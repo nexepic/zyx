@@ -15,18 +15,18 @@
 namespace graph {
 
 Edge::Edge(uint64_t id, uint64_t from, uint64_t to, const std::string& label)
-    : id(id), fromNode(from), toNode(to), label(label) {}
+    : id(id), fromNodeId(from), toNodeId(to), label(label) {}
 
 uint64_t Edge::getId() const {
     return id;
 }
 
-uint64_t Edge::getFrom() const {
-    return fromNode;
+uint64_t Edge::getFromNodeId() const {
+    return fromNodeId;
 }
 
-uint64_t Edge::getTo() const {
-    return toNode;
+uint64_t Edge::getToNodeId() const {
+    return toNodeId;
 }
 
 const std::string& Edge::getLabel() const {
@@ -37,7 +37,7 @@ void Edge::addProperty(const std::string& key, const PropertyValue& value) {
     properties.emplace(key, value);
 }
 
-const Edge::PropertyValue& Edge::getProperty(const std::string& key) const {
+const PropertyValue& Edge::getProperty(const std::string& key) const {
     auto it = properties.find(key);
     if (it == properties.end()) {
         throw std::out_of_range("Property '" + key + "' not found");
@@ -47,8 +47,8 @@ const Edge::PropertyValue& Edge::getProperty(const std::string& key) const {
 
 void Edge::serialize(std::ostream& os) const {
     utils::Serializer::writePOD(os, id);
-    utils::Serializer::writePOD(os, fromNode);
-    utils::Serializer::writePOD(os, toNode);
+    utils::Serializer::writePOD(os, fromNodeId);
+    utils::Serializer::writePOD(os, toNodeId);
     utils::Serializer::writeString(os, label);
 
     utils::Serializer::writePOD(os, static_cast<uint32_t>(properties.size()));

@@ -21,14 +21,10 @@ namespace graph {
 
 	const std::string &Node::getLabel() const { return label; }
 
-	void Node::addProperty(const std::string &key, const PropertyValue &value) { properties.emplace(key, value); }
+	void Node::addProperties(const std::string &key, const PropertyValue &value) { properties.emplace(key, value); }
 
-	const Node::PropertyValue &Node::getProperty(const std::string &key) const {
-		auto it = properties.find(key);
-		if (it == properties.end()) {
-			throw std::out_of_range("Property '" + key + "' not found");
-		}
-		return it->second;
+	const std::unordered_map<std::string, PropertyValue>& Node::getProperties() const {
+	    return properties;
 	}
 
 	void Node::addOutEdge(uint64_t edgeId) {
@@ -80,7 +76,7 @@ namespace graph {
 		for (uint32_t i = 0; i < propCount; ++i) {
 			std::string key = utils::Serializer::readString(is);
 			PropertyValue value = utils::Serializer::deserializeVariant(is);
-			node.addProperty(key, std::move(value));
+			node.addProperties(key, std::move(value));
 		}
 
 		uint32_t inEdgeCount = utils::Serializer::readPOD<uint32_t>(is);

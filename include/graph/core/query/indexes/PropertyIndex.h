@@ -15,13 +15,10 @@
 #include <map>
 #include <vector>
 #include <variant>
-#include <mutex>
 #include <shared_mutex>
+#include "graph/core/Types.h"
 
 namespace graph::query::indexes {
-
-	// Property value can be different types
-	using PropertyValue = std::variant<std::string, int64_t, double, bool>;
 
 	class PropertyIndex {
 	public:

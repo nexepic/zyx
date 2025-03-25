@@ -13,7 +13,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <mutex>
 #include <shared_mutex>
 
 namespace graph::query::indexes {

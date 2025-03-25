@@ -9,13 +9,16 @@
  **/
 
 #pragma once
+#include <variant>
 
 namespace graph {
 
-enum class Direction {
-    INCOMING,
-    OUTGOING,
-    BOTH
-};
+	using PropertyValue = std::variant<int64_t, double, std::string, std::vector<double>, bool>;
+
+	enum class Direction {
+		INCOMING,
+		OUTGOING,
+		BOTH
+	};
 
 } // namespace graph

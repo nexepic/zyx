@@ -9,14 +9,13 @@
  **/
 
 #pragma once
+#include <graph/core/Node.h>
 #include <iostream>
 #include <string>
 #include <variant>
 #include <vector>
 
 namespace graph::utils {
-
-	using PropertyValue = std::variant<int, double, std::string, std::vector<double>>;
 
 	class Serializer {
 	public:
