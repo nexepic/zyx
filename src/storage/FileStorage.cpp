@@ -9,14 +9,17 @@
  **/
 
 #include "graph/storage/FileStorage.h"
+#include <algorithm> // for std::sort
 #include <fstream>
+#include <graph/storage/BlobStore.h>
+#include <graph/storage/PropertyStorage.h>
 #include <sstream>
 #include <zlib.h>
-#include "graph/utils/ChecksumUtils.h"
-#include "graph/utils/Serializer.h"
+
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
-#include <algorithm> // for std::sort
+#include "graph/utils/ChecksumUtils.h"
+#include "graph/utils/Serializer.h"
 
 using namespace graph::storage;
 
@@ -27,6 +30,10 @@ FileStorage::FileStorage(std::string path, size_t cacheSize)
 		// Initialize DataManager with the existing file
 		dataManager = std::make_unique<DataManager>(dbFilePath, cacheSize);
 	}
+
+	// Initialize empty tracking sets
+	nodePropsDirty.clear();
+	edgePropsDirty.clear();
 }
 
 FileStorage::~FileStorage() {
@@ -34,103 +41,138 @@ FileStorage::~FileStorage() {
 }
 
 void FileStorage::open() {
-	if (isFileOpen) return;
+    if (isFileOpen) return;
 
-	bool fileExists = std::filesystem::exists(dbFilePath);
+    bool fileExists = std::filesystem::exists(dbFilePath);
 
-	if (!fileExists) {
-		// Create a new file with header
-		std::fstream file(dbFilePath, std::ios::binary | std::ios::out);
-		if (!file) {
-			throw std::runtime_error("Cannot create database file");
-		}
+    if (!fileExists) {
+        // Create a new file with header
+        std::fstream file(dbFilePath, std::ios::binary | std::ios::out);
+        if (!file) {
+            throw std::runtime_error("Cannot create database file");
+        }
 
-		// Initialize header
-		currentHeader = FileHeader();
-		currentHeader.header_crc = utils::calculateCrc(&currentHeader, offsetof(FileHeader, header_crc));
+        // Initialize header
+        currentHeader = FileHeader();
+        currentHeader.header_crc = utils::calculateCrc(&currentHeader, offsetof(FileHeader, header_crc));
 
-		// Write header
-		file.write(reinterpret_cast<char*>(&currentHeader), sizeof(FileHeader));
-		file.close();
-	}
+        // Write header
+        file.write(reinterpret_cast<char*>(&currentHeader), sizeof(FileHeader));
+        file.close();
+    }
 
-	// Initialize data manager
-	dataManager = std::make_unique<DataManager>(dbFilePath, 10000); // Default cache sizes
-	dataManager->initialize();
+    // Initialize data manager
+    dataManager = std::make_unique<DataManager>(dbFilePath, 10000); // Default cache sizes
+    dataManager->initialize();
 
-	// Read header into memory
-	currentHeader = dataManager->getFileHeader();
-	max_node_id = currentHeader.max_node_id;
-	max_edge_id = currentHeader.max_edge_id;
+    // Read header into memory
+    currentHeader = dataManager->getFileHeader();
+    max_node_id = currentHeader.max_node_id;
+    max_edge_id = currentHeader.max_edge_id;
 
-	isFileOpen = true;
+    isFileOpen = true;
 }
 
 void FileStorage::close() {
 	if (isFileOpen) {
 		flush(); // Ensure any pending changes are written
+		dataManager->clearCache();
 		dataManager.reset();
 		isFileOpen = false;
 	}
 }
 
 void FileStorage::save() {
-	if (!isFileOpen) {
-		throw std::runtime_error("Database must be open before saving");
-	}
+    if (!isFileOpen) {
+        throw std::runtime_error("Database must be open before saving");
+    }
 
-	// Skip if nothing to save
-	if (!dataManager->hasUnsavedChanges()) {
-		return;
-	}
+    // Check if we only have property changes but no entity changes
+    bool onlyPropertyChanges = !dataManager->hasUnsavedChanges() &&
+        (!dataManager->getNodesPropsDirty().empty() || !dataManager->getEdgesPropsDirty().empty());
 
-	// Open file for writing
-	std::fstream file(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
-	if (!file) {
-		throw std::runtime_error("Cannot open database file for saving");
-	}
+    if (onlyPropertyChanges) {
+        // If we only have property changes, use the specialized update method
+        updateEntityProperties();
 
-	// Update header
-	currentHeader.max_node_id = max_node_id;
-	currentHeader.max_edge_id = max_edge_id;
-	currentHeader.header_crc = utils::calculateCrc(&currentHeader, offsetof(FileHeader, header_crc));
+        // Update property segment head in header
+        currentHeader.property_segment_head = dataManager->getFileHeader().property_segment_head;
 
-	// Write header
-	file.seekp(0);
-	file.write(reinterpret_cast<char*>(&currentHeader), sizeof(FileHeader));
+        // Update header CRC
+        currentHeader.header_crc = utils::calculateCrc(&currentHeader, offsetof(FileHeader, header_crc));
 
-	// Get only unsaved nodes and edges - more efficient than dumping all
-	auto dirtyNodes = dataManager->getUnsavedNodes();
-	auto dirtyEdges = dataManager->getUnsavedEdges();
+        // Write header
+        std::fstream file(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
+        file.seekp(0);
+        file.write(reinterpret_cast<char*>(&currentHeader), sizeof(FileHeader));
+        file.close();
 
-	// Convert to map format expected by saveData
-	std::unordered_map<uint64_t, Node> nodesToSave;
-	for (const auto& node : dirtyNodes) {
-		nodesToSave[node.getId()] = node;
-	}
+        // Clear property dirty flags
+        dataManager->clearPropsDirtyFlags();
+        return;
+    }
 
-	std::unordered_map<uint64_t, Edge> edgesToSave;
-	for (const auto& edge : dirtyEdges) {
-		edgesToSave[edge.getId()] = edge;
-	}
+    // Original save logic for entity changes
+    if (!dataManager->hasUnsavedChanges()) {
+        return;
+    }
 
-	// Save dirty nodes
-	if (!nodesToSave.empty()) {
-		saveData(file, nodesToSave, currentHeader.node_segment_head, NODES_PER_SEGMENT);
-	}
+    // Open file for writing
+    std::fstream file(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
+    if (!file) {
+        throw std::runtime_error("Cannot open database file for saving");
+    }
 
-	// Save dirty edges
-	if (!edgesToSave.empty()) {
-		saveData(file, edgesToSave, currentHeader.edge_segment_head, EDGES_PER_SEGMENT);
-	}
+    auto filePtr = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-	file.close();
+    // Get only unsaved nodes and edges - more efficient than dumping all
+    auto dirtyNodes = dataManager->getUnsavedNodes();
+    auto dirtyEdges = dataManager->getUnsavedEdges();
 
-	// Mark everything as saved
-	dataManager->markAllSaved();
+    // Convert to map format expected by saveData
+    std::unordered_map<uint64_t, Node> nodesToSave;
+    for (const auto& node : dirtyNodes) {
+        nodesToSave[node.getId()] = node;
+    }
 
-	// Update indexes
-	dataManager->refreshFromDisk();
+    std::unordered_map<uint64_t, Edge> edgesToSave;
+    for (const auto& edge : dirtyEdges) {
+        edgesToSave[edge.getId()] = edge;
+    }
+
+    // Save dirty nodes
+    if (!nodesToSave.empty()) {
+        saveData(file, nodesToSave, currentHeader.node_segment_head, NODES_PER_SEGMENT);
+    }
+
+    // Save dirty edges
+    if (!edgesToSave.empty()) {
+        saveData(file, edgesToSave, currentHeader.edge_segment_head, EDGES_PER_SEGMENT);
+    }
+
+    // // Handle property reference updates for existing entities
+    // if (!dataManager->getNodesPropsDirty().empty() || !dataManager->getEdgesPropsDirty().empty()) {
+    //     updateEntityProperties();
+    // }
+
+    // Update header
+    currentHeader.property_segment_head = dataManager->getFileHeader().property_segment_head;
+    currentHeader.max_node_id = max_node_id;
+    currentHeader.max_edge_id = max_edge_id;
+    currentHeader.header_crc = utils::calculateCrc(&currentHeader, offsetof(FileHeader, header_crc));
+
+    // Write header
+    file.seekp(0);
+    file.write(reinterpret_cast<char*>(&currentHeader), sizeof(FileHeader));
+
+    file.close();
+
+    // Mark everything as saved
+    dataManager->markAllSaved();
+    dataManager->clearPropsDirtyFlags();
+
+    // Update indexes
+    dataManager->refreshFromDisk();
 }
 
 template<typename T>
@@ -271,6 +313,17 @@ void FileStorage::writeSegmentData(std::fstream &file, uint64_t segmentOffset,
 }
 
 void FileStorage::flush() {
+	// Before saving, sync dirty property sets from DataManager
+	if (dataManager) {
+		for (auto nodeId : dataManager->getNodesPropsDirty()) {
+			nodePropsDirty.insert(nodeId);
+		}
+
+		for (auto edgeId : dataManager->getEdgesPropsDirty()) {
+			edgePropsDirty.insert(edgeId);
+		}
+	}
+
 	save();
 }
 
@@ -345,6 +398,76 @@ std::vector<uint64_t> FileStorage::findConnectedNodeIds(uint64_t nodeId, const s
     return connectedNodeIds;
 }
 
+void FileStorage::updateNodeProperty(uint64_t nodeId, const std::string& key, const PropertyValue& value) {
+	if (!isFileOpen) {
+		open();
+	}
+	dataManager->updateNodeProperty(nodeId, key, value);
+}
+
+void FileStorage::updateEdgeProperty(uint64_t edgeId, const std::string& key, const PropertyValue& value) {
+	if (!isFileOpen) {
+		open();
+	}
+	dataManager->updateEdgeProperty(edgeId, key, value);
+}
+
+graph::PropertyValue FileStorage::getNodeProperty(uint64_t nodeId, const std::string& key) {
+	if (!isFileOpen) {
+		open();
+	}
+	return dataManager->getNodeProperty(nodeId, key);
+}
+
+graph::PropertyValue FileStorage::getEdgeProperty(uint64_t edgeId, const std::string& key) {
+	if (!isFileOpen) {
+		open();
+	}
+	return dataManager->getEdgeProperty(edgeId, key);
+}
+
+std::unordered_map<std::string, graph::PropertyValue> FileStorage::getNodeProperties(uint64_t nodeId) {
+	if (!isFileOpen) {
+		open();
+	}
+	return dataManager->getNodeProperties(nodeId);
+}
+
+std::unordered_map<std::string, graph::PropertyValue> FileStorage::getEdgeProperties(uint64_t edgeId) {
+	if (!isFileOpen) {
+		open();
+	}
+	return dataManager->getEdgeProperties(edgeId);
+}
+
+void FileStorage::removeNodeProperty(uint64_t nodeId, const std::string& key) {
+	if (!isFileOpen) {
+		open();
+	}
+	dataManager->removeNodeProperty(nodeId, key);
+}
+
+void FileStorage::removeEdgeProperty(uint64_t edgeId, const std::string& key) {
+	if (!isFileOpen) {
+		open();
+	}
+	dataManager->removeEdgeProperty(edgeId, key);
+}
+
+uint64_t FileStorage::storeBlob(const std::string &data, const std::string &contentType) {
+	if (!isFileOpen) {
+		open();
+	}
+	return dataManager->storeBlob(data, contentType);
+}
+
+BlobStore& FileStorage::getBlobStore() {
+	if (!isFileOpen) {
+		open();
+	}
+	return dataManager->getBlobStore();
+}
+
 uint64_t FileStorage::insertNode(const Node& node) {
 	if (!isFileOpen) {
 		throw std::runtime_error("Database must be open before inserting data");
@@ -375,6 +498,145 @@ uint64_t FileStorage::insertEdge(const Edge& edge) {
 	return newEdge.getId();
 }
 
+void FileStorage::updateEntityProperties() {
+    if (!isFileOpen) {
+        throw std::runtime_error("Database must be open before updating properties");
+    }
+
+    if (nodePropsDirty.empty() && edgePropsDirty.empty()) {
+        return; // Nothing to update
+    }
+
+    std::fstream file(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
+    if (!file) {
+        throw std::runtime_error("Cannot open database file for property update");
+    }
+
+    // Update node properties
+    updateNodePropertyReferences(file);
+
+    // Update edge properties
+    updateEdgePropertyReferences(file);
+
+    file.close();
+}
+
+void FileStorage::updateNodePropertyReferences(std::fstream& file) {
+    if (nodePropsDirty.empty()) return;
+
+    uint64_t segmentOffset = currentHeader.node_segment_head;
+    SegmentHeader header;
+
+    // Iterate through all segments to find nodes that need property updates
+    while (segmentOffset != 0) {
+        file.seekg(static_cast<std::streamoff>(segmentOffset));
+        file.read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
+
+        // Calculate size of each node
+        size_t nodeSize = sizeof(Node);
+
+        // Iterate through nodes in segment
+        for (uint32_t i = 0; i < header.used; ++i) {
+            uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + i * nodeSize;
+            file.seekg(static_cast<std::streamoff>(dataOffset));
+
+            // Read just the ID to check if it's in our dirty set
+            auto id = utils::Serializer::readPOD<uint64_t>(file);
+
+            if (nodePropsDirty.find(id) != nodePropsDirty.end()) {
+                // We found a node that needs property reference update
+                // Fetch the current node with updated property reference
+                Node node = dataManager->getNode(id);
+
+                // Seek to the position where property reference is stored
+                // Skip ID and label (string length + string)
+                file.seekg(static_cast<std::streamoff>(dataOffset)); // Go back to start of node
+
+                // Skip ID
+                file.seekg(sizeof(uint64_t), std::ios::cur);
+
+                // Skip label (read length, then skip that many bytes)
+                auto labelSize = utils::Serializer::readPOD<uint32_t>(file);
+                file.seekg(labelSize, std::ios::cur);
+
+                // Now we're at the property reference position
+                // Write the updated property reference
+                utils::Serializer::writePOD(file, static_cast<uint8_t>(node.getPropertyReference().type));
+                utils::Serializer::writePOD(file, node.getPropertyReference().reference);
+                utils::Serializer::writePOD(file, node.getPropertyReference().size);
+
+                // Remove from dirty set
+                nodePropsDirty.erase(id);
+
+                // If all nodes are processed, we can break early
+                if (nodePropsDirty.empty()) break;
+            }
+        }
+
+        // Move to next segment if needed
+        if (!nodePropsDirty.empty() && header.next_segment_offset != 0) {
+            segmentOffset = header.next_segment_offset;
+        } else {
+            break;
+        }
+    }
+}
+
+void FileStorage::updateEdgePropertyReferences(std::fstream& file) {
+    // Similar to updateNodePropertyReferences but for edges
+    if (edgePropsDirty.empty()) return;
+
+    uint64_t segmentOffset = currentHeader.edge_segment_head;
+    SegmentHeader header;
+
+    while (segmentOffset != 0) {
+        file.seekg(static_cast<std::streamoff>(segmentOffset));
+        file.read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
+
+        // Calculate size of each edge
+        size_t edgeSize = sizeof(Edge);
+
+        for (uint32_t i = 0; i < header.used; ++i) {
+            uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + i * edgeSize;
+            file.seekg(static_cast<std::streamoff>(dataOffset));
+
+            auto id = utils::Serializer::readPOD<uint64_t>(file);
+
+            if (edgePropsDirty.find(id) != edgePropsDirty.end()) {
+                Edge edge = dataManager->getEdge(id);
+
+                // Similar to node property update, skip to property reference position
+                file.seekg(static_cast<std::streamoff>(dataOffset));
+
+                // Skip ID
+                file.seekg(sizeof(uint64_t), std::ios::cur);
+
+                // Skip fromNodeId, toNodeId, and type
+                file.seekg(sizeof(uint64_t) * 2 + sizeof(uint32_t), std::ios::cur);
+
+                // Skip label
+                auto labelSize = utils::Serializer::readPOD<uint32_t>(file);
+                file.seekg(labelSize, std::ios::cur);
+
+                // Now at property reference position
+                utils::Serializer::writePOD(file, static_cast<uint8_t>(edge.getPropertyReference().type));
+                utils::Serializer::writePOD(file, edge.getPropertyReference().reference);
+                utils::Serializer::writePOD(file, edge.getPropertyReference().size);
+
+                edgePropsDirty.erase(id);
+
+                if (edgePropsDirty.empty()) break;
+            }
+        }
+
+        if (!edgePropsDirty.empty() && header.next_segment_offset != 0) {
+            segmentOffset = header.next_segment_offset;
+        } else {
+            break;
+        }
+    }
+}
+
 uint64_t FileStorage::getLastId() const {
     return std::max(max_node_id, max_edge_id);
 }
@@ -399,12 +661,8 @@ void FileStorage::rollbackWrite() {
     // Placeholder for transaction management
 }
 
-void FileStorage::clearCache() {
+void FileStorage::clearCache() const {
     dataManager->clearCache();
-}
-
-void FileStorage::resizeCache(size_t nodeSize, size_t edgeSize) {
-    dataManager->resizeCache(nodeSize, edgeSize);
 }
 
 std::unordered_map<uint64_t, graph::Node> FileStorage::getAllNodes() {

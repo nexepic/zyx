@@ -4,7 +4,8 @@ readline_dep = dependency('readline', required: true)
 
 test_sources = [
     'apps/cli/test_Repl.cpp',
-    'src/storage/test_FileStorage.cpp'
+    'src/storage/test_FileStorage.cpp',
+    'src/storage/test_StorageHeaders.cpp',
 ]
 
 foreach test_source : test_sources

@@ -3,6 +3,7 @@ db_src = files(
 	'core/Edge.cpp',
     'core/Node.cpp',
     'core/Transaction.cpp',
+    'core/PropertyValue.cpp',
     'core/query/QueryEngine.cpp',
     'core/query/QueryExecutor.cpp',
     'core/query/QueryPlanner.cpp',
@@ -13,7 +14,11 @@ db_src = files(
     'core/query/indexes/FulltextIndex.cpp',
     'storage/FileStorage.cpp',
     'storage/DataManager.cpp',
+    'storage/BlobStore.cpp',
+    'storage/PropertyStorage.cpp',
+    'storage/DatabaseInspector.cpp',
     'utils/ChecksumUtils.cpp',
+    'utils/CompressUtils.cpp',
     'utils/Serializer.cpp',
     'cli/Repl.cpp'
 )

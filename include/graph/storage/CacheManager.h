@@ -12,7 +12,7 @@
 #include <list>
 #include <unordered_map>
 #include <functional>
-#include <memory>
+#include "graph/utils/PairHash.h"
 
 namespace graph::storage {
 
@@ -22,7 +22,7 @@ namespace graph::storage {
 		explicit LRUCache(size_t capacity) : capacity_(capacity) {}
 
 		bool contains(const K& key) const {
-			return cache_map_.find(key) != cache_map_.end();
+			return cache_map_.contains(key);
 		}
 
 		V get(const K& key) {
@@ -68,19 +68,33 @@ namespace graph::storage {
 			return it->second->second;
 		}
 
+		void remove(const K& key) {
+			auto it = cache_map_.find(key);
+			if (it != cache_map_.end()) {
+				cache_list_.erase(it->second);
+				cache_map_.erase(it);
+			}
+		}
+
 		void clear() {
 			cache_map_.clear();
 			cache_list_.clear();
 		}
 
-		size_t size() const {
+		[[nodiscard]] size_t size() const {
 			return cache_list_.size();
 		}
 
 	private:
 		size_t capacity_;
 		std::list<std::pair<K, V>> cache_list_;
-		std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> cache_map_;
+		// std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> cache_map_;
+
+		using Hash = std::conditional_t<std::is_same_v<K, std::pair<uint64_t, std::string>>,
+					utils::PairHash,
+					std::hash<K>>;
+
+		std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator, Hash> cache_map_;
 	};
 
 } // namespace graph::storage

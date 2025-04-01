@@ -16,7 +16,7 @@
 #include <vector>
 #include <variant>
 #include <shared_mutex>
-#include "graph/core/Types.h"
+#include "graph/core/PropertyValue.h"
 
 namespace graph::query::indexes {
 

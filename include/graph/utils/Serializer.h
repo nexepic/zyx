@@ -28,6 +28,9 @@ namespace graph::utils {
 		static void writeString(std::ostream &os, const std::string &str);
 		static std::string readString(std::istream &is);
 
+		static void writePropertyValue(std::ostream &os, const PropertyValue &value);
+		static PropertyValue readPropertyValue(std::istream &is);
+
 		template<typename T>
 		static void serialize(std::ostream &os, const T &value);
 

@@ -28,14 +28,13 @@ void Database::open() {
 
     storage->open();
     queryEngine = std::make_shared<query::QueryEngine>(storage);
-    queryEngine->initialize();
+    // queryEngine->initialize();
     openFlag = true;
 }
 
 void Database::close() {
     if (!openFlag) return;
 
-    save();
     storage->close();
     queryEngine.reset();
     openFlag = false;

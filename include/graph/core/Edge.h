@@ -9,26 +9,34 @@
  **/
 
 #pragma once
-#include "Types.h"
+#include <ostream>
 #include <string>
 #include <unordered_map>
-#include <ostream>
-#include <istream>
+#include "PropertyValue.h"
+#include "Types.h"
 
 namespace graph {
 
 	class Edge {
 	public:
 		Edge() = default;
-		Edge(uint64_t id, uint64_t from, uint64_t to, const std::string& label);
+		Edge(uint64_t id, uint64_t from, uint64_t to, std::string  label);
 
-		void addProperty(const std::string& key, const PropertyValue& value);
-		const PropertyValue& getProperty(const std::string& key) const;
+		// Property methods
+		void addProperty(const std::string &key, const PropertyValue &value);
+		[[nodiscard]] bool hasProperty(const std::string &key) const;
+		[[nodiscard]] PropertyValue getProperty(const std::string &key) const;
+		void removeProperty(const std::string &key);
+		[[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
+		[[nodiscard]] size_t getTotalPropertySize() const;
 
-		uint64_t getFromNodeId() const;
-		uint64_t getToNodeId() const;
-		uint64_t getId() const;
-		const std::string& getLabel() const;
+		void setPropertyReference(const PropertyReference& ref);
+		[[nodiscard]] const PropertyReference& getPropertyReference() const;
+
+		[[nodiscard]] uint64_t getFromNodeId() const;
+		[[nodiscard]] uint64_t getToNodeId() const;
+		[[nodiscard]] uint64_t getId() const;
+		[[nodiscard]] const std::string& getLabel() const;
 
 		void serialize(std::ostream& os) const;
 		static Edge deserialize(std::istream& is);
@@ -38,11 +46,16 @@ namespace graph {
 		void setId(uint64_t id) { this->id = id; }
 
 	private:
-		uint64_t id;
-		uint64_t fromNodeId;
-		uint64_t toNodeId;
+		uint64_t id{};
+		uint64_t fromNodeId{};
+		uint64_t toNodeId{};
 		std::string label;
+
+		PropertyReference propertyRef;
+
 		std::unordered_map<std::string, PropertyValue> properties;
+
+		static constexpr size_t MAX_TOTAL_PROPERTY_SIZE = 512 * 1024; // 512KB total property limit per edge
 	};
 
 } // namespace graph

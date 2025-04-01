@@ -1,5 +1,5 @@
 /**
- * @file Edge
+ * @file Edge.cpp
  * @author Nexepic
  * @brief This source code is licensed under MIT License.
  * @date 2025/2/26
@@ -14,68 +14,103 @@
 
 namespace graph {
 
-Edge::Edge(uint64_t id, uint64_t from, uint64_t to, const std::string& label)
-    : id(id), fromNodeId(from), toNodeId(to), label(label) {}
+Edge::Edge(uint64_t id, uint64_t from, uint64_t to, std::string label) :
+	id(id), fromNodeId(from), toNodeId(to), label(std::move(label)) {}
 
-uint64_t Edge::getId() const {
-    return id;
+uint64_t Edge::getId() const { return id; }
+
+uint64_t Edge::getFromNodeId() const { return fromNodeId; }
+
+uint64_t Edge::getToNodeId() const { return toNodeId; }
+
+const std::string &Edge::getLabel() const { return label; }
+
+void Edge::addProperty(const std::string &key, const PropertyValue &value) {
+	size_t valueSize = property_utils::getPropertyValueSize(value);
+	size_t keySize = key.size();
+	size_t newTotalSize = getTotalPropertySize();
+
+	if (properties.count(key) > 0) {
+		newTotalSize -= property_utils::getPropertyValueSize(properties[key]);
+		newTotalSize -= key.size();
+	}
+
+	newTotalSize += keySize + valueSize;
+
+	if (newTotalSize > MAX_TOTAL_PROPERTY_SIZE) {
+		throw std::runtime_error("Property size limit exceeded for node " + std::to_string(id));
+	}
+
+	properties[key] = value;
 }
 
-uint64_t Edge::getFromNodeId() const {
-    return fromNodeId;
+bool Edge::hasProperty(const std::string &key) const { return properties.count(key) > 0; }
+
+PropertyValue Edge::getProperty(const std::string &key) const {
+	auto it = properties.find(key);
+	if (it == properties.end()) {
+		throw std::out_of_range("Property " + key + " not found");
+	}
+	return it->second;
 }
 
-uint64_t Edge::getToNodeId() const {
-    return toNodeId;
+void Edge::removeProperty(const std::string &key) {
+	auto it = properties.find(key);
+	if (it != properties.end()) {
+		properties.erase(it);
+	}
 }
 
-const std::string& Edge::getLabel() const {
-    return label;
+const std::unordered_map<std::string, PropertyValue> &Edge::getProperties() const { return properties; }
+
+size_t Edge::getTotalPropertySize() const {
+	size_t totalSize = 0;
+	for (const auto &[key, value]: properties) {
+		totalSize += key.size();
+		totalSize += property_utils::getPropertyValueSize(value);
+	}
+	return totalSize;
 }
 
-void Edge::addProperty(const std::string& key, const PropertyValue& value) {
-    properties.emplace(key, value);
+void Edge::serialize(std::ostream &os) const {
+	utils::Serializer::writePOD(os, id);
+	utils::Serializer::writePOD(os, fromNodeId);
+	utils::Serializer::writePOD(os, toNodeId);
+	utils::Serializer::writeString(os, label);
+
+	utils::Serializer::writePOD(os, static_cast<uint32_t>(properties.size()));
+	for (const auto &[key, value]: properties) {
+		utils::Serializer::writeString(os, key);
+		std::visit([&os](const auto &v) { utils::Serializer::serialize(os, v); }, value);
+	}
 }
 
-const PropertyValue& Edge::getProperty(const std::string& key) const {
-    auto it = properties.find(key);
-    if (it == properties.end()) {
-        throw std::out_of_range("Property '" + key + "' not found");
-    }
-    return it->second;
+Edge Edge::deserialize(std::istream &is) {
+	auto id = utils::Serializer::readPOD<uint64_t>(is);
+	auto from = utils::Serializer::readPOD<uint64_t>(is);
+	auto to = utils::Serializer::readPOD<uint64_t>(is);
+	std::string label = utils::Serializer::readString(is);
+
+	Edge edge(id, from, to, label);
+
+	auto propCount = utils::Serializer::readPOD<uint32_t>(is);
+	for (uint32_t i = 0; i < propCount; ++i) {
+		std::string key = utils::Serializer::readString(is);
+		PropertyValue value = utils::Serializer::deserializeVariant(is);
+		edge.properties[key] = value;
+	}
+
+	return edge;
 }
 
-void Edge::serialize(std::ostream& os) const {
-    utils::Serializer::writePOD(os, id);
-    utils::Serializer::writePOD(os, fromNodeId);
-    utils::Serializer::writePOD(os, toNodeId);
-    utils::Serializer::writeString(os, label);
-
-    utils::Serializer::writePOD(os, static_cast<uint32_t>(properties.size()));
-    for (const auto& [key, value] : properties) {
-        utils::Serializer::writeString(os, key);
-        std::visit([&os](const auto& v) {
-            utils::Serializer::serialize(os, v);
-        }, value);
-    }
+void Edge::setPropertyReference(const PropertyReference& ref) {
+	propertyRef = ref;
+	// Clear cached properties as the reference has changed
+	properties.clear();
 }
 
-Edge Edge::deserialize(std::istream& is) {
-    uint64_t id = utils::Serializer::readPOD<uint64_t>(is);
-    uint64_t from = utils::Serializer::readPOD<uint64_t>(is);
-    uint64_t to = utils::Serializer::readPOD<uint64_t>(is);
-    std::string label = utils::Serializer::readString(is);
-
-    Edge edge(id, from, to, label);
-
-    uint32_t propCount = utils::Serializer::readPOD<uint32_t>(is);
-    for (uint32_t i = 0; i < propCount; ++i) {
-        std::string key = utils::Serializer::readString(is);
-        PropertyValue value = utils::Serializer::deserializeVariant(is);
-        edge.addProperty(key, std::move(value));
-    }
-
-    return edge;
+const PropertyReference& Edge::getPropertyReference() const {
+	return propertyRef;
 }
 
 } // namespace graph

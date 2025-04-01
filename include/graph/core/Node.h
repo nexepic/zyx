@@ -10,28 +10,37 @@
 
 #pragma once
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
+#include "PropertyValue.h"
 #include "Types.h"
 
 namespace graph {
 
-	class Node {
+	class alignas(128) Node {
 	public:
 		Node() = default;
-		Node(uint64_t id, const std::string& label);
+		Node(uint64_t id, std::string  label);
 
 		void addOutEdge(uint64_t edgeId);
 		void addInEdge(uint64_t edgeId);
 
-		const std::vector<uint64_t>& getOutEdges() const;
-		const std::vector<uint64_t>& getInEdges() const;
+		[[nodiscard]] const std::vector<uint64_t>& getOutEdges() const;
+		[[nodiscard]] const std::vector<uint64_t>& getInEdges() const;
 
-		void addProperties(const std::string& key, const PropertyValue& value);
-		const std::unordered_map<std::string, PropertyValue>& getProperties() const;
+		// Property methods
+		void addProperty(const std::string &key, const PropertyValue &value);
+		[[nodiscard]] bool hasProperty(const std::string &key) const;
+		[[nodiscard]] PropertyValue getProperty(const std::string &key) const;
+		void removeProperty(const std::string &key);
+		[[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
+		[[nodiscard]] size_t getTotalPropertySize() const;
 
-		const std::string& getLabel() const;
-		uint64_t getId() const;
+		void setPropertyReference(const PropertyReference& ref);
+		[[nodiscard]] const PropertyReference& getPropertyReference() const;
+
+		[[nodiscard]] const std::string& getLabel() const;
+		[[nodiscard]] uint64_t getId() const;
 
 		void serialize(std::ostream& os) const;
 		static Node deserialize(std::istream& is);
@@ -41,11 +50,17 @@ namespace graph {
 		void setId(uint64_t id) { this->id = id; }
 
 	private:
-		uint64_t id;
+		uint64_t id{};
 		std::string label;
-		std::unordered_map<std::string, PropertyValue> properties;
+
+        PropertyReference propertyRef;
+
+        std::unordered_map<std::string, PropertyValue> properties;
+
 		std::vector<uint64_t> inEdges;
 		std::vector<uint64_t> outEdges;
+
+		static constexpr size_t MAX_TOTAL_PROPERTY_SIZE = 512 * 1024; // 512KB total property limit per node
 	};
 
 } // namespace graph
