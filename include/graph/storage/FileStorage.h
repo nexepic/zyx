@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include "DataManager.h"
+#include "DeletionManager.h"
 #include "StorageHeaders.h"
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
@@ -29,14 +30,12 @@ namespace graph::storage {
 		void flush();
 
 		template<typename T>
-		void saveData(std::fstream &file, std::unordered_map<uint64_t, T> &data, uint64_t &segmentHead,
-					  uint32_t maxSegmentSize);
+		void saveData(std::unordered_map<uint64_t, T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
 
 		template<typename T>
-		void writeSegmentData(std::fstream &file, uint64_t segmentOffset, const std::vector<T> &data,
-							  uint32_t usedItems);
+		void writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t usedItems);
 
-		uint64_t allocateSegment(std::fstream &file, uint8_t type, uint32_t capacity) const;
+		uint64_t allocateSegment(uint8_t type, uint32_t capacity) const;
 
 		// Node operations
 		uint64_t insertNode(const Node &node);
@@ -45,6 +44,12 @@ namespace graph::storage {
 		// Edge operations
 		uint64_t insertEdge(const Edge &edge);
 		[[nodiscard]] uint64_t getNextEdgeId() const { return max_edge_id + 1; }
+
+		void updateNode(const Node& node);
+		void updateEdge(const Edge& edge);
+
+		bool deleteNode(uint64_t nodeId, bool cascadeEdges = false);
+		bool deleteEdge(uint64_t edgeId);
 
 		[[nodiscard]] uint64_t getLastId() const;
 		[[nodiscard]] uint64_t getNodeCount() const;
@@ -86,20 +91,27 @@ namespace graph::storage {
 		PropertyValue getEdgeProperty(uint64_t edgeId, const std::string &key);
 		void removeEdgeProperty(uint64_t edgeId, const std::string &key);
 
+		template<typename T>
+		void updateEntityInPlace(const T& entity);
+
 		// Get all properties for a node
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(uint64_t nodeId);
 
 		// Get all properties for an edge
 		std::unordered_map<std::string, PropertyValue> getEdgeProperties(uint64_t edgeId);
 
-		uint64_t storeBlob(const std::string& data, const std::string& contentType = "text");
+		uint64_t storeBlob(const std::string &data, const std::string &contentType = "text");
 
-		BlobStore& getBlobStore();
+		BlobStore &getBlobStore();
 
 		// isFileOpen getter
 		[[nodiscard]] bool isOpen() const { return isFileOpen; }
 
 		void updateEntityProperties();
+
+		std::unique_ptr<DeletionManager> deletionManager;
+
+		void updateNodeDeletionStatus(uint64_t nodeId, bool isDeleted);
 
 	private:
 		std::string dbFilePath;
@@ -112,18 +124,29 @@ namespace graph::storage {
 
 		bool isFileOpen = false;
 
+		// Single file stream for all operations
+		std::shared_ptr<std::fstream> fileStream;
+
 		// Segment management
 		std::vector<uint64_t> nodeSegments; // List of node segment offsets
 		std::vector<uint64_t> edgeSegments; // List of edge segment offsets
 
 		std::unique_ptr<DataManager> dataManager;
 
-		// Tracks entities that have had property changes
-		std::unordered_set<uint64_t> nodePropsDirty;
-		std::unordered_set<uint64_t> edgePropsDirty;
-
 		// Helper methods for updating property references
-		void updateNodePropertyReferences(std::fstream& file);
-		void updateEdgePropertyReferences(std::fstream& file);
+		void updateNodePropertyReferences();
+		void updateEdgePropertyReferences();
+
+		// Compaction control
+		void compactStorage(bool force = false);
+
+		// Statistics
+		size_t getDeletedNodeCount() const;
+		size_t getDeletedEdgeCount() const;
+		double getFragmentationRatio() const;
+
+		// Smart methods that decide whether to insert or update
+		uint64_t saveNode(const Node& node);
+		uint64_t saveEdge(const Edge& edge);
 	};
 } // namespace graph::storage

@@ -78,11 +78,13 @@ void Edge::serialize(std::ostream &os) const {
 	utils::Serializer::writePOD(os, toNodeId);
 	utils::Serializer::writeString(os, label);
 
-	utils::Serializer::writePOD(os, static_cast<uint32_t>(properties.size()));
-	for (const auto &[key, value]: properties) {
-		utils::Serializer::writeString(os, key);
-		std::visit([&os](const auto &v) { utils::Serializer::serialize(os, v); }, value);
-	}
+	// Write property reference instead of properties themselves
+	utils::Serializer::writePOD(os, static_cast<uint8_t>(propertyRef.type));
+	utils::Serializer::writePOD(os, propertyRef.reference);
+	utils::Serializer::writePOD(os, propertyRef.size);
+
+	// Write activation flag
+	utils::Serializer::writePOD(os, isActive_);
 }
 
 Edge Edge::deserialize(std::istream &is) {
@@ -93,12 +95,16 @@ Edge Edge::deserialize(std::istream &is) {
 
 	Edge edge(id, from, to, label);
 
-	auto propCount = utils::Serializer::readPOD<uint32_t>(is);
-	for (uint32_t i = 0; i < propCount; ++i) {
-		std::string key = utils::Serializer::readString(is);
-		PropertyValue value = utils::Serializer::deserializeVariant(is);
-		edge.properties[key] = value;
-	}
+	PropertyReference propRef;
+	propRef.type = static_cast<PropertyReference::StorageType>(
+		utils::Serializer::readPOD<uint8_t>(is));
+	propRef.reference = utils::Serializer::readPOD<uint64_t>(is);
+	propRef.size = utils::Serializer::readPOD<uint32_t>(is);
+
+	edge.setPropertyReference(propRef);
+
+	// Read activation flag
+	edge.isActive_ = utils::Serializer::readPOD<bool>(is);
 
 	return edge;
 }
@@ -106,7 +112,7 @@ Edge Edge::deserialize(std::istream &is) {
 void Edge::setPropertyReference(const PropertyReference& ref) {
 	propertyRef = ref;
 	// Clear cached properties as the reference has changed
-	properties.clear();
+	// properties.clear();
 }
 
 const PropertyReference& Edge::getPropertyReference() const {

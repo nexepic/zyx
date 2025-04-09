@@ -23,7 +23,6 @@ namespace graph::storage {
     constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1 * 512; // 512 bytes per property segment
     constexpr uint32_t BLOB_SECTION_SIZE = SEGMENT_SIZE * 4; // 512K per blob section
     constexpr uint32_t PROPERTY_SEGMENT_SIZE = SEGMENT_SIZE * 2; // 256K per property segment
-    constexpr uint32_t SMALL_PROPERTY_THRESHOLD = 64;
 
     constexpr size_t FILE_HEADER_SIZE = 128;
     constexpr size_t SEGMENT_HEADER_SIZE = 64;

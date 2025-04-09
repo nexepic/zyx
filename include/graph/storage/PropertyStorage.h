@@ -35,7 +35,8 @@ namespace graph::property_storage {
 		    uint8_t entityType,
 		    const std::unordered_map<std::string, PropertyValue>& properties,
 		    uint64_t propertySegmentHead,
-		    storage::DataManager& dataManager);
+		    storage::DataManager& dataManager,
+		    const PropertyReference& existingReference = PropertyReference{});
 
 		// Load properties from a property segment
 		static std::unordered_map<std::string, PropertyValue> loadProperties(const std::shared_ptr<std::ifstream> &file,

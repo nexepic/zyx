@@ -98,6 +98,8 @@ void Node::serialize(std::ostream &os) const {
 	utils::Serializer::writePOD(os, propertyRef.reference);
 	utils::Serializer::writePOD(os, propertyRef.size);
 
+	// Write activation flag
+	utils::Serializer::writePOD(os, isActive_);
 }
 
 Node Node::deserialize(std::istream &is) {
@@ -128,13 +130,16 @@ Node Node::deserialize(std::istream &is) {
 
 	node.setPropertyReference(propRef);
 
+	// Read activation flag
+	node.isActive_ = utils::Serializer::readPOD<bool>(is);
+
 	return node;
 }
 
 void Node::setPropertyReference(const PropertyReference& ref) {
 	propertyRef = ref;
 	// Clear cached properties as the reference has changed
-	properties.clear();
+	// properties.clear();
 }
 
 const PropertyReference& Node::getPropertyReference() const {

@@ -22,7 +22,7 @@ namespace graph::storage {
 		explicit LRUCache(size_t capacity) : capacity_(capacity) {}
 
 		bool contains(const K& key) const {
-			return cache_map_.contains(key);
+			return cache_map_.find(key) != cache_map_.end();
 		}
 
 		V get(const K& key) {

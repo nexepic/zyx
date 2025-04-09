@@ -23,155 +23,204 @@
 
 namespace graph::storage {
 
-// Structure to map ID ranges to segment positions
-struct SegmentIndex {
-    uint64_t startId;
-    uint64_t endId;
-    uint64_t segmentOffset;
-};
+	// Structure to map ID ranges to segment positions
+	struct SegmentIndex {
+		uint64_t startId;
+		uint64_t endId;
+		uint64_t segmentOffset;
+	};
 
-class DataManager {
-public:
-    explicit DataManager(const std::string& dbFilePath, size_t cacheSize = 10000);
-    ~DataManager();
+	class DataManager {
+	public:
+		explicit DataManager(const std::string &dbFilePath, size_t cacheSize = 10000);
+		~DataManager();
 
-    void initialize();
-    void refreshFromDisk();
+		// Enhanced dirty tracking structures - separate from cache
+		struct DirtyEntityInfo {
+			enum class ChangeType { ADDED, MODIFIED, DELETED };
+			ChangeType changeType;
+			// For deleted entities, we need to keep a copy since they're removed from cache
+			std::optional<Node> nodeBackup;
+			std::optional<Edge> edgeBackup;
+		};
 
-    // Header access
-    [[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
-    FileHeader& getFileHeaderRef() { return fileHeader_; }
+		void initialize();
+		void refreshFromDisk();
 
-    // Node-specific operations
-    void addNode(const Node& node);
-    Node getNode(uint64_t id);
-    void refreshNode(const Node& node);
-    std::vector<Node> getNodeBatch(const std::vector<uint64_t>& ids);
-    std::vector<Node> getNodesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
+		// Header access
+		[[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
+		FileHeader &getFileHeaderRef() { return fileHeader_; }
 
-    // Edge-specific operations
-    void addEdge(const Edge& edge);
-    Edge getEdge(uint64_t id);
-    void refreshEdge(const Edge& edge);
-    std::vector<Edge> getEdgeBatch(const std::vector<uint64_t>& ids);
-    std::vector<Edge> getEdgesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
+		// Node-specific operations
+		void addNode(const Node &node);
+		void updateNode(const Node &node);
+		void deleteNode(Node &node);
+		Node getNode(uint64_t id);
+		void refreshNode(const Node &node);
+		std::vector<Node> getNodeBatch(const std::vector<uint64_t> &ids);
+		std::vector<Node> getNodesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
 
-    // Property operations
-    void updateNodeProperty(uint64_t nodeId, const std::string& key, const PropertyValue& value);
-    PropertyValue getNodeProperty(uint64_t nodeId, const std::string& key);
-    void removeNodeProperty(uint64_t nodeId, const std::string& key);
-    void updateEdgeProperty(uint64_t edgeId, const std::string& key, const PropertyValue& value);
-    PropertyValue getEdgeProperty(uint64_t edgeId, const std::string& key);
-    void removeEdgeProperty(uint64_t edgeId, const std::string& key);
+		// Edge-specific operations
+		void addEdge(const Edge &edge);
+		void updateEdge(const Edge &edge);
+		void deleteEdge(Edge &edge);
+		Edge getEdge(uint64_t id);
+		void refreshEdge(const Edge &edge);
+		std::vector<Edge> getEdgeBatch(const std::vector<uint64_t> &ids);
+		std::vector<Edge> getEdgesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
 
-    // Get all properties
-    std::unordered_map<std::string, PropertyValue> getNodeProperties(uint64_t nodeId);
-    std::unordered_map<std::string, PropertyValue> getEdgeProperties(uint64_t edgeId);
+		// Property operations
+		void updateNodeProperty(uint64_t nodeId, const std::string &key, const PropertyValue &value);
+		PropertyValue getNodeProperty(uint64_t nodeId, const std::string &key);
+		void removeNodeProperty(uint64_t nodeId, const std::string &key);
+		void updateEdgeProperty(uint64_t edgeId, const std::string &key, const PropertyValue &value);
+		PropertyValue getEdgeProperty(uint64_t edgeId, const std::string &key);
+		void removeEdgeProperty(uint64_t edgeId, const std::string &key);
 
-    // Blob operations
-    std::string getBlob(uint64_t blobId);
-    uint64_t storeBlob(const std::string& data, const std::string& contentType = "text");
-    [[nodiscard]] BlobStore& getBlobStore() const;
+		// Get all properties
+		std::unordered_map<std::string, PropertyValue> getNodeProperties(uint64_t nodeId);
+		std::unordered_map<std::string, PropertyValue> getEdgeProperties(uint64_t edgeId);
 
-    // Find edges connected to a node
-    std::vector<Edge> findEdgesByNode(uint64_t nodeId, const std::string& direction = "both");
+		template<typename EntityType>
+		bool entityNeedsPropertyStorage(const EntityType &entity) const;
 
-    // Cache management
-    void clearCache();
+		template<typename EntityType>
+		void storeEntityProperties(EntityType& entity, const std::shared_ptr<std::fstream>& fileStream);
 
-    [[nodiscard]] bool hasUnsavedChanges() const { return !dirtyNodes_.empty() || !dirtyEdges_.empty(); }
-    [[nodiscard]] std::vector<Node> getUnsavedNodes() const;
-    [[nodiscard]] std::vector<Edge> getUnsavedEdges() const;
-    void markAllSaved();
+		// Find segment containing the given ID
+		[[nodiscard]] uint64_t findSegmentForNodeId(uint64_t id) const;
+		[[nodiscard]] uint64_t findSegmentForEdgeId(uint64_t id) const;
 
-    void flushToDisk(std::fstream& file);
+		// Blob operations
+		std::string getBlob(uint64_t blobId);
+		uint64_t storeBlob(const std::string &data, const std::string &contentType = "text");
+		[[nodiscard]] BlobStore &getBlobStore() const;
 
-    void markNodePropsDirty(uint64_t nodeId);
-    void markEdgePropsDirty(uint64_t edgeId);
+		// Find edges connected to a node
+		std::vector<Edge> findEdgesByNode(uint64_t nodeId, const std::string &direction = "both");
 
-    // Get entities with dirty properties
-    [[nodiscard]] const std::unordered_set<uint64_t>& getNodesPropsDirty() const;
-    [[nodiscard]] const std::unordered_set<uint64_t>& getEdgesPropsDirty() const;
+		// Cache management
+		void clearCache();
 
-    // Clear dirty flags
-    void clearPropsDirtyFlags();
+		[[nodiscard]] bool hasUnsavedChanges() const { return !dirtyNodes_.empty() || !dirtyEdges_.empty(); }
+		void markAllSaved();
 
-private:
-    std::string dbFilePath_;
-    std::shared_ptr<std::ifstream> file_; // Persistent file handle
+		void flushToDisk(std::fstream &file);
 
-    // Cache for frequently accessed nodes and edges
-    LRUCache<uint64_t, Node> nodeCache_;
-    LRUCache<uint64_t, Edge> edgeCache_;
-    LRUCache<std::pair<uint64_t, std::string>, PropertyValue> propertyCache_;
-    LRUCache<uint64_t, std::string> blobCache_;
+		void markNodeDirty(Node &node);
+		void markEdgeDirty(Edge &edge);
 
-    // Segment indexes for fast lookups
-    std::vector<SegmentIndex> nodeSegmentIndex_;
-    std::vector<SegmentIndex> edgeSegmentIndex_;
-    std::vector<SegmentIndex> propertySegmentIndex_;
+		[[nodiscard]] std::vector<Node> getDirtyNodesWithChangeType(DirtyEntityInfo::ChangeType type) const;
+		[[nodiscard]] std::vector<Edge> getDirtyEdgesWithChangeType(DirtyEntityInfo::ChangeType type) const;
 
-    uint64_t propertySegmentHead_ = 0;
+		// Filter results to exclude deleted entities
+		[[nodiscard]] static std::vector<Node> filterInactiveNodes(const std::vector<Node> &nodes);
+		[[nodiscard]] static std::vector<Edge> filterInactiveEdges(const std::vector<Edge> &edges);
 
-    FileHeader fileHeader_; // Cached file header
+		// Set maximum dirty entities before auto-flush
+		void setMaxDirtyEntities(size_t maxDirtyEntities) { maxDirtyEntities_ = maxDirtyEntities; }
 
-    // Generic segment operations
-    void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;
-	static uint64_t findSegmentForId(const std::vector<SegmentIndex>& segmentIndex, uint64_t id);
+		// Set callback for auto-flush
+		void setAutoFlushCallback(std::function<void()> callback) { autoFlushCallback_ = std::move(callback); }
 
-    // Find segment containing the given ID
-    [[nodiscard]] uint64_t findSegmentForNodeId(uint64_t id) const;
-    [[nodiscard]] uint64_t findSegmentForEdgeId(uint64_t id) const;
+		// Check if we need auto-flush
+		[[nodiscard]] bool needsAutoFlush() const {
+			return dirtyNodes_.size() >= maxDirtyEntities_ || dirtyEdges_.size() >= maxDirtyEntities_;
+		}
 
-    // Load node or edge from disk
-    [[nodiscard]] Node loadNodeFromDisk(uint64_t id) const;
-    [[nodiscard]] Edge loadEdgeFromDisk(uint64_t id) const;
+		// Trigger auto-flush if needed
+		void checkAndTriggerAutoFlush() const;
 
-    PropertyValue loadPropertyFromDisk(uint64_t entityId, const std::string& key, bool isNode);
+	private:
+		std::string dbFilePath_;
+		std::shared_ptr<std::ifstream> file_; // Persistent file handle
 
-    std::unordered_map<std::string, PropertyValue> loadPropertiesFromDisk(const PropertyReference& ref);
+		// Cache for frequently accessed nodes and edges
+		LRUCache<uint64_t, Node> nodeCache_;
+		LRUCache<uint64_t, Edge> edgeCache_;
+		LRUCache<std::pair<uint64_t, std::string>, PropertyValue> propertyCache_;
+		LRUCache<uint64_t, std::string> blobCache_;
 
-    // Load a batch of items from a segment
-    [[nodiscard]] std::vector<Node> loadNodesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId, size_t limit) const;
-    [[nodiscard]] std::vector<Edge> loadEdgesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId, size_t limit) const;
+		// Segment indexes for fast lookups
+		std::vector<SegmentIndex> nodeSegmentIndex_;
+		std::vector<SegmentIndex> edgeSegmentIndex_;
+		std::vector<SegmentIndex> propertySegmentIndex_;
 
-    // Build segment indexes from file for fast lookups
-    void buildNodeSegmentIndex();
-    void buildEdgeSegmentIndex();
-    void buildPropertySegmentIndex();
+		uint64_t propertySegmentHead_ = 0;
 
-    [[nodiscard]] uint64_t findPropertyEntry(uint64_t entityId, uint8_t entityType) const;
+		FileHeader fileHeader_; // Cached file header
 
-    std::unordered_set<uint64_t> dirtyNodes_;
-    std::unordered_set<uint64_t> dirtyEdges_;
+		// Generic segment operations
+		void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;
+		static uint64_t findSegmentForId(const std::vector<SegmentIndex> &segmentIndex, uint64_t id);
 
-    // Track entities with dirty properties
-    std::unordered_set<uint64_t> nodesPropsDirty;
-    std::unordered_set<uint64_t> edgesPropsDirty;
+		// Load node or edge from disk
+		[[nodiscard]] Node loadNodeFromDisk(uint64_t id) const;
+		[[nodiscard]] Edge loadEdgeFromDisk(uint64_t id) const;
 
-    std::unique_ptr<BlobStore> blobStore_;
+		std::unordered_map<std::string, PropertyValue> loadPropertiesFromDisk(const PropertyReference &ref);
 
-    void ensureBlobStoreInitialized();
+		// Load a batch of items from a segment
+		[[nodiscard]] std::vector<Node> loadNodesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+															 size_t limit) const;
+		[[nodiscard]] std::vector<Edge> loadEdgesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+															 size_t limit) const;
 
-    // Generic methods
-    template<typename EntityType>
-    PropertyValue getEntityProperty(uint64_t entityId, const std::string& key, uint8_t entityTypeId);
+		// Build segment indexes from file for fast lookups
+		void buildNodeSegmentIndex();
+		void buildEdgeSegmentIndex();
+		void buildPropertySegmentIndex();
 
-    template<typename EntityType>
-    void updateEntityProperty(uint64_t entityId, const std::string& key, const PropertyValue& value, uint8_t entityTypeId);
+		[[nodiscard]] uint64_t findPropertyEntry(uint64_t entityId, uint8_t entityType) const;
 
-    template<typename EntityType>
-    void removeEntityProperty(uint64_t entityId, const std::string& key, uint8_t entityTypeId);
+		// Configuration for dirty tracking
+		size_t maxDirtyEntities_ = 10000; // Maximum number of dirty entities before auto-flush
 
-    template<typename EntityType>
-    std::unordered_map<std::string, PropertyValue> getEntityProperties(uint64_t entityId);
+		std::unordered_map<uint64_t, DirtyEntityInfo> dirtyNodes_;
+		std::unordered_map<uint64_t, DirtyEntityInfo> dirtyEdges_;
 
-    template<typename EntityType>
-    std::vector<EntityType> loadEntitiesFromSegment(uint64_t segmentOffset,
-                                                 uint64_t startId,
-                                                 uint64_t endId,
-                                                 size_t limit) const;
+		// Auto-flush callback
+		std::function<void()> autoFlushCallback_ = nullptr;
 
-};
+		std::unique_ptr<BlobStore> blobStore_;
+
+		void ensureBlobStoreInitialized();
+
+		template<typename EntityType>
+		std::optional<EntityType> readEntityFromDisk(uint64_t fileOffset) const;
+
+		template<typename EntityType>
+		std::optional<EntityType> findAndReadEntity(uint64_t id) const;
+
+		template<typename EntityType>
+		std::vector<EntityType> readEntitiesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+														size_t limit, bool filterDeleted = true) const;
+
+		// Generic methods
+		template<typename EntityType>
+		PropertyValue getEntityProperty(uint64_t entityId, const std::string &key, uint8_t entityTypeId);
+
+		template<typename EntityType>
+		void updateEntityProperty(uint64_t entityId, const std::string &key, const PropertyValue &value);
+
+		template<typename EntityType>
+		void removeEntityProperty(uint64_t entityId, const std::string &key);
+
+		// Helper method to retrieve an entity from memory (dirty collections and cache) or disk
+		template<typename EntityType>
+		EntityType getEntityFromMemoryOrDisk(uint64_t id);
+
+		// Helper to check if an entity exists in dirty collections
+		template<typename EntityType>
+		std::optional<EntityType> getEntityFromDirty(uint64_t id) const;
+
+		// Helper to check if a property is in dirty collections
+		template<typename EntityType>
+		std::optional<PropertyValue> getPropertyFromMemory(uint64_t entityId, const std::string &key);
+
+		// Helper to retrieve all properties for an entity, including dirty ones
+		template<typename EntityType>
+		std::unordered_map<std::string, PropertyValue> getMergedProperties(uint64_t entityId);
+	};
 
 } // namespace graph::storage

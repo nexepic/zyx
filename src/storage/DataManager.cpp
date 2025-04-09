@@ -115,8 +115,12 @@ struct EntityGetter<Node> {
 		manager->refreshNode(entity);
 	}
 
-	static void markEntityPropsDirty(DataManager* manager, uint64_t id) {
-		manager->markNodePropsDirty(id);
+	static void markEntityDirty(DataManager* manager, Node& node) {
+		manager->markNodeDirty(node);
+	}
+
+	static uint64_t findSegmentForId(const DataManager* manager, uint64_t id) {
+		return manager->findSegmentForNodeId(id);
 	}
 
 	static constexpr uint8_t typeId = Node::typeId;
@@ -133,8 +137,12 @@ struct EntityGetter<Edge> {
 		manager->refreshEdge(entity);
 	}
 
-	static void markEntityPropsDirty(DataManager* manager, uint64_t id) {
-		manager->markEdgePropsDirty(id);
+	static void markEntityDirty(DataManager* manager, Edge& edge) {
+		manager->markEdgeDirty(edge);
+	}
+
+	static uint64_t findSegmentForId(const DataManager* manager, uint64_t id) {
+		return manager->findSegmentForEdgeId(id);
 	}
 
 	static constexpr uint8_t typeId = Edge::typeId;
@@ -257,7 +265,14 @@ void DataManager::addNode(const Node& node) {
 	nodeCache_.put(node.getId(), node);
 
 	// Mark as dirty (needs to be persisted)
-	dirtyNodes_.insert(node.getId());
+	dirtyNodes_[node.getId()] = {
+		DirtyEntityInfo::ChangeType::ADDED,
+		node,
+		std::nullopt
+	};
+
+	// Check if auto-flush is needed
+	checkAndTriggerAutoFlush();
 }
 
 void DataManager::addEdge(const Edge& edge) {
@@ -265,7 +280,127 @@ void DataManager::addEdge(const Edge& edge) {
 	edgeCache_.put(edge.getId(), edge);
 
 	// Mark as dirty (needs to be persisted)
-	dirtyEdges_.insert(edge.getId());
+	dirtyEdges_[edge.getId()] = {
+		DirtyEntityInfo::ChangeType::ADDED,
+		std::nullopt,
+		edge
+	};
+
+	// Check if auto-flush is needed
+	checkAndTriggerAutoFlush();
+}
+
+void DataManager::updateNode(const Node& node) {
+    // Add to cache
+    nodeCache_.put(node.getId(), node);
+
+    // Check if the node is already marked as ADDED in dirtyNodes_
+    auto it = dirtyNodes_.find(node.getId());
+    if (it != dirtyNodes_.end() && it->second.changeType == DirtyEntityInfo::ChangeType::ADDED) {
+        // Keep ADDED state but update the node backup with the latest version
+        dirtyNodes_[node.getId()] = {
+            DirtyEntityInfo::ChangeType::ADDED,
+            node,  // This captures the updated node with properties
+            std::nullopt
+        };
+        return;
+    }
+
+    // Mark as dirty (needs to be persisted)
+    dirtyNodes_[node.getId()] = {
+        DirtyEntityInfo::ChangeType::MODIFIED,
+        node,
+        std::nullopt
+    };
+
+    // Check if auto-flush is needed
+    checkAndTriggerAutoFlush();
+}
+
+void DataManager::updateEdge(const Edge& edge) {
+	// Add to cache
+	edgeCache_.put(edge.getId(), edge);
+
+	// Check if the edge is already marked as ADDED in dirtyEdges_
+	auto it = dirtyEdges_.find(edge.getId());
+	if (it != dirtyEdges_.end() && it->second.changeType == DirtyEntityInfo::ChangeType::ADDED) {
+		dirtyEdges_[edge.getId()] = {
+			DirtyEntityInfo::ChangeType::ADDED,
+			std::nullopt,
+			edge
+		};
+		return;
+	}
+
+	// Mark as dirty (needs to be persisted)
+	dirtyEdges_[edge.getId()] = {
+		DirtyEntityInfo::ChangeType::MODIFIED,
+		std::nullopt,
+		edge
+	};
+
+	// Check if auto-flush is needed
+	checkAndTriggerAutoFlush();
+}
+
+void DataManager::deleteNode(Node& node) {
+	node.markInactive();
+	// Keep a backup copy before removing from cache
+	dirtyNodes_[node.getId()] = {
+		DirtyEntityInfo::ChangeType::DELETED,
+		node,
+		std::nullopt
+	};
+
+	// Remove from cache
+	nodeCache_.remove(node.getId());
+
+	// Check if auto-flush is needed
+	checkAndTriggerAutoFlush();
+}
+
+void DataManager::deleteEdge(Edge& edge) {
+	edge.markInactive();
+	// Keep a backup copy before removing from cache
+	dirtyEdges_[edge.getId()] = {
+		DirtyEntityInfo::ChangeType::DELETED,
+		std::nullopt,
+		edge
+	};
+
+	// Remove from cache
+	edgeCache_.remove(edge.getId());
+
+	// Check if auto-flush is needed
+	checkAndTriggerAutoFlush();
+}
+
+std::vector<Node> DataManager::getDirtyNodesWithChangeType(DirtyEntityInfo::ChangeType type) const {
+	std::vector<Node> result;
+	for (const auto& [id, info] : dirtyNodes_) {
+		if (info.changeType == type) {
+			if (info.nodeBackup.has_value()) {
+				result.push_back(*info.nodeBackup);
+			} else if (nodeCache_.contains(id)) {
+				result.push_back(nodeCache_.peek(id));
+			}
+		}
+	}
+	return result;
+}
+
+std::vector<Edge> DataManager::getDirtyEdgesWithChangeType(DirtyEntityInfo::ChangeType type) const {
+	std::vector<Edge> result;
+	for (const auto& [id, info] : dirtyEdges_) {
+		if (info.changeType == type) {
+			if (info.edgeBackup.has_value()) {
+				result.push_back(*info.edgeBackup);
+			} else if (edgeCache_.contains(id)) {
+				result.push_back(edgeCache_.peek(id));
+			}
+		}
+	}
+	return result;
 }
 
 void DataManager::refreshNode(const Node &node) {
@@ -278,122 +413,33 @@ void DataManager::refreshEdge(const Edge &edge) {
 	edgeCache_.put(edge.getId(), edge);
 }
 
-std::vector<Node> DataManager::getUnsavedNodes() const {
-	std::vector<Node> result;
-	result.reserve(dirtyNodes_.size());
-
-	for (uint64_t id : dirtyNodes_) {
-		// Access from cache without affecting LRU order
-		if (nodeCache_.contains(id)) {
-			result.push_back(nodeCache_.peek(id));
-		}
-	}
-
-	return result;
-}
-
-std::vector<Edge> DataManager::getUnsavedEdges() const {
-	std::vector<Edge> result;
-	result.reserve(dirtyEdges_.size());
-
-	for (uint64_t id : dirtyEdges_) {
-		// Access from cache without affecting LRU order
-		if (edgeCache_.contains(id)) {
-			result.push_back(edgeCache_.peek(id));
-		}
-	}
-
-	return result;
-}
-
 void DataManager::markAllSaved() {
 	dirtyNodes_.clear();
 	dirtyEdges_.clear();
 }
 
+void DataManager::checkAndTriggerAutoFlush() const {
+	if (needsAutoFlush() && autoFlushCallback_) {
+		autoFlushCallback_();
+	}
+}
+
 Node DataManager::getNode(uint64_t id) {
-    // Check if in cache
-    if (nodeCache_.contains(id)) {
-        return nodeCache_.get(id);
-    }
-
-    // Load from disk
-    Node node = loadNodeFromDisk(id);
-    if (node.getId() != 0) {  // Valid node
-        nodeCache_.put(id, node);
-    }
-
-    return node;
+	return getEntityFromMemoryOrDisk<Node>(id);
 }
 
 Edge DataManager::getEdge(uint64_t id) {
-    // Check if in cache
-    if (edgeCache_.contains(id)) {
-        return edgeCache_.get(id);
-    }
-
-    // Load from disk
-    Edge edge = loadEdgeFromDisk(id);
-    if (edge.getId() != 0) {  // Valid edge
-        edgeCache_.put(id, edge);
-    }
-
-    return edge;
+	return getEntityFromMemoryOrDisk<Edge>(id);
 }
 
 Node DataManager::loadNodeFromDisk(uint64_t id) const {
-    uint64_t segmentOffset = findSegmentForNodeId(id);
-    if (segmentOffset == 0) {
-        std::cerr << "Segment not found for Node ID: " << id << std::endl;
-        return {}; // Return empty node if not found
-    }
-
-    // Read segment header
-    SegmentHeader header;
-    file_->seekg(static_cast<std::streamoff>(segmentOffset));
-    file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
-
-    // Calculate position of node within segment
-    uint64_t relativePosition = id - header.start_id;
-    if (relativePosition >= header.used) {
-        std::cerr << "ID " << id << " is out of range for this segment" << std::endl;
-        return {}; // ID is out of range for this segment
-    }
-
-    // Calculate file offset for this node
-    auto nodeOffset = static_cast<std::streamoff>(
-        segmentOffset + sizeof(SegmentHeader) + relativePosition * sizeof(Node));
-
-    file_->seekg(nodeOffset);
-    Node node = Node::deserialize(*file_);
-
-    return node;
-    // Note: At this point, only the basic data and PropertyReference of the Node are deserialized, but the properties are not loaded.
+	auto nodeOpt = findAndReadEntity<Node>(id);
+	return nodeOpt.value_or(Node()); // Return empty node if not found or deleted
 }
 
 Edge DataManager::loadEdgeFromDisk(uint64_t id) const {
-    uint64_t segmentOffset = findSegmentForEdgeId(id);
-    if (segmentOffset == 0) {
-        return {}; // Return empty edge if not found
-    }
-
-    // Read segment header
-    SegmentHeader header;
-    file_->seekg(static_cast<std::streamoff>(segmentOffset));
-    file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
-
-    // Calculate position of edge within segment
-    uint64_t relativePosition = id - header.start_id;
-    if (relativePosition >= header.used) {
-        return {}; // ID is out of range for this segment
-    }
-
-    // Calculate file offset for this edge
-    auto edgeOffset = static_cast<std::streamoff>(
-        segmentOffset + sizeof(SegmentHeader) + relativePosition * sizeof(Edge));
-
-    file_->seekg(edgeOffset);
-    return Edge::deserialize(*file_);
+	auto edgeOpt = findAndReadEntity<Edge>(id);
+	return edgeOpt.value_or(Edge()); // Return empty edge if not found or deleted
 }
 
 std::vector<Node> DataManager::getNodeBatch(const std::vector<uint64_t>& ids) {
@@ -401,8 +447,16 @@ std::vector<Node> DataManager::getNodeBatch(const std::vector<uint64_t>& ids) {
     result.reserve(ids.size());
     std::vector<uint64_t> missedIds;
 
-    // First attempt to get nodes from cache
+    // First check dirty collections and cache
     for (uint64_t id : ids) {
+        // Check dirty collections
+        auto dirtyNode = getEntityFromDirty<Node>(id);
+        if (dirtyNode.has_value()) {
+            result.push_back(*dirtyNode);
+            continue;
+        }
+
+        // Check cache
         if (nodeCache_.contains(id)) {
             result.push_back(nodeCache_.get(id));
         } else {
@@ -421,21 +475,11 @@ std::vector<Node> DataManager::getNodeBatch(const std::vector<uint64_t>& ids) {
 
     // Load nodes segment by segment
     for (const auto& [segmentOffset, segmentIds] : segmentToIds) {
-        SegmentHeader header;
-        file_->seekg(static_cast<std::streamoff>(segmentOffset));
-        file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
-
-        // Get all nodes in this segment that we need
         for (uint64_t id : segmentIds) {
-            uint64_t relativePosition = id - header.start_id;
-            if (relativePosition < header.used) {
-                auto nodeOffset = static_cast<std::streamoff>(
-                    segmentOffset + sizeof(SegmentHeader) + relativePosition * sizeof(Node));
-
-                file_->seekg(nodeOffset);
-                Node node = Node::deserialize(*file_);
+            auto nodeOpt = findAndReadEntity<Node>(id);
+            if (nodeOpt.has_value()) {
+                const Node& node = nodeOpt.value();
                 result.push_back(node);
-
                 // Add to cache
                 nodeCache_.put(id, node);
             }
@@ -446,13 +490,20 @@ std::vector<Node> DataManager::getNodeBatch(const std::vector<uint64_t>& ids) {
 }
 
 std::vector<Edge> DataManager::getEdgeBatch(const std::vector<uint64_t>& ids) {
-    // Implementation similar to getNodeBatch but for edges
     std::vector<Edge> result;
     result.reserve(ids.size());
     std::vector<uint64_t> missedIds;
 
-    // First attempt to get edges from cache
+    // First check dirty collections and cache
     for (uint64_t id : ids) {
+        // Check dirty collections
+        auto dirtyEdge = getEntityFromDirty<Edge>(id);
+        if (dirtyEdge.has_value()) {
+            result.push_back(*dirtyEdge);
+            continue;
+        }
+
+        // Check cache
         if (edgeCache_.contains(id)) {
             result.push_back(edgeCache_.get(id));
         } else {
@@ -471,21 +522,11 @@ std::vector<Edge> DataManager::getEdgeBatch(const std::vector<uint64_t>& ids) {
 
     // Load edges segment by segment
     for (const auto& [segmentOffset, segmentIds] : segmentToIds) {
-        SegmentHeader header;
-        file_->seekg(static_cast<std::streamoff>(segmentOffset));
-        file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
-
-        // Get all edges in this segment that we need
         for (uint64_t id : segmentIds) {
-            uint64_t relativePosition = id - header.start_id;
-            if (relativePosition < header.used) {
-                auto edgeOffset = static_cast<std::streamoff>(
-                    segmentOffset + sizeof(SegmentHeader) + relativePosition * sizeof(Edge));
-
-                file_->seekg(edgeOffset);
-                Edge edge = Edge::deserialize(*file_);
+            auto edgeOpt = findAndReadEntity<Edge>(id);
+            if (edgeOpt.has_value()) {
+                const Edge& edge = edgeOpt.value();
                 result.push_back(edge);
-
                 // Add to cache
                 edgeCache_.put(id, edge);
             }
@@ -564,82 +605,169 @@ std::vector<Edge> DataManager::getEdgesInRange(uint64_t startId, uint64_t endId,
     return result;
 }
 
-// Generic method to load entities from segment
+// Core method to read a single entity from a specific file offset
 template<typename EntityType>
-std::vector<EntityType> DataManager::loadEntitiesFromSegment(uint64_t segmentOffset,
-															 uint64_t startId,
-															 uint64_t endId,
-															 size_t limit) const {
-	std::vector<EntityType> result;
-	if (segmentOffset == 0 || limit == 0) {
-		return result;
-	}
+std::optional<EntityType> DataManager::readEntityFromDisk(uint64_t fileOffset) const {
+    file_->seekg(static_cast<std::streamoff>(fileOffset));
+    EntityType entity = EntityType::deserialize(*file_);
 
-	// Read segment header
-	SegmentHeader header;
-	file_->seekg(static_cast<std::streamoff>(segmentOffset));
-	file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
+    // Check if the entity is marked as inactive
+    if (!entity.isActive()) {
+        return std::nullopt; // Return empty optional if marked as inactive
+    }
 
-	// Calculate effective start and end positions
-	uint64_t effectiveStartId = std::max(startId, header.start_id);
-	uint64_t effectiveEndId = std::min(endId, header.start_id + header.used - 1);
+    return entity;
+}
 
-	if (effectiveStartId > effectiveEndId) {
-		return result;
-	}
+// Core method to find and read a single entity by ID
+template<typename EntityType>
+std::optional<EntityType> DataManager::findAndReadEntity(uint64_t id) const {
+    // Find segment for this entity type and ID
+    uint64_t segmentOffset = EntityGetter<EntityType>::findSegmentForId(this, id);
 
-	// Calculate offsets
-	uint64_t startOffset = effectiveStartId - header.start_id;
-	uint64_t count = std::min(effectiveEndId - effectiveStartId + 1, static_cast<uint64_t>(limit));
+    if (segmentOffset == 0) {
+        return std::nullopt; // Segment not found
+    }
 
-	result.reserve(count);
+    // Read segment header
+    SegmentHeader header;
+    file_->seekg(static_cast<std::streamoff>(segmentOffset));
+    file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
 
-	// Seek to the first entity
-	auto entityOffset = static_cast<std::streamoff>(
-		segmentOffset + sizeof(SegmentHeader) + startOffset * sizeof(EntityType));
-	file_->seekg(entityOffset);
+    // Calculate position of entity within segment
+    uint64_t relativePosition = id - header.start_id;
+    if (relativePosition >= header.used) {
+        return std::nullopt; // ID is out of range for this segment
+    }
 
-	// Read entities
-	for (uint64_t i = 0; i < count; ++i) {
-		EntityType entity = EntityType::deserialize(*file_);
-		result.push_back(entity);
-	}
+    // Calculate file offset for this entity
+    auto entityOffset = static_cast<std::streamoff>(
+        segmentOffset + sizeof(SegmentHeader) + relativePosition * sizeof(EntityType));
 
-	return result;
+    return readEntityFromDisk<EntityType>(entityOffset);
+}
+
+// Core method to read multiple entities from a segment with filtering
+template<typename EntityType>
+std::vector<EntityType> DataManager::readEntitiesFromSegment(
+    uint64_t segmentOffset,
+    uint64_t startId,
+    uint64_t endId,
+    size_t limit,
+    bool filterDeleted) const {
+
+    std::vector<EntityType> result;
+    if (segmentOffset == 0 || limit == 0) {
+        return result;
+    }
+
+    // Read segment header
+    SegmentHeader header;
+    file_->seekg(static_cast<std::streamoff>(segmentOffset));
+    file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
+
+    // Calculate effective start and end positions
+    uint64_t effectiveStartId = std::max(startId, header.start_id);
+    uint64_t effectiveEndId = std::min(endId, header.start_id + header.used - 1);
+
+    if (effectiveStartId > effectiveEndId) {
+        return result;
+    }
+
+    // Calculate offsets
+    uint64_t startOffset = effectiveStartId - header.start_id;
+    uint64_t count = std::min(effectiveEndId - effectiveStartId + 1, static_cast<uint64_t>(limit));
+
+    // Reserve space for the maximum possible entities
+    result.reserve(count);
+
+    // Seek to the first entity
+    auto entityOffset = static_cast<std::streamoff>(
+        segmentOffset + sizeof(SegmentHeader) + startOffset * sizeof(EntityType));
+
+    // Read entities
+    for (uint64_t i = 0; i < count; ++i) {
+        auto entityOpt = readEntityFromDisk<EntityType>(entityOffset);
+        if (entityOpt.has_value()) {
+            result.push_back(entityOpt.value());
+        } else if (!filterDeleted) {
+            // If we're not filtering deleted entities, read directly
+            file_->seekg(entityOffset);
+            EntityType entity = EntityType::deserialize(*file_);
+            result.push_back(entity);
+        }
+
+        // Move to next entity
+        entityOffset += sizeof(EntityType);
+    }
+
+    return result;
 }
 
 std::vector<Node> DataManager::loadNodesFromSegment(uint64_t segmentOffset,
 													   uint64_t startId,
 													   uint64_t endId,
 													   size_t limit) const {
-	return loadEntitiesFromSegment<Node>(segmentOffset, startId, endId, limit);
+	return readEntitiesFromSegment<Node>(segmentOffset, startId, endId, limit);
 }
 
 std::vector<Edge> DataManager::loadEdgesFromSegment(uint64_t segmentOffset,
 													   uint64_t startId,
 													   uint64_t endId,
 													   size_t limit) const {
-	return loadEntitiesFromSegment<Edge>(segmentOffset, startId, endId, limit);
+	return readEntitiesFromSegment<Edge>(segmentOffset, startId, endId, limit);
 }
 
 std::vector<Edge> DataManager::findEdgesByNode(uint64_t nodeId, const std::string& direction) {
     std::vector<Edge> result;
 
-    // This is a more complex operation that requires scanning edges
-    // In a real implementation, you would have secondary indexes for this
-    // For now, we'll scan through edges in batches
+    // First check dirty edges
+    for (const auto& [edgeId, info] : dirtyEdges_) {
+        if (info.changeType != DirtyEntityInfo::ChangeType::DELETED) {
+            Edge edge;
+            if (info.edgeBackup.has_value()) {
+                edge = *info.edgeBackup;
+            } else if (edgeCache_.contains(edgeId)) {
+                edge = edgeCache_.peek(edgeId);
+            } else {
+                continue; // Skip if we can't get the edge
+            }
 
+            bool match = false;
+            if (direction == "outgoing" && edge.getFromNodeId() == nodeId) {
+                match = true;
+            } else if (direction == "incoming" && edge.getToNodeId() == nodeId) {
+                match = true;
+            } else if (direction == "both" &&
+                      (edge.getFromNodeId() == nodeId || edge.getToNodeId() == nodeId)) {
+                match = true;
+            }
+
+            if (match) {
+                result.push_back(edge);
+            }
+        }
+    }
+
+    // Then proceed with disk scan
+    // Scan through edge segments
     for (const auto& segmentIndex : edgeSegmentIndex_) {
         uint64_t segmentOffset = segmentIndex.segmentOffset;
         SegmentHeader header;
         file_->seekg(static_cast<std::streamoff>(segmentOffset));
         file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
 
-        // Scan edges in this segment
-        file_->seekg(static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)));
+        // Read all edges in this segment (allowing for potential filtering)
+        // We set filterDeleted to true to automatically skip deleted edges
+        std::vector<Edge> segmentEdges = readEntitiesFromSegment<Edge>(
+            segmentOffset, header.start_id, header.start_id + header.used - 1, header.used);
 
-        for (uint32_t i = 0; i < header.used; ++i) {
-            Edge edge = Edge::deserialize(*file_);
+        // Filter edges based on direction criteria
+        for (const Edge& edge : segmentEdges) {
+            // Skip edges that are in dirty collection (already processed)
+            if (dirtyEdges_.find(edge.getId()) != dirtyEdges_.end()) {
+                continue;
+            }
 
             bool match = false;
             if (direction == "outgoing" && edge.getFromNodeId() == nodeId) {
@@ -662,68 +790,51 @@ std::vector<Edge> DataManager::findEdgesByNode(uint64_t nodeId, const std::strin
 }
 
 template<typename EntityType>
-void DataManager::updateEntityProperty(uint64_t entityId, const std::string& key, const PropertyValue& value, uint8_t entityTypeId) {
-    // Get the entity
-    EntityType entity = EntityGetter<EntityType>::get(this, entityId);
+void DataManager::updateEntityProperty(uint64_t entityId, const std::string& key, const PropertyValue& value) {
+	// Get the entity
+	EntityType entity = EntityGetter<EntityType>::get(this, entityId);
 
-    if (entity.getId() == 0) {
-        throw std::runtime_error("Entity " + std::to_string(entityId) + " not found");
-    }
+	if (entity.getId() == 0) {
+		throw std::runtime_error("Entity " + std::to_string(entityId) + " not found");
+	}
 
-    // IMPORTANT: Load all existing properties first
-    // This ensures we don't lose existing properties
-    const PropertyReference& propRef = entity.getPropertyReference();
-    if (propRef.type != PropertyReference::StorageType::NONE) {
-        // Load existing properties from disk
-        auto properties = loadPropertiesFromDisk(propRef);
+	// Get all current properties (from memory and disk, with memory taking precedence)
+	std::unordered_map<std::string, PropertyValue> currentProperties = getMergedProperties<EntityType>(entityId);
 
-        // Apply existing properties to the entity
-        for (const auto& [propKey, propValue] : properties) {
-            if (propKey != key) { // Skip the key we're about to update
-                entity.addProperty(propKey, propValue);
-                propertyCache_.put({entityId, propKey}, propValue);
-            }
-        }
-    }
+	// Clear existing properties from the entity and add all current ones back
+	entity.clearProperties();
+	for (const auto& [propKey, propValue] : currentProperties) {
+		if (propKey != key) { // Skip the key we're about to update
+			entity.addProperty(propKey, propValue);
+		}
+	}
 
-    // Now add/update the property
-    entity.addProperty(key, value);
+	// Now add/update the property
+	entity.addProperty(key, value);
 
-    // If the total size of properties exceeds the threshold, store externally
-    if (entity.getTotalPropertySize() > MAX_INLINE_PROPERTY_SIZE) {
-        auto fileStream = std::make_shared<std::fstream>(dbFilePath_, std::ios::binary | std::ios::in | std::ios::out);
+	// Cache the updated property
+	std::pair cacheKey = {entityId, key};
+	propertyCache_.put(cacheKey, value);
 
-        // Store all properties (existing ones + updated one)
-        PropertyReference newPropRef = property_storage::PropertyStorage::storeProperties(
-            fileStream,
-            entityId,
-            entityTypeId,
-            entity.getProperties(), // This now contains all properties
-            propertySegmentHead_,
-            *this
-        );
+	// Check if total property size exceeds threshold, but DON'T store immediately
+	if (entity.getTotalPropertySize() > MAX_INLINE_PROPERTY_SIZE) {
+		// Just mark that this entity needs property storage during next save
+		// Keep any existing property reference if it exists
+		if (entity.getPropertyReference().type == PropertyReference::StorageType::NONE) {
+			entity.setPropertyReference({PropertyReference::StorageType::NEEDS_STORE, 0, 0});
+		}
+	}
 
-        // Set the property reference WITHOUT clearing properties
-        entity.setPropertyReference(newPropRef);
-    }
-
-    // Cache the updated property
-    std::pair cacheKey = {entityId, key};
-    propertyCache_.put(cacheKey, value);
-
-    // Update the entity
-    EntityGetter<EntityType>::refresh(this, entity);
-
-    // Mark as property dirty
-    EntityGetter<EntityType>::markEntityPropsDirty(this, entityId);
+	// Mark entity as dirty
+	EntityGetter<EntityType>::markEntityDirty(this, entity);
 }
 
 void DataManager::updateNodeProperty(uint64_t nodeId, const std::string& key, const PropertyValue& value) {
-	updateEntityProperty<Node>(nodeId, key, value, Node::typeId);
+	updateEntityProperty<Node>(nodeId, key, value);
 }
 
 void DataManager::updateEdgeProperty(uint64_t edgeId, const std::string& key, const PropertyValue& value) {
-	updateEntityProperty<Edge>(edgeId, key, value, Edge::typeId);
+	updateEntityProperty<Edge>(edgeId, key, value);
 }
 
 // Generic method to handle entity properties
@@ -802,181 +913,321 @@ PropertyValue DataManager::getEntityProperty(uint64_t entityId, const std::strin
 }
 
 PropertyValue DataManager::getNodeProperty(uint64_t nodeId, const std::string& key) {
+	// First check if property exists in dirty collections or cache
+	auto dirtyProp = getPropertyFromMemory<Node>(nodeId, key);
+	if (dirtyProp.has_value()) {
+		return *dirtyProp;
+	}
+
+	// If not found in dirty collections, proceed with the original logic
 	return getEntityProperty<Node>(nodeId, key, Node::typeId);
 }
 
 PropertyValue DataManager::getEdgeProperty(uint64_t edgeId, const std::string& key) {
+	// First check if property exists in dirty collections or cache
+	auto dirtyProp = getPropertyFromMemory<Edge>(edgeId, key);
+	if (dirtyProp.has_value()) {
+		return *dirtyProp;
+	}
+
+	// If not found in dirty collections, proceed with the original logic
 	return getEntityProperty<Edge>(edgeId, key, Edge::typeId);
 }
 
-void DataManager::markNodePropsDirty(uint64_t nodeId) {
-    nodesPropsDirty.insert(nodeId);
+void DataManager::markNodeDirty(Node& node) {
+	updateNode(node);
 }
 
-void DataManager::markEdgePropsDirty(uint64_t edgeId) {
-    edgesPropsDirty.insert(edgeId);
-}
-
-const std::unordered_set<uint64_t>& DataManager::getNodesPropsDirty() const {
-    return nodesPropsDirty;
-}
-
-const std::unordered_set<uint64_t>& DataManager::getEdgesPropsDirty() const {
-    return edgesPropsDirty;
-}
-
-void DataManager::clearPropsDirtyFlags() {
-    nodesPropsDirty.clear();
-    edgesPropsDirty.clear();
+void DataManager::markEdgeDirty(Edge& edge) {
+	updateEdge(edge);
 }
 
 template<typename EntityType>
-void DataManager::removeEntityProperty(uint64_t entityId, const std::string& key, uint8_t entityTypeId) {
-    // Get the entity
+bool DataManager::entityNeedsPropertyStorage(const EntityType& entity) const {
+	return entity.getPropertyReference().type == PropertyReference::StorageType::NEEDS_STORE ||
+		   entity.getTotalPropertySize() > MAX_INLINE_PROPERTY_SIZE;
+}
+
+template<typename EntityType>
+void DataManager::storeEntityProperties(EntityType& entity, const std::shared_ptr<std::fstream>& fileStream) {
+	// Only store if needed
+	if (entityNeedsPropertyStorage(entity)) {
+		PropertyReference newPropRef = property_storage::PropertyStorage::storeProperties(
+			fileStream,
+			entity.getId(),
+			EntityType::typeId,
+			entity.getProperties(),
+			propertySegmentHead_,
+			*this,
+			entity.getPropertyReference()
+		);
+
+		// Update property reference
+		entity.setPropertyReference(newPropRef);
+
+		// Mark entity as dirty (again) to ensure the updated reference is saved
+		EntityGetter<EntityType>::markEntityDirty(this, entity);
+	}
+}
+
+// Template instantiations
+template bool DataManager::entityNeedsPropertyStorage<Node>(const Node& entity) const;
+template bool DataManager::entityNeedsPropertyStorage<Edge>(const Edge& entity) const;
+template void DataManager::storeEntityProperties<Node>(Node& entity, const std::shared_ptr<std::fstream>& fileStream);
+template void DataManager::storeEntityProperties<Edge>(Edge& entity, const std::shared_ptr<std::fstream>& fileStream);
+
+template<typename EntityType>
+void DataManager::removeEntityProperty(uint64_t entityId, const std::string& key) {
+	// Get the entity
 	EntityType entity = EntityGetter<EntityType>::get(this, entityId);
 
-    if (entity.getId() == 0) {
-        throw std::runtime_error("Entity " + std::to_string(entityId) + " not found");
-    }
+	if (entity.getId() == 0) {
+		throw std::runtime_error("Entity " + std::to_string(entityId) + " not found");
+	}
 
-    // Get the entity's property reference
-    const PropertyReference& propRef = entity.getPropertyReference();
+	// Get all current properties (from memory and disk, with memory taking precedence)
+	std::unordered_map<std::string, PropertyValue> currentProperties = getMergedProperties<EntityType>(entityId);
 
-    // Check if the property exists
-    if (!entity.hasProperty(key)) {
-        // If the entity does not have this property locally but has a property reference, load all properties
-        if (propRef.type != PropertyReference::StorageType::NONE) {
-            auto properties = loadPropertiesFromDisk(propRef);
+	// Check if the property exists
+	if (currentProperties.find(key) == currentProperties.end()) {
+		return; // Property doesn't exist, nothing to do
+	}
 
-            // If the external storage also does not have this property, return directly
-            if (properties.find(key) == properties.end()) {
-                return;
-            }
+	// Remove the property
+	currentProperties.erase(key);
 
-            // Load all properties (except the one to be deleted) into the entity
-            for (const auto& [propKey, propValue] : properties) {
-                if (propKey != key) {
-                    entity.addProperty(propKey, propValue);
-                }
-            }
+	// Clear existing properties from the entity and add all remaining ones back
+	entity.clearProperties();
+	for (const auto& [propKey, propValue] : currentProperties) {
+		entity.addProperty(propKey, propValue);
+	}
 
-            // Clear the original property reference as we will recreate it
-            entity.setPropertyReference(PropertyReference{});
-        } else {
-            // If there is neither a local property nor an external reference, return directly
-            return;
-        }
-    } else {
-        // If the property exists locally, remove it from the entity
-        entity.removeProperty(key);
-    }
+	// Remove from cache
+	std::pair cacheKey = {entityId, key};
+	if (propertyCache_.contains(cacheKey)) {
+		propertyCache_.remove(cacheKey);
+	}
 
-    // Remove from cache
-    std::pair cacheKey = {entityId, key};
-    if (propertyCache_.contains(cacheKey)) {
-        propertyCache_.remove(cacheKey);
-    }
+	// If the entity still has properties and the total size is large, mark for storage
+	if (!entity.getProperties().empty() && entity.getTotalPropertySize() > MAX_INLINE_PROPERTY_SIZE) {
+		if (entity.getPropertyReference().type == PropertyReference::StorageType::NONE) {
+			entity.setPropertyReference({PropertyReference::StorageType::NEEDS_STORE, 0, 0});
+		}
+	} else {
+		// For small or empty property sets, clear external reference
+		entity.setPropertyReference(PropertyReference{});
+	}
 
-    // If the entity still has properties and the total size is large, store them externally again
-    if (!entity.getProperties().empty() && entity.getTotalPropertySize() > SMALL_PROPERTY_THRESHOLD) {
-        auto fileStream = std::make_shared<std::fstream>(
-            dbFilePath_, std::ios::binary | std::ios::in | std::ios::out);
-
-        // Store the remaining properties again and get a new reference
-        PropertyReference newPropRef = property_storage::PropertyStorage::storeProperties(
-            fileStream,
-            entityId,
-            entityTypeId,
-            entity.getProperties(),
-            propertySegmentHead_,
-            *this
-        );
-
-        // Set the new property reference
-        entity.setPropertyReference(newPropRef);
-    }
-
-    // Update the entity
-	EntityGetter<EntityType>::refresh(this, entity);
+	// Mark as property dirty
+	EntityGetter<EntityType>::markEntityDirty(this, entity);
 }
 
 void DataManager::removeNodeProperty(uint64_t nodeId, const std::string& key) {
-	removeEntityProperty<Node>(nodeId, key, Node::typeId);
+	removeEntityProperty<Node>(nodeId, key);
 }
 
 void DataManager::removeEdgeProperty(uint64_t edgeId, const std::string& key) {
-	removeEntityProperty<Edge>(edgeId, key, Edge::typeId);
+	removeEntityProperty<Edge>(edgeId, key);
+}
+
+std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(uint64_t nodeId) {
+	return getMergedProperties<Node>(nodeId);
+}
+
+std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(uint64_t edgeId) {
+	return getMergedProperties<Edge>(edgeId);
 }
 
 template<typename EntityType>
-std::unordered_map<std::string, PropertyValue> DataManager::getEntityProperties(uint64_t entityId) {
-    // Get the entity
-    EntityType entity = EntityGetter<EntityType>::get(this, entityId);
+std::optional<EntityType> DataManager::getEntityFromDirty(uint64_t id) const {
+    if constexpr (std::is_same_v<EntityType, Node>) {
+        auto it = dirtyNodes_.find(id);
+        if (it != dirtyNodes_.end()) {
+            const auto& info = it->second;
+        	std::cout << "000 Entity ID: " << id << ", Properties: ";
+        	for (const auto& [key, value] : info.nodeBackup->getProperties()) {
+        		std::cout << "111 " << key << " ";
+        	}
+        	std::cout << std::endl;
+            // Return the entity if it's not deleted
+            if (info.changeType != DirtyEntityInfo::ChangeType::DELETED) {
+                // If we have a backup, return it, otherwise try to get from cache
+                if (info.nodeBackup.has_value()) {
+                    return *info.nodeBackup;
+                } else if (nodeCache_.contains(id)) {
+                    return nodeCache_.peek(id);
+                }
+            }
+            // If it's deleted or not available, return nullopt
+            return std::nullopt;
+        }
+    } else if constexpr (std::is_same_v<EntityType, Edge>) {
+        auto it = dirtyEdges_.find(id);
+        if (it != dirtyEdges_.end()) {
+            const auto& info = it->second;
+            // Return the entity if it's not deleted
+            if (info.changeType != DirtyEntityInfo::ChangeType::DELETED) {
+                // If we have a backup, return it, otherwise try to get from cache
+                if (info.edgeBackup.has_value()) {
+                    return *info.edgeBackup;
+                } else if (edgeCache_.contains(id)) {
+                    return edgeCache_.peek(id);
+                }
+            }
+            // If it's deleted or not available, return nullopt
+            return std::nullopt;
+        }
+    }
+
+    return std::nullopt;
+}
+
+template<typename EntityType>
+EntityType DataManager::getEntityFromMemoryOrDisk(uint64_t id) {
+    // First check dirty collections
+    auto dirtyEntity = getEntityFromDirty<EntityType>(id);
+    if (dirtyEntity.has_value()) {
+        return *dirtyEntity;
+    }
+
+    // Then check cache
+    if constexpr (std::is_same_v<EntityType, Node>) {
+        if (nodeCache_.contains(id)) {
+            return nodeCache_.get(id);
+        }
+    } else if constexpr (std::is_same_v<EntityType, Edge>) {
+        if (edgeCache_.contains(id)) {
+            return edgeCache_.get(id);
+        }
+    }
+
+    // Finally, load from disk
+    if constexpr (std::is_same_v<EntityType, Node>) {
+        auto node = loadNodeFromDisk(id);
+        if (node.getId() != 0) {  // Valid node
+            nodeCache_.put(id, node);
+        }
+        return node;
+    } else if constexpr (std::is_same_v<EntityType, Edge>) {
+        auto edge = loadEdgeFromDisk(id);
+        if (edge.getId() != 0) {  // Valid edge
+            edgeCache_.put(id, edge);
+        }
+        return edge;
+    }
+
+    // Return empty entity if not found
+    return EntityType();
+}
+
+template<typename EntityType>
+std::optional<PropertyValue> DataManager::getPropertyFromMemory(uint64_t entityId, const std::string& key) {
+    if constexpr (std::is_same_v<EntityType, Node>) {
+        auto it = dirtyNodes_.find(entityId);
+        if (it != dirtyNodes_.end()) {
+            const auto& info = it->second;
+
+            if (info.changeType == DirtyEntityInfo::ChangeType::DELETED) {
+                return std::nullopt; // Entity is deleted
+            }
+
+            // Try to get from nodeBackup if available
+            if (info.nodeBackup.has_value() && info.nodeBackup->hasProperty(key)) {
+                return info.nodeBackup->getProperty(key);
+            }
+
+            // Try from cache
+            if (nodeCache_.contains(entityId)) {
+                const Node& node = nodeCache_.peek(entityId);
+                if (node.hasProperty(key)) {
+                    return node.getProperty(key);
+                }
+            }
+        }
+    } else if constexpr (std::is_same_v<EntityType, Edge>) {
+        auto it = dirtyEdges_.find(entityId);
+        if (it != dirtyEdges_.end()) {
+            const auto& info = it->second;
+
+            if (info.changeType == DirtyEntityInfo::ChangeType::DELETED) {
+                return std::nullopt; // Entity is deleted
+            }
+
+            // Try to get from edgeBackup if available
+            if (info.edgeBackup.has_value() && info.edgeBackup->hasProperty(key)) {
+                return info.edgeBackup->getProperty(key);
+            }
+
+            // Try from cache
+            if (edgeCache_.contains(entityId)) {
+                const Edge& edge = edgeCache_.peek(entityId);
+                if (edge.hasProperty(key)) {
+                    return edge.getProperty(key);
+                }
+            }
+        }
+    }
+
+    // Check property cache
+    std::pair<uint64_t, std::string> cacheKey = {entityId, key};
+    if (propertyCache_.contains(cacheKey)) {
+        return propertyCache_.get(cacheKey);
+    }
+
+    return std::nullopt;
+}
+
+template<typename EntityType>
+std::unordered_map<std::string, PropertyValue> DataManager::getMergedProperties(uint64_t entityId) {
+    // First get properties from disk or cache
+    EntityType entity = getEntityFromMemoryOrDisk<EntityType>(entityId);
 
     if (entity.getId() == 0) {
         throw std::runtime_error("Entity " + std::to_string(entityId) + " not found");
     }
 
-    // Check if we already have properties in memory
-    if (!entity.getProperties().empty()) {
-        return entity.getProperties();
-    }
+    // Get all properties, including those that might be externally stored
+    std::unordered_map<std::string, PropertyValue> properties;
 
-    // Check the entity's property reference
+    // If entity has a property reference, load properties from disk
     const PropertyReference& propRef = entity.getPropertyReference();
-
-    // If the entity has a property reference, load all properties from disk
     if (propRef.type != PropertyReference::StorageType::NONE) {
-        auto properties = loadPropertiesFromDisk(propRef);
+        properties = loadPropertiesFromDisk(propRef);
 
-        // Update the entity's properties and cache
+        // Update the entity's property set and cache
         for (const auto& [key, value] : properties) {
             entity.addProperty(key, value);
             propertyCache_.put({entityId, key}, value);
         }
-
-        // Update the entity in cache
-        EntityGetter<EntityType>::refresh(this, entity);
+    } else {
+        // Otherwise just use entity's properties
+        properties = entity.getProperties();
     }
 
-    return entity.getProperties();
-}
-
-std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(uint64_t nodeId) {
-	return getEntityProperties<Node>(nodeId);
-}
-
-std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(uint64_t edgeId) {
-	return getEntityProperties<Edge>(edgeId);
-}
-
-PropertyValue DataManager::loadPropertyFromDisk(uint64_t entityId, const std::string& key, bool isNode) {
-    // Find the property entry
-    uint64_t entryOffset = findPropertyEntry(entityId, isNode ? Node::typeId : Edge::typeId);
-    if (entryOffset == 0) {
-        return std::monostate{}; // Property entry not found
-    }
-
-    // Read the property data
-    file_->seekg(static_cast<std::streamoff>(entryOffset));
-
-    // Read the property entry header
-    PropertyEntryHeader entryHeader;
-    file_->read(reinterpret_cast<char*>(&entryHeader), sizeof(entryHeader));
-
-    // Deserialize the properties
-    auto properties = property_storage::PropertyStorage::deserialize(*file_);
-
-    // Check for the specific property
-    if (properties.find(key) != properties.end()) {
-        // Cache all properties
-        for (const auto& [propKey, propValue] : properties) {
-            propertyCache_.put({entityId, propKey}, propValue);
+    // Now check for dirty properties and overlay them
+    if constexpr (std::is_same_v<EntityType, Node>) {
+        auto it = dirtyNodes_.find(entityId);
+        if (it != dirtyNodes_.end() && it->second.changeType != DirtyEntityInfo::ChangeType::DELETED) {
+            if (it->second.nodeBackup.has_value()) {
+                // Overlay dirty properties from backup
+                for (const auto& [key, value] : it->second.nodeBackup->getProperties()) {
+                    properties[key] = value;
+                }
+            }
         }
-        return properties.at(key);
+    } else if constexpr (std::is_same_v<EntityType, Edge>) {
+        auto it = dirtyEdges_.find(entityId);
+        if (it != dirtyEdges_.end() && it->second.changeType != DirtyEntityInfo::ChangeType::DELETED) {
+            if (it->second.edgeBackup.has_value()) {
+                // Overlay dirty properties from backup
+                for (const auto& [key, value] : it->second.edgeBackup->getProperties()) {
+                    properties[key] = value;
+                }
+            }
+        }
     }
 
-    return std::monostate{}; // Specific property not found
+    return properties;
 }
 
 std::unordered_map<std::string, PropertyValue> DataManager::loadPropertiesFromDisk(const PropertyReference& ref) {
@@ -1008,6 +1259,32 @@ std::unordered_map<std::string, PropertyValue> DataManager::loadPropertiesFromDi
     }
 
     return {};
+}
+
+std::vector<Node> DataManager::filterInactiveNodes(const std::vector<Node>& nodes) {
+	std::vector<Node> filteredNodes;
+	filteredNodes.reserve(nodes.size());
+
+	for (const auto& node : nodes) {
+		if (node.isActive()) {
+			filteredNodes.push_back(node);
+		}
+	}
+
+	return filteredNodes;
+}
+
+std::vector<Edge> DataManager::filterInactiveEdges(const std::vector<Edge>& edges) {
+	std::vector<Edge> filteredEdges;
+	filteredEdges.reserve(edges.size());
+
+	for (const auto& edge : edges) {
+		if (edge.isActive()) {
+			filteredEdges.push_back(edge);
+		}
+	}
+
+	return filteredEdges;
 }
 
 std::string DataManager::getBlob(uint64_t blobId) {

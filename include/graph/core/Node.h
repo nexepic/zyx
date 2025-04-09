@@ -35,6 +35,7 @@ namespace graph {
 		void removeProperty(const std::string &key);
 		[[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
 		[[nodiscard]] size_t getTotalPropertySize() const;
+		void clearProperties() { properties.clear(); }
 
 		void setPropertyReference(const PropertyReference& ref);
 		[[nodiscard]] const PropertyReference& getPropertyReference() const;
@@ -49,6 +50,9 @@ namespace graph {
 
 		void setId(uint64_t id) { this->id = id; }
 
+		[[nodiscard]] bool isActive() const { return isActive_; }
+		void markInactive(bool active = false) { isActive_ = active; }
+
 	private:
 		uint64_t id{};
 		std::string label;
@@ -61,6 +65,8 @@ namespace graph {
 		std::vector<uint64_t> outEdges;
 
 		static constexpr size_t MAX_TOTAL_PROPERTY_SIZE = 512 * 1024; // 512KB total property limit per node
+
+		bool isActive_ = true;
 	};
 
 } // namespace graph

@@ -17,7 +17,8 @@ namespace graph {
 		enum class StorageType : uint8_t {
 			NONE = 0,       // No property
 			SEGMENT = 1,    // Property stored in property segment
-			BLOB = 2        // Property stored in BLOB (large property)
+			BLOB = 2,        // Property stored in BLOB (large property)
+			NEEDS_STORE = 3  // properties need to be stored during next save
 		    };
 
 		StorageType type = StorageType::NONE;

@@ -18,11 +18,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 
-// using namespace graph::storage;
-
-// Test fixture for FileStorage
-#include <filesystem>
-
 class FileStorageTest : public ::testing::Test {
 protected:
 	void SetUp() override {
@@ -57,7 +52,7 @@ TEST_F(FileStorageTest, AllocateSegment) {
     ASSERT_TRUE(file.is_open());
 
     // Allocate a segment
-    uint64_t segmentOffset = fileStorage->allocateSegment(file, 0, 10);
+    uint64_t segmentOffset = fileStorage->allocateSegment(0, 10);
 
     // Verify the segment was allocated correctly
     file.seekg(static_cast<std::streamoff>(segmentOffset));
@@ -135,7 +130,7 @@ TEST_F(FileStorageTest, SaveDataEmpty) {
     fileStorage->open();
     std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(file, data, segmentHead, 100);
+    fileStorage->saveData(data, segmentHead, 100);
     EXPECT_EQ(segmentHead, 0u);
 }
 
@@ -146,7 +141,7 @@ TEST_F(FileStorageTest, SaveDataSingleElement) {
     fileStorage->open();
     std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(file, data, segmentHead, 100);
+    fileStorage->saveData(data, segmentHead, 100);
     EXPECT_NE(segmentHead, 0u);
 }
 
@@ -160,7 +155,7 @@ TEST_F(FileStorageTest, SaveDataFitsInOneSegment) {
     fileStorage->open();
     std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(file, data, segmentHead, 100);
+    fileStorage->saveData(data, segmentHead, 100);
     EXPECT_NE(segmentHead, 0u);
 }
 
@@ -174,7 +169,7 @@ TEST_F(FileStorageTest, SaveDataMultipleSegments) {
     fileStorage->open();
     std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(file, data, segmentHead, 100);
+    fileStorage->saveData(data, segmentHead, 100);
     EXPECT_NE(segmentHead, 0u);
 }
 
@@ -188,7 +183,7 @@ TEST_F(FileStorageTest, VerifySegmentLinking) {
     fileStorage->open();
     std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(file, data, segmentHead, 100);
+    fileStorage->saveData(data, segmentHead, 100);
 
     // Read segment headers to check linking
     uint64_t currentOffset = segmentHead;

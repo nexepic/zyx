@@ -15,6 +15,8 @@
 #include "PropertyValue.h"
 #include "Types.h"
 
+#include <graph/utils/Serializer.h>
+
 namespace graph {
 
 	class Edge {
@@ -29,6 +31,7 @@ namespace graph {
 		void removeProperty(const std::string &key);
 		[[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
 		[[nodiscard]] size_t getTotalPropertySize() const;
+		void clearProperties() { properties.clear(); }
 
 		void setPropertyReference(const PropertyReference& ref);
 		[[nodiscard]] const PropertyReference& getPropertyReference() const;
@@ -45,6 +48,9 @@ namespace graph {
 
 		void setId(uint64_t id) { this->id = id; }
 
+		[[nodiscard]] bool isActive() const { return isActive_; }
+		void markInactive(bool active = false) { isActive_ = active; }
+
 	private:
 		uint64_t id{};
 		uint64_t fromNodeId{};
@@ -56,6 +62,8 @@ namespace graph {
 		std::unordered_map<std::string, PropertyValue> properties;
 
 		static constexpr size_t MAX_TOTAL_PROPERTY_SIZE = 512 * 1024; // 512KB total property limit per edge
+
+		bool isActive_ = true;
 	};
 
 } // namespace graph

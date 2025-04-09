@@ -48,7 +48,8 @@ PropertyReference PropertyStorage::storeProperties(
     uint8_t entityType,
     const std::unordered_map<std::string, PropertyValue>& properties,
     uint64_t propertySegmentHead,
-    storage::DataManager& dataManager) {
+    storage::DataManager& dataManager,
+    const PropertyReference& existingReference) {
 
     // If there are no properties, return an empty reference
     if (properties.empty()) {
@@ -75,6 +76,38 @@ PropertyReference PropertyStorage::storeProperties(
            static_cast<uint32_t>(serializedData.size())
         };
     }
+
+	// Check if we can reuse the existing property entry
+	if (existingReference.type == PropertyReference::StorageType::SEGMENT) {
+
+		// We can reuse the existing entry
+		uint64_t entryPosition = existingReference.reference;
+
+		// Seek to the entry position
+		file->seekp(static_cast<std::streamoff>(entryPosition));
+
+		// Write the property entry header
+		storage::PropertyEntryHeader entryHeader;
+		entryHeader.entity_id = entityId;
+		entryHeader.entity_type = entityType;
+		entryHeader.data_size = dataSize;
+		entryHeader.property_count = static_cast<uint32_t>(properties.size());
+
+		file->write(reinterpret_cast<const char*>(&entryHeader), sizeof(entryHeader));
+
+		// Serialize the properties
+		std::stringstream ss;
+		serialize(ss, properties);
+		std::string serializedData = ss.str();
+		file->write(serializedData.c_str(), static_cast<std::streamsize>(serializedData.size()));
+
+		// Return the existing reference with potentially updated size
+		return PropertyReference{
+			PropertyReference::StorageType::SEGMENT,
+			entryPosition,
+			dataSize
+		};
+		}
 
     // Calculate the total size required for the property entry
     uint32_t totalSize = dataSize + sizeof(storage::PropertyEntryHeader);
