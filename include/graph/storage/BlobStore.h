@@ -21,6 +21,7 @@ namespace graph::storage {
     // Header for the blob section
     struct alignas(BLOB_SECTION_HEADER_SIZE) BlobSectionHeader {
         uint64_t next_section_offset = 0;
+        uint64_t prev_section_offset = 0;
         uint32_t capacity = 0;
         uint32_t used = 0;
         uint32_t section_crc = 0;

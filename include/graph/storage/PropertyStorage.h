@@ -33,6 +33,7 @@ namespace graph::property_storage {
 		    const std::shared_ptr<std::fstream>& file,
 		    uint64_t entityId,
 		    uint8_t entityType,
+		    uint64_t entityOffset,
 		    const std::unordered_map<std::string, PropertyValue>& properties,
 		    uint64_t propertySegmentHead,
 		    storage::DataManager& dataManager,
