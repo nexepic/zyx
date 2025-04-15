@@ -29,6 +29,8 @@ namespace graph::storage {
 		void save();
 		void flush();
 
+		void initializeComponents();
+
 		template<typename T>
 		void saveData(std::unordered_map<uint64_t, T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
 
@@ -127,26 +129,33 @@ namespace graph::storage {
 		// Single file stream for all operations
 		std::shared_ptr<std::fstream> fileStream;
 
+		// cacheSize
+		size_t cacheSize;
+
 		// Segment management
 		std::vector<uint64_t> nodeSegments; // List of node segment offsets
 		std::vector<uint64_t> edgeSegments; // List of edge segment offsets
 
 		std::unique_ptr<DataManager> dataManager;
 
+		std::shared_ptr<SpaceManager> spaceManager;
+
 		// Helper methods for updating property references
 		void updateNodePropertyReferences();
 		void updateEdgePropertyReferences();
 
-		// Compaction control
-		void compactStorage(bool force = false);
-
 		// Statistics
 		size_t getDeletedNodeCount() const;
 		size_t getDeletedEdgeCount() const;
-		double getFragmentationRatio() const;
 
 		// Smart methods that decide whether to insert or update
 		uint64_t saveNode(const Node& node);
 		uint64_t saveEdge(const Edge& edge);
+
+		// Truncates the file to its actual size by removing unused space at the end
+		void truncateFileToActualSize();
+
+		// Finds the highest offset of any active segment
+		uint64_t findHighestActiveSegmentEnd() const;
 	};
 } // namespace graph::storage
