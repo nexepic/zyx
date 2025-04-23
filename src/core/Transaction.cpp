@@ -15,19 +15,14 @@ namespace graph {
 
 	Transaction::Transaction(Database &db) : storage(db.getStorage()) { storage.beginWrite(); }
 
-	Node &Transaction::insertNode(const Node &node) {
-		uint64_t nodeId = storage.insertNode(node);
-		newNodes[nodeId] = node;
-		newNodes[nodeId].setId(nodeId);
-		return newNodes[nodeId];
+	Node Transaction::insertNode(const std::string &label) {
+		Node node = storage.insertNode(label);
+		return node;
 	}
 
-	Edge &Transaction::insertEdge(const Node &from, const Node &to, const std::string &label) {
-		Edge edge(0, from.getId(), to.getId(), label);
-		uint64_t edgeId = storage.insertEdge(edge);
-		newEdges[edgeId] = edge;
-		newEdges[edgeId].setId(edgeId);
-		return newEdges[edgeId];
+	Edge Transaction::insertEdge(const uint64_t &from, const uint64_t &to, const std::string &label) {
+		Edge edge = storage.insertEdge(from, to, label);
+		return edge;
 	}
 
 	void Transaction::commit() const { storage.commitWrite(); }

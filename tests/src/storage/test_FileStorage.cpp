@@ -8,15 +8,15 @@
  *
  **/
 
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
 #include <fstream>
 #include <graph/utils/ChecksumUtils.h>
 #include <gtest/gtest.h>
 #include <zlib.h>
 #include "graph/storage/FileStorage.h"
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <filesystem>
 
 class FileStorageTest : public ::testing::Test {
 protected:
@@ -47,29 +47,29 @@ TEST(CalculateCrcTest, BasicTest) {
 
 // Test case for FileStorage::allocateSegment
 TEST_F(FileStorageTest, AllocateSegment) {
-    // Open the file for writing
-    std::fstream file(testFilePath, std::ios::binary | std::ios::out | std::ios::in | std::ios::trunc);
-    ASSERT_TRUE(file.is_open());
+	// Open the file for writing
+	std::fstream file(testFilePath, std::ios::binary | std::ios::out | std::ios::in | std::ios::trunc);
+	ASSERT_TRUE(file.is_open());
 
-    // Allocate a segment
-    uint64_t segmentOffset = fileStorage->allocateSegment(0, 10);
+	// Allocate a segment
+	uint64_t segmentOffset = fileStorage->allocateSegment(0, 10);
 
-    // Verify the segment was allocated correctly
-    file.seekg(static_cast<std::streamoff>(segmentOffset));
-    graph::storage::SegmentHeader header;
-    file.read(reinterpret_cast<char*>(&header), sizeof(header));
-    ASSERT_EQ(header.data_type, static_cast<unsigned int>(0));
-    ASSERT_EQ(header.capacity, static_cast<unsigned int>(10));
-    ASSERT_EQ(header.used, static_cast<unsigned int>(0));
-    ASSERT_EQ(header.next_segment_offset, static_cast<unsigned long long>(0));
-    ASSERT_EQ(header.start_id, static_cast<unsigned long long>(0));
+	// Verify the segment was allocated correctly
+	file.seekg(static_cast<std::streamoff>(segmentOffset));
+	graph::storage::SegmentHeader header;
+	file.read(reinterpret_cast<char *>(&header), sizeof(header));
+	ASSERT_EQ(header.data_type, static_cast<unsigned int>(0));
+	ASSERT_EQ(header.capacity, static_cast<unsigned int>(10));
+	ASSERT_EQ(header.used, static_cast<unsigned int>(0));
+	ASSERT_EQ(header.next_segment_offset, static_cast<unsigned long long>(0));
+	ASSERT_EQ(header.start_id, static_cast<long long>(0));
 
-    // Verify the segment data area is correctly initialized
-    file.seekg(static_cast<std::streamoff>(segmentOffset + sizeof(graph::storage::SegmentHeader)));
-    std::vector<char> data(header.capacity * sizeof(graph::Node), 0);
-    std::vector<char> fileData(data.size());
-    file.read(fileData.data(), static_cast<std::streamsize>(fileData.size()));
-    ASSERT_EQ(data, fileData);
+	// Verify the segment data area is correctly initialized
+	file.seekg(static_cast<std::streamoff>(segmentOffset + sizeof(graph::storage::SegmentHeader)));
+	std::vector<char> data(header.capacity * sizeof(graph::Node), 0);
+	std::vector<char> fileData(data.size());
+	file.read(fileData.data(), static_cast<std::streamsize>(fileData.size()));
+	ASSERT_EQ(data, fileData);
 }
 
 TEST_F(FileStorageTest, TestOpenClose) {
@@ -81,30 +81,24 @@ TEST_F(FileStorageTest, TestOpenClose) {
 
 TEST_F(FileStorageTest, TestInsertNode) {
 	fileStorage->open();
-	graph::Node node(1, "TestNode");
-	uint64_t nodeId = fileStorage->insertNode(node);
-	EXPECT_EQ(nodeId, 1u);
-	graph::Node retrievedNode = fileStorage->getNode(nodeId);
+	graph::Node node = fileStorage->insertNode("TestNode");
+	graph::Node retrievedNode = fileStorage->getNode(node.getId());
 	EXPECT_EQ(retrievedNode.getId(), node.getId());
 	EXPECT_EQ(retrievedNode.getLabel(), node.getLabel());
 }
 
 TEST_F(FileStorageTest, TestInsertEdge) {
 	fileStorage->open();
-	graph::Edge edge(1, 1, 2, "TestEdge");
-	uint64_t edgeId = fileStorage->insertEdge(edge);
-	EXPECT_EQ(edgeId, 1u);
-	graph::Edge retrievedEdge = fileStorage->getEdge(edgeId);
+	graph::Edge edge = fileStorage->insertEdge(1, 2, "TestEdge");
+	graph::Edge retrievedEdge = fileStorage->getEdge(edge.getId());
 	EXPECT_EQ(retrievedEdge.getId(), edge.getId());
 	EXPECT_EQ(retrievedEdge.getLabel(), edge.getLabel());
 }
 
 TEST_F(FileStorageTest, TestGetAllNodes) {
 	fileStorage->open();
-	graph::Node node1(1, "Node1");
-	graph::Node node2(2, "Node2");
-	fileStorage->insertNode(node1);
-	fileStorage->insertNode(node2);
+	fileStorage->insertNode("Node1");
+	fileStorage->insertNode("Node2");
 	auto allNodes = fileStorage->getAllNodes();
 	EXPECT_EQ(allNodes.size(), 2u);
 	EXPECT_EQ(allNodes[1].getLabel(), "Node1");
@@ -113,10 +107,8 @@ TEST_F(FileStorageTest, TestGetAllNodes) {
 
 TEST_F(FileStorageTest, TestGetAllEdges) {
 	fileStorage->open();
-	graph::Edge edge1(1, 1, 2, "Edge1");
-	graph::Edge edge2(2, 2, 3, "Edge2");
-	fileStorage->insertEdge(edge1);
-	fileStorage->insertEdge(edge2);
+	fileStorage->insertEdge(1, 2, "Edge1");
+	fileStorage->insertEdge(2, 3, "Edge2");
 	auto allEdges = fileStorage->getAllEdges();
 	EXPECT_EQ(allEdges.size(), 2u);
 	EXPECT_EQ(allEdges[1].getLabel(), "Edge1");
@@ -125,75 +117,75 @@ TEST_F(FileStorageTest, TestGetAllEdges) {
 
 // Test for empty data
 TEST_F(FileStorageTest, SaveDataEmpty) {
-    std::unordered_map<uint64_t, graph::Node> data;
-    uint64_t segmentHead = 0;
-    fileStorage->open();
-    std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+	std::unordered_map<int64_t, graph::Node> data;
+	uint64_t segmentHead = 0;
+	fileStorage->open();
+	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(data, segmentHead, 100);
-    EXPECT_EQ(segmentHead, 0u);
+	fileStorage->saveData(data, segmentHead, 100);
+	EXPECT_EQ(segmentHead, 0u);
 }
 
 // Test for single data element
 TEST_F(FileStorageTest, SaveDataSingleElement) {
-    std::unordered_map<uint64_t, graph::Node> data = {{1, graph::Node(1, "Node1")}};
-    uint64_t segmentHead = 0;
-    fileStorage->open();
-    std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+	std::unordered_map<int64_t, graph::Node> data = {{1, graph::Node(1, "Node1")}};
+	uint64_t segmentHead = 0;
+	fileStorage->open();
+	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(data, segmentHead, 100);
-    EXPECT_NE(segmentHead, 0u);
+	fileStorage->saveData(data, segmentHead, 100);
+	EXPECT_NE(segmentHead, 0u);
 }
 
 // Test for data that fits in one segment
 TEST_F(FileStorageTest, SaveDataFitsInOneSegment) {
-    std::unordered_map<uint64_t, graph::Node> data;
-    for (uint64_t i = 1; i <= 50; ++i) {
-        data[i] = graph::Node(i, "Node" + std::to_string(i));
-    }
-    uint64_t segmentHead = 0;
-    fileStorage->open();
-    std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+	std::unordered_map<int64_t, graph::Node> data;
+	for (int64_t i = 1; i <= 50; ++i) {
+		data[i] = graph::Node(i, "Node" + std::to_string(i));
+	}
+	uint64_t segmentHead = 0;
+	fileStorage->open();
+	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(data, segmentHead, 100);
-    EXPECT_NE(segmentHead, 0u);
+	fileStorage->saveData(data, segmentHead, 100);
+	EXPECT_NE(segmentHead, 0u);
 }
 
 // Test for data requiring multiple segments
 TEST_F(FileStorageTest, SaveDataMultipleSegments) {
-    std::unordered_map<uint64_t, graph::Node> data;
-    for (uint64_t i = 1; i <= 300; ++i) {
-        data[i] = graph::Node(i, "Node" + std::to_string(i));
-    }
-    uint64_t segmentHead = 0;
-    fileStorage->open();
-    std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+	std::unordered_map<int64_t, graph::Node> data;
+	for (int64_t i = 1; i <= 300; ++i) {
+		data[i] = graph::Node(i, "Node" + std::to_string(i));
+	}
+	uint64_t segmentHead = 0;
+	fileStorage->open();
+	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(data, segmentHead, 100);
-    EXPECT_NE(segmentHead, 0u);
+	fileStorage->saveData(data, segmentHead, 100);
+	EXPECT_NE(segmentHead, 0u);
 }
 
 // Test for verifying segment link correctness
 TEST_F(FileStorageTest, VerifySegmentLinking) {
-    std::unordered_map<uint64_t, graph::Node> data;
-    for (uint64_t i = 1; i <= 300; ++i) {
-        data[i] = graph::Node(i, "Node" + std::to_string(i));
-    }
-    uint64_t segmentHead = 0;
-    fileStorage->open();
-    std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+	std::unordered_map<int64_t, graph::Node> data;
+	for (int64_t i = 1; i <= 300; ++i) {
+		data[i] = graph::Node(i, "Node" + std::to_string(i));
+	}
+	uint64_t segmentHead = 0;
+	fileStorage->open();
+	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-    fileStorage->saveData(data, segmentHead, 100);
+	fileStorage->saveData(data, segmentHead, 100);
 
-    // Read segment headers to check linking
-    uint64_t currentOffset = segmentHead;
-    graph::storage::SegmentHeader header;
-    int segmentCount = 0;
-    while (currentOffset != 0) {
-        file.seekg(static_cast<std::streamoff>(currentOffset));
-        file.read(reinterpret_cast<char*>(&header), sizeof(graph::storage::SegmentHeader));
-        segmentCount++;
-        currentOffset = header.next_segment_offset;
-    }
-    EXPECT_EQ(segmentCount, 3);
+	// Read segment headers to check linking
+	uint64_t currentOffset = segmentHead;
+	graph::storage::SegmentHeader header;
+	int segmentCount = 0;
+	while (currentOffset != 0) {
+		file.seekg(static_cast<std::streamoff>(currentOffset));
+		file.read(reinterpret_cast<char *>(&header), sizeof(graph::storage::SegmentHeader));
+		segmentCount++;
+		currentOffset = header.next_segment_offset;
+	}
+	EXPECT_EQ(segmentCount, 3);
 }

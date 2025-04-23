@@ -23,48 +23,48 @@ namespace graph::query::indexes {
 		RelationshipIndex();
 
 		// Add an edge to the index
-		void addEdge(uint64_t edgeId, uint64_t fromNodeId, uint64_t toNodeId, const std::string& label);
+		void addEdge(int64_t edgeId, int64_t fromNodeId, int64_t toNodeId, const std::string& label);
 
 		// Remove an edge from the index
-		void removeEdge(uint64_t edgeId);
+		void removeEdge(int64_t edgeId);
 
 		// Find edges by label
-		[[nodiscard]] std::vector<uint64_t> findEdgesByLabel(const std::string& label) const;
+		[[nodiscard]] std::vector<int64_t> findEdgesByLabel(const std::string& label) const;
 
 		// Find edges between specific nodes
-		[[nodiscard]] std::vector<uint64_t> findEdgesBetweenNodes(uint64_t fromNodeId, uint64_t toNodeId) const;
+		[[nodiscard]] std::vector<int64_t> findEdgesBetweenNodes(int64_t fromNodeId, int64_t toNodeId) const;
 
 		// Find outgoing edges from a node
-		[[nodiscard]] std::vector<uint64_t> findOutgoingEdges(uint64_t nodeId, const std::string& label = "") const;
+		[[nodiscard]] std::vector<int64_t> findOutgoingEdges(int64_t nodeId, const std::string& label = "") const;
 
 		// Find incoming edges to a node
-		[[nodiscard]] std::vector<uint64_t> findIncomingEdges(uint64_t nodeId, const std::string& label = "") const;
+		[[nodiscard]] std::vector<int64_t> findIncomingEdges(int64_t nodeId, const std::string& label = "") const;
 
 		// Clear the index
 		void clear();
 
 	private:
 		// Label -> edge IDs
-		std::unordered_map<std::string, std::vector<uint64_t>> labelToEdges_;
+		std::unordered_map<std::string, std::vector<int64_t>> labelToEdges_;
 
 		// fromNodeId -> toNodeId -> edge IDs
-		std::unordered_map<uint64_t, std::unordered_map<uint64_t, std::vector<uint64_t>>> nodeToNodeEdges_;
+		std::unordered_map<int64_t, std::unordered_map<int64_t, std::vector<int64_t>>> nodeToNodeEdges_;
 
 		// fromNodeId -> (label -> edge IDs)
-		std::unordered_map<uint64_t, std::unordered_map<std::string, std::vector<uint64_t>>> outgoingEdges_;
+		std::unordered_map<int64_t, std::unordered_map<std::string, std::vector<int64_t>>> outgoingEdges_;
 
 		// toNodeId -> (label -> edge IDs)
-		std::unordered_map<uint64_t, std::unordered_map<std::string, std::vector<uint64_t>>> incomingEdges_;
+		std::unordered_map<int64_t, std::unordered_map<std::string, std::vector<int64_t>>> incomingEdges_;
 
 		// Edge metadata
 		struct EdgeInfo {
-			uint64_t fromNodeId;
-			uint64_t toNodeId;
+			int64_t fromNodeId;
+			int64_t toNodeId;
 			std::string label;
 		};
 
 		// Edge ID -> edge metadata
-		std::unordered_map<uint64_t, EdgeInfo> edgeInfo_;
+		std::unordered_map<int64_t, EdgeInfo> edgeInfo_;
 
 		// Thread safety
 		mutable std::shared_mutex mutex_;

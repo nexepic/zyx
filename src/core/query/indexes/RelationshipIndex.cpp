@@ -9,13 +9,12 @@
  **/
 
 #include "graph/core/query/indexes/RelationshipIndex.h"
-#include <algorithm>
 
 namespace graph::query::indexes {
 
 RelationshipIndex::RelationshipIndex() = default;
 
-void RelationshipIndex::addEdge(uint64_t edgeId, uint64_t fromNodeId, uint64_t toNodeId, const std::string& label) {
+void RelationshipIndex::addEdge(int64_t edgeId, int64_t fromNodeId, int64_t toNodeId, const std::string& label) {
     std::unique_lock lock(mutex_);
 
     // Store edge information
@@ -35,7 +34,7 @@ void RelationshipIndex::addEdge(uint64_t edgeId, uint64_t fromNodeId, uint64_t t
     incomingEdges_[toNodeId][label].push_back(edgeId);
 }
 
-void RelationshipIndex::removeEdge(uint64_t edgeId) {
+void RelationshipIndex::removeEdge(int64_t edgeId) {
     std::unique_lock lock(mutex_);
 
     auto edgeIt = edgeInfo_.find(edgeId);
@@ -86,7 +85,7 @@ void RelationshipIndex::removeEdge(uint64_t edgeId) {
     edgeInfo_.erase(edgeId);
 }
 
-std::vector<uint64_t> RelationshipIndex::findEdgesByLabel(const std::string& label) const {
+std::vector<int64_t> RelationshipIndex::findEdgesByLabel(const std::string& label) const {
     std::shared_lock lock(mutex_);
 
     auto it = labelToEdges_.find(label);
@@ -97,7 +96,7 @@ std::vector<uint64_t> RelationshipIndex::findEdgesByLabel(const std::string& lab
     return it->second;
 }
 
-std::vector<uint64_t> RelationshipIndex::findEdgesBetweenNodes(uint64_t fromNodeId, uint64_t toNodeId) const {
+std::vector<int64_t> RelationshipIndex::findEdgesBetweenNodes(int64_t fromNodeId, int64_t toNodeId) const {
     std::shared_lock lock(mutex_);
 
     auto fromIt = nodeToNodeEdges_.find(fromNodeId);
@@ -113,7 +112,7 @@ std::vector<uint64_t> RelationshipIndex::findEdgesBetweenNodes(uint64_t fromNode
     return toIt->second;
 }
 
-std::vector<uint64_t> RelationshipIndex::findOutgoingEdges(uint64_t nodeId, const std::string& label) const {
+std::vector<int64_t> RelationshipIndex::findOutgoingEdges(int64_t nodeId, const std::string& label) const {
     std::shared_lock lock(mutex_);
 
     auto nodeIt = outgoingEdges_.find(nodeId);
@@ -123,7 +122,7 @@ std::vector<uint64_t> RelationshipIndex::findOutgoingEdges(uint64_t nodeId, cons
 
     if (label.empty()) {
         // Return all outgoing edges regardless of label
-        std::vector<uint64_t> result;
+        std::vector<int64_t> result;
         for (const auto& [edgeLabel, edges] : nodeIt->second) {
             result.insert(result.end(), edges.begin(), edges.end());
         }
@@ -138,7 +137,7 @@ std::vector<uint64_t> RelationshipIndex::findOutgoingEdges(uint64_t nodeId, cons
     }
 }
 
-std::vector<uint64_t> RelationshipIndex::findIncomingEdges(uint64_t nodeId, const std::string& label) const {
+std::vector<int64_t> RelationshipIndex::findIncomingEdges(int64_t nodeId, const std::string& label) const {
     std::shared_lock lock(mutex_);
 
     auto nodeIt = incomingEdges_.find(nodeId);
@@ -148,7 +147,7 @@ std::vector<uint64_t> RelationshipIndex::findIncomingEdges(uint64_t nodeId, cons
 
     if (label.empty()) {
         // Return all incoming edges regardless of label
-        std::vector<uint64_t> result;
+        std::vector<int64_t> result;
         for (const auto& [edgeLabel, edges] : nodeIt->second) {
             result.insert(result.end(), edges.begin(), edges.end());
         }

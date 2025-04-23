@@ -12,7 +12,10 @@
 #include <string>
 #include <unordered_map>
 #include "DataManager.h"
+#include "DatabaseInspector.h"
 #include "DeletionManager.h"
+#include "FileHeaderManager.h"
+#include "IDAllocator.h"
 #include "StorageHeaders.h"
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
@@ -31,8 +34,10 @@ namespace graph::storage {
 
 		void initializeComponents();
 
+		void persistSegmentHeaders();
+
 		template<typename T>
-		void saveData(std::unordered_map<uint64_t, T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
+		void saveData(std::unordered_map<int64_t, T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
 
 		template<typename T>
 		void writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t usedItems);
@@ -40,22 +45,16 @@ namespace graph::storage {
 		uint64_t allocateSegment(uint8_t type, uint32_t capacity) const;
 
 		// Node operations
-		uint64_t insertNode(const Node &node);
-		[[nodiscard]] uint64_t getNextNodeId() const { return max_node_id + 1; }
+		Node insertNode(const std::string &label);
 
 		// Edge operations
-		uint64_t insertEdge(const Edge &edge);
-		[[nodiscard]] uint64_t getNextEdgeId() const { return max_edge_id + 1; }
+		Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label);
 
 		void updateNode(const Node& node);
 		void updateEdge(const Edge& edge);
 
 		bool deleteNode(uint64_t nodeId, bool cascadeEdges = false);
 		bool deleteEdge(uint64_t edgeId);
-
-		[[nodiscard]] uint64_t getLastId() const;
-		[[nodiscard]] uint64_t getNodeCount() const;
-		[[nodiscard]] uint64_t getEdgeCount() const;
 
 		static void beginWrite();
 		void commitWrite();
@@ -65,23 +64,23 @@ namespace graph::storage {
 		void clearCache() const;
 
 		// Get a single node by ID (uses cache)
-		Node getNode(uint64_t id);
+		Node getNode(int64_t id);
 
 		// Get a single edge by ID (uses cache)
-		Edge getEdge(uint64_t id);
+		Edge getEdge(int64_t id);
 
 		// Batch operations
-		std::vector<Node> getNodes(const std::vector<uint64_t> &ids);
-		std::vector<Edge> getEdges(const std::vector<uint64_t> &ids);
+		std::vector<Node> getNodes(const std::vector<int64_t> &ids);
+		std::vector<Edge> getEdges(const std::vector<int64_t> &ids);
 
-		std::unordered_map<uint64_t, Node> getAllNodes();
-		std::unordered_map<uint64_t, Edge> getAllEdges();
+		std::unordered_map<int64_t, Node> getAllNodes();
+		std::unordered_map<int64_t, Edge> getAllEdges();
 
 		// Query-specific loading methods
-		std::vector<Node> getNodesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
-		std::vector<Edge> getEdgesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
-		std::vector<Edge> findEdgesByNode(uint64_t nodeId, const std::string &direction = "both");
-		std::vector<uint64_t> findConnectedNodeIds(uint64_t nodeId, const std::string &direction = "both");
+		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
+		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
+		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both");
+		std::vector<int64_t> findConnectedNodeIds(int64_t nodeId, const std::string &direction = "both");
 
 		// Node property operations
 		void updateNodeProperty(uint64_t nodeId, const std::string &key, const PropertyValue &value);
@@ -96,6 +95,9 @@ namespace graph::storage {
 		template<typename T>
 		void updateEntityInPlace(const T& entity);
 
+		template<typename T>
+		void deleteEntityOnDisk(const T &entity);
+
 		// Get all properties for a node
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(uint64_t nodeId);
 
@@ -109,20 +111,17 @@ namespace graph::storage {
 		// isFileOpen getter
 		[[nodiscard]] bool isOpen() const { return isFileOpen; }
 
-		void updateEntityProperties();
-
 		std::unique_ptr<DeletionManager> deletionManager;
 
-		void updateNodeDeletionStatus(uint64_t nodeId, bool isDeleted);
+		// Verify bitmap consistency for debugging purposes
+		bool verifyBitmapConsistency(uint64_t segmentOffset);
 
 	private:
 		std::string dbFilePath;
 		std::unordered_map<uint64_t, Node> nodes;
 		std::unordered_map<uint64_t, Edge> edges;
-		uint64_t max_node_id = 0;
-		uint64_t max_edge_id = 0;
 
-		FileHeader currentHeader;
+		FileHeader fileHeader;
 
 		bool isFileOpen = false;
 
@@ -132,30 +131,35 @@ namespace graph::storage {
 		// cacheSize
 		size_t cacheSize;
 
+		std::shared_ptr<IDAllocator> idAllocator;
+
 		// Segment management
 		std::vector<uint64_t> nodeSegments; // List of node segment offsets
 		std::vector<uint64_t> edgeSegments; // List of edge segment offsets
+
+		std::shared_ptr<FileHeaderManager> fileHeaderManager;
 
 		std::unique_ptr<DataManager> dataManager;
 
 		std::shared_ptr<SpaceManager> spaceManager;
 
-		// Helper methods for updating property references
-		void updateNodePropertyReferences();
-		void updateEdgePropertyReferences();
+		std::shared_ptr<DatabaseInspector> databaseInspector;
 
-		// Statistics
-		size_t getDeletedNodeCount() const;
-		size_t getDeletedEdgeCount() const;
+		// Update bitmap for an entity in the segment header
+		template<typename EntityType>
+		void updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive);
 
-		// Smart methods that decide whether to insert or update
-		uint64_t saveNode(const Node& node);
-		uint64_t saveEdge(const Edge& edge);
+		// Update bitmap when writing segment data in batch
+		void updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count, bool isActive = true);
 
-		// Truncates the file to its actual size by removing unused space at the end
-		void truncateFileToActualSize();
+		// Read the current segment header from disk
+		SegmentHeader readSegmentHeader(uint64_t segmentOffset) const;
 
-		// Finds the highest offset of any active segment
-		uint64_t findHighestActiveSegmentEnd() const;
+		// Write updated segment header to disk
+		void writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader& header);
+
+		std::mutex flushMutex;
+		std::atomic<bool> flushInProgress{false};
+		std::atomic<bool> deleteOperationPerformed{false};
 	};
 } // namespace graph::storage

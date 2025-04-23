@@ -90,7 +90,7 @@ void FullTextIndex::removeTextProperty(uint64_t nodeId, const std::string& key) 
     }
 }
 
-std::vector<uint64_t> FullTextIndex::search(const std::string& key, const std::string& searchText) const {
+std::vector<int64_t> FullTextIndex::search(const std::string& key, const std::string& searchText) const {
     std::vector<std::string> searchTokens = tokenize(searchText);
     if (searchTokens.empty()) {
         return {};
@@ -111,7 +111,7 @@ std::vector<uint64_t> FullTextIndex::search(const std::string& key, const std::s
         return {};
     }
 
-    std::vector<uint64_t> result = tokenIt->second;
+    std::vector<int64_t> result = tokenIt->second;
 
     // Intersect with nodes matching subsequent tokens
     for (size_t i = 1; i < searchTokens.size(); ++i) {
@@ -122,10 +122,10 @@ std::vector<uint64_t> FullTextIndex::search(const std::string& key, const std::s
         }
 
         const auto& nodeIds = tokenIt->second;
-        std::vector<uint64_t> intersection;
+        std::vector<int64_t> intersection;
 
         // Find intersection (assuming vectors are unsorted)
-        for (uint64_t nodeId : result) {
+        for (int64_t nodeId : result) {
             if (std::find(nodeIds.begin(), nodeIds.end(), nodeId) != nodeIds.end()) {
                 intersection.push_back(nodeId);
             }

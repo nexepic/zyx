@@ -22,8 +22,8 @@ namespace graph {
 	public:
 	    explicit Transaction(Database &db);
 
-	    Node &insertNode(const Node &node);
-	    Edge &insertEdge(const Node &from, const Node &to, const std::string &label);
+	    Node insertNode(const std::string &label);
+	    Edge insertEdge(const uint64_t &from, const uint64_t &to, const std::string &label);
 
 	    void commit() const;
 	    void rollback() const;

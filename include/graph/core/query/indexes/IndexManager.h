@@ -42,16 +42,16 @@ public:
     [[nodiscard]] std::shared_ptr<FullTextIndex> getFullTextIndex() const;
 
     // Find nodes by various criteria
-    std::vector<uint64_t> findNodeIdsByLabel(const std::string& label) const;
-    std::vector<uint64_t> findNodeIdsByProperty(const std::string& key, const std::string& value) const;
-    std::vector<uint64_t> findNodeIdsByPropertyRange(const std::string& key, double minValue, double maxValue) const;
-    std::vector<uint64_t> findNodeIdsByTextSearch(const std::string& key, const std::string& searchText) const;
+    std::vector<int64_t> findNodeIdsByLabel(const std::string& label) const;
+    std::vector<int64_t> findNodeIdsByProperty(const std::string& key, const std::string& value) const;
+    std::vector<int64_t> findNodeIdsByPropertyRange(const std::string& key, double minValue, double maxValue) const;
+    std::vector<int64_t> findNodeIdsByTextSearch(const std::string& key, const std::string& searchText) const;
 
     // Relationship queries
-    std::vector<uint64_t> findEdgeIdsByRelationship(const std::string& label) const;
-    std::vector<uint64_t> findEdgeIdsByNodes(uint64_t fromNodeId, uint64_t toNodeId) const;
-    std::vector<uint64_t> findOutgoingEdgeIds(uint64_t nodeId, const std::string& label = "") const;
-    std::vector<uint64_t> findIncomingEdgeIds(uint64_t nodeId, const std::string& label = "") const;
+    std::vector<int64_t> findEdgeIdsByRelationship(const std::string& label) const;
+    std::vector<int64_t> findEdgeIdsByNodes(int64_t fromNodeId, int64_t toNodeId) const;
+    std::vector<int64_t> findOutgoingEdgeIds(int64_t nodeId, const std::string& label = "") const;
+    std::vector<int64_t> findIncomingEdgeIds(int64_t nodeId, const std::string& label = "") const;
 
 private:
     std::shared_ptr<storage::FileStorage> storage_;

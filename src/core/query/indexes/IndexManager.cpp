@@ -200,36 +200,36 @@ std::shared_ptr<FullTextIndex> IndexManager::getFullTextIndex() const {
     return fullTextIndex_;
 }
 
-std::vector<uint64_t> IndexManager::findNodeIdsByLabel(const std::string& label) const {
+std::vector<int64_t> IndexManager::findNodeIdsByLabel(const std::string& label) const {
     return labelIndex_->findNodes(label);
 }
 
-std::vector<uint64_t> IndexManager::findNodeIdsByProperty(const std::string& key, const std::string& value) const {
+std::vector<int64_t> IndexManager::findNodeIdsByProperty(const std::string& key, const std::string& value) const {
     PropertyValue propValue = value;
     return propertyIndex_->findExactMatch(key, propValue);
 }
 
-std::vector<uint64_t> IndexManager::findNodeIdsByPropertyRange(const std::string& key, double minValue, double maxValue) const {
+std::vector<int64_t> IndexManager::findNodeIdsByPropertyRange(const std::string& key, double minValue, double maxValue) const {
     return propertyIndex_->findRange(key, minValue, maxValue);
 }
 
-std::vector<uint64_t> IndexManager::findNodeIdsByTextSearch(const std::string& key, const std::string& searchText) const {
+std::vector<int64_t> IndexManager::findNodeIdsByTextSearch(const std::string& key, const std::string& searchText) const {
     return fullTextIndex_->search(key, searchText);
 }
 
-std::vector<uint64_t> IndexManager::findEdgeIdsByRelationship(const std::string& label) const {
+std::vector<int64_t> IndexManager::findEdgeIdsByRelationship(const std::string& label) const {
     return relationshipIndex_->findEdgesByLabel(label);
 }
 
-std::vector<uint64_t> IndexManager::findEdgeIdsByNodes(uint64_t fromNodeId, uint64_t toNodeId) const {
+std::vector<int64_t> IndexManager::findEdgeIdsByNodes(int64_t fromNodeId, int64_t toNodeId) const {
     return relationshipIndex_->findEdgesBetweenNodes(fromNodeId, toNodeId);
 }
 
-std::vector<uint64_t> IndexManager::findOutgoingEdgeIds(uint64_t nodeId, const std::string& label) const {
+std::vector<int64_t> IndexManager::findOutgoingEdgeIds(int64_t nodeId, const std::string& label) const {
     return relationshipIndex_->findOutgoingEdges(nodeId, label);
 }
 
-std::vector<uint64_t> IndexManager::findIncomingEdgeIds(uint64_t nodeId, const std::string& label) const {
+std::vector<int64_t> IndexManager::findIncomingEdgeIds(int64_t nodeId, const std::string& label) const {
     return relationshipIndex_->findIncomingEdges(nodeId, label);
 }
 

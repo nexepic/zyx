@@ -9,141 +9,149 @@
  **/
 
 #include "graph/core/Node.h"
+#include <graph/storage/IDAllocator.h>
 #include <stdexcept>
+
 #include "graph/core/PropertyValue.h"
 #include "graph/storage/PropertyStorage.h"
 #include "graph/utils/Serializer.h"
 
 namespace graph {
 
-Node::Node(uint64_t id, std::string label) : id(id), label(std::move(label)) {}
+	Node::Node(int64_t id, std::string label = "") : id(id), label(std::move(label)) {}
 
-uint64_t Node::getId() const { return id; }
+	int64_t Node::getId() const { return id; }
 
-const std::string &Node::getLabel() const { return label; }
+	bool Node::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(id); }
 
-void Node::addProperty(const std::string &key, const PropertyValue &value) {
-    size_t valueSize = property_utils::getPropertyValueSize(value);
-    size_t keySize = key.size();
-    size_t newTotalSize = getTotalPropertySize();
+	void Node::setPermanentId(int64_t permanentId) {
+		if (!hasTemporaryId()) {
+			throw std::runtime_error("Cannot set permanent ID for node that already has one");
+		}
+		id = permanentId;
+	}
 
-    if (properties.count(key) > 0) {
-        newTotalSize -= property_utils::getPropertyValueSize(properties[key]);
-        newTotalSize -= key.size();
-    }
+	const std::string &Node::getLabel() const { return label; }
 
-    newTotalSize += keySize + valueSize;
+	void Node::addProperty(const std::string &key, const PropertyValue &value) {
+		size_t valueSize = property_utils::getPropertyValueSize(value);
+		size_t keySize = key.size();
+		size_t newTotalSize = getTotalPropertySize();
 
-    if (newTotalSize > MAX_TOTAL_PROPERTY_SIZE) {
-        throw std::runtime_error("Property size limit exceeded for node " + std::to_string(id));
-    }
+		if (properties.count(key) > 0) {
+			newTotalSize -= property_utils::getPropertyValueSize(properties[key]);
+			newTotalSize -= key.size();
+		}
 
-    properties[key] = value;
-}
+		newTotalSize += keySize + valueSize;
 
-bool Node::hasProperty(const std::string &key) const { return properties.count(key) > 0; }
+		if (newTotalSize > MAX_TOTAL_PROPERTY_SIZE) {
+			throw std::runtime_error("Property size limit exceeded for node " + std::to_string(id));
+		}
 
-PropertyValue Node::getProperty(const std::string &key) const {
-    auto it = properties.find(key);
-    if (it == properties.end()) {
-        throw std::out_of_range("Property " + key + " not found");
-    }
-    return it->second;
-}
+		properties[key] = value;
+	}
 
-void Node::removeProperty(const std::string &key) {
-    auto it = properties.find(key);
-    if (it != properties.end()) {
-        properties.erase(it);
-    }
-}
+	bool Node::hasProperty(const std::string &key) const { return properties.count(key) > 0; }
 
-const std::unordered_map<std::string, PropertyValue> &Node::getProperties() const { return properties; }
+	PropertyValue Node::getProperty(const std::string &key) const {
+		auto it = properties.find(key);
+		if (it == properties.end()) {
+			throw std::out_of_range("Property " + key + " not found");
+		}
+		return it->second;
+	}
 
-size_t Node::getTotalPropertySize() const {
-    size_t totalSize = 0;
-    for (const auto &[key, value]: properties) {
-        totalSize += key.size();
-        totalSize += property_utils::getPropertyValueSize(value);
-    }
-    return totalSize;
-}
+	void Node::removeProperty(const std::string &key) {
+		auto it = properties.find(key);
+		if (it != properties.end()) {
+			properties.erase(it);
+		}
+	}
 
-void Node::addOutEdge(uint64_t edgeId) { outEdges.push_back(edgeId); }
+	const std::unordered_map<std::string, PropertyValue> &Node::getProperties() const { return properties; }
 
-void Node::addInEdge(uint64_t edgeId) { inEdges.push_back(edgeId); }
+	size_t Node::getTotalPropertySize() const {
+		size_t totalSize = 0;
+		for (const auto &[key, value]: properties) {
+			totalSize += key.size();
+			totalSize += property_utils::getPropertyValueSize(value);
+		}
+		return totalSize;
+	}
 
-const std::vector<uint64_t> &Node::getOutEdges() const { return outEdges; }
+	void Node::addOutEdge(uint64_t edgeId) { outEdges.push_back(edgeId); }
 
-const std::vector<uint64_t> &Node::getInEdges() const { return inEdges; }
+	void Node::addInEdge(uint64_t edgeId) { inEdges.push_back(edgeId); }
 
-void Node::serialize(std::ostream &os) const {
-	// Write fixed-size node data
-	utils::Serializer::writePOD(os, id);
-	utils::Serializer::writeString(os, label);
+	const std::vector<uint64_t> &Node::getOutEdges() const { return outEdges; }
 
-	// // Write edge counts and IDs
-	// utils::Serializer::writePOD(os, static_cast<uint32_t>(inEdges.size()));
-	// for (const auto &edgeId: inEdges) {
-	// 	utils::Serializer::writePOD(os, edgeId);
-	// }
-	//
-	// utils::Serializer::writePOD(os, static_cast<uint32_t>(outEdges.size()));
-	// for (const auto &edgeId: outEdges) {
-	// 	utils::Serializer::writePOD(os, edgeId);
-	// }
+	const std::vector<uint64_t> &Node::getInEdges() const { return inEdges; }
 
-	// Write property reference instead of properties themselves
-	utils::Serializer::writePOD(os, static_cast<uint8_t>(propertyRef.type));
-	utils::Serializer::writePOD(os, propertyRef.reference);
-	utils::Serializer::writePOD(os, propertyRef.size);
+	void Node::serialize(std::ostream &os) const {
+		// Write fixed-size node data
+		utils::Serializer::writePOD(os, id);
+		utils::Serializer::writeString(os, label);
 
-	// Write activation flag
-	utils::Serializer::writePOD(os, isActive_);
-}
+		// // Write edge counts and IDs
+		// utils::Serializer::writePOD(os, static_cast<uint32_t>(inEdges.size()));
+		// for (const auto &edgeId: inEdges) {
+		// 	utils::Serializer::writePOD(os, edgeId);
+		// }
+		//
+		// utils::Serializer::writePOD(os, static_cast<uint32_t>(outEdges.size()));
+		// for (const auto &edgeId: outEdges) {
+		// 	utils::Serializer::writePOD(os, edgeId);
+		// }
 
-Node Node::deserialize(std::istream &is) {
-	auto id = utils::Serializer::readPOD<uint64_t>(is);
-	std::string label = utils::Serializer::readString(is);
+		// Write property reference instead of properties themselves
+		utils::Serializer::writePOD(os, static_cast<uint8_t>(propertyRef.type));
+		utils::Serializer::writePOD(os, propertyRef.reference);
+		utils::Serializer::writePOD(os, propertyRef.size);
 
-	Node node(id, label);
+		// Write activation flag
+		utils::Serializer::writePOD(os, isActive_);
+	}
 
-	// // Read edge counts and IDs
-	// auto inEdgeCount = utils::Serializer::readPOD<uint32_t>(is);
-	// for (uint32_t i = 0; i < inEdgeCount; ++i) {
-	// 	auto edgeId = utils::Serializer::readPOD<uint64_t>(is);
-	// 	node.addInEdge(edgeId);
-	// }
-	//
-	// auto outEdgeCount = utils::Serializer::readPOD<uint32_t>(is);
-	// for (uint32_t i = 0; i < outEdgeCount; ++i) {
-	// 	auto edgeId = utils::Serializer::readPOD<uint64_t>(is);
-	// 	node.addOutEdge(edgeId);
-	// }
+	Node Node::deserialize(std::istream &is) {
+		auto id = utils::Serializer::readPOD<uint64_t>(is);
+		std::string label = utils::Serializer::readString(is);
 
-	// Read property reference
-	PropertyReference propRef;
-	propRef.type = static_cast<PropertyReference::StorageType>(
-		utils::Serializer::readPOD<uint8_t>(is));
-	propRef.reference = utils::Serializer::readPOD<uint64_t>(is);
-	propRef.size = utils::Serializer::readPOD<uint32_t>(is);
+		Node node(id, label);
 
-	node.setPropertyReference(propRef);
+		// // Read edge counts and IDs
+		// auto inEdgeCount = utils::Serializer::readPOD<uint32_t>(is);
+		// for (uint32_t i = 0; i < inEdgeCount; ++i) {
+		// 	auto edgeId = utils::Serializer::readPOD<uint64_t>(is);
+		// 	node.addInEdge(edgeId);
+		// }
+		//
+		// auto outEdgeCount = utils::Serializer::readPOD<uint32_t>(is);
+		// for (uint32_t i = 0; i < outEdgeCount; ++i) {
+		// 	auto edgeId = utils::Serializer::readPOD<uint64_t>(is);
+		// 	node.addOutEdge(edgeId);
+		// }
 
-	// Read activation flag
-	node.isActive_ = utils::Serializer::readPOD<bool>(is);
+		// Read property reference
+		PropertyReference propRef;
+		propRef.type = static_cast<PropertyReference::StorageType>(utils::Serializer::readPOD<uint8_t>(is));
+		propRef.reference = utils::Serializer::readPOD<uint64_t>(is);
+		propRef.size = utils::Serializer::readPOD<uint32_t>(is);
 
-	return node;
-}
+		node.setPropertyReference(propRef);
 
-void Node::setPropertyReference(const PropertyReference& ref) {
-	propertyRef = ref;
-	// Clear cached properties as the reference has changed
-	// properties.clear();
-}
+		// Read activation flag
+		node.isActive_ = utils::Serializer::readPOD<bool>(is);
 
-const PropertyReference& Node::getPropertyReference() const {
-	return propertyRef;
-}
+		return node;
+	}
+
+	void Node::setPropertyReference(const PropertyReference &ref) {
+		propertyRef = ref;
+		// Clear cached properties as the reference has changed
+		// properties.clear();
+	}
+
+	const PropertyReference &Node::getPropertyReference() const { return propertyRef; }
 
 } // namespace graph

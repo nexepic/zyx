@@ -40,7 +40,7 @@ namespace graph::property_storage {
 		    const PropertyReference& existingReference = PropertyReference{});
 
 		// Load properties from a property segment
-		static std::unordered_map<std::string, PropertyValue> loadProperties(const std::shared_ptr<std::ifstream> &file,
+		static std::unordered_map<std::string, PropertyValue> loadProperties(const std::shared_ptr<std::fstream> &file,
 		    const PropertyReference& reference);
 
 		// Allocate a new property segment

@@ -68,6 +68,10 @@ namespace graph::storage {
 			return it->second->second;
 		}
 
+		// Add iterator support
+		auto begin() const { return cache_list_.begin(); }
+		auto end() const { return cache_list_.end(); }
+
 		void remove(const K& key) {
 			auto it = cache_map_.find(key);
 			if (it != cache_map_.end()) {
@@ -90,7 +94,7 @@ namespace graph::storage {
 		std::list<std::pair<K, V>> cache_list_;
 		// std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> cache_map_;
 
-		using Hash = std::conditional_t<std::is_same_v<K, std::pair<uint64_t, std::string>>,
+		using Hash = std::conditional_t<std::is_same_v<K, std::pair<int64_t, std::string>>,
 					utils::PairHash,
 					std::hash<K>>;
 

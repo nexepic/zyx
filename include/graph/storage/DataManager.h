@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include "CacheManager.h"
+#include "IDAllocator.h"
 #include "StorageHeaders.h"
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
@@ -25,14 +26,15 @@ namespace graph::storage {
 
 	// Structure to map ID ranges to segment positions
 	struct SegmentIndex {
-		uint64_t startId;
-		uint64_t endId;
+		int64_t startId;
+		int64_t endId;
 		uint64_t segmentOffset;
 	};
 
 	class DataManager {
 	public:
-		explicit DataManager(const std::string &dbFilePath, size_t cacheSize = 10000);
+		explicit DataManager(const std::string &dbFilePath, size_t cacheSize, FileHeader &fileHeader,
+							 std::shared_ptr<IDAllocator> idAllocator);
 		~DataManager();
 
 		// Enhanced dirty tracking structures - separate from cache
@@ -45,7 +47,7 @@ namespace graph::storage {
 		};
 
 		void initialize();
-		void refreshFromDisk();
+		// void refreshFromDisk();
 
 		// Header access
 		[[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
@@ -55,41 +57,48 @@ namespace graph::storage {
 		void addNode(const Node &node);
 		void updateNode(const Node &node);
 		void deleteNode(Node &node);
-		Node getNode(uint64_t id);
+		Node getNode(int64_t id);
 		void refreshNode(const Node &node);
-		std::vector<Node> getNodeBatch(const std::vector<uint64_t> &ids);
-		std::vector<Node> getNodesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
+		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids);
+		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
 
 		// Edge-specific operations
 		void addEdge(const Edge &edge);
 		void updateEdge(const Edge &edge);
 		void deleteEdge(Edge &edge);
-		Edge getEdge(uint64_t id);
+		Edge getEdge(int64_t id);
 		void refreshEdge(const Edge &edge);
-		std::vector<Edge> getEdgeBatch(const std::vector<uint64_t> &ids);
-		std::vector<Edge> getEdgesInRange(uint64_t startId, uint64_t endId, size_t limit = 1000);
+		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids);
+		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
+
+		// Reserve temporary IDs
+		int64_t reserveTemporaryNodeId();
+		int64_t reserveTemporaryEdgeId();
+
+		// Update entities with permanent IDs after save
+		void updateEntitiesWithPermanentIds();
 
 		// Property operations
-		void updateNodeProperty(uint64_t nodeId, const std::string &key, const PropertyValue &value);
-		PropertyValue getNodeProperty(uint64_t nodeId, const std::string &key);
-		void removeNodeProperty(uint64_t nodeId, const std::string &key);
-		void updateEdgeProperty(uint64_t edgeId, const std::string &key, const PropertyValue &value);
-		PropertyValue getEdgeProperty(uint64_t edgeId, const std::string &key);
-		void removeEdgeProperty(uint64_t edgeId, const std::string &key);
+		void updateNodeProperty(int64_t nodeId, const std::string &key, const PropertyValue &value);
+		PropertyValue getNodeProperty(int64_t nodeId, const std::string &key);
+		void removeNodeProperty(int64_t nodeId, const std::string &key);
+		void updateEdgeProperty(int64_t edgeId, const std::string &key, const PropertyValue &value);
+		PropertyValue getEdgeProperty(int64_t edgeId, const std::string &key);
+		void removeEdgeProperty(int64_t edgeId, const std::string &key);
 
 		// Get all properties
-		std::unordered_map<std::string, PropertyValue> getNodeProperties(uint64_t nodeId);
-		std::unordered_map<std::string, PropertyValue> getEdgeProperties(uint64_t edgeId);
+		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId);
+		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId);
 
 		template<typename EntityType>
 		bool entityNeedsPropertyStorage(const EntityType &entity) const;
 
 		template<typename EntityType>
-		void storeEntityProperties(EntityType& entity, const std::shared_ptr<std::fstream>& fileStream);
+		void storeEntityProperties(EntityType &entity, const std::shared_ptr<std::fstream> &fileStream);
 
 		// Find segment containing the given ID
-		[[nodiscard]] uint64_t findSegmentForNodeId(uint64_t id) const;
-		[[nodiscard]] uint64_t findSegmentForEdgeId(uint64_t id) const;
+		[[nodiscard]] uint64_t findSegmentForNodeId(int64_t id) const;
+		[[nodiscard]] uint64_t findSegmentForEdgeId(int64_t id) const;
 
 		// Blob operations
 		std::string getBlob(uint64_t blobId);
@@ -97,7 +106,12 @@ namespace graph::storage {
 		[[nodiscard]] BlobStore &getBlobStore() const;
 
 		// Find edges connected to a node
-		std::vector<Edge> findEdgesByNode(uint64_t nodeId, const std::string &direction = "both");
+		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both");
+
+		// Build segment indexes from file for fast lookups
+		void buildNodeSegmentIndex();
+		void buildEdgeSegmentIndex();
+		void buildPropertySegmentIndex();
 
 		// Cache management
 		void clearCache();
@@ -112,10 +126,6 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<Node> getDirtyNodesWithChangeType(DirtyEntityInfo::ChangeType type) const;
 		[[nodiscard]] std::vector<Edge> getDirtyEdgesWithChangeType(DirtyEntityInfo::ChangeType type) const;
-
-		// Filter results to exclude deleted entities
-		[[nodiscard]] static std::vector<Node> filterInactiveNodes(const std::vector<Node> &nodes);
-		[[nodiscard]] static std::vector<Edge> filterInactiveEdges(const std::vector<Edge> &edges);
 
 		// Set maximum dirty entities before auto-flush
 		void setMaxDirtyEntities(size_t maxDirtyEntities) { maxDirtyEntities_ = maxDirtyEntities; }
@@ -136,9 +146,9 @@ namespace graph::storage {
 		std::shared_ptr<std::ifstream> file_; // Persistent file handle
 
 		// Cache for frequently accessed nodes and edges
-		LRUCache<uint64_t, Node> nodeCache_;
-		LRUCache<uint64_t, Edge> edgeCache_;
-		LRUCache<std::pair<uint64_t, std::string>, PropertyValue> propertyCache_;
+		LRUCache<int64_t, Node> nodeCache_;
+		LRUCache<int64_t, Edge> edgeCache_;
+		LRUCache<std::pair<int64_t, std::string>, PropertyValue> propertyCache_;
 		LRUCache<uint64_t, std::string> blobCache_;
 
 		// Segment indexes for fast lookups
@@ -148,36 +158,34 @@ namespace graph::storage {
 
 		uint64_t propertySegmentHead_ = 0;
 
-		FileHeader fileHeader_; // Cached file header
+		FileHeader &fileHeader_; // Cached file header
+
+		// ID allocator reference
+		std::shared_ptr<IDAllocator> idAllocator_;
 
 		// Generic segment operations
 		void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;
-		static uint64_t findSegmentForId(const std::vector<SegmentIndex> &segmentIndex, uint64_t id);
+		static uint64_t findSegmentForId(const std::vector<SegmentIndex> &segmentIndex, int64_t id);
 
 		// Load node or edge from disk
-		[[nodiscard]] Node loadNodeFromDisk(uint64_t id) const;
-		[[nodiscard]] Edge loadEdgeFromDisk(uint64_t id) const;
+		[[nodiscard]] Node loadNodeFromDisk(int64_t id) const;
+		[[nodiscard]] Edge loadEdgeFromDisk(int64_t id) const;
 
 		std::unordered_map<std::string, PropertyValue> loadPropertiesFromDisk(const PropertyReference &ref);
 
 		// Load a batch of items from a segment
-		[[nodiscard]] std::vector<Node> loadNodesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+		[[nodiscard]] std::vector<Node> loadNodesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 															 size_t limit) const;
-		[[nodiscard]] std::vector<Edge> loadEdgesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+		[[nodiscard]] std::vector<Edge> loadEdgesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 															 size_t limit) const;
 
-		// Build segment indexes from file for fast lookups
-		void buildNodeSegmentIndex();
-		void buildEdgeSegmentIndex();
-		void buildPropertySegmentIndex();
-
-		[[nodiscard]] uint64_t findPropertyEntry(uint64_t entityId, uint8_t entityType) const;
+		[[nodiscard]] uint64_t findPropertyEntry(int64_t entityId, uint8_t entityType) const;
 
 		// Configuration for dirty tracking
-		size_t maxDirtyEntities_ = 10000; // Maximum number of dirty entities before auto-flush
+		size_t maxDirtyEntities_ = 1000; // Maximum number of dirty entities before auto-flush
 
-		std::unordered_map<uint64_t, DirtyEntityInfo> dirtyNodes_;
-		std::unordered_map<uint64_t, DirtyEntityInfo> dirtyEdges_;
+		std::unordered_map<int64_t, DirtyEntityInfo> dirtyNodes_;
+		std::unordered_map<int64_t, DirtyEntityInfo> dirtyEdges_;
 
 		// Auto-flush callback
 		std::function<void()> autoFlushCallback_ = nullptr;
@@ -187,40 +195,40 @@ namespace graph::storage {
 		void ensureBlobStoreInitialized();
 
 		template<typename EntityType>
-		std::optional<EntityType> readEntityFromDisk(uint64_t fileOffset) const;
+		std::optional<EntityType> readEntityFromDisk(int64_t fileOffset) const;
 
 		template<typename EntityType>
-		std::optional<EntityType> findAndReadEntity(uint64_t id) const;
+		std::optional<EntityType> findAndReadEntity(int64_t id) const;
 
 		template<typename EntityType>
-		std::vector<EntityType> readEntitiesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+		std::vector<EntityType> readEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 														size_t limit, bool filterDeleted = true) const;
 
 		// Generic methods
 		template<typename EntityType>
-		PropertyValue getEntityProperty(uint64_t entityId, const std::string &key, uint8_t entityTypeId);
+		PropertyValue getEntityProperty(int64_t entityId, const std::string &key, uint8_t entityTypeId);
 
 		template<typename EntityType>
-		void updateEntityProperty(uint64_t entityId, const std::string &key, const PropertyValue &value);
+		void updateEntityProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
 
 		template<typename EntityType>
-		void removeEntityProperty(uint64_t entityId, const std::string &key);
+		void removeEntityProperty(int64_t entityId, const std::string &key);
 
 		// Helper method to retrieve an entity from memory (dirty collections and cache) or disk
 		template<typename EntityType>
-		EntityType getEntityFromMemoryOrDisk(uint64_t id);
+		EntityType getEntityFromMemoryOrDisk(int64_t id);
 
 		// Helper to check if an entity exists in dirty collections
 		template<typename EntityType>
-		std::optional<EntityType> getEntityFromDirty(uint64_t id) const;
+		std::optional<EntityType> getEntityFromDirty(int64_t id) const;
 
 		// Helper to check if a property is in dirty collections
 		template<typename EntityType>
-		std::optional<PropertyValue> getPropertyFromMemory(uint64_t entityId, const std::string &key);
+		std::optional<PropertyValue> getPropertyFromMemory(int64_t entityId, const std::string &key);
 
 		// Helper to retrieve all properties for an entity, including dirty ones
 		template<typename EntityType>
-		std::unordered_map<std::string, PropertyValue> getMergedProperties(uint64_t entityId);
+		std::unordered_map<std::string, PropertyValue> getMergedProperties(int64_t entityId);
 	};
 
 } // namespace graph::storage

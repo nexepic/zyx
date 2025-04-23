@@ -31,20 +31,20 @@ namespace graph::query::indexes {
 		void removeProperty(uint64_t nodeId, const std::string& key);
 
 		// Find nodes with a specific property value
-		[[nodiscard]] std::vector<uint64_t> findExactMatch(const std::string& key, const PropertyValue& value) const;
+		[[nodiscard]] std::vector<int64_t> findExactMatch(const std::string& key, const PropertyValue& value) const;
 
 		// Find nodes with property values in a range (for numeric properties)
-		[[nodiscard]] std::vector<uint64_t> findRange(const std::string& key, double minValue, double maxValue) const;
+		[[nodiscard]] std::vector<int64_t> findRange(const std::string& key, double minValue, double maxValue) const;
 
 		// Clear the index
 		void clear();
 
 	private:
 		// Hash-based exact match index: key -> value -> node IDs
-		std::unordered_map<std::string, std::unordered_map<std::string, std::vector<uint64_t>>> stringIndex_;
-		std::unordered_map<std::string, std::unordered_map<int64_t, std::vector<uint64_t>>> intIndex_;
-		std::unordered_map<std::string, std::unordered_map<double, std::vector<uint64_t>>> doubleIndex_;
-		std::unordered_map<std::string, std::unordered_map<bool, std::vector<uint64_t>>> boolIndex_;
+		std::unordered_map<std::string, std::unordered_map<std::string, std::vector<int64_t>>> stringIndex_;
+		std::unordered_map<std::string, std::unordered_map<int64_t, std::vector<int64_t>>> intIndex_;
+		std::unordered_map<std::string, std::unordered_map<double, std::vector<int64_t>>> doubleIndex_;
+		std::unordered_map<std::string, std::unordered_map<bool, std::vector<int64_t>>> boolIndex_;
 
 		// B-tree style ordered index for range queries: key -> (value -> node IDs)
 		std::unordered_map<std::string, std::map<double, std::vector<uint64_t>>> rangeIndex_;

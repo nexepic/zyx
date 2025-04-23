@@ -22,7 +22,7 @@ namespace graph {
 	class Edge {
 	public:
 		Edge() = default;
-		Edge(uint64_t id, uint64_t from, uint64_t to, std::string  label);
+		Edge(int64_t id, int64_t from, int64_t to, std::string label);
 
 		// Property methods
 		void addProperty(const std::string &key, const PropertyValue &value);
@@ -36,10 +36,14 @@ namespace graph {
 		void setPropertyReference(const PropertyReference& ref);
 		[[nodiscard]] const PropertyReference& getPropertyReference() const;
 
-		[[nodiscard]] uint64_t getFromNodeId() const;
-		[[nodiscard]] uint64_t getToNodeId() const;
-		[[nodiscard]] uint64_t getId() const;
+		[[nodiscard]] int64_t getFromNodeId() const;
+		[[nodiscard]] int64_t getToNodeId() const;
+		[[nodiscard]] int64_t getId() const;
 		[[nodiscard]] const std::string& getLabel() const;
+
+		[[nodiscard]] bool hasTemporaryId() const;
+
+		void setPermanentId(int64_t permanentId);
 
 		void serialize(std::ostream& os) const;
 		static Edge deserialize(std::istream& is);
@@ -52,9 +56,9 @@ namespace graph {
 		void markInactive(bool active = false) { isActive_ = active; }
 
 	private:
-		uint64_t id{};
-		uint64_t fromNodeId{};
-		uint64_t toNodeId{};
+		int64_t id{};
+		int64_t fromNodeId{};
+		int64_t toNodeId{};
 		std::string label;
 
 		PropertyReference propertyRef;

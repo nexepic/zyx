@@ -22,10 +22,6 @@ namespace graph {
         // Ensure the database is open and ready
         db.getStorage().open();
 
-        std::cout << "Database opened with "
-                  << db.getStorage().getNodeCount() << " nodes and "
-                  << db.getStorage().getEdgeCount() << " edges.\n";
-
         char *line = nullptr;
         while ((line = readline("\033[1;32mmetrix>\033[0m ")) != nullptr) {
             std::string command(line);
@@ -53,11 +49,49 @@ namespace graph {
             std::getline(std::cin, label);
 
             auto transaction = db.beginTransaction();
-            Node node(0, label); // Assuming Node constructor takes id and label
-            auto &newNode = transaction.insertNode(node);
-            transaction.commit();
+			Node newNode = transaction.insertNode(label);
+            // transaction.commit();
 
             std::cout << "Added node with ID: " << newNode.getId() << "\n";
+        }else if (command == "deleteNode") {
+        	int nodeId;
+        	std::cout << "Enter node ID to delete: ";
+        	std::cin >> nodeId;
+        	std::cin.ignore(); // Clear the newline
+
+        	try {
+        		// auto transaction = db.beginTransaction();
+        		bool success = db.getStorage().deleteNode(nodeId, true); // Assuming cascadeEdges is true
+        		// transaction.commit();
+
+        		if (success) {
+        			std::cout << "Deleted node with ID: " << nodeId << "\n";
+        		} else {
+        			std::cout << "Node with ID " << nodeId << " not found\n";
+        		}
+        	} catch (const std::exception &e) {
+        		std::cout << "Error: " << e.what() << "\n";
+        	}
+        }
+        else if (command == "deleteEdge") {
+        	int edgeId;
+        	std::cout << "Enter edge ID to delete: ";
+        	std::cin >> edgeId;
+        	std::cin.ignore(); // Clear the newline
+
+        	try {
+        		auto transaction = db.beginTransaction();
+        		bool success = db.getStorage().deleteEdge(edgeId);
+        		transaction.commit();
+
+        		if (success) {
+        			std::cout << "Deleted edge with ID: " << edgeId << "\n";
+        		} else {
+        			std::cout << "Edge with ID " << edgeId << " not found\n";
+        		}
+        	} catch (const std::exception &e) {
+        		std::cout << "Error: " << e.what() << "\n";
+        	}
         }
         else if (command == "addProperty") {
             // Add property to a node
@@ -283,18 +317,8 @@ namespace graph {
 
             try {
                 auto transaction = db.beginTransaction();
-                // First get the nodes to make sure they exist
-                auto fromNode = db.getStorage().getNode(from);
-                auto toNode = db.getStorage().getNode(to);
 
-                if (fromNode.getId() == 0 || toNode.getId() == 0) {
-                    std::cout << "One or both nodes do not exist\n";
-                    return;
-                }
-
-                Edge edge(0, fromNode.getId(), toNode.getId(),
-                          relation); // Assuming Edge constructor takes id, from, to, and label
-                auto &newEdge = transaction.insertEdge(fromNode, toNode, relation);
+				Edge newEdge = transaction.insertEdge(from, to, relation);
                 transaction.commit();
                 std::cout << "Added edge with ID: " << newEdge.getId() << "\n";
             } catch (const std::exception &e) {
@@ -365,7 +389,7 @@ namespace graph {
             }
         }
         else if (command == "save") {
-            db.getStorage().save();
+            db.getStorage().flush();
             std::cout << "Database saved\n";
         }
         else if (command == "help") {

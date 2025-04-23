@@ -183,7 +183,7 @@ namespace graph::property_storage {
 	}
 
 	std::unordered_map<std::string, PropertyValue>
-	PropertyStorage::loadProperties(const std::shared_ptr<std::ifstream> &file, const PropertyReference &reference) {
+	PropertyStorage::loadProperties(const std::shared_ptr<std::fstream> &file, const PropertyReference &reference) {
 
 		// If there are no properties, return an empty map
 		if (reference.type == PropertyReference::StorageType::NONE) {

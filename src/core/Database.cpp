@@ -65,7 +65,7 @@ Transaction Database::beginTransaction() {
     return Transaction(*this);
 }
 
-Node Database::getNode(uint64_t id) {
+Node Database::getNode(int64_t id) {
     if (!openFlag) {
         open();
     }
@@ -73,7 +73,7 @@ Node Database::getNode(uint64_t id) {
     return storage->getNode(id);
 }
 
-Edge Database::getEdge(uint64_t id) {
+Edge Database::getEdge(int64_t id) {
     if (!openFlag) {
         open();
     }
@@ -81,7 +81,7 @@ Edge Database::getEdge(uint64_t id) {
     return storage->getEdge(id);
 }
 
-std::vector<Node> Database::getNodes(const std::vector<uint64_t>& ids) {
+std::vector<Node> Database::getNodes(const std::vector<int64_t>& ids) {
     if (!openFlag) {
         open();
     }
@@ -89,7 +89,7 @@ std::vector<Node> Database::getNodes(const std::vector<uint64_t>& ids) {
     return storage->getNodes(ids);
 }
 
-std::vector<Edge> Database::getEdges(const std::vector<uint64_t>& ids) {
+std::vector<Edge> Database::getEdges(const std::vector<int64_t>& ids) {
     if (!openFlag) {
         open();
     }
@@ -97,7 +97,7 @@ std::vector<Edge> Database::getEdges(const std::vector<uint64_t>& ids) {
     return storage->getEdges(ids);
 }
 
-std::vector<Node> Database::getNodesInRange(uint64_t startId, uint64_t endId, size_t limit) {
+std::vector<Node> Database::getNodesInRange(int64_t startId, int64_t endId, size_t limit) {
     if (!openFlag) {
         open();
     }
@@ -105,7 +105,7 @@ std::vector<Node> Database::getNodesInRange(uint64_t startId, uint64_t endId, si
     return storage->getNodesInRange(startId, endId, limit);
 }
 
-std::vector<Edge> Database::getEdgesInRange(uint64_t startId, uint64_t endId, size_t limit) {
+std::vector<Edge> Database::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) {
     if (!openFlag) {
         open();
     }

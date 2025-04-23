@@ -15,7 +15,7 @@ namespace graph::query::indexes {
 
 LabelIndex::LabelIndex() = default;
 
-void LabelIndex::addNode(uint64_t nodeId, const std::string& label) {
+void LabelIndex::addNode(int64_t nodeId, const std::string& label) {
     std::unique_lock lock(mutex_);
 
     // Add to label -> nodes mapping
@@ -25,7 +25,7 @@ void LabelIndex::addNode(uint64_t nodeId, const std::string& label) {
     nodeToLabels_[nodeId].push_back(label);
 }
 
-void LabelIndex::removeNode(uint64_t nodeId, const std::string& label) {
+void LabelIndex::removeNode(int64_t nodeId, const std::string& label) {
     std::unique_lock lock(mutex_);
 
     // Remove from label -> nodes mapping
@@ -53,7 +53,7 @@ void LabelIndex::removeNode(uint64_t nodeId, const std::string& label) {
     }
 }
 
-std::vector<uint64_t> LabelIndex::findNodes(const std::string& label) const {
+std::vector<int64_t> LabelIndex::findNodes(const std::string& label) const {
     std::shared_lock lock(mutex_);
 
     auto it = labelToNodes_.find(label);
@@ -64,7 +64,7 @@ std::vector<uint64_t> LabelIndex::findNodes(const std::string& label) const {
     return it->second;
 }
 
-bool LabelIndex::hasLabel(uint64_t nodeId, const std::string& label) const {
+bool LabelIndex::hasLabel(int64_t nodeId, const std::string& label) const {
     std::shared_lock lock(mutex_);
 
     auto it = nodeToLabels_.find(nodeId);

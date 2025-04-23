@@ -118,8 +118,8 @@ QueryResult QueryExecutor::executeLabelPropertyScan(const QueryPlan& plan) {
         std::swap(labelNodeIds, propertyNodeIds);
     }
 
-    std::vector<uint64_t> intersection;
-    for (uint64_t nodeId : labelNodeIds) {
+    std::vector<int64_t> intersection;
+    for (int64_t nodeId : labelNodeIds) {
         if (std::find(propertyNodeIds.begin(), propertyNodeIds.end(), nodeId) != propertyNodeIds.end()) {
             intersection.push_back(nodeId);
         }
@@ -211,7 +211,7 @@ QueryResult QueryExecutor::executeRelationshipScan(const QueryPlan& plan) {
     std::string label = (labelIt != stringParams.end()) ? labelIt->second : "";
     std::string direction = (directionIt != stringParams.end()) ? directionIt->second : "outgoing";
 
-    std::vector<uint64_t> edgeIds;
+    std::vector<int64_t> edgeIds;
 
     // Find edges based on direction
     if (direction == "outgoing" || direction == "both") {
@@ -231,7 +231,7 @@ QueryResult QueryExecutor::executeRelationshipScan(const QueryPlan& plan) {
     // Retrieve the actual edges
 	auto fetchedEdges = storage_->getEdges(edgeIds);
 	// Convert them to a map if we need fast lookups
-	std::unordered_map<uint64_t, Edge> edgeMap;
+	std::unordered_map<int64_t, Edge> edgeMap;
 	edgeMap.reserve(fetchedEdges.size());
 	for (auto &e : fetchedEdges) {
 		edgeMap[e.getId()] = e;
@@ -244,7 +244,7 @@ QueryResult QueryExecutor::executeRelationshipScan(const QueryPlan& plan) {
 
             // Optionally include connected nodes
             if (stringParams.find("includeNodes") != stringParams.end()) {
-                std::vector<uint64_t> neededIds;
+                std::vector<int64_t> neededIds;
                 neededIds.push_back(it->second.getFromNodeId());
                 neededIds.push_back(it->second.getToNodeId());
                 auto connectedNodes = storage_->getNodes(neededIds);

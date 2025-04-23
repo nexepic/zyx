@@ -132,10 +132,10 @@ void PropertyIndex::removeProperty(uint64_t nodeId, const std::string& key) {
     }
 }
 
-std::vector<uint64_t> PropertyIndex::findExactMatch(const std::string& key, const PropertyValue& value) const {
+std::vector<int64_t> PropertyIndex::findExactMatch(const std::string& key, const PropertyValue& value) const {
     std::shared_lock lock(mutex_);
 
-    return std::visit([&](const auto& v) -> std::vector<uint64_t> {
+    return std::visit([&](const auto& v) -> std::vector<int64_t> {
         using T = std::decay_t<decltype(v)>;
 
         if constexpr (std::is_same_v<T, std::string>) {
@@ -193,7 +193,7 @@ std::vector<uint64_t> PropertyIndex::findExactMatch(const std::string& key, cons
     }, value);
 }
 
-std::vector<uint64_t> PropertyIndex::findRange(const std::string& key, double minValue, double maxValue) const {
+std::vector<int64_t> PropertyIndex::findRange(const std::string& key, double minValue, double maxValue) const {
     std::shared_lock lock(mutex_);
 
     auto rangeIt = rangeIndex_.find(key);
@@ -201,7 +201,7 @@ std::vector<uint64_t> PropertyIndex::findRange(const std::string& key, double mi
         return {};
     }
 
-    std::vector<uint64_t> result;
+    std::vector<int64_t> result;
 
     // Find all values in the range
     auto startIt = rangeIt->second.lower_bound(minValue);

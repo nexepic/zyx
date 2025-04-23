@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <vector>
 #include <set>
-#include <mutex>
 #include <shared_mutex>
 
 namespace graph::query::indexes {
@@ -30,7 +29,7 @@ namespace graph::query::indexes {
 		void removeTextProperty(uint64_t nodeId, const std::string& key);
 
 		// Find nodes with text properties containing the search text
-		[[nodiscard]] std::vector<uint64_t> search(const std::string& key, const std::string& searchText) const;
+		[[nodiscard]] std::vector<int64_t> search(const std::string& key, const std::string& searchText) const;
 
 		// Clear the index
 		void clear();
@@ -40,7 +39,7 @@ namespace graph::query::indexes {
 		static std::vector<std::string> tokenize(const std::string& text);
 
 		// key -> token -> node IDs
-		std::unordered_map<std::string, std::unordered_map<std::string, std::vector<uint64_t>>> invertedIndex_;
+		std::unordered_map<std::string, std::unordered_map<std::string, std::vector<int64_t>>> invertedIndex_;
 
 		// nodeId -> key -> set of tokens
 		std::unordered_map<uint64_t, std::unordered_map<std::string, std::set<std::string>>> nodeTokens_;

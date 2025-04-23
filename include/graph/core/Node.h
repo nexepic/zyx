@@ -20,7 +20,7 @@ namespace graph {
 	class alignas(128) Node {
 	public:
 		Node() = default;
-		Node(uint64_t id, std::string  label);
+		Node(int64_t id, std::string label);
 
 		void addOutEdge(uint64_t edgeId);
 		void addInEdge(uint64_t edgeId);
@@ -41,20 +41,26 @@ namespace graph {
 		[[nodiscard]] const PropertyReference& getPropertyReference() const;
 
 		[[nodiscard]] const std::string& getLabel() const;
-		[[nodiscard]] uint64_t getId() const;
+		[[nodiscard]] int64_t getId() const;
+
+		// Check if this node has a temporary ID
+		[[nodiscard]] bool hasTemporaryId() const;
+
+		// Set permanent ID (replaces temporary ID)
+		void setPermanentId(int64_t permanentId);
 
 		void serialize(std::ostream& os) const;
 		static Node deserialize(std::istream& is);
 
 		static constexpr uint8_t typeId = 0;
 
-		void setId(uint64_t id) { this->id = id; }
+		void setId(int64_t id) { this->id = id; }
 
 		[[nodiscard]] bool isActive() const { return isActive_; }
 		void markInactive(bool active = false) { isActive_ = active; }
 
 	private:
-		uint64_t id{};
+		int64_t id{};
 		std::string label;
 
         PropertyReference propertyRef;

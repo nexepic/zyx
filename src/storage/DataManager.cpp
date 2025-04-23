@@ -10,7 +10,6 @@
 
 #include "graph/storage/DataManager.h"
 #include <algorithm>
-#include <graph/storage/DatabaseInspector.h>
 #include <graph/storage/PropertyStorage.h>
 #include <iostream>
 #include <sstream>
@@ -20,9 +19,10 @@
 
 namespace graph::storage {
 
-	DataManager::DataManager(const std::string &dbFilePath, size_t cacheSize) :
+	DataManager::DataManager(const std::string &dbFilePath, size_t cacheSize, FileHeader &fileHeader,
+							 std::shared_ptr<IDAllocator> idAllocator) :
 		dbFilePath_(dbFilePath), nodeCache_(cacheSize), edgeCache_(cacheSize), propertyCache_(cacheSize * 2),
-		blobCache_(cacheSize / 4) {
+		blobCache_(cacheSize / 4), fileHeader_(fileHeader), idAllocator_(std::move(idAllocator)) {
 		file_ = std::make_shared<std::ifstream>(dbFilePath, std::ios::binary);
 		if (!file_->good()) {
 			throw std::runtime_error("Cannot open database file");
@@ -36,21 +36,6 @@ namespace graph::storage {
 	}
 
 	void DataManager::initialize() {
-		// Read file header
-		file_->seekg(0);
-		file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
-
-		// Validate magic number
-		if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
-			throw std::runtime_error("Invalid file format");
-		}
-
-		// Validate header CRC
-		uint32_t calculatedCrc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
-		if (calculatedCrc != fileHeader_.header_crc) {
-			throw std::runtime_error("Header CRC mismatch, data corruption detected");
-		}
-
 		// Build segment indexes for efficient lookups
 		buildNodeSegmentIndex();
 		buildEdgeSegmentIndex();
@@ -66,36 +51,35 @@ namespace graph::storage {
 					std::make_shared<std::fstream>(dbFilePath_, std::ios::binary | std::ios::in | std::ios::out);
 			blobStore_ = std::make_unique<BlobStore>(fileStream, fileHeader_.blob_section_head);
 		}
-		displayDatabaseStructure(file_);
 	}
 
-	void DataManager::refreshFromDisk() {
-		if (!file_->is_open()) {
-			file_->open(dbFilePath_, std::ios::binary);
-			if (!file_->good()) {
-				throw std::runtime_error("Cannot open database file");
-			}
-		}
-
-		// Read file header
-		file_->seekg(0);
-		file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
-
-		// Validate magic number
-		if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
-			throw std::runtime_error("Invalid file format");
-		}
-
-		// Validate header CRC
-		uint32_t calculatedCrc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
-		if (calculatedCrc != fileHeader_.header_crc) {
-			throw std::runtime_error("Header CRC mismatch, data corruption detected");
-		}
-
-		// Rebuild segment indexes
-		buildNodeSegmentIndex();
-		buildEdgeSegmentIndex();
-	}
+	// void DataManager::refreshFromDisk() {
+	// 	if (!file_->is_open()) {
+	// 		file_->open(dbFilePath_, std::ios::binary);
+	// 		if (!file_->good()) {
+	// 			throw std::runtime_error("Cannot open database file");
+	// 		}
+	// 	}
+	//
+	// 	// Read file header
+	// 	file_->seekg(0);
+	// 	file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
+	//
+	// 	// Validate magic number
+	// 	if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
+	// 		throw std::runtime_error("Invalid file format");
+	// 	}
+	//
+	// 	// Validate header CRC
+	// 	uint32_t calculatedCrc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
+	// 	if (calculatedCrc != fileHeader_.header_crc) {
+	// 		throw std::runtime_error("Header CRC mismatch, data corruption detected");
+	// 	}
+	//
+	// 	// Rebuild segment indexes
+	// 	buildNodeSegmentIndex();
+	// 	buildEdgeSegmentIndex();
+	// }
 
 	template<typename EntityType>
 	struct EntityGetter {
@@ -117,7 +101,7 @@ namespace graph::storage {
 
 		static void markEntityDirty(DataManager *manager, Node &node) { manager->markNodeDirty(node); }
 
-		static uint64_t findSegmentForId(const DataManager *manager, uint64_t id) {
+		static uint64_t findSegmentForId(const DataManager *manager, int64_t id) {
 			return manager->findSegmentForNodeId(id);
 		}
 
@@ -195,10 +179,10 @@ namespace graph::storage {
 	}
 
 	// Generic method to find segment for ID
-	uint64_t DataManager::findSegmentForId(const std::vector<SegmentIndex> &segmentIndex, uint64_t id) {
+	uint64_t DataManager::findSegmentForId(const std::vector<SegmentIndex> &segmentIndex, int64_t id) {
 		// Binary search to find the segment containing this ID
 		auto it = std::lower_bound(segmentIndex.begin(), segmentIndex.end(), id,
-								   [](const SegmentIndex &index, uint64_t value) { return index.endId < value; });
+								   [](const SegmentIndex &index, const int64_t value) { return index.endId < value; });
 
 		if (it != segmentIndex.end() && id >= it->startId && id <= it->endId) {
 			return it->segmentOffset;
@@ -207,11 +191,11 @@ namespace graph::storage {
 		return 0; // Not found
 	}
 
-	uint64_t DataManager::findSegmentForNodeId(uint64_t id) const { return findSegmentForId(nodeSegmentIndex_, id); }
+	uint64_t DataManager::findSegmentForNodeId(int64_t id) const { return findSegmentForId(nodeSegmentIndex_, id); }
 
-	uint64_t DataManager::findSegmentForEdgeId(uint64_t id) const { return findSegmentForId(edgeSegmentIndex_, id); }
+	uint64_t DataManager::findSegmentForEdgeId(int64_t id) const { return findSegmentForId(edgeSegmentIndex_, id); }
 
-	uint64_t DataManager::findPropertyEntry(uint64_t entityId, uint8_t entityType) const {
+	uint64_t DataManager::findPropertyEntry(int64_t entityId, uint8_t entityType) const {
 		// Find the property entry for the given entity in the property segments
 		for (const auto &segmentIndex: propertySegmentIndex_) {
 			uint64_t segmentOffset = segmentIndex.segmentOffset;
@@ -245,6 +229,10 @@ namespace graph::storage {
 		// Not found
 		return 0;
 	}
+
+	int64_t DataManager::reserveTemporaryNodeId() { return idAllocator_->reserveTemporaryId(Node::typeId); }
+
+	int64_t DataManager::reserveTemporaryEdgeId() { return idAllocator_->reserveTemporaryId(Edge::typeId); }
 
 	void DataManager::addNode(const Node &node) {
 		// Add to cache
@@ -390,27 +378,27 @@ namespace graph::storage {
 		}
 	}
 
-	Node DataManager::getNode(uint64_t id) { return getEntityFromMemoryOrDisk<Node>(id); }
+	Node DataManager::getNode(int64_t id) { return getEntityFromMemoryOrDisk<Node>(id); }
 
-	Edge DataManager::getEdge(uint64_t id) { return getEntityFromMemoryOrDisk<Edge>(id); }
+	Edge DataManager::getEdge(int64_t id) { return getEntityFromMemoryOrDisk<Edge>(id); }
 
-	Node DataManager::loadNodeFromDisk(uint64_t id) const {
+	Node DataManager::loadNodeFromDisk(int64_t id) const {
 		auto nodeOpt = findAndReadEntity<Node>(id);
 		return nodeOpt.value_or(Node()); // Return empty node if not found or deleted
 	}
 
-	Edge DataManager::loadEdgeFromDisk(uint64_t id) const {
+	Edge DataManager::loadEdgeFromDisk(int64_t id) const {
 		auto edgeOpt = findAndReadEntity<Edge>(id);
 		return edgeOpt.value_or(Edge()); // Return empty edge if not found or deleted
 	}
 
-	std::vector<Node> DataManager::getNodeBatch(const std::vector<uint64_t> &ids) {
+	std::vector<Node> DataManager::getNodeBatch(const std::vector<int64_t> &ids) {
 		std::vector<Node> result;
 		result.reserve(ids.size());
-		std::vector<uint64_t> missedIds;
+		std::vector<int64_t> missedIds;
 
 		// First check dirty collections and cache
-		for (uint64_t id: ids) {
+		for (int64_t id: ids) {
 			// Check dirty collections
 			auto dirtyNode = getEntityFromDirty<Node>(id);
 			if (dirtyNode.has_value()) {
@@ -427,8 +415,8 @@ namespace graph::storage {
 		}
 
 		// Group missed IDs by segment for efficient loading
-		std::unordered_map<uint64_t, std::vector<uint64_t>> segmentToIds;
-		for (uint64_t id: missedIds) {
+		std::unordered_map<uint64_t, std::vector<int64_t>> segmentToIds;
+		for (int64_t id: missedIds) {
 			uint64_t segmentOffset = findSegmentForNodeId(id);
 			if (segmentOffset != 0) {
 				segmentToIds[segmentOffset].push_back(id);
@@ -437,7 +425,7 @@ namespace graph::storage {
 
 		// Load nodes segment by segment
 		for (const auto &[segmentOffset, segmentIds]: segmentToIds) {
-			for (uint64_t id: segmentIds) {
+			for (int64_t id: segmentIds) {
 				auto nodeOpt = findAndReadEntity<Node>(id);
 				if (nodeOpt.has_value()) {
 					const Node &node = nodeOpt.value();
@@ -451,13 +439,13 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::vector<Edge> DataManager::getEdgeBatch(const std::vector<uint64_t> &ids) {
+	std::vector<Edge> DataManager::getEdgeBatch(const std::vector<int64_t> &ids) {
 		std::vector<Edge> result;
 		result.reserve(ids.size());
-		std::vector<uint64_t> missedIds;
+		std::vector<int64_t> missedIds;
 
 		// First check dirty collections and cache
-		for (uint64_t id: ids) {
+		for (int64_t id: ids) {
 			// Check dirty collections
 			auto dirtyEdge = getEntityFromDirty<Edge>(id);
 			if (dirtyEdge.has_value()) {
@@ -474,8 +462,8 @@ namespace graph::storage {
 		}
 
 		// Group missed IDs by segment for efficient loading
-		std::unordered_map<uint64_t, std::vector<uint64_t>> segmentToIds;
-		for (uint64_t id: missedIds) {
+		std::unordered_map<uint64_t, std::vector<int64_t>> segmentToIds;
+		for (int64_t id: missedIds) {
 			uint64_t segmentOffset = findSegmentForEdgeId(id);
 			if (segmentOffset != 0) {
 				segmentToIds[segmentOffset].push_back(id);
@@ -484,7 +472,7 @@ namespace graph::storage {
 
 		// Load edges segment by segment
 		for (const auto &[segmentOffset, segmentIds]: segmentToIds) {
-			for (uint64_t id: segmentIds) {
+			for (int64_t id: segmentIds) {
 				auto edgeOpt = findAndReadEntity<Edge>(id);
 				if (edgeOpt.has_value()) {
 					const Edge &edge = edgeOpt.value();
@@ -498,7 +486,7 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::vector<Node> DataManager::getNodesInRange(uint64_t startId, uint64_t endId, size_t limit) {
+	std::vector<Node> DataManager::getNodesInRange(int64_t startId, int64_t endId, size_t limit) {
 		std::vector<Node> result;
 		if (startId > endId || limit == 0) {
 			return result;
@@ -530,7 +518,7 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::vector<Edge> DataManager::getEdgesInRange(uint64_t startId, uint64_t endId, size_t limit) {
+	std::vector<Edge> DataManager::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) {
 		// Implementation similar to getNodesInRange
 		std::vector<Edge> result;
 		if (startId > endId || limit == 0) {
@@ -565,7 +553,7 @@ namespace graph::storage {
 
 	// Core method to read a single entity from a specific file offset
 	template<typename EntityType>
-	std::optional<EntityType> DataManager::readEntityFromDisk(uint64_t fileOffset) const {
+	std::optional<EntityType> DataManager::readEntityFromDisk(int64_t fileOffset) const {
 		file_->seekg(static_cast<std::streamoff>(fileOffset));
 		EntityType entity = EntityType::deserialize(*file_);
 
@@ -579,7 +567,7 @@ namespace graph::storage {
 
 	// Core method to find and read a single entity by ID
 	template<typename EntityType>
-	std::optional<EntityType> DataManager::findAndReadEntity(uint64_t id) const {
+	std::optional<EntityType> DataManager::findAndReadEntity(int64_t id) const {
 		// Find segment for this entity type and ID
 		uint64_t segmentOffset = EntityGetter<EntityType>::findSegmentForId(this, id);
 
@@ -607,9 +595,8 @@ namespace graph::storage {
 
 	// Core method to read multiple entities from a segment with filtering
 	template<typename EntityType>
-	std::vector<EntityType> DataManager::readEntitiesFromSegment(uint64_t segmentOffset, uint64_t startId,
-																 uint64_t endId, size_t limit,
-																 bool filterDeleted) const {
+	std::vector<EntityType> DataManager::readEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
+																 size_t limit, bool filterDeleted) const {
 
 		std::vector<EntityType> result;
 		if (segmentOffset == 0 || limit == 0) {
@@ -659,17 +646,17 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::vector<Node> DataManager::loadNodesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+	std::vector<Node> DataManager::loadNodesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 														size_t limit) const {
 		return readEntitiesFromSegment<Node>(segmentOffset, startId, endId, limit);
 	}
 
-	std::vector<Edge> DataManager::loadEdgesFromSegment(uint64_t segmentOffset, uint64_t startId, uint64_t endId,
+	std::vector<Edge> DataManager::loadEdgesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 														size_t limit) const {
 		return readEntitiesFromSegment<Edge>(segmentOffset, startId, endId, limit);
 	}
 
-	std::vector<Edge> DataManager::findEdgesByNode(uint64_t nodeId, const std::string &direction) {
+	std::vector<Edge> DataManager::findEdgesByNode(int64_t nodeId, const std::string &direction) {
 		std::vector<Edge> result;
 
 		// First check dirty edges
@@ -739,7 +726,7 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
-	void DataManager::updateEntityProperty(uint64_t entityId, const std::string &key, const PropertyValue &value) {
+	void DataManager::updateEntityProperty(int64_t entityId, const std::string &key, const PropertyValue &value) {
 		// Get the entity
 		EntityType entity = EntityGetter<EntityType>::get(this, entityId);
 
@@ -783,17 +770,17 @@ namespace graph::storage {
 		EntityGetter<EntityType>::markEntityDirty(this, entity);
 	}
 
-	void DataManager::updateNodeProperty(uint64_t nodeId, const std::string &key, const PropertyValue &value) {
+	void DataManager::updateNodeProperty(int64_t nodeId, const std::string &key, const PropertyValue &value) {
 		updateEntityProperty<Node>(nodeId, key, value);
 	}
 
-	void DataManager::updateEdgeProperty(uint64_t edgeId, const std::string &key, const PropertyValue &value) {
+	void DataManager::updateEdgeProperty(int64_t edgeId, const std::string &key, const PropertyValue &value) {
 		updateEntityProperty<Edge>(edgeId, key, value);
 	}
 
 	// Generic method to handle entity properties
 	template<typename EntityType>
-	PropertyValue DataManager::getEntityProperty(uint64_t entityId, const std::string &key, uint8_t entityTypeId) {
+	PropertyValue DataManager::getEntityProperty(int64_t entityId, const std::string &key, uint8_t entityTypeId) {
 		// First check the property cache
 		std::pair<uint64_t, std::string> cacheKey = {entityId, key};
 		if (propertyCache_.contains(cacheKey)) {
@@ -871,7 +858,7 @@ namespace graph::storage {
 		throw std::out_of_range("Property " + key + " not found for entity " + std::to_string(entityId));
 	}
 
-	PropertyValue DataManager::getNodeProperty(uint64_t nodeId, const std::string &key) {
+	PropertyValue DataManager::getNodeProperty(int64_t nodeId, const std::string &key) {
 		// First check if property exists in dirty collections or cache
 		auto dirtyProp = getPropertyFromMemory<Node>(nodeId, key);
 		if (dirtyProp.has_value()) {
@@ -882,7 +869,7 @@ namespace graph::storage {
 		return getEntityProperty<Node>(nodeId, key, Node::typeId);
 	}
 
-	PropertyValue DataManager::getEdgeProperty(uint64_t edgeId, const std::string &key) {
+	PropertyValue DataManager::getEdgeProperty(int64_t edgeId, const std::string &key) {
 		// First check if property exists in dirty collections or cache
 		auto dirtyProp = getPropertyFromMemory<Edge>(edgeId, key);
 		if (dirtyProp.has_value()) {
@@ -896,6 +883,67 @@ namespace graph::storage {
 	void DataManager::markNodeDirty(Node &node) { updateNode(node); }
 
 	void DataManager::markEdgeDirty(Edge &edge) { updateEdge(edge); }
+
+	void DataManager::updateEntitiesWithPermanentIds() {
+		// Process nodes
+		std::vector<std::pair<int64_t, Node>> updatedNodes;
+
+		for (const auto &[id, node]: nodeCache_) {
+			if (node.getId() != 0 && IDAllocator::isTemporaryId(node.getId())) {
+				int64_t tempId = node.getId(); // Store the temporary ID
+				int64_t permanentId = idAllocator_->getPermanentId(tempId, Node::typeId);
+
+				if (permanentId > 0) {
+					// Clone the node and update its ID
+					Node updatedNode = node;
+					updatedNode.setPermanentId(permanentId);
+
+					// Store both the original temp ID and the updated node
+					updatedNodes.emplace_back(tempId, updatedNode);
+				}
+			}
+		}
+
+		// Update node cache with permanent IDs
+		for (const auto &[tempId, node]: updatedNodes) {
+			// Remove the entry with the temporary ID
+			nodeCache_.remove(tempId);
+
+			// Add new entry with the permanent ID
+			nodeCache_.put(node.getId(), node);
+
+			// Clean up the mapping
+			idAllocator_->clearTempIdMapping(tempId, Node::typeId);
+		}
+
+		// Process edges - similar logic
+		std::vector<std::pair<int64_t, Edge>> updatedEdges;
+
+		for (const auto &[id, edge]: edgeCache_) {
+			if (edge.getId() != 0 && IDAllocator::isTemporaryId(edge.getId())) {
+				int64_t tempId = edge.getId();
+				int64_t permanentId = idAllocator_->getPermanentId(tempId, Edge::typeId);
+
+				if (permanentId > 0) {
+					Edge updatedEdge = edge;
+					updatedEdge.setPermanentId(permanentId);
+					updatedEdges.emplace_back(tempId, updatedEdge);
+				}
+			}
+		}
+
+		// Update edge cache with permanent IDs
+		for (const auto &[tempId, edge]: updatedEdges) {
+			edgeCache_.remove(tempId);
+			edgeCache_.put(edge.getId(), edge);
+			idAllocator_->clearTempIdMapping(tempId, Edge::typeId);
+		}
+
+		// If all temporary IDs have been processed, we can clear the maps completely
+		if (updatedNodes.empty() && updatedEdges.empty()) {
+			idAllocator_->clearTempIdMappings();
+		}
+	}
 
 	template<typename EntityType>
 	bool DataManager::entityNeedsPropertyStorage(const EntityType &entity) const {
@@ -946,7 +994,7 @@ namespace graph::storage {
 														   const std::shared_ptr<std::fstream> &fileStream);
 
 	template<typename EntityType>
-	void DataManager::removeEntityProperty(uint64_t entityId, const std::string &key) {
+	void DataManager::removeEntityProperty(int64_t entityId, const std::string &key) {
 		// Get the entity
 		EntityType entity = EntityGetter<EntityType>::get(this, entityId);
 
@@ -996,24 +1044,24 @@ namespace graph::storage {
 		EntityGetter<EntityType>::markEntityDirty(this, entity);
 	}
 
-	void DataManager::removeNodeProperty(uint64_t nodeId, const std::string &key) {
+	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) {
 		removeEntityProperty<Node>(nodeId, key);
 	}
 
-	void DataManager::removeEdgeProperty(uint64_t edgeId, const std::string &key) {
+	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) {
 		removeEntityProperty<Edge>(edgeId, key);
 	}
 
-	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(uint64_t nodeId) {
+	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) {
 		return getMergedProperties<Node>(nodeId);
 	}
 
-	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(uint64_t edgeId) {
+	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) {
 		return getMergedProperties<Edge>(edgeId);
 	}
 
 	template<typename EntityType>
-	std::optional<EntityType> DataManager::getEntityFromDirty(uint64_t id) const {
+	std::optional<EntityType> DataManager::getEntityFromDirty(int64_t id) const {
 		if constexpr (std::is_same_v<EntityType, Node>) {
 			auto it = dirtyNodes_.find(id);
 			if (it != dirtyNodes_.end()) {
@@ -1052,7 +1100,7 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
-	EntityType DataManager::getEntityFromMemoryOrDisk(uint64_t id) {
+	EntityType DataManager::getEntityFromMemoryOrDisk(int64_t id) {
 		// First check dirty collections
 		auto dirtyEntity = getEntityFromDirty<EntityType>(id);
 		if (dirtyEntity.has_value()) {
@@ -1102,7 +1150,7 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
-	std::optional<PropertyValue> DataManager::getPropertyFromMemory(uint64_t entityId, const std::string &key) {
+	std::optional<PropertyValue> DataManager::getPropertyFromMemory(int64_t entityId, const std::string &key) {
 		if constexpr (std::is_same_v<EntityType, Node>) {
 			auto it = dirtyNodes_.find(entityId);
 			if (it != dirtyNodes_.end()) {
@@ -1150,7 +1198,7 @@ namespace graph::storage {
 		}
 
 		// Check property cache
-		std::pair<uint64_t, std::string> cacheKey = {entityId, key};
+		std::pair cacheKey = {entityId, key};
 		if (propertyCache_.contains(cacheKey)) {
 			return propertyCache_.get(cacheKey);
 		}
@@ -1159,7 +1207,7 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
-	std::unordered_map<std::string, PropertyValue> DataManager::getMergedProperties(uint64_t entityId) {
+	std::unordered_map<std::string, PropertyValue> DataManager::getMergedProperties(int64_t entityId) {
 		// First get properties from disk or cache
 		EntityType entity = getEntityFromMemoryOrDisk<EntityType>(entityId);
 
@@ -1240,32 +1288,6 @@ namespace graph::storage {
 		}
 
 		return {};
-	}
-
-	std::vector<Node> DataManager::filterInactiveNodes(const std::vector<Node> &nodes) {
-		std::vector<Node> filteredNodes;
-		filteredNodes.reserve(nodes.size());
-
-		for (const auto &node: nodes) {
-			if (node.isActive()) {
-				filteredNodes.push_back(node);
-			}
-		}
-
-		return filteredNodes;
-	}
-
-	std::vector<Edge> DataManager::filterInactiveEdges(const std::vector<Edge> &edges) {
-		std::vector<Edge> filteredEdges;
-		filteredEdges.reserve(edges.size());
-
-		for (const auto &edge: edges) {
-			if (edge.isActive()) {
-				filteredEdges.push_back(edge);
-			}
-		}
-
-		return filteredEdges;
 	}
 
 	std::string DataManager::getBlob(uint64_t blobId) {
