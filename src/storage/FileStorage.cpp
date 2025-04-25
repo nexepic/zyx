@@ -67,7 +67,7 @@ namespace graph::storage {
 	void FileStorage::initializeComponents() {
 		fileHeaderManager->extractFileHeaderInfo();
 
-		auto segmentTracker = std::make_shared<SegmentTracker>(fileStream);
+		segmentTracker = std::make_shared<SegmentTracker>(fileStream);
 
 		// Initialize ID allocator
 		idAllocator = std::make_unique<IDAllocator>(fileStream, segmentTracker, fileHeaderManager->getMaxNodeIdRef(),
@@ -75,7 +75,7 @@ namespace graph::storage {
 		idAllocator->initialize();
 
 		// Initialize data manager
-		dataManager = std::make_unique<DataManager>(dbFilePath, cacheSize, fileHeader, idAllocator);
+		dataManager = std::make_unique<DataManager>(dbFilePath, cacheSize, fileHeader, idAllocator, segmentTracker);
 		dataManager->initialize();
 
 		// Always set up auto-flush callback
@@ -303,83 +303,25 @@ namespace graph::storage {
 			uint32_t writeCount = std::min(remaining, static_cast<uint32_t>(sortedData.end() - dataIt));
 			std::vector<T> batch(dataIt, dataIt + writeCount);
 
-			// // If this is a new segment, set its start ID
-			// if (currentSegHeader.used == 0 && !batch.empty()) {
-			//     currentSegHeader.start_id = batch.front().getId();
-			//     fileStream->seekp(static_cast<std::streamoff>(currentSegmentOffset));
-			//     fileStream->write(reinterpret_cast<char *>(&currentSegHeader), sizeof(SegmentHeader));
-			// }
-
 			// Write data
 			writeSegmentData(currentSegmentOffset, batch, currentSegHeader.used);
 
 			// Reload header to get updated used count
-			fileStream->seekg(static_cast<std::streamoff>(currentSegmentOffset));
-			fileStream->read(reinterpret_cast<char *>(&currentSegHeader), sizeof(SegmentHeader));
+			currentSegHeader = readSegmentHeader(currentSegmentOffset);
 
 			dataIt += writeCount;
 		}
-
-		// // Update max IDs in header if needed
-		// if constexpr (std::is_same_v<T, Node>) {
-		// 	fileHeader.max_node_id = idAllocator_->getCurrentMaxNodeId();
-		// } else if constexpr (std::is_same_v<T, Edge>) {
-		// 	fileHeader.max_edge_id = idAllocator_->getCurrentMaxEdgeId();
-		// }
 	}
 
 	uint64_t FileStorage::allocateSegment(uint8_t type, uint32_t capacity) const {
-		fileStream->seekp(0, std::ios::end);
-		if (!*fileStream) {
-			throw std::runtime_error("Failed to seek to end of file.");
-		}
-
-		const uint64_t baseOffset = fileStream->tellp();
-
-		SegmentHeader header;
-		header.data_type = type;
-		header.capacity = capacity;
-		header.used = 0;
-		header.inactive_count = 0;
-		header.next_segment_offset = 0;
-		header.prev_segment_offset = 0;
-		header.start_id = 0;
-
-		// Initialize bitmap
-		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
-		memset(header.activity_bitmap, 0, MAX_BITMAP_SIZE); // Initialize bitmap to all 0s
-
-		// Calculate header CRC
-		header.segment_crc = utils::calculateCrc(&header, offsetof(SegmentHeader, segment_crc));
-
-		// Write segment header
-		fileStream->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
-		if (!*fileStream) {
-			throw std::runtime_error("Failed to write SegmentHeader.");
-		}
-
-		// Write empty data area
-		size_t itemSize = (type == 0) ? sizeof(Node) : sizeof(Edge);
-		size_t dataSize = capacity * itemSize;
-		std::vector<char> emptyData(dataSize, 0);
-		fileStream->write(emptyData.data(), static_cast<std::streamsize>(dataSize));
-		if (!*fileStream) {
-			throw std::runtime_error("Failed to write segment data.");
-		}
-
-		fileStream->flush();
-		return baseOffset;
+		// Use SpaceManager's allocateSegment function instead of direct file operations
+		return spaceManager->allocateSegment(type, capacity);
 	}
 
 	template<typename T>
 	void FileStorage::writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t baseUsed) {
-		// Read segment header
-		SegmentHeader header;
-		fileStream->seekg(static_cast<std::streamoff>(segmentOffset));
-		fileStream->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
 		// Calculate item size
-		const size_t itemSize = (header.data_type == 0) ? sizeof(Node) : sizeof(Edge);
+		const size_t itemSize = sizeof(T);
 
 		// Write data
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + baseUsed * itemSize;
@@ -389,26 +331,19 @@ namespace graph::storage {
 			dataOffset += itemSize;
 		}
 
-		// Update header
-		header.used = baseUsed + static_cast<uint32_t>(data.size());
-		if (baseUsed == 0 && !data.empty()) {
-			header.start_id = data.front().getId();
-		}
+		// Use the tracker to update the segment header
+		segmentTracker->updateSegmentHeader(segmentOffset, [&](SegmentHeader &header) {
+			// Update header fields
+			header.used = baseUsed + static_cast<uint32_t>(data.size());
+			if (baseUsed == 0 && !data.empty()) {
+				header.start_id = data.front().getId();
+			}
+		});
 
-		// Ensure bitmap_size is correctly set
-		if (header.bitmap_size == 0) {
-			header.bitmap_size = bitmap::calculateBitmapSize(header.capacity);
-		}
-
-		// Calculate and write CRC of segment data
-		header.segment_crc = utils::calculateCrc(&header, offsetof(SegmentHeader, segment_crc));
-
-		// Write updated header back to file
-		fileStream->seekp(static_cast<std::streamoff>(segmentOffset));
-		fileStream->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
+		// Flush file stream to ensure data is written
 		fileStream->flush();
 
-		// Update bitmap for the newly added entities
+		// Update bitmap for the newly added entities directly
 		if (!data.empty()) {
 			updateSegmentBitmap(segmentOffset, data.front().getId(), static_cast<uint32_t>(data.size()), true);
 		}
@@ -481,25 +416,14 @@ namespace graph::storage {
 	template void FileStorage::deleteEntityOnDisk<Node>(const Node &entity);
 	template void FileStorage::deleteEntityOnDisk<Edge>(const Edge &entity);
 
-	// Read segment header from disk
+	// Read segment header
 	SegmentHeader FileStorage::readSegmentHeader(uint64_t segmentOffset) const {
-		SegmentHeader header;
-		fileStream->seekg(static_cast<std::streamoff>(segmentOffset));
-		fileStream->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-		if (!*fileStream) {
-			throw std::runtime_error("Failed to read segment header at offset " + std::to_string(segmentOffset));
-		}
-		return header;
+		return segmentTracker->readSegmentHeader(segmentOffset);
 	}
 
-	// Write segment header to disk
+	// Write segment header
 	void FileStorage::writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header) {
-		fileStream->seekp(static_cast<std::streamoff>(segmentOffset));
-		fileStream->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
-		if (!*fileStream) {
-			throw std::runtime_error("Failed to write segment header at offset " + std::to_string(segmentOffset));
-		}
-		fileStream->flush();
+		segmentTracker->writeSegmentHeader(segmentOffset, header);
 	}
 
 	// Update bitmap for a specific entity in the segment
@@ -509,38 +433,15 @@ namespace graph::storage {
 			return; // No segment to update
 		}
 
-		// Read segment header
-		SegmentHeader header = readSegmentHeader(segmentOffset);
-
 		// Calculate entity position within segment
+		SegmentHeader header = segmentTracker->readSegmentHeader(segmentOffset);
 		uint64_t entityIndex = entityId - header.start_id;
 		if (entityIndex >= header.capacity) {
 			throw std::runtime_error("Entity index out of bounds for segment bitmap update");
 		}
 
-		// Ensure bitmap_size is correctly set if it's not already
-		if (header.bitmap_size == 0) {
-			header.bitmap_size = bitmap::calculateBitmapSize(header.capacity);
-		}
-
-		// Update bitmap - set bit to 1 if active, 0 if inactive
-		bitmap::setBit(header.activity_bitmap, entityIndex, isActive);
-
-		// Update inactive count if needed
-		if (!isActive) {
-			header.inactive_count++;
-		} else if (header.inactive_count > 0) {
-			header.inactive_count--;
-		}
-
-		// Recalculate segment CRC
-		header.segment_crc = utils::calculateCrc(&header, offsetof(SegmentHeader, segment_crc));
-
-		// Write updated header
-		writeSegmentHeader(segmentOffset, header);
-
-		// Update segment usage in SpaceManager
-		spaceManager->getTracker()->updateSegmentUsage(segmentOffset, header.used, header.inactive_count);
+		// Delegate bitmap update to SegmentTracker
+		segmentTracker->setEntityActive(segmentOffset, entityIndex, isActive);
 	}
 
 	// Update bitmap for batch operations
@@ -549,8 +450,8 @@ namespace graph::storage {
 			return;
 		}
 
-		// Read segment header
-		SegmentHeader header = readSegmentHeader(segmentOffset);
+		// Read segment header to get start_id
+		SegmentHeader header = segmentTracker->readSegmentHeader(segmentOffset);
 
 		// Calculate relative start position
 		uint64_t startIndex = startId - header.start_id;
@@ -558,37 +459,21 @@ namespace graph::storage {
 			throw std::runtime_error("Entity range out of bounds for segment bitmap batch update");
 		}
 
-		// Ensure bitmap_size is correctly set
-		if (header.bitmap_size == 0) {
-			header.bitmap_size = bitmap::calculateBitmapSize(header.capacity);
+		// Create the activity map
+		std::vector<bool> currentActivity = segmentTracker->getActivityBitmap(segmentOffset);
+
+		// Ensure the vector is large enough
+		if (currentActivity.size() < startIndex + count) {
+			currentActivity.resize(startIndex + count);
 		}
 
-		// Update bitmap for each entity in range
+		// Update activity status for the specified range
 		for (uint32_t i = 0; i < count; i++) {
-			uint64_t entityIndex = startIndex + i;
-			bool currentState = bitmap::getBit(header.activity_bitmap, entityIndex);
-
-			// Only adjust counts if the state is changing
-			if (currentState != isActive) {
-				if (isActive) {
-					// Activating an inactive entity
-					if (header.inactive_count > 0) {
-						header.inactive_count--;
-					}
-				} else {
-					// Deactivating an active entity
-					header.inactive_count++;
-				}
-			}
-
-			bitmap::setBit(header.activity_bitmap, entityIndex, isActive);
+			currentActivity[startIndex + i] = isActive;
 		}
 
-		// Recalculate segment CRC
-		header.segment_crc = utils::calculateCrc(&header, offsetof(SegmentHeader, segment_crc));
-
-		// Write updated header
-		writeSegmentHeader(segmentOffset, header);
+		// Delegate the update to SegmentTracker
+		segmentTracker->updateActivityBitmap(segmentOffset, currentActivity);
 	}
 
 	// Template instantiations
@@ -600,13 +485,13 @@ namespace graph::storage {
 			return false;
 		}
 
-		// Read segment header
-		SegmentHeader header = readSegmentHeader(segmentOffset);
+		// Read segment header through the tracker
+		SegmentHeader header = segmentTracker->readSegmentHeader(segmentOffset);
 
 		// Count inactive items in bitmap
 		uint32_t inactiveCount = 0;
 		for (uint32_t i = 0; i < header.used; i++) {
-			if (!bitmap::getBit(header.activity_bitmap, i)) {
+			if (!segmentTracker->getBitmapBit(segmentOffset, i)) {
 				inactiveCount++;
 			}
 		}
@@ -621,34 +506,9 @@ namespace graph::storage {
 		return true;
 	}
 
-	void FileStorage::persistSegmentHeaders() {
-		// Persist segment headers for any segments marked for compaction
-		auto nodeSegments = spaceManager->getTracker()->getSegmentsByType(0);
-		for (const auto &info: nodeSegments) {
-			if (info.needsCompaction) {
-				SegmentHeader header;
-				fileStream->seekg(static_cast<std::streamoff>(info.offset));
-				fileStream->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-				// Update header if needed (e.g., update used count)
-				fileStream->seekp(static_cast<std::streamoff>(info.offset));
-				fileStream->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
-			}
-		}
-
-		// Do the same for edge segments
-		auto edgeSegments = spaceManager->getTracker()->getSegmentsByType(1);
-		for (const auto &info: edgeSegments) {
-			if (info.needsCompaction) {
-				SegmentHeader header;
-				fileStream->seekg(static_cast<std::streamoff>(info.offset));
-				fileStream->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-				// Update header if needed
-				fileStream->seekp(static_cast<std::streamoff>(info.offset));
-				fileStream->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
-			}
-		}
+	void FileStorage::persistSegmentHeaders() const {
+		// Simply delegate to the SegmentTracker to flush all dirty segments
+		segmentTracker->flushDirtySegments();
 	}
 
 	void FileStorage::flush() {
@@ -902,7 +762,7 @@ namespace graph::storage {
 		dataManager->updateEdge(edge);
 	}
 
-	bool FileStorage::deleteNode(uint64_t nodeId, bool cascadeEdges) {
+	bool FileStorage::deleteNode(int64_t nodeId, bool cascadeEdges) {
 		if (!isFileOpen) {
 			open();
 		}
@@ -914,7 +774,7 @@ namespace graph::storage {
 		return result;
 	}
 
-	bool FileStorage::deleteEdge(uint64_t edgeId) {
+	bool FileStorage::deleteEdge(int64_t edgeId) {
 		if (!isFileOpen) {
 			open();
 		}

@@ -103,8 +103,8 @@ namespace graph::storage {
 		bool compactNodeSegment(uint64_t offset);
 		bool compactEdgeSegment(uint64_t offset);
 		bool compactPropertySegment(uint64_t offset);
-		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset, const SegmentInfo &info);
-		void updateSegmentChain(uint64_t newOffset, const SegmentInfo &info);
+		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset, const SegmentHeader &info);
+		void updateSegmentChain(uint64_t newOffset, const SegmentHeader &info);
 		uint64_t findLastSegment() const;
 
 		uint64_t findSegmentForNodeId(int64_t id) const;

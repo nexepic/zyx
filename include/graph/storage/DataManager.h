@@ -34,7 +34,7 @@ namespace graph::storage {
 	class DataManager {
 	public:
 		explicit DataManager(const std::string &dbFilePath, size_t cacheSize, FileHeader &fileHeader,
-							 std::shared_ptr<IDAllocator> idAllocator);
+							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker);
 		~DataManager();
 
 		// Enhanced dirty tracking structures - separate from cache
@@ -162,6 +162,8 @@ namespace graph::storage {
 
 		// ID allocator reference
 		std::shared_ptr<IDAllocator> idAllocator_;
+
+		std::shared_ptr<SegmentTracker> segmentTracker_;
 
 		// Generic segment operations
 		void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;

@@ -210,8 +210,8 @@ namespace graph::storage {
 		auto segments = segmentTracker_->getSegmentsByType(entityType);
 
 		// Process each segment
-		for (const auto &segmentInfo: segments) {
-			uint64_t segmentOffset = segmentInfo.offset;
+		for (const auto &header: segments) {
+			uint64_t segmentOffset = header.file_offset;
 
 			// Read the activity bitmap
 			std::vector<bool> activityMap = segmentTracker_->getActivityBitmap(segmentOffset);

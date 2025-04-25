@@ -17,7 +17,6 @@ TEST(StorageHeadersTest, FileHeaderInitialization) {
     EXPECT_EQ(std::string(fileHeader.magic, 8), graph::storage::FILE_HEADER_MAGIC_STRING);
     EXPECT_EQ(fileHeader.node_segment_head, 0u);
     EXPECT_EQ(fileHeader.edge_segment_head, 0u);
-    EXPECT_EQ(fileHeader.free_pool_head, 0u);
     EXPECT_EQ(fileHeader.max_node_id, 0u);
     EXPECT_EQ(fileHeader.max_edge_id, 0u);
     EXPECT_EQ(fileHeader.page_size, graph::storage::PAGE_SIZE);

@@ -34,7 +34,7 @@ namespace graph::storage {
 
 		void initializeComponents();
 
-		void persistSegmentHeaders();
+		void persistSegmentHeaders() const;
 
 		template<typename T>
 		void saveData(std::unordered_map<int64_t, T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
@@ -53,8 +53,8 @@ namespace graph::storage {
 		void updateNode(const Node& node);
 		void updateEdge(const Edge& edge);
 
-		bool deleteNode(uint64_t nodeId, bool cascadeEdges = false);
-		bool deleteEdge(uint64_t edgeId);
+		bool deleteNode(int64_t nodeId, bool cascadeEdges = false);
+		bool deleteEdge(int64_t edgeId);
 
 		static void beginWrite();
 		void commitWrite();
@@ -144,6 +144,8 @@ namespace graph::storage {
 		std::shared_ptr<SpaceManager> spaceManager;
 
 		std::shared_ptr<DatabaseInspector> databaseInspector;
+
+		std::shared_ptr<SegmentTracker> segmentTracker;
 
 		// Update bitmap for an entity in the segment header
 		template<typename EntityType>

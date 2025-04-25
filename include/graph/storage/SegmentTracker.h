@@ -11,39 +11,15 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
-#include <unordered_map>
 #include <fstream>
 #include <mutex>
+#include <unordered_map>
+#include <vector>
 #include "StorageHeaders.h"
 
+#include <functional>
+
 namespace graph::storage {
-
-    struct SegmentInfo {
-        uint64_t offset = 0;
-        uint8_t type = 0;
-        uint32_t capacity = 0;
-        uint32_t used = 0;
-        uint32_t inactive = 0;
-        uint64_t nextSegment = 0;
-        uint64_t prevSegment = 0;
-        bool needsCompaction = false;
-
-        // Helper method to get number of active elements
-        uint32_t getActiveCount() const {
-            return (used > inactive) ? (used - inactive) : 0;
-        }
-
-        // Helper method to get total free space (never used + inactive)
-        uint32_t getTotalFreeSpace() const {
-            return capacity - getActiveCount();
-        }
-
-        // Calculate true fragmentation ratio
-        double getFragmentationRatio() const {
-            return (capacity > 0) ? static_cast<double>(getTotalFreeSpace()) / capacity : 0.0;
-        }
-    };
 
     class SegmentTracker {
     public:
@@ -55,12 +31,10 @@ namespace graph::storage {
         void updateSegmentUsage(uint64_t offset, uint32_t used, uint32_t inactive);
         void markForCompaction(uint64_t offset, bool needsCompaction);
 
-        SegmentInfo &getSegmentInfo(uint64_t offset);
-        std::vector<SegmentInfo> getSegmentsByType(uint8_t type) const;
-        std::vector<SegmentInfo> getSegmentsNeedingCompaction(uint8_t type, double threshold) const;
+        SegmentHeader &getSegmentHeader(uint64_t offset);
+        std::vector<SegmentHeader> getSegmentsByType(uint8_t type) const;
+        std::vector<SegmentHeader> getSegmentsNeedingCompaction(uint8_t type, double threshold) const;
         double calculateFragmentationRatio(uint8_t type) const;
-        double calculateUtilizationRatio(uint64_t offset) const;
-        std::vector<SegmentInfo> getLowUtilizationSegments(uint8_t type, double threshold) const;
 
         uint64_t getChainHead(uint8_t type) const;
         void updateChainHead(uint8_t type, uint64_t newHead);
@@ -70,13 +44,22 @@ namespace graph::storage {
 
         void removeFromFreeList(uint64_t offset);
 
+        void flushDirtySegments();
         void refreshSegmentInfo(uint64_t offset);
 
         // New methods for finding segments for specific entities
-        uint64_t getSegmentOffsetForNodeId(uint64_t nodeId) const;
-        uint64_t getSegmentOffsetForEdgeId(uint64_t edgeId) const;
+        uint64_t getSegmentOffsetForNodeId(uint64_t nodeId);
+        uint64_t getSegmentOffsetForEdgeId(uint64_t edgeId);
+
+        PropertySegmentHeader readPropertySegmentHeader(uint64_t offset) const;
+        void writePropertySegmentHeader(uint64_t offset, const PropertySegmentHeader& header);
+
+        // Unified segment header update operations
+        void updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> & updateFn);
+        void updatePropertySegmentHeader(uint64_t offset, const std::function<void(PropertySegmentHeader&)>& updateFn);
 
         SegmentHeader readSegmentHeader(uint64_t offset) const;
+        void writeSegmentHeader(uint64_t offset, const SegmentHeader& header);
 
         // Bitmap operations
         void setEntityActive(uint64_t offset, uint32_t index, bool active);
@@ -84,15 +67,14 @@ namespace graph::storage {
         uint32_t countActiveEntities(uint64_t offset) const;
 
         // Methods for activity bitmap management
-        void initializeActivityBitmap(uint64_t offset, uint32_t capacity);
+        void setBitmapBit(uint64_t offset, uint32_t index, bool value);
+        bool getBitmapBit(uint64_t offset, uint32_t index) const;
         void updateActivityBitmap(uint64_t offset, const std::vector<bool>& activityMap);
         std::vector<bool> getActivityBitmap(uint64_t offset) const;
 
-        std::mutex& getMutex() { return mutex_; }
-
     private:
         std::shared_ptr<std::fstream> file_;
-        mutable std::mutex mutex_;
+        mutable std::recursive_mutex mutex_;
 
         // Chain heads (cached)
         uint64_t nodeSegmentHead_ = 0;
@@ -100,12 +82,24 @@ namespace graph::storage {
         uint64_t propertySegmentHead_ = 0;
         uint64_t blobSegmentHead_ = 0;
 
-        // Segment maps
-        std::unordered_map<uint64_t, SegmentInfo> segments_;
-        std::vector<uint64_t> freeSegments_;
+        // Segment cache - stores actual segment headers
+        std::unordered_map<uint64_t, SegmentHeader> segments_;
 
-        void writeSegmentHeader(uint64_t offset, const SegmentHeader& header);
+        std::vector<uint64_t> freeSegments_;
+        std::vector<uint64_t> dirtySegments_;
+
+        void loadSegments();
+
+        // Load a chain of segments
+        void loadSegmentChain(uint64_t headOffset, uint8_t type);
+
+        void loadPropertySegmentChain(uint64_t headOffset);
+
+        // Ensure a segment is in cache
         void ensureSegmentCached(uint64_t offset);
+
+        // Mark a segment as dirty
+        void markSegmentDirty(uint64_t offset);
     };
 
 } // namespace graph::storage

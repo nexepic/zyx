@@ -36,12 +36,7 @@ namespace graph::storage {
 	void DeletionManager::refreshSegmentState() {
 		// Update the inactive count for each segment based on actual data
 		auto nodeSegments = spaceManager_->getTracker()->getSegmentsByType(0);
-		for (const auto &info: nodeSegments) {
-			// Read segment header
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(info.offset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
+		for (const auto &header: nodeSegments) {
 			// Create activity map
 			std::vector<bool> activityMap(header.used);
 
@@ -58,17 +53,12 @@ namespace graph::storage {
 			}
 
 			// Update segment bitmap
-			spaceManager_->getTracker()->updateActivityBitmap(info.offset, activityMap);
+			spaceManager_->getTracker()->updateActivityBitmap(header.file_offset, activityMap);
 		}
 
 		// Do the same for edge segments
 		auto edgeSegments = spaceManager_->getTracker()->getSegmentsByType(1);
-		for (const auto &info: edgeSegments) {
-			// Read segment header
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(info.offset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
+		for (const auto &header: edgeSegments) {
 			// Create activity map
 			std::vector<bool> activityMap(header.used);
 
@@ -85,7 +75,7 @@ namespace graph::storage {
 			}
 
 			// Update segment bitmap
-			spaceManager_->getTracker()->updateActivityBitmap(info.offset, activityMap);
+			spaceManager_->getTracker()->updateActivityBitmap(header.file_offset, activityMap);
 		}
 	}
 
@@ -150,43 +140,13 @@ namespace graph::storage {
 	}
 
 	uint64_t DeletionManager::findSegmentForNodeId(int64_t id) const {
-		// Start from the node segment head
-		uint64_t segmentOffset = dataManager_.getFileHeader().node_segment_head;
-
-		while (segmentOffset != 0) {
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(segmentOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-			// Check if the ID falls within this segment's range
-			if (id >= header.start_id && id < header.start_id + header.capacity) {
-				return segmentOffset;
-			}
-
-			segmentOffset = header.next_segment_offset;
-		}
-
-		return 0; // Not found
+		// Use the tracker's method instead of reimplementing the logic
+		return spaceManager_->getTracker()->getSegmentOffsetForNodeId(id);
 	}
 
 	uint64_t DeletionManager::findSegmentForEdgeId(int64_t id) const {
-		// Start from the edge segment head
-		uint64_t segmentOffset = dataManager_.getFileHeader().edge_segment_head;
-
-		while (segmentOffset != 0) {
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(segmentOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-			// Check if the ID falls within this segment's range
-			if (id >= header.start_id && id < header.start_id + header.capacity) {
-				return segmentOffset;
-			}
-
-			segmentOffset = header.next_segment_offset;
-		}
-
-		return 0; // Not found
+		// Use the tracker's method instead of reimplementing the logic
+		return spaceManager_->getTracker()->getSegmentOffsetForEdgeId(id);
 	}
 
 	bool DeletionManager::deleteBulkNodes(const std::vector<uint64_t> &nodeIds, bool cascadeEdges) {
@@ -254,8 +214,6 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markNodeInactive(Node node) {
-		// std::lock_guard<std::mutex> lock(mutex_);
-
 		// Mark node as inactive
 		node.markInactive();
 		dataManager_.deleteNode(node);
@@ -266,46 +224,21 @@ namespace graph::storage {
 			return; // Node not found
 		}
 
-		// // Get segment info
-		// SegmentInfo info = spaceManager_->getTracker()->getSegmentInfo(segmentOffset);
-		//
-		// // Read segment header
-		// SegmentHeader header;
-		// file_->seekg(static_cast<std::streamoff>(segmentOffset));
-		// file_->read(reinterpret_cast<char*>(&header), sizeof(SegmentHeader));
+		// Get the node's index within the segment
+		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+		uint32_t indexInSegment = static_cast<uint32_t>(node.getId() - header.start_id);
 
-		// // Calculate the index within the segment
-		// uint32_t indexInSegment = static_cast<uint32_t>(nodeId - header.start_id);
-		//
-		// // Update the bitmap to mark this node as inactive
-		// bitmap::setBit(header.activity_bitmap, indexInSegment, false);
-		//
-		// // Ensure bitmap size is updated if needed
-		// if (header.bitmap_size < bitmap::calculateBitmapSize(indexInSegment + 1)) {
-		// 	header.bitmap_size = bitmap::calculateBitmapSize(indexInSegment + 1);
-		// }
-		//
-		// // Update inactive count
-		// uint32_t inactiveCount = info.inactive + 1;
-		// header.inactive_count = inactiveCount;
-		//
-		// // Write the updated header back
-		// file_->seekp(static_cast<std::streamoff>(segmentOffset));
-		// file_->write(reinterpret_cast<const char*>(&header), sizeof(SegmentHeader));
-
-		// // Update segment info with new inactive count
-		// spaceManager_->getTracker()->updateSegmentUsage(segmentOffset, header.used, inactiveCount);
+		// Mark the node as inactive in the segment bitmap
+		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
 
 		// Check if we need to mark segment for compaction using the actual fragmentation ratio
-		SegmentInfo segmentInfo = spaceManager_->getTracker()->getSegmentInfo(segmentOffset);
-		if (segmentInfo.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
 			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
 		}
 	}
 
 	void DeletionManager::markEdgeInactive(Edge edge) {
-		// std::lock_guard<std::mutex> lock(mutex_);
-
 		// Mark edge as inactive
 		edge.markInactive();
 		dataManager_.deleteEdge(edge);
@@ -316,39 +249,16 @@ namespace graph::storage {
 			return; // Edge not found
 		}
 
-		// // Get segment info
-		// SegmentInfo info = spaceManager_->getTracker()->getSegmentInfo(segmentOffset);
-		//
-		// // Read segment header
-		// SegmentHeader header;
-		// file_->seekg(static_cast<std::streamoff>(segmentOffset));
-		// file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-		//
-		// // Calculate the index within the segment
-		// uint32_t indexInSegment = static_cast<uint32_t>(edgeId - header.start_id);
-		//
-		// // Update the bitmap to mark this edge as inactive
-		// bitmap::setBit(header.activity_bitmap, indexInSegment, false);
-		//
-		// // Ensure bitmap size is updated if needed
-		// if (header.bitmap_size < bitmap::calculateBitmapSize(indexInSegment + 1)) {
-		// 	header.bitmap_size = bitmap::calculateBitmapSize(indexInSegment + 1);
-		// }
-		//
-		// // Update inactive count
-		// uint32_t inactiveCount = info.inactive + 1;
-		// header.inactive_count = inactiveCount;
-		//
-		// // Write the updated header back
-		// file_->seekp(static_cast<std::streamoff>(segmentOffset));
-		// file_->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
-		//
-		// // Update segment info with new inactive count
-		// spaceManager_->getTracker()->updateSegmentUsage(segmentOffset, header.used, inactiveCount);
+		// Get the edge's index within the segment
+		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+		uint32_t indexInSegment = static_cast<uint32_t>(edge.getId() - header.start_id);
+
+		// Mark the edge as inactive in the segment bitmap
+		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
 
 		// Check if we need to mark segment for compaction
-		SegmentInfo segmentInfo = spaceManager_->getTracker()->getSegmentInfo(segmentOffset);
-		if (segmentInfo.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
 			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
 		}
 	}
@@ -360,10 +270,8 @@ namespace graph::storage {
 			return false; // Node not found
 		}
 
-		// Read segment header
-		SegmentHeader header;
-		file_->seekg(static_cast<std::streamoff>(segmentOffset));
-		file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+		// Get segment header from tracker
+		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
 
 		// Calculate the index within the segment
 		uint32_t indexInSegment = static_cast<uint32_t>(nodeId - header.start_id);
@@ -379,10 +287,8 @@ namespace graph::storage {
 			return false; // Edge not found
 		}
 
-		// Read segment header
-		SegmentHeader header;
-		file_->seekg(static_cast<std::streamoff>(segmentOffset));
-		file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+		// Get segment header from tracker
+		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
 
 		// Calculate the index within the segment
 		uint32_t indexInSegment = static_cast<uint32_t>(edgeId - header.start_id);
@@ -398,92 +304,85 @@ namespace graph::storage {
 		auto segments = spaceManager_->getTracker()->getSegmentsByType(entityType);
 
 		// Calculate fragmentation ratio for each segment
-		for (const auto &info: segments) {
-			// Fragmentation ratio is inactive / capacity
-			double fragRatio = (info.capacity > 0) ? static_cast<double>(info.inactive) / info.capacity : 0.0;
-
-			result[info.offset] = fragRatio;
+		for (const auto &header: segments) {
+			// Use the getFragmentationRatio method directly
+			result[header.file_offset] = header.getFragmentationRatio();
 		}
 
 		return result;
 	}
 
 	void DeletionManager::handleReferenceUpdate(uint64_t oldOffset, uint64_t newOffset, uint8_t type) {
-		// This callback is invoked after a segment has moved
-		// We need to update references to entities in the moved segment
+        // This callback is invoked after a segment has moved
+        // We need to update references to entities in the moved segment
 
-		if (type == 0) { // Node segment moved
-			// Read segment header to get ID range
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(newOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+        if (type == 0) { // Node segment moved
+            // Read segment header to get ID range
+            SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(newOffset);
 
-			// ID range covered by this segment
-			uint64_t startId = header.start_id;
-			uint64_t endId = startId + header.capacity;
+            // ID range covered by this segment
+            uint64_t startId = header.start_id;
+            uint64_t endId = startId + header.capacity;
 
-			// For each edge segment, check and update references to nodes in this segment
-			auto edgeSegments = spaceManager_->getTracker()->getSegmentsByType(1);
-			for (const auto &edgeInfo: edgeSegments) {
-				// Read each edge and update source/target references if needed
-				uint64_t edgeSegOffset = edgeInfo.offset;
-				SegmentHeader edgeHeader;
-				file_->seekg(static_cast<std::streamoff>(edgeSegOffset));
-				file_->read(reinterpret_cast<char *>(&edgeHeader), sizeof(SegmentHeader));
+            // For each edge segment, check and update references to nodes in this segment
+            auto edgeSegments = spaceManager_->getTracker()->getSegmentsByType(1);
+            for (const auto &edgeHeader: edgeSegments) {
+                // Read each edge and update source/target references if needed
+                uint64_t edgeSegOffset = edgeHeader.file_offset;
 
-				// Check edges in this segment
-				for (uint32_t i = 0; i < edgeHeader.used; ++i) {
-					uint64_t edgeId = edgeHeader.start_id + i;
-					uint64_t edgeOffset = edgeSegOffset + sizeof(SegmentHeader) + i * sizeof(Edge);
+                // Check edges in this segment
+                for (uint32_t i = 0; i < edgeHeader.used; ++i) {
+                    // Only process active edges
+                    if (spaceManager_->getTracker()->isEntityActive(edgeSegOffset, i)) {
+                        uint64_t edgeId = edgeHeader.start_id + i;
+                        uint64_t edgeOffset = edgeSegOffset + sizeof(SegmentHeader) + i * sizeof(Edge);
 
-					// Read edge
-					Edge edge;
-					file_->seekg(static_cast<std::streamoff>(edgeOffset));
-					file_->read(reinterpret_cast<char *>(&edge), sizeof(Edge));
+                        // Read edge
+                        Edge edge;
+                        file_->seekg(static_cast<std::streamoff>(edgeOffset));
+                        file_->read(reinterpret_cast<char *>(&edge), sizeof(Edge));
 
-					// // Check if source or target node is in moved segment
-					// uint64_t sourceNode = edge.getSourceNodeId();
-					// uint64_t targetNode = edge.getTargetNodeId();
-					//
-					// bool updated = false;
-					// if (sourceNode >= startId && sourceNode < endId) {
-					//     // Update edge's reference to source node
-					//     updated = true;
-					// }
-					//
-					// if (targetNode >= startId && targetNode < endId) {
-					//     // Update edge's reference to target node
-					//     updated = true;
-					// }
+                        // // Check if source or target node is in moved segment
+                        // uint64_t sourceNode = edge.getSourceNodeId();
+                        // uint64_t targetNode = edge.getTargetNodeId();
+                        //
+                        // bool updated = false;
+                        // if (sourceNode >= startId && sourceNode < endId) {
+                        //     // Update edge's reference to source node
+                        //     updated = true;
+                        // }
+                        //
+                        // if (targetNode >= startId && targetNode < endId) {
+                        //     // Update edge's reference to target node
+                        //     updated = true;
+                        // }
+                        //
+                        // if (updated) {
+                        //     // Write updated edge back
+                        //     file_->seekp(static_cast<std::streamoff>(edgeOffset));
+                        //     file_->write(reinterpret_cast<const char*>(&edge), sizeof(Edge));
+                        // }
+                    }
+                }
+            }
+        } else if (type == 1) { // Edge segment moved
+            // Read segment header to get ID range
+            SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(newOffset);
 
-					// if (updated) {
-					//     // Write updated edge back
-					//     file_->seekp(static_cast<std::streamoff>(edgeOffset));
-					//     file_->write(reinterpret_cast<const char*>(&edge), sizeof(Edge));
-					// }
-				}
-			}
-		} else if (type == 1) { // Edge segment moved
-			// Read segment header to get ID range
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(newOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+            // ID range covered by this segment
+            uint64_t startId = header.start_id;
+            uint64_t endId = startId + header.capacity;
 
-			// ID range covered by this segment
-			uint64_t startId = header.start_id;
-			uint64_t endId = startId + header.capacity;
+            // Update any property references to edges in this segment
+            // (would require scanning property segments for references to these edges)
 
-			// Update any property references to edges in this segment
-			// (would require scanning property segments for references to these edges)
-		} else if (type == 2) { // Property segment moved
-			// Update entity references to properties in this segment
-			PropertySegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(newOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(PropertySegmentHeader));
+        } else if (type == 2) { // Property segment moved
+            // Update entity references to properties in this segment
+            PropertySegmentHeader header = spaceManager_->getTracker()->readPropertySegmentHeader(newOffset);
 
-			// This is more complex as we need to scan through property entries
-			// to determine which entities reference this segment
-		}
-	}
+            // This is more complex as we need to scan through property entries
+            // to determine which entities reference this segment
+        }
+    }
 
 } // namespace graph::storage

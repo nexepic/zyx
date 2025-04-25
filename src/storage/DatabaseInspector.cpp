@@ -62,7 +62,6 @@ namespace graph::storage {
 		table.addRow({"Edge Segment Head", std::to_string(fileHeader.edge_segment_head)});
 		table.addRow({"Property Segment Head", std::to_string(fileHeader.property_segment_head)});
 		table.addRow({"Blob Section Head", std::to_string(fileHeader.blob_section_head)});
-		table.addRow({"Free Pool Head", std::to_string(fileHeader.free_pool_head)});
 		table.addRow({"Max Node ID", std::to_string(fileHeader.max_node_id)});
 		table.addRow({"Max Edge ID", std::to_string(fileHeader.max_edge_id)});
 		table.addRow({"Max Blob ID", std::to_string(fileHeader.max_blob_id)});

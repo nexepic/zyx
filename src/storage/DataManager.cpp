@@ -11,18 +11,18 @@
 #include "graph/storage/DataManager.h"
 #include <algorithm>
 #include <graph/storage/PropertyStorage.h>
+#include <graph/storage/SegmentTracker.h>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 
-#include "graph/utils/ChecksumUtils.h"
-
 namespace graph::storage {
 
 	DataManager::DataManager(const std::string &dbFilePath, size_t cacheSize, FileHeader &fileHeader,
-							 std::shared_ptr<IDAllocator> idAllocator) :
+							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker) :
 		dbFilePath_(dbFilePath), nodeCache_(cacheSize), edgeCache_(cacheSize), propertyCache_(cacheSize * 2),
-		blobCache_(cacheSize / 4), fileHeader_(fileHeader), idAllocator_(std::move(idAllocator)) {
+		blobCache_(cacheSize / 4), fileHeader_(fileHeader), idAllocator_(std::move(idAllocator)),
+		segmentTracker_(std::move(segmentTracker)) {
 		file_ = std::make_shared<std::ifstream>(dbFilePath, std::ios::binary);
 		if (!file_->good()) {
 			throw std::runtime_error("Cannot open database file");
@@ -52,34 +52,6 @@ namespace graph::storage {
 			blobStore_ = std::make_unique<BlobStore>(fileStream, fileHeader_.blob_section_head);
 		}
 	}
-
-	// void DataManager::refreshFromDisk() {
-	// 	if (!file_->is_open()) {
-	// 		file_->open(dbFilePath_, std::ios::binary);
-	// 		if (!file_->good()) {
-	// 			throw std::runtime_error("Cannot open database file");
-	// 		}
-	// 	}
-	//
-	// 	// Read file header
-	// 	file_->seekg(0);
-	// 	file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
-	//
-	// 	// Validate magic number
-	// 	if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
-	// 		throw std::runtime_error("Invalid file format");
-	// 	}
-	//
-	// 	// Validate header CRC
-	// 	uint32_t calculatedCrc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
-	// 	if (calculatedCrc != fileHeader_.header_crc) {
-	// 		throw std::runtime_error("Header CRC mismatch, data corruption detected");
-	// 	}
-	//
-	// 	// Rebuild segment indexes
-	// 	buildNodeSegmentIndex();
-	// 	buildEdgeSegmentIndex();
-	// }
 
 	template<typename EntityType>
 	struct EntityGetter {
@@ -136,9 +108,8 @@ namespace graph::storage {
 		uint64_t currentOffset = segmentHead;
 
 		while (currentOffset != 0) {
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(currentOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+			// Use the segment tracker to read the header if available
+			SegmentHeader header = segmentTracker_->readSegmentHeader(currentOffset);
 
 			SegmentIndex index{};
 			index.startId = header.start_id;
@@ -163,9 +134,7 @@ namespace graph::storage {
 		uint64_t currentOffset = propertySegmentHead_;
 
 		while (currentOffset != 0) {
-			PropertySegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(currentOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(header));
+			PropertySegmentHeader header = segmentTracker_->readPropertySegmentHeader(currentOffset);
 
 			// Here we do not store ID ranges like nodes and edges, because property entries are organized by entity ID
 			SegmentIndex index{};
@@ -201,9 +170,7 @@ namespace graph::storage {
 			uint64_t segmentOffset = segmentIndex.segmentOffset;
 
 			// Read the segment header
-			PropertySegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(segmentOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(header));
+			PropertySegmentHeader header = segmentTracker_->readPropertySegmentHeader(segmentOffset);
 
 			// Iterate through all entries in the segment
 			uint64_t currentPos = segmentOffset + sizeof(PropertySegmentHeader);
@@ -575,15 +542,18 @@ namespace graph::storage {
 			return std::nullopt; // Segment not found
 		}
 
-		// Read segment header
-		SegmentHeader header;
-		file_->seekg(static_cast<std::streamoff>(segmentOffset));
-		file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+		// Read segment header using segment tracker if available
+		SegmentHeader header = segmentTracker_->readSegmentHeader(segmentOffset);
 
 		// Calculate position of entity within segment
 		uint64_t relativePosition = id - header.start_id;
 		if (relativePosition >= header.used) {
 			return std::nullopt; // ID is out of range for this segment
+		}
+
+		// Check if the entity is active
+		if (!segmentTracker_->isEntityActive(segmentOffset, relativePosition)) {
+			return std::nullopt; // Entity is marked as inactive
 		}
 
 		// Calculate file offset for this entity
@@ -604,9 +574,7 @@ namespace graph::storage {
 		}
 
 		// Read segment header
-		SegmentHeader header;
-		file_->seekg(static_cast<std::streamoff>(segmentOffset));
-		file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+		SegmentHeader header = segmentTracker_->readSegmentHeader(segmentOffset);
 
 		// Calculate effective start and end positions
 		uint64_t effectiveStartId = std::max(startId, header.start_id);
@@ -690,9 +658,7 @@ namespace graph::storage {
 		// Scan through edge segments
 		for (const auto &segmentIndex: edgeSegmentIndex_) {
 			uint64_t segmentOffset = segmentIndex.segmentOffset;
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(segmentOffset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+			SegmentHeader header = segmentTracker_->readSegmentHeader(segmentOffset);
 
 			// Read all edges in this segment (allowing for potential filtering)
 			// We set filterDeleted to true to automatically skip deleted edges
@@ -961,9 +927,7 @@ namespace graph::storage {
 
 			if (segmentOffset != 0) {
 				// Read segment header
-				SegmentHeader header;
-				file_->seekg(static_cast<std::streamoff>(segmentOffset));
-				file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+				SegmentHeader header = segmentTracker_->readSegmentHeader(segmentOffset);
 
 				// Calculate entity's offset within the segment
 				uint64_t relativePosition = entity.getId() - header.start_id;

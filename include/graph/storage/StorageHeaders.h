@@ -38,7 +38,6 @@ namespace graph::storage {
         uint64_t edge_segment_head = 0; // Offset of the first edge segment
         uint64_t property_segment_head = 0; // Offset of the first property segment
         uint64_t blob_section_head = 0; // Offset of the first blob section
-        uint64_t free_pool_head = 0; // Head of the free pool list
 
         // Statistics
         int64_t max_node_id = 0;
@@ -75,16 +74,19 @@ namespace graph::storage {
 
     // Segment metadata
     struct alignas(SEGMENT_HEADER_SIZE) SegmentHeader {
+        uint64_t file_offset = 0;         // This segment's file offset (for self-reference)
         uint64_t next_segment_offset = 0; // File offset of the next segment
         uint64_t prev_segment_offset = 0; // File offset of the previous segment
         int64_t start_id = 0; // Starting ID
         uint32_t capacity = 0; // Total capacity of the segment (in items)
         uint32_t used = 0; // Number of used items
         uint32_t inactive_count = 0; // Number of inactive items
-        uint32_t data_type = 0; // Data type 0: Node 1: Edge
+        uint32_t data_type = 0; // Data type 0: Node 1: Edge 2: Property 3: Blob
         uint32_t segment_crc = 0; // CRC checksum of the segment data
         uint32_t bitmap_size = 0; // Size of the activity bitmap in bytes
         uint8_t activity_bitmap[MAX_BITMAP_SIZE] = {}; // Bitmap tracking active/inactive status (1=active, 0=inactive)
+        uint8_t needs_compaction = 0;     // Flag indicating if segment needs compaction (0=no, 1=yes)
+        uint8_t is_dirty = 0;             // Flag indicating if segment data has been modified (0=no, 1=yes)
 
         uint32_t getActiveCount() const {
             return calculateActiveCount(*this);
