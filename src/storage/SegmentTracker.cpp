@@ -265,38 +265,6 @@ namespace graph::storage {
 			header.is_dirty = 1;
 			markSegmentDirty(offset);
 		}
-
-		// Update the previous segment's next link
-		if (prevOffset != 0) {
-			ensureSegmentCached(prevOffset);
-			auto it = segments_.find(prevOffset);
-			if (it != segments_.end()) {
-				SegmentHeader &prevHeader = it->second;
-				if (prevHeader.next_segment_offset != offset) {
-					prevHeader.next_segment_offset = offset;
-					prevHeader.is_dirty = 1;
-					markSegmentDirty(prevOffset);
-				}
-			} else {
-				std::cerr << "Warning: Previous segment not found for offset " << prevOffset << std::endl;
-			}
-		}
-
-		// Update the next segment's previous link
-		if (nextOffset != 0) {
-			ensureSegmentCached(nextOffset);
-			auto it = segments_.find(nextOffset);
-			if (it != segments_.end()) {
-				SegmentHeader &nextHeader = it->second;
-				if (nextHeader.prev_segment_offset != offset) {
-					nextHeader.prev_segment_offset = offset;
-					nextHeader.is_dirty = 1;
-					markSegmentDirty(nextOffset);
-				}
-			} else {
-				std::cerr << "Warning: Next segment not found for offset " << nextOffset << std::endl;
-			}
-		}
 	}
 
 	void SegmentTracker::markSegmentFree(uint64_t offset) {

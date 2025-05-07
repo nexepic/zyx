@@ -71,13 +71,8 @@ namespace graph::storage {
 			}
 		}
 
-		std::cout << "22 Allocating permanent ID for temp ID: " << tempId
-				  << " of type: " << static_cast<int>(entityType) << std::endl;
-
 		// First try to reuse an inactive ID
 		int64_t permId = findInactiveId(entityType);
-
-		std::cout << "23 Reusing inactive ID: " << permId << std::endl;
 
 		// If no inactive ID is available, allocate a new sequential ID
 		if (permId == 0) {

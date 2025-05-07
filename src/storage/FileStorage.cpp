@@ -224,9 +224,6 @@ namespace graph::storage {
 			deleteEntityOnDisk(edge);
 		}
 
-		// Persist segment headers
-		persistSegmentHeaders();
-
 		// Mark everything as saved
 		dataManager->markAllSaved();
 
@@ -611,6 +608,9 @@ namespace graph::storage {
 				// Reset the flag after handling potential compaction
 				deleteOperationPerformed.store(false);
 			}
+
+			// Persist segment headers
+			persistSegmentHeaders();
 
 			fileHeaderManager->updateFileHeader();
 		} catch (const std::exception &e) {

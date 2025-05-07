@@ -125,14 +125,16 @@ namespace graph::storage {
 		uint64_t nextOffset = header.next_segment_offset;
 
 		if (prevOffset != 0) {
-			tracker_->updateSegmentLinks(prevOffset, header.prev_segment_offset, nextOffset);
+			SegmentHeader prevHeader = tracker_->getSegmentHeader(prevOffset);
+			tracker_->updateSegmentLinks(prevOffset, prevHeader.prev_segment_offset, nextOffset);
 		} else {
 			// This is the head of the chain
 			tracker_->updateChainHead(header.data_type, nextOffset);
 		}
 
 		if (nextOffset != 0) {
-			tracker_->updateSegmentLinks(nextOffset, prevOffset, header.next_segment_offset);
+		    SegmentHeader nextHeader = tracker_->getSegmentHeader(nextOffset);
+		    tracker_->updateSegmentLinks(nextOffset, prevOffset, nextHeader.next_segment_offset);
 		}
 
 		// Mark segment as free
