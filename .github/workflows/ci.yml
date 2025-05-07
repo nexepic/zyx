@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build meson g++ libboost-all-dev zlib1g-dev
+
+      - name: Set up dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install ninja meson boost zlib
+
+      - name: Set up dependencies
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install ninja meson boost-msvc-14.2 zlib
+
+      - name: Configure the build
+        run: |
+          meson setup buildDir
+        shell: bash
+
+      - name: Build the project
+        run: |
+          meson compile -C buildDir
+        shell: bash
