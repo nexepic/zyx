@@ -11,16 +11,14 @@
 #include "graph/storage/FileStorage.h"
 #include <algorithm> // for std::sort
 #include <fstream>
-#include <graph/storage/BlobStore.h>
-#include <graph/storage/PropertyStorage.h>
 #include <sstream>
 #include <zlib.h>
+#include "graph/core/Blob.h"
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
+#include "graph/core/Property.h"
 #include "graph/storage/DatabaseInspector.h"
-#include "graph/utils/ChecksumUtils.h"
 #include "graph/utils/FixedSizeSerializer.h"
-#include "graph/utils/Serializer.h"
 
 namespace graph::storage {
 
@@ -70,9 +68,16 @@ namespace graph::storage {
 		segmentTracker = std::make_shared<SegmentTracker>(fileStream);
 
 		// Initialize ID allocator
-		idAllocator = std::make_unique<IDAllocator>(fileStream, segmentTracker, fileHeaderManager->getMaxNodeIdRef(),
-													fileHeaderManager->getMaxEdgeIdRef());
+		idAllocator = std::make_unique<IDAllocator>(
+				fileStream, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
+				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef());
 		idAllocator->initialize();
+
+		// Set up ID update callback
+		idAllocator->setIdUpdateCallback([this](int64_t tempId, int64_t permId, uint8_t entityType) {
+			// Handle ID updates by immediately updating entities in the DataManager
+			dataManager->handleIdUpdate(tempId, permId, entityType);
+		});
 
 		// Initialize data manager
 		dataManager = std::make_unique<DataManager>(dbFilePath, cacheSize, fileHeader, idAllocator, segmentTracker);
@@ -88,9 +93,9 @@ namespace graph::storage {
 
 		// After dataManager initialization
 		deletionManager = std::make_unique<DeletionManager>(fileStream, *this, *dataManager, spaceManager);
-		deletionManager->initialize();
+		// deletionManager->initialize();
 
-		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream);
+		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
 		databaseInspector->displayDatabaseStructure();
 	}
 
@@ -121,39 +126,46 @@ namespace graph::storage {
 			return;
 		}
 
+		// First, allocate permanent IDs for all entities
+		allocatePermanentIdsForAllEntities();
+
+		updateEntityReferences();
+
 		// Get entities by their change type
-		auto newNodes = dataManager->getDirtyNodesWithChangeType(DataManager::DirtyEntityInfo::ChangeType::ADDED);
-		auto modifiedNodes =
-				dataManager->getDirtyNodesWithChangeType(DataManager::DirtyEntityInfo::ChangeType::MODIFIED);
-		auto deletedNodes = dataManager->getDirtyNodesWithChangeType(DataManager::DirtyEntityInfo::ChangeType::DELETED);
+		auto newNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::ADDED});
+		auto modifiedNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::MODIFIED});
+		auto deletedNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::DELETED});
 
-		auto newEdges = dataManager->getDirtyEdgesWithChangeType(DataManager::DirtyEntityInfo::ChangeType::ADDED);
-		auto modifiedEdges =
-				dataManager->getDirtyEdgesWithChangeType(DataManager::DirtyEntityInfo::ChangeType::MODIFIED);
-		auto deletedEdges = dataManager->getDirtyEdgesWithChangeType(DataManager::DirtyEntityInfo::ChangeType::DELETED);
+		auto newEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::ADDED});
+		auto modifiedEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::MODIFIED});
+		auto deletedEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::DELETED});
 
-		// First, store properties for all entities that need it
-		// For new nodes
-		for (auto &node: newNodes) {
-			dataManager->storeEntityProperties<Node>(node, fileStream);
+		auto newProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::ADDED});
+		auto modifiedProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::MODIFIED});
+		auto deletedProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::DELETED});
+
+		auto newBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::ADDED});
+		auto modifiedBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::MODIFIED});
+		auto deletedBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::DELETED});
+
+		// Save new properties first
+		if (!newProperties.empty()) {
+			std::unordered_map<int64_t, Property> propertiesToSave;
+			for (const auto &property: newProperties) {
+				propertiesToSave[property.getId()] = property;
+			}
+			saveData(propertiesToSave, fileHeader.property_segment_head, PROPERTIES_PER_SEGMENT);
 		}
 
-		// For modified nodes
-		for (auto &node: modifiedNodes) {
-			dataManager->storeEntityProperties<Node>(node, fileStream);
+		// Save new blobs
+		if (!newBlobs.empty()) {
+			std::unordered_map<int64_t, Blob> blobsToSave;
+			for (const auto &blob: newBlobs) {
+				blobsToSave[blob.getId()] = blob;
+			}
+			saveData(blobsToSave, fileHeader.blob_segment_head, BLOBS_PER_SEGMENT);
 		}
 
-		// For new edges
-		for (auto &edge: newEdges) {
-			dataManager->storeEntityProperties<Edge>(edge, fileStream);
-		}
-
-		// For modified edges
-		for (auto &edge: modifiedEdges) {
-			dataManager->storeEntityProperties<Edge>(edge, fileStream);
-		}
-
-		// Now save the actual entities
 		// Save new nodes
 		if (!newNodes.empty()) {
 			std::unordered_map<int64_t, Node> nodesToSave;
@@ -172,6 +184,16 @@ namespace graph::storage {
 			saveData(edgesToSave, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
 		}
 
+		// update properties in-place
+		for (const auto &property: modifiedProperties) {
+			updateEntityInPlace(property);
+		}
+
+		// update blobs in-place
+		for (const auto &blob: modifiedBlobs) {
+			updateEntityInPlace(blob);
+		}
+
 		// Update modified nodes in-place
 		for (const auto &node: modifiedNodes) {
 			updateEntityInPlace(node);
@@ -180,6 +202,16 @@ namespace graph::storage {
 		// Update modified edges in-place
 		for (const auto &edge: modifiedEdges) {
 			updateEntityInPlace(edge);
+		}
+
+		// Delete properties
+		for (const auto &property: deletedProperties) {
+			deleteEntityOnDisk(property);
+		}
+
+		// Delete blobs
+		for (const auto &blob: deletedBlobs) {
+			deleteEntityOnDisk(blob);
 		}
 
 		// Delete nodes
@@ -198,9 +230,6 @@ namespace graph::storage {
 		// Mark everything as saved
 		dataManager->markAllSaved();
 
-		// Process any pending ID updates for objects in the database
-		dataManager->updateEntitiesWithPermanentIds();
-
 		// Clean up any remaining temporary ID mappings
 		idAllocator->clearTempIdMappings();
 	}
@@ -210,37 +239,77 @@ namespace graph::storage {
 		if (data.empty())
 			return;
 
-		// Process entities with temporary IDs first
-		std::unordered_map<int64_t, uint64_t> idMapping; // Maps temporary IDs to permanent IDs
-		std::unordered_map<uint64_t, T> permanentIdData; // Entities with permanent IDs
+		// Group entities by whether they have pre-allocated slots or need new allocation
+		std::vector<T> entitiesForNewSlots;
+		std::unordered_map<uint64_t, std::vector<T>> entitiesBySegment; // Segment offset -> entities
 
-		for (auto &[id, entity]: data) {
-			if (IDAllocator::isTemporaryId(id)) {
-				// Allocate a permanent ID
-				uint64_t permanentId = idAllocator->allocatePermanentId(id, T::typeId);
+		// First pass: determine if each entity has a pre-allocated slot
+		for (const auto &[id, entity]: data) {
+			uint64_t segmentOffset = 0;
 
-				// Update the entity with its permanent ID
-				entity.setPermanentId(permanentId);
+			// Find if entity has a segment assignment (either from inactive slot reuse or existing entity)
+			if constexpr (std::is_same_v<T, Node>) {
+				segmentOffset = dataManager->findSegmentForNodeId(id);
+			} else if constexpr (std::is_same_v<T, Edge>) {
+				segmentOffset = dataManager->findSegmentForEdgeId(id);
+			} else if constexpr (std::is_same_v<T, Property>) {
+				segmentOffset = dataManager->findSegmentForPropertyId(id);
+			} else if constexpr (std::is_same_v<T, Blob>) {
+				segmentOffset = dataManager->findSegmentForBlobId(id);
+			}
 
-				// Store in mapping
-				idMapping[id] = permanentId;
-
-				// Add to permanent ID data
-				permanentIdData[permanentId] = entity;
+			if (segmentOffset != 0) {
+				// Entity has a pre-allocated slot - group by segment for batch processing
+				entitiesBySegment[segmentOffset].push_back(entity);
 			} else {
-				// Already has a permanent ID
-				permanentIdData[id] = entity;
+				// Entity needs a new slot
+				entitiesForNewSlots.push_back(entity);
 			}
 		}
 
-		// Sort data by permanent ID
-		std::vector<T> sortedData;
-		sortedData.reserve(permanentIdData.size());
-		for (const auto &[id, item]: permanentIdData) {
-			sortedData.push_back(item);
-		}
-		std::sort(sortedData.begin(), sortedData.end(), [](const T &a, const T &b) { return a.getId() < b.getId(); });
+		// Process entities with pre-allocated slots
+		for (auto &[segmentOffset, entities]: entitiesBySegment) {
+			SegmentHeader header = readSegmentHeader(segmentOffset);
 
+			// Sort entities by ID for efficient placement
+			std::sort(entities.begin(), entities.end(), [](const T &a, const T &b) { return a.getId() < b.getId(); });
+
+			// Process each entity
+			for (const auto &entity: entities) {
+				uint32_t index = static_cast<uint32_t>(entity.getId() - header.start_id);
+
+				// Calculate file offset for this entity
+				uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + index * sizeof(T);
+
+				// Write entity
+				fileStream->seekp(static_cast<std::streamoff>(entityOffset));
+				utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, sizeof(T));
+
+				// Mark entity as active if it wasn't already
+				bool wasInactive = !segmentTracker->getBitmapBit(segmentOffset, index);
+				if (wasInactive) {
+					segmentTracker->setEntityActive(segmentOffset, index, true);
+
+					// Update inactive count in the segment header if needed
+					segmentTracker->updateSegmentHeader(segmentOffset, [](SegmentHeader &header) {
+						if (header.inactive_count > 0) {
+							header.inactive_count--;
+						}
+					});
+				}
+			}
+		}
+
+		// Exit if all entities were saved to pre-allocated slots
+		if (entitiesForNewSlots.empty()) {
+			return;
+		}
+
+		// For remaining entities, sort by ID for sequential storage
+		std::sort(entitiesForNewSlots.begin(), entitiesForNewSlots.end(),
+				  [](const T &a, const T &b) { return a.getId() < b.getId(); });
+
+		// Process entities that need new slots in segments
 		uint64_t currentSegmentOffset = segmentHead;
 		SegmentHeader currentSegHeader;
 
@@ -261,8 +330,8 @@ namespace graph::storage {
 			fileStream->read(reinterpret_cast<char *>(&currentSegHeader), sizeof(SegmentHeader));
 		}
 
-		auto dataIt = sortedData.begin();
-		while (dataIt != sortedData.end()) {
+		auto dataIt = entitiesForNewSlots.begin();
+		while (dataIt != entitiesForNewSlots.end()) {
 			// Calculate remaining space
 			uint32_t remaining = currentSegHeader.capacity - currentSegHeader.used;
 
@@ -300,7 +369,7 @@ namespace graph::storage {
 			}
 
 			// Calculate number of items to write
-			uint32_t writeCount = std::min(remaining, static_cast<uint32_t>(sortedData.end() - dataIt));
+			uint32_t writeCount = std::min(remaining, static_cast<uint32_t>(entitiesForNewSlots.end() - dataIt));
 			std::vector<T> batch(dataIt, dataIt + writeCount);
 
 			// Write data
@@ -418,7 +487,7 @@ namespace graph::storage {
 
 	// Read segment header
 	SegmentHeader FileStorage::readSegmentHeader(uint64_t segmentOffset) const {
-		return segmentTracker->readSegmentHeader(segmentOffset);
+		return segmentTracker->getSegmentHeader(segmentOffset);
 	}
 
 	// Write segment header
@@ -434,7 +503,7 @@ namespace graph::storage {
 		}
 
 		// Calculate entity position within segment
-		SegmentHeader header = segmentTracker->readSegmentHeader(segmentOffset);
+		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
 		uint64_t entityIndex = entityId - header.start_id;
 		if (entityIndex >= header.capacity) {
 			throw std::runtime_error("Entity index out of bounds for segment bitmap update");
@@ -451,7 +520,7 @@ namespace graph::storage {
 		}
 
 		// Read segment header to get start_id
-		SegmentHeader header = segmentTracker->readSegmentHeader(segmentOffset);
+		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
 
 		// Calculate relative start position
 		uint64_t startIndex = startId - header.start_id;
@@ -486,7 +555,7 @@ namespace graph::storage {
 		}
 
 		// Read segment header through the tracker
-		SegmentHeader header = segmentTracker->readSegmentHeader(segmentOffset);
+		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
 
 		// Count inactive items in bitmap
 		uint32_t inactiveCount = 0;
@@ -531,10 +600,13 @@ namespace graph::storage {
 
 					idAllocator->refreshInactiveIdsCache(Node::typeId);
 					idAllocator->refreshInactiveIdsCache(Edge::typeId);
+					idAllocator->refreshInactiveIdsCache(Property::typeId);
+					idAllocator->refreshInactiveIdsCache(Blob::typeId);
 
 					dataManager->buildNodeSegmentIndex();
 					dataManager->buildEdgeSegmentIndex();
 					dataManager->buildPropertySegmentIndex();
+					dataManager->buildBlobSegmentIndex();
 				}
 				// Reset the flag after handling potential compaction
 				deleteOperationPerformed.store(false);
@@ -551,6 +623,179 @@ namespace graph::storage {
 
 		// Mark flush as complete
 		flushInProgress.store(false);
+	}
+
+	void FileStorage::allocatePermanentIdsForAllEntities() {
+		// Get entities with temporary IDs
+		auto newNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::ADDED});
+		auto newEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::ADDED});
+		auto newProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::ADDED});
+		auto newBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::ADDED});
+
+		// Process in order: properties, blobs, nodes, edges (dependencies go first)
+		std::sort(newProperties.begin(), newProperties.end(),
+				  [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		for (auto &property: newProperties) {
+			if (property.hasTemporaryId()) {
+				idAllocator->allocatePermanentId(property.getId(), Property::typeId);
+				// No need to update property here, callback will handle it
+			}
+		}
+
+		std::sort(newBlobs.begin(), newBlobs.end(), [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		for (auto &blob: newBlobs) {
+			if (blob.hasTemporaryId()) {
+				idAllocator->allocatePermanentId(blob.getId(), Blob::typeId);
+				// No need to update blob here, callback will handle it
+			}
+		}
+
+		std::sort(newNodes.begin(), newNodes.end(), [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		for (auto &node: newNodes) {
+			if (node.hasTemporaryId()) {
+				idAllocator->allocatePermanentId(node.getId(), Node::typeId);
+				// No need to update node here, callback will handle it
+			}
+		}
+
+		std::sort(newEdges.begin(), newEdges.end(), [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		for (auto &edge: newEdges) {
+			if (edge.hasTemporaryId()) {
+				idAllocator->allocatePermanentId(edge.getId(), Edge::typeId);
+				// No need to update edge here, callback will handle it
+			}
+		}
+	}
+
+	void FileStorage::updateEntityReferences() {
+		// Get entities that need reference updates (both ADDED and MODIFIED)
+		auto dirtyNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>(
+				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
+
+		auto dirtyEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>(
+				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
+
+		auto dirtyProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>(
+				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
+
+		// Update node references
+		for (auto &node: dirtyNodes) {
+			bool needsUpdate = false;
+			Node updatedNode = node;
+
+			// Update property entity reference
+			if (node.hasPropertyEntity()) {
+				int64_t propId = node.getPropertyEntityId();
+				if (IDAllocator::isTemporaryId(propId)) {
+					int64_t permanentId = idAllocator->getPermanentId(propId, Property::typeId);
+					if (permanentId != 0) { // If we found a mapping
+						updatedNode.setPropertyEntityId(permanentId);
+						needsUpdate = true;
+					}
+				}
+			}
+
+			// Update edge references in inEdges and outEdges
+			std::vector<uint64_t> updatedInEdges = node.getInEdges();
+			std::vector<uint64_t> updatedOutEdges = node.getOutEdges();
+			bool inEdgesUpdated = false;
+			bool outEdgesUpdated = false;
+
+			for (auto &edgeId: updatedInEdges) {
+				if (IDAllocator::isTemporaryId(edgeId)) {
+					int64_t permanentId = idAllocator->getPermanentId(edgeId, Edge::typeId);
+					if (permanentId != 0) {
+						edgeId = permanentId;
+						inEdgesUpdated = true;
+					}
+				}
+			}
+
+			for (auto &edgeId: updatedOutEdges) {
+				if (IDAllocator::isTemporaryId(edgeId)) {
+					int64_t permanentId = idAllocator->getPermanentId(edgeId, Edge::typeId);
+					if (permanentId != 0) {
+						edgeId = permanentId;
+						outEdgesUpdated = true;
+					}
+				}
+			}
+
+			if (inEdgesUpdated) {
+				updatedNode.setInEdges(updatedInEdges);
+				needsUpdate = true;
+			}
+
+			if (outEdgesUpdated) {
+				updatedNode.setOutEdges(updatedOutEdges);
+				needsUpdate = true;
+			}
+
+			if (needsUpdate) {
+				dataManager->updateNode(updatedNode);
+			}
+		}
+
+		// Update edge references
+		for (auto &edge: dirtyEdges) {
+			bool needsUpdate = false;
+			Edge updatedEdge = edge;
+
+			// Update property entity reference
+			if (edge.hasPropertyEntity()) {
+				int64_t propId = edge.getPropertyEntityId();
+				if (IDAllocator::isTemporaryId(propId)) {
+					int64_t permanentId = idAllocator->getPermanentId(propId, Property::typeId);
+					if (permanentId != 0) {
+						updatedEdge.setPropertyEntityId(permanentId);
+						needsUpdate = true;
+					}
+				}
+			}
+
+			// Update source and target node references
+			int64_t sourceNodeId = edge.getSourceNodeId();
+			if (IDAllocator::isTemporaryId(sourceNodeId)) {
+				int64_t permanentId = idAllocator->getPermanentId(sourceNodeId, Node::typeId);
+				if (permanentId != 0) {
+					updatedEdge.setSourceNodeId(permanentId);
+					needsUpdate = true;
+				}
+			}
+
+			int64_t targetNodeId = edge.getTargetNodeId();
+			if (IDAllocator::isTemporaryId(targetNodeId)) {
+				int64_t permanentId = idAllocator->getPermanentId(targetNodeId, Node::typeId);
+				if (permanentId != 0) {
+					updatedEdge.setTargetNodeId(permanentId);
+					needsUpdate = true;
+				}
+			}
+
+			if (needsUpdate) {
+				dataManager->updateEdge(updatedEdge);
+			}
+		}
+
+		// Update property references to their entities
+		for (auto &property: dirtyProperties) {
+			int64_t entityId = property.getEntityId();
+			uint8_t entityType = property.getEntityType();
+			bool needsUpdate = false;
+			Property updatedProperty = property;
+
+			if (IDAllocator::isTemporaryId(entityId)) {
+				int64_t permanentId = idAllocator->getPermanentId(entityId, entityType);
+				if (permanentId != 0) {
+					updatedProperty.setEntityId(permanentId);
+					needsUpdate = true;
+				}
+			}
+
+			if (needsUpdate) {
+				dataManager->updatePropertyEntity(updatedProperty);
+			}
+		}
 	}
 
 	Node FileStorage::getNode(int64_t id) {
@@ -624,34 +869,6 @@ namespace graph::storage {
 		return connectedNodeIds;
 	}
 
-	void FileStorage::updateNodeProperty(uint64_t nodeId, const std::string &key, const PropertyValue &value) {
-		if (!isFileOpen) {
-			open();
-		}
-		dataManager->updateNodeProperty(nodeId, key, value);
-	}
-
-	void FileStorage::updateEdgeProperty(uint64_t edgeId, const std::string &key, const PropertyValue &value) {
-		if (!isFileOpen) {
-			open();
-		}
-		dataManager->updateEdgeProperty(edgeId, key, value);
-	}
-
-	PropertyValue FileStorage::getNodeProperty(uint64_t nodeId, const std::string &key) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->getNodeProperty(nodeId, key);
-	}
-
-	PropertyValue FileStorage::getEdgeProperty(uint64_t edgeId, const std::string &key) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->getEdgeProperty(edgeId, key);
-	}
-
 	std::unordered_map<std::string, PropertyValue> FileStorage::getNodeProperties(uint64_t nodeId) {
 		if (!isFileOpen) {
 			open();
@@ -664,34 +881,6 @@ namespace graph::storage {
 			open();
 		}
 		return dataManager->getEdgeProperties(edgeId);
-	}
-
-	void FileStorage::removeNodeProperty(uint64_t nodeId, const std::string &key) {
-		if (!isFileOpen) {
-			open();
-		}
-		dataManager->removeNodeProperty(nodeId, key);
-	}
-
-	void FileStorage::removeEdgeProperty(uint64_t edgeId, const std::string &key) {
-		if (!isFileOpen) {
-			open();
-		}
-		dataManager->removeEdgeProperty(edgeId, key);
-	}
-
-	uint64_t FileStorage::storeBlob(const std::string &data, const std::string &contentType) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->storeBlob(data, contentType);
-	}
-
-	BlobStore &FileStorage::getBlobStore() {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->getBlobStore();
 	}
 
 	Node FileStorage::insertNode(const std::string &label) {
@@ -730,6 +919,18 @@ namespace graph::storage {
 
 		dataManager->addEdge(edge);
 		return edge;
+	}
+
+	void FileStorage::insertProperties(int64_t entityId, uint8_t entityType,
+									   const std::unordered_map<std::string, PropertyValue> &properties) const {
+		// Check the entity type and call the appropriate method
+		if (entityType == Node::typeId) {
+			dataManager->addNodeProperties(entityId, properties);
+		} else if (entityType == Edge::typeId) {
+			dataManager->addEdgeProperties(entityId, properties);
+		} else {
+			throw std::runtime_error("Unsupported entity type for properties: " + std::to_string(entityType));
+		}
 	}
 
 	void FileStorage::updateNode(const Node &node) {

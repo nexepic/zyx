@@ -50,6 +50,9 @@ namespace graph::storage {
 		// Edge operations
 		Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label);
 
+		void insertProperties(int64_t entityId, uint8_t entityType,
+			const std::unordered_map<std::string, PropertyValue>& properties) const;
+
 		void updateNode(const Node& node);
 		void updateEdge(const Edge& edge);
 
@@ -82,16 +85,6 @@ namespace graph::storage {
 		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both");
 		std::vector<int64_t> findConnectedNodeIds(int64_t nodeId, const std::string &direction = "both");
 
-		// Node property operations
-		void updateNodeProperty(uint64_t nodeId, const std::string &key, const PropertyValue &value);
-		PropertyValue getNodeProperty(uint64_t nodeId, const std::string &key);
-		void removeNodeProperty(uint64_t nodeId, const std::string &key);
-
-		// Edge property operations
-		void updateEdgeProperty(uint64_t edgeId, const std::string &key, const PropertyValue &value);
-		PropertyValue getEdgeProperty(uint64_t edgeId, const std::string &key);
-		void removeEdgeProperty(uint64_t edgeId, const std::string &key);
-
 		template<typename T>
 		void updateEntityInPlace(const T& entity);
 
@@ -103,10 +96,6 @@ namespace graph::storage {
 
 		// Get all properties for an edge
 		std::unordered_map<std::string, PropertyValue> getEdgeProperties(uint64_t edgeId);
-
-		uint64_t storeBlob(const std::string &data, const std::string &contentType = "text");
-
-		BlobStore &getBlobStore();
 
 		// isFileOpen getter
 		[[nodiscard]] bool isOpen() const { return isFileOpen; }
@@ -163,5 +152,10 @@ namespace graph::storage {
 		std::mutex flushMutex;
 		std::atomic<bool> flushInProgress{false};
 		std::atomic<bool> deleteOperationPerformed{false};
+
+		// ID allocation for all entities before saving
+		void allocatePermanentIdsForAllEntities();
+
+		void updateEntityReferences();
 	};
 } // namespace graph::storage

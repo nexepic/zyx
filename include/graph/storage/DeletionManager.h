@@ -16,6 +16,9 @@
 #include <vector>
 #include "SpaceManager.h"
 
+#include <graph/core/Blob.h>
+#include <graph/core/Property.h>
+
 namespace graph::storage {
 
 	// Forward declarations
@@ -59,7 +62,7 @@ namespace graph::storage {
 		/**
 		 * Refresh segment state information
 		 */
-		void refreshSegmentState();
+		// void refreshSegmentState();
 
 		/**
 		 * Mark a node as inactive
@@ -70,6 +73,10 @@ namespace graph::storage {
 		 * Mark an edge as inactive
 		 */
 		void markEdgeInactive(Edge edge);
+
+		void markPropertyInactive(Property property);
+
+		void markBlobInactive(Blob blob);
 
 		/**
 		 * Check if a node is inactive

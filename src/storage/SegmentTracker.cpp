@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <graph/storage/SegmentType.h>
 #include <graph/utils/ChecksumUtils.h>
 #include <iostream>
 #include <stdexcept>
@@ -29,7 +30,7 @@ namespace graph::storage {
 		nodeSegmentHead_ = header.node_segment_head;
 		edgeSegmentHead_ = header.edge_segment_head;
 		propertySegmentHead_ = header.property_segment_head;
-		blobSegmentHead_ = header.blob_section_head;
+		blobSegmentHead_ = header.blob_segment_head;
 
 		// Clear existing cache
 		segments_.clear();
@@ -42,16 +43,16 @@ namespace graph::storage {
 
 	void SegmentTracker::loadSegments() {
 		// Scan node segments
-		loadSegmentChain(nodeSegmentHead_, 0); // 0 = Node type
+		loadSegmentChain(nodeSegmentHead_, toUnderlying(SegmentType::Node));
 
 		// Scan edge segments
-		loadSegmentChain(edgeSegmentHead_, 1); // 1 = Edge type
+		loadSegmentChain(edgeSegmentHead_, toUnderlying(SegmentType::Edge));
 
-		// Scan property segments (using conversion from PropertySegmentHeader)
-		loadPropertySegmentChain(propertySegmentHead_);
+		// Scan property segments
+		loadSegmentChain(propertySegmentHead_, toUnderlying(SegmentType::Property));
 
 		// Scan blob segments
-		loadSegmentChain(blobSegmentHead_, 3); // 3 = Blob type
+		loadSegmentChain(blobSegmentHead_, toUnderlying(SegmentType::Blob));
 	}
 
 	void SegmentTracker::loadSegmentChain(uint64_t headOffset, uint8_t expectedType) {
@@ -72,54 +73,17 @@ namespace graph::storage {
 										 ", found " + std::to_string(header.data_type));
 			}
 
-			// Store file offset and initialize tracking flags
-			header.file_offset = offset;
-			header.is_dirty = 0;
-			header.needs_compaction = 0;
+			// // Store file offset and initialize tracking flags
+			// header.file_offset = offset;
+			// header.is_dirty = 0;
+			// header.needs_compaction = 0;
+
 
 			// Add to segment map
 			segments_[offset] = header;
 
 			// Move to next segment
 			offset = header.next_segment_offset;
-		}
-	}
-
-	void SegmentTracker::loadPropertySegmentChain(uint64_t headOffset) {
-		uint64_t offset = headOffset;
-		while (offset != 0) {
-			// Read property segment header
-			PropertySegmentHeader propHeader;
-			file_->seekg(static_cast<std::streamoff>(offset));
-			file_->read(reinterpret_cast<char *>(&propHeader), sizeof(PropertySegmentHeader));
-
-			if (!*file_) {
-				throw std::runtime_error("Failed to read property segment header at offset " + std::to_string(offset));
-			}
-
-			// Convert to unified SegmentHeader format
-			SegmentHeader header;
-			header.next_segment_offset = propHeader.next_segment_offset;
-			header.prev_segment_offset = propHeader.prev_segment_offset;
-			header.start_id = 0; // Property segments don't have start_id
-			header.capacity = propHeader.capacity;
-			header.used = propHeader.used;
-			header.inactive_count = propHeader.inactive_count;
-			header.data_type = 2; // 2 = Property type
-			header.segment_crc = propHeader.segment_crc;
-			header.bitmap_size = propHeader.bitmap_size;
-			header.file_offset = offset;
-			header.is_dirty = 0;
-			header.needs_compaction = 0;
-
-			// Copy activity bitmap
-			std::memcpy(header.activity_bitmap, propHeader.activity_bitmap, MAX_BITMAP_SIZE);
-
-			// Add to segment map
-			segments_[offset] = header;
-
-			// Move to next segment
-			offset = propHeader.next_segment_offset;
 		}
 	}
 
@@ -169,8 +133,12 @@ namespace graph::storage {
 		}
 	}
 
-	SegmentHeader &SegmentTracker::getSegmentHeader(uint64_t offset) {
+	SegmentHeader& SegmentTracker::getSegmentHeader(uint64_t offset) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Ensure the segment is cached
+		ensureSegmentCached(offset);
+
 		auto it = segments_.find(offset);
 		if (it == segments_.end()) {
 			throw std::runtime_error("Segment not found at offset " + std::to_string(offset));
@@ -268,67 +236,67 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset) {
-	    std::lock_guard<std::recursive_mutex> lock(mutex_);
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-	    // Ensure the current segment is cached
-	    ensureSegmentCached(offset);
+		// Ensure the current segment is cached
+		ensureSegmentCached(offset);
 
-	    SegmentHeader &header = segments_[offset];
-	    bool changed = false;
+		SegmentHeader &header = segments_[offset];
+		bool changed = false;
 
-	    // Update the current segment's links
-	    if (header.prev_segment_offset != prevOffset) {
-	        if (prevOffset == offset) {
-	            throw std::runtime_error("Self-loop detected: prevOffset cannot be the same as offset");
-	        }
-	        header.prev_segment_offset = prevOffset;
-	        changed = true;
-	    }
+		// Update the current segment's links
+		if (header.prev_segment_offset != prevOffset) {
+			if (prevOffset == offset) {
+				throw std::runtime_error("Self-loop detected: prevOffset cannot be the same as offset");
+			}
+			header.prev_segment_offset = prevOffset;
+			changed = true;
+		}
 
-	    if (header.next_segment_offset != nextOffset) {
-	        if (nextOffset == offset) {
-	            throw std::runtime_error("Self-loop detected: nextOffset cannot be the same as offset");
-	        }
-	        header.next_segment_offset = nextOffset;
-	        changed = true;
-	    }
+		if (header.next_segment_offset != nextOffset) {
+			if (nextOffset == offset) {
+				throw std::runtime_error("Self-loop detected: nextOffset cannot be the same as offset");
+			}
+			header.next_segment_offset = nextOffset;
+			changed = true;
+		}
 
-	    if (changed) {
-	        header.is_dirty = 1;
-	        markSegmentDirty(offset);
-	    }
+		if (changed) {
+			header.is_dirty = 1;
+			markSegmentDirty(offset);
+		}
 
-	    // Update the previous segment's next link
-	    if (prevOffset != 0) {
-	        ensureSegmentCached(prevOffset);
-	        auto it = segments_.find(prevOffset);
-	        if (it != segments_.end()) {
-	            SegmentHeader &prevHeader = it->second;
-	            if (prevHeader.next_segment_offset != offset) {
-	                prevHeader.next_segment_offset = offset;
-	                prevHeader.is_dirty = 1;
-	                markSegmentDirty(prevOffset);
-	            }
-	        } else {
-	            std::cerr << "Warning: Previous segment not found for offset " << prevOffset << std::endl;
-	        }
-	    }
+		// Update the previous segment's next link
+		if (prevOffset != 0) {
+			ensureSegmentCached(prevOffset);
+			auto it = segments_.find(prevOffset);
+			if (it != segments_.end()) {
+				SegmentHeader &prevHeader = it->second;
+				if (prevHeader.next_segment_offset != offset) {
+					prevHeader.next_segment_offset = offset;
+					prevHeader.is_dirty = 1;
+					markSegmentDirty(prevOffset);
+				}
+			} else {
+				std::cerr << "Warning: Previous segment not found for offset " << prevOffset << std::endl;
+			}
+		}
 
-	    // Update the next segment's previous link
-	    if (nextOffset != 0) {
-	        ensureSegmentCached(nextOffset);
-	        auto it = segments_.find(nextOffset);
-	        if (it != segments_.end()) {
-	            SegmentHeader &nextHeader = it->second;
-	            if (nextHeader.prev_segment_offset != offset) {
-	                nextHeader.prev_segment_offset = offset;
-	                nextHeader.is_dirty = 1;
-	                markSegmentDirty(nextOffset);
-	            }
-	        } else {
-	            std::cerr << "Warning: Next segment not found for offset " << nextOffset << std::endl;
-	        }
-	    }
+		// Update the next segment's previous link
+		if (nextOffset != 0) {
+			ensureSegmentCached(nextOffset);
+			auto it = segments_.find(nextOffset);
+			if (it != segments_.end()) {
+				SegmentHeader &nextHeader = it->second;
+				if (nextHeader.prev_segment_offset != offset) {
+					nextHeader.prev_segment_offset = offset;
+					nextHeader.is_dirty = 1;
+					markSegmentDirty(nextOffset);
+				}
+			} else {
+				std::cerr << "Warning: Next segment not found for offset " << nextOffset << std::endl;
+			}
+		}
 	}
 
 	void SegmentTracker::markSegmentFree(uint64_t offset) {
@@ -362,113 +330,6 @@ namespace graph::storage {
 	void SegmentTracker::removeFromFreeList(uint64_t offset) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		freeSegments_.erase(std::remove(freeSegments_.begin(), freeSegments_.end(), offset), freeSegments_.end());
-	}
-
-	void SegmentTracker::refreshSegmentInfo(uint64_t offset) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		auto it = segments_.find(offset);
-		if (it != segments_.end()) {
-			uint8_t type = it->second.data_type;
-
-			if (type == 2) { // Property segment
-				PropertySegmentHeader propHeader = readPropertySegmentHeader(offset);
-
-				// Update fields
-				it->second.capacity = propHeader.capacity;
-				it->second.used = propHeader.used;
-				it->second.inactive_count = propHeader.inactive_count;
-				it->second.next_segment_offset = propHeader.next_segment_offset;
-				it->second.prev_segment_offset = propHeader.prev_segment_offset;
-				it->second.bitmap_size = propHeader.bitmap_size;
-				memcpy(it->second.activity_bitmap, propHeader.activity_bitmap, MAX_BITMAP_SIZE);
-				it->second.is_dirty = 0;
-			} else { // Node, Edge, or Blob segment
-				SegmentHeader header;
-				file_->seekg(static_cast<std::streamoff>(offset));
-				file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-				// Preserve memory-only fields
-				header.file_offset = offset;
-				header.needs_compaction = it->second.needs_compaction;
-				header.is_dirty = 0;
-
-				// Replace entire header
-				it->second = header;
-			}
-
-			// Remove from dirty list
-			auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
-			if (dirtyIt != dirtySegments_.end()) {
-				dirtySegments_.erase(dirtyIt);
-			}
-		} else {
-			// Not in cache, load it
-			try {
-				SegmentHeader header;
-				file_->seekg(static_cast<std::streamoff>(offset));
-				file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-				// Set memory-only fields
-				header.file_offset = offset;
-				header.needs_compaction = 0;
-				header.is_dirty = 0;
-
-				segments_[offset] = header;
-			} catch (const std::exception &e) {
-				// Try as property segment
-				try {
-					PropertySegmentHeader propHeader = readPropertySegmentHeader(offset);
-
-					// Convert to unified header
-					SegmentHeader header;
-					header.next_segment_offset = propHeader.next_segment_offset;
-					header.prev_segment_offset = propHeader.prev_segment_offset;
-					header.capacity = propHeader.capacity;
-					header.used = propHeader.used;
-					header.inactive_count = propHeader.inactive_count;
-					header.data_type = 2; // Property type
-					header.segment_crc = propHeader.segment_crc;
-					header.bitmap_size = propHeader.bitmap_size;
-					memcpy(header.activity_bitmap, propHeader.activity_bitmap, MAX_BITMAP_SIZE);
-
-					// Set memory-only fields
-					header.file_offset = offset;
-					header.needs_compaction = 0;
-					header.is_dirty = 0;
-
-					segments_[offset] = header;
-				} catch (...) {
-					throw std::runtime_error("Cannot determine segment type at offset " + std::to_string(offset));
-				}
-			}
-		}
-	}
-
-	SegmentHeader SegmentTracker::readSegmentHeader(uint64_t offset) const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		// Check if the segment is cached
-		auto it = segments_.find(offset);
-		if (it != segments_.end()) {
-			return it->second;
-		}
-
-		// If not cached, read from disk
-		SegmentHeader header;
-		file_->seekg(static_cast<std::streamoff>(offset));
-		file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-		if (!*file_) {
-			throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
-		}
-
-		// Set memory-only fields
-		header.file_offset = offset;
-		header.needs_compaction = 0;
-		header.is_dirty = 0;
-
-		return header;
 	}
 
 	void SegmentTracker::writeSegmentHeader(uint64_t offset, const SegmentHeader &header) {
@@ -508,110 +369,14 @@ namespace graph::storage {
 		}
 	}
 
-	PropertySegmentHeader SegmentTracker::readPropertySegmentHeader(uint64_t offset) const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		PropertySegmentHeader header;
-		file_->seekg(static_cast<std::streamoff>(offset));
-		file_->read(reinterpret_cast<char *>(&header), sizeof(PropertySegmentHeader));
-
-		if (!*file_) {
-			throw std::runtime_error("Failed to read property segment header at offset " + std::to_string(offset));
-		}
-
-		return header;
-	}
-
-	void SegmentTracker::writePropertySegmentHeader(uint64_t offset, const PropertySegmentHeader &header) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		// Calculate CRC before writing
-		PropertySegmentHeader headerToWrite = header;
-		headerToWrite.segment_crc = utils::calculateCrc(&headerToWrite, offsetof(PropertySegmentHeader, segment_crc));
-
-		// Write to disk
-		file_->seekp(static_cast<std::streamoff>(offset));
-		file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(PropertySegmentHeader));
-
-		if (!*file_) {
-			throw std::runtime_error("Failed to write property segment header at offset " + std::to_string(offset));
-		}
-
-		// Update in-memory cache if present
-		auto it = segments_.find(offset);
-		if (it != segments_.end()) {
-			// Convert property header to unified header
-			it->second.next_segment_offset = headerToWrite.next_segment_offset;
-			it->second.prev_segment_offset = headerToWrite.prev_segment_offset;
-			it->second.capacity = headerToWrite.capacity;
-			it->second.used = headerToWrite.used;
-			it->second.inactive_count = headerToWrite.inactive_count;
-			it->second.bitmap_size = headerToWrite.bitmap_size;
-			memcpy(it->second.activity_bitmap, headerToWrite.activity_bitmap, MAX_BITMAP_SIZE);
-			it->second.is_dirty = 0;
-
-			// Remove from dirty list
-			auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
-			if (dirtyIt != dirtySegments_.end()) {
-				dirtySegments_.erase(dirtyIt);
-			}
-		}
-	}
-
 	void SegmentTracker::updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> &updateFn) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		ensureSegmentCached(offset);
 		SegmentHeader &header = segments_[offset];
 
-		if (header.data_type != 0 && header.data_type != 1 && header.data_type != 3) {
-			throw std::runtime_error("Invalid segment type for updateSegmentHeader at offset " +
-									 std::to_string(offset));
-		}
-
 		// Apply update function
 		updateFn(header);
-
-		// Mark as dirty
-		header.is_dirty = 1;
-		markSegmentDirty(offset);
-	}
-
-	void SegmentTracker::updatePropertySegmentHeader(uint64_t offset,
-													 const std::function<void(PropertySegmentHeader &)> &updateFn) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		ensureSegmentCached(offset);
-		SegmentHeader &header = segments_[offset];
-
-		if (header.data_type != 2) {
-			throw std::runtime_error("Invalid segment type for updatePropertySegmentHeader at offset " +
-									 std::to_string(offset));
-		}
-
-		// Convert to PropertySegmentHeader
-		PropertySegmentHeader propHeader;
-		propHeader.next_segment_offset = header.next_segment_offset;
-		propHeader.prev_segment_offset = header.prev_segment_offset;
-		propHeader.capacity = header.capacity;
-		propHeader.used = header.used;
-		propHeader.inactive_count = header.inactive_count;
-		propHeader.segment_crc = header.segment_crc;
-		propHeader.bitmap_size = header.bitmap_size;
-		memcpy(propHeader.activity_bitmap, header.activity_bitmap, MAX_BITMAP_SIZE);
-
-		// Apply update function
-		updateFn(propHeader);
-
-		// Update the unified header with changes
-		header.next_segment_offset = propHeader.next_segment_offset;
-		header.prev_segment_offset = propHeader.prev_segment_offset;
-		header.capacity = propHeader.capacity;
-		header.used = propHeader.used;
-		header.inactive_count = propHeader.inactive_count;
-		header.segment_crc = propHeader.segment_crc;
-		header.bitmap_size = propHeader.bitmap_size;
-		memcpy(header.activity_bitmap, propHeader.activity_bitmap, MAX_BITMAP_SIZE);
 
 		// Mark as dirty
 		header.is_dirty = 1;
@@ -724,7 +489,7 @@ namespace graph::storage {
 		return it->second.used - it->second.inactive_count;
 	}
 
-	uint64_t SegmentTracker::getSegmentOffsetForNodeId(uint64_t nodeId) {
+	uint64_t SegmentTracker::getSegmentOffsetForNodeId(int64_t nodeId) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		uint64_t offset = nodeSegmentHead_;
@@ -743,7 +508,7 @@ namespace graph::storage {
 		return 0; // Not found
 	}
 
-	uint64_t SegmentTracker::getSegmentOffsetForEdgeId(uint64_t edgeId) {
+	uint64_t SegmentTracker::getSegmentOffsetForEdgeId(int64_t edgeId) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		uint64_t offset = edgeSegmentHead_;
@@ -762,9 +527,62 @@ namespace graph::storage {
 		return 0; // Not found
 	}
 
+	uint64_t SegmentTracker::getSegmentOffsetForPropId(int64_t propId) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		uint64_t offset = propertySegmentHead_;
+
+		while (offset != 0) {
+			SegmentHeader &header = getSegmentHeader(offset);
+
+			// Check if the ID falls within this segment's range
+			if (propId >= header.start_id && propId < header.start_id + header.capacity) {
+				return offset;
+			}
+
+			offset = header.next_segment_offset;
+		}
+
+		return 0; // Not found
+	}
+
+	uint64_t SegmentTracker::getSegmentOffsetForBlobId(int64_t blobId) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		uint64_t offset = blobSegmentHead_;
+
+		while (offset != 0) {
+			SegmentHeader &header = getSegmentHeader(offset);
+
+			// Check if the ID falls within this segment's range
+			if (blobId >= header.start_id && blobId < header.start_id + header.capacity) {
+				return offset;
+			}
+
+			offset = header.next_segment_offset;
+		}
+
+		return 0; // Not found
+	}
+
 	void SegmentTracker::ensureSegmentCached(uint64_t offset) {
 		if (segments_.find(offset) == segments_.end()) {
-			refreshSegmentInfo(offset);
+			// Read from disk and add to cache
+			SegmentHeader header;
+			file_->seekg(static_cast<std::streamoff>(offset));
+			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+
+			if (!*file_) {
+				throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
+			}
+
+			// Set memory-only fields
+			header.file_offset = offset;
+			header.needs_compaction = 0;
+			header.is_dirty = 0;
+
+			// Add to cache
+			segments_[offset] = header;
 		}
 	}
 
@@ -786,38 +604,16 @@ namespace graph::storage {
 			if (it != segments_.end() && it->second.is_dirty) {
 				SegmentHeader &header = it->second;
 
-				if (header.data_type == 2) { // Property segment
-					// Convert to PropertySegmentHeader
-					PropertySegmentHeader propHeader;
-					propHeader.next_segment_offset = header.next_segment_offset;
-					propHeader.prev_segment_offset = header.prev_segment_offset;
-					propHeader.capacity = header.capacity;
-					propHeader.used = header.used;
-					propHeader.inactive_count = header.inactive_count;
-					propHeader.segment_crc = header.segment_crc;
-					propHeader.bitmap_size = header.bitmap_size;
-					memcpy(propHeader.activity_bitmap, header.activity_bitmap, MAX_BITMAP_SIZE);
+				// Create a copy for writing to disk, excluding memory-only fields
+				SegmentHeader headerToWrite = header;
 
-					// Calculate CRC
-					propHeader.segment_crc =
-							utils::calculateCrc(&propHeader, offsetof(PropertySegmentHeader, segment_crc));
+				// Calculate CRC
+				headerToWrite.segment_crc =
+						utils::calculateCrc(&headerToWrite, offsetof(SegmentHeader, segment_crc));
 
-					// Write to disk
-					file_->seekp(static_cast<std::streamoff>(offset));
-					file_->write(reinterpret_cast<const char *>(&propHeader), sizeof(PropertySegmentHeader));
-				} else {
-					// Regular segment (Node, Edge, Blob)
-					// Create a copy for writing to disk, excluding memory-only fields
-					SegmentHeader headerToWrite = header;
-
-					// Calculate CRC
-					headerToWrite.segment_crc =
-							utils::calculateCrc(&headerToWrite, offsetof(SegmentHeader, segment_crc));
-
-					// Write to disk
-					file_->seekp(static_cast<std::streamoff>(offset));
-					file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
-				}
+				// Write to disk
+				file_->seekp(static_cast<std::streamoff>(offset));
+				file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
 
 				// Mark as clean
 				it->second.is_dirty = 0;

@@ -9,15 +9,15 @@
  **/
 
 #pragma once
-#include "StorageHeaders.h"
-
-
 #include <fstream>
+#include "DataManager.h"
+#include "StorageHeaders.h"
 
 namespace graph::storage {
 	class DatabaseInspector {
 	public:
-		explicit DatabaseInspector(FileHeader fileHeader, std::shared_ptr<std::fstream> &file);
+		explicit DatabaseInspector(FileHeader fileHeader, std::shared_ptr<std::fstream> &file,
+								   DataManager &dataManager);
 		~DatabaseInspector();
 
 		void inspectDatabase();
@@ -30,9 +30,13 @@ namespace graph::storage {
 
 		void displayPropertySegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
 
+		void displayBlobSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+
 	private:
 		FileHeader fileHeader;
 
 		std::shared_ptr<std::fstream> &file;
+
+		DataManager &dataManager_;
 	};
 } // namespace graph::storage

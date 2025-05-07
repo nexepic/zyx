@@ -92,13 +92,13 @@ namespace graph::storage {
 	private:
 		size_t capacity_;
 		std::list<std::pair<K, V>> cache_list_;
-		// std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> cache_map_;
+		std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> cache_map_;
 
-		using Hash = std::conditional_t<std::is_same_v<K, std::pair<int64_t, std::string>>,
-					utils::PairHash,
-					std::hash<K>>;
-
-		std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator, Hash> cache_map_;
+		// using Hash = std::conditional_t<std::is_same_v<K, std::pair<int64_t, std::string>>,
+		// 			utils::PairHash,
+		// 			std::hash<K>>;
+		//
+		// std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator, Hash> cache_map_;
 	};
 
 } // namespace graph::storage

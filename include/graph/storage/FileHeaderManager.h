@@ -41,9 +41,13 @@ namespace graph::storage {
 		// Getters for max IDs
 		[[nodiscard]] int64_t getMaxNodeId() const { return maxNodeId; }
 		[[nodiscard]] int64_t getMaxEdgeId() const { return maxEdgeId; }
+		[[nodiscard]] int64_t getMaxPropId() const { return maxPropId; }
+		[[nodiscard]] int64_t getMaxBlobId() const { return maxBlobId; }
 
 		int64_t& getMaxNodeIdRef() { return maxNodeId; }
 		int64_t& getMaxEdgeIdRef() { return maxEdgeId; }
+		int64_t& getMaxPropIdRef() { return maxPropId; }
+		int64_t& getMaxBlobIdRef() { return maxBlobId; }
 
 	private:
 		std::shared_ptr<std::fstream> file_;
@@ -52,7 +56,7 @@ namespace graph::storage {
 
 		int64_t maxNodeId;
 		int64_t maxEdgeId;
-		int64_t maxPropertyId;
+		int64_t maxPropId;
 		int64_t maxBlobId;
 	};
 

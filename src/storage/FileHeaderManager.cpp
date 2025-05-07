@@ -76,7 +76,7 @@ namespace graph::storage {
 		// Scan node segments to find max node ID
 		uint64_t nodeSegment = tracker->getChainHead(0);
 		while (nodeSegment != 0) {
-			SegmentHeader segHeader = tracker->readSegmentHeader(nodeSegment);
+			SegmentHeader segHeader = tracker->getSegmentHeader(nodeSegment);
 			int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
 			// maxNodeId = std::max(maxNodeId, segmentMaxId);
 			maxNodeId = segmentMaxId;
@@ -86,7 +86,7 @@ namespace graph::storage {
 		// Scan edge segments to find max edge ID
 		uint64_t edgeSegment = tracker->getChainHead(1);
 		while (edgeSegment != 0) {
-			SegmentHeader segHeader = tracker->readSegmentHeader(edgeSegment);
+			SegmentHeader segHeader = tracker->getSegmentHeader(edgeSegment);
 			int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
 			// maxEdgeId = std::max(maxEdgeId, segmentMaxId);
 			maxEdgeId = segmentMaxId;
@@ -96,7 +96,7 @@ namespace graph::storage {
 		// Scan blob segments to find max blob ID (if you track blob IDs similarly)
 		uint64_t blobSegment = tracker->getChainHead(3);
 		while (blobSegment != 0) {
-			SegmentHeader segHeader = tracker->readSegmentHeader(blobSegment);
+			SegmentHeader segHeader = tracker->getSegmentHeader(blobSegment);
 			int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
 			// maxBlobId = std::max(maxBlobId, segmentMaxId);
 			maxBlobId = segmentMaxId;

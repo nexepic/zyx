@@ -45,20 +45,16 @@ namespace graph::storage {
         void removeFromFreeList(uint64_t offset);
 
         void flushDirtySegments();
-        void refreshSegmentInfo(uint64_t offset);
 
         // New methods for finding segments for specific entities
-        uint64_t getSegmentOffsetForNodeId(uint64_t nodeId);
-        uint64_t getSegmentOffsetForEdgeId(uint64_t edgeId);
-
-        PropertySegmentHeader readPropertySegmentHeader(uint64_t offset) const;
-        void writePropertySegmentHeader(uint64_t offset, const PropertySegmentHeader& header);
+        uint64_t getSegmentOffsetForNodeId(int64_t nodeId);
+        uint64_t getSegmentOffsetForEdgeId(int64_t edgeId);
+        uint64_t getSegmentOffsetForPropId(int64_t propId);
+        uint64_t getSegmentOffsetForBlobId(int64_t blobId);
 
         // Unified segment header update operations
         void updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> & updateFn);
-        void updatePropertySegmentHeader(uint64_t offset, const std::function<void(PropertySegmentHeader&)>& updateFn);
 
-        SegmentHeader readSegmentHeader(uint64_t offset) const;
         void writeSegmentHeader(uint64_t offset, const SegmentHeader& header);
 
         // Bitmap operations
@@ -92,8 +88,6 @@ namespace graph::storage {
 
         // Load a chain of segments
         void loadSegmentChain(uint64_t headOffset, uint8_t type);
-
-        void loadPropertySegmentChain(uint64_t headOffset);
 
         // Ensure a segment is in cache
         void ensureSegmentCached(uint64_t offset);

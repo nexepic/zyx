@@ -11,9 +11,7 @@
 #include "graph/core/Node.h"
 #include <graph/storage/IDAllocator.h>
 #include <stdexcept>
-
 #include "graph/core/PropertyValue.h"
-#include "graph/storage/PropertyStorage.h"
 #include "graph/utils/Serializer.h"
 
 namespace graph {
@@ -71,6 +69,23 @@ namespace graph {
 
 	const std::unordered_map<std::string, PropertyValue> &Node::getProperties() const { return properties; }
 
+	void Node::setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType) {
+		this->propertyEntityId = propertyId;
+		this->propertyStorageType = storageType;
+	}
+
+	int64_t Node::getPropertyEntityId() const {
+		return propertyEntityId;
+	}
+
+	PropertyStorageType Node::getPropertyStorageType() const {
+		return propertyStorageType;
+	}
+
+	bool Node::hasPropertyEntity() const {
+		return propertyStorageType != PropertyStorageType::NONE && propertyEntityId != 0;
+	}
+
 	size_t Node::getTotalPropertySize() const {
 		size_t totalSize = 0;
 		for (const auto &[key, value]: properties) {
@@ -104,10 +119,11 @@ namespace graph {
 		// 	utils::Serializer::writePOD(os, edgeId);
 		// }
 
-		// Write property reference instead of properties themselves
-		utils::Serializer::writePOD(os, static_cast<uint8_t>(propertyRef.type));
-		utils::Serializer::writePOD(os, propertyRef.reference);
-		utils::Serializer::writePOD(os, propertyRef.size);
+		// Write property storage type
+		utils::Serializer::writePOD(os, static_cast<uint8_t>(propertyStorageType));
+
+		// Write property entity ID
+		utils::Serializer::writePOD(os, propertyEntityId);
 
 		// Write activation flag
 		utils::Serializer::writePOD(os, isActive_);
@@ -132,26 +148,16 @@ namespace graph {
 		// 	node.addOutEdge(edgeId);
 		// }
 
-		// Read property reference
-		PropertyReference propRef;
-		propRef.type = static_cast<PropertyReference::StorageType>(utils::Serializer::readPOD<uint8_t>(is));
-		propRef.reference = utils::Serializer::readPOD<uint64_t>(is);
-		propRef.size = utils::Serializer::readPOD<uint32_t>(is);
+		// Read property storage type
+		node.propertyStorageType = static_cast<PropertyStorageType>(utils::Serializer::readPOD<uint8_t>(is));
 
-		node.setPropertyReference(propRef);
+		// Read property entity ID
+		node.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
 
 		// Read activation flag
 		node.isActive_ = utils::Serializer::readPOD<bool>(is);
 
 		return node;
 	}
-
-	void Node::setPropertyReference(const PropertyReference &ref) {
-		propertyRef = ref;
-		// Clear cached properties as the reference has changed
-		// properties.clear();
-	}
-
-	const PropertyReference &Node::getPropertyReference() const { return propertyRef; }
 
 } // namespace graph

@@ -9,27 +9,11 @@
  **/
 
 #pragma once
-#include <cstdint>
 
 namespace graph {
 
-	struct PropertyReference {
-		enum class StorageType : uint8_t {
-			NONE = 0,       // No property
-			SEGMENT = 1,    // Property stored in property segment
-			BLOB = 2,        // Property stored in BLOB (large property)
-			NEEDS_STORE = 3  // properties need to be stored during next save
-		    };
+	enum class PropertyStorageType { NONE, PROPERTY_ENTITY, BLOB_ENTITY };
 
-		StorageType type = StorageType::NONE;
-		uint64_t reference = 0;  // Segment offset or BLOB ID
-		uint32_t size = 0;       // Property data size
-	};
-
-	enum class Direction {
-		INCOMING,
-		OUTGOING,
-		BOTH
-	};
+	enum class Direction { INCOMING, OUTGOING, BOTH };
 
 } // namespace graph

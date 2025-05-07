@@ -9,8 +9,10 @@
  **/
 
 #pragma once
+#include <graph/core/Blob.h>
 #include <graph/core/Edge.h>
 #include <graph/core/Node.h>
+#include <graph/core/Property.h>
 
 namespace graph::storage {
 
@@ -20,10 +22,9 @@ namespace graph::storage {
     constexpr uint32_t SEGMENT_SIZE = 1024;
     constexpr uint32_t NODES_PER_SEGMENT = SEGMENT_SIZE / sizeof(Node);
     constexpr uint32_t EDGES_PER_SEGMENT = SEGMENT_SIZE / sizeof(Edge);
-    constexpr uint32_t MAX_INLINE_PROPERTY_SIZE = 2; // 16KB max inline property
+    constexpr uint32_t PROPERTIES_PER_SEGMENT = SEGMENT_SIZE / sizeof(Property);
+    constexpr uint32_t BLOBS_PER_SEGMENT = SEGMENT_SIZE / sizeof(Blob);
     constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1 * 512; // 512 bytes per property segment
-    constexpr uint32_t BLOB_SECTION_SIZE = SEGMENT_SIZE; // Keep BLOB section size same as segment size
-    constexpr uint32_t PROPERTY_SEGMENT_SIZE = SEGMENT_SIZE; // Keep property segment size same as segment size
 
     constexpr size_t FILE_HEADER_SIZE = 128;
     constexpr size_t SEGMENT_HEADER_SIZE = 128;
@@ -37,15 +38,13 @@ namespace graph::storage {
         uint64_t node_segment_head = 0; // Offset of the first node segment
         uint64_t edge_segment_head = 0; // Offset of the first edge segment
         uint64_t property_segment_head = 0; // Offset of the first property segment
-        uint64_t blob_section_head = 0; // Offset of the first blob section
+        uint64_t blob_segment_head = 0; // Offset of the first blob section
 
         // Statistics
         int64_t max_node_id = 0;
         int64_t max_edge_id = 0;
-        uint64_t max_blob_id = 0;
-
-        uint32_t page_size = PAGE_SIZE; // Storage block alignment size
-        uint32_t segment_count = 0; // Total number of segments
+        int64_t max_prop_id = 0;
+        int64_t max_blob_id = 0;
 
         uint32_t version = 0x00000001; // File format version
 
@@ -88,50 +87,17 @@ namespace graph::storage {
         uint8_t needs_compaction = 0;     // Flag indicating if segment needs compaction (0=no, 1=yes)
         uint8_t is_dirty = 0;             // Flag indicating if segment data has been modified (0=no, 1=yes)
 
-        uint32_t getActiveCount() const {
+        [[nodiscard]] uint32_t getActiveCount() const {
             return calculateActiveCount(*this);
         }
 
-        uint32_t getTotalFreeSpace() const {
+        [[nodiscard]] uint32_t getTotalFreeSpace() const {
             return calculateTotalFreeSpace(*this);
         }
 
-        double getFragmentationRatio() const {
+        [[nodiscard]] double getFragmentationRatio() const {
             return calculateFragmentationRatio(*this);
         }
-    };
-
-    // Property segment header information
-    struct alignas(SEGMENT_HEADER_SIZE) PropertySegmentHeader {
-        uint64_t next_segment_offset = 0;  // Offset of the next property segment
-        uint64_t prev_segment_offset = 0;  // Offset of the previous property segment
-        uint32_t capacity = 0;             // Total capacity of the segment (bytes)
-        uint32_t used = 0;                 // Number of used bytes
-        uint32_t inactive_count = 0;       // Number of inactive bytes
-        uint32_t segment_crc = 0;          // CRC checksum of the segment data
-        uint32_t bitmap_size = 0;          // Size of the activity bitmap in bytes
-        uint8_t activity_bitmap[MAX_BITMAP_SIZE] = {}; // Bitmap tracking active/inactive areas
-
-        uint32_t getActiveCount() const {
-            return calculateActiveCount(*this);
-        }
-
-        uint32_t getTotalFreeSpace() const {
-            return calculateTotalFreeSpace(*this);
-        }
-
-        double getFragmentationRatio() const {
-            return calculateFragmentationRatio(*this);
-        }
-    };
-
-    // Property entry header information - stored before each property set in the property segment
-    struct PropertyEntryHeader {
-        int64_t entity_id = 0;     // ID of the associated entity
-        uint8_t entity_type = 0;    // Entity type (0=Node, 1=Edge)
-        uint64_t entity_offset = 0; // File offset of the entity
-        uint32_t data_size = 0;     // Property data size
-        uint32_t property_count = 0; // Number of properties
     };
 
     namespace bitmap {

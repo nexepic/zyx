@@ -30,61 +30,61 @@ namespace graph::storage {
 
 	void DeletionManager::initialize() {
 		// Refresh segment state to initialize tracking
-		refreshSegmentState();
+		// refreshSegmentState();
 	}
 
-	void DeletionManager::refreshSegmentState() {
-		// Update the inactive count for each segment based on actual data
-		auto nodeSegments = spaceManager_->getTracker()->getSegmentsByType(0);
-		for (const auto &header: nodeSegments) {
-			// Create activity map
-			std::vector<bool> activityMap(header.used);
-
-			// Scan nodes in segment to determine active/inactive status
-			for (uint32_t i = 0; i < header.used; ++i) {
-				uint64_t nodeId = header.start_id + i;
-				try {
-					Node node = dataManager_.getNode(nodeId);
-					activityMap[i] = node.isActive();
-				} catch (const std::exception &) {
-					// Node not found or error - consider it inactive
-					activityMap[i] = false;
-				}
-			}
-
-			// Update segment bitmap
-			spaceManager_->getTracker()->updateActivityBitmap(header.file_offset, activityMap);
-		}
-
-		// Do the same for edge segments
-		auto edgeSegments = spaceManager_->getTracker()->getSegmentsByType(1);
-		for (const auto &header: edgeSegments) {
-			// Create activity map
-			std::vector<bool> activityMap(header.used);
-
-			// Scan edges in segment to determine active/inactive status
-			for (uint32_t i = 0; i < header.used; ++i) {
-				uint64_t edgeId = header.start_id + i;
-				try {
-					Edge edge = dataManager_.getEdge(edgeId);
-					activityMap[i] = edge.isActive();
-				} catch (const std::exception &) {
-					// Edge not found or error - consider it inactive
-					activityMap[i] = false;
-				}
-			}
-
-			// Update segment bitmap
-			spaceManager_->getTracker()->updateActivityBitmap(header.file_offset, activityMap);
-		}
-	}
+	// void DeletionManager::refreshSegmentState() {
+	// 	// Update the inactive count for each segment based on actual data
+	// 	auto nodeSegments = spaceManager_->getTracker()->getSegmentsByType(0);
+	// 	for (const auto &header: nodeSegments) {
+	// 		// Create activity map
+	// 		std::vector<bool> activityMap(header.used);
+	//
+	// 		// Scan nodes in segment to determine active/inactive status
+	// 		for (uint32_t i = 0; i < header.used; ++i) {
+	// 			uint64_t nodeId = header.start_id + i;
+	// 			try {
+	// 				Node node = dataManager_.getNode(nodeId);
+	// 				activityMap[i] = node.isActive();
+	// 			} catch (const std::exception &) {
+	// 				// Node not found or error - consider it inactive
+	// 				activityMap[i] = false;
+	// 			}
+	// 		}
+	//
+	// 		// Update segment bitmap
+	// 		spaceManager_->getTracker()->updateActivityBitmap(header.file_offset, activityMap);
+	// 	}
+	//
+	// 	// Do the same for edge segments
+	// 	auto edgeSegments = spaceManager_->getTracker()->getSegmentsByType(1);
+	// 	for (const auto &header: edgeSegments) {
+	// 		// Create activity map
+	// 		std::vector<bool> activityMap(header.used);
+	//
+	// 		// Scan edges in segment to determine active/inactive status
+	// 		for (uint32_t i = 0; i < header.used; ++i) {
+	// 			uint64_t edgeId = header.start_id + i;
+	// 			try {
+	// 				Edge edge = dataManager_.getEdge(edgeId);
+	// 				activityMap[i] = edge.isActive();
+	// 			} catch (const std::exception &) {
+	// 				// Edge not found or error - consider it inactive
+	// 				activityMap[i] = false;
+	// 			}
+	// 		}
+	//
+	// 		// Update segment bitmap
+	// 		spaceManager_->getTracker()->updateActivityBitmap(header.file_offset, activityMap);
+	// 	}
+	// }
 
 	bool DeletionManager::deleteNode(int64_t nodeId, bool cascadeEdges) {
 		// Check if the node exists by trying to retrieve it
 		Node node;
 		try {
 			node = dataManager_.getNode(nodeId);
-		} catch (const std::exception &) {
+		} catch (const std::exception&) {
 			// Node not found
 			return false;
 		}
@@ -93,18 +93,36 @@ namespace graph::storage {
 		if (cascadeEdges) {
 			// Find edges connected to this node
 			auto edges = dataManager_.findEdgesByNode(nodeId, "both");
-			for (const auto &edge: edges) {
+			for (const auto& edge : edges) {
 				deleteEdge(edge.getId());
 			}
 		}
 
-		// Delete the node properties
-		auto properties = dataManager_.getNodeProperties(nodeId);
-		if (!properties.empty()) {
-			const PropertyReference &ref = node.getPropertyReference();
-			if (ref.type != PropertyReference::StorageType::NONE) {
-				// Property deletion is handled by marking the node as deleted
-				// The property segment compaction will handle freeing space later
+		// Delete the node's external property entity if it exists
+		if (node.hasPropertyEntity()) {
+			int64_t propertyId = node.getPropertyEntityId();
+
+			if (node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
+				try {
+					Property property = dataManager_.getProperty(propertyId);
+					if (property.getId() != 0 && property.isActive()) {
+						dataManager_.deleteProperty(property);
+					}
+				} catch (const std::exception& e) {
+					// Log or handle the error if needed
+					std::cerr << "Failed to delete property entity for node " << nodeId << ": " << e.what() << "\n";
+				}
+			}
+			else if (node.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
+				try {
+					Blob blob = dataManager_.getBlob(propertyId);
+					if (blob.getId() != 0 && blob.isActive()) {
+						dataManager_.deleteBlob(blob);
+					}
+				} catch (const std::exception& e) {
+					// Log or handle the error if needed
+					std::cerr << "Failed to delete blob entity for node " << nodeId << ": " << e.what() << "\n";
+				}
 			}
 		}
 
@@ -119,21 +137,40 @@ namespace graph::storage {
 		Edge edge;
 		try {
 			edge = dataManager_.getEdge(edgeId);
-		} catch (const std::exception &) {
+		} catch (const std::exception&) {
+			// Edge not found
 			return false;
 		}
 
-		// Delete edge properties
-		auto properties = dataManager_.getEdgeProperties(edgeId);
-		if (!properties.empty()) {
-			const PropertyReference &ref = edge.getPropertyReference();
-			if (ref.type != PropertyReference::StorageType::NONE) {
-				// Property deletion is handled by marking the edge as deleted
-				// The property segment compaction will handle freeing space later
+		// Delete the edge's external property entity if it exists
+		if (edge.hasPropertyEntity()) {
+			int64_t propertyId = edge.getPropertyEntityId();
+
+			if (edge.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
+				try {
+					Property property = dataManager_.getProperty(propertyId);
+					if (property.getId() != 0 && property.isActive()) {
+						dataManager_.deleteProperty(property);
+					}
+				} catch (const std::exception& e) {
+					// Log or handle the error if needed
+					std::cerr << "Failed to delete property entity for edge " << edgeId << ": " << e.what() << "\n";
+				}
+			}
+			else if (edge.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
+				try {
+					Blob blob = dataManager_.getBlob(propertyId);
+					if (blob.getId() != 0 && blob.isActive()) {
+						dataManager_.deleteBlob(blob);
+					}
+				} catch (const std::exception& e) {
+					// Log or handle the error if needed
+					std::cerr << "Failed to delete blob entity for edge " << edgeId << ": " << e.what() << "\n";
+				}
 			}
 		}
 
-		// Mark as inactive in index
+		// Mark the edge as inactive in the index
 		markEdgeInactive(edge);
 
 		return true;
@@ -263,6 +300,8 @@ namespace graph::storage {
 		}
 	}
 
+
+
 	bool DeletionManager::isNodeActive(uint64_t nodeId) const {
 		// Find the segment this node belongs to
 		uint64_t segmentOffset = findSegmentForNodeId(nodeId);
@@ -378,7 +417,7 @@ namespace graph::storage {
 
         } else if (type == 2) { // Property segment moved
             // Update entity references to properties in this segment
-            PropertySegmentHeader header = spaceManager_->getTracker()->readPropertySegmentHeader(newOffset);
+            SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(newOffset);
 
             // This is more complex as we need to scan through property entries
             // to determine which entities reference this segment

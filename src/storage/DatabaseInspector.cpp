@@ -10,7 +10,6 @@
 
 #include <fstream>
 #include <graph/storage/DatabaseInspector.h>
-#include <graph/storage/PropertyStorage.h>
 #include <graph/storage/StorageHeaders.h>
 #include <graph/utils/TableFormatter.h>
 #include <iostream>
@@ -18,37 +17,15 @@
 
 namespace graph::storage {
 
-	DatabaseInspector::DatabaseInspector(FileHeader fileHeader, std::shared_ptr<std::fstream> &file) : fileHeader(fileHeader), file(file) {};
+	DatabaseInspector::DatabaseInspector(FileHeader fileHeader, std::shared_ptr<std::fstream> &file,
+										 DataManager &dataManager) :
+		fileHeader(fileHeader), file(file), dataManager_(dataManager){};
 
 	DatabaseInspector::~DatabaseInspector() = default;
 
 	void DatabaseInspector::displayDatabaseStructure() {
-		// // Check if the file stream is in a good state
-		// if (!file->good()) {
-		// 	std::cerr << "Error: File stream is not in a good state." << std::endl;
-		// 	return;
-		// }
-
-		// // Reset the file pointer to the beginning
-		// file->clear(); // Clear any error flags
-		// file->seekg(0);
-		//
-		// // Read the file header
-		// FileHeader fileHeader;
-		// file->read(reinterpret_cast<char *>(&fileHeader), sizeof(FileHeader));
-		//
-		// // Check if the read was successful
-		// if (!file->good()) {
-		// 	std::cerr << "Error: Failed to read the file header." << std::endl;
-		// 	return;
-		// }
-
-
-
 		std::cout << "FileHeader size: " << sizeof(FileHeader) << std::endl;
 		std::cout << "SegmentHeader size: " << sizeof(SegmentHeader) << std::endl;
-		std::cout << "PropertySegmentHeader size: " << sizeof(PropertySegmentHeader) << std::endl;
-
 
 		// Create a table formatter for displaying file header
 		TableFormatter table;
@@ -61,12 +38,11 @@ namespace graph::storage {
 		table.addRow({"Node Segment Head", std::to_string(fileHeader.node_segment_head)});
 		table.addRow({"Edge Segment Head", std::to_string(fileHeader.edge_segment_head)});
 		table.addRow({"Property Segment Head", std::to_string(fileHeader.property_segment_head)});
-		table.addRow({"Blob Section Head", std::to_string(fileHeader.blob_section_head)});
+		table.addRow({"Blob Segment Head", std::to_string(fileHeader.blob_segment_head)});
 		table.addRow({"Max Node ID", std::to_string(fileHeader.max_node_id)});
 		table.addRow({"Max Edge ID", std::to_string(fileHeader.max_edge_id)});
+		table.addRow({"Max Prop ID", std::to_string(fileHeader.max_prop_id)});
 		table.addRow({"Max Blob ID", std::to_string(fileHeader.max_blob_id)});
-		table.addRow({"Page Size", std::to_string(fileHeader.page_size)});
-		table.addRow({"Segment Count", std::to_string(fileHeader.segment_count)});
 		table.addRow({"Version", std::to_string(fileHeader.version)});
 		table.addRow({"Header CRC", std::to_string(fileHeader.header_crc)});
 
@@ -81,6 +57,9 @@ namespace graph::storage {
 
 		// Display property segments if they exist
 		displayPropertySegmentChain(file, fileHeader.property_segment_head);
+
+		// Display blob segments if they exist
+		displayBlobSegmentChain(file, fileHeader.blob_segment_head);
 	}
 
 	void DatabaseInspector::displayNodeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) {
@@ -153,8 +132,7 @@ namespace graph::storage {
 						table.addRow({"Active", node.isActive() ? "true" : "false"});
 
 						// Load properties
-						auto properties =
-								property_storage::PropertyStorage::loadProperties(file, node.getPropertyReference());
+						auto properties = dataManager_.getNodeProperties(node.getId());
 
 						// Add Attribute data to the table
 						for (const auto &[key, value]: properties) {
@@ -299,8 +277,7 @@ namespace graph::storage {
 						table.addRow({"Active", edge.isActive() ? "true" : "false"});
 
 						// Load properties
-						auto properties =
-								property_storage::PropertyStorage::loadProperties(file, edge.getPropertyReference());
+						auto properties = dataManager_.getEdgeProperties(edge.getId());
 
 						// Add Attribute data to the table
 						for (const auto &[key, value]: properties) {
@@ -376,114 +353,224 @@ namespace graph::storage {
 	}
 
 	void DatabaseInspector::displayPropertySegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) {
-		int segmentIndex = 0;
+        int segmentIndex = 0;
 
-		while (segmentOffset != 0) {
-			std::cout << "\n=== Property Segment #" << segmentIndex++ << " ===\n" << std::endl;
+        while (segmentOffset != 0) {
+            std::cout << "\n=== Property Segment #" << segmentIndex++ << " ===\n" << std::endl;
 
-			// Seek to the segment header
-			file->seekg(static_cast<std::streamoff>(segmentOffset));
+            // Seek to the segment header
+            file->seekg(static_cast<std::streamoff>(segmentOffset));
 
-			// Read property segment header
-			PropertySegmentHeader segmentHeader;
-			file->read(reinterpret_cast<char *>(&segmentHeader), sizeof(PropertySegmentHeader));
+            // Read segment header - using the unified SegmentHeader for all types
+            SegmentHeader segmentHeader;
+            file->read(reinterpret_cast<char *>(&segmentHeader), sizeof(SegmentHeader));
 
-			if (!file->good()) {
-				std::cerr << "Error: Failed to read property segment header at offset " << segmentOffset << std::endl;
-				break;
-			}
+            if (!file->good()) {
+                std::cerr << "Error: Failed to read property segment header at offset " << segmentOffset << std::endl;
+                break;
+            }
 
-			// Display segment header information
-			TableFormatter table;
-			table.setTitle("Property Segment Header");
-			table.addColumn("Attribute");
-			table.addColumn("Value");
+            // Display segment header information
+            TableFormatter table;
+            table.setTitle("Property Segment Header");
+            table.addColumn("Attribute");
+            table.addColumn("Value");
 
-			table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
-			table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
-			table.addRow({"Used", std::to_string(segmentHeader.used)});
-			table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
-			table.print();
+            table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
+            table.addRow({"Previous Segment Offset", std::to_string(segmentHeader.prev_segment_offset)});
+            table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
+            table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
+            table.addRow({"Used", std::to_string(segmentHeader.used)});
+            table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
+            table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
+            table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
+            table.print();
 
-			// Calculate data start position
-			std::streampos dataStart = file->tellg();
+            // Print activity bitmap
+            std::cout << "Activity Bitmap: ";
+            for (uint32_t i = 0; i < segmentHeader.bitmap_size; ++i) {
+                for (int bit = 7; bit >= 0; --bit) {
+                    std::cout << ((segmentHeader.activity_bitmap[i] >> bit) & 1);
+                }
+                std::cout << " ";
+            }
+            std::cout << std::endl;
 
-			// Display used space in the segment
-			if (segmentHeader.used > 0) {
-				std::cout << "\n--- Used Space (" << segmentHeader.used << " bytes) ---" << std::endl;
+            // Calculate data start position
+            std::streampos dataStart = file->tellg();
+            const size_t propertySize = sizeof(Property); // Using Property entities now
 
-				// Property segments are more complex as they contain variable-length entries
-				// Need to scan through all property entries
-				std::streampos currentPos = dataStart;
-				file->seekg(currentPos);
+            // Display all slots in the segment (both used and unused)
+            for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
+                std::streampos propertyPosition = dataStart + static_cast<std::streamoff>(i * propertySize);
+                file->seekg(propertyPosition);
 
-				uint32_t bytesProcessed = 0;
-				while (bytesProcessed < segmentHeader.used) {
-					// Try to read a property entry header
-					PropertyEntryHeader entryHeader;
-					file->read(reinterpret_cast<char *>(&entryHeader), sizeof(PropertyEntryHeader));
+                std::cout << "\n--- Slot " << i << " (Offset: " << propertyPosition << ") ---" << std::endl;
 
-					if (!file->good()) {
-						std::cerr << "Error: Failed to read property entry header at position " << currentPos
-								  << std::endl;
-						break;
-					}
+                if (i < segmentHeader.used && bitmap::getBit(segmentHeader.activity_bitmap, i)) {
+                    // This slot is used, deserialize and display the property
+                    try {
+                        Property property = Property::deserialize(*file);
 
-					table.clear();
-					table.setTitle("Property Entry");
-					table.addColumn("Attribute");
-					table.addColumn("Value");
+                        // Display property information
+                        table.clear();
+                        table.setTitle("Property Data");
+                        table.addColumn("Attribute");
+                        table.addColumn("Value");
 
-					table.addRow({"Entity ID", std::to_string(entryHeader.entity_id)});
-					table.addRow({"Entity Type", entryHeader.entity_type == 0 ? "Node" : "Edge"});
-					table.addRow({"Data Size", std::to_string(entryHeader.data_size)});
-					table.addRow({"Property Count", std::to_string(entryHeader.property_count)});
-					table.print();
+                        table.addRow({"Status", "USED"});
+                        table.addRow({"Property ID", std::to_string(property.getId())});
+                        table.addRow({"Entity ID", std::to_string(property.getEntityId())});
+                        table.addRow({"Entity Type", property.getEntityType() == 0 ? "Node" : "Edge"});
 
-					// Skip past the property data - in a real implementation, you would parse and display
-					// the properties based on your property serialization format
-					file->seekg(static_cast<std::streamoff>(entryHeader.data_size), std::ios::cur);
+                        table.print();
+                    } catch (const std::exception &e) {
+                        std::cerr << "Error deserializing property: " << e.what() << std::endl;
+                        table.clear();
+                        table.setTitle("Property Data");
+                        table.addColumn("Attribute");
+                        table.addColumn("Value");
+                        table.addRow({"Status", "ERROR"});
+                        table.addRow({"Error", e.what()});
+                        table.print();
+                    }
+                } else {
+                    // This slot is unused or inactive
+                    table.clear();
+                    table.setTitle("Property Data");
+                    table.addColumn("Attribute");
+                    table.addColumn("Value");
+                    table.addRow({"Status", i < segmentHeader.used ? "INACTIVE" : "UNUSED"});
+                    table.print();
 
-					// Update bytes processed and current position
-					bytesProcessed += sizeof(PropertyEntryHeader) + entryHeader.data_size;
-					currentPos = dataStart + static_cast<std::streamoff>(bytesProcessed);
-					file->seekg(currentPos);
-				}
-			}
+                    // Show raw data bytes for debugging purposes
+                    std::vector<char> rawData(propertySize);
+                    file->read(rawData.data(), propertySize);
+                    if (file->good()) {
+                        std::cout << "Raw data (first 16 bytes): ";
+                        for (size_t j = 0; j < std::min<size_t>(16, propertySize); ++j) {
+                            std::cout << std::hex << std::setw(2) << std::setfill('0')
+                                     << static_cast<int>(static_cast<unsigned char>(rawData[j])) << " ";
+                        }
+                        std::cout << std::dec << std::endl;
+                    }
+                }
+            }
 
-			// Display unused space
-			if (segmentHeader.used < segmentHeader.capacity) {
-				uint32_t unusedBytes = segmentHeader.capacity - segmentHeader.used;
-				std::cout << "\n--- Unused Space (" << unusedBytes << " bytes) ---" << std::endl;
+            // Move to the next segment in the chain
+            segmentOffset = segmentHeader.next_segment_offset;
+        }
+    }
 
-				table.clear();
-				table.setTitle("Unused Space");
-				table.addColumn("Attribute");
-				table.addColumn("Value");
-				table.addRow({"Offset", std::to_string(dataStart + static_cast<std::streamoff>(segmentHeader.used))});
-				table.addRow({"Size", std::to_string(unusedBytes)});
-				table.print();
+    // New method to display blob segments
+    void DatabaseInspector::displayBlobSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) {
+        int segmentIndex = 0;
 
-				// Show a sample of the unused space for debugging
-				file->seekg(dataStart + static_cast<std::streamoff>(segmentHeader.used));
-				std::vector<char> rawData(std::min<uint32_t>(32, unusedBytes));
-				file->read(rawData.data(), rawData.size());
+        while (segmentOffset != 0) {
+            std::cout << "\n=== Blob Segment #" << segmentIndex++ << " ===\n" << std::endl;
 
-				if (file->good()) {
-					std::cout << "Sample raw data (first 32 bytes or less): " << std::endl;
-					for (size_t j = 0; j < rawData.size(); ++j) {
-						std::cout << std::hex << std::setw(2) << std::setfill('0')
-								  << static_cast<int>(static_cast<unsigned char>(rawData[j])) << " ";
-						if ((j + 1) % 16 == 0)
-							std::cout << std::endl;
-					}
-					std::cout << std::dec << std::endl;
-				}
-			}
+            // Seek to the segment header
+            file->seekg(static_cast<std::streamoff>(segmentOffset));
 
-			// Move to the next segment in the chain
-			segmentOffset = segmentHeader.next_segment_offset;
-		}
-	}
+            // Read segment header
+            SegmentHeader segmentHeader;
+            file->read(reinterpret_cast<char *>(&segmentHeader), sizeof(SegmentHeader));
+
+            if (!file->good()) {
+                std::cerr << "Error: Failed to read blob segment header at offset " << segmentOffset << std::endl;
+                break;
+            }
+
+            // Display segment header information
+            TableFormatter table;
+            table.setTitle("Blob Segment Header");
+            table.addColumn("Attribute");
+            table.addColumn("Value");
+
+            table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
+            table.addRow({"Previous Segment Offset", std::to_string(segmentHeader.prev_segment_offset)});
+            table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
+            table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
+            table.addRow({"Used", std::to_string(segmentHeader.used)});
+            table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
+            table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
+            table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
+            table.print();
+
+            // Print activity bitmap
+            std::cout << "Activity Bitmap: ";
+            for (uint32_t i = 0; i < segmentHeader.bitmap_size; ++i) {
+                for (int bit = 7; bit >= 0; --bit) {
+                    std::cout << ((segmentHeader.activity_bitmap[i] >> bit) & 1);
+                }
+                std::cout << " ";
+            }
+            std::cout << std::endl;
+
+            // Calculate data start position
+            std::streampos dataStart = file->tellg();
+            const size_t blobEntrySize = sizeof(Blob); // Assuming Blob is the correct structure
+
+            // Display all slots in the segment (both used and unused)
+            for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
+                std::streampos blobPosition = dataStart + static_cast<std::streamoff>(i * blobEntrySize);
+                file->seekg(blobPosition);
+
+                std::cout << "\n--- Slot " << i << " (Offset: " << blobPosition << ") ---" << std::endl;
+
+                if (i < segmentHeader.used && bitmap::getBit(segmentHeader.activity_bitmap, i)) {
+                    // This slot is used, deserialize and display the blob entry
+                    try {
+                        Blob blob;
+                        file->read(reinterpret_cast<char *>(&blob), sizeof(Blob));
+
+                        // Display blob information
+                        table.clear();
+                        table.setTitle("Blob Data");
+                        table.addColumn("Attribute");
+                        table.addColumn("Value");
+
+                        table.addRow({"Status", "USED"});
+                        table.addRow({"Blob ID", std::to_string(blob.getId())});
+                        table.addRow({"Size", std::to_string(blob.getSize())});
+
+                        table.print();
+                    } catch (const std::exception &e) {
+                        std::cerr << "Error deserializing blob: " << e.what() << std::endl;
+                        table.clear();
+                        table.setTitle("Blob Data");
+                        table.addColumn("Attribute");
+                        table.addColumn("Value");
+                        table.addRow({"Status", "ERROR"});
+                        table.addRow({"Error", e.what()});
+                        table.print();
+                    }
+                } else {
+                    // This slot is unused or inactive
+                    table.clear();
+                    table.setTitle("Blob Data");
+                    table.addColumn("Attribute");
+                    table.addColumn("Value");
+                    table.addRow({"Status", i < segmentHeader.used ? "INACTIVE" : "UNUSED"});
+                    table.print();
+
+                    // Show raw data bytes for debugging purposes
+                    std::vector<char> rawData(blobEntrySize);
+                    file->read(rawData.data(), blobEntrySize);
+                    if (file->good()) {
+                        std::cout << "Raw data (first 16 bytes): ";
+                        for (size_t j = 0; j < std::min<size_t>(16, blobEntrySize); ++j) {
+                            std::cout << std::hex << std::setw(2) << std::setfill('0')
+                                      << static_cast<int>(static_cast<unsigned char>(rawData[j])) << " ";
+                        }
+                        std::cout << std::dec << std::endl;
+                    }
+                }
+            }
+
+            // Move to the next segment in the chain
+            segmentOffset = segmentHeader.next_segment_offset;
+        }
+    }
 
 } // namespace graph::storage

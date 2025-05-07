@@ -9,7 +9,6 @@
  **/
 
 #include "graph/core/PropertyValue.h"
-#include "graph/storage/BlobStore.h"
 #include <zlib.h>
 
 namespace graph::property_utils {

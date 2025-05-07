@@ -158,59 +158,15 @@ namespace graph {
                     return;
                 }
 
+                // Create a map for the property
+                std::unordered_map<std::string, PropertyValue> properties;
+                properties[key] = propValue;
+
                 // Add the property to the node
-                db.getStorage().updateNodeProperty(nodeId, key, propValue);
+                db.getStorage().insertProperties(nodeId, Node::typeId, properties);
                 // transaction.commit();
 
                 std::cout << "Added property '" << key << "' to node " << nodeId << "\n";
-            } catch (const std::exception &e) {
-                std::cout << "Error: " << e.what() << "\n";
-            }
-        }
-        else if (command == "getProperty") {
-            // Get a specific property from a node
-            int nodeId;
-            std::string key;
-
-            std::cout << "Enter node ID: ";
-            std::cin >> nodeId;
-            std::cin.ignore(); // Clear the newline
-
-            std::cout << "Enter property key: ";
-            std::getline(std::cin, key);
-
-            try {
-                auto node = db.getStorage().getNode(nodeId);
-
-                if (node.getId() == 0) {
-                    std::cout << "Node not found\n";
-                    return;
-                }
-
-                // if (!node.hasProperty(key)) {
-                //     std::cout << "Property '" << key << "' not found on node " << nodeId << "\n";
-                //     return;
-                // }
-
-				PropertyValue value = db.getStorage().getNodeProperty(nodeId, key);
-
-                // Display property value based on its type
-                if (std::holds_alternative<std::string>(value)) {
-                    auto strValue = std::get<std::string>(value);
-                    std::cout << "Property value (string): " << strValue << "\n";
-                }
-                else if (std::holds_alternative<int64_t>(value)) {
-                    std::cout << "Property value (int): " << std::get<int64_t>(value) << "\n";
-                }
-                else if (std::holds_alternative<double>(value)) {
-                    std::cout << "Property value (double): " << std::get<double>(value) << "\n";
-                }
-                else if (std::holds_alternative<bool>(value)) {
-                    std::cout << "Property value (bool): " << (std::get<bool>(value) ? "true" : "false") << "\n";
-                }
-                else {
-                    std::cout << "Property value has unsupported type for display\n";
-                }
             } catch (const std::exception &e) {
                 std::cout << "Error: " << e.what() << "\n";
             }
@@ -264,46 +220,45 @@ namespace graph {
                     }
                 }
 
-                std::cout << "Total property size: " << node.getTotalPropertySize() << " bytes\n";
             } catch (const std::exception &e) {
                 std::cout << "Error: " << e.what() << "\n";
             }
         }
-        else if (command == "removeProperty") {
-            // Remove a property from a node
-            int nodeId;
-            std::string key;
-
-            std::cout << "Enter node ID: ";
-            std::cin >> nodeId;
-            std::cin.ignore(); // Clear the newline
-
-            std::cout << "Enter property key to remove: ";
-            std::getline(std::cin, key);
-
-            try {
-                auto transaction = db.beginTransaction();
-                auto node = db.getStorage().getNode(nodeId);
-
-                if (node.getId() == 0) {
-                    std::cout << "Node not found\n";
-                    return;
-                }
-
-                if (!node.hasProperty(key)) {
-                    std::cout << "Property '" << key << "' not found on node " << nodeId << "\n";
-                    return;
-                }
-
-                // Remove the property
-                db.getStorage().removeNodeProperty(nodeId, key);
-                transaction.commit();
-
-                std::cout << "Removed property '" << key << "' from node " << nodeId << "\n";
-            } catch (const std::exception &e) {
-                std::cout << "Error: " << e.what() << "\n";
-            }
-        }
+        // else if (command == "removeProperty") {
+        //     // Remove a property from a node
+        //     int nodeId;
+        //     std::string key;
+        //
+        //     std::cout << "Enter node ID: ";
+        //     std::cin >> nodeId;
+        //     std::cin.ignore(); // Clear the newline
+        //
+        //     std::cout << "Enter property key to remove: ";
+        //     std::getline(std::cin, key);
+        //
+        //     try {
+        //         auto transaction = db.beginTransaction();
+        //         auto node = db.getStorage().getNode(nodeId);
+        //
+        //         if (node.getId() == 0) {
+        //             std::cout << "Node not found\n";
+        //             return;
+        //         }
+        //
+        //         if (!node.hasProperty(key)) {
+        //             std::cout << "Property '" << key << "' not found on node " << nodeId << "\n";
+        //             return;
+        //         }
+        //
+        //         // Remove the property
+        //         db.getStorage().removeNodeProperty(nodeId, key);
+        //         transaction.commit();
+        //
+        //         std::cout << "Removed property '" << key << "' from node " << nodeId << "\n";
+        //     } catch (const std::exception &e) {
+        //         std::cout << "Error: " << e.what() << "\n";
+        //     }
+        // }
         else if (command == "addEdge") {
             int from, to;
             std::string relation;

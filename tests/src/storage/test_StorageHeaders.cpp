@@ -19,8 +19,6 @@ TEST(StorageHeadersTest, FileHeaderInitialization) {
     EXPECT_EQ(fileHeader.edge_segment_head, 0u);
     EXPECT_EQ(fileHeader.max_node_id, 0u);
     EXPECT_EQ(fileHeader.max_edge_id, 0u);
-    EXPECT_EQ(fileHeader.page_size, graph::storage::PAGE_SIZE);
-    EXPECT_EQ(fileHeader.segment_count, 0u);
     EXPECT_EQ(fileHeader.header_crc, 0u);
     EXPECT_EQ(fileHeader.version, 0x0001u);
 }

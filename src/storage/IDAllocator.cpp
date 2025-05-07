@@ -9,16 +9,15 @@
  **/
 
 #include "graph/storage/IDAllocator.h"
-#include <algorithm>
 #include <stdexcept>
 #include "graph/storage/SegmentTracker.h"
 
 namespace graph::storage {
 
 	IDAllocator::IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
-							 int64_t &maxNodeId, int64_t &maxEdgeId) :
+							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId) :
 		file_(std::move(file)), segmentTracker_(std::move(segmentTracker)), currentMaxNodeId_(maxNodeId),
-		currentMaxEdgeId_(maxEdgeId) {}
+		currentMaxEdgeId_(maxEdgeId), currentMaxPropId_(maxPropId), currentMaxBlobId_(maxBlobId) {}
 
 	void IDAllocator::initialize() {
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -26,6 +25,8 @@ namespace graph::storage {
 		// Initialize the cache of inactive IDs
 		refreshInactiveIdsCache(Node::typeId);
 		refreshInactiveIdsCache(Edge::typeId);
+		refreshInactiveIdsCache(Property::typeId);
+		refreshInactiveIdsCache(Blob::typeId);
 	}
 
 	int64_t IDAllocator::reserveTemporaryId(uint8_t entityType) {
@@ -35,12 +36,16 @@ namespace graph::storage {
 			return nextTempNodeId_--;
 		} else if (entityType == Edge::typeId) {
 			return nextTempEdgeId_--;
+		} else if (entityType == Property::typeId) {
+			return nextTempPropId_--;
+		} else if (entityType == Blob::typeId) {
+			return nextTempBlobId_--;
 		}
 
 		throw std::runtime_error("Invalid entity type for temporary ID reservation");
 	}
 
-	uint64_t IDAllocator::allocatePermanentId(int64_t tempId, uint8_t entityType) {
+	int64_t IDAllocator::allocatePermanentId(int64_t tempId, uint8_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		// Check if we've already allocated a permanent ID for this temp ID
@@ -54,10 +59,25 @@ namespace graph::storage {
 			if (it != tempToPermEdgeIds_.end()) {
 				return it->second;
 			}
+		} else if (entityType == Property::typeId) {
+			auto it = tempToPermPropIds_.find(tempId);
+			if (it != tempToPermPropIds_.end()) {
+				return it->second;
+			}
+		} else if (entityType == Blob::typeId) {
+			auto it = tempToPermBlobIds_.find(tempId);
+			if (it != tempToPermBlobIds_.end()) {
+				return it->second;
+			}
 		}
+
+		std::cout << "22 Allocating permanent ID for temp ID: " << tempId
+				  << " of type: " << static_cast<int>(entityType) << std::endl;
 
 		// First try to reuse an inactive ID
 		int64_t permId = findInactiveId(entityType);
+
+		std::cout << "23 Reusing inactive ID: " << permId << std::endl;
 
 		// If no inactive ID is available, allocate a new sequential ID
 		if (permId == 0) {
@@ -69,6 +89,15 @@ namespace graph::storage {
 			tempToPermNodeIds_[tempId] = permId;
 		} else if (entityType == Edge::typeId) {
 			tempToPermEdgeIds_[tempId] = permId;
+		} else if (entityType == Property::typeId) {
+			tempToPermPropIds_[tempId] = permId;
+		} else if (entityType == Blob::typeId) {
+			tempToPermBlobIds_[tempId] = permId;
+		}
+
+		// Notify the callback if it's set
+		if (idUpdateCallback_) {
+			idUpdateCallback_(tempId, permId, entityType);
 		}
 
 		return permId;
@@ -83,6 +112,10 @@ namespace graph::storage {
 			segmentOffset = segmentTracker_->getSegmentOffsetForNodeId(id);
 		} else if (entityType == Edge::typeId) {
 			segmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(id);
+		} else if (entityType == Property::typeId) {
+			segmentOffset = segmentTracker_->getSegmentOffsetForPropId(id);
+		} else if (entityType == Blob::typeId) {
+			segmentOffset = segmentTracker_->getSegmentOffsetForBlobId(id);
 		}
 
 		if (segmentOffset == 0) {
@@ -91,7 +124,7 @@ namespace graph::storage {
 		}
 
 		// Read segment header
-		SegmentHeader header = segmentTracker_->readSegmentHeader(segmentOffset);
+		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate index in segment
 		uint32_t index = static_cast<uint32_t>(id - header.start_id);
@@ -120,39 +153,29 @@ namespace graph::storage {
 		// If cache is empty, refresh it
 		if (cache.empty()) {
 			refreshInactiveIdsCache(entityType);
+
+			// If still empty after refresh, no inactive IDs are available
+			if (cache.empty()) {
+				return 0;
+			}
 		}
 
-		// If still empty after refresh, no inactive IDs are available
-		if (cache.empty()) {
-			return 0;
-		}
+		// Get first segment with inactive IDs
+		uint64_t segmentOffset = cache.front().first;
+		auto &inactiveIndices = cache.front().second;
 
-		// Get the first segment with inactive IDs
-		auto &entry = cache.front();
-		uint64_t segmentOffset = entry.first;
-		auto &inactiveIndices = entry.second;
-
-		// If no inactive indices in this segment, remove it and try again
-		if (inactiveIndices.empty()) {
-			cache.erase(cache.begin());
-			return findInactiveId(entityType);
-		}
-
-		// Get the first inactive index
+		// Get an inactive index
 		uint32_t index = inactiveIndices.back();
 		inactiveIndices.pop_back();
 
-		// If no more inactive indices in this segment, remove it from cache
+		// If this segment has no more inactive indices, remove it from cache
 		if (inactiveIndices.empty()) {
 			cache.erase(cache.begin());
 		}
 
 		// Read segment header to get start_id
-		SegmentHeader header = segmentTracker_->readSegmentHeader(segmentOffset);
+		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 		int64_t id = header.start_id + index;
-
-		// Mark the ID as active
-		markIdActive(id, entityType);
 
 		return id;
 	}
@@ -170,6 +193,10 @@ namespace graph::storage {
 			id = ++currentMaxNodeId_;
 		} else if (entityType == Edge::typeId) {
 			id = ++currentMaxEdgeId_;
+		} else if (entityType == Property::typeId) {
+			id = ++currentMaxPropId_;
+		} else if (entityType == Blob::typeId) {
+			id = ++currentMaxBlobId_;
 		} else {
 			throw std::runtime_error("Invalid entity type for ID allocation");
 		}
@@ -193,7 +220,7 @@ namespace graph::storage {
 		}
 
 		// Read segment header
-		SegmentHeader header = segmentTracker_->readSegmentHeader(segmentOffset);
+		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate index in segment
 		uint32_t index = static_cast<uint32_t>(id - header.start_id);
@@ -213,14 +240,25 @@ namespace graph::storage {
 		for (const auto &header: segments) {
 			uint64_t segmentOffset = header.file_offset;
 
+			// Skip segments with no inactive elements
+			if (header.inactive_count == 0) {
+				continue;
+			}
+
 			// Read the activity bitmap
 			std::vector<bool> activityMap = segmentTracker_->getActivityBitmap(segmentOffset);
 
 			// Find all inactive indices
 			std::vector<uint32_t> inactiveIndices;
-			for (uint32_t i = 0; i < activityMap.size(); ++i) {
+			inactiveIndices.reserve(header.inactive_count); // Pre-allocate for efficiency
+
+			// Only check up to the 'used' count (not capacity)
+			for (uint32_t i = 0; i < header.used; ++i) {
 				if (!activityMap[i]) {
 					inactiveIndices.push_back(i);
+					if (inactiveIndices.size() >= header.inactive_count) {
+						break; // Found all inactive slots
+					}
 				}
 			}
 
@@ -242,6 +280,16 @@ namespace graph::storage {
 		} else if (entityType == Edge::typeId) {
 			auto it = tempToPermEdgeIds_.find(tempId);
 			if (it != tempToPermEdgeIds_.end()) {
+				return it->second;
+			}
+		} else if (entityType == Property::typeId) {
+			auto it = tempToPermPropIds_.find(tempId);
+			if (it != tempToPermPropIds_.end()) {
+				return it->second;
+			}
+		} else if (entityType == Blob::typeId) {
+			auto it = tempToPermBlobIds_.find(tempId);
+			if (it != tempToPermBlobIds_.end()) {
 				return it->second;
 			}
 		}

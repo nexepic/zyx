@@ -22,13 +22,13 @@ namespace graph::storage {
 	class IDAllocator {
 	public:
 		explicit IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
-							 int64_t &maxNodeId, int64_t &maxEdgeId);
+							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId);
 
 		// Reserve a temporary ID (negative number)
 		int64_t reserveTemporaryId(uint8_t entityType);
 
 		// Allocate a permanent ID for a temporary ID
-		uint64_t allocatePermanentId(int64_t tempId, uint8_t entityType);
+		int64_t allocatePermanentId(int64_t tempId, uint8_t entityType);
 
 		// Check if an ID is temporary
 		static bool isTemporaryId(int64_t id) { return id < 0; }
@@ -42,6 +42,8 @@ namespace graph::storage {
 		// Get current max IDs for file header updates
 		int64_t getCurrentMaxNodeId() const { return currentMaxNodeId_; }
 		int64_t getCurrentMaxEdgeId() const { return currentMaxEdgeId_; }
+		int64_t getCurrentMaxPropId() const { return currentMaxPropId_; }
+		int64_t getCurrentMaxBlobId() const { return currentMaxBlobId_; }
 
 		// Clear temporary to permanent ID mappings
 		void clearTempIdMappings();
@@ -56,6 +58,13 @@ namespace graph::storage {
 
 		// Refresh the inactive IDs cache for a given entity type
 		void refreshInactiveIdsCache(uint8_t entityType);
+
+		using IdUpdateCallback = std::function<void(int64_t tempId, int64_t permId, uint8_t entityType)>;
+
+		// Set the callback for ID updates
+		void setIdUpdateCallback(IdUpdateCallback callback) {
+			idUpdateCallback_ = std::move(callback);
+		}
 
 	private:
 		// Find an inactive ID in segments
@@ -76,17 +85,26 @@ namespace graph::storage {
 		// References to max IDs
 		int64_t &currentMaxNodeId_;
 		int64_t &currentMaxEdgeId_;
+		int64_t &currentMaxPropId_;
+		int64_t &currentMaxBlobId_;
 
 		// Temporary ID counters (negative values)
 		int64_t nextTempNodeId_ = -1;
 		int64_t nextTempEdgeId_ = -1;
+		int64_t nextTempPropId_ = -1;
+		int64_t nextTempBlobId_ = -1;
 
 		// Maps from temporary IDs to permanent IDs
 		std::unordered_map<int64_t, int64_t> tempToPermNodeIds_;
 		std::unordered_map<int64_t, int64_t> tempToPermEdgeIds_;
+		std::unordered_map<int64_t, int64_t> tempToPermPropIds_;
+		std::unordered_map<int64_t, int64_t> tempToPermBlobIds_;
 
 		// Mutex for thread safety
 		mutable std::mutex mutex_;
+
+		// Callback to notify when IDs are updated
+		IdUpdateCallback idUpdateCallback_;
 	};
 
 } // namespace graph::storage

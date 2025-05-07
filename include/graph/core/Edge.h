@@ -22,7 +22,7 @@ namespace graph {
 	class Edge {
 	public:
 		Edge() = default;
-		Edge(int64_t id, int64_t from, int64_t to, std::string label);
+		Edge(int64_t id, int64_t sourceNodeId, int64_t targetNodeId, std::string label);
 
 		// Property methods
 		void addProperty(const std::string &key, const PropertyValue &value);
@@ -33,8 +33,11 @@ namespace graph {
 		[[nodiscard]] size_t getTotalPropertySize() const;
 		void clearProperties() { properties.clear(); }
 
-		void setPropertyReference(const PropertyReference& ref);
-		[[nodiscard]] const PropertyReference& getPropertyReference() const;
+		// Property entity
+		void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::PROPERTY_ENTITY);
+		int64_t getPropertyEntityId() const;
+		PropertyStorageType getPropertyStorageType() const;
+		bool hasPropertyEntity() const;
 
 		[[nodiscard]] int64_t getFromNodeId() const;
 		[[nodiscard]] int64_t getToNodeId() const;
@@ -50,18 +53,35 @@ namespace graph {
 
 		static constexpr uint8_t typeId = 1;
 
-		void setId(uint64_t id) { this->id = id; }
+		void setId(int64_t id) { this->id = id; }
 
 		[[nodiscard]] bool isActive() const { return isActive_; }
 		void markInactive(bool active = false) { isActive_ = active; }
 
+		void setSourceNodeId(int64_t newSourceId) {
+			sourceNodeId = newSourceId;
+		}
+
+		void setTargetNodeId(int64_t newTargetId) {
+			targetNodeId = newTargetId;
+		}
+
+		[[nodiscard]] int64_t getSourceNodeId() const {
+			return sourceNodeId;
+		}
+
+		[[nodiscard]] int64_t getTargetNodeId() const {
+			return targetNodeId;
+		}
+
 	private:
 		int64_t id{};
-		int64_t fromNodeId{};
-		int64_t toNodeId{};
+		int64_t sourceNodeId{};
+		int64_t targetNodeId{};
 		std::string label;
 
-		PropertyReference propertyRef;
+		PropertyStorageType propertyStorageType = PropertyStorageType::NONE;
+		int64_t propertyEntityId = 0;
 
 		std::unordered_map<std::string, PropertyValue> properties;
 

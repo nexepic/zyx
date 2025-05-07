@@ -37,8 +37,11 @@ namespace graph {
 		[[nodiscard]] size_t getTotalPropertySize() const;
 		void clearProperties() { properties.clear(); }
 
-		void setPropertyReference(const PropertyReference& ref);
-		[[nodiscard]] const PropertyReference& getPropertyReference() const;
+		// Property entity
+		void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::PROPERTY_ENTITY);
+		int64_t getPropertyEntityId() const;
+		PropertyStorageType getPropertyStorageType() const;
+		bool hasPropertyEntity() const;
 
 		[[nodiscard]] const std::string& getLabel() const;
 		[[nodiscard]] int64_t getId() const;
@@ -59,13 +62,21 @@ namespace graph {
 		[[nodiscard]] bool isActive() const { return isActive_; }
 		void markInactive(bool active = false) { isActive_ = active; }
 
+		void setInEdges(const std::vector<uint64_t>& edges) {
+			inEdges = edges;
+		}
+
+		void setOutEdges(const std::vector<uint64_t>& edges) {
+			outEdges = edges;
+		}
+
 	private:
 		int64_t id{};
 		std::string label;
 
-        PropertyReference propertyRef;
-
         std::unordered_map<std::string, PropertyValue> properties;
+		PropertyStorageType propertyStorageType = PropertyStorageType::NONE;
+		int64_t propertyEntityId = 0;
 
 		std::vector<uint64_t> inEdges;
 		std::vector<uint64_t> outEdges;

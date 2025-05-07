@@ -131,7 +131,7 @@ public:
         os << vertical;
         for (const auto& col : columns) {
             os << std::string(padding, ' ')
-               << std::left << std::setw(static_cast<int>(col.width)) << col.header
+               << std::left << std::setw(static_cast<int>(col.width)) << std::setfill(' ') << col.header
                << std::string(padding, ' ') << vertical;
         }
         os << std::endl;
@@ -144,7 +144,7 @@ public:
             os << vertical;
             for (const auto& col : columns) {
                 os << std::string(padding, ' ')
-                   << std::left << std::setw(static_cast<int>(col.width)) << col.values[row]
+                   << std::left << std::setw(static_cast<int>(col.width)) << std::setfill(' ') << col.values[row]
                    << std::string(padding, ' ') << vertical;
             }
             os << std::endl;

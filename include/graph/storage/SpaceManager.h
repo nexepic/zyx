@@ -34,6 +34,7 @@ namespace graph::storage {
 		~SpaceManager();
 
 		void initialize(FileHeader &header);
+		uint64_t findMaxId(uint8_t type, std::shared_ptr<SegmentTracker> &tracker);
 		uint64_t allocateSegment(uint8_t type, uint32_t capacity);
 		void deallocateSegment(uint64_t offset);
 		void compactSegments(uint8_t type, double threshold);
@@ -103,6 +104,7 @@ namespace graph::storage {
 		bool compactNodeSegment(uint64_t offset);
 		bool compactEdgeSegment(uint64_t offset);
 		bool compactPropertySegment(uint64_t offset);
+		bool compactBlobSegment(uint64_t offset);
 		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset, const SegmentHeader &info);
 		void updateSegmentChain(uint64_t newOffset, const SegmentHeader &info);
 		uint64_t findLastSegment() const;
@@ -111,8 +113,7 @@ namespace graph::storage {
 		uint64_t findSegmentForEdgeId(int64_t id) const;
 		SegmentHeader readSegmentHeader(uint64_t offset) const;
 
-		template<typename HeaderType>
-		void writeSegmentHeader(uint64_t offset, const HeaderType &header);
+		void writeSegmentHeader(uint64_t offset, const SegmentHeader &header);
 
 		// Identifies segments at the end of file that can be truncated
 		std::vector<uint64_t> findTruncatableSegments() const;
