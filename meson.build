@@ -7,7 +7,7 @@ project('metrix', 'cpp',
             'b_coverage=false'
         ])
 
-db_inc = include_directories('include', '/opt/homebrew/Cellar/boost/1.87.0_1/include')
+db_inc = include_directories('include')
 
 subdir('src')
 subdir('apps/cli')
