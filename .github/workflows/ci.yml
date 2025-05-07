@@ -20,29 +20,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up dependencies
+      - name: Set up dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build meson g++ libboost-all-dev zlib1g-dev
+          sudo apt-get install -y ninja-build meson g++ libboost-all-dev zlib1g-dev libreadline-dev
 
-      - name: Set up dependencies
+      - name: Set up dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
-          brew install ninja meson boost zlib
+          brew install ninja meson boost zlib readline
 
-      - name: Set up dependencies
+      - name: Set up dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           choco install ninja meson boost-msvc-14.2 zlib
 
       - name: Configure the build
         run: |
-          meson setup buildDir
+          meson setup builddir
         shell: bash
 
       - name: Build the project
         run: |
-          meson compile -C buildDir
+          meson compile -C builddir
         shell: bash
