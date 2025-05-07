@@ -29,7 +29,7 @@ db_src = files(
 )
 
 zlib_dep = dependency('zlib')
-boost_dep = dependency('boost', modules: ['filesystem', 'system', 'uuid'], required: true)
+boost_dep = dependency('boost', modules: ['filesystem', 'system'], required: true)
 
 # static library
 db_lib = static_library('metrix',
