@@ -9,6 +9,7 @@
  **/
 
 #pragma once
+#include <atomic>
 #include <string>
 #include <unordered_map>
 #include "DataManager.h"
@@ -51,10 +52,10 @@ namespace graph::storage {
 		Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label);
 
 		void insertProperties(int64_t entityId, uint8_t entityType,
-			const std::unordered_map<std::string, PropertyValue>& properties) const;
+							  const std::unordered_map<std::string, PropertyValue> &properties) const;
 
-		void updateNode(const Node& node);
-		void updateEdge(const Edge& edge);
+		void updateNode(const Node &node);
+		void updateEdge(const Edge &edge);
 
 		bool deleteNode(int64_t nodeId, bool cascadeEdges = false);
 		bool deleteEdge(int64_t edgeId);
@@ -86,7 +87,7 @@ namespace graph::storage {
 		std::vector<int64_t> findConnectedNodeIds(int64_t nodeId, const std::string &direction = "both");
 
 		template<typename T>
-		void updateEntityInPlace(const T& entity);
+		void updateEntityInPlace(const T &entity);
 
 		template<typename T>
 		void deleteEntityOnDisk(const T &entity);
@@ -147,7 +148,7 @@ namespace graph::storage {
 		SegmentHeader readSegmentHeader(uint64_t segmentOffset) const;
 
 		// Write updated segment header to disk
-		void writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader& header);
+		void writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header);
 
 		std::mutex flushMutex;
 		std::atomic<bool> flushInProgress{false};

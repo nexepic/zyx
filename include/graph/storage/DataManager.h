@@ -20,7 +20,7 @@
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
 #include "graph/core/Property.h"
-
+#include <optional>
 #include <unordered_set>
 
 namespace graph::storage {
