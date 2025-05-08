@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <set>
+#include <functional>
 #include <unordered_map>
 #include <vector>
 #include "StorageHeaders.h"
@@ -62,9 +62,7 @@ namespace graph::storage {
 		using IdUpdateCallback = std::function<void(int64_t tempId, int64_t permId, uint8_t entityType)>;
 
 		// Set the callback for ID updates
-		void setIdUpdateCallback(IdUpdateCallback callback) {
-			idUpdateCallback_ = std::move(callback);
-		}
+		void setIdUpdateCallback(IdUpdateCallback callback) { idUpdateCallback_ = std::move(callback); }
 
 	private:
 		// Find an inactive ID in segments
