@@ -1,3 +1,5 @@
+cc = meson.get_compiler('cpp')
+
 readline_dep = dependency('readline', required : false)
 if not readline_dep.found()
     readline_dep = cc.find_library('readline', required : true)

@@ -4,7 +4,7 @@ project('metrix', 'cpp',
             'cpp_std=c++17',
             'warning_level=3',
             'buildtype=debugoptimized',
-            'b_coverage=false'
+            'b_coverage=true'
         ])
 
 db_inc = include_directories('include')
