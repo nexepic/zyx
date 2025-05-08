@@ -24,18 +24,26 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build meson g++ libboost-all-dev zlib1g-dev libreadline-dev
+          sudo apt-get install -y ninja-build meson g++ libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
+          # Copy precompiled gtest libraries to the system path
+          sudo cp /usr/lib/x86_64-linux-gnu/libgtest*.a /usr/lib/
 
       - name: Set up dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
-          brew install ninja meson boost zlib readline
+          brew install ninja meson boost zlib readline googletest
 
       - name: Set up dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           choco install ninja meson boost-msvc-14.2 zlib
+          # Use precompiled gtest binaries from vcpkg
+          git clone https://github.com/microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install gtest
+          set VCPKG_ROOT=%cd%\vcpkg
+          set PATH=%VCPKG_ROOT%\installed\x64-windows\bin;%PATH%
 
       - name: Configure the build
         run: |
