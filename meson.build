@@ -16,8 +16,11 @@ inc_dirs = include_directories('include')
 # Core dependencies
 zlib_dep = dependency('zlib')
 
-# Boost dependency with fallback
-boost_dep = dependency('boost', modules: ['filesystem', 'system'], required: true, fallback: ['boost', 'boost-cpp'])
+# Boost dependency - Try both standard name and conda-forge name
+boost_dep = dependency('boost', modules: ['filesystem', 'system'], required: false)
+if not boost_dep.found()
+    boost_dep = dependency('boost-cpp', modules: ['filesystem', 'system'], required: true)
+endif
 
 # Readline dependency
 readline_dep = dependency('readline', required : false)
@@ -28,6 +31,7 @@ endif
 # Testing dependencies
 gtest_dep = dependency('gtest', required : false)
 gtest_main_dep = dependency('gtest_main', required : false)
+# If not found, they'll be required in tests/meson.build only if tests are enabled
 
 # ===== Process subdirectories =====
 # First build the core library
