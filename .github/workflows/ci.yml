@@ -2,11 +2,9 @@ name: Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   build:
@@ -20,41 +18,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up dependencies and Clang (Ubuntu)
+      - name: Set up dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang ninja-build meson libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
+          sudo apt-get install -y ninja-build meson clang libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
           sudo cp /usr/lib/x86_64-linux-gnu/libgtest*.a /usr/lib/
-          export CC=clang
-          export CXX=clang++
 
-      - name: Set up dependencies and Clang (macOS)
+      - name: Set up dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
-          brew install clang ninja meson boost zlib readline googletest
-          export CC=clang
-          export CXX=clang++
+          brew install ninja meson boost zlib readline googletest
 
-      - name: Set up dependencies and Clang (Windows)
+      - name: Set up dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           choco install llvm ninja meson boost-msvc-14.2 zlib
           git clone https://github.com/microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
           .\vcpkg\vcpkg install gtest
-          set VCPKG_ROOT=%cd%\vcpkg
-          set PATH=%VCPKG_ROOT%\installed\x64-windows\bin;%PATH%
-          set CC=clang
-          set CXX=clang++
+          echo "VCPKG_ROOT=${PWD}\\vcpkg" >> $env:GITHUB_ENV
+          echo "${PWD}\\vcpkg\\installed\\x64-windows\\bin" >> $env:GITHUB_PATH
 
       - name: Configure the build
         run: |
-          meson setup builddir --native-file <(echo -e "[binaries]\nc = 'clang'\ncxx = 'clang++'")
+          mkdir -p buildDir
+          meson setup buildDir --buildtype=release \
+            --native-file compiler_options.ini
         shell: bash
 
       - name: Build the project
-        run: |
-          meson compile -C builddir
+        run: meson compile -C buildDir
         shell: bash
