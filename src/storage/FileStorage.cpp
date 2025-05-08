@@ -10,6 +10,7 @@
 
 #include "graph/storage/FileStorage.h"
 #include <algorithm> // for std::sort
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <zlib.h>

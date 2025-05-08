@@ -44,8 +44,7 @@ jobs:
       - name: Configure the build
         run: |
           mkdir -p buildDir
-          meson setup buildDir --buildtype=release \
-            --native-file compiler_options.ini
+          meson setup buildDir --native-file compiler_options.ini
         shell: bash
 
       - name: Build the project
