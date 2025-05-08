@@ -13,7 +13,7 @@ db_src = files(
 	'core/query/indexes/LabelIndex.cpp',
 	'core/query/indexes/PropertyIndex.cpp',
 	'core/query/indexes/RelationshipIndex.cpp',
-	'core/query/indexes/FulltextIndex.cpp',
+	'core/query/indexes/FullTextIndex.cpp',
 	'storage/FileStorage.cpp',
 	'storage/DataManager.cpp',
 	'storage/DeletionManager.cpp',
