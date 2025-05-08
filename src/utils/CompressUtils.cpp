@@ -8,18 +8,20 @@
  *
  **/
 
+#include "graph/utils/CompressUtils.h"
+#include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <zlib.h>
-#include "graph/utils/CompressUtils.h"
 
 namespace graph::utils {
 
-	std::string zlibCompress(const std::string& data) {
+	std::string zlibCompress(const std::string &data) {
 		uLongf compressedSize = compressBound(data.size());
 		std::string compressedData(compressedSize, '\0');
 
-		int result = compress(reinterpret_cast<Bytef*>(&compressedData[0]), &compressedSize,
-							  reinterpret_cast<const Bytef*>(data.data()), data.size());
+		int result = compress(reinterpret_cast<Bytef *>(&compressedData[0]), &compressedSize,
+							  reinterpret_cast<const Bytef *>(data.data()), data.size());
 
 		if (result != Z_OK) {
 			throw std::runtime_error("Compression failed");
@@ -29,12 +31,12 @@ namespace graph::utils {
 		return compressedData;
 	}
 
-	std::string zlibDecompress(const std::string& data, uint32_t originalSize) {
+	std::string zlibDecompress(const std::string &data, uint32_t originalSize) {
 		std::string decompressedData(originalSize, '\0');
 		uLongf decompressedSize = originalSize;
 
-		int result = uncompress(reinterpret_cast<Bytef*>(&decompressedData[0]), &decompressedSize,
-								reinterpret_cast<const Bytef*>(data.data()), data.size());
+		int result = uncompress(reinterpret_cast<Bytef *>(&decompressedData[0]), &decompressedSize,
+								reinterpret_cast<const Bytef *>(data.data()), data.size());
 
 		if (result != Z_OK) {
 			throw std::runtime_error("Decompression failed");

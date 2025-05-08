@@ -10,7 +10,7 @@
 
 #pragma once
 #include <string>
-#include <zlib.h>
+#include <cstdint>
 
 namespace graph::utils {
 
