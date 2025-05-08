@@ -9,6 +9,7 @@
  **/
 
 #include "graph/storage/IDAllocator.h"
+#include <algorithm>
 #include <stdexcept>
 #include "graph/storage/SegmentTracker.h"
 

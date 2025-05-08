@@ -11,6 +11,7 @@
 #include "graph/storage/SpaceManager.h"
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <unordered_set>
 #include "graph/storage/SegmentType.h"
