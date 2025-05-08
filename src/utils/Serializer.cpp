@@ -24,6 +24,9 @@ namespace graph::utils {
         return pod;
     }
 
+    template void Serializer::writePOD<unsigned long>(std::ostream &os, const unsigned long &pod);
+    template unsigned long Serializer::readPOD<unsigned long>(std::istream &is);
+
 	template void Serializer::writePOD<unsigned char>(std::ostream &os, const unsigned char &pod);
 	template unsigned char Serializer::readPOD<unsigned char>(std::istream &is);
 
