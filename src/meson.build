@@ -28,24 +28,16 @@ db_src = files(
 	'cli/Repl.cpp'
 )
 
-cc = meson.get_compiler('cpp')
-
-zlib_dep = dependency('zlib')
-boost_dep = dependency('boost', modules: ['filesystem', 'system'], required: false)
-if not boost_dep.found()
-    boost_dep = cc.find_library('boost_filesystem', required: true)
-endif
-
-# static library
+# Static library - using dependencies declared in root meson.build
 db_lib = static_library('metrix',
 						sources : db_src,
-						include_directories : db_inc,
+						include_directories : inc_dirs,
 						dependencies : [zlib_dep, boost_dep],
 						install : false
 )
 
-# export library
+# Export library dependency for other parts of the project
 db_dep = declare_dependency(
-	include_directories : db_inc,
+	include_directories : inc_dirs,
 	link_with : db_lib
 )
