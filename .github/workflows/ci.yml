@@ -18,36 +18,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build meson clang llvm libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
-          sudo cp /usr/lib/x86_64-linux-gnu/libgtest*.a /usr/lib/
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          activate-environment: build-env
+          environment-file: environment.yml
+          auto-activate-base: false
+          use-mamba: true
 
-      - name: Set up dependencies (macOS)
-        if: matrix.os == 'macos-latest'
+      - name: Display Python & Meson version
+        shell: bash -l {0}
         run: |
-          brew update
-          brew install ninja meson llvm boost zlib readline googletest
-
-      - name: Set up dependencies (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install llvm ninja meson boost-msvc-14.2 zlib
-          git clone https://github.com/microsoft/vcpkg.git
-          .\vcpkg\bootstrap-vcpkg.bat
-          .\vcpkg\vcpkg install gtest
-          echo "C:\ProgramData\chocolatey\bin" >> $env:GITHUB_PATH
-          echo "VCPKG_ROOT=${PWD}\\vcpkg" >> $env:GITHUB_ENV
-          echo "${PWD}\\vcpkg\\installed\\x64-windows\\bin" >> $env:GITHUB_PATH
+          python --version
+          meson --version
+          ninja --version
 
       - name: Configure the build
+        shell: bash -l {0}
         run: |
           mkdir -p buildDir
           meson setup buildDir --native-file compiler_options.ini
-        shell: bash
 
       - name: Build the project
-        run: meson compile -C buildDir
-        shell: bash
+        shell: bash -l {0}
+        run: |
+          meson compile -C buildDir
