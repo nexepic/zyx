@@ -20,36 +20,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up dependencies (Ubuntu)
+      - name: Set up dependencies and Clang (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build meson g++ libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
-          # Copy precompiled gtest libraries to the system path
+          sudo apt-get install -y clang ninja-build meson libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
           sudo cp /usr/lib/x86_64-linux-gnu/libgtest*.a /usr/lib/
-
-      - name: Set up dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
           export CC=clang
           export CXX=clang++
-          brew update
-          brew install ninja meson boost zlib readline googletest
 
-      - name: Set up dependencies (Windows)
+      - name: Set up dependencies and Clang (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install clang ninja meson boost zlib readline googletest
+          export CC=clang
+          export CXX=clang++
+
+      - name: Set up dependencies and Clang (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          choco install ninja meson boost-msvc-14.2 zlib
-          # Use precompiled gtest binaries from vcpkg
+          choco install llvm ninja meson boost-msvc-14.2 zlib
           git clone https://github.com/microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
           .\vcpkg\vcpkg install gtest
           set VCPKG_ROOT=%cd%\vcpkg
           set PATH=%VCPKG_ROOT%\installed\x64-windows\bin;%PATH%
+          set CC=clang
+          set CXX=clang++
 
       - name: Configure the build
         run: |
-          meson setup builddir
+          meson setup builddir --native-file <(echo -e "[binaries]\nc = 'clang'\ncxx = 'clang++'")
         shell: bash
 
       - name: Build the project
