@@ -11,14 +11,15 @@
 #pragma once
 
 #include <fstream>
-#include "StorageHeaders.h"
+#include <memory>
 #include "SegmentTracker.h"
+#include "StorageHeaders.h"
 
 namespace graph::storage {
 
 	class FileHeaderManager {
 	public:
-		explicit FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader& header);
+		explicit FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader &header);
 		~FileHeaderManager();
 
 		void updateFileHeader() const;
@@ -27,7 +28,7 @@ namespace graph::storage {
 		[[nodiscard]] FileHeader readFileHeader() const;
 
 		// Write updated file header
-		void writeFileHeader(const FileHeader& header);
+		void writeFileHeader(const FileHeader &header);
 
 		// Update max IDs based on current segment state
 		void updateFileHeaderMaxIds(std::shared_ptr<SegmentTracker> tracker);
@@ -44,15 +45,15 @@ namespace graph::storage {
 		[[nodiscard]] int64_t getMaxPropId() const { return maxPropId; }
 		[[nodiscard]] int64_t getMaxBlobId() const { return maxBlobId; }
 
-		int64_t& getMaxNodeIdRef() { return maxNodeId; }
-		int64_t& getMaxEdgeIdRef() { return maxEdgeId; }
-		int64_t& getMaxPropIdRef() { return maxPropId; }
-		int64_t& getMaxBlobIdRef() { return maxBlobId; }
+		int64_t &getMaxNodeIdRef() { return maxNodeId; }
+		int64_t &getMaxEdgeIdRef() { return maxEdgeId; }
+		int64_t &getMaxPropIdRef() { return maxPropId; }
+		int64_t &getMaxBlobIdRef() { return maxBlobId; }
 
 	private:
 		std::shared_ptr<std::fstream> file_;
 
-		FileHeader& fileHeader_;
+		FileHeader &fileHeader_;
 
 		int64_t maxNodeId;
 		int64_t maxEdgeId;

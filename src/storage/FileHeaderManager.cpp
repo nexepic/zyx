@@ -10,15 +10,13 @@
 
 #include "graph/storage/FileHeaderManager.h"
 #include <cstring>
-#include <fstream>
-#include <memory>
 #include <stdexcept>
 #include "graph/utils/ChecksumUtils.h"
 
 namespace graph::storage {
 
-	FileHeaderManager::FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader &header) :
-		file_(std::move(file)), fileHeader_(header) {
+	FileHeaderManager::FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader& header)
+	: file_(std::move(file)), fileHeader_(header) {
 		if (!file_ || !file_->good()) {
 			throw std::runtime_error("Invalid file handle provided to FileHeaderManager");
 		}
@@ -30,12 +28,12 @@ namespace graph::storage {
 		fileHeader_.max_node_id = maxNodeId;
 		fileHeader_.max_edge_id = maxEdgeId;
 		fileHeader_.max_blob_id = maxBlobId;
-		fileHeader_.header_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
+	    fileHeader_.header_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
 
-		// Write header to the file
-		file_->seekp(0);
-		file_->write(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
-		file_->flush();
+	    // Write header to the file
+	    file_->seekp(0);
+	    file_->write(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
+	    file_->flush();
 	}
 
 	FileHeader FileHeaderManager::readFileHeader() const {
@@ -109,7 +107,7 @@ namespace graph::storage {
 	void FileHeaderManager::initializeFileHeader() {
 		fileHeader_.header_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
 
-		file_->write(reinterpret_cast<const char *>(&fileHeader_), sizeof(FileHeader));
+		file_->write(reinterpret_cast<const char*>(&fileHeader_), sizeof(FileHeader));
 		file_->flush();
 
 		file_->clear();

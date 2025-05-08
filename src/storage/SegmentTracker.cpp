@@ -11,12 +11,10 @@
 #include "graph/storage/SegmentTracker.h"
 #include <algorithm>
 #include <chrono>
-#include <fstream>
 #include <functional>
 #include <graph/storage/SegmentType.h>
 #include <graph/utils/ChecksumUtils.h>
 #include <iostream>
-#include <memory>
 #include <stdexcept>
 
 namespace graph::storage {
@@ -135,7 +133,7 @@ namespace graph::storage {
 		}
 	}
 
-	SegmentHeader &SegmentTracker::getSegmentHeader(uint64_t offset) {
+	SegmentHeader& SegmentTracker::getSegmentHeader(uint64_t offset) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		// Ensure the segment is cached
@@ -578,7 +576,8 @@ namespace graph::storage {
 				SegmentHeader headerToWrite = header;
 
 				// Calculate CRC
-				headerToWrite.segment_crc = utils::calculateCrc(&headerToWrite, offsetof(SegmentHeader, segment_crc));
+				headerToWrite.segment_crc =
+						utils::calculateCrc(&headerToWrite, offsetof(SegmentHeader, segment_crc));
 
 				// Write to disk
 				file_->seekp(static_cast<std::streamoff>(offset));
