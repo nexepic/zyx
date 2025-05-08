@@ -38,6 +38,7 @@ jobs:
       - name: Configure the build
         shell: bash -l {0}
         run: |
+          export CONDA_PREFIX=$(conda info --base)
           mkdir -p buildDir
           meson setup buildDir --native-file compiler_options.ini
 
