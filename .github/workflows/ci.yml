@@ -22,14 +22,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build meson clang libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
+          sudo apt-get install -y ninja-build meson clang llvm libboost-all-dev zlib1g-dev libreadline-dev libgtest-dev
           sudo cp /usr/lib/x86_64-linux-gnu/libgtest*.a /usr/lib/
 
       - name: Set up dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
-          brew install ninja meson boost zlib readline googletest
+          brew install ninja meson llvm boost zlib readline googletest
 
       - name: Set up dependencies (Windows)
         if: matrix.os == 'windows-latest'
