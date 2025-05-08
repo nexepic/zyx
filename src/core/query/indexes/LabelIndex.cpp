@@ -9,8 +9,7 @@
  **/
 
 #include "graph/core/query/indexes/LabelIndex.h"
-#include <algorithm>
-#include <mutex>
+#include <shared_mutex>
 
 namespace graph::query::indexes {
 
