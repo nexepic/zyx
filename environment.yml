@@ -1,0 +1,13 @@
+name: build-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - meson
+  - ninja
+  - llvm
+  - clang
+  - boost
+  - zlib
+  - gtest
+  - readline
