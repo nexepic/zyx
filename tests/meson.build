@@ -1,6 +1,5 @@
 gtest_dep = dependency('gtest', required: true)
 gtest_main_dep = dependency('gtest_main', required: true)
-readline_dep = dependency('readline', required: true)
 
 test_sources = [
     'apps/cli/test_Repl.cpp',
