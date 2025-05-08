@@ -8,7 +8,8 @@ dependencies:
   - ninja
   - llvm
   - clang
-  - boost
+  - boost-cpp
   - zlib
   - gtest
   - readline
+  - pkg-config  # Helps with library discovery

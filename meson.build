@@ -17,10 +17,7 @@ inc_dirs = include_directories('include')
 zlib_dep = dependency('zlib')
 
 # Boost dependency
-boost_dep = dependency('boost', modules: ['filesystem', 'system'], required: false)
-if not boost_dep.found()
-    boost_dep = cc.find_library('boost', required: true)
-endif
+boost_dep = dependency('boost', modules: ['filesystem', 'system'], required: true)
 
 # Readline dependency
 readline_dep = dependency('readline', required : false)
