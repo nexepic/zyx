@@ -9,6 +9,8 @@
  **/
 
 #include "graph/storage/SpaceManager.h"
+#include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <unordered_set>
 #include "graph/storage/SegmentType.h"
@@ -133,8 +135,8 @@ namespace graph::storage {
 		}
 
 		if (nextOffset != 0) {
-		    SegmentHeader nextHeader = tracker_->getSegmentHeader(nextOffset);
-		    tracker_->updateSegmentLinks(nextOffset, prevOffset, nextHeader.next_segment_offset);
+			SegmentHeader nextHeader = tracker_->getSegmentHeader(nextOffset);
+			tracker_->updateSegmentLinks(nextOffset, prevOffset, nextHeader.next_segment_offset);
 		}
 
 		// Mark segment as free
