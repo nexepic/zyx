@@ -5,11 +5,11 @@ gtest/1.13.0
 readline/8.2
 
 [generators]
-pkg_config
-meson
+PkgConfigDeps
+MesonToolchain
 
 [options]
-boost:shared=True
-zlib:shared=True
-gtest:shared=True
-readline:shared=True
+boost/*:shared=True
+zlib/*:shared=True
+gtest/*:shared=True
+readline/*:shared=True
