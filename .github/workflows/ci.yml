@@ -39,7 +39,16 @@ jobs:
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing
 
-      - name: Configure and build
+      - name: Configure and build for Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd buildDir
+          # Don't use the compiler_options.ini on Windows
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
+          meson compile
+
+      - name: Configure and build for non-Windows
+        if: matrix.os != 'windows-latest'
         run: |
           cd buildDir
           meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
