@@ -22,12 +22,6 @@ if not boost_dep.found()
     boost_dep = dependency('boost-cpp', modules: ['filesystem', 'system'], required: true)
 endif
 
-# Readline dependency
-readline_dep = dependency('readline', required : false)
-if not readline_dep.found()
-    readline_dep = cc.find_library('readline', required : true)
-endif
-
 # Testing dependencies
 gtest_dep = dependency('gtest', required : false)
 gtest_main_dep = dependency('gtest_main', required : false)

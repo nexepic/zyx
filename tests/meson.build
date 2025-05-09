@@ -17,7 +17,7 @@ if get_option('tests').enabled() or get_option('tests').auto()
 		test_name = test_source.split('/')[-1].split('.')[0]
 		test_executable = executable(test_name,
 									 sources : [test_source],
-									 dependencies : [db_dep, readline_dep, gtest_dep, gtest_main_dep, boost_dep],
+									 dependencies : [db_dep, gtest_dep, gtest_main_dep, boost_dep],
 									 build_by_default : true
 		)
 		test(test_name, test_executable)
