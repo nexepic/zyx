@@ -4,7 +4,7 @@ project('metrix', 'cpp',
             'cpp_std=c++20',
             'warning_level=3',
             'buildtype=debugoptimized',
-            'b_coverage=true'
+            'b_coverage=false'
         ])
 
 # Compiler setup

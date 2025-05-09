@@ -11,15 +11,8 @@ class ProjectConan(ConanFile):
         self.requires("zlib/1.2.13")
         self.requires("gtest/1.13.0")
 
-        # Only include readline on non-Windows platforms
-        if self.settings.os != "Windows":
-            self.requires("readline/8.2")
-
     def configure(self):
         # Set all dependencies to shared
         self.options["boost/*"].shared = True
         self.options["zlib/*"].shared = True
         self.options["gtest/*"].shared = True
-
-        if self.settings.os != "Windows":
-            self.options["readline/*"].shared = True
