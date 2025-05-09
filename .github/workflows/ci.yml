@@ -43,7 +43,7 @@ jobs:
           cd buildDir
           meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
           meson compile
-        shell: cmd
+        shell: pwsh
 
       - name: Configure and build (non-Windows)
         if: runner.os != 'Windows'
