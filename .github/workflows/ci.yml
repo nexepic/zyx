@@ -1,3 +1,5 @@
+name: Build
+
 on:
   push:
     branches: [main]
@@ -21,14 +23,6 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install pkg-config on Windows
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install pkgconfiglite
-          # Ensure PKG_CONFIG_PATH includes Conan's output directory
-          echo "PKG_CONFIG_PATH=${{ github.workspace }}\buildDir" >> $env:GITHUB_ENV
-        shell: pwsh
-
       - name: Install Conan and tools
         run: |
           pip install conan meson ninja
@@ -39,17 +33,18 @@ jobs:
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing
 
-      - name: Configure and build for Windows
-        if: matrix.os == 'windows-latest'
+      - name: Configure and build (Windows)
+        if: runner.os == 'Windows'
         run: |
           cd buildDir
-          # Don't use the compiler_options.ini on Windows
           meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
           meson compile
+        shell: pwsh
 
-      - name: Configure and build for non-Windows
-        if: matrix.os != 'windows-latest'
+      - name: Configure and build (non-Windows)
+        if: runner.os != 'Windows'
         run: |
           cd buildDir
           meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
           meson compile
+        shell: bash
