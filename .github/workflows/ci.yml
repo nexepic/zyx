@@ -38,10 +38,7 @@ jobs:
       - name: Configure the build
         shell: bash -l {0}
         run: |
-          # Get the active conda environment path
-          CONDA_ENV_PATH=$(conda info --envs | grep build-env | awk '{print $2}')
-          # Set pkg-config path to find libraries
-          export PKG_CONFIG_PATH=$CONDA_ENV_PATH/lib/pkgconfig:$PKG_CONFIG_PATH
+          export CONDA_PREFIX=$(conda info --base)
           mkdir -p buildDir
           meson setup buildDir --native-file compiler_options.ini
 
