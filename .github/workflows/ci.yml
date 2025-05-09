@@ -1,3 +1,5 @@
+name: Build
+
 on:
   push:
     branches: [main]
@@ -16,46 +18,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v2
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          miniconda-version: "latest"
-          auto-update-conda: true
-          activate-environment: build-env
-          environment-file: environment.yml
-          auto-activate-base: false
-          use-mamba: true
+          python-version: '3.10'
 
-      - name: Display Python & Meson version
-        shell: bash -l {0}
+      - name: Install Conan and tools
         run: |
-          python --version
-          meson --version
-          ninja --version
+          pip install conan meson ninja
 
-      - name: Configure the build
-        shell: bash -l {0}
+      - name: Install dependencies with Conan
         run: |
-          # Get and export the actual conda environment path
-          export CONDA_ENV_PATH=$(conda info --envs | grep build-env | awk '{print $NF}')
-          echo "Using Conda environment at: $CONDA_ENV_PATH"
-          
-          # Set pkg-config path to include the conda environment
-          export PKG_CONFIG_PATH=$CONDA_ENV_PATH/lib/pkgconfig:$PKG_CONFIG_PATH
-          
-          # Debug output to verify pkg-config can find boost-cpp
-          echo "Available pkg-config packages:"
-          pkg-config --list-all | grep -i boost
-          
-          # Configure with meson, passing proper paths
+          conan profile detect
           mkdir -p buildDir
-          meson setup buildDir \
-            --native-file compiler_options.ini \
-            --pkg-config-path=$CONDA_ENV_PATH/lib/pkgconfig \
-            --includedir=$CONDA_ENV_PATH/include \
-            --libdir=$CONDA_ENV_PATH/lib
+          conan install . --output-folder=buildDir --build=missing
 
-      - name: Build the project
-        shell: bash -l {0}
+      - name: Configure and build
         run: |
-          meson compile -C buildDir
+          cd buildDir
+          meson setup . .. --prefix=/usr/local
+          meson compile
