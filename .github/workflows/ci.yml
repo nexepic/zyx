@@ -33,13 +33,17 @@ jobs:
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing
 
+      - name: Set up Visual Studio environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure and build (Windows)
         if: runner.os == 'Windows'
         run: |
           cd buildDir
           meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
           meson compile
-        shell: pwsh
+        shell: cmd
 
       - name: Configure and build (non-Windows)
         if: runner.os != 'Windows'
@@ -47,4 +51,3 @@ jobs:
           cd buildDir
           meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
           meson compile
-        shell: bash
