@@ -21,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10' # Ensure Conan 2.x is compatible or use a newer Python if needed
+          python-version: '3.10'
 
       - name: Install Conan and tools
         run: |
@@ -29,10 +29,8 @@ jobs:
 
       - name: Install dependencies with Conan
         run: |
-          conan profile detect # Creates a default profile if one doesn't exist
+          conan profile detect
           mkdir -p buildDir
-          # Conan install using the conanfile.py in the current directory (.),
-          # outputting generated files and dependency info into buildDir.
           conan install . --output-folder=buildDir --build=missing
 
       - name: Set up Visual Studio environment (Windows)
@@ -43,8 +41,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          # Use conan_toolchain.meson as the native file
-          meson setup . .. --prefix=/usr/local --native-file conan_toolchain.meson
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
           meson compile
         shell: pwsh
 
@@ -52,7 +49,5 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd buildDir
-          # Use conan_toolchain.meson as the native file
-          # Also ensure compiler_options.ini is correctly located relative to '..' (project root)
-          meson setup . .. --prefix=/usr/local --native-file conan_toolchain.meson --native-file ../compiler_options.ini
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
           meson compile
