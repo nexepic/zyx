@@ -27,6 +27,11 @@ jobs:
         run: |
           pip install conan meson ninja
 
+      - name: Install pkg-config on Windows
+        if: runner.os == 'Windows'
+        run: choco install pkgconfiglite
+        shell: cmd
+
       - name: Install dependencies with Conan
         run: |
           conan profile detect
