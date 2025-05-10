@@ -41,6 +41,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
+          $env:PKG_CONFIG_PATH = "$PWD\pkgconfig"
           meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
           meson compile
         shell: pwsh
