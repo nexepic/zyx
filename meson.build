@@ -14,7 +14,7 @@ cc = meson.get_compiler('cpp')
 inc_dirs = include_directories('include')
 
 # Core dependencies
-zlib_dep = dependency('zlib')
+zlib_dep = dependency('zlib', methods: ['cmake'])
 
 # Boost dependency - Try both standard name and conda-forge name
 boost_dep = dependency('boost', modules: ['filesystem', 'system'], required: false)
