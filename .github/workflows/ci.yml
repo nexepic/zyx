@@ -32,21 +32,28 @@ jobs:
         run: choco install pkgconfiglite
         shell: cmd
 
+      - name: Install LLVM (clang) on Windows
+        if: runner.os == 'Windows'
+        run: choco install llvm
+        shell: cmd
+
       - name: Install dependencies with Conan
         run: |
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing
 
-      - name: Set up Visual Studio environment (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+#      - name: Set up Visual Studio environment (Windows)
+#        if: runner.os == 'Windows'
+#        uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Configure and build (Windows)
+      - name: Configure and build (Windows with clang++)
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
+          set CC=clang
+          set CXX=clang++
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
           meson compile
         shell: pwsh
 
