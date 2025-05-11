@@ -47,10 +47,10 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local \
-            --native-file conan_meson_native.ini \
-            --native-file ../compiler_options.ini \
-            -D c=clang-cl \
+          meson setup . .. --prefix=/usr/local `
+            --native-file conan_meson_native.ini `
+            --native-file ../compiler_options.ini `
+            -D c=clang-cl `
             -D cpp=clang-cl
           meson compile
         shell: pwsh
