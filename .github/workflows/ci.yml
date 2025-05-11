@@ -43,41 +43,15 @@ jobs:
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing
 
-      # Remove or comment out the Visual Studio environment step if you don't need MSVC:
-      # - name: Set up Visual Studio environment (Windows)
-      #   if: runner.os == 'Windows'
-      #   uses: ilammy/msvc-dev-cmd@v1
-
-      # ----------------------------------------------------------------
-      # Option 1: Use clang-cl (MSVC-compatible front end)
-      # This will produce .lib instead of .a, avoiding the LNK1107 error.
-      # ----------------------------------------------------------------
       - name: Configure and build (Windows with clang-cl)
         if: runner.os == 'Windows'
         run: |
           cd buildDir
           set CC=clang-cl
           set CXX=clang-cl
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini
           meson compile
         shell: pwsh
-
-      # ----------------------------------------------------------------
-      # Option 2 (Alternative): Use clang with MinGW. You must ensure
-      # that you have a MinGW environment so clang can produce a .a library
-      # that is linkable. This requires installing MSYS2 or MinGW-w64,
-      # then configuring a Meson cross file.
-      # ----------------------------------------------------------------
-      # - name: Configure and build (Windows with clang under MinGW)
-      #   if: runner.os == 'Windows'
-      #   run: |
-      #     cd buildDir
-      #     set PATH=C:\msys64\mingw64\bin;%PATH%
-      #     set CC=clang
-      #     set CXX=clang++
-      #     meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
-      #     meson compile
-      #   shell: pwsh
 
       - name: Configure and build (non-Windows)
         if: runner.os != 'Windows'
