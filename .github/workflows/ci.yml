@@ -1,3 +1,5 @@
+name: Build
+
 on:
   push:
     branches: [main]
@@ -41,11 +43,11 @@ jobs:
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing
 
-      - name: Configure and build (Windows)
+      - name: Configure and build (Windows with clang-cl)
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini
           meson compile
         shell: pwsh
 
