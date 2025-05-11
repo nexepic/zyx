@@ -106,6 +106,8 @@ namespace graph::storage {
 		// Verify bitmap consistency for debugging purposes
 		bool verifyBitmapConsistency(uint64_t segmentOffset);
 
+		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker; }
+
 	private:
 		std::string dbFilePath;
 		std::unordered_map<uint64_t, Node> nodes;
