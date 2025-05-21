@@ -34,7 +34,7 @@ namespace graph::storage {
 		tracker_->initialize(header);
 	}
 
-	uint64_t SpaceManager::findMaxId(uint8_t type, std::shared_ptr<SegmentTracker> &tracker) {
+	uint64_t SpaceManager::findMaxId(uint32_t type, std::shared_ptr<SegmentTracker> &tracker) {
 		uint64_t maxId = 0;
 		uint64_t head = tracker->getChainHead(type);
 		uint64_t current = head;
@@ -46,7 +46,7 @@ namespace graph::storage {
 		return maxId;
 	}
 
-	uint64_t SpaceManager::allocateSegment(uint8_t type, uint32_t capacity) {
+	uint64_t SpaceManager::allocateSegment(uint32_t type, uint32_t capacity) {
 		// Calculate segment size based on type
 		size_t segmentSize = TOTAL_SEGMENT_SIZE; // Use a consistent segment size for all types
 
@@ -144,7 +144,7 @@ namespace graph::storage {
 		tracker_->markSegmentFree(offset);
 	}
 
-	void SpaceManager::compactSegments(uint8_t type, double threshold) {
+	void SpaceManager::compactSegments(uint32_t type, double threshold) {
 		// Get segments that need compaction based on total free space, not just inactive elements
 		auto segments = tracker_->getSegmentsNeedingCompaction(type, threshold);
 
@@ -198,12 +198,12 @@ namespace graph::storage {
 			}
 
 			// Update all references to this segment
-			if (referenceUpdateCallback_) {
-				referenceUpdateCallback_(sourceOffset, destinationOffset, sourceHeader.data_type);
-			} else {
+			// if (referenceUpdateCallback_) {
+			// 	referenceUpdateCallback_(sourceOffset, destinationOffset, sourceHeader.data_type);
+			// } else {
 				// If no callback is set, do standard reference updates
 				updateSegmentReferences(sourceOffset, destinationOffset, sourceHeader.data_type);
-			}
+			// }
 
 			// Mark old segment as free
 			tracker_->markSegmentFree(sourceOffset);
@@ -215,7 +215,7 @@ namespace graph::storage {
 		}
 	}
 
-	void SpaceManager::updateSegmentReferences(uint64_t oldOffset, uint64_t newOffset, uint8_t type) {
+	void SpaceManager::updateSegmentReferences(uint64_t oldOffset, uint64_t newOffset, uint32_t type) {
 		// Handle different segment types
 		switch (type) {
 			case toUnderlying(SegmentType::Node):
@@ -349,7 +349,7 @@ namespace graph::storage {
 		}
 	}
 
-	void SpaceManager::updatePropertyReferencesToEntity(int64_t entityId, uint8_t entityType, uint64_t oldSegment,
+	void SpaceManager::updatePropertyReferencesToEntity(int64_t entityId, uint32_t entityType, uint64_t oldSegment,
 														uint64_t newSegment) {
 		// Scan property segments for properties referencing this entity
 		uint64_t propSegment = tracker_->getChainHead(toUnderlying(SegmentType::Property));
@@ -396,9 +396,9 @@ namespace graph::storage {
 		}
 	}
 
-	void SpaceManager::setReferenceUpdateCallback(ReferenceUpdateCallback callback) {
-		referenceUpdateCallback_ = std::move(callback);
-	}
+	// void SpaceManager::setReferenceUpdateCallback(ReferenceUpdateCallback callback) {
+	// 	referenceUpdateCallback_ = std::move(callback);
+	// }
 
 	double SpaceManager::getTotalFragmentationRatio() const {
 		double nodeRatio = tracker_->calculateFragmentationRatio(toUnderlying(SegmentType::Node));
@@ -757,7 +757,7 @@ namespace graph::storage {
 	}
 
 	// Initialize segment header without allocating new space
-	void SpaceManager::initializeSegmentHeader(uint64_t offset, uint8_t type, uint32_t capacity) {
+	void SpaceManager::initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity) {
 		// Remove from free list if it's there
 		tracker_->removeFromFreeList(offset);
 
@@ -804,7 +804,7 @@ namespace graph::storage {
 		tracker_->writeSegmentHeader(offset, header);
 	}
 
-	void SpaceManager::updatePropertyReference(uint64_t entityId, uint8_t entityType, uint64_t oldSegmentOffset,
+	void SpaceManager::updatePropertyReference(uint64_t entityId, uint32_t entityType, uint64_t oldSegmentOffset,
 											   uint64_t newSegmentOffset, uint64_t oldPropertyOffset,
 											   uint64_t newPropertyOffset) {
 		if (entityType == toUnderlying(SegmentType::Node)) {
@@ -850,7 +850,7 @@ namespace graph::storage {
 
 				// Update property reference in the edge
 				if (edge.getPropertyEntityId() == oldPropertyOffset) {
-					edge.setPropertyEntityId(newPropertyOffset);
+					edge.setPropertyEntityId(newPropertyOffset, PropertyStorageType::PROPERTY_ENTITY);
 				}
 
 				// Write updated edge
@@ -861,7 +861,7 @@ namespace graph::storage {
 		// Handling for other entity types if needed
 	}
 
-	std::vector<uint64_t> SpaceManager::findCandidatesForMerge(uint8_t type, double usageThreshold) {
+	std::vector<uint64_t> SpaceManager::findCandidatesForMerge(uint32_t type, double usageThreshold) {
 		std::vector<uint64_t> candidates;
 
 		// Get all segments of the specified type
@@ -878,7 +878,7 @@ namespace graph::storage {
 		return candidates;
 	}
 
-	bool SpaceManager::mergeSegments(uint8_t type, double usageThreshold) {
+	bool SpaceManager::mergeSegments(uint32_t type, double usageThreshold) {
 		// Find candidate segments for merging
 		auto candidates = findCandidatesForMerge(type, usageThreshold);
 
@@ -1093,7 +1093,7 @@ namespace graph::storage {
 		return mergedAny;
 	}
 
-	bool SpaceManager::mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint8_t type) {
+	bool SpaceManager::mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint32_t type) {
 		// Get headers directly from tracker
 		SegmentHeader targetHeader = tracker_->getSegmentHeader(targetOffset);
 		SegmentHeader sourceHeader = tracker_->getSegmentHeader(sourceOffset);
@@ -1250,7 +1250,7 @@ namespace graph::storage {
 		removeEmptySegments(toUnderlying(SegmentType::Blob));
 	}
 
-	bool SpaceManager::removeEmptySegments(uint8_t type) {
+	bool SpaceManager::removeEmptySegments(uint32_t type) {
 		bool removedAny = false;
 
 		// Get all segments of the specified type

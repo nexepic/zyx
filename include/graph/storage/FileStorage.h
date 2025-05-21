@@ -43,7 +43,7 @@ namespace graph::storage {
 		template<typename T>
 		void writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t usedItems);
 
-		uint64_t allocateSegment(uint8_t type, uint32_t capacity) const;
+		uint64_t allocateSegment(uint32_t type, uint32_t capacity) const;
 
 		// Node operations
 		Node insertNode(const std::string &label);
@@ -51,14 +51,14 @@ namespace graph::storage {
 		// Edge operations
 		Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label);
 
-		void insertProperties(int64_t entityId, uint8_t entityType,
+		void insertProperties(int64_t entityId, uint32_t entityType,
 							  const std::unordered_map<std::string, PropertyValue> &properties) const;
 
 		void updateNode(const Node &node);
 		void updateEdge(const Edge &edge);
 
-		bool deleteNode(int64_t nodeId, bool cascadeEdges = false);
-		bool deleteEdge(int64_t edgeId);
+		void deleteNode(int64_t nodeId);
+		void deleteEdge(int64_t edgeId);
 
 		static void beginWrite();
 		void commitWrite();
@@ -93,10 +93,10 @@ namespace graph::storage {
 		void deleteEntityOnDisk(const T &entity);
 
 		// Get all properties for a node
-		std::unordered_map<std::string, PropertyValue> getNodeProperties(uint64_t nodeId);
+		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId);
 
 		// Get all properties for an edge
-		std::unordered_map<std::string, PropertyValue> getEdgeProperties(uint64_t edgeId);
+		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId);
 
 		// isFileOpen getter
 		[[nodiscard]] bool isOpen() const { return isFileOpen; }
@@ -131,7 +131,7 @@ namespace graph::storage {
 
 		std::shared_ptr<FileHeaderManager> fileHeaderManager;
 
-		std::unique_ptr<DataManager> dataManager;
+		std::shared_ptr<DataManager> dataManager;
 
 		std::shared_ptr<SpaceManager> spaceManager;
 
@@ -159,6 +159,6 @@ namespace graph::storage {
 		// ID allocation for all entities before saving
 		void allocatePermanentIdsForAllEntities();
 
-		void updateEntityReferences();
+		void updateEntityReferencesToPermanent() const;
 	};
 } // namespace graph::storage

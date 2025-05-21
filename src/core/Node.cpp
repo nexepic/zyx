@@ -108,19 +108,8 @@ namespace graph {
 		utils::Serializer::writePOD(os, id);
 		utils::Serializer::writeString(os, label);
 
-		// // Write edge counts and IDs
-		// utils::Serializer::writePOD(os, static_cast<uint32_t>(inEdges.size()));
-		// for (const auto &edgeId: inEdges) {
-		// 	utils::Serializer::writePOD(os, edgeId);
-		// }
-		//
-		// utils::Serializer::writePOD(os, static_cast<uint32_t>(outEdges.size()));
-		// for (const auto &edgeId: outEdges) {
-		// 	utils::Serializer::writePOD(os, edgeId);
-		// }
-
 		// Write property storage type
-		utils::Serializer::writePOD(os, static_cast<uint8_t>(propertyStorageType));
+		utils::Serializer::writePOD(os, static_cast<uint32_t>(propertyStorageType));
 
 		// Write property entity ID
 		utils::Serializer::writePOD(os, propertyEntityId);
@@ -135,21 +124,8 @@ namespace graph {
 
 		Node node(id, label);
 
-		// // Read edge counts and IDs
-		// auto inEdgeCount = utils::Serializer::readPOD<uint32_t>(is);
-		// for (uint32_t i = 0; i < inEdgeCount; ++i) {
-		// 	auto edgeId = utils::Serializer::readPOD<uint64_t>(is);
-		// 	node.addInEdge(edgeId);
-		// }
-		//
-		// auto outEdgeCount = utils::Serializer::readPOD<uint32_t>(is);
-		// for (uint32_t i = 0; i < outEdgeCount; ++i) {
-		// 	auto edgeId = utils::Serializer::readPOD<uint64_t>(is);
-		// 	node.addOutEdge(edgeId);
-		// }
-
 		// Read property storage type
-		node.propertyStorageType = static_cast<PropertyStorageType>(utils::Serializer::readPOD<uint8_t>(is));
+		node.propertyStorageType = static_cast<PropertyStorageType>(utils::Serializer::readPOD<uint32_t>(is));
 
 		// Read property entity ID
 		node.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);

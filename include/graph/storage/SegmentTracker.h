@@ -27,17 +27,17 @@ namespace graph::storage {
 		~SegmentTracker();
 
 		void initialize(const FileHeader &header);
-		void registerSegment(uint64_t offset, uint8_t type, uint32_t capacity);
+		void registerSegment(uint64_t offset, uint32_t type, uint32_t capacity);
 		void updateSegmentUsage(uint64_t offset, uint32_t used, uint32_t inactive);
 		void markForCompaction(uint64_t offset, bool needsCompaction);
 
 		SegmentHeader &getSegmentHeader(uint64_t offset);
-		std::vector<SegmentHeader> getSegmentsByType(uint8_t type) const;
-		std::vector<SegmentHeader> getSegmentsNeedingCompaction(uint8_t type, double threshold) const;
-		double calculateFragmentationRatio(uint8_t type) const;
+		std::vector<SegmentHeader> getSegmentsByType(uint32_t type) const;
+		std::vector<SegmentHeader> getSegmentsNeedingCompaction(uint32_t type, double threshold) const;
+		double calculateFragmentationRatio(uint32_t type) const;
 
-		uint64_t getChainHead(uint8_t type) const;
-		void updateChainHead(uint8_t type, uint64_t newHead);
+		uint64_t getChainHead(uint32_t type) const;
+		void updateChainHead(uint32_t type, uint64_t newHead);
 		void updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset);
 		void markSegmentFree(uint64_t offset);
 		std::vector<uint64_t> getFreeSegments() const;
@@ -87,7 +87,7 @@ namespace graph::storage {
 		void loadSegments();
 
 		// Load a chain of segments
-		void loadSegmentChain(uint64_t headOffset, uint8_t type);
+		void loadSegmentChain(uint64_t headOffset, uint32_t type);
 
 		// Ensure a segment is in cache
 		void ensureSegmentCached(uint64_t offset);

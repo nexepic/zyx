@@ -30,7 +30,7 @@ namespace graph::storage {
 		refreshInactiveIdsCache(Blob::typeId);
 	}
 
-	int64_t IDAllocator::reserveTemporaryId(uint8_t entityType) {
+	int64_t IDAllocator::reserveTemporaryId(uint32_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		if (entityType == Node::typeId) {
@@ -46,7 +46,7 @@ namespace graph::storage {
 		throw std::runtime_error("Invalid entity type for temporary ID reservation");
 	}
 
-	int64_t IDAllocator::allocatePermanentId(int64_t tempId, uint8_t entityType) {
+	int64_t IDAllocator::allocatePermanentId(int64_t tempId, uint32_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		// Check if we've already allocated a permanent ID for this temp ID
@@ -99,7 +99,7 @@ namespace graph::storage {
 		return permId;
 	}
 
-	void IDAllocator::freeId(uint64_t id, uint8_t entityType) {
+	void IDAllocator::freeId(uint64_t id, uint32_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		// Find the segment containing this ID
@@ -123,7 +123,7 @@ namespace graph::storage {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate index in segment
-		uint32_t index = static_cast<uint32_t>(id - header.start_id);
+		auto index = static_cast<uint32_t>(id - header.start_id);
 
 		// Update bitmap to mark ID as inactive
 		segmentTracker_->setEntityActive(segmentOffset, index, false);
@@ -143,7 +143,7 @@ namespace graph::storage {
 		}
 	}
 
-	int64_t IDAllocator::findInactiveId(uint8_t entityType) {
+	int64_t IDAllocator::findInactiveId(uint32_t entityType) {
 		auto &cache = inactiveIdsCache_[entityType];
 
 		// If cache is empty, refresh it
@@ -182,7 +182,7 @@ namespace graph::storage {
 		currentMaxEdgeId_ = maxEdgeId;
 	}
 
-	int64_t IDAllocator::allocateNewSequentialId(uint8_t entityType) {
+	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) {
 		int64_t id;
 
 		if (entityType == Node::typeId) {
@@ -200,7 +200,7 @@ namespace graph::storage {
 		return id;
 	}
 
-	void IDAllocator::markIdActive(uint64_t id, uint8_t entityType) {
+	void IDAllocator::markIdActive(uint64_t id, uint32_t entityType) {
 		// Find the segment containing this ID
 		uint64_t segmentOffset = 0;
 		if (entityType == Node::typeId) {
@@ -219,13 +219,13 @@ namespace graph::storage {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate index in segment
-		uint32_t index = static_cast<uint32_t>(id - header.start_id);
+		auto index = static_cast<uint32_t>(id - header.start_id);
 
 		// Update bitmap to mark ID as active
 		segmentTracker_->setEntityActive(segmentOffset, index, true);
 	}
 
-	void IDAllocator::refreshInactiveIdsCache(uint8_t entityType) {
+	void IDAllocator::refreshInactiveIdsCache(uint32_t entityType) {
 		// Clear the current cache for this entity type
 		inactiveIdsCache_[entityType].clear();
 
@@ -265,7 +265,7 @@ namespace graph::storage {
 		}
 	}
 
-	int64_t IDAllocator::getPermanentId(int64_t tempId, uint8_t entityType) const {
+	int64_t IDAllocator::getPermanentId(int64_t tempId, uint32_t entityType) const {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		if (entityType == Node::typeId) {
@@ -300,7 +300,7 @@ namespace graph::storage {
 		tempToPermEdgeIds_.clear();
 	}
 
-	void IDAllocator::clearTempIdMapping(int64_t tempId, uint8_t entityType) {
+	void IDAllocator::clearTempIdMapping(int64_t tempId, uint32_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		if (entityType == Node::typeId) {

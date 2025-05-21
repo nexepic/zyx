@@ -55,7 +55,7 @@ namespace graph::storage {
 		loadSegmentChain(blobSegmentHead_, toUnderlying(SegmentType::Blob));
 	}
 
-	void SegmentTracker::loadSegmentChain(uint64_t headOffset, uint8_t expectedType) {
+	void SegmentTracker::loadSegmentChain(uint64_t headOffset, uint32_t expectedType) {
 		uint64_t offset = headOffset;
 		while (offset != 0) {
 			// Read segment header
@@ -87,7 +87,7 @@ namespace graph::storage {
 		}
 	}
 
-	void SegmentTracker::registerSegment(uint64_t offset, uint8_t type, uint32_t capacity) {
+	void SegmentTracker::registerSegment(uint64_t offset, uint32_t type, uint32_t capacity) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		SegmentHeader header;
@@ -146,7 +146,7 @@ namespace graph::storage {
 		return it->second;
 	}
 
-	std::vector<SegmentHeader> SegmentTracker::getSegmentsByType(uint8_t type) const {
+	std::vector<SegmentHeader> SegmentTracker::getSegmentsByType(uint32_t type) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		std::vector<SegmentHeader> result;
@@ -158,7 +158,7 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::vector<SegmentHeader> SegmentTracker::getSegmentsNeedingCompaction(uint8_t type, double threshold) const {
+	std::vector<SegmentHeader> SegmentTracker::getSegmentsNeedingCompaction(uint32_t type, double threshold) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		std::vector<SegmentHeader> result;
@@ -176,11 +176,11 @@ namespace graph::storage {
 		return result;
 	}
 
-	double SegmentTracker::calculateFragmentationRatio(uint8_t type) const {
+	double SegmentTracker::calculateFragmentationRatio(uint32_t type) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		uint64_t totalCapacity = 0;
-		uint64_t totalUtilizedSpace = 0;
+		double totalCapacity = 0;
+		double totalUtilizedSpace = 0;
 
 		for (const auto &[offset, header]: segments_) {
 			if (header.data_type == type) {
@@ -195,11 +195,11 @@ namespace graph::storage {
 		}
 
 		// Fragmentation ratio is (1 - utilization rate)
-		double utilizationRate = static_cast<double>(totalUtilizedSpace) / totalCapacity;
+		double utilizationRate = totalUtilizedSpace / totalCapacity;
 		return 1.0 - utilizationRate;
 	}
 
-	uint64_t SegmentTracker::getChainHead(uint8_t type) const {
+	uint64_t SegmentTracker::getChainHead(uint32_t type) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		switch (type) {
@@ -216,22 +216,23 @@ namespace graph::storage {
 		}
 	}
 
-	void SegmentTracker::updateChainHead(uint8_t type, uint64_t newHead) {
+	void SegmentTracker::updateChainHead(uint32_t type, uint64_t newHead) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		switch (type) {
-			case 0:
+			case toUnderlying(SegmentType::Node):
 				nodeSegmentHead_ = newHead;
 				break;
-			case 1:
+			case toUnderlying(SegmentType::Edge):
 				edgeSegmentHead_ = newHead;
 				break;
-			case 2:
+			case toUnderlying(SegmentType::Property):
 				propertySegmentHead_ = newHead;
 				break;
-			case 3:
+			case toUnderlying(SegmentType::Blob):
 				blobSegmentHead_ = newHead;
 				break;
+			default:;
 		}
 	}
 

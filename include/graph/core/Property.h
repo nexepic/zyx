@@ -10,24 +10,24 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <string>
-#include "PropertyValue.h"
 #include <cstdint>
+#include <string>
+#include <unordered_map>
+#include "PropertyValue.h"
 
 namespace graph {
 
 	class alignas(512) Property {
 	public:
-		static constexpr uint8_t typeId = 2; // Node = 0, Edge = 1, Property = 2
+		static constexpr uint32_t typeId = 2; // Node = 0, Edge = 1, Property = 2
 
-		Property(int64_t id, int64_t entityId, uint8_t entityType);
+		Property(int64_t id, int64_t entityId, uint32_t entityType);
 		Property() = default;
 
 		int64_t getId() const;
 		void setId(int64_t newId) { id = newId; }
 		int64_t getEntityId() const;
-		uint8_t getEntityType() const;
+		uint32_t getEntityType() const;
 		bool hasTemporaryId() const;
 		void setPermanentId(int64_t permanentId);
 
@@ -50,12 +50,12 @@ namespace graph {
 			entityId = newEntityId;
 		}
 
-		void setEntityType(uint8_t newEntityType) {
+		void setEntityType(uint32_t newEntityType) {
 			entityType = newEntityType;
 		}
 
 		// setEntityInfo
-		void setEntityInfo(int64_t newEntityId, uint8_t newEntityType) {
+		void setEntityInfo(int64_t newEntityId, uint32_t newEntityType) {
 			entityId = newEntityId;
 			entityType = newEntityType;
 		}
@@ -68,7 +68,7 @@ namespace graph {
 	private:
 		int64_t id = 0;
 		int64_t entityId = 0;  // ID of the entity this property belongs to
-		uint8_t entityType = 0; // 0 = Node, 1 = Edge
+		uint32_t entityType = 0; // 0 = Node, 1 = Edge
 		std::unordered_map<std::string, PropertyValue> values;
 		bool isActive_ = true;
 	};

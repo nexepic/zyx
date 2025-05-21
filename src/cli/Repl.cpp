@@ -94,14 +94,9 @@ namespace graph {
 
 			try {
 				// auto transaction = db.beginTransaction();
-				bool success = db.getStorage().deleteNode(nodeId, true); // Assuming cascadeEdges is true
+				db.getStorage().deleteNode(nodeId); // Assuming cascadeEdges is true
 				// transaction.commit();
-
-				if (success) {
-					std::cout << "Deleted node with ID: " << nodeId << "\n";
-				} else {
-					std::cout << "Node with ID " << nodeId << " not found\n";
-				}
+				std::cout << "Deleted node with ID: " << nodeId << "\n";
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
 			}
@@ -112,15 +107,11 @@ namespace graph {
 			std::cin.ignore(); // Clear the newline
 
 			try {
-				auto transaction = db.beginTransaction();
-				bool success = db.getStorage().deleteEdge(edgeId);
-				transaction.commit();
+				// auto transaction = db.beginTransaction();
+				db.getStorage().deleteEdge(edgeId);
+				// transaction.commit();
 
-				if (success) {
-					std::cout << "Deleted edge with ID: " << edgeId << "\n";
-				} else {
-					std::cout << "Edge with ID " << edgeId << " not found\n";
-				}
+				std::cout << "Deleted edge with ID: " << edgeId << "\n";
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
 			}

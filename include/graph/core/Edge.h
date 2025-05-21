@@ -34,7 +34,7 @@ namespace graph {
 		void clearProperties() { properties.clear(); }
 
 		// Property entity
-		void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::PROPERTY_ENTITY);
+		void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType);
 		int64_t getPropertyEntityId() const;
 		PropertyStorageType getPropertyStorageType() const;
 		bool hasPropertyEntity() const;
@@ -51,7 +51,7 @@ namespace graph {
 		void serialize(std::ostream& os) const;
 		static Edge deserialize(std::istream& is);
 
-		static constexpr uint8_t typeId = 1;
+		static constexpr uint32_t typeId = 1;
 
 		void setId(int64_t id) { this->id = id; }
 

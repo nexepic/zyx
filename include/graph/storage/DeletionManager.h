@@ -30,8 +30,7 @@ namespace graph::storage {
 	 */
 	class DeletionManager {
 	public:
-		DeletionManager(std::shared_ptr<std::fstream> file, FileStorage &storage, DataManager &dataManager,
-						std::shared_ptr<SpaceManager> spaceManager);
+		DeletionManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<SpaceManager> spaceManager);
 		~DeletionManager();
 
 		/**
@@ -42,12 +41,16 @@ namespace graph::storage {
 		/**
 		 * Delete a node
 		 */
-		bool deleteNode(int64_t nodeId, bool cascadeEdges = false);
+		void deleteNode(Node &node);
 
 		/**
 		 * Delete an edge
 		 */
-		bool deleteEdge(int64_t edgeId);
+		void deleteEdge(Edge &edge);
+
+		void deleteProperty(Property &property);
+
+		void deleteBlob(Blob &blob);
 
 		/**
 		 * Delete multiple nodes
@@ -67,16 +70,20 @@ namespace graph::storage {
 		/**
 		 * Mark a node as inactive
 		 */
-		void markNodeInactive(Node node);
+		void markNodeInactive(Node &node);
+
+		void deletePropertyEntity(int64_t propertyId, PropertyStorageType storageType);
+
+		void deleteNodeConnectedEdges(int64_t nodeId);
 
 		/**
 		 * Mark an edge as inactive
 		 */
-		void markEdgeInactive(Edge edge);
+		void markEdgeInactive(Edge &edge);
 
-		void markPropertyInactive(Property property);
+		void markPropertyInactive(Property &property);
 
-		void markBlobInactive(Blob blob);
+		void markBlobInactive(Blob &blob);
 
 		/**
 		 * Check if a node is inactive
@@ -98,15 +105,19 @@ namespace graph::storage {
 		 */
 		uint64_t findSegmentForEdgeId(int64_t id) const;
 
+		uint64_t findSegmentForPropertyId(int64_t id) const;
+
+		uint64_t findSegmentForBlobId(int64_t id) const;
+
 		/**
 		 * Analyze segment fragmentation for the given entity type
 		 */
-		std::unordered_map<uint64_t, double> analyzeSegmentFragmentation(uint8_t entityType) const;
+		std::unordered_map<uint64_t, double> analyzeSegmentFragmentation(uint32_t entityType) const;
 
 	private:
-		std::shared_ptr<std::fstream> file_;
-		FileStorage &storage_;
-		DataManager &dataManager_;
+		// std::shared_ptr<std::fstream> file_;
+		// FileStorage &storage_;
+		std::shared_ptr<DataManager> dataManager_;
 		std::shared_ptr<SpaceManager> spaceManager_;
 
 		// Compaction thresholds and counters
@@ -117,7 +128,7 @@ namespace graph::storage {
 		bool performEdgeDeletion(uint64_t edgeId);
 
 		// Callback for reference updates after segment movement
-		void handleReferenceUpdate(uint64_t oldOffset, uint64_t newOffset, uint8_t type);
+		// void handleReferenceUpdate(uint64_t oldOffset, uint64_t newOffset, uint32_t type);
 
 		// Cache for segment headers to reduce disk access
 		mutable std::mutex mutex_;

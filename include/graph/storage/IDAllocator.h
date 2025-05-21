@@ -27,16 +27,16 @@ namespace graph::storage {
 							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId);
 
 		// Reserve a temporary ID (negative number)
-		int64_t reserveTemporaryId(uint8_t entityType);
+		int64_t reserveTemporaryId(uint32_t entityType);
 
 		// Allocate a permanent ID for a temporary ID
-		int64_t allocatePermanentId(int64_t tempId, uint8_t entityType);
+		int64_t allocatePermanentId(int64_t tempId, uint32_t entityType);
 
 		// Check if an ID is temporary
 		static bool isTemporaryId(int64_t id) { return id < 0; }
 
 		// Free an ID (mark as inactive for future reuse)
-		void freeId(uint64_t id, uint8_t entityType);
+		void freeId(uint64_t id, uint32_t entityType);
 
 		// Initialize with current maximum IDs
 		void initialize();
@@ -51,36 +51,36 @@ namespace graph::storage {
 		void clearTempIdMappings();
 
 		// Clear a specific temporary ID mapping
-		void clearTempIdMapping(int64_t tempId, uint8_t entityType);
+		void clearTempIdMapping(int64_t tempId, uint32_t entityType);
 
 		// Get permanent ID for a temporary ID (returns 0 if not found)
-		int64_t getPermanentId(int64_t tempId, uint8_t entityType) const;
+		int64_t getPermanentId(int64_t tempId, uint32_t entityType) const;
 
 		void updateMaxIds(int64_t maxNodeId, int64_t maxEdgeId);
 
 		// Refresh the inactive IDs cache for a given entity type
-		void refreshInactiveIdsCache(uint8_t entityType);
+		void refreshInactiveIdsCache(uint32_t entityType);
 
-		using IdUpdateCallback = std::function<void(int64_t tempId, int64_t permId, uint8_t entityType)>;
+		using IdUpdateCallback = std::function<void(int64_t tempId, int64_t permId, uint32_t entityType)>;
 
 		// Set the callback for ID updates
 		void setIdUpdateCallback(IdUpdateCallback callback) { idUpdateCallback_ = std::move(callback); }
 
 	private:
 		// Find an inactive ID in segments
-		int64_t findInactiveId(uint8_t entityType);
+		int64_t findInactiveId(uint32_t entityType);
 
 		// Allocate a new sequential ID
-		int64_t allocateNewSequentialId(uint8_t entityType);
+		int64_t allocateNewSequentialId(uint32_t entityType);
 
 		// Mark an ID as active in its segment
-		void markIdActive(uint64_t id, uint8_t entityType);
+		void markIdActive(uint64_t id, uint32_t entityType);
 
 		std::shared_ptr<std::fstream> file_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
 
 		// Cache of segments with inactive IDs for quick lookup
-		std::unordered_map<uint8_t, std::vector<std::pair<uint64_t, std::vector<uint32_t>>>> inactiveIdsCache_;
+		std::unordered_map<uint32_t, std::vector<std::pair<uint64_t, std::vector<uint32_t>>>> inactiveIdsCache_;
 
 		// References to max IDs
 		int64_t &currentMaxNodeId_;

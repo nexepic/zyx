@@ -24,13 +24,13 @@ namespace graph::storage {
 
 		void displayDatabaseStructure();
 
-		void displayNodeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+		void displayNodeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) const;
 
-		void displayEdgeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+		void displayEdgeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) const;
 
-		void displayPropertySegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+		static void displayPropertySegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
 
-		void displayBlobSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+		static void displayBlobSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
 
 	private:
 		FileHeader fileHeader;

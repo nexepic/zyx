@@ -24,7 +24,8 @@ namespace graph::storage {
     constexpr uint32_t EDGES_PER_SEGMENT = SEGMENT_SIZE / sizeof(Edge);
     constexpr uint32_t PROPERTIES_PER_SEGMENT = SEGMENT_SIZE / sizeof(Property);
     constexpr uint32_t BLOBS_PER_SEGMENT = SEGMENT_SIZE / sizeof(Blob);
-    constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1 * 512; // 512 bytes per property segment
+    // constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1 * 512; // 512 bytes per property segment
+    constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1;
 
     constexpr size_t FILE_HEADER_SIZE = 128;
     constexpr size_t SEGMENT_HEADER_SIZE = 128;

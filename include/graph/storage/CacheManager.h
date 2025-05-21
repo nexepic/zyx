@@ -12,7 +12,6 @@
 #include <list>
 #include <unordered_map>
 #include <functional>
-#include "graph/utils/PairHash.h"
 
 namespace graph::storage {
 

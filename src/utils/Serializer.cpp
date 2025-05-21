@@ -30,6 +30,10 @@ namespace graph::utils {
 	template void Serializer::writePOD<unsigned char>(std::ostream &os, const unsigned char &pod);
 	template unsigned char Serializer::readPOD<unsigned char>(std::istream &is);
 
+	// int
+	template void Serializer::writePOD<int>(std::ostream &os, const int &pod);
+	template int Serializer::readPOD<int>(std::istream &is);
+
     template void Serializer::writePOD<unsigned int>(std::ostream &os, const unsigned int &pod);
     template unsigned int Serializer::readPOD<unsigned int>(std::istream &is);
 

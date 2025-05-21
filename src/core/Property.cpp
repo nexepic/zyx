@@ -14,14 +14,14 @@
 
 namespace graph {
 
-	Property::Property(int64_t id, int64_t entityId, uint8_t entityType) :
+	Property::Property(int64_t id, int64_t entityId, uint32_t entityType) :
 		id(id), entityId(entityId), entityType(entityType) {}
 
 	int64_t Property::getId() const { return id; }
 
 	int64_t Property::getEntityId() const { return entityId; }
 
-	uint8_t Property::getEntityType() const { return entityType; }
+	uint32_t Property::getEntityType() const { return entityType; }
 
 	bool Property::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(id); }
 

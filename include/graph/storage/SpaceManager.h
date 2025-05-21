@@ -25,7 +25,7 @@
 namespace graph::storage {
 
 	// Callback function type for updating references
-	using ReferenceUpdateCallback = std::function<void(uint64_t, uint64_t, uint8_t)>;
+	using ReferenceUpdateCallback = std::function<void(uint64_t, uint64_t, uint32_t)>;
 
 	class SpaceManager {
 	public:
@@ -34,24 +34,24 @@ namespace graph::storage {
 		~SpaceManager();
 
 		void initialize(FileHeader &header);
-		uint64_t findMaxId(uint8_t type, std::shared_ptr<SegmentTracker> &tracker);
-		uint64_t allocateSegment(uint8_t type, uint32_t capacity);
+		uint64_t findMaxId(uint32_t type, std::shared_ptr<SegmentTracker> &tracker);
+		uint64_t allocateSegment(uint32_t type, uint32_t capacity);
 		void deallocateSegment(uint64_t offset);
-		void compactSegments(uint8_t type, double threshold);
+		void compactSegments(uint32_t type, double threshold);
 		bool moveSegment(uint64_t sourceOffset, uint64_t destinationOffset);
 
 		// Update references when a segment is moved
-		void updateSegmentReferences(uint64_t oldOffset, uint64_t newOffset, uint8_t type);
+		void updateSegmentReferences(uint64_t oldOffset, uint64_t newOffset, uint32_t type);
 		void updateNodeSegmentReferences(uint64_t oldOffset, uint64_t newOffset);
 		void updateEdgeSegmentReferences(uint64_t oldOffset, uint64_t newOffset);
 		void updatePropertySegmentReferences(uint64_t oldOffset, uint64_t newOffset);
 
 		// Helper methods for reference updates
 		void updateEdgeReferencesToNode(uint64_t nodeId, uint64_t oldNodeSegment, uint64_t newNodeSegment);
-		void updatePropertyReferencesToEntity(int64_t entityId, uint8_t entityType, uint64_t oldSegment,
+		void updatePropertyReferencesToEntity(int64_t entityId, uint32_t entityType, uint64_t oldSegment,
 											  uint64_t newSegment);
 
-		void setReferenceUpdateCallback(ReferenceUpdateCallback callback);
+		// void setReferenceUpdateCallback(ReferenceUpdateCallback callback);
 
 		bool shouldCompact() const;
 
@@ -63,16 +63,16 @@ namespace graph::storage {
 		std::shared_ptr<SegmentTracker> getTracker() const { return tracker_; }
 
 		// methods for segment merging
-		std::vector<uint64_t> findCandidatesForMerge(uint8_t type, double usageThreshold);
-		bool mergeSegments(uint8_t type, double usageThreshold);
-		bool mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint8_t type);
+		std::vector<uint64_t> findCandidatesForMerge(uint32_t type, double usageThreshold);
+		bool mergeSegments(uint32_t type, double usageThreshold);
+		bool mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint32_t type);
 
 		// Remove empty segments
-		bool removeEmptySegments(uint8_t type);
+		bool removeEmptySegments(uint32_t type);
 		void removeAllEmptySegments();
 
 		// Property reference updates
-		void updatePropertyReference(uint64_t entityId, uint8_t entityType, uint64_t oldSegmentOffset,
+		void updatePropertyReference(uint64_t entityId, uint32_t entityType, uint64_t oldSegmentOffset,
 									 uint64_t newSegmentOffset, uint64_t oldEntryOffset, uint64_t newEntryOffset);
 
 		// Truncates the file by removing unused trailing segments
@@ -82,14 +82,14 @@ namespace graph::storage {
 
 		bool isSegmentAtEndOfFile(uint64_t offset) const;
 		uint64_t findFreeSegmentNotAtEnd() const;
-		void initializeSegmentHeader(uint64_t offset, uint8_t type, uint32_t capacity);
+		void initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity);
 
 	private:
 		std::shared_ptr<std::fstream> file_;
 		std::string fileName_;
 		std::shared_ptr<SegmentTracker> tracker_;
 		std::mutex mutex_;
-		ReferenceUpdateCallback referenceUpdateCallback_;
+		// ReferenceUpdateCallback referenceUpdateCallback_;
 
 		std::shared_ptr<FileHeaderManager> fileHeaderManager_;
 

@@ -12,7 +12,7 @@
 
 namespace graph {
 
-	enum class PropertyStorageType { NONE, PROPERTY_ENTITY, BLOB_ENTITY };
+	enum class PropertyStorageType : uint32_t { NONE, PROPERTY_ENTITY, BLOB_ENTITY };
 
 	enum class Direction { INCOMING, OUTGOING, BOTH };
 

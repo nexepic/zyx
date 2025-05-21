@@ -107,7 +107,7 @@ namespace graph {
 		utils::Serializer::writeString(os, label);
 
 		// write property storage type
-		utils::Serializer::writePOD(os, static_cast<uint8_t>(propertyStorageType));
+		utils::Serializer::writePOD(os, static_cast<uint32_t>(propertyStorageType));
 
 		// Write property entity ID
 		utils::Serializer::writePOD(os, propertyEntityId);
@@ -125,7 +125,7 @@ namespace graph {
 		Edge edge(id, sourceNodeId, targetNodeId, label);
 
 		// Read property storage type
-		edge.propertyStorageType = static_cast<PropertyStorageType>(utils::Serializer::readPOD<uint8_t>(is));
+		edge.propertyStorageType = static_cast<PropertyStorageType>(utils::Serializer::readPOD<uint32_t>(is));
 
 		// Read property entity ID
 		edge.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);

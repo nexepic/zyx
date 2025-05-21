@@ -14,14 +14,17 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
+#include "graph/core/BlobChainManager.h"
 
 namespace graph::storage {
 
 	DataManager::DataManager(const std::string &dbFilePath, size_t cacheSize, FileHeader &fileHeader,
-							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker) :
+							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
+							 std::shared_ptr<SpaceManager> spaceManager) :
 		dbFilePath_(dbFilePath), nodeCache_(cacheSize), edgeCache_(cacheSize), propertyCache_(cacheSize * 2),
 		blobCache_(cacheSize / 4), fileHeader_(fileHeader), idAllocator_(std::move(idAllocator)),
-		segmentTracker_(std::move(segmentTracker)) {
+		segmentTracker_(std::move(segmentTracker)), spaceManager_(std::move(spaceManager)) {
 		file_ = std::make_shared<std::ifstream>(dbFilePath, std::ios::binary);
 		if (!file_->good()) {
 			throw std::runtime_error("Cannot open database file");
@@ -35,6 +38,9 @@ namespace graph::storage {
 	}
 
 	void DataManager::initialize() {
+		blobManager_ = std::make_unique<BlobChainManager>(shared_from_this());
+		deletionManager_ = std::make_unique<DeletionManager>(shared_from_this(), spaceManager_);
+
 		// Build segment indexes for efficient lookups
 		buildNodeSegmentIndex();
 		buildEdgeSegmentIndex();
@@ -88,15 +94,11 @@ namespace graph::storage {
 		return 0; // Not found
 	}
 
-	uint64_t DataManager::findSegmentForNodeId(int64_t id) const { return findSegmentForId(nodeSegmentIndex_, id); }
-
-	uint64_t DataManager::findSegmentForEdgeId(int64_t id) const { return findSegmentForId(edgeSegmentIndex_, id); }
-
-	uint64_t DataManager::findSegmentForPropertyId(int64_t id) const {
-		return findSegmentForId(propertySegmentIndex_, id);
+	template<typename EntityType>
+	uint64_t DataManager::findSegmentForEntityId(int64_t id) const {
+		const auto &segmentIndex = EntityTraits<EntityType>::getSegmentIndex(this);
+		return findSegmentForId(segmentIndex, id);
 	}
-
-	uint64_t DataManager::findSegmentForBlobId(int64_t id) const { return findSegmentForId(blobSegmentIndex_, id); }
 
 	int64_t DataManager::reserveTemporaryNodeId() { return idAllocator_->reserveTemporaryId(Node::typeId); }
 
@@ -114,7 +116,7 @@ namespace graph::storage {
 	template<typename EntityType>
 	std::unordered_map<std::string, PropertyValue> DataManager::getEntityProperties(int64_t entityId) {
 		// Get the entity
-		EntityType entity = getEntity<EntityType>(entityId);
+		auto entity = getEntity<EntityType>(entityId);
 
 		// If entity doesn't exist or is inactive, return empty map
 		if (entity.getId() == 0 || !entity.isActive()) {
@@ -144,22 +146,12 @@ namespace graph::storage {
 					}
 				}
 			} else if (entity.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
-				// Load from Blob entity
-				Blob blob = getBlob(entity.getPropertyEntityId());
+				// Load from Blob chain
+				auto blobProperties = getPropertiesFromBlob(entity.getPropertyEntityId());
 
-				if (blob.getId() != 0 && blob.isActive()) {
-					// Deserialize properties
-					std::string serializedData = blob.getData();
-					std::stringstream ss(serializedData);
-					auto blobProperties = deserializeProperties(ss);
-
-					// Merge properties
-					for (const auto &[key, value]: blobProperties) {
-						allProperties[key] = value;
-					}
-
-					// Add blob to cache
-					addToCache(blob);
+				// Merge properties
+				for (const auto &[key, value]: blobProperties) {
+					allProperties[key] = value;
 				}
 			}
 		}
@@ -216,7 +208,7 @@ namespace graph::storage {
 	void DataManager::addEntityProperties(int64_t entityId,
 										  const std::unordered_map<std::string, PropertyValue> &properties) {
 		// Get the entity
-		EntityType entity = getEntity<EntityType>(entityId);
+		auto entity = getEntity<EntityType>(entityId);
 
 		// Check if entity exists and is active
 		if (entity.getId() == 0 || !entity.isActive()) {
@@ -244,7 +236,7 @@ namespace graph::storage {
 	template<typename EntityType>
 	void DataManager::removeEntityProperty(int64_t entityId, const std::string &key) {
 		// Get the entity
-		EntityType entity = getEntity<EntityType>(entityId);
+		auto entity = getEntity<EntityType>(entityId);
 
 		// Check if the entity exists and is active
 		if (entity.getId() == 0 || !entity.isActive()) {
@@ -440,10 +432,8 @@ namespace graph::storage {
 		int64_t propertyId = entity.getPropertyEntityId();
 
 		if (entity.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
-			Blob blob = getBlob(propertyId);
-			if (blob.getId() != 0 && blob.isActive()) {
-				deleteBlob(blob);
-			}
+			// Delete the entire blob chain
+			blobManager_->deleteBlobChain(propertyId);
 		} else if (entity.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
 			Property property = getProperty(propertyId);
 			if (property.getId() != 0 && property.isActive()) {
@@ -500,6 +490,22 @@ namespace graph::storage {
 		entity.clearProperties();
 	}
 
+	std::unordered_map<std::string, PropertyValue> DataManager::getPropertiesFromBlob(int64_t blobId) {
+		try {
+			// Read data from blob chain
+			std::string serializedData = blobManager_->readBlobChain(blobId);
+
+			// Deserialize properties
+			std::stringstream ss(serializedData);
+			return deserializeProperties(ss);
+
+		} catch (const std::exception &e) {
+			// Log error but return empty map to avoid crashing
+			std::cerr << "Error reading blob chain: " << e.what() << std::endl;
+			return {};
+		}
+	}
+
 	// Store properties in a Blob entity
 	template<typename EntityType>
 	void DataManager::storePropertiesInBlob(EntityType &entity,
@@ -511,14 +517,19 @@ namespace graph::storage {
 
 		// Check if there's an existing blob
 		if (entity.hasPropertyEntity() && entity.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
-			// Update existing blob
-			Blob blob = getBlob(entity.getPropertyEntityId());
-			if (blob.getId() != 0 && blob.isActive()) {
-				blob.setData(serializedData);
-				updateBlobEntity(blob);
+			try {
+				// Update existing blob chain
+				// blobManager_->updateBlobChain(entity.getPropertyEntityId(), serializedData);
+				blobManager_->deleteBlobChain(entity.getPropertyEntityId());
+
 				// Clear properties from entity as they're now stored externally
 				entity.clearProperties();
 				return;
+			} catch (const std::exception &e) {
+				// Handle update failure (e.g., blob not found)
+				// Clean up any existing blob chain
+				// blobManager_->deleteBlobChain(entity.getPropertyEntityId());
+				std::cerr << "Error deleting blob chain: " << e.what() << std::endl;
 			}
 		}
 
@@ -530,26 +541,38 @@ namespace graph::storage {
 			}
 		}
 
-		// Create new blob
-		Blob blob;
-		blob.setId(reserveTemporaryBlobId());
-		blob.setData(serializedData);
+		try {
+			// Create new blob chain
+			int64_t entityId = entity.getId();
+			uint32_t entityType = 0;
 
-		// Associate blob with entity type and ID
-		if constexpr (std::is_same_v<EntityType, Node>) {
-			blob.setEntityInfo(entity.getId(), Node::typeId);
-		} else if constexpr (std::is_same_v<EntityType, Edge>) {
-			blob.setEntityInfo(entity.getId(), Edge::typeId);
+			if constexpr (std::is_same_v<EntityType, Node>) {
+				entityType = Node::typeId;
+			} else if constexpr (std::is_same_v<EntityType, Edge>) {
+				entityType = Edge::typeId;
+			}
+
+			auto blobChain = blobManager_->createBlobChain(entityId, entityType, serializedData);
+
+			if (blobChain.empty()) {
+				throw std::runtime_error("Failed to create blob chain");
+			}
+
+			// Add all blobs to storage
+			for (auto &blob: blobChain) {
+				addBlobEntity(blob);
+			}
+
+			// Update entity with head blob reference
+			entity.setPropertyEntityId(blobChain[0].getId(), PropertyStorageType::BLOB_ENTITY);
+
+			// Clear properties from entity as they're now stored externally
+			entity.clearProperties();
+
+		} catch (const std::runtime_error &e) {
+			// Handle errors during blob chain creation
+			throw std::runtime_error(std::string("Failed to store properties in blob: ") + e.what());
 		}
-
-		// Add blob to storage
-		addBlobEntity(blob);
-
-		// Update entity with blob reference
-		entity.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
-
-		// Clear properties from entity as they're now stored externally
-		entity.clearProperties();
 	}
 
 	template<typename EntityType>
@@ -559,14 +582,9 @@ namespace graph::storage {
 		// Calculate total size of properties
 		uint32_t dataSize = calculateSerializedSize(properties);
 
-		// If properties are empty, clean up any existing external storage
-		if (properties.empty()) {
-			// Clean up any existing external property reference
-			if (entity.hasPropertyEntity()) {
-				cleanupExternalProperties(entity);
-				entity.setPropertyEntityId(0, PropertyStorageType::NONE);
-			}
-			return;
+		if (entity.hasPropertyEntity()) {
+			cleanupExternalProperties(entity);
+			entity.setPropertyEntityId(0, PropertyStorageType::NONE);
 		}
 
 		// Choose storage type based on size
@@ -649,7 +667,7 @@ namespace graph::storage {
 		// Group missed IDs by segment for efficient loading
 		std::unordered_map<uint64_t, std::vector<int64_t>> segmentToIds;
 		for (int64_t id: missedIds) {
-			uint64_t segmentOffset = findSegmentForNodeId(id);
+			uint64_t segmentOffset = findSegmentForEntityId<Node>(id);
 			if (segmentOffset != 0) {
 				segmentToIds[segmentOffset].push_back(id);
 			}
@@ -696,7 +714,7 @@ namespace graph::storage {
 		// Group missed IDs by segment for efficient loading
 		std::unordered_map<uint64_t, std::vector<int64_t>> segmentToIds;
 		for (int64_t id: missedIds) {
-			uint64_t segmentOffset = findSegmentForEdgeId(id);
+			uint64_t segmentOffset = findSegmentForEntityId<Edge>(id);
 			if (segmentOffset != 0) {
 				segmentToIds[segmentOffset].push_back(id);
 			}
@@ -744,7 +762,7 @@ namespace graph::storage {
 	template<typename EntityType>
 	std::optional<EntityType> DataManager::findAndReadEntity(int64_t id) const {
 		// Find segment for this entity type and ID using EntityTraits
-		uint64_t segmentOffset = EntityTraits<EntityType>::findSegmentForId(this, id);
+		uint64_t segmentOffset = findSegmentForEntityId<EntityType>(id);
 
 		if (segmentOffset == 0) {
 			return std::nullopt; // Segment not found
@@ -987,7 +1005,7 @@ namespace graph::storage {
 		return EntityTraits<EntityType>::get(this, id);
 	}
 
-	void DataManager::handleIdUpdate(int64_t tempId, int64_t permId, uint8_t entityType) {
+	void DataManager::handleIdUpdate(int64_t tempId, int64_t permId, uint32_t entityType) {
 		// Skip if temp and perm IDs are the same
 		if (tempId == permId)
 			return;
@@ -1077,13 +1095,27 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
-	void DataManager::deleteEntity(EntityType &entity) {
+	void DataManager::markEntityDeleted(EntityType &entity) {
+		// Update in-memory state without calling back to DeletionManager
 		entity.markInactive();
 		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
 		dirtyMap[entity.getId()] = DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity);
-
 		EntityTraits<EntityType>::removeFromCache(this, entity.getId());
 		checkAndTriggerAutoFlush();
+	}
+
+	template<typename EntityType>
+	void DataManager::deleteEntity(EntityType &entity) {
+		// Otherwise delegate to DeletionManager
+		if constexpr (std::is_same_v<EntityType, Node>) {
+			deletionManager_->deleteNode(entity);
+		} else if constexpr (std::is_same_v<EntityType, Edge>) {
+			deletionManager_->deleteEdge(entity);
+		} else if constexpr (std::is_same_v<EntityType, Property>) {
+			deletionManager_->deleteProperty(entity);
+		} else if constexpr (std::is_same_v<EntityType, Blob>) {
+			deletionManager_->deleteBlob(entity);
+		}
 	}
 
 	template<typename EntityType>
@@ -1124,7 +1156,6 @@ namespace graph::storage {
 	// Template instantiations
 	template Node DataManager::getEntity<Node>(int64_t id);
 	template Edge DataManager::getEntity<Edge>(int64_t id);
-	// template void DataManager::addEntity<Node>(const Node &entity);
 	template void DataManager::storeProperties<Node>(Node &entity);
 	template void DataManager::storeProperties<Edge>(Edge &entity);
 	template bool DataManager::hasExternalProperty<Node>(const Node &entity, const std::string &key);
@@ -1163,4 +1194,12 @@ namespace graph::storage {
 	template void DataManager::addToCache<Blob>(const Blob &entity);
 	template size_t DataManager::calculateEntityTotalPropertySize<Node>(int64_t entityId);
 	template size_t DataManager::calculateEntityTotalPropertySize<Edge>(int64_t entityId);
+	template void DataManager::markEntityDeleted<Node>(Node &entity);
+	template void DataManager::markEntityDeleted<Edge>(Edge &entity);
+	template void DataManager::markEntityDeleted<Property>(Property &entity);
+	template void DataManager::markEntityDeleted<Blob>(Blob &entity);
+	template uint64_t DataManager::findSegmentForEntityId<Node>(int64_t id) const;
+	template uint64_t DataManager::findSegmentForEntityId<Edge>(int64_t id) const;
+	template uint64_t DataManager::findSegmentForEntityId<Property>(int64_t id) const;
+	template uint64_t DataManager::findSegmentForEntityId<Blob>(int64_t id) const;
 } // namespace graph::storage
