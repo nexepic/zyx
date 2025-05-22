@@ -17,7 +17,7 @@
 
 namespace graph {
 
-	class alignas(512) Property {
+	class alignas(256) Property {
 	public:
 		static constexpr uint32_t typeId = 2; // Node = 0, Edge = 1, Property = 2
 

@@ -263,7 +263,7 @@ namespace graph::storage {
 
 			// Process each entity
 			for (const auto &entity: entities) {
-				uint32_t index = static_cast<uint32_t>(entity.getId() - header.start_id);
+				auto index = static_cast<uint32_t>(entity.getId() - header.start_id);
 
 				// Calculate file offset for this entity
 				uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + index * sizeof(T);

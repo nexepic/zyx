@@ -217,7 +217,8 @@ namespace graph {
 					// Display type and brief value preview
 					if (std::holds_alternative<std::string>(value)) {
 						auto strValue = std::get<std::string>(value);
-						std::string preview = (strValue.length() > 50) ? strValue.substr(0, 47) + "..." : strValue;
+						// std::string preview = (strValue.length() > 50) ? strValue.substr(0, 47) + "..." : strValue;
+						std::string preview = strValue;
 						std::cout << "(string) " << preview << "\n";
 					} else if (std::holds_alternative<int64_t>(value)) {
 						std::cout << "(int) " << std::get<int64_t>(value) << "\n";

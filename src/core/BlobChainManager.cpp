@@ -20,7 +20,7 @@ namespace graph {
 		dataManager_(std::move(dataManager)) {}
 
 	std::vector<Blob> BlobChainManager::createBlobChain(int64_t entityId, uint32_t entityType,
-														const std::string &data) {
+														const std::string &data) const {
 		// Compress the data first
 		std::string compressedData = compressData(data);
 
@@ -70,7 +70,7 @@ namespace graph {
 		return blobChain;
 	}
 
-	std::string BlobChainManager::readBlobChain(int64_t headBlobId) {
+	std::string BlobChainManager::readBlobChain(int64_t headBlobId) const {
 		// Get the head blob
 		Blob headBlob = dataManager_->getBlob(headBlobId);
 		if (headBlob.getId() == 0 || !headBlob.isActive()) {
@@ -82,10 +82,10 @@ namespace graph {
 			// Single blob case
 			if (headBlob.isCompressed()) {
 				// Decompress and return
-				return utils::zlibDecompress(headBlob.getData(), headBlob.getOriginalSize());
-			} else {
-				return headBlob.getData();
+				return utils::zlibDecompress(std::string(headBlob.getData(), headBlob.getSize()),
+											 headBlob.getOriginalSize());
 			}
+			return {headBlob.getData(), headBlob.getSize()};
 		}
 
 		// Reassemble data from the chain
@@ -107,8 +107,8 @@ namespace graph {
 										 " but found " + std::to_string(currentBlob.getChainPosition()));
 			}
 
-			// Append data
-			reassembledData.append(currentBlob.getData());
+			// Append data with explicit size
+			reassembledData.append(currentBlob.getData(), currentBlob.getSize());
 
 			// Move to next blob
 			currentBlobId = currentBlob.getNextBlobId();
@@ -123,7 +123,7 @@ namespace graph {
 		return reassembledData;
 	}
 
-	void BlobChainManager::deleteBlobChain(int64_t headBlobId) {
+	void BlobChainManager::deleteBlobChain(int64_t headBlobId) const {
 		auto chainIds = getBlobChainIds(headBlobId);
 
 		// Delete each blob in the chain
@@ -148,7 +148,7 @@ namespace graph {
 		return chunks;
 	}
 
-	std::vector<int64_t> BlobChainManager::getBlobChainIds(int64_t headBlobId) {
+	std::vector<int64_t> BlobChainManager::getBlobChainIds(int64_t headBlobId) const {
 		std::vector<int64_t> chainIds;
 		int64_t currentBlobId = headBlobId;
 

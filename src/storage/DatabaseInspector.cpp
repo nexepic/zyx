@@ -23,9 +23,14 @@ namespace graph::storage {
 
 	DatabaseInspector::~DatabaseInspector() = default;
 
-	void DatabaseInspector::displayDatabaseStructure() {
+	void DatabaseInspector::displayDatabaseStructure() const {
 		std::cout << "FileHeader size: " << sizeof(FileHeader) << std::endl;
 		std::cout << "SegmentHeader size: " << sizeof(SegmentHeader) << std::endl;
+		std::cout << "Size of Node: " << sizeof(Node) << std::endl;
+		std::cout << "Size of Edge: " << sizeof(Edge) << std::endl;
+		std::cout << "Size of Property: " << sizeof(Property) << std::endl;
+		std::cout << "Size of Blob: " << sizeof(Blob) << std::endl;
+		std::cout << "METADATA_SIZE: " << Blob::METADATA_SIZE << std::endl;
 
 		// Create a table formatter for displaying file header
 		TableFormatter table;
@@ -164,7 +169,8 @@ namespace graph::storage {
 	                            },
 	                            value);
 
-	                        table.addRow({"Attribute: " + key, valueStr});
+	                    	std::string preview = (valueStr.length() > 50) ? valueStr.substr(0, 47) + "..." : valueStr;
+	                    	table.addRow({"Attribute: " + key, preview});
 	                    }
 
 	                    table.print();
@@ -308,7 +314,8 @@ namespace graph::storage {
 	                            },
 	                            value);
 
-	                        table.addRow({"Attribute: " + key, valueStr});
+	                        std::string preview = (valueStr.length() > 50) ? valueStr.substr(0, 47) + "..." : valueStr;
+	                        table.addRow({"Attribute: " + key, preview});
 	                    }
 
 	                    table.print();
