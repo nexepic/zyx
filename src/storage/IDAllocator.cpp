@@ -139,7 +139,7 @@ namespace graph::storage {
 		if (it != cache.end()) {
 			it->second.push_back(index);
 		} else {
-			cache.emplace_back(segmentOffset, std::vector<uint32_t>{index});
+			cache.emplace_back(segmentOffset, std::vector{index});
 		}
 	}
 
@@ -172,6 +172,9 @@ namespace graph::storage {
 		// Read segment header to get start_id
 		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 		int64_t id = header.start_id + index;
+
+		// Mark the ID as active in the segment tracker to prevent reuse
+		segmentTracker_->setEntityActive(segmentOffset, index, true);
 
 		return id;
 	}
