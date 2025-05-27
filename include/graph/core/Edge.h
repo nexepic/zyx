@@ -34,7 +34,7 @@ namespace graph {
         static constexpr size_t TOTAL_EDGE_SIZE = 256;
         static constexpr size_t METADATA_SIZE = sizeof(Metadata);
         static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_EDGE_SIZE - METADATA_SIZE;
-        static constexpr uint32_t typeId = 1;
+        static constexpr uint32_t typeId = static_cast<uint32_t>(EntityType::Edge);
 
         static constexpr size_t getTotalSize() {
         	return TOTAL_EDGE_SIZE;

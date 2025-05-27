@@ -14,6 +14,7 @@
 #include <string>
 #include <unordered_map>
 #include "PropertyValue.h"
+#include "Types.h"
 
 namespace graph {
 
@@ -27,7 +28,7 @@ namespace graph {
             bool isActive = true;
         };
 
-        static constexpr uint32_t typeId = 2; // Node = 0, Edge = 1, Property = 2
+        static constexpr uint32_t typeId = static_cast<uint32_t>(EntityType::Property);
         static constexpr size_t TOTAL_PROPERTY_SIZE = 256;
         static constexpr size_t METADATA_SIZE = sizeof(Metadata);
 
