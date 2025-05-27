@@ -17,60 +17,76 @@
 
 namespace graph {
 
-	class alignas(256) Property {
-	public:
-		static constexpr uint32_t typeId = 2; // Node = 0, Edge = 1, Property = 2
+    class Property {
+    public:
+        // Metadata struct to contain fixed property data
+        struct Metadata {
+            int64_t id = 0;
+            int64_t entityId = 0;  // ID of the entity this property belongs to
+            uint32_t entityType = 0; // 0 = Node, 1 = Edge
+            bool isActive = true;
+        };
 
-		Property(int64_t id, int64_t entityId, uint32_t entityType);
-		Property() = default;
+        static constexpr uint32_t typeId = 2; // Node = 0, Edge = 1, Property = 2
+        static constexpr size_t TOTAL_PROPERTY_SIZE = 256;
+        static constexpr size_t METADATA_SIZE = sizeof(Metadata);
 
-		int64_t getId() const;
-		void setId(int64_t newId) { id = newId; }
-		int64_t getEntityId() const;
-		uint32_t getEntityType() const;
-		bool hasTemporaryId() const;
-		void setPermanentId(int64_t permanentId);
+        static constexpr size_t getTotalSize() {
+            return TOTAL_PROPERTY_SIZE;
+        }
 
-		void addPropertyValue(const std::string& key, const PropertyValue& value);
-		bool hasPropertyValue(const std::string& key) const;
-		PropertyValue getPropertyValue(const std::string& key) const;
-		void removePropertyValue(const std::string& key);
-		const std::unordered_map<std::string, PropertyValue>& getPropertyValues() const;
+        Property(int64_t id, int64_t entityId, uint32_t entityType);
+        Property() = default;
 
-		void markInactive();
-		bool isActive() const;
+        // Basic getters
+        int64_t getId() const { return metadata.id; }
+        int64_t getEntityId() const { return metadata.entityId; }
+        uint32_t getEntityType() const { return metadata.entityType; }
+        bool isActive() const { return metadata.isActive; }
 
-		// Serialization methods
-		void serialize(std::ostream& os) const;
-		static Property deserialize(std::istream& is);
+        // Basic setters
+        void setId(int64_t newId) { metadata.id = newId; }
+        void setEntityId(int64_t newEntityId) { metadata.entityId = newEntityId; }
+        void setEntityType(uint32_t newEntityType) { metadata.entityType = newEntityType; }
+        void markInactive() { metadata.isActive = false; }
 
-		size_t getTotalSize() const;
+        // ID management
+        bool hasTemporaryId() const;
+        void setPermanentId(int64_t permanentId);
 
-		void setEntityId(int64_t newEntityId) {
-			entityId = newEntityId;
-		}
+        // Property value management
+        void addPropertyValue(const std::string& key, const PropertyValue& value);
+        bool hasPropertyValue(const std::string& key) const;
+        PropertyValue getPropertyValue(const std::string& key) const;
+        void removePropertyValue(const std::string& key);
+        const std::unordered_map<std::string, PropertyValue>& getPropertyValues() const;
 
-		void setEntityType(uint32_t newEntityType) {
-			entityType = newEntityType;
-		}
+        // Entity information
+        void setEntityInfo(int64_t newEntityId, uint32_t newEntityType) {
+            metadata.entityId = newEntityId;
+            metadata.entityType = newEntityType;
+        }
 
-		// setEntityInfo
-		void setEntityInfo(int64_t newEntityId, uint32_t newEntityType) {
-			entityId = newEntityId;
-			entityType = newEntityType;
-		}
+        // Property map management
+        void setProperties(const std::unordered_map<std::string, PropertyValue>& newValues) {
+            values = newValues;
+        }
 
-		// setProperties
-		void setProperties(const std::unordered_map<std::string, PropertyValue>& newValues) {
-			values = newValues;
-		}
+        // Serialization methods
+        void serialize(std::ostream& os) const;
+        static Property deserialize(std::istream& is);
+        [[nodiscard]] size_t getSerializedSize() const;
 
-	private:
-		int64_t id = 0;
-		int64_t entityId = 0;  // ID of the entity this property belongs to
-		uint32_t entityType = 0; // 0 = Node, 1 = Edge
-		std::unordered_map<std::string, PropertyValue> values;
-		bool isActive_ = true;
-	};
+        // Metadata access for advanced usage
+        const Metadata& getMetadata() const { return metadata; }
+        Metadata& getMutableMetadata() { return metadata; }
+
+    private:
+        // Fixed-size metadata structure
+        Metadata metadata;
+
+        // Variable-sized data (not included in the fixed-size structure)
+        std::unordered_map<std::string, PropertyValue> values;
+    };
 
 } // namespace graph

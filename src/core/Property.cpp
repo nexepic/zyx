@@ -14,90 +14,108 @@
 
 namespace graph {
 
-	Property::Property(int64_t id, int64_t entityId, uint32_t entityType) :
-		id(id), entityId(entityId), entityType(entityType) {}
+    Property::Property(int64_t id, int64_t entityId, uint32_t entityType) {
+        metadata.id = id;
+        metadata.entityId = entityId;
+        metadata.entityType = entityType;
+        metadata.isActive = true;
+    }
 
-	int64_t Property::getId() const { return id; }
+    bool Property::hasTemporaryId() const {
+        return storage::IDAllocator::isTemporaryId(metadata.id);
+    }
 
-	int64_t Property::getEntityId() const { return entityId; }
+    void Property::setPermanentId(int64_t permanentId) {
+        if (!hasTemporaryId()) {
+            throw std::runtime_error("Cannot set permanent ID for property that already has one");
+        }
+        metadata.id = permanentId;
+    }
 
-	uint32_t Property::getEntityType() const { return entityType; }
+    void Property::addPropertyValue(const std::string &key, const PropertyValue &value) {
+        values[key] = value;
+    }
 
-	bool Property::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(id); }
+    bool Property::hasPropertyValue(const std::string &key) const {
+        return values.count(key) > 0;
+    }
 
-	void Property::setPermanentId(int64_t permanentId) {
-		if (!hasTemporaryId()) {
-			throw std::runtime_error("Cannot set permanent ID for property that already has one");
-		}
-		id = permanentId;
-	}
+    PropertyValue Property::getPropertyValue(const std::string &key) const {
+        auto it = values.find(key);
+        if (it == values.end()) {
+            throw std::out_of_range("Property value " + key + " not found");
+        }
+        return it->second;
+    }
 
-	void Property::addPropertyValue(const std::string &key, const PropertyValue &value) { values[key] = value; }
+    void Property::removePropertyValue(const std::string &key) {
+        auto it = values.find(key);
+        if (it != values.end()) {
+            values.erase(it);
+        }
+    }
 
-	bool Property::hasPropertyValue(const std::string &key) const { return values.count(key) > 0; }
+    const std::unordered_map<std::string, PropertyValue> &Property::getPropertyValues() const {
+        return values;
+    }
 
-	PropertyValue Property::getPropertyValue(const std::string &key) const {
-		auto it = values.find(key);
-		if (it == values.end()) {
-			throw std::out_of_range("Property value " + key + " not found");
-		}
-		return it->second;
-	}
+    void Property::serialize(std::ostream &os) const {
+        // Write metadata fields individually
+        utils::Serializer::writePOD(os, metadata.id);
+        utils::Serializer::writePOD(os, metadata.entityId);
+        utils::Serializer::writePOD(os, metadata.entityType);
+        utils::Serializer::writePOD(os, metadata.isActive);
 
-	void Property::removePropertyValue(const std::string &key) {
-		auto it = values.find(key);
-		if (it != values.end()) {
-			values.erase(it);
-		}
-	}
+        // Write property values
+        utils::Serializer::writePOD(os, static_cast<uint32_t>(values.size()));
+        for (const auto &[key, value]: values) {
+            utils::Serializer::writeString(os, key);
+            utils::Serializer::writePropertyValue(os, value);
+        }
+    }
 
-	const std::unordered_map<std::string, PropertyValue> &Property::getPropertyValues() const { return values; }
+    Property Property::deserialize(std::istream &is) {
+        Property property;
 
-	void Property::markInactive() { isActive_ = false; }
+        // Read metadata fields individually
+        property.metadata.id = utils::Serializer::readPOD<int64_t>(is);
+        property.metadata.entityId = utils::Serializer::readPOD<int64_t>(is);
+        property.metadata.entityType = utils::Serializer::readPOD<uint32_t>(is);
+        property.metadata.isActive = utils::Serializer::readPOD<bool>(is);
 
-	bool Property::isActive() const { return isActive_; }
+        // Read property values
+        auto propertyCount = utils::Serializer::readPOD<uint32_t>(is);
+        for (uint32_t i = 0; i < propertyCount; ++i) {
+            std::string key = utils::Serializer::readString(is);
+            PropertyValue value = utils::Serializer::readPropertyValue(is);
+            property.values[key] = value;
+        }
 
-	void Property::serialize(std::ostream &os) const {
-		// Write fixed-size property data
-		utils::Serializer::writePOD(os, id);
-		utils::Serializer::writePOD(os, entityId);
-		utils::Serializer::writePOD(os, entityType);
-		utils::Serializer::writePOD(os, isActive_);
+        return property;
+    }
 
-		// Write property values
-		utils::Serializer::writePOD(os, static_cast<uint32_t>(values.size()));
-		for (const auto &[key, value]: values) {
-			utils::Serializer::writeString(os, key);
-			utils::Serializer::writePropertyValue(os, value);
-		}
-	}
+    size_t Property::getSerializedSize() const {
+        // Calculate size of all metadata fields
+        size_t size = 0;
+        size += sizeof(metadata.id);          // int64_t
+        size += sizeof(metadata.entityId);    // int64_t
+        size += sizeof(metadata.entityType);  // uint32_t
+        size += sizeof(metadata.isActive);    // bool
 
-	Property Property::deserialize(std::istream &is) {
-		auto id = utils::Serializer::readPOD<int64_t>(is);
-		auto entityId = utils::Serializer::readPOD<int64_t>(is);
-		auto entityType = utils::Serializer::readPOD<uint8_t>(is);
+        // Size for property count
+        size += sizeof(uint32_t);  // For property count
 
-		Property property(id, entityId, entityType);
+        // Calculate size of all property values
+        for (const auto &[key, value]: values) {
+            // String key (length prefix + string content)
+            size += sizeof(uint32_t);  // String length prefix
+            size += key.size();        // Key string content
 
-		property.isActive_ = utils::Serializer::readPOD<bool>(is);
+            // Property value
+            size += property_utils::getPropertyValueSize(value);
+        }
 
-		auto propertyCount = utils::Serializer::readPOD<uint32_t>(is);
-		for (uint32_t i = 0; i < propertyCount; ++i) {
-			std::string key = utils::Serializer::readString(is);
-			PropertyValue value = utils::Serializer::readPropertyValue(is);
-			property.values[key] = value;
-		}
-
-		return property;
-	}
-
-	size_t Property::getTotalSize() const {
-		size_t totalSize = 0;
-		for (const auto &[key, value]: values) {
-			totalSize += key.size();
-			totalSize += property_utils::getPropertyValueSize(value);
-		}
-		return totalSize;
-	}
+        return size;
+    }
 
 } // namespace graph

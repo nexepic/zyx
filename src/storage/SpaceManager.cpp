@@ -280,7 +280,7 @@ namespace graph::storage {
 
 		// Since properties are now treated as entities, we handle them like nodes/edges
 		// Each property has a fixed size within the segment
-		size_t propertySize = sizeof(Property); // Assuming Property is your property entity class
+		size_t propertySize = Property::getTotalSize(); // Assuming Property is your property entity class
 		uint32_t activeCount = header.getActiveCount();
 
 		// Process all active properties in the segment
@@ -319,8 +319,8 @@ namespace graph::storage {
 				if (bitmap::getBit(header.activity_bitmap, i)) {
 					// Read edge
 					Edge edge;
-					file_->seekg(static_cast<std::streamoff>(edgeSegment + sizeof(SegmentHeader) + i * sizeof(Edge)));
-					file_->read(reinterpret_cast<char *>(&edge), sizeof(Edge));
+					file_->seekg(static_cast<std::streamoff>(edgeSegment + sizeof(SegmentHeader) + i * Edge::getTotalSize()));
+					file_->read(reinterpret_cast<char *>(&edge), Edge::getTotalSize());
 
 					// Assuming Edge has source_id and target_id fields:
 					bool updated = false;
@@ -353,7 +353,7 @@ namespace graph::storage {
 														uint64_t newSegment) {
 		// Scan property segments for properties referencing this entity
 		uint64_t propSegment = tracker_->getChainHead(toUnderlying(SegmentType::Property));
-		size_t propertySize = sizeof(Property); // Assuming Property is your property entity class
+		size_t propertySize = Property::getTotalSize(); // Assuming Property is your property entity class
 
 		while (propSegment != 0) {
 			SegmentHeader header = tracker_->getSegmentHeader(propSegment);
@@ -478,7 +478,7 @@ namespace graph::storage {
 		}
 
 		// Always compact in place
-		size_t nodeSize = sizeof(Node);
+		size_t nodeSize = Node::getTotalSize();
 		uint32_t nextFreeSpot = 0;
 
 		// Create a new activity bitmap
@@ -545,7 +545,7 @@ namespace graph::storage {
 		}
 
 		// Always compact in place
-		size_t edgeSize = sizeof(Edge);
+		size_t edgeSize = Edge::getTotalSize();
 		uint32_t nextFreeSpot = 0;
 
 		// Create a new activity bitmap
@@ -612,7 +612,7 @@ namespace graph::storage {
 		}
 
 		// Always compact in place
-		size_t propertySize = sizeof(Property); // Use the entity-based Property size
+		size_t propertySize = Property::getTotalSize(); // Use the entity-based Property size
 		uint32_t nextFreeSpot = 0;
 
 		// Create a new activity bitmap
@@ -680,7 +680,7 @@ namespace graph::storage {
 		}
 
 		// Always compact in place
-		size_t blobSize = sizeof(Blob); // Assuming Blob is the structure for blobs
+		size_t blobSize = Blob::getTotalSize(); // Assuming Blob is the structure for blobs
 		uint32_t nextFreeSpot = 0;
 
 		// Create a new activity bitmap
@@ -816,12 +816,12 @@ namespace graph::storage {
 
 				// Calculate node offset within segment
 				uint32_t nodeIndex = static_cast<uint32_t>(entityId - header.start_id);
-				uint64_t nodeOffset = nodeSegmentOffset + sizeof(SegmentHeader) + nodeIndex * sizeof(Node);
+				uint64_t nodeOffset = nodeSegmentOffset + sizeof(SegmentHeader) + nodeIndex * Node::getTotalSize();
 
 				// Read node
 				Node node;
 				file_->seekg(static_cast<std::streamoff>(nodeOffset));
-				file_->read(reinterpret_cast<char *>(&node), sizeof(Node));
+				file_->read(reinterpret_cast<char *>(&node), Node::getTotalSize());
 
 				// Update property reference in the node
 				if (node.getPropertyEntityId() == oldPropertyOffset) {
@@ -830,7 +830,7 @@ namespace graph::storage {
 
 				// Write updated node
 				file_->seekp(static_cast<std::streamoff>(nodeOffset));
-				file_->write(reinterpret_cast<const char *>(&node), sizeof(Node));
+				file_->write(reinterpret_cast<const char *>(&node), Node::getTotalSize());
 			}
 		} else if (entityType == toUnderlying(SegmentType::Edge)) {
 			// Find the segment containing this edge
@@ -841,12 +841,12 @@ namespace graph::storage {
 
 				// Calculate edge offset within segment
 				uint32_t edgeIndex = static_cast<uint32_t>(entityId - header.start_id);
-				uint64_t edgeOffset = edgeSegmentOffset + sizeof(SegmentHeader) + edgeIndex * sizeof(Edge);
+				uint64_t edgeOffset = edgeSegmentOffset + sizeof(SegmentHeader) + edgeIndex * Edge::getTotalSize();
 
 				// Read edge
 				Edge edge;
 				file_->seekg(static_cast<std::streamoff>(edgeOffset));
-				file_->read(reinterpret_cast<char *>(&edge), sizeof(Edge));
+				file_->read(reinterpret_cast<char *>(&edge), Edge::getTotalSize());
 
 				// Update property reference in the edge
 				if (edge.getPropertyEntityId() == oldPropertyOffset) {
@@ -855,7 +855,7 @@ namespace graph::storage {
 
 				// Write updated edge
 				file_->seekp(static_cast<std::streamoff>(edgeOffset));
-				file_->write(reinterpret_cast<const char *>(&edge), sizeof(Edge));
+				file_->write(reinterpret_cast<const char *>(&edge), Edge::getTotalSize());
 			}
 		}
 		// Handling for other entity types if needed
@@ -1116,16 +1116,16 @@ namespace graph::storage {
 		size_t itemSize;
 		switch (type) {
 			case toUnderlying(SegmentType::Node):
-				itemSize = sizeof(Node);
+				itemSize = Node::getTotalSize();
 				break;
 			case toUnderlying(SegmentType::Edge):
-				itemSize = sizeof(Edge);
+				itemSize = Edge::getTotalSize();
 				break;
 			case toUnderlying(SegmentType::Property):
-				itemSize = sizeof(Property);
+				itemSize = Property::getTotalSize();
 				break;
 			case toUnderlying(SegmentType::Blob):
-				itemSize = sizeof(Blob);
+				itemSize = Blob::getTotalSize();
 				break;
 			default:
 				return false;
@@ -1393,8 +1393,6 @@ namespace graph::storage {
 		try {
 			// Must close file before truncating on some platforms
 			// Get the filename from the file stream
-			// This requires storing the filename when opening the file
-			// file_->close();
 
 			// Truncate using filesystem library (C++17)
 			std::filesystem::resize_file(fileName_, newFileSize);
@@ -1405,26 +1403,6 @@ namespace graph::storage {
 			}
 
 			return true;
-
-			// // Reopen the file
-			// file_->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
-			// if (!file_->is_open()) {
-			// 	return false; // Failed to reopen
-			// }
-			//
-			// // Update file size tracking
-			// fileSize_ = newFileSize;
-			//
-			// // Remove truncated segments from free list
-			// for (uint64_t offset: truncatableSegments) {
-			// 	auto it = std::find(tracker_->getFreeSegments().begin(), tracker_->getFreeSegments().end(), offset);
-			// 	if (it != tracker_->getFreeSegments().end()) {
-			// 		// Use a method in tracker to remove from free list
-			// 		tracker_->removeFromFreeList(offset);
-			// 	}
-			// }
-			//
-			// return true;
 		} catch (const std::exception &e) {
 			std::cerr << "Error truncating file: " << e.what() << std::endl;
 			return false;

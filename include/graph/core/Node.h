@@ -17,73 +17,102 @@
 
 namespace graph {
 
-	class alignas(128) Node {
-	public:
-		Node() = default;
-		Node(int64_t id, std::string label);
+    class Node {
+    public:
+        // Metadata struct to contain fixed node data
+        struct Metadata {
+            int64_t id = 0;
+            int64_t propertyEntityId = 0;
+            uint32_t propertyStorageType = 0;
+            bool isActive = true;
+            // Padding is implicit
+        };
 
-		void addOutEdge(uint64_t edgeId);
-		void addInEdge(uint64_t edgeId);
+        static constexpr size_t TOTAL_NODE_SIZE = 256;
+        static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+        static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_NODE_SIZE - METADATA_SIZE;
+        static constexpr uint32_t typeId = 0;
 
-		[[nodiscard]] const std::vector<uint64_t>& getOutEdges() const;
-		[[nodiscard]] const std::vector<uint64_t>& getInEdges() const;
+        [[nodiscard]] size_t getSerializedSize() const;
 
-		// Property methods
-		void addProperty(const std::string &key, const PropertyValue &value);
-		[[nodiscard]] bool hasProperty(const std::string &key) const;
-		[[nodiscard]] PropertyValue getProperty(const std::string &key) const;
-		void removeProperty(const std::string &key);
-		[[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
-		[[nodiscard]] size_t getTotalPropertySize() const;
-		void clearProperties() { properties.clear(); }
+        static constexpr size_t getTotalSize() {
+            return TOTAL_NODE_SIZE;
+        }
 
-		// Property entity
-		void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::NONE);
-		int64_t getPropertyEntityId() const;
-		PropertyStorageType getPropertyStorageType() const;
-		bool hasPropertyEntity() const;
+        Node() = default;
+        Node(int64_t id, const std::string &label);
 
-		[[nodiscard]] const std::string& getLabel() const;
-		[[nodiscard]] int64_t getId() const;
+        void addOutEdge(uint64_t edgeId);
+        void addInEdge(uint64_t edgeId);
 
-		// Check if this node has a temporary ID
-		[[nodiscard]] bool hasTemporaryId() const;
+        [[nodiscard]] const std::vector<uint64_t>& getOutEdges() const;
+        [[nodiscard]] const std::vector<uint64_t>& getInEdges() const;
 
-		// Set permanent ID (replaces temporary ID)
-		void setPermanentId(int64_t permanentId);
+        // Property methods
+        void addProperty(const std::string &key, const PropertyValue &value);
+        [[nodiscard]] bool hasProperty(const std::string &key) const;
+        [[nodiscard]] PropertyValue getProperty(const std::string &key) const;
+        void removeProperty(const std::string &key);
+        [[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
+        [[nodiscard]] size_t getTotalPropertySize() const;
+        void clearProperties() { properties.clear(); }
 
-		void serialize(std::ostream& os) const;
-		static Node deserialize(std::istream& is);
+        // Property entity
+        void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::NONE);
+        int64_t getPropertyEntityId() const { return metadata.propertyEntityId; }
+        PropertyStorageType getPropertyStorageType() const {
+            return static_cast<PropertyStorageType>(metadata.propertyStorageType);
+        }
+        bool hasPropertyEntity() const {
+            return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
+        }
 
-		static constexpr uint32_t typeId = 0;
+        // Getters for metadata
+        [[nodiscard]] std::string getLabel() const;
+        [[nodiscard]] int64_t getId() const { return metadata.id; }
+        [[nodiscard]] bool isActive() const { return metadata.isActive; }
 
-		void setId(int64_t id) { this->id = id; }
+        // Setters for metadata
+        void setId(int64_t id) { metadata.id = id; }
+        void markInactive(bool active = false) { metadata.isActive = active; }
 
-		[[nodiscard]] bool isActive() const { return isActive_; }
-		void markInactive(bool active = false) { isActive_ = active; }
+        // Check if this node has a temporary ID
+        [[nodiscard]] bool hasTemporaryId() const;
 
-		void setInEdges(const std::vector<uint64_t>& edges) {
-			inEdges = edges;
-		}
+        // Set permanent ID (replaces temporary ID)
+        void setPermanentId(int64_t permanentId);
 
-		void setOutEdges(const std::vector<uint64_t>& edges) {
-			outEdges = edges;
-		}
+        // Edge management
+        void setInEdges(const std::vector<uint64_t>& edges) {
+            inEdges = edges;
+        }
 
-	private:
-		int64_t id{};
-		std::string label;
+        void setOutEdges(const std::vector<uint64_t>& edges) {
+            outEdges = edges;
+        }
 
+        // Serialization
+        void serialize(std::ostream& os) const;
+        static Node deserialize(std::istream& is);
+
+        // Metadata access for advanced usage
+        const Metadata& getMetadata() const { return metadata; }
+        Metadata& getMutableMetadata() { return metadata; }
+
+    private:
+        // Fixed-size metadata structure
+        Metadata metadata;
+
+        // Fixed-size buffer for label
+        char labelBuffer[LABEL_BUFFER_SIZE] = {0};
+
+        // Variable-sized structures (not included in the 128-byte alignment)
         std::unordered_map<std::string, PropertyValue> properties;
-		PropertyStorageType propertyStorageType = PropertyStorageType::NONE;
-		int64_t propertyEntityId = 0;
+        std::vector<uint64_t> inEdges;
+        std::vector<uint64_t> outEdges;
 
-		std::vector<uint64_t> inEdges;
-		std::vector<uint64_t> outEdges;
-
-		static constexpr size_t MAX_TOTAL_PROPERTY_SIZE = 512 * 1024; // 512KB total property limit per node
-
-		bool isActive_ = true;
-	};
+        // Helper method to set label
+        void setLabel(const std::string& label);
+    };
 
 } // namespace graph

@@ -38,6 +38,12 @@ namespace graph {
         static constexpr uint32_t typeId = 3;
         static constexpr uint32_t MAX_COMPRESSED_SIZE = 5 * 1024 * 1024; // 5MB
 
+        [[nodiscard]] size_t getSerializedSize() const;
+
+        static constexpr size_t getTotalSize() {
+            return TOTAL_BLOB_SIZE;
+        }
+
         Blob(int64_t id, const std::string &data);
         Blob() = default;
 

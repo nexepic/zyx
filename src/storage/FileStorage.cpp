@@ -266,11 +266,11 @@ namespace graph::storage {
 				auto index = static_cast<uint32_t>(entity.getId() - header.start_id);
 
 				// Calculate file offset for this entity
-				uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + index * sizeof(T);
+				uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + index * T::getTotalSize();
 
 				// Write entity
 				fileStream->seekp(static_cast<std::streamoff>(entityOffset));
-				utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, sizeof(T));
+				utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, T::getTotalSize());
 
 				// Mark entity as active if it wasn't already
 				bool wasInactive = !segmentTracker->getBitmapBit(segmentOffset, index);
@@ -377,7 +377,7 @@ namespace graph::storage {
 	template<typename T>
 	void FileStorage::writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t baseUsed) {
 		// Calculate item size
-		const size_t itemSize = sizeof(T);
+		const size_t itemSize = T::getTotalSize();
 
 		// Write data
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + baseUsed * itemSize;
@@ -428,11 +428,11 @@ namespace graph::storage {
 		}
 
 		// Calculate file offset for this entity
-		uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + entityIndex * sizeof(T);
+		uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + entityIndex * T::getTotalSize();
 
 		// Write entity
 		fileStream->seekp(static_cast<std::streamoff>(entityOffset));
-		utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, sizeof(T));
+		utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, T::getTotalSize());
 		fileStream->flush();
 
 		// Update bitmap to reflect entity's active state

@@ -26,11 +26,9 @@ namespace graph::storage {
 	void DatabaseInspector::displayDatabaseStructure() const {
 		std::cout << "FileHeader size: " << sizeof(FileHeader) << std::endl;
 		std::cout << "SegmentHeader size: " << sizeof(SegmentHeader) << std::endl;
-		std::cout << "Size of Node: " << sizeof(Node) << std::endl;
-		std::cout << "Size of Edge: " << sizeof(Edge) << std::endl;
-		std::cout << "Size of Property: " << sizeof(Property) << std::endl;
-		std::cout << "Size of Blob: " << sizeof(Blob) << std::endl;
-		std::cout << "METADATA_SIZE: " << Blob::METADATA_SIZE << std::endl;
+		std::cout << "Node METADATA_SIZE: " << Node::METADATA_SIZE << std::endl;
+		std::cout << "Node LABEL_BUFFER_SIZE: " << Node::LABEL_BUFFER_SIZE << std::endl;
+		std::cout << "Blob METADATA_SIZE: " << Blob::METADATA_SIZE << std::endl;
 
 		// Create a table formatter for displaying file header
 		TableFormatter table;
@@ -114,7 +112,7 @@ namespace graph::storage {
 
 	        // Display all slots in the segment (both used and unused)
 	        for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
-	            std::streampos nodePosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * sizeof(Node)));
+	            std::streampos nodePosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * Node::getTotalSize()));
 	            file->seekg(nodePosition);
 
 	            std::cout << "\n--- Slot " << i << " (Offset: " << nodePosition << ") ---" << std::endl;
@@ -194,11 +192,11 @@ namespace graph::storage {
 	                table.print();
 
 	                // Show raw data bytes
-	                std::vector<char> rawData(sizeof(Node));
-	                file->read(rawData.data(), sizeof(Node));
+	                std::vector<char> rawData(Node::getTotalSize());
+	                file->read(rawData.data(), Node::getTotalSize());
 	                if (file->good()) {
 	                    std::cout << "Raw data (first 16 bytes): ";
-	                    for (size_t j = 0; j < std::min<size_t>(16, sizeof(Node)); ++j) {
+	                    for (size_t j = 0; j < std::min<size_t>(16, Node::getTotalSize()); ++j) {
 	                        std::cout << std::hex << std::setw(2) << std::setfill('0')
 	                                  << static_cast<int>(static_cast<unsigned char>(rawData[j])) << " ";
 	                    }
@@ -259,7 +257,7 @@ namespace graph::storage {
 
 	        // Display all slots in the segment (both used and unused)
 	        for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
-	            std::streampos edgePosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * sizeof(Edge)));
+	            std::streampos edgePosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * Edge::getTotalSize()));
 	            file->seekg(edgePosition);
 
 	            std::cout << "\n--- Slot " << i << " (Offset: " << edgePosition << ") ---" << std::endl;
@@ -339,11 +337,11 @@ namespace graph::storage {
 	                table.print();
 
 	                // Show raw data bytes
-	                std::vector<char> rawData(sizeof(Edge));
-	                file->read(rawData.data(), sizeof(Edge));
+	                std::vector<char> rawData(Edge::getTotalSize());
+	                file->read(rawData.data(), Edge::getTotalSize());
 	                if (file->good()) {
 	                    std::cout << "Raw data (first 16 bytes): ";
-	                    for (size_t j = 0; j < std::min<size_t>(16, sizeof(Edge)); ++j) {
+	                    for (size_t j = 0; j < std::min<size_t>(16, Edge::getTotalSize()); ++j) {
 	                        std::cout << std::hex << std::setw(2) << std::setfill('0')
 	                                  << static_cast<int>(static_cast<unsigned char>(rawData[j])) << " ";
 	                    }
@@ -407,7 +405,7 @@ namespace graph::storage {
 
 	        // Display all slots in the segment (both used and unused)
 	        for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
-	            std::streampos propertyPosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * sizeof(Property)));
+	            std::streampos propertyPosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * Property::getTotalSize()));
 	            file->seekg(propertyPosition);
 
 	            std::cout << "\n--- Slot " << i << " (Offset: " << propertyPosition << ") ---" << std::endl;
@@ -449,11 +447,11 @@ namespace graph::storage {
 	                table.print();
 
 	                // Show raw data bytes
-	                std::vector<char> rawData(sizeof(Property));
-	                file->read(rawData.data(), sizeof(Property));
+	                std::vector<char> rawData(Property::getTotalSize());
+	                file->read(rawData.data(), Property::getTotalSize());
 	                if (file->good()) {
 	                    std::cout << "Raw data (first 16 bytes): ";
-	                    for (size_t j = 0; j < std::min<size_t>(16, sizeof(Property)); ++j) {
+	                    for (size_t j = 0; j < std::min<size_t>(16, Property::getTotalSize()); ++j) {
 	                        std::cout << std::hex << std::setw(2) << std::setfill('0')
 	                                  << static_cast<int>(static_cast<unsigned char>(rawData[j])) << " ";
 	                    }
@@ -517,7 +515,7 @@ namespace graph::storage {
 
 			// Display all slots in the segment (both used and unused)
 			for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
-				std::streampos blobPosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * sizeof(Blob)));
+				std::streampos blobPosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * Blob::getTotalSize()));
 				file->seekg(blobPosition);
 
 				std::cout << "\n--- Slot " << i << " (Offset: " << blobPosition << ") ---" << std::endl;
@@ -559,11 +557,11 @@ namespace graph::storage {
 					table.print();
 
 					// Show raw data bytes
-					std::vector<char> rawData(sizeof(Blob));
-					file->read(rawData.data(), sizeof(Blob));
+					std::vector<char> rawData(Blob::getTotalSize());
+					file->read(rawData.data(), Blob::getTotalSize());
 					if (file->good()) {
 						std::cout << "Raw data (first 16 bytes): ";
-						for (size_t j = 0; j < std::min<size_t>(16, sizeof(Blob)); ++j) {
+						for (size_t j = 0; j < std::min<size_t>(16, Blob::getTotalSize()); ++j) {
 							std::cout << std::hex << std::setw(2) << std::setfill('0')
 									  << static_cast<int>(static_cast<unsigned char>(rawData[j])) << " ";
 						}

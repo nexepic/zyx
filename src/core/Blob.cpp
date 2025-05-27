@@ -77,4 +77,24 @@ namespace graph {
         return blob;
     }
 
+	size_t Blob::getSerializedSize() const {
+    	// Calculate size of all metadata fields
+    	size_t size = 0;
+    	size += sizeof(metadata.id);
+    	size += sizeof(metadata.isActive);
+    	size += sizeof(metadata.entityId);
+    	size += sizeof(metadata.entityType);
+    	size += sizeof(metadata.nextBlobId);
+    	size += sizeof(metadata.prevBlobId);
+    	size += sizeof(metadata.chainPosition);
+    	size += sizeof(metadata.originalSize);
+    	size += sizeof(metadata.compressed);
+    	size += sizeof(metadata.dataSize);
+
+    	// Add size of the actual data buffer
+    	size += metadata.dataSize;
+
+    	return size;
+    }
+
 } // namespace graph

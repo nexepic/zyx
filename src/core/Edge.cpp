@@ -16,124 +16,125 @@
 
 namespace graph {
 
-	Edge::Edge(int64_t id, int64_t sourceNodeId, int64_t targetNodeId, std::string label) :
-		id(id), sourceNodeId(sourceNodeId), targetNodeId(targetNodeId), label(std::move(label)) {}
+    Edge::Edge(int64_t id, int64_t sourceNodeId, int64_t targetNodeId, const std::string &label) {
+        metadata.id = id;
+        metadata.sourceNodeId = sourceNodeId;
+        metadata.targetNodeId = targetNodeId;
+        metadata.isActive = true;
+        setLabel(label);
+    }
 
-	int64_t Edge::getId() const { return id; }
+    void Edge::setLabel(const std::string& label) {
+        // Copy label to fixed-size buffer, ensuring null termination
+        size_t copySize = std::min(label.size(), LABEL_BUFFER_SIZE - 1);
+        memcpy(labelBuffer, label.data(), copySize);
+        labelBuffer[copySize] = '\0';
+    }
 
-	bool Edge::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(id); }
+    std::string Edge::getLabel() const {
+        // Return label as string
+        return {labelBuffer};
+    }
 
-	void Edge::setPermanentId(int64_t permanentId) {
-		if (!hasTemporaryId()) {
-			throw std::runtime_error("Cannot set permanent ID for node that already has one");
-		}
-		id = permanentId;
-	}
+    bool Edge::hasTemporaryId() const {
+        return storage::IDAllocator::isTemporaryId(metadata.id);
+    }
 
-	int64_t Edge::getFromNodeId() const { return sourceNodeId; }
+    void Edge::setPermanentId(int64_t permanentId) {
+        if (!hasTemporaryId()) {
+            throw std::runtime_error("Cannot set permanent ID for edge that already has one");
+        }
+        metadata.id = permanentId;
+    }
 
-	int64_t Edge::getToNodeId() const { return targetNodeId; }
+    void Edge::addProperty(const std::string &key, const PropertyValue &value) {
+        properties[key] = value;
+    }
 
-	const std::string &Edge::getLabel() const { return label; }
+    bool Edge::hasProperty(const std::string &key) const {
+        return properties.count(key) > 0;
+    }
 
-	void Edge::addProperty(const std::string &key, const PropertyValue &value) {
-		size_t valueSize = property_utils::getPropertyValueSize(value);
-		size_t keySize = key.size();
-		size_t newTotalSize = getTotalPropertySize();
+    PropertyValue Edge::getProperty(const std::string &key) const {
+        auto it = properties.find(key);
+        if (it == properties.end()) {
+            throw std::out_of_range("Property " + key + " not found");
+        }
+        return it->second;
+    }
 
-		if (properties.count(key) > 0) {
-			newTotalSize -= property_utils::getPropertyValueSize(properties[key]);
-			newTotalSize -= key.size();
-		}
+    void Edge::removeProperty(const std::string &key) {
+        auto it = properties.find(key);
+        if (it != properties.end()) {
+            properties.erase(it);
+        }
+    }
 
-		newTotalSize += keySize + valueSize;
+    const std::unordered_map<std::string, PropertyValue> &Edge::getProperties() const {
+        return properties;
+    }
 
-		if (newTotalSize > MAX_TOTAL_PROPERTY_SIZE) {
-			throw std::runtime_error("Property size limit exceeded for node " + std::to_string(id));
-		}
+    void Edge::setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType) {
+        metadata.propertyEntityId = propertyId;
+        metadata.propertyStorageType = static_cast<uint32_t>(storageType);
+    }
 
-		properties[key] = value;
-	}
+    size_t Edge::getTotalPropertySize() const {
+        size_t totalSize = 0;
+        for (const auto &[key, value]: properties) {
+            totalSize += key.size();
+            totalSize += property_utils::getPropertyValueSize(value);
+        }
+        return totalSize;
+    }
 
-	bool Edge::hasProperty(const std::string &key) const { return properties.count(key) > 0; }
+    void Edge::serialize(std::ostream &os) const {
+        // Write metadata fields individually
+        utils::Serializer::writePOD(os, metadata.id);
+        utils::Serializer::writePOD(os, metadata.sourceNodeId);
+        utils::Serializer::writePOD(os, metadata.targetNodeId);
+        utils::Serializer::writePOD(os, metadata.propertyEntityId);
+        utils::Serializer::writePOD(os, metadata.propertyStorageType);
+        utils::Serializer::writePOD(os, metadata.isActive);
 
-	PropertyValue Edge::getProperty(const std::string &key) const {
-		auto it = properties.find(key);
-		if (it == properties.end()) {
-			throw std::out_of_range("Property " + key + " not found");
-		}
-		return it->second;
-	}
+        // Write label as string (only writes the actual string length, not the full buffer)
+        utils::Serializer::writeString(os, getLabel());
+    }
 
-	void Edge::removeProperty(const std::string &key) {
-		auto it = properties.find(key);
-		if (it != properties.end()) {
-			properties.erase(it);
-		}
-	}
+    Edge Edge::deserialize(std::istream &is) {
+        Edge edge;
 
-	const std::unordered_map<std::string, PropertyValue> &Edge::getProperties() const { return properties; }
+        // Read metadata fields individually
+        edge.metadata.id = utils::Serializer::readPOD<int64_t>(is);
+        edge.metadata.sourceNodeId = utils::Serializer::readPOD<int64_t>(is);
+        edge.metadata.targetNodeId = utils::Serializer::readPOD<int64_t>(is);
+        edge.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
+        edge.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
+        edge.metadata.isActive = utils::Serializer::readPOD<bool>(is);
 
-	void Edge::setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType) {
-		this->propertyEntityId = propertyId;
-		this->propertyStorageType = storageType;
-	}
+        // Read label
+        std::string label = utils::Serializer::readString(is);
+        edge.setLabel(label);
 
-	int64_t Edge::getPropertyEntityId() const {
-		return propertyEntityId;
-	}
+        return edge;
+    }
 
-	PropertyStorageType Edge::getPropertyStorageType() const {
-		return propertyStorageType;
-	}
+    size_t Edge::getSerializedSize() const {
+        // Calculate size of all metadata fields
+        size_t size = 0;
+        size += sizeof(metadata.id);                // int64_t
+        size += sizeof(metadata.sourceNodeId);      // int64_t
+        size += sizeof(metadata.targetNodeId);      // int64_t
+        size += sizeof(metadata.propertyEntityId);  // int64_t
+        size += sizeof(metadata.propertyStorageType); // uint32_t
+        size += sizeof(metadata.isActive);          // bool
 
-	bool Edge::hasPropertyEntity() const {
-		return propertyStorageType != PropertyStorageType::NONE && propertyEntityId != 0;
-	}
+        // Calculate size of the serialized string (length prefix + string content)
+        std::string label = getLabel();
+        size += sizeof(uint32_t);                   // For string length prefix
+        size += label.size();                       // Actual string content
 
-	size_t Edge::getTotalPropertySize() const {
-		size_t totalSize = 0;
-		for (const auto &[key, value]: properties) {
-			totalSize += key.size();
-			totalSize += property_utils::getPropertyValueSize(value);
-		}
-		return totalSize;
-	}
-
-	void Edge::serialize(std::ostream &os) const {
-		utils::Serializer::writePOD(os, id);
-		utils::Serializer::writePOD(os, sourceNodeId);
-		utils::Serializer::writePOD(os, targetNodeId);
-		utils::Serializer::writeString(os, label);
-
-		// write property storage type
-		utils::Serializer::writePOD(os, static_cast<uint32_t>(propertyStorageType));
-
-		// Write property entity ID
-		utils::Serializer::writePOD(os, propertyEntityId);
-
-		// Write activation flag
-		utils::Serializer::writePOD(os, isActive_);
-	}
-
-	Edge Edge::deserialize(std::istream &is) {
-		auto id = utils::Serializer::readPOD<uint64_t>(is);
-		auto sourceNodeId = utils::Serializer::readPOD<uint64_t>(is);
-		auto targetNodeId = utils::Serializer::readPOD<uint64_t>(is);
-		std::string label = utils::Serializer::readString(is);
-
-		Edge edge(id, sourceNodeId, targetNodeId, label);
-
-		// Read property storage type
-		edge.propertyStorageType = static_cast<PropertyStorageType>(utils::Serializer::readPOD<uint32_t>(is));
-
-		// Read property entity ID
-		edge.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
-
-		// Read activation flag
-		edge.isActive_ = utils::Serializer::readPOD<bool>(is);
-
-		return edge;
-	}
+        return size;
+    }
 
 } // namespace graph

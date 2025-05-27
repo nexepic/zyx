@@ -784,7 +784,7 @@ namespace graph::storage {
 
 		// Calculate file offset for this entity
 		auto entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) +
-														relativePosition * sizeof(EntityType));
+														relativePosition * EntityType::getTotalSize());
 
 		auto entity = readEntityFromDisk<EntityType>(entityOffset);
 
@@ -827,7 +827,7 @@ namespace graph::storage {
 
 		// Seek to the first entity
 		auto entityOffset =
-				static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) + startOffset * sizeof(EntityType));
+				static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) + startOffset * EntityType::getTotalSize());
 
 		// Read entities
 		for (uint64_t i = 0; i < count; ++i) {
@@ -842,7 +842,7 @@ namespace graph::storage {
 			}
 
 			// Move to next entity
-			entityOffset += sizeof(EntityType);
+			entityOffset += EntityType::getTotalSize();
 		}
 
 		return result;
