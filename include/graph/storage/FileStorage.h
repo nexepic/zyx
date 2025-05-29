@@ -15,6 +15,7 @@
 #include "DataManager.h"
 #include "DatabaseInspector.h"
 #include "DeletionManager.h"
+#include "EntityReferenceUpdater.h"
 #include "FileHeaderManager.h"
 #include "IDAllocator.h"
 #include "StorageHeaders.h"
@@ -138,6 +139,8 @@ namespace graph::storage {
 		std::shared_ptr<DatabaseInspector> databaseInspector;
 
 		std::shared_ptr<SegmentTracker> segmentTracker;
+
+		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater;
 
 		// Update bitmap for an entity in the segment header
 		template<typename EntityType>

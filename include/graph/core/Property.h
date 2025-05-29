@@ -28,7 +28,7 @@ namespace graph {
             bool isActive = true;
         };
 
-        static constexpr uint32_t typeId = static_cast<uint32_t>(EntityType::Property);
+        static constexpr uint32_t typeId = toUnderlying(EntityType::Property);
         static constexpr size_t TOTAL_PROPERTY_SIZE = 256;
         static constexpr size_t METADATA_SIZE = sizeof(Metadata);
 

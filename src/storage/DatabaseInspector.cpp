@@ -93,6 +93,7 @@ namespace graph::storage {
 	        table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
 	        table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
 	        table.addRow({"Used", std::to_string(segmentHeader.used)});
+	        table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
 	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
 	        table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
 	        table.print();
@@ -238,6 +239,7 @@ namespace graph::storage {
 	        table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
 	        table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
 	        table.addRow({"Used", std::to_string(segmentHeader.used)});
+	    	table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
 	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
 	        table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
 	        table.print();

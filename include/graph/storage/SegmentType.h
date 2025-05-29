@@ -16,8 +16,4 @@ namespace graph::storage {
 
 	using SegmentType = EntityType;
 
-	constexpr uint32_t toUnderlying(SegmentType type) {
-		return static_cast<uint32_t>(type);
-	}
-
 } // namespace graph::storage

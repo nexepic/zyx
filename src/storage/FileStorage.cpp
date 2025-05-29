@@ -81,13 +81,16 @@ namespace graph::storage {
 			dataManager->handleIdUpdate(tempId, permId, entityType);
 		});
 
+		entityReferenceUpdater = std::make_shared<EntityReferenceUpdater>(fileStream, idAllocator, segmentTracker);
+
 		// Then create the space manager
-		spaceManager =
-				std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager, idAllocator);
+		spaceManager = std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager,
+													  idAllocator, entityReferenceUpdater);
 		spaceManager->initialize(fileHeader);
 
 		// Initialize data manager
-		dataManager = std::make_shared<DataManager>(dbFilePath, cacheSize, fileHeader, idAllocator, segmentTracker, spaceManager);
+		dataManager = std::make_shared<DataManager>(dbFilePath, cacheSize, fileHeader, idAllocator, segmentTracker,
+													spaceManager);
 		dataManager->initialize();
 
 		// Always set up auto-flush callback
@@ -665,14 +668,14 @@ namespace graph::storage {
 
 		// Update references for properties first
 		for (auto &property: dirtyProperties) {
-			if (EntityReferenceUpdater::updatePropertyReferencesToPermanent(property, idAllocator)) {
+			if (entityReferenceUpdater->updatePropertyReferencesToPermanent(property)) {
 				dataManager->updatePropertyEntity(property);
 			}
 		}
 
 		// Update references for blobs next
 		for (auto &blob: dirtyBlobs) {
-			if (EntityReferenceUpdater::updateBlobReferencesToPermanent(blob, idAllocator)) {
+			if (entityReferenceUpdater->updateBlobReferencesToPermanent(blob)) {
 				// Ensure your DataManager has this method
 				dataManager->updateBlobEntity(blob);
 			}
@@ -680,14 +683,14 @@ namespace graph::storage {
 
 		// Update references for nodes
 		for (auto &node: dirtyNodes) {
-			if (EntityReferenceUpdater::updateNodeReferencesToPermanent(node, idAllocator)) {
+			if (entityReferenceUpdater->updateNodeReferencesToPermanent(node)) {
 				dataManager->updateNode(node);
 			}
 		}
 
 		// Update references for edges last
 		for (auto &edge: dirtyEdges) {
-			if (EntityReferenceUpdater::updateEdgeReferencesToPermanent(edge, idAllocator)) {
+			if (entityReferenceUpdater->updateEdgeReferencesToPermanent(edge)) {
 				dataManager->updateEdge(edge);
 			}
 		}

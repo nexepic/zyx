@@ -39,9 +39,10 @@ namespace graph::storage {
 		uint64_t getChainHead(uint32_t type) const;
 		void updateChainHead(uint32_t type, uint64_t newHead);
 		void updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset);
+
 		void markSegmentFree(uint64_t offset);
 		std::vector<uint64_t> getFreeSegments() const;
-
+		SegmentHeader getFreeSegmentHeader(uint64_t offset) const;
 		void removeFromFreeList(uint64_t offset);
 
 		void flushDirtySegments();
@@ -68,6 +69,12 @@ namespace graph::storage {
 		void updateActivityBitmap(uint64_t offset, const std::vector<bool> &activityMap);
 		std::vector<bool> getActivityBitmap(uint64_t offset) const;
 
+		template<typename T>
+		T readEntity(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
+
+		template<typename T>
+		void writeEntity(uint64_t segmentOffset, uint32_t itemIndex, const T &entity, size_t itemSize);
+
 	private:
 		std::shared_ptr<std::fstream> file_;
 		mutable std::recursive_mutex mutex_;
@@ -81,7 +88,7 @@ namespace graph::storage {
 		// Segment cache - stores actual segment headers
 		std::unordered_map<uint64_t, SegmentHeader> segments_;
 
-		std::vector<uint64_t> freeSegments_;
+		std::unordered_map<uint64_t, SegmentHeader> freeSegments_;
 		std::vector<uint64_t> dirtySegments_;
 
 		void loadSegments();

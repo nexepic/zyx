@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "EntityReferenceUpdater.h"
 #include "FileHeaderManager.h"
 #include "IDAllocator.h"
 
@@ -24,13 +25,11 @@
 
 namespace graph::storage {
 
-	// Callback function type for updating references
-	using ReferenceUpdateCallback = std::function<void(uint64_t, uint64_t, uint32_t)>;
-
 	class SpaceManager {
 	public:
 		SpaceManager(std::shared_ptr<std::fstream> file, std::string fileName, std::shared_ptr<SegmentTracker> tracker,
-					 std::shared_ptr<FileHeaderManager> fileHeaderManager, std::shared_ptr<IDAllocator> idAllocator);
+					 std::shared_ptr<FileHeaderManager> fileHeaderManager, std::shared_ptr<IDAllocator> idAllocator,
+					 std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater);
 		~SpaceManager();
 
 		void initialize(FileHeader &header);
@@ -40,19 +39,6 @@ namespace graph::storage {
 		void compactSegments(uint32_t type, double threshold);
 		bool moveSegment(uint64_t sourceOffset, uint64_t destinationOffset);
 
-		// Update references when a segment is moved
-		void updateSegmentReferences(uint64_t oldOffset, uint64_t newOffset, uint32_t type);
-		void updateNodeSegmentReferences(uint64_t oldOffset, uint64_t newOffset);
-		void updateEdgeSegmentReferences(uint64_t oldOffset, uint64_t newOffset);
-		void updatePropertySegmentReferences(uint64_t oldOffset, uint64_t newOffset);
-
-		// Helper methods for reference updates
-		void updateEdgeReferencesToNode(uint64_t nodeId, uint64_t oldNodeSegment, uint64_t newNodeSegment);
-		void updatePropertyReferencesToEntity(int64_t entityId, uint32_t entityType, uint64_t oldSegment,
-											  uint64_t newSegment);
-
-		// void setReferenceUpdateCallback(ReferenceUpdateCallback callback);
-
 		bool shouldCompact() const;
 
 		void compactSegments();
@@ -60,7 +46,7 @@ namespace graph::storage {
 		double getTotalFragmentationRatio() const;
 
 		// Get the tracker
-		std::shared_ptr<SegmentTracker> getTracker() const { return tracker_; }
+		std::shared_ptr<SegmentTracker> getTracker() const { return segmentTracker_; }
 
 		// methods for segment merging
 		std::vector<uint64_t> findCandidatesForMerge(uint32_t type, double usageThreshold);
@@ -68,12 +54,8 @@ namespace graph::storage {
 		bool mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint32_t type);
 
 		// Remove empty segments
-		bool removeEmptySegments(uint32_t type);
-		void removeAllEmptySegments();
-
-		// Property reference updates
-		void updatePropertyReference(uint64_t entityId, uint32_t entityType, uint64_t oldSegmentOffset,
-									 uint64_t newSegmentOffset, uint64_t oldEntryOffset, uint64_t newEntryOffset);
+		bool processEmptySegments(uint32_t type);
+		void processAllEmptySegments();
 
 		// Truncates the file by removing unused trailing segments
 		bool truncateFile();
@@ -85,15 +67,34 @@ namespace graph::storage {
 		void initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity);
 
 	private:
+		// Struct to track ID mappings for entity relocations
+		struct EntityIdMapping {
+			int64_t oldId;
+			int64_t newId;
+			uint32_t index;
+		};
+
+		// Map entities when relocating segments with different start_id
+		std::vector<EntityIdMapping> mapEntityIds(uint32_t type, uint64_t sourceOffset,
+							uint64_t destOffset,
+							const SegmentHeader& sourceHeader,
+							const SegmentHeader& destHeader);
+
+		// Update entities with new IDs during relocation
+		void updateEntitiesWithNewIds(uint32_t type, uint64_t destOffset,
+					    const std::vector<EntityIdMapping>& idMappings,
+					    const SegmentHeader& header);
+
 		std::shared_ptr<std::fstream> file_;
 		std::string fileName_;
-		std::shared_ptr<SegmentTracker> tracker_;
+		std::shared_ptr<SegmentTracker> segmentTracker_;
 		std::mutex mutex_;
-		// ReferenceUpdateCallback referenceUpdateCallback_;
 
 		std::shared_ptr<FileHeaderManager> fileHeaderManager_;
 
 		std::shared_ptr<IDAllocator> idAllocator_;
+
+		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
 
 		// Update file header with current max IDs
 		void updateMaxIds();

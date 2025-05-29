@@ -16,6 +16,7 @@
 #include <graph/utils/ChecksumUtils.h>
 #include <iostream>
 #include <stdexcept>
+#include "graph/utils/FixedSizeSerializer.h"
 
 namespace graph::storage {
 
@@ -72,12 +73,6 @@ namespace graph::storage {
 				throw std::runtime_error("Segment type mismatch: expected " + std::to_string(expectedType) +
 										 ", found " + std::to_string(header.data_type));
 			}
-
-			// // Store file offset and initialize tracking flags
-			// header.file_offset = offset;
-			// header.is_dirty = 0;
-			// header.needs_compaction = 0;
-
 
 			// Add to segment map
 			segments_[offset] = header;
@@ -276,29 +271,60 @@ namespace graph::storage {
 			throw std::runtime_error("Attempting to free segment at non-aligned offset: " + std::to_string(offset));
 		}
 
+		// Get the header before removing from segments map
+		auto it = segments_.find(offset);
+		if (it != segments_.end()) {
+			// Store the header in the free segments map
+			freeSegments_[offset] = it->second;
+
+			// Remove from segments map
+			segments_.erase(it);
+		} else {
+			// If header is not in memory, read it from disk
+			SegmentHeader header;
+			file_->seekg(static_cast<std::streamoff>(offset));
+			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+
+			if (!*file_) {
+				throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
+			}
+
+			freeSegments_[offset] = header;
+		}
+
 		// Remove from dirty segments list if present
-		auto it = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
-		if (it != dirtySegments_.end()) {
-			dirtySegments_.erase(it);
+		auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
+		if (dirtyIt != dirtySegments_.end()) {
+			dirtySegments_.erase(dirtyIt);
 		}
-
-		// Remove from segments map
-		if (segments_.find(offset) != segments_.end()) {
-			segments_.erase(offset);
-		}
-
-		// Add to free segments list
-		freeSegments_.push_back(offset);
 	}
 
 	std::vector<uint64_t> SegmentTracker::getFreeSegments() const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		return freeSegments_;
+		std::vector<uint64_t> offsets;
+		offsets.reserve(freeSegments_.size());
+
+		for (const auto &[offset, _]: freeSegments_) {
+			offsets.push_back(offset);
+		}
+
+		return offsets;
+	}
+
+	SegmentHeader SegmentTracker::getFreeSegmentHeader(uint64_t offset) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		auto it = freeSegments_.find(offset);
+		if (it != freeSegments_.end()) {
+			return it->second;
+		}
+
+		throw std::runtime_error("Free segment not found at offset " + std::to_string(offset));
 	}
 
 	void SegmentTracker::removeFromFreeList(uint64_t offset) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		freeSegments_.erase(std::remove(freeSegments_.begin(), freeSegments_.end(), offset), freeSegments_.end());
+		freeSegments_.erase(offset);
 	}
 
 	void SegmentTracker::writeSegmentHeader(uint64_t offset, const SegmentHeader &header) {
@@ -354,6 +380,8 @@ namespace graph::storage {
 
 	void SegmentTracker::setBitmapBit(uint64_t offset, uint32_t index, bool value) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// TODO: Executing multiple times while performing deleting and saving
 
 		ensureSegmentCached(offset);
 		SegmentHeader &header = segments_[offset];
@@ -594,5 +622,56 @@ namespace graph::storage {
 		// Ensure all writes are flushed to disk
 		file_->flush();
 	}
+
+	template<typename T>
+	T SegmentTracker::readEntity(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Ensure segment is cached
+		ensureSegmentCached(segmentOffset);
+
+		// Calculate item offset within segment
+		uint64_t itemOffset = segmentOffset + sizeof(SegmentHeader) + itemIndex * itemSize;
+
+		// Position the file at the correct offset
+		file_->seekg(static_cast<std::streamoff>(itemOffset));
+
+		// Use the FixedSizeSerializer to deserialize the entity
+		return utils::FixedSizeSerializer::deserializeWithFixedSize<T>(*file_, itemSize);
+	}
+
+	template<typename T>
+	void SegmentTracker::writeEntity(uint64_t segmentOffset, uint32_t itemIndex, const T &entity, size_t itemSize) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Ensure segment is cached
+		ensureSegmentCached(segmentOffset);
+
+		// Calculate item offset within segment
+		uint64_t itemOffset = segmentOffset + sizeof(SegmentHeader) + itemIndex * itemSize;
+
+		// Position the file at the correct offset
+		file_->seekp(static_cast<std::streamoff>(itemOffset));
+
+		// Use the FixedSizeSerializer to serialize the entity
+		utils::FixedSizeSerializer::serializeWithFixedSize(*file_, entity, itemSize);
+
+		// Mark segment as dirty since we've modified its content
+		auto it = segments_.find(segmentOffset);
+		if (it != segments_.end()) {
+			it->second.is_dirty = 1;
+			markSegmentDirty(segmentOffset);
+		}
+	}
+
+	template Node SegmentTracker::readEntity<Node>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
+	template Edge SegmentTracker::readEntity<Edge>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
+	template Property SegmentTracker::readEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
+	template Blob SegmentTracker::readEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
+
+	template void SegmentTracker::writeEntity<Node>(uint64_t segmentOffset, uint32_t itemIndex, const Node& entity, size_t itemSize);
+	template void SegmentTracker::writeEntity<Edge>(uint64_t segmentOffset, uint32_t itemIndex, const Edge& entity, size_t itemSize);
+	template void SegmentTracker::writeEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex, const Property& entity, size_t itemSize);
+	template void SegmentTracker::writeEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, const Blob& entity, size_t itemSize);
 
 } // namespace graph::storage

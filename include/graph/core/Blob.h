@@ -38,7 +38,7 @@ namespace graph {
         static constexpr size_t METADATA_SIZE = sizeof(Metadata);
         static constexpr size_t CHUNK_SIZE = TOTAL_BLOB_SIZE - METADATA_SIZE;
 
-        static constexpr uint32_t typeId = static_cast<uint32_t>(EntityType::Blob);
+        static constexpr uint32_t typeId = toUnderlying(EntityType::Blob);
         static constexpr uint32_t MAX_COMPRESSED_SIZE = 5 * 1024 * 1024; // 5MB
 
         [[nodiscard]] size_t getSerializedSize() const;

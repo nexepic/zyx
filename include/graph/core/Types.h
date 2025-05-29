@@ -10,9 +10,15 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace graph {
 
 	enum class EntityType : uint32_t { Node, Edge, Property, Blob };
+
+	constexpr uint32_t toUnderlying(EntityType type) {
+		return static_cast<uint32_t>(type);
+	}
 
 	enum class PropertyStorageType : uint32_t { NONE, PROPERTY_ENTITY, BLOB_ENTITY };
 
