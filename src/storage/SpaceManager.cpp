@@ -12,8 +12,10 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <graph/storage/DataManager.h>
 #include <iostream>
 #include <unordered_set>
+
 #include "graph/storage/SegmentType.h"
 
 namespace graph::storage {
@@ -21,10 +23,9 @@ namespace graph::storage {
 	SpaceManager::SpaceManager(std::shared_ptr<std::fstream> file, std::string fileName,
 							   std::shared_ptr<SegmentTracker> tracker,
 							   std::shared_ptr<FileHeaderManager> fileHeaderManager,
-							   std::shared_ptr<IDAllocator> idAllocator,
-							   std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater) :
+							   std::shared_ptr<IDAllocator> idAllocator) :
 		file_(file), fileName_(fileName), segmentTracker_(tracker), fileHeaderManager_(fileHeaderManager),
-		idAllocator_(idAllocator), entityReferenceUpdater_(entityReferenceUpdater) {}
+		idAllocator_(idAllocator) {}
 
 	SpaceManager::~SpaceManager() = default;
 
@@ -33,6 +34,9 @@ namespace graph::storage {
 
 		// Initialize tracker with header
 		segmentTracker_->initialize(header);
+
+		// // Validate segment chains after initialization to ensure integrity
+		// segmentTracker_->validateSegmentChains();
 	}
 
 	uint64_t SpaceManager::findMaxId(uint32_t type, std::shared_ptr<SegmentTracker> &tracker) {
@@ -124,6 +128,9 @@ namespace graph::storage {
 		// Get segment info before it's removed
 		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
 
+		// Check if this is a chain head
+		bool isChainHead = (segmentTracker_->getChainHead(header.data_type) == offset);
+
 		// Update chain links
 		uint64_t prevOffset = header.prev_segment_offset;
 		uint64_t nextOffset = header.next_segment_offset;
@@ -139,6 +146,11 @@ namespace graph::storage {
 		if (nextOffset != 0) {
 			SegmentHeader nextHeader = segmentTracker_->getSegmentHeader(nextOffset);
 			segmentTracker_->updateSegmentLinks(nextOffset, prevOffset, nextHeader.next_segment_offset);
+		}
+
+		// If this was a chain head, update the file header
+		if (isChainHead) {
+			updateFileHeaderChainHeads();
 		}
 
 		// Mark segment as free
@@ -186,81 +198,32 @@ namespace graph::storage {
 			SegmentHeader sourceHeader = segmentTracker_->getSegmentHeader(sourceOffset);
 			uint32_t segmentType = sourceHeader.data_type;
 
-			// Get destination segment info (if it's a free segment)
-			SegmentHeader destHeader;
-			bool isFreeSegment = false;
+			// Check if this is a chain head
+			bool isChainHead = (segmentTracker_->getChainHead(segmentType) == sourceOffset);
 
-			try {
-				// Try to get header from free list first
-				destHeader = segmentTracker_->getFreeSegmentHeader(destinationOffset);
-				isFreeSegment = true;
-			} catch (const std::exception &) {
-				// If not in free list, try to read directly (this is a fallback)
-				try {
-					destHeader = segmentTracker_->getSegmentHeader(destinationOffset);
-				} catch (const std::exception &) {
-					// If we can't get header info at all, initialize a new one
-					destHeader = sourceHeader;
-					destHeader.file_offset = destinationOffset;
-				}
-			}
+			// Remove destination from free list if applicable
+			segmentTracker_->removeFromFreeList(destinationOffset);
 
-			// Create ID mapping if the start_id values differ and we're moving to a previously
-			// used segment location
-			std::vector<EntityIdMapping> idMappings;
-
-			if (isFreeSegment && destHeader.start_id != 0 && destHeader.start_id != sourceHeader.start_id) {
-				idMappings = mapEntityIds(segmentType, sourceOffset, destinationOffset, sourceHeader, destHeader);
-			}
-
-			// Save active entities information for reference updates before copying data
-			std::vector<int64_t> activeEntityIds;
-			std::vector<bool> activityMap = segmentTracker_->getActivityBitmap(sourceOffset);
-			for (uint32_t i = 0; i < sourceHeader.used && i < activityMap.size(); i++) {
-				if (activityMap[i]) {
-					activeEntityIds.push_back(sourceHeader.start_id + i);
-				}
-			}
-
-			// Copy the segment data (both header and content)
-			copySegmentData(sourceOffset, destinationOffset, sourceHeader);
-
-			// Update entity IDs if we have mappings
-			if (!idMappings.empty()) {
-				updateEntitiesWithNewIds(segmentType, destinationOffset, idMappings, destHeader);
-
-				// Update references for each entity with ID mapping
-				for (const auto &mapping: idMappings) {
-					entityReferenceUpdater_->updateEntityReferences(mapping.oldId, segmentType, sourceOffset,
-																	destinationOffset);
-				}
-			} else {
-				// Directly update references for each active entity
-				for (int64_t entityId: activeEntityIds) {
-					entityReferenceUpdater_->updateEntityReferences(entityId, segmentType, sourceOffset,
-																	destinationOffset);
-				}
-			}
-
-			// Prepare updated header for the destination
+			// Create a clean copy of the source header for the destination
+			// Preserving all original metadata including start_id
 			SegmentHeader newHeader = sourceHeader;
-
-			// If moving to a previously used segment, preserve its start_id to maintain ID sequence
-			if (isFreeSegment && destHeader.start_id != 0) {
-				newHeader.start_id = destHeader.start_id;
-			}
-
 			newHeader.file_offset = destinationOffset;
 
-			// Write the updated header at the destination
+			// Copy the segment data (content only, not header)
+			copySegmentData(sourceOffset, destinationOffset);
+
+			// Write the copied header at the destination
 			segmentTracker_->writeSegmentHeader(destinationOffset, newHeader);
 
 			// Update chain links
 			updateSegmentChain(destinationOffset, sourceHeader);
 
-			// If this is the head of a chain, update the chain head
-			if (sourceHeader.prev_segment_offset == 0) {
-				segmentTracker_->updateChainHead(sourceHeader.data_type, destinationOffset);
+			// Ensure chain head is properly updated
+			// This is for safety in case updateSegmentChain didn't detect it was a chain head
+			if (isChainHead) {
+				segmentTracker_->updateChainHead(segmentType, destinationOffset);
+				// Update the file header to reflect the new chain head
+				updateFileHeaderChainHeads();
 			}
 
 			// Mark old segment as free
@@ -270,94 +233,6 @@ namespace graph::storage {
 		} catch (const std::exception &e) {
 			std::cerr << "Error moving segment: " << e.what() << std::endl;
 			return false;
-		}
-	}
-
-	std::vector<SpaceManager::EntityIdMapping> SpaceManager::mapEntityIds(uint32_t type, uint64_t sourceOffset,
-																		  uint64_t destOffset,
-																		  const SegmentHeader &sourceHeader,
-																		  const SegmentHeader &destHeader) {
-
-		std::vector<EntityIdMapping> idMappings;
-
-		// Get information about active entities in the source segment
-		std::vector<bool> activityMap = segmentTracker_->getActivityBitmap(sourceOffset);
-
-		// Calculate ID offset difference
-		int64_t idDiff = destHeader.start_id - sourceHeader.start_id;
-
-		// Create mapping for each active entity
-		for (uint32_t i = 0; i < sourceHeader.used && i < activityMap.size(); i++) {
-			if (activityMap[i]) {
-				EntityIdMapping mapping;
-				mapping.oldId = sourceHeader.start_id + i;
-				mapping.newId = mapping.oldId + idDiff;
-				mapping.index = i;
-				idMappings.push_back(mapping);
-			}
-		}
-
-		return idMappings;
-	}
-
-	void SpaceManager::updateEntitiesWithNewIds(uint32_t type, uint64_t destOffset,
-												const std::vector<EntityIdMapping> &idMappings,
-												const SegmentHeader &header) {
-
-		// Determine entity size based on type
-		size_t entitySize;
-		switch (type) {
-			case toUnderlying(SegmentType::Node):
-				entitySize = Node::getTotalSize();
-				break;
-			case toUnderlying(SegmentType::Edge):
-				entitySize = Edge::getTotalSize();
-				break;
-			case toUnderlying(SegmentType::Property):
-				entitySize = Property::getTotalSize();
-				break;
-			case toUnderlying(SegmentType::Blob):
-				entitySize = Blob::getTotalSize();
-				break;
-			default:
-				throw std::invalid_argument("Invalid segment type");
-		}
-
-		// Update each entity with its new ID
-		for (const auto &mapping: idMappings) {
-			// Calculate relative index in the segment
-			uint32_t index = mapping.index;
-
-			// Update ID based on entity type
-			switch (type) {
-				case toUnderlying(SegmentType::Node): {
-					// Read entity using serialization
-					auto node = segmentTracker_->readEntity<Node>(destOffset, index, entitySize);
-					node.setId(mapping.newId);
-					// Write updated entity back
-					segmentTracker_->writeEntity(destOffset, index, node, entitySize);
-					break;
-				}
-				case toUnderlying(SegmentType::Edge): {
-					auto edge = segmentTracker_->readEntity<Edge>(destOffset, index, entitySize);
-					edge.setId(mapping.newId);
-					segmentTracker_->writeEntity(destOffset, index, edge, entitySize);
-					break;
-				}
-				case toUnderlying(SegmentType::Property): {
-					auto property = segmentTracker_->readEntity<Property>(destOffset, index, entitySize);
-					property.setId(mapping.newId);
-					segmentTracker_->writeEntity(destOffset, index, property, entitySize);
-					break;
-				}
-				case toUnderlying(SegmentType::Blob): {
-					auto blob = segmentTracker_->readEntity<Blob>(destOffset, index, entitySize);
-					blob.setId(mapping.newId);
-					segmentTracker_->writeEntity(destOffset, index, blob, entitySize);
-					break;
-				}
-				default:;
-			}
 		}
 	}
 
@@ -389,6 +264,37 @@ namespace graph::storage {
 		return ratio;
 	}
 
+	bool SpaceManager::safeCompactSegments() {
+		// Try to acquire the compaction lock, return immediately if already locked
+		if (!compactionMutex_.try_lock()) {
+			return false; // Another thread is already performing compaction
+		}
+
+		// Double-check with atomic flag (belt and suspenders approach)
+		if (compactionInProgress_.exchange(true)) {
+			// This shouldn't happen with the mutex, but for extra safety
+			compactionMutex_.unlock();
+			return false;
+		}
+
+		bool success = false;
+		try {
+			// Perform the actual compaction
+			compactSegments();
+			success = true;
+		} catch (const std::exception &e) {
+			// Log compaction error but don't rethrow to ensure cleanup
+			std::cerr << "Error during compaction: " << e.what() << std::endl;
+		} catch (...) {
+			std::cerr << "Unknown error during compaction" << std::endl;
+		}
+
+		// Always reset the flag and unlock when done
+		compactionInProgress_.store(false);
+		compactionMutex_.unlock();
+		return success;
+	}
+
 	void SpaceManager::compactSegments() {
 		// Remove completely empty segments
 		processAllEmptySegments();
@@ -408,7 +314,11 @@ namespace graph::storage {
 		// Relocate segments from end of file to fill gaps
 		relocateSegmentsFromEnd();
 
+		// Update max IDs in file header
 		updateMaxIds();
+
+		// // Ensure chain heads are properly updated in file header
+		// updateFileHeaderChainHeads();
 	}
 
 	bool SpaceManager::shouldCompact() const {
@@ -447,27 +357,31 @@ namespace graph::storage {
 		// Create a new activity bitmap
 		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
 
-		std::vector<char> nodeBuffer(nodeSize);
 		for (uint32_t i = 0; i < header.used; i++) {
 			// Check if this node is active
 			if (bitmap::getBit(header.activity_bitmap, i)) {
-				// Read node
-				file_->seekg(static_cast<std::streamoff>(offset + sizeof(SegmentHeader) +
-														 static_cast<std::streamoff>(i * nodeSize)));
-				file_->read(nodeBuffer.data(), static_cast<std::streamsize>(nodeSize));
+				// Calculate IDs
+				int64_t oldId = header.start_id + i;
+				int64_t newId = header.start_id + nextFreeSpot;
+
+				// Read node using SegmentTracker
+				auto node = segmentTracker_->readEntity<Node>(offset, i, nodeSize);
 
 				// Update node ID
-				Node *node = reinterpret_cast<Node *>(nodeBuffer.data());
-				node->setId(header.start_id + nextFreeSpot);
+				node.setId(newId);
 
-				// Write to the free spot
-				file_->seekp(static_cast<std::streamoff>(offset + sizeof(SegmentHeader) +
-														 static_cast<std::streamoff>(nextFreeSpot * nodeSize)));
-				file_->write(nodeBuffer.data(), static_cast<std::streamsize>(nodeSize));
+				// Write updated node using SegmentTracker
+				segmentTracker_->writeEntity<Node>(offset, nextFreeSpot, node, nodeSize);
 
 				// Mark as active in new bitmap
 				bitmap::setBit(newBitmap, nextFreeSpot, true);
 				nextFreeSpot++;
+
+				// Update references immediately if ID has changed
+				if (oldId != newId) {
+					// Use updateEntityReferences as the entry point which will dispatch to the appropriate method
+					entityReferenceUpdater_->updateEntityReferences(oldId, &node, toUnderlying(SegmentType::Node));
+				}
 			}
 		}
 
@@ -514,27 +428,30 @@ namespace graph::storage {
 		// Create a new activity bitmap
 		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
 
-		std::vector<char> edgeBuffer(edgeSize);
 		for (uint32_t i = 0; i < header.used; i++) {
 			// Check if this edge is active
 			if (bitmap::getBit(header.activity_bitmap, i)) {
-				if (i != nextFreeSpot) {
-					// Read edge
-					file_->seekg(static_cast<std::streamoff>(offset + sizeof(SegmentHeader) + i * edgeSize));
-					file_->read(edgeBuffer.data(), static_cast<std::streamsize>(edgeSize));
+				// Calculate IDs
+				int64_t oldId = header.start_id + i;
+				int64_t newId = header.start_id + nextFreeSpot;
 
-					// Update edge ID
-					Edge *edge = reinterpret_cast<Edge *>(edgeBuffer.data());
-					edge->setId(header.start_id + nextFreeSpot);
+				// Read edge using SegmentTracker
+				auto edge = segmentTracker_->readEntity<Edge>(offset, i, edgeSize);
 
-					// Write to the free spot
-					file_->seekp(static_cast<std::streamoff>(offset + sizeof(SegmentHeader) + nextFreeSpot * edgeSize));
-					file_->write(edgeBuffer.data(), static_cast<std::streamsize>(edgeSize));
-				}
+				// Update edge ID
+				edge.setId(newId);
+
+				// Write updated edge using SegmentTracker
+				segmentTracker_->writeEntity<Edge>(offset, nextFreeSpot, edge, edgeSize);
 
 				// Mark as active in new bitmap
 				bitmap::setBit(newBitmap, nextFreeSpot, true);
 				nextFreeSpot++;
+
+				// Update references immediately if ID has changed
+				if (oldId != newId) {
+					entityReferenceUpdater_->updateEntityReferences(oldId, &edge, toUnderlying(SegmentType::Edge));
+				}
 			}
 		}
 
@@ -556,8 +473,8 @@ namespace graph::storage {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
 
 		// If inactive count is zero, nothing to do
-		if (header.inactive_count == 0) {
-			return true;
+		if (header.getFragmentationRatio() == 0) {
+			return false;
 		}
 
 		// If segment is empty, deallocate it
@@ -575,34 +492,37 @@ namespace graph::storage {
 		}
 
 		// Always compact in place
-		size_t propertySize = Property::getTotalSize(); // Use the entity-based Property size
+		size_t propertySize = Property::getTotalSize();
 		uint32_t nextFreeSpot = 0;
 
 		// Create a new activity bitmap
 		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
 
-		std::vector<char> propertyBuffer(propertySize);
 		for (uint32_t i = 0; i < header.used; i++) {
 			// Check if this property is active
 			if (bitmap::getBit(header.activity_bitmap, i)) {
-				if (i != nextFreeSpot) {
-					// Read property
-					file_->seekg(static_cast<std::streamoff>(offset + sizeof(SegmentHeader) + i * propertySize));
-					file_->read(propertyBuffer.data(), static_cast<std::streamsize>(propertySize));
+				// Calculate IDs
+				int64_t oldId = header.start_id + i;
+				int64_t newId = header.start_id + nextFreeSpot;
 
-					// Update property ID if needed
-					Property *property = reinterpret_cast<Property *>(propertyBuffer.data());
-					property->setId(header.start_id + nextFreeSpot);
+				// Read property using SegmentTracker
+				auto property = segmentTracker_->readEntity<Property>(offset, i, propertySize);
 
-					// Write to the free spot
-					file_->seekp(
-							static_cast<std::streamoff>(offset + sizeof(SegmentHeader) + nextFreeSpot * propertySize));
-					file_->write(propertyBuffer.data(), static_cast<std::streamsize>(propertySize));
-				}
+				// Update property ID
+				property.setId(newId);
+
+				// Write updated property using SegmentTracker
+				segmentTracker_->writeEntity<Property>(offset, nextFreeSpot, property, propertySize);
 
 				// Mark as active in new bitmap
 				bitmap::setBit(newBitmap, nextFreeSpot, true);
 				nextFreeSpot++;
+
+				// Update references immediately if ID has changed
+				if (oldId != newId) {
+					entityReferenceUpdater_->updateEntityReferences(oldId, &property,
+																	toUnderlying(SegmentType::Property));
+				}
 			}
 		}
 
@@ -624,8 +544,8 @@ namespace graph::storage {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
 
 		// If inactive count is zero, nothing to do
-		if (header.inactive_count == 0) {
-			return true;
+		if (header.getFragmentationRatio() == 0) {
+			return false;
 		}
 
 		// If segment is empty, deallocate it
@@ -643,33 +563,36 @@ namespace graph::storage {
 		}
 
 		// Always compact in place
-		size_t blobSize = Blob::getTotalSize(); // Assuming Blob is the structure for blobs
+		size_t blobSize = Blob::getTotalSize();
 		uint32_t nextFreeSpot = 0;
 
 		// Create a new activity bitmap
 		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
 
-		std::vector<char> blobBuffer(blobSize);
 		for (uint32_t i = 0; i < header.used; i++) {
 			// Check if this blob is active
 			if (bitmap::getBit(header.activity_bitmap, i)) {
-				if (i != nextFreeSpot) {
-					// Read blob
-					file_->seekg(static_cast<std::streamoff>(offset + sizeof(SegmentHeader) + i * blobSize));
-					file_->read(blobBuffer.data(), static_cast<std::streamsize>(blobSize));
+				// Calculate IDs
+				int64_t oldId = header.start_id + i;
+				int64_t newId = header.start_id + nextFreeSpot;
 
-					// Update blob ID if needed
-					Blob *blob = reinterpret_cast<Blob *>(blobBuffer.data());
-					blob->setId(header.start_id + nextFreeSpot);
+				// Read blob using SegmentTracker
+				auto blob = segmentTracker_->readEntity<Blob>(offset, i, blobSize);
 
-					// Write to the free spot
-					file_->seekp(static_cast<std::streamoff>(offset + sizeof(SegmentHeader) + nextFreeSpot * blobSize));
-					file_->write(blobBuffer.data(), static_cast<std::streamsize>(blobSize));
-				}
+				// Update blob ID
+				blob.setId(newId);
+
+				// Write updated blob using SegmentTracker
+				segmentTracker_->writeEntity<Blob>(offset, nextFreeSpot, blob, blobSize);
 
 				// Mark as active in new bitmap
 				bitmap::setBit(newBitmap, nextFreeSpot, true);
 				nextFreeSpot++;
+
+				// Update references immediately if ID has changed
+				if (oldId != newId) {
+					entityReferenceUpdater_->updateEntityReferences(oldId, &blob, toUnderlying(SegmentType::Blob));
+				}
 			}
 		}
 
@@ -1048,51 +971,53 @@ namespace graph::storage {
 		uint32_t targetNextIndex = targetHeader.used;
 		uint32_t newInactiveCount = targetHeader.inactive_count;
 
-		// Track entities being moved for reference updates
-		std::vector<std::pair<uint64_t, uint64_t>> movedEntities; // <oldId, newId>
-
 		// Copy active items
 		for (uint32_t i = 0; i < sourceHeader.used; i++) {
 			// Check if this item is active
 			bool isActive = bitmap::getBit(sourceHeader.activity_bitmap, i);
 
 			if (isActive) {
-				uint64_t oldId = 0;
-				uint64_t newId = targetHeader.start_id + targetNextIndex;
+				// Calculate new ID
+				int64_t oldId = sourceHeader.start_id + i;
+				int64_t newId = targetHeader.start_id + targetNextIndex;
 
 				// Read, update ID, and write entity based on type
 				if (type == toUnderlying(SegmentType::Node)) {
-					Node node = segmentTracker_->readEntity<Node>(sourceOffset, i, itemSize);
-					oldId = node.getId();
+					auto node = segmentTracker_->readEntity<Node>(sourceOffset, i, itemSize);
 					node.setId(newId);
 					segmentTracker_->writeEntity(targetOffset, targetNextIndex, node, itemSize);
 
-					// Track for reference updates
-					movedEntities.emplace_back(oldId, newId);
+					// Update references immediately using the updated entity object
+					if (oldId != newId) {
+						entityReferenceUpdater_->updateEntityReferences(oldId, &node, type);
+					}
 				} else if (type == toUnderlying(SegmentType::Edge)) {
-					Edge edge = segmentTracker_->readEntity<Edge>(sourceOffset, i, itemSize);
-					oldId = edge.getId();
+					auto edge = segmentTracker_->readEntity<Edge>(sourceOffset, i, itemSize);
 					edge.setId(newId);
 					segmentTracker_->writeEntity(targetOffset, targetNextIndex, edge, itemSize);
 
-					// Track for reference updates
-					movedEntities.emplace_back(oldId, newId);
+					// Update references immediately using the updated entity object
+					if (oldId != newId) {
+						entityReferenceUpdater_->updateEntityReferences(oldId, &edge, type);
+					}
 				} else if (type == toUnderlying(SegmentType::Property)) {
-					Property property = segmentTracker_->readEntity<Property>(sourceOffset, i, itemSize);
-					oldId = property.getId();
+					auto property = segmentTracker_->readEntity<Property>(sourceOffset, i, itemSize);
 					property.setId(newId);
 					segmentTracker_->writeEntity(targetOffset, targetNextIndex, property, itemSize);
 
-					// Track for reference updates
-					movedEntities.emplace_back(oldId, newId);
+					// Update references immediately using the updated entity object
+					if (oldId != newId) {
+						entityReferenceUpdater_->updateEntityReferences(oldId, &property, type);
+					}
 				} else if (type == toUnderlying(SegmentType::Blob)) {
-					Blob blob = segmentTracker_->readEntity<Blob>(sourceOffset, i, itemSize);
-					oldId = blob.getId();
+					auto blob = segmentTracker_->readEntity<Blob>(sourceOffset, i, itemSize);
 					blob.setId(newId);
 					segmentTracker_->writeEntity(targetOffset, targetNextIndex, blob, itemSize);
 
-					// Track for reference updates
-					movedEntities.emplace_back(oldId, newId);
+					// Update references immediately using the updated entity object
+					if (oldId != newId) {
+						entityReferenceUpdater_->updateEntityReferences(oldId, &blob, type);
+					}
 				}
 
 				// Mark as active in the new bitmap
@@ -1117,24 +1042,13 @@ namespace graph::storage {
 		// Update segment chain references
 		updateSegmentChain(targetOffset, sourceHeader);
 
-		// Update entity references based on type
-		for (const auto &[oldId, newId]: movedEntities) {
-			if (type == toUnderlying(SegmentType::Node)) {
-				// Logic to update node references would go here
-			} else if (type == toUnderlying(SegmentType::Edge)) {
-				// Logic to update edge references would go here
-			} else if (type == toUnderlying(SegmentType::Property)) {
-				// Logic to update property references would go here
-			}
-		}
-
 		// Mark source segment as free
 		segmentTracker_->markSegmentFree(sourceOffset);
 
 		return true;
 	}
 
-	bool SpaceManager::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset, const SegmentHeader &header) {
+	bool SpaceManager::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) {
 		// Copy data in chunks to avoid large memory allocations
 		constexpr size_t COPY_BLOCK_SIZE = 64 * 1024; // 64KB
 		std::vector<char> buffer(COPY_BLOCK_SIZE);
@@ -1151,23 +1065,31 @@ namespace graph::storage {
 			file_->write(buffer.data(), copySize);
 		}
 
-		// Update the segment header at the destination
-		// Copy the header but update its location information
-		SegmentHeader newHeader = header;
-		newHeader.file_offset = destinationOffset; // Update memory-only field
-
-		// Re-register with tracker at the new location
-		segmentTracker_->registerSegment(destinationOffset, header.data_type, header.capacity);
-		segmentTracker_->updateSegmentUsage(destinationOffset, header.used, header.inactive_count);
-
-		// Copy the bitmap
-		std::vector<bool> activityBitmap = segmentTracker_->getActivityBitmap(sourceOffset);
-		segmentTracker_->updateActivityBitmap(destinationOffset, activityBitmap);
-
 		return true;
 	}
 
+	void SpaceManager::updateFileHeaderChainHeads() {
+		// Directly update the fileHeader_ member
+		FileHeader &header = fileHeaderManager_->getFileHeader();
+
+		// Update chain heads based on current tracker state
+		header.node_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Node));
+		header.edge_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Edge));
+		header.property_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Property));
+		header.blob_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Blob));
+	}
+
 	void SpaceManager::updateSegmentChain(uint64_t newOffset, const SegmentHeader &header) {
+		// Check if this is a chain head
+		bool isChainHead = false;
+		uint64_t currentChainHead = segmentTracker_->getChainHead(header.data_type);
+
+		if (currentChainHead == header.file_offset) {
+			// This is the head of the chain, update chain head to point to new location
+			segmentTracker_->updateChainHead(header.data_type, newOffset);
+			isChainHead = true;
+		}
+
 		// Update prev segment to point to the new segment
 		if (header.prev_segment_offset != 0) {
 			SegmentHeader prevHeader = segmentTracker_->getSegmentHeader(header.prev_segment_offset);
@@ -1177,9 +1099,6 @@ namespace graph::storage {
 				segmentTracker_->updateSegmentLinks(prevHeader.file_offset, prevHeader.prev_segment_offset,
 													header.next_segment_offset);
 			}
-		} else {
-			// This is the head of the chain
-			segmentTracker_->updateChainHead(header.data_type, newOffset);
 		}
 
 		// Update next segment to point to the new segment
@@ -1191,6 +1110,11 @@ namespace graph::storage {
 				segmentTracker_->updateSegmentLinks(nextHeader.file_offset, header.prev_segment_offset,
 													nextHeader.next_segment_offset);
 			}
+		}
+
+		// If this was a chain head, update the file header as well
+		if (isChainHead) {
+			updateFileHeaderChainHeads();
 		}
 	}
 

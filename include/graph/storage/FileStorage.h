@@ -140,8 +140,6 @@ namespace graph::storage {
 
 		std::shared_ptr<SegmentTracker> segmentTracker;
 
-		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater;
-
 		// Update bitmap for an entity in the segment header
 		template<typename EntityType>
 		void updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive);

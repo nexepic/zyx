@@ -10,7 +10,9 @@
 
 #include "graph/storage/FileHeaderManager.h"
 #include <cstring>
+#include <graph/storage/SegmentType.h>
 #include <stdexcept>
+
 #include "graph/utils/ChecksumUtils.h"
 
 namespace graph::storage {
@@ -24,7 +26,7 @@ namespace graph::storage {
 
 	FileHeaderManager::~FileHeaderManager() = default;
 
-	void FileHeaderManager::updateFileHeader() const {
+	void FileHeaderManager::flushFileHeader() const {
 		fileHeader_.max_node_id = maxNodeId;
 		fileHeader_.max_edge_id = maxEdgeId;
 		fileHeader_.max_blob_id = maxBlobId;
@@ -56,21 +58,23 @@ namespace graph::storage {
 		return header;
 	}
 
-	// void FileHeaderManager::writeFileHeader(const FileHeader &header) {
-	// 	// Save current position
-	// 	auto currentPos = file_->tellp();
-	//
-	// 	// Go to start of file
-	// 	file_->seekp(0, std::ios::beg);
-	// 	file_->write(reinterpret_cast<const char *>(&header), sizeof(FileHeader));
-	//
-	// 	if (!file_->good()) {
-	// 		throw std::runtime_error("Failed to write file header");
-	// 	}
-	//
-	// 	// Restore original position
-	// 	file_->seekp(currentPos);
-	// }
+	void FileHeaderManager::updateFileHeader(const FileHeader &header) {
+		// // Save current position
+		// auto currentPos = file_->tellp();
+		//
+		// // Go to start of file
+		// file_->seekp(0, std::ios::beg);
+		// file_->write(reinterpret_cast<const char *>(&header), sizeof(FileHeader));
+		//
+		// if (!file_->good()) {
+		// 	throw std::runtime_error("Failed to write file header");
+		// }
+		//
+		// // Restore original position
+		// file_->seekp(currentPos);
+
+		fileHeader_ = header;
+	}
 
 	void FileHeaderManager::updateFileHeaderMaxIds(std::shared_ptr<SegmentTracker> tracker) {
 		// Scan node segments to find max node ID
@@ -135,6 +139,44 @@ namespace graph::storage {
 		maxNodeId = fileHeader_.max_node_id;
 		maxEdgeId = fileHeader_.max_edge_id;
 		maxBlobId = fileHeader_.max_blob_id;
+	}
+
+	void FileHeaderManager::validateChainHeads(std::shared_ptr<SegmentTracker> tracker) {
+		FileHeader header = getFileHeader();
+		bool headersChanged = false;
+
+		// Check if node segment head matches tracker
+		uint64_t nodeHead = tracker->getChainHead(toUnderlying(SegmentType::Node));
+		if (header.node_segment_head != nodeHead) {
+			header.node_segment_head = nodeHead;
+			headersChanged = true;
+		}
+
+		// Check if edge segment head matches tracker
+		uint64_t edgeHead = tracker->getChainHead(toUnderlying(SegmentType::Edge));
+		if (header.edge_segment_head != edgeHead) {
+			header.edge_segment_head = edgeHead;
+			headersChanged = true;
+		}
+
+		// Check if property segment head matches tracker
+		uint64_t propertyHead = tracker->getChainHead(toUnderlying(SegmentType::Property));
+		if (header.property_segment_head != propertyHead) {
+			header.property_segment_head = propertyHead;
+			headersChanged = true;
+		}
+
+		// Check if blob segment head matches tracker
+		uint64_t blobHead = tracker->getChainHead(toUnderlying(SegmentType::Blob));
+		if (header.blob_segment_head != blobHead) {
+			header.blob_segment_head = blobHead;
+			headersChanged = true;
+		}
+
+		// Write back to file if any changes were made
+		if (headersChanged) {
+			updateFileHeader(header);
+		}
 	}
 
 } // namespace graph::storage

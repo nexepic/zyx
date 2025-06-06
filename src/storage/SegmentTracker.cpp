@@ -115,6 +115,86 @@ namespace graph::storage {
 		}
 	}
 
+	void SegmentTracker::validateSegmentChains() {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Validate node segment chain
+		validateChain(nodeSegmentHead_, toUnderlying(SegmentType::Node));
+
+		// Validate edge segment chain
+		validateChain(edgeSegmentHead_, toUnderlying(SegmentType::Edge));
+
+		// Validate property segment chain
+		validateChain(propertySegmentHead_, toUnderlying(SegmentType::Property));
+
+		// Validate blob segment chain
+		validateChain(blobSegmentHead_, toUnderlying(SegmentType::Blob));
+	}
+
+	void SegmentTracker::validateChain(uint64_t headOffset, uint32_t type) {
+		if (headOffset == 0) {
+			return; // Empty chain, nothing to validate
+		}
+
+		uint64_t current = headOffset;
+		uint64_t prev = 0;
+
+		while (current != 0) {
+			auto it = segments_.find(current);
+			if (it == segments_.end()) {
+				// Segment not in cache, try to read from disk
+				ensureSegmentCached(current);
+				it = segments_.find(current);
+
+				if (it == segments_.end()) {
+					// Still not found, chain is broken
+					if (prev == 0) {
+						// This was the head, update chain head to 0
+						updateChainHead(type, 0);
+					} else {
+						// Update previous segment to point to 0
+						updateSegmentLinks(prev, segments_[prev].prev_segment_offset, 0);
+					}
+					break;
+				}
+			}
+
+			SegmentHeader &header = it->second;
+
+			// Verify type matches
+			if (header.data_type != type) {
+				// Type mismatch, fix the chain
+				if (prev == 0) {
+					// This was the head, update chain head to next segment
+					updateChainHead(type, header.next_segment_offset);
+				} else {
+					// Update previous segment to point to next segment
+					updateSegmentLinks(prev, segments_[prev].prev_segment_offset, header.next_segment_offset);
+				}
+
+				// Remove this segment from the chain
+				if (header.next_segment_offset != 0) {
+					updateSegmentLinks(header.next_segment_offset, prev,
+									   segments_[header.next_segment_offset].next_segment_offset);
+				}
+
+				// Skip to next segment
+				current = header.next_segment_offset;
+				continue;
+			}
+
+			// Verify prev_segment_offset matches
+			if (header.prev_segment_offset != prev) {
+				// Fix prev_segment_offset
+				updateSegmentLinks(current, prev, header.next_segment_offset);
+			}
+
+			// Move to next segment
+			prev = current;
+			current = header.next_segment_offset;
+		}
+	}
+
 	void SegmentTracker::markForCompaction(uint64_t offset, bool needsCompaction) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
@@ -271,55 +351,30 @@ namespace graph::storage {
 			throw std::runtime_error("Attempting to free segment at non-aligned offset: " + std::to_string(offset));
 		}
 
-		// Get the header before removing from segments map
-		auto it = segments_.find(offset);
-		if (it != segments_.end()) {
-			// Store the header in the free segments map
-			freeSegments_[offset] = it->second;
+		// Add to free segments set
+		freeSegments_.insert(offset);
 
-			// Remove from segments map
-			segments_.erase(it);
-		} else {
-			// If header is not in memory, read it from disk
-			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(offset));
-			file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-
-			if (!*file_) {
-				throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
-			}
-
-			freeSegments_[offset] = header;
-		}
+		// Remove from segments map if present
+		segments_.erase(offset);
 
 		// Remove from dirty segments list if present
 		auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
 		if (dirtyIt != dirtySegments_.end()) {
 			dirtySegments_.erase(dirtyIt);
 		}
+
+		// Mark the segment as free in the file by zeroing out the first few bytes
+		// This is just for safety and diagnostics - we don't actually need the segment header anymore
+		SegmentHeader emptyHeader{};
+		emptyHeader.data_type = 0xFF; // Special marker for free segments
+
+		file_->seekp(static_cast<std::streamoff>(offset));
+		file_->write(reinterpret_cast<const char *>(&emptyHeader), sizeof(SegmentHeader));
 	}
 
 	std::vector<uint64_t> SegmentTracker::getFreeSegments() const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		std::vector<uint64_t> offsets;
-		offsets.reserve(freeSegments_.size());
-
-		for (const auto &[offset, _]: freeSegments_) {
-			offsets.push_back(offset);
-		}
-
-		return offsets;
-	}
-
-	SegmentHeader SegmentTracker::getFreeSegmentHeader(uint64_t offset) const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		auto it = freeSegments_.find(offset);
-		if (it != freeSegments_.end()) {
-			return it->second;
-		}
-
-		throw std::runtime_error("Free segment not found at offset " + std::to_string(offset));
+		return {freeSegments_.begin(), freeSegments_.end()};
 	}
 
 	void SegmentTracker::removeFromFreeList(uint64_t offset) {
@@ -669,9 +724,13 @@ namespace graph::storage {
 	template Property SegmentTracker::readEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 	template Blob SegmentTracker::readEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 
-	template void SegmentTracker::writeEntity<Node>(uint64_t segmentOffset, uint32_t itemIndex, const Node& entity, size_t itemSize);
-	template void SegmentTracker::writeEntity<Edge>(uint64_t segmentOffset, uint32_t itemIndex, const Edge& entity, size_t itemSize);
-	template void SegmentTracker::writeEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex, const Property& entity, size_t itemSize);
-	template void SegmentTracker::writeEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, const Blob& entity, size_t itemSize);
+	template void SegmentTracker::writeEntity<Node>(uint64_t segmentOffset, uint32_t itemIndex, const Node &entity,
+													size_t itemSize);
+	template void SegmentTracker::writeEntity<Edge>(uint64_t segmentOffset, uint32_t itemIndex, const Edge &entity,
+													size_t itemSize);
+	template void SegmentTracker::writeEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex,
+														const Property &entity, size_t itemSize);
+	template void SegmentTracker::writeEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, const Blob &entity,
+													size_t itemSize);
 
 } // namespace graph::storage

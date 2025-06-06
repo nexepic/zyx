@@ -19,17 +19,12 @@
 
 namespace graph::storage {
 
-	DataManager::DataManager(const std::string &dbFilePath, size_t cacheSize, FileHeader &fileHeader,
+	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<SpaceManager> spaceManager) :
-		dbFilePath_(dbFilePath), nodeCache_(cacheSize), edgeCache_(cacheSize), propertyCache_(cacheSize * 2),
+		file_(std::move(file)), nodeCache_(cacheSize), edgeCache_(cacheSize), propertyCache_(cacheSize * 2),
 		blobCache_(cacheSize / 4), fileHeader_(fileHeader), idAllocator_(std::move(idAllocator)),
-		segmentTracker_(std::move(segmentTracker)), spaceManager_(std::move(spaceManager)) {
-		file_ = std::make_shared<std::ifstream>(dbFilePath, std::ios::binary);
-		if (!file_->good()) {
-			throw std::runtime_error("Cannot open database file");
-		}
-	}
+		segmentTracker_(std::move(segmentTracker)), spaceManager_(std::move(spaceManager)) {}
 
 	DataManager::~DataManager() {
 		if (file_ && file_->is_open()) {
@@ -40,6 +35,8 @@ namespace graph::storage {
 	void DataManager::initialize() {
 		blobManager_ = std::make_unique<BlobChainManager>(shared_from_this());
 		deletionManager_ = std::make_unique<DeletionManager>(shared_from_this(), spaceManager_);
+		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, idAllocator_, segmentTracker_);
+		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 
 		// Build segment indexes for efficient lookups
 		buildNodeSegmentIndex();
@@ -826,8 +823,8 @@ namespace graph::storage {
 		result.reserve(count);
 
 		// Seek to the first entity
-		auto entityOffset =
-				static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) + startOffset * EntityType::getTotalSize());
+		auto entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) +
+														startOffset * EntityType::getTotalSize());
 
 		// Read entities
 		for (uint64_t i = 0; i < count; ++i) {
@@ -1202,4 +1199,5 @@ namespace graph::storage {
 	template uint64_t DataManager::findSegmentForEntityId<Edge>(int64_t id) const;
 	template uint64_t DataManager::findSegmentForEntityId<Property>(int64_t id) const;
 	template uint64_t DataManager::findSegmentForEntityId<Blob>(int64_t id) const;
+	template std::vector<Property> DataManager::getEntitiesInRange<Property>(int64_t, int64_t, size_t);
 } // namespace graph::storage

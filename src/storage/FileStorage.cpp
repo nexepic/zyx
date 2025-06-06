@@ -81,15 +81,13 @@ namespace graph::storage {
 			dataManager->handleIdUpdate(tempId, permId, entityType);
 		});
 
-		entityReferenceUpdater = std::make_shared<EntityReferenceUpdater>(fileStream, idAllocator, segmentTracker);
-
 		// Then create the space manager
-		spaceManager = std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager,
-													  idAllocator, entityReferenceUpdater);
+		spaceManager =
+				std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager, idAllocator);
 		spaceManager->initialize(fileHeader);
 
 		// Initialize data manager
-		dataManager = std::make_shared<DataManager>(dbFilePath, cacheSize, fileHeader, idAllocator, segmentTracker,
+		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,
 													spaceManager);
 		dataManager->initialize();
 
@@ -578,17 +576,25 @@ namespace graph::storage {
 			// Only check for compaction if delete operations occurred
 			if (deleteOperationPerformed.load()) {
 				if (spaceManager->shouldCompact()) {
-					spaceManager->compactSegments();
+					// Use the thread-safe compaction method
+					bool compactionPerformed = spaceManager->safeCompactSegments();
 
-					idAllocator->refreshInactiveIdsCache(Node::typeId);
-					idAllocator->refreshInactiveIdsCache(Edge::typeId);
-					idAllocator->refreshInactiveIdsCache(Property::typeId);
-					idAllocator->refreshInactiveIdsCache(Blob::typeId);
+					// Only perform post-compaction operations if compaction was successful
+					if (compactionPerformed) {
+						dataManager->clearCache();
 
-					dataManager->buildNodeSegmentIndex();
-					dataManager->buildEdgeSegmentIndex();
-					dataManager->buildPropertySegmentIndex();
-					dataManager->buildBlobSegmentIndex();
+						// Refresh inactive IDs cache for all entity types
+						idAllocator->refreshInactiveIdsCache(Node::typeId);
+						idAllocator->refreshInactiveIdsCache(Edge::typeId);
+						idAllocator->refreshInactiveIdsCache(Property::typeId);
+						idAllocator->refreshInactiveIdsCache(Blob::typeId);
+
+						// Rebuild segment indexes
+						dataManager->buildNodeSegmentIndex();
+						dataManager->buildEdgeSegmentIndex();
+						dataManager->buildPropertySegmentIndex();
+						dataManager->buildBlobSegmentIndex();
+					}
 				}
 				// Reset the flag after handling potential compaction
 				deleteOperationPerformed.store(false);
@@ -597,7 +603,7 @@ namespace graph::storage {
 			// Persist segment headers
 			persistSegmentHeaders();
 
-			fileHeaderManager->updateFileHeader();
+			fileHeaderManager->flushFileHeader();
 		} catch (const std::exception &e) {
 			// Log the error
 			std::cerr << "Exception during flush operation: " << e.what() << std::endl;
@@ -668,29 +674,28 @@ namespace graph::storage {
 
 		// Update references for properties first
 		for (auto &property: dirtyProperties) {
-			if (entityReferenceUpdater->updatePropertyReferencesToPermanent(property)) {
+			if (dataManager->getEntityReferenceUpdater()->updatePropertyReferencesToPermanent(property)) {
 				dataManager->updatePropertyEntity(property);
 			}
 		}
 
 		// Update references for blobs next
 		for (auto &blob: dirtyBlobs) {
-			if (entityReferenceUpdater->updateBlobReferencesToPermanent(blob)) {
-				// Ensure your DataManager has this method
+			if (dataManager->getEntityReferenceUpdater()->updateBlobReferencesToPermanent(blob)) {
 				dataManager->updateBlobEntity(blob);
 			}
 		}
 
 		// Update references for nodes
 		for (auto &node: dirtyNodes) {
-			if (entityReferenceUpdater->updateNodeReferencesToPermanent(node)) {
+			if (dataManager->getEntityReferenceUpdater()->updateNodeReferencesToPermanent(node)) {
 				dataManager->updateNode(node);
 			}
 		}
 
 		// Update references for edges last
 		for (auto &edge: dirtyEdges) {
-			if (entityReferenceUpdater->updateEdgeReferencesToPermanent(edge)) {
+			if (dataManager->getEntityReferenceUpdater()->updateEdgeReferencesToPermanent(edge)) {
 				dataManager->updateEdge(edge);
 			}
 		}

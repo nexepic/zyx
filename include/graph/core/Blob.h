@@ -81,8 +81,8 @@ namespace graph {
 
         void setEntityId(int64_t newEntityId) { metadata.entityId = newEntityId; }
         void setEntityType(uint32_t newEntityType) { metadata.entityType = newEntityType; }
-        int64_t getEntityId() const { return metadata.entityId; }
-        uint32_t getEntityType() const { return metadata.entityType; }
+        [[nodiscard]] int64_t getEntityId() const { return metadata.entityId; }
+        [[nodiscard]] uint32_t getEntityType() const { return metadata.entityType; }
 
         void setEntityInfo(int64_t newEntityId, uint32_t newEntityType) {
             metadata.entityId = newEntityId;
@@ -97,8 +97,8 @@ namespace graph {
             metadata.compressed = isCompressed;
         }
 
-        uint32_t getOriginalSize() const { return metadata.originalSize; }
-        bool isCompressed() const { return metadata.compressed; }
+        [[nodiscard]] uint32_t getOriginalSize() const { return metadata.originalSize; }
+        [[nodiscard]] bool isCompressed() const { return metadata.compressed; }
 
     private:
         Metadata metadata;

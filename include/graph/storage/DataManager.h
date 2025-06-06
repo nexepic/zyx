@@ -56,7 +56,7 @@ namespace graph::storage {
 
 	class DataManager : public std::enable_shared_from_this<DataManager> {
 	public:
-		explicit DataManager(const std::string &dbFilePath, size_t cacheSize, FileHeader &fileHeader,
+		explicit DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<SpaceManager> spaceManager);
 		~DataManager();
@@ -244,11 +244,15 @@ namespace graph::storage {
 		template<typename EntityType>
 		void markEntityDeleted(EntityType &entity);
 
+		[[nodiscard]] std::shared_ptr<EntityReferenceUpdater> getEntityReferenceUpdater() const {
+			return entityReferenceUpdater_;
+		}
+
 	private:
-		std::string dbFilePath_;
-		std::shared_ptr<std::ifstream> file_; // Persistent file handle
+		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		std::unique_ptr<BlobChainManager> blobManager_;
 		std::shared_ptr<DeletionManager> deletionManager_;
+		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
 
 		// Cache for frequently accessed nodes and edges
 		mutable LRUCache<int64_t, Node> nodeCache_;

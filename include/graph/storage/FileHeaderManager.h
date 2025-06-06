@@ -22,13 +22,13 @@ namespace graph::storage {
 		explicit FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader &header);
 		~FileHeaderManager();
 
-		void updateFileHeader() const;
+		void flushFileHeader() const;
 
 		// Read current file header
 		[[nodiscard]] FileHeader readFileHeader() const;
 
 		// Write updated file header
-		void writeFileHeader(const FileHeader &header);
+		void updateFileHeader(const FileHeader &header);
 
 		// Update max IDs based on current segment state
 		void updateFileHeaderMaxIds(std::shared_ptr<SegmentTracker> tracker);
@@ -49,6 +49,10 @@ namespace graph::storage {
 		int64_t &getMaxEdgeIdRef() { return maxEdgeId; }
 		int64_t &getMaxPropIdRef() { return maxPropId; }
 		int64_t &getMaxBlobIdRef() { return maxBlobId; }
+
+		[[nodiscard]] FileHeader &getFileHeader() const { return fileHeader_; }
+
+		void validateChainHeads(std::shared_ptr<SegmentTracker> tracker);
 
 	private:
 		std::shared_ptr<std::fstream> file_;

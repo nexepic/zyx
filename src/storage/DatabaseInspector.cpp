@@ -89,6 +89,7 @@ namespace graph::storage {
 	        table.addColumn("Attribute");
 	        table.addColumn("Value");
 
+			table.addRow({"Segment Offset", std::to_string(segmentHeader.file_offset)});
 	        table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
 	        table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
 	        table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
@@ -132,6 +133,7 @@ namespace graph::storage {
 	                    table.addRow({"Status", "USED"});
 	                    table.addRow({"Node ID", std::to_string(node.getId())});
 	                    table.addRow({"Label", node.getLabel()});
+	                    table.addRow({"propertyEntityId", std::to_string(node.getPropertyEntityId())});
 	                    table.addRow({"Active", node.isActive() ? "true" : "false"});
 
 	                    // Load properties
@@ -235,6 +237,7 @@ namespace graph::storage {
 	        table.addColumn("Attribute");
 	        table.addColumn("Value");
 
+	    	table.addRow({"Segment Offset", std::to_string(segmentHeader.file_offset)});
 	        table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
 	        table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
 	        table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
@@ -278,6 +281,7 @@ namespace graph::storage {
 	                    table.addRow({"Status", "USED"});
 	                    table.addRow({"Edge ID", std::to_string(edge.getId())});
 	                    table.addRow({"Label", edge.getLabel()});
+	                	table.addRow({"propertyEntityId", std::to_string(edge.getPropertyEntityId())});
 	                    table.addRow({"Active", edge.isActive() ? "true" : "false"});
 
 	                    // Load properties
@@ -382,6 +386,7 @@ namespace graph::storage {
 	        table.addColumn("Attribute");
 	        table.addColumn("Value");
 
+	    	table.addRow({"Segment Offset", std::to_string(segmentHeader.file_offset)});
 	        table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
 	        table.addRow({"Previous Segment Offset", std::to_string(segmentHeader.prev_segment_offset)});
 	        table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
@@ -492,6 +497,7 @@ namespace graph::storage {
 			table.addColumn("Attribute");
 			table.addColumn("Value");
 
+			table.addRow({"Segment Offset", std::to_string(segmentHeader.file_offset)});
 			table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
 			table.addRow({"Previous Segment Offset", std::to_string(segmentHeader.prev_segment_offset)});
 			table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
@@ -536,6 +542,10 @@ namespace graph::storage {
 						table.addRow({"Status", "USED"});
 						table.addRow({"Blob ID", std::to_string(blob.getId())});
 						table.addRow({"Size", std::to_string(blob.getSize())});
+						table.addRow({"Entity ID", std::to_string(blob.getEntityId())});
+						table.addRow({"Entity Type", blob.getEntityType() == 0 ? "Node" : "Edge"});
+						table.addRow({"Prev Blob ID", std::to_string(blob.getPrevBlobId())});
+						table.addRow({"Next Blob ID", std::to_string(blob.getNextBlobId())});
 						table.addRow({"Active", blob.isActive() ? "true" : "false"});
 
 						table.print();

@@ -50,41 +50,38 @@ namespace graph::storage {
 		 */
 		bool updateBlobReferencesToPermanent(Blob &blob);
 
-		/**
-		 * Update references to a specific entity (node, edge, property)
-		 * @param entityId ID of the entity being updated
-		 * @param entityType Type of the entity (Node, Edge, Property, Blob)
-		 * @param oldSegmentOffset Original segment offset
-		 * @param newSegmentOffset New segment offset
-		 */
-		void updateEntityReferences(int64_t entityId, uint32_t entityType, uint64_t oldSegmentOffset,
-									uint64_t newSegmentOffset);
+		void updateEntityReferences(int64_t oldEntityId, const void *newEntity, uint32_t entityType);
 
 	private:
+		struct EntityPropertyInfo {
+			PropertyStorageType storageType;
+			int64_t propertyEntityId;
+		};
+
 		std::shared_ptr<std::fstream> file_;
 		std::shared_ptr<IDAllocator> idAllocator_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
 
-		void updateNodeReferences(int64_t oldNodeId, int64_t newNodeId, uint64_t oldOffset,
-														  uint64_t newOffset);
+		void updateNodeReferences(int64_t oldNodeId, const Node &newNode);
 
-		void updateEdgeReferences(int64_t oldEdgeId, int64_t newEdgeId, uint64_t oldOffset,
-														  uint64_t newOffset);
+		void updateEdgeReferences(int64_t oldEdgeId, const Edge &newEdge);
 
-		void updatePropertyReferences(int64_t oldPropId, int64_t newPropId, uint64_t oldOffset,
-															  uint64_t newOffset);
+		void updatePropertyReferences(int64_t oldPropertyId, const Property &newProperty);
 
-		void updateBlobReferences(int64_t oldBlobId, int64_t newBlobId, uint64_t oldOffset, uint64_t newOffset);
+		void updateBlobReferences(int64_t oldBlobId, const Blob &newBlob);
 
-		void updatePropertiesPointingToEntity(int64_t oldEntityId, int64_t newEntityId,
-				      uint32_t entityType, uint64_t oldOffset, uint64_t newOffset);
+		void updateBlobChainReference(int64_t oldBlobId, int64_t newBlobId, int64_t linkedBlobId, bool isNextBlob,
+									  const Blob &sourceBlob) const;
 
-		void updateEdgesPointingToNode(int64_t oldNodeId, int64_t newNodeId,
-					       uint64_t oldOffset, uint64_t newOffset);
+		Property getPropertyById(int64_t propertyId);
 
-		uint64_t calculatePropertyPhysicalLocation(int64_t propId, uint64_t segmentOffset);
+		Blob getBlobById(int64_t blobId);
 
-		int64_t getSegmentStartId(uint64_t segmentOffset, uint32_t segmentType);
+		template<typename T>
+		EntityPropertyInfo getEntityPropertyInfoFromEntity(const T &entity);
+
+		template<typename T>
+		void updatePropertiesPointingToEntity(int64_t oldEntityId, const T &newEntity);
 	};
 
 } // namespace graph::storage

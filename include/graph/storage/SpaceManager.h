@@ -13,8 +13,6 @@
 #include "EntityReferenceUpdater.h"
 #include "FileHeaderManager.h"
 #include "IDAllocator.h"
-
-
 #include <cstdint>
 #include <fstream>
 #include <functional>
@@ -28,8 +26,7 @@ namespace graph::storage {
 	class SpaceManager {
 	public:
 		SpaceManager(std::shared_ptr<std::fstream> file, std::string fileName, std::shared_ptr<SegmentTracker> tracker,
-					 std::shared_ptr<FileHeaderManager> fileHeaderManager, std::shared_ptr<IDAllocator> idAllocator,
-					 std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater);
+					 std::shared_ptr<FileHeaderManager> fileHeaderManager, std::shared_ptr<IDAllocator> idAllocator);
 		~SpaceManager();
 
 		void initialize(FileHeader &header);
@@ -41,6 +38,7 @@ namespace graph::storage {
 
 		bool shouldCompact() const;
 
+		bool safeCompactSegments();
 		void compactSegments();
 
 		double getTotalFragmentationRatio() const;
@@ -66,24 +64,22 @@ namespace graph::storage {
 		uint64_t findFreeSegmentNotAtEnd() const;
 		void initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity);
 
+		void setEntityReferenceUpdater(std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater) {
+			entityReferenceUpdater_ = std::move(entityReferenceUpdater);
+		}
+
+		// Update FileHeader chain heads based on current SegmentTracker state
+		void updateFileHeaderChainHeads();
+
+		// Validate segment chains to ensure integrity
+		void validateSegmentChains() {
+			segmentTracker_->validateSegmentChains();
+			updateFileHeaderChainHeads();
+		}
+
 	private:
-		// Struct to track ID mappings for entity relocations
-		struct EntityIdMapping {
-			int64_t oldId;
-			int64_t newId;
-			uint32_t index;
-		};
-
-		// Map entities when relocating segments with different start_id
-		std::vector<EntityIdMapping> mapEntityIds(uint32_t type, uint64_t sourceOffset,
-							uint64_t destOffset,
-							const SegmentHeader& sourceHeader,
-							const SegmentHeader& destHeader);
-
-		// Update entities with new IDs during relocation
-		void updateEntitiesWithNewIds(uint32_t type, uint64_t destOffset,
-					    const std::vector<EntityIdMapping>& idMappings,
-					    const SegmentHeader& header);
+		std::mutex compactionMutex_;
+		std::atomic<bool> compactionInProgress_{false};
 
 		std::shared_ptr<std::fstream> file_;
 		std::string fileName_;
@@ -106,7 +102,7 @@ namespace graph::storage {
 		bool compactEdgeSegment(uint64_t offset);
 		bool compactPropertySegment(uint64_t offset);
 		bool compactBlobSegment(uint64_t offset);
-		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset, const SegmentHeader &info);
+		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset);
 		void updateSegmentChain(uint64_t newOffset, const SegmentHeader &info);
 		uint64_t findLastSegment() const;
 

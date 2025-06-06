@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "StorageHeaders.h"
 
@@ -42,7 +43,6 @@ namespace graph::storage {
 
 		void markSegmentFree(uint64_t offset);
 		std::vector<uint64_t> getFreeSegments() const;
-		SegmentHeader getFreeSegmentHeader(uint64_t offset) const;
 		void removeFromFreeList(uint64_t offset);
 
 		void flushDirtySegments();
@@ -75,6 +75,9 @@ namespace graph::storage {
 		template<typename T>
 		void writeEntity(uint64_t segmentOffset, uint32_t itemIndex, const T &entity, size_t itemSize);
 
+		// Validate segment chains to ensure integrity
+		void validateSegmentChains();
+
 	private:
 		std::shared_ptr<std::fstream> file_;
 		mutable std::recursive_mutex mutex_;
@@ -88,7 +91,7 @@ namespace graph::storage {
 		// Segment cache - stores actual segment headers
 		std::unordered_map<uint64_t, SegmentHeader> segments_;
 
-		std::unordered_map<uint64_t, SegmentHeader> freeSegments_;
+		std::unordered_set<uint64_t> freeSegments_;
 		std::vector<uint64_t> dirtySegments_;
 
 		void loadSegments();
@@ -101,6 +104,9 @@ namespace graph::storage {
 
 		// Mark a segment as dirty
 		void markSegmentDirty(uint64_t offset);
+
+		// Helper method to validate a single chain
+		void validateChain(uint64_t headOffset, uint32_t type);
 	};
 
 } // namespace graph::storage
