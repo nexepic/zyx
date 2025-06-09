@@ -588,17 +588,17 @@ namespace graph::storage {
 						idAllocator->refreshInactiveIdsCache(Edge::typeId);
 						idAllocator->refreshInactiveIdsCache(Property::typeId);
 						idAllocator->refreshInactiveIdsCache(Blob::typeId);
-
-						// Rebuild segment indexes
-						dataManager->buildNodeSegmentIndex();
-						dataManager->buildEdgeSegmentIndex();
-						dataManager->buildPropertySegmentIndex();
-						dataManager->buildBlobSegmentIndex();
 					}
 				}
 				// Reset the flag after handling potential compaction
 				deleteOperationPerformed.store(false);
 			}
+
+			// Rebuild segment indexes
+			dataManager->buildNodeSegmentIndex();
+			dataManager->buildEdgeSegmentIndex();
+			dataManager->buildPropertySegmentIndex();
+			dataManager->buildBlobSegmentIndex();
 
 			// Persist segment headers
 			persistSegmentHeaders();
