@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <graph/storage/SegmentIndexManager.h>
 #include <graph/storage/SegmentType.h>
 #include <graph/utils/ChecksumUtils.h>
 #include <iostream>
@@ -668,6 +669,13 @@ namespace graph::storage {
 
 				// Mark as clean
 				it->second.is_dirty = 0;
+
+				// Update segment index after successful flush
+				if (auto segmentIndexManager = segmentIndexManager_.lock()) {
+				    segmentIndexManager->updateSegmentIndexByOffset(offset, header);
+				} else {
+					throw std::runtime_error("SegmentIndexManager is not available");
+				}
 			}
 		}
 

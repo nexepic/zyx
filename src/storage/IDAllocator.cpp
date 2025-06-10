@@ -179,12 +179,6 @@ namespace graph::storage {
 		return id;
 	}
 
-	void IDAllocator::updateMaxIds(int64_t maxNodeId, int64_t maxEdgeId) {
-		std::lock_guard<std::mutex> lock(mutex_);
-		currentMaxNodeId_ = maxNodeId;
-		currentMaxEdgeId_ = maxEdgeId;
-	}
-
 	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) {
 		int64_t id;
 

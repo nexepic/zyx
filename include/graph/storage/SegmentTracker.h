@@ -22,6 +22,8 @@
 
 namespace graph::storage {
 
+	class SegmentIndexManager;
+
 	class SegmentTracker {
 	public:
 		explicit SegmentTracker(std::shared_ptr<std::fstream> file);
@@ -78,6 +80,10 @@ namespace graph::storage {
 		// Validate segment chains to ensure integrity
 		void validateSegmentChains();
 
+		void setSegmentIndexManager(std::weak_ptr<SegmentIndexManager> indexManager) {
+			segmentIndexManager_ = std::move(indexManager);
+		}
+
 	private:
 		std::shared_ptr<std::fstream> file_;
 		mutable std::recursive_mutex mutex_;
@@ -93,6 +99,7 @@ namespace graph::storage {
 
 		std::unordered_set<uint64_t> freeSegments_;
 		std::vector<uint64_t> dirtySegments_;
+		std::weak_ptr<SegmentIndexManager> segmentIndexManager_;
 
 		void loadSegments();
 

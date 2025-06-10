@@ -56,8 +56,6 @@ namespace graph::storage {
 		// Get permanent ID for a temporary ID (returns 0 if not found)
 		int64_t getPermanentId(int64_t tempId, uint32_t entityType) const;
 
-		void updateMaxIds(int64_t maxNodeId, int64_t maxEdgeId);
-
 		// Refresh the inactive IDs cache for a given entity type
 		void refreshInactiveIdsCache(uint32_t entityType);
 

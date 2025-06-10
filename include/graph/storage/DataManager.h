@@ -24,15 +24,9 @@
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
 #include "graph/core/Property.h"
+#include "SegmentIndexManager.h"
 
 namespace graph::storage {
-
-	// Structure to map ID ranges to segment positions
-	struct SegmentIndex {
-		int64_t startId;
-		int64_t endId;
-		uint64_t segmentOffset;
-	};
 
 	enum class EntityChangeType { ADDED, MODIFIED, DELETED };
 
@@ -170,12 +164,6 @@ namespace graph::storage {
 		// Find edges connected to a node
 		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both");
 
-		// Build segment indexes from file for fast lookups
-		void buildNodeSegmentIndex();
-		void buildEdgeSegmentIndex();
-		void buildPropertySegmentIndex();
-		void buildBlobSegmentIndex();
-
 		// Cache management
 		void clearCache();
 
@@ -230,12 +218,6 @@ namespace graph::storage {
 		}
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Blob>> &getDirtyBlobs() { return dirtyBlobs_; }
 
-		// Get segment indexes
-		[[nodiscard]] const std::vector<SegmentIndex> &getNodeSegmentIndex() const { return nodeSegmentIndex_; }
-		[[nodiscard]] const std::vector<SegmentIndex> &getEdgeSegmentIndex() const { return edgeSegmentIndex_; }
-		[[nodiscard]] const std::vector<SegmentIndex> &getPropertySegmentIndex() const { return propertySegmentIndex_; }
-		[[nodiscard]] const std::vector<SegmentIndex> &getBlobSegmentIndex() const { return blobSegmentIndex_; }
-
 		void handleIdUpdate(int64_t tempId, int64_t permId, uint32_t entityType);
 
 		void setDeletionManager(std::shared_ptr<DeletionManager> deletionManager);
@@ -248,23 +230,22 @@ namespace graph::storage {
 			return entityReferenceUpdater_;
 		}
 
+		std::shared_ptr<SegmentIndexManager> getSegmentIndexManager() const {
+			return segmentIndexManager_;
+		}
+
 	private:
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		std::unique_ptr<BlobChainManager> blobManager_;
 		std::shared_ptr<DeletionManager> deletionManager_;
 		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
+		std::shared_ptr<SegmentIndexManager> segmentIndexManager_;
 
 		// Cache for frequently accessed nodes and edges
 		mutable LRUCache<int64_t, Node> nodeCache_;
 		mutable LRUCache<int64_t, Edge> edgeCache_;
 		mutable LRUCache<int64_t, Property> propertyCache_;
 		mutable LRUCache<int64_t, Blob> blobCache_;
-
-		// Segment indexes for fast lookups
-		std::vector<SegmentIndex> nodeSegmentIndex_;
-		std::vector<SegmentIndex> edgeSegmentIndex_;
-		std::vector<SegmentIndex> propertySegmentIndex_;
-		std::vector<SegmentIndex> blobSegmentIndex_;
 
 		// Configuration for dirty tracking
 		size_t maxDirtyEntities_ = 1000; // Maximum number of dirty entities before auto-flush
@@ -283,9 +264,7 @@ namespace graph::storage {
 
 		std::shared_ptr<SpaceManager> spaceManager_;
 
-		// Generic segment operations
-		void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;
-		static uint64_t findSegmentForId(const std::vector<SegmentIndex> &segmentIndex, int64_t id);
+		void initializeSegmentIndexes();
 
 		template<typename EntityType>
 		std::vector<EntityType> loadEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
@@ -354,8 +333,8 @@ namespace graph::storage {
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyNodes(); }
 
-		static const std::vector<SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getNodeSegmentIndex();
+		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex( DataManager *manager) {
+			return manager->getSegmentIndexManager()->getNodeSegmentIndex();
 		}
 	};
 
@@ -381,8 +360,8 @@ namespace graph::storage {
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyEdges(); }
 
-		static const std::vector<SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getEdgeSegmentIndex();
+		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
+			return manager->getSegmentIndexManager()->getEdgeSegmentIndex();
 		}
 	};
 
@@ -412,8 +391,8 @@ namespace graph::storage {
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyProperties(); }
 
-		static const std::vector<SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getPropertySegmentIndex();
+		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
+			return manager->getSegmentIndexManager()->getPropertySegmentIndex();
 		}
 	};
 
@@ -439,8 +418,8 @@ namespace graph::storage {
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyBlobs(); }
 
-		static const std::vector<SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getBlobSegmentIndex();
+		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
+			return manager->getSegmentIndexManager()->getBlobSegmentIndex();
 		}
 	};
 

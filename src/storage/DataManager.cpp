@@ -24,12 +24,23 @@ namespace graph::storage {
 							 std::shared_ptr<SpaceManager> spaceManager) :
 		file_(std::move(file)), nodeCache_(cacheSize), edgeCache_(cacheSize), propertyCache_(cacheSize * 2),
 		blobCache_(cacheSize / 4), fileHeader_(fileHeader), idAllocator_(std::move(idAllocator)),
-		segmentTracker_(std::move(segmentTracker)), spaceManager_(std::move(spaceManager)) {}
+		segmentTracker_(std::move(segmentTracker)), spaceManager_(std::move(spaceManager)) {
+
+		segmentIndexManager_ = std::make_shared<SegmentIndexManager>(segmentTracker_);
+
+		segmentTracker_->setSegmentIndexManager(std::weak_ptr(segmentIndexManager_));
+	}
 
 	DataManager::~DataManager() {
 		if (file_ && file_->is_open()) {
 			file_->close();
 		}
+	}
+
+	void DataManager::initializeSegmentIndexes() {
+		// Initialize all segment indexes at once
+		segmentIndexManager_->initialize(fileHeader_.node_segment_head, fileHeader_.edge_segment_head,
+										 fileHeader_.property_segment_head, fileHeader_.blob_segment_head);
 	}
 
 	void DataManager::initialize() {
@@ -38,63 +49,13 @@ namespace graph::storage {
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, idAllocator_, segmentTracker_);
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 
-		// Build segment indexes for efficient lookups
-		buildNodeSegmentIndex();
-		buildEdgeSegmentIndex();
-		buildPropertySegmentIndex();
-		buildBlobSegmentIndex();
-	}
-
-	// Generic method to build segment index
-	void DataManager::buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const {
-		segmentIndex.clear();
-		uint64_t currentOffset = segmentHead;
-
-		while (currentOffset != 0) {
-			// Use the segment tracker to read the header if available
-			SegmentHeader header = segmentTracker_->getSegmentHeader(currentOffset);
-
-			SegmentIndex index{};
-			index.startId = header.start_id;
-			index.endId = header.start_id + header.used - 1;
-			index.segmentOffset = currentOffset;
-
-			segmentIndex.push_back(index);
-			currentOffset = header.next_segment_offset;
-		}
-
-		// Sort by startId to enable binary search
-		std::sort(segmentIndex.begin(), segmentIndex.end(),
-				  [](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
-	}
-
-	void DataManager::buildNodeSegmentIndex() { buildSegmentIndex(nodeSegmentIndex_, fileHeader_.node_segment_head); }
-
-	void DataManager::buildEdgeSegmentIndex() { buildSegmentIndex(edgeSegmentIndex_, fileHeader_.edge_segment_head); }
-
-	void DataManager::buildPropertySegmentIndex() {
-		buildSegmentIndex(propertySegmentIndex_, fileHeader_.property_segment_head);
-	}
-
-	void DataManager::buildBlobSegmentIndex() { buildSegmentIndex(blobSegmentIndex_, fileHeader_.blob_segment_head); }
-
-	// Generic method to find segment for ID
-	uint64_t DataManager::findSegmentForId(const std::vector<SegmentIndex> &segmentIndex, int64_t id) {
-		// Binary search to find the segment containing this ID
-		auto it = std::lower_bound(segmentIndex.begin(), segmentIndex.end(), id,
-								   [](const SegmentIndex &index, const int64_t value) { return index.endId < value; });
-
-		if (it != segmentIndex.end() && id >= it->startId && id <= it->endId) {
-			return it->segmentOffset;
-		}
-
-		return 0; // Not found
+		initializeSegmentIndexes();
 	}
 
 	template<typename EntityType>
 	uint64_t DataManager::findSegmentForEntityId(int64_t id) const {
-		const auto &segmentIndex = EntityTraits<EntityType>::getSegmentIndex(this);
-		return findSegmentForId(segmentIndex, id);
+		uint32_t type = EntityTraits<EntityType>::typeId;
+		return segmentIndexManager_->findSegmentForId(type, id);
 	}
 
 	int64_t DataManager::reserveTemporaryNodeId() { return idAllocator_->reserveTemporaryId(Node::typeId); }
@@ -882,7 +843,7 @@ namespace graph::storage {
 		}
 
 		// Then proceed with disk scan
-		for (const auto &segmentIndex: edgeSegmentIndex_) {
+		for (const auto &segmentIndex: segmentIndexManager_->getEdgeSegmentIndex()) {
 			uint64_t segmentOffset = segmentIndex.segmentOffset;
 			SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 

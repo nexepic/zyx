@@ -24,6 +24,7 @@ db_src = files(
 	'storage/DatabaseInspector.cpp',
 	'storage/IDAllocator.cpp',
 	'storage/EntityReferenceUpdater.cpp',
+	'storage/SegmentIndexManager.cpp',
 	'utils/ChecksumUtils.cpp',
 	'utils/CompressUtils.cpp',
 	'utils/Serializer.cpp',

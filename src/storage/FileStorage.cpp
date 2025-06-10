@@ -297,62 +297,54 @@ namespace graph::storage {
 		std::sort(entitiesForNewSlots.begin(), entitiesForNewSlots.end(),
 				  [](const T &a, const T &b) { return a.getId() < b.getId(); });
 
-		// Process entities that need new slots in segments
+		// Process entities that need new slots
 		uint64_t currentSegmentOffset = segmentHead;
 		SegmentHeader currentSegHeader;
+		bool isFirstSegment = (currentSegmentOffset == 0);
 
-		// Locate the last segment if segmentHead != 0
+		// If we have a segment head, find the last segment in the chain
 		if (currentSegmentOffset != 0) {
+			// Find the last segment in the chain
 			while (true) {
-				fileStream->seekg(static_cast<std::streamoff>(currentSegmentOffset));
-				fileStream->read(reinterpret_cast<char *>(&currentSegHeader), sizeof(SegmentHeader));
+				currentSegHeader = readSegmentHeader(currentSegmentOffset);
 				if (currentSegHeader.next_segment_offset == 0)
 					break;
 				currentSegmentOffset = currentSegHeader.next_segment_offset;
 			}
-		} else {
-			// Allocate first segment
-			currentSegmentOffset = allocateSegment(T::typeId, itemsPerSegment);
-			segmentHead = currentSegmentOffset;
-			fileStream->seekg(static_cast<std::streamoff>(currentSegmentOffset));
-			fileStream->read(reinterpret_cast<char *>(&currentSegHeader), sizeof(SegmentHeader));
 		}
 
 		auto dataIt = entitiesForNewSlots.begin();
 		while (dataIt != entitiesForNewSlots.end()) {
-			// Calculate remaining space
-			uint32_t remaining = currentSegHeader.capacity - currentSegHeader.used;
+			uint32_t remaining = 0;
 
-			if (remaining == 0) {
-				// Allocate new segment and link
+			// Calculate remaining space in current segment (if it exists)
+			if (currentSegmentOffset != 0) {
+				currentSegHeader = readSegmentHeader(currentSegmentOffset);
+				remaining = currentSegHeader.capacity - currentSegHeader.used;
+			}
+
+			if (currentSegmentOffset == 0 || remaining == 0) {
+				// Allocate new segment
+				// Note: SpaceManager will handle all segment linking automatically
 				uint64_t newOffset = allocateSegment(T::typeId, itemsPerSegment);
 
-				// Update next pointer in current segment
-				currentSegHeader.next_segment_offset = newOffset;
+				// If this is the first segment for this type, update the segment head
+				if (isFirstSegment) {
+					segmentHead = newOffset;
+					isFirstSegment = false;
+				}
 
-				// Write updated segment header
-				fileStream->seekp(static_cast<std::streamoff>(currentSegmentOffset));
-				fileStream->write(reinterpret_cast<char *>(&currentSegHeader), sizeof(SegmentHeader));
-
-				// Get the new segment header
-				SegmentHeader newSegHeader;
-				fileStream->seekg(static_cast<std::streamoff>(newOffset));
-				fileStream->read(reinterpret_cast<char *>(&newSegHeader), sizeof(SegmentHeader));
-
-				// Update prev pointer in new segment
-				newSegHeader.prev_segment_offset = currentSegmentOffset;
-
-				// Set the start ID for the new segment
-				newSegHeader.start_id = dataIt->getId();
-
-				// Write updated new segment header
-				fileStream->seekp(static_cast<std::streamoff>(newOffset));
-				fileStream->write(reinterpret_cast<char *>(&newSegHeader), sizeof(SegmentHeader));
-				fileStream->flush();
+				// Update the start_id if needed (only for a new segment)
+				SegmentHeader newSegHeader = readSegmentHeader(newOffset);
+				if (newSegHeader.start_id != dataIt->getId()) {
+					// Only update start_id if it differs from what SpaceManager set
+					segmentTracker->updateSegmentHeader(
+							newOffset, [dataIt](SegmentHeader &header) { header.start_id = dataIt->getId(); });
+				}
 
 				// Move to new segment
 				currentSegmentOffset = newOffset;
-				currentSegHeader = newSegHeader;
+				currentSegHeader = readSegmentHeader(newOffset);
 				remaining = currentSegHeader.capacity;
 			}
 
@@ -588,17 +580,13 @@ namespace graph::storage {
 						idAllocator->refreshInactiveIdsCache(Edge::typeId);
 						idAllocator->refreshInactiveIdsCache(Property::typeId);
 						idAllocator->refreshInactiveIdsCache(Blob::typeId);
+
+						dataManager->getSegmentIndexManager()->buildSegmentIndexes();
 					}
 				}
 				// Reset the flag after handling potential compaction
 				deleteOperationPerformed.store(false);
 			}
-
-			// Rebuild segment indexes
-			dataManager->buildNodeSegmentIndex();
-			dataManager->buildEdgeSegmentIndex();
-			dataManager->buildPropertySegmentIndex();
-			dataManager->buildBlobSegmentIndex();
 
 			// Persist segment headers
 			persistSegmentHeaders();
