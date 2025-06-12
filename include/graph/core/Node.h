@@ -9,6 +9,7 @@
  **/
 
 #pragma once
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -22,6 +23,8 @@ namespace graph {
         // Metadata struct to contain fixed node data
         struct Metadata {
             int64_t id = 0;
+            int64_t firstOutEdgeId = 0;  // First outgoing edge
+            int64_t firstInEdgeId = 0;   // First incoming edge
             int64_t propertyEntityId = 0;
             uint32_t propertyStorageType = 0;
             bool isActive = true;
@@ -42,11 +45,11 @@ namespace graph {
         Node() = default;
         Node(int64_t id, const std::string &label);
 
-        void addOutEdge(uint64_t edgeId);
-        void addInEdge(uint64_t edgeId);
-
-        [[nodiscard]] const std::vector<uint64_t>& getOutEdges() const;
-        [[nodiscard]] const std::vector<uint64_t>& getInEdges() const;
+        // Edge relationship management
+        void setFirstOutEdgeId(int64_t edgeId);
+        void setFirstInEdgeId(int64_t edgeId);
+        [[nodiscard]] int64_t getFirstOutEdgeId() const { return metadata.firstOutEdgeId; }
+        [[nodiscard]] int64_t getFirstInEdgeId() const { return metadata.firstInEdgeId; }
 
         // Property methods
         void addProperty(const std::string &key, const PropertyValue &value);
@@ -59,11 +62,11 @@ namespace graph {
 
         // Property entity
         void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::NONE);
-        int64_t getPropertyEntityId() const { return metadata.propertyEntityId; }
-        PropertyStorageType getPropertyStorageType() const {
+        [[nodiscard]] int64_t getPropertyEntityId() const { return metadata.propertyEntityId; }
+        [[nodiscard]] PropertyStorageType getPropertyStorageType() const {
             return static_cast<PropertyStorageType>(metadata.propertyStorageType);
         }
-        bool hasPropertyEntity() const {
+        [[nodiscard]] bool hasPropertyEntity() const {
             return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
         }
 
@@ -82,21 +85,12 @@ namespace graph {
         // Set permanent ID (replaces temporary ID)
         void setPermanentId(int64_t permanentId);
 
-        // Edge management
-        void setInEdges(const std::vector<uint64_t>& edges) {
-            inEdges = edges;
-        }
-
-        void setOutEdges(const std::vector<uint64_t>& edges) {
-            outEdges = edges;
-        }
-
         // Serialization
         void serialize(std::ostream& os) const;
         static Node deserialize(std::istream& is);
 
         // Metadata access for advanced usage
-        const Metadata& getMetadata() const { return metadata; }
+        [[nodiscard]] const Metadata& getMetadata() const { return metadata; }
         Metadata& getMutableMetadata() { return metadata; }
 
     private:
@@ -108,8 +102,6 @@ namespace graph {
 
         // Variable-sized structures (not included in the 128-byte alignment)
         std::unordered_map<std::string, PropertyValue> properties;
-        std::vector<uint64_t> inEdges;
-        std::vector<uint64_t> outEdges;
 
         // Helper method to set label
         void setLabel(const std::string& label);

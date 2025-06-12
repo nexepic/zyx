@@ -44,43 +44,24 @@ namespace graph::storage {
 			}
 		}
 
-		// Update edge references in inEdges and outEdges
-		auto inEdges = node.getInEdges();
-		auto outEdges = node.getOutEdges();
-		bool inEdgesUpdated = false;
-		bool outEdgesUpdated = false;
-
-		std::vector<uint64_t> updatedInEdges = inEdges;
-		std::vector<uint64_t> updatedOutEdges = outEdges;
-
-		for (auto &edgeId: updatedInEdges) {
-			if (IDAllocator::isTemporaryId(edgeId)) {
-				int64_t permanentId = idAllocator_->getPermanentId(edgeId, Edge::typeId);
-				if (permanentId != 0) {
-					edgeId = permanentId;
-					inEdgesUpdated = true;
-				}
+		// Update first incoming edge reference if it exists
+		int64_t firstInEdgeId = node.getFirstInEdgeId();
+		if (firstInEdgeId != 0 && IDAllocator::isTemporaryId(firstInEdgeId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(firstInEdgeId, Edge::typeId);
+			if (permanentId != 0) {
+				node.setFirstInEdgeId(permanentId);
+				updated = true;
 			}
 		}
 
-		for (auto &edgeId: updatedOutEdges) {
-			if (IDAllocator::isTemporaryId(edgeId)) {
-				int64_t permanentId = idAllocator_->getPermanentId(edgeId, Edge::typeId);
-				if (permanentId != 0) {
-					edgeId = permanentId;
-					outEdgesUpdated = true;
-				}
+		// Update first outgoing edge reference if it exists
+		int64_t firstOutEdgeId = node.getFirstOutEdgeId();
+		if (firstOutEdgeId != 0 && IDAllocator::isTemporaryId(firstOutEdgeId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(firstOutEdgeId, Edge::typeId);
+			if (permanentId != 0) {
+				node.setFirstOutEdgeId(permanentId);
+				updated = true;
 			}
-		}
-
-		if (inEdgesUpdated) {
-			node.setInEdges(updatedInEdges);
-			updated = true;
-		}
-
-		if (outEdgesUpdated) {
-			node.setOutEdges(updatedOutEdges);
-			updated = true;
 		}
 
 		return updated;
@@ -219,61 +200,78 @@ namespace graph::storage {
 			return;
 		}
 
-		// Process incoming edges from the node object
-		const auto &inEdges = newNode.getInEdges();
-		for (uint64_t edgeId: inEdges) {
-			// Find the segment containing this edge
-			uint64_t edgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(edgeId);
-			if (edgeSegmentOffset == 0)
-				continue;
+		// We need to find all edges that reference this node (either as source or target)
+		// and update their references
 
-			// Get the edge segment header
-			SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
+		// First, get the first outgoing edge from the node
+		int64_t firstOutEdgeId = newNode.getFirstOutEdgeId();
+		if (firstOutEdgeId != 0) {
+			// Follow the outgoing edge chain
+			int64_t currentEdgeId = firstOutEdgeId;
+			while (currentEdgeId != 0) {
+				// Get the segment containing this edge
+				uint64_t edgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(currentEdgeId);
+				if (edgeSegmentOffset == 0)
+					break;
 
-			// Calculate the edge's index in the segment
-			uint32_t edgeIndex = static_cast<uint32_t>(edgeId - edgeHeader.start_id);
+				// Get the edge segment header
+				SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
 
-			// Check if the edge exists and is active
-			if (edgeIndex >= edgeHeader.used || !segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex))
-				continue;
+				// Calculate the edge's index in the segment
+				uint32_t edgeIndex = static_cast<uint32_t>(currentEdgeId - edgeHeader.start_id);
 
-			// Read the edge
-			size_t edgeSize = Edge::getTotalSize();
-			Edge edge = segmentTracker_->readEntity<Edge>(edgeSegmentOffset, edgeIndex, edgeSize);
+				// Check if the edge exists and is active
+				if (edgeIndex >= edgeHeader.used || !segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex))
+					break;
 
-			// Update the edge's target node ID if necessary
-			if (edge.getTargetNodeId() == oldNodeId) {
-				edge.setTargetNodeId(newNodeId);
-				segmentTracker_->writeEntity(edgeSegmentOffset, edgeIndex, edge, edgeSize);
+				// Read the edge
+				size_t edgeSize = Edge::getTotalSize();
+				Edge edge = segmentTracker_->readEntity<Edge>(edgeSegmentOffset, edgeIndex, edgeSize);
+
+				// Update the edge's source node ID
+				if (edge.getSourceNodeId() == oldNodeId) {
+					edge.setSourceNodeId(newNodeId);
+					segmentTracker_->writeEntity(edgeSegmentOffset, edgeIndex, edge, edgeSize);
+				}
+
+				// Move to the next edge in the chain
+				currentEdgeId = edge.getNextOutEdgeId();
 			}
 		}
 
-		// Process outgoing edges
-		const auto &outEdges = newNode.getOutEdges();
-		for (uint64_t edgeId: outEdges) {
-			// Find the segment containing this edge
-			uint64_t edgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(edgeId);
-			if (edgeSegmentOffset == 0)
-				continue;
+		// Next, get the first incoming edge to the node
+		int64_t firstInEdgeId = newNode.getFirstInEdgeId();
+		if (firstInEdgeId != 0) {
+			// Follow the incoming edge chain
+			int64_t currentEdgeId = firstInEdgeId;
+			while (currentEdgeId != 0) {
+				// Get the segment containing this edge
+				uint64_t edgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(currentEdgeId);
+				if (edgeSegmentOffset == 0)
+					break;
 
-			// Get the edge segment header
-			SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
+				// Get the edge segment header
+				SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
 
-			// Calculate the edge's index in the segment
-			uint32_t edgeIndex = static_cast<uint32_t>(edgeId - edgeHeader.start_id);
+				// Calculate the edge's index in the segment
+				uint32_t edgeIndex = static_cast<uint32_t>(currentEdgeId - edgeHeader.start_id);
 
-			// Check if the edge exists and is active
-			if (edgeIndex >= edgeHeader.used || !segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex))
-				continue;
+				// Check if the edge exists and is active
+				if (edgeIndex >= edgeHeader.used || !segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex))
+					break;
 
-			// Read the edge
-			size_t edgeSize = Edge::getTotalSize();
-			Edge edge = segmentTracker_->readEntity<Edge>(edgeSegmentOffset, edgeIndex, edgeSize);
+				// Read the edge
+				size_t edgeSize = Edge::getTotalSize();
+				Edge edge = segmentTracker_->readEntity<Edge>(edgeSegmentOffset, edgeIndex, edgeSize);
 
-			// Update the edge's source node ID if necessary
-			if (edge.getSourceNodeId() == oldNodeId) {
-				edge.setSourceNodeId(newNodeId);
-				segmentTracker_->writeEntity(edgeSegmentOffset, edgeIndex, edge, edgeSize);
+				// Update the edge's target node ID
+				if (edge.getTargetNodeId() == oldNodeId) {
+					edge.setTargetNodeId(newNodeId);
+					segmentTracker_->writeEntity(edgeSegmentOffset, edgeIndex, edge, edgeSize);
+				}
+
+				// Move to the next edge in the chain
+				currentEdgeId = edge.getNextInEdgeId();
 			}
 		}
 
@@ -289,11 +287,11 @@ namespace graph::storage {
 			return;
 		}
 
-		// Get source and target node IDs directly from the edge object
+		// Get source and target node IDs from the edge
 		int64_t sourceNodeId = newEdge.getSourceNodeId();
 		int64_t targetNodeId = newEdge.getTargetNodeId();
 
-		// Update source node's outgoing edge list
+		// Update the source node's first outgoing edge reference if it points to this edge
 		uint64_t sourceNodeSegmentOffset = segmentTracker_->getSegmentOffsetForNodeId(sourceNodeId);
 		if (sourceNodeSegmentOffset != 0) {
 			SegmentHeader sourceNodeHeader = segmentTracker_->getSegmentHeader(sourceNodeSegmentOffset);
@@ -305,24 +303,14 @@ namespace graph::storage {
 				size_t nodeSize = Node::getTotalSize();
 				Node sourceNode = segmentTracker_->readEntity<Node>(sourceNodeSegmentOffset, sourceNodeIndex, nodeSize);
 
-				auto outEdges = sourceNode.getOutEdges();
-				bool updated = false;
-
-				for (auto &id: outEdges) {
-					if (id == oldEdgeId) {
-						id = newEdgeId;
-						updated = true;
-					}
-				}
-
-				if (updated) {
-					sourceNode.setOutEdges(outEdges);
+				if (sourceNode.getFirstOutEdgeId() == oldEdgeId) {
+					sourceNode.setFirstOutEdgeId(newEdgeId);
 					segmentTracker_->writeEntity(sourceNodeSegmentOffset, sourceNodeIndex, sourceNode, nodeSize);
 				}
 			}
 		}
 
-		// Update target node's incoming edge list
+		// Update the target node's first incoming edge reference if it points to this edge
 		uint64_t targetNodeSegmentOffset = segmentTracker_->getSegmentOffsetForNodeId(targetNodeId);
 		if (targetNodeSegmentOffset != 0) {
 			SegmentHeader targetNodeHeader = segmentTracker_->getSegmentHeader(targetNodeSegmentOffset);
@@ -334,19 +322,102 @@ namespace graph::storage {
 				size_t nodeSize = Node::getTotalSize();
 				Node targetNode = segmentTracker_->readEntity<Node>(targetNodeSegmentOffset, targetNodeIndex, nodeSize);
 
-				auto inEdges = targetNode.getInEdges();
-				bool updated = false;
+				if (targetNode.getFirstInEdgeId() == oldEdgeId) {
+					targetNode.setFirstInEdgeId(newEdgeId);
+					segmentTracker_->writeEntity(targetNodeSegmentOffset, targetNodeIndex, targetNode, nodeSize);
+				}
+			}
+		}
 
-				for (auto &id: inEdges) {
-					if (id == oldEdgeId) {
-						id = newEdgeId;
-						updated = true;
+		// Update references in adjacent edges in the linked list
+		// Get previous and next edges in the outgoing chain
+		int64_t prevOutEdgeId = newEdge.getPrevOutEdgeId();
+		int64_t nextOutEdgeId = newEdge.getNextOutEdgeId();
+
+		// Update the previous edge's next pointer if it exists
+		if (prevOutEdgeId != 0) {
+			uint64_t prevEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(prevOutEdgeId);
+			if (prevEdgeSegmentOffset != 0) {
+				SegmentHeader prevEdgeHeader = segmentTracker_->getSegmentHeader(prevEdgeSegmentOffset);
+				uint32_t prevEdgeIndex = static_cast<uint32_t>(prevOutEdgeId - prevEdgeHeader.start_id);
+
+				if (prevEdgeIndex < prevEdgeHeader.used &&
+					segmentTracker_->isEntityActive(prevEdgeSegmentOffset, prevEdgeIndex)) {
+
+					size_t edgeSize = Edge::getTotalSize();
+					Edge prevEdge = segmentTracker_->readEntity<Edge>(prevEdgeSegmentOffset, prevEdgeIndex, edgeSize);
+
+					if (prevEdge.getNextOutEdgeId() == oldEdgeId) {
+						prevEdge.setNextOutEdgeId(newEdgeId);
+						segmentTracker_->writeEntity(prevEdgeSegmentOffset, prevEdgeIndex, prevEdge, edgeSize);
 					}
 				}
+			}
+		}
 
-				if (updated) {
-					targetNode.setInEdges(inEdges);
-					segmentTracker_->writeEntity(targetNodeSegmentOffset, targetNodeIndex, targetNode, nodeSize);
+		// Update the next edge's previous pointer if it exists
+		if (nextOutEdgeId != 0) {
+			uint64_t nextEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(nextOutEdgeId);
+			if (nextEdgeSegmentOffset != 0) {
+				SegmentHeader nextEdgeHeader = segmentTracker_->getSegmentHeader(nextEdgeSegmentOffset);
+				uint32_t nextEdgeIndex = static_cast<uint32_t>(nextOutEdgeId - nextEdgeHeader.start_id);
+
+				if (nextEdgeIndex < nextEdgeHeader.used &&
+					segmentTracker_->isEntityActive(nextEdgeSegmentOffset, nextEdgeIndex)) {
+
+					size_t edgeSize = Edge::getTotalSize();
+					Edge nextEdge = segmentTracker_->readEntity<Edge>(nextEdgeSegmentOffset, nextEdgeIndex, edgeSize);
+
+					if (nextEdge.getPrevOutEdgeId() == oldEdgeId) {
+						nextEdge.setPrevOutEdgeId(newEdgeId);
+						segmentTracker_->writeEntity(nextEdgeSegmentOffset, nextEdgeIndex, nextEdge, edgeSize);
+					}
+				}
+			}
+		}
+
+		// Get previous and next edges in the incoming chain
+		int64_t prevInEdgeId = newEdge.getPrevInEdgeId();
+		int64_t nextInEdgeId = newEdge.getNextInEdgeId();
+
+		// Update the previous edge's next pointer if it exists
+		if (prevInEdgeId != 0) {
+			uint64_t prevEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(prevInEdgeId);
+			if (prevEdgeSegmentOffset != 0) {
+				SegmentHeader prevEdgeHeader = segmentTracker_->getSegmentHeader(prevEdgeSegmentOffset);
+				uint32_t prevEdgeIndex = static_cast<uint32_t>(prevInEdgeId - prevEdgeHeader.start_id);
+
+				if (prevEdgeIndex < prevEdgeHeader.used &&
+					segmentTracker_->isEntityActive(prevEdgeSegmentOffset, prevEdgeIndex)) {
+
+					size_t edgeSize = Edge::getTotalSize();
+					Edge prevEdge = segmentTracker_->readEntity<Edge>(prevEdgeSegmentOffset, prevEdgeIndex, edgeSize);
+
+					if (prevEdge.getNextInEdgeId() == oldEdgeId) {
+						prevEdge.setNextInEdgeId(newEdgeId);
+						segmentTracker_->writeEntity(prevEdgeSegmentOffset, prevEdgeIndex, prevEdge, edgeSize);
+					}
+				}
+			}
+		}
+
+		// Update the next edge's previous pointer if it exists
+		if (nextInEdgeId != 0) {
+			uint64_t nextEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(nextInEdgeId);
+			if (nextEdgeSegmentOffset != 0) {
+				SegmentHeader nextEdgeHeader = segmentTracker_->getSegmentHeader(nextEdgeSegmentOffset);
+				uint32_t nextEdgeIndex = static_cast<uint32_t>(nextInEdgeId - nextEdgeHeader.start_id);
+
+				if (nextEdgeIndex < nextEdgeHeader.used &&
+					segmentTracker_->isEntityActive(nextEdgeSegmentOffset, nextEdgeIndex)) {
+
+					size_t edgeSize = Edge::getTotalSize();
+					Edge nextEdge = segmentTracker_->readEntity<Edge>(nextEdgeSegmentOffset, nextEdgeIndex, edgeSize);
+
+					if (nextEdge.getPrevInEdgeId() == oldEdgeId) {
+						nextEdge.setPrevInEdgeId(newEdgeId);
+						segmentTracker_->writeEntity(nextEdgeSegmentOffset, nextEdgeIndex, nextEdge, edgeSize);
+					}
 				}
 			}
 		}

@@ -37,6 +37,8 @@ namespace graph::query {
 		QueryResult executePropertyRangeScan(const QueryPlan& plan);
 		QueryResult executeTextSearch(const QueryPlan& plan);
 		QueryResult executeRelationshipScan(const QueryPlan& plan);
+		QueryResult executeTraversalConnectedNodes(const QueryPlan& plan);
+		QueryResult executeTraversalShortestPath(const QueryPlan& plan);
 	};
 
 } // namespace graph::query

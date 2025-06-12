@@ -26,6 +26,12 @@ namespace graph {
             int64_t id = 0;
             int64_t sourceNodeId = 0;
             int64_t targetNodeId = 0;
+            // Linked list fields for outgoing edges (from the same source node)
+            int64_t nextOutEdgeId = 0;
+            int64_t prevOutEdgeId = 0;
+            // Linked list fields for incoming edges (to the same target node)
+            int64_t nextInEdgeId = 0;
+            int64_t prevInEdgeId = 0;
             int64_t propertyEntityId = 0;
             uint32_t propertyStorageType = 0; // Corresponds to PropertyStorageType enum
             bool isActive = true;
@@ -37,11 +43,22 @@ namespace graph {
         static constexpr uint32_t typeId = toUnderlying(EntityType::Edge);
 
         static constexpr size_t getTotalSize() {
-        	return TOTAL_EDGE_SIZE;
+            return TOTAL_EDGE_SIZE;
         }
 
         Edge() = default;
         Edge(int64_t id, int64_t sourceNodeId, int64_t targetNodeId, const std::string &label);
+
+        // Linked list management methods
+        void setNextOutEdgeId(int64_t edgeId) { metadata.nextOutEdgeId = edgeId; }
+        void setPrevOutEdgeId(int64_t edgeId) { metadata.prevOutEdgeId = edgeId; }
+        void setNextInEdgeId(int64_t edgeId) { metadata.nextInEdgeId = edgeId; }
+        void setPrevInEdgeId(int64_t edgeId) { metadata.prevInEdgeId = edgeId; }
+
+        [[nodiscard]] int64_t getNextOutEdgeId() const { return metadata.nextOutEdgeId; }
+        [[nodiscard]] int64_t getPrevOutEdgeId() const { return metadata.prevOutEdgeId; }
+        [[nodiscard]] int64_t getNextInEdgeId() const { return metadata.nextInEdgeId; }
+        [[nodiscard]] int64_t getPrevInEdgeId() const { return metadata.prevInEdgeId; }
 
         // Property methods
         void addProperty(const std::string &key, const PropertyValue &value);

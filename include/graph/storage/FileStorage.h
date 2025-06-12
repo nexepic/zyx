@@ -109,6 +109,8 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker; }
 
+		[[nodiscard]] std::shared_ptr<DataManager> getDataManager() const { return dataManager; }
+
 	private:
 		std::string dbFilePath;
 		std::unordered_map<uint64_t, Node> nodes;

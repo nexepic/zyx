@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/core/query/indexes/RelationshipIndex.h"
+#include "graph/query/indexes/RelationshipIndex.h"
 #include <algorithm>
 
 namespace graph::query::indexes {

@@ -19,12 +19,14 @@
 #include "CacheManager.h"
 #include "DeletionManager.h"
 #include "IDAllocator.h"
+#include "SegmentIndexManager.h"
 #include "StorageHeaders.h"
 #include "graph/core/Blob.h"
 #include "graph/core/Edge.h"
 #include "graph/core/Node.h"
 #include "graph/core/Property.h"
-#include "SegmentIndexManager.h"
+
+#include <graph/traversal/RelationshipTraversal.h>
 
 namespace graph::storage {
 
@@ -70,7 +72,7 @@ namespace graph::storage {
 		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
 
 		// Edge-specific operations
-		void addEdge(const Edge &edge);
+		void addEdge(Edge &edge);
 		void updateEdge(const Edge &edge);
 		void deleteEdge(Edge &edge);
 		Edge getEdge(int64_t id);
@@ -162,7 +164,7 @@ namespace graph::storage {
 		uint64_t findSegmentForEntityId(int64_t id) const;
 
 		// Find edges connected to a node
-		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both");
+		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both") const;
 
 		// Cache management
 		void clearCache();
@@ -263,6 +265,8 @@ namespace graph::storage {
 		std::shared_ptr<SegmentTracker> segmentTracker_;
 
 		std::shared_ptr<SpaceManager> spaceManager_;
+
+		std::shared_ptr<traversal::RelationshipTraversal> relationshipTraversal_;
 
 		void initializeSegmentIndexes();
 

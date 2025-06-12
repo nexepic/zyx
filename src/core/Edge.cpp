@@ -20,6 +20,10 @@ namespace graph {
         metadata.id = id;
         metadata.sourceNodeId = sourceNodeId;
         metadata.targetNodeId = targetNodeId;
+    	metadata.nextOutEdgeId = 0;
+    	metadata.prevOutEdgeId = 0;
+    	metadata.nextInEdgeId = 0;
+    	metadata.prevInEdgeId = 0;
         metadata.isActive = true;
         setLabel(label);
     }
@@ -93,6 +97,10 @@ namespace graph {
         utils::Serializer::writePOD(os, metadata.id);
         utils::Serializer::writePOD(os, metadata.sourceNodeId);
         utils::Serializer::writePOD(os, metadata.targetNodeId);
+    	utils::Serializer::writePOD(os, metadata.nextOutEdgeId);
+    	utils::Serializer::writePOD(os, metadata.prevOutEdgeId);
+    	utils::Serializer::writePOD(os, metadata.nextInEdgeId);
+    	utils::Serializer::writePOD(os, metadata.prevInEdgeId);
         utils::Serializer::writePOD(os, metadata.propertyEntityId);
         utils::Serializer::writePOD(os, metadata.propertyStorageType);
         utils::Serializer::writePOD(os, metadata.isActive);
@@ -108,6 +116,10 @@ namespace graph {
         edge.metadata.id = utils::Serializer::readPOD<int64_t>(is);
         edge.metadata.sourceNodeId = utils::Serializer::readPOD<int64_t>(is);
         edge.metadata.targetNodeId = utils::Serializer::readPOD<int64_t>(is);
+    	edge.metadata.nextOutEdgeId = utils::Serializer::readPOD<int64_t>(is);
+    	edge.metadata.prevOutEdgeId = utils::Serializer::readPOD<int64_t>(is);
+    	edge.metadata.nextInEdgeId = utils::Serializer::readPOD<int64_t>(is);
+    	edge.metadata.prevInEdgeId = utils::Serializer::readPOD<int64_t>(is);
         edge.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
         edge.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
         edge.metadata.isActive = utils::Serializer::readPOD<bool>(is);
@@ -125,6 +137,10 @@ namespace graph {
         size += sizeof(metadata.id);                // int64_t
         size += sizeof(metadata.sourceNodeId);      // int64_t
         size += sizeof(metadata.targetNodeId);      // int64_t
+    	size += sizeof(metadata.nextOutEdgeId);     // int64_t
+    	size += sizeof(metadata.prevOutEdgeId);     // int64_t
+    	size += sizeof(metadata.nextInEdgeId);      // int64_t
+    	size += sizeof(metadata.prevInEdgeId);      // int64_t
         size += sizeof(metadata.propertyEntityId);  // int64_t
         size += sizeof(metadata.propertyStorageType); // uint32_t
         size += sizeof(metadata.isActive);          // bool

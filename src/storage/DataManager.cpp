@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <utility>
 #include "graph/core/BlobChainManager.h"
+#include "graph/traversal/RelationshipTraversal.h"
 
 namespace graph::storage {
 
@@ -48,6 +49,7 @@ namespace graph::storage {
 		deletionManager_ = std::make_unique<DeletionManager>(shared_from_this(), spaceManager_);
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, idAllocator_, segmentTracker_);
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
+		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(weak_from_this());
 
 		initializeSegmentIndexes();
 	}
@@ -67,8 +69,14 @@ namespace graph::storage {
 	int64_t DataManager::reserveTemporaryBlobId() { return idAllocator_->reserveTemporaryId(Blob::typeId); }
 
 	void DataManager::addNode(const Node &node) { addEntity(node); }
-	void DataManager::addEdge(const Edge &edge) { addEntity(edge); }
+
+	void DataManager::addEdge(Edge &edge) {
+		addEntity(edge);
+		relationshipTraversal_->linkEdge(edge);
+	}
+
 	void DataManager::addPropertyEntity(const Property &property) { addEntity(property); }
+
 	void DataManager::addBlobEntity(const Blob &blob) { addEntity(blob); }
 
 	template<typename EntityType>
@@ -314,8 +322,14 @@ namespace graph::storage {
 	}
 
 	void DataManager::deleteNode(Node &node) { deleteEntity(node); }
-	void DataManager::deleteEdge(Edge &edge) { deleteEntity(edge); }
+
+	void DataManager::deleteEdge(Edge &edge) {
+		relationshipTraversal_->unlinkEdge(edge);
+		deleteEntity(edge);
+	}
+
 	void DataManager::deleteProperty(Property &property) { deleteEntity(property); }
+
 	void DataManager::deleteBlob(Blob &blob) { deleteEntity(blob); }
 
 	template<typename EntityType>
@@ -812,68 +826,14 @@ namespace graph::storage {
 		return readEntitiesFromSegment<EntityType>(segmentOffset, startId, endId, limit);
 	}
 
-	std::vector<Edge> DataManager::findEdgesByNode(int64_t nodeId, const std::string &direction) {
-		std::vector<Edge> result;
-
-		// First check dirty edges
-		for (const auto &[edgeId, info]: dirtyEdges_) {
-			if (info.changeType != EntityChangeType::DELETED) { // Use correct enum scope
-				Edge edge;
-				if (info.backup.has_value()) { // Access backup correctly
-					edge = *info.backup;
-				} else if (edgeCache_.contains(edgeId)) {
-					edge = edgeCache_.peek(edgeId);
-				} else {
-					continue; // Skip if we can't get the edge
-				}
-
-				bool match = false;
-				if (direction == "outgoing" && edge.getFromNodeId() == nodeId) {
-					match = true;
-				} else if (direction == "incoming" && edge.getToNodeId() == nodeId) {
-					match = true;
-				} else if (direction == "both" && (edge.getFromNodeId() == nodeId || edge.getToNodeId() == nodeId)) {
-					match = true;
-				}
-
-				if (match) {
-					result.push_back(edge);
-				}
-			}
+	std::vector<Edge> DataManager::findEdgesByNode(int64_t nodeId, const std::string &direction) const {
+		if (direction == "out") {
+			return relationshipTraversal_->getOutgoingEdges(nodeId);
+		} else if (direction == "in") {
+			return relationshipTraversal_->getIncomingEdges(nodeId);
+		} else { // "both" is the default
+			return relationshipTraversal_->getAllConnectedEdges(nodeId);
 		}
-
-		// Then proceed with disk scan
-		for (const auto &segmentIndex: segmentIndexManager_->getEdgeSegmentIndex()) {
-			uint64_t segmentOffset = segmentIndex.segmentOffset;
-			SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
-
-			// Read all edges in this segment
-			std::vector<Edge> segmentEdges = readEntitiesFromSegment<Edge>(
-					segmentOffset, header.start_id, header.start_id + header.used - 1, header.used);
-
-			for (const Edge &edge: segmentEdges) {
-				// Skip edges that are in dirty collection
-				if (dirtyEdges_.find(edge.getId()) != dirtyEdges_.end()) {
-					continue;
-				}
-
-				bool match = false;
-				if (direction == "outgoing" && edge.getFromNodeId() == nodeId) {
-					match = true;
-				} else if (direction == "incoming" && edge.getToNodeId() == nodeId) {
-					match = true;
-				} else if (direction == "both" && (edge.getFromNodeId() == nodeId || edge.getToNodeId() == nodeId)) {
-					match = true;
-				}
-
-				if (match) {
-					result.push_back(edge);
-					edgeCache_.put(edge.getId(), edge); // Cache the edge
-				}
-			}
-		}
-
-		return result;
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) {

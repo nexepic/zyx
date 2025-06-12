@@ -13,7 +13,7 @@
 #include "graph/storage/FileStorage.h"
 #include "graph/core/Node.h"
 #include "graph/core/Edge.h"
-#include "graph/core/query/QueryEngine.h"
+#include "graph/query/QueryEngine.h"
 #include "graph/core/Transaction.h"
 
 namespace graph {

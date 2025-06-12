@@ -235,41 +235,6 @@ namespace graph {
 				std::cout << "Error: " << e.what() << "\n";
 			}
 		}
-		// else if (command == "removeProperty") {
-		//     // Remove a property from a node
-		//     int nodeId;
-		//     std::string key;
-		//
-		//     std::cout << "Enter node ID: ";
-		//     std::cin >> nodeId;
-		//     std::cin.ignore(); // Clear the newline
-		//
-		//     std::cout << "Enter property key to remove: ";
-		//     std::getline(std::cin, key);
-		//
-		//     try {
-		//         auto transaction = db.beginTransaction();
-		//         auto node = db.getStorage().getNode(nodeId);
-		//
-		//         if (node.getId() == 0) {
-		//             std::cout << "Node not found\n";
-		//             return;
-		//         }
-		//
-		//         if (!node.hasProperty(key)) {
-		//             std::cout << "Property '" << key << "' not found on node " << nodeId << "\n";
-		//             return;
-		//         }
-		//
-		//         // Remove the property
-		//         db.getStorage().removeNodeProperty(nodeId, key);
-		//         transaction.commit();
-		//
-		//         std::cout << "Removed property '" << key << "' from node " << nodeId << "\n";
-		//     } catch (const std::exception &e) {
-		//         std::cout << "Error: " << e.what() << "\n";
-		//     }
-		// }
 		else if (command == "addEdge") {
 			int from, to;
 			std::string relation;

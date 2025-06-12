@@ -18,6 +18,8 @@ namespace graph {
 
     Node::Node(int64_t id, const std::string &label) {
         metadata.id = id;
+        metadata.firstOutEdgeId = 0;
+        metadata.firstInEdgeId = 0;
         setLabel(label);
     }
 
@@ -44,8 +46,15 @@ namespace graph {
         metadata.id = permanentId;
     }
 
+    void Node::setFirstOutEdgeId(int64_t edgeId) {
+        metadata.firstOutEdgeId = edgeId;
+    }
+
+    void Node::setFirstInEdgeId(int64_t edgeId) {
+        metadata.firstInEdgeId = edgeId;
+    }
+
     void Node::addProperty(const std::string &key, const PropertyValue &value) {
-    	// TODO: clear existing properties
         properties[key] = value;
     }
 
@@ -86,65 +95,54 @@ namespace graph {
         return totalSize;
     }
 
-    void Node::addOutEdge(uint64_t edgeId) {
-        outEdges.push_back(edgeId);
+    void Node::serialize(std::ostream &os) const {
+        // Write metadata fields individually
+        utils::Serializer::writePOD(os, metadata.id);
+    	utils::Serializer::writePOD(os, metadata.firstOutEdgeId);
+    	utils::Serializer::writePOD(os, metadata.firstInEdgeId);
+        utils::Serializer::writePOD(os, metadata.propertyEntityId);
+        utils::Serializer::writePOD(os, metadata.propertyStorageType);
+        utils::Serializer::writePOD(os, metadata.isActive);
+
+        // Write label (using the actual length of the string)
+        std::string label = getLabel();
+        utils::Serializer::writeString(os, label);
     }
 
-    void Node::addInEdge(uint64_t edgeId) {
-        inEdges.push_back(edgeId);
+    Node Node::deserialize(std::istream &is) {
+        Node node;
+
+        // Read metadata fields individually
+        node.metadata.id = utils::Serializer::readPOD<int64_t>(is);
+    	node.metadata.firstOutEdgeId = utils::Serializer::readPOD<int64_t>(is);
+    	node.metadata.firstInEdgeId = utils::Serializer::readPOD<int64_t>(is);
+        node.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
+        node.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
+        node.metadata.isActive = utils::Serializer::readPOD<bool>(is);
+
+        // Read label
+        std::string label = utils::Serializer::readString(is);
+        node.setLabel(label);
+
+        return node;
     }
 
-    const std::vector<uint64_t> &Node::getOutEdges() const {
-        return outEdges;
-    }
+    size_t Node::getSerializedSize() const {
+        // Calculate size of all metadata fields
+        size_t size = 0;
+        size += sizeof(metadata.id);                 // int64_t
+    	size += sizeof(metadata.firstOutEdgeId);     // int64_t
+    	size += sizeof(metadata.firstInEdgeId);      // int64_t
+        size += sizeof(metadata.propertyEntityId);   // int64_t
+        size += sizeof(metadata.propertyStorageType); // uint32_t
+        size += sizeof(metadata.isActive);           // bool
 
-    const std::vector<uint64_t> &Node::getInEdges() const {
-        return inEdges;
-    }
+        // Calculate size of the serialized string (length prefix + string content)
+        std::string label = getLabel();
+        size += sizeof(uint32_t);                    // For string length prefix
+        size += label.size();                        // Actual string content
 
-	void Node::serialize(std::ostream &os) const {
-    	// Write metadata fields individually
-    	utils::Serializer::writePOD(os, metadata.id);
-    	utils::Serializer::writePOD(os, metadata.propertyEntityId);
-    	utils::Serializer::writePOD(os, metadata.propertyStorageType);
-    	utils::Serializer::writePOD(os, metadata.isActive);
-
-    	// Write label (using the actual length of the string)
-    	std::string label = getLabel();
-    	utils::Serializer::writeString(os, label);
-    }
-
-	Node Node::deserialize(std::istream &is) {
-    	Node node;
-
-    	// Read metadata fields individually
-    	node.metadata.id = utils::Serializer::readPOD<int64_t>(is);
-    	node.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
-    	node.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
-    	node.metadata.isActive = utils::Serializer::readPOD<bool>(is);
-
-    	// Read label
-    	std::string label = utils::Serializer::readString(is);
-    	node.setLabel(label);
-
-    	return node;
-    }
-
-	// Implementation for Node's getSerializedSize method
-	size_t Node::getSerializedSize() const {
-    	// Calculate size of all metadata fields
-    	size_t size = 0;
-    	size += sizeof(metadata.id);                 // int64_t
-    	size += sizeof(metadata.propertyEntityId);   // int64_t
-    	size += sizeof(metadata.propertyStorageType); // uint32_t
-    	size += sizeof(metadata.isActive);           // bool
-
-    	// Calculate size of the serialized string (length prefix + string content)
-    	std::string label = getLabel();
-    	size += sizeof(uint32_t);                    // For string length prefix
-    	size += label.size();                        // Actual string content
-
-    	return size;
+        return size;
     }
 
 } // namespace graph
