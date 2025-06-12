@@ -8,9 +8,9 @@
  *
  **/
 
-#include "graph/query/QueryExecutor.h"
+#include "graph/query/QueryExecutor.hpp"
 #include <algorithm>
-#include <graph/query/strategies/TraversalQuery.h>
+#include <graph/query/strategies/TraversalQuery.hpp>
 
 namespace graph::query {
 

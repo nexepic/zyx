@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/cli/Repl.h"
+#include "graph/cli/Repl.hpp"
 #include <iostream>
 #include <sstream>
 #include "graph/cli/linenoise.hpp"

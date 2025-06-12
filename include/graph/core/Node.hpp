@@ -1,0 +1,110 @@
+/**
+ * @file Node.hpp
+ * @author Nexepic
+ * @brief This source code is licensed under MIT License.
+ * @date 2025/2/26
+ *
+ * @copyright Copyright (c) 2025 Nexepic
+ *
+ **/
+
+#pragma once
+
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include "PropertyValue.hpp"
+#include "Types.hpp"
+
+namespace graph {
+
+    class Node {
+    public:
+        // Metadata struct to contain fixed node data
+        struct Metadata {
+            int64_t id = 0;
+            int64_t firstOutEdgeId = 0;  // First outgoing edge
+            int64_t firstInEdgeId = 0;   // First incoming edge
+            int64_t propertyEntityId = 0;
+            uint32_t propertyStorageType = 0;
+            bool isActive = true;
+            // Padding is implicit
+        };
+
+        static constexpr size_t TOTAL_NODE_SIZE = 256;
+        static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+        static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_NODE_SIZE - METADATA_SIZE;
+        static constexpr uint32_t typeId = toUnderlying(EntityType::Node);
+
+        [[nodiscard]] size_t getSerializedSize() const;
+
+        static constexpr size_t getTotalSize() {
+            return TOTAL_NODE_SIZE;
+        }
+
+        Node() = default;
+        Node(int64_t id, const std::string &label);
+
+        // Edge relationship management
+        void setFirstOutEdgeId(int64_t edgeId);
+        void setFirstInEdgeId(int64_t edgeId);
+        [[nodiscard]] int64_t getFirstOutEdgeId() const { return metadata.firstOutEdgeId; }
+        [[nodiscard]] int64_t getFirstInEdgeId() const { return metadata.firstInEdgeId; }
+
+        // Property methods
+        void addProperty(const std::string &key, const PropertyValue &value);
+        [[nodiscard]] bool hasProperty(const std::string &key) const;
+        [[nodiscard]] PropertyValue getProperty(const std::string &key) const;
+        void removeProperty(const std::string &key);
+        [[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
+        [[nodiscard]] size_t getTotalPropertySize() const;
+        void clearProperties() { properties.clear(); }
+
+        // Property entity
+        void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::NONE);
+        [[nodiscard]] int64_t getPropertyEntityId() const { return metadata.propertyEntityId; }
+        [[nodiscard]] PropertyStorageType getPropertyStorageType() const {
+            return static_cast<PropertyStorageType>(metadata.propertyStorageType);
+        }
+        [[nodiscard]] bool hasPropertyEntity() const {
+            return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
+        }
+
+        // Getters for metadata
+        [[nodiscard]] std::string getLabel() const;
+        [[nodiscard]] int64_t getId() const { return metadata.id; }
+        [[nodiscard]] bool isActive() const { return metadata.isActive; }
+
+        // Setters for metadata
+        void setId(int64_t id) { metadata.id = id; }
+        void markInactive(bool active = false) { metadata.isActive = active; }
+
+        // Check if this node has a temporary ID
+        [[nodiscard]] bool hasTemporaryId() const;
+
+        // Set permanent ID (replaces temporary ID)
+        void setPermanentId(int64_t permanentId);
+
+        // Serialization
+        void serialize(std::ostream& os) const;
+        static Node deserialize(std::istream& is);
+
+        // Metadata access for advanced usage
+        [[nodiscard]] const Metadata& getMetadata() const { return metadata; }
+        Metadata& getMutableMetadata() { return metadata; }
+
+    private:
+        // Fixed-size metadata structure
+        Metadata metadata;
+
+        // Fixed-size buffer for label
+        char labelBuffer[LABEL_BUFFER_SIZE] = {0};
+
+        // Variable-sized structures (not included in the 128-byte alignment)
+        std::unordered_map<std::string, PropertyValue> properties;
+
+        // Helper method to set label
+        void setLabel(const std::string& label);
+    };
+
+} // namespace graph

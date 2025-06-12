@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/indexes/LabelIndex.h"
+#include "graph/query/indexes/LabelIndex.hpp"
 #include <algorithm>
 #include <mutex>
 

@@ -8,10 +8,10 @@
  *
  **/
 
-#include "graph/storage/IDAllocator.h"
+#include "graph/storage/IDAllocator.hpp"
 #include <algorithm>
 #include <stdexcept>
-#include "graph/storage/SegmentTracker.h"
+#include "graph/storage/SegmentTracker.hpp"
 
 namespace graph::storage {
 

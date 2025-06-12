@@ -8,9 +8,9 @@
  *
  **/
 
-#include "graph/core/Database.h"
+#include "graph/core/Database.hpp"
 #include "graph/cli/CLI11.hpp"
-#include "graph/cli/Repl.h"
+#include "graph/cli/Repl.hpp"
 #include <iostream>
 
 int main(int argc, char **argv) {

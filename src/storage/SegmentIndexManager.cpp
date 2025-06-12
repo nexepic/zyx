@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/storage/SegmentIndexManager.h"
+#include "graph/storage/SegmentIndexManager.hpp"
 #include <algorithm>
 
 namespace graph::storage {

@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/utils/CompressUtils.h"
+#include "graph/utils/CompressUtils.hpp"
 #include <cstdint>
 #include <stdexcept>
 #include <string>

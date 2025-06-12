@@ -8,8 +8,8 @@
  *
  **/
 
-#include "graph/core/Transaction.h"
-#include "graph/core/Database.h"
+#include "graph/core/Transaction.hpp"
+#include "graph/core/Database.hpp"
 
 namespace graph {
 

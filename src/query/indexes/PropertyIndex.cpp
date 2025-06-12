@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/indexes/PropertyIndex.h"
+#include "graph/query/indexes/PropertyIndex.hpp"
 #include <algorithm>
 #include <mutex>
 

@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/QueryPlanner.h"
+#include "graph/query/QueryPlanner.hpp"
 
 namespace graph::query {
 

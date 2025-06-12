@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/strategies/TraversalQuery.h"
+#include "graph/query/strategies/TraversalQuery.hpp"
 #include <queue>
 #include <unordered_set>
 #include <unordered_map>

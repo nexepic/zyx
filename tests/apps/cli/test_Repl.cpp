@@ -9,8 +9,8 @@
  **/
 
 #include <gtest/gtest.h>
-#include "graph/cli/Repl.h"
-#include "graph/core/Database.h"
+#include "graph/cli/Repl.hpp"
+#include "graph/core/Database.hpp"
 
 class REPLTest : public ::testing::Test {
 protected:

@@ -8,9 +8,9 @@
  *
  **/
 
-#include "graph/core/Property.h"
-#include <graph/storage/IDAllocator.h>
-#include "graph/utils/Serializer.h"
+#include "graph/core/Property.hpp"
+#include <graph/storage/IDAllocator.hpp>
+#include "graph/utils/Serializer.hpp"
 
 namespace graph {
 

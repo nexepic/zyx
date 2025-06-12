@@ -8,15 +8,14 @@
  *
  **/
 
-#include "graph/storage/SpaceManager.h"
+#include "graph/storage/SpaceManager.hpp"
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
-#include <graph/storage/DataManager.h>
+#include <graph/storage/DataManager.hpp>
 #include <iostream>
 #include <unordered_set>
-
-#include "graph/storage/SegmentType.h"
+#include "graph/storage/SegmentType.hpp"
 
 namespace graph::storage {
 

@@ -9,9 +9,9 @@
  **/
 
 #include <fstream>
-#include <graph/storage/DatabaseInspector.h>
-#include <graph/storage/StorageHeaders.h>
-#include <graph/utils/TableFormatter.h>
+#include <graph/storage/DatabaseInspector.hpp>
+#include <graph/storage/StorageHeaders.hpp>
+#include <graph/utils/TableFormatter.hpp>
 #include <iostream>
 #include <sstream>
 

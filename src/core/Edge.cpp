@@ -8,11 +8,10 @@
  *
  **/
 
-#include "graph/core/Edge.h"
-#include <graph/storage/IDAllocator.h>
+#include "graph/core/Edge.hpp"
+#include <graph/storage/IDAllocator.hpp>
 #include <stdexcept>
-
-#include "graph/utils/Serializer.h"
+#include "graph/utils/Serializer.hpp"
 
 namespace graph {
 

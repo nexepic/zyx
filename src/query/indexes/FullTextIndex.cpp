@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/indexes/FullTextIndex.h"
+#include "graph/query/indexes/FullTextIndex.hpp"
 #include <algorithm>
 #include <cctype>
 #include <mutex>

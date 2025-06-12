@@ -9,7 +9,7 @@
  **/
 
 #include <gtest/gtest.h>
-#include "graph/storage/StorageHeaders.h"
+#include "graph/storage/StorageHeaders.hpp"
 
 TEST(StorageHeadersTest, FileHeaderInitialization) {
     graph::storage::FileHeader fileHeader;

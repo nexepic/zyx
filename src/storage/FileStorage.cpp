@@ -8,19 +8,19 @@
  *
  **/
 
-#include "graph/storage/FileStorage.h"
+#include "graph/storage/FileStorage.hpp"
 #include <algorithm> // for std::sort
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <zlib.h>
-#include "graph/core/Blob.h"
-#include "graph/core/Edge.h"
-#include "graph/core/Node.h"
-#include "graph/core/Property.h"
-#include "graph/storage/DatabaseInspector.h"
-#include "graph/storage/EntityReferenceUpdater.h"
-#include "graph/utils/FixedSizeSerializer.h"
+#include "graph/core/Blob.hpp"
+#include "graph/core/Edge.hpp"
+#include "graph/core/Node.hpp"
+#include "graph/core/Property.hpp"
+#include "graph/storage/DatabaseInspector.hpp"
+#include "graph/storage/EntityReferenceUpdater.hpp"
+#include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
 

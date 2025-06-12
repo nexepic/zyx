@@ -8,11 +8,11 @@
  *
  **/
 
-#include "graph/core/BlobChainManager.h"
+#include "graph/core/BlobChainManager.hpp"
 #include <stdexcept>
-#include "graph/core/Blob.h"
-#include "graph/storage/DataManager.h"
-#include "graph/utils/CompressUtils.h"
+#include "graph/core/Blob.hpp"
+#include "graph/storage/DataManager.hpp"
+#include "graph/utils/CompressUtils.hpp"
 
 namespace graph {
 

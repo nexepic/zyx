@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/core/Database.h"
+#include "graph/core/Database.hpp"
 #include <filesystem>
 
 namespace graph {

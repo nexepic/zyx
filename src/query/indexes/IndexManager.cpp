@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/indexes/IndexManager.h"
+#include "graph/query/indexes/IndexManager.hpp"
 #include <algorithm>
 
 namespace graph::query::indexes {

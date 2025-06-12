@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/utils/ChecksumUtils.h"
+#include "graph/utils/ChecksumUtils.hpp"
 #include <cstdint>
 #include <zlib.h>
 

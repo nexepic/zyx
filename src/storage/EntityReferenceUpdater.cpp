@@ -8,9 +8,9 @@
  *
  **/
 
-#include "graph/storage/EntityReferenceUpdater.h"
-#include <graph/storage/SegmentTracker.h>
-#include <graph/storage/SegmentType.h>
+#include "graph/storage/EntityReferenceUpdater.hpp"
+#include <graph/storage/SegmentTracker.hpp>
+#include <graph/storage/SegmentType.hpp>
 #include <utility>
 
 namespace graph::storage {

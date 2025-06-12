@@ -8,12 +8,12 @@
  *
  **/
 
-#include "graph/storage/DeletionManager.h"
+#include "graph/storage/DeletionManager.hpp"
 #include <chrono>
 #include <iostream>
 #include <utility>
-#include "graph/storage/DataManager.h"
-#include "graph/storage/FileStorage.h"
+#include "graph/storage/DataManager.hpp"
+#include "graph/storage/FileStorage.hpp"
 
 namespace graph::storage {
 

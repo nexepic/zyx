@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/core/PropertyValue.h"
+#include "graph/core/PropertyValue.hpp"
 #include <zlib.h>
 
 namespace graph::property_utils {

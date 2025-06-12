@@ -8,9 +8,9 @@
  *
  **/
 
-#include "graph/query/QueryEngine.h"
-#include "graph/query/QueryExecutor.h"
-#include "graph/query/QueryPlanner.h"
+#include "graph/query/QueryEngine.hpp"
+#include "graph/query/QueryExecutor.hpp"
+#include "graph/query/QueryPlanner.hpp"
 
 namespace graph::query {
 

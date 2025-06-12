@@ -13,10 +13,10 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <fstream>
-#include <graph/utils/ChecksumUtils.h>
+#include <graph/utils/ChecksumUtils.hpp>
 #include <gtest/gtest.h>
 #include <zlib.h>
-#include "graph/storage/FileStorage.h"
+#include "graph/storage/FileStorage.hpp"
 
 class FileStorageTest : public ::testing::Test {
 protected:

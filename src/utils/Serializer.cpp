@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/utils/Serializer.h"
+#include "graph/utils/Serializer.hpp"
 
 namespace graph::utils {
 

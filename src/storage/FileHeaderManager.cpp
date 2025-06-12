@@ -8,12 +8,11 @@
  *
  **/
 
-#include "graph/storage/FileHeaderManager.h"
+#include "graph/storage/FileHeaderManager.hpp"
 #include <cstring>
-#include <graph/storage/SegmentType.h>
+#include <graph/storage/SegmentType.hpp>
 #include <stdexcept>
-
-#include "graph/utils/ChecksumUtils.h"
+#include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
 

@@ -9,7 +9,7 @@
  **/
 
 #include <gtest/gtest.h>
-#include "graph/core/Database.h"
+#include "graph/core/Database.hpp"
 
 // Test database creation
 TEST(DatabaseTest, CreateDatabase) {

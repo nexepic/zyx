@@ -8,11 +8,11 @@
  *
  **/
 
-#include "graph/core/Node.h"
-#include <graph/storage/IDAllocator.h>
+#include "graph/core/Node.hpp"
+#include <graph/storage/IDAllocator.hpp>
 #include <stdexcept>
-#include "graph/core/PropertyValue.h"
-#include "graph/utils/Serializer.h"
+#include "graph/core/PropertyValue.hpp"
+#include "graph/utils/Serializer.hpp"
 
 namespace graph {
 

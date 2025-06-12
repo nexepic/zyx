@@ -8,16 +8,16 @@
  *
  **/
 
-#include "graph/storage/SegmentTracker.h"
+#include "graph/storage/SegmentTracker.hpp"
 #include <algorithm>
 #include <cstring>
 #include <functional>
-#include <graph/storage/SegmentIndexManager.h>
-#include <graph/storage/SegmentType.h>
-#include <graph/utils/ChecksumUtils.h>
+#include <graph/storage/SegmentIndexManager.hpp>
+#include <graph/storage/SegmentType.hpp>
+#include <graph/utils/ChecksumUtils.hpp>
 #include <iostream>
 #include <stdexcept>
-#include "graph/utils/FixedSizeSerializer.h"
+#include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
 

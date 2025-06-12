@@ -8,8 +8,8 @@
  *
  **/
 
-#include "graph/traversal/RelationshipTraversal.h"
-#include "graph/storage/DataManager.h"
+#include "graph/traversal/RelationshipTraversal.hpp"
+#include "graph/storage/DataManager.hpp"
 #include <unordered_set>
 
 namespace graph::traversal {

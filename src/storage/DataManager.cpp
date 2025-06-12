@@ -8,15 +8,15 @@
  *
  **/
 
-#include "graph/storage/DataManager.h"
+#include "graph/storage/DataManager.hpp"
 #include <algorithm>
-#include <graph/storage/SegmentTracker.h>
+#include <graph/storage/SegmentTracker.hpp>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
-#include "graph/core/BlobChainManager.h"
-#include "graph/traversal/RelationshipTraversal.h"
+#include "graph/core/BlobChainManager.hpp"
+#include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::storage {
 
