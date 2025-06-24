@@ -27,28 +27,32 @@ namespace graph::storage {
 		 * @param node The node to update
 		 * @return True if any references were updated, false otherwise
 		 */
-		bool updateNodeReferencesToPermanent(Node &node);
+		bool updateNodeReferencesToPermanent(Node &node) const;
 
 		/**
 		 * Update temporary IDs to permanent IDs in Edge references
 		 * @param edge The edge to update
 		 * @return True if any references were updated, false otherwise
 		 */
-		bool updateEdgeReferencesToPermanent(Edge &edge);
+		bool updateEdgeReferencesToPermanent(Edge &edge) const;
 
 		/**
 		 * Update temporary IDs to permanent IDs in Property references
 		 * @param property The property to update
 		 * @return True if any references were updated, false otherwise
 		 */
-		bool updatePropertyReferencesToPermanent(Property &property);
+		bool updatePropertyReferencesToPermanent(Property &property) const;
 
 		/**
 		 * Update temporary IDs to permanent IDs in Blob references, including chain links
 		 * @param blob The blob to update
 		 * @return True if any references were updated, false otherwise
 		 */
-		bool updateBlobReferencesToPermanent(Blob &blob);
+		bool updateBlobReferencesToPermanent(Blob &blob) const;
+
+		bool updateIndexReferencesToPermanent(Index &index) const;
+
+		bool updateStateReferencesToPermanent(State &state) const;
 
 		void updateEntityReferences(int64_t oldEntityId, const void *newEntity, uint32_t entityType);
 

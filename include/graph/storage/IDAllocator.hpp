@@ -24,7 +24,8 @@ namespace graph::storage {
 	class IDAllocator {
 	public:
 		explicit IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
-							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId);
+							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId,
+							 int64_t &maxIndexId, int64_t &maxStateId);
 
 		// Reserve a temporary ID (negative number)
 		int64_t reserveTemporaryId(uint32_t entityType);
@@ -36,7 +37,7 @@ namespace graph::storage {
 		static bool isTemporaryId(int64_t id) { return id < 0; }
 
 		// Free an ID (mark as inactive for future reuse)
-		void freeId(uint64_t id, uint32_t entityType);
+		void freeId(int64_t id, uint32_t entityType);
 
 		// Initialize with current maximum IDs
 		void initialize();
@@ -46,6 +47,8 @@ namespace graph::storage {
 		int64_t getCurrentMaxEdgeId() const { return currentMaxEdgeId_; }
 		int64_t getCurrentMaxPropId() const { return currentMaxPropId_; }
 		int64_t getCurrentMaxBlobId() const { return currentMaxBlobId_; }
+		int64_t getCurrentMaxIndexId() const { return currentMaxIndexId_; }
+		int64_t getCurrentMaxStateId() const { return currentMaxStateId_; }
 
 		// Clear temporary to permanent ID mappings
 		void clearTempIdMappings();
@@ -69,10 +72,7 @@ namespace graph::storage {
 		int64_t findInactiveId(uint32_t entityType);
 
 		// Allocate a new sequential ID
-		int64_t allocateNewSequentialId(uint32_t entityType);
-
-		// Mark an ID as active in its segment
-		void markIdActive(uint64_t id, uint32_t entityType);
+		int64_t allocateNewSequentialId(uint32_t entityType) const;
 
 		std::shared_ptr<std::fstream> file_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
@@ -85,18 +85,24 @@ namespace graph::storage {
 		int64_t &currentMaxEdgeId_;
 		int64_t &currentMaxPropId_;
 		int64_t &currentMaxBlobId_;
+		int64_t &currentMaxIndexId_;
+		int64_t &currentMaxStateId_;
 
 		// Temporary ID counters (negative values)
 		int64_t nextTempNodeId_ = -1;
 		int64_t nextTempEdgeId_ = -1;
 		int64_t nextTempPropId_ = -1;
 		int64_t nextTempBlobId_ = -1;
+		int64_t nextTempIndexId_ = -1;
+		int64_t nextTempStateId_ = -1;
 
 		// Maps from temporary IDs to permanent IDs
 		std::unordered_map<int64_t, int64_t> tempToPermNodeIds_;
 		std::unordered_map<int64_t, int64_t> tempToPermEdgeIds_;
 		std::unordered_map<int64_t, int64_t> tempToPermPropIds_;
 		std::unordered_map<int64_t, int64_t> tempToPermBlobIds_;
+		std::unordered_map<int64_t, int64_t> tempToPermIndexIds_;
+		std::unordered_map<int64_t, int64_t> tempToPermStateIds_;
 
 		// Mutex for thread safety
 		mutable std::mutex mutex_;

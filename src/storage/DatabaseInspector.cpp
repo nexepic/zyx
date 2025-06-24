@@ -47,7 +47,6 @@ namespace graph::storage {
 		table.addRow({"Max Prop ID", std::to_string(fileHeader.max_prop_id)});
 		table.addRow({"Max Blob ID", std::to_string(fileHeader.max_blob_id)});
 		table.addRow({"Version", std::to_string(fileHeader.version)});
-		table.addRow({"Header CRC", std::to_string(fileHeader.header_crc)});
 
 		// Print the file header table
 		table.print();
@@ -63,6 +62,12 @@ namespace graph::storage {
 
 		// Display blob segments if they exist
 		displayBlobSegmentChain(file, fileHeader.blob_segment_head);
+
+		// Display index segments if they exist
+		displayIndexSegmentChain(file, fileHeader.index_segment_head);
+
+		// Display state segments if they exist
+		displayStateSegmentChain(file, fileHeader.state_segment_head);
 	}
 
 	void DatabaseInspector::displayNodeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) const {
@@ -96,7 +101,6 @@ namespace graph::storage {
 	        table.addRow({"Used", std::to_string(segmentHeader.used)});
 	        table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
 	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
-	        table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
 	        table.print();
 
 	        // Print activity bitmap
@@ -244,7 +248,6 @@ namespace graph::storage {
 	        table.addRow({"Used", std::to_string(segmentHeader.used)});
 	    	table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
 	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
-	        table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
 	        table.print();
 
 	        // Print activity bitmap
@@ -394,7 +397,6 @@ namespace graph::storage {
 	        table.addRow({"Used", std::to_string(segmentHeader.used)});
 	        table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
 	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
-	        table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
 	        table.print();
 
 	        // Print activity bitmap
@@ -505,7 +507,6 @@ namespace graph::storage {
 			table.addRow({"Used", std::to_string(segmentHeader.used)});
 			table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
 			table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
-			table.addRow({"Segment CRC", std::to_string(segmentHeader.segment_crc)});
 			table.print();
 
 			// Print activity bitmap
@@ -585,6 +586,152 @@ namespace graph::storage {
 			// Move to the next segment in the chain
 			segmentOffset = segmentHeader.next_segment_offset;
 		}
+	}
+
+	void DatabaseInspector::displayIndexSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) {
+	    int segmentIndex = 0;
+
+	    while (segmentOffset != 0) {
+	        std::cout << "\n=== Index Segment #" << segmentIndex++ << " ===\n" << std::endl;
+
+	        // Seek to the segment header
+	        file->seekg(static_cast<std::streamoff>(segmentOffset));
+
+	        // Read segment header
+	        SegmentHeader segmentHeader;
+	        file->read(reinterpret_cast<char *>(&segmentHeader), sizeof(SegmentHeader));
+
+	        if (!file->good()) {
+	            std::cerr << "Error: Failed to read index segment header at offset " << segmentOffset << std::endl;
+	            break;
+	        }
+
+	        // Display segment header information
+	        TableFormatter table;
+	        table.setTitle("Index Segment Header");
+	        table.addColumn("Attribute");
+	        table.addColumn("Value");
+
+	        table.addRow({"Segment Offset", std::to_string(segmentHeader.file_offset)});
+	        table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
+	        table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
+	        table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
+	        table.addRow({"Used", std::to_string(segmentHeader.used)});
+	        table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
+	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
+	        table.print();
+
+	        // Calculate data start position
+	        std::streampos dataStart = file->tellg();
+
+	        // Display all slots in the segment (both used and unused)
+	        for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
+	            std::streampos indexPosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * Index::getTotalSize()));
+	            file->seekg(indexPosition);
+
+	            std::cout << "\n--- Slot " << i << " (Offset: " << indexPosition << ") ---" << std::endl;
+
+	            if (i < segmentHeader.used) {
+	                try {
+	                    Index index = Index::deserialize(*file);
+
+	                    // Display index information
+	                    table.clear();
+	                    table.setTitle("Index Data");
+	                    table.addColumn("Attribute");
+	                    table.addColumn("Value");
+
+	                    table.addRow({"Status", "USED"});
+	                    table.addRow({"Index ID", std::to_string(index.getId())});
+	                    table.addRow({"Node Type", index.isLeaf() ? "LEAF" : "INTERNAL"});
+	                    table.addRow({"Key Count", std::to_string(index.getKeyCount())});
+	                    table.addRow({"Active", index.isActive() ? "true" : "false"});
+
+	                    table.print();
+	                } catch (const std::exception &e) {
+	                    std::cerr << "Error deserializing index: " << e.what() << std::endl;
+	                }
+	            } else {
+	                std::cout << "Slot is unused." << std::endl;
+	            }
+	        }
+
+	        // Move to the next segment in the chain
+	        segmentOffset = segmentHeader.next_segment_offset;
+	    }
+	}
+
+	void DatabaseInspector::displayStateSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) {
+	    int segmentIndex = 0;
+
+	    while (segmentOffset != 0) {
+	        std::cout << "\n=== State Segment #" << segmentIndex++ << " ===\n" << std::endl;
+
+	        // Seek to the segment header
+	        file->seekg(static_cast<std::streamoff>(segmentOffset));
+
+	        // Read segment header
+	        SegmentHeader segmentHeader;
+	        file->read(reinterpret_cast<char *>(&segmentHeader), sizeof(SegmentHeader));
+
+	        if (!file->good()) {
+	            std::cerr << "Error: Failed to read state segment header at offset " << segmentOffset << std::endl;
+	            break;
+	        }
+
+	        // Display segment header information
+	        TableFormatter table;
+	        table.setTitle("State Segment Header");
+	        table.addColumn("Attribute");
+	        table.addColumn("Value");
+
+	        table.addRow({"Segment Offset", std::to_string(segmentHeader.file_offset)});
+	        table.addRow({"Next Segment Offset", std::to_string(segmentHeader.next_segment_offset)});
+	        table.addRow({"Start ID", std::to_string(segmentHeader.start_id)});
+	        table.addRow({"Capacity", std::to_string(segmentHeader.capacity)});
+	        table.addRow({"Used", std::to_string(segmentHeader.used)});
+	        table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
+	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
+	        table.print();
+
+	        // Calculate data start position
+	        std::streampos dataStart = file->tellg();
+
+	        // Display all slots in the segment (both used and unused)
+	        for (uint32_t i = 0; i < segmentHeader.capacity; ++i) {
+	            std::streampos statePosition = dataStart + static_cast<std::streamoff>(static_cast<std::make_signed_t<size_t>>(i * State::getTotalSize()));
+	            file->seekg(statePosition);
+
+	            std::cout << "\n--- Slot " << i << " (Offset: " << statePosition << ") ---" << std::endl;
+
+	            if (i < segmentHeader.used) {
+	                try {
+	                    State state = State::deserialize(*file);
+
+	                    // Display state information
+	                    table.clear();
+	                    table.setTitle("State Data");
+	                    table.addColumn("Attribute");
+	                    table.addColumn("Value");
+
+	                    table.addRow({"Status", "USED"});
+	                    table.addRow({"State ID", std::to_string(state.getId())});
+	                    table.addRow({"Key", state.getKey()});
+	                    table.addRow({"Data Size", std::to_string(state.getSize())});
+	                    table.addRow({"Active", state.isActive() ? "true" : "false"});
+
+	                    table.print();
+	                } catch (const std::exception &e) {
+	                    std::cerr << "Error deserializing state: " << e.what() << std::endl;
+	                }
+	            } else {
+	                std::cout << "Slot is unused." << std::endl;
+	            }
+	        }
+
+	        // Move to the next segment in the chain
+	        segmentOffset = segmentHeader.next_segment_offset;
+	    }
 	}
 
 } // namespace graph::storage

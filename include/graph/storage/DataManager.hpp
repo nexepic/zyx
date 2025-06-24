@@ -12,6 +12,9 @@
 
 #include <fstream>
 #include <graph/core/BlobChainManager.hpp>
+#include <graph/core/Index.hpp>
+#include <graph/core/StateChainManager.hpp>
+#include <graph/traversal/RelationshipTraversal.hpp>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -25,7 +28,6 @@
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
-#include <graph/traversal/RelationshipTraversal.hpp>
 
 namespace graph::storage {
 
@@ -122,11 +124,33 @@ namespace graph::storage {
 		void deleteBlob(Blob &blob);
 		Blob getBlob(int64_t id);
 
+		// Index-specific operations
+		void addIndexEntity(const Index &index);
+		void updateIndexEntity(const Index &index);
+		void deleteIndex(Index &index);
+		Index getIndex(int64_t id);
+
+		// State-specific operations
+		void addStateEntity(const State &state);
+		void updateStateEntity(const State &state);
+		void deleteState(State &state);
+		State getState(int64_t id);
+
+		std::vector<State> getAllStates();
+
+		State findStateByKey(const std::string &key);
+
+		void addStateProperties(const std::string &stateKey,
+								const std::unordered_map<std::string, PropertyValue> &properties);
+		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey);
+
 		// Reserve temporary IDs
 		int64_t reserveTemporaryNodeId();
 		int64_t reserveTemporaryEdgeId();
 		int64_t reserveTemporaryPropertyId();
 		int64_t reserveTemporaryBlobId();
+		int64_t reserveTemporaryIndexId();
+		int64_t reserveTemporaryStateId();
 
 		// Get all properties
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId);
@@ -204,12 +228,16 @@ namespace graph::storage {
 		[[nodiscard]] Edge loadEdgeFromDisk(int64_t id) const;
 		[[nodiscard]] Property loadPropertyFromDisk(int64_t id) const;
 		[[nodiscard]] Blob loadBlobFromDisk(int64_t id) const;
+		[[nodiscard]] Index loadIndexFromDisk(int64_t id) const;
+		[[nodiscard]] State loadStateFromDisk(int64_t id) const;
 
 		// get cache
 		[[nodiscard]] LRUCache<int64_t, Node> &getNodeCache() { return nodeCache_; }
 		[[nodiscard]] LRUCache<int64_t, Edge> &getEdgeCache() { return edgeCache_; }
 		[[nodiscard]] LRUCache<int64_t, Property> &getPropertyCache() { return propertyCache_; }
 		[[nodiscard]] LRUCache<int64_t, Blob> &getBlobCache() { return blobCache_; }
+		[[nodiscard]] LRUCache<int64_t, Index> &getIndexCache() { return indexCache_; }
+		[[nodiscard]] LRUCache<int64_t, State> &getStateCache() { return stateCache_; }
 
 		// get dirty collections
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Node>> &getDirtyNodes() { return dirtyNodes_; }
@@ -218,6 +246,8 @@ namespace graph::storage {
 			return dirtyProperties_;
 		}
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Blob>> &getDirtyBlobs() { return dirtyBlobs_; }
+		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Index>> &getDirtyIndexes() { return dirtyIndexes_; }
+		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<State>> &getDirtyStates() { return dirtyStates_; }
 
 		void handleIdUpdate(int64_t tempId, int64_t permId, uint32_t entityType);
 
@@ -231,9 +261,9 @@ namespace graph::storage {
 			return entityReferenceUpdater_;
 		}
 
-		std::shared_ptr<SegmentIndexManager> getSegmentIndexManager() const {
-			return segmentIndexManager_;
-		}
+		std::shared_ptr<SegmentIndexManager> getSegmentIndexManager() const { return segmentIndexManager_; }
+
+		[[nodiscard]] std::shared_ptr<StateChainManager> getStateManager() const { return stateManager_; }
 
 	private:
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
@@ -241,12 +271,15 @@ namespace graph::storage {
 		std::shared_ptr<DeletionManager> deletionManager_;
 		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
 		std::shared_ptr<SegmentIndexManager> segmentIndexManager_;
+		std::shared_ptr<StateChainManager> stateManager_;
 
 		// Cache for frequently accessed nodes and edges
 		mutable LRUCache<int64_t, Node> nodeCache_;
 		mutable LRUCache<int64_t, Edge> edgeCache_;
 		mutable LRUCache<int64_t, Property> propertyCache_;
 		mutable LRUCache<int64_t, Blob> blobCache_;
+		mutable LRUCache<int64_t, Index> indexCache_;
+		mutable LRUCache<int64_t, State> stateCache_;
 
 		// Configuration for dirty tracking
 		size_t maxDirtyEntities_ = 1000; // Maximum number of dirty entities before auto-flush
@@ -255,6 +288,10 @@ namespace graph::storage {
 		std::unordered_map<int64_t, DirtyEntityInfo<Edge>> dirtyEdges_;
 		std::unordered_map<int64_t, DirtyEntityInfo<Property>> dirtyProperties_;
 		std::unordered_map<int64_t, DirtyEntityInfo<Blob>> dirtyBlobs_;
+		std::unordered_map<int64_t, DirtyEntityInfo<Index>> dirtyIndexes_;
+		std::unordered_map<int64_t, DirtyEntityInfo<State>> dirtyStates_;
+
+		std::unordered_map<std::string, int64_t> stateKeyToIdMap_;
 
 		FileHeader &fileHeader_; // Cached file header
 
@@ -307,123 +344,8 @@ namespace graph::storage {
 
 		template<typename EntityType>
 		void updateEntityId(int64_t tempId, int64_t permId);
-	};
 
-	template<typename EntityType>
-	struct EntityTraits {
-		// Will be specialized for each entity type
-	};
-
-	// Node specialization
-	template<>
-	struct EntityTraits<Node> {
-		using CacheType = LRUCache<int64_t, Node>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Node>>;
-
-		static constexpr uint32_t typeId = Node::typeId;
-
-		static Node get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<Node>(id); }
-
-		static Node loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadNodeFromDisk(id); }
-
-		static void addToCache(DataManager *manager, const Node &entity) {
-			manager->getNodeCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getNodeCache().remove(id); }
-
-		static CacheType &getCache(DataManager *manager) { return manager->getNodeCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyNodes(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex( DataManager *manager) {
-			return manager->getSegmentIndexManager()->getNodeSegmentIndex();
-		}
-	};
-
-	// Edge specialization
-	template<>
-	struct EntityTraits<Edge> {
-		using CacheType = LRUCache<int64_t, Edge>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Edge>>;
-
-		static constexpr uint32_t typeId = Edge::typeId;
-
-		static Edge get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<Edge>(id); }
-
-		static Edge loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadEdgeFromDisk(id); }
-
-		static void addToCache(DataManager *manager, const Edge &entity) {
-			manager->getEdgeCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getEdgeCache().remove(id); }
-
-		static CacheType &getCache(DataManager *manager) { return manager->getEdgeCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyEdges(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getEdgeSegmentIndex();
-		}
-	};
-
-	// Property specialization
-	template<>
-	struct EntityTraits<Property> {
-		using CacheType = LRUCache<int64_t, Property>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Property>>;
-
-		static constexpr uint32_t typeId = Property::typeId;
-
-		static Property get(DataManager *manager, int64_t id) {
-			return manager->getEntityFromMemoryOrDisk<Property>(id);
-		}
-
-		static Property loadFromDisk(const DataManager *manager, int64_t id) {
-			return manager->loadPropertyFromDisk(id);
-		}
-
-		static void addToCache(DataManager *manager, const Property &entity) {
-			manager->getPropertyCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getPropertyCache().remove(id); }
-
-		static CacheType &getCache(DataManager *manager) { return manager->getPropertyCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyProperties(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getPropertySegmentIndex();
-		}
-	};
-
-	// Blob specialization
-	template<>
-	struct EntityTraits<Blob> {
-		using CacheType = LRUCache<int64_t, Blob>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Blob>>;
-
-		static constexpr uint32_t typeId = Blob::typeId;
-
-		static Blob get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<Blob>(id); }
-
-		static Blob loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadBlobFromDisk(id); }
-
-		static void addToCache(DataManager *manager, const Blob &entity) {
-			manager->getBlobCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getBlobCache().remove(id); }
-
-		static CacheType &getCache(DataManager *manager) { return manager->getBlobCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyBlobs(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getBlobSegmentIndex();
-		}
+		static bool isChainHeadState(const State& state);
 	};
 
 } // namespace graph::storage

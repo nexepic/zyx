@@ -10,7 +10,10 @@
 
 #include "graph/storage/DataManager.hpp"
 #include <algorithm>
+#include <graph/core/Index.hpp>
+#include <graph/storage/EntityTraits.hpp>
 #include <graph/storage/SegmentTracker.hpp>
+#include <graph/utils/FixedSizeSerializer.hpp>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -24,8 +27,9 @@ namespace graph::storage {
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<SpaceManager> spaceManager) :
 		file_(std::move(file)), nodeCache_(cacheSize), edgeCache_(cacheSize), propertyCache_(cacheSize * 2),
-		blobCache_(cacheSize / 4), fileHeader_(fileHeader), idAllocator_(std::move(idAllocator)),
-		segmentTracker_(std::move(segmentTracker)), spaceManager_(std::move(spaceManager)) {
+		blobCache_(cacheSize / 4), indexCache_(cacheSize), stateCache_(cacheSize), fileHeader_(fileHeader),
+		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)),
+		spaceManager_(std::move(spaceManager)) {
 
 		segmentIndexManager_ = std::make_shared<SegmentIndexManager>(segmentTracker_);
 
@@ -41,7 +45,8 @@ namespace graph::storage {
 	void DataManager::initializeSegmentIndexes() {
 		// Initialize all segment indexes at once
 		segmentIndexManager_->initialize(fileHeader_.node_segment_head, fileHeader_.edge_segment_head,
-										 fileHeader_.property_segment_head, fileHeader_.blob_segment_head);
+										 fileHeader_.property_segment_head, fileHeader_.blob_segment_head,
+										 fileHeader_.index_segment_head, fileHeader_.state_segment_head);
 	}
 
 	void DataManager::initialize() {
@@ -50,6 +55,7 @@ namespace graph::storage {
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, idAllocator_, segmentTracker_);
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(weak_from_this());
+		stateManager_ = std::make_shared<StateChainManager>(shared_from_this());
 
 		initializeSegmentIndexes();
 	}
@@ -68,6 +74,10 @@ namespace graph::storage {
 
 	int64_t DataManager::reserveTemporaryBlobId() { return idAllocator_->reserveTemporaryId(Blob::typeId); }
 
+	int64_t DataManager::reserveTemporaryIndexId() { return idAllocator_->reserveTemporaryId(Index::typeId); }
+
+	int64_t DataManager::reserveTemporaryStateId() { return idAllocator_->reserveTemporaryId(State::typeId); }
+
 	void DataManager::addNode(const Node &node) { addEntity(node); }
 
 	void DataManager::addEdge(Edge &edge) {
@@ -78,6 +88,10 @@ namespace graph::storage {
 	void DataManager::addPropertyEntity(const Property &property) { addEntity(property); }
 
 	void DataManager::addBlobEntity(const Blob &blob) { addEntity(blob); }
+
+	void DataManager::addIndexEntity(const Index &index) { addEntity(index); }
+
+	void DataManager::addStateEntity(const State &state) { addEntity(state); }
 
 	template<typename EntityType>
 	std::unordered_map<std::string, PropertyValue> DataManager::getEntityProperties(int64_t entityId) {
@@ -296,6 +310,9 @@ namespace graph::storage {
 	void DataManager::updateEdge(const Edge &edge) { updateEntity(edge); }
 	void DataManager::updatePropertyEntity(const Property &property) { updateEntity(property); }
 	void DataManager::updateBlobEntity(const Blob &blob) { updateEntity(blob); }
+	void DataManager::updateIndexEntity(const Index &index) { updateEntity(index); }
+	void DataManager::updateStateEntity(const State &state) { updateEntity(state); }
+
 
 	template<typename EntityType>
 	bool DataManager::hasExternalProperty(const EntityType &entity, const std::string &key) {
@@ -331,6 +348,11 @@ namespace graph::storage {
 	void DataManager::deleteProperty(Property &property) { deleteEntity(property); }
 
 	void DataManager::deleteBlob(Blob &blob) { deleteEntity(blob); }
+
+	void DataManager::deleteIndex(Index &index) { deleteEntity(index); }
+
+	void DataManager::deleteState(State &state) { deleteEntity(state); }
+
 
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types) {
@@ -570,7 +592,8 @@ namespace graph::storage {
 	}
 
 	bool DataManager::hasUnsavedChanges() const {
-		return !dirtyNodes_.empty() || !dirtyEdges_.empty() || !dirtyProperties_.empty() || !dirtyBlobs_.empty();
+		return !dirtyNodes_.empty() || !dirtyEdges_.empty() || !dirtyProperties_.empty() || !dirtyBlobs_.empty() ||
+			   !dirtyIndexes_.empty() || !dirtyStates_.empty();
 	}
 
 	void DataManager::markAllSaved() {
@@ -578,6 +601,8 @@ namespace graph::storage {
 		dirtyEdges_.clear();
 		dirtyProperties_.clear();
 		dirtyBlobs_.clear();
+		dirtyIndexes_.clear();
+		dirtyStates_.clear();
 	}
 
 	void DataManager::checkAndTriggerAutoFlush() const {
@@ -593,6 +618,121 @@ namespace graph::storage {
 	Property DataManager::getProperty(int64_t id) { return getEntity<Property>(id); }
 
 	Blob DataManager::getBlob(int64_t id) { return getEntity<Blob>(id); }
+
+	Index DataManager::getIndex(int64_t id) { return getEntity<Index>(id); }
+
+	State DataManager::getState(int64_t id) { return getEntity<State>(id); }
+
+	std::vector<State> DataManager::getAllStates() {
+		std::vector<State> allHeadStates;
+		std::unordered_set<int64_t> processedIds;
+
+		// First collect all in-memory states
+		for (const auto &pair: stateKeyToIdMap_) {
+			State state = getState(pair.second);
+			if (state.getId() != 0 && state.isActive() && isChainHeadState(state)) {
+				allHeadStates.push_back(state);
+				processedIds.insert(state.getId());
+			}
+		}
+
+		// Get segments of type State using SegmentTracker
+		auto stateSegments = segmentTracker_->getSegmentsByType(State::typeId);
+
+		for (const auto &header: stateSegments) {
+			// Load states from this segment
+			for (uint32_t i = 0; i < header.used; i++) {
+				if (segmentTracker_->isEntityActive(header.file_offset, i)) {
+					auto state = segmentTracker_->readEntity<State>(header.file_offset, i, State::getTotalSize());
+
+					// Only include head states
+					if (isChainHeadState(state) && processedIds.find(state.getId()) == processedIds.end()) {
+						allHeadStates.push_back(state);
+						processedIds.insert(state.getId());
+
+						// Cache for future use
+						if (!state.getKey().empty()) {
+							stateKeyToIdMap_[state.getKey()] = state.getId();
+							addToCache(state);
+						}
+					}
+				}
+			}
+		}
+
+		return allHeadStates;
+	}
+
+	State DataManager::findStateByKey(const std::string &key) {
+		// Check key-to-id map first (most efficient)
+		auto it = stateKeyToIdMap_.find(key);
+		if (it != stateKeyToIdMap_.end()) {
+			State state = getState(it->second);
+			if (state.getId() != 0 && state.isActive()) {
+				return state;
+			}
+		}
+
+		// Not found
+		return State();
+	}
+
+	void DataManager::addStateProperties(const std::string &stateKey,
+										 const std::unordered_map<std::string, PropertyValue> &properties) {
+		State state = findStateByKey(stateKey);
+		if (state.getId() == 0) {
+			// Create new state
+			int64_t id = reserveTemporaryStateId();
+			state = State(id, stateKey, "");
+			addStateEntity(state);
+		}
+
+		// Serialize the properties
+		std::stringstream ss;
+		serializeProperties(ss, properties);
+		std::string serializedData = ss.str();
+
+		// Check if we need a chain
+		if (serializedData.size() <= State::CHUNK_SIZE) {
+			// Small enough for inline storage
+			state.setData(serializedData);
+			updateStateEntity(state);
+		} else {
+			// Need a chain
+			auto stateChain = stateManager_->updateStateChain(state.getId(), serializedData);
+
+			// Add all states to storage
+			for (auto &chainState: stateChain) {
+				addStateEntity(chainState);
+			}
+		}
+	}
+
+	std::unordered_map<std::string, PropertyValue> DataManager::getStateProperties(const std::string &stateKey) {
+		State state = findStateByKey(stateKey);
+		if (state.getId() == 0) {
+			return {}; // No properties
+		}
+
+		std::string data;
+
+		// Check if this state is chained
+		if (state.isChained() || state.isChainStart()) {
+			// Read from chain
+			data = stateManager_->readStateChain(state.getId());
+		} else {
+			// Read inline data
+			data = state.getDataAsString();
+		}
+
+		// Deserialize properties
+		std::stringstream ss(data);
+		return deserializeProperties(ss);
+	}
+
+	bool DataManager::isChainHeadState(const State &state) {
+		return state.getId() != 0 && state.isActive() && state.getPrevStateId() == 0;
+	}
 
 	Node DataManager::loadNodeFromDisk(int64_t id) const {
 		auto nodeOpt = findAndReadEntity<Node>(id);
@@ -612,6 +752,16 @@ namespace graph::storage {
 	Blob DataManager::loadBlobFromDisk(int64_t id) const {
 		auto blobOpt = findAndReadEntity<Blob>(id);
 		return blobOpt.value_or(Blob()); // Return empty blob if not found or deleted
+	}
+
+	Index DataManager::loadIndexFromDisk(int64_t id) const {
+		auto indexOpt = findAndReadEntity<Index>(id);
+		return indexOpt.value_or(Index()); // Return empty IndexEntity if not found or deleted
+	}
+
+	State DataManager::loadStateFromDisk(int64_t id) const {
+		auto stateOpt = findAndReadEntity<State>(id);
+		return stateOpt.value_or(State()); // Return empty State if not found or deleted
 	}
 
 	std::vector<Node> DataManager::getNodeBatch(const std::vector<int64_t> &ids) {
@@ -937,6 +1087,12 @@ namespace graph::storage {
 			updateEntityId<Property>(tempId, permId);
 		} else if (entityType == Blob::typeId) {
 			updateEntityId<Blob>(tempId, permId);
+		} else if (entityType == Index::typeId) {
+			updateEntityId<Index>(tempId, permId);
+		} else if (entityType == State::typeId) {
+			updateEntityId<State>(tempId, permId);
+		} else {
+			throw std::runtime_error("Unknown entity type for ID update: " + std::to_string(entityType));
 		}
 	}
 
@@ -1106,6 +1262,10 @@ namespace graph::storage {
 	DataManager::getDirtyEntitiesWithChangeTypes<Property>(const std::vector<EntityChangeType> &);
 	template std::vector<Blob>
 	DataManager::getDirtyEntitiesWithChangeTypes<Blob>(const std::vector<EntityChangeType> &);
+	template std::vector<Index>
+	DataManager::getDirtyEntitiesWithChangeTypes<Index>(const std::vector<EntityChangeType> &);
+	template std::vector<State>
+	DataManager::getDirtyEntitiesWithChangeTypes<State>(const std::vector<EntityChangeType> &);
 	template void DataManager::addToCache<Node>(const Node &entity);
 	template void DataManager::addToCache<Edge>(const Edge &entity);
 	template void DataManager::addToCache<Property>(const Property &entity);
@@ -1120,5 +1280,7 @@ namespace graph::storage {
 	template uint64_t DataManager::findSegmentForEntityId<Edge>(int64_t id) const;
 	template uint64_t DataManager::findSegmentForEntityId<Property>(int64_t id) const;
 	template uint64_t DataManager::findSegmentForEntityId<Blob>(int64_t id) const;
+	template uint64_t DataManager::findSegmentForEntityId<Index>(int64_t id) const;
+	template uint64_t DataManager::findSegmentForEntityId<State>(int64_t id) const;
 	template std::vector<Property> DataManager::getEntitiesInRange<Property>(int64_t, int64_t, size_t);
 } // namespace graph::storage

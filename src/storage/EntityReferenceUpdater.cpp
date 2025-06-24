@@ -20,7 +20,7 @@ namespace graph::storage {
 												   std::shared_ptr<SegmentTracker> tracker) :
 		file_(std::move(file)), idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(tracker)) {}
 
-	bool EntityReferenceUpdater::updateNodeReferencesToPermanent(Node &node) {
+	bool EntityReferenceUpdater::updateNodeReferencesToPermanent(Node &node) const {
 
 		bool updated = false;
 
@@ -67,7 +67,7 @@ namespace graph::storage {
 		return updated;
 	}
 
-	bool EntityReferenceUpdater::updateEdgeReferencesToPermanent(Edge &edge) {
+	bool EntityReferenceUpdater::updateEdgeReferencesToPermanent(Edge &edge) const {
 
 		bool updated = false;
 
@@ -114,7 +114,7 @@ namespace graph::storage {
 		return updated;
 	}
 
-	bool EntityReferenceUpdater::updatePropertyReferencesToPermanent(Property &property) {
+	bool EntityReferenceUpdater::updatePropertyReferencesToPermanent(Property &property) const {
 
 		bool updated = false;
 
@@ -133,7 +133,7 @@ namespace graph::storage {
 		return updated;
 	}
 
-	bool EntityReferenceUpdater::updateBlobReferencesToPermanent(Blob &blob) {
+	bool EntityReferenceUpdater::updateBlobReferencesToPermanent(Blob &blob) const {
 
 		bool updated = false;
 
@@ -165,6 +165,80 @@ namespace graph::storage {
 			int64_t permanentId = idAllocator_->getPermanentId(prevBlobId, Blob::typeId);
 			if (permanentId != 0) {
 				blob.setPrevBlobId(permanentId);
+				updated = true;
+			}
+		}
+
+		return updated;
+	}
+
+	bool EntityReferenceUpdater::updateIndexReferencesToPermanent(Index &index) const {
+		bool updated = false;
+
+		// Update parent ID reference if it exists
+		int64_t parentId = index.getParentId();
+		if (parentId != 0 && IDAllocator::isTemporaryId(parentId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(parentId, Index::typeId);
+			if (permanentId != 0) {
+				index.setParentId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update next leaf ID reference if it exists
+		int64_t nextLeafId = index.getNextLeafId();
+		if (nextLeafId != 0 && IDAllocator::isTemporaryId(nextLeafId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(nextLeafId, Index::typeId);
+			if (permanentId != 0) {
+				index.setNextLeafId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update previous leaf ID reference if it exists
+		int64_t prevLeafId = index.getPrevLeafId();
+		if (prevLeafId != 0 && IDAllocator::isTemporaryId(prevLeafId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(prevLeafId, Index::typeId);
+			if (permanentId != 0) {
+				index.setPrevLeafId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update blob ID reference if using blob storage
+		if (index.hasBlobStorage()) {
+			int64_t blobId = index.getBlobId();
+			if (blobId != 0 && IDAllocator::isTemporaryId(blobId)) {
+				int64_t permanentId = idAllocator_->getPermanentId(blobId, Blob::typeId);
+				if (permanentId != 0) {
+					index.setBlobId(permanentId);
+					updated = true;
+				}
+			}
+		}
+
+		return updated;
+	}
+
+	bool EntityReferenceUpdater::updateStateReferencesToPermanent(State &state) const {
+		bool updated = false;
+
+		// Update next state ID reference if it exists
+		int64_t nextStateId = state.getNextStateId();
+		if (nextStateId != 0 && IDAllocator::isTemporaryId(nextStateId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(nextStateId, State::typeId);
+			if (permanentId != 0) {
+				state.setNextStateId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update previous state ID reference if it exists
+		int64_t prevStateId = state.getPrevStateId();
+		if (prevStateId != 0 && IDAllocator::isTemporaryId(prevStateId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(prevStateId, State::typeId);
+			if (permanentId != 0) {
+				state.setPrevStateId(permanentId);
 				updated = true;
 			}
 		}
@@ -218,7 +292,7 @@ namespace graph::storage {
 				SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
 
 				// Calculate the edge's index in the segment
-				uint32_t edgeIndex = static_cast<uint32_t>(currentEdgeId - edgeHeader.start_id);
+				auto edgeIndex = static_cast<uint32_t>(currentEdgeId - edgeHeader.start_id);
 
 				// Check if the edge exists and is active
 				if (edgeIndex >= edgeHeader.used || !segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex))
@@ -254,7 +328,7 @@ namespace graph::storage {
 				SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
 
 				// Calculate the edge's index in the segment
-				uint32_t edgeIndex = static_cast<uint32_t>(currentEdgeId - edgeHeader.start_id);
+				auto edgeIndex = static_cast<uint32_t>(currentEdgeId - edgeHeader.start_id);
 
 				// Check if the edge exists and is active
 				if (edgeIndex >= edgeHeader.used || !segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex))
@@ -295,7 +369,7 @@ namespace graph::storage {
 		uint64_t sourceNodeSegmentOffset = segmentTracker_->getSegmentOffsetForNodeId(sourceNodeId);
 		if (sourceNodeSegmentOffset != 0) {
 			SegmentHeader sourceNodeHeader = segmentTracker_->getSegmentHeader(sourceNodeSegmentOffset);
-			uint32_t sourceNodeIndex = static_cast<uint32_t>(sourceNodeId - sourceNodeHeader.start_id);
+			auto sourceNodeIndex = static_cast<uint32_t>(sourceNodeId - sourceNodeHeader.start_id);
 
 			if (sourceNodeIndex < sourceNodeHeader.used &&
 				segmentTracker_->isEntityActive(sourceNodeSegmentOffset, sourceNodeIndex)) {
@@ -314,7 +388,7 @@ namespace graph::storage {
 		uint64_t targetNodeSegmentOffset = segmentTracker_->getSegmentOffsetForNodeId(targetNodeId);
 		if (targetNodeSegmentOffset != 0) {
 			SegmentHeader targetNodeHeader = segmentTracker_->getSegmentHeader(targetNodeSegmentOffset);
-			uint32_t targetNodeIndex = static_cast<uint32_t>(targetNodeId - targetNodeHeader.start_id);
+			auto targetNodeIndex = static_cast<uint32_t>(targetNodeId - targetNodeHeader.start_id);
 
 			if (targetNodeIndex < targetNodeHeader.used &&
 				segmentTracker_->isEntityActive(targetNodeSegmentOffset, targetNodeIndex)) {
@@ -339,7 +413,7 @@ namespace graph::storage {
 			uint64_t prevEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(prevOutEdgeId);
 			if (prevEdgeSegmentOffset != 0) {
 				SegmentHeader prevEdgeHeader = segmentTracker_->getSegmentHeader(prevEdgeSegmentOffset);
-				uint32_t prevEdgeIndex = static_cast<uint32_t>(prevOutEdgeId - prevEdgeHeader.start_id);
+				auto prevEdgeIndex = static_cast<uint32_t>(prevOutEdgeId - prevEdgeHeader.start_id);
 
 				if (prevEdgeIndex < prevEdgeHeader.used &&
 					segmentTracker_->isEntityActive(prevEdgeSegmentOffset, prevEdgeIndex)) {
@@ -360,7 +434,7 @@ namespace graph::storage {
 			uint64_t nextEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(nextOutEdgeId);
 			if (nextEdgeSegmentOffset != 0) {
 				SegmentHeader nextEdgeHeader = segmentTracker_->getSegmentHeader(nextEdgeSegmentOffset);
-				uint32_t nextEdgeIndex = static_cast<uint32_t>(nextOutEdgeId - nextEdgeHeader.start_id);
+				auto nextEdgeIndex = static_cast<uint32_t>(nextOutEdgeId - nextEdgeHeader.start_id);
 
 				if (nextEdgeIndex < nextEdgeHeader.used &&
 					segmentTracker_->isEntityActive(nextEdgeSegmentOffset, nextEdgeIndex)) {
@@ -385,7 +459,7 @@ namespace graph::storage {
 			uint64_t prevEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(prevInEdgeId);
 			if (prevEdgeSegmentOffset != 0) {
 				SegmentHeader prevEdgeHeader = segmentTracker_->getSegmentHeader(prevEdgeSegmentOffset);
-				uint32_t prevEdgeIndex = static_cast<uint32_t>(prevInEdgeId - prevEdgeHeader.start_id);
+				auto prevEdgeIndex = static_cast<uint32_t>(prevInEdgeId - prevEdgeHeader.start_id);
 
 				if (prevEdgeIndex < prevEdgeHeader.used &&
 					segmentTracker_->isEntityActive(prevEdgeSegmentOffset, prevEdgeIndex)) {
@@ -406,7 +480,7 @@ namespace graph::storage {
 			uint64_t nextEdgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(nextInEdgeId);
 			if (nextEdgeSegmentOffset != 0) {
 				SegmentHeader nextEdgeHeader = segmentTracker_->getSegmentHeader(nextEdgeSegmentOffset);
-				uint32_t nextEdgeIndex = static_cast<uint32_t>(nextInEdgeId - nextEdgeHeader.start_id);
+				auto nextEdgeIndex = static_cast<uint32_t>(nextInEdgeId - nextEdgeHeader.start_id);
 
 				if (nextEdgeIndex < nextEdgeHeader.used &&
 					segmentTracker_->isEntityActive(nextEdgeSegmentOffset, nextEdgeIndex)) {
@@ -442,7 +516,7 @@ namespace graph::storage {
 			uint64_t nodeSegmentOffset = segmentTracker_->getSegmentOffsetForNodeId(entityId);
 			if (nodeSegmentOffset != 0) {
 				SegmentHeader nodeHeader = segmentTracker_->getSegmentHeader(nodeSegmentOffset);
-				uint32_t nodeIndex = static_cast<uint32_t>(entityId - nodeHeader.start_id);
+				auto nodeIndex = static_cast<uint32_t>(entityId - nodeHeader.start_id);
 
 				if (nodeIndex < nodeHeader.used && segmentTracker_->isEntityActive(nodeSegmentOffset, nodeIndex)) {
 
@@ -461,7 +535,7 @@ namespace graph::storage {
 			uint64_t edgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(entityId);
 			if (edgeSegmentOffset != 0) {
 				SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
-				uint32_t edgeIndex = static_cast<uint32_t>(entityId - edgeHeader.start_id);
+				auto edgeIndex = static_cast<uint32_t>(entityId - edgeHeader.start_id);
 
 				if (edgeIndex < edgeHeader.used && segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex)) {
 
@@ -496,7 +570,7 @@ namespace graph::storage {
 			uint64_t nodeSegmentOffset = segmentTracker_->getSegmentOffsetForNodeId(entityId);
 			if (nodeSegmentOffset != 0) {
 				SegmentHeader nodeHeader = segmentTracker_->getSegmentHeader(nodeSegmentOffset);
-				uint32_t nodeIndex = static_cast<uint32_t>(entityId - nodeHeader.start_id);
+				auto nodeIndex = static_cast<uint32_t>(entityId - nodeHeader.start_id);
 
 				if (nodeIndex < nodeHeader.used && segmentTracker_->isEntityActive(nodeSegmentOffset, nodeIndex)) {
 					size_t nodeSize = Node::getTotalSize();
@@ -514,7 +588,7 @@ namespace graph::storage {
 			uint64_t edgeSegmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(entityId);
 			if (edgeSegmentOffset != 0) {
 				SegmentHeader edgeHeader = segmentTracker_->getSegmentHeader(edgeSegmentOffset);
-				uint32_t edgeIndex = static_cast<uint32_t>(entityId - edgeHeader.start_id);
+				auto edgeIndex = static_cast<uint32_t>(entityId - edgeHeader.start_id);
 
 				if (edgeIndex < edgeHeader.used && segmentTracker_->isEntityActive(edgeSegmentOffset, edgeIndex)) {
 					size_t edgeSize = Edge::getTotalSize();
@@ -604,7 +678,7 @@ namespace graph::storage {
 		SegmentHeader propHeader = segmentTracker_->getSegmentHeader(propSegmentOffset);
 
 		// Calculate the property's index in the segment
-		uint32_t propIndex = static_cast<uint32_t>(propertyId - propHeader.start_id);
+		auto propIndex = static_cast<uint32_t>(propertyId - propHeader.start_id);
 
 		// Verify the property exists and is active
 		if (propIndex >= propHeader.used || !segmentTracker_->isEntityActive(propSegmentOffset, propIndex)) {
@@ -629,7 +703,7 @@ namespace graph::storage {
 		SegmentHeader blobHeader = segmentTracker_->getSegmentHeader(blobSegmentOffset);
 
 		// Calculate the blob's index in the segment
-		uint32_t blobIndex = static_cast<uint32_t>(blobId - blobHeader.start_id);
+		auto blobIndex = static_cast<uint32_t>(blobId - blobHeader.start_id);
 
 		// Verify the blob exists and is active
 		if (blobIndex >= blobHeader.used || !segmentTracker_->isEntityActive(blobSegmentOffset, blobIndex)) {
@@ -689,7 +763,7 @@ namespace graph::storage {
 					// Get the segment info
 					uint64_t propSegmentOffset = segmentTracker_->getSegmentOffsetForPropId(propInfo.propertyEntityId);
 					SegmentHeader propHeader = segmentTracker_->getSegmentHeader(propSegmentOffset);
-					uint32_t propIndex = static_cast<uint32_t>(propInfo.propertyEntityId - propHeader.start_id);
+					auto propIndex = static_cast<uint32_t>(propInfo.propertyEntityId - propHeader.start_id);
 
 					// Write back the updated property
 					size_t propertySize = Property::getTotalSize();
@@ -713,7 +787,7 @@ namespace graph::storage {
 					// Get the segment info
 					uint64_t blobSegmentOffset = segmentTracker_->getSegmentOffsetForBlobId(propInfo.propertyEntityId);
 					SegmentHeader blobHeader = segmentTracker_->getSegmentHeader(blobSegmentOffset);
-					uint32_t blobIndex = static_cast<uint32_t>(propInfo.propertyEntityId - blobHeader.start_id);
+					auto blobIndex = static_cast<uint32_t>(propInfo.propertyEntityId - blobHeader.start_id);
 
 					// Write back the updated blob
 					size_t blobSize = Blob::getTotalSize();

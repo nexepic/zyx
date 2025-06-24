@@ -16,9 +16,11 @@
 namespace graph::storage {
 
 	IDAllocator::IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
-							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId) :
+							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId,
+							 int64_t &maxIndexId, int64_t &maxStateId) :
 		file_(std::move(file)), segmentTracker_(std::move(segmentTracker)), currentMaxNodeId_(maxNodeId),
-		currentMaxEdgeId_(maxEdgeId), currentMaxPropId_(maxPropId), currentMaxBlobId_(maxBlobId) {}
+		currentMaxEdgeId_(maxEdgeId), currentMaxPropId_(maxPropId), currentMaxBlobId_(maxBlobId),
+		currentMaxIndexId_(maxIndexId), currentMaxStateId_(maxStateId) {}
 
 	void IDAllocator::initialize() {
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -28,6 +30,8 @@ namespace graph::storage {
 		refreshInactiveIdsCache(Edge::typeId);
 		refreshInactiveIdsCache(Property::typeId);
 		refreshInactiveIdsCache(Blob::typeId);
+		refreshInactiveIdsCache(Index::typeId);
+		refreshInactiveIdsCache(State::typeId);
 	}
 
 	int64_t IDAllocator::reserveTemporaryId(uint32_t entityType) {
@@ -41,6 +45,10 @@ namespace graph::storage {
 			return nextTempPropId_--;
 		} else if (entityType == Blob::typeId) {
 			return nextTempBlobId_--;
+		} else if (entityType == Index::typeId) {
+			return nextTempIndexId_--;
+		} else if (entityType == State::typeId) {
+			return nextTempStateId_--;
 		}
 
 		throw std::runtime_error("Invalid entity type for temporary ID reservation");
@@ -70,6 +78,16 @@ namespace graph::storage {
 			if (it != tempToPermBlobIds_.end()) {
 				return it->second;
 			}
+		} else if (entityType == Index::typeId) {
+			auto it = tempToPermIndexIds_.find(tempId);
+			if (it != tempToPermIndexIds_.end()) {
+				return it->second;
+			}
+		} else if (entityType == State::typeId) {
+			auto it = tempToPermStateIds_.find(tempId);
+			if (it != tempToPermStateIds_.end()) {
+				return it->second;
+			}
 		}
 
 		// First try to reuse an inactive ID
@@ -89,6 +107,12 @@ namespace graph::storage {
 			tempToPermPropIds_[tempId] = permId;
 		} else if (entityType == Blob::typeId) {
 			tempToPermBlobIds_[tempId] = permId;
+		} else if (entityType == Index::typeId) {
+			tempToPermIndexIds_[tempId] = permId;
+		} else if (entityType == State::typeId) {
+			tempToPermStateIds_[tempId] = permId;
+		} else {
+			throw std::runtime_error("Invalid entity type for permanent ID allocation");
 		}
 
 		// Notify the callback if it's set
@@ -99,7 +123,7 @@ namespace graph::storage {
 		return permId;
 	}
 
-	void IDAllocator::freeId(uint64_t id, uint32_t entityType) {
+	void IDAllocator::freeId(int64_t id, uint32_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		// Find the segment containing this ID
@@ -112,6 +136,12 @@ namespace graph::storage {
 			segmentOffset = segmentTracker_->getSegmentOffsetForPropId(id);
 		} else if (entityType == Blob::typeId) {
 			segmentOffset = segmentTracker_->getSegmentOffsetForBlobId(id);
+		} else if (entityType == Index::typeId) {
+			segmentOffset = segmentTracker_->getSegmentOffsetForIndexId(id);
+		} else if (entityType == State::typeId) {
+			segmentOffset = segmentTracker_->getSegmentOffsetForStateId(id);
+		} else {
+			throw std::runtime_error("Invalid entity type for ID deallocation");
 		}
 
 		if (segmentOffset == 0) {
@@ -132,8 +162,8 @@ namespace graph::storage {
 		auto &cache = inactiveIdsCache_[entityType];
 
 		// Find this segment in the cache
-		auto it = std::find_if(cache.begin(), cache.end(),
-							   [segmentOffset](const auto &entry) { return entry.first == segmentOffset; });
+		auto it = std::ranges::find_if(cache,
+									   [segmentOffset](const auto &entry) { return entry.first == segmentOffset; });
 
 		// Add this index to the list of inactive indices
 		if (it != cache.end()) {
@@ -179,7 +209,7 @@ namespace graph::storage {
 		return id;
 	}
 
-	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) {
+	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) const {
 		int64_t id;
 
 		if (entityType == Node::typeId) {
@@ -190,36 +220,15 @@ namespace graph::storage {
 			id = ++currentMaxPropId_;
 		} else if (entityType == Blob::typeId) {
 			id = ++currentMaxBlobId_;
+		} else if (entityType == Index::typeId) {
+			id = ++currentMaxIndexId_;
+		} else if (entityType == State::typeId) {
+			id = ++currentMaxStateId_;
 		} else {
 			throw std::runtime_error("Invalid entity type for ID allocation");
 		}
 
 		return id;
-	}
-
-	void IDAllocator::markIdActive(uint64_t id, uint32_t entityType) {
-		// Find the segment containing this ID
-		uint64_t segmentOffset = 0;
-		if (entityType == Node::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForNodeId(id);
-		} else if (entityType == Edge::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(id);
-		}
-
-		if (segmentOffset == 0) {
-			// This is a new ID that doesn't exist in any segment yet
-			// It will be marked as active when it's written to disk
-			return;
-		}
-
-		// Read segment header
-		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
-
-		// Calculate index in segment
-		auto index = static_cast<uint32_t>(id - header.start_id);
-
-		// Update bitmap to mark ID as active
-		segmentTracker_->setEntityActive(segmentOffset, index, true);
 	}
 
 	void IDAllocator::refreshInactiveIdsCache(uint32_t entityType) {
@@ -285,6 +294,18 @@ namespace graph::storage {
 			if (it != tempToPermBlobIds_.end()) {
 				return it->second;
 			}
+		} else if (entityType == Index::typeId) {
+			auto it = tempToPermIndexIds_.find(tempId);
+			if (it != tempToPermIndexIds_.end()) {
+				return it->second;
+			}
+		} else if (entityType == State::typeId) {
+			auto it = tempToPermStateIds_.find(tempId);
+			if (it != tempToPermStateIds_.end()) {
+				return it->second;
+			}
+		} else {
+			throw std::runtime_error("Invalid entity type for permanent ID retrieval");
 		}
 
 		return 0; // Not found
@@ -295,6 +316,10 @@ namespace graph::storage {
 		std::lock_guard<std::mutex> lock(mutex_);
 		tempToPermNodeIds_.clear();
 		tempToPermEdgeIds_.clear();
+		tempToPermPropIds_.clear();
+		tempToPermBlobIds_.clear();
+		tempToPermIndexIds_.clear();
+		tempToPermStateIds_.clear();
 	}
 
 	void IDAllocator::clearTempIdMapping(int64_t tempId, uint32_t entityType) {
@@ -304,6 +329,16 @@ namespace graph::storage {
 			tempToPermNodeIds_.erase(tempId);
 		} else if (entityType == Edge::typeId) {
 			tempToPermEdgeIds_.erase(tempId);
+		} else if (entityType == Property::typeId) {
+			tempToPermPropIds_.erase(tempId);
+		} else if (entityType == Blob::typeId) {
+			tempToPermBlobIds_.erase(tempId);
+		} else if (entityType == Index::typeId) {
+			tempToPermIndexIds_.erase(tempId);
+		} else if (entityType == State::typeId) {
+			tempToPermStateIds_.erase(tempId);
+		} else {
+			throw std::runtime_error("Invalid entity type for clearing temporary ID mapping");
 		}
 	}
 

@@ -22,6 +22,10 @@
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 
+namespace graph::query {
+	class QueryEngine;
+}
+
 namespace graph::storage {
 
 	class FileStorage {
@@ -47,16 +51,16 @@ namespace graph::storage {
 		uint64_t allocateSegment(uint32_t type, uint32_t capacity) const;
 
 		// Node operations
-		Node insertNode(const std::string &label);
+		Node insertNode(const std::string &label) const;
 
 		// Edge operations
-		Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label);
+		Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const;
 
 		void insertProperties(int64_t entityId, uint32_t entityType,
 							  const std::unordered_map<std::string, PropertyValue> &properties) const;
 
-		void updateNode(const Node &node);
-		void updateEdge(const Edge &edge);
+		void updateNode(const Node &node) const;
+		void updateEdge(const Edge &edge) const;
 
 		void deleteNode(int64_t nodeId);
 		void deleteEdge(int64_t edgeId);
@@ -105,11 +109,15 @@ namespace graph::storage {
 		std::unique_ptr<DeletionManager> deletionManager;
 
 		// Verify bitmap consistency for debugging purposes
-		bool verifyBitmapConsistency(uint64_t segmentOffset);
+		bool verifyBitmapConsistency(uint64_t segmentOffset) const;
 
 		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker; }
 
 		[[nodiscard]] std::shared_ptr<DataManager> getDataManager() const { return dataManager; }
+
+		void setQueryEngine(std::shared_ptr<query::QueryEngine> engine) {
+			queryEngine = std::move(engine);
+		}
 
 	private:
 		std::string dbFilePath;
@@ -142,25 +150,27 @@ namespace graph::storage {
 
 		std::shared_ptr<SegmentTracker> segmentTracker;
 
+		std::shared_ptr<query::QueryEngine> queryEngine;
+
 		// Update bitmap for an entity in the segment header
 		template<typename EntityType>
 		void updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive);
 
 		// Update bitmap when writing segment data in batch
-		void updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count, bool isActive = true);
+		void updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count, bool isActive = true) const;
 
 		// Read the current segment header from disk
 		SegmentHeader readSegmentHeader(uint64_t segmentOffset) const;
 
 		// Write updated segment header to disk
-		void writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header);
+		void writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header) const;
 
 		std::mutex flushMutex;
 		std::atomic<bool> flushInProgress{false};
 		std::atomic<bool> deleteOperationPerformed{false};
 
 		// ID allocation for all entities before saving
-		void allocatePermanentIdsForAllEntities();
+		void allocatePermanentIdsForAllEntities() const;
 
 		void updateEntityReferencesToPermanent() const;
 	};

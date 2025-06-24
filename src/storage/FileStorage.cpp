@@ -12,7 +12,10 @@
 #include <algorithm> // for std::sort
 #include <filesystem>
 #include <fstream>
+#include <graph/core/Database.hpp>
+#include <graph/storage/EntityTraits.hpp>
 #include <sstream>
+#include <utility>
 #include <zlib.h>
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
@@ -72,7 +75,8 @@ namespace graph::storage {
 		// Initialize ID allocator
 		idAllocator = std::make_unique<IDAllocator>(
 				fileStream, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
-				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef());
+				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
+				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 		idAllocator->initialize();
 
 		// Set up ID update callback
@@ -147,6 +151,14 @@ namespace graph::storage {
 		auto modifiedBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::MODIFIED});
 		auto deletedBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::DELETED});
 
+		auto newIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::ADDED});
+		auto modifiedIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::MODIFIED});
+		auto deletedIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::DELETED});
+
+		auto newStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::ADDED});
+		auto modifiedStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::MODIFIED});
+		auto deletedStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::DELETED});
+
 		// Save new properties first
 		if (!newProperties.empty()) {
 			std::unordered_map<int64_t, Property> propertiesToSave;
@@ -183,6 +195,24 @@ namespace graph::storage {
 			saveData(edgesToSave, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
 		}
 
+		// Save new indexes
+		if (!newIndexes.empty()) {
+			std::unordered_map<int64_t, Index> indexesToSave;
+			for (const auto &index: newIndexes) {
+				indexesToSave[index.getId()] = index;
+			}
+			saveData(indexesToSave, fileHeader.index_segment_head, INDEXES_PER_SEGMENT);
+		}
+
+		// Save new states
+		if (!newStates.empty()) {
+			std::unordered_map<int64_t, State> statesToSave;
+			for (const auto &state: newStates) {
+				statesToSave[state.getId()] = state;
+			}
+			saveData(statesToSave, fileHeader.state_segment_head, STATES_PER_SEGMENT);
+		}
+
 		// update properties in-place
 		for (const auto &property: modifiedProperties) {
 			updateEntityInPlace(property);
@@ -203,6 +233,16 @@ namespace graph::storage {
 			updateEntityInPlace(edge);
 		}
 
+		// Update modified indexes in-place
+		for (const auto &index: modifiedIndexes) {
+			updateEntityInPlace(index);
+		}
+
+		// Update modified states in-place
+		for (const auto &state: modifiedStates) {
+			updateEntityInPlace(state);
+		}
+
 		// Delete properties
 		for (const auto &property: deletedProperties) {
 			deleteEntityOnDisk(property);
@@ -221,6 +261,16 @@ namespace graph::storage {
 		// Delete edges
 		for (const auto &edge: deletedEdges) {
 			deleteEntityOnDisk(edge);
+		}
+
+		// Delete indexes
+		for (const auto &index: deletedIndexes) {
+			deleteEntityOnDisk(index);
+		}
+
+		// Delete states
+		for (const auto &state: deletedStates) {
+			deleteEntityOnDisk(state);
 		}
 
 		// Mark everything as saved
@@ -274,8 +324,7 @@ namespace graph::storage {
 				utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, T::getTotalSize());
 
 				// Mark entity as active if it wasn't already
-				bool wasInactive = !segmentTracker->getBitmapBit(segmentOffset, index);
-				if (wasInactive) {
+				if (!segmentTracker->getBitmapBit(segmentOffset, index)) {
 					segmentTracker->setEntityActive(segmentOffset, index, true);
 
 					// Update inactive count in the segment header if needed
@@ -432,10 +481,6 @@ namespace graph::storage {
 		updateBitmapForEntity<T>(segmentOffset, id, entity.isActive());
 	}
 
-	// Specializations for Node and Edge
-	template void FileStorage::updateEntityInPlace<Node>(const Node &entity);
-	template void FileStorage::updateEntityInPlace<Edge>(const Edge &entity);
-
 	template<typename T>
 	void FileStorage::deleteEntityOnDisk(const T &entity) {
 		int64_t id = entity.getId();
@@ -463,7 +508,7 @@ namespace graph::storage {
 	}
 
 	// Write segment header
-	void FileStorage::writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header) {
+	void FileStorage::writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header) const {
 		segmentTracker->writeSegmentHeader(segmentOffset, header);
 	}
 
@@ -486,7 +531,8 @@ namespace graph::storage {
 	}
 
 	// Update bitmap for batch operations
-	void FileStorage::updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count, bool isActive) {
+	void FileStorage::updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count,
+										  bool isActive) const {
 		if (segmentOffset == 0 || count == 0) {
 			return;
 		}
@@ -521,7 +567,7 @@ namespace graph::storage {
 	template void FileStorage::updateBitmapForEntity<Node>(uint64_t segmentOffset, uint64_t entityId, bool isActive);
 	template void FileStorage::updateBitmapForEntity<Edge>(uint64_t segmentOffset, uint64_t entityId, bool isActive);
 
-	bool FileStorage::verifyBitmapConsistency(uint64_t segmentOffset) {
+	bool FileStorage::verifyBitmapConsistency(uint64_t segmentOffset) const {
 		if (segmentOffset == 0) {
 			return false;
 		}
@@ -562,6 +608,8 @@ namespace graph::storage {
 		}
 
 		try {
+			queryEngine->persistIndexState();
+
 			// Ensure all pending changes are written
 			save();
 
@@ -569,10 +617,9 @@ namespace graph::storage {
 			if (deleteOperationPerformed.load()) {
 				if (spaceManager->shouldCompact()) {
 					// Use the thread-safe compaction method
-					bool compactionPerformed = spaceManager->safeCompactSegments();
 
 					// Only perform post-compaction operations if compaction was successful
-					if (compactionPerformed) {
+					if (spaceManager->safeCompactSegments()) {
 						dataManager->clearCache();
 
 						// Refresh inactive IDs cache for all entity types
@@ -580,6 +627,8 @@ namespace graph::storage {
 						idAllocator->refreshInactiveIdsCache(Edge::typeId);
 						idAllocator->refreshInactiveIdsCache(Property::typeId);
 						idAllocator->refreshInactiveIdsCache(Blob::typeId);
+						idAllocator->refreshInactiveIdsCache(Index::typeId);
+						idAllocator->refreshInactiveIdsCache(State::typeId);
 
 						dataManager->getSegmentIndexManager()->buildSegmentIndexes();
 					}
@@ -604,16 +653,17 @@ namespace graph::storage {
 		flushInProgress.store(false);
 	}
 
-	void FileStorage::allocatePermanentIdsForAllEntities() {
+	void FileStorage::allocatePermanentIdsForAllEntities() const {
 		// Get entities with temporary IDs
 		auto newNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::ADDED});
 		auto newEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::ADDED});
 		auto newProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::ADDED});
 		auto newBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::ADDED});
+		auto newIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::ADDED});
+		auto newStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::ADDED});
 
 		// Process in order: properties, blobs, nodes, edges (dependencies go first)
-		std::sort(newProperties.begin(), newProperties.end(),
-				  [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		std::ranges::sort(newProperties, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
 		for (auto &property: newProperties) {
 			if (property.hasTemporaryId()) {
 				idAllocator->allocatePermanentId(property.getId(), Property::typeId);
@@ -621,7 +671,7 @@ namespace graph::storage {
 			}
 		}
 
-		std::sort(newBlobs.begin(), newBlobs.end(), [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		std::ranges::sort(newBlobs, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
 		for (auto &blob: newBlobs) {
 			if (blob.hasTemporaryId()) {
 				idAllocator->allocatePermanentId(blob.getId(), Blob::typeId);
@@ -629,7 +679,23 @@ namespace graph::storage {
 			}
 		}
 
-		std::sort(newNodes.begin(), newNodes.end(), [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		std::ranges::sort(newIndexes, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		for (auto &index: newIndexes) {
+			if (index.hasTemporaryId()) {
+				idAllocator->allocatePermanentId(index.getId(), Index::typeId);
+				// No need to update index here, callback will handle it
+			}
+		}
+
+		std::ranges::sort(newStates, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		for (auto &state: newStates) {
+			if (state.hasTemporaryId()) {
+				idAllocator->allocatePermanentId(state.getId(), State::typeId);
+				// No need to update state here, callback will handle it
+			}
+		}
+
+		std::ranges::sort(newNodes, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
 		for (auto &node: newNodes) {
 			if (node.hasTemporaryId()) {
 				idAllocator->allocatePermanentId(node.getId(), Node::typeId);
@@ -637,7 +703,7 @@ namespace graph::storage {
 			}
 		}
 
-		std::sort(newEdges.begin(), newEdges.end(), [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
+		std::ranges::sort(newEdges, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
 		for (auto &edge: newEdges) {
 			if (edge.hasTemporaryId()) {
 				idAllocator->allocatePermanentId(edge.getId(), Edge::typeId);
@@ -658,6 +724,12 @@ namespace graph::storage {
 				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
 
 		auto dirtyBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>(
+				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
+
+		auto dirtyIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>(
+				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
+
+		auto dirtyStates = dataManager->getDirtyEntitiesWithChangeTypes<State>(
 				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
 
 		// Update references for properties first
@@ -685,6 +757,20 @@ namespace graph::storage {
 		for (auto &edge: dirtyEdges) {
 			if (dataManager->getEntityReferenceUpdater()->updateEdgeReferencesToPermanent(edge)) {
 				dataManager->updateEdge(edge);
+			}
+		}
+
+		// Update references for indexes
+		for (auto &index: dirtyIndexes) {
+			if (dataManager->getEntityReferenceUpdater()->updateIndexReferencesToPermanent(index)) {
+				dataManager->updateIndexEntity(index);
+			}
+		}
+
+		// Update references for states
+		for (auto &state: dirtyStates) {
+			if (dataManager->getEntityReferenceUpdater()->updateStateReferencesToPermanent(state)) {
+				dataManager->updateStateEntity(state);
 			}
 		}
 	}
@@ -774,7 +860,7 @@ namespace graph::storage {
 		return dataManager->getEdgeProperties(edgeId);
 	}
 
-	Node FileStorage::insertNode(const std::string &label) {
+	Node FileStorage::insertNode(const std::string &label) const {
 		if (!isFileOpen) {
 			throw std::runtime_error("Database must be open before inserting data");
 		}
@@ -790,7 +876,7 @@ namespace graph::storage {
 		return node;
 	}
 
-	Edge FileStorage::insertEdge(const int64_t &from, const int64_t &to, const std::string &label) {
+	Edge FileStorage::insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const {
 		if (!isFileOpen) {
 			throw std::runtime_error("Database must be open before inserting data");
 		}
@@ -824,7 +910,7 @@ namespace graph::storage {
 		}
 	}
 
-	void FileStorage::updateNode(const Node &node) {
+	void FileStorage::updateNode(const Node &node) const {
 		if (!isFileOpen) {
 			throw std::runtime_error("Database must be open before updating data");
 		}
@@ -839,7 +925,7 @@ namespace graph::storage {
 		dataManager->updateNode(node);
 	}
 
-	void FileStorage::updateEdge(const Edge &edge) {
+	void FileStorage::updateEdge(const Edge &edge) const {
 		if (!isFileOpen) {
 			throw std::runtime_error("Database must be open before updating data");
 		}

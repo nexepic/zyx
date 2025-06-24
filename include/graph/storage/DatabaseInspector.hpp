@@ -32,6 +32,10 @@ namespace graph::storage {
 
 		static void displayBlobSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
 
+		static void displayIndexSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+
+		static void displayStateSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) ;
+
 	private:
 		FileHeader fileHeader;
 
