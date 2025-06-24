@@ -10,41 +10,96 @@
 
 #pragma once
 
-#include <shared_mutex>
 #include <string>
-#include <unordered_map>
 #include <vector>
+#include <memory>
+#include <shared_mutex>
+#include "graph/core/IndexTreeManager.hpp"
+
+namespace graph::storage {
+	class DataManager;
+}
 
 namespace graph::query::indexes {
 
+	/**
+	 * Index for node labels using B+Tree structure
+	 * Uses IndexTreeManager for B+Tree operations
+	 */
 	class LabelIndex {
 	public:
-		LabelIndex();
+		// Constants for this index type
+		static constexpr uint32_t LABEL_INDEX_TYPE = 1;
 
-		// Add a node to the label index
-		void addNode(int64_t nodeId, const std::string &label);
+		// State key for persisting rootId
+		static constexpr char STATE_KEY_ROOT_ID[] = "label_index.root_id";
 
-		// Remove a node from the label index
-		void removeNode(int64_t nodeId, const std::string &label);
+		/**
+		 * Constructor
+		 *
+		 * @param dataManager Pointer to data manager for persistence
+		 */
+		explicit LabelIndex(const std::shared_ptr<storage::DataManager>& dataManager);
+		~LabelIndex() = default;
 
-		// Find nodes with a specific label
-		[[nodiscard]] std::vector<int64_t> findNodes(const std::string &label) const;
+		/**
+		 * Adds a node to a label index
+		 *
+		 * @param nodeId ID of the node to add
+		 * @param label Label to index the node under
+		 */
+		void addNode(int64_t nodeId, const std::string& label);
 
-		// Check if a node has a specific label
-		[[nodiscard]] bool hasLabel(int64_t nodeId, const std::string &label) const;
+		/**
+		 * Removes a node from a label index
+		 *
+		 * @param nodeId ID of the node to remove
+		 * @param label Label to remove the node from
+		 */
+		void removeNode(int64_t nodeId, const std::string& label);
 
-		// Clear the index
+		/**
+		 * Finds all nodes with a specific label
+		 *
+		 * @param label Label to search for
+		 * @return Vector of node IDs with the label
+		 */
+		std::vector<int64_t> findNodes(const std::string& label) const;
+
+		/**
+		 * Checks if a node has a specific label
+		 *
+		 * @param nodeId ID of the node to check
+		 * @param label Label to check for
+		 * @return true if the node has the label
+		 */
+		bool hasLabel(int64_t nodeId, const std::string& label) const;
+
+		/**
+		 * Initializes the index
+		 */
+		void initialize();
+
+		bool isEmpty() const;
+
+		/**
+		 * Clears all index data
+		 */
 		void clear();
 
+		/**
+		 * Ensures persistence of index data
+		 */
+		void flush();
+
+		void saveState();
+
 	private:
-		// Maps label -> set of node IDs
-		std::unordered_map<std::string, std::vector<int64_t>> labelToNodes_;
-
-		// Maps node ID -> set of labels
-		std::unordered_map<int64_t, std::vector<std::string>> nodeToLabels_;
-
-		// Thread safety
+		std::shared_ptr<IndexTreeManager> treeManager_;
 		mutable std::shared_mutex mutex_;
+		int64_t rootId_ = 0;
+
+		void loadRootId();
 	};
 
 } // namespace graph::query::indexes

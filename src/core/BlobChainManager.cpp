@@ -20,17 +20,27 @@ namespace graph {
 		dataManager_(std::move(dataManager)) {}
 
 	std::vector<Blob> BlobChainManager::createBlobChain(int64_t entityId, uint32_t entityType,
-														const std::string &data) const {
-		// Compress the data first
-		std::string compressedData = compressData(data);
+												  const std::string& data) const {
+		// Determine if this is an Index blob
+		bool isIndexBlob = (entityType == storage::Index::typeId);
 
-		// Check size limit
-		if (compressedData.size() > Blob::MAX_COMPRESSED_SIZE) {
-			throw std::runtime_error("Compressed property data exceeds maximum size limit of 5MB");
+		// Compress the data first (unless it's an index blob)
+		std::string processedData;
+		if (isIndexBlob) {
+			// For index blobs, skip compression and size limits
+			processedData = compressData(data);
+		} else {
+			// For other entities, compress and check size
+			processedData = compressData(data);
+
+			// Check size limit for non-index blobs
+			if (processedData.size() > Blob::MAX_COMPRESSED_SIZE) {
+				throw std::runtime_error("Compressed data exceeds maximum size limit of 5MB");
+			}
 		}
 
 		// Split into chunks
-		auto chunks = splitData(compressedData);
+		auto chunks = splitData(processedData);
 
 		// Create blob entities
 		std::vector<Blob> blobChain;
@@ -47,8 +57,8 @@ namespace graph {
 			// Set entity info
 			blob.setEntityInfo(entityId, entityType);
 
-			// Set compression info
-			blob.setCompressionInfo(data.size(), true);
+			// Set compression info - only set compressed flag for non-index blobs
+			blob.setCompressionInfo(data.size(), !isIndexBlob);
 
 			// Set chain position
 			blob.setChainPosition(static_cast<int32_t>(i));

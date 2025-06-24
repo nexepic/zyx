@@ -43,6 +43,8 @@ namespace graph::query::indexes {
 		// Clear the index
 		void clear();
 
+		void flush();
+
 	private:
 		// Label -> edge IDs
 		std::unordered_map<std::string, std::vector<int64_t>> labelToEdges_;

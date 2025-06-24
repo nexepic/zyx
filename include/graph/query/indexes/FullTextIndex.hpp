@@ -34,6 +34,8 @@ namespace graph::query::indexes {
 		// Clear the index
 		void clear();
 
+		void flush();
+
 	private:
 		// Tokenize text into words
 		static std::vector<std::string> tokenize(const std::string& text);

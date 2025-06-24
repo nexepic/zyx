@@ -147,6 +147,10 @@ namespace graph::query::indexes {
 		nodeTokens_.clear();
 	}
 
+	void FullTextIndex::flush() {
+
+	}
+
 	std::vector<std::string> FullTextIndex::tokenize(const std::string &text) {
 		std::vector<std::string> tokens;
 		std::stringstream ss(text);

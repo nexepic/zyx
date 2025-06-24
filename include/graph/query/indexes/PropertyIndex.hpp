@@ -10,50 +10,82 @@
 
 #pragma once
 
-#include <string>
-#include <unordered_map>
-#include <map>
-#include <vector>
-#include <variant>
+#include <memory>
 #include <shared_mutex>
-#include "graph/core/PropertyValue.hpp"
+#include <string>
+#include <variant>
+#include <vector>
+#include "graph/core/IndexTreeManager.hpp"
+#include "graph/storage/DataManager.hpp"
+
+#include <graph/core/StateRegistry.hpp>
 
 namespace graph::query::indexes {
 
 	class PropertyIndex {
 	public:
-		PropertyIndex();
+		// Constants for this index type
+		static constexpr uint32_t PROPERTY_INDEX_TYPE = 2;
 
-		// Add a property to the index
-		void addProperty(uint64_t nodeId, const std::string& key, const PropertyValue& value);
+		static constexpr char STATE_STRING_ROOTS_KEY[] = "index.property.string_roots";
+		static constexpr char STATE_INT_ROOTS_KEY[] = "index.property.int_roots";
+		static constexpr char STATE_DOUBLE_ROOTS_KEY[] = "index.property.double_roots";
+		static constexpr char STATE_BOOL_ROOTS_KEY[] = "index.property.bool_roots";
+		static constexpr char STATE_INDEX_ENABLED_KEY[] = "index.property.enabled";
 
-		// Remove a property from the index
-		void removeProperty(uint64_t nodeId, const std::string& key);
+		PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager);
 
-		// Find nodes with a specific property value
-		[[nodiscard]] std::vector<int64_t> findExactMatch(const std::string& key, const PropertyValue& value) const;
+		void saveState();
 
-		// Find nodes with property values in a range (for numeric properties)
-		[[nodiscard]] std::vector<int64_t> findRange(const std::string& key, double minValue, double maxValue) const;
-
-		// Clear the index
+		void initialize();
 		void clear();
+		void flush();
+
+		// Add property to index
+		void addProperty(int64_t nodeId, const std::string &key, const PropertyValue &value);
+
+		// Remove property from index
+		void removeProperty(int64_t nodeId, const std::string &key);
+
+		// Find nodes with exact property match
+		std::vector<int64_t> findExactMatch(const std::string &key, const PropertyValue &value) const;
+
+		// Find nodes with property value in range (for numeric types)
+		std::vector<int64_t> findRange(const std::string &key, double minValue, double maxValue) const;
+
+		// Check if node has property with specific value
+		bool hasPropertyValue(int64_t nodeId, const std::string &key, const PropertyValue &value) const;
+
+		void clearKey(const std::string& key);
+
+		std::vector<std::string> getIndexedKeys() const;
+
+		bool isEmpty() const;
 
 	private:
-		// Hash-based exact match index: key -> value -> node IDs
-		std::unordered_map<std::string, std::unordered_map<std::string, std::vector<int64_t>>> stringIndex_;
-		std::unordered_map<std::string, std::unordered_map<int64_t, std::vector<int64_t>>> intIndex_;
-		std::unordered_map<std::string, std::unordered_map<double, std::vector<int64_t>>> doubleIndex_;
-		std::unordered_map<std::string, std::unordered_map<bool, std::vector<int64_t>>> boolIndex_;
+		std::shared_ptr<IndexTreeManager> stringTreeManager_;
+		std::shared_ptr<IndexTreeManager> intTreeManager_;
+		std::shared_ptr<IndexTreeManager> doubleTreeManager_;
+		std::shared_ptr<IndexTreeManager> boolTreeManager_;
 
-		// B-tree style ordered index for range queries: key -> (value -> node IDs)
-		std::unordered_map<std::string, std::map<double, std::vector<uint64_t>>> rangeIndex_;
-
-		// Reverse index: nodeId -> key -> value
-		std::unordered_map<uint64_t, std::unordered_map<std::string, PropertyValue>> nodeProperties_;
-
-		// Thread safety
 		mutable std::shared_mutex mutex_;
+
+		// Root IDs for different property types
+		std::unordered_map<std::string, int64_t> stringRoots_;
+		std::unordered_map<std::string, int64_t> intRoots_;
+		std::unordered_map<std::string, int64_t> doubleRoots_;
+		std::unordered_map<std::string, int64_t> boolRoots_;
+
+		// Helper methods
+		std::shared_ptr<IndexTreeManager> getTreeManagerForType(const PropertyValue &value) const;
+		std::unordered_map<std::string, int64_t> &getRootMapForType(const PropertyValue &value);
+		const std::unordered_map<std::string, int64_t> &getRootMapForType(const PropertyValue &value) const;
+
+		// Convert property value to string key for tree storage
+		std::string valueToString(const PropertyValue &value) const;
+
+		void serializeRootMap(const std::string& stateKey, const std::unordered_map<std::string, int64_t>& rootMap);
+		std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string& stateKey);
 	};
 
 } // namespace graph::query::indexes

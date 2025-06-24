@@ -174,4 +174,8 @@ namespace graph::query::indexes {
 		edgeInfo_.clear();
 	}
 
+	void RelationshipIndex::flush() {
+
+	}
+
 } // namespace graph::query::indexes
