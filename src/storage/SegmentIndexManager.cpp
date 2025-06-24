@@ -17,7 +17,7 @@ namespace graph::storage {
 		segmentTracker_(std::move(segmentTracker)) {}
 
 	void SegmentIndexManager::initialize(uint64_t &nodeHead, uint64_t &edgeHead, uint64_t &propertyHead,
-										 uint64_t &blobHead) {
+										 uint64_t &blobHead, uint64_t &indexHead, uint64_t &stateHead) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		// Store pointers to the head references
@@ -25,6 +25,8 @@ namespace graph::storage {
 		edgeSegmentHead_ = &edgeHead;
 		propertySegmentHead_ = &propertyHead;
 		blobSegmentHead_ = &blobHead;
+		indexSegmentHead_ = &indexHead;
+		stateSegmentHead_ = &stateHead;
 
 		// Build indexes using the current head values
 		buildSegmentIndexes();
@@ -39,6 +41,8 @@ namespace graph::storage {
 		buildSegmentIndex(edgeSegmentIndex_, edgeSegmentHead_ ? *edgeSegmentHead_ : 0);
 		buildSegmentIndex(propertySegmentIndex_, propertySegmentHead_ ? *propertySegmentHead_ : 0);
 		buildSegmentIndex(blobSegmentIndex_, blobSegmentHead_ ? *blobSegmentHead_ : 0);
+		buildSegmentIndex(indexSegmentIndex_, indexSegmentHead_ ? *indexSegmentHead_ : 0);
+		buildSegmentIndex(stateSegmentIndex_, stateSegmentHead_ ? *stateSegmentHead_ : 0);
 	}
 
 	void SegmentIndexManager::buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) {
@@ -86,6 +90,10 @@ namespace graph::storage {
 				return propertySegmentIndex_;
 			case toUnderlying(SegmentType::Blob):
 				return blobSegmentIndex_;
+			case toUnderlying(SegmentType::Index):
+				return indexSegmentIndex_;
+			case toUnderlying(SegmentType::State):
+				return stateSegmentIndex_;
 			default:
 				throw std::invalid_argument("Invalid segment type");
 		}
@@ -102,6 +110,10 @@ namespace graph::storage {
 				return propertySegmentIndex_;
 			case toUnderlying(SegmentType::Blob):
 				return blobSegmentIndex_;
+			case toUnderlying(SegmentType::Index):
+				return indexSegmentIndex_;
+			case toUnderlying(SegmentType::State):
+				return stateSegmentIndex_;
 			default:
 				throw std::invalid_argument("Invalid segment type");
 		}

@@ -54,6 +54,8 @@ namespace graph::storage {
 		uint64_t getSegmentOffsetForEdgeId(int64_t edgeId);
 		uint64_t getSegmentOffsetForPropId(int64_t propId);
 		uint64_t getSegmentOffsetForBlobId(int64_t blobId);
+		uint64_t getSegmentOffsetForIndexId(int64_t indexId);
+		uint64_t getSegmentOffsetForStateId(int64_t stateId);
 
 		// Unified segment header update operations
 		void updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> &updateFn);
@@ -93,6 +95,8 @@ namespace graph::storage {
 		uint64_t edgeSegmentHead_ = 0;
 		uint64_t propertySegmentHead_ = 0;
 		uint64_t blobSegmentHead_ = 0;
+		uint64_t indexSegmentHead_ = 0;
+		uint64_t stateSegmentHead_ = 0;
 
 		// Segment cache - stores actual segment headers
 		std::unordered_map<uint64_t, SegmentHeader> segments_;

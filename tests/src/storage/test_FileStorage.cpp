@@ -23,7 +23,7 @@ protected:
 	void SetUp() override {
 		// Generate a unique temporary file name using UUID
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testFilePath = std::filesystem::temp_directory_path() / ("test_db_file_" + boost::uuids::to_string(uuid) + ".dat");
+		testFilePath = std::filesystem::temp_directory_path() / ("test_db_file_" + to_string(uuid) + ".dat");
 
 		// Create and initialize FileStorage
 		fileStorage = std::make_unique<graph::storage::FileStorage>(testFilePath.string());

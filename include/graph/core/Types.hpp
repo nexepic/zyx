@@ -14,7 +14,7 @@
 
 namespace graph {
 
-	enum class EntityType : uint32_t { Node, Edge, Property, Blob };
+	enum class EntityType : uint32_t { Node, Edge, Property, Blob, Index, State };
 
 	constexpr uint32_t toUnderlying(EntityType type) {
 		return static_cast<uint32_t>(type);

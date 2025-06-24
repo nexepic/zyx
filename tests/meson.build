@@ -9,9 +9,13 @@ if get_option('tests').enabled() or get_option('tests').auto()
 
 	test_sources = [
 		'apps/cli/test_Repl.cpp',
+		'src/core/test_Index.cpp',
+		'src/core/test_IndexTreeManager.cpp',
 		'src/storage/test_FileStorage.cpp',
 		'src/storage/test_StorageHeaders.cpp',
 	]
+
+	test_include_dirs = include_directories('include', '../tests/include')
 
 	foreach test_source : test_sources
 		test_name = test_source.split('/')[-1].split('.')[0]
@@ -24,6 +28,7 @@ if get_option('tests').enabled() or get_option('tests').auto()
 										 boost_dep,
 										 zlib_dep
 									 ],
+									 include_directories : test_include_dirs,
 									 build_by_default : true
 		)
 		test(test_name, test_executable)

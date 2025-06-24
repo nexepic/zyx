@@ -33,6 +33,8 @@ namespace graph::storage {
 		edgeSegmentHead_ = header.edge_segment_head;
 		propertySegmentHead_ = header.property_segment_head;
 		blobSegmentHead_ = header.blob_segment_head;
+		indexSegmentHead_ = header.index_segment_head;
+		stateSegmentHead_ = header.state_segment_head;
 
 		// Clear existing cache
 		segments_.clear();
@@ -55,6 +57,12 @@ namespace graph::storage {
 
 		// Scan blob segments
 		loadSegmentChain(blobSegmentHead_, toUnderlying(SegmentType::Blob));
+
+		// Scan index segments
+		loadSegmentChain(indexSegmentHead_, toUnderlying(SegmentType::Index));
+
+		// Scan state segments
+		loadSegmentChain(stateSegmentHead_, toUnderlying(SegmentType::State));
 	}
 
 	void SegmentTracker::loadSegmentChain(uint64_t headOffset, uint32_t expectedType) {
@@ -130,6 +138,12 @@ namespace graph::storage {
 
 		// Validate blob segment chain
 		validateChain(blobSegmentHead_, toUnderlying(SegmentType::Blob));
+
+		// Validate index segment chain
+		validateChain(indexSegmentHead_, toUnderlying(SegmentType::Index));
+
+		// Validate state segment chain
+		validateChain(stateSegmentHead_, toUnderlying(SegmentType::State));
 	}
 
 	void SegmentTracker::validateChain(uint64_t headOffset, uint32_t type) {
@@ -279,14 +293,18 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		switch (type) {
-			case 0:
+			case toUnderlying(SegmentType::Node):
 				return nodeSegmentHead_;
-			case 1:
+			case toUnderlying(SegmentType::Edge):
 				return edgeSegmentHead_;
-			case 2:
+			case toUnderlying(SegmentType::Property):
 				return propertySegmentHead_;
-			case 3:
+			case toUnderlying(SegmentType::Blob):
 				return blobSegmentHead_;
+			case toUnderlying(SegmentType::Index):
+				return indexSegmentHead_;
+			case toUnderlying(SegmentType::State):
+				return stateSegmentHead_;
 			default:
 				return 0;
 		}
@@ -307,6 +325,12 @@ namespace graph::storage {
 				break;
 			case toUnderlying(SegmentType::Blob):
 				blobSegmentHead_ = newHead;
+				break;
+			case toUnderlying(SegmentType::Index):
+				indexSegmentHead_ = newHead;
+				break;
+			case toUnderlying(SegmentType::State):
+				stateSegmentHead_ = newHead;
 				break;
 			default:;
 		}
@@ -388,9 +412,6 @@ namespace graph::storage {
 
 		// Create a copy for writing to disk
 		SegmentHeader headerToWrite = header;
-
-		// Calculate CRC before writing
-		headerToWrite.segment_crc = utils::calculateCrc(&headerToWrite, offsetof(SegmentHeader, segment_crc));
 
 		// Write to disk
 		file_->seekp(static_cast<std::streamoff>(offset));
@@ -618,6 +639,44 @@ namespace graph::storage {
 		return 0; // Not found
 	}
 
+	uint64_t SegmentTracker::getSegmentOffsetForIndexId(int64_t indexId) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		uint64_t offset = indexSegmentHead_;
+
+		while (offset != 0) {
+			SegmentHeader &header = getSegmentHeader(offset);
+
+			// Check if the ID falls within this segment's range
+			if (indexId >= header.start_id && indexId < header.start_id + header.capacity) {
+				return offset;
+			}
+
+			offset = header.next_segment_offset;
+		}
+
+		return 0; // Not found
+	}
+
+	uint64_t SegmentTracker::getSegmentOffsetForStateId(int64_t stateId) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		uint64_t offset = stateSegmentHead_;
+
+		while (offset != 0) {
+			SegmentHeader &header = getSegmentHeader(offset);
+
+			// Check if the ID falls within this segment's range
+			if (stateId >= header.start_id && stateId < header.start_id + header.capacity) {
+				return offset;
+			}
+
+			offset = header.next_segment_offset;
+		}
+
+		return 0; // Not found
+	}
+
 	void SegmentTracker::ensureSegmentCached(uint64_t offset) {
 		if (segments_.find(offset) == segments_.end()) {
 			// Read from disk and add to cache
@@ -660,9 +719,6 @@ namespace graph::storage {
 				// Create a copy for writing to disk, excluding memory-only fields
 				SegmentHeader headerToWrite = header;
 
-				// Calculate CRC
-				headerToWrite.segment_crc = utils::calculateCrc(&headerToWrite, offsetof(SegmentHeader, segment_crc));
-
 				// Write to disk
 				file_->seekp(static_cast<std::streamoff>(offset));
 				file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
@@ -672,7 +728,7 @@ namespace graph::storage {
 
 				// Update segment index after successful flush
 				if (auto segmentIndexManager = segmentIndexManager_.lock()) {
-				    segmentIndexManager->updateSegmentIndexByOffset(offset, header);
+					segmentIndexManager->updateSegmentIndexByOffset(offset, header);
 				} else {
 					throw std::runtime_error("SegmentIndexManager is not available");
 				}
@@ -731,6 +787,7 @@ namespace graph::storage {
 	template Edge SegmentTracker::readEntity<Edge>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 	template Property SegmentTracker::readEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 	template Blob SegmentTracker::readEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
+	template State SegmentTracker::readEntity<State>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 
 	template void SegmentTracker::writeEntity<Node>(uint64_t segmentOffset, uint32_t itemIndex, const Node &entity,
 													size_t itemSize);

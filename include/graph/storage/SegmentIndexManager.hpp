@@ -41,7 +41,8 @@ namespace graph::storage {
 		/**
 		 * Initialize all segment indexes from chain heads
 		 */
-		void initialize(uint64_t& nodeHead, uint64_t& edgeHead, uint64_t& propertyHead, uint64_t& blobHead);
+		void initialize(uint64_t &nodeHead, uint64_t &edgeHead, uint64_t &propertyHead, uint64_t &blobHead,
+						uint64_t &indexHead, uint64_t &stateHead);
 
 		/**
 		 * Find the segment containing an entity ID
@@ -56,10 +57,12 @@ namespace graph::storage {
 		const std::vector<SegmentIndex> &getEdgeSegmentIndex() const { return edgeSegmentIndex_; }
 		const std::vector<SegmentIndex> &getPropertySegmentIndex() const { return propertySegmentIndex_; }
 		const std::vector<SegmentIndex> &getBlobSegmentIndex() const { return blobSegmentIndex_; }
+		const std::vector<SegmentIndex> &getIndexSegmentIndex() const { return indexSegmentIndex_; }
+		const std::vector<SegmentIndex> &getStateSegmentIndex() const { return stateSegmentIndex_; }
 
 		void buildSegmentIndexes();
 
-		bool updateSegmentIndexByOffset(uint64_t offset, const SegmentHeader& header);
+		bool updateSegmentIndexByOffset(uint64_t offset, const SegmentHeader &header);
 
 	private:
 		std::shared_ptr<SegmentTracker> segmentTracker_;
@@ -69,11 +72,15 @@ namespace graph::storage {
 		std::vector<SegmentIndex> edgeSegmentIndex_;
 		std::vector<SegmentIndex> propertySegmentIndex_;
 		std::vector<SegmentIndex> blobSegmentIndex_;
+		std::vector<SegmentIndex> indexSegmentIndex_;
+		std::vector<SegmentIndex> stateSegmentIndex_;
 
-		uint64_t* nodeSegmentHead_ = nullptr;
-		uint64_t* edgeSegmentHead_ = nullptr;
-		uint64_t* propertySegmentHead_ = nullptr;
-		uint64_t* blobSegmentHead_ = nullptr;
+		uint64_t *nodeSegmentHead_ = nullptr;
+		uint64_t *edgeSegmentHead_ = nullptr;
+		uint64_t *propertySegmentHead_ = nullptr;
+		uint64_t *blobSegmentHead_ = nullptr;
+		uint64_t *indexSegmentHead_ = nullptr;
+		uint64_t *stateSegmentHead_ = nullptr;
 
 		mutable std::mutex mutex_;
 
@@ -92,7 +99,6 @@ namespace graph::storage {
 		 * Sort a segment index for binary search
 		 */
 		static void sortSegmentIndex(std::vector<SegmentIndex> &segmentIndex);
-
 	};
 
 } // namespace graph::storage
