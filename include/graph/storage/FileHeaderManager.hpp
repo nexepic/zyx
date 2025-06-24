@@ -28,41 +28,43 @@ namespace graph::storage {
 		[[nodiscard]] FileHeader readFileHeader() const;
 
 		// Write updated file header
-		void updateFileHeader(const FileHeader &header);
+		void updateFileHeader(const FileHeader &header) const;
 
 		// Update max IDs based on current segment state
-		void updateFileHeaderMaxIds(std::shared_ptr<SegmentTracker> tracker);
+		void updateFileHeaderMaxIds(const std::shared_ptr<SegmentTracker> &tracker);
 
-		void initializeFileHeader();
+		void initializeFileHeader() const;
 
-		void validateAndReadHeader();
+		void validateAndReadHeader() const;
 
 		void extractFileHeaderInfo();
-
-		// Getters for max IDs
-		[[nodiscard]] int64_t getMaxNodeId() const { return maxNodeId; }
-		[[nodiscard]] int64_t getMaxEdgeId() const { return maxEdgeId; }
-		[[nodiscard]] int64_t getMaxPropId() const { return maxPropId; }
-		[[nodiscard]] int64_t getMaxBlobId() const { return maxBlobId; }
 
 		int64_t &getMaxNodeIdRef() { return maxNodeId; }
 		int64_t &getMaxEdgeIdRef() { return maxEdgeId; }
 		int64_t &getMaxPropIdRef() { return maxPropId; }
 		int64_t &getMaxBlobIdRef() { return maxBlobId; }
+		int64_t &getMaxIndexIdRef() { return maxIndexId; }
+		int64_t &getMaxStateIdRef() { return maxStateId; }
 
 		[[nodiscard]] FileHeader &getFileHeader() const { return fileHeader_; }
 
-		void validateChainHeads(std::shared_ptr<SegmentTracker> tracker);
+		void updateFileCrc() const;
+
+		bool validateFileCrc() const;
 
 	private:
 		std::shared_ptr<std::fstream> file_;
 
 		FileHeader &fileHeader_;
 
-		int64_t maxNodeId;
-		int64_t maxEdgeId;
-		int64_t maxPropId;
-		int64_t maxBlobId;
+		int64_t maxNodeId = 0;
+		int64_t maxEdgeId = 0;
+		int64_t maxPropId = 0;
+		int64_t maxBlobId = 0;
+		int64_t maxIndexId = 0;
+		int64_t maxStateId = 0;
+
+		[[nodiscard]] uint32_t calculateFileCrc() const;
 	};
 
 } // namespace graph::storage

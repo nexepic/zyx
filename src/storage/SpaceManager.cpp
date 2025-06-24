@@ -79,14 +79,14 @@ namespace graph::storage {
 		header.data_type = type;
 		header.next_segment_offset = 0;
 		header.prev_segment_offset = 0;
-		header.segment_crc = 0;
 		header.inactive_count = 0;
 		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
 
 		// Start ID calculation for nodes, edges, properties, and blobs
-		if (type >= 0 && type <= 3) {
+		if (type >= 0 && type <= 5) {
 			header.start_id = findMaxId(type, segmentTracker_) + 1;
 		} else {
+			std::cout << "33" << std::endl;
 			throw std::invalid_argument("Invalid segment type");
 		}
 
@@ -653,7 +653,6 @@ namespace graph::storage {
 		header.data_type = type;
 		header.next_segment_offset = 0;
 		header.prev_segment_offset = 0;
-		header.segment_crc = 0;
 		header.inactive_count = 0;
 		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
 
@@ -1247,8 +1246,6 @@ namespace graph::storage {
 	}
 
 	bool SpaceManager::truncateFile() {
-		// std::lock_guard<std::mutex> lock(mutex_);
-
 		// Find segments at the end of file that can be truncated
 		auto truncatableSegments = findTruncatableSegments();
 
@@ -1267,20 +1264,32 @@ namespace graph::storage {
 			newFileSize = FILE_HEADER_SIZE;
 		}
 
-		// Close and reopen the file to ensure all writes are flushed
+		// Flush all pending writes
 		file_->flush();
 
-		// Use standard resize method to truncate the file
 		try {
-			// Must close file before truncating on some platforms
-			// Get the filename from the file stream
+			// The most reliable approach: close, truncate, reopen the file
+			file_->close();
 
-			// Truncate using filesystem library (C++17)
+			// Now truncate the closed file
 			std::filesystem::resize_file(fileName_, newFileSize);
+
+			// Reopen the file with the same mode
+			file_->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
+			if (!file_->is_open()) {
+				throw std::runtime_error("Failed to reopen file after truncation");
+			}
 
 			// Remove truncated segments from free list
 			for (uint64_t offset: truncatableSegments) {
 				segmentTracker_->removeFromFreeList(offset);
+			}
+
+			// Now that we have a fresh file handle, update the CRC
+			if (fileHeaderManager_) {
+				// We need to reinitialize the file header manager with the new file handle
+				// if it keeps its own reference to the file stream
+				fileHeaderManager_->updateFileCrc();
 			}
 
 			return true;

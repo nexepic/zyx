@@ -18,4 +18,8 @@ namespace graph::utils {
 		return crc32(0L, static_cast<const Bytef *>(data), length);
 	}
 
+	uint32_t updateCrc(uint32_t initialCrc, const void *data, size_t length) {
+		return crc32(initialCrc, static_cast<const Bytef *>(data), length);
+	}
+
 } // namespace graph::utils

@@ -28,13 +28,18 @@ namespace graph::storage {
 	void FileHeaderManager::flushFileHeader() const {
 		fileHeader_.max_node_id = maxNodeId;
 		fileHeader_.max_edge_id = maxEdgeId;
+		fileHeader_.max_prop_id = maxPropId;
 		fileHeader_.max_blob_id = maxBlobId;
-	    fileHeader_.header_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
+		fileHeader_.max_index_id = maxIndexId;
+		fileHeader_.max_state_id = maxStateId;
 
-	    // Write header to the file
-	    file_->seekp(0);
-	    file_->write(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
-	    file_->flush();
+		// First, update the header without CRC
+		file_->seekp(0);
+		file_->write(reinterpret_cast<char*>(&fileHeader_), sizeof(FileHeader));
+		file_->flush();
+
+		// Now calculate and update the file-wide CRC
+		updateFileCrc();
 	}
 
 	FileHeader FileHeaderManager::readFileHeader() const {
@@ -57,25 +62,11 @@ namespace graph::storage {
 		return header;
 	}
 
-	void FileHeaderManager::updateFileHeader(const FileHeader &header) {
-		// // Save current position
-		// auto currentPos = file_->tellp();
-		//
-		// // Go to start of file
-		// file_->seekp(0, std::ios::beg);
-		// file_->write(reinterpret_cast<const char *>(&header), sizeof(FileHeader));
-		//
-		// if (!file_->good()) {
-		// 	throw std::runtime_error("Failed to write file header");
-		// }
-		//
-		// // Restore original position
-		// file_->seekp(currentPos);
-
+	void FileHeaderManager::updateFileHeader(const FileHeader &header) const {
 		fileHeader_ = header;
 	}
 
-	void FileHeaderManager::updateFileHeaderMaxIds(std::shared_ptr<SegmentTracker> tracker) {
+	void FileHeaderManager::updateFileHeaderMaxIds(const std::shared_ptr<SegmentTracker> &tracker) {
 		// Scan node segments to find max node ID
 		uint64_t nodeSegment = tracker->getChainHead(0);
 		while (nodeSegment != 0) {
@@ -107,8 +98,8 @@ namespace graph::storage {
 		}
 	}
 
-	void FileHeaderManager::initializeFileHeader() {
-		fileHeader_.header_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
+	void FileHeaderManager::initializeFileHeader() const {
+		fileHeader_.data_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, data_crc));
 
 		file_->write(reinterpret_cast<const char*>(&fileHeader_), sizeof(FileHeader));
 		file_->flush();
@@ -116,8 +107,7 @@ namespace graph::storage {
 		file_->clear();
 	}
 
-	void FileHeaderManager::validateAndReadHeader() {
-
+	void FileHeaderManager::validateAndReadHeader() const {
 		// Validate magic number
 		if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
 			throw std::runtime_error("Invalid file format");
@@ -125,57 +115,97 @@ namespace graph::storage {
 
 		// Read file header
 		file_->seekg(0);
-		file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
+		file_->read(reinterpret_cast<char*>(&fileHeader_), sizeof(FileHeader));
 
-		// Validate header CRC
-		uint32_t calculatedCrc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, header_crc));
-		if (calculatedCrc != fileHeader_.header_crc) {
-			throw std::runtime_error("Header CRC mismatch, data corruption detected");
+		// Validate file CRC
+		try {
+			if (!validateFileCrc()) {
+				throw std::runtime_error("File CRC mismatch, data corruption detected");
+			}
+		} catch (const std::runtime_error& e) {
+			std::cerr << e.what() << std::endl;
+			std::exit(EXIT_FAILURE); // Exit gracefully
 		}
 	}
 
 	void FileHeaderManager::extractFileHeaderInfo() {
 		maxNodeId = fileHeader_.max_node_id;
 		maxEdgeId = fileHeader_.max_edge_id;
+		maxPropId = fileHeader_.max_prop_id;
 		maxBlobId = fileHeader_.max_blob_id;
+		maxIndexId = fileHeader_.max_index_id;
+		maxStateId = fileHeader_.max_state_id;
 	}
 
-	void FileHeaderManager::validateChainHeads(std::shared_ptr<SegmentTracker> tracker) {
-		FileHeader header = getFileHeader();
-		bool headersChanged = false;
+	uint32_t FileHeaderManager::calculateFileCrc() const {
+		// Save current position
+		auto originalPos = file_->tellg();
 
-		// Check if node segment head matches tracker
-		uint64_t nodeHead = tracker->getChainHead(toUnderlying(SegmentType::Node));
-		if (header.node_segment_head != nodeHead) {
-			header.node_segment_head = nodeHead;
-			headersChanged = true;
+		// Create a buffer for reading chunks of the file
+		constexpr size_t BUFFER_SIZE = 8192; // 8KB buffer
+		std::vector<char> buffer(BUFFER_SIZE);
+
+		// Calculate CRC for header (excluding the CRC field itself)
+		file_->seekg(0);
+		uint32_t crc = 0;
+
+		// Read header part before CRC field
+		size_t crcFieldOffset = offsetof(FileHeader, data_crc);
+
+		file_->read(buffer.data(), static_cast<std::streamsize>(crcFieldOffset));
+		size_t bytesRead = file_->gcount();
+		crc = utils::updateCrc(crc, buffer.data(), bytesRead);
+
+		// Skip CRC field (4 bytes)
+		file_->seekg(crcFieldOffset + sizeof(uint32_t));
+
+		// Read header part after CRC field
+		size_t headerSize = sizeof(FileHeader);
+		if (headerSize > crcFieldOffset + sizeof(uint32_t)) {
+			size_t remainingHeaderBytes = headerSize - (crcFieldOffset + sizeof(uint32_t));
+			file_->read(buffer.data(), static_cast<std::streamsize>(remainingHeaderBytes));
+			size_t bytesReadAfterCRC = file_->gcount();
+			crc = utils::updateCrc(crc, buffer.data(), bytesReadAfterCRC);
 		}
 
-		// Check if edge segment head matches tracker
-		uint64_t edgeHead = tracker->getChainHead(toUnderlying(SegmentType::Edge));
-		if (header.edge_segment_head != edgeHead) {
-			header.edge_segment_head = edgeHead;
-			headersChanged = true;
+		// Calculate CRC for the rest of the file
+		file_->seekg(static_cast<std::streamsize>(headerSize));
+		while (*file_) {
+			file_->read(buffer.data(), BUFFER_SIZE);
+			size_t bytesReadRest = file_->gcount();
+			if (bytesReadRest > 0) {
+				crc = utils::updateCrc(crc, buffer.data(), bytesReadRest);
+			} else {
+				break;
+			}
 		}
 
-		// Check if property segment head matches tracker
-		uint64_t propertyHead = tracker->getChainHead(toUnderlying(SegmentType::Property));
-		if (header.property_segment_head != propertyHead) {
-			header.property_segment_head = propertyHead;
-			headersChanged = true;
-		}
+		// Restore original position
+		file_->clear();  // Clear EOF flag
+		file_->seekg(originalPos);
 
-		// Check if blob segment head matches tracker
-		uint64_t blobHead = tracker->getChainHead(toUnderlying(SegmentType::Blob));
-		if (header.blob_segment_head != blobHead) {
-			header.blob_segment_head = blobHead;
-			headersChanged = true;
-		}
+		return crc;
+	}
 
-		// Write back to file if any changes were made
-		if (headersChanged) {
-			updateFileHeader(header);
-		}
+	void FileHeaderManager::updateFileCrc() const {
+		// Calculate CRC for the entire file except the CRC field itself
+		uint32_t fileCrc = calculateFileCrc();
+
+		// Update the CRC field
+		fileHeader_.data_crc = fileCrc;
+
+		// Write back the updated header
+		file_->seekp(0);
+		file_->write(reinterpret_cast<char*>(&fileHeader_), sizeof(FileHeader));
+		file_->flush();
+	}
+
+	bool FileHeaderManager::validateFileCrc() const {
+		// Calculate the current file CRC
+		uint32_t calculatedCrc = calculateFileCrc();
+
+		// Compare with stored CRC
+		return calculatedCrc == fileHeader_.data_crc;
 	}
 
 } // namespace graph::storage

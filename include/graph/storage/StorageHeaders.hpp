@@ -11,8 +11,10 @@
 #pragma once
 #include <graph/core/Blob.hpp>
 #include <graph/core/Edge.hpp>
+#include <graph/core/Index.hpp>
 #include <graph/core/Node.hpp>
 #include <graph/core/Property.hpp>
+#include <graph/core/State.hpp>
 
 namespace graph::storage {
 
@@ -24,6 +26,8 @@ namespace graph::storage {
     constexpr uint32_t EDGES_PER_SEGMENT = SEGMENT_SIZE / Edge::getTotalSize();
     constexpr uint32_t PROPERTIES_PER_SEGMENT = SEGMENT_SIZE / Property::getTotalSize();
     constexpr uint32_t BLOBS_PER_SEGMENT = SEGMENT_SIZE / Blob::getTotalSize();
+    constexpr uint32_t INDEXES_PER_SEGMENT = SEGMENT_SIZE / Index::getTotalSize();
+    constexpr uint32_t STATES_PER_SEGMENT = SEGMENT_SIZE / State::getTotalSize();
     // constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1 * 512; // 512 bytes per property segment
     constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1;
 
@@ -40,17 +44,21 @@ namespace graph::storage {
         uint64_t edge_segment_head = 0; // Offset of the first edge segment
         uint64_t property_segment_head = 0; // Offset of the first property segment
         uint64_t blob_segment_head = 0; // Offset of the first blob section
+        uint64_t index_segment_head = 0; // Offset of the first index segment
+        uint64_t state_segment_head = 0; // Offset of the first state segment
 
         // Statistics
         int64_t max_node_id = 0;
         int64_t max_edge_id = 0;
         int64_t max_prop_id = 0;
         int64_t max_blob_id = 0;
+        int64_t max_index_id = 0;
+        int64_t max_state_id = 0;
 
         uint32_t version = 0x00000001; // File format version
 
         // Checksum
-        uint32_t header_crc = 0;
+        uint32_t data_crc = 0;
 
         FileHeader() {
 		    std::copy(std::begin(FILE_HEADER_MAGIC_STRING), std::end(FILE_HEADER_MAGIC_STRING) - 1, magic);
@@ -81,8 +89,7 @@ namespace graph::storage {
         uint32_t capacity = 0; // Total capacity of the segment (in items)
         uint32_t used = 0; // Number of used items
         uint32_t inactive_count = 0; // Number of inactive items
-        uint32_t data_type = 0; // Data type 0: Node 1: Edge 2: Property 3: Blob
-        uint32_t segment_crc = 0; // CRC checksum of the segment data
+        uint32_t data_type = 0;
         uint32_t bitmap_size = 0; // Size of the activity bitmap in bytes
         uint8_t activity_bitmap[MAX_BITMAP_SIZE] = {}; // Bitmap tracking active/inactive status (1=active, 0=inactive)
         uint8_t needs_compaction = 0;     // Flag indicating if segment needs compaction (0=no, 1=yes)

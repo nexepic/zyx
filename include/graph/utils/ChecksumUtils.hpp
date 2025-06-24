@@ -13,6 +13,8 @@
 
 namespace graph::utils {
 
-    uint32_t calculateCrc(const void *data, size_t length);
+	uint32_t calculateCrc(const void *data, size_t length);
+
+	uint32_t updateCrc(uint32_t initialCrc, const void *data, size_t length);
 
 } // namespace graph::utils
