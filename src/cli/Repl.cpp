@@ -23,9 +23,9 @@ namespace graph {
 
 		// Create a prompt that works on both Windows and Unix-like systems
 #ifdef _WIN32
-		const char* prompt = "metrix> ";
+		const char *prompt = "metrix> ";
 #else
-		const char* prompt = "\033[1;32mmetrix>\033[0m ";
+		const char *prompt = "\033[1;32mmetrix>\033[0m ";
 #endif
 
 		// Create a linenoise state with our prompt
@@ -38,14 +38,12 @@ namespace graph {
 		ls.EnableMultiLine();
 
 		// Set up auto-completion for common commands
-		ls.SetCompletionCallback([](const char* editBuffer, std::vector<std::string>& completions) {
-			const char* commands[] = {
-				"addNode", "deleteNode", "addEdge", "deleteEdge", "addProperty",
-				"listProperties", "queryNode", "queryEdge", "listNodes", "save",
-				"help", "exit"
-			};
+		ls.SetCompletionCallback([](const char *editBuffer, std::vector<std::string> &completions) {
+			const char *commands[] = {"addNode",	 "deleteNode",	   "addEdge",	"deleteEdge",
+									  "addProperty", "listProperties", "queryNode", "queryEdge",
+									  "listNodes",	 "save",		   "help",		"exit"};
 
-			for (const auto& cmd : commands) {
+			for (const auto &cmd: commands) {
 				if (strncmp(editBuffer, cmd, strlen(editBuffer)) == 0) {
 					completions.push_back(cmd);
 				}
@@ -234,8 +232,120 @@ namespace graph {
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
 			}
-		}
-		else if (command == "addEdge") {
+		} else if (command == "createLabelIndex") {
+			std::cout << "Creating label index...\n";
+			try {
+				bool success = db.getQueryEngine()->buildLabelIndex();
+				if (success) {
+					std::cout << "Label index created successfully\n";
+				} else {
+					std::cout << "Failed to create label index\n";
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "createPropertyIndex") {
+			std::string key;
+			std::cout << "Enter property key to index: ";
+			std::getline(std::cin, key);
+
+			if (key.empty()) {
+				std::cout << "Property key cannot be empty\n";
+				return;
+			}
+
+			std::cout << "Creating property index for key '" << key << "'...\n";
+			try {
+				bool success = db.getQueryEngine()->buildPropertyIndex(key);
+				if (success) {
+					std::cout << "Property index for '" << key << "' created successfully\n";
+				} else {
+					std::cout << "Failed to create property index\n";
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "dropIndex") {
+			std::string indexType;
+			std::cout << "Enter index type (label/property): ";
+			std::getline(std::cin, indexType);
+
+			if (indexType != "label" && indexType != "property") {
+				std::cout << "Invalid index type. Use 'label' or 'property'\n";
+				return;
+			}
+
+			std::string key = "";
+			if (indexType == "property") {
+				std::cout << "Enter property key (leave empty to drop all property indexes): ";
+				std::getline(std::cin, key);
+			}
+
+			std::cout << "Dropping " << indexType << " index" << ((!key.empty()) ? " for key '" + key + "'" : "")
+					  << "...\n";
+
+			try {
+				bool success = db.getQueryEngine()->dropIndex(indexType, key);
+				if (success) {
+					std::cout << "Index dropped successfully\n";
+				} else {
+					std::cout << "Failed to drop index\n";
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "listIndexes") {
+			std::cout << "Active indexes:\n";
+			try {
+				auto indexes = db.getQueryEngine()->listIndexes();
+				if (indexes.empty()) {
+					std::cout << "No active indexes found\n";
+				} else {
+					for (const auto &[type, key]: indexes) {
+						if (type == "property" && !key.empty()) {
+							std::cout << "- " << type << " index on key: '" << key << "'\n";
+						} else {
+							std::cout << "- " << type << " index\n";
+						}
+					}
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "findNodesByLabel") {
+			std::string label;
+			std::cout << "Enter node label to search for: ";
+			std::getline(std::cin, label);
+
+			if (label.empty()) {
+				std::cout << "Label cannot be empty\n";
+				return;
+			}
+
+			std::cout << "Searching for nodes with label '" << label << "'...\n";
+			try {
+				auto result = db.getQueryEngine()->findNodesByLabel(label);
+
+				const auto &nodes = result.getNodes();
+				if (nodes.empty()) {
+					std::cout << "No nodes found with label '" << label << "'\n";
+				} else {
+					std::cout << "Found " << nodes.size() << " node(s):\n";
+					for (const auto &node: nodes) {
+						std::cout << "ID: " << node.getId() << ", Label: " << node.getLabel();
+
+						// Show property count if available
+						const auto &props = node.getProperties();
+						if (!props.empty()) {
+							std::cout << " (" << props.size() << " properties)";
+						}
+						std::cout << "\n";
+					}
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "addEdge") {
 			int from, to;
 			std::string relation;
 			std::cout << "Enter from node ID: ";
@@ -329,6 +439,11 @@ namespace graph {
 					  << "  queryNode      - Look up a node by ID\n"
 					  << "  queryEdge      - Look up an edge by ID\n"
 					  << "  listNodes      - List all nodes\n"
+					  << "  findNodesByLabel    - Find nodes with a specific label\n"
+					  << "  createLabelIndex    - Create an index on node labels\n"
+					  << "  createPropertyIndex - Create an index on a specific property key\n"
+					  << "  dropIndex           - Remove an index\n"
+					  << "  listIndexes         - List all active indexes\n"
 					  << "  save           - Save changes to disk\n"
 					  << "  exit           - Exit the program\n"
 					  << "  help           - Show this help\n";

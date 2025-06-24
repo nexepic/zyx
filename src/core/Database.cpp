@@ -1,5 +1,5 @@
 /**
- * @file Database
+ * @file Database.cpp
  * @author Nexepic
  * @brief This source code is licensed under MIT License.
  * @date 2025/2/26
@@ -28,6 +28,7 @@ void Database::open() {
 
     storage->open();
     queryEngine = std::make_shared<query::QueryEngine>(storage);
+    storage->setQueryEngine(queryEngine);
     // queryEngine->initialize();
     openFlag = true;
 }

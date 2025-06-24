@@ -31,8 +31,13 @@ namespace graph::query {
 		explicit QueryEngine(std::shared_ptr<storage::FileStorage> storage);
 		~QueryEngine();
 
-		// Initialize the query engine and build indexes
-		bool initialize();
+		bool buildLabelIndex();
+
+		bool buildPropertyIndex(const std::string& key);
+
+		bool dropIndex(const std::string& indexType, const std::string& key);
+
+		std::vector<std::pair<std::string, std::string>> listIndexes();
 
 		// Query nodes by label
 		QueryResult findNodesByLabel(const std::string &label);
@@ -68,6 +73,10 @@ namespace graph::query {
 
 		// Rebuild indexes - call when data has changed significantly
 		void rebuildIndexes();
+
+		void persistIndexState() const {
+			indexManager_->persistState();
+		}
 
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;

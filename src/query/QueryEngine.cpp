@@ -23,7 +23,21 @@ namespace graph::query {
 
 	QueryEngine::~QueryEngine() = default;
 
-	bool QueryEngine::initialize() { return indexManager_->buildIndexes(); }
+	bool QueryEngine::buildLabelIndex() {
+		return indexManager_->buildLabelIndex();
+	}
+
+	bool QueryEngine::buildPropertyIndex(const std::string& key) {
+		return indexManager_->buildPropertyIndex(key);
+	}
+
+	bool QueryEngine::dropIndex(const std::string& indexType, const std::string& key) {
+		return indexManager_->dropIndex(indexType, key);
+	}
+
+	std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes() {
+		return indexManager_->listIndexes();
+	}
 
 	QueryResult QueryEngine::findNodesByLabel(const std::string &label) {
 		auto plan = queryPlanner_->createPlanForLabelQuery(label);
