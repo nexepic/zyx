@@ -1,0 +1,422 @@
+/**
+ * @file WALManager.cpp
+ * @author Nexepic
+ * @brief This source code is licensed under MIT License.
+ * @date 2025/3/24
+ *
+ * @copyright Copyright (c) 2025 Nexepic
+ *
+ **/
+
+#include "graph/storage/wal/WALManager.hpp"
+#include <filesystem>
+#include <algorithm>
+#include <iostream>
+#include <regex>
+
+namespace fs = std::filesystem;
+using namespace std::chrono_literals;
+
+namespace graph::storage::wal {
+
+WALManager::WALManager(const WALConfig& config)
+    : config_(config) {
+}
+
+WALManager::~WALManager() {
+    shutdown();
+}
+
+void WALManager::initialize() {
+    // Create WAL directory if it doesn't exist
+    if (!fs::exists(config_.walPath)) {
+        fs::create_directories(config_.walPath);
+    }
+
+    // Find existing WAL files and determine next file number
+    auto files = getWalFiles();
+    if (!files.empty()) {
+        // Extract file number from last file
+        std::regex walFilePattern("wal_(\\d+)\\.log");
+        std::smatch match;
+        if (std::regex_search(files.back(), match, walFilePattern)) {
+            fileCounter_ = std::stoi(match[1]) + 1;
+        }
+    }
+
+    // Initialize a new log file
+    currentLogPath_ = generateLogFileName(fileCounter_);
+    logFile_.open(currentLogPath_, std::ios::binary | std::ios::out | std::ios::app);
+
+    if (!logFile_) {
+        throw std::runtime_error("Failed to create WAL log file: " + currentLogPath_);
+    }
+
+    // Start background threads
+    running_ = true;
+    flushThread_ = std::thread(&WALManager::backgroundFlushThread, this);
+    checkpointThread_ = std::thread(&WALManager::backgroundCheckpointThread, this);
+}
+
+void WALManager::shutdown() {
+    if (running_) {
+        // Stop background threads
+        running_ = false;
+
+        // Notify threads to check running state
+        flushCondition_.notify_all();
+
+        // Wait for threads to finish
+        if (flushThread_.joinable()) flushThread_.join();
+        if (checkpointThread_.joinable()) checkpointThread_.join();
+
+        // Flush any pending records
+        flush();
+
+        // Close file
+        if (logFile_.is_open()) {
+            logFile_.close();
+        }
+    }
+}
+
+uint64_t WALManager::logNodeInsert(const graph::Node& node) {
+    auto record = std::make_unique<NodeRecord>(WALRecordType::NODE_INSERT, node);
+    return writeRecord(std::move(record));
+}
+
+uint64_t WALManager::logNodeUpdate(const graph::Node& node) {
+    auto record = std::make_unique<NodeRecord>(WALRecordType::NODE_UPDATE, node);
+    return writeRecord(std::move(record));
+}
+
+uint64_t WALManager::logNodeDelete(uint64_t nodeId) {
+    graph::Node node;
+    node.setId(nodeId);
+    auto record = std::make_unique<NodeRecord>(WALRecordType::NODE_DELETE, node);
+    return writeRecord(std::move(record));
+}
+
+uint64_t WALManager::logEdgeInsert(const graph::Edge& edge) {
+    auto record = std::make_unique<EdgeRecord>(WALRecordType::EDGE_INSERT, edge);
+    return writeRecord(std::move(record));
+}
+
+uint64_t WALManager::logEdgeUpdate(const graph::Edge& edge) {
+    auto record = std::make_unique<EdgeRecord>(WALRecordType::EDGE_UPDATE, edge);
+    return writeRecord(std::move(record));
+}
+
+uint64_t WALManager::logEdgeDelete(uint64_t edgeId) {
+    graph::Edge edge;
+    edge.setId(edgeId);
+    auto record = std::make_unique<EdgeRecord>(WALRecordType::EDGE_DELETE, edge);
+    return writeRecord(std::move(record));
+}
+
+uint64_t WALManager::beginTransaction() {
+    uint64_t txnId = nextTxnId_++;
+    auto record = std::make_unique<TransactionRecord>(WALRecordType::TRANSACTION_BEGIN, txnId);
+    writeRecord(std::move(record));
+    return txnId;
+}
+
+void WALManager::commitTransaction(uint64_t txnId) {
+    auto record = std::make_unique<TransactionRecord>(WALRecordType::TRANSACTION_COMMIT, txnId);
+    writeRecord(std::move(record));
+    flush(); // Force flush on commit
+}
+
+void WALManager::rollbackTransaction(uint64_t txnId) {
+    auto record = std::make_unique<TransactionRecord>(WALRecordType::TRANSACTION_ROLLBACK, txnId);
+    writeRecord(std::move(record));
+}
+
+// Added implementations below:
+
+void WALManager::flush() {
+    std::unique_lock<std::mutex> lock(queueMutex_);
+
+    // Process all pending writes
+    while (!pendingWrites_.empty()) {
+        auto& record = pendingWrites_.front();
+
+        std::unique_lock<std::mutex> fileLock(walMutex_);
+
+        // Ensure we have space in the current log file
+        rotateLogFileIfNeeded();
+
+        // Write the record to disk
+        size_t recordSize = record->getSize();
+        std::vector<uint8_t> buffer(recordSize);
+        record->serialize(buffer.data());
+
+        logFile_.write(reinterpret_cast<const char*>(buffer.data()), recordSize);
+        logFile_.flush();
+
+        // Update offset
+        currentOffset_ += recordSize;
+
+        pendingWrites_.pop();
+    }
+}
+
+uint64_t WALManager::checkpoint() {
+    // Force a flush first to ensure all pending writes are on disk
+    flush();
+
+    std::lock_guard<std::mutex> lock(walMutex_);
+
+    // Record current LSN as checkpoint
+    uint64_t checkpointLSN = currentLSN_.load();
+    lastCheckpointLSN_.store(checkpointLSN);
+
+    // Create a checkpoint record
+    auto record = std::make_unique<CheckpointRecord>(checkpointLSN);
+    size_t recordSize = record->getSize();
+    std::vector<uint8_t> buffer(recordSize);
+    record->serialize(buffer.data());
+
+    logFile_.write(reinterpret_cast<const char*>(buffer.data()), recordSize);
+    logFile_.flush();
+
+    currentOffset_ += recordSize;
+
+    // Cleanup old WAL files that are no longer needed
+    cleanupOldWalFiles();
+
+    return checkpointLSN;
+}
+
+bool WALManager::needsRecovery() const {
+    // Recovery is needed if WAL files exist and the last checkpoint
+    // is older than the newest LSN in the WAL
+    auto walFiles = getWalFiles();
+    if (walFiles.empty()) {
+        return false;
+    }
+
+    return true; // Simplified - in production, compare checkpoint LSN with last LSN in WAL
+}
+
+void WALManager::performRecovery(std::function<void(const WALRecord*)> applyFunc) {
+    auto walFiles = getWalFiles();
+    if (walFiles.empty()) {
+        return;
+    }
+
+    std::cout << "Starting WAL recovery with " << walFiles.size() << " log files...\n";
+
+    // Track active transactions for proper rollback/commit
+    std::unordered_set<uint64_t> activeTransactions;
+
+    for (const auto& walFile : walFiles) {
+        std::ifstream file(walFile, std::ios::binary);
+        if (!file) {
+            std::cerr << "Failed to open WAL file for recovery: " << walFile << std::endl;
+            continue;
+        }
+
+        // Read all records from this file
+        while (file) {
+            // Read record header to determine size and type
+            WALRecordHeader header;
+            file.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+            if (!file) {
+                break; // End of file or error
+            }
+
+            if (header.magic != WAL_RECORD_MAGIC) {
+                std::cerr << "Corrupted WAL record found, recovery may be incomplete\n";
+                break;
+            }
+
+            // Prepare buffer for the full record
+            std::vector<uint8_t> buffer(header.recordSize);
+
+            // Move back to start of record
+            file.seekg(-static_cast<std::streamoff>(sizeof(header)), std::ios::cur);
+
+            // Read the entire record
+            file.read(reinterpret_cast<char*>(buffer.data()), header.recordSize);
+
+            if (!file) {
+                std::cerr << "Failed to read complete WAL record\n";
+                break;
+            }
+
+            // Deserialize the record
+            std::unique_ptr<WALRecord> record = WALRecord::deserialize(buffer.data());
+
+            // Handle transaction state tracking
+            if (record->getType() == WALRecordType::TRANSACTION_BEGIN) {
+                auto txnRecord = dynamic_cast<TransactionRecord*>(record.get());
+                if (txnRecord) {
+                    activeTransactions.insert(txnRecord->getTransactionId());
+                }
+            } else if (record->getType() == WALRecordType::TRANSACTION_COMMIT) {
+                auto txnRecord = dynamic_cast<TransactionRecord*>(record.get());
+                if (txnRecord) {
+                    activeTransactions.erase(txnRecord->getTransactionId());
+                }
+            } else if (record->getType() == WALRecordType::TRANSACTION_ROLLBACK) {
+                auto txnRecord = dynamic_cast<TransactionRecord*>(record.get());
+                if (txnRecord) {
+                    activeTransactions.erase(txnRecord->getTransactionId());
+                }
+            }
+            // Apply record if it's a data operation and either:
+            // 1. It's not part of any transaction
+            // 2. It's part of a committed transaction (not in activeTransactions)
+            else if ((record->getTransactionId() == 0 ||
+                     !activeTransactions.count(record->getTransactionId())) &&
+                    (record->getType() == WALRecordType::NODE_INSERT ||
+                     record->getType() == WALRecordType::NODE_UPDATE ||
+                     record->getType() == WALRecordType::NODE_DELETE ||
+                     record->getType() == WALRecordType::EDGE_INSERT ||
+                     record->getType() == WALRecordType::EDGE_UPDATE ||
+                     record->getType() == WALRecordType::EDGE_DELETE)) {
+
+                // Apply the record to restore database state
+                applyFunc(record.get());
+            }
+
+            // Update current LSN to the highest seen
+            if (record->getLSN() > currentLSN_) {
+                currentLSN_.store(record->getLSN());
+            }
+        }
+
+        file.close();
+    }
+
+    std::cout << "WAL recovery complete. Processed records up to LSN: " << currentLSN_.load() << std::endl;
+
+    // Start with a fresh WAL after recovery
+    logFile_.close();
+    currentLogPath_ = generateLogFileName(++fileCounter_);
+    logFile_.open(currentLogPath_, std::ios::binary | std::ios::out);
+    currentOffset_ = 0;
+}
+
+void WALManager::rotateLogFileIfNeeded() {
+    // Check if we need to rotate log file (size exceeded)
+    if (currentOffset_ >= config_.maxFileSize) {
+        // Close current file
+        if (logFile_.is_open()) {
+            logFile_.close();
+        }
+
+        // Create new log file
+        currentLogPath_ = generateLogFileName(++fileCounter_);
+        logFile_.open(currentLogPath_, std::ios::binary | std::ios::out);
+        if (!logFile_) {
+            throw std::runtime_error("Failed to create new WAL log file during rotation: " + currentLogPath_);
+        }
+
+        currentOffset_ = 0;
+
+        // Clean up old WAL files if we have too many
+        cleanupOldWalFiles();
+    }
+}
+
+std::string WALManager::generateLogFileName(uint32_t fileNum) {
+    char buffer[64];
+    snprintf(buffer, sizeof(buffer), "wal_%010u.log", fileNum);
+    return config_.walPath + "/" + buffer;
+}
+
+void WALManager::backgroundFlushThread() {
+    while (running_) {
+        // Wait for notification or timeout
+        {
+            std::unique_lock<std::mutex> lock(queueMutex_);
+            flushCondition_.wait_for(lock, std::chrono::milliseconds(config_.flushInterval),
+                [this]() { return !running_ || !pendingWrites_.empty(); });
+
+            if (!running_) break;
+
+            if (!pendingWrites_.empty()) {
+                // Flush pending writes while holding the lock
+                flush();
+            }
+        }
+    }
+}
+
+void WALManager::backgroundCheckpointThread() {
+    while (running_) {
+        // Sleep for checkpoint interval
+        std::this_thread::sleep_for(std::chrono::milliseconds(config_.checkpointInterval));
+
+        if (!running_) break;
+
+        try {
+            checkpoint();
+        } catch (const std::exception& e) {
+            std::cerr << "Error during background checkpoint: " << e.what() << std::endl;
+        }
+    }
+}
+
+uint64_t WALManager::writeRecord(std::unique_ptr<WALRecord> record) {
+    // Assign LSN and prepare record
+    uint64_t lsn = currentLSN_.fetch_add(1);
+    record->setLSN(lsn);
+
+    // Queue the record for writing
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        pendingWrites_.push(std::move(record));
+
+        // If we've accumulated enough writes, notify flush thread
+        if (pendingWrites_.size() >= config_.writeBatchSize) {
+            flushCondition_.notify_one();
+        }
+    }
+
+    return lsn;
+}
+
+std::vector<std::string> WALManager::getWalFiles() const {
+    std::vector<std::string> files;
+
+    if (!fs::exists(config_.walPath)) {
+        return files;
+    }
+
+    // Find all WAL files in directory
+    for (const auto& entry : fs::directory_iterator(config_.walPath)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+            if (filename.find("wal_") == 0 && filename.find(".log") != std::string::npos) {
+                files.push_back(entry.path().string());
+            }
+        }
+    }
+
+    // Sort files by name (which includes sequence number)
+    std::sort(files.begin(), files.end());
+
+    return files;
+}
+
+void WALManager::cleanupOldWalFiles() {
+    auto files = getWalFiles();
+
+    // Keep only the most recent N files
+    if (files.size() > config_.maxWalFiles) {
+        size_t filesToDelete = files.size() - config_.maxWalFiles;
+        for (size_t i = 0; i < filesToDelete; i++) {
+            try {
+                fs::remove(files[i]);
+            } catch (const std::exception& e) {
+                std::cerr << "Failed to delete old WAL file: " << e.what() << std::endl;
+            }
+        }
+    }
+}
+
+} // namespace graph::storage::wal
