@@ -259,7 +259,7 @@ namespace graph::storage {
 		}
 
 		// Sort by fragmentation ratio (highest first)
-		std::sort(result.begin(), result.end(), [](const SegmentHeader &a, const SegmentHeader &b) {
+		std::ranges::sort(result, [](const SegmentHeader &a, const SegmentHeader &b) {
 			return a.getFragmentationRatio() > b.getFragmentationRatio();
 		});
 
@@ -383,7 +383,7 @@ namespace graph::storage {
 		segments_.erase(offset);
 
 		// Remove from dirty segments list if present
-		auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
+		auto dirtyIt = std::ranges::find(dirtySegments_, offset);
 		if (dirtyIt != dirtySegments_.end()) {
 			dirtySegments_.erase(dirtyIt);
 		}
@@ -429,7 +429,7 @@ namespace graph::storage {
 			it->second.is_dirty = 0; // Mark as clean after writing
 
 			// Remove from dirty list
-			auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
+			auto dirtyIt = std::ranges::find(dirtySegments_, offset);
 			if (dirtyIt != dirtySegments_.end()) {
 				dirtySegments_.erase(dirtyIt);
 			}
@@ -678,7 +678,7 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::ensureSegmentCached(uint64_t offset) {
-		if (segments_.find(offset) == segments_.end()) {
+		if (!segments_.contains(offset)) {
 			// Read from disk and add to cache
 			SegmentHeader header;
 			file_->seekg(static_cast<std::streamoff>(offset));
@@ -700,7 +700,7 @@ namespace graph::storage {
 
 	void SegmentTracker::markSegmentDirty(uint64_t offset) {
 		// Add to dirty segments list if not already there
-		if (std::find(dirtySegments_.begin(), dirtySegments_.end(), offset) == dirtySegments_.end()) {
+		if (std::ranges::find(dirtySegments_, offset) == dirtySegments_.end()) {
 			dirtySegments_.push_back(offset);
 		}
 	}

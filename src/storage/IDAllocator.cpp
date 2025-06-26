@@ -54,38 +54,44 @@ namespace graph::storage {
 		throw std::runtime_error("Invalid entity type for temporary ID reservation");
 	}
 
-	int64_t IDAllocator::allocatePermanentId(int64_t tempId, uint32_t entityType) {
+	int64_t IDAllocator::allocatePermanentId(int64_t tempId, uint32_t entityType, bool notifyIdUpdateCallback) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		// Check if we've already allocated a permanent ID for this temp ID
 		if (entityType == Node::typeId) {
 			auto it = tempToPermNodeIds_.find(tempId);
 			if (it != tempToPermNodeIds_.end()) {
+				idUpdateCallback_(tempId, it->second, entityType);
 				return it->second;
 			}
 		} else if (entityType == Edge::typeId) {
 			auto it = tempToPermEdgeIds_.find(tempId);
 			if (it != tempToPermEdgeIds_.end()) {
+				idUpdateCallback_(tempId, it->second, entityType);
 				return it->second;
 			}
 		} else if (entityType == Property::typeId) {
 			auto it = tempToPermPropIds_.find(tempId);
 			if (it != tempToPermPropIds_.end()) {
+				idUpdateCallback_(tempId, it->second, entityType);
 				return it->second;
 			}
 		} else if (entityType == Blob::typeId) {
 			auto it = tempToPermBlobIds_.find(tempId);
 			if (it != tempToPermBlobIds_.end()) {
+				idUpdateCallback_(tempId, it->second, entityType);
 				return it->second;
 			}
 		} else if (entityType == Index::typeId) {
 			auto it = tempToPermIndexIds_.find(tempId);
 			if (it != tempToPermIndexIds_.end()) {
+				idUpdateCallback_(tempId, it->second, entityType);
 				return it->second;
 			}
 		} else if (entityType == State::typeId) {
 			auto it = tempToPermStateIds_.find(tempId);
 			if (it != tempToPermStateIds_.end()) {
+				idUpdateCallback_(tempId, it->second, entityType);
 				return it->second;
 			}
 		}
@@ -116,7 +122,7 @@ namespace graph::storage {
 		}
 
 		// Notify the callback if it's set
-		if (idUpdateCallback_) {
+		if (notifyIdUpdateCallback && idUpdateCallback_) {
 			idUpdateCallback_(tempId, permId, entityType);
 		}
 

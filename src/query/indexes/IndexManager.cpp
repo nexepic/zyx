@@ -10,89 +10,203 @@
 
 #include "graph/query/indexes/IndexManager.hpp"
 #include <algorithm>
+#include "graph/query/indexes/IndexBuilder.hpp"
 
 namespace graph::query::indexes {
 
-	IndexManager::IndexManager(std::shared_ptr<storage::FileStorage> storage) : storage_(std::move(storage)) {
-		StateRegistry::initialize(storage_->getDataManager());
+	IndexManager::IndexManager(std::shared_ptr<storage::FileStorage> storage) :
+		storage_(std::move(storage)), dataManager_(storage_->getDataManager()) {
 
-		labelIndex_ = std::make_shared<LabelIndex>(storage_->getDataManager());
-		propertyIndex_ = std::make_shared<PropertyIndex>(storage_->getDataManager());
+		StateRegistry::initialize(dataManager_);
+
+		labelIndex_ = std::make_shared<LabelIndex>(dataManager_);
+		propertyIndex_ = std::make_shared<PropertyIndex>(dataManager_);
 		relationshipIndex_ = std::make_shared<RelationshipIndex>();
 		fullTextIndex_ = std::make_shared<FullTextIndex>();
 	}
 
-	// Build only the label index
+	IndexManager::~IndexManager() {
+		// Ensure any in-progress index building is cancelled
+		if (indexBuilder_) {
+			indexBuilder_->cancel();
+		}
+	}
+
+	void IndexManager::initialize() {
+		// Create index builder
+		indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_);
+	}
+
 	bool IndexManager::buildLabelIndex() {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Check if an async build is in progress
+		if (isIndexBuilding()) {
+			return false;
+		}
+
 		// Clear existing label index
 		labelIndex_->clear();
 
+		// Commit any pending changes before indexing
 		storage_->save();
 
-		// Rebuild label index from all nodes
-		const auto& nodes = storage_->getAllNodes();
-		for (const auto& [id, node] : nodes) {
-			labelIndex_->addNode(id, node.getLabel());
+		bool result = indexBuilder_->buildLabelIndexWorker();
+
+		// Enable automatic updates for this index
+		if (result) {
+			enableLabelIndex(true);
 		}
 
-		// Persist the index state
-		// labelIndex_->flush();
-		return true;
+		return result;
 	}
 
-	// Build index for a specific property key
-	bool IndexManager::buildPropertyIndex(const std::string& key) {
+	bool IndexManager::buildPropertyIndex(const std::string &key) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Check if an async build is in progress
+		if (isIndexBuilding()) {
+			return false;
+		}
+
 		// Clear specific property key index
 		propertyIndex_->clearKey(key);
 
-		// Rebuild the property index for the specific key
-		const auto& nodes = storage_->getAllNodes();
-		for (const auto& [id, node] : nodes) {
-			auto properties = storage_->getNodeProperties(id);
-			auto it = properties.find(key);
-			if (it != properties.end()) {
-				propertyIndex_->addProperty(id, key, it->second);
+		// Commit any pending changes before indexing
+		storage_->save();
+
+		bool result = indexBuilder_->buildPropertyIndexWorker(key);
+
+		// Enable automatic updates for this index
+		if (result) {
+			enablePropertyIndex(key, true);
+		}
+
+		return result;
+	}
+
+	bool IndexManager::buildIndexes() {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Check if an async build is in progress
+		if (isIndexBuilding()) {
+			return false;
+		}
+
+		// Commit any pending changes before indexing
+		storage_->save();
+
+		bool result = indexBuilder_->buildAllIndexesWorker();
+
+		// Enable automatic updates for all indexes
+		if (result) {
+			enableLabelIndex(true);
+			enableRelationshipIndex(true);
+			enableFullTextIndex(true);
+
+			// Get all property keys that were indexed
+			auto propertyKeys = propertyIndex_->getIndexedKeys();
+			for (const auto &key: propertyKeys) {
+				enablePropertyIndex(key, true);
 			}
 		}
 
-		// Persist the index state
-		// propertyIndex_->flush();
-		return true;
+		return result;
 	}
 
-	// Drop a specific index
-	bool IndexManager::dropIndex(const std::string& indexType, const std::string& key) {
+	bool IndexManager::startBuildLabelIndex() {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		if (isIndexBuilding()) {
+			return false;
+		}
+
+		// Commit any pending changes before indexing
+		storage_->save();
+
+		return indexBuilder_->startBuildLabelIndex();
+	}
+
+	bool IndexManager::startBuildPropertyIndex(const std::string &key) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		if (isIndexBuilding()) {
+			return false;
+		}
+
+		// Commit any pending changes before indexing
+		storage_->save();
+
+		return indexBuilder_->startBuildPropertyIndex(key);
+	}
+
+	bool IndexManager::startBuildAllIndexes() {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		if (isIndexBuilding()) {
+			return false;
+		}
+
+		// Commit any pending changes before indexing
+		storage_->save();
+
+		return indexBuilder_->startBuildAllIndexes();
+	}
+
+	bool IndexManager::isIndexBuilding() const { return indexBuilder_ && indexBuilder_->isBuilding(); }
+
+	int IndexManager::getIndexBuildProgress() const { return indexBuilder_ ? indexBuilder_->getProgress() : 0; }
+
+	bool IndexManager::waitForIndexCompletion(int timeoutSeconds) {
+		if (!indexBuilder_) {
+			return true; // No builder, so considered complete
+		}
+
+		return indexBuilder_->waitForCompletion(std::chrono::seconds(timeoutSeconds));
+	}
+
+	void IndexManager::cancelIndexBuild() {
+		if (indexBuilder_) {
+			indexBuilder_->cancel();
+		}
+	}
+
+	bool IndexManager::dropIndex(const std::string &indexType, const std::string &key) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
 		if (indexType == "label") {
 			labelIndex_->clear();
 			labelIndex_->flush();
+			indexConfig_.labelIndexEnabled = false;
 			return true;
-		}
-		else if (indexType == "property") {
+		} else if (indexType == "property") {
 			if (key.empty()) {
 				// Drop all property indexes
 				propertyIndex_->clear();
+				indexConfig_.propertyIndexKeys.clear();
 			} else {
 				// Drop specific property key index
 				propertyIndex_->clearKey(key);
+				indexConfig_.propertyIndexKeys.erase(key);
 			}
 			propertyIndex_->flush();
 			return true;
-		}
-		else if (indexType == "relationship") {
+		} else if (indexType == "relationship") {
 			relationshipIndex_->clear();
 			relationshipIndex_->flush();
+			indexConfig_.relationshipIndexEnabled = false;
 			return true;
-		}
-		else if (indexType == "fulltext") {
+		} else if (indexType == "fulltext") {
 			fullTextIndex_->clear();
 			fullTextIndex_->flush();
+			indexConfig_.fullTextIndexEnabled = false;
 			return true;
 		}
 		return false;
 	}
 
-	// List all active indexes
 	std::vector<std::pair<std::string, std::string>> IndexManager::listIndexes() {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		std::vector<std::pair<std::string, std::string>> result;
 
 		// Add label index if active
@@ -103,25 +217,27 @@ namespace graph::query::indexes {
 		// Add property indexes - first check if any exist at all
 		if (!propertyIndex_->isEmpty()) {
 			auto propertyKeys = propertyIndex_->getIndexedKeys();
-			for (const auto& key : propertyKeys) {
+			for (const auto &key: propertyKeys) {
 				result.emplace_back("property", key);
 			}
 		}
 
 		// // Add relationship index if active
 		// if (!relationshipIndex_->isEmpty()) {
-		// 	result.emplace_back("relationship", "");
+		//     result.emplace_back("relationship", "");
 		// }
-  //
+		//
 		// // Add fulltext index if active
 		// if (!fullTextIndex_->isEmpty()) {
-		// 	result.emplace_back("fulltext", "");
+		//     result.emplace_back("fulltext", "");
 		// }
 
 		return result;
 	}
 
 	void IndexManager::persistState() const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
 		// Persist all indexes' state
 		if (labelIndex_)
 			labelIndex_->flush();
@@ -133,164 +249,197 @@ namespace graph::query::indexes {
 			fullTextIndex_->flush();
 	}
 
-	bool IndexManager::buildIndexes() {
-		// Clear existing indexes
-		labelIndex_->clear();
-		propertyIndex_->clear();
-		relationshipIndex_->clear();
-		fullTextIndex_->clear();
+	void IndexManager::enableLabelIndex(bool enable) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		indexConfig_.labelIndexEnabled = enable;
+	}
 
-		// Index all nodes
-		const auto &nodes = storage_->getAllNodes();
-		for (const auto &[nodeId, node]: nodes) {
-			// Index by label
-			const auto &label = node.getLabel();
-			labelIndex_->addNode(nodeId, label);
+	void IndexManager::enablePropertyIndex(const std::string &key, bool enable) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		if (enable) {
+			indexConfig_.propertyIndexKeys.insert(key);
+		} else {
+			indexConfig_.propertyIndexKeys.erase(key);
+		}
+	}
 
-			// Index by properties
-			const auto &properties = node.getProperties();
-			for (const auto &[key, value]: properties) {
-				// Add to property index
-				if (std::holds_alternative<std::string>(value)) {
-					std::string strValue = std::get<std::string>(value);
-					propertyIndex_->addProperty(nodeId, key, strValue);
+	void IndexManager::enableRelationshipIndex(bool enable) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		indexConfig_.relationshipIndexEnabled = enable;
+	}
 
-					// Also add to full-text index for string properties
-					fullTextIndex_->addTextProperty(nodeId, key, strValue);
-				} else if (std::holds_alternative<int64_t>(value)) {
-					int64_t intValue = std::get<int64_t>(value);
-					propertyIndex_->addProperty(nodeId, key, intValue);
-				} else if (std::holds_alternative<double>(value)) {
-					double doubleValue = std::get<double>(value);
-					propertyIndex_->addProperty(nodeId, key, doubleValue);
-				} else if (std::holds_alternative<bool>(value)) {
-					bool boolValue = std::get<bool>(value);
-					propertyIndex_->addProperty(nodeId, key, boolValue);
+	void IndexManager::enableFullTextIndex(bool enable) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		indexConfig_.fullTextIndexEnabled = enable;
+	}
+
+	void IndexManager::updateNodeIndexes(const Node &node, bool isNew, bool isDeleted) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		const int64_t nodeId = node.getId();
+
+		// Skip temporary nodes
+		if (nodeId <= 0)
+			return;
+
+		if (isDeleted) {
+			// Remove from all indexes
+			if (indexConfig_.labelIndexEnabled) {
+				labelIndex_->removeNode(nodeId, node.getLabel());
+			}
+
+			if (!indexConfig_.propertyIndexKeys.empty()) {
+				auto properties = dataManager_->getNodeProperties(nodeId);
+				for (const auto &[key, _]: properties) {
+					if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
+						propertyIndex_->removeProperty(nodeId, key);
+					}
+
+					if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(_)) {
+						fullTextIndex_->removeTextProperty(nodeId, key);
+					}
+				}
+			}
+		} else {
+			// Add or update indexes
+			if (indexConfig_.labelIndexEnabled) {
+				if (!isNew) {
+					// For updates, first remove old label
+					labelIndex_->removeNode(nodeId, node.getLabel());
+				}
+
+				// Add current label
+				labelIndex_->addNode(nodeId, node.getLabel());
+			}
+
+			if (!indexConfig_.propertyIndexKeys.empty()) {
+				auto properties = dataManager_->getNodeProperties(nodeId);
+
+				// Only process properties that have indexes enabled
+				for (const auto &[key, value]: properties) {
+					if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
+						propertyIndex_->addProperty(nodeId, key, value);
+
+						// Also handle full-text index for string properties
+						if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(value)) {
+							fullTextIndex_->addTextProperty(nodeId, key, std::get<std::string>(value));
+						}
+					}
 				}
 			}
 		}
+	}
 
-		// Index all edges
-		const auto &edges = storage_->getAllEdges();
-		for (const auto &[edgeId, edge]: edges) {
+	void IndexManager::updateEdgeIndexes(const Edge &edge, bool isNew, bool isDeleted) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Skip if relationship indexing is not enabled
+		if (!indexConfig_.relationshipIndexEnabled)
+			return;
+
+		const int64_t edgeId = edge.getId();
+
+		// Skip temporary edges
+		if (edgeId <= 0)
+			return;
+
+		if (isDeleted) {
+			// Remove from relationship index
+			relationshipIndex_->removeEdge(edgeId);
+		} else {
+			// Add to relationship index (handles both new and updated)
 			relationshipIndex_->addEdge(edgeId, edge.getFromNodeId(), edge.getToNodeId(), edge.getLabel());
 		}
-
-		return true;
 	}
 
 	void IndexManager::updateIndexes(const std::vector<Node> &addedNodes, const std::vector<Node> &updatedNodes,
 									 const std::vector<uint64_t> &removedNodeIds, const std::vector<Edge> &addedEdges,
 									 const std::vector<Edge> &updatedEdges,
 									 const std::vector<uint64_t> &removedEdgeIds) {
-		// Handle removed nodes
-		for (uint64_t nodeId: removedNodeIds) {
-			// Find node in storage to get its label
-			const auto &nodes = storage_->getAllNodes();
-			auto nodeIt = nodes.find(nodeId);
-			if (nodeIt != nodes.end()) {
-				const auto &node = nodeIt->second;
-
-				// Remove from label index
-				labelIndex_->removeNode(nodeId, node.getLabel());
-
-				// Remove from property indexes
-				const auto &properties = node.getProperties();
-				for (const auto &[key, _]: properties) {
-					propertyIndex_->removeProperty(nodeId, key);
-					fullTextIndex_->removeTextProperty(nodeId, key);
-				}
+		// Process nodes
+		for (const auto &nodeId: removedNodeIds) {
+			// Find node in storage
+			const auto &node = dataManager_->getNode(nodeId);
+			if (node.getId() != 0) {
+				updateNodeIndexes(node, false, true);
 			}
 		}
 
-		// Handle removed edges
-		for (uint64_t edgeId: removedEdgeIds) {
-			relationshipIndex_->removeEdge(edgeId);
-		}
-
-		// Handle added nodes
 		for (const auto &node: addedNodes) {
-			uint64_t nodeId = node.getId();
-
-			// Add to label index
-			labelIndex_->addNode(nodeId, node.getLabel());
-
-			// Add to property indexes
-			const auto &properties = node.getProperties();
-			for (const auto &[key, value]: properties) {
-				// Add to property index
-				if (std::holds_alternative<std::string>(value)) {
-					std::string strValue = std::get<std::string>(value);
-					propertyIndex_->addProperty(nodeId, key, strValue);
-
-					// Also add to full-text index for string properties
-					fullTextIndex_->addTextProperty(nodeId, key, strValue);
-				} else if (std::holds_alternative<int64_t>(value)) {
-					int64_t intValue = std::get<int64_t>(value);
-					propertyIndex_->addProperty(nodeId, key, intValue);
-				} else if (std::holds_alternative<double>(value)) {
-					double doubleValue = std::get<double>(value);
-					propertyIndex_->addProperty(nodeId, key, doubleValue);
-				} else if (std::holds_alternative<bool>(value)) {
-					bool boolValue = std::get<bool>(value);
-					propertyIndex_->addProperty(nodeId, key, boolValue);
-				}
-			}
+			updateNodeIndexes(node, true, false);
 		}
 
-		// Handle updated nodes - treat as remove + add
 		for (const auto &node: updatedNodes) {
-			uint64_t nodeId = node.getId();
+			updateNodeIndexes(node, false, false);
+		}
 
-			// First remove old index entries
-			const auto &nodes = storage_->getAllNodes();
-			auto nodeIt = nodes.find(nodeId);
-			if (nodeIt != nodes.end()) {
-				const auto &oldNode = nodeIt->second;
-
-				// Remove from label index
-				labelIndex_->removeNode(nodeId, oldNode.getLabel());
-
-				// Remove from property indexes
-				const auto &properties = oldNode.getProperties();
-				for (const auto &[key, _]: properties) {
-					propertyIndex_->removeProperty(nodeId, key);
-					fullTextIndex_->removeTextProperty(nodeId, key);
-				}
-			}
-
-			// Then add new index entries
-			labelIndex_->addNode(nodeId, node.getLabel());
-
-			const auto &properties = node.getProperties();
-			for (const auto &[key, value]: properties) {
-				// Add to property index
-				if (std::holds_alternative<std::string>(value)) {
-					std::string strValue = std::get<std::string>(value);
-					propertyIndex_->addProperty(nodeId, key, strValue);
-					fullTextIndex_->addTextProperty(nodeId, key, strValue);
-				} else if (std::holds_alternative<int64_t>(value)) {
-					int64_t intValue = std::get<int64_t>(value);
-					propertyIndex_->addProperty(nodeId, key, intValue);
-				} else if (std::holds_alternative<double>(value)) {
-					double doubleValue = std::get<double>(value);
-					propertyIndex_->addProperty(nodeId, key, doubleValue);
-				} else if (std::holds_alternative<bool>(value)) {
-					bool boolValue = std::get<bool>(value);
-					propertyIndex_->addProperty(nodeId, key, boolValue);
-				}
+		// Process edges
+		for (const auto &edgeId: removedEdgeIds) {
+			// Find edge in storage
+			const auto &edge = dataManager_->getEdge(edgeId);
+			if (edge.getId() != 0) {
+				updateEdgeIndexes(edge, false, true);
 			}
 		}
 
-		// Handle added edges
 		for (const auto &edge: addedEdges) {
-			relationshipIndex_->addEdge(edge.getId(), edge.getFromNodeId(), edge.getToNodeId(), edge.getLabel());
+			updateEdgeIndexes(edge, true, false);
 		}
 
-		// Handle updated edges - treat as remove + add
 		for (const auto &edge: updatedEdges) {
-			relationshipIndex_->removeEdge(edge.getId());
-			relationshipIndex_->addEdge(edge.getId(), edge.getFromNodeId(), edge.getToNodeId(), edge.getLabel());
+			updateEdgeIndexes(edge, false, false);
+		}
+
+		// Persist changes if needed
+		persistState();
+	}
+
+	// Helper method to update property indexes
+	void IndexManager::updatePropertyIndexes(int64_t entityId,
+											 const std::unordered_map<std::string, PropertyValue> &oldProps,
+											 const std::unordered_map<std::string, PropertyValue> &newProps) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Get all keys that need updating
+		std::unordered_set<std::string> keys;
+		for (const auto &[key, _]: oldProps) {
+			if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
+				keys.insert(key);
+			}
+		}
+
+		for (const auto &[key, _]: newProps) {
+			if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
+				keys.insert(key);
+			}
+		}
+
+		// Process each key
+		for (const auto &key: keys) {
+			auto oldIt = oldProps.find(key);
+			auto newIt = newProps.find(key);
+
+			if (oldIt != oldProps.end() && newIt == newProps.end()) {
+				// Property removed
+				propertyIndex_->removeProperty(entityId, key);
+
+				if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(oldIt->second)) {
+					fullTextIndex_->removeTextProperty(entityId, key);
+				}
+			} else if (newIt != newProps.end()) {
+				// Property added or updated
+				propertyIndex_->addProperty(entityId, key, newIt->second);
+
+				if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(newIt->second)) {
+					// For updates, first remove old text
+					if (oldIt != oldProps.end() && std::holds_alternative<std::string>(oldIt->second)) {
+						fullTextIndex_->removeTextProperty(entityId, key);
+					}
+
+					// Add new text
+					fullTextIndex_->addTextProperty(entityId, key, std::get<std::string>(newIt->second));
+				}
+			}
 		}
 	}
 

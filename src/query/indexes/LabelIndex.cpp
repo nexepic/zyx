@@ -16,7 +16,7 @@
 
 namespace graph::query::indexes {
 
-	LabelIndex::LabelIndex(const std::shared_ptr<storage::DataManager> &dataManager) :
+	LabelIndex::LabelIndex(const std::shared_ptr<storage::DataManager> &dataManager) : dataManager_(dataManager),
 		treeManager_(std::make_shared<IndexTreeManager>(dataManager, LABEL_INDEX_TYPE)) {
 		initialize();
 	}
@@ -48,6 +48,10 @@ namespace graph::query::indexes {
 
 		// Save rootId to state registry
 		if (rootId_ != 0) {
+			if (rootId_ < 0) {
+				rootId_ = dataManager_->getIdAllocator()->allocatePermanentId(rootId_, storage::Index::typeId, false);
+			}
+
 			// Create a property map with the single root ID
 			std::unordered_map<std::string, PropertyValue> properties;
 			properties["rootId"] = rootId_;

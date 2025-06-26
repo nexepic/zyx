@@ -16,6 +16,8 @@ namespace graph::query {
 
 	QueryEngine::QueryEngine(std::shared_ptr<storage::FileStorage> storage) : storage_(std::move(storage)) {
 		indexManager_ = std::make_shared<indexes::IndexManager>(storage_);
+		indexManager_->initialize();
+
 		queryPlanner_ = std::make_unique<QueryPlanner>(indexManager_);
 		queryExecutor_ = std::make_unique<QueryExecutor>(indexManager_, storage_);
 		traversalQuery_ = std::make_shared<TraversalQuery>(storage_->getDataManager());

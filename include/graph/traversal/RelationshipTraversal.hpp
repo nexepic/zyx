@@ -28,7 +28,7 @@ namespace graph::traversal {
      */
     class RelationshipTraversal {
     public:
-        explicit RelationshipTraversal(std::weak_ptr<storage::DataManager> dataManager);
+        explicit RelationshipTraversal(std::shared_ptr<storage::DataManager> dataManager);
 
         /**
          * Gets all outgoing edges from a node
@@ -93,7 +93,7 @@ namespace graph::traversal {
         void unlinkEdge(Edge& edge);
 
     private:
-        std::weak_ptr<storage::DataManager> dataManager_;
+        std::shared_ptr<storage::DataManager> dataManager_;
     };
 
 } // namespace graph::traversal

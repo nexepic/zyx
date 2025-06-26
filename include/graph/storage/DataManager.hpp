@@ -263,15 +263,17 @@ namespace graph::storage {
 
 		std::shared_ptr<SegmentIndexManager> getSegmentIndexManager() const { return segmentIndexManager_; }
 
-		[[nodiscard]] std::shared_ptr<StateChainManager> getStateManager() const { return stateManager_; }
+		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker_; }
+
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator() const { return idAllocator_; }
 
 	private:
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		std::unique_ptr<BlobChainManager> blobManager_;
-		std::shared_ptr<DeletionManager> deletionManager_;
+		std::unique_ptr<DeletionManager> deletionManager_;
 		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
 		std::shared_ptr<SegmentIndexManager> segmentIndexManager_;
-		std::shared_ptr<StateChainManager> stateManager_;
+		std::unique_ptr<StateChainManager> stateManager_;
 
 		// Cache for frequently accessed nodes and edges
 		mutable LRUCache<int64_t, Node> nodeCache_;
@@ -302,7 +304,7 @@ namespace graph::storage {
 
 		std::shared_ptr<SpaceManager> spaceManager_;
 
-		std::shared_ptr<traversal::RelationshipTraversal> relationshipTraversal_;
+		std::unique_ptr<traversal::RelationshipTraversal> relationshipTraversal_;
 
 		void initializeSegmentIndexes();
 

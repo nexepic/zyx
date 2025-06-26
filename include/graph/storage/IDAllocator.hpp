@@ -31,7 +31,7 @@ namespace graph::storage {
 		int64_t reserveTemporaryId(uint32_t entityType);
 
 		// Allocate a permanent ID for a temporary ID
-		int64_t allocatePermanentId(int64_t tempId, uint32_t entityType);
+		int64_t allocatePermanentId(int64_t tempId, uint32_t entityType, bool notifyIdUpdateCallback = true);
 
 		// Check if an ID is temporary
 		static bool isTemporaryId(int64_t id) { return id < 0; }

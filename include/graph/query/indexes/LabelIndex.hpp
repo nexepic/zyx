@@ -95,6 +95,7 @@ namespace graph::query::indexes {
 		void saveState();
 
 	private:
+		std::shared_ptr<storage::DataManager> dataManager_;
 		std::shared_ptr<IndexTreeManager> treeManager_;
 		mutable std::shared_mutex mutex_;
 		int64_t rootId_ = 0;

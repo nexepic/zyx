@@ -16,6 +16,7 @@ db_src = files(
 	'query/QueryExecutor.cpp',
 	'query/QueryPlanner.cpp',
 	'query/indexes/IndexManager.cpp',
+	'query/indexes/IndexBuilder.cpp',
 	'query/indexes/LabelIndex.cpp',
 	'query/indexes/PropertyIndex.cpp',
 	'query/indexes/RelationshipIndex.cpp',

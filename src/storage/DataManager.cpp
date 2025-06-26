@@ -54,8 +54,8 @@ namespace graph::storage {
 		deletionManager_ = std::make_unique<DeletionManager>(shared_from_this(), spaceManager_);
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, idAllocator_, segmentTracker_);
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
-		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(weak_from_this());
-		stateManager_ = std::make_shared<StateChainManager>(shared_from_this());
+		relationshipTraversal_ = std::make_unique<traversal::RelationshipTraversal>(shared_from_this());
+		stateManager_ = std::make_unique<StateChainManager>(shared_from_this());
 
 		initializeSegmentIndexes();
 	}
