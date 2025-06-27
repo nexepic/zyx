@@ -182,6 +182,12 @@ namespace graph::storage {
 				case toUnderlying(SegmentType::Blob):
 					compactBlobSegment(segment.file_offset);
 					break;
+				case toUnderlying(SegmentType::Index):
+					compactIndexSegment(segment.file_offset);
+					break;
+				case toUnderlying(SegmentType::State):
+					compactStateSegment(segment.file_offset);
+					break;
 				default:;
 			}
 		}
@@ -240,15 +246,20 @@ namespace graph::storage {
 		double edgeRatio = segmentTracker_->calculateFragmentationRatio(toUnderlying(SegmentType::Edge));
 		double propertyRatio = segmentTracker_->calculateFragmentationRatio(toUnderlying(SegmentType::Property));
 		double blobRatio = segmentTracker_->calculateFragmentationRatio(toUnderlying(SegmentType::Blob));
+		double indexRatio = segmentTracker_->calculateFragmentationRatio(toUnderlying(SegmentType::Index));
+		double stateRatio = segmentTracker_->calculateFragmentationRatio(toUnderlying(SegmentType::State));
 
 		// Weight by segment counts
 		auto nodeSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::Node));
 		auto edgeSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::Edge));
 		auto propSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::Property));
 		auto blobSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::Blob));
+		auto indexSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::Index));
+		auto stateSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::State));
 
 		double totalWeight = static_cast<double>(nodeSegments.size()) + static_cast<double>(edgeSegments.size()) +
-							 static_cast<double>(propSegments.size()) + static_cast<double>(blobSegments.size());
+							 static_cast<double>(propSegments.size()) + static_cast<double>(blobSegments.size()) +
+							 static_cast<double>(indexSegments.size()) + static_cast<double>(stateSegments.size());
 
 		if (totalWeight == 0) {
 			return 0.0;
@@ -257,10 +268,91 @@ namespace graph::storage {
 		auto ratio = (nodeRatio * static_cast<double>(nodeSegments.size()) +
 					  edgeRatio * static_cast<double>(edgeSegments.size()) +
 					  propertyRatio * static_cast<double>(propSegments.size()) +
-					  blobRatio * static_cast<double>(blobSegments.size())) /
+					  blobRatio * static_cast<double>(blobSegments.size()) +
+					  indexRatio * static_cast<double>(indexSegments.size()) +
+					  stateRatio * static_cast<double>(stateSegments.size())) /
 					 totalWeight;
 
 		return ratio;
+	}
+
+	void SpaceManager::recalculateMaxIds() {
+		// Reset all max IDs
+		int64_t &maxNodeId = fileHeaderManager_->getMaxNodeIdRef();
+		int64_t &maxEdgeId = fileHeaderManager_->getMaxEdgeIdRef();
+		int64_t &maxPropId = fileHeaderManager_->getMaxPropIdRef();
+		int64_t &maxBlobId = fileHeaderManager_->getMaxBlobIdRef();
+		int64_t &maxIndexId = fileHeaderManager_->getMaxIndexIdRef();
+		int64_t &maxStateId = fileHeaderManager_->getMaxStateIdRef();
+
+		// Reset to initial values
+		maxNodeId = 0;
+		maxEdgeId = 0;
+		maxPropId = 0;
+		maxBlobId = 0;
+		maxIndexId = 0;
+		maxStateId = 0;
+
+		// Scan all segments to determine true max IDs
+		for (uint32_t type = 0; type <= 5; type++) {
+			auto segments = segmentTracker_->getSegmentsByType(type);
+
+			for (const auto &header: segments) {
+				// Only consider segments with active entities
+				if (header.getActiveCount() > 0) {
+					// Calculate max ID based on segment start_id and used values
+					int64_t lastUsedId = calculateLastUsedIdInSegment(header);
+
+					// Update appropriate max ID
+					switch (type) {
+						case toUnderlying(SegmentType::Node):
+							maxNodeId = std::max(maxNodeId, lastUsedId);
+							break;
+						case toUnderlying(SegmentType::Edge):
+							maxEdgeId = std::max(maxEdgeId, lastUsedId);
+							break;
+						case toUnderlying(SegmentType::Property):
+							maxPropId = std::max(maxPropId, lastUsedId);
+							break;
+						case toUnderlying(SegmentType::Blob):
+							maxBlobId = std::max(maxBlobId, lastUsedId);
+							break;
+						case toUnderlying(SegmentType::Index):
+							maxIndexId = std::max(maxIndexId, lastUsedId);
+							break;
+						case toUnderlying(SegmentType::State):
+							maxStateId = std::max(maxStateId, lastUsedId);
+							break;
+						default:;
+					}
+				}
+			}
+		}
+	}
+
+	// Helper method to calculate the highest used ID in a segment considering the activity bitmap
+	int64_t SpaceManager::calculateLastUsedIdInSegment(const SegmentHeader &header) {
+		// Start with the segment's start_id
+		int64_t maxId = header.start_id - 1; // Initialize to one less than start ID
+
+		// If no used entities, return start_id - 1
+		if (header.used == 0) {
+			return maxId;
+		}
+
+		// Get the activity bitmap to check which entities are active
+		auto segmentOffset = header.file_offset;
+
+		// Find the highest active entity in the segment
+		for (int32_t i = header.used - 1; i >= 0; i--) {
+			if (segmentTracker_->isEntityActive(segmentOffset, i)) {
+				// Found the highest active entity
+				maxId = header.start_id + i;
+				break;
+			}
+		}
+
+		return maxId;
 	}
 
 	bool SpaceManager::safeCompactSegments() {
@@ -303,12 +395,16 @@ namespace graph::storage {
 		compactSegments(toUnderlying(SegmentType::Edge), COMPACTION_THRESHOLD);
 		compactSegments(toUnderlying(SegmentType::Property), COMPACTION_THRESHOLD);
 		compactSegments(toUnderlying(SegmentType::Blob), COMPACTION_THRESHOLD);
+		compactSegments(toUnderlying(SegmentType::Index), COMPACTION_THRESHOLD);
+		compactSegments(toUnderlying(SegmentType::State), COMPACTION_THRESHOLD);
 
 		// Try to merge segments with low utilization
 		mergeSegments(toUnderlying(SegmentType::Node), COMPACTION_THRESHOLD);
 		mergeSegments(toUnderlying(SegmentType::Edge), COMPACTION_THRESHOLD);
 		mergeSegments(toUnderlying(SegmentType::Property), COMPACTION_THRESHOLD);
 		mergeSegments(toUnderlying(SegmentType::Blob), COMPACTION_THRESHOLD);
+		mergeSegments(toUnderlying(SegmentType::Index), COMPACTION_THRESHOLD);
+		mergeSegments(toUnderlying(SegmentType::State), COMPACTION_THRESHOLD);
 
 		// Relocate segments from end of file to fill gaps
 		relocateSegmentsFromEnd();
@@ -326,7 +422,8 @@ namespace graph::storage {
 		return fragRatio > COMPACTION_THRESHOLD;
 	}
 
-	bool SpaceManager::compactNodeSegment(uint64_t offset) {
+	template<typename EntityType>
+	bool SpaceManager::compactSegment(uint64_t offset, SegmentType segmentType, size_t entitySize) {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
 
 		// If inactive count is zero, nothing to do
@@ -345,32 +442,30 @@ namespace graph::storage {
 
 		// Only perform compaction if fragmentation ratio exceeds threshold
 		if (fragmentationRatio <= COMPACTION_THRESHOLD) {
-			// No need to compact yet
 			return true;
 		}
 
 		// Always compact in place
-		size_t nodeSize = Node::getTotalSize();
 		uint32_t nextFreeSpot = 0;
 
 		// Create a new activity bitmap
 		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
 
 		for (uint32_t i = 0; i < header.used; i++) {
-			// Check if this node is active
+			// Check if this entity is active
 			if (bitmap::getBit(header.activity_bitmap, i)) {
 				// Calculate IDs
 				int64_t oldId = header.start_id + i;
 				int64_t newId = header.start_id + nextFreeSpot;
 
-				// Read node using SegmentTracker
-				auto node = segmentTracker_->readEntity<Node>(offset, i, nodeSize);
+				// Read entity using SegmentTracker
+				auto entity = segmentTracker_->readEntity<EntityType>(offset, i, entitySize);
 
-				// Update node ID
-				node.setId(newId);
+				// Update entity ID
+				entity.setId(newId);
 
-				// Write updated node using SegmentTracker
-				segmentTracker_->writeEntity<Node>(offset, nextFreeSpot, node, nodeSize);
+				// Write updated entity using SegmentTracker
+				segmentTracker_->writeEntity<EntityType>(offset, nextFreeSpot, entity, entitySize);
 
 				// Mark as active in new bitmap
 				bitmap::setBit(newBitmap, nextFreeSpot, true);
@@ -378,8 +473,7 @@ namespace graph::storage {
 
 				// Update references immediately if ID has changed
 				if (oldId != newId) {
-					// Use updateEntityReferences as the entry point which will dispatch to the appropriate method
-					entityReferenceUpdater_->updateEntityReferences(oldId, &node, toUnderlying(SegmentType::Node));
+					entityReferenceUpdater_->updateEntityReferences(oldId, &entity, toUnderlying(segmentType));
 				}
 			}
 		}
@@ -396,217 +490,30 @@ namespace graph::storage {
 		segmentTracker_->updateSegmentUsage(offset, nextFreeSpot, 0);
 
 		return true;
+	}
+
+	bool SpaceManager::compactNodeSegment(uint64_t offset) {
+		return compactSegment<Node>(offset, SegmentType::Node, Node::getTotalSize());
 	}
 
 	bool SpaceManager::compactEdgeSegment(uint64_t offset) {
-		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
-
-		// If inactive count is zero, nothing to do
-		if (header.getFragmentationRatio() == 0) {
-			return false;
-		}
-
-		// If segment is empty, deallocate it
-		if (header.used == header.inactive_count) {
-			deallocateSegment(offset);
-			return true;
-		}
-
-		// Calculate fragmentation ratio
-		double fragmentationRatio = header.getFragmentationRatio();
-
-		// Only perform compaction if fragmentation ratio exceeds threshold
-		if (fragmentationRatio <= COMPACTION_THRESHOLD) {
-			return true;
-		}
-
-		// Always compact in place
-		size_t edgeSize = Edge::getTotalSize();
-		uint32_t nextFreeSpot = 0;
-
-		// Create a new activity bitmap
-		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
-
-		for (uint32_t i = 0; i < header.used; i++) {
-			// Check if this edge is active
-			if (bitmap::getBit(header.activity_bitmap, i)) {
-				// Calculate IDs
-				int64_t oldId = header.start_id + i;
-				int64_t newId = header.start_id + nextFreeSpot;
-
-				// Read edge using SegmentTracker
-				auto edge = segmentTracker_->readEntity<Edge>(offset, i, edgeSize);
-
-				// Update edge ID
-				edge.setId(newId);
-
-				// Write updated edge using SegmentTracker
-				segmentTracker_->writeEntity<Edge>(offset, nextFreeSpot, edge, edgeSize);
-
-				// Mark as active in new bitmap
-				bitmap::setBit(newBitmap, nextFreeSpot, true);
-				nextFreeSpot++;
-
-				// Update references immediately if ID has changed
-				if (oldId != newId) {
-					entityReferenceUpdater_->updateEntityReferences(oldId, &edge, toUnderlying(SegmentType::Edge));
-				}
-			}
-		}
-
-		// Update header
-		header.used = nextFreeSpot;
-		header.inactive_count = 0;
-		header.bitmap_size = bitmap::calculateBitmapSize(nextFreeSpot);
-		std::memcpy(header.activity_bitmap, newBitmap, header.bitmap_size);
-
-		segmentTracker_->writeSegmentHeader(offset, header);
-
-		// Update segment usage
-		segmentTracker_->updateSegmentUsage(offset, nextFreeSpot, 0);
-
-		return true;
+		return compactSegment<Edge>(offset, SegmentType::Edge, Edge::getTotalSize());
 	}
 
 	bool SpaceManager::compactPropertySegment(uint64_t offset) {
-		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
-
-		// If inactive count is zero, nothing to do
-		if (header.getFragmentationRatio() == 0) {
-			return false;
-		}
-
-		// If segment is empty, deallocate it
-		if (header.used == header.inactive_count) {
-			deallocateSegment(offset);
-			return true;
-		}
-
-		// Calculate fragmentation ratio
-		double fragmentationRatio = header.getFragmentationRatio();
-
-		// Only perform compaction if fragmentation ratio exceeds threshold
-		if (fragmentationRatio <= COMPACTION_THRESHOLD) {
-			return true;
-		}
-
-		// Always compact in place
-		size_t propertySize = Property::getTotalSize();
-		uint32_t nextFreeSpot = 0;
-
-		// Create a new activity bitmap
-		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
-
-		for (uint32_t i = 0; i < header.used; i++) {
-			// Check if this property is active
-			if (bitmap::getBit(header.activity_bitmap, i)) {
-				// Calculate IDs
-				int64_t oldId = header.start_id + i;
-				int64_t newId = header.start_id + nextFreeSpot;
-
-				// Read property using SegmentTracker
-				auto property = segmentTracker_->readEntity<Property>(offset, i, propertySize);
-
-				// Update property ID
-				property.setId(newId);
-
-				// Write updated property using SegmentTracker
-				segmentTracker_->writeEntity<Property>(offset, nextFreeSpot, property, propertySize);
-
-				// Mark as active in new bitmap
-				bitmap::setBit(newBitmap, nextFreeSpot, true);
-				nextFreeSpot++;
-
-				// Update references immediately if ID has changed
-				if (oldId != newId) {
-					entityReferenceUpdater_->updateEntityReferences(oldId, &property,
-																	toUnderlying(SegmentType::Property));
-				}
-			}
-		}
-
-		// Update header
-		header.used = nextFreeSpot;
-		header.inactive_count = 0;
-		header.bitmap_size = bitmap::calculateBitmapSize(nextFreeSpot);
-		std::memcpy(header.activity_bitmap, newBitmap, header.bitmap_size);
-
-		segmentTracker_->writeSegmentHeader(offset, header);
-
-		// Update segment usage
-		segmentTracker_->updateSegmentUsage(offset, nextFreeSpot, 0);
-
-		return true;
+		return compactSegment<Property>(offset, SegmentType::Property, Property::getTotalSize());
 	}
 
 	bool SpaceManager::compactBlobSegment(uint64_t offset) {
-		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
+		return compactSegment<Blob>(offset, SegmentType::Blob, Blob::getTotalSize());
+	}
 
-		// If inactive count is zero, nothing to do
-		if (header.getFragmentationRatio() == 0) {
-			return false;
-		}
+	bool SpaceManager::compactIndexSegment(uint64_t offset) {
+		return compactSegment<Index>(offset, SegmentType::Index, Index::getTotalSize());
+	}
 
-		// If segment is empty, deallocate it
-		if (header.used == header.inactive_count) {
-			deallocateSegment(offset);
-			return true;
-		}
-
-		// Calculate fragmentation ratio
-		double fragmentationRatio = header.getFragmentationRatio();
-
-		// Only perform compaction if fragmentation ratio exceeds threshold
-		if (fragmentationRatio <= COMPACTION_THRESHOLD) {
-			return true;
-		}
-
-		// Always compact in place
-		size_t blobSize = Blob::getTotalSize();
-		uint32_t nextFreeSpot = 0;
-
-		// Create a new activity bitmap
-		uint8_t newBitmap[MAX_BITMAP_SIZE] = {};
-
-		for (uint32_t i = 0; i < header.used; i++) {
-			// Check if this blob is active
-			if (bitmap::getBit(header.activity_bitmap, i)) {
-				// Calculate IDs
-				int64_t oldId = header.start_id + i;
-				int64_t newId = header.start_id + nextFreeSpot;
-
-				// Read blob using SegmentTracker
-				auto blob = segmentTracker_->readEntity<Blob>(offset, i, blobSize);
-
-				// Update blob ID
-				blob.setId(newId);
-
-				// Write updated blob using SegmentTracker
-				segmentTracker_->writeEntity<Blob>(offset, nextFreeSpot, blob, blobSize);
-
-				// Mark as active in new bitmap
-				bitmap::setBit(newBitmap, nextFreeSpot, true);
-				nextFreeSpot++;
-
-				// Update references immediately if ID has changed
-				if (oldId != newId) {
-					entityReferenceUpdater_->updateEntityReferences(oldId, &blob, toUnderlying(SegmentType::Blob));
-				}
-			}
-		}
-
-		// Update header
-		header.used = nextFreeSpot;
-		header.inactive_count = 0;
-		header.bitmap_size = bitmap::calculateBitmapSize(nextFreeSpot);
-		std::memcpy(header.activity_bitmap, newBitmap, header.bitmap_size);
-
-		segmentTracker_->writeSegmentHeader(offset, header);
-
-		// Update segment usage
-		segmentTracker_->updateSegmentUsage(offset, nextFreeSpot, 0);
-
-		return true;
+	bool SpaceManager::compactStateSegment(uint64_t offset) {
+		return compactSegment<State>(offset, SegmentType::State, State::getTotalSize());
 	}
 
 	// Check if segment is at the end of the file
@@ -674,10 +581,8 @@ namespace graph::storage {
 	}
 
 	void SpaceManager::updateMaxIds() {
+		recalculateMaxIds();
 		fileHeaderManager_->updateFileHeaderMaxIds(segmentTracker_);
-		// auto maxNodeId = fileHeaderManager_->getMaxNodeId();
-		// auto maxEdgeId = fileHeaderManager_->getMaxEdgeId();
-		// idAllocator_->updateMaxIds(maxNodeId, maxEdgeId);
 	}
 
 	SegmentHeader SpaceManager::readSegmentHeader(uint64_t offset) const {
@@ -920,26 +825,41 @@ namespace graph::storage {
 		return mergedAny;
 	}
 
+	template<typename EntityType>
+	void SpaceManager::processEntity(uint64_t sourceOffset, uint64_t targetOffset, uint32_t i,
+									 uint32_t &targetNextIndex, uint8_t *newBitmap, size_t itemSize,
+									 const SegmentHeader &sourceHeader, const SegmentHeader &targetHeader,
+									 uint32_t type) {
+		int64_t oldId = sourceHeader.start_id + i;
+		int64_t newId = targetHeader.start_id + targetNextIndex;
+
+		auto entity = segmentTracker_->readEntity<EntityType>(sourceOffset, i, itemSize);
+		entity.setId(newId);
+		segmentTracker_->writeEntity(targetOffset, targetNextIndex, entity, itemSize);
+
+		if (oldId != newId) {
+			entityReferenceUpdater_->updateEntityReferences(oldId, &entity, type);
+		}
+
+		bitmap::setBit(newBitmap, targetNextIndex, true);
+		targetNextIndex++;
+	}
+
 	bool SpaceManager::mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint32_t type) {
-		// Get headers directly from tracker
 		SegmentHeader targetHeader = segmentTracker_->getSegmentHeader(targetOffset);
 		SegmentHeader sourceHeader = segmentTracker_->getSegmentHeader(sourceOffset);
 
-		// Ensure the types match
 		if (targetHeader.data_type != type || sourceHeader.data_type != type) {
 			return false;
 		}
 
-		// Calculate active items and available space
 		uint32_t targetActiveItems = targetHeader.getActiveCount();
 		uint32_t sourceActiveItems = sourceHeader.getActiveCount();
 
-		// Ensure there's enough space
 		if (targetActiveItems + sourceActiveItems > targetHeader.capacity) {
 			return false;
 		}
 
-		// Get appropriate item size based on type
 		size_t itemSize;
 		switch (type) {
 			case toUnderlying(SegmentType::Node):
@@ -954,93 +874,60 @@ namespace graph::storage {
 			case toUnderlying(SegmentType::Blob):
 				itemSize = Blob::getTotalSize();
 				break;
+			case toUnderlying(SegmentType::Index):
+				itemSize = Index::getTotalSize();
+				break;
+			case toUnderlying(SegmentType::State):
+				itemSize = State::getTotalSize();
+				break;
 			default:
 				return false;
 		}
 
-		// Create a copy of the target bitmap to work with
 		uint32_t bitmapSize = bitmap::calculateBitmapSize(targetHeader.capacity);
 		std::vector<uint8_t> newBitmap(bitmapSize, 0);
-
-		// Copy the existing target bitmap
-		std::memcpy(newBitmap.data(), targetHeader.activity_bitmap,
-					std::min(bitmapSize, static_cast<uint32_t>(targetHeader.bitmap_size)));
+		std::memcpy(newBitmap.data(), targetHeader.activity_bitmap, std::min(bitmapSize, targetHeader.bitmap_size));
 
 		uint32_t targetNextIndex = targetHeader.used;
-		uint32_t newInactiveCount = targetHeader.inactive_count;
 
-		// Copy active items
 		for (uint32_t i = 0; i < sourceHeader.used; i++) {
-			// Check if this item is active
-			bool isActive = bitmap::getBit(sourceHeader.activity_bitmap, i);
-
-			if (isActive) {
-				// Calculate new ID
-				int64_t oldId = sourceHeader.start_id + i;
-				int64_t newId = targetHeader.start_id + targetNextIndex;
-
-				// Read, update ID, and write entity based on type
-				if (type == toUnderlying(SegmentType::Node)) {
-					auto node = segmentTracker_->readEntity<Node>(sourceOffset, i, itemSize);
-					node.setId(newId);
-					segmentTracker_->writeEntity(targetOffset, targetNextIndex, node, itemSize);
-
-					// Update references immediately using the updated entity object
-					if (oldId != newId) {
-						entityReferenceUpdater_->updateEntityReferences(oldId, &node, type);
-					}
-				} else if (type == toUnderlying(SegmentType::Edge)) {
-					auto edge = segmentTracker_->readEntity<Edge>(sourceOffset, i, itemSize);
-					edge.setId(newId);
-					segmentTracker_->writeEntity(targetOffset, targetNextIndex, edge, itemSize);
-
-					// Update references immediately using the updated entity object
-					if (oldId != newId) {
-						entityReferenceUpdater_->updateEntityReferences(oldId, &edge, type);
-					}
-				} else if (type == toUnderlying(SegmentType::Property)) {
-					auto property = segmentTracker_->readEntity<Property>(sourceOffset, i, itemSize);
-					property.setId(newId);
-					segmentTracker_->writeEntity(targetOffset, targetNextIndex, property, itemSize);
-
-					// Update references immediately using the updated entity object
-					if (oldId != newId) {
-						entityReferenceUpdater_->updateEntityReferences(oldId, &property, type);
-					}
-				} else if (type == toUnderlying(SegmentType::Blob)) {
-					auto blob = segmentTracker_->readEntity<Blob>(sourceOffset, i, itemSize);
-					blob.setId(newId);
-					segmentTracker_->writeEntity(targetOffset, targetNextIndex, blob, itemSize);
-
-					// Update references immediately using the updated entity object
-					if (oldId != newId) {
-						entityReferenceUpdater_->updateEntityReferences(oldId, &blob, type);
-					}
+			if (bitmap::getBit(sourceHeader.activity_bitmap, i)) {
+				switch (type) {
+					case toUnderlying(SegmentType::Node):
+						processEntity<Node>(sourceOffset, targetOffset, i, targetNextIndex, newBitmap.data(), itemSize,
+											sourceHeader, targetHeader, type);
+						break;
+					case toUnderlying(SegmentType::Edge):
+						processEntity<Edge>(sourceOffset, targetOffset, i, targetNextIndex, newBitmap.data(), itemSize,
+											sourceHeader, targetHeader, type);
+						break;
+					case toUnderlying(SegmentType::Property):
+						processEntity<Property>(sourceOffset, targetOffset, i, targetNextIndex, newBitmap.data(),
+												itemSize, sourceHeader, targetHeader, type);
+						break;
+					case toUnderlying(SegmentType::Blob):
+						processEntity<Blob>(sourceOffset, targetOffset, i, targetNextIndex, newBitmap.data(), itemSize,
+											sourceHeader, targetHeader, type);
+						break;
+					case toUnderlying(SegmentType::Index):
+						processEntity<Index>(sourceOffset, targetOffset, i, targetNextIndex, newBitmap.data(), itemSize,
+											 sourceHeader, targetHeader, type);
+						break;
+					case toUnderlying(SegmentType::State):
+						processEntity<State>(sourceOffset, targetOffset, i, targetNextIndex, newBitmap.data(), itemSize,
+											 sourceHeader, targetHeader, type);
+						break;
+					default:;
 				}
-
-				// Mark as active in the new bitmap
-				bitmap::setBit(newBitmap.data(), targetNextIndex, true);
-
-				// Update index
-				targetNextIndex++;
 			}
 		}
 
-		// Update target header with new values
 		targetHeader.used = targetNextIndex;
-		targetHeader.inactive_count = newInactiveCount;
 		targetHeader.bitmap_size = bitmapSize;
-
-		// Copy the new bitmap to the header
 		std::memcpy(targetHeader.activity_bitmap, newBitmap.data(), bitmapSize);
-
-		// Write updated header to disk
 		segmentTracker_->writeSegmentHeader(targetOffset, targetHeader);
 
-		// Update segment chain references
 		updateSegmentChain(targetOffset, sourceHeader);
-
-		// Mark source segment as free
 		segmentTracker_->markSegmentFree(sourceOffset);
 
 		return true;
@@ -1075,6 +962,8 @@ namespace graph::storage {
 		header.edge_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Edge));
 		header.property_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Property));
 		header.blob_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Blob));
+		header.index_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::Index));
+		header.state_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::State));
 	}
 
 	void SpaceManager::updateSegmentChain(uint64_t newOffset, const SegmentHeader &header) {
@@ -1128,6 +1017,12 @@ namespace graph::storage {
 
 		// Remove empty blob segments
 		processEmptySegments(toUnderlying(SegmentType::Blob));
+
+		// Remove empty Index segments
+		processEmptySegments(toUnderlying(SegmentType::Index));
+
+		// Remove empty State segments
+		processEmptySegments(toUnderlying(SegmentType::State));
 	}
 
 	bool SpaceManager::processEmptySegments(uint32_t type) {
@@ -1307,9 +1202,6 @@ namespace graph::storage {
 
 		// Sort by offset (ascending)
 		std::sort(freeSegments.begin(), freeSegments.end());
-
-		// Calculate current file size
-		uint64_t fileSize = calculateCurrentFileSize();
 
 		// Find the highest used offset in any chain
 		uint64_t highestActiveOffset = 0;

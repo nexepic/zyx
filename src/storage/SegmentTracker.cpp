@@ -787,6 +787,7 @@ namespace graph::storage {
 	template Edge SegmentTracker::readEntity<Edge>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 	template Property SegmentTracker::readEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 	template Blob SegmentTracker::readEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
+	template Index SegmentTracker::readEntity<Index>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 	template State SegmentTracker::readEntity<State>(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize);
 
 	template void SegmentTracker::writeEntity<Node>(uint64_t segmentOffset, uint32_t itemIndex, const Node &entity,
@@ -796,6 +797,10 @@ namespace graph::storage {
 	template void SegmentTracker::writeEntity<Property>(uint64_t segmentOffset, uint32_t itemIndex,
 														const Property &entity, size_t itemSize);
 	template void SegmentTracker::writeEntity<Blob>(uint64_t segmentOffset, uint32_t itemIndex, const Blob &entity,
+													size_t itemSize);
+	template void SegmentTracker::writeEntity<Index>(uint64_t segmentOffset, uint32_t itemIndex, const Index &entity,
+													 size_t itemSize);
+	template void SegmentTracker::writeEntity<State>(uint64_t segmentOffset, uint32_t itemIndex, const State &entity,
 													size_t itemSize);
 
 } // namespace graph::storage

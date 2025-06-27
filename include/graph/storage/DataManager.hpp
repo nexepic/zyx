@@ -143,6 +143,7 @@ namespace graph::storage {
 		void addStateProperties(const std::string &stateKey,
 								const std::unordered_map<std::string, PropertyValue> &properties);
 		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey);
+		void removeState(const std::string &stateKey);
 
 		// Reserve temporary IDs
 		int64_t reserveTemporaryNodeId();
@@ -267,6 +268,16 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator() const { return idAllocator_; }
 
+		void setDeletionFlagReference(std::atomic<bool>* flagReference) {
+			deleteOperationPerformedFlag_ = flagReference;
+		}
+
+		void markDeletionPerformed() const {
+			if (deleteOperationPerformedFlag_) {
+				deleteOperationPerformedFlag_->store(true);
+			}
+		}
+
 	private:
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		std::unique_ptr<BlobChainManager> blobManager_;
@@ -292,6 +303,8 @@ namespace graph::storage {
 		std::unordered_map<int64_t, DirtyEntityInfo<Blob>> dirtyBlobs_;
 		std::unordered_map<int64_t, DirtyEntityInfo<Index>> dirtyIndexes_;
 		std::unordered_map<int64_t, DirtyEntityInfo<State>> dirtyStates_;
+
+		std::atomic<bool>* deleteOperationPerformedFlag_ = nullptr;
 
 		std::unordered_map<std::string, int64_t> stateKeyToIdMap_;
 

@@ -42,10 +42,14 @@ namespace graph::storage {
 		table.addRow({"Edge Segment Head", std::to_string(fileHeader.edge_segment_head)});
 		table.addRow({"Property Segment Head", std::to_string(fileHeader.property_segment_head)});
 		table.addRow({"Blob Segment Head", std::to_string(fileHeader.blob_segment_head)});
+		table.addRow({"Index Segment Head", std::to_string(fileHeader.index_segment_head)});
+		table.addRow({"State Segment Head", std::to_string(fileHeader.state_segment_head)});
 		table.addRow({"Max Node ID", std::to_string(fileHeader.max_node_id)});
 		table.addRow({"Max Edge ID", std::to_string(fileHeader.max_edge_id)});
 		table.addRow({"Max Prop ID", std::to_string(fileHeader.max_prop_id)});
 		table.addRow({"Max Blob ID", std::to_string(fileHeader.max_blob_id)});
+		table.addRow({"Max Index ID", std::to_string(fileHeader.max_index_id)});
+		table.addRow({"Max State ID", std::to_string(fileHeader.max_state_id)});
 		table.addRow({"Version", std::to_string(fileHeader.version)});
 
 		// Print the file header table
@@ -621,6 +625,16 @@ namespace graph::storage {
 	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
 	        table.print();
 
+	    	// Print activity bitmap
+	    	std::cout << "Activity Bitmap: ";
+	    	for (uint32_t i = 0; i < segmentHeader.bitmap_size; ++i) {
+	    		for (int bit = 7; bit >= 0; --bit) {
+	    			std::cout << ((segmentHeader.activity_bitmap[i] >> bit) & 1);
+	    		}
+	    		std::cout << " ";
+	    	}
+	    	std::cout << std::endl;
+
 	        // Calculate data start position
 	        std::streampos dataStart = file->tellg();
 
@@ -693,6 +707,16 @@ namespace graph::storage {
 	        table.addRow({"Inactive Count", std::to_string(segmentHeader.inactive_count)});
 	        table.addRow({"Data Type", std::to_string(segmentHeader.data_type)});
 	        table.print();
+
+	    	// Print activity bitmap
+	    	std::cout << "Activity Bitmap: ";
+	    	for (uint32_t i = 0; i < segmentHeader.bitmap_size; ++i) {
+	    		for (int bit = 7; bit >= 0; --bit) {
+	    			std::cout << ((segmentHeader.activity_bitmap[i] >> bit) & 1);
+	    		}
+	    		std::cout << " ";
+	    	}
+	    	std::cout << std::endl;
 
 	        // Calculate data start position
 	        std::streampos dataStart = file->tellg();

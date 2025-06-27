@@ -353,7 +353,6 @@ namespace graph::storage {
 
 	void DataManager::deleteState(State &state) { deleteEntity(state); }
 
-
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types) {
 		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
@@ -674,7 +673,7 @@ namespace graph::storage {
 		}
 
 		// Not found
-		return State();
+		return {};
 	}
 
 	void DataManager::addStateProperties(const std::string &stateKey,
@@ -728,6 +727,26 @@ namespace graph::storage {
 		// Deserialize properties
 		std::stringstream ss(data);
 		return deserializeProperties(ss);
+	}
+
+	void DataManager::removeState(const std::string &stateKey) {
+	    // Find the state by key
+	    State state = findStateByKey(stateKey);
+	    if (state.getId() == 0) {
+	        return; // State does not exist, nothing to remove
+	    }
+
+	    // Check if the state is part of a chain
+	    if (state.isChained() || state.isChainStart()) {
+	        // Delete the entire state chain
+	        stateManager_->deleteStateChain(state.getId());
+	    } else {
+	        // Delete the single state entity
+	        deleteState(state);
+	    }
+
+	    // Remove the state from the key-to-id map
+	    stateKeyToIdMap_.erase(stateKey);
 	}
 
 	bool DataManager::isChainHeadState(const State &state) {
@@ -1060,6 +1079,8 @@ namespace graph::storage {
 		edgeCache_.clear();
 		propertyCache_.clear();
 		blobCache_.clear();
+		indexCache_.clear();
+		stateCache_.clear();
 	}
 
 	template<typename EntityType>
@@ -1189,7 +1210,16 @@ namespace graph::storage {
 			deletionManager_->deleteProperty(entity);
 		} else if constexpr (std::is_same_v<EntityType, Blob>) {
 			deletionManager_->deleteBlob(entity);
+		} else if constexpr (std::is_same_v<EntityType, Index>) {
+			deletionManager_->deleteIndex(entity);
+		} else if constexpr (std::is_same_v<EntityType, State>) {
+			deletionManager_->deleteState(entity);
+		} else {
+			throw std::runtime_error("Unknown entity type for deletion: " + std::to_string(EntityType::typeId));
 		}
+
+		// Mark that a deletion operation has been performed
+		markDeletionPerformed();
 	}
 
 	template<typename EntityType>
@@ -1276,6 +1306,8 @@ namespace graph::storage {
 	template void DataManager::markEntityDeleted<Edge>(Edge &entity);
 	template void DataManager::markEntityDeleted<Property>(Property &entity);
 	template void DataManager::markEntityDeleted<Blob>(Blob &entity);
+	template void DataManager::markEntityDeleted<Index>(Index &entity);
+	template void DataManager::markEntityDeleted<State>(State &entity);
 	template uint64_t DataManager::findSegmentForEntityId<Node>(int64_t id) const;
 	template uint64_t DataManager::findSegmentForEntityId<Edge>(int64_t id) const;
 	template uint64_t DataManager::findSegmentForEntityId<Property>(int64_t id) const;

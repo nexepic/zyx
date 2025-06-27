@@ -51,6 +51,10 @@ namespace graph::storage {
 
 		void deleteBlob(Blob &blob);
 
+		void deleteIndex(Index &index);
+
+		void deleteState(State &state);
+
 		/**
 		 * Delete multiple nodes
 		 */
@@ -84,6 +88,10 @@ namespace graph::storage {
 
 		void markBlobInactive(Blob &blob);
 
+		void markIndexInactive(Index &index);
+
+		void markStateInactive(State &state);
+
 		/**
 		 * Check if a node is inactive
 		 */
@@ -107,6 +115,10 @@ namespace graph::storage {
 		uint64_t findSegmentForPropertyId(int64_t id) const;
 
 		uint64_t findSegmentForBlobId(int64_t id) const;
+
+		uint64_t findSegmentForIndexId(int64_t id) const;
+
+		uint64_t findSegmentForStateId(int64_t id) const;
 
 		/**
 		 * Analyze segment fragmentation for the given entity type

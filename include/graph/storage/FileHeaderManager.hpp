@@ -13,6 +13,7 @@
 #include <fstream>
 #include <memory>
 #include "SegmentTracker.hpp"
+#include "SegmentType.hpp"
 #include "StorageHeaders.hpp"
 
 namespace graph::storage {
@@ -29,6 +30,10 @@ namespace graph::storage {
 
 		// Write updated file header
 		void updateFileHeader(const FileHeader &header) const;
+
+		template<typename MaxIdType>
+		static void updateMaxIdForSegment(const std::shared_ptr<SegmentTracker> &tracker, SegmentType segmentType,
+								   MaxIdType &maxId);
 
 		// Update max IDs based on current segment state
 		void updateFileHeaderMaxIds(const std::shared_ptr<SegmentTracker> &tracker);

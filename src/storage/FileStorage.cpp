@@ -94,6 +94,7 @@ namespace graph::storage {
 		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,
 													spaceManager);
 		dataManager->initialize();
+		dataManager->setDeletionFlagReference(&deleteOperationPerformed);
 
 		// Always set up auto-flush callback
 		dataManager->setAutoFlushCallback([this]() { this->flush(); });
@@ -946,8 +947,6 @@ namespace graph::storage {
 		}
 		auto node = dataManager->getNode(nodeId);
 		dataManager->deleteNode(node);
-		// Set the flag if deletion was successful
-		deleteOperationPerformed.store(true);
 	}
 
 	void FileStorage::deleteEdge(int64_t edgeId) {
@@ -956,8 +955,6 @@ namespace graph::storage {
 		}
 		auto edge = dataManager->getEdge(edgeId);
 		dataManager->deleteEdge(edge);
-		// Set the flag if deletion was successful
-		deleteOperationPerformed.store(true);
 	}
 
 	void FileStorage::beginWrite() {

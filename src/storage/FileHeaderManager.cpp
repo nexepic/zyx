@@ -66,36 +66,25 @@ namespace graph::storage {
 		fileHeader_ = header;
 	}
 
+	template <typename MaxIdType>
+	void FileHeaderManager::updateMaxIdForSegment(const std::shared_ptr<SegmentTracker> &tracker,
+	                                              SegmentType segmentType, MaxIdType &maxId) {
+	    uint64_t segment = tracker->getChainHead(toUnderlying(segmentType));
+	    while (segment != 0) {
+	        SegmentHeader segHeader = tracker->getSegmentHeader(segment);
+	        int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
+	        maxId = segmentMaxId; // Update max ID
+	        segment = segHeader.next_segment_offset;
+	    }
+	}
+
 	void FileHeaderManager::updateFileHeaderMaxIds(const std::shared_ptr<SegmentTracker> &tracker) {
-		// Scan node segments to find max node ID
-		uint64_t nodeSegment = tracker->getChainHead(0);
-		while (nodeSegment != 0) {
-			SegmentHeader segHeader = tracker->getSegmentHeader(nodeSegment);
-			int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
-			// maxNodeId = std::max(maxNodeId, segmentMaxId);
-			maxNodeId = segmentMaxId;
-			nodeSegment = segHeader.next_segment_offset;
-		}
-
-		// Scan edge segments to find max edge ID
-		uint64_t edgeSegment = tracker->getChainHead(1);
-		while (edgeSegment != 0) {
-			SegmentHeader segHeader = tracker->getSegmentHeader(edgeSegment);
-			int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
-			// maxEdgeId = std::max(maxEdgeId, segmentMaxId);
-			maxEdgeId = segmentMaxId;
-			edgeSegment = segHeader.next_segment_offset;
-		}
-
-		// Scan blob segments to find max blob ID (if you track blob IDs similarly)
-		uint64_t blobSegment = tracker->getChainHead(3);
-		while (blobSegment != 0) {
-			SegmentHeader segHeader = tracker->getSegmentHeader(blobSegment);
-			int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
-			// maxBlobId = std::max(maxBlobId, segmentMaxId);
-			maxBlobId = segmentMaxId;
-			blobSegment = segHeader.next_segment_offset;
-		}
+	    updateMaxIdForSegment(tracker, SegmentType::Node, maxNodeId);
+	    updateMaxIdForSegment(tracker, SegmentType::Edge, maxEdgeId);
+	    updateMaxIdForSegment(tracker, SegmentType::Property, maxPropId);
+	    updateMaxIdForSegment(tracker, SegmentType::Blob, maxBlobId);
+	    updateMaxIdForSegment(tracker, SegmentType::Index, maxIndexId);
+	    updateMaxIdForSegment(tracker, SegmentType::State, maxStateId);
 	}
 
 	void FileHeaderManager::initializeFileHeader() const {
