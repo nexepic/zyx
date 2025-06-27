@@ -86,7 +86,7 @@ namespace graph::query::indexes {
 
 	int IndexBuilder::getProgress() const { return progress_; }
 
-	bool IndexBuilder::waitForCompletion(std::chrono::seconds timeout) {
+	bool IndexBuilder::waitForCompletion(std::chrono::seconds timeout) const {
 		if (!buildTask_.valid()) {
 			return true; // No task running
 		}
@@ -102,7 +102,7 @@ namespace graph::query::indexes {
 			if (buildTask_.valid()) {
 				try {
 					buildTask_.wait();
-				} catch (const std::exception &e) {
+				} catch ([[maybe_unused]] const std::exception &e) {
 					// Log exception if needed
 				}
 			}
@@ -195,7 +195,7 @@ namespace graph::query::indexes {
 				progress_ = 100;
 				return true;
 			}
-		} catch (const std::exception &e) {
+		} catch ([[maybe_unused]] const std::exception &e) {
 			// Log exception if needed
 			status_ = IndexBuildStatus::FAILED;
 			return false;
@@ -238,9 +238,6 @@ namespace graph::query::indexes {
 					break;
 			}
 
-			// Persist the index
-			// labelIndex->flush();
-
 			if (cancelRequested_) {
 				status_ = IndexBuildStatus::FAILED;
 				return false;
@@ -249,7 +246,7 @@ namespace graph::query::indexes {
 				progress_ = 100;
 				return true;
 			}
-		} catch (const std::exception &e) {
+		} catch ([[maybe_unused]] const std::exception &e) {
 			// Log exception if needed
 			status_ = IndexBuildStatus::FAILED;
 			return false;
@@ -292,9 +289,6 @@ namespace graph::query::indexes {
 					break;
 			}
 
-			// Persist the index
-			propertyIndex->flush();
-
 			if (cancelRequested_) {
 				status_ = IndexBuildStatus::FAILED;
 				return false;
@@ -303,16 +297,18 @@ namespace graph::query::indexes {
 				progress_ = 100;
 				return true;
 			}
-		} catch (const std::exception &e) {
+		} catch ([[maybe_unused]] const std::exception &e) {
 			// Log exception if needed
 			status_ = IndexBuildStatus::FAILED;
 			return false;
 		}
 	}
 
-	void IndexBuilder::processNodeBatch(std::vector<int64_t> &nodeIds, std::shared_ptr<LabelIndex> labelIndex,
-										std::shared_ptr<PropertyIndex> propertyIndex,
-										std::shared_ptr<FullTextIndex> fullTextIndex, const std::string &propertyKey) {
+	void IndexBuilder::processNodeBatch(const std::vector<int64_t> &nodeIds,
+										const std::shared_ptr<LabelIndex> &labelIndex,
+										const std::shared_ptr<PropertyIndex> &propertyIndex,
+										const std::shared_ptr<FullTextIndex> &fullTextIndex,
+										const std::string &propertyKey) const {
 		// Get nodes in batch to minimize memory usage
 		auto nodeBatch = dataManager_->getNodeBatch(nodeIds);
 
@@ -362,8 +358,8 @@ namespace graph::query::indexes {
 		}
 	}
 
-	void IndexBuilder::processEdgeBatch(std::vector<int64_t> &edgeIds,
-										std::shared_ptr<RelationshipIndex> relationshipIndex) {
+	void IndexBuilder::processEdgeBatch(const std::vector<int64_t> &edgeIds,
+										const std::shared_ptr<RelationshipIndex> &relationshipIndex) const {
 		// Get edges in batch to minimize memory usage
 		auto edgeBatch = dataManager_->getEdgeBatch(edgeIds);
 

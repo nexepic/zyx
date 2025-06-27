@@ -59,7 +59,7 @@ namespace graph::query::indexes {
 		 * @param rootId ID of the current root node
 		 * @return ID of the new root node
 		 */
-		int64_t clear(int64_t rootId);
+		void clear(int64_t rootId);
 
 		/**
 		 * Inserts a key-value pair into the tree

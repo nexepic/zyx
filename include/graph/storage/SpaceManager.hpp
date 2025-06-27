@@ -10,15 +10,16 @@
 
 #pragma once
 
-#include "EntityReferenceUpdater.hpp"
-#include "FileHeaderManager.hpp"
-#include "IDAllocator.hpp"
 #include <cstdint>
 #include <fstream>
 #include <functional>
 #include <mutex>
 #include <vector>
+#include "EntityReferenceUpdater.hpp"
+#include "FileHeaderManager.hpp"
+#include "IDAllocator.hpp"
 #include "SegmentTracker.hpp"
+#include "SegmentType.hpp"
 #include "StorageHeaders.hpp"
 
 namespace graph::storage {
@@ -49,6 +50,12 @@ namespace graph::storage {
 		// methods for segment merging
 		std::vector<uint64_t> findCandidatesForMerge(uint32_t type, double usageThreshold);
 		bool mergeSegments(uint32_t type, double usageThreshold);
+
+		template<typename EntityType>
+		void processEntity(uint64_t sourceOffset, uint64_t targetOffset, uint32_t i, uint32_t &targetNextIndex,
+						   uint8_t *newBitmap, size_t itemSize, const SegmentHeader &sourceHeader,
+						   const SegmentHeader &targetHeader, uint32_t type);
+
 		bool mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint32_t type);
 
 		// Remove empty segments
@@ -77,6 +84,8 @@ namespace graph::storage {
 			updateFileHeaderChainHeads();
 		}
 
+		void recalculateMaxIds();
+
 	private:
 		std::mutex compactionMutex_;
 		std::atomic<bool> compactionInProgress_{false};
@@ -98,10 +107,15 @@ namespace graph::storage {
 		// Compaction thresholds and counters
 		static constexpr double COMPACTION_THRESHOLD = 0.3; // 30% inactive triggers compaction
 
+		template<typename EntityType>
+		bool compactSegment(uint64_t offset, SegmentType segmentType, size_t entitySize);
+
 		bool compactNodeSegment(uint64_t offset);
 		bool compactEdgeSegment(uint64_t offset);
 		bool compactPropertySegment(uint64_t offset);
 		bool compactBlobSegment(uint64_t offset);
+		bool compactIndexSegment(uint64_t offset);
+		bool compactStateSegment(uint64_t offset);
 		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset);
 		void updateSegmentChain(uint64_t newOffset, const SegmentHeader &info);
 		uint64_t findLastSegment() const;
@@ -123,6 +137,8 @@ namespace graph::storage {
 
 		// Find the file size by examining segment positions
 		uint64_t calculateCurrentFileSize() const;
+
+		int64_t calculateLastUsedIdInSegment(const SegmentHeader& header);
 	};
 
 } // namespace graph::storage

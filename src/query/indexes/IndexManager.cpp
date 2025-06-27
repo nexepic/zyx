@@ -175,21 +175,19 @@ namespace graph::query::indexes {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		if (indexType == "label") {
-			labelIndex_->clear();
-			labelIndex_->flush();
+			labelIndex_->drop();
 			indexConfig_.labelIndexEnabled = false;
 			return true;
 		} else if (indexType == "property") {
 			if (key.empty()) {
 				// Drop all property indexes
-				propertyIndex_->clear();
+				propertyIndex_->drop();
 				indexConfig_.propertyIndexKeys.clear();
 			} else {
 				// Drop specific property key index
-				propertyIndex_->clearKey(key);
+				propertyIndex_->dropKey(key);
 				indexConfig_.propertyIndexKeys.erase(key);
 			}
-			propertyIndex_->flush();
 			return true;
 		} else if (indexType == "relationship") {
 			relationshipIndex_->clear();

@@ -345,6 +345,42 @@ namespace graph {
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
 			}
+		} else if (command == "findNodesByProperty") {
+			std::string key, value;
+			std::cout << "Enter property key to search for: ";
+			std::getline(std::cin, key);
+
+			if (key.empty()) {
+				std::cout << "Property key cannot be empty\n";
+				return;
+			}
+
+			std::cout << "Enter property value to search for: ";
+			std::getline(std::cin, value);
+
+			std::cout << "Searching for nodes with property '" << key << "' and value '" << value << "'...\n";
+			try {
+				auto result = db.getQueryEngine()->findNodesByProperty(key, value);
+
+				const auto &nodes = result.getNodes();
+				if (nodes.empty()) {
+					std::cout << "No nodes found with property '" << key << "' and value '" << value << "'\n";
+				} else {
+					std::cout << "Found " << nodes.size() << " node(s):\n";
+					for (const auto &node: nodes) {
+						std::cout << "ID: " << node.getId() << ", Label: " << node.getLabel();
+
+						// Show property count if available
+						const auto &props = node.getProperties();
+						if (!props.empty()) {
+							std::cout << " (" << props.size() << " properties)";
+						}
+						std::cout << "\n";
+					}
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
 		} else if (command == "addEdge") {
 			int from, to;
 			std::string relation;
@@ -440,6 +476,7 @@ namespace graph {
 					  << "  queryEdge      - Look up an edge by ID\n"
 					  << "  listNodes      - List all nodes\n"
 					  << "  findNodesByLabel    - Find nodes with a specific label\n"
+					  << "  findNodesByProperty - Find nodes with a specific property\n"
 					  << "  createLabelIndex    - Create an index on node labels\n"
 					  << "  createPropertyIndex - Create an index on a specific property key\n"
 					  << "  dropIndex           - Remove an index\n"

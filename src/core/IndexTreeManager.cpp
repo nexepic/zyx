@@ -27,7 +27,7 @@ namespace graph::query::indexes {
 		return createNewNode(storage::Index::NodeType::LEAF);
 	}
 
-	int64_t IndexTreeManager::clear(int64_t rootId) {
+	void IndexTreeManager::clear(int64_t rootId) {
 		std::unique_lock lock(mutex_);
 
 		if (rootId != 0) {
@@ -50,8 +50,8 @@ namespace graph::query::indexes {
 			}
 		}
 
-		// Create a new root node
-		return createNewNode(storage::Index::NodeType::LEAF);
+		// // Create a new root node
+		// return createNewNode(storage::Index::NodeType::LEAF);
 	}
 
 	int64_t IndexTreeManager::createNewNode(storage::Index::NodeType type) {

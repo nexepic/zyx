@@ -38,6 +38,58 @@ namespace graph::query::indexes {
 		boolRoots_ = deserializeRootMap(STATE_BOOL_ROOTS_KEY);
 	}
 
+	// Clear a specific property key from all type indexes
+	void PropertyIndex::clearKey(const std::string &key) {
+		std::unique_lock lock(mutex_);
+
+		// Remove from string index
+		auto strIt = stringRoots_.find(key);
+		if (strIt != stringRoots_.end()) {
+			stringTreeManager_->clear(strIt->second);
+			stringRoots_.erase(strIt);
+		}
+
+		// Remove from int index
+		auto intIt = intRoots_.find(key);
+		if (intIt != intRoots_.end()) {
+			intTreeManager_->clear(intIt->second);
+			intRoots_.erase(intIt);
+		}
+
+		// Remove from double index
+		auto doubleIt = doubleRoots_.find(key);
+		if (doubleIt != doubleRoots_.end()) {
+			doubleTreeManager_->clear(doubleIt->second);
+			doubleRoots_.erase(doubleIt);
+		}
+
+		// Remove from bool index
+		auto boolIt = boolRoots_.find(key);
+		if (boolIt != boolRoots_.end()) {
+			boolTreeManager_->clear(boolIt->second);
+			boolRoots_.erase(boolIt);
+		}
+	}
+
+	void PropertyIndex::dropKey(const std::string &key) {
+		// Clear the specific key from all type indexes
+		clearKey(key);
+
+		// Check if all root maps are empty before removing state
+		if (stringRoots_.empty()) {
+			StateRegistry::getDataManager()->removeState(STATE_STRING_ROOTS_KEY);
+		}
+		if (intRoots_.empty()) {
+			StateRegistry::getDataManager()->removeState(STATE_INT_ROOTS_KEY);
+		}
+		if (doubleRoots_.empty()) {
+			StateRegistry::getDataManager()->removeState(STATE_DOUBLE_ROOTS_KEY);
+		}
+		if (boolRoots_.empty()) {
+			StateRegistry::getDataManager()->removeState(STATE_BOOL_ROOTS_KEY);
+		}
+	}
+
 	void PropertyIndex::clear() {
 		std::unique_lock lock(mutex_);
 
@@ -63,6 +115,18 @@ namespace graph::query::indexes {
 		boolRoots_.clear();
 	}
 
+	void PropertyIndex::drop() {
+		// Clear all root maps
+		clear();
+
+		// Remove all state entries related to this index
+		StateRegistry::getDataManager()->removeState(STATE_STRING_ROOTS_KEY);
+		StateRegistry::getDataManager()->removeState(STATE_INT_ROOTS_KEY);
+		StateRegistry::getDataManager()->removeState(STATE_DOUBLE_ROOTS_KEY);
+		StateRegistry::getDataManager()->removeState(STATE_BOOL_ROOTS_KEY);
+		StateRegistry::getDataManager()->removeState(STATE_INDEX_ENABLED_KEY);
+	}
+
 	void PropertyIndex::flush() {
 		// Save current state to persistent storage
 		saveState();
@@ -71,18 +135,33 @@ namespace graph::query::indexes {
 	void PropertyIndex::saveState() {
 		std::shared_lock lock(mutex_);
 
+		// Convert all root IDs in root maps to permanent IDs
+		auto convertToPermanentId = [this](std::unordered_map<std::string, int64_t> &rootMap) {
+			for (auto &[key, rootId]: rootMap) {
+				if (rootId < 0) {
+					rootId = StateRegistry::getDataManager()->getIdAllocator()->allocatePermanentId(
+							rootId, storage::Index::typeId, false);
+				}
+			}
+		};
+
+		convertToPermanentId(stringRoots_);
+		convertToPermanentId(intRoots_);
+		convertToPermanentId(doubleRoots_);
+		convertToPermanentId(boolRoots_);
+
 		// Save all root maps to state
 		if (!stringRoots_.empty()) {
-		    serializeRootMap(STATE_STRING_ROOTS_KEY, stringRoots_);
+			serializeRootMap(STATE_STRING_ROOTS_KEY, stringRoots_);
 		}
 		if (!intRoots_.empty()) {
-		    serializeRootMap(STATE_INT_ROOTS_KEY, intRoots_);
+			serializeRootMap(STATE_INT_ROOTS_KEY, intRoots_);
 		}
 		if (!doubleRoots_.empty()) {
-		    serializeRootMap(STATE_DOUBLE_ROOTS_KEY, doubleRoots_);
+			serializeRootMap(STATE_DOUBLE_ROOTS_KEY, doubleRoots_);
 		}
 		if (!boolRoots_.empty()) {
-		    serializeRootMap(STATE_BOOL_ROOTS_KEY, boolRoots_);
+			serializeRootMap(STATE_BOOL_ROOTS_KEY, boolRoots_);
 		}
 	}
 
@@ -237,7 +316,7 @@ namespace graph::query::indexes {
 		return stringRoots_;
 	}
 
-	std::string PropertyIndex::valueToString(const PropertyValue &value) const {
+	std::string PropertyIndex::valueToString(const PropertyValue &value) {
 		if (std::holds_alternative<std::string>(value)) {
 			return std::get<std::string>(value);
 		} else if (std::holds_alternative<int64_t>(value)) {
@@ -291,6 +370,7 @@ namespace graph::query::indexes {
 		std::vector<std::string> keys;
 
 		// Collect keys from all type maps
+		keys.reserve(stringRoots_.size());
 		for (const auto &[key, _]: stringRoots_) {
 			keys.push_back(key);
 		}
@@ -314,39 +394,6 @@ namespace graph::query::indexes {
 		}
 
 		return keys;
-	}
-
-	// Clear a specific property key from all type indexes
-	void PropertyIndex::clearKey(const std::string &key) {
-		std::unique_lock lock(mutex_);
-
-		// Remove from string index
-		auto strIt = stringRoots_.find(key);
-		if (strIt != stringRoots_.end()) {
-			stringTreeManager_->clear(strIt->second);
-			stringRoots_.erase(strIt);
-		}
-
-		// Remove from int index
-		auto intIt = intRoots_.find(key);
-		if (intIt != intRoots_.end()) {
-			intTreeManager_->clear(intIt->second);
-			intRoots_.erase(intIt);
-		}
-
-		// Remove from double index
-		auto doubleIt = doubleRoots_.find(key);
-		if (doubleIt != doubleRoots_.end()) {
-			doubleTreeManager_->clear(doubleIt->second);
-			doubleRoots_.erase(doubleIt);
-		}
-
-		// Remove from bool index
-		auto boolIt = boolRoots_.find(key);
-		if (boolIt != boolRoots_.end()) {
-			boolTreeManager_->clear(boolIt->second);
-			boolRoots_.erase(boolIt);
-		}
 	}
 
 } // namespace graph::query::indexes

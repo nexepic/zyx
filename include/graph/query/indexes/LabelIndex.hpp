@@ -87,6 +87,8 @@ namespace graph::query::indexes {
 		 */
 		void clear();
 
+		void drop();
+
 		/**
 		 * Ensures persistence of index data
 		 */

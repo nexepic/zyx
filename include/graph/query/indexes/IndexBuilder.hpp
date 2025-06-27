@@ -61,7 +61,7 @@ namespace graph::query::indexes {
 		int getProgress() const;
 
 		// Wait for completion of the current index building task
-		bool waitForCompletion(std::chrono::seconds timeout = std::chrono::seconds(60));
+		bool waitForCompletion(std::chrono::seconds timeout = std::chrono::seconds(60)) const;
 
 		// Cancel the current index building task
 		void cancel();
@@ -86,12 +86,13 @@ namespace graph::query::indexes {
 		std::atomic<int> progress_{0};
 
 		// Process a batch of nodes for indexing
-		void processNodeBatch(std::vector<int64_t> &nodeIds, std::shared_ptr<LabelIndex> labelIndex,
-							  std::shared_ptr<PropertyIndex> propertyIndex,
-							  std::shared_ptr<FullTextIndex> fullTextIndex, const std::string &propertyKey = "");
+		void processNodeBatch(const std::vector<int64_t> &nodeIds, const std::shared_ptr<LabelIndex> &labelIndex,
+							  const std::shared_ptr<PropertyIndex> &propertyIndex,
+							  const std::shared_ptr<FullTextIndex> &fullTextIndex, const std::string &propertyKey = "") const;
 
 		// Process a batch of edges for indexing
-		void processEdgeBatch(std::vector<int64_t> &edgeIds, std::shared_ptr<RelationshipIndex> relationshipIndex);
+		void processEdgeBatch(const std::vector<int64_t> &edgeIds,
+							  const std::shared_ptr<RelationshipIndex> &relationshipIndex) const;
 
 		// Get node ID ranges from segments for efficient batch processing
 		std::vector<std::pair<int64_t, int64_t>> getNodeIdRanges() const;

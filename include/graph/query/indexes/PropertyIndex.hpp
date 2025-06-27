@@ -33,12 +33,16 @@ namespace graph::query::indexes {
 		static constexpr char STATE_BOOL_ROOTS_KEY[] = "index.property.bool_roots";
 		static constexpr char STATE_INDEX_ENABLED_KEY[] = "index.property.enabled";
 
-		PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager);
+		explicit PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager);
 
 		void saveState();
 
+		void clearKey(const std::string& key);
+		void dropKey(const std::string &key);
+
 		void initialize();
 		void clear();
+		void drop();
 		void flush();
 
 		// Add property to index
@@ -55,8 +59,6 @@ namespace graph::query::indexes {
 
 		// Check if node has property with specific value
 		bool hasPropertyValue(int64_t nodeId, const std::string &key, const PropertyValue &value) const;
-
-		void clearKey(const std::string& key);
 
 		std::vector<std::string> getIndexedKeys() const;
 
@@ -82,10 +84,10 @@ namespace graph::query::indexes {
 		const std::unordered_map<std::string, int64_t> &getRootMapForType(const PropertyValue &value) const;
 
 		// Convert property value to string key for tree storage
-		std::string valueToString(const PropertyValue &value) const;
+		static std::string valueToString(const PropertyValue &value);
 
-		void serializeRootMap(const std::string& stateKey, const std::unordered_map<std::string, int64_t>& rootMap);
-		std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string& stateKey);
+		static void serializeRootMap(const std::string &stateKey, const std::unordered_map<std::string, int64_t> &rootMap);
+		static std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string& stateKey);
 	};
 
 } // namespace graph::query::indexes

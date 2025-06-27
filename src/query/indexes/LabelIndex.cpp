@@ -37,10 +37,18 @@ namespace graph::query::indexes {
 	void LabelIndex::clear() {
 		std::unique_lock lock(mutex_);
 		if (rootId_ != 0) {
-			rootId_ = treeManager_->clear(rootId_);
+			treeManager_->clear(rootId_);
 			// After clearing, reset rootId to 0
 			rootId_ = 0;
 		}
+	}
+
+	void LabelIndex::drop() {
+		// Clear the index and reset rootId
+		clear();
+
+		// Remove the rootId from state registry
+		StateRegistry::getDataManager()->removeState(STATE_KEY_ROOT_ID);
 	}
 
 	void LabelIndex::saveState() {
