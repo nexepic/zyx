@@ -9,6 +9,7 @@
  **/
 
 #include "graph/core/Blob.hpp"
+#include <cstring>
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 

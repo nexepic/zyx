@@ -10,9 +10,7 @@
 
 #pragma once
 
-#include <atomic>
 #include <cstdint>
-#include <cstring>
 #include <iosfwd>
 #include <memory>
 #include <string>

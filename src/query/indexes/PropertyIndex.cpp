@@ -9,6 +9,8 @@
  **/
 
 #include "graph/query/indexes/PropertyIndex.hpp"
+#include <algorithm>
+#include <cmath>
 
 namespace graph::query::indexes {
 

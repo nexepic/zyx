@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <fstream>
 #include <functional>
@@ -138,7 +139,7 @@ namespace graph::storage {
 		// Find the file size by examining segment positions
 		uint64_t calculateCurrentFileSize() const;
 
-		int64_t calculateLastUsedIdInSegment(const SegmentHeader& header);
+		int64_t calculateLastUsedIdInSegment(const SegmentHeader &header);
 	};
 
 } // namespace graph::storage

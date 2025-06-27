@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
-#include <graph/storage/DataManager.hpp>
+#include "graph/storage/DataManager.hpp"
 #include <iostream>
 #include <unordered_set>
 #include "graph/storage/SegmentType.hpp"
@@ -86,7 +86,6 @@ namespace graph::storage {
 		if (type >= 0 && type <= 5) {
 			header.start_id = findMaxId(type, segmentTracker_) + 1;
 		} else {
-			std::cout << "33" << std::endl;
 			throw std::invalid_argument("Invalid segment type");
 		}
 

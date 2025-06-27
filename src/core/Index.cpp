@@ -10,6 +10,8 @@
 
 #include "graph/core/Index.hpp"
 #include <algorithm>
+#include <atomic>
+#include <cstring>
 #include <graph/core/BlobChainManager.hpp>
 #include <graph/storage/DataManager.hpp>
 #include <sstream>

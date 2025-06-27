@@ -346,7 +346,7 @@ namespace graph::query::indexes {
 			relationshipIndex_->removeEdge(edgeId);
 		} else {
 			// Add to relationship index (handles both new and updated)
-			relationshipIndex_->addEdge(edgeId, edge.getFromNodeId(), edge.getToNodeId(), edge.getLabel());
+			relationshipIndex_->addEdge(edgeId, edge.getSourceNodeId(), edge.getTargetNodeId(), edge.getLabel());
 		}
 	}
 

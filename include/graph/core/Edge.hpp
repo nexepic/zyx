@@ -81,8 +81,6 @@ namespace graph {
         // Basic getters
         [[nodiscard]] std::string getLabel() const;
         [[nodiscard]] int64_t getId() const { return metadata.id; }
-        [[nodiscard]] int64_t getFromNodeId() const { return metadata.sourceNodeId; }
-        [[nodiscard]] int64_t getToNodeId() const { return metadata.targetNodeId; }
         [[nodiscard]] bool isActive() const { return metadata.isActive; }
 
         // Node relationship accessors

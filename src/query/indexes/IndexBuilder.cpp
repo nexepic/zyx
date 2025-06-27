@@ -370,7 +370,7 @@ namespace graph::query::indexes {
 			}
 
 			// Add to relationship index
-			relationshipIndex->addEdge(edge.getId(), edge.getFromNodeId(), edge.getToNodeId(), edge.getLabel());
+			relationshipIndex->addEdge(edge.getId(), edge.getSourceNodeId(), edge.getTargetNodeId(), edge.getLabel());
 		}
 	}
 

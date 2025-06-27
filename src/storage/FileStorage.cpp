@@ -834,13 +834,13 @@ namespace graph::storage {
 
 		for (const auto &edge: edges) {
 			if (direction == "outgoing" || direction == "both") {
-				if (edge.getFromNodeId() == nodeId) {
-					connectedNodeIds.push_back(edge.getToNodeId());
+				if (edge.getSourceNodeId() == nodeId) {
+					connectedNodeIds.push_back(edge.getTargetNodeId());
 				}
 			}
 			if (direction == "incoming" || direction == "both") {
-				if (edge.getToNodeId() == nodeId) {
-					connectedNodeIds.push_back(edge.getFromNodeId());
+				if (edge.getTargetNodeId() == nodeId) {
+					connectedNodeIds.push_back(edge.getSourceNodeId());
 				}
 			}
 		}
