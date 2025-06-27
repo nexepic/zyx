@@ -258,8 +258,8 @@ namespace graph::query {
 				// Optionally include connected nodes
 				if (stringParams.find("includeNodes") != stringParams.end()) {
 					std::vector<int64_t> neededIds;
-					neededIds.push_back(it->second.getFromNodeId());
-					neededIds.push_back(it->second.getToNodeId());
+					neededIds.push_back(it->second.getSourceNodeId());
+					neededIds.push_back(it->second.getTargetNodeId());
 					auto connectedNodes = storage_->getNodes(neededIds);
 					for (auto &node: connectedNodes) {
 						result.addNode(node);
@@ -518,10 +518,10 @@ namespace graph::query {
 
 				// Check direction and connected node
 				if ((direction == "outgoing" || direction == "both") &&
-					edge.getFromNodeId() == static_cast<int64_t>(nodeId)) {
+					edge.getSourceNodeId() == static_cast<int64_t>(nodeId)) {
 					directionMatch = true;
 				} else if ((direction == "incoming" || direction == "both") &&
-						   edge.getToNodeId() == static_cast<int64_t>(nodeId)) {
+						   edge.getTargetNodeId() == static_cast<int64_t>(nodeId)) {
 					directionMatch = true;
 				}
 
@@ -534,8 +534,8 @@ namespace graph::query {
 					// Optionally include connected nodes
 					if (stringParams.find("includeNodes") != stringParams.end()) {
 						std::vector<int64_t> neededIds;
-						neededIds.push_back(edge.getFromNodeId());
-						neededIds.push_back(edge.getToNodeId());
+						neededIds.push_back(edge.getSourceNodeId());
+						neededIds.push_back(edge.getTargetNodeId());
 						auto connectedNodes = storage_->getNodes(neededIds);
 						for (auto &node: connectedNodes) {
 							result.addNode(node);
