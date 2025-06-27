@@ -14,7 +14,6 @@
 #include <graph/storage/DataManager.hpp>
 #include <sstream>
 #include <stdexcept>
-
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 

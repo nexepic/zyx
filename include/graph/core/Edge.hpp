@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include "PropertyValue.hpp"
 #include "Types.hpp"
-#include <graph/utils/Serializer.hpp>
+#include "graph/utils/Serializer.hpp"
 
 namespace graph {
 
