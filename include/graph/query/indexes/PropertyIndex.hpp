@@ -37,7 +37,7 @@ namespace graph::query::indexes {
 
 		void saveState();
 
-		void clearKey(const std::string& key);
+		void clearKey(const std::string &key);
 		void dropKey(const std::string &key);
 
 		void initialize();
@@ -64,6 +64,12 @@ namespace graph::query::indexes {
 
 		bool isEmpty() const;
 
+		bool hasKeyIndexed(const std::string &key) const {
+			std::shared_lock lock(mutex_);
+			return stringRoots_.find(key) != stringRoots_.end() || intRoots_.find(key) != intRoots_.end() ||
+				   doubleRoots_.find(key) != doubleRoots_.end() || boolRoots_.find(key) != boolRoots_.end();
+		}
+
 	private:
 		std::shared_ptr<IndexTreeManager> stringTreeManager_;
 		std::shared_ptr<IndexTreeManager> intTreeManager_;
@@ -86,8 +92,9 @@ namespace graph::query::indexes {
 		// Convert property value to string key for tree storage
 		static std::string valueToString(const PropertyValue &value);
 
-		static void serializeRootMap(const std::string &stateKey, const std::unordered_map<std::string, int64_t> &rootMap);
-		static std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string& stateKey);
+		static void serializeRootMap(const std::string &stateKey,
+									 const std::unordered_map<std::string, int64_t> &rootMap);
+		static std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string &stateKey);
 	};
 
 } // namespace graph::query::indexes

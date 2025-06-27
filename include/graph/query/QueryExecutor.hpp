@@ -39,6 +39,11 @@ namespace graph::query {
 		QueryResult executeRelationshipScan(const QueryPlan& plan);
 		QueryResult executeTraversalConnectedNodes(const QueryPlan& plan);
 		QueryResult executeTraversalShortestPath(const QueryPlan& plan);
+		QueryResult executeFullNodeScan(const QueryPlan &plan);
+		QueryResult executeFullNodeLabelScan(const QueryPlan &plan);
+		QueryResult executeFullNodePropertyScan(const QueryPlan &plan);
+		QueryResult executeFullNodeLabelPropertyScan(const QueryPlan &plan);
+		QueryResult executeFullRelationshipScan(const QueryPlan &plan);
 	};
 
 } // namespace graph::query

@@ -36,9 +36,19 @@ namespace graph::query {
 				return executeTraversalConnectedNodes(plan);
 			case QueryPlan::OperationType::TRAVERSAL_SHORTEST_PATH:
 				return executeTraversalShortestPath(plan);
+			case QueryPlan::OperationType::FULL_NODE_SCAN:
+				return executeFullNodeScan(plan);
+			case QueryPlan::OperationType::FULL_NODE_LABEL_SCAN:
+				return executeFullNodeLabelScan(plan);
+			case QueryPlan::OperationType::FULL_NODE_PROPERTY_SCAN:
+				return executeFullNodePropertyScan(plan);
+			case QueryPlan::OperationType::FULL_NODE_LABEL_PROPERTY_SCAN:
+				return executeFullNodeLabelPropertyScan(plan);
+			case QueryPlan::OperationType::FULL_RELATIONSHIP_SCAN:
+				return executeFullRelationshipScan(plan);
 			default:
 				// Unknown operation type
-				return QueryResult();
+				return {};
 		}
 	}
 
@@ -320,8 +330,8 @@ namespace graph::query {
 			return result; // Missing node IDs
 		}
 
-		int64_t startNodeId = static_cast<int64_t>(startNodeIdIt->second);
-		int64_t endNodeId = static_cast<int64_t>(endNodeIdIt->second);
+		auto startNodeId = static_cast<int64_t>(startNodeIdIt->second);
+		auto endNodeId = static_cast<int64_t>(endNodeIdIt->second);
 
 		int maxDepth = 10; // Default
 		auto maxDepthIt = doubleParams.find("maxDepth");
@@ -342,6 +352,197 @@ namespace graph::query {
 		auto pathNodes = traversalQuery->findShortestPath(startNodeId, endNodeId, maxDepth, direction);
 		for (const auto &node: pathNodes) {
 			result.addNode(node);
+		}
+
+		return result;
+	}
+
+	QueryResult QueryExecutor::executeFullNodeScan(const QueryPlan &plan) {
+		QueryResult result;
+
+		// Get maximum node ID to determine scan range
+		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
+
+		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
+			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
+			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+
+			for (auto &node: nodes) {
+				result.addNode(node);
+			}
+		}
+
+		return result;
+	}
+
+	QueryResult QueryExecutor::executeFullNodeLabelScan(const QueryPlan &plan) {
+		QueryResult result;
+
+		// Get parameters
+		const auto &params = plan.getStringParams();
+		auto it = params.find("label");
+		if (it == params.end()) {
+			return result; // No label specified
+		}
+
+		const std::string &label = it->second;
+
+		// Get maximum node ID to determine scan range
+		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
+
+		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
+			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
+			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+
+			for (auto &node: nodes) {
+				if (node.getLabel() == label) {
+					result.addNode(node);
+				}
+			}
+		}
+
+		return result;
+	}
+
+	QueryResult QueryExecutor::executeFullNodePropertyScan(const QueryPlan &plan) {
+		QueryResult result;
+
+		// Get parameters
+		const auto &params = plan.getStringParams();
+		auto keyIt = params.find("key");
+		auto valueIt = params.find("value");
+
+		if (keyIt == params.end() || valueIt == params.end()) {
+			return result; // Missing parameters
+		}
+
+		const std::string &key = keyIt->second;
+		const std::string &value = valueIt->second;
+
+		// Get maximum node ID to determine scan range
+		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
+
+		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
+			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
+			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+
+			for (auto &node: nodes) {
+				auto properties = storage_->getDataManager()->getNodeProperties(node.getId());
+				auto propIt = properties.find(key);
+
+				if (propIt != properties.end() && (std::holds_alternative<std::string>(propIt->second) &&
+												   std::get<std::string>(propIt->second) == value)) {
+					result.addNode(node);
+				}
+			}
+		}
+
+		return result;
+	}
+
+	QueryResult QueryExecutor::executeFullNodeLabelPropertyScan(const QueryPlan &plan) {
+		QueryResult result;
+
+		// Get parameters
+		const auto &params = plan.getStringParams();
+		auto labelIt = params.find("label");
+		auto keyIt = params.find("key");
+		auto valueIt = params.find("value");
+
+		if (labelIt == params.end() || keyIt == params.end() || valueIt == params.end()) {
+			return result; // Missing parameters
+		}
+
+		const std::string &label = labelIt->second;
+		const std::string &key = keyIt->second;
+		const std::string &value = valueIt->second;
+
+		// Get maximum node ID to determine scan range
+		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
+
+		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
+			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
+			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+
+			for (auto &node: nodes) {
+				// Check label first (cheaper operation)
+				if (node.getLabel() == label) {
+					auto properties = storage_->getDataManager()->getNodeProperties(node.getId());
+					auto propIt = properties.find(key);
+
+					if (propIt != properties.end() && (std::holds_alternative<std::string>(propIt->second) &&
+													   std::get<std::string>(propIt->second) == value)) {
+						result.addNode(node);
+					}
+				}
+			}
+		}
+
+		return result;
+	}
+
+	QueryResult QueryExecutor::executeFullRelationshipScan(const QueryPlan &plan) {
+		QueryResult result;
+
+		// Get parameters
+		const auto &stringParams = plan.getStringParams();
+		const auto &uint64Params = plan.getUint64Params();
+
+		auto nodeIdIt = uint64Params.find("nodeId");
+		auto labelIt = stringParams.find("label");
+		auto directionIt = stringParams.find("direction");
+
+		// Early return if we can't find the node ID
+		if (nodeIdIt == uint64Params.end()) {
+			return result;
+		}
+
+		uint64_t nodeId = nodeIdIt->second;
+		std::string label = (labelIt != stringParams.end()) ? labelIt->second : "";
+		std::string direction = (directionIt != stringParams.end()) ? directionIt->second : "outgoing";
+
+		// Get maximum edge ID to determine scan range
+		int64_t maxEdgeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxEdgeId();
+		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
+
+		for (int64_t startId = 1; startId <= maxEdgeId; startId += BATCH_SIZE) {
+			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxEdgeId);
+			auto edges = storage_->getDataManager()->getEdgesInRange(startId, endId);
+
+			for (auto &edge: edges) {
+				bool directionMatch = false;
+
+				// Check direction and connected node
+				if ((direction == "outgoing" || direction == "both") &&
+					edge.getFromNodeId() == static_cast<int64_t>(nodeId)) {
+					directionMatch = true;
+				} else if ((direction == "incoming" || direction == "both") &&
+						   edge.getToNodeId() == static_cast<int64_t>(nodeId)) {
+					directionMatch = true;
+				}
+
+				// Check label if specified
+				bool labelMatch = label.empty() || edge.getLabel() == label;
+
+				if (directionMatch && labelMatch) {
+					result.addEdge(edge);
+
+					// Optionally include connected nodes
+					if (stringParams.find("includeNodes") != stringParams.end()) {
+						std::vector<int64_t> neededIds;
+						neededIds.push_back(edge.getFromNodeId());
+						neededIds.push_back(edge.getToNodeId());
+						auto connectedNodes = storage_->getNodes(neededIds);
+						for (auto &node: connectedNodes) {
+							result.addNode(node);
+						}
+					}
+				}
+			}
 		}
 
 		return result;

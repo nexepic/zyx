@@ -16,44 +16,89 @@ namespace graph::query {
 		indexManager_(std::move(indexManager)) {}
 
 	QueryPlan QueryPlanner::createPlanForLabelQuery(const std::string &label) {
-		QueryPlan plan(QueryPlan::OperationType::LABEL_SCAN);
-		plan.addParameter("label", label);
-		return plan;
-	}
+        // Check if label index exists
+        if (indexManager_->getLabelIndex() && !indexManager_->getLabelIndex()->isEmpty()) {
+            QueryPlan plan(QueryPlan::OperationType::LABEL_SCAN);
+            plan.addParameter("label", label);
+            return plan;
+        } else {
+            // Fallback to full scan
+            QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_SCAN);
+            plan.addParameter("label", label);
+            return plan;
+        }
+    }
 
 	QueryPlan QueryPlanner::createPlanForPropertyQuery(const std::string &key, const std::string &value) {
-		QueryPlan plan(QueryPlan::OperationType::PROPERTY_SCAN);
-		plan.addParameter("key", key);
-		plan.addParameter("value", value);
-		return plan;
-	}
-
-	QueryPlan QueryPlanner::createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
-															   const std::string &value) {
-		// Determine which index is more selective (has fewer matching nodes)
-		auto labelNodeIds = indexManager_->findNodeIdsByLabel(label);
-		auto propertyNodeIds = indexManager_->findNodeIdsByProperty(key, value);
-
-		// In a more sophisticated implementation, we would use statistics to make this decision
-		// For simplicity, we'll just compare the number of matching nodes
-		if (labelNodeIds.size() <= propertyNodeIds.size()) {
-			// Label index is more selective, use label scan first
-			QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
-			plan.addParameter("label", label);
+		// Check if property index exists for this key
+		auto propertyIndex = indexManager_->getPropertyIndex();
+		if (propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key)) {
+			QueryPlan plan(QueryPlan::OperationType::PROPERTY_SCAN);
 			plan.addParameter("key", key);
 			plan.addParameter("value", value);
-			plan.addParameter("scanType", "labelFirst");
 			return plan;
 		} else {
-			// Property index is more selective, use property scan first
-			QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
-			plan.addParameter("label", label);
+			// Fallback to full scan
+			QueryPlan plan(QueryPlan::OperationType::FULL_NODE_PROPERTY_SCAN);
 			plan.addParameter("key", key);
 			plan.addParameter("value", value);
-			plan.addParameter("scanType", "propertyFirst");
 			return plan;
 		}
 	}
+
+	QueryPlan QueryPlanner::createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
+                                                           const std::string &value) {
+        auto labelIndex = indexManager_->getLabelIndex();
+        auto propertyIndex = indexManager_->getPropertyIndex();
+        bool hasLabelIndex = labelIndex && !labelIndex->isEmpty();
+        bool hasPropertyIndex = propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key);
+
+        if (hasLabelIndex && hasPropertyIndex) {
+            // Determine which index is more selective
+            auto labelNodeIds = indexManager_->findNodeIdsByLabel(label);
+            auto propertyNodeIds = indexManager_->findNodeIdsByProperty(key, value);
+
+            // Use the index that returns fewer matches
+            if (labelNodeIds.size() <= propertyNodeIds.size()) {
+                QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
+                plan.addParameter("label", label);
+                plan.addParameter("key", key);
+                plan.addParameter("value", value);
+                plan.addParameter("scanType", "labelFirst");
+                return plan;
+            } else {
+                QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
+                plan.addParameter("label", label);
+                plan.addParameter("key", key);
+                plan.addParameter("value", value);
+                plan.addParameter("scanType", "propertyFirst");
+                return plan;
+            }
+        } else if (hasLabelIndex) {
+            // Only label index exists, use label scan with property filter
+            QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
+            plan.addParameter("label", label);
+            plan.addParameter("key", key);
+            plan.addParameter("value", value);
+            plan.addParameter("scanType", "labelFirst");
+            return plan;
+        } else if (hasPropertyIndex) {
+            // Only property index exists, use property scan with label filter
+            QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
+            plan.addParameter("label", label);
+            plan.addParameter("key", key);
+            plan.addParameter("value", value);
+            plan.addParameter("scanType", "propertyFirst");
+            return plan;
+        } else {
+            // No indexes, full scan
+            QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_PROPERTY_SCAN);
+            plan.addParameter("label", label);
+            plan.addParameter("key", key);
+            plan.addParameter("value", value);
+            return plan;
+        }
+    }
 
 	QueryPlan QueryPlanner::createPlanForPropertyRangeQuery(const std::string &key, double minValue, double maxValue) {
 		QueryPlan plan(QueryPlan::OperationType::PROPERTY_RANGE_SCAN);
