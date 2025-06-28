@@ -13,8 +13,9 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <graph/query/indexes/LabelIndex.hpp>
+#include <filesystem>
 #include "graph/core/IndexTreeManager.hpp"
+#include "graph/query/indexes/LabelIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 namespace graph::storage::test {
