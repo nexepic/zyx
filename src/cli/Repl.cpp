@@ -396,7 +396,7 @@ namespace graph {
 				auto transaction = db.beginTransaction();
 
 				Edge newEdge = transaction.insertEdge(from, to, relation);
-				transaction.commit();
+				// transaction.commit();
 				std::cout << "Added edge with ID: " << newEdge.getId() << "\n";
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
@@ -437,8 +437,8 @@ namespace graph {
 				if (edge.getId() == 0) {
 					std::cout << "Edge not found\n";
 				} else {
-					std::cout << "Edge ID: " << edge.getId() << ", From: " << edge.getFromNodeId()
-							  << ", To: " << edge.getToNodeId() << ", Relation: " << edge.getLabel() << "\n";
+					std::cout << "Edge ID: " << edge.getId() << ", From: " << edge.getSourceNodeId()
+							  << ", To: " << edge.getTargetNodeId() << ", Relation: " << edge.getLabel() << "\n";
 				}
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
