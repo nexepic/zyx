@@ -10,17 +10,17 @@
 
 #pragma once
 
-#include <cstdint>
 #include <iosfwd>
 #include <memory>
 #include <string>
 #include <vector>
 #include "Types.hpp"
+#include "graph/core/Entity.hpp"
 
 namespace graph::storage {
 	class DataManager;
 
-	class Index {
+	class Index : public EntityBase<Index> {
 	public:
 		// Enum to distinguish between internal nodes and leaf nodes
 		enum class NodeType : uint8_t { INTERNAL = 0, LEAF = 1 };
@@ -48,22 +48,20 @@ namespace graph::storage {
 		static constexpr size_t TOTAL_INDEX_SIZE = 256; // Larger size for index nodes
 		static constexpr size_t METADATA_SIZE = sizeof(Metadata);
 		static constexpr size_t DATA_SIZE = TOTAL_INDEX_SIZE - METADATA_SIZE;
-
-		// For entity type system
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Index);
 
 		// Constructor for a new index entity
 		Index(int64_t id, NodeType type, uint32_t indexType);
 		Index() = default;
 
-		// Basic getters/setters for metadata
-		int64_t getId() const { return metadata.id; }
-		void setId(int64_t newId) { metadata.id = newId; }
+		// Metadata access for CRTP
+		const Metadata &getMetadata() const { return metadata; }
+		Metadata &getMutableMetadata() { return metadata; }
+
+		// Specialized getters/setters
 		NodeType getNodeType() const { return metadata.nodeType; }
 		uint32_t getIndexType() const { return metadata.indexType; }
 		bool isLeaf() const { return metadata.nodeType == NodeType::LEAF; }
-		bool isActive() const { return metadata.isActive; }
-		void markInactive() { metadata.isActive = false; }
 		uint32_t getKeyCount() const { return metadata.keyCount; }
 		uint8_t getLevel() const { return metadata.level; }
 		void setLevel(uint8_t level) { metadata.level = level; }
@@ -78,13 +76,8 @@ namespace graph::storage {
 		void setNextLeafId(int64_t id) { metadata.nextLeafId = id; }
 		void setPrevLeafId(int64_t id) { metadata.prevLeafId = id; }
 
-		// For checking if temporary
-		bool hasTemporaryId() const;
-		void setPermanentId(int64_t permanentId);
-
-		// For serialization
-		void serialize(std::ostream &os) const;
-		static Index deserialize(std::istream &is);
+		// The rest of the Index implementation...
+		// ... (keep the original functionality)
 
 		// For B+Tree operations with strings as keys (for label index)
 		bool insertStringKey(const std::string &key, int64_t value);
@@ -101,6 +94,10 @@ namespace graph::storage {
 		static constexpr size_t getTotalSize() { return TOTAL_INDEX_SIZE; }
 
 		uint32_t getChildCount() const { return metadata.childCount; }
+
+		// Serialization
+		void serialize(std::ostream &os) const;
+		static Index deserialize(std::istream &is);
 
 		// Internal helpers for string key operations
 		struct KeyValuePair {

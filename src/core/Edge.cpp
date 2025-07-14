@@ -40,15 +40,6 @@ namespace graph {
 		return {labelBuffer};
 	}
 
-	bool Edge::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(metadata.id); }
-
-	void Edge::setPermanentId(int64_t permanentId) {
-		if (!hasTemporaryId()) {
-			throw std::runtime_error("Cannot set permanent ID for edge that already has one");
-		}
-		metadata.id = permanentId;
-	}
-
 	void Edge::addProperty(const std::string &key, const PropertyValue &value) { properties[key] = value; }
 
 	bool Edge::hasProperty(const std::string &key) const { return properties.count(key) > 0; }

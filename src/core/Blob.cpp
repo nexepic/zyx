@@ -31,15 +31,6 @@ namespace graph {
 		return size <= CHUNK_SIZE;
 	}
 
-	bool Blob::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(metadata.id); }
-
-	void Blob::setPermanentId(int64_t permanentId) {
-		if (!hasTemporaryId()) {
-			throw std::runtime_error("Cannot set permanent ID for blob that already has one");
-		}
-		metadata.id = permanentId;
-	}
-
 	void Blob::serialize(std::ostream &os) const {
 		utils::Serializer::writePOD(os, metadata.id);
 		utils::Serializer::writePOD(os, metadata.isActive);

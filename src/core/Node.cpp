@@ -36,15 +36,6 @@ namespace graph {
 		return {labelBuffer};
 	}
 
-	bool Node::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(metadata.id); }
-
-	void Node::setPermanentId(int64_t permanentId) {
-		if (!hasTemporaryId()) {
-			throw std::runtime_error("Cannot set permanent ID for node that already has one");
-		}
-		metadata.id = permanentId;
-	}
-
 	void Node::setFirstOutEdgeId(int64_t edgeId) { metadata.firstOutEdgeId = edgeId; }
 
 	void Node::setFirstInEdgeId(int64_t edgeId) { metadata.firstInEdgeId = edgeId; }

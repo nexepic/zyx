@@ -14,110 +14,107 @@
 #include <unordered_map>
 #include "PropertyValue.hpp"
 #include "Types.hpp"
+#include "graph/core/Entity.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph {
 
-    class Edge {
-    public:
-        // Metadata struct to contain fixed edge data
-        struct Metadata {
-            int64_t id = 0;
-            int64_t sourceNodeId = 0;
-            int64_t targetNodeId = 0;
-            // Linked list fields for outgoing edges (from the same source node)
-            int64_t nextOutEdgeId = 0;
-            int64_t prevOutEdgeId = 0;
-            // Linked list fields for incoming edges (to the same target node)
-            int64_t nextInEdgeId = 0;
-            int64_t prevInEdgeId = 0;
-            int64_t propertyEntityId = 0;
-            uint32_t propertyStorageType = 0; // Corresponds to PropertyStorageType enum
-            bool isActive = true;
-        };
+	class Edge : public EntityBase<Edge> {
+	public:
+		// Metadata struct to contain fixed edge data
+		struct Metadata {
+			int64_t id = 0;
+			int64_t sourceNodeId = 0; // Source node of this edge
+			int64_t targetNodeId = 0; // Target node of this edge
+			int64_t nextOutEdgeId = 0; // Next outgoing edge from source
+			int64_t prevOutEdgeId = 0; // Previous outgoing edge from source
+			int64_t nextInEdgeId = 0; // Next incoming edge to target
+			int64_t prevInEdgeId = 0; // Previous incoming edge to target
+			int64_t propertyEntityId = 0; // Property entity ID (if any)
+			uint32_t propertyStorageType = 0; // How properties are stored
+			bool isActive = true;
+			// Padding is implicit
+		};
 
-        static constexpr size_t TOTAL_EDGE_SIZE = 256;
-        static constexpr size_t METADATA_SIZE = sizeof(Metadata);
-        static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_EDGE_SIZE - METADATA_SIZE;
-        static constexpr uint32_t typeId = toUnderlying(EntityType::Edge);
+		static constexpr size_t TOTAL_EDGE_SIZE = 256;
+		static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+		static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_EDGE_SIZE - METADATA_SIZE;
+		static constexpr uint32_t typeId = toUnderlying(EntityType::Edge);
 
-        static constexpr size_t getTotalSize() {
-            return TOTAL_EDGE_SIZE;
-        }
+		[[nodiscard]] size_t getSerializedSize() const;
 
-        Edge() = default;
-        Edge(int64_t id, int64_t sourceNodeId, int64_t targetNodeId, const std::string &label);
+		static constexpr size_t getTotalSize() { return TOTAL_EDGE_SIZE; }
 
-        // Linked list management methods
-        void setNextOutEdgeId(int64_t edgeId) { metadata.nextOutEdgeId = edgeId; }
-        void setPrevOutEdgeId(int64_t edgeId) { metadata.prevOutEdgeId = edgeId; }
-        void setNextInEdgeId(int64_t edgeId) { metadata.nextInEdgeId = edgeId; }
-        void setPrevInEdgeId(int64_t edgeId) { metadata.prevInEdgeId = edgeId; }
+		Edge() = default;
+		Edge(int64_t id, int64_t sourceId, int64_t targetId, const std::string &type);
 
-        [[nodiscard]] int64_t getNextOutEdgeId() const { return metadata.nextOutEdgeId; }
-        [[nodiscard]] int64_t getPrevOutEdgeId() const { return metadata.prevOutEdgeId; }
-        [[nodiscard]] int64_t getNextInEdgeId() const { return metadata.nextInEdgeId; }
-        [[nodiscard]] int64_t getPrevInEdgeId() const { return metadata.prevInEdgeId; }
+		// Metadata access for CRTP base class
+		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
+		Metadata &getMutableMetadata() { return metadata; }
 
-        // Property methods
-        void addProperty(const std::string &key, const PropertyValue &value);
-        [[nodiscard]] bool hasProperty(const std::string &key) const;
-        [[nodiscard]] PropertyValue getProperty(const std::string &key) const;
-        void removeProperty(const std::string &key);
-        [[nodiscard]] const std::unordered_map<std::string, PropertyValue>& getProperties() const;
-        [[nodiscard]] size_t getTotalPropertySize() const;
-        void clearProperties() { properties.clear(); }
+		[[nodiscard]] std::string getLabel() const;
 
-        // Property entity
-        void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType);
-        int64_t getPropertyEntityId() const { return metadata.propertyEntityId; }
-        PropertyStorageType getPropertyStorageType() const {
-            return static_cast<PropertyStorageType>(metadata.propertyStorageType);
-        }
-        bool hasPropertyEntity() const {
-            return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
-        }
+		// Node relationship getters
+		[[nodiscard]] int64_t getSourceNodeId() const { return metadata.sourceNodeId; }
+		[[nodiscard]] int64_t getTargetNodeId() const { return metadata.targetNodeId; }
 
-        // Basic getters
-        [[nodiscard]] std::string getLabel() const;
-        [[nodiscard]] int64_t getId() const { return metadata.id; }
-        [[nodiscard]] bool isActive() const { return metadata.isActive; }
+		// Node relationship setters
+		void setSourceNodeId(int64_t sourceId) { metadata.sourceNodeId = sourceId; }
+		void setTargetNodeId(int64_t targetId) { metadata.targetNodeId = targetId; }
 
-        // Node relationship accessors
-        [[nodiscard]] int64_t getSourceNodeId() const { return metadata.sourceNodeId; }
-        [[nodiscard]] int64_t getTargetNodeId() const { return metadata.targetNodeId; }
+		// Edge linking for traversal
+		[[nodiscard]] int64_t getNextOutEdgeId() const { return metadata.nextOutEdgeId; }
+		[[nodiscard]] int64_t getPrevOutEdgeId() const { return metadata.prevOutEdgeId; }
+		[[nodiscard]] int64_t getNextInEdgeId() const { return metadata.nextInEdgeId; }
+		[[nodiscard]] int64_t getPrevInEdgeId() const { return metadata.prevInEdgeId; }
 
-        // ID management
-        [[nodiscard]] bool hasTemporaryId() const;
-        void setPermanentId(int64_t permanentId);
+		void setNextOutEdgeId(int64_t edgeId) { metadata.nextOutEdgeId = edgeId; }
+		void setPrevOutEdgeId(int64_t edgeId) { metadata.prevOutEdgeId = edgeId; }
+		void setNextInEdgeId(int64_t edgeId) { metadata.nextInEdgeId = edgeId; }
+		void setPrevInEdgeId(int64_t edgeId) { metadata.prevInEdgeId = edgeId; }
 
-        // Setters
-        void setId(int64_t id) { metadata.id = id; }
-        void markInactive(bool active = false) { metadata.isActive = active; }
-        void setSourceNodeId(int64_t newSourceId) { metadata.sourceNodeId = newSourceId; }
-        void setTargetNodeId(int64_t newTargetId) { metadata.targetNodeId = newTargetId; }
+		// Property methods
+		void addProperty(const std::string &key, const PropertyValue &value);
+		[[nodiscard]] bool hasProperty(const std::string &key) const;
+		[[nodiscard]] PropertyValue getProperty(const std::string &key) const;
+		void removeProperty(const std::string &key);
+		[[nodiscard]] const std::unordered_map<std::string, PropertyValue> &getProperties() const;
+		[[nodiscard]] size_t getTotalPropertySize() const;
+		void clearProperties() { properties.clear(); }
 
-        // Serialization
-        void serialize(std::ostream& os) const;
-        static Edge deserialize(std::istream& is);
-        [[nodiscard]] size_t getSerializedSize() const;
+		// Property entity
+		void setPropertyEntityId(int64_t propertyId, PropertyStorageType storageType = PropertyStorageType::NONE);
+		[[nodiscard]] int64_t getPropertyEntityId() const { return metadata.propertyEntityId; }
+		[[nodiscard]] PropertyStorageType getPropertyStorageType() const {
+			return static_cast<PropertyStorageType>(metadata.propertyStorageType);
+		}
+		[[nodiscard]] bool hasPropertyEntity() const {
+			return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
+		}
 
-        // Metadata access for advanced usage
-        const Metadata& getMetadata() const { return metadata; }
-        Metadata& getMutableMetadata() { return metadata; }
+		// Type management
+		[[nodiscard]] std::string getType() const;
+		void setType(const std::string &type);
 
-    private:
-        // Fixed-size metadata structure
-        Metadata metadata;
+		// Active state
+		bool isActive() const { return metadata.isActive; }
+		void markInactive(bool active = false) { metadata.isActive = active; }
 
-        // Fixed-size buffer for label
-        char labelBuffer[LABEL_BUFFER_SIZE] = {0};
+		// Serialization
+		void serialize(std::ostream &os) const;
+		static Edge deserialize(std::istream &is);
 
-        // Variable-sized data (not included in the fixed-size structure)
-        std::unordered_map<std::string, PropertyValue> properties;
+	private:
+		// Fixed-size metadata structure
+		Metadata metadata;
 
-        // Helper method to set label
-        void setLabel(const std::string& label);
-    };
+		// Fixed-size buffer for label
+		char labelBuffer[LABEL_BUFFER_SIZE] = {0};
+
+		// Variable-sized structures (not included in the fixed-size structure)
+		std::unordered_map<std::string, PropertyValue> properties;
+
+		void setLabel(const std::string& label);
+	};
 
 } // namespace graph

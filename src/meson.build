@@ -1,5 +1,6 @@
 db_src = files(
 	'core/Database.cpp',
+	'core/Entity.cpp',
 	'core/Edge.cpp',
 	'core/Node.cpp',
 	'core/Property.cpp',

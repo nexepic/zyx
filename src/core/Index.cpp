@@ -30,15 +30,6 @@ namespace graph::storage {
 		metadata.level = (type == NodeType::LEAF) ? 0 : 1;
 	}
 
-	bool Index::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(metadata.id); }
-
-	void Index::setPermanentId(int64_t permanentId) {
-		if (!hasTemporaryId()) {
-			throw std::runtime_error("Cannot set permanent ID for index entity that already has one");
-		}
-		metadata.id = permanentId;
-	}
-
 	void Index::setDataStorageType(DataStorageType type) { metadata.dataStorageType = type; }
 
 	Index::DataStorageType Index::getDataStorageType() const { return metadata.dataStorageType; }

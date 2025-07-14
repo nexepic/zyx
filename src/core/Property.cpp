@@ -21,17 +21,6 @@ namespace graph {
         metadata.isActive = true;
     }
 
-    bool Property::hasTemporaryId() const {
-        return storage::IDAllocator::isTemporaryId(metadata.id);
-    }
-
-    void Property::setPermanentId(int64_t permanentId) {
-        if (!hasTemporaryId()) {
-            throw std::runtime_error("Cannot set permanent ID for property that already has one");
-        }
-        metadata.id = permanentId;
-    }
-
     void Property::addPropertyValue(const std::string &key, const PropertyValue &value) {
         values[key] = value;
     }

@@ -39,15 +39,6 @@ namespace graph {
 
 	bool State::canFitData(uint32_t dataSize) { return dataSize <= CHUNK_SIZE; }
 
-	bool State::hasTemporaryId() const { return storage::IDAllocator::isTemporaryId(metadata.id); }
-
-	void State::setPermanentId(int64_t permanentId) {
-		if (!hasTemporaryId()) {
-			throw std::runtime_error("Cannot set permanent ID for state that already has one");
-		}
-		metadata.id = permanentId;
-	}
-
 	void State::serialize(std::ostream &os) const {
 		utils::Serializer::writePOD(os, metadata.id);
 		utils::Serializer::writePOD(os, metadata.nextStateId);
