@@ -34,7 +34,7 @@ jobs:
 
       - name: Install LLVM (clang) on Windows
         if: runner.os == 'Windows'
-        run: choco install llvm --version=20.1.4
+        run: choco install llvm --version=20.1.4 --force
         shell: cmd
 
       - name: Install dependencies with Conan
