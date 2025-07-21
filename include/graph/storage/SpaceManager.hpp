@@ -79,12 +79,6 @@ namespace graph::storage {
 		// Update FileHeader chain heads based on current SegmentTracker state
 		void updateFileHeaderChainHeads();
 
-		// Validate segment chains to ensure integrity
-		void validateSegmentChains() {
-			segmentTracker_->validateSegmentChains();
-			updateFileHeaderChainHeads();
-		}
-
 		void recalculateMaxIds();
 
 	private:

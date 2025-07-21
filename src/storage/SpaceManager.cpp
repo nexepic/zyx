@@ -29,13 +29,8 @@ namespace graph::storage {
 	SpaceManager::~SpaceManager() = default;
 
 	void SpaceManager::initialize(FileHeader &header) {
-		// std::lock_guard<std::mutex> lock(mutex_);
-
 		// Initialize tracker with header
 		segmentTracker_->initialize(header);
-
-		// // Validate segment chains after initialization to ensure integrity
-		// segmentTracker_->validateSegmentChains();
 	}
 
 	uint64_t SpaceManager::findMaxId(uint32_t type, std::shared_ptr<SegmentTracker> &tracker) {

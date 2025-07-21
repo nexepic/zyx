@@ -76,9 +76,6 @@ namespace graph::storage {
 		void setNextLeafId(int64_t id) { metadata.nextLeafId = id; }
 		void setPrevLeafId(int64_t id) { metadata.prevLeafId = id; }
 
-		// The rest of the Index implementation...
-		// ... (keep the original functionality)
-
 		// For B+Tree operations with strings as keys (for label index)
 		bool insertStringKey(const std::string &key, int64_t value);
 		bool removeStringKey(const std::string &key, int64_t value);

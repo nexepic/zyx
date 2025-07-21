@@ -13,11 +13,11 @@
 #include <cstring>
 #include <functional>
 #include <graph/storage/SegmentIndexManager.hpp>
-#include <graph/storage/SegmentType.hpp>
 #include <graph/utils/ChecksumUtils.hpp>
 #include <iostream>
 #include <stdexcept>
 #include "graph/utils/FixedSizeSerializer.hpp"
+#include "graph/storage/SegmentTypeRegistry.hpp"
 
 namespace graph::storage {
 
@@ -25,16 +25,25 @@ namespace graph::storage {
 
 	SegmentTracker::~SegmentTracker() = default;
 
-	void SegmentTracker::initialize(const FileHeader &header) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
+	void SegmentTracker::initializeRegistry() {
+		SegmentTypeRegistry::registerType(EntityType::Node);
+		SegmentTypeRegistry::registerType(EntityType::Edge);
+		SegmentTypeRegistry::registerType(EntityType::Property);
+		SegmentTypeRegistry::registerType(EntityType::Blob);
+		SegmentTypeRegistry::registerType(EntityType::Index);
+		SegmentTypeRegistry::registerType(EntityType::State);
+	}
 
-		// Initialize chain heads
-		nodeSegmentHead_ = header.node_segment_head;
-		edgeSegmentHead_ = header.edge_segment_head;
-		propertySegmentHead_ = header.property_segment_head;
-		blobSegmentHead_ = header.blob_segment_head;
-		indexSegmentHead_ = header.index_segment_head;
-		stateSegmentHead_ = header.state_segment_head;
+	void SegmentTracker::initialize(const FileHeader &header) {
+		initializeRegistry();
+
+		// Initialize chain heads using registry
+		SegmentTypeRegistry::setChainHead(EntityType::Node, header.node_segment_head);
+		SegmentTypeRegistry::setChainHead(EntityType::Edge, header.edge_segment_head);
+		SegmentTypeRegistry::setChainHead(EntityType::Property, header.property_segment_head);
+		SegmentTypeRegistry::setChainHead(EntityType::Blob, header.blob_segment_head);
+		SegmentTypeRegistry::setChainHead(EntityType::Index, header.index_segment_head);
+		SegmentTypeRegistry::setChainHead(EntityType::State, header.state_segment_head);
 
 		// Clear existing cache
 		segments_.clear();
@@ -46,24 +55,11 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::loadSegments() {
-		// Scan node segments
-		loadSegmentChain(nodeSegmentHead_, toUnderlying(SegmentType::Node));
-
-		// Scan edge segments
-		loadSegmentChain(edgeSegmentHead_, toUnderlying(SegmentType::Edge));
-
-		// Scan property segments
-		loadSegmentChain(propertySegmentHead_, toUnderlying(SegmentType::Property));
-
-		// Scan blob segments
-		loadSegmentChain(blobSegmentHead_, toUnderlying(SegmentType::Blob));
-
-		// Scan index segments
-		loadSegmentChain(indexSegmentHead_, toUnderlying(SegmentType::Index));
-
-		// Scan state segments
-		loadSegmentChain(stateSegmentHead_, toUnderlying(SegmentType::State));
-	}
+        for (const auto& type : SegmentTypeRegistry::getAllTypes()) {
+            uint64_t headOffset = SegmentTypeRegistry::getChainHead(type);
+            loadSegmentChain(headOffset, toUnderlying(type));
+        }
+    }
 
 	void SegmentTracker::loadSegmentChain(uint64_t headOffset, uint32_t expectedType) {
 		uint64_t offset = headOffset;
@@ -121,92 +117,6 @@ namespace graph::storage {
 			header.inactive_count = inactive;
 			header.is_dirty = 1;
 			markSegmentDirty(offset);
-		}
-	}
-
-	void SegmentTracker::validateSegmentChains() {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		// Validate node segment chain
-		validateChain(nodeSegmentHead_, toUnderlying(SegmentType::Node));
-
-		// Validate edge segment chain
-		validateChain(edgeSegmentHead_, toUnderlying(SegmentType::Edge));
-
-		// Validate property segment chain
-		validateChain(propertySegmentHead_, toUnderlying(SegmentType::Property));
-
-		// Validate blob segment chain
-		validateChain(blobSegmentHead_, toUnderlying(SegmentType::Blob));
-
-		// Validate index segment chain
-		validateChain(indexSegmentHead_, toUnderlying(SegmentType::Index));
-
-		// Validate state segment chain
-		validateChain(stateSegmentHead_, toUnderlying(SegmentType::State));
-	}
-
-	void SegmentTracker::validateChain(uint64_t headOffset, uint32_t type) {
-		if (headOffset == 0) {
-			return; // Empty chain, nothing to validate
-		}
-
-		uint64_t current = headOffset;
-		uint64_t prev = 0;
-
-		while (current != 0) {
-			auto it = segments_.find(current);
-			if (it == segments_.end()) {
-				// Segment not in cache, try to read from disk
-				ensureSegmentCached(current);
-				it = segments_.find(current);
-
-				if (it == segments_.end()) {
-					// Still not found, chain is broken
-					if (prev == 0) {
-						// This was the head, update chain head to 0
-						updateChainHead(type, 0);
-					} else {
-						// Update previous segment to point to 0
-						updateSegmentLinks(prev, segments_[prev].prev_segment_offset, 0);
-					}
-					break;
-				}
-			}
-
-			SegmentHeader &header = it->second;
-
-			// Verify type matches
-			if (header.data_type != type) {
-				// Type mismatch, fix the chain
-				if (prev == 0) {
-					// This was the head, update chain head to next segment
-					updateChainHead(type, header.next_segment_offset);
-				} else {
-					// Update previous segment to point to next segment
-					updateSegmentLinks(prev, segments_[prev].prev_segment_offset, header.next_segment_offset);
-				}
-
-				// Remove this segment from the chain
-				if (header.next_segment_offset != 0) {
-					updateSegmentLinks(header.next_segment_offset, prev,
-									   segments_[header.next_segment_offset].next_segment_offset);
-				}
-
-				// Skip to next segment
-				current = header.next_segment_offset;
-				continue;
-			}
-
-			// Verify prev_segment_offset matches
-			if (header.prev_segment_offset != prev) {
-				// Fix prev_segment_offset
-				updateSegmentLinks(current, prev, header.next_segment_offset);
-			}
-
-			// Move to next segment
-			prev = current;
-			current = header.next_segment_offset;
 		}
 	}
 
@@ -291,49 +201,12 @@ namespace graph::storage {
 
 	uint64_t SegmentTracker::getChainHead(uint32_t type) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		switch (type) {
-			case toUnderlying(SegmentType::Node):
-				return nodeSegmentHead_;
-			case toUnderlying(SegmentType::Edge):
-				return edgeSegmentHead_;
-			case toUnderlying(SegmentType::Property):
-				return propertySegmentHead_;
-			case toUnderlying(SegmentType::Blob):
-				return blobSegmentHead_;
-			case toUnderlying(SegmentType::Index):
-				return indexSegmentHead_;
-			case toUnderlying(SegmentType::State):
-				return stateSegmentHead_;
-			default:
-				return 0;
-		}
+		return SegmentTypeRegistry::getChainHead(static_cast<EntityType>(type));
 	}
 
-	void SegmentTracker::updateChainHead(uint32_t type, uint64_t newHead) {
+	void SegmentTracker::updateChainHead(uint32_t type, uint64_t newHead) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		switch (type) {
-			case toUnderlying(SegmentType::Node):
-				nodeSegmentHead_ = newHead;
-				break;
-			case toUnderlying(SegmentType::Edge):
-				edgeSegmentHead_ = newHead;
-				break;
-			case toUnderlying(SegmentType::Property):
-				propertySegmentHead_ = newHead;
-				break;
-			case toUnderlying(SegmentType::Blob):
-				blobSegmentHead_ = newHead;
-				break;
-			case toUnderlying(SegmentType::Index):
-				indexSegmentHead_ = newHead;
-				break;
-			case toUnderlying(SegmentType::State):
-				stateSegmentHead_ = newHead;
-				break;
-			default:;
-		}
+		SegmentTypeRegistry::setChainHead(static_cast<EntityType>(type), newHead);
 	}
 
 	void SegmentTracker::updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset) {
@@ -563,16 +436,16 @@ namespace graph::storage {
 		return it->second.used - it->second.inactive_count;
 	}
 
-	uint64_t SegmentTracker::getSegmentOffsetForNodeId(int64_t nodeId) {
+	uint64_t SegmentTracker::getSegmentOffsetForEntityId(EntityType type, int64_t entityId) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		uint64_t offset = nodeSegmentHead_;
+		uint64_t offset = SegmentTypeRegistry::getChainHead(type);
 
 		while (offset != 0) {
 			SegmentHeader &header = getSegmentHeader(offset);
 
 			// Check if the ID falls within this segment's range
-			if (nodeId >= header.start_id && nodeId < header.start_id + header.capacity) {
+			if (entityId >= header.start_id && entityId < header.start_id + header.capacity) {
 				return offset;
 			}
 
@@ -580,101 +453,30 @@ namespace graph::storage {
 		}
 
 		return 0; // Not found
+	}
+
+	uint64_t SegmentTracker::getSegmentOffsetForNodeId(int64_t nodeId) {
+		return getSegmentOffsetForEntityId(EntityType::Node, nodeId);
 	}
 
 	uint64_t SegmentTracker::getSegmentOffsetForEdgeId(int64_t edgeId) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		uint64_t offset = edgeSegmentHead_;
-
-		while (offset != 0) {
-			SegmentHeader &header = getSegmentHeader(offset);
-
-			// Check if the ID falls within this segment's range
-			if (edgeId >= header.start_id && edgeId < header.start_id + header.capacity) {
-				return offset;
-			}
-
-			offset = header.next_segment_offset;
-		}
-
-		return 0; // Not found
+		return getSegmentOffsetForEntityId(EntityType::Edge, edgeId);
 	}
 
 	uint64_t SegmentTracker::getSegmentOffsetForPropId(int64_t propId) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		uint64_t offset = propertySegmentHead_;
-
-		while (offset != 0) {
-			SegmentHeader &header = getSegmentHeader(offset);
-
-			// Check if the ID falls within this segment's range
-			if (propId >= header.start_id && propId < header.start_id + header.capacity) {
-				return offset;
-			}
-
-			offset = header.next_segment_offset;
-		}
-
-		return 0; // Not found
+		return getSegmentOffsetForEntityId(EntityType::Property, propId);
 	}
 
 	uint64_t SegmentTracker::getSegmentOffsetForBlobId(int64_t blobId) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		uint64_t offset = blobSegmentHead_;
-
-		while (offset != 0) {
-			SegmentHeader &header = getSegmentHeader(offset);
-
-			// Check if the ID falls within this segment's range
-			if (blobId >= header.start_id && blobId < header.start_id + header.capacity) {
-				return offset;
-			}
-
-			offset = header.next_segment_offset;
-		}
-
-		return 0; // Not found
+		return getSegmentOffsetForEntityId(EntityType::Blob, blobId);
 	}
 
 	uint64_t SegmentTracker::getSegmentOffsetForIndexId(int64_t indexId) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		uint64_t offset = indexSegmentHead_;
-
-		while (offset != 0) {
-			SegmentHeader &header = getSegmentHeader(offset);
-
-			// Check if the ID falls within this segment's range
-			if (indexId >= header.start_id && indexId < header.start_id + header.capacity) {
-				return offset;
-			}
-
-			offset = header.next_segment_offset;
-		}
-
-		return 0; // Not found
+		return getSegmentOffsetForEntityId(EntityType::Index, indexId);
 	}
 
 	uint64_t SegmentTracker::getSegmentOffsetForStateId(int64_t stateId) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		uint64_t offset = stateSegmentHead_;
-
-		while (offset != 0) {
-			SegmentHeader &header = getSegmentHeader(offset);
-
-			// Check if the ID falls within this segment's range
-			if (stateId >= header.start_id && stateId < header.start_id + header.capacity) {
-				return offset;
-			}
-
-			offset = header.next_segment_offset;
-		}
-
-		return 0; // Not found
+		return getSegmentOffsetForEntityId(EntityType::State, stateId);
 	}
 
 	void SegmentTracker::ensureSegmentCached(uint64_t offset) {

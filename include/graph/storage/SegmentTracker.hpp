@@ -40,7 +40,7 @@ namespace graph::storage {
 		double calculateFragmentationRatio(uint32_t type) const;
 
 		uint64_t getChainHead(uint32_t type) const;
-		void updateChainHead(uint32_t type, uint64_t newHead);
+		void updateChainHead(uint32_t type, uint64_t newHead) const;
 		void updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset);
 
 		void markSegmentFree(uint64_t offset);
@@ -48,6 +48,8 @@ namespace graph::storage {
 		void removeFromFreeList(uint64_t offset);
 
 		void flushDirtySegments();
+
+		uint64_t getSegmentOffsetForEntityId(EntityType type, int64_t entityId);
 
 		// New methods for finding segments for specific entities
 		uint64_t getSegmentOffsetForNodeId(int64_t nodeId);
@@ -79,9 +81,6 @@ namespace graph::storage {
 		template<typename T>
 		void writeEntity(uint64_t segmentOffset, uint32_t itemIndex, const T &entity, size_t itemSize);
 
-		// Validate segment chains to ensure integrity
-		void validateSegmentChains();
-
 		void setSegmentIndexManager(std::weak_ptr<SegmentIndexManager> indexManager) {
 			segmentIndexManager_ = std::move(indexManager);
 		}
@@ -90,20 +89,14 @@ namespace graph::storage {
 		std::shared_ptr<std::fstream> file_;
 		mutable std::recursive_mutex mutex_;
 
-		// Chain heads (cached)
-		uint64_t nodeSegmentHead_ = 0;
-		uint64_t edgeSegmentHead_ = 0;
-		uint64_t propertySegmentHead_ = 0;
-		uint64_t blobSegmentHead_ = 0;
-		uint64_t indexSegmentHead_ = 0;
-		uint64_t stateSegmentHead_ = 0;
-
 		// Segment cache - stores actual segment headers
 		std::unordered_map<uint64_t, SegmentHeader> segments_;
 
 		std::unordered_set<uint64_t> freeSegments_;
 		std::vector<uint64_t> dirtySegments_;
 		std::weak_ptr<SegmentIndexManager> segmentIndexManager_;
+
+		static void initializeRegistry();
 
 		void loadSegments();
 
@@ -115,9 +108,6 @@ namespace graph::storage {
 
 		// Mark a segment as dirty
 		void markSegmentDirty(uint64_t offset);
-
-		// Helper method to validate a single chain
-		void validateChain(uint64_t headOffset, uint32_t type);
 	};
 
 } // namespace graph::storage
