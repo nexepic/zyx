@@ -47,7 +47,7 @@ namespace graph {
 		std::shared_ptr<query::QueryEngine> getQueryEngine() { return queryEngine; }
 
 		// Access to storage for advanced operations
-		[[nodiscard]] storage::FileStorage &getStorage() const { return *storage; }
+		[[nodiscard]] std::shared_ptr<storage::FileStorage> getStorage() const { return storage; }
 
 	private:
 		std::shared_ptr<storage::FileStorage> storage;

@@ -17,8 +17,7 @@
 namespace graph::query {
 
 	TraversalQuery::TraversalQuery(std::shared_ptr<storage::DataManager> dataManager) :
-		dataManager_(std::move(dataManager)),
-		traversal_(std::make_shared<traversal::RelationshipTraversal>(dataManager_)) {}
+		dataManager_(std::move(dataManager)), traversal_(dataManager_->getRelationshipTraversal()) {}
 
 	std::vector<Node> TraversalQuery::findConnectedNodes(int64_t startNodeId, const std::string &direction,
 														 const std::string &edgeLabel, const std::string &nodeLabel) {
@@ -70,36 +69,60 @@ namespace graph::query {
 		return result;
 	}
 
-	std::vector<Node> TraversalQuery::findShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
+	std::vector<Node> TraversalQuery::findShortestPath(int64_t startNodeId, int64_t endNodeId,
 													   const std::string &direction) {
-		// Use breadth-first search to find shortest path
-		std::queue<int64_t> queue;
-		std::unordered_set<int64_t> visited;
+		// Use Dijkstra's algorithm to find shortest path
+		std::unordered_map<int64_t, double> distances;
 		std::unordered_map<int64_t, int64_t> parentMap;
+		std::unordered_set<int64_t> visited;
 
-		queue.push(startNodeId);
-		visited.insert(startNodeId);
+		// Priority queue with pairs of (distance, nodeId)
+		// Using greater for min-heap priority queue
+		using NodeDistance = std::pair<double, int64_t>;
+		std::priority_queue<NodeDistance, std::vector<NodeDistance>, std::greater<>> pq;
+
+		// Initialize
+		pq.push({0.0, startNodeId});
+		distances[startNodeId] = 0.0;
 
 		bool found = false;
-		while (!queue.empty() && !found) {
-			int64_t currentNodeId = queue.front();
-			queue.pop();
+		while (!pq.empty() && !found) {
+			auto [currentDist, currentNodeId] = pq.top();
+			pq.pop();
 
-			// Find connected nodes
+			// Skip if we've already processed this node with a shorter path
+			if (visited.find(currentNodeId) != visited.end()) {
+				continue;
+			}
+
+			visited.insert(currentNodeId);
+
+			// Check if we found the destination
+			if (currentNodeId == endNodeId) {
+				found = true;
+				break;
+			}
+
+			// Get connected nodes and their edges
 			std::vector<Node> connectedNodes = findConnectedNodes(currentNodeId, direction);
 
 			for (const auto &node: connectedNodes) {
-				int64_t nodeId = node.getId();
-				if (visited.find(nodeId) == visited.end()) {
-					visited.insert(nodeId);
-					parentMap[nodeId] = currentNodeId;
-					queue.push(nodeId);
+				int64_t neighborId = node.getId();
+				if (visited.find(neighborId) != visited.end()) {
+					continue;
+				}
 
-					// Check if we found the destination
-					if (nodeId == endNodeId) {
-						found = true;
-						break;
-					}
+				// Get edge between current node and neighbor
+				// For simplicity, using weight 1.0 for all edges
+				// TODO: Use actual edge weights if available
+				double weight = 1.0;
+				double newDist = distances[currentNodeId] + weight;
+
+				// If this is a shorter path, update
+				if (distances.find(neighborId) == distances.end() || newDist < distances[neighborId]) {
+					distances[neighborId] = newDist;
+					parentMap[neighborId] = currentNodeId;
+					pq.push({newDist, neighborId});
 				}
 			}
 		}

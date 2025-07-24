@@ -142,6 +142,10 @@ namespace graph::storage {
 	                    table.addRow({"Node ID", std::to_string(node.getId())});
 	                    table.addRow({"Label", node.getLabel()});
 	                    table.addRow({"propertyEntityId", std::to_string(node.getPropertyEntityId())});
+	                    // firstOutEdgeId
+	                    table.addRow({"First Out Edge ID", std::to_string(node.getFirstOutEdgeId())});
+	                    // firstInEdgeId
+	                    table.addRow({"First In Edge ID", std::to_string(node.getFirstInEdgeId())});
 	                    table.addRow({"Active", node.isActive() ? "true" : "false"});
 
 	                    // Load properties
@@ -288,7 +292,17 @@ namespace graph::storage {
 	                    table.addRow({"Status", "USED"});
 	                    table.addRow({"Edge ID", std::to_string(edge.getId())});
 	                    table.addRow({"Label", edge.getLabel()});
-	                	table.addRow({"propertyEntityId", std::to_string(edge.getPropertyEntityId())});
+	                    table.addRow({"Source Node ID", std::to_string(edge.getSourceNodeId())});
+	                    table.addRow({"Target Node ID", std::to_string(edge.getTargetNodeId())});
+	                    // prevOutEdgeId
+	                    table.addRow({"Previous Out Edge ID", std::to_string(edge.getPrevOutEdgeId())});
+	                    // nextOutEdgeId
+	                    table.addRow({"Next Out Edge ID", std::to_string(edge.getNextOutEdgeId())});
+	                    // prevInEdgeId
+	                    table.addRow({"Previous In Edge ID", std::to_string(edge.getPrevInEdgeId())});
+	                    // nextInEdgeId
+	                    table.addRow({"Next In Edge ID", std::to_string(edge.getNextInEdgeId())});
+	                    table.addRow({"propertyEntityId", std::to_string(edge.getPropertyEntityId())});
 	                    table.addRow({"Active", edge.isActive() ? "true" : "false"});
 
 	                    // Load properties

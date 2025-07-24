@@ -29,7 +29,7 @@ namespace graph {
 	    void rollback() const;
 
 	private:
-	    storage::FileStorage &storage;
+	    std::shared_ptr<storage::FileStorage> storage;
 	    std::unordered_map<uint64_t, Node> newNodes;
 	    std::unordered_map<uint64_t, Edge> newEdges;
 	};

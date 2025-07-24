@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ ubuntu-latest, windows-latest ]
 
     steps:
       - name: Checkout code
@@ -37,6 +37,12 @@ jobs:
         run: choco install llvm --version=20.1.4 --force
         shell: cmd
 
+      - name: Install gcov/lcov on Ubuntu
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
       - name: Install dependencies with Conan
         run: |
           conan profile detect
@@ -47,7 +53,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini -Db_coverage=true
           meson compile
         shell: pwsh
 
@@ -55,5 +61,34 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini -Db_coverage=true
           meson compile
+
+      - name: Run tests
+        run: |
+          cd buildDir
+          meson test --verbose
+
+      - name: Generate coverage report (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd buildDir
+          ninja coverage-xml || true
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' '*/tests/*' '*/test_*' --output-file coverage.info
+          lcov --list coverage.info
+
+      - name: Generate coverage report (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd buildDir
+          gcov -r -p $(find . -name "*.gcno" -exec dirname {} \; | sort -u | xargs -I {} find {} -name "*.cpp" -o -name "*.cc")
+        shell: bash
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./buildDir/coverage.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false

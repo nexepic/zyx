@@ -15,7 +15,6 @@
 #include <functional>
 #include <string>
 #include "graph/core/Node.hpp"
-#include "graph/core/Edge.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 #include "graph/storage/DataManager.hpp"
 
@@ -50,14 +49,12 @@ namespace graph::query {
          *
          * @param startNodeId The ID of the starting node
          * @param endNodeId The ID of the destination node
-         * @param maxDepth Maximum search depth
          * @param direction The direction of relationships to follow
          * @return A vector of nodes representing the path, empty if no path found
          */
         std::vector<Node> findShortestPath(
             int64_t startNodeId,
             int64_t endNodeId,
-            int maxDepth = 10,
             const std::string& direction = "both"
         );
 

@@ -18,9 +18,6 @@ namespace graph {
 	REPL::REPL(Database &db) : db(db) {}
 
 	void REPL::run() const {
-		// Ensure the database is open and ready
-		db.getStorage().open();
-
 		// Create a prompt that works on both Windows and Unix-like systems
 #ifdef _WIN32
 		const char *prompt = "metrix> ";
@@ -39,9 +36,9 @@ namespace graph {
 
 		// Set up auto-completion for common commands
 		ls.SetCompletionCallback([](const char *editBuffer, std::vector<std::string> &completions) {
-			const char *commands[] = {"addNode",	 "deleteNode",	   "addEdge",	"deleteEdge",
-									  "addProperty", "listProperties", "queryNode", "queryEdge",
-									  "listNodes",	 "save",		   "help",		"exit"};
+			const char *commands[] = {"addNode",		  "deleteNode", "addEdge",	 "deleteEdge", "addProperty",
+									  "listProperties",	  "queryNode",	"queryEdge", "listNodes",  "findConnectedNodes",
+									  "findShortestPath", "save",		"help",		 "exit"};
 
 			for (const auto &cmd: commands) {
 				if (strncmp(editBuffer, cmd, strlen(editBuffer)) == 0) {
@@ -92,7 +89,7 @@ namespace graph {
 
 			try {
 				// auto transaction = db.beginTransaction();
-				db.getStorage().deleteNode(nodeId); // Assuming cascadeEdges is true
+				db.getStorage()->deleteNode(nodeId); // Assuming cascadeEdges is true
 				// transaction.commit();
 				std::cout << "Deleted node with ID: " << nodeId << "\n";
 			} catch (const std::exception &e) {
@@ -106,7 +103,7 @@ namespace graph {
 
 			try {
 				// auto transaction = db.beginTransaction();
-				db.getStorage().deleteEdge(edgeId);
+				db.getStorage()->deleteEdge(edgeId);
 				// transaction.commit();
 
 				std::cout << "Deleted edge with ID: " << edgeId << "\n";
@@ -166,7 +163,7 @@ namespace graph {
 
 			try {
 				auto transaction = db.beginTransaction();
-				auto node = db.getStorage().getNode(nodeId);
+				auto node = db.getStorage()->getNode(nodeId);
 
 				if (node.getId() == 0) {
 					std::cout << "Node not found\n";
@@ -178,7 +175,7 @@ namespace graph {
 				properties[key] = propValue;
 
 				// Add the property to the node
-				db.getStorage().insertProperties(nodeId, Node::typeId, properties);
+				db.getStorage()->insertProperties(nodeId, Node::typeId, properties);
 				// transaction.commit();
 
 				std::cout << "Added property '" << key << "' to node " << nodeId << "\n";
@@ -194,14 +191,14 @@ namespace graph {
 			std::cin.ignore(); // Clear the newline
 
 			try {
-				auto node = db.getStorage().getNode(nodeId);
+				auto node = db.getStorage()->getNode(nodeId);
 
 				if (node.getId() == 0) {
 					std::cout << "Node not found\n";
 					return;
 				}
 
-				const auto &properties = db.getStorage().getNodeProperties(node.getId());
+				const auto &properties = db.getStorage()->getNodeProperties(node.getId());
 
 				if (properties.empty()) {
 					std::cout << "Node " << nodeId << " has no properties\n";
@@ -410,7 +407,7 @@ namespace graph {
 
 			try {
 				// Use getNode instead of getNodes().at() for better error handling
-				auto node = db.getStorage().getNode(id);
+				auto node = db.getStorage()->getNode(id);
 				if (node.getId() == 0) {
 					std::cout << "Node not found\n";
 				} else {
@@ -433,7 +430,7 @@ namespace graph {
 
 			try {
 				// Use getEdge instead of getEdges().at()
-				auto edge = db.getStorage().getEdge(id);
+				auto edge = db.getStorage()->getEdge(id);
 				if (edge.getId() == 0) {
 					std::cout << "Edge not found\n";
 				} else {
@@ -445,7 +442,7 @@ namespace graph {
 			}
 		} else if (command == "listNodes") {
 			// Add a command to list all nodes
-			const auto &nodes = db.getStorage().getAllNodes();
+			const auto &nodes = db.getStorage()->getAllNodes();
 			if (nodes.empty()) {
 				std::cout << "No nodes found\n";
 			} else {
@@ -461,8 +458,94 @@ namespace graph {
 				}
 			}
 		} else if (command == "save") {
-			db.getStorage().flush();
+			db.getStorage()->flush();
 			std::cout << "Database saved\n";
+		} else if (command == "findConnectedNodes") {
+			uint64_t nodeId;
+			std::string edgeLabel, direction, nodeLabel;
+
+			std::cout << "Enter source node ID: ";
+			std::cin >> nodeId;
+			std::cin.ignore(); // Clear the newline
+
+			std::cout << "Enter edge label (or press Enter for any): ";
+			std::getline(std::cin, edgeLabel);
+
+			std::cout << "Enter direction (incoming/outgoing/both): ";
+			std::getline(std::cin, direction);
+
+			// Validate direction
+			if (direction != "incoming" && direction != "outgoing" && direction != "both") {
+				std::cout << "Invalid direction. Using 'both' as default.\n";
+				direction = "both";
+			}
+
+			std::cout << "Enter target node label filter (or press Enter for any): ";
+			std::getline(std::cin, nodeLabel);
+
+			std::cout << "Finding connected nodes...\n";
+			try {
+				auto result = db.getQueryEngine()->findConnectedNodes(nodeId, edgeLabel, direction, nodeLabel);
+
+				const auto &nodes = result.getNodes();
+				if (nodes.empty()) {
+					std::cout << "No connected nodes found\n";
+				} else {
+					std::cout << "Found " << nodes.size() << " connected node(s):\n";
+					for (const auto &node: nodes) {
+						std::cout << "ID: " << node.getId() << ", Label: " << node.getLabel();
+
+						// Show property count if available
+						const auto &props = node.getProperties();
+						if (!props.empty()) {
+							std::cout << " (" << props.size() << " properties)";
+						}
+						std::cout << "\n";
+					}
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "findShortestPath") {
+			int64_t startNodeId, endNodeId;
+			std::string direction;
+
+			std::cout << "Enter start node ID: ";
+			std::cin >> startNodeId;
+			std::cin.ignore(); // Clear the newline
+
+			std::cout << "Enter end node ID: ";
+			std::cin >> endNodeId;
+			std::cin.ignore(); // Clear the newline
+
+			std::cout << "Enter direction (incoming/outgoing/both): ";
+			std::getline(std::cin, direction);
+
+			// Validate direction
+			if (direction != "incoming" && direction != "outgoing" && direction != "both") {
+				std::cout << "Invalid direction. Using 'both' as default.\n";
+				direction = "both";
+			}
+
+			std::cout << "Finding shortest path...\n";
+			try {
+				// Note: maxDepth parameter is passed as 0 as it's no longer used in the implementation
+				auto result = db.getQueryEngine()->findShortestPath(startNodeId, endNodeId, 0, direction);
+
+				const auto &nodes = result.getNodes();
+				if (nodes.empty()) {
+					std::cout << "No path found between nodes " << startNodeId << " and " << endNodeId << "\n";
+				} else {
+					std::cout << "Found path with " << nodes.size() << " nodes:\n";
+					for (size_t i = 0; i < nodes.size(); i++) {
+						const auto &node = nodes[i];
+						std::cout << (i > 0 ? " -> " : "") << "Node " << node.getId() << " (" << node.getLabel() << ")";
+					}
+					std::cout << "\n";
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
 		} else if (command == "help") {
 			std::cout << "Available commands:\n"
 					  << "  addNode        - Add a new node\n"
@@ -481,6 +564,8 @@ namespace graph {
 					  << "  createPropertyIndex - Create an index on a specific property key\n"
 					  << "  dropIndex           - Remove an index\n"
 					  << "  listIndexes         - List all active indexes\n"
+					  << "  findConnectedNodes - Find nodes connected to a specific node\n"
+					  << "  findShortestPath   - Find shortest path between two nodes\n"
 					  << "  save           - Save changes to disk\n"
 					  << "  exit           - Exit the program\n"
 					  << "  help           - Show this help\n";

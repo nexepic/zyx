@@ -68,7 +68,6 @@ namespace graph::storage {
 	}
 
 	bool EntityReferenceUpdater::updateEdgeReferencesToPermanent(Edge &edge) const {
-
 		bool updated = false;
 
 		// Update property entity reference if it exists
@@ -107,6 +106,46 @@ namespace graph::storage {
 			int64_t permanentId = idAllocator_->getPermanentId(targetNodeId, Node::typeId);
 			if (permanentId != 0) {
 				edge.setTargetNodeId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update next outgoing edge reference
+		int64_t nextOutEdgeId = edge.getNextOutEdgeId();
+		if (nextOutEdgeId != 0 && IDAllocator::isTemporaryId(nextOutEdgeId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(nextOutEdgeId, Edge::typeId);
+			if (permanentId != 0) {
+				edge.setNextOutEdgeId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update previous outgoing edge reference
+		int64_t prevOutEdgeId = edge.getPrevOutEdgeId();
+		if (prevOutEdgeId != 0 && IDAllocator::isTemporaryId(prevOutEdgeId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(prevOutEdgeId, Edge::typeId);
+			if (permanentId != 0) {
+				edge.setPrevOutEdgeId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update next incoming edge reference
+		int64_t nextInEdgeId = edge.getNextInEdgeId();
+		if (nextInEdgeId != 0 && IDAllocator::isTemporaryId(nextInEdgeId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(nextInEdgeId, Edge::typeId);
+			if (permanentId != 0) {
+				edge.setNextInEdgeId(permanentId);
+				updated = true;
+			}
+		}
+
+		// Update previous incoming edge reference
+		int64_t prevInEdgeId = edge.getPrevInEdgeId();
+		if (prevInEdgeId != 0 && IDAllocator::isTemporaryId(prevInEdgeId)) {
+			int64_t permanentId = idAllocator_->getPermanentId(prevInEdgeId, Edge::typeId);
+			if (permanentId != 0) {
+				edge.setPrevInEdgeId(permanentId);
 				updated = true;
 			}
 		}

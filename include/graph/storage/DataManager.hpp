@@ -278,6 +278,10 @@ namespace graph::storage {
 			}
 		}
 
+		[[nodiscard]] std::shared_ptr<traversal::RelationshipTraversal> getRelationshipTraversal() const {
+			return relationshipTraversal_;
+		}
+
 	private:
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		std::unique_ptr<BlobChainManager> blobManager_;
@@ -317,7 +321,7 @@ namespace graph::storage {
 
 		std::shared_ptr<SpaceManager> spaceManager_;
 
-		std::unique_ptr<traversal::RelationshipTraversal> relationshipTraversal_;
+		std::shared_ptr<traversal::RelationshipTraversal> relationshipTraversal_;
 
 		void initializeSegmentIndexes();
 

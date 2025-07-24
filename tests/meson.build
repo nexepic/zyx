@@ -1,11 +1,10 @@
 # Ensure we have the test dependencies
 if get_option('tests').enabled() or get_option('tests').auto()
-	if not gtest_dep.found()
-		gtest_dep = dependency('gtest', required : true)
-	endif
-	if not gtest_main_dep.found()
-		gtest_main_dep = dependency('gtest_main', required : true)
-	endif
+	gtest_dep = dependency('gtest', required : true)
+	gtest_main_dep = dependency('gtest_main', required : true)
+	# Add Google Mock dependencies
+	gmock_dep = dependency('gmock', required : true)
+	gmock_main_dep = dependency('gmock_main', required : true)
 
 	test_sources = [
 		'apps/cli/test_Repl.cpp',
@@ -13,6 +12,7 @@ if get_option('tests').enabled() or get_option('tests').auto()
 		'src/core/test_IndexTreeManager.cpp',
 		'src/storage/test_FileStorage.cpp',
 		'src/storage/test_StorageHeaders.cpp',
+		'src/query/strategies/test_TraversalQuery.cpp'
 	]
 
 	test_include_dirs = include_directories('include', '../tests/include')
@@ -25,6 +25,8 @@ if get_option('tests').enabled() or get_option('tests').auto()
 										 db_dep,
 										 gtest_dep,
 										 gtest_main_dep,
+										 gmock_dep,
+										 gmock_main_dep,
 										 boost_dep,
 										 zlib_dep
 									 ],

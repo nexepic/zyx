@@ -89,7 +89,6 @@ namespace graph::storage {
 		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
 		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both");
-		std::vector<int64_t> findConnectedNodeIds(int64_t nodeId, const std::string &direction = "both");
 
 		template<typename T>
 		void updateEntityInPlace(const T &entity);

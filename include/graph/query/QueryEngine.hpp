@@ -33,9 +33,9 @@ namespace graph::query {
 
 		bool buildLabelIndex();
 
-		bool buildPropertyIndex(const std::string& key);
+		bool buildPropertyIndex(const std::string &key);
 
-		bool dropIndex(const std::string& indexType, const std::string& key);
+		bool dropIndex(const std::string &indexType, const std::string &key);
 
 		std::vector<std::pair<std::string, std::string>> listIndexes();
 
@@ -59,11 +59,8 @@ namespace graph::query {
 		QueryResult findRelationships(uint64_t nodeId, const std::string &edgeLabel = "");
 
 		// Find nodes connected to a specified node
-		QueryResult findConnectedNodes(uint64_t nodeId, const std::string &edgeLabel = "",
-									   const std::string &direction = "both");
-
-		QueryResult findConnectedNodesTraversal(int64_t startNodeId, const std::string &direction = "both",
-												const std::string &edgeLabel = "", const std::string &nodeLabel = "");
+		QueryResult findConnectedNodes(uint64_t nodeId, const std::string &edgeLabel, const std::string &direction,
+									   const std::string &nodeLabel = "");
 
 		QueryResult findShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth = 10,
 									 const std::string &direction = "both");
@@ -74,9 +71,7 @@ namespace graph::query {
 		// Rebuild indexes - call when data has changed significantly
 		void rebuildIndexes();
 
-		void persistIndexState() const {
-			indexManager_->persistState();
-		}
+		void persistIndexState() const { indexManager_->persistState(); }
 
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
@@ -85,7 +80,7 @@ namespace graph::query {
 		std::unique_ptr<QueryExecutor> queryExecutor_;
 		std::shared_ptr<TraversalQuery> traversalQuery_;
 
-		QueryResult nodesToQueryResult(const std::vector<Node>& nodes);
+		static QueryResult nodesToQueryResult(const std::vector<Node> &nodes);
 	};
 
 } // namespace graph::query

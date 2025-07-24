@@ -27,6 +27,10 @@ protected:
         TestTreeManagerConfig::resetMaxKeysPerNode(); // Reset MAX_KEYS_PER_NODE
     }
 
+	static void TearDownTestSuite() {
+    	TestTreeManagerConfig::cleanup();
+    }
+
     std::shared_ptr<IndexTreeManager> treeManager;
     int64_t rootId{};
 };

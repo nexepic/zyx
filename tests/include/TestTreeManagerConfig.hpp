@@ -16,26 +16,35 @@
 #include <filesystem>
 #include "graph/core/IndexTreeManager.hpp"
 #include "graph/query/indexes/LabelIndex.hpp"
-#include "graph/storage/FileStorage.hpp"
+#include <graph/core/Database.hpp>
 
 namespace graph::storage::test {
 
 	class TestTreeManagerConfig {
 	public:
 		static void initialize() {
-			if (!isInitialized_) {
-				boost::uuids::uuid uuid = boost::uuids::random_generator()();
-				std::filesystem::path testFilePath =
-						std::filesystem::temp_directory_path() / ("test_db_file_" + to_string(uuid) + ".dat");
+		    if (!isInitialized_) {
+		        boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		        std::filesystem::path testFilePath =
+		                std::filesystem::temp_directory_path() / ("test_db_file_" + to_string(uuid) + ".dat");
 
-				// Create and initialize FileStorage
-				fileStorage = std::make_unique<FileStorage>(testFilePath.string());
-				fileStorage->open();
+		        // Create and initialize Database
+		        database = std::make_unique<Database>(testFilePath.string());
+		        database->open();
 
-				treeManager = std::make_shared<query::indexes::IndexTreeManager>(
-						fileStorage->getDataManager(), query::indexes::LabelIndex::LABEL_INDEX_TYPE);
-				isInitialized_ = true;
-			}
+		        treeManager = std::make_shared<query::indexes::IndexTreeManager>(
+		                database->getStorage()->getDataManager(), query::indexes::LabelIndex::LABEL_INDEX_TYPE);
+		        isInitialized_ = true;
+		    }
+		}
+
+		static void cleanup() {
+		    if (isInitialized_ && database) {
+		        database->close();
+		        database.reset();
+		        treeManager.reset();
+		        isInitialized_ = false;
+		    }
 		}
 
 		static std::shared_ptr<query::indexes::IndexTreeManager> &getTreeManager() { return treeManager; }
@@ -55,7 +64,7 @@ namespace graph::storage::test {
 		}
 
 	private:
-		static inline std::shared_ptr<FileStorage> fileStorage;
+		static inline std::unique_ptr<Database> database;
 		static inline std::shared_ptr<query::indexes::IndexTreeManager> treeManager;
 		static inline bool isInitialized_ = false;
 		static inline uint32_t originalMaxKeys_ = 0;

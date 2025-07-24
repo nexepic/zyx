@@ -25,21 +25,15 @@ namespace graph::query {
 
 	QueryEngine::~QueryEngine() = default;
 
-	bool QueryEngine::buildLabelIndex() {
-		return indexManager_->buildLabelIndex();
-	}
+	bool QueryEngine::buildLabelIndex() { return indexManager_->buildLabelIndex(); }
 
-	bool QueryEngine::buildPropertyIndex(const std::string& key) {
-		return indexManager_->buildPropertyIndex(key);
-	}
+	bool QueryEngine::buildPropertyIndex(const std::string &key) { return indexManager_->buildPropertyIndex(key); }
 
-	bool QueryEngine::dropIndex(const std::string& indexType, const std::string& key) {
+	bool QueryEngine::dropIndex(const std::string &indexType, const std::string &key) {
 		return indexManager_->dropIndex(indexType, key);
 	}
 
-	std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes() {
-		return indexManager_->listIndexes();
-	}
+	std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes() { return indexManager_->listIndexes(); }
 
 	QueryResult QueryEngine::findNodesByLabel(const std::string &label) {
 		auto plan = queryPlanner_->createPlanForLabelQuery(label);
@@ -73,21 +67,16 @@ namespace graph::query {
 	}
 
 	QueryResult QueryEngine::findConnectedNodes(uint64_t nodeId, const std::string &edgeLabel,
-												const std::string &direction) {
-		auto plan = queryPlanner_->createPlanForConnectedNodesQuery(nodeId, edgeLabel, direction);
+										  const std::string &direction, const std::string &nodeLabel) {
+		// Create a traversal plan
+		auto plan = queryPlanner_->createPlanForConnectedNodesQuery(nodeId, nodeLabel, edgeLabel, direction);
 		return queryExecutor_->execute(plan);
-	}
-
-	QueryResult QueryEngine::findConnectedNodesTraversal(int64_t startNodeId, const std::string &direction,
-														 const std::string &edgeLabel, const std::string &nodeLabel) {
-		auto nodes = traversalQuery_->findConnectedNodes(startNodeId, direction, edgeLabel, nodeLabel);
-		return nodesToQueryResult(nodes);
 	}
 
 	QueryResult QueryEngine::findShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
 											  const std::string &direction) {
-		auto pathNodes = traversalQuery_->findShortestPath(startNodeId, endNodeId, maxDepth, direction);
-		return nodesToQueryResult(pathNodes);
+		auto plan = queryPlanner_->createPlanForTraversalShortestPath(startNodeId, endNodeId, maxDepth, direction);
+		return queryExecutor_->execute(plan);
 	}
 
 	void QueryEngine::breadthFirstTraversal(int64_t startNodeId, const std::function<bool(const Node &, int)> &visitFn,

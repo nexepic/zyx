@@ -37,6 +37,7 @@ void Database::close() {
     if (!openFlag) return;
 
     storage->close();
+    storage.reset();
     queryEngine.reset();
     openFlag = false;
 }

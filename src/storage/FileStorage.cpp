@@ -828,25 +828,6 @@ namespace graph::storage {
 		return dataManager->findEdgesByNode(nodeId, direction);
 	}
 
-	std::vector<int64_t> FileStorage::findConnectedNodeIds(int64_t nodeId, const std::string &direction) {
-		std::vector<Edge> edges = findEdgesByNode(nodeId, direction);
-		std::vector<int64_t> connectedNodeIds;
-
-		for (const auto &edge: edges) {
-			if (direction == "outgoing" || direction == "both") {
-				if (edge.getSourceNodeId() == nodeId) {
-					connectedNodeIds.push_back(edge.getTargetNodeId());
-				}
-			}
-			if (direction == "incoming" || direction == "both") {
-				if (edge.getTargetNodeId() == nodeId) {
-					connectedNodeIds.push_back(edge.getSourceNodeId());
-				}
-			}
-		}
-		return connectedNodeIds;
-	}
-
 	std::unordered_map<std::string, PropertyValue> FileStorage::getNodeProperties(int64_t nodeId) {
 		if (!isFileOpen) {
 			open();
@@ -878,25 +859,30 @@ namespace graph::storage {
 	}
 
 	Edge FileStorage::insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const {
-		if (!isFileOpen) {
-			throw std::runtime_error("Database must be open before inserting data");
-		}
+	    if (!isFileOpen) {
+	        throw std::runtime_error("Database must be open before inserting data");
+	    }
 
-		Node fromNode = dataManager->getNode(from);
-		Node toNode = dataManager->getNode(to);
+	    Node fromNode = dataManager->getNode(from);
+	    Node toNode = dataManager->getNode(to);
 
-		if (!fromNode.isActive() || !toNode.isActive()) {
-			throw std::runtime_error("Cannot create edge between inactive or non-existent nodes");
-		}
+	    if (!fromNode.isActive() || !toNode.isActive()) {
+	        throw std::runtime_error("Cannot create edge between inactive or non-existent nodes");
+	    }
 
-		// Get a temporary ID
-		int64_t tempId = dataManager->reserveTemporaryEdgeId();
+	    // Check for existing edge first
+	    auto existingEdges = dataManager->findEdgesByNode(from, "outgoing");
+	    for (const auto& edge : existingEdges) {
+	        if (edge.getTargetNodeId() == to && edge.getLabel() == label && edge.isActive()) {
+	            return edge; // Return existing edge
+	        }
+	    }
 
-		// Create a new edge with the temporary ID
-		Edge edge(tempId, from, to, label);
-
-		dataManager->addEdge(edge);
-		return edge;
+	    // Create new edge if none exists
+	    int64_t tempId = dataManager->reserveTemporaryEdgeId();
+	    Edge edge(tempId, from, to, label);
+	    dataManager->addEdge(edge);
+	    return edge;
 	}
 
 	void FileStorage::insertProperties(int64_t entityId, uint32_t entityType,

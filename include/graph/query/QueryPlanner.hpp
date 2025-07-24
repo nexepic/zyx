@@ -89,11 +89,8 @@ namespace graph::query {
 		QueryPlan createPlanForRelationshipQuery(uint64_t nodeId, const std::string &edgeLabel);
 
 		// Create a plan for finding connected nodes
-		QueryPlan createPlanForConnectedNodesQuery(uint64_t nodeId, const std::string &edgeLabel,
-												   const std::string &direction);
-
-		QueryPlan createPlanForTraversalConnectedNodes(int64_t startNodeId, const std::string &direction,
-													   const std::string &edgeLabel, const std::string &nodeLabel);
+		QueryPlan createPlanForConnectedNodesQuery(uint64_t nodeId, const std::string &nodeLabel,
+												   const std::string &edgeLabel, const std::string &direction);
 
 		QueryPlan createPlanForTraversalShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
 													 const std::string &direction);

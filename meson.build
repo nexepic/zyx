@@ -22,11 +22,6 @@ if not boost_dep.found()
     boost_dep = dependency('boost-cpp', modules: ['filesystem', 'system'], required: true)
 endif
 
-# Testing dependencies
-gtest_dep = dependency('gtest', required : false)
-gtest_main_dep = dependency('gtest_main', required : false)
-# If not found, they'll be required in tests/meson.build only if tests are enabled
-
 # ===== Process subdirectories =====
 # First build the core library
 subdir('src')

@@ -104,6 +104,8 @@ namespace graph {
 		void serialize(std::ostream &os) const;
 		static Edge deserialize(std::istream &is);
 
+		void setLabel(const std::string& label);
+
 	private:
 		// Fixed-size metadata structure
 		Metadata metadata;
@@ -113,8 +115,6 @@ namespace graph {
 
 		// Variable-sized structures (not included in the fixed-size structure)
 		std::unordered_map<std::string, PropertyValue> properties;
-
-		void setLabel(const std::string& label);
 	};
 
 } // namespace graph

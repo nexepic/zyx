@@ -349,7 +349,7 @@ namespace graph::query {
 		auto dataManager = storage_->getDataManager();
 		auto traversalQuery = std::make_shared<TraversalQuery>(dataManager);
 
-		auto pathNodes = traversalQuery->findShortestPath(startNodeId, endNodeId, maxDepth, direction);
+		auto pathNodes = traversalQuery->findShortestPath(startNodeId, endNodeId, direction);
 		for (const auto &node: pathNodes) {
 			result.addNode(node);
 		}
