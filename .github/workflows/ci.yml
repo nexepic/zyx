@@ -47,7 +47,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini -Db_coverage=true
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini -Db_coverage=true -Dtests=enabled
           meson compile
         shell: pwsh
 
@@ -55,7 +55,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini -Db_coverage=true
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini -Db_coverage=true -Dtests=enabled
           meson compile
 
       - name: Run unit tests
