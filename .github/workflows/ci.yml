@@ -40,8 +40,16 @@ jobs:
       - name: Install LLVM on Ubuntu
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-20 llvm-20
+          # Add LLVM repository key and source
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          # Install LLVM 20 tools
+          sudo apt install -y clang-20 llvm-20
+          # Create symlinks to make them default
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 100
+          sudo update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-20 100
 
       - name: Install dependencies with Conan
         run: |
