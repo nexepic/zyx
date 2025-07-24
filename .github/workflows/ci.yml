@@ -37,6 +37,12 @@ jobs:
         run: choco install llvm --version=20.1.4 --force
         shell: cmd
 
+      - name: Install LLVM on Ubuntu
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-20 llvm-20
+
       - name: Install dependencies with Conan
         run: |
           conan profile detect
@@ -47,7 +53,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini -Db_coverage=true -Dtests=enabled
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini -Db_coverage=true
           meson compile
         shell: pwsh
 
@@ -55,7 +61,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini -Db_coverage=true -Dtests=enabled
+          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini -Db_coverage=true
           meson compile
 
       - name: Run unit tests
@@ -67,7 +73,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd buildDir
-          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches
+          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches --gcov-executable "llvm-cov gcov"
 
       - name: Generate coverage report (Windows)
         if: runner.os == 'Windows'
