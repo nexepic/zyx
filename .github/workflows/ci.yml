@@ -46,10 +46,6 @@ jobs:
           sudo apt update
           # Install LLVM 20 tools
           sudo apt install -y clang-20 llvm-20
-          # Create symlinks to make them default
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 100
-          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 100
-          sudo update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-20 100
 
       - name: Install dependencies with Conan
         run: |
@@ -91,7 +87,7 @@ jobs:
         shell: pwsh
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ./buildDir/coverage.xml
           flags: unittests
