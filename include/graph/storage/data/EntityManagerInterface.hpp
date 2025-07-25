@@ -10,11 +10,8 @@
 
 #pragma once
 
-#include <memory>
-#include <optional>
 #include <vector>
 #include "EntityChangeType.hpp"
-#include "graph/core/Types.hpp"
 
 namespace graph::storage {
 
