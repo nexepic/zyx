@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include <iostream>
 #include <unordered_set>
 #include "graph/storage/SegmentType.hpp"

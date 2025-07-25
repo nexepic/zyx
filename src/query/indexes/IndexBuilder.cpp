@@ -16,7 +16,7 @@
 #include "graph/query/indexes/LabelIndex.hpp"
 #include "graph/query/indexes/PropertyIndex.hpp"
 #include "graph/query/indexes/RelationshipIndex.hpp"
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 

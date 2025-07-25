@@ -11,13 +11,14 @@
 #include "graph/query/indexes/LabelIndex.hpp"
 #include <algorithm>
 #include <graph/core/StateRegistry.hpp>
+#include <graph/storage/IDAllocator.hpp>
 
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::indexes {
 
-	LabelIndex::LabelIndex(const std::shared_ptr<storage::DataManager> &dataManager) : dataManager_(dataManager),
-		treeManager_(std::make_shared<IndexTreeManager>(dataManager, LABEL_INDEX_TYPE)) {
+	LabelIndex::LabelIndex(const std::shared_ptr<storage::DataManager> &dataManager) :
+		dataManager_(dataManager), treeManager_(std::make_shared<IndexTreeManager>(dataManager, LABEL_INDEX_TYPE)) {
 		initialize();
 	}
 

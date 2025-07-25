@@ -11,6 +11,7 @@
 #include "graph/query/indexes/PropertyIndex.hpp"
 #include <algorithm>
 #include <cmath>
+#include <graph/storage/IDAllocator.hpp>
 
 namespace graph::query::indexes {
 

@@ -10,7 +10,7 @@
 
 #pragma once
 #include <fstream>
-#include "DataManager.hpp"
+#include "data/DataManager.hpp"
 #include "StorageHeaders.hpp"
 
 namespace graph::storage {

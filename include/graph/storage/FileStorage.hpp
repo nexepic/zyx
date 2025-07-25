@@ -12,7 +12,7 @@
 #include <atomic>
 #include <string>
 #include <unordered_map>
-#include "DataManager.hpp"
+#include "data/DataManager.hpp"
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
 #include "EntityReferenceUpdater.hpp"

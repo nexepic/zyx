@@ -12,7 +12,7 @@
 #include <chrono>
 #include <iostream>
 #include <utility>
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 namespace graph::storage {

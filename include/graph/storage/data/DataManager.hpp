@@ -2,7 +2,7 @@
  * @file DataManager.hpp
  * @author Nexepic
  * @brief This source code is licensed under MIT License.
- * @date 2025/3/21
+ * @date 2025/7/24
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
@@ -10,54 +10,74 @@
 
 #pragma once
 
+#include <atomic>
 #include <fstream>
-#include <graph/core/BlobChainManager.hpp>
-#include <graph/core/Index.hpp>
-#include <graph/core/StateChainManager.hpp>
-#include <graph/traversal/RelationshipTraversal.hpp>
-#include <optional>
-#include <string>
-#include <unordered_set>
-#include <vector>
-#include "CacheManager.hpp"
-#include "DeletionManager.hpp"
-#include "IDAllocator.hpp"
-#include "SegmentIndexManager.hpp"
-#include "StorageHeaders.hpp"
+#include <functional>
+#include <memory>
+#include <unordered_map>
+#include "DirtyEntityInfo.hpp"
+#include "EntityChangeType.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
+#include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
+#include "graph/core/State.hpp"
+#include "graph/storage/CacheManager.hpp"
+#include "graph/storage/FileHeaderManager.hpp"
+
+namespace graph {
+	class BlobChainManager;
+	class StateChainManager;
+} // namespace graph
+
+namespace graph::traversal {
+	class RelationshipTraversal;
+}
 
 namespace graph::storage {
 
-	enum class EntityChangeType { ADDED, MODIFIED, DELETED };
+	class IDAllocator;
+	class SegmentTracker;
+	class SpaceManager;
+	class SegmentIndexManager;
+	class EntityReferenceUpdater;
+	class DeletionManager;
+	class NodeManager;
+	class EdgeManager;
+	class PropertyEntityManager;
+	class BlobManager;
+	class IndexEntityManager;
+	class StateManager;
+	class PropertyManager;
 
-	template<typename T>
-	struct DirtyEntityInfo {
-		EntityChangeType changeType;
-		std::optional<T> backup;
-
-		// Default constructor
-		DirtyEntityInfo() : changeType(EntityChangeType::MODIFIED), backup(std::nullopt) {}
-
-		// Copy constructor from EntityChangeType and T
-		DirtyEntityInfo(EntityChangeType type, const T &entity) : changeType(type) {
-			// Use emplace which directly constructs the object in-place
-			backup.emplace(entity);
-		}
-
-		// Constructor with just type
-		explicit DirtyEntityInfo(EntityChangeType type) : changeType(type), backup(std::nullopt) {}
-	};
-
+	/**
+	 * Core data management class coordinating all entity operations
+	 * Acts as a facade to specialized entity managers
+	 */
 	class DataManager : public std::enable_shared_from_this<DataManager> {
 	public:
+		/**
+		 * Constructs a new DataManager with the specified parameters
+		 * @param file The file stream for persistent storage
+		 * @param cacheSize Size of the entity caches
+		 * @param fileHeader Reference to the file header
+		 * @param idAllocator Allocator for entity IDs
+		 * @param segmentTracker Tracks segment information
+		 * @param spaceManager Manages storage space allocation
+		 */
 		explicit DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<SpaceManager> spaceManager);
+
+		/**
+		 * Destructor that ensures the file is closed
+		 */
 		~DataManager();
 
+		/**
+		 * Initializes all managers and components
+		 */
 		void initialize();
 
 		// Header access
@@ -71,6 +91,10 @@ namespace graph::storage {
 		Node getNode(int64_t id);
 		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids);
 		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
+		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties);
+		void removeNodeProperty(int64_t nodeId, const std::string &key);
+		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId);
+		int64_t reserveTemporaryNodeId();
 
 		// Edge-specific operations
 		void addEdge(Edge &edge);
@@ -79,84 +103,57 @@ namespace graph::storage {
 		Edge getEdge(int64_t id);
 		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids);
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
-
-		template<typename EntityType>
-		void storeProperties(EntityType &entity);
-
-		// Node property methods
-		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties);
-		void removeNodeProperty(int64_t nodeId, const std::string &key);
-
-		// Edge property methods
 		void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties);
 		void removeEdgeProperty(int64_t edgeId, const std::string &key);
+		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId);
+		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both") const;
+		int64_t reserveTemporaryEdgeId();
+
+		// Property entity operations
+		void addPropertyEntity(const Property &property);
+		void updatePropertyEntity(const Property &property);
+		void deleteProperty(Property &property);
+		Property getProperty(int64_t id);
+		int64_t reserveTemporaryPropertyId();
+
+		// Blob operations
+		void addBlobEntity(const Blob &blob);
+		void updateBlobEntity(const Blob &blob);
+		void deleteBlob(Blob &blob);
+		Blob getBlob(int64_t id);
+		int64_t reserveTemporaryBlobId();
+
+		// Index operations
+		void addIndexEntity(const Index &index);
+		void updateIndexEntity(const Index &index);
+		void deleteIndex(Index &index);
+		Index getIndex(int64_t id);
+		int64_t reserveTemporaryIndexId();
+
+		// State operations
+		void addStateEntity(const State &state);
+		void updateStateEntity(const State &state);
+		void deleteState(State &state);
+		State getState(int64_t id);
+		int64_t reserveTemporaryStateId();
+		std::vector<State> getAllStates();
+		State findStateByKey(const std::string &key);
+		void addStateProperties(const std::string &stateKey,
+								const std::unordered_map<std::string, PropertyValue> &properties);
+		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey);
+		void removeState(const std::string &stateKey);
 
 		uint32_t calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void serializeProperties(std::ostream &os,
 								 const std::unordered_map<std::string, PropertyValue> &properties) const;
 		std::unordered_map<std::string, PropertyValue> deserializeProperties(std::istream &is) const;
 
-		template<typename EntityType>
-		bool hasExternalProperty(const EntityType &entity, const std::string &key);
-
 		std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId);
 
 		template<typename EntityType>
 		void cleanupExternalProperties(EntityType &entity);
 
-		template<typename EntityType>
-		void storePropertiesInPropertyEntity(EntityType &entity,
-											 const std::unordered_map<std::string, PropertyValue> &properties);
-
-		template<typename EntityType>
-		void storePropertiesInBlob(EntityType &entity,
-								   const std::unordered_map<std::string, PropertyValue> &properties);
-
-		// Property-specific operations
-		void addPropertyEntity(const Property &property);
-		void updatePropertyEntity(const Property &property);
-		void deleteProperty(Property &property);
-		Property getProperty(int64_t id);
-
-		// Blob-specific operations
-		void addBlobEntity(const Blob &blob);
-		void updateBlobEntity(const Blob &blob);
-		void deleteBlob(Blob &blob);
-		Blob getBlob(int64_t id);
-
-		// Index-specific operations
-		void addIndexEntity(const Index &index);
-		void updateIndexEntity(const Index &index);
-		void deleteIndex(Index &index);
-		Index getIndex(int64_t id);
-
-		// State-specific operations
-		void addStateEntity(const State &state);
-		void updateStateEntity(const State &state);
-		void deleteState(State &state);
-		State getState(int64_t id);
-
-		std::vector<State> getAllStates();
-
-		State findStateByKey(const std::string &key);
-
-		void addStateProperties(const std::string &stateKey,
-								const std::unordered_map<std::string, PropertyValue> &properties);
-		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey);
-		void removeState(const std::string &stateKey);
-
-		// Reserve temporary IDs
-		int64_t reserveTemporaryNodeId();
-		int64_t reserveTemporaryEdgeId();
-		int64_t reserveTemporaryPropertyId();
-		int64_t reserveTemporaryBlobId();
-		int64_t reserveTemporaryIndexId();
-		int64_t reserveTemporaryStateId();
-
-		// Get all properties
-		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId);
-		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId);
-
+		// Generic entity operations
 		template<typename EntityType>
 		void addToCache(const EntityType &entity);
 
@@ -187,15 +184,12 @@ namespace graph::storage {
 		template<typename EntityType>
 		uint64_t findSegmentForEntityId(int64_t id) const;
 
-		// Find edges connected to a node
-		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both") const;
-
 		// Cache management
 		void clearCache();
 
+		// Transaction management
 		[[nodiscard]] bool hasUnsavedChanges() const;
 		void markAllSaved();
-
 		void flushToDisk(std::fstream &file);
 
 		template<typename EntityType>
@@ -206,25 +200,19 @@ namespace graph::storage {
 		std::vector<Property> getDirtyPropertiesWithChangeTypes(const std::vector<EntityChangeType> &types) const;
 		std::vector<Blob> getDirtyBlobsWithChangeTypes(const std::vector<EntityChangeType> &types) const;
 
-		// Set maximum dirty entities before auto-flush
+		// Auto-flush configuration
 		void setMaxDirtyEntities(size_t maxDirtyEntities) { maxDirtyEntities_ = maxDirtyEntities; }
-
-		// Set callback for auto-flush
 		void setAutoFlushCallback(std::function<void()> callback) { autoFlushCallback_ = std::move(callback); }
-
-		// Check if we need auto-flush
 		[[nodiscard]] bool needsAutoFlush() const {
 			return dirtyNodes_.size() >= maxDirtyEntities_ || dirtyEdges_.size() >= maxDirtyEntities_;
 		}
-
-		// Trigger auto-flush if needed
 		void checkAndTriggerAutoFlush() const;
 
 		// Helper method to retrieve an entity from memory (dirty collections and cache) or disk
 		template<typename EntityType>
 		EntityType getEntityFromMemoryOrDisk(int64_t id);
 
-		// Load node or edge from disk
+		// Loading entities from disk
 		[[nodiscard]] Node loadNodeFromDisk(int64_t id) const;
 		[[nodiscard]] Edge loadEdgeFromDisk(int64_t id) const;
 		[[nodiscard]] Property loadPropertyFromDisk(int64_t id) const;
@@ -232,7 +220,7 @@ namespace graph::storage {
 		[[nodiscard]] Index loadIndexFromDisk(int64_t id) const;
 		[[nodiscard]] State loadStateFromDisk(int64_t id) const;
 
-		// get cache
+		// Cache access (for backward compatibility)
 		[[nodiscard]] LRUCache<int64_t, Node> &getNodeCache() { return nodeCache_; }
 		[[nodiscard]] LRUCache<int64_t, Edge> &getEdgeCache() { return edgeCache_; }
 		[[nodiscard]] LRUCache<int64_t, Property> &getPropertyCache() { return propertyCache_; }
@@ -240,7 +228,7 @@ namespace graph::storage {
 		[[nodiscard]] LRUCache<int64_t, Index> &getIndexCache() { return indexCache_; }
 		[[nodiscard]] LRUCache<int64_t, State> &getStateCache() { return stateCache_; }
 
-		// get dirty collections
+		// Dirty collections access (for backward compatibility)
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Node>> &getDirtyNodes() { return dirtyNodes_; }
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Edge>> &getDirtyEdges() { return dirtyEdges_; }
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Property>> &getDirtyProperties() {
@@ -250,47 +238,46 @@ namespace graph::storage {
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Index>> &getDirtyIndexes() { return dirtyIndexes_; }
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<State>> &getDirtyStates() { return dirtyStates_; }
 
+		// ID management
 		void handleIdUpdate(int64_t tempId, int64_t permId, uint32_t entityType);
-
-		void setDeletionManager(std::shared_ptr<DeletionManager> deletionManager);
 
 		// Helper method for DeletionManager to update entity status in memory without recursion
 		template<typename EntityType>
 		void markEntityDeleted(EntityType &entity);
 
-		[[nodiscard]] std::shared_ptr<EntityReferenceUpdater> getEntityReferenceUpdater() const {
-			return entityReferenceUpdater_;
-		}
-
-		std::shared_ptr<SegmentIndexManager> getSegmentIndexManager() const { return segmentIndexManager_; }
-
-		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker_; }
-
-		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator() const { return idAllocator_; }
-
-		void setDeletionFlagReference(std::atomic<bool>* flagReference) {
+		// Deletion tracking
+		void setDeletionFlagReference(std::atomic<bool> *flagReference) {
 			deleteOperationPerformedFlag_ = flagReference;
 		}
-
 		void markDeletionPerformed() const {
 			if (deleteOperationPerformedFlag_) {
 				deleteOperationPerformedFlag_->store(true);
 			}
 		}
 
+		// Component accessors
+		[[nodiscard]] std::shared_ptr<EntityReferenceUpdater> getEntityReferenceUpdater() const {
+			return entityReferenceUpdater_;
+		}
+		[[nodiscard]] std::shared_ptr<SegmentIndexManager> getSegmentIndexManager() const {
+			return segmentIndexManager_;
+		}
+		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker_; }
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator() const { return idAllocator_; }
 		[[nodiscard]] std::shared_ptr<traversal::RelationshipTraversal> getRelationshipTraversal() const {
 			return relationshipTraversal_;
 		}
+		[[nodiscard]] std::shared_ptr<PropertyManager> getPropertyManager() const { return propertyManager_; }
+		[[nodiscard]] std::shared_ptr<NodeManager> getNodeManager() const { return nodeManager_; }
+		[[nodiscard]] std::shared_ptr<EdgeManager> getEdgeManager() const { return edgeManager_; }
+		[[nodiscard]] std::shared_ptr<BlobChainManager> getBlobManager() const { return blobChainManager_; }
 
 	private:
+		// Core file and state
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
-		std::unique_ptr<BlobChainManager> blobManager_;
-		std::unique_ptr<DeletionManager> deletionManager_;
-		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
-		std::shared_ptr<SegmentIndexManager> segmentIndexManager_;
-		std::unique_ptr<StateChainManager> stateManager_;
+		FileHeader &fileHeader_; // Cached file header
 
-		// Cache for frequently accessed nodes and edges
+		// Caches
 		mutable LRUCache<int64_t, Node> nodeCache_;
 		mutable LRUCache<int64_t, Edge> edgeCache_;
 		mutable LRUCache<int64_t, Property> propertyCache_;
@@ -298,9 +285,7 @@ namespace graph::storage {
 		mutable LRUCache<int64_t, Index> indexCache_;
 		mutable LRUCache<int64_t, State> stateCache_;
 
-		// Configuration for dirty tracking
-		size_t maxDirtyEntities_ = 1000; // Maximum number of dirty entities before auto-flush
-
+		// Dirty tracking
 		std::unordered_map<int64_t, DirtyEntityInfo<Node>> dirtyNodes_;
 		std::unordered_map<int64_t, DirtyEntityInfo<Edge>> dirtyEdges_;
 		std::unordered_map<int64_t, DirtyEntityInfo<Property>> dirtyProperties_;
@@ -308,33 +293,45 @@ namespace graph::storage {
 		std::unordered_map<int64_t, DirtyEntityInfo<Index>> dirtyIndexes_;
 		std::unordered_map<int64_t, DirtyEntityInfo<State>> dirtyStates_;
 
-		std::atomic<bool>* deleteOperationPerformedFlag_ = nullptr;
+		// Auto-flush settings
+		size_t maxDirtyEntities_ = 1000; // Maximum number of dirty entities before auto-flush
+		std::function<void()> autoFlushCallback_ = nullptr;
 
-		std::unordered_map<std::string, int64_t> stateKeyToIdMap_;
+		// Flag for deletion tracking
+		std::atomic<bool> *deleteOperationPerformedFlag_ = nullptr;
 
-		FileHeader &fileHeader_; // Cached file header
-
-		// ID allocator reference
+		// Dependency components
 		std::shared_ptr<IDAllocator> idAllocator_;
-
 		std::shared_ptr<SegmentTracker> segmentTracker_;
-
 		std::shared_ptr<SpaceManager> spaceManager_;
-
+		std::shared_ptr<SegmentIndexManager> segmentIndexManager_;
+		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
 		std::shared_ptr<traversal::RelationshipTraversal> relationshipTraversal_;
 
-		void initializeSegmentIndexes();
+		// Specialized managers
+		std::shared_ptr<BlobChainManager> blobChainManager_;
+		std::shared_ptr<DeletionManager> deletionManager_;
+		std::unique_ptr<StateChainManager> stateChainManager_;
+		std::shared_ptr<PropertyManager> propertyManager_;
+		std::shared_ptr<NodeManager> nodeManager_;
+		std::shared_ptr<EdgeManager> edgeManager_;
+		std::shared_ptr<PropertyEntityManager> propertyEntityManager_;
+		std::shared_ptr<BlobManager> blobEntityManager_;
+		std::shared_ptr<IndexEntityManager> indexEntityManager_;
+		std::shared_ptr<StateManager> stateEntityManager_;
 
+		// Initialization helpers
+		void initializeSegmentIndexes();
+		void initializeManagers(std::shared_ptr<graph::BlobChainManager> blobChainManager,
+								std::shared_ptr<graph::StateChainManager> stateChainManager);
+
+		// Helper for state operations
+		static bool isChainHeadState(const State &state);
+
+		// Entity loading from disk
 		template<typename EntityType>
 		std::vector<EntityType> loadEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 														size_t limit) const;
-
-		// Auto-flush callback
-		std::function<void()> autoFlushCallback_ = nullptr;
-
-		static constexpr uint32_t PROPERTY_ENTITY_OVERHEAD = 100;
-
-		void ensureBlobStoreInitialized();
 
 		template<typename EntityType>
 		std::optional<EntityType> readEntityFromDisk(int64_t fileOffset) const;
@@ -346,6 +343,7 @@ namespace graph::storage {
 		std::vector<EntityType> readEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 														size_t limit, bool filterDeleted = true) const;
 
+		// Entity property operations
 		template<typename EntityType>
 		void removeEntityProperty(int64_t entityId, const std::string &key);
 
@@ -361,10 +359,9 @@ namespace graph::storage {
 		template<typename EntityType>
 		std::unordered_map<std::string, PropertyValue> getMergedProperties(int64_t entityId);
 
+		// ID management helper
 		template<typename EntityType>
 		void updateEntityId(int64_t tempId, int64_t permId);
-
-		static bool isChainHeadState(const State& state);
 	};
 
 } // namespace graph::storage

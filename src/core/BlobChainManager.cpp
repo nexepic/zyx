@@ -11,7 +11,7 @@
 #include "graph/core/BlobChainManager.hpp"
 #include <stdexcept>
 #include "graph/core/Blob.hpp"
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include "graph/utils/CompressUtils.hpp"
 
 namespace graph {

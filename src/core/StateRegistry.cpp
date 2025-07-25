@@ -10,7 +10,7 @@
 
 #include "graph/core/StateRegistry.hpp"
 #include "graph/core/StateChainManager.hpp"
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include <iostream>
 
 namespace graph {

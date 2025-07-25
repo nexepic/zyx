@@ -29,7 +29,6 @@ void Database::open() {
     storage->open();
     queryEngine = std::make_shared<query::QueryEngine>(storage);
     storage->setQueryEngine(queryEngine);
-    // queryEngine->initialize();
     openFlag = true;
 }
 

@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include "CacheManager.hpp"
 #include "DataManager.hpp"
-#include "SegmentIndexManager.hpp"
+#include "graph/storage/CacheManager.hpp"
+#include "graph/storage/SegmentIndexManager.hpp"
 
 namespace graph::storage {
 

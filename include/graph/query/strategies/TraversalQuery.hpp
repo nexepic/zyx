@@ -16,7 +16,7 @@
 #include <string>
 #include "graph/core/Node.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query {
 

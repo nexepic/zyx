@@ -16,7 +16,7 @@
 #include <variant>
 #include <vector>
 #include "graph/core/IndexTreeManager.hpp"
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 #include <graph/core/StateRegistry.hpp>
 

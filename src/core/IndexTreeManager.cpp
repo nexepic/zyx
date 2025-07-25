@@ -11,7 +11,7 @@
 #include "graph/core/IndexTreeManager.hpp"
 #include <algorithm>
 #include <stdexcept>
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::indexes {
 

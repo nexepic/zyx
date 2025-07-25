@@ -10,7 +10,7 @@
 
 #include "graph/traversal/RelationshipTraversal.hpp"
 #include <unordered_set>
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::traversal {
 

@@ -1,0 +1,30 @@
+/**
+ * @file PropertyEntityManager.cpp
+ * @author Nexepic
+ * @brief This source code is licensed under MIT License.
+ * @date 2025/7/24
+ *
+ * @copyright Copyright (c) 2025 Nexepic
+ *
+ **/
+
+#include "graph/storage/data/PropertyEntityManager.hpp"
+
+namespace graph::storage {
+
+	PropertyEntityManager::PropertyEntityManager(std::shared_ptr<DataManager> dataManager,
+												 std::shared_ptr<PropertyManager> propertyManager,
+												 std::shared_ptr<DeletionManager> deletionManager) :
+		BaseEntityManager<Property>(dataManager, propertyManager, deletionManager) {}
+
+	void PropertyEntityManager::doRemove(Property &property) { deletionManager_->deleteProperty(property); }
+
+	int64_t PropertyEntityManager::doReserveTemporaryId() {
+		auto dataManager = dataManager_.lock();
+		if (!dataManager)
+			return 0;
+
+		return dataManager->reserveTemporaryPropertyId();
+	}
+
+} // namespace graph::storage

@@ -10,7 +10,7 @@
 
 #include "graph/core/StateChainManager.hpp"
 #include <stdexcept>
-#include "graph/storage/DataManager.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph {
 
@@ -109,20 +109,43 @@ namespace graph {
 		return reassembledData;
 	}
 
-	std::vector<State> StateChainManager::updateStateChain(int64_t headStateId, const std::string &newData) const {
-		// Delete existing chain
-		deleteStateChain(headStateId);
+	bool StateChainManager::isDataSame(int64_t headStateId, const std::string &newData) const {
+		try {
+			std::string currentData = readStateChain(headStateId);
+			return currentData == newData;
+		} catch (const std::exception &) {
+			// If we can't read the current data, assume it's different
+			return false;
+		}
+	}
 
-		// Get the original key from the head state
+	std::vector<State> StateChainManager::updateStateChain(int64_t headStateId, const std::string &newData) const {
+		// Check if the data is actually different
+		if (isDataSame(headStateId, newData)) {
+			// Data is the same, return the existing chain
+			auto chainIds = getStateChainIds(headStateId);
+			std::vector<State> existingChain;
+			existingChain.reserve(chainIds.size());
+
+			for (auto stateId: chainIds) {
+				State state = dataManager_->getState(stateId);
+				if (state.getId() != 0 && state.isActive()) {
+					existingChain.push_back(state);
+				}
+			}
+			return existingChain;
+		}
+
+		// Data is different, proceed with update
 		State headState = dataManager_->getState(headStateId);
 		if (headState.getId() == 0 || !headState.isActive()) {
 			throw std::runtime_error("Head state not found or inactive");
 		}
+		const std::string &originalKey = headState.getKey();
 
-		// Create new chain with the same key
-		auto updatedChain = createStateChain(headState.getKey(), newData);
+		deleteStateChain(headStateId);
+		auto updatedChain = createStateChain(originalKey, newData);
 
-		// Add each state entity to the system
 		for (auto &state: updatedChain) {
 			dataManager_->addStateEntity(state);
 		}

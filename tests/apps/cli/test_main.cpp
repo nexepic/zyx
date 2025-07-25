@@ -13,21 +13,25 @@
 
 // Test database creation
 TEST(DatabaseTest, CreateDatabase) {
-	std::string testDbPath = "test_db.metrix";
+    std::string testDbPath = "test_db_create.metrix";
 
-	// Create the database
-	graph::Database db(testDbPath);
+    // Create the database
+    graph::Database db(testDbPath);
 
-	// Check if it was created successfully
-	EXPECT_TRUE(db.exists());
+    // Open the database to create the file
+    db.open();
 
-	// Cleanup
-	remove(testDbPath.c_str());
+    // Check if it was created successfully
+    EXPECT_TRUE(db.exists());
+
+    // Cleanup
+    db.close();
+    remove(testDbPath.c_str());
 }
 
 // Test database opening
 TEST(DatabaseTest, OpenDatabase) {
-	std::string testDbPath = "test_db.metrix";
+	std::string testDbPath = "test_db_open.metrix";
 	graph::Database db(testDbPath);
 
 	db.open();

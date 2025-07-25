@@ -13,7 +13,7 @@
 #include <atomic>
 #include <cstring>
 #include <graph/core/BlobChainManager.hpp>
-#include <graph/storage/DataManager.hpp>
+#include <graph/storage/data/DataManager.hpp>
 #include <sstream>
 #include <stdexcept>
 #include "graph/storage/IDAllocator.hpp"

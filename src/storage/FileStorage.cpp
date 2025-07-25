@@ -13,7 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <graph/core/Database.hpp>
-#include <graph/storage/EntityTraits.hpp>
+#include <graph/storage/data/EntityTraits.hpp>
 #include <sstream>
 #include <utility>
 #include <zlib.h>

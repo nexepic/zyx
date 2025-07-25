@@ -1,44 +1,23 @@
-db_src = files(
-	'core/Database.cpp',
-	'core/Entity.cpp',
-	'core/Edge.cpp',
-	'core/Node.cpp',
-	'core/Property.cpp',
-	'core/Blob.cpp',
-	'core/Index.cpp',
-	'core/State.cpp',
-	'core/IndexTreeManager.cpp',
-	'core/BlobChainManager.cpp',
-	'core/StateChainManager.cpp',
-	'core/StateRegistry.cpp',
-	'core/Transaction.cpp',
-	'core/PropertyValue.cpp',
-	'query/QueryEngine.cpp',
-	'query/QueryExecutor.cpp',
-	'query/QueryPlanner.cpp',
-	'query/indexes/IndexManager.cpp',
-	'query/indexes/IndexBuilder.cpp',
-	'query/indexes/LabelIndex.cpp',
-	'query/indexes/PropertyIndex.cpp',
-	'query/indexes/RelationshipIndex.cpp',
-	'query/indexes/FullTextIndex.cpp',
-	'query/strategies/TraversalQuery.cpp',
-	'storage/FileStorage.cpp',
-	'storage/DataManager.cpp',
-	'storage/DeletionManager.cpp',
-	'storage/SegmentTracker.cpp',
-	'storage/SpaceManager.cpp',
-	'storage/FileHeaderManager.cpp',
-	'storage/DatabaseInspector.cpp',
-	'storage/IDAllocator.cpp',
-	'storage/EntityReferenceUpdater.cpp',
-	'storage/SegmentIndexManager.cpp',
-	'traversal/RelationshipTraversal.cpp',
-	'utils/ChecksumUtils.cpp',
-	'utils/CompressUtils.cpp',
-	'utils/Serializer.cpp',
-	'cli/Repl.cpp'
-)
+python = import('python').find_installation()
+find_result = run_command(python, '-c', '''
+import os
+import sys
+for root, dirs, files in os.walk(sys.argv[1]):
+    for file in files:
+        if file.endswith(".cpp"):
+            print(os.path.join(root, file))
+''', meson.current_source_dir(), check : true)
+
+cpp_files = find_result.stdout().strip().split('\n')
+
+db_src = []
+foreach file : cpp_files
+	if file != ''
+		rel_path = file.replace(meson.current_source_dir() + '/', '')
+		rel_path = rel_path.replace(meson.current_source_dir() + '\\', '')
+		db_src += files(rel_path)
+	endif
+endforeach
 
 # Static library - using dependencies declared in root meson.build
 db_lib = static_library('metrix',
