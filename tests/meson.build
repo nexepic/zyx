@@ -30,7 +30,10 @@ for root, dirs, files in os.walk(sys.argv[1]):
 
 	foreach file : test_files
 		if file != '' and file != '.'
-			test_name = file.split('/')[-1].replace('.cpp', '')
+			# Extract just the filename without path and extension
+			base_name = file.split('/')[-1].replace('.cpp', '')
+			# Create a unique test name by replacing path separators with underscores
+			test_name = file.replace('/', '_').replace('\\', '_').replace('.cpp', '')
 
 			test_executable = executable(test_name,
 										 sources : files(file),
