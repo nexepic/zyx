@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <shared_mutex>
 
 namespace graph::query::indexes {
 
