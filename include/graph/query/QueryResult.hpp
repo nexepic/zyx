@@ -30,7 +30,7 @@ namespace graph::query {
 		[[nodiscard]] size_t nodeCount() const { return nodes_.size(); }
 		[[nodiscard]] size_t edgeCount() const { return edges_.size(); }
 
-		bool isEmpty() const { return nodes_.empty() && edges_.empty(); }
+		[[nodiscard]] bool isEmpty() const { return nodes_.empty() && edges_.empty(); }
 
 	private:
 		std::vector<Node> nodes_;

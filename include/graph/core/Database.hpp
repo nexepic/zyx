@@ -25,8 +25,8 @@ namespace graph {
 
 		void open();
 		void close();
-		void save();
-		void flush();
+		void save() const;
+		void flush() const;
 
 		[[nodiscard]] bool exists() const;
 		[[nodiscard]] bool isOpen() const { return openFlag; }

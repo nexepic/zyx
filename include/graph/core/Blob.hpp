@@ -47,25 +47,25 @@ namespace graph {
 		Blob() = default;
 
 		// Accessor methods for metadata and CRTP base classes
-		const Metadata &getMetadata() const { return metadata; }
+		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
 		Metadata &getMutableMetadata() { return metadata; }
 
 		// Adapter methods for ChainableMixin
-		int64_t getNextChainId() const { return metadata.nextBlobId; }
-		int64_t getPrevChainId() const { return metadata.prevBlobId; }
+		[[nodiscard]] int64_t getNextChainId() const { return metadata.nextBlobId; }
+		[[nodiscard]] int64_t getPrevChainId() const { return metadata.prevBlobId; }
 		void setNextChainId(int64_t id) { metadata.nextBlobId = id; }
 		void setPrevChainId(int64_t id) { metadata.prevBlobId = id; }
 
 		// Legacy methods for backward compatibility
-		int64_t getNextBlobId() const { return getNextId(); }
-		int64_t getPrevBlobId() const { return getPrevId(); }
+		[[nodiscard]] int64_t getNextBlobId() const { return getNextId(); }
+		[[nodiscard]] int64_t getPrevBlobId() const { return getPrevId(); }
 		void setNextBlobId(int64_t id) { setNextId(id); }
 		void setPrevBlobId(int64_t id) { setPrevId(id); }
 
 		// Data methods
-		const char *getData() const { return dataBuffer; }
-		std::string getDataAsString() const;
-		uint32_t getSize() const { return metadata.dataSize; }
+		[[nodiscard]] const char *getData() const { return dataBuffer; }
+		[[nodiscard]] std::string getDataAsString() const;
+		[[nodiscard]] uint32_t getSize() const { return metadata.dataSize; }
 		void setData(const std::string &newData);
 		static bool canFitData(uint32_t dataSize);
 

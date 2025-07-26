@@ -15,7 +15,6 @@
 #include "data/DataManager.hpp"
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
-#include "EntityReferenceUpdater.hpp"
 #include "FileHeaderManager.hpp"
 #include "IDAllocator.hpp"
 #include "StorageHeaders.hpp"

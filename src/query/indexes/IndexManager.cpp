@@ -10,6 +10,7 @@
 
 #include "graph/query/indexes/IndexManager.hpp"
 #include <algorithm>
+#include <ranges>
 #include "graph/query/indexes/IndexBuilder.hpp"
 
 namespace graph::query::indexes {
@@ -114,7 +115,7 @@ namespace graph::query::indexes {
 		return result;
 	}
 
-	bool IndexManager::startBuildLabelIndex() {
+	bool IndexManager::startBuildLabelIndex() const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		if (isIndexBuilding()) {
@@ -127,7 +128,7 @@ namespace graph::query::indexes {
 		return indexBuilder_->startBuildLabelIndex();
 	}
 
-	bool IndexManager::startBuildPropertyIndex(const std::string &key) {
+	bool IndexManager::startBuildPropertyIndex(const std::string &key) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		if (isIndexBuilding()) {
@@ -140,7 +141,7 @@ namespace graph::query::indexes {
 		return indexBuilder_->startBuildPropertyIndex(key);
 	}
 
-	bool IndexManager::startBuildAllIndexes() {
+	bool IndexManager::startBuildAllIndexes() const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		if (isIndexBuilding()) {
@@ -157,7 +158,7 @@ namespace graph::query::indexes {
 
 	int IndexManager::getIndexBuildProgress() const { return indexBuilder_ ? indexBuilder_->getProgress() : 0; }
 
-	bool IndexManager::waitForIndexCompletion(int timeoutSeconds) {
+	bool IndexManager::waitForIndexCompletion(int timeoutSeconds) const {
 		if (!indexBuilder_) {
 			return true; // No builder, so considered complete
 		}
@@ -165,7 +166,7 @@ namespace graph::query::indexes {
 		return indexBuilder_->waitForCompletion(std::chrono::seconds(timeoutSeconds));
 	}
 
-	void IndexManager::cancelIndexBuild() {
+	void IndexManager::cancelIndexBuild() const {
 		if (indexBuilder_) {
 			indexBuilder_->cancel();
 		}
@@ -203,7 +204,7 @@ namespace graph::query::indexes {
 		return false;
 	}
 
-	std::vector<std::pair<std::string, std::string>> IndexManager::listIndexes() {
+	std::vector<std::pair<std::string, std::string>> IndexManager::listIndexes() const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		std::vector<std::pair<std::string, std::string>> result;
 
@@ -271,7 +272,7 @@ namespace graph::query::indexes {
 		indexConfig_.fullTextIndexEnabled = enable;
 	}
 
-	void IndexManager::updateNodeIndexes(const Node &node, bool isNew, bool isDeleted) {
+	void IndexManager::updateNodeIndexes(const Node &node, bool isNew, bool isDeleted) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		const int64_t nodeId = node.getId();
@@ -289,7 +290,7 @@ namespace graph::query::indexes {
 			if (!indexConfig_.propertyIndexKeys.empty()) {
 				auto properties = dataManager_->getNodeProperties(nodeId);
 				for (const auto &[key, _]: properties) {
-					if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
+					if (indexConfig_.propertyIndexKeys.contains(key)) {
 						propertyIndex_->removeProperty(nodeId, key);
 					}
 
@@ -315,7 +316,7 @@ namespace graph::query::indexes {
 
 				// Only process properties that have indexes enabled
 				for (const auto &[key, value]: properties) {
-					if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
+					if (indexConfig_.propertyIndexKeys.contains(key)) {
 						propertyIndex_->addProperty(nodeId, key, value);
 
 						// Also handle full-text index for string properties
@@ -328,7 +329,7 @@ namespace graph::query::indexes {
 		}
 	}
 
-	void IndexManager::updateEdgeIndexes(const Edge &edge, bool isNew, bool isDeleted) {
+	void IndexManager::updateEdgeIndexes(const Edge &edge, bool isNew, bool isDeleted) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		// Skip if relationship indexing is not enabled
@@ -351,9 +352,9 @@ namespace graph::query::indexes {
 	}
 
 	void IndexManager::updateIndexes(const std::vector<Node> &addedNodes, const std::vector<Node> &updatedNodes,
-									 const std::vector<uint64_t> &removedNodeIds, const std::vector<Edge> &addedEdges,
+									 const std::vector<int64_t> &removedNodeIds, const std::vector<Edge> &addedEdges,
 									 const std::vector<Edge> &updatedEdges,
-									 const std::vector<uint64_t> &removedEdgeIds) {
+									 const std::vector<int64_t> &removedEdgeIds) const {
 		// Process nodes
 		for (const auto &nodeId: removedNodeIds) {
 			// Find node in storage
@@ -395,21 +396,21 @@ namespace graph::query::indexes {
 	// Helper method to update property indexes
 	void IndexManager::updatePropertyIndexes(int64_t entityId,
 											 const std::unordered_map<std::string, PropertyValue> &oldProps,
-											 const std::unordered_map<std::string, PropertyValue> &newProps) {
+											 const std::unordered_map<std::string, PropertyValue> &newProps) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		// Get all keys that need updating
 		std::unordered_set<std::string> keys;
-		for (const auto &[key, _]: oldProps) {
-			if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
+		for (const auto &key: oldProps | std::views::keys) {
+			if (indexConfig_.propertyIndexKeys.contains(key)) {
 				keys.insert(key);
 			}
 		}
 
-		for (const auto &[key, _]: newProps) {
-			if (indexConfig_.propertyIndexKeys.find(key) != indexConfig_.propertyIndexKeys.end()) {
-				keys.insert(key);
-			}
+		for (const auto& key : newProps | std::views::keys) {
+		    if (indexConfig_.propertyIndexKeys.contains(key)) {
+		        keys.insert(key);
+		    }
 		}
 
 		// Process each key

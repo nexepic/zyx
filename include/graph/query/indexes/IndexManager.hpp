@@ -42,21 +42,21 @@ namespace graph::query::indexes {
 		bool buildIndexes();
 
 		// Async index building methods
-		bool startBuildLabelIndex();
-		bool startBuildPropertyIndex(const std::string &key);
-		bool startBuildAllIndexes();
+		bool startBuildLabelIndex() const;
+		bool startBuildPropertyIndex(const std::string &key) const;
+		bool startBuildAllIndexes() const;
 
 		// Check status of async index building
 		bool isIndexBuilding() const;
 		int getIndexBuildProgress() const;
-		bool waitForIndexCompletion(int timeoutSeconds = 60);
-		void cancelIndexBuild();
+		bool waitForIndexCompletion(int timeoutSeconds = 60) const;
+		void cancelIndexBuild() const;
 
 		// Drop index methods
 		bool dropIndex(const std::string &indexType, const std::string &key = "");
 
 		// List all active indexes
-		std::vector<std::pair<std::string, std::string>> listIndexes();
+		std::vector<std::pair<std::string, std::string>> listIndexes() const;
 
 		// Persist indexes to storage
 		void persistState() const;
@@ -69,14 +69,14 @@ namespace graph::query::indexes {
 
 		// Update indexes with entity changes (for incremental updates)
 		void updateIndexes(const std::vector<Node> &addedNodes, const std::vector<Node> &updatedNodes,
-						   const std::vector<uint64_t> &removedNodeIds, const std::vector<Edge> &addedEdges,
-						   const std::vector<Edge> &updatedEdges, const std::vector<uint64_t> &removedEdgeIds);
+						   const std::vector<int64_t> &removedNodeIds, const std::vector<Edge> &addedEdges,
+						   const std::vector<Edge> &updatedEdges, const std::vector<int64_t> &removedEdgeIds) const;
 
 		// Update a single node in all enabled indexes
-		void updateNodeIndexes(const Node &node, bool isNew = false, bool isDeleted = false);
+		void updateNodeIndexes(const Node &node, bool isNew = false, bool isDeleted = false) const;
 
 		// Update a single edge in all enabled indexes
-		void updateEdgeIndexes(const Edge &edge, bool isNew = false, bool isDeleted = false);
+		void updateEdgeIndexes(const Edge &edge, bool isNew = false, bool isDeleted = false) const;
 
 		// Accessors for individual indexes
 		std::shared_ptr<LabelIndex> getLabelIndex() const;
@@ -114,7 +114,7 @@ namespace graph::query::indexes {
 
 		// Helper method to update property indexes
 		void updatePropertyIndexes(int64_t entityId, const std::unordered_map<std::string, PropertyValue> &oldProps,
-								   const std::unordered_map<std::string, PropertyValue> &newProps);
+								   const std::unordered_map<std::string, PropertyValue> &newProps) const;
 	};
 
 } // namespace graph::query::indexes

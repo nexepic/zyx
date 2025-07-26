@@ -19,7 +19,7 @@ namespace graph {
 
 	std::vector<State> StateChainManager::createStateChain(const std::string &key, const std::string &data) const {
 		// Split into chunks
-		auto chunks = splitData(data);
+		const auto chunks = splitData(data);
 
 		// Create state entities
 		std::vector<State> stateChain;
@@ -58,7 +58,7 @@ namespace graph {
 		return stateChain;
 	}
 
-	std::string StateChainManager::readStateChain(int64_t headStateId) const {
+	std::string StateChainManager::readStateChain(const int64_t headStateId) const {
 		// Get the head state
 		State headState = dataManager_->getState(headStateId);
 		if (headState.getId() == 0 || !headState.isActive()) {
@@ -109,7 +109,7 @@ namespace graph {
 		return reassembledData;
 	}
 
-	bool StateChainManager::isDataSame(int64_t headStateId, const std::string &newData) const {
+	bool StateChainManager::isDataSame(const int64_t headStateId, const std::string &newData) const {
 		try {
 			std::string currentData = readStateChain(headStateId);
 			return currentData == newData;
@@ -119,7 +119,7 @@ namespace graph {
 		}
 	}
 
-	std::vector<State> StateChainManager::updateStateChain(int64_t headStateId, const std::string &newData) const {
+	std::vector<State> StateChainManager::updateStateChain(const int64_t headStateId, const std::string &newData) const {
 		// Check if the data is actually different
 		if (isDataSame(headStateId, newData)) {
 			// Data is the same, return the existing chain
@@ -153,7 +153,7 @@ namespace graph {
 		return updatedChain;
 	}
 
-	void StateChainManager::deleteStateChain(int64_t headStateId) const {
+	void StateChainManager::deleteStateChain(const int64_t headStateId) const {
 		auto chainIds = getStateChainIds(headStateId);
 
 		// Delete each state in the chain
@@ -165,7 +165,7 @@ namespace graph {
 		}
 	}
 
-	std::vector<int64_t> StateChainManager::getStateChainIds(int64_t headStateId) const {
+	std::vector<int64_t> StateChainManager::getStateChainIds(const int64_t headStateId) const {
 		std::vector<int64_t> chainIds;
 		int64_t currentStateId = headStateId;
 

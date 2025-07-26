@@ -23,10 +23,10 @@ namespace graph::query::indexes {
 		FullTextIndex();
 
 		// Add a text property to the index
-		void addTextProperty(uint64_t nodeId, const std::string& key, const std::string& text);
+		void addTextProperty(int64_t nodeId, const std::string& key, const std::string& text);
 
 		// Remove a text property from the index
-		void removeTextProperty(uint64_t nodeId, const std::string& key);
+		void removeTextProperty(int64_t nodeId, const std::string& key);
 
 		// Find nodes with text properties containing the search text
 		[[nodiscard]] std::vector<int64_t> search(const std::string& key, const std::string& searchText) const;

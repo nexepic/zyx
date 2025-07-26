@@ -25,10 +25,10 @@ namespace graph {
 		explicit BlobChainManager(std::shared_ptr<storage::DataManager> dataManager);
 
 		// Split data into multiple blob entities
-		std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType, const std::string &data) const;
+		[[nodiscard]] std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType, const std::string &data) const;
 
 		// Reassemble data from a chain of blob entities
-		std::string readBlobChain(int64_t headBlobId) const;
+		[[nodiscard]] std::string readBlobChain(int64_t headBlobId) const;
 
 		// Delete an entire chain of blob entities
 		void deleteBlobChain(int64_t headBlobId) const;
@@ -43,6 +43,6 @@ namespace graph {
 		static std::vector<std::string> splitData(const std::string &data);
 
 		// Get all blob IDs in a chain
-		std::vector<int64_t> getBlobChainIds(int64_t headBlobId) const;
+		[[nodiscard]] std::vector<int64_t> getBlobChainIds(int64_t headBlobId) const;
 	};
 }

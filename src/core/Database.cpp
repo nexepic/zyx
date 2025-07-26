@@ -13,105 +13,101 @@
 
 namespace graph {
 
-Database::Database(const std::string& dbPath, size_t cacheSize)
-    : dbPath(dbPath),
-      openFlag(false) {
-    storage = std::make_shared<storage::FileStorage>(dbPath, cacheSize);
-}
+	Database::Database(const std::string &dbPath, size_t cacheSize) : dbPath(dbPath), openFlag(false) {
+		storage = std::make_shared<storage::FileStorage>(dbPath, cacheSize);
+	}
 
-Database::~Database() {
-    close();
-}
+	Database::~Database() { close(); }
 
-void Database::open() {
-    if (openFlag) return;
+	void Database::open() {
+		if (openFlag)
+			return;
 
-    storage->open();
-    queryEngine = std::make_shared<query::QueryEngine>(storage);
-    storage->setQueryEngine(queryEngine);
-    openFlag = true;
-}
+		storage->open();
+		queryEngine = std::make_shared<query::QueryEngine>(storage);
+		storage->setQueryEngine(queryEngine);
+		openFlag = true;
+	}
 
-void Database::close() {
-    if (!openFlag) return;
+	void Database::close() {
+		if (!openFlag)
+			return;
 
-    storage->close();
-    storage.reset();
-    queryEngine.reset();
-    openFlag = false;
-}
+		storage->close();
+		storage.reset();
+		queryEngine.reset();
+		openFlag = false;
+	}
 
-void Database::save() {
-    if (openFlag) {
-        storage->save();
-    }
-}
+	void Database::save() const {
+		if (openFlag) {
+			storage->save();
+		}
+	}
 
-void Database::flush() {
-    if (openFlag) {
-        storage->flush();
-    }
-}
+	void Database::flush() const {
+		if (openFlag) {
+			storage->flush();
+		}
+	}
 
-bool Database::exists() const {
-    return std::filesystem::exists(dbPath);
-}
+	bool Database::exists() const { return std::filesystem::exists(dbPath); }
 
-Transaction Database::beginTransaction() {
-    if (!openFlag) {
-        open();
-    }
+	Transaction Database::beginTransaction() {
+		if (!openFlag) {
+			open();
+		}
 
-    storage::FileStorage::beginWrite();
-    return Transaction(*this);
-}
+		storage::FileStorage::beginWrite();
+		return Transaction(*this);
+	}
 
-Node Database::getNode(int64_t id) {
-    if (!openFlag) {
-        open();
-    }
+	Node Database::getNode(int64_t id) {
+		if (!openFlag) {
+			open();
+		}
 
-    return storage->getNode(id);
-}
+		return storage->getNode(id);
+	}
 
-Edge Database::getEdge(int64_t id) {
-    if (!openFlag) {
-        open();
-    }
+	Edge Database::getEdge(int64_t id) {
+		if (!openFlag) {
+			open();
+		}
 
-    return storage->getEdge(id);
-}
+		return storage->getEdge(id);
+	}
 
-std::vector<Node> Database::getNodes(const std::vector<int64_t>& ids) {
-    if (!openFlag) {
-        open();
-    }
+	std::vector<Node> Database::getNodes(const std::vector<int64_t> &ids) {
+		if (!openFlag) {
+			open();
+		}
 
-    return storage->getNodes(ids);
-}
+		return storage->getNodes(ids);
+	}
 
-std::vector<Edge> Database::getEdges(const std::vector<int64_t>& ids) {
-    if (!openFlag) {
-        open();
-    }
+	std::vector<Edge> Database::getEdges(const std::vector<int64_t> &ids) {
+		if (!openFlag) {
+			open();
+		}
 
-    return storage->getEdges(ids);
-}
+		return storage->getEdges(ids);
+	}
 
-std::vector<Node> Database::getNodesInRange(int64_t startId, int64_t endId, size_t limit) {
-    if (!openFlag) {
-        open();
-    }
+	std::vector<Node> Database::getNodesInRange(int64_t startId, int64_t endId, size_t limit) {
+		if (!openFlag) {
+			open();
+		}
 
-    return storage->getNodesInRange(startId, endId, limit);
-}
+		return storage->getNodesInRange(startId, endId, limit);
+	}
 
-std::vector<Edge> Database::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) {
-    if (!openFlag) {
-        open();
-    }
+	std::vector<Edge> Database::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) {
+		if (!openFlag) {
+			open();
+		}
 
-    return storage->getEdgesInRange(startId, endId, limit);
-}
+		return storage->getEdgesInRange(startId, endId, limit);
+	}
 
 } // namespace graph

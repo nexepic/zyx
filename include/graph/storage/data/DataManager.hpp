@@ -82,7 +82,7 @@ namespace graph::storage {
 
 		// Header access
 		[[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
-		FileHeader &getFileHeaderRef() { return fileHeader_; }
+		FileHeader &getFileHeaderRef() const { return fileHeader_; }
 
 		// Node-specific operations
 		void addNode(const Node &node);
@@ -221,12 +221,12 @@ namespace graph::storage {
 		[[nodiscard]] State loadStateFromDisk(int64_t id) const;
 
 		// Cache access (for backward compatibility)
-		[[nodiscard]] LRUCache<int64_t, Node> &getNodeCache() { return nodeCache_; }
-		[[nodiscard]] LRUCache<int64_t, Edge> &getEdgeCache() { return edgeCache_; }
-		[[nodiscard]] LRUCache<int64_t, Property> &getPropertyCache() { return propertyCache_; }
-		[[nodiscard]] LRUCache<int64_t, Blob> &getBlobCache() { return blobCache_; }
-		[[nodiscard]] LRUCache<int64_t, Index> &getIndexCache() { return indexCache_; }
-		[[nodiscard]] LRUCache<int64_t, State> &getStateCache() { return stateCache_; }
+		[[nodiscard]] LRUCache<int64_t, Node> &getNodeCache() const { return nodeCache_; }
+		[[nodiscard]] LRUCache<int64_t, Edge> &getEdgeCache() const { return edgeCache_; }
+		[[nodiscard]] LRUCache<int64_t, Property> &getPropertyCache() const { return propertyCache_; }
+		[[nodiscard]] LRUCache<int64_t, Blob> &getBlobCache() const { return blobCache_; }
+		[[nodiscard]] LRUCache<int64_t, Index> &getIndexCache() const { return indexCache_; }
+		[[nodiscard]] LRUCache<int64_t, State> &getStateCache() const { return stateCache_; }
 
 		// Dirty collections access (for backward compatibility)
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Node>> &getDirtyNodes() { return dirtyNodes_; }
@@ -322,8 +322,8 @@ namespace graph::storage {
 
 		// Initialization helpers
 		void initializeSegmentIndexes();
-		void initializeManagers(std::shared_ptr<graph::BlobChainManager> blobChainManager,
-								std::shared_ptr<graph::StateChainManager> stateChainManager);
+		void initializeManagers(std::shared_ptr<BlobChainManager> blobChainManager,
+								std::shared_ptr<StateChainManager> stateChainManager);
 
 		// Helper for state operations
 		static bool isChainHeadState(const State &state);
@@ -350,14 +350,6 @@ namespace graph::storage {
 		// Helper to check if an entity exists in dirty collections
 		template<typename EntityType>
 		std::optional<EntityType> getEntityFromDirty(int64_t id);
-
-		// Helper to check if a property is in dirty collections
-		template<typename EntityType>
-		std::optional<PropertyValue> getPropertyFromMemory(int64_t entityId, const std::string &key);
-
-		// Helper to retrieve all properties for an entity, including dirty ones
-		template<typename EntityType>
-		std::unordered_map<std::string, PropertyValue> getMergedProperties(int64_t entityId);
 
 		// ID management helper
 		template<typename EntityType>

@@ -55,42 +55,42 @@ namespace graph::storage {
 		Index() = default;
 
 		// Metadata access for CRTP
-		const Metadata &getMetadata() const { return metadata; }
+		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
 		Metadata &getMutableMetadata() { return metadata; }
 
 		// Specialized getters/setters
-		NodeType getNodeType() const { return metadata.nodeType; }
-		uint32_t getIndexType() const { return metadata.indexType; }
-		bool isLeaf() const { return metadata.nodeType == NodeType::LEAF; }
-		uint32_t getKeyCount() const { return metadata.keyCount; }
-		uint8_t getLevel() const { return metadata.level; }
+		[[nodiscard]] NodeType getNodeType() const { return metadata.nodeType; }
+		[[nodiscard]] uint32_t getIndexType() const { return metadata.indexType; }
+		[[nodiscard]] bool isLeaf() const { return metadata.nodeType == NodeType::LEAF; }
+		[[nodiscard]] uint32_t getKeyCount() const { return metadata.keyCount; }
+		[[nodiscard]] uint8_t getLevel() const { return metadata.level; }
 		void setLevel(uint8_t level) { metadata.level = level; }
 
 		// Parent links
-		int64_t getParentId() const { return metadata.parentId; }
+		[[nodiscard]] int64_t getParentId() const { return metadata.parentId; }
 		void setParentId(int64_t id) { metadata.parentId = id; }
 
 		// Leaf node traversal links
-		int64_t getNextLeafId() const { return metadata.nextLeafId; }
-		int64_t getPrevLeafId() const { return metadata.prevLeafId; }
+		[[nodiscard]] int64_t getNextLeafId() const { return metadata.nextLeafId; }
+		[[nodiscard]] int64_t getPrevLeafId() const { return metadata.prevLeafId; }
 		void setNextLeafId(int64_t id) { metadata.nextLeafId = id; }
 		void setPrevLeafId(int64_t id) { metadata.prevLeafId = id; }
 
 		// For B+Tree operations with strings as keys (for label index)
 		bool insertStringKey(const std::string &key, int64_t value);
 		bool removeStringKey(const std::string &key, int64_t value);
-		std::vector<int64_t> findStringValues(const std::string &key) const;
+		[[nodiscard]] std::vector<int64_t> findStringValues(const std::string &key) const;
 
 		// For internal nodes to manage child pointers
 		bool addChild(const std::string &key, int64_t childId);
 		bool removeChild(const std::string &key);
-		int64_t findChild(const std::string &key) const;
-		std::vector<std::pair<std::string, int64_t>> getAllChildren() const;
+		[[nodiscard]] int64_t findChild(const std::string &key) const;
+		[[nodiscard]] std::vector<std::pair<std::string, int64_t>> getAllChildren() const;
 
 		// For calculating space requirements
 		static constexpr size_t getTotalSize() { return TOTAL_INDEX_SIZE; }
 
-		uint32_t getChildCount() const { return metadata.childCount; }
+		[[nodiscard]] uint32_t getChildCount() const { return metadata.childCount; }
 
 		// Serialization
 		void serialize(std::ostream &os) const;
@@ -102,20 +102,20 @@ namespace graph::storage {
 			std::vector<int64_t> values;
 		};
 
-		std::vector<KeyValuePair> getAllKeyValues(std::shared_ptr<DataManager> dataManager) const;
-		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues, std::shared_ptr<DataManager> dataManager);
+		[[nodiscard]] std::vector<KeyValuePair> getAllKeyValues(const std::shared_ptr<DataManager>& dataManager) const;
+		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues, const std::shared_ptr<DataManager>& dataManager);
 
-		std::vector<KeyValuePair> deserializeStringKVs() const;
+		[[nodiscard]] std::vector<KeyValuePair> deserializeStringKVs() const;
 		void serializeStringKVs(const std::vector<KeyValuePair> &kvs);
 
 		void setDataStorageType(DataStorageType type);
-		DataStorageType getDataStorageType() const;
+		[[nodiscard]] DataStorageType getDataStorageType() const;
 		void setBlobId(int64_t blobId);
-		int64_t getBlobId() const;
-		bool hasBlobStorage() const;
+		[[nodiscard]] int64_t getBlobId() const;
+		[[nodiscard]] bool hasBlobStorage() const;
 
-		void storeDataInBlob(std::shared_ptr<DataManager> dataManager, const std::string &data);
-		std::string retrieveDataFromBlob(std::shared_ptr<DataManager> dataManager) const;
+		void storeDataInBlob(const std::shared_ptr<DataManager>& dataManager, const std::string &data);
+		[[nodiscard]] std::string retrieveDataFromBlob(const std::shared_ptr<DataManager>& dataManager) const;
 
 	private:
 		Metadata metadata;
@@ -126,7 +126,7 @@ namespace graph::storage {
 			int64_t childId;
 		};
 
-		std::vector<ChildEntry> deserializeChildren() const;
+		[[nodiscard]] std::vector<ChildEntry> deserializeChildren() const;
 		void serializeChildren(const std::vector<ChildEntry> &children);
 	};
 

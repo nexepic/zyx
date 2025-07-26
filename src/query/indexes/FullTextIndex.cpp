@@ -11,27 +11,24 @@
 #include "graph/query/indexes/FullTextIndex.hpp"
 #include <algorithm>
 #include <cctype>
-#include <mutex>
 #include <sstream>
 
 namespace graph::query::indexes {
 
 	FullTextIndex::FullTextIndex() = default;
 
-	void FullTextIndex::addTextProperty(uint64_t nodeId, const std::string &key, const std::string &text) {
+	void FullTextIndex::addTextProperty(int64_t nodeId, const std::string &key, const std::string &text) {
 		std::vector<std::string> tokens = tokenize(text);
 
 		std::unique_lock lock(mutex_);
 
 		// Remove old tokens if they exist
-		auto nodeIt = nodeTokens_.find(nodeId);
-		if (nodeIt != nodeTokens_.end()) {
-			auto keyIt = nodeIt->second.find(key);
-			if (keyIt != nodeIt->second.end()) {
+		if (const auto nodeIt = nodeTokens_.find(nodeId); nodeIt != nodeTokens_.end()) {
+			if (const auto keyIt = nodeIt->second.find(key); keyIt != nodeIt->second.end()) {
 				// Remove old tokens from inverted index
 				for (const auto &token: keyIt->second) {
 					auto &nodeIds = invertedIndex_[key][token];
-					nodeIds.erase(std::remove(nodeIds.begin(), nodeIds.end(), nodeId), nodeIds.end());
+					nodeIds.erase(std::ranges::remove(nodeIds, nodeId).begin(), nodeIds.end());
 
 					// Clean up empty entries
 					if (nodeIds.empty()) {
@@ -48,7 +45,7 @@ namespace graph::query::indexes {
 		}
 
 		// Add new tokens
-		std::set<std::string> uniqueTokens(tokens.begin(), tokens.end());
+		std::set uniqueTokens(tokens.begin(), tokens.end());
 		for (const auto &token: uniqueTokens) {
 			invertedIndex_[key][token].push_back(nodeId);
 		}
@@ -57,7 +54,7 @@ namespace graph::query::indexes {
 		nodeTokens_[nodeId][key] = uniqueTokens;
 	}
 
-	void FullTextIndex::removeTextProperty(uint64_t nodeId, const std::string &key) {
+	void FullTextIndex::removeTextProperty(int64_t nodeId, const std::string &key) {
 		std::unique_lock lock(mutex_);
 
 		auto nodeIt = nodeTokens_.find(nodeId);

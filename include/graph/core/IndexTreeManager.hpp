@@ -50,7 +50,7 @@ namespace graph::query::indexes {
 		 *
 		 * @return The ID of the root node
 		 */
-		int64_t initialize();
+		int64_t initialize() const;
 
 		/**
 		 * Clears the entire tree structure
@@ -59,7 +59,7 @@ namespace graph::query::indexes {
 		 * @param rootId ID of the current root node
 		 * @return ID of the new root node
 		 */
-		void clear(int64_t rootId);
+		void clear(int64_t rootId) const;
 
 		/**
 		 * Inserts a key-value pair into the tree
@@ -79,7 +79,7 @@ namespace graph::query::indexes {
 		 * @param value The value to remove
 		 * @return true if the pair was found and removed
 		 */
-		bool remove(int64_t rootId, const KeyType &key, int64_t value);
+		bool remove(int64_t rootId, const KeyType &key, int64_t value) const;
 
 		/**
 		 * Finds all values associated with a key
@@ -112,14 +112,14 @@ namespace graph::query::indexes {
 		uint32_t indexType_;
 
 		// Helper methods for B+Tree operations
-		int64_t createNewNode(storage::Index::NodeType type);
+		int64_t createNewNode(storage::Index::NodeType type) const;
 
 		// Key comparison helper
 		static bool compareKeys(const KeyType &a, const KeyType &b);
 		static std::string keyToString(const KeyType &key);
 
 		// Insert helpers
-		bool insertIntoLeaf(int64_t leafId, const KeyType &key, int64_t value);
+		bool insertIntoLeaf(int64_t leafId, const KeyType &key, int64_t value) const;
 		void splitLeaf(int64_t rootId, int64_t leafId, const KeyType &key, int64_t value, int64_t &newRootId);
 		void insertIntoParent(int64_t rootId, int64_t nodeId, const KeyType &key, int64_t newNodeId,
 							  int64_t &newRootId);
@@ -130,7 +130,7 @@ namespace graph::query::indexes {
 			std::vector<int64_t> values;
 		};
 		std::vector<KeyValueEntry> getAllKeyValuesFromNode(const storage::Index &node) const;
-		void setAllKeyValuesToNode(storage::Index &node, const std::vector<KeyValueEntry> &entries);
+		void setAllKeyValuesToNode(storage::Index &node, const std::vector<KeyValueEntry> &entries) const;
 
 		// Convert between variant key types and specific types
 		static void setEntityKey(storage::Index &entity, const KeyType &key, int64_t childOrValue);

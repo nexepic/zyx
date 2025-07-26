@@ -21,7 +21,7 @@
 
 namespace graph::storage {
 
-	Index::Index(int64_t id, NodeType type, uint32_t indexType) {
+	Index::Index(const int64_t id, NodeType type, const uint32_t indexType) {
 		metadata.id = id;
 		metadata.nodeType = type;
 		metadata.indexType = indexType;
@@ -42,7 +42,7 @@ namespace graph::storage {
 		return getDataStorageType() == DataStorageType::BLOB_CHAIN && getBlobId() != 0;
 	}
 
-	void Index::storeDataInBlob(std::shared_ptr<DataManager> dataManager, const std::string &data) {
+	void Index::storeDataInBlob(const std::shared_ptr<DataManager> &dataManager, const std::string &data) {
 		if (!dataManager) {
 			throw std::runtime_error("DataManager is required for blob storage operations");
 		}
@@ -77,9 +77,9 @@ namespace graph::storage {
 		std::memset(dataBuffer, 0, DATA_SIZE);
 	}
 
-	std::string Index::retrieveDataFromBlob(std::shared_ptr<DataManager> dataManager) const {
+	std::string Index::retrieveDataFromBlob(const std::shared_ptr<DataManager> &dataManager) const {
 		if (!hasBlobStorage()) {
-			return std::string(dataBuffer, DATA_SIZE);
+			return {dataBuffer, DATA_SIZE};
 		}
 
 		if (!dataManager) {
@@ -135,7 +135,7 @@ namespace graph::storage {
 	}
 
 	// Update getAllKeyValues to handle blob storage
-	std::vector<Index::KeyValuePair> Index::getAllKeyValues(std::shared_ptr<DataManager> dataManager) const {
+	std::vector<Index::KeyValuePair> Index::getAllKeyValues(const std::shared_ptr<DataManager> &dataManager) const {
 		if (metadata.nodeType != NodeType::LEAF) {
 			return {}; // Only leaf nodes store key-values
 		}
@@ -156,7 +156,7 @@ namespace graph::storage {
 				KeyValuePair kvp;
 				kvp.key = utils::Serializer::readString(is);
 
-				uint32_t valueCount = utils::Serializer::readPOD<uint32_t>(is);
+				auto valueCount = utils::Serializer::readPOD<uint32_t>(is);
 				kvp.values.reserve(valueCount);
 
 				for (uint32_t j = 0; j < valueCount; j++) {
@@ -185,7 +185,8 @@ namespace graph::storage {
 	}
 
 	// Update setAllKeyValues to handle blob storage
-	void Index::setAllKeyValues(const std::vector<KeyValuePair> &keyValues, std::shared_ptr<DataManager> dataManager) {
+	void Index::setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
+								const std::shared_ptr<DataManager> &dataManager) {
 		if (metadata.nodeType != NodeType::LEAF) {
 			return; // Only leaf nodes store key-values
 		}
@@ -240,7 +241,7 @@ namespace graph::storage {
 			KeyValuePair kvp;
 			kvp.key = utils::Serializer::readString(is);
 
-			uint32_t valueCount = utils::Serializer::readPOD<uint32_t>(is);
+			auto valueCount = utils::Serializer::readPOD<uint32_t>(is);
 			kvp.values.reserve(valueCount);
 
 			for (uint32_t j = 0; j < valueCount; j++) {
@@ -318,11 +319,11 @@ namespace graph::storage {
 		auto kvs = deserializeStringKVs();
 
 		// Find key or insert position
-		auto it = std::find_if(kvs.begin(), kvs.end(), [&key](const KeyValuePair &kvp) { return kvp.key == key; });
+		auto it = std::ranges::find_if(kvs, [&key](const KeyValuePair &kvp) { return kvp.key == key; });
 
 		if (it != kvs.end()) {
 			// Key exists, add value if it doesn't already exist
-			if (std::find(it->values.begin(), it->values.end(), value) == it->values.end()) {
+			if (std::ranges::find(it->values, value) == it->values.end()) {
 				it->values.push_back(value);
 				serializeStringKVs(kvs);
 				return true;
@@ -335,9 +336,8 @@ namespace graph::storage {
 			newKvp.values.push_back(value);
 
 			// Find sorted position
-			auto insertPos =
-					std::lower_bound(kvs.begin(), kvs.end(), newKvp,
-									 [](const KeyValuePair &a, const KeyValuePair &b) { return a.key < b.key; });
+			auto insertPos = std::ranges::lower_bound(
+					kvs, newKvp, [](const KeyValuePair &a, const KeyValuePair &b) { return a.key < b.key; });
 
 			kvs.insert(insertPos, newKvp);
 			serializeStringKVs(kvs);
@@ -353,12 +353,12 @@ namespace graph::storage {
 		auto kvs = deserializeStringKVs();
 
 		// Find key
-		auto it = std::find_if(kvs.begin(), kvs.end(), [&key](const KeyValuePair &kvp) { return kvp.key == key; });
+		auto it = std::ranges::find_if(kvs, [&key](const KeyValuePair &kvp) { return kvp.key == key; });
 
 		if (it != kvs.end()) {
 			// Remove value
 			auto &values = it->values;
-			auto valueIt = std::find(values.begin(), values.end(), value);
+			auto valueIt = std::ranges::find(values, value);
 
 			if (valueIt != values.end()) {
 				values.erase(valueIt);
@@ -384,7 +384,7 @@ namespace graph::storage {
 		auto kvs = deserializeStringKVs();
 
 		// Find key
-		auto it = std::find_if(kvs.begin(), kvs.end(), [&key](const KeyValuePair &kvp) { return kvp.key == key; });
+		auto it = std::ranges::find_if(kvs, [&key](const KeyValuePair &kvp) { return kvp.key == key; });
 
 		if (it != kvs.end()) {
 			return it->values;
@@ -401,8 +401,7 @@ namespace graph::storage {
 		auto children = deserializeChildren();
 
 		// Check if key already exists
-		auto it = std::find_if(children.begin(), children.end(),
-							   [&key](const ChildEntry &entry) { return entry.key == key; });
+		auto it = std::ranges::find_if(children, [&key](const ChildEntry &entry) { return entry.key == key; });
 
 		if (it != children.end()) {
 			// Update existing child
@@ -412,8 +411,8 @@ namespace graph::storage {
 			ChildEntry newEntry{key, childId};
 
 			// Find sorted position
-			auto insertPos = std::lower_bound(children.begin(), children.end(), newEntry,
-											  [](const ChildEntry &a, const ChildEntry &b) { return a.key < b.key; });
+			auto insertPos = std::ranges::lower_bound(
+					children, newEntry, [](const ChildEntry &a, const ChildEntry &b) { return a.key < b.key; });
 
 			children.insert(insertPos, newEntry);
 		}
@@ -430,8 +429,7 @@ namespace graph::storage {
 		auto children = deserializeChildren();
 
 		// Find key
-		auto it = std::find_if(children.begin(), children.end(),
-							   [&key](const ChildEntry &entry) { return entry.key == key; });
+		auto it = std::ranges::find_if(children, [&key](const ChildEntry &entry) { return entry.key == key; });
 
 		if (it != children.end()) {
 			children.erase(it);
@@ -483,6 +481,7 @@ namespace graph::storage {
 		auto children = deserializeChildren();
 		std::vector<std::pair<std::string, int64_t>> result;
 
+		result.reserve(children.size());
 		for (const auto &entry: children) {
 			result.emplace_back(entry.key, entry.childId);
 		}

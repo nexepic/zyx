@@ -42,7 +42,7 @@ namespace graph {
 
 	void Node::addProperty(const std::string &key, const PropertyValue &value) { properties[key] = value; }
 
-	bool Node::hasProperty(const std::string &key) const { return properties.count(key) > 0; }
+	bool Node::hasProperty(const std::string &key) const { return properties.contains(key); }
 
 	PropertyValue Node::getProperty(const std::string &key) const {
 		auto it = properties.find(key);

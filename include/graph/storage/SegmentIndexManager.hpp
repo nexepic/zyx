@@ -14,7 +14,6 @@
 #include <mutex>
 #include <vector>
 #include "SegmentTracker.hpp"
-#include "SegmentType.hpp"
 #include "StorageHeaders.hpp"
 
 namespace graph::storage {

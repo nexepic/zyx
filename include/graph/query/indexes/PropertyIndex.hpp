@@ -17,7 +17,6 @@
 #include <vector>
 #include "graph/core/IndexTreeManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
-
 #include <graph/core/StateRegistry.hpp>
 
 namespace graph::query::indexes {
@@ -66,8 +65,8 @@ namespace graph::query::indexes {
 
 		bool hasKeyIndexed(const std::string &key) const {
 			std::shared_lock lock(mutex_);
-			return stringRoots_.find(key) != stringRoots_.end() || intRoots_.find(key) != intRoots_.end() ||
-				   doubleRoots_.find(key) != doubleRoots_.end() || boolRoots_.find(key) != boolRoots_.end();
+			return stringRoots_.contains(key) || intRoots_.contains(key) || doubleRoots_.contains(key) ||
+				   boolRoots_.contains(key);
 		}
 
 	private:

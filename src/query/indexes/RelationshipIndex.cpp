@@ -9,7 +9,7 @@
  **/
 
 #include "graph/query/indexes/RelationshipIndex.hpp"
-#include <algorithm>
+#include <ranges>
 
 namespace graph::query::indexes {
 
@@ -47,15 +47,14 @@ namespace graph::query::indexes {
 
 		// Remove from label index
 		auto &labelEdges = labelToEdges_[info.label];
-		labelEdges.erase(std::remove(labelEdges.begin(), labelEdges.end(), edgeId), labelEdges.end());
+		std::erase(labelEdges, edgeId);
 		if (labelEdges.empty()) {
 			labelToEdges_.erase(info.label);
 		}
 
 		// Remove from node-to-node index
 		auto &nodeToNodeEdgesList = nodeToNodeEdges_[info.fromNodeId][info.toNodeId];
-		nodeToNodeEdgesList.erase(std::remove(nodeToNodeEdgesList.begin(), nodeToNodeEdgesList.end(), edgeId),
-								  nodeToNodeEdgesList.end());
+		std::erase(nodeToNodeEdgesList, edgeId);
 		if (nodeToNodeEdgesList.empty()) {
 			nodeToNodeEdges_[info.fromNodeId].erase(info.toNodeId);
 			if (nodeToNodeEdges_[info.fromNodeId].empty()) {
@@ -65,7 +64,7 @@ namespace graph::query::indexes {
 
 		// Remove from outgoing edges index
 		auto &outEdges = outgoingEdges_[info.fromNodeId][info.label];
-		outEdges.erase(std::remove(outEdges.begin(), outEdges.end(), edgeId), outEdges.end());
+		std::erase(outEdges, edgeId);
 		if (outEdges.empty()) {
 			outgoingEdges_[info.fromNodeId].erase(info.label);
 			if (outgoingEdges_[info.fromNodeId].empty()) {
@@ -75,7 +74,7 @@ namespace graph::query::indexes {
 
 		// Remove from incoming edges index
 		auto &inEdges = incomingEdges_[info.toNodeId][info.label];
-		inEdges.erase(std::remove(inEdges.begin(), inEdges.end(), edgeId), inEdges.end());
+		std::erase(inEdges, edgeId);
 		if (inEdges.empty()) {
 			incomingEdges_[info.toNodeId].erase(info.label);
 			if (incomingEdges_[info.toNodeId].empty()) {
@@ -125,8 +124,8 @@ namespace graph::query::indexes {
 		if (label.empty()) {
 			// Return all outgoing edges regardless of label
 			std::vector<int64_t> result;
-			for (const auto &[edgeLabel, edges]: nodeIt->second) {
-				result.insert(result.end(), edges.begin(), edges.end());
+			for (const auto& edges : nodeIt->second | std::views::values) {
+			    result.insert(result.end(), edges.begin(), edges.end());
 			}
 			return result;
 		} else {
@@ -150,8 +149,8 @@ namespace graph::query::indexes {
 		if (label.empty()) {
 			// Return all incoming edges regardless of label
 			std::vector<int64_t> result;
-			for (const auto &[edgeLabel, edges]: nodeIt->second) {
-				result.insert(result.end(), edges.begin(), edges.end());
+			for (const auto& edges : nodeIt->second | std::views::values) {
+			    result.insert(result.end(), edges.begin(), edges.end());
 			}
 			return result;
 		} else {

@@ -43,7 +43,7 @@ namespace graph::query::indexes {
 		// Clear the index
 		void clear();
 
-		void flush();
+		static void flush();
 
 	private:
 		// Label -> edge IDs

@@ -28,7 +28,7 @@ namespace graph::storage {
 		explicit PropertyManager(std::shared_ptr<DataManager> dataManager);
 
 		// Serialization methods
-		uint32_t calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) const;
+		[[nodiscard]] uint32_t calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void serializeProperties(std::ostream &os,
 								 const std::unordered_map<std::string, PropertyValue> &properties) const;
 		std::unordered_map<std::string, PropertyValue> deserializeProperties(std::istream &is) const;

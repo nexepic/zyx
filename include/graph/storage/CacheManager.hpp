@@ -11,7 +11,6 @@
 #pragma once
 #include <list>
 #include <unordered_map>
-#include <functional>
 
 namespace graph::storage {
 
@@ -21,7 +20,7 @@ namespace graph::storage {
 		explicit LRUCache(size_t capacity) : capacity_(capacity) {}
 
 		bool contains(const K& key) const {
-			return cache_map_.find(key) != cache_map_.end();
+			return cache_map_.contains(key);
 		}
 
 		V get(const K& key) {
@@ -92,12 +91,6 @@ namespace graph::storage {
 		size_t capacity_;
 		std::list<std::pair<K, V>> cache_list_;
 		std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> cache_map_;
-
-		// using Hash = std::conditional_t<std::is_same_v<K, std::pair<int64_t, std::string>>,
-		// 			utils::PairHash,
-		// 			std::hash<K>>;
-		//
-		// std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator, Hash> cache_map_;
 	};
 
 } // namespace graph::storage

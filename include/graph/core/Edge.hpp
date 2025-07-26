@@ -97,7 +97,7 @@ namespace graph {
 		void setType(const std::string &type);
 
 		// Active state
-		bool isActive() const { return metadata.isActive; }
+		[[nodiscard]] bool isActive() const { return metadata.isActive; }
 		void markInactive(bool active = false) { metadata.isActive = active; }
 
 		// Serialization

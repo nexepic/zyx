@@ -140,7 +140,7 @@ namespace graph::query::indexes {
 		}
 
 		auto nodes = treeManager_->find(rootId_, label);
-		return std::find(nodes.begin(), nodes.end(), nodeId) != nodes.end();
+		return std::ranges::find(nodes, nodeId) != nodes.end();
 	}
 
 } // namespace graph::query::indexes

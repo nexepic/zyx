@@ -39,7 +39,7 @@ namespace graph {
 
         try {
             return std::stoll(strValue);
-        } catch (const std::exception& e) {
+        } catch ([[maybe_unused]] const std::exception& e) {
             return defaultValue;
         }
     }
@@ -52,7 +52,7 @@ namespace graph {
 
         try {
             return std::stod(strValue);
-        } catch (const std::exception& e) {
+        } catch ([[maybe_unused]] const std::exception& e) {
             return defaultValue;
         }
     }
@@ -92,7 +92,7 @@ namespace graph {
 
     bool StateRegistry::exists(const std::string& key) {
         std::lock_guard<std::mutex> lock(mutex_);
-        return stateCache_.find(key) != stateCache_.end();
+        return stateCache_.contains(key);
     }
 
     bool StateRegistry::remove(const std::string& key) {

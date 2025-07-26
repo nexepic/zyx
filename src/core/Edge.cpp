@@ -42,7 +42,7 @@ namespace graph {
 
 	void Edge::addProperty(const std::string &key, const PropertyValue &value) { properties[key] = value; }
 
-	bool Edge::hasProperty(const std::string &key) const { return properties.count(key) > 0; }
+	bool Edge::hasProperty(const std::string &key) const { return properties.contains(key); }
 
 	PropertyValue Edge::getProperty(const std::string &key) const {
 		auto it = properties.find(key);

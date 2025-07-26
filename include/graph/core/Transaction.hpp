@@ -20,18 +20,16 @@ namespace graph {
 
 	class Transaction {
 	public:
-	    explicit Transaction(Database &db);
+		explicit Transaction(const Database &db);
 
-	    Node insertNode(const std::string &label);
-	    Edge insertEdge(const uint64_t &from, const uint64_t &to, const std::string &label);
+		[[nodiscard]] Node insertNode(const std::string &label) const;
+		[[nodiscard]] Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const;
 
-	    void commit() const;
-	    void rollback() const;
+		void commit() const;
+		static void rollback();
 
 	private:
-	    std::shared_ptr<storage::FileStorage> storage;
-	    std::unordered_map<uint64_t, Node> newNodes;
-	    std::unordered_map<uint64_t, Edge> newEdges;
+		std::shared_ptr<storage::FileStorage> storage;
 	};
 
 } // namespace graph

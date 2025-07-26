@@ -9,7 +9,8 @@
  **/
 
 #pragma once
-#include "graph/core/Edge.hpp"
+
+#include <cstdint>
 
 namespace graph::utils {
 

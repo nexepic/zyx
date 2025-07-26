@@ -9,9 +9,9 @@
  **/
 
 #include "graph/query/indexes/PropertyIndex.hpp"
-#include <algorithm>
 #include <cmath>
-#include <graph/storage/IDAllocator.hpp>
+#include <ranges>
+#include "graph/storage/IDAllocator.hpp"
 
 namespace graph::query::indexes {
 
@@ -97,23 +97,23 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 
 		// Clear all root maps
-		for (auto &[key, rootId]: stringRoots_) {
+		for (const auto &rootId: stringRoots_ | std::views::values) {
 			stringTreeManager_->clear(rootId);
 		}
 		stringRoots_.clear();
 
-		for (auto &[key, rootId]: intRoots_) {
-			intTreeManager_->clear(rootId);
+		for (const auto& rootId : intRoots_ | std::views::values) {
+		    intTreeManager_->clear(rootId);
 		}
 		intRoots_.clear();
 
-		for (auto &[key, rootId]: doubleRoots_) {
-			doubleTreeManager_->clear(rootId);
+		for (const auto& rootId : doubleRoots_ | std::views::values) {
+		    doubleTreeManager_->clear(rootId);
 		}
 		doubleRoots_.clear();
 
-		for (auto &[key, rootId]: boolRoots_) {
-			boolTreeManager_->clear(rootId);
+		for (const auto& rootId : boolRoots_ | std::views::values) {
+		    boolTreeManager_->clear(rootId);
 		}
 		boolRoots_.clear();
 	}
@@ -140,11 +140,11 @@ namespace graph::query::indexes {
 
 		// Convert all root IDs in root maps to permanent IDs
 		auto convertToPermanentId = [this](std::unordered_map<std::string, int64_t> &rootMap) {
-			for (auto &[key, rootId]: rootMap) {
-				if (rootId < 0) {
-					rootId = StateRegistry::getDataManager()->getIdAllocator()->allocatePermanentId(
-							rootId, storage::Index::typeId, false);
-				}
+			for (auto& rootId : rootMap | std::views::values) {
+			    if (rootId < 0) {
+			        rootId = StateRegistry::getDataManager()->getIdAllocator()->allocatePermanentId(
+			                rootId, storage::Index::typeId, false);
+			    }
 			}
 		};
 
@@ -175,7 +175,7 @@ namespace graph::query::indexes {
 		auto &rootMap = getRootMapForType(value);
 
 		// Create root if it doesn't exist for this property key
-		if (rootMap.find(key) == rootMap.end()) {
+		if (!rootMap.contains(key)) {
 			rootMap[key] = treeManager->initialize();
 		}
 
@@ -271,7 +271,7 @@ namespace graph::query::indexes {
 
 		std::string stringValue = valueToString(value);
 		auto results = treeManager->find(it->second, stringValue);
-		return std::find(results.begin(), results.end(), nodeId) != results.end();
+		return std::ranges::find(results, nodeId) != results.end();
 	}
 
 	std::shared_ptr<IndexTreeManager> PropertyIndex::getTreeManagerForType(const PropertyValue &value) const {
@@ -374,26 +374,26 @@ namespace graph::query::indexes {
 
 		// Collect keys from all type maps
 		keys.reserve(stringRoots_.size());
-		for (const auto &[key, _]: stringRoots_) {
-			keys.push_back(key);
+		for (const auto& key : stringRoots_ | std::views::keys) {
+		    keys.push_back(key);
 		}
 
-		for (const auto &[key, _]: intRoots_) {
-			if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
-				keys.push_back(key);
-			}
+		for (const auto& key : intRoots_ | std::views::keys) {
+		    if (std::ranges::find(keys, key) == keys.end()) {
+		        keys.push_back(key);
+		    }
 		}
 
-		for (const auto &[key, _]: doubleRoots_) {
-			if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
-				keys.push_back(key);
-			}
+		for (const auto& key : doubleRoots_ | std::views::keys) {
+		    if (std::ranges::find(keys, key) == keys.end()) {
+		        keys.push_back(key);
+		    }
 		}
 
-		for (const auto &[key, _]: boolRoots_) {
-			if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
-				keys.push_back(key);
-			}
+		for (const auto& key : boolRoots_ | std::views::keys) {
+		    if (std::ranges::find(keys, key) == keys.end()) {
+		        keys.push_back(key);
+		    }
 		}
 
 		return keys;

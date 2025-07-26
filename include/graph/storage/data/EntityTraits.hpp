@@ -33,17 +33,17 @@ namespace graph::storage {
 
 		static Node loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadNodeFromDisk(id); }
 
-		static void addToCache(DataManager *manager, const Node &entity) {
+		static void addToCache(const DataManager *manager, const Node &entity) {
 			manager->getNodeCache().put(entity.getId(), entity);
 		}
 
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getNodeCache().remove(id); }
+		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getNodeCache().remove(id); }
 
-		static CacheType &getCache(DataManager *manager) { return manager->getNodeCache(); }
+		static CacheType &getCache(const DataManager *manager) { return manager->getNodeCache(); }
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyNodes(); }
 
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(DataManager *manager) {
+		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
 			return manager->getSegmentIndexManager()->getNodeSegmentIndex();
 		}
 	};
@@ -60,13 +60,13 @@ namespace graph::storage {
 
 		static Edge loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadEdgeFromDisk(id); }
 
-		static void addToCache(DataManager *manager, const Edge &entity) {
+		static void addToCache(const DataManager *manager, const Edge &entity) {
 			manager->getEdgeCache().put(entity.getId(), entity);
 		}
 
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getEdgeCache().remove(id); }
+		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getEdgeCache().remove(id); }
 
-		static CacheType &getCache(DataManager *manager) { return manager->getEdgeCache(); }
+		static CacheType &getCache(const DataManager *manager) { return manager->getEdgeCache(); }
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyEdges(); }
 
@@ -91,13 +91,13 @@ namespace graph::storage {
 			return manager->loadPropertyFromDisk(id);
 		}
 
-		static void addToCache(DataManager *manager, const Property &entity) {
+		static void addToCache(const DataManager *manager, const Property &entity) {
 			manager->getPropertyCache().put(entity.getId(), entity);
 		}
 
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getPropertyCache().remove(id); }
+		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getPropertyCache().remove(id); }
 
-		static CacheType &getCache(DataManager *manager) { return manager->getPropertyCache(); }
+		static CacheType &getCache(const DataManager *manager) { return manager->getPropertyCache(); }
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyProperties(); }
 
@@ -118,13 +118,13 @@ namespace graph::storage {
 
 		static Blob loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadBlobFromDisk(id); }
 
-		static void addToCache(DataManager *manager, const Blob &entity) {
+		static void addToCache(const DataManager *manager, const Blob &entity) {
 			manager->getBlobCache().put(entity.getId(), entity);
 		}
 
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getBlobCache().remove(id); }
+		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getBlobCache().remove(id); }
 
-		static CacheType &getCache(DataManager *manager) { return manager->getBlobCache(); }
+		static CacheType &getCache(const DataManager *manager) { return manager->getBlobCache(); }
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyBlobs(); }
 
@@ -145,13 +145,13 @@ namespace graph::storage {
 
 		static Index loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadIndexFromDisk(id); }
 
-		static void addToCache(DataManager *manager, const Index &entity) {
+		static void addToCache(const DataManager *manager, const Index &entity) {
 			manager->getIndexCache().put(entity.getId(), entity);
 		}
 
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getIndexCache().remove(id); }
+		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getIndexCache().remove(id); }
 
-		static CacheType &getCache(DataManager *manager) { return manager->getIndexCache(); }
+		static CacheType &getCache(const DataManager *manager) { return manager->getIndexCache(); }
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyIndexes(); }
 
@@ -172,13 +172,13 @@ namespace graph::storage {
 
 		static State loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadStateFromDisk(id); }
 
-		static void addToCache(DataManager *manager, const State &entity) {
+		static void addToCache(const DataManager *manager, const State &entity) {
 			manager->getStateCache().put(entity.getId(), entity);
 		}
 
-		static void removeFromCache(DataManager *manager, int64_t id) { manager->getStateCache().remove(id); }
+		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getStateCache().remove(id); }
 
-		static CacheType &getCache(DataManager *manager) { return manager->getStateCache(); }
+		static CacheType &getCache(const DataManager *manager) { return manager->getStateCache(); }
 
 		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyStates(); }
 

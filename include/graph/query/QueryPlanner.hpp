@@ -37,7 +37,7 @@ namespace graph::query {
 			FULL_RELATIONSHIP_SCAN
 		};
 
-		QueryPlan(OperationType type) : type_(type) {}
+		explicit QueryPlan(OperationType type) : type_(type) {}
 
 		// Add parameters for the operation
 		void addParameter(const std::string &key, const std::string &value) { stringParams_[key] = value; }

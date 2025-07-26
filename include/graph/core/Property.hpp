@@ -38,21 +38,21 @@ namespace graph {
 		Property() = default;
 
 		// Metadata access for CRTP base class
-		const Metadata &getMetadata() const { return metadata; }
+		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
 		Metadata &getMutableMetadata() { return metadata; }
 
 		// Basic getters
-		bool isActive() const { return metadata.isActive; }
+		[[nodiscard]] bool isActive() const { return metadata.isActive; }
 
 		// Basic setters
 		void markInactive() { metadata.isActive = false; }
 
 		// Property value management
 		void addPropertyValue(const std::string &key, const PropertyValue &value);
-		bool hasPropertyValue(const std::string &key) const;
-		PropertyValue getPropertyValue(const std::string &key) const;
+		[[nodiscard]] bool hasPropertyValue(const std::string &key) const;
+		[[nodiscard]] PropertyValue getPropertyValue(const std::string &key) const;
 		void removePropertyValue(const std::string &key);
-		const std::unordered_map<std::string, PropertyValue> &getPropertyValues() const;
+		[[nodiscard]] const std::unordered_map<std::string, PropertyValue> &getPropertyValues() const;
 
 		// Property map management
 		void setProperties(const std::unordered_map<std::string, PropertyValue> &newValues) { values = newValues; }

@@ -10,6 +10,7 @@
 
 #include "graph/core/IndexTreeManager.hpp"
 #include <algorithm>
+#include <ranges>
 #include <stdexcept>
 #include "graph/storage/data/DataManager.hpp"
 
@@ -20,14 +21,14 @@ namespace graph::query::indexes {
 	IndexTreeManager::IndexTreeManager(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType) :
 		dataManager_(std::move(dataManager)), indexType_(indexType) {}
 
-	int64_t IndexTreeManager::initialize() {
+	int64_t IndexTreeManager::initialize() const {
 		std::unique_lock lock(mutex_);
 
 		// Create a new root node as a leaf
 		return createNewNode(storage::Index::NodeType::LEAF);
 	}
 
-	void IndexTreeManager::clear(int64_t rootId) {
+	void IndexTreeManager::clear(const int64_t rootId) const {
 		std::unique_lock lock(mutex_);
 
 		if (rootId != 0) {
@@ -41,8 +42,8 @@ namespace graph::query::indexes {
 				// If it's an internal node, add all children to the queue
 				if (entity.getNodeType() == storage::Index::NodeType::INTERNAL) {
 					auto children = entity.getAllChildren();
-					for (const auto &child: children) {
-						toDelete.push_back(child.second);
+					for (const auto childId: children | std::views::values) {
+						toDelete.push_back(childId);
 					}
 				}
 
@@ -54,7 +55,7 @@ namespace graph::query::indexes {
 		// return createNewNode(storage::Index::NodeType::LEAF);
 	}
 
-	int64_t IndexTreeManager::createNewNode(storage::Index::NodeType type) {
+	int64_t IndexTreeManager::createNewNode(storage::Index::NodeType type) const {
 		// Allocate ID for new node
 		int64_t id = dataManager_->reserveTemporaryIndexId();
 
@@ -139,7 +140,8 @@ namespace graph::query::indexes {
 		return result;
 	}
 
-	void IndexTreeManager::setAllKeyValuesToNode(storage::Index &node, const std::vector<KeyValueEntry> &entries) {
+	void IndexTreeManager::setAllKeyValuesToNode(storage::Index &node,
+												 const std::vector<KeyValueEntry> &entries) const {
 		if (!node.isLeaf()) {
 			return; // Only applies to leaf nodes
 		}
@@ -186,7 +188,7 @@ namespace graph::query::indexes {
 		return currentId;
 	}
 
-	bool IndexTreeManager::insertIntoLeaf(int64_t leafId, const KeyType &key, int64_t value) {
+	bool IndexTreeManager::insertIntoLeaf(int64_t leafId, const KeyType &key, int64_t value) const {
 		auto leaf = dataManager_->getIndex(leafId);
 
 		// Check if we're at capacity
@@ -230,7 +232,7 @@ namespace graph::query::indexes {
 
 			if (!inserted && !compareKeys(it->key, key) && !compareKeys(key, it->key)) { // Equal keys
 				// Key exists, add value if not already present
-				if (std::find(it->values.begin(), it->values.end(), value) == it->values.end()) {
+				if (std::ranges::find(it->values, value) == it->values.end()) {
 					it->values.push_back(value);
 				}
 				inserted = true;
@@ -254,11 +256,13 @@ namespace graph::query::indexes {
 		leaf = dataManager_->getIndex(leafId);
 
 		// Keep first half in original leaf
-		std::vector<KeyValueEntry> firstHalf(allValues.begin(), allValues.begin() + midPoint);
+		std::vector firstHalf(allValues.begin(),
+							  allValues.begin() + static_cast<std::vector<KeyValueEntry>::difference_type>(midPoint));
 		setAllKeyValuesToNode(leaf, firstHalf);
 
 		// Put second half in new leaf
-		std::vector<KeyValueEntry> secondHalf(allValues.begin() + midPoint, allValues.end());
+		std::vector secondHalf(allValues.begin() + static_cast<std::vector<KeyValueEntry>::difference_type>(midPoint),
+							   allValues.end());
 		setAllKeyValuesToNode(newLeaf, secondHalf);
 
 		// Update leaf links
@@ -343,6 +347,7 @@ namespace graph::query::indexes {
 
 		// Get existing children from parent
 		auto stringChildren = parent.getAllChildren();
+		allChildren.reserve(stringChildren.size());
 		for (const auto &child: stringChildren) {
 			allChildren.push_back({child.first, child.second});
 		}
@@ -404,7 +409,7 @@ namespace graph::query::indexes {
 		insertIntoParent(rootId, parentId, midKey, newParentId, newRootId);
 	}
 
-	int64_t IndexTreeManager::insert(int64_t rootId, const KeyType &key, int64_t value) {
+	int64_t IndexTreeManager::insert(int64_t rootId, const KeyType &key, const int64_t value) {
 		std::unique_lock lock(mutex_);
 
 		if (rootId == 0) {
@@ -425,7 +430,7 @@ namespace graph::query::indexes {
 		return rootId; // Root didn't change
 	}
 
-	bool IndexTreeManager::remove(int64_t rootId, const KeyType &key, int64_t value) {
+	bool IndexTreeManager::remove(const int64_t rootId, const KeyType &key, const int64_t value) const {
 		std::unique_lock lock(mutex_);
 
 		if (rootId == 0) {
@@ -456,7 +461,7 @@ namespace graph::query::indexes {
 		return removed;
 	}
 
-	std::vector<int64_t> IndexTreeManager::find(int64_t rootId, const KeyType &key) const {
+	std::vector<int64_t> IndexTreeManager::find(const int64_t rootId, const KeyType &key) const {
 		std::shared_lock lock(mutex_);
 
 		if (rootId == 0) {

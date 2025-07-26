@@ -42,7 +42,7 @@ namespace graph {
 
 			for (const auto &cmd: commands) {
 				if (strncmp(editBuffer, cmd, strlen(editBuffer)) == 0) {
-					completions.push_back(cmd);
+					completions.emplace_back(cmd);
 				}
 			}
 		});

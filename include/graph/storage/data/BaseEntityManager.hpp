@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <utility>
 #include "DataManager.hpp"
 #include "EntityManagerInterface.hpp"
 #include "EntityTraits.hpp"
@@ -32,9 +33,9 @@ namespace graph::storage {
 		std::shared_ptr<DeletionManager> deletionManager_;
 
 	public:
-		BaseEntityManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<PropertyManager> propertyManager,
+		BaseEntityManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<PropertyManager> propertyManager,
 						  std::shared_ptr<DeletionManager> deletionManager) :
-			dataManager_(dataManager), propertyManager_(propertyManager), deletionManager_(deletionManager) {}
+			dataManager_(dataManager), propertyManager_(std::move(propertyManager)), deletionManager_(std::move(deletionManager)) {}
 
 		// Core CRUD operations
 		void add(const EntityType &entity) override {
@@ -84,8 +85,7 @@ namespace graph::storage {
 			doRemove(entity);
 
 			// Mark that a deletion has been performed
-			auto dataManager = dataManager_.lock();
-			if (dataManager) {
+			if (auto dataManager = dataManager_.lock()) {
 				dataManager->markDeletionPerformed();
 			}
 		}

@@ -50,14 +50,14 @@ namespace graph {
 		[[nodiscard]] Metadata &getMutableMetadata() { return metadata; }
 
 		// Adapter methods for ChainableMixin
-		int64_t getNextChainId() const { return metadata.nextStateId; }
-		int64_t getPrevChainId() const { return metadata.prevStateId; }
+		[[nodiscard]] int64_t getNextChainId() const { return metadata.nextStateId; }
+		[[nodiscard]] int64_t getPrevChainId() const { return metadata.prevStateId; }
 		void setNextChainId(int64_t id) { metadata.nextStateId = id; }
 		void setPrevChainId(int64_t id) { metadata.prevStateId = id; }
 
 		// Legacy methods for backward compatibility
-		int64_t getNextStateId() const { return getNextId(); }
-		int64_t getPrevStateId() const { return getPrevId(); }
+		[[nodiscard]] int64_t getNextStateId() const { return getNextId(); }
+		[[nodiscard]] int64_t getPrevStateId() const { return getPrevId(); }
 		void setNextStateId(int64_t id) { setNextId(id); }
 		void setPrevStateId(int64_t id) { setPrevId(id); }
 

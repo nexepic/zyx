@@ -10,6 +10,7 @@
 
 #include "graph/storage/SegmentIndexManager.hpp"
 #include <algorithm>
+#include <graph/storage/SegmentType.hpp>
 
 namespace graph::storage {
 

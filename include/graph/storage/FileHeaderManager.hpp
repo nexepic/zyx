@@ -55,7 +55,7 @@ namespace graph::storage {
 
 		void updateFileCrc() const;
 
-		bool validateFileCrc() const;
+		[[nodiscard]] bool validateFileCrc() const;
 
 	private:
 		std::shared_ptr<std::fstream> file_;

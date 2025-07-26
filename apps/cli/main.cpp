@@ -1,5 +1,5 @@
 /**
- * @file main
+ * @file main.cpp
  * @author Nexepic
  * @brief This source code is licensed under MIT License.
  * @date 2025/2/26
@@ -8,10 +8,10 @@
  *
  **/
 
-#include "graph/core/Database.hpp"
+#include <iostream>
 #include "graph/cli/CLI11.hpp"
 #include "graph/cli/Repl.hpp"
-#include <iostream>
+#include "graph/core/Database.hpp"
 
 int main(int argc, char **argv) {
 	CLI::App app{"metrix"};
@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
 	createCmd->callback([&]() {
 		graph::Database db(dbPath);
 		std::cout << "Database created at: " << dbPath << "\n";
-		graph::REPL repl(db);
+		const graph::REPL repl(db);
 		repl.run();
 	});
 
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
 	openCmd->callback([&]() {
 		graph::Database db(dbPath);
 		db.open();
-		graph::REPL repl(db);
+		const graph::REPL repl(db);
 		repl.run();
 		db.close();
 	});
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
 	runCmd->callback([&]() {
 		graph::Database db(dbPath);
 		db.open();
-		graph::REPL repl(db);
+		const graph::REPL repl(db);
 		repl.run();
 		db.close();
 	});
