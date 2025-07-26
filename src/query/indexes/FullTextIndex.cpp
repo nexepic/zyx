@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
-#include <shared_mutex>
+#include <mutex>
 
 namespace graph::query::indexes {
 
@@ -21,7 +21,7 @@ namespace graph::query::indexes {
 	void FullTextIndex::addTextProperty(int64_t nodeId, const std::string &key, const std::string &text) {
 		std::vector<std::string> tokens = tokenize(text);
 
-		std::unique_lock<std::shared_mutex> lock(mutex_);
+		std::unique_lock lock(mutex_);
 
 		// Remove old tokens if they exist
 		if (const auto nodeIt = nodeTokens_.find(nodeId); nodeIt != nodeTokens_.end()) {
@@ -56,7 +56,7 @@ namespace graph::query::indexes {
 	}
 
 	void FullTextIndex::removeTextProperty(int64_t nodeId, const std::string &key) {
-		std::unique_lock<std::shared_mutex> lock(mutex_);
+		std::unique_lock lock(mutex_);
 
 		auto nodeIt = nodeTokens_.find(nodeId);
 		if (nodeIt == nodeTokens_.end()) {
@@ -140,7 +140,7 @@ namespace graph::query::indexes {
 	}
 
 	void FullTextIndex::clear() {
-		std::unique_lock<std::shared_mutex> lock(mutex_);
+		std::unique_lock lock(mutex_);
 		invertedIndex_.clear();
 		nodeTokens_.clear();
 	}
