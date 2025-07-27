@@ -15,7 +15,7 @@ namespace graph::query {
 	QueryPlanner::QueryPlanner(std::shared_ptr<indexes::IndexManager> indexManager) :
 		indexManager_(std::move(indexManager)) {}
 
-	QueryPlan QueryPlanner::createPlanForLabelQuery(const std::string &label) {
+	QueryPlan QueryPlanner::createPlanForLabelQuery(const std::string &label) const {
 		// Check if label index exists
 		if (indexManager_->getLabelIndex() && !indexManager_->getLabelIndex()->isEmpty()) {
 			QueryPlan plan(QueryPlan::OperationType::LABEL_SCAN);
@@ -29,7 +29,7 @@ namespace graph::query {
 		}
 	}
 
-	QueryPlan QueryPlanner::createPlanForPropertyQuery(const std::string &key, const std::string &value) {
+	QueryPlan QueryPlanner::createPlanForPropertyQuery(const std::string &key, const std::string &value) const {
 		// Check if property index exists for this key
 		auto propertyIndex = indexManager_->getPropertyIndex();
 		if (propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key)) {
@@ -47,7 +47,7 @@ namespace graph::query {
 	}
 
 	QueryPlan QueryPlanner::createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
-															   const std::string &value) {
+															   const std::string &value) const {
 		auto labelIndex = indexManager_->getLabelIndex();
 		auto propertyIndex = indexManager_->getPropertyIndex();
 		bool hasLabelIndex = labelIndex && !labelIndex->isEmpty();
@@ -115,7 +115,7 @@ namespace graph::query {
 		return plan;
 	}
 
-	QueryPlan QueryPlanner::createPlanForRelationshipQuery(uint64_t nodeId, const std::string &edgeLabel) {
+	QueryPlan QueryPlanner::createPlanForRelationshipQuery(int64_t nodeId, const std::string &edgeLabel) {
 		QueryPlan plan(QueryPlan::OperationType::RELATIONSHIP_SCAN);
 		plan.addParameter("nodeId", nodeId);
 
@@ -126,7 +126,7 @@ namespace graph::query {
 		return plan;
 	}
 
-	QueryPlan QueryPlanner::createPlanForConnectedNodesQuery(uint64_t nodeId, const std::string &nodeLabel,
+	QueryPlan QueryPlanner::createPlanForConnectedNodesQuery(int64_t nodeId, const std::string &nodeLabel,
 															 const std::string &edgeLabel,
 															 const std::string &direction) {
 		QueryPlan plan(QueryPlan::OperationType::TRAVERSAL_CONNECTED_NODES);
@@ -147,8 +147,8 @@ namespace graph::query {
 	QueryPlan QueryPlanner::createPlanForTraversalShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
 															   const std::string &direction) {
 		QueryPlan plan(QueryPlan::OperationType::TRAVERSAL_SHORTEST_PATH);
-		plan.addParameter("startNodeId", static_cast<uint64_t>(startNodeId));
-		plan.addParameter("endNodeId", static_cast<uint64_t>(endNodeId));
+		plan.addParameter("startNodeId", startNodeId);
+		plan.addParameter("endNodeId", endNodeId);
 		plan.addParameter("maxDepth", static_cast<double>(maxDepth));
 		plan.addParameter("direction", direction);
 

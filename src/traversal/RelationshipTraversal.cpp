@@ -17,7 +17,7 @@ namespace graph::traversal {
 	RelationshipTraversal::RelationshipTraversal(std::shared_ptr<storage::DataManager> dataManager) :
 		dataManager_(std::move(dataManager)) {}
 
-	std::vector<Edge> RelationshipTraversal::getOutgoingEdges(int64_t nodeId) {
+	std::vector<Edge> RelationshipTraversal::getOutgoingEdges(int64_t nodeId) const {
 		std::vector<Edge> outEdges;
 		Node node = dataManager_->getNode(nodeId);
 
@@ -32,7 +32,7 @@ namespace graph::traversal {
 		return outEdges;
 	}
 
-	std::vector<Edge> RelationshipTraversal::getIncomingEdges(int64_t nodeId) {
+	std::vector<Edge> RelationshipTraversal::getIncomingEdges(int64_t nodeId) const {
 		std::vector<Edge> inEdges;
 		Node node = dataManager_->getNode(nodeId);
 
@@ -47,7 +47,7 @@ namespace graph::traversal {
 		return inEdges;
 	}
 
-	std::vector<Edge> RelationshipTraversal::getAllConnectedEdges(int64_t nodeId) {
+	std::vector<Edge> RelationshipTraversal::getAllConnectedEdges(int64_t nodeId) const {
 		std::vector<Edge> outEdges = getOutgoingEdges(nodeId);
 		std::vector<Edge> inEdges = getIncomingEdges(nodeId);
 
@@ -56,27 +56,29 @@ namespace graph::traversal {
 		return outEdges;
 	}
 
-	std::vector<Node> RelationshipTraversal::getConnectedTargetNodes(int64_t nodeId) {
+	std::vector<Node> RelationshipTraversal::getConnectedTargetNodes(int64_t nodeId) const {
 		std::vector<Node> targetNodes;
 		std::vector<Edge> outEdges = getOutgoingEdges(nodeId);
 
+		targetNodes.reserve(outEdges.size());
 		for (const auto &edge: outEdges) {
 			targetNodes.push_back(dataManager_->getNode(edge.getTargetNodeId()));
 		}
 		return targetNodes;
 	}
 
-	std::vector<Node> RelationshipTraversal::getConnectedSourceNodes(int64_t nodeId) {
+	std::vector<Node> RelationshipTraversal::getConnectedSourceNodes(int64_t nodeId) const {
 		std::vector<Node> sourceNodes;
 		std::vector<Edge> inEdges = getIncomingEdges(nodeId);
 
+		sourceNodes.reserve(inEdges.size());
 		for (const auto &edge: inEdges) {
 			sourceNodes.push_back(dataManager_->getNode(edge.getSourceNodeId()));
 		}
 		return sourceNodes;
 	}
 
-	std::vector<Node> RelationshipTraversal::getAllConnectedNodes(int64_t nodeId) {
+	std::vector<Node> RelationshipTraversal::getAllConnectedNodes(int64_t nodeId) const {
 		std::unordered_set<int64_t> nodeIds;
 		std::vector<Node> connectedNodes;
 
@@ -96,7 +98,7 @@ namespace graph::traversal {
 		return connectedNodes;
 	}
 
-	void RelationshipTraversal::linkEdge(Edge &edge) {
+	void RelationshipTraversal::linkEdge(Edge &edge) const {
 		int64_t edgeId = edge.getId();
 		int64_t sourceNodeId = edge.getSourceNodeId();
 		int64_t targetNodeId = edge.getTargetNodeId();
@@ -138,8 +140,7 @@ namespace graph::traversal {
 		dataManager_->updateEdge(edge);
 	}
 
-	void RelationshipTraversal::unlinkEdge(Edge &edge) {
-		int64_t edgeId = edge.getId();
+	void RelationshipTraversal::unlinkEdge(Edge &edge) const {
 		int64_t sourceNodeId = edge.getSourceNodeId();
 		int64_t targetNodeId = edge.getTargetNodeId();
 

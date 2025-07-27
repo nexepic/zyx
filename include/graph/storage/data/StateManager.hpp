@@ -24,7 +24,7 @@ namespace graph::storage {
 
 	class StateManager : public BaseEntityManager<State> {
 	public:
-		StateManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<PropertyManager> propertyManager,
+		StateManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<PropertyManager> propertyManager,
 					 std::shared_ptr<graph::StateChainManager> stateChainManager,
 					 std::shared_ptr<DeletionManager> deletionManager);
 
@@ -37,10 +37,10 @@ namespace graph::storage {
 		void removeState(const std::string &stateKey);
 
 		// Chain management methods that delegate to StateChainManager
-		std::string readStateChain(int64_t headStateId);
-		std::vector<State> createStateChain(const std::string &key, const std::string &data);
-		std::vector<State> updateStateChain(int64_t headStateId, const std::string &newData);
-		void deleteStateChain(int64_t headStateId);
+		std::string readStateChain(int64_t headStateId) const;
+		std::vector<State> createStateChain(const std::string &key, const std::string &data) const;
+		std::vector<State> updateStateChain(int64_t headStateId, const std::string &newData) const;
+		void deleteStateChain(int64_t headStateId) const;
 
 		// Helper methods
 		static bool isChainHeadState(const State &state);

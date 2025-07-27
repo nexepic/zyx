@@ -25,62 +25,66 @@ namespace graph::query {
 
 	QueryEngine::~QueryEngine() = default;
 
-	bool QueryEngine::buildLabelIndex() { return indexManager_->buildLabelIndex(); }
+	bool QueryEngine::buildLabelIndex() const { return indexManager_->buildLabelIndex(); }
 
-	bool QueryEngine::buildPropertyIndex(const std::string &key) { return indexManager_->buildPropertyIndex(key); }
+	bool QueryEngine::buildPropertyIndex(const std::string &key) const {
+		return indexManager_->buildPropertyIndex(key);
+	}
 
-	bool QueryEngine::dropIndex(const std::string &indexType, const std::string &key) {
+	bool QueryEngine::dropIndex(const std::string &indexType, const std::string &key) const {
 		return indexManager_->dropIndex(indexType, key);
 	}
 
-	std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes() { return indexManager_->listIndexes(); }
+	std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes() const {
+		return indexManager_->listIndexes();
+	}
 
-	QueryResult QueryEngine::findNodesByLabel(const std::string &label) {
+	QueryResult QueryEngine::findNodesByLabel(const std::string &label) const {
 		auto plan = queryPlanner_->createPlanForLabelQuery(label);
 		return queryExecutor_->execute(plan);
 	}
 
-	QueryResult QueryEngine::findNodesByProperty(const std::string &key, const std::string &value) {
+	QueryResult QueryEngine::findNodesByProperty(const std::string &key, const std::string &value) const {
 		auto plan = queryPlanner_->createPlanForPropertyQuery(key, value);
 		return queryExecutor_->execute(plan);
 	}
 
 	QueryResult QueryEngine::findNodesByLabelAndProperty(const std::string &label, const std::string &key,
-														 const std::string &value) {
+														 const std::string &value) const {
 		auto plan = queryPlanner_->createPlanForLabelAndPropertyQuery(label, key, value);
 		return queryExecutor_->execute(plan);
 	}
 
-	QueryResult QueryEngine::findNodesByPropertyRange(const std::string &key, double minValue, double maxValue) {
+	QueryResult QueryEngine::findNodesByPropertyRange(const std::string &key, double minValue, double maxValue) const {
 		auto plan = queryPlanner_->createPlanForPropertyRangeQuery(key, minValue, maxValue);
 		return queryExecutor_->execute(plan);
 	}
 
-	QueryResult QueryEngine::findNodesByTextSearch(const std::string &key, const std::string &searchText) {
+	QueryResult QueryEngine::findNodesByTextSearch(const std::string &key, const std::string &searchText) const {
 		auto plan = queryPlanner_->createPlanForTextSearchQuery(key, searchText);
 		return queryExecutor_->execute(plan);
 	}
 
-	QueryResult QueryEngine::findRelationships(uint64_t nodeId, const std::string &edgeLabel) {
+	QueryResult QueryEngine::findRelationships(uint64_t nodeId, const std::string &edgeLabel) const {
 		auto plan = queryPlanner_->createPlanForRelationshipQuery(nodeId, edgeLabel);
 		return queryExecutor_->execute(plan);
 	}
 
 	QueryResult QueryEngine::findConnectedNodes(uint64_t nodeId, const std::string &edgeLabel,
-										  const std::string &direction, const std::string &nodeLabel) {
+												const std::string &direction, const std::string &nodeLabel) const {
 		// Create a traversal plan
 		auto plan = queryPlanner_->createPlanForConnectedNodesQuery(nodeId, nodeLabel, edgeLabel, direction);
 		return queryExecutor_->execute(plan);
 	}
 
 	QueryResult QueryEngine::findShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
-											  const std::string &direction) {
+											  const std::string &direction) const {
 		auto plan = queryPlanner_->createPlanForTraversalShortestPath(startNodeId, endNodeId, maxDepth, direction);
 		return queryExecutor_->execute(plan);
 	}
 
 	void QueryEngine::breadthFirstTraversal(int64_t startNodeId, const std::function<bool(const Node &, int)> &visitFn,
-											int maxDepth, const std::string &direction) {
+											int maxDepth, const std::string &direction) const {
 		traversalQuery_->breadthFirstTraversal(startNodeId, visitFn, maxDepth, direction);
 	}
 
@@ -93,6 +97,6 @@ namespace graph::query {
 		return result;
 	}
 
-	void QueryEngine::rebuildIndexes() { indexManager_->buildIndexes(); }
+	void QueryEngine::rebuildIndexes() const { indexManager_->buildIndexes(); }
 
 } // namespace graph::query

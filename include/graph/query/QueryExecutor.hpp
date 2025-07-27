@@ -24,26 +24,26 @@ namespace graph::query {
 					 std::shared_ptr<storage::FileStorage> storage);
 
 		// Execute a query plan and return the result
-		QueryResult execute(const QueryPlan& plan);
+		QueryResult execute(const QueryPlan& plan) const;
 
 	private:
 		std::shared_ptr<indexes::IndexManager> indexManager_;
 		std::shared_ptr<storage::FileStorage> storage_;
 
 		// Helper methods for different operation types
-		QueryResult executeLabelScan(const QueryPlan& plan);
-		QueryResult executePropertyScan(const QueryPlan& plan);
-		QueryResult executeLabelPropertyScan(const QueryPlan& plan);
-		QueryResult executePropertyRangeScan(const QueryPlan& plan);
-		QueryResult executeTextSearch(const QueryPlan& plan);
-		QueryResult executeRelationshipScan(const QueryPlan& plan);
-		QueryResult executeTraversalConnectedNodes(const QueryPlan& plan);
-		QueryResult executeTraversalShortestPath(const QueryPlan& plan);
-		QueryResult executeFullNodeScan(const QueryPlan &plan);
-		QueryResult executeFullNodeLabelScan(const QueryPlan &plan);
-		QueryResult executeFullNodePropertyScan(const QueryPlan &plan);
-		QueryResult executeFullNodeLabelPropertyScan(const QueryPlan &plan);
-		QueryResult executeFullRelationshipScan(const QueryPlan &plan);
+		QueryResult executeLabelScan(const QueryPlan& plan) const;
+		QueryResult executePropertyScan(const QueryPlan& plan) const;
+		QueryResult executeLabelPropertyScan(const QueryPlan& plan) const;
+		QueryResult executePropertyRangeScan(const QueryPlan& plan) const;
+		QueryResult executeTextSearch(const QueryPlan& plan) const;
+		QueryResult executeRelationshipScan(const QueryPlan& plan) const;
+		QueryResult executeTraversalConnectedNodes(const QueryPlan& plan) const;
+		QueryResult executeTraversalShortestPath(const QueryPlan& plan) const;
+		QueryResult executeFullNodeScan(const QueryPlan &plan) const;
+		QueryResult executeFullNodeLabelScan(const QueryPlan &plan) const;
+		QueryResult executeFullNodePropertyScan(const QueryPlan &plan) const;
+		QueryResult executeFullNodeLabelPropertyScan(const QueryPlan &plan) const;
+		QueryResult executeFullRelationshipScan(const QueryPlan &plan) const;
 	};
 
 } // namespace graph::query

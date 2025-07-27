@@ -17,14 +17,14 @@ namespace graph::storage {
 
 	class EdgeManager : public BaseEntityManager<Edge> {
 	public:
-		EdgeManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<PropertyManager> propertyManager,
+		EdgeManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<PropertyManager> propertyManager,
 					std::shared_ptr<DeletionManager> deletionManager);
 
 		// Override add to handle special edge creation logic (linking)
 		void add(const Edge &edge) override;
 
 		// Edge-specific methods
-		std::vector<Edge> findByNode(int64_t nodeId, const std::string &direction = "both");
+		std::vector<Edge> findByNode(int64_t nodeId, const std::string &direction = "both") const;
 
 	protected:
 		// Implement the abstract method for reserving IDs

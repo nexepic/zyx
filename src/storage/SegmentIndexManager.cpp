@@ -46,7 +46,7 @@ namespace graph::storage {
 		buildSegmentIndex(stateSegmentIndex_, stateSegmentHead_ ? *stateSegmentHead_ : 0);
 	}
 
-	void SegmentIndexManager::buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) {
+	void SegmentIndexManager::buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const {
 		segmentIndex.clear();
 		uint64_t currentOffset = segmentHead;
 
@@ -121,8 +121,8 @@ namespace graph::storage {
 	}
 
 	void SegmentIndexManager::sortSegmentIndex(std::vector<SegmentIndex> &segmentIndex) {
-		std::sort(segmentIndex.begin(), segmentIndex.end(),
-				  [](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
+		std::ranges::sort(segmentIndex,
+						  [](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
 	}
 
 	bool SegmentIndexManager::updateSegmentIndexByOffset(uint64_t offset, const SegmentHeader &header) {
@@ -132,8 +132,8 @@ namespace graph::storage {
 		auto &segmentIndex = getSegmentIndexForType(type);
 
 		// Try to find the segment by offset
-		auto it = std::find_if(segmentIndex.begin(), segmentIndex.end(),
-							   [offset](const SegmentIndex &index) { return index.segmentOffset == offset; });
+		auto it = std::ranges::find_if(segmentIndex,
+									   [offset](const SegmentIndex &index) { return index.segmentOffset == offset; });
 
 		if (it != segmentIndex.end()) {
 			// Update existing entry
@@ -149,9 +149,10 @@ namespace graph::storage {
 		index.segmentOffset = offset;
 
 		// Find insertion position
-		auto insertPos =
-				std::lower_bound(segmentIndex.begin(), segmentIndex.end(), index,
-								 [](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
+		const auto insertPos =
+				std::ranges::lower_bound(segmentIndex, index, [](const SegmentIndex &a, const SegmentIndex &b) {
+					return a.startId < b.startId;
+				});
 
 		// Insert at the correct position
 		segmentIndex.insert(insertPos, index);

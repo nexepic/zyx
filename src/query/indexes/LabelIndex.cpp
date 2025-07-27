@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <graph/core/StateRegistry.hpp>
 #include <graph/storage/IDAllocator.hpp>
-
 #include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::indexes {

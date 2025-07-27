@@ -31,45 +31,45 @@ namespace graph::query {
 		explicit QueryEngine(std::shared_ptr<storage::FileStorage> storage);
 		~QueryEngine();
 
-		bool buildLabelIndex();
+		bool buildLabelIndex() const;
 
-		bool buildPropertyIndex(const std::string &key);
+		bool buildPropertyIndex(const std::string &key) const;
 
-		bool dropIndex(const std::string &indexType, const std::string &key);
+		bool dropIndex(const std::string &indexType, const std::string &key) const;
 
-		std::vector<std::pair<std::string, std::string>> listIndexes();
+		std::vector<std::pair<std::string, std::string>> listIndexes() const;
 
 		// Query nodes by label
-		QueryResult findNodesByLabel(const std::string &label);
+		QueryResult findNodesByLabel(const std::string &label) const;
 
 		// Query nodes by property key and value
-		QueryResult findNodesByProperty(const std::string &key, const std::string &value);
+		QueryResult findNodesByProperty(const std::string &key, const std::string &value) const;
 
 		// Combined query - nodes with specific label AND property
 		QueryResult findNodesByLabelAndProperty(const std::string &label, const std::string &key,
-												const std::string &value);
+												const std::string &value) const;
 
 		// Range query for numeric properties
-		QueryResult findNodesByPropertyRange(const std::string &key, double minValue, double maxValue);
+		QueryResult findNodesByPropertyRange(const std::string &key, double minValue, double maxValue) const;
 
 		// Text search within properties (partial matching)
-		QueryResult findNodesByTextSearch(const std::string &key, const std::string &searchText);
+		QueryResult findNodesByTextSearch(const std::string &key, const std::string &searchText) const;
 
 		// Find relationships between nodes
-		QueryResult findRelationships(uint64_t nodeId, const std::string &edgeLabel = "");
+		QueryResult findRelationships(uint64_t nodeId, const std::string &edgeLabel = "") const;
 
 		// Find nodes connected to a specified node
 		QueryResult findConnectedNodes(uint64_t nodeId, const std::string &edgeLabel, const std::string &direction,
-									   const std::string &nodeLabel = "");
+									   const std::string &nodeLabel = "") const;
 
 		QueryResult findShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth = 10,
-									 const std::string &direction = "both");
+									 const std::string &direction = "both") const;
 
 		void breadthFirstTraversal(int64_t startNodeId, const std::function<bool(const Node &, int)> &visitFn,
-								   int maxDepth = 10, const std::string &direction = "both");
+								   int maxDepth = 10, const std::string &direction = "both") const;
 
 		// Rebuild indexes - call when data has changed significantly
-		void rebuildIndexes();
+		void rebuildIndexes() const;
 
 		void persistIndexState() const { indexManager_->persistState(); }
 

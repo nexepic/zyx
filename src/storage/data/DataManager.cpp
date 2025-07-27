@@ -9,7 +9,6 @@
  **/
 
 #include "graph/storage/data/DataManager.hpp"
-#include <algorithm>
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/StateChainManager.hpp"
 #include "graph/storage/DeletionManager.hpp"
@@ -58,22 +57,22 @@ namespace graph::storage {
 		initializeSegmentIndexes();
 
 		// Create chain managers
-		auto blobChainManager = std::make_shared<graph::BlobChainManager>(shared_from_this());
-		auto stateChainManager = std::make_shared<graph::StateChainManager>(shared_from_this());
+		auto blobChainManager = std::make_shared<BlobChainManager>(shared_from_this());
+		auto stateChainManager = std::make_shared<StateChainManager>(shared_from_this());
 
 		// Initialize entity managers
 		initializeManagers(blobChainManager, stateChainManager);
 	}
 
-	void DataManager::initializeSegmentIndexes() {
+	void DataManager::initializeSegmentIndexes() const {
 		// Initialize all segment indexes at once
 		segmentIndexManager_->initialize(fileHeader_.node_segment_head, fileHeader_.edge_segment_head,
 										 fileHeader_.property_segment_head, fileHeader_.blob_segment_head,
 										 fileHeader_.index_segment_head, fileHeader_.state_segment_head);
 	}
 
-	void DataManager::initializeManagers(std::shared_ptr<graph::BlobChainManager> blobChainManager,
-										 std::shared_ptr<graph::StateChainManager> stateChainManager) {
+	void DataManager::initializeManagers(const std::shared_ptr<BlobChainManager> &blobChainManager,
+										 const std::shared_ptr<StateChainManager> &stateChainManager) {
 		// Create property manager first as others depend on it
 		propertyManager_ = std::make_shared<PropertyManager>(shared_from_this());
 
@@ -84,68 +83,73 @@ namespace graph::storage {
 				std::make_shared<PropertyEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
 		blobEntityManager_ =
 				std::make_shared<BlobManager>(shared_from_this(), propertyManager_, blobChainManager, deletionManager_);
-		indexEntityManager_ = std::make_shared<IndexEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
+		indexEntityManager_ =
+				std::make_shared<IndexEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
 		stateEntityManager_ = std::make_shared<StateManager>(shared_from_this(), propertyManager_, stateChainManager,
 															 deletionManager_);
 	}
 
 	// --- Node Operations (delegate to NodeManager) ---
 
-	void DataManager::addNode(const Node &node) { nodeManager_->add(node); }
+	void DataManager::addNode(const Node &node) const { nodeManager_->add(node); }
 
-	void DataManager::updateNode(const Node &node) { nodeManager_->update(node); }
+	void DataManager::updateNode(const Node &node) const { nodeManager_->update(node); }
 
-	void DataManager::deleteNode(Node &node) { nodeManager_->remove(node); }
+	void DataManager::deleteNode(Node &node) const { nodeManager_->remove(node); }
 
-	Node DataManager::getNode(int64_t id) { return nodeManager_->get(id); }
+	Node DataManager::getNode(int64_t id) const { return nodeManager_->get(id); }
 
-	std::vector<Node> DataManager::getNodeBatch(const std::vector<int64_t> &ids) { return nodeManager_->getBatch(ids); }
+	std::vector<Node> DataManager::getNodeBatch(const std::vector<int64_t> &ids) const {
+		return nodeManager_->getBatch(ids);
+	}
 
-	std::vector<Node> DataManager::getNodesInRange(int64_t startId, int64_t endId, size_t limit) {
+	std::vector<Node> DataManager::getNodesInRange(int64_t startId, int64_t endId, size_t limit) const {
 		return nodeManager_->getInRange(startId, endId, limit);
 	}
 
 	void DataManager::addNodeProperties(int64_t nodeId,
-										const std::unordered_map<std::string, PropertyValue> &properties) {
+										const std::unordered_map<std::string, PropertyValue> &properties) const {
 		nodeManager_->addProperties(nodeId, properties);
 	}
 
-	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) {
+	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) const {
 		nodeManager_->removeProperty(nodeId, key);
 	}
 
-	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) {
+	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) const {
 		return nodeManager_->getProperties(nodeId);
 	}
 
-	int64_t DataManager::reserveTemporaryNodeId() { return idAllocator_->reserveTemporaryId(Node::typeId); }
+	int64_t DataManager::reserveTemporaryNodeId() const { return idAllocator_->reserveTemporaryId(Node::typeId); }
 
 	// --- Edge Operations (delegate to EdgeManager) ---
 
-	void DataManager::addEdge(Edge &edge) { edgeManager_->add(edge); }
+	void DataManager::addEdge(const Edge &edge) const { edgeManager_->add(edge); }
 
-	void DataManager::updateEdge(const Edge &edge) { edgeManager_->update(edge); }
+	void DataManager::updateEdge(const Edge &edge) const { edgeManager_->update(edge); }
 
-	void DataManager::deleteEdge(Edge &edge) { edgeManager_->remove(edge); }
+	void DataManager::deleteEdge(Edge &edge) const { edgeManager_->remove(edge); }
 
-	Edge DataManager::getEdge(int64_t id) { return edgeManager_->get(id); }
+	Edge DataManager::getEdge(int64_t id) const { return edgeManager_->get(id); }
 
-	std::vector<Edge> DataManager::getEdgeBatch(const std::vector<int64_t> &ids) { return edgeManager_->getBatch(ids); }
+	std::vector<Edge> DataManager::getEdgeBatch(const std::vector<int64_t> &ids) const {
+		return edgeManager_->getBatch(ids);
+	}
 
-	std::vector<Edge> DataManager::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) {
+	std::vector<Edge> DataManager::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) const {
 		return edgeManager_->getInRange(startId, endId, limit);
 	}
 
 	void DataManager::addEdgeProperties(int64_t edgeId,
-										const std::unordered_map<std::string, PropertyValue> &properties) {
+										const std::unordered_map<std::string, PropertyValue> &properties) const {
 		edgeManager_->addProperties(edgeId, properties);
 	}
 
-	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) {
+	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) const {
 		edgeManager_->removeProperty(edgeId, key);
 	}
 
-	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) {
+	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) const {
 		return edgeManager_->getProperties(edgeId);
 	}
 
@@ -159,70 +163,72 @@ namespace graph::storage {
 		}
 	}
 
-	int64_t DataManager::reserveTemporaryEdgeId() { return idAllocator_->reserveTemporaryId(Edge::typeId); }
+	int64_t DataManager::reserveTemporaryEdgeId() const { return idAllocator_->reserveTemporaryId(Edge::typeId); }
 
 	// --- Property Entity Operations ---
 
-	void DataManager::addPropertyEntity(const Property &property) { propertyEntityManager_->add(property); }
+	void DataManager::addPropertyEntity(const Property &property) const { propertyEntityManager_->add(property); }
 
-	void DataManager::updatePropertyEntity(const Property &property) { propertyEntityManager_->update(property); }
+	void DataManager::updatePropertyEntity(const Property &property) const { propertyEntityManager_->update(property); }
 
-	void DataManager::deleteProperty(Property &property) { propertyEntityManager_->remove(property); }
+	void DataManager::deleteProperty(Property &property) const { propertyEntityManager_->remove(property); }
 
-	Property DataManager::getProperty(int64_t id) { return propertyEntityManager_->get(id); }
+	Property DataManager::getProperty(int64_t id) const { return propertyEntityManager_->get(id); }
 
-	int64_t DataManager::reserveTemporaryPropertyId() { return idAllocator_->reserveTemporaryId(Property::typeId); }
+	int64_t DataManager::reserveTemporaryPropertyId() const {
+		return idAllocator_->reserveTemporaryId(Property::typeId);
+	}
 
 	// --- Blob Operations ---
 
-	void DataManager::addBlobEntity(const Blob &blob) { blobEntityManager_->add(blob); }
+	void DataManager::addBlobEntity(const Blob &blob) const { blobEntityManager_->add(blob); }
 
-	void DataManager::updateBlobEntity(const Blob &blob) { blobEntityManager_->update(blob); }
+	void DataManager::updateBlobEntity(const Blob &blob) const { blobEntityManager_->update(blob); }
 
-	void DataManager::deleteBlob(Blob &blob) { blobEntityManager_->remove(blob); }
+	void DataManager::deleteBlob(Blob &blob) const { blobEntityManager_->remove(blob); }
 
-	Blob DataManager::getBlob(int64_t id) { return blobEntityManager_->get(id); }
+	Blob DataManager::getBlob(int64_t id) const { return blobEntityManager_->get(id); }
 
-	int64_t DataManager::reserveTemporaryBlobId() { return idAllocator_->reserveTemporaryId(Blob::typeId); }
+	int64_t DataManager::reserveTemporaryBlobId() const { return idAllocator_->reserveTemporaryId(Blob::typeId); }
 
 	// --- Index Operations ---
 
-	void DataManager::addIndexEntity(const Index &index) { indexEntityManager_->add(index); }
+	void DataManager::addIndexEntity(const Index &index) const { indexEntityManager_->add(index); }
 
-	void DataManager::updateIndexEntity(const Index &index) { indexEntityManager_->update(index); }
+	void DataManager::updateIndexEntity(const Index &index) const { indexEntityManager_->update(index); }
 
-	void DataManager::deleteIndex(Index &index) { indexEntityManager_->remove(index); }
+	void DataManager::deleteIndex(Index &index) const { indexEntityManager_->remove(index); }
 
-	Index DataManager::getIndex(int64_t id) { return indexEntityManager_->get(id); }
+	Index DataManager::getIndex(int64_t id) const { return indexEntityManager_->get(id); }
 
-	int64_t DataManager::reserveTemporaryIndexId() { return idAllocator_->reserveTemporaryId(Index::typeId); }
+	int64_t DataManager::reserveTemporaryIndexId() const { return idAllocator_->reserveTemporaryId(Index::typeId); }
 
 	// --- State Operations ---
 
-	void DataManager::addStateEntity(const State &state) { stateEntityManager_->add(state); }
+	void DataManager::addStateEntity(const State &state) const { stateEntityManager_->add(state); }
 
-	void DataManager::updateStateEntity(const State &state) { stateEntityManager_->update(state); }
+	void DataManager::updateStateEntity(const State &state) const { stateEntityManager_->update(state); }
 
-	void DataManager::deleteState(State &state) { stateEntityManager_->remove(state); }
+	void DataManager::deleteState(State &state) const { stateEntityManager_->remove(state); }
 
-	State DataManager::getState(int64_t id) { return stateEntityManager_->get(id); }
+	State DataManager::getState(int64_t id) const { return stateEntityManager_->get(id); }
 
-	int64_t DataManager::reserveTemporaryStateId() { return idAllocator_->reserveTemporaryId(State::typeId); }
+	int64_t DataManager::reserveTemporaryStateId() const { return idAllocator_->reserveTemporaryId(State::typeId); }
 
-	std::vector<State> DataManager::getAllStates() { return stateEntityManager_->getAllHeadStates(); }
+	std::vector<State> DataManager::getAllStates() const { return stateEntityManager_->getAllHeadStates(); }
 
-	State DataManager::findStateByKey(const std::string &key) { return stateEntityManager_->findByKey(key); }
+	State DataManager::findStateByKey(const std::string &key) const { return stateEntityManager_->findByKey(key); }
 
 	void DataManager::addStateProperties(const std::string &stateKey,
-										 const std::unordered_map<std::string, PropertyValue> &properties) {
+										 const std::unordered_map<std::string, PropertyValue> &properties) const {
 		stateEntityManager_->addStateProperties(stateKey, properties);
 	}
 
-	std::unordered_map<std::string, PropertyValue> DataManager::getStateProperties(const std::string &stateKey) {
+	std::unordered_map<std::string, PropertyValue> DataManager::getStateProperties(const std::string &stateKey) const {
 		return stateEntityManager_->getStateProperties(stateKey);
 	}
 
-	void DataManager::removeState(const std::string &stateKey) { stateEntityManager_->removeState(stateKey); }
+	void DataManager::removeState(const std::string &stateKey) const { stateEntityManager_->removeState(stateKey); }
 
 	bool DataManager::isChainHeadState(const State &state) {
 		return state.getId() != 0 && state.isActive() && state.getPrevStateId() == 0;
@@ -244,7 +250,7 @@ namespace graph::storage {
 		return propertyManager_->deserializeProperties(is);
 	}
 
-	std::unordered_map<std::string, PropertyValue> DataManager::getPropertiesFromBlob(int64_t blobId) {
+	std::unordered_map<std::string, PropertyValue> DataManager::getPropertiesFromBlob(int64_t blobId) const {
 		return propertyManager_->getPropertiesFromBlob(blobId);
 	}
 
@@ -271,7 +277,7 @@ namespace graph::storage {
 			addNode(entity);
 		} else if constexpr (std::is_same_v<EntityType, Edge>) {
 			// Need to make a copy as addEdge takes a non-const reference
-			Edge edgeCopy = entity;
+			const Edge &edgeCopy = entity;
 			addEdge(edgeCopy);
 		} else if constexpr (std::is_same_v<EntityType, Property>) {
 			addPropertyEntity(entity);
@@ -411,7 +417,7 @@ namespace graph::storage {
 		std::vector<Node> result;
 
 		for (const auto &[id, info]: dirtyNodes_) {
-			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
+			if (std::ranges::find(types, info.changeType) != types.end()) {
 				if (info.backup.has_value()) {
 					result.push_back(*info.backup);
 				} else if (nodeCache_.contains(id)) {
@@ -427,7 +433,7 @@ namespace graph::storage {
 		std::vector<Edge> result;
 
 		for (const auto &[id, info]: dirtyEdges_) {
-			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
+			if (std::ranges::find(types, info.changeType) != types.end()) {
 				if (info.backup.has_value()) {
 					result.push_back(*info.backup);
 				} else if (edgeCache_.contains(id)) {
@@ -444,7 +450,7 @@ namespace graph::storage {
 		std::vector<Property> result;
 
 		for (const auto &[id, info]: dirtyProperties_) {
-			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
+			if (std::ranges::find(types, info.changeType) != types.end()) {
 				if (info.backup.has_value()) {
 					result.push_back(*info.backup);
 				} else if (propertyCache_.contains(id)) {
@@ -460,7 +466,7 @@ namespace graph::storage {
 		std::vector<Blob> result;
 
 		for (const auto &[id, info]: dirtyBlobs_) {
-			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
+			if (std::ranges::find(types, info.changeType) != types.end()) {
 				if (info.backup.has_value()) {
 					result.push_back(*info.backup);
 				} else if (blobCache_.contains(id)) {
@@ -662,7 +668,7 @@ namespace graph::storage {
 
 	// --- Cache and Transaction Management ---
 
-	void DataManager::clearCache() {
+	void DataManager::clearCache() const {
 		nodeCache_.clear();
 		edgeCache_.clear();
 		propertyCache_.clear();

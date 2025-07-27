@@ -23,14 +23,14 @@ namespace graph::storage {
 
 	class BlobManager : public BaseEntityManager<Blob> {
 	public:
-		BlobManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<PropertyManager> propertyManager,
+		BlobManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<PropertyManager> propertyManager,
 					std::shared_ptr<BlobChainManager> blobChainManager,
 					std::shared_ptr<DeletionManager> deletionManager);
 
 		// Blob-specific methods that delegate to BlobChainManager
-		std::string readBlobChain(int64_t headBlobId);
-		std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType, const std::string &data);
-		void deleteBlobChain(int64_t headBlobId);
+		std::string readBlobChain(int64_t headBlobId) const;
+		std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType, const std::string &data) const;
+		void deleteBlobChain(int64_t headBlobId) const;
 
 	protected:
 		// Implement the abstract method for reserving IDs

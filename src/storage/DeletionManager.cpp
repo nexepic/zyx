@@ -12,8 +12,8 @@
 #include <chrono>
 #include <iostream>
 #include <utility>
-#include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::storage {
 
@@ -28,7 +28,7 @@ namespace graph::storage {
 		// refreshSegmentState();
 	}
 
-	void DeletionManager::deleteNode(Node &node) {
+	void DeletionManager::deleteNode(Node &node) const {
 		if (node.hasPropertyEntity()) {
 			deletePropertyEntity(node.getPropertyEntityId(), node.getPropertyStorageType());
 		}
@@ -39,7 +39,7 @@ namespace graph::storage {
 		markNodeInactive(node);
 	}
 
-	void DeletionManager::deleteEdge(Edge &edge) {
+	void DeletionManager::deleteEdge(Edge &edge) const {
 		if (edge.hasPropertyEntity()) {
 			deletePropertyEntity(edge.getPropertyEntityId(), edge.getPropertyStorageType());
 		}
@@ -48,29 +48,33 @@ namespace graph::storage {
 		markEdgeInactive(edge);
 	}
 
-	void DeletionManager::deleteProperty(Property &property) {
-		if (property.getId() == 0) return;
+	void DeletionManager::deleteProperty(Property &property) const {
+		if (property.getId() == 0)
+			return;
 
 		// Mark the property as inactive in the index
 		markPropertyInactive(property);
 	}
 
-	void DeletionManager::deleteBlob(Blob &blob) {
-		if (blob.getId() == 0) return;
+	void DeletionManager::deleteBlob(Blob &blob) const {
+		if (blob.getId() == 0)
+			return;
 
 		// Mark the blob as inactive in the index
 		markBlobInactive(blob);
 	}
 
-	void DeletionManager::deleteIndex(Index &index) {
-		if (index.getId() == 0) return;
+	void DeletionManager::deleteIndex(Index &index) const {
+		if (index.getId() == 0)
+			return;
 
 		// Mark the index as inactive in the index
 		markIndexInactive(index);
 	}
 
-	void DeletionManager::deleteState(State &state) {
-		if (state.getId() == 0) return;
+	void DeletionManager::deleteState(State &state) const {
+		if (state.getId() == 0)
+			return;
 
 		// Mark the state as inactive in the index
 		markStateInactive(state);
@@ -106,11 +110,11 @@ namespace graph::storage {
 		return spaceManager_->getTracker()->getSegmentOffsetForStateId(id);
 	}
 
-	bool DeletionManager::deleteBulkNodes(const std::vector<uint64_t> &nodeIds, bool cascadeEdges) {
+	bool DeletionManager::deleteBulkNodes(const std::vector<int64_t> &nodeIds, bool cascadeEdges) const {
 		bool allSucceeded = true;
 
 		// For bulk operations, we'll postpone compaction until the end
-		for (uint64_t nodeId: nodeIds) {
+		for (int64_t nodeId: nodeIds) {
 			// Use a non-compacting version of node deletion
 			bool success = performNodeDeletion(nodeId);
 
@@ -118,7 +122,7 @@ namespace graph::storage {
 				// Find and delete connected edges
 				auto edges = dataManager_->findEdgesByNode(nodeId, "both");
 				for (const auto &edge: edges) {
-					performEdgeDeletion(edge.getId());
+					return performEdgeDeletion(edge.getId());
 				}
 			}
 
@@ -128,11 +132,11 @@ namespace graph::storage {
 		return allSucceeded;
 	}
 
-	bool DeletionManager::deleteBulkEdges(const std::vector<uint64_t> &edgeIds) {
+	bool DeletionManager::deleteBulkEdges(const std::vector<int64_t> &edgeIds) const {
 		bool allSucceeded = true;
 
 		// For bulk operations, postpone compaction until the end
-		for (uint64_t edgeId: edgeIds) {
+		for (int64_t edgeId: edgeIds) {
 			// Use non-compacting deletion
 			allSucceeded = performEdgeDeletion(edgeId) && allSucceeded;
 		}
@@ -140,7 +144,7 @@ namespace graph::storage {
 		return allSucceeded;
 	}
 
-	bool DeletionManager::performNodeDeletion(uint64_t nodeId) {
+	bool DeletionManager::performNodeDeletion(int64_t nodeId) const {
 		// Check if the node exists
 		Node node;
 		try {
@@ -155,7 +159,7 @@ namespace graph::storage {
 		return true;
 	}
 
-	bool DeletionManager::performEdgeDeletion(uint64_t edgeId) {
+	bool DeletionManager::performEdgeDeletion(int64_t edgeId) const {
 		// Check if the edge exists
 		Edge edge;
 		try {
@@ -170,8 +174,9 @@ namespace graph::storage {
 		return true;
 	}
 
-	void DeletionManager::deletePropertyEntity(int64_t propertyId, PropertyStorageType storageType) {
-		if (propertyId == 0) return;
+	void DeletionManager::deletePropertyEntity(int64_t propertyId, PropertyStorageType storageType) const {
+		if (propertyId == 0)
+			return;
 
 		try {
 			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
@@ -190,14 +195,14 @@ namespace graph::storage {
 		}
 	}
 
-	void DeletionManager::deleteNodeConnectedEdges(int64_t nodeId) {
+	void DeletionManager::deleteNodeConnectedEdges(int64_t nodeId) const {
 		auto edges = dataManager_->findEdgesByNode(nodeId, "both");
-		for (auto &edge : edges) {
+		for (auto &edge: edges) {
 			markEdgeInactive(edge);
 		}
 	}
 
-	void DeletionManager::markNodeInactive(Node &node) {
+	void DeletionManager::markNodeInactive(Node &node) const {
 		// Find the segment this node belongs to
 		uint64_t segmentOffset = findSegmentForNodeId(node.getId());
 		if (segmentOffset == 0) {
@@ -223,7 +228,7 @@ namespace graph::storage {
 		}
 	}
 
-	void DeletionManager::markEdgeInactive(Edge &edge) {
+	void DeletionManager::markEdgeInactive(Edge &edge) const {
 		// Find the segment this edge belongs to
 		uint64_t segmentOffset = findSegmentForEdgeId(edge.getId());
 		if (segmentOffset == 0) {
@@ -249,7 +254,7 @@ namespace graph::storage {
 		}
 	}
 
-	void DeletionManager::markPropertyInactive(Property &property) {
+	void DeletionManager::markPropertyInactive(Property &property) const {
 		// Find the segment this property belongs to
 		uint64_t segmentOffset = findSegmentForPropertyId(property.getId());
 		if (segmentOffset == 0) {
@@ -275,7 +280,7 @@ namespace graph::storage {
 		}
 	}
 
-	void DeletionManager::markBlobInactive(Blob &blob) {
+	void DeletionManager::markBlobInactive(Blob &blob) const {
 		// Find the segment this blob belongs to
 		uint64_t segmentOffset = findSegmentForBlobId(blob.getId());
 		if (segmentOffset == 0) {
@@ -301,7 +306,7 @@ namespace graph::storage {
 		}
 	}
 
-	void DeletionManager::markIndexInactive(Index &index) {
+	void DeletionManager::markIndexInactive(Index &index) const {
 		// Find the segment this index belongs to
 		uint64_t segmentOffset = findSegmentForIndexId(index.getId());
 		if (segmentOffset == 0) {
@@ -327,7 +332,7 @@ namespace graph::storage {
 		}
 	}
 
-	void DeletionManager::markStateInactive(State &state) {
+	void DeletionManager::markStateInactive(State &state) const {
 		// Find the segment this state belongs to
 		uint64_t segmentOffset = findSegmentForStateId(state.getId());
 		if (segmentOffset == 0) {
@@ -353,7 +358,7 @@ namespace graph::storage {
 		}
 	}
 
-	bool DeletionManager::isNodeActive(uint64_t nodeId) const {
+	bool DeletionManager::isNodeActive(int64_t nodeId) const {
 		// Find the segment this node belongs to
 		uint64_t segmentOffset = findSegmentForNodeId(nodeId);
 		if (segmentOffset == 0) {
@@ -370,7 +375,7 @@ namespace graph::storage {
 		return spaceManager_->getTracker()->isEntityActive(segmentOffset, indexInSegment);
 	}
 
-	bool DeletionManager::isEdgeActive(uint64_t edgeId) const {
+	bool DeletionManager::isEdgeActive(int64_t edgeId) const {
 		// Find the segment this edge belongs to
 		uint64_t segmentOffset = findSegmentForEdgeId(edgeId);
 		if (segmentOffset == 0) {

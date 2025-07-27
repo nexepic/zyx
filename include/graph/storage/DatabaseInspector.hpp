@@ -16,7 +16,7 @@
 namespace graph::storage {
 	class DatabaseInspector {
 	public:
-		explicit DatabaseInspector(FileHeader fileHeader, std::shared_ptr<std::fstream> &file,
+		explicit DatabaseInspector(const FileHeader &fileHeader, std::shared_ptr<std::fstream> &file,
 								   DataManager &dataManager);
 		~DatabaseInspector();
 

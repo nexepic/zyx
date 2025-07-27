@@ -85,70 +85,70 @@ namespace graph::storage {
 		FileHeader &getFileHeaderRef() const { return fileHeader_; }
 
 		// Node-specific operations
-		void addNode(const Node &node);
-		void updateNode(const Node &node);
-		void deleteNode(Node &node);
-		Node getNode(int64_t id);
-		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids);
-		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
-		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties);
-		void removeNodeProperty(int64_t nodeId, const std::string &key);
-		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId);
-		int64_t reserveTemporaryNodeId();
+		void addNode(const Node &node) const;
+		void updateNode(const Node &node) const;
+		void deleteNode(Node &node) const;
+		Node getNode(int64_t id) const;
+		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids) const;
+		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
+		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
+		void removeNodeProperty(int64_t nodeId, const std::string &key) const;
+		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;
+		int64_t reserveTemporaryNodeId() const;
 
 		// Edge-specific operations
-		void addEdge(Edge &edge);
-		void updateEdge(const Edge &edge);
-		void deleteEdge(Edge &edge);
-		Edge getEdge(int64_t id);
-		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids);
-		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
-		void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties);
-		void removeEdgeProperty(int64_t edgeId, const std::string &key);
-		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId);
+		void addEdge(const Edge &edge) const;
+		void updateEdge(const Edge &edge) const;
+		void deleteEdge(Edge &edge) const;
+		Edge getEdge(int64_t id) const;
+		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids) const;
+		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
+		void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
+		void removeEdgeProperty(int64_t edgeId, const std::string &key) const;
+		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId) const;
 		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both") const;
-		int64_t reserveTemporaryEdgeId();
+		int64_t reserveTemporaryEdgeId() const;
 
 		// Property entity operations
-		void addPropertyEntity(const Property &property);
-		void updatePropertyEntity(const Property &property);
-		void deleteProperty(Property &property);
-		Property getProperty(int64_t id);
-		int64_t reserveTemporaryPropertyId();
+		void addPropertyEntity(const Property &property) const;
+		void updatePropertyEntity(const Property &property) const;
+		void deleteProperty(Property &property) const;
+		Property getProperty(int64_t id) const;
+		int64_t reserveTemporaryPropertyId() const;
 
 		// Blob operations
-		void addBlobEntity(const Blob &blob);
-		void updateBlobEntity(const Blob &blob);
-		void deleteBlob(Blob &blob);
-		Blob getBlob(int64_t id);
-		int64_t reserveTemporaryBlobId();
+		void addBlobEntity(const Blob &blob) const;
+		void updateBlobEntity(const Blob &blob) const;
+		void deleteBlob(Blob &blob) const;
+		Blob getBlob(int64_t id) const;
+		int64_t reserveTemporaryBlobId() const;
 
 		// Index operations
-		void addIndexEntity(const Index &index);
-		void updateIndexEntity(const Index &index);
-		void deleteIndex(Index &index);
-		Index getIndex(int64_t id);
-		int64_t reserveTemporaryIndexId();
+		void addIndexEntity(const Index &index) const;
+		void updateIndexEntity(const Index &index) const;
+		void deleteIndex(Index &index) const;
+		Index getIndex(int64_t id) const;
+		int64_t reserveTemporaryIndexId() const;
 
 		// State operations
-		void addStateEntity(const State &state);
-		void updateStateEntity(const State &state);
-		void deleteState(State &state);
-		State getState(int64_t id);
-		int64_t reserveTemporaryStateId();
-		std::vector<State> getAllStates();
-		State findStateByKey(const std::string &key);
+		void addStateEntity(const State &state) const;
+		void updateStateEntity(const State &state) const;
+		void deleteState(State &state) const;
+		State getState(int64_t id) const;
+		int64_t reserveTemporaryStateId() const;
+		std::vector<State> getAllStates() const;
+		State findStateByKey(const std::string &key) const;
 		void addStateProperties(const std::string &stateKey,
-								const std::unordered_map<std::string, PropertyValue> &properties);
-		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey);
-		void removeState(const std::string &stateKey);
+								const std::unordered_map<std::string, PropertyValue> &properties) const;
+		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey) const;
+		void removeState(const std::string &stateKey) const;
 
 		uint32_t calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void serializeProperties(std::ostream &os,
 								 const std::unordered_map<std::string, PropertyValue> &properties) const;
 		std::unordered_map<std::string, PropertyValue> deserializeProperties(std::istream &is) const;
 
-		std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId);
+		std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId) const;
 
 		template<typename EntityType>
 		void cleanupExternalProperties(EntityType &entity);
@@ -185,12 +185,12 @@ namespace graph::storage {
 		uint64_t findSegmentForEntityId(int64_t id) const;
 
 		// Cache management
-		void clearCache();
+		void clearCache() const;
 
 		// Transaction management
 		[[nodiscard]] bool hasUnsavedChanges() const;
 		void markAllSaved();
-		void flushToDisk(std::fstream &file);
+		static void flushToDisk(std::fstream &file);
 
 		template<typename EntityType>
 		std::vector<EntityType> getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types);
@@ -321,9 +321,9 @@ namespace graph::storage {
 		std::shared_ptr<StateManager> stateEntityManager_;
 
 		// Initialization helpers
-		void initializeSegmentIndexes();
-		void initializeManagers(std::shared_ptr<BlobChainManager> blobChainManager,
-								std::shared_ptr<StateChainManager> stateChainManager);
+		void initializeSegmentIndexes() const;
+		void initializeManagers(const std::shared_ptr<BlobChainManager>& blobChainManager,
+								const std::shared_ptr<StateChainManager>& stateChainManager);
 
 		// Helper for state operations
 		static bool isChainHeadState(const State &state);

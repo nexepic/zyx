@@ -25,13 +25,14 @@ namespace graph::storage {
 	 */
 	class PropertyManager {
 	public:
-		explicit PropertyManager(std::shared_ptr<DataManager> dataManager);
+		explicit PropertyManager(const std::shared_ptr<DataManager> &dataManager);
 
 		// Serialization methods
-		[[nodiscard]] uint32_t calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) const;
-		void serializeProperties(std::ostream &os,
-								 const std::unordered_map<std::string, PropertyValue> &properties) const;
-		std::unordered_map<std::string, PropertyValue> deserializeProperties(std::istream &is) const;
+		[[nodiscard]] static uint32_t
+		calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties);
+		static void serializeProperties(std::ostream &os,
+										const std::unordered_map<std::string, PropertyValue> &properties);
+		static std::unordered_map<std::string, PropertyValue> deserializeProperties(std::istream &is);
 
 		// Property storage strategies
 		template<typename EntityType>
@@ -52,7 +53,7 @@ namespace graph::storage {
 		template<typename EntityType>
 		std::unordered_map<std::string, PropertyValue> getEntityProperties(int64_t entityId);
 
-		std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId);
+		std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId) const;
 
 		// Property operations
 		template<typename EntityType>

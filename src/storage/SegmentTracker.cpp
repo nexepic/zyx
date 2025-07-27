@@ -13,11 +13,10 @@
 #include <cstring>
 #include <functional>
 #include <graph/storage/SegmentIndexManager.hpp>
-#include <graph/utils/ChecksumUtils.hpp>
 #include <iostream>
 #include <stdexcept>
-#include "graph/utils/FixedSizeSerializer.hpp"
 #include "graph/storage/SegmentTypeRegistry.hpp"
+#include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
 
@@ -55,11 +54,11 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::loadSegments() {
-        for (const auto& type : SegmentTypeRegistry::getAllTypes()) {
-            uint64_t headOffset = SegmentTypeRegistry::getChainHead(type);
-            loadSegmentChain(headOffset, toUnderlying(type));
-        }
-    }
+		for (const auto &type: SegmentTypeRegistry::getAllTypes()) {
+			uint64_t headOffset = SegmentTypeRegistry::getChainHead(type);
+			loadSegmentChain(headOffset, toUnderlying(type));
+		}
+	}
 
 	void SegmentTracker::loadSegmentChain(uint64_t headOffset, uint32_t expectedType) {
 		uint64_t offset = headOffset;
@@ -603,6 +602,6 @@ namespace graph::storage {
 	template void SegmentTracker::writeEntity<Index>(uint64_t segmentOffset, uint32_t itemIndex, const Index &entity,
 													 size_t itemSize);
 	template void SegmentTracker::writeEntity<State>(uint64_t segmentOffset, uint32_t itemIndex, const State &entity,
-													size_t itemSize);
+													 size_t itemSize);
 
 } // namespace graph::storage

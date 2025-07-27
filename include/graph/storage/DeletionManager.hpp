@@ -35,35 +35,35 @@ namespace graph::storage {
 		/**
 		 * Initialize the deletion manager
 		 */
-		void initialize();
+		static void initialize();
 
 		/**
 		 * Delete a node
 		 */
-		void deleteNode(Node &node);
+		void deleteNode(Node &node) const;
 
 		/**
 		 * Delete an edge
 		 */
-		void deleteEdge(Edge &edge);
+		void deleteEdge(Edge &edge) const;
 
-		void deleteProperty(Property &property);
+		void deleteProperty(Property &property) const;
 
-		void deleteBlob(Blob &blob);
+		void deleteBlob(Blob &blob) const;
 
-		void deleteIndex(Index &index);
+		void deleteIndex(Index &index) const;
 
-		void deleteState(State &state);
+		void deleteState(State &state) const;
 
 		/**
 		 * Delete multiple nodes
 		 */
-		bool deleteBulkNodes(const std::vector<uint64_t> &nodeIds, bool cascadeEdges = false);
+		bool deleteBulkNodes(const std::vector<int64_t> &nodeIds, bool cascadeEdges = false) const;
 
 		/**
 		 * Delete multiple edges
 		 */
-		bool deleteBulkEdges(const std::vector<uint64_t> &edgeIds);
+		bool deleteBulkEdges(const std::vector<int64_t> &edgeIds) const;
 
 		/**
 		 * Refresh segment state information
@@ -73,34 +73,34 @@ namespace graph::storage {
 		/**
 		 * Mark a node as inactive
 		 */
-		void markNodeInactive(Node &node);
+		void markNodeInactive(Node &node) const;
 
-		void deletePropertyEntity(int64_t propertyId, PropertyStorageType storageType);
+		void deletePropertyEntity(int64_t propertyId, PropertyStorageType storageType) const;
 
-		void deleteNodeConnectedEdges(int64_t nodeId);
+		void deleteNodeConnectedEdges(int64_t nodeId) const;
 
 		/**
 		 * Mark an edge as inactive
 		 */
-		void markEdgeInactive(Edge &edge);
+		void markEdgeInactive(Edge &edge) const;
 
-		void markPropertyInactive(Property &property);
+		void markPropertyInactive(Property &property) const;
 
-		void markBlobInactive(Blob &blob);
+		void markBlobInactive(Blob &blob) const;
 
-		void markIndexInactive(Index &index);
+		void markIndexInactive(Index &index) const;
 
-		void markStateInactive(State &state);
+		void markStateInactive(State &state) const;
 
 		/**
 		 * Check if a node is inactive
 		 */
-		bool isNodeActive(uint64_t nodeId) const;
+		bool isNodeActive(int64_t nodeId) const;
 
 		/**
 		 * Check if an edge is inactive
 		 */
-		bool isEdgeActive(uint64_t edgeId) const;
+		bool isEdgeActive(int64_t edgeId) const;
 
 		/**
 		 * Get the segment that contains the specified node ID
@@ -135,8 +135,8 @@ namespace graph::storage {
 		static constexpr double COMPACTION_THRESHOLD = 0.3; // 30% inactive triggers compaction
 
 		// Internal helper methods
-		bool performNodeDeletion(uint64_t nodeId);
-		bool performEdgeDeletion(uint64_t edgeId);
+		bool performNodeDeletion(int64_t nodeId) const;
+		bool performEdgeDeletion(int64_t edgeId) const;
 
 		// Callback for reference updates after segment movement
 		// void handleReferenceUpdate(uint64_t oldOffset, uint64_t newOffset, uint32_t type);

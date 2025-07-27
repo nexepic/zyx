@@ -36,7 +36,7 @@ namespace graph::traversal {
          * @param nodeId The ID of the node
          * @return A vector of all outgoing edges
          */
-        std::vector<Edge> getOutgoingEdges(int64_t nodeId);
+        std::vector<Edge> getOutgoingEdges(int64_t nodeId) const;
 
         /**
          * Gets all incoming edges to a node
@@ -44,7 +44,7 @@ namespace graph::traversal {
          * @param nodeId The ID of the node
          * @return A vector of all incoming edges
          */
-        std::vector<Edge> getIncomingEdges(int64_t nodeId);
+        std::vector<Edge> getIncomingEdges(int64_t nodeId) const;
 
         /**
          * Gets all edges connected to a node (both incoming and outgoing)
@@ -52,7 +52,7 @@ namespace graph::traversal {
          * @param nodeId The ID of the node
          * @return A vector of all connected edges
          */
-        std::vector<Edge> getAllConnectedEdges(int64_t nodeId);
+        std::vector<Edge> getAllConnectedEdges(int64_t nodeId) const;
 
         /**
          * Gets all nodes connected to the specified node via outgoing edges
@@ -60,7 +60,7 @@ namespace graph::traversal {
          * @param nodeId The ID of the node
          * @return A vector of all target nodes
          */
-        std::vector<Node> getConnectedTargetNodes(int64_t nodeId);
+        std::vector<Node> getConnectedTargetNodes(int64_t nodeId) const;
 
         /**
          * Gets all nodes connected to the specified node via incoming edges
@@ -68,7 +68,7 @@ namespace graph::traversal {
          * @param nodeId The ID of the node
          * @return A vector of all source nodes
          */
-        std::vector<Node> getConnectedSourceNodes(int64_t nodeId);
+        std::vector<Node> getConnectedSourceNodes(int64_t nodeId) const;
 
         /**
          * Gets all nodes connected to the specified node (both source and target)
@@ -76,21 +76,21 @@ namespace graph::traversal {
          * @param nodeId The ID of the node
          * @return A vector of all connected nodes
          */
-        std::vector<Node> getAllConnectedNodes(int64_t nodeId);
+        std::vector<Node> getAllConnectedNodes(int64_t nodeId) const;
 
         /**
          * Links a new edge into the appropriate linked lists
          *
          * @param edge The edge to be linked
          */
-        void linkEdge(Edge& edge);
+        void linkEdge(Edge& edge) const;
 
         /**
          * Unlinks an edge from the linked lists
          *
          * @param edge The edge to be unlinked
          */
-        void unlinkEdge(Edge& edge);
+        void unlinkEdge(Edge& edge) const;
 
     private:
         std::shared_ptr<storage::DataManager> dataManager_;

@@ -20,6 +20,10 @@ namespace graph {
 		return static_cast<uint32_t>(type);
 	}
 
+	constexpr uint32_t getMaxEntityType() {
+	    return static_cast<uint32_t>(EntityType::State);
+	}
+
 	enum class PropertyStorageType : uint32_t { NONE, PROPERTY_ENTITY, BLOB_ENTITY };
 
 } // namespace graph

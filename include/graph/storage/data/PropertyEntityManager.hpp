@@ -17,7 +17,7 @@ namespace graph::storage {
 
 	class PropertyEntityManager : public BaseEntityManager<Property> {
 	public:
-		PropertyEntityManager(std::shared_ptr<DataManager> dataManager,
+		PropertyEntityManager(const std::shared_ptr<DataManager> &dataManager,
 							  std::shared_ptr<PropertyManager> propertyManager,
 							  std::shared_ptr<DeletionManager> deletionManager);
 

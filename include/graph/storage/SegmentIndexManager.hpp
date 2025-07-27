@@ -86,7 +86,7 @@ namespace graph::storage {
 		/**
 		 * Build an entire segment index from a chain head
 		 */
-		void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead);
+		void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;
 
 		/**
 		 * Get the index vector for a specific type

@@ -31,12 +31,12 @@ namespace graph::storage {
 					 std::shared_ptr<FileHeaderManager> fileHeaderManager, std::shared_ptr<IDAllocator> idAllocator);
 		~SpaceManager();
 
-		void initialize(FileHeader &header);
-		uint64_t findMaxId(uint32_t type, std::shared_ptr<SegmentTracker> &tracker);
-		uint64_t allocateSegment(uint32_t type, uint32_t capacity);
-		void deallocateSegment(uint64_t offset);
+		void initialize(const FileHeader &header) const;
+		static uint64_t findMaxId(uint32_t type, const std::shared_ptr<SegmentTracker> &tracker);
+		uint64_t allocateSegment(uint32_t type, uint32_t capacity) const;
+		void deallocateSegment(uint64_t offset) const;
 		void compactSegments(uint32_t type, double threshold);
-		bool moveSegment(uint64_t sourceOffset, uint64_t destinationOffset);
+		bool moveSegment(uint64_t sourceOffset, uint64_t destinationOffset) const;
 
 		bool shouldCompact() const;
 
@@ -49,7 +49,7 @@ namespace graph::storage {
 		std::shared_ptr<SegmentTracker> getTracker() const { return segmentTracker_; }
 
 		// methods for segment merging
-		std::vector<uint64_t> findCandidatesForMerge(uint32_t type, double usageThreshold);
+		std::vector<uint64_t> findCandidatesForMerge(uint32_t type, double usageThreshold) const;
 		bool mergeSegments(uint32_t type, double usageThreshold);
 
 		template<typename EntityType>
@@ -60,26 +60,26 @@ namespace graph::storage {
 		bool mergeIntoSegment(uint64_t targetOffset, uint64_t sourceOffset, uint32_t type);
 
 		// Remove empty segments
-		bool processEmptySegments(uint32_t type);
-		void processAllEmptySegments();
+		bool processEmptySegments(uint32_t type) const;
+		void processAllEmptySegments() const;
 
 		// Truncates the file by removing unused trailing segments
-		bool truncateFile();
+		bool truncateFile() const;
 
 		std::mutex &getMutex() { return mutex_; }
 
 		bool isSegmentAtEndOfFile(uint64_t offset) const;
 		uint64_t findFreeSegmentNotAtEnd() const;
-		void initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity);
+		void initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity) const;
 
 		void setEntityReferenceUpdater(std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater) {
 			entityReferenceUpdater_ = std::move(entityReferenceUpdater);
 		}
 
 		// Update FileHeader chain heads based on current SegmentTracker state
-		void updateFileHeaderChainHeads();
+		void updateFileHeaderChainHeads() const;
 
-		void recalculateMaxIds();
+		void recalculateMaxIds() const;
 
 	private:
 		std::mutex compactionMutex_;
@@ -97,7 +97,7 @@ namespace graph::storage {
 		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
 
 		// Update file header with current max IDs
-		void updateMaxIds();
+		void updateMaxIds() const;
 
 		// Compaction thresholds and counters
 		static constexpr double COMPACTION_THRESHOLD = 0.3; // 30% inactive triggers compaction
@@ -111,21 +111,21 @@ namespace graph::storage {
 		bool compactBlobSegment(uint64_t offset);
 		bool compactIndexSegment(uint64_t offset);
 		bool compactStateSegment(uint64_t offset);
-		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset);
-		void updateSegmentChain(uint64_t newOffset, const SegmentHeader &info);
+		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) const;
+		void updateSegmentChain(uint64_t newOffset, const SegmentHeader &info) const;
 		uint64_t findLastSegment() const;
 
 		uint64_t findSegmentForNodeId(int64_t id) const;
 		uint64_t findSegmentForEdgeId(int64_t id) const;
 		SegmentHeader readSegmentHeader(uint64_t offset) const;
 
-		void writeSegmentHeader(uint64_t offset, const SegmentHeader &header);
+		void writeSegmentHeader(uint64_t offset, const SegmentHeader &header) const;
 
 		// Identifies segments at the end of file that can be truncated
 		std::vector<uint64_t> findTruncatableSegments() const;
 
 		// Relocate segments from the end of the file to fill gaps
-		bool relocateSegmentsFromEnd();
+		bool relocateSegmentsFromEnd() const;
 
 		// Find segments near the end of the file that could be relocated
 		std::vector<uint64_t> findRelocatableSegments() const;
@@ -133,7 +133,7 @@ namespace graph::storage {
 		// Find the file size by examining segment positions
 		uint64_t calculateCurrentFileSize() const;
 
-		int64_t calculateLastUsedIdInSegment(const SegmentHeader &header);
+		int64_t calculateLastUsedIdInSegment(const SegmentHeader &header) const;
 	};
 
 } // namespace graph::storage

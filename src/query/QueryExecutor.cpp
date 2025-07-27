@@ -18,7 +18,7 @@ namespace graph::query {
 								 std::shared_ptr<storage::FileStorage> storage) :
 		indexManager_(std::move(indexManager)), storage_(std::move(storage)) {}
 
-	QueryResult QueryExecutor::execute(const QueryPlan &plan) {
+	QueryResult QueryExecutor::execute(const QueryPlan &plan) const {
 		switch (plan.getType()) {
 			case QueryPlan::OperationType::LABEL_SCAN:
 				return executeLabelScan(plan);
@@ -52,7 +52,7 @@ namespace graph::query {
 		}
 	}
 
-	QueryResult QueryExecutor::executeLabelScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeLabelScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -77,7 +77,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executePropertyScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executePropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -104,7 +104,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeLabelPropertyScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeLabelPropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -133,7 +133,7 @@ namespace graph::query {
 
 		std::vector<int64_t> intersection;
 		for (int64_t nodeId: labelNodeIds) {
-			if (std::find(propertyNodeIds.begin(), propertyNodeIds.end(), nodeId) != propertyNodeIds.end()) {
+			if (std::ranges::find(propertyNodeIds, nodeId) != propertyNodeIds.end()) {
 				intersection.push_back(nodeId);
 			}
 		}
@@ -147,7 +147,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executePropertyRangeScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executePropertyRangeScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -178,7 +178,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeTextSearch(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeTextSearch(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -205,22 +205,22 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeRelationshipScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeRelationshipScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
 		const auto &stringParams = plan.getStringParams();
-		const auto &uint64Params = plan.getUint64Params();
+		const auto &int64Params = plan.getInt64Params();
 
-		auto nodeIdIt = uint64Params.find("nodeId");
+		auto nodeIdIt = int64Params.find("nodeId");
 		auto labelIt = stringParams.find("label");
 		auto directionIt = stringParams.find("direction");
 
-		if (nodeIdIt == uint64Params.end()) {
+		if (nodeIdIt == int64Params.end()) {
 			return result; // Missing node ID
 		}
 
-		uint64_t nodeId = nodeIdIt->second;
+		int64_t nodeId = nodeIdIt->second;
 		std::string label = (labelIt != stringParams.end()) ? labelIt->second : "";
 		std::string direction = (directionIt != stringParams.end()) ? directionIt->second : "outgoing";
 
@@ -238,8 +238,8 @@ namespace graph::query {
 		}
 
 		// Remove duplicates if any
-		std::sort(edgeIds.begin(), edgeIds.end());
-		edgeIds.erase(std::unique(edgeIds.begin(), edgeIds.end()), edgeIds.end());
+		std::ranges::sort(edgeIds);
+		edgeIds.erase(std::ranges::unique(edgeIds).begin(), edgeIds.end());
 
 		// Retrieve the actual edges
 		auto fetchedEdges = storage_->getEdges(edgeIds);
@@ -256,7 +256,7 @@ namespace graph::query {
 				result.addEdge(it->second);
 
 				// Optionally include connected nodes
-				if (stringParams.find("includeNodes") != stringParams.end()) {
+				if (stringParams.contains("includeNodes")) {
 					std::vector<int64_t> neededIds;
 					neededIds.push_back(it->second.getSourceNodeId());
 					neededIds.push_back(it->second.getTargetNodeId());
@@ -271,19 +271,19 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeTraversalConnectedNodes(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeTraversalConnectedNodes(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
 		const auto &stringParams = plan.getStringParams();
-		const auto &uint64Params = plan.getUint64Params();
+		const auto &uint64Params = plan.getInt64Params();
 
 		auto nodeIdIt = uint64Params.find("startNodeId");
 		if (nodeIdIt == uint64Params.end()) {
 			return result; // Missing node ID
 		}
 
-		int64_t startNodeId = static_cast<int64_t>(nodeIdIt->second);
+		const auto startNodeId = static_cast<int64_t>(nodeIdIt->second);
 
 		std::string direction = "both";
 		auto directionIt = stringParams.find("direction");
@@ -291,36 +291,34 @@ namespace graph::query {
 			direction = directionIt->second;
 		}
 
-		std::string edgeLabel = "";
-		auto edgeLabelIt = stringParams.find("edgeLabel");
-		if (edgeLabelIt != stringParams.end()) {
+		std::string edgeLabel;
+		if (const auto edgeLabelIt = stringParams.find("edgeLabel"); edgeLabelIt != stringParams.end()) {
 			edgeLabel = edgeLabelIt->second;
 		}
 
-		std::string nodeLabel = "";
-		auto nodeLabelIt = stringParams.find("nodeLabel");
-		if (nodeLabelIt != stringParams.end()) {
+		std::string nodeLabel;
+		if (const auto nodeLabelIt = stringParams.find("nodeLabel"); nodeLabelIt != stringParams.end()) {
 			nodeLabel = nodeLabelIt->second;
 		}
 
 		// Create TraversalQuery and execute traversal
 		auto dataManager = storage_->getDataManager();
-		auto traversalQuery = std::make_shared<TraversalQuery>(dataManager);
+		const auto traversalQuery = std::make_shared<TraversalQuery>(dataManager);
 
-		auto nodes = traversalQuery->findConnectedNodes(startNodeId, direction, edgeLabel, nodeLabel);
-		for (const auto &node: nodes) {
+		for (const auto nodes = traversalQuery->findConnectedNodes(startNodeId, direction, edgeLabel, nodeLabel);
+			 const auto &node: nodes) {
 			result.addNode(node);
 		}
 
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeTraversalShortestPath(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeTraversalShortestPath(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
 		const auto &stringParams = plan.getStringParams();
-		const auto &uint64Params = plan.getUint64Params();
+		const auto &uint64Params = plan.getInt64Params();
 		const auto &doubleParams = plan.getDoubleParams();
 
 		auto startNodeIdIt = uint64Params.find("startNodeId");
@@ -333,11 +331,9 @@ namespace graph::query {
 		auto startNodeId = static_cast<int64_t>(startNodeIdIt->second);
 		auto endNodeId = static_cast<int64_t>(endNodeIdIt->second);
 
-		int maxDepth = 10; // Default
 		auto maxDepthIt = doubleParams.find("maxDepth");
-		if (maxDepthIt != doubleParams.end()) {
-			maxDepth = static_cast<int>(maxDepthIt->second);
-		}
+		// TODO: maxDepth is not used in this implementation, but can be used for limiting the search depth
+		int maxDepth = (maxDepthIt != doubleParams.end()) ? static_cast<int>(maxDepthIt->second) : 10;
 
 		std::string direction = "both";
 		auto directionIt = stringParams.find("direction");
@@ -357,7 +353,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeFullNodeScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeFullNodeScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get maximum node ID to determine scan range
@@ -376,7 +372,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeFullNodeLabelScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeFullNodeLabelScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -406,7 +402,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeFullNodePropertyScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeFullNodePropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -443,7 +439,7 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeFullNodeLabelPropertyScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeFullNodeLabelPropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
@@ -485,12 +481,12 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeFullRelationshipScan(const QueryPlan &plan) {
+	QueryResult QueryExecutor::executeFullRelationshipScan(const QueryPlan &plan) const {
 		QueryResult result;
 
 		// Get parameters
 		const auto &stringParams = plan.getStringParams();
-		const auto &uint64Params = plan.getUint64Params();
+		const auto &uint64Params = plan.getInt64Params();
 
 		auto nodeIdIt = uint64Params.find("nodeId");
 		auto labelIt = stringParams.find("label");
@@ -506,33 +502,29 @@ namespace graph::query {
 		std::string direction = (directionIt != stringParams.end()) ? directionIt->second : "outgoing";
 
 		// Get maximum edge ID to determine scan range
-		int64_t maxEdgeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxEdgeId();
+		const int64_t maxEdgeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxEdgeId();
+		// TODO: Fix hardcoded batch size
 		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
 
 		for (int64_t startId = 1; startId <= maxEdgeId; startId += BATCH_SIZE) {
-			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxEdgeId);
-			auto edges = storage_->getDataManager()->getEdgesInRange(startId, endId);
+			const int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxEdgeId);
 
-			for (auto &edge: edges) {
+			for (auto edges = storage_->getDataManager()->getEdgesInRange(startId, endId); auto &edge: edges) {
 				bool directionMatch = false;
 
 				// Check direction and connected node
-				if ((direction == "outgoing" || direction == "both") &&
-					edge.getSourceNodeId() == static_cast<int64_t>(nodeId)) {
-					directionMatch = true;
-				} else if ((direction == "incoming" || direction == "both") &&
-						   edge.getTargetNodeId() == static_cast<int64_t>(nodeId)) {
-					directionMatch = true;
-				}
+				directionMatch = ((direction == "outgoing" || direction == "both") &&
+								  edge.getSourceNodeId() == static_cast<int64_t>(nodeId)) ||
+								 ((direction == "incoming" || direction == "both") &&
+								  edge.getTargetNodeId() == static_cast<int64_t>(nodeId));
 
 				// Check label if specified
-				bool labelMatch = label.empty() || edge.getLabel() == label;
 
-				if (directionMatch && labelMatch) {
+				if (const bool labelMatch = label.empty() || edge.getLabel() == label; directionMatch && labelMatch) {
 					result.addEdge(edge);
 
 					// Optionally include connected nodes
-					if (stringParams.find("includeNodes") != stringParams.end()) {
+					if (stringParams.contains("includeNodes")) {
 						std::vector<int64_t> neededIds;
 						neededIds.push_back(edge.getSourceNodeId());
 						neededIds.push_back(edge.getTargetNodeId());

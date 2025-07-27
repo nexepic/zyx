@@ -8,29 +8,34 @@
  *
  **/
 
-#include "graph/storage/data/BlobManager.hpp"
+#include <utility>
+
 #include "graph/core/BlobChainManager.hpp"
+#include "graph/storage/data/BlobManager.hpp"
 
 namespace graph::storage {
 
-	BlobManager::BlobManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<PropertyManager> propertyManager,
-							 std::shared_ptr<graph::BlobChainManager> blobChainManager,
+	BlobManager::BlobManager(const std::shared_ptr<DataManager> &dataManager,
+							 std::shared_ptr<PropertyManager> propertyManager,
+							 std::shared_ptr<BlobChainManager> blobChainManager,
 							 std::shared_ptr<DeletionManager> deletionManager) :
-		BaseEntityManager<Blob>(dataManager, propertyManager, deletionManager), blobChainManager_(blobChainManager) {}
+		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)),
+		blobChainManager_(std::move(blobChainManager)) {}
 
 	void BlobManager::doRemove(Blob &blob) { deletionManager_->deleteBlob(blob); }
 
-	std::string BlobManager::readBlobChain(int64_t headBlobId) {
+	std::string BlobManager::readBlobChain(int64_t headBlobId) const {
 		// Delegate to BlobChainManager
 		return blobChainManager_->readBlobChain(headBlobId);
 	}
 
-	std::vector<Blob> BlobManager::createBlobChain(int64_t entityId, uint32_t entityType, const std::string &data) {
+	std::vector<Blob> BlobManager::createBlobChain(int64_t entityId, uint32_t entityType,
+												   const std::string &data) const {
 		// Delegate to BlobChainManager
 		return blobChainManager_->createBlobChain(entityId, entityType, data);
 	}
 
-	void BlobManager::deleteBlobChain(int64_t headBlobId) {
+	void BlobManager::deleteBlobChain(int64_t headBlobId) const {
 		// Delegate to BlobChainManager
 		blobChainManager_->deleteBlobChain(headBlobId);
 	}

@@ -20,7 +20,8 @@ namespace graph::query {
 		dataManager_(std::move(dataManager)), traversal_(dataManager_->getRelationshipTraversal()) {}
 
 	std::vector<Node> TraversalQuery::findConnectedNodes(int64_t startNodeId, const std::string &direction,
-														 const std::string &edgeLabel, const std::string &nodeLabel) {
+														 const std::string &edgeLabel,
+														 const std::string &nodeLabel) const {
 		std::vector<Node> result;
 		std::vector<Edge> edges;
 
@@ -70,7 +71,7 @@ namespace graph::query {
 	}
 
 	std::vector<Node> TraversalQuery::findShortestPath(int64_t startNodeId, int64_t endNodeId,
-													   const std::string &direction) {
+													   const std::string &direction) const {
 		// Use Dijkstra's algorithm to find shortest path
 		std::unordered_map<int64_t, double> distances;
 		std::unordered_map<int64_t, int64_t> parentMap;
@@ -82,16 +83,16 @@ namespace graph::query {
 		std::priority_queue<NodeDistance, std::vector<NodeDistance>, std::greater<>> pq;
 
 		// Initialize
-		pq.push({0.0, startNodeId});
+		pq.emplace(0.0, startNodeId);
 		distances[startNodeId] = 0.0;
 
 		bool found = false;
-		while (!pq.empty() && !found) {
+		while (!pq.empty()) {
 			auto [currentDist, currentNodeId] = pq.top();
 			pq.pop();
 
 			// Skip if we've already processed this node with a shorter path
-			if (visited.find(currentNodeId) != visited.end()) {
+			if (visited.contains(currentNodeId)) {
 				continue;
 			}
 
@@ -104,25 +105,25 @@ namespace graph::query {
 			}
 
 			// Get connected nodes and their edges
-			std::vector<Node> connectedNodes = findConnectedNodes(currentNodeId, direction);
 
-			for (const auto &node: connectedNodes) {
+			for (std::vector<Node> connectedNodes = findConnectedNodes(currentNodeId, direction);
+				 const auto &node: connectedNodes) {
 				int64_t neighborId = node.getId();
-				if (visited.find(neighborId) != visited.end()) {
+				if (visited.contains(neighborId)) {
 					continue;
 				}
 
 				// Get edge between current node and neighbor
 				// For simplicity, using weight 1.0 for all edges
 				// TODO: Use actual edge weights if available
-				double weight = 1.0;
-				double newDist = distances[currentNodeId] + weight;
+				constexpr double weight = 1.0;
 
 				// If this is a shorter path, update
-				if (distances.find(neighborId) == distances.end() || newDist < distances[neighborId]) {
+				if (double newDist = distances[currentNodeId] + weight;
+					!distances.contains(neighborId) || newDist < distances[neighborId]) {
 					distances[neighborId] = newDist;
 					parentMap[neighborId] = currentNodeId;
-					pq.push({newDist, neighborId});
+					pq.emplace(newDist, neighborId);
 				}
 			}
 		}
@@ -138,7 +139,7 @@ namespace graph::query {
 			path.push_back(dataManager_->getNode(startNodeId));
 
 			// Reverse to get path from start to end
-			std::reverse(path.begin(), path.end());
+			std::ranges::reverse(path);
 		}
 
 		return path;
@@ -146,11 +147,11 @@ namespace graph::query {
 
 	void TraversalQuery::breadthFirstTraversal(int64_t startNodeId,
 											   const std::function<bool(const Node &, int)> &visitFn, int maxDepth,
-											   const std::string &direction) {
+											   const std::string &direction) const {
 		std::queue<std::pair<int64_t, int>> queue; // Node ID and depth
 		std::unordered_set<int64_t> visited;
 
-		queue.push({startNodeId, 0});
+		queue.emplace(startNodeId, 0);
 		visited.insert(startNodeId);
 
 		while (!queue.empty()) {
@@ -170,9 +171,9 @@ namespace graph::query {
 
 			for (const auto &node: connectedNodes) {
 				int64_t nodeId = node.getId();
-				if (visited.find(nodeId) == visited.end()) {
+				if (!visited.contains(nodeId)) {
 					visited.insert(nodeId);
-					queue.push({nodeId, depth + 1});
+					queue.emplace(nodeId, depth + 1);
 				}
 			}
 		}

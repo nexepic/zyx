@@ -8,14 +8,16 @@
  *
  **/
 
+#include <utility>
+
 #include "graph/storage/data/PropertyEntityManager.hpp"
 
 namespace graph::storage {
 
-	PropertyEntityManager::PropertyEntityManager(std::shared_ptr<DataManager> dataManager,
+	PropertyEntityManager::PropertyEntityManager(const std::shared_ptr<DataManager> &dataManager,
 												 std::shared_ptr<PropertyManager> propertyManager,
 												 std::shared_ptr<DeletionManager> deletionManager) :
-		BaseEntityManager<Property>(dataManager, propertyManager, deletionManager) {}
+		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)) {}
 
 	void PropertyEntityManager::doRemove(Property &property) { deletionManager_->deleteProperty(property); }
 

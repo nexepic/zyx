@@ -9,19 +9,18 @@
  **/
 
 #include "graph/storage/data/StateManager.hpp"
-#include <algorithm>
 #include <sstream>
-#include <stdexcept>
+#include <utility>
 #include "graph/core/StateChainManager.hpp"
 
 namespace graph::storage {
 
-	StateManager::StateManager(std::shared_ptr<DataManager> dataManager,
+	StateManager::StateManager(const std::shared_ptr<DataManager> &dataManager,
 							   std::shared_ptr<PropertyManager> propertyManager,
 							   std::shared_ptr<StateChainManager> stateChainManager,
 							   std::shared_ptr<DeletionManager> deletionManager) :
-		BaseEntityManager<State>(dataManager, propertyManager, deletionManager), stateChainManager_(stateChainManager) {
-	}
+		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)),
+		stateChainManager_(std::move(stateChainManager)) {}
 
 	void StateManager::doRemove(State &state) {
 		// Remove from key mapping if needed
@@ -70,7 +69,7 @@ namespace graph::storage {
 																 segmentIndex.endId - segmentIndex.startId + 1);
 
 			for (const auto &state: states) {
-				if (isChainHeadState(state) && processedIds.find(state.getId()) == processedIds.end()) {
+				if (isChainHeadState(state) && !processedIds.contains(state.getId())) {
 					allHeadStates.push_back(state);
 					processedIds.insert(state.getId());
 
@@ -95,7 +94,7 @@ namespace graph::storage {
 		// Serialize the properties
 		std::stringstream ss;
 		if (propertyManager_) {
-			propertyManager_->serializeProperties(ss, properties);
+			PropertyManager::serializeProperties(ss, properties);
 		}
 		std::string serializedData = ss.str();
 
@@ -135,7 +134,7 @@ namespace graph::storage {
 
 		// Deserialize properties
 		std::stringstream ss(data);
-		return propertyManager_->deserializeProperties(ss);
+		return PropertyManager::deserializeProperties(ss);
 	}
 
 	void StateManager::removeState(const std::string &stateKey) {
@@ -156,22 +155,22 @@ namespace graph::storage {
 		stateKeyToIdMap_.erase(stateKey);
 	}
 
-	std::string StateManager::readStateChain(int64_t headStateId) {
+	std::string StateManager::readStateChain(int64_t headStateId) const {
 		// Delegate to StateChainManager
 		return stateChainManager_->readStateChain(headStateId);
 	}
 
-	std::vector<State> StateManager::createStateChain(const std::string &key, const std::string &data) {
+	std::vector<State> StateManager::createStateChain(const std::string &key, const std::string &data) const {
 		// Delegate to StateChainManager
 		return stateChainManager_->createStateChain(key, data);
 	}
 
-	std::vector<State> StateManager::updateStateChain(int64_t headStateId, const std::string &newData) {
+	std::vector<State> StateManager::updateStateChain(int64_t headStateId, const std::string &newData) const {
 		// Delegate to StateChainManager
 		return stateChainManager_->updateStateChain(headStateId, newData);
 	}
 
-	void StateManager::deleteStateChain(int64_t headStateId) {
+	void StateManager::deleteStateChain(int64_t headStateId) const {
 		// Delegate to StateChainManager
 		stateChainManager_->deleteStateChain(headStateId);
 	}

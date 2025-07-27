@@ -16,8 +16,8 @@
 
 namespace graph::storage {
 
-	FileHeaderManager::FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader& header)
-	: file_(std::move(file)), fileHeader_(header) {
+	FileHeaderManager::FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader &header) :
+		file_(std::move(file)), fileHeader_(header) {
 		if (!file_ || !file_->good()) {
 			throw std::runtime_error("Invalid file handle provided to FileHeaderManager");
 		}
@@ -35,7 +35,7 @@ namespace graph::storage {
 
 		// First, update the header without CRC
 		file_->seekp(0);
-		file_->write(reinterpret_cast<char*>(&fileHeader_), sizeof(FileHeader));
+		file_->write(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
 		file_->flush();
 
 		// Now calculate and update the file-wide CRC
@@ -62,35 +62,33 @@ namespace graph::storage {
 		return header;
 	}
 
-	void FileHeaderManager::updateFileHeader(const FileHeader &header) const {
-		fileHeader_ = header;
-	}
+	void FileHeaderManager::updateFileHeader(const FileHeader &header) const { fileHeader_ = header; }
 
-	template <typename MaxIdType>
+	template<typename MaxIdType>
 	void FileHeaderManager::updateMaxIdForSegment(const std::shared_ptr<SegmentTracker> &tracker,
-	                                              SegmentType segmentType, MaxIdType &maxId) {
-	    uint64_t segment = tracker->getChainHead(toUnderlying(segmentType));
-	    while (segment != 0) {
-	        SegmentHeader segHeader = tracker->getSegmentHeader(segment);
-	        int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
-	        maxId = segmentMaxId; // Update max ID
-	        segment = segHeader.next_segment_offset;
-	    }
+												  SegmentType segmentType, MaxIdType &maxId) {
+		uint64_t segment = tracker->getChainHead(toUnderlying(segmentType));
+		while (segment != 0) {
+			SegmentHeader segHeader = tracker->getSegmentHeader(segment);
+			int64_t segmentMaxId = segHeader.start_id + segHeader.used - 1;
+			maxId = segmentMaxId; // Update max ID
+			segment = segHeader.next_segment_offset;
+		}
 	}
 
 	void FileHeaderManager::updateFileHeaderMaxIds(const std::shared_ptr<SegmentTracker> &tracker) {
-	    updateMaxIdForSegment(tracker, SegmentType::Node, maxNodeId);
-	    updateMaxIdForSegment(tracker, SegmentType::Edge, maxEdgeId);
-	    updateMaxIdForSegment(tracker, SegmentType::Property, maxPropId);
-	    updateMaxIdForSegment(tracker, SegmentType::Blob, maxBlobId);
-	    updateMaxIdForSegment(tracker, SegmentType::Index, maxIndexId);
-	    updateMaxIdForSegment(tracker, SegmentType::State, maxStateId);
+		updateMaxIdForSegment(tracker, SegmentType::Node, maxNodeId);
+		updateMaxIdForSegment(tracker, SegmentType::Edge, maxEdgeId);
+		updateMaxIdForSegment(tracker, SegmentType::Property, maxPropId);
+		updateMaxIdForSegment(tracker, SegmentType::Blob, maxBlobId);
+		updateMaxIdForSegment(tracker, SegmentType::Index, maxIndexId);
+		updateMaxIdForSegment(tracker, SegmentType::State, maxStateId);
 	}
 
 	void FileHeaderManager::initializeFileHeader() const {
 		fileHeader_.data_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, data_crc));
 
-		file_->write(reinterpret_cast<const char*>(&fileHeader_), sizeof(FileHeader));
+		file_->write(reinterpret_cast<const char *>(&fileHeader_), sizeof(FileHeader));
 		file_->flush();
 
 		file_->clear();
@@ -104,14 +102,14 @@ namespace graph::storage {
 
 		// Read file header
 		file_->seekg(0);
-		file_->read(reinterpret_cast<char*>(&fileHeader_), sizeof(FileHeader));
+		file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
 
 		// Validate file CRC
 		try {
 			if (!validateFileCrc()) {
 				throw std::runtime_error("File CRC mismatch, data corruption detected");
 			}
-		} catch (const std::runtime_error& e) {
+		} catch (const std::runtime_error &e) {
 			std::cerr << e.what() << std::endl;
 			std::exit(EXIT_FAILURE); // Exit gracefully
 		}
@@ -146,7 +144,7 @@ namespace graph::storage {
 		crc = utils::updateCrc(crc, buffer.data(), bytesRead);
 
 		// Skip CRC field (4 bytes)
-		file_->seekg(crcFieldOffset + sizeof(uint32_t));
+		file_->seekg(static_cast<std::streamoff>(crcFieldOffset + sizeof(uint32_t)));
 
 		// Read header part after CRC field
 		size_t headerSize = sizeof(FileHeader);
@@ -170,7 +168,7 @@ namespace graph::storage {
 		}
 
 		// Restore original position
-		file_->clear();  // Clear EOF flag
+		file_->clear(); // Clear EOF flag
 		file_->seekg(originalPos);
 
 		return crc;
@@ -185,7 +183,7 @@ namespace graph::storage {
 
 		// Write back the updated header
 		file_->seekp(0);
-		file_->write(reinterpret_cast<char*>(&fileHeader_), sizeof(FileHeader));
+		file_->write(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
 		file_->flush();
 	}
 

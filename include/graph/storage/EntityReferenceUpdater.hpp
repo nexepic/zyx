@@ -70,19 +70,19 @@ namespace graph::storage {
 
 		void updateEdgeReferences(int64_t oldEdgeId, const Edge &newEdge);
 
-		void updatePropertyReferences(int64_t oldPropertyId, const Property &newProperty);
+		void updatePropertyReferences(int64_t oldPropertyId, const Property &newProperty) const;
 
-		void updateBlobReferences(int64_t oldBlobId, const Blob &newBlob);
+		void updateBlobReferences(int64_t oldBlobId, const Blob &newBlob) const;
 
 		void updateBlobChainReference(int64_t oldBlobId, int64_t newBlobId, int64_t linkedBlobId, bool isNextBlob,
 									  const Blob &sourceBlob) const;
 
-		Property getPropertyById(int64_t propertyId);
+		Property getPropertyById(int64_t propertyId) const;
 
-		Blob getBlobById(int64_t blobId);
+		Blob getBlobById(int64_t blobId) const;
 
 		template<typename T>
-		EntityPropertyInfo getEntityPropertyInfoFromEntity(const T &entity);
+		static EntityPropertyInfo getEntityPropertyInfoFromEntity(const T &entity);
 
 		template<typename T>
 		void updatePropertiesPointingToEntity(int64_t oldEntityId, const T &newEntity);

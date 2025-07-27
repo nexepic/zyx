@@ -42,7 +42,7 @@ namespace graph::query {
             const std::string& direction = "both",
             const std::string& edgeLabel = "",
             const std::string& nodeLabel = ""
-        );
+        ) const;
 
         /**
          * Finds the shortest path between two nodes
@@ -56,7 +56,7 @@ namespace graph::query {
             int64_t startNodeId,
             int64_t endNodeId,
             const std::string& direction = "both"
-        );
+        ) const;
 
         /**
          * Performs a breadth-first traversal of the graph
@@ -71,7 +71,7 @@ namespace graph::query {
             const std::function<bool(const Node&, int)>& visitFn,
             int maxDepth = 10,
             const std::string& direction = "both"
-        );
+        ) const;
 
     private:
         std::shared_ptr<storage::DataManager> dataManager_;

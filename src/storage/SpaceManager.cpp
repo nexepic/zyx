@@ -12,10 +12,11 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
-#include "graph/storage/data/DataManager.hpp"
 #include <iostream>
 #include <unordered_set>
+#include <utility>
 #include "graph/storage/SegmentType.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::storage {
 
@@ -23,17 +24,18 @@ namespace graph::storage {
 							   std::shared_ptr<SegmentTracker> tracker,
 							   std::shared_ptr<FileHeaderManager> fileHeaderManager,
 							   std::shared_ptr<IDAllocator> idAllocator) :
-		file_(file), fileName_(fileName), segmentTracker_(tracker), fileHeaderManager_(fileHeaderManager),
-		idAllocator_(idAllocator) {}
+		file_(std::move(file)), fileName_(std::move(fileName)), segmentTracker_(std::move(tracker)),
+		fileHeaderManager_(std::move(fileHeaderManager)), idAllocator_(std::move(idAllocator)) {}
 
 	SpaceManager::~SpaceManager() = default;
 
-	void SpaceManager::initialize(FileHeader &header) {
+	void SpaceManager::initialize(const FileHeader &header) const {
 		// Initialize tracker with header
 		segmentTracker_->initialize(header);
 	}
 
-	uint64_t SpaceManager::findMaxId(uint32_t type, std::shared_ptr<SegmentTracker> &tracker) {
+	// TODO: optimize with IDAllocator
+	uint64_t SpaceManager::findMaxId(uint32_t type, const std::shared_ptr<SegmentTracker> &tracker) {
 		uint64_t maxId = 0;
 		uint64_t head = tracker->getChainHead(type);
 		uint64_t current = head;
@@ -45,7 +47,7 @@ namespace graph::storage {
 		return maxId;
 	}
 
-	uint64_t SpaceManager::allocateSegment(uint32_t type, uint32_t capacity) {
+	uint64_t SpaceManager::allocateSegment(uint32_t type, uint32_t capacity) const {
 		// Calculate segment size based on type
 		size_t segmentSize = TOTAL_SEGMENT_SIZE; // Use a consistent segment size for all types
 
@@ -64,7 +66,7 @@ namespace graph::storage {
 
 			// Initialize segment space with zeros
 			std::vector<char> zeros(segmentSize, 0);
-			file_->write(zeros.data(), segmentSize);
+			file_->write(zeros.data(), static_cast<std::streamsize>(segmentSize));
 		}
 
 		// Initialize segment header
@@ -77,9 +79,9 @@ namespace graph::storage {
 		header.inactive_count = 0;
 		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
 
-		// Start ID calculation for nodes, edges, properties, and blobs
-		if (type >= 0 && type <= 5) {
-			header.start_id = findMaxId(type, segmentTracker_) + 1;
+		// Start ID calculation for nodes, edges, properties, and blobs...
+		if (type <= getMaxEntityType()) {
+			header.start_id = static_cast<int64_t>(findMaxId(type, segmentTracker_)) + 1;
 		} else {
 			throw std::invalid_argument("Invalid segment type");
 		}
@@ -101,9 +103,9 @@ namespace graph::storage {
 			uint64_t current = chainHead;
 			uint64_t prev = 0;
 			while (current != 0) {
-				SegmentHeader header = segmentTracker_->getSegmentHeader(current);
+				const SegmentHeader currentHeader = segmentTracker_->getSegmentHeader(current);
 				prev = current;
-				current = header.next_segment_offset;
+				current = currentHeader.next_segment_offset;
 			}
 
 			// Link the new segment to the end of chain
@@ -117,7 +119,7 @@ namespace graph::storage {
 		return offset;
 	}
 
-	void SpaceManager::deallocateSegment(uint64_t offset) {
+	void SpaceManager::deallocateSegment(uint64_t offset) const {
 		// Get segment info before it's removed
 		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
 
@@ -156,7 +158,7 @@ namespace graph::storage {
 
 		// Limit to top 5 segments with highest fragmentation
 		if (segments.size() > 5) {
-			std::sort(segments.begin(), segments.end(), [](const SegmentHeader &a, const SegmentHeader &b) {
+			std::ranges::sort(segments, [](const SegmentHeader &a, const SegmentHeader &b) {
 				return a.getFragmentationRatio() > b.getFragmentationRatio();
 			});
 			segments.resize(5);
@@ -187,7 +189,7 @@ namespace graph::storage {
 		}
 	}
 
-	bool SpaceManager::moveSegment(uint64_t sourceOffset, uint64_t destinationOffset) {
+	bool SpaceManager::moveSegment(uint64_t sourceOffset, uint64_t destinationOffset) const {
 		if (sourceOffset == destinationOffset) {
 			return true; // Nothing to do
 		}
@@ -209,7 +211,10 @@ namespace graph::storage {
 			newHeader.file_offset = destinationOffset;
 
 			// Copy the segment data (content only, not header)
-			copySegmentData(sourceOffset, destinationOffset);
+			if (!copySegmentData(sourceOffset, destinationOffset)) {
+				throw std::runtime_error("Failed to copy segment data from " + std::to_string(sourceOffset) + " to " +
+										 std::to_string(destinationOffset));
+			}
 
 			// Write the copied header at the destination
 			segmentTracker_->writeSegmentHeader(destinationOffset, newHeader);
@@ -270,7 +275,7 @@ namespace graph::storage {
 		return ratio;
 	}
 
-	void SpaceManager::recalculateMaxIds() {
+	void SpaceManager::recalculateMaxIds() const {
 		// Reset all max IDs
 		int64_t &maxNodeId = fileHeaderManager_->getMaxNodeIdRef();
 		int64_t &maxEdgeId = fileHeaderManager_->getMaxEdgeIdRef();
@@ -325,7 +330,7 @@ namespace graph::storage {
 	}
 
 	// Helper method to calculate the highest used ID in a segment considering the activity bitmap
-	int64_t SpaceManager::calculateLastUsedIdInSegment(const SegmentHeader &header) {
+	int64_t SpaceManager::calculateLastUsedIdInSegment(const SegmentHeader &header) const {
 		// Start with the segment's start_id
 		int64_t maxId = header.start_id - 1; // Initialize to one less than start ID
 
@@ -338,7 +343,7 @@ namespace graph::storage {
 		auto segmentOffset = header.file_offset;
 
 		// Find the highest active entity in the segment
-		for (int32_t i = header.used - 1; i >= 0; i--) {
+		for (int64_t i = static_cast<int64_t>(header.used) - 1; i >= 0; i--) {
 			if (segmentTracker_->isEntityActive(segmentOffset, i)) {
 				// Found the highest active entity
 				maxId = header.start_id + i;
@@ -401,7 +406,7 @@ namespace graph::storage {
 		mergeSegments(toUnderlying(SegmentType::State), COMPACTION_THRESHOLD);
 
 		// Relocate segments from end of file to fill gaps
-		relocateSegmentsFromEnd();
+		static_cast<void>(relocateSegmentsFromEnd());
 
 		// Update max IDs in file header
 		updateMaxIds();
@@ -530,7 +535,7 @@ namespace graph::storage {
 		uint64_t endThreshold = fileSize - TOTAL_SEGMENT_SIZE;
 
 		// Sort segments by offset (ascending)
-		std::sort(freeSegments.begin(), freeSegments.end());
+		std::ranges::sort(freeSegments);
 
 		// Find the first free segment that's not at the end
 		for (uint64_t offset: freeSegments) {
@@ -543,7 +548,7 @@ namespace graph::storage {
 	}
 
 	// Initialize segment header without allocating new space
-	void SpaceManager::initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity) {
+	void SpaceManager::initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity) const {
 		// Remove from free list if it's there
 		segmentTracker_->removeFromFreeList(offset);
 
@@ -574,7 +579,7 @@ namespace graph::storage {
 		return segmentTracker_->getSegmentOffsetForEdgeId(id);
 	}
 
-	void SpaceManager::updateMaxIds() {
+	void SpaceManager::updateMaxIds() const {
 		recalculateMaxIds();
 		fileHeaderManager_->updateFileHeaderMaxIds(segmentTracker_);
 	}
@@ -584,12 +589,12 @@ namespace graph::storage {
 		return segmentTracker_->getSegmentHeader(offset);
 	}
 
-	void SpaceManager::writeSegmentHeader(uint64_t offset, const SegmentHeader &header) {
+	void SpaceManager::writeSegmentHeader(uint64_t offset, const SegmentHeader &header) const {
 		// Use tracker's method to write segment header
 		segmentTracker_->writeSegmentHeader(offset, header);
 	}
 
-	std::vector<uint64_t> SpaceManager::findCandidatesForMerge(uint32_t type, double usageThreshold) {
+	std::vector<uint64_t> SpaceManager::findCandidatesForMerge(uint32_t type, double usageThreshold) const {
 		std::vector<uint64_t> candidates;
 
 		// Get all segments of the specified type
@@ -635,7 +640,7 @@ namespace graph::storage {
 		}
 
 		// Sort end segments by usage ratio (lowest first)
-		std::sort(endSegments.begin(), endSegments.end(), [this](uint64_t a, uint64_t b) {
+		std::ranges::sort(endSegments, [this](uint64_t a, uint64_t b) {
 			SegmentHeader headerA = segmentTracker_->getSegmentHeader(a);
 			SegmentHeader headerB = segmentTracker_->getSegmentHeader(b);
 
@@ -646,7 +651,7 @@ namespace graph::storage {
 		});
 
 		// Sort front segments by position (ascending) and then by space available (descending)
-		std::sort(frontSegments.begin(), frontSegments.end(), [this](uint64_t a, uint64_t b) {
+		std::ranges::sort(frontSegments, [this](uint64_t a, uint64_t b) {
 			// Primary sort by position (earlier first)
 			if (a < b)
 				return true;
@@ -670,7 +675,7 @@ namespace graph::storage {
 
 		// PHASE 1: Try to move data from end segments to front segments
 		for (uint64_t sourceOffset: endSegments) {
-			if (mergedSegments.count(sourceOffset) > 0) {
+			if (mergedSegments.contains(sourceOffset)) {
 				continue; // Already merged
 			}
 
@@ -688,7 +693,7 @@ namespace graph::storage {
 			// Try each front segment as a potential target
 			bool merged = false;
 			for (uint64_t targetOffset: frontSegments) {
-				if (mergedSegments.count(targetOffset) > 0) {
+				if (mergedSegments.contains(targetOffset)) {
 					continue; // Already used as a source
 				}
 
@@ -712,12 +717,12 @@ namespace graph::storage {
 				// Sort remaining end segments by offset (ascending)
 				std::vector<uint64_t> remainingEndSegments;
 				for (uint64_t offset: endSegments) {
-					if (offset != sourceOffset && mergedSegments.count(offset) == 0) {
+					if (offset != sourceOffset && !mergedSegments.contains(offset)) {
 						remainingEndSegments.push_back(offset);
 					}
 				}
 
-				std::sort(remainingEndSegments.begin(), remainingEndSegments.end());
+				std::ranges::sort(remainingEndSegments);
 
 				for (uint64_t targetOffset: remainingEndSegments) {
 					// Only merge with segments closer to the beginning of the file
@@ -744,15 +749,15 @@ namespace graph::storage {
 		// Only process segments that weren't already used as targets
 		std::vector<uint64_t> remainingFrontSegments;
 		for (uint64_t offset: frontSegments) {
-			if (mergedSegments.count(offset) == 0) {
+			if (!mergedSegments.contains(offset)) {
 				remainingFrontSegments.push_back(offset);
 			}
 		}
 
 		// Sort by usage ratio (lowest first)
-		std::sort(remainingFrontSegments.begin(), remainingFrontSegments.end(), [this](uint64_t a, uint64_t b) {
-			SegmentHeader headerA = segmentTracker_->getSegmentHeader(a);
-			SegmentHeader headerB = segmentTracker_->getSegmentHeader(b);
+		std::ranges::sort(remainingFrontSegments, [this](uint64_t a, uint64_t b) {
+			const SegmentHeader headerA = segmentTracker_->getSegmentHeader(a);
+			const SegmentHeader headerB = segmentTracker_->getSegmentHeader(b);
 
 			double usageA = static_cast<double>(headerA.getActiveCount()) / headerA.capacity;
 			double usageB = static_cast<double>(headerB.getActiveCount()) / headerB.capacity;
@@ -764,7 +769,7 @@ namespace graph::storage {
 		for (size_t i = 0; i < remainingFrontSegments.size(); i++) {
 			uint64_t sourceOffset = remainingFrontSegments[i];
 
-			if (mergedSegments.count(sourceOffset) > 0) {
+			if (mergedSegments.contains(sourceOffset)) {
 				continue; // Skip if already processed
 			}
 
@@ -785,7 +790,7 @@ namespace graph::storage {
 					continue; // Skip self
 
 				uint64_t targetOffset = remainingFrontSegments[j];
-				if (mergedSegments.count(targetOffset) > 0) {
+				if (mergedSegments.contains(targetOffset)) {
 					continue; // Skip already processed
 				}
 
@@ -811,7 +816,7 @@ namespace graph::storage {
 		for (uint64_t offset: mergedSegments) {
 			// Verify segment is actually in the free list
 			auto freeSegments = segmentTracker_->getFreeSegments();
-			if (std::find(freeSegments.begin(), freeSegments.end(), offset) == freeSegments.end()) {
+			if (std::ranges::find(freeSegments, offset) == freeSegments.end()) {
 				segmentTracker_->markSegmentFree(offset);
 			}
 		}
@@ -927,7 +932,7 @@ namespace graph::storage {
 		return true;
 	}
 
-	bool SpaceManager::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) {
+	bool SpaceManager::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) const {
 		// Copy data in chunks to avoid large memory allocations
 		constexpr size_t COPY_BLOCK_SIZE = 64 * 1024; // 64KB
 		std::vector<char> buffer(COPY_BLOCK_SIZE);
@@ -937,17 +942,27 @@ namespace graph::storage {
 
 			// Read from source
 			file_->seekg(static_cast<std::streamoff>(sourceOffset + offset));
-			file_->read(buffer.data(), copySize);
+			file_->read(buffer.data(), static_cast<std::streamsize>(copySize));
+
+			// Check for read errors
+			if (file_->fail() || file_->gcount() != static_cast<std::streamsize>(copySize)) {
+				return false;
+			}
 
 			// Write to destination
 			file_->seekp(static_cast<std::streamoff>(destinationOffset + offset));
-			file_->write(buffer.data(), copySize);
+			file_->write(buffer.data(), static_cast<std::streamsize>(copySize));
+
+			// Check for write errors
+			if (file_->fail()) {
+				return false;
+			}
 		}
 
 		return true;
 	}
 
-	void SpaceManager::updateFileHeaderChainHeads() {
+	void SpaceManager::updateFileHeaderChainHeads() const {
 		// Directly update the fileHeader_ member
 		FileHeader &header = fileHeaderManager_->getFileHeader();
 
@@ -960,7 +975,7 @@ namespace graph::storage {
 		header.state_segment_head = segmentTracker_->getChainHead(toUnderlying(SegmentType::State));
 	}
 
-	void SpaceManager::updateSegmentChain(uint64_t newOffset, const SegmentHeader &header) {
+	void SpaceManager::updateSegmentChain(uint64_t newOffset, const SegmentHeader &header) const {
 		// Check if this is a chain head
 		bool isChainHead = false;
 		uint64_t currentChainHead = segmentTracker_->getChainHead(header.data_type);
@@ -999,7 +1014,7 @@ namespace graph::storage {
 		}
 	}
 
-	void SpaceManager::processAllEmptySegments() {
+	void SpaceManager::processAllEmptySegments() const {
 		// Remove empty node segments
 		processEmptySegments(toUnderlying(SegmentType::Node));
 
@@ -1019,7 +1034,7 @@ namespace graph::storage {
 		processEmptySegments(toUnderlying(SegmentType::State));
 	}
 
-	bool SpaceManager::processEmptySegments(uint32_t type) {
+	bool SpaceManager::processEmptySegments(uint32_t type) const {
 		bool deallocatedAny = false;
 
 		// Get all segments of the specified type
@@ -1043,7 +1058,7 @@ namespace graph::storage {
 		return deallocatedAny;
 	}
 
-	bool SpaceManager::relocateSegmentsFromEnd() {
+	bool SpaceManager::relocateSegmentsFromEnd() const {
 		// Get free segments that we can use as targets
 		auto freeSegments = segmentTracker_->getFreeSegments();
 		if (freeSegments.empty()) {
@@ -1134,7 +1149,7 @@ namespace graph::storage {
 		return maxOffset;
 	}
 
-	bool SpaceManager::truncateFile() {
+	bool SpaceManager::truncateFile() const {
 		// Find segments at the end of file that can be truncated
 		auto truncatableSegments = findTruncatableSegments();
 
@@ -1143,7 +1158,7 @@ namespace graph::storage {
 		}
 
 		// Sort segments by offset (ascending)
-		std::sort(truncatableSegments.begin(), truncatableSegments.end());
+		std::ranges::sort(truncatableSegments);
 
 		// Find the new file size (start of the first truncatable segment)
 		uint64_t newFileSize = truncatableSegments.front();
@@ -1195,7 +1210,7 @@ namespace graph::storage {
 		auto freeSegments = segmentTracker_->getFreeSegments();
 
 		// Sort by offset (ascending)
-		std::sort(freeSegments.begin(), freeSegments.end());
+		std::ranges::sort(freeSegments);
 
 		// Find the highest used offset in any chain
 		uint64_t highestActiveOffset = 0;

@@ -42,9 +42,9 @@ namespace graph::query {
 		// Add parameters for the operation
 		void addParameter(const std::string &key, const std::string &value) { stringParams_[key] = value; }
 
-		void addParameter(const std::string &key, double value) { doubleParams_[key] = value; }
+		void addParameter(const std::string &key, const double value) { doubleParams_[key] = value; }
 
-		void addParameter(const std::string &key, uint64_t value) { uint64Params_[key] = value; }
+		void addParameter(const std::string &key, const int64_t value) { int64Params_[key] = value; }
 
 		// Get the operation type
 		[[nodiscard]] OperationType getType() const { return type_; }
@@ -56,13 +56,13 @@ namespace graph::query {
 
 		[[nodiscard]] const std::unordered_map<std::string, double> &getDoubleParams() const { return doubleParams_; }
 
-		[[nodiscard]] const std::unordered_map<std::string, uint64_t> &getUint64Params() const { return uint64Params_; }
+		[[nodiscard]] const std::unordered_map<std::string, int64_t> &getInt64Params() const { return int64Params_; }
 
 	private:
 		OperationType type_;
 		std::unordered_map<std::string, std::string> stringParams_;
 		std::unordered_map<std::string, double> doubleParams_;
-		std::unordered_map<std::string, uint64_t> uint64Params_;
+		std::unordered_map<std::string, uint64_t> int64Params_;
 	};
 
 	class QueryPlanner {
@@ -70,29 +70,29 @@ namespace graph::query {
 		explicit QueryPlanner(std::shared_ptr<indexes::IndexManager> indexManager);
 
 		// Create a plan for finding nodes by label
-		QueryPlan createPlanForLabelQuery(const std::string &label);
+		QueryPlan createPlanForLabelQuery(const std::string &label) const;
 
 		// Create a plan for finding nodes by property
-		QueryPlan createPlanForPropertyQuery(const std::string &key, const std::string &value);
+		QueryPlan createPlanForPropertyQuery(const std::string &key, const std::string &value) const;
 
 		// Create a plan for finding nodes by label and property
 		QueryPlan createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
-													 const std::string &value);
+													 const std::string &value) const;
 
 		// Create a plan for finding nodes by property range
-		QueryPlan createPlanForPropertyRangeQuery(const std::string &key, double minValue, double maxValue);
+		static QueryPlan createPlanForPropertyRangeQuery(const std::string &key, double minValue, double maxValue);
 
 		// Create a plan for text search
-		QueryPlan createPlanForTextSearchQuery(const std::string &key, const std::string &searchText);
+		static QueryPlan createPlanForTextSearchQuery(const std::string &key, const std::string &searchText);
 
 		// Create a plan for finding relationships
-		QueryPlan createPlanForRelationshipQuery(uint64_t nodeId, const std::string &edgeLabel);
+		static QueryPlan createPlanForRelationshipQuery(int64_t nodeId, const std::string &edgeLabel);
 
 		// Create a plan for finding connected nodes
-		QueryPlan createPlanForConnectedNodesQuery(uint64_t nodeId, const std::string &nodeLabel,
-												   const std::string &edgeLabel, const std::string &direction);
+		static QueryPlan createPlanForConnectedNodesQuery(int64_t nodeId, const std::string &nodeLabel,
+														  const std::string &edgeLabel, const std::string &direction);
 
-		QueryPlan createPlanForTraversalShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
+		static QueryPlan createPlanForTraversalShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
 													 const std::string &direction);
 
 	private:

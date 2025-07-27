@@ -539,7 +539,7 @@ namespace graph::storage {
 		updatePropertiesPointingToEntity(oldEdgeId, newEdge);
 	}
 
-	void EntityReferenceUpdater::updatePropertyReferences(int64_t oldPropId, const Property &newProperty) {
+	void EntityReferenceUpdater::updatePropertyReferences(int64_t oldPropId, const Property &newProperty) const {
 		int64_t newPropId = newProperty.getId();
 
 		// Skip if IDs are the same
@@ -592,7 +592,7 @@ namespace graph::storage {
 		}
 	}
 
-	void EntityReferenceUpdater::updateBlobReferences(int64_t oldBlobId, const Blob &newBlob) {
+	void EntityReferenceUpdater::updateBlobReferences(int64_t oldBlobId, const Blob &newBlob) const {
 		int64_t newBlobId = newBlob.getId();
 
 		// Skip if IDs are the same
@@ -706,7 +706,7 @@ namespace graph::storage {
 		}
 	}
 
-	Property EntityReferenceUpdater::getPropertyById(int64_t propertyId) {
+	Property EntityReferenceUpdater::getPropertyById(int64_t propertyId) const {
 		// Find the segment containing this property
 		uint64_t propSegmentOffset = segmentTracker_->getSegmentOffsetForPropId(propertyId);
 		if (propSegmentOffset == 0) {
@@ -731,7 +731,7 @@ namespace graph::storage {
 	}
 
 	// Get a specific blob by its ID
-	Blob EntityReferenceUpdater::getBlobById(int64_t blobId) {
+	Blob EntityReferenceUpdater::getBlobById(int64_t blobId) const {
 		// Find the segment containing this blob
 		uint64_t blobSegmentOffset = segmentTracker_->getSegmentOffsetForBlobId(blobId);
 		if (blobSegmentOffset == 0) {
