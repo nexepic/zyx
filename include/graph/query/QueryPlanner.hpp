@@ -11,7 +11,6 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 #include "indexes/IndexManager.hpp"
 
 namespace graph::query {
@@ -62,7 +61,7 @@ namespace graph::query {
 		OperationType type_;
 		std::unordered_map<std::string, std::string> stringParams_;
 		std::unordered_map<std::string, double> doubleParams_;
-		std::unordered_map<std::string, uint64_t> int64Params_;
+		std::unordered_map<std::string, int64_t> int64Params_;
 	};
 
 	class QueryPlanner {
@@ -70,13 +69,13 @@ namespace graph::query {
 		explicit QueryPlanner(std::shared_ptr<indexes::IndexManager> indexManager);
 
 		// Create a plan for finding nodes by label
-		QueryPlan createPlanForLabelQuery(const std::string &label) const;
+		[[nodiscard]] QueryPlan createPlanForLabelQuery(const std::string &label) const;
 
 		// Create a plan for finding nodes by property
-		QueryPlan createPlanForPropertyQuery(const std::string &key, const std::string &value) const;
+		[[nodiscard]] QueryPlan createPlanForPropertyQuery(const std::string &key, const std::string &value) const;
 
 		// Create a plan for finding nodes by label and property
-		QueryPlan createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
+		[[nodiscard]] QueryPlan createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
 													 const std::string &value) const;
 
 		// Create a plan for finding nodes by property range
