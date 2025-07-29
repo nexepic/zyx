@@ -128,11 +128,10 @@ namespace graph {
     }
 
     std::string StateRegistry::getStringInternal(const std::string& key, const std::string& defaultValue) {
-        auto it = stateCache_.find(key);
-        if (it == stateCache_.end()) {
+        if (!stateCache_.contains(key)) {
             return defaultValue;
         }
-        return it->second;
+        return stateCache_.at(key);
     }
 
     void StateRegistry::setStringInternal(const std::string& key, const std::string& value) {

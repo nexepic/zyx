@@ -9,6 +9,7 @@
  **/
 
 #include "graph/storage/data/StateManager.hpp"
+#include <graph/core/StateRegistry.hpp>
 #include <ranges>
 #include <sstream>
 #include <utility>
@@ -27,6 +28,8 @@ namespace graph::storage {
 		BaseEntityManager::add(state);
 		if (!state.getKey().empty()) {
 			stateKeyToIdMap_[state.getKey()] = state.getId();
+			// Update StateRegistry cache if initialized
+			StateRegistry::setString(state.getKey(), state.getDataAsString());
 		}
 	}
 
@@ -34,6 +37,7 @@ namespace graph::storage {
 		// Remove from key mapping if needed
 		if (!state.getKey().empty()) {
 			stateKeyToIdMap_.erase(state.getKey());
+			StateRegistry::remove(state.getKey());
 		}
 
 		deletionManager_->deleteState(state);

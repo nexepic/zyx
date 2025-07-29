@@ -54,7 +54,8 @@ namespace graph::storage {
 		void doRemove(State &state) override;
 
 	private:
-		std::shared_ptr<graph::StateChainManager> stateChainManager_;
+		std::shared_ptr<StateChainManager> stateChainManager_;
+		// TODO: What if id changed from temporary to permanent?
 		std::unordered_map<std::string, int64_t> stateKeyToIdMap_;
 	};
 
