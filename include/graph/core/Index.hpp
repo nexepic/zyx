@@ -46,7 +46,7 @@ namespace graph::storage {
 		};
 
 		static constexpr size_t TOTAL_INDEX_SIZE = 256; // Larger size for index nodes
-		static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
 		static constexpr size_t DATA_SIZE = TOTAL_INDEX_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Index);
 

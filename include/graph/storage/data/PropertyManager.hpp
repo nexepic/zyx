@@ -53,7 +53,7 @@ namespace graph::storage {
 		template<typename EntityType>
 		std::unordered_map<std::string, PropertyValue> getEntityProperties(int64_t entityId);
 
-		std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId) const;
+		[[nodiscard]] std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId) const;
 
 		// Property operations
 		template<typename EntityType>
@@ -70,8 +70,6 @@ namespace graph::storage {
 
 	private:
 		std::weak_ptr<DataManager> dataManager_;
-		static constexpr uint32_t PROPERTY_ENTITY_OVERHEAD = 100;
-		static constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 4096; // Maximum size for property entity storage
 	};
 
 } // namespace graph::storage

@@ -30,12 +30,12 @@ namespace graph {
 			uint32_t entityType = 0;
 			uint32_t originalSize = 0;
 			int32_t chainPosition = 0;
-			bool isActive = true;
 			bool compressed = false;
+			bool isActive = true;
 		};
 
 		static constexpr size_t TOTAL_BLOB_SIZE = 256;
-		static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
 		static constexpr size_t CHUNK_SIZE = TOTAL_BLOB_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Blob);
 		static constexpr uint32_t MAX_COMPRESSED_SIZE = 5 * 1024 * 1024; // 5MB

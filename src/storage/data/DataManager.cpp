@@ -56,12 +56,8 @@ namespace graph::storage {
 		// Initialize segment indexes
 		initializeSegmentIndexes();
 
-		// Create chain managers
-		auto blobChainManager = std::make_shared<BlobChainManager>(shared_from_this());
-		auto stateChainManager = std::make_shared<StateChainManager>(shared_from_this());
-
 		// Initialize entity managers
-		initializeManagers(blobChainManager, stateChainManager);
+		initializeManagers();
 	}
 
 	void DataManager::initializeSegmentIndexes() const {
@@ -71,8 +67,11 @@ namespace graph::storage {
 										 fileHeader_.index_segment_head, fileHeader_.state_segment_head);
 	}
 
-	void DataManager::initializeManagers(const std::shared_ptr<BlobChainManager> &blobChainManager,
-										 const std::shared_ptr<StateChainManager> &stateChainManager) {
+	void DataManager::initializeManagers() {
+		// Initialize chain managers
+		blobChainManager_ = std::make_shared<BlobChainManager>(shared_from_this());
+		stateChainManager_ = std::make_shared<StateChainManager>(shared_from_this());
+
 		// Create property manager first as others depend on it
 		propertyManager_ = std::make_shared<PropertyManager>(shared_from_this());
 
@@ -81,11 +80,11 @@ namespace graph::storage {
 		edgeManager_ = std::make_shared<EdgeManager>(shared_from_this(), propertyManager_, deletionManager_);
 		propertyEntityManager_ =
 				std::make_shared<PropertyEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
-		blobEntityManager_ =
-				std::make_shared<BlobManager>(shared_from_this(), propertyManager_, blobChainManager, deletionManager_);
+		blobEntityManager_ = std::make_shared<BlobManager>(shared_from_this(), propertyManager_, blobChainManager_,
+														   deletionManager_);
 		indexEntityManager_ =
 				std::make_shared<IndexEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
-		stateEntityManager_ = std::make_shared<StateManager>(shared_from_this(), propertyManager_, stateChainManager,
+		stateEntityManager_ = std::make_shared<StateManager>(shared_from_this(), propertyManager_, stateChainManager_,
 															 deletionManager_);
 	}
 
@@ -234,32 +233,7 @@ namespace graph::storage {
 		return state.getId() != 0 && state.isActive() && state.getPrevStateId() == 0;
 	}
 
-	// --- Property Management Delegations ---
-
-	uint32_t
-	DataManager::calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) const {
-		return propertyManager_->calculateSerializedSize(properties);
-	}
-
-	void DataManager::serializeProperties(std::ostream &os,
-										  const std::unordered_map<std::string, PropertyValue> &properties) const {
-		propertyManager_->serializeProperties(os, properties);
-	}
-
-	std::unordered_map<std::string, PropertyValue> DataManager::deserializeProperties(std::istream &is) const {
-		return propertyManager_->deserializeProperties(is);
-	}
-
-	std::unordered_map<std::string, PropertyValue> DataManager::getPropertiesFromBlob(int64_t blobId) const {
-		return propertyManager_->getPropertiesFromBlob(blobId);
-	}
-
 	// --- Template Method Implementations ---
-
-	template<typename EntityType>
-	void DataManager::cleanupExternalProperties(EntityType &entity) {
-		propertyManager_->cleanupExternalProperties(entity);
-	}
 
 	template<typename EntityType>
 	void DataManager::addToCache(const EntityType &entity) {
@@ -269,25 +243,6 @@ namespace graph::storage {
 	template<typename EntityType>
 	EntityType DataManager::getEntity(int64_t id) {
 		return EntityTraits<EntityType>::get(this, id);
-	}
-
-	template<typename EntityType>
-	void DataManager::addEntity(const EntityType &entity) {
-		if constexpr (std::is_same_v<EntityType, Node>) {
-			addNode(entity);
-		} else if constexpr (std::is_same_v<EntityType, Edge>) {
-			// Need to make a copy as addEdge takes a non-const reference
-			const Edge &edgeCopy = entity;
-			addEdge(edgeCopy);
-		} else if constexpr (std::is_same_v<EntityType, Property>) {
-			addPropertyEntity(entity);
-		} else if constexpr (std::is_same_v<EntityType, Blob>) {
-			addBlobEntity(entity);
-		} else if constexpr (std::is_same_v<EntityType, Index>) {
-			addIndexEntity(entity);
-		} else if constexpr (std::is_same_v<EntityType, State>) {
-			addStateEntity(entity);
-		}
 	}
 
 	template<typename EntityType>
@@ -304,23 +259,6 @@ namespace graph::storage {
 			updateIndexEntity(entity);
 		} else if constexpr (std::is_same_v<EntityType, State>) {
 			updateStateEntity(entity);
-		}
-	}
-
-	template<typename EntityType>
-	void DataManager::deleteEntity(EntityType &entity) {
-		if constexpr (std::is_same_v<EntityType, Node>) {
-			deleteNode(entity);
-		} else if constexpr (std::is_same_v<EntityType, Edge>) {
-			deleteEdge(entity);
-		} else if constexpr (std::is_same_v<EntityType, Property>) {
-			deleteProperty(entity);
-		} else if constexpr (std::is_same_v<EntityType, Blob>) {
-			deleteBlob(entity);
-		} else if constexpr (std::is_same_v<EntityType, Index>) {
-			deleteIndex(entity);
-		} else if constexpr (std::is_same_v<EntityType, State>) {
-			deleteState(entity);
 		}
 	}
 
@@ -406,71 +344,6 @@ namespace graph::storage {
 					if (cache.contains(id)) {
 						result.push_back(cache.peek(id));
 					}
-				}
-			}
-		}
-
-		return result;
-	}
-
-	std::vector<Node> DataManager::getDirtyNodesWithChangeTypes(const std::vector<EntityChangeType> &types) const {
-		std::vector<Node> result;
-
-		for (const auto &[id, info]: dirtyNodes_) {
-			if (std::ranges::find(types, info.changeType) != types.end()) {
-				if (info.backup.has_value()) {
-					result.push_back(*info.backup);
-				} else if (nodeCache_.contains(id)) {
-					result.push_back(nodeCache_.peek(id));
-				}
-			}
-		}
-
-		return result;
-	}
-
-	std::vector<Edge> DataManager::getDirtyEdgesWithChangeTypes(const std::vector<EntityChangeType> &types) const {
-		std::vector<Edge> result;
-
-		for (const auto &[id, info]: dirtyEdges_) {
-			if (std::ranges::find(types, info.changeType) != types.end()) {
-				if (info.backup.has_value()) {
-					result.push_back(*info.backup);
-				} else if (edgeCache_.contains(id)) {
-					result.push_back(edgeCache_.peek(id));
-				}
-			}
-		}
-
-		return result;
-	}
-
-	std::vector<Property>
-	DataManager::getDirtyPropertiesWithChangeTypes(const std::vector<EntityChangeType> &types) const {
-		std::vector<Property> result;
-
-		for (const auto &[id, info]: dirtyProperties_) {
-			if (std::ranges::find(types, info.changeType) != types.end()) {
-				if (info.backup.has_value()) {
-					result.push_back(*info.backup);
-				} else if (propertyCache_.contains(id)) {
-					result.push_back(propertyCache_.peek(id));
-				}
-			}
-		}
-
-		return result;
-	}
-
-	std::vector<Blob> DataManager::getDirtyBlobsWithChangeTypes(const std::vector<EntityChangeType> &types) const {
-		std::vector<Blob> result;
-
-		for (const auto &[id, info]: dirtyBlobs_) {
-			if (std::ranges::find(types, info.changeType) != types.end()) {
-				if (info.backup.has_value()) {
-					result.push_back(*info.backup);
-				} else if (blobCache_.contains(id)) {
-					result.push_back(blobCache_.peek(id));
 				}
 			}
 		}
@@ -636,32 +509,32 @@ namespace graph::storage {
 
 	// --- Loading Entities from Disk ---
 
-	Node DataManager::loadNodeFromDisk(int64_t id) const {
+	Node DataManager::loadNodeFromDisk(const int64_t id) const {
 		auto nodeOpt = findAndReadEntity<Node>(id);
 		return nodeOpt.value_or(Node()); // Return empty node if not found or deleted
 	}
 
-	Edge DataManager::loadEdgeFromDisk(int64_t id) const {
+	Edge DataManager::loadEdgeFromDisk(const int64_t id) const {
 		auto edgeOpt = findAndReadEntity<Edge>(id);
 		return edgeOpt.value_or(Edge()); // Return empty edge if not found or deleted
 	}
 
-	Property DataManager::loadPropertyFromDisk(int64_t id) const {
+	Property DataManager::loadPropertyFromDisk(const int64_t id) const {
 		auto propertyOpt = findAndReadEntity<Property>(id);
 		return propertyOpt.value_or(Property()); // Return empty property if not found or deleted
 	}
 
-	Blob DataManager::loadBlobFromDisk(int64_t id) const {
+	Blob DataManager::loadBlobFromDisk(const int64_t id) const {
 		auto blobOpt = findAndReadEntity<Blob>(id);
 		return blobOpt.value_or(Blob()); // Return empty blob if not found or deleted
 	}
 
-	Index DataManager::loadIndexFromDisk(int64_t id) const {
+	Index DataManager::loadIndexFromDisk(const int64_t id) const {
 		auto indexOpt = findAndReadEntity<Index>(id);
 		return indexOpt.value_or(Index()); // Return empty index if not found or deleted
 	}
 
-	State DataManager::loadStateFromDisk(int64_t id) const {
+	State DataManager::loadStateFromDisk(const int64_t id) const {
 		auto stateOpt = findAndReadEntity<State>(id);
 		return stateOpt.value_or(State()); // Return empty state if not found or deleted
 	}
@@ -768,12 +641,9 @@ namespace graph::storage {
 	// --- Template Instantiations ---
 
 	// Node-specific instantiations
-	template void DataManager::cleanupExternalProperties<Node>(Node &entity);
 	template void DataManager::addToCache<Node>(const Node &entity);
 	template Node DataManager::getEntity<Node>(int64_t id);
-	template void DataManager::addEntity<Node>(const Node &entity);
 	template void DataManager::updateEntity<Node>(const Node &entity);
-	template void DataManager::deleteEntity<Node>(Node &entity);
 	template std::vector<Node> DataManager::getEntitiesInRange<Node>(int64_t, int64_t, size_t);
 	template size_t DataManager::calculateEntityTotalPropertySize<Node>(int64_t entityId);
 	template void DataManager::addEntityProperties<Node>(int64_t,
@@ -794,12 +664,9 @@ namespace graph::storage {
 																		  bool) const;
 
 	// Edge-specific instantiations
-	template void DataManager::cleanupExternalProperties<Edge>(Edge &entity);
 	template void DataManager::addToCache<Edge>(const Edge &entity);
 	template Edge DataManager::getEntity<Edge>(int64_t id);
-	template void DataManager::addEntity<Edge>(const Edge &entity);
 	template void DataManager::updateEntity<Edge>(const Edge &entity);
-	template void DataManager::deleteEntity<Edge>(Edge &entity);
 	template std::vector<Edge> DataManager::getEntitiesInRange<Edge>(int64_t, int64_t, size_t);
 	template size_t DataManager::calculateEntityTotalPropertySize<Edge>(int64_t entityId);
 	template void DataManager::addEntityProperties<Edge>(int64_t,

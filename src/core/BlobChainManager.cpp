@@ -20,15 +20,16 @@ namespace graph {
 		dataManager_(std::move(dataManager)) {}
 
 	std::vector<Blob> BlobChainManager::createBlobChain(int64_t entityId, uint32_t entityType,
-												  const std::string& data) const {
+														const std::string &data) const {
 		// Determine if this is an Index blob
 		bool isIndexBlob = (entityType == storage::Index::typeId);
 
 		// Compress the data first (unless it's an index blob)
 		std::string processedData;
+		// TODO: Decouple Index blob compression logic from BlobChainManager
 		if (isIndexBlob) {
 			// For index blobs, skip compression and size limits
-			processedData = compressData(data);
+			processedData = data;
 		} else {
 			// For other entities, compress and check size
 			processedData = compressData(data);
@@ -57,6 +58,7 @@ namespace graph {
 			// Set entity info
 			blob.setEntityInfo(entityId, entityType);
 
+			// TODO: Decouple Index blob compression logic from BlobChainManager
 			// Set compression info - only set compressed flag for non-index blobs
 			blob.setCompressionInfo(data.size(), !isIndexBlob);
 
@@ -134,12 +136,10 @@ namespace graph {
 	}
 
 	void BlobChainManager::deleteBlobChain(int64_t headBlobId) const {
-		auto chainIds = getBlobChainIds(headBlobId);
 
 		// Delete each blob in the chain
-		for (auto blobId: chainIds) {
-			Blob blob = dataManager_->getBlob(blobId);
-			if (blob.getId() != 0 && blob.isActive()) {
+		for (const auto chainIds = getBlobChainIds(headBlobId); const auto blobId: chainIds) {
+			if (Blob blob = dataManager_->getBlob(blobId); blob.getId() != 0 && blob.isActive()) {
 				dataManager_->deleteBlob(blob);
 			}
 		}

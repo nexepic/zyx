@@ -33,7 +33,7 @@ namespace graph {
 		};
 
 		static constexpr size_t TOTAL_NODE_SIZE = 256;
-		static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
 		static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_NODE_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Node);
 

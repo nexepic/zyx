@@ -37,7 +37,7 @@ namespace graph {
 		};
 
 		static constexpr size_t TOTAL_EDGE_SIZE = 256;
-		static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
 		static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_EDGE_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Edge);
 
@@ -104,7 +104,7 @@ namespace graph {
 		void serialize(std::ostream &os) const;
 		static Edge deserialize(std::istream &is);
 
-		void setLabel(const std::string& label);
+		void setLabel(const std::string &label);
 
 	private:
 		// Fixed-size metadata structure

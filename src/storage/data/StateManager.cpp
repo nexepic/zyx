@@ -9,6 +9,7 @@
  **/
 
 #include "graph/storage/data/StateManager.hpp"
+#include <ranges>
 #include <sstream>
 #include <utility>
 #include "graph/core/StateChainManager.hpp"
@@ -21,6 +22,13 @@ namespace graph::storage {
 							   std::shared_ptr<DeletionManager> deletionManager) :
 		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)),
 		stateChainManager_(std::move(stateChainManager)) {}
+
+	void StateManager::add(const State &state) {
+		BaseEntityManager::add(state);
+		if (!state.getKey().empty()) {
+			stateKeyToIdMap_[state.getKey()] = state.getId();
+		}
+	}
 
 	void StateManager::doRemove(State &state) {
 		// Remove from key mapping if needed
@@ -54,8 +62,8 @@ namespace graph::storage {
 		std::unordered_set<int64_t> processedIds;
 
 		// First collect all in-memory states
-		for (const auto &pair: stateKeyToIdMap_) {
-			State state = get(pair.second);
+		for (const auto &stateId: std::views::values(stateKeyToIdMap_)) {
+			State state = get(stateId);
 			if (state.getId() != 0 && state.isActive() && isChainHeadState(state)) {
 				allHeadStates.push_back(state);
 				processedIds.insert(state.getId());

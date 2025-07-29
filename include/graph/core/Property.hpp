@@ -30,7 +30,7 @@ namespace graph {
 
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Property);
 		static constexpr size_t TOTAL_PROPERTY_SIZE = 256;
-		static constexpr size_t METADATA_SIZE = sizeof(Metadata);
+		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
 
 		static constexpr size_t getTotalSize() { return TOTAL_PROPERTY_SIZE; }
 

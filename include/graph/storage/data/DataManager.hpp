@@ -143,16 +143,6 @@ namespace graph::storage {
 		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey) const;
 		void removeState(const std::string &stateKey) const;
 
-		uint32_t calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) const;
-		void serializeProperties(std::ostream &os,
-								 const std::unordered_map<std::string, PropertyValue> &properties) const;
-		std::unordered_map<std::string, PropertyValue> deserializeProperties(std::istream &is) const;
-
-		std::unordered_map<std::string, PropertyValue> getPropertiesFromBlob(int64_t blobId) const;
-
-		template<typename EntityType>
-		void cleanupExternalProperties(EntityType &entity);
-
 		// Generic entity operations
 		template<typename EntityType>
 		void addToCache(const EntityType &entity);
@@ -161,13 +151,7 @@ namespace graph::storage {
 		EntityType getEntity(int64_t id);
 
 		template<typename EntityType>
-		void addEntity(const EntityType &entity);
-
-		template<typename EntityType>
 		void updateEntity(const EntityType &entity);
-
-		template<typename EntityType>
-		void deleteEntity(EntityType &entity);
 
 		template<typename EntityType>
 		std::vector<EntityType> getEntitiesInRange(int64_t startId, int64_t endId, size_t limit);
@@ -194,11 +178,6 @@ namespace graph::storage {
 
 		template<typename EntityType>
 		std::vector<EntityType> getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types);
-
-		std::vector<Node> getDirtyNodesWithChangeTypes(const std::vector<EntityChangeType> &types) const;
-		std::vector<Edge> getDirtyEdgesWithChangeTypes(const std::vector<EntityChangeType> &types) const;
-		std::vector<Property> getDirtyPropertiesWithChangeTypes(const std::vector<EntityChangeType> &types) const;
-		std::vector<Blob> getDirtyBlobsWithChangeTypes(const std::vector<EntityChangeType> &types) const;
 
 		// Auto-flush configuration
 		void setMaxDirtyEntities(size_t maxDirtyEntities) { maxDirtyEntities_ = maxDirtyEntities; }
@@ -311,7 +290,7 @@ namespace graph::storage {
 		// Specialized managers
 		std::shared_ptr<BlobChainManager> blobChainManager_;
 		std::shared_ptr<DeletionManager> deletionManager_;
-		std::unique_ptr<StateChainManager> stateChainManager_;
+		std::shared_ptr<StateChainManager> stateChainManager_;
 		std::shared_ptr<PropertyManager> propertyManager_;
 		std::shared_ptr<NodeManager> nodeManager_;
 		std::shared_ptr<EdgeManager> edgeManager_;
@@ -322,8 +301,7 @@ namespace graph::storage {
 
 		// Initialization helpers
 		void initializeSegmentIndexes() const;
-		void initializeManagers(const std::shared_ptr<BlobChainManager>& blobChainManager,
-								const std::shared_ptr<StateChainManager>& stateChainManager);
+		void initializeManagers();
 
 		// Helper for state operations
 		static bool isChainHeadState(const State &state);

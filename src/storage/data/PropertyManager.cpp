@@ -88,8 +88,11 @@ namespace graph::storage {
 				EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0, PropertyStorageType::NONE);
 			}
 
+			// Calculate overhead for storing properties in an external entity
+			constexpr size_t PROPERTY_ENTITY_PAYLOAD_SIZE = Property::TOTAL_PROPERTY_SIZE - Property::METADATA_SIZE;
+
 			// Choose storage type based on size
-			if (dataSize + PROPERTY_ENTITY_OVERHEAD > MAX_SEGMENT_PROPERTY_SIZE) {
+			if (dataSize > PROPERTY_ENTITY_PAYLOAD_SIZE) {
 				// Large properties - use Blob
 				storePropertiesInBlob(entity, properties);
 			} else {

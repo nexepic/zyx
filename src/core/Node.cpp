@@ -118,7 +118,7 @@ namespace graph {
 		size += sizeof(metadata.isActive); // bool
 
 		// Calculate size of the serialized string (length prefix + string content)
-		std::string label = getLabel();
+		const std::string label = getLabel();
 		size += sizeof(uint32_t); // For string length prefix
 		size += label.size(); // Actual string content
 

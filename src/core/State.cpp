@@ -22,12 +22,16 @@ namespace graph {
 		setData(data);
 	}
 
+	std::string State::getKey() const { return {metadata.key}; }
+
 	void State::setKey(const std::string &newKey) {
-		if (newKey.size() > MAX_KEY_LENGTH - 1) { // Leave space for null terminator
+		if (newKey.length() >= MAX_KEY_LENGTH) {
 			throw std::runtime_error("State key exceeds maximum length of " + std::to_string(MAX_KEY_LENGTH - 1) +
 									 " characters");
 		}
-		metadata.key = newKey;
+		std::fill_n(metadata.key, MAX_KEY_LENGTH, 0);
+		strncpy(metadata.key, newKey.c_str(), MAX_KEY_LENGTH - 1);
+		metadata.key[MAX_KEY_LENGTH - 1] = '\0';
 	}
 
 	std::string State::getDataAsString() const { return {dataBuffer, metadata.dataSize}; }
@@ -45,39 +49,39 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.prevStateId);
 		utils::Serializer::writePOD(os, metadata.dataSize);
 		utils::Serializer::writePOD(os, metadata.chainPosition);
+		utils::Serializer::writeBuffer(os, metadata.key, MAX_KEY_LENGTH);
 		utils::Serializer::writePOD(os, metadata.isActive);
-		utils::Serializer::writeString(os, metadata.key);
 
 		if (metadata.dataSize > 0) {
-			os.write(dataBuffer, metadata.dataSize);
+			utils::Serializer::writeBuffer(os, dataBuffer, metadata.dataSize);
 		}
 	}
 
 	State State::deserialize(std::istream &is) {
 		State state;
+
 		state.metadata.id = utils::Serializer::readPOD<int64_t>(is);
 		state.metadata.nextStateId = utils::Serializer::readPOD<int64_t>(is);
 		state.metadata.prevStateId = utils::Serializer::readPOD<int64_t>(is);
 		state.metadata.dataSize = utils::Serializer::readPOD<uint32_t>(is);
 		state.metadata.chainPosition = utils::Serializer::readPOD<int32_t>(is);
+		utils::Serializer::readBuffer(is, state.metadata.key, MAX_KEY_LENGTH);
+		state.metadata.key[MAX_KEY_LENGTH - 1] = '\0'; // Ensure null-termination for safety
 		state.metadata.isActive = utils::Serializer::readPOD<bool>(is);
-		state.metadata.key = utils::Serializer::readString(is);
 
 		if (state.metadata.dataSize > 0) {
-			is.read(state.dataBuffer, state.metadata.dataSize);
+			if (state.metadata.dataSize > CHUNK_SIZE) {
+				throw std::runtime_error("Deserialization error: dataSize " + std::to_string(state.metadata.dataSize) +
+										 " exceeds CHUNK_SIZE " + std::to_string(CHUNK_SIZE));
+			}
+			utils::Serializer::readBuffer(is, state.dataBuffer, state.metadata.dataSize);
 		}
 		return state;
 	}
 
 	size_t State::getSerializedSize() const {
 		size_t size = 0;
-		size += sizeof(metadata.id);
-		size += sizeof(metadata.nextStateId);
-		size += sizeof(metadata.prevStateId);
-		size += sizeof(metadata.dataSize);
-		size += sizeof(metadata.chainPosition);
-		size += sizeof(metadata.isActive);
-		size += sizeof(uint32_t) + metadata.key.size(); // String size + content
+		size += METADATA_SIZE; // Metadata size
 		size += metadata.dataSize; // Actual data size
 
 		return size;

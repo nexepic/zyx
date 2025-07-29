@@ -25,6 +25,9 @@ namespace graph::utils {
 		template<typename T>
 		static T readPOD(std::istream &is);
 
+		static void writeBuffer(std::ostream &os, const char *buffer, size_t size);
+		static void readBuffer(std::istream &is, char *buffer, size_t size);
+
 		static void writeString(std::ostream &os, const std::string &str);
 		static std::string readString(std::istream &is);
 

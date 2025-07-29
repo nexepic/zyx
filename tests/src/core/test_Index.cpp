@@ -127,3 +127,21 @@ TEST_F(IndexTest, Serialization) {
 	ASSERT_EQ(values.size(), 1);
 	ASSERT_EQ(values[0], 200);
 }
+
+TEST_F(IndexTest, Constants) {
+	EXPECT_EQ(Index::getTotalSize(), 256u);
+	EXPECT_EQ(Index::TOTAL_INDEX_SIZE, 256u);
+
+	size_t expectedMetadataSize = 0;
+	expectedMetadataSize += sizeof(int64_t) * 5;
+	expectedMetadataSize += sizeof(uint32_t) * 3;
+	expectedMetadataSize += sizeof(uint8_t);
+	expectedMetadataSize += sizeof(Index::NodeType);
+	expectedMetadataSize += sizeof(Index::DataStorageType);
+	expectedMetadataSize += sizeof(bool);
+
+	// Or use the macro as in the header:
+	EXPECT_EQ(Index::METADATA_SIZE, expectedMetadataSize);
+	EXPECT_EQ(Index::DATA_SIZE, Index::TOTAL_INDEX_SIZE - Index::METADATA_SIZE);
+	EXPECT_EQ(Index::typeId, static_cast<uint32_t>(graph::EntityType::Index));
+}

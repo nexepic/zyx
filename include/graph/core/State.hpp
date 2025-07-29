@@ -24,20 +24,20 @@ namespace graph {
 	 */
 	class State : public EntityBase<State>, public ChainableMixin<State> {
 	public:
+		static constexpr size_t MAX_KEY_LENGTH = 32;
+
 		struct Metadata {
 			int64_t id = 0; // Unique identifier
 			int64_t nextStateId = 0; // Next state in chain
 			int64_t prevStateId = 0; // Previous state in chain
 			uint32_t dataSize = 0; // Size of data in current chunk
 			int32_t chainPosition = 0; // Position in the chain
-			std::string key; // Unique key for state identification
+			char key[MAX_KEY_LENGTH] = {}; // Unique key for state identification
 			bool isActive = true; // Whether this state is active
 		};
 
 		static constexpr size_t TOTAL_STATE_SIZE = 256;
-		static constexpr size_t MAX_KEY_LENGTH = 32;
-		static constexpr size_t METADATA_SIZE =
-				sizeof(int64_t) * 3 + sizeof(uint32_t) + sizeof(int32_t) + sizeof(bool) + MAX_KEY_LENGTH;
+		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
 		static constexpr size_t CHUNK_SIZE = TOTAL_STATE_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::State);
 
@@ -62,7 +62,7 @@ namespace graph {
 		void setPrevStateId(int64_t id) { setPrevId(id); }
 
 		// Key management
-		[[nodiscard]] const std::string &getKey() const { return metadata.key; }
+		[[nodiscard]] std::string getKey() const;
 		void setKey(const std::string &newKey);
 
 		// Data management
@@ -81,7 +81,7 @@ namespace graph {
 
 	private:
 		Metadata metadata;
-		char dataBuffer[CHUNK_SIZE] = {};
+		char dataBuffer[CHUNK_SIZE > 0 ? CHUNK_SIZE : 1] = {};
 	};
 
 } // namespace graph
