@@ -16,6 +16,7 @@
 #include <graph/core/BlobChainManager.hpp>
 #include <gtest/gtest.h>
 #include <memory>
+#include <random>
 #include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
