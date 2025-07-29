@@ -73,7 +73,7 @@ TEST_F(BlobChainManagerTest, CreateMultipleBlobChain) {
 	std::string testData;
 	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
 	std::mt19937 rng(42); // Fixed seed for reproducibility
-	std::uniform_int_distribution<unsigned char> dist(0, 255);
+	std::uniform_int_distribution dist(0, 255);
 	for (auto &c: testData) {
 		c = static_cast<char>(dist(rng));
 	}
@@ -145,7 +145,7 @@ TEST_F(BlobChainManagerTest, ReadMultipleBlobChain) {
 	std::string testData;
 	testData.resize(graph::Blob::CHUNK_SIZE + 50);
 	std::mt19937 rng(123);
-	std::uniform_int_distribution<unsigned char> dist(0, 255);
+	std::uniform_int_distribution dist(0, 255);
 	for (auto &c: testData) {
 		c = static_cast<char>(dist(rng));
 	}
@@ -174,7 +174,7 @@ TEST_F(BlobChainManagerTest, DeleteBlobChain) {
 	std::string testData;
 	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
 	std::mt19937 rng(99);
-	std::uniform_int_distribution<unsigned char> dist(0, 255);
+	std::uniform_int_distribution dist(0, 255);
 	for (auto &c: testData) {
 		c = static_cast<char>(dist(rng));
 	}
@@ -212,7 +212,7 @@ TEST_F(BlobChainManagerTest, SplitDataIntoMultipleChunks) {
 	std::string largeData;
 	largeData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
 	std::mt19937 rng(2024); // Fixed seed for reproducibility
-	std::uniform_int_distribution<unsigned char> dist(0, 255);
+	std::uniform_int_distribution dist(0, 255);
 	for (auto &c: largeData) {
 		c = static_cast<char>(dist(rng));
 	}
