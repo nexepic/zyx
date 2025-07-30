@@ -10,8 +10,6 @@
 
 #pragma once
 #include <string>
-#include "graph/core/Edge.hpp"
-#include "graph/core/Node.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/query/QueryEngine.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -24,12 +22,12 @@ namespace graph {
 		~Database();
 
 		void open();
-		void close();
+		void close() const;
 		void save() const;
 		void flush() const;
 
 		[[nodiscard]] bool exists() const;
-		[[nodiscard]] bool isOpen() const { return openFlag; }
+		[[nodiscard]] bool isOpen() const;
 
 		Transaction beginTransaction();
 
@@ -43,7 +41,6 @@ namespace graph {
 		std::shared_ptr<storage::FileStorage> storage;
 		std::shared_ptr<query::QueryEngine> queryEngine;
 		std::string dbPath;
-		bool openFlag = false;
 	};
 
 } // namespace graph

@@ -16,9 +16,9 @@
 #include "graph/query/indexes/LabelIndex.hpp"
 #include "graph/query/indexes/PropertyIndex.hpp"
 #include "graph/query/indexes/RelationshipIndex.hpp"
-#include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/SegmentTracker.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::indexes {
 
@@ -27,279 +27,113 @@ namespace graph::query::indexes {
 		indexManager_(std::move(indexManager)), storage_(std::move(storage)), dataManager_(storage_->getDataManager()) {
 	}
 
-	IndexBuilder::~IndexBuilder() {
-		cancel();
-		if (buildTask_.valid()) {
-			try {
-				buildTask_.wait();
-			} catch (...) {
-				// Ignore exceptions during destruction
-			}
-		}
-	}
+	IndexBuilder::~IndexBuilder() = default;
 
-	bool IndexBuilder::startBuildAllIndexes() {
-		if (isBuilding()) {
-			return false; // Already building an index
-		}
-
-		cancelRequested_ = false;
-		status_ = IndexBuildStatus::IN_PROGRESS;
-		progress_ = 0;
-
-		buildTask_ = std::async(std::launch::async, &IndexBuilder::buildAllIndexesWorker, this);
-		return true;
-	}
-
-	bool IndexBuilder::startBuildLabelIndex() {
-		if (isBuilding()) {
-			return false; // Already building an index
-		}
-
-		cancelRequested_ = false;
-		status_ = IndexBuildStatus::IN_PROGRESS;
-		progress_ = 0;
-
-		buildTask_ = std::async(std::launch::async, &IndexBuilder::buildLabelIndexWorker, this);
-		return true;
-	}
-
-	bool IndexBuilder::startBuildPropertyIndex(const std::string &key) {
-		if (isBuilding()) {
-			return false; // Already building an index
-		}
-
-		cancelRequested_ = false;
-		status_ = IndexBuildStatus::IN_PROGRESS;
-		progress_ = 0;
-
-		buildTask_ = std::async(std::launch::async, &IndexBuilder::buildPropertyIndexWorker, this, key);
-		return true;
-	}
-
-	bool IndexBuilder::isBuilding() const {
-		return status_ == IndexBuildStatus::IN_PROGRESS && buildTask_.valid() &&
-			   buildTask_.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
-	}
-
-	IndexBuildStatus IndexBuilder::getStatus() const { return status_; }
-
-	int IndexBuilder::getProgress() const { return progress_; }
-
-	bool IndexBuilder::waitForCompletion(std::chrono::seconds timeout) const {
-		if (!buildTask_.valid()) {
-			return true; // No task running
-		}
-
-		auto result = buildTask_.wait_for(timeout);
-		return result == std::future_status::ready;
-	}
-
-	void IndexBuilder::cancel() {
-		if (isBuilding()) {
-			cancelRequested_ = true;
-
-			if (buildTask_.valid()) {
-				try {
-					buildTask_.wait();
-				} catch ([[maybe_unused]] const std::exception &e) {
-					// Log exception if needed
-				}
-			}
-
-			status_ = IndexBuildStatus::FAILED;
-		}
-	}
-
-	bool IndexBuilder::buildAllIndexesWorker() {
+	bool IndexBuilder::buildAllIndexes() const {
 		try {
-			// Clear existing indexes
+			// Get index pointers
 			auto labelIndex = indexManager_->getLabelIndex();
 			auto propertyIndex = indexManager_->getPropertyIndex();
 			auto relationshipIndex = indexManager_->getRelationshipIndex();
 			auto fullTextIndex = indexManager_->getFullTextIndex();
 
+			// Clear existing indexes
 			labelIndex->clear();
 			propertyIndex->clear();
 			relationshipIndex->clear();
 			fullTextIndex->clear();
 
-			// Process nodes in batches
-			auto nodeRanges = getNodeIdRanges();
-			size_t totalRanges = nodeRanges.size();
-
-			for (size_t i = 0; i < totalRanges && !cancelRequested_; i++) {
-				const auto &[startId, endId] = nodeRanges[i];
+			// Process all nodes
+			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
-
-				// Collect valid IDs in this range
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-
 					if (batchIds.size() >= BATCH_SIZE) {
 						processNodeBatch(batchIds, labelIndex, propertyIndex, fullTextIndex);
 						batchIds.clear();
 					}
 				}
-
-				// Process remaining nodes
 				if (!batchIds.empty()) {
 					processNodeBatch(batchIds, labelIndex, propertyIndex, fullTextIndex);
 				}
-
-				// Update progress based on node processing
-				updateProgress(static_cast<int>((i + 1) * 50 / totalRanges));
-
-				if (cancelRequested_)
-					break;
 			}
 
-			// Process edges in batches
-			auto edgeRanges = getEdgeIdRanges();
-			totalRanges = edgeRanges.size();
-
-			for (size_t i = 0; i < totalRanges && !cancelRequested_; i++) {
-				const auto &[startId, endId] = edgeRanges[i];
+			// Process all edges
+			for (const auto &[startId, endId]: getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
-
-				// Collect valid IDs in this range
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-
 					if (batchIds.size() >= BATCH_SIZE) {
 						processEdgeBatch(batchIds, relationshipIndex);
 						batchIds.clear();
 					}
 				}
-
-				// Process remaining edges
 				if (!batchIds.empty()) {
 					processEdgeBatch(batchIds, relationshipIndex);
 				}
-
-				// Update progress based on edge processing (50% to 100%)
-				updateProgress(50 + static_cast<int>((i + 1) * 50 / totalRanges));
-
-				if (cancelRequested_)
-					break;
 			}
 
-			// Persist the indexes
+			// Persist the indexes' state to disk
 			indexManager_->persistState();
-
-			if (cancelRequested_) {
-				status_ = IndexBuildStatus::FAILED;
-				return false;
-			} else {
-				status_ = IndexBuildStatus::COMPLETED;
-				progress_ = 100;
-				return true;
-			}
+			return true;
 		} catch ([[maybe_unused]] const std::exception &e) {
 			// Log exception if needed
-			status_ = IndexBuildStatus::FAILED;
 			return false;
 		}
 	}
 
-	bool IndexBuilder::buildLabelIndexWorker() {
+	bool IndexBuilder::buildLabelIndex() const {
 		try {
 			// Clear existing label index
 			auto labelIndex = indexManager_->getLabelIndex();
 			labelIndex->clear();
 
 			// Process nodes in batches
-			auto nodeRanges = getNodeIdRanges();
-			size_t totalRanges = nodeRanges.size();
-
-			for (size_t i = 0; i < totalRanges && !cancelRequested_; i++) {
-				const auto &[startId, endId] = nodeRanges[i];
+			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
-
-				// Collect valid IDs in this range
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-
 					if (batchIds.size() >= BATCH_SIZE) {
 						processNodeBatch(batchIds, labelIndex, nullptr, nullptr);
 						batchIds.clear();
 					}
 				}
-
-				// Process remaining nodes
 				if (!batchIds.empty()) {
 					processNodeBatch(batchIds, labelIndex, nullptr, nullptr);
 				}
-
-				// Update progress
-				updateProgress(static_cast<int>((i + 1) * 100 / totalRanges));
-
-				if (cancelRequested_)
-					break;
 			}
 
-			if (cancelRequested_) {
-				status_ = IndexBuildStatus::FAILED;
-				return false;
-			} else {
-				status_ = IndexBuildStatus::COMPLETED;
-				progress_ = 100;
-				return true;
-			}
+			return true;
 		} catch ([[maybe_unused]] const std::exception &e) {
 			// Log exception if needed
-			status_ = IndexBuildStatus::FAILED;
 			return false;
 		}
 	}
 
-	bool IndexBuilder::buildPropertyIndexWorker(const std::string &key) {
+	bool IndexBuilder::buildPropertyIndex(const std::string &key) const {
 		try {
-			// Clear existing property index for this key
+			// Clear existing property index for this specific key
 			auto propertyIndex = indexManager_->getPropertyIndex();
 			propertyIndex->clearKey(key);
 
 			// Process nodes in batches
-			auto nodeRanges = getNodeIdRanges();
-			size_t totalRanges = nodeRanges.size();
-
-			for (size_t i = 0; i < totalRanges && !cancelRequested_; i++) {
-				const auto &[startId, endId] = nodeRanges[i];
+			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
-
-				// Collect valid IDs in this range
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-
 					if (batchIds.size() >= BATCH_SIZE) {
 						processNodeBatch(batchIds, nullptr, propertyIndex, nullptr, key);
 						batchIds.clear();
 					}
 				}
-
-				// Process remaining nodes
 				if (!batchIds.empty()) {
 					processNodeBatch(batchIds, nullptr, propertyIndex, nullptr, key);
 				}
-
-				// Update progress
-				updateProgress(static_cast<int>((i + 1) * 100 / totalRanges));
-
-				if (cancelRequested_)
-					break;
 			}
 
-			if (cancelRequested_) {
-				status_ = IndexBuildStatus::FAILED;
-				return false;
-			} else {
-				status_ = IndexBuildStatus::COMPLETED;
-				progress_ = 100;
-				return true;
-			}
+			return true;
 		} catch ([[maybe_unused]] const std::exception &e) {
 			// Log exception if needed
-			status_ = IndexBuildStatus::FAILED;
 			return false;
 		}
 	}
@@ -404,12 +238,6 @@ namespace graph::query::indexes {
 		}
 
 		return ranges;
-	}
-
-	void IndexBuilder::updateProgress(int newProgress) {
-		if (newProgress > progress_) {
-			progress_ = newProgress;
-		}
 	}
 
 } // namespace graph::query::indexes

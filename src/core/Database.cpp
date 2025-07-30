@@ -19,32 +19,37 @@ namespace graph {
 
 	Database::~Database() { close(); }
 
+	bool Database::isOpen() const {
+		// The database is open if the storage is initialized and its file is open.
+		return storage && storage->isOpen();
+	}
+
 	void Database::open() {
-		if (openFlag)
+		if (isOpen()) {
 			return;
+		}
 
 		storage->open();
 		queryEngine = std::make_shared<query::QueryEngine>(storage);
 		storage->setQueryEngine(queryEngine);
-		openFlag = true;
 	}
 
-	void Database::close() {
-		if (!openFlag)
+	void Database::close() const {
+		if (!isOpen()) {
 			return;
+		}
 
 		storage->close();
-		openFlag = false;
 	}
 
 	void Database::save() const {
-		if (openFlag) {
+		if (isOpen()) {
 			storage->save();
 		}
 	}
 
 	void Database::flush() const {
-		if (openFlag) {
+		if (isOpen()) {
 			storage->flush();
 		}
 	}
@@ -52,7 +57,7 @@ namespace graph {
 	bool Database::exists() const { return std::filesystem::exists(dbPath); }
 
 	Transaction Database::beginTransaction() {
-		if (!openFlag) {
+		if (!isOpen()) {
 			open();
 		}
 

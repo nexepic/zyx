@@ -41,17 +41,6 @@ namespace graph::query::indexes {
 		bool buildPropertyIndex(const std::string &key);
 		bool buildIndexes();
 
-		// Async index building methods
-		bool startBuildLabelIndex() const;
-		bool startBuildPropertyIndex(const std::string &key) const;
-		bool startBuildAllIndexes() const;
-
-		// Check status of async index building
-		bool isIndexBuilding() const;
-		int getIndexBuildProgress() const;
-		bool waitForIndexCompletion(int timeoutSeconds = 60) const;
-		void cancelIndexBuild() const;
-
 		// Drop index methods
 		bool dropIndex(const std::string &indexType, const std::string &key = "");
 
@@ -94,6 +83,10 @@ namespace graph::query::indexes {
 		std::vector<int64_t> findOutgoingEdgeIds(int64_t nodeId, const std::string &label = "") const;
 		std::vector<int64_t> findIncomingEdgeIds(int64_t nodeId, const std::string &label = "") const;
 
+		IndexBuilder* getIndexBuilder() const {
+			return indexBuilder_.get();
+		}
+
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::DataManager> dataManager_;
@@ -115,6 +108,8 @@ namespace graph::query::indexes {
 		// Helper method to update property indexes
 		void updatePropertyIndexes(int64_t entityId, const std::unordered_map<std::string, PropertyValue> &oldProps,
 								   const std::unordered_map<std::string, PropertyValue> &newProps) const;
+
+		bool executeBuildTask(const std::function<bool()> &buildFunc) const;
 	};
 
 } // namespace graph::query::indexes

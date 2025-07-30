@@ -79,13 +79,6 @@ TEST_F(IndexManagerTest, BuildAllIndexesAndDropAll) {
 	EXPECT_TRUE(indexManager->dropIndex("label", ""));
 }
 
-TEST_F(IndexManagerTest, IndexBuildProgressAndCancel) {
-	EXPECT_EQ(indexManager->getIndexBuildProgress(), 0);
-	// Start async build (simulate, actual async may need mock)
-	EXPECT_TRUE(indexManager->startBuildLabelIndex());
-	indexManager->cancelIndexBuild();
-}
-
 TEST_F(IndexManagerTest, EnableAndDisableIndexes) {
 	indexManager->enableLabelIndex(true);
 	indexManager->enableLabelIndex(false);

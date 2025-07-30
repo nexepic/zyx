@@ -46,7 +46,7 @@ namespace graph {
 		static constexpr size_t getTotalSize() { return TOTAL_EDGE_SIZE; }
 
 		Edge() = default;
-		Edge(int64_t id, int64_t sourceId, int64_t targetId, const std::string &type);
+		Edge(int64_t id, int64_t sourceId, int64_t targetId, const std::string &label);
 
 		// Metadata access for CRTP base class
 		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }

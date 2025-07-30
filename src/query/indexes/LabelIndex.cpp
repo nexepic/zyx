@@ -123,8 +123,6 @@ namespace graph::query::indexes {
 	std::vector<int64_t> LabelIndex::findNodes(const std::string &label) const {
 		std::shared_lock lock(mutex_);
 
-		std::cout << "111 rootId: " << rootId_ << std::endl;
-
 		if (rootId_ == 0) {
 			return {};
 		}

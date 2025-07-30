@@ -26,35 +26,28 @@ namespace graph::query::indexes {
 		fullTextIndex_ = std::make_shared<FullTextIndex>();
 	}
 
-	IndexManager::~IndexManager() {
-		// Ensure any in-progress index building is cancelled
-		if (indexBuilder_) {
-			indexBuilder_->cancel();
-		}
-	}
+	IndexManager::~IndexManager() = default;
 
 	void IndexManager::initialize() {
 		// Create index builder
 		indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_);
 	}
 
+	bool IndexManager::executeBuildTask(const std::function<bool()> &buildFunc) const {
+		// Commit any pending changes before indexing. This is crucial for ensuring
+		// data consistency and that all temporary IDs are replaced with permanent ones.
+		storage_->save();
+
+		// Execute the specific build task.
+		return buildFunc();
+	}
+
 	bool IndexManager::buildLabelIndex() {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// Check if an async build is in progress
-		if (isIndexBuilding()) {
-			return false;
-		}
+		bool result = executeBuildTask([&]() { return indexBuilder_->buildLabelIndex(); });
 
-		// Clear existing label index
-		labelIndex_->clear();
-
-		// Commit any pending changes before indexing
-		storage_->save();
-
-		bool result = indexBuilder_->buildLabelIndexWorker();
-
-		// Enable automatic updates for this index
+		// Enable automatic updates for this index upon successful start.
 		if (result) {
 			enableLabelIndex(true);
 		}
@@ -65,20 +58,9 @@ namespace graph::query::indexes {
 	bool IndexManager::buildPropertyIndex(const std::string &key) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// Check if an async build is in progress
-		if (isIndexBuilding()) {
-			return false;
-		}
+		bool result = executeBuildTask([&]() { return indexBuilder_->buildPropertyIndex(key); });
 
-		// Clear specific property key index
-		propertyIndex_->clearKey(key);
-
-		// Commit any pending changes before indexing
-		storage_->save();
-
-		bool result = indexBuilder_->buildPropertyIndexWorker(key);
-
-		// Enable automatic updates for this index
+		// Enable automatic updates for this index upon successful start.
 		if (result) {
 			enablePropertyIndex(key, true);
 		}
@@ -89,23 +71,15 @@ namespace graph::query::indexes {
 	bool IndexManager::buildIndexes() {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// Check if an async build is in progress
-		if (isIndexBuilding()) {
-			return false;
-		}
+		bool result = executeBuildTask([&]() { return indexBuilder_->buildAllIndexes(); });
 
-		// Commit any pending changes before indexing
-		storage_->save();
-
-		bool result = indexBuilder_->buildAllIndexesWorker();
-
-		// Enable automatic updates for all indexes
+		// Enable automatic updates for all relevant indexes upon successful start.
 		if (result) {
 			enableLabelIndex(true);
 			enableRelationshipIndex(true);
 			enableFullTextIndex(true);
 
-			// Get all property keys that were indexed
+			// Get all property keys that were indexed.
 			auto propertyKeys = propertyIndex_->getIndexedKeys();
 			for (const auto &key: propertyKeys) {
 				enablePropertyIndex(key, true);
@@ -113,63 +87,6 @@ namespace graph::query::indexes {
 		}
 
 		return result;
-	}
-
-	bool IndexManager::startBuildLabelIndex() const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		if (isIndexBuilding()) {
-			return false;
-		}
-
-		// Commit any pending changes before indexing
-		storage_->save();
-
-		return indexBuilder_->startBuildLabelIndex();
-	}
-
-	bool IndexManager::startBuildPropertyIndex(const std::string &key) const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		if (isIndexBuilding()) {
-			return false;
-		}
-
-		// Commit any pending changes before indexing
-		storage_->save();
-
-		return indexBuilder_->startBuildPropertyIndex(key);
-	}
-
-	bool IndexManager::startBuildAllIndexes() const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		if (isIndexBuilding()) {
-			return false;
-		}
-
-		// Commit any pending changes before indexing
-		storage_->save();
-
-		return indexBuilder_->startBuildAllIndexes();
-	}
-
-	bool IndexManager::isIndexBuilding() const { return indexBuilder_ && indexBuilder_->isBuilding(); }
-
-	int IndexManager::getIndexBuildProgress() const { return indexBuilder_ ? indexBuilder_->getProgress() : 0; }
-
-	bool IndexManager::waitForIndexCompletion(int timeoutSeconds) const {
-		if (!indexBuilder_) {
-			return true; // No builder, so considered complete
-		}
-
-		return indexBuilder_->waitForCompletion(std::chrono::seconds(timeoutSeconds));
-	}
-
-	void IndexManager::cancelIndexBuild() const {
-		if (indexBuilder_) {
-			indexBuilder_->cancel();
-		}
 	}
 
 	bool IndexManager::dropIndex(const std::string &indexType, const std::string &key) {
@@ -407,10 +324,10 @@ namespace graph::query::indexes {
 			}
 		}
 
-		for (const auto& key : newProps | std::views::keys) {
-		    if (indexConfig_.propertyIndexKeys.contains(key)) {
-		        keys.insert(key);
-		    }
+		for (const auto &key: newProps | std::views::keys) {
+			if (indexConfig_.propertyIndexKeys.contains(key)) {
+				keys.insert(key);
+			}
 		}
 
 		// Process each key

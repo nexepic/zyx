@@ -8,72 +8,72 @@
  *
  **/
 
-#include <gtest/gtest.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <filesystem>
-#include <memory>
 #include <chrono>
-#include "graph/query/indexes/IndexBuilder.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
+#include <filesystem>
+#include <gtest/gtest.h>
+#include <memory>
 #include "graph/core/Database.hpp"
+#define private public
+#include "graph/query/indexes/IndexBuilder.hpp"
+#undef private
+#include "graph/query/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 class IndexBuilderTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        boost::uuids::uuid uuid = boost::uuids::random_generator()();
-        testFilePath = std::filesystem::temp_directory_path() / ("test_indexBuilder_" + to_string(uuid) + ".dat");
-        database = std::make_unique<graph::Database>(testFilePath.string());
-        database->open();
-        fileStorage = database->getStorage();
-        indexManager = std::make_shared<graph::query::indexes::IndexManager>(fileStorage);
-        indexManager->initialize();
-        indexBuilder = std::make_unique<graph::query::indexes::IndexBuilder>(indexManager, fileStorage);
-    }
+	void SetUp() override {
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testFilePath = std::filesystem::temp_directory_path() / ("test_indexBuilder_" + to_string(uuid) + ".dat");
+		database = std::make_unique<graph::Database>(testFilePath.string());
+		database->open();
+		fileStorage = database->getStorage();
+		indexManager = database->getQueryEngine()->getIndexManager();
+		indexBuilder = indexManager->getIndexBuilder();
+	}
 
-    void TearDown() override {
-        database->close();
-        database.reset();
-        std::filesystem::remove(testFilePath);
-    }
+	void TearDown() override {
+		database->close();
+		database.reset();
+		std::filesystem::remove(testFilePath);
+	}
 
-    std::filesystem::path testFilePath;
-    std::unique_ptr<graph::Database> database;
-    std::shared_ptr<graph::storage::FileStorage> fileStorage;
-    std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
-    std::unique_ptr<graph::query::indexes::IndexBuilder> indexBuilder;
+	std::filesystem::path testFilePath;
+	std::unique_ptr<graph::Database> database;
+	std::shared_ptr<graph::storage::FileStorage> fileStorage;
+	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
+	graph::query::indexes::IndexBuilder *indexBuilder = nullptr;
 };
 
-TEST_F(IndexBuilderTest, StartBuildAllIndexes) {
-    EXPECT_TRUE(indexBuilder->startBuildAllIndexes());
-    EXPECT_TRUE(indexBuilder->isBuilding() || indexBuilder->getStatus() != graph::query::indexes::IndexBuildStatus::FAILED);
-    indexBuilder->waitForCompletion(std::chrono::seconds(5));
-    EXPECT_EQ(indexBuilder->getStatus(), graph::query::indexes::IndexBuildStatus::COMPLETED);
-    EXPECT_EQ(indexBuilder->getProgress(), 100);
+TEST_F(IndexBuilderTest, BuildAllIndexes) { EXPECT_TRUE(indexBuilder->buildAllIndexes()); }
+
+TEST_F(IndexBuilderTest, BuildLabelIndex) { EXPECT_TRUE(indexBuilder->buildLabelIndex()); }
+
+TEST_F(IndexBuilderTest, BuildPropertyIndex) { EXPECT_TRUE(indexBuilder->buildPropertyIndex("name")); }
+
+TEST_F(IndexBuilderTest, GetNodeAndEdgeIdRangesEmpty) {
+	// Should return empty ranges if no segments
+	auto nodeRanges = indexBuilder->getNodeIdRanges();
+	auto edgeRanges = indexBuilder->getEdgeIdRanges();
+	EXPECT_TRUE(nodeRanges.empty());
+	EXPECT_TRUE(edgeRanges.empty());
 }
 
-TEST_F(IndexBuilderTest, StartBuildLabelIndex) {
-    EXPECT_TRUE(indexBuilder->startBuildLabelIndex());
-    indexBuilder->waitForCompletion(std::chrono::seconds(5));
-    EXPECT_EQ(indexBuilder->getStatus(), graph::query::indexes::IndexBuildStatus::COMPLETED);
-}
+TEST_F(IndexBuilderTest, GetNodeAndEdgeIdRangesNonEmpty) {
+	// Add a node and edge, then check ranges
+	graph::Node node1(1, "Node1");
+	graph::Node node2(2, "Node2");
+	fileStorage->getDataManager()->addNode(node1);
+	fileStorage->getDataManager()->addNode(node2);
 
-TEST_F(IndexBuilderTest, StartBuildPropertyIndex) {
-    EXPECT_TRUE(indexBuilder->startBuildPropertyIndex("name"));
-    indexBuilder->waitForCompletion(std::chrono::seconds(5));
-    EXPECT_EQ(indexBuilder->getStatus(), graph::query::indexes::IndexBuildStatus::COMPLETED);
-}
-
-TEST_F(IndexBuilderTest, CancelBuild) {
-    EXPECT_TRUE(indexBuilder->startBuildAllIndexes());
-    indexBuilder->cancel();
-    EXPECT_NE(indexBuilder->getStatus(), graph::query::indexes::IndexBuildStatus::COMPLETED);
-}
-
-TEST_F(IndexBuilderTest, DoubleStartReturnsFalse) {
-    EXPECT_TRUE(indexBuilder->startBuildAllIndexes());
-    EXPECT_FALSE(indexBuilder->startBuildLabelIndex());
-    indexBuilder->cancel();
+	// Add an edge between the two nodes
+	graph::Edge edge(1, node1.getId(), node2.getId(), "KNOWS");
+	fileStorage->getDataManager()->addEdge(edge);
+	fileStorage->save();
+	auto nodeRanges = indexBuilder->getNodeIdRanges();
+	auto edgeRanges = indexBuilder->getEdgeIdRanges();
+	EXPECT_FALSE(nodeRanges.empty());
+	EXPECT_FALSE(edgeRanges.empty());
 }
