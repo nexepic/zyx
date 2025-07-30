@@ -102,9 +102,7 @@ namespace graph::query::indexes {
 
 		int64_t findLeafNode(int64_t rootId, const KeyType &key) const;
 
-		std::shared_ptr<storage::DataManager> getDataManager() const {
-			return dataManager_;
-		}
+		std::shared_ptr<storage::DataManager> getDataManager() const { return dataManager_; }
 
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
@@ -112,7 +110,7 @@ namespace graph::query::indexes {
 		uint32_t indexType_;
 
 		// Helper methods for B+Tree operations
-		int64_t createNewNode(storage::Index::NodeType type) const;
+		int64_t createNewNode(Index::NodeType type) const;
 
 		// Key comparison helper
 		static bool compareKeys(const KeyType &a, const KeyType &b);
@@ -129,12 +127,12 @@ namespace graph::query::indexes {
 			KeyType key;
 			std::vector<int64_t> values;
 		};
-		std::vector<KeyValueEntry> getAllKeyValuesFromNode(const storage::Index &node) const;
-		void setAllKeyValuesToNode(storage::Index &node, const std::vector<KeyValueEntry> &entries) const;
+		std::vector<KeyValueEntry> getAllKeyValuesFromNode(const Index &node) const;
+		void setAllKeyValuesToNode(Index &node, const std::vector<KeyValueEntry> &entries) const;
 
 		// Convert between variant key types and specific types
-		static void setEntityKey(storage::Index &entity, const KeyType &key, int64_t childOrValue);
-		static std::vector<int64_t> getEntityValues(const storage::Index &entity, const KeyType &key);
+		static void setEntityKey(Index &entity, const KeyType &key, int64_t childOrValue);
+		static std::vector<int64_t> getEntityValues(const Index &entity, const KeyType &key);
 	};
 
 } // namespace graph::query::indexes

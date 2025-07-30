@@ -309,22 +309,6 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
-	size_t DataManager::calculateEntityTotalPropertySize(int64_t entityId) {
-		return propertyManager_->calculateEntityTotalPropertySize<EntityType>(entityId);
-	}
-
-	template<typename EntityType>
-	void DataManager::addEntityProperties(int64_t entityId,
-										  const std::unordered_map<std::string, PropertyValue> &properties) {
-		propertyManager_->addEntityProperties<EntityType>(entityId, properties);
-	}
-
-	template<typename EntityType>
-	std::unordered_map<std::string, PropertyValue> DataManager::getEntityProperties(int64_t entityId) {
-		return propertyManager_->getEntityProperties<EntityType>(entityId);
-	}
-
-	template<typename EntityType>
 	uint64_t DataManager::findSegmentForEntityId(int64_t id) const {
 		uint32_t type = EntityType::typeId;
 		return segmentIndexManager_->findSegmentForId(type, id);
@@ -645,10 +629,6 @@ namespace graph::storage {
 	template Node DataManager::getEntity<Node>(int64_t id);
 	template void DataManager::updateEntity<Node>(const Node &entity);
 	template std::vector<Node> DataManager::getEntitiesInRange<Node>(int64_t, int64_t, size_t);
-	template size_t DataManager::calculateEntityTotalPropertySize<Node>(int64_t entityId);
-	template void DataManager::addEntityProperties<Node>(int64_t,
-														 const std::unordered_map<std::string, PropertyValue> &);
-	template std::unordered_map<std::string, PropertyValue> DataManager::getEntityProperties<Node>(int64_t entityId);
 	template uint64_t DataManager::findSegmentForEntityId<Node>(int64_t id) const;
 	template std::vector<Node>
 	DataManager::getDirtyEntitiesWithChangeTypes<Node>(const std::vector<EntityChangeType> &);
@@ -668,10 +648,6 @@ namespace graph::storage {
 	template Edge DataManager::getEntity<Edge>(int64_t id);
 	template void DataManager::updateEntity<Edge>(const Edge &entity);
 	template std::vector<Edge> DataManager::getEntitiesInRange<Edge>(int64_t, int64_t, size_t);
-	template size_t DataManager::calculateEntityTotalPropertySize<Edge>(int64_t entityId);
-	template void DataManager::addEntityProperties<Edge>(int64_t,
-														 const std::unordered_map<std::string, PropertyValue> &);
-	template std::unordered_map<std::string, PropertyValue> DataManager::getEntityProperties<Edge>(int64_t entityId);
 	template uint64_t DataManager::findSegmentForEntityId<Edge>(int64_t id) const;
 	template std::vector<Edge>
 	DataManager::getDirtyEntitiesWithChangeTypes<Edge>(const std::vector<EntityChangeType> &);

@@ -57,7 +57,7 @@ namespace graph::query::indexes {
 		// Save rootId to state registry
 		if (rootId_ != 0) {
 			if (rootId_ < 0) {
-				rootId_ = dataManager_->getIdAllocator()->allocatePermanentId(rootId_, storage::Index::typeId, false);
+				rootId_ = dataManager_->getIdAllocator()->allocatePermanentId(rootId_, Index::typeId, false);
 			}
 
 			// Create a property map with the single root ID
@@ -74,9 +74,8 @@ namespace graph::query::indexes {
 		auto properties = StateRegistry::getDataManager()->getStateProperties(STATE_KEY_ROOT_ID);
 
 		// Look for the rootId property
-		auto it = properties.find("rootId");
-		if (it != properties.end() && std::holds_alternative<int64_t>(it->second)) {
-			rootId_ = std::get<int64_t>(it->second);
+		if (properties.contains("rootId") && std::holds_alternative<int64_t>(properties.at("rootId"))) {
+			rootId_ = std::get<int64_t>(properties.at("rootId"));
 		} else {
 			rootId_ = 0;
 		}
@@ -123,6 +122,8 @@ namespace graph::query::indexes {
 
 	std::vector<int64_t> LabelIndex::findNodes(const std::string &label) const {
 		std::shared_lock lock(mutex_);
+
+		std::cout << "111 rootId: " << rootId_ << std::endl;
 
 		if (rootId_ == 0) {
 			return {};

@@ -13,7 +13,7 @@
 
 namespace graph {
 
-	Database::Database(const std::string &dbPath, size_t cacheSize) : dbPath(dbPath), openFlag(false) {
+	Database::Database(const std::string &dbPath, size_t cacheSize) : dbPath(dbPath) {
 		storage = std::make_shared<storage::FileStorage>(dbPath, cacheSize);
 	}
 
@@ -34,8 +34,6 @@ namespace graph {
 			return;
 
 		storage->close();
-		storage.reset();
-		queryEngine.reset();
 		openFlag = false;
 	}
 
@@ -60,54 +58,6 @@ namespace graph {
 
 		storage::FileStorage::beginWrite();
 		return Transaction(*this);
-	}
-
-	Node Database::getNode(int64_t id) {
-		if (!openFlag) {
-			open();
-		}
-
-		return storage->getNode(id);
-	}
-
-	Edge Database::getEdge(int64_t id) {
-		if (!openFlag) {
-			open();
-		}
-
-		return storage->getEdge(id);
-	}
-
-	std::vector<Node> Database::getNodes(const std::vector<int64_t> &ids) {
-		if (!openFlag) {
-			open();
-		}
-
-		return storage->getNodes(ids);
-	}
-
-	std::vector<Edge> Database::getEdges(const std::vector<int64_t> &ids) {
-		if (!openFlag) {
-			open();
-		}
-
-		return storage->getEdges(ids);
-	}
-
-	std::vector<Node> Database::getNodesInRange(int64_t startId, int64_t endId, size_t limit) {
-		if (!openFlag) {
-			open();
-		}
-
-		return storage->getNodesInRange(startId, endId, limit);
-	}
-
-	std::vector<Edge> Database::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) {
-		if (!openFlag) {
-			open();
-		}
-
-		return storage->getEdgesInRange(startId, endId, limit);
 	}
 
 } // namespace graph

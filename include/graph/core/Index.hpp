@@ -19,6 +19,9 @@
 
 namespace graph::storage {
 	class DataManager;
+}
+
+namespace graph {
 
 	class Index : public EntityBase<Index> {
 	public:
@@ -102,8 +105,9 @@ namespace graph::storage {
 			std::vector<int64_t> values;
 		};
 
-		[[nodiscard]] std::vector<KeyValuePair> getAllKeyValues(const std::shared_ptr<DataManager>& dataManager) const;
-		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues, const std::shared_ptr<DataManager>& dataManager);
+		[[nodiscard]] std::vector<KeyValuePair> getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const;
+		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
+							 const std::shared_ptr<storage::DataManager> &dataManager);
 
 		[[nodiscard]] std::vector<KeyValuePair> deserializeStringKVs() const;
 		void serializeStringKVs(const std::vector<KeyValuePair> &kvs);
@@ -114,8 +118,8 @@ namespace graph::storage {
 		[[nodiscard]] int64_t getBlobId() const;
 		[[nodiscard]] bool hasBlobStorage() const;
 
-		void storeDataInBlob(const std::shared_ptr<DataManager>& dataManager, const std::string &data);
-		[[nodiscard]] std::string retrieveDataFromBlob(const std::shared_ptr<DataManager>& dataManager) const;
+		void storeDataInBlob(const std::shared_ptr<storage::DataManager> &dataManager, const std::string &data);
+		[[nodiscard]] std::string retrieveDataFromBlob(const std::shared_ptr<storage::DataManager> &dataManager) const;
 
 	private:
 		Metadata metadata;
@@ -130,4 +134,4 @@ namespace graph::storage {
 		void serializeChildren(const std::vector<ChildEntry> &children);
 	};
 
-} // namespace graph::storage
+} // namespace graph

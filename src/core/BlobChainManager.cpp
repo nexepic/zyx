@@ -22,7 +22,7 @@ namespace graph {
 	std::vector<Blob> BlobChainManager::createBlobChain(int64_t entityId, uint32_t entityType,
 														const std::string &data) const {
 		// Determine if this is an Index blob
-		bool isIndexBlob = (entityType == storage::Index::typeId);
+		bool isIndexBlob = (entityType == Index::typeId);
 
 		// Compress the data first (unless it's an index blob)
 		std::string processedData;

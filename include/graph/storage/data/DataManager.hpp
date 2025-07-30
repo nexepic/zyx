@@ -157,15 +157,6 @@ namespace graph::storage {
 		std::vector<EntityType> getEntitiesInRange(int64_t startId, int64_t endId, size_t limit);
 
 		template<typename EntityType>
-		size_t calculateEntityTotalPropertySize(int64_t entityId);
-
-		template<typename EntityType>
-		void addEntityProperties(int64_t entityId, const std::unordered_map<std::string, PropertyValue> &properties);
-
-		template<typename EntityType>
-		std::unordered_map<std::string, PropertyValue> getEntityProperties(int64_t entityId);
-
-		template<typename EntityType>
 		uint64_t findSegmentForEntityId(int64_t id) const;
 
 		// Cache management

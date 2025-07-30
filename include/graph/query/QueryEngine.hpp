@@ -73,6 +73,8 @@ namespace graph::query {
 
 		void persistIndexState() const { indexManager_->persistState(); }
 
+		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return indexManager_; }
+
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<indexes::IndexManager> indexManager_;

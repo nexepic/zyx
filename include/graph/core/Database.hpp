@@ -33,16 +33,6 @@ namespace graph {
 
 		Transaction beginTransaction();
 
-		// Node and Edge access methods
-		Node getNode(int64_t id);
-		Edge getEdge(int64_t id);
-
-		std::vector<Node> getNodes(const std::vector<int64_t> &ids);
-		std::vector<Edge> getEdges(const std::vector<int64_t> &ids);
-
-		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
-		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
-
 		// Query engine access
 		std::shared_ptr<query::QueryEngine> getQueryEngine() { return queryEngine; }
 

@@ -11,18 +11,16 @@
 #include <gtest/gtest.h>
 #include "graph/core/Index.hpp"
 
-using namespace graph::storage;
-
 class IndexTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		// Initialize test environment
-		leafNode = Index(1, Index::NodeType::LEAF, 0);
-		internalNode = Index(2, Index::NodeType::INTERNAL, 0);
+		leafNode = graph::Index(1, graph::Index::NodeType::LEAF, 0);
+		internalNode = graph::Index(2, graph::Index::NodeType::INTERNAL, 0);
 	}
 
-	Index leafNode;
-	Index internalNode;
+	graph::Index leafNode;
+	graph::Index internalNode;
 };
 
 TEST_F(IndexTest, InsertStringKey) {
@@ -79,8 +77,8 @@ TEST_F(IndexTest, RemoveChild) {
 
 TEST_F(IndexTest, LeafNodeLinkedList) {
 	// Test leaf node linked list structure
-	Index leafNode1(1, Index::NodeType::LEAF, 0);
-	Index leafNode2(2, Index::NodeType::LEAF, 0);
+	graph::Index leafNode1(1, graph::Index::NodeType::LEAF, 0);
+	graph::Index leafNode2(2, graph::Index::NodeType::LEAF, 0);
 
 	leafNode1.setNextLeafId(leafNode2.getId());
 	leafNode2.setPrevLeafId(leafNode1.getId());
@@ -118,7 +116,7 @@ TEST_F(IndexTest, Serialization) {
 	leafNode.serialize(os);
 
 	std::istringstream is(os.str());
-	auto deserializedNode = Index::deserialize(is);
+	auto deserializedNode = graph::Index::deserialize(is);
 
 	auto values = deserializedNode.findStringValues("key1");
 	ASSERT_EQ(values.size(), 1);
@@ -129,19 +127,19 @@ TEST_F(IndexTest, Serialization) {
 }
 
 TEST_F(IndexTest, Constants) {
-	EXPECT_EQ(Index::getTotalSize(), 256u);
-	EXPECT_EQ(Index::TOTAL_INDEX_SIZE, 256u);
+	EXPECT_EQ(graph::Index::getTotalSize(), 256u);
+	EXPECT_EQ(graph::Index::TOTAL_INDEX_SIZE, 256u);
 
 	size_t expectedMetadataSize = 0;
 	expectedMetadataSize += sizeof(int64_t) * 5;
 	expectedMetadataSize += sizeof(uint32_t) * 3;
 	expectedMetadataSize += sizeof(uint8_t);
-	expectedMetadataSize += sizeof(Index::NodeType);
-	expectedMetadataSize += sizeof(Index::DataStorageType);
+	expectedMetadataSize += sizeof(graph::Index::NodeType);
+	expectedMetadataSize += sizeof(graph::Index::DataStorageType);
 	expectedMetadataSize += sizeof(bool);
 
 	// Or use the macro as in the header:
-	EXPECT_EQ(Index::METADATA_SIZE, expectedMetadataSize);
-	EXPECT_EQ(Index::DATA_SIZE, Index::TOTAL_INDEX_SIZE - Index::METADATA_SIZE);
-	EXPECT_EQ(Index::typeId, static_cast<uint32_t>(graph::EntityType::Index));
+	EXPECT_EQ(graph::Index::METADATA_SIZE, expectedMetadataSize);
+	EXPECT_EQ(graph::Index::DATA_SIZE, graph::Index::TOTAL_INDEX_SIZE - graph::Index::METADATA_SIZE);
+	EXPECT_EQ(graph::Index::typeId, static_cast<uint32_t>(graph::EntityType::Index));
 }

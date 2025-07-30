@@ -19,7 +19,7 @@
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 
-namespace graph::storage {
+namespace graph {
 
 	Index::Index(const int64_t id, NodeType type, const uint32_t indexType) {
 		metadata.id = id;
@@ -42,7 +42,7 @@ namespace graph::storage {
 		return getDataStorageType() == DataStorageType::BLOB_CHAIN && getBlobId() != 0;
 	}
 
-	void Index::storeDataInBlob(const std::shared_ptr<DataManager> &dataManager, const std::string &data) {
+	void Index::storeDataInBlob(const std::shared_ptr<storage::DataManager> &dataManager, const std::string &data) {
 		if (!dataManager) {
 			throw std::runtime_error("DataManager is required for blob storage operations");
 		}
@@ -77,7 +77,7 @@ namespace graph::storage {
 		std::memset(dataBuffer, 0, DATA_SIZE);
 	}
 
-	std::string Index::retrieveDataFromBlob(const std::shared_ptr<DataManager> &dataManager) const {
+	std::string Index::retrieveDataFromBlob(const std::shared_ptr<storage::DataManager> &dataManager) const {
 		if (!hasBlobStorage()) {
 			return {dataBuffer, DATA_SIZE};
 		}
@@ -135,7 +135,7 @@ namespace graph::storage {
 	}
 
 	// Update getAllKeyValues to handle blob storage
-	std::vector<Index::KeyValuePair> Index::getAllKeyValues(const std::shared_ptr<DataManager> &dataManager) const {
+	std::vector<Index::KeyValuePair> Index::getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const {
 		if (metadata.nodeType != NodeType::LEAF) {
 			return {}; // Only leaf nodes store key-values
 		}
@@ -186,7 +186,7 @@ namespace graph::storage {
 
 	// Update setAllKeyValues to handle blob storage
 	void Index::setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
-								const std::shared_ptr<DataManager> &dataManager) {
+								const std::shared_ptr<storage::DataManager> &dataManager) {
 		if (metadata.nodeType != NodeType::LEAF) {
 			return; // Only leaf nodes store key-values
 		}

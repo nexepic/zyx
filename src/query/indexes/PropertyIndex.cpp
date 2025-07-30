@@ -143,7 +143,7 @@ namespace graph::query::indexes {
 			for (auto& rootId : rootMap | std::views::values) {
 			    if (rootId < 0) {
 			        rootId = StateRegistry::getDataManager()->getIdAllocator()->allocatePermanentId(
-			                rootId, storage::Index::typeId, false);
+			                rootId, Index::typeId, false);
 			    }
 			}
 		};

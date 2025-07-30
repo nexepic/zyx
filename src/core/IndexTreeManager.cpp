@@ -25,7 +25,7 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 
 		// Create a new root node as a leaf
-		return createNewNode(storage::Index::NodeType::LEAF);
+		return createNewNode(Index::NodeType::LEAF);
 	}
 
 	void IndexTreeManager::clear(const int64_t rootId) const {
@@ -40,7 +40,7 @@ namespace graph::query::indexes {
 				auto entity = dataManager_->getIndex(toDelete[i]);
 
 				// If it's an internal node, add all children to the queue
-				if (entity.getNodeType() == storage::Index::NodeType::INTERNAL) {
+				if (entity.getNodeType() == Index::NodeType::INTERNAL) {
 					auto children = entity.getAllChildren();
 					for (const auto childId: children | std::views::values) {
 						toDelete.push_back(childId);
@@ -52,15 +52,15 @@ namespace graph::query::indexes {
 		}
 
 		// // Create a new root node
-		// return createNewNode(storage::Index::NodeType::LEAF);
+		// return createNewNode(Index::NodeType::LEAF);
 	}
 
-	int64_t IndexTreeManager::createNewNode(storage::Index::NodeType type) const {
+	int64_t IndexTreeManager::createNewNode(Index::NodeType type) const {
 		// Allocate ID for new node
 		int64_t id = dataManager_->reserveTemporaryIndexId();
 
 		// Create node
-		storage::Index entity(id, type, indexType_);
+		Index entity(id, type, indexType_);
 
 		// Save it
 		dataManager_->addIndexEntity(entity);
@@ -97,7 +97,7 @@ namespace graph::query::indexes {
 		return ""; // Should never reach here
 	}
 
-	void IndexTreeManager::setEntityKey(storage::Index &entity, const KeyType &key, int64_t childOrValue) {
+	void IndexTreeManager::setEntityKey(Index &entity, const KeyType &key, int64_t childOrValue) {
 		if (entity.isLeaf()) {
 			// For leaf nodes, insert values
 			entity.insertStringKey(std::get<std::string>(key), childOrValue);
@@ -107,7 +107,7 @@ namespace graph::query::indexes {
 		}
 	}
 
-	std::vector<int64_t> IndexTreeManager::getEntityValues(const storage::Index &entity, const KeyType &key) {
+	std::vector<int64_t> IndexTreeManager::getEntityValues(const Index &entity, const KeyType &key) {
 		if (!entity.isLeaf()) {
 			return {}; // Only leaf nodes store values
 		}
@@ -117,7 +117,7 @@ namespace graph::query::indexes {
 	}
 
 	std::vector<IndexTreeManager::KeyValueEntry>
-	IndexTreeManager::getAllKeyValuesFromNode(const storage::Index &node) const {
+	IndexTreeManager::getAllKeyValuesFromNode(const Index &node) const {
 		std::vector<KeyValueEntry> result;
 
 		if (!node.isLeaf()) {
@@ -140,18 +140,18 @@ namespace graph::query::indexes {
 		return result;
 	}
 
-	void IndexTreeManager::setAllKeyValuesToNode(storage::Index &node,
+	void IndexTreeManager::setAllKeyValuesToNode(Index &node,
 												 const std::vector<KeyValueEntry> &entries) const {
 		if (!node.isLeaf()) {
 			return; // Only applies to leaf nodes
 		}
 
 		// Prepare entries for string keys
-		std::vector<storage::Index::KeyValuePair> stringEntries;
+		std::vector<Index::KeyValuePair> stringEntries;
 
 		for (const auto &entry: entries) {
 			if (std::holds_alternative<std::string>(entry.key)) {
-				storage::Index::KeyValuePair kv;
+				Index::KeyValuePair kv;
 				kv.key = std::get<std::string>(entry.key);
 				kv.values = entry.values;
 				stringEntries.push_back(kv);
@@ -171,7 +171,7 @@ namespace graph::query::indexes {
 		auto current = dataManager_->getIndex(currentId);
 
 		// Traverse down to leaf
-		while (current.getNodeType() == storage::Index::NodeType::INTERNAL) {
+		while (current.getNodeType() == Index::NodeType::INTERNAL) {
 			int64_t childId = 0;
 
 			// Find appropriate child based on string key
@@ -211,7 +211,7 @@ namespace graph::query::indexes {
 		auto leaf = dataManager_->getIndex(leafId);
 
 		// Create a new leaf
-		int64_t newLeafId = createNewNode(storage::Index::NodeType::LEAF);
+		int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
 		auto newLeaf = dataManager_->getIndex(newLeafId);
 
 		// Get all key-value pairs
@@ -292,7 +292,7 @@ namespace graph::query::indexes {
 
 		// If this is the root, create a new root
 		if (node.getParentId() == 0) {
-			int64_t createdNewRootId = createNewNode(storage::Index::NodeType::INTERNAL);
+			int64_t createdNewRootId = createNewNode(Index::NodeType::INTERNAL);
 			auto newRoot = dataManager_->getIndex(createdNewRootId);
 
 			// First child gets empty key (will match everything less than the split key)
@@ -334,7 +334,7 @@ namespace graph::query::indexes {
 		// Parent is full, need to split the internal node
 
 		// 1. Create a new internal node
-		int64_t newParentId = createNewNode(storage::Index::NodeType::INTERNAL);
+		int64_t newParentId = createNewNode(Index::NodeType::INTERNAL);
 		auto newParent = dataManager_->getIndex(newParentId);
 
 		// 2. Get all children from parent and prepare for splitting
