@@ -42,6 +42,12 @@ namespace graph::query::indexes {
 		bool buildLabelIndex() const;
 		bool buildPropertyIndex(const std::string &key) const;
 
+		// Get node ID ranges from segments for efficient batch processing
+		[[nodiscard]] std::vector<std::pair<int64_t, int64_t>> getNodeIdRanges() const;
+
+		// Get edge ID ranges from segments for efficient batch processing
+		[[nodiscard]] std::vector<std::pair<int64_t, int64_t>> getEdgeIdRanges() const;
+
 	private:
 		// Batch size for processing nodes/edges
 		static constexpr size_t BATCH_SIZE = 10000;
@@ -60,11 +66,6 @@ namespace graph::query::indexes {
 		void processEdgeBatch(const std::vector<int64_t> &edgeIds,
 							  const std::shared_ptr<RelationshipIndex> &relationshipIndex) const;
 
-		// Get node ID ranges from segments for efficient batch processing
-		[[nodiscard]] std::vector<std::pair<int64_t, int64_t>> getNodeIdRanges() const;
-
-		// Get edge ID ranges from segments for efficient batch processing
-		[[nodiscard]] std::vector<std::pair<int64_t, int64_t>> getEdgeIdRanges() const;
 	};
 
 } // namespace graph::query::indexes

@@ -208,6 +208,7 @@ namespace graph::query::indexes {
 		}
 	}
 
+	// TODO: Move these to a more appropriate place, like SegmentTracker or DataManager
 	std::vector<std::pair<int64_t, int64_t>> IndexBuilder::getNodeIdRanges() const {
 		std::vector<std::pair<int64_t, int64_t>> ranges;
 

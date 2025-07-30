@@ -16,9 +16,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/Database.hpp"
-#define private public
 #include "graph/query/indexes/IndexBuilder.hpp"
-#undef private
 #include "graph/query/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 
