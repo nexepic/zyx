@@ -10,13 +10,13 @@
 
 #pragma once
 
-#include <memory>
-#include <vector>
 #include <functional>
+#include <memory>
 #include <string>
+#include <vector>
 #include "graph/core/Node.hpp"
-#include "graph/traversal/RelationshipTraversal.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::query {
 

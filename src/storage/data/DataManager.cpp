@@ -315,6 +315,23 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
+	std::vector<DirtyEntityInfo<EntityType>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types) {
+		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
+		std::vector<DirtyEntityInfo<EntityType>> result;
+		result.reserve(dirtyMap.size()); // Reserve space for potential efficiency gain
+
+		for (const auto &[id, info]: dirtyMap) {
+			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
+				// Push the entire DirtyEntityInfo struct, which includes the changeType and backup
+				result.push_back(info);
+			}
+		}
+
+		return result;
+	}
+
+	template<typename EntityType>
 	std::vector<EntityType> DataManager::getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types) {
 		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
 		std::vector<EntityType> result;
@@ -630,6 +647,8 @@ namespace graph::storage {
 	template void DataManager::updateEntity<Node>(const Node &entity);
 	template std::vector<Node> DataManager::getEntitiesInRange<Node>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Node>(int64_t id) const;
+	template std::vector<DirtyEntityInfo<Node>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
 	template std::vector<Node>
 	DataManager::getDirtyEntitiesWithChangeTypes<Node>(const std::vector<EntityChangeType> &);
 	template std::optional<Node> DataManager::getEntityFromDirty<Node>(int64_t id);
@@ -649,6 +668,8 @@ namespace graph::storage {
 	template void DataManager::updateEntity<Edge>(const Edge &entity);
 	template std::vector<Edge> DataManager::getEntitiesInRange<Edge>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Edge>(int64_t id) const;
+	template std::vector<DirtyEntityInfo<Edge>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
 	template std::vector<Edge>
 	DataManager::getDirtyEntitiesWithChangeTypes<Edge>(const std::vector<EntityChangeType> &);
 	template std::optional<Edge> DataManager::getEntityFromDirty<Edge>(int64_t id);
@@ -667,6 +688,8 @@ namespace graph::storage {
 	template Property DataManager::getEntityFromMemoryOrDisk<Property>(int64_t id);
 	template std::vector<Property> DataManager::getEntitiesInRange<Property>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Property>(int64_t id) const;
+	template std::vector<DirtyEntityInfo<Property>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
 	template std::vector<Property>
 	DataManager::getDirtyEntitiesWithChangeTypes<Property>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<Property>(Property &entity);
@@ -675,6 +698,8 @@ namespace graph::storage {
 	template Blob DataManager::getEntityFromMemoryOrDisk<Blob>(int64_t id);
 	template std::vector<Blob> DataManager::getEntitiesInRange<Blob>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Blob>(int64_t id) const;
+	template std::vector<DirtyEntityInfo<Blob>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
 	template std::vector<Blob>
 	DataManager::getDirtyEntitiesWithChangeTypes<Blob>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<Blob>(Blob &entity);
@@ -683,6 +708,8 @@ namespace graph::storage {
 	template Index DataManager::getEntityFromMemoryOrDisk<Index>(int64_t id);
 	template std::vector<Index> DataManager::getEntitiesInRange<Index>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Index>(int64_t id) const;
+	template std::vector<DirtyEntityInfo<Index>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
 	template std::vector<Index>
 	DataManager::getDirtyEntitiesWithChangeTypes<Index>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<Index>(Index &entity);
@@ -691,6 +718,8 @@ namespace graph::storage {
 	template State DataManager::getEntityFromMemoryOrDisk<State>(int64_t id);
 	template std::vector<State> DataManager::getEntitiesInRange<State>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<State>(int64_t id) const;
+	template std::vector<DirtyEntityInfo<State>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
 	template std::vector<State>
 	DataManager::getDirtyEntitiesWithChangeTypes<State>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<State>(State &entity);

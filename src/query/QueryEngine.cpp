@@ -19,7 +19,7 @@ namespace graph::query {
 		indexManager_->initialize();
 
 		queryPlanner_ = std::make_unique<QueryPlanner>(indexManager_);
-		queryExecutor_ = std::make_unique<QueryExecutor>(indexManager_, storage_);
+		queryExecutor_ = std::make_unique<QueryExecutor>(indexManager_, storage_->getDataManager());
 		traversalQuery_ = std::make_shared<TraversalQuery>(storage_->getDataManager());
 	}
 

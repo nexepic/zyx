@@ -13,22 +13,23 @@
 #include <memory>
 #include "QueryPlanner.hpp"
 #include "QueryResult.hpp"
+#include "UnifiedQueryView.hpp"
 #include "indexes/IndexManager.hpp"
-#include "graph/storage/FileStorage.hpp"
 
 namespace graph::query {
 
 	class QueryExecutor {
 	public:
 		QueryExecutor(std::shared_ptr<indexes::IndexManager> indexManager,
-					 std::shared_ptr<storage::FileStorage> storage);
+					 std::shared_ptr<storage::DataManager> dataManager);
 
 		// Execute a query plan and return the result
 		QueryResult execute(const QueryPlan& plan) const;
 
 	private:
 		std::shared_ptr<indexes::IndexManager> indexManager_;
-		std::shared_ptr<storage::FileStorage> storage_;
+		std::shared_ptr<storage::DataManager> dataManager_;
+		std::unique_ptr<UnifiedQueryView> unifiedQueryView_;
 
 		// Helper methods for different operation types
 		QueryResult executeLabelScan(const QueryPlan& plan) const;

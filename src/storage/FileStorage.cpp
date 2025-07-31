@@ -599,6 +599,7 @@ namespace graph::storage {
 		segmentTracker->flushDirtySegments();
 	}
 
+	// TODO: Subsequent flush operations should be executed in a queue
 	void FileStorage::flush() {
 		// Acquire lock to ensure atomic operation
 		std::unique_lock<std::mutex> lock(flushMutex, std::try_to_lock);
@@ -793,41 +794,6 @@ namespace graph::storage {
 		return edge;
 	}
 
-	std::vector<Node> FileStorage::getNodes(const std::vector<int64_t> &ids) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->getNodeBatch(ids);
-	}
-
-	std::vector<Edge> FileStorage::getEdges(const std::vector<int64_t> &ids) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->getEdgeBatch(ids);
-	}
-
-	std::vector<Node> FileStorage::getNodesInRange(int64_t startId, int64_t endId, size_t limit) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->getNodesInRange(startId, endId, limit);
-	}
-
-	std::vector<Edge> FileStorage::getEdgesInRange(int64_t startId, int64_t endId, size_t limit) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->getEdgesInRange(startId, endId, limit);
-	}
-
-	std::vector<Edge> FileStorage::findEdgesByNode(int64_t nodeId, const std::string &direction) {
-		if (!isFileOpen) {
-			open();
-		}
-		return dataManager->findEdgesByNode(nodeId, direction);
-	}
-
 	std::unordered_map<std::string, PropertyValue> FileStorage::getNodeProperties(int64_t nodeId) {
 		if (!isFileOpen) {
 			open();
@@ -859,30 +825,30 @@ namespace graph::storage {
 	}
 
 	Edge FileStorage::insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const {
-	    if (!isFileOpen) {
-	        throw std::runtime_error("Database must be open before inserting data");
-	    }
+		if (!isFileOpen) {
+			throw std::runtime_error("Database must be open before inserting data");
+		}
 
-	    Node fromNode = dataManager->getNode(from);
-	    Node toNode = dataManager->getNode(to);
+		Node fromNode = dataManager->getNode(from);
+		Node toNode = dataManager->getNode(to);
 
-	    if (!fromNode.isActive() || !toNode.isActive()) {
-	        throw std::runtime_error("Cannot create edge between inactive or non-existent nodes");
-	    }
+		if (!fromNode.isActive() || !toNode.isActive()) {
+			throw std::runtime_error("Cannot create edge between inactive or non-existent nodes");
+		}
 
-	    // Check for existing edge first
-	    auto existingEdges = dataManager->findEdgesByNode(from, "outgoing");
-	    for (const auto& edge : existingEdges) {
-	        if (edge.getTargetNodeId() == to && edge.getLabel() == label && edge.isActive()) {
-	            return edge; // Return existing edge
-	        }
-	    }
+		// Check for existing edge first
+		auto existingEdges = dataManager->findEdgesByNode(from, "outgoing");
+		for (const auto &edge: existingEdges) {
+			if (edge.getTargetNodeId() == to && edge.getLabel() == label && edge.isActive()) {
+				return edge; // Return existing edge
+			}
+		}
 
-	    // Create new edge if none exists
-	    int64_t tempId = dataManager->reserveTemporaryEdgeId();
-	    Edge edge(tempId, from, to, label);
-	    dataManager->addEdge(edge);
-	    return edge;
+		// Create new edge if none exists
+		int64_t tempId = dataManager->reserveTemporaryEdgeId();
+		Edge edge(tempId, from, to, label);
+		dataManager->addEdge(edge);
+		return edge;
 	}
 
 	void FileStorage::insertProperties(int64_t entityId, uint32_t entityType,

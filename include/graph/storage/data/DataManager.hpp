@@ -168,6 +168,9 @@ namespace graph::storage {
 		static void flushToDisk(std::fstream &file);
 
 		template<typename EntityType>
+		std::vector<DirtyEntityInfo<EntityType>> getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
+
+		template<typename EntityType>
 		std::vector<EntityType> getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types);
 
 		// Auto-flush configuration

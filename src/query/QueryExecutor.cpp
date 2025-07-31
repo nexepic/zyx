@@ -15,8 +15,8 @@
 namespace graph::query {
 
 	QueryExecutor::QueryExecutor(std::shared_ptr<indexes::IndexManager> indexManager,
-								 std::shared_ptr<storage::FileStorage> storage) :
-		indexManager_(std::move(indexManager)), storage_(std::move(storage)) {}
+								 std::shared_ptr<storage::DataManager> dataManager) :
+		indexManager_(std::move(indexManager)), dataManager_(std::move(dataManager)) {}
 
 	QueryResult QueryExecutor::execute(const QueryPlan &plan) const {
 		switch (plan.getType()) {
@@ -67,11 +67,16 @@ namespace graph::query {
 		// Find nodes by label using the index
 		auto nodeIds = indexManager_->findNodeIdsByLabel(label);
 
+		unifiedQueryView_->mergeDirtyEntities<Node>(nodeIds,
+			[&](const Node &node) { return node.getLabel() == label; }
+		);
+
 		// Retrieve the actual nodes
-		auto fetchedNodes = storage_->getNodes(nodeIds);
-		for (auto &node: fetchedNodes) {
-			// node.getId() can be checked if needed
-			result.addNode(node);
+		if (!nodeIds.empty()) {
+			auto fetchedNodes = dataManager_->getNodeBatch(nodeIds);
+			for (const auto &node: fetchedNodes) {
+				result.addNode(node);
+			}
 		}
 
 		return result;
@@ -95,10 +100,24 @@ namespace graph::query {
 		// Find nodes by property using the index
 		auto nodeIds = indexManager_->findNodeIdsByProperty(key, value);
 
+		unifiedQueryView_->mergeDirtyEntities<Node>(nodeIds,
+			[&](const Node &node) {
+				// To check properties, we must ask the DataManager, as properties are linked.
+				auto properties = dataManager_->getNodeProperties(node.getId());
+				auto propIt = properties.find(key);
+				if (propIt != properties.end() && std::holds_alternative<std::string>(propIt->second)) {
+					return std::get<std::string>(propIt->second) == value;
+				}
+				return false;
+			}
+		);
+
 		// Retrieve the actual nodes
-		auto fetchedNodes = storage_->getNodes(nodeIds);
-		for (auto &node: fetchedNodes) {
-			result.addNode(node);
+		if (!nodeIds.empty()) {
+			auto fetchedNodes = dataManager_->getNodeBatch(nodeIds);
+			for (const auto &node: fetchedNodes) {
+				result.addNode(node);
+			}
 		}
 
 		return result;
@@ -109,39 +128,43 @@ namespace graph::query {
 
 		// Get parameters
 		const auto &params = plan.getStringParams();
-		auto labelIt = params.find("label");
-		auto keyIt = params.find("key");
-		auto valueIt = params.find("value");
-
-		if (labelIt == params.end() || keyIt == params.end() || valueIt == params.end()) {
-			return result; // Missing parameters
-		}
-
-		const std::string &label = labelIt->second;
-		const std::string &key = keyIt->second;
-		const std::string &value = valueIt->second;
+		const std::string &label = params.at("label");
+		const std::string &key = params.at("key");
+		const std::string &value = params.at("value");
 
 		// Find nodes by label and property using the indexes
 		// Use the smaller set for iteration and filtering
 		auto labelNodeIds = indexManager_->findNodeIdsByLabel(label);
 		auto propertyNodeIds = indexManager_->findNodeIdsByProperty(key, value);
 
-		// Use set intersection approach for optimization
-		if (labelNodeIds.size() > propertyNodeIds.size()) {
-			std::swap(labelNodeIds, propertyNodeIds);
-		}
-
-		std::vector<int64_t> intersection;
-		for (int64_t nodeId: labelNodeIds) {
-			if (std::ranges::find(propertyNodeIds, nodeId) != propertyNodeIds.end()) {
-				intersection.push_back(nodeId);
+		// Intersect the results from the two indexes first for efficiency.
+		std::vector<int64_t> initialIds;
+		std::unordered_set propertySet(propertyNodeIds.begin(), propertyNodeIds.end());
+		for (int64_t id : labelNodeIds) {
+			if (propertySet.contains(id)) {
+				initialIds.push_back(id);
 			}
 		}
 
+		unifiedQueryView_->mergeDirtyEntities<Node>(initialIds,
+			[&](const Node &node) {
+				if (node.getLabel() != label) return false;
+
+				auto properties = dataManager_->getNodeProperties(node.getId());
+				auto propIt = properties.find(key);
+				if (propIt != properties.end() && std::holds_alternative<std::string>(propIt->second)) {
+					return std::get<std::string>(propIt->second) == value;
+				}
+				return false;
+			}
+		);
+
 		// Retrieve the actual nodes
-		auto fetchedNodes = storage_->getNodes(intersection);
-		for (auto &node: fetchedNodes) {
-			result.addNode(node);
+		if (!initialIds.empty()) {
+			auto fetchedNodes = dataManager_->getNodeBatch(initialIds);
+			for (const auto &node: fetchedNodes) {
+				result.addNode(node);
+			}
 		}
 
 		return result;
@@ -170,7 +193,7 @@ namespace graph::query {
 		auto nodeIds = indexManager_->findNodeIdsByPropertyRange(key, minValue, maxValue);
 
 		// Retrieve the actual nodes
-		auto fetchedNodes = storage_->getNodes(nodeIds);
+		auto fetchedNodes = dataManager_->getNodeBatch(nodeIds);
 		for (auto &node: fetchedNodes) {
 			result.addNode(node);
 		}
@@ -197,7 +220,7 @@ namespace graph::query {
 		auto nodeIds = indexManager_->findNodeIdsByTextSearch(key, searchText);
 
 		// Retrieve the actual nodes
-		auto fetchedNodes = storage_->getNodes(nodeIds);
+		auto fetchedNodes = dataManager_->getNodeBatch(nodeIds);
 		for (auto &node: fetchedNodes) {
 			result.addNode(node);
 		}
@@ -242,7 +265,7 @@ namespace graph::query {
 		edgeIds.erase(std::ranges::unique(edgeIds).begin(), edgeIds.end());
 
 		// Retrieve the actual edges
-		auto fetchedEdges = storage_->getEdges(edgeIds);
+		auto fetchedEdges = dataManager_->getEdgeBatch(edgeIds);
 		// Convert them to a map if we need fast lookups
 		std::unordered_map<int64_t, Edge> edgeMap;
 		edgeMap.reserve(fetchedEdges.size());
@@ -260,7 +283,7 @@ namespace graph::query {
 					std::vector<int64_t> neededIds;
 					neededIds.push_back(it->second.getSourceNodeId());
 					neededIds.push_back(it->second.getTargetNodeId());
-					auto connectedNodes = storage_->getNodes(neededIds);
+					auto connectedNodes = dataManager_->getNodeBatch(neededIds);
 					for (auto &node: connectedNodes) {
 						result.addNode(node);
 					}
@@ -301,9 +324,9 @@ namespace graph::query {
 			nodeLabel = nodeLabelIt->second;
 		}
 
+		// TODO: Create traversalQuery once
 		// Create TraversalQuery and execute traversal
-		auto dataManager = storage_->getDataManager();
-		const auto traversalQuery = std::make_shared<TraversalQuery>(dataManager);
+		const auto traversalQuery = std::make_shared<TraversalQuery>(dataManager_);
 
 		for (const auto nodes = traversalQuery->findConnectedNodes(startNodeId, direction, edgeLabel, nodeLabel);
 			 const auto &node: nodes) {
@@ -342,8 +365,7 @@ namespace graph::query {
 		}
 
 		// Create TraversalQuery and execute shortest path
-		auto dataManager = storage_->getDataManager();
-		auto traversalQuery = std::make_shared<TraversalQuery>(dataManager);
+		auto traversalQuery = std::make_shared<TraversalQuery>(dataManager_);
 
 		auto pathNodes = traversalQuery->findShortestPath(startNodeId, endNodeId, direction);
 		for (const auto &node: pathNodes) {
@@ -357,12 +379,12 @@ namespace graph::query {
 		QueryResult result;
 
 		// Get maximum node ID to determine scan range
-		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
 		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
 
 		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
 			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
-			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+			auto nodes = dataManager_->getNodesInRange(startId, endId);
 
 			for (auto &node: nodes) {
 				result.addNode(node);
@@ -385,12 +407,12 @@ namespace graph::query {
 		const std::string &label = it->second;
 
 		// Get maximum node ID to determine scan range
-		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
 		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
 
 		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
 			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
-			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+			auto nodes = dataManager_->getNodesInRange(startId, endId);
 
 			for (auto &node: nodes) {
 				if (node.getLabel() == label) {
@@ -418,15 +440,15 @@ namespace graph::query {
 		const std::string &value = valueIt->second;
 
 		// Get maximum node ID to determine scan range
-		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
 		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
 
 		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
 			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
-			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+			auto nodes = dataManager_->getNodesInRange(startId, endId);
 
 			for (auto &node: nodes) {
-				auto properties = storage_->getDataManager()->getNodeProperties(node.getId());
+				auto properties = dataManager_->getNodeProperties(node.getId());
 				auto propIt = properties.find(key);
 
 				if (propIt != properties.end() && (std::holds_alternative<std::string>(propIt->second) &&
@@ -457,17 +479,17 @@ namespace graph::query {
 		const std::string &value = valueIt->second;
 
 		// Get maximum node ID to determine scan range
-		int64_t maxNodeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxNodeId();
+		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
 		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
 
 		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
 			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
-			auto nodes = storage_->getDataManager()->getNodesInRange(startId, endId);
+			auto nodes = dataManager_->getNodesInRange(startId, endId);
 
 			for (auto &node: nodes) {
 				// Check label first (cheaper operation)
 				if (node.getLabel() == label) {
-					auto properties = storage_->getDataManager()->getNodeProperties(node.getId());
+					auto properties = dataManager_->getNodeProperties(node.getId());
 					auto propIt = properties.find(key);
 
 					if (propIt != properties.end() && (std::holds_alternative<std::string>(propIt->second) &&
@@ -502,14 +524,14 @@ namespace graph::query {
 		std::string direction = (directionIt != stringParams.end()) ? directionIt->second : "outgoing";
 
 		// Get maximum edge ID to determine scan range
-		const int64_t maxEdgeId = storage_->getDataManager()->getIdAllocator()->getCurrentMaxEdgeId();
+		const int64_t maxEdgeId = dataManager_->getIdAllocator()->getCurrentMaxEdgeId();
 		// TODO: Fix hardcoded batch size
 		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
 
 		for (int64_t startId = 1; startId <= maxEdgeId; startId += BATCH_SIZE) {
 			const int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxEdgeId);
 
-			for (auto edges = storage_->getDataManager()->getEdgesInRange(startId, endId); auto &edge: edges) {
+			for (auto edges = dataManager_->getEdgesInRange(startId, endId); auto &edge: edges) {
 				bool directionMatch = false;
 
 				// Check direction and connected node
@@ -528,7 +550,7 @@ namespace graph::query {
 						std::vector<int64_t> neededIds;
 						neededIds.push_back(edge.getSourceNodeId());
 						neededIds.push_back(edge.getTargetNodeId());
-						auto connectedNodes = storage_->getNodes(neededIds);
+						auto connectedNodes = dataManager_->getNodeBatch(neededIds);
 						for (auto &node: connectedNodes) {
 							result.addNode(node);
 						}

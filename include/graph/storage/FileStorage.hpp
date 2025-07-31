@@ -77,17 +77,8 @@ namespace graph::storage {
 		// Get a single edge by ID (uses cache)
 		Edge getEdge(int64_t id);
 
-		// Batch operations
-		std::vector<Node> getNodes(const std::vector<int64_t> &ids);
-		std::vector<Edge> getEdges(const std::vector<int64_t> &ids);
-
 		std::unordered_map<int64_t, Node> getAllNodes();
 		std::unordered_map<int64_t, Edge> getAllEdges();
-
-		// Query-specific loading methods
-		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
-		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000);
-		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both");
 
 		template<typename T>
 		void updateEntityInPlace(const T &entity);
