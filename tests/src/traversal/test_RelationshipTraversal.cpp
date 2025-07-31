@@ -172,18 +172,18 @@ TEST_F(RelationshipTraversalTest, SelfReferencingEdge) {
 }
 
 TEST_F(RelationshipTraversalTest, CycleDetectionThrowsExceptionOnTraversal) {
-    // Step 1: Get the latest state of the edge and call linkEdge again to intentionally create a cycle.
-    // We expect this call to succeed because it only writes data, not traverses.
-    auto edgeToCreateCycleWith = dataManager->getEdge(edge.getId());
-    // Use EXPECT_NO_THROW to explicitly indicate that we do not expect an exception here.
-    EXPECT_NO_THROW(traversal->linkEdge(edgeToCreateCycleWith));
+	// Step 1: Get the latest state of the edge and call linkEdge again to intentionally create a cycle.
+	// We expect this call to succeed because it only writes data, not traverses.
+	auto edgeToCreateCycleWith = dataManager->getEdge(edge.getId());
+	// Use EXPECT_NO_THROW to explicitly indicate that we do not expect an exception here.
+	EXPECT_NO_THROW(traversal->linkEdge(edgeToCreateCycleWith));
 
-    // Step 2: Now, try to traverse the corrupted, cyclic linked list.
-    // This getOutgoingEdges call should detect the cycle and throw an exception.
-    ASSERT_THROW(traversal->getOutgoingEdges(node1.getId()), std::runtime_error);
+	// Step 2: Now, try to traverse the corrupted, cyclic linked list.
+	// This getOutgoingEdges call should detect the cycle and throw an exception.
+	ASSERT_THROW(traversal->getOutgoingEdges(node1.getId()), std::runtime_error);
 
-    // You can also verify the same for incoming edges
-    ASSERT_THROW(traversal->getIncomingEdges(node2.getId()), std::runtime_error);
+	// You can also verify the same for incoming edges
+	ASSERT_THROW(traversal->getIncomingEdges(node2.getId()), std::runtime_error);
 }
 
 // A new Test Fixture for more complex scenarios involving multiple edges
@@ -296,4 +296,73 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInChain) {
 	// Verify the new last edge in the list (edge11) has no next edge
 	auto newLastEdge = dataManager->getEdge(edge11.getId());
 	EXPECT_EQ(newLastEdge.getNextOutEdgeId(), 0);
+}
+
+TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
+	graph::Edge edge14(14, n1.getId(), n4.getId(), "links_to");
+	dataManager->addEdge(edge14);
+
+	graph::Edge edge24(24, n2.getId(), n4.getId(), "links_to");
+	dataManager->addEdge(edge24);
+
+	graph::Edge edge34(34, n3.getId(), n4.getId(), "links_to");
+	dataManager->addEdge(edge34);
+
+	auto initialInEdges = traversal->getIncomingEdges(n4.getId());
+	ASSERT_EQ(initialInEdges.size(), 3);
+	ASSERT_EQ(initialInEdges[0].getId(), edge34.getId());
+	ASSERT_EQ(initialInEdges[1].getId(), edge24.getId());
+	ASSERT_EQ(initialInEdges[2].getId(), edge14.getId());
+
+	// Remove the middle edge edge24.
+	auto edgeToUnlink = dataManager->getEdge(edge24.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	// a. Check the edges currently in the chain
+	auto finalInEdges = traversal->getIncomingEdges(n4.getId());
+	ASSERT_EQ(finalInEdges.size(), 2);
+	EXPECT_EQ(finalInEdges[0].getId(), edge34.getId()); // New head of the list
+	EXPECT_EQ(finalInEdges[1].getId(), edge14.getId()); // New tail of the list
+
+	// b. Key verification: check if the pointers are correctly reconnected
+	auto newFirstEdge = dataManager->getEdge(edge34.getId());
+	auto newSecondEdge = dataManager->getEdge(edge14.getId());
+
+	// Verify that `prevInEdge.setNextInEdgeId(nextInEdgeId)` succeeded
+	EXPECT_EQ(newFirstEdge.getNextInEdgeId(), newSecondEdge.getId());
+
+	// Verify that `nextInEdge.setPrevInEdgeId(prevInEdgeId)` succeeded
+	EXPECT_EQ(newSecondEdge.getPrevInEdgeId(), newFirstEdge.getId());
+}
+
+TEST(RelationshipTraversalLifetimeTest, HandlesExpiredDataManagerGracefully) {
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testFilePath = std::filesystem::temp_directory_path() / ("test_lifetime_" + to_string(uuid) + ".dat");
+
+	// 1. Create a DataManager whose lifetime we can fully control
+	auto database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	std::shared_ptr<graph::storage::DataManager> dataManager = database->getStorage()->getDataManager();
+
+	// 2. Create Traversal, whose internal weak_ptr now points to our DataManager
+	auto traversal = std::make_shared<graph::traversal::RelationshipTraversal>(dataManager);
+
+	// 3. Key step: destroy the DataManager.
+	// We reset the shared_ptr to bring the reference count to zero, triggering its destructor.
+	// Now, the weak_ptr inside traversal is expired (dangling).
+	dataManager.reset();
+	database->close();
+
+	// 4. Call methods on Traversal.
+	// Inside these methods, `dataManager_.lock()` will fail and return a null pointer.
+	// We expect these calls to complete safely, throw no exceptions, and return empty results.
+	std::vector<graph::Edge> outEdges;
+	EXPECT_NO_THROW(outEdges = traversal->getOutgoingEdges(123));
+	EXPECT_TRUE(outEdges.empty());
+
+	std::vector<graph::Node> connectedNodes;
+	EXPECT_NO_THROW(connectedNodes = traversal->getAllConnectedNodes(123));
+	EXPECT_TRUE(connectedNodes.empty());
+
+	std::filesystem::remove(testFilePath);
 }
