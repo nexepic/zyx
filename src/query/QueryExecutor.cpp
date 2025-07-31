@@ -16,7 +16,9 @@ namespace graph::query {
 
 	QueryExecutor::QueryExecutor(std::shared_ptr<indexes::IndexManager> indexManager,
 								 std::shared_ptr<storage::DataManager> dataManager) :
-		indexManager_(std::move(indexManager)), dataManager_(std::move(dataManager)) {}
+		indexManager_(std::move(indexManager)), dataManager_(std::move(dataManager)) {
+		unifiedQueryView_ = std::make_unique<UnifiedQueryView>(dataManager_);
+	}
 
 	QueryResult QueryExecutor::execute(const QueryPlan &plan) const {
 		switch (plan.getType()) {
@@ -57,12 +59,11 @@ namespace graph::query {
 
 		// Get parameters
 		const auto &params = plan.getStringParams();
-		auto it = params.find("label");
-		if (it == params.end()) {
-			return result; // No label specified
+		if (!params.contains("label")) {
+		    return result;
 		}
 
-		const std::string &label = it->second;
+		const std::string &label = params.at("label");
 
 		// Find nodes by label using the index
 		auto nodeIds = indexManager_->findNodeIdsByLabel(label);
@@ -399,12 +400,10 @@ namespace graph::query {
 
 		// Get parameters
 		const auto &params = plan.getStringParams();
-		auto it = params.find("label");
-		if (it == params.end()) {
-			return result; // No label specified
+		if (!params.contains("label")) {
+		    return result;
 		}
-
-		const std::string &label = it->second;
+		const std::string &label = params.at("label");
 
 		// Get maximum node ID to determine scan range
 		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
