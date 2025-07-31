@@ -52,32 +52,33 @@ protected:
 		//       ↑   ↓
 		//      11 → 12
 
-		// Reserve IDs for nodes
-		std::vector<int64_t> nodeIds;
-		nodeIds.reserve(12);
-		for (int i = 0; i < 12; ++i) {
-			nodeIds.push_back(dataManager->reserveTemporaryNodeId());
-		}
-
 		// Create nodes
-		node1 = graph::Node(nodeIds[0], "Node1");
-		node2 = graph::Node(nodeIds[1], "Node2");
-		node3 = graph::Node(nodeIds[2], "Node3");
-		node4 = graph::Node(nodeIds[3], "Node4");
-		node5 = graph::Node(nodeIds[4], "Node5");
-		node6 = graph::Node(nodeIds[5], "Node6");
-		node7 = graph::Node(nodeIds[6], "Node7");
-		node8 = graph::Node(nodeIds[7], "Node8");
-		node9 = graph::Node(nodeIds[8], "Node9");
-		node10 = graph::Node(nodeIds[9], "Node10");
-		node11 = graph::Node(nodeIds[10], "Node11");
-		node12 = graph::Node(nodeIds[11], "Node12");
+		node1 = graph::Node(0, "Node1");
+		node2 = graph::Node(0, "Node2");
+		node3 = graph::Node(0, "Node3");
+		node4 = graph::Node(0, "Node4");
+		node5 = graph::Node(0, "Node5");
+		node6 = graph::Node(0, "Node6");
+		node7 = graph::Node(0, "Node7");
+		node8 = graph::Node(0, "Node8");
+		node9 = graph::Node(0, "Node9");
+		node10 = graph::Node(0, "Node10");
+		node11 = graph::Node(0, "Node11");
+		node12 = graph::Node(0, "Node12");
 
 		// Add all nodes
-		std::vector nodes = {node1, node2, node3, node4, node5, node6, node7, node8, node9, node10, node11, node12};
-		for (const auto &node: nodes) {
-			dataManager->addNode(node);
-		}
+		dataManager->addNode(node1);
+		dataManager->addNode(node2);
+		dataManager->addNode(node3);
+		dataManager->addNode(node4);
+		dataManager->addNode(node5);
+		dataManager->addNode(node6);
+		dataManager->addNode(node7);
+		dataManager->addNode(node8);
+		dataManager->addNode(node9);
+		dataManager->addNode(node10);
+		dataManager->addNode(node11);
+		dataManager->addNode(node12);
 
 		// Create edges
 		std::vector<std::pair<int64_t, int64_t>> edgeConnections = {
@@ -101,11 +102,11 @@ protected:
 
 		edges.clear();
 		for (size_t i = 0; i < edgeConnections.size(); ++i) {
-			const int64_t edgeId = dataManager->reserveTemporaryEdgeId();
-			auto edge = graph::Edge(edgeId, edgeConnections[i].first, edgeConnections[i].second,
-									"edge" + std::to_string(i + 1));
+			auto edge =
+					graph::Edge(0, edgeConnections[i].first, edgeConnections[i].second, "edge" + std::to_string(i + 1));
+
+			dataManager->addEdge(edge);
 			edges.push_back(edge);
-			dataManager->addEdge(edges.back());
 		}
 	}
 
@@ -269,8 +270,7 @@ TEST_F(TraversalQueryTest, FindConnectedNodesBoth) {
 
 TEST_F(TraversalQueryTest, FindConnectedNodesWithEdgeLabel) {
 	// Add edge with specific label for testing
-	const int64_t edgeId = dataManager->reserveTemporaryEdgeId();
-	const auto labeledEdge = graph::Edge(edgeId, node6.getId(), node7.getId(), "special_edge");
+	auto labeledEdge = graph::Edge(0, node6.getId(), node7.getId(), "special_edge");
 	dataManager->addEdge(labeledEdge);
 
 	std::vector<graph::Node> connectedNodes =
@@ -294,8 +294,7 @@ TEST_F(TraversalQueryTest, FindConnectedNodesWithNodeLabel) {
 
 TEST_F(TraversalQueryTest, FindConnectedNodesWithBothLabels) {
 	// Add edge and node with specific labels
-	const int64_t edgeId = dataManager->reserveTemporaryEdgeId();
-	const auto labeledEdge = graph::Edge(edgeId, node1.getId(), node4.getId(), "test_edge");
+	auto labeledEdge = graph::Edge(0, node1.getId(), node4.getId(), "test_edge");
 	dataManager->addEdge(labeledEdge);
 
 	graph::Node labeledNode4(node4.getId(), "test_node");
@@ -365,5 +364,5 @@ TEST_F(TraversalQueryTest, FindConnectedNodesEmptyParameters) {
 	const std::unordered_set expectedIds = {node2.getId(), node3.getId()};
 	for (const auto &node: connectedNodes) {
 		EXPECT_TRUE(expectedIds.contains(node.getId()));
-    }
+	}
 }

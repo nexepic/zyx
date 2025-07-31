@@ -21,14 +21,13 @@ namespace graph::storage {
 					std::shared_ptr<DeletionManager> deletionManager);
 
 		// Override add to handle special edge creation logic (linking)
-		void add(const Edge &edge) override;
+		void add(Edge &edge) override;
 
 		// Edge-specific methods
-		std::vector<Edge> findByNode(int64_t nodeId, const std::string &direction = "both") const;
+		[[nodiscard]] std::vector<Edge> findByNode(int64_t nodeId, const std::string &direction = "both") const;
 
 	protected:
-		// Implement the abstract method for reserving IDs
-		int64_t doReserveTemporaryId() override;
+		int64_t doAllocateId() override;
 
 		void doRemove(Edge &edge) override;
 	};

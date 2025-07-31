@@ -42,6 +42,9 @@ namespace graph {
 
 		// Split into chunks
 		auto chunks = splitData(processedData);
+		if (chunks.empty()) {
+			return {};
+		}
 
 		// Create blob entities
 		std::vector<Blob> blobChain;
@@ -51,32 +54,33 @@ namespace graph {
 
 		// Create each blob in the chain
 		for (size_t i = 0; i < chunks.size(); i++) {
-			// Create new blob with temporary ID
-			int64_t tempId = dataManager_->reserveTemporaryBlobId();
-			Blob blob(tempId, chunks[i]);
+			// Create a new blob object for the current chunk
+			Blob currentBlob(0, chunks[i]);
 
-			// Set entity info
-			blob.setEntityInfo(entityId, entityType);
-
+			currentBlob.setEntityInfo(entityId, entityType);
 			// TODO: Decouple Index blob compression logic from BlobChainManager
-			// Set compression info - only set compressed flag for non-index blobs
-			blob.setCompressionInfo(data.size(), !isIndexBlob);
+			currentBlob.setCompressionInfo(data.size(), !isIndexBlob);
 
-			// Set chain position
-			blob.setChainPosition(static_cast<int32_t>(i));
+			currentBlob.setChainPosition(static_cast<int32_t>(i));
 
-			// Set previous blob ID
-			blob.setPrevBlobId(prevBlobId);
+			currentBlob.setPrevBlobId(prevBlobId);
 
-			// Add to chain
-			blobChain.push_back(blob);
+			dataManager_->addBlobEntity(currentBlob);
 
-			// Update previous blob's next pointer if not the first blob
 			if (i > 0) {
-				blobChain[i - 1].setNextBlobId(tempId);
+				// Get the previous blob from our local vector
+				Blob &prevBlob = blobChain.back();
+
+				// Set its `next_blob_id` to the new permanent ID of the current blob
+				prevBlob.setNextBlobId(currentBlob.getId());
+
+				// Since we modified `prevBlob` after it was added, we must update it
+				// in the DataManager. This will update the entity in the dirty map.
+				dataManager_->updateBlobEntity(prevBlob);
 			}
 
-			prevBlobId = tempId;
+			prevBlobId = currentBlob.getId();
+			blobChain.push_back(currentBlob);
 		}
 
 		return blobChain;

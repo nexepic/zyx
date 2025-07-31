@@ -11,13 +11,13 @@
 #include "graph/storage/data/PropertyManager.hpp"
 #include <sstream>
 #include "graph/core/Blob.hpp"
-#include "graph/core/BlobChainManager.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
+#include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/utils/Serializer.hpp"
 
@@ -171,7 +171,6 @@ namespace graph::storage {
 
 		// Create new property entity
 		Property property;
-		property.setId(dataManager->reserveTemporaryPropertyId());
 		property.setProperties(properties);
 
 		// Set entity reference on the property
@@ -245,11 +244,6 @@ namespace graph::storage {
 
 			if (blobChain.empty()) {
 				throw std::runtime_error("Failed to create blob chain");
-			}
-
-			// Add all blobs to storage
-			for (auto &blob: blobChain) {
-				dataManager->addBlobEntity(blob);
 			}
 
 			// Update entity with head blob reference

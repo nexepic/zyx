@@ -33,15 +33,22 @@ namespace graph::storage {
 		std::shared_ptr<DeletionManager> deletionManager_;
 
 	public:
-		BaseEntityManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<PropertyManager> propertyManager,
+		BaseEntityManager(const std::shared_ptr<DataManager> &dataManager,
+						  std::shared_ptr<PropertyManager> propertyManager,
 						  std::shared_ptr<DeletionManager> deletionManager) :
-			dataManager_(dataManager), propertyManager_(std::move(propertyManager)), deletionManager_(std::move(deletionManager)) {}
+			dataManager_(dataManager), propertyManager_(std::move(propertyManager)),
+			deletionManager_(std::move(deletionManager)) {}
 
 		// Core CRUD operations
-		void add(const EntityType &entity) override {
-			auto dataManager = dataManager_.lock();
+		void add(EntityType &entity) override {
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return;
+
+			if (entity.getId() == 0) {
+				int64_t newId = doAllocateId();
+				entity.setId(newId);
+			}
 
 			// Add to cache
 			EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
@@ -55,7 +62,7 @@ namespace graph::storage {
 		}
 
 		void update(const EntityType &entity) override {
-			auto dataManager = dataManager_.lock();
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return;
 
@@ -85,13 +92,13 @@ namespace graph::storage {
 			doRemove(entity);
 
 			// Mark that a deletion has been performed
-			if (auto dataManager = dataManager_.lock()) {
+			if (const auto dataManager = dataManager_.lock()) {
 				dataManager->markDeletionPerformed();
 			}
 		}
 
 		EntityType get(int64_t id) override {
-			auto dataManager = dataManager_.lock();
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return EntityType();
 
@@ -99,8 +106,7 @@ namespace graph::storage {
 		}
 
 		std::vector<EntityType> getBatch(const std::vector<int64_t> &ids) override {
-			auto dataManager = dataManager_.lock();
-			if (!dataManager)
+			if (const auto dataManager = dataManager_.lock(); !dataManager)
 				return {};
 
 			std::vector<EntityType> result;
@@ -117,7 +123,7 @@ namespace graph::storage {
 		}
 
 		std::vector<EntityType> getInRange(int64_t startId, int64_t endId, size_t limit) override {
-			auto dataManager = dataManager_.lock();
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return {};
 
@@ -125,7 +131,7 @@ namespace graph::storage {
 		}
 
 		std::vector<EntityType> getDirtyWithChangeTypes(const std::vector<EntityChangeType> &types) override {
-			auto dataManager = dataManager_.lock();
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return {};
 
@@ -149,7 +155,7 @@ namespace graph::storage {
 		}
 
 		void markAllSaved() override {
-			auto dataManager = dataManager_.lock();
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return;
 
@@ -157,7 +163,7 @@ namespace graph::storage {
 		}
 
 		void addToCache(const EntityType &entity) override {
-			auto dataManager = dataManager_.lock();
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return;
 
@@ -165,7 +171,7 @@ namespace graph::storage {
 		}
 
 		void clearCache() override {
-			auto dataManager = dataManager_.lock();
+			const auto dataManager = dataManager_.lock();
 			if (!dataManager)
 				return;
 
@@ -193,15 +199,11 @@ namespace graph::storage {
 		}
 
 	protected:
-		// Abstract method for reservation of IDs
-		virtual int64_t doReserveTemporaryId() = 0;
+		// Abstract method for allocating an ID that can be overridden by subclasses
+		virtual int64_t doAllocateId() = 0;
 
 		// Virtual method for removal that can be overridden by subclasses
 		virtual void doRemove(EntityType &entity) = 0;
-
-	public:
-		// Implement the interface method using the abstract method
-		int64_t reserveTemporaryId() override { return doReserveTemporaryId(); }
 	};
 
 } // namespace graph::storage

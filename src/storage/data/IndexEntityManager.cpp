@@ -8,9 +8,8 @@
  *
  **/
 
-#include <utility>
-
 #include "graph/storage/data/IndexEntityManager.hpp"
+#include <utility>
 
 namespace graph::storage {
 
@@ -21,12 +20,12 @@ namespace graph::storage {
 
 	void IndexEntityManager::doRemove(Index &index) { deletionManager_->deleteIndex(index); }
 
-	int64_t IndexEntityManager::doReserveTemporaryId() {
+	int64_t IndexEntityManager::doAllocateId() {
 		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return 0;
-
-		return dataManager->reserveTemporaryIndexId();
+		if (!dataManager) {
+			throw std::runtime_error("DataManager is not available for ID allocation.");
+		}
+		return dataManager->getIdAllocator()->allocateId(Index::typeId);
 	}
 
 } // namespace graph::storage

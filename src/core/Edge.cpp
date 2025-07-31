@@ -16,10 +16,10 @@
 
 namespace graph {
 
-	Edge::Edge(int64_t id, int64_t sourceNodeId, int64_t targetNodeId, const std::string &label) {
+	Edge::Edge(const int64_t id, const int64_t sourceId, const int64_t targetId, const std::string &label) {
 		metadata.id = id;
-		metadata.sourceNodeId = sourceNodeId;
-		metadata.targetNodeId = targetNodeId;
+		metadata.sourceNodeId = sourceId;
+		metadata.targetNodeId = targetId;
 		metadata.nextOutEdgeId = 0;
 		metadata.prevOutEdgeId = 0;
 		metadata.nextInEdgeId = 0;

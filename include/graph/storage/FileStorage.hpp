@@ -157,10 +157,5 @@ namespace graph::storage {
 		std::mutex flushMutex;
 		std::atomic<bool> flushInProgress{false};
 		std::atomic<bool> deleteOperationPerformed{false};
-
-		// ID allocation for all entities before saving
-		void allocatePermanentIdsForAllEntities() const;
-
-		void updateEntityReferencesToPermanent() const;
 	};
 } // namespace graph::storage

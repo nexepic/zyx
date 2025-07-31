@@ -28,7 +28,7 @@ namespace graph::storage {
 					 std::shared_ptr<StateChainManager> stateChainManager,
 					 std::shared_ptr<DeletionManager> deletionManager);
 
-		void add(const State& state) override;
+		void add(State& state) override;
 
 		// State-specific methods
 		State findByKey(const std::string &key);
@@ -48,14 +48,12 @@ namespace graph::storage {
 		static bool isChainHeadState(const State &state);
 
 	protected:
-		// Implement the abstract method for reserving IDs
-		int64_t doReserveTemporaryId() override;
+		int64_t doAllocateId() override;
 
 		void doRemove(State &state) override;
 
 	private:
 		std::shared_ptr<StateChainManager> stateChainManager_;
-		// TODO: What if id changed from temporary to permanent?
 		std::unordered_map<std::string, int64_t> stateKeyToIdMap_;
 	};
 

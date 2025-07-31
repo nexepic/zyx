@@ -9,7 +9,6 @@
  **/
 
 #include <utility>
-
 #include "graph/storage/data/NodeManager.hpp"
 
 namespace graph::storage {
@@ -21,12 +20,12 @@ namespace graph::storage {
 
 	void NodeManager::doRemove(Node &node) { deletionManager_->deleteNode(node); }
 
-	int64_t NodeManager::doReserveTemporaryId() {
+	int64_t NodeManager::doAllocateId() {
 		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return 0;
-
-		return dataManager->reserveTemporaryNodeId();
+		if (!dataManager) {
+			throw std::runtime_error("DataManager is not available for ID allocation.");
+		}
+		return dataManager->getIdAllocator()->allocateId(Node::typeId);
 	}
 
 } // namespace graph::storage

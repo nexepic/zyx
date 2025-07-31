@@ -34,96 +34,15 @@ namespace graph::storage {
 		refreshInactiveIdsCache(State::typeId);
 	}
 
-	int64_t IDAllocator::reserveTemporaryId(uint32_t entityType) {
+	int64_t IDAllocator::allocateId(uint32_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		if (entityType == Node::typeId) {
-			return nextTempNodeId_--;
-		} else if (entityType == Edge::typeId) {
-			return nextTempEdgeId_--;
-		} else if (entityType == Property::typeId) {
-			return nextTempPropId_--;
-		} else if (entityType == Blob::typeId) {
-			return nextTempBlobId_--;
-		} else if (entityType == Index::typeId) {
-			return nextTempIndexId_--;
-		} else if (entityType == State::typeId) {
-			return nextTempStateId_--;
-		}
-
-		throw std::runtime_error("Invalid entity type for temporary ID reservation");
-	}
-
-	int64_t IDAllocator::allocatePermanentId(int64_t tempId, uint32_t entityType, bool notifyIdUpdateCallback) {
-		std::lock_guard<std::mutex> lock(mutex_);
-
-		// Check if we've already allocated a permanent ID for this temp ID
-		if (entityType == Node::typeId) {
-			auto it = tempToPermNodeIds_.find(tempId);
-			if (it != tempToPermNodeIds_.end()) {
-				idUpdateCallback_(tempId, it->second, entityType);
-				return it->second;
-			}
-		} else if (entityType == Edge::typeId) {
-			auto it = tempToPermEdgeIds_.find(tempId);
-			if (it != tempToPermEdgeIds_.end()) {
-				idUpdateCallback_(tempId, it->second, entityType);
-				return it->second;
-			}
-		} else if (entityType == Property::typeId) {
-			auto it = tempToPermPropIds_.find(tempId);
-			if (it != tempToPermPropIds_.end()) {
-				idUpdateCallback_(tempId, it->second, entityType);
-				return it->second;
-			}
-		} else if (entityType == Blob::typeId) {
-			auto it = tempToPermBlobIds_.find(tempId);
-			if (it != tempToPermBlobIds_.end()) {
-				idUpdateCallback_(tempId, it->second, entityType);
-				return it->second;
-			}
-		} else if (entityType == Index::typeId) {
-			auto it = tempToPermIndexIds_.find(tempId);
-			if (it != tempToPermIndexIds_.end()) {
-				idUpdateCallback_(tempId, it->second, entityType);
-				return it->second;
-			}
-		} else if (entityType == State::typeId) {
-			auto it = tempToPermStateIds_.find(tempId);
-			if (it != tempToPermStateIds_.end()) {
-				idUpdateCallback_(tempId, it->second, entityType);
-				return it->second;
-			}
-		}
-
-		// First try to reuse an inactive ID
+		// First, try to reuse an inactive ID from the pool.
 		int64_t permId = findInactiveId(entityType);
 
-		// If no inactive ID is available, allocate a new sequential ID
+		// If no inactive ID is available, allocate a new sequential ID.
 		if (permId == 0) {
 			permId = allocateNewSequentialId(entityType);
-		}
-
-		// Store the mapping from temporary to permanent ID
-		if (entityType == Node::typeId) {
-			tempToPermNodeIds_[tempId] = permId;
-		} else if (entityType == Edge::typeId) {
-			tempToPermEdgeIds_[tempId] = permId;
-		} else if (entityType == Property::typeId) {
-			tempToPermPropIds_[tempId] = permId;
-		} else if (entityType == Blob::typeId) {
-			tempToPermBlobIds_[tempId] = permId;
-		} else if (entityType == Index::typeId) {
-			tempToPermIndexIds_[tempId] = permId;
-		} else if (entityType == State::typeId) {
-			tempToPermStateIds_[tempId] = permId;
-		} else {
-			throw std::runtime_error("Invalid entity type for permanent ID allocation");
-		}
-
-		// Notify the callback if it's set
-		if (notifyIdUpdateCallback && idUpdateCallback_) {
-			idUpdateCallback_(tempId, permId, entityType);
 		}
 
 		return permId;
@@ -274,77 +193,6 @@ namespace graph::storage {
 			if (!inactiveIndices.empty()) {
 				inactiveIdsCache_[entityType].emplace_back(segmentOffset, std::move(inactiveIndices));
 			}
-		}
-	}
-
-	int64_t IDAllocator::getPermanentId(int64_t tempId, uint32_t entityType) const {
-		std::lock_guard<std::mutex> lock(mutex_);
-
-		if (entityType == Node::typeId) {
-			auto it = tempToPermNodeIds_.find(tempId);
-			if (it != tempToPermNodeIds_.end()) {
-				return it->second;
-			}
-		} else if (entityType == Edge::typeId) {
-			auto it = tempToPermEdgeIds_.find(tempId);
-			if (it != tempToPermEdgeIds_.end()) {
-				return it->second;
-			}
-		} else if (entityType == Property::typeId) {
-			auto it = tempToPermPropIds_.find(tempId);
-			if (it != tempToPermPropIds_.end()) {
-				return it->second;
-			}
-		} else if (entityType == Blob::typeId) {
-			auto it = tempToPermBlobIds_.find(tempId);
-			if (it != tempToPermBlobIds_.end()) {
-				return it->second;
-			}
-		} else if (entityType == Index::typeId) {
-			auto it = tempToPermIndexIds_.find(tempId);
-			if (it != tempToPermIndexIds_.end()) {
-				return it->second;
-			}
-		} else if (entityType == State::typeId) {
-			auto it = tempToPermStateIds_.find(tempId);
-			if (it != tempToPermStateIds_.end()) {
-				return it->second;
-			}
-		} else {
-			throw std::runtime_error("Invalid entity type for permanent ID retrieval");
-		}
-
-		return 0; // Not found
-	}
-
-
-	void IDAllocator::clearTempIdMappings() {
-		std::lock_guard<std::mutex> lock(mutex_);
-		tempToPermNodeIds_.clear();
-		tempToPermEdgeIds_.clear();
-		tempToPermPropIds_.clear();
-		tempToPermBlobIds_.clear();
-		tempToPermIndexIds_.clear();
-		tempToPermStateIds_.clear();
-	}
-
-	void IDAllocator::clearTempIdMapping(int64_t tempId, uint32_t entityType) {
-		std::lock_guard<std::mutex> lock(mutex_);
-
-		if (entityType == Node::typeId) {
-			tempToPermNodeIds_.erase(tempId);
-		} else if (entityType == Edge::typeId) {
-			tempToPermEdgeIds_.erase(tempId);
-		} else if (entityType == Property::typeId) {
-			tempToPermPropIds_.erase(tempId);
-		} else if (entityType == Blob::typeId) {
-			tempToPermBlobIds_.erase(tempId);
-		} else if (entityType == Index::typeId) {
-			tempToPermIndexIds_.erase(tempId);
-		} else if (entityType == State::typeId) {
-			tempToPermStateIds_.erase(tempId);
-		} else {
-			throw std::runtime_error("Invalid entity type for clearing temporary ID mapping");
 		}
 	}
 

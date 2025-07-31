@@ -34,13 +34,17 @@ protected:
 		fileStorage = database->getStorage();
 		dataManager = fileStorage->getDataManager();
 
-		// Add some states
 		// Add active states
-		dataManager->addStateEntity(graph::State(1, "int_key", "42"));
-		dataManager->addStateEntity(graph::State(2, "double_key", "3.14"));
-		dataManager->addStateEntity(graph::State(3, "bool_key_true", "true"));
-		dataManager->addStateEntity(graph::State(4, "bool_key_false", "false"));
-		dataManager->addStateEntity(graph::State(5, "string_key", "hello"));
+		graph::State s1(1, "int_key", "42");
+		graph::State s2(2, "double_key", "3.14");
+		graph::State s3(3, "bool_key_true", "true");
+		graph::State s4(4, "bool_key_false", "false");
+		graph::State s5(5, "string_key", "hello");
+		dataManager->addStateEntity(s1);
+		dataManager->addStateEntity(s2);
+		dataManager->addStateEntity(s3);
+		dataManager->addStateEntity(s4);
+		dataManager->addStateEntity(s5);
 
 		// Add inactive state
 		graph::State inactiveState(6, "inactive_key", "should_not_load");
@@ -132,20 +136,21 @@ TEST_F(StateRegistryTest, ThreadSafety) {
 }
 
 TEST_F(StateRegistryTest, InsertWithoutInit) {
-    // Insert data before initialization
-    dataManager->addStateEntity(graph::State(20, "pre_init_key_only", "pre_value_only"));
-    // Do not call initialize here
-    // Should not be able to read the value
-    EXPECT_EQ(graph::StateRegistry::getString("pre_init_key_only", "notfound"), "pre_value_only");
+	// Insert data before initialization
+	graph::State preInitState(20, "pre_init_key_only", "pre_value_only");
+	dataManager->addStateEntity(preInitState);
+	// Do not call initialize here    // Do not call initialize here
+	// Should not be able to read the value
+	EXPECT_EQ(graph::StateRegistry::getString("pre_init_key_only", "notfound"), "pre_value_only");
 }
 
 TEST_F(StateRegistryTest, DeleteWithoutInit) {
 	graph::State inactiveState(30, "delete_key_only", "delete_value_only");
-    // Insert data before initialization
-    dataManager->addStateEntity(inactiveState);
-    // Delete the data before initialization
-    dataManager->deleteState(inactiveState);
-    // Do not call initialize here
-    // Should not be able to read the value
-    EXPECT_EQ(graph::StateRegistry::getString("delete_key_only", "notfound"), "notfound");
+	// Insert data before initialization
+	dataManager->addStateEntity(inactiveState);
+	// Delete the data before initialization
+	dataManager->deleteState(inactiveState);
+	// Do not call initialize here
+	// Should not be able to read the value
+	EXPECT_EQ(graph::StateRegistry::getString("delete_key_only", "notfound"), "notfound");
 }

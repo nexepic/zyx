@@ -8,9 +8,8 @@
  *
  **/
 
-#include <utility>
-
 #include "graph/storage/data/PropertyEntityManager.hpp"
+#include <utility>
 
 namespace graph::storage {
 
@@ -21,12 +20,12 @@ namespace graph::storage {
 
 	void PropertyEntityManager::doRemove(Property &property) { deletionManager_->deleteProperty(property); }
 
-	int64_t PropertyEntityManager::doReserveTemporaryId() {
+	int64_t PropertyEntityManager::doAllocateId() {
 		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return 0;
-
-		return dataManager->reserveTemporaryPropertyId();
+		if (!dataManager) {
+			throw std::runtime_error("DataManager is not available for ID allocation.");
+		}
+		return dataManager->getIdAllocator()->allocateId(Property::typeId);
 	}
 
 } // namespace graph::storage

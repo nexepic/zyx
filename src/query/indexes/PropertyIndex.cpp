@@ -138,21 +138,6 @@ namespace graph::query::indexes {
 	void PropertyIndex::saveState() {
 		std::shared_lock lock(mutex_);
 
-		// Convert all root IDs in root maps to permanent IDs
-		auto convertToPermanentId = [this](std::unordered_map<std::string, int64_t> &rootMap) {
-			for (auto& rootId : rootMap | std::views::values) {
-			    if (rootId < 0) {
-			        rootId = StateRegistry::getDataManager()->getIdAllocator()->allocatePermanentId(
-			                rootId, Index::typeId, false);
-			    }
-			}
-		};
-
-		convertToPermanentId(stringRoots_);
-		convertToPermanentId(intRoots_);
-		convertToPermanentId(doubleRoots_);
-		convertToPermanentId(boolRoots_);
-
 		// Save all root maps to state
 		if (!stringRoots_.empty()) {
 			serializeRootMap(STATE_STRING_ROOTS_KEY, stringRoots_);

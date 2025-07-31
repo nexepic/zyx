@@ -14,8 +14,6 @@
 
 namespace graph {
 
-	bool isTemporaryId(int64_t id);
-
 	/**
 	 * Base template for all entity types using CRTP pattern
 	 */
@@ -31,15 +29,6 @@ namespace graph {
 		[[nodiscard]] bool isActive() const { return static_cast<const Derived *>(this)->getMetadata().isActive; }
 
 		void markInactive() { static_cast<Derived *>(this)->getMutableMetadata().isActive = false; }
-
-		// ID type checking
-		[[nodiscard]] bool hasTemporaryId() const { return isTemporaryId(getId()); }
-
-		void setPermanentId(int64_t permanentId) {
-			if (hasTemporaryId()) {
-				setId(permanentId);
-			}
-		}
 	};
 
 	/**

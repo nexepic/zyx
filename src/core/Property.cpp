@@ -14,7 +14,7 @@
 
 namespace graph {
 
-	Property::Property(int64_t id, int64_t entityId, uint32_t entityType) {
+	Property::Property(const int64_t id, const int64_t entityId, const uint32_t entityType) {
 		metadata.id = id;
 		metadata.entityId = entityId;
 		metadata.entityType = entityType;

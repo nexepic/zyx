@@ -56,16 +56,13 @@ namespace graph::query::indexes {
 	}
 
 	int64_t IndexTreeManager::createNewNode(Index::NodeType type) const {
-		// Allocate ID for new node
-		int64_t id = dataManager_->reserveTemporaryIndexId();
-
 		// Create node
-		Index entity(id, type, indexType_);
+		Index entity(0, type, indexType_);
 
 		// Save it
 		dataManager_->addIndexEntity(entity);
 
-		return id;
+		return entity.getId();
 	}
 
 	bool IndexTreeManager::compareKeys(const KeyType &a, const KeyType &b) {

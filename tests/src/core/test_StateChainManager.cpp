@@ -100,7 +100,7 @@ TEST_F(StateChainManagerTest, ReadStateChainSingleState) {
 	constexpr int64_t headStateId = 4001;
 	const std::string testData = "Single state data";
 
-	const graph::State headState(headStateId, "test_key", testData);
+	graph::State headState(headStateId, "test_key", testData);
 	dataManager->addStateEntity(headState);
 
 	const std::string result = stateChainManager->readStateChain(headStateId);
@@ -172,7 +172,7 @@ TEST_F(StateChainManagerTest, IsDataSameTrue) {
 	constexpr int64_t headStateId = 9001;
 	const std::string testData = "Test data";
 
-	const graph::State headState(headStateId, "test_key", testData);
+	graph::State headState(headStateId, "test_key", testData);
 	dataManager->addStateEntity(headState);
 
 	bool result = stateChainManager->isDataSame(headStateId, testData);
@@ -248,7 +248,7 @@ TEST_F(StateChainManagerTest, GetStateChainIdsBreakOnInactive) {
 
 TEST_F(StateChainManagerTest, FindStateByKey) {
 	const std::string testKey = "search_key";
-	const graph::State expectedState(14001, testKey, "data");
+	graph::State expectedState(14001, testKey, "data");
 	dataManager->addStateEntity(expectedState);
 
 	const graph::State result = stateChainManager->findStateByKey(testKey);
@@ -273,7 +273,7 @@ TEST_F(StateChainManagerTest, UpdateStateChainSameData) {
 	constexpr int64_t headStateId = 16001;
 	const std::string testData = "Same data";
 
-	const graph::State headState(headStateId, "test_key", testData);
+	graph::State headState(headStateId, "test_key", testData);
 	dataManager->addStateEntity(headState);
 
 	const auto result = stateChainManager->updateStateChain(headStateId, testData);
@@ -287,7 +287,7 @@ TEST_F(StateChainManagerTest, UpdateStateChainDifferentData) {
 	const std::string originalData = "Original data";
 	const std::string newData = "New different data";
 
-	const graph::State headState(headStateId, "test_key", originalData);
+	graph::State headState(headStateId, "test_key", originalData);
 	dataManager->addStateEntity(headState);
 
 	const auto result = stateChainManager->updateStateChain(headStateId, newData);

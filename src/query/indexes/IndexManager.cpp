@@ -34,8 +34,7 @@ namespace graph::query::indexes {
 	}
 
 	bool IndexManager::executeBuildTask(const std::function<bool()> &buildFunc) const {
-		// Commit any pending changes before indexing. This is crucial for ensuring
-		// data consistency and that all temporary IDs are replaced with permanent ones.
+		// Commit any pending changes before indexing. This is crucial for ensuring data consistency.
 		storage_->save();
 
 		// Execute the specific build task.
@@ -194,8 +193,7 @@ namespace graph::query::indexes {
 
 		const int64_t nodeId = node.getId();
 
-		// Skip temporary nodes
-		if (nodeId <= 0)
+		if (nodeId == 0)
 			return;
 
 		if (isDeleted) {
@@ -255,8 +253,7 @@ namespace graph::query::indexes {
 
 		const int64_t edgeId = edge.getId();
 
-		// Skip temporary edges
-		if (edgeId <= 0)
+		if (edgeId == 0)
 			return;
 
 		if (isDeleted) {

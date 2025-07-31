@@ -20,6 +20,9 @@ namespace graph {
 	std::vector<State> StateChainManager::createStateChain(const std::string &key, const std::string &data) const {
 		// Split into chunks
 		const auto chunks = splitData(data);
+		if (chunks.empty()) {
+			return {};
+		}
 
 		// Create state entities
 		std::vector<State> stateChain;
@@ -29,30 +32,35 @@ namespace graph {
 
 		// Create each state in the chain
 		for (size_t i = 0; i < chunks.size(); i++) {
-			// Create new state with temporary ID
-			int64_t tempId = dataManager_->reserveTemporaryStateId();
-
 			// Only the head state has the actual key, other states have empty keys
 			// as they should only be accessed through the chain
 			std::string stateKey = (i == 0) ? key : "";
 
-			State state(tempId, stateKey, chunks[i]);
+			State currentState(0, stateKey, chunks[i]);
 
 			// Set chain position
-			state.setChainPosition(static_cast<int32_t>(i));
+			currentState.setChainPosition(static_cast<int32_t>(i));
 
 			// Set previous state ID
-			state.setPrevStateId(prevStateId);
+			currentState.setPrevStateId(prevStateId);
 
-			// Add to chain
-			stateChain.push_back(state);
+			dataManager_->addStateEntity(currentState);
 
 			// Update previous state's next pointer if not the first state
 			if (i > 0) {
-				stateChain[i - 1].setNextStateId(tempId);
+				// Get a reference to the previous state from our local vector.
+				State &prevState = stateChain.back();
+
+				// Set its `next_state_id` to the permanent ID of the current state.
+				prevState.setNextStateId(currentState.getId());
+
+				// We modified `prevState` after it was added, so we must tell the DataManager
+				// to update its version in the dirty map.
+				dataManager_->updateStateEntity(prevState);
 			}
 
-			prevStateId = tempId;
+			prevStateId = currentState.getId();
+			stateChain.push_back(currentState);
 		}
 
 		return stateChain;
@@ -60,7 +68,7 @@ namespace graph {
 
 	std::string StateChainManager::readStateChain(const int64_t headStateId) const {
 		// Get the head state
-		State headState = dataManager_->getState(headStateId);
+		const State headState = dataManager_->getState(headStateId);
 		if (headState.getId() == 0 || !headState.isActive()) {
 			throw std::runtime_error("Head state not found or inactive");
 		}
@@ -111,7 +119,7 @@ namespace graph {
 
 	bool StateChainManager::isDataSame(const int64_t headStateId, const std::string &newData) const {
 		try {
-			std::string currentData = readStateChain(headStateId);
+			const std::string currentData = readStateChain(headStateId);
 			return currentData == newData;
 		} catch (const std::exception &) {
 			// If we can't read the current data, assume it's different
@@ -119,11 +127,12 @@ namespace graph {
 		}
 	}
 
-	std::vector<State> StateChainManager::updateStateChain(const int64_t headStateId, const std::string &newData) const {
+	std::vector<State> StateChainManager::updateStateChain(const int64_t headStateId,
+														   const std::string &newData) const {
 		// Check if the data is actually different
 		if (isDataSame(headStateId, newData)) {
 			// Data is the same, return the existing chain
-			auto chainIds = getStateChainIds(headStateId);
+			const auto chainIds = getStateChainIds(headStateId);
 			std::vector<State> existingChain;
 			existingChain.reserve(chainIds.size());
 
@@ -137,7 +146,7 @@ namespace graph {
 		}
 
 		// Data is different, proceed with update
-		State headState = dataManager_->getState(headStateId);
+		const State headState = dataManager_->getState(headStateId);
 		if (headState.getId() == 0 || !headState.isActive()) {
 			throw std::runtime_error("Head state not found or inactive");
 		}
@@ -146,18 +155,12 @@ namespace graph {
 		deleteStateChain(headStateId);
 		auto updatedChain = createStateChain(originalKey, newData);
 
-		for (auto &state: updatedChain) {
-			dataManager_->addStateEntity(state);
-		}
-
 		return updatedChain;
 	}
 
 	void StateChainManager::deleteStateChain(const int64_t headStateId) const {
-		auto chainIds = getStateChainIds(headStateId);
-
 		// Delete each state in the chain
-		for (auto stateId: chainIds) {
+		for (const auto chainIds = getStateChainIds(headStateId); auto stateId: chainIds) {
 			State state = dataManager_->getState(stateId);
 			if (state.getId() != 0 && state.isActive()) {
 				dataManager_->deleteState(state);

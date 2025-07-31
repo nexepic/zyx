@@ -24,7 +24,7 @@ namespace graph::storage {
 		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)),
 		stateChainManager_(std::move(stateChainManager)) {}
 
-	void StateManager::add(const State &state) {
+	void StateManager::add(State &state) {
 		BaseEntityManager::add(state);
 		if (!state.getKey().empty()) {
 			stateKeyToIdMap_[state.getKey()] = state.getId();
@@ -115,19 +115,9 @@ namespace graph::storage {
 		if (state.getId() == 0) {
 			// Create a new state chain
 			auto stateChain = createStateChain(stateKey, serializedData);
-
-			// Add all states to storage
-			for (auto &chainState: stateChain) {
-				add(chainState);
-			}
 		} else {
 			// Update existing state chain
 			auto stateChain = updateStateChain(state.getId(), serializedData);
-
-			// Update all states in storage
-			for (auto &chainState: stateChain) {
-				update(chainState);
-			}
 		}
 	}
 
@@ -191,12 +181,12 @@ namespace graph::storage {
 		return state.getId() != 0 && state.isActive() && state.getPrevStateId() == 0;
 	}
 
-	int64_t StateManager::doReserveTemporaryId() {
+	int64_t StateManager::doAllocateId() {
 		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return 0;
-
-		return dataManager->reserveTemporaryStateId();
+		if (!dataManager) {
+			throw std::runtime_error("DataManager is not available for ID allocation.");
+		}
+		return dataManager->getIdAllocator()->allocateId(State::typeId);
 	}
 
 } // namespace graph::storage

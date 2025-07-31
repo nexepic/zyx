@@ -19,9 +19,14 @@ namespace graph::storage {
 							 std::shared_ptr<DeletionManager> deletionManager) :
 		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)) {}
 
-	void EdgeManager::doRemove(Edge &edge) { deletionManager_->deleteEdge(edge); }
+	void EdgeManager::doRemove(Edge &edge) {
+		if (const auto dataManager = dataManager_.lock()) {
+		    dataManager->getRelationshipTraversal()->unlinkEdge(edge);
+			deletionManager_->deleteEdge(edge);
+		}
+	}
 
-	void EdgeManager::add(const Edge &edge) {
+	void EdgeManager::add(Edge &edge) {
 		auto dataManager = dataManager_.lock();
 		if (!dataManager)
 			return;
@@ -42,12 +47,12 @@ namespace graph::storage {
 		return dataManager->findEdgesByNode(nodeId, direction);
 	}
 
-	int64_t EdgeManager::doReserveTemporaryId() {
+	int64_t EdgeManager::doAllocateId() {
 		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return 0;
-
-		return dataManager->reserveTemporaryEdgeId();
+		if (!dataManager) {
+			throw std::runtime_error("DataManager is not available for ID allocation.");
+		}
+		return dataManager->getIdAllocator()->allocateId(Edge::typeId);
 	}
 
 } // namespace graph::storage

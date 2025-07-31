@@ -49,7 +49,7 @@ namespace graph::storage {
 	void DataManager::initialize() {
 		// Initialize low-level components
 		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), spaceManager_);
-		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, idAllocator_, segmentTracker_);
+		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, segmentTracker_);
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(shared_from_this());
 
@@ -80,7 +80,7 @@ namespace graph::storage {
 		edgeManager_ = std::make_shared<EdgeManager>(shared_from_this(), propertyManager_, deletionManager_);
 		propertyEntityManager_ =
 				std::make_shared<PropertyEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
-		blobEntityManager_ = std::make_shared<BlobManager>(shared_from_this(), propertyManager_, blobChainManager_,
+		blobManager_ = std::make_shared<BlobManager>(shared_from_this(), propertyManager_, blobChainManager_,
 														   deletionManager_);
 		indexEntityManager_ =
 				std::make_shared<IndexEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
@@ -90,7 +90,7 @@ namespace graph::storage {
 
 	// --- Node Operations (delegate to NodeManager) ---
 
-	void DataManager::addNode(const Node &node) const { nodeManager_->add(node); }
+	void DataManager::addNode(Node &node) const { nodeManager_->add(node); }
 
 	void DataManager::updateNode(const Node &node) const { nodeManager_->update(node); }
 
@@ -119,11 +119,9 @@ namespace graph::storage {
 		return nodeManager_->getProperties(nodeId);
 	}
 
-	int64_t DataManager::reserveTemporaryNodeId() const { return idAllocator_->reserveTemporaryId(Node::typeId); }
-
 	// --- Edge Operations (delegate to EdgeManager) ---
 
-	void DataManager::addEdge(const Edge &edge) const { edgeManager_->add(edge); }
+	void DataManager::addEdge(Edge &edge) const { edgeManager_->add(edge); }
 
 	void DataManager::updateEdge(const Edge &edge) const { edgeManager_->update(edge); }
 
@@ -162,11 +160,9 @@ namespace graph::storage {
 		}
 	}
 
-	int64_t DataManager::reserveTemporaryEdgeId() const { return idAllocator_->reserveTemporaryId(Edge::typeId); }
-
 	// --- Property Entity Operations ---
 
-	void DataManager::addPropertyEntity(const Property &property) const { propertyEntityManager_->add(property); }
+	void DataManager::addPropertyEntity(Property &property) const { propertyEntityManager_->add(property); }
 
 	void DataManager::updatePropertyEntity(const Property &property) const { propertyEntityManager_->update(property); }
 
@@ -174,25 +170,19 @@ namespace graph::storage {
 
 	Property DataManager::getProperty(int64_t id) const { return propertyEntityManager_->get(id); }
 
-	int64_t DataManager::reserveTemporaryPropertyId() const {
-		return idAllocator_->reserveTemporaryId(Property::typeId);
-	}
-
 	// --- Blob Operations ---
 
-	void DataManager::addBlobEntity(const Blob &blob) const { blobEntityManager_->add(blob); }
+	void DataManager::addBlobEntity(Blob &blob) const { blobManager_->add(blob); }
 
-	void DataManager::updateBlobEntity(const Blob &blob) const { blobEntityManager_->update(blob); }
+	void DataManager::updateBlobEntity(const Blob &blob) const { blobManager_->update(blob); }
 
-	void DataManager::deleteBlob(Blob &blob) const { blobEntityManager_->remove(blob); }
+	void DataManager::deleteBlob(Blob &blob) const { blobManager_->remove(blob); }
 
-	Blob DataManager::getBlob(int64_t id) const { return blobEntityManager_->get(id); }
-
-	int64_t DataManager::reserveTemporaryBlobId() const { return idAllocator_->reserveTemporaryId(Blob::typeId); }
+	Blob DataManager::getBlob(int64_t id) const { return blobManager_->get(id); }
 
 	// --- Index Operations ---
 
-	void DataManager::addIndexEntity(const Index &index) const { indexEntityManager_->add(index); }
+	void DataManager::addIndexEntity(Index &index) const { indexEntityManager_->add(index); }
 
 	void DataManager::updateIndexEntity(const Index &index) const { indexEntityManager_->update(index); }
 
@@ -200,19 +190,15 @@ namespace graph::storage {
 
 	Index DataManager::getIndex(int64_t id) const { return indexEntityManager_->get(id); }
 
-	int64_t DataManager::reserveTemporaryIndexId() const { return idAllocator_->reserveTemporaryId(Index::typeId); }
-
 	// --- State Operations ---
 
-	void DataManager::addStateEntity(const State &state) const { stateEntityManager_->add(state); }
+	void DataManager::addStateEntity(State &state) const { stateEntityManager_->add(state); }
 
 	void DataManager::updateStateEntity(const State &state) const { stateEntityManager_->update(state); }
 
 	void DataManager::deleteState(State &state) const { stateEntityManager_->remove(state); }
 
 	State DataManager::getState(int64_t id) const { return stateEntityManager_->get(id); }
-
-	int64_t DataManager::reserveTemporaryStateId() const { return idAllocator_->reserveTemporaryId(State::typeId); }
 
 	std::vector<State> DataManager::getAllStates() const { return stateEntityManager_->getAllHeadStates(); }
 
@@ -577,53 +563,6 @@ namespace graph::storage {
 		}
 	}
 
-	void DataManager::handleIdUpdate(int64_t tempId, int64_t permId, uint32_t entityType) {
-		// Skip if temp and perm IDs are the same
-		if (tempId == permId)
-			return;
-
-		// Update the appropriate cache and dirty collections based on entity type
-		if (entityType == Node::typeId) {
-			updateEntityId<Node>(tempId, permId);
-		} else if (entityType == Edge::typeId) {
-			updateEntityId<Edge>(tempId, permId);
-		} else if (entityType == Property::typeId) {
-			updateEntityId<Property>(tempId, permId);
-		} else if (entityType == Blob::typeId) {
-			updateEntityId<Blob>(tempId, permId);
-		} else if (entityType == Index::typeId) {
-			updateEntityId<Index>(tempId, permId);
-		} else if (entityType == State::typeId) {
-			updateEntityId<State>(tempId, permId);
-		} else {
-			throw std::runtime_error("Unknown entity type for ID update: " + std::to_string(entityType));
-		}
-	}
-
-	template<typename EntityType>
-	void DataManager::updateEntityId(int64_t tempId, int64_t permId) {
-		// Update in cache if it exists
-		auto &cache = EntityTraits<EntityType>::getCache(this);
-		if (cache.contains(tempId)) {
-			EntityType entity = cache.get(tempId);
-			entity.setPermanentId(permId);
-			cache.remove(tempId);
-			cache.put(permId, entity);
-		}
-
-		// Update in dirty map
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
-		auto it = dirtyMap.find(tempId);
-		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
-			if (it->second.backup) {
-				EntityType entity = *it->second.backup;
-				entity.setPermanentId(permId);
-				dirtyMap[permId] = DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity);
-				dirtyMap.erase(tempId);
-			}
-		}
-	}
-
 	template<typename EntityType>
 	void DataManager::markEntityDeleted(EntityType &entity) {
 		// Update in-memory state without calling back to DeletionManager
@@ -655,7 +594,6 @@ namespace graph::storage {
 	template Node DataManager::getEntityFromMemoryOrDisk<Node>(int64_t id);
 	template void DataManager::removeEntityProperty<Node>(int64_t entityId, const std::string &key);
 	template void DataManager::markEntityDeleted<Node>(Node &entity);
-	template void DataManager::updateEntityId<Node>(int64_t tempId, int64_t permId);
 	template std::vector<Node> DataManager::loadEntitiesFromSegment<Node>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::optional<Node> DataManager::readEntityFromDisk<Node>(int64_t fileOffset) const;
 	template std::optional<Node> DataManager::findAndReadEntity<Node>(int64_t id) const;
@@ -676,7 +614,6 @@ namespace graph::storage {
 	template Edge DataManager::getEntityFromMemoryOrDisk<Edge>(int64_t id);
 	template void DataManager::removeEntityProperty<Edge>(int64_t entityId, const std::string &key);
 	template void DataManager::markEntityDeleted<Edge>(Edge &entity);
-	template void DataManager::updateEntityId<Edge>(int64_t tempId, int64_t permId);
 	template std::vector<Edge> DataManager::loadEntitiesFromSegment<Edge>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::optional<Edge> DataManager::readEntityFromDisk<Edge>(int64_t fileOffset) const;
 	template std::optional<Edge> DataManager::findAndReadEntity<Edge>(int64_t id) const;

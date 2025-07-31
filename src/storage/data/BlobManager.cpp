@@ -40,12 +40,12 @@ namespace graph::storage {
 		blobChainManager_->deleteBlobChain(headBlobId);
 	}
 
-	int64_t BlobManager::doReserveTemporaryId() {
+	int64_t BlobManager::doAllocateId() {
 		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return 0;
-
-		return dataManager->reserveTemporaryBlobId();
+		if (!dataManager) {
+			throw std::runtime_error("DataManager is not available for ID allocation.");
+		}
+		return dataManager->getIdAllocator()->allocateId(Blob::typeId);
 	}
 
 } // namespace graph::storage

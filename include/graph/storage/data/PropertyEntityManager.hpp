@@ -22,8 +22,7 @@ namespace graph::storage {
 							  std::shared_ptr<DeletionManager> deletionManager);
 
 	protected:
-		// Implement the abstract method for reserving IDs
-		int64_t doReserveTemporaryId() override;
+		int64_t doAllocateId() override;
 
 		void doRemove(Property &property) override;
 	};

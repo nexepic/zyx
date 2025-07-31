@@ -17,7 +17,7 @@
 
 namespace graph {
 
-	Node::Node(int64_t id, const std::string &label) {
+	Node::Node(const int64_t id, const std::string &label) {
 		metadata.id = id;
 		metadata.firstOutEdgeId = 0;
 		metadata.firstInEdgeId = 0;

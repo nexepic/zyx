@@ -85,7 +85,7 @@ namespace graph::storage {
 		FileHeader &getFileHeaderRef() const { return fileHeader_; }
 
 		// Node-specific operations
-		void addNode(const Node &node) const;
+		void addNode(Node &node) const;
 		void updateNode(const Node &node) const;
 		void deleteNode(Node &node) const;
 		Node getNode(int64_t id) const;
@@ -94,10 +94,9 @@ namespace graph::storage {
 		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeNodeProperty(int64_t nodeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;
-		int64_t reserveTemporaryNodeId() const;
 
 		// Edge-specific operations
-		void addEdge(const Edge &edge) const;
+		void addEdge(Edge &edge) const;
 		void updateEdge(const Edge &edge) const;
 		void deleteEdge(Edge &edge) const;
 		Edge getEdge(int64_t id) const;
@@ -107,35 +106,30 @@ namespace graph::storage {
 		void removeEdgeProperty(int64_t edgeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId) const;
 		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both") const;
-		int64_t reserveTemporaryEdgeId() const;
 
 		// Property entity operations
-		void addPropertyEntity(const Property &property) const;
+		void addPropertyEntity(Property &property) const;
 		void updatePropertyEntity(const Property &property) const;
 		void deleteProperty(Property &property) const;
 		Property getProperty(int64_t id) const;
-		int64_t reserveTemporaryPropertyId() const;
 
 		// Blob operations
-		void addBlobEntity(const Blob &blob) const;
+		void addBlobEntity(Blob &blob) const;
 		void updateBlobEntity(const Blob &blob) const;
 		void deleteBlob(Blob &blob) const;
 		Blob getBlob(int64_t id) const;
-		int64_t reserveTemporaryBlobId() const;
 
 		// Index operations
-		void addIndexEntity(const Index &index) const;
+		void addIndexEntity(Index &index) const;
 		void updateIndexEntity(const Index &index) const;
 		void deleteIndex(Index &index) const;
 		Index getIndex(int64_t id) const;
-		int64_t reserveTemporaryIndexId() const;
 
 		// State operations
-		void addStateEntity(const State &state) const;
+		void addStateEntity(State &state) const;
 		void updateStateEntity(const State &state) const;
 		void deleteState(State &state) const;
 		State getState(int64_t id) const;
-		int64_t reserveTemporaryStateId() const;
 		std::vector<State> getAllStates() const;
 		State findStateByKey(const std::string &key) const;
 		void addStateProperties(const std::string &stateKey,
@@ -211,9 +205,6 @@ namespace graph::storage {
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Index>> &getDirtyIndexes() { return dirtyIndexes_; }
 		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<State>> &getDirtyStates() { return dirtyStates_; }
 
-		// ID management
-		void handleIdUpdate(int64_t tempId, int64_t permId, uint32_t entityType);
-
 		// Helper method for DeletionManager to update entity status in memory without recursion
 		template<typename EntityType>
 		void markEntityDeleted(EntityType &entity);
@@ -243,7 +234,7 @@ namespace graph::storage {
 		[[nodiscard]] std::shared_ptr<PropertyManager> getPropertyManager() const { return propertyManager_; }
 		[[nodiscard]] std::shared_ptr<NodeManager> getNodeManager() const { return nodeManager_; }
 		[[nodiscard]] std::shared_ptr<EdgeManager> getEdgeManager() const { return edgeManager_; }
-		[[nodiscard]] std::shared_ptr<BlobChainManager> getBlobManager() const { return blobChainManager_; }
+		[[nodiscard]] std::shared_ptr<BlobManager> getBlobManager() const { return blobManager_; }
 
 	private:
 		// Core file and state
@@ -289,7 +280,7 @@ namespace graph::storage {
 		std::shared_ptr<NodeManager> nodeManager_;
 		std::shared_ptr<EdgeManager> edgeManager_;
 		std::shared_ptr<PropertyEntityManager> propertyEntityManager_;
-		std::shared_ptr<BlobManager> blobEntityManager_;
+		std::shared_ptr<BlobManager> blobManager_;
 		std::shared_ptr<IndexEntityManager> indexEntityManager_;
 		std::shared_ptr<StateManager> stateEntityManager_;
 
@@ -322,10 +313,6 @@ namespace graph::storage {
 		// Helper to check if an entity exists in dirty collections
 		template<typename EntityType>
 		std::optional<EntityType> getEntityFromDirty(int64_t id);
-
-		// ID management helper
-		template<typename EntityType>
-		void updateEntityId(int64_t tempId, int64_t permId);
 	};
 
 } // namespace graph::storage

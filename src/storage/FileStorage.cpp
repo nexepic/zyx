@@ -79,12 +79,6 @@ namespace graph::storage {
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 		idAllocator->initialize();
 
-		// Set up ID update callback
-		idAllocator->setIdUpdateCallback([this](int64_t tempId, int64_t permId, uint32_t entityType) {
-			// Handle ID updates by immediately updating entities in the DataManager
-			dataManager->handleIdUpdate(tempId, permId, entityType);
-		});
-
 		// Then create the space manager
 		spaceManager =
 				std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager, idAllocator);
@@ -129,11 +123,6 @@ namespace graph::storage {
 		if (!dataManager->hasUnsavedChanges()) {
 			return;
 		}
-
-		// First, allocate permanent IDs for all entities
-		allocatePermanentIdsForAllEntities();
-
-		updateEntityReferencesToPermanent();
 
 		// Get entities by their change type
 		auto newNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::ADDED});
@@ -276,9 +265,6 @@ namespace graph::storage {
 
 		// Mark everything as saved
 		dataManager->markAllSaved();
-
-		// Clean up any remaining temporary ID mappings
-		idAllocator->clearTempIdMappings();
 	}
 
 	template<typename T>
@@ -655,128 +641,6 @@ namespace graph::storage {
 		flushInProgress.store(false);
 	}
 
-	void FileStorage::allocatePermanentIdsForAllEntities() const {
-		// Get entities with temporary IDs
-		auto newNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::ADDED});
-		auto newEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::ADDED});
-		auto newProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::ADDED});
-		auto newBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::ADDED});
-		auto newIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::ADDED});
-		auto newStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::ADDED});
-
-		// Process in order: properties, blobs, nodes, edges (dependencies go first)
-		std::ranges::sort(newProperties, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
-		for (auto &property: newProperties) {
-			if (property.hasTemporaryId()) {
-				idAllocator->allocatePermanentId(property.getId(), Property::typeId);
-				// No need to update property here, callback will handle it
-			}
-		}
-
-		std::ranges::sort(newBlobs, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
-		for (auto &blob: newBlobs) {
-			if (blob.hasTemporaryId()) {
-				idAllocator->allocatePermanentId(blob.getId(), Blob::typeId);
-				// No need to update blob here, callback will handle it
-			}
-		}
-
-		std::ranges::sort(newIndexes, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
-		for (auto &index: newIndexes) {
-			if (index.hasTemporaryId()) {
-				idAllocator->allocatePermanentId(index.getId(), Index::typeId);
-				// No need to update index here, callback will handle it
-			}
-		}
-
-		std::ranges::sort(newStates, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
-		for (auto &state: newStates) {
-			if (state.hasTemporaryId()) {
-				idAllocator->allocatePermanentId(state.getId(), State::typeId);
-				// No need to update state here, callback will handle it
-			}
-		}
-
-		std::ranges::sort(newNodes, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
-		for (auto &node: newNodes) {
-			if (node.hasTemporaryId()) {
-				idAllocator->allocatePermanentId(node.getId(), Node::typeId);
-				// No need to update node here, callback will handle it
-			}
-		}
-
-		std::ranges::sort(newEdges, [](const auto &a, const auto &b) { return a.getId() > b.getId(); });
-		for (auto &edge: newEdges) {
-			if (edge.hasTemporaryId()) {
-				idAllocator->allocatePermanentId(edge.getId(), Edge::typeId);
-				// No need to update edge here, callback will handle it
-			}
-		}
-	}
-
-	void FileStorage::updateEntityReferencesToPermanent() const {
-		// Get entities that need reference updates (both ADDED and MODIFIED)
-		auto dirtyNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>(
-				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
-
-		auto dirtyEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>(
-				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
-
-		auto dirtyProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>(
-				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
-
-		auto dirtyBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>(
-				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
-
-		auto dirtyIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>(
-				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
-
-		auto dirtyStates = dataManager->getDirtyEntitiesWithChangeTypes<State>(
-				{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
-
-		// Update references for properties first
-		for (auto &property: dirtyProperties) {
-			if (dataManager->getEntityReferenceUpdater()->updatePropertyReferencesToPermanent(property)) {
-				dataManager->updatePropertyEntity(property);
-			}
-		}
-
-		// Update references for blobs next
-		for (auto &blob: dirtyBlobs) {
-			if (dataManager->getEntityReferenceUpdater()->updateBlobReferencesToPermanent(blob)) {
-				dataManager->updateBlobEntity(blob);
-			}
-		}
-
-		// Update references for nodes
-		for (auto &node: dirtyNodes) {
-			if (dataManager->getEntityReferenceUpdater()->updateNodeReferencesToPermanent(node)) {
-				dataManager->updateNode(node);
-			}
-		}
-
-		// Update references for edges last
-		for (auto &edge: dirtyEdges) {
-			if (dataManager->getEntityReferenceUpdater()->updateEdgeReferencesToPermanent(edge)) {
-				dataManager->updateEdge(edge);
-			}
-		}
-
-		// Update references for indexes
-		for (auto &index: dirtyIndexes) {
-			if (dataManager->getEntityReferenceUpdater()->updateIndexReferencesToPermanent(index)) {
-				dataManager->updateIndexEntity(index);
-			}
-		}
-
-		// Update references for states
-		for (auto &state: dirtyStates) {
-			if (dataManager->getEntityReferenceUpdater()->updateStateReferencesToPermanent(state)) {
-				dataManager->updateStateEntity(state);
-			}
-		}
-	}
-
 	Node FileStorage::getNode(int64_t id) {
 		if (!isFileOpen) {
 			open();
@@ -813,12 +677,7 @@ namespace graph::storage {
 			throw std::runtime_error("Database must be open before inserting data");
 		}
 
-		// Get a temporary ID (negative number)
-		int64_t tempId = dataManager->reserveTemporaryNodeId();
-
-		// Create a new node with the temporary ID
-
-		Node node(tempId, label);
+		Node node(0, label);
 
 		dataManager->addNode(node);
 		return node;
@@ -845,8 +704,7 @@ namespace graph::storage {
 		}
 
 		// Create new edge if none exists
-		int64_t tempId = dataManager->reserveTemporaryEdgeId();
-		Edge edge(tempId, from, to, label);
+		Edge edge(0, from, to, label);
 		dataManager->addEdge(edge);
 		return edge;
 	}

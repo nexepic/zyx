@@ -12,11 +12,11 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
-#include <graph/core/BlobChainManager.hpp>
 #include <graph/storage/data/DataManager.hpp>
 #include <sstream>
 #include <stdexcept>
 #include "graph/storage/IDAllocator.hpp"
+#include "graph/storage/data/BlobManager.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph {
@@ -49,24 +49,16 @@ namespace graph {
 
 		// If there's existing blob storage, delete it
 		if (hasBlobStorage()) {
-			auto blobManager = std::make_unique<BlobChainManager>(dataManager);
+			const auto blobManager = dataManager->getBlobManager();
 			blobManager->deleteBlobChain(getBlobId());
 		}
 
 		// Create a new blob chain
-		auto blobManager = std::make_unique<BlobChainManager>(dataManager);
-		auto blobChain = blobManager->createBlobChain(getId(), // Entity ID
-													  typeId, // Entity type (Index)
-													  data // Data to store
-		);
+		const auto blobManager = dataManager->getBlobManager();
+		const auto blobChain = blobManager->createBlobChain(getId(), typeId, data);
 
 		if (blobChain.empty()) {
 			throw std::runtime_error("Failed to create blob chain for index data");
-		}
-
-		// Add all blobs to storage
-		for (auto &blob: blobChain) {
-			dataManager->addBlobEntity(blob);
 		}
 
 		// Update index with blob reference
@@ -86,7 +78,7 @@ namespace graph {
 			throw std::runtime_error("DataManager is required to retrieve blob data");
 		}
 
-		auto blobManager = std::make_unique<BlobChainManager>(dataManager);
+		const auto blobManager = dataManager->getBlobManager();
 		return blobManager->readBlobChain(getBlobId());
 	}
 
@@ -135,7 +127,8 @@ namespace graph {
 	}
 
 	// Update getAllKeyValues to handle blob storage
-	std::vector<Index::KeyValuePair> Index::getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const {
+	std::vector<Index::KeyValuePair>
+	Index::getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const {
 		if (metadata.nodeType != NodeType::LEAF) {
 			return {}; // Only leaf nodes store key-values
 		}
@@ -489,4 +482,4 @@ namespace graph {
 		return result;
 	}
 
-} // namespace graph::storage
+} // namespace graph

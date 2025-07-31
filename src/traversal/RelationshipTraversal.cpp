@@ -14,35 +14,57 @@
 
 namespace graph::traversal {
 
-	RelationshipTraversal::RelationshipTraversal(std::shared_ptr<storage::DataManager> dataManager) :
-		dataManager_(std::move(dataManager)) {}
+	RelationshipTraversal::RelationshipTraversal(const std::shared_ptr<storage::DataManager> &dataManager) :
+		dataManager_(dataManager) {}
 
 	std::vector<Edge> RelationshipTraversal::getOutgoingEdges(int64_t nodeId) const {
 		std::vector<Edge> outEdges;
-		Node node = dataManager_->getNode(nodeId);
+		if (auto dm = dataManager_.lock()) {
+			Node node = dm->getNode(nodeId);
+			int64_t currentEdgeId = node.getFirstOutEdgeId();
 
-		int64_t currentEdgeId = node.getFirstOutEdgeId();
-		while (currentEdgeId != 0) {
-			Edge edge = dataManager_->getEdge(currentEdgeId);
-			if (edge.isActive()) {
-				outEdges.push_back(edge);
+			// Keep track of visited edge IDs to detect cycles in the linked list.
+			std::unordered_set<int64_t> visitedEdgeIds;
+
+			while (currentEdgeId != 0) {
+				// Cycle detected in the edge linked-list. Abort traversal.
+				if (visitedEdgeIds.contains(currentEdgeId)) {
+					throw std::runtime_error("Cycle detected in outgoing edges linked-list for node " + std::to_string(nodeId));
+				}
+				visitedEdgeIds.insert(currentEdgeId);
+
+				Edge edge = dm->getEdge(currentEdgeId);
+				if (edge.isActive()) {
+					outEdges.push_back(edge);
+				}
+				currentEdgeId = edge.getNextOutEdgeId();
 			}
-			currentEdgeId = edge.getNextOutEdgeId();
 		}
 		return outEdges;
 	}
 
 	std::vector<Edge> RelationshipTraversal::getIncomingEdges(int64_t nodeId) const {
 		std::vector<Edge> inEdges;
-		Node node = dataManager_->getNode(nodeId);
+		if (auto dm = dataManager_.lock()) {
+			Node node = dm->getNode(nodeId);
+			int64_t currentEdgeId = node.getFirstInEdgeId();
 
-		int64_t currentEdgeId = node.getFirstInEdgeId();
-		while (currentEdgeId != 0) {
-			Edge edge = dataManager_->getEdge(currentEdgeId);
-			if (edge.isActive()) {
-				inEdges.push_back(edge);
+			// Keep track of visited edge IDs to detect cycles in the linked list.
+			std::unordered_set<int64_t> visitedEdgeIds;
+
+			while (currentEdgeId != 0) {
+				// Cycle detected in the edge linked-list. Abort traversal.
+				if (visitedEdgeIds.count(currentEdgeId)) {
+					throw std::runtime_error("Cycle detected in incoming edges linked-list for node " + std::to_string(nodeId));
+				}
+				visitedEdgeIds.insert(currentEdgeId);
+
+				Edge edge = dm->getEdge(currentEdgeId);
+				if (edge.isActive()) {
+					inEdges.push_back(edge);
+				}
+				currentEdgeId = edge.getNextInEdgeId();
 			}
-			currentEdgeId = edge.getNextInEdgeId();
 		}
 		return inEdges;
 	}
@@ -61,8 +83,10 @@ namespace graph::traversal {
 		std::vector<Edge> outEdges = getOutgoingEdges(nodeId);
 
 		targetNodes.reserve(outEdges.size());
-		for (const auto &edge: outEdges) {
-			targetNodes.push_back(dataManager_->getNode(edge.getTargetNodeId()));
+		if (auto dm = dataManager_.lock()) {
+			for (const auto &edge: outEdges) {
+				targetNodes.push_back(dm->getNode(edge.getTargetNodeId()));
+			}
 		}
 		return targetNodes;
 	}
@@ -72,27 +96,31 @@ namespace graph::traversal {
 		std::vector<Edge> inEdges = getIncomingEdges(nodeId);
 
 		sourceNodes.reserve(inEdges.size());
-		for (const auto &edge: inEdges) {
-			sourceNodes.push_back(dataManager_->getNode(edge.getSourceNodeId()));
+		if (auto dm = dataManager_.lock()) {
+			for (const auto &edge: inEdges) {
+				sourceNodes.push_back(dm->getNode(edge.getSourceNodeId()));
+			}
 		}
 		return sourceNodes;
 	}
 
 	std::vector<Node> RelationshipTraversal::getAllConnectedNodes(int64_t nodeId) const {
-		std::unordered_set<int64_t> nodeIds;
 		std::vector<Node> connectedNodes;
 
-		for (const auto &edge: getOutgoingEdges(nodeId)) {
-			int64_t targetId = edge.getTargetNodeId();
-			if (nodeIds.insert(targetId).second) {
-				connectedNodes.push_back(dataManager_->getNode(targetId));
+		if (auto dm = dataManager_.lock()) {
+			std::unordered_set<int64_t> nodeIds;
+			for (const auto &edge: getOutgoingEdges(nodeId)) {
+				int64_t targetId = edge.getTargetNodeId();
+				if (nodeIds.insert(targetId).second) {
+					connectedNodes.push_back(dm->getNode(targetId));
+				}
 			}
-		}
 
-		for (const auto &edge: getIncomingEdges(nodeId)) {
-			int64_t sourceId = edge.getSourceNodeId();
-			if (nodeIds.insert(sourceId).second) {
-				connectedNodes.push_back(dataManager_->getNode(sourceId));
+			for (const auto &edge: getIncomingEdges(nodeId)) {
+				int64_t sourceId = edge.getSourceNodeId();
+				if (nodeIds.insert(sourceId).second) {
+					connectedNodes.push_back(dm->getNode(sourceId));
+				}
 			}
 		}
 		return connectedNodes;
@@ -103,89 +131,93 @@ namespace graph::traversal {
 		int64_t sourceNodeId = edge.getSourceNodeId();
 		int64_t targetNodeId = edge.getTargetNodeId();
 
-		Node sourceNode = dataManager_->getNode(sourceNodeId);
-		int64_t firstOutEdgeId = sourceNode.getFirstOutEdgeId();
+		if (auto dm = dataManager_.lock()) {
+			Node sourceNode = dm->getNode(sourceNodeId);
+			int64_t firstOutEdgeId = sourceNode.getFirstOutEdgeId();
 
-		if (firstOutEdgeId == 0) {
-			sourceNode.setFirstOutEdgeId(edgeId);
-			dataManager_->updateNode(sourceNode);
-		} else {
-			Edge firstOutEdge = dataManager_->getEdge(firstOutEdgeId);
-			edge.setNextOutEdgeId(firstOutEdgeId);
-			firstOutEdge.setPrevOutEdgeId(edgeId);
+			if (firstOutEdgeId == 0) {
+				sourceNode.setFirstOutEdgeId(edgeId);
+				dm->updateNode(sourceNode);
+			} else {
+				Edge firstOutEdge = dm->getEdge(firstOutEdgeId);
+				edge.setNextOutEdgeId(firstOutEdgeId);
+				firstOutEdge.setPrevOutEdgeId(edgeId);
 
-			sourceNode.setFirstOutEdgeId(edgeId);
+				sourceNode.setFirstOutEdgeId(edgeId);
 
-			dataManager_->updateEdge(firstOutEdge);
-			dataManager_->updateNode(sourceNode);
+				dm->updateEdge(firstOutEdge);
+				dm->updateNode(sourceNode);
+			}
+
+			Node targetNode = dm->getNode(targetNodeId);
+			int64_t firstInEdgeId = targetNode.getFirstInEdgeId();
+
+			if (firstInEdgeId == 0) {
+				targetNode.setFirstInEdgeId(edgeId);
+				dm->updateNode(targetNode);
+			} else {
+				Edge firstInEdge = dm->getEdge(firstInEdgeId);
+				edge.setNextInEdgeId(firstInEdgeId);
+				firstInEdge.setPrevInEdgeId(edgeId);
+
+				targetNode.setFirstInEdgeId(edgeId);
+
+				dm->updateEdge(firstInEdge);
+				dm->updateNode(targetNode);
+			}
+
+			dm->updateEdge(edge);
 		}
-
-		Node targetNode = dataManager_->getNode(targetNodeId);
-		int64_t firstInEdgeId = targetNode.getFirstInEdgeId();
-
-		if (firstInEdgeId == 0) {
-			targetNode.setFirstInEdgeId(edgeId);
-			dataManager_->updateNode(targetNode);
-		} else {
-			Edge firstInEdge = dataManager_->getEdge(firstInEdgeId);
-			edge.setNextInEdgeId(firstInEdgeId);
-			firstInEdge.setPrevInEdgeId(edgeId);
-
-			targetNode.setFirstInEdgeId(edgeId);
-
-			dataManager_->updateEdge(firstInEdge);
-			dataManager_->updateNode(targetNode);
-		}
-
-		dataManager_->updateEdge(edge);
 	}
 
 	void RelationshipTraversal::unlinkEdge(Edge &edge) const {
-		int64_t sourceNodeId = edge.getSourceNodeId();
-		int64_t targetNodeId = edge.getTargetNodeId();
+		if (auto dm = dataManager_.lock()) {
+			int64_t sourceNodeId = edge.getSourceNodeId();
+			int64_t targetNodeId = edge.getTargetNodeId();
 
-		int64_t prevOutEdgeId = edge.getPrevOutEdgeId();
-		int64_t nextOutEdgeId = edge.getNextOutEdgeId();
+			int64_t prevOutEdgeId = edge.getPrevOutEdgeId();
+			int64_t nextOutEdgeId = edge.getNextOutEdgeId();
 
-		if (prevOutEdgeId == 0) {
-			Node sourceNode = dataManager_->getNode(sourceNodeId);
-			sourceNode.setFirstOutEdgeId(nextOutEdgeId);
-			dataManager_->updateNode(sourceNode);
-		} else {
-			Edge prevOutEdge = dataManager_->getEdge(prevOutEdgeId);
-			prevOutEdge.setNextOutEdgeId(nextOutEdgeId);
-			dataManager_->updateEdge(prevOutEdge);
+			if (prevOutEdgeId == 0) {
+				Node sourceNode = dm->getNode(sourceNodeId);
+				sourceNode.setFirstOutEdgeId(nextOutEdgeId);
+				dm->updateNode(sourceNode);
+			} else {
+				Edge prevOutEdge = dm->getEdge(prevOutEdgeId);
+				prevOutEdge.setNextOutEdgeId(nextOutEdgeId);
+				dm->updateEdge(prevOutEdge);
+			}
+
+			if (nextOutEdgeId != 0) {
+				Edge nextOutEdge = dm->getEdge(nextOutEdgeId);
+				nextOutEdge.setPrevOutEdgeId(prevOutEdgeId);
+				dm->updateEdge(nextOutEdge);
+			}
+
+			int64_t prevInEdgeId = edge.getPrevInEdgeId();
+			int64_t nextInEdgeId = edge.getNextInEdgeId();
+
+			if (prevInEdgeId == 0) {
+				Node targetNode = dm->getNode(targetNodeId);
+				targetNode.setFirstInEdgeId(nextInEdgeId);
+				dm->updateNode(targetNode);
+			} else {
+				Edge prevInEdge = dm->getEdge(prevInEdgeId);
+				prevInEdge.setNextInEdgeId(nextInEdgeId);
+				dm->updateEdge(prevInEdge);
+			}
+
+			if (nextInEdgeId != 0) {
+				Edge nextInEdge = dm->getEdge(nextInEdgeId);
+				nextInEdge.setPrevInEdgeId(prevInEdgeId);
+				dm->updateEdge(nextInEdge);
+			}
+
+			edge.setNextOutEdgeId(0);
+			edge.setPrevOutEdgeId(0);
+			edge.setNextInEdgeId(0);
+			edge.setPrevInEdgeId(0);
 		}
-
-		if (nextOutEdgeId != 0) {
-			Edge nextOutEdge = dataManager_->getEdge(nextOutEdgeId);
-			nextOutEdge.setPrevOutEdgeId(prevOutEdgeId);
-			dataManager_->updateEdge(nextOutEdge);
-		}
-
-		int64_t prevInEdgeId = edge.getPrevInEdgeId();
-		int64_t nextInEdgeId = edge.getNextInEdgeId();
-
-		if (prevInEdgeId == 0) {
-			Node targetNode = dataManager_->getNode(targetNodeId);
-			targetNode.setFirstInEdgeId(nextInEdgeId);
-			dataManager_->updateNode(targetNode);
-		} else {
-			Edge prevInEdge = dataManager_->getEdge(prevInEdgeId);
-			prevInEdge.setNextInEdgeId(nextInEdgeId);
-			dataManager_->updateEdge(prevInEdge);
-		}
-
-		if (nextInEdgeId != 0) {
-			Edge nextInEdge = dataManager_->getEdge(nextInEdgeId);
-			nextInEdge.setPrevInEdgeId(prevInEdgeId);
-			dataManager_->updateEdge(nextInEdge);
-		}
-
-		edge.setNextOutEdgeId(0);
-		edge.setPrevOutEdgeId(0);
-		edge.setNextInEdgeId(0);
-		edge.setPrevInEdgeId(0);
 	}
 
 } // namespace graph::traversal

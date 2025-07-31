@@ -15,7 +15,7 @@
 
 namespace graph {
 
-	Blob::Blob(int64_t id, const std::string &data) {
+	Blob::Blob(const int64_t id, const std::string &data) {
 		metadata.id = id;
 		setData(data);
 	}

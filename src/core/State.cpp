@@ -16,7 +16,7 @@
 
 namespace graph {
 
-	State::State(int64_t id, const std::string &key, const std::string &data) {
+	State::State(const int64_t id, const std::string &key, const std::string &data) {
 		metadata.id = id;
 		setKey(key);
 		setData(data);

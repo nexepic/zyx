@@ -25,7 +25,7 @@ namespace graph::storage {
 		virtual ~EntityManagerInterface() = default;
 
 		// Core CRUD operations
-		virtual void add(const EntityType &entity) = 0;
+		virtual void add(EntityType &entity) = 0;
 		virtual void update(const EntityType &entity) = 0;
 		virtual void remove(EntityType &entity) = 0;
 		virtual EntityType get(int64_t id) = 0;
@@ -33,9 +33,6 @@ namespace graph::storage {
 		// Batch operations
 		virtual std::vector<EntityType> getBatch(const std::vector<int64_t> &ids) = 0;
 		virtual std::vector<EntityType> getInRange(int64_t startId, int64_t endId, size_t limit) = 0;
-
-		// ID management
-		virtual int64_t reserveTemporaryId() = 0;
 
 		// Dirty entity management
 		virtual std::vector<EntityType> getDirtyWithChangeTypes(const std::vector<EntityChangeType> &types) = 0;
