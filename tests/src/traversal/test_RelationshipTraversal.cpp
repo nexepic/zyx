@@ -299,16 +299,19 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInChain) {
 }
 
 TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
-	graph::Edge edge14(14, n1.getId(), n4.getId(), "links_to");
+	graph::Node n5(5, "N5");
+	dataManager->addNode(n5);
+
+	graph::Edge edge14(14, n1.getId(), n5.getId(), "links_to");
 	dataManager->addEdge(edge14);
 
-	graph::Edge edge24(24, n2.getId(), n4.getId(), "links_to");
+	graph::Edge edge24(24, n2.getId(), n5.getId(), "links_to");
 	dataManager->addEdge(edge24);
 
-	graph::Edge edge34(34, n3.getId(), n4.getId(), "links_to");
+	graph::Edge edge34(34, n3.getId(), n5.getId(), "links_to");
 	dataManager->addEdge(edge34);
 
-	auto initialInEdges = traversal->getIncomingEdges(n4.getId());
+	auto initialInEdges = traversal->getIncomingEdges(n5.getId());
 	ASSERT_EQ(initialInEdges.size(), 3);
 	ASSERT_EQ(initialInEdges[0].getId(), edge34.getId());
 	ASSERT_EQ(initialInEdges[1].getId(), edge24.getId());
@@ -319,7 +322,7 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
 	traversal->unlinkEdge(edgeToUnlink);
 
 	// a. Check the edges currently in the chain
-	auto finalInEdges = traversal->getIncomingEdges(n4.getId());
+	auto finalInEdges = traversal->getIncomingEdges(n5.getId());
 	ASSERT_EQ(finalInEdges.size(), 2);
 	EXPECT_EQ(finalInEdges[0].getId(), edge34.getId()); // New head of the list
 	EXPECT_EQ(finalInEdges[1].getId(), edge14.getId()); // New tail of the list
