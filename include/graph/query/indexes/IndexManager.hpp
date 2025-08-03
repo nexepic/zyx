@@ -56,13 +56,16 @@ namespace graph::query::indexes {
 		void enableRelationshipIndex(bool enable = true);
 		void enableFullTextIndex(bool enable = true);
 
-		// Update indexes with entity changes (for incremental updates)
-		void updateIndexes(const std::vector<Node> &addedNodes, const std::vector<Node> &updatedNodes,
-						   const std::vector<int64_t> &removedNodeIds, const std::vector<Edge> &addedEdges,
-						   const std::vector<Edge> &updatedEdges, const std::vector<int64_t> &removedEdgeIds) const;
+		void onNodeAdded(const Node& node) const;
+		void onNodeUpdated(const Node& oldNode, const Node& newNode) const;
+		void onNodeDeleted(const Node& node) const;
+
+		void onEdgeAdded(const Edge& edge) const;
+		void onEdgeUpdated(const Edge& oldEdge, const Edge& newEdge) const;
+		void onEdgeDeleted(const Edge& edge) const;
 
 		// Update a single node in all enabled indexes
-		void updateNodeIndexes(const Node &node, bool isNew = false, bool isDeleted = false) const;
+		void updateNodeLabelIndex(const Node &node, const std::string &oldLabel, bool isDeleted) const;
 
 		// Update a single edge in all enabled indexes
 		void updateEdgeIndexes(const Edge &edge, bool isNew = false, bool isDeleted = false) const;

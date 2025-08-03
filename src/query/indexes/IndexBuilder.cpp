@@ -76,8 +76,8 @@ namespace graph::query::indexes {
 			// Persist the indexes' state to disk
 			indexManager_->persistState();
 			return true;
-		} catch ([[maybe_unused]] const std::exception &e) {
-			// Log exception if needed
+		} catch (const std::exception &e) {
+			std::cerr << "Error in buildAllIndexes: " << e.what() << std::endl;
 			return false;
 		}
 	}

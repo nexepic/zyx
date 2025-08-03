@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ ubuntu-latest, windows-latest ]
 
     steps:
       - name: Checkout code
@@ -77,13 +77,13 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd buildDir
-          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches --gcov-executable "llvm-cov-20 gcov"
+          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches --exclude=".*tests/.*" --gcov-executable "llvm-cov-20 gcov"
 
       - name: Generate coverage report (Windows)
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches --gcov-executable "llvm-cov gcov"
+          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches --exclude=".*tests/.*" --gcov-executable "llvm-cov gcov"
         shell: pwsh
 
       - name: Upload coverage to Codecov

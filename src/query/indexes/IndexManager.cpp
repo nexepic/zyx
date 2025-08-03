@@ -35,7 +35,7 @@ namespace graph::query::indexes {
 
 	bool IndexManager::executeBuildTask(const std::function<bool()> &buildFunc) const {
 		// Commit any pending changes before indexing. This is crucial for ensuring data consistency.
-		storage_->save();
+		storage_->flush();
 
 		// Execute the specific build task.
 		return buildFunc();
@@ -188,58 +188,31 @@ namespace graph::query::indexes {
 		indexConfig_.fullTextIndexEnabled = enable;
 	}
 
-	void IndexManager::updateNodeIndexes(const Node &node, bool isNew, bool isDeleted) const {
+	void IndexManager::updateNodeLabelIndex(const Node &node, const std::string &oldLabel, bool isDeleted) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		const int64_t nodeId = node.getId();
-
-		if (nodeId == 0)
+		if (!indexConfig_.labelIndexEnabled)
+			return;
+		if (node.getId() == 0)
 			return;
 
+		const int64_t nodeId = node.getId();
+		const std::string &newLabel = node.getLabel();
+
 		if (isDeleted) {
-			// Remove from all indexes
-			if (indexConfig_.labelIndexEnabled) {
-				labelIndex_->removeNode(nodeId, node.getLabel());
-			}
-
-			if (!indexConfig_.propertyIndexKeys.empty()) {
-				auto properties = dataManager_->getNodeProperties(nodeId);
-				for (const auto &[key, _]: properties) {
-					if (indexConfig_.propertyIndexKeys.contains(key)) {
-						propertyIndex_->removeProperty(nodeId, key);
-					}
-
-					if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(_)) {
-						fullTextIndex_->removeTextProperty(nodeId, key);
-					}
-				}
-			}
+			// On deletion, remove the node from its last known label index.
+			// Note: The passed `node` object should represent the state just before deletion.
+			labelIndex_->removeNode(nodeId, newLabel);
 		} else {
-			// Add or update indexes
-			if (indexConfig_.labelIndexEnabled) {
-				if (!isNew) {
-					// For updates, first remove old label
-					labelIndex_->removeNode(nodeId, node.getLabel());
-				}
-
-				// Add current label
-				labelIndex_->addNode(nodeId, node.getLabel());
+			// Handle Add or Update
+			if (!oldLabel.empty() && oldLabel != newLabel) {
+				// The label was changed, so remove it from the old index.
+				labelIndex_->removeNode(nodeId, oldLabel);
 			}
 
-			if (!indexConfig_.propertyIndexKeys.empty()) {
-				auto properties = dataManager_->getNodeProperties(nodeId);
-
-				// Only process properties that have indexes enabled
-				for (const auto &[key, value]: properties) {
-					if (indexConfig_.propertyIndexKeys.contains(key)) {
-						propertyIndex_->addProperty(nodeId, key, value);
-
-						// Also handle full-text index for string properties
-						if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(value)) {
-							fullTextIndex_->addTextProperty(nodeId, key, std::get<std::string>(value));
-						}
-					}
-				}
+			if (!newLabel.empty()) {
+				// Add the node to the new/current label index.
+				labelIndex_->addNode(nodeId, newLabel);
 			}
 		}
 	}
@@ -265,45 +238,69 @@ namespace graph::query::indexes {
 		}
 	}
 
-	void IndexManager::updateIndexes(const std::vector<Node> &addedNodes, const std::vector<Node> &updatedNodes,
-									 const std::vector<int64_t> &removedNodeIds, const std::vector<Edge> &addedEdges,
-									 const std::vector<Edge> &updatedEdges,
-									 const std::vector<int64_t> &removedEdgeIds) const {
-		// Process nodes
-		for (const auto &nodeId: removedNodeIds) {
-			// Find node in storage
-			const auto &node = dataManager_->getNode(nodeId);
-			if (node.getId() != 0) {
-				updateNodeIndexes(node, false, true);
-			}
-		}
+	void IndexManager::onNodeAdded(const Node &node) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		for (const auto &node: addedNodes) {
-			updateNodeIndexes(node, true, false);
-		}
+		// 1. Update label index
+		// For a new node, the oldLabel is empty, and it's not a deletion.
+		updateNodeLabelIndex(node, "", false);
 
-		for (const auto &node: updatedNodes) {
-			updateNodeIndexes(node, false, false);
-		}
+		// 2. Update property indexes
+		// For a new node, the oldProps map is empty.
+		updatePropertyIndexes(node.getId(), {}, node.getProperties());
 
-		// Process edges
-		for (const auto &edgeId: removedEdgeIds) {
-			// Find edge in storage
-			const auto &edge = dataManager_->getEdge(edgeId);
-			if (edge.getId() != 0) {
-				updateEdgeIndexes(edge, false, true);
-			}
-		}
+		persistState();
+	}
 
-		for (const auto &edge: addedEdges) {
-			updateEdgeIndexes(edge, true, false);
-		}
+	/**
+	 * @brief Must be called AFTER a node has been updated in storage.
+	 * @param oldNode The state of the node BEFORE the update.
+	 * @param newNode The state of the node AFTER the update.
+	 */
+	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		for (const auto &edge: updatedEdges) {
-			updateEdgeIndexes(edge, false, false);
-		}
+		// 1. Update label index
+		// We provide both old and new labels.
+		updateNodeLabelIndex(newNode, oldNode.getLabel(), false);
 
-		// Persist changes if needed
+		// 2. Update property indexes
+		// We provide both old and new properties.
+		updatePropertyIndexes(newNode.getId(), oldNode.getProperties(), newNode.getProperties());
+
+		persistState();
+	}
+
+	void IndexManager::onNodeDeleted(const Node &node) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// 1. Update label index for deletion
+		updateNodeLabelIndex(node, node.getLabel(), true);
+
+		// 2. Update property indexes for deletion
+		// The newProps map is empty because the node will cease to exist.
+		updatePropertyIndexes(node.getId(), node.getProperties(), {});
+
+		persistState();
+	}
+
+
+	// --- You would implement similar onEdgeAdded, onEdgeUpdated, onEdgeDeleted methods here ---
+	void IndexManager::onEdgeAdded(const Edge &edge) const {
+		// Conceptual: update property indexes for the new edge
+		updatePropertyIndexes(edge.getId(), {}, edge.getProperties());
+		persistState();
+	}
+
+	void IndexManager::onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const {
+		// Conceptual: update property indexes for the updated edge
+		updatePropertyIndexes(newEdge.getId(), oldEdge.getProperties(), newEdge.getProperties());
+		persistState();
+	}
+
+	void IndexManager::onEdgeDeleted(const Edge &edge) const {
+		// Conceptual: update property indexes for the deleted edge
+		updatePropertyIndexes(edge.getId(), edge.getProperties(), {});
 		persistState();
 	}
 
@@ -313,45 +310,68 @@ namespace graph::query::indexes {
 											 const std::unordered_map<std::string, PropertyValue> &newProps) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// Get all keys that need updating
+		// Get all unique property keys from both old and new maps that are indexed.
 		std::unordered_set<std::string> keys;
 		for (const auto &key: oldProps | std::views::keys) {
 			if (indexConfig_.propertyIndexKeys.contains(key)) {
 				keys.insert(key);
 			}
 		}
-
 		for (const auto &key: newProps | std::views::keys) {
 			if (indexConfig_.propertyIndexKeys.contains(key)) {
 				keys.insert(key);
 			}
 		}
 
-		// Process each key
+		// Process each affected key
 		for (const auto &key: keys) {
 			auto oldIt = oldProps.find(key);
 			auto newIt = newProps.find(key);
 
-			if (oldIt != oldProps.end() && newIt == newProps.end()) {
-				// Property removed
-				propertyIndex_->removeProperty(entityId, key);
+			bool hadOldValue = (oldIt != oldProps.end());
+			bool hasNewValue = (newIt != newProps.end());
 
+			if (hadOldValue && !hasNewValue) {
+				// --- Case 1: Property was REMOVED ---
+				// We have the old value, so we can remove it correctly.
+				propertyIndex_->removeProperty(entityId, key, oldIt->second);
+
+				// Handle full-text index as well
 				if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(oldIt->second)) {
 					fullTextIndex_->removeTextProperty(entityId, key);
 				}
-			} else if (newIt != newProps.end()) {
-				// Property added or updated
+
+			} else if (!hadOldValue && hasNewValue) {
+				// --- Case 2: Property was ADDED ---
 				propertyIndex_->addProperty(entityId, key, newIt->second);
 
 				if (indexConfig_.fullTextIndexEnabled && std::holds_alternative<std::string>(newIt->second)) {
-					// For updates, first remove old text
-					if (oldIt != oldProps.end() && std::holds_alternative<std::string>(oldIt->second)) {
-						fullTextIndex_->removeTextProperty(entityId, key);
-					}
-
-					// Add new text
 					fullTextIndex_->addTextProperty(entityId, key, std::get<std::string>(newIt->second));
 				}
+
+			} else if (hadOldValue && hasNewValue) {
+				// --- Case 3: Property was UPDATED ---
+				if (oldIt->second != newIt->second) {
+					// The value changed, so we must REMOVE the old and ADD the new.
+
+					// Remove old property from index
+					propertyIndex_->removeProperty(entityId, key, oldIt->second);
+
+					// Add new property to index
+					propertyIndex_->addProperty(entityId, key, newIt->second);
+
+					// Handle full-text index
+					if (indexConfig_.fullTextIndexEnabled) {
+						if (std::holds_alternative<std::string>(oldIt->second)) {
+							fullTextIndex_->removeTextProperty(entityId, key);
+						}
+						if (std::holds_alternative<std::string>(newIt->second)) {
+							fullTextIndex_->addTextProperty(entityId, key, std::get<std::string>(newIt->second));
+						}
+					}
+				}
+				// If oldIt->second == newIt->second, the indexed property value didn't change,
+				// so we do nothing.
 			}
 		}
 	}

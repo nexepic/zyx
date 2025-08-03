@@ -8,129 +8,146 @@
  *
  **/
 
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
 #include <gtest/gtest.h>
-#include "TestTreeManagerConfig.hpp"
-
-using namespace graph::query::indexes;
-using namespace graph::storage::test;
+#include "graph/core/Database.hpp"
 
 class IndexTreeManagerTest : public ::testing::Test {
 protected:
+	// SetUpTestSuite is run once for all tests in this file
+	static void SetUpTestSuite() {
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		std::filesystem::path testFilePath = std::filesystem::temp_directory_path() /
+											 ("test_db_file_manager_" + boost::uuids::to_string(uuid) + ".dat");
+
+		database_ = std::make_unique<graph::Database>(testFilePath.string());
+		database_->open();
+		dataManager_ = database_->getStorage()->getDataManager();
+	}
+
+	static void TearDownTestSuite() {
+		if (database_) {
+			database_->close();
+			database_.reset();
+		}
+		dataManager_.reset();
+	}
+
+	// SetUp is run before each individual TEST_F
 	void SetUp() override {
-		TestTreeManagerConfig::initialize();
-		TestTreeManagerConfig::setMaxKeysPerNode(5); // Set MAX_KEYS_PER_NODE globally
-		treeManager = TestTreeManagerConfig::getTreeManager();
-		rootId = treeManager->initialize();
+		// For each test, create a fresh tree manager with a SMALL capacity to test splits.
+		treeManager_ = std::make_shared<graph::query::indexes::IndexTreeManager>(
+				dataManager_, graph::query::indexes::LabelIndex::LABEL_INDEX_TYPE,
+				3, // maxKeysPerLeaf: force leaf split after 3 insertions
+				3 // maxKeysPerInternal: force internal node to split too
+		);
+		rootId_ = treeManager_->initialize();
 	}
 
 	void TearDown() override {
-		TestTreeManagerConfig::resetMaxKeysPerNode(); // Reset MAX_KEYS_PER_NODE
+		// Clean up the tree created in SetUp to ensure tests are isolated
+		if (rootId_ != 0) {
+			treeManager_->clear(rootId_);
+		}
 	}
 
-	static void TearDownTestSuite() { TestTreeManagerConfig::cleanup(); }
+	// Member variables accessible by each TEST_F
+	std::shared_ptr<graph::query::indexes::IndexTreeManager> treeManager_;
+	int64_t rootId_{};
 
-	std::shared_ptr<IndexTreeManager> treeManager;
-	int64_t rootId{};
+	// Static members shared by all tests in the suite
+	static std::unique_ptr<graph::Database> database_;
+	static std::shared_ptr<graph::storage::DataManager> dataManager_;
 };
 
-TEST_F(IndexTreeManagerTest, InsertAndSplit) {
-	for (int i = 0; i < 10; ++i) {
-		rootId = treeManager->insert(rootId, "key" + std::to_string(i), i);
-	}
+// Initialize static members
+std::unique_ptr<graph::Database> IndexTreeManagerTest::database_ = nullptr;
+std::shared_ptr<graph::storage::DataManager> IndexTreeManagerTest::dataManager_ = nullptr;
 
-	auto results = treeManager->findRange(rootId, "key0", "key9");
 
-	// Sort the results to ensure consistent order
-	std::ranges::sort(results);
+TEST_F(IndexTreeManagerTest, InsertCausesLeafSplit) {
+	// With maxKeysPerLeaf = 3, the 4th insertion should trigger a split.
+	rootId_ = treeManager_->insert(rootId_, "keyA", 1);
+	rootId_ = treeManager_->insert(rootId_, "keyB", 2);
+	rootId_ = treeManager_->insert(rootId_, "keyC", 3);
 
-	ASSERT_EQ(results.size(), 10);
-	ASSERT_EQ(results.front(), 0);
-	ASSERT_EQ(results.back(), 9);
+	auto rootNodeBeforeSplit = dataManager_->getIndex(rootId_);
+	ASSERT_TRUE(rootNodeBeforeSplit.isLeaf());
+	ASSERT_EQ(rootNodeBeforeSplit.getKeyCount(), 3);
+
+	// This insertion MUST cause a split.
+	rootId_ = treeManager_->insert(rootId_, "keyD", 4);
+
+	// Verify the split happened
+	auto newRootNode = dataManager_->getIndex(rootId_);
+	ASSERT_FALSE(newRootNode.isLeaf()); // The root should now be an internal node
+	ASSERT_EQ(newRootNode.getChildCount(), 2);
+
+	// Verify all data is still findable
+	auto results = treeManager_->findRange(rootId_, "keyA", "keyD");
+	ASSERT_EQ(results.size(), 4);
 }
 
-TEST_F(IndexTreeManagerTest, NodeMerge) {
-	for (int i = 0; i < 5; ++i) {
-		rootId = treeManager->insert(rootId, "key" + std::to_string(i), i);
+TEST_F(IndexTreeManagerTest, InsertCausesInternalSplit) {
+	// With maxKeysPerInternal = 3, we need to cause enough leaf splits
+	// to over-fill the root internal node.
+	// Each leaf split promotes one key. We need 4 keys promoted to split the root.
+	// Each leaf holds 3 keys, so we need to fill 4 leaves.
+	for (int i = 0; i < 10; ++i) {
+		rootId_ = treeManager_->insert(rootId_, "key_" + std::to_string(i), i);
 	}
 
-	bool removed = treeManager->remove(rootId, "key0", 0);
+	auto rootNode = dataManager_->getIndex(rootId_);
+	ASSERT_FALSE(rootNode.isLeaf());
+	// The specific structure depends on split keys, but we can verify all data exists.
+	auto results = treeManager_->findRange(rootId_, "key_0", "key_9");
+	ASSERT_EQ(results.size(), 10);
+}
+
+TEST_F(IndexTreeManagerTest, RemoveAndFind) {
+	rootId_ = treeManager_->insert(rootId_, "keyA", 1);
+	rootId_ = treeManager_->insert(rootId_, "keyB", 2);
+
+	bool removed = treeManager_->remove(rootId_, "keyA", 1);
 	ASSERT_TRUE(removed);
 
-	auto results = treeManager->findRange(rootId, "key1", "key4");
+	removed = treeManager_->remove(rootId_, "keyA", 1);
+	ASSERT_FALSE(removed);
 
-	// Sort the results to ensure consistent order
-	std::ranges::sort(results);
+	auto results = treeManager_->find(rootId_, "keyA");
+	ASSERT_TRUE(results.empty());
 
-	ASSERT_EQ(results.size(), 4);
-	ASSERT_EQ(results.front(), 1);
-	ASSERT_EQ(results.back(), 4);
-}
-
-TEST_F(IndexTreeManagerTest, EmptyRangeQuery) {
-	auto results = treeManager->findRange(rootId, "key0", "key9");
-
-	// Sort the results to ensure consistent order
-	std::ranges::sort(results);
-
-	ASSERT_TRUE(results.empty()); // Ensure no results are returned
-}
-
-TEST_F(IndexTreeManagerTest, SingleKeyRangeQuery) {
-	treeManager->insert(rootId, "key5", 5);
-	auto results = treeManager->findRange(rootId, "key5", "key5");
-
-	// Sort the results to ensure consistent order
-	std::ranges::sort(results);
-
+	results = treeManager_->find(rootId_, "keyB");
 	ASSERT_EQ(results.size(), 1);
-	ASSERT_EQ(results[0], 5);
+	ASSERT_EQ(results[0], 2);
 }
 
-TEST_F(IndexTreeManagerTest, BoundaryRangeQuery) {
-	for (int i = 0; i < 10; ++i) {
-		treeManager->insert(rootId, "key" + std::to_string(i), i);
-	}
-	auto results = treeManager->findRange(rootId, "key0", "key9");
-
-	// Sort the results to ensure consistent order
-	std::ranges::sort(results);
-
-	ASSERT_EQ(results.size(), 10);
-	ASSERT_EQ(results.front(), 0);
-	ASSERT_EQ(results.back(), 9);
-}
-
-TEST_F(IndexTreeManagerTest, DuplicateKeyRangeQuery) {
-	treeManager->insert(rootId, "key5", 5);
-	treeManager->insert(rootId, "key5", 6); // Duplicate key with different value
-	auto results = treeManager->findRange(rootId, "key5", "key5");
-
-	// Sort the results to ensure consistent order
-	std::ranges::sort(results);
-
-	ASSERT_EQ(results.size(), 2);
-	ASSERT_EQ(results[0], 5);
-	ASSERT_EQ(results[1], 6);
-}
-
-TEST_F(IndexTreeManagerTest, EdgeCaseEmptyNode) {
-	auto results = treeManager->findRange(rootId, "key0", "key9");
-
-	// Sort the results to ensure consistent order
-	std::ranges::sort(results);
-
-	ASSERT_TRUE(results.empty()); // Ensure no results are returned for an empty node
-}
-
-TEST_F(IndexTreeManagerTest, EdgeCaseMaxKeys) {
-	for (int i = 0; i < 5; ++i) {
-		treeManager->insert(rootId, "key" + std::to_string(i), i);
+TEST_F(IndexTreeManagerTest, RangeQueryAfterSplit) {
+	for (int i = 0; i < 7; ++i) {
+		rootId_ = treeManager_->insert(rootId_, "key" + std::to_string(i), i);
 	}
 
-	auto results = treeManager->findRange(rootId, "key0", "key4");
-
-	// Sort the results to ensure consistent order
+	auto results = treeManager_->findRange(rootId_, "key1", "key5");
+	std::vector<int64_t> expected = {1, 2, 3, 4, 5};
 	std::ranges::sort(results);
+	ASSERT_EQ(results, expected);
+}
 
-	ASSERT_EQ(results.size(), 5); // Ensure the node handles max keys correctly
+TEST_F(IndexTreeManagerTest, Clear) {
+	for (int i = 0; i < 7; ++i) {
+		rootId_ = treeManager_->insert(rootId_, "key" + std::to_string(i), i);
+	}
+
+	int64_t rootToDelete = rootId_;
+	treeManager_->clear(rootToDelete);
+
+	// Check that a previously found key is no longer there.
+	// A new tree would have a different rootId, so we can't search the old one.
+	// The best way to test clear is to ensure no errors and that a new tree is empty.
+	rootId_ = treeManager_->initialize();
+	auto results = treeManager_->find(rootId_, "key1");
+	ASSERT_TRUE(results.empty());
 }

@@ -120,6 +120,7 @@ protected:
 	std::vector<graph::Edge> edges;
 };
 
+// FindShortestPath tests
 TEST_F(TraversalQueryTest, FindShortestPathDirectConnection) {
 	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node1.getId(), node2.getId(), "outgoing");
 
@@ -234,7 +235,7 @@ TEST_F(TraversalQueryTest, FindShortestPathMultipleAlternatives) {
 	EXPECT_EQ(path[1].getId(), node5.getId());
 }
 
-// Test findConnectedNodes functionality
+// FindConnectedNodes tests
 TEST_F(TraversalQueryTest, FindConnectedNodesOutgoing) {
 	const std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node1.getId(), "outgoing");
 
@@ -364,5 +365,321 @@ TEST_F(TraversalQueryTest, FindConnectedNodesEmptyParameters) {
 	const std::unordered_set expectedIds = {node2.getId(), node3.getId()};
 	for (const auto &node: connectedNodes) {
 		EXPECT_TRUE(expectedIds.contains(node.getId()));
+	}
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_BasicTraversal) {
+	std::vector<int64_t> visitedNodeIds;
+	std::vector<int> visitedDepths;
+
+	traversalQuery->breadthFirstTraversal(
+			node1.getId(),
+			[&visitedNodeIds, &visitedDepths](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				visitedDepths.push_back(depth);
+				return true; // Continue traversal
+			},
+			3, // Max depth of 3
+			"outgoing");
+
+	// Check we visited the expected nodes in BFS order
+	ASSERT_GE(visitedNodeIds.size(), 3u);
+	EXPECT_EQ(visitedNodeIds[0], node1.getId()); // Start node (depth 0)
+
+	// Check depths are correct (should increase monotonically by steps)
+	EXPECT_EQ(visitedDepths[0], 0); // Start at depth 0
+
+	// All nodes at depth 1 should be before nodes at depth 2
+	int lastDepth = 0;
+	for (size_t i = 1; i < visitedDepths.size(); ++i) {
+		EXPECT_GE(visitedDepths[i], lastDepth);
+		EXPECT_LE(visitedDepths[i] - lastDepth, 1); // Depth can only increase by 1 in BFS
+		lastDepth = visitedDepths[i];
+	}
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_MaxDepthLimit) {
+	std::vector<int64_t> visitedNodeIds;
+	std::vector<int> visitedDepths;
+
+	// Set max depth to 1 (only immediate neighbors)
+	traversalQuery->breadthFirstTraversal(
+			node1.getId(),
+			[&visitedNodeIds, &visitedDepths](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				visitedDepths.push_back(depth);
+				return true;
+			},
+			1, // Max depth of 1
+			"outgoing");
+
+	// Should only visit node1 and its direct neighbors (node2, node3)
+	ASSERT_LE(visitedNodeIds.size(), 3u);
+	EXPECT_EQ(visitedNodeIds[0], node1.getId());
+
+	// All nodes should be at depth 0 or 1
+	for (int depth: visitedDepths) {
+		EXPECT_LE(depth, 1);
+	}
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_EarlyTermination) {
+	std::vector<int64_t> visitedNodeIds;
+
+	// Stop traversal after visiting node1
+	traversalQuery->breadthFirstTraversal(
+			node1.getId(),
+			[&visitedNodeIds](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				return false; // Stop traversal immediately
+			},
+			5, // High max depth
+			"outgoing");
+
+	// Should only visit the start node due to early termination
+	ASSERT_EQ(visitedNodeIds.size(), 1u);
+	EXPECT_EQ(visitedNodeIds[0], node1.getId());
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_IncomingDirection) {
+	std::vector<int64_t> visitedNodeIds;
+
+	// Traverse incoming edges from node5
+	traversalQuery->breadthFirstTraversal(
+			node5.getId(),
+			[&visitedNodeIds](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				return true;
+			},
+			2, // Max depth of 2
+			"incoming");
+
+	// Node5 has incoming edges from node3, node4, node9, node11
+	ASSERT_GE(visitedNodeIds.size(), 5u); // At least 5 nodes including node5
+	EXPECT_EQ(visitedNodeIds[0], node5.getId());
+
+	// Check that direct incoming nodes to node5 are included
+	const std::unordered_set<int64_t> directIncoming = {node3.getId(), node4.getId(), node9.getId(), node11.getId()};
+
+	bool foundDirectIncoming = false;
+	for (size_t i = 1; i < visitedNodeIds.size(); ++i) {
+		if (directIncoming.contains(visitedNodeIds[i])) {
+			foundDirectIncoming = true;
+			break;
+		}
+	}
+	EXPECT_TRUE(foundDirectIncoming);
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_BothDirections) {
+	std::vector<int64_t> visitedNodeIds;
+
+	// Traverse in both directions from node3
+	traversalQuery->breadthFirstTraversal(
+			node3.getId(),
+			[&visitedNodeIds](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				return true;
+			},
+			1, // Max depth of 1
+			"both");
+
+	// Node3 has connections with node1, node2, node5, node7
+	ASSERT_GE(visitedNodeIds.size(), 3u);
+	EXPECT_EQ(visitedNodeIds[0], node3.getId());
+
+	// Check for neighbors in both directions
+	const std::unordered_set<int64_t> neighbors = {node1.getId(), node2.getId(), node5.getId(), node7.getId()};
+
+	int neighborCount = 0;
+	for (size_t i = 1; i < visitedNodeIds.size(); ++i) {
+		if (neighbors.contains(visitedNodeIds[i])) {
+			neighborCount++;
+		}
+	}
+	EXPECT_GT(neighborCount, 0);
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_NoConnections) {
+	std::vector<int64_t> visitedNodeIds;
+
+	// Create an isolated node for testing
+	graph::Node isolatedNode(0, "IsolatedNode");
+	dataManager->addNode(isolatedNode);
+
+	traversalQuery->breadthFirstTraversal(
+			isolatedNode.getId(),
+			[&visitedNodeIds](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				return true;
+			},
+			3, // Max depth of 3
+			"outgoing");
+
+	// Should only visit the isolated node itself
+	ASSERT_EQ(visitedNodeIds.size(), 1u);
+	EXPECT_EQ(visitedNodeIds[0], isolatedNode.getId());
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_ComplexGraph) {
+	std::vector<int64_t> visitedNodeIds;
+	std::unordered_map<int64_t, int> nodeDepths;
+
+	// Start from node6 which has multiple paths to node5
+	traversalQuery->breadthFirstTraversal(
+			node6.getId(),
+			[&visitedNodeIds, &nodeDepths](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				nodeDepths[node.getId()] = depth;
+				return true;
+			},
+			5, // High max depth to reach deep nodes
+			"outgoing");
+
+	ASSERT_GT(visitedNodeIds.size(), 1u);
+	EXPECT_EQ(visitedNodeIds[0], node6.getId());
+
+	// Node5 should be visited at depth > 0
+	bool foundNode5 = false;
+	for (int64_t id: visitedNodeIds) {
+		if (id == node5.getId()) {
+			EXPECT_GT(nodeDepths[id], 0);
+			foundNode5 = true;
+			break;
+		}
+	}
+
+	// The traversal should eventually reach node5 through outgoing paths
+	EXPECT_TRUE(foundNode5);
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_ZeroMaxDepth) {
+	std::vector<int64_t> visitedNodeIds;
+
+	// Set max depth to 0 (only the start node)
+	traversalQuery->breadthFirstTraversal(
+			node1.getId(),
+			[&visitedNodeIds](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				return true;
+			},
+			0, // Max depth of 0
+			"outgoing");
+
+	// Should only visit the start node
+	ASSERT_EQ(visitedNodeIds.size(), 1u);
+	EXPECT_EQ(visitedNodeIds[0], node1.getId());
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_InvalidDirection) {
+	std::vector<int64_t> visitedNodeIds;
+
+	// Use invalid direction
+	traversalQuery->breadthFirstTraversal(
+			node1.getId(),
+			[&visitedNodeIds](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				return true;
+			},
+			3, "invalid_direction");
+
+	// Should only visit the start node since no valid connections will be found
+	ASSERT_EQ(visitedNodeIds.size(), 1u);
+	EXPECT_EQ(visitedNodeIds[0], node1.getId());
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_CycleDetection) {
+	// Create a cycle: A -> B -> C -> A
+	graph::Node nodeA(0, "NodeA");
+	graph::Node nodeB(0, "NodeB");
+	graph::Node nodeC(0, "NodeC");
+
+	dataManager->addNode(nodeA);
+	dataManager->addNode(nodeB);
+	dataManager->addNode(nodeC);
+
+	graph::Edge edge1(0, nodeA.getId(), nodeB.getId(), "cycle_edge1");
+	graph::Edge edge2(0, nodeB.getId(), nodeC.getId(), "cycle_edge2");
+	graph::Edge edge3(0, nodeC.getId(), nodeA.getId(), "cycle_edge3");
+
+	dataManager->addEdge(edge1);
+	dataManager->addEdge(edge2);
+	dataManager->addEdge(edge3);
+
+	std::vector<int64_t> visitedNodeIds;
+
+	traversalQuery->breadthFirstTraversal(
+			nodeA.getId(),
+			[&visitedNodeIds](const graph::Node &node, int depth) {
+				visitedNodeIds.push_back(node.getId());
+				return true;
+			},
+			5, // High max depth
+			"outgoing");
+
+	// Should visit each node exactly once despite the cycle
+	EXPECT_EQ(visitedNodeIds.size(), 3u);
+
+	// Count occurrences of each node
+	std::unordered_map<int64_t, int> nodeCounts;
+	for (int64_t id: visitedNodeIds) {
+		nodeCounts[id]++;
+	}
+
+	// Each node should appear exactly once
+	EXPECT_EQ(nodeCounts[nodeA.getId()], 1);
+	EXPECT_EQ(nodeCounts[nodeB.getId()], 1);
+	EXPECT_EQ(nodeCounts[nodeC.getId()], 1);
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_NonexistentStartNode) {
+	bool visitCalled = false;
+
+	// Use non-existent node ID
+	traversalQuery->breadthFirstTraversal(
+			999,
+			[&visitCalled](const graph::Node &node, int depth) {
+				visitCalled = true;
+				return true;
+			},
+			3, "outgoing");
+
+	// The visit function should not be called as the start node doesn't exist
+	EXPECT_FALSE(visitCalled);
+}
+
+TEST_F(TraversalQueryTest, CombinedQueryTest) {
+	// Test combining findConnectedNodes and findShortestPath
+	std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node6.getId(), "outgoing");
+	ASSERT_FALSE(connectedNodes.empty());
+
+	int64_t connectedNodeId = connectedNodes[0].getId();
+	std::vector<graph::Node> path = traversalQuery->findShortestPath(node6.getId(), connectedNodeId, "outgoing");
+
+	ASSERT_EQ(path.size(), 2u);
+	EXPECT_EQ(path[0].getId(), node6.getId());
+	EXPECT_EQ(path[1].getId(), connectedNodeId);
+}
+
+TEST_F(TraversalQueryTest, BreadthFirstTraversal_DepthProgression) {
+	std::vector<std::pair<int64_t, int>> visitOrder;
+
+	traversalQuery->breadthFirstTraversal(
+			node6.getId(),
+			[&visitOrder](const graph::Node &node, int depth) {
+				visitOrder.emplace_back(node.getId(), depth);
+				return true;
+			},
+			3, "outgoing");
+
+	// Verify that all nodes at depth n are visited before any node at depth n+1
+	int currentDepth = 0;
+	for (const auto &[nodeId, depth]: visitOrder) {
+		if (depth > currentDepth) {
+			// When depth increases, it should increase by exactly 1
+			EXPECT_EQ(depth, currentDepth + 1);
+			currentDepth = depth;
+		}
+		EXPECT_LE(depth, currentDepth);
 	}
 }

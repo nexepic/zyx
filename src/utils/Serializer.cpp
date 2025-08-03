@@ -54,6 +54,9 @@ namespace graph::utils {
 	template void Serializer::writePOD<int64_t>(std::ostream &os, const int64_t &pod);
 	template int64_t Serializer::readPOD<int64_t>(std::istream &is);
 
+	template void Serializer::writePOD<double>(std::ostream &os, const double &pod);
+	template double Serializer::readPOD<double>(std::istream &is);
+
 	// Explicit instantiation of other template functions
 	// Explicit instantiation of serialize for std::string
 	template void Serializer::serialize<std::string>(std::ostream &os, const std::string &value);
@@ -85,6 +88,14 @@ namespace graph::utils {
 
 	// Explicit instantiation of serialize for std::monostate
 	template void Serializer::serialize<std::monostate>(std::ostream &os, const std::monostate &value);
+
+	template std::string Serializer::deserialize<std::string>(std::istream &is);
+	template std::vector<double> Serializer::deserialize<std::vector<double>>(std::istream &is);
+	template bool Serializer::deserialize<bool>(std::istream &is);
+	template double Serializer::deserialize<double>(std::istream &is);
+	template float Serializer::deserialize<float>(std::istream &is);
+	template int Serializer::deserialize<int>(std::istream &is);
+	template int64_t Serializer::deserialize<int64_t>(std::istream &is);
 
 	void Serializer::writeString(std::ostream &os, const std::string &str) {
 		writePOD(os, static_cast<uint32_t>(str.size()));

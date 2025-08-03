@@ -42,18 +42,6 @@ namespace graph {
 		storage->close();
 	}
 
-	void Database::save() const {
-		if (isOpen()) {
-			storage->save();
-		}
-	}
-
-	void Database::flush() const {
-		if (isOpen()) {
-			storage->flush();
-		}
-	}
-
 	bool Database::exists() const { return std::filesystem::exists(dbPath); }
 
 	Transaction Database::beginTransaction() {

@@ -33,7 +33,17 @@ namespace graph::query::indexes {
 		using KeyType = std::variant<std::string, int64_t, double>;
 
 		// Constants for B+Tree configuration
-		static uint32_t MAX_KEYS_PER_NODE;
+		static constexpr size_t MAX_KEY_LENGTH = 32;
+
+		static constexpr uint32_t calculateMaxKeysForInternal() {
+			constexpr size_t entrySize = sizeof(uint32_t) + MAX_KEY_LENGTH + sizeof(int64_t);
+			return (Index::DATA_SIZE / entrySize > 2) ? (Index::DATA_SIZE / entrySize) : 2;
+		}
+
+		static constexpr uint32_t calculateMaxKeysForLeaf() {
+			constexpr size_t entrySize = sizeof(uint32_t) + MAX_KEY_LENGTH + sizeof(uint32_t) + sizeof(int64_t);
+			return (Index::DATA_SIZE / entrySize > 1) ? (Index::DATA_SIZE / entrySize) : 1;
+		}
 
 		/**
 		 * Constructor
@@ -41,7 +51,9 @@ namespace graph::query::indexes {
 		 * @param dataManager Pointer to the data manager for entity persistence
 		 * @param indexType The type identifier for this index (e.g., LABEL_INDEX_TYPE)
 		 */
-		IndexTreeManager(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType);
+		IndexTreeManager(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType,
+						 uint32_t maxLeafKeys = calculateMaxKeysForLeaf(),
+						 uint32_t maxInternalKeys = calculateMaxKeysForInternal());
 		~IndexTreeManager() = default;
 
 		/**
@@ -109,6 +121,9 @@ namespace graph::query::indexes {
 		mutable std::shared_mutex mutex_;
 		uint32_t indexType_;
 
+		const uint32_t maxKeysPerLeaf_;
+		const uint32_t maxKeysPerInternal_;
+
 		// Helper methods for B+Tree operations
 		int64_t createNewNode(Index::NodeType type) const;
 
@@ -117,10 +132,9 @@ namespace graph::query::indexes {
 		static std::string keyToString(const KeyType &key);
 
 		// Insert helpers
-		bool insertIntoLeaf(int64_t leafId, const KeyType &key, int64_t value) const;
-		void splitLeaf(int64_t rootId, int64_t leafId, const KeyType &key, int64_t value, int64_t &newRootId);
-		void insertIntoParent(int64_t rootId, int64_t nodeId, const KeyType &key, int64_t newNodeId,
-							  int64_t &newRootId);
+		void insertIntoLeaf(int64_t leafId, const KeyType &key, int64_t value);
+		void splitLeaf(Index &leaf, const KeyType &newKey, int64_t newValue, int64_t &rootId);
+		void insertIntoParent(Index &leftNode, const KeyType &key, int64_t rightNodeId, int64_t &rootId);
 
 		// Get all key-values from a node
 		struct KeyValueEntry {
@@ -129,10 +143,6 @@ namespace graph::query::indexes {
 		};
 		std::vector<KeyValueEntry> getAllKeyValuesFromNode(const Index &node) const;
 		void setAllKeyValuesToNode(Index &node, const std::vector<KeyValueEntry> &entries) const;
-
-		// Convert between variant key types and specific types
-		static void setEntityKey(Index &entity, const KeyType &key, int64_t childOrValue);
-		static std::vector<int64_t> getEntityValues(const Index &entity, const KeyType &key);
 	};
 
 } // namespace graph::query::indexes

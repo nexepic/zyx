@@ -79,17 +79,6 @@ namespace graph {
 		void setNextLeafId(int64_t id) { metadata.nextLeafId = id; }
 		void setPrevLeafId(int64_t id) { metadata.prevLeafId = id; }
 
-		// For B+Tree operations with strings as keys (for label index)
-		bool insertStringKey(const std::string &key, int64_t value);
-		bool removeStringKey(const std::string &key, int64_t value);
-		[[nodiscard]] std::vector<int64_t> findStringValues(const std::string &key) const;
-
-		// For internal nodes to manage child pointers
-		bool addChild(const std::string &key, int64_t childId);
-		bool removeChild(const std::string &key);
-		[[nodiscard]] int64_t findChild(const std::string &key) const;
-		[[nodiscard]] std::vector<std::pair<std::string, int64_t>> getAllChildren() const;
-
 		// For calculating space requirements
 		static constexpr size_t getTotalSize() { return TOTAL_INDEX_SIZE; }
 
@@ -105,33 +94,41 @@ namespace graph {
 			std::vector<int64_t> values;
 		};
 
-		[[nodiscard]] std::vector<KeyValuePair> getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const;
-		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
-							 const std::shared_ptr<storage::DataManager> &dataManager);
-
-		[[nodiscard]] std::vector<KeyValuePair> deserializeStringKVs() const;
-		void serializeStringKVs(const std::vector<KeyValuePair> &kvs);
-
-		void setDataStorageType(DataStorageType type);
-		[[nodiscard]] DataStorageType getDataStorageType() const;
-		void setBlobId(int64_t blobId);
-		[[nodiscard]] int64_t getBlobId() const;
-		[[nodiscard]] bool hasBlobStorage() const;
-
-		void storeDataInBlob(const std::shared_ptr<storage::DataManager> &dataManager, const std::string &data);
-		[[nodiscard]] std::string retrieveDataFromBlob(const std::shared_ptr<storage::DataManager> &dataManager) const;
-
-	private:
-		Metadata metadata;
-		char dataBuffer[DATA_SIZE] = {}; // Buffer for serialized key-value pairs or child pointers
-
 		struct ChildEntry {
 			std::string key;
 			int64_t childId;
 		};
 
-		[[nodiscard]] std::vector<ChildEntry> deserializeChildren() const;
-		void serializeChildren(const std::vector<ChildEntry> &children);
+		void insertStringKey(const std::string &key, int64_t value,
+							 const std::shared_ptr<storage::DataManager> &dataManager);
+		bool removeStringKey(const std::string &key, int64_t value,
+							 const std::shared_ptr<storage::DataManager> &dataManager);
+		[[nodiscard]] std::vector<int64_t>
+		findStringValues(const std::string &key, const std::shared_ptr<storage::DataManager> &dataManager) const;
+		[[nodiscard]] std::vector<KeyValuePair>
+		getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const;
+		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
+							 const std::shared_ptr<storage::DataManager> &dataManager);
+
+		void addChild(const std::string &key, int64_t childId);
+		bool removeChild(const std::string &key);
+		[[nodiscard]] int64_t findChild(const std::string &key) const;
+		[[nodiscard]] std::vector<ChildEntry> getAllChildren() const;
+		void setAllChildren(const std::vector<ChildEntry> &children);
+
+		[[nodiscard]] int64_t getBlobId() const;
+		[[nodiscard]] bool hasBlobStorage() const;
+
+	private:
+		Metadata metadata;
+		char dataBuffer[DATA_SIZE] = {}; // Buffer for serialized key-value pairs or child pointers
+
+		void setDataStorageType(DataStorageType type);
+		[[nodiscard]] DataStorageType getDataStorageType() const;
+		void setBlobId(int64_t blobId);
+
+		void storeDataInBlob(const std::shared_ptr<storage::DataManager> &dataManager, const std::string &data);
+		[[nodiscard]] std::string retrieveDataFromBlob(const std::shared_ptr<storage::DataManager> &dataManager) const;
 	};
 
 } // namespace graph

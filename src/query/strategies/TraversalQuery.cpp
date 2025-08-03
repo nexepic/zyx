@@ -151,6 +151,17 @@ namespace graph::query {
 		std::queue<std::pair<int64_t, int>> queue; // Node ID and depth
 		std::unordered_set<int64_t> visited;
 
+		// Check if start node exists before beginning traversal
+		try {
+			Node startNode = dataManager_->getNode(startNodeId);
+			// If getNode doesn't throw but returns invalid node, check validity
+			if (startNode.getId() == 0 && startNodeId != 0) {
+				return; // Node doesn't exist
+			}
+		} catch (...) {
+			return; // Node doesn't exist
+		}
+
 		queue.emplace(startNodeId, 0);
 		visited.insert(startNodeId);
 

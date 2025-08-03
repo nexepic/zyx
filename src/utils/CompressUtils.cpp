@@ -20,7 +20,7 @@ namespace graph::utils {
 		uLongf compressedSize = compressBound(data.size());
 		std::string compressedData(compressedSize, '\0');
 
-		int result = compress(reinterpret_cast<Bytef *>(&compressedData[0]), &compressedSize,
+		const int result = compress(reinterpret_cast<Bytef *>(&compressedData[0]), &compressedSize,
 							  reinterpret_cast<const Bytef *>(data.data()), data.size());
 
 		if (result != Z_OK) {
@@ -35,7 +35,7 @@ namespace graph::utils {
 		std::string decompressedData(originalSize, '\0');
 		uLongf decompressedSize = originalSize;
 
-		int result = uncompress(reinterpret_cast<Bytef *>(&decompressedData[0]), &decompressedSize,
+		const int result = uncompress(reinterpret_cast<Bytef *>(&decompressedData[0]), &decompressedSize,
 								reinterpret_cast<const Bytef *>(data.data()), data.size());
 
 		if (result != Z_OK) {

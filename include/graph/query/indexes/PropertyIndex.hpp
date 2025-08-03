@@ -48,7 +48,7 @@ namespace graph::query::indexes {
 		void addProperty(int64_t nodeId, const std::string &key, const PropertyValue &value);
 
 		// Remove property from index
-		void removeProperty(int64_t nodeId, const std::string &key);
+		void removeProperty(int64_t nodeId, const std::string &key, const PropertyValue &value);
 
 		// Find nodes with exact property match
 		std::vector<int64_t> findExactMatch(const std::string &key, const PropertyValue &value) const;

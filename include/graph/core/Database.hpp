@@ -23,8 +23,6 @@ namespace graph {
 
 		void open();
 		void close() const;
-		void save() const;
-		void flush() const;
 
 		[[nodiscard]] bool exists() const;
 		[[nodiscard]] bool isOpen() const;

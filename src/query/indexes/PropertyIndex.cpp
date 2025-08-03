@@ -102,18 +102,18 @@ namespace graph::query::indexes {
 		}
 		stringRoots_.clear();
 
-		for (const auto& rootId : intRoots_ | std::views::values) {
-		    intTreeManager_->clear(rootId);
+		for (const auto &rootId: intRoots_ | std::views::values) {
+			intTreeManager_->clear(rootId);
 		}
 		intRoots_.clear();
 
-		for (const auto& rootId : doubleRoots_ | std::views::values) {
-		    doubleTreeManager_->clear(rootId);
+		for (const auto &rootId: doubleRoots_ | std::views::values) {
+			doubleTreeManager_->clear(rootId);
 		}
 		doubleRoots_.clear();
 
-		for (const auto& rootId : boolRoots_ | std::views::values) {
-		    boolTreeManager_->clear(rootId);
+		for (const auto &rootId: boolRoots_ | std::views::values) {
+			boolTreeManager_->clear(rootId);
 		}
 		boolRoots_.clear();
 	}
@@ -159,42 +159,39 @@ namespace graph::query::indexes {
 		auto treeManager = getTreeManagerForType(value);
 		auto &rootMap = getRootMapForType(value);
 
-		// Create root if it doesn't exist for this property key
 		if (!rootMap.contains(key)) {
 			rootMap[key] = treeManager->initialize();
 		}
 
-		// Convert value to string representation and insert
-		std::string stringValue = valueToString(value);
-		rootMap[key] = treeManager->insert(rootMap[key], stringValue, nodeId);
+		// The key for the B+Tree is the string representation of the property's value.
+		std::string btreeKey = valueToString(value);
+		rootMap[key] = treeManager->insert(rootMap[key], btreeKey, nodeId);
 	}
 
-	void PropertyIndex::removeProperty(int64_t nodeId, const std::string &key) {
+	void PropertyIndex::removeProperty(int64_t nodeId, const std::string &key, const PropertyValue &value) {
 		std::unique_lock lock(mutex_);
 
-		// Try to remove from all possible type indexes since we don't know the original type
-		// This is an O(n) operation as we need to scan all values
+		// 1. Get the correct manager and root map based on the value's type.
+		auto treeManager = getTreeManagerForType(value);
+		auto &rootMap = getRootMapForType(value);
 
-		// Check string index
-		auto strIt = stringRoots_.find(key);
-		if (strIt != stringRoots_.end()) {
-			auto leaf = stringTreeManager_->findLeafNode(strIt->second, key);
-			if (leaf != 0) {
-				auto entity = stringTreeManager_->getDataManager()->getIndex(leaf);
-				auto kvs = entity.getAllKeyValues(stringTreeManager_->getDataManager());
-				for (const auto &kv: kvs) {
-					for (int64_t value: kv.values) {
-						if (value == nodeId) {
-							stringTreeManager_->remove(strIt->second, kv.key, nodeId);
-							break;
-						}
-					}
-				}
-			}
+		// 2. Find the root of the B+Tree for this specific property key (e.g., "name").
+		auto it = rootMap.find(key);
+		if (it == rootMap.end()) {
+			// No index exists for this property key, so nothing to do.
+			return;
 		}
+		int64_t rootId = it->second;
 
-		// Similar checks for int, double, and bool indexes
-		// (Implementation omitted for brevity but follows the same pattern)
+		// 3. The key to search for in the B+Tree is the stringified property value.
+		std::string btreeKey = valueToString(value);
+
+		// 4. Call the tree manager's remove function with all necessary information.
+		// This is now efficient and correct, mirroring the LabelIndex implementation.
+		(void) treeManager->remove(rootId, btreeKey, nodeId);
+		// Note: We are not currently checking if a tree becomes empty after removal.
+		// A potential enhancement is to check if the tree is empty and if so,
+		// remove the root from the rootMap and delete the tree entirely.
 	}
 
 	std::vector<int64_t> PropertyIndex::findExactMatch(const std::string &key, const PropertyValue &value) const {
@@ -208,9 +205,8 @@ namespace graph::query::indexes {
 			return {}; // No index for this key
 		}
 
-		// Convert value to string representation and search
-		std::string stringValue = valueToString(value);
-		return treeManager->find(it->second, stringValue);
+		std::string btreeKey = valueToString(value);
+		return treeManager->find(it->second, btreeKey);
 	}
 
 	std::vector<int64_t> PropertyIndex::findRange(const std::string &key, double minValue, double maxValue) const {
@@ -359,26 +355,26 @@ namespace graph::query::indexes {
 
 		// Collect keys from all type maps
 		keys.reserve(stringRoots_.size());
-		for (const auto& key : stringRoots_ | std::views::keys) {
-		    keys.push_back(key);
+		for (const auto &key: stringRoots_ | std::views::keys) {
+			keys.push_back(key);
 		}
 
-		for (const auto& key : intRoots_ | std::views::keys) {
-		    if (std::ranges::find(keys, key) == keys.end()) {
-		        keys.push_back(key);
-		    }
+		for (const auto &key: intRoots_ | std::views::keys) {
+			if (std::ranges::find(keys, key) == keys.end()) {
+				keys.push_back(key);
+			}
 		}
 
-		for (const auto& key : doubleRoots_ | std::views::keys) {
-		    if (std::ranges::find(keys, key) == keys.end()) {
-		        keys.push_back(key);
-		    }
+		for (const auto &key: doubleRoots_ | std::views::keys) {
+			if (std::ranges::find(keys, key) == keys.end()) {
+				keys.push_back(key);
+			}
 		}
 
-		for (const auto& key : boolRoots_ | std::views::keys) {
-		    if (std::ranges::find(keys, key) == keys.end()) {
-		        keys.push_back(key);
-		    }
+		for (const auto &key: boolRoots_ | std::views::keys) {
+			if (std::ranges::find(keys, key) == keys.end()) {
+				keys.push_back(key);
+			}
 		}
 
 		return keys;

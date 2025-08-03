@@ -34,7 +34,6 @@ namespace graph::storage {
 
 		void open();
 		void close();
-		void save();
 		void flush();
 
 		void initializeComponents();
@@ -140,6 +139,8 @@ namespace graph::storage {
 		std::shared_ptr<SegmentTracker> segmentTracker;
 
 		std::shared_ptr<query::QueryEngine> queryEngine;
+
+		void save();
 
 		// Update bitmap for an entity in the segment header
 		template<typename EntityType>
