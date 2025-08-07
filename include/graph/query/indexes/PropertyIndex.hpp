@@ -10,27 +10,21 @@
 
 #pragma once
 
+#include <graph/core/StateRegistry.hpp>
 #include <memory>
 #include <shared_mutex>
 #include <string>
 #include <vector>
 #include "graph/core/IndexTreeManager.hpp"
+#include "graph/core/PropertyTypes.hpp"
 #include "graph/storage/data/DataManager.hpp"
-#include <graph/core/StateRegistry.hpp>
 
 namespace graph::query::indexes {
 
-	enum class PropertyType : uint8_t {
-		UNKNOWN = 0,
-		STRING = 1,
-		INTEGER = 2,
-		DOUBLE = 3,
-		BOOLEAN = 4
-	};
-
 	class PropertyIndex {
 	public:
-		PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType, const std::string &stateKeyPrefix);
+		PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType,
+					  const std::string &stateKeyPrefix);
 
 		void saveState() const;
 
@@ -87,9 +81,6 @@ namespace graph::query::indexes {
 
 		// Map to store the determined type for each indexed key.
 		std::unordered_map<std::string, PropertyType> indexedKeyTypes_;
-
-		// Get property type from variant
-		static PropertyType getPropertyType(const PropertyValue &value);
 
 		std::shared_ptr<IndexTreeManager> getTreeManagerForType(PropertyType type) const;
 		std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type);

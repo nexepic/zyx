@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include <sstream>
 #include "graph/core/Node.hpp"
-#include "graph/core/PropertyValue.hpp"
+#include "graph/core/PropertyTypes.hpp"
 
 class NodeTest : public ::testing::Test {
 protected:

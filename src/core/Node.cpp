@@ -11,7 +11,7 @@
 #include "graph/core/Node.hpp"
 #include <cstring>
 #include <stdexcept>
-#include "graph/core/PropertyValue.hpp"
+#include "graph/core/PropertyTypes.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 
@@ -85,8 +85,7 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.isActive);
 
 		// Write label (using the actual length of the string)
-		std::string label = getLabel();
-		utils::Serializer::writeString(os, label);
+		utils::Serializer::serialize(os, getLabel());
 	}
 
 	Node Node::deserialize(std::istream &is) {
@@ -101,7 +100,7 @@ namespace graph {
 		node.metadata.isActive = utils::Serializer::readPOD<bool>(is);
 
 		// Read label
-		std::string label = utils::Serializer::readString(is);
+		std::string label = utils::Serializer::deserialize<std::string>(is);
 		node.setLabel(label);
 
 		return node;

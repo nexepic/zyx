@@ -25,23 +25,28 @@ namespace graph::query {
 
 	QueryEngine::~QueryEngine() = default;
 
-	bool QueryEngine::buildIndexes(const std::string& entityType) const {
-		if (entityType != "node" && entityType != "edge") return false;
+	bool QueryEngine::buildIndexes(const std::string &entityType) const {
+		if (entityType != "node" && entityType != "edge")
+			return false;
 		return indexManager_->buildIndexes(entityType);
 	}
 
-	bool QueryEngine::buildPropertyIndex(const std::string& entityType, const std::string& key) const {
-		if (entityType != "node" && entityType != "edge") return false;
+	bool QueryEngine::buildPropertyIndex(const std::string &entityType, const std::string &key) const {
+		if (entityType != "node" && entityType != "edge")
+			return false;
 		return indexManager_->buildPropertyIndex(entityType, key);
 	}
 
-	bool QueryEngine::dropIndex(const std::string& entityType, const std::string& indexType, const std::string& key) const {
-		if (entityType != "node" && entityType != "edge") return false;
+	bool QueryEngine::dropIndex(const std::string &entityType, const std::string &indexType,
+								const std::string &key) const {
+		if (entityType != "node" && entityType != "edge")
+			return false;
 		return indexManager_->dropIndex(entityType, indexType, key);
 	}
 
-	std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes(const std::string& entityType) const {
-		if (entityType != "node" && entityType != "edge") return {};
+	std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes(const std::string &entityType) const {
+		if (entityType != "node" && entityType != "edge")
+			return {};
 		return indexManager_->listIndexes(entityType);
 	}
 
@@ -52,25 +57,25 @@ namespace graph::query {
 		return queryExecutor_->execute(plan);
 	}
 
-	QueryResult QueryEngine::findNodesByProperty(const std::string &key, const std::string &value) const {
+	QueryResult QueryEngine::findNodesByProperty(const std::string &key, const PropertyValue &value) const {
 		auto plan = queryPlanner_->createPlanForNodePropertyQuery(key, value);
 		return queryExecutor_->execute(plan);
 	}
 
 	QueryResult QueryEngine::findNodesByLabelAndProperty(const std::string &label, const std::string &key,
-														 const std::string &value) const {
+														 const PropertyValue &value) const {
 		auto plan = queryPlanner_->createPlanForNodeLabelAndPropertyQuery(label, key, value);
 		return queryExecutor_->execute(plan);
 	}
 
 	// --- Edge Query API ---
 
-	QueryResult QueryEngine::findEdgesByLabel(const std::string& label) const {
+	QueryResult QueryEngine::findEdgesByLabel(const std::string &label) const {
 		auto plan = queryPlanner_->createPlanForEdgeLabelQuery(label);
 		return queryExecutor_->execute(plan);
 	}
 
-	QueryResult QueryEngine::findEdgesByProperty(const std::string& key, const std::string& value) const {
+	QueryResult QueryEngine::findEdgesByProperty(const std::string &key, const PropertyValue &value) const {
 		auto plan = queryPlanner_->createPlanForEdgePropertyQuery(key, value);
 		return queryExecutor_->execute(plan);
 	}

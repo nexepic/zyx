@@ -69,10 +69,10 @@ namespace graph::query::indexes {
 
 		// Query methods now need to know which index to use
 		std::vector<int64_t> findNodeIdsByLabel(const std::string &label) const;
-		std::vector<int64_t> findNodeIdsByProperty(const std::string &key, const std::string &value) const;
+		std::vector<int64_t> findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 
         std::vector<int64_t> findEdgeIdsByLabel(const std::string &label) const;
-        std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const std::string &value) const;
+		std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;

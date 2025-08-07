@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include <sstream>
 #include "graph/core/Edge.hpp"
-#include "graph/core/PropertyValue.hpp"
+#include "graph/core/PropertyTypes.hpp"
 
 class EdgeTest : public ::testing::Test {
 protected:

@@ -135,7 +135,7 @@ namespace graph {
 
 		for (uint32_t i = 0; i < metadata.keyCount; i++) {
 			KeyValuePair kvp;
-			kvp.key = utils::Serializer::readString(is);
+			kvp.key = utils::Serializer::deserialize<std::string>(is);
 			auto valueCount = utils::Serializer::readPOD<uint32_t>(is);
 			kvp.values.reserve(valueCount);
 			for (uint32_t j = 0; j < valueCount; j++) {
@@ -155,7 +155,7 @@ namespace graph {
 
 		std::ostringstream os;
 		for (const auto &kvp: keyValues) {
-			utils::Serializer::writeString(os, kvp.key);
+			utils::Serializer::serialize(os, kvp.key);
 			utils::Serializer::writePOD(os, static_cast<uint32_t>(kvp.values.size()));
 			for (int64_t value: kvp.values) {
 				utils::Serializer::writePOD(os, value);
@@ -208,7 +208,7 @@ namespace graph {
 		// "Dry-run" the serialization to get the exact prospective byte size.
 		std::ostringstream os;
 		for (const auto &kvp: kvs) {
-			utils::Serializer::writeString(os, kvp.key);
+			utils::Serializer::serialize(os, kvp.key);
 			utils::Serializer::writePOD(os, static_cast<uint32_t>(kvp.values.size()));
 			for (int64_t v: kvp.values) {
 				utils::Serializer::writePOD(os, v);
@@ -294,7 +294,7 @@ namespace graph {
 			if (isBlob) {
 				utils::Serializer::writePOD(os, entry.keyBlobId);
 			} else {
-				utils::Serializer::writeString(os, entry.key);
+				utils::Serializer::serialize(os, entry.key);
 			}
 			utils::Serializer::writePOD(os, entry.childId);
 		}
@@ -418,7 +418,7 @@ namespace graph {
 				entry.keyBlobId = utils::Serializer::readPOD<int64_t>(is);
 				entry.key = ""; // Inline key is empty
 			} else {
-				entry.key = utils::Serializer::readString(is);
+				entry.key = utils::Serializer::deserialize<std::string>(is);
 				entry.keyBlobId = 0;
 			}
 			entry.childId = utils::Serializer::readPOD<int64_t>(is);
@@ -440,7 +440,7 @@ namespace graph {
 			if (isBlob) {
 				utils::Serializer::writePOD(os, entry.keyBlobId);
 			} else {
-				utils::Serializer::writeString(os, entry.key);
+				utils::Serializer::serialize(os, entry.key);
 			}
 			utils::Serializer::writePOD(os, entry.childId);
 		}

@@ -12,7 +12,7 @@
 
 #include <string>
 #include <unordered_map>
-#include "PropertyValue.hpp"
+#include "PropertyTypes.hpp"
 #include "Types.hpp"
 #include "graph/core/Entity.hpp"
 

@@ -146,8 +146,10 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 
 		PropertyType valueType = getPropertyType(value);
-		if (valueType == PropertyType::UNKNOWN) {
-			return; // Do not index unknown or unsupported types
+
+		// Do not index UNKNOWN or NULL types
+		if (valueType == PropertyType::UNKNOWN || valueType == PropertyType::NULL_TYPE) {
+			return;
 		}
 
 		auto it = indexedKeyTypes_.find(key);
@@ -157,14 +159,13 @@ namespace graph::query::indexes {
 			indexedKeyTypes_[key] = valueType;
 		} else if (it->second != valueType) {
 			// Type mismatch! Do not index this value.
-			// In a real system, this should go to a proper logging framework.
-			std::cerr << "WARNING: Property key '" << key << "' is indexed as " << static_cast<int>(it->second)
+			std::cerr << "WARNING: Property key '" << key << "' is indexed as type " << static_cast<int>(it->second)
 					  << " but received a value of type " << static_cast<int>(valueType) << " for entity " << entityId
 					  << ". Value will not be indexed." << std::endl;
 			return;
 		}
 
-		// Proceed with adding the property to the correct B-Tree
+		// The rest of the function remains the same...
 		PropertyType registeredType = indexedKeyTypes_[key];
 		auto treeManager = getTreeManagerForType(registeredType);
 		auto &rootMap = getRootMapForType(registeredType);
@@ -181,52 +182,42 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 
 		// Find the registered type for this key to know which index to search
-		auto it = indexedKeyTypes_.find(key);
+		const auto it = indexedKeyTypes_.find(key);
 		if (it == indexedKeyTypes_.end()) {
 			return; // Key is not indexed, nothing to remove
 		}
 
-		PropertyType registeredType = it->second;
-		PropertyType valueType = getPropertyType(value);
+		const PropertyType registeredType = it->second;
+		const PropertyType valueType = getPropertyType(value);
 
 		// Only proceed if the value type matches the indexed type
 		if (registeredType != valueType) {
 			return;
 		}
 
-		auto treeManager = getTreeManagerForType(registeredType);
+		const auto treeManager = getTreeManagerForType(registeredType);
 		auto &rootMap = getRootMapForType(registeredType);
-		auto rootIt = rootMap.find(key);
+		const auto rootIt = rootMap.find(key);
 
 		if (rootIt == rootMap.end()) {
 			return; // No root for this key
 		}
 
-		int64_t rootId = rootIt->second;
+		const int64_t rootId = rootIt->second;
 		std::string btreeKey = valueToString(value);
 		(void) treeManager->remove(rootId, btreeKey, entityId);
 	}
 
 	std::vector<int64_t> PropertyIndex::findExactMatch(const std::string &key, const PropertyValue &value) const {
 		std::shared_lock lock(mutex_);
-
-		PropertyType valueType = getPropertyType(value);
-		auto it = indexedKeyTypes_.find(key);
-
-		// The key must be indexed and the query value type must match the index type
-		if (it == indexedKeyTypes_.end() || it->second != valueType) {
+		const PropertyType valueType = getPropertyType(value);
+		if (const auto it = indexedKeyTypes_.find(key); it == indexedKeyTypes_.end() || it->second != valueType)
 			return {};
-		}
-
 		const auto &rootMap = getRootMapForType(valueType);
-		auto rootIt = rootMap.find(key);
-		if (rootIt == rootMap.end()) {
-			return {}; // Should not happen if key is in type map, but good practice
-		}
-
-		auto treeManager = getTreeManagerForType(valueType);
-		std::string btreeKey = valueToString(value);
-		return treeManager->find(rootIt->second, btreeKey);
+		const auto rootIt = rootMap.find(key);
+		if (rootIt == rootMap.end())
+			return {};
+		return getTreeManagerForType(valueType)->find(rootIt->second, valueToString(value));
 	}
 
 	std::vector<int64_t> PropertyIndex::findRange(const std::string &key, double minValue, double maxValue) const {
@@ -262,18 +253,6 @@ namespace graph::query::indexes {
 		// Note: Range queries on other types are not supported.
 
 		return results;
-	}
-
-	PropertyType PropertyIndex::getPropertyType(const PropertyValue &value) {
-		if (std::holds_alternative<std::string>(value))
-			return PropertyType::STRING;
-		if (std::holds_alternative<int64_t>(value))
-			return PropertyType::INTEGER;
-		if (std::holds_alternative<double>(value))
-			return PropertyType::DOUBLE;
-		if (std::holds_alternative<bool>(value))
-			return PropertyType::BOOLEAN;
-		return PropertyType::UNKNOWN;
 	}
 
 	std::shared_ptr<IndexTreeManager> PropertyIndex::getTreeManagerForType(PropertyType type) const {
@@ -322,16 +301,28 @@ namespace graph::query::indexes {
 	}
 
 	std::string PropertyIndex::valueToString(const PropertyValue &value) {
-		if (std::holds_alternative<std::string>(value)) {
-			return std::get<std::string>(value);
-		} else if (std::holds_alternative<int64_t>(value)) {
-			return std::to_string(std::get<int64_t>(value));
-		} else if (std::holds_alternative<double>(value)) {
-			return std::to_string(std::get<double>(value));
-		} else if (std::holds_alternative<bool>(value)) {
-			return std::get<bool>(value) ? "true" : "false";
-		}
-		return ""; // Should never reach here
+		// Use std::visit for a clean, type-safe traversal of the variant.
+		return std::visit(
+				[]<typename T0>(const T0 &arg) -> std::string {
+					// Get the clean, underlying type of the variant's current alternative.
+					using T = std::decay_t<T0>;
+
+					if constexpr (std::is_same_v<T, std::monostate>) {
+						// Define a consistent string representation for NULL.
+						return "NULL";
+					} else if constexpr (std::is_same_v<T, bool>) {
+						// Handle booleans explicitly.
+						return arg ? "true" : "false";
+					} else if constexpr (std::is_same_v<T, std::string>) {
+						// If it's already a string, just return it directly.
+						return arg;
+					} else {
+						// This 'else' now ONLY handles types for which std::to_string is valid
+						// (i.e., int64_t and double in our case).
+						return std::to_string(arg);
+					}
+				},
+				value.getVariant()); // Remember to call getVariant() on the wrapper.
 	}
 
 	void PropertyIndex::serializeRootMap(const std::string &stateKey,
@@ -349,17 +340,14 @@ namespace graph::query::indexes {
 
 	std::unordered_map<std::string, int64_t> PropertyIndex::deserializeRootMap(const std::string &stateKey) {
 		std::unordered_map<std::string, int64_t> rootMap;
-
-		// Get properties from state entity
 		auto properties = StateRegistry::getDataManager()->getStateProperties(stateKey);
 
-		// Convert properties to root map
 		for (const auto &[key, value]: properties) {
-			if (std::holds_alternative<int64_t>(value)) {
-				rootMap[key] = std::get<int64_t>(value);
+			// Correctly access the variant inside the wrapper struct
+			if (const auto *val_ptr = std::get_if<int64_t>(&value.getVariant())) {
+				rootMap[key] = *val_ptr;
 			}
 		}
-
 		return rootMap;
 	}
 
@@ -376,8 +364,9 @@ namespace graph::query::indexes {
 		indexedKeyTypes_.clear();
 		auto properties = StateRegistry::getDataManager()->getStateProperties(STATE_KEY_TYPES_KEY);
 		for (const auto &[key, value]: properties) {
-			if (std::holds_alternative<int64_t>(value)) {
-				indexedKeyTypes_[key] = static_cast<PropertyType>(std::get<int64_t>(value));
+			// Use the safe std::get_if pattern here as well
+			if (const auto *val_ptr = std::get_if<int64_t>(&value.getVariant())) {
+				indexedKeyTypes_[key] = static_cast<PropertyType>(*val_ptr);
 			}
 		}
 	}

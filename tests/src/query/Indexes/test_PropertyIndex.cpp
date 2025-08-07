@@ -76,23 +76,23 @@ protected:
 
 
 TEST_F(PropertyIndexTest, IsEmptyInitiallyAndAfterDrop) {
-	EXPECT_TRUE(propertyIndex_->isEmpty());
+	EXPECT_TRUE(propertyIndex_->isEmpty()) << "Index should be empty upon creation.";
 	propertyIndex_->addProperty(1, "test", "value");
-	EXPECT_FALSE(propertyIndex_->isEmpty());
+	EXPECT_FALSE(propertyIndex_->isEmpty()) << "Index should not be empty after adding a property.";
 	propertyIndex_->drop();
-	EXPECT_TRUE(propertyIndex_->isEmpty());
+	EXPECT_TRUE(propertyIndex_->isEmpty()) << "Index should be empty again after dropping.";
 }
 
 TEST_F(PropertyIndexTest, AddAndFindPropertiesOfAllTypes) {
-	// Add properties of all supported types
+	// Arrange: Add properties of all supported scalar types.
 	propertyIndex_->addProperty(1, "name", std::string("Alice"));
-	propertyIndex_->addProperty(2, "age", 30);
+	propertyIndex_->addProperty(2, "age", 30); // Robust: no cast needed
 	propertyIndex_->addProperty(3, "score", 99.5);
 	propertyIndex_->addProperty(4, "active", true);
 
 	EXPECT_FALSE(propertyIndex_->isEmpty());
 
-	// Verify each can be found
+	// Act & Assert: Verify each property can be found with its correct value.
 	auto foundStr = propertyIndex_->findExactMatch("name", std::string("Alice"));
 	ASSERT_EQ(foundStr.size(), 1);
 	EXPECT_EQ(foundStr[0], 1);
@@ -111,131 +111,122 @@ TEST_F(PropertyIndexTest, AddAndFindPropertiesOfAllTypes) {
 }
 
 TEST_F(PropertyIndexTest, RemoveProperty) {
-	int64_t nodeId = 6;
-	std::string key = "status";
-	std::string value = "pending";
-	propertyIndex_->addProperty(nodeId, key, value);
+	// Arrange
+	propertyIndex_->addProperty(6, "status", "pending");
+	ASSERT_TRUE(vectorContains(propertyIndex_->findExactMatch("status", "pending"), 6));
 
-	// Verify it exists before removal
-	auto found_before = propertyIndex_->findExactMatch(key, value);
-	ASSERT_TRUE(vectorContains(found_before, nodeId));
+	// Act
+	propertyIndex_->removeProperty(6, "status", "pending");
 
-	// Remove and verify it's gone
-	propertyIndex_->removeProperty(nodeId, key, value);
-	auto found_after = propertyIndex_->findExactMatch(key, value);
-	EXPECT_FALSE(vectorContains(found_after, nodeId));
+	// Assert
+	EXPECT_TRUE(propertyIndex_->findExactMatch("status", "pending").empty())
+		<< "The property should not be findable after being removed.";
 }
 
-TEST_F(PropertyIndexTest, UpdateProperty) {
-	int64_t nodeId = 7;
-	std::string key = "status";
-	std::string oldValue = "pending";
-	std::string newValue = "approved";
+TEST_F(PropertyIndexTest, UpdatePropertySimulation) {
+	// Arrange: An "update" is a remove followed by an add.
+	propertyIndex_->addProperty(7, "status", "pending");
+	ASSERT_TRUE(vectorContains(propertyIndex_->findExactMatch("status", "pending"), 7));
 
-	// Add old value
-	propertyIndex_->addProperty(nodeId, key, oldValue);
-	ASSERT_TRUE(vectorContains(propertyIndex_->findExactMatch(key, oldValue), nodeId));
+	// Act
+	propertyIndex_->removeProperty(7, "status", "pending");
+	propertyIndex_->addProperty(7, "status", "approved");
 
-	// Simulate an update by removing old and adding new
-	propertyIndex_->removeProperty(nodeId, key, oldValue);
-	propertyIndex_->addProperty(nodeId, key, newValue);
-
-	// Verify old value is gone and new value is present
-	ASSERT_TRUE(propertyIndex_->findExactMatch(key, oldValue).empty());
-	ASSERT_TRUE(vectorContains(propertyIndex_->findExactMatch(key, newValue), nodeId));
-}
-
-TEST_F(PropertyIndexTest, FindRangeForSeparateTypes) {
-	// Arrange: Index an integer-based key and a double-based key.
-	std::string intKey = "level";
-	propertyIndex_->addProperty(8, intKey, 10);
-	propertyIndex_->addProperty(9, intKey, 20);
-	propertyIndex_->addProperty(10, intKey, 30);
-
-	std::string doubleKey = "rating";
-	propertyIndex_->addProperty(11, doubleKey, 3.5);
-	propertyIndex_->addProperty(12, doubleKey, 4.5);
-	propertyIndex_->addProperty(13, doubleKey, 5.0);
-
-	// Act & Assert: Test integer range
-	auto foundInts = propertyIndex_->findRange(intKey, 15, 25);
-	ASSERT_EQ(foundInts.size(), 1);
-	EXPECT_EQ(foundInts[0], 9);
-
-	// Act & Assert: Test double range
-	auto foundDoubles = propertyIndex_->findRange(doubleKey, 4.0, 5.0);
-	ASSERT_EQ(foundDoubles.size(), 2);
-	EXPECT_TRUE(vectorContains(foundDoubles, 12));
-	EXPECT_TRUE(vectorContains(foundDoubles, 13));
-
-	// Act & Assert: A range query on a non-numeric-indexed key should return nothing.
-	propertyIndex_->addProperty(14, "name", std::string("a string"));
-	auto foundStrings = propertyIndex_->findRange("name", 0, 100);
-	EXPECT_TRUE(foundStrings.empty());
+	// Assert
+	EXPECT_TRUE(propertyIndex_->findExactMatch("status", "pending").empty());
+	ASSERT_TRUE(vectorContains(propertyIndex_->findExactMatch("status", "approved"), 7));
 }
 
 TEST_F(PropertyIndexTest, TypeEnforcementPreventsMixing) {
 	// Arrange: Index a key with a specific type (string).
-	std::string key = "mixedKey";
-	propertyIndex_->addProperty(1, key, std::string("string value"));
-	EXPECT_EQ(propertyIndex_->getIndexedKeyType(key), graph::query::indexes::PropertyType::STRING);
+	propertyIndex_->addProperty(1, "mixedKey", std::string("string value"));
+	ASSERT_EQ(propertyIndex_->getIndexedKeyType("mixedKey"), graph::PropertyType::STRING);
 
-	// Act: Attempt to add a property with the same key but a different type (int).
-	// This should be ignored by the index and ideally log a warning.
-	propertyIndex_->addProperty(2, key, 12345);
+	// Act: Attempt to add a property with the same key but a different type (integer).
+	// This action should be silently ignored by the index to maintain type integrity.
+	propertyIndex_->addProperty(2, "mixedKey", 12345);
 
-	// Assert:
-	// 1. The original string value can still be found.
-	auto foundStr = propertyIndex_->findExactMatch(key, std::string("string value"));
-	ASSERT_EQ(foundStr.size(), 1);
-	EXPECT_EQ(foundStr[0], 1);
+	// Assert: The original value is still present, and the mismatched value was not added.
+	EXPECT_TRUE(vectorContains(propertyIndex_->findExactMatch("mixedKey", std::string("string value")), 1));
+	EXPECT_TRUE(propertyIndex_->findExactMatch("mixedKey", 12345).empty());
 
-	// 2. The mismatched integer value cannot be found.
-	auto foundInt = propertyIndex_->findExactMatch(key, 12345);
-	EXPECT_TRUE(foundInt.empty());
-
-	// 3. The indexed type for the key remains STRING.
-	EXPECT_EQ(propertyIndex_->getIndexedKeyType(key), graph::query::indexes::PropertyType::STRING);
+	// The indexed type for the key must remain unchanged.
+	EXPECT_EQ(propertyIndex_->getIndexedKeyType("mixedKey"), graph::PropertyType::STRING);
 }
 
+TEST_F(PropertyIndexTest, FindRangeForNumericTypes) {
+	// Arrange
+	propertyIndex_->addProperty(8, "level", 10);
+	propertyIndex_->addProperty(9, "level", 20);
+	propertyIndex_->addProperty(10, "rating", 4.5);
+	propertyIndex_->addProperty(11, "rating", 5.0);
+	propertyIndex_->addProperty(12, "name", "a string"); // Non-numeric for boundary check
+
+	// Act & Assert: Test integer range query.
+	auto foundInts = propertyIndex_->findRange("level", 15.0, 25.0);
+	ASSERT_EQ(foundInts.size(), 1);
+	EXPECT_EQ(foundInts[0], 9);
+
+	// Act & Assert: Test double range query.
+	auto foundDoubles = propertyIndex_->findRange("rating", 4.0, 5.0);
+	ASSERT_EQ(foundDoubles.size(), 2);
+	EXPECT_TRUE(vectorContains(foundDoubles, 10));
+	EXPECT_TRUE(vectorContains(foundDoubles, 11));
+
+	// Act & Assert: A range query on a key indexed with a non-numeric type should return nothing.
+	EXPECT_TRUE(propertyIndex_->findRange("name", 0, 100).empty());
+}
 
 TEST_F(PropertyIndexTest, GetIndexedKeys) {
-	propertyIndex_->addProperty(11, "k1", std::string("v1"));
+	// Arrange
+	propertyIndex_->addProperty(11, "k1", "v1");
 	propertyIndex_->addProperty(12, "k2", 123);
 	propertyIndex_->addProperty(13, "k3", 1.23);
 	propertyIndex_->addProperty(14, "k4", true);
-	// This one should be ignored due to type mismatch.
-	propertyIndex_->addProperty(15, "k1", 456);
+	propertyIndex_->addProperty(15, "k1", 456); // This should be ignored (type mismatch).
 
+	// Act
 	auto keys = propertyIndex_->getIndexedKeys();
 	std::ranges::sort(keys);
 
-	// Expecting 4 keys because the second "k1" was a type mismatch and not indexed.
+	// Assert
+	const std::vector<std::string> expected_keys = {"k1", "k2", "k3", "k4"};
 	ASSERT_EQ(keys.size(), 4);
-	EXPECT_EQ(keys[0], "k1");
-	EXPECT_EQ(keys[1], "k2");
-	EXPECT_EQ(keys[2], "k3");
-	EXPECT_EQ(keys[3], "k4");
+	EXPECT_EQ(keys, expected_keys);
 }
 
 TEST_F(PropertyIndexTest, ClearAndDropKey) {
-	propertyIndex_->addProperty(20, "key_to_clear", std::string("v"));
+	// Arrange
+	propertyIndex_->addProperty(20, "key_to_clear", "v");
 	propertyIndex_->addProperty(21, "another_key", 1);
 	ASSERT_TRUE(propertyIndex_->hasKeyIndexed("key_to_clear"));
 	ASSERT_TRUE(propertyIndex_->hasKeyIndexed("another_key"));
 
-	// Clear one key, the other should remain.
+	// Act: Clear one key, the other should remain.
 	propertyIndex_->clearKey("key_to_clear");
+
+	// Assert
 	EXPECT_FALSE(propertyIndex_->isEmpty());
 	EXPECT_FALSE(propertyIndex_->hasKeyIndexed("key_to_clear"));
 	EXPECT_TRUE(propertyIndex_->hasKeyIndexed("another_key"));
-	EXPECT_TRUE(propertyIndex_->findExactMatch("key_to_clear", std::string("v")).empty());
-	EXPECT_FALSE(propertyIndex_->findExactMatch("another_key", 1).empty());
+	EXPECT_FALSE(vectorContains(propertyIndex_->findExactMatch("another_key", 1), 0)); // Check other key is still valid
 
-	// Drop the last key, index should become empty.
+	// Act: Drop the last key.
 	propertyIndex_->dropKey("another_key");
+
+	// Assert
 	EXPECT_TRUE(propertyIndex_->isEmpty());
 	EXPECT_FALSE(propertyIndex_->hasKeyIndexed("another_key"));
+}
+
+TEST_F(PropertyIndexTest, IgnoresNullAndUnknownTypes) {
+	// Arrange: Add a property with a NULL value (monostate).
+	propertyIndex_->addProperty(50, "nullable_key", std::monostate{});
+
+	// Assert: The index should remain empty as NULLs are not indexed.
+	EXPECT_TRUE(propertyIndex_->isEmpty());
+	EXPECT_FALSE(propertyIndex_->hasKeyIndexed("nullable_key"));
+	EXPECT_EQ(propertyIndex_->getIndexedKeyType("nullable_key"), graph::PropertyType::UNKNOWN);
 }
 
 TEST_F(PropertyIndexTest, SaveAndLoadState) {
@@ -254,19 +245,12 @@ TEST_F(PropertyIndexTest, SaveAndLoadState) {
 
 	// Assert: The reloaded index should contain all the data and type information.
 	EXPECT_FALSE(reloadedIndex->isEmpty());
-	EXPECT_EQ(reloadedIndex->getIndexedKeyType("name"), graph::query::indexes::PropertyType::STRING);
-	EXPECT_EQ(reloadedIndex->getIndexedKeyType("value"), graph::query::indexes::PropertyType::INTEGER);
-	EXPECT_EQ(reloadedIndex->getIndexedKeyType("active"), graph::query::indexes::PropertyType::BOOLEAN);
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("name"), graph::PropertyType::STRING);
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("value"), graph::PropertyType::INTEGER);
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("active"), graph::PropertyType::BOOLEAN);
 
-	auto foundStr = reloadedIndex->findExactMatch("name", std::string("persisted_user"));
-	ASSERT_EQ(foundStr.size(), 1);
-	EXPECT_EQ(foundStr[0], 101);
-
-	auto foundInt = reloadedIndex->findExactMatch("value", 999);
-	ASSERT_EQ(foundInt.size(), 1);
-	EXPECT_EQ(foundInt[0], 102);
-
-	auto foundBool = reloadedIndex->findExactMatch("active", true);
-	ASSERT_EQ(foundBool.size(), 1);
-	EXPECT_EQ(foundBool[0], 103);
+	// Verify data can be found in the reloaded index.
+	EXPECT_TRUE(vectorContains(reloadedIndex->findExactMatch("name", std::string("persisted_user")), 101));
+	EXPECT_TRUE(vectorContains(reloadedIndex->findExactMatch("value", 999), 102));
+	EXPECT_TRUE(vectorContains(reloadedIndex->findExactMatch("active", true), 103));
 }

@@ -90,7 +90,7 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.isActive);
 
 		// Write label as string (only writes the actual string length, not the full buffer)
-		utils::Serializer::writeString(os, getLabel());
+		utils::Serializer::serialize(os, getLabel());
 	}
 
 	Edge Edge::deserialize(std::istream &is) {
@@ -109,7 +109,7 @@ namespace graph {
 		edge.metadata.isActive = utils::Serializer::readPOD<bool>(is);
 
 		// Read label
-		std::string label = utils::Serializer::readString(is);
+		std::string label = utils::Serializer::deserialize<std::string>(is);
 		edge.setLabel(label);
 
 		return edge;

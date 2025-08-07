@@ -31,11 +31,11 @@ namespace graph::query {
 		return plan;
 	}
 
-	QueryPlan QueryPlanner::createPlanForNodePropertyQuery(const std::string &key, const std::string &value) const {
-		// Check if node property index exists for this key
+	QueryPlan QueryPlanner::createPlanForNodePropertyQuery(const std::string &key, const PropertyValue &value) const {
 		auto nodeIndexManager = indexManager_->getNodeIndexManager();
 		auto propertyIndex = nodeIndexManager->getPropertyIndex();
-		if (propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key)) {
+
+		if (propertyIndex && propertyIndex->hasKeyIndexed(key)) {
 			QueryPlan plan(QueryPlan::OperationType::NODE_PROPERTY_SCAN);
 			plan.addParameter("key", key);
 			plan.addParameter("value", value);
@@ -45,11 +45,12 @@ namespace graph::query {
 		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_PROPERTY_SCAN);
 		plan.addParameter("key", key);
 		plan.addParameter("value", value);
+		// highlight-end
 		return plan;
 	}
 
 	QueryPlan QueryPlanner::createPlanForNodeLabelAndPropertyQuery(const std::string &label, const std::string &key,
-																   const std::string &value) const {
+																   const PropertyValue &value) const {
 		auto nodeIndexManager = indexManager_->getNodeIndexManager();
 		bool hasLabelIndex = !nodeIndexManager->getLabelIndex()->isEmpty();
 		bool hasPropertyIndex = !nodeIndexManager->getPropertyIndex()->isEmpty() &&
@@ -62,7 +63,7 @@ namespace graph::query {
 			plan.addParameter("value", value);
 			return plan;
 		}
-		// Fallback to full scan (or a more optimized single-index scan if preferred)
+		// Fallback
 		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_PROPERTY_SCAN);
 		plan.addParameter("label", label);
 		plan.addParameter("key", key);
@@ -85,16 +86,17 @@ namespace graph::query {
 		return plan;
 	}
 
-	QueryPlan QueryPlanner::createPlanForEdgePropertyQuery(const std::string &key, const std::string &value) const {
+	QueryPlan QueryPlanner::createPlanForEdgePropertyQuery(const std::string &key, const PropertyValue &value) const {
 		auto edgeIndexManager = indexManager_->getEdgeIndexManager();
 		auto propertyIndex = edgeIndexManager->getPropertyIndex();
-		if (propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key)) {
+
+		if (propertyIndex && propertyIndex->hasKeyIndexed(key)) {
 			QueryPlan plan(QueryPlan::OperationType::EDGE_PROPERTY_SCAN);
 			plan.addParameter("key", key);
 			plan.addParameter("value", value);
 			return plan;
 		}
-		// Fallback to full edge scan
+		// Fallback
 		QueryPlan plan(QueryPlan::OperationType::FULL_EDGE_PROPERTY_SCAN);
 		plan.addParameter("key", key);
 		plan.addParameter("value", value);
@@ -124,7 +126,7 @@ namespace graph::query {
 		QueryPlan plan(QueryPlan::OperationType::TRAVERSAL_SHORTEST_PATH);
 		plan.addParameter("startNodeId", startNodeId);
 		plan.addParameter("endNodeId", endNodeId);
-		plan.addParameter("maxDepth", static_cast<double>(maxDepth));
+		plan.addParameter("maxDepth", maxDepth);
 		plan.addParameter("direction", direction);
 
 		return plan;

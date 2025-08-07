@@ -16,9 +16,9 @@
 
 namespace graph::query::indexes {
 
-	LabelIndex::LabelIndex(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType, std::string stateKey) :
-		dataManager_(std::move(dataManager)),
-		treeManager_(std::make_shared<IndexTreeManager>(dataManager_, indexType)),
+	LabelIndex::LabelIndex(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType,
+						   std::string stateKey) :
+		dataManager_(std::move(dataManager)), treeManager_(std::make_shared<IndexTreeManager>(dataManager_, indexType)),
 		stateKey_(std::move(stateKey)) {
 		initialize();
 	}
@@ -64,11 +64,15 @@ namespace graph::query::indexes {
 
 	void LabelIndex::loadRootId() {
 		auto properties = StateRegistry::getDataManager()->getStateProperties(stateKey_);
-		if (properties.contains("rootId") && std::holds_alternative<int64_t>(properties.at("rootId"))) {
-			rootId_ = std::get<int64_t>(properties.at("rootId"));
-		} else {
-			rootId_ = 0;
+		if (properties.contains("rootId")) {
+			// Use the safe std::get_if pattern
+			if (const auto *rootId_ptr = std::get_if<int64_t>(&properties["rootId"].getVariant())) {
+				rootId_ = *rootId_ptr;
+				return; // Exit after successful load
+			}
 		}
+		// Default value if not found or type mismatch
+		rootId_ = 0;
 	}
 
 	void LabelIndex::flush() {

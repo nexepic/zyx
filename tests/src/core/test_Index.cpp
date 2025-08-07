@@ -111,7 +111,7 @@ TEST_F(IndexTest, DataOverflowToBlob) {
 		graph::Index::KeyValuePair kvp = {key, {100L + i}};
 		kvs.push_back(kvp);
 		// Simulate serialization to check size
-		graph::utils::Serializer::writeString(temp_os, kvp.key);
+		graph::utils::Serializer::serialize(temp_os, kvp.key);
 		graph::utils::Serializer::writePOD(temp_os, static_cast<uint32_t>(kvp.values.size()));
 		graph::utils::Serializer::writePOD(temp_os, kvp.values[0]);
 	}

@@ -20,8 +20,6 @@ namespace graph::storage {
 								   DataManager &dataManager);
 		~DatabaseInspector();
 
-		void inspectDatabase();
-
 		void displayDatabaseStructure() const;
 
 		void displayNodeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) const;

@@ -21,15 +21,13 @@ namespace graph::query::indexes {
 		// Instantiate the Node index manager without the redundant config keys.
 		// The existence of the index data itself determines if it's "enabled".
 		nodeIndexManager_ = std::make_shared<EntityTypeIndexManager>(
-				dataManager_, IndexTypes::NODE_LABEL_TYPE, StateKeys::NODE_LABEL_ROOT,
-				IndexTypes::NODE_PROPERTY_TYPE, StateKeys::NODE_PROPERTY_PREFIX
-		);
+				dataManager_, IndexTypes::NODE_LABEL_TYPE, StateKeys::NODE_LABEL_ROOT, IndexTypes::NODE_PROPERTY_TYPE,
+				StateKeys::NODE_PROPERTY_PREFIX);
 
 		// Instantiate the Edge index manager similarly.
 		edgeIndexManager_ = std::make_shared<EntityTypeIndexManager>(
-				dataManager_, IndexTypes::EDGE_LABEL_TYPE, StateKeys::EDGE_LABEL_ROOT,
-				IndexTypes::EDGE_PROPERTY_TYPE, StateKeys::EDGE_PROPERTY_PREFIX
-		);
+				dataManager_, IndexTypes::EDGE_LABEL_TYPE, StateKeys::EDGE_LABEL_ROOT, IndexTypes::EDGE_PROPERTY_TYPE,
+				StateKeys::EDGE_PROPERTY_PREFIX);
 	}
 
 	IndexManager::~IndexManager() = default;
@@ -112,18 +110,16 @@ namespace graph::query::indexes {
 		return nodeIndexManager_->getLabelIndex()->findNodes(label);
 	}
 
-	std::vector<int64_t> IndexManager::findNodeIdsByProperty(const std::string &key, const std::string &value) const {
-		PropertyValue propValue = value;
-		return nodeIndexManager_->getPropertyIndex()->findExactMatch(key, propValue);
+	std::vector<int64_t> IndexManager::findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const {
+		return nodeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
 	}
 
 	std::vector<int64_t> IndexManager::findEdgeIdsByLabel(const std::string &label) const {
-		return edgeIndexManager_->getLabelIndex()->findNodes(label); // findNodes is generic now
+		return edgeIndexManager_->getLabelIndex()->findNodes(label);
 	}
 
-	std::vector<int64_t> IndexManager::findEdgeIdsByProperty(const std::string &key, const std::string &value) const {
-		PropertyValue propValue = value;
-		return edgeIndexManager_->getPropertyIndex()->findExactMatch(key, propValue);
+	std::vector<int64_t> IndexManager::findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const {
+		return edgeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
 	}
 
 } // namespace graph::query::indexes

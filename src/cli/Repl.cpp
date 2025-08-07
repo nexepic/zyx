@@ -9,11 +9,63 @@
  **/
 
 #include "graph/cli/Repl.hpp"
+#include <charconv>
 #include <iostream>
 #include <sstream>
 #include "graph/cli/linenoise.hpp"
 
 namespace graph {
+
+	// Helper function to pretty-print a PropertyValue
+	void printPropertyValue(const PropertyValue& value) {
+		std::visit([](const auto& arg) {
+			using T = std::decay_t<decltype(arg)>;
+			if constexpr (std::is_same_v<T, std::monostate>) {
+				std::cout << "(null)";
+			} else if constexpr (std::is_same_v<T, bool>) {
+				std::cout << "(bool) " << (arg ? "true" : "false");
+			} else if constexpr (std::is_same_v<T, int64_t>) {
+				std::cout << "(integer) " << arg;
+			} else if constexpr (std::is_same_v<T, double>) {
+				std::cout << "(double) " << arg;
+			} else if constexpr (std::is_same_v<T, std::string>) {
+				std::cout << "(string) \"" << arg << "\"";
+			}
+		}, value.getVariant());
+	}
+
+	// Helper function to smartly parse user input into a PropertyValue
+	PropertyValue parsePropertyValue(const std::string& input) {
+		// 1. Check for specific keywords first.
+		if (input == "true") return PropertyValue(true);
+		if (input == "false") return PropertyValue(false);
+		if (input == "null") return PropertyValue(std::monostate{});
+
+		// 2. Try to parse as an integer. std::from_chars is best for this.
+		int64_t int_val;
+		auto [ptr_int, ec_int] = std::from_chars(input.data(), input.data() + input.size(), int_val);
+		if (ec_int == std::errc() && ptr_int == input.data() + input.size()) {
+			// Success: the entire string was consumed and is a valid integer.
+			return PropertyValue(int_val);
+		}
+
+		// 3. Try to parse as a double using a more robust method.
+		try {
+			size_t pos = 0;
+			double double_val = std::stod(input, &pos);
+			// Check if the entire string was consumed. This is crucial for correctness.
+			if (pos == input.size()) {
+				return PropertyValue(double_val);
+			}
+		} catch (const std::invalid_argument&) {
+			// Not a double, proceed.
+		} catch (const std::out_of_range&) {
+			// It's a number but too large/small for a double, treat as string.
+		}
+
+		// 4. If all other parsing attempts fail, treat it as a string.
+		return PropertyValue(input);
+	}
 
 	REPL::REPL(Database &db) : db(db) {}
 
@@ -140,63 +192,70 @@ namespace graph {
 			uint32_t typeId = (entityType == "node") ? Node::typeId : Edge::typeId;
 
 			if (command == "addProperty") {
-				std::string key, valueTypeStr, valueStr;
-				std::cout << "Enter property key: ";
-				std::getline(std::cin, key);
-				std::cout << "Enter property type (string/int/double/bool): ";
-				std::getline(std::cin, valueTypeStr);
-				std::cout << "Enter property value: ";
+			// A much smarter 'addProperty'
+			std::string entityType, key, valueStr;
+			int64_t entityId;
 
-				PropertyValue propValue;
-				if (valueTypeStr == "int") {
-					int64_t v;
-					std::cin >> v;
-					propValue = v;
-				} else if (valueTypeStr == "double") {
-					double v;
-					std::cin >> v;
-					propValue = v;
-				} else if (valueTypeStr == "bool") {
-					std::string v;
-					std::getline(std::cin, v);
-					propValue = (v == "true" || v == "1");
-				} else {
-					std::getline(std::cin, valueStr);
-					propValue = valueStr;
-				}
-				std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			std::cout << "Enter entity type (node/edge): ";
+			std::getline(std::cin, entityType);
+			std::cout << "Enter " << entityType << " ID: ";
+			std::cin >> entityId; std::cin.ignore(); // Consume newline
+			std::cout << "Enter property key: ";
+			std::getline(std::cin, key);
+			std::cout << "Enter property value: ";
+			std::getline(std::cin, valueStr);
 
-				try {
-					db.getStorage()->insertProperties(entityId, typeId, {{key, propValue}});
-					std::cout << "Added/updated property '" << key << "' to " << entityType << " " << entityId << "\n";
-				} catch (const std::exception &e) {
-					std::cout << "Error: " << e.what() << "\n";
-				}
-
-			} else { // listProperties
-				try {
-					auto properties = (entityType == "node") ? db.getStorage()->getNodeProperties(entityId)
-															 : db.getStorage()->getEdgeProperties(entityId);
-					if (properties.empty()) {
-						std::cout << "No properties found for " << entityType << " " << entityId << ".\n";
-					} else {
-						std::cout << "Properties for " << entityType << " " << entityId << ":\n";
-						for (const auto &[key, value]: properties) {
-							std::cout << " - " << key << ": ";
-							if (std::holds_alternative<std::string>(value))
-								std::cout << "(string) \"" << std::get<std::string>(value) << "\"\n";
-							else if (std::holds_alternative<int64_t>(value))
-								std::cout << "(int) " << std::get<int64_t>(value) << "\n";
-							else if (std::holds_alternative<double>(value))
-								std::cout << "(double) " << std::get<double>(value) << "\n";
-							else if (std::holds_alternative<bool>(value))
-								std::cout << "(bool) " << (std::get<bool>(value) ? "true" : "false") << "\n";
-						}
-					}
-				} catch (const std::exception &e) {
-					std::cout << "Error: " << e.what() << "\n";
-				}
+			if (entityType != "node" && entityType != "edge") {
+				std::cout << "Invalid entity type.\n";
+				return;
 			}
+
+			// Automatically parse the value
+			PropertyValue propValue = parsePropertyValue(valueStr);
+
+			try {
+				uint32_t typeId = (entityType == "node") ? Node::typeId : Edge::typeId;
+				db.getStorage()->insertProperties(entityId, typeId, {{key, propValue}});
+				std::cout << "Added/updated property '" << key << "' for " << entityType << " " << entityId << " with value: ";
+				printPropertyValue(propValue);
+				std::cout << "\n";
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+
+		} else if (command == "listProperties") {
+			std::string entityType;
+			int64_t entityId;
+			std::cout << "Enter entity type (node/edge): ";
+			std::getline(std::cin, entityType);
+			std::cout << "Enter " << entityType << " ID: ";
+			std::cin >> entityId; std::cin.ignore();
+
+			if (entityType != "node" && entityType != "edge") {
+				std::cout << "Invalid entity type.\n";
+				return;
+			}
+
+			try {
+				auto properties = (entityType == "node")
+					? db.getStorage()->getNodeProperties(entityId)
+					: db.getStorage()->getEdgeProperties(entityId);
+
+				if (properties.empty()) {
+					std::cout << "No properties found for " << entityType << " " << entityId << ".\n";
+				} else {
+					std::cout << "Properties for " << entityType << " " << entityId << ":\n";
+					for (const auto &[key, value] : properties) {
+						std::cout << " - " << key << ": ";
+						printPropertyValue(value); // Use the helper to print
+						std::cout << "\n";
+					}
+				}
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+
+		}
 		} else if (command == "queryNode") {
 			int64_t id;
 			std::cout << "Enter node ID: ";
@@ -301,19 +360,23 @@ namespace graph {
 						std::cout << "  Edge ID: " << e.getId() << ", " << e.getSourceNodeId() << "-[" << e.getLabel()
 								  << "]->" << e.getTargetNodeId() << "\n";
 				}
-			} else { // find by property
-				std::string key, value;
+			} else if (command == "findNodesByProperty" || command == "findEdgesByProperty") {
+				std::string key, valueStr;
 				std::cout << "Enter property key: ";
 				std::getline(std::cin, key);
-				std::cout << "Enter property value: ";
-				std::getline(std::cin, value);
+				std::cout << "Enter property value to find: ";
+				std::getline(std::cin, valueStr);
+
+				// Parse the input string to find the correct PropertyValue to search for.
+				PropertyValue searchValue = parsePropertyValue(valueStr);
+
 				if (command == "findNodesByProperty") {
-					auto result = db.getQueryEngine()->findNodesByProperty(key, value);
+					auto result = db.getQueryEngine()->findNodesByProperty(key, searchValue);
 					std::cout << "Found " << result.getNodes().size() << " node(s).\n";
 					for (const auto &n: result.getNodes())
 						std::cout << "  Node ID: " << n.getId() << ", Label: " << n.getLabel() << "\n";
 				} else {
-					auto result = db.getQueryEngine()->findEdgesByProperty(key, value);
+					auto result = db.getQueryEngine()->findEdgesByProperty(key, searchValue);
 					std::cout << "Found " << result.getEdges().size() << " edge(s).\n";
 					for (const auto &e: result.getEdges())
 						std::cout << "  Edge ID: " << e.getId() << ", " << e.getSourceNodeId() << "-[" << e.getLabel()

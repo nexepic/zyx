@@ -78,14 +78,13 @@ namespace graph::query {
 
 		// --- Node Query API ---
 		QueryResult findNodesByLabel(const std::string &label) const;
-		QueryResult findNodesByProperty(const std::string &key, const std::string &value) const;
-		QueryResult findNodesByLabelAndProperty(const std::string &label, const std::string &key,
-												const std::string &value) const;
+		QueryResult findNodesByProperty(const std::string &key, const PropertyValue &value) const;
+		QueryResult findNodesByLabelAndProperty(const std::string &label, const std::string &key, const PropertyValue &value) const;
 
 		// --- Edge Query API ---
 		QueryResult findEdgesByLabel(const std::string &label) const;
 
-		QueryResult findEdgesByProperty(const std::string &key, const std::string &value) const;
+		QueryResult findEdgesByProperty(const std::string& key, const PropertyValue &value) const;
 
 		QueryResult findConnectedNodes(uint64_t nodeId, const std::string &edgeLabel, const std::string &direction,
 									   const std::string &nodeLabel = "") const;

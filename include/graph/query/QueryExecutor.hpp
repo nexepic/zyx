@@ -31,8 +31,6 @@ namespace graph::query {
 		std::shared_ptr<storage::DataManager> dataManager_;
 		std::unique_ptr<UnifiedQueryView> unifiedQueryView_;
 
-		// --- Private Execution Helpers (now specific to entity type) ---
-
 		// Node execution helpers
 		QueryResult executeNodeLabelScan(const QueryPlan& plan) const;
 		QueryResult executeNodePropertyScan(const QueryPlan& plan) const;

@@ -53,19 +53,19 @@ namespace graph::query {
 
 	QueryResult QueryExecutor::executeNodeLabelScan(const QueryPlan &plan) const {
 		QueryResult result;
-		const auto &params = plan.getStringParams();
-		if (!params.contains("label")) return result;
-		const std::string &label = params.at("label");
+
+		auto label = plan.getParameter<std::string>("label");
+		if (!label)
+			return result;
 
 		// Use the new index manager interface for nodes
-		auto nodeIds = indexManager_->findNodeIdsByLabel(label);
+		auto nodeIds = indexManager_->findNodeIdsByLabel(*label);
 
 		unifiedQueryView_->mergeDirtyEntities<Node>(nodeIds,
-			[&](const Node &node) { return node.getLabel() == label; }
-		);
+													[&](const Node &node) { return node.getLabel() == *label; });
 
 		if (!nodeIds.empty()) {
-			for (const auto &node : dataManager_->getNodeBatch(nodeIds)) {
+			for (const auto &node: dataManager_->getNodeBatch(nodeIds)) {
 				result.addNode(node);
 			}
 		}
@@ -74,28 +74,27 @@ namespace graph::query {
 
 	QueryResult QueryExecutor::executeNodePropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
-		const auto &params = plan.getStringParams();
-		if (!params.contains("key") || !params.contains("value")) return result;
+		auto key = plan.getParameter<std::string>("key");
+		auto value = plan.getParameter<PropertyValue>("value");
 
-		const std::string &key = params.at("key");
-		const std::string &value = params.at("value");
+		if (!key || !value) {
+			return result;
+		}
 
-		auto nodeIds = indexManager_->findNodeIdsByProperty(key, value);
+		auto nodeIds = indexManager_->findNodeIdsByProperty(*key, *value);
 
-		// ... unified view logic remains the same ...
-		unifiedQueryView_->mergeDirtyEntities<Node>(nodeIds,
-			[&](const Node &node) {
-				auto properties = dataManager_->getNodeProperties(node.getId());
-				auto propIt = properties.find(key);
-				if (propIt != properties.end() && std::holds_alternative<std::string>(propIt->second)) {
-					return std::get<std::string>(propIt->second) == value;
-				}
-				return false;
+		// The mergeDirtyEntities lambda now needs to compare PropertyValues
+		unifiedQueryView_->mergeDirtyEntities<Node>(nodeIds, [&](const Node &node) {
+			auto properties = dataManager_->getNodeProperties(node.getId());
+			auto propIt = properties.find(*key);
+			if (propIt != properties.end()) {
+				return property_utils::checkPropertyMatch(propIt->second, *value);
 			}
-		);
+			return false;
+		});
 
 		if (!nodeIds.empty()) {
-			for (const auto &node : dataManager_->getNodeBatch(nodeIds)) {
+			for (const auto &node: dataManager_->getNodeBatch(nodeIds)) {
 				result.addNode(node);
 			}
 		}
@@ -104,78 +103,83 @@ namespace graph::query {
 
 	QueryResult QueryExecutor::executeNodeLabelPropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
-		const auto& params = plan.getStringParams();
-		if (!params.contains("label") || !params.contains("key") || !params.contains("value")) return result;
 
-		const std::string &label = params.at("label");
-		const std::string &key = params.at("key");
-		const std::string &value = params.at("value");
+		auto label = plan.getParameter<std::string>("label");
+		auto key = plan.getParameter<std::string>("key");
+		auto value = plan.getParameter<PropertyValue>("value");
 
-		auto labelNodeIds = indexManager_->findNodeIdsByLabel(label);
-		auto propertyNodeIds = indexManager_->findNodeIdsByProperty(key, value);
+		if (!label || !key || !value)
+			return result;
+
+		auto labelNodeIds = indexManager_->findNodeIdsByLabel(*label);
+		auto propertyNodeIds = indexManager_->findNodeIdsByProperty(*key, *value);
 
 		// Intersect results for efficiency
 		std::vector<int64_t> initialIds;
-		std::unordered_set propertySet(propertyNodeIds.begin(), propertyNodeIds.end());
-		for (int64_t id : labelNodeIds) {
+		std::unordered_set<int64_t> propertySet(propertyNodeIds.begin(), propertyNodeIds.end());
+		for (int64_t id: labelNodeIds) {
 			if (propertySet.contains(id)) {
 				initialIds.push_back(id);
 			}
 		}
 
-		// ... unified view and data fetching logic remains the same ...
+		unifiedQueryView_->mergeDirtyEntities<Node>(initialIds, [&](const Node &node) {
+			auto properties = dataManager_->getNodeProperties(node.getId());
+			auto propIt = properties.find(*key);
+			return node.getLabel() == *label && propIt != properties.end() &&
+				   property_utils::checkPropertyMatch(propIt->second, *value);
+		});
+
 		if (!initialIds.empty()) {
-			for (const auto& node : dataManager_->getNodeBatch(initialIds)) {
+			for (const auto &node: dataManager_->getNodeBatch(initialIds)) {
 				result.addNode(node);
 			}
 		}
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeEdgeLabelScan(const QueryPlan& plan) const {
+	QueryResult QueryExecutor::executeEdgeLabelScan(const QueryPlan &plan) const {
 		QueryResult result;
-		const auto& params = plan.getStringParams();
-		if (!params.contains("label")) return result;
-		const std::string& label = params.at("label");
+
+		auto label = plan.getParameter<std::string>("label");
+		if (!label)
+			return result;
 
 		// Use the new index manager interface for edges
-		auto edgeIds = indexManager_->findEdgeIdsByLabel(label);
+		auto edgeIds = indexManager_->findEdgeIdsByLabel(*label);
 
 		unifiedQueryView_->mergeDirtyEntities<Edge>(edgeIds,
-			[&](const Edge& edge) { return edge.getLabel() == label; }
-		);
+													[&](const Edge &edge) { return edge.getLabel() == *label; });
 
 		if (!edgeIds.empty()) {
-			for (const auto& edge : dataManager_->getEdgeBatch(edgeIds)) {
+			for (const auto &edge: dataManager_->getEdgeBatch(edgeIds)) {
 				result.addEdge(edge);
 			}
 		}
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeEdgePropertyScan(const QueryPlan& plan) const {
+	QueryResult QueryExecutor::executeEdgePropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
-		const auto& params = plan.getStringParams();
-		if (!params.contains("key") || !params.contains("value")) return result;
-		const std::string& key = params.at("key");
-		const std::string& value = params.at("value");
 
-		// Use the new index manager interface for edges
-		auto edgeIds = indexManager_->findEdgeIdsByProperty(key, value);
+		auto key = plan.getParameter<std::string>("key");
+		auto value = plan.getParameter<PropertyValue>("value");
+		if (!key || !value)
+			return result;
 
-		unifiedQueryView_->mergeDirtyEntities<Edge>(edgeIds,
-			[&](const Edge& edge) {
-				auto properties = dataManager_->getEdgeProperties(edge.getId());
-				auto propIt = properties.find(key);
-				if (propIt != properties.end() && std::holds_alternative<std::string>(propIt->second)) {
-					return std::get<std::string>(propIt->second) == value;
-				}
-				return false;
+		auto edgeIds = indexManager_->findEdgeIdsByProperty(*key, *value);
+
+		unifiedQueryView_->mergeDirtyEntities<Edge>(edgeIds, [&](const Edge &edge) {
+			auto properties = dataManager_->getEdgeProperties(edge.getId());
+			auto propIt = properties.find(*key);
+			if (propIt != properties.end()) {
+				return property_utils::checkPropertyMatch(propIt->second, *value);
 			}
-		);
+			return false;
+		});
 
 		if (!edgeIds.empty()) {
-			for (const auto& edge : dataManager_->getEdgeBatch(edgeIds)) {
+			for (const auto &edge: dataManager_->getEdgeBatch(edgeIds)) {
 				result.addEdge(edge);
 			}
 		}
@@ -185,39 +189,25 @@ namespace graph::query {
 	QueryResult QueryExecutor::executeTraversalConnectedNodes(const QueryPlan &plan) const {
 		QueryResult result;
 
-		// Get parameters
-		const auto &stringParams = plan.getStringParams();
-		const auto &uint64Params = plan.getInt64Params();
+		auto startNodeId = plan.getParameter<int64_t>("startNodeId");
+		if (!startNodeId)
+			return result;
 
-		auto nodeIdIt = uint64Params.find("startNodeId");
-		if (nodeIdIt == uint64Params.end()) {
-			return result; // Missing node ID
-		}
+		auto direction = plan.getParameter<std::string>("direction");
+		std::string directionStr = direction ? *direction : "both";
 
-		const auto startNodeId = static_cast<int64_t>(nodeIdIt->second);
+		auto edgeLabel = plan.getParameter<std::string>("edgeLabel");
+		std::string edgeLabelStr = edgeLabel ? *edgeLabel : "";
 
-		std::string direction = "both";
-		auto directionIt = stringParams.find("direction");
-		if (directionIt != stringParams.end()) {
-			direction = directionIt->second;
-		}
-
-		std::string edgeLabel;
-		if (const auto edgeLabelIt = stringParams.find("edgeLabel"); edgeLabelIt != stringParams.end()) {
-			edgeLabel = edgeLabelIt->second;
-		}
-
-		std::string nodeLabel;
-		if (const auto nodeLabelIt = stringParams.find("nodeLabel"); nodeLabelIt != stringParams.end()) {
-			nodeLabel = nodeLabelIt->second;
-		}
+		auto nodeLabel = plan.getParameter<std::string>("nodeLabel");
+		std::string nodeLabelStr = nodeLabel ? *nodeLabel : "";
 
 		// TODO: Create traversalQuery once
 		// Create TraversalQuery and execute traversal
 		const auto traversalQuery = std::make_shared<TraversalQuery>(dataManager_);
 
-		for (const auto nodes = traversalQuery->findConnectedNodes(startNodeId, direction, edgeLabel, nodeLabel);
-			 const auto &node: nodes) {
+		auto nodes = traversalQuery->findConnectedNodes(*startNodeId, directionStr, edgeLabelStr, nodeLabelStr);
+		for (const auto &node: nodes) {
 			result.addNode(node);
 		}
 
@@ -227,35 +217,22 @@ namespace graph::query {
 	QueryResult QueryExecutor::executeTraversalShortestPath(const QueryPlan &plan) const {
 		QueryResult result;
 
-		// Get parameters
-		const auto &stringParams = plan.getStringParams();
-		const auto &uint64Params = plan.getInt64Params();
-		const auto &doubleParams = plan.getDoubleParams();
+		auto startNodeId = plan.getParameter<int64_t>("startNodeId");
+		auto endNodeId = plan.getParameter<int64_t>("endNodeId");
+		auto maxDepth = plan.getParameter<int64_t>("maxDepth");
+		auto direction = plan.getParameter<std::string>("direction");
 
-		auto startNodeIdIt = uint64Params.find("startNodeId");
-		auto endNodeIdIt = uint64Params.find("endNodeId");
-
-		if (startNodeIdIt == uint64Params.end() || endNodeIdIt == uint64Params.end()) {
-			return result; // Missing node IDs
-		}
-
-		auto startNodeId = static_cast<int64_t>(startNodeIdIt->second);
-		auto endNodeId = static_cast<int64_t>(endNodeIdIt->second);
-
-		auto maxDepthIt = doubleParams.find("maxDepth");
-		// TODO: maxDepth is not used in this implementation, but can be used for limiting the search depth
-		int maxDepth = (maxDepthIt != doubleParams.end()) ? static_cast<int>(maxDepthIt->second) : 10;
-
-		std::string direction = "both";
-		auto directionIt = stringParams.find("direction");
-		if (directionIt != stringParams.end()) {
-			direction = directionIt->second;
+		// The check for existence is also very readable.
+		if (!startNodeId || !endNodeId || !maxDepth || !direction) {
+			// Here you could log which parameter was missing for better debugging.
+			std::cerr << "Error: Missing required parameters for shortest path query." << std::endl;
+			return result;
 		}
 
 		// Create TraversalQuery and execute shortest path
 		auto traversalQuery = std::make_shared<TraversalQuery>(dataManager_);
 
-		auto pathNodes = traversalQuery->findShortestPath(startNodeId, endNodeId, direction);
+		auto pathNodes = traversalQuery->findShortestPath(*startNodeId, *endNodeId, *direction);
 		for (const auto &node: pathNodes) {
 			result.addNode(node);
 		}
@@ -266,12 +243,9 @@ namespace graph::query {
 	QueryResult QueryExecutor::executeFullNodeLabelScan(const QueryPlan &plan) const {
 		QueryResult result;
 
-		// Get parameters
-		const auto &params = plan.getStringParams();
-		if (!params.contains("label")) {
-		    return result;
-		}
-		const std::string &label = params.at("label");
+		auto label = plan.getParameter<std::string>("label");
+		if (!label)
+			return result;
 
 		// Get maximum node ID to determine scan range
 		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
@@ -282,7 +256,7 @@ namespace graph::query {
 			auto nodes = dataManager_->getNodesInRange(startId, endId);
 
 			for (auto &node: nodes) {
-				if (node.getLabel() == label) {
+				if (node.getLabel() == *label) {
 					result.addNode(node);
 				}
 			}
@@ -294,21 +268,13 @@ namespace graph::query {
 	QueryResult QueryExecutor::executeFullNodePropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
 
-		// Get parameters
-		const auto &params = plan.getStringParams();
-		auto keyIt = params.find("key");
-		auto valueIt = params.find("value");
+		auto key = plan.getParameter<std::string>("key");
+		auto value = plan.getParameter<PropertyValue>("value");
+		if (!key || !value)
+			return result;
 
-		if (keyIt == params.end() || valueIt == params.end()) {
-			return result; // Missing parameters
-		}
-
-		const std::string &key = keyIt->second;
-		const std::string &value = valueIt->second;
-
-		// Get maximum node ID to determine scan range
 		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
-		constexpr int64_t BATCH_SIZE = 1000; // Process in batches for efficiency
+		constexpr int64_t BATCH_SIZE = 1000;
 
 		for (int64_t startId = 1; startId <= maxNodeId; startId += BATCH_SIZE) {
 			int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxNodeId);
@@ -316,34 +282,25 @@ namespace graph::query {
 
 			for (auto &node: nodes) {
 				auto properties = dataManager_->getNodeProperties(node.getId());
-				auto propIt = properties.find(key);
+				auto propIt = properties.find(*key);
 
-				if (propIt != properties.end() && (std::holds_alternative<std::string>(propIt->second) &&
-												   std::get<std::string>(propIt->second) == value)) {
+				if (propIt != properties.end() && property_utils::checkPropertyMatch(propIt->second, *value)) {
 					result.addNode(node);
 				}
 			}
 		}
-
 		return result;
 	}
 
 	QueryResult QueryExecutor::executeFullNodeLabelPropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
 
-		// Get parameters
-		const auto &params = plan.getStringParams();
-		auto labelIt = params.find("label");
-		auto keyIt = params.find("key");
-		auto valueIt = params.find("value");
+		auto label = plan.getParameter<std::string>("label");
+		auto key = plan.getParameter<std::string>("key");
+		auto value = plan.getParameter<PropertyValue>("value");
 
-		if (labelIt == params.end() || keyIt == params.end() || valueIt == params.end()) {
-			return result; // Missing parameters
-		}
-
-		const std::string &label = labelIt->second;
-		const std::string &key = keyIt->second;
-		const std::string &value = valueIt->second;
+		if (!label || !key || !value)
+			return result;
 
 		// Get maximum node ID to determine scan range
 		int64_t maxNodeId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
@@ -355,12 +312,11 @@ namespace graph::query {
 
 			for (auto &node: nodes) {
 				// Check label first (cheaper operation)
-				if (node.getLabel() == label) {
+				if (node.getLabel() == *label) {
 					auto properties = dataManager_->getNodeProperties(node.getId());
-					auto propIt = properties.find(key);
+					auto propIt = properties.find(*key);
 
-					if (propIt != properties.end() && (std::holds_alternative<std::string>(propIt->second) &&
-													   std::get<std::string>(propIt->second) == value)) {
+					if (propIt != properties.end() && property_utils::checkPropertyMatch(propIt->second, *value)) {
 						result.addNode(node);
 					}
 				}
@@ -370,15 +326,12 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeFullEdgeLabelScan(const QueryPlan& plan) const {
+	QueryResult QueryExecutor::executeFullEdgeLabelScan(const QueryPlan &plan) const {
 		QueryResult result;
 
-		// Extract the label from the query plan.
-		const auto& params = plan.getStringParams();
-		if (!params.contains("label")) {
-			return result; // Invalid plan.
-		}
-		const std::string& label = params.at("label");
+		auto label = plan.getParameter<std::string>("label");
+		if (!label)
+			return result;
 
 		// Get the highest possible edge ID to define the scan range.
 		const int64_t maxEdgeId = dataManager_->getIdAllocator()->getCurrentMaxEdgeId();
@@ -389,9 +342,9 @@ namespace graph::query {
 			const int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxEdgeId);
 			auto edges = dataManager_->getEdgesInRange(startId, endId);
 
-			for (auto& edge : edges) {
+			for (auto &edge: edges) {
 				// Apply the label filter.
-				if (edge.isActive() && edge.getLabel() == label) {
+				if (edge.isActive() && edge.getLabel() == *label) {
 					result.addEdge(edge);
 				}
 			}
@@ -400,16 +353,13 @@ namespace graph::query {
 		return result;
 	}
 
-	QueryResult QueryExecutor::executeFullEdgePropertyScan(const QueryPlan& plan) const {
+	QueryResult QueryExecutor::executeFullEdgePropertyScan(const QueryPlan &plan) const {
 		QueryResult result;
 
-		// Extract key and value from the query plan.
-		const auto& params = plan.getStringParams();
-		if (!params.contains("key") || !params.contains("value")) {
-			return result; // Invalid plan.
-		}
-		const std::string& key = params.at("key");
-		const std::string& value = params.at("value");
+		auto key = plan.getParameter<std::string>("key");
+		auto value = plan.getParameter<PropertyValue>("value");
+		if (!key || !value)
+			return result;
 
 		// Get the highest possible edge ID to define the scan range.
 		const int64_t maxEdgeId = dataManager_->getIdAllocator()->getCurrentMaxEdgeId();
@@ -419,21 +369,15 @@ namespace graph::query {
 			const int64_t endId = std::min<int64_t>(startId + BATCH_SIZE - 1, maxEdgeId);
 			auto edges = dataManager_->getEdgesInRange(startId, endId);
 
-			for (auto& edge : edges) {
+			for (auto &edge: edges) {
 				if (!edge.isActive()) {
 					continue;
 				}
 
-				// Fetch properties for the current edge. This is the expensive part of the operation.
 				auto properties = dataManager_->getEdgeProperties(edge.getId());
-				auto propIt = properties.find(key);
+				auto propIt = properties.find(*key);
 
-				// Check if the property exists and its value matches.
-				// Note: This currently only handles string-to-string comparison.
-				if (propIt != properties.end() &&
-					std::holds_alternative<std::string>(propIt->second) &&
-					std::get<std::string>(propIt->second) == value)
-				{
+				if (propIt != properties.end() && property_utils::checkPropertyMatch(propIt->second, *value)) {
 					result.addEdge(edge);
 				}
 			}

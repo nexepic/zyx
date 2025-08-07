@@ -14,7 +14,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
-#include "graph/core/PropertyValue.hpp"
+#include "graph/core/PropertyTypes.hpp"
 
 namespace graph::storage {
 

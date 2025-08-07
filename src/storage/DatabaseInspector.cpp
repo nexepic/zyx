@@ -23,6 +23,21 @@ namespace graph::storage {
 
 	DatabaseInspector::~DatabaseInspector() = default;
 
+	std::string propertyValueToString(const PropertyValue& value) {
+		return std::visit([](const auto& arg) -> std::string {
+			using T = std::decay_t<decltype(arg)>;
+			if constexpr (std::is_same_v<T, std::monostate>) {
+				return "null";
+			} else if constexpr (std::is_same_v<T, bool>) {
+				return arg ? "true" : "false";
+			} else if constexpr (std::is_same_v<T, std::string>) {
+				return "\"" + arg + "\"";
+			} else { // Catches int64_t and double
+				return std::to_string(arg);
+			}
+		}, value.getVariant());
+	}
+
 	void DatabaseInspector::displayDatabaseStructure() const {
 		std::cout << "FileHeader size: " << sizeof(FileHeader) << std::endl;
 		std::cout << "SegmentHeader size: " << sizeof(SegmentHeader) << std::endl;
@@ -155,36 +170,9 @@ namespace graph::storage {
 						auto properties = dataManager_.getNodeProperties(node.getId());
 
 						// Add Attribute data to the table
-						for (const auto &[key, value]: properties) {
-							std::string valueStr = std::visit(
-									[]<typename T0>(const T0 &val) -> std::string {
-										std::ostringstream oss;
-										if constexpr (std::is_same_v<T0, std::monostate>) {
-											return "null";
-										} else if constexpr (std::is_same_v<T0, bool>) {
-											return val ? "true" : "false";
-										} else if constexpr (std::is_arithmetic_v<T0>) {
-											oss << val;
-											return oss.str();
-										} else if constexpr (std::is_same_v<T0, std::string>) {
-											return val;
-										} else if constexpr (std::is_same_v<T0, std::vector<int64_t>> ||
-															 std::is_same_v<T0, std::vector<double>> ||
-															 std::is_same_v<T0, std::vector<std::string>>) {
-											oss << "[";
-											for (size_t i = 0; i < val.size(); ++i) {
-												if (i > 0)
-													oss << ", ";
-												oss << val.at(i);
-											}
-											oss << "]";
-											return oss.str();
-										} else {
-											return "unknown";
-										}
-									},
-									value);
-
+						for (const auto &[key, value] : properties) {
+							// Use the simplified helper function
+							std::string valueStr = propertyValueToString(value);
 							std::string preview = (valueStr.length() > 50) ? valueStr.substr(0, 47) + "..." : valueStr;
 							table.addRow({"Attribute: " + key, preview});
 						}
@@ -315,36 +303,9 @@ namespace graph::storage {
 						auto properties = dataManager_.getEdgeProperties(edge.getId());
 
 						// Add Attribute data to the table
-						for (const auto &[key, value]: properties) {
-							std::string valueStr = std::visit(
-									[]<typename T0>(const T0 &val) -> std::string {
-										std::ostringstream oss;
-										if constexpr (std::is_same_v<T0, std::monostate>) {
-											return "null";
-										} else if constexpr (std::is_same_v<T0, bool>) {
-											return val ? "true" : "false";
-										} else if constexpr (std::is_arithmetic_v<T0>) {
-											oss << val;
-											return oss.str();
-										} else if constexpr (std::is_same_v<T0, std::string>) {
-											return val;
-										} else if constexpr (std::is_same_v<T0, std::vector<int64_t>> ||
-															 std::is_same_v<T0, std::vector<double>> ||
-															 std::is_same_v<T0, std::vector<std::string>>) {
-											oss << "[";
-											for (size_t i = 0; i < val.size(); ++i) {
-												if (i > 0)
-													oss << ", ";
-												oss << val.at(i);
-											}
-											oss << "]";
-											return oss.str();
-										} else {
-											return "unknown";
-										}
-									},
-									value);
-
+						for (const auto &[key, value] : properties) {
+							// Use the simplified helper function
+							std::string valueStr = propertyValueToString(value);
 							std::string preview = (valueStr.length() > 50) ? valueStr.substr(0, 47) + "..." : valueStr;
 							table.addRow({"Attribute: " + key, preview});
 						}
