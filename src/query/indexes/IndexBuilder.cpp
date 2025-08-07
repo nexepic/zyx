@@ -11,11 +11,9 @@
 #include "graph/query/indexes/IndexBuilder.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
-#include "graph/query/indexes/FullTextIndex.hpp"
 #include "graph/query/indexes/IndexManager.hpp"
 #include "graph/query/indexes/LabelIndex.hpp"
 #include "graph/query/indexes/PropertyIndex.hpp"
-#include "graph/query/indexes/RelationshipIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -29,182 +27,164 @@ namespace graph::query::indexes {
 
 	IndexBuilder::~IndexBuilder() = default;
 
-	bool IndexBuilder::buildAllIndexes() const {
+	bool IndexBuilder::buildAllNodeIndexes() const {
 		try {
-			// Get index pointers
-			auto labelIndex = indexManager_->getLabelIndex();
-			auto propertyIndex = indexManager_->getPropertyIndex();
-			auto relationshipIndex = indexManager_->getRelationshipIndex();
-			auto fullTextIndex = indexManager_->getFullTextIndex();
+			auto nodeIndexManager = indexManager_->getNodeIndexManager();
+			auto labelIndex = nodeIndexManager->getLabelIndex();
+			auto propertyIndex = nodeIndexManager->getPropertyIndex();
 
-			// Clear existing indexes
 			labelIndex->clear();
 			propertyIndex->clear();
-			relationshipIndex->clear();
-			fullTextIndex->clear();
 
-			// Process all nodes
-			for (const auto &[startId, endId]: getNodeIdRanges()) {
+			for (const auto& [startId, endId] : getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() >= BATCH_SIZE) {
-						processNodeBatch(batchIds, labelIndex, propertyIndex, fullTextIndex);
+						processNodeBatch(batchIds, labelIndex, propertyIndex);
 						batchIds.clear();
 					}
 				}
 				if (!batchIds.empty()) {
-					processNodeBatch(batchIds, labelIndex, propertyIndex, fullTextIndex);
+					processNodeBatch(batchIds, labelIndex, propertyIndex);
 				}
 			}
-
-			// Process all edges
-			for (const auto &[startId, endId]: getEdgeIdRanges()) {
-				std::vector<int64_t> batchIds;
-				for (int64_t id = startId; id <= endId; id++) {
-					batchIds.push_back(id);
-					if (batchIds.size() >= BATCH_SIZE) {
-						processEdgeBatch(batchIds, relationshipIndex);
-						batchIds.clear();
-					}
-				}
-				if (!batchIds.empty()) {
-					processEdgeBatch(batchIds, relationshipIndex);
-				}
-			}
-
-			// Persist the indexes' state to disk
-			indexManager_->persistState();
 			return true;
-		} catch (const std::exception &e) {
-			std::cerr << "Error in buildAllIndexes: " << e.what() << std::endl;
+		} catch (const std::exception& e) {
+			std::cerr << "Error in buildAllNodeIndexes: " << e.what() << std::endl;
 			return false;
 		}
 	}
 
-	bool IndexBuilder::buildLabelIndex() const {
+	bool IndexBuilder::buildAllEdgeIndexes() const {
 		try {
-			// Clear existing label index
-			auto labelIndex = indexManager_->getLabelIndex();
+			auto edgeIndexManager = indexManager_->getEdgeIndexManager();
+			auto labelIndex = edgeIndexManager->getLabelIndex();
+			auto propertyIndex = edgeIndexManager->getPropertyIndex();
+
 			labelIndex->clear();
+			propertyIndex->clear();
 
-			// Process nodes in batches
-			for (const auto &[startId, endId]: getNodeIdRanges()) {
+			for (const auto& [startId, endId] : getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() >= BATCH_SIZE) {
-						processNodeBatch(batchIds, labelIndex, nullptr, nullptr);
+						processEdgeBatch(batchIds, labelIndex, propertyIndex);
 						batchIds.clear();
 					}
 				}
 				if (!batchIds.empty()) {
-					processNodeBatch(batchIds, labelIndex, nullptr, nullptr);
+					processEdgeBatch(batchIds, labelIndex, propertyIndex);
 				}
 			}
-
 			return true;
-		} catch ([[maybe_unused]] const std::exception &e) {
-			// Log exception if needed
+		} catch (const std::exception& e) {
+			std::cerr << "Error in buildAllEdgeIndexes: " << e.what() << std::endl;
 			return false;
 		}
 	}
 
-	bool IndexBuilder::buildPropertyIndex(const std::string &key) const {
+	bool IndexBuilder::buildNodePropertyIndex(const std::string& key) const {
 		try {
-			// Clear existing property index for this specific key
-			auto propertyIndex = indexManager_->getPropertyIndex();
+			auto propertyIndex = indexManager_->getNodeIndexManager()->getPropertyIndex();
 			propertyIndex->clearKey(key);
 
-			// Process nodes in batches
-			for (const auto &[startId, endId]: getNodeIdRanges()) {
+			for (const auto& [startId, endId] : getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() >= BATCH_SIZE) {
-						processNodeBatch(batchIds, nullptr, propertyIndex, nullptr, key);
+						processNodeBatch(batchIds, nullptr, propertyIndex, key);
 						batchIds.clear();
 					}
 				}
 				if (!batchIds.empty()) {
-					processNodeBatch(batchIds, nullptr, propertyIndex, nullptr, key);
+					processNodeBatch(batchIds, nullptr, propertyIndex, key);
 				}
 			}
-
 			return true;
-		} catch ([[maybe_unused]] const std::exception &e) {
-			// Log exception if needed
-			return false;
-		}
+		} catch (...) { return false; }
 	}
 
-	void IndexBuilder::processNodeBatch(const std::vector<int64_t> &nodeIds,
-										const std::shared_ptr<LabelIndex> &labelIndex,
-										const std::shared_ptr<PropertyIndex> &propertyIndex,
-										const std::shared_ptr<FullTextIndex> &fullTextIndex,
-										const std::string &propertyKey) const {
-		// Get nodes in batch to minimize memory usage
-		auto nodeBatch = dataManager_->getNodeBatch(nodeIds);
+	// Specialized builder for a single edge property
+	bool IndexBuilder::buildEdgePropertyIndex(const std::string& key) const {
+		try {
+			auto propertyIndex = indexManager_->getEdgeIndexManager()->getPropertyIndex();
+			propertyIndex->clearKey(key);
 
-		for (const auto &node: nodeBatch) {
-			// Skip invalid or inactive nodes
-			if (node.getId() == 0 || !node.isActive()) {
-				continue;
+			for (const auto& [startId, endId] : getEdgeIdRanges()) {
+				std::vector<int64_t> batchIds;
+				for (int64_t id = startId; id <= endId; id++) {
+					batchIds.push_back(id);
+					if (batchIds.size() >= BATCH_SIZE) {
+						processEdgeBatch(batchIds, nullptr, propertyIndex, key);
+						batchIds.clear();
+					}
+				}
+				if (!batchIds.empty()) {
+					processEdgeBatch(batchIds, nullptr, propertyIndex, key);
+				}
 			}
+			return true;
+		} catch (...) { return false; }
+	}
+
+	void IndexBuilder::processNodeBatch(const std::vector<int64_t>& nodeIds,
+										const std::shared_ptr<LabelIndex>& labelIndex,
+										const std::shared_ptr<PropertyIndex>& propertyIndex,
+										const std::string& propertyKey) const {
+		auto nodeBatch = dataManager_->getNodeBatch(nodeIds);
+		for (const auto& node : nodeBatch) {
+			if (node.getId() == 0 || !node.isActive()) continue;
 
 			int64_t nodeId = node.getId();
 
-			// Add to label index if requested
 			if (labelIndex) {
-				const auto &label = node.getLabel();
-				labelIndex->addNode(nodeId, label);
+				labelIndex->addNode(nodeId, node.getLabel());
 			}
 
-			// Add to property index if requested
 			if (propertyIndex) {
 				auto properties = dataManager_->getNodeProperties(nodeId);
-
-				if (propertyKey.empty()) {
-					// Index all properties
-					for (const auto &[key, value]: properties) {
+				if (propertyKey.empty()) { // Index all properties
+					for (const auto& [key, value] : properties) {
 						propertyIndex->addProperty(nodeId, key, value);
-
-						// Also add to full-text index for string properties if requested
-						if (fullTextIndex && std::holds_alternative<std::string>(value)) {
-							std::string strValue = std::get<std::string>(value);
-							fullTextIndex->addTextProperty(nodeId, key, strValue);
-						}
 					}
-				} else {
-					// Index specific property key
-					auto it = properties.find(propertyKey);
-					if (it != properties.end()) {
+				} else { // Index specific property
+					if (auto it = properties.find(propertyKey); it != properties.end()) {
 						propertyIndex->addProperty(nodeId, propertyKey, it->second);
-
-						// Also add to full-text index for string properties if requested
-						if (fullTextIndex && std::holds_alternative<std::string>(it->second)) {
-							std::string strValue = std::get<std::string>(it->second);
-							fullTextIndex->addTextProperty(nodeId, propertyKey, strValue);
-						}
 					}
 				}
 			}
 		}
 	}
 
-	void IndexBuilder::processEdgeBatch(const std::vector<int64_t> &edgeIds,
-										const std::shared_ptr<RelationshipIndex> &relationshipIndex) const {
-		// Get edges in batch to minimize memory usage
+	void IndexBuilder::processEdgeBatch(const std::vector<int64_t>& edgeIds,
+										const std::shared_ptr<LabelIndex>& labelIndex,
+										const std::shared_ptr<PropertyIndex>& propertyIndex,
+										const std::string& propertyKey) const {
 		auto edgeBatch = dataManager_->getEdgeBatch(edgeIds);
+		for (const auto& edge : edgeBatch) {
+			if (edge.getId() == 0 || !edge.isActive()) continue;
 
-		for (const auto &edge: edgeBatch) {
-			// Skip invalid or inactive edges
-			if (edge.getId() == 0 || !edge.isActive()) {
-				continue;
+			int64_t edgeId = edge.getId();
+
+			if (labelIndex) {
+				labelIndex->addNode(edgeId, edge.getLabel()); // Use addNode for generality
 			}
 
-			// Add to relationship index
-			relationshipIndex->addEdge(edge.getId(), edge.getSourceNodeId(), edge.getTargetNodeId(), edge.getLabel());
+			if (propertyIndex) {
+				auto properties = dataManager_->getEdgeProperties(edgeId);
+				if (propertyKey.empty()) { // Index all properties
+					for (const auto& [key, value] : properties) {
+						propertyIndex->addProperty(edgeId, key, value);
+					}
+				} else { // Index specific property
+					if (auto it = properties.find(propertyKey); it != properties.end()) {
+						propertyIndex->addProperty(edgeId, propertyKey, it->second);
+					}
+				}
+			}
 		}
 	}
 

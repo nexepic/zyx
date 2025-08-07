@@ -53,6 +53,10 @@ namespace graph {
 		static constexpr size_t DATA_SIZE = TOTAL_INDEX_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Index);
 
+		// TODO: Wasting space here, but this is a good compromise for now.
+		static constexpr size_t INTERNAL_KEY_BLOB_THRESHOLD = 32;
+		static constexpr size_t ABSOLUTE_MAX_KEY_LENGTH = 256;
+
 		// Constructor for a new index entity
 		Index(int64_t id, NodeType type, uint32_t indexType);
 		Index() = default;
@@ -95,8 +99,9 @@ namespace graph {
 		};
 
 		struct ChildEntry {
-			std::string key;
+			std::string key;      // Used for inline keys (<= 32 bytes).
 			int64_t childId;
+			int64_t keyBlobId = 0; // If != 0, key is stored in a blob and 'key' field is empty.
 		};
 
 		void insertStringKey(const std::string &key, int64_t value,
@@ -109,12 +114,16 @@ namespace graph {
 		getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const;
 		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
 							 const std::shared_ptr<storage::DataManager> &dataManager);
+		[[nodiscard]] bool isFullAfterInsert(const std::string &key, int64_t value,
+											 const std::shared_ptr<storage::DataManager> &dataManager) const;
 
-		void addChild(const std::string &key, int64_t childId);
-		bool removeChild(const std::string &key);
-		[[nodiscard]] int64_t findChild(const std::string &key) const;
+
+		[[nodiscard]] bool tryAddChild(const ChildEntry& newEntry);
+		void addChild(const ChildEntry& newEntry, const std::shared_ptr<storage::DataManager>& dataManager);
+		bool removeChild(const std::string& key, const std::shared_ptr<storage::DataManager>& dataManager);
+		[[nodiscard]] int64_t findChild(const std::string& key, const std::shared_ptr<storage::DataManager>& dataManager) const;
 		[[nodiscard]] std::vector<ChildEntry> getAllChildren() const;
-		void setAllChildren(const std::vector<ChildEntry> &children);
+		void setAllChildren(const std::vector<ChildEntry>& children);
 
 		[[nodiscard]] int64_t getBlobId() const;
 		[[nodiscard]] bool hasBlobStorage() const;

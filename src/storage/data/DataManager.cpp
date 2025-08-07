@@ -250,48 +250,41 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::getEntitiesInRange(int64_t startId, int64_t endId, size_t limit) {
-		if constexpr (std::is_same_v<EntityType, Node>) {
-			return getNodesInRange(startId, endId, limit);
-		} else if constexpr (std::is_same_v<EntityType, Edge>) {
-			return getEdgesInRange(startId, endId, limit);
-		} else {
-			// For other entity types, implement a generic version
-			std::vector<EntityType> result;
-			if (startId > endId || limit == 0) {
-				return result;
-			}
+	    std::vector<EntityType> result;
+	    if (startId > endId || limit == 0) {
+	        return result;
+	    }
 
-			// Find relevant segments
-			std::vector<uint64_t> relevantSegments;
-			auto entityType = EntityType::typeId;
-			auto segments = segmentTracker_->getSegmentsByType(entityType);
+	    // Find relevant segments
+	    std::vector<uint64_t> relevantSegments;
+	    auto entityType = EntityType::typeId;
+	    auto segments = segmentTracker_->getSegmentsByType(entityType);
 
-			for (const auto &header: segments) {
-				int64_t segmentStartId = header.start_id;
-				int64_t segmentEndId = header.start_id + header.used - 1;
+	    for (const auto &header: segments) {
+	        int64_t segmentStartId = header.start_id;
+	        int64_t segmentEndId = header.start_id + header.used - 1;
 
-				if (segmentStartId <= endId && segmentEndId >= startId) {
-					relevantSegments.push_back(header.file_offset);
-				}
-			}
+	        if (segmentStartId <= endId && segmentEndId >= startId) {
+	            relevantSegments.push_back(header.file_offset);
+	        }
+	    }
 
-			// Load entities from segments
-			for (uint64_t segmentOffset: relevantSegments) {
-				auto segmentEntities =
-						loadEntitiesFromSegment<EntityType>(segmentOffset, startId, endId, limit - result.size());
+	    // Load entities from segments
+	    for (uint64_t segmentOffset: relevantSegments) {
+	        auto segmentEntities =
+	                loadEntitiesFromSegment<EntityType>(segmentOffset, startId, endId, limit - result.size());
 
-				for (const EntityType &entity: segmentEntities) {
-					result.push_back(entity);
-					addToCache(entity);
-				}
+	        for (const EntityType &entity: segmentEntities) {
+	            result.push_back(entity);
+	            addToCache(entity);
+	        }
 
-				if (result.size() >= limit) {
-					break;
-				}
-			}
+	        if (result.size() >= limit) {
+	            break;
+	        }
+	    }
 
-			return result;
-		}
+	    return result;
 	}
 
 	template<typename EntityType>

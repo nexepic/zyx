@@ -48,10 +48,7 @@ namespace graph {
 		void markInactive() { metadata.isActive = false; }
 
 		// Property value management
-		void addPropertyValue(const std::string &key, const PropertyValue &value);
 		[[nodiscard]] bool hasPropertyValue(const std::string &key) const;
-		[[nodiscard]] PropertyValue getPropertyValue(const std::string &key) const;
-		void removePropertyValue(const std::string &key);
 		[[nodiscard]] const std::unordered_map<std::string, PropertyValue> &getPropertyValues() const;
 
 		// Property map management

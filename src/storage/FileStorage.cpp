@@ -9,7 +9,7 @@
  **/
 
 #include "graph/storage/FileStorage.hpp"
-#include <algorithm> // for std::sort
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <graph/core/Database.hpp>
@@ -22,7 +22,6 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/storage/DatabaseInspector.hpp"
-#include "graph/storage/EntityReferenceUpdater.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {

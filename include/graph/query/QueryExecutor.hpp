@@ -31,20 +31,27 @@ namespace graph::query {
 		std::shared_ptr<storage::DataManager> dataManager_;
 		std::unique_ptr<UnifiedQueryView> unifiedQueryView_;
 
-		// Helper methods for different operation types
-		QueryResult executeLabelScan(const QueryPlan& plan) const;
-		QueryResult executePropertyScan(const QueryPlan& plan) const;
-		QueryResult executeLabelPropertyScan(const QueryPlan& plan) const;
-		QueryResult executePropertyRangeScan(const QueryPlan& plan) const;
-		QueryResult executeTextSearch(const QueryPlan& plan) const;
-		QueryResult executeRelationshipScan(const QueryPlan& plan) const;
+		// --- Private Execution Helpers (now specific to entity type) ---
+
+		// Node execution helpers
+		QueryResult executeNodeLabelScan(const QueryPlan& plan) const;
+		QueryResult executeNodePropertyScan(const QueryPlan& plan) const;
+		QueryResult executeNodeLabelPropertyScan(const QueryPlan& plan) const;
+		// Note: PropertyRangeScan can be re-added here if needed.
+
+		// Edge execution helpers
+		QueryResult executeEdgeLabelScan(const QueryPlan& plan) const;
+		QueryResult executeEdgePropertyScan(const QueryPlan& plan) const;
+
+		// Full scan helpers
+		QueryResult executeFullNodeLabelScan(const QueryPlan& plan) const;
+		QueryResult executeFullNodePropertyScan(const QueryPlan& plan) const;
+		QueryResult executeFullNodeLabelPropertyScan(const QueryPlan& plan) const;
+		QueryResult executeFullEdgeLabelScan(const QueryPlan& plan) const;
+		QueryResult executeFullEdgePropertyScan(const QueryPlan& plan) const;
+
 		QueryResult executeTraversalConnectedNodes(const QueryPlan& plan) const;
 		QueryResult executeTraversalShortestPath(const QueryPlan& plan) const;
-		QueryResult executeFullNodeScan(const QueryPlan &plan) const;
-		QueryResult executeFullNodeLabelScan(const QueryPlan &plan) const;
-		QueryResult executeFullNodePropertyScan(const QueryPlan &plan) const;
-		QueryResult executeFullNodeLabelPropertyScan(const QueryPlan &plan) const;
-		QueryResult executeFullRelationshipScan(const QueryPlan &plan) const;
 	};
 
 } // namespace graph::query

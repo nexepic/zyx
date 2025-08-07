@@ -26,6 +26,7 @@ namespace graph {
 
 	void State::setKey(const std::string &newKey) {
 		if (newKey.length() >= MAX_KEY_LENGTH) {
+			std::cout << "new key: " << newKey << " length: " << newKey.length() << std::endl;
 			throw std::runtime_error("State key exceeds maximum length of " + std::to_string(MAX_KEY_LENGTH - 1) +
 									 " characters");
 		}

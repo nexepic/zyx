@@ -18,22 +18,27 @@ namespace graph::query {
 	class QueryPlan {
 	public:
 		enum class OperationType {
-			LABEL_SCAN,
-			PROPERTY_SCAN,
-			LABEL_PROPERTY_SCAN,
-			PROPERTY_RANGE_SCAN,
-			TEXT_SEARCH,
-			RELATIONSHIP_SCAN,
-			NODE_FILTER,
-			EDGE_FILTER,
-			TRAVERSAL_CONNECTED_NODES,
-			TRAVERSAL_SHORTEST_PATH,
-			TRAVERSAL_BFS,
-			FULL_NODE_SCAN,
+			// --- Node Operations ---
+			NODE_LABEL_SCAN,            // Use index to find nodes by label
+			NODE_PROPERTY_SCAN,         // Use index to find nodes by property
+			NODE_LABEL_PROPERTY_SCAN,   // Use indexes to find nodes by label and property
+
+			// --- Edge Operations ---
+			EDGE_LABEL_SCAN,            // Use index to find edges by label
+			EDGE_PROPERTY_SCAN,         // Use index to find edges by property
+			// Note: EDGE_LABEL_PROPERTY_SCAN can be added if needed
+
+			// --- Full Scan Operations (Fallbacks) ---
 			FULL_NODE_LABEL_SCAN,
 			FULL_NODE_PROPERTY_SCAN,
 			FULL_NODE_LABEL_PROPERTY_SCAN,
-			FULL_RELATIONSHIP_SCAN
+			FULL_EDGE_LABEL_SCAN,       // Can be added if needed
+			FULL_EDGE_PROPERTY_SCAN,    // Can be added if needed
+
+			// --- Traversal Operations (if supported without old indexes) ---
+			TRAVERSAL_CONNECTED_NODES,
+			TRAVERSAL_SHORTEST_PATH,
+			TRAVERSAL_BFS,
 		};
 
 		explicit QueryPlan(OperationType type) : type_(type) {}
@@ -68,24 +73,14 @@ namespace graph::query {
 	public:
 		explicit QueryPlanner(std::shared_ptr<indexes::IndexManager> indexManager);
 
-		// Create a plan for finding nodes by label
-		[[nodiscard]] QueryPlan createPlanForLabelQuery(const std::string &label) const;
+		// --- Node Query Planners ---
+		[[nodiscard]] QueryPlan createPlanForNodeLabelQuery(const std::string& label) const;
+		[[nodiscard]] QueryPlan createPlanForNodePropertyQuery(const std::string& key, const std::string& value) const;
+		[[nodiscard]] QueryPlan createPlanForNodeLabelAndPropertyQuery(const std::string& label, const std::string& key, const std::string& value) const;
 
-		// Create a plan for finding nodes by property
-		[[nodiscard]] QueryPlan createPlanForPropertyQuery(const std::string &key, const std::string &value) const;
-
-		// Create a plan for finding nodes by label and property
-		[[nodiscard]] QueryPlan createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
-													 const std::string &value) const;
-
-		// Create a plan for finding nodes by property range
-		static QueryPlan createPlanForPropertyRangeQuery(const std::string &key, double minValue, double maxValue);
-
-		// Create a plan for text search
-		static QueryPlan createPlanForTextSearchQuery(const std::string &key, const std::string &searchText);
-
-		// Create a plan for finding relationships
-		static QueryPlan createPlanForRelationshipQuery(int64_t nodeId, const std::string &edgeLabel);
+		// --- Edge Query Planners ---
+		[[nodiscard]] QueryPlan createPlanForEdgeLabelQuery(const std::string& label) const;
+		[[nodiscard]] QueryPlan createPlanForEdgePropertyQuery(const std::string& key, const std::string& value) const;
 
 		// Create a plan for finding connected nodes
 		static QueryPlan createPlanForConnectedNodesQuery(int64_t nodeId, const std::string &nodeLabel,

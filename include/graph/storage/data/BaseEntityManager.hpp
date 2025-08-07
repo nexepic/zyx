@@ -112,6 +112,7 @@ namespace graph::storage {
 			std::vector<EntityType> result;
 			result.reserve(ids.size());
 
+			// TODO: Performance issue? Get batch data from disk?
 			for (int64_t id: ids) {
 				EntityType entity = get(id);
 				if (entity.getId() != 0 && entity.isActive()) {

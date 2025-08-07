@@ -15,63 +15,49 @@
 
 namespace graph::query::indexes {
 
-	PropertyIndex::PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager) {
-		stringTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, PROPERTY_INDEX_TYPE);
-		intTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, PROPERTY_INDEX_TYPE);
-		doubleTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, PROPERTY_INDEX_TYPE);
-		boolTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, PROPERTY_INDEX_TYPE);
+	PropertyIndex::PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType,
+								 const std::string &stateKeyPrefix) :
+		STATE_STRING_ROOTS_KEY(stateKeyPrefix + ".string_roots"), STATE_INT_ROOTS_KEY(stateKeyPrefix + ".int_roots"),
+		STATE_DOUBLE_ROOTS_KEY(stateKeyPrefix + ".double_roots"), STATE_BOOL_ROOTS_KEY(stateKeyPrefix + ".bool_roots"),
+		STATE_KEY_TYPES_KEY(stateKeyPrefix + ".key_types") {
+		stringTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType);
+		intTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType);
+		doubleTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType);
+		boolTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType);
 		initialize();
 	}
 
 	void PropertyIndex::initialize() {
 		std::unique_lock lock(mutex_);
-
-		// Load enabled state (default to true if not found)
-		bool indexEnabled = StateRegistry::getBool(STATE_INDEX_ENABLED_KEY, true);
-
-		if (!indexEnabled) {
-			// If indexing is disabled, no need to load anything else
-			return;
-		}
-
-		// Load root maps from state
+		// Load root maps from state using the constructed keys
 		stringRoots_ = deserializeRootMap(STATE_STRING_ROOTS_KEY);
 		intRoots_ = deserializeRootMap(STATE_INT_ROOTS_KEY);
 		doubleRoots_ = deserializeRootMap(STATE_DOUBLE_ROOTS_KEY);
 		boolRoots_ = deserializeRootMap(STATE_BOOL_ROOTS_KEY);
+		deserializeKeyTypeMap();
 	}
 
 	// Clear a specific property key from all type indexes
 	void PropertyIndex::clearKey(const std::string &key) {
 		std::unique_lock lock(mutex_);
 
-		// Remove from string index
-		auto strIt = stringRoots_.find(key);
-		if (strIt != stringRoots_.end()) {
-			stringTreeManager_->clear(strIt->second);
-			stringRoots_.erase(strIt);
+		auto it = indexedKeyTypes_.find(key);
+		if (it == indexedKeyTypes_.end()) {
+			return; // Key not indexed
 		}
 
-		// Remove from int index
-		auto intIt = intRoots_.find(key);
-		if (intIt != intRoots_.end()) {
-			intTreeManager_->clear(intIt->second);
-			intRoots_.erase(intIt);
+		PropertyType type = it->second;
+		auto &rootMap = getRootMapForType(type);
+		auto rootIt = rootMap.find(key);
+
+		if (rootIt != rootMap.end()) {
+			auto treeManager = getTreeManagerForType(type);
+			treeManager->clear(rootIt->second);
+			rootMap.erase(rootIt);
 		}
 
-		// Remove from double index
-		auto doubleIt = doubleRoots_.find(key);
-		if (doubleIt != doubleRoots_.end()) {
-			doubleTreeManager_->clear(doubleIt->second);
-			doubleRoots_.erase(doubleIt);
-		}
-
-		// Remove from bool index
-		auto boolIt = boolRoots_.find(key);
-		if (boolIt != boolRoots_.end()) {
-			boolTreeManager_->clear(boolIt->second);
-			boolRoots_.erase(boolIt);
-		}
+		// Remove from the type map
+		indexedKeyTypes_.erase(it);
 	}
 
 	void PropertyIndex::dropKey(const std::string &key) {
@@ -91,51 +77,49 @@ namespace graph::query::indexes {
 		if (boolRoots_.empty()) {
 			StateRegistry::getDataManager()->removeState(STATE_BOOL_ROOTS_KEY);
 		}
+
+		if (indexedKeyTypes_.empty()) {
+			StateRegistry::getDataManager()->removeState(STATE_KEY_TYPES_KEY);
+		}
 	}
 
 	void PropertyIndex::clear() {
 		std::unique_lock lock(mutex_);
 
-		// Clear all root maps
-		for (const auto &rootId: stringRoots_ | std::views::values) {
-			stringTreeManager_->clear(rootId);
-		}
-		stringRoots_.clear();
+		auto clearAllRoots = [&](auto &rootMap, auto &treeManager) {
+			for (const auto &rootId: rootMap | std::views::values) {
+				treeManager->clear(rootId);
+			}
+			rootMap.clear();
+		};
 
-		for (const auto &rootId: intRoots_ | std::views::values) {
-			intTreeManager_->clear(rootId);
-		}
-		intRoots_.clear();
+		clearAllRoots(stringRoots_, stringTreeManager_);
+		clearAllRoots(intRoots_, intTreeManager_);
+		clearAllRoots(doubleRoots_, doubleTreeManager_);
+		clearAllRoots(boolRoots_, boolTreeManager_);
 
-		for (const auto &rootId: doubleRoots_ | std::views::values) {
-			doubleTreeManager_->clear(rootId);
-		}
-		doubleRoots_.clear();
-
-		for (const auto &rootId: boolRoots_ | std::views::values) {
-			boolTreeManager_->clear(rootId);
-		}
-		boolRoots_.clear();
+		// Also clear the type map
+		indexedKeyTypes_.clear();
 	}
 
 	void PropertyIndex::drop() {
-		// Clear all root maps
+		// Clear all data
 		clear();
 
-		// Remove all state entries related to this index
+		// Remove all state entries related to this index using the constructed keys
 		StateRegistry::getDataManager()->removeState(STATE_STRING_ROOTS_KEY);
 		StateRegistry::getDataManager()->removeState(STATE_INT_ROOTS_KEY);
 		StateRegistry::getDataManager()->removeState(STATE_DOUBLE_ROOTS_KEY);
 		StateRegistry::getDataManager()->removeState(STATE_BOOL_ROOTS_KEY);
-		StateRegistry::getDataManager()->removeState(STATE_INDEX_ENABLED_KEY);
+		StateRegistry::getDataManager()->removeState(STATE_KEY_TYPES_KEY);
 	}
 
-	void PropertyIndex::flush() {
+	void PropertyIndex::flush() const {
 		// Save current state to persistent storage
 		saveState();
 	}
 
-	void PropertyIndex::saveState() {
+	void PropertyIndex::saveState() const {
 		std::shared_lock lock(mutex_);
 
 		// Save all root maps to state
@@ -151,153 +135,190 @@ namespace graph::query::indexes {
 		if (!boolRoots_.empty()) {
 			serializeRootMap(STATE_BOOL_ROOTS_KEY, boolRoots_);
 		}
+
+		// Save the key->type map
+		if (!indexedKeyTypes_.empty()) {
+			serializeKeyTypeMap();
+		}
 	}
 
-	void PropertyIndex::addProperty(int64_t nodeId, const std::string &key, const PropertyValue &value) {
+	void PropertyIndex::addProperty(int64_t entityId, const std::string &key, const PropertyValue &value) {
 		std::unique_lock lock(mutex_);
 
-		auto treeManager = getTreeManagerForType(value);
-		auto &rootMap = getRootMapForType(value);
+		PropertyType valueType = getPropertyType(value);
+		if (valueType == PropertyType::UNKNOWN) {
+			return; // Do not index unknown or unsupported types
+		}
+
+		auto it = indexedKeyTypes_.find(key);
+
+		if (it == indexedKeyTypes_.end()) {
+			// First time seeing this key. Register its type.
+			indexedKeyTypes_[key] = valueType;
+		} else if (it->second != valueType) {
+			// Type mismatch! Do not index this value.
+			// In a real system, this should go to a proper logging framework.
+			std::cerr << "WARNING: Property key '" << key << "' is indexed as " << static_cast<int>(it->second)
+					  << " but received a value of type " << static_cast<int>(valueType) << " for entity " << entityId
+					  << ". Value will not be indexed." << std::endl;
+			return;
+		}
+
+		// Proceed with adding the property to the correct B-Tree
+		PropertyType registeredType = indexedKeyTypes_[key];
+		auto treeManager = getTreeManagerForType(registeredType);
+		auto &rootMap = getRootMapForType(registeredType);
 
 		if (!rootMap.contains(key)) {
 			rootMap[key] = treeManager->initialize();
 		}
 
-		// The key for the B+Tree is the string representation of the property's value.
 		std::string btreeKey = valueToString(value);
-		rootMap[key] = treeManager->insert(rootMap[key], btreeKey, nodeId);
+		rootMap[key] = treeManager->insert(rootMap[key], btreeKey, entityId);
 	}
 
-	void PropertyIndex::removeProperty(int64_t nodeId, const std::string &key, const PropertyValue &value) {
+	void PropertyIndex::removeProperty(int64_t entityId, const std::string &key, const PropertyValue &value) {
 		std::unique_lock lock(mutex_);
 
-		// 1. Get the correct manager and root map based on the value's type.
-		auto treeManager = getTreeManagerForType(value);
-		auto &rootMap = getRootMapForType(value);
+		// Find the registered type for this key to know which index to search
+		auto it = indexedKeyTypes_.find(key);
+		if (it == indexedKeyTypes_.end()) {
+			return; // Key is not indexed, nothing to remove
+		}
 
-		// 2. Find the root of the B+Tree for this specific property key (e.g., "name").
-		auto it = rootMap.find(key);
-		if (it == rootMap.end()) {
-			// No index exists for this property key, so nothing to do.
+		PropertyType registeredType = it->second;
+		PropertyType valueType = getPropertyType(value);
+
+		// Only proceed if the value type matches the indexed type
+		if (registeredType != valueType) {
 			return;
 		}
-		int64_t rootId = it->second;
 
-		// 3. The key to search for in the B+Tree is the stringified property value.
+		auto treeManager = getTreeManagerForType(registeredType);
+		auto &rootMap = getRootMapForType(registeredType);
+		auto rootIt = rootMap.find(key);
+
+		if (rootIt == rootMap.end()) {
+			return; // No root for this key
+		}
+
+		int64_t rootId = rootIt->second;
 		std::string btreeKey = valueToString(value);
-
-		// 4. Call the tree manager's remove function with all necessary information.
-		// This is now efficient and correct, mirroring the LabelIndex implementation.
-		(void) treeManager->remove(rootId, btreeKey, nodeId);
-		// Note: We are not currently checking if a tree becomes empty after removal.
-		// A potential enhancement is to check if the tree is empty and if so,
-		// remove the root from the rootMap and delete the tree entirely.
+		(void) treeManager->remove(rootId, btreeKey, entityId);
 	}
 
 	std::vector<int64_t> PropertyIndex::findExactMatch(const std::string &key, const PropertyValue &value) const {
 		std::shared_lock lock(mutex_);
 
-		auto treeManager = getTreeManagerForType(value);
-		const auto &rootMap = getRootMapForType(value);
+		PropertyType valueType = getPropertyType(value);
+		auto it = indexedKeyTypes_.find(key);
 
-		auto it = rootMap.find(key);
-		if (it == rootMap.end()) {
-			return {}; // No index for this key
+		// The key must be indexed and the query value type must match the index type
+		if (it == indexedKeyTypes_.end() || it->second != valueType) {
+			return {};
 		}
 
+		const auto &rootMap = getRootMapForType(valueType);
+		auto rootIt = rootMap.find(key);
+		if (rootIt == rootMap.end()) {
+			return {}; // Should not happen if key is in type map, but good practice
+		}
+
+		auto treeManager = getTreeManagerForType(valueType);
 		std::string btreeKey = valueToString(value);
-		return treeManager->find(it->second, btreeKey);
+		return treeManager->find(rootIt->second, btreeKey);
 	}
 
 	std::vector<int64_t> PropertyIndex::findRange(const std::string &key, double minValue, double maxValue) const {
 		std::shared_lock lock(mutex_);
 
+		auto it = indexedKeyTypes_.find(key);
+		if (it == indexedKeyTypes_.end()) {
+			return {}; // Key not indexed
+		}
+
+		PropertyType type = it->second;
 		std::vector<int64_t> results;
 
-		// Check int index
-		{
-			auto it = intRoots_.find(key);
-			if (it != intRoots_.end()) {
+		if (type == PropertyType::INTEGER) {
+			auto rootIt = intRoots_.find(key);
+			if (rootIt != intRoots_.end()) {
+				// Correctly use integer comparison
 				auto minKey = std::to_string(static_cast<int64_t>(std::ceil(minValue)));
 				auto maxKey = std::to_string(static_cast<int64_t>(std::floor(maxValue)));
-				auto rangeResults = intTreeManager_->findRange(it->second, minKey, maxKey);
+				auto rangeResults = intTreeManager_->findRange(rootIt->second, minKey, maxKey);
 				results.insert(results.end(), rangeResults.begin(), rangeResults.end());
 			}
-		}
-
-		// Check double index
-		{
-			auto it = doubleRoots_.find(key);
-			if (it != doubleRoots_.end()) {
+		} else if (type == PropertyType::DOUBLE) {
+			auto rootIt = doubleRoots_.find(key);
+			if (rootIt != doubleRoots_.end()) {
+				// Correctly use double comparison
 				auto minKey = std::to_string(minValue);
 				auto maxKey = std::to_string(maxValue);
-				auto rangeResults = doubleTreeManager_->findRange(it->second, minKey, maxKey);
+				auto rangeResults = doubleTreeManager_->findRange(rootIt->second, minKey, maxKey);
 				results.insert(results.end(), rangeResults.begin(), rangeResults.end());
 			}
 		}
+		// Note: Range queries on other types are not supported.
 
 		return results;
 	}
 
-	bool PropertyIndex::hasPropertyValue(int64_t nodeId, const std::string &key, const PropertyValue &value) const {
-		std::shared_lock lock(mutex_);
-
-		auto treeManager = getTreeManagerForType(value);
-		const auto &rootMap = getRootMapForType(value);
-
-		auto it = rootMap.find(key);
-		if (it == rootMap.end()) {
-			return false; // No index for this key
-		}
-
-		std::string stringValue = valueToString(value);
-		auto results = treeManager->find(it->second, stringValue);
-		return std::ranges::find(results, nodeId) != results.end();
+	PropertyType PropertyIndex::getPropertyType(const PropertyValue &value) {
+		if (std::holds_alternative<std::string>(value))
+			return PropertyType::STRING;
+		if (std::holds_alternative<int64_t>(value))
+			return PropertyType::INTEGER;
+		if (std::holds_alternative<double>(value))
+			return PropertyType::DOUBLE;
+		if (std::holds_alternative<bool>(value))
+			return PropertyType::BOOLEAN;
+		return PropertyType::UNKNOWN;
 	}
 
-	std::shared_ptr<IndexTreeManager> PropertyIndex::getTreeManagerForType(const PropertyValue &value) const {
-		if (std::holds_alternative<std::string>(value)) {
-			return stringTreeManager_;
-		} else if (std::holds_alternative<int64_t>(value)) {
-			return intTreeManager_;
-		} else if (std::holds_alternative<double>(value)) {
-			return doubleTreeManager_;
-		} else if (std::holds_alternative<bool>(value)) {
-			return boolTreeManager_;
+	std::shared_ptr<IndexTreeManager> PropertyIndex::getTreeManagerForType(PropertyType type) const {
+		switch (type) {
+			case PropertyType::STRING:
+				return stringTreeManager_;
+			case PropertyType::INTEGER:
+				return intTreeManager_;
+			case PropertyType::DOUBLE:
+				return doubleTreeManager_;
+			case PropertyType::BOOLEAN:
+				return boolTreeManager_;
+			default:
+				return nullptr;
 		}
-
-		// Default to string (should never happen)
-		return stringTreeManager_;
 	}
 
-	std::unordered_map<std::string, int64_t> &PropertyIndex::getRootMapForType(const PropertyValue &value) {
-		if (std::holds_alternative<std::string>(value)) {
-			return stringRoots_;
-		} else if (std::holds_alternative<int64_t>(value)) {
-			return intRoots_;
-		} else if (std::holds_alternative<double>(value)) {
-			return doubleRoots_;
-		} else if (std::holds_alternative<bool>(value)) {
-			return boolRoots_;
+	std::unordered_map<std::string, int64_t> &PropertyIndex::getRootMapForType(PropertyType type) {
+		switch (type) {
+			case PropertyType::STRING:
+				return stringRoots_;
+			case PropertyType::INTEGER:
+				return intRoots_;
+			case PropertyType::DOUBLE:
+				return doubleRoots_;
+			case PropertyType::BOOLEAN:
+				return boolRoots_;
+			default:
+				throw std::invalid_argument("Invalid property type for root map");
 		}
-
-		// Default to string (should never happen)
-		return stringRoots_;
 	}
 
-	const std::unordered_map<std::string, int64_t> &PropertyIndex::getRootMapForType(const PropertyValue &value) const {
-		if (std::holds_alternative<std::string>(value)) {
-			return stringRoots_;
-		} else if (std::holds_alternative<int64_t>(value)) {
-			return intRoots_;
-		} else if (std::holds_alternative<double>(value)) {
-			return doubleRoots_;
-		} else if (std::holds_alternative<bool>(value)) {
-			return boolRoots_;
+	const std::unordered_map<std::string, int64_t> &PropertyIndex::getRootMapForType(PropertyType type) const {
+		switch (type) {
+			case PropertyType::STRING:
+				return stringRoots_;
+			case PropertyType::INTEGER:
+				return intRoots_;
+			case PropertyType::DOUBLE:
+				return doubleRoots_;
+			case PropertyType::BOOLEAN:
+				return boolRoots_;
+			default:
+				throw std::invalid_argument("Invalid property type for root map");
 		}
-
-		// Default to string (should never happen)
-		return stringRoots_;
 	}
 
 	std::string PropertyIndex::valueToString(const PropertyValue &value) {
@@ -342,42 +363,47 @@ namespace graph::query::indexes {
 		return rootMap;
 	}
 
-	bool PropertyIndex::isEmpty() const {
-		std::shared_lock lock(mutex_);
-		return stringRoots_.empty() && intRoots_.empty() && doubleRoots_.empty() && boolRoots_.empty();
+	void PropertyIndex::serializeKeyTypeMap() const {
+		std::unordered_map<std::string, PropertyValue> properties;
+		for (const auto &[key, type]: indexedKeyTypes_) {
+			// Store the enum value as an integer (int64_t)
+			properties[key] = static_cast<int64_t>(type);
+		}
+		StateRegistry::getDataManager()->addStateProperties(STATE_KEY_TYPES_KEY, properties);
 	}
 
-	// Get all property keys that are indexed
+	void PropertyIndex::deserializeKeyTypeMap() {
+		indexedKeyTypes_.clear();
+		auto properties = StateRegistry::getDataManager()->getStateProperties(STATE_KEY_TYPES_KEY);
+		for (const auto &[key, value]: properties) {
+			if (std::holds_alternative<int64_t>(value)) {
+				indexedKeyTypes_[key] = static_cast<PropertyType>(std::get<int64_t>(value));
+			}
+		}
+	}
+
+	bool PropertyIndex::isEmpty() const {
+		std::shared_lock lock(mutex_);
+		// The definitive source of whether an index exists for any key is the type map.
+		return indexedKeyTypes_.empty();
+	}
+
 	std::vector<std::string> PropertyIndex::getIndexedKeys() const {
 		std::shared_lock lock(mutex_);
-
 		std::vector<std::string> keys;
-
-		// Collect keys from all type maps
-		keys.reserve(stringRoots_.size());
-		for (const auto &key: stringRoots_ | std::views::keys) {
+		keys.reserve(indexedKeyTypes_.size());
+		for (const auto &key: indexedKeyTypes_ | std::views::keys) {
 			keys.push_back(key);
 		}
-
-		for (const auto &key: intRoots_ | std::views::keys) {
-			if (std::ranges::find(keys, key) == keys.end()) {
-				keys.push_back(key);
-			}
-		}
-
-		for (const auto &key: doubleRoots_ | std::views::keys) {
-			if (std::ranges::find(keys, key) == keys.end()) {
-				keys.push_back(key);
-			}
-		}
-
-		for (const auto &key: boolRoots_ | std::views::keys) {
-			if (std::ranges::find(keys, key) == keys.end()) {
-				keys.push_back(key);
-			}
-		}
-
 		return keys;
+	}
+
+	PropertyType PropertyIndex::getIndexedKeyType(const std::string &key) const {
+		std::shared_lock lock(mutex_);
+		if (auto it = indexedKeyTypes_.find(key); it != indexedKeyTypes_.end()) {
+			return it->second;
+		}
+		return PropertyType::UNKNOWN;
 	}
 
 } // namespace graph::query::indexes

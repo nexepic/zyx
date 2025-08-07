@@ -12,22 +12,28 @@
 
 #include <memory>
 #include <string>
-#include "FullTextIndex.hpp"
-#include "LabelIndex.hpp"
-#include "PropertyIndex.hpp"
-#include "RelationshipIndex.hpp"
+#include "EntityTypeIndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 namespace graph::query::indexes {
 
 	class IndexBuilder;
 
-	struct IndexConfig {
-		bool labelIndexEnabled = false;
-		std::unordered_set<std::string> propertyIndexKeys;
-		bool relationshipIndexEnabled = false;
-		bool fullTextIndexEnabled = false;
-	};
+	// Define constants for index types and state keys
+	namespace IndexTypes {
+		constexpr uint32_t NODE_LABEL_TYPE = 1;
+		constexpr uint32_t NODE_PROPERTY_TYPE = 2;
+		constexpr uint32_t EDGE_LABEL_TYPE = 3;
+		constexpr uint32_t EDGE_PROPERTY_TYPE = 4;
+	}
+
+	namespace StateKeys {
+		// Keys for index data (B-Tree roots)
+		constexpr char NODE_LABEL_ROOT[] = "node.index.label_root";
+		constexpr char NODE_PROPERTY_PREFIX[] = "node.index.property";
+		constexpr char EDGE_LABEL_ROOT[] = "edge.index.label_root";
+		constexpr char EDGE_PROPERTY_PREFIX[] = "edge.index.property";
+	}
 
 	class IndexManager : public std::enable_shared_from_this<IndexManager> {
 	public:
@@ -36,83 +42,49 @@ namespace graph::query::indexes {
 
 		void initialize();
 
-		// Index creation methods
-		bool buildLabelIndex();
-		bool buildPropertyIndex(const std::string &key);
-		bool buildIndexes();
+		// Index creation methods now take an entity type
+		bool buildIndexes(const std::string& entityType);
+		bool buildPropertyIndex(const std::string& entityType, const std::string& key);
 
-		// Drop index methods
-		bool dropIndex(const std::string &indexType, const std::string &key = "");
+		// Drop index method
+		bool dropIndex(const std::string& entityType, const std::string& indexType, const std::string& key = "");
 
-		// List all active indexes
-		std::vector<std::pair<std::string, std::string>> listIndexes() const;
+		// List indexes for a specific entity type
+		std::vector<std::pair<std::string, std::string>> listIndexes(const std::string& entityType) const;
 
-		// Persist indexes to storage
 		void persistState() const;
 
-		// Enable/disable automatic index updates
-		void enableLabelIndex(bool enable = true);
-		void enablePropertyIndex(const std::string &key, bool enable = true);
-		void enableRelationshipIndex(bool enable = true);
-		void enableFullTextIndex(bool enable = true);
-
+		// --- Entity Event Handlers ---
 		void onNodeAdded(const Node& node) const;
 		void onNodeUpdated(const Node& oldNode, const Node& newNode) const;
 		void onNodeDeleted(const Node& node) const;
-
 		void onEdgeAdded(const Edge& edge) const;
 		void onEdgeUpdated(const Edge& oldEdge, const Edge& newEdge) const;
 		void onEdgeDeleted(const Edge& edge) const;
 
-		// Update a single node in all enabled indexes
-		void updateNodeLabelIndex(const Node &node, const std::string &oldLabel, bool isDeleted) const;
+		// --- Accessors ---
+		std::shared_ptr<EntityTypeIndexManager> getNodeIndexManager() const { return nodeIndexManager_; }
+		std::shared_ptr<EntityTypeIndexManager> getEdgeIndexManager() const { return edgeIndexManager_; }
+		IndexBuilder* getIndexBuilder() const { return indexBuilder_.get(); }
 
-		// Update a single edge in all enabled indexes
-		void updateEdgeIndexes(const Edge &edge, bool isNew = false, bool isDeleted = false) const;
-
-		// Accessors for individual indexes
-		std::shared_ptr<LabelIndex> getLabelIndex() const;
-		std::shared_ptr<PropertyIndex> getPropertyIndex() const;
-		std::shared_ptr<RelationshipIndex> getRelationshipIndex() const;
-		std::shared_ptr<FullTextIndex> getFullTextIndex() const;
-
-		// Query methods
+		// Query methods now need to know which index to use
 		std::vector<int64_t> findNodeIdsByLabel(const std::string &label) const;
 		std::vector<int64_t> findNodeIdsByProperty(const std::string &key, const std::string &value) const;
-		std::vector<int64_t> findNodeIdsByPropertyRange(const std::string &key, double minValue, double maxValue) const;
-		std::vector<int64_t> findNodeIdsByTextSearch(const std::string &key, const std::string &searchText) const;
-		std::vector<int64_t> findEdgeIdsByRelationship(const std::string &label) const;
-		std::vector<int64_t> findEdgeIdsByNodes(int64_t fromNodeId, int64_t toNodeId) const;
-		std::vector<int64_t> findOutgoingEdgeIds(int64_t nodeId, const std::string &label = "") const;
-		std::vector<int64_t> findIncomingEdgeIds(int64_t nodeId, const std::string &label = "") const;
 
-		IndexBuilder* getIndexBuilder() const {
-			return indexBuilder_.get();
-		}
+        std::vector<int64_t> findEdgeIdsByLabel(const std::string &label) const;
+        std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const std::string &value) const;
 
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::DataManager> dataManager_;
 
-		std::shared_ptr<LabelIndex> labelIndex_;
-		std::shared_ptr<PropertyIndex> propertyIndex_;
-		std::shared_ptr<RelationshipIndex> relationshipIndex_;
-		std::shared_ptr<FullTextIndex> fullTextIndex_;
+		std::shared_ptr<EntityTypeIndexManager> nodeIndexManager_;
+		std::shared_ptr<EntityTypeIndexManager> edgeIndexManager_;
 
-		// Configuration for automatic index updates
-		IndexConfig indexConfig_;
-
-		// For asynchronous index building
 		std::unique_ptr<IndexBuilder> indexBuilder_;
-
-		// Thread safety
 		mutable std::recursive_mutex mutex_;
 
-		// Helper method to update property indexes
-		void updatePropertyIndexes(int64_t entityId, const std::unordered_map<std::string, PropertyValue> &oldProps,
-								   const std::unordered_map<std::string, PropertyValue> &newProps) const;
-
-		bool executeBuildTask(const std::function<bool()> &buildFunc) const;
+		bool executeBuildTask(const std::function<bool()>& buildFunc) const;
 	};
 
 } // namespace graph::query::indexes

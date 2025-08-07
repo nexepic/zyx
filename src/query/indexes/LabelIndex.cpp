@@ -16,8 +16,10 @@
 
 namespace graph::query::indexes {
 
-	LabelIndex::LabelIndex(const std::shared_ptr<storage::DataManager> &dataManager) :
-		dataManager_(dataManager), treeManager_(std::make_shared<IndexTreeManager>(dataManager, LABEL_INDEX_TYPE)) {
+	LabelIndex::LabelIndex(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType, std::string stateKey) :
+		dataManager_(std::move(dataManager)),
+		treeManager_(std::make_shared<IndexTreeManager>(dataManager_, indexType)),
+		stateKey_(std::move(stateKey)) {
 		initialize();
 	}
 
@@ -47,29 +49,21 @@ namespace graph::query::indexes {
 		// Clear the index and reset rootId
 		clear();
 
-		// Remove the rootId from state registry
-		StateRegistry::getDataManager()->removeState(STATE_KEY_ROOT_ID);
+		// Remove the rootId from state registry using the specific key
+		StateRegistry::getDataManager()->removeState(stateKey_);
 	}
 
 	void LabelIndex::saveState() {
 		std::shared_lock lock(mutex_);
-
-		// Save rootId to state registry
 		if (rootId_ != 0) {
-			// Create a property map with the single root ID
 			std::unordered_map<std::string, PropertyValue> properties;
 			properties["rootId"] = rootId_;
-
-			// Store in state entity
-			StateRegistry::getDataManager()->addStateProperties(STATE_KEY_ROOT_ID, properties);
+			StateRegistry::getDataManager()->addStateProperties(stateKey_, properties);
 		}
 	}
 
 	void LabelIndex::loadRootId() {
-		// Load rootId from state registry, defaulting to 0 if not found
-		auto properties = StateRegistry::getDataManager()->getStateProperties(STATE_KEY_ROOT_ID);
-
-		// Look for the rootId property
+		auto properties = StateRegistry::getDataManager()->getStateProperties(stateKey_);
 		if (properties.contains("rootId") && std::holds_alternative<int64_t>(properties.at("rootId"))) {
 			rootId_ = std::get<int64_t>(properties.at("rootId"));
 		} else {
@@ -83,34 +77,23 @@ namespace graph::query::indexes {
 		saveState();
 	}
 
-	void LabelIndex::addNode(int64_t nodeId, const std::string &label) {
+	void LabelIndex::addNode(int64_t entityId, const std::string &label) {
 		std::unique_lock lock(mutex_);
-
 		if (rootId_ == 0) {
 			rootId_ = treeManager_->initialize();
 		}
-
-		// Use the tree manager to insert the label->nodeId mapping
-		// The new root ID might change if tree restructuring occurs
-		int64_t newRootId = treeManager_->insert(rootId_, label, nodeId);
-
-		// If the root has changed, update the persisted value
+		int64_t newRootId = treeManager_->insert(rootId_, label, entityId);
 		if (newRootId != rootId_) {
 			rootId_ = newRootId;
 		}
 	}
 
-	void LabelIndex::removeNode(int64_t nodeId, const std::string &label) {
+	void LabelIndex::removeNode(int64_t entityId, const std::string &label) {
 		std::unique_lock lock(mutex_);
-
 		if (rootId_ == 0) {
 			return;
 		}
-
-		// The remove operation might modify the tree structure
-		int64_t newRootId = treeManager_->remove(rootId_, label, nodeId);
-
-		// If the root has changed, update the persisted value
+		int64_t newRootId = treeManager_->remove(rootId_, label, entityId);
 		if (newRootId != rootId_) {
 			rootId_ = newRootId;
 		}
@@ -126,7 +109,7 @@ namespace graph::query::indexes {
 		return treeManager_->find(rootId_, label);
 	}
 
-	bool LabelIndex::hasLabel(int64_t nodeId, const std::string &label) const {
+	bool LabelIndex::hasLabel(int64_t entityId, const std::string &label) const {
 		std::shared_lock lock(mutex_);
 
 		if (rootId_ == 0) {
@@ -134,7 +117,7 @@ namespace graph::query::indexes {
 		}
 
 		auto nodes = treeManager_->find(rootId_, label);
-		return std::ranges::find(nodes, nodeId) != nodes.end();
+		return std::ranges::find(nodes, entityId) != nodes.end();
 	}
 
 } // namespace graph::query::indexes

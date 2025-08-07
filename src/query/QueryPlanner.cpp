@@ -15,114 +15,89 @@ namespace graph::query {
 	QueryPlanner::QueryPlanner(std::shared_ptr<indexes::IndexManager> indexManager) :
 		indexManager_(std::move(indexManager)) {}
 
-	QueryPlan QueryPlanner::createPlanForLabelQuery(const std::string &label) const {
-		// Check if label index exists
-		if (indexManager_->getLabelIndex() && !indexManager_->getLabelIndex()->isEmpty()) {
-			QueryPlan plan(QueryPlan::OperationType::LABEL_SCAN);
-			plan.addParameter("label", label);
-			return plan;
-		} else {
-			// Fallback to full scan
-			QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_SCAN);
+	// --- Node Query Plans ---
+
+	QueryPlan QueryPlanner::createPlanForNodeLabelQuery(const std::string &label) const {
+		// Check if node label index exists
+		auto nodeIndexManager = indexManager_->getNodeIndexManager();
+		if (nodeIndexManager && !nodeIndexManager->getLabelIndex()->isEmpty()) {
+			QueryPlan plan(QueryPlan::OperationType::NODE_LABEL_SCAN);
 			plan.addParameter("label", label);
 			return plan;
 		}
+		// Fallback to full scan
+		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_SCAN);
+		plan.addParameter("label", label);
+		return plan;
 	}
 
-	QueryPlan QueryPlanner::createPlanForPropertyQuery(const std::string &key, const std::string &value) const {
-		// Check if property index exists for this key
-		auto propertyIndex = indexManager_->getPropertyIndex();
+	QueryPlan QueryPlanner::createPlanForNodePropertyQuery(const std::string &key, const std::string &value) const {
+		// Check if node property index exists for this key
+		auto nodeIndexManager = indexManager_->getNodeIndexManager();
+		auto propertyIndex = nodeIndexManager->getPropertyIndex();
 		if (propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key)) {
-			QueryPlan plan(QueryPlan::OperationType::PROPERTY_SCAN);
-			plan.addParameter("key", key);
-			plan.addParameter("value", value);
-			return plan;
-		} else {
-			// Fallback to full scan
-			QueryPlan plan(QueryPlan::OperationType::FULL_NODE_PROPERTY_SCAN);
+			QueryPlan plan(QueryPlan::OperationType::NODE_PROPERTY_SCAN);
 			plan.addParameter("key", key);
 			plan.addParameter("value", value);
 			return plan;
 		}
+		// Fallback to full scan
+		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_PROPERTY_SCAN);
+		plan.addParameter("key", key);
+		plan.addParameter("value", value);
+		return plan;
 	}
 
-	QueryPlan QueryPlanner::createPlanForLabelAndPropertyQuery(const std::string &label, const std::string &key,
-															   const std::string &value) const {
-		auto labelIndex = indexManager_->getLabelIndex();
-		auto propertyIndex = indexManager_->getPropertyIndex();
-		bool hasLabelIndex = labelIndex && !labelIndex->isEmpty();
-		bool hasPropertyIndex = propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key);
+	QueryPlan QueryPlanner::createPlanForNodeLabelAndPropertyQuery(const std::string &label, const std::string &key,
+																   const std::string &value) const {
+		auto nodeIndexManager = indexManager_->getNodeIndexManager();
+		bool hasLabelIndex = !nodeIndexManager->getLabelIndex()->isEmpty();
+		bool hasPropertyIndex = !nodeIndexManager->getPropertyIndex()->isEmpty() &&
+								nodeIndexManager->getPropertyIndex()->hasKeyIndexed(key);
 
 		if (hasLabelIndex && hasPropertyIndex) {
-			// Determine which index is more selective
-			auto labelNodeIds = indexManager_->findNodeIdsByLabel(label);
-			auto propertyNodeIds = indexManager_->findNodeIdsByProperty(key, value);
-
-			// Use the index that returns fewer matches
-			if (labelNodeIds.size() <= propertyNodeIds.size()) {
-				QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
-				plan.addParameter("label", label);
-				plan.addParameter("key", key);
-				plan.addParameter("value", value);
-				plan.addParameter("scanType", "labelFirst");
-				return plan;
-			} else {
-				QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
-				plan.addParameter("label", label);
-				plan.addParameter("key", key);
-				plan.addParameter("value", value);
-				plan.addParameter("scanType", "propertyFirst");
-				return plan;
-			}
-		} else if (hasLabelIndex) {
-			// Only label index exists, use label scan with property filter
-			QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
-			plan.addParameter("label", label);
-			plan.addParameter("key", key);
-			plan.addParameter("value", value);
-			plan.addParameter("scanType", "labelFirst");
-			return plan;
-		} else if (hasPropertyIndex) {
-			// Only property index exists, use property scan with label filter
-			QueryPlan plan(QueryPlan::OperationType::LABEL_PROPERTY_SCAN);
-			plan.addParameter("label", label);
-			plan.addParameter("key", key);
-			plan.addParameter("value", value);
-			plan.addParameter("scanType", "propertyFirst");
-			return plan;
-		} else {
-			// No indexes, full scan
-			QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_PROPERTY_SCAN);
+			QueryPlan plan(QueryPlan::OperationType::NODE_LABEL_PROPERTY_SCAN);
 			plan.addParameter("label", label);
 			plan.addParameter("key", key);
 			plan.addParameter("value", value);
 			return plan;
 		}
-	}
-
-	QueryPlan QueryPlanner::createPlanForPropertyRangeQuery(const std::string &key, double minValue, double maxValue) {
-		QueryPlan plan(QueryPlan::OperationType::PROPERTY_RANGE_SCAN);
+		// Fallback to full scan (or a more optimized single-index scan if preferred)
+		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_PROPERTY_SCAN);
+		plan.addParameter("label", label);
 		plan.addParameter("key", key);
-		plan.addParameter("minValue", minValue);
-		plan.addParameter("maxValue", maxValue);
+		plan.addParameter("value", value);
 		return plan;
 	}
 
-	QueryPlan QueryPlanner::createPlanForTextSearchQuery(const std::string &key, const std::string &searchText) {
-		QueryPlan plan(QueryPlan::OperationType::TEXT_SEARCH);
-		plan.addParameter("key", key);
-		plan.addParameter("searchText", searchText);
-		return plan;
-	}
+	// --- Edge Query Plans ---
 
-	QueryPlan QueryPlanner::createPlanForRelationshipQuery(int64_t nodeId, const std::string &edgeLabel) {
-		QueryPlan plan(QueryPlan::OperationType::RELATIONSHIP_SCAN);
-		plan.addParameter("nodeId", nodeId);
-
-		if (!edgeLabel.empty()) {
-			plan.addParameter("label", edgeLabel);
+	QueryPlan QueryPlanner::createPlanForEdgeLabelQuery(const std::string &label) const {
+		auto edgeIndexManager = indexManager_->getEdgeIndexManager();
+		if (edgeIndexManager && !edgeIndexManager->getLabelIndex()->isEmpty()) {
+			QueryPlan plan(QueryPlan::OperationType::EDGE_LABEL_SCAN);
+			plan.addParameter("label", label);
+			return plan;
 		}
+		// Fallback to full edge scan
+		QueryPlan plan(QueryPlan::OperationType::FULL_EDGE_LABEL_SCAN);
+		plan.addParameter("label", label);
+		return plan;
+	}
 
+	QueryPlan QueryPlanner::createPlanForEdgePropertyQuery(const std::string &key, const std::string &value) const {
+		auto edgeIndexManager = indexManager_->getEdgeIndexManager();
+		auto propertyIndex = edgeIndexManager->getPropertyIndex();
+		if (propertyIndex && !propertyIndex->isEmpty() && propertyIndex->hasKeyIndexed(key)) {
+			QueryPlan plan(QueryPlan::OperationType::EDGE_PROPERTY_SCAN);
+			plan.addParameter("key", key);
+			plan.addParameter("value", value);
+			return plan;
+		}
+		// Fallback to full edge scan
+		QueryPlan plan(QueryPlan::OperationType::FULL_EDGE_PROPERTY_SCAN);
+		plan.addParameter("key", key);
+		plan.addParameter("value", value);
 		return plan;
 	}
 

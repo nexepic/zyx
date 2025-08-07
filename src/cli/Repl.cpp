@@ -18,27 +18,38 @@ namespace graph {
 	REPL::REPL(Database &db) : db(db) {}
 
 	void REPL::run() const {
-		// Create a prompt that works on both Windows and Unix-like systems
 #ifdef _WIN32
 		const char *prompt = "metrix> ";
 #else
 		const char *prompt = "\033[1;32mmetrix>\033[0m ";
 #endif
 
-		// Create a linenoise state with our prompt
 		linenoise::linenoiseState ls(prompt);
-
-		// Set up history (in memory only)
 		ls.SetHistoryMaxLen(100);
-
-		// Enable multi-line mode for better editing
 		ls.EnableMultiLine();
 
-		// Set up auto-completion for common commands
+		// Updated and complete list for auto-completion
 		ls.SetCompletionCallback([](const char *editBuffer, std::vector<std::string> &completions) {
-			const char *commands[] = {"addNode",		  "deleteNode", "addEdge",	 "deleteEdge", "addProperty",
-									  "listProperties",	  "queryNode",	"queryEdge", "listNodes",  "findConnectedNodes",
-									  "findShortestPath", "save",		"help",		 "exit"};
+			const char *commands[] = {"addNode",
+									  "addEdge",
+									  "addProperty",
+									  "deleteNode",
+									  "deleteEdge",
+									  "queryNode",
+									  "queryEdge",
+									  "listNodes",
+									  "listEdges",
+									  "listProperties",
+									  "findNodesByLabel",
+									  "findNodesByProperty",
+									  "findEdgesByLabel",
+									  "findEdgesByProperty",
+									  "createIndex",
+									  "dropIndex",
+									  "listIndexes",
+									  "save",
+									  "help",
+									  "exit"};
 
 			for (const auto &cmd: commands) {
 				if (strncmp(editBuffer, cmd, strlen(editBuffer)) == 0) {
@@ -48,21 +59,15 @@ namespace graph {
 		});
 
 		std::string line;
-		bool quit = false;
-
-		while (!quit) {
-			// Use the instance's Readline method
-			quit = ls.Readline(line);
+		while (true) {
+			bool quit = ls.Readline(line);
 
 			if (quit || shouldExit(line)) {
 				break;
 			}
 
 			if (!line.empty()) {
-				// Process the command before adding to history
 				handleCommand(line);
-
-				// Add the command to history AFTER processing it
 				ls.AddHistory(line.c_str());
 			}
 		}
@@ -75,504 +80,279 @@ namespace graph {
 			std::string label;
 			std::cout << "Enter node label: ";
 			std::getline(std::cin, label);
-
 			auto transaction = db.beginTransaction();
 			Node newNode = transaction.insertNode(label);
-			// transaction.commit();
-
 			std::cout << "Added node with ID: " << newNode.getId() << "\n";
-		} else if (command == "deleteNode") {
-			int nodeId;
-			std::cout << "Enter node ID to delete: ";
-			std::cin >> nodeId;
-			std::cin.ignore(); // Clear the newline
-
-			try {
-				// auto transaction = db.beginTransaction();
-				db.getStorage()->deleteNode(nodeId); // Assuming cascadeEdges is true
-				// transaction.commit();
-				std::cout << "Deleted node with ID: " << nodeId << "\n";
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "deleteEdge") {
-			int edgeId;
-			std::cout << "Enter edge ID to delete: ";
-			std::cin >> edgeId;
-			std::cin.ignore(); // Clear the newline
-
-			try {
-				// auto transaction = db.beginTransaction();
-				db.getStorage()->deleteEdge(edgeId);
-				// transaction.commit();
-
-				std::cout << "Deleted edge with ID: " << edgeId << "\n";
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "addProperty") {
-			// Add property to a node
-			int nodeId;
-			std::string key, valueType, value;
-
-			std::cout << "Enter node ID: ";
-			std::cin >> nodeId;
-			std::cin.ignore(); // Clear the newline
-
-			std::cout << "Enter property key: ";
-			std::getline(std::cin, key);
-
-			std::cout << "Enter property type (string/int/double/bool/text): ";
-			std::getline(std::cin, valueType);
-
-			std::cout << "Enter property value: ";
-
-			PropertyValue propValue;
-
-			if (valueType == "string") {
-				std::getline(std::cin, value);
-				propValue = value;
-			} else if (valueType == "int") {
-				int64_t intValue;
-				std::cin >> intValue;
-				std::cin.ignore();
-				propValue = intValue;
-			} else if (valueType == "double") {
-				double doubleValue;
-				std::cin >> doubleValue;
-				std::cin.ignore();
-				propValue = doubleValue;
-			} else if (valueType == "bool") {
-				std::string boolStr;
-				std::getline(std::cin, boolStr);
-				bool boolValue = (boolStr == "true" || boolStr == "1" || boolStr == "yes");
-				propValue = boolValue;
-			} else if (valueType == "text") {
-				std::cout << "Enter multiline text (type END on a new line to finish):\n";
-				std::string line;
-				value = "";
-				while (std::getline(std::cin, line) && line != "END") {
-					value += line + "\n";
-				}
-				propValue = value;
-			} else {
-				std::cout << "Unsupported property type. Using string type.\n";
-				std::getline(std::cin, value);
-				propValue = value;
-			}
-
-			try {
-				auto transaction = db.beginTransaction();
-				auto node = db.getStorage()->getNode(nodeId);
-
-				if (node.getId() == 0) {
-					std::cout << "Node not found\n";
-					return;
-				}
-
-				// Create a map for the property
-				std::unordered_map<std::string, PropertyValue> properties;
-				properties[key] = propValue;
-
-				// Add the property to the node
-				db.getStorage()->insertProperties(nodeId, Node::typeId, properties);
-				// transaction.commit();
-
-				std::cout << "Added property '" << key << "' to node " << nodeId << "\n";
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "listProperties") {
-			// List all properties of a node
-			int nodeId;
-
-			std::cout << "Enter node ID: ";
-			std::cin >> nodeId;
-			std::cin.ignore(); // Clear the newline
-
-			try {
-				auto node = db.getStorage()->getNode(nodeId);
-
-				if (node.getId() == 0) {
-					std::cout << "Node not found\n";
-					return;
-				}
-
-				const auto &properties = db.getStorage()->getNodeProperties(node.getId());
-
-				if (properties.empty()) {
-					std::cout << "Node " << nodeId << " has no properties\n";
-					return;
-				}
-
-				std::cout << "Properties of node " << nodeId << ":\n";
-				for (const auto &[key, value]: properties) {
-					std::cout << " - " << key << ": ";
-
-					// Display type and brief value preview
-					if (std::holds_alternative<std::string>(value)) {
-						auto strValue = std::get<std::string>(value);
-						// std::string preview = (strValue.length() > 50) ? strValue.substr(0, 47) + "..." : strValue;
-						std::string preview = strValue;
-						std::cout << "(string) " << preview << "\n";
-					} else if (std::holds_alternative<int64_t>(value)) {
-						std::cout << "(int) " << std::get<int64_t>(value) << "\n";
-					} else if (std::holds_alternative<double>(value)) {
-						std::cout << "(double) " << std::get<double>(value) << "\n";
-					} else if (std::holds_alternative<bool>(value)) {
-						std::cout << "(bool) " << (std::get<bool>(value) ? "true" : "false") << "\n";
-					} else {
-						std::cout << "(other type)\n";
-					}
-				}
-
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "createLabelIndex") {
-			std::cout << "Creating label index...\n";
-			try {
-				bool success = db.getQueryEngine()->buildLabelIndex();
-				if (success) {
-					std::cout << "Label index created successfully\n";
-				} else {
-					std::cout << "Failed to create label index\n";
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "createPropertyIndex") {
-			std::string key;
-			std::cout << "Enter property key to index: ";
-			std::getline(std::cin, key);
-
-			if (key.empty()) {
-				std::cout << "Property key cannot be empty\n";
-				return;
-			}
-
-			std::cout << "Creating property index for key '" << key << "'...\n";
-			try {
-				bool success = db.getQueryEngine()->buildPropertyIndex(key);
-				if (success) {
-					std::cout << "Property index for '" << key << "' created successfully\n";
-				} else {
-					std::cout << "Failed to create property index\n";
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "dropIndex") {
-			std::string indexType;
-			std::cout << "Enter index type (label/property): ";
-			std::getline(std::cin, indexType);
-
-			if (indexType != "label" && indexType != "property") {
-				std::cout << "Invalid index type. Use 'label' or 'property'\n";
-				return;
-			}
-
-			std::string key = "";
-			if (indexType == "property") {
-				std::cout << "Enter property key (leave empty to drop all property indexes): ";
-				std::getline(std::cin, key);
-			}
-
-			std::cout << "Dropping " << indexType << " index" << ((!key.empty()) ? " for key '" + key + "'" : "")
-					  << "...\n";
-
-			try {
-				bool success = db.getQueryEngine()->dropIndex(indexType, key);
-				if (success) {
-					std::cout << "Index dropped successfully\n";
-				} else {
-					std::cout << "Failed to drop index\n";
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "listIndexes") {
-			std::cout << "Active indexes:\n";
-			try {
-				auto indexes = db.getQueryEngine()->listIndexes();
-				if (indexes.empty()) {
-					std::cout << "No active indexes found\n";
-				} else {
-					for (const auto &[type, key]: indexes) {
-						if (type == "property" && !key.empty()) {
-							std::cout << "- " << type << " index on key: '" << key << "'\n";
-						} else {
-							std::cout << "- " << type << " index\n";
-						}
-					}
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "findNodesByLabel") {
-			std::string label;
-			std::cout << "Enter node label to search for: ";
-			std::getline(std::cin, label);
-
-			if (label.empty()) {
-				std::cout << "Label cannot be empty\n";
-				return;
-			}
-
-			std::cout << "Searching for nodes with label '" << label << "'...\n";
-			try {
-				auto result = db.getQueryEngine()->findNodesByLabel(label);
-
-				const auto &nodes = result.getNodes();
-				if (nodes.empty()) {
-					std::cout << "No nodes found with label '" << label << "'\n";
-				} else {
-					std::cout << "Found " << nodes.size() << " node(s):\n";
-					for (const auto &node: nodes) {
-						std::cout << "ID: " << node.getId() << ", Label: " << node.getLabel();
-
-						// Show property count if available
-						const auto &props = node.getProperties();
-						if (!props.empty()) {
-							std::cout << " (" << props.size() << " properties)";
-						}
-						std::cout << "\n";
-					}
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "findNodesByProperty") {
-			std::string key, value;
-			std::cout << "Enter property key to search for: ";
-			std::getline(std::cin, key);
-
-			if (key.empty()) {
-				std::cout << "Property key cannot be empty\n";
-				return;
-			}
-
-			std::cout << "Enter property value to search for: ";
-			std::getline(std::cin, value);
-
-			std::cout << "Searching for nodes with property '" << key << "' and value '" << value << "'...\n";
-			try {
-				auto result = db.getQueryEngine()->findNodesByProperty(key, value);
-
-				const auto &nodes = result.getNodes();
-				if (nodes.empty()) {
-					std::cout << "No nodes found with property '" << key << "' and value '" << value << "'\n";
-				} else {
-					std::cout << "Found " << nodes.size() << " node(s):\n";
-					for (const auto &node: nodes) {
-						std::cout << "ID: " << node.getId() << ", Label: " << node.getLabel();
-
-						// Show property count if available
-						const auto &props = node.getProperties();
-						if (!props.empty()) {
-							std::cout << " (" << props.size() << " properties)";
-						}
-						std::cout << "\n";
-					}
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
 		} else if (command == "addEdge") {
-			int from, to;
+			int64_t from, to;
 			std::string relation;
 			std::cout << "Enter from node ID: ";
 			std::cin >> from;
 			std::cout << "Enter to node ID: ";
 			std::cin >> to;
-			std::cin.ignore(); // Clear the newline
-			std::cout << "Enter relation: ";
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			std::cout << "Enter relation (label): ";
 			std::getline(std::cin, relation);
-
 			try {
 				auto transaction = db.beginTransaction();
-
 				Edge newEdge = transaction.insertEdge(from, to, relation);
-				// transaction.commit();
 				std::cout << "Added edge with ID: " << newEdge.getId() << "\n";
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "deleteNode") {
+			int64_t nodeId;
+			std::cout << "Enter node ID to delete: ";
+			std::cin >> nodeId;
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			try {
+				db.getStorage()->deleteNode(nodeId); // Assuming cascade delete
+				std::cout << "Deleted node with ID: " << nodeId << "\n";
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "deleteEdge") {
+			int64_t edgeId;
+			std::cout << "Enter edge ID to delete: ";
+			std::cin >> edgeId;
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			try {
+				db.getStorage()->deleteEdge(edgeId);
+				std::cout << "Deleted edge with ID: " << edgeId << "\n";
+			} catch (const std::exception &e) {
+				std::cout << "Error: " << e.what() << "\n";
+			}
+		} else if (command == "addProperty" || command == "listProperties" || command == "removeProperty") {
+			// Consolidated block for all property-related operations
+			std::string entityType;
+			std::cout << "Enter entity type (node/edge): ";
+			std::getline(std::cin, entityType);
+			if (entityType != "node" && entityType != "edge") {
+				std::cout << "Invalid entity type. Please use 'node' or 'edge'.\n";
+				return;
+			}
+
+			int64_t entityId;
+			std::cout << "Enter " << entityType << " ID: ";
+			std::cin >> entityId;
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+			uint32_t typeId = (entityType == "node") ? Node::typeId : Edge::typeId;
+
+			if (command == "addProperty") {
+				std::string key, valueTypeStr, valueStr;
+				std::cout << "Enter property key: ";
+				std::getline(std::cin, key);
+				std::cout << "Enter property type (string/int/double/bool): ";
+				std::getline(std::cin, valueTypeStr);
+				std::cout << "Enter property value: ";
+
+				PropertyValue propValue;
+				if (valueTypeStr == "int") {
+					int64_t v;
+					std::cin >> v;
+					propValue = v;
+				} else if (valueTypeStr == "double") {
+					double v;
+					std::cin >> v;
+					propValue = v;
+				} else if (valueTypeStr == "bool") {
+					std::string v;
+					std::getline(std::cin, v);
+					propValue = (v == "true" || v == "1");
+				} else {
+					std::getline(std::cin, valueStr);
+					propValue = valueStr;
+				}
 				std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+				try {
+					db.getStorage()->insertProperties(entityId, typeId, {{key, propValue}});
+					std::cout << "Added/updated property '" << key << "' to " << entityType << " " << entityId << "\n";
+				} catch (const std::exception &e) {
+					std::cout << "Error: " << e.what() << "\n";
+				}
+
+			} else { // listProperties
+				try {
+					auto properties = (entityType == "node") ? db.getStorage()->getNodeProperties(entityId)
+															 : db.getStorage()->getEdgeProperties(entityId);
+					if (properties.empty()) {
+						std::cout << "No properties found for " << entityType << " " << entityId << ".\n";
+					} else {
+						std::cout << "Properties for " << entityType << " " << entityId << ":\n";
+						for (const auto &[key, value]: properties) {
+							std::cout << " - " << key << ": ";
+							if (std::holds_alternative<std::string>(value))
+								std::cout << "(string) \"" << std::get<std::string>(value) << "\"\n";
+							else if (std::holds_alternative<int64_t>(value))
+								std::cout << "(int) " << std::get<int64_t>(value) << "\n";
+							else if (std::holds_alternative<double>(value))
+								std::cout << "(double) " << std::get<double>(value) << "\n";
+							else if (std::holds_alternative<bool>(value))
+								std::cout << "(bool) " << (std::get<bool>(value) ? "true" : "false") << "\n";
+						}
+					}
+				} catch (const std::exception &e) {
+					std::cout << "Error: " << e.what() << "\n";
+				}
 			}
 		} else if (command == "queryNode") {
-			int id;
+			int64_t id;
 			std::cout << "Enter node ID: ";
 			std::cin >> id;
-			std::cin.ignore(); // Clear the newline
-
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 			try {
-				// Use getNode instead of getNodes().at() for better error handling
 				auto node = db.getStorage()->getNode(id);
 				if (node.getId() == 0) {
-					std::cout << "Node not found\n";
+					std::cout << "Node not found.\n";
 				} else {
 					std::cout << "Node ID: " << node.getId() << ", Label: " << node.getLabel() << "\n";
-
-					// Show property count
-					const auto &props = node.getProperties();
-					if (!props.empty()) {
-						std::cout << "Properties: " << props.size() << " (use 'listProperties' command to view)\n";
-					}
 				}
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
 			}
 		} else if (command == "queryEdge") {
-			int id;
+			int64_t id;
 			std::cout << "Enter edge ID: ";
 			std::cin >> id;
-			std::cin.ignore(); // Clear the newline
-
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 			try {
-				// Use getEdge instead of getEdges().at()
 				auto edge = db.getStorage()->getEdge(id);
 				if (edge.getId() == 0) {
-					std::cout << "Edge not found\n";
+					std::cout << "Edge not found.\n";
 				} else {
 					std::cout << "Edge ID: " << edge.getId() << ", From: " << edge.getSourceNodeId()
-							  << ", To: " << edge.getTargetNodeId() << ", Relation: " << edge.getLabel() << "\n";
+							  << ", To: " << edge.getTargetNodeId() << ", Label: " << edge.getLabel() << "\n";
 				}
 			} catch (const std::exception &e) {
 				std::cout << "Error: " << e.what() << "\n";
 			}
 		} else if (command == "listNodes") {
-			// Add a command to list all nodes
 			const auto &nodes = db.getStorage()->getAllNodes();
 			if (nodes.empty()) {
-				std::cout << "No nodes found\n";
+				std::cout << "No nodes found in the database.\n";
 			} else {
-				std::cout << "Node count: " << nodes.size() << "\n";
+				std::cout << "Total nodes: " << nodes.size() << "\n";
 				for (const auto &[id, node]: nodes) {
-					std::cout << "ID: " << id << ", Label: " << node.getLabel();
-					// Add property count information
-					size_t propCount = node.getProperties().size();
-					if (propCount > 0) {
-						std::cout << " (" << propCount << " properties)";
+					std::cout << "ID: " << id << ", Label: " << node.getLabel() << "\n";
+				}
+			}
+		} else if (command == "listEdges") {
+			const auto &edges = db.getStorage()->getAllEdges();
+			if (edges.empty()) {
+				std::cout << "No edges found in the database.\n";
+			} else {
+				std::cout << "Total edges: " << edges.size() << "\n";
+				for (const auto &[id, edge]: edges) {
+					std::cout << "ID: " << id << ", " << edge.getSourceNodeId() << " -[" << edge.getLabel() << "]-> "
+							  << edge.getTargetNodeId() << "\n";
+				}
+			}
+		} else if (command == "createIndex" || command == "dropIndex" || command == "listIndexes") {
+			std::string entityType;
+			std::cout << "Enter entity type (node/edge): ";
+			std::getline(std::cin, entityType);
+			if (entityType != "node" && entityType != "edge") {
+				std::cout << "Invalid entity type.\n";
+				return;
+			}
+			if (command == "createIndex") {
+				db.getQueryEngine()->buildIndexes(entityType);
+				std::cout << "Build command for all '" << entityType << "' indexes issued.\n";
+			} else if (command == "dropIndex") {
+				std::string indexType;
+				std::cout << "Enter index type to drop (label/property): ";
+				std::getline(std::cin, indexType);
+				std::string key = "";
+				if (indexType == "property") {
+					std::cout << "Enter property key (leave empty to drop all property indexes for this type): ";
+					std::getline(std::cin, key);
+				}
+				db.getQueryEngine()->dropIndex(entityType, indexType, key);
+				std::cout << "Drop command for " << entityType << " " << indexType << " index issued.\n";
+			} else { // listIndexes
+				auto indexes = db.getQueryEngine()->listIndexes(entityType);
+				std::cout << "Active indexes for '" << entityType << "':\n";
+				if (indexes.empty()) {
+					std::cout << "  (none)\n";
+				} else {
+					for (const auto &[type, key]: indexes) {
+						std::cout << "- " << type << (key.empty() ? "" : " on key: '" + key + "'") << "\n";
 					}
-					std::cout << "\n";
+				}
+			}
+		} else if (command == "findNodesByLabel" || command == "findNodesByProperty" || command == "findEdgesByLabel" ||
+				   command == "findEdgesByProperty") {
+			// This block handles all indexed find operations
+			if (command == "findNodesByLabel" || command == "findEdgesByLabel") {
+				std::string label;
+				std::cout << "Enter label: ";
+				std::getline(std::cin, label);
+				if (command == "findNodesByLabel") {
+					auto result = db.getQueryEngine()->findNodesByLabel(label);
+					std::cout << "Found " << result.getNodes().size() << " node(s).\n";
+					for (const auto &n: result.getNodes())
+						std::cout << "  Node ID: " << n.getId() << ", Label: " << n.getLabel() << "\n";
+				} else {
+					auto result = db.getQueryEngine()->findEdgesByLabel(label);
+					std::cout << "Found " << result.getEdges().size() << " edge(s).\n";
+					for (const auto &e: result.getEdges())
+						std::cout << "  Edge ID: " << e.getId() << ", " << e.getSourceNodeId() << "-[" << e.getLabel()
+								  << "]->" << e.getTargetNodeId() << "\n";
+				}
+			} else { // find by property
+				std::string key, value;
+				std::cout << "Enter property key: ";
+				std::getline(std::cin, key);
+				std::cout << "Enter property value: ";
+				std::getline(std::cin, value);
+				if (command == "findNodesByProperty") {
+					auto result = db.getQueryEngine()->findNodesByProperty(key, value);
+					std::cout << "Found " << result.getNodes().size() << " node(s).\n";
+					for (const auto &n: result.getNodes())
+						std::cout << "  Node ID: " << n.getId() << ", Label: " << n.getLabel() << "\n";
+				} else {
+					auto result = db.getQueryEngine()->findEdgesByProperty(key, value);
+					std::cout << "Found " << result.getEdges().size() << " edge(s).\n";
+					for (const auto &e: result.getEdges())
+						std::cout << "  Edge ID: " << e.getId() << ", " << e.getSourceNodeId() << "-[" << e.getLabel()
+								  << "]->" << e.getTargetNodeId() << "\n";
 				}
 			}
 		} else if (command == "save") {
 			db.getStorage()->flush();
-			std::cout << "Database saved\n";
-		} else if (command == "findConnectedNodes") {
-			uint64_t nodeId;
-			std::string edgeLabel, direction, nodeLabel;
-
-			std::cout << "Enter source node ID: ";
-			std::cin >> nodeId;
-			std::cin.ignore(); // Clear the newline
-
-			std::cout << "Enter edge label (or press Enter for any): ";
-			std::getline(std::cin, edgeLabel);
-
-			std::cout << "Enter direction (incoming/outgoing/both): ";
-			std::getline(std::cin, direction);
-
-			// Validate direction
-			if (direction != "incoming" && direction != "outgoing" && direction != "both") {
-				std::cout << "Invalid direction. Using 'both' as default.\n";
-				direction = "both";
-			}
-
-			std::cout << "Enter target node label filter (or press Enter for any): ";
-			std::getline(std::cin, nodeLabel);
-
-			std::cout << "Finding connected nodes...\n";
-			try {
-				auto result = db.getQueryEngine()->findConnectedNodes(nodeId, edgeLabel, direction, nodeLabel);
-
-				const auto &nodes = result.getNodes();
-				if (nodes.empty()) {
-					std::cout << "No connected nodes found\n";
-				} else {
-					std::cout << "Found " << nodes.size() << " connected node(s):\n";
-					for (const auto &node: nodes) {
-						std::cout << "ID: " << node.getId() << ", Label: " << node.getLabel();
-
-						// Show property count if available
-						const auto &props = node.getProperties();
-						if (!props.empty()) {
-							std::cout << " (" << props.size() << " properties)";
-						}
-						std::cout << "\n";
-					}
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
-		} else if (command == "findShortestPath") {
-			int64_t startNodeId, endNodeId;
-			std::string direction;
-
-			std::cout << "Enter start node ID: ";
-			std::cin >> startNodeId;
-			std::cin.ignore(); // Clear the newline
-
-			std::cout << "Enter end node ID: ";
-			std::cin >> endNodeId;
-			std::cin.ignore(); // Clear the newline
-
-			std::cout << "Enter direction (incoming/outgoing/both): ";
-			std::getline(std::cin, direction);
-
-			// Validate direction
-			if (direction != "incoming" && direction != "outgoing" && direction != "both") {
-				std::cout << "Invalid direction. Using 'both' as default.\n";
-				direction = "both";
-			}
-
-			std::cout << "Finding shortest path...\n";
-			try {
-				// Note: maxDepth parameter is passed as 0 as it's no longer used in the implementation
-				auto result = db.getQueryEngine()->findShortestPath(startNodeId, endNodeId, 0, direction);
-
-				const auto &nodes = result.getNodes();
-				if (nodes.empty()) {
-					std::cout << "No path found between nodes " << startNodeId << " and " << endNodeId << "\n";
-				} else {
-					std::cout << "Found path with " << nodes.size() << " nodes:\n";
-					for (size_t i = 0; i < nodes.size(); i++) {
-						const auto &node = nodes[i];
-						std::cout << (i > 0 ? " -> " : "") << "Node " << node.getId() << " (" << node.getLabel() << ")";
-					}
-					std::cout << "\n";
-				}
-			} catch (const std::exception &e) {
-				std::cout << "Error: " << e.what() << "\n";
-			}
+			std::cout << "Database state flushed to disk.\n";
 		} else if (command == "help") {
-			std::cout << "Available commands:\n"
-					  << "  addNode        - Add a new node\n"
-					  << "  addEdge        - Add a new edge between nodes\n"
-					  << "  addProperty    - Add a property to a node\n"
-					  << "  getProperty    - Get a specific property from a node\n"
-					  << "  listProperties - List all properties of a node\n"
-					  << "  removeProperty - Remove a property from a node\n"
-					  << "  addTextFile    - Add contents of a text file as a property\n"
-					  << "  queryNode      - Look up a node by ID\n"
-					  << "  queryEdge      - Look up an edge by ID\n"
-					  << "  listNodes      - List all nodes\n"
-					  << "  findNodesByLabel    - Find nodes with a specific label\n"
-					  << "  findNodesByProperty - Find nodes with a specific property\n"
-					  << "  createLabelIndex    - Create an index on node labels\n"
-					  << "  createPropertyIndex - Create an index on a specific property key\n"
-					  << "  dropIndex           - Remove an index\n"
-					  << "  listIndexes         - List all active indexes\n"
-					  << "  findConnectedNodes - Find nodes connected to a specific node\n"
-					  << "  findShortestPath   - Find shortest path between two nodes\n"
-					  << "  save           - Save changes to disk\n"
-					  << "  exit           - Exit the program\n"
-					  << "  help           - Show this help\n";
+			std::cout << "--- MetrixDB REPL Help ---\n\n"
+					  << "  -- Graph Modification --\n"
+					  << "  addNode                  Add a new node.\n"
+					  << "  addEdge                  Add a new edge between nodes.\n"
+					  << "  addProperty              Add/update a property on a node or edge.\n"
+					  << "  deleteNode               Delete a node and its connected edges.\n"
+					  << "  deleteEdge               Delete an edge.\n\n"
+					  << "  -- Index Management --\n"
+					  << "  createIndex              Build all label and property indexes for nodes or edges.\n"
+					  << "  dropIndex                Remove an index (prompts for details).\n"
+					  << "  listIndexes              List all active indexes for nodes or edges.\n\n"
+					  << "  -- Querying & Inspection --\n"
+					  << "  queryNode                Look up a node by its ID.\n"
+					  << "  queryEdge                Look up an edge by its ID.\n"
+					  << "  listNodes                List all nodes in the database.\n"
+					  << "  listEdges                List all edges in the database.\n"
+					  << "  listProperties           List all properties of a node or edge.\n"
+					  << "  findNodesByLabel         Find nodes with a specific label (uses index).\n"
+					  << "  findNodesByProperty      Find nodes with a specific property (uses index).\n"
+					  << "  findEdgesByLabel         Find edges with a specific label (uses index).\n"
+					  << "  findEdgesByProperty      Find edges with a specific property (uses index).\n\n"
+					  << "  -- System --\n"
+					  << "  save                     Save all changes to disk.\n"
+					  << "  exit                     Exit the application.\n"
+					  << "  help                     Show this help message.\n\n";
 		} else if (command.empty()) {
-			// Handle empty command
+			// Do nothing for an empty command
 		} else {
-			std::cout << "Unknown command. Type 'help' for available commands.\n";
+			std::cout << "Unknown command: '" << command << "'. Type 'help' for available commands.\n";
 		}
 	}
 

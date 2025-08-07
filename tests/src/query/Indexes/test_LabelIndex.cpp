@@ -21,49 +21,53 @@
 
 class LabelIndexTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        boost::uuids::uuid uuid = boost::uuids::random_generator()();
-        testFilePath = std::filesystem::temp_directory_path() / ("test_labelIndex_" + to_string(uuid) + ".dat");
-        database = std::make_unique<graph::Database>(testFilePath.string());
-        database->open();
-        fileStorage = database->getStorage();
-        dataManager = fileStorage->getDataManager();
-        labelIndex = database->getQueryEngine()->getIndexManager()->getLabelIndex();
-    }
+	void SetUp() override {
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testFilePath = std::filesystem::temp_directory_path() / ("test_labelIndex_" + to_string(uuid) + ".dat");
+		database = std::make_unique<graph::Database>(testFilePath.string());
+		database->open();
+		fileStorage = database->getStorage();
+		dataManager = fileStorage->getDataManager();
 
-    void TearDown() override {
-        database->close();
-        database.reset();
-        std::filesystem::remove(testFilePath);
-    }
+		// Updated: Explicitly get the LabelIndex for nodes to make the test target clear.
+		labelIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getLabelIndex();
+	}
 
-    std::filesystem::path testFilePath;
-    std::unique_ptr<graph::Database> database;
-    std::shared_ptr<graph::storage::FileStorage> fileStorage;
-    std::shared_ptr<graph::storage::DataManager> dataManager;
+	void TearDown() override {
+		database->close();
+		database.reset();
+		if (std::filesystem::exists(testFilePath)) {
+			std::filesystem::remove(testFilePath);
+		}
+	}
+
+	std::filesystem::path testFilePath;
+	std::unique_ptr<graph::Database> database;
+	std::shared_ptr<graph::storage::FileStorage> fileStorage;
+	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::query::indexes::LabelIndex> labelIndex;
 };
 
 TEST_F(LabelIndexTest, AddAndFindNode) {
-    int64_t nodeId = 123;
-    std::string label = "Person";
-    labelIndex->addNode(nodeId, label);
-    auto found = labelIndex->findNodes(label);
-    ASSERT_EQ(found.size(), 1);
-    EXPECT_EQ(found[0], nodeId);
-    EXPECT_FALSE(labelIndex->isEmpty());
+	int64_t nodeId = 123;
+	std::string label = "Person";
+	labelIndex->addNode(nodeId, label);
+	auto found = labelIndex->findNodes(label);
+	ASSERT_EQ(found.size(), 1);
+	EXPECT_EQ(found[0], nodeId);
+	EXPECT_FALSE(labelIndex->isEmpty());
 }
 
 TEST_F(LabelIndexTest, HasLabel) {
-    int64_t nodeId = 456;
-    std::string label = "Company";
-    labelIndex->addNode(nodeId, label);
-    EXPECT_TRUE(labelIndex->hasLabel(nodeId, label));
-    EXPECT_FALSE(labelIndex->hasLabel(nodeId, "Other"));
+	int64_t nodeId = 456;
+	std::string label = "Company";
+	labelIndex->addNode(nodeId, label);
+	EXPECT_TRUE(labelIndex->hasLabel(nodeId, label));
+	EXPECT_FALSE(labelIndex->hasLabel(nodeId, "Other"));
 }
 
 TEST_F(LabelIndexTest, IsEmptyInitially) {
-    EXPECT_TRUE(labelIndex->isEmpty());
+	EXPECT_TRUE(labelIndex->isEmpty());
 }
 
 TEST_F(LabelIndexTest, RemoveNode) {
@@ -78,31 +82,45 @@ TEST_F(LabelIndexTest, RemoveNode) {
 }
 
 TEST_F(LabelIndexTest, ClearAndDrop) {
-    labelIndex->addNode(1, "A");
-    labelIndex->addNode(2, "B");
-    EXPECT_FALSE(labelIndex->isEmpty());
-    labelIndex->clear();
-    EXPECT_TRUE(labelIndex->isEmpty());
-    // Drop should not throw
-    EXPECT_NO_THROW(labelIndex->drop());
+	labelIndex->addNode(1, "A");
+	labelIndex->addNode(2, "B");
+	EXPECT_FALSE(labelIndex->isEmpty());
+
+	// Act & Assert: clear() should remove all data but keep the state file.
+	labelIndex->clear();
+	EXPECT_TRUE(labelIndex->isEmpty());
+
+	// Act & Assert: drop() should work correctly and not throw.
+	EXPECT_NO_THROW(labelIndex->drop());
+	EXPECT_TRUE(labelIndex->isEmpty());
 }
 
 TEST_F(LabelIndexTest, SaveAndLoadState) {
-    int64_t nodeId = 321;
-    std::string label = "Reload";
-	graph::Node node(nodeId, label);
-	dataManager->addNode(node);
-    labelIndex->addNode(nodeId, label);
-    database->close();
+	// Arrange
+	int64_t nodeId = 321;
+	std::string label = "Reload";
 
+	// Act: Add a node directly to the index and explicitly save its state.
+	// This tests the component's own persistence logic.
+	labelIndex->addNode(nodeId, label);
+	labelIndex->flush(); // This is the crucial step to persist the rootId.
+
+	// Close and reopen the database to simulate a restart.
+	database->close();
 	database->open();
-	auto labelIndexNew = database->getQueryEngine()->getIndexManager()->getLabelIndex();
-    auto found = labelIndexNew->findNodes(label);
-    EXPECT_EQ(found.size(), 1);
-    EXPECT_EQ(found[0], nodeId);
+
+	// Get the new index instance after reloading.
+	auto labelIndexNew = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getLabelIndex();
+
+	// Assert: The reloaded index should contain the persisted data.
+	EXPECT_FALSE(labelIndexNew->isEmpty());
+	auto found = labelIndexNew->findNodes(label);
+	ASSERT_EQ(found.size(), 1);
+	EXPECT_EQ(found[0], nodeId);
 }
 
 TEST_F(LabelIndexTest, FlushNoThrow) {
-    labelIndex->addNode(1, "Flush");
-    EXPECT_NO_THROW(labelIndex->flush());
+	labelIndex->addNode(1, "Flush");
+	// A simple sanity check that flush can be called without error.
+	EXPECT_NO_THROW(labelIndex->flush());
 }

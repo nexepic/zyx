@@ -18,54 +18,116 @@
 #include <vector>
 
 namespace graph::storage {
-	class DataManager;
-	class FileStorage;
-} // namespace graph::storage
+    class FileStorage;
+    class DataManager;
+}
 
 namespace graph::query::indexes {
+    class IndexManager;
+    class LabelIndex;
+    class PropertyIndex;
 
-	class IndexManager;
-	class LabelIndex;
-	class PropertyIndex;
-	class RelationshipIndex;
-	class FullTextIndex;
+    /**
+     * @class IndexBuilder
+     * @brief Responsible for the bulk creation of indexes from existing data.
+     *
+     * This class iterates through all nodes and edges in the database and populates
+     * the specified index structures. It operates in batches to manage memory usage
+     * during the build process.
+     */
+    class IndexBuilder {
+    public:
+        /**
+         * @brief Constructs an IndexBuilder.
+         * @param indexManager A shared pointer to the main IndexManager, used to access entity-specific managers.
+         * @param storage A shared pointer to the FileStorage for underlying data access.
+         */
+        IndexBuilder(std::shared_ptr<IndexManager> indexManager,
+                       std::shared_ptr<storage::FileStorage> storage);
 
-	// Class to handle background index building with progress tracking
-	class IndexBuilder {
-	public:
-		explicit IndexBuilder(std::shared_ptr<IndexManager> indexManager,
-							  std::shared_ptr<storage::FileStorage> storage);
-		~IndexBuilder();
+        /**
+         * @brief Destructor.
+         */
+        ~IndexBuilder();
 
-		// Worker functions
-		bool buildAllIndexes() const;
-		bool buildLabelIndex() const;
-		bool buildPropertyIndex(const std::string &key) const;
+        // --- Public Build Methods ---
 
-		// Get node ID ranges from segments for efficient batch processing
-		[[nodiscard]] std::vector<std::pair<int64_t, int64_t>> getNodeIdRanges() const;
+        /**
+         * @brief Builds all label and property indexes for all nodes in the database.
+         * This will clear any existing node indexes before building.
+         * @return true if successful, false otherwise.
+         */
+        bool buildAllNodeIndexes() const;
 
-		// Get edge ID ranges from segments for efficient batch processing
-		[[nodiscard]] std::vector<std::pair<int64_t, int64_t>> getEdgeIdRanges() const;
+        /**
+         * @brief Builds all label and property indexes for all edges in the database.
+         * This will clear any existing edge indexes before building.
+         * @return true if successful, false otherwise.
+         */
+        bool buildAllEdgeIndexes() const;
 
-	private:
-		// Batch size for processing nodes/edges
-		static constexpr size_t BATCH_SIZE = 10000;
+        /**
+         * @brief Builds an index for a specific property key on all nodes.
+         * This will clear any existing index for this specific property on nodes.
+         * @param key The property key to index.
+         * @return true if successful, false otherwise.
+         */
+        bool buildNodePropertyIndex(const std::string& key) const;
 
-		std::shared_ptr<IndexManager> indexManager_;
-		std::shared_ptr<storage::FileStorage> storage_;
-		std::shared_ptr<storage::DataManager> dataManager_;
+        /**
+         * @brief Builds an index for a specific property key on all edges.
+         * This will clear any existing index for this specific property on edges.
+         * @param key The property key to index.
+         * @return true if successful, false otherwise.
+         */
+        bool buildEdgePropertyIndex(const std::string& key) const;
 
-		// Process a batch of nodes for indexing
-		void processNodeBatch(const std::vector<int64_t> &nodeIds, const std::shared_ptr<LabelIndex> &labelIndex,
-							  const std::shared_ptr<PropertyIndex> &propertyIndex,
-							  const std::shared_ptr<FullTextIndex> &fullTextIndex,
-							  const std::string &propertyKey = "") const;
+    	/**
+		 * @brief Retrieves all active ID ranges for nodes from the data manager.
+		 * @return A vector of pairs, where each pair is a [start_id, end_id] range.
+		 */
+    	std::vector<std::pair<int64_t, int64_t>> getNodeIdRanges() const;
 
-		// Process a batch of edges for indexing
-		void processEdgeBatch(const std::vector<int64_t> &edgeIds,
-							  const std::shared_ptr<RelationshipIndex> &relationshipIndex) const;
+    	/**
+		 * @brief Retrieves all active ID ranges for edges from the data manager.
+		 * @return A vector of pairs, where each pair is a [start_id, end_id] range.
+		 */
+    	std::vector<std::pair<int64_t, int64_t>> getEdgeIdRanges() const;
 
-	};
+    private:
+        // --- Private Helper Methods ---
+
+        /**
+         * @brief Processes a batch of node IDs, adding them to the provided indexes.
+         * @param nodeIds The vector of node IDs to process.
+         * @param labelIndex The label index to populate (can be nullptr).
+         * @param propertyIndex The property index to populate (can be nullptr).
+         * @param propertyKey If not empty, only this property key will be indexed. Otherwise, all properties are indexed.
+         */
+        void processNodeBatch(const std::vector<int64_t>& nodeIds,
+                              const std::shared_ptr<LabelIndex>& labelIndex,
+                              const std::shared_ptr<PropertyIndex>& propertyIndex,
+                              const std::string& propertyKey = "") const;
+
+        /**
+         * @brief Processes a batch of edge IDs, adding them to the provided indexes.
+         * @param edgeIds The vector of edge IDs to process.
+         * @param labelIndex The label index to populate (can be nullptr).
+         * @param propertyIndex The property index to populate (can be nullptr).
+         * @param propertyKey If not empty, only this property key will be indexed. Otherwise, all properties are indexed.
+         */
+        void processEdgeBatch(const std::vector<int64_t>& edgeIds,
+                              const std::shared_ptr<LabelIndex>& labelIndex,
+                              const std::shared_ptr<PropertyIndex>& propertyIndex,
+                              const std::string& propertyKey = "") const;
+
+        // --- Member Variables ---
+        std::shared_ptr<IndexManager> indexManager_;
+        std::shared_ptr<storage::FileStorage> storage_;
+        std::shared_ptr<storage::DataManager> dataManager_;
+
+        // --- Constants ---
+        static constexpr size_t BATCH_SIZE = 10000; // Size of batches for processing entities to control memory usage.
+    };
 
 } // namespace graph::query::indexes

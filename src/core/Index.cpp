@@ -184,21 +184,67 @@ namespace graph {
 		}
 	}
 
+	bool Index::isFullAfterInsert(const std::string &key, int64_t value,
+								  const std::shared_ptr<storage::DataManager> &dataManager) const {
+		if (metadata.nodeType != NodeType::LEAF) {
+			// Fullness check is only relevant for leaf nodes in the context of insertion.
+			return false;
+		}
+
+		auto kvs = getAllKeyValues(dataManager);
+		auto it = std::lower_bound(kvs.begin(), kvs.end(), key,
+								   [](const KeyValuePair &a, const std::string &b) { return a.key < b; });
+
+		// Create a temporary copy of the key-value list to measure its potential serialized size.
+		bool keyExists = (it != kvs.end() && it->key == key);
+		if (keyExists) {
+			// Add the value to the existing key's value list in the copy.
+			it->values.push_back(value);
+		} else {
+			// Insert a new key-value pair into the copy.
+			kvs.insert(it, {key, {value}});
+		}
+
+		// "Dry-run" the serialization to get the exact prospective byte size.
+		std::ostringstream os;
+		for (const auto &kvp: kvs) {
+			utils::Serializer::writeString(os, kvp.key);
+			utils::Serializer::writePOD(os, static_cast<uint32_t>(kvp.values.size()));
+			for (int64_t v: kvp.values) {
+				utils::Serializer::writePOD(os, v);
+			}
+		}
+
+		// A node is considered "full" if its contents would exceed the inline buffer size.
+		// This is the trigger for the B+Tree manager to perform a split.
+		return os.str().size() > DATA_SIZE;
+	}
+
 	void Index::insertStringKey(const std::string &key, int64_t value,
 								const std::shared_ptr<storage::DataManager> &dataManager) {
+		if (metadata.nodeType != NodeType::LEAF) {
+			throw std::logic_error("Keys can only be inserted into leaf nodes.");
+		}
+
 		auto kvs = getAllKeyValues(dataManager);
 		auto it = std::lower_bound(kvs.begin(), kvs.end(), key,
 								   [](const KeyValuePair &a, const std::string &b) { return a.key < b; });
 
 		if (it != kvs.end() && it->key == key) {
-			if (std::find(it->values.begin(), it->values.end(), value) == it->values.end()) {
-				it->values.push_back(value);
+			// Key exists, add new value if it's not a duplicate.
+			auto &values = it->values;
+			if (std::find(values.begin(), values.end(), value) == values.end()) {
+				values.push_back(value);
 			} else {
-				return; // Value already exists
+				return; // Value already exists, nothing to do.
 			}
 		} else {
+			// Key does not exist, insert a new entry.
 			kvs.insert(it, {key, {value}});
 		}
+
+		// Commit the changes. The setAllKeyValues method will internally decide
+		// whether to store the final data inline or in a blob.
 		setAllKeyValues(kvs, dataManager);
 	}
 
@@ -229,53 +275,127 @@ namespace graph {
 		return (it != kvs.cend()) ? it->values : std::vector<int64_t>{};
 	}
 
-	void Index::addChild(const std::string &key, int64_t childId) {
-		auto children = getAllChildren();
-		auto it = std::lower_bound(children.begin(), children.end(), key,
-								   [](const ChildEntry &a, const std::string &b) { return a.key < b; });
-
-		if (it != children.end() && it->key == key) {
-			it->childId = childId; // Update existing
-		} else {
-			children.insert(it, {key, childId}); // Add new
+	bool Index::tryAddChild(const ChildEntry &newEntry) {
+		if (metadata.nodeType != NodeType::INTERNAL) {
+			throw std::logic_error("Children can only be added to internal nodes.");
 		}
+
+		auto children = getAllChildren();
+		// Simulate adding the new entry to check the resulting size.
+		// For a size check, order doesn't matter, so push_back is sufficient and fast.
+		children.push_back(newEntry);
+
+		// "Dry-run" the serialization to get the exact prospective byte size.
+		std::ostringstream os;
+		for (const auto &entry: children) {
+			bool isBlob = (entry.keyBlobId != 0);
+			utils::Serializer::writePOD(os, static_cast<uint8_t>(isBlob ? 1 : 0));
+
+			if (isBlob) {
+				utils::Serializer::writePOD(os, entry.keyBlobId);
+			} else {
+				utils::Serializer::writeString(os, entry.key);
+			}
+			utils::Serializer::writePOD(os, entry.childId);
+		}
+
+		// Check if the simulated data size exceeds the node's inline data capacity.
+		return os.str().size() <= DATA_SIZE;
+	}
+
+	void Index::addChild(const ChildEntry &newEntry, const std::shared_ptr<storage::DataManager> &dataManager) {
+		if (metadata.nodeType != NodeType::INTERNAL) {
+			throw std::logic_error("Children can only be added to internal nodes.");
+		}
+		if (!dataManager) {
+			throw std::invalid_argument(
+					"DataManager is required for addChild to resolve potential blob keys for sorting.");
+		}
+
+		auto children = getAllChildren();
+
+		// Define a blob-aware comparator to find the correct insertion point.
+		auto blobAwareComparator = [&](const ChildEntry &entry, const std::string &keyToInsert) {
+			if (entry.key.empty() && entry.keyBlobId == 0) { // First child is -infinity
+				return true;
+			}
+			std::string currentKey =
+					(entry.keyBlobId != 0) ? dataManager->getBlobManager()->readBlobChain(entry.keyBlobId) : entry.key;
+			return currentKey < keyToInsert;
+		};
+
+		// Resolve the key of the entry we are about to insert.
+		std::string newKeyStr = (newEntry.keyBlobId != 0)
+										? dataManager->getBlobManager()->readBlobChain(newEntry.keyBlobId)
+										: newEntry.key;
+
+		// Find the correct position to insert the new child to maintain sort order.
+		auto it = std::lower_bound(children.begin(), children.end(), newKeyStr, blobAwareComparator);
+
+		children.insert(it, newEntry);
 		setAllChildren(children);
 	}
 
-	bool Index::removeChild(const std::string &key) {
+	bool Index::removeChild(const std::string &key, const std::shared_ptr<storage::DataManager> &dataManager) {
+		if (metadata.nodeType != NodeType::INTERNAL) {
+			throw std::logic_error("Children can only be removed from internal nodes.");
+		}
+		if (!dataManager) {
+			throw std::invalid_argument("DataManager is required for removeChild to resolve potential blob keys.");
+		}
+
 		auto children = getAllChildren();
-		auto it = std::find_if(children.begin(), children.end(), [&](const ChildEntry &e) { return e.key == key; });
+
+		// Find the entry that matches the key. This may involve reading blobs.
+		auto it = std::find_if(children.begin(), children.end(), [&](const ChildEntry &entry) {
+			// The first child's key is implicit and cannot be removed by string key.
+			if (entry.key.empty() && entry.keyBlobId == 0)
+				return false;
+
+			std::string currentKey =
+					(entry.keyBlobId != 0) ? dataManager->getBlobManager()->readBlobChain(entry.keyBlobId) : entry.key;
+			return currentKey == key;
+		});
 
 		if (it != children.end()) {
+			// CRITICAL: If the key was stored in a blob, we must delete the blob chain.
+			if (it->keyBlobId != 0) {
+				dataManager->getBlobManager()->deleteBlobChain(it->keyBlobId);
+			}
+
 			children.erase(it);
 			setAllChildren(children);
 			return true;
 		}
-		return false;
+
+		return false; // Key not found
 	}
 
-	int64_t Index::findChild(const std::string &key) const {
+	int64_t Index::findChild(const std::string &key, const std::shared_ptr<storage::DataManager> &dataManager) const {
+		if (!dataManager) {
+			throw std::invalid_argument("DataManager is required for findChild in internal nodes.");
+		}
 		auto children = getAllChildren();
 		if (children.empty())
 			return 0;
 
 		// Find the first element whose key is GREATER than the search key
-		auto it = std::upper_bound(children.begin(), children.end(), key,
-								   [](const std::string &k, const ChildEntry &entry) {
-									   // An empty key in the tree acts as -infinity, so any search key is >= it.
-									   if (entry.key.empty())
-										   return false;
-									   return k < entry.key;
-								   });
+		auto it = std::upper_bound(
+				children.begin(), children.end(), key, [&](const std::string &searchKey, const ChildEntry &entry) {
+					if (entry.key.empty() && entry.keyBlobId == 0) { // First child, effectively -infinity
+						return false;
+					}
+					// Resolve the key, from blob if necessary
+					std::string currentKey = (entry.keyBlobId != 0)
+													 ? dataManager->getBlobManager()->readBlobChain(entry.keyBlobId)
+													 : entry.key;
 
-		// The correct child is pointed to by the key just BEFORE this one.
-		// If `it` is the beginning, it means `key` is smaller than all keys,
-		// so we should descend into the first child.
+					return searchKey < currentKey;
+				});
+
 		if (it == children.begin()) {
 			return children.front().childId;
 		}
-
-		// Otherwise, the correct child is the one before `it`.
 		return std::prev(it)->childId;
 	}
 
@@ -290,7 +410,19 @@ namespace graph {
 		std::istringstream is(std::string(dataBuffer, DATA_SIZE));
 		result.reserve(metadata.childCount);
 		for (uint32_t i = 0; i < metadata.childCount; i++) {
-			result.push_back({utils::Serializer::readString(is), utils::Serializer::readPOD<int64_t>(is)});
+			ChildEntry entry;
+			auto typeFlag = utils::Serializer::readPOD<uint8_t>(is);
+			bool isBlob = (typeFlag == 1);
+
+			if (isBlob) {
+				entry.keyBlobId = utils::Serializer::readPOD<int64_t>(is);
+				entry.key = ""; // Inline key is empty
+			} else {
+				entry.key = utils::Serializer::readString(is);
+				entry.keyBlobId = 0;
+			}
+			entry.childId = utils::Serializer::readPOD<int64_t>(is);
+			result.push_back(entry);
 		}
 		return result;
 	}
@@ -301,13 +433,21 @@ namespace graph {
 		}
 		std::ostringstream os;
 		for (const auto &entry: children) {
-			utils::Serializer::writeString(os, entry.key);
+			bool isBlob = (entry.keyBlobId != 0);
+			// Write a flag: 1 for blob, 0 for inline
+			utils::Serializer::writePOD(os, static_cast<uint8_t>(isBlob ? 1 : 0));
+
+			if (isBlob) {
+				utils::Serializer::writePOD(os, entry.keyBlobId);
+			} else {
+				utils::Serializer::writeString(os, entry.key);
+			}
 			utils::Serializer::writePOD(os, entry.childId);
 		}
+
 		std::string data = os.str();
 		if (data.size() > DATA_SIZE) {
-			// This signals the manager to split the internal node.
-			throw std::runtime_error("Child entries exceed node capacity.");
+			throw std::runtime_error("Child entries exceed node capacity. A split should have been performed.");
 		}
 		metadata.childCount = static_cast<uint32_t>(children.size());
 		std::memset(dataBuffer, 0, DATA_SIZE);

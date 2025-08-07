@@ -21,24 +21,7 @@ namespace graph {
 		metadata.isActive = true;
 	}
 
-	void Property::addPropertyValue(const std::string &key, const PropertyValue &value) { values[key] = value; }
-
 	bool Property::hasPropertyValue(const std::string &key) const { return values.contains(key); }
-
-	PropertyValue Property::getPropertyValue(const std::string &key) const {
-		auto it = values.find(key);
-		if (it == values.end()) {
-			throw std::out_of_range("Property value " + key + " not found");
-		}
-		return it->second;
-	}
-
-	void Property::removePropertyValue(const std::string &key) {
-		auto it = values.find(key);
-		if (it != values.end()) {
-			values.erase(it);
-		}
-	}
 
 	const std::unordered_map<std::string, PropertyValue> &Property::getPropertyValues() const { return values; }
 

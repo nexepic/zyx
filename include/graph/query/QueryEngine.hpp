@@ -13,7 +13,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 #include "QueryExecutor.hpp"
 #include "QueryPlanner.hpp"
@@ -26,53 +25,79 @@
 
 namespace graph::query {
 
+	/**
+	 * @class QueryEngine
+	 * @brief The main entry point for executing queries and managing indexes.
+	 *
+	 * This class provides a high-level API for all database operations,
+	 * coordinating the planner, executor, and index manager.
+	 */
 	class QueryEngine {
 	public:
 		explicit QueryEngine(std::shared_ptr<storage::FileStorage> storage);
 		~QueryEngine();
 
-		bool buildLabelIndex() const;
+		// --- Index Management API (Updated) ---
 
-		bool buildPropertyIndex(const std::string &key) const;
+		/**
+		 * @brief Builds all available indexes for a given entity type.
+		 * @param entityType "node" or "edge".
+		 * @return true if successful, false otherwise.
+		 */
+		bool buildIndexes(const std::string &entityType) const;
 
-		bool dropIndex(const std::string &indexType, const std::string &key) const;
+		/**
+		 * @brief Builds a property index for a specific key on a given entity type.
+		 * @param entityType "node" or "edge".
+		 * @param key The property key to index.
+		 * @return true if successful, false otherwise.
+		 */
+		bool buildPropertyIndex(const std::string &entityType, const std::string &key) const;
 
-		std::vector<std::pair<std::string, std::string>> listIndexes() const;
+		/**
+		 * @brief Drops an index.
+		 * @param entityType "node" or "edge".
+		 * @param indexType "label" or "property".
+		 * @param key The property key to drop (if indexType is "property").
+		 * @return true if successful, false otherwise.
+		 */
+		bool dropIndex(const std::string &entityType, const std::string &indexType, const std::string &key = "") const;
 
-		// Query nodes by label
+		/**
+		 * @brief Lists all active indexes for a given entity type.
+		 * @param entityType "node" or "edge".
+		 * @return A vector of pairs, where the first element is the index type ("label", "property")
+		 *         and the second is the property key (or empty for label indexes).
+		 */
+		std::vector<std::pair<std::string, std::string>> listIndexes(const std::string &entityType) const;
+
+		/**
+		 * @brief Persists the state of all indexes to disk.
+		 */
+		void persistIndexState() const { indexManager_->persistState(); }
+
+		// --- Node Query API ---
 		QueryResult findNodesByLabel(const std::string &label) const;
-
-		// Query nodes by property key and value
 		QueryResult findNodesByProperty(const std::string &key, const std::string &value) const;
-
-		// Combined query - nodes with specific label AND property
 		QueryResult findNodesByLabelAndProperty(const std::string &label, const std::string &key,
 												const std::string &value) const;
 
-		// Range query for numeric properties
-		QueryResult findNodesByPropertyRange(const std::string &key, double minValue, double maxValue) const;
+		// --- Edge Query API ---
+		QueryResult findEdgesByLabel(const std::string &label) const;
 
-		// Text search within properties (partial matching)
-		QueryResult findNodesByTextSearch(const std::string &key, const std::string &searchText) const;
+		QueryResult findEdgesByProperty(const std::string &key, const std::string &value) const;
 
-		// Find relationships between nodes
-		QueryResult findRelationships(uint64_t nodeId, const std::string &edgeLabel = "") const;
-
-		// Find nodes connected to a specified node
 		QueryResult findConnectedNodes(uint64_t nodeId, const std::string &edgeLabel, const std::string &direction,
 									   const std::string &nodeLabel = "") const;
 
 		QueryResult findShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth = 10,
 									 const std::string &direction = "both") const;
 
+		// --- Traversal API ---
 		void breadthFirstTraversal(int64_t startNodeId, const std::function<bool(const Node &, int)> &visitFn,
 								   int maxDepth = 10, const std::string &direction = "both") const;
 
-		// Rebuild indexes - call when data has changed significantly
-		void rebuildIndexes() const;
-
-		void persistIndexState() const { indexManager_->persistState(); }
-
+		// --- Accessors ---
 		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return indexManager_; }
 
 	private:
@@ -81,8 +106,6 @@ namespace graph::query {
 		std::unique_ptr<QueryPlanner> queryPlanner_;
 		std::unique_ptr<QueryExecutor> queryExecutor_;
 		std::shared_ptr<TraversalQuery> traversalQuery_;
-
-		static QueryResult nodesToQueryResult(const std::vector<Node> &nodes);
 	};
 
 } // namespace graph::query

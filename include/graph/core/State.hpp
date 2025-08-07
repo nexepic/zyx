@@ -24,7 +24,7 @@ namespace graph {
 	 */
 	class State : public EntityBase<State>, public ChainableMixin<State> {
 	public:
-		static constexpr size_t MAX_KEY_LENGTH = 32;
+		static constexpr size_t MAX_KEY_LENGTH = 64;
 
 		struct Metadata {
 			int64_t id = 0; // Unique identifier

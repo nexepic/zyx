@@ -212,7 +212,7 @@ TEST_F(StateTest, GetSerializedSizeEmpty) {
 TEST_F(StateTest, Constants) {
 	EXPECT_EQ(graph::State::getTotalSize(), 256u);
 	EXPECT_EQ(graph::State::TOTAL_STATE_SIZE, 256u);
-	EXPECT_EQ(graph::State::MAX_KEY_LENGTH, 32u);
+	EXPECT_EQ(graph::State::MAX_KEY_LENGTH, 64u);
 
 	size_t expectedMetadataSize = 0;
 	expectedMetadataSize += sizeof(int64_t) * 3;

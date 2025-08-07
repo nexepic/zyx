@@ -24,22 +24,35 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_indexManager_" + to_string(uuid) + ".dat");
+		// Use the full Database setup as it correctly initializes the full chain:
+		// Database -> QueryEngine -> IndexManager -> EntityTypeIndexManagers
 		database = std::make_unique<graph::Database>(testFilePath.string());
 		database->open();
+
 		fileStorage = database->getStorage();
 		dataManager = fileStorage->getDataManager();
-		indexManager = std::make_shared<graph::query::indexes::IndexManager>(fileStorage);
-		indexManager->initialize();
+		// Get the IndexManager instance from the database's query engine.
+		indexManager = database->getQueryEngine()->getIndexManager();
 
-		graph::Node node1(1, "label_1");
+		// Add a node with properties to be used in tests.
+		graph::Node node1(1, "Person");
 		dataManager->addNode(node1);
-		dataManager->addNodeProperties(1, {{"name", "Node1"}, {"value", static_cast<int64_t>(42)}});
+		dataManager->addNodeProperties(1, {{"name", std::string("Alice")}, {"age", static_cast<int64_t>(42)}});
+		fileStorage->flush();
 	}
 
 	void TearDown() override {
 		database->close();
 		database.reset();
-		std::filesystem::remove(testFilePath);
+		if (std::filesystem::exists(testFilePath)) {
+			std::filesystem::remove(testFilePath);
+		}
+	}
+
+	static bool hasIndex(const std::vector<std::pair<std::string, std::string>> &indexes, const std::string &type,
+						 const std::string &key = "") {
+		return std::any_of(indexes.begin(), indexes.end(),
+						   [&](const auto &pair) { return pair.first == type && pair.second == key; });
 	}
 
 	std::filesystem::path testFilePath;
@@ -49,45 +62,83 @@ protected:
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 };
 
-TEST_F(IndexManagerTest, BuildAndDropLabelIndex) {
-	EXPECT_TRUE(indexManager->buildLabelIndex());
-	auto indexes = indexManager->listIndexes();
-	ASSERT_FALSE(indexes.empty());
-	EXPECT_EQ(indexes[0].first, "label");
-	EXPECT_TRUE(indexManager->dropIndex("label", ""));
-	EXPECT_TRUE(indexManager->listIndexes().empty());
+// Test building all node indexes (label and property) and then dropping them individually.
+TEST_F(IndexManagerTest, BuildAndDropNodeIndexes) {
+	// Act: Build all indexes for nodes. This creates both label and property indexes.
+	EXPECT_TRUE(indexManager->buildIndexes("node"));
+
+	// Assert: Check that both label and property indexes for "name" and "age" were created.
+	auto nodeIndexes = indexManager->listIndexes("node");
+	ASSERT_EQ(nodeIndexes.size(), 3); // label + name + age
+	EXPECT_TRUE(hasIndex(nodeIndexes, "label"));
+	EXPECT_TRUE(hasIndex(nodeIndexes, "property", "name"));
+	EXPECT_TRUE(hasIndex(nodeIndexes, "property", "age"));
+
+	// Act & Assert: Drop the label index and verify it's gone.
+	EXPECT_TRUE(indexManager->dropIndex("node", "label"));
+	nodeIndexes = indexManager->listIndexes("node");
+	ASSERT_EQ(nodeIndexes.size(), 2);
+	EXPECT_FALSE(hasIndex(nodeIndexes, "label"));
+
+	// Act & Assert: Drop one property index and verify.
+	EXPECT_TRUE(indexManager->dropIndex("node", "property", "name"));
+	nodeIndexes = indexManager->listIndexes("node");
+	ASSERT_EQ(nodeIndexes.size(), 1);
+	EXPECT_FALSE(hasIndex(nodeIndexes, "property", "name"));
+	EXPECT_TRUE(hasIndex(nodeIndexes, "property", "age"));
+
+	// Act & Assert: Drop all remaining property indexes and verify everything is empty.
+	EXPECT_TRUE(indexManager->dropIndex("node", "property")); // Drop all properties
+	EXPECT_TRUE(indexManager->listIndexes("node").empty());
 }
 
-TEST_F(IndexManagerTest, BuildAndDropPropertyIndex) {
-	std::string key = "name";
-	EXPECT_TRUE(indexManager->buildPropertyIndex(key));
-	auto indexes = indexManager->listIndexes();
-	bool found = false;
-	for (const auto &idx: indexes) {
-		if (idx.first == "property" && idx.second == key)
-			found = true;
-	}
-	EXPECT_TRUE(found);
-	EXPECT_TRUE(indexManager->dropIndex("property", key));
+// Test building only a specific property index for nodes.
+TEST_F(IndexManagerTest, BuildAndDropSpecificNodePropertyIndex) {
+	const std::string key = "name";
+
+	// Act: Build only the property index for the "name" key.
+	EXPECT_TRUE(indexManager->buildPropertyIndex("node", key));
+
+	// Assert: Check that ONLY the specified property index exists.
+	auto nodeIndexes = indexManager->listIndexes("node");
+	ASSERT_EQ(nodeIndexes.size(), 1);
+	EXPECT_TRUE(hasIndex(nodeIndexes, "property", key));
+	EXPECT_FALSE(hasIndex(nodeIndexes, "label"));
+	EXPECT_FALSE(hasIndex(nodeIndexes, "property", "age"));
+
+	// Act & Assert: Drop the specific index and verify the list is empty.
+	EXPECT_TRUE(indexManager->dropIndex("node", "property", key));
+	EXPECT_TRUE(indexManager->listIndexes("node").empty());
 }
 
-TEST_F(IndexManagerTest, BuildAllIndexesAndDropAll) {
-	EXPECT_TRUE(indexManager->buildIndexes());
-	auto indexes = indexManager->listIndexes();
-	EXPECT_FALSE(indexes.empty());
-	EXPECT_TRUE(indexManager->dropIndex("property", ""));
-	EXPECT_TRUE(indexManager->dropIndex("label", ""));
+// New Test: Verify that edge index management works correctly and is isolated from nodes.
+TEST_F(IndexManagerTest, BuildAndDropEdgeIndexes) {
+	// Arrange: Add an edge with a label and properties.
+	graph::Edge edge1(10, 1, 1, "LINKS_TO");
+	dataManager->addEdge(edge1);
+	dataManager->addEdgeProperties(10, {{"weight", 2.5}});
+	fileStorage->flush();
+
+	// Act: Build all indexes for edges.
+	EXPECT_TRUE(indexManager->buildIndexes("edge"));
+
+	// Assert: Check that edge indexes are created.
+	auto edgeIndexes = indexManager->listIndexes("edge");
+	ASSERT_EQ(edgeIndexes.size(), 2); // label + weight
+	EXPECT_TRUE(hasIndex(edgeIndexes, "label"));
+	EXPECT_TRUE(hasIndex(edgeIndexes, "property", "weight"));
+
+	// Assert: Check that NO node indexes were created by this operation.
+	EXPECT_TRUE(indexManager->listIndexes("node").empty());
+
+	// Act & Assert: Drop the edge indexes and verify.
+	EXPECT_TRUE(indexManager->dropIndex("edge", "label"));
+	EXPECT_TRUE(indexManager->dropIndex("edge", "property", "weight"));
+	EXPECT_TRUE(indexManager->listIndexes("edge").empty());
 }
 
-TEST_F(IndexManagerTest, EnableAndDisableIndexes) {
-	indexManager->enableLabelIndex(true);
-	indexManager->enableLabelIndex(false);
-	indexManager->enablePropertyIndex("foo", true);
-	indexManager->enablePropertyIndex("foo", false);
-	indexManager->enableRelationshipIndex(true);
-	indexManager->enableRelationshipIndex(false);
-	indexManager->enableFullTextIndex(true);
-	indexManager->enableFullTextIndex(false);
+// Test that persisting state does not throw an exception. This is a basic sanity check.
+TEST_F(IndexManagerTest, PersistStateNoThrow) {
+	// Act & Assert
+	EXPECT_NO_THROW(indexManager->persistState());
 }
-
-TEST_F(IndexManagerTest, PersistStateNoThrow) { EXPECT_NO_THROW(indexManager->persistState()); }

@@ -28,18 +28,12 @@ namespace graph::query::indexes {
 	 */
 	class LabelIndex {
 	public:
-		// Constants for this index type
-		static constexpr uint32_t LABEL_INDEX_TYPE = 1;
-
-		// State key for persisting rootId
-		static constexpr char STATE_KEY_ROOT_ID[] = "label_index.root_id";
-
 		/**
 		 * Constructor
 		 *
 		 * @param dataManager Pointer to data manager for persistence
 		 */
-		explicit LabelIndex(const std::shared_ptr<storage::DataManager>& dataManager);
+		LabelIndex(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType, std::string stateKey);
 		~LabelIndex() = default;
 
 		/**
@@ -69,11 +63,11 @@ namespace graph::query::indexes {
 		/**
 		 * Checks if a node has a specific label
 		 *
-		 * @param nodeId ID of the node to check
+		 * @param entityId ID of the node to check
 		 * @param label Label to check for
 		 * @return true if the node has the label
 		 */
-		bool hasLabel(int64_t nodeId, const std::string& label) const;
+		bool hasLabel(int64_t entityId, const std::string& label) const;
 
 		/**
 		 * Initializes the index
@@ -101,6 +95,7 @@ namespace graph::query::indexes {
 		std::shared_ptr<IndexTreeManager> treeManager_;
 		mutable std::shared_mutex mutex_;
 		int64_t rootId_ = 0;
+		const std::string stateKey_;
 
 		void loadRootId();
 	};

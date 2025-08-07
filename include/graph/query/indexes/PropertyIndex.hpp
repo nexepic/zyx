@@ -13,7 +13,6 @@
 #include <memory>
 #include <shared_mutex>
 #include <string>
-#include <variant>
 #include <vector>
 #include "graph/core/IndexTreeManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -21,20 +20,19 @@
 
 namespace graph::query::indexes {
 
+	enum class PropertyType : uint8_t {
+		UNKNOWN = 0,
+		STRING = 1,
+		INTEGER = 2,
+		DOUBLE = 3,
+		BOOLEAN = 4
+	};
+
 	class PropertyIndex {
 	public:
-		// Constants for this index type
-		static constexpr uint32_t PROPERTY_INDEX_TYPE = 2;
+		PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType, const std::string &stateKeyPrefix);
 
-		static constexpr char STATE_STRING_ROOTS_KEY[] = "index.property.string_roots";
-		static constexpr char STATE_INT_ROOTS_KEY[] = "index.property.int_roots";
-		static constexpr char STATE_DOUBLE_ROOTS_KEY[] = "index.property.double_roots";
-		static constexpr char STATE_BOOL_ROOTS_KEY[] = "index.property.bool_roots";
-		static constexpr char STATE_INDEX_ENABLED_KEY[] = "index.property.enabled";
-
-		explicit PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager);
-
-		void saveState();
+		void saveState() const;
 
 		void clearKey(const std::string &key);
 		void dropKey(const std::string &key);
@@ -42,22 +40,18 @@ namespace graph::query::indexes {
 		void initialize();
 		void clear();
 		void drop();
-		void flush();
+		void flush() const;
 
 		// Add property to index
-		void addProperty(int64_t nodeId, const std::string &key, const PropertyValue &value);
+		void addProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
 
-		// Remove property from index
-		void removeProperty(int64_t nodeId, const std::string &key, const PropertyValue &value);
+		void removeProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
 
 		// Find nodes with exact property match
 		std::vector<int64_t> findExactMatch(const std::string &key, const PropertyValue &value) const;
 
 		// Find nodes with property value in range (for numeric types)
 		std::vector<int64_t> findRange(const std::string &key, double minValue, double maxValue) const;
-
-		// Check if node has property with specific value
-		bool hasPropertyValue(int64_t nodeId, const std::string &key, const PropertyValue &value) const;
 
 		std::vector<std::string> getIndexedKeys() const;
 
@@ -69,7 +63,15 @@ namespace graph::query::indexes {
 				   boolRoots_.contains(key);
 		}
 
+		PropertyType getIndexedKeyType(const std::string &key) const;
+
 	private:
+		const std::string STATE_STRING_ROOTS_KEY;
+		const std::string STATE_INT_ROOTS_KEY;
+		const std::string STATE_DOUBLE_ROOTS_KEY;
+		const std::string STATE_BOOL_ROOTS_KEY;
+		const std::string STATE_KEY_TYPES_KEY;
+
 		std::shared_ptr<IndexTreeManager> stringTreeManager_;
 		std::shared_ptr<IndexTreeManager> intTreeManager_;
 		std::shared_ptr<IndexTreeManager> doubleTreeManager_;
@@ -83,10 +85,15 @@ namespace graph::query::indexes {
 		std::unordered_map<std::string, int64_t> doubleRoots_;
 		std::unordered_map<std::string, int64_t> boolRoots_;
 
-		// Helper methods
-		std::shared_ptr<IndexTreeManager> getTreeManagerForType(const PropertyValue &value) const;
-		std::unordered_map<std::string, int64_t> &getRootMapForType(const PropertyValue &value);
-		const std::unordered_map<std::string, int64_t> &getRootMapForType(const PropertyValue &value) const;
+		// Map to store the determined type for each indexed key.
+		std::unordered_map<std::string, PropertyType> indexedKeyTypes_;
+
+		// Get property type from variant
+		static PropertyType getPropertyType(const PropertyValue &value);
+
+		std::shared_ptr<IndexTreeManager> getTreeManagerForType(PropertyType type) const;
+		std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type);
+		const std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type) const;
 
 		// Convert property value to string key for tree storage
 		static std::string valueToString(const PropertyValue &value);
@@ -94,6 +101,9 @@ namespace graph::query::indexes {
 		static void serializeRootMap(const std::string &stateKey,
 									 const std::unordered_map<std::string, int64_t> &rootMap);
 		static std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string &stateKey);
+
+		void serializeKeyTypeMap() const;
+		void deserializeKeyTypeMap();
 	};
 
 } // namespace graph::query::indexes
