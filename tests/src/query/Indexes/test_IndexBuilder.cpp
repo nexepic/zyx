@@ -20,6 +20,12 @@
 #include "graph/query/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 
+#ifdef _WIN32
+#include <windows.h> // For Sleep()
+#else
+#include <unistd.h>  // For usleep()
+#endif
+
 constexpr size_t BATCH_SIZE = 1000;
 
 class IndexBuilderTest : public ::testing::Test {
