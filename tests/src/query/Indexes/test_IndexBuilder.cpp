@@ -134,7 +134,7 @@ TEST_F(IndexBuilderTest, BuildAllIndexes_WithData_Verification) {
 	EXPECT_EQ(companyNodes[0], 3);
 
 	auto aliceNodes = nodePropertyIndex->findExactMatch("name", std::string("Alice"));
-	auto ageNodes = nodePropertyIndex->findExactMatch("age", static_cast<int64_t>(30));
+	auto ageNodes = nodePropertyIndex->findExactMatch("age", 30);
 	ASSERT_EQ(aliceNodes.size(), 1);
 	EXPECT_EQ(aliceNodes[0], 1);
 	ASSERT_EQ(ageNodes.size(), 1);
@@ -151,7 +151,7 @@ TEST_F(IndexBuilderTest, BuildAllIndexes_WithData_Verification) {
 	ASSERT_EQ(worksAtEdges.size(), 1);
 	EXPECT_EQ(worksAtEdges[0], 2);
 
-	auto sinceEdges = edgePropertyIndex->findExactMatch("since", static_cast<int64_t>(2020));
+	auto sinceEdges = edgePropertyIndex->findExactMatch("since", 2020);
 	ASSERT_EQ(sinceEdges.size(), 1);
 	EXPECT_EQ(sinceEdges[0], 1);
 
@@ -205,7 +205,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
 
 	// Assert: Verify other properties (like "age") are not indexed
 	EXPECT_FALSE(nodePropertyIndex->hasKeyIndexed("age"));
-	EXPECT_TRUE(nodePropertyIndex->findExactMatch("age", static_cast<int64_t>(30)).empty());
+	EXPECT_TRUE(nodePropertyIndex->findExactMatch("age", 30).empty());
 
 	// Assert: Verify other indexes (node label, all edge indexes) are not built
 	EXPECT_TRUE(indexManager->getNodeIndexManager()->getLabelIndex()->isEmpty());
@@ -246,24 +246,26 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	for (int i = 1; i <= numNodes; ++i) {
 		graph::Node node(i, "TestNode");
 		dataManager->addNode(node);
-		dataManager->addNodeProperties(i, {{"test_id", static_cast<int64_t>(i)}});
+		dataManager->addNodeProperties(i, {{"test_id", i}});
 	}
 	fileStorage->flush();
 
+	auto newIndexBuilder = std::make_unique<graph::query::indexes::IndexBuilder>(indexManager, fileStorage);
+
 	// Act
-	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
+	EXPECT_TRUE(newIndexBuilder->buildAllNodeIndexes());
 
 	// Assert
 	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 
 	// Check the first node
-	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(1));
+	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", 1);
 	ASSERT_EQ(firstNodeResult.size(), 1);
 	EXPECT_EQ(firstNodeResult[0], 1);
 
 	// Check the last node (from the second batch)
-	auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(numNodes));
+	auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", numNodes);
 	ASSERT_EQ(lastNodeResult.size(), 1);
 	EXPECT_EQ(lastNodeResult[0], numNodes);
 
