@@ -20,12 +20,6 @@
 #include "graph/query/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 
-#ifdef _WIN32
-#include <windows.h> // For Sleep()
-#else
-#include <unistd.h>  // For usleep()
-#endif
-
 constexpr size_t BATCH_SIZE = 1000;
 
 class IndexBuilderTest : public ::testing::Test {
@@ -249,51 +243,32 @@ TEST_F(IndexBuilderTest, GetNodeAndEdgeIdRanges) {
 TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	// Arrange
 	constexpr int64_t numNodes = BATCH_SIZE + 5;
-	std::cout << "[TEST LOG] Arranging data for " << numNodes << " nodes..." << std::endl;
 	for (int i = 1; i <= numNodes; ++i) {
 		graph::Node node(i, "TestNode");
 		dataManager->addNode(node);
-		// IMPORTANT FIX: Ensure we are using PropertyValue correctly
-		dataManager->addNodeProperties(i, {{"test_id", graph::PropertyValue(static_cast<int64_t>(i))}});
+		dataManager->addNodeProperties(i, {{"test_id", static_cast<int64_t>(i)}});
 	}
-
-	std::cout << "[TEST LOG] Data arranged in DataManager's memory. Flushing to FileStorage..." << std::endl;
 	fileStorage->flush();
-	std::cout << "[TEST LOG] Flush command issued." << std::endl;
-
-	// Add a small delay, ONLY FOR DEBUGGING, to see if it's a timing issue.
-	// This is a "bad smell" but can be a powerful diagnostic tool.
-	#ifdef _WIN32
-		Sleep(100); // 100 milliseconds
-	#else
-		usleep(100 * 1000);
-	#endif
 
 	// Act
-	std::cout << "[TEST LOG] Starting index build..." << std::endl;
 	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
-	std::cout << "[TEST LOG] Index build finished." << std::endl;
 
 	// Assert
 	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 
 	// Check the first node
-	// IMPORTANT FIX: Use PropertyValue for searching
-	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", graph::PropertyValue(static_cast<int64_t>(1)));
-	std::cout << "[TEST LOG] Searching for test_id=1. Found " << firstNodeResult.size() << " results." << std::endl;
+	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(1));
 	ASSERT_EQ(firstNodeResult.size(), 1);
 	EXPECT_EQ(firstNodeResult[0], 1);
 
 	// Check the last node (from the second batch)
-	auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", graph::PropertyValue(static_cast<int64_t>(numNodes)));
-	std::cout << "[TEST LOG] Searching for test_id=" << numNodes << ". Found " << lastNodeResult.size() << " results." << std::endl;
+	auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", numNodes);
 	ASSERT_EQ(lastNodeResult.size(), 1);
 	EXPECT_EQ(lastNodeResult[0], numNodes);
 
 	// Check the total count
 	auto allTestNodes = nodeLabelIndex->findNodes("TestNode");
-	std::cout << "[TEST LOG] Searching for label=TestNode. Found " << allTestNodes.size() << " nodes." << std::endl;
 	EXPECT_EQ(allTestNodes.size(), numNodes);
 }
 
