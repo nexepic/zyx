@@ -246,19 +246,48 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	for (int i = 1; i <= numNodes; ++i) {
 		graph::Node node(i, "TestNode");
 		dataManager->addNode(node);
-		dataManager->addNodeProperties(i, {{"test_id", static_cast<int64_t>(i)}});
+		dataManager->addNodeProperties(i, {{"test_id", i}});
 	}
 	fileStorage->flush();
 
+	auto testNode = dataManager->getNode(1);
+	std::cout << "===== Test node 1 exists: " << (testNode.getId() == 1) << std::endl;
+	auto props = dataManager->getNodeProperties(1);
+	std::cout << "===== Test node 1 has property 'test_id': " << props.contains("test_id") << std::endl;
+
+	// Print all properties for the node
+	std::cout << "===== All properties for node 1: " << std::endl;
+	for (const auto& [key, value] : props) {
+	    std::cout << "  Key: " << key << ", Type: " << static_cast<int>(getPropertyType(value)) << std::endl;
+
+	    // If it's the test_id property, extract and print the actual value
+	    if (key == "test_id") {
+	        std::visit([](const auto& v) {
+	            using T = std::decay_t<decltype(v)>;
+	            if constexpr (std::is_same_v<T, int64_t>) {
+	                std::cout << "  test_id value (int64): " << v << std::endl;
+	            } else if constexpr (std::is_same_v<T, double>) {
+	                std::cout << "  test_id value (double): " << v << std::endl;
+	            } else {
+	                std::cout << "  test_id value (other type)" << std::endl;
+	            }
+	        }, value.getVariant());
+	    }
+	}
+
 	// Act
 	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
+
+	auto new_nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
+	std::cout << "Property 'test_id' indexed type: " <<
+	static_cast<int>(new_nodePropertyIndex->getIndexedKeyType("test_id")) << std::endl;
 
 	// Assert
 	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 
 	// Check the first node
-	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(1));
+	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", 1);
 	ASSERT_EQ(firstNodeResult.size(), 1);
 	EXPECT_EQ(firstNodeResult[0], 1);
 

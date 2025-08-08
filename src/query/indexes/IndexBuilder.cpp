@@ -37,6 +37,7 @@ namespace graph::query::indexes {
 			propertyIndex->clear();
 
 			for (const auto& [startId, endId] : getNodeIdRanges()) {
+				std::cout << "========== Range: " << startId << " to " << endId << std::endl;
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
