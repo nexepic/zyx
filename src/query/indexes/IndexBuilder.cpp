@@ -9,6 +9,7 @@
  **/
 
 #include "graph/query/indexes/IndexBuilder.hpp"
+#include <algorithm>
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/query/indexes/IndexManager.hpp"
