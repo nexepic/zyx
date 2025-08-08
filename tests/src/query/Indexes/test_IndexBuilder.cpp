@@ -24,55 +24,25 @@ constexpr size_t BATCH_SIZE = 1000;
 
 class IndexBuilderTest : public ::testing::Test {
 protected:
-	// Use SetUpTestSuite and TearDownTestSuite for one-time path generation and cleanup.
-	static void SetUpTestSuite() {
+	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_indexBuilder_" + to_string(uuid) + ".dat");
-	}
-
-	static void TearDownTestSuite() {
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
-	}
-
-	// SetUp is called before each test.
-	void SetUp() override {
-		// Ensure a clean state by deleting the file before each test.
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
-		// Open a fresh database instance for the test.
-		open_database();
-	}
-
-	// TearDown is called after each test.
-	void TearDown() override {
-		// Ensure the database is closed and resources are freed.
-		close_database();
-	}
-
-	// --- Helper functions for managing database lifecycle ---
-
-	void open_database() {
 		database = std::make_unique<graph::Database>(testFilePath.string());
 		database->open();
 		fileStorage = database->getStorage();
-		dataManager = fileStorage->getDataManager();
 		indexManager = database->getQueryEngine()->getIndexManager();
+		// In order to test IndexBuilder, we need access to it.
+		// The getIndexBuilder() method was added to IndexManager for this purpose.
 		indexBuilder = indexManager->getIndexBuilder();
+		dataManager = fileStorage->getDataManager();
 	}
 
-	void close_database() {
-		if (database) {
-			database->close(); // This is the crucial step that closes file handles.
-			database.reset();
+	void TearDown() override {
+		database->close();
+		database.reset();
+		if (std::filesystem::exists(testFilePath)) {
+			std::filesystem::remove(testFilePath);
 		}
-		// Nullify pointers to prevent accidental use after close.
-		fileStorage.reset();
-		dataManager.reset();
-		indexManager.reset();
-		indexBuilder = nullptr;
 	}
 
 	// Helper function to populate the database with comprehensive test data
@@ -116,10 +86,7 @@ protected:
 		fileStorage->flush();
 	}
 
-	// Use a static path to be shared across SetUp and TearDown.
-	static inline std::filesystem::path testFilePath;
-
-	// Member variables for a single test run.
+	std::filesystem::path testFilePath;
 	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
@@ -274,45 +241,54 @@ TEST_F(IndexBuilderTest, GetNodeAndEdgeIdRanges) {
 
 // Test 6: Test batching logic for node index building
 TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
+	// Arrange
 	constexpr int64_t numNodes = BATCH_SIZE + 5;
-
-	// --- Phase 1: Arrange and Write Data ---
-	{
-		for (int i = 1; i <= numNodes; ++i) {
-			graph::Node node(i, "TestNode");
-			dataManager->addNode(node);
-			dataManager->addNodeProperties(i, {{"test_id", static_cast<int64_t>(i)}});
-		}
-		// THE FIX: Close the database to force all writes to disk.
-		close_database();
+	std::cout << "[TEST LOG] Arranging data for " << numNodes << " nodes..." << std::endl;
+	for (int i = 1; i <= numNodes; ++i) {
+		graph::Node node(i, "TestNode");
+		dataManager->addNode(node);
+		// IMPORTANT FIX: Ensure we are using PropertyValue correctly
+		dataManager->addNodeProperties(i, {{"test_id", graph::PropertyValue(static_cast<int64_t>(i))}});
 	}
 
-	// --- Phase 2: Reopen, Act, and Assert ---
-	{
-		// Reopen the database to read the persisted state.
-		open_database();
+	std::cout << "[TEST LOG] Data arranged in DataManager's memory. Flushing to FileStorage..." << std::endl;
+	fileStorage->flush();
+	std::cout << "[TEST LOG] Flush command issued." << std::endl;
 
-		// Act
-		EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
+	// Add a small delay, ONLY FOR DEBUGGING, to see if it's a timing issue.
+	// This is a "bad smell" but can be a powerful diagnostic tool.
+	#ifdef _WIN32
+		Sleep(100); // 100 milliseconds
+	#else
+		usleep(100 * 1000);
+	#endif
 
-		// Assert
-		auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
-		auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
+	// Act
+	std::cout << "[TEST LOG] Starting index build..." << std::endl;
+	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
+	std::cout << "[TEST LOG] Index build finished." << std::endl;
 
-		// Check the first node
-		auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(1));
-		ASSERT_EQ(firstNodeResult.size(), 1);
-		EXPECT_EQ(firstNodeResult[0], 1);
+	// Assert
+	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
+	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 
-		// Check the last node (from the second batch)
-		auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(numNodes));
-		ASSERT_EQ(lastNodeResult.size(), 1);
-		EXPECT_EQ(lastNodeResult[0], numNodes);
+	// Check the first node
+	// IMPORTANT FIX: Use PropertyValue for searching
+	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", graph::PropertyValue(static_cast<int64_t>(1)));
+	std::cout << "[TEST LOG] Searching for test_id=1. Found " << firstNodeResult.size() << " results." << std::endl;
+	ASSERT_EQ(firstNodeResult.size(), 1);
+	EXPECT_EQ(firstNodeResult[0], 1);
 
-		// Check the total count
-		auto allTestNodes = nodeLabelIndex->findNodes("TestNode");
-		EXPECT_EQ(allTestNodes.size(), numNodes);
-	}
+	// Check the last node (from the second batch)
+	auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", graph::PropertyValue(static_cast<int64_t>(numNodes)));
+	std::cout << "[TEST LOG] Searching for test_id=" << numNodes << ". Found " << lastNodeResult.size() << " results." << std::endl;
+	ASSERT_EQ(lastNodeResult.size(), 1);
+	EXPECT_EQ(lastNodeResult[0], numNodes);
+
+	// Check the total count
+	auto allTestNodes = nodeLabelIndex->findNodes("TestNode");
+	std::cout << "[TEST LOG] Searching for label=TestNode. Found " << allTestNodes.size() << " nodes." << std::endl;
+	EXPECT_EQ(allTestNodes.size(), numNodes);
 }
 
 // Test that specifically tracks batch processing

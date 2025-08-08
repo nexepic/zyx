@@ -36,16 +36,36 @@ namespace graph::query::indexes {
 			labelIndex->clear();
 			propertyIndex->clear();
 
-			for (const auto& [startId, endId] : getNodeIdRanges()) {
+			// --- DEBUG LOG ---
+			std::cout << "[BUILDER LOG] Getting node ID ranges..." << std::endl;
+			auto ranges = getNodeIdRanges();
+			if (ranges.empty()) {
+				std::cout << "[BUILDER LOG] WARNING: No node ID ranges found!" << std::endl;
+			} else {
+				for (const auto& [start, end] : ranges) {
+					std::cout << "[BUILDER LOG] Found range: " << start << " to " << end << std::endl;
+				}
+			}
+			// --- END DEBUG LOG ---
+
+			for (const auto& [startId, endId] : ranges) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() >= BATCH_SIZE) {
+						// --- DEBUG LOG ---
+						std::cout << "[BUILDER LOG] Processing node batch of size " << batchIds.size()
+								  << " (IDs " << batchIds.front() << " to " << batchIds.back() << ")" << std::endl;
+						// --- END DEBUG LOG ---
 						processNodeBatch(batchIds, labelIndex, propertyIndex);
 						batchIds.clear();
 					}
 				}
 				if (!batchIds.empty()) {
+					// --- DEBUG LOG ---
+					std::cout << "[BUILDER LOG] Processing final node batch of size " << batchIds.size()
+							  << " (IDs " << batchIds.front() << " to " << batchIds.back() << ")" << std::endl;
+					// --- END DEBUG LOG ---
 					processNodeBatch(batchIds, labelIndex, propertyIndex);
 				}
 			}
@@ -131,28 +151,39 @@ namespace graph::query::indexes {
 	}
 
 	void IndexBuilder::processNodeBatch(const std::vector<int64_t>& nodeIds,
-										const std::shared_ptr<LabelIndex>& labelIndex,
-										const std::shared_ptr<PropertyIndex>& propertyIndex,
-										const std::string& propertyKey) const {
+									const std::shared_ptr<LabelIndex>& labelIndex,
+									const std::shared_ptr<PropertyIndex>& propertyIndex,
+									const std::string& propertyKey) const {
 		auto nodeBatch = dataManager_->getNodeBatch(nodeIds);
+
+		// --- DEBUG LOG ---
+		if (nodeBatch.empty() && !nodeIds.empty()) {
+			std::cout << "[BUILDER LOG] WARNING: getNodeBatch returned 0 nodes for "
+					  << nodeIds.size() << " requested IDs." << std::endl;
+		}
+		// --- END DEBUG LOG ---
+
 		for (const auto& node : nodeBatch) {
 			if (node.getId() == 0 || !node.isActive()) continue;
 
 			int64_t nodeId = node.getId();
 
 			if (labelIndex) {
+				// --- DEBUG LOG ---
+				// std::cout << "[BUILDER LOG] Indexing label '" << node.getLabel() << "' for node " << nodeId << std::endl;
+				// --- END DEBUG LOG ---
 				labelIndex->addNode(nodeId, node.getLabel());
 			}
 
 			if (propertyIndex) {
 				auto properties = dataManager_->getNodeProperties(nodeId);
-				if (propertyKey.empty()) { // Index all properties
-					for (const auto& [key, value] : properties) {
+				for (const auto& [key, value] : properties) {
+					if (propertyKey.empty() || key == propertyKey) {
+						// --- DEBUG LOG ---
+						// This can be very verbose, enable if needed.
+						// std::cout << "[BUILDER LOG] Indexing property '" << key << "' for node " << nodeId << std::endl;
+						// --- END DEBUG LOG ---
 						propertyIndex->addProperty(nodeId, key, value);
-					}
-				} else { // Index specific property
-					if (auto it = properties.find(propertyKey); it != properties.end()) {
-						propertyIndex->addProperty(nodeId, propertyKey, it->second);
 					}
 				}
 			}
