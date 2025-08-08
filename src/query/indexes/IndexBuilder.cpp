@@ -36,7 +36,7 @@ namespace graph::query::indexes {
 			labelIndex->clear();
 			propertyIndex->clear();
 
-			for (const auto& [startId, endId] : getNodeIdRanges()) {
+			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::cout << "========== Range: " << startId << " to " << endId << std::endl;
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
@@ -51,7 +51,7 @@ namespace graph::query::indexes {
 				}
 			}
 			return true;
-		} catch (const std::exception& e) {
+		} catch (const std::exception &e) {
 			std::cerr << "Error in buildAllNodeIndexes: " << e.what() << std::endl;
 			return false;
 		}
@@ -66,7 +66,7 @@ namespace graph::query::indexes {
 			labelIndex->clear();
 			propertyIndex->clear();
 
-			for (const auto& [startId, endId] : getEdgeIdRanges()) {
+			for (const auto &[startId, endId]: getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
@@ -80,18 +80,18 @@ namespace graph::query::indexes {
 				}
 			}
 			return true;
-		} catch (const std::exception& e) {
+		} catch (const std::exception &e) {
 			std::cerr << "Error in buildAllEdgeIndexes: " << e.what() << std::endl;
 			return false;
 		}
 	}
 
-	bool IndexBuilder::buildNodePropertyIndex(const std::string& key) const {
+	bool IndexBuilder::buildNodePropertyIndex(const std::string &key) const {
 		try {
 			auto propertyIndex = indexManager_->getNodeIndexManager()->getPropertyIndex();
 			propertyIndex->clearKey(key);
 
-			for (const auto& [startId, endId] : getNodeIdRanges()) {
+			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
@@ -105,16 +105,18 @@ namespace graph::query::indexes {
 				}
 			}
 			return true;
-		} catch (...) { return false; }
+		} catch (...) {
+			return false;
+		}
 	}
 
 	// Specialized builder for a single edge property
-	bool IndexBuilder::buildEdgePropertyIndex(const std::string& key) const {
+	bool IndexBuilder::buildEdgePropertyIndex(const std::string &key) const {
 		try {
 			auto propertyIndex = indexManager_->getEdgeIndexManager()->getPropertyIndex();
 			propertyIndex->clearKey(key);
 
-			for (const auto& [startId, endId] : getEdgeIdRanges()) {
+			for (const auto &[startId, endId]: getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
@@ -128,16 +130,19 @@ namespace graph::query::indexes {
 				}
 			}
 			return true;
-		} catch (...) { return false; }
+		} catch (...) {
+			return false;
+		}
 	}
 
-	void IndexBuilder::processNodeBatch(const std::vector<int64_t>& nodeIds,
-										const std::shared_ptr<LabelIndex>& labelIndex,
-										const std::shared_ptr<PropertyIndex>& propertyIndex,
-										const std::string& propertyKey) const {
+	void IndexBuilder::processNodeBatch(const std::vector<int64_t> &nodeIds,
+										const std::shared_ptr<LabelIndex> &labelIndex,
+										const std::shared_ptr<PropertyIndex> &propertyIndex,
+										const std::string &propertyKey) const {
 		auto nodeBatch = dataManager_->getNodeBatch(nodeIds);
-		for (const auto& node : nodeBatch) {
-			if (node.getId() == 0 || !node.isActive()) continue;
+		for (const auto &node: nodeBatch) {
+			if (node.getId() == 0 || !node.isActive())
+				continue;
 
 			int64_t nodeId = node.getId();
 
@@ -148,7 +153,7 @@ namespace graph::query::indexes {
 			if (propertyIndex) {
 				auto properties = dataManager_->getNodeProperties(nodeId);
 				if (propertyKey.empty()) { // Index all properties
-					for (const auto& [key, value] : properties) {
+					for (const auto &[key, value]: properties) {
 						propertyIndex->addProperty(nodeId, key, value);
 					}
 				} else { // Index specific property
@@ -160,13 +165,14 @@ namespace graph::query::indexes {
 		}
 	}
 
-	void IndexBuilder::processEdgeBatch(const std::vector<int64_t>& edgeIds,
-										const std::shared_ptr<LabelIndex>& labelIndex,
-										const std::shared_ptr<PropertyIndex>& propertyIndex,
-										const std::string& propertyKey) const {
+	void IndexBuilder::processEdgeBatch(const std::vector<int64_t> &edgeIds,
+										const std::shared_ptr<LabelIndex> &labelIndex,
+										const std::shared_ptr<PropertyIndex> &propertyIndex,
+										const std::string &propertyKey) const {
 		auto edgeBatch = dataManager_->getEdgeBatch(edgeIds);
-		for (const auto& edge : edgeBatch) {
-			if (edge.getId() == 0 || !edge.isActive()) continue;
+		for (const auto &edge: edgeBatch) {
+			if (edge.getId() == 0 || !edge.isActive())
+				continue;
 
 			int64_t edgeId = edge.getId();
 
@@ -177,7 +183,7 @@ namespace graph::query::indexes {
 			if (propertyIndex) {
 				auto properties = dataManager_->getEdgeProperties(edgeId);
 				if (propertyKey.empty()) { // Index all properties
-					for (const auto& [key, value] : properties) {
+					for (const auto &[key, value]: properties) {
 						propertyIndex->addProperty(edgeId, key, value);
 					}
 				} else { // Index specific property
@@ -203,6 +209,8 @@ namespace graph::query::indexes {
 			}
 		}
 
+		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
+
 		return ranges;
 	}
 
@@ -218,6 +226,8 @@ namespace graph::query::indexes {
 				ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
 			}
 		}
+
+		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
 
 		return ranges;
 	}
