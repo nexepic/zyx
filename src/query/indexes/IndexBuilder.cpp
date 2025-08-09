@@ -37,21 +37,30 @@ namespace graph::query::indexes {
 			labelIndex->clear();
 			propertyIndex->clear();
 
-			for (const auto &[startId, endId]: getNodeIdRanges()) {
-				std::cout << "========== Range: " << startId << " to " << endId << std::endl;
-				std::vector<int64_t> batchIds;
+			auto ranges = getNodeIdRanges(); // Get ranges once.
+
+			std::vector<int64_t> batchIds;
+			batchIds.reserve(BATCH_SIZE); // Pre-allocate memory for efficiency.
+
+			for (const auto &[startId, endId]: ranges) {
+				std::cout << "========== Accumulating Range: " << startId << " to " << endId << std::endl;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
+					// When a full batch is ready, process it and clear it.
 					if (batchIds.size() >= BATCH_SIZE) {
 						processNodeBatch(batchIds, labelIndex, propertyIndex);
 						batchIds.clear();
 					}
 				}
-				if (!batchIds.empty()) {
-					processNodeBatch(batchIds, labelIndex, propertyIndex);
-				}
 			}
+
+			// After iterating through ALL ranges, process any final remainder.
+			if (!batchIds.empty()) {
+				processNodeBatch(batchIds, labelIndex, propertyIndex);
+			}
+
 			return true;
+
 		} catch (const std::exception &e) {
 			std::cerr << "Error in buildAllNodeIndexes: " << e.what() << std::endl;
 			return false;
