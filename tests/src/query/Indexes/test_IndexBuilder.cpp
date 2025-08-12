@@ -246,7 +246,7 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	for (int i = 1; i <= numNodes; ++i) {
 		graph::Node node(i, "TestNode");
 		dataManager->addNode(node);
-		dataManager->addNodeProperties(i, {{"test_id", (i)}});
+		dataManager->addNodeProperties(i, {{"test_id", static_cast<int64_t>(i)}});
 	}
 	fileStorage->flush();
 
@@ -258,7 +258,7 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 
 	// Check the first node
-	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", 1);
+	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(1));
 	ASSERT_EQ(firstNodeResult.size(), 1);
 	EXPECT_EQ(firstNodeResult[0], 1);
 
@@ -274,33 +274,33 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 
 // Test that specifically tracks batch processing
 TEST_F(IndexBuilderTest, BuildNodeIndexes_BatchProcessingAnalysis) {
-    // Arrange - Use smaller batches for easier debugging
-    constexpr int smallerBatchSize = 100;
-    constexpr int numNodes = smallerBatchSize * 3 + 5; // Multiple batches with remainder
+	// Arrange - Use smaller batches for easier debugging
+	constexpr int smallerBatchSize = 100;
+	constexpr int numNodes = smallerBatchSize * 3 + 5; // Multiple batches with remainder
 
-    for (int i = 1; i <= numNodes; ++i) {
-        graph::Node node(i, "DebugTestNode");
-        dataManager->addNode(node);
-        dataManager->addNodeProperties(i, {{"batch_id", static_cast<int64_t>(i)}});
-    }
-    fileStorage->flush();
+	for (int i = 1; i <= numNodes; ++i) {
+		graph::Node node(i, "DebugTestNode");
+		dataManager->addNode(node);
+		dataManager->addNodeProperties(i, {{"batch_id", static_cast<int64_t>(i)}});
+	}
+	fileStorage->flush();
 
-    // Add logging to examine node ranges
-    auto nodeRanges = indexBuilder->getNodeIdRanges();
-    std::cout << "Node ranges found: " << nodeRanges.size() << std::endl;
-    for (const auto& [start, end] : nodeRanges) {
-        std::cout << "Range: " << start << " to " << end << " (count: " << (end-start+1) << ")" << std::endl;
-    }
+	// Add logging to examine node ranges
+	auto nodeRanges = indexBuilder->getNodeIdRanges();
+	std::cout << "Node ranges found: " << nodeRanges.size() << std::endl;
+	for (const auto &[start, end]: nodeRanges) {
+		std::cout << "Range: " << start << " to " << end << " (count: " << (end - start + 1) << ")" << std::endl;
+	}
 
-    // Act
-    EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
+	// Act
+	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
 
-    // Assert - Check total count
-    auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
-    auto allTestNodes = nodeLabelIndex->findNodes("DebugTestNode");
+	// Assert - Check total count
+	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
+	auto allTestNodes = nodeLabelIndex->findNodes("DebugTestNode");
 
-    // Log detailed results
-    std::cout << "Expected nodes: " << numNodes << ", Found nodes: " << allTestNodes.size() << std::endl;
+	// Log detailed results
+	std::cout << "Expected nodes: " << numNodes << ", Found nodes: " << allTestNodes.size() << std::endl;
 
-    EXPECT_EQ(allTestNodes.size(), numNodes);
+	EXPECT_EQ(allTestNodes.size(), numNodes);
 }
