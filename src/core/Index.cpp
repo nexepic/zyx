@@ -26,7 +26,17 @@ namespace graph {
 		metadata.indexType = indexType;
 		metadata.entryCount = 0;
 		metadata.childCount = 0;
+		metadata.dataUsage = 0;
 		metadata.level = (type == NodeType::LEAF) ? 0 : 1;
+	}
+
+	bool Index::isUnderflow(double thresholdRatio) const {
+		// A node is in underflow if its data usage is less than the specified ratio of its capacity.
+		// We don't check for underflow on the root, as it has different fill rules.
+		if (metadata.parentId == 0) {
+			return false;
+		}
+		return metadata.dataUsage < static_cast<uint32_t>(static_cast<double>(DATA_SIZE) * thresholdRatio);
 	}
 
 	inline Index::EntrySerializationFlags operator|(Index::EntrySerializationFlags a,
@@ -47,6 +57,7 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.indexType);
 		utils::Serializer::writePOD(os, metadata.entryCount);
 		utils::Serializer::writePOD(os, metadata.childCount);
+		utils::Serializer::writePOD(os, metadata.dataUsage);
 		utils::Serializer::writePOD(os, metadata.level);
 		utils::Serializer::writePOD(os, static_cast<uint8_t>(metadata.nodeType));
 		utils::Serializer::writePOD(os, metadata.isActive);
@@ -63,6 +74,7 @@ namespace graph {
 		entity.metadata.indexType = utils::Serializer::readPOD<uint32_t>(is);
 		entity.metadata.entryCount = utils::Serializer::readPOD<uint32_t>(is);
 		entity.metadata.childCount = utils::Serializer::readPOD<uint32_t>(is);
+		entity.metadata.dataUsage = utils::Serializer::readPOD<uint32_t>(is);
 		entity.metadata.level = utils::Serializer::readPOD<uint8_t>(is);
 		entity.metadata.nodeType = static_cast<NodeType>(utils::Serializer::readPOD<uint8_t>(is));
 		entity.metadata.isActive = utils::Serializer::readPOD<bool>(is);
@@ -79,7 +91,7 @@ namespace graph {
 		if (metadata.entryCount == 0)
 			return result;
 
-		std::string serializedData(dataBuffer, DATA_SIZE);
+		std::string serializedData(dataBuffer, metadata.dataUsage); // Use dataUsage for accurate length
 		std::istringstream is(serializedData);
 		result.reserve(metadata.entryCount);
 
@@ -220,6 +232,7 @@ namespace graph {
 		}
 
 		metadata.entryCount = static_cast<uint32_t>(entries.size());
+		metadata.dataUsage = static_cast<uint32_t>(data.size());
 		std::memset(dataBuffer, 0, DATA_SIZE);
 		std::memcpy(dataBuffer, data.data(), data.size());
 	}
@@ -229,7 +242,7 @@ namespace graph {
 	 * This calculation must exactly match the serialization logic in setAllChildren.
 	 */
 	bool Index::wouldInternalOverflowOnAddChild(const ChildEntry &newEntry,
-												const std::shared_ptr<storage::DataManager> &dataManager) const {
+										  const std::shared_ptr<storage::DataManager> &dataManager) const {
 		if (isLeaf()) {
 			return false;
 		}
@@ -237,29 +250,37 @@ namespace graph {
 		auto children = getAllChildren(dataManager);
 		children.push_back(newEntry); // Simulate the addition.
 
-		size_t estimatedSize = 0;
-		if (children.empty()) {
-			return false;
-		}
+		// Now serialize exactly as setAllChildren would
+		std::ostringstream os;
 
 		// The first child is always just its ID.
-		estimatedSize += sizeof(children[0].childId);
-
-		// For each subsequent child, we store a flag, the key, and the child ID.
-		for (size_t i = 1; i < children.size(); ++i) {
-			const auto &entry = children[i];
-			estimatedSize += sizeof(uint8_t); // For the flags byte.
-
-			const bool keyIsBlob = utils::getSerializedSize(entry.key) > INTERNAL_KEY_INLINE_THRESHOLD;
-			if (keyIsBlob) {
-				estimatedSize += sizeof(int64_t); // Size of the blob ID.
-			} else {
-				estimatedSize += utils::getSerializedSize(entry.key); // Size of the inline key.
-			}
-			estimatedSize += sizeof(entry.childId); // Size of the child pointer.
+		if (!children.empty()) {
+			utils::Serializer::writePOD(os, children[0].childId);
 		}
 
-		return estimatedSize > DATA_SIZE;
+		// For each subsequent child, we serialize a flag, the key (or blob ID), and the child ID.
+		for (size_t i = 1; i < children.size(); ++i) {
+			const auto &entry = children[i];
+			auto flags = EntrySerializationFlags::NONE;
+
+			// Check if key should use blob
+			const bool keyIsBlob = utils::getSerializedSize(entry.key) > INTERNAL_KEY_INLINE_THRESHOLD;
+			if (keyIsBlob) {
+				flags = flags | EntrySerializationFlags::KEY_IS_BLOB;
+			}
+
+			utils::Serializer::writePOD(os, flags);
+
+			if (keyIsBlob) {
+				utils::Serializer::writePOD(os, entry.keyBlobId);
+			} else {
+				utils::Serializer::serialize(os, entry.key);
+			}
+
+			utils::Serializer::writePOD(os, entry.childId);
+		}
+
+		return os.str().size() > DATA_SIZE;
 	}
 
 	bool Index::wouldLeafOverflowOnInsert(
@@ -438,7 +459,7 @@ namespace graph {
 			return result;
 		}
 
-		std::string serializedData(dataBuffer, DATA_SIZE);
+		std::string serializedData(dataBuffer, metadata.dataUsage); // Use dataUsage for accurate length
 		std::istringstream is(serializedData);
 		result.reserve(metadata.childCount);
 
@@ -537,8 +558,8 @@ namespace graph {
 		}
 
 		metadata.childCount = static_cast<uint32_t>(children.size());
-		// Entry count for an internal node is the number of keys, which is childCount - 1.
 		metadata.entryCount = (children.size() > 0) ? static_cast<uint32_t>(children.size() - 1) : 0;
+		metadata.dataUsage = static_cast<uint32_t>(data.size());
 		std::memset(dataBuffer, 0, DATA_SIZE);
 		std::memcpy(dataBuffer, data.data(), data.size());
 	}

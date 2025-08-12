@@ -37,6 +37,7 @@ namespace graph {
 			uint32_t indexType = 0; // Type of index (label, property, etc.)
 			uint32_t entryCount = 0; // Number of keys in this node
 			uint32_t childCount = 0; // Number of children (internal nodes only)
+			uint32_t dataUsage = 0; // Tracks the actual bytes used in the dataBuffer. Crucial for underflow checks.
 			uint8_t level = 0; // Level in the tree (0 for leaf)
 			NodeType nodeType = NodeType::LEAF; // Node type (leaf or internal)
 			bool isActive = true; // Whether this node is active
@@ -60,6 +61,8 @@ namespace graph {
 		// Metadata access for CRTP
 		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
 		Metadata &getMutableMetadata() { return metadata; }
+
+		[[nodiscard]] bool isUnderflow(double thresholdRatio) const;
 
 		// Specialized getters/setters
 		[[nodiscard]] NodeType getNodeType() const { return metadata.nodeType; }
@@ -90,7 +93,7 @@ namespace graph {
 
 		enum class EntrySerializationFlags : uint8_t {
 			NONE = 0,
-			KEY_IS_BLOB = 1 << 0,    // Bit 0 for key
+			KEY_IS_BLOB = 1 << 0, // Bit 0 for key
 			VALUES_ARE_BLOB = 1 << 1 // Bit 1 for values
 		};
 

@@ -104,12 +104,44 @@ namespace graph::query::indexes {
 		PropertyType keyDataType_;
 		std::function<bool(const PropertyValue &, const PropertyValue &)> keyComparator_;
 
+		// --- Configuration ---
+		// The ratio of data buffer usage below which a node is considered for merging or redistribution.
+		// A value of 0.5 means a node must be at least 50% full.
+		// This is now the single source of truth for underflow logic.
+		static constexpr double UNDERFLOW_THRESHOLD_RATIO = 0.5;
+
 		// Helper methods for B+Tree operations
 		int64_t createNewNode(Index::NodeType type) const;
 
 		void splitLeaf(Index &leaf, const PropertyValue &newKey, int64_t newValue, int64_t &rootId);
 		void insertIntoParent(Index &leftNode, const PropertyValue &key, int64_t rightNodeId, int64_t &rootId);
+
+		/**
+		 * @brief Handles a node that may be under-full after a deletion.
+		 * @param node The node to check (can be leaf or internal).
+		 * @param rootId Reference to the root ID, as it may change.
+		 */
+		void handleUnderflow(Index &node, int64_t &rootId);
+
+		/**
+		 * @brief Attempts to redistribute entries from a sibling node.
+		 * @param node The under-full node.
+		 * @param sibling The sibling node to borrow from.
+		 * @param parent The parent of the two nodes.
+		 * @param isLeftSibling True if the sibling is to the left of the node.
+		 */
+		void redistribute(Index &node, Index &sibling, Index &parent, bool isLeftSibling);
+
+		/**
+		 * @brief Merges a node with its sibling.
+		 * @param leftNode The node on the left.
+		 * @param rightNode The node on the right.
+		 * @param parent The parent of the two nodes.
+		 * @param separatorKey The key in the parent that separates the two nodes.
+		 * @param rootId Reference to the root ID, as it may change.
+		 */
+		void mergeNodes(Index &leftNode, Index &rightNode, Index &parent, const PropertyValue &separatorKey,
+						int64_t &rootId);
 	};
 
 } // namespace graph::query::indexes
-

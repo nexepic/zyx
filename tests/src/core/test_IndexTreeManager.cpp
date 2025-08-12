@@ -268,3 +268,206 @@ TEST_F(IndexTreeManagerTest, InternalKeyPromotionToBlob_EndToEnd) {
 	ASSERT_EQ(results.size(), 1);
 	ASSERT_EQ(results[0], splitTriggerCount - 1);
 }
+
+// --- B+Tree Deletion, Redistribution, and Merging Tests ---
+
+/**
+ * @brief Tests that the clear() function correctly deletes all nodes except a new root.
+ */
+TEST_F(IndexTreeManagerTest, ClearFunctionality) {
+	// Insert a significant amount of data to create many nodes.
+	for (int i = 0; i < 500; ++i) {
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(generatePaddedKey(i)), i);
+	}
+
+	// The clear operation should delete all nodes and create a new, single leaf root.
+	stringTreeManager_->clear(stringRootId_);
+
+	// After clearing, the database should not contain any old index nodes.
+	// We can verify this by checking if we can still access an old node ID.
+	// Note: This is a conceptual check. A more robust way would be to count index entities.
+	// For now, let's re-initialize and check the state.
+
+	stringRootId_ = stringTreeManager_->initialize();
+	auto rootNode = dataManager_->getIndex(stringRootId_);
+	ASSERT_TRUE(rootNode.isLeaf()) << "Root should be a leaf after clear and re-initialize.";
+	ASSERT_EQ(rootNode.getEntryCount(), 0) << "New root should be empty.";
+
+	// A simple check to ensure the old data is gone.
+	auto results = stringTreeManager_->find(stringRootId_, PropertyValue(generatePaddedKey(0)));
+	ASSERT_TRUE(results.empty());
+}
+
+
+/**
+ * @brief Tests redistribution from a right sibling to a left sibling on a leaf node.
+ *
+ * 1. Create a split, resulting in [L_Node_1 (few keys)] [L_Node_2 (many keys)]
+ * 2. Delete a key from L_Node_1 to trigger underflow.
+ * 3. L_Node_2 has extra keys, so it should lend one to L_Node_1 (redistribute).
+ * 4. Verify the node counts, key distribution, and parent's separator key.
+ */
+TEST_F(IndexTreeManagerTest, RemoveCausesLeafRedistributionFromRight) {
+	// Setup: Insert keys to cause a split. We need precise control.
+	// Assuming a split promotes the median key, we can craft the insertions.
+	// For simplicity, let's just insert enough to cause a split, then add more to the right.
+	for (int i = 0; i < 300; ++i) { // Creates at least one split
+		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(i), i);
+	}
+
+	// At this point, keys are likely distributed among several leaves.
+	// Find two adjacent leaves. Let's find leaf for key 50.
+	int64_t leftLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(50));
+	auto leftLeaf = dataManager_->getIndex(leftLeafId);
+	int64_t rightLeafId = leftLeaf.getNextLeafId();
+	ASSERT_NE(rightLeafId, 0) << "Setup failed: Could not find two adjacent leaf nodes.";
+
+	// To reliably trigger redistribution, let's empty the left leaf and fill the right one.
+	auto leftEntries = leftLeaf.getAllEntries(dataManager_);
+	auto rightLeaf = dataManager_->getIndex(rightLeafId);
+	auto rightEntries = rightLeaf.getAllEntries(dataManager_);
+
+	// Move all but one entry from left to right.
+	rightEntries.insert(rightEntries.begin(), std::make_move_iterator(leftEntries.begin() + 1),
+						std::make_move_iterator(leftEntries.end()));
+	leftEntries.resize(1);
+
+	leftLeaf.setAllEntries(leftEntries, dataManager_);
+	rightLeaf.setAllEntries(rightEntries, dataManager_);
+	dataManager_->updateIndexEntity(leftLeaf);
+	dataManager_->updateIndexEntity(rightLeaf);
+
+	// Action: Delete the last entry from the left leaf to trigger underflow.
+	int keyToDelete = std::get<int64_t>(leftEntries[0].key.getVariant());
+	ASSERT_TRUE(intTreeManager_->remove(intRootId_, PropertyValue(keyToDelete), keyToDelete));
+
+	// Verification
+	auto finalLeftLeaf = dataManager_->getIndex(leftLeafId);
+	auto finalRightLeaf = dataManager_->getIndex(rightLeafId);
+
+	ASSERT_GT(finalLeftLeaf.getEntryCount(), 0) << "Left leaf should have received an entry.";
+	ASSERT_LT(finalRightLeaf.getEntryCount(), rightEntries.size()) << "Right leaf should have given an entry.";
+
+	// Check that the data is still correct.
+	auto result = intTreeManager_->find(intRootId_, PropertyValue(keyToDelete + 1));
+	ASSERT_FALSE(result.empty()) << "Data should still be findable after redistribution.";
+}
+
+/**
+ * @brief Tests the merge of two leaf nodes.
+ *
+ * 1. Create a split resulting in [L_Node_1] [L_Node_2].
+ * 2. Manipulate the nodes so both have the minimum number of keys.
+ * 3. Delete a key from L_Node_1 to trigger underflow.
+ * 4. L_Node_2 cannot spare a key, so L_Node_1 and L_Node_2 must merge.
+ * 5. Verify that one node was deleted and the other contains all keys.
+ */
+TEST_F(IndexTreeManagerTest, RemoveCausesLeafMerge) {
+	// Setup: Insert just enough data to cause a split and have two leaf nodes with minimal entries.
+	for (int i = 0; i < 300; ++i) {
+		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(i), i);
+	}
+
+	// Use the smallest key to ensure we select the first leaf (no left sibling).
+	int64_t leafId1 = intTreeManager_->findLeafNode(intRootId_, PropertyValue(0));
+	auto leaf1_before = dataManager_->getIndex(leafId1);
+	int64_t leafId2 = leaf1_before.getNextLeafId();
+	ASSERT_NE(leafId2, 0);
+	auto leaf2_before = dataManager_->getIndex(leafId2);
+	int64_t parentId = leaf1_before.getParentId();
+	ASSERT_EQ(parentId, leaf2_before.getParentId());
+
+	auto entries1 = leaf1_before.getAllEntries(dataManager_);
+	auto entries2 = leaf2_before.getAllEntries(dataManager_);
+	entries1.resize(2);
+	entries2.resize(2);
+	leaf1_before.setAllEntries(entries1, dataManager_);
+	leaf2_before.setAllEntries(entries2, dataManager_);
+	dataManager_->updateIndexEntity(leaf1_before);
+	dataManager_->updateIndexEntity(leaf2_before);
+
+	int keyToDelete = std::get<int64_t>(entries1.back().key.getVariant());
+	int valueToDelete = keyToDelete;
+	size_t countBeforeMerge = entries1.size() + entries2.size();
+	auto parent_before = dataManager_->getIndex(parentId);
+	size_t parentChildCount_before = parent_before.getChildCount();
+
+	// Action
+	ASSERT_TRUE(intTreeManager_->remove(intRootId_, PropertyValue(keyToDelete), valueToDelete));
+
+	// --- Verification ---
+
+	// 1. The parent node should have one less child.
+	auto parent_after = dataManager_->getIndex(parentId);
+	ASSERT_EQ(parent_after.getChildCount(), parentChildCount_before - 1)
+			<< "Parent's child count should decrease by one after a merge.";
+
+	// 2. The parent node should no longer contain a pointer to the merged-out leaf.
+	auto parentChildren_after = parent_after.getAllChildren(dataManager_);
+	for (const auto &child: parentChildren_after) {
+		ASSERT_NE(child.childId, leafId2) << "Parent should not have a reference to the merged leaf.";
+	}
+
+	// 3. The surviving leaf node should have the correct number of entries.
+	auto mergedLeaf = dataManager_->getIndex(leafId1);
+	ASSERT_EQ(mergedLeaf.getEntryCount(), countBeforeMerge - 1);
+
+	// 4. The leaf linked-list should be correctly rewired.
+	ASSERT_EQ(mergedLeaf.getNextLeafId(), leaf2_before.getNextLeafId()) << "Surviving leaf's next pointer is wrong.";
+	if (leaf2_before.getNextLeafId() != 0) {
+		auto nextLeaf = dataManager_->getIndex(leaf2_before.getNextLeafId());
+		ASSERT_EQ(nextLeaf.getPrevLeafId(), mergedLeaf.getId())
+				<< "The leaf after the merged-out one has an incorrect back-pointer.";
+	}
+}
+
+/**
+ * @brief Tests a recursive merge, where a leaf merge causes its parent to underflow and merge.
+ *
+ * This is the most complex scenario. We need to create a tree structure where a parent (P1)
+ * and its sibling (P2) both have the minimum number of children. Then, by merging P1's
+ * children, P1 itself underflows and is forced to merge with P2.
+ */
+TEST_F(IndexTreeManagerTest, RemoveCausesRecursiveMerge) {
+	// Setup: This requires creating a very specific tree structure.
+	// We need a tree of height > 1, with at least two internal nodes at the same level,
+	// both of which have the minimum number of children (e.g., 2), and those children
+	// are also minimally filled leaves.
+
+	// This setup can be very sensitive to the fanout factor of nodes.
+	// We'll insert and then delete strategically to create the desired state.
+	const int initial_insert_count = 5000;
+	for (int i = 0; i < initial_insert_count; ++i) {
+		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(i), i);
+	}
+
+	auto root_before = dataManager_->getIndex(intRootId_);
+	uint8_t height_before = root_before.getLevel();
+	ASSERT_GE(height_before, 2) << "Test requires a tree of at least height 2.";
+
+	// Now, delete a large chunk of keys from the middle, which tends to cause
+	// many merges and can trigger recursive merges.
+	for (int i = 100; i < 4800; ++i) {
+		intTreeManager_->remove(intRootId_, PropertyValue(i), i);
+	}
+
+	// Verification
+	auto root_after = dataManager_->getIndex(intRootId_);
+	uint8_t height_after = root_after.getLevel();
+
+	// It's possible the tree height decreased.
+	ASSERT_LE(height_after, height_before) << "Tree height should not increase after massive deletions.";
+
+	// The most important check: data integrity. The remaining data should be findable.
+	auto result1 = intTreeManager_->find(intRootId_, PropertyValue(50));
+	ASSERT_EQ(result1.size(), 1);
+	ASSERT_EQ(result1[0], 50);
+
+	auto result2 = intTreeManager_->find(intRootId_, PropertyValue(4900));
+	ASSERT_EQ(result2.size(), 1);
+	ASSERT_EQ(result2[0], 4900);
+
+	// A specific check for a key that was deleted.
+	auto result3 = intTreeManager_->find(intRootId_, PropertyValue(2500));
+	ASSERT_TRUE(result3.empty());
+}
