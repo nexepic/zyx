@@ -127,7 +127,7 @@ namespace graph::query::indexes {
         std::shared_ptr<storage::DataManager> dataManager_;
 
         // --- Constants ---
-        static constexpr size_t BATCH_SIZE = 10000; // Size of batches for processing entities to control memory usage.
+        static constexpr size_t BATCH_SIZE = 1000; // Size of batches for processing entities to control memory usage.
     };
 
 } // namespace graph::query::indexes

@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include <vector>
-#include <string>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace graph {
 	class Blob;
@@ -25,7 +25,13 @@ namespace graph {
 		explicit BlobChainManager(std::shared_ptr<storage::DataManager> dataManager);
 
 		// Split data into multiple blob entities
-		[[nodiscard]] std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType, const std::string &data) const;
+		[[nodiscard]] std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType,
+														const std::string &data) const;
+
+		[[nodiscard]] bool isDataSame(int64_t headBlobId, const std::string &newData) const;
+
+		[[nodiscard]] std::vector<Blob> updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
+														const std::string &data) const;
 
 		// Reassemble data from a chain of blob entities
 		[[nodiscard]] std::string readBlobChain(int64_t headBlobId) const;
@@ -45,4 +51,4 @@ namespace graph {
 		// Get all blob IDs in a chain
 		[[nodiscard]] std::vector<int64_t> getBlobChainIds(int64_t headBlobId) const;
 	};
-}
+} // namespace graph

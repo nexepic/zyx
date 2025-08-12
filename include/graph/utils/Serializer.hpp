@@ -73,35 +73,80 @@ namespace graph::utils {
 		return str;
 	}
 
-	// --- PropertyValue method implementations ---
-	inline void Serializer::writePropertyValue(std::ostream &os, const PropertyValue &value) {
+	/**
+	 * @brief Specialization for serializing PropertyValue.
+	 * Format: [PropertyType tag][value data]
+	 */
+	template<>
+	inline void Serializer::serialize<PropertyValue>(std::ostream &os, const PropertyValue &value) {
 		std::visit(
 				[&os](const auto &arg) {
-					const PropertyType type = getPropertyType(arg);
-					serialize(os, type);
 					using T = std::decay_t<decltype(arg)>;
-					if constexpr (!std::is_same_v<T, std::monostate>) {
-						serialize(os, arg);
+
+					// First, write the type tag. This is more efficient than calling getPropertyType.
+					if constexpr (std::is_same_v<T, std::monostate>) {
+						writePOD(os, PropertyType::NULL_TYPE);
+						// No value data for NULL
+					} else if constexpr (std::is_same_v<T, bool>) {
+						writePOD(os, PropertyType::BOOLEAN);
+						writePOD(os, arg); // Write the bool value
+					} else if constexpr (std::is_same_v<T, int64_t>) {
+						writePOD(os, PropertyType::INTEGER);
+						writePOD(os, arg); // Write the int64_t value
+					} else if constexpr (std::is_same_v<T, double>) {
+						writePOD(os, PropertyType::DOUBLE);
+						writePOD(os, arg); // Write the double value
+					} else if constexpr (std::is_same_v<T, std::string>) {
+						writePOD(os, PropertyType::STRING);
+						serialize(os, arg); // Recursively call the std::string specialization
 					}
 				},
 				value.getVariant());
 	}
 
-	inline PropertyValue Serializer::readPropertyValue(std::istream &is) {
-		switch (deserialize<PropertyType>(is)) {
+	/**
+	 * @brief Specialization for deserializing PropertyValue.
+	 */
+	template<>
+	inline PropertyValue Serializer::deserialize<PropertyValue>(std::istream &is) {
+		// First, read the type tag to know what to expect next.
+		const auto type = readPOD<PropertyType>(is);
+
+		switch (type) {
 			case PropertyType::NULL_TYPE:
 				return PropertyValue(std::monostate{});
 			case PropertyType::BOOLEAN:
-				return PropertyValue(deserialize<bool>(is));
+				return PropertyValue(readPOD<bool>(is));
 			case PropertyType::INTEGER:
-				return PropertyValue(deserialize<int64_t>(is));
+				return PropertyValue(readPOD<int64_t>(is));
 			case PropertyType::DOUBLE:
-				return PropertyValue(deserialize<double>(is));
+				return PropertyValue(readPOD<double>(is));
 			case PropertyType::STRING:
+				// Call the std::string specialization to read the value
 				return PropertyValue(deserialize<std::string>(is));
 			default:
-				throw std::runtime_error("Invalid PropertyType tag in stream.");
+				throw std::runtime_error("Invalid PropertyType tag in stream during deserialization.");
 		}
+	}
+
+	inline size_t getSerializedSize(const PropertyValue &value) {
+		size_t size = sizeof(PropertyType);
+
+		std::visit(
+				[&size]<typename T0>(const T0&arg) {
+					using T = std::decay_t<T0>;
+					if constexpr (std::is_same_v<T, std::monostate>) {
+					} else if constexpr (std::is_same_v<T, std::string>) {
+						size += sizeof(uint32_t);
+						size += arg.length();
+					} else if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int64_t> ||
+										 std::is_same_v<T, double>) {
+						size += sizeof(T);
+					}
+				},
+				value.getVariant());
+
+		return size;
 	}
 
 } // namespace graph::utils

@@ -12,8 +12,6 @@
 
 #include <memory>
 #include <shared_mutex>
-#include <string>
-#include <variant>
 #include <vector>
 #include "Index.hpp"
 
@@ -29,16 +27,14 @@ namespace graph::query::indexes {
 	 */
 	class IndexTreeManager {
 	public:
-		// Supported key types
-		using KeyType = std::variant<std::string, int64_t, double>;
-
 		/**
 		 * Constructor
 		 *
 		 * @param dataManager Pointer to the data manager for entity persistence
 		 * @param indexType The type identifier for this index (e.g., LABEL_INDEX_TYPE)
 		 */
-		IndexTreeManager(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType);
+		IndexTreeManager(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType,
+						 PropertyType keyDataType);
 		~IndexTreeManager() = default;
 
 		/**
@@ -66,7 +62,7 @@ namespace graph::query::indexes {
 		 * @param value The value to associate with the key
 		 * @return ID of the new root (may change due to splits)
 		 */
-		int64_t insert(int64_t rootId, const KeyType &key, int64_t value);
+		int64_t insert(int64_t rootId, const PropertyValue &key, int64_t value);
 
 		/**
 		 * Removes a key-value pair from the tree
@@ -76,7 +72,7 @@ namespace graph::query::indexes {
 		 * @param value The value to remove
 		 * @return true if the pair was found and removed
 		 */
-		bool remove(int64_t rootId, const KeyType &key, int64_t value) const;
+		bool remove(int64_t rootId, const PropertyValue &key, int64_t value);
 
 		/**
 		 * Finds all values associated with a key
@@ -85,7 +81,7 @@ namespace graph::query::indexes {
 		 * @param key The key to search for
 		 * @return Vector of values associated with the key
 		 */
-		std::vector<int64_t> find(int64_t rootId, const KeyType &key) const;
+		std::vector<int64_t> find(int64_t rootId, const PropertyValue &key);
 
 		/**
 		 * Finds all values within a range (for numeric keys)
@@ -95,9 +91,9 @@ namespace graph::query::indexes {
 		 * @param maxKey The upper bound of the range
 		 * @return Vector of values within the range
 		 */
-		std::vector<int64_t> findRange(int64_t rootId, const KeyType &minKey, const KeyType &maxKey) const;
+		std::vector<int64_t> findRange(int64_t rootId, const PropertyValue &minKey, const PropertyValue &maxKey);
 
-		int64_t findLeafNode(int64_t rootId, const KeyType &key) const;
+		int64_t findLeafNode(int64_t rootId, const PropertyValue &key) const;
 
 		std::shared_ptr<storage::DataManager> getDataManager() const { return dataManager_; }
 
@@ -105,24 +101,15 @@ namespace graph::query::indexes {
 		std::shared_ptr<storage::DataManager> dataManager_;
 		mutable std::shared_mutex mutex_;
 		uint32_t indexType_;
+		PropertyType keyDataType_;
+		std::function<bool(const PropertyValue &, const PropertyValue &)> keyComparator_;
 
 		// Helper methods for B+Tree operations
 		int64_t createNewNode(Index::NodeType type) const;
 
-		// Key comparison helper
-		static bool compareKeys(const KeyType &a, const KeyType &b);
-		static std::string keyToString(const KeyType &key);
-
-		void splitLeaf(Index &leaf, const KeyType &newKey, int64_t newValue, int64_t &rootId);
-		void insertIntoParent(Index &leftNode, const KeyType &key, int64_t rightNodeId, int64_t &rootId);
-
-		// Get all key-values from a node
-		struct KeyValueEntry {
-			KeyType key;
-			std::vector<int64_t> values;
-		};
-		std::vector<KeyValueEntry> getAllKeyValuesFromNode(const Index &node) const;
-		void setAllKeyValuesToNode(Index &node, const std::vector<KeyValueEntry> &entries) const;
+		void splitLeaf(Index &leaf, const PropertyValue &newKey, int64_t newValue, int64_t &rootId);
+		void insertIntoParent(Index &leftNode, const PropertyValue &key, int64_t rightNodeId, int64_t &rootId);
 	};
 
 } // namespace graph::query::indexes
+

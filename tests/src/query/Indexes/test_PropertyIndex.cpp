@@ -67,6 +67,15 @@ protected:
 		return std::ranges::find(vec, val) != vec.end();
 	}
 
+	static std::string generatePaddedUuid(int i, int totalItems) {
+		std::ostringstream ss;
+		// Calculate the required width for padding based on the total number of items.
+		// e.g., if totalItems is 2500, width is 4.
+		const int width = static_cast<int>(std::to_string(totalItems).length());
+		ss << "user-" << std::setw(width) << std::setfill('0') << i;
+		return ss.str();
+	}
+
 	static inline std::filesystem::path testFilePath_;
 	static inline std::unique_ptr<graph::Database> database_;
 	static inline std::shared_ptr<graph::storage::DataManager> dataManager_;
@@ -120,7 +129,7 @@ TEST_F(PropertyIndexTest, RemoveProperty) {
 
 	// Assert
 	EXPECT_TRUE(propertyIndex_->findExactMatch("status", "pending").empty())
-		<< "The property should not be findable after being removed.";
+			<< "The property should not be findable after being removed.";
 }
 
 TEST_F(PropertyIndexTest, UpdatePropertySimulation) {
@@ -253,4 +262,58 @@ TEST_F(PropertyIndexTest, SaveAndLoadState) {
 	EXPECT_TRUE(vectorContains(reloadedIndex->findExactMatch("name", std::string("persisted_user")), 101));
 	EXPECT_TRUE(vectorContains(reloadedIndex->findExactMatch("value", 999), 102));
 	EXPECT_TRUE(vectorContains(reloadedIndex->findExactMatch("active", true), 103));
+}
+
+TEST_F(PropertyIndexTest, HandlesLargeNumberOfPropertiesAndReloads) {
+	// Arrange: Insert a large number of properties across different keys and types.
+	// This will force the underlying B+Trees to split multiple times.
+	constexpr int numItems = 2500;
+	const std::string stateKeyPrefix = "test.node.properties";
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+
+	for (int i = 1; i <= numItems; ++i) {
+		propertyIndex_->addProperty(i, "id", i);
+		// Use a helper to generate zero-padded strings to ensure correct lexicographical ordering.
+		propertyIndex_->addProperty(i, "uuid", generatePaddedUuid(i, numItems));
+		propertyIndex_->addProperty(numItems + i, "active", (i % 2 == 0));
+	}
+
+	// Act I: Flush the state to disk.
+	propertyIndex_->flush();
+
+	// Drop the current instance to ensure the next one reads from disk.
+	propertyIndex_.reset();
+
+	// Act II: Create a new instance, which should load the state from the DataManager.
+	auto reloadedIndex =
+			std::make_unique<graph::query::indexes::PropertyIndex>(dataManager_, indexType, stateKeyPrefix);
+
+	// Assert: Verify that the reloaded index contains the correct data.
+	ASSERT_FALSE(reloadedIndex->isEmpty());
+	ASSERT_EQ(reloadedIndex->getIndexedKeyType("id"), graph::PropertyType::INTEGER);
+	ASSERT_EQ(reloadedIndex->getIndexedKeyType("uuid"), graph::PropertyType::STRING);
+	ASSERT_EQ(reloadedIndex->getIndexedKeyType("active"), graph::PropertyType::BOOLEAN);
+
+	// Verify a subset of the data to ensure correctness.
+	for (int i = 1; i <= numItems; i += 250) { // Check a sample of items.
+		// Check integer property
+		auto foundById = reloadedIndex->findExactMatch("id", i);
+		ASSERT_EQ(foundById.size(), 1) << "Failed to find integer property for ID: " << i;
+		EXPECT_EQ(foundById[0], i);
+
+		// Check string property using the same padded format.
+		auto foundByUuid = reloadedIndex->findExactMatch("uuid", generatePaddedUuid(i, numItems));
+		ASSERT_EQ(foundByUuid.size(), 1) << "Failed to find string property for ID: " << i;
+		EXPECT_EQ(foundByUuid[0], i);
+
+		// Check boolean property
+		auto foundByActive = reloadedIndex->findExactMatch("active", (i % 2 == 0));
+		EXPECT_TRUE(vectorContains(foundByActive, numItems + i))
+				<< "Failed to find boolean property for ID: " << (numItems + i);
+	}
+
+	// Check the last item to be sure.
+	auto lastItem = reloadedIndex->findExactMatch("id", static_cast<int64_t>(numItems));
+	ASSERT_EQ(lastItem.size(), 1);
+	EXPECT_EQ(lastItem[0], numItems);
 }

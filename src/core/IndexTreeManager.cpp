@@ -17,8 +17,33 @@
 
 namespace graph::query::indexes {
 
-	IndexTreeManager::IndexTreeManager(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType) :
-		dataManager_(std::move(dataManager)), indexType_(indexType) {}
+	std::function<bool(const PropertyValue &, const PropertyValue &)> makeComparator(PropertyType type) {
+		switch (type) {
+			case PropertyType::INTEGER:
+				return [](const auto &a, const auto &b) {
+					return std::get<int64_t>(a.getVariant()) < std::get<int64_t>(b.getVariant());
+				};
+			case PropertyType::DOUBLE:
+				return [](const auto &a, const auto &b) {
+					return std::get<double>(a.getVariant()) < std::get<double>(b.getVariant());
+				};
+			case PropertyType::STRING:
+				return [](const auto &a, const auto &b) {
+					return std::get<std::string>(a.getVariant()) < std::get<std::string>(b.getVariant());
+				};
+			case PropertyType::BOOLEAN:
+				return [](const auto &a, const auto &b) {
+					return std::get<bool>(a.getVariant()) < std::get<bool>(b.getVariant());
+				};
+			default:
+				throw std::logic_error("Unsupported key type for comparison.");
+		}
+	}
+
+	IndexTreeManager::IndexTreeManager(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType,
+									   PropertyType keyDataType) :
+		dataManager_(std::move(dataManager)), indexType_(indexType), keyDataType_(keyDataType),
+		keyComparator_(makeComparator(keyDataType)) {}
 
 	int64_t IndexTreeManager::initialize() const {
 		std::unique_lock lock(mutex_);
@@ -28,46 +53,40 @@ namespace graph::query::indexes {
 	}
 
 	void IndexTreeManager::clear(const int64_t rootId) const {
-		std::unique_lock lock(mutex_);
-
-		if (rootId == 0) {
+		if (rootId == 0)
 			return;
-		}
 
-		// Use a queue for a Breadth-First-Search (BFS) traversal to delete all nodes.
 		std::vector<int64_t> toDelete;
 		toDelete.push_back(rootId);
 
+		// Use an index-based loop because the vector grows during iteration.
 		for (size_t i = 0; i < toDelete.size(); ++i) {
-			int64_t currentId = toDelete[i];
-			auto entity = dataManager_->getIndex(currentId);
-
+			auto entity = dataManager_->getIndex(toDelete[i]);
 			if (entity.getId() == 0)
-				continue; // Node already deleted or invalid
+				continue;
 
-			// If it's an internal node, add all its children to the deletion queue
-			// AND clean up any blobs used for its keys.
-			if (entity.getNodeType() == Index::NodeType::INTERNAL) {
-				auto children = entity.getAllChildren();
-
-				for (const auto &entry: children) {
-					// Add the child node's ID to the queue for future deletion.
-					toDelete.push_back(entry.childId);
-
-					// This prevents leaking key data.
+			// For any node, we must clean up blobs it might own.
+			if (entity.isLeaf()) {
+				auto allEntries = entity.getAllEntries(dataManager_);
+				for (const auto &entry: allEntries) {
+					// Clean up blobs for both keys and values, not just values.
 					if (entry.keyBlobId != 0) {
 						dataManager_->getBlobManager()->deleteBlobChain(entry.keyBlobId);
 					}
+					if (entry.valuesBlobId != 0) {
+						dataManager_->getBlobManager()->deleteBlobChain(entry.valuesBlobId);
+					}
+				}
+			} else { // Internal node
+				auto allChildren = entity.getAllChildren(dataManager_);
+				for (const auto &child: allChildren) {
+					if (child.keyBlobId != 0) {
+						dataManager_->getBlobManager()->deleteBlobChain(child.keyBlobId);
+					}
+					toDelete.push_back(child.childId);
 				}
 			}
-			// If it's a leaf node and uses blob storage for its *content*,
-			// we must delete that blob chain.
-			else if (entity.isLeaf() && entity.hasBlobStorage()) {
-				dataManager_->getBlobManager()->deleteBlobChain(entity.getBlobId());
-			}
-
-			// Finally, delete the index node entity itself.
-			dataManager_->deleteIndex(entity);
+			dataManager_->deleteIndex(entity); // Finally, delete the index node itself
 		}
 	}
 
@@ -77,131 +96,52 @@ namespace graph::query::indexes {
 		return entity.getId();
 	}
 
-	bool IndexTreeManager::compareKeys(const KeyType &a, const KeyType &b) {
-		// Compare keys of potentially different types
-		if (a.index() != b.index()) {
-			return a.index() < b.index(); // Different types - sort by type index
-		}
-
-		// Same types, compare values
-		if (std::holds_alternative<std::string>(a)) {
-			return std::get<std::string>(a) < std::get<std::string>(b);
-		} else if (std::holds_alternative<int64_t>(a)) {
-			return std::get<int64_t>(a) < std::get<int64_t>(b);
-		} else if (std::holds_alternative<double>(a)) {
-			return std::get<double>(a) < std::get<double>(b);
-		}
-
-		return false; // Should never reach here
-	}
-
-	std::string IndexTreeManager::keyToString(const KeyType &key) {
-		if (std::holds_alternative<std::string>(key))
-			return std::get<std::string>(key);
-		if (std::holds_alternative<int64_t>(key))
-			return std::to_string(std::get<int64_t>(key));
-		if (std::holds_alternative<double>(key))
-			return std::to_string(std::get<double>(key));
-		return "";
-	}
-
-	std::vector<IndexTreeManager::KeyValueEntry> IndexTreeManager::getAllKeyValuesFromNode(const Index &node) const {
-		std::vector<KeyValueEntry> result;
-
-		if (!node.isLeaf()) {
-			return result; // Only applies to leaf nodes
-		}
-
-		// Get all values based on key type
-		// For string keys
-		auto stringKVs = node.getAllKeyValues(dataManager_); // This should return the public version
-		for (const auto &kv: stringKVs) {
-			KeyValueEntry entry;
-			entry.key = kv.key;
-			entry.values = kv.values;
-			result.push_back(entry);
-		}
-
-		// Similar methods for int and double keys would be needed
-		// (For the current implementation focused on strings)
-
-		return result;
-	}
-
-	void IndexTreeManager::setAllKeyValuesToNode(Index &node, const std::vector<KeyValueEntry> &entries) const {
-		if (!node.isLeaf()) {
-			return; // Only applies to leaf nodes
-		}
-
-		// Prepare entries for string keys
-		std::vector<Index::KeyValuePair> stringEntries;
-
-		for (const auto &entry: entries) {
-			if (std::holds_alternative<std::string>(entry.key)) {
-				Index::KeyValuePair kv;
-				kv.key = std::get<std::string>(entry.key);
-				kv.values = entry.values;
-				stringEntries.push_back(kv);
-			}
-		}
-
-		// Set values for string keys
-		node.setAllKeyValues(stringEntries, dataManager_);
-	}
-
-	int64_t IndexTreeManager::findLeafNode(int64_t rootId, const KeyType &key) const {
+	int64_t IndexTreeManager::findLeafNode(int64_t rootId, const PropertyValue &key) const {
 		if (rootId == 0)
 			return 0;
 		int64_t currentId = rootId;
-		auto current = dataManager_->getIndex(currentId);
-		while (!current.isLeaf()) {
-			int64_t childId = current.findChild(keyToString(key), dataManager_);
-			if (childId == 0) {
-				// Safeguard
-				auto children = current.getAllChildren();
-				return children.empty() ? 0 : children.front().childId;
-			}
+		while (true) {
+			auto current = dataManager_->getIndex(currentId);
+			if (current.isLeaf())
+				return currentId;
+			// Pass dataManager to findChild
+			int64_t childId = current.findChild(key, dataManager_, keyComparator_);
+			if (childId == 0)
+				return 0; // Should not happen in a healthy tree
 			currentId = childId;
-			current = dataManager_->getIndex(currentId);
 		}
-		return currentId;
 	}
 
-	void IndexTreeManager::splitLeaf(Index &leaf, const KeyType &newKey, int64_t newValue, int64_t &rootId) {
-		// 1. Get all existing KVs from the leaf and add the new one.
-		auto allKVs = leaf.getAllKeyValues(dataManager_);
+	void IndexTreeManager::splitLeaf(Index &leaf, const PropertyValue &newKey, int64_t newValue, int64_t &rootId) {
+		// 1. Create a temporary, sorted list of all entries including the new one.
+		auto allEntries = leaf.getAllEntries(dataManager_);
+		auto it = std::lower_bound(
+				allEntries.begin(), allEntries.end(), newKey,
+				[&](const Index::Entry &a, const PropertyValue &b) { return keyComparator_(a.key, b); });
+		// IMPORTANT: The new entry to be inserted must also be default-initialized
+		allEntries.insert(it, {newKey, {newValue}, 0, 0});
 
-		// Find the correct place and insert the new key-value pair.
-		std::string newKeyStr = keyToString(newKey);
-		auto it = std::lower_bound(allKVs.begin(), allKVs.end(), newKeyStr,
-								   [](const Index::KeyValuePair &a, const std::string &b) { return a.key < b; });
-
-		if (it != allKVs.end() && it->key == newKeyStr) {
-			// Key exists, add new value if not present.
-			auto &values = it->values;
-			if (std::find(values.begin(), values.end(), newValue) == values.end()) {
-				values.push_back(newValue);
-			}
-		} else {
-			// Key does not exist, insert new entry.
-			allKVs.insert(it, {newKeyStr, {newValue}});
-		}
-
-		// 2. Create a new sibling leaf.
+		// 2. Create the new sibling leaf node.
 		int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
 		auto newLeaf = dataManager_->getIndex(newLeafId);
+		newLeaf.setLevel(leaf.getLevel());
 
-		// 3. Find the midpoint. The key at the midpoint will be promoted to the parent.
-		size_t midPointIdx = allKVs.size() / 2;
-		// The promoted key is the *first key* of the new (right) sibling node.
-		KeyType promotedKey = allKVs[midPointIdx].key;
+		// 3. Find the split point.
+		// The key at the midpoint is COPIED UP to the parent.
+		// The entry itself becomes the FIRST entry of the new right leaf.
+		size_t midPointIdx = allEntries.size() / 2;
+		PropertyValue promotedKey = allEntries[midPointIdx].key; // This key is COPIED up.
 
-		// 4. Distribute KVs between the old leaf and the new sibling.
-		std::vector<Index::KeyValuePair> firstHalf(allKVs.begin(), allKVs.begin() + midPointIdx);
-		leaf.setAllKeyValues(firstHalf, dataManager_);
+		// 4. Distribute entries between the old and new leaves.
+		// The original leaf gets all entries BEFORE the midpoint.
+		std::vector<Index::Entry> leftEntries(std::make_move_iterator(allEntries.begin()),
+											  std::make_move_iterator(allEntries.begin() + midPointIdx));
+		leaf.setAllEntries(leftEntries, dataManager_);
 
-		std::vector<Index::KeyValuePair> secondHalf(allKVs.begin() + midPointIdx, allKVs.end());
-		newLeaf.setAllKeyValues(secondHalf, dataManager_);
+		// The new leaf gets all entries FROM the midpoint to the end.
+		std::vector<Index::Entry> rightEntries(std::make_move_iterator(allEntries.begin() + midPointIdx),
+											   std::make_move_iterator(allEntries.end()));
+		newLeaf.setAllEntries(rightEntries, dataManager_);
 
 		// 5. Update the doubly linked list of leaves.
 		newLeaf.setNextLeafId(leaf.getNextLeafId());
@@ -212,114 +152,93 @@ namespace graph::query::indexes {
 			dataManager_->updateIndexEntity(nextLeaf);
 		}
 		leaf.setNextLeafId(newLeafId);
-		newLeaf.setLevel(leaf.getLevel());
 
 		// 6. Save changes and insert the promoted key into the parent.
 		dataManager_->updateIndexEntity(leaf);
 		dataManager_->updateIndexEntity(newLeaf);
-
 		insertIntoParent(leaf, promotedKey, newLeafId, rootId);
 	}
 
-	void IndexTreeManager::insertIntoParent(Index &leftNode, const KeyType &key, int64_t rightNodeId, int64_t &rootId) {
-		std::string separatorKeyStr = keyToString(key);
-		Index::ChildEntry newChildEntry;
-		newChildEntry.childId = rightNodeId;
-
-		if (separatorKeyStr.length() > Index::INTERNAL_KEY_BLOB_THRESHOLD) {
-			auto blobChain = dataManager_->getBlobManager()->createBlobChain(leftNode.getParentId(), Index::typeId,
-																			 separatorKeyStr);
-			if (blobChain.empty()) {
-				throw std::runtime_error("Failed to create blob for oversized index key.");
-			}
-			newChildEntry.keyBlobId = blobChain.front().getId();
-		} else {
-			newChildEntry.key = separatorKeyStr;
-		}
-
-		// Case 1: The left node was the root. Create a new root.
+	void IndexTreeManager::insertIntoParent(Index &leftNode, const PropertyValue &key, int64_t rightNodeId,
+											int64_t &rootId) {
+		// Case 1: The left node was the root. A new root must be created.
 		if (leftNode.getParentId() == 0) {
 			int64_t newRootId = createNewNode(Index::NodeType::INTERNAL);
 			auto newRoot = dataManager_->getIndex(newRootId);
-			rootId = newRootId; // Update the root ID reference for the caller
-
-			// Set the new root's level. It's one level higher than its children.
+			rootId = newRootId;
 			newRoot.setLevel(leftNode.getLevel() + 1);
 
-			// The new root will have two children: the original left node and the new right node.
-			// The first child has an implicit key (-infinity).
-			Index::ChildEntry firstChildEntry;
-			firstChildEntry.childId = leftNode.getId();
+			auto leftNodeFromDb = dataManager_->getIndex(leftNode.getId());
+			auto rightNodeFromDb = dataManager_->getIndex(rightNodeId);
 
-			std::vector<Index::ChildEntry> children;
-			children.push_back(firstChildEntry);
-			children.push_back(newChildEntry); // The new child entry contains the key and rightNodeId
-			newRoot.setAllChildren(children);
+			leftNodeFromDb.setParentId(newRootId);
+			rightNodeFromDb.setParentId(newRootId);
 
-			// Update parent pointers for both children to point to the new root.
-			leftNode.setParentId(newRootId);
+			// The new child entry to be inserted into the new root.
+			Index::ChildEntry newChildEntry{key, rightNodeId, 0};
 
-			auto rightNode = dataManager_->getIndex(rightNodeId);
-			rightNode.setParentId(newRootId);
+			// The first child has an implicit, "negative infinity" key.
+			Index::ChildEntry firstChild{PropertyValue(std::monostate{}), leftNode.getId(), 0};
 
-			// Persist all changes to the database.
-			dataManager_->updateIndexEntity(leftNode);
-			dataManager_->updateIndexEntity(rightNode);
+			std::vector<Index::ChildEntry> children = {firstChild, newChildEntry};
+			// Let replaceAllChildren handle blob creation for `newChildEntry.key` if needed.
+			newRoot.setAllChildren(children, dataManager_);
+
+			dataManager_->updateIndexEntity(leftNodeFromDb);
+			dataManager_->updateIndexEntity(rightNodeFromDb);
 			dataManager_->updateIndexEntity(newRoot);
 			return;
 		}
 
-		// Case 2: Parent exists. Try to add the new child.
+		// Case 2: Parent exists.
 		auto parent = dataManager_->getIndex(leftNode.getParentId());
+		Index::ChildEntry newChildEntry{key, rightNodeId, 0};
 
-		// It no longer passes the unnecessary dataManager_ argument.
-		if (parent.tryAddChild(newChildEntry)) {
-			parent.addChild(newChildEntry, dataManager_);
-			// Update the parent and also the right node, whose parent ID has now been set.
+		// If parent is not full, just add the new child.
+		if (!parent.wouldInternalOverflowOnAddChild(newChildEntry, dataManager_)) {
+			parent.addChild(newChildEntry, dataManager_, keyComparator_);
 			auto rightNode = dataManager_->getIndex(rightNodeId);
 			rightNode.setParentId(parent.getId());
 			dataManager_->updateIndexEntity(parent);
 			dataManager_->updateIndexEntity(rightNode);
-		}
-		// Case 3: Parent is full and must be split.
-		else {
-			auto allChildren = parent.getAllChildren();
-			allChildren.push_back(newChildEntry);
+		} else {
+			// Case 3: Parent is full and must also be split ("Push-Up").
+			auto allChildren = parent.getAllChildren(dataManager_);
+			auto it = std::lower_bound(
+					allChildren.begin() + 1, allChildren.end(), key,
+					[&](const Index::ChildEntry &a, const PropertyValue &b) { return keyComparator_(a.key, b); });
+			allChildren.insert(it, newChildEntry);
 
-			auto blobAwareComparator = [&](const Index::ChildEntry &a, const Index::ChildEntry &b) {
-				if (b.key.empty() && b.keyBlobId == 0)
-					return false;
-				if (a.key.empty() && a.keyBlobId == 0)
-					return true;
-				std::string keyA =
-						(a.keyBlobId != 0) ? dataManager_->getBlobManager()->readBlobChain(a.keyBlobId) : a.key;
-				std::string keyB =
-						(b.keyBlobId != 0) ? dataManager_->getBlobManager()->readBlobChain(b.keyBlobId) : b.key;
-				return keyA < keyB;
-			};
-			std::sort(allChildren.begin(), allChildren.end(), blobAwareComparator);
-
+			// The median entry is PUSHED UP. Its key goes to the grandparent,
+			// and it is REMOVED from this level.
 			size_t midPointIdx = allChildren.size() / 2;
-			Index::ChildEntry promotedEntry = allChildren[midPointIdx];
+			Index::ChildEntry promotedEntry = std::move(allChildren[midPointIdx]);
 
+			// Create the new sibling internal node.
 			int64_t newInternalId = createNewNode(Index::NodeType::INTERNAL);
 			auto newInternalNode = dataManager_->getIndex(newInternalId);
 			newInternalNode.setParentId(parent.getParentId());
 			newInternalNode.setLevel(parent.getLevel());
 
-			std::vector leftChildren(allChildren.begin(), allChildren.begin() + midPointIdx);
-			parent.setAllChildren(leftChildren);
+			// The new sibling gets the children to the RIGHT of the promoted entry.
+			// The first child of the new sibling is the one pointed to by the promoted entry.
+			std::vector<Index::ChildEntry> rightChildren;
+			rightChildren.reserve(allChildren.size() - midPointIdx);
+			// The first child is special: it's the one from the promoted entry, but with an implicit key.
+			Index::ChildEntry firstRightChild{PropertyValue(std::monostate{}), promotedEntry.childId, 0};
+			rightChildren.push_back(firstRightChild);
+			// The rest of the children are moved from the original list.
+			std::move(allChildren.begin() + midPointIdx + 1, allChildren.end(), std::back_inserter(rightChildren));
 
-			std::vector rightChildren(allChildren.begin() + midPointIdx, allChildren.end());
-			if (!rightChildren.empty()) {
-				// The first entry in the new right node has its key promoted, so it becomes an implicit key.
-				rightChildren[0].key = "";
-				rightChildren[0].keyBlobId = 0;
-			}
-			newInternalNode.setAllChildren(rightChildren);
+			// This will correctly handle any blobs for keys in rightChildren.
+			newInternalNode.setAllChildren(rightChildren, dataManager_);
 
-			// Re-parent the children that were moved to the new internal node.
-			for (const auto &childEntry: rightChildren) {
+			// The old node (parent) now contains the children BEFORE the midpoint.
+			allChildren.erase(allChildren.begin() + midPointIdx, allChildren.end());
+			parent.setAllChildren(allChildren, dataManager_);
+
+			// Re-parent the children that were moved.
+			for (const auto &childEntry: newInternalNode.getAllChildren(dataManager_)) {
 				auto child = dataManager_->getIndex(childEntry.childId);
 				child.setParentId(newInternalId);
 				dataManager_->updateIndexEntity(child);
@@ -328,87 +247,56 @@ namespace graph::query::indexes {
 			dataManager_->updateIndexEntity(parent);
 			dataManager_->updateIndexEntity(newInternalNode);
 
-			KeyType promotedKey = (promotedEntry.keyBlobId != 0)
-										  ? dataManager_->getBlobManager()->readBlobChain(promotedEntry.keyBlobId)
-										  : promotedEntry.key;
-
-			// Recursively insert the promoted key into the grandparent.
-			insertIntoParent(parent, promotedKey, newInternalId, rootId);
+			// Recursively call insert on the grandparent, using the key from the promoted entry.
+			insertIntoParent(parent, promotedEntry.key, newInternalId, rootId);
 		}
 	}
 
-	int64_t IndexTreeManager::insert(int64_t rootId, const KeyType &key, const int64_t value) {
+	int64_t IndexTreeManager::insert(int64_t rootId, const PropertyValue &key, const int64_t value) {
 		std::unique_lock lock(mutex_);
-
-		std::string keyStr = keyToString(key);
-		if (keyStr.length() > Index::ABSOLUTE_MAX_KEY_LENGTH) {
-			throw std::runtime_error("Key size exceeds absolute maximum limit.");
-		}
 
 		if (rootId == 0) {
 			rootId = initialize();
 		}
 
 		int64_t leafId = findLeafNode(rootId, key);
-		if (leafId == 0) { // Should only happen on a truly empty or corrupt tree
+		if (leafId == 0) {
 			rootId = initialize();
 			leafId = rootId;
 		}
 
 		auto leaf = dataManager_->getIndex(leafId);
 
-		auto existingValues = leaf.findStringValues(keyStr, dataManager_);
-
-		if (!existingValues.empty()) {
-			// Key exists. Just add the new value. This may trigger the leaf's
-			// internal switch to blob storage, but it should NOT cause a split.
-			leaf.insertStringKey(keyStr, value, dataManager_);
-			dataManager_->updateIndexEntity(leaf);
+		if (leaf.wouldLeafOverflowOnInsert(key, value, dataManager_, keyComparator_)) {
+			splitLeaf(leaf, key, value, rootId);
 		} else {
-			// This is a NEW key. Now we check if adding it will overfill the node
-			// and require a split.
-			if (leaf.isFullAfterInsert(keyStr, value, dataManager_)) {
-				// The leaf is full of keys, split it.
-				splitLeaf(leaf, key, value, rootId);
-			} else {
-				// The leaf has room for the new key, insert it directly.
-				leaf.insertStringKey(keyStr, value, dataManager_);
-				dataManager_->updateIndexEntity(leaf);
-			}
+			leaf.insertEntry(key, value, dataManager_, keyComparator_);
+			dataManager_->updateIndexEntity(leaf);
 		}
 
 		return rootId;
 	}
 
-	bool IndexTreeManager::remove(int64_t rootId, const KeyType &key, int64_t value) const {
+	bool IndexTreeManager::remove(int64_t rootId, const PropertyValue &key, int64_t value) {
 		std::unique_lock lock(mutex_);
-
-		if (rootId == 0) {
+		if (rootId == 0)
 			return false;
-		}
-
 		int64_t leafId = findLeafNode(rootId, key);
-		if (leafId == 0) {
-			return false; // Key not found, can't find the leaf.
-		}
+		if (leafId == 0)
+			return false;
 
 		auto leaf = dataManager_->getIndex(leafId);
-
-		// The removeStringKey method handles the entire Load->Modify->Save cycle,
-		// including updating blob storage if necessary.
-		bool removed = leaf.removeStringKey(keyToString(key), value, dataManager_);
+		bool removed = leaf.removeEntry(key, value, dataManager_, keyComparator_);
 
 		if (removed) {
 			dataManager_->updateIndexEntity(leaf);
-			// NOTE: A full B+Tree implementation would check if `leaf` is now under-full
-			// and trigger a merge or redistribution with sibling nodes. This can
-			// recursively affect parent nodes and even change the root.
+			// TODO: A full implementation would check if the leaf is now under-full
+			// and trigger a merge or redistribution with its siblings.
 		}
-
 		return removed;
 	}
 
-	std::vector<int64_t> IndexTreeManager::find(const int64_t rootId, const KeyType &key) const {
+	std::vector<int64_t> IndexTreeManager::find(int64_t rootId, const PropertyValue &key) {
 		std::shared_lock lock(mutex_);
 		if (rootId == 0)
 			return {};
@@ -416,58 +304,38 @@ namespace graph::query::indexes {
 		if (leafId == 0)
 			return {};
 		auto leaf = dataManager_->getIndex(leafId);
-		return leaf.findStringValues(keyToString(key), dataManager_);
+		return leaf.findValues(key, dataManager_, keyComparator_);
 	}
 
-	std::vector<int64_t> IndexTreeManager::findRange(int64_t rootId, const KeyType &minKey,
-													 const KeyType &maxKey) const {
+	std::vector<int64_t> IndexTreeManager::findRange(int64_t rootId, const PropertyValue &minKey,
+													 const PropertyValue &maxKey) {
 		std::shared_lock lock(mutex_);
-
-		if (rootId == 0) {
+		if (rootId == 0)
 			return {};
-		}
 
-		// Validate key types match
-		if (minKey.index() != maxKey.index()) {
-			return {}; // Different types not supported for range queries
-		}
-
-		// Start at the minimum key's leaf
 		int64_t leafId = findLeafNode(rootId, minKey);
-		if (leafId == 0) {
+		if (leafId == 0)
 			return {};
-		}
 
 		std::vector<int64_t> results;
+		bool continueScan = true;
 
-		// Traverse leaves collecting matching values
-		while (leafId != 0) {
+		while (leafId != 0 && continueScan) {
 			auto leaf = dataManager_->getIndex(leafId);
-			auto allEntries = getAllKeyValuesFromNode(leaf);
+			auto allEntries = leaf.getAllEntries(dataManager_);
 
 			for (const auto &entry: allEntries) {
-				// Skip if less than minimum key
-				if (compareKeys(entry.key, minKey)) {
-					continue;
-				}
-
-				// Stop if greater than maximum key
-				if (compareKeys(maxKey, entry.key)) {
+				if (keyComparator_(entry.key, minKey))
+					continue; // Skip if less than minKey
+				if (keyComparator_(maxKey, entry.key)) { // Stop if greater than maxKey
+					continueScan = false;
 					break;
 				}
-
-				// Add matching values
 				results.insert(results.end(), entry.values.begin(), entry.values.end());
 			}
-
-			// Move to next leaf if we haven't passed maxKey
-			if (allEntries.empty() || !compareKeys(maxKey, allEntries.back().key)) {
+			if (continueScan)
 				leafId = leaf.getNextLeafId();
-			} else {
-				break;
-			}
 		}
-
 		return results;
 	}
 

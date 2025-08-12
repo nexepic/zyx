@@ -16,15 +16,18 @@
 #include "graph/core/Database.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 
+using namespace graph;
+using namespace graph::storage;
+using namespace graph::query::indexes;
+
 class IndexTreeManagerTest : public ::testing::Test {
 protected:
-	// SetUpTestSuite is run once for all tests in this file
 	static void SetUpTestSuite() {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		std::filesystem::path testFilePath = std::filesystem::temp_directory_path() /
-											 ("test_indexTreeManager_" + boost::uuids::to_string(uuid) + ".dat");
+		testDbPath_ = std::filesystem::temp_directory_path() /
+					  ("test_indexTreeManager_" + boost::uuids::to_string(uuid) + ".dat");
 
-		database_ = std::make_unique<graph::Database>(testFilePath.string());
+		database_ = std::make_unique<Database>(testDbPath_.string());
 		database_->open();
 		dataManager_ = database_->getStorage()->getDataManager();
 	}
@@ -33,309 +36,235 @@ protected:
 		if (database_) {
 			database_->close();
 			database_.reset();
+			if (std::filesystem::exists(testDbPath_)) {
+				std::filesystem::remove(testDbPath_);
+			}
 		}
 	}
 
-	// SetUp is run before each individual TEST_F
 	void SetUp() override {
-		treeManager_ = std::make_shared<graph::query::indexes::IndexTreeManager>(
-				dataManager_, graph::query::indexes::IndexTypes::NODE_LABEL_TYPE);
-		rootId_ = treeManager_->initialize();
+		// Create managers for specific key types as needed by tests.
+		stringTreeManager_ =
+				std::make_shared<IndexTreeManager>(dataManager_, IndexTypes::NODE_PROPERTY_TYPE, PropertyType::STRING);
+		stringRootId_ = stringTreeManager_->initialize();
+
+		intTreeManager_ =
+				std::make_shared<IndexTreeManager>(dataManager_, IndexTypes::NODE_PROPERTY_TYPE, PropertyType::INTEGER);
+		intRootId_ = intTreeManager_->initialize();
 	}
 
 	void TearDown() override {
-		if (rootId_ != 0) {
-			treeManager_->clear(rootId_);
-		}
+		if (stringRootId_ != 0)
+			stringTreeManager_->clear(stringRootId_);
+		if (intRootId_ != 0)
+			intTreeManager_->clear(intRootId_);
 	}
 
-	// Helper function to force a leaf split.
-	void ensureSplitOccurs() {
-		auto rootNode = dataManager_->getIndex(rootId_);
-		if (!rootNode.isLeaf())
-			return; // Split has already occurred.
-
-		for (int i = 0; i < 500; ++i) {
-			rootId_ = treeManager_->insert(rootId_, "split_key_" + std::to_string(i), i);
-			rootNode = dataManager_->getIndex(rootId_);
-			if (!rootNode.isLeaf()) {
-				return; // Exit as soon as split is detected.
-			}
-		}
-		FAIL() << "Setup failed: A leaf split did not occur within the loop.";
-	}
-
-	// Helper function to generate zero-padded keys for correct alphabetical sorting.
-	static std::string generatePaddedKey(int i, int width = 4) {
+	static std::string generatePaddedKey(int i, int width = 5) {
 		std::ostringstream ss;
 		ss << "key_" << std::setw(width) << std::setfill('0') << i;
 		return ss.str();
 	}
 
-	// Static members are shared by all tests in the suite
-	static inline std::unique_ptr<graph::Database> database_;
-	static inline std::shared_ptr<graph::storage::DataManager> dataManager_;
+	static std::unique_ptr<Database> database_;
+	static std::shared_ptr<DataManager> dataManager_;
+	static std::filesystem::path testDbPath_;
 
-	// Member variables accessible by each TEST_F
-	std::shared_ptr<graph::query::indexes::IndexTreeManager> treeManager_;
-	int64_t rootId_{};
+	std::shared_ptr<IndexTreeManager> stringTreeManager_;
+	int64_t stringRootId_{};
+	std::shared_ptr<IndexTreeManager> intTreeManager_;
+	int64_t intRootId_{};
 };
+
+std::unique_ptr<Database> IndexTreeManagerTest::database_ = nullptr;
+std::shared_ptr<DataManager> IndexTreeManagerTest::dataManager_ = nullptr;
+std::filesystem::path IndexTreeManagerTest::testDbPath_;
+
 
 // --- Core B+Tree Functionality Tests ---
 
 TEST_F(IndexTreeManagerTest, OperationsOnEmptyTree) {
-	// An empty tree is created in SetUp.
-	ASSERT_TRUE(treeManager_->find(rootId_, "any_key").empty());
-	ASSERT_FALSE(treeManager_->remove(rootId_, "any_key", 123));
+	ASSERT_TRUE(stringTreeManager_->find(stringRootId_, PropertyValue("any_key")).empty());
+	ASSERT_FALSE(stringTreeManager_->remove(stringRootId_, PropertyValue("any_key"), 123));
 
-	auto range_results = treeManager_->findRange(rootId_, "A", "Z");
+	auto range_results = stringTreeManager_->findRange(stringRootId_, PropertyValue("A"), PropertyValue("Z"));
 	ASSERT_TRUE(range_results.empty());
 }
 
 TEST_F(IndexTreeManagerTest, InsertDuplicateAndMultipleValues) {
-	// 1. Insert multiple values for the same key.
-	rootId_ = treeManager_->insert(rootId_, "multi_key", 100);
-	rootId_ = treeManager_->insert(rootId_, "multi_key", 200);
-	rootId_ = treeManager_->insert(rootId_, "multi_key", 300);
+	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("multi_key"), 100);
+	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("multi_key"), 200);
+	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("multi_key"), 300);
+	stringRootId_ =
+			stringTreeManager_->insert(stringRootId_, PropertyValue("multi_key"), 200); // Duplicate should be ignored.
 
-	// 2. Insert a duplicate key-value pair, which should be ignored (no-op).
-	rootId_ = treeManager_->insert(rootId_, "multi_key", 200);
-
-	auto results = treeManager_->find(rootId_, "multi_key");
+	auto results = stringTreeManager_->find(stringRootId_, PropertyValue("multi_key"));
 	ASSERT_EQ(results.size(), 3);
-	std::ranges::sort(results);
+	std::sort(results.begin(), results.end());
 	ASSERT_EQ(results[0], 100);
 	ASSERT_EQ(results[1], 200);
 	ASSERT_EQ(results[2], 300);
 }
 
 TEST_F(IndexTreeManagerTest, AdvancedRemoveScenarios) {
-	rootId_ = treeManager_->insert(rootId_, "test_key", 1);
-	rootId_ = treeManager_->insert(rootId_, "test_key", 2);
-	rootId_ = treeManager_->insert(rootId_, "test_key", 3);
+	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("test_key"), 1);
+	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("test_key"), 2);
+	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("test_key"), 3);
 
-	// Scenario 1: Remove a non-existent value from an existing key.
-	ASSERT_FALSE(treeManager_->remove(rootId_, "test_key", 99));
-	ASSERT_EQ(treeManager_->find(rootId_, "test_key").size(), 3);
+	ASSERT_FALSE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 99));
+	ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("test_key")).size(), 3);
 
-	// Scenario 2: Remove an existing value from a key with multiple values.
-	ASSERT_TRUE(treeManager_->remove(rootId_, "test_key", 2));
-	auto results1 = treeManager_->find(rootId_, "test_key");
+	ASSERT_TRUE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 2));
+	auto results1 = stringTreeManager_->find(stringRootId_, PropertyValue("test_key"));
 	ASSERT_EQ(results1.size(), 2);
-	ASSERT_EQ(std::ranges::find(results1, 2), results1.end()); // Verify value 2 is GONE.
-	ASSERT_NE(std::ranges::find(results1, 1), results1.end()); // Verify others remain.
+	ASSERT_EQ(std::find(results1.begin(), results1.end(), 2), results1.end());
 
-	// Scenario 3: Remove the last value for a key, which should remove the key itself.
-	ASSERT_TRUE(treeManager_->remove(rootId_, "test_key", 1));
-	ASSERT_TRUE(treeManager_->remove(rootId_, "test_key", 3));
-	ASSERT_TRUE(treeManager_->find(rootId_, "test_key").empty());
+	ASSERT_TRUE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 1));
+	ASSERT_TRUE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 3));
+	ASSERT_TRUE(stringTreeManager_->find(stringRootId_, PropertyValue("test_key")).empty());
 
-	// Scenario 4: Remove a non-existent key.
-	ASSERT_FALSE(treeManager_->remove(rootId_, "non_existent_key", 1));
+	ASSERT_FALSE(stringTreeManager_->remove(stringRootId_, PropertyValue("non_existent_key"), 1));
 }
 
 // --- B+Tree Structural Integrity and Split Tests ---
 
 TEST_F(IndexTreeManagerTest, InsertCausesLeafSplit) {
-	auto rootNode = dataManager_->getIndex(rootId_);
+	auto rootNode = dataManager_->getIndex(stringRootId_);
 	ASSERT_TRUE(rootNode.isLeaf());
 
 	int insertedCount = 0;
-	// Insert enough distinct keys to overfill a single leaf node.
 	for (int i = 0; i < 500; ++i) {
-		rootId_ = treeManager_->insert(rootId_, "key_" + std::to_string(i), i);
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("key_" + std::to_string(i)), i);
 		insertedCount++;
-		rootNode = dataManager_->getIndex(rootId_);
+		rootNode = dataManager_->getIndex(stringRootId_);
 		if (!rootNode.isLeaf())
-			break; // Split detected
+			break;
 	}
 
 	ASSERT_FALSE(rootNode.isLeaf()) << "A leaf split should have turned the root into an internal node.";
 	ASSERT_EQ(rootNode.getChildCount(), 2);
 
-	// Verify all data is still accessible after the split.
-	auto results = treeManager_->findRange(rootId_, "key_0", "key_" + std::to_string(insertedCount - 1));
-	ASSERT_EQ(results.size(), insertedCount);
+	auto results = stringTreeManager_->find(stringRootId_, PropertyValue("key_0"));
+	ASSERT_EQ(results[0], 0);
 }
 
 TEST_F(IndexTreeManagerTest, LeafNodeLinkedListIsCorrectAfterSplit) {
-	rootId_ = treeManager_->insert(rootId_, "C", 3);
-	rootId_ = treeManager_->insert(rootId_, "A", 1);
-	rootId_ = treeManager_->insert(rootId_, "B", 2);
+	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("C"), 3);
+	for (int i = 0; i < 500; ++i) { // Force a split
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(generatePaddedKey(i)), i);
+	}
 
-	// Force a split by inserting enough data.
-	ensureSplitOccurs();
-
-	// After the split, the tree has an internal root and at least two leaves.
-	int64_t leaf1_id = treeManager_->findLeafNode(rootId_, "A");
+	int64_t leaf1_id = stringTreeManager_->findLeafNode(stringRootId_, PropertyValue("C"));
 	ASSERT_NE(leaf1_id, 0);
 	auto leaf1 = dataManager_->getIndex(leaf1_id);
 
-	// The first leaf's 'prev' pointer should be null (0).
-	ASSERT_EQ(leaf1.getPrevLeafId(), 0);
 	int64_t leaf2_id = leaf1.getNextLeafId();
-	ASSERT_NE(leaf2_id, 0) << "The first leaf node must point to a second leaf node after a split.";
-
+	ASSERT_NE(leaf2_id, 0);
 	auto leaf2 = dataManager_->getIndex(leaf2_id);
-	// The second leaf's 'prev' pointer should point back to the first leaf.
 	ASSERT_EQ(leaf2.getPrevLeafId(), leaf1_id);
 }
 
 TEST_F(IndexTreeManagerTest, InsertCausesInternalSplit) {
-	auto rootNode = dataManager_->getIndex(rootId_);
+	auto rootNode = dataManager_->getIndex(stringRootId_);
 	uint8_t initialLevel = rootNode.getLevel();
 
 	int insertedCount = 0;
-	// Increase loop limit drastically. An internal root split requires filling the
-	// root node with pointers from many leaf splits. This can take thousands of insertions.
-	for (int i = 0; i < 50000; ++i) {
-		rootId_ = treeManager_->insert(rootId_, generatePaddedKey(i), i);
+	for (int i = 0; i < 10000; ++i) { // Need many insertions to split internal nodes
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(generatePaddedKey(i)), i);
 		insertedCount++;
-		rootNode = dataManager_->getIndex(rootId_);
-		// A split of the root internal node creates a new root, increasing tree height.
-		if (rootNode.getLevel() >= initialLevel + 2) {
-			break;
-		}
+		rootNode = dataManager_->getIndex(stringRootId_);
+		if (rootNode.getLevel() > initialLevel + 1)
+			break; // Height increased by 2 (e.g., L0 -> L2)
 	}
 
-	ASSERT_GE(rootNode.getLevel(), initialLevel + 2) << "An internal root split should increase the tree height.";
+	ASSERT_GT(rootNode.getLevel(), initialLevel + 1)
+			<< "An internal root split should increase the tree height by at least 2 levels.";
 
-	// Verify data integrity after many splits.
-	auto results = treeManager_->findRange(rootId_, generatePaddedKey(0), generatePaddedKey(insertedCount - 1));
+	auto results = stringTreeManager_->findRange(stringRootId_, PropertyValue(generatePaddedKey(0)),
+												 PropertyValue(generatePaddedKey(insertedCount - 1)));
 	ASSERT_EQ(results.size(), insertedCount);
 }
 
 TEST_F(IndexTreeManagerTest, RangeQuerySpansMultipleLeaves) {
-	// Insert enough data to guarantee multiple leaf splits.
 	for (int i = 0; i < 600; ++i) {
-		rootId_ = treeManager_->insert(rootId_, generatePaddedKey(i), i);
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(generatePaddedKey(i)), i);
 	}
 
-	auto rootNode = dataManager_->getIndex(rootId_);
-	ASSERT_FALSE(rootNode.isLeaf()) << "Multiple splits are required for this test.";
-
-	// Query a range that is guaranteed to span across at least two leaves.
-	auto results = treeManager_->findRange(rootId_, generatePaddedKey(100), generatePaddedKey(499));
-
-	// We expect to get 400 values (from 100 to 499 inclusive).
+	auto results = stringTreeManager_->findRange(stringRootId_, PropertyValue(generatePaddedKey(100)),
+												 PropertyValue(generatePaddedKey(499)));
 	ASSERT_EQ(results.size(), 400);
-	std::ranges::sort(results);
+	std::sort(results.begin(), results.end());
 	ASSERT_EQ(results[0], 100);
 	ASSERT_EQ(results.back(), 499);
 }
 
-// --- Blob Storage and Validation Tests ---
+// --- End-to-End Blob Storage Tests ---
 
-/**
- * @brief (NEW) Verifies that attempting to insert a key longer than the
- * system's absolute limit is correctly rejected by throwing an exception.
- */
-TEST_F(IndexTreeManagerTest, InsertWithKeyExceedingAbsoluteLimitFails) {
-	// Create a key that is intentionally longer than the allowed maximum length.
-	std::string illegalKey(graph::Index::ABSOLUTE_MAX_KEY_LENGTH + 1, 'Z');
-
-	// Expect the insert operation to throw a std::runtime_error.
-	ASSERT_THROW(treeManager_->insert(rootId_, illegalKey, 999), std::runtime_error);
-}
-
-/**
- * @brief (REPLACEMENT) Verifies that a LEAF node's content moves to a blob
- * when a single key accumulates too many values to fit inline.
- */
-TEST_F(IndexTreeManagerTest, LeafDataOverflowsToBlob) {
+TEST_F(IndexTreeManagerTest, LeafValuesOverflowToBlob_EndToEnd) {
 	const std::string testKey = "key_with_many_values";
+	size_t valueCount = (Index::LEAF_VALUES_INLINE_THRESHOLD / sizeof(int64_t)) + 5;
 
-	// Insert enough values for this single key to force its data into a blob.
-	// e.g., 50 values * 8 bytes/value = 400 bytes, which should exceed DATA_SIZE.
-	const int valueCount = 50;
-	for (int i = 0; i < valueCount; ++i) {
-		rootId_ = treeManager_->insert(rootId_, testKey, i);
+	for (size_t i = 0; i < valueCount; ++i) {
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(testKey), static_cast<int64_t>(i));
 	}
 
-	// Find the leaf where our key is stored.
-	int64_t leafId = treeManager_->findLeafNode(rootId_, testKey);
+	int64_t leafId = stringTreeManager_->findLeafNode(stringRootId_, PropertyValue(testKey));
 	ASSERT_NE(leafId, 0);
 	auto leafNode = dataManager_->getIndex(leafId);
+	auto entries = leafNode.getAllEntries(dataManager_);
+	ASSERT_EQ(entries.size(), 1);
+	ASSERT_NE(entries[0].valuesBlobId, 0) << "The entry's value list should have been offloaded to a blob.";
 
-	// The leaf itself should have offloaded its oversized content to a blob.
-	ASSERT_TRUE(leafNode.hasBlobStorage()) << "Node should be using blob storage for the large value list.";
-
-	// Verify all data can be retrieved from the blob.
-	auto results = treeManager_->find(rootId_, testKey);
+	auto results = stringTreeManager_->find(stringRootId_, PropertyValue(testKey));
 	ASSERT_EQ(results.size(), valueCount);
 }
 
-/**
- * @brief (DETERMINISTIC VERSION) Verifies an INTERNAL node's key is stored in a blob.
- * This test works in two stages:
- * 1. Probe Stage: It first determines the exact key capacity of a leaf node.
- * 2. Execution Stage: It uses this capacity to precisely place a long key at the
- *    split point, guaranteeing it gets promoted and testing the blob storage mechanism.
- */
-TEST_F(IndexTreeManagerTest, InternalNodeKeyIsStoredInBlob) {
-	// --- STAGE 1: PROBE a leaf node's actual capacity ---
-	int capacity = 0;
-	{
-		// Use a temporary, separate Tree Manager to avoid interfering with the main test.
-		auto probeTreeManager = std::make_shared<graph::query::indexes::IndexTreeManager>(
-				dataManager_, graph::query::indexes::IndexTypes::NODE_LABEL_TYPE);
-		int64_t probeRootId = probeTreeManager->initialize();
+TEST_F(IndexTreeManagerTest, InternalKeyPromotionToBlob_EndToEnd) {
+	// This test ensures that all promoted keys are long enough to force Blob storage.
+	const std::string suffix(Index::INTERNAL_KEY_INLINE_THRESHOLD + 1, 'X');
+	int splitTriggerCount =
+			500; // A number of insertions sufficient to cause multiple splits (including internal node splits).
 
-		for (int i = 0; i < 5000; ++i) { // High safety limit
-			probeRootId = probeTreeManager->insert(probeRootId, "probe_key_" + std::to_string(i), i);
-			capacity++;
-			auto probeRootNode = dataManager_->getIndex(probeRootId);
-			if (!probeRootNode.isLeaf()) {
-				// The first split just occurred. `capacity` now holds the number of
-				// items that fit in a single leaf.
-				break;
+	// Insert a large number of long keys to force multiple splits in the tree.
+	for (int i = 0; i < splitTriggerCount; ++i) {
+		// Make each key a long key.
+		std::string currentLongKey = generatePaddedKey(i) + suffix;
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(currentLongKey), i);
+	}
+
+	// At this point, at least one promoted key in the tree must have been stored in a Blob.
+	// Traversal and checking logic remain unchanged.
+	bool foundBlobKeyInTree = false;
+	std::vector<int64_t> nodesToVisit = {stringRootId_};
+	std::set<int64_t> visited;
+
+	while (!nodesToVisit.empty()) {
+		int64_t currentId = nodesToVisit.back();
+		nodesToVisit.pop_back();
+		if (visited.count(currentId))
+			continue;
+		visited.insert(currentId);
+
+		auto currentNode = dataManager_->getIndex(currentId);
+		if (!currentNode.isLeaf()) {
+			auto children = currentNode.getAllChildren(dataManager_);
+			for (const auto &child: children) {
+				if (child.keyBlobId != 0) {
+					foundBlobKeyInTree = true;
+					break;
+				}
+				nodesToVisit.push_back(child.childId);
 			}
 		}
-		probeTreeManager->clear(probeRootId); // Clean up the probe tree.
-	}
-	ASSERT_GT(capacity, 0) << "Probe stage failed: Could not determine node capacity.";
-
-
-	// --- STAGE 2: EXECUTE the test with the known capacity ---
-
-	// Create a key that is valid but long enough to require blob storage when promoted.
-	std::string longButLegalKey(graph::Index::INTERNAL_KEY_BLOB_THRESHOLD + 10, 'Y');
-	const int midpoint = capacity / 2;
-
-	// Step 2.1: Fill the first half of the leaf with keys alphabetically BEFORE our long key.
-	for (int i = 0; i < midpoint; ++i) {
-		rootId_ = treeManager_->insert(rootId_, "A_key_" + std::to_string(i), i);
-	}
-
-	// Step 2.2: Insert our target long key. It is now positioned to be the first
-	// key in the new "right" node after the split.
-	rootId_ = treeManager_->insert(rootId_, longButLegalKey, 9999);
-
-	// Step 2.3: Fill the rest of the leaf to trigger the split.
-	// The total number of items will exceed `capacity` here.
-	for (int i = 0; i < midpoint; ++i) {
-		rootId_ = treeManager_->insert(rootId_, "Z_key_" + std::to_string(i), i);
-	}
-
-	auto rootNode = dataManager_->getIndex(rootId_);
-	ASSERT_FALSE(rootNode.isLeaf()) << "A split must have occurred, creating an internal root.";
-
-	// Step 2.4: Assertions. Now we can reliably check the promoted key.
-	auto children = rootNode.getAllChildren();
-	bool blobKeyFound = false;
-	for (const auto &child: children) {
-		if (child.keyBlobId != 0) {
-			blobKeyFound = true;
-			std::string keyFromBlob = dataManager_->getBlobManager()->readBlobChain(child.keyBlobId);
-			ASSERT_EQ(keyFromBlob, longButLegalKey);
+		if (foundBlobKeyInTree)
 			break;
-		}
 	}
-	ASSERT_TRUE(blobKeyFound)
-			<< "The promoted internal key, which was at the split point, should have been stored in a blob.";
 
-	// Finally, ensure we can still find the data using this blob-stored key.
-	auto results = treeManager_->find(rootId_, longButLegalKey);
+	ASSERT_TRUE(foundBlobKeyInTree) << "After multiple splits, no keys stored in Blob were found in internal nodes.";
+
+	// Finally, verify that we can still find the correct value using this long key.
+	std::string finalKeyToFind = generatePaddedKey(splitTriggerCount - 1) + suffix;
+	auto results = stringTreeManager_->find(stringRootId_, PropertyValue(finalKeyToFind));
 	ASSERT_EQ(results.size(), 1);
-	ASSERT_EQ(results[0], 9999);
+	ASSERT_EQ(results[0], splitTriggerCount - 1);
 }

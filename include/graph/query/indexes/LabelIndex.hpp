@@ -86,9 +86,9 @@ namespace graph::query::indexes {
 		/**
 		 * Ensures persistence of index data
 		 */
-		void flush();
+		void flush() const;
 
-		void saveState();
+		void saveState() const;
 
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;

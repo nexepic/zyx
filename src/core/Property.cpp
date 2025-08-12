@@ -36,7 +36,7 @@ namespace graph {
 		utils::Serializer::writePOD(os, static_cast<uint32_t>(values.size()));
 		for (const auto &[key, value]: values) {
 			utils::Serializer::serialize(os, key);
-			utils::Serializer::writePropertyValue(os, value);
+			utils::Serializer::serialize<PropertyValue>(os, value);
 		}
 	}
 
@@ -53,7 +53,7 @@ namespace graph {
 		auto propertyCount = utils::Serializer::readPOD<uint32_t>(is);
 		for (uint32_t i = 0; i < propertyCount; ++i) {
 			std::string key = utils::Serializer::deserialize<std::string>(is);
-			PropertyValue value = utils::Serializer::readPropertyValue(is);
+			PropertyValue value = utils::Serializer::deserialize<PropertyValue>(is);
 			property.values[key] = value;
 		}
 

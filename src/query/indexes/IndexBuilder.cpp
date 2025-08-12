@@ -37,30 +37,24 @@ namespace graph::query::indexes {
 			labelIndex->clear();
 			propertyIndex->clear();
 
-			auto ranges = getNodeIdRanges(); // Get ranges once.
-
-			std::vector<int64_t> batchIds;
-			batchIds.reserve(BATCH_SIZE); // Pre-allocate memory for efficiency.
-
-			for (const auto &[startId, endId]: ranges) {
-				std::cout << "========== Accumulating Range: " << startId << " to " << endId << std::endl;
+			for (const auto &[startId, endId]: getNodeIdRanges()) {
+				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-					// When a full batch is ready, process it and clear it.
 					if (batchIds.size() >= BATCH_SIZE) {
 						processNodeBatch(batchIds, labelIndex, propertyIndex);
 						batchIds.clear();
 					}
 				}
+				if (!batchIds.empty()) {
+					processNodeBatch(batchIds, labelIndex, propertyIndex);
+				}
 			}
 
-			// After iterating through ALL ranges, process any final remainder.
-			if (!batchIds.empty()) {
-				processNodeBatch(batchIds, labelIndex, propertyIndex);
-			}
+			labelIndex->flush();
+			propertyIndex->flush();
 
 			return true;
-
 		} catch (const std::exception &e) {
 			std::cerr << "Error in buildAllNodeIndexes: " << e.what() << std::endl;
 			return false;
@@ -89,6 +83,10 @@ namespace graph::query::indexes {
 					processEdgeBatch(batchIds, labelIndex, propertyIndex);
 				}
 			}
+
+			labelIndex->flush();
+			propertyIndex->flush();
+
 			return true;
 		} catch (const std::exception &e) {
 			std::cerr << "Error in buildAllEdgeIndexes: " << e.what() << std::endl;
@@ -219,8 +217,6 @@ namespace graph::query::indexes {
 			}
 		}
 
-		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
-
 		return ranges;
 	}
 
@@ -236,8 +232,6 @@ namespace graph::query::indexes {
 				ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
 			}
 		}
-
-		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
 
 		return ranges;
 	}

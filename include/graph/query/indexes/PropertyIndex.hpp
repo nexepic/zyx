@@ -86,9 +86,6 @@ namespace graph::query::indexes {
 		std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type);
 		const std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type) const;
 
-		// Convert property value to string key for tree storage
-		static std::string valueToString(const PropertyValue &value);
-
 		static void serializeRootMap(const std::string &stateKey,
 									 const std::unordered_map<std::string, int64_t> &rootMap);
 		static std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string &stateKey);

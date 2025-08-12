@@ -10,7 +10,6 @@
 
 #include "graph/core/Index.hpp"
 #include <algorithm>
-#include <atomic>
 #include <cstring>
 #include <graph/storage/data/DataManager.hpp>
 #include <sstream>
@@ -25,419 +24,506 @@ namespace graph {
 		metadata.id = id;
 		metadata.nodeType = type;
 		metadata.indexType = indexType;
-		metadata.keyCount = 0;
+		metadata.entryCount = 0;
 		metadata.childCount = 0;
 		metadata.level = (type == NodeType::LEAF) ? 0 : 1;
 	}
 
-	void Index::setDataStorageType(DataStorageType type) { metadata.dataStorageType = type; }
-
-	Index::DataStorageType Index::getDataStorageType() const { return metadata.dataStorageType; }
-
-	void Index::setBlobId(int64_t blobId) { metadata.blobId = blobId; }
-
-	int64_t Index::getBlobId() const { return metadata.blobId; }
-
-	bool Index::hasBlobStorage() const {
-		return getDataStorageType() == DataStorageType::BLOB_CHAIN && getBlobId() != 0;
+	inline Index::EntrySerializationFlags operator|(Index::EntrySerializationFlags a,
+													Index::EntrySerializationFlags b) {
+		return static_cast<Index::EntrySerializationFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
 	}
 
-	void Index::storeDataInBlob(const std::shared_ptr<storage::DataManager> &dataManager, const std::string &data) {
-		if (!dataManager) {
-			throw std::runtime_error("DataManager is required for blob storage operations");
-		}
-		if (hasBlobStorage()) {
-			dataManager->getBlobManager()->deleteBlobChain(getBlobId());
-		}
-		const auto blobChain = dataManager->getBlobManager()->createBlobChain(getId(), typeId, data);
-		if (blobChain.empty()) {
-			throw std::runtime_error("Failed to create blob chain for index data");
-		}
-		setBlobId(blobChain[0].getId());
-		setDataStorageType(DataStorageType::BLOB_CHAIN);
-		std::memset(dataBuffer, 0, DATA_SIZE);
+	inline bool operator&(Index::EntrySerializationFlags a, Index::EntrySerializationFlags b) {
+		return (static_cast<uint8_t>(a) & static_cast<uint8_t>(b)) != 0;
 	}
 
-	std::string Index::retrieveDataFromBlob(const std::shared_ptr<storage::DataManager> &dataManager) const {
-		if (!hasBlobStorage()) {
-			return {dataBuffer, DATA_SIZE};
-		}
-		if (!dataManager) {
-			throw std::runtime_error("DataManager is required to retrieve blob data");
-		}
-		return dataManager->getBlobManager()->readBlobChain(getBlobId());
-	}
-
-	// Update the serialize method to include the new fields
 	void Index::serialize(std::ostream &os) const {
-		// Serialize metadata
+		// The order must match deserialize
 		utils::Serializer::writePOD(os, metadata.id);
 		utils::Serializer::writePOD(os, metadata.parentId);
 		utils::Serializer::writePOD(os, metadata.nextLeafId);
 		utils::Serializer::writePOD(os, metadata.prevLeafId);
-		utils::Serializer::writePOD(os, metadata.blobId);
 		utils::Serializer::writePOD(os, metadata.indexType);
-		utils::Serializer::writePOD(os, metadata.keyCount);
+		utils::Serializer::writePOD(os, metadata.entryCount);
 		utils::Serializer::writePOD(os, metadata.childCount);
 		utils::Serializer::writePOD(os, metadata.level);
 		utils::Serializer::writePOD(os, static_cast<uint8_t>(metadata.nodeType));
-		utils::Serializer::writePOD(os, static_cast<uint8_t>(metadata.dataStorageType));
 		utils::Serializer::writePOD(os, metadata.isActive);
 
-		// Write data buffer
 		os.write(dataBuffer, DATA_SIZE);
 	}
 
-	// Update the deserialize method to include the new fields
 	Index Index::deserialize(std::istream &is) {
 		Index entity;
-
-		// Deserialize metadata
 		entity.metadata.id = utils::Serializer::readPOD<int64_t>(is);
 		entity.metadata.parentId = utils::Serializer::readPOD<int64_t>(is);
 		entity.metadata.nextLeafId = utils::Serializer::readPOD<int64_t>(is);
 		entity.metadata.prevLeafId = utils::Serializer::readPOD<int64_t>(is);
-		entity.metadata.blobId = utils::Serializer::readPOD<int64_t>(is);
 		entity.metadata.indexType = utils::Serializer::readPOD<uint32_t>(is);
-		entity.metadata.keyCount = utils::Serializer::readPOD<uint32_t>(is);
+		entity.metadata.entryCount = utils::Serializer::readPOD<uint32_t>(is);
 		entity.metadata.childCount = utils::Serializer::readPOD<uint32_t>(is);
 		entity.metadata.level = utils::Serializer::readPOD<uint8_t>(is);
 		entity.metadata.nodeType = static_cast<NodeType>(utils::Serializer::readPOD<uint8_t>(is));
-		entity.metadata.dataStorageType = static_cast<DataStorageType>(utils::Serializer::readPOD<uint8_t>(is));
 		entity.metadata.isActive = utils::Serializer::readPOD<bool>(is);
 
-		// Read data buffer
 		is.read(entity.dataBuffer, DATA_SIZE);
-
 		return entity;
 	}
 
-	// Update getAllKeyValues to handle blob storage
-	std::vector<Index::KeyValuePair>
-	Index::getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const {
+	std::vector<Index::Entry> Index::getAllEntries(const std::shared_ptr<storage::DataManager> &dataManager) const {
 		if (metadata.nodeType != NodeType::LEAF) {
-			throw std::logic_error("Key-values can only be retrieved from leaf nodes.");
+			throw std::logic_error("Entries can only be retrieved from leaf nodes.");
 		}
-
-		std::string serializedData;
-		if (hasBlobStorage()) {
-			serializedData = retrieveDataFromBlob(dataManager);
-		} else {
-			serializedData = std::string(dataBuffer, DATA_SIZE);
-		}
-
-		std::vector<KeyValuePair> result;
-		if (metadata.keyCount == 0)
+		std::vector<Entry> result;
+		if (metadata.entryCount == 0)
 			return result;
 
-		result.reserve(metadata.keyCount);
+		std::string serializedData(dataBuffer, DATA_SIZE);
 		std::istringstream is(serializedData);
+		result.reserve(metadata.entryCount);
 
-		for (uint32_t i = 0; i < metadata.keyCount; i++) {
-			KeyValuePair kvp;
-			kvp.key = utils::Serializer::deserialize<std::string>(is);
-			auto valueCount = utils::Serializer::readPOD<uint32_t>(is);
-			kvp.values.reserve(valueCount);
-			for (uint32_t j = 0; j < valueCount; j++) {
-				kvp.values.push_back(utils::Serializer::readPOD<int64_t>(is));
+		for (uint32_t i = 0; i < metadata.entryCount; i++) {
+			Entry entry;
+			// Read the flags byte first to determine the structure.
+			auto flags = utils::Serializer::readPOD<EntrySerializationFlags>(is);
+
+			// Read key from blob or inline based on the flag.
+			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
+				entry.keyBlobId = utils::Serializer::readPOD<int64_t>(is);
+				if (!dataManager)
+					throw std::runtime_error("DataManager required to retrieve key blob data.");
+				std::string keyData = dataManager->getBlobManager()->readBlobChain(entry.keyBlobId);
+				std::istringstream keyStream(keyData);
+				entry.key = utils::Serializer::deserialize<PropertyValue>(keyStream);
+			} else {
+				entry.keyBlobId = 0; // Ensure blob ID is 0 if not used.
+				entry.key = utils::Serializer::deserialize<PropertyValue>(is);
 			}
-			result.push_back(kvp);
+
+			// Read value count, which is always present.
+			auto valueCount = utils::Serializer::readPOD<uint32_t>(is);
+			entry.values.reserve(valueCount);
+
+			// Read values from blob or inline based on the flag.
+			if (flags & EntrySerializationFlags::VALUES_ARE_BLOB) {
+				entry.valuesBlobId = utils::Serializer::readPOD<int64_t>(is);
+				if (!dataManager)
+					throw std::runtime_error("DataManager required to retrieve value blob data.");
+				std::string blobData = dataManager->getBlobManager()->readBlobChain(entry.valuesBlobId);
+				std::istringstream valueStream(blobData);
+				for (uint32_t j = 0; j < valueCount; ++j) {
+					entry.values.push_back(utils::Serializer::readPOD<int64_t>(valueStream));
+				}
+			} else {
+				entry.valuesBlobId = 0; // Ensure blob ID is 0 if not used.
+				for (uint32_t j = 0; j < valueCount; j++) {
+					entry.values.push_back(utils::Serializer::readPOD<int64_t>(is));
+				}
+			}
+			result.push_back(std::move(entry));
 		}
 		return result;
 	}
 
-	// Update setAllKeyValues to handle blob storage
-	void Index::setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
-								const std::shared_ptr<storage::DataManager> &dataManager) {
-		if (metadata.nodeType != NodeType::LEAF) {
-			throw std::logic_error("Key-values can only be set on leaf nodes.");
-		}
+	void Index::setAllEntries(std::vector<Entry> &entries, const std::shared_ptr<storage::DataManager> &dataManager) {
+		if (!isLeaf())
+			throw std::logic_error("Entries can only be set on leaf nodes.");
 
 		std::ostringstream os;
-		for (const auto &kvp: keyValues) {
-			utils::Serializer::serialize(os, kvp.key);
-			utils::Serializer::writePOD(os, static_cast<uint32_t>(kvp.values.size()));
-			for (int64_t value: kvp.values) {
-				utils::Serializer::writePOD(os, value);
+		for (auto &entry: entries) {
+			// --- Determine if blobs are needed and manage them ---
+			const bool shouldKeyUseBlob = utils::getSerializedSize(entry.key) > LEAF_KEY_INLINE_THRESHOLD;
+			const bool shouldValuesUseBlob = (entry.values.size() * sizeof(int64_t)) > LEAF_VALUES_INLINE_THRESHOLD;
+
+			// Cleanup or create key blob if necessary
+			if (entry.keyBlobId != 0 && !shouldKeyUseBlob) {
+				dataManager->getBlobManager()->deleteBlobChain(entry.keyBlobId);
+				entry.keyBlobId = 0;
+			}
+			if (shouldKeyUseBlob) {
+				if (!dataManager)
+					throw std::runtime_error("DataManager not available for key blob storage.");
+				std::ostringstream keyStream;
+				utils::Serializer::serialize(keyStream, entry.key);
+				if (entry.keyBlobId != 0) {
+					auto blob = dataManager->getBlobManager()->updateBlobChain(entry.keyBlobId, getId(), typeId,
+																			   keyStream.str());
+					if (blob.empty())
+						throw std::runtime_error("Failed to update blob chain for entry key.");
+					entry.keyBlobId = blob[0].getId();
+				} else {
+					auto blob = dataManager->getBlobManager()->createBlobChain(getId(), typeId, keyStream.str());
+					if (blob.empty())
+						throw std::runtime_error("Failed to create blob chain for entry key.");
+					entry.keyBlobId = blob[0].getId();
+				}
+			}
+
+			// Cleanup or create values blob if necessary
+			if (entry.valuesBlobId != 0 && !shouldValuesUseBlob) {
+				dataManager->getBlobManager()->deleteBlobChain(entry.valuesBlobId);
+				entry.valuesBlobId = 0;
+			}
+			if (shouldValuesUseBlob) {
+				if (!dataManager)
+					throw std::runtime_error("DataManager not available for value blob storage.");
+				std::ostringstream valueStream;
+				for (int64_t val: entry.values)
+					utils::Serializer::writePOD(valueStream, val);
+				if (entry.valuesBlobId != 0) {
+					auto blob = dataManager->getBlobManager()->updateBlobChain(entry.valuesBlobId, getId(), typeId,
+																			   valueStream.str());
+					if (blob.empty())
+						throw std::runtime_error("Failed to update blob chain for entry values.");
+					entry.valuesBlobId = blob[0].getId();
+				} else {
+					auto blob = dataManager->getBlobManager()->createBlobChain(getId(), typeId, valueStream.str());
+					if (blob.empty())
+						throw std::runtime_error("Failed to create blob chain for entry values.");
+					entry.valuesBlobId = blob[0].getId();
+				}
+			}
+
+			// --- Serialize entry using the flags byte ---
+			auto flags = EntrySerializationFlags::NONE;
+			if (shouldKeyUseBlob)
+				flags = flags | EntrySerializationFlags::KEY_IS_BLOB;
+			if (shouldValuesUseBlob)
+				flags = flags | EntrySerializationFlags::VALUES_ARE_BLOB;
+			utils::Serializer::writePOD(os, flags);
+
+			// Write key (or its blob ID)
+			if (shouldKeyUseBlob) {
+				utils::Serializer::writePOD(os, entry.keyBlobId);
+			} else {
+				utils::Serializer::serialize(os, entry.key);
+			}
+
+			// Always write value count
+			utils::Serializer::writePOD(os, static_cast<uint32_t>(entry.values.size()));
+
+			// Write values (or their blob ID)
+			if (shouldValuesUseBlob) {
+				utils::Serializer::writePOD(os, entry.valuesBlobId);
+			} else {
+				for (int64_t value: entry.values) {
+					utils::Serializer::writePOD(os, value);
+				}
 			}
 		}
+
 		std::string data = os.str();
-		metadata.keyCount = static_cast<uint32_t>(keyValues.size());
-
-		// Clean up old blob if it exists, as the new data might fit inline
-		if (hasBlobStorage()) {
-			if (!dataManager)
-				throw std::runtime_error("DataManager is required to clean up existing blob storage.");
-			dataManager->getBlobManager()->deleteBlobChain(getBlobId());
-			setBlobId(0); // Invalidate blob ID before deciding new storage type
+		if (data.size() > DATA_SIZE) {
+			throw std::runtime_error(
+					"FATAL: Leaf node data exceeds capacity after handling overflows. A split should have occurred.");
 		}
 
-		if (data.size() <= DATA_SIZE) {
-			setDataStorageType(DataStorageType::INLINE);
-			std::memset(dataBuffer, 0, DATA_SIZE);
-			std::memcpy(dataBuffer, data.data(), data.size());
-		} else {
-			if (!dataManager) {
-				throw std::runtime_error("Data size exceeds buffer and DataManager is not available for blob storage");
-			}
-			storeDataInBlob(dataManager, data);
-		}
+		metadata.entryCount = static_cast<uint32_t>(entries.size());
+		std::memset(dataBuffer, 0, DATA_SIZE);
+		std::memcpy(dataBuffer, data.data(), data.size());
 	}
 
-	bool Index::isFullAfterInsert(const std::string &key, int64_t value,
-								  const std::shared_ptr<storage::DataManager> &dataManager) const {
-		if (metadata.nodeType != NodeType::LEAF) {
-			// Fullness check is only relevant for leaf nodes in the context of insertion.
+	/**
+	 * @brief Estimates the serialized size of all children to check for potential overflow.
+	 * This calculation must exactly match the serialization logic in setAllChildren.
+	 */
+	bool Index::wouldInternalOverflowOnAddChild(const ChildEntry &newEntry,
+												const std::shared_ptr<storage::DataManager> &dataManager) const {
+		if (isLeaf()) {
 			return false;
 		}
 
-		auto kvs = getAllKeyValues(dataManager);
-		auto it = std::lower_bound(kvs.begin(), kvs.end(), key,
-								   [](const KeyValuePair &a, const std::string &b) { return a.key < b; });
+		auto children = getAllChildren(dataManager);
+		children.push_back(newEntry); // Simulate the addition.
 
-		// Create a temporary copy of the key-value list to measure its potential serialized size.
-		bool keyExists = (it != kvs.end() && it->key == key);
-		if (keyExists) {
-			// Add the value to the existing key's value list in the copy.
-			it->values.push_back(value);
-		} else {
-			// Insert a new key-value pair into the copy.
-			kvs.insert(it, {key, {value}});
+		size_t estimatedSize = 0;
+		if (children.empty()) {
+			return false;
 		}
 
-		// "Dry-run" the serialization to get the exact prospective byte size.
-		std::ostringstream os;
-		for (const auto &kvp: kvs) {
-			utils::Serializer::serialize(os, kvp.key);
-			utils::Serializer::writePOD(os, static_cast<uint32_t>(kvp.values.size()));
-			for (int64_t v: kvp.values) {
-				utils::Serializer::writePOD(os, v);
+		// The first child is always just its ID.
+		estimatedSize += sizeof(children[0].childId);
+
+		// For each subsequent child, we store a flag, the key, and the child ID.
+		for (size_t i = 1; i < children.size(); ++i) {
+			const auto &entry = children[i];
+			estimatedSize += sizeof(uint8_t); // For the flags byte.
+
+			const bool keyIsBlob = utils::getSerializedSize(entry.key) > INTERNAL_KEY_INLINE_THRESHOLD;
+			if (keyIsBlob) {
+				estimatedSize += sizeof(int64_t); // Size of the blob ID.
+			} else {
+				estimatedSize += utils::getSerializedSize(entry.key); // Size of the inline key.
 			}
+			estimatedSize += sizeof(entry.childId); // Size of the child pointer.
 		}
 
-		// A node is considered "full" if its contents would exceed the inline buffer size.
-		// This is the trigger for the B+Tree manager to perform a split.
-		return os.str().size() > DATA_SIZE;
+		return estimatedSize > DATA_SIZE;
 	}
 
-	void Index::insertStringKey(const std::string &key, int64_t value,
-								const std::shared_ptr<storage::DataManager> &dataManager) {
-		if (metadata.nodeType != NodeType::LEAF) {
-			throw std::logic_error("Keys can only be inserted into leaf nodes.");
+	bool Index::wouldLeafOverflowOnInsert(
+			const PropertyValue &key, int64_t value, const std::shared_ptr<storage::DataManager> &dataManager,
+			const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const {
+		if (!isLeaf())
+			return false;
+		auto entries = getAllEntries(dataManager);
+		auto it = std::lower_bound(entries.begin(), entries.end(), key,
+								   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
+
+		bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
+
+		// Simulate the insertion to calculate the potential size.
+		if (keyExists) {
+			it->values.push_back(value);
+		} else {
+			entries.insert(it, {key, {value}, 0, 0});
 		}
 
-		auto kvs = getAllKeyValues(dataManager);
-		auto it = std::lower_bound(kvs.begin(), kvs.end(), key,
-								   [](const KeyValuePair &a, const std::string &b) { return a.key < b; });
+		// Simulate the new serialization process to get an accurate size estimate.
+		size_t estimatedSize = 0;
+		for (const auto &entry: entries) {
+			estimatedSize += sizeof(uint8_t); // for flags
 
-		if (it != kvs.end() && it->key == key) {
-			// Key exists, add new value if it's not a duplicate.
+			// Account for key size (blob ID or inline data)
+			const bool keyIsBlob = utils::getSerializedSize(entry.key) > LEAF_KEY_INLINE_THRESHOLD;
+			if (keyIsBlob) {
+				estimatedSize += sizeof(int64_t);
+			} else {
+				estimatedSize += utils::getSerializedSize(entry.key);
+			}
+
+			// Account for value count
+			estimatedSize += sizeof(uint32_t);
+
+			// Account for values size (blob ID or inline data)
+			const bool valuesAreBlob = (entry.values.size() * sizeof(int64_t)) > LEAF_VALUES_INLINE_THRESHOLD;
+			if (valuesAreBlob) {
+				estimatedSize += sizeof(int64_t);
+			} else {
+				estimatedSize += entry.values.size() * sizeof(int64_t);
+			}
+		}
+		return estimatedSize > DATA_SIZE;
+	}
+
+	void Index::insertEntry(const PropertyValue &key, int64_t value,
+							const std::shared_ptr<storage::DataManager> &dataManager,
+							const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		if (!isLeaf())
+			throw std::logic_error("Keys can only be inserted into leaf nodes.");
+		auto entries = getAllEntries(dataManager);
+		auto it = std::lower_bound(entries.begin(), entries.end(), key,
+								   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
+
+		bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
+
+		if (keyExists) {
 			auto &values = it->values;
 			if (std::find(values.begin(), values.end(), value) == values.end()) {
 				values.push_back(value);
-			} else {
-				return; // Value already exists, nothing to do.
 			}
 		} else {
-			// Key does not exist, insert a new entry.
-			kvs.insert(it, {key, {value}});
+			entries.insert(it, {key, {value}, 0, 0});
 		}
-
-		// Commit the changes. The setAllKeyValues method will internally decide
-		// whether to store the final data inline or in a blob.
-		setAllKeyValues(kvs, dataManager);
+		setAllEntries(entries, dataManager);
 	}
 
-	bool Index::removeStringKey(const std::string &key, int64_t value,
-								const std::shared_ptr<storage::DataManager> &dataManager) {
-		auto kvs = getAllKeyValues(dataManager);
-		auto it = std::find_if(kvs.begin(), kvs.end(), [&](const KeyValuePair &kvp) { return kvp.key == key; });
+	bool Index::removeEntry(const PropertyValue &key, int64_t value,
+							const std::shared_ptr<storage::DataManager> &dataManager,
+							const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		auto entries = getAllEntries(dataManager);
+		auto it = std::lower_bound(entries.begin(), entries.end(), key,
+								   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
 
-		if (it != kvs.end()) {
+		if (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key)) {
 			auto &values = it->values;
-			auto value_it = std::find(values.begin(), values.end(), value);
+			auto value_it = std::remove(values.begin(), values.end(), value);
 			if (value_it != values.end()) {
-				values.erase(value_it);
+				values.erase(value_it, values.end());
 				if (values.empty()) {
-					kvs.erase(it);
+					// If the entry is now empty, delete associated blobs before erasing.
+					if (!dataManager)
+						throw std::runtime_error("DataManager required to clean up blobs.");
+					if (it->valuesBlobId != 0) {
+						dataManager->getBlobManager()->deleteBlobChain(it->valuesBlobId);
+					}
+					if (it->keyBlobId != 0) {
+						dataManager->getBlobManager()->deleteBlobChain(it->keyBlobId);
+					}
+					entries.erase(it);
 				}
-				setAllKeyValues(kvs, dataManager);
+				setAllEntries(entries, dataManager);
 				return true;
 			}
 		}
 		return false;
 	}
 
-	std::vector<int64_t> Index::findStringValues(const std::string &key,
-												 const std::shared_ptr<storage::DataManager> &dataManager) const {
-		auto kvs = getAllKeyValues(dataManager);
-		auto it = std::find_if(kvs.cbegin(), kvs.cend(), [&](const KeyValuePair &kvp) { return kvp.key == key; });
-		return (it != kvs.cend()) ? it->values : std::vector<int64_t>{};
+	std::vector<int64_t>
+	Index::findValues(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
+					  const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const {
+		auto entries = getAllEntries(dataManager);
+		auto it = std::lower_bound(entries.begin(), entries.end(), key,
+								   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
+
+		bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
+
+		return keyExists ? it->values : std::vector<int64_t>{};
 	}
 
-	bool Index::tryAddChild(const ChildEntry &newEntry) {
-		if (metadata.nodeType != NodeType::INTERNAL) {
+	void Index::addChild(ChildEntry &newEntry, const std::shared_ptr<storage::DataManager> &dataManager,
+						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		if (isLeaf())
 			throw std::logic_error("Children can only be added to internal nodes.");
-		}
+		auto children = getAllChildren(dataManager);
 
-		auto children = getAllChildren();
-		// Simulate adding the new entry to check the resulting size.
-		// For a size check, order doesn't matter, so push_back is sufficient and fast.
-		children.push_back(newEntry);
-
-		// "Dry-run" the serialization to get the exact prospective byte size.
-		std::ostringstream os;
-		for (const auto &entry: children) {
-			bool isBlob = (entry.keyBlobId != 0);
-			utils::Serializer::writePOD(os, static_cast<uint8_t>(isBlob ? 1 : 0));
-
-			if (isBlob) {
-				utils::Serializer::writePOD(os, entry.keyBlobId);
-			} else {
-				utils::Serializer::serialize(os, entry.key);
-			}
-			utils::Serializer::writePOD(os, entry.childId);
-		}
-
-		// Check if the simulated data size exceeds the node's inline data capacity.
-		return os.str().size() <= DATA_SIZE;
-	}
-
-	void Index::addChild(const ChildEntry &newEntry, const std::shared_ptr<storage::DataManager> &dataManager) {
-		if (metadata.nodeType != NodeType::INTERNAL) {
-			throw std::logic_error("Children can only be added to internal nodes.");
-		}
-		if (!dataManager) {
-			throw std::invalid_argument(
-					"DataManager is required for addChild to resolve potential blob keys for sorting.");
-		}
-
-		auto children = getAllChildren();
-
-		// Define a blob-aware comparator to find the correct insertion point.
-		auto blobAwareComparator = [&](const ChildEntry &entry, const std::string &keyToInsert) {
-			if (entry.key.empty() && entry.keyBlobId == 0) { // First child is -infinity
-				return true;
-			}
-			std::string currentKey =
-					(entry.keyBlobId != 0) ? dataManager->getBlobManager()->readBlobChain(entry.keyBlobId) : entry.key;
-			return currentKey < keyToInsert;
-		};
-
-		// Resolve the key of the entry we are about to insert.
-		std::string newKeyStr = (newEntry.keyBlobId != 0)
-										? dataManager->getBlobManager()->readBlobChain(newEntry.keyBlobId)
-										: newEntry.key;
-
-		// Find the correct position to insert the new child to maintain sort order.
-		auto it = std::lower_bound(children.begin(), children.end(), newKeyStr, blobAwareComparator);
+		auto it = std::lower_bound(children.begin() + 1, children.end(), newEntry.key,
+								   [&](const ChildEntry &a, const PropertyValue &b) { return comparator(a.key, b); });
 
 		children.insert(it, newEntry);
-		setAllChildren(children);
+		setAllChildren(children, dataManager);
 	}
 
-	bool Index::removeChild(const std::string &key, const std::shared_ptr<storage::DataManager> &dataManager) {
-		if (metadata.nodeType != NodeType::INTERNAL) {
+	bool Index::removeChild(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
+							const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		if (isLeaf())
 			throw std::logic_error("Children can only be removed from internal nodes.");
-		}
-		if (!dataManager) {
-			throw std::invalid_argument("DataManager is required for removeChild to resolve potential blob keys.");
-		}
+		auto children = getAllChildren(dataManager);
 
-		auto children = getAllChildren();
+		auto it = std::lower_bound(children.begin() + 1, children.end(), key,
+								   [&](const ChildEntry &a, const PropertyValue &b) { return comparator(a.key, b); });
 
-		// Find the entry that matches the key. This may involve reading blobs.
-		auto it = std::find_if(children.begin(), children.end(), [&](const ChildEntry &entry) {
-			// The first child's key is implicit and cannot be removed by string key.
-			if (entry.key.empty() && entry.keyBlobId == 0)
-				return false;
-
-			std::string currentKey =
-					(entry.keyBlobId != 0) ? dataManager->getBlobManager()->readBlobChain(entry.keyBlobId) : entry.key;
-			return currentKey == key;
-		});
-
-		if (it != children.end()) {
-			// CRITICAL: If the key was stored in a blob, we must delete the blob chain.
+		if (it != children.end() && !comparator(key, it->key) && !comparator(it->key, key)) {
 			if (it->keyBlobId != 0) {
+				if (!dataManager)
+					throw std::runtime_error("DataManager required to clean up blob.");
 				dataManager->getBlobManager()->deleteBlobChain(it->keyBlobId);
 			}
-
 			children.erase(it);
-			setAllChildren(children);
+			setAllChildren(children, dataManager);
 			return true;
 		}
-
-		return false; // Key not found
+		return false;
 	}
 
-	int64_t Index::findChild(const std::string &key, const std::shared_ptr<storage::DataManager> &dataManager) const {
-		if (!dataManager) {
-			throw std::invalid_argument("DataManager is required for findChild in internal nodes.");
-		}
-		auto children = getAllChildren();
+	int64_t
+	Index::findChild(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
+					 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const {
+		if (isLeaf())
+			throw std::logic_error("findChild is for internal nodes only.");
+		auto children = getAllChildren(dataManager);
 		if (children.empty())
 			return 0;
 
-		// Find the first element whose key is GREATER than the search key
-		auto it = std::upper_bound(
-				children.begin(), children.end(), key, [&](const std::string &searchKey, const ChildEntry &entry) {
-					if (entry.key.empty() && entry.keyBlobId == 0) { // First child, effectively -infinity
-						return false;
-					}
-					// Resolve the key, from blob if necessary
-					std::string currentKey = (entry.keyBlobId != 0)
-													 ? dataManager->getBlobManager()->readBlobChain(entry.keyBlobId)
-													 : entry.key;
+		auto it = std::upper_bound(children.begin() + 1, children.end(), key,
+								   [&](const PropertyValue &searchKey, const ChildEntry &entry) {
+									   return comparator(searchKey, entry.key);
+								   });
 
-					return searchKey < currentKey;
-				});
-
-		if (it == children.begin()) {
-			return children.front().childId;
-		}
 		return std::prev(it)->childId;
 	}
 
-	std::vector<Index::ChildEntry> Index::getAllChildren() const {
-		if (metadata.nodeType != NodeType::INTERNAL) {
+	/**
+	 * @brief Deserializes all child entries from the internal node's data buffer.
+	 * The format is: [childId_0][flags_1][key_1][childId_1][flags_2][key_2][childId_2]...
+	 */
+	std::vector<Index::ChildEntry>
+	Index::getAllChildren(const std::shared_ptr<storage::DataManager> &dataManager) const {
+		if (isLeaf()) {
 			throw std::logic_error("Children can only be retrieved from internal nodes.");
 		}
 		std::vector<ChildEntry> result;
-		if (metadata.childCount == 0)
+		if (metadata.childCount == 0) {
 			return result;
+		}
 
-		std::istringstream is(std::string(dataBuffer, DATA_SIZE));
+		std::string serializedData(dataBuffer, DATA_SIZE);
+		std::istringstream is(serializedData);
 		result.reserve(metadata.childCount);
-		for (uint32_t i = 0; i < metadata.childCount; i++) {
-			ChildEntry entry;
-			auto typeFlag = utils::Serializer::readPOD<uint8_t>(is);
-			bool isBlob = (typeFlag == 1);
 
-			if (isBlob) {
+		// The first child is always stored as just an ID, with an implicit key.
+		if (metadata.childCount > 0) {
+			ChildEntry firstChild;
+			firstChild.childId = utils::Serializer::readPOD<int64_t>(is);
+			firstChild.key = PropertyValue(std::monostate{}); // Implicit "negative infinity" key.
+			firstChild.keyBlobId = 0;
+			result.push_back(std::move(firstChild));
+		}
+
+		// Subsequent children are each preceded by a separator key and a flag.
+		for (uint32_t i = 1; i < metadata.childCount; i++) {
+			ChildEntry entry;
+			auto flags = utils::Serializer::readPOD<EntrySerializationFlags>(is);
+
+			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
 				entry.keyBlobId = utils::Serializer::readPOD<int64_t>(is);
-				entry.key = ""; // Inline key is empty
+				if (!dataManager) {
+					throw std::runtime_error("DataManager is required to retrieve blob data.");
+				}
+				std::string keyData = dataManager->getBlobManager()->readBlobChain(entry.keyBlobId);
+				std::istringstream keyStream(keyData);
+				entry.key = utils::Serializer::deserialize<PropertyValue>(keyStream);
 			} else {
-				entry.key = utils::Serializer::deserialize<std::string>(is);
 				entry.keyBlobId = 0;
+				entry.key = utils::Serializer::deserialize<PropertyValue>(is);
 			}
 			entry.childId = utils::Serializer::readPOD<int64_t>(is);
-			result.push_back(entry);
+			result.push_back(std::move(entry));
 		}
 		return result;
 	}
 
-	void Index::setAllChildren(const std::vector<ChildEntry> &children) {
-		if (metadata.nodeType != NodeType::INTERNAL) {
+	/**
+	 * @brief Serializes a vector of child entries into the node's data buffer.
+	 * The format is: [childId_0][flags_1][key_1][childId_1][flags_2][key_2][childId_2]...
+	 */
+	void Index::setAllChildren(std::vector<ChildEntry> &children,
+	                           const std::shared_ptr<storage::DataManager> &dataManager) {
+		if (isLeaf()) {
 			throw std::logic_error("Children can only be set on internal nodes.");
 		}
-		std::ostringstream os;
-		for (const auto &entry: children) {
-			bool isBlob = (entry.keyBlobId != 0);
-			// Write a flag: 1 for blob, 0 for inline
-			utils::Serializer::writePOD(os, static_cast<uint8_t>(isBlob ? 1 : 0));
 
-			if (isBlob) {
+		std::ostringstream os;
+
+		// Handle the first child pointer, which has no preceding key or flag.
+		if (!children.empty()) {
+			utils::Serializer::writePOD(os, children[0].childId);
+		}
+
+		// Handle subsequent children, each preceded by a separator key and a flag.
+		for (size_t i = 1; i < children.size(); ++i) {
+			auto &entry = children[i];
+			const bool shouldUseBlob = utils::getSerializedSize(entry.key) > INTERNAL_KEY_INLINE_THRESHOLD;
+
+			// --- Blob Management for the key ---
+			if (entry.keyBlobId != 0 && !shouldUseBlob) {
+				if (!dataManager) throw std::runtime_error("DataManager required to clean up blob.");
+				dataManager->getBlobManager()->deleteBlobChain(entry.keyBlobId);
+				entry.keyBlobId = 0;
+			}
+			if (shouldUseBlob) {
+				if (!dataManager) throw std::runtime_error("DataManager not available for blob storage.");
+				std::ostringstream keyStream;
+				utils::Serializer::serialize(keyStream, entry.key);
+				if (entry.keyBlobId != 0) {
+					auto blob = dataManager->getBlobManager()->updateBlobChain(entry.keyBlobId, getId(), typeId,
+					                                                           keyStream.str());
+					if (blob.empty()) throw std::runtime_error("Failed to update blob chain for entry key.");
+					entry.keyBlobId = blob[0].getId();
+				} else {
+					auto blob = dataManager->getBlobManager()->createBlobChain(getId(), typeId, keyStream.str());
+					if (blob.empty()) throw std::runtime_error("Failed to create blob chain for key.");
+					entry.keyBlobId = blob[0].getId();
+				}
+			}
+
+			// --- Serialization ---
+			// The flag only indicates if the key is a blob; values are not a concept here.
+			auto flags = shouldUseBlob ? EntrySerializationFlags::KEY_IS_BLOB : EntrySerializationFlags::NONE;
+			utils::Serializer::writePOD(os, flags);
+
+			if (shouldUseBlob) {
 				utils::Serializer::writePOD(os, entry.keyBlobId);
 			} else {
 				utils::Serializer::serialize(os, entry.key);
@@ -447,9 +533,12 @@ namespace graph {
 
 		std::string data = os.str();
 		if (data.size() > DATA_SIZE) {
-			throw std::runtime_error("Child entries exceed node capacity. A split should have been performed.");
+			throw std::runtime_error("FATAL: Internal node data exceeds capacity. A split should have been performed.");
 		}
+
 		metadata.childCount = static_cast<uint32_t>(children.size());
+		// Entry count for an internal node is the number of keys, which is childCount - 1.
+		metadata.entryCount = (children.size() > 0) ? static_cast<uint32_t>(children.size() - 1) : 0;
 		std::memset(dataBuffer, 0, DATA_SIZE);
 		std::memcpy(dataBuffer, data.data(), data.size());
 	}

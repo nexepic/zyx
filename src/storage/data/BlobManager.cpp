@@ -35,6 +35,12 @@ namespace graph::storage {
 		return blobChainManager_->createBlobChain(entityId, entityType, data);
 	}
 
+	std::vector<Blob> BlobManager::updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
+	                                             const std::string &data) const {
+	    // Delegate to BlobChainManager
+	    return blobChainManager_->updateBlobChain(headBlobId, entityId, entityType, data);
+	}
+
 	void BlobManager::deleteBlobChain(int64_t headBlobId) const {
 		// Delegate to BlobChainManager
 		blobChainManager_->deleteBlobChain(headBlobId);

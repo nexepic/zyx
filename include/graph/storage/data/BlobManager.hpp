@@ -31,6 +31,8 @@ namespace graph::storage {
 		[[nodiscard]] std::string readBlobChain(int64_t headBlobId) const;
 		[[nodiscard]] std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType,
 														const std::string &data) const;
+		[[nodiscard]] std::vector<Blob> updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
+														const std::string &data) const;
 		void deleteBlobChain(int64_t headBlobId) const;
 
 	protected:

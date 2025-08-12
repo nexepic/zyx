@@ -46,7 +46,7 @@ namespace graph::storage {
 		// Write each property key-value pair
 		for (const auto &[key, value]: properties) {
 			utils::Serializer::serialize(os, key);
-			utils::Serializer::writePropertyValue(os, value);
+			utils::Serializer::serialize<PropertyValue>(os, value);
 		}
 	}
 
@@ -59,7 +59,7 @@ namespace graph::storage {
 		// Read each property key-value pair
 		for (uint32_t i = 0; i < propertyCount; ++i) {
 			std::string key = utils::Serializer::deserialize<std::string>(is);
-			PropertyValue value = utils::Serializer::readPropertyValue(is);
+			PropertyValue value = utils::Serializer::deserialize<PropertyValue>(is);
 			properties[key] = value;
 		}
 

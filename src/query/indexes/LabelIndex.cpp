@@ -18,7 +18,8 @@ namespace graph::query::indexes {
 
 	LabelIndex::LabelIndex(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType,
 						   std::string stateKey) :
-		dataManager_(std::move(dataManager)), treeManager_(std::make_shared<IndexTreeManager>(dataManager_, indexType)),
+		dataManager_(std::move(dataManager)),
+		treeManager_(std::make_shared<IndexTreeManager>(dataManager_, indexType, PropertyType::STRING)),
 		stateKey_(std::move(stateKey)) {
 		initialize();
 	}
@@ -53,7 +54,7 @@ namespace graph::query::indexes {
 		StateRegistry::getDataManager()->removeState(stateKey_);
 	}
 
-	void LabelIndex::saveState() {
+	void LabelIndex::saveState() const {
 		std::shared_lock lock(mutex_);
 		if (rootId_ != 0) {
 			std::unordered_map<std::string, PropertyValue> properties;
@@ -75,7 +76,7 @@ namespace graph::query::indexes {
 		rootId_ = 0;
 	}
 
-	void LabelIndex::flush() {
+	void LabelIndex::flush() const {
 		// std::unique_lock lock(mutex_);
 		// Call the new saveState method instead of saveRootId
 		saveState();

@@ -60,8 +60,8 @@ namespace graph::utils::test {
 		auto testPropValue = [&](const PropertyValue &val) {
 			stream.str(""); // Clear the stream
 			stream.clear();
-			Serializer::writePropertyValue(stream, val);
-			PropertyValue result = Serializer::readPropertyValue(stream);
+			Serializer::serialize<PropertyValue>(stream, val);
+			PropertyValue result = Serializer::deserialize<PropertyValue>(stream);
 			EXPECT_EQ(val, result);
 		};
 
@@ -78,7 +78,7 @@ namespace graph::utils::test {
 		std::stringstream stream;
 		// Write an invalid type tag that doesn't correspond to any known PropertyType.
 		Serializer::serialize(stream, static_cast<PropertyType>(255));
-		EXPECT_THROW(Serializer::readPropertyValue(stream), std::runtime_error);
+		EXPECT_THROW(Serializer::deserialize<PropertyValue>(stream), std::runtime_error);
 	}
 
 	TEST_F(SerializerTest, ErrorOnInsufficientData) {

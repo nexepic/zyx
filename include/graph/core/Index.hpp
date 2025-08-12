@@ -10,10 +10,11 @@
 
 #pragma once
 
+#include <functional>
 #include <iosfwd>
 #include <memory>
-#include <string>
 #include <vector>
+#include "PropertyTypes.hpp"
 #include "Types.hpp"
 #include "graph/core/Entity.hpp"
 
@@ -28,23 +29,16 @@ namespace graph {
 		// Enum to distinguish between internal nodes and leaf nodes
 		enum class NodeType : uint8_t { INTERNAL = 0, LEAF = 1 };
 
-		enum class DataStorageType : uint8_t {
-			INLINE, // Data stored in dataBuffer
-			BLOB_CHAIN // Data stored in blob chain
-		};
-
 		struct Metadata {
 			int64_t id = 0; // Unique ID for this index entity
 			int64_t parentId = 0; // Parent node ID (0 if root)
 			int64_t nextLeafId = 0; // Next leaf node (for leaf traversal)
 			int64_t prevLeafId = 0; // Previous leaf node (for leaf traversal)
-			int64_t blobId = 0; // ID of the head blob if using blob storage
 			uint32_t indexType = 0; // Type of index (label, property, etc.)
-			uint32_t keyCount = 0; // Number of keys in this node
+			uint32_t entryCount = 0; // Number of keys in this node
 			uint32_t childCount = 0; // Number of children (internal nodes only)
 			uint8_t level = 0; // Level in the tree (0 for leaf)
 			NodeType nodeType = NodeType::LEAF; // Node type (leaf or internal)
-			DataStorageType dataStorageType = DataStorageType::INLINE;
 			bool isActive = true; // Whether this node is active
 		};
 
@@ -54,8 +48,10 @@ namespace graph {
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Index);
 
 		// TODO: Wasting space here, but this is a good compromise for now.
-		static constexpr size_t INTERNAL_KEY_BLOB_THRESHOLD = 32;
-		static constexpr size_t ABSOLUTE_MAX_KEY_LENGTH = 256;
+		// Max size for a key to be stored inline within an internal node's ChildEntry.
+		static constexpr size_t INTERNAL_KEY_INLINE_THRESHOLD = 32;
+		static constexpr size_t LEAF_KEY_INLINE_THRESHOLD = 32;
+		static constexpr size_t LEAF_VALUES_INLINE_THRESHOLD = 32;
 
 		// Constructor for a new index entity
 		Index(int64_t id, NodeType type, uint32_t indexType);
@@ -69,7 +65,7 @@ namespace graph {
 		[[nodiscard]] NodeType getNodeType() const { return metadata.nodeType; }
 		[[nodiscard]] uint32_t getIndexType() const { return metadata.indexType; }
 		[[nodiscard]] bool isLeaf() const { return metadata.nodeType == NodeType::LEAF; }
-		[[nodiscard]] uint32_t getKeyCount() const { return metadata.keyCount; }
+		[[nodiscard]] uint32_t getEntryCount() const { return metadata.entryCount; }
 		[[nodiscard]] uint8_t getLevel() const { return metadata.level; }
 		void setLevel(uint8_t level) { metadata.level = level; }
 
@@ -92,52 +88,62 @@ namespace graph {
 		void serialize(std::ostream &os) const;
 		static Index deserialize(std::istream &is);
 
-		// Internal helpers for string key operations
-		struct KeyValuePair {
-			std::string key;
+		enum class EntrySerializationFlags : uint8_t {
+			NONE = 0,
+			KEY_IS_BLOB = 1 << 0,    // Bit 0 for key
+			VALUES_ARE_BLOB = 1 << 1 // Bit 1 for values
+		};
+
+		// Entry for leaf nodes. Now includes a blob ID for oversized value lists.
+		struct Entry {
+			PropertyValue key;
 			std::vector<int64_t> values;
+			int64_t keyBlobId = 0; // ID of blob for oversized key. 0 if inline.
+			int64_t valuesBlobId = 0; // ID of blob chain for oversized value lists. 0 if inline.
 		};
 
+		// Entry for internal nodes. Now includes a blob ID for oversized keys.
 		struct ChildEntry {
-			std::string key;      // Used for inline keys (<= 32 bytes).
-			int64_t childId;
-			int64_t keyBlobId = 0; // If != 0, key is stored in a blob and 'key' field is empty.
+			PropertyValue key; // Separator key for internal nodes
+			int64_t childId{};
+			int64_t keyBlobId = 0; // ID of blob for oversized key. 0 if inline.
 		};
 
-		void insertStringKey(const std::string &key, int64_t value,
-							 const std::shared_ptr<storage::DataManager> &dataManager);
-		bool removeStringKey(const std::string &key, int64_t value,
-							 const std::shared_ptr<storage::DataManager> &dataManager);
+		void insertEntry(const PropertyValue &key, int64_t value,
+						 const std::shared_ptr<storage::DataManager> &dataManager,
+						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
+		bool removeEntry(const PropertyValue &key, int64_t value,
+						 const std::shared_ptr<storage::DataManager> &dataManager,
+						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
 		[[nodiscard]] std::vector<int64_t>
-		findStringValues(const std::string &key, const std::shared_ptr<storage::DataManager> &dataManager) const;
-		[[nodiscard]] std::vector<KeyValuePair>
-		getAllKeyValues(const std::shared_ptr<storage::DataManager> &dataManager) const;
-		void setAllKeyValues(const std::vector<KeyValuePair> &keyValues,
-							 const std::shared_ptr<storage::DataManager> &dataManager);
-		[[nodiscard]] bool isFullAfterInsert(const std::string &key, int64_t value,
-											 const std::shared_ptr<storage::DataManager> &dataManager) const;
+		findValues(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
+				   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
+		[[nodiscard]] std::vector<Entry> getAllEntries(const std::shared_ptr<storage::DataManager> &dataManager) const;
+		void setAllEntries(std::vector<Entry> &entries, const std::shared_ptr<storage::DataManager> &dataManager);
+		[[nodiscard]] bool wouldLeafOverflowOnInsert(
+				const PropertyValue &key, int64_t value, const std::shared_ptr<storage::DataManager> &dataManager,
+				const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
 
 
-		[[nodiscard]] bool tryAddChild(const ChildEntry& newEntry);
-		void addChild(const ChildEntry& newEntry, const std::shared_ptr<storage::DataManager>& dataManager);
-		bool removeChild(const std::string& key, const std::shared_ptr<storage::DataManager>& dataManager);
-		[[nodiscard]] int64_t findChild(const std::string& key, const std::shared_ptr<storage::DataManager>& dataManager) const;
-		[[nodiscard]] std::vector<ChildEntry> getAllChildren() const;
-		void setAllChildren(const std::vector<ChildEntry>& children);
+		[[nodiscard]] bool
+		wouldInternalOverflowOnAddChild(const ChildEntry &newEntry,
+										const std::shared_ptr<storage::DataManager> &dataManager) const;
 
-		[[nodiscard]] int64_t getBlobId() const;
-		[[nodiscard]] bool hasBlobStorage() const;
+		void addChild(ChildEntry &newEntry, const std::shared_ptr<storage::DataManager> &dataManager,
+					  const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
+		bool removeChild(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
+						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
+		[[nodiscard]] int64_t
+		findChild(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
+				  const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
+		[[nodiscard]] std::vector<ChildEntry>
+		getAllChildren(const std::shared_ptr<storage::DataManager> &dataManager) const;
+		void setAllChildren(std::vector<ChildEntry> &children,
+							const std::shared_ptr<storage::DataManager> &dataManager);
 
 	private:
 		Metadata metadata;
 		char dataBuffer[DATA_SIZE] = {}; // Buffer for serialized key-value pairs or child pointers
-
-		void setDataStorageType(DataStorageType type);
-		[[nodiscard]] DataStorageType getDataStorageType() const;
-		void setBlobId(int64_t blobId);
-
-		void storeDataInBlob(const std::shared_ptr<storage::DataManager> &dataManager, const std::string &data);
-		[[nodiscard]] std::string retrieveDataFromBlob(const std::shared_ptr<storage::DataManager> &dataManager) const;
 	};
 
 } // namespace graph

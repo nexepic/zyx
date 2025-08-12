@@ -646,7 +646,7 @@ namespace graph::storage {
 						table.addRow({"Status", "USED"});
 						table.addRow({"Index ID", std::to_string(index.getId())});
 						table.addRow({"Node Type", index.isLeaf() ? "LEAF" : "INTERNAL"});
-						table.addRow({"Key Count", std::to_string(index.getKeyCount())});
+						table.addRow({"Key Count", std::to_string(index.getEntryCount())});
 						table.addRow({"Active", index.isActive() ? "true" : "false"});
 
 						table.print();

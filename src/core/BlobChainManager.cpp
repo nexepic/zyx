@@ -21,23 +21,12 @@ namespace graph {
 
 	std::vector<Blob> BlobChainManager::createBlobChain(int64_t entityId, uint32_t entityType,
 														const std::string &data) const {
-		// Determine if this is an Index blob
-		bool isIndexBlob = (entityType == Index::typeId);
+		// Compress all data regardless of entity type
+		std::string processedData = compressData(data);
 
-		// Compress the data first (unless it's an index blob)
-		std::string processedData;
-		// TODO: Decouple Index blob compression logic from BlobChainManager
-		if (isIndexBlob) {
-			// For index blobs, skip compression and size limits
-			processedData = data;
-		} else {
-			// For other entities, compress and check size
-			processedData = compressData(data);
-
-			// Check size limit for non-index blobs
-			if (processedData.size() > Blob::MAX_COMPRESSED_SIZE) {
-				throw std::runtime_error("Compressed data exceeds maximum size limit of 5MB");
-			}
+		// Check size limit for all blobs
+		if (processedData.size() > Blob::MAX_COMPRESSED_SIZE) {
+			throw std::runtime_error("Compressed data exceeds maximum size limit of 5MB");
 		}
 
 		// Split into chunks
@@ -58,8 +47,8 @@ namespace graph {
 			Blob currentBlob(0, chunks[i]);
 
 			currentBlob.setEntityInfo(entityId, entityType);
-			// TODO: Decouple Index blob compression logic from BlobChainManager
-			currentBlob.setCompressionInfo(data.size(), !isIndexBlob);
+			// All blobs are now compressed
+			currentBlob.setCompressionInfo(data.size(), true);
 
 			currentBlob.setChainPosition(static_cast<int32_t>(i));
 
@@ -84,6 +73,47 @@ namespace graph {
 		}
 
 		return blobChain;
+	}
+
+	bool BlobChainManager::isDataSame(int64_t headBlobId, const std::string &newData) const {
+	    try {
+	        const std::string currentData = readBlobChain(headBlobId);
+	        return currentData == newData;
+	    } catch (const std::exception &) {
+	        // If we can't read the current data, assume it's different
+	        return false;
+	    }
+	}
+
+	std::vector<Blob> BlobChainManager::updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
+	                                                  const std::string &data) const {
+	    // First check if the data is actually different
+	    if (isDataSame(headBlobId, data)) {
+	        // Data is the same, return the existing chain
+	        const auto chainIds = getBlobChainIds(headBlobId);
+	        std::vector<Blob> existingChain;
+	        existingChain.reserve(chainIds.size());
+
+	        for (auto blobId : chainIds) {
+	            Blob blob = dataManager_->getBlob(blobId);
+	            if (blob.getId() != 0 && blob.isActive()) {
+	                existingChain.push_back(blob);
+	            }
+	        }
+	        return existingChain;
+	    }
+
+	    // Data is different, proceed with update
+	    Blob headBlob = dataManager_->getBlob(headBlobId);
+	    if (headBlob.getId() == 0 || !headBlob.isActive()) {
+	        throw std::runtime_error("Head blob not found or inactive");
+	    }
+
+	    // Delete the existing chain
+	    deleteBlobChain(headBlobId);
+
+	    // Create a new chain with updated data
+	    return createBlobChain(entityId, entityType, data);
 	}
 
 	std::string BlobChainManager::readBlobChain(int64_t headBlobId) const {

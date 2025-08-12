@@ -12,284 +12,359 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 
+using namespace graph;
+using namespace graph::storage;
+
 class IndexTest : public ::testing::Test {
 protected:
+	// --- Comparators ---
+	static bool stringComparator(const PropertyValue &a, const PropertyValue &b) {
+		return std::get<std::string>(a.getVariant()) < std::get<std::string>(b.getVariant());
+	}
+
+	static bool intComparator(const PropertyValue &a, const PropertyValue &b) {
+		return std::get<int64_t>(a.getVariant()) < std::get<int64_t>(b.getVariant());
+	}
+
+	// --- Test Suite Setup ---
 	static void SetUpTestSuite() {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		std::filesystem::path testFilePath = std::filesystem::temp_directory_path() /
-											 ("test_db_file_index_" + boost::uuids::to_string(uuid) + ".dat");
+		testDbPath_ = std::filesystem::temp_directory_path() /
+					  ("test_db_file_index_" + boost::uuids::to_string(uuid) + ".dat");
 
-		database_ = std::make_unique<graph::Database>(testFilePath.string());
+		database_ = std::make_unique<Database>(testDbPath_.string());
 		database_->open();
 		dataManager_ = database_->getStorage()->getDataManager();
 	}
 
 	static void TearDownTestSuite() {
 		if (database_) {
-			// This will also trigger DataManager destruction via FileStorage
 			database_->close();
 			database_.reset();
-		}
-		dataManager_.reset();
-	}
-
-	void SetUp() override {
-		// Create fresh, empty nodes for each test.
-		leafNode_ = graph::Index(0, graph::Index::NodeType::LEAF, 1);
-		internalNode_ = graph::Index(0, graph::Index::NodeType::INTERNAL, 1);
-	}
-
-	void TearDown() override {
-		// Clean up any blobs created during tests
-		if (leafNode_.hasBlobStorage()) {
-			dataManager_->getBlobManager()->deleteBlobChain(leafNode_.getBlobId());
-		}
-		auto children = internalNode_.getAllChildren();
-		for (const auto &entry: children) {
-			if (entry.keyBlobId != 0) {
-				dataManager_->getBlobManager()->deleteBlobChain(entry.keyBlobId);
+			if (std::filesystem::exists(testDbPath_)) {
+				std::filesystem::remove(testDbPath_);
 			}
 		}
 	}
 
-	graph::Index leafNode_;
-	graph::Index internalNode_;
+	// --- Per-Test Setup ---
+	void SetUp() override {
+		// Create fresh nodes for each test to ensure isolation
+		Index newLeaf(0, Index::NodeType::LEAF, 1);
+		dataManager_->addIndexEntity(newLeaf);
+		leafNode_ = newLeaf;
 
-	static std::shared_ptr<graph::storage::DataManager> dataManager_;
-	static std::unique_ptr<graph::Database> database_;
+		Index newInternal(0, Index::NodeType::INTERNAL, 1);
+		dataManager_->addIndexEntity(newInternal);
+		internalNode_ = newInternal;
+	}
+
+	void TearDown() override {
+		// This is now less critical since each test gets a fresh node, but good practice.
+		dataManager_->deleteIndex(leafNode_);
+		dataManager_->deleteIndex(internalNode_);
+	}
+
+	Index leafNode_;
+	Index internalNode_;
+
+	static std::shared_ptr<DataManager> dataManager_;
+	static std::unique_ptr<Database> database_;
+	static std::filesystem::path testDbPath_;
 };
 
 // Initialize static members
-std::shared_ptr<graph::storage::DataManager> IndexTest::dataManager_ = nullptr;
-std::unique_ptr<graph::Database> IndexTest::database_ = nullptr;
+std::shared_ptr<DataManager> IndexTest::dataManager_ = nullptr;
+std::unique_ptr<Database> IndexTest::database_ = nullptr;
+std::filesystem::path IndexTest::testDbPath_;
 
+// =================================================================================
 // --- LEAF NODE TESTS ---
+// =================================================================================
 
-TEST_F(IndexTest, InsertStringKey) {
-	leafNode_.insertStringKey("key1", 100, dataManager_);
-	leafNode_.insertStringKey("key2", 200, dataManager_);
-	leafNode_.insertStringKey("key1", 101, dataManager_); // Add another value to same key
+TEST_F(IndexTest, InsertAndFindEntry) {
+	leafNode_.insertEntry(PropertyValue("key1"), 100, dataManager_, stringComparator);
+	leafNode_.insertEntry(PropertyValue("key2"), 200, dataManager_, stringComparator);
+	leafNode_.insertEntry(PropertyValue("key1"), 101, dataManager_, stringComparator);
 
-	auto values = leafNode_.findStringValues("key1", dataManager_);
+	auto values = leafNode_.findValues(PropertyValue("key1"), dataManager_, stringComparator);
 	ASSERT_EQ(values.size(), 2);
-	ASSERT_TRUE(std::find(values.begin(), values.end(), 100) != values.end());
-	ASSERT_TRUE(std::find(values.begin(), values.end(), 101) != values.end());
+	// Use gtest's container assertions for better output
+	ASSERT_THAT(values, ::testing::UnorderedElementsAre(100, 101));
 
-	auto allKVs = leafNode_.getAllKeyValues(dataManager_);
-	ASSERT_EQ(allKVs.size(), 2); // Should have two distinct keys
+	values = leafNode_.findValues(PropertyValue("key2"), dataManager_, stringComparator);
+	ASSERT_EQ(values.size(), 1);
+	ASSERT_EQ(values[0], 200);
+
+	auto allEntries = leafNode_.getAllEntries(dataManager_);
+	ASSERT_EQ(allEntries.size(), 2);
 }
 
-TEST_F(IndexTest, RemoveStringKey) {
-	leafNode_.insertStringKey("key1", 100, dataManager_);
-	leafNode_.insertStringKey("key1", 101, dataManager_);
+TEST_F(IndexTest, RemoveEntry) {
+	leafNode_.insertEntry(PropertyValue("key1"), 100, dataManager_, stringComparator);
+	leafNode_.insertEntry(PropertyValue("key1"), 101, dataManager_, stringComparator);
 
-	ASSERT_TRUE(leafNode_.removeStringKey("key1", 100, dataManager_));
-	ASSERT_FALSE(leafNode_.removeStringKey("key1", 100, dataManager_)); // Already removed
-
-	auto values = leafNode_.findStringValues("key1", dataManager_);
+	// Remove one value from a key with multiple values
+	ASSERT_TRUE(leafNode_.removeEntry(PropertyValue("key1"), 100, dataManager_, stringComparator));
+	auto values = leafNode_.findValues(PropertyValue("key1"), dataManager_, stringComparator);
 	ASSERT_EQ(values.size(), 1);
 	ASSERT_EQ(values[0], 101);
 
-	ASSERT_TRUE(leafNode_.removeStringKey("key1", 101, dataManager_));
-	values = leafNode_.findStringValues("key1", dataManager_);
+	// Attempt to remove a value that is already gone
+	ASSERT_FALSE(leafNode_.removeEntry(PropertyValue("key1"), 100, dataManager_, stringComparator));
+
+	// Remove the last value for a key, which should remove the entire entry
+	ASSERT_TRUE(leafNode_.removeEntry(PropertyValue("key1"), 101, dataManager_, stringComparator));
+	values = leafNode_.findValues(PropertyValue("key1"), dataManager_, stringComparator);
 	ASSERT_TRUE(values.empty());
+	ASSERT_TRUE(leafNode_.getAllEntries(dataManager_).empty()) << "The entire entry should be gone.";
 }
 
-TEST_F(IndexTest, DataOverflowToBlob) {
-	std::string base_key = "a_long_key_to_ensure_we_take_up_space_";
-	std::vector<graph::Index::KeyValuePair> kvs;
-	std::ostringstream temp_os;
+TEST_F(IndexTest, EmptyNodeOperations) {
+	auto values = leafNode_.findValues(PropertyValue("nonexistent"), dataManager_, stringComparator);
+	ASSERT_TRUE(values.empty());
+	ASSERT_FALSE(leafNode_.removeEntry(PropertyValue("nonexistent"), 123, dataManager_, stringComparator));
+	ASSERT_TRUE(leafNode_.getAllEntries(dataManager_).empty());
+}
 
-	// Fill kvs until the serialized size exceeds DATA_SIZE
-	for (int i = 0; temp_os.str().size() <= graph::Index::DATA_SIZE; ++i) {
-		std::string key = base_key + std::to_string(i);
-		graph::Index::KeyValuePair kvp = {key, {100L + i}};
-		kvs.push_back(kvp);
-		// Simulate serialization to check size
-		graph::utils::Serializer::serialize(temp_os, kvp.key);
-		graph::utils::Serializer::writePOD(temp_os, static_cast<uint32_t>(kvp.values.size()));
-		graph::utils::Serializer::writePOD(temp_os, kvp.values[0]);
+// --- NEW TEST: Verifies the full lifecycle of leaf key blobs ---
+TEST_F(IndexTest, LeafKeyBlobManagement) {
+	std::string oversized_key_str(Index::LEAF_KEY_INLINE_THRESHOLD + 1, 'K');
+
+	// 1. Create with oversized key -> Should create a blob
+	std::vector<Index::Entry> entries = {{PropertyValue(oversized_key_str), {1}, 0, 0}};
+	leafNode_.setAllEntries(entries, dataManager_);
+
+	auto retrieved = leafNode_.getAllEntries(dataManager_);
+	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_NE(retrieved[0].keyBlobId, 0) << "Oversized key should be stored in a blob.";
+	ASSERT_EQ(retrieved[0].key, PropertyValue(oversized_key_str));
+
+	int64_t old_blob_id = retrieved[0].keyBlobId;
+
+	// 2. Update with a small key -> Should delete the old blob and go inline
+	std::vector<Index::Entry> updated_entries = {{PropertyValue("small_key"), {1}, old_blob_id, 0}};
+	leafNode_.setAllEntries(updated_entries, dataManager_);
+
+	retrieved = leafNode_.getAllEntries(dataManager_);
+	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_EQ(retrieved[0].keyBlobId, 0) << "Small key should be stored inline.";
+	ASSERT_EQ(retrieved[0].key, PropertyValue("small_key"));
+
+	// Verify old blob was deleted
+	ASSERT_THROW((void) dataManager_->getBlobManager()->readBlobChain(old_blob_id), std::runtime_error);
+}
+
+// --- REVISED TEST: Verifies the full lifecycle of leaf value blobs ---
+TEST_F(IndexTest, LeafValuesBlobManagement) {
+	std::vector<int64_t> oversized_values;
+	size_t value_count = (Index::LEAF_VALUES_INLINE_THRESHOLD / sizeof(int64_t)) + 1;
+	for (size_t i = 0; i < value_count; ++i) {
+		oversized_values.push_back(static_cast<int64_t>(i));
 	}
 
-	leafNode_.setAllKeyValues(kvs, dataManager_);
+	// 1. Create with oversized values -> Should create a blob
+	std::vector<Index::Entry> entries = {{PropertyValue("key"), oversized_values, 0, 0}};
+	leafNode_.setAllEntries(entries, dataManager_);
 
-	ASSERT_TRUE(leafNode_.hasBlobStorage()) << "Node should have switched to blob storage.";
-	ASSERT_NE(leafNode_.getBlobId(), 0) << "Blob ID should be valid.";
+	auto retrieved = leafNode_.getAllEntries(dataManager_);
+	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_NE(retrieved[0].valuesBlobId, 0) << "Value list should be stored in a blob.";
+	ASSERT_EQ(retrieved[0].values.size(), value_count);
 
-	auto retrievedKVs = leafNode_.getAllKeyValues(dataManager_);
-	ASSERT_EQ(retrievedKVs.size(), kvs.size());
-	ASSERT_EQ(retrievedKVs[0].key, kvs[0].key);
-	ASSERT_EQ(retrievedKVs.back().values[0], kvs.back().values[0]);
+	int64_t old_blob_id = retrieved[0].valuesBlobId;
 
-	std::vector<graph::Index::KeyValuePair> small_kvs = {{"small_key", {999}}};
-	leafNode_.setAllKeyValues(small_kvs, dataManager_);
+	// 2. Update with small value list -> Should delete old blob and go inline
+	std::vector<Index::Entry> small_entry_list = {{PropertyValue("key"), {999}, 0, old_blob_id}};
+	leafNode_.setAllEntries(small_entry_list, dataManager_);
 
-	ASSERT_FALSE(leafNode_.hasBlobStorage()) << "Node should have reverted to inline storage.";
-	ASSERT_EQ(leafNode_.getBlobId(), 0) << "Blob ID should be reset to 0.";
+	retrieved = leafNode_.getAllEntries(dataManager_);
+	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_EQ(retrieved[0].valuesBlobId, 0) << "Value list should revert to inline storage.";
+	ASSERT_EQ(retrieved[0].values[0], 999);
 
-	auto finalKVs = leafNode_.getAllKeyValues(dataManager_);
-	ASSERT_EQ(finalKVs.size(), 1);
-	ASSERT_EQ(finalKVs[0].key, "small_key");
+	// Verify old blob was deleted
+	ASSERT_THROW((void) dataManager_->getBlobManager()->readBlobChain(old_blob_id), std::runtime_error);
 }
 
-
+// =================================================================================
 // --- INTERNAL NODE TESTS ---
+// =================================================================================
 
-TEST_F(IndexTest, AddChildSorted) {
-	internalNode_.addChild({"keyB", 200, 0}, dataManager_);
-	internalNode_.addChild({"keyA", 100, 0}, dataManager_);
-	internalNode_.addChild({"keyC", 300, 0}, dataManager_);
+TEST_F(IndexTest, AddAndRemoveChild) {
+	// Start with the mandatory first child (implicit key)
+	std::vector<Index::ChildEntry> children = {{PropertyValue(std::monostate{}), 5, 0}};
+	internalNode_.setAllChildren(children, dataManager_);
 
-	auto children = internalNode_.getAllChildren();
+	// Add children out of order
+	Index::ChildEntry entry1 = {PropertyValue(200), 20, 0};
+	Index::ChildEntry entry2 = {PropertyValue(100), 10, 0};
+	Index::ChildEntry entry3 = {PropertyValue(300), 30, 0};
+	internalNode_.addChild(entry1, dataManager_, intComparator);
+	internalNode_.addChild(entry2, dataManager_, intComparator);
+	internalNode_.addChild(entry3, dataManager_, intComparator);
+
+	auto final_children = internalNode_.getAllChildren(dataManager_);
+	ASSERT_EQ(final_children.size(), 4);
+	// Check sorting
+	ASSERT_EQ(final_children[1].key, PropertyValue(100));
+	ASSERT_EQ(final_children[2].key, PropertyValue(200));
+	ASSERT_EQ(final_children[3].key, PropertyValue(300));
+
+	// Remove a middle child
+	ASSERT_TRUE(internalNode_.removeChild(PropertyValue(200), dataManager_, intComparator));
+	children = internalNode_.getAllChildren(dataManager_);
 	ASSERT_EQ(children.size(), 3);
+	ASSERT_EQ(children[1].key, PropertyValue(100));
+	ASSERT_EQ(children[2].key, PropertyValue(300));
 
-	// Verify they are stored in sorted order by key
-	ASSERT_EQ(children[0].key, "keyA");
-	ASSERT_EQ(children[0].childId, 100);
-	ASSERT_EQ(children[1].key, "keyB");
-	ASSERT_EQ(children[1].childId, 200);
-	ASSERT_EQ(children[2].key, "keyC");
-	ASSERT_EQ(children[2].childId, 300);
+	// Attempt to remove non-existent child
+	ASSERT_FALSE(internalNode_.removeChild(PropertyValue(999), dataManager_, intComparator));
 }
 
-TEST_F(IndexTest, RemoveChild) {
-	internalNode_.addChild({"keyA", 100, 0}, dataManager_);
-	internalNode_.addChild({"keyB", 200, 0}, dataManager_);
-	ASSERT_TRUE(internalNode_.removeChild("keyA", dataManager_));
+TEST_F(IndexTest, FindChild) {
+	std::vector<Index::ChildEntry> children = {
+			{PropertyValue(std::monostate{}), 5, 0}, {PropertyValue(100), 10, 0}, {PropertyValue(200), 20, 0}};
+	internalNode_.setAllChildren(children, dataManager_);
 
-	auto children = internalNode_.getAllChildren();
-	ASSERT_EQ(children.size(), 1);
-	ASSERT_EQ(children[0].key, "keyB");
-	ASSERT_EQ(children[0].childId, 200);
-
-	ASSERT_FALSE(internalNode_.removeChild("keyC", dataManager_)); // Non-existent key
+	// Test keys that fall between separators
+	ASSERT_EQ(internalNode_.findChild(PropertyValue(50), dataManager_, intComparator), 5); // Before first key
+	ASSERT_EQ(internalNode_.findChild(PropertyValue(150), dataManager_, intComparator), 10); // Between 100 and 200
+	ASSERT_EQ(internalNode_.findChild(PropertyValue(250), dataManager_, intComparator), 20); // After last key
+	// Test keys that exactly match separators
+	ASSERT_EQ(internalNode_.findChild(PropertyValue(100), dataManager_, intComparator), 10);
+	ASSERT_EQ(internalNode_.findChild(PropertyValue(200), dataManager_, intComparator), 20);
 }
 
-TEST_F(IndexTest, AddChildWithBlobKey) {
-	// A key longer than INTERNAL_KEY_BLOB_THRESHOLD (32)
-	std::string longKey = "this_is_a_very_long_key_that_must_be_stored_in_a_blob";
-	ASSERT_GT(longKey.length(), graph::Index::INTERNAL_KEY_BLOB_THRESHOLD);
+// --- REVISED TEST: Verifies the full lifecycle of internal key blobs ---
+TEST_F(IndexTest, InternalKeyBlobManagement) {
+	std::string oversized_key_str(Index::INTERNAL_KEY_INLINE_THRESHOLD + 1, 'X');
+	Index::ChildEntry oversized_entry = {PropertyValue(oversized_key_str), 123, 0};
 
-	// IndexTreeManager would be responsible for creating the blob. Here we simulate it.
-	auto blobChain =
-			dataManager_->getBlobManager()->createBlobChain(internalNode_.getId(), graph::Index::typeId, longKey);
-	ASSERT_FALSE(blobChain.empty());
-	int64_t blobId = blobChain.front().getId();
+	// 1. Create with oversized key -> should use blob
+	std::vector<Index::ChildEntry> children = {{PropertyValue(std::monostate{}), 1, 0}, oversized_entry};
+	internalNode_.setAllChildren(children, dataManager_);
 
-	internalNode_.addChild({"keyA", 100, 0}, dataManager_);
-	internalNode_.addChild({"", blobId, blobId}, dataManager_); // Add blob key
+	auto retrieved = internalNode_.getAllChildren(dataManager_);
+	ASSERT_EQ(retrieved.size(), 2);
+	ASSERT_NE(retrieved[1].keyBlobId, 0) << "Oversized key should be in a blob.";
+	ASSERT_EQ(retrieved[1].key, PropertyValue(oversized_key_str));
 
-	auto children = internalNode_.getAllChildren();
-	ASSERT_EQ(children.size(), 2);
-
-	// Find the entry for the blob key
-	auto it = std::find_if(children.begin(), children.end(), [](const auto &entry) { return entry.keyBlobId != 0; });
-
-	ASSERT_NE(it, children.end());
-	EXPECT_EQ(it->keyBlobId, blobId);
-	EXPECT_TRUE(it->key.empty());
-
-	// Verify findChild can resolve the blob key
-	int64_t foundChildId = internalNode_.findChild(longKey, dataManager_);
-	EXPECT_EQ(foundChildId, blobId); // We stored blobId as childId for this test
+	// 2. Remove entry with blob key and verify blob is gone
+	int64_t blob_id = retrieved[1].keyBlobId;
+	ASSERT_TRUE(internalNode_.removeChild(PropertyValue(oversized_key_str), dataManager_, stringComparator));
+	ASSERT_THROW((void) dataManager_->getBlobManager()->readBlobChain(blob_id), std::runtime_error);
 }
 
-// --- GENERAL/STATIC TESTS ---
+// =================================================================================
+// --- GENERAL, SERIALIZATION & FULLNESS TESTS ---
+// =================================================================================
 
-TEST_F(IndexTest, SerializationDeserialization) {
-	leafNode_.insertStringKey("key1", 100, dataManager_);
-	leafNode_.insertStringKey("key2", 200, dataManager_);
+TEST_F(IndexTest, BlobGarbageCollectionOnRemove) {
+	// 1. Setup an entry with both key and value blobs
+	std::string oversized_key(Index::LEAF_KEY_INLINE_THRESHOLD + 1, 'K');
+	std::vector<int64_t> oversized_values;
+	// Keep the value count small but still enough to trigger a blob, makes the test faster
+	size_t value_count = (Index::LEAF_VALUES_INLINE_THRESHOLD / sizeof(int64_t)) + 1;
+	for (size_t i = 0; i < value_count; ++i)
+		oversized_values.push_back(i);
 
-	std::ostringstream os;
-	leafNode_.serialize(os);
+	std::vector<Index::Entry> entries = {{PropertyValue(oversized_key), oversized_values, 0, 0}};
+	leafNode_.setAllEntries(entries, dataManager_);
 
-	std::istringstream is(os.str());
-	auto deserializedNode = graph::Index::deserialize(is);
+	auto retrieved = leafNode_.getAllEntries(dataManager_);
+	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_NE(retrieved[0].keyBlobId, 0);
+	ASSERT_NE(retrieved[0].valuesBlobId, 0);
+	int64_t key_blob_id = retrieved[0].keyBlobId;
+	int64_t values_blob_id = retrieved[0].valuesBlobId;
 
-	auto values1 = deserializedNode.findStringValues("key1", dataManager_);
-	ASSERT_EQ(values1.size(), 1);
-	ASSERT_EQ(values1[0], 100);
+	// 2. MODIFICATION: Remove ALL values, one by one.
+	// The garbage collection should only happen after the LAST value is removed.
+	for (size_t i = 0; i < oversized_values.size(); ++i) {
+		bool is_last_element = (i == oversized_values.size() - 1);
 
-	auto values2 = deserializedNode.findStringValues("key2", dataManager_);
-	ASSERT_EQ(values2.size(), 1);
-	ASSERT_EQ(values2[0], 200);
+		ASSERT_TRUE(leafNode_.removeEntry(PropertyValue(oversized_key), oversized_values[i], dataManager_,
+										  stringComparator));
+
+		// Before the last element is removed, the entry list should NOT be empty.
+		if (!is_last_element) {
+			ASSERT_FALSE(leafNode_.getAllEntries(dataManager_).empty())
+					<< "Entry should not be deleted until its value list is empty.";
+		}
+	}
+
+	// 3. After the loop, the entry should be gone.
+	ASSERT_TRUE(leafNode_.getAllEntries(dataManager_).empty())
+			<< "The entry should be deleted after its last value was removed.";
+
+	// 4. Verify both blobs are gone from storage
+	ASSERT_THROW((void) dataManager_->getBlobManager()->readBlobChain(key_blob_id), std::runtime_error);
+	ASSERT_THROW((void) dataManager_->getBlobManager()->readBlobChain(values_blob_id), std::runtime_error);
 }
 
-/**
- * @brief Tests that removing the last value for a key also removes the key itself.
- */
-TEST_F(IndexTest, RemoveLastValueRemovesKey) {
-	leafNode_.insertStringKey("test_key", 1, dataManager_);
-	leafNode_.insertStringKey("another_key", 2, dataManager_);
+TEST_F(IndexTest, WouldOverflowChecks) {
+	// --- Leaf Node Test ---
+	// 1. Fill the node almost to capacity
+	std::vector<Index::Entry> entries;
+	size_t estimatedSize = 0;
+	int key_counter = 0;
+	while (true) {
+		PropertyValue key(std::to_string(key_counter++));
+		int64_t value = 1;
 
-	// Remove the only value for "test_key"
-	ASSERT_TRUE(leafNode_.removeStringKey("test_key", 1, dataManager_));
+		// 1 byte for flags, size of the key, 4 bytes for value count, size of the value.
+		// No space is allocated for blob IDs when they are not used.
+		size_t entrySize = sizeof(uint8_t) + // Flags byte
+						   utils::getSerializedSize(key) + // Inline key
+						   sizeof(uint32_t) + // Value count
+						   sizeof(value); // Inline value
 
-	// The key itself should now be gone.
-	auto allKVs = leafNode_.getAllKeyValues(dataManager_);
-	ASSERT_EQ(allKVs.size(), 1);
-	ASSERT_EQ(allKVs[0].key, "another_key");
+		if (estimatedSize + entrySize > Index::DATA_SIZE) {
+			break;
+		}
+		entries.push_back({key, {value}, 0, 0});
+		estimatedSize += entrySize;
+	}
 
-	// Finding the removed key should yield no results.
-	ASSERT_TRUE(leafNode_.findStringValues("test_key", dataManager_).empty());
+	// This check ensures we're actually testing something. If the loop didn't run,
+	// DATA_SIZE might be too small for even one entry.
+	ASSERT_FALSE(entries.empty()) << "Node could not fit even a single test entry.";
+	leafNode_.setAllEntries(entries, dataManager_);
+
+	// 2. Check that adding one more small entry would cause an overflow
+	ASSERT_TRUE(leafNode_.wouldLeafOverflowOnInsert(PropertyValue("one_more"), 1, dataManager_, stringComparator))
+			<< "Adding to a nearly full node should trigger overflow.";
+
+	// 3. Check that an empty node does not overflow with a single small entry
+	Index empty_leaf(0, Index::NodeType::LEAF, 1);
+	dataManager_->addIndexEntity(empty_leaf);
+	ASSERT_FALSE(empty_leaf.wouldLeafOverflowOnInsert(PropertyValue("a"), 1, dataManager_, stringComparator))
+			<< "Adding a single entry to an empty node should not cause an overflow.";
+	dataManager_->deleteIndex(empty_leaf);
 }
 
-/**
- * @brief Tests edge cases for finding a child pointer in an internal node.
- */
-TEST_F(IndexTest, FindChildEdgeCases) {
-	internalNode_.addChild({"key_100", 100, 0}, dataManager_);
-	internalNode_.addChild({"key_200", 200, 0}, dataManager_);
-
-	// The first child has an implicit key of -infinity.
-	// We need to add it to simulate a real internal node post-split.
-	auto children = internalNode_.getAllChildren();
-	children.insert(children.begin(), {"", 50, 0});
-	internalNode_.setAllChildren(children);
-
-	// Case 1: Key is smaller than all known keys, should go to the first child.
-	ASSERT_EQ(internalNode_.findChild("aaa_before_all", dataManager_), 50);
-
-	// Case 2: Key is between two keys.
-	ASSERT_EQ(internalNode_.findChild("key_150", dataManager_), 100);
-
-	// Case 3: Key is larger than all known keys.
-	ASSERT_EQ(internalNode_.findChild("zzz_after_all", dataManager_), 200);
-}
-
-/**
- * @brief Verifies that methods requiring a DataManager for blob operations
- * throw an exception if one is not provided.
- */
 TEST_F(IndexTest, OperationsWithNullDataManager) {
-	// Create a key-value structure that is GUARANTEED to be larger than DATA_SIZE
-	// to force the code path that requires blob storage.
-	std::vector<graph::Index::KeyValuePair> kvs;
-	std::string largeKey(graph::Index::DATA_SIZE, 'X'); // Create a key that alone fills the buffer
-	kvs.push_back({largeKey, {123}}); // Adding the value makes it overflow.
+	// Test leaf node blob operations
+	std::vector<int64_t> oversized_values(Index::LEAF_VALUES_INLINE_THRESHOLD + 1, 1);
+	std::vector<Index::Entry> entries = {{PropertyValue("key"), oversized_values}};
+	ASSERT_THROW(leafNode_.setAllEntries(entries, nullptr), std::runtime_error);
 
-	// This will now attempt to create a blob because data size > DATA_SIZE,
-	// and it must fail because the dataManager is null.
-	ASSERT_THROW(leafNode_.setAllKeyValues(kvs, nullptr), std::runtime_error);
+	leafNode_.setAllEntries(entries, dataManager_);
+	ASSERT_THROW((void) leafNode_.getAllEntries(nullptr), std::runtime_error);
 
-	// Now, test the retrieval side.
-	// First, successfully store the data with a valid manager.
-	leafNode_.setAllKeyValues(kvs, dataManager_);
-	ASSERT_TRUE(leafNode_.hasBlobStorage());
+	// Test internal node blob operations
+	std::string oversized_key_str(Index::INTERNAL_KEY_INLINE_THRESHOLD + 1, 'X');
+	std::vector<Index::ChildEntry> children = {{PropertyValue(std::monostate{}), 1, 0},
+											   {PropertyValue(oversized_key_str), 123, 0}};
+	ASSERT_THROW(internalNode_.setAllChildren(children, nullptr), std::runtime_error);
 
-	// Attempting to retrieve the data with a null manager must also fail.
-	ASSERT_THROW(leafNode_.getAllKeyValues(nullptr), std::runtime_error);
-}
-
-TEST_F(IndexTest, ConstantsAndSize) {
-	EXPECT_EQ(graph::Index::TOTAL_INDEX_SIZE, 256u);
-	EXPECT_EQ(graph::Index::METADATA_SIZE,
-			  offsetof(graph::Index::Metadata, isActive) + sizeof(graph::Index::Metadata::isActive));
-	EXPECT_EQ(graph::Index::DATA_SIZE, graph::Index::TOTAL_INDEX_SIZE - (offsetof(graph::Index::Metadata, isActive) +
-																		 sizeof(graph::Index::Metadata::isActive)));
+	internalNode_.setAllChildren(children, dataManager_);
+	ASSERT_THROW((void) internalNode_.getAllChildren(nullptr), std::runtime_error);
 }
