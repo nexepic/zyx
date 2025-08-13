@@ -217,8 +217,6 @@ namespace graph::query::indexes {
 			}
 		}
 
-		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
-
 		return ranges;
 	}
 
@@ -234,8 +232,6 @@ namespace graph::query::indexes {
 				ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
 			}
 		}
-
-		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
 
 		return ranges;
 	}
