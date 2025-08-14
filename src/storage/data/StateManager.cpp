@@ -14,15 +14,15 @@
 #include <sstream>
 #include <utility>
 #include "graph/core/StateChainManager.hpp"
+#include "graph/storage/data/EntityTraits.hpp"
+#include "graph/storage/data/PropertyManager.hpp"
 
 namespace graph::storage {
 
 	StateManager::StateManager(const std::shared_ptr<DataManager> &dataManager,
-							   std::shared_ptr<PropertyManager> propertyManager,
 							   std::shared_ptr<StateChainManager> stateChainManager,
 							   std::shared_ptr<DeletionManager> deletionManager) :
-		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)),
-		stateChainManager_(std::move(stateChainManager)) {}
+		BaseEntityManager(dataManager, std::move(deletionManager)), stateChainManager_(std::move(stateChainManager)) {}
 
 	void StateManager::add(State &state) {
 		BaseEntityManager::add(state);
@@ -103,9 +103,12 @@ namespace graph::storage {
 		if (!dataManager)
 			return;
 
+		// Get PropertyManager from DataManager
+		auto propertyManager = dataManager->getPropertyManager();
+
 		// Serialize the properties
 		std::stringstream ss;
-		if (propertyManager_) {
+		if (propertyManager) {
 			PropertyManager::serializeProperties(ss, properties);
 		}
 		std::string serializedData = ss.str();
@@ -123,7 +126,11 @@ namespace graph::storage {
 
 	std::unordered_map<std::string, PropertyValue> StateManager::getStateProperties(const std::string &stateKey) {
 		auto dataManager = dataManager_.lock();
-		if (!dataManager || !propertyManager_)
+		if (!dataManager)
+			return {};
+
+		auto propertyManager = dataManager->getPropertyManager();
+		if (!propertyManager)
 			return {};
 
 		State state = findByKey(stateKey);

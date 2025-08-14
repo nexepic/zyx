@@ -23,8 +23,7 @@ namespace graph::storage {
 
 	class BlobManager : public BaseEntityManager<Blob> {
 	public:
-		BlobManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<PropertyManager> propertyManager,
-					std::shared_ptr<BlobChainManager> blobChainManager,
+		BlobManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<BlobChainManager> blobChainManager,
 					std::shared_ptr<DeletionManager> deletionManager);
 
 		// Blob-specific methods that delegate to BlobChainManager

@@ -15,6 +15,7 @@
 #include <string>
 #include <unordered_map>
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/storage/data/BaseEntityManager.hpp"
 
 namespace graph::storage {
 
@@ -23,9 +24,10 @@ namespace graph::storage {
 	/**
 	 * Manages property-related operations across all entity types
 	 */
-	class PropertyManager {
+	class PropertyManager : public BaseEntityManager<Property> {
 	public:
-		explicit PropertyManager(const std::shared_ptr<DataManager> &dataManager);
+		PropertyManager(const std::shared_ptr<DataManager> &dataManager,
+						std::shared_ptr<DeletionManager> deletionManager);
 
 		// Serialization methods
 		[[nodiscard]] static uint32_t
@@ -68,8 +70,10 @@ namespace graph::storage {
 		template<typename EntityType>
 		size_t calculateEntityTotalPropertySize(int64_t entityId);
 
-	private:
-		std::weak_ptr<DataManager> dataManager_;
+	protected:
+		int64_t doAllocateId() override;
+
+		void doRemove(Property &property) override;
 	};
 
 } // namespace graph::storage

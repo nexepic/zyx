@@ -23,8 +23,7 @@ namespace graph::storage {
 	 */
 	class NodeManager : public BaseEntityManager<Node> {
 	public:
-		NodeManager(const std::shared_ptr<DataManager>& dataManager, std::shared_ptr<PropertyManager> propertyManager,
-					std::shared_ptr<DeletionManager> deletionManager);
+		NodeManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<DeletionManager> deletionManager);
 
 	protected:
 		int64_t doAllocateId() override;

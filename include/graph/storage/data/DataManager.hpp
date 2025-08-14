@@ -279,7 +279,6 @@ namespace graph::storage {
 		std::shared_ptr<PropertyManager> propertyManager_;
 		std::shared_ptr<NodeManager> nodeManager_;
 		std::shared_ptr<EdgeManager> edgeManager_;
-		std::shared_ptr<PropertyEntityManager> propertyEntityManager_;
 		std::shared_ptr<BlobManager> blobManager_;
 		std::shared_ptr<IndexEntityManager> indexEntityManager_;
 		std::shared_ptr<StateManager> stateEntityManager_;

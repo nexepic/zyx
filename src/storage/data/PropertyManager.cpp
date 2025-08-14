@@ -23,7 +23,22 @@
 
 namespace graph::storage {
 
-	PropertyManager::PropertyManager(const std::shared_ptr<DataManager> &dataManager) : dataManager_(dataManager) {}
+	PropertyManager::PropertyManager(const std::shared_ptr<DataManager> &dataManager,
+									 std::shared_ptr<DeletionManager> deletionManager) :
+		BaseEntityManager(dataManager, std::move(deletionManager)) {}
+
+	int64_t PropertyManager::doAllocateId() {
+		auto dataManager = dataManager_.lock();
+		if (!dataManager) {
+			throw std::runtime_error("DataManager is not available for ID allocation.");
+		}
+		return dataManager->getIdAllocator()->allocateId(Property::typeId);
+	}
+
+	void PropertyManager::doRemove(Property &property) {
+		// Delegate the complex deletion logic to the DeletionManager.
+		deletionManager_->deleteProperty(property);
+	}
 
 	uint32_t
 	PropertyManager::calculateSerializedSize(const std::unordered_map<std::string, PropertyValue> &properties) {

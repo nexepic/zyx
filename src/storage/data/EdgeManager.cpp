@@ -15,13 +15,12 @@
 namespace graph::storage {
 
 	EdgeManager::EdgeManager(const std::shared_ptr<DataManager> &dataManager,
-							 std::shared_ptr<PropertyManager> propertyManager,
 							 std::shared_ptr<DeletionManager> deletionManager) :
-		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)) {}
+		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 
 	void EdgeManager::doRemove(Edge &edge) {
 		if (const auto dataManager = dataManager_.lock()) {
-		    dataManager->getRelationshipTraversal()->unlinkEdge(edge);
+			dataManager->getRelationshipTraversal()->unlinkEdge(edge);
 			deletionManager_->deleteEdge(edge);
 		}
 	}

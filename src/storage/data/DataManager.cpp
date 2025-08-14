@@ -19,9 +19,9 @@
 #include "graph/storage/SpaceManager.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/EdgeManager.hpp"
+#include "graph/storage/data/EntityTraits.hpp"
 #include "graph/storage/data/IndexEntityManager.hpp"
 #include "graph/storage/data/NodeManager.hpp"
-#include "graph/storage/data/PropertyEntityManager.hpp"
 #include "graph/storage/data/PropertyManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
@@ -73,19 +73,14 @@ namespace graph::storage {
 		stateChainManager_ = std::make_shared<StateChainManager>(shared_from_this());
 
 		// Create property manager first as others depend on it
-		propertyManager_ = std::make_shared<PropertyManager>(shared_from_this());
+		propertyManager_ = std::make_shared<PropertyManager>(shared_from_this(), deletionManager_);
 
 		// Create entity managers
-		nodeManager_ = std::make_shared<NodeManager>(shared_from_this(), propertyManager_, deletionManager_);
-		edgeManager_ = std::make_shared<EdgeManager>(shared_from_this(), propertyManager_, deletionManager_);
-		propertyEntityManager_ =
-				std::make_shared<PropertyEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
-		blobManager_ = std::make_shared<BlobManager>(shared_from_this(), propertyManager_, blobChainManager_,
-														   deletionManager_);
-		indexEntityManager_ =
-				std::make_shared<IndexEntityManager>(shared_from_this(), propertyManager_, deletionManager_);
-		stateEntityManager_ = std::make_shared<StateManager>(shared_from_this(), propertyManager_, stateChainManager_,
-															 deletionManager_);
+		nodeManager_ = std::make_shared<NodeManager>(shared_from_this(), deletionManager_);
+		edgeManager_ = std::make_shared<EdgeManager>(shared_from_this(), deletionManager_);
+		blobManager_ = std::make_shared<BlobManager>(shared_from_this(), blobChainManager_, deletionManager_);
+		indexEntityManager_ = std::make_shared<IndexEntityManager>(shared_from_this(), deletionManager_);
+		stateEntityManager_ = std::make_shared<StateManager>(shared_from_this(), stateChainManager_, deletionManager_);
 	}
 
 	// --- Node Operations (delegate to NodeManager) ---
@@ -162,13 +157,13 @@ namespace graph::storage {
 
 	// --- Property Entity Operations ---
 
-	void DataManager::addPropertyEntity(Property &property) const { propertyEntityManager_->add(property); }
+	void DataManager::addPropertyEntity(Property &property) const { propertyManager_->add(property); }
 
-	void DataManager::updatePropertyEntity(const Property &property) const { propertyEntityManager_->update(property); }
+	void DataManager::updatePropertyEntity(const Property &property) const { propertyManager_->update(property); }
 
-	void DataManager::deleteProperty(Property &property) const { propertyEntityManager_->remove(property); }
+	void DataManager::deleteProperty(Property &property) const { propertyManager_->remove(property); }
 
-	Property DataManager::getProperty(int64_t id) const { return propertyEntityManager_->get(id); }
+	Property DataManager::getProperty(int64_t id) const { return propertyManager_->get(id); }
 
 	// --- Blob Operations ---
 
@@ -250,41 +245,41 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::getEntitiesInRange(int64_t startId, int64_t endId, size_t limit) {
-	    std::vector<EntityType> result;
-	    if (startId > endId || limit == 0) {
-	        return result;
-	    }
+		std::vector<EntityType> result;
+		if (startId > endId || limit == 0) {
+			return result;
+		}
 
-	    // Find relevant segments
-	    std::vector<uint64_t> relevantSegments;
-	    auto entityType = EntityType::typeId;
-	    auto segments = segmentTracker_->getSegmentsByType(entityType);
+		// Find relevant segments
+		std::vector<uint64_t> relevantSegments;
+		auto entityType = EntityType::typeId;
+		auto segments = segmentTracker_->getSegmentsByType(entityType);
 
-	    for (const auto &header: segments) {
-	        int64_t segmentStartId = header.start_id;
-	        int64_t segmentEndId = header.start_id + header.used - 1;
+		for (const auto &header: segments) {
+			int64_t segmentStartId = header.start_id;
+			int64_t segmentEndId = header.start_id + header.used - 1;
 
-	        if (segmentStartId <= endId && segmentEndId >= startId) {
-	            relevantSegments.push_back(header.file_offset);
-	        }
-	    }
+			if (segmentStartId <= endId && segmentEndId >= startId) {
+				relevantSegments.push_back(header.file_offset);
+			}
+		}
 
-	    // Load entities from segments
-	    for (uint64_t segmentOffset: relevantSegments) {
-	        auto segmentEntities =
-	                loadEntitiesFromSegment<EntityType>(segmentOffset, startId, endId, limit - result.size());
+		// Load entities from segments
+		for (uint64_t segmentOffset: relevantSegments) {
+			auto segmentEntities =
+					loadEntitiesFromSegment<EntityType>(segmentOffset, startId, endId, limit - result.size());
 
-	        for (const EntityType &entity: segmentEntities) {
-	            result.push_back(entity);
-	            addToCache(entity);
-	        }
+			for (const EntityType &entity: segmentEntities) {
+				result.push_back(entity);
+				addToCache(entity);
+			}
 
-	        if (result.size() >= limit) {
-	            break;
-	        }
-	    }
+			if (result.size() >= limit) {
+				break;
+			}
+		}
 
-	    return result;
+		return result;
 	}
 
 	template<typename EntityType>

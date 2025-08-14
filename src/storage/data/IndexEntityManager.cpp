@@ -14,9 +14,8 @@
 namespace graph::storage {
 
 	IndexEntityManager::IndexEntityManager(const std::shared_ptr<DataManager> &dataManager,
-										   std::shared_ptr<PropertyManager> propertyManager,
 										   std::shared_ptr<DeletionManager> deletionManager) :
-		BaseEntityManager(dataManager, std::move(propertyManager), std::move(deletionManager)) {}
+		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 
 	void IndexEntityManager::doRemove(Index &index) { deletionManager_->deleteIndex(index); }
 

@@ -24,11 +24,11 @@ namespace graph::storage {
 
 	class StateManager : public BaseEntityManager<State> {
 	public:
-		StateManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<PropertyManager> propertyManager,
+		StateManager(const std::shared_ptr<DataManager> &dataManager,
 					 std::shared_ptr<StateChainManager> stateChainManager,
 					 std::shared_ptr<DeletionManager> deletionManager);
 
-		void add(State& state) override;
+		void add(State &state) override;
 
 		// State-specific methods
 		State findByKey(const std::string &key);
