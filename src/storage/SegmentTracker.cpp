@@ -149,7 +149,7 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		std::vector<SegmentHeader> result;
-		for (const auto &[offset, header]: segments_) {
+		for (const auto &header: segments_ | std::views::values) {
 			if (header.data_type == type) {
 				result.push_back(header);
 			}

@@ -9,7 +9,6 @@
  **/
 
 #include "graph/query/indexes/IndexBuilder.hpp"
-#include <algorithm>
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/query/indexes/IndexManager.hpp"
@@ -217,8 +216,6 @@ namespace graph::query::indexes {
 			}
 		}
 
-		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
-
 		return ranges;
 	}
 
@@ -234,8 +231,6 @@ namespace graph::query::indexes {
 				ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
 			}
 		}
-
-		std::ranges::sort(ranges, [](const auto &a, const auto &b) { return a.first < b.first; });
 
 		return ranges;
 	}

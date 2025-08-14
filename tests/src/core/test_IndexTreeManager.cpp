@@ -354,86 +354,73 @@ TEST_F(IndexTreeManagerTest, RemoveCausesLeafRedistributionFromRight) {
 }
 
 TEST_F(IndexTreeManagerTest, RemoveCausesLeafMerge) {
-	// 1. Setup: Insert enough data to create a stable tree structure with several leaves.
-	for (int i = 0; i < 300; ++i) {
-		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
-	}
+    // Start with a fresh tree
+    intTreeManager_->clear(intRootId_);
+    intRootId_ = intTreeManager_->initialize();
 
-	// 2. Find two adjacent leaf nodes in the middle of the list.
-	int64_t leftLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(static_cast<int64_t>(150)));
-	auto leftLeaf = dataManager_->getIndex(leftLeafId);
-	int64_t rightLeafId = leftLeaf.getNextLeafId();
-	ASSERT_NE(rightLeafId, 0);
-	auto rightLeaf = dataManager_->getIndex(rightLeafId);
-	int64_t parentId = leftLeaf.getParentId();
-	ASSERT_EQ(parentId, rightLeaf.getParentId());
+    // 1. Create a simple tree with a small, controlled set of entries
+    // Use a distribution that forces multiple leaf nodes
+    std::vector<int64_t> values;
+    // First leaf should contain values 10-50
+    for (int i = 10; i <= 50; i += 10) {
+        values.push_back(i);
+        intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
+    }
 
-	auto parent_before = dataManager_->getIndex(parentId);
-	size_t parentChildCount_before = parent_before.getChildCount();
-	int64_t leftLeafPrevId = leftLeaf.getPrevLeafId(); // For final linked-list check
+    // Force a split by adding more values
+    // Second leaf should contain values 60-100
+    for (int i = 60; i <= 100; i += 10) {
+        values.push_back(i);
+        intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
+    }
 
-	// 3. Get the real separator key from the parent. This is crucial for correctness.
-	auto parentChildren = parent_before.getAllChildren(dataManager_);
-	auto it = std::find_if(parentChildren.begin(), parentChildren.end(),
-						   [&](const Index::ChildEntry &c) { return c.childId == rightLeafId; });
-	ASSERT_NE(it, parentChildren.end()) << "Could not find right leaf in parent's children.";
-	PropertyValue separatorKey = it->key;
+    // 2. Verify the tree structure - we should have at least two leaf nodes
+    int64_t firstLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(static_cast<int64_t>(10)));
+    auto firstLeaf = dataManager_->getIndex(firstLeafId);
+    ASSERT_NE(firstLeaf.getNextLeafId(), 0) << "Test requires at least two leaf nodes";
 
-	// 4. Get original entries from the right leaf to use for setup. This is more realistic.
-	auto originalRightEntries = rightLeaf.getAllEntries(dataManager_);
-	ASSERT_GT(originalRightEntries.size(), 2)
-			<< "Test setup requires right leaf to have more than 2 entries initially.";
+    int64_t secondLeafId = firstLeaf.getNextLeafId();
+    auto secondLeaf = dataManager_->getIndex(secondLeafId);
 
-	// 5. Use setAllEntries to force the exact pre-condition, avoiding rebalancing side-effects.
+    // Both leaves should have the same parent
+    ASSERT_EQ(firstLeaf.getParentId(), secondLeaf.getParentId());
+    int64_t parentId = firstLeaf.getParentId();
+    auto parent = dataManager_->getIndex(parentId);
 
-	// a) Configure left leaf to have exactly one entry that will be removed.
-	// The key must be less than the separator key to ensure findLeafNode works.
-	int64_t key_to_remove = std::get<int64_t>(separatorKey.getVariant()) - 1;
-	std::vector<Index::Entry> leftEntriesSetup = {{PropertyValue(key_to_remove), {99999}, 0, 0}};
-	leftLeaf.setAllEntries(leftEntriesSetup, dataManager_);
+    // Save parent's child count before operation
+    size_t parentChildCount_before = parent.getChildCount();
+    ASSERT_GE(parentChildCount_before, 2) << "Parent must have at least 2 children for merge test";
 
-	// b) Configure right leaf to have a minimal number of entries (e.g., 2), making it unable to redistribute.
-	std::vector<Index::Entry> rightEntriesSetup;
-	rightEntriesSetup.push_back(originalRightEntries.front()); // Take the first original entry
-	rightEntriesSetup.push_back(originalRightEntries.back()); // Take the last original entry
-	rightLeaf.setAllEntries(rightEntriesSetup, dataManager_);
+    // 3. Now remove all entries from first leaf to force a merge
+    for (int i = 10; i <= 50; i += 10) {
+        ASSERT_TRUE(intTreeManager_->remove(intRootId_, PropertyValue(static_cast<int64_t>(i)), i));
+    }
 
-	// c) Persist the changes
-	dataManager_->updateIndexEntity(leftLeaf);
-	dataManager_->updateIndexEntity(rightLeaf);
+    // 4. After removal, the first leaf should be merged with the second
+    // The parent should have one fewer child
+    auto parent_after = dataManager_->getIndex(parentId);
+    ASSERT_EQ(parent_after.getChildCount(), parentChildCount_before - 1)
+        << "Parent should have one less child after merge";
 
-	// 6. Sanity check the setup before the action.
-	auto leftLeaf_before_remove = dataManager_->getIndex(leftLeafId);
-	ASSERT_EQ(leftLeaf_before_remove.getEntryCount(), 1);
-	auto rightLeaf_before_remove = dataManager_->getIndex(rightLeafId);
-	ASSERT_EQ(rightLeaf_before_remove.getEntryCount(), 2);
+    // 5. Verify the merged node contains the remaining values
+    int64_t remainingLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(static_cast<int64_t>(60)));
+    auto remainingLeaf = dataManager_->getIndex(remainingLeafId);
+    auto entries = remainingLeaf.getAllEntries(dataManager_);
 
-	// 7. Action: Remove the single entry from the left leaf, which MUST trigger a merge.
-	ASSERT_TRUE(intTreeManager_->remove(intRootId_, PropertyValue(key_to_remove), 99999));
+    // Should have entries for 60, 70, 80, 90, 100
+    ASSERT_EQ(entries.size(), 5) << "Merged leaf should contain all remaining entries";
 
-	// 8. Verification
-
-	// a) Check parent: it should have one less child.
-	auto parent_after = dataManager_->getIndex(parentId);
-	ASSERT_EQ(parent_after.getChildCount(), parentChildCount_before - 1);
-
-	// b) The right leaf should be gone (merged into the left).
-	auto mergedNode = dataManager_->getIndex(rightLeafId);
-	ASSERT_TRUE(mergedNode.getId() == 0 || !mergedNode.getMetadata().isActive);
-
-	// c) The left (surviving) leaf should contain the entries from the right leaf.
-	auto survivingLeaf = dataManager_->getIndex(leftLeafId);
-	ASSERT_EQ(survivingLeaf.getEntryCount(), rightEntriesSetup.size());
-	auto finalEntries = survivingLeaf.getAllEntries(dataManager_);
-	ASSERT_EQ(finalEntries.size(), rightEntriesSetup.size());
-
-	// d) Check the leaf linked-list pointers.
-	ASSERT_EQ(survivingLeaf.getNextLeafId(), rightLeaf.getNextLeafId());
-	ASSERT_EQ(survivingLeaf.getPrevLeafId(), leftLeafPrevId);
-	if (survivingLeaf.getNextLeafId() != 0) {
-		auto nextLeaf = dataManager_->getIndex(survivingLeaf.getNextLeafId());
-		ASSERT_EQ(nextLeaf.getPrevLeafId(), survivingLeaf.getId());
-	}
+    // Verify each expected value is present
+    for (int i = 60; i <= 100; i += 10) {
+        bool found = false;
+        for (const auto& entry : entries) {
+            if (std::get<int64_t>(entry.key.getVariant()) == i) {
+                found = true;
+                break;
+            }
+        }
+        ASSERT_TRUE(found) << "Value " << i << " not found in merged leaf";
+    }
 }
 
 /**

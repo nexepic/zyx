@@ -10,6 +10,7 @@
 
 #include "graph/core/IndexTreeManager.hpp"
 #include <algorithm>
+#include <cassert>
 #include <ranges>
 #include <stdexcept>
 #include "graph/storage/data/BlobManager.hpp"
@@ -21,6 +22,7 @@ namespace graph::query::indexes {
 		switch (type) {
 			case PropertyType::INTEGER:
 				return [](const auto &a, const auto &b) {
+					// Ensure we're comparing the actual integer values
 					return std::get<int64_t>(a.getVariant()) < std::get<int64_t>(b.getVariant());
 				};
 			case PropertyType::DOUBLE:
@@ -113,37 +115,47 @@ namespace graph::query::indexes {
 	}
 
 	void IndexTreeManager::splitLeaf(Index &leaf, const PropertyValue &newKey, int64_t newValue, int64_t &rootId) {
-		// 1. Create a temporary, sorted list of all entries including the new one.
+		// Get all current entries
 		auto allEntries = leaf.getAllEntries(dataManager_);
+
+		// Find the position to insert the new entry
 		auto it = std::lower_bound(
 				allEntries.begin(), allEntries.end(), newKey,
 				[&](const Index::Entry &a, const PropertyValue &b) { return keyComparator_(a.key, b); });
-		// IMPORTANT: The new entry to be inserted must also be default-initialized
-		allEntries.insert(it, {newKey, {newValue}, 0, 0});
 
-		// 2. Create the new sibling leaf node.
+		// Check if the key already exists
+		bool keyExists =
+				(it != allEntries.end() && !keyComparator_(newKey, it->key) && !keyComparator_(it->key, newKey));
+
+		if (keyExists) {
+			// Key exists - just add the value if it's not already there
+			if (std::find(it->values.begin(), it->values.end(), newValue) == it->values.end()) {
+				it->values.push_back(newValue);
+			}
+		} else {
+			// Insert new entry
+			allEntries.insert(it, {newKey, {newValue}, 0, 0});
+		}
+
+		// Create a new sibling leaf node
 		int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
 		auto newLeaf = dataManager_->getIndex(newLeafId);
 		newLeaf.setLevel(leaf.getLevel());
+		newLeaf.setParentId(leaf.getParentId());
 
-		// 3. Find the split point.
-		// The key at the midpoint is COPIED UP to the parent.
-		// The entry itself becomes the FIRST entry of the new right leaf.
+		// Find split point
 		size_t midPointIdx = allEntries.size() / 2;
-		PropertyValue promotedKey = allEntries[midPointIdx].key; // This key is COPIED up.
+		PropertyValue promotedKey = allEntries[midPointIdx].key;
 
-		// 4. Distribute entries between the old and new leaves.
-		// The original leaf gets all entries BEFORE the midpoint.
-		std::vector<Index::Entry> leftEntries(std::make_move_iterator(allEntries.begin()),
-											  std::make_move_iterator(allEntries.begin() + midPointIdx));
+		// Distribute entries
+		std::vector<Index::Entry> leftEntries(allEntries.begin(), allEntries.begin() + midPointIdx);
+		std::vector<Index::Entry> rightEntries(allEntries.begin() + midPointIdx, allEntries.end());
+
+		// Update both nodes with their new entries
 		leaf.setAllEntries(leftEntries, dataManager_);
-
-		// The new leaf gets all entries FROM the midpoint to the end.
-		std::vector<Index::Entry> rightEntries(std::make_move_iterator(allEntries.begin() + midPointIdx),
-											   std::make_move_iterator(allEntries.end()));
 		newLeaf.setAllEntries(rightEntries, dataManager_);
 
-		// 5. Update the doubly linked list of leaves.
+		// Update the leaf node chain
 		newLeaf.setNextLeafId(leaf.getNextLeafId());
 		newLeaf.setPrevLeafId(leaf.getId());
 		if (leaf.getNextLeafId() != 0) {
@@ -153,9 +165,11 @@ namespace graph::query::indexes {
 		}
 		leaf.setNextLeafId(newLeafId);
 
-		// 6. Save changes and insert the promoted key into the parent.
+		// Save the nodes
 		dataManager_->updateIndexEntity(leaf);
 		dataManager_->updateIndexEntity(newLeaf);
+
+		// Insert the promoted key into the parent
 		insertIntoParent(leaf, promotedKey, newLeafId, rootId);
 	}
 
@@ -264,75 +278,71 @@ namespace graph::query::indexes {
 	 * @param rootId Reference to the root ID, as it may change if the root is merged or collapsed.
 	 */
 	void IndexTreeManager::handleUnderflow(Index &node, int64_t &rootId) {
-    // Case 1: The root is the node. The root is allowed to be under-full.
-    // However, if it's an internal node with only one child, it's redundant.
-    // The root should be removed and its single child becomes the new root.
-    if (node.getParentId() == 0) {
-        if (!node.isLeaf() && node.getChildCount() == 1) {
-            auto children = node.getAllChildren(dataManager_);
-            rootId = children[0].childId;
+		// Case 1: The root is the node. The root is allowed to be under-full.
+		// However, if it's an internal node with only one child, it's redundant.
+		// The root should be removed and its single child becomes the new root.
+		if (node.getParentId() == 0) {
+			if (!node.isLeaf() && node.getChildCount() == 1) {
+				auto children = node.getAllChildren(dataManager_);
+				rootId = children[0].childId;
 
-            auto newRoot = dataManager_->getIndex(rootId);
-            newRoot.setParentId(0);
-            dataManager_->updateIndexEntity(newRoot);
+				auto newRoot = dataManager_->getIndex(rootId);
+				newRoot.setParentId(0);
+				dataManager_->updateIndexEntity(newRoot);
 
-            // Create a named empty vector to clear owned blobs before deleting
-            std::vector<Index::ChildEntry> emptyChildren;
-            node.setAllChildren(emptyChildren, dataManager_);
-            dataManager_->deleteIndex(node);
-        }
-        return;
-    }
+				// FIX: Create a named empty vector to clear owned blobs before deleting.
+				std::vector<Index::ChildEntry> emptyChildren;
+				node.setAllChildren(emptyChildren, dataManager_);
+				dataManager_->deleteIndex(node);
+			}
+			return;
+		}
 
-    // For non-root nodes, get parent and find siblings
-    auto parent = dataManager_->getIndex(node.getParentId());
-    auto parentChildren = parent.getAllChildren(dataManager_);
+		// For non-root nodes, get parent and find siblings.
+		auto parent = dataManager_->getIndex(node.getParentId());
+		auto parentChildren = parent.getAllChildren(dataManager_);
 
-    // Find the node's position within its parent's children array
-    auto it = std::find_if(parentChildren.begin(), parentChildren.end(),
-                           [&](const auto &child) { return child.childId == node.getId(); });
-    int nodeIndexInParent = std::distance(parentChildren.begin(), it);
+		// Find the node's position within its parent's children array.
+		auto it = std::find_if(parentChildren.begin(), parentChildren.end(),
+							   [&](const auto &child) { return child.childId == node.getId(); });
+		int nodeIndexInParent = std::distance(parentChildren.begin(), it);
 
-    // Try to find a left and right sibling
-    int64_t leftSiblingId = (nodeIndexInParent > 0) ? parentChildren[nodeIndexInParent - 1].childId : 0;
-    int64_t rightSiblingId =
-            (nodeIndexInParent < parentChildren.size() - 1) ? parentChildren[nodeIndexInParent + 1].childId : 0;
+		// Try to find a left and right sibling.
+		int64_t leftSiblingId = (nodeIndexInParent > 0) ? parentChildren[nodeIndexInParent - 1].childId : 0;
+		int64_t rightSiblingId =
+				(nodeIndexInParent < parentChildren.size() - 1) ? parentChildren[nodeIndexInParent + 1].childId : 0;
 
-    // Case 2: Try to redistribute from the right sibling
-    if (rightSiblingId != 0) {
-        auto rightSibling = dataManager_->getIndex(rightSiblingId);
-        // Check if right sibling has enough entries to share
-        // We need at least one extra entry beyond the threshold to share
-        if (!rightSibling.isUnderflow(UNDERFLOW_THRESHOLD_RATIO) && rightSibling.getEntryCount() > 1) {
-            redistribute(node, rightSibling, parent, false); // false means 'is NOT left sibling'
-            return;
-        }
-    }
+		// Case 2: Try to redistribute from the right sibling.
+		if (rightSiblingId != 0) {
+			auto rightSibling = dataManager_->getIndex(rightSiblingId);
+			if (!rightSibling.isUnderflow(UNDERFLOW_THRESHOLD_RATIO + 0.1)) {
+				redistribute(node, rightSibling, parent, false);
+				return;
+			}
+		}
 
-    // Case 3: Try to redistribute from the left sibling
-    if (leftSiblingId != 0) {
-        auto leftSibling = dataManager_->getIndex(leftSiblingId);
-        // Check if left sibling has enough entries to share
-        // We need at least one extra entry beyond the threshold to share
-        if (!leftSibling.isUnderflow(UNDERFLOW_THRESHOLD_RATIO) && leftSibling.getEntryCount() > 1) {
-            redistribute(node, leftSibling, parent, true); // true means 'is left sibling'
-            return;
-        }
-    }
+		// Case 3: Try to redistribute from the left sibling.
+		if (leftSiblingId != 0) {
+			auto leftSibling = dataManager_->getIndex(leftSiblingId);
+			if (!leftSibling.isUnderflow(UNDERFLOW_THRESHOLD_RATIO + 0.1)) {
+				redistribute(node, leftSibling, parent, true);
+				return;
+			}
+		}
 
-    // Case 4: Redistribution is not possible, so we must merge
-    // Merge with the right sibling if it exists
-    if (rightSiblingId != 0) {
-        auto rightSibling = dataManager_->getIndex(rightSiblingId);
-        PropertyValue separatorKey = parentChildren[nodeIndexInParent + 1].key;
-        mergeNodes(node, rightSibling, parent, separatorKey, rootId);
-    } else if (leftSiblingId != 0) {
-        // Otherwise, merge with the left sibling
-        auto leftSibling = dataManager_->getIndex(leftSiblingId);
-        PropertyValue separatorKey = parentChildren[nodeIndexInParent].key;
-        mergeNodes(leftSibling, node, parent, separatorKey, rootId);
-    }
-}
+		// Case 4: Redistribution is not possible, so we must merge.
+		// Merge with the right sibling if it exists.
+		if (rightSiblingId != 0) {
+			auto rightSibling = dataManager_->getIndex(rightSiblingId);
+			PropertyValue separatorKey = parentChildren[nodeIndexInParent + 1].key;
+			mergeNodes(node, rightSibling, parent, separatorKey, rootId);
+		} else if (leftSiblingId != 0) {
+			// Otherwise, merge with the left sibling.
+			auto leftSibling = dataManager_->getIndex(leftSiblingId);
+			PropertyValue separatorKey = parentChildren[nodeIndexInParent].key;
+			mergeNodes(leftSibling, node, parent, separatorKey, rootId);
+		}
+	}
 
 	/**
 	 * @brief Redistributes entries between two sibling nodes to resolve an underflow.
@@ -474,8 +484,6 @@ namespace graph::query::indexes {
 	 */
 	void IndexTreeManager::mergeNodes(Index &leftNode, Index &rightNode, Index &parent,
 									  const PropertyValue &separatorKey, int64_t &rootId) {
-		constexpr uint32_t MIN_ENTRY_COUNT = 2; // Minimum entries/keys before underflow (for both leaf and internal)
-
 		if (leftNode.isLeaf() != rightNode.isLeaf()) {
 			throw std::logic_error("Attempting to merge a leaf with a non-leaf node.");
 		}
@@ -535,7 +543,7 @@ namespace graph::query::indexes {
 		dataManager_->deleteIndex(rightNode);
 
 		// Only handle underflow if the parent is now underfull (and not root)
-		if (parent.getEntryCount() < MIN_ENTRY_COUNT && parent.getParentId() != 0) {
+		if (parent.isUnderflow(UNDERFLOW_THRESHOLD_RATIO) && parent.getParentId() != 0) {
 			handleUnderflow(parent, rootId);
 		}
 	}
@@ -555,6 +563,7 @@ namespace graph::query::indexes {
 
 		auto leaf = dataManager_->getIndex(leafId);
 
+		// Check if insertion would overflow the leaf
 		if (leaf.wouldLeafOverflowOnInsert(key, value, dataManager_, keyComparator_)) {
 			splitLeaf(leaf, key, value, rootId);
 		} else {

@@ -246,7 +246,7 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	for (int i = 1; i <= numNodes; ++i) {
 		graph::Node node(i, "TestNode");
 		dataManager->addNode(node);
-		dataManager->addNodeProperties(i, {{"test_id", static_cast<int64_t>(i)}});
+		dataManager->addNodeProperties(i, {{"test_id", i}});
 	}
 	fileStorage->flush();
 
@@ -258,7 +258,7 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 
 	// Check the first node
-	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", static_cast<int64_t>(1));
+	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", 1);
 	ASSERT_EQ(firstNodeResult.size(), 1);
 	EXPECT_EQ(firstNodeResult[0], 1);
 

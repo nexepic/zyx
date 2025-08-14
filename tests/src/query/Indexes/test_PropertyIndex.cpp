@@ -313,7 +313,55 @@ TEST_F(PropertyIndexTest, HandlesLargeNumberOfPropertiesAndReloads) {
 	}
 
 	// Check the last item to be sure.
-	auto lastItem = reloadedIndex->findExactMatch("id", static_cast<int64_t>(numItems));
+	auto lastItem = reloadedIndex->findExactMatch("id", numItems);
 	ASSERT_EQ(lastItem.size(), 1);
 	EXPECT_EQ(lastItem[0], numItems);
+}
+
+TEST_F(PropertyIndexTest, HandlesRandomInsertionsAndDeletions) {
+    // Arrange: Create a list of IDs to be inserted randomly.
+    constexpr int numItems = 1500; // A size large enough to cause multiple splits.
+    std::vector<int64_t> ids(numItems);
+    std::iota(ids.begin(), ids.end(), 1); // Fills the vector with 1, 2, 3, ..., numItems
+
+    // Use a deterministic random engine for reproducibility of the test.
+    std::mt19937 g(42); // Use a fixed seed.
+    std::ranges::shuffle(ids, g);
+
+    // Act I: Insert properties in a random order.
+    for (int64_t id : ids) {
+        propertyIndex_->addProperty(id, "random_id", id);
+    }
+    propertyIndex_->flush();
+
+    // Assert I: Verify all items can be found after random insertion.
+    for (int64_t id = 1; id <= numItems; ++id) {
+        auto result = propertyIndex_->findExactMatch("random_id", id);
+        ASSERT_EQ(result.size(), 1) << "Failed to find item " << id << " after random insertion.";
+        EXPECT_EQ(result[0], id);
+    }
+
+    // Arrange II: Shuffle again for random deletion.
+    std::ranges::shuffle(ids, g);
+    std::vector idsToDelete(ids.begin(), ids.begin() + numItems / 2);
+    std::vector idsToKeep(ids.begin() + numItems / 2, ids.end());
+
+    // Act II: Remove half of the properties in a random order.
+    for (int64_t id : idsToDelete) {
+        propertyIndex_->removeProperty(id, "random_id", id);
+    }
+    propertyIndex_->flush();
+
+    // Assert II: Verify that deleted items are gone and remaining items are still present.
+    // Check deleted items
+    for (int64_t id : idsToDelete) {
+        auto result = propertyIndex_->findExactMatch("random_id", id);
+        EXPECT_TRUE(result.empty()) << "Item " << id << " should have been deleted.";
+    }
+    // Check kept items
+    for (int64_t id : idsToKeep) {
+        auto result = propertyIndex_->findExactMatch("random_id", id);
+        ASSERT_EQ(result.size(), 1) << "Failed to find remaining item " << id;
+        EXPECT_EQ(result[0], id);
+    }
 }

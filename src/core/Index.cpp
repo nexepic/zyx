@@ -242,7 +242,7 @@ namespace graph {
 	 * This calculation must exactly match the serialization logic in setAllChildren.
 	 */
 	bool Index::wouldInternalOverflowOnAddChild(const ChildEntry &newEntry,
-										  const std::shared_ptr<storage::DataManager> &dataManager) const {
+												const std::shared_ptr<storage::DataManager> &dataManager) const {
 		if (isLeaf()) {
 			return false;
 		}
@@ -500,7 +500,7 @@ namespace graph {
 	 * The format is: [childId_0][flags_1][key_1][childId_1][flags_2][key_2][childId_2]...
 	 */
 	void Index::setAllChildren(std::vector<ChildEntry> &children,
-	                           const std::shared_ptr<storage::DataManager> &dataManager) {
+							   const std::shared_ptr<storage::DataManager> &dataManager) {
 		if (isLeaf()) {
 			throw std::logic_error("Children can only be set on internal nodes.");
 		}
@@ -519,22 +519,26 @@ namespace graph {
 
 			// --- Blob Management for the key ---
 			if (entry.keyBlobId != 0 && !shouldUseBlob) {
-				if (!dataManager) throw std::runtime_error("DataManager required to clean up blob.");
+				if (!dataManager)
+					throw std::runtime_error("DataManager required to clean up blob.");
 				dataManager->getBlobManager()->deleteBlobChain(entry.keyBlobId);
 				entry.keyBlobId = 0;
 			}
 			if (shouldUseBlob) {
-				if (!dataManager) throw std::runtime_error("DataManager not available for blob storage.");
+				if (!dataManager)
+					throw std::runtime_error("DataManager not available for blob storage.");
 				std::ostringstream keyStream;
 				utils::Serializer::serialize(keyStream, entry.key);
 				if (entry.keyBlobId != 0) {
 					auto blob = dataManager->getBlobManager()->updateBlobChain(entry.keyBlobId, getId(), typeId,
-					                                                           keyStream.str());
-					if (blob.empty()) throw std::runtime_error("Failed to update blob chain for entry key.");
+																			   keyStream.str());
+					if (blob.empty())
+						throw std::runtime_error("Failed to update blob chain for entry key.");
 					entry.keyBlobId = blob[0].getId();
 				} else {
 					auto blob = dataManager->getBlobManager()->createBlobChain(getId(), typeId, keyStream.str());
-					if (blob.empty()) throw std::runtime_error("Failed to create blob chain for key.");
+					if (blob.empty())
+						throw std::runtime_error("Failed to create blob chain for key.");
 					entry.keyBlobId = blob[0].getId();
 				}
 			}

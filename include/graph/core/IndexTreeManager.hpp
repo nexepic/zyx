@@ -28,13 +28,6 @@ namespace graph::query::indexes {
 	class IndexTreeManager {
 	public:
 		/**
-		 * Threshold ratio for node underflow condition.
-		 * A node is considered underfull if its data usage falls below this ratio of its capacity.
-		 * Range: 0.0-1.0 (typically 0.3-0.5 for B+Trees)
-		 */
-		static constexpr double UNDERFLOW_THRESHOLD_RATIO = 0.4;
-
-		/**
 		 * Constructor
 		 *
 		 * @param dataManager Pointer to the data manager for entity persistence
@@ -110,6 +103,8 @@ namespace graph::query::indexes {
 		uint32_t indexType_;
 		PropertyType keyDataType_;
 		std::function<bool(const PropertyValue &, const PropertyValue &)> keyComparator_;
+
+		static constexpr double UNDERFLOW_THRESHOLD_RATIO = 0.4;
 
 		// Helper methods for B+Tree operations
 		int64_t createNewNode(Index::NodeType type) const;
