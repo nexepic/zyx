@@ -23,6 +23,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
+#include "graph/query/indexes/IEntityObserver.hpp"
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 
@@ -84,10 +85,12 @@ namespace graph::storage {
 		[[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
 		FileHeader &getFileHeaderRef() const { return fileHeader_; }
 
+		void registerObserver(std::shared_ptr<IEntityObserver> observer);
+
 		// Node-specific operations
-		void addNode(Node &node) const;
-		void updateNode(const Node &node) const;
-		void deleteNode(Node &node) const;
+		void addNode(Node &node);
+		void updateNode(const Node &node);
+		void deleteNode(Node &node);
 		Node getNode(int64_t id) const;
 		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
@@ -96,9 +99,9 @@ namespace graph::storage {
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;
 
 		// Edge-specific operations
-		void addEdge(Edge &edge) const;
-		void updateEdge(const Edge &edge) const;
-		void deleteEdge(Edge &edge) const;
+		void addEdge(Edge &edge);
+		void updateEdge(const Edge &edge);
+		void deleteEdge(Edge &edge);
 		Edge getEdge(int64_t id) const;
 		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
@@ -312,6 +315,17 @@ namespace graph::storage {
 		// Helper to check if an entity exists in dirty collections
 		template<typename EntityType>
 		std::optional<EntityType> getEntityFromDirty(int64_t id);
+
+		void notifyNodeAdded(const Node& node);
+		void notifyNodeUpdated(const Node& oldNode, const Node& newNode);
+		void notifyNodeDeleted(const Node& node);
+
+		void notifyEdgeAdded(const Edge& edge);
+		void notifyEdgeUpdated(const Edge& oldEdge, const Edge& newEdge);
+		void notifyEdgeDeleted(const Edge& edge);
+
+		std::vector<std::shared_ptr<IEntityObserver>> observers_;
+		mutable std::mutex observer_mutex_;
 	};
 
 } // namespace graph::storage

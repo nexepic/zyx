@@ -94,16 +94,21 @@ namespace graph::query::indexes {
 	}
 
 	// --- Event Handlers simply delegate to the appropriate manager ---
-	void IndexManager::onNodeAdded(const Node &node) const { nodeIndexManager_->onEntityAdded(node); }
-	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) const {
+	void IndexManager::onNodeAdded(const Node &node) { nodeIndexManager_->onEntityAdded(node); }
+
+	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
 		nodeIndexManager_->onEntityUpdated(oldNode, newNode);
 	}
-	void IndexManager::onNodeDeleted(const Node &node) const { nodeIndexManager_->onEntityDeleted(node); }
-	void IndexManager::onEdgeAdded(const Edge &edge) const { edgeIndexManager_->onEntityAdded(edge); }
-	void IndexManager::onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const {
+
+	void IndexManager::onNodeDeleted(const Node &node) { nodeIndexManager_->onEntityDeleted(node); }
+
+	void IndexManager::onEdgeAdded(const Edge &edge) { edgeIndexManager_->onEntityAdded(edge); }
+
+	void IndexManager::onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) {
 		edgeIndexManager_->onEntityUpdated(oldEdge, newEdge);
 	}
-	void IndexManager::onEdgeDeleted(const Edge &edge) const { edgeIndexManager_->onEntityDeleted(edge); }
+
+	void IndexManager::onEdgeDeleted(const Edge &edge) { edgeIndexManager_->onEntityDeleted(edge); }
 
 	// --- Query methods delegate to the correct index ---
 	std::vector<int64_t> IndexManager::findNodeIdsByLabel(const std::string &label) const {

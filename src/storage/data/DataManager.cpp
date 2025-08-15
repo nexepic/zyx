@@ -83,13 +83,77 @@ namespace graph::storage {
 		stateEntityManager_ = std::make_shared<StateManager>(shared_from_this(), stateChainManager_, deletionManager_);
 	}
 
+	void DataManager::registerObserver(std::shared_ptr<IEntityObserver> observer) {
+		std::lock_guard<std::mutex> lock(observer_mutex_);
+		observers_.push_back(std::move(observer));
+	}
+
+	// --- Notification Helper Implementations ---
+
+	void DataManager::notifyNodeAdded(const Node &node) {
+		std::lock_guard<std::mutex> lock(observer_mutex_);
+		for (const auto &observer: observers_) {
+			observer->onNodeAdded(node);
+		}
+	}
+
+	void DataManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) {
+		std::lock_guard<std::mutex> lock(observer_mutex_);
+		for (const auto &observer: observers_) {
+			observer->onNodeUpdated(oldNode, newNode);
+		}
+	}
+
+	void DataManager::notifyNodeDeleted(const Node &node) {
+		std::lock_guard<std::mutex> lock(observer_mutex_);
+		for (const auto &observer: observers_) {
+			observer->onNodeDeleted(node);
+		}
+	}
+
+	void DataManager::notifyEdgeAdded(const Edge &edge) {
+		std::lock_guard<std::mutex> lock(observer_mutex_);
+		for (const auto &observer: observers_) {
+			observer->onEdgeAdded(edge);
+		}
+	}
+
+	void DataManager::notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) {
+		std::lock_guard<std::mutex> lock(observer_mutex_);
+		for (const auto &observer: observers_) {
+			observer->onEdgeUpdated(oldEdge, newEdge);
+		}
+	}
+
+	void DataManager::notifyEdgeDeleted(const Edge &edge) {
+		std::lock_guard<std::mutex> lock(observer_mutex_);
+		for (const auto &observer: observers_) {
+			observer->onEdgeDeleted(edge);
+		}
+	}
+
 	// --- Node Operations (delegate to NodeManager) ---
 
-	void DataManager::addNode(Node &node) const { nodeManager_->add(node); }
+	void DataManager::addNode(Node &node) {
+		nodeManager_->add(node);
+		notifyNodeAdded(node);
+	}
 
-	void DataManager::updateNode(const Node &node) const { nodeManager_->update(node); }
+	void DataManager::updateNode(const Node &node) {
+		// Get the old node before updating
+		Node oldNode = nodeManager_->get(node.getId());
 
-	void DataManager::deleteNode(Node &node) const { nodeManager_->remove(node); }
+		// Update the node in storage
+		nodeManager_->update(node);
+
+		// Notify observers with both old and new nodes
+		notifyNodeUpdated(oldNode, node);
+	}
+
+	void DataManager::deleteNode(Node &node) {
+		nodeManager_->remove(node);
+		notifyNodeDeleted(node);
+	}
 
 	Node DataManager::getNode(int64_t id) const { return nodeManager_->get(id); }
 
@@ -116,11 +180,23 @@ namespace graph::storage {
 
 	// --- Edge Operations (delegate to EdgeManager) ---
 
-	void DataManager::addEdge(Edge &edge) const { edgeManager_->add(edge); }
+	void DataManager::addEdge(Edge &edge) {
+		edgeManager_->add(edge);
+		notifyEdgeAdded(edge);
+	}
 
-	void DataManager::updateEdge(const Edge &edge) const { edgeManager_->update(edge); }
+	void DataManager::updateEdge(const Edge &edge) {
+		Edge oldEdge = edgeManager_->get(edge.getId());
 
-	void DataManager::deleteEdge(Edge &edge) const { edgeManager_->remove(edge); }
+		edgeManager_->update(edge);
+
+		notifyEdgeUpdated(oldEdge, edge);
+	}
+
+	void DataManager::deleteEdge(Edge &edge) {
+		edgeManager_->remove(edge);
+		notifyEdgeDeleted(edge);
+	}
 
 	Edge DataManager::getEdge(int64_t id) const { return edgeManager_->get(id); }
 

@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include "EntityTypeIndexManager.hpp"
+#include "IEntityObserver.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 namespace graph::query::indexes {
@@ -35,10 +36,10 @@ namespace graph::query::indexes {
 		constexpr char EDGE_PROPERTY_PREFIX[] = "edge.index.property";
 	}
 
-	class IndexManager : public std::enable_shared_from_this<IndexManager> {
+	class IndexManager : public IEntityObserver, public std::enable_shared_from_this<IndexManager> {
 	public:
 		explicit IndexManager(std::shared_ptr<storage::FileStorage> storage);
-		~IndexManager();
+		~IndexManager() override;
 
 		void initialize();
 
@@ -54,13 +55,13 @@ namespace graph::query::indexes {
 
 		void persistState() const;
 
-		// --- Entity Event Handlers ---
-		void onNodeAdded(const Node& node) const;
-		void onNodeUpdated(const Node& oldNode, const Node& newNode) const;
-		void onNodeDeleted(const Node& node) const;
-		void onEdgeAdded(const Edge& edge) const;
-		void onEdgeUpdated(const Edge& oldEdge, const Edge& newEdge) const;
-		void onEdgeDeleted(const Edge& edge) const;
+		// --- Entity Event Handlers (Implementing IEntityObserver) ---
+		void onNodeAdded(const Node& node) override;
+		void onNodeUpdated(const Node& oldNode, const Node& newNode) override;
+		void onNodeDeleted(const Node& node) override;
+		void onEdgeAdded(const Edge& edge) override;
+		void onEdgeUpdated(const Edge& oldEdge, const Edge& newEdge) override;
+		void onEdgeDeleted(const Edge& edge) override;
 
 		// --- Accessors ---
 		std::shared_ptr<EntityTypeIndexManager> getNodeIndexManager() const { return nodeIndexManager_; }
