@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <graph/core/StateRegistry.hpp>
 #include <memory>
 #include <shared_mutex>
 #include <string>
@@ -23,7 +22,7 @@ namespace graph::query::indexes {
 
 	class PropertyIndex {
 	public:
-		PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType,
+		PropertyIndex(std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType,
 					  const std::string &stateKeyPrefix);
 
 		void saveState() const;
@@ -60,6 +59,8 @@ namespace graph::query::indexes {
 		PropertyType getIndexedKeyType(const std::string &key) const;
 
 	private:
+		std::shared_ptr<storage::DataManager> dataManager_;
+
 		const std::string STATE_STRING_ROOTS_KEY;
 		const std::string STATE_INT_ROOTS_KEY;
 		const std::string STATE_DOUBLE_ROOTS_KEY;
@@ -86,9 +87,9 @@ namespace graph::query::indexes {
 		std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type);
 		const std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type) const;
 
-		static void serializeRootMap(const std::string &stateKey,
-									 const std::unordered_map<std::string, int64_t> &rootMap);
-		static std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string &stateKey);
+		void serializeRootMap(const std::string &stateKey,
+							  const std::unordered_map<std::string, int64_t> &rootMap) const;
+		std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string &stateKey);
 
 		void serializeKeyTypeMap() const;
 		void deserializeKeyTypeMap();

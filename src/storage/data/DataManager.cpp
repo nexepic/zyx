@@ -9,6 +9,7 @@
  **/
 
 #include "graph/storage/data/DataManager.hpp"
+#include <map>
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/StateChainManager.hpp"
 #include "graph/storage/DeletionManager.hpp"
@@ -80,7 +81,7 @@ namespace graph::storage {
 		edgeManager_ = std::make_shared<EdgeManager>(shared_from_this(), deletionManager_);
 		blobManager_ = std::make_shared<BlobManager>(shared_from_this(), blobChainManager_, deletionManager_);
 		indexEntityManager_ = std::make_shared<IndexEntityManager>(shared_from_this(), deletionManager_);
-		stateEntityManager_ = std::make_shared<StateManager>(shared_from_this(), stateChainManager_, deletionManager_);
+		stateManager_ = std::make_shared<StateManager>(shared_from_this(), stateChainManager_, deletionManager_);
 	}
 
 	void DataManager::registerObserver(std::shared_ptr<IEntityObserver> observer) {
@@ -140,13 +141,28 @@ namespace graph::storage {
 	}
 
 	void DataManager::updateNode(const Node &node) {
-		// Get the old node before updating
+		// Check the entity's current dirty state before proceeding.
+		auto &dirtyMap = getDirtyNodes();
+		auto it = dirtyMap.find(node.getId());
+
+		// If the node is still marked as ADDED in the dirty map, any "update" call
+		// is considered part of its initial creation process (e.g., linking by an edge).
+		// In this case, we should perform the data update but suppress sending an
+		// `onNodeUpdated` notification, as this would be logically incorrect.
+		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
+			// Perform the underlying update to ensure the in-memory state is correct.
+			nodeManager_->update(node);
+			// Exit without sending an "updated" notification.
+			return;
+		}
+
+		// Get the state of the node as it was before this update operation.
 		Node oldNode = nodeManager_->get(node.getId());
 
-		// Update the node in storage
+		// Perform the update in the underlying manager.
 		nodeManager_->update(node);
 
-		// Notify observers with both old and new nodes
+		// Notify observers about the change.
 		notifyNodeUpdated(oldNode, node);
 	}
 
@@ -186,10 +202,28 @@ namespace graph::storage {
 	}
 
 	void DataManager::updateEdge(const Edge &edge) {
+		// Check the entity's current dirty state before proceeding.
+		auto &dirtyMap = getDirtyEdges();
+		auto it = dirtyMap.find(edge.getId());
+
+		// If the edge is still marked as ADDED, the call to `updateEdge` is an
+		// internal part of the `addEdge` workflow (specifically, from `linkEdge`).
+		// We must suppress the `onEdgeUpdated` notification to maintain correct
+		// observer semantics: an `add` operation should only fire `onEdgeAdded`.
+		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
+			// Perform the underlying update to save changes to link pointers (e.g., prev/next edge IDs).
+			edgeManager_->update(edge);
+			// Exit without sending an "updated" notification.
+			return;
+		}
+
+		// Get the state of the edge as it was before this update operation.
 		Edge oldEdge = edgeManager_->get(edge.getId());
 
+		// Perform the update in the underlying manager.
 		edgeManager_->update(edge);
 
+		// Notify observers about the change.
 		notifyEdgeUpdated(oldEdge, edge);
 	}
 
@@ -263,28 +297,26 @@ namespace graph::storage {
 
 	// --- State Operations ---
 
-	void DataManager::addStateEntity(State &state) const { stateEntityManager_->add(state); }
+	void DataManager::addStateEntity(State &state) const { stateManager_->add(state); }
 
-	void DataManager::updateStateEntity(const State &state) const { stateEntityManager_->update(state); }
+	void DataManager::updateStateEntity(const State &state) const { stateManager_->update(state); }
 
-	void DataManager::deleteState(State &state) const { stateEntityManager_->remove(state); }
+	void DataManager::deleteState(State &state) const { stateManager_->remove(state); }
 
-	State DataManager::getState(int64_t id) const { return stateEntityManager_->get(id); }
+	State DataManager::getState(int64_t id) const { return stateManager_->get(id); }
 
-	std::vector<State> DataManager::getAllStates() const { return stateEntityManager_->getAllHeadStates(); }
-
-	State DataManager::findStateByKey(const std::string &key) const { return stateEntityManager_->findByKey(key); }
+	State DataManager::findStateByKey(const std::string &key) const { return stateManager_->findByKey(key); }
 
 	void DataManager::addStateProperties(const std::string &stateKey,
 										 const std::unordered_map<std::string, PropertyValue> &properties) const {
-		stateEntityManager_->addStateProperties(stateKey, properties);
+		stateManager_->addStateProperties(stateKey, properties);
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getStateProperties(const std::string &stateKey) const {
-		return stateEntityManager_->getStateProperties(stateKey);
+		return stateManager_->getStateProperties(stateKey);
 	}
 
-	void DataManager::removeState(const std::string &stateKey) const { stateEntityManager_->removeState(stateKey); }
+	void DataManager::removeState(const std::string &stateKey) const { stateManager_->removeState(stateKey); }
 
 	bool DataManager::isChainHeadState(const State &state) {
 		return state.getId() != 0 && state.isActive() && state.getPrevStateId() == 0;
@@ -326,32 +358,95 @@ namespace graph::storage {
 			return result;
 		}
 
-		// Find relevant segments
-		std::vector<uint64_t> relevantSegments;
+		// Reserve memory to avoid reallocations.
+		result.reserve(std::min(static_cast<size_t>(endId - startId + 1), limit));
+
+		// This set will keep track of IDs that have already been processed (from memory)
+		// to avoid adding them again from the disk-based load.
+		std::unordered_set<int64_t> processedIds;
+
+		// --- PASS 1: Populate from Memory (Dirty Entities & Cache) ---
+		// This pass ensures data consistency by prioritizing in-memory changes over stale disk data.
+		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
+		auto &cache = EntityTraits<EntityType>::getCache(this);
+
+		for (int64_t currentId = startId; currentId <= endId; ++currentId) {
+			if (result.size() >= limit) {
+				break;
+			}
+
+			// 1. Check the dirty map first, as it contains the most recent state.
+			auto it = dirtyMap.find(currentId);
+			if (it != dirtyMap.end()) {
+				const auto &info = it->second;
+				// Only add if it's not marked for deletion.
+				if (info.changeType != EntityChangeType::DELETED && info.backup.has_value()) {
+					result.push_back(*info.backup);
+				}
+				// Mark this ID as processed, regardless of its state (even DELETED),
+				// so we don't try to fetch it from disk later.
+				processedIds.insert(currentId);
+				continue; // Move to the next ID
+			}
+
+			// 2. If not in dirty map, check the cache.
+			if (cache.contains(currentId)) {
+				EntityType entity = cache.peek(currentId); // Use peek to avoid changing LRU order
+				if (entity.isActive()) {
+					result.push_back(entity);
+				}
+				// Mark as processed so we don't fetch it from disk.
+				processedIds.insert(currentId);
+			}
+		}
+
+		// If we have already reached the limit just from memory, we can return early.
+		if (result.size() >= limit) {
+			return result;
+		}
+
+		// --- PASS 2: Load remaining entities from Disk using Segment-based reads ---
+		// This pass leverages data locality for performance by reading from segments in bulk.
+		// It will skip any entities that were already loaded from memory in Pass 1.
+
+		// Find all segments that overlap with the requested ID range.
 		auto entityType = EntityType::typeId;
 		auto segments = segmentTracker_->getSegmentsByType(entityType);
 
 		for (const auto &header: segments) {
+			// Calculate the intersection between the segment's ID range and the user's requested range.
 			int64_t segmentStartId = header.start_id;
 			int64_t segmentEndId = header.start_id + header.used - 1;
 
-			if (segmentStartId <= endId && segmentEndId >= startId) {
-				relevantSegments.push_back(header.file_offset);
-			}
-		}
+			int64_t intersectStart = std::max(startId, segmentStartId);
+			int64_t intersectEnd = std::min(endId, segmentEndId);
 
-		// Load entities from segments
-		for (uint64_t segmentOffset: relevantSegments) {
-			auto segmentEntities =
-					loadEntitiesFromSegment<EntityType>(segmentOffset, startId, endId, limit - result.size());
+			if (intersectStart > intersectEnd) {
+				continue; // No overlap with this segment.
+			}
+
+			// Load a batch of entities from this segment within the intersecting range.
+			size_t needed = limit - result.size();
+			std::vector<EntityType> segmentEntities =
+					loadEntitiesFromSegment<EntityType>(header.file_offset, intersectStart, intersectEnd, needed);
 
 			for (const EntityType &entity: segmentEntities) {
-				result.push_back(entity);
-				addToCache(entity);
+				// IMPORTANT: Only add the entity if it was not already processed from memory.
+				// The find() operation on an unordered_set is very fast (average O(1)).
+				if (processedIds.find(entity.getId()) == processedIds.end()) {
+					result.push_back(entity);
+
+					// Add the newly loaded entity to the cache for future queries.
+					addToCache(entity);
+
+					if (result.size() >= limit) {
+						break;
+					}
+				}
 			}
 
 			if (result.size() >= limit) {
-				break;
+				break; // Stop iterating through segments if limit is reached.
 			}
 		}
 
@@ -629,10 +724,23 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void DataManager::markEntityDeleted(EntityType &entity) {
-		// Update in-memory state without calling back to DeletionManager
-		entity.markInactive();
 		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
-		dirtyMap[entity.getId()] = DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity);
+		auto it = dirtyMap.find(entity.getId());
+
+		// Check the entity's current state in the dirty map.
+		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
+			// If the entity was newly ADDED in this transaction, deleting it
+			// should simply cancel out the addition. We remove it from the
+			// dirty map entirely, as it results in a no-op for the database.
+			dirtyMap.erase(it);
+		} else {
+			// If the entity existed on disk (i.e., it wasn't in the dirty map,
+			// or was marked as MODIFIED), then we mark it as DELETED.
+			entity.markInactive();
+			dirtyMap[entity.getId()] = DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity);
+		}
+
+		// Always remove from cache upon deletion.
 		EntityTraits<EntityType>::removeFromCache(this, entity.getId());
 		checkAndTriggerAutoFlush();
 	}

@@ -9,7 +9,6 @@
  **/
 
 #include "graph/storage/data/StateManager.hpp"
-#include <graph/core/StateRegistry.hpp>
 #include <ranges>
 #include <sstream>
 #include <utility>
@@ -22,25 +21,83 @@ namespace graph::storage {
 	StateManager::StateManager(const std::shared_ptr<DataManager> &dataManager,
 							   std::shared_ptr<StateChainManager> stateChainManager,
 							   std::shared_ptr<DeletionManager> deletionManager) :
-		BaseEntityManager(dataManager, std::move(deletionManager)), stateChainManager_(std::move(stateChainManager)) {}
+		BaseEntityManager(dataManager, std::move(deletionManager)), stateChainManager_(std::move(stateChainManager)) {
+
+		// Populate the key-to-ID map upon construction, ensuring the manager is
+		// immediately ready to serve requests, even after a database restart.
+		populateKeyToIdMap();
+	}
 
 	void StateManager::add(State &state) {
 		BaseEntityManager::add(state);
 		if (!state.getKey().empty()) {
 			stateKeyToIdMap_[state.getKey()] = state.getId();
-			// Update StateRegistry cache if initialized
-			StateRegistry::setString(state.getKey(), state.getDataAsString());
 		}
+	}
+
+	void StateManager::update(const State &state) {
+		auto dataManager = dataManager_.lock();
+		if (!dataManager)
+			return;
+
+		// To properly update the key-to-ID map, we need the old key.
+		// The most reliable way to get the old state is from the DataManager itself,
+		// before the update is fully committed.
+		State oldState = get(state.getId());
+
+		const std::string &oldKey = oldState.getKey();
+		const std::string &newKey = state.getKey();
+
+		// If the key has changed, update our internal map.
+		if (oldKey != newKey) {
+			if (!oldKey.empty()) {
+				stateKeyToIdMap_.erase(oldKey);
+			}
+			if (!newKey.empty()) {
+				stateKeyToIdMap_[newKey] = state.getId();
+			}
+		}
+
+		BaseEntityManager::update(state);
 	}
 
 	void StateManager::doRemove(State &state) {
 		// Remove from key mapping if needed
 		if (!state.getKey().empty()) {
 			stateKeyToIdMap_.erase(state.getKey());
-			StateRegistry::remove(state.getKey());
 		}
 
 		deletionManager_->deleteState(state);
+	}
+
+	void StateManager::populateKeyToIdMap() {
+		auto dataManager = dataManager_.lock();
+		if (!dataManager)
+			return;
+
+		// At initialization, the map is empty, so we perform a clean scan from disk.
+		// We do not need to check in-memory states or use a 'processedIds' set.
+		stateKeyToIdMap_.clear();
+
+		// Get the segment index information for the State entity type.
+		auto &segmentIndices = EntityTraits<State>::getSegmentIndex(dataManager.get());
+		for (const auto &segmentIndex: segmentIndices) {
+			// Fetch all states within this segment's range.
+			auto states = dataManager->getEntitiesInRange<State>(
+					segmentIndex.startId, segmentIndex.endId,
+					// Ensure limit is large enough to get all entities in the segment
+					segmentIndex.endId - segmentIndex.startId + 1);
+
+			for (const auto &state: states) {
+				// Use the existing helper to check if it's a head state.
+				if (isChainHeadState(state)) {
+					// If it is a head state and has a key, add it to our map.
+					if (!state.getKey().empty()) {
+						stateKeyToIdMap_[state.getKey()] = state.getId();
+					}
+				}
+			}
+		}
 	}
 
 	State StateManager::findByKey(const std::string &key) {
@@ -57,46 +114,6 @@ namespace graph::storage {
 		return {};
 	}
 
-	std::vector<State> StateManager::getAllHeadStates() {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return {};
-
-		std::vector<State> allHeadStates;
-		std::unordered_set<int64_t> processedIds;
-
-		// First collect all in-memory states
-		for (const auto &stateId: std::views::values(stateKeyToIdMap_)) {
-			State state = get(stateId);
-			if (state.getId() != 0 && state.isActive() && isChainHeadState(state)) {
-				allHeadStates.push_back(state);
-				processedIds.insert(state.getId());
-			}
-		}
-
-		// Then check all states from disk
-		auto &segmentIndices = EntityTraits<State>::getSegmentIndex(dataManager.get());
-		for (const auto &segmentIndex: segmentIndices) {
-			auto states = dataManager->getEntitiesInRange<State>(segmentIndex.startId, segmentIndex.endId,
-																 segmentIndex.endId - segmentIndex.startId + 1);
-
-			for (const auto &state: states) {
-				if (isChainHeadState(state) && !processedIds.contains(state.getId())) {
-					allHeadStates.push_back(state);
-					processedIds.insert(state.getId());
-
-					// Cache for future use
-					if (!state.getKey().empty()) {
-						stateKeyToIdMap_[state.getKey()] = state.getId();
-						addToCache(state);
-					}
-				}
-			}
-		}
-
-		return allHeadStates;
-	}
-
 	void StateManager::addStateProperties(const std::string &stateKey,
 										  const std::unordered_map<std::string, PropertyValue> &properties) {
 		auto dataManager = dataManager_.lock();
@@ -108,9 +125,7 @@ namespace graph::storage {
 
 		// Serialize the properties
 		std::stringstream ss;
-		if (propertyManager) {
-			PropertyManager::serializeProperties(ss, properties);
-		}
+		PropertyManager::serializeProperties(ss, properties);
 		std::string serializedData = ss.str();
 
 		// Find or create the state
@@ -129,17 +144,18 @@ namespace graph::storage {
 		if (!dataManager)
 			return {};
 
-		auto propertyManager = dataManager->getPropertyManager();
-		if (!propertyManager)
-			return {};
-
 		State state = findByKey(stateKey);
 		if (state.getId() == 0) {
 			return {}; // No properties
 		}
 
+		std::cout << "555" << std::endl;
+
 		// Read state data
 		std::string data = readStateChain(state.getId());
+
+		// print data
+		std::cout << "66666 State data for key '" << stateKey << "': " << data << std::endl;
 
 		// Deserialize properties
 		std::stringstream ss(data);

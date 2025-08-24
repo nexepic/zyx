@@ -30,9 +30,10 @@ namespace graph::storage {
 
 		void add(State &state) override;
 
+		void update(const State &state) override;
+
 		// State-specific methods
 		State findByKey(const std::string &key);
-		std::vector<State> getAllHeadStates();
 		void addStateProperties(const std::string &stateKey,
 								const std::unordered_map<std::string, PropertyValue> &properties);
 		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey);
@@ -44,15 +45,16 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<State> updateStateChain(int64_t headStateId, const std::string &newData) const;
 		void deleteStateChain(int64_t headStateId) const;
 
-		// Helper methods
-		static bool isChainHeadState(const State &state);
-
 	protected:
 		int64_t doAllocateId() override;
 
 		void doRemove(State &state) override;
 
 	private:
+		void populateKeyToIdMap();
+
+		static bool isChainHeadState(const State &state);
+
 		std::shared_ptr<StateChainManager> stateChainManager_;
 		std::unordered_map<std::string, int64_t> stateKeyToIdMap_;
 	};

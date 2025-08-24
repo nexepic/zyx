@@ -170,6 +170,10 @@ namespace graph {
 	}
 
 	void BlobChainManager::deleteBlobChain(int64_t headBlobId) const {
+		const Blob headBlob = dataManager_->getBlob(headBlobId);
+		if (headBlob.getId() == 0 || !headBlob.isActive()) {
+			throw std::runtime_error("Head blob not found or is inactive for deletion: " + std::to_string(headBlobId));
+		}
 
 		// Delete each blob in the chain
 		for (const auto chainIds = getBlobChainIds(headBlobId); const auto blobId: chainIds) {

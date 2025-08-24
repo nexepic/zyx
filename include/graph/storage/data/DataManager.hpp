@@ -133,7 +133,6 @@ namespace graph::storage {
 		void updateStateEntity(const State &state) const;
 		void deleteState(State &state) const;
 		State getState(int64_t id) const;
-		std::vector<State> getAllStates() const;
 		State findStateByKey(const std::string &key) const;
 		void addStateProperties(const std::string &stateKey,
 								const std::unordered_map<std::string, PropertyValue> &properties) const;
@@ -238,6 +237,10 @@ namespace graph::storage {
 		[[nodiscard]] std::shared_ptr<NodeManager> getNodeManager() const { return nodeManager_; }
 		[[nodiscard]] std::shared_ptr<EdgeManager> getEdgeManager() const { return edgeManager_; }
 		[[nodiscard]] std::shared_ptr<BlobManager> getBlobManager() const { return blobManager_; }
+		[[nodiscard]] std::shared_ptr<IndexEntityManager> getIndexEntityManager() const { return indexEntityManager_; }
+		[[nodiscard]] std::shared_ptr<StateManager> getStateManager() const { return stateManager_; }
+
+		[[nodiscard]] std::shared_ptr<DeletionManager> getDeletionManager() const { return deletionManager_; }
 
 	private:
 		// Core file and state
@@ -284,7 +287,7 @@ namespace graph::storage {
 		std::shared_ptr<EdgeManager> edgeManager_;
 		std::shared_ptr<BlobManager> blobManager_;
 		std::shared_ptr<IndexEntityManager> indexEntityManager_;
-		std::shared_ptr<StateManager> stateEntityManager_;
+		std::shared_ptr<StateManager> stateManager_;
 
 		// Initialization helpers
 		void initializeSegmentIndexes() const;
@@ -316,13 +319,13 @@ namespace graph::storage {
 		template<typename EntityType>
 		std::optional<EntityType> getEntityFromDirty(int64_t id);
 
-		void notifyNodeAdded(const Node& node);
-		void notifyNodeUpdated(const Node& oldNode, const Node& newNode);
-		void notifyNodeDeleted(const Node& node);
+		void notifyNodeAdded(const Node &node);
+		void notifyNodeUpdated(const Node &oldNode, const Node &newNode);
+		void notifyNodeDeleted(const Node &node);
 
-		void notifyEdgeAdded(const Edge& edge);
-		void notifyEdgeUpdated(const Edge& oldEdge, const Edge& newEdge);
-		void notifyEdgeDeleted(const Edge& edge);
+		void notifyEdgeAdded(const Edge &edge);
+		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge);
+		void notifyEdgeDeleted(const Edge &edge);
 
 		std::vector<std::shared_ptr<IEntityObserver>> observers_;
 		mutable std::mutex observer_mutex_;

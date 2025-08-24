@@ -10,9 +10,9 @@
 
 #include "graph/query/indexes/LabelIndex.hpp"
 #include <algorithm>
-#include <graph/core/StateRegistry.hpp>
 #include <graph/storage/IDAllocator.hpp>
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/data/StateManager.hpp"
 
 namespace graph::query::indexes {
 
@@ -51,7 +51,7 @@ namespace graph::query::indexes {
 		clear();
 
 		// Remove the rootId from state registry using the specific key
-		StateRegistry::getDataManager()->removeState(stateKey_);
+		dataManager_->removeState(stateKey_);
 	}
 
 	void LabelIndex::saveState() const {
@@ -59,12 +59,12 @@ namespace graph::query::indexes {
 		if (rootId_ != 0) {
 			std::unordered_map<std::string, PropertyValue> properties;
 			properties["rootId"] = rootId_;
-			StateRegistry::getDataManager()->addStateProperties(stateKey_, properties);
+			dataManager_->addStateProperties(stateKey_, properties);
 		}
 	}
 
 	void LabelIndex::loadRootId() {
-		auto properties = StateRegistry::getDataManager()->getStateProperties(stateKey_);
+		auto properties = dataManager_->getStateProperties(stateKey_);
 		if (properties.contains("rootId")) {
 			// Use the safe std::get_if pattern
 			if (const auto *rootId_ptr = std::get_if<int64_t>(&properties["rootId"].getVariant())) {

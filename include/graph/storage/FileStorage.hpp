@@ -94,8 +94,6 @@ namespace graph::storage {
 		// isFileOpen getter
 		[[nodiscard]] bool isOpen() const { return isFileOpen; }
 
-		std::unique_ptr<DeletionManager> deletionManager;
-
 		// Verify bitmap consistency for debugging purposes
 		bool verifyBitmapConsistency(uint64_t segmentOffset) const;
 

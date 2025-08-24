@@ -83,38 +83,44 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void PropertyManager::storeProperties(EntityType &entity) {
-		// Only process entity types that support properties
+		// Only process entity types that support properties.
 		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties) {
-			return; // Do nothing for entity types that don't support properties
+			return;
 		}
 
 		auto dataManager = dataManager_.lock();
 		if (!dataManager)
 			return;
 
+		// Step 1: ALWAYS clean up any existing external properties first.
+		// This ensures we start from a clean slate every time properties are modified.
+		if constexpr (EntityPropertyTraits<EntityType>::supportsExternalProperties) {
+			cleanupExternalProperties(entity);
+			// After cleanup, immediately reset the reference on the entity.
+			EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0, PropertyStorageType::NONE);
+		}
+
 		auto properties = EntityPropertyTraits<EntityType>::getProperties(entity);
 
-		// Calculate total size of properties
-		uint32_t dataSize = calculateSerializedSize(properties);
+		// Step 2: If the new set of properties is empty, our job is done.
+		if (properties.empty()) {
+			return;
+		}
 
+		// Step 3: Decide the storage strategy based on size.
 		if constexpr (EntityPropertyTraits<EntityType>::supportsExternalProperties) {
-			if (EntityPropertyTraits<EntityType>::hasPropertyEntity(entity)) {
-				cleanupExternalProperties(entity);
-				EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0, PropertyStorageType::NONE);
-			}
-
-			// Calculate overhead for storing properties in an external entity
+			uint32_t dataSize = calculateSerializedSize(properties);
 			constexpr size_t PROPERTY_ENTITY_PAYLOAD_SIZE = Property::TOTAL_PROPERTY_SIZE - Property::METADATA_SIZE;
 
-			// Choose storage type based on size
 			if (dataSize > PROPERTY_ENTITY_PAYLOAD_SIZE) {
-				// Large properties - use Blob
+				// Data is large, delegate to the Blob storage worker.
 				storePropertiesInBlob(entity, properties);
 			} else {
-				// Medium properties - use Property entity
+				// Data fits in a Property entity, delegate to the Property storage worker.
 				storePropertiesInPropertyEntity(entity, properties);
 			}
 		}
+		// If external properties are not supported, they remain inline, and no further action is needed.
 	}
 
 	template<typename EntityType>
@@ -152,124 +158,79 @@ namespace graph::storage {
 	void
 	PropertyManager::storePropertiesInPropertyEntity(EntityType &entity,
 													 const std::unordered_map<std::string, PropertyValue> &properties) {
-		// Only process entity types that support external properties
+		// Only process entity types that support external properties.
 		if constexpr (!EntityPropertyTraits<EntityType>::supportsExternalProperties) {
-			return; // Do nothing for entity types that don't support external properties
+			return;
 		}
 
 		auto dataManager = dataManager_.lock();
 		if (!dataManager)
 			return;
 
-		// Check if there's an existing property entity
-		if (EntityPropertyTraits<EntityType>::hasPropertyEntity(entity) &&
-			EntityPropertyTraits<EntityType>::getPropertyStorageType(entity) == PropertyStorageType::PROPERTY_ENTITY) {
-			// Update existing property entity
-			Property property = dataManager->getProperty(EntityPropertyTraits<EntityType>::getPropertyEntityId(entity));
-			if (property.getId() != 0 && property.isActive()) {
-				property.setProperties(properties);
-				dataManager->updatePropertyEntity(property);
-				// Clear properties from entity as they're now stored externally
-				EntityPropertyTraits<EntityType>::clearProperties(entity);
-				return;
-			}
-		}
+		// This function's responsibility is simple: create a new Property entity.
+		// It assumes any previous external storage has already been cleaned up by the caller (storeProperties).
 
-		// Clean up any existing blob
-		if (EntityPropertyTraits<EntityType>::hasPropertyEntity(entity) &&
-			EntityPropertyTraits<EntityType>::getPropertyStorageType(entity) == PropertyStorageType::BLOB_ENTITY) {
-			Blob blob = dataManager->getBlob(EntityPropertyTraits<EntityType>::getPropertyEntityId(entity));
-			if (blob.getId() != 0 && blob.isActive()) {
-				dataManager->deleteBlob(blob);
-			}
-		}
+		// Create and configure the new property entity.
+		Property newProperty;
+		newProperty.setProperties(properties);
+		newProperty.setEntityInfo(entity.getId(), EntityType::typeId); // Set back-reference
 
-		// Create new property entity
-		Property property;
-		property.setProperties(properties);
+		// Add the new entity to storage.
+		dataManager->addPropertyEntity(newProperty);
 
-		// Set entity reference on the property
-		property.setEntityInfo(entity.getId(), EntityType::typeId);
-
-		// Add property to storage
-		dataManager->addPropertyEntity(property);
-
-		// Update entity with property reference
-		EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, property.getId(),
+		// Update the parent entity to reference the new property entity.
+		EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, newProperty.getId(),
 															  PropertyStorageType::PROPERTY_ENTITY);
 
-		// Clear properties from entity as they're now stored externally
+		// Clear the properties from the in-memory entity object, as they are now stored externally.
 		EntityPropertyTraits<EntityType>::clearProperties(entity);
 	}
 
 	template<typename EntityType>
 	void PropertyManager::storePropertiesInBlob(EntityType &entity,
 												const std::unordered_map<std::string, PropertyValue> &properties) {
-		// Only process entity types that support external properties
+		// Only process entity types that support external properties.
 		if constexpr (!EntityPropertyTraits<EntityType>::supportsExternalProperties) {
-			return; // Do nothing for entity types that don't support external properties
+			return;
 		}
 
 		auto dataManager = dataManager_.lock();
 		if (!dataManager)
 			return;
 
-		// Serialize properties
+		auto blobManager = dataManager->getBlobManager();
+		if (!blobManager) {
+			throw std::runtime_error("BlobManager not initialized");
+		}
+
+		// This function's responsibility is simple: create a new Blob chain.
+		// It assumes any previous external storage has already been cleaned up by the caller (storeProperties).
+
+		// Serialize properties to a string.
 		std::stringstream ss;
 		serializeProperties(ss, properties);
 		std::string serializedData = ss.str();
 
-		// Check if there's an existing blob
-		if (EntityPropertyTraits<EntityType>::hasPropertyEntity(entity) &&
-			EntityPropertyTraits<EntityType>::getPropertyStorageType(entity) == PropertyStorageType::BLOB_ENTITY) {
-			try {
-				// Clean up existing blob chain
-				if (auto blobManager = dataManager->getBlobManager()) {
-					blobManager->deleteBlobChain(EntityPropertyTraits<EntityType>::getPropertyEntityId(entity));
-				}
-
-				// Clear properties from entity as they're now stored externally
-				EntityPropertyTraits<EntityType>::clearProperties(entity);
-				return;
-			} catch (const std::exception &e) {
-				std::cerr << "Error deleting blob chain: " << e.what() << std::endl;
-			}
-		}
-
-		// Clean up any existing property entity
-		if (EntityPropertyTraits<EntityType>::hasPropertyEntity(entity) &&
-			EntityPropertyTraits<EntityType>::getPropertyStorageType(entity) == PropertyStorageType::PROPERTY_ENTITY) {
-			Property property = dataManager->getProperty(EntityPropertyTraits<EntityType>::getPropertyEntityId(entity));
-			if (property.getId() != 0 && property.isActive()) {
-				dataManager->deleteProperty(property);
-			}
+		if (serializedData.empty()) {
+			return; // Nothing to store.
 		}
 
 		try {
-			// Create new blob chain
-			int64_t entityId = entity.getId();
-			uint32_t entityType = EntityType::typeId;
-
-			auto blobManager = dataManager->getBlobManager();
-			if (!blobManager) {
-				throw std::runtime_error("BlobManager not initialized");
-			}
-
-			auto blobChain = blobManager->createBlobChain(entityId, entityType, serializedData);
+			// Create a new blob chain for the serialized properties.
+			auto blobChain = blobManager->createBlobChain(entity.getId(), EntityType::typeId, serializedData);
 
 			if (blobChain.empty()) {
 				throw std::runtime_error("Failed to create blob chain");
 			}
 
-			// Update entity with head blob reference
-			EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, blobChain[0].getId(),
+			// Update the entity to reference the head of the new blob chain.
+			EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, blobChain.front().getId(),
 																  PropertyStorageType::BLOB_ENTITY);
 
-			// Clear properties from entity as they're now stored externally
+			// Clear the properties from the in-memory entity object, as they are now stored externally.
 			EntityPropertyTraits<EntityType>::clearProperties(entity);
 
 		} catch (const std::runtime_error &e) {
-			// Handle errors during blob chain creation
 			throw std::runtime_error(std::string("Failed to store properties in blob: ") + e.what());
 		}
 	}
@@ -395,82 +356,88 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void PropertyManager::removeEntityProperty(int64_t entityId, const std::string &key) {
-		// Only process entity types that support properties
+		// This function is idempotent. If the property does not exist, it does nothing and returns successfully.
+
+		// Only process entity types that support properties.
 		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties) {
-			throw std::runtime_error("Entity type does not support properties");
+			// Silently return for unsupported types, as this could be a generic cleanup call.
+			return;
 		}
 
 		auto dataManager = dataManager_.lock();
 		if (!dataManager)
 			return;
 
-		// Get the entity
+		// Get the entity.
 		auto entity = dataManager->getEntity<EntityType>(entityId);
 
-		// Check if the entity exists and is active
+		// Check if the entity exists and is active.
 		if (entity.getId() == 0 || !entity.isActive()) {
-			throw std::runtime_error("Cannot remove property from non-existent or inactive: " +
-									 std::to_string(entityId));
+			// Cannot remove property from a non-existent entity, but we don't throw to maintain idempotency.
+			return;
 		}
 
-		// Check if the entity has this property
-		bool propertyRemoved = false;
+		bool propertyWasRemoved = false;
 
-		// Try to remove from inline properties
+		// Attempt to remove from inline properties.
 		if (EntityPropertyTraits<EntityType>::hasProperty(entity, key)) {
 			EntityPropertyTraits<EntityType>::removeProperty(entity, key);
-			propertyRemoved = true;
+			propertyWasRemoved = true;
 		}
 
-		// Special handling for properties stored externally
+		// If not found inline, check external storage if supported.
 		if constexpr (EntityPropertyTraits<EntityType>::supportsExternalProperties) {
-			if (EntityPropertyTraits<EntityType>::hasPropertyEntity(entity) && !propertyRemoved) {
+			if (!propertyWasRemoved && EntityPropertyTraits<EntityType>::hasPropertyEntity(entity)) {
 				auto storageType = EntityPropertyTraits<EntityType>::getPropertyStorageType(entity);
 				auto propertyEntityId = EntityPropertyTraits<EntityType>::getPropertyEntityId(entity);
 
 				if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 					Property property = dataManager->getProperty(propertyEntityId);
-					if (property.getId() != 0 && property.isActive()) {
+					if (property.getId() != 0 && property.isActive() && property.hasPropertyValue(key)) {
 						auto properties = property.getPropertyValues();
-						auto it = properties.find(key);
-						if (it != properties.end()) {
-							properties.erase(it);
-							property.setProperties(properties);
-							propertyRemoved = true;
+						properties.erase(key);
+						property.setProperties(properties);
+						propertyWasRemoved = true;
 
-							// If no properties left, delete the property entity
-							if (properties.empty()) {
-								dataManager->deleteProperty(property);
-								EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0,
-																					  PropertyStorageType::NONE);
-							} else {
-								dataManager->updatePropertyEntity(property);
-							}
+						// If no properties are left, delete the property entity itself.
+						if (properties.empty()) {
+							dataManager->deleteProperty(property);
+							EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0, PropertyStorageType::NONE);
+						} else {
+							dataManager->updatePropertyEntity(property);
 						}
 					}
 				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
-					Blob blob = dataManager->getBlob(propertyEntityId);
-					if (blob.getId() != 0 && blob.isActive()) {
-						std::string serializedData = blob.getData();
-						std::stringstream ss(serializedData);
-						auto properties = deserializeProperties(ss);
+					// Get properties from blob chain to modify them.
+					auto properties = getPropertiesFromBlob(propertyEntityId);
+					auto it = properties.find(key);
+					if (it != properties.end()) {
+						properties.erase(it);
+						propertyWasRemoved = true;
 
-						auto it = properties.find(key);
-						if (it != properties.end()) {
-							properties.erase(it);
-							propertyRemoved = true;
+						auto blobManager = dataManager->getBlobManager();
+						if (!blobManager)
+							return; // Should not happen
 
-							// If no properties left, delete the blob
-							if (properties.empty()) {
-								dataManager->deleteBlob(blob);
+						// First, delete the old blob chain completely.
+						blobManager->deleteBlobChain(propertyEntityId);
+
+						if (properties.empty()) {
+							// If no properties left, just clear the reference on the entity.
+							EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0, PropertyStorageType::NONE);
+						} else {
+							// Re-serialize the remaining properties into a new blob chain.
+							std::stringstream ss;
+							serializeProperties(ss, properties);
+							auto newBlobChain =
+									blobManager->createBlobChain(entity.getId(), EntityType::typeId, ss.str());
+							if (!newBlobChain.empty()) {
+								EntityPropertyTraits<EntityType>::setPropertyEntityId(
+										entity, newBlobChain.front().getId(), PropertyStorageType::BLOB_ENTITY);
+							} else {
+								// Failed to create a new chain, clear the reference.
 								EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0,
 																					  PropertyStorageType::NONE);
-							} else {
-								// Re-serialize and update
-								std::stringstream outSs;
-								serializeProperties(outSs, properties);
-								blob.setData(outSs.str());
-								dataManager->updateBlobEntity(blob);
 							}
 						}
 					}
@@ -478,15 +445,10 @@ namespace graph::storage {
 			}
 		}
 
-		if (!propertyRemoved) {
-			throw std::runtime_error("Property not found: " + key);
+		if (propertyWasRemoved) {
+			// If a property was changed, update the parent entity.
+			dataManager->updateEntity(entity);
 		}
-
-		// Store the properties using the appropriate mechanism - in case size thresholds changed
-		storeProperties(entity);
-
-		// Update the entity in cache and mark it as dirty
-		dataManager->updateEntity(entity);
 	}
 
 	template<typename EntityType>

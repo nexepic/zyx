@@ -15,15 +15,15 @@
 
 namespace graph::query::indexes {
 
-	PropertyIndex::PropertyIndex(const std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType,
+	PropertyIndex::PropertyIndex(std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType,
 								 const std::string &stateKeyPrefix) :
-		STATE_STRING_ROOTS_KEY(stateKeyPrefix + ".string_roots"), STATE_INT_ROOTS_KEY(stateKeyPrefix + ".int_roots"),
-		STATE_DOUBLE_ROOTS_KEY(stateKeyPrefix + ".double_roots"), STATE_BOOL_ROOTS_KEY(stateKeyPrefix + ".bool_roots"),
-		STATE_KEY_TYPES_KEY(stateKeyPrefix + ".key_types") {
-		stringTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType, PropertyType::STRING);
-		intTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType, PropertyType::INTEGER);
-		doubleTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType, PropertyType::DOUBLE);
-		boolTreeManager_ = std::make_shared<IndexTreeManager>(dataManager, indexType, PropertyType::BOOLEAN);
+		dataManager_(std::move(dataManager)), STATE_STRING_ROOTS_KEY(stateKeyPrefix + ".string_roots"),
+		STATE_INT_ROOTS_KEY(stateKeyPrefix + ".int_roots"), STATE_DOUBLE_ROOTS_KEY(stateKeyPrefix + ".double_roots"),
+		STATE_BOOL_ROOTS_KEY(stateKeyPrefix + ".bool_roots"), STATE_KEY_TYPES_KEY(stateKeyPrefix + ".key_types") {
+		stringTreeManager_ = std::make_shared<IndexTreeManager>(dataManager_, indexType, PropertyType::STRING);
+		intTreeManager_ = std::make_shared<IndexTreeManager>(dataManager_, indexType, PropertyType::INTEGER);
+		doubleTreeManager_ = std::make_shared<IndexTreeManager>(dataManager_, indexType, PropertyType::DOUBLE);
+		boolTreeManager_ = std::make_shared<IndexTreeManager>(dataManager_, indexType, PropertyType::BOOLEAN);
 		initialize();
 	}
 
@@ -66,20 +66,20 @@ namespace graph::query::indexes {
 
 		// Check if all root maps are empty before removing state
 		if (stringRoots_.empty()) {
-			StateRegistry::getDataManager()->removeState(STATE_STRING_ROOTS_KEY);
+			dataManager_->removeState(STATE_STRING_ROOTS_KEY);
 		}
 		if (intRoots_.empty()) {
-			StateRegistry::getDataManager()->removeState(STATE_INT_ROOTS_KEY);
+			dataManager_->removeState(STATE_INT_ROOTS_KEY);
 		}
 		if (doubleRoots_.empty()) {
-			StateRegistry::getDataManager()->removeState(STATE_DOUBLE_ROOTS_KEY);
+			dataManager_->removeState(STATE_DOUBLE_ROOTS_KEY);
 		}
 		if (boolRoots_.empty()) {
-			StateRegistry::getDataManager()->removeState(STATE_BOOL_ROOTS_KEY);
+			dataManager_->removeState(STATE_BOOL_ROOTS_KEY);
 		}
 
 		if (indexedKeyTypes_.empty()) {
-			StateRegistry::getDataManager()->removeState(STATE_KEY_TYPES_KEY);
+			dataManager_->removeState(STATE_KEY_TYPES_KEY);
 		}
 	}
 
@@ -107,11 +107,11 @@ namespace graph::query::indexes {
 		clear();
 
 		// Remove all state entries related to this index using the constructed keys
-		StateRegistry::getDataManager()->removeState(STATE_STRING_ROOTS_KEY);
-		StateRegistry::getDataManager()->removeState(STATE_INT_ROOTS_KEY);
-		StateRegistry::getDataManager()->removeState(STATE_DOUBLE_ROOTS_KEY);
-		StateRegistry::getDataManager()->removeState(STATE_BOOL_ROOTS_KEY);
-		StateRegistry::getDataManager()->removeState(STATE_KEY_TYPES_KEY);
+		dataManager_->removeState(STATE_STRING_ROOTS_KEY);
+		dataManager_->removeState(STATE_INT_ROOTS_KEY);
+		dataManager_->removeState(STATE_DOUBLE_ROOTS_KEY);
+		dataManager_->removeState(STATE_BOOL_ROOTS_KEY);
+		dataManager_->removeState(STATE_KEY_TYPES_KEY);
 	}
 
 	void PropertyIndex::flush() const {
@@ -283,7 +283,7 @@ namespace graph::query::indexes {
 	}
 
 	void PropertyIndex::serializeRootMap(const std::string &stateKey,
-										 const std::unordered_map<std::string, int64_t> &rootMap) {
+										 const std::unordered_map<std::string, int64_t> &rootMap) const {
 		// Convert root map to properties
 		std::unordered_map<std::string, PropertyValue> properties;
 
@@ -292,12 +292,12 @@ namespace graph::query::indexes {
 		}
 
 		// Store in state entity
-		StateRegistry::getDataManager()->addStateProperties(stateKey, properties);
+		dataManager_->addStateProperties(stateKey, properties);
 	}
 
 	std::unordered_map<std::string, int64_t> PropertyIndex::deserializeRootMap(const std::string &stateKey) {
 		std::unordered_map<std::string, int64_t> rootMap;
-		auto properties = StateRegistry::getDataManager()->getStateProperties(stateKey);
+		auto properties = dataManager_->getStateProperties(stateKey);
 
 		for (const auto &[key, value]: properties) {
 			// Correctly access the variant inside the wrapper struct
@@ -314,12 +314,12 @@ namespace graph::query::indexes {
 			// Store the enum value as an integer (int64_t)
 			properties[key] = static_cast<int64_t>(type);
 		}
-		StateRegistry::getDataManager()->addStateProperties(STATE_KEY_TYPES_KEY, properties);
+		dataManager_->addStateProperties(STATE_KEY_TYPES_KEY, properties);
 	}
 
 	void PropertyIndex::deserializeKeyTypeMap() {
 		indexedKeyTypes_.clear();
-		auto properties = StateRegistry::getDataManager()->getStateProperties(STATE_KEY_TYPES_KEY);
+		auto properties = dataManager_->getStateProperties(STATE_KEY_TYPES_KEY);
 		for (const auto &[key, value]: properties) {
 			// Use the safe std::get_if pattern here as well
 			if (const auto *val_ptr = std::get_if<int64_t>(&value.getVariant())) {

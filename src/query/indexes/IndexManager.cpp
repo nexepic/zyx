@@ -16,8 +16,6 @@ namespace graph::query::indexes {
 	IndexManager::IndexManager(std::shared_ptr<storage::FileStorage> storage) :
 		storage_(std::move(storage)), dataManager_(storage_->getDataManager()) {
 
-		StateRegistry::initialize(dataManager_);
-
 		// Instantiate the Node index manager without the redundant config keys.
 		// The existence of the index data itself determines if it's "enabled".
 		nodeIndexManager_ = std::make_shared<EntityTypeIndexManager>(

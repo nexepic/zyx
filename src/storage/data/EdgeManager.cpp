@@ -34,8 +34,8 @@ namespace graph::storage {
 		BaseEntityManager::add(edge);
 
 		// Edge-specific: Link the edge in the relationship traversal
-		Edge edgeCopy = edge; // Make a mutable copy
-		dataManager->getRelationshipTraversal()->linkEdge(edgeCopy);
+		// Edge edgeCopy = edge; // Make a mutable copy
+		dataManager->getRelationshipTraversal()->linkEdge(edge);
 	}
 
 	std::vector<Edge> EdgeManager::findByNode(int64_t nodeId, const std::string &direction) const {
