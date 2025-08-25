@@ -22,7 +22,7 @@
 
 class IndexEntityManagerTest : public ::testing::Test {
 protected:
-	std::string testFilePath;
+	std::filesystem::path testFilePath;
 	std::unique_ptr<graph::Database> db;
 	std::shared_ptr<graph::storage::FileStorage> storage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
