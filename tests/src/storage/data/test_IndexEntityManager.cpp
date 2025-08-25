@@ -35,7 +35,7 @@ protected:
 		testFilePath = std::filesystem::temp_directory_path() / ("test_indexEntityManager_" + to_string(uuid) + ".dat");
 
 		// Initialize database and get the necessary manager
-		db = std::make_unique<graph::Database>(testFilePath);
+		db = std::make_unique<graph::Database>(testFilePath.string());
 		db->open();
 		storage = db->getStorage();
 		dataManager = storage->getDataManager();
