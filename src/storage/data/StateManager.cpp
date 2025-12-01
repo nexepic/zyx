@@ -149,13 +149,8 @@ namespace graph::storage {
 			return {}; // No properties
 		}
 
-		std::cout << "555" << std::endl;
-
 		// Read state data
 		std::string data = readStateChain(state.getId());
-
-		// print data
-		std::cout << "66666 State data for key '" << stateKey << "': " << data << std::endl;
 
 		// Deserialize properties
 		std::stringstream ss(data);
