@@ -24,7 +24,7 @@ TEST(StorageHeadersTest, FileHeaderInitialization) {
 }
 
 TEST(StorageHeadersTest, SegmentHeaderInitialization) {
-	const graph::storage::SegmentHeader segmentHeader;
+	constexpr graph::storage::SegmentHeader segmentHeader;
 
 	EXPECT_EQ(segmentHeader.next_segment_offset, 0u);
 	EXPECT_EQ(segmentHeader.start_id, 0u);

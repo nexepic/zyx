@@ -21,7 +21,7 @@ namespace graph::storage {
 	/**
 	 * Manages node entities
 	 */
-	class NodeManager : public BaseEntityManager<Node> {
+	class NodeManager final : public BaseEntityManager<Node> {
 	public:
 		NodeManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<DeletionManager> deletionManager);
 

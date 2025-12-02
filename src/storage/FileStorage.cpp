@@ -108,162 +108,145 @@ namespace graph::storage {
 
 			dataManager->clearCache();
 			dataManager.reset();
-			spaceManager->truncateFile();
+			(void) spaceManager->truncateFile();
 			isFileOpen = false;
 		}
 	}
 
+	template<typename EntityType>
+	std::vector<EntityType> getEntitiesByType(const std::unordered_map<int64_t, DirtyEntityInfo<EntityType>> &map,
+											  EntityChangeType type) {
+		std::vector<EntityType> result;
+		for (const auto &[id, info]: map) {
+			if (info.changeType == type && info.backup.has_value()) {
+				result.push_back(*info.backup);
+			}
+		}
+		return result;
+	}
+
 	void FileStorage::save() {
-		if (!isFileOpen) {
+		if (!isFileOpen)
 			throw std::runtime_error("Database must be open before saving");
-		}
-
-		// Check if we have any changes to save
-		if (!dataManager->hasUnsavedChanges()) {
+		if (!dataManager->hasUnsavedChanges())
 			return;
-		}
 
-		// Get entities by their change type
-		auto newNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::ADDED});
-		auto modifiedNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::MODIFIED});
-		auto deletedNodes = dataManager->getDirtyEntitiesWithChangeTypes<Node>({EntityChangeType::DELETED});
+		// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
+		auto snapshot = dataManager->prepareFlushSnapshot();
 
-		auto newEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::ADDED});
-		auto modifiedEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::MODIFIED});
-		auto deletedEdges = dataManager->getDirtyEntitiesWithChangeTypes<Edge>({EntityChangeType::DELETED});
+		if (snapshot.isEmpty())
+			return;
 
-		auto newProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::ADDED});
-		auto modifiedProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::MODIFIED});
-		auto deletedProperties = dataManager->getDirtyEntitiesWithChangeTypes<Property>({EntityChangeType::DELETED});
+		// 2. PROCESS NODES
+		if (!snapshot.nodes.empty()) {
+			auto newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::ADDED);
+			auto modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::MODIFIED);
+			auto delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::DELETED);
 
-		auto newBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::ADDED});
-		auto modifiedBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::MODIFIED});
-		auto deletedBlobs = dataManager->getDirtyEntitiesWithChangeTypes<Blob>({EntityChangeType::DELETED});
-
-		auto newIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::ADDED});
-		auto modifiedIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::MODIFIED});
-		auto deletedIndexes = dataManager->getDirtyEntitiesWithChangeTypes<Index>({EntityChangeType::DELETED});
-
-		auto newStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::ADDED});
-		auto modifiedStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::MODIFIED});
-		auto deletedStates = dataManager->getDirtyEntitiesWithChangeTypes<State>({EntityChangeType::DELETED});
-
-		// Save new properties first
-		if (!newProperties.empty()) {
-			std::unordered_map<int64_t, Property> propertiesToSave;
-			for (const auto &property: newProperties) {
-				propertiesToSave[property.getId()] = property;
+			// ... save logic (saveData, updateEntityInPlace, deleteEntityOnDisk) ...
+			if (!newNodes.empty()) {
+				std::unordered_map<int64_t, Node> map;
+				for (auto &e: newNodes)
+					map[e.getId()] = e;
+				saveData(map, fileHeader.node_segment_head, NODES_PER_SEGMENT);
 			}
-			saveData(propertiesToSave, fileHeader.property_segment_head, PROPERTIES_PER_SEGMENT);
+			for (const auto &n: modNodes)
+				updateEntityInPlace(n);
+			for (const auto &n: delNodes)
+				deleteEntityOnDisk(n);
 		}
 
-		// Save new blobs
-		if (!newBlobs.empty()) {
-			std::unordered_map<int64_t, Blob> blobsToSave;
-			for (const auto &blob: newBlobs) {
-				blobsToSave[blob.getId()] = blob;
+		// 3. PROCESS EDGES
+		if (!snapshot.edges.empty()) {
+			auto newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::ADDED);
+			auto modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::MODIFIED);
+			auto delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::DELETED);
+
+			if (!newEdges.empty()) {
+				std::unordered_map<int64_t, Edge> map;
+				for (auto &e: newEdges)
+					map[e.getId()] = e;
+				saveData(map, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
 			}
-			saveData(blobsToSave, fileHeader.blob_segment_head, BLOBS_PER_SEGMENT);
+			for (const auto &e: modEdges)
+				updateEntityInPlace(e);
+			for (const auto &e: delEdges)
+				deleteEntityOnDisk(e);
 		}
 
-		// Save new nodes
-		if (!newNodes.empty()) {
-			std::unordered_map<int64_t, Node> nodesToSave;
-			for (const auto &node: newNodes) {
-				nodesToSave[node.getId()] = node;
+		// ... REPEAT FOR Properties, Blobs, Indexes, States ...
+		if (!snapshot.properties.empty()) {
+			auto newProps = getEntitiesByType(snapshot.properties, EntityChangeType::ADDED);
+			auto modProps = getEntitiesByType(snapshot.properties, EntityChangeType::MODIFIED);
+			auto delProps = getEntitiesByType(snapshot.properties, EntityChangeType::DELETED);
+
+			if (!newProps.empty()) {
+				std::unordered_map<int64_t, Property> map;
+				for (auto &e: newProps)
+					map[e.getId()] = e;
+				saveData(map, fileHeader.property_segment_head, PROPERTIES_PER_SEGMENT);
 			}
-			saveData(nodesToSave, fileHeader.node_segment_head, NODES_PER_SEGMENT);
+			for (const auto &p: modProps)
+				updateEntityInPlace(p);
+			for (const auto &p: delProps)
+				deleteEntityOnDisk(p);
 		}
 
-		// Save new edges
-		if (!newEdges.empty()) {
-			std::unordered_map<int64_t, Edge> edgesToSave;
-			for (const auto &edge: newEdges) {
-				edgesToSave[edge.getId()] = edge;
+		if (!snapshot.blobs.empty()) {
+			auto newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::ADDED);
+			auto modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::MODIFIED);
+			auto delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::DELETED);
+
+			if (!newBlobs.empty()) {
+				std::unordered_map<int64_t, Blob> map;
+				for (auto &e: newBlobs)
+					map[e.getId()] = e;
+				saveData(map, fileHeader.blob_segment_head, BLOBS_PER_SEGMENT);
 			}
-			saveData(edgesToSave, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
+			for (const auto &b: modBlobs)
+				updateEntityInPlace(b);
+			for (const auto &b: delBlobs)
+				deleteEntityOnDisk(b);
 		}
 
-		// Save new indexes
-		if (!newIndexes.empty()) {
-			std::unordered_map<int64_t, Index> indexesToSave;
-			for (const auto &index: newIndexes) {
-				indexesToSave[index.getId()] = index;
+		if (!snapshot.indexes.empty()) {
+			auto newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::ADDED);
+			auto modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::MODIFIED);
+			auto delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::DELETED);
+
+			if (!newIndexes.empty()) {
+				std::unordered_map<int64_t, Index> map;
+				for (auto &e: newIndexes)
+					map[e.getId()] = e;
+				saveData(map, fileHeader.index_segment_head, INDEXES_PER_SEGMENT);
 			}
-			saveData(indexesToSave, fileHeader.index_segment_head, INDEXES_PER_SEGMENT);
+			for (const auto &i: modIndexes)
+				updateEntityInPlace(i);
+			for (const auto &i: delIndexes)
+				deleteEntityOnDisk(i);
 		}
 
-		// Save new states
-		if (!newStates.empty()) {
-			std::unordered_map<int64_t, State> statesToSave;
-			for (const auto &state: newStates) {
-				statesToSave[state.getId()] = state;
+		if (!snapshot.states.empty()) {
+			auto newStates = getEntitiesByType(snapshot.states, EntityChangeType::ADDED);
+			auto modStates = getEntitiesByType(snapshot.states, EntityChangeType::MODIFIED);
+			auto delStates = getEntitiesByType(snapshot.states, EntityChangeType::DELETED);
+
+			if (!newStates.empty()) {
+				std::unordered_map<int64_t, State> map;
+				for (auto &e: newStates)
+					map[e.getId()] = e;
+				saveData(map, fileHeader.state_segment_head, STATES_PER_SEGMENT);
 			}
-			saveData(statesToSave, fileHeader.state_segment_head, STATES_PER_SEGMENT);
+			for (const auto &s: modStates)
+				updateEntityInPlace(s);
+			for (const auto &s: delStates)
+				deleteEntityOnDisk(s);
 		}
 
-		// update properties in-place
-		for (const auto &property: modifiedProperties) {
-			updateEntityInPlace(property);
-		}
-
-		// update blobs in-place
-		for (const auto &blob: modifiedBlobs) {
-			updateEntityInPlace(blob);
-		}
-
-		// Update modified nodes in-place
-		for (const auto &node: modifiedNodes) {
-			updateEntityInPlace(node);
-		}
-
-		// Update modified edges in-place
-		for (const auto &edge: modifiedEdges) {
-			updateEntityInPlace(edge);
-		}
-
-		// Update modified indexes in-place
-		for (const auto &index: modifiedIndexes) {
-			updateEntityInPlace(index);
-		}
-
-		// Update modified states in-place
-		for (const auto &state: modifiedStates) {
-			updateEntityInPlace(state);
-		}
-
-		// Delete properties
-		for (const auto &property: deletedProperties) {
-			deleteEntityOnDisk(property);
-		}
-
-		// Delete blobs
-		for (const auto &blob: deletedBlobs) {
-			deleteEntityOnDisk(blob);
-		}
-
-		// Delete nodes
-		for (const auto &node: deletedNodes) {
-			deleteEntityOnDisk(node);
-		}
-
-		// Delete edges
-		for (const auto &edge: deletedEdges) {
-			deleteEntityOnDisk(edge);
-		}
-
-		// Delete indexes
-		for (const auto &index: deletedIndexes) {
-			deleteEntityOnDisk(index);
-		}
-
-		// Delete states
-		for (const auto &state: deletedStates) {
-			deleteEntityOnDisk(state);
-		}
-
-		// Mark everything as saved
-		dataManager->markAllSaved();
+		// 4. COMMIT: Clear the snapshot data
+		// Only the data contained in 'snapshot' is removed from PersistenceManager's flushing layer.
+		// New data that entered active layer during IO remains untouched.
+		dataManager->commitFlushSnapshot();
 	}
 
 	template<typename T>

@@ -37,6 +37,7 @@ namespace graph::storage {
 		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)),
 		spaceManager_(std::move(spaceManager)) {
 
+		persistenceManager_ = std::make_shared<PersistenceManager>();
 		segmentIndexManager_ = std::make_shared<SegmentIndexManager>(segmentTracker_);
 		segmentTracker_->setSegmentIndexManager(std::weak_ptr(segmentIndexManager_));
 	}
@@ -91,82 +92,88 @@ namespace graph::storage {
 
 	// --- Notification Helper Implementations ---
 
-	void DataManager::notifyNodeAdded(const Node &node) {
+	void DataManager::notifyNodeAdded(const Node &node) const {
 		std::lock_guard<std::mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onNodeAdded(node);
 		}
 	}
 
-	void DataManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) {
+	void DataManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) const {
 		std::lock_guard<std::mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onNodeUpdated(oldNode, newNode);
 		}
 	}
 
-	void DataManager::notifyNodeDeleted(const Node &node) {
+	void DataManager::notifyNodeDeleted(const Node &node) const {
 		std::lock_guard<std::mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onNodeDeleted(node);
 		}
 	}
 
-	void DataManager::notifyEdgeAdded(const Edge &edge) {
+	void DataManager::notifyEdgeAdded(const Edge &edge) const {
 		std::lock_guard<std::mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeAdded(edge);
 		}
 	}
 
-	void DataManager::notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) {
+	void DataManager::notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const {
 		std::lock_guard<std::mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeUpdated(oldEdge, newEdge);
 		}
 	}
 
-	void DataManager::notifyEdgeDeleted(const Edge &edge) {
+	void DataManager::notifyEdgeDeleted(const Edge &edge) const {
 		std::lock_guard<std::mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeDeleted(edge);
 		}
 	}
 
+	template<typename T>
+	void DataManager::updateEntityImpl(const T &entity, std::function<T(int64_t)> getOldFunc,
+									   std::function<void(T)> internalUpdateFunc,
+									   std::function<void(const T &, const T &)> notifyFunc) {
+		// Check dirty info via persistence manager
+		auto dirtyInfo = persistenceManager_->getDirtyInfo<T>(entity.getId());
+
+		// If entity is marked as ADDED, this update is part of creation.
+		// Keep changeType as ADDED, do not trigger 'Updated' notification.
+		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
+			internalUpdateFunc(entity);
+			return;
+		}
+
+		// Get old state
+		T oldEntity = getOldFunc(entity.getId());
+
+		// Perform update
+		internalUpdateFunc(entity);
+
+		// Notify
+		if (notifyFunc)
+			notifyFunc(oldEntity, entity);
+	}
+
 	// --- Node Operations (delegate to NodeManager) ---
 
-	void DataManager::addNode(Node &node) {
+	void DataManager::addNode(Node &node) const {
 		nodeManager_->add(node);
 		notifyNodeAdded(node);
 	}
 
 	void DataManager::updateNode(const Node &node) {
-		// Check the entity's current dirty state before proceeding.
-		auto &dirtyMap = getDirtyNodes();
-		auto it = dirtyMap.find(node.getId());
-
-		// If the node is still marked as ADDED in the dirty map, any "update" call
-		// is considered part of its initial creation process (e.g., linking by an edge).
-		// In this case, we should perform the data update but suppress sending an
-		// `onNodeUpdated` notification, as this would be logically incorrect.
-		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
-			// Perform the underlying update to ensure the in-memory state is correct.
-			nodeManager_->update(node);
-			// Exit without sending an "updated" notification.
-			return;
-		}
-
-		// Get the state of the node as it was before this update operation.
-		Node oldNode = nodeManager_->get(node.getId());
-
-		// Perform the update in the underlying manager.
-		nodeManager_->update(node);
-
-		// Notify observers about the change.
-		notifyNodeUpdated(oldNode, node);
+		updateEntityImpl<Node>(
+				node, [this](int64_t id) { return nodeManager_->get(id); },
+				[this](const Node &n) { nodeManager_->update(n); },
+				[this](const Node &o, const Node &n) { notifyNodeUpdated(o, n); });
 	}
 
-	void DataManager::deleteNode(Node &node) {
+	void DataManager::deleteNode(Node &node) const {
 		nodeManager_->remove(node);
 		notifyNodeDeleted(node);
 	}
@@ -196,38 +203,19 @@ namespace graph::storage {
 
 	// --- Edge Operations (delegate to EdgeManager) ---
 
-	void DataManager::addEdge(Edge &edge) {
+	void DataManager::addEdge(Edge &edge) const {
 		edgeManager_->add(edge);
 		notifyEdgeAdded(edge);
 	}
 
 	void DataManager::updateEdge(const Edge &edge) {
-		// Check the entity's current dirty state before proceeding.
-		auto &dirtyMap = getDirtyEdges();
-		auto it = dirtyMap.find(edge.getId());
-
-		// If the edge is still marked as ADDED, the call to `updateEdge` is an
-		// internal part of the `addEdge` workflow (specifically, from `linkEdge`).
-		// We must suppress the `onEdgeUpdated` notification to maintain correct
-		// observer semantics: an `add` operation should only fire `onEdgeAdded`.
-		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
-			// Perform the underlying update to save changes to link pointers (e.g., prev/next edge IDs).
-			edgeManager_->update(edge);
-			// Exit without sending an "updated" notification.
-			return;
-		}
-
-		// Get the state of the edge as it was before this update operation.
-		Edge oldEdge = edgeManager_->get(edge.getId());
-
-		// Perform the update in the underlying manager.
-		edgeManager_->update(edge);
-
-		// Notify observers about the change.
-		notifyEdgeUpdated(oldEdge, edge);
+		updateEntityImpl<Edge>(
+				edge, [this](int64_t id) { return edgeManager_->get(id); },
+				[this](const Edge &e) { edgeManager_->update(e); },
+				[this](const Edge &o, const Edge &n) { notifyEdgeUpdated(o, n); });
 	}
 
-	void DataManager::deleteEdge(Edge &edge) {
+	void DataManager::deleteEdge(Edge &edge) const {
 		edgeManager_->remove(edge);
 		notifyEdgeDeleted(edge);
 	}
@@ -365,9 +353,10 @@ namespace graph::storage {
 		// to avoid adding them again from the disk-based load.
 		std::unordered_set<int64_t> processedIds;
 
-		// --- PASS 1: Populate from Memory (Dirty Entities & Cache) ---
+		// --- PASS 1: Populate from Memory (PersistenceManager & Cache) ---
 		// This pass ensures data consistency by prioritizing in-memory changes over stale disk data.
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
+
+		// Get reference to cache via EntityTraits (Adapter)
 		auto &cache = EntityTraits<EntityType>::getCache(this);
 
 		for (int64_t currentId = startId; currentId <= endId; ++currentId) {
@@ -375,21 +364,22 @@ namespace graph::storage {
 				break;
 			}
 
-			// 1. Check the dirty map first, as it contains the most recent state.
-			auto it = dirtyMap.find(currentId);
-			if (it != dirtyMap.end()) {
-				const auto &info = it->second;
-				// Only add if it's not marked for deletion.
-				if (info.changeType != EntityChangeType::DELETED && info.backup.has_value()) {
-					result.push_back(*info.backup);
-				}
-				// Mark this ID as processed, regardless of its state (even DELETED),
-				// so we don't try to fetch it from disk later.
+			// 1. Check PersistenceManager first (Highest Priority)
+			// It checks both the Active Layer (new writes) and Flushing Layer (currently saving).
+			auto dirtyInfo = persistenceManager_->getDirtyInfo<EntityType>(currentId);
+
+			if (dirtyInfo.has_value()) {
+				// Mark this ID as processed so we don't fetch it from cache or disk.
 				processedIds.insert(currentId);
+
+				// Only add if it's not marked for deletion.
+				if (dirtyInfo->changeType != EntityChangeType::DELETED && dirtyInfo->backup.has_value()) {
+					result.push_back(*dirtyInfo->backup);
+				}
 				continue; // Move to the next ID
 			}
 
-			// 2. If not in dirty map, check the cache.
+			// 2. If not dirty, check the LRU Cache.
 			if (cache.contains(currentId)) {
 				EntityType entity = cache.peek(currentId); // Use peek to avoid changing LRU order
 				if (entity.isActive()) {
@@ -432,8 +422,7 @@ namespace graph::storage {
 
 			for (const EntityType &entity: segmentEntities) {
 				// IMPORTANT: Only add the entity if it was not already processed from memory.
-				// The find() operation on an unordered_set is very fast (average O(1)).
-				if (processedIds.find(entity.getId()) == processedIds.end()) {
+				if (!processedIds.contains(entity.getId())) {
 					result.push_back(entity);
 
 					// Add the newly loaded entity to the cache for future queries.
@@ -457,44 +446,6 @@ namespace graph::storage {
 	uint64_t DataManager::findSegmentForEntityId(int64_t id) const {
 		uint32_t type = EntityType::typeId;
 		return segmentIndexManager_->findSegmentForId(type, id);
-	}
-
-	template<typename EntityType>
-	std::vector<DirtyEntityInfo<EntityType>>
-	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types) {
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
-		std::vector<DirtyEntityInfo<EntityType>> result;
-		result.reserve(dirtyMap.size()); // Reserve space for potential efficiency gain
-
-		for (const auto &[id, info]: dirtyMap) {
-			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
-				// Push the entire DirtyEntityInfo struct, which includes the changeType and backup
-				result.push_back(info);
-			}
-		}
-
-		return result;
-	}
-
-	template<typename EntityType>
-	std::vector<EntityType> DataManager::getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types) {
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
-		std::vector<EntityType> result;
-
-		for (const auto &[id, info]: dirtyMap) {
-			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
-				if (info.backup.has_value()) {
-					result.push_back(*info.backup);
-				} else {
-					auto &cache = EntityTraits<EntityType>::getCache(this);
-					if (cache.contains(id)) {
-						result.push_back(cache.peek(id));
-					}
-				}
-			}
-		}
-
-		return result;
 	}
 
 	// --- Entity Loading from Disk ---
@@ -602,54 +553,93 @@ namespace graph::storage {
 	// --- Entity Memory Operations ---
 
 	template<typename EntityType>
-	std::optional<EntityType> DataManager::getEntityFromDirty(int64_t id) {
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
-		auto it = dirtyMap.find(id);
+	void DataManager::setEntityDirty(const DirtyEntityInfo<EntityType> &info) {
+		persistenceManager_->upsert(info);
+	}
 
-		if (it != dirtyMap.end()) {
-			const auto &info = it->second;
-			if (info.changeType != EntityChangeType::DELETED) {
-				if (info.backup.has_value()) {
-					return info.backup;
-				} else {
-					auto &cache = EntityTraits<EntityType>::getCache(this);
-					if (cache.contains(id)) {
-						return cache.peek(id);
-					}
+	template<typename EntityType>
+	std::optional<DirtyEntityInfo<EntityType>> DataManager::getDirtyInfo(int64_t id) {
+		return persistenceManager_->getDirtyInfo<EntityType>(id);
+	}
+
+	bool DataManager::hasUnsavedChanges() const { return persistenceManager_->hasUnsavedChanges(); }
+
+	FlushSnapshot DataManager::prepareFlushSnapshot() const { return persistenceManager_->createSnapshot(); }
+
+	void DataManager::commitFlushSnapshot() const { persistenceManager_->commitSnapshot(); }
+
+	void DataManager::setMaxDirtyEntities(size_t max) const { persistenceManager_->setMaxDirtyEntities(max); }
+
+	void DataManager::setAutoFlushCallback(std::function<void()> cb) const {
+		persistenceManager_->setAutoFlushCallback(std::move(cb));
+	}
+
+	void DataManager::checkAndTriggerAutoFlush() const { persistenceManager_->checkAndTriggerAutoFlush(); }
+
+	template<typename EntityType>
+	std::vector<DirtyEntityInfo<EntityType>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types) {
+		// 1. Get all dirty entities from PersistenceManager (Active + Flushing)
+		auto allInfos = persistenceManager_->getAllDirtyInfos<EntityType>();
+
+		// 2. Filter by requested types
+		// Optimization: If types contains ALL types, return directly
+		if (types.size() == 3) { // Assuming ADDED, MODIFIED, DELETED are the only main ones
+			return allInfos;
+		}
+
+		std::vector<DirtyEntityInfo<EntityType>> result;
+		result.reserve(allInfos.size());
+
+		for (const auto &info: allInfos) {
+			bool typeMatch = false;
+			for (auto type: types) {
+				if (info.changeType == type) {
+					typeMatch = true;
+					break;
 				}
 			}
+			if (typeMatch) {
+				result.push_back(info);
+			}
 		}
-		return std::nullopt;
+		return result;
 	}
 
 	template<typename EntityType>
 	EntityType DataManager::getEntityFromMemoryOrDisk(int64_t id) {
-		// First check dirty collections
-		auto dirtyEntity = getEntityFromDirty<EntityType>(id);
-		if (dirtyEntity.has_value()) {
-			return *dirtyEntity;
+		// 1. Check dirty info via PersistenceManager
+		auto dirtyInfo = getDirtyInfo<EntityType>(id);
+
+		if (dirtyInfo.has_value()) {
+			// CASE A: Entity is marked as DELETED in memory
+			if (dirtyInfo->changeType == EntityChangeType::DELETED) {
+				return EntityType();
+			}
+
+			// CASE B: Entity is ADDED or MODIFIED
+			if (dirtyInfo->backup.has_value()) {
+				return *dirtyInfo->backup;
+			}
 		}
 
-		// Then check cache
+		// 2. Check Cache
 		auto &cache = EntityTraits<EntityType>::getCache(this);
 		if (cache.contains(id)) {
 			EntityType entity = cache.get(id);
-			// Check if entity is active
 			if (!entity.isActive()) {
-				return EntityType(); // Return empty entity if inactive
+				return EntityType(); // Cache hit but inactive -> return empty
 			}
 			return entity;
 		}
 
-		// Finally, load from disk
+		// 3. Load from Disk
 		EntityType entity = EntityTraits<EntityType>::loadFromDisk(this, id);
 		if (entity.getId() != 0 && entity.isActive()) {
-			// Add to cache
 			cache.put(id, entity);
 			return entity;
 		}
 
-		// Return empty entity if not found
 		return EntityType();
 	}
 
@@ -696,51 +686,22 @@ namespace graph::storage {
 		stateCache_.clear();
 	}
 
-	bool DataManager::hasUnsavedChanges() const {
-		return !dirtyNodes_.empty() || !dirtyEdges_.empty() || !dirtyProperties_.empty() || !dirtyBlobs_.empty() ||
-			   !dirtyIndexes_.empty() || !dirtyStates_.empty();
-	}
-
-	void DataManager::markAllSaved() {
-		dirtyNodes_.clear();
-		dirtyEdges_.clear();
-		dirtyProperties_.clear();
-		dirtyBlobs_.clear();
-		dirtyIndexes_.clear();
-		dirtyStates_.clear();
-	}
-
-	void DataManager::flushToDisk(std::fstream &file) {
-		// This would contain the logic to write all dirty entities to disk
-		// and update the file header/indexes
-		// Implementation details depend on how you want to handle persistence
-	}
-
-	void DataManager::checkAndTriggerAutoFlush() const {
-		if (needsAutoFlush() && autoFlushCallback_) {
-			autoFlushCallback_();
-		}
-	}
-
 	template<typename EntityType>
 	void DataManager::markEntityDeleted(EntityType &entity) {
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(this);
-		auto it = dirtyMap.find(entity.getId());
+		auto dirtyInfo = persistenceManager_->getDirtyInfo<EntityType>(entity.getId());
 
-		// Check the entity's current state in the dirty map.
-		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
-			// If the entity was newly ADDED in this transaction, deleting it
-			// should simply cancel out the addition. We remove it from the
-			// dirty map entirely, as it results in a no-op for the database.
-			dirtyMap.erase(it);
+		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
+			// Revert ADD by overwriting with explicit DELETED (or just removing, but DELETED is safer for log)
+			// Actually, if it was just added in memory and never saved, we can technically ignore it,
+			// BUT to be safe in the registry logic, we mark it DELETED.
+			// Better yet, update registry to remove it?
+			// Simpler: Mark DELETED.
+			persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));
 		} else {
-			// If the entity existed on disk (i.e., it wasn't in the dirty map,
-			// or was marked as MODIFIED), then we mark it as DELETED.
 			entity.markInactive();
-			dirtyMap[entity.getId()] = DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity);
+			persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));
 		}
 
-		// Always remove from cache upon deletion.
 		EntityTraits<EntityType>::removeFromCache(this, entity.getId());
 		checkAndTriggerAutoFlush();
 	}
@@ -756,13 +717,9 @@ namespace graph::storage {
 	template void DataManager::addToCache<Node>(const Node &entity);
 	template Node DataManager::getEntity<Node>(int64_t id);
 	template void DataManager::updateEntity<Node>(const Node &entity);
+	template std::optional<DirtyEntityInfo<Node>> DataManager::getDirtyInfo<Node>(int64_t);
 	template std::vector<Node> DataManager::getEntitiesInRange<Node>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Node>(int64_t id) const;
-	template std::vector<DirtyEntityInfo<Node>>
-	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
-	template std::vector<Node>
-	DataManager::getDirtyEntitiesWithChangeTypes<Node>(const std::vector<EntityChangeType> &);
-	template std::optional<Node> DataManager::getEntityFromDirty<Node>(int64_t id);
 	template Node DataManager::getEntityFromMemoryOrDisk<Node>(int64_t id);
 	template void DataManager::removeEntityProperty<Node>(int64_t entityId, const std::string &key);
 	template void DataManager::markEntityDeleted<Node>(Node &entity);
@@ -771,18 +728,17 @@ namespace graph::storage {
 	template std::optional<Node> DataManager::findAndReadEntity<Node>(int64_t id) const;
 	template std::vector<Node> DataManager::readEntitiesFromSegment<Node>(uint64_t, int64_t, int64_t, size_t,
 																		  bool) const;
+	template std::vector<DirtyEntityInfo<Node>>
+	DataManager::getDirtyEntityInfos<Node>(const std::vector<EntityChangeType> &);
+	template void DataManager::setEntityDirty<Node>(const DirtyEntityInfo<Node> &);
 
 	// Edge-specific instantiations
 	template void DataManager::addToCache<Edge>(const Edge &entity);
 	template Edge DataManager::getEntity<Edge>(int64_t id);
 	template void DataManager::updateEntity<Edge>(const Edge &entity);
+	template std::optional<DirtyEntityInfo<Edge>> DataManager::getDirtyInfo<Edge>(int64_t);
 	template std::vector<Edge> DataManager::getEntitiesInRange<Edge>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Edge>(int64_t id) const;
-	template std::vector<DirtyEntityInfo<Edge>>
-	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
-	template std::vector<Edge>
-	DataManager::getDirtyEntitiesWithChangeTypes<Edge>(const std::vector<EntityChangeType> &);
-	template std::optional<Edge> DataManager::getEntityFromDirty<Edge>(int64_t id);
 	template Edge DataManager::getEntityFromMemoryOrDisk<Edge>(int64_t id);
 	template void DataManager::removeEntityProperty<Edge>(int64_t entityId, const std::string &key);
 	template void DataManager::markEntityDeleted<Edge>(Edge &entity);
@@ -791,47 +747,48 @@ namespace graph::storage {
 	template std::optional<Edge> DataManager::findAndReadEntity<Edge>(int64_t id) const;
 	template std::vector<Edge> DataManager::readEntitiesFromSegment<Edge>(uint64_t, int64_t, int64_t, size_t,
 																		  bool) const;
+	template std::vector<DirtyEntityInfo<Edge>>
+	DataManager::getDirtyEntityInfos<Edge>(const std::vector<EntityChangeType> &);
+	template void DataManager::setEntityDirty<Edge>(const DirtyEntityInfo<Edge> &);
 
 	// Property-specific instantiations
 	template void DataManager::addToCache<Property>(const Property &entity);
+	template std::optional<DirtyEntityInfo<Property>> DataManager::getDirtyInfo<Property>(int64_t);
 	template Property DataManager::getEntityFromMemoryOrDisk<Property>(int64_t id);
 	template std::vector<Property> DataManager::getEntitiesInRange<Property>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Property>(int64_t id) const;
-	template std::vector<DirtyEntityInfo<Property>>
-	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
-	template std::vector<Property>
-	DataManager::getDirtyEntitiesWithChangeTypes<Property>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<Property>(Property &entity);
+	template std::vector<DirtyEntityInfo<Property>>
+	DataManager::getDirtyEntityInfos<Property>(const std::vector<EntityChangeType> &);
+	template void DataManager::setEntityDirty<Property>(const DirtyEntityInfo<Property> &);
 
 	// Blob-specific instantiations
 	template Blob DataManager::getEntityFromMemoryOrDisk<Blob>(int64_t id);
+	template std::optional<DirtyEntityInfo<Blob>> DataManager::getDirtyInfo<Blob>(int64_t);
 	template std::vector<Blob> DataManager::getEntitiesInRange<Blob>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Blob>(int64_t id) const;
-	template std::vector<DirtyEntityInfo<Blob>>
-	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
-	template std::vector<Blob>
-	DataManager::getDirtyEntitiesWithChangeTypes<Blob>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<Blob>(Blob &entity);
+	template std::vector<DirtyEntityInfo<Blob>>
+	DataManager::getDirtyEntityInfos<Blob>(const std::vector<EntityChangeType> &);
+	template void DataManager::setEntityDirty<Blob>(const DirtyEntityInfo<Blob> &);
 
 	// Index-specific instantiations
 	template Index DataManager::getEntityFromMemoryOrDisk<Index>(int64_t id);
+	template std::optional<DirtyEntityInfo<Index>> DataManager::getDirtyInfo<Index>(int64_t);
 	template std::vector<Index> DataManager::getEntitiesInRange<Index>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<Index>(int64_t id) const;
-	template std::vector<DirtyEntityInfo<Index>>
-	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
-	template std::vector<Index>
-	DataManager::getDirtyEntitiesWithChangeTypes<Index>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<Index>(Index &entity);
+	template std::vector<DirtyEntityInfo<Index>>
+	DataManager::getDirtyEntityInfos<Index>(const std::vector<EntityChangeType> &);
+	template void DataManager::setEntityDirty<Index>(const DirtyEntityInfo<Index> &);
 
 	// State-specific instantiations
 	template State DataManager::getEntityFromMemoryOrDisk<State>(int64_t id);
+	template std::optional<DirtyEntityInfo<State>> DataManager::getDirtyInfo<State>(int64_t);
 	template std::vector<State> DataManager::getEntitiesInRange<State>(int64_t, int64_t, size_t);
 	template uint64_t DataManager::findSegmentForEntityId<State>(int64_t id) const;
-	template std::vector<DirtyEntityInfo<State>>
-	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
-	template std::vector<State>
-	DataManager::getDirtyEntitiesWithChangeTypes<State>(const std::vector<EntityChangeType> &);
 	template void DataManager::markEntityDeleted<State>(State &entity);
-
-
+	template std::vector<DirtyEntityInfo<State>>
+	DataManager::getDirtyEntityInfos<State>(const std::vector<EntityChangeType> &);
+	template void DataManager::setEntityDirty<State>(const DirtyEntityInfo<State> &);
 } // namespace graph::storage

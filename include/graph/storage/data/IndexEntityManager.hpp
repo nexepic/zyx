@@ -15,7 +15,7 @@
 
 namespace graph::storage {
 
-	class IndexEntityManager : public BaseEntityManager<Index> {
+	class IndexEntityManager final : public BaseEntityManager<Index> {
 	public:
 		IndexEntityManager(const std::shared_ptr<DataManager> &dataManager,
 						   std::shared_ptr<DeletionManager> deletionManager);

@@ -47,7 +47,7 @@ protected:
 	}
 
 	// Helper to create a Blob using the correct API
-	graph::Blob createTestBlob(const std::string &data, int64_t entityId, uint32_t entityType) {
+	static graph::Blob createTestBlob(const std::string &data, int64_t entityId, uint32_t entityType) {
 		graph::Blob blob;
 		blob.setData(data);
 		blob.setEntityId(entityId);
@@ -56,7 +56,7 @@ protected:
 	}
 
 	// Helper function to generate random data
-	std::string generateRandomData(size_t size, unsigned int seed = 42) {
+	static std::string generateRandomData(size_t size, unsigned int seed = 42) {
 		std::string data;
 		data.resize(size);
 		std::mt19937 rng(seed);
@@ -192,7 +192,7 @@ TEST_F(BlobManagerTest, CreateMultipleBlobChain) {
 TEST_F(BlobManagerTest, CreateBlobChainWithEmptyData) {
 	constexpr int64_t entityId = 400;
 	constexpr uint32_t entityType = 4;
-	const std::string emptyData = "";
+	const std::string emptyData;
 
 	auto blobs = blobManager->createBlobChain(entityId, entityType, emptyData);
 

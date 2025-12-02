@@ -45,8 +45,6 @@ namespace graph::storage {
 		EntityType get(int64_t id) override;
 		std::vector<EntityType> getBatch(const std::vector<int64_t> &ids) override;
 		std::vector<EntityType> getInRange(int64_t startId, int64_t endId, size_t limit) override;
-		std::vector<EntityType> getDirtyWithChangeTypes(const std::vector<EntityChangeType> &types) override;
-		void markAllSaved() override;
 		void addToCache(const EntityType &entity) override;
 		void clearCache() override;
 

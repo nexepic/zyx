@@ -10,180 +10,138 @@
 
 #pragma once
 
-#include "DataManager.hpp"
+#include <optional>
+#include <vector>
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 
 namespace graph::storage {
 
+	// Forward declaration
+	class DataManager;
+
+	// ==============================================================================
+	// 1. DataManagerAccess Adapter
+	//    This layer maps generic operations to specific method names in DataManager.
+	// ==============================================================================
+
+	template<typename EntityType>
+	struct DataManagerAccess;
+
+	// --- Node Specialization ---
+	template<>
+	struct DataManagerAccess<Node> {
+		static auto &getCache(const DataManager *dm) { return dm->getNodeCache(); }
+		static auto loadFromDisk(const DataManager *dm, int64_t id) { return dm->loadNodeFromDisk(id); }
+		static const auto &getSegmentIndex(const DataManager *dm) {
+			return dm->getSegmentIndexManager()->getNodeSegmentIndex();
+		}
+	};
+
+	// --- Edge Specialization ---
+	template<>
+	struct DataManagerAccess<Edge> {
+		static auto &getCache(const DataManager *dm) { return dm->getEdgeCache(); }
+		static auto loadFromDisk(const DataManager *dm, int64_t id) { return dm->loadEdgeFromDisk(id); }
+		static const auto &getSegmentIndex(const DataManager *dm) {
+			return dm->getSegmentIndexManager()->getEdgeSegmentIndex();
+		}
+	};
+
+	// --- Property Specialization ---
+	template<>
+	struct DataManagerAccess<Property> {
+		static auto &getCache(const DataManager *dm) { return dm->getPropertyCache(); }
+		static auto loadFromDisk(const DataManager *dm, int64_t id) { return dm->loadPropertyFromDisk(id); }
+		static const auto &getSegmentIndex(const DataManager *dm) {
+			return dm->getSegmentIndexManager()->getPropertySegmentIndex();
+		}
+	};
+
+	// --- Blob Specialization ---
+	template<>
+	struct DataManagerAccess<Blob> {
+		static auto &getCache(const DataManager *dm) { return dm->getBlobCache(); }
+		static auto loadFromDisk(const DataManager *dm, int64_t id) { return dm->loadBlobFromDisk(id); }
+		static const auto &getSegmentIndex(const DataManager *dm) {
+			return dm->getSegmentIndexManager()->getBlobSegmentIndex();
+		}
+	};
+
+	// --- Index Specialization ---
+	template<>
+	struct DataManagerAccess<Index> {
+		static auto &getCache(const DataManager *dm) { return dm->getIndexCache(); }
+		static auto loadFromDisk(const DataManager *dm, int64_t id) { return dm->loadIndexFromDisk(id); }
+		static const auto &getSegmentIndex(const DataManager *dm) {
+			return dm->getSegmentIndexManager()->getIndexSegmentIndex();
+		}
+	};
+
+	// --- State Specialization ---
+	template<>
+	struct DataManagerAccess<State> {
+		static auto &getCache(const DataManager *dm) { return dm->getStateCache(); }
+		static auto loadFromDisk(const DataManager *dm, int64_t id) { return dm->loadStateFromDisk(id); }
+		static const auto &getSegmentIndex(const DataManager *dm) {
+			return dm->getSegmentIndexManager()->getStateSegmentIndex();
+		}
+	};
+
+
+	// ==============================================================================
+	// 2. EntityTraits (Generic Template)
+	//    Now purely generic, utilizing DataManagerAccess<T> for specific mapping.
+	// ==============================================================================
+
 	template<typename EntityType>
 	struct EntityTraits {
-		// Will be specialized for each entity type
-	};
+		using CacheType = LRUCache<int64_t, EntityType>;
+		using Access = DataManagerAccess<EntityType>;
 
-	// Node specialization
-	template<>
-	struct EntityTraits<Node> {
-		using CacheType = LRUCache<int64_t, Node>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Node>>;
+		static constexpr uint32_t typeId = EntityType::typeId;
 
-		static constexpr uint32_t typeId = Node::typeId;
+		/* --- Core Retrieval --- */
 
-		static Node get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<Node>(id); }
-
-		static Node loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadNodeFromDisk(id); }
-
-		static void addToCache(const DataManager *manager, const Node &entity) {
-			manager->getNodeCache().put(entity.getId(), entity);
+		static EntityType get(DataManager *manager, int64_t id) {
+			// This method is generic in DataManager, so no adapter needed
+			return manager->getEntityFromMemoryOrDisk<EntityType>(id);
 		}
 
-		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getNodeCache().remove(id); }
+		static EntityType loadFromDisk(const DataManager *manager, int64_t id) {
+			// Call specific method via Adapter
+			return Access::loadFromDisk(manager, id);
+		}
 
-		static CacheType &getCache(const DataManager *manager) { return manager->getNodeCache(); }
+		/* --- Cache Management --- */
 
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyNodes(); }
+		static void addToCache(const DataManager *manager, const EntityType &entity) {
+			Access::getCache(const_cast<DataManager *>(manager)).put(entity.getId(), entity);
+		}
+
+		static void removeFromCache(const DataManager *manager, int64_t id) {
+			Access::getCache(const_cast<DataManager *>(manager)).remove(id);
+		}
+
+		static CacheType &getCache(const DataManager *manager) {
+			return Access::getCache(const_cast<DataManager *>(manager));
+		}
+
+		/* --- Dirty Data Management --- */
+		// These methods in DataManager are already generic templates, so no Adapter needed!
+
+		static void addToDirty(DataManager *manager, const DirtyEntityInfo<EntityType> &info) {
+			manager->setEntityDirty(info);
+		}
+
+		static std::optional<DirtyEntityInfo<EntityType>> getDirtyInfo(DataManager *manager, int64_t id) {
+			return manager->getDirtyInfo<EntityType>(id);
+		}
+
+		/* --- Segment Index Access --- */
 
 		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getNodeSegmentIndex();
-		}
-	};
-
-	// Edge specialization
-	template<>
-	struct EntityTraits<Edge> {
-		using CacheType = LRUCache<int64_t, Edge>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Edge>>;
-
-		static constexpr uint32_t typeId = Edge::typeId;
-
-		static Edge get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<Edge>(id); }
-
-		static Edge loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadEdgeFromDisk(id); }
-
-		static void addToCache(const DataManager *manager, const Edge &entity) {
-			manager->getEdgeCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getEdgeCache().remove(id); }
-
-		static CacheType &getCache(const DataManager *manager) { return manager->getEdgeCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyEdges(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getEdgeSegmentIndex();
-		}
-	};
-
-	// Property specialization
-	template<>
-	struct EntityTraits<Property> {
-		using CacheType = LRUCache<int64_t, Property>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Property>>;
-
-		static constexpr uint32_t typeId = Property::typeId;
-
-		static Property get(DataManager *manager, int64_t id) {
-			return manager->getEntityFromMemoryOrDisk<Property>(id);
-		}
-
-		static Property loadFromDisk(const DataManager *manager, int64_t id) {
-			return manager->loadPropertyFromDisk(id);
-		}
-
-		static void addToCache(const DataManager *manager, const Property &entity) {
-			manager->getPropertyCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getPropertyCache().remove(id); }
-
-		static CacheType &getCache(const DataManager *manager) { return manager->getPropertyCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyProperties(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getPropertySegmentIndex();
-		}
-	};
-
-	// Blob specialization
-	template<>
-	struct EntityTraits<Blob> {
-		using CacheType = LRUCache<int64_t, Blob>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Blob>>;
-
-		static constexpr uint32_t typeId = Blob::typeId;
-
-		static Blob get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<Blob>(id); }
-
-		static Blob loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadBlobFromDisk(id); }
-
-		static void addToCache(const DataManager *manager, const Blob &entity) {
-			manager->getBlobCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getBlobCache().remove(id); }
-
-		static CacheType &getCache(const DataManager *manager) { return manager->getBlobCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyBlobs(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getBlobSegmentIndex();
-		}
-	};
-
-	// IndexEntity specialization
-	template<>
-	struct EntityTraits<Index> {
-		using CacheType = LRUCache<int64_t, Index>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<Index>>;
-
-		static constexpr uint32_t typeId = Index::typeId;
-
-		static Index get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<Index>(id); }
-
-		static Index loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadIndexFromDisk(id); }
-
-		static void addToCache(const DataManager *manager, const Index &entity) {
-			manager->getIndexCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getIndexCache().remove(id); }
-
-		static CacheType &getCache(const DataManager *manager) { return manager->getIndexCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyIndexes(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getIndexSegmentIndex();
-		}
-	};
-
-	// StateEntity specialization
-	template<>
-	struct EntityTraits<State> {
-		using CacheType = LRUCache<int64_t, State>;
-		using DirtyMapType = std::unordered_map<int64_t, DirtyEntityInfo<State>>;
-
-		static constexpr uint32_t typeId = State::typeId;
-
-		static State get(DataManager *manager, int64_t id) { return manager->getEntityFromMemoryOrDisk<State>(id); }
-
-		static State loadFromDisk(const DataManager *manager, int64_t id) { return manager->loadStateFromDisk(id); }
-
-		static void addToCache(const DataManager *manager, const State &entity) {
-			manager->getStateCache().put(entity.getId(), entity);
-		}
-
-		static void removeFromCache(const DataManager *manager, int64_t id) { manager->getStateCache().remove(id); }
-
-		static CacheType &getCache(const DataManager *manager) { return manager->getStateCache(); }
-
-		static DirtyMapType &getDirtyMap(DataManager *manager) { return manager->getDirtyStates(); }
-
-		static const std::vector<SegmentIndexManager::SegmentIndex> &getSegmentIndex(const DataManager *manager) {
-			return manager->getSegmentIndexManager()->getStateSegmentIndex();
+			return Access::getSegmentIndex(manager);
 		}
 	};
 

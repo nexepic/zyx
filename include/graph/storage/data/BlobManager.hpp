@@ -21,7 +21,7 @@ namespace graph {
 
 namespace graph::storage {
 
-	class BlobManager : public BaseEntityManager<Blob> {
+	class BlobManager final : public BaseEntityManager<Blob> {
 	public:
 		BlobManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<BlobChainManager> blobChainManager,
 					std::shared_ptr<DeletionManager> deletionManager);

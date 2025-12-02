@@ -16,7 +16,6 @@
 #include <memory>
 #include <unordered_map>
 #include "DirtyEntityInfo.hpp"
-#include "EntityChangeType.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
@@ -26,6 +25,7 @@
 #include "graph/query/indexes/IEntityObserver.hpp"
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
+#include "graph/storage/PersistenceManager.hpp"
 
 namespace graph {
 	class BlobChainManager;
@@ -87,10 +87,15 @@ namespace graph::storage {
 
 		void registerObserver(std::shared_ptr<IEntityObserver> observer);
 
+		template<typename T>
+		void updateEntityImpl(const T &entity, std::function<T(int64_t)> getOldFunc,
+							  std::function<void(T)> internalUpdateFunc,
+							  std::function<void(const T &, const T &)> notifyFunc);
+
 		// Node-specific operations
-		void addNode(Node &node);
+		void addNode(Node &node) const;
 		void updateNode(const Node &node);
-		void deleteNode(Node &node);
+		void deleteNode(Node &node) const;
 		Node getNode(int64_t id) const;
 		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
@@ -99,9 +104,9 @@ namespace graph::storage {
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;
 
 		// Edge-specific operations
-		void addEdge(Edge &edge);
+		void addEdge(Edge &edge) const;
 		void updateEdge(const Edge &edge);
-		void deleteEdge(Edge &edge);
+		void deleteEdge(Edge &edge) const;
 		Edge getEdge(int64_t id) const;
 		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
@@ -158,24 +163,12 @@ namespace graph::storage {
 		// Cache management
 		void clearCache() const;
 
-		// Transaction management
-		[[nodiscard]] bool hasUnsavedChanges() const;
-		void markAllSaved();
-		static void flushToDisk(std::fstream &file);
+		void setMaxDirtyEntities(size_t maxDirtyEntities) const;
+		void setAutoFlushCallback(std::function<void()> callback) const;
+		void checkAndTriggerAutoFlush() const;
 
 		template<typename EntityType>
 		std::vector<DirtyEntityInfo<EntityType>> getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
-
-		template<typename EntityType>
-		std::vector<EntityType> getDirtyEntitiesWithChangeTypes(const std::vector<EntityChangeType> &types);
-
-		// Auto-flush configuration
-		void setMaxDirtyEntities(size_t maxDirtyEntities) { maxDirtyEntities_ = maxDirtyEntities; }
-		void setAutoFlushCallback(std::function<void()> callback) { autoFlushCallback_ = std::move(callback); }
-		[[nodiscard]] bool needsAutoFlush() const {
-			return dirtyNodes_.size() >= maxDirtyEntities_ || dirtyEdges_.size() >= maxDirtyEntities_;
-		}
-		void checkAndTriggerAutoFlush() const;
 
 		// Helper method to retrieve an entity from memory (dirty collections and cache) or disk
 		template<typename EntityType>
@@ -196,16 +189,6 @@ namespace graph::storage {
 		[[nodiscard]] LRUCache<int64_t, Blob> &getBlobCache() const { return blobCache_; }
 		[[nodiscard]] LRUCache<int64_t, Index> &getIndexCache() const { return indexCache_; }
 		[[nodiscard]] LRUCache<int64_t, State> &getStateCache() const { return stateCache_; }
-
-		// Dirty collections access (for backward compatibility)
-		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Node>> &getDirtyNodes() { return dirtyNodes_; }
-		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Edge>> &getDirtyEdges() { return dirtyEdges_; }
-		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Property>> &getDirtyProperties() {
-			return dirtyProperties_;
-		}
-		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Blob>> &getDirtyBlobs() { return dirtyBlobs_; }
-		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<Index>> &getDirtyIndexes() { return dirtyIndexes_; }
-		[[nodiscard]] std::unordered_map<int64_t, DirtyEntityInfo<State>> &getDirtyStates() { return dirtyStates_; }
 
 		// Helper method for DeletionManager to update entity status in memory without recursion
 		template<typename EntityType>
@@ -242,6 +225,16 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<DeletionManager> getDeletionManager() const { return deletionManager_; }
 
+		FlushSnapshot prepareFlushSnapshot() const;
+		void commitFlushSnapshot() const;
+		[[nodiscard]] bool hasUnsavedChanges() const;
+
+		template<typename EntityType>
+		std::optional<DirtyEntityInfo<EntityType>> getDirtyInfo(int64_t id);
+
+		template<typename EntityType>
+		void setEntityDirty(const DirtyEntityInfo<EntityType> &info);
+
 	private:
 		// Core file and state
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
@@ -262,10 +255,6 @@ namespace graph::storage {
 		std::unordered_map<int64_t, DirtyEntityInfo<Blob>> dirtyBlobs_;
 		std::unordered_map<int64_t, DirtyEntityInfo<Index>> dirtyIndexes_;
 		std::unordered_map<int64_t, DirtyEntityInfo<State>> dirtyStates_;
-
-		// Auto-flush settings
-		size_t maxDirtyEntities_ = 1000; // Maximum number of dirty entities before auto-flush
-		std::function<void()> autoFlushCallback_ = nullptr;
 
 		// Flag for deletion tracking
 		std::atomic<bool> *deleteOperationPerformedFlag_ = nullptr;
@@ -288,6 +277,8 @@ namespace graph::storage {
 		std::shared_ptr<BlobManager> blobManager_;
 		std::shared_ptr<IndexEntityManager> indexEntityManager_;
 		std::shared_ptr<StateManager> stateManager_;
+
+		std::shared_ptr<PersistenceManager> persistenceManager_;
 
 		// Initialization helpers
 		void initializeSegmentIndexes() const;
@@ -315,17 +306,13 @@ namespace graph::storage {
 		template<typename EntityType>
 		void removeEntityProperty(int64_t entityId, const std::string &key);
 
-		// Helper to check if an entity exists in dirty collections
-		template<typename EntityType>
-		std::optional<EntityType> getEntityFromDirty(int64_t id);
+		void notifyNodeAdded(const Node &node) const;
+		void notifyNodeUpdated(const Node &oldNode, const Node &newNode) const;
+		void notifyNodeDeleted(const Node &node) const;
 
-		void notifyNodeAdded(const Node &node);
-		void notifyNodeUpdated(const Node &oldNode, const Node &newNode);
-		void notifyNodeDeleted(const Node &node);
-
-		void notifyEdgeAdded(const Edge &edge);
-		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge);
-		void notifyEdgeDeleted(const Edge &edge);
+		void notifyEdgeAdded(const Edge &edge) const;
+		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const;
+		void notifyEdgeDeleted(const Edge &edge) const;
 
 		std::vector<std::shared_ptr<IEntityObserver>> observers_;
 		mutable std::mutex observer_mutex_;

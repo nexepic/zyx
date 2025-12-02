@@ -16,51 +16,44 @@
 namespace graph::storage {
 
 	template<typename EntityType>
-	void BaseEntityManager<EntityType>::add(EntityType &entity) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+    void BaseEntityManager<EntityType>::add(EntityType &entity) {
+        const auto dataManager = dataManager_.lock();
+        if (!dataManager) return;
 
-		if (entity.getId() == 0) {
-			int64_t newId = doAllocateId();
-			entity.setId(newId);
-		}
+        if (entity.getId() == 0) {
+            int64_t newId = doAllocateId();
+            entity.setId(newId);
+        }
 
-		// Add to cache
-		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
+        EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
 
-		// Mark as dirty
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(dataManager.get());
-		dirtyMap[entity.getId()] = DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity);
+        // REFACTORED: Use addToDirty instead of accessing map
+        EntityTraits<EntityType>::addToDirty(dataManager.get(),
+            DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
 
-		// Check if auto-flush needed
-		dataManager->checkAndTriggerAutoFlush();
-	}
+        dataManager->checkAndTriggerAutoFlush();
+    }
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::update(const EntityType &entity) {
 		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		if (!dataManager) return;
 
-		if (!entity.isActive()) {
-			throw std::runtime_error("Cannot update inactive entity: " + std::to_string(entity.getId()));
-		}
+		if (!entity.isActive()) throw std::runtime_error("Update inactive entity");
 
-		// Add to cache
 		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
 
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(dataManager.get());
-		auto it = dirtyMap.find(entity.getId());
+		// REFACTORED: Check logic via Traits wrapper
+		auto dirtyInfo = EntityTraits<EntityType>::getDirtyInfo(dataManager.get(), entity.getId());
 
-		// If already marked as ADDED, keep that state but update the backup
-		if (it != dirtyMap.end() && it->second.changeType == EntityChangeType::ADDED) {
-			dirtyMap[entity.getId()] = DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity);
-			return;
+		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
+			EntityTraits<EntityType>::addToDirty(dataManager.get(),
+				DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
+		} else {
+			EntityTraits<EntityType>::addToDirty(dataManager.get(),
+				DirtyEntityInfo<EntityType>(EntityChangeType::MODIFIED, entity));
 		}
 
-		// Otherwise mark as modified
-		dirtyMap[entity.getId()] = DirtyEntityInfo<EntityType>(EntityChangeType::MODIFIED, entity);
 		dataManager->checkAndTriggerAutoFlush();
 	}
 
@@ -109,41 +102,6 @@ namespace graph::storage {
 			return {};
 
 		return dataManager->template getEntitiesInRange<EntityType>(startId, endId, limit);
-	}
-
-	template<typename EntityType>
-	std::vector<EntityType>
-	BaseEntityManager<EntityType>::getDirtyWithChangeTypes(const std::vector<EntityChangeType> &types) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return {};
-
-		auto &dirtyMap = EntityTraits<EntityType>::getDirtyMap(dataManager.get());
-		std::vector<EntityType> result;
-
-		for (const auto &[id, info]: dirtyMap) {
-			if (std::find(types.begin(), types.end(), info.changeType) != types.end()) {
-				if (info.backup.has_value()) {
-					result.push_back(*info.backup);
-				} else {
-					auto &cache = EntityTraits<EntityType>::getCache(dataManager.get());
-					if (cache.contains(id)) {
-						result.push_back(cache.peek(id));
-					}
-				}
-			}
-		}
-
-		return result;
-	}
-
-	template<typename EntityType>
-	void BaseEntityManager<EntityType>::markAllSaved() {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
-		EntityTraits<EntityType>::getDirtyMap(dataManager.get()).clear();
 	}
 
 	template<typename EntityType>

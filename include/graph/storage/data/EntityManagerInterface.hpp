@@ -11,7 +11,6 @@
 #pragma once
 
 #include <vector>
-#include "EntityChangeType.hpp"
 
 namespace graph::storage {
 
@@ -33,10 +32,6 @@ namespace graph::storage {
 		// Batch operations
 		virtual std::vector<EntityType> getBatch(const std::vector<int64_t> &ids) = 0;
 		virtual std::vector<EntityType> getInRange(int64_t startId, int64_t endId, size_t limit) = 0;
-
-		// Dirty entity management
-		virtual std::vector<EntityType> getDirtyWithChangeTypes(const std::vector<EntityChangeType> &types) = 0;
-		virtual void markAllSaved() = 0;
 
 		// Cache management
 		virtual void addToCache(const EntityType &entity) = 0;

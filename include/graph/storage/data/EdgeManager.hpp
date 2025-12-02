@@ -15,7 +15,7 @@
 
 namespace graph::storage {
 
-	class EdgeManager : public BaseEntityManager<Edge> {
+	class EdgeManager final : public BaseEntityManager<Edge> {
 	public:
 		EdgeManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<DeletionManager> deletionManager);
 

@@ -22,7 +22,7 @@ namespace graph {
 
 namespace graph::storage {
 
-	class StateManager : public BaseEntityManager<State> {
+	class StateManager final : public BaseEntityManager<State> {
 	public:
 		StateManager(const std::shared_ptr<DataManager> &dataManager,
 					 std::shared_ptr<StateChainManager> stateChainManager,
