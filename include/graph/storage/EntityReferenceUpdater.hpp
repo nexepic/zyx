@@ -11,6 +11,10 @@
 #pragma once
 
 #include <memory>
+#include "graph/core/Blob.hpp"
+#include "graph/core/Edge.hpp"
+#include "graph/core/Node.hpp"
+#include "graph/core/Property.hpp"
 #include "graph/storage/IDAllocator.hpp"
 
 namespace graph::storage {
@@ -43,9 +47,9 @@ namespace graph::storage {
 		void updateBlobChainReference(int64_t oldBlobId, int64_t newBlobId, int64_t linkedBlobId, bool isNextBlob,
 									  const Blob &sourceBlob) const;
 
-		Property getPropertyById(int64_t propertyId) const;
+		[[nodiscard]] Property getPropertyById(int64_t propertyId) const;
 
-		Blob getBlobById(int64_t blobId) const;
+		[[nodiscard]] Blob getBlobById(int64_t blobId) const;
 
 		template<typename T>
 		static EntityPropertyInfo getEntityPropertyInfoFromEntity(const T &entity);

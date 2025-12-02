@@ -14,6 +14,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include "graph/core/PropertyTypes.hpp"
 
 namespace graph::utils {
 

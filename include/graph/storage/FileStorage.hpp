@@ -101,6 +101,8 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<DataManager> getDataManager() const { return dataManager; }
 
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator() const { return idAllocator; }
+
 		void setQueryEngine(std::shared_ptr<query::QueryEngine> engine) {
 			queryEngine = std::move(engine);
 		}
