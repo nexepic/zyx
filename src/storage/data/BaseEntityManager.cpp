@@ -39,6 +39,10 @@ namespace graph::storage {
 		const auto dataManager = dataManager_.lock();
 		if (!dataManager) return;
 
+		if (entity.getId() == 0) {
+			return;
+		}
+
 		if (!entity.isActive()) throw std::runtime_error("Update inactive entity");
 
 		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
@@ -59,6 +63,9 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::remove(EntityType &entity) {
+		if (entity.getId() == 0 || !entity.isActive()) {
+			return;
+		}
 		// Call the virtual method that can be overridden by subclasses
 		doRemove(entity);
 

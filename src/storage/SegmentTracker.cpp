@@ -111,11 +111,22 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(offset);
 		SegmentHeader &header = segments_[offset];
-		if (header.used != used || header.inactive_count != inactive) {
+
+		// Capture old start_id (though usage update rarely changes start_id, it keeps API consistent)
+		int64_t oldStartId = header.start_id;
+
+		bool changed = (header.used != used || header.inactive_count != inactive);
+
+		if (changed) {
 			header.used = used;
 			header.inactive_count = inactive;
 			header.is_dirty = 1;
 			markSegmentDirty(offset);
+
+			// Pass oldStartId
+			if (auto indexMgr = segmentIndexManager_.lock()) {
+				indexMgr->updateSegmentIndex(header, oldStartId);
+			}
 		}
 	}
 
@@ -216,6 +227,13 @@ namespace graph::storage {
 		if ((offset - FILE_HEADER_SIZE) % TOTAL_SEGMENT_SIZE != 0) {
 			throw std::runtime_error("Invalid segment offset alignment");
 		}
+
+		if (segments_.contains(offset)) {
+			if (auto indexMgr = segmentIndexManager_.lock()) {
+				indexMgr->removeSegmentIndex(segments_[offset]);
+			}
+		}
+
 		freeSegments_.insert(offset);
 		segments_.erase(offset);
 
@@ -256,9 +274,19 @@ namespace graph::storage {
 	void SegmentTracker::updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> &updateFn) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(offset);
-		updateFn(segments_[offset]);
-		segments_[offset].is_dirty = 1;
+
+		SegmentHeader& header = segments_[offset];
+
+		int64_t oldStartId = header.start_id; // <--- CRITICAL
+
+		updateFn(header);
+
+		header.is_dirty = 1;
 		markSegmentDirty(offset);
+
+		if (auto indexMgr = segmentIndexManager_.lock()) {
+			indexMgr->updateSegmentIndex(header, oldStartId);
+		}
 	}
 
 	void SegmentTracker::setBitmapBit(uint64_t offset, uint32_t index, bool value) {
@@ -414,11 +442,6 @@ namespace graph::storage {
 				file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
 
 				it->second.is_dirty = 0;
-
-				// Critical: Update Index after flushing
-				if (auto segmentIndexManager = segmentIndexManager_.lock()) {
-					segmentIndexManager->updateSegmentIndexByOffset(offset, header);
-				}
 			}
 		}
 		dirtySegments_.clear();

@@ -9,191 +9,303 @@
  **/
 
 #include "graph/storage/IDAllocator.hpp"
+#include "graph/storage/SegmentTracker.hpp"
 #include <algorithm>
 #include <stdexcept>
-#include "graph/storage/SegmentTracker.hpp"
+#include <iostream>
 
 namespace graph::storage {
 
-	IDAllocator::IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
-							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId,
-							 int64_t &maxIndexId, int64_t &maxStateId) :
-		file_(std::move(file)), segmentTracker_(std::move(segmentTracker)), currentMaxNodeId_(maxNodeId),
-		currentMaxEdgeId_(maxEdgeId), currentMaxPropId_(maxPropId), currentMaxBlobId_(maxBlobId),
-		currentMaxIndexId_(maxIndexId), currentMaxStateId_(maxStateId) {}
+    // =========================================================
+    // IDIntervalSet Implementation (The Memory Optimizer)
+    // =========================================================
 
-	void IDAllocator::initialize() {
-		std::lock_guard<std::mutex> lock(mutex_);
+    void IDAllocator::IDIntervalSet::add(int64_t id) {
+        if (intervals_.empty()) {
+            intervals_[id] = id;
+            return;
+        }
 
-		// Initialize the cache of inactive IDs
-		refreshInactiveIdsCache(Node::typeId);
-		refreshInactiveIdsCache(Edge::typeId);
-		refreshInactiveIdsCache(Property::typeId);
-		refreshInactiveIdsCache(Blob::typeId);
-		refreshInactiveIdsCache(Index::typeId);
-		refreshInactiveIdsCache(State::typeId);
-	}
+        // Find the first interval starting AFTER id
+        auto it = intervals_.upper_bound(id);
 
-	int64_t IDAllocator::allocateId(uint32_t entityType) {
-		std::lock_guard<std::mutex> lock(mutex_);
+        // Check merge with NEXT interval (id + 1 == next.start)
+        bool mergeNext = (it != intervals_.end() && it->first == id + 1);
 
-		// First, try to reuse an inactive ID from the pool.
-		int64_t permId = findInactiveId(entityType);
+        // Check merge with PREV interval (prev.end + 1 == id)
+        bool mergePrev = false;
+        auto prev = it;
+        if (it != intervals_.begin()) {
+            prev = std::prev(it);
+            if (prev->second == id - 1) {
+                mergePrev = true;
+            } else if (prev->second >= id) {
+                // ID already exists in range (Duplicate free?)
+                return;
+            }
+        }
 
-		// If no inactive ID is available, allocate a new sequential ID.
-		if (permId == 0) {
-			permId = allocateNewSequentialId(entityType);
-		}
+        if (mergePrev && mergeNext) {
+            // Merge all three: [prev] + id + [next]
+            // Extend prev to cover next
+            prev->second = it->second;
+            intervals_.erase(it);
+        } else if (mergePrev) {
+            // Extend prev: [prev] + id
+            prev->second = id;
+        } else if (mergeNext) {
+            // Extend next backwards: id + [next]
+            int64_t end = it->second;
+            intervals_.erase(it);
+            intervals_[id] = end;
+        } else {
+            // No merge, new isolated interval
+            intervals_[id] = id;
+        }
+    }
 
-		return permId;
-	}
+    int64_t IDAllocator::IDIntervalSet::pop() {
+        if (intervals_.empty()) return 0;
 
-	void IDAllocator::freeId(int64_t id, uint32_t entityType) {
-		std::lock_guard<std::mutex> lock(mutex_);
+        // Take the first available interval
+        auto it = intervals_.begin();
+        int64_t start = it->first;
+        int64_t end = it->second;
 
-		// Find the segment containing this ID
-		uint64_t segmentOffset = 0;
-		if (entityType == Node::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForNodeId(id);
-		} else if (entityType == Edge::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(id);
-		} else if (entityType == Property::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForPropId(id);
-		} else if (entityType == Blob::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForBlobId(id);
-		} else if (entityType == Index::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForIndexId(id);
-		} else if (entityType == State::typeId) {
-			segmentOffset = segmentTracker_->getSegmentOffsetForStateId(id);
-		} else {
-			throw std::runtime_error("Invalid entity type for ID deallocation");
-		}
+        int64_t idToReturn = start;
 
-		if (segmentOffset == 0) {
-			// ID not found in any segment, nothing to do
-			return;
-		}
+        if (start == end) {
+            // Interval exhausted, remove it
+            intervals_.erase(it);
+        } else {
+            // Shrink interval from the left
+            // Optimizing map key modification: remove and re-insert is necessary
+            // because keys are const.
+            intervals_.erase(it);
+            intervals_[start + 1] = end;
+        }
 
-		// Read segment header
-		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
+        return idToReturn;
+    }
 
-		// Calculate index in segment
-		auto index = static_cast<uint32_t>(id - header.start_id);
+    // =========================================================
+    // IDAllocator Implementation
+    // =========================================================
 
-		// Update bitmap to mark ID as inactive
-		segmentTracker_->setEntityActive(segmentOffset, index, false);
+    IDAllocator::IDAllocator(std::shared_ptr<std::fstream> file,
+                             std::shared_ptr<SegmentTracker> segmentTracker,
+                             int64_t& maxNodeId, int64_t& maxEdgeId,
+                             int64_t& maxPropId, int64_t& maxBlobId,
+                             int64_t& maxIndexId, int64_t& maxStateId)
+        : file_(std::move(file)),
+          segmentTracker_(std::move(segmentTracker)),
+          currentMaxNodeId_(maxNodeId),
+          currentMaxEdgeId_(maxEdgeId),
+          currentMaxPropId_(maxPropId),
+          currentMaxBlobId_(maxBlobId),
+          currentMaxIndexId_(maxIndexId),
+          currentMaxStateId_(maxStateId) {}
 
-		// Update our cache of inactive IDs
-		auto &cache = inactiveIdsCache_[entityType];
+    void IDAllocator::initialize() {
+        clearAllCaches();
+    }
 
-		// Find this segment in the cache
-		auto it = std::ranges::find_if(cache,
-									   [segmentOffset](const auto &entry) { return entry.first == segmentOffset; });
+    void IDAllocator::clearAllCaches() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        hotCache_.clear();
+        coldCache_.clear();
+        scanCursors_.clear();
+    }
 
-		// Add this index to the list of inactive indices
-		if (it != cache.end()) {
-			it->second.push_back(index);
-		} else {
-			cache.emplace_back(segmentOffset, std::vector{index});
-		}
-	}
+    void IDAllocator::clearCache(uint32_t entityType) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        hotCache_[entityType].clear();
+        coldCache_[entityType].clear();
+        scanCursors_[entityType] = ScanCursor{0, false, false};
+    }
 
-	int64_t IDAllocator::findInactiveId(uint32_t entityType) {
-		auto &cache = inactiveIdsCache_[entityType];
+    int64_t IDAllocator::allocateId(uint32_t entityType) {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-		// If cache is empty, refresh it
-		if (cache.empty()) {
-			refreshInactiveIdsCache(entityType);
+        auto& l1 = hotCache_[entityType];
+        auto& l2 = coldCache_[entityType];
 
-			// If still empty after refresh, no inactive IDs are available
-			if (cache.empty()) {
-				return 0;
-			}
-		}
+        int64_t recycledId = 0;
 
-		// Get first segment with inactive IDs
-		uint64_t segmentOffset = cache.front().first;
-		auto &inactiveIndices = cache.front().second;
+        // Strategy: L1 -> L2 -> Disk -> Sequence
 
-		// Get an inactive index
-		uint32_t index = inactiveIndices.back();
-		inactiveIndices.pop_back();
+        // 1. Check L1 (Hot)
+        if (!l1.empty()) {
+            recycledId = l1.front();
+            l1.pop_front();
+        }
+        // 2. Check L2 (Cold Intervals)
+        else if (!l2.empty()) {
+            recycledId = l2.pop();
+        }
+        // 3. Check Disk (Lazy Load)
+        else {
+            auto& cursor = scanCursors_[entityType];
+            if (!cursor.diskExhausted) {
+                // Try to fill L1 from disk
+                if (fetchInactiveIdsFromDisk(entityType)) {
+                    // Fetch succeeded, take one from L1
+                    recycledId = l1.front();
+                    l1.pop_front();
+                }
+            }
+        }
 
-		// If this segment has no more inactive indices, remove it from cache
-		if (inactiveIndices.empty()) {
-			cache.erase(cache.begin());
-		}
+        // 4. Validate and Return
+        if (recycledId != 0) {
+            // Validate against SegmentTracker (Safety Check)
+            uint64_t segmentOffset = 0;
+            if (entityType == Node::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForNodeId(recycledId);
+            else if (entityType == Edge::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(recycledId);
+            else if (entityType == Property::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForPropId(recycledId);
+            else if (entityType == Blob::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForBlobId(recycledId);
+            else if (entityType == Index::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForIndexId(recycledId);
+            else if (entityType == State::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForStateId(recycledId);
 
-		// Read segment header to get start_id
-		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
-		int64_t id = header.start_id + index;
+            if (segmentOffset != 0) {
+                SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
+                if (recycledId >= header.start_id && recycledId < header.start_id + header.capacity) {
+                    uint32_t index = static_cast<uint32_t>(recycledId - header.start_id);
+                    segmentTracker_->setEntityActive(segmentOffset, index, true);
+                    return recycledId;
+                }
+            }
+            // If validation fails, fall through to allocate new
+        }
 
-		// Mark the ID as active in the segment tracker to prevent reuse
-		segmentTracker_->setEntityActive(segmentOffset, index, true);
+        // 5. Fallback: New Sequential ID
+        return allocateNewSequentialId(entityType);
+    }
 
-		return id;
-	}
+    void IDAllocator::freeId(int64_t id, uint32_t entityType) {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) const {
-		int64_t id;
+        // 1. Mark in SegmentTracker
+        uint64_t segmentOffset = 0;
+        // ... (Find segment logic same as before) ...
+        if (entityType == Node::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForNodeId(id);
+        else if (entityType == Edge::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(id);
+        else if (entityType == Property::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForPropId(id);
+        else if (entityType == Blob::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForBlobId(id);
+        else if (entityType == Index::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForIndexId(id);
+        else if (entityType == State::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForStateId(id);
 
-		if (entityType == Node::typeId) {
-			id = ++currentMaxNodeId_;
-		} else if (entityType == Edge::typeId) {
-			id = ++currentMaxEdgeId_;
-		} else if (entityType == Property::typeId) {
-			id = ++currentMaxPropId_;
-		} else if (entityType == Blob::typeId) {
-			id = ++currentMaxBlobId_;
-		} else if (entityType == Index::typeId) {
-			id = ++currentMaxIndexId_;
-		} else if (entityType == State::typeId) {
-			id = ++currentMaxStateId_;
-		} else {
-			throw std::runtime_error("Invalid entity type for ID allocation");
-		}
+        if (segmentOffset == 0) return;
 
-		return id;
-	}
+        SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
+        if (id < header.start_id || id >= header.start_id + header.capacity) return;
+        uint32_t index = static_cast<uint32_t>(id - header.start_id);
 
-	void IDAllocator::refreshInactiveIdsCache(uint32_t entityType) {
-		// Clear the current cache for this entity type
-		inactiveIdsCache_[entityType].clear();
+        if (segmentTracker_->isEntityActive(segmentOffset, index)) {
+            segmentTracker_->setEntityActive(segmentOffset, index, false);
 
-		// Get all segments of this type
-		auto segments = segmentTracker_->getSegmentsByType(entityType);
+            // 2. Add to Cache Hierarchy
+            auto& l1 = hotCache_[entityType];
+            auto& l2 = coldCache_[entityType];
 
-		// Process each segment
-		for (const auto &header: segments) {
-			uint64_t segmentOffset = header.file_offset;
+            if (l1.size() < L1_CACHE_SIZE) {
+                // Keep hot cache filled with most recently freed (LIFO for locality)
+                l1.push_front(id);
+            } else {
+                // Overflow to L2 Cold Cache
+                // Move the oldest from L1 to L2 to make room, or just push current to L2?
+                // Strategy: Push current ID to L2. Since L2 merges intervals,
+                // it is efficient for sequential deletes.
 
-			// Skip segments with no inactive elements
-			if (header.inactive_count == 0) {
-				continue;
-			}
+                if (l2.intervalCount() < L2_MAX_INTERVALS) {
+                    l2.add(id);
+                } else {
+                    // L2 Full: Drop the ID.
+                    // It is safely recorded in Disk Bitmap (SegmentTracker).
+                    // fetchInactiveIdsFromDisk will find it later if needed.
+                    // This guarantees we never OOM.
+                }
+            }
+        }
+    }
 
-			// Read the activity bitmap
-			std::vector<bool> activityMap = segmentTracker_->getActivityBitmap(segmentOffset);
+    bool IDAllocator::fetchInactiveIdsFromDisk(uint32_t entityType) {
+        auto& cursor = scanCursors_[entityType];
+        auto& l1 = hotCache_[entityType];
 
-			// Find all inactive indices
-			std::vector<uint32_t> inactiveIndices;
-			inactiveIndices.reserve(header.inactive_count); // Pre-allocate for efficiency
+        if (cursor.diskExhausted) return false;
 
-			// Only check up to the 'used' count (not capacity)
-			for (uint32_t i = 0; i < header.used; ++i) {
-				if (!activityMap[i]) {
-					inactiveIndices.push_back(i);
-					if (inactiveIndices.size() >= header.inactive_count) {
-						break; // Found all inactive slots
-					}
-				}
-			}
+        uint64_t chainHead = segmentTracker_->getChainHead(entityType);
 
-			// If we found inactive indices, add to cache
-			if (!inactiveIndices.empty()) {
-				inactiveIdsCache_[entityType].emplace_back(segmentOffset, std::move(inactiveIndices));
-			}
-		}
-	}
+        // Initialization logic (Same as improved version)
+        if (cursor.nextSegmentOffset == 0) {
+            if (!cursor.wrappedAround) {
+                cursor.nextSegmentOffset = chainHead;
+                cursor.wrappedAround = true;
+            } else {
+                cursor.nextSegmentOffset = chainHead;
+                cursor.wrappedAround = true;
+            }
+        }
+
+        if (cursor.nextSegmentOffset == 0) {
+            cursor.diskExhausted = true;
+            return false;
+        }
+
+        uint64_t currentOffset = cursor.nextSegmentOffset;
+        int scannedCount = 0;
+        const int MAX_SCANS_PER_CALL = 20; // Reduced scans per call to stay responsive
+        bool foundAny = false;
+
+        while (currentOffset != 0 && scannedCount < MAX_SCANS_PER_CALL) {
+            SegmentHeader header = segmentTracker_->getSegmentHeader(currentOffset);
+
+            if (header.inactive_count > 0) {
+                std::vector<bool> bitmap = segmentTracker_->getActivityBitmap(currentOffset);
+                for (uint32_t i = 0; i < header.used; ++i) {
+                    if (!bitmap[i]) {
+                        int64_t recoveredId = header.start_id + i;
+                        l1.push_back(recoveredId);
+                        foundAny = true;
+                    }
+                }
+            }
+
+            // Stop if L1 is full enough
+            if (l1.size() >= L1_CACHE_SIZE) {
+                cursor.nextSegmentOffset = header.next_segment_offset;
+                return true;
+            }
+
+            currentOffset = header.next_segment_offset;
+            scannedCount++;
+        }
+
+        if (currentOffset == 0) {
+            if (cursor.wrappedAround) {
+                cursor.diskExhausted = true;
+                cursor.nextSegmentOffset = 0;
+                cursor.wrappedAround = false;
+            } else {
+                cursor.wrappedAround = true;
+                cursor.nextSegmentOffset = chainHead;
+            }
+        } else {
+            cursor.nextSegmentOffset = currentOffset;
+        }
+
+        return foundAny;
+    }
+
+    int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) const {
+        if (entityType == Node::typeId) return ++currentMaxNodeId_;
+        if (entityType == Edge::typeId) return ++currentMaxEdgeId_;
+        if (entityType == Property::typeId) return ++currentMaxPropId_;
+        if (entityType == Blob::typeId) return ++currentMaxBlobId_;
+        if (entityType == Index::typeId) return ++currentMaxIndexId_;
+        if (entityType == State::typeId) return ++currentMaxStateId_;
+        throw std::runtime_error("Invalid entity type");
+    }
 
 } // namespace graph::storage

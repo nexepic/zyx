@@ -11,93 +11,98 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
+#include <shared_mutex> // Changed from mutex to shared_mutex for R/W locking
 #include <vector>
-#include "SegmentTracker.hpp"
 #include "StorageHeaders.hpp"
 
 namespace graph::storage {
 
-	/**
-	 * Manages segment indexes for efficient entity ID lookups.
-	 * Provides incremental updates when segments are allocated or deallocated.
-	 */
-	class SegmentIndexManager {
-	public:
-		// Structure representing an indexed segment
-		struct SegmentIndex {
-			int64_t startId;
-			int64_t endId;
-			uint64_t segmentOffset;
-		};
+    class SegmentTracker;
 
-		/**
-		 * Constructor
-		 * @param segmentTracker The segment tracker to use for fetching segment information
-		 */
-		explicit SegmentIndexManager(std::shared_ptr<SegmentTracker> segmentTracker);
+    /**
+     * @brief Manages segment indexes for efficient entity ID lookups.
+     *
+     * Architecture Update:
+     * This manager now reflects the Real-Time In-Memory state of segments.
+     * It is updated immediately when SegmentTracker modifies segment metadata,
+     * decoupling index validity from disk flush operations.
+     */
+    class SegmentIndexManager {
+    public:
+        struct SegmentIndex {
+            int64_t startId;
+            int64_t endId;
+            uint64_t segmentOffset;
+        };
 
-		/**
-		 * Initialize all segment indexes from chain heads
-		 */
-		void initialize(uint64_t &nodeHead, uint64_t &edgeHead, uint64_t &propertyHead, uint64_t &blobHead,
-						uint64_t &indexHead, uint64_t &stateHead);
+        explicit SegmentIndexManager(std::shared_ptr<SegmentTracker> segmentTracker);
 
-		/**
-		 * Find the segment containing an entity ID
-		 * @param type The entity type
-		 * @param id The entity ID to locate
-		 * @return The file offset of the segment containing the ID, or 0 if not found
-		 */
-		uint64_t findSegmentForId(uint32_t type, int64_t id) const;
+        void initialize(uint64_t &nodeHead, uint64_t &edgeHead, uint64_t &propertyHead, uint64_t &blobHead,
+                        uint64_t &indexHead, uint64_t &stateHead);
 
-		// Accessors for compatibility with existing code
-		const std::vector<SegmentIndex> &getNodeSegmentIndex() const { return nodeSegmentIndex_; }
-		const std::vector<SegmentIndex> &getEdgeSegmentIndex() const { return edgeSegmentIndex_; }
-		const std::vector<SegmentIndex> &getPropertySegmentIndex() const { return propertySegmentIndex_; }
-		const std::vector<SegmentIndex> &getBlobSegmentIndex() const { return blobSegmentIndex_; }
-		const std::vector<SegmentIndex> &getIndexSegmentIndex() const { return indexSegmentIndex_; }
-		const std::vector<SegmentIndex> &getStateSegmentIndex() const { return stateSegmentIndex_; }
+        /**
+         * @brief Find the segment containing an entity ID.
+         * Thread-safe (Shared Lock).
+         */
+        uint64_t findSegmentForId(uint32_t type, int64_t id) const;
 
-		void buildSegmentIndexes();
+        // Accessors
+        const std::vector<SegmentIndex> &getNodeSegmentIndex() const { return nodeSegmentIndex_; }
+        const std::vector<SegmentIndex> &getEdgeSegmentIndex() const { return edgeSegmentIndex_; }
+        const std::vector<SegmentIndex> &getPropertySegmentIndex() const { return propertySegmentIndex_; }
+        const std::vector<SegmentIndex> &getBlobSegmentIndex() const { return blobSegmentIndex_; }
+        const std::vector<SegmentIndex> &getIndexSegmentIndex() const { return indexSegmentIndex_; }
+        const std::vector<SegmentIndex> &getStateSegmentIndex() const { return stateSegmentIndex_; }
 
-		bool updateSegmentIndexByOffset(uint64_t offset, const SegmentHeader &header);
+        /**
+         * @brief Full rebuild of indexes (Used during initialization/compaction).
+         */
+        void buildSegmentIndexes();
 
-	private:
-		std::shared_ptr<SegmentTracker> segmentTracker_;
+        /**
+         * @brief Updates or Inserts a segment index entry based on the header.
+         * Called immediately when a segment is created or its usage changes in memory.
+         * Thread-safe (Unique Lock).
+         *
+         * @param header The current header of the segment.
+         */
+    	void updateSegmentIndex(const SegmentHeader &header, int64_t oldStartId);
 
-		// Index vectors for each entity type
-		std::vector<SegmentIndex> nodeSegmentIndex_;
-		std::vector<SegmentIndex> edgeSegmentIndex_;
-		std::vector<SegmentIndex> propertySegmentIndex_;
-		std::vector<SegmentIndex> blobSegmentIndex_;
-		std::vector<SegmentIndex> indexSegmentIndex_;
-		std::vector<SegmentIndex> stateSegmentIndex_;
+        /**
+         * @brief Removes a segment from the index.
+         * Called immediately when a segment is marked free/deleted.
+         * Thread-safe (Unique Lock).
+         *
+         * @param header The header of the segment being removed.
+         */
+        void removeSegmentIndex(const SegmentHeader &header);
 
-		uint64_t *nodeSegmentHead_ = nullptr;
-		uint64_t *edgeSegmentHead_ = nullptr;
-		uint64_t *propertySegmentHead_ = nullptr;
-		uint64_t *blobSegmentHead_ = nullptr;
-		uint64_t *indexSegmentHead_ = nullptr;
-		uint64_t *stateSegmentHead_ = nullptr;
+    private:
+        std::shared_ptr<SegmentTracker> segmentTracker_;
 
-		mutable std::mutex mutex_;
+        std::vector<SegmentIndex> nodeSegmentIndex_;
+        std::vector<SegmentIndex> edgeSegmentIndex_;
+        std::vector<SegmentIndex> propertySegmentIndex_;
+        std::vector<SegmentIndex> blobSegmentIndex_;
+        std::vector<SegmentIndex> indexSegmentIndex_;
+        std::vector<SegmentIndex> stateSegmentIndex_;
 
-		/**
-		 * Build an entire segment index from a chain head
-		 */
-		void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;
+        uint64_t *nodeSegmentHead_ = nullptr;
+        uint64_t *edgeSegmentHead_ = nullptr;
+        uint64_t *propertySegmentHead_ = nullptr;
+        uint64_t *blobSegmentHead_ = nullptr;
+        uint64_t *indexSegmentHead_ = nullptr;
+        uint64_t *stateSegmentHead_ = nullptr;
 
-		/**
-		 * Get the index vector for a specific type
-		 */
-		std::vector<SegmentIndex> &getSegmentIndexForType(uint32_t type);
-		const std::vector<SegmentIndex> &getSegmentIndexForType(uint32_t type) const;
+        // Use shared_mutex for high concurrent read performance
+        mutable std::shared_mutex mutex_;
 
-		/**
-		 * Sort a segment index for binary search
-		 */
-		static void sortSegmentIndex(std::vector<SegmentIndex> &segmentIndex);
-	};
+        void buildSegmentIndex(std::vector<SegmentIndex> &segmentIndex, uint64_t segmentHead) const;
+
+        std::vector<SegmentIndex> &getSegmentIndexForType(uint32_t type);
+        const std::vector<SegmentIndex> &getSegmentIndexForType(uint32_t type) const;
+
+        static void sortSegmentIndex(std::vector<SegmentIndex> &segmentIndex);
+    };
 
 } // namespace graph::storage

@@ -50,7 +50,7 @@ namespace graph::storage {
 
 	void DataManager::initialize() {
 		// Initialize low-level components
-		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), spaceManager_);
+		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), spaceManager_, idAllocator_);
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, segmentTracker_);
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(shared_from_this());
@@ -554,6 +554,9 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void DataManager::setEntityDirty(const DirtyEntityInfo<EntityType> &info) {
+		if (info.backup.has_value() && info.backup->getId() == 0) {
+			return;
+		}
 		persistenceManager_->upsert(info);
 	}
 

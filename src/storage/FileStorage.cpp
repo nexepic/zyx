@@ -349,6 +349,7 @@ namespace graph::storage {
 				// If this is the first segment for this type, update the segment head
 				if (isFirstSegment) {
 					segmentHead = newOffset;
+					segmentTracker->updateChainHead(T::typeId, newOffset);
 					isFirstSegment = false;
 				}
 
@@ -417,25 +418,29 @@ namespace graph::storage {
 	}
 
 	template<typename T>
-	void FileStorage::updateEntityInPlace(const T &entity) {
+	void FileStorage::updateEntityInPlace(const T &entity, uint64_t knownSegmentOffset) {
 		int64_t id = entity.getId();
-		uint64_t segmentOffset = 0;
-
-		segmentOffset = dataManager->findSegmentForEntityId<T>(id);
+		uint64_t segmentOffset = knownSegmentOffset;
 
 		if (segmentOffset == 0) {
-			throw std::runtime_error("Cannot update entity: entity not found");
+			segmentOffset = dataManager->findSegmentForEntityId<T>(id);
 		}
 
-		// Read segment header
-		SegmentHeader header;
-		fileStream->seekg(static_cast<std::streamoff>(segmentOffset));
-		fileStream->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+		if (segmentOffset == 0) {
+			throw std::runtime_error("Cannot update entity: entity not found via index lookup. ID: " + std::to_string(id));
+		}
+
+		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
 
 		// Calculate entity position within segment
 		uint64_t entityIndex = id - header.start_id;
+
 		if (entityIndex >= header.capacity) {
-			throw std::runtime_error("Entity index out of bounds for segment");
+			std::stringstream ss;
+			ss << "Entity index out of bounds for segment. "
+			   << "ID: " << id << ", StartID: " << header.start_id
+			   << ", Index: " << entityIndex << ", Capacity: " << header.capacity;
+			throw std::runtime_error(ss.str());
 		}
 
 		// Calculate file offset for this entity
@@ -458,11 +463,10 @@ namespace graph::storage {
 		segmentOffset = dataManager->findSegmentForEntityId<T>(id);
 
 		if (segmentOffset != 0) {
-			// Entity exists on disk, update it in place
-			updateEntityInPlace(entity);
-
 			// Mark the ID as available for reuse
 			idAllocator->freeId(id, entity.typeId);
+			// Entity exists on disk, update it in place
+			updateEntityInPlace(entity, segmentOffset);
 		}
 		// If entity doesn't exist on disk, there's nothing to update
 	}
@@ -592,13 +596,8 @@ namespace graph::storage {
 					if (spaceManager->safeCompactSegments()) {
 						dataManager->clearCache();
 
-						// Refresh inactive IDs cache for all entity types
-						idAllocator->refreshInactiveIdsCache(Node::typeId);
-						idAllocator->refreshInactiveIdsCache(Edge::typeId);
-						idAllocator->refreshInactiveIdsCache(Property::typeId);
-						idAllocator->refreshInactiveIdsCache(Blob::typeId);
-						idAllocator->refreshInactiveIdsCache(Index::typeId);
-						idAllocator->refreshInactiveIdsCache(State::typeId);
+						// Just clear the allocator cache. It will lazy-load on next insert.
+						idAllocator->clearAllCaches();
 
 						dataManager->getSegmentIndexManager()->buildSegmentIndexes();
 					}

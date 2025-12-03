@@ -33,6 +33,7 @@ namespace graph::storage {
 		~FileStorage();
 
 		void open();
+		void save();
 		void close();
 		void flush();
 
@@ -80,7 +81,7 @@ namespace graph::storage {
 		std::unordered_map<int64_t, Edge> getAllEdges();
 
 		template<typename T>
-		void updateEntityInPlace(const T &entity);
+		void updateEntityInPlace(const T &entity, uint64_t knownSegmentOffset = 0);
 
 		template<typename T>
 		void deleteEntityOnDisk(const T &entity);
@@ -139,8 +140,6 @@ namespace graph::storage {
 		std::shared_ptr<SegmentTracker> segmentTracker;
 
 		std::shared_ptr<query::QueryEngine> queryEngine;
-
-		void save();
 
 		// Update bitmap for an entity in the segment header
 		template<typename EntityType>

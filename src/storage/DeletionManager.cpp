@@ -18,8 +18,11 @@
 namespace graph::storage {
 
 	DeletionManager::DeletionManager(std::shared_ptr<DataManager> dataManager,
-									 std::shared_ptr<SpaceManager> spaceManager) :
-		dataManager_(std::move(dataManager)), spaceManager_(std::move(spaceManager)) {}
+									 std::shared_ptr<SpaceManager> spaceManager,
+									 std::shared_ptr<IDAllocator> idAllocator) :
+	dataManager_(std::move(dataManager)),
+	spaceManager_(std::move(spaceManager)),
+	idAllocator_(std::move(idAllocator)) {}
 
 	DeletionManager::~DeletionManager() = default;
 
@@ -203,160 +206,90 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markNodeInactive(Node &node) const {
-		// Find the segment this node belongs to
-		uint64_t segmentOffset = findSegmentForNodeId(node.getId());
-		if (segmentOffset == 0) {
-			// Node not found in segments, just mark it as deleted in memory
-			dataManager_->markEntityDeleted(node);
-			return;
-		}
+		// 1. Eagerly free the ID
+		// This updates the SegmentTracker bitmap to 0 AND puts the ID into the L1 Cache immediately.
+		idAllocator_->freeId(node.getId(), Node::typeId);
 
-		// Get the node's index within the segment
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		auto indexInSegment = static_cast<uint32_t>(node.getId() - header.start_id);
-
-		// Mark the node as inactive in the segment bitmap
-		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
-
-		// Update in-memory state
+		// 2. Mark logical deletion in DataManager (Persistence Layer)
+		// This ensures the entity is treated as DELETED in transactions/queries.
 		dataManager_->markEntityDeleted(node);
 
-		// Check if we need to mark segment for compaction using the actual fragmentation ratio
-		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+		// 3. Compaction Check
+		// We still need to check compaction, but we use the IDAllocator's underlying tracker state which is now updated.
+		// Optimization: freeId already updated the bitmap, so fragmentation ratio is current.
+		uint64_t segmentOffset = findSegmentForNodeId(node.getId());
+		if (segmentOffset != 0) {
+			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+			}
 		}
 	}
 
 	void DeletionManager::markEdgeInactive(Edge &edge) const {
-		// Find the segment this edge belongs to
-		uint64_t segmentOffset = findSegmentForEdgeId(edge.getId());
-		if (segmentOffset == 0) {
-			// Edge not found in segments, just mark it as deleted in memory
-			dataManager_->markEntityDeleted(edge);
-			return;
-		}
-
-		// Get the edge's index within the segment
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		auto indexInSegment = static_cast<uint32_t>(edge.getId() - header.start_id);
-
-		// Mark the edge as inactive in the segment bitmap
-		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
-
-		// Update in-memory state
+		idAllocator_->freeId(edge.getId(), Edge::typeId);
 		dataManager_->markEntityDeleted(edge);
 
-		// Check if we need to mark segment for compaction
-		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+		uint64_t segmentOffset = findSegmentForEdgeId(edge.getId());
+		if (segmentOffset != 0) {
+			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+			}
 		}
 	}
 
 	void DeletionManager::markPropertyInactive(Property &property) const {
-		// Find the segment this property belongs to
-		uint64_t segmentOffset = findSegmentForPropertyId(property.getId());
-		if (segmentOffset == 0) {
-			// Property not found in segments, just mark it as deleted in memory
-			dataManager_->markEntityDeleted(property);
-			return;
-		}
+        idAllocator_->freeId(property.getId(), Property::typeId);
+        dataManager_->markEntityDeleted(property);
 
-		// Get the property's index within the segment
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		auto indexInSegment = static_cast<uint32_t>(property.getId() - header.start_id);
+        uint64_t segmentOffset = findSegmentForPropertyId(property.getId());
+        if (segmentOffset != 0) {
+            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+            }
+        }
+    }
 
-		// Mark the property as inactive in the segment bitmap
-		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
+    void DeletionManager::markBlobInactive(Blob &blob) const {
+        idAllocator_->freeId(blob.getId(), Blob::typeId);
+        dataManager_->markEntityDeleted(blob);
 
-		// Update in-memory state
-		dataManager_->markEntityDeleted(property);
+        uint64_t segmentOffset = findSegmentForBlobId(blob.getId());
+        if (segmentOffset != 0) {
+            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+            }
+        }
+    }
 
-		// Check if we need to mark segment for compaction
-		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-		}
-	}
+    void DeletionManager::markIndexInactive(Index &index) const {
+        idAllocator_->freeId(index.getId(), Index::typeId);
+        dataManager_->markEntityDeleted(index);
 
-	void DeletionManager::markBlobInactive(Blob &blob) const {
-		// Find the segment this blob belongs to
-		uint64_t segmentOffset = findSegmentForBlobId(blob.getId());
-		if (segmentOffset == 0) {
-			// Blob not found in segments, just mark it as deleted in memory
-			dataManager_->markEntityDeleted(blob);
-			return;
-		}
+        uint64_t segmentOffset = findSegmentForIndexId(index.getId());
+        if (segmentOffset != 0) {
+            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+            }
+        }
+    }
 
-		// Get the blob's index within the segment
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		auto indexInSegment = static_cast<uint32_t>(blob.getId() - header.start_id);
+    void DeletionManager::markStateInactive(State &state) const {
+        idAllocator_->freeId(state.getId(), State::typeId);
+        dataManager_->markEntityDeleted(state);
 
-		// Mark the blob as inactive in the segment bitmap
-		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
-
-		// Update in-memory state
-		dataManager_->markEntityDeleted(blob);
-
-		// Check if we need to mark segment for compaction
-		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-		}
-	}
-
-	void DeletionManager::markIndexInactive(Index &index) const {
-		// Find the segment this index belongs to
-		uint64_t segmentOffset = findSegmentForIndexId(index.getId());
-		if (segmentOffset == 0) {
-			// Index not found in segments, just mark it as deleted in memory
-			dataManager_->markEntityDeleted(index);
-			return;
-		}
-
-		// Get the index's index within the segment
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		auto indexInSegment = static_cast<uint32_t>(index.getId() - header.start_id);
-
-		// Mark the index as inactive in the segment bitmap
-		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
-
-		// Update in-memory state
-		dataManager_->markEntityDeleted(index);
-
-		// Check if we need to mark segment for compaction
-		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-		}
-	}
-
-	void DeletionManager::markStateInactive(State &state) const {
-		// Find the segment this state belongs to
-		uint64_t segmentOffset = findSegmentForStateId(state.getId());
-		if (segmentOffset == 0) {
-			// State not found in segments, just mark it as deleted in memory
-			dataManager_->markEntityDeleted(state);
-			return;
-		}
-
-		// Get the state's index within the segment
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		auto indexInSegment = static_cast<uint32_t>(state.getId() - header.start_id);
-
-		// Mark the state as inactive in the segment bitmap
-		spaceManager_->getTracker()->setEntityActive(segmentOffset, indexInSegment, false);
-
-		// Update in-memory state
-		dataManager_->markEntityDeleted(state);
-
-		// Check if we need to mark segment for compaction
-		SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-		if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-			spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-		}
-	}
+        uint64_t segmentOffset = findSegmentForStateId(state.getId());
+        if (segmentOffset != 0) {
+            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+            }
+        }
+    }
 
 	bool DeletionManager::isNodeActive(int64_t nodeId) const {
 		// Find the segment this node belongs to

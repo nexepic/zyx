@@ -11,12 +11,12 @@
 #pragma once
 #include <cstdint>
 #include <fstream>
+#include <graph/core/Blob.hpp>
+#include <graph/core/Property.hpp>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
 #include "SpaceManager.hpp"
-#include <graph/core/Blob.hpp>
-#include <graph/core/Property.hpp>
 
 namespace graph::storage {
 
@@ -29,7 +29,8 @@ namespace graph::storage {
 	 */
 	class DeletionManager {
 	public:
-		DeletionManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<SpaceManager> spaceManager);
+		DeletionManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<SpaceManager> spaceManager,
+						std::shared_ptr<IDAllocator> idAllocator);
 		~DeletionManager();
 
 		/**
@@ -130,6 +131,7 @@ namespace graph::storage {
 		// FileStorage &storage_;
 		std::shared_ptr<DataManager> dataManager_;
 		std::shared_ptr<SpaceManager> spaceManager_;
+		std::shared_ptr<IDAllocator> idAllocator_;
 
 		// Compaction thresholds and counters
 		static constexpr double COMPACTION_THRESHOLD = 0.3; // 30% inactive triggers compaction
