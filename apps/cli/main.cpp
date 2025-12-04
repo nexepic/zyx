@@ -12,20 +12,33 @@
 #include "graph/cli/CLI11.hpp"
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
+#include "graph/utils/Log.hpp"
 
 int main(int argc, char **argv) {
 	CLI::App app{"metrix"};
 
+	bool debugMode = false;
+	app.add_flag("--debug", debugMode, "Enable verbose debug output (errors and internal states)");
+
 	// Database subcommand
 	auto database = app.add_subcommand("database", "Database operations");
+
+	// --- Helper Lambda to Setup Environment ---
+	auto setupEnv = [&]() {
+		graph::utils::Log::setDebug(debugMode);
+		if (debugMode) {
+			graph::utils::Log::debug("Debug mode enabled.");
+		}
+	};
 
 	// database create command
 	std::string dbPath;
 	auto createCmd = database->add_subcommand("create", "Create a new database");
 	createCmd->add_option("path", dbPath, "Database file path")->required();
 	createCmd->callback([&]() {
+		setupEnv();
 		graph::Database db(dbPath);
-		std::cout << "Database created at: " << dbPath << "\n";
+		graph::utils::Log::info("Database created at: ", dbPath);
 		const graph::REPL repl(db);
 		repl.run();
 	});
@@ -34,6 +47,7 @@ int main(int argc, char **argv) {
 	auto openCmd = database->add_subcommand("open", "Open an existing database");
 	openCmd->add_option("path", dbPath, "Database file path")->required();
 	openCmd->callback([&]() {
+		setupEnv();
 		graph::Database db(dbPath);
 		db.open();
 		const graph::REPL repl(db);
@@ -45,6 +59,7 @@ int main(int argc, char **argv) {
 	auto runCmd = database->add_subcommand("run", "Run database operations");
 	runCmd->add_option("path", dbPath, "Database file path")->required();
 	runCmd->callback([&]() {
+		setupEnv();
 		graph::Database db(dbPath);
 		db.open();
 		const graph::REPL repl(db);
@@ -55,16 +70,20 @@ int main(int argc, char **argv) {
 	// Ensure correct subcommand usage
 	database->callback([&]() {
 		if (database->get_subcommands().empty()) {
-			std::cout << "Error: Missing or incorrect subcommand. Available subcommands: create, run\n";
+			graph::utils::Log::error("Missing or incorrect subcommand. Available subcommands: create, run");
 			std::cout << database->help() << std::endl;
 			exit(EXIT_FAILURE);
 		}
 	});
 
-	// Show help if no subcommand is provided
 	app.require_subcommand(0, 1);
 
-	CLI11_PARSE(app, argc, argv);
+	try {
+		CLI11_PARSE(app, argc, argv);
+	} catch (const std::exception &e) {
+		std::cerr << "Command line error: " << e.what() << std::endl;
+		return 1;
+	}
 
 	if (argc == 1) {
 		std::cout << app.help() << std::endl;

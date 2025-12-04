@@ -12,7 +12,6 @@
 #include "graph/storage/SegmentTracker.hpp"
 #include <algorithm>
 #include <stdexcept>
-#include <iostream>
 
 namespace graph::storage {
 
@@ -170,7 +169,7 @@ namespace graph::storage {
             if (segmentOffset != 0) {
                 SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
                 if (recycledId >= header.start_id && recycledId < header.start_id + header.capacity) {
-                    uint32_t index = static_cast<uint32_t>(recycledId - header.start_id);
+                    auto index = static_cast<uint32_t>(recycledId - header.start_id);
                     segmentTracker_->setEntityActive(segmentOffset, index, true);
                     return recycledId;
                 }
@@ -187,7 +186,6 @@ namespace graph::storage {
 
         // 1. Mark in SegmentTracker
         uint64_t segmentOffset = 0;
-        // ... (Find segment logic same as before) ...
         if (entityType == Node::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForNodeId(id);
         else if (entityType == Edge::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(id);
         else if (entityType == Property::typeId) segmentOffset = segmentTracker_->getSegmentOffsetForPropId(id);
@@ -199,7 +197,7 @@ namespace graph::storage {
 
         SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
         if (id < header.start_id || id >= header.start_id + header.capacity) return;
-        uint32_t index = static_cast<uint32_t>(id - header.start_id);
+        auto index = static_cast<uint32_t>(id - header.start_id);
 
         if (segmentTracker_->isEntityActive(segmentOffset, index)) {
             segmentTracker_->setEntityActive(segmentOffset, index, false);
@@ -255,7 +253,7 @@ namespace graph::storage {
 
         uint64_t currentOffset = cursor.nextSegmentOffset;
         int scannedCount = 0;
-        const int MAX_SCANS_PER_CALL = 20; // Reduced scans per call to stay responsive
+		constexpr int MAX_SCANS_PER_CALL = 20; // Reduced scans per call to stay responsive
         bool foundAny = false;
 
         while (currentOffset != 0 && scannedCount < MAX_SCANS_PER_CALL) {
