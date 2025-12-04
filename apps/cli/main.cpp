@@ -12,7 +12,7 @@
 #include "graph/cli/CLI11.hpp"
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
-#include "graph/utils/Log.hpp"
+#include "graph/log/Log.hpp"
 
 int main(int argc, char **argv) {
 	CLI::App app{"metrix"};
