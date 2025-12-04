@@ -71,13 +71,13 @@ namespace graph::storage {
 
 		// Initialize segment header
 		SegmentHeader header;
+		header.file_offset = offset;
+		header.data_type = type;
 		header.capacity = capacity;
 		header.used = 0;
-		header.data_type = type;
+		header.inactive_count = 0;
 		header.next_segment_offset = 0;
 		header.prev_segment_offset = 0;
-		header.inactive_count = 0;
-		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
 
 		// Start ID calculation for nodes, edges, properties, and blobs...
 		if (type <= getMaxEntityType()) {
@@ -86,12 +86,17 @@ namespace graph::storage {
 			throw std::invalid_argument("Invalid segment type");
 		}
 
+		header.needs_compaction = 0;
+		header.is_dirty = 0;
+		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
+		std::memset(header.activity_bitmap, 0, sizeof(header.activity_bitmap));
+
 		// Write header
 		file_->seekp(static_cast<std::streamoff>(offset));
 		file_->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
 
 		// Register with tracker
-		segmentTracker_->registerSegment(offset, type, capacity);
+		segmentTracker_->registerSegment(header);
 
 		// Link with chain
 		uint64_t chainHead = segmentTracker_->getChainHead(type);
@@ -545,29 +550,6 @@ namespace graph::storage {
 		}
 
 		return 0; // No suitable segment found
-	}
-
-	// Initialize segment header without allocating new space
-	void SpaceManager::initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity) const {
-		// Remove from free list if it's there
-		segmentTracker_->removeFromFreeList(offset);
-
-		// Initialize segment header for all types
-		SegmentHeader header;
-		header.capacity = capacity;
-		header.used = 0;
-		header.data_type = type;
-		header.next_segment_offset = 0;
-		header.prev_segment_offset = 0;
-		header.inactive_count = 0;
-		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
-
-		// Write header
-		file_->seekp(static_cast<std::streamoff>(offset));
-		file_->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
-
-		// Register with tracker
-		segmentTracker_->registerSegment(offset, type, capacity);
 	}
 
 	uint64_t SpaceManager::findSegmentForNodeId(int64_t id) const {

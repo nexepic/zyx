@@ -30,7 +30,7 @@ namespace graph::storage {
 		~SegmentTracker();
 
 		void initialize(const FileHeader &header);
-		void registerSegment(uint64_t offset, uint32_t type, uint32_t capacity);
+		void registerSegment(const SegmentHeader& header);
 		void updateSegmentUsage(uint64_t offset, uint32_t used, uint32_t inactive);
 		void markForCompaction(uint64_t offset, bool needsCompaction);
 

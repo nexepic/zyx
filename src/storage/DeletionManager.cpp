@@ -20,9 +20,8 @@ namespace graph::storage {
 	DeletionManager::DeletionManager(std::shared_ptr<DataManager> dataManager,
 									 std::shared_ptr<SpaceManager> spaceManager,
 									 std::shared_ptr<IDAllocator> idAllocator) :
-	dataManager_(std::move(dataManager)),
-	spaceManager_(std::move(spaceManager)),
-	idAllocator_(std::move(idAllocator)) {}
+		dataManager_(std::move(dataManager)), spaceManager_(std::move(spaceManager)),
+		idAllocator_(std::move(idAllocator)) {}
 
 	DeletionManager::~DeletionManager() = default;
 
@@ -113,70 +112,6 @@ namespace graph::storage {
 		return spaceManager_->getTracker()->getSegmentOffsetForStateId(id);
 	}
 
-	bool DeletionManager::deleteBulkNodes(const std::vector<int64_t> &nodeIds, bool cascadeEdges) const {
-		bool allSucceeded = true;
-
-		// For bulk operations, we'll postpone compaction until the end
-		for (int64_t nodeId: nodeIds) {
-			// Use a non-compacting version of node deletion
-			bool success = performNodeDeletion(nodeId);
-
-			if (success && cascadeEdges) {
-				// Find and delete connected edges
-				auto edges = dataManager_->findEdgesByNode(nodeId, "both");
-				for (const auto &edge: edges) {
-					return performEdgeDeletion(edge.getId());
-				}
-			}
-
-			allSucceeded = allSucceeded && success;
-		}
-
-		return allSucceeded;
-	}
-
-	bool DeletionManager::deleteBulkEdges(const std::vector<int64_t> &edgeIds) const {
-		bool allSucceeded = true;
-
-		// For bulk operations, postpone compaction until the end
-		for (int64_t edgeId: edgeIds) {
-			// Use non-compacting deletion
-			allSucceeded = performEdgeDeletion(edgeId) && allSucceeded;
-		}
-
-		return allSucceeded;
-	}
-
-	bool DeletionManager::performNodeDeletion(int64_t nodeId) const {
-		// Check if the node exists
-		Node node;
-		try {
-			node = dataManager_->getNode(nodeId);
-		} catch (const std::exception &) {
-			return false;
-		}
-
-		// Mark as inactive in index
-		markNodeInactive(node);
-
-		return true;
-	}
-
-	bool DeletionManager::performEdgeDeletion(int64_t edgeId) const {
-		// Check if the edge exists
-		Edge edge;
-		try {
-			edge = dataManager_->getEdge(edgeId);
-		} catch (const std::exception &) {
-			return false;
-		}
-
-		// Mark as inactive in index
-		markEdgeInactive(edge);
-
-		return true;
-	}
-
 	void DeletionManager::deletePropertyEntity(int64_t propertyId, PropertyStorageType storageType) const {
 		if (propertyId == 0)
 			return;
@@ -215,8 +150,8 @@ namespace graph::storage {
 		dataManager_->markEntityDeleted(node);
 
 		// 3. Compaction Check
-		// We still need to check compaction, but we use the IDAllocator's underlying tracker state which is now updated.
-		// Optimization: freeId already updated the bitmap, so fragmentation ratio is current.
+		// We still need to check compaction, but we use the IDAllocator's underlying tracker state which is now
+		// updated. Optimization: freeId already updated the bitmap, so fragmentation ratio is current.
 		uint64_t segmentOffset = findSegmentForNodeId(node.getId());
 		if (segmentOffset != 0) {
 			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
@@ -240,56 +175,56 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markPropertyInactive(Property &property) const {
-        idAllocator_->freeId(property.getId(), Property::typeId);
-        dataManager_->markEntityDeleted(property);
+		idAllocator_->freeId(property.getId(), Property::typeId);
+		dataManager_->markEntityDeleted(property);
 
-        uint64_t segmentOffset = findSegmentForPropertyId(property.getId());
-        if (segmentOffset != 0) {
-            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-            }
-        }
-    }
+		uint64_t segmentOffset = findSegmentForPropertyId(property.getId());
+		if (segmentOffset != 0) {
+			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+			}
+		}
+	}
 
-    void DeletionManager::markBlobInactive(Blob &blob) const {
-        idAllocator_->freeId(blob.getId(), Blob::typeId);
-        dataManager_->markEntityDeleted(blob);
+	void DeletionManager::markBlobInactive(Blob &blob) const {
+		idAllocator_->freeId(blob.getId(), Blob::typeId);
+		dataManager_->markEntityDeleted(blob);
 
-        uint64_t segmentOffset = findSegmentForBlobId(blob.getId());
-        if (segmentOffset != 0) {
-            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-            }
-        }
-    }
+		uint64_t segmentOffset = findSegmentForBlobId(blob.getId());
+		if (segmentOffset != 0) {
+			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+			}
+		}
+	}
 
-    void DeletionManager::markIndexInactive(Index &index) const {
-        idAllocator_->freeId(index.getId(), Index::typeId);
-        dataManager_->markEntityDeleted(index);
+	void DeletionManager::markIndexInactive(Index &index) const {
+		idAllocator_->freeId(index.getId(), Index::typeId);
+		dataManager_->markEntityDeleted(index);
 
-        uint64_t segmentOffset = findSegmentForIndexId(index.getId());
-        if (segmentOffset != 0) {
-            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-            }
-        }
-    }
+		uint64_t segmentOffset = findSegmentForIndexId(index.getId());
+		if (segmentOffset != 0) {
+			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+			}
+		}
+	}
 
-    void DeletionManager::markStateInactive(State &state) const {
-        idAllocator_->freeId(state.getId(), State::typeId);
-        dataManager_->markEntityDeleted(state);
+	void DeletionManager::markStateInactive(State &state) const {
+		idAllocator_->freeId(state.getId(), State::typeId);
+		dataManager_->markEntityDeleted(state);
 
-        uint64_t segmentOffset = findSegmentForStateId(state.getId());
-        if (segmentOffset != 0) {
-            SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
-            if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-                spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
-            }
-        }
-    }
+		uint64_t segmentOffset = findSegmentForStateId(state.getId());
+		if (segmentOffset != 0) {
+			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
+				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+			}
+		}
+	}
 
 	bool DeletionManager::isNodeActive(int64_t nodeId) const {
 		// Find the segment this node belongs to

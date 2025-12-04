@@ -86,25 +86,10 @@ namespace graph::storage {
 		}
 	}
 
-	void SegmentTracker::registerSegment(uint64_t offset, uint32_t type, uint32_t capacity) {
+	void SegmentTracker::registerSegment(const SegmentHeader& header) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		SegmentHeader header;
-		header.file_offset = offset;
-		header.data_type = type;
-		header.capacity = capacity;
-		header.used = 0;
-		header.inactive_count = 0;
-		header.next_segment_offset = 0;
-		header.prev_segment_offset = 0;
-		header.start_id = 0;
-		header.needs_compaction = 0;
-		header.is_dirty = 0;
-		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
-
-		std::memset(header.activity_bitmap, 0, sizeof(header.activity_bitmap));
-
-		segments_[offset] = header;
+		segments_[header.file_offset] = header;
 	}
 
 	void SegmentTracker::updateSegmentUsage(uint64_t offset, uint32_t used, uint32_t inactive) {
@@ -115,9 +100,7 @@ namespace graph::storage {
 		// Capture old start_id (though usage update rarely changes start_id, it keeps API consistent)
 		int64_t oldStartId = header.start_id;
 
-		bool changed = (header.used != used || header.inactive_count != inactive);
-
-		if (changed) {
+		if (header.used != used || header.inactive_count != inactive) {
 			header.used = used;
 			header.inactive_count = inactive;
 			header.is_dirty = 1;
@@ -154,9 +137,9 @@ namespace graph::storage {
 	std::vector<SegmentHeader> SegmentTracker::getSegmentsByType(uint32_t type) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		std::vector<SegmentHeader> result;
-		for (const auto &pair : segments_) {
-			if (pair.second.data_type == type) {
-				result.push_back(pair.second);
+		for (const auto &val: segments_ | std::views::values) {
+			if (val.data_type == type) {
+				result.push_back(val);
 			}
 		}
 		return result;
@@ -165,12 +148,12 @@ namespace graph::storage {
 	std::vector<SegmentHeader> SegmentTracker::getSegmentsNeedingCompaction(uint32_t type, double threshold) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		std::vector<SegmentHeader> result;
-		for (const auto &[offset, header]: segments_) {
+		for (const auto &header: segments_ | std::views::values) {
 			if (header.data_type == type && (header.needs_compaction || header.getFragmentationRatio() >= threshold)) {
 				result.push_back(header);
 			}
 		}
-		std::sort(result.begin(), result.end(), [](const SegmentHeader &a, const SegmentHeader &b) {
+		std::ranges::sort(result, [](const SegmentHeader &a, const SegmentHeader &b) {
 			return a.getFragmentationRatio() > b.getFragmentationRatio();
 		});
 		return result;
@@ -180,7 +163,7 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		double totalCapacity = 0;
 		double totalUtilizedSpace = 0;
-		for (const auto &[offset, header]: segments_) {
+		for (const auto &header: segments_ | std::views::values) {
 			if (header.data_type == type) {
 				totalCapacity += header.capacity;
 				totalUtilizedSpace += (header.used - header.inactive_count);
@@ -237,7 +220,7 @@ namespace graph::storage {
 		freeSegments_.insert(offset);
 		segments_.erase(offset);
 
-		auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
+		auto dirtyIt = std::ranges::find(dirtySegments_, offset);
 		if (dirtyIt != dirtySegments_.end()) dirtySegments_.erase(dirtyIt);
 
 		SegmentHeader emptyHeader{};
@@ -267,7 +250,7 @@ namespace graph::storage {
 		segments_[offset].file_offset = offset;
 		segments_[offset].is_dirty = 0;
 
-		auto dirtyIt = std::find(dirtySegments_.begin(), dirtySegments_.end(), offset);
+		auto dirtyIt = std::ranges::find(dirtySegments_, offset);
 		if (dirtyIt != dirtySegments_.end()) dirtySegments_.erase(dirtyIt);
 	}
 
@@ -423,7 +406,7 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::markSegmentDirty(uint64_t offset) {
-		if (std::find(dirtySegments_.begin(), dirtySegments_.end(), offset) == dirtySegments_.end()) {
+		if (std::ranges::find(dirtySegments_, offset) == dirtySegments_.end()) {
 			dirtySegments_.push_back(offset);
 		}
 	}

@@ -57,7 +57,7 @@ TEST_F(FileStorageTest, AllocateSegment) {
 	ASSERT_EQ(header.capacity, static_cast<unsigned int>(10));
 	ASSERT_EQ(header.used, static_cast<unsigned int>(0));
 	ASSERT_EQ(header.next_segment_offset, static_cast<unsigned long long>(0));
-	ASSERT_EQ(header.start_id, static_cast<long long>(0));
+	ASSERT_EQ(header.start_id, static_cast<long long>(1));
 }
 
 TEST_F(FileStorageTest, TestOpenClose) {

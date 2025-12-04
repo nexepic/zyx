@@ -9,6 +9,7 @@
  **/
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -100,6 +101,31 @@ protected:
 		}
 	}
 
+	// Helper to create and register a fully initialized segment header
+	SegmentHeader createAndRegisterSegment(uint64_t offset, uint32_t type, uint32_t capacity, int64_t start_id = 0) {
+		SegmentHeader header;
+		header.file_offset = offset;
+		header.data_type = type;
+		header.capacity = capacity;
+		header.used = 0;
+		header.inactive_count = 0;
+		header.next_segment_offset = 0;
+		header.prev_segment_offset = 0;
+		header.start_id = start_id;
+		header.needs_compaction = 0;
+		header.is_dirty = 0;
+		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
+		std::memset(header.activity_bitmap, 0, sizeof(header.activity_bitmap));
+
+		// Write header to file to simulate allocation
+		fileStream->seekp(static_cast<std::streamoff>(offset));
+		fileStream->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
+
+		// Register with tracker
+		tracker->registerSegment(header);
+		return header;
+	}
+
 	// Helper: Read raw bytes to verify disk persistence
 	template<typename T>
 	T readRawAt(uint64_t offset) {
@@ -142,7 +168,7 @@ TEST_F(SegmentTrackerTest, RegisterAndRetrieveSegment) {
 	auto type = static_cast<uint32_t>(EntityType::Node);
 	uint32_t capacity = NODES_PER_SEGMENT;
 
-	tracker->registerSegment(offset, type, capacity);
+	createAndRegisterSegment(offset, type, capacity);
 
 	SegmentHeader &header = tracker->getSegmentHeader(offset);
 	EXPECT_EQ(header.file_offset, offset);
@@ -166,12 +192,7 @@ TEST_F(SegmentTrackerTest, GetNonExistentSegmentThrows) {
 TEST_F(SegmentTrackerTest, UpdateUsageUpdatesIndex) {
 	uint64_t offset = getSegmentOffset(0);
 	auto type = static_cast<uint32_t>(EntityType::Node);
-	tracker->registerSegment(offset, type, 100);
-
-	// Initial state: Start ID 0 (default)
-	SegmentHeader &header = tracker->getSegmentHeader(offset);
-	header.start_id = 1000; // Manually set start ID for test
-	tracker->writeSegmentHeader(offset, header); // Commit to update internal cache properly
+	createAndRegisterSegment(offset, type, 100, 1000);
 
 	// Action: Update usage
 	// This should trigger IndexManager update because tracker calls updateSegmentIndex
@@ -189,7 +210,7 @@ TEST_F(SegmentTrackerTest, UpdateUsageUpdatesIndex) {
 
 TEST_F(SegmentTrackerTest, MarkForCompaction) {
 	uint64_t offset = getSegmentOffset(0);
-	tracker->registerSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
 
 	tracker->markForCompaction(offset, true);
 	EXPECT_EQ(tracker->getSegmentHeader(offset).needs_compaction, 1);
@@ -205,25 +226,25 @@ TEST_F(SegmentTrackerTest, MarkForCompaction) {
 
 TEST_F(SegmentTrackerTest, FlushDirtySegments) {
 	uint64_t offset = getSegmentOffset(0);
-	tracker->registerSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+
+	// Verify disk is already updated by createAndRegisterSegment
+	auto diskHeaderBefore = readRawAt<SegmentHeader>(offset);
+	EXPECT_EQ(diskHeaderBefore.used, 0);
 
 	// Modify in memory
 	tracker->updateSegmentUsage(offset, 10, 0);
 
 	// Verify disk is NOT yet updated (raw read)
-	auto diskHeader = readRawAt<SegmentHeader>(offset);
-	// registerSegment writes 0 used. updateSegmentUsage marks dirty but doesn't flush immediately.
-	// Note: implementation details: registerSegment writes via memory map or just map?
-	// Looking at code: registerSegment just updates `segments_` map. It doesn't write to file immediately unless
-	// `writeSegmentHeader` is called or flushed. However, the test SetUp initialized file with zeros.
-	EXPECT_EQ(diskHeader.used, 0);
+	auto diskHeaderAfterUpdate = readRawAt<SegmentHeader>(offset);
+	EXPECT_EQ(diskHeaderAfterUpdate.used, 0);
 
 	// Action: Flush
 	tracker->flushDirtySegments();
 
 	// Verify disk IS updated
-	diskHeader = readRawAt<SegmentHeader>(offset);
-	EXPECT_EQ(diskHeader.used, 10);
+	auto diskHeaderAfterFlush = readRawAt<SegmentHeader>(offset);
+	EXPECT_EQ(diskHeaderAfterFlush.used, 10);
 
 	// Verify internal dirty flag cleared
 	EXPECT_EQ(tracker->getSegmentHeader(offset).is_dirty, 0);
@@ -236,9 +257,10 @@ TEST_F(SegmentTrackerTest, FlushDirtySegments) {
 TEST_F(SegmentTrackerTest, LinkSegments) {
 	uint64_t head = getSegmentOffset(0);
 	uint64_t next = getSegmentOffset(1);
+	auto type = static_cast<uint32_t>(EntityType::Node);
 
-	tracker->registerSegment(head, static_cast<uint32_t>(EntityType::Node), 100);
-	tracker->registerSegment(next, static_cast<uint32_t>(EntityType::Node), 100);
+	createAndRegisterSegment(head, type, 100);
+	createAndRegisterSegment(next, type, 100);
 
 	// Link
 	tracker->updateSegmentLinks(head, 0, next);
@@ -259,18 +281,10 @@ TEST_F(SegmentTrackerTest, LinkSegments) {
 TEST_F(SegmentTrackerTest, SingleBitOperations) {
 	uint64_t offset = getSegmentOffset(0);
 	// Capacity 16 -> 2 bytes bitmap
-	tracker->registerSegment(offset, static_cast<uint32_t>(EntityType::Node), 16);
+	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 16);
 
 	// Pretend usage is 16
 	tracker->updateSegmentUsage(offset, 16, 0);
-
-	// Set bit 5 to inactive (assuming setEntityActive(..., false) means inactive/deleted?)
-	// In code: setBit(..., value).
-	// Logic: if value=true (active), inactive_count decr. if value=false (inactive), inactive_count incr.
-
-	// Initial: all 0s? registerSegment memsets to 0.
-	// But usually active entities should have bit 1.
-	// Let's assume we initialize all to active (1) manually or via bulk update first.
 
 	std::vector<bool> allActive(16, true);
 	tracker->updateActivityBitmap(offset, allActive);
@@ -289,7 +303,7 @@ TEST_F(SegmentTrackerTest, SingleBitOperations) {
 
 TEST_F(SegmentTrackerTest, BulkBitmapUpdate) {
 	uint64_t offset = getSegmentOffset(0);
-	tracker->registerSegment(offset, static_cast<uint32_t>(EntityType::Node), 8);
+	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 8);
 
 	std::vector<bool> pattern = {true, false, true, false, true, false, true, false}; // 4 inactive
 	tracker->updateActivityBitmap(offset, pattern);
@@ -306,7 +320,7 @@ TEST_F(SegmentTrackerTest, BulkBitmapUpdate) {
 
 TEST_F(SegmentTrackerTest, FreeListOperations) {
 	uint64_t offset = getSegmentOffset(0);
-	tracker->registerSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
 
 	// Verify empty initially
 	EXPECT_TRUE(tracker->getFreeSegments().empty());
@@ -339,13 +353,10 @@ TEST_F(SegmentTrackerTest, MarkFreeAlignCheck) {
 
 TEST_F(SegmentTrackerTest, LookupFastPathViaIndex) {
 	uint64_t offset = getSegmentOffset(0);
-	tracker->registerSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100, 500);
 
 	// Setup Header
-	tracker->updateSegmentHeader(offset, [](SegmentHeader &h) {
-		h.start_id = 500;
-		h.used = 100;
-	});
+	tracker->updateSegmentHeader(offset, [](SegmentHeader &h) { h.used = 100; });
 
 	// Verify IndexManager caught it
 	// Note: updateSegmentHeader calls indexMgr->updateSegmentIndex
@@ -359,38 +370,22 @@ TEST_F(SegmentTrackerTest, LookupFastPathViaIndex) {
 }
 
 TEST_F(SegmentTrackerTest, LookupSlowPathLinearScan) {
-	// Simulate a scenario where index is not yet built or failed,
-	// or manually disconnect index manager to force linear scan (if possible)
-	// The code tries indexMgr lock first.
-
-	// Let's create a scenario: We set the chain head, but we clear the IndexManager's memory
-	// (though IndexManager monitors tracker, so it's hard to desync them in this test structure).
-
 	// Alternative: Reset the indexManager pointer in tracker to null to force fallback
 	tracker->setSegmentIndexManager(std::weak_ptr<SegmentIndexManager>());
 
 	uint64_t offset1 = getSegmentOffset(0);
 	uint64_t offset2 = getSegmentOffset(1);
+	auto type = static_cast<uint32_t>(EntityType::Node);
 
-	tracker->registerSegment(offset1, static_cast<uint32_t>(EntityType::Node), 10);
-	tracker->registerSegment(offset2, static_cast<uint32_t>(EntityType::Node), 10);
+	createAndRegisterSegment(offset1, type, 10, 0);
+	createAndRegisterSegment(offset2, type, 10, 10);
 
 	// Link them
 	tracker->updateSegmentLinks(offset1, 0, offset2);
 	tracker->updateSegmentLinks(offset2, offset1, 0);
 
-	// Set headers
-	tracker->updateSegmentHeader(offset1, [](SegmentHeader &h) {
-		h.start_id = 0;
-		h.capacity = 10;
-	});
-	tracker->updateSegmentHeader(offset2, [](SegmentHeader &h) {
-		h.start_id = 10;
-		h.capacity = 10;
-	});
-
 	// Set Chain Head
-	tracker->updateChainHead(static_cast<uint32_t>(EntityType::Node), offset1);
+	tracker->updateChainHead(type, offset1);
 
 	// Linear scan for ID 15 (should be in offset2)
 	uint64_t result = tracker->getSegmentOffsetForNodeId(15);
@@ -407,7 +402,7 @@ TEST_F(SegmentTrackerTest, LookupSlowPathLinearScan) {
 TEST_F(SegmentTrackerTest, FragmentationCalculation) {
 	auto type = static_cast<uint32_t>(EntityType::Node);
 	uint64_t offset = getSegmentOffset(0);
-	tracker->registerSegment(offset, type, 100);
+	createAndRegisterSegment(offset, type, 100);
 
 	// Case 1: 100% used -> 0 fragmentation
 	tracker->updateSegmentUsage(offset, 100, 0);
@@ -427,13 +422,13 @@ TEST_F(SegmentTrackerTest, GetSegmentsNeedingCompaction) {
 	uint64_t off1 = getSegmentOffset(0);
 	uint64_t off2 = getSegmentOffset(1);
 
-	tracker->registerSegment(off1, type, 100);
-	tracker->registerSegment(off2, type, 100);
+	createAndRegisterSegment(off1, type, 100);
+	createAndRegisterSegment(off2, type, 100);
 
-	// Off1: High fragmentation (1 used)
+	// Off1: High fragmentation (1 used) -> frag ratio = 0.99
 	tracker->updateSegmentUsage(off1, 1, 0);
 
-	// Off2: Low fragmentation (100 used)
+	// Off2: Low fragmentation (100 used) -> frag ratio = 0.0
 	tracker->updateSegmentUsage(off2, 100, 0);
 
 	// Threshold 0.8
@@ -452,7 +447,7 @@ TEST_F(SegmentTrackerTest, WriteAndReadEntity) {
 	// or is trivially copyable.
 
 	uint64_t segOffset = getSegmentOffset(0);
-	tracker->registerSegment(segOffset, static_cast<uint32_t>(EntityType::Node), 10);
+	createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Node), 10);
 
 	Node testNode(123, "TestNode");
 	// Calculate size (using Node::getTotalSize() as defined in StorageHeaders constants)

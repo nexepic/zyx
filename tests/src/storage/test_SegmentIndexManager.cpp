@@ -15,6 +15,7 @@
 #include <vector>
 #include <algorithm>
 #include <random>
+#include <cstring> // For memset
 
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
@@ -89,13 +90,25 @@ protected:
     }
 
     // Helper to create a dummy header for direct API testing
+    // MANUAL INITIALIZATION as requested
 	static SegmentHeader createHeader(uint64_t offset, uint32_t type, int64_t startId, uint32_t used) {
         SegmentHeader h;
+        // Basic fields
         h.file_offset = offset;
         h.data_type = type;
         h.start_id = startId;
         h.used = used;
-        h.capacity = 100;
+        h.capacity = 100; // Mock capacity
+
+        // Default initializations to ensure clean state
+        h.inactive_count = 0;
+        h.next_segment_offset = 0;
+        h.prev_segment_offset = 0;
+        h.needs_compaction = 0;
+        h.is_dirty = 0;
+        h.bitmap_size = bitmap::calculateBitmapSize(h.capacity);
+        std::memset(h.activity_bitmap, 0, sizeof(h.activity_bitmap));
+
         return h;
     }
 };
@@ -268,22 +281,48 @@ TEST_F(SegmentIndexManagerTest, BuildSegmentIndexesFromChain) {
     uint64_t head = getSegOffset(0);
     uint64_t next = getSegOffset(1);
 
-    // 1. Manually register segments in tracker (simulating file load)
-    tracker->registerSegment(head, type, 100);
-    tracker->registerSegment(next, type, 100);
+    // --- FIX: Manual SegmentHeader Initialization ---
+    // Instead of using convenience constructor, we build and register
 
-    // 2. Setup Chain headers in tracker
-    tracker->updateSegmentHeader(head, [&](SegmentHeader& h) {
-        h.start_id = 0;
-        h.used = 50;       // [0, 49]
+    // Register Head Segment
+    {
+        SegmentHeader h;
+        h.file_offset = head;
+        h.data_type = type;
+        h.capacity = 100;
+        h.start_id = 0;       // [0, 49]
+        h.used = 50;
         h.next_segment_offset = next;
-    });
+        h.prev_segment_offset = 0;
+        h.inactive_count = 0;
+        h.needs_compaction = 0;
+        h.is_dirty = 0;
+        h.bitmap_size = bitmap::calculateBitmapSize(h.capacity);
+        std::memset(h.activity_bitmap, 0, sizeof(h.activity_bitmap));
 
-    tracker->updateSegmentHeader(next, [&](SegmentHeader& h) {
-        h.start_id = 100;
-        h.used = 20;       // [100, 119]
+        // Register to tracker (tracker will copy it)
+        tracker->registerSegment(h);
+    }
+
+    // Register Next Segment
+    {
+        SegmentHeader h;
+        h.file_offset = next;
+        h.data_type = type;
+        h.capacity = 100;
+        h.start_id = 100;     // [100, 119]
+        h.used = 20;
+        h.next_segment_offset = 0;
         h.prev_segment_offset = head;
-    });
+        h.inactive_count = 0;
+        h.needs_compaction = 0;
+        h.is_dirty = 0;
+        h.bitmap_size = bitmap::calculateBitmapSize(h.capacity);
+        std::memset(h.activity_bitmap, 0, sizeof(h.activity_bitmap));
+
+        // Register to tracker
+        tracker->registerSegment(h);
+    }
 
     // 3. Update the tracked head pointer in our test fixture
     // Note: indexManager->initialize captured the pointers to these variables.
@@ -292,13 +331,7 @@ TEST_F(SegmentIndexManagerTest, BuildSegmentIndexesFromChain) {
     // 4. Force Rebuild
     // The previous updates might have triggered updateSegmentIndex incrementally if wired,
     // but here we want to test the full scan logic.
-    // We can simulate a "restart" by creating a new manager or just calling build.
-
-    // Let's clear the manager first to prove build works
-    SegmentHeader hRemove = createHeader(head, type, 0, 0);
-    indexManager->removeSegmentIndex(hRemove); // Naively try to clear (might not clear all)
-
-    // Actually, calling buildSegmentIndexes() clears vectors first internally.
+    // Calling buildSegmentIndexes() clears vectors first internally.
     indexManager->buildSegmentIndexes();
 
     // 5. Verify Results
@@ -321,7 +354,7 @@ TEST_F(SegmentIndexManagerTest, BuildSegmentIndexesFromChain) {
 // ============================================================================
 
 TEST_F(SegmentIndexManagerTest, LookupWithGaps) {
-    auto type = static_cast<uint32_t>(graph::EntityType::Node);
+    uint32_t type = static_cast<uint32_t>(graph::EntityType::Node);
 
     // Seg 1: [0, 9]
     indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, 0, 10), -1);

@@ -70,7 +70,6 @@ namespace graph::storage {
 
 		bool isSegmentAtEndOfFile(uint64_t offset) const;
 		uint64_t findFreeSegmentNotAtEnd() const;
-		void initializeSegmentHeader(uint64_t offset, uint32_t type, uint32_t capacity) const;
 
 		void setEntityReferenceUpdater(std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater) {
 			entityReferenceUpdater_ = std::move(entityReferenceUpdater);
