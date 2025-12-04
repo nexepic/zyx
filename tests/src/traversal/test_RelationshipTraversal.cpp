@@ -350,22 +350,28 @@ TEST(RelationshipTraversalLifetimeTest, HandlesExpiredDataManagerGracefully) {
 	// 2. Create Traversal, whose internal weak_ptr now points to our DataManager
 	auto traversal = std::make_shared<graph::traversal::RelationshipTraversal>(dataManager);
 
+	// Create a dummy edge for link/unlink tests
+	graph::Edge dummyEdge(1, 1, 2, "dummy");
+
 	// 3. Key step: destroy the DataManager.
 	// We reset the shared_ptr to bring the reference count to zero, triggering its destructor.
-	// Now, the weak_ptr inside traversal is expired (dangling).
+	// Now, the weak_ptr inside traversal is expired.
 	dataManager.reset();
 	database->close();
 
-	// 4. Call methods on Traversal.
+	// 4. Call all public methods on Traversal.
 	// Inside these methods, `dataManager_.lock()` will fail and return a null pointer.
-	// We expect these calls to complete safely, throw no exceptions, and return empty results.
-	std::vector<graph::Edge> outEdges;
-	EXPECT_NO_THROW(outEdges = traversal->getOutgoingEdges(123));
-	EXPECT_TRUE(outEdges.empty());
-
-	std::vector<graph::Node> connectedNodes;
-	EXPECT_NO_THROW(connectedNodes = traversal->getAllConnectedNodes(123));
-	EXPECT_TRUE(connectedNodes.empty());
+	// We expect these calls to complete safely, throw no exceptions, and return empty/default results.
+	EXPECT_NO_THROW({
+		EXPECT_TRUE(traversal->getOutgoingEdges(1).empty());
+		EXPECT_TRUE(traversal->getIncomingEdges(1).empty());
+		EXPECT_TRUE(traversal->getAllConnectedEdges(1).empty());
+		EXPECT_TRUE(traversal->getConnectedTargetNodes(1).empty());
+		EXPECT_TRUE(traversal->getConnectedSourceNodes(1).empty());
+		EXPECT_TRUE(traversal->getAllConnectedNodes(1).empty());
+		traversal->linkEdge(dummyEdge);   // Should do nothing
+		traversal->unlinkEdge(dummyEdge); // Should do nothing
+	});
 
 	std::filesystem::remove(testFilePath);
 }
