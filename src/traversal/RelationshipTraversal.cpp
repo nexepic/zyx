@@ -190,9 +190,9 @@ namespace graph::traversal {
 
 	void RelationshipTraversal::unlinkEdge(Edge &edge) const {
 		auto dataManager = dataManager_.lock();
-		// if (!dataManager) {
-		// 	return;
-		// }
+		if (!dataManager) {
+			return;
+		}
 
 		int64_t sourceNodeId = edge.getSourceNodeId();
 		int64_t targetNodeId = edge.getTargetNodeId();

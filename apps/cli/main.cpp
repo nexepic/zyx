@@ -25,9 +25,9 @@ int main(int argc, char **argv) {
 
 	// --- Helper Lambda to Setup Environment ---
 	auto setupEnv = [&]() {
-		graph::utils::Log::setDebug(debugMode);
+		graph::log::Log::setDebug(debugMode);
 		if (debugMode) {
-			graph::utils::Log::debug("Debug mode enabled.");
+			graph::log::Log::debug("Debug mode enabled.");
 		}
 	};
 
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 	createCmd->callback([&]() {
 		setupEnv();
 		graph::Database db(dbPath);
-		graph::utils::Log::info("Database created at: ", dbPath);
+		graph::log::Log::info("Database created at: ", dbPath);
 		const graph::REPL repl(db);
 		repl.run();
 	});
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
 	// Ensure correct subcommand usage
 	database->callback([&]() {
 		if (database->get_subcommands().empty()) {
-			graph::utils::Log::error("Missing or incorrect subcommand. Available subcommands: create, run");
+			graph::log::Log::error("Missing or incorrect subcommand. Available subcommands: create, run");
 			std::cout << database->help() << std::endl;
 			exit(EXIT_FAILURE);
 		}

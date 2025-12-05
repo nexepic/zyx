@@ -267,7 +267,7 @@ TEST_F(BaseEntityManagerTest, EdgeEntityOperations) {
 	EXPECT_EQ(retrievedFromDisk.getId(), 0);
 }
 
-// UPDATED: Tests for PersistenceManager Snapshot Commit (Replacing MarkAllSaved)
+// Tests for PersistenceManager Snapshot Commit (Replacing MarkAllSaved)
 TEST_F(BaseEntityManagerTest, SnapshotCommitClearsDirty) {
 	// Create and add multiple nodes
 	for (int i = 0; i < 3; i++) {
@@ -290,7 +290,7 @@ TEST_F(BaseEntityManagerTest, SnapshotCommitClearsDirty) {
 	EXPECT_TRUE(dirtyNodes.empty());
 }
 
-// UPDATED: Tests for getDirtyEntityInfos (Replacing getDirtyWithChangeTypes)
+// Tests for getDirtyEntityInfos (Replacing getDirtyWithChangeTypes)
 TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 	// --- Setup ---
 
@@ -336,16 +336,15 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 	EXPECT_EQ(modifiedNodes.size(), 0);
 
 
-	// Get only DELETED nodes
-	// removedNode -> Was ADDED then marked DELETED.
+	// Since 'removedNode' was only in memory (ADDED), deleting it simply removes it
+	// from the dirty registry completely. It does NOT create a DELETED record.
 	auto deletedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::DELETED});
 	// In current implementation, we upsert a DELETED record.
-	EXPECT_EQ(deletedNodes.size(), 1);
-	EXPECT_EQ(deletedNodes[0].getId(), removedNode.getId());
+	EXPECT_EQ(deletedNodes.size(), 0);
 
 	// Get all dirty nodes. Total = 3 (2 Added + 1 Deleted)
 	auto allDirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED,
 														graph::storage::EntityChangeType::MODIFIED,
 														graph::storage::EntityChangeType::DELETED});
-	EXPECT_EQ(allDirtyNodes.size(), 3);
+	EXPECT_EQ(allDirtyNodes.size(), 2);
 }

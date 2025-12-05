@@ -458,13 +458,15 @@ namespace graph::storage {
 	template<typename T>
 	void FileStorage::deleteEntityOnDisk(const T &entity) {
 		int64_t id = entity.getId();
-		uint64_t segmentOffset = 0;
 
-		segmentOffset = dataManager->findSegmentForEntityId<T>(id);
+		if (id <= 0) {
+			return;
+		}
 
-		if (segmentOffset != 0) {
-			// Mark the ID as available for reuse
-			idAllocator->freeId(id, entity.typeId);
+		// Mark the ID as available for reuse
+		idAllocator->freeId(id, entity.typeId);
+
+		if (uint64_t segmentOffset = dataManager->findSegmentForEntityId<T>(id); segmentOffset != 0) {
 			// Entity exists on disk, update it in place
 			updateEntityInPlace(entity, segmentOffset);
 		}

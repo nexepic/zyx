@@ -79,6 +79,7 @@ namespace graph::storage {
         public:
             // Adds an ID, merging with existing intervals if possible
             void add(int64_t id);
+        	void addRange(int64_t start, int64_t end);
 
             // Retrieves and removes the first available ID
             // Returns 0 if empty
@@ -107,6 +108,8 @@ namespace graph::storage {
 
         int64_t allocateNewSequentialId(uint32_t entityType) const;
 
+    	void recoverGapIds(uint32_t entityType, int64_t currentMaxId);
+
         std::shared_ptr<std::fstream> file_;
         std::shared_ptr<SegmentTracker> segmentTracker_;
 
@@ -115,6 +118,8 @@ namespace graph::storage {
 
         // L2 Cache: Compact storage (Intervals)
         std::unordered_map<uint32_t, IDIntervalSet> coldCache_;
+
+    	std::unordered_map<uint32_t, std::deque<int64_t>> memoryOnlyCache_;
 
         std::unordered_map<uint32_t, ScanCursor> scanCursors_;
 

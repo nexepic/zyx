@@ -40,6 +40,24 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
+	void PersistenceManager::remove(int64_t id) {
+		// Assuming DirtyEntityRegistry has a 'remove(id)' or 'erase(id)' method.
+		// If your DirtyEntityRegistry wraps a map, this should just call map.erase(id).
+		if constexpr (std::is_same_v<EntityType, Node>)
+			nodeRegistry_->remove(id);
+		else if constexpr (std::is_same_v<EntityType, Edge>)
+			edgeRegistry_->remove(id);
+		else if constexpr (std::is_same_v<EntityType, Property>)
+			propertyRegistry_->remove(id);
+		else if constexpr (std::is_same_v<EntityType, Blob>)
+			blobRegistry_->remove(id);
+		else if constexpr (std::is_same_v<EntityType, Index>)
+			indexRegistry_->remove(id);
+		else if constexpr (std::is_same_v<EntityType, State>)
+			stateRegistry_->remove(id);
+	}
+
+	template<typename EntityType>
 	std::optional<DirtyEntityInfo<EntityType>> PersistenceManager::getDirtyInfo(int64_t id) const {
 		if constexpr (std::is_same_v<EntityType, Node>)
 			return nodeRegistry_->getInfo(id);
@@ -140,6 +158,13 @@ namespace graph::storage {
 	template void PersistenceManager::upsert<Blob>(const DirtyEntityInfo<Blob> &);
 	template void PersistenceManager::upsert<Index>(const DirtyEntityInfo<Index> &);
 	template void PersistenceManager::upsert<State>(const DirtyEntityInfo<State> &);
+
+	template void PersistenceManager::remove<Node>(int64_t);
+	template void PersistenceManager::remove<Edge>(int64_t);
+	template void PersistenceManager::remove<Property>(int64_t);
+	template void PersistenceManager::remove<Blob>(int64_t);
+	template void PersistenceManager::remove<Index>(int64_t);
+	template void PersistenceManager::remove<State>(int64_t);
 
 	template bool PersistenceManager::isDirty<Node>(int64_t) const;
 	template bool PersistenceManager::isDirty<Edge>(int64_t) const;

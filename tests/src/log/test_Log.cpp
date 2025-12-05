@@ -26,7 +26,7 @@ protected:
 		original_cout_buf = std::cout.rdbuf(cout_buffer.rdbuf());
 		original_cerr_buf = std::cerr.rdbuf(cerr_buffer.rdbuf());
 		// Ensure debug mode is off at the start of each test
-		graph::utils::Log::setDebug(false);
+		graph::log::Log::setDebug(false);
 	}
 
 	// After each test, restore std::cout and std::cerr
@@ -39,18 +39,18 @@ protected:
 // Test setting and querying the debug flag
 TEST_F(LogTest, HandlesDebugFlag) {
 	// Default should be false
-	ASSERT_FALSE(graph::utils::Log::isDebugEnabled());
+	ASSERT_FALSE(graph::log::Log::isDebugEnabled());
 
-	graph::utils::Log::setDebug(true);
-	ASSERT_TRUE(graph::utils::Log::isDebugEnabled());
+	graph::log::Log::setDebug(true);
+	ASSERT_TRUE(graph::log::Log::isDebugEnabled());
 
-	graph::utils::Log::setDebug(false);
-	ASSERT_FALSE(graph::utils::Log::isDebugEnabled());
+	graph::log::Log::setDebug(false);
+	ASSERT_FALSE(graph::log::Log::isDebugEnabled());
 }
 
 // Test info logs
 TEST_F(LogTest, PrintsInfoLogs) {
-	graph::utils::Log::info("This is an info message with number ", 123);
+	graph::log::Log::info("This is an info message with number ", 123);
 	std::string expected = "[INFO] This is an info message with number 123\n";
 	ASSERT_EQ(cout_buffer.str(), expected);
 	// Ensure cerr has no output
@@ -59,7 +59,7 @@ TEST_F(LogTest, PrintsInfoLogs) {
 
 // Test error logs
 TEST_F(LogTest, PrintsErrorLogs) {
-	graph::utils::Log::error("This is an error message with number ", 456);
+	graph::log::Log::error("This is an error message with number ", 456);
 	std::string expected = "\033[1;31m[ERROR] This is an error message with number 456\033[0m\n";
 	ASSERT_EQ(cerr_buffer.str(), expected);
 	// Ensure cout has no output
@@ -69,8 +69,8 @@ TEST_F(LogTest, PrintsErrorLogs) {
 // Test that debug logs are not printed when debug mode is disabled
 TEST_F(LogTest, DoesNotPrintDebugLogsWhenDisabled) {
 	// Ensure debug mode is disabled
-	ASSERT_FALSE(graph::utils::Log::isDebugEnabled());
-	graph::utils::Log::debug("This should not be printed");
+	ASSERT_FALSE(graph::log::Log::isDebugEnabled());
+	graph::log::Log::debug("This should not be printed");
 	// Ensure both cout and cerr have no output
 	ASSERT_TRUE(cout_buffer.str().empty());
 	ASSERT_TRUE(cerr_buffer.str().empty());
@@ -78,10 +78,10 @@ TEST_F(LogTest, DoesNotPrintDebugLogsWhenDisabled) {
 
 // Test that debug logs are printed when debug mode is enabled
 TEST_F(LogTest, PrintsDebugLogsWhenEnabled) {
-	graph::utils::Log::setDebug(true);
-	ASSERT_TRUE(graph::utils::Log::isDebugEnabled());
+	graph::log::Log::setDebug(true);
+	ASSERT_TRUE(graph::log::Log::isDebugEnabled());
 
-	graph::utils::Log::debug("This is a debug message with number ", 789);
+	graph::log::Log::debug("This is a debug message with number ", 789);
 	std::string expected = "\033[1;33m[DEBUG] This is a debug message with number 789\033[0m\n";
 	ASSERT_EQ(cout_buffer.str(), expected);
 	// Ensure cerr has no output

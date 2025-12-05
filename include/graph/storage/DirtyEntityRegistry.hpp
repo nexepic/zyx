@@ -44,6 +44,32 @@ namespace graph::storage {
     		}
     	}
 
+    	/**
+		 * @brief Attempts to remove an entity from the active dirty registry.
+		 * Used to undo an ADD operation that hasn't been persisted yet.
+		 *
+		 * @param id The ID of the entity to remove.
+		 * @return true If the entity was successfully removed from the active map and is NOT currently flushing.
+		 * @return false If the entity is currently involved in a flush operation (in flushingMap_).
+		 *               In this case, removal is unsafe as it would cause data inconsistency between memory and disk.
+		 */
+    	bool remove(int64_t id) {
+    		std::unique_lock<std::shared_mutex> lock(mutex_);
+
+    		// SAFETY CHECK:
+    		// If the entity is in the flushing map, the IO thread is currently writing it to disk
+    		// (or is about to). We cannot simply "disappear" it from memory, because the disk
+    		// will soon contain this entity.
+    		if (flushingMap_.contains(id)) {
+    			return false;
+    		}
+
+    		// Safe to remove from active map (if it exists there)
+    		activeMap_.erase(id);
+    		updateCount();
+    		return true;
+    	}
+
         /**
          * @brief Retrieves the dirty info wrapper if it exists (Active or Flushing).
          */

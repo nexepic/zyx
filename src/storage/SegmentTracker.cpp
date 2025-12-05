@@ -345,6 +345,14 @@ namespace graph::storage {
 		return it->second.used - it->second.inactive_count;
 	}
 
+	bool SegmentTracker::isIdInUsedRange(uint64_t segmentOffset, int64_t entityId) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		ensureSegmentCached(segmentOffset);
+		const SegmentHeader &header = segments_[segmentOffset];
+
+		return (entityId >= header.start_id && entityId < header.start_id + header.used);
+	}
+
 	// =========================================================================
 	// OPTIMIZED LOOKUP: Uses SegmentIndexManager for O(log N) performance
 	// =========================================================================

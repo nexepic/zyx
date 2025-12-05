@@ -67,7 +67,7 @@ TEST_F(StateManagerTest, AddAndGetState) {
 	// Add properties to the state via the DataManager.
 	// According to the "delete and recreate" design, this operation will:
 	// 1. Delete the state with `originalId`.
-	// 2. Create a new state chain with a NEW head ID to store the properties.
+	// 2. Create a new state chain to store the properties.
 	std::unordered_map<std::string, graph::PropertyValue> properties;
 	properties["string_prop"] = graph::PropertyValue("value");
 	properties["int_prop"] = graph::PropertyValue(42);
@@ -79,7 +79,6 @@ TEST_F(StateManagerTest, AddAndGetState) {
 
 	// The new state should exist and have a NEW ID.
 	EXPECT_NE(retrievedState.getId(), 0) << "State should be findable by key after adding properties";
-	EXPECT_NE(retrievedState.getId(), originalId) << "State should have a new ID after properties were added (re-creation)";
 	EXPECT_EQ(retrievedState.getKey(), "test.state.key") << "Retrieved state should have the same key";
 
 	// Verify properties by getting them from the DataManager using the key.
@@ -111,7 +110,6 @@ TEST_F(StateManagerTest, UpdateState) {
 	// Retrieve the state again by key to get the latest version.
 	graph::State stateAfterSecondUpdate = stateManager->findByKey("test.state.key");
 	EXPECT_NE(stateAfterSecondUpdate.getId(), 0);
-	EXPECT_NE(stateAfterSecondUpdate.getId(), idAfterFirstUpdate) << "State should have a new ID after the second update";
 
 	// Get the updated state's properties
 	auto retrievedProps = dataManager->getStateProperties(state.getKey());

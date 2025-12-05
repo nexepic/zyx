@@ -13,7 +13,7 @@
 #include <iostream>
 #include <mutex>
 
-namespace graph::utils {
+namespace graph::log {
 
 	class Log {
 	public:

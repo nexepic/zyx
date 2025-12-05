@@ -128,21 +128,9 @@ TEST_F(EdgeManagerTest, RemoveEdgeInSameContext) {
 		EXPECT_EQ(retrievedEdge.getId(), 0);
 	}
 
-	// Verify dirty map: It should have a DELETED entry
-	// (Previous logic said "cancel out", but safer new logic is explicit delete)
-	// If you implemented "cancel out" optimization in DataManager::markEntityDeleted:
-	// "if (dirtyInfo.changeType == ADDED) { upsert(DELETED); }" <- This is explicit DELETE.
 	auto deletedEdges = getDirtyInfo({graph::storage::EntityChangeType::DELETED});
 
-	// Depending on implementation detail:
-	// If optimized to remove entirely: size = 0.
-	// If marked DELETED: size = 1.
-	// Let's assume explicit DELETED for safety in PersistenceManager.
-	// If your code cancels it out (removes from map), change expectation to 0.
-	// Based on DataManager.cpp refactor I provided earlier:
-	// "persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));"
-	// So it will be 1.
-	EXPECT_EQ(deletedEdges.size(), 1);
+	EXPECT_EQ(deletedEdges.size(), 0);
 }
 
 // Test edge removal for an entity that is considered "persisted"

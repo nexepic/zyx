@@ -49,6 +49,7 @@ namespace graph::storage {
 
 		void flushDirtySegments();
 
+		bool isIdInUsedRange(uint64_t segmentOffset, int64_t entityId);
 		uint64_t getSegmentOffsetForEntityId(EntityType type, int64_t entityId);
 
 		// New methods for finding segments for specific entities

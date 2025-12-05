@@ -699,7 +699,12 @@ namespace graph::storage {
 			// BUT to be safe in the registry logic, we mark it DELETED.
 			// Better yet, update registry to remove it?
 			// Simpler: Mark DELETED.
-			persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));
+			// persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));
+
+			// Remove from persistence manager completely (Undoes the ADD).
+			// This prevents an unnecessary DELETE record from being written to the WAL/Disk.
+			const int64_t id = entity.getId();
+			persistenceManager_->remove<EntityType>(id);
 		} else {
 			entity.markInactive();
 			persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));
