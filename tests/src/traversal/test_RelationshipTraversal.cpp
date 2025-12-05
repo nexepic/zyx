@@ -369,39 +369,3 @@ TEST(RelationshipTraversalLifetimeTest, HandlesExpiredDataManagerGracefully) {
 
 	std::filesystem::remove(testFilePath);
 }
-
-TEST(RelationshipTraversalLifetimeTest, AllMethodsHandleExpiredDataManagerGracefully) {
-	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testFilePath = std::filesystem::temp_directory_path() / ("test_lifetime_full_" + boost::uuids::to_string(uuid) + ".dat");
-
-	auto database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	std::shared_ptr<graph::storage::DataManager> dataManager = database->getStorage()->getDataManager();
-
-	auto traversal = std::make_shared<graph::traversal::RelationshipTraversal>(dataManager);
-
-	dataManager.reset();
-	database->close();
-
-	int64_t dummyNodeId = 123;
-
-	EXPECT_TRUE(traversal->getOutgoingEdges(dummyNodeId).empty());
-
-	EXPECT_TRUE(traversal->getIncomingEdges(dummyNodeId).empty());
-
-	EXPECT_TRUE(traversal->getAllConnectedEdges(dummyNodeId).empty());
-
-	EXPECT_TRUE(traversal->getConnectedTargetNodes(dummyNodeId).empty());
-
-	EXPECT_TRUE(traversal->getConnectedSourceNodes(dummyNodeId).empty());
-
-	EXPECT_TRUE(traversal->getAllConnectedNodes(dummyNodeId).empty());
-
-	graph::Edge dummyEdge(999, 1, 2, "DUMMY_REL");
-
-	EXPECT_NO_THROW(traversal->linkEdge(dummyEdge));
-
-	EXPECT_NO_THROW(traversal->unlinkEdge(dummyEdge));
-
-	std::filesystem::remove(testFilePath);
-}

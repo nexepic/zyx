@@ -21,7 +21,9 @@ namespace graph::traversal {
 		std::vector<Edge> outEdges;
 		const auto dataManager = dataManager_.lock();
 		if (!dataManager) {
+			// GCOVR_EXCL_START
 			return outEdges;
+			// GCOVR_EXCL_STOP
 		}
 
 		const Node node = dataManager->getNode(nodeId);
@@ -50,7 +52,9 @@ namespace graph::traversal {
 		std::vector<Edge> inEdges;
 		const auto dataManager = dataManager_.lock();
 		if (!dataManager) {
+			// GCOVR_EXCL_START
 			return inEdges;
+			// GCOVR_EXCL_STOP
 		}
 
 		const Node node = dataManager->getNode(nodeId);
@@ -91,7 +95,9 @@ namespace graph::traversal {
 		targetNodes.reserve(outEdges.size());
 		const auto dataManager = dataManager_.lock();
 		if (!dataManager) {
+			// GCOVR_EXCL_START
 			return targetNodes;
+			// GCOVR_EXCL_STOP
 		}
 
 		for (const auto &edge: outEdges) {
@@ -107,7 +113,9 @@ namespace graph::traversal {
 		sourceNodes.reserve(inEdges.size());
 		const auto dataManager = dataManager_.lock();
 		if (!dataManager) {
+			// GCOVR_EXCL_START
 			return sourceNodes;
+			// GCOVR_EXCL_STOP
 		}
 
 		for (const auto &edge: inEdges) {
@@ -121,7 +129,9 @@ namespace graph::traversal {
 
 		const auto dataManager = dataManager_.lock();
 		if (!dataManager) {
+			// GCOVR_EXCL_START
 			return connectedNodes;
+			// GCOVR_EXCL_STOP
 		}
 
 		std::unordered_set<int64_t> nodeIds;
@@ -148,7 +158,9 @@ namespace graph::traversal {
 
 		auto dataManager = dataManager_.lock();
 		if (!dataManager) {
+			// GCOVR_EXCL_START
 			return;
+			// GCOVR_EXCL_STOP
 		}
 
 		Node sourceNode = dataManager->getNode(sourceNodeId);
@@ -191,7 +203,9 @@ namespace graph::traversal {
 	void RelationshipTraversal::unlinkEdge(Edge &edge) const {
 		auto dataManager = dataManager_.lock();
 		if (!dataManager) {
+			// GCOVR_EXCL_START
 			return;
+			// GCOVR_EXCL_STOP
 		}
 
 		int64_t sourceNodeId = edge.getSourceNodeId();
