@@ -350,28 +350,58 @@ TEST(RelationshipTraversalLifetimeTest, HandlesExpiredDataManagerGracefully) {
 	// 2. Create Traversal, whose internal weak_ptr now points to our DataManager
 	auto traversal = std::make_shared<graph::traversal::RelationshipTraversal>(dataManager);
 
-	// Create a dummy edge for link/unlink tests
-	graph::Edge dummyEdge(1, 1, 2, "dummy");
-
 	// 3. Key step: destroy the DataManager.
 	// We reset the shared_ptr to bring the reference count to zero, triggering its destructor.
-	// Now, the weak_ptr inside traversal is expired.
+	// Now, the weak_ptr inside traversal is expired (dangling).
 	dataManager.reset();
 	database->close();
 
-	// 4. Call all public methods on Traversal.
+	// 4. Call methods on Traversal.
 	// Inside these methods, `dataManager_.lock()` will fail and return a null pointer.
-	// We expect these calls to complete safely, throw no exceptions, and return empty/default results.
-	EXPECT_NO_THROW({
-		EXPECT_TRUE(traversal->getOutgoingEdges(1).empty());
-		EXPECT_TRUE(traversal->getIncomingEdges(1).empty());
-		EXPECT_TRUE(traversal->getAllConnectedEdges(1).empty());
-		EXPECT_TRUE(traversal->getConnectedTargetNodes(1).empty());
-		EXPECT_TRUE(traversal->getConnectedSourceNodes(1).empty());
-		EXPECT_TRUE(traversal->getAllConnectedNodes(1).empty());
-		traversal->linkEdge(dummyEdge);   // Should do nothing
-		traversal->unlinkEdge(dummyEdge); // Should do nothing
-	});
+	// We expect these calls to complete safely, throw no exceptions, and return empty results.
+	std::vector<graph::Edge> outEdges;
+	EXPECT_NO_THROW(outEdges = traversal->getOutgoingEdges(123));
+	EXPECT_TRUE(outEdges.empty());
+
+	std::vector<graph::Node> connectedNodes;
+	EXPECT_NO_THROW(connectedNodes = traversal->getAllConnectedNodes(123));
+	EXPECT_TRUE(connectedNodes.empty());
+
+	std::filesystem::remove(testFilePath);
+}
+
+TEST(RelationshipTraversalLifetimeTest, AllMethodsHandleExpiredDataManagerGracefully) {
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testFilePath = std::filesystem::temp_directory_path() / ("test_lifetime_full_" + boost::uuids::to_string(uuid) + ".dat");
+
+	auto database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	std::shared_ptr<graph::storage::DataManager> dataManager = database->getStorage()->getDataManager();
+
+	auto traversal = std::make_shared<graph::traversal::RelationshipTraversal>(dataManager);
+
+	dataManager.reset();
+	database->close();
+
+	int64_t dummyNodeId = 123;
+
+	EXPECT_TRUE(traversal->getOutgoingEdges(dummyNodeId).empty());
+
+	EXPECT_TRUE(traversal->getIncomingEdges(dummyNodeId).empty());
+
+	EXPECT_TRUE(traversal->getAllConnectedEdges(dummyNodeId).empty());
+
+	EXPECT_TRUE(traversal->getConnectedTargetNodes(dummyNodeId).empty());
+
+	EXPECT_TRUE(traversal->getConnectedSourceNodes(dummyNodeId).empty());
+
+	EXPECT_TRUE(traversal->getAllConnectedNodes(dummyNodeId).empty());
+
+	graph::Edge dummyEdge(999, 1, 2, "DUMMY_REL");
+
+	EXPECT_NO_THROW(traversal->linkEdge(dummyEdge));
+
+	EXPECT_NO_THROW(traversal->unlinkEdge(dummyEdge));
 
 	std::filesystem::remove(testFilePath);
 }
