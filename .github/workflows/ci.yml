@@ -11,11 +11,27 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-latest ]
+        include:
+          - os: ubuntu-latest
+            # Linux configuration for Clang 20
+            compiler_cc: clang-20
+            compiler_cxx: clang++-20
+            # Tools usually have version suffixes on Ubuntu
+            llvm_cov: llvm-cov-20
+            llvm_profdata: llvm-profdata-20
+
+          - os: windows-latest
+            # Windows configuration (Clang-CL)
+            compiler_cc: clang-cl
+            compiler_cxx: clang-cl
+            # Tools are typically versionless in the path on Windows
+            llvm_cov: llvm-cov
+            llvm_profdata: llvm-profdata
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -23,74 +39,99 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Conan and tools
-        run: |
-          pip install conan meson ninja gcovr
+      - name: Install Build Tools
+        run: pip install conan meson ninja
 
-      - name: Install pkg-config on Windows
-        if: runner.os == 'Windows'
-        run: choco install pkgconfiglite
-        shell: cmd
+      # --- Dependency Installation (OS Specific) ---
 
-      - name: Install LLVM (clang) on Windows
+      - name: Install LLVM 20 (Windows)
         if: runner.os == 'Windows'
+        # Installing specific version 20.1.4 as requested
         run: choco install llvm --version=20.1.4 --force
         shell: cmd
 
-      - name: Install LLVM on Ubuntu
+      - name: Install LLVM 20 (Linux)
         if: runner.os == 'Linux'
         run: |
-          # Add LLVM repository key and source
+          # Add LLVM snapshot repository key and source for version 20
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          
+          # Add the repository for the current distro version
           sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          
           sudo apt update
-          # Install LLVM 20 tools
-          sudo apt install -y clang-20 llvm-20
+          
+          # Install Clang 20 and LLVM 20 tools
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
 
-      - name: Install dependencies with Conan
+      - name: Install Project Dependencies (Conan)
         run: |
           conan profile detect
+          # Ensure buildDir exists
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing
 
-      - name: Configure and build (Windows with clang-cl)
+      # --- Build Phase ---
+
+      - name: Configure and Compile (Windows)
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options_win64.ini -Db_coverage=true
+          # Set compilers for Windows
+          $env:CC="${{ matrix.compiler_cc }}"
+          $env:CXX="${{ matrix.compiler_cxx }}"
+          
+          # Flags for Clang Source-based Coverage
+          $FLAGS="-fprofile-instr-generate -fcoverage-mapping"
+          
+          # Inject flags via command line (Meson.build remains clean)
+          meson setup . .. --native-file conan_meson_native.ini -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS"
           meson compile
         shell: pwsh
 
-      - name: Configure and build (non-Windows)
-        if: runner.os != 'Windows'
+      - name: Configure and Compile (Linux)
+        if: runner.os == 'Linux'
         run: |
           cd buildDir
-          meson setup . .. --prefix=/usr/local --native-file conan_meson_native.ini --native-file ../compiler_options.ini -Db_coverage=true
+          # Set compilers for Linux (using variables from Matrix)
+          export CC=${{ matrix.compiler_cc }}
+          export CXX=${{ matrix.compiler_cxx }}
+          
+          # Flags for Clang Source-based Coverage
+          export FLAGS="-fprofile-instr-generate -fcoverage-mapping"
+          
+          # Inject flags via command line
+          meson setup . .. --native-file conan_meson_native.ini -Dcpp_args="${FLAGS}" -Dcpp_link_args="${FLAGS}"
           meson compile
 
-      - name: Run unit tests
+      # --- Test Phase ---
+
+      - name: Run Unit Tests
         run: |
           cd buildDir
+          # %p expands to Process ID to prevent file conflicts
+          # Use absolute path (PWD) to ensure reliable file generation
+          export LLVM_PROFILE_FILE="$PWD/code-%p.profraw"
+          
+          # Run tests
           meson test --verbose
+        shell: bash
 
-      - name: Generate coverage report
-        if: runner.os != 'Windows'
+      # --- Coverage Generation Phase ---
+
+      - name: Generate Coverage Report
         run: |
-          cd buildDir
-          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches --exclude ".*/tests/.*" --exclude ".*/include/graph/cli/CLI11.hpp" --gcov-executable "llvm-cov-20 gcov"
+          # Use the Python script to handle filtering and platform logic
+          # Arguments: <build_dir> <output_file> <llvm-cov-cmd> <llvm-profdata-cmd>
+          python scripts/generate_coverage.py buildDir coverage.lcov "${{ matrix.llvm_cov }}" "${{ matrix.llvm_profdata }}"
 
-      - name: Generate coverage report (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          cd buildDir
-          gcovr --root .. --xml --output coverage.xml --exclude-unreachable-branches --exclude-throw-branches --exclude ".*/tests/.*" --exclude ".*/include/graph/cli/CLI11.hpp" --gcov-executable "llvm-cov gcov"
-        shell: pwsh
+      # --- Upload Phase ---
 
-      - name: Upload coverage to Codecov
+      - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./buildDir/coverage.xml
+          files: ./coverage.lcov
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
