@@ -20,11 +20,9 @@ namespace graph::traversal {
 	std::vector<Edge> RelationshipTraversal::getOutgoingEdges(int64_t nodeId) const {
 		std::vector<Edge> outEdges;
 		const auto dataManager = dataManager_.lock();
-		// GCOVR_EXCL_START
 		if (!dataManager) {
 			return outEdges;
 		}
-		// GCOVR_EXCL_STOP
 
 		const Node node = dataManager->getNode(nodeId);
 		int64_t currentEdgeId = node.getFirstOutEdgeId();
@@ -51,11 +49,9 @@ namespace graph::traversal {
 	std::vector<Edge> RelationshipTraversal::getIncomingEdges(int64_t nodeId) const {
 		std::vector<Edge> inEdges;
 		const auto dataManager = dataManager_.lock();
-		// GCOVR_EXCL_START
 		if (!dataManager) {
 			return inEdges;
 		}
-		// GCOVR_EXCL_STOP
 
 		const Node node = dataManager->getNode(nodeId);
 		int64_t currentEdgeId = node.getFirstInEdgeId();
@@ -94,11 +90,9 @@ namespace graph::traversal {
 
 		targetNodes.reserve(outEdges.size());
 		const auto dataManager = dataManager_.lock();
-		// GCOVR_EXCL_START
 		if (!dataManager) {
 			return targetNodes;
 		}
-		// GCOVR_EXCL_STOP
 
 		for (const auto &edge: outEdges) {
 			targetNodes.push_back(dataManager->getNode(edge.getTargetNodeId()));
@@ -112,11 +106,9 @@ namespace graph::traversal {
 
 		sourceNodes.reserve(inEdges.size());
 		const auto dataManager = dataManager_.lock();
-		// GCOVR_EXCL_START
 		if (!dataManager) {
 			return sourceNodes;
 		}
-		// GCOVR_EXCL_STOP
 
 		for (const auto &edge: inEdges) {
 			sourceNodes.push_back(dataManager->getNode(edge.getSourceNodeId()));
@@ -128,11 +120,9 @@ namespace graph::traversal {
 		std::vector<Node> connectedNodes;
 
 		const auto dataManager = dataManager_.lock();
-		// GCOVR_EXCL_START
 		if (!dataManager) {
 			return connectedNodes;
 		}
-		// GCOVR_EXCL_STOP
 
 		std::unordered_set<int64_t> nodeIds;
 		for (const auto &edge: getOutgoingEdges(nodeId)) {
@@ -157,11 +147,9 @@ namespace graph::traversal {
 		int64_t targetNodeId = edge.getTargetNodeId();
 
 		auto dataManager = dataManager_.lock();
-		// GCOVR_EXCL_START
 		if (!dataManager) {
 			return;
 		}
-		// GCOVR_EXCL_STOP
 
 		Node sourceNode = dataManager->getNode(sourceNodeId);
 		int64_t firstOutEdgeId = sourceNode.getFirstOutEdgeId();
@@ -202,11 +190,9 @@ namespace graph::traversal {
 
 	void RelationshipTraversal::unlinkEdge(Edge &edge) const {
 		auto dataManager = dataManager_.lock();
-		// GCOVR_EXCL_START
-		if (!dataManager) {
-			return;
-		}
-		// GCOVR_EXCL_STOP
+		// if (!dataManager) {
+		// 	return;
+		// }
 
 		int64_t sourceNodeId = edge.getSourceNodeId();
 		int64_t targetNodeId = edge.getTargetNodeId();
