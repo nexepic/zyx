@@ -1,7 +1,7 @@
 # Metrix
 
-[![Build Status](https://github.com/nexepic/metrix-lite/actions/workflows/build.yml/badge.svg)](https://github.com/nexepic/metrix-lite/actions/workflows/build.yml)
-[![codecov](https://codecov.io/gh/nexepic/metrix-lite/branch/main/graph/badge.svg)](https://codecov.io/gh/nexepic/metrix-lite)
+[![Build Status](https://github.com/nexepic/metrix/actions/workflows/build.yml/badge.svg)](https://github.com/nexepic/metrix/actions/workflows/build.yml)
+[![codecov](https://codecov.io/gh/nexepic/metrix/branch/main/graph/badge.svg)](https://codecov.io/gh/nexepic/metrix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Meson](https://img.shields.io/badge/Build-Meson-blue.svg)](https://mesonbuild.com/)
