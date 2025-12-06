@@ -11,7 +11,7 @@ class ProjectConan(ConanFile):
     def requirements(self):
         # Common dependencies for all platforms
         self.requires("boost/1.87.0")
-        self.requires("zlib/1.2.13")
+        self.requires("zlib/1.3.1")
         self.requires("gtest/1.13.0")
 
     def configure(self):

@@ -15,13 +15,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            # Linux specific configuration
             native_file: compiler_options.ini
             llvm_cov: llvm-cov-20
             llvm_profdata: llvm-profdata-20
 
           - os: windows-latest
-            # Windows specific configuration
             native_file: compiler_options_win64.ini
             llvm_cov: llvm-cov
             llvm_profdata: llvm-profdata
@@ -38,30 +36,30 @@ jobs:
       - name: Install Build Tools
         run: pip install conan meson ninja
 
+      - name: Install Pkg-Config (Windows)
+        if: runner.os == 'Windows'
+        run: choco install pkgconfiglite --allow-empty-checksums
+        shell: cmd
+
       # -----------------------------------------------------------
       # Install LLVM/Clang
       # -----------------------------------------------------------
 
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
-        # Force install specific version 20.1.4
         run: choco install llvm --version=20.1.4 --force
         shell: cmd
 
       - name: Install LLVM (Linux)
         if: runner.os == 'Linux'
         run: |
-          # Add LLVM repository key and source
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
           sudo apt update
-          # Install Clang 20 and tools
           sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
 
       # -----------------------------------------------------------
       # Install Dependencies (Conan)
-      # We let Conan detect the default profile. We will override
-      # the compiler in the Meson setup step using the .ini files.
       # -----------------------------------------------------------
       - name: Install Dependencies with Conan
         run: |
@@ -71,34 +69,27 @@ jobs:
 
       # -----------------------------------------------------------
       # Build Phase (Windows)
-      # Uses compiler_options_win64.ini to force clang-cl
       # -----------------------------------------------------------
       - name: Configure and Build (Windows)
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          # Flags for Clang Source-based Coverage
           $FLAGS="-fprofile-instr-generate -fcoverage-mapping"
           
-          # 1. Load Conan settings
-          # 2. Load User settings (compiler_options_win64.ini) - This OVERRIDES the compiler to clang-cl
-          # 3. Inject coverage flags manually
+          # Native files: Conan generated + User override
           meson setup . .. --native-file conan_meson_native.ini --native-file ../${{ matrix.native_file }} -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS"
           meson compile
         shell: pwsh
 
       # -----------------------------------------------------------
       # Build Phase (Linux)
-      # Uses compiler_options.ini to force clang-20
       # -----------------------------------------------------------
       - name: Configure and Build (Linux)
         if: runner.os == 'Linux'
         run: |
           cd buildDir
-          # Flags for Clang Source-based Coverage
           export FLAGS="-fprofile-instr-generate -fcoverage-mapping"
           
-          # The second native-file overrides the compiler to clang-20, preventing g++ errors
           meson setup . .. --native-file conan_meson_native.ini --native-file ../${{ matrix.native_file }} -Dcpp_args="${FLAGS}" -Dcpp_link_args="${FLAGS}"
           meson compile
 
@@ -108,19 +99,15 @@ jobs:
       - name: Run Unit Tests
         run: |
           cd buildDir
-          # Use absolute path for profile generation to avoid path issues
-          # %p expands to process ID
           export LLVM_PROFILE_FILE="$PWD/code-%p.profraw"
           meson test --verbose
         shell: bash
 
       # -----------------------------------------------------------
       # Report Generation Phase
-      # Uses the Python script to handle filtering and platform differences
       # -----------------------------------------------------------
       - name: Generate Coverage Report
         run: |
-          # Arguments: <build_dir> <output_file> <llvm-cov-cmd> <llvm-profdata-cmd>
           python scripts/generate_coverage.py buildDir coverage.lcov "${{ matrix.llvm_cov }}" "${{ matrix.llvm_profdata }}"
 
       - name: Upload to Codecov
