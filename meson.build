@@ -3,29 +3,27 @@ project('metrix', 'cpp',
 		default_options : [
 			'cpp_std=c++20',
 			'warning_level=3',
-			'buildtype=debugoptimized',
-			'b_coverage=false'
+			'werror=false',
+			'buildtype=debug',
+			'default_library=static'
 		])
 
 # Compiler setup
-cc = meson.get_compiler('cpp')
+# In Meson, getting the compiler object explicitly is often useful for checks
+cxx = meson.get_compiler('cpp')
 
 # Global include directories
 inc_dirs = include_directories('include')
 
-# Core dependencies
+# Dependencies
 zlib_dep = dependency('zlib')
+boost_dep = dependency('boost', modules : ['filesystem', 'system'])
 
-# Boost dependency - Try both standard name and conda-forge name
-boost_dep = dependency('boost', modules : ['filesystem', 'system'], required : false)
-if not boost_dep.found()
-	boost_dep = dependency('boost-cpp', modules : ['filesystem', 'system'], required : true)
-endif
-
-# ===== Process subdirectories =====
-# First build the core library
+# Subdirectories
 subdir('src')
-# Then the applications
 subdir('apps/cli')
-# Finally the tests
-subdir('tests')
+
+# Build tests only if not a subproject
+if not meson.is_subproject()
+	subdir('tests')
+endif
