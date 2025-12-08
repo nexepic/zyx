@@ -368,3 +368,80 @@ TEST_F(IndexTest, OperationsWithNullDataManager) {
 	internalNode_.setAllChildren(children, dataManager_);
 	ASSERT_THROW((void) internalNode_.getAllChildren(nullptr), std::runtime_error);
 }
+
+TEST_F(IndexTest, UpdateChildId_InlineKeys) {
+    // Setup: Internal node with 3 children using simple inline keys
+    std::vector<Index::ChildEntry> children;
+    children.push_back({PropertyValue(std::monostate{}), 100, 0}); // First child
+    children.push_back({PropertyValue(10), 200, 0});              // Second child
+    children.push_back({PropertyValue(20), 300, 0});              // Third child
+
+    internalNode_.setAllChildren(children, dataManager_);
+
+    // 1. Successful Update: Change Child 200 -> 299
+    ASSERT_TRUE(internalNode_.updateChildId(200, 299));
+
+    // Verify
+    auto updatedChildren = internalNode_.getAllChildren(dataManager_);
+    ASSERT_EQ(updatedChildren.size(), 3);
+    EXPECT_EQ(updatedChildren[0].childId, 100);
+    EXPECT_EQ(updatedChildren[1].childId, 299); // Changed
+    EXPECT_EQ(updatedChildren[1].key, PropertyValue(10)); // Key preserved
+    EXPECT_EQ(updatedChildren[2].childId, 300);
+
+    // 2. Failed Update: Non-existent Child
+    ASSERT_FALSE(internalNode_.updateChildId(999, 888));
+
+    // 3. Update First Child (Special case: no key)
+    ASSERT_TRUE(internalNode_.updateChildId(100, 199));
+    updatedChildren = internalNode_.getAllChildren(dataManager_);
+    EXPECT_EQ(updatedChildren[0].childId, 199);
+}
+
+TEST_F(IndexTest, UpdateChildId_BlobKeys) {
+    // Setup: Internal node where one child has a BLOB key
+    std::string largeKey(Index::INTERNAL_KEY_INLINE_THRESHOLD + 5, 'B');
+    std::vector<Index::ChildEntry> children;
+    children.push_back({PropertyValue(std::monostate{}), 10, 0});
+    children.push_back({PropertyValue(largeKey), 20, 0}); // This will use a blob
+
+    internalNode_.setAllChildren(children, dataManager_);
+
+    // Verify blob usage first
+    auto check = internalNode_.getAllChildren(dataManager_);
+    ASSERT_NE(check[1].keyBlobId, 0);
+
+    // Action: Update Child ID of the entry with Blob Key
+    ASSERT_TRUE(internalNode_.updateChildId(20, 25));
+
+    // Verify
+    auto updatedChildren = internalNode_.getAllChildren(dataManager_);
+    EXPECT_EQ(updatedChildren[1].childId, 25);
+    EXPECT_EQ(updatedChildren[1].key, PropertyValue(largeKey)); // Key content intact
+    EXPECT_NE(updatedChildren[1].keyBlobId, 0); // Still points to a blob
+}
+
+TEST_F(IndexTest, GetChildIds_MixedContent) {
+    // Setup: Internal node with mixed keys (Implicit, Inline, Blob)
+    std::string largeKey(Index::INTERNAL_KEY_INLINE_THRESHOLD + 5, 'C');
+    std::vector<Index::ChildEntry> children;
+    children.push_back({PropertyValue(std::monostate{}), 100, 0});
+    children.push_back({PropertyValue("inline"), 200, 0});
+    children.push_back({PropertyValue(largeKey), 300, 0});
+
+    internalNode_.setAllChildren(children, dataManager_);
+
+    // Action
+    std::vector<int64_t> ids = internalNode_.getChildIds();
+
+    // Verify
+    ASSERT_EQ(ids.size(), 3);
+    EXPECT_EQ(ids[0], 100);
+    EXPECT_EQ(ids[1], 200);
+    EXPECT_EQ(ids[2], 300);
+}
+
+TEST_F(IndexTest, GetChildIds_LeafNode) {
+    // Leaf nodes have no children
+    ASSERT_TRUE(leafNode_.getChildIds().empty());
+}

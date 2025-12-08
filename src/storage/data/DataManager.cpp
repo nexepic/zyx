@@ -51,7 +51,7 @@ namespace graph::storage {
 	void DataManager::initialize() {
 		// Initialize low-level components
 		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), spaceManager_, idAllocator_);
-		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(file_, segmentTracker_);
+		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(shared_from_this());
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(shared_from_this());
 

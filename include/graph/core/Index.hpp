@@ -144,6 +144,9 @@ namespace graph {
 		void setAllChildren(std::vector<ChildEntry> &children,
 							const std::shared_ptr<storage::DataManager> &dataManager);
 
+		bool updateChildId(int64_t oldChildId, int64_t newChildId);
+		[[nodiscard]] std::vector<int64_t> getChildIds() const;
+
 	private:
 		Metadata metadata;
 		char dataBuffer[DATA_SIZE] = {}; // Buffer for serialized key-value pairs or child pointers

@@ -562,10 +562,110 @@ namespace graph {
 		}
 
 		metadata.childCount = static_cast<uint32_t>(children.size());
-		metadata.entryCount = (children.size() > 0) ? static_cast<uint32_t>(children.size() - 1) : 0;
+		metadata.entryCount = (!children.empty()) ? static_cast<uint32_t>(children.size() - 1) : 0;
 		metadata.dataUsage = static_cast<uint32_t>(data.size());
 		std::memset(dataBuffer, 0, DATA_SIZE);
 		std::memcpy(dataBuffer, data.data(), data.size());
+	}
+
+	bool Index::updateChildId(int64_t oldChildId, int64_t newChildId) {
+		if (isLeaf())
+			return false;
+		if (metadata.childCount == 0)
+			return false;
+
+		std::string currentData(dataBuffer, metadata.dataUsage);
+		std::istringstream is(currentData);
+		std::ostringstream os; // We will rebuild the buffer
+
+		bool found = false;
+
+		// 1. Process First Child ID (It has no key preceding it)
+		{
+			auto id = utils::Serializer::readPOD<int64_t>(is);
+			if (id == oldChildId) {
+				id = newChildId;
+				found = true;
+			}
+			utils::Serializer::writePOD(os, id);
+		}
+
+		// 2. Process Remaining Children
+		for (uint32_t i = 1; i < metadata.childCount; ++i) {
+			// Read Flags
+			auto flags = utils::Serializer::readPOD<EntrySerializationFlags>(is);
+			utils::Serializer::writePOD(os, flags);
+
+			// Copy Key (Blob ID or Inline)
+			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
+				// Blob ID is int64
+				auto blobId = utils::Serializer::readPOD<int64_t>(is);
+				utils::Serializer::writePOD(os, blobId);
+			} else {
+				// Inline Key: Deserialize and re-serialize to copy correctly
+				// PropertyValue serialization handles variable length strings etc.
+				auto key = utils::Serializer::deserialize<PropertyValue>(is);
+				utils::Serializer::serialize(os, key);
+			}
+
+			// Read and Update Child ID
+			auto id = utils::Serializer::readPOD<int64_t>(is);
+			if (id == oldChildId) {
+				id = newChildId;
+				found = true;
+			}
+			utils::Serializer::writePOD(os, id);
+		}
+
+		if (found) {
+			std::string newData = os.str();
+			if (newData.size() > DATA_SIZE) {
+				// This theoretically shouldn't happen as we are just replacing int64 with int64
+				throw std::runtime_error("Buffer overflow during child ID update");
+			}
+			std::memset(dataBuffer, 0, DATA_SIZE);
+			std::memcpy(dataBuffer, newData.data(), newData.size());
+			// dataUsage remains the same size-wise, but good practice to update if logic changed
+			metadata.dataUsage = static_cast<uint32_t>(newData.size());
+		}
+
+		return found;
+	}
+
+	std::vector<int64_t> Index::getChildIds() const {
+		if (isLeaf())
+			return {};
+		if (metadata.childCount == 0)
+			return {};
+
+		std::vector<int64_t> ids;
+		ids.reserve(metadata.childCount);
+
+		std::string currentData(dataBuffer, metadata.dataUsage);
+		std::istringstream is(currentData);
+
+		// 1. First Child
+		ids.push_back(utils::Serializer::readPOD<int64_t>(is));
+
+		// 2. Rest
+		for (uint32_t i = 1; i < metadata.childCount; ++i) {
+			// Skip Flags
+			auto flags = utils::Serializer::readPOD<EntrySerializationFlags>(is);
+
+			// Skip Key
+			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
+				is.ignore(sizeof(int64_t)); // Skip Blob ID
+			} else {
+				// To skip inline PropertyValue properly, we must deserialize it
+				// because it has variable length (e.g. strings)
+				utils::Serializer::deserialize<PropertyValue>(is);
+			}
+
+			// Read Child ID
+			ids.push_back(utils::Serializer::readPOD<int64_t>(is));
+		}
+
+		return ids;
 	}
 
 } // namespace graph

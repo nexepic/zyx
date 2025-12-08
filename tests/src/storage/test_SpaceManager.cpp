@@ -25,6 +25,7 @@
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/SpaceManager.hpp"
 #include "graph/storage/StorageHeaders.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 using namespace graph::storage;
 using namespace graph;
@@ -38,12 +39,13 @@ protected:
 	std::shared_ptr<std::fstream> file;
 	FileHeader header; // Member variable to prevent dangling reference
 
+	std::shared_ptr<DataManager> dataManager;
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
 	std::shared_ptr<IDAllocator> idAllocator;
 	std::shared_ptr<EntityReferenceUpdater> refUpdater;
 
-	std::unique_ptr<SpaceManager> spaceManager;
+	std::shared_ptr<SpaceManager> spaceManager;
 
 	void SetUp() override {
 		// Generate random file path
@@ -67,10 +69,14 @@ protected:
 				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 
-		refUpdater = std::make_shared<EntityReferenceUpdater>(file, segmentTracker);
-
-		spaceManager = std::make_unique<SpaceManager>(file, testFilePath.string(), segmentTracker, fileHeaderManager,
+		spaceManager = std::make_shared<SpaceManager>(file, testFilePath.string(), segmentTracker, fileHeaderManager,
 													  idAllocator);
+
+		dataManager = std::make_shared<DataManager>(file,
+													100, // Cache size
+													header, idAllocator, segmentTracker, spaceManager);
+
+		refUpdater = std::make_shared<EntityReferenceUpdater>(dataManager);
 
 		spaceManager->setEntityReferenceUpdater(refUpdater);
 		spaceManager->initialize(header);

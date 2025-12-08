@@ -10,52 +10,71 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
-#include "graph/core/Blob.hpp"
-#include "graph/core/Edge.hpp"
-#include "graph/core/Node.hpp"
-#include "graph/core/Property.hpp"
-#include "graph/storage/IDAllocator.hpp"
+#include "graph/core/Types.hpp"
+
+namespace graph {
+    class Node;
+    class Edge;
+    class Property;
+    class Blob;
+    class Index;
+    class State;
+}
 
 namespace graph::storage {
 
-	class EntityReferenceUpdater {
-	public:
-		EntityReferenceUpdater(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> tracker);
+    class DataManager;
 
-		~EntityReferenceUpdater() = default;
+    /**
+     * @brief Updates references to entities when their IDs change (e.g., during compaction).
+     *
+     * Refactored to use DataManager for all operations to ensure consistency with
+     * the caching and transaction layers.
+     */
+    class EntityReferenceUpdater {
+    public:
+        explicit EntityReferenceUpdater(const std::shared_ptr<DataManager>& dataManager);
 
-		void updateEntityReferences(int64_t oldEntityId, const void *newEntity, uint32_t entityType);
+        void updateEntityReferences(int64_t oldEntityId, const void* newEntity, uint32_t entityType);
 
-	private:
-		struct EntityPropertyInfo {
-			PropertyStorageType storageType;
-			int64_t propertyEntityId;
-		};
+    private:
+        std::weak_ptr<DataManager> dataManager_;
 
-		std::shared_ptr<std::fstream> file_;
-		std::shared_ptr<SegmentTracker> segmentTracker_;
+        // Helper structure
+        struct EntityPropertyInfo {
+            PropertyStorageType storageType;
+            int64_t propertyEntityId;
+        };
 
-		void updateNodeReferences(int64_t oldNodeId, const Node &newNode);
+        // Specific updaters
+        void updateNodeReferences(int64_t oldNodeId, const Node& newNode);
+        void updateEdgeReferences(int64_t oldEdgeId, const Edge& newEdge);
+        void updatePropertyReferences(int64_t oldPropId, const Property& newProperty) const;
+        void updateBlobReferences(int64_t oldBlobId, const Blob& newBlob) const;
+        void updateIndexReferences(int64_t oldIndexId, const Index& newIndex);
+        void updateStateReferences(int64_t oldStateId, const State& newState);
 
-		void updateEdgeReferences(int64_t oldEdgeId, const Edge &newEdge);
+        // Helper methods using DataManager
+        template <typename T>
+        static EntityPropertyInfo getEntityPropertyInfoFromEntity(const T& entity);
 
-		void updatePropertyReferences(int64_t oldPropertyId, const Property &newProperty) const;
+        template <typename T>
+        void updatePropertiesPointingToEntity(int64_t oldEntityId, const T& newEntity);
 
-		void updateBlobReferences(int64_t oldBlobId, const Blob &newBlob) const;
+        // Blob chain specific helper
+        void updateBlobChainReference(int64_t oldBlobId, int64_t newBlobId,
+                                      int64_t linkedBlobId, bool isNextBlob,
+                                      const Blob& sourceBlob) const;
 
-		void updateBlobChainReference(int64_t oldBlobId, int64_t newBlobId, int64_t linkedBlobId, bool isNextBlob,
-									  const Blob &sourceBlob) const;
+        // Index specific helpers
+        void updateIndexParentPtr(int64_t childId, int64_t newParentId) const;
+        void updateIndexSiblingPtr(int64_t siblingId, int64_t oldId, int64_t newId, bool updateNext) const;
+        void updateIndexChildId(int64_t parentId, int64_t oldId, int64_t newId) const;
 
-		[[nodiscard]] Property getPropertyById(int64_t propertyId) const;
-
-		[[nodiscard]] Blob getBlobById(int64_t blobId) const;
-
-		template<typename T>
-		static EntityPropertyInfo getEntityPropertyInfoFromEntity(const T &entity);
-
-		template<typename T>
-		void updatePropertiesPointingToEntity(int64_t oldEntityId, const T &newEntity);
-	};
+        // State specific helper
+        void updateStateChainReference(int64_t targetStateId, int64_t oldId, int64_t newId, bool updateNext) const;
+    };
 
 } // namespace graph::storage

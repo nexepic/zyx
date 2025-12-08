@@ -78,8 +78,6 @@ protected:
 				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 
-		refUpdater = std::make_shared<EntityReferenceUpdater>(file, segmentTracker);
-
 		spaceManager = std::make_shared<SpaceManager>(file, testFilePath.string(), segmentTracker, fileHeaderManager,
 													  idAllocator);
 		spaceManager->setEntityReferenceUpdater(refUpdater);
@@ -89,6 +87,8 @@ protected:
 		dataManager = std::make_shared<DataManager>(file,
 													100, // Cache size
 													header, idAllocator, segmentTracker, spaceManager);
+
+		refUpdater = std::make_shared<EntityReferenceUpdater>(dataManager);
 
 		// 4. Initialize System Under Test (DeletionManager)
 		deletionManager = std::make_shared<DeletionManager>(dataManager, spaceManager, idAllocator);
