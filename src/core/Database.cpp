@@ -31,7 +31,6 @@ namespace graph {
 
 		storage->open();
 		queryEngine = std::make_shared<query::QueryEngine>(storage);
-		storage->setQueryEngine(queryEngine);
 	}
 
 	void Database::close() const {

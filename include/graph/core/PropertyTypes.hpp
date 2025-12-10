@@ -9,9 +9,11 @@
  **/
 
 #pragma once
+
 #include <cstdint>
 #include <string>
 #include <variant>
+#include <sstream>
 
 namespace graph {
 
@@ -70,6 +72,31 @@ namespace graph {
 
 		// Overload the equality operator for easy comparison.
 		bool operator==(const PropertyValue &other) const { return this->data == other.data; }
+
+		std::string toString() const {
+			return std::visit(
+				[](auto const& value) -> std::string {
+					using T = std::decay_t<decltype(value)>;
+
+					if constexpr (std::is_same_v<T, std::monostate>) {
+						return "null";
+					} else if constexpr (std::is_same_v<T, bool>) {
+						return value ? "true" : "false";
+					} else if constexpr (std::is_same_v<T, int64_t>) {
+						return std::to_string(value);
+					} else if constexpr (std::is_same_v<T, double>) {
+						std::ostringstream oss;
+						oss << value;
+						return oss.str();
+					} else if constexpr (std::is_same_v<T, std::string>) {
+						return value;
+					} else {
+
+					}
+				},
+				data
+			);
+		}
 	};
 
 

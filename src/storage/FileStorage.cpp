@@ -573,6 +573,11 @@ namespace graph::storage {
 		segmentTracker->flushDirtySegments();
 	}
 
+	void FileStorage::registerEventListener(std::weak_ptr<IStorageEventListener> listener) {
+		std::lock_guard<std::mutex> lock(listenerMutex_);
+		eventListeners_.push_back(std::move(listener));
+	}
+
 	// TODO: Subsequent flush operations should be executed in a queue
 	void FileStorage::flush() {
 		// Acquire lock to ensure atomic operation
@@ -584,7 +589,22 @@ namespace graph::storage {
 		}
 
 		try {
-			queryEngine->persistIndexState();
+			// --- NOTIFY LISTENERS ---
+			{
+				std::lock_guard<std::mutex> listenerLock(listenerMutex_);
+				// Iterate and notify valid listeners
+				auto it = eventListeners_.begin();
+				while (it != eventListeners_.end()) {
+					if (auto listener = it->lock()) {
+						// Notify IndexManager or others to persist their state
+						listener->onStorageFlush();
+						++it;
+					} else {
+						// Remove expired listeners (e.g., if IndexManager was destroyed)
+						it = eventListeners_.erase(it);
+					}
+				}
+			}
 
 			// Ensure all pending changes are written
 			save();

@@ -10,126 +10,63 @@
 
 #include "graph/query/QueryPlanner.hpp"
 
+#include "graph/query/execution/operators/CreateEdgeOperator.hpp"
+#include "graph/query/execution/operators/CreateNodeOperator.hpp"
+#include "graph/query/execution/operators/FilterOperator.hpp"
+#include "graph/query/execution/operators/NodeScanOperator.hpp"
+
 namespace graph::query {
 
-	QueryPlanner::QueryPlanner(std::shared_ptr<indexes::IndexManager> indexManager) :
-		indexManager_(std::move(indexManager)) {}
+	QueryPlanner::QueryPlanner(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im)
+		: dataManager_(std::move(dm)), indexManager_(std::move(im)) {}
 
-	// --- Node Query Plans ---
-
-	QueryPlan QueryPlanner::createPlanForNodeLabelQuery(const std::string &label) const {
-		// Check if node label index exists
-		auto nodeIndexManager = indexManager_->getNodeIndexManager();
-		if (nodeIndexManager && !nodeIndexManager->getLabelIndex()->isEmpty()) {
-			QueryPlan plan(QueryPlan::OperationType::NODE_LABEL_SCAN);
-			plan.addParameter("label", label);
-			return plan;
-		}
-		// Fallback to full scan
-		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_SCAN);
-		plan.addParameter("label", label);
-		return plan;
+	// Implementation for Node Creation
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::create(
+		const std::string& variable,
+		const std::string& label,
+		const std::unordered_map<std::string, PropertyValue>& props
+	) const {
+		// Factory logic: return specific Node operator
+		return std::make_unique<execution::operators::CreateNodeOperator>(
+			dataManager_, variable, label, props
+		);
 	}
 
-	QueryPlan QueryPlanner::createPlanForNodePropertyQuery(const std::string &key, const PropertyValue &value) const {
-		auto nodeIndexManager = indexManager_->getNodeIndexManager();
-		auto propertyIndex = nodeIndexManager->getPropertyIndex();
-
-		if (propertyIndex && propertyIndex->hasKeyIndexed(key)) {
-			QueryPlan plan(QueryPlan::OperationType::NODE_PROPERTY_SCAN);
-			plan.addParameter("key", key);
-			plan.addParameter("value", value);
-			return plan;
-		}
-		// Fallback to full scan
-		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_PROPERTY_SCAN);
-		plan.addParameter("key", key);
-		plan.addParameter("value", value);
-		// highlight-end
-		return plan;
+	// Implementation for Edge Creation
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::create(
+		const std::string& variable,
+		const std::string& label,
+		const std::unordered_map<std::string, PropertyValue>& props,
+		const std::string& sourceVar,
+		const std::string& targetVar
+	) const {
+		// Factory logic: return specific Edge operator
+		return std::make_unique<execution::operators::CreateEdgeOperator>(
+			dataManager_, variable, label, props, sourceVar, targetVar
+		);
 	}
 
-	QueryPlan QueryPlanner::createPlanForNodeLabelAndPropertyQuery(const std::string &label, const std::string &key,
-																   const PropertyValue &value) const {
-		auto nodeIndexManager = indexManager_->getNodeIndexManager();
-		bool hasLabelIndex = !nodeIndexManager->getLabelIndex()->isEmpty();
-		bool hasPropertyIndex = !nodeIndexManager->getPropertyIndex()->isEmpty() &&
-								nodeIndexManager->getPropertyIndex()->hasKeyIndexed(key);
-
-		if (hasLabelIndex && hasPropertyIndex) {
-			QueryPlan plan(QueryPlan::OperationType::NODE_LABEL_PROPERTY_SCAN);
-			plan.addParameter("label", label);
-			plan.addParameter("key", key);
-			plan.addParameter("value", value);
-			return plan;
-		}
-		// Fallback
-		QueryPlan plan(QueryPlan::OperationType::FULL_NODE_LABEL_PROPERTY_SCAN);
-		plan.addParameter("label", label);
-		plan.addParameter("key", key);
-		plan.addParameter("value", value);
-		return plan;
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::scan(const std::string& variable, const std::string& label) const {
+		return std::make_unique<execution::operators::NodeScanOperator>(
+			dataManager_, indexManager_, variable, label
+		);
 	}
 
-	// --- Edge Query Plans ---
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::filter(
+		std::unique_ptr<execution::PhysicalOperator> child,
+		std::function<bool(const execution::Record&)> predicate) const {
 
-	QueryPlan QueryPlanner::createPlanForEdgeLabelQuery(const std::string &label) const {
-		auto edgeIndexManager = indexManager_->getEdgeIndexManager();
-		if (edgeIndexManager && !edgeIndexManager->getLabelIndex()->isEmpty()) {
-			QueryPlan plan(QueryPlan::OperationType::EDGE_LABEL_SCAN);
-			plan.addParameter("label", label);
-			return plan;
-		}
-		// Fallback to full edge scan
-		QueryPlan plan(QueryPlan::OperationType::FULL_EDGE_LABEL_SCAN);
-		plan.addParameter("label", label);
-		return plan;
+		return std::make_unique<execution::operators::FilterOperator>(
+			std::move(child), std::move(predicate)
+		);
 	}
 
-	QueryPlan QueryPlanner::createPlanForEdgePropertyQuery(const std::string &key, const PropertyValue &value) const {
-		auto edgeIndexManager = indexManager_->getEdgeIndexManager();
-		auto propertyIndex = edgeIndexManager->getPropertyIndex();
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::traverse(
+		std::unique_ptr<execution::PhysicalOperator> source,
+		const std::string& sourceVar, const std::string& edgeVar, const std::string& targetVar,
+		const std::string& edgeLabel, const std::string& direction) const {
 
-		if (propertyIndex && propertyIndex->hasKeyIndexed(key)) {
-			QueryPlan plan(QueryPlan::OperationType::EDGE_PROPERTY_SCAN);
-			plan.addParameter("key", key);
-			plan.addParameter("value", value);
-			return plan;
-		}
-		// Fallback
-		QueryPlan plan(QueryPlan::OperationType::FULL_EDGE_PROPERTY_SCAN);
-		plan.addParameter("key", key);
-		plan.addParameter("value", value);
-		return plan;
+		// return std::make_unique<execution::operators::TraversalOperator>(...);
+		return nullptr; // Placeholder until you implement TraversalOperator
 	}
-
-	QueryPlan QueryPlanner::createPlanForConnectedNodesQuery(int64_t nodeId, const std::string &nodeLabel,
-															 const std::string &edgeLabel,
-															 const std::string &direction) {
-		QueryPlan plan(QueryPlan::OperationType::TRAVERSAL_CONNECTED_NODES);
-		plan.addParameter("startNodeId", nodeId);
-		plan.addParameter("direction", direction);
-
-		if (!nodeLabel.empty()) {
-			plan.addParameter("nodeLabel", nodeLabel);
-		}
-
-		if (!edgeLabel.empty()) {
-			plan.addParameter("edgeLabel", edgeLabel);
-		}
-
-		return plan;
-	}
-
-	QueryPlan QueryPlanner::createPlanForTraversalShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
-															   const std::string &direction) {
-		QueryPlan plan(QueryPlan::OperationType::TRAVERSAL_SHORTEST_PATH);
-		plan.addParameter("startNodeId", startNodeId);
-		plan.addParameter("endNodeId", endNodeId);
-		plan.addParameter("maxDepth", maxDepth);
-		plan.addParameter("direction", direction);
-
-		return plan;
-	}
-
-} // namespace graph::query
+}

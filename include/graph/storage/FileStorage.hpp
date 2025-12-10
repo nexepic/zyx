@@ -12,18 +12,15 @@
 #include <atomic>
 #include <string>
 #include <unordered_map>
-#include "data/DataManager.hpp"
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
 #include "FileHeaderManager.hpp"
 #include "IDAllocator.hpp"
+#include "IStorageEventListener.hpp"
 #include "StorageHeaders.hpp"
+#include "data/DataManager.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
-
-namespace graph::query {
-	class QueryEngine;
-}
 
 namespace graph::storage {
 
@@ -104,9 +101,7 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator() const { return idAllocator; }
 
-		void setQueryEngine(std::shared_ptr<query::QueryEngine> engine) {
-			queryEngine = std::move(engine);
-		}
+		void registerEventListener(std::weak_ptr<IStorageEventListener> listener);
 
 	private:
 		std::string dbFilePath;
@@ -139,7 +134,8 @@ namespace graph::storage {
 
 		std::shared_ptr<SegmentTracker> segmentTracker;
 
-		std::shared_ptr<query::QueryEngine> queryEngine;
+		std::vector<std::weak_ptr<IStorageEventListener>> eventListeners_;
+		std::mutex listenerMutex_;
 
 		// Update bitmap for an entity in the segment header
 		template<typename EntityType>

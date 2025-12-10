@@ -9,6 +9,8 @@
  **/
 
 #include "graph/query/indexes/IndexManager.hpp"
+
+#include "graph/log/Log.hpp"
 #include "graph/query/indexes/IndexBuilder.hpp"
 
 namespace graph::query::indexes {
@@ -30,7 +32,31 @@ namespace graph::query::indexes {
 
 	IndexManager::~IndexManager() = default;
 
-	void IndexManager::initialize() { indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_); }
+	void IndexManager::initialize() {
+		// 1. Initialize the builder
+		indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_);
+
+		// 2. Register self as listener
+		// This connects IndexManager to FileStorage without FileStorage knowing about "Indexes"
+		storage_->registerEventListener(weak_from_this());
+	}
+
+	void IndexManager::onStorageFlush() {
+		// When FileStorage flushes, we must persist our index states.
+		persistState();
+	}
+
+	bool IndexManager::hasLabelIndex(const std::string& entityType) const {
+		if (entityType == "node") return nodeIndexManager_->hasLabelIndex();
+		if (entityType == "edge") return edgeIndexManager_->hasLabelIndex();
+		return false;
+	}
+
+	bool IndexManager::hasPropertyIndex(const std::string& entityType, const std::string& key) const {
+		if (entityType == "node") return nodeIndexManager_->hasPropertyIndex(key);
+		if (entityType == "edge") return edgeIndexManager_->hasPropertyIndex(key);
+		return false;
+	}
 
 	bool IndexManager::executeBuildTask(const std::function<bool()> &buildFunc) const {
 		storage_->flush();
@@ -114,6 +140,7 @@ namespace graph::query::indexes {
 	}
 
 	std::vector<int64_t> IndexManager::findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const {
+		log::Log::debug("IndexManager::findNodeIdsByProperty - key: {}", key);
 		return nodeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
 	}
 

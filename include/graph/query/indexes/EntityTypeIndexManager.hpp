@@ -55,6 +55,14 @@ namespace graph::query::indexes {
 		template<typename T>
 		void onEntityDeleted(const T& entity) const;
 
+		bool hasLabelIndex() const {
+			return !labelIndex_->isEmpty();
+		}
+
+		bool hasPropertyIndex(const std::string& key) const {
+			return propertyIndex_->hasKeyIndexed(key);
+		}
+
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
 		std::shared_ptr<LabelIndex> labelIndex_;

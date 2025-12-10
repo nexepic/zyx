@@ -9,6 +9,7 @@
  **/
 
 #pragma once
+
 #include <string>
 #include "graph/core/Transaction.hpp"
 #include "graph/query/QueryEngine.hpp"

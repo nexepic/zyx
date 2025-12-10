@@ -26,7 +26,7 @@ namespace graph::query::indexes {
 		constexpr uint32_t NODE_PROPERTY_TYPE = 2;
 		constexpr uint32_t EDGE_LABEL_TYPE = 3;
 		constexpr uint32_t EDGE_PROPERTY_TYPE = 4;
-	}
+	} // namespace IndexTypes
 
 	namespace StateKeys {
 		// Keys for index data (B-Tree roots)
@@ -34,45 +34,52 @@ namespace graph::query::indexes {
 		constexpr char NODE_PROPERTY_PREFIX[] = "node.index.property";
 		constexpr char EDGE_LABEL_ROOT[] = "edge.index.label_root";
 		constexpr char EDGE_PROPERTY_PREFIX[] = "edge.index.property";
-	}
+	} // namespace StateKeys
 
-	class IndexManager : public IEntityObserver, public std::enable_shared_from_this<IndexManager> {
+	class IndexManager : public IEntityObserver,
+						 public storage::IStorageEventListener,
+						 public std::enable_shared_from_this<IndexManager> {
 	public:
 		explicit IndexManager(std::shared_ptr<storage::FileStorage> storage);
 		~IndexManager() override;
 
 		void initialize();
 
+		bool hasLabelIndex(const std::string &entityType) const;
+		bool hasPropertyIndex(const std::string &entityType, const std::string &key) const;
+
 		// Index creation methods now take an entity type
-		bool buildIndexes(const std::string& entityType);
-		bool buildPropertyIndex(const std::string& entityType, const std::string& key);
+		bool buildIndexes(const std::string &entityType);
+		bool buildPropertyIndex(const std::string &entityType, const std::string &key);
 
 		// Drop index method
-		bool dropIndex(const std::string& entityType, const std::string& indexType, const std::string& key = "");
+		bool dropIndex(const std::string &entityType, const std::string &indexType, const std::string &key = "");
 
 		// List indexes for a specific entity type
-		std::vector<std::pair<std::string, std::string>> listIndexes(const std::string& entityType) const;
+		std::vector<std::pair<std::string, std::string>> listIndexes(const std::string &entityType) const;
+
+		void onStorageFlush() override;
 
 		void persistState() const;
 
 		// --- Entity Event Handlers (Implementing IEntityObserver) ---
-		void onNodeAdded(const Node& node) override;
-		void onNodeUpdated(const Node& oldNode, const Node& newNode) override;
-		void onNodeDeleted(const Node& node) override;
-		void onEdgeAdded(const Edge& edge) override;
-		void onEdgeUpdated(const Edge& oldEdge, const Edge& newEdge) override;
-		void onEdgeDeleted(const Edge& edge) override;
+		void onNodeAdded(const Node &node) override;
+		void onNodeUpdated(const Node &oldNode, const Node &newNode) override;
+		void onNodeDeleted(const Node &node) override;
+		void onEdgeAdded(const Edge &edge) override;
+		void onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) override;
+		void onEdgeDeleted(const Edge &edge) override;
 
 		// --- Accessors ---
 		std::shared_ptr<EntityTypeIndexManager> getNodeIndexManager() const { return nodeIndexManager_; }
 		std::shared_ptr<EntityTypeIndexManager> getEdgeIndexManager() const { return edgeIndexManager_; }
-		IndexBuilder* getIndexBuilder() const { return indexBuilder_.get(); }
+		IndexBuilder *getIndexBuilder() const { return indexBuilder_.get(); }
 
 		// Query methods now need to know which index to use
 		std::vector<int64_t> findNodeIdsByLabel(const std::string &label) const;
 		std::vector<int64_t> findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 
-        std::vector<int64_t> findEdgeIdsByLabel(const std::string &label) const;
+		std::vector<int64_t> findEdgeIdsByLabel(const std::string &label) const;
 		std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 
 	private:
@@ -85,7 +92,7 @@ namespace graph::query::indexes {
 		std::unique_ptr<IndexBuilder> indexBuilder_;
 		mutable std::recursive_mutex mutex_;
 
-		bool executeBuildTask(const std::function<bool()>& buildFunc) const;
+		bool executeBuildTask(const std::function<bool()> &buildFunc) const;
 	};
 
 } // namespace graph::query::indexes

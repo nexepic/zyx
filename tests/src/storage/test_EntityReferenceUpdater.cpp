@@ -762,3 +762,237 @@ TEST_F(EntityReferenceUpdaterTest, Functional_StateChain_Read_AfterMove) {
     EXPECT_EQ(updatedS1.getNextChainId(), newS2)
         << "State chain broken: Head does not point to new Next state";
 }
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_UpdatesInEdgeChain) {
+	// Scenario: Multiple edges pointing TO the same node (Incoming Edges).
+	// Node T (Target).
+	// Node S1 -> T (Edge E1).
+	// Node S2 -> T (Edge E2).
+	// Node S3 -> T (Edge E3).
+	// Chain: E1 <-> E2 <-> E3.
+	// Move E2. Verify E1.nextIn and E3.prevIn point to E2_new.
+
+	Node t = createNode("Target");
+	Node s1 = createNode("S1");
+	Node s2 = createNode("S2");
+	Node s3 = createNode("S3");
+
+	Edge e1 = createEdge(s1.getId(), t.getId(), "E1");
+	Edge e2 = createEdge(s2.getId(), t.getId(), "E2");
+	Edge e3 = createEdge(s3.getId(), t.getId(), "E3");
+
+	// Manually setup Incoming Chain on edges
+	// Note: In real logic, DataManager maintains this. Here we force it on disk entities.
+	e1.setNextInEdgeId(e2.getId());
+
+	e2.setPrevInEdgeId(e1.getId());
+	e2.setNextInEdgeId(e3.getId());
+
+	e3.setPrevInEdgeId(e2.getId());
+
+	dataManager->updateEdge(e1);
+	dataManager->updateEdge(e2);
+	dataManager->updateEdge(e3);
+
+	// MOVE E2
+	int64_t oldE2 = e2.getId();
+	int64_t newE2 = oldE2 + 555;
+	Edge movedE2 = e2;
+	movedE2.getMutableMetadata().id = newE2;
+
+	// ACTION
+	updater->updateEntityReferences(oldE2, &movedE2, toUnderlying(SegmentType::Edge));
+
+	// VERIFY
+	Edge updatedE1 = dataManager->getEdge(e1.getId());
+	Edge updatedE3 = dataManager->getEdge(e3.getId());
+
+	EXPECT_EQ(updatedE1.getNextInEdgeId(), newE2) << "E1 nextIn pointer failed to update";
+	EXPECT_EQ(updatedE3.getPrevInEdgeId(), newE2) << "E3 prevIn pointer failed to update";
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateProperty_UpdatesEdgeRef) {
+	// Scenario: Edge E owns Property P.
+	// Move Property P. Edge E should point to P_new.
+
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Property prop = createProperty(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(prop.getId(), PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldPropId = prop.getId();
+	int64_t newPropId = oldPropId + 123;
+	Property movedProp = prop;
+	movedProp.setId(newPropId);
+
+	// ACTION
+	updater->updateEntityReferences(oldPropId, &movedProp, toUnderlying(SegmentType::Property));
+
+	// VERIFY
+	Edge updatedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(updatedEdge.getPropertyEntityId(), newPropId);
+	EXPECT_EQ(updatedEdge.getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_UpdatesEdgeRef) {
+	// Scenario: Edge E owns Blob B.
+	// Move Blob B. Edge E should point to B_new.
+
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Blob blob = createBlob(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 456;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	// ACTION
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	// VERIFY
+	Edge updatedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(updatedEdge.getPropertyEntityId(), newBlobId);
+	EXPECT_EQ(updatedEdge.getPropertyStorageType(), PropertyStorageType::BLOB_ENTITY);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_UpdatesBidirectionalChain) {
+	// Scenario: B1 <-> B2 <-> B3.
+	// Move B2.
+	// Verify: B1.next -> B2_new AND B3.prev -> B2_new.
+	// Also Verify: Entity Info sync logic (simulated).
+
+	Node n = createNode("Owner");
+	uint32_t typeNode = toUnderlying(SegmentType::Node);
+
+	Blob b1 = createBlob(n.getId(), typeNode);
+	Blob b2 = createBlob(n.getId(), typeNode);
+	Blob b3 = createBlob(n.getId(), typeNode);
+
+	// Link B1 -> B2 -> B3
+	b1.setNextBlobId(b2.getId());
+
+	b2.setPrevBlobId(b1.getId());
+	b2.setNextBlobId(b3.getId());
+
+	b3.setPrevBlobId(b2.getId());
+	// Hack: Set B3 to have "wrong" owner info initially to trigger the sync logic
+	b3.setEntityInfo(99999, 999);
+
+	dataManager->updateBlobEntity(b1);
+	dataManager->updateBlobEntity(b2);
+	dataManager->updateBlobEntity(b3);
+
+	// MOVE B2
+	int64_t oldB2 = b2.getId();
+	int64_t newB2 = oldB2 + 888;
+	Blob movedB2 = b2;
+	movedB2.setId(newB2);
+
+	// ACTION
+	updater->updateEntityReferences(oldB2, &movedB2, toUnderlying(SegmentType::Blob));
+
+	// VERIFY
+	Blob updatedB1 = dataManager->getBlob(b1.getId());
+	Blob updatedB3 = dataManager->getBlob(b3.getId());
+
+	// 1. Check Pointers
+	EXPECT_EQ(updatedB1.getNextBlobId(), newB2) << "B1 next pointer failed";
+	EXPECT_EQ(updatedB3.getPrevBlobId(), newB2) << "B3 prev pointer failed";
+
+	// 2. Check Entity Info Sync (The missing branch)
+	// movedB2 (source) has correct owner info (n.getId(), Node).
+	// updatedB3 was set to (99999, 999). It should now be synced to n.getId().
+	EXPECT_EQ(updatedB3.getEntityId(), n.getId());
+	EXPECT_EQ(updatedB3.getEntityType(), typeNode);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateIndex_SiblingUpdateNext) {
+	// Scenario: Leaf1 -> Leaf2.
+	// Move Leaf2. Leaf1's NEXT pointer should update.
+	// (Previous tests mostly covered moving Leaf1 updating Leaf2's PREV)
+
+	Index leaf1 = createIndex(Index::NodeType::LEAF);
+	Index leaf2 = createIndex(Index::NodeType::LEAF);
+
+	leaf1.setNextLeafId(leaf2.getId());
+	leaf2.setPrevLeafId(leaf1.getId());
+
+	dataManager->updateIndexEntity(leaf1);
+	dataManager->updateIndexEntity(leaf2);
+
+	// MOVE Leaf2 (The "Next" sibling)
+	int64_t oldL2 = leaf2.getId();
+	int64_t newL2 = oldL2 + 200;
+	Index movedL2 = leaf2;
+	movedL2.getMutableMetadata().id = newL2;
+
+	// ACTION
+	updater->updateEntityReferences(oldL2, &movedL2, toUnderlying(SegmentType::Index));
+
+	// VERIFY
+	Index updatedL1 = dataManager->getIndex(leaf1.getId());
+	EXPECT_EQ(updatedL1.getNextLeafId(), newL2);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateState_ChainPrevUpdate) {
+	// Scenario: S1 <- S2.
+	// Move S1 (The "Previous" state). S2's PREV pointer should update.
+
+	State s1 = createState("S1");
+	State s2 = createState("S2");
+
+	// Link S1 <- S2
+	s1.setNextStateId(s2.getId());
+	s2.setPrevStateId(s1.getId());
+
+	dataManager->updateStateEntity(s1);
+	dataManager->updateStateEntity(s2);
+
+	// MOVE S1
+	int64_t oldS1 = s1.getId();
+	int64_t newS1 = oldS1 + 111;
+	State movedS1 = s1;
+	movedS1.getMutableMetadata().id = newS1;
+
+	// ACTION
+	updater->updateEntityReferences(oldS1, &movedS1, toUnderlying(SegmentType::State));
+
+	// VERIFY
+	State updatedS2 = dataManager->getState(s2.getId());
+	EXPECT_EQ(updatedS2.getPrevStateId(), newS1);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateNode_UpdatesBlobRef) {
+	// Scenario: Node has a Blob entity (not Property).
+	// Move Node. Blob should update its owner info to new Node ID.
+	// Note: updatePropertiesPointingToEntity is called when the *Entity* (Node) moves,
+	// and it updates the *Blob* pointing to it.
+
+	Node node = createNode("BlobOwner");
+	Blob blob = createBlob(node.getId(), toUnderlying(SegmentType::Node));
+
+	// Link Node -> Blob
+	node.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(node);
+
+	// MOVE Node
+	int64_t oldNodeId = node.getId();
+	int64_t newNodeId = oldNodeId + 99;
+	Node movedNode = node;
+	movedNode.getMutableMetadata().id = newNodeId;
+
+	// ACTION
+	updater->updateEntityReferences(oldNodeId, &movedNode, toUnderlying(SegmentType::Node));
+
+	// VERIFY
+	// The Blob should now point to the new Node ID
+	Blob updatedBlob = dataManager->getBlob(blob.getId());
+	EXPECT_EQ(updatedBlob.getEntityId(), newNodeId);
+	EXPECT_EQ(updatedBlob.getEntityType(), toUnderlying(SegmentType::Node));
+}

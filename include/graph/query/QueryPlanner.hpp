@@ -10,101 +10,70 @@
 
 #pragma once
 
-#include <map>
 #include <memory>
-#include "indexes/IndexManager.hpp"
+#include <string>
+#include <functional>
+#include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/storage/data/DataManager.hpp"
+#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/query/execution/Record.hpp"
 
 namespace graph::query {
 
-	class QueryPlan {
-	public:
-		enum class OperationType {
-			// --- Node Operations ---
-			NODE_LABEL_SCAN, // Use index to find nodes by label
-			NODE_PROPERTY_SCAN, // Use index to find nodes by property
-			NODE_LABEL_PROPERTY_SCAN, // Use indexes to find nodes by label and property
-
-			// --- Edge Operations ---
-			EDGE_LABEL_SCAN, // Use index to find edges by label
-			EDGE_PROPERTY_SCAN, // Use index to find edges by property
-			// Note: EDGE_LABEL_PROPERTY_SCAN can be added if needed
-
-			// --- Full Scan Operations (Fallbacks) ---
-			FULL_NODE_LABEL_SCAN,
-			FULL_NODE_PROPERTY_SCAN,
-			FULL_NODE_LABEL_PROPERTY_SCAN,
-			FULL_EDGE_LABEL_SCAN, // Can be added if needed
-			FULL_EDGE_PROPERTY_SCAN, // Can be added if needed
-
-			// --- Traversal Operations (if supported without old indexes) ---
-			TRAVERSAL_CONNECTED_NODES,
-			TRAVERSAL_SHORTEST_PATH,
-			TRAVERSAL_BFS,
-		};
-
-		explicit QueryPlan(OperationType type) : type_(type) {}
-
-		// Add parameters for the operation
-		void addParameter(const std::string &name, const PropertyValue &value) { params_[name] = value; }
-
-		template<typename T>
-		std::optional<T> getParameter(const std::string &key) const {
-			auto it = params_.find(key);
-			if (it == params_.end()) {
-				return std::nullopt; // Key not found.
-			}
-
-			// The PropertyValue object associated with the key.
-			const auto &propValue = it->second;
-
-			// --- The Magic Happens Here ---
-			if constexpr (std::is_same_v<T, PropertyValue>) {
-				// Case 1: The user requested the PropertyValue wrapper itself.
-				return propValue;
-			} else {
-				// Case 2: The user requested a specific inner type (int64_t, string, etc.).
-				// We attempt to extract it from the variant.
-				if (const T *val = std::get_if<T>(&propValue.getVariant())) {
-					return *val;
-				} else {
-					// The key exists, but holds a different type than requested.
-					return std::nullopt;
-				}
-			}
-		}
-
-		// Get the operation type
-		[[nodiscard]] OperationType getType() const { return type_; }
-
-	private:
-		OperationType type_;
-
-		std::map<std::string, PropertyValue> params_;
-	};
-
 	class QueryPlanner {
 	public:
-		explicit QueryPlanner(std::shared_ptr<indexes::IndexManager> indexManager);
+		QueryPlanner(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im);
 
-		// --- Node Query Planners ---
-		[[nodiscard]] QueryPlan createPlanForNodeLabelQuery(const std::string &label) const;
-		QueryPlan createPlanForNodePropertyQuery(const std::string &key, const PropertyValue &value) const;
-		QueryPlan createPlanForNodeLabelAndPropertyQuery(const std::string &label, const std::string &key,
-														 const PropertyValue &value) const;
+		// Factory Methods
 
-		// --- Edge Query Planners ---
-		[[nodiscard]] QueryPlan createPlanForEdgeLabelQuery(const std::string &label) const;
-		QueryPlan createPlanForEdgePropertyQuery(const std::string &key, const PropertyValue &value) const;
+		// --- Write Operations ---
 
-		// Create a plan for finding connected nodes
-		static QueryPlan createPlanForConnectedNodesQuery(int64_t nodeId, const std::string &nodeLabel,
-														  const std::string &edgeLabel, const std::string &direction);
+		/**
+		 * @brief Generic CREATE for Nodes (Standalone Entities).
+		 * Usage: CREATE (n:Label {props})
+		 */
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> create(
+			const std::string& variable,
+			const std::string& label,
+			const std::unordered_map<std::string, PropertyValue>& props
+		) const;
 
-		static QueryPlan createPlanForTraversalShortestPath(int64_t startNodeId, int64_t endNodeId, int maxDepth,
-															const std::string &direction);
+		/**
+		 * @brief Generic CREATE for Edges (Connected Entities).
+		 * Usage: CREATE (a)-[e:Label {props}]->(b)
+		 */
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> create(
+			const std::string& variable,
+			const std::string& label,
+			const std::unordered_map<std::string, PropertyValue>& props,
+			const std::string& sourceVar,
+			const std::string& targetVar
+		) const;
+
+		// --- Read Operations ---
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> scan(
+			const std::string& variable,
+			const std::string& label
+		) const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> filter(
+			std::unique_ptr<execution::PhysicalOperator> child,
+			std::function<bool(const execution::Record&)> predicate
+		) const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> traverse(
+			std::unique_ptr<execution::PhysicalOperator> source,
+			const std::string& sourceVar,
+			const std::string& edgeVar,
+			const std::string& targetVar,
+			const std::string& edgeLabel,
+			const std::string& direction
+		) const;
 
 	private:
+		std::shared_ptr<storage::DataManager> dataManager_;
 		std::shared_ptr<indexes::IndexManager> indexManager_;
 	};
 
-} // namespace graph::query
+}
