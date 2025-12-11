@@ -40,6 +40,10 @@ namespace graph {
 
 	void Node::setFirstInEdgeId(int64_t edgeId) { metadata.firstInEdgeId = edgeId; }
 
+	void Node::setProperties(std::unordered_map<std::string, PropertyValue> props) {
+		properties = std::move(props);
+	}
+
 	void Node::addProperty(const std::string &key, const PropertyValue &value) { properties[key] = value; }
 
 	bool Node::hasProperty(const std::string &key) const { return properties.contains(key); }

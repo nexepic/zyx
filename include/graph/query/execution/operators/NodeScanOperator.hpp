@@ -14,15 +14,29 @@
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/query/indexes/IndexManager.hpp"
 #include <memory>
+#include <vector>
+#include <string>
 
 namespace graph::query::execution::operators {
 
 	class NodeScanOperator : public PhysicalOperator {
 	public:
+		/**
+		 * @brief Constructs a NodeScanOperator.
+		 *
+		 * @param dataManager Storage access.
+		 * @param indexManager Index access.
+		 * @param variableName The Cypher variable (e.g., "n").
+		 * @param label The node label filter (optional).
+		 * @param key The property key for index lookup (optional).
+		 * @param value The property value for index lookup (optional).
+		 */
 		NodeScanOperator(std::shared_ptr<storage::DataManager> dataManager,
 						 std::shared_ptr<indexes::IndexManager> indexManager,
 						 std::string variableName,
-						 std::string label = "");
+						 std::string label = "",
+						 std::string key = "",
+						 PropertyValue value = PropertyValue());
 
 		~NodeScanOperator() override = default;
 
@@ -40,16 +54,18 @@ namespace graph::query::execution::operators {
 		std::string variableName_;
 		std::string label_;
 
+		// Pushdown Predicates (for Property Index optimization)
+		std::string key_;
+		PropertyValue value_;
+
 		// Execution State
 		std::vector<int64_t> candidateIds_;
-		size_t currentIndex_;
-		bool useIndex_;
+		size_t currentIndex_ = 0;
+		bool useIndex_ = false;
 		static constexpr size_t BATCH_SIZE = 1000;
 
 		// Helper to load remaining IDs via Full Scan
 		void prepareFullScan();
-		// Helper to load IDs via Index
-		void prepareIndexScan();
 	};
 
 } // namespace graph::query::execution::operators

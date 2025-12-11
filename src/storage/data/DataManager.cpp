@@ -457,8 +457,8 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
-	std::optional<EntityType> DataManager::readEntityFromDisk(int64_t fileOffset) const {
-		file_->seekg(static_cast<std::streamoff>(fileOffset));
+	std::optional<EntityType> DataManager::readEntityFromDisk(const int64_t fileOffset) const {
+		file_->seekg(fileOffset);
 		EntityType entity = EntityType::deserialize(*file_);
 
 		// Check if the entity is marked as inactive

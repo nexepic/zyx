@@ -55,6 +55,7 @@ namespace graph {
 		[[nodiscard]] int64_t getFirstInEdgeId() const { return metadata.firstInEdgeId; }
 
 		// Property methods
+		void setProperties(std::unordered_map<std::string, PropertyValue> props);
 		void addProperty(const std::string &key, const PropertyValue &value);
 		[[nodiscard]] bool hasProperty(const std::string &key) const;
 		[[nodiscard]] PropertyValue getProperty(const std::string &key) const;

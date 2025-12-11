@@ -45,70 +45,110 @@ namespace graph::parser::cypher {
 
 	// --- MATCH statement processing ---
 	std::any CypherToPlanVisitor::visitMatchStatement(CypherParser::MatchStatementContext *ctx) {
-		// Grammar: MATCH pattern
-		// pattern -> patternPart*
+        // Grammar: MATCH pattern (WHERE ...)?
+        // pattern -> patternPart -> ...
 
-		auto parts = ctx->pattern()->patternPart();
+        auto parts = ctx->pattern()->patternPart();
 
-		// Simple implementation: currently only handles the first path
-		// A complete implementation needs to handle multiple paths (Cartesian Product)
-		if (parts.empty())
-			return std::any();
+        // Handle case with no pattern (though syntax error usually prevents this)
+        if (parts.empty()) return std::any();
 
-		auto part = parts[0];
-		auto headNodePat = part->nodePattern();
+        // 1. Process the First Path
+        // We focus on the Head Node of the first pattern part for the Scan.
+        auto part = parts[0];
+        auto headNodePat = part->nodePattern();
 
-		// 1. Process the head node SCAN
-		// Use ->variable instead of ->variable() because we used variable=ID in g4
-		std::string var = (headNodePat->variable) ? headNodePat->variable->getText() : "";
-		std::string label = (headNodePat->label) ? headNodePat->label->getText() : "";
+        // Access members directly as per your G4 structure
+        std::string var = (headNodePat->variable) ? headNodePat->variable->getText() : "";
+        std::string label = (headNodePat->label) ? headNodePat->label->getText() : "";
 
-		// Factory method to create Scan
-		auto currentOp = planner_->scan(var, label);
+        // --- OPTIMIZER: Index Pushdown Logic ---
+        // We look for inline properties: MATCH (n {age: 25, active: true})
+        // If present, we push the FIRST property down to the Scan operator
+        // to utilize a potential Property Index.
 
-		// 2. Process inline property filtering for the head node {key:val}
-		if (headNodePat->mapLiteral()) {
-			auto entries = headNodePat->mapLiteral()->mapEntry();
-			for (auto entry: entries) {
-				std::string key = entry->key->getText();
-				auto val = parseValue(entry->literal());
+        std::string pushdownKey = "";
+        PropertyValue pushdownValue;
+        bool hasPushdown = false;
 
-				auto predicate = [var, key, val](const query::execution::Record &r) {
-					auto n = r.getNode(var);
-					if (!n)
-						return false;
-					const auto &props = n->getProperties();
-					auto it = props.find(key);
-					return it != props.end() && it->second == val;
-				};
+        // This vector holds filters that couldn't be pushed down (indexes 1..N)
+        std::vector<std::pair<std::string, PropertyValue>> remainingFilters;
 
-				currentOp = planner_->filter(std::move(currentOp), predicate);
-			}
-		}
+        if (headNodePat->mapLiteral()) {
+            auto entries = headNodePat->mapLiteral()->mapEntry();
+            for (size_t i = 0; i < entries.size(); ++i) {
+                std::string key = entries[i]->key->getText();
+                auto val = parseValue(entries[i]->literal());
 
-		// Update the root operator
-		rootOp_ = std::move(currentOp);
+                if (i == 0) {
+                    // Push the first property to the Scan
+                    pushdownKey = key;
+                    pushdownValue = val;
+                    hasPushdown = true;
+                } else {
+                    // Keep subsequent properties as standard Filters
+                    remainingFilters.emplace_back(key, val);
+                }
+            }
+        }
 
-		// TODO: Handle chained MATCH, e.g., (a)-[r]->(b)
-		// This requires support from the planner_->traverse() interface
-		auto chains = part->patternElementChain();
-		if (!chains.empty()) {
-			// If there's a chain, a TraversalOperator should be generated here
-			// Since we are currently focused on Create, this is left blank or could throw a not-implemented exception
-		}
+        // 2. Factory: Create Optimized SCAN Operator
+        // Pass the pushdown key/value to the planner.
+        // The NodeScanOperator will decide if it can use an index.
+        auto currentOp = planner_->scan(var, label, pushdownKey, pushdownValue);
 
-		// TODO: Handle WHERE clause
-		// if (ctx->whereClause()) ...
+        // 3. Factory: Create FILTER Operators for remaining properties
+        for (const auto& [key, val] : remainingFilters) {
+            auto predicate = [var, key, val](const query::execution::Record& r) {
+                auto n = r.getNode(var);
+                if (!n) return false;
+                const auto& props = n->getProperties();
+                auto it = props.find(key);
+                return it != props.end() && it->second == val;
+            };
 
-		return std::any();
-	}
+            // Wrap current op in a Filter
+            currentOp = planner_->filter(std::move(currentOp), predicate);
+        }
+
+        // Update the global root
+        rootOp_ = std::move(currentOp);
+
+        // --- TODO: Traversal Handling ---
+        // Check for (a)-[r]->(b) chain
+        auto chains = part->patternElementChain();
+        if (!chains.empty()) {
+            // Future implementation:
+            // Iterate chains and wrap rootOp_ in TraversalOperator(s)
+        }
+
+        // --- TODO: WHERE Clause Handling ---
+        // Parse ctx->whereClause() and wrap rootOp_ in generic FilterOperator
+        // if (ctx->whereClause()) { ... }
+
+        return std::any();
+    }
 
 	// --- CREATE statement processing ---
 	std::any CypherToPlanVisitor::visitCreateStatement(CypherParser::CreateStatementContext *ctx) {
 		// Grammar: CREATE ( indexDefinition | pattern )
 
 		if (ctx->indexDefinition()) {
-			// Skip DDL operations for now
+			auto idxDef = ctx->indexDefinition();
+
+			// Extract Label and Property from grammar
+			// Grammar: K_INDEX K_ON ':' label=ID '(' property=ID ')'
+
+			// Note: Since we use 'label=ID' in G4, we access via the label token.
+			std::string label = idxDef->label->getText();
+			std::string property = idxDef->property->getText();
+
+			// Create the operator
+			auto op = planner_->createIndex(label, property);
+
+			// Set as root (DDL is usually a standalone operation)
+			chainOperator(std::move(op));
+
 			return std::any();
 		}
 

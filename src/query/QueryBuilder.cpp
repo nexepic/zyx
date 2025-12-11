@@ -48,6 +48,11 @@ namespace graph::query {
         return *this;
     }
 
+	QueryBuilder& QueryBuilder::createIndex(const std::string& label, const std::string& property) {
+		root_ = planner_->createIndex(label, property);
+		return *this;
+	}
+
     void QueryBuilder::append(std::unique_ptr<execution::PhysicalOperator> op) {
         // Simple chaining logic
         // If 'op' is a filter or something that takes a child, wrap 'root_'.

@@ -10,51 +10,46 @@
 
 #pragma once
 
+#include <format>
 #include <iostream>
 #include <mutex>
+#include <string_view>
 
 namespace graph::log {
 
 	class Log {
 	public:
 		// Configuration
-		static void setDebug(bool enable) {
-			debugEnabled_ = enable;
-		}
+		static void setDebug(bool enable) { debugEnabled_ = enable; }
 
-		static bool isDebugEnabled() {
-			return debugEnabled_;
-		}
+		static bool isDebugEnabled() { return debugEnabled_; }
 
 		// Standard Info (Always printed, usually to stdout)
 		template<typename... Args>
-		static void info(Args&&... args) {
+		static void info(std::string_view fmt, Args &&...args) {
 			std::lock_guard<std::mutex> lock(mutex_);
-			std::cout << "[INFO] ";
-			(std::cout << ... << args);
-			std::cout << std::endl;
+			std::cout << "[INFO] " << std::vformat(fmt, std::make_format_args(args...)) << std::endl;
 		}
 
 		// Error Logging (Always printed, to stderr, Red color)
 		template<typename... Args>
-		static void error(Args&&... args) {
+		static void error(std::string_view fmt, Args &&...args) {
 			std::lock_guard<std::mutex> lock(mutex_);
 			// ANSI Red color
-			std::cerr << "\033[1;31m[ERROR] ";
-			(std::cerr << ... << args);
-			std::cerr << "\033[0m" << std::endl; // Reset color
+			std::cerr << "\033[1;31m[ERROR] " << std::vformat(fmt, std::make_format_args(args...)) << "\033[0m"
+					  << std::endl;
 		}
 
 		// Debug Logging (Only printed if debugEnabled_ is true, usually Yellow/Grey)
 		template<typename... Args>
-		static void debug(Args&&... args) {
-			if (!debugEnabled_) return;
+		static void debug(std::string_view fmt, Args &&...args) {
+			if (!debugEnabled_)
+				return;
 
 			std::lock_guard<std::mutex> lock(mutex_);
 			// ANSI Yellow color
-			std::cout << "\033[1;33m[DEBUG] ";
-			(std::cout << ... << args);
-			std::cout << "\033[0m" << std::endl;
+			std::cout << "\033[1;33m[DEBUG] " << std::vformat(fmt, std::make_format_args(args...)) << "\033[0m"
+					  << std::endl;
 		}
 
 	private:
@@ -62,4 +57,4 @@ namespace graph::log {
 		static inline std::mutex mutex_;
 	};
 
-} // namespace graph::utils
+} // namespace graph::log

@@ -48,18 +48,18 @@ TEST_F(LogTest, HandlesDebugFlag) {
 	ASSERT_FALSE(graph::log::Log::isDebugEnabled());
 }
 
-// Test info logs
+// Test info logs with a single argument
 TEST_F(LogTest, PrintsInfoLogs) {
-	graph::log::Log::info("This is an info message with number ", 123);
+	graph::log::Log::info("This is an info message with number {}", 123);
 	std::string expected = "[INFO] This is an info message with number 123\n";
 	ASSERT_EQ(cout_buffer.str(), expected);
 	// Ensure cerr has no output
 	ASSERT_TRUE(cerr_buffer.str().empty());
 }
 
-// Test error logs
+// Test error logs with a single argument
 TEST_F(LogTest, PrintsErrorLogs) {
-	graph::log::Log::error("This is an error message with number ", 456);
+	graph::log::Log::error("This is an error message with number {}", 456);
 	std::string expected = "\033[1;31m[ERROR] This is an error message with number 456\033[0m\n";
 	ASSERT_EQ(cerr_buffer.str(), expected);
 	// Ensure cout has no output
@@ -81,9 +81,18 @@ TEST_F(LogTest, PrintsDebugLogsWhenEnabled) {
 	graph::log::Log::setDebug(true);
 	ASSERT_TRUE(graph::log::Log::isDebugEnabled());
 
-	graph::log::Log::debug("This is a debug message with number ", 789);
+	graph::log::Log::debug("This is a debug message with number {}", 789);
 	std::string expected = "\033[1;33m[DEBUG] This is a debug message with number 789\033[0m\n";
 	ASSERT_EQ(cout_buffer.str(), expected);
 	// Ensure cerr has no output
 	ASSERT_TRUE(cerr_buffer.str().empty());
+}
+
+// Test logging with multiple arguments of different types
+TEST_F(LogTest, PrintsLogsWithMultipleArguments) {
+	std::string str_arg = "world";
+	double float_arg = 3.14;
+	graph::log::Log::info("Hello {}, the number is {} and the float is {}", str_arg, 42, float_arg);
+	std::string expected = "[INFO] Hello world, the number is 42 and the float is 3.14\n";
+	ASSERT_EQ(cout_buffer.str(), expected);
 }

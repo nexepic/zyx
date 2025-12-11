@@ -50,11 +50,23 @@ namespace graph::query {
 			const std::string& targetVar
 		) const;
 
+		/**
+		 * @brief Creates a plan to build an index.
+		 * @param label The target label (e.g., "User").
+		 * @param propertyKey The target property (e.g., "name").
+		 */
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createIndex(
+			const std::string& label,
+			const std::string& propertyKey
+		) const;
+
 		// --- Read Operations ---
 
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> scan(
 			const std::string& variable,
-			const std::string& label
+			const std::string& label,
+			const std::string& key = "",
+			const PropertyValue& value = PropertyValue()
 		) const;
 
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> filter(

@@ -13,104 +13,104 @@
 
 namespace graph::query::execution::operators {
 
-    NodeScanOperator::NodeScanOperator(std::shared_ptr<storage::DataManager> dataManager,
-                                       std::shared_ptr<indexes::IndexManager> indexManager,
-                                       std::string variableName,
-                                       std::string label)
-        : dataManager_(std::move(dataManager)),
-          indexManager_(std::move(indexManager)),
-          variableName_(std::move(variableName)),
-          label_(std::move(label)),
-          currentIndex_(0),
-          useIndex_(false) {}
+	NodeScanOperator::NodeScanOperator(std::shared_ptr<storage::DataManager> dataManager,
+									   std::shared_ptr<indexes::IndexManager> indexManager, std::string variableName,
+									   std::string label, std::string key, PropertyValue value) :
+		dataManager_(std::move(dataManager)), indexManager_(std::move(indexManager)),
+		variableName_(std::move(variableName)), label_(std::move(label)), key_(std::move(key)),
+		value_(std::move(value)) {}
 
-    void NodeScanOperator::open() {
-        currentIndex_ = 0;
-        candidateIds_.clear();
+	void NodeScanOperator::open() {
+		currentIndex_ = 0;
+		candidateIds_.clear();
+		useIndex_ = false;
 
-        // Optimizer Logic: Determine access path at runtime (Open phase)
-        bool hasLabelIndex = !label_.empty() && indexManager_->hasLabelIndex("node");
+		// --- Strategy 1: Property Index (Most Specific) ---
+		// If a key is provided and an index exists for it, this is usually the fastest path.
+		if (!key_.empty() && indexManager_->hasPropertyIndex("node", key_)) {
+			candidateIds_ = indexManager_->findNodeIdsByProperty(key_, value_);
+			useIndex_ = true;
+			return;
+		}
 
-        if (hasLabelIndex) {
-            prepareIndexScan();
-        } else {
-            prepareFullScan();
-        }
-    }
+		// --- Strategy 2: Label Index ---
+		if (!label_.empty() && indexManager_->hasLabelIndex("node")) {
+			candidateIds_ = indexManager_->findNodeIdsByLabel(label_);
+			useIndex_ = true;
+			return;
+		}
 
-    void NodeScanOperator::prepareIndexScan() {
-        useIndex_ = true;
-        candidateIds_ = indexManager_->findNodeIdsByLabel(label_);
-    }
+		// --- Strategy 3: Full Scan (Fallback) ---
+		prepareFullScan();
+	}
 
-    void NodeScanOperator::prepareFullScan() {
-        useIndex_ = false;
-        // In a real scenario, you might not load ALL IDs into memory here.
-        // You would use an iterator from DataManager/SegmentTracker.
-        // For this refactoring, we simulate it by fetching the ID range.
-        int64_t maxId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
-        // Pre-allocate logic or iterator setup goes here
-        // Simplified:
-        for (int64_t i = 1; i <= maxId; ++i) {
-            candidateIds_.push_back(i);
-        }
-    }
+	void NodeScanOperator::prepareFullScan() {
+		useIndex_ = false;
+		// Fetch max ID to determine range
+		int64_t maxId = dataManager_->getIdAllocator()->getCurrentMaxNodeId();
 
-    std::optional<RecordBatch> NodeScanOperator::next() {
-        if (currentIndex_ >= candidateIds_.size()) {
-            return std::nullopt; // End of stream
-        }
+		// Pre-allocate for performance (though in real DB we would use an iterator)
+		candidateIds_.reserve(maxId);
+		for (int64_t i = 1; i <= maxId; ++i) {
+			candidateIds_.push_back(i);
+		}
+	}
 
-        RecordBatch batch;
-        batch.reserve(BATCH_SIZE);
+	std::optional<RecordBatch> NodeScanOperator::next() {
+		if (currentIndex_ >= candidateIds_.size()) {
+			return std::nullopt;
+		}
 
-        // Fetch loop
-        while (batch.size() < BATCH_SIZE && currentIndex_ < candidateIds_.size()) {
-            // Determine range for bulk fetch
-            size_t end = std::min(currentIndex_ + BATCH_SIZE, candidateIds_.size());
-            std::vector<int64_t> idsToFetch;
-            idsToFetch.reserve(end - currentIndex_);
+		RecordBatch batch;
+		batch.reserve(BATCH_SIZE);
 
-            for (size_t i = currentIndex_; i < end; ++i) {
-                idsToFetch.push_back(candidateIds_[i]);
-            }
+		while (batch.size() < BATCH_SIZE && currentIndex_ < candidateIds_.size()) {
+			int64_t id = candidateIds_[currentIndex_++];
 
-            // Bulk fetch from DataManager
-            auto nodes = dataManager_->getNodeBatch(idsToFetch);
-            currentIndex_ = end;
+			// 1. Load Header (ID, Label, pointers) - Cheap
+			Node node = dataManager_->getNode(id);
 
-            for (const auto& node : nodes) {
-                if (!node.isActive()) continue;
+			if (!node.isActive())
+				continue;
 
-                // If doing full scan, we must filter by label manually
-                if (!useIndex_ && !label_.empty() && node.getLabel() != label_) {
-                    continue;
-                }
+			// 2. Check Label
+			if (!label_.empty() && node.getLabel() != label_) {
+				continue;
+			}
 
-                // Create Record
-                Record record;
-                record.setNode(variableName_, node);
-                batch.push_back(std::move(record));
-            }
-        }
+			// 3. Hydrate Properties (Load from disk) - Expensive
+			// We must do this before checking properties or returning the node.
+			auto props = dataManager_->getNodeProperties(id);
 
-        // If we exhausted the candidates but produced no results (all filtered),
-        // we might need to return an empty batch or std::nullopt.
-        // Convention: Return empty batch if stream isn't done but this chunk was empty,
-        // or recursively fetch. Here we return what we have.
-        if (batch.empty() && currentIndex_ >= candidateIds_.size()) {
-            return std::nullopt;
-        }
+			// Fill the node object with the loaded properties
+			node.setProperties(std::move(props));
 
-        return batch;
-    }
+			// 4. Check Property (Pushdown check)
+			if (!key_.empty()) {
+				// Now node.getProperties() is populated, so this works
+				const auto &nodeProps = node.getProperties();
+				auto it = nodeProps.find(key_);
 
-    void NodeScanOperator::close() {
-        candidateIds_.clear();
-    }
+				if (it == nodeProps.end() || it->second != value_) {
+					continue;
+				}
+			}
 
-    std::vector<std::string> NodeScanOperator::getOutputVariables() const {
-        return {variableName_};
-    }
+			// 5. Add to Batch
+			Record record;
+			record.setNode(variableName_, node);
+			batch.push_back(std::move(record));
+		}
+
+		if (batch.empty() && currentIndex_ >= candidateIds_.size()) {
+			return std::nullopt;
+		}
+
+		return batch;
+	}
+
+	void NodeScanOperator::close() { candidateIds_.clear(); }
+
+	std::vector<std::string> NodeScanOperator::getOutputVariables() const { return {variableName_}; }
 
 } // namespace graph::query::execution::operators

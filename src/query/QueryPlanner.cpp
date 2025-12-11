@@ -11,6 +11,7 @@
 #include "graph/query/QueryPlanner.hpp"
 
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
+#include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
@@ -46,9 +47,24 @@ namespace graph::query {
 		);
 	}
 
-	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::scan(const std::string& variable, const std::string& label) const {
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::createIndex(
+		const std::string& label,
+		const std::string& propertyKey
+	) const {
+		return std::make_unique<execution::operators::CreateIndexOperator>(
+			indexManager_, label, propertyKey
+		);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::scan(
+		const std::string& variable,
+		const std::string& label,
+		const std::string& key,
+		const PropertyValue& value
+	) const {
+		// Pass all info to the operator. The operator decides whether to use the info for indexing.
 		return std::make_unique<execution::operators::NodeScanOperator>(
-			dataManager_, indexManager_, variable, label
+			dataManager_, indexManager_, variable, label, key, value
 		);
 	}
 

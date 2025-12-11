@@ -37,6 +37,8 @@ namespace graph::query {
 							 const std::string& sourceVar, const std::string& targetVar,
 							 const std::unordered_map<std::string, PropertyValue>& props = {});
 
+		QueryBuilder& createIndex(const std::string& label, const std::string& property);
+
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> build();
 
 	private:
