@@ -112,7 +112,7 @@ protected:
     // These helpers ensure that the SegmentTracker's bitmap matches the DataManager's state,
     // which is crucial for EntityReferenceUpdater to locate entities.
 
-    Node createNode(const std::string& label) {
+    [[nodiscard]] Node createNode(const std::string& label) const {
         int64_t id = idAllocator->allocateId(Node::typeId);
         uint64_t offset = segmentTracker->getSegmentOffsetForNodeId(id);
         if (offset == 0) offset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
@@ -130,7 +130,7 @@ protected:
         return node;
     }
 
-    Edge createEdge(int64_t src, int64_t dst, const std::string& label) {
+    [[nodiscard]] Edge createEdge(int64_t src, int64_t dst, const std::string& label) const {
         int64_t id = idAllocator->allocateId(Edge::typeId);
         uint64_t offset = segmentTracker->getSegmentOffsetForEdgeId(id);
         if (offset == 0) offset = spaceManager->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
@@ -147,7 +147,7 @@ protected:
         return edge;
     }
 
-    Property createProperty(int64_t ownerId, uint32_t ownerType) {
+    [[nodiscard]] Property createProperty(int64_t ownerId, uint32_t ownerType) const {
         int64_t id = idAllocator->allocateId(Property::typeId);
         uint64_t offset = segmentTracker->getSegmentOffsetForPropId(id);
         if (offset == 0) offset = spaceManager->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
@@ -166,7 +166,7 @@ protected:
         return prop;
     }
 
-    Blob createBlob(int64_t ownerId, uint32_t ownerType) {
+    [[nodiscard]] Blob createBlob(int64_t ownerId, uint32_t ownerType) const {
         int64_t id = idAllocator->allocateId(Blob::typeId);
         uint64_t offset = segmentTracker->getSegmentOffsetForBlobId(id);
         if (offset == 0) offset = spaceManager->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
@@ -185,7 +185,7 @@ protected:
         return blob;
     }
 
-    Index createIndex(Index::NodeType nodeType) {
+    [[nodiscard]] Index createIndex(Index::NodeType nodeType) const {
         int64_t id = idAllocator->allocateId(Index::typeId);
         uint64_t offset = segmentTracker->getSegmentOffsetForIndexId(id);
         if (offset == 0) offset = spaceManager->allocateSegment(Index::typeId, INDEXES_PER_SEGMENT);
@@ -201,7 +201,7 @@ protected:
         return idx;
     }
 
-    State createState(const std::string& key) {
+    [[nodiscard]] State createState(const std::string& key) const {
         int64_t id = idAllocator->allocateId(State::typeId);
         uint64_t offset = segmentTracker->getSegmentOffsetForStateId(id);
         if (offset == 0) offset = spaceManager->allocateSegment(State::typeId, STATES_PER_SEGMENT);

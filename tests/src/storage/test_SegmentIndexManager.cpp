@@ -353,7 +353,7 @@ TEST_F(SegmentIndexManagerTest, BuildSegmentIndexesFromChain) {
 // ============================================================================
 
 TEST_F(SegmentIndexManagerTest, LookupWithGaps) {
-	uint32_t type = static_cast<uint32_t>(graph::EntityType::Node);
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
 
 	// Seg 1: [0, 9]
 	indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, 0, 10), -1);

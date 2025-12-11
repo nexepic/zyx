@@ -112,7 +112,7 @@ protected:
 
 	// --- Helper Functions to create entities and update Tracker Metadata ---
 
-	Node createNode(const std::string &label) {
+	[[nodiscard]] Node createNode(const std::string &label) const {
 		int64_t id = idAllocator->allocateId(Node::typeId);
 
 		uint64_t offset = segmentTracker->getSegmentOffsetForNodeId(id);
@@ -137,7 +137,7 @@ protected:
 		return node;
 	}
 
-	Edge createEdge(int64_t srcId, int64_t dstId, const std::string &label) {
+	[[nodiscard]] Edge createEdge(int64_t srcId, int64_t dstId, const std::string &label) const {
 		int64_t id = idAllocator->allocateId(Edge::typeId);
 
 		uint64_t offset = segmentTracker->getSegmentOffsetForEdgeId(id);
@@ -159,7 +159,7 @@ protected:
 		return edge;
 	}
 
-	Property createProperty() {
+	[[nodiscard]] Property createProperty() const {
 		int64_t id = idAllocator->allocateId(Property::typeId);
 		uint64_t offset = spaceManager->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
 
@@ -174,7 +174,7 @@ protected:
 		return prop;
 	}
 
-	Blob createBlob() {
+	[[nodiscard]] Blob createBlob() const {
 		int64_t id = idAllocator->allocateId(Blob::typeId);
 		uint64_t offset = spaceManager->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
 
@@ -190,14 +190,14 @@ protected:
 	}
 
 	// Helper checks
-	bool isNodeDeleted(int64_t id) {
+	[[nodiscard]] bool isNodeDeleted(int64_t id) const {
 		// 1. Check DeletionManager logic (Bitmap check)
 		if (!deletionManager->isNodeActive(id))
 			return true;
 		return false;
 	}
 
-	bool isEdgeDeleted(int64_t id) {
+	[[nodiscard]] bool isEdgeDeleted(int64_t id) const {
 		if (!deletionManager->isEdgeActive(id))
 			return true;
 		return false;
@@ -518,8 +518,8 @@ TEST_F(DeletionManagerTest, AnalyzeFragmentation) {
 	// Run Analysis
 	auto fragMap = deletionManager->analyzeSegmentFragmentation(type);
 
-	ASSERT_TRUE(fragMap.find(seg1) != fragMap.end());
-	ASSERT_TRUE(fragMap.find(seg2) != fragMap.end());
+	ASSERT_TRUE(fragMap.contains(seg1));
+	ASSERT_TRUE(fragMap.contains(seg2));
 
 	EXPECT_DOUBLE_EQ(fragMap[seg1], 0.5);
 	EXPECT_DOUBLE_EQ(fragMap[seg2], 0.0);
