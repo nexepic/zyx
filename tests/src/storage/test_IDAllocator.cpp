@@ -414,6 +414,44 @@ TEST_F(IDAllocatorTest, RecoverGapsOnRestart) {
 	EXPECT_EQ(n.getId(), 3);
 }
 
+TEST_F(IDAllocatorTest, Persistence_Restart_NoOverlap) {
+	// 1. Session 1: Create IDs [1, 2, 3]
+	{
+		// Use a local scope to force destruction of DB objects (Simulate Close)
+		graph::Node n1 = fileStorage->insertNode("A");
+		graph::Node n2 = fileStorage->insertNode("B");
+		graph::Node n3 = fileStorage->insertNode("C");
+
+		EXPECT_EQ(n1.getId(), 1);
+		EXPECT_EQ(n2.getId(), 2);
+		EXPECT_EQ(n3.getId(), 3);
+
+		database->close();
+	}
+
+	// 2. Session 2: Re-open and Insert New Node
+	{
+		auto db2 = std::make_unique<graph::Database>(testFilePath.string());
+		db2->open();
+		auto store2 = db2->getStorage();
+		auto alloc2 = store2->getIDAllocator();
+
+		// CHECK: Max ID should be recovered correctly from header
+		EXPECT_EQ(alloc2->getCurrentMaxNodeId(), 3) << "MaxNodeId not recovered from FileHeader correctly";
+
+		// Insert new node.
+		// IF the bug exists (Gap Recovery thinks 1,2,3 are holes because SegmentTracker wasn't init),
+		// it would return 1.
+		// IF fixed, it should return 4.
+		graph::Node n4 = store2->insertNode("D");
+
+		EXPECT_EQ(n4.getId(), 4) << "ID Overlap Detected! Allocator reused an existing ID after restart.";
+
+		// Ensure 1, 2, 3 still exist (Double check)
+		// (Assuming retrieval logic works, but allocating 4 is the primary test)
+	}
+}
+
 TEST_F(IDAllocatorTest, UndoAdd_Logic_Integration) {
 	// 1. Insert Node
 	graph::Node n = fileStorage->insertNode("Temp");

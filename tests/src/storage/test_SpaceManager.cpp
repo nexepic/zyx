@@ -61,7 +61,7 @@ protected:
 		file->flush();
 
 		// Initialize Components
-		segmentTracker = std::make_shared<SegmentTracker>(file);
+		segmentTracker = std::make_shared<SegmentTracker>(file, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
 
 		idAllocator = std::make_shared<IDAllocator>(
@@ -79,7 +79,6 @@ protected:
 		refUpdater = std::make_shared<EntityReferenceUpdater>(dataManager);
 
 		spaceManager->setEntityReferenceUpdater(refUpdater);
-		spaceManager->initialize(header);
 	}
 
 	void TearDown() override {

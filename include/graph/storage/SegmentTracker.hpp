@@ -18,6 +18,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "SegmentTypeRegistry.hpp"
 #include "StorageHeaders.hpp"
 
 namespace graph::storage {
@@ -26,7 +28,7 @@ namespace graph::storage {
 
 	class SegmentTracker {
 	public:
-		explicit SegmentTracker(std::shared_ptr<std::fstream> file);
+		explicit SegmentTracker(std::shared_ptr<std::fstream> file, const FileHeader &fileHeader);
 		~SegmentTracker();
 
 		void initialize(const FileHeader &header);
@@ -40,7 +42,7 @@ namespace graph::storage {
 		double calculateFragmentationRatio(uint32_t type) const;
 
 		uint64_t getChainHead(uint32_t type) const;
-		void updateChainHead(uint32_t type, uint64_t newHead) const;
+		void updateChainHead(uint32_t type, uint64_t newHead);
 		void updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset);
 
 		void markSegmentFree(uint64_t offset);
@@ -86,6 +88,11 @@ namespace graph::storage {
 			segmentIndexManager_ = std::move(indexManager);
 		}
 
+		// get segment type registry
+		SegmentTypeRegistry getSegmentTypeRegistry() const {
+			return registry_;
+		}
+
 	private:
 		std::shared_ptr<std::fstream> file_;
 		mutable std::recursive_mutex mutex_;
@@ -97,7 +104,9 @@ namespace graph::storage {
 		std::vector<uint64_t> dirtySegments_;
 		std::weak_ptr<SegmentIndexManager> segmentIndexManager_;
 
-		static void initializeRegistry();
+		SegmentTypeRegistry registry_;
+
+		void initializeRegistry();
 
 		void loadSegments();
 

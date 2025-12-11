@@ -29,11 +29,6 @@ namespace graph::storage {
 
 	SpaceManager::~SpaceManager() = default;
 
-	void SpaceManager::initialize(const FileHeader &header) const {
-		// Initialize tracker with header
-		segmentTracker_->initialize(header);
-	}
-
 	// TODO: optimize with IDAllocator
 	uint64_t SpaceManager::findMaxId(uint32_t type, const std::shared_ptr<SegmentTracker> &tracker) {
 		uint64_t maxId = 0;

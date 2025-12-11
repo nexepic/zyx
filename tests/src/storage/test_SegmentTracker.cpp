@@ -66,14 +66,13 @@ protected:
 		fileStream = std::make_shared<std::fstream>(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 		ASSERT_TRUE(fileStream->is_open()) << "Failed to open test file";
 
-		// 4. Initialize Tracker
-		tracker = std::make_shared<SegmentTracker>(fileStream);
-
 		// Read header to pass to initialize
 		fileStream->seekg(0);
 		FileHeader header;
 		fileStream->read(reinterpret_cast<char *>(&header), sizeof(FileHeader));
-		tracker->initialize(header);
+
+		// 4. Initialize Tracker
+		tracker = std::make_shared<SegmentTracker>(fileStream, header);
 
 		// 5. Initialize and Link IndexManager
 		// We need a real IndexManager to test the integration (e.g., updating indexes when tracker updates)
@@ -142,7 +141,7 @@ protected:
 
 TEST_F(SegmentTrackerTest, InitializationRegistersTypes) {
 	// Verify that initializeRegistry() was called internally
-	auto types = SegmentTypeRegistry::getAllTypes();
+	auto types = tracker->getSegmentTypeRegistry().getAllTypes();
 	EXPECT_FALSE(types.empty());
 
 	// Check for standard types

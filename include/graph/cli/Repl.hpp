@@ -20,15 +20,11 @@ namespace graph {
 	private:
 		Database &db;
 		void handleCommand(const std::string &command) const;
-
-	protected:
-		static bool shouldExit(const std::string &command);
 	};
 
 	class REPLTest : public REPL {
 	public:
 		using REPL::REPL;
-		using REPL::shouldExit;
 	};
 
 } // namespace graph

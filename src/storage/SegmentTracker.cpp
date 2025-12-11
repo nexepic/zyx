@@ -22,22 +22,26 @@
 namespace graph::storage {
 
 	// Helper to cast enum class to underlying type
-	template <typename E>
+	template<typename E>
 	constexpr auto to_underlying(E e) noexcept {
 		return static_cast<std::underlying_type_t<E>>(e);
 	}
 
-	SegmentTracker::SegmentTracker(std::shared_ptr<std::fstream> file) : file_(std::move(file)) {}
+	SegmentTracker::SegmentTracker(std::shared_ptr<std::fstream> file, const FileHeader &fileHeader) :
+		file_(std::move(file)) {
+		initialize(fileHeader);
+	}
 
 	SegmentTracker::~SegmentTracker() = default;
 
 	void SegmentTracker::initializeRegistry() {
-		SegmentTypeRegistry::registerType(EntityType::Node);
-		SegmentTypeRegistry::registerType(EntityType::Edge);
-		SegmentTypeRegistry::registerType(EntityType::Property);
-		SegmentTypeRegistry::registerType(EntityType::Blob);
-		SegmentTypeRegistry::registerType(EntityType::Index);
-		SegmentTypeRegistry::registerType(EntityType::State);
+		registry_.clear();
+		registry_.registerType(EntityType::Node);
+		registry_.registerType(EntityType::Edge);
+		registry_.registerType(EntityType::Property);
+		registry_.registerType(EntityType::Blob);
+		registry_.registerType(EntityType::Index);
+		registry_.registerType(EntityType::State);
 	}
 
 	void SegmentTracker::initialize(const FileHeader &header) {
@@ -45,12 +49,12 @@ namespace graph::storage {
 
 		initializeRegistry();
 
-		SegmentTypeRegistry::setChainHead(EntityType::Node, header.node_segment_head);
-		SegmentTypeRegistry::setChainHead(EntityType::Edge, header.edge_segment_head);
-		SegmentTypeRegistry::setChainHead(EntityType::Property, header.property_segment_head);
-		SegmentTypeRegistry::setChainHead(EntityType::Blob, header.blob_segment_head);
-		SegmentTypeRegistry::setChainHead(EntityType::Index, header.index_segment_head);
-		SegmentTypeRegistry::setChainHead(EntityType::State, header.state_segment_head);
+		registry_.setChainHead(EntityType::Node, header.node_segment_head);
+		registry_.setChainHead(EntityType::Edge, header.edge_segment_head);
+		registry_.setChainHead(EntityType::Property, header.property_segment_head);
+		registry_.setChainHead(EntityType::Blob, header.blob_segment_head);
+		registry_.setChainHead(EntityType::Index, header.index_segment_head);
+		registry_.setChainHead(EntityType::State, header.state_segment_head);
 
 		segments_.clear();
 		freeSegments_.clear();
@@ -60,8 +64,8 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::loadSegments() {
-		for (const auto &type: SegmentTypeRegistry::getAllTypes()) {
-			uint64_t headOffset = SegmentTypeRegistry::getChainHead(type);
+		for (const auto &type: registry_.getAllTypes()) {
+			uint64_t headOffset = registry_.getChainHead(type);
 			loadSegmentChain(headOffset, to_underlying(type));
 		}
 	}
@@ -86,7 +90,7 @@ namespace graph::storage {
 		}
 	}
 
-	void SegmentTracker::registerSegment(const SegmentHeader& header) {
+	void SegmentTracker::registerSegment(const SegmentHeader &header) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		segments_[header.file_offset] = header;
@@ -169,18 +173,19 @@ namespace graph::storage {
 				totalUtilizedSpace += (header.used - header.inactive_count);
 			}
 		}
-		if (totalCapacity == 0) return 0.0;
+		if (totalCapacity == 0)
+			return 0.0;
 		return 1.0 - (totalUtilizedSpace / totalCapacity);
 	}
 
 	uint64_t SegmentTracker::getChainHead(uint32_t type) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		return SegmentTypeRegistry::getChainHead(static_cast<EntityType>(type));
+		return registry_.getChainHead(static_cast<EntityType>(type));
 	}
 
-	void SegmentTracker::updateChainHead(uint32_t type, uint64_t newHead) const {
+	void SegmentTracker::updateChainHead(uint32_t type, uint64_t newHead) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		SegmentTypeRegistry::setChainHead(static_cast<EntityType>(type), newHead);
+		registry_.setChainHead(static_cast<EntityType>(type), newHead);
 	}
 
 	void SegmentTracker::updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset) {
@@ -190,12 +195,14 @@ namespace graph::storage {
 
 		bool changed = false;
 		if (header.prev_segment_offset != prevOffset) {
-			if (prevOffset == offset) throw std::runtime_error("Self-loop detected");
+			if (prevOffset == offset)
+				throw std::runtime_error("Self-loop detected");
 			header.prev_segment_offset = prevOffset;
 			changed = true;
 		}
 		if (header.next_segment_offset != nextOffset) {
-			if (nextOffset == offset) throw std::runtime_error("Self-loop detected");
+			if (nextOffset == offset)
+				throw std::runtime_error("Self-loop detected");
 			header.next_segment_offset = nextOffset;
 			changed = true;
 		}
@@ -221,7 +228,8 @@ namespace graph::storage {
 		segments_.erase(offset);
 
 		auto dirtyIt = std::ranges::find(dirtySegments_, offset);
-		if (dirtyIt != dirtySegments_.end()) dirtySegments_.erase(dirtyIt);
+		if (dirtyIt != dirtySegments_.end())
+			dirtySegments_.erase(dirtyIt);
 
 		SegmentHeader emptyHeader{};
 		emptyHeader.data_type = 0xFF;
@@ -244,21 +252,23 @@ namespace graph::storage {
 		SegmentHeader headerToWrite = header;
 		file_->seekp(static_cast<std::streamoff>(offset));
 		file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
-		if (!*file_) throw std::runtime_error("Failed to write segment header");
+		if (!*file_)
+			throw std::runtime_error("Failed to write segment header");
 
 		segments_[offset] = headerToWrite;
 		segments_[offset].file_offset = offset;
 		segments_[offset].is_dirty = 0;
 
 		auto dirtyIt = std::ranges::find(dirtySegments_, offset);
-		if (dirtyIt != dirtySegments_.end()) dirtySegments_.erase(dirtyIt);
+		if (dirtyIt != dirtySegments_.end())
+			dirtySegments_.erase(dirtyIt);
 	}
 
 	void SegmentTracker::updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> &updateFn) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(offset);
 
-		SegmentHeader& header = segments_[offset];
+		SegmentHeader &header = segments_[offset];
 
 		int64_t oldStartId = header.start_id; // <--- CRITICAL
 
@@ -281,7 +291,8 @@ namespace graph::storage {
 		if (oldValue != value) {
 			bitmap::setBit(header.activity_bitmap, index, value);
 			if (value) {
-				if (header.inactive_count > 0) header.inactive_count--;
+				if (header.inactive_count > 0)
+					header.inactive_count--;
 			} else {
 				header.inactive_count++;
 			}
@@ -310,7 +321,8 @@ namespace graph::storage {
 		uint32_t inactiveCount = 0;
 		for (size_t i = 0; i < activityMap.size(); i++) {
 			bitmap::setBit(header.activity_bitmap, static_cast<uint32_t>(i), activityMap[i]);
-			if (!activityMap[i]) inactiveCount++;
+			if (!activityMap[i])
+				inactiveCount++;
 		}
 		header.inactive_count = inactiveCount;
 		header.is_dirty = 1;
@@ -320,7 +332,8 @@ namespace graph::storage {
 	std::vector<bool> SegmentTracker::getActivityBitmap(uint64_t offset) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		auto it = segments_.find(offset);
-		if (it == segments_.end()) throw std::runtime_error("Segment not found");
+		if (it == segments_.end())
+			throw std::runtime_error("Segment not found");
 
 		const SegmentHeader &header = it->second;
 		std::vector<bool> activityMap(header.used);
@@ -334,14 +347,13 @@ namespace graph::storage {
 		setBitmapBit(offset, index, active);
 	}
 
-	bool SegmentTracker::isEntityActive(uint64_t offset, uint32_t index) const {
-		return getBitmapBit(offset, index);
-	}
+	bool SegmentTracker::isEntityActive(uint64_t offset, uint32_t index) const { return getBitmapBit(offset, index); }
 
 	uint32_t SegmentTracker::countActiveEntities(uint64_t offset) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		auto it = segments_.find(offset);
-		if (it == segments_.end()) throw std::runtime_error("Segment not found");
+		if (it == segments_.end())
+			throw std::runtime_error("Segment not found");
 		return it->second.used - it->second.inactive_count;
 	}
 
@@ -368,7 +380,7 @@ namespace graph::storage {
 		}
 
 		// 2. Slow Path: Linear Scan (Fallback if index is not ready)
-		uint64_t offset = SegmentTypeRegistry::getChainHead(type);
+		uint64_t offset = registry_.getChainHead(type);
 		while (offset != 0) {
 			SegmentHeader &header = getSegmentHeader(offset);
 			if (entityId >= header.start_id && entityId < header.start_id + header.capacity) {

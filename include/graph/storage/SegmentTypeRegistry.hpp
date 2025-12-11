@@ -24,22 +24,33 @@ namespace graph::storage {
 	 */
 	class SegmentTypeRegistry {
 	public:
-		static void registerType(const EntityType type) { instance().typeInfo_[type] = TypeInfo{}; }
+		SegmentTypeRegistry() = default;
+		~SegmentTypeRegistry() = default;
 
-		static void setChainHead(const EntityType type, const uint64_t offset) {
-			instance().typeInfo_[type].chainHead = offset;
+		void registerType(const EntityType type) {
+			typeInfo_[type] = TypeInfo{};
 		}
 
-		static uint64_t getChainHead(const EntityType type) {
-			return instance().typeInfo_.contains(type) ? instance().typeInfo_[type].chainHead : 0;
+		void setChainHead(const EntityType type, const uint64_t offset) {
+			typeInfo_[type].chainHead = offset;
 		}
 
-		static std::vector<EntityType> getAllTypes() {
+		[[nodiscard]] uint64_t getChainHead(const EntityType type) const {
+			auto it = typeInfo_.find(type);
+			return it != typeInfo_.end() ? it->second.chainHead : 0;
+		}
+
+		[[nodiscard]] std::vector<EntityType> getAllTypes() const {
 			std::vector<EntityType> types;
-			for (const auto &type: instance().typeInfo_ | std::views::keys) {
+			types.reserve(typeInfo_.size());
+			for (const auto &type: typeInfo_ | std::views::keys) {
 				types.push_back(type);
 			}
 			return types;
+		}
+
+		void clear() {
+			typeInfo_.clear();
 		}
 
 	private:
@@ -48,11 +59,6 @@ namespace graph::storage {
 		};
 
 		std::unordered_map<EntityType, TypeInfo> typeInfo_;
-
-		static SegmentTypeRegistry &instance() {
-			static SegmentTypeRegistry registry;
-			return registry;
-		}
 	};
 
 } // namespace graph::storage

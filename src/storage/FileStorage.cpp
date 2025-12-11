@@ -69,7 +69,7 @@ namespace graph::storage {
 	void FileStorage::initializeComponents() {
 		fileHeaderManager->extractFileHeaderInfo();
 
-		segmentTracker = std::make_shared<SegmentTracker>(fileStream);
+		segmentTracker = std::make_shared<SegmentTracker>(fileStream, fileHeader);
 
 		// Initialize ID allocator
 		idAllocator = std::make_unique<IDAllocator>(
@@ -81,7 +81,6 @@ namespace graph::storage {
 		// Then create the space manager
 		spaceManager =
 				std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager, idAllocator);
-		spaceManager->initialize(fileHeader);
 
 		// Initialize data manager
 		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,

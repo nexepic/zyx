@@ -71,7 +71,7 @@ protected:
         file->flush();
 
         // 2. Initialize Components
-        segmentTracker = std::make_shared<SegmentTracker>(file);
+        segmentTracker = std::make_shared<SegmentTracker>(file, header);
         fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
 
         idAllocator = std::make_shared<IDAllocator>(
@@ -87,7 +87,6 @@ protected:
         spaceManager = std::make_shared<SpaceManager>(
             file, testFilePath.string(), segmentTracker, fileHeaderManager, idAllocator
         );
-        spaceManager->initialize(header);
 
         dataManager = std::make_shared<DataManager>(
             file, 100, header, idAllocator, segmentTracker, spaceManager

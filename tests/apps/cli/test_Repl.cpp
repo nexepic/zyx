@@ -25,9 +25,3 @@ protected:
         // Cleanup code if needed
     }
 };
-
-TEST_F(REPLTest, ShouldExit) {
-    ASSERT_TRUE(repl.shouldExit("exit"));
-    ASSERT_FALSE(repl.shouldExit("addNode"));
-    ASSERT_FALSE(repl.shouldExit("addEdge"));
-}
