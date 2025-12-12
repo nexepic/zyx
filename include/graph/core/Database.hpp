@@ -12,7 +12,7 @@
 
 #include <string>
 #include "graph/core/Transaction.hpp"
-#include "graph/query/QueryEngine.hpp"
+#include "graph/query/api/QueryEngine.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 namespace graph {

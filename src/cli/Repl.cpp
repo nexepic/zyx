@@ -12,7 +12,6 @@
 #include <iostream>
 #include <sstream>
 #include "graph/cli/linenoise.hpp"
-#include "graph/query/QueryResult.hpp"
 
 namespace graph {
 
@@ -71,7 +70,7 @@ namespace graph {
         linenoise::linenoiseState ls(prompt);
         ls.SetHistoryMaxLen(100);
 
-        std::cout << "MetrixDB Shell. Type 'help' for commands or enter Cypher queries directly.\n";
+        std::cout << "<Metrix> Shell. Type 'help' for commands or enter Cypher queries directly.\n";
 
         std::string line;
         while (true) {

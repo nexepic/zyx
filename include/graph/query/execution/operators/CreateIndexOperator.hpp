@@ -58,6 +58,10 @@ namespace graph::query::execution::operators {
             return {"result"};
         }
 
+    	[[nodiscard]] std::string toString() const override {
+        	return "CreateIndex(label=" + label_ + ", prop=" + propertyKey_ + ")";
+        }
+
     private:
         std::shared_ptr<indexes::IndexManager> indexManager_;
         std::string label_;

@@ -1,4 +1,4 @@
-subdir('parser')
+subdir('query/parser')
 
 # Find source files, but we need to exclude the parser directory since it is already handled as a separate library
 python = import('python').find_installation()
@@ -7,7 +7,7 @@ import os
 import sys
 
 # Paths to exclude (relative to src)
-EXCLUDE_DIRS = ['parser']
+EXCLUDE_DIRS = ['query/parser']
 
 base_dir = sys.argv[1]
 for root, dirs, files in os.walk(base_dir):

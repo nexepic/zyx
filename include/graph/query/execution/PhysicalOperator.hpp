@@ -43,6 +43,21 @@ namespace graph::query::execution {
 		 * @brief Returns the schema (variables) produced by this operator.
 		 */
 		[[nodiscard]] virtual std::vector<std::string> getOutputVariables() const = 0;
+
+		/**
+		 * @brief Returns a short description of this operator.
+		 * e.g., "NodeScan(n:User)" or "Filter(age > 10)"
+		 */
+		[[nodiscard]] virtual std::string toString() const = 0;
+
+		/**
+		 * @brief Returns raw pointers to children operators.
+		 * Used by the PlanVisualizer to traverse the tree.
+		 * Default implementation returns empty (leaf node).
+		 */
+		[[nodiscard]] virtual std::vector<const PhysicalOperator*> getChildren() const {
+			return {};
+		}
 	};
 
 } // namespace graph::query::execution

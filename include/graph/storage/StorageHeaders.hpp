@@ -18,7 +18,7 @@
 
 namespace graph::storage {
 
-    constexpr char FILE_HEADER_MAGIC_STRING[] = "METRIXDB";
+    constexpr char FILE_HEADER_MAGIC_STRING[] = "<METRIX>";
     constexpr uint32_t PAGE_SIZE = 4096;
     // constexpr uint32_t SEGMENT_SIZE = PAGE_SIZE * 32; // 128K per segment
     constexpr uint32_t SEGMENT_SIZE = 1024;

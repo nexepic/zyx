@@ -91,6 +91,16 @@ namespace graph::query::execution::operators {
             child_ = std::move(child);
         }
 
+    	[[nodiscard]] std::string toString() const override {
+        	return "CreateEdge(var=" + variable_ + ", type=" + label_ +
+				   ", src=" + sourceVar_ + ", tgt=" + targetVar_ + ")";
+        }
+
+    	[[nodiscard]] std::vector<const PhysicalOperator*> getChildren() const override {
+        	if (child_) return {child_.get()};
+        	return {};
+        }
+
     private:
         std::shared_ptr<storage::DataManager> dm_;
         std::unique_ptr<PhysicalOperator> child_; // Upstream operator

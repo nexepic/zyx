@@ -11,61 +11,42 @@
 #pragma once
 
 #include "../PhysicalOperator.hpp"
+#include "../ScanConfigs.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/query/indexes/IndexManager.hpp"
-#include <memory>
-#include <vector>
-#include <string>
 
 namespace graph::query::execution::operators {
 
+	/**
+	 * @brief A pure source operator.
+	 * It does NOT perform property filtering (except implicit filtering via Index lookup).
+	 * It ALWAYS hydrates the node properties.
+	 */
 	class NodeScanOperator : public PhysicalOperator {
 	public:
-		/**
-		 * @brief Constructs a NodeScanOperator.
-		 *
-		 * @param dataManager Storage access.
-		 * @param indexManager Index access.
-		 * @param variableName The Cypher variable (e.g., "n").
-		 * @param label The node label filter (optional).
-		 * @param key The property key for index lookup (optional).
-		 * @param value The property value for index lookup (optional).
-		 */
-		NodeScanOperator(std::shared_ptr<storage::DataManager> dataManager,
-						 std::shared_ptr<indexes::IndexManager> indexManager,
-						 std::string variableName,
-						 std::string label = "",
-						 std::string key = "",
-						 PropertyValue value = PropertyValue());
-
-		~NodeScanOperator() override = default;
+		NodeScanOperator(std::shared_ptr<storage::DataManager> dm,
+						 std::shared_ptr<indexes::IndexManager> im,
+						 NodeScanConfig config)
+			: dm_(std::move(dm)), im_(std::move(im)), config_(std::move(config)) {}
 
 		void open() override;
 		std::optional<RecordBatch> next() override;
-		void close() override;
-		[[nodiscard]] std::vector<std::string> getOutputVariables() const override;
+		void close() override { candidateIds_.clear(); }
+
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
+			return {config_.variable};
+		}
+
+		[[nodiscard]] std::string toString() const override {
+			return config_.toString();
+		}
 
 	private:
-		// Dependencies
-		std::shared_ptr<storage::DataManager> dataManager_;
-		std::shared_ptr<indexes::IndexManager> indexManager_;
+		std::shared_ptr<storage::DataManager> dm_;
+		std::shared_ptr<indexes::IndexManager> im_;
+		NodeScanConfig config_;
 
-		// Configuration
-		std::string variableName_;
-		std::string label_;
-
-		// Pushdown Predicates (for Property Index optimization)
-		std::string key_;
-		PropertyValue value_;
-
-		// Execution State
 		std::vector<int64_t> candidateIds_;
-		size_t currentIndex_ = 0;
-		bool useIndex_ = false;
-		static constexpr size_t BATCH_SIZE = 1000;
-
-		// Helper to load remaining IDs via Full Scan
-		void prepareFullScan();
+		size_t currentIdx_ = 0;
 	};
-
-} // namespace graph::query::execution::operators
+}

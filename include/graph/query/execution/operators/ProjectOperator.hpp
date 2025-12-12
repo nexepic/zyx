@@ -1,8 +1,8 @@
 /**
- * @file FilterOperator.hpp
+ * @file ProjectOperator.hpp
  * @author Nexepic
  * @brief This source code is licensed under MIT License.
- * @date 2025/12/10
+ * @date 2025/12/12
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
@@ -11,26 +11,21 @@
 #pragma once
 
 #include "../PhysicalOperator.hpp"
-#include <functional>
+#include <vector>
 #include <string>
 #include <memory>
 
 namespace graph::query::execution::operators {
 
-	class FilterOperator : public PhysicalOperator {
+	class ProjectOperator : public PhysicalOperator {
 	public:
-		using Predicate = std::function<bool(const Record&)>;
-
 		/**
-		 * @brief Constructs a FilterOperator.
-		 *
-		 * @param child The upstream operator.
-		 * @param predicate The generic lambda function for filtering.
-		 * @param predicateStr A string representation of the logic (for debugging/visualization).
+		 * @brief Constructs a ProjectOperator.
+		 * @param child Upstream operator.
+		 * @param variableNames List of variable names to keep in the result.
 		 */
-		FilterOperator(std::unique_ptr<PhysicalOperator> child,
-					   Predicate predicate,
-					   std::string predicateStr);
+		ProjectOperator(std::unique_ptr<PhysicalOperator> child,
+						std::vector<std::string> variableNames);
 
 		void open() override;
 		std::optional<RecordBatch> next() override;
@@ -44,8 +39,7 @@ namespace graph::query::execution::operators {
 
 	private:
 		std::unique_ptr<PhysicalOperator> child_;
-		Predicate predicate_;
-		std::string predicateStr_;
+		std::vector<std::string> variableNames_;
 	};
 
 } // namespace graph::query::execution::operators
