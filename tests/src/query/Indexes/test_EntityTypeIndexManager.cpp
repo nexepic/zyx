@@ -18,6 +18,7 @@
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/query/indexes/EntityTypeIndexManager.hpp"
+#include "graph/query/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 

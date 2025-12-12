@@ -16,6 +16,7 @@
 #include <memory>
 #include <numeric>
 #include "graph/core/Database.hpp"
+#include "graph/query/indexes/IndexManager.hpp"
 #include "graph/query/indexes/PropertyIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"

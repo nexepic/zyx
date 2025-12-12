@@ -8,16 +8,17 @@
  *
  **/
 
-#include <gtest/gtest.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <gtest/gtest.h>
 #include <memory>
-#include "graph/query/indexes/LabelIndex.hpp"
-#include "graph/storage/data/DataManager.hpp"
 #include "graph/core/Database.hpp"
+#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/query/indexes/LabelIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 class LabelIndexTest : public ::testing::Test {
 protected:

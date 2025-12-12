@@ -14,6 +14,8 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
+#include "graph/core/IndexTreeManager.hpp"
+#include "graph/query/indexes/IndexManager.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 
 using namespace graph;
