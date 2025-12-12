@@ -12,7 +12,7 @@
 
 #include <memory>
 #include <string>
-#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query::optimizer::rules {
 

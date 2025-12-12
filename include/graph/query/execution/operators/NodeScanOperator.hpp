@@ -13,7 +13,7 @@
 #include "../PhysicalOperator.hpp"
 #include "../ScanConfigs.hpp"
 #include "graph/storage/data/DataManager.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query::execution::operators {
 

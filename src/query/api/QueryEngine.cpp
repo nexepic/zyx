@@ -10,7 +10,7 @@
 
 #include "graph/query/api/QueryEngine.hpp"
 #include "CypherParserImpl.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query {
 

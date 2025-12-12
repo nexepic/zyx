@@ -16,8 +16,8 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/Database.hpp"
-#include "graph/query/indexes/IndexBuilder.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/IndexBuilder.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 constexpr size_t BATCH_SIZE = 1000;

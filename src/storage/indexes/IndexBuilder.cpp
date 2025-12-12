@@ -8,12 +8,12 @@
  *
  **/
 
-#include "graph/query/indexes/IndexBuilder.hpp"
+#include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
-#include "graph/query/indexes/LabelIndex.hpp"
-#include "graph/query/indexes/PropertyIndex.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/LabelIndex.hpp"
+#include "graph/storage/indexes/PropertyIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/DataManager.hpp"

@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/indexes/PropertyIndex.hpp"
+#include "graph/storage/indexes/PropertyIndex.hpp"
 #include <cmath>
 #include <ranges>
 #include "graph/storage/IDAllocator.hpp"

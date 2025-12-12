@@ -13,7 +13,7 @@
 #include <memory>
 
 #include "graph/query/execution/ScanConfigs.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 #include "rules/IndexPushdownRule.hpp"
 
 namespace graph::query::optimizer {

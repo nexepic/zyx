@@ -22,7 +22,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
-#include "graph/query/indexes/IEntityObserver.hpp"
+#include "graph/storage/indexes/IEntityObserver.hpp"
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/PersistenceManager.hpp"

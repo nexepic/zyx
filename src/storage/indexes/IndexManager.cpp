@@ -8,10 +8,9 @@
  *
  **/
 
-#include "graph/query/indexes/IndexManager.hpp"
-
+#include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/log/Log.hpp"
-#include "graph/query/indexes/IndexBuilder.hpp"
+#include "graph/storage/indexes/IndexBuilder.hpp"
 
 namespace graph::query::indexes {
 

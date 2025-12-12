@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/indexes/EntityTypeIndexManager.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 
 namespace graph::query::indexes {
 

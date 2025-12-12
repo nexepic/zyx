@@ -8,7 +8,7 @@
  *
  **/
 
-#include "graph/query/indexes/LabelIndex.hpp"
+#include "graph/storage/indexes/LabelIndex.hpp"
 #include <algorithm>
 #include <graph/storage/IDAllocator.hpp>
 #include "graph/storage/data/DataManager.hpp"

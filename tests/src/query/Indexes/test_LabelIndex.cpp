@@ -15,8 +15,8 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/Database.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
-#include "graph/query/indexes/LabelIndex.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/LabelIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
