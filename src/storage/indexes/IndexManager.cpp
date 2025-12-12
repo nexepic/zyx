@@ -65,10 +65,15 @@ namespace graph::query::indexes {
 	bool IndexManager::buildIndexes(const std::string &entityType) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		if (entityType == "node") {
+			// Explicitly enable label index before building
+			nodeIndexManager_->getLabelIndex()->createIndex();
+
 			return nodeIndexManager_->buildAllIndexes(
 					[&]() { return executeBuildTask([&]() { return indexBuilder_->buildAllNodeIndexes(); }); });
 		}
 		if (entityType == "edge") {
+			edgeIndexManager_->getLabelIndex()->createIndex();
+
 			return edgeIndexManager_->buildAllIndexes(
 					[&]() { return executeBuildTask([&]() { return indexBuilder_->buildAllEdgeIndexes(); }); });
 		}
@@ -78,11 +83,16 @@ namespace graph::query::indexes {
 	bool IndexManager::buildPropertyIndex(const std::string &entityType, const std::string &key) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		if (entityType == "node") {
+			// Register key immediately (Metadata creation)
+			nodeIndexManager_->getPropertyIndex()->createIndex(key);
+
 			return nodeIndexManager_->buildPropertyIndex(key, [&]() {
 				return executeBuildTask([&]() { return indexBuilder_->buildNodePropertyIndex(key); });
 			});
 		}
 		if (entityType == "edge") {
+			edgeIndexManager_->getPropertyIndex()->createIndex(key);
+
 			return edgeIndexManager_->buildPropertyIndex(key, [&]() {
 				return executeBuildTask([&]() { return indexBuilder_->buildEdgePropertyIndex(key); });
 			});

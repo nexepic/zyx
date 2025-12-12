@@ -35,6 +35,19 @@ namespace graph::query::indexes {
 		void drop();
 		void flush() const;
 
+		/**
+		 * @brief Registers a property key for indexing immediately.
+		 * Sets the type to UNKNOWN initially if not determined.
+		 * This ensures listIndexes() sees it even if data is empty.
+		 */
+		void createIndex(const std::string& key);
+
+		/**
+		 * @brief Clears the data (B-Trees) for a key but KEEPS the index definition.
+		 * Used by IndexBuilder for rebuilding.
+		 */
+		void clearIndexData(const std::string& key);
+
 		// Add property to index
 		void addProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
 

@@ -119,6 +119,42 @@ namespace graph::query::indexes {
 		saveState();
 	}
 
+	void PropertyIndex::createIndex(const std::string& key) {
+		std::unique_lock lock(mutex_);
+		// If it doesn't exist, register it with UNKNOWN type.
+		// If it exists, we leave it alone (preserving existing type info).
+		if (indexedKeyTypes_.find(key) == indexedKeyTypes_.end()) {
+			indexedKeyTypes_[key] = PropertyType::UNKNOWN;
+		}
+	}
+
+	void PropertyIndex::clearIndexData(const std::string& key) {
+		std::unique_lock lock(mutex_);
+
+		// We do NOT remove from indexedKeyTypes_. We only clear the trees.
+		auto it = indexedKeyTypes_.find(key);
+		if (it == indexedKeyTypes_.end()) {
+			return;
+		}
+
+		// Clear roots for all potential types associated with this key
+		// (Though logically one key usually maps to one type, we clear all to be safe during rebuild)
+		auto clearRoot = [&](auto& rootMap, auto& treeManager) {
+			if (auto rootIt = rootMap.find(key); rootIt != rootMap.end()) {
+				treeManager->clear(rootIt->second);
+				rootMap.erase(rootIt);
+			}
+		};
+
+		clearRoot(stringRoots_, stringTreeManager_);
+		clearRoot(intRoots_, intTreeManager_);
+		clearRoot(doubleRoots_, doubleTreeManager_);
+		clearRoot(boolRoots_, boolTreeManager_);
+
+		// Reset type to UNKNOWN so it can be re-determined during rebuild
+		indexedKeyTypes_[key] = PropertyType::UNKNOWN;
+	}
+
 	void PropertyIndex::saveState() const {
 		std::shared_lock lock(mutex_);
 
@@ -152,9 +188,14 @@ namespace graph::query::indexes {
 
 		auto it = indexedKeyTypes_.find(key);
 		if (it == indexedKeyTypes_.end()) {
+			// Auto-creation policy: if not registered, register now.
 			indexedKeyTypes_[key] = valueType;
+		} else if (it->second == PropertyType::UNKNOWN) {
+			// Transition from empty/unknown to concrete type
+			it->second = valueType;
 		} else if (it->second != valueType) {
-			// Type mismatch warning remains the same
+			// Type mismatch: In a strict schema, throw. In flexible, maybe ignore or log.
+			// For now, we return as per original logic.
 			return;
 		}
 
@@ -165,7 +206,6 @@ namespace graph::query::indexes {
 			rootMap[key] = treeManager->initialize();
 		}
 
-		// Pass the PropertyValue directly to the manager's insert method.
 		rootMap[key] = treeManager->insert(rootMap[key], value, entityId);
 	}
 

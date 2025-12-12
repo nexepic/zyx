@@ -96,7 +96,10 @@ namespace graph::query::indexes {
 	bool IndexBuilder::buildNodePropertyIndex(const std::string &key) const {
 		try {
 			auto propertyIndex = indexManager_->getNodeIndexManager()->getPropertyIndex();
-			propertyIndex->clearKey(key);
+
+			// CRITICAL CHANGE: Use clearIndexData instead of clearKey.
+			// clearKey would remove the definition; clearIndexData only resets the tree/data.
+			propertyIndex->clearIndexData(key);
 
 			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
@@ -121,7 +124,9 @@ namespace graph::query::indexes {
 	bool IndexBuilder::buildEdgePropertyIndex(const std::string &key) const {
 		try {
 			auto propertyIndex = indexManager_->getEdgeIndexManager()->getPropertyIndex();
-			propertyIndex->clearKey(key);
+
+			// CRITICAL CHANGE: Use clearIndexData instead of clearKey.
+			propertyIndex->clearIndexData(key);
 
 			for (const auto &[startId, endId]: getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;

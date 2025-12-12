@@ -26,15 +26,34 @@ namespace graph::query::indexes {
 
 	void LabelIndex::initialize() {
 		std::unique_lock lock(mutex_);
-
-		// Load the rootId from state
 		loadRootId();
+
+		// Load enabled state
+		auto props = dataManager_->getStateProperties(STATE_ENABLED_KEY);
+		if (props.contains("enabled")) {
+			// Assuming PropertyValue has a boolean or int representation
+			// Adjust based on your PropertyValue implementation
+			if (const auto* val = std::get_if<int64_t>(&props["enabled"].getVariant())) {
+				enabled_ = (*val != 0);
+			}
+		} else {
+			// Fallback: if rootId > 0, it implies it was enabled before
+			enabled_ = (rootId_ != 0);
+		}
+	}
+
+	void LabelIndex::createIndex() {
+		std::unique_lock lock(mutex_);
+		enabled_ = true;
+		// Ideally, persist immediately or wait for flush.
+		// Setting flag in memory is enough for listIndexes() to work immediately.
 	}
 
 	bool LabelIndex::isEmpty() const {
 		std::shared_lock lock(mutex_);
-		// The index is empty if no tree has been initialized (rootId_ is 0)
-		return rootId_ == 0;
+		// It's empty if it's not enabled.
+		// If it IS enabled, it's considered "present" even if it contains no nodes (rootId_ == 0).
+		return !enabled_;
 	}
 
 	void LabelIndex::clear() {
@@ -47,19 +66,25 @@ namespace graph::query::indexes {
 	}
 
 	void LabelIndex::drop() {
-		// Clear the index and reset rootId
 		clear();
-
-		// Remove the rootId from state registry using the specific key
+		std::unique_lock lock(mutex_);
+		enabled_ = false;
 		dataManager_->removeState(stateKey_);
+		dataManager_->removeState(STATE_ENABLED_KEY);
 	}
 
 	void LabelIndex::saveState() const {
 		std::shared_lock lock(mutex_);
-		if (rootId_ != 0) {
-			std::unordered_map<std::string, PropertyValue> properties;
-			properties["rootId"] = rootId_;
-			dataManager_->addStateProperties(stateKey_, properties);
+		if (enabled_) {
+			// Save root
+			std::unordered_map<std::string, PropertyValue> props;
+			props["root"] = rootId_;
+			dataManager_->addStateProperties(stateKey_, props);
+
+			// Save enabled flag
+			std::unordered_map<std::string, PropertyValue> flagProps;
+			flagProps["enabled"] = static_cast<int64_t>(1);
+			dataManager_->addStateProperties(STATE_ENABLED_KEY, flagProps);
 		}
 	}
 

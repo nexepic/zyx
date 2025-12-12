@@ -74,6 +74,11 @@ namespace graph::query::indexes {
 		 */
 		void initialize();
 
+		/**
+		 * @brief Explicitly creates/enables the label index.
+		 */
+		void createIndex();
+
 		bool isEmpty() const;
 
 		/**
@@ -95,7 +100,10 @@ namespace graph::query::indexes {
 		std::shared_ptr<IndexTreeManager> treeManager_;
 		mutable std::shared_mutex mutex_;
 		int64_t rootId_ = 0;
+		bool enabled_ = false;
 		const std::string stateKey_;
+
+		const std::string STATE_ENABLED_KEY;
 
 		void loadRootId();
 	};
