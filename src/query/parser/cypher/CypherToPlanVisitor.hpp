@@ -34,6 +34,8 @@ namespace graph::parser::cypher {
 		std::any visitQuery(CypherParser::QueryContext *ctx) override;
 		std::any visitMatchStatement(CypherParser::MatchStatementContext *ctx) override;
 		std::any visitCreateStatement(CypherParser::CreateStatementContext *ctx) override;
+		std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) override;
+		std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) override;
 
 		// Helper to parse literals
 		std::any visitLiteral(CypherParser::LiteralContext *ctx) override;

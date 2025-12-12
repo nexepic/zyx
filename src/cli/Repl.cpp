@@ -60,6 +60,20 @@ namespace graph {
                 std::cout << "]-> " << edge.getTargetNodeId() << "\n";
             }
         }
+
+    	if (result.rowCount() > 0) {
+    		std::cout << "--- Records (" << result.rowCount() << ") ---\n";
+
+    		if (result.getRows().empty()) return;
+
+    		for (const auto& row : result.getRows()) {
+    			std::cout << "| ";
+    			for (const auto& [key, val] : row) {
+    				std::cout << key << ": " << val.toString() << " | ";
+    			}
+    			std::cout << "\n";
+    		}
+    	}
     }
 
     REPL::REPL(Database &db) : db(db) {}

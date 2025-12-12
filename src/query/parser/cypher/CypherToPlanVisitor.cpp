@@ -402,6 +402,24 @@ namespace graph::parser::cypher {
 		return std::any();
 	}
 
+	std::any CypherToPlanVisitor::visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) {
+		// Grammar: SHOW INDEXES
+		auto op = planner_->showIndexes();
+		chainOperator(std::move(op));
+		return std::any();
+	}
+
+	std::any CypherToPlanVisitor::visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) {
+		// Grammar: DROP INDEX ON :Label(prop)
+
+		std::string label = ctx->label->getText();
+		std::string property = ctx->property->getText();
+
+		auto op = planner_->dropIndex(label, property);
+		chainOperator(std::move(op));
+		return std::any();
+	}
+
 	std::any CypherToPlanVisitor::visitLiteral(CypherParser::LiteralContext *ctx) { return parseValue(ctx); }
 
 	graph::PropertyValue CypherToPlanVisitor::parseValue(CypherParser::LiteralContext *ctx) {

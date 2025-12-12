@@ -27,6 +27,12 @@ public:
 
     virtual std::any visitStatement(CypherParser::StatementContext *context) = 0;
 
+    virtual std::any visitAdministrationStatement(CypherParser::AdministrationStatementContext *context) = 0;
+
+    virtual std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *context) = 0;
+
+    virtual std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *context) = 0;
+
     virtual std::any visitMatchStatement(CypherParser::MatchStatementContext *context) = 0;
 
     virtual std::any visitReturnClause(CypherParser::ReturnClauseContext *context) = 0;

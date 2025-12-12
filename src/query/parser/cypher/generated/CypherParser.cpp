@@ -56,7 +56,8 @@ void cypherParserInitialize() {
 #endif
   auto staticData = std::make_unique<CypherParserStaticData>(
     std::vector<std::string>{
-      "query", "statement", "matchStatement", "returnClause", "returnBody", 
+      "query", "statement", "administrationStatement", "showIndexesStatement", 
+      "dropIndexStatement", "matchStatement", "returnClause", "returnBody", 
       "returnItem", "expression", "createStatement", "indexDefinition", 
       "pattern", "patternPart", "patternElementChain", "relationshipPattern", 
       "relationshipDetail", "nodePattern", "whereClause", "propertyExpression", 
@@ -64,71 +65,80 @@ void cypherParserInitialize() {
     },
     std::vector<std::string>{
       "", "'*'", "'-'", "'['", "']'", "", "", "", "", "", "", "", "", "", 
-      "", "", "", "", "", "'('", "')'", "'{'", "'}'", "':'", "','", "'.'", 
-      "'<'", "'>'", "'='", "'<>'", "'>='", "'<='"
+      "", "", "", "", "", "", "", "", "'('", "')'", "'{'", "'}'", "':'", 
+      "','", "'.'", "'<'", "'>'", "'='", "'<>'", "'>='", "'<='"
     },
     std::vector<std::string>{
-      "", "", "", "", "", "K_INDEX", "K_ON", "K_MATCH", "K_CREATE", "K_WHERE", 
-      "K_RETURN", "K_AS", "NULL_LITERAL", "BOOLEAN", "ID", "STRING", "INTEGER", 
-      "DECIMAL", "WS", "LPAREN", "RPAREN", "LBRACE", "RBRACE", "COLON", 
-      "COMMA", "DOT", "LT", "GT", "EQ", "NEQ", "GTE", "LTE"
+      "", "", "", "", "", "K_INDEX", "K_SHOW", "K_DROP", "K_INDEXES", "K_ON", 
+      "K_MATCH", "K_CREATE", "K_WHERE", "K_RETURN", "K_AS", "NULL_LITERAL", 
+      "BOOLEAN", "ID", "STRING", "INTEGER", "DECIMAL", "WS", "LPAREN", "RPAREN", 
+      "LBRACE", "RBRACE", "COLON", "COMMA", "DOT", "LT", "GT", "EQ", "NEQ", 
+      "GTE", "LTE"
     }
   );
   static const int32_t serializedATNSegment[] = {
-  	4,1,31,175,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
+  	4,1,34,198,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
   	7,7,7,2,8,7,8,2,9,7,9,2,10,7,10,2,11,7,11,2,12,7,12,2,13,7,13,2,14,7,
-  	14,2,15,7,15,2,16,7,16,2,17,7,17,2,18,7,18,2,19,7,19,1,0,1,0,1,0,1,1,
-  	1,1,3,1,46,8,1,1,2,1,2,1,2,1,2,3,2,52,8,2,1,2,3,2,55,8,2,1,3,1,3,1,3,
-  	1,4,1,4,1,4,5,4,63,8,4,10,4,12,4,66,9,4,1,4,3,4,69,8,4,1,5,1,5,1,5,3,
-  	5,74,8,5,1,6,1,6,1,6,3,6,79,8,6,1,7,1,7,1,7,3,7,84,8,7,1,8,1,8,1,8,1,
-  	8,1,8,1,8,1,8,1,8,1,9,1,9,1,9,5,9,97,8,9,10,9,12,9,100,9,9,1,10,1,10,
-  	5,10,104,8,10,10,10,12,10,107,9,10,1,11,1,11,1,11,1,12,3,12,113,8,12,
-  	1,12,1,12,1,12,1,12,1,12,3,12,120,8,12,1,13,1,13,3,13,124,8,13,1,13,1,
-  	13,3,13,128,8,13,1,13,3,13,131,8,13,1,13,1,13,1,14,1,14,3,14,137,8,14,
-  	1,14,1,14,3,14,141,8,14,1,14,3,14,144,8,14,1,14,1,14,1,15,1,15,1,15,1,
-  	15,1,16,1,16,1,16,1,16,1,17,1,17,1,17,1,17,5,17,160,8,17,10,17,12,17,
-  	163,9,17,3,17,165,8,17,1,17,1,17,1,18,1,18,1,18,1,18,1,19,1,19,1,19,0,
-  	0,20,0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,0,2,1,0,26,
-  	31,2,0,12,13,15,17,175,0,40,1,0,0,0,2,45,1,0,0,0,4,47,1,0,0,0,6,56,1,
-  	0,0,0,8,68,1,0,0,0,10,70,1,0,0,0,12,78,1,0,0,0,14,80,1,0,0,0,16,85,1,
-  	0,0,0,18,93,1,0,0,0,20,101,1,0,0,0,22,108,1,0,0,0,24,112,1,0,0,0,26,121,
-  	1,0,0,0,28,134,1,0,0,0,30,147,1,0,0,0,32,151,1,0,0,0,34,155,1,0,0,0,36,
-  	168,1,0,0,0,38,172,1,0,0,0,40,41,3,2,1,0,41,42,5,0,0,1,42,1,1,0,0,0,43,
-  	46,3,4,2,0,44,46,3,14,7,0,45,43,1,0,0,0,45,44,1,0,0,0,46,3,1,0,0,0,47,
-  	48,5,7,0,0,48,51,3,18,9,0,49,50,5,9,0,0,50,52,3,30,15,0,51,49,1,0,0,0,
-  	51,52,1,0,0,0,52,54,1,0,0,0,53,55,3,6,3,0,54,53,1,0,0,0,54,55,1,0,0,0,
-  	55,5,1,0,0,0,56,57,5,10,0,0,57,58,3,8,4,0,58,7,1,0,0,0,59,64,3,10,5,0,
-  	60,61,5,24,0,0,61,63,3,10,5,0,62,60,1,0,0,0,63,66,1,0,0,0,64,62,1,0,0,
-  	0,64,65,1,0,0,0,65,69,1,0,0,0,66,64,1,0,0,0,67,69,5,1,0,0,68,59,1,0,0,
-  	0,68,67,1,0,0,0,69,9,1,0,0,0,70,73,3,12,6,0,71,72,5,11,0,0,72,74,5,14,
-  	0,0,73,71,1,0,0,0,73,74,1,0,0,0,74,11,1,0,0,0,75,79,3,32,16,0,76,79,5,
-  	14,0,0,77,79,3,38,19,0,78,75,1,0,0,0,78,76,1,0,0,0,78,77,1,0,0,0,79,13,
-  	1,0,0,0,80,83,5,8,0,0,81,84,3,16,8,0,82,84,3,18,9,0,83,81,1,0,0,0,83,
-  	82,1,0,0,0,84,15,1,0,0,0,85,86,5,5,0,0,86,87,5,6,0,0,87,88,5,23,0,0,88,
-  	89,5,14,0,0,89,90,5,19,0,0,90,91,5,14,0,0,91,92,5,20,0,0,92,17,1,0,0,
-  	0,93,98,3,20,10,0,94,95,5,24,0,0,95,97,3,20,10,0,96,94,1,0,0,0,97,100,
-  	1,0,0,0,98,96,1,0,0,0,98,99,1,0,0,0,99,19,1,0,0,0,100,98,1,0,0,0,101,
-  	105,3,28,14,0,102,104,3,22,11,0,103,102,1,0,0,0,104,107,1,0,0,0,105,103,
-  	1,0,0,0,105,106,1,0,0,0,106,21,1,0,0,0,107,105,1,0,0,0,108,109,3,24,12,
-  	0,109,110,3,28,14,0,110,23,1,0,0,0,111,113,5,26,0,0,112,111,1,0,0,0,112,
-  	113,1,0,0,0,113,114,1,0,0,0,114,115,5,2,0,0,115,116,1,0,0,0,116,117,3,
-  	26,13,0,117,119,5,2,0,0,118,120,5,27,0,0,119,118,1,0,0,0,119,120,1,0,
-  	0,0,120,25,1,0,0,0,121,123,5,3,0,0,122,124,5,14,0,0,123,122,1,0,0,0,123,
-  	124,1,0,0,0,124,127,1,0,0,0,125,126,5,23,0,0,126,128,5,14,0,0,127,125,
-  	1,0,0,0,127,128,1,0,0,0,128,130,1,0,0,0,129,131,3,34,17,0,130,129,1,0,
-  	0,0,130,131,1,0,0,0,131,132,1,0,0,0,132,133,5,4,0,0,133,27,1,0,0,0,134,
-  	136,5,19,0,0,135,137,5,14,0,0,136,135,1,0,0,0,136,137,1,0,0,0,137,140,
-  	1,0,0,0,138,139,5,23,0,0,139,141,5,14,0,0,140,138,1,0,0,0,140,141,1,0,
-  	0,0,141,143,1,0,0,0,142,144,3,34,17,0,143,142,1,0,0,0,143,144,1,0,0,0,
-  	144,145,1,0,0,0,145,146,5,20,0,0,146,29,1,0,0,0,147,148,3,32,16,0,148,
-  	149,7,0,0,0,149,150,3,38,19,0,150,31,1,0,0,0,151,152,5,14,0,0,152,153,
-  	5,25,0,0,153,154,5,14,0,0,154,33,1,0,0,0,155,164,5,21,0,0,156,161,3,36,
-  	18,0,157,158,5,24,0,0,158,160,3,36,18,0,159,157,1,0,0,0,160,163,1,0,0,
-  	0,161,159,1,0,0,0,161,162,1,0,0,0,162,165,1,0,0,0,163,161,1,0,0,0,164,
-  	156,1,0,0,0,164,165,1,0,0,0,165,166,1,0,0,0,166,167,5,22,0,0,167,35,1,
-  	0,0,0,168,169,5,14,0,0,169,170,5,23,0,0,170,171,3,38,19,0,171,37,1,0,
-  	0,0,172,173,7,1,0,0,173,39,1,0,0,0,20,45,51,54,64,68,73,78,83,98,105,
-  	112,119,123,127,130,136,140,143,161,164
+  	14,2,15,7,15,2,16,7,16,2,17,7,17,2,18,7,18,2,19,7,19,2,20,7,20,2,21,7,
+  	21,2,22,7,22,1,0,1,0,1,0,1,1,1,1,1,1,3,1,53,8,1,1,2,1,2,3,2,57,8,2,1,
+  	3,1,3,1,3,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,5,1,5,1,5,1,5,3,5,75,
+  	8,5,1,5,3,5,78,8,5,1,6,1,6,1,6,1,7,1,7,1,7,5,7,86,8,7,10,7,12,7,89,9,
+  	7,1,7,3,7,92,8,7,1,8,1,8,1,8,3,8,97,8,8,1,9,1,9,1,9,3,9,102,8,9,1,10,
+  	1,10,1,10,3,10,107,8,10,1,11,1,11,1,11,1,11,1,11,1,11,1,11,1,11,1,12,
+  	1,12,1,12,5,12,120,8,12,10,12,12,12,123,9,12,1,13,1,13,5,13,127,8,13,
+  	10,13,12,13,130,9,13,1,14,1,14,1,14,1,15,3,15,136,8,15,1,15,1,15,1,15,
+  	1,15,1,15,3,15,143,8,15,1,16,1,16,3,16,147,8,16,1,16,1,16,3,16,151,8,
+  	16,1,16,3,16,154,8,16,1,16,1,16,1,17,1,17,3,17,160,8,17,1,17,1,17,3,17,
+  	164,8,17,1,17,3,17,167,8,17,1,17,1,17,1,18,1,18,1,18,1,18,1,19,1,19,1,
+  	19,1,19,1,20,1,20,1,20,1,20,5,20,183,8,20,10,20,12,20,186,9,20,3,20,188,
+  	8,20,1,20,1,20,1,21,1,21,1,21,1,21,1,22,1,22,1,22,0,0,23,0,2,4,6,8,10,
+  	12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,0,3,2,0,5,5,8,8,1,
+  	0,29,34,2,0,15,16,18,20,197,0,46,1,0,0,0,2,52,1,0,0,0,4,56,1,0,0,0,6,
+  	58,1,0,0,0,8,61,1,0,0,0,10,70,1,0,0,0,12,79,1,0,0,0,14,91,1,0,0,0,16,
+  	93,1,0,0,0,18,101,1,0,0,0,20,103,1,0,0,0,22,108,1,0,0,0,24,116,1,0,0,
+  	0,26,124,1,0,0,0,28,131,1,0,0,0,30,135,1,0,0,0,32,144,1,0,0,0,34,157,
+  	1,0,0,0,36,170,1,0,0,0,38,174,1,0,0,0,40,178,1,0,0,0,42,191,1,0,0,0,44,
+  	195,1,0,0,0,46,47,3,2,1,0,47,48,5,0,0,1,48,1,1,0,0,0,49,53,3,10,5,0,50,
+  	53,3,20,10,0,51,53,3,4,2,0,52,49,1,0,0,0,52,50,1,0,0,0,52,51,1,0,0,0,
+  	53,3,1,0,0,0,54,57,3,6,3,0,55,57,3,8,4,0,56,54,1,0,0,0,56,55,1,0,0,0,
+  	57,5,1,0,0,0,58,59,5,6,0,0,59,60,7,0,0,0,60,7,1,0,0,0,61,62,5,7,0,0,62,
+  	63,5,5,0,0,63,64,5,9,0,0,64,65,5,26,0,0,65,66,5,17,0,0,66,67,5,22,0,0,
+  	67,68,5,17,0,0,68,69,5,23,0,0,69,9,1,0,0,0,70,71,5,10,0,0,71,74,3,24,
+  	12,0,72,73,5,12,0,0,73,75,3,36,18,0,74,72,1,0,0,0,74,75,1,0,0,0,75,77,
+  	1,0,0,0,76,78,3,12,6,0,77,76,1,0,0,0,77,78,1,0,0,0,78,11,1,0,0,0,79,80,
+  	5,13,0,0,80,81,3,14,7,0,81,13,1,0,0,0,82,87,3,16,8,0,83,84,5,27,0,0,84,
+  	86,3,16,8,0,85,83,1,0,0,0,86,89,1,0,0,0,87,85,1,0,0,0,87,88,1,0,0,0,88,
+  	92,1,0,0,0,89,87,1,0,0,0,90,92,5,1,0,0,91,82,1,0,0,0,91,90,1,0,0,0,92,
+  	15,1,0,0,0,93,96,3,18,9,0,94,95,5,14,0,0,95,97,5,17,0,0,96,94,1,0,0,0,
+  	96,97,1,0,0,0,97,17,1,0,0,0,98,102,3,38,19,0,99,102,5,17,0,0,100,102,
+  	3,44,22,0,101,98,1,0,0,0,101,99,1,0,0,0,101,100,1,0,0,0,102,19,1,0,0,
+  	0,103,106,5,11,0,0,104,107,3,22,11,0,105,107,3,24,12,0,106,104,1,0,0,
+  	0,106,105,1,0,0,0,107,21,1,0,0,0,108,109,5,5,0,0,109,110,5,9,0,0,110,
+  	111,5,26,0,0,111,112,5,17,0,0,112,113,5,22,0,0,113,114,5,17,0,0,114,115,
+  	5,23,0,0,115,23,1,0,0,0,116,121,3,26,13,0,117,118,5,27,0,0,118,120,3,
+  	26,13,0,119,117,1,0,0,0,120,123,1,0,0,0,121,119,1,0,0,0,121,122,1,0,0,
+  	0,122,25,1,0,0,0,123,121,1,0,0,0,124,128,3,34,17,0,125,127,3,28,14,0,
+  	126,125,1,0,0,0,127,130,1,0,0,0,128,126,1,0,0,0,128,129,1,0,0,0,129,27,
+  	1,0,0,0,130,128,1,0,0,0,131,132,3,30,15,0,132,133,3,34,17,0,133,29,1,
+  	0,0,0,134,136,5,29,0,0,135,134,1,0,0,0,135,136,1,0,0,0,136,137,1,0,0,
+  	0,137,138,5,2,0,0,138,139,1,0,0,0,139,140,3,32,16,0,140,142,5,2,0,0,141,
+  	143,5,30,0,0,142,141,1,0,0,0,142,143,1,0,0,0,143,31,1,0,0,0,144,146,5,
+  	3,0,0,145,147,5,17,0,0,146,145,1,0,0,0,146,147,1,0,0,0,147,150,1,0,0,
+  	0,148,149,5,26,0,0,149,151,5,17,0,0,150,148,1,0,0,0,150,151,1,0,0,0,151,
+  	153,1,0,0,0,152,154,3,40,20,0,153,152,1,0,0,0,153,154,1,0,0,0,154,155,
+  	1,0,0,0,155,156,5,4,0,0,156,33,1,0,0,0,157,159,5,22,0,0,158,160,5,17,
+  	0,0,159,158,1,0,0,0,159,160,1,0,0,0,160,163,1,0,0,0,161,162,5,26,0,0,
+  	162,164,5,17,0,0,163,161,1,0,0,0,163,164,1,0,0,0,164,166,1,0,0,0,165,
+  	167,3,40,20,0,166,165,1,0,0,0,166,167,1,0,0,0,167,168,1,0,0,0,168,169,
+  	5,23,0,0,169,35,1,0,0,0,170,171,3,38,19,0,171,172,7,1,0,0,172,173,3,44,
+  	22,0,173,37,1,0,0,0,174,175,5,17,0,0,175,176,5,28,0,0,176,177,5,17,0,
+  	0,177,39,1,0,0,0,178,187,5,24,0,0,179,184,3,42,21,0,180,181,5,27,0,0,
+  	181,183,3,42,21,0,182,180,1,0,0,0,183,186,1,0,0,0,184,182,1,0,0,0,184,
+  	185,1,0,0,0,185,188,1,0,0,0,186,184,1,0,0,0,187,179,1,0,0,0,187,188,1,
+  	0,0,0,188,189,1,0,0,0,189,190,5,25,0,0,190,41,1,0,0,0,191,192,5,17,0,
+  	0,192,193,5,26,0,0,193,194,3,44,22,0,194,43,1,0,0,0,195,196,7,2,0,0,196,
+  	45,1,0,0,0,21,52,56,74,77,87,91,96,101,106,121,128,135,142,146,150,153,
+  	159,163,166,184,187
   };
   staticData->serializedATN = antlr4::atn::SerializedATNView(serializedATNSegment, sizeof(serializedATNSegment) / sizeof(serializedATNSegment[0]));
 
@@ -217,9 +227,9 @@ CypherParser::QueryContext* CypherParser::query() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(40);
+    setState(46);
     statement();
-    setState(41);
+    setState(47);
     match(CypherParser::EOF);
    
   }
@@ -244,6 +254,10 @@ CypherParser::MatchStatementContext* CypherParser::StatementContext::matchStatem
 
 CypherParser::CreateStatementContext* CypherParser::StatementContext::createStatement() {
   return getRuleContext<CypherParser::CreateStatementContext>(0);
+}
+
+CypherParser::AdministrationStatementContext* CypherParser::StatementContext::administrationStatement() {
+  return getRuleContext<CypherParser::AdministrationStatementContext>(0);
 }
 
 
@@ -271,26 +285,264 @@ CypherParser::StatementContext* CypherParser::statement() {
     exitRule();
   });
   try {
-    setState(45);
+    setState(52);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
       case CypherParser::K_MATCH: {
         enterOuterAlt(_localctx, 1);
-        setState(43);
+        setState(49);
         matchStatement();
         break;
       }
 
       case CypherParser::K_CREATE: {
         enterOuterAlt(_localctx, 2);
-        setState(44);
+        setState(50);
         createStatement();
+        break;
+      }
+
+      case CypherParser::K_SHOW:
+      case CypherParser::K_DROP: {
+        enterOuterAlt(_localctx, 3);
+        setState(51);
+        administrationStatement();
         break;
       }
 
     default:
       throw NoViableAltException(this);
     }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- AdministrationStatementContext ------------------------------------------------------------------
+
+CypherParser::AdministrationStatementContext::AdministrationStatementContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+CypherParser::ShowIndexesStatementContext* CypherParser::AdministrationStatementContext::showIndexesStatement() {
+  return getRuleContext<CypherParser::ShowIndexesStatementContext>(0);
+}
+
+CypherParser::DropIndexStatementContext* CypherParser::AdministrationStatementContext::dropIndexStatement() {
+  return getRuleContext<CypherParser::DropIndexStatementContext>(0);
+}
+
+
+size_t CypherParser::AdministrationStatementContext::getRuleIndex() const {
+  return CypherParser::RuleAdministrationStatement;
+}
+
+
+std::any CypherParser::AdministrationStatementContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<CypherVisitor*>(visitor))
+    return parserVisitor->visitAdministrationStatement(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+CypherParser::AdministrationStatementContext* CypherParser::administrationStatement() {
+  AdministrationStatementContext *_localctx = _tracker.createInstance<AdministrationStatementContext>(_ctx, getState());
+  enterRule(_localctx, 4, CypherParser::RuleAdministrationStatement);
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    setState(56);
+    _errHandler->sync(this);
+    switch (_input->LA(1)) {
+      case CypherParser::K_SHOW: {
+        enterOuterAlt(_localctx, 1);
+        setState(54);
+        showIndexesStatement();
+        break;
+      }
+
+      case CypherParser::K_DROP: {
+        enterOuterAlt(_localctx, 2);
+        setState(55);
+        dropIndexStatement();
+        break;
+      }
+
+    default:
+      throw NoViableAltException(this);
+    }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- ShowIndexesStatementContext ------------------------------------------------------------------
+
+CypherParser::ShowIndexesStatementContext::ShowIndexesStatementContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+tree::TerminalNode* CypherParser::ShowIndexesStatementContext::K_SHOW() {
+  return getToken(CypherParser::K_SHOW, 0);
+}
+
+tree::TerminalNode* CypherParser::ShowIndexesStatementContext::K_INDEX() {
+  return getToken(CypherParser::K_INDEX, 0);
+}
+
+tree::TerminalNode* CypherParser::ShowIndexesStatementContext::K_INDEXES() {
+  return getToken(CypherParser::K_INDEXES, 0);
+}
+
+
+size_t CypherParser::ShowIndexesStatementContext::getRuleIndex() const {
+  return CypherParser::RuleShowIndexesStatement;
+}
+
+
+std::any CypherParser::ShowIndexesStatementContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<CypherVisitor*>(visitor))
+    return parserVisitor->visitShowIndexesStatement(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+CypherParser::ShowIndexesStatementContext* CypherParser::showIndexesStatement() {
+  ShowIndexesStatementContext *_localctx = _tracker.createInstance<ShowIndexesStatementContext>(_ctx, getState());
+  enterRule(_localctx, 6, CypherParser::RuleShowIndexesStatement);
+  size_t _la = 0;
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    enterOuterAlt(_localctx, 1);
+    setState(58);
+    match(CypherParser::K_SHOW);
+    setState(59);
+    _la = _input->LA(1);
+    if (!(_la == CypherParser::K_INDEX
+
+    || _la == CypherParser::K_INDEXES)) {
+    _errHandler->recoverInline(this);
+    }
+    else {
+      _errHandler->reportMatch(this);
+      consume();
+    }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- DropIndexStatementContext ------------------------------------------------------------------
+
+CypherParser::DropIndexStatementContext::DropIndexStatementContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+tree::TerminalNode* CypherParser::DropIndexStatementContext::K_DROP() {
+  return getToken(CypherParser::K_DROP, 0);
+}
+
+tree::TerminalNode* CypherParser::DropIndexStatementContext::K_INDEX() {
+  return getToken(CypherParser::K_INDEX, 0);
+}
+
+tree::TerminalNode* CypherParser::DropIndexStatementContext::K_ON() {
+  return getToken(CypherParser::K_ON, 0);
+}
+
+tree::TerminalNode* CypherParser::DropIndexStatementContext::COLON() {
+  return getToken(CypherParser::COLON, 0);
+}
+
+tree::TerminalNode* CypherParser::DropIndexStatementContext::LPAREN() {
+  return getToken(CypherParser::LPAREN, 0);
+}
+
+tree::TerminalNode* CypherParser::DropIndexStatementContext::RPAREN() {
+  return getToken(CypherParser::RPAREN, 0);
+}
+
+std::vector<tree::TerminalNode *> CypherParser::DropIndexStatementContext::ID() {
+  return getTokens(CypherParser::ID);
+}
+
+tree::TerminalNode* CypherParser::DropIndexStatementContext::ID(size_t i) {
+  return getToken(CypherParser::ID, i);
+}
+
+
+size_t CypherParser::DropIndexStatementContext::getRuleIndex() const {
+  return CypherParser::RuleDropIndexStatement;
+}
+
+
+std::any CypherParser::DropIndexStatementContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<CypherVisitor*>(visitor))
+    return parserVisitor->visitDropIndexStatement(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+CypherParser::DropIndexStatementContext* CypherParser::dropIndexStatement() {
+  DropIndexStatementContext *_localctx = _tracker.createInstance<DropIndexStatementContext>(_ctx, getState());
+  enterRule(_localctx, 8, CypherParser::RuleDropIndexStatement);
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    enterOuterAlt(_localctx, 1);
+    setState(61);
+    match(CypherParser::K_DROP);
+    setState(62);
+    match(CypherParser::K_INDEX);
+    setState(63);
+    match(CypherParser::K_ON);
+    setState(64);
+    match(CypherParser::COLON);
+    setState(65);
+    antlrcpp::downCast<DropIndexStatementContext *>(_localctx)->label = match(CypherParser::ID);
+    setState(66);
+    match(CypherParser::LPAREN);
+    setState(67);
+    antlrcpp::downCast<DropIndexStatementContext *>(_localctx)->property = match(CypherParser::ID);
+    setState(68);
+    match(CypherParser::RPAREN);
    
   }
   catch (RecognitionException &e) {
@@ -343,7 +595,7 @@ std::any CypherParser::MatchStatementContext::accept(tree::ParseTreeVisitor *vis
 
 CypherParser::MatchStatementContext* CypherParser::matchStatement() {
   MatchStatementContext *_localctx = _tracker.createInstance<MatchStatementContext>(_ctx, getState());
-  enterRule(_localctx, 4, CypherParser::RuleMatchStatement);
+  enterRule(_localctx, 10, CypherParser::RuleMatchStatement);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -355,26 +607,26 @@ CypherParser::MatchStatementContext* CypherParser::matchStatement() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(47);
+    setState(70);
     match(CypherParser::K_MATCH);
-    setState(48);
+    setState(71);
     pattern();
-    setState(51);
+    setState(74);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::K_WHERE) {
-      setState(49);
+      setState(72);
       match(CypherParser::K_WHERE);
-      setState(50);
+      setState(73);
       whereClause();
     }
-    setState(54);
+    setState(77);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::K_RETURN) {
-      setState(53);
+      setState(76);
       returnClause();
     }
    
@@ -417,7 +669,7 @@ std::any CypherParser::ReturnClauseContext::accept(tree::ParseTreeVisitor *visit
 
 CypherParser::ReturnClauseContext* CypherParser::returnClause() {
   ReturnClauseContext *_localctx = _tracker.createInstance<ReturnClauseContext>(_ctx, getState());
-  enterRule(_localctx, 6, CypherParser::RuleReturnClause);
+  enterRule(_localctx, 12, CypherParser::RuleReturnClause);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -428,9 +680,9 @@ CypherParser::ReturnClauseContext* CypherParser::returnClause() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(56);
+    setState(79);
     match(CypherParser::K_RETURN);
-    setState(57);
+    setState(80);
     returnBody();
    
   }
@@ -480,7 +732,7 @@ std::any CypherParser::ReturnBodyContext::accept(tree::ParseTreeVisitor *visitor
 
 CypherParser::ReturnBodyContext* CypherParser::returnBody() {
   ReturnBodyContext *_localctx = _tracker.createInstance<ReturnBodyContext>(_ctx, getState());
-  enterRule(_localctx, 8, CypherParser::RuleReturnBody);
+  enterRule(_localctx, 14, CypherParser::RuleReturnBody);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -491,7 +743,7 @@ CypherParser::ReturnBodyContext* CypherParser::returnBody() {
     exitRule();
   });
   try {
-    setState(68);
+    setState(91);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
       case CypherParser::NULL_LITERAL:
@@ -501,17 +753,17 @@ CypherParser::ReturnBodyContext* CypherParser::returnBody() {
       case CypherParser::INTEGER:
       case CypherParser::DECIMAL: {
         enterOuterAlt(_localctx, 1);
-        setState(59);
+        setState(82);
         returnItem();
-        setState(64);
+        setState(87);
         _errHandler->sync(this);
         _la = _input->LA(1);
         while (_la == CypherParser::COMMA) {
-          setState(60);
+          setState(83);
           match(CypherParser::COMMA);
-          setState(61);
+          setState(84);
           returnItem();
-          setState(66);
+          setState(89);
           _errHandler->sync(this);
           _la = _input->LA(1);
         }
@@ -520,7 +772,7 @@ CypherParser::ReturnBodyContext* CypherParser::returnBody() {
 
       case CypherParser::T__0: {
         enterOuterAlt(_localctx, 2);
-        setState(67);
+        setState(90);
         match(CypherParser::T__0);
         break;
       }
@@ -572,7 +824,7 @@ std::any CypherParser::ReturnItemContext::accept(tree::ParseTreeVisitor *visitor
 
 CypherParser::ReturnItemContext* CypherParser::returnItem() {
   ReturnItemContext *_localctx = _tracker.createInstance<ReturnItemContext>(_ctx, getState());
-  enterRule(_localctx, 10, CypherParser::RuleReturnItem);
+  enterRule(_localctx, 16, CypherParser::RuleReturnItem);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -584,16 +836,16 @@ CypherParser::ReturnItemContext* CypherParser::returnItem() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(70);
+    setState(93);
     expression();
-    setState(73);
+    setState(96);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::K_AS) {
-      setState(71);
+      setState(94);
       match(CypherParser::K_AS);
-      setState(72);
+      setState(95);
       antlrcpp::downCast<ReturnItemContext *>(_localctx)->variable = match(CypherParser::ID);
     }
    
@@ -640,7 +892,7 @@ std::any CypherParser::ExpressionContext::accept(tree::ParseTreeVisitor *visitor
 
 CypherParser::ExpressionContext* CypherParser::expression() {
   ExpressionContext *_localctx = _tracker.createInstance<ExpressionContext>(_ctx, getState());
-  enterRule(_localctx, 12, CypherParser::RuleExpression);
+  enterRule(_localctx, 18, CypherParser::RuleExpression);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -650,26 +902,26 @@ CypherParser::ExpressionContext* CypherParser::expression() {
     exitRule();
   });
   try {
-    setState(78);
+    setState(101);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 6, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 7, _ctx)) {
     case 1: {
       enterOuterAlt(_localctx, 1);
-      setState(75);
+      setState(98);
       propertyExpression();
       break;
     }
 
     case 2: {
       enterOuterAlt(_localctx, 2);
-      setState(76);
+      setState(99);
       match(CypherParser::ID);
       break;
     }
 
     case 3: {
       enterOuterAlt(_localctx, 3);
-      setState(77);
+      setState(100);
       literal();
       break;
     }
@@ -721,7 +973,7 @@ std::any CypherParser::CreateStatementContext::accept(tree::ParseTreeVisitor *vi
 
 CypherParser::CreateStatementContext* CypherParser::createStatement() {
   CreateStatementContext *_localctx = _tracker.createInstance<CreateStatementContext>(_ctx, getState());
-  enterRule(_localctx, 14, CypherParser::RuleCreateStatement);
+  enterRule(_localctx, 20, CypherParser::RuleCreateStatement);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -732,19 +984,19 @@ CypherParser::CreateStatementContext* CypherParser::createStatement() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(80);
+    setState(103);
     match(CypherParser::K_CREATE);
-    setState(83);
+    setState(106);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
       case CypherParser::K_INDEX: {
-        setState(81);
+        setState(104);
         indexDefinition();
         break;
       }
 
       case CypherParser::LPAREN: {
-        setState(82);
+        setState(105);
         pattern();
         break;
       }
@@ -812,7 +1064,7 @@ std::any CypherParser::IndexDefinitionContext::accept(tree::ParseTreeVisitor *vi
 
 CypherParser::IndexDefinitionContext* CypherParser::indexDefinition() {
   IndexDefinitionContext *_localctx = _tracker.createInstance<IndexDefinitionContext>(_ctx, getState());
-  enterRule(_localctx, 16, CypherParser::RuleIndexDefinition);
+  enterRule(_localctx, 22, CypherParser::RuleIndexDefinition);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -823,19 +1075,19 @@ CypherParser::IndexDefinitionContext* CypherParser::indexDefinition() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(85);
+    setState(108);
     match(CypherParser::K_INDEX);
-    setState(86);
+    setState(109);
     match(CypherParser::K_ON);
-    setState(87);
+    setState(110);
     match(CypherParser::COLON);
-    setState(88);
+    setState(111);
     antlrcpp::downCast<IndexDefinitionContext *>(_localctx)->label = match(CypherParser::ID);
-    setState(89);
+    setState(112);
     match(CypherParser::LPAREN);
-    setState(90);
+    setState(113);
     antlrcpp::downCast<IndexDefinitionContext *>(_localctx)->property = match(CypherParser::ID);
-    setState(91);
+    setState(114);
     match(CypherParser::RPAREN);
    
   }
@@ -885,7 +1137,7 @@ std::any CypherParser::PatternContext::accept(tree::ParseTreeVisitor *visitor) {
 
 CypherParser::PatternContext* CypherParser::pattern() {
   PatternContext *_localctx = _tracker.createInstance<PatternContext>(_ctx, getState());
-  enterRule(_localctx, 18, CypherParser::RulePattern);
+  enterRule(_localctx, 24, CypherParser::RulePattern);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -897,17 +1149,17 @@ CypherParser::PatternContext* CypherParser::pattern() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(93);
+    setState(116);
     patternPart();
-    setState(98);
+    setState(121);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while (_la == CypherParser::COMMA) {
-      setState(94);
+      setState(117);
       match(CypherParser::COMMA);
-      setState(95);
+      setState(118);
       patternPart();
-      setState(100);
+      setState(123);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
@@ -955,7 +1207,7 @@ std::any CypherParser::PatternPartContext::accept(tree::ParseTreeVisitor *visito
 
 CypherParser::PatternPartContext* CypherParser::patternPart() {
   PatternPartContext *_localctx = _tracker.createInstance<PatternPartContext>(_ctx, getState());
-  enterRule(_localctx, 20, CypherParser::RulePatternPart);
+  enterRule(_localctx, 26, CypherParser::RulePatternPart);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -967,17 +1219,17 @@ CypherParser::PatternPartContext* CypherParser::patternPart() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(101);
+    setState(124);
     nodePattern();
-    setState(105);
+    setState(128);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while (_la == CypherParser::T__1
 
     || _la == CypherParser::LT) {
-      setState(102);
+      setState(125);
       patternElementChain();
-      setState(107);
+      setState(130);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
@@ -1021,7 +1273,7 @@ std::any CypherParser::PatternElementChainContext::accept(tree::ParseTreeVisitor
 
 CypherParser::PatternElementChainContext* CypherParser::patternElementChain() {
   PatternElementChainContext *_localctx = _tracker.createInstance<PatternElementChainContext>(_ctx, getState());
-  enterRule(_localctx, 22, CypherParser::RulePatternElementChain);
+  enterRule(_localctx, 28, CypherParser::RulePatternElementChain);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1032,9 +1284,9 @@ CypherParser::PatternElementChainContext* CypherParser::patternElementChain() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(108);
+    setState(131);
     relationshipPattern();
-    setState(109);
+    setState(132);
     nodePattern();
    
   }
@@ -1080,7 +1332,7 @@ std::any CypherParser::RelationshipPatternContext::accept(tree::ParseTreeVisitor
 
 CypherParser::RelationshipPatternContext* CypherParser::relationshipPattern() {
   RelationshipPatternContext *_localctx = _tracker.createInstance<RelationshipPatternContext>(_ctx, getState());
-  enterRule(_localctx, 24, CypherParser::RuleRelationshipPattern);
+  enterRule(_localctx, 30, CypherParser::RuleRelationshipPattern);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1092,27 +1344,27 @@ CypherParser::RelationshipPatternContext* CypherParser::relationshipPattern() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(112);
+    setState(135);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::LT) {
-      setState(111);
+      setState(134);
       match(CypherParser::LT);
     }
-    setState(114);
+    setState(137);
     match(CypherParser::T__1);
-    setState(116);
+    setState(139);
     relationshipDetail();
 
-    setState(117);
+    setState(140);
     match(CypherParser::T__1);
-    setState(119);
+    setState(142);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::GT) {
-      setState(118);
+      setState(141);
       match(CypherParser::GT);
     }
    
@@ -1163,7 +1415,7 @@ std::any CypherParser::RelationshipDetailContext::accept(tree::ParseTreeVisitor 
 
 CypherParser::RelationshipDetailContext* CypherParser::relationshipDetail() {
   RelationshipDetailContext *_localctx = _tracker.createInstance<RelationshipDetailContext>(_ctx, getState());
-  enterRule(_localctx, 26, CypherParser::RuleRelationshipDetail);
+  enterRule(_localctx, 32, CypherParser::RuleRelationshipDetail);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1175,35 +1427,35 @@ CypherParser::RelationshipDetailContext* CypherParser::relationshipDetail() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(121);
+    setState(144);
     match(CypherParser::T__2);
-    setState(123);
+    setState(146);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::ID) {
-      setState(122);
+      setState(145);
       antlrcpp::downCast<RelationshipDetailContext *>(_localctx)->variable = match(CypherParser::ID);
     }
-    setState(127);
+    setState(150);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::COLON) {
-      setState(125);
+      setState(148);
       match(CypherParser::COLON);
-      setState(126);
+      setState(149);
       antlrcpp::downCast<RelationshipDetailContext *>(_localctx)->label = match(CypherParser::ID);
     }
-    setState(130);
+    setState(153);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::LBRACE) {
-      setState(129);
+      setState(152);
       mapLiteral();
     }
-    setState(132);
+    setState(155);
     match(CypherParser::T__3);
    
   }
@@ -1261,7 +1513,7 @@ std::any CypherParser::NodePatternContext::accept(tree::ParseTreeVisitor *visito
 
 CypherParser::NodePatternContext* CypherParser::nodePattern() {
   NodePatternContext *_localctx = _tracker.createInstance<NodePatternContext>(_ctx, getState());
-  enterRule(_localctx, 28, CypherParser::RuleNodePattern);
+  enterRule(_localctx, 34, CypherParser::RuleNodePattern);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1273,35 +1525,35 @@ CypherParser::NodePatternContext* CypherParser::nodePattern() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(134);
+    setState(157);
     match(CypherParser::LPAREN);
-    setState(136);
+    setState(159);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::ID) {
-      setState(135);
+      setState(158);
       antlrcpp::downCast<NodePatternContext *>(_localctx)->variable = match(CypherParser::ID);
     }
-    setState(140);
+    setState(163);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::COLON) {
-      setState(138);
+      setState(161);
       match(CypherParser::COLON);
-      setState(139);
+      setState(162);
       antlrcpp::downCast<NodePatternContext *>(_localctx)->label = match(CypherParser::ID);
     }
-    setState(143);
+    setState(166);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::LBRACE) {
-      setState(142);
+      setState(165);
       mapLiteral();
     }
-    setState(145);
+    setState(168);
     match(CypherParser::RPAREN);
    
   }
@@ -1367,7 +1619,7 @@ std::any CypherParser::WhereClauseContext::accept(tree::ParseTreeVisitor *visito
 
 CypherParser::WhereClauseContext* CypherParser::whereClause() {
   WhereClauseContext *_localctx = _tracker.createInstance<WhereClauseContext>(_ctx, getState());
-  enterRule(_localctx, 30, CypherParser::RuleWhereClause);
+  enterRule(_localctx, 36, CypherParser::RuleWhereClause);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1379,20 +1631,20 @@ CypherParser::WhereClauseContext* CypherParser::whereClause() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(147);
+    setState(170);
     propertyExpression();
-    setState(148);
+    setState(171);
     antlrcpp::downCast<WhereClauseContext *>(_localctx)->op = _input->LT(1);
     _la = _input->LA(1);
     if (!((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 4227858432) != 0))) {
+      ((1ULL << _la) & 33822867456) != 0))) {
       antlrcpp::downCast<WhereClauseContext *>(_localctx)->op = _errHandler->recoverInline(this);
     }
     else {
       _errHandler->reportMatch(this);
       consume();
     }
-    setState(149);
+    setState(172);
     literal();
    
   }
@@ -1438,7 +1690,7 @@ std::any CypherParser::PropertyExpressionContext::accept(tree::ParseTreeVisitor 
 
 CypherParser::PropertyExpressionContext* CypherParser::propertyExpression() {
   PropertyExpressionContext *_localctx = _tracker.createInstance<PropertyExpressionContext>(_ctx, getState());
-  enterRule(_localctx, 32, CypherParser::RulePropertyExpression);
+  enterRule(_localctx, 38, CypherParser::RulePropertyExpression);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1449,11 +1701,11 @@ CypherParser::PropertyExpressionContext* CypherParser::propertyExpression() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(151);
+    setState(174);
     match(CypherParser::ID);
-    setState(152);
+    setState(175);
     match(CypherParser::DOT);
-    setState(153);
+    setState(176);
     match(CypherParser::ID);
    
   }
@@ -1511,7 +1763,7 @@ std::any CypherParser::MapLiteralContext::accept(tree::ParseTreeVisitor *visitor
 
 CypherParser::MapLiteralContext* CypherParser::mapLiteral() {
   MapLiteralContext *_localctx = _tracker.createInstance<MapLiteralContext>(_ctx, getState());
-  enterRule(_localctx, 34, CypherParser::RuleMapLiteral);
+  enterRule(_localctx, 40, CypherParser::RuleMapLiteral);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1523,29 +1775,29 @@ CypherParser::MapLiteralContext* CypherParser::mapLiteral() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(155);
+    setState(178);
     match(CypherParser::LBRACE);
-    setState(164);
+    setState(187);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == CypherParser::ID) {
-      setState(156);
+      setState(179);
       mapEntry();
-      setState(161);
+      setState(184);
       _errHandler->sync(this);
       _la = _input->LA(1);
       while (_la == CypherParser::COMMA) {
-        setState(157);
+        setState(180);
         match(CypherParser::COMMA);
-        setState(158);
+        setState(181);
         mapEntry();
-        setState(163);
+        setState(186);
         _errHandler->sync(this);
         _la = _input->LA(1);
       }
     }
-    setState(166);
+    setState(189);
     match(CypherParser::RBRACE);
    
   }
@@ -1591,7 +1843,7 @@ std::any CypherParser::MapEntryContext::accept(tree::ParseTreeVisitor *visitor) 
 
 CypherParser::MapEntryContext* CypherParser::mapEntry() {
   MapEntryContext *_localctx = _tracker.createInstance<MapEntryContext>(_ctx, getState());
-  enterRule(_localctx, 36, CypherParser::RuleMapEntry);
+  enterRule(_localctx, 42, CypherParser::RuleMapEntry);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1602,11 +1854,11 @@ CypherParser::MapEntryContext* CypherParser::mapEntry() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(168);
+    setState(191);
     antlrcpp::downCast<MapEntryContext *>(_localctx)->key = match(CypherParser::ID);
-    setState(169);
+    setState(192);
     match(CypherParser::COLON);
-    setState(170);
+    setState(193);
     literal();
    
   }
@@ -1660,7 +1912,7 @@ std::any CypherParser::LiteralContext::accept(tree::ParseTreeVisitor *visitor) {
 
 CypherParser::LiteralContext* CypherParser::literal() {
   LiteralContext *_localctx = _tracker.createInstance<LiteralContext>(_ctx, getState());
-  enterRule(_localctx, 38, CypherParser::RuleLiteral);
+  enterRule(_localctx, 44, CypherParser::RuleLiteral);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1672,10 +1924,10 @@ CypherParser::LiteralContext* CypherParser::literal() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(172);
+    setState(195);
     _la = _input->LA(1);
     if (!((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 241664) != 0))) {
+      ((1ULL << _la) & 1933312) != 0))) {
     _errHandler->recoverInline(this);
     }
     else {

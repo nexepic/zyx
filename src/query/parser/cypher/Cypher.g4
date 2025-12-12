@@ -17,6 +17,22 @@ query
 statement
     : matchStatement
     | createStatement
+    | administrationStatement
+    ;
+
+administrationStatement
+    : showIndexesStatement
+    | dropIndexStatement
+    ;
+
+// SHOW INDEXES
+showIndexesStatement
+    : K_SHOW (K_INDEX | K_INDEXES)
+    ;
+
+// DROP INDEX ON :Label(prop)
+dropIndexStatement
+    : K_DROP K_INDEX K_ON ':' label=ID '(' property=ID ')'
     ;
 
 // MATCH uses 'pattern' now, allowing (a)-[r]->(b)
@@ -115,6 +131,9 @@ literal
 // --- Lexer Rules ---
 
 K_INDEX  : 'INDEX' | 'index';
+K_SHOW   : 'SHOW' | 'show';
+K_DROP   : 'DROP' | 'drop';
+K_INDEXES: 'INDEXES' | 'indexes';
 K_ON     : 'ON' | 'on';
 K_MATCH  : 'MATCH' | 'match';
 K_CREATE : 'CREATE' | 'create';

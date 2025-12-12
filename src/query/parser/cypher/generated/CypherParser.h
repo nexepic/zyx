@@ -16,20 +16,22 @@ namespace graph::parser::cypher {
 class  CypherParser : public antlr4::Parser {
 public:
   enum {
-    T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, K_INDEX = 5, K_ON = 6, K_MATCH = 7, 
-    K_CREATE = 8, K_WHERE = 9, K_RETURN = 10, K_AS = 11, NULL_LITERAL = 12, 
-    BOOLEAN = 13, ID = 14, STRING = 15, INTEGER = 16, DECIMAL = 17, WS = 18, 
-    LPAREN = 19, RPAREN = 20, LBRACE = 21, RBRACE = 22, COLON = 23, COMMA = 24, 
-    DOT = 25, LT = 26, GT = 27, EQ = 28, NEQ = 29, GTE = 30, LTE = 31
+    T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, K_INDEX = 5, K_SHOW = 6, K_DROP = 7, 
+    K_INDEXES = 8, K_ON = 9, K_MATCH = 10, K_CREATE = 11, K_WHERE = 12, 
+    K_RETURN = 13, K_AS = 14, NULL_LITERAL = 15, BOOLEAN = 16, ID = 17, 
+    STRING = 18, INTEGER = 19, DECIMAL = 20, WS = 21, LPAREN = 22, RPAREN = 23, 
+    LBRACE = 24, RBRACE = 25, COLON = 26, COMMA = 27, DOT = 28, LT = 29, 
+    GT = 30, EQ = 31, NEQ = 32, GTE = 33, LTE = 34
   };
 
   enum {
-    RuleQuery = 0, RuleStatement = 1, RuleMatchStatement = 2, RuleReturnClause = 3, 
-    RuleReturnBody = 4, RuleReturnItem = 5, RuleExpression = 6, RuleCreateStatement = 7, 
-    RuleIndexDefinition = 8, RulePattern = 9, RulePatternPart = 10, RulePatternElementChain = 11, 
-    RuleRelationshipPattern = 12, RuleRelationshipDetail = 13, RuleNodePattern = 14, 
-    RuleWhereClause = 15, RulePropertyExpression = 16, RuleMapLiteral = 17, 
-    RuleMapEntry = 18, RuleLiteral = 19
+    RuleQuery = 0, RuleStatement = 1, RuleAdministrationStatement = 2, RuleShowIndexesStatement = 3, 
+    RuleDropIndexStatement = 4, RuleMatchStatement = 5, RuleReturnClause = 6, 
+    RuleReturnBody = 7, RuleReturnItem = 8, RuleExpression = 9, RuleCreateStatement = 10, 
+    RuleIndexDefinition = 11, RulePattern = 12, RulePatternPart = 13, RulePatternElementChain = 14, 
+    RuleRelationshipPattern = 15, RuleRelationshipDetail = 16, RuleNodePattern = 17, 
+    RuleWhereClause = 18, RulePropertyExpression = 19, RuleMapLiteral = 20, 
+    RuleMapEntry = 21, RuleLiteral = 22
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -51,6 +53,9 @@ public:
 
   class QueryContext;
   class StatementContext;
+  class AdministrationStatementContext;
+  class ShowIndexesStatementContext;
+  class DropIndexStatementContext;
   class MatchStatementContext;
   class ReturnClauseContext;
   class ReturnBodyContext;
@@ -90,6 +95,7 @@ public:
     virtual size_t getRuleIndex() const override;
     MatchStatementContext *matchStatement();
     CreateStatementContext *createStatement();
+    AdministrationStatementContext *administrationStatement();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -97,6 +103,57 @@ public:
   };
 
   StatementContext* statement();
+
+  class  AdministrationStatementContext : public antlr4::ParserRuleContext {
+  public:
+    AdministrationStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    ShowIndexesStatementContext *showIndexesStatement();
+    DropIndexStatementContext *dropIndexStatement();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  AdministrationStatementContext* administrationStatement();
+
+  class  ShowIndexesStatementContext : public antlr4::ParserRuleContext {
+  public:
+    ShowIndexesStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_SHOW();
+    antlr4::tree::TerminalNode *K_INDEX();
+    antlr4::tree::TerminalNode *K_INDEXES();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ShowIndexesStatementContext* showIndexesStatement();
+
+  class  DropIndexStatementContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *label = nullptr;
+    antlr4::Token *property = nullptr;
+    DropIndexStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_DROP();
+    antlr4::tree::TerminalNode *K_INDEX();
+    antlr4::tree::TerminalNode *K_ON();
+    antlr4::tree::TerminalNode *COLON();
+    antlr4::tree::TerminalNode *LPAREN();
+    antlr4::tree::TerminalNode *RPAREN();
+    std::vector<antlr4::tree::TerminalNode *> ID();
+    antlr4::tree::TerminalNode* ID(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  DropIndexStatementContext* dropIndexStatement();
 
   class  MatchStatementContext : public antlr4::ParserRuleContext {
   public:

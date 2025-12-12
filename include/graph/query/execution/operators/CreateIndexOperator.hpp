@@ -11,7 +11,7 @@
 #pragma once
 
 #include "../PhysicalOperator.hpp"
-#include "graph/query/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query::execution::operators {
 

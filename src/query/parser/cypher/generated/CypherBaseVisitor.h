@@ -28,6 +28,18 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitAdministrationStatement(CypherParser::AdministrationStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitMatchStatement(CypherParser::MatchStatementContext *ctx) override {
     return visitChildren(ctx);
   }

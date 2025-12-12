@@ -29,6 +29,7 @@ namespace graph::query {
 		// We keep pulling batches until std::nullopt is returned.
 		while (auto batchOpt = plan->next()) {
 			const auto& batch = batchOpt.value();
+			auto vars = plan->getOutputVariables();
 
 			// 3. Materialize Results
 			// In a real system, you might not materialize everything immediately.
@@ -38,17 +39,28 @@ namespace graph::query {
 				// For now, we dump all found nodes (mimicking "RETURN *").
 				// A 'ProjectionOperator' would normally handle filtering columns here.
 
-				auto vars = plan->getOutputVariables();
 				for (const auto& var : vars) {
-					auto nodeOpt = record.getNode(var);
-					if (nodeOpt) {
-						result.addNode(*nodeOpt);
+					if (auto node = record.getNode(var)) {
+						result.addNode(*node);
 					}
+					else if (auto edge = record.getEdge(var)) {
+						result.addEdge(*edge);
+					}
+				}
 
-					auto edgeOpt = record.getEdge(var);
-					if (edgeOpt) {
-						result.addEdge(*edgeOpt);
+				// If this Record contains non-graph data, save it as a row
+				std::unordered_map<std::string, PropertyValue> row;
+				bool hasValues = false;
+
+				for (const auto& var : vars) {
+					if (auto val = record.getValue(var)) {
+						row[var] = *val;
+						hasValues = true;
 					}
+				}
+
+				if (hasValues) {
+					result.addRow(std::move(row));
 				}
 			}
 		}

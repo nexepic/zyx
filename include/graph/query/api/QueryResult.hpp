@@ -30,11 +30,24 @@ namespace graph::query {
 		[[nodiscard]] size_t nodeCount() const { return nodes_.size(); }
 		[[nodiscard]] size_t edgeCount() const { return edges_.size(); }
 
-		[[nodiscard]] bool isEmpty() const { return nodes_.empty() && edges_.empty(); }
+		using Row = std::unordered_map<std::string, PropertyValue>;
+
+		void addRow(Row row) {
+			rows_.push_back(std::move(row));
+		}
+
+		const std::vector<Row>& getRows() const { return rows_; }
+		size_t rowCount() const { return rows_.size(); }
+
+		bool isEmpty() const {
+			return nodes_.empty() && edges_.empty() && rows_.empty();
+		}
 
 	private:
 		std::vector<Node> nodes_;
 		std::vector<Edge> edges_;
+
+		std::vector<Row> rows_;
 	};
 
 } // namespace graph::query

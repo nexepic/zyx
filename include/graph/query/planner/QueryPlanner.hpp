@@ -98,14 +98,14 @@ namespace graph::query {
         [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> create(
             const std::string& variable,
             const std::string& label,
-            const std::unordered_map<std::string, ::graph::PropertyValue>& props
+            const std::unordered_map<std::string, PropertyValue>& props
         ) const;
 
         // Create Edge
         [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> create(
             const std::string& variable,
             const std::string& label,
-            const std::unordered_map<std::string, ::graph::PropertyValue>& props,
+            const std::unordered_map<std::string, PropertyValue>& props,
             const std::string& sourceVar,
             const std::string& targetVar
         ) const;
@@ -115,6 +115,13 @@ namespace graph::query {
             const std::string& label,
             const std::string& propertyKey
         ) const;
+
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexes() const;
+
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndex(
+			const std::string& label,
+			const std::string& propertyKey
+		) const;
 
     private:
         std::shared_ptr<storage::DataManager> dm_;

@@ -12,9 +12,11 @@
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
+#include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
+#include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 
@@ -143,6 +145,19 @@ namespace graph::query {
         return std::make_unique<execution::operators::CreateIndexOperator>(
             im_, label, propertyKey
         );
+    }
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::showIndexes() const {
+    	return std::make_unique<execution::operators::ShowIndexesOperator>(im_);
+    }
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::dropIndex(
+		const std::string& label,
+		const std::string& propertyKey
+	) const {
+    	return std::make_unique<execution::operators::DropIndexOperator>(
+			im_, label, propertyKey
+		);
     }
 
 } // namespace graph::query
