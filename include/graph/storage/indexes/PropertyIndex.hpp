@@ -65,8 +65,7 @@ namespace graph::query::indexes {
 
 		bool hasKeyIndexed(const std::string &key) const {
 			std::shared_lock lock(mutex_);
-			return stringRoots_.contains(key) || intRoots_.contains(key) || doubleRoots_.contains(key) ||
-				   boolRoots_.contains(key);
+			return indexedKeyTypes_.contains(key);
 		}
 
 		PropertyType getIndexedKeyType(const std::string &key) const;

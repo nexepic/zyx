@@ -117,6 +117,9 @@ TEST_F(IndexBuilderTest, BuildAllIndexes_WithData_Verification) {
 	// Arrange
 	populateDatabaseForTests();
 
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
+
 	// Act
 	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
 	EXPECT_TRUE(indexBuilder->buildAllEdgeIndexes());
@@ -124,6 +127,9 @@ TEST_F(IndexBuilderTest, BuildAllIndexes_WithData_Verification) {
 	// Assert: --- Verify Node Indexes ---
 	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
+
+	EXPECT_FALSE(nodeLabelIndex->isEmpty());
+	EXPECT_FALSE(nodePropertyIndex->isEmpty());
 
 	auto personNodes = nodeLabelIndex->findNodes("Person");
 	auto companyNodes = nodeLabelIndex->findNodes("Company");
@@ -169,6 +175,8 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_VerifiesIsolation) {
 	// Arrange
 	populateDatabaseForTests();
 
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+
 	// Act
 	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
 
@@ -183,10 +191,11 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_VerifiesIsolation) {
 	// Assert: Verify edge indexes are NOT built
 	auto edgeLabelIndex = indexManager->getEdgeIndexManager()->getLabelIndex();
 	auto edgePropertyIndex = indexManager->getEdgeIndexManager()->getPropertyIndex();
+
+	// Now this should pass because we didn't enable them, and buildAllNodeIndexes shouldn't touch them.
 	EXPECT_TRUE(edgeLabelIndex->isEmpty());
 	EXPECT_TRUE(edgePropertyIndex->isEmpty());
 }
-
 
 // Test 4: Build property index for a specific node key only
 TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {

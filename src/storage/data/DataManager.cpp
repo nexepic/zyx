@@ -190,11 +190,42 @@ namespace graph::storage {
 
 	void DataManager::addNodeProperties(int64_t nodeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
+		// 1. Snapshot OLD state
+		Node oldNode = nodeManager_->get(nodeId);
+		// Manually fetch and bake the existing properties into the oldNode object.
+		// This ensures oldNode.getProperties() returns the state BEFORE the modification.
+		auto existingProps = nodeManager_->getProperties(nodeId);
+		oldNode.setProperties(existingProps);
+
+		// 2. Perform the modification
 		nodeManager_->addProperties(nodeId, properties);
+
+		// 3. Snapshot NEW state
+		Node newNode = nodeManager_->get(nodeId);
+		auto newProps = nodeManager_->getProperties(nodeId);
+		newNode.setProperties(newProps);
+
+		// 4. Notify with valid snapshots
+		notifyNodeUpdated(oldNode, newNode);
 	}
 
 	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) const {
+		// 1. Snapshot OLD state
+		Node oldNode = nodeManager_->get(nodeId);
+		// Freeze old properties
+		auto existingProps = nodeManager_->getProperties(nodeId);
+		oldNode.setProperties(existingProps);
+
+		// 2. Perform removal
 		nodeManager_->removeProperty(nodeId, key);
+
+		// 3. Snapshot NEW state
+		Node newNode = nodeManager_->get(nodeId);
+		auto newProps = nodeManager_->getProperties(nodeId);
+		newNode.setProperties(newProps);
+
+		// 4. Notify
+		notifyNodeUpdated(oldNode, newNode);
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) const {
@@ -232,11 +263,39 @@ namespace graph::storage {
 
 	void DataManager::addEdgeProperties(int64_t edgeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
+		// 1. Snapshot OLD state
+		Edge oldEdge = edgeManager_->get(edgeId);
+		// Freeze old properties
+		auto existingProps = edgeManager_->getProperties(edgeId);
+		oldEdge.setProperties(existingProps);
+
+		// 2. Perform modification
 		edgeManager_->addProperties(edgeId, properties);
+
+		// 3. Snapshot NEW state
+		Edge newEdge = edgeManager_->get(edgeId);
+		auto newProps = edgeManager_->getProperties(edgeId);
+		newEdge.setProperties(newProps);
+
+		notifyEdgeUpdated(oldEdge, newEdge);
 	}
 
 	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) const {
+		// 1. Snapshot OLD state
+		Edge oldEdge = edgeManager_->get(edgeId);
+		// Freeze old properties
+		auto existingProps = edgeManager_->getProperties(edgeId);
+		oldEdge.setProperties(existingProps);
+
+		// 2. Perform removal
 		edgeManager_->removeProperty(edgeId, key);
+
+		// 3. Snapshot NEW state
+		Edge newEdge = edgeManager_->get(edgeId);
+		auto newProps = edgeManager_->getProperties(edgeId);
+		newEdge.setProperties(newProps);
+
+		notifyEdgeUpdated(oldEdge, newEdge);
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) const {

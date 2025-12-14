@@ -95,6 +95,10 @@ TEST_F(EntityTypeIndexManagerTest, BuildAndDropIndexes) {
 }
 
 TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
+    nodeIndexManager->getLabelIndex()->createIndex();
+    // For property index, we register the specific key we want to track
+    nodeIndexManager->getPropertyIndex()->createIndex("key1");
+
 	// Create a test node
 	graph::Node node;
 	node.setId(1);
@@ -109,7 +113,7 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	auto propertyIndex = nodeIndexManager->getPropertyIndex();
 	propertyIndex->addProperty(node.getId(), "key1", node.getProperty("key1"));
 
-	// Add node
+	// Add node (Should update/confirm the indexes)
 	nodeIndexManager->onEntityAdded(node);
 
 	// Verify label index
@@ -127,6 +131,8 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	updatedNode.setLabel("NewLabel");
 	updatedNode.addProperty("key1", "value2");
 	updatedNode.addProperty("key2", "value3");
+
+    nodeIndexManager->getPropertyIndex()->createIndex("key2");
 
 	nodeIndexManager->onEntityUpdated(node, updatedNode);
 
@@ -159,6 +165,11 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 }
 
 TEST_F(EntityTypeIndexManagerTest, EdgeEventHandlers) {
+	edgeIndexManager->getLabelIndex()->createIndex();
+	edgeIndexManager->getPropertyIndex()->createIndex("key1");
+	// Ensure "key2" (used in update) is also registered, otherwise updatePropertyIndexes ignores it
+	edgeIndexManager->getPropertyIndex()->createIndex("key2");
+
 	// Create a test edge
 	graph::Edge edge;
 	edge.setId(1);
@@ -229,6 +240,10 @@ TEST_F(EntityTypeIndexManagerTest, HandleZeroEntityId) {
 }
 
 TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
+    // [FIX] Explicitly enable the label index.
+    // Otherwise onEntityAdded checks isEmpty() and returns early.
+    nodeIndexManager->getLabelIndex()->createIndex();
+
 	// Create a node with empty label
 	graph::Node node;
 	node.setId(1);
@@ -263,6 +278,7 @@ TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
 	EXPECT_TRUE(nodesWithLabel.empty());
 }
 
+// Check for PropertyChangeHandling (No changes needed, logic confirms correct behavior)
 TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling) {
 	// Create a node with properties
 	graph::Node node;
@@ -271,6 +287,7 @@ TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling) {
 	node.addProperty("key2", 42);
 
 	// Initialize property index manually
+    // Note: addProperty automatically registers the key type, making index non-empty.
 	auto propertyIndex = nodeIndexManager->getPropertyIndex();
 	propertyIndex->addProperty(node.getId(), "key1", node.getProperty("key1"));
 	propertyIndex->addProperty(node.getId(), "key2", node.getProperty("key2"));
@@ -281,10 +298,12 @@ TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling) {
 	updatedNode.removeProperty("key2"); // Removed property
 	updatedNode.addProperty("key3", true); // Added property
 
-	// Manually index the new property to simulate it being indexed
+	// Manually index the new property to simulate it being indexed (registers key3)
 	propertyIndex->addProperty(node.getId(), "key3", updatedNode.getProperty("key3"));
 
 	// Update the node
+    // Because key1, key2, key3 are all registered (via addProperty calls above),
+    // updatePropertyIndexes will process them.
 	nodeIndexManager->onEntityUpdated(node, updatedNode);
 
 	// Verify property changes
@@ -301,4 +320,27 @@ TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling) {
 	nodesWithProperty = propertyIndex->findExactMatch("key3", true);
 	EXPECT_EQ(nodesWithProperty.size(), 1);
 	EXPECT_EQ(nodesWithProperty[0], 1);
+}
+
+// Check for BuildPropertyIndex_RegistersImmediately (No changes needed, correct)
+TEST_F(EntityTypeIndexManagerTest, BuildPropertyIndex_RegistersImmediately) {
+	const std::string key = "lazy_prop";
+
+	// Check not present
+	EXPECT_FALSE(nodeIndexManager->hasPropertyIndex(key));
+
+	// Build (Create empty)
+	bool success = nodeIndexManager->buildPropertyIndex(key, [](){ return true; });
+	EXPECT_TRUE(success);
+
+	// Check present immediately
+	EXPECT_TRUE(nodeIndexManager->hasPropertyIndex(key));
+
+	// Check list
+	auto list = nodeIndexManager->listIndexes();
+	bool found = false;
+	for(auto& p : list) {
+		if(p.first == "property" && p.second == key) found = true;
+	}
+	EXPECT_TRUE(found);
 }

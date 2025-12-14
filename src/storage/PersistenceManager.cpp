@@ -10,6 +10,8 @@
 
 #include "graph/storage/PersistenceManager.hpp"
 
+#include "graph/log/Log.hpp"
+
 namespace graph::storage {
 
 	PersistenceManager::PersistenceManager() {
@@ -140,6 +142,7 @@ namespace graph::storage {
 	void PersistenceManager::checkAndTriggerAutoFlush() const {
 		if (!autoFlushCallback_)
 			return;
+		log::Log::debug("Checking auto-flush conditions...");
 
 		// Sum counts from ALL registries to ensure memory safety.
 		// If we ignore Blobs or Indexes, a bulk insert of those types could cause OOM.
@@ -147,6 +150,7 @@ namespace graph::storage {
 					   blobRegistry_->size() + indexRegistry_->size() + stateRegistry_->size();
 
 		if (total >= maxDirtyEntities_) {
+			log::Log::debug("Auto-flush triggered: {} dirty entities (threshold: {})", total, maxDirtyEntities_);
 			autoFlushCallback_();
 		}
 	}

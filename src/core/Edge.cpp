@@ -41,6 +41,10 @@ namespace graph {
 		return {labelBuffer};
 	}
 
+	void Edge::setProperties(std::unordered_map<std::string, PropertyValue> props) {
+		properties = std::move(props);
+	}
+
 	void Edge::addProperty(const std::string &key, const PropertyValue &value) { properties[key] = value; }
 
 	bool Edge::hasProperty(const std::string &key) const { return properties.contains(key); }

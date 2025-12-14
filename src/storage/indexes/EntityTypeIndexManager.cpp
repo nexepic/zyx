@@ -10,6 +10,8 @@
 
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 
+#include "graph/log/Log.hpp"
+
 namespace graph::query::indexes {
 
 	EntityTypeIndexManager::EntityTypeIndexManager(std::shared_ptr<storage::DataManager> dataManager,
@@ -36,6 +38,7 @@ namespace graph::query::indexes {
 
 	bool EntityTypeIndexManager::buildPropertyIndex(const std::string& key, const std::function<bool()>& buildFunc) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		propertyIndex_->createIndex(key);
 		return buildFunc();
 	}
 
@@ -154,6 +157,10 @@ namespace graph::query::indexes {
 	template<typename T>
 	void EntityTypeIndexManager::onEntityUpdated(const T& oldEntity, const T& newEntity) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		log::Log::debug("Old entity id: {}, label: {}, properties: {}",
+			oldEntity.getId(), oldEntity.getLabel(), oldEntity.getProperties().size());
+		log::Log::debug("New entity id: {}, label: {}, properties: {}",
+			newEntity.getId(), newEntity.getLabel(), newEntity.getProperties().size());
 		updateLabelIndex(newEntity, oldEntity.getLabel(), false);
 		updatePropertyIndexes(newEntity.getId(), oldEntity.getProperties(), newEntity.getProperties());
 		persistState();

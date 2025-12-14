@@ -38,9 +38,12 @@ namespace graph::query::indexes {
 		// 2. Register self as listener
 		// This connects IndexManager to FileStorage without FileStorage knowing about "Indexes"
 		storage_->registerEventListener(weak_from_this());
+
+		dataManager_->registerObserver(shared_from_this());
 	}
 
 	void IndexManager::onStorageFlush() {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		// When FileStorage flushes, we must persist our index states.
 		persistState();
 	}

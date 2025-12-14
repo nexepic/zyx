@@ -78,7 +78,7 @@ namespace graph::query::indexes {
 		if (enabled_) {
 			// Save root
 			std::unordered_map<std::string, PropertyValue> props;
-			props["root"] = rootId_;
+			props["rootId"] = rootId_;
 			dataManager_->addStateProperties(stateKey_, props);
 
 			// Save enabled flag
