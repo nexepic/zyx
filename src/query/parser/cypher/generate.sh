@@ -14,11 +14,21 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 echo "Generating ANTLR4 C++ sources into '$OUTPUT_DIR'..."
+
+# Compile Lexer first (Parser depends on it)
+java -jar "$ANTLR_JAR" \
+    -Dlanguage=Cpp \
+    -package graph::parser::cypher \
+    -o "$OUTPUT_DIR" \
+    CypherLexer.g4
+
+# Compile Parser (Visitor option goes here)
 java -jar "$ANTLR_JAR" \
     -Dlanguage=Cpp \
     -visitor \
     -no-listener \
     -package graph::parser::cypher \
     -o "$OUTPUT_DIR" \
-    Cypher.g4
+    CypherParser.g4
+
 echo "Done."

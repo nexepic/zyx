@@ -9,39 +9,68 @@
  **/
 
 #include "CypherParserImpl.hpp"
-#include "antlr4-runtime.h"
 #include "CypherLexer.h"
 #include "CypherParser.h"
 #include "CypherToPlanVisitor.hpp"
+#include "antlr4-runtime.h"
+
+class ThrowingErrorListener : public antlr4::BaseErrorListener {
+public:
+	void syntaxError(antlr4::Recognizer * /*recognizer*/, antlr4::Token * /*offendingSymbol*/, size_t line,
+					 size_t charPositionInLine, const std::string &msg, std::exception_ptr /*e*/) override {
+		throw std::runtime_error("Syntax Error at line " + std::to_string(line) + ":" +
+								 std::to_string(charPositionInLine) + " - " + msg);
+	}
+};
 
 namespace graph::parser::cypher {
 
-	CypherParserImpl::CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner)
-		: planner_(std::move(planner)) {}
+	CypherParserImpl::CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner) : planner_(std::move(planner)) {}
 
-	std::unique_ptr<query::execution::PhysicalOperator> CypherParserImpl::parse(const std::string& query) const {
-		// 1. ANTLR Boilerplate
+	std::unique_ptr<query::execution::PhysicalOperator> CypherParserImpl::parse(const std::string &query) const {
 		antlr4::ANTLRInputStream input(query);
 		CypherLexer lexer(&input);
 		antlr4::CommonTokenStream tokens(&lexer);
 		CypherParser parser(&tokens);
 
-		// Error handling
+		// Error Handling
 		parser.removeErrorListeners();
-		parser.addErrorListener(&antlr4::ConsoleErrorListener::INSTANCE);
+		// Add console listener if you still want to see it, or just use the throwing one
+		// parser.addErrorListener(&antlr4::ConsoleErrorListener::INSTANCE);
 
-		auto tree = parser.query();
+		ThrowingErrorListener errorListener;
+		parser.addErrorListener(&errorListener);
+		lexer.removeErrorListeners();
+		lexer.addErrorListener(&errorListener);
 
-		// 2. Visit tree to build Operator Pipeline
+		// 1. Parse
+		CypherParser::CypherContext *tree = nullptr;
+		try {
+			tree = parser.cypher();
+		} catch (const std::exception &e) {
+			// Rethrow or handle parsing exception
+			throw;
+		}
+
+		// 2. Visit
 		CypherToPlanVisitor visitor(planner_);
-		visitor.visit(tree);
+
+		try {
+			visitor.visit(tree);
+		} catch (const std::exception &e) {
+			// Contextualize visitor errors
+			throw std::runtime_error(std::string("Plan generation failed: ") + e.what());
+		}
 
 		// 3. Extract result
 		auto plan = visitor.getPlan();
 		if (!plan) {
-			throw std::runtime_error("Failed to generate query plan.");
+			// This happens if the query was empty or comment-only, or visitor didn't set rootOp
+			// For CREATE INDEX, visitor SHOULD set rootOp.
+			// If syntax was correct but no plan, it's an internal logic error.
+			throw std::runtime_error("Query successfully parsed but generated no execution plan.");
 		}
 
 		return plan;
 	}
-}
+} // namespace graph::parser::cypher
