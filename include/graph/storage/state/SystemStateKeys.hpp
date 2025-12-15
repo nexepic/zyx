@@ -14,6 +14,12 @@ namespace graph::storage::state::keys {
 
 	constexpr char SYS_CONFIG[] = "sys.config";
 
+	// --- System Configuration Fields ---
+
+	namespace Config {
+		constexpr char LOG_LEVEL[] = "log.level";
+	}
+
 	// --- Base Keys for Entities ---
 	namespace Node {
 		constexpr char LABEL_ROOT[] = "node.index.label";

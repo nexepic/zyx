@@ -11,6 +11,8 @@
 #pragma once
 
 #include <string>
+
+#include "graph/config/SystemConfigManager.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -40,6 +42,7 @@ namespace graph {
 		std::shared_ptr<storage::FileStorage> storage;
 		std::shared_ptr<query::QueryEngine> queryEngine;
 		std::string dbPath;
+		std::shared_ptr<config::SystemConfigManager> configManager_;
 	};
 
 } // namespace graph

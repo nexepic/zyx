@@ -86,51 +86,58 @@ namespace graph::storage {
 	}
 
 	void DataManager::registerObserver(std::shared_ptr<IEntityObserver> observer) {
-		std::lock_guard<std::mutex> lock(observer_mutex_);
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		observers_.push_back(std::move(observer));
 	}
 
 	// --- Notification Helper Implementations ---
 
 	void DataManager::notifyNodeAdded(const Node &node) const {
-		std::lock_guard<std::mutex> lock(observer_mutex_);
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onNodeAdded(node);
 		}
 	}
 
 	void DataManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) const {
-		std::lock_guard<std::mutex> lock(observer_mutex_);
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onNodeUpdated(oldNode, newNode);
 		}
 	}
 
 	void DataManager::notifyNodeDeleted(const Node &node) const {
-		std::lock_guard<std::mutex> lock(observer_mutex_);
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onNodeDeleted(node);
 		}
 	}
 
 	void DataManager::notifyEdgeAdded(const Edge &edge) const {
-		std::lock_guard<std::mutex> lock(observer_mutex_);
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeAdded(edge);
 		}
 	}
 
 	void DataManager::notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const {
-		std::lock_guard<std::mutex> lock(observer_mutex_);
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeUpdated(oldEdge, newEdge);
 		}
 	}
 
 	void DataManager::notifyEdgeDeleted(const Edge &edge) const {
-		std::lock_guard<std::mutex> lock(observer_mutex_);
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeDeleted(edge);
+		}
+	}
+
+	void DataManager::notifyStateUpdated(const State& oldState, const State& newState) const {
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
+		for (const auto &observer : observers_) {
+			observer->onStateUpdated(oldState, newState);
 		}
 	}
 
@@ -356,7 +363,19 @@ namespace graph::storage {
 
 	void DataManager::addStateProperties(const std::string &stateKey,
 										 const std::unordered_map<std::string, PropertyValue> &properties) const {
+		// 1. Capture OLD state (Snapshot)
+		// We find the head state of the chain associated with this key
+		const State oldState = stateManager_->findByKey(stateKey);
+
+		// 2. Perform the update (This effectively replaces the chain)
 		stateManager_->addStateProperties(stateKey, properties);
+
+		// 3. Capture NEW state
+		const State newState = stateManager_->findByKey(stateKey);
+
+		// 4. Notify Listeners
+		// This tells SystemConfigManager that "sys.config" has changed
+		notifyStateUpdated(oldState, newState);
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getStateProperties(const std::string &stateKey) const {

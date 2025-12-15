@@ -160,11 +160,14 @@ TEST_F(IndexManagerTest, LiveIndexUpdate_CreateBeforeInsert) {
     EXPECT_TRUE(indexManager->buildPropertyIndex("node", propertyKey));
     EXPECT_TRUE(indexManager->hasPropertyIndex("node", propertyKey));
     EXPECT_TRUE(hasIndexListEntry("node", "property", propertyKey));
+	std::cout << "111" << std::endl;
 
     // 2. Insert Data
     // Step 2a: Create Node (Triggers onNodeAdded)
     graph::Node node(nodeId, "Employee");
+	std::cout << "222" << std::endl;
     dataManager->addNode(node);
+	std::cout << "333" << std::endl;
 
     // Step 2b: Add Property (Triggers onNodeUpdated via DataManager snapshot logic)
     dataManager->addNodeProperties(nodeId, {{propertyKey, targetValue}});

@@ -314,8 +314,10 @@ namespace graph::storage {
 		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const;
 		void notifyEdgeDeleted(const Edge &edge) const;
 
+		void notifyStateUpdated(const State &oldState, const State &newState) const;
+
 		std::vector<std::shared_ptr<IEntityObserver>> observers_;
-		mutable std::mutex observer_mutex_;
+		mutable std::recursive_mutex observer_mutex_;
 	};
 
 } // namespace graph::storage

@@ -17,26 +17,14 @@
 int main(int argc, char **argv) {
 	CLI::App app{"metrix"};
 
-	bool debugMode = false;
-	app.add_flag("--debug", debugMode, "Enable verbose debug output (errors and internal states)");
-
 	// Database subcommand
 	auto database = app.add_subcommand("database", "Database operations");
-
-	// --- Helper Lambda to Setup Environment ---
-	auto setupEnv = [&]() {
-		graph::log::Log::setDebug(debugMode);
-		if (debugMode) {
-			graph::log::Log::debug("Debug mode enabled.");
-		}
-	};
 
 	// database create command
 	std::string dbPath;
 	auto createCmd = database->add_subcommand("create", "Create a new database");
 	createCmd->add_option("path", dbPath, "Database file path")->required();
 	createCmd->callback([&]() {
-		setupEnv();
 		graph::Database db(dbPath);
 		graph::log::Log::info("Database created at: ", dbPath);
 		const graph::REPL repl(db);
@@ -47,7 +35,6 @@ int main(int argc, char **argv) {
 	auto openCmd = database->add_subcommand("open", "Open an existing database");
 	openCmd->add_option("path", dbPath, "Database file path")->required();
 	openCmd->callback([&]() {
-		setupEnv();
 		graph::Database db(dbPath);
 		db.open();
 		const graph::REPL repl(db);
@@ -59,7 +46,6 @@ int main(int argc, char **argv) {
 	auto runCmd = database->add_subcommand("run", "Run database operations");
 	runCmd->add_option("path", dbPath, "Database file path")->required();
 	runCmd->callback([&]() {
-		setupEnv();
 		graph::Database db(dbPath);
 		db.open();
 		const graph::REPL repl(db);
