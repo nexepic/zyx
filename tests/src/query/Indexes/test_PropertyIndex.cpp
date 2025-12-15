@@ -16,17 +16,17 @@
 #include <memory>
 #include <numeric>
 #include "graph/core/Database.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
-#include "graph/storage/indexes/PropertyIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/PropertyIndex.hpp"
 
 class PropertyIndexTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() /
-						("test_propertyIndex" + boost::uuids::to_string(uuid) + ".dat");
+					   ("test_propertyIndex" + boost::uuids::to_string(uuid) + ".dat");
 
 		database = std::make_unique<graph::Database>(testFilePath.string());
 		database->open();
@@ -34,8 +34,7 @@ protected:
 
 		constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 		const std::string stateKeyPrefix = "test.node.properties";
-		propertyIndex =
-			database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getPropertyIndex();
+		propertyIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getPropertyIndex();
 	}
 
 	void TearDown() override {
@@ -233,8 +232,8 @@ TEST_F(PropertyIndexTest, SaveAndLoadState) {
 	// Use the correct prefix that matched the one in SetUp (via IndexManager)
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
-	auto reloadedIndex =
-			std::make_unique<graph::query::indexes::PropertyIndex>(dataManager, indexType, stateKeyPrefix);
+	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	// Assert: The reloaded index should contain all the data and type information.
 	EXPECT_FALSE(reloadedIndex->isEmpty());
@@ -266,8 +265,8 @@ TEST_F(PropertyIndexTest, HandlesLargeNumberOfPropertiesAndReloads) {
 	propertyIndex.reset();
 
 	// Act II: Create a new instance, which should load the state from the DataManager.
-	auto reloadedIndex =
-			std::make_unique<graph::query::indexes::PropertyIndex>(dataManager, indexType, stateKeyPrefix);
+	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	// Assert: Verify that the reloaded index contains the correct data.
 	ASSERT_FALSE(reloadedIndex->isEmpty());
@@ -371,4 +370,31 @@ TEST_F(PropertyIndexTest, CreateIndex_RegistersKeyWithoutData) {
 	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
 	auto results = propertyIndex->findExactMatch(key, 123);
 	EXPECT_EQ(results.size(), 1);
+}
+
+TEST_F(PropertyIndexTest, Persistence_MapKeyRemoval) {
+	const std::string key1 = "to_be_deleted";
+	const std::string key2 = "to_remain";
+
+	propertyIndex->addProperty(1, key1, 100);
+	propertyIndex->addProperty(1, key2, 200);
+	propertyIndex->flush();
+	database->getStorage()->flush();
+
+	// 1. Manually drop one key
+	propertyIndex->dropKey(key1);
+	propertyIndex->flush();
+	database->getStorage()->flush();
+
+	// 2. Reload
+	database->close();
+	database.reset();
+
+	auto newDatabase = std::make_unique<graph::Database>(testFilePath.string());
+	newDatabase->open();
+
+	// 3. Verify key1 is totally gone from persisted state
+	auto reloadedIdx = newDatabase->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getPropertyIndex();
+	EXPECT_FALSE(reloadedIdx->hasKeyIndexed(key1));
+	EXPECT_TRUE(reloadedIdx->hasKeyIndexed(key2));
 }

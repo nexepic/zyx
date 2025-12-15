@@ -10,11 +10,12 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
 #include <memory>
 #include <shared_mutex>
+#include <string>
+#include <vector>
 #include "graph/core/IndexTreeManager.hpp"
+#include "graph/storage/state/SystemStateManager.hpp"
 
 namespace graph::storage {
 	class DataManager;
@@ -33,7 +34,9 @@ namespace graph::query::indexes {
 		 *
 		 * @param dataManager Pointer to data manager for persistence
 		 */
-		LabelIndex(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType, std::string stateKey);
+		LabelIndex(std::shared_ptr<storage::DataManager> dataManager,
+				   std::shared_ptr<storage::state::SystemStateManager> systemStateManager, uint32_t indexType,
+				   std::string stateKey);
 		~LabelIndex() = default;
 
 		/**
@@ -42,7 +45,7 @@ namespace graph::query::indexes {
 		 * @param nodeId ID of the node to add
 		 * @param label Label to index the node under
 		 */
-		void addNode(int64_t nodeId, const std::string& label);
+		void addNode(int64_t nodeId, const std::string &label);
 
 		/**
 		 * Removes a node from a label index
@@ -50,7 +53,7 @@ namespace graph::query::indexes {
 		 * @param nodeId ID of the node to remove
 		 * @param label Label to remove the node from
 		 */
-		void removeNode(int64_t nodeId, const std::string& label);
+		void removeNode(int64_t nodeId, const std::string &label);
 
 		/**
 		 * Finds all nodes with a specific label
@@ -58,7 +61,7 @@ namespace graph::query::indexes {
 		 * @param label Label to search for
 		 * @return Vector of node IDs with the label
 		 */
-		std::vector<int64_t> findNodes(const std::string& label) const;
+		std::vector<int64_t> findNodes(const std::string &label) const;
 
 		/**
 		 * Checks if a node has a specific label
@@ -67,7 +70,7 @@ namespace graph::query::indexes {
 		 * @param label Label to check for
 		 * @return true if the node has the label
 		 */
-		bool hasLabel(int64_t entityId, const std::string& label) const;
+		bool hasLabel(int64_t entityId, const std::string &label) const;
 
 		/**
 		 * Initializes the index
@@ -97,6 +100,7 @@ namespace graph::query::indexes {
 
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
+		std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;
 		std::shared_ptr<IndexTreeManager> treeManager_;
 		mutable std::shared_mutex mutex_;
 		int64_t rootId_ = 0;
@@ -104,8 +108,6 @@ namespace graph::query::indexes {
 		const std::string stateKey_;
 
 		const std::string STATE_ENABLED_KEY;
-
-		void loadRootId();
 	};
 
 } // namespace graph::query::indexes

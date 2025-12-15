@@ -13,12 +13,14 @@
 #include <graph/storage/IDAllocator.hpp>
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
+#include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace graph::query::indexes {
 
-	LabelIndex::LabelIndex(std::shared_ptr<storage::DataManager> dataManager, uint32_t indexType,
+	LabelIndex::LabelIndex(std::shared_ptr<storage::DataManager> dataManager,
+						   std::shared_ptr<storage::state::SystemStateManager> systemStateManager, uint32_t indexType,
 						   std::string stateKey) :
-		dataManager_(std::move(dataManager)),
+		dataManager_(std::move(dataManager)), systemStateManager_(std::move(systemStateManager)),
 		treeManager_(std::make_shared<IndexTreeManager>(dataManager_, indexType, PropertyType::STRING)),
 		stateKey_(std::move(stateKey)) {
 		initialize();
@@ -26,19 +28,19 @@ namespace graph::query::indexes {
 
 	void LabelIndex::initialize() {
 		std::unique_lock lock(mutex_);
-		loadRootId();
 
-		// Load enabled state
-		auto props = dataManager_->getStateProperties(STATE_ENABLED_KEY);
-		if (props.contains("enabled")) {
-			// Assuming PropertyValue has a boolean or int representation
-			// Adjust based on your PropertyValue implementation
-			if (const auto* val = std::get_if<int64_t>(&props["enabled"].getVariant())) {
-				enabled_ = (*val != 0);
-			}
-		} else {
-			// Fallback: if rootId > 0, it implies it was enabled before
-			enabled_ = (rootId_ != 0);
+		// 1. Load Root ID
+		// Logic: "Get an int64 from the stateKey under field 'rootId'"
+		rootId_ = systemStateManager_->get<int64_t>(stateKey_, storage::state::keys::Fields::ROOT_ID, 0);
+
+		// 2. Load Enabled Config
+		// Logic: "Construct config key, then get a bool under field 'enabled'"
+		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
+		enabled_ = systemStateManager_->get<bool>(configKey, storage::state::keys::Fields::ENABLED, false);
+
+		// Fallback for backward compatibility
+		if (!enabled_ && rootId_ != 0) {
+			enabled_ = true;
 		}
 	}
 
@@ -69,36 +71,22 @@ namespace graph::query::indexes {
 		clear();
 		std::unique_lock lock(mutex_);
 		enabled_ = false;
-		dataManager_->removeState(stateKey_);
-		dataManager_->removeState(STATE_ENABLED_KEY);
+
+		// Explicitly remove the specific states used by this module
+		systemStateManager_->remove(stateKey_);
+		systemStateManager_->remove(stateKey_ + storage::state::keys::SUFFIX_CONFIG);
 	}
 
 	void LabelIndex::saveState() const {
 		std::shared_lock lock(mutex_);
 		if (enabled_) {
-			// Save root
-			std::unordered_map<std::string, PropertyValue> props;
-			props["rootId"] = rootId_;
-			dataManager_->addStateProperties(stateKey_, props);
+			// Save Root
+			systemStateManager_->set<int64_t>(stateKey_, storage::state::keys::Fields::ROOT_ID, rootId_);
 
-			// Save enabled flag
-			std::unordered_map<std::string, PropertyValue> flagProps;
-			flagProps["enabled"] = static_cast<int64_t>(1);
-			dataManager_->addStateProperties(STATE_ENABLED_KEY, flagProps);
+			// Save Enabled Config
+			systemStateManager_->set<bool>(stateKey_ + storage::state::keys::SUFFIX_CONFIG,
+										   storage::state::keys::Fields::ENABLED, true);
 		}
-	}
-
-	void LabelIndex::loadRootId() {
-		auto properties = dataManager_->getStateProperties(stateKey_);
-		if (properties.contains("rootId")) {
-			// Use the safe std::get_if pattern
-			if (const auto *rootId_ptr = std::get_if<int64_t>(&properties["rootId"].getVariant())) {
-				rootId_ = *rootId_ptr;
-				return; // Exit after successful load
-			}
-		}
-		// Default value if not found or type mismatch
-		rootId_ = 0;
 	}
 
 	void LabelIndex::flush() const {

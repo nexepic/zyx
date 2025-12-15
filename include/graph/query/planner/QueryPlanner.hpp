@@ -116,6 +116,11 @@ namespace graph::query {
             const std::string& propertyKey
         ) const;
 
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> callProcedure(
+			const std::string& procedure,
+			const std::vector<::graph::PropertyValue>& args
+		) const;
+
     	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexes() const;
 
     	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndex(

@@ -91,6 +91,8 @@ namespace graph::storage {
 		// Always set up auto-flush callback
 		dataManager->setAutoFlushCallback([this]() { this->flush(); });
 
+		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
+
 		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
 		databaseInspector->displayDatabaseStructure();
 	}

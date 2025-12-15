@@ -17,13 +17,15 @@
 #include "graph/core/IndexTreeManager.hpp"
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/state/SystemStateManager.hpp"
 
 namespace graph::query::indexes {
 
 	class PropertyIndex {
 	public:
-		PropertyIndex(std::shared_ptr<storage::DataManager> &dataManager, uint32_t indexType,
-					  const std::string &stateKeyPrefix);
+		PropertyIndex(std::shared_ptr<storage::DataManager> &dataManager,
+					  std::shared_ptr<storage::state::SystemStateManager> systemStateManager, uint32_t indexType,
+					  std::string baseStateKey);
 
 		void saveState() const;
 
@@ -40,13 +42,13 @@ namespace graph::query::indexes {
 		 * Sets the type to UNKNOWN initially if not determined.
 		 * This ensures listIndexes() sees it even if data is empty.
 		 */
-		void createIndex(const std::string& key);
+		void createIndex(const std::string &key);
 
 		/**
 		 * @brief Clears the data (B-Trees) for a key but KEEPS the index definition.
 		 * Used by IndexBuilder for rebuilding.
 		 */
-		void clearIndexData(const std::string& key);
+		void clearIndexData(const std::string &key);
 
 		// Add property to index
 		void addProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
@@ -72,12 +74,7 @@ namespace graph::query::indexes {
 
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
-
-		const std::string STATE_STRING_ROOTS_KEY;
-		const std::string STATE_INT_ROOTS_KEY;
-		const std::string STATE_DOUBLE_ROOTS_KEY;
-		const std::string STATE_BOOL_ROOTS_KEY;
-		const std::string STATE_KEY_TYPES_KEY;
+		std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;
 
 		std::shared_ptr<IndexTreeManager> stringTreeManager_;
 		std::shared_ptr<IndexTreeManager> intTreeManager_;
@@ -85,6 +82,8 @@ namespace graph::query::indexes {
 		std::shared_ptr<IndexTreeManager> boolTreeManager_;
 
 		mutable std::shared_mutex mutex_;
+
+		const std::string baseStateKey_;
 
 		// Root IDs for different property types
 		std::unordered_map<std::string, int64_t> stringRoots_;
@@ -99,9 +98,8 @@ namespace graph::query::indexes {
 		std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type);
 		const std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type) const;
 
-		void serializeRootMap(const std::string &stateKey,
-							  const std::unordered_map<std::string, int64_t> &rootMap) const;
-		std::unordered_map<std::string, int64_t> deserializeRootMap(const std::string &stateKey);
+		void serializeRootMap() const;
+		void deserializeRootMap();
 
 		void serializeKeyTypeMap() const;
 		void deserializeKeyTypeMap();

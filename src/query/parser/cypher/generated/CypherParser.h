@@ -18,20 +18,22 @@ public:
   enum {
     T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, K_INDEX = 5, K_SHOW = 6, K_DROP = 7, 
     K_INDEXES = 8, K_ON = 9, K_MATCH = 10, K_CREATE = 11, K_WHERE = 12, 
-    K_RETURN = 13, K_AS = 14, NULL_LITERAL = 15, BOOLEAN = 16, ID = 17, 
-    STRING = 18, INTEGER = 19, DECIMAL = 20, WS = 21, LPAREN = 22, RPAREN = 23, 
-    LBRACE = 24, RBRACE = 25, COLON = 26, COMMA = 27, DOT = 28, LT = 29, 
-    GT = 30, EQ = 31, NEQ = 32, GTE = 33, LTE = 34
+    K_RETURN = 13, K_AS = 14, K_CALL = 15, NULL_LITERAL = 16, BOOLEAN = 17, 
+    ID = 18, STRING = 19, INTEGER = 20, DECIMAL = 21, WS = 22, LPAREN = 23, 
+    RPAREN = 24, LBRACE = 25, RBRACE = 26, COLON = 27, COMMA = 28, DOT = 29, 
+    LT = 30, GT = 31, EQ = 32, NEQ = 33, GTE = 34, LTE = 35
   };
 
   enum {
-    RuleQuery = 0, RuleStatement = 1, RuleAdministrationStatement = 2, RuleShowIndexesStatement = 3, 
-    RuleDropIndexStatement = 4, RuleMatchStatement = 5, RuleReturnClause = 6, 
-    RuleReturnBody = 7, RuleReturnItem = 8, RuleExpression = 9, RuleCreateStatement = 10, 
-    RuleIndexDefinition = 11, RulePattern = 12, RulePatternPart = 13, RulePatternElementChain = 14, 
-    RuleRelationshipPattern = 15, RuleRelationshipDetail = 16, RuleNodePattern = 17, 
-    RuleWhereClause = 18, RulePropertyExpression = 19, RuleMapLiteral = 20, 
-    RuleMapEntry = 21, RuleLiteral = 22
+    RuleQuery = 0, RuleStatement = 1, RuleCallStatement = 2, RuleProcedureName = 3, 
+    RuleSymbolicName = 4, RuleArgumentList = 5, RuleAdministrationStatement = 6, 
+    RuleShowIndexesStatement = 7, RuleDropIndexStatement = 8, RuleMatchStatement = 9, 
+    RuleReturnClause = 10, RuleReturnBody = 11, RuleReturnItem = 12, RuleExpression = 13, 
+    RuleCreateStatement = 14, RuleIndexDefinition = 15, RulePattern = 16, 
+    RulePatternPart = 17, RulePatternElementChain = 18, RuleRelationshipPattern = 19, 
+    RuleRelationshipDetail = 20, RuleNodePattern = 21, RuleWhereClause = 22, 
+    RulePropertyExpression = 23, RuleMapLiteral = 24, RuleMapEntry = 25, 
+    RuleLiteral = 26
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -53,6 +55,10 @@ public:
 
   class QueryContext;
   class StatementContext;
+  class CallStatementContext;
+  class ProcedureNameContext;
+  class SymbolicNameContext;
+  class ArgumentListContext;
   class AdministrationStatementContext;
   class ShowIndexesStatementContext;
   class DropIndexStatementContext;
@@ -96,6 +102,7 @@ public:
     MatchStatementContext *matchStatement();
     CreateStatementContext *createStatement();
     AdministrationStatementContext *administrationStatement();
+    CallStatementContext *callStatement();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -103,6 +110,78 @@ public:
   };
 
   StatementContext* statement();
+
+  class  CallStatementContext : public antlr4::ParserRuleContext {
+  public:
+    CallStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_CALL();
+    ProcedureNameContext *procedureName();
+    antlr4::tree::TerminalNode *LPAREN();
+    antlr4::tree::TerminalNode *RPAREN();
+    ArgumentListContext *argumentList();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  CallStatementContext* callStatement();
+
+  class  ProcedureNameContext : public antlr4::ParserRuleContext {
+  public:
+    ProcedureNameContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<SymbolicNameContext *> symbolicName();
+    SymbolicNameContext* symbolicName(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> DOT();
+    antlr4::tree::TerminalNode* DOT(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ProcedureNameContext* procedureName();
+
+  class  SymbolicNameContext : public antlr4::ParserRuleContext {
+  public:
+    SymbolicNameContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *ID();
+    antlr4::tree::TerminalNode *K_INDEX();
+    antlr4::tree::TerminalNode *K_ON();
+    antlr4::tree::TerminalNode *K_MATCH();
+    antlr4::tree::TerminalNode *K_CREATE();
+    antlr4::tree::TerminalNode *K_WHERE();
+    antlr4::tree::TerminalNode *K_RETURN();
+    antlr4::tree::TerminalNode *K_SHOW();
+    antlr4::tree::TerminalNode *K_DROP();
+    antlr4::tree::TerminalNode *K_CALL();
+    antlr4::tree::TerminalNode *K_AS();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  SymbolicNameContext* symbolicName();
+
+  class  ArgumentListContext : public antlr4::ParserRuleContext {
+  public:
+    ArgumentListContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> COMMA();
+    antlr4::tree::TerminalNode* COMMA(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ArgumentListContext* argumentList();
 
   class  AdministrationStatementContext : public antlr4::ParserRuleContext {
   public:

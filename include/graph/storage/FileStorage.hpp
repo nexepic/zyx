@@ -21,6 +21,7 @@
 #include "data/DataManager.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "state/SystemStateManager.hpp"
 
 namespace graph::storage {
 
@@ -101,6 +102,10 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator() const { return idAllocator; }
 
+		[[nodiscard]] std::shared_ptr<state::SystemStateManager> getSystemStateManager() const {
+			return systemStateManager;
+		}
+
 		void registerEventListener(std::weak_ptr<IStorageEventListener> listener);
 
 	private:
@@ -133,6 +138,8 @@ namespace graph::storage {
 		std::shared_ptr<DatabaseInspector> databaseInspector;
 
 		std::shared_ptr<SegmentTracker> segmentTracker;
+
+		std::shared_ptr<state::SystemStateManager> systemStateManager;
 
 		std::vector<std::weak_ptr<IStorageEventListener>> eventListeners_;
 		std::mutex listenerMutex_;

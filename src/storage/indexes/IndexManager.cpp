@@ -11,6 +11,7 @@
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
+#include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace graph::query::indexes {
 
@@ -20,13 +21,21 @@ namespace graph::query::indexes {
 		// Instantiate the Node index manager without the redundant config keys.
 		// The existence of the index data itself determines if it's "enabled".
 		nodeIndexManager_ = std::make_shared<EntityTypeIndexManager>(
-				dataManager_, IndexTypes::NODE_LABEL_TYPE, StateKeys::NODE_LABEL_ROOT, IndexTypes::NODE_PROPERTY_TYPE,
-				StateKeys::NODE_PROPERTY_PREFIX);
+				dataManager_,
+				storage_->getSystemStateManager(),
+				IndexTypes::NODE_LABEL_TYPE,
+				storage::state::keys::Node::LABEL_ROOT,
+				IndexTypes::NODE_PROPERTY_TYPE,
+				storage::state::keys::Node::PROPERTY_PREFIX);
 
 		// Instantiate the Edge index manager similarly.
 		edgeIndexManager_ = std::make_shared<EntityTypeIndexManager>(
-				dataManager_, IndexTypes::EDGE_LABEL_TYPE, StateKeys::EDGE_LABEL_ROOT, IndexTypes::EDGE_PROPERTY_TYPE,
-				StateKeys::EDGE_PROPERTY_PREFIX);
+				dataManager_,
+				storage_->getSystemStateManager(),
+				IndexTypes::EDGE_LABEL_TYPE,
+				storage::state::keys::Edge::LABEL_ROOT,
+				IndexTypes::EDGE_PROPERTY_TYPE,
+				storage::state::keys::Edge::PROPERTY_PREFIX);
 	}
 
 	IndexManager::~IndexManager() = default;

@@ -18,6 +18,25 @@ statement
     : matchStatement
     | createStatement
     | administrationStatement
+    | callStatement
+    ;
+
+callStatement
+    : K_CALL procedureName '(' argumentList? ')'
+    ;
+
+procedureName
+    : symbolicName ('.' symbolicName)*
+    ;
+
+symbolicName
+    : ID
+    | K_INDEX | K_ON | K_MATCH | K_CREATE | K_WHERE | K_RETURN
+    | K_SHOW | K_DROP | K_CALL | K_AS
+    ;
+
+argumentList
+    : expression (',' expression)*
     ;
 
 administrationStatement
@@ -140,6 +159,7 @@ K_CREATE : 'CREATE' | 'create';
 K_WHERE  : 'WHERE' | 'where';
 K_RETURN : 'RETURN' | 'return';
 K_AS     : 'AS' | 'as';
+K_CALL   : 'CALL' | 'call';
 
 NULL_LITERAL : 'NULL' | 'null';
 BOOLEAN      : 'TRUE' | 'true' | 'FALSE' | 'false';

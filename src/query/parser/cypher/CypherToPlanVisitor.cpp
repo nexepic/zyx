@@ -402,6 +402,41 @@ namespace graph::parser::cypher {
 		return std::any();
 	}
 
+	std::any CypherToPlanVisitor::visitCallStatement(CypherParser::CallStatementContext *ctx) {
+		// 1. Extract Procedure Name (e.g., "dbms.setConfig")
+		std::string procName = ctx->procedureName()->getText();
+
+		// 2. Extract Arguments
+		std::vector<graph::PropertyValue> args;
+		if (ctx->argumentList()) {
+			auto exprs = ctx->argumentList()->expression();
+			for (auto expr : exprs) {
+				// Note: Currently supporting Literals and simple Identifiers as strings.
+				if (expr->literal()) {
+					args.push_back(parseValue(expr->literal()));
+				}
+				else if (expr->ID()) {
+					// Treat ID as string argument
+					args.push_back(graph::PropertyValue(expr->getText()));
+				}
+				else {
+					// If you added complex expressions support, handle it here.
+					// For now, fail gracefully.
+					throw std::runtime_error("Procedure arguments currently only support literals (strings, numbers, booleans).");
+				}
+			}
+		}
+
+		// 3. Delegate to Planner
+		// The planner will decide which PhysicalOperator (SetConfig, ListConfig) to create.
+		auto op = planner_->callProcedure(procName, args);
+
+		// 4. Chain the operator to the pipeline
+		chainOperator(std::move(op));
+
+		return std::any();
+	}
+
 	std::any CypherToPlanVisitor::visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) {
 		// Grammar: SHOW INDEXES
 		auto op = planner_->showIndexes();

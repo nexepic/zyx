@@ -303,3 +303,20 @@ TEST_F(IndexManagerTest, LiveIndexUpdate_ExistingPropertyModification_WithColdCa
         << "Bug Detected: New index entry (20) missing. Snapshot failed.";
     EXPECT_EQ(newResults[0], nodeId);
 }
+
+TEST_F(IndexManagerTest, Isolation_NodeVsEdgeState) {
+	// Enable both
+	indexManager->buildPropertyIndex("node", "name");
+	indexManager->buildPropertyIndex("edge", "weight");
+
+	fileStorage->flush();
+
+	// Check if listing is correct
+	auto nodeIdx = indexManager->listIndexes("node");
+	auto edgeIdx = indexManager->listIndexes("edge");
+
+	EXPECT_TRUE(hasIndexListEntry("node", "property", "name"));
+	EXPECT_FALSE(hasIndexListEntry("node", "property", "weight")); // Weight shouldn't be in node
+
+	EXPECT_TRUE(hasIndexListEntry("edge", "property", "weight"));
+}

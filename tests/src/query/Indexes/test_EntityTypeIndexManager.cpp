@@ -17,10 +17,11 @@
 #include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
-#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/state/SystemStateKeys.hpp"
 
 class EntityTypeIndexManagerTest : public ::testing::Test {
 protected:
@@ -37,16 +38,19 @@ protected:
 
 		// Create the index managers
 		nodeIndexManager = std::make_shared<graph::query::indexes::EntityTypeIndexManager>(
-				dataManager, graph::query::indexes::IndexTypes::NODE_LABEL_TYPE,
-				graph::query::indexes::StateKeys::NODE_LABEL_ROOT,
+				dataManager,
+				fileStorage->getSystemStateManager(), // Get the manager instance
+				graph::query::indexes::IndexTypes::NODE_LABEL_TYPE,
+				graph::storage::state::keys::Node::LABEL_ROOT, // Use new group
 				graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE,
-				graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX);
+				graph::storage::state::keys::Node::PROPERTY_PREFIX);
 
 		edgeIndexManager = std::make_shared<graph::query::indexes::EntityTypeIndexManager>(
-				dataManager, graph::query::indexes::IndexTypes::EDGE_LABEL_TYPE,
-				graph::query::indexes::StateKeys::EDGE_LABEL_ROOT,
+				dataManager, fileStorage->getSystemStateManager(),
+				graph::query::indexes::IndexTypes::EDGE_LABEL_TYPE,
+				graph::storage::state::keys::Edge::LABEL_ROOT,
 				graph::query::indexes::IndexTypes::EDGE_PROPERTY_TYPE,
-				graph::query::indexes::StateKeys::EDGE_PROPERTY_PREFIX);
+				graph::storage::state::keys::Edge::PROPERTY_PREFIX);
 	}
 
 	void TearDown() override {
@@ -95,9 +99,9 @@ TEST_F(EntityTypeIndexManagerTest, BuildAndDropIndexes) {
 }
 
 TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
-    nodeIndexManager->getLabelIndex()->createIndex();
-    // For property index, we register the specific key we want to track
-    nodeIndexManager->getPropertyIndex()->createIndex("key1");
+	nodeIndexManager->getLabelIndex()->createIndex();
+	// For property index, we register the specific key we want to track
+	nodeIndexManager->getPropertyIndex()->createIndex("key1");
 
 	// Create a test node
 	graph::Node node;
@@ -132,7 +136,7 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	updatedNode.addProperty("key1", "value2");
 	updatedNode.addProperty("key2", "value3");
 
-    nodeIndexManager->getPropertyIndex()->createIndex("key2");
+	nodeIndexManager->getPropertyIndex()->createIndex("key2");
 
 	nodeIndexManager->onEntityUpdated(node, updatedNode);
 
@@ -240,9 +244,9 @@ TEST_F(EntityTypeIndexManagerTest, HandleZeroEntityId) {
 }
 
 TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
-    // [FIX] Explicitly enable the label index.
-    // Otherwise onEntityAdded checks isEmpty() and returns early.
-    nodeIndexManager->getLabelIndex()->createIndex();
+	// [FIX] Explicitly enable the label index.
+	// Otherwise onEntityAdded checks isEmpty() and returns early.
+	nodeIndexManager->getLabelIndex()->createIndex();
 
 	// Create a node with empty label
 	graph::Node node;
@@ -287,7 +291,7 @@ TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling) {
 	node.addProperty("key2", 42);
 
 	// Initialize property index manually
-    // Note: addProperty automatically registers the key type, making index non-empty.
+	// Note: addProperty automatically registers the key type, making index non-empty.
 	auto propertyIndex = nodeIndexManager->getPropertyIndex();
 	propertyIndex->addProperty(node.getId(), "key1", node.getProperty("key1"));
 	propertyIndex->addProperty(node.getId(), "key2", node.getProperty("key2"));
@@ -302,8 +306,8 @@ TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling) {
 	propertyIndex->addProperty(node.getId(), "key3", updatedNode.getProperty("key3"));
 
 	// Update the node
-    // Because key1, key2, key3 are all registered (via addProperty calls above),
-    // updatePropertyIndexes will process them.
+	// Because key1, key2, key3 are all registered (via addProperty calls above),
+	// updatePropertyIndexes will process them.
 	nodeIndexManager->onEntityUpdated(node, updatedNode);
 
 	// Verify property changes
@@ -330,7 +334,7 @@ TEST_F(EntityTypeIndexManagerTest, BuildPropertyIndex_RegistersImmediately) {
 	EXPECT_FALSE(nodeIndexManager->hasPropertyIndex(key));
 
 	// Build (Create empty)
-	bool success = nodeIndexManager->buildPropertyIndex(key, [](){ return true; });
+	bool success = nodeIndexManager->buildPropertyIndex(key, []() { return true; });
 	EXPECT_TRUE(success);
 
 	// Check present immediately
@@ -339,8 +343,9 @@ TEST_F(EntityTypeIndexManagerTest, BuildPropertyIndex_RegistersImmediately) {
 	// Check list
 	auto list = nodeIndexManager->listIndexes();
 	bool found = false;
-	for(auto& p : list) {
-		if(p.first == "property" && p.second == key) found = true;
+	for (auto &p: list) {
+		if (p.first == "property" && p.second == key)
+			found = true;
 	}
 	EXPECT_TRUE(found);
 }

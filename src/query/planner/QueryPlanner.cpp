@@ -14,8 +14,10 @@
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
+#include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
+#include "graph/query/execution/operators/SetConfigOperator.hpp"
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
@@ -145,6 +147,28 @@ namespace graph::query {
         return std::make_unique<execution::operators::CreateIndexOperator>(
             im_, label, propertyKey
         );
+    }
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::callProcedure(
+		const std::string& procedure,
+		const std::vector<::graph::PropertyValue>& args
+	) const {
+    	if (procedure == "dbms.setConfig") {
+    		if (args.size() != 2) throw std::runtime_error("dbms.setConfig expects (key, value)");
+    		// args[0] should be key (string), args[1] is value
+    		return std::make_unique<execution::operators::SetConfigOperator>(dm_, args[0].toString(), args[1]);
+    	}
+
+    	if (procedure == "dbms.listConfig") {
+    		return std::make_unique<execution::operators::ListConfigOperator>(dm_);
+    	}
+
+    	if (procedure == "dbms.getConfig") {
+    		if (args.size() != 1) throw std::runtime_error("dbms.getConfig expects (key)");
+    		return std::make_unique<execution::operators::ListConfigOperator>(dm_, args[0].toString());
+    	}
+
+    	throw std::runtime_error("Unknown procedure: " + procedure);
     }
 
 	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::showIndexes() const {

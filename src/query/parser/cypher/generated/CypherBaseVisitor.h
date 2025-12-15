@@ -28,6 +28,22 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitCallStatement(CypherParser::CallStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitProcedureName(CypherParser::ProcedureNameContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitSymbolicName(CypherParser::SymbolicNameContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitArgumentList(CypherParser::ArgumentListContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitAdministrationStatement(CypherParser::AdministrationStatementContext *ctx) override {
     return visitChildren(ctx);
   }

@@ -103,7 +103,6 @@ TEST_F(LabelIndexTest, SaveAndLoadState) {
 	// Arrange
 	labelIndex->createIndex();
 
-	// [FIX] Use ID 1 instead of 321 to avoid FileStorage "Entity range out of bounds" bug
 	int64_t nodeId = 1;
 	std::string label = "Reload";
 
@@ -111,7 +110,6 @@ TEST_F(LabelIndexTest, SaveAndLoadState) {
 	labelIndex->addNode(nodeId, label);
 
 	labelIndex->flush();
-	fileStorage->flush();
 
 	// Close and reopen the database to simulate a restart.
 	database->close();
