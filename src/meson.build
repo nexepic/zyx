@@ -60,3 +60,35 @@ db_dep = declare_dependency(
 	link_with : db_lib,
 	dependencies : [cypher_dep] # Pass through dependencies
 )
+
+
+
+# 1. Define Public Headers
+# These are the ONLY files the client tool needs to see.
+public_headers = [
+	'../include/metrix/metrix.hpp',
+	'../include/metrix/value.hpp'
+]
+
+# 2. Build Shared Library (Implementation)
+libmetrix = shared_library('metrix',
+							 sources : db_src,
+							 include_directories : inc_dirs,
+							 dependencies : [zlib_dep, boost_dep, antlr4_dep, cypher_dep],
+							 install : true,
+							 install_dir : get_option('libdir')
+)
+
+# 3. Install Headers (Contract)
+# This copies headers to {prefix}/include/metrix/
+install_headers(public_headers, subdir : 'metrix')
+
+# 4. Generate pkg-config file (The Professional Standard)
+# This allows tools to find your library using `pkg-config --libs metrix`
+pkg = import('pkgconfig')
+pkg.generate(libmetrix,
+			 name : 'Metrix',
+			 description : 'High-performance Graph Database Engine',
+			 version : '0.1.0',
+			 subdirs : 'metrix' # Clients will include <metrix/metrix.hpp>
+)

@@ -48,6 +48,10 @@ namespace graph::query {
 		return queryExecutor_->execute(std::move(planTree));
 	}
 
+	QueryResult QueryEngine::execute(std::unique_ptr<execution::PhysicalOperator> plan) const {
+		return queryExecutor_->execute(std::move(plan));
+	}
+
     // --- Index Management Wrappers (Unchanged Logic) ---
     bool QueryEngine::buildIndexes(const std::string &entityType) const {
         if (entityType != "node" && entityType != "edge") return false;

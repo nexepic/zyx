@@ -30,6 +30,12 @@ namespace graph::query {
 		// --- Main Execution ---
 		QueryResult execute(const std::string& query, Language lang = Language::Cypher);
 
+		/**
+		 * @brief Executes a pre-built physical plan directly.
+		 *        Useful for internal API calls or optimized paths bypassing the parser.
+		 */
+		QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan) const;
+
 		// Returns a builder to construct queries programmatically
 		QueryBuilder query() const {
 			return QueryBuilder(queryPlanner_);
