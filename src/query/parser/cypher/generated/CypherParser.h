@@ -39,26 +39,25 @@ public:
     RuleShowIndexesStatement = 3, RuleDropIndexStatement = 4, RuleCreateIndexStatement = 5, 
     RuleQuery = 6, RuleRegularQuery = 7, RuleSingleQuery = 8, RuleReadingClause = 9, 
     RuleUpdatingClause = 10, RuleMatchStatement = 11, RuleUnwindStatement = 12, 
-    RuleCreateStatement = 13, RuleMergeStatement = 14, RuleSetStatement = 15, 
-    RuleSetItem = 16, RuleDeleteStatement = 17, RuleRemoveStatement = 18, 
-    RuleRemoveItem = 19, RuleInQueryCallStatement = 20, RuleStandaloneCallStatement = 21, 
-    RuleYieldItems = 22, RuleYieldItem = 23, RuleReturnStatement = 24, RuleProjectionBody = 25, 
-    RuleProjectionItems = 26, RuleProjectionItem = 27, RuleOrderStatement = 28, 
-    RuleSkipStatement = 29, RuleLimitStatement = 30, RuleSortItem = 31, 
-    RuleWhere = 32, RulePattern = 33, RulePatternPart = 34, RulePatternElement = 35, 
-    RulePatternElementChain = 36, RuleNodePattern = 37, RuleRelationshipPattern = 38, 
-    RuleRelationshipDetail = 39, RuleProperties = 40, RuleNodeLabels = 41, 
-    RuleNodeLabel = 42, RuleRelationshipTypes = 43, RuleRangeLiteral = 44, 
-    RuleExpression = 45, RuleOrExpression = 46, RuleXorExpression = 47, 
+    RuleInQueryCallStatement = 13, RuleCreateStatement = 14, RuleMergeStatement = 15, 
+    RuleSetStatement = 16, RuleSetItem = 17, RuleDeleteStatement = 18, RuleRemoveStatement = 19, 
+    RuleRemoveItem = 20, RuleReturnStatement = 21, RuleStandaloneCallStatement = 22, 
+    RuleYieldItems = 23, RuleYieldItem = 24, RuleProjectionBody = 25, RuleProjectionItems = 26, 
+    RuleProjectionItem = 27, RuleOrderStatement = 28, RuleSkipStatement = 29, 
+    RuleLimitStatement = 30, RuleSortItem = 31, RuleWhere = 32, RulePattern = 33, 
+    RulePatternPart = 34, RulePatternElement = 35, RulePatternElementChain = 36, 
+    RuleNodePattern = 37, RuleRelationshipPattern = 38, RuleRelationshipDetail = 39, 
+    RuleProperties = 40, RuleNodeLabels = 41, RuleNodeLabel = 42, RuleRelationshipTypes = 43, 
+    RuleRangeLiteral = 44, RuleExpression = 45, RuleOrExpression = 46, RuleXorExpression = 47, 
     RuleAndExpression = 48, RuleNotExpression = 49, RuleComparisonExpression = 50, 
-    RuleArithmeticExpression = 51, RuleUnaryExpression = 52, RuleAtom = 53, 
-    RulePropertyExpression = 54, RuleFunctionInvocation = 55, RuleExplicitProcedureInvocation = 56, 
-    RuleImplicitProcedureInvocation = 57, RuleVariable = 58, RuleLabelName = 59, 
-    RuleRelTypeName = 60, RulePropertyKeyName = 61, RuleProcedureName = 62, 
-    RuleProcedureResultField = 63, RuleFunctionName = 64, RuleNamespace = 65, 
-    RuleSchemaName = 66, RuleSymbolicName = 67, RuleLiteral = 68, RuleBooleanLiteral = 69, 
-    RuleNumberLiteral = 70, RuleIntegerLiteral = 71, RuleMapLiteral = 72, 
-    RuleListLiteral = 73, RuleParameter = 74
+    RuleArithmeticExpression = 51, RuleUnaryExpression = 52, RuleAccessor = 53, 
+    RuleAtom = 54, RulePropertyExpression = 55, RuleFunctionInvocation = 56, 
+    RuleExplicitProcedureInvocation = 57, RuleImplicitProcedureInvocation = 58, 
+    RuleVariable = 59, RuleLabelName = 60, RuleRelTypeName = 61, RulePropertyKeyName = 62, 
+    RuleProcedureName = 63, RuleProcedureResultField = 64, RuleFunctionName = 65, 
+    RuleNamespace = 66, RuleSchemaName = 67, RuleSymbolicName = 68, RuleLiteral = 69, 
+    RuleBooleanLiteral = 70, RuleNumberLiteral = 71, RuleIntegerLiteral = 72, 
+    RuleMapLiteral = 73, RuleListLiteral = 74, RuleParameter = 75
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -91,6 +90,7 @@ public:
   class UpdatingClauseContext;
   class MatchStatementContext;
   class UnwindStatementContext;
+  class InQueryCallStatementContext;
   class CreateStatementContext;
   class MergeStatementContext;
   class SetStatementContext;
@@ -98,11 +98,10 @@ public:
   class DeleteStatementContext;
   class RemoveStatementContext;
   class RemoveItemContext;
-  class InQueryCallStatementContext;
+  class ReturnStatementContext;
   class StandaloneCallStatementContext;
   class YieldItemsContext;
   class YieldItemContext;
-  class ReturnStatementContext;
   class ProjectionBodyContext;
   class ProjectionItemsContext;
   class ProjectionItemContext;
@@ -131,6 +130,7 @@ public:
   class ComparisonExpressionContext;
   class ArithmeticExpressionContext;
   class UnaryExpressionContext;
+  class AccessorContext;
   class AtomContext;
   class PropertyExpressionContext;
   class FunctionInvocationContext;
@@ -173,8 +173,8 @@ public:
   public:
     StatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    AdministrationStatementContext *administrationStatement();
     QueryContext *query();
+    AdministrationStatementContext *administrationStatement();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -364,6 +364,22 @@ public:
 
   UnwindStatementContext* unwindStatement();
 
+  class  InQueryCallStatementContext : public antlr4::ParserRuleContext {
+  public:
+    InQueryCallStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_CALL();
+    ExplicitProcedureInvocationContext *explicitProcedureInvocation();
+    antlr4::tree::TerminalNode *K_YIELD();
+    YieldItemsContext *yieldItems();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  InQueryCallStatementContext* inQueryCallStatement();
+
   class  CreateStatementContext : public antlr4::ParserRuleContext {
   public:
     CreateStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
@@ -485,21 +501,19 @@ public:
 
   RemoveItemContext* removeItem();
 
-  class  InQueryCallStatementContext : public antlr4::ParserRuleContext {
+  class  ReturnStatementContext : public antlr4::ParserRuleContext {
   public:
-    InQueryCallStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    ReturnStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *K_CALL();
-    ExplicitProcedureInvocationContext *explicitProcedureInvocation();
-    antlr4::tree::TerminalNode *K_YIELD();
-    YieldItemsContext *yieldItems();
+    antlr4::tree::TerminalNode *K_RETURN();
+    ProjectionBodyContext *projectionBody();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 
-  InQueryCallStatementContext* inQueryCallStatement();
+  ReturnStatementContext* returnStatement();
 
   class  StandaloneCallStatementContext : public antlr4::ParserRuleContext {
   public:
@@ -551,20 +565,6 @@ public:
   };
 
   YieldItemContext* yieldItem();
-
-  class  ReturnStatementContext : public antlr4::ParserRuleContext {
-  public:
-    ReturnStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *K_RETURN();
-    ProjectionBodyContext *projectionBody();
-
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  ReturnStatementContext* returnStatement();
 
   class  ProjectionBodyContext : public antlr4::ParserRuleContext {
   public:
@@ -1011,8 +1011,9 @@ public:
   public:
     UnaryExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    PropertyExpressionContext *propertyExpression();
     AtomContext *atom();
+    std::vector<AccessorContext *> accessor();
+    AccessorContext* accessor(size_t i);
     antlr4::tree::TerminalNode *PLUS();
     antlr4::tree::TerminalNode *MINUS();
 
@@ -1022,6 +1023,23 @@ public:
   };
 
   UnaryExpressionContext* unaryExpression();
+
+  class  AccessorContext : public antlr4::ParserRuleContext {
+  public:
+    AccessorContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *DOT();
+    PropertyKeyNameContext *propertyKeyName();
+    antlr4::tree::TerminalNode *LBRACK();
+    ExpressionContext *expression();
+    antlr4::tree::TerminalNode *RBRACK();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  AccessorContext* accessor();
 
   class  AtomContext : public antlr4::ParserRuleContext {
   public:

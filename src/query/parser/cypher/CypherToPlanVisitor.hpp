@@ -59,7 +59,6 @@ namespace graph::parser::cypher {
 		std::string extractLabel(CypherParser::NodeLabelsContext *ctx);
 		std::string extractLabelFromNodeLabel(CypherParser::NodeLabelContext *ctx);
 		std::string extractRelType(CypherParser::RelationshipTypesContext *ctx);
-		std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext *ctx);
 
 		PropertyValue parseValue(CypherParser::LiteralContext *ctx);
 		std::unordered_map<std::string, PropertyValue> extractProperties(CypherParser::PropertiesContext *ctx);

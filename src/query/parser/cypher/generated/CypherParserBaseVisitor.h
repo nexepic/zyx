@@ -72,6 +72,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitCreateStatement(CypherParser::CreateStatementContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -100,7 +104,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) override {
+  virtual std::any visitReturnStatement(CypherParser::ReturnStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -113,10 +117,6 @@ public:
   }
 
   virtual std::any visitYieldItem(CypherParser::YieldItemContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitReturnStatement(CypherParser::ReturnStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -229,6 +229,10 @@ public:
   }
 
   virtual std::any visitUnaryExpression(CypherParser::UnaryExpressionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitAccessor(CypherParser::AccessorContext *ctx) override {
     return visitChildren(ctx);
   }
 

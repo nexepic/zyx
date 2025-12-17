@@ -12,18 +12,22 @@ options {
     #include "antlr4-runtime.h"
 }
 
-// --- Entry Point ---
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
 
 cypher
     : statement SEMI? EOF
     ;
 
 statement
-    : administrationStatement
-    | query
+    : query
+    | administrationStatement
     ;
 
-// --- Administration ---
+// ============================================================================
+// ADMINISTRATION (DDL)
+// ============================================================================
 
 administrationStatement
     : showIndexesStatement
@@ -35,6 +39,7 @@ showIndexesStatement
     : K_SHOW K_INDEX
     ;
 
+// Use LPAREN propertyKeyName RPAREN to explicitly match :Label(prop)
 dropIndexStatement
     : K_DROP K_INDEX K_ON nodeLabel LPAREN propertyKeyName RPAREN
     ;
@@ -43,7 +48,9 @@ createIndexStatement
     : K_CREATE K_INDEX K_ON nodeLabel LPAREN propertyKeyName RPAREN
     ;
 
-// --- Query Structure ---
+// ============================================================================
+// QUERY STRUCTURE
+// ============================================================================
 
 query
     : regularQuery
@@ -59,7 +66,9 @@ singleQuery
     | ( readingClause* updatingClause+ returnStatement? )
     ;
 
-// --- Clauses ---
+// ============================================================================
+// CLAUSES
+// ============================================================================
 
 readingClause
     : matchStatement
@@ -75,6 +84,8 @@ updatingClause
     | removeStatement
     ;
 
+// --- Reading ---
+
 matchStatement
     : K_OPTIONAL? K_MATCH pattern ( K_WHERE where )?
     ;
@@ -82,6 +93,12 @@ matchStatement
 unwindStatement
     : K_UNWIND expression K_AS variable
     ;
+
+inQueryCallStatement
+    : K_CALL explicitProcedureInvocation ( K_YIELD yieldItems )?
+    ;
+
+// --- Updating ---
 
 createStatement
     : K_CREATE pattern
@@ -95,6 +112,7 @@ setStatement
     : K_SET setItem ( COMMA setItem )*
     ;
 
+// setItem uses propertyExpression to ensure we assign to a property, not just any expression
 setItem
     : propertyExpression EQ expression
     | variable EQ expression
@@ -115,13 +133,19 @@ removeItem
     | propertyExpression
     ;
 
-inQueryCallStatement
-    : K_CALL explicitProcedureInvocation ( K_YIELD yieldItems )?
+// --- Return & Call ---
+
+returnStatement
+    : K_RETURN projectionBody
     ;
 
 standaloneCallStatement
     : K_CALL ( explicitProcedureInvocation | implicitProcedureInvocation ) ( K_YIELD ( MULTIPLY | yieldItems ) )?
     ;
+
+// ============================================================================
+// SUB-CLAUSE STRUCTURES
+// ============================================================================
 
 yieldItems
     : yieldItem ( COMMA yieldItem )* ( K_WHERE where )?
@@ -129,10 +153,6 @@ yieldItems
 
 yieldItem
     : ( procedureResultField K_AS )? variable
-    ;
-
-returnStatement
-    : K_RETURN projectionBody
     ;
 
 projectionBody
@@ -168,7 +188,9 @@ where
     : expression
     ;
 
-// --- Patterns ---
+// ============================================================================
+// PATTERNS
+// ============================================================================
 
 pattern
     : patternPart ( COMMA patternPart )*
@@ -221,7 +243,9 @@ rangeLiteral
     : MULTIPLY ( integerLiteral )? ( RANGE ( integerLiteral )? )?
     ;
 
-// --- Expressions ---
+// ============================================================================
+// EXPRESSIONS (Official Structure: Atom + Suffixes)
+// ============================================================================
 
 expression
     : orExpression
@@ -251,8 +275,16 @@ arithmeticExpression
     : unaryExpression ( ( PLUS | MINUS | MULTIPLY | DIVIDE | MODULO ) unaryExpression )*
     ;
 
+// Official structure: An expression is an Atom followed by optional accessors.
+// This allows 'n' (atom) to become 'n.age' (atom + accessor) validly.
 unaryExpression
-    : ( PLUS | MINUS )? ( propertyExpression | atom )
+    : ( PLUS | MINUS )? atom ( accessor )*
+    ;
+
+// Accessor handles property lookup (.prop) or list indexing ([0])
+accessor
+    : DOT propertyKeyName
+    | LBRACK expression RBRACK
     ;
 
 atom
@@ -265,6 +297,8 @@ atom
     | listLiteral
     ;
 
+// Helper rule for SET/REMOVE clauses that requires a property (not just any atom)
+// Matches: atom (accessor)+
 propertyExpression
     : atom ( DOT propertyKeyName )+
     ;
@@ -281,7 +315,9 @@ implicitProcedureInvocation
     : procedureName
     ;
 
-// --- Basic Elements ---
+// ============================================================================
+// BASIC ELEMENTS
+// ============================================================================
 
 variable : symbolicName ;
 labelName : schemaName ;

@@ -49,6 +49,8 @@ public:
 
     virtual std::any visitUnwindStatement(CypherParser::UnwindStatementContext *context) = 0;
 
+    virtual std::any visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *context) = 0;
+
     virtual std::any visitCreateStatement(CypherParser::CreateStatementContext *context) = 0;
 
     virtual std::any visitMergeStatement(CypherParser::MergeStatementContext *context) = 0;
@@ -63,15 +65,13 @@ public:
 
     virtual std::any visitRemoveItem(CypherParser::RemoveItemContext *context) = 0;
 
-    virtual std::any visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *context) = 0;
+    virtual std::any visitReturnStatement(CypherParser::ReturnStatementContext *context) = 0;
 
     virtual std::any visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *context) = 0;
 
     virtual std::any visitYieldItems(CypherParser::YieldItemsContext *context) = 0;
 
     virtual std::any visitYieldItem(CypherParser::YieldItemContext *context) = 0;
-
-    virtual std::any visitReturnStatement(CypherParser::ReturnStatementContext *context) = 0;
 
     virtual std::any visitProjectionBody(CypherParser::ProjectionBodyContext *context) = 0;
 
@@ -128,6 +128,8 @@ public:
     virtual std::any visitArithmeticExpression(CypherParser::ArithmeticExpressionContext *context) = 0;
 
     virtual std::any visitUnaryExpression(CypherParser::UnaryExpressionContext *context) = 0;
+
+    virtual std::any visitAccessor(CypherParser::AccessorContext *context) = 0;
 
     virtual std::any visitAtom(CypherParser::AtomContext *context) = 0;
 
