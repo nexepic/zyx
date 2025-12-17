@@ -41,8 +41,7 @@ namespace graph::query::execution::operators {
 
                 // 5. Hydrate Edge Properties
                 auto edgeProps = dm_->getEdgeProperties(edge.getId());
-                // Assuming Edge class has setProperties, like Node
-                // edge.setProperties(std::move(edgeProps));
+                edge.setProperties(std::move(edgeProps));
 
                 // 6. Resolve Target Node
                 // Determine which side is the "other" side

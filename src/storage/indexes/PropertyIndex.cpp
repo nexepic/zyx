@@ -45,6 +45,16 @@ namespace graph::query::indexes {
 		}
 
 		PropertyType type = it->second;
+
+		// Handle the case where index was created but no data added (Type is UNKNOWN).
+		// In this case, there are no B-Tree roots to clear in any specific map.
+		// We just need to remove the definition.
+		if (type == PropertyType::UNKNOWN) {
+			indexedKeyTypes_.erase(it);
+			return;
+		}
+
+		// Normal logic for concrete types
 		auto &rootMap = getRootMapForType(type);
 		auto rootIt = rootMap.find(key);
 
