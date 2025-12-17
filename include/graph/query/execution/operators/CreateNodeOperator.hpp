@@ -15,49 +15,60 @@
 
 namespace graph::query::execution::operators {
 
-	/**
-	 * @class CreateNodeOperator
-	 * @brief Operator that performs a write operation to create a node.
-	 *        It acts as a source (if root) or a pass-through pipe.
-	 */
 	class CreateNodeOperator : public PhysicalOperator {
 	public:
-		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm,
-						   std::string variable,
-						   std::string label,
-						   std::unordered_map<std::string, PropertyValue> props)
-			: dm_(std::move(dm)), variable_(std::move(variable)),
-			  label_(std::move(label)), props_(std::move(props)) {}
+		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string label,
+						   std::unordered_map<std::string, PropertyValue> props) :
+			dm_(std::move(dm)), variable_(std::move(variable)), label_(std::move(label)), props_(std::move(props)) {}
 
-		void setChild(std::unique_ptr<PhysicalOperator> child) {
-			child_ = std::move(child);
+		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
+
+		void open() override {
+			executed_ = false;
+			if (child_)
+				child_->open();
 		}
 
-		void open() override { executed_ = false; }
-
 		std::optional<RecordBatch> next() override {
+			// Case A: Pipeline (Chained to previous MATCH or CREATE)
 			if (child_) {
 				auto batchOpt = child_->next();
-				if (!batchOpt) return std::nullopt;
+				if (!batchOpt)
+					return std::nullopt;
 
-				RecordBatch& inputBatch = *batchOpt;
+				RecordBatch &inputBatch = *batchOpt;
 				RecordBatch outputBatch;
 				outputBatch.reserve(inputBatch.size());
 
-				for (auto& record : inputBatch) {
-					Node newNode = performCreate();
+				for (auto &record: inputBatch) {
+					// Check if variable is already bound!
+					// If 'b' exists in the record (from a previous MATCH), use it.
+					// Do NOT create a new one.
+					auto existingNode = record.getNode(variable_);
 
-					Record newRecord = record;
-					newRecord.setNode(variable_, newNode);
-					outputBatch.push_back(std::move(newRecord));
+					if (existingNode) {
+						// Pass through the existing record unchanged
+						// (Strict Cypher: If CREATE (n {prop:1}) is used on bound node, it throws error.
+						//  Here we assume simple reuse for pattern connection.)
+						outputBatch.push_back(std::move(record));
+					} else {
+						// Variable unbound -> Create new Node
+						Node newNode = performCreate();
+
+						// Extend record
+						Record newRecord = record;
+						newRecord.setNode(variable_, newNode);
+						outputBatch.push_back(std::move(newRecord));
+					}
 				}
 				return outputBatch;
 			}
 
-			if (executed_) return std::nullopt;
+			// Case B: Source (Start of query)
+			if (executed_)
+				return std::nullopt;
 
 			Node newNode = performCreate();
-
 			Record record;
 			record.setNode(variable_, newNode);
 			RecordBatch batch;
@@ -67,7 +78,10 @@ namespace graph::query::execution::operators {
 			return batch;
 		}
 
-		void close() override { if (child_) child_->close(); }
+		void close() override {
+			if (child_)
+				child_->close();
+		}
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
@@ -79,11 +93,6 @@ namespace graph::query::execution::operators {
 			return "CreateNode(var=" + variable_ + ", label=" + label_ + ")";
 		}
 
-		[[nodiscard]] std::vector<const PhysicalOperator*> getChildren() const override {
-			if (child_) return {child_.get()};
-			return {};
-		}
-
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::unique_ptr<PhysicalOperator> child_;
@@ -92,7 +101,7 @@ namespace graph::query::execution::operators {
 		std::unordered_map<std::string, PropertyValue> props_;
 		bool executed_ = false;
 
-		Node performCreate() const {
+		Node performCreate() {
 			Node newNode(0, label_);
 			dm_->addNode(newNode);
 			if (!props_.empty()) {
@@ -102,4 +111,4 @@ namespace graph::query::execution::operators {
 			return newNode;
 		}
 	};
-}
+} // namespace graph::query::execution::operators

@@ -25,10 +25,7 @@ namespace graph::storage {
 
 	DeletionManager::~DeletionManager() = default;
 
-	void DeletionManager::initialize() {
-		// Refresh segment state to initialize tracking
-		// refreshSegmentState();
-	}
+	void DeletionManager::initialize() {}
 
 	void DeletionManager::deleteNode(Node &node) const {
 		if (node.hasPropertyEntity()) {

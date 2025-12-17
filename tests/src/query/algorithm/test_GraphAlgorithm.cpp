@@ -1,5 +1,5 @@
 /**
- * @file test_TraversalQuery.cpp
+ * @file test_GraphAlgorithm.cpp
  * @author Nexepic
  * @brief This source code is licensed under MIT License.
  * @date 2025/7/23
@@ -13,10 +13,10 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <graph/core/Database.hpp>
-#include <graph/query/strategies/TraversalQuery.hpp>
+#include <graph/query/algorithm/GraphAlgorithm.hpp>
 #include <gtest/gtest.h>
 
-class TraversalQueryTest : public ::testing::Test {
+class GraphAlgorithmTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		// Generate a unique temporary file name using UUID
@@ -27,16 +27,16 @@ protected:
 		database = std::make_unique<graph::Database>(testFilePath.string());
 		database->open();
 
-		// Get DataManager and create TraversalQuery
+		// Get DataManager and create algo
 		dataManager = database->getStorage()->getDataManager();
-		traversalQuery = std::make_unique<graph::query::TraversalQuery>(dataManager);
+		algo = std::make_unique<graph::query::algorithm::GraphAlgorithm>(dataManager);
 
 		// Set up test graph structure
 		setupTestGraph();
 	}
 
 	void TearDown() override {
-		traversalQuery.reset();
+		algo.reset();
 		database->close();
 		database.reset();
 		std::filesystem::remove(testFilePath);
@@ -113,7 +113,7 @@ protected:
 	std::filesystem::path testFilePath;
 	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
-	std::unique_ptr<graph::query::TraversalQuery> traversalQuery;
+	std::unique_ptr<graph::query::algorithm::GraphAlgorithm> algo;
 
 	// Test graph elements
 	graph::Node node1, node2, node3, node4, node5, node6, node7, node8, node9, node10, node11, node12;
@@ -121,114 +121,114 @@ protected:
 };
 
 // FindShortestPath tests
-TEST_F(TraversalQueryTest, FindShortestPathDirectConnection) {
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node1.getId(), node2.getId(), "outgoing");
+TEST_F(GraphAlgorithmTest, FindShortestPathDirectConnection) {
+	const std::vector<graph::Node> path = algo->findShortestPath(node1.getId(), node2.getId(), "outgoing");
 
 	ASSERT_EQ(path.size(), 2u);
 	EXPECT_EQ(path[0].getId(), node1.getId());
 	EXPECT_EQ(path[1].getId(), node2.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathTwoHops) {
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node1.getId(), node5.getId(), "outgoing");
+TEST_F(GraphAlgorithmTest, FindShortestPathTwoHops) {
+	const std::vector<graph::Node> path = algo->findShortestPath(node1.getId(), node5.getId(), "outgoing");
 
 	ASSERT_EQ(path.size(), 3u);
 	EXPECT_EQ(path[0].getId(), node1.getId());
 	EXPECT_EQ(path[2].getId(), node5.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathMultiplePaths) {
+TEST_F(GraphAlgorithmTest, FindShortestPathMultiplePaths) {
 	// Path from node1 to node5: 1->2->4->5 or 1->3->5 (both have different lengths)
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node1.getId(), node5.getId(), "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node1.getId(), node5.getId(), "outgoing");
 
 	ASSERT_GE(path.size(), 3u);
 	EXPECT_EQ(path[0].getId(), node1.getId());
 	EXPECT_EQ(path.back().getId(), node5.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathSameNode) {
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node1.getId(), node1.getId(), "outgoing");
+TEST_F(GraphAlgorithmTest, FindShortestPathSameNode) {
+	const std::vector<graph::Node> path = algo->findShortestPath(node1.getId(), node1.getId(), "outgoing");
 
 	ASSERT_EQ(path.size(), 1u);
 	EXPECT_EQ(path[0].getId(), node1.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathNoConnection) {
+TEST_F(GraphAlgorithmTest, FindShortestPathNoConnection) {
 	// Try to find path from node5 to node1 (no outgoing path exists)
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node5.getId(), node1.getId(), "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node5.getId(), node1.getId(), "outgoing");
 
 	EXPECT_TRUE(path.empty());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathIncomingDirection) {
+TEST_F(GraphAlgorithmTest, FindShortestPathIncomingDirection) {
 	// Test incoming direction: path from node5 to node1
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node5.getId(), node1.getId(), "incoming");
+	const std::vector<graph::Node> path = algo->findShortestPath(node5.getId(), node1.getId(), "incoming");
 
 	ASSERT_GE(path.size(), 3u);
 	EXPECT_EQ(path[0].getId(), node5.getId());
 	EXPECT_EQ(path.back().getId(), node1.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathBothDirections) {
+TEST_F(GraphAlgorithmTest, FindShortestPathBothDirections) {
 	// Test both directions: should find the shortest path regardless of edge direction
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node5.getId(), node1.getId(), "both");
+	const std::vector<graph::Node> path = algo->findShortestPath(node5.getId(), node1.getId(), "both");
 
 	ASSERT_GE(path.size(), 3u);
 	EXPECT_EQ(path[0].getId(), node5.getId());
 	EXPECT_EQ(path.back().getId(), node1.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathNonexistentNode) {
+TEST_F(GraphAlgorithmTest, FindShortestPathNonexistentNode) {
 	// Test with non-existent end node
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node1.getId(), 999, "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node1.getId(), 999, "outgoing");
 
 	EXPECT_TRUE(path.empty());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathLongerPath) {
+TEST_F(GraphAlgorithmTest, FindShortestPathLongerPath) {
 	// Test longer path: node6 to node5
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node6.getId(), node5.getId(), "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node6.getId(), node5.getId(), "outgoing");
 
 	ASSERT_GE(path.size(), 4u);
 	EXPECT_EQ(path[0].getId(), node6.getId());
 	EXPECT_EQ(path.back().getId(), node5.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathDisconnectedNodes) {
+TEST_F(GraphAlgorithmTest, FindShortestPathDisconnectedNodes) {
 	// Test path between nodes that are not connected
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node12.getId(), node1.getId(), "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node12.getId(), node1.getId(), "outgoing");
 
 	EXPECT_TRUE(path.empty());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathCrossConnections) {
+TEST_F(GraphAlgorithmTest, FindShortestPathCrossConnections) {
 	// Test path that requires crossing multiple branches: node6 to node10
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node6.getId(), node10.getId(), "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node6.getId(), node10.getId(), "outgoing");
 
 	ASSERT_GE(path.size(), 3u);
 	EXPECT_EQ(path[0].getId(), node6.getId());
 	EXPECT_EQ(path.back().getId(), node10.getId());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathFromIsolatedNode) {
+TEST_F(GraphAlgorithmTest, FindShortestPathFromIsolatedNode) {
 	// Test path from node that has no incoming edges (node11, node10)
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node11.getId(), node10.getId(), "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node11.getId(), node10.getId(), "outgoing");
 
 	EXPECT_TRUE(path.empty());
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathInvalidDirection) {
+TEST_F(GraphAlgorithmTest, FindShortestPathInvalidDirection) {
 	// Test with invalid direction parameter (should handle gracefully)
-	std::vector<graph::Node> path = traversalQuery->findShortestPath(node1.getId(), node5.getId(), "invalid");
+	std::vector<graph::Node> path = algo->findShortestPath(node1.getId(), node5.getId(), "invalid");
 
 	// Behavior depends on implementation - could be empty or default to "both"
 	// Just ensure it doesn't crash
 	EXPECT_TRUE(true);
 }
 
-TEST_F(TraversalQueryTest, FindShortestPathMultipleAlternatives) {
+TEST_F(GraphAlgorithmTest, FindShortestPathMultipleAlternatives) {
 	// Test node9 to node5: direct path vs through node12->node11->node5
-	const std::vector<graph::Node> path = traversalQuery->findShortestPath(node9.getId(), node5.getId(), "outgoing");
+	const std::vector<graph::Node> path = algo->findShortestPath(node9.getId(), node5.getId(), "outgoing");
 
 	ASSERT_EQ(path.size(), 2u); // Should choose direct path
 	EXPECT_EQ(path[0].getId(), node9.getId());
@@ -236,8 +236,8 @@ TEST_F(TraversalQueryTest, FindShortestPathMultipleAlternatives) {
 }
 
 // FindConnectedNodes tests
-TEST_F(TraversalQueryTest, FindConnectedNodesOutgoing) {
-	const std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node1.getId(), "outgoing");
+TEST_F(GraphAlgorithmTest, FindConnectedNodesOutgoing) {
+	const std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node1.getId(), "outgoing");
 
 	ASSERT_EQ(connectedNodes.size(), 2u);
 	// node1 has outgoing edges to node2 and node3
@@ -247,8 +247,8 @@ TEST_F(TraversalQueryTest, FindConnectedNodesOutgoing) {
 	}
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesIncoming) {
-	const std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node5.getId(), "incoming");
+TEST_F(GraphAlgorithmTest, FindConnectedNodesIncoming) {
+	const std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node5.getId(), "incoming");
 
 	ASSERT_GE(connectedNodes.size(), 2u);
 	// node5 has incoming edges from node3, node4, node9, node11
@@ -258,8 +258,8 @@ TEST_F(TraversalQueryTest, FindConnectedNodesIncoming) {
 	}
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesBoth) {
-	const std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node3.getId(), "both");
+TEST_F(GraphAlgorithmTest, FindConnectedNodesBoth) {
+	const std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node3.getId(), "both");
 
 	ASSERT_GE(connectedNodes.size(), 3u);
 	// node3 has incoming from node1, node2, node7 and outgoing to node5
@@ -269,31 +269,31 @@ TEST_F(TraversalQueryTest, FindConnectedNodesBoth) {
 	}
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesWithEdgeLabel) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesWithEdgeLabel) {
 	// Add edge with specific label for testing
 	auto labeledEdge = graph::Edge(0, node6.getId(), node7.getId(), "special_edge");
 	dataManager->addEdge(labeledEdge);
 
 	std::vector<graph::Node> connectedNodes =
-			traversalQuery->findConnectedNodes(node6.getId(), "outgoing", "special_edge");
+			algo->findConnectedNodes(node6.getId(), "outgoing", "special_edge");
 
 	ASSERT_EQ(connectedNodes.size(), 1u);
 	EXPECT_EQ(connectedNodes[0].getId(), node7.getId());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesWithNodeLabel) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesWithNodeLabel) {
 	// Modify node2 to have a specific label for testing
 	const graph::Node labeledNode2(node2.getId(), "special_node");
 	dataManager->updateNode(labeledNode2);
 
 	std::vector<graph::Node> connectedNodes =
-			traversalQuery->findConnectedNodes(node1.getId(), "outgoing", "", "special_node");
+			algo->findConnectedNodes(node1.getId(), "outgoing", "", "special_node");
 
 	ASSERT_EQ(connectedNodes.size(), 1u);
 	EXPECT_EQ(connectedNodes[0].getId(), node2.getId());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesWithBothLabels) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesWithBothLabels) {
 	// Add edge and node with specific labels
 	auto labeledEdge = graph::Edge(0, node1.getId(), node4.getId(), "test_edge");
 	dataManager->addEdge(labeledEdge);
@@ -302,46 +302,46 @@ TEST_F(TraversalQueryTest, FindConnectedNodesWithBothLabels) {
 	dataManager->updateNode(labeledNode4);
 
 	std::vector<graph::Node> connectedNodes =
-			traversalQuery->findConnectedNodes(node1.getId(), "outgoing", "test_edge", "test_node");
+			algo->findConnectedNodes(node1.getId(), "outgoing", "test_edge", "test_node");
 
 	ASSERT_EQ(connectedNodes.size(), 1u);
 	EXPECT_EQ(connectedNodes[0].getId(), node4.getId());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesNoConnections) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesNoConnections) {
 	// Test node with no connections (assuming node12 has limited connections)
-	const std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node12.getId(), "outgoing");
+	const std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node12.getId(), "outgoing");
 
 	// Based on current graph structure, node12 should have no outgoing edges
 	EXPECT_TRUE(connectedNodes.empty());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesNonexistentEdgeLabel) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesNonexistentEdgeLabel) {
 	const std::vector<graph::Node> connectedNodes =
-			traversalQuery->findConnectedNodes(node1.getId(), "outgoing", "nonexistent_label");
+			algo->findConnectedNodes(node1.getId(), "outgoing", "nonexistent_label");
 
 	EXPECT_TRUE(connectedNodes.empty());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesNonexistentNodeLabel) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesNonexistentNodeLabel) {
 	const std::vector<graph::Node> connectedNodes =
-			traversalQuery->findConnectedNodes(node1.getId(), "outgoing", "", "nonexistent_label");
+			algo->findConnectedNodes(node1.getId(), "outgoing", "", "nonexistent_label");
 
 	EXPECT_TRUE(connectedNodes.empty());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesInvalidDirection) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesInvalidDirection) {
 	// Test with invalid direction parameter
 	const std::vector<graph::Node> connectedNodes =
-			traversalQuery->findConnectedNodes(node1.getId(), "invalid_direction");
+			algo->findConnectedNodes(node1.getId(), "invalid_direction");
 
 	// Should return empty result for invalid direction
 	EXPECT_TRUE(connectedNodes.empty());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesDuplicateEdges) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesDuplicateEdges) {
 	// Test that duplicate connections are handled correctly (no duplicate nodes returned)
-	const std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node1.getId(), "outgoing");
+	const std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node1.getId(), "outgoing");
 
 	// Verify no duplicate nodes in result
 	std::unordered_set<int64_t> uniqueIds;
@@ -350,16 +350,16 @@ TEST_F(TraversalQueryTest, FindConnectedNodesDuplicateEdges) {
 	}
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesNonexistentStartNode) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesNonexistentStartNode) {
 	// Test with non-existent start node
-	const std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(999, "outgoing");
+	const std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(999, "outgoing");
 
 	EXPECT_TRUE(connectedNodes.empty());
 }
 
-TEST_F(TraversalQueryTest, FindConnectedNodesEmptyParameters) {
+TEST_F(GraphAlgorithmTest, FindConnectedNodesEmptyParameters) {
 	// Test with empty edge and node labels (should return all connected nodes)
-	std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node1.getId(), "outgoing", "", "");
+	std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node1.getId(), "outgoing", "", "");
 
 	ASSERT_EQ(connectedNodes.size(), 2u);
 	const std::unordered_set expectedIds = {node2.getId(), node3.getId()};
@@ -368,11 +368,11 @@ TEST_F(TraversalQueryTest, FindConnectedNodesEmptyParameters) {
 	}
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_BasicTraversal) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_BasicTraversal) {
 	std::vector<int64_t> visitedNodeIds;
 	std::vector<int> visitedDepths;
 
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node1.getId(),
 			[&visitedNodeIds, &visitedDepths](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -398,12 +398,12 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_BasicTraversal) {
 	}
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_MaxDepthLimit) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_MaxDepthLimit) {
 	std::vector<int64_t> visitedNodeIds;
 	std::vector<int> visitedDepths;
 
 	// Set max depth to 1 (only immediate neighbors)
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node1.getId(),
 			[&visitedNodeIds, &visitedDepths](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -423,11 +423,11 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_MaxDepthLimit) {
 	}
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_EarlyTermination) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_EarlyTermination) {
 	std::vector<int64_t> visitedNodeIds;
 
 	// Stop traversal after visiting node1
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node1.getId(),
 			[&visitedNodeIds](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -441,11 +441,11 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_EarlyTermination) {
 	EXPECT_EQ(visitedNodeIds[0], node1.getId());
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_IncomingDirection) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_IncomingDirection) {
 	std::vector<int64_t> visitedNodeIds;
 
 	// Traverse incoming edges from node5
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node5.getId(),
 			[&visitedNodeIds](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -471,11 +471,11 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_IncomingDirection) {
 	EXPECT_TRUE(foundDirectIncoming);
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_BothDirections) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_BothDirections) {
 	std::vector<int64_t> visitedNodeIds;
 
 	// Traverse in both directions from node3
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node3.getId(),
 			[&visitedNodeIds](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -500,14 +500,14 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_BothDirections) {
 	EXPECT_GT(neighborCount, 0);
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_NoConnections) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_NoConnections) {
 	std::vector<int64_t> visitedNodeIds;
 
 	// Create an isolated node for testing
 	graph::Node isolatedNode(0, "IsolatedNode");
 	dataManager->addNode(isolatedNode);
 
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			isolatedNode.getId(),
 			[&visitedNodeIds](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -521,12 +521,12 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_NoConnections) {
 	EXPECT_EQ(visitedNodeIds[0], isolatedNode.getId());
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_ComplexGraph) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_ComplexGraph) {
 	std::vector<int64_t> visitedNodeIds;
 	std::unordered_map<int64_t, int> nodeDepths;
 
 	// Start from node6 which has multiple paths to node5
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node6.getId(),
 			[&visitedNodeIds, &nodeDepths](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -553,11 +553,11 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_ComplexGraph) {
 	EXPECT_TRUE(foundNode5);
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_ZeroMaxDepth) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_ZeroMaxDepth) {
 	std::vector<int64_t> visitedNodeIds;
 
 	// Set max depth to 0 (only the start node)
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node1.getId(),
 			[&visitedNodeIds](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -571,11 +571,11 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_ZeroMaxDepth) {
 	EXPECT_EQ(visitedNodeIds[0], node1.getId());
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_InvalidDirection) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_InvalidDirection) {
 	std::vector<int64_t> visitedNodeIds;
 
 	// Use invalid direction
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node1.getId(),
 			[&visitedNodeIds](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -588,7 +588,7 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_InvalidDirection) {
 	EXPECT_EQ(visitedNodeIds[0], node1.getId());
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_CycleDetection) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_CycleDetection) {
 	// Create a cycle: A -> B -> C -> A
 	graph::Node nodeA(0, "NodeA");
 	graph::Node nodeB(0, "NodeB");
@@ -608,7 +608,7 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_CycleDetection) {
 
 	std::vector<int64_t> visitedNodeIds;
 
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			nodeA.getId(),
 			[&visitedNodeIds](const graph::Node &node, int depth) {
 				visitedNodeIds.push_back(node.getId());
@@ -632,11 +632,11 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_CycleDetection) {
 	EXPECT_EQ(nodeCounts[nodeC.getId()], 1);
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_NonexistentStartNode) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_NonexistentStartNode) {
 	bool visitCalled = false;
 
 	// Use non-existent node ID
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			999,
 			[&visitCalled](const graph::Node &node, int depth) {
 				visitCalled = true;
@@ -648,23 +648,23 @@ TEST_F(TraversalQueryTest, BreadthFirstTraversal_NonexistentStartNode) {
 	EXPECT_FALSE(visitCalled);
 }
 
-TEST_F(TraversalQueryTest, CombinedQueryTest) {
+TEST_F(GraphAlgorithmTest, CombinedQueryTest) {
 	// Test combining findConnectedNodes and findShortestPath
-	std::vector<graph::Node> connectedNodes = traversalQuery->findConnectedNodes(node6.getId(), "outgoing");
+	std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node6.getId(), "outgoing");
 	ASSERT_FALSE(connectedNodes.empty());
 
 	int64_t connectedNodeId = connectedNodes[0].getId();
-	std::vector<graph::Node> path = traversalQuery->findShortestPath(node6.getId(), connectedNodeId, "outgoing");
+	std::vector<graph::Node> path = algo->findShortestPath(node6.getId(), connectedNodeId, "outgoing");
 
 	ASSERT_EQ(path.size(), 2u);
 	EXPECT_EQ(path[0].getId(), node6.getId());
 	EXPECT_EQ(path[1].getId(), connectedNodeId);
 }
 
-TEST_F(TraversalQueryTest, BreadthFirstTraversal_DepthProgression) {
+TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_DepthProgression) {
 	std::vector<std::pair<int64_t, int>> visitOrder;
 
-	traversalQuery->breadthFirstTraversal(
+	algo->breadthFirstTraversal(
 			node6.getId(),
 			[&visitOrder](const graph::Node &node, int depth) {
 				visitOrder.emplace_back(node.getId(), depth);

@@ -9,6 +9,8 @@
  **/
 
 #include "graph/query/planner/QueryPlanner.hpp"
+
+#include "graph/query/execution/operators/AlgoShortestPathOperator.hpp"
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
@@ -166,6 +168,35 @@ namespace graph::query {
     	if (procedure == "dbms.getConfig") {
     		if (args.size() != 1) throw std::runtime_error("dbms.getConfig expects (key)");
     		return std::make_unique<execution::operators::ListConfigOperator>(dm_, args[0].toString());
+    	}
+
+    	if (procedure == "algo.shortestPath") {
+    		if (args.size() < 2) {
+    			throw std::runtime_error("algo.shortestPath requires at least (startId, endId)");
+    		}
+
+    		// Extract IDs (Assuming arguments are passed as Integers)
+    		// If user passes '1', it might be parsed as int64.
+    		// Using std::visit or simpler helpers if available.
+    		// Here assuming simple conversion via PropertyValue helper logic or direct variant access.
+
+    		int64_t startId = 0;
+    		int64_t endId = 0;
+
+    		// Simple extraction logic (adjust based on your PropertyValue API)
+    		try {
+    			startId = std::stoll(args[0].toString());
+    			endId = std::stoll(args[1].toString());
+    		} catch (...) {
+    			throw std::runtime_error("IDs must be numeric");
+    		}
+
+    		std::string dir = "both";
+    		if (args.size() > 2) dir = args[2].toString();
+
+    		return std::make_unique<execution::operators::AlgoShortestPathOperator>(
+				dm_, startId, endId, dir
+			);
     	}
 
     	throw std::runtime_error("Unknown procedure: " + procedure);

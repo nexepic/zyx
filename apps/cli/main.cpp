@@ -8,72 +8,9 @@
  *
  **/
 
-#include <iostream>
-#include "graph/cli/CLI11.hpp"
-#include "graph/cli/Repl.hpp"
-#include "graph/core/Database.hpp"
-#include "graph/log/Log.hpp"
+#include "graph/cli/CommandLineInterface.hpp"
 
-int main(int argc, char **argv) {
-	CLI::App app{"metrix"};
-
-	// Database subcommand
-	auto database = app.add_subcommand("database", "Database operations");
-
-	// database create command
-	std::string dbPath;
-	auto createCmd = database->add_subcommand("create", "Create a new database");
-	createCmd->add_option("path", dbPath, "Database file path")->required();
-	createCmd->callback([&]() {
-		graph::Database db(dbPath);
-		graph::log::Log::info("Database created at: ", dbPath);
-		const graph::REPL repl(db);
-		repl.run();
-	});
-
-	// database open command
-	auto openCmd = database->add_subcommand("open", "Open an existing database");
-	openCmd->add_option("path", dbPath, "Database file path")->required();
-	openCmd->callback([&]() {
-		graph::Database db(dbPath);
-		db.open();
-		const graph::REPL repl(db);
-		repl.run();
-		db.close();
-	});
-
-	// database run command
-	auto runCmd = database->add_subcommand("run", "Run database operations");
-	runCmd->add_option("path", dbPath, "Database file path")->required();
-	runCmd->callback([&]() {
-		graph::Database db(dbPath);
-		db.open();
-		const graph::REPL repl(db);
-		repl.run();
-		db.close();
-	});
-
-	// Ensure correct subcommand usage
-	database->callback([&]() {
-		if (database->get_subcommands().empty()) {
-			graph::log::Log::error("Missing or incorrect subcommand. Available subcommands: create, run");
-			std::cout << database->help() << std::endl;
-			exit(EXIT_FAILURE);
-		}
-	});
-
-	app.require_subcommand(0, 1);
-
-	try {
-		CLI11_PARSE(app, argc, argv);
-	} catch (const std::exception &e) {
-		std::cerr << "Command line error: " << e.what() << std::endl;
-		return 1;
-	}
-
-	if (argc == 1) {
-		std::cout << app.help() << std::endl;
-	}
-
-	return 0;
+int main(const int argc, char **argv) {
+	graph::cli::CommandLineInterface cli;
+	return cli.run(argc, argv);
 }

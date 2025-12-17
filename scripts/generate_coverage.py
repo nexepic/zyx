@@ -26,7 +26,8 @@ IGNORE_PATTERNS = [
     "CLI11",
     "Xcode.app",
     "MSVC",
-    "Program Files"
+    "Program Files",
+    "generated/"
 ]
 
 

@@ -65,39 +65,39 @@ protected:
 
 TEST_F(RelationshipTraversalTest, GetOutgoingAndIncomingEdgesForSingleEdge) {
 	auto outEdges = traversal->getOutgoingEdges(node1.getId());
-	ASSERT_EQ(outEdges.size(), 1) << "Node1 should have one outgoing edge.";
+	ASSERT_EQ(outEdges.size(), 1UL) << "Node1 should have one outgoing edge.";
 	EXPECT_EQ(outEdges[0].getId(), edge.getId());
 
 	auto inEdges = traversal->getIncomingEdges(node2.getId());
-	ASSERT_EQ(inEdges.size(), 1) << "Node2 should have one incoming edge.";
+	ASSERT_EQ(inEdges.size(), 1UL) << "Node2 should have one incoming edge.";
 	EXPECT_EQ(inEdges[0].getId(), edge.getId());
 }
 
 TEST_F(RelationshipTraversalTest, GetAllConnectedEdgesForSingleEdge) {
 	auto allEdgesA = traversal->getAllConnectedEdges(node1.getId());
-	EXPECT_EQ(allEdgesA.size(), 1);
+	EXPECT_EQ(allEdgesA.size(), 1UL);
 
 	auto allEdgesB = traversal->getAllConnectedEdges(node2.getId());
-	EXPECT_EQ(allEdgesB.size(), 1);
+	EXPECT_EQ(allEdgesB.size(), 1UL);
 }
 
 TEST_F(RelationshipTraversalTest, GetConnectedNodesForSingleEdge) {
 	auto targets = traversal->getConnectedTargetNodes(node1.getId());
-	ASSERT_EQ(targets.size(), 1);
+	ASSERT_EQ(targets.size(), 1UL);
 	EXPECT_EQ(targets[0].getId(), node2.getId());
 
 	auto sources = traversal->getConnectedSourceNodes(node2.getId());
-	ASSERT_EQ(sources.size(), 1);
+	ASSERT_EQ(sources.size(), 1UL);
 	EXPECT_EQ(sources[0].getId(), node1.getId());
 }
 
 TEST_F(RelationshipTraversalTest, GetAllConnectedNodesForSingleEdge) {
 	auto connectedA = traversal->getAllConnectedNodes(node1.getId());
-	ASSERT_EQ(connectedA.size(), 1);
+	ASSERT_EQ(connectedA.size(), 1UL);
 	EXPECT_EQ(connectedA[0].getId(), node2.getId());
 
 	auto connectedB = traversal->getAllConnectedNodes(node2.getId());
-	ASSERT_EQ(connectedB.size(), 1);
+	ASSERT_EQ(connectedB.size(), 1UL);
 	EXPECT_EQ(connectedB[0].getId(), node1.getId());
 }
 
@@ -147,7 +147,7 @@ TEST_F(RelationshipTraversalTest, GetAllConnectedNodesReturnsUniqueNodes) {
 
 	// We have two edges pointing to node2, but should only get one node back
 	auto connectedNodes = traversal->getAllConnectedNodes(node1.getId());
-	ASSERT_EQ(connectedNodes.size(), 1);
+	ASSERT_EQ(connectedNodes.size(), 1UL);
 	EXPECT_EQ(connectedNodes[0].getId(), node2.getId());
 }
 
@@ -159,15 +159,15 @@ TEST_F(RelationshipTraversalTest, SelfReferencingEdge) {
 	dataManager->addEdge(selfEdge);
 
 	auto outEdges = traversal->getOutgoingEdges(node3.getId());
-	ASSERT_EQ(outEdges.size(), 1);
+	ASSERT_EQ(outEdges.size(), 1UL);
 	EXPECT_EQ(outEdges[0].getId(), selfEdge.getId());
 
 	auto inEdges = traversal->getIncomingEdges(node3.getId());
-	ASSERT_EQ(inEdges.size(), 1);
+	ASSERT_EQ(inEdges.size(), 1UL);
 	EXPECT_EQ(inEdges[0].getId(), selfEdge.getId());
 
 	auto allNodes = traversal->getAllConnectedNodes(node3.getId());
-	ASSERT_EQ(allNodes.size(), 1);
+	ASSERT_EQ(allNodes.size(), 1UL);
 	EXPECT_EQ(allNodes[0].getId(), node3.getId());
 }
 
@@ -240,7 +240,7 @@ protected:
 
 TEST_F(RelationshipTraversalAdvancedTest, GetMultipleOutgoingEdges) {
 	auto outEdges = traversal->getOutgoingEdges(n1.getId());
-	ASSERT_EQ(outEdges.size(), 3);
+	ASSERT_EQ(outEdges.size(), 3UL);
 
 	// Verify the order is LIFO (Last-In, First-Out) due to linking at the head
 	EXPECT_EQ(outEdges[0].getId(), edge12.getId());
@@ -254,7 +254,7 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkFirstEdgeInChain) {
 	traversal->unlinkEdge(edgeToUnlink);
 
 	auto outEdges = traversal->getOutgoingEdges(n1.getId());
-	ASSERT_EQ(outEdges.size(), 2);
+	ASSERT_EQ(outEdges.size(), 2UL);
 	EXPECT_EQ(outEdges[0].getId(), edge11.getId());
 	EXPECT_EQ(outEdges[1].getId(), edge10.getId());
 
@@ -269,7 +269,7 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeInChain) {
 	traversal->unlinkEdge(edgeToUnlink);
 
 	auto outEdges = traversal->getOutgoingEdges(n1.getId());
-	ASSERT_EQ(outEdges.size(), 2);
+	ASSERT_EQ(outEdges.size(), 2UL);
 
 	// Verify the remaining edges are edge12 and edge10
 	EXPECT_EQ(outEdges[0].getId(), edge12.getId());
@@ -289,7 +289,7 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInChain) {
 	traversal->unlinkEdge(edgeToUnlink);
 
 	auto outEdges = traversal->getOutgoingEdges(n1.getId());
-	ASSERT_EQ(outEdges.size(), 2);
+	ASSERT_EQ(outEdges.size(), 2UL);
 	EXPECT_EQ(outEdges[0].getId(), edge12.getId());
 	EXPECT_EQ(outEdges[1].getId(), edge11.getId());
 
@@ -312,7 +312,7 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
 	dataManager->addEdge(edge34);
 
 	auto initialInEdges = traversal->getIncomingEdges(n5.getId());
-	ASSERT_EQ(initialInEdges.size(), 3);
+	ASSERT_EQ(initialInEdges.size(), 3UL);
 	ASSERT_EQ(initialInEdges[0].getId(), edge34.getId());
 	ASSERT_EQ(initialInEdges[1].getId(), edge24.getId());
 	ASSERT_EQ(initialInEdges[2].getId(), edge14.getId());
@@ -323,7 +323,7 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
 
 	// a. Check the edges currently in the chain
 	auto finalInEdges = traversal->getIncomingEdges(n5.getId());
-	ASSERT_EQ(finalInEdges.size(), 2);
+	ASSERT_EQ(finalInEdges.size(), 2UL);
 	EXPECT_EQ(finalInEdges[0].getId(), edge34.getId()); // New head of the list
 	EXPECT_EQ(finalInEdges[1].getId(), edge14.getId()); // New tail of the list
 

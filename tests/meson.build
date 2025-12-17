@@ -43,6 +43,7 @@ for root, dirs, files in os.walk(sys.argv[1]):
 											 gtest_main_dep,
 											 gmock_dep,
 											 gmock_main_dep,
+											 antlr4_dep,
 											 boost_dep,
 											 zlib_dep
 										 ],

@@ -57,7 +57,7 @@ protected:
 TEST_F(CypherTest, CreateAndMatchNode) {
 	// 1. Create a node with properties
 	auto res1 = execute("CREATE (n:User {name: 'Alice', age: 30}) RETURN n");
-	ASSERT_EQ(res1.nodeCount(), 1);
+	ASSERT_EQ(res1.nodeCount(), 1UL);
 
 	auto node = res1.getNodes()[0];
 	EXPECT_EQ(node.getLabel(), "User");
@@ -70,7 +70,7 @@ TEST_F(CypherTest, CreateAndMatchNode) {
 
 	// 2. Match the node back (Scan)
 	auto res2 = execute("MATCH (n:User) RETURN n");
-	ASSERT_EQ(res2.nodeCount(), 1);
+	ASSERT_EQ(res2.nodeCount(), 1UL);
 	EXPECT_EQ(res2.getNodes()[0].getLabel(), "User");
 }
 
@@ -81,8 +81,8 @@ TEST_F(CypherTest, CreateAndMatchChain) {
 	// Verify traversal
 	auto res = execute("MATCH (n:Person)-[r]->(m) RETURN n, r, m");
 
-	ASSERT_EQ(res.nodeCount(), 2); // A and B
-	ASSERT_EQ(res.edgeCount(), 1); // KNOWS
+	ASSERT_EQ(res.nodeCount(), 2UL); // A and B
+	ASSERT_EQ(res.edgeCount(), 1UL); // KNOWS
 
 	// Verify Topology
 	const auto &edges = res.getEdges();
@@ -102,7 +102,7 @@ TEST_F(CypherTest, FilterByInlineProperty) {
 
 	// Inline match (This tests Index Pushdown or FilterOperator logic)
 	auto res = execute("MATCH (n:User {name: 'Alice'}) RETURN n");
-	ASSERT_EQ(res.nodeCount(), 1);
+	ASSERT_EQ(res.nodeCount(), 1UL);
 	EXPECT_EQ(res.getNodes()[0].getProperties().at("name").toString(), "Alice");
 }
 
@@ -113,12 +113,12 @@ TEST_F(CypherTest, FilterByWhereClause) {
 
 	// Test Equals (=)
 	auto res1 = execute("MATCH (n:Item) WHERE n.price = 200 RETURN n");
-	ASSERT_EQ(res1.nodeCount(), 1);
+	ASSERT_EQ(res1.nodeCount(), 1UL);
 	EXPECT_EQ(res1.getNodes()[0].getProperties().at("price").toString(), "200");
 
 	// Test Not Equals (<>)
 	auto res2 = execute("MATCH (n:Item) WHERE n.price <> 100 RETURN n");
-	ASSERT_EQ(res2.nodeCount(), 2); // 200 and 50
+	ASSERT_EQ(res2.nodeCount(), 2UL); // 200 and 50
 }
 
 TEST_F(CypherTest, FilterTraversalTarget) {
@@ -129,7 +129,7 @@ TEST_F(CypherTest, FilterTraversalTarget) {
 
 	// Filter target label
 	auto res = execute("MATCH (n:Node)-[r]->(t:Target) RETURN t");
-	ASSERT_EQ(res.nodeCount(), 1);
+	ASSERT_EQ(res.nodeCount(), 1UL);
 	EXPECT_EQ(res.getNodes()[0].getLabel(), "Target");
 }
 
@@ -157,7 +157,7 @@ TEST_F(CypherTest, IndexCreationAndPushdown) {
 	// The logic inside NodeScanOperator should pick the PropertyIndex.
 	// We confirm the result is correct.
 	auto resQuery = execute("MATCH (n:User {id: 2}) RETURN n");
-	ASSERT_EQ(resQuery.nodeCount(), 1);
+	ASSERT_EQ(resQuery.nodeCount(), 1UL);
 	EXPECT_EQ(resQuery.getNodes()[0].getProperties().at("name").toString(), "Two");
 }
 
@@ -194,7 +194,7 @@ TEST_F(CypherTest, SystemConfigFlow) {
 
 	// 2. Get Specific Config
 	auto res1 = execute("CALL dbms.getConfig('test.key')");
-	ASSERT_EQ(res1.rowCount(), 1);
+	ASSERT_EQ(res1.rowCount(), 1UL);
 	EXPECT_EQ(res1.getRows()[0].at("value").toString(), "12345");
 
 	// 3. List All
@@ -241,7 +241,7 @@ TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
 
 	// 5. Verify Data (Hydration)
 	auto resData = execute("MATCH (n:SaveTest {val: 999}) RETURN n");
-	ASSERT_EQ(resData.nodeCount(), 1);
+	ASSERT_EQ(resData.nodeCount(), 1UL);
 	EXPECT_EQ(resData.getNodes()[0].getProperties().at("val").toString(), "999");
 
 	// 6. Verify Index (Metadata Persistence)
@@ -257,6 +257,62 @@ TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
 
 	// 7. Verify Config (State Persistence)
 	auto resCfg = execute("CALL dbms.getConfig('persistent.cfg')");
-	ASSERT_EQ(resCfg.rowCount(), 1);
+	ASSERT_EQ(resCfg.rowCount(), 1UL);
 	EXPECT_EQ(resCfg.getRows()[0].at("value").toString(), "true") << "Config lost after restart";
+}
+
+TEST_F(CypherTest, AlgoShortestPath) {
+	// 1. Setup Graph Topology: A -> B -> C
+	// Note: Creating chain in steps to ensure connectivity
+	(void) execute("CREATE (a:City {name: 'A'})-[r1:ROAD]->(b:City {name: 'B'})");
+	// Match B to extend the chain to C
+	(void) execute("MATCH (b:City {name: 'B'}) CREATE (b)-[r2:ROAD]->(c:City {name: 'C'})");
+
+	// 2. Fetch IDs dynamically (Ids might vary based on execution order)
+	auto resA = execute("MATCH (n:City {name: 'A'}) RETURN n");
+	ASSERT_EQ(resA.nodeCount(), 1UL);
+	int64_t idA = resA.getNodes()[0].getId();
+
+	auto resC = execute("MATCH (n:City {name: 'C'}) RETURN n");
+	ASSERT_EQ(resC.nodeCount(), 1UL);
+	int64_t idC = resC.getNodes()[0].getId();
+
+	// 3. Execute Shortest Path
+	// Syntax: CALL algo.shortestPath(startId, endId)
+	std::string query = "CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idC) + ")";
+	auto resPath = execute(query);
+
+	// 4. Verify Result
+	// Expecting 3 nodes in the path: A -> B -> C
+	ASSERT_EQ(resPath.nodeCount(), 3UL);
+
+	const auto &nodes = resPath.getNodes();
+	// Verify Order and Properties
+	EXPECT_EQ(nodes[0].getProperties().at("name").toString(), "A");
+	EXPECT_EQ(nodes[1].getProperties().at("name").toString(), "B");
+	EXPECT_EQ(nodes[2].getProperties().at("name").toString(), "C");
+
+	// Verify Steps metadata (returned as Rows)
+	ASSERT_GE(resPath.rowCount(), 3UL);
+	EXPECT_EQ(resPath.getRows()[0].at("step").toString(), "0");
+	EXPECT_EQ(resPath.getRows()[2].at("step").toString(), "2");
+}
+
+TEST_F(CypherTest, AlgoShortestPathNoPath) {
+	// 1. Create Disconnected Graph: A   B
+	(void) execute("CREATE (a:City {name: 'A'})");
+	(void) execute("CREATE (b:City {name: 'B'})");
+
+	auto resA = execute("MATCH (n:City {name: 'A'}) RETURN n");
+	int64_t idA = resA.getNodes()[0].getId();
+
+	auto resB = execute("MATCH (n:City {name: 'B'}) RETURN n");
+	int64_t idB = resB.getNodes()[0].getId();
+
+	// 2. Execute Shortest Path
+	std::string query = "CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ")";
+	auto resPath = execute(query);
+
+	// 3. Verify Empty Result
+	EXPECT_TRUE(resPath.isEmpty()) << "Should return empty result for disconnected nodes";
 }
