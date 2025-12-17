@@ -106,20 +106,20 @@ TEST_F(CypherTest, FilterByInlineProperty) {
 	EXPECT_EQ(res.getNodes()[0].getProperties().at("name").toString(), "Alice");
 }
 
-// TEST_F(CypherTest, FilterByWhereClause) {
-// 	execute("CREATE (n:Item {price: 100})");
-// 	execute("CREATE (n:Item {price: 200})");
-// 	execute("CREATE (n:Item {price: 50})");
-//
-// 	// Test Equals (=)
-// 	auto res1 = execute("MATCH (n:Item) WHERE n.price = 200 RETURN n");
-// 	ASSERT_EQ(res1.nodeCount(), 1);
-// 	EXPECT_EQ(res1.getNodes()[0].getProperties().at("price").toString(), "200");
-//
-// 	// Test Not Equals (<>)
-// 	auto res2 = execute("MATCH (n:Item) WHERE n.price <> 100 RETURN n");
-// 	ASSERT_EQ(res2.nodeCount(), 2); // 200 and 50
-// }
+TEST_F(CypherTest, FilterByWhereClause) {
+	(void) execute("CREATE (n:Item {price: 100})");
+	(void) execute("CREATE (n:Item {price: 200})");
+	(void) execute("CREATE (n:Item {price: 50})");
+
+	// Test Equals (=)
+	auto res1 = execute("MATCH (n:Item) WHERE n.price = 200 RETURN n");
+	ASSERT_EQ(res1.nodeCount(), 1);
+	EXPECT_EQ(res1.getNodes()[0].getProperties().at("price").toString(), "200");
+
+	// Test Not Equals (<>)
+	auto res2 = execute("MATCH (n:Item) WHERE n.price <> 100 RETURN n");
+	ASSERT_EQ(res2.nodeCount(), 2); // 200 and 50
+}
 
 TEST_F(CypherTest, FilterTraversalTarget) {
 	// A -> B(Target)

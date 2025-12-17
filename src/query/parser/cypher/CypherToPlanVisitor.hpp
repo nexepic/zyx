@@ -13,62 +13,59 @@
 #include <any>
 #include <memory>
 #include <string>
-#include <vector>
 #include <unordered_map>
-
-// Include the ANTLR generated Base Visitor
 #include "generated/CypherParserBaseVisitor.h"
-
-// Core dependencies
-#include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/execution/PhysicalOperator.hpp"
-#include "graph/core/Property.hpp"
+#include "graph/query/planner/QueryPlanner.hpp"
 
 namespace graph::parser::cypher {
 
-    class CypherToPlanVisitor : public CypherParserBaseVisitor {
-    public:
-        explicit CypherToPlanVisitor(std::shared_ptr<query::QueryPlanner> planner);
+	class CypherToPlanVisitor : public CypherParserBaseVisitor {
+	public:
+		explicit CypherToPlanVisitor(std::shared_ptr<query::QueryPlanner> planner);
 
-        std::unique_ptr<query::execution::PhysicalOperator> getPlan();
+		std::unique_ptr<query::execution::PhysicalOperator> getPlan();
 
-        // --- Entry Points ---
-        std::any visitCypher(CypherParser::CypherContext *ctx) override;
-        std::any visitRegularQuery(CypherParser::RegularQueryContext *ctx) override;
-        std::any visitSingleQuery(CypherParser::SingleQueryContext *ctx) override;
+		// --- Entry Points ---
+		std::any visitCypher(CypherParser::CypherContext *ctx) override;
+		std::any visitRegularQuery(CypherParser::RegularQueryContext *ctx) override;
+		std::any visitSingleQuery(CypherParser::SingleQueryContext *ctx) override;
 
-        // --- Clauses (Using *Statement naming) ---
+		// --- Clauses (Using *Statement naming) ---
 
-        // Reading
-        std::any visitMatchStatement(CypherParser::MatchStatementContext *ctx) override;
-        std::any visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *ctx) override;
+		// Reading
+		std::any visitMatchStatement(CypherParser::MatchStatementContext *ctx) override;
+		std::any visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *ctx) override;
 
-        // Updating
-        std::any visitCreateStatement(CypherParser::CreateStatementContext *ctx) override;
+		// Updating
+		std::any visitCreateStatement(CypherParser::CreateStatementContext *ctx) override;
 
-        // Return
-        std::any visitReturnStatement(CypherParser::ReturnStatementContext *ctx) override;
+		// Return
+		std::any visitReturnStatement(CypherParser::ReturnStatementContext *ctx) override;
 
-        // --- Administration ---
-        std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) override;
-        std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) override;
-        std::any visitCreateIndexStatement(CypherParser::CreateIndexStatementContext *ctx) override;
+		// --- Administration ---
+		std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) override;
+		std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) override;
+		std::any visitCreateIndexStatement(CypherParser::CreateIndexStatementContext *ctx) override;
 
-    private:
-        std::shared_ptr<query::QueryPlanner> planner_;
-        std::unique_ptr<query::execution::PhysicalOperator> rootOp_;
+	private:
+		std::shared_ptr<query::QueryPlanner> planner_;
+		std::unique_ptr<query::execution::PhysicalOperator> rootOp_;
 
-        // --- Helpers ---
-        void chainOperator(std::unique_ptr<query::execution::PhysicalOperator> newOp);
+		// --- Helpers ---
+		void chainOperator(std::unique_ptr<query::execution::PhysicalOperator> newOp);
 
-        std::string extractVariable(CypherParser::VariableContext* ctx);
-        std::string extractLabel(CypherParser::NodeLabelsContext* ctx);
-        std::string extractLabelFromNodeLabel(CypherParser::NodeLabelContext* ctx);
-        std::string extractRelType(CypherParser::RelationshipTypesContext* ctx);
-        std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext* ctx);
+		std::string extractVariable(CypherParser::VariableContext *ctx);
+		std::string extractLabel(CypherParser::NodeLabelsContext *ctx);
+		std::string extractLabelFromNodeLabel(CypherParser::NodeLabelContext *ctx);
+		std::string extractRelType(CypherParser::RelationshipTypesContext *ctx);
+		std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext *ctx);
 
-        graph::PropertyValue parseValue(CypherParser::LiteralContext* ctx);
-        std::unordered_map<std::string, graph::PropertyValue> extractProperties(CypherParser::PropertiesContext* ctx);
-    };
+		PropertyValue parseValue(CypherParser::LiteralContext *ctx);
+		std::unordered_map<std::string, PropertyValue> extractProperties(CypherParser::PropertiesContext *ctx);
+
+		std::function<bool(const query::execution::Record &)> buildWherePredicate(CypherParser::ExpressionContext *expr,
+																				  std::string &outDesc);
+	};
 
 } // namespace graph::parser::cypher

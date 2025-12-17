@@ -252,7 +252,7 @@ arithmeticExpression
     ;
 
 unaryExpression
-    : ( PLUS | MINUS )? atom
+    : ( PLUS | MINUS )? ( propertyExpression | atom )
     ;
 
 atom

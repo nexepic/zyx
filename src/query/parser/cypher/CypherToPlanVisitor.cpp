@@ -54,6 +54,90 @@ namespace graph::parser::cypher {
         rootOp_ = std::move(newOp);
     }
 
+	std::function<bool(const query::execution::Record&)>
+    CypherToPlanVisitor::buildWherePredicate(CypherParser::ExpressionContext* expr, std::string& outDesc) {
+
+        // Hierarchy: expression -> or -> xor -> and -> not -> comparison
+        auto comparison = expr->orExpression()->xorExpression(0)
+                              ->andExpression(0)->notExpression(0)
+                              ->comparisonExpression();
+
+        if (!comparison) throw std::runtime_error("Unsupported WHERE expression structure");
+
+        // Check if it is a binary operation
+        // arithmeticExpression is a list in the grammar
+        if (comparison->arithmeticExpression().size() < 2) {
+             throw std::runtime_error("WHERE clause currently only supports binary comparisons (e.g. n.age > 10)");
+        }
+
+        auto lhsArith = comparison->arithmeticExpression(0);
+        auto rhsArith = comparison->arithmeticExpression(1);
+
+        // 1. Parse LHS (Property)
+        // Access index (0) because unaryExpression() returns a vector!
+        auto lhsUnary = lhsArith->unaryExpression(0);
+
+        if (!lhsUnary->propertyExpression()) {
+             throw std::runtime_error("LHS of WHERE must be a property (e.g. n.age)");
+        }
+
+        // propertyExpression -> atom (DOT key)*
+        auto propExpr = lhsUnary->propertyExpression();
+        std::string varName = propExpr->atom()->getText(); // "n"
+
+        // Ensure property key exists
+        if (propExpr->propertyKeyName().empty()) {
+            throw std::runtime_error("Property expression must have a key (e.g. n.age)");
+        }
+        std::string propKey = propExpr->propertyKeyName(0)->getText(); // "price"
+
+        // 2. Parse RHS (Literal)
+        // Access index (0) here too
+        auto rhsUnary = rhsArith->unaryExpression(0);
+        auto rhsAtom = rhsUnary->atom();
+
+        if (!rhsAtom || !rhsAtom->literal()) {
+             throw std::runtime_error("RHS of WHERE must be a literal");
+        }
+        auto literalVal = parseValue(rhsAtom->literal());
+
+        // 3. Parse Operator
+        // Check vector emptiness instead of pointer conversion
+        std::string op = "==";
+        if (!comparison->EQ().empty()) op = "=";
+        else if (!comparison->NEQ().empty()) op = "<>";
+        else if (!comparison->LT().empty()) op = "<";
+        else if (!comparison->GT().empty()) op = ">";
+        else if (!comparison->LTE().empty()) op = "<=";
+        else if (!comparison->GTE().empty()) op = ">=";
+
+        // 4. Build Description
+        outDesc = varName + "." + propKey + " " + op + " " + literalVal.toString();
+
+        // 5. Build Lambda
+        // Explicit return type `-> bool` and fully qualified Record type
+        return [varName, propKey, literalVal, op](const graph::query::execution::Record& r) -> bool {
+            auto n = r.getNode(varName);
+            if (!n) return false;
+
+            const auto& props = n->getProperties();
+            auto it = props.find(propKey);
+            if (it == props.end()) return false;
+
+            const auto& val = it->second;
+
+            // Note: PropertyValue MUST strictly support these operators
+            if (op == "=") return val == literalVal;
+            if (op == "<>") return val != literalVal;
+            if (op == ">") return val > literalVal;
+            if (op == "<") return val < literalVal;
+            if (op == ">=") return val >= literalVal;
+            if (op == "<=") return val <= literalVal;
+
+            return false;
+        };
+    }
+
     // --- MATCH ---
     std::any CypherToPlanVisitor::visitMatchStatement(CypherParser::MatchStatementContext *ctx) {
         auto pattern = ctx->pattern();
@@ -162,9 +246,17 @@ namespace graph::parser::cypher {
         }
 
         // 3. Where
-        if (ctx->where()) {
-            // Placeholder: Add your where expression parsing logic here
-        }
+    	if (ctx->where()) {
+    		std::string desc;
+    		try {
+    			auto predicate = buildWherePredicate(ctx->where()->expression(), desc);
+    			rootOp_ = planner_->filter(std::move(rootOp_), predicate, desc);
+    		} catch (const std::exception& e) {
+    			std::cerr << "Warning: Failed to parse WHERE clause optimization: " << e.what() << std::endl;
+    			// Fallback or rethrow depending on strictness
+    			throw;
+    		}
+    	}
 
         return std::any();
     }
