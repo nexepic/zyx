@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <string>
+#include <vector>
 #include "graph/cli/CLI11.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/query/api/QueryResult.hpp"
@@ -29,10 +30,13 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath =
-				std::filesystem::temp_directory_path() / ("test_cypher_" + CLI::detail::to_string(uuid) + ".dat");
+				std::filesystem::temp_directory_path() / ("test_cypher_" + boost::uuids::to_string(uuid) + ".dat");
+
+		// Clean up previous artifacts if any
+		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
 
 		// Initialize Database
-		db = std::make_unique<graph::Database>(testFilePath);
+		db = std::make_unique<graph::Database>(testFilePath.string());
 		db->open();
 	}
 
@@ -47,7 +51,9 @@ protected:
 	}
 
 	// Helper to execute Cypher and return result
-	graph::query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
+	graph::query::QueryResult execute(const std::string &query) const {
+        return db->getQueryEngine()->execute(query);
+    }
 };
 
 // ============================================================================
@@ -76,6 +82,7 @@ TEST_F(CypherTest, CreateAndMatchNode) {
 
 TEST_F(CypherTest, CreateAndMatchChain) {
 	// Test: (a)-[r]->(b) creation pipeline
+    // We expect no return data, so void cast to ignore result
 	(void) execute("CREATE (a:Person {name: 'A'})-[r:KNOWS {since: 2020}]->(b:Person {name: 'B'})");
 
 	// Verify traversal
@@ -93,14 +100,58 @@ TEST_F(CypherTest, CreateAndMatchChain) {
 }
 
 // ============================================================================
-// 2. Filtering Tests (WHERE & Inline)
+// 2. Update & Delete Tests (SET & DELETE)
+// ============================================================================
+
+TEST_F(CypherTest, UpdateProperties) {
+    (void) execute("CREATE (n:UpdateTest {val: 1})");
+
+    // Update property
+    auto resSet = execute("MATCH (n:UpdateTest) SET n.val = 2 RETURN n");
+    ASSERT_EQ(resSet.nodeCount(), 1UL);
+    // Should reflect immediate change in returned record
+    EXPECT_EQ(resSet.getNodes()[0].getProperties().at("val").toString(), "2");
+
+    // Verify persistence
+    auto resCheck = execute("MATCH (n:UpdateTest) RETURN n");
+    EXPECT_EQ(resCheck.getNodes()[0].getProperties().at("val").toString(), "2");
+}
+
+TEST_F(CypherTest, AddNewProperty) {
+    (void) execute("CREATE (n:UpdateTest {val: 1})");
+
+    // Add new property 'tag'
+    (void) execute("MATCH (n:UpdateTest) SET n.tag = 'new'");
+
+    auto res = execute("MATCH (n:UpdateTest) RETURN n");
+    const auto& props = res.getNodes()[0].getProperties();
+    EXPECT_EQ(props.at("val").toString(), "1");
+    EXPECT_EQ(props.at("tag").toString(), "new");
+}
+
+TEST_F(CypherTest, DeleteNodes) {
+    (void) execute("CREATE (n:DeleteMe)");
+
+    // Ensure exists
+    ASSERT_EQ(execute("MATCH (n:DeleteMe) RETURN n").nodeCount(), 1UL);
+
+    // Delete
+    (void) execute("MATCH (n:DeleteMe) DELETE n");
+
+    // Verify gone
+    auto res = execute("MATCH (n:DeleteMe) RETURN n");
+    EXPECT_EQ(res.nodeCount(), 0UL);
+}
+
+// ============================================================================
+// 3. Filtering Tests (WHERE & Inline)
 // ============================================================================
 
 TEST_F(CypherTest, FilterByInlineProperty) {
 	(void) execute("CREATE (n:User {name: 'Alice'})");
 	(void) execute("CREATE (n:User {name: 'Bob'})");
 
-	// Inline match (This tests Index Pushdown or FilterOperator logic)
+	// Inline match (Tests Index Pushdown or FilterOperator)
 	auto res = execute("MATCH (n:User {name: 'Alice'}) RETURN n");
 	ASSERT_EQ(res.nodeCount(), 1UL);
 	EXPECT_EQ(res.getNodes()[0].getProperties().at("name").toString(), "Alice");
@@ -119,6 +170,10 @@ TEST_F(CypherTest, FilterByWhereClause) {
 	// Test Not Equals (<>)
 	auto res2 = execute("MATCH (n:Item) WHERE n.price <> 100 RETURN n");
 	ASSERT_EQ(res2.nodeCount(), 2UL); // 200 and 50
+
+    // Test Greater Than (>)
+    auto res3 = execute("MATCH (n:Item) WHERE n.price > 90 RETURN n");
+    ASSERT_EQ(res3.nodeCount(), 2UL); // 100 and 200
 }
 
 TEST_F(CypherTest, FilterTraversalTarget) {
@@ -134,16 +189,15 @@ TEST_F(CypherTest, FilterTraversalTarget) {
 }
 
 // ============================================================================
-// 3. Indexing Tests (Admin & Optimization)
+// 4. Indexing Tests (Admin & Optimization)
 // ============================================================================
 
 TEST_F(CypherTest, IndexCreationAndPushdown) {
 	// 1. Create Index via Cypher
 	auto res1 = execute("CREATE INDEX ON :User(id)");
-	// Should contain a row with "result" -> "Index created"
 	ASSERT_GE(res1.rowCount(), 1UL);
 
-	// 2. Insert Data
+	// 2. Insert Data (Should trigger IndexBuilder)
 	(void) execute("CREATE (u1:User {id: 1, name: 'One'})");
 	(void) execute("CREATE (u2:User {id: 2, name: 'Two'})");
 	(void) execute("CREATE (u3:User {id: 3, name: 'Three'})");
@@ -151,11 +205,8 @@ TEST_F(CypherTest, IndexCreationAndPushdown) {
 	// 3. Show Indexes
 	auto resIndex = execute("SHOW INDEXES");
 	ASSERT_GE(resIndex.rowCount(), 1UL);
-	// Could iterate rows to verify key='id' exists
 
-	// 4. Query using Index (Implicit Verification)
-	// The logic inside NodeScanOperator should pick the PropertyIndex.
-	// We confirm the result is correct.
+	// 4. Query using Index (Implicit Verification of Scan Logic)
 	auto resQuery = execute("MATCH (n:User {id: 2}) RETURN n");
 	ASSERT_EQ(resQuery.nodeCount(), 1UL);
 	EXPECT_EQ(resQuery.getNodes()[0].getProperties().at("name").toString(), "Two");
@@ -172,19 +223,19 @@ TEST_F(CypherTest, DropIndex) {
 	(void) execute("DROP INDEX ON :Tag(name)");
 
 	// Ensure it's gone
-	// Note: Assuming no other indexes exist in this isolated test
-	// In a real suite, we'd filter the rows.
-	// Since SetUp clears the DB, this is safe.
 	auto resShow2 = execute("SHOW INDEXES");
-	// If show indexes returns empty optional in Operator, QueryResult might be empty
-	if (!resShow2.isEmpty()) {
-		// If not empty, ensure Tag(name) is not in it
-		// (Simplified check for empty here)
-	}
+    // Depending on implementation, might return empty set or set without this index
+    if (!resShow2.isEmpty() && resShow2.rowCount() > 0) {
+        bool found = false;
+        for(const auto& row : resShow2.getRows()) {
+            if (row.at("key").toString() == "name") found = true;
+        }
+        EXPECT_FALSE(found);
+    }
 }
 
 // ============================================================================
-// 4. System Configuration Tests (CALL Procedures)
+// 5. System Configuration Tests (CALL Procedures)
 // ============================================================================
 
 TEST_F(CypherTest, SystemConfigFlow) {
@@ -199,24 +250,21 @@ TEST_F(CypherTest, SystemConfigFlow) {
 
 	// 3. List All
 	auto res2 = execute("CALL dbms.listConfig()");
-	// Should contain at least the 2 we added
 	ASSERT_GE(res2.rowCount(), 2UL);
 
-	// Verify Merge behavior (previous config not lost)
+	// Verify Merge behavior
 	bool foundKey = false;
 	bool foundMode = false;
 	for (const auto &row: res2.getRows()) {
-		if (row.at("key").toString() == "test.key")
-			foundKey = true;
-		if (row.at("key").toString() == "test.mode")
-			foundMode = true;
+		if (row.at("key").toString() == "test.key") foundKey = true;
+		if (row.at("key").toString() == "test.mode") foundMode = true;
 	}
 	EXPECT_TRUE(foundKey);
 	EXPECT_TRUE(foundMode);
 }
 
 // ============================================================================
-// 5. Persistence & Recovery Test (Full Cycle)
+// 6. Persistence & Recovery Test (Full Cycle)
 // ============================================================================
 
 TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
@@ -225,18 +273,15 @@ TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
 	(void) execute("CREATE INDEX ON :SaveTest(val)");
 	(void) execute("CALL dbms.setConfig('persistent.cfg', 'true')");
 
-	// 2. Flush to Disk (Simulate 'save' command)
-	// This triggers IndexManager and SystemStateManager to serialize data
+	// 2. Flush to Disk
 	db->getStorage()->flush();
 
-	// 3. Close Database (Destructor)
-	// We manually close and reset the pointer to ensure complete shutdown
+	// 3. Close Database
 	db->close();
 	db.reset();
 
 	// 4. Reopen Database
-	// This simulates a fresh application start
-	db = std::make_unique<graph::Database>(testFilePath);
+	db = std::make_unique<graph::Database>(testFilePath.string());
 	db->open();
 
 	// 5. Verify Data (Hydration)
@@ -246,12 +291,9 @@ TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
 
 	// 6. Verify Index (Metadata Persistence)
 	auto resIdx = execute("SHOW INDEXES");
-	// Should show the index we created
 	bool indexFound = false;
 	for (const auto &row: resIdx.getRows()) {
-		// Checking simplified string matching
-		if (row.at("key").toString() == "val")
-			indexFound = true;
+		if (row.at("key").toString() == "val") indexFound = true;
 	}
 	EXPECT_TRUE(indexFound) << "Index definition lost after restart";
 
@@ -261,14 +303,17 @@ TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
 	EXPECT_EQ(resCfg.getRows()[0].at("value").toString(), "true") << "Config lost after restart";
 }
 
+// ============================================================================
+// 7. Graph Algorithm Tests (CALL algo.*)
+// ============================================================================
+
 TEST_F(CypherTest, AlgoShortestPath) {
 	// 1. Setup Graph Topology: A -> B -> C
-	// Note: Creating chain in steps to ensure connectivity
 	(void) execute("CREATE (a:City {name: 'A'})-[r1:ROAD]->(b:City {name: 'B'})");
 	// Match B to extend the chain to C
 	(void) execute("MATCH (b:City {name: 'B'}) CREATE (b)-[r2:ROAD]->(c:City {name: 'C'})");
 
-	// 2. Fetch IDs dynamically (Ids might vary based on execution order)
+	// 2. Fetch IDs dynamically
 	auto resA = execute("MATCH (n:City {name: 'A'}) RETURN n");
 	ASSERT_EQ(resA.nodeCount(), 1UL);
 	int64_t idA = resA.getNodes()[0].getId();
@@ -278,7 +323,6 @@ TEST_F(CypherTest, AlgoShortestPath) {
 	int64_t idC = resC.getNodes()[0].getId();
 
 	// 3. Execute Shortest Path
-	// Syntax: CALL algo.shortestPath(startId, endId)
 	std::string query = "CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idC) + ")";
 	auto resPath = execute(query);
 

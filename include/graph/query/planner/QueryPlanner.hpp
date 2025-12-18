@@ -10,12 +10,13 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
-#include <vector>
-#include <functional>
 #include <unordered_map>
+#include <vector>
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/execution/operators/SetOperator.hpp"
 
 // Forward declarations to reduce compile-time dependencies
 namespace graph::storage { class DataManager; }
@@ -52,7 +53,7 @@ namespace graph::query {
          * @param key Optional property key for index pushdown.
          * @param value Optional property value for index pushdown.
          */
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> scan(
+        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> scanOp(
             const std::string& variable,
             const std::string& label,
             const std::string& key = "",
@@ -64,16 +65,16 @@ namespace graph::query {
          *
          * @param description A string describing the logic (e.g., "n.age > 10") for debugging.
          */
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> filter(
+        [[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> filterOp(
             std::unique_ptr<execution::PhysicalOperator> child,
             std::function<bool(const execution::Record&)> predicate,
             const std::string& description
-        ) const;
+        );
 
         /**
          * @brief Expands a node into connected edges and target nodes.
          */
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> traverse(
+        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> traverseOp(
             std::unique_ptr<execution::PhysicalOperator> source,
             const std::string& sourceVar,
             const std::string& edgeVar,
@@ -85,24 +86,24 @@ namespace graph::query {
         /**
          * @brief Projects specific variables from the stream (SELECT/RETURN).
          */
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> project(
+        [[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> projectOp(
             std::unique_ptr<execution::PhysicalOperator> child,
             const std::vector<std::string>& variables
-        ) const;
+        );
 
         // =================================================================
         // Write Operations (Factories)
         // =================================================================
 
         // Create Node
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> create(
+        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createOp(
             const std::string& variable,
             const std::string& label,
             const std::unordered_map<std::string, PropertyValue>& props
         ) const;
 
         // Create Edge
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> create(
+        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createOp(
             const std::string& variable,
             const std::string& label,
             const std::unordered_map<std::string, PropertyValue>& props,
@@ -111,21 +112,32 @@ namespace graph::query {
         ) const;
 
         // Create Index (DDL)
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createIndex(
+        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createIndexOp(
             const std::string& label,
             const std::string& propertyKey
         ) const;
 
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> callProcedure(
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> callProcedureOp(
 			const std::string& procedure,
 			const std::vector<::graph::PropertyValue>& args
 		) const;
 
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexes() const;
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexesOp() const;
 
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndex(
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(
 			const std::string& label,
 			const std::string& propertyKey
+		) const;
+
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> deleteOp(
+			std::unique_ptr<execution::PhysicalOperator> child,
+			const std::vector<std::string>& variables,
+			bool detach
+		) const;
+
+    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> setOp(
+			std::unique_ptr<execution::PhysicalOperator> child,
+			const std::vector<execution::operators::SetItem>& items
 		) const;
 
     private:

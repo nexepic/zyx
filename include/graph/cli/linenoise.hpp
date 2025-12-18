@@ -2355,21 +2355,30 @@ inline bool linenoiseState::Raw(std::string& line) {
 
     history_index_ = 0;
 
-    if (!isatty(STDIN_FILENO)) {
-        /* Not a tty: read from file / pipe. */
-        int c;
-        while ((c = getc(stdin)) != EOF) {
-            if (c == '\r')  // CRLF -> LF
-               continue;
-            if (c == '\n' || c == '\r') // send command
-               break;
+	if (!isatty(STDIN_FILENO)) {
+		/* Not a tty: read from file / pipe. */
+		int c;
+		bool hasReadChars = false; // Track if we read anything
 
-            line += c;
-        }
-        if (!line.length())
-            quit = true;
+		while ((c = getc(stdin)) != EOF) {
+			hasReadChars = true; // We got something
+			if (c == '\r')  // CRLF -> LF
+				continue;
+			if (c == '\n') // send command
+				break;
 
-    } else {
+			line += c;
+		}
+
+		// Only quit if we hit EOF AND didn't read any characters (even newline)
+		// If we read a newline (c == '\n' in the loop), hasReadChars is true.
+		// If we hit immediate EOF, hasReadChars is false.
+		if (c == EOF && !hasReadChars) {
+			quit = true;
+		}
+		// If line is empty but we read a newline, quit stays false (Correct).
+
+	} else {
         /* Interactive editing. */
         if (enableRawMode(STDIN_FILENO) == false) {
             return quit;
@@ -2479,13 +2488,17 @@ inline bool linenoiseState::AddHistory(const char* line) {
  * if there is already some history, the function will make sure to retain
  * just the latest 'len' elements if the new history length value is smaller
  * than the amount of items already inside the history. */
-inline bool linenoiseState::SetHistoryMaxLen(size_t mlen) {
-    if (mlen < 1) return false;
-    history_max_len_ = mlen;
-    if (mlen < history_.size()) {
-        history_.resize(mlen);
-    }
-    return true;
+inline bool linenoiseState::SetHistoryMaxLen(const size_t mlen) {
+	if (mlen < 1) return false;
+	history_max_len_ = mlen;
+
+	// If we need to shrink, we must discard the OLDEST elements (at the front),
+	// not the NEWEST elements (at the back).
+	if (mlen < history_.size()) {
+		size_t to_remove = history_.size() - mlen;
+		history_.erase(history_.begin(), history_.begin() + to_remove);
+	}
+	return true;
 }
 
 /* Save the history in the specified file. On success *true* is returned

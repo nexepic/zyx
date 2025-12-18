@@ -14,6 +14,7 @@
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
+#include "graph/query/execution/operators/DeleteOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
@@ -38,7 +39,7 @@ namespace graph::query {
 
     // --- Read Operations ---
 
-    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::scan(
+    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::scanOp(
         const std::string& variable,
         const std::string& label,
         const std::string& key,
@@ -72,7 +73,7 @@ namespace graph::query {
                 };
 
                 std::string desc = variable + "." + key + " == " + value.toString() + " (Residual)";
-                rootOp = filter(std::move(rootOp), predicate, desc);
+                rootOp = filterOp(std::move(rootOp), predicate, desc);
             }
             else {
                 // Case: Index USED.
@@ -86,17 +87,17 @@ namespace graph::query {
         return rootOp;
     }
 
-    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::filter(
+    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::filterOp(
         std::unique_ptr<execution::PhysicalOperator> child,
         std::function<bool(const execution::Record&)> predicate,
         const std::string& description
-    ) const {
+    ) {
         return std::make_unique<execution::operators::FilterOperator>(
             std::move(child), std::move(predicate), description
         );
     }
 
-    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::traverse(
+    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::traverseOp(
         std::unique_ptr<execution::PhysicalOperator> source,
         const std::string& sourceVar,
         const std::string& edgeVar,
@@ -109,10 +110,10 @@ namespace graph::query {
         );
     }
 
-    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::project(
+    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::projectOp(
         std::unique_ptr<execution::PhysicalOperator> child,
         const std::vector<std::string>& variables
-    ) const {
+    ) {
         return std::make_unique<execution::operators::ProjectOperator>(
             std::move(child), variables
         );
@@ -120,7 +121,7 @@ namespace graph::query {
 
     // --- Write Operations ---
 
-    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::create(
+    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::createOp(
         const std::string& variable,
         const std::string& label,
         const std::unordered_map<std::string, PropertyValue>& props
@@ -130,7 +131,7 @@ namespace graph::query {
         );
     }
 
-    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::create(
+    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::createOp(
         const std::string& variable,
         const std::string& label,
         const std::unordered_map<std::string, PropertyValue>& props,
@@ -142,7 +143,7 @@ namespace graph::query {
         );
     }
 
-    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::createIndex(
+    std::unique_ptr<execution::PhysicalOperator> QueryPlanner::createIndexOp(
         const std::string& label,
         const std::string& propertyKey
     ) const {
@@ -151,7 +152,7 @@ namespace graph::query {
         );
     }
 
-	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::callProcedure(
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::callProcedureOp(
 		const std::string& procedure,
 		const std::vector<::graph::PropertyValue>& args
 	) const {
@@ -202,16 +203,35 @@ namespace graph::query {
     	throw std::runtime_error("Unknown procedure: " + procedure);
     }
 
-	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::showIndexes() const {
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::showIndexesOp() const {
     	return std::make_unique<execution::operators::ShowIndexesOperator>(im_);
     }
 
-	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::dropIndex(
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::dropIndexOp(
 		const std::string& label,
 		const std::string& propertyKey
 	) const {
     	return std::make_unique<execution::operators::DropIndexOperator>(
 			im_, label, propertyKey
+		);
+    }
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::deleteOp(
+		std::unique_ptr<execution::PhysicalOperator> child,
+		const std::vector<std::string>& variables,
+		bool detach
+	) const {
+    	return std::make_unique<execution::operators::DeleteOperator>(
+			dm_, std::move(child), variables, detach
+		);
+    }
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::setOp(
+		std::unique_ptr<execution::PhysicalOperator> child,
+		const std::vector<execution::operators::SetItem>& items
+	) const {
+    	return std::make_unique<execution::operators::SetOperator>(
+			dm_, std::move(child), items
 		);
     }
 

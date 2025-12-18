@@ -48,6 +48,9 @@ namespace graph::parser::cypher {
 		std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) override;
 		std::any visitCreateIndexStatement(CypherParser::CreateIndexStatementContext *ctx) override;
 
+		std::any visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) override;
+		std::any visitSetStatement(CypherParser::SetStatementContext *ctx) override;
+
 	private:
 		std::shared_ptr<query::QueryPlanner> planner_;
 		std::unique_ptr<query::execution::PhysicalOperator> rootOp_;

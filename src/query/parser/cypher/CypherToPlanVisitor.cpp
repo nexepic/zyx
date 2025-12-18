@@ -197,7 +197,7 @@ namespace graph::parser::cypher {
 			}
 		}
 
-		auto currentOp = planner_->scan(var, label, pushKey, pushVal);
+		auto currentOp = planner_->scanOp(var, label, pushKey, pushVal);
 
 		for (const auto &[key, val]: residualFilters) {
 			auto predicate = [var, key, val](const query::execution::Record &r) {
@@ -208,7 +208,7 @@ namespace graph::parser::cypher {
 				return p.count(key) && p.at(key) == val;
 			};
 			std::string desc = var + "." + key + " == " + val.toString();
-			currentOp = planner_->filter(std::move(currentOp), predicate, desc);
+			currentOp = planner_->filterOp(std::move(currentOp), predicate, desc);
 		}
 
 		rootOp_ = std::move(currentOp);
@@ -244,7 +244,7 @@ namespace graph::parser::cypher {
 			auto targetProps = extractProperties(nodePat->properties());
 
 			// Build
-			rootOp_ = planner_->traverse(std::move(rootOp_), var, edgeVar, targetVar, edgeLabel, direction);
+			rootOp_ = planner_->traverseOp(std::move(rootOp_), var, edgeVar, targetVar, edgeLabel, direction);
 
 			// Filter Target
 			if (!targetLabel.empty()) {
@@ -252,7 +252,7 @@ namespace graph::parser::cypher {
 					auto n = r.getNode(targetVar);
 					return n && n->getLabel() == targetLabel;
 				};
-				rootOp_ = planner_->filter(std::move(rootOp_), labelPred, "Label(" + targetVar + ")=" + targetLabel);
+				rootOp_ = planner_->filterOp(std::move(rootOp_), labelPred, "Label(" + targetVar + ")=" + targetLabel);
 			}
 
 			for (const auto &[key, val]: targetProps) {
@@ -260,7 +260,7 @@ namespace graph::parser::cypher {
 					auto n = r.getNode(targetVar);
 					return n && n->getProperties().count(key) && n->getProperties().at(key) == val;
 				};
-				rootOp_ = planner_->filter(std::move(rootOp_), pred, targetVar + "." + key + "=" + val.toString());
+				rootOp_ = planner_->filterOp(std::move(rootOp_), pred, targetVar + "." + key + "=" + val.toString());
 			}
 
 			// Filter Edge
@@ -269,7 +269,7 @@ namespace graph::parser::cypher {
 					auto e = r.getEdge(edgeVar);
 					return e && e->getProperties().count(key) && e->getProperties().at(key) == val;
 				};
-				rootOp_ = planner_->filter(std::move(rootOp_), pred, edgeVar + "." + key + "=" + val.toString());
+				rootOp_ = planner_->filterOp(std::move(rootOp_), pred, edgeVar + "." + key + "=" + val.toString());
 			}
 
 			var = targetVar;
@@ -280,7 +280,7 @@ namespace graph::parser::cypher {
 			std::string desc;
 			try {
 				auto predicate = buildWherePredicate(ctx->where()->expression(), desc);
-				rootOp_ = planner_->filter(std::move(rootOp_), predicate, desc);
+				rootOp_ = planner_->filterOp(std::move(rootOp_), predicate, desc);
 			} catch (const std::exception &e) {
 				std::cerr << "Warning: Failed to parse WHERE clause optimization: " << e.what() << std::endl;
 				// Fallback or rethrow depending on strictness
@@ -305,7 +305,7 @@ namespace graph::parser::cypher {
 			std::string headLabel = extractLabel(headNodePat->nodeLabels());
 			auto headProps = extractProperties(headNodePat->properties());
 
-			auto headOp = planner_->create(headVar, headLabel, headProps);
+			auto headOp = planner_->createOp(headVar, headLabel, headProps);
 			chainOperator(std::move(headOp));
 
 			std::string prevVar = headVar;
@@ -318,7 +318,7 @@ namespace graph::parser::cypher {
 				std::string targetLabel = extractLabel(targetNodePat->nodeLabels());
 				auto targetProps = extractProperties(targetNodePat->properties());
 
-				auto targetOp = planner_->create(targetVar, targetLabel, targetProps);
+				auto targetOp = planner_->createOp(targetVar, targetLabel, targetProps);
 				chainOperator(std::move(targetOp));
 
 				auto relDetail = relPat->relationshipDetail();
@@ -331,7 +331,7 @@ namespace graph::parser::cypher {
 					edgeProps = extractProperties(relDetail->properties());
 				}
 
-				auto edgeOp = planner_->create(edgeVar, edgeLabel, edgeProps, prevVar, targetVar);
+				auto edgeOp = planner_->createOp(edgeVar, edgeLabel, edgeProps, prevVar, targetVar);
 				chainOperator(std::move(edgeOp));
 
 				prevVar = targetVar;
@@ -354,7 +354,7 @@ namespace graph::parser::cypher {
 				vars.push_back(exprText);
 			}
 			if (!vars.empty()) {
-				rootOp_ = planner_->project(std::move(rootOp_), vars);
+				rootOp_ = planner_->projectOp(std::move(rootOp_), vars);
 			}
 		}
 		return std::any();
@@ -389,7 +389,7 @@ namespace graph::parser::cypher {
 					}
 				}
 			}
-			auto op = planner_->callProcedure(procName, args);
+			auto op = planner_->callProcedureOp(procName, args);
 			chainOperator(std::move(op));
 		}
 		return std::any();
@@ -397,7 +397,7 @@ namespace graph::parser::cypher {
 
 	// --- ADMIN ---
 	std::any CypherToPlanVisitor::visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) {
-		chainOperator(planner_->showIndexes());
+		chainOperator(planner_->showIndexesOp());
 		return std::any();
 	}
 
@@ -406,7 +406,7 @@ namespace graph::parser::cypher {
 
 		std::string prop = ctx->propertyKeyName()->getText();
 
-		chainOperator(planner_->dropIndex(label, prop));
+		chainOperator(planner_->dropIndexOp(label, prop));
 		return std::any();
 	}
 
@@ -416,7 +416,7 @@ namespace graph::parser::cypher {
 
 		std::string prop = ctx->propertyKeyName()->getText();
 
-		chainOperator(planner_->createIndex(label, prop));
+		chainOperator(planner_->createIndexOp(label, prop));
 		return std::any();
 	}
 
@@ -497,5 +497,90 @@ namespace graph::parser::cypher {
 		}
 		return props;
 	}
+
+	// --- DELETE ---
+    std::any CypherToPlanVisitor::visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) {
+        // Grammar: DETACH? DELETE expression (COMMA expression)*
+
+        bool detach = (ctx->K_DETACH() != nullptr);
+        std::vector<std::string> vars;
+
+        for (auto expr : ctx->expression()) {
+            // Simplified: Expect expression to be a variable name (Atom -> Variable)
+            // Need to extract text.
+            // For now, getText() is a reasonable approximation for variable names.
+            vars.push_back(expr->getText());
+        }
+
+        if (!rootOp_) {
+            throw std::runtime_error("DELETE cannot be the start of a query. Use MATCH first.");
+        }
+
+        rootOp_ = planner_->deleteOp(std::move(rootOp_), vars, detach);
+        return std::any();
+    }
+
+    // --- SET ---
+    std::any CypherToPlanVisitor::visitSetStatement(CypherParser::SetStatementContext *ctx) {
+        // Grammar: SET setItem (COMMA setItem)*
+
+        std::vector<query::execution::operators::SetItem> items;
+
+        for (auto item : ctx->setItem()) {
+            // Grammar: propertyExpression EQ expression
+            if (item->propertyExpression() && item->EQ()) {
+                auto propExpr = item->propertyExpression();
+
+                // Extract Variable and Key
+                // propertyExpression -> atom (DOT key)+
+                std::string varName = propExpr->atom()->getText();
+                std::string keyName = propExpr->propertyKeyName(0)->getText(); // Assume 1 dot for now
+
+                // Extract Value
+                // expression -> ... -> literal
+                // Using helper function logic here
+                // Note: We need to parse expression properly.
+                // For simplicity, we assume the RHS is a literal.
+                auto expr = item->expression();
+
+                // Hacky way to get literal from expression tree without full visitor
+                // In production, use ExpressionVisitor.
+                // Here we assume expression text is parseable (e.g. "10", "'string'")
+                // Or try to find the literal context.
+
+                // Let's try to extract literal text and parse it
+                std::string valText = expr->getText();
+                graph::PropertyValue val;
+
+                if (valText.front() == '\'' || valText.front() == '"') {
+                    val = graph::PropertyValue(valText.substr(1, valText.length()-2));
+                } else if (valText == "TRUE" || valText == "true") {
+                    val = graph::PropertyValue(true);
+                } else if (valText == "FALSE" || valText == "false") {
+                    val = graph::PropertyValue(false);
+                } else {
+                    try {
+                        val = graph::PropertyValue(std::stoll(valText));
+                    } catch(...) {
+                         // Double?
+                         try { val = graph::PropertyValue(std::stod(valText)); }
+                         catch(...) { throw std::runtime_error("Unsupported SET value format: " + valText); }
+                    }
+                }
+
+                items.push_back({varName, keyName, val});
+            }
+            else {
+                throw std::runtime_error("Only SET n.prop = val is currently supported.");
+            }
+        }
+
+        if (!rootOp_) {
+            throw std::runtime_error("SET cannot be the start of a query.");
+        }
+
+        rootOp_ = planner_->setOp(std::move(rootOp_), items);
+        return std::any();
+    }
 
 } // namespace graph::parser::cypher
