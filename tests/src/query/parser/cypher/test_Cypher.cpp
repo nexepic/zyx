@@ -143,6 +143,55 @@ TEST_F(CypherTest, DeleteNodes) {
     EXPECT_EQ(res.nodeCount(), 0UL);
 }
 
+TEST_F(CypherTest, DeleteNodeWithEdgesConstraint) {
+	// 1. Setup: Create two nodes connected by an edge
+	(void) execute("CREATE (a:ConstraintTest)-[:REL]->(b:ConstraintTest)");
+
+	// 2. Attempt Standard DELETE (Should Fail)
+	// Cypher semantics: Cannot delete a node that still has relationships
+	EXPECT_THROW({
+		execute("MATCH (n:ConstraintTest) DELETE n");
+	}, std::runtime_error);
+
+	// 3. Verify Data remains untouched
+	auto res = execute("MATCH (n:ConstraintTest) RETURN n");
+	EXPECT_EQ(res.nodeCount(), 2UL);
+}
+
+TEST_F(CypherTest, DetachDeleteNodes) {
+	// 1. Setup: Create nodes with relationships
+	(void) execute("CREATE (a:DetachTest)-[r:REL]->(b:DetachTest)");
+
+	// 2. Execute DETACH DELETE
+	// Should remove both nodes AND the relationship 'r'
+	(void) execute("MATCH (n:DetachTest) DETACH DELETE n");
+
+	// 3. Verify Nodes are gone
+	auto resNodes = execute("MATCH (n:DetachTest) RETURN n");
+	EXPECT_EQ(resNodes.nodeCount(), 0UL);
+
+	// 4. Verify Relationships are gone
+	// (Trying to match the pattern again should yield nothing)
+	auto resEdges = execute("MATCH ()-[r:REL]->() RETURN r");
+	EXPECT_EQ(resEdges.edgeCount(), 0UL);
+}
+
+TEST_F(CypherTest, DeleteEdgeOnly) {
+	// 1. Setup
+	(void) execute("CREATE (a:EdgeDel)-[r:TO_BE_DELETED]->(b:EdgeDel)");
+
+	// 2. Delete only the relationship 'r'
+	(void) execute("MATCH (a:EdgeDel)-[r:TO_BE_DELETED]->(b) DELETE r");
+
+	// 3. Verify Nodes still exist
+	auto resNodes = execute("MATCH (n:EdgeDel) RETURN n");
+	EXPECT_EQ(resNodes.nodeCount(), 2UL);
+
+	// 4. Verify Edge is gone
+	auto resEdges = execute("MATCH (a:EdgeDel)-[r:TO_BE_DELETED]->(b) RETURN r");
+	EXPECT_EQ(resEdges.edgeCount(), 0UL);
+}
+
 // ============================================================================
 // 3. Filtering Tests (WHERE & Inline)
 // ============================================================================
