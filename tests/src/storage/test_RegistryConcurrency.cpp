@@ -65,7 +65,7 @@ TEST_F(RegistryConcurrencyTest, MultiThreadedWrites) {
 	}
 
 	// Verification
-	EXPECT_EQ(registry.size(), NUM_THREADS * OPS_PER_THREAD);
+	EXPECT_EQ(registry.size(), static_cast<size_t>(NUM_THREADS * OPS_PER_THREAD));
 
 	// Check random sample
 	auto info = registry.getInfo(55); // Thread 0, item 55

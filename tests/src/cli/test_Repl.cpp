@@ -72,7 +72,7 @@ TEST_F(REPLTest, RunSimpleScript) {
 
 	// Verify side effect in DB
 	auto res = db->getQueryEngine()->execute("MATCH (n:ReplTest) RETURN n");
-	ASSERT_EQ(res.nodeCount(), 1);
+	ASSERT_EQ(res.nodeCount(), 1UL);
 	EXPECT_EQ(res.getNodes()[0].getProperties().at("id").toString(), "1");
 }
 
@@ -91,11 +91,11 @@ TEST_F(REPLTest, RunMultiLineScriptWithComments) {
 
 	// Verify A exists
 	auto resA = db->getQueryEngine()->execute("MATCH (n:A) RETURN n");
-	EXPECT_EQ(resA.nodeCount(), 1);
+	EXPECT_EQ(resA.nodeCount(), 1UL);
 
 	// Verify B exists
 	auto resB = db->getQueryEngine()->execute("MATCH (n:B) RETURN n");
-	EXPECT_EQ(resB.nodeCount(), 1);
+	EXPECT_EQ(resB.nodeCount(), 1UL);
 }
 
 // Test executing a script where statements span multiple lines
@@ -106,7 +106,7 @@ TEST_F(REPLTest, RunMultilineStatement) {
 	repl->runScript(scriptPath);
 
 	auto res = db->getQueryEngine()->execute("MATCH (n:Multiline) RETURN n");
-	ASSERT_EQ(res.nodeCount(), 1);
+	ASSERT_EQ(res.nodeCount(), 1UL);
 	EXPECT_EQ(res.getNodes()[0].getProperties().at("val").toString(), "test");
 }
 
@@ -127,6 +127,6 @@ TEST_F(REPLTest, RunSystemCommands) {
 	repl->runScript(scriptPath);
 
 	auto res = db->getQueryEngine()->execute("CALL dbms.getConfig('repl.test')");
-	ASSERT_EQ(res.rowCount(), 1);
+	ASSERT_EQ(res.rowCount(), 1UL);
 	EXPECT_EQ(res.getRows()[0].at("value").toString(), "true");
 }

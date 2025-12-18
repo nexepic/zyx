@@ -381,87 +381,86 @@ TEST_F(DeletionManagerTest, DeleteState) {
 // =========================================================================
 
 TEST_F(DeletionManagerTest, CompactionThreshold_Triggered) {
-    // 1. Manually allocate a segment to strictly control capacity (10)
-    uint32_t type = Node::typeId;
-    uint32_t capacity = 10;
-    uint64_t offset = spaceManager->allocateSegment(type, capacity);
+	// 1. Manually allocate a segment to strictly control capacity (10)
+	uint32_t type = Node::typeId;
+	uint32_t capacity = 10;
+	uint64_t offset = spaceManager->allocateSegment(type, capacity);
 
-    // Get the segment header
-    SegmentHeader h = segmentTracker->getSegmentHeader(offset);
+	// Get the segment header
+	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 
-    // CRITICAL CHECK: Ensure SpaceManager allocated a valid start_id >= 1
-    // ID 0 is reserved/invalid. If this fails, SpaceManager allocation logic is flawed.
-    ASSERT_GE(h.start_id, 1) << "Segment start_id must be >= 1. ID 0 is invalid.";
+	// CRITICAL CHECK: Ensure SpaceManager allocated a valid start_id >= 1
+	// ID 0 is reserved/invalid. If this fails, SpaceManager allocation logic is flawed.
+	ASSERT_GE(h.start_id, 1) << "Segment start_id must be >= 1. ID 0 is invalid.";
 
-    int64_t startId = h.start_id;
+	int64_t startId = h.start_id;
 
-    // 2. Setup Data
-    // We explicitly call updateSegmentUsage FIRST.
-    // This sets 'used' count to 10. The SegmentIndexManager listens to this
-    // and registers the range [startId, startId + 9] as valid.
-    segmentTracker->updateSegmentUsage(offset, 10, 0);
+	// 2. Setup Data
+	// We explicitly call updateSegmentUsage FIRST.
+	// This sets 'used' count to 10. The SegmentIndexManager listens to this
+	// and registers the range [startId, startId + 9] as valid.
+	segmentTracker->updateSegmentUsage(offset, 10, 0);
 
-    std::vector<Node> nodes;
-    for(int i=0; i<10; i++) {
-        int64_t id = startId + i; // IDs will be e.g., 1, 2, 3... 10
-        Node n(id, "Fill");
+	std::vector<Node> nodes;
+	for (int i = 0; i < 10; i++) {
+		int64_t id = startId + i; // IDs will be e.g., 1, 2, 3... 10
+		Node n(id, "Fill");
 
-        // Write to DataManager so DeletionManager can read it back to verify existence
-        dataManager->addNode(n);
+		// Write to DataManager so DeletionManager can read it back to verify existence
+		dataManager->addNode(n);
 
-        // Manually activate in tracker bitmap
-        // index = id - startId = i (0 to 9)
-        segmentTracker->setEntityActive(offset, i, true);
+		// Manually activate in tracker bitmap
+		// index = id - startId = i (0 to 9)
+		segmentTracker->setEntityActive(offset, i, true);
 
-        nodes.push_back(n);
-    }
+		nodes.push_back(n);
+	}
 
-    // 3. Pre-Deletion Verification
-    // Verify everything is active and correctly mapped
-    for(int i=0; i<10; i++) {
-        ASSERT_TRUE(deletionManager->isNodeActive(nodes[i].getId()))
-            << "Setup Check Failed: Node " << i << " (ID: " << nodes[i].getId() << ") is inactive!";
-    }
+	// 3. Pre-Deletion Verification
+	// Verify everything is active and correctly mapped
+	for (int i = 0; i < 10; i++) {
+		ASSERT_TRUE(deletionManager->isNodeActive(nodes[i].getId()))
+				<< "Setup Check Failed: Node " << i << " (ID: " << nodes[i].getId() << ") is inactive!";
+	}
 
-    // Verify Header Initial State
-    SegmentHeader hBefore = segmentTracker->getSegmentHeader(offset);
-    ASSERT_EQ(hBefore.used, 10);
-    ASSERT_EQ(hBefore.inactive_count, 0);
-    ASSERT_DOUBLE_EQ(hBefore.getFragmentationRatio(), 0.0);
+	// Verify Header Initial State
+	SegmentHeader hBefore = segmentTracker->getSegmentHeader(offset);
+	ASSERT_EQ(hBefore.used, 10U);
+	ASSERT_EQ(hBefore.inactive_count, 0U);
+	ASSERT_DOUBLE_EQ(hBefore.getFragmentationRatio(), 0.0);
 
-    // 4. Delete 4 nodes
-    for(int i=0; i<4; i++) {
-        int64_t idToDelete = nodes[i].getId();
+	// 4. Delete 4 nodes
+	for (int i = 0; i < 4; i++) {
+		int64_t idToDelete = nodes[i].getId();
 
-        // Double check active status before delete
-        ASSERT_TRUE(deletionManager->isNodeActive(idToDelete))
-             << "Dependency Check: Node ID " << idToDelete << " became inactive unexpectedly!";
+		// Double check active status before delete
+		ASSERT_TRUE(deletionManager->isNodeActive(idToDelete))
+				<< "Dependency Check: Node ID " << idToDelete << " became inactive unexpectedly!";
 
-        deletionManager->deleteNode(nodes[i]);
+		deletionManager->deleteNode(nodes[i]);
 
-        // Immediate post-check
-        ASSERT_FALSE(deletionManager->isNodeActive(idToDelete))
-            << "Deletion Failed: Node ID " << idToDelete << " is still active!";
-    }
+		// Immediate post-check
+		ASSERT_FALSE(deletionManager->isNodeActive(idToDelete))
+				<< "Deletion Failed: Node ID " << idToDelete << " is still active!";
+	}
 
-    // 5. Final Verification
-    SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
+	// 5. Final Verification
+	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
 
-    // Debug print if assertions fail
-    if (hAfter.inactive_count != 4) {
-        std::cout << "[Debug] startId=" << startId
-                  << " Used=" << hAfter.used
-                  << " Inactive=" << hAfter.inactive_count << std::endl;
-    }
+	// Debug print if assertions fail
+	if (hAfter.inactive_count != 4U) {
+		std::cout << "[Debug] startId=" << startId << " Used=" << hAfter.used << " Inactive=" << hAfter.inactive_count
+				  << std::endl;
+	}
 
-    EXPECT_EQ(hAfter.used, 10);
-    EXPECT_EQ(hAfter.inactive_count, 4);
+	EXPECT_EQ(hAfter.used, 10U);
+	EXPECT_EQ(hAfter.inactive_count, 4U);
 
-    // Ratio = 1.0 - ((10 - 4) / 10) = 0.4
-    EXPECT_DOUBLE_EQ(hAfter.getFragmentationRatio(), 0.4);
+	// Ratio = 1.0 - ((10 - 4) / 10) = 0.4
+	EXPECT_DOUBLE_EQ(hAfter.getFragmentationRatio(), 0.4);
 
-    // Threshold is 0.3, so 0.4 should trigger compaction
-    EXPECT_EQ(hAfter.needs_compaction, 1);
+	// Threshold is 0.3, so 0.4 should trigger compaction
+	EXPECT_EQ(hAfter.needs_compaction, 1U);
 }
 
 TEST_F(DeletionManagerTest, CompactionThreshold_NotTriggered) {
@@ -483,7 +482,7 @@ TEST_F(DeletionManagerTest, CompactionThreshold_NotTriggered) {
 	deletionManager->deleteNode(nodes[0]);
 
 	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
-	EXPECT_EQ(hAfter.needs_compaction, 0);
+	EXPECT_EQ(hAfter.needs_compaction, 0U);
 	EXPECT_DOUBLE_EQ(hAfter.getFragmentationRatio(), 0.1);
 }
 

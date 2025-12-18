@@ -130,7 +130,7 @@ TEST_F(EdgeManagerTest, RemoveEdgeInSameContext) {
 
 	auto deletedEdges = getDirtyInfo({graph::storage::EntityChangeType::DELETED});
 
-	EXPECT_EQ(deletedEdges.size(), 0);
+	EXPECT_EQ(deletedEdges.size(), 0UL);
 }
 
 // Test edge removal for an entity that is considered "persisted"
@@ -154,7 +154,7 @@ TEST_F(EdgeManagerTest, RemovePersistedEdge) {
 
 	// Verify it is now in the DELETED dirty map
 	auto deletedEdgesInfo = getDirtyInfo({graph::storage::EntityChangeType::DELETED});
-	EXPECT_EQ(deletedEdgesInfo.size(), 1) << "One edge should be marked as DELETED.";
+	EXPECT_EQ(deletedEdgesInfo.size(), 1UL) << "One edge should be marked as DELETED.";
 	EXPECT_EQ(deletedEdgesInfo[0].backup->getId(), edgeId);
 	EXPECT_FALSE(deletedEdgesInfo[0].backup->isActive()) << "The backup of the deleted edge should be inactive.";
 
@@ -177,11 +177,11 @@ TEST_F(EdgeManagerTest, FindEdgesByNode) {
 
 	// Find outgoing edges from source node
 	auto outgoingEdges = edgeManager->findByNode(sourceNode.getId(), "out");
-	EXPECT_EQ(outgoingEdges.size(), 2) << "Should find 2 outgoing edges from source node";
+	EXPECT_EQ(outgoingEdges.size(), 2UL) << "Should find 2 outgoing edges from source node";
 
 	// Find incoming edges to target node
 	auto incomingEdges = edgeManager->findByNode(targetNode.getId(), "in");
-	EXPECT_EQ(incomingEdges.size(), 1) << "Should find 1 incoming edge to target node";
+	EXPECT_EQ(incomingEdges.size(), 1UL) << "Should find 1 incoming edge to target node";
 	EXPECT_EQ(incomingEdges[0].getSourceNodeId(), sourceNode.getId());
 }
 
@@ -292,12 +292,12 @@ TEST_F(EdgeManagerTest, BatchOperations) {
 
 	// Test getBatch
 	auto retrievedEdges = edgeManager->getBatch(edgeIds);
-	EXPECT_EQ(retrievedEdges.size(), 5) << "Should retrieve all 5 edges";
+	EXPECT_EQ(retrievedEdges.size(), 5UL) << "Should retrieve all 5 edges";
 
 	// Test with removing one edge
 	edgeManager->remove(edges[2]);
 	retrievedEdges = edgeManager->getBatch(edgeIds);
-	EXPECT_EQ(retrievedEdges.size(), 4) << "Should retrieve only active edges";
+	EXPECT_EQ(retrievedEdges.size(), 4UL) << "Should retrieve only active edges";
 }
 
 // Test edge ID allocation

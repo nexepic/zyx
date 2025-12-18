@@ -32,8 +32,6 @@ protected:
 		database->open();
 		dataManager = database->getStorage()->getDataManager();
 
-		constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
-		const std::string stateKeyPrefix = "test.node.properties";
 		propertyIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getPropertyIndex();
 	}
 
@@ -85,19 +83,19 @@ TEST_F(PropertyIndexTest, AddAndFindPropertiesOfAllTypes) {
 
 	// Act & Assert: Verify each property can be found with its correct value.
 	auto foundStr = propertyIndex->findExactMatch("name", std::string("Alice"));
-	ASSERT_EQ(foundStr.size(), 1);
+	ASSERT_EQ(foundStr.size(), 1u);
 	EXPECT_EQ(foundStr[0], 1);
 
 	auto foundInt = propertyIndex->findExactMatch("age", 30);
-	ASSERT_EQ(foundInt.size(), 1);
+	ASSERT_EQ(foundInt.size(), 1u);
 	EXPECT_EQ(foundInt[0], 2);
 
 	auto foundDouble = propertyIndex->findExactMatch("score", 99.5);
-	ASSERT_EQ(foundDouble.size(), 1);
+	ASSERT_EQ(foundDouble.size(), 1u);
 	EXPECT_EQ(foundDouble[0], 3);
 
 	auto foundBool = propertyIndex->findExactMatch("active", true);
-	ASSERT_EQ(foundBool.size(), 1);
+	ASSERT_EQ(foundBool.size(), 1u);
 	EXPECT_EQ(foundBool[0], 4);
 }
 
@@ -155,12 +153,12 @@ TEST_F(PropertyIndexTest, FindRangeForNumericTypes) {
 
 	// Act & Assert: Test integer range query.
 	auto foundInts = propertyIndex->findRange("level", 15.0, 25.0);
-	ASSERT_EQ(foundInts.size(), 1);
+	ASSERT_EQ(foundInts.size(), 1u);
 	EXPECT_EQ(foundInts[0], 9);
 
 	// Act & Assert: Test double range query.
 	auto foundDoubles = propertyIndex->findRange("rating", 4.0, 5.0);
-	ASSERT_EQ(foundDoubles.size(), 2);
+	ASSERT_EQ(foundDoubles.size(), 2u);
 	EXPECT_TRUE(vectorContains(foundDoubles, 10));
 	EXPECT_TRUE(vectorContains(foundDoubles, 11));
 
@@ -182,7 +180,7 @@ TEST_F(PropertyIndexTest, GetIndexedKeys) {
 
 	// Assert
 	const std::vector<std::string> expected_keys = {"k1", "k2", "k3", "k4"};
-	ASSERT_EQ(keys.size(), 4);
+	ASSERT_EQ(keys.size(), 4u);
 	EXPECT_EQ(keys, expected_keys);
 }
 
@@ -278,12 +276,12 @@ TEST_F(PropertyIndexTest, HandlesLargeNumberOfPropertiesAndReloads) {
 	for (int i = 1; i <= numItems; i += 250) { // Check a sample of items.
 		// Check integer property
 		auto foundById = reloadedIndex->findExactMatch("id", i);
-		ASSERT_EQ(foundById.size(), 1) << "Failed to find integer property for ID: " << i;
+		ASSERT_EQ(foundById.size(), 1u) << "Failed to find integer property for ID: " << i;
 		EXPECT_EQ(foundById[0], i);
 
 		// Check string property using the same padded format.
 		auto foundByUuid = reloadedIndex->findExactMatch("uuid", generatePaddedUuid(i, numItems));
-		ASSERT_EQ(foundByUuid.size(), 1) << "Failed to find string property for ID: " << i;
+		ASSERT_EQ(foundByUuid.size(), 1u) << "Failed to find string property for ID: " << i;
 		EXPECT_EQ(foundByUuid[0], i);
 
 		// Check boolean property
@@ -294,7 +292,7 @@ TEST_F(PropertyIndexTest, HandlesLargeNumberOfPropertiesAndReloads) {
 
 	// Check the last item to be sure.
 	auto lastItem = reloadedIndex->findExactMatch("id", numItems);
-	ASSERT_EQ(lastItem.size(), 1);
+	ASSERT_EQ(lastItem.size(), 1u);
 	EXPECT_EQ(lastItem[0], numItems);
 }
 
@@ -317,7 +315,7 @@ TEST_F(PropertyIndexTest, HandlesRandomInsertionsAndDeletions) {
 	// Assert I: Verify all items can be found after random insertion.
 	for (int64_t id = 1; id <= numItems; ++id) {
 		auto result = propertyIndex->findExactMatch("random_id", id);
-		ASSERT_EQ(result.size(), 1) << "Failed to find item " << id << " after random insertion.";
+		ASSERT_EQ(result.size(), 1u) << "Failed to find item " << id << " after random insertion.";
 		EXPECT_EQ(result[0], id);
 	}
 
@@ -341,7 +339,7 @@ TEST_F(PropertyIndexTest, HandlesRandomInsertionsAndDeletions) {
 	// Check kept items
 	for (int64_t id: idsToKeep) {
 		auto result = propertyIndex->findExactMatch("random_id", id);
-		ASSERT_EQ(result.size(), 1) << "Failed to find remaining item " << id;
+		ASSERT_EQ(result.size(), 1u) << "Failed to find remaining item " << id;
 		EXPECT_EQ(result[0], id);
 	}
 }
@@ -361,7 +359,7 @@ TEST_F(PropertyIndexTest, CreateIndex_RegistersKeyWithoutData) {
 	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key)) << "createIndex should mark key as indexed immediately";
 	// It should be listed in getIndexedKeys
 	auto keys = propertyIndex->getIndexedKeys();
-	EXPECT_NE(std::find(keys.begin(), keys.end(), key), keys.end());
+	EXPECT_NE(std::ranges::find(keys, key), keys.end());
 
 	// 4. Now add data
 	propertyIndex->addProperty(1, key, 123);
@@ -369,7 +367,7 @@ TEST_F(PropertyIndexTest, CreateIndex_RegistersKeyWithoutData) {
 	// 5. Type should transition from UNKNOWN to INTEGER
 	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
 	auto results = propertyIndex->findExactMatch(key, 123);
-	EXPECT_EQ(results.size(), 1);
+	EXPECT_EQ(results.size(), 1u);
 }
 
 TEST_F(PropertyIndexTest, Persistence_MapKeyRemoval) {
@@ -509,7 +507,7 @@ TEST_F(PropertyIndexTest, Robustness_RepetitiveAndInterleavedOps) {
 
     // Verify data is still accessible
     auto results = propertyIndex->findExactMatch(key, 100);
-    ASSERT_EQ(results.size(), 1);
+    ASSERT_EQ(results.size(), 1u);
     EXPECT_EQ(results[0], 1);
 
     // --- Phase 4: Multiple Drop (Cleanup) ---
@@ -555,17 +553,17 @@ TEST_F(PropertyIndexTest, MultiplePropertyKeysIsolation) {
 
     // Query firstname "Alice" -> Should find Node 1
     auto res1 = propertyIndex->findExactMatch(key1, "Alice");
-    ASSERT_EQ(res1.size(), 1);
+    ASSERT_EQ(res1.size(), 1u);
     EXPECT_EQ(res1[0], 1);
 
     // Query lastname "Smith" -> Should find Node 1
     auto res2 = propertyIndex->findExactMatch(key2, "Smith");
-    ASSERT_EQ(res2.size(), 1);
+    ASSERT_EQ(res2.size(), 1u);
     EXPECT_EQ(res2[0], 1);
 
     // Query age 40 -> Should find Node 2
     auto res3 = propertyIndex->findExactMatch(key3, 40);
-    ASSERT_EQ(res3.size(), 1);
+    ASSERT_EQ(res3.size(), 1u);
     EXPECT_EQ(res3[0], 2);
 
     // Cross-contamination check:

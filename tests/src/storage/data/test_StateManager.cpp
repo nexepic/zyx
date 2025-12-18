@@ -83,7 +83,7 @@ TEST_F(StateManagerTest, AddAndGetState) {
 
 	// Verify properties by getting them from the DataManager using the key.
 	auto retrievedProps = dataManager->getStateProperties(state.getKey());
-	ASSERT_EQ(retrievedProps.size(), 2); // Assuming properties are stored in the state's data.
+	ASSERT_EQ(retrievedProps.size(), 2UL); // Assuming properties are stored in the state's data.
 	EXPECT_EQ(std::get<std::string>(retrievedProps["string_prop"].getVariant()), "value");
 	EXPECT_EQ(std::get<int64_t>(retrievedProps["int_prop"].getVariant()), 42);
 }
@@ -113,7 +113,7 @@ TEST_F(StateManagerTest, UpdateState) {
 
 	// Get the updated state's properties
 	auto retrievedProps = dataManager->getStateProperties(state.getKey());
-	ASSERT_EQ(retrievedProps.size(), 2);
+	ASSERT_EQ(retrievedProps.size(), 2UL);
 	EXPECT_EQ(std::get<int64_t>(retrievedProps.at("counter").getVariant()), 2) << "State property should be updated";
 	EXPECT_EQ(std::get<bool>(retrievedProps.at("updated").getVariant()), true) << "New property should be added";
 }

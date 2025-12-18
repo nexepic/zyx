@@ -355,7 +355,7 @@ TEST_F(IDAllocatorTest, ThreadSafetyConcurrency) {
 	futures.reserve(NUM_THREADS);
 
 	for (int t = 0; t < NUM_THREADS; ++t) {
-		futures.push_back(std::async(std::launch::async, [this, OPS_PER_THREAD]() {
+		futures.push_back(std::async(std::launch::async, [this]() {
 			std::vector<int64_t> myIds;
 			myIds.reserve(OPS_PER_THREAD);
 			for (int i = 0; i < OPS_PER_THREAD; ++i) {
@@ -377,7 +377,7 @@ TEST_F(IDAllocatorTest, ThreadSafetyConcurrency) {
 		totalCount += ids.size();
 	}
 
-	EXPECT_EQ(totalCount, NUM_THREADS * OPS_PER_THREAD);
+	EXPECT_EQ(totalCount, static_cast<size_t>(NUM_THREADS * OPS_PER_THREAD));
 }
 
 // ==========================================

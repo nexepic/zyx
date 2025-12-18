@@ -32,7 +32,7 @@ TEST_F(PropertyTest, DefaultConstructor) {
 	EXPECT_EQ(property.getMetadata().entityType, 0u);
 	EXPECT_TRUE(property.getMetadata().isActive);
 	EXPECT_TRUE(property.isActive());
-	EXPECT_EQ(property.getPropertyValues().size(), 0);
+	EXPECT_EQ(property.getPropertyValues().size(), 0UL);
 }
 
 TEST_F(PropertyTest, ParameterizedConstructor) {
@@ -60,7 +60,7 @@ TEST_F(PropertyTest, SetAndGetProperties) {
 
 	EXPECT_TRUE(property.hasPropertyValue(key));
 	EXPECT_EQ(property.getPropertyValues().at(key), value);
-	EXPECT_EQ(property.getPropertyValues().size(), 1);
+	EXPECT_EQ(property.getPropertyValues().size(), 1UL);
 }
 
 TEST_F(PropertyTest, SetMultiplePropertyValues) {
@@ -84,7 +84,7 @@ TEST_F(PropertyTest, SetMultiplePropertyValues) {
 	EXPECT_EQ(property.getPropertyValues().at(key1), value1);
 	EXPECT_EQ(property.getPropertyValues().at(key2), value2);
 	EXPECT_EQ(property.getPropertyValues().at(key3), value3);
-	EXPECT_EQ(property.getPropertyValues().size(), 3);
+	EXPECT_EQ(property.getPropertyValues().size(), 3UL);
 }
 
 TEST_F(PropertyTest, OverwritePropertyValue) {
@@ -101,7 +101,7 @@ TEST_F(PropertyTest, OverwritePropertyValue) {
 	props[key] = value2;
 	property.setProperties(props);
 	EXPECT_EQ(property.getPropertyValues().at(key), value2);
-	EXPECT_EQ(property.getPropertyValues().size(), 1);
+	EXPECT_EQ(property.getPropertyValues().size(), 1UL);
 }
 
 TEST_F(PropertyTest, HasPropertyValue) {
@@ -132,7 +132,7 @@ TEST_F(PropertyTest, SetProperties) {
 
 	property.setProperties(newProperties);
 
-	EXPECT_EQ(property.getPropertyValues().size(), 3);
+	EXPECT_EQ(property.getPropertyValues().size(), 3UL);
 	EXPECT_TRUE(property.hasPropertyValue("key1"));
 	EXPECT_TRUE(property.hasPropertyValue("key2"));
 	EXPECT_TRUE(property.hasPropertyValue("key3"));
@@ -163,7 +163,7 @@ TEST_F(PropertyTest, SerializeDeserializeEmpty) {
 	EXPECT_EQ(deserializedProperty.getMetadata().isActive, originalProperty.getMetadata().isActive);
 	EXPECT_EQ(deserializedProperty.getMetadata().entityType, originalProperty.getMetadata().entityType);
 	EXPECT_EQ(deserializedProperty.getMetadata().isActive, originalProperty.getMetadata().isActive);
-	EXPECT_EQ(deserializedProperty.getPropertyValues().size(), 0);
+	EXPECT_EQ(deserializedProperty.getPropertyValues().size(), 0UL);
 }
 
 TEST_F(PropertyTest, SerializeDeserializeWithValues) {
@@ -268,7 +268,7 @@ TEST_F(PropertyTest, PropertyValueTypes) {
 	props["bool_val"] = graph::PropertyValue(true);
 	property.setProperties(props);
 
-	EXPECT_EQ(property.getPropertyValues().size(), 4);
+	EXPECT_EQ(property.getPropertyValues().size(), 4UL);
 	EXPECT_EQ(property.getPropertyValues().at("int_val"), graph::PropertyValue(42));
 	EXPECT_EQ(property.getPropertyValues().at("double_val"), graph::PropertyValue(3.14159));
 	EXPECT_EQ(property.getPropertyValues().at("string_val"), graph::PropertyValue("hello"));
@@ -313,12 +313,12 @@ TEST_F(PropertyTest, PropertyMapReplacement) {
 
 	props1["old_key"] = graph::PropertyValue("old_value");
 	property.setProperties(props1);
-	EXPECT_EQ(property.getPropertyValues().size(), 1);
+	EXPECT_EQ(property.getPropertyValues().size(), 1UL);
 	EXPECT_TRUE(property.hasPropertyValue("old_key"));
 
 	props2["new_key"] = graph::PropertyValue("new_value");
 	property.setProperties(props2);
-	EXPECT_EQ(property.getPropertyValues().size(), 1);
+	EXPECT_EQ(property.getPropertyValues().size(), 1UL);
 	EXPECT_FALSE(property.hasPropertyValue("old_key"));
 	EXPECT_TRUE(property.hasPropertyValue("new_key"));
 }

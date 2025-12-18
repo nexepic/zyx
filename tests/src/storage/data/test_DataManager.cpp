@@ -22,10 +22,10 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
-#include "graph/storage/indexes/IEntityObserver.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EntityChangeType.hpp"
+#include "graph/storage/indexes/IEntityObserver.hpp"
 
 namespace graph::storage::test {
 
@@ -168,7 +168,7 @@ namespace graph::storage::test {
 		auto node = createTestNode("Person");
 		dataManager->addNode(node);
 		EXPECT_NE(0, node.getId());
-		ASSERT_EQ(1, observer->addedNodes.size());
+		ASSERT_EQ(1UL, observer->addedNodes.size());
 		EXPECT_EQ(node.getId(), observer->addedNodes[0].getId());
 
 		// 2. Retrieve
@@ -182,7 +182,7 @@ namespace graph::storage::test {
 		dataManager->updateNode(node);
 		retrievedNode = dataManager->getNode(node.getId());
 		EXPECT_EQ("StagingPerson", retrievedNode.getLabel());
-		ASSERT_EQ(0, observer->updatedNodes.size());
+		ASSERT_EQ(0UL, observer->updatedNodes.size());
 
 		// 4. Simulate Save & Update
 		simulateSave(); // Replaces markAllSaved()
@@ -194,7 +194,7 @@ namespace graph::storage::test {
 		retrievedNode = dataManager->getNode(node.getId());
 		EXPECT_EQ("UpdatedPerson", retrievedNode.getLabel());
 
-		ASSERT_EQ(1, observer->updatedNodes.size());
+		ASSERT_EQ(1UL, observer->updatedNodes.size());
 		EXPECT_EQ(oldNode.getLabel(), observer->updatedNodes[0].first.getLabel());
 		EXPECT_EQ("UpdatedPerson", observer->updatedNodes[0].second.getLabel());
 
@@ -210,7 +210,7 @@ namespace graph::storage::test {
 			EXPECT_EQ(0, retrievedNode.getId());
 		}
 
-		ASSERT_EQ(1, observer->deletedNodes.size());
+		ASSERT_EQ(1UL, observer->deletedNodes.size());
 		EXPECT_EQ(node.getId(), observer->deletedNodes[0].getId());
 	}
 
@@ -225,7 +225,7 @@ namespace graph::storage::test {
 		dataManager->addNodeProperties(node.getId(), properties);
 
 		auto retrievedProps = dataManager->getNodeProperties(node.getId());
-		EXPECT_EQ(4, retrievedProps.size());
+		EXPECT_EQ(4UL, retrievedProps.size());
 		EXPECT_EQ("John Doe", std::get<std::string>(retrievedProps.at("name").getVariant()));
 		EXPECT_EQ(30, std::get<int64_t>(retrievedProps.at("age").getVariant()));
 		EXPECT_TRUE(std::get<bool>(retrievedProps.at("active").getVariant()));
@@ -233,7 +233,7 @@ namespace graph::storage::test {
 
 		dataManager->removeNodeProperty(node.getId(), "age");
 		retrievedProps = dataManager->getNodeProperties(node.getId());
-		EXPECT_EQ(3, retrievedProps.size());
+		EXPECT_EQ(3UL, retrievedProps.size());
 		EXPECT_EQ(retrievedProps.find("age"), retrievedProps.end());
 	}
 
@@ -248,7 +248,7 @@ namespace graph::storage::test {
 		auto edge = createTestEdge(sourceNode.getId(), targetNode.getId(), "KNOWS");
 		dataManager->addEdge(edge);
 		EXPECT_NE(0, edge.getId());
-		ASSERT_EQ(1, observer->addedEdges.size());
+		ASSERT_EQ(1UL, observer->addedEdges.size());
 
 		// 2. Retrieve
 		auto retrievedEdge = dataManager->getEdge(edge.getId());
@@ -267,7 +267,7 @@ namespace graph::storage::test {
 		retrievedEdge = dataManager->getEdge(edge.getId());
 		EXPECT_EQ("UPDATED_KNOWS", retrievedEdge.getLabel());
 
-		ASSERT_EQ(1, observer->updatedEdges.size());
+		ASSERT_EQ(1UL, observer->updatedEdges.size());
 		EXPECT_EQ(oldEdge.getLabel(), observer->updatedEdges[0].first.getLabel());
 		EXPECT_EQ("UPDATED_KNOWS", observer->updatedEdges[0].second.getLabel());
 
@@ -280,7 +280,7 @@ namespace graph::storage::test {
 		else
 			EXPECT_EQ(0, retrievedEdge.getId());
 
-		ASSERT_EQ(1, observer->deletedEdges.size());
+		ASSERT_EQ(1UL, observer->deletedEdges.size());
 		EXPECT_EQ(edge.getId(), observer->deletedEdges[0].getId());
 	}
 
@@ -297,14 +297,14 @@ namespace graph::storage::test {
 		dataManager->addEdgeProperties(edge.getId(), properties);
 
 		auto retrievedProps = dataManager->getEdgeProperties(edge.getId());
-		EXPECT_EQ(3, retrievedProps.size());
+		EXPECT_EQ(3UL, retrievedProps.size());
 		EXPECT_DOUBLE_EQ(2.5, std::get<double>(retrievedProps.at("weight").getVariant()));
 		EXPECT_EQ(2023, std::get<int64_t>(retrievedProps.at("since").getVariant()));
 		EXPECT_TRUE(std::get<bool>(retrievedProps.at("active").getVariant()));
 
 		dataManager->removeEdgeProperty(edge.getId(), "since");
 		retrievedProps = dataManager->getEdgeProperties(edge.getId());
-		EXPECT_EQ(2, retrievedProps.size());
+		EXPECT_EQ(2UL, retrievedProps.size());
 		EXPECT_EQ(retrievedProps.find("since"), retrievedProps.end());
 	}
 
@@ -323,17 +323,17 @@ namespace graph::storage::test {
 		dataManager->addEdge(edge3);
 
 		auto outEdges = dataManager->findEdgesByNode(node1.getId(), "out");
-		ASSERT_EQ(1, outEdges.size());
+		ASSERT_EQ(1UL, outEdges.size());
 		EXPECT_EQ(edge1.getId(), outEdges[0].getId());
 		EXPECT_EQ(node2.getId(), outEdges[0].getTargetNodeId());
 
 		auto inEdges = dataManager->findEdgesByNode(node1.getId(), "in");
-		ASSERT_EQ(1, inEdges.size());
+		ASSERT_EQ(1UL, inEdges.size());
 		EXPECT_EQ(edge3.getId(), inEdges[0].getId());
 		EXPECT_EQ(node3.getId(), inEdges[0].getSourceNodeId());
 
 		auto allEdges = dataManager->findEdgesByNode(node1.getId(), "both");
-		EXPECT_EQ(2, allEdges.size());
+		EXPECT_EQ(2UL, allEdges.size());
 	}
 
 	TEST_F(DataManagerTest, PropertyEntityCRUD) {
@@ -455,7 +455,7 @@ namespace graph::storage::test {
 		dataManager->addStateProperties("config.state", properties);
 
 		auto retrievedProps = dataManager->getStateProperties("config.state");
-		EXPECT_EQ(3, retrievedProps.size());
+		EXPECT_EQ(3UL, retrievedProps.size());
 		EXPECT_EQ("value1", std::get<std::string>(retrievedProps.at("setting1").getVariant()));
 		EXPECT_EQ(42, std::get<int64_t>(retrievedProps.at("setting2").getVariant()));
 		EXPECT_TRUE(std::get<bool>(retrievedProps.at("setting3").getVariant()));
@@ -477,17 +477,17 @@ namespace graph::storage::test {
 		}
 
 		auto nodes = dataManager->getNodeBatch(nodeIds);
-		ASSERT_EQ(10, nodes.size());
+		ASSERT_EQ(10UL, nodes.size());
 		for (size_t i = 0; i < nodes.size(); i++) {
 			EXPECT_EQ(nodeIds[i], nodes[i].getId());
 			EXPECT_EQ("BatchNode" + std::to_string(i), nodes[i].getLabel());
 		}
 
 		auto rangeNodes = dataManager->getNodesInRange(nodeIds.front(), nodeIds.back(), 5);
-		EXPECT_EQ(5, rangeNodes.size());
+		EXPECT_EQ(5UL, rangeNodes.size());
 
 		rangeNodes = dataManager->getNodesInRange(nodeIds.front(), nodeIds.back(), 20);
-		EXPECT_EQ(10, rangeNodes.size());
+		EXPECT_EQ(10UL, rangeNodes.size());
 	}
 
 	TEST_F(DataManagerTest, CacheManagement) {
@@ -510,7 +510,7 @@ namespace graph::storage::test {
 		EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
 		auto dirtyNodes = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::ADDED});
-		ASSERT_EQ(1, dirtyNodes.size());
+		ASSERT_EQ(1UL, dirtyNodes.size());
 		EXPECT_EQ(EntityChangeType::ADDED, dirtyNodes[0].changeType);
 		EXPECT_EQ(node.getId(), dirtyNodes[0].backup->getId());
 
@@ -522,7 +522,7 @@ namespace graph::storage::test {
 		EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
 		dirtyNodes = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::MODIFIED});
-		ASSERT_EQ(1, dirtyNodes.size());
+		ASSERT_EQ(1UL, dirtyNodes.size());
 		EXPECT_EQ(EntityChangeType::MODIFIED, dirtyNodes[0].changeType);
 	}
 
@@ -555,10 +555,10 @@ namespace graph::storage::test {
 		auto edge = createTestEdge(source.getId(), target.getId(), "RELATES_TO");
 		dataManager->addEdge(edge);
 
-		EXPECT_EQ(2, observer->addedNodes.size());
-		EXPECT_EQ(1, observer->addedEdges.size());
-		EXPECT_EQ(0, observer->updatedNodes.size());
-		EXPECT_EQ(0, observer->updatedEdges.size());
+		EXPECT_EQ(2UL, observer->addedNodes.size());
+		EXPECT_EQ(1UL, observer->addedEdges.size());
+		EXPECT_EQ(0UL, observer->updatedNodes.size());
+		EXPECT_EQ(0UL, observer->updatedEdges.size());
 
 		// --- PHASE 2 ---
 		simulateSave();
@@ -572,8 +572,8 @@ namespace graph::storage::test {
 		edge.setLabel("UPDATED_RELATION");
 		dataManager->updateEdge(edge);
 
-		EXPECT_EQ(1, observer->updatedNodes.size());
-		EXPECT_EQ(1, observer->updatedEdges.size());
+		EXPECT_EQ(1UL, observer->updatedNodes.size());
+		EXPECT_EQ(1UL, observer->updatedEdges.size());
 
 		// --- PHASE 3 ---
 		observer->reset();
@@ -581,13 +581,13 @@ namespace graph::storage::test {
 		dataManager->deleteEdge(edge);
 		dataManager->deleteNode(target);
 
-		EXPECT_EQ(1, observer->deletedNodes.size());
+		EXPECT_EQ(1UL, observer->deletedNodes.size());
 		EXPECT_EQ(target.getId(), observer->deletedNodes[0].getId());
 
-		EXPECT_EQ(1, observer->deletedEdges.size());
+		EXPECT_EQ(1UL, observer->deletedEdges.size());
 		EXPECT_EQ(edge.getId(), observer->deletedEdges[0].getId());
 
-		EXPECT_EQ(2, observer->updatedNodes.size());
+		EXPECT_EQ(2UL, observer->updatedNodes.size());
 
 		std::vector<int64_t> updatedNodeIds;
 		for (const auto &pair: observer->updatedNodes) {
@@ -624,10 +624,10 @@ namespace graph::storage::test {
 		EXPECT_EQ(blobData, retrievedBlob.getDataAsString());
 
 		EXPECT_TRUE(dataManager->hasUnsavedChanges());
-		EXPECT_EQ(1, dataManager->getDirtyEntityInfos<Node>({EntityChangeType::ADDED}).size());
-		EXPECT_EQ(1, dataManager->getDirtyEntityInfos<State>({EntityChangeType::ADDED}).size());
-		EXPECT_EQ(1, dataManager->getDirtyEntityInfos<Index>({EntityChangeType::ADDED}).size());
-		EXPECT_EQ(1, dataManager->getDirtyEntityInfos<Blob>({EntityChangeType::ADDED}).size());
+		EXPECT_EQ(1UL, dataManager->getDirtyEntityInfos<Node>({EntityChangeType::ADDED}).size());
+		EXPECT_EQ(1UL, dataManager->getDirtyEntityInfos<State>({EntityChangeType::ADDED}).size());
+		EXPECT_EQ(1UL, dataManager->getDirtyEntityInfos<Index>({EntityChangeType::ADDED}).size());
+		EXPECT_EQ(1UL, dataManager->getDirtyEntityInfos<Blob>({EntityChangeType::ADDED}).size());
 
 		simulateSave();
 		EXPECT_FALSE(dataManager->hasUnsavedChanges());

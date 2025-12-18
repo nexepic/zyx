@@ -88,12 +88,12 @@ namespace graph::utils::test {
 
 		// Attempt to read an 8-byte int64_t.
 		// The read operation itself won't throw.
-		(void)Serializer::readPOD<int64_t>(stream);
+		(void) Serializer::readPOD<int64_t>(stream);
 
 		// Check gcount(). The number of bytes actually read must be less
 		// than what we requested, which is a sign of an incomplete read.
 		// The stream will also be in a failed state (either eof or fail).
-		EXPECT_NE(stream.gcount(), sizeof(int64_t));
+		EXPECT_NE(static_cast<size_t>(stream.gcount()), sizeof(int64_t));
 		EXPECT_TRUE(stream.fail() || stream.eof()); // A more robust check for read failure.
 	}
 } // namespace graph::utils::test

@@ -172,7 +172,7 @@ TEST_F(BaseEntityManagerTest, GetBatchOfNodes) {
 	std::vector<graph::Node> nodes = nodeManager->getBatch(nodeIds);
 
 	// Should only return active nodes
-	EXPECT_EQ(nodes.size(), 4);
+	EXPECT_EQ(nodes.size(), 4UL);
 
 	// Verify correct nodes were returned
 	for (const auto &node: nodes) {
@@ -197,7 +197,7 @@ TEST_F(BaseEntityManagerTest, GetNodesInRange) {
 	std::vector<graph::Node> nodes = nodeManager->getInRange(startId + 2, startId + 6, 10);
 
 	// Verify correct range was returned
-	EXPECT_EQ(nodes.size(), 5);
+	EXPECT_EQ(nodes.size(), 5UL);
 	for (const auto &node: nodes) {
 		EXPECT_GE(node.getId(), startId + 2);
 		EXPECT_LE(node.getId(), startId + 6);
@@ -205,7 +205,7 @@ TEST_F(BaseEntityManagerTest, GetNodesInRange) {
 
 	// Test with limit
 	nodes = nodeManager->getInRange(startId + 2, startId + 6, 2);
-	EXPECT_EQ(nodes.size(), 2);
+	EXPECT_EQ(nodes.size(), 2UL);
 }
 
 // Tests for property management
@@ -222,7 +222,7 @@ TEST_F(BaseEntityManagerTest, NodePropertyManagement) {
 
 	auto retrievedProps = nodeManager->getProperties(nodeId);
 
-	EXPECT_EQ(retrievedProps.size(), 3);
+	EXPECT_EQ(retrievedProps.size(), 3UL);
 	EXPECT_EQ(std::get<std::string>(retrievedProps["name"].getVariant()), "TestName");
 	EXPECT_EQ(std::get<int64_t>(retrievedProps["age"].getVariant()), 30);
 	EXPECT_EQ(std::get<bool>(retrievedProps["active"].getVariant()), true);
@@ -230,8 +230,8 @@ TEST_F(BaseEntityManagerTest, NodePropertyManagement) {
 	nodeManager->removeProperty(nodeId, "age");
 
 	retrievedProps = nodeManager->getProperties(nodeId);
-	EXPECT_EQ(retrievedProps.size(), 2);
-	EXPECT_EQ(retrievedProps.count("age"), 0);
+	EXPECT_EQ(retrievedProps.size(), 2UL);
+	EXPECT_EQ(retrievedProps.count("age"), 0UL);
 }
 
 // Tests for Edge entity
@@ -321,7 +321,7 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 	// Depending on strict logic:
 	// addedNode -> ADDED
 	// modifiedNode -> ADDED (because updateEntityImpl preserved ADDED state)
-	EXPECT_EQ(addedNodes.size(), 2);
+	EXPECT_EQ(addedNodes.size(), 2UL);
 
 	// Verify IDs
 	std::set<int64_t> addedIds;
@@ -333,18 +333,18 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 
 	// Get only MODIFIED nodes
 	auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
-	EXPECT_EQ(modifiedNodes.size(), 0);
+	EXPECT_EQ(modifiedNodes.size(), 0UL);
 
 
 	// Since 'removedNode' was only in memory (ADDED), deleting it simply removes it
 	// from the dirty registry completely. It does NOT create a DELETED record.
 	auto deletedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::DELETED});
 	// In current implementation, we upsert a DELETED record.
-	EXPECT_EQ(deletedNodes.size(), 0);
+	EXPECT_EQ(deletedNodes.size(), 0UL);
 
 	// Get all dirty nodes. Total = 3 (2 Added + 1 Deleted)
 	auto allDirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED,
 														graph::storage::EntityChangeType::MODIFIED,
 														graph::storage::EntityChangeType::DELETED});
-	EXPECT_EQ(allDirtyNodes.size(), 2);
+	EXPECT_EQ(allDirtyNodes.size(), 2UL);
 }

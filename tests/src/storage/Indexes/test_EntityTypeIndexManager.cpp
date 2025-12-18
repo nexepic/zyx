@@ -46,10 +46,8 @@ protected:
 				graph::storage::state::keys::Node::PROPERTY_PREFIX);
 
 		edgeIndexManager = std::make_shared<graph::query::indexes::EntityTypeIndexManager>(
-				dataManager, fileStorage->getSystemStateManager(),
-				graph::query::indexes::IndexTypes::EDGE_LABEL_TYPE,
-				graph::storage::state::keys::Edge::LABEL_ROOT,
-				graph::query::indexes::IndexTypes::EDGE_PROPERTY_TYPE,
+				dataManager, fileStorage->getSystemStateManager(), graph::query::indexes::IndexTypes::EDGE_LABEL_TYPE,
+				graph::storage::state::keys::Edge::LABEL_ROOT, graph::query::indexes::IndexTypes::EDGE_PROPERTY_TYPE,
 				graph::storage::state::keys::Edge::PROPERTY_PREFIX);
 	}
 
@@ -122,12 +120,12 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 
 	// Verify label index
 	auto nodesWithLabel = labelIndex->findNodes("TestLabel");
-	EXPECT_EQ(nodesWithLabel.size(), 1);
+	EXPECT_EQ(nodesWithLabel.size(), 1UL);
 	EXPECT_EQ(nodesWithLabel[0], 1);
 
 	// Verify property index
 	auto nodesWithProperty = propertyIndex->findExactMatch("key1", "value1");
-	EXPECT_EQ(nodesWithProperty.size(), 1);
+	EXPECT_EQ(nodesWithProperty.size(), 1UL);
 	EXPECT_EQ(nodesWithProperty[0], 1);
 
 	// Update node
@@ -145,7 +143,7 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	EXPECT_TRUE(nodesWithLabel.empty());
 
 	nodesWithLabel = labelIndex->findNodes("NewLabel");
-	EXPECT_EQ(nodesWithLabel.size(), 1);
+	EXPECT_EQ(nodesWithLabel.size(), 1UL);
 	EXPECT_EQ(nodesWithLabel[0], 1);
 
 	// Verify property index update
@@ -153,7 +151,7 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	EXPECT_TRUE(nodesWithProperty.empty());
 
 	nodesWithProperty = propertyIndex->findExactMatch("key1", "value2");
-	EXPECT_EQ(nodesWithProperty.size(), 1);
+	EXPECT_EQ(nodesWithProperty.size(), 1UL);
 	EXPECT_EQ(nodesWithProperty[0], 1);
 
 	// Delete node
@@ -193,12 +191,12 @@ TEST_F(EntityTypeIndexManagerTest, EdgeEventHandlers) {
 
 	// Verify label index
 	auto edgesWithLabel = labelIndex->findNodes("TestEdgeLabel");
-	EXPECT_EQ(edgesWithLabel.size(), 1);
+	EXPECT_EQ(edgesWithLabel.size(), 1UL);
 	EXPECT_EQ(edgesWithLabel[0], 1);
 
 	// Verify property index
 	auto edgesWithProperty = propertyIndex->findExactMatch("key1", "value1");
-	EXPECT_EQ(edgesWithProperty.size(), 1);
+	EXPECT_EQ(edgesWithProperty.size(), 1UL);
 	EXPECT_EQ(edgesWithProperty[0], 1);
 
 	// Update edge
@@ -214,7 +212,7 @@ TEST_F(EntityTypeIndexManagerTest, EdgeEventHandlers) {
 	EXPECT_TRUE(edgesWithLabel.empty());
 
 	edgesWithLabel = labelIndex->findNodes("NewEdgeLabel");
-	EXPECT_EQ(edgesWithLabel.size(), 1);
+	EXPECT_EQ(edgesWithLabel.size(), 1UL);
 	EXPECT_EQ(edgesWithLabel[0], 1);
 
 	// Delete edge
@@ -268,7 +266,7 @@ TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
 
 	// Verify label index
 	auto nodesWithLabel = labelIndex->findNodes("NewLabel");
-	EXPECT_EQ(nodesWithLabel.size(), 1);
+	EXPECT_EQ(nodesWithLabel.size(), 1UL);
 	EXPECT_EQ(nodesWithLabel[0], 1);
 
 	// Update back to empty label
@@ -315,14 +313,14 @@ TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling) {
 	EXPECT_TRUE(nodesWithProperty.empty());
 
 	nodesWithProperty = propertyIndex->findExactMatch("key1", "value2");
-	EXPECT_EQ(nodesWithProperty.size(), 1);
+	EXPECT_EQ(nodesWithProperty.size(), 1UL);
 	EXPECT_EQ(nodesWithProperty[0], 1);
 
 	nodesWithProperty = propertyIndex->findExactMatch("key2", 42);
 	EXPECT_TRUE(nodesWithProperty.empty());
 
 	nodesWithProperty = propertyIndex->findExactMatch("key3", true);
-	EXPECT_EQ(nodesWithProperty.size(), 1);
+	EXPECT_EQ(nodesWithProperty.size(), 1UL);
 	EXPECT_EQ(nodesWithProperty[0], 1);
 }
 

@@ -55,7 +55,7 @@ TEST_F(LabelIndexTest, AddAndFindNode) {
 	std::string label = "Person";
 	labelIndex->addNode(nodeId, label);
 	auto found = labelIndex->findNodes(label);
-	ASSERT_EQ(found.size(), 1);
+	ASSERT_EQ(found.size(), 1UL);
 	EXPECT_EQ(found[0], nodeId);
 	EXPECT_FALSE(labelIndex->isEmpty());
 }
@@ -124,7 +124,7 @@ TEST_F(LabelIndexTest, SaveAndLoadState) {
 	// Assert: The reloaded index should contain the persisted data.
 	EXPECT_FALSE(labelIndexNew->isEmpty());
 	auto found = labelIndexNew->findNodes(label);
-	ASSERT_EQ(found.size(), 1);
+	ASSERT_EQ(found.size(), 1UL);
 	EXPECT_EQ(found[0], nodeId);
 }
 

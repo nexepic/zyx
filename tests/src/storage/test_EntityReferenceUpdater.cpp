@@ -445,7 +445,7 @@ TEST_F(EntityReferenceUpdaterTest, UpdateIndex_ChildToParent) {
     // VERIFY
     Index updatedParent = dataManager->getIndex(parentId);
     std::vector<int64_t> ids = updatedParent.getChildIds();
-    ASSERT_EQ(ids.size(), 1);
+    ASSERT_EQ(ids.size(), 1UL);
     EXPECT_EQ(ids[0], newChildId);
 }
 

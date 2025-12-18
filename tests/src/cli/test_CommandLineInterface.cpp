@@ -83,21 +83,21 @@ protected:
 
 // Verify behavior for partial commands (Help should be shown, exit code 0)
 TEST_F(CommandLineInterfaceTest, HandlePartialCommand) {
-    // Case: User types "metrix database" without a subcommand.
-    // Expectation: It should print help and exit gracefully (return 0).
-    // Previously we expected NE 0, which was wrong for your design.
-    EXPECT_EQ(runMockCLI({"database"}), 0);
+	// Case: User types "metrix database" without a subcommand.
+	// Expectation: It should print help and exit gracefully (return 0).
+	// Previously we expected NE 0, which was wrong for your design.
+	EXPECT_EQ(runMockCLI({"database"}), 0);
 }
 
 // Verify actual invalid arguments (Missing required options, unknown flags)
 TEST_F(CommandLineInterfaceTest, HandleInvalidArguments) {
-    // Missing required path argument for 'create'
-    // "metrix database create" -> Error because --path is required
-    EXPECT_NE(runMockCLI({"database", "create"}), 0);
+	// Missing required path argument for 'create'
+	// "metrix database create" -> Error because --path is required
+	EXPECT_NE(runMockCLI({"database", "create"}), 0);
 
-    // Unknown flag
-    // "metrix database open ... --unknown" -> Error
-    EXPECT_NE(runMockCLI({"database", "open", "path", "--unknown-flag"}), 0);
+	// Unknown flag
+	// "metrix database open ... --unknown" -> Error
+	EXPECT_NE(runMockCLI({"database", "open", "path", "--unknown-flag"}), 0);
 }
 
 // Verify 'exec' command happy path
@@ -120,7 +120,7 @@ TEST_F(CommandLineInterfaceTest, ExecuteScriptSuccessfully) {
 	db.open();
 	auto res = db.getQueryEngine()->execute("MATCH (n:CliNode) RETURN n");
 
-	ASSERT_EQ(res.nodeCount(), 1);
+	ASSERT_EQ(res.nodeCount(), 1UL);
 	EXPECT_EQ(res.getNodes()[0].getProperties().at("id").toString(), "999");
 }
 

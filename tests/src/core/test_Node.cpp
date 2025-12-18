@@ -102,7 +102,7 @@ TEST_F(NodeTest, PropertyOperations) {
 
 	// Get all properties
 	const auto &properties = node.getProperties();
-	EXPECT_EQ(properties.size(), 2);
+	EXPECT_EQ(properties.size(), 2UL);
 	EXPECT_EQ(properties.at(key1), value1);
 	EXPECT_EQ(properties.at(key2), value2);
 }
@@ -133,10 +133,10 @@ TEST_F(NodeTest, ClearProperties) {
 	node.addProperty("key1", graph::PropertyValue(1));
 	node.addProperty("key2", graph::PropertyValue(2));
 
-	EXPECT_EQ(node.getProperties().size(), 2);
+	EXPECT_EQ(node.getProperties().size(), 2UL);
 
 	node.clearProperties();
-	EXPECT_EQ(node.getProperties().size(), 0);
+	EXPECT_EQ(node.getProperties().size(), 0UL);
 }
 
 TEST_F(NodeTest, PropertyEntityManagement) {
@@ -229,7 +229,7 @@ TEST_F(NodeTest, GetSerializedSizeEmptyLabel) {
 TEST_F(NodeTest, GetTotalPropertySize) {
 	graph::Node node;
 
-	EXPECT_EQ(node.getTotalPropertySize(), 0);
+	EXPECT_EQ(node.getTotalPropertySize(), 0UL);
 
 	node.addProperty("name", graph::PropertyValue("Alice"));
 	node.addProperty("age", graph::PropertyValue(25));

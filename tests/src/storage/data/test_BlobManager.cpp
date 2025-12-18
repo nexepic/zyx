@@ -87,7 +87,7 @@ TEST_F(BlobManagerTest, BasicCRUDOperations) {
 	graph::Blob retrievedBlob = blobManager->get(blob.getId());
 	EXPECT_EQ(retrievedBlob.getId(), blob.getId());
 	EXPECT_EQ(retrievedBlob.getEntityId(), 1);
-	EXPECT_EQ(retrievedBlob.getEntityType(), 1);
+	EXPECT_EQ(retrievedBlob.getEntityType(), 1U);
 	EXPECT_EQ(retrievedBlob.getDataAsString(), "Test data");
 	EXPECT_TRUE(retrievedBlob.isActive());
 
@@ -144,7 +144,7 @@ TEST_F(BlobManagerTest, CreateSingleBlobChain) {
 
 	auto blobs = blobManager->createBlobChain(entityId, entityType, testData);
 
-	EXPECT_EQ(blobs.size(), 1);
+	EXPECT_EQ(blobs.size(), 1UL);
 	EXPECT_EQ(blobs[0].getEntityId(), entityId);
 	EXPECT_EQ(blobs[0].getEntityType(), entityType);
 	EXPECT_EQ(blobs[0].getChainPosition(), 0);
@@ -163,7 +163,7 @@ TEST_F(BlobManagerTest, CreateMultipleBlobChain) {
 
 	auto blobs = blobManager->createBlobChain(entityId, entityType, testData);
 
-	ASSERT_GT(blobs.size(), 2); // Should be 3 blobs
+	ASSERT_GT(blobs.size(), 2UL); // Should be 3 blobs
 
 	// Verify chain properties
 	for (size_t i = 0; i < blobs.size(); i++) {
@@ -196,14 +196,14 @@ TEST_F(BlobManagerTest, CreateBlobChainWithEmptyData) {
 
 	auto blobs = blobManager->createBlobChain(entityId, entityType, emptyData);
 
-	ASSERT_EQ(blobs.size(), 1);
-	EXPECT_EQ(blobs[0].getOriginalSize(), 0);
+	ASSERT_EQ(blobs.size(), 1UL);
+	EXPECT_EQ(blobs[0].getOriginalSize(), 0U);
 
 	// MODIFICATION: This test is adjusted to reflect the implementation detail that
 	// even an empty blob has a non-zero storage footprint (e.g., for a length prefix).
 	// We are now testing against the expected implementation-specific size, which is 8,
 	// rather than the logical size of the data, which is 0.
-	EXPECT_EQ(blobs[0].getSize(), 8);
+	EXPECT_EQ(blobs[0].getSize(), 8U);
 
 	// Add to storage and verify we can read it back
 	for (auto &blob: blobs) {
@@ -249,7 +249,7 @@ TEST_F(BlobManagerTest, DeleteBlobChain) {
 
 	// Create and save the blob chain
 	auto blobs = blobManager->createBlobChain(entityId, entityType, testData);
-	ASSERT_GT(blobs.size(), 1);
+	ASSERT_GT(blobs.size(), 1UL);
 	for (auto &blob: blobs) {
 		dataManager->addBlobEntity(blob);
 	}
@@ -305,12 +305,12 @@ TEST_F(BlobManagerTest, BatchOperations) {
 
 	// Test getBatch
 	auto retrievedBlobs = blobManager->getBatch(blobIds);
-	EXPECT_EQ(retrievedBlobs.size(), 5);
+	EXPECT_EQ(retrievedBlobs.size(), 5UL);
 
 	// Make one blob inactive
 	blobManager->remove(blobs[2]);
 
 	// Test getBatch again - should only return active blobs
 	retrievedBlobs = blobManager->getBatch(blobIds);
-	EXPECT_EQ(retrievedBlobs.size(), 4);
+	EXPECT_EQ(retrievedBlobs.size(), 4UL);
 }

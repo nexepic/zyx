@@ -94,16 +94,16 @@ TEST_F(IndexTest, InsertAndFindEntry) {
 	leafNode_.insertEntry(PropertyValue("key1"), 101, dataManager_, stringComparator);
 
 	auto values = leafNode_.findValues(PropertyValue("key1"), dataManager_, stringComparator);
-	ASSERT_EQ(values.size(), 2);
+	ASSERT_EQ(values.size(), 2UL);
 	// Use gtest's container assertions for better output
 	ASSERT_THAT(values, ::testing::UnorderedElementsAre(100, 101));
 
 	values = leafNode_.findValues(PropertyValue("key2"), dataManager_, stringComparator);
-	ASSERT_EQ(values.size(), 1);
+	ASSERT_EQ(values.size(), 1UL);
 	ASSERT_EQ(values[0], 200);
 
 	auto allEntries = leafNode_.getAllEntries(dataManager_);
-	ASSERT_EQ(allEntries.size(), 2);
+	ASSERT_EQ(allEntries.size(), 2UL);
 }
 
 TEST_F(IndexTest, RemoveEntry) {
@@ -113,7 +113,7 @@ TEST_F(IndexTest, RemoveEntry) {
 	// Remove one value from a key with multiple values
 	ASSERT_TRUE(leafNode_.removeEntry(PropertyValue("key1"), 100, dataManager_, stringComparator));
 	auto values = leafNode_.findValues(PropertyValue("key1"), dataManager_, stringComparator);
-	ASSERT_EQ(values.size(), 1);
+	ASSERT_EQ(values.size(), 1UL);
 	ASSERT_EQ(values[0], 101);
 
 	// Attempt to remove a value that is already gone
@@ -142,7 +142,7 @@ TEST_F(IndexTest, LeafKeyBlobManagement) {
 	leafNode_.setAllEntries(entries, dataManager_);
 
 	auto retrieved = leafNode_.getAllEntries(dataManager_);
-	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_EQ(retrieved.size(), 1UL);
 	ASSERT_NE(retrieved[0].keyBlobId, 0) << "Oversized key should be stored in a blob.";
 	ASSERT_EQ(retrieved[0].key, PropertyValue(oversized_key_str));
 
@@ -153,7 +153,7 @@ TEST_F(IndexTest, LeafKeyBlobManagement) {
 	leafNode_.setAllEntries(updated_entries, dataManager_);
 
 	retrieved = leafNode_.getAllEntries(dataManager_);
-	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_EQ(retrieved.size(), 1UL);
 	ASSERT_EQ(retrieved[0].keyBlobId, 0) << "Small key should be stored inline.";
 	ASSERT_EQ(retrieved[0].key, PropertyValue("small_key"));
 
@@ -174,7 +174,7 @@ TEST_F(IndexTest, LeafValuesBlobManagement) {
 	leafNode_.setAllEntries(entries, dataManager_);
 
 	auto retrieved = leafNode_.getAllEntries(dataManager_);
-	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_EQ(retrieved.size(), 1UL);
 	ASSERT_NE(retrieved[0].valuesBlobId, 0) << "Value list should be stored in a blob.";
 	ASSERT_EQ(retrieved[0].values.size(), value_count);
 
@@ -185,7 +185,7 @@ TEST_F(IndexTest, LeafValuesBlobManagement) {
 	leafNode_.setAllEntries(small_entry_list, dataManager_);
 
 	retrieved = leafNode_.getAllEntries(dataManager_);
-	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_EQ(retrieved.size(), 1UL);
 	ASSERT_EQ(retrieved[0].valuesBlobId, 0) << "Value list should revert to inline storage.";
 	ASSERT_EQ(retrieved[0].values[0], 999);
 
@@ -211,7 +211,7 @@ TEST_F(IndexTest, AddAndRemoveChild) {
 	internalNode_.addChild(entry3, dataManager_, intComparator);
 
 	auto final_children = internalNode_.getAllChildren(dataManager_);
-	ASSERT_EQ(final_children.size(), 4);
+	ASSERT_EQ(final_children.size(), 4UL);
 	// Check sorting
 	ASSERT_EQ(final_children[1].key, PropertyValue(100));
 	ASSERT_EQ(final_children[2].key, PropertyValue(200));
@@ -220,7 +220,7 @@ TEST_F(IndexTest, AddAndRemoveChild) {
 	// Remove a middle child
 	ASSERT_TRUE(internalNode_.removeChild(PropertyValue(200), dataManager_, intComparator));
 	children = internalNode_.getAllChildren(dataManager_);
-	ASSERT_EQ(children.size(), 3);
+	ASSERT_EQ(children.size(), 3UL);
 	ASSERT_EQ(children[1].key, PropertyValue(100));
 	ASSERT_EQ(children[2].key, PropertyValue(300));
 
@@ -252,7 +252,7 @@ TEST_F(IndexTest, InternalKeyBlobManagement) {
 	internalNode_.setAllChildren(children, dataManager_);
 
 	auto retrieved = internalNode_.getAllChildren(dataManager_);
-	ASSERT_EQ(retrieved.size(), 2);
+	ASSERT_EQ(retrieved.size(), 2UL);
 	ASSERT_NE(retrieved[1].keyBlobId, 0) << "Oversized key should be in a blob.";
 	ASSERT_EQ(retrieved[1].key, PropertyValue(oversized_key_str));
 
@@ -279,7 +279,7 @@ TEST_F(IndexTest, BlobGarbageCollectionOnRemove) {
 	leafNode_.setAllEntries(entries, dataManager_);
 
 	auto retrieved = leafNode_.getAllEntries(dataManager_);
-	ASSERT_EQ(retrieved.size(), 1);
+	ASSERT_EQ(retrieved.size(), 1UL);
 	ASSERT_NE(retrieved[0].keyBlobId, 0);
 	ASSERT_NE(retrieved[0].valuesBlobId, 0);
 	int64_t key_blob_id = retrieved[0].keyBlobId;
@@ -370,78 +370,78 @@ TEST_F(IndexTest, OperationsWithNullDataManager) {
 }
 
 TEST_F(IndexTest, UpdateChildId_InlineKeys) {
-    // Setup: Internal node with 3 children using simple inline keys
-    std::vector<Index::ChildEntry> children;
-    children.push_back({PropertyValue(std::monostate{}), 100, 0}); // First child
-    children.push_back({PropertyValue(10), 200, 0});              // Second child
-    children.push_back({PropertyValue(20), 300, 0});              // Third child
+	// Setup: Internal node with 3 children using simple inline keys
+	std::vector<Index::ChildEntry> children;
+	children.push_back({PropertyValue(std::monostate{}), 100, 0}); // First child
+	children.push_back({PropertyValue(10), 200, 0}); // Second child
+	children.push_back({PropertyValue(20), 300, 0}); // Third child
 
-    internalNode_.setAllChildren(children, dataManager_);
+	internalNode_.setAllChildren(children, dataManager_);
 
-    // 1. Successful Update: Change Child 200 -> 299
-    ASSERT_TRUE(internalNode_.updateChildId(200, 299));
+	// 1. Successful Update: Change Child 200 -> 299
+	ASSERT_TRUE(internalNode_.updateChildId(200, 299));
 
-    // Verify
-    auto updatedChildren = internalNode_.getAllChildren(dataManager_);
-    ASSERT_EQ(updatedChildren.size(), 3);
-    EXPECT_EQ(updatedChildren[0].childId, 100);
-    EXPECT_EQ(updatedChildren[1].childId, 299); // Changed
-    EXPECT_EQ(updatedChildren[1].key, PropertyValue(10)); // Key preserved
-    EXPECT_EQ(updatedChildren[2].childId, 300);
+	// Verify
+	auto updatedChildren = internalNode_.getAllChildren(dataManager_);
+	ASSERT_EQ(updatedChildren.size(), 3UL);
+	EXPECT_EQ(updatedChildren[0].childId, 100);
+	EXPECT_EQ(updatedChildren[1].childId, 299); // Changed
+	EXPECT_EQ(updatedChildren[1].key, PropertyValue(10)); // Key preserved
+	EXPECT_EQ(updatedChildren[2].childId, 300);
 
-    // 2. Failed Update: Non-existent Child
-    ASSERT_FALSE(internalNode_.updateChildId(999, 888));
+	// 2. Failed Update: Non-existent Child
+	ASSERT_FALSE(internalNode_.updateChildId(999, 888));
 
-    // 3. Update First Child (Special case: no key)
-    ASSERT_TRUE(internalNode_.updateChildId(100, 199));
-    updatedChildren = internalNode_.getAllChildren(dataManager_);
-    EXPECT_EQ(updatedChildren[0].childId, 199);
+	// 3. Update First Child (Special case: no key)
+	ASSERT_TRUE(internalNode_.updateChildId(100, 199));
+	updatedChildren = internalNode_.getAllChildren(dataManager_);
+	EXPECT_EQ(updatedChildren[0].childId, 199);
 }
 
 TEST_F(IndexTest, UpdateChildId_BlobKeys) {
-    // Setup: Internal node where one child has a BLOB key
-    std::string largeKey(Index::INTERNAL_KEY_INLINE_THRESHOLD + 5, 'B');
-    std::vector<Index::ChildEntry> children;
-    children.push_back({PropertyValue(std::monostate{}), 10, 0});
-    children.push_back({PropertyValue(largeKey), 20, 0}); // This will use a blob
+	// Setup: Internal node where one child has a BLOB key
+	std::string largeKey(Index::INTERNAL_KEY_INLINE_THRESHOLD + 5, 'B');
+	std::vector<Index::ChildEntry> children;
+	children.push_back({PropertyValue(std::monostate{}), 10, 0});
+	children.push_back({PropertyValue(largeKey), 20, 0}); // This will use a blob
 
-    internalNode_.setAllChildren(children, dataManager_);
+	internalNode_.setAllChildren(children, dataManager_);
 
-    // Verify blob usage first
-    auto check = internalNode_.getAllChildren(dataManager_);
-    ASSERT_NE(check[1].keyBlobId, 0);
+	// Verify blob usage first
+	auto check = internalNode_.getAllChildren(dataManager_);
+	ASSERT_NE(check[1].keyBlobId, 0);
 
-    // Action: Update Child ID of the entry with Blob Key
-    ASSERT_TRUE(internalNode_.updateChildId(20, 25));
+	// Action: Update Child ID of the entry with Blob Key
+	ASSERT_TRUE(internalNode_.updateChildId(20, 25));
 
-    // Verify
-    auto updatedChildren = internalNode_.getAllChildren(dataManager_);
-    EXPECT_EQ(updatedChildren[1].childId, 25);
-    EXPECT_EQ(updatedChildren[1].key, PropertyValue(largeKey)); // Key content intact
-    EXPECT_NE(updatedChildren[1].keyBlobId, 0); // Still points to a blob
+	// Verify
+	auto updatedChildren = internalNode_.getAllChildren(dataManager_);
+	EXPECT_EQ(updatedChildren[1].childId, 25);
+	EXPECT_EQ(updatedChildren[1].key, PropertyValue(largeKey)); // Key content intact
+	EXPECT_NE(updatedChildren[1].keyBlobId, 0); // Still points to a blob
 }
 
 TEST_F(IndexTest, GetChildIds_MixedContent) {
-    // Setup: Internal node with mixed keys (Implicit, Inline, Blob)
-    std::string largeKey(Index::INTERNAL_KEY_INLINE_THRESHOLD + 5, 'C');
-    std::vector<Index::ChildEntry> children;
-    children.push_back({PropertyValue(std::monostate{}), 100, 0});
-    children.push_back({PropertyValue("inline"), 200, 0});
-    children.push_back({PropertyValue(largeKey), 300, 0});
+	// Setup: Internal node with mixed keys (Implicit, Inline, Blob)
+	std::string largeKey(Index::INTERNAL_KEY_INLINE_THRESHOLD + 5, 'C');
+	std::vector<Index::ChildEntry> children;
+	children.push_back({PropertyValue(std::monostate{}), 100, 0});
+	children.push_back({PropertyValue("inline"), 200, 0});
+	children.push_back({PropertyValue(largeKey), 300, 0});
 
-    internalNode_.setAllChildren(children, dataManager_);
+	internalNode_.setAllChildren(children, dataManager_);
 
-    // Action
-    std::vector<int64_t> ids = internalNode_.getChildIds();
+	// Action
+	std::vector<int64_t> ids = internalNode_.getChildIds();
 
-    // Verify
-    ASSERT_EQ(ids.size(), 3);
-    EXPECT_EQ(ids[0], 100);
-    EXPECT_EQ(ids[1], 200);
-    EXPECT_EQ(ids[2], 300);
+	// Verify
+	ASSERT_EQ(ids.size(), 3UL);
+	EXPECT_EQ(ids[0], 100);
+	EXPECT_EQ(ids[1], 200);
+	EXPECT_EQ(ids[2], 300);
 }
 
 TEST_F(IndexTest, GetChildIds_LeafNode) {
-    // Leaf nodes have no children
-    ASSERT_TRUE(leafNode_.getChildIds().empty());
+	// Leaf nodes have no children
+	ASSERT_TRUE(leafNode_.getChildIds().empty());
 }

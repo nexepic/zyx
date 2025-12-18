@@ -126,7 +126,7 @@ TEST_F(EdgeTest, PropertyOperations) {
 
 	// Get all properties
 	const auto &properties = edge.getProperties();
-	EXPECT_EQ(properties.size(), 2);
+	EXPECT_EQ(properties.size(), 2UL);
 	EXPECT_EQ(properties.at(key1), value1);
 	EXPECT_EQ(properties.at(key2), value2);
 }
@@ -157,10 +157,10 @@ TEST_F(EdgeTest, ClearProperties) {
 	edge.addProperty("key1", graph::PropertyValue(1));
 	edge.addProperty("key2", graph::PropertyValue(2));
 
-	EXPECT_EQ(edge.getProperties().size(), 2);
+	EXPECT_EQ(edge.getProperties().size(), 2UL);
 
 	edge.clearProperties();
-	EXPECT_EQ(edge.getProperties().size(), 0);
+	EXPECT_EQ(edge.getProperties().size(), 0UL);
 }
 
 TEST_F(EdgeTest, PropertyEntityManagement) {
@@ -255,7 +255,7 @@ TEST_F(EdgeTest, GetSerializedSizeEmptyLabel) {
 TEST_F(EdgeTest, GetTotalPropertySize) {
 	graph::Edge edge;
 
-	EXPECT_EQ(edge.getTotalPropertySize(), 0);
+	EXPECT_EQ(edge.getTotalPropertySize(), 0UL);
 
 	edge.addProperty("key1", graph::PropertyValue(42));
 	edge.addProperty("longer_key_name", graph::PropertyValue("string_value"));

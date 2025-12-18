@@ -101,7 +101,8 @@ protected:
 	}
 
 	// Helper to create and register a fully initialized segment header
-	SegmentHeader createAndRegisterSegment(uint64_t offset, uint32_t type, uint32_t capacity, int64_t start_id = 0) {
+	SegmentHeader createAndRegisterSegment(uint64_t offset, uint32_t type, uint32_t capacity,
+										   int64_t start_id = 0) const {
 		SegmentHeader header;
 		header.file_offset = offset;
 		header.data_type = type;
@@ -154,8 +155,8 @@ TEST_F(SegmentTrackerTest, InitializationRegistersTypes) {
 }
 
 TEST_F(SegmentTrackerTest, ChainHeadsInitializedToZero) {
-	EXPECT_EQ(tracker->getChainHead(static_cast<uint32_t>(EntityType::Node)), 0);
-	EXPECT_EQ(tracker->getChainHead(static_cast<uint32_t>(EntityType::Edge)), 0);
+	EXPECT_EQ(tracker->getChainHead(static_cast<uint32_t>(EntityType::Node)), 0ULL);
+	EXPECT_EQ(tracker->getChainHead(static_cast<uint32_t>(EntityType::Edge)), 0ULL);
 }
 
 // ============================================================================
@@ -167,14 +168,14 @@ TEST_F(SegmentTrackerTest, RegisterAndRetrieveSegment) {
 	auto type = static_cast<uint32_t>(EntityType::Node);
 	uint32_t capacity = NODES_PER_SEGMENT;
 
-	createAndRegisterSegment(offset, type, capacity);
+	(void) createAndRegisterSegment(offset, type, capacity);
 
 	SegmentHeader &header = tracker->getSegmentHeader(offset);
 	EXPECT_EQ(header.file_offset, offset);
 	EXPECT_EQ(header.data_type, type);
 	EXPECT_EQ(header.capacity, capacity);
-	EXPECT_EQ(header.used, 0);
-	EXPECT_EQ(header.is_dirty, 0); // Newly registered but not modified via tracker's update methods yet
+	EXPECT_EQ(header.used, 0U);
+	EXPECT_EQ(header.is_dirty, 0U); // Newly registered but not modified via tracker's update methods yet
 }
 
 TEST_F(SegmentTrackerTest, GetNonExistentSegmentThrows) {
@@ -191,7 +192,7 @@ TEST_F(SegmentTrackerTest, GetNonExistentSegmentThrows) {
 TEST_F(SegmentTrackerTest, UpdateUsageUpdatesIndex) {
 	uint64_t offset = getSegmentOffset(0);
 	auto type = static_cast<uint32_t>(EntityType::Node);
-	createAndRegisterSegment(offset, type, 100, 1000);
+	(void) createAndRegisterSegment(offset, type, 100, 1000);
 
 	// Action: Update usage
 	// This should trigger IndexManager update because tracker calls updateSegmentIndex
@@ -199,8 +200,8 @@ TEST_F(SegmentTrackerTest, UpdateUsageUpdatesIndex) {
 
 	// Verification
 	SegmentHeader &updatedHeader = tracker->getSegmentHeader(offset);
-	EXPECT_EQ(updatedHeader.used, 50);
-	EXPECT_EQ(updatedHeader.is_dirty, 1);
+	EXPECT_EQ(updatedHeader.used, 50U);
+	EXPECT_EQ(updatedHeader.is_dirty, 1U);
 
 	// check index manager to see if it knows about this segment now
 	uint64_t foundOffset = indexManager->findSegmentForId(type, 1025); // 1000 + 25
@@ -209,14 +210,14 @@ TEST_F(SegmentTrackerTest, UpdateUsageUpdatesIndex) {
 
 TEST_F(SegmentTrackerTest, MarkForCompaction) {
 	uint64_t offset = getSegmentOffset(0);
-	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
 
 	tracker->markForCompaction(offset, true);
-	EXPECT_EQ(tracker->getSegmentHeader(offset).needs_compaction, 1);
-	EXPECT_EQ(tracker->getSegmentHeader(offset).is_dirty, 1);
+	EXPECT_EQ(tracker->getSegmentHeader(offset).needs_compaction, 1U);
+	EXPECT_EQ(tracker->getSegmentHeader(offset).is_dirty, 1U);
 
 	tracker->markForCompaction(offset, false);
-	EXPECT_EQ(tracker->getSegmentHeader(offset).needs_compaction, 0);
+	EXPECT_EQ(tracker->getSegmentHeader(offset).needs_compaction, 0U);
 }
 
 // ============================================================================
@@ -225,28 +226,28 @@ TEST_F(SegmentTrackerTest, MarkForCompaction) {
 
 TEST_F(SegmentTrackerTest, FlushDirtySegments) {
 	uint64_t offset = getSegmentOffset(0);
-	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
 
 	// Verify disk is already updated by createAndRegisterSegment
 	auto diskHeaderBefore = readRawAt<SegmentHeader>(offset);
-	EXPECT_EQ(diskHeaderBefore.used, 0);
+	EXPECT_EQ(diskHeaderBefore.used, 0U);
 
 	// Modify in memory
 	tracker->updateSegmentUsage(offset, 10, 0);
 
 	// Verify disk is NOT yet updated (raw read)
 	auto diskHeaderAfterUpdate = readRawAt<SegmentHeader>(offset);
-	EXPECT_EQ(diskHeaderAfterUpdate.used, 0);
+	EXPECT_EQ(diskHeaderAfterUpdate.used, 0U);
 
 	// Action: Flush
 	tracker->flushDirtySegments();
 
 	// Verify disk IS updated
 	auto diskHeaderAfterFlush = readRawAt<SegmentHeader>(offset);
-	EXPECT_EQ(diskHeaderAfterFlush.used, 10);
+	EXPECT_EQ(diskHeaderAfterFlush.used, 10U);
 
 	// Verify internal dirty flag cleared
-	EXPECT_EQ(tracker->getSegmentHeader(offset).is_dirty, 0);
+	EXPECT_EQ(tracker->getSegmentHeader(offset).is_dirty, 0U);
 }
 
 // ============================================================================
@@ -258,8 +259,8 @@ TEST_F(SegmentTrackerTest, LinkSegments) {
 	uint64_t next = getSegmentOffset(1);
 	auto type = static_cast<uint32_t>(EntityType::Node);
 
-	createAndRegisterSegment(head, type, 100);
-	createAndRegisterSegment(next, type, 100);
+	(void) createAndRegisterSegment(head, type, 100);
+	(void) createAndRegisterSegment(next, type, 100);
 
 	// Link
 	tracker->updateSegmentLinks(head, 0, next);
@@ -280,35 +281,35 @@ TEST_F(SegmentTrackerTest, LinkSegments) {
 TEST_F(SegmentTrackerTest, SingleBitOperations) {
 	uint64_t offset = getSegmentOffset(0);
 	// Capacity 16 -> 2 bytes bitmap
-	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 16);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 16);
 
 	// Pretend usage is 16
 	tracker->updateSegmentUsage(offset, 16, 0);
 
 	std::vector<bool> allActive(16, true);
 	tracker->updateActivityBitmap(offset, allActive);
-	EXPECT_EQ(tracker->getSegmentHeader(offset).inactive_count, 0);
+	EXPECT_EQ(tracker->getSegmentHeader(offset).inactive_count, 0U);
 
 	// Mark index 5 as inactive (false)
 	tracker->setEntityActive(offset, 5, false);
 	EXPECT_FALSE(tracker->isEntityActive(offset, 5));
-	EXPECT_EQ(tracker->getSegmentHeader(offset).inactive_count, 1);
+	EXPECT_EQ(tracker->getSegmentHeader(offset).inactive_count, 1U);
 
 	// Mark index 5 as active again
 	tracker->setEntityActive(offset, 5, true);
 	EXPECT_TRUE(tracker->isEntityActive(offset, 5));
-	EXPECT_EQ(tracker->getSegmentHeader(offset).inactive_count, 0);
+	EXPECT_EQ(tracker->getSegmentHeader(offset).inactive_count, 0U);
 }
 
 TEST_F(SegmentTrackerTest, BulkBitmapUpdate) {
 	uint64_t offset = getSegmentOffset(0);
-	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 8);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 8);
 
 	std::vector<bool> pattern = {true, false, true, false, true, false, true, false}; // 4 inactive
 	tracker->updateActivityBitmap(offset, pattern);
 
 	SegmentHeader &header = tracker->getSegmentHeader(offset);
-	EXPECT_EQ(header.inactive_count, 4);
+	EXPECT_EQ(header.inactive_count, 4U);
 	EXPECT_TRUE(tracker->isEntityActive(offset, 0));
 	EXPECT_FALSE(tracker->isEntityActive(offset, 1));
 }
@@ -319,7 +320,7 @@ TEST_F(SegmentTrackerTest, BulkBitmapUpdate) {
 
 TEST_F(SegmentTrackerTest, FreeListOperations) {
 	uint64_t offset = getSegmentOffset(0);
-	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
 
 	// Verify empty initially
 	EXPECT_TRUE(tracker->getFreeSegments().empty());
@@ -329,12 +330,12 @@ TEST_F(SegmentTrackerTest, FreeListOperations) {
 
 	// Verify in list
 	auto freeList = tracker->getFreeSegments();
-	ASSERT_EQ(freeList.size(), 1);
+	ASSERT_EQ(freeList.size(), 1UL);
 	EXPECT_EQ(freeList[0], offset);
 
 	// Verify header on disk is wiped/marked (Code writes data_type = 0xFF)
 	auto diskHeader = readRawAt<SegmentHeader>(offset);
-	EXPECT_EQ(diskHeader.data_type, 0xFF);
+	EXPECT_EQ(diskHeader.data_type, 0xFFU);
 
 	// Remove from free list (reallocation scenario)
 	tracker->removeFromFreeList(offset);
@@ -352,7 +353,7 @@ TEST_F(SegmentTrackerTest, MarkFreeAlignCheck) {
 
 TEST_F(SegmentTrackerTest, LookupFastPathViaIndex) {
 	uint64_t offset = getSegmentOffset(0);
-	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100, 500);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100, 500);
 
 	// Setup Header
 	tracker->updateSegmentHeader(offset, [](SegmentHeader &h) { h.used = 100; });
@@ -365,7 +366,7 @@ TEST_F(SegmentTrackerTest, LookupFastPathViaIndex) {
 	EXPECT_EQ(result, offset);
 
 	// Lookup out of range
-	EXPECT_EQ(tracker->getSegmentOffsetForNodeId(800), 0);
+	EXPECT_EQ(tracker->getSegmentOffsetForNodeId(800), 0ULL);
 }
 
 TEST_F(SegmentTrackerTest, LookupSlowPathLinearScan) {
@@ -376,8 +377,8 @@ TEST_F(SegmentTrackerTest, LookupSlowPathLinearScan) {
 	uint64_t offset2 = getSegmentOffset(1);
 	auto type = static_cast<uint32_t>(EntityType::Node);
 
-	createAndRegisterSegment(offset1, type, 10, 0);
-	createAndRegisterSegment(offset2, type, 10, 10);
+	(void) createAndRegisterSegment(offset1, type, 10, 0);
+	(void) createAndRegisterSegment(offset2, type, 10, 10);
 
 	// Link them
 	tracker->updateSegmentLinks(offset1, 0, offset2);
@@ -401,7 +402,7 @@ TEST_F(SegmentTrackerTest, LookupSlowPathLinearScan) {
 TEST_F(SegmentTrackerTest, FragmentationCalculation) {
 	auto type = static_cast<uint32_t>(EntityType::Node);
 	uint64_t offset = getSegmentOffset(0);
-	createAndRegisterSegment(offset, type, 100);
+	(void) createAndRegisterSegment(offset, type, 100);
 
 	// Case 1: 100% used -> 0 fragmentation
 	tracker->updateSegmentUsage(offset, 100, 0);
@@ -421,8 +422,8 @@ TEST_F(SegmentTrackerTest, GetSegmentsNeedingCompaction) {
 	uint64_t off1 = getSegmentOffset(0);
 	uint64_t off2 = getSegmentOffset(1);
 
-	createAndRegisterSegment(off1, type, 100);
-	createAndRegisterSegment(off2, type, 100);
+	(void) createAndRegisterSegment(off1, type, 100);
+	(void) createAndRegisterSegment(off2, type, 100);
 
 	// Off1: High fragmentation (1 used) -> frag ratio = 0.99
 	tracker->updateSegmentUsage(off1, 1, 0);
@@ -433,7 +434,7 @@ TEST_F(SegmentTrackerTest, GetSegmentsNeedingCompaction) {
 	// Threshold 0.8
 	auto segments = tracker->getSegmentsNeedingCompaction(type, 0.8);
 
-	EXPECT_EQ(segments.size(), 1);
+	EXPECT_EQ(segments.size(), 1UL);
 	EXPECT_EQ(segments[0].file_offset, off1);
 }
 
@@ -446,7 +447,7 @@ TEST_F(SegmentTrackerTest, WriteAndReadEntity) {
 	// or is trivially copyable.
 
 	uint64_t segOffset = getSegmentOffset(0);
-	createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Node), 10);
+	(void) createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Node), 10);
 
 	Node testNode(123, "TestNode");
 	// Calculate size (using Node::getTotalSize() as defined in StorageHeaders constants)
@@ -456,7 +457,7 @@ TEST_F(SegmentTrackerTest, WriteAndReadEntity) {
 	tracker->writeEntity<Node>(segOffset, 0, testNode, nodeSize);
 
 	// Verify dirty
-	EXPECT_EQ(tracker->getSegmentHeader(segOffset).is_dirty, 1);
+	EXPECT_EQ(tracker->getSegmentHeader(segOffset).is_dirty, 1U);
 
 	// Read back
 	// Note: If FixedSizeSerializer is not linked, this might fail linking.

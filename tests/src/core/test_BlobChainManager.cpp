@@ -57,7 +57,7 @@ TEST_F(BlobChainManagerTest, CreateSingleBlobChain) {
 
 	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
 
-	EXPECT_EQ(blobChain.size(), 1);
+	EXPECT_EQ(blobChain.size(), 1UL);
 	EXPECT_EQ(blobChain[0].getEntityId(), entityId);
 	EXPECT_EQ(blobChain[0].getEntityType(), entityTypeId);
 	EXPECT_EQ(blobChain[0].getChainPosition(), 0);
@@ -80,7 +80,7 @@ TEST_F(BlobChainManagerTest, CreateMultipleBlobChain) {
 
 	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
 
-	EXPECT_EQ(blobChain.size(), 3);
+	EXPECT_EQ(blobChain.size(), 3UL);
 
 	// Check head blob
 	EXPECT_EQ(blobChain[0].getChainPosition(), 0);
@@ -109,11 +109,11 @@ TEST_F(BlobChainManagerTest, CreateBlobChainEmptyData) {
 		dataManager->addBlobEntity(blob);
 	}
 
-	EXPECT_EQ(blobChain.size(), 1);
+	EXPECT_EQ(blobChain.size(), 1UL);
 	// Check that reading the chain returns the original empty string
 	EXPECT_EQ(chainManager->readBlobChain(blobChain[0].getId()), "");
 	// Optionally, check the original size
-	EXPECT_EQ(blobChain[0].getOriginalSize(), 0);
+	EXPECT_EQ(blobChain[0].getOriginalSize(), 0u);
 }
 
 TEST_F(BlobChainManagerTest, ReadSingleBlobChain) {
@@ -127,7 +127,7 @@ TEST_F(BlobChainManagerTest, ReadSingleBlobChain) {
 		dataManager->addBlobEntity(blob);
 	}
 
-	ASSERT_EQ(blobChain.size(), 1);
+	ASSERT_EQ(blobChain.size(), 1UL);
 
 	std::string result = chainManager->readBlobChain(blobChain[0].getId());
 	EXPECT_EQ(result, originalData);
@@ -152,7 +152,7 @@ TEST_F(BlobChainManagerTest, ReadMultipleBlobChain) {
 	const std::string originalData = testData;
 
 	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
-	ASSERT_EQ(blobChain.size(), 2);
+	ASSERT_EQ(blobChain.size(), 2UL);
 
 	for (auto &blob: blobChain) {
 		dataManager->addBlobEntity(blob);
@@ -186,7 +186,7 @@ TEST_F(BlobChainManagerTest, DeleteBlobChain) {
 		dataManager->addBlobEntity(blob);
 	}
 
-	ASSERT_GT(blobChain.size(), 1);
+	ASSERT_GT(blobChain.size(), 1UL);
 
 	// Delete the blob chain
 	EXPECT_NO_THROW(chainManager->deleteBlobChain(blobChain[0].getId()));
@@ -203,7 +203,7 @@ TEST_F(BlobChainManagerTest, CompressDataThroughChain) {
 
 	auto blobChain = chainManager->createBlobChain(1, 1, testData);
 
-	EXPECT_EQ(blobChain.size(), 1);
+	EXPECT_EQ(blobChain.size(), 1UL);
 	EXPECT_EQ(blobChain[0].getOriginalSize(), testData.size());
 }
 
@@ -220,7 +220,7 @@ TEST_F(BlobChainManagerTest, SplitDataIntoMultipleChunks) {
 	auto blobChain = chainManager->createBlobChain(1, 1, largeData);
 
 	// Should create multiple blobs due to size
-	EXPECT_GT(blobChain.size(), 2);
+	EXPECT_GT(blobChain.size(), 2UL);
 
 	// Verify chain linking
 	for (size_t i = 0; i < blobChain.size(); i++) {

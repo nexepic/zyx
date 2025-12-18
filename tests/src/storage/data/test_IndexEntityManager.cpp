@@ -76,7 +76,7 @@ TEST_F(IndexEntityManagerTest, AddAndGetIndex) {
 	EXPECT_EQ(retrievedIndex.getId(), index.getId()) << "Retrieved index should have the same ID";
 	EXPECT_EQ(retrievedIndex.getNodeType(), graph::Index::NodeType::LEAF)
 			<< "Retrieved index should have the same node type";
-	EXPECT_EQ(retrievedIndex.getIndexType(), 1) << "Retrieved index should have the same index type";
+	EXPECT_EQ(retrievedIndex.getIndexType(), 1U) << "Retrieved index should have the same index type";
 }
 
 // Test updating an index
@@ -139,12 +139,12 @@ TEST_F(IndexEntityManagerTest, BatchOperations) {
 
 	// Test getBatch
 	auto retrievedIndexes = indexEntityManager->getBatch(indexIds);
-	EXPECT_EQ(retrievedIndexes.size(), 5) << "Should retrieve all 5 indexes";
+	EXPECT_EQ(retrievedIndexes.size(), 5UL) << "Should retrieve all 5 indexes";
 
 	// Test after removing one index
 	indexEntityManager->remove(indexes[2]);
 	retrievedIndexes = indexEntityManager->getBatch(indexIds);
-	EXPECT_EQ(retrievedIndexes.size(), 4) << "Should retrieve only active indexes";
+	EXPECT_EQ(retrievedIndexes.size(), 4UL) << "Should retrieve only active indexes";
 }
 
 // Test index ID allocation

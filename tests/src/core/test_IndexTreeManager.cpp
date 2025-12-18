@@ -15,8 +15,8 @@
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
 #include "graph/core/IndexTreeManager.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/data/BlobManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 
 using namespace graph;
 using namespace graph::storage;
@@ -101,8 +101,8 @@ TEST_F(IndexTreeManagerTest, InsertDuplicateAndMultipleValues) {
 			stringTreeManager_->insert(stringRootId_, PropertyValue("multi_key"), 200); // Duplicate should be ignored.
 
 	auto results = stringTreeManager_->find(stringRootId_, PropertyValue("multi_key"));
-	ASSERT_EQ(results.size(), 3);
-	std::sort(results.begin(), results.end());
+	ASSERT_EQ(results.size(), 3UL);
+	std::ranges::sort(results);
 	ASSERT_EQ(results[0], 100);
 	ASSERT_EQ(results[1], 200);
 	ASSERT_EQ(results[2], 300);
@@ -114,13 +114,12 @@ TEST_F(IndexTreeManagerTest, AdvancedRemoveScenarios) {
 	stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("test_key"), 3);
 
 	ASSERT_FALSE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 99));
-	ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("test_key")).size(), 3);
+	ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("test_key")).size(), 3UL);
 
 	ASSERT_TRUE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 2));
 	auto results1 = stringTreeManager_->find(stringRootId_, PropertyValue("test_key"));
-	ASSERT_EQ(results1.size(), 2);
-	ASSERT_EQ(std::find(results1.begin(), results1.end(), 2), results1.end());
-
+	ASSERT_EQ(results1.size(), 2UL);
+	ASSERT_EQ(std::ranges::find(results1, 2), results1.end());
 	ASSERT_TRUE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 1));
 	ASSERT_TRUE(stringTreeManager_->remove(stringRootId_, PropertyValue("test_key"), 3));
 	ASSERT_TRUE(stringTreeManager_->find(stringRootId_, PropertyValue("test_key")).empty());
@@ -144,7 +143,7 @@ TEST_F(IndexTreeManagerTest, InsertCausesLeafSplit) {
 	}
 
 	ASSERT_FALSE(rootNode.isLeaf()) << "A leaf split should have turned the root into an internal node.";
-	ASSERT_EQ(rootNode.getChildCount(), 2);
+	ASSERT_EQ(rootNode.getChildCount(), 2u);
 
 	auto results = stringTreeManager_->find(stringRootId_, PropertyValue("key_0"));
 	ASSERT_EQ(results[0], 0);
@@ -179,12 +178,12 @@ TEST_F(IndexTreeManagerTest, InsertCausesInternalSplit) {
 			break; // Height increased by 2 (e.g., L0 -> L2)
 	}
 
-	ASSERT_GT(rootNode.getLevel(), initialLevel + 1)
+	ASSERT_GT(rootNode.getLevel(), static_cast<uint8_t>(initialLevel + 1))
 			<< "An internal root split should increase the tree height by at least 2 levels.";
 
 	auto results = stringTreeManager_->findRange(stringRootId_, PropertyValue(generatePaddedKey(0)),
 												 PropertyValue(generatePaddedKey(insertedCount - 1)));
-	ASSERT_EQ(results.size(), insertedCount);
+	ASSERT_EQ(results.size(), static_cast<size_t>(insertedCount));
 }
 
 TEST_F(IndexTreeManagerTest, RangeQuerySpansMultipleLeaves) {
@@ -194,8 +193,8 @@ TEST_F(IndexTreeManagerTest, RangeQuerySpansMultipleLeaves) {
 
 	auto results = stringTreeManager_->findRange(stringRootId_, PropertyValue(generatePaddedKey(100)),
 												 PropertyValue(generatePaddedKey(499)));
-	ASSERT_EQ(results.size(), 400);
-	std::sort(results.begin(), results.end());
+	ASSERT_EQ(results.size(), 400UL);
+	std::ranges::sort(results);
 	ASSERT_EQ(results[0], 100);
 	ASSERT_EQ(results.back(), 499);
 }
@@ -214,7 +213,7 @@ TEST_F(IndexTreeManagerTest, LeafValuesOverflowToBlob_EndToEnd) {
 	ASSERT_NE(leafId, 0);
 	auto leafNode = dataManager_->getIndex(leafId);
 	auto entries = leafNode.getAllEntries(dataManager_);
-	ASSERT_EQ(entries.size(), 1);
+	ASSERT_EQ(entries.size(), 1UL);
 	ASSERT_NE(entries[0].valuesBlobId, 0) << "The entry's value list should have been offloaded to a blob.";
 
 	auto results = stringTreeManager_->find(stringRootId_, PropertyValue(testKey));
@@ -243,7 +242,7 @@ TEST_F(IndexTreeManagerTest, InternalKeyPromotionToBlob_EndToEnd) {
 	while (!nodesToVisit.empty()) {
 		int64_t currentId = nodesToVisit.back();
 		nodesToVisit.pop_back();
-		if (visited.count(currentId))
+		if (visited.contains(currentId))
 			continue;
 		visited.insert(currentId);
 
@@ -267,7 +266,7 @@ TEST_F(IndexTreeManagerTest, InternalKeyPromotionToBlob_EndToEnd) {
 	// Finally, verify that we can still find the correct value using this long key.
 	std::string finalKeyToFind = generatePaddedKey(splitTriggerCount - 1) + suffix;
 	auto results = stringTreeManager_->find(stringRootId_, PropertyValue(finalKeyToFind));
-	ASSERT_EQ(results.size(), 1);
+	ASSERT_EQ(results.size(), 1UL);
 	ASSERT_EQ(results[0], splitTriggerCount - 1);
 }
 
@@ -293,7 +292,7 @@ TEST_F(IndexTreeManagerTest, ClearFunctionality) {
 	stringRootId_ = stringTreeManager_->initialize();
 	auto rootNode = dataManager_->getIndex(stringRootId_);
 	ASSERT_TRUE(rootNode.isLeaf()) << "Root should be a leaf after clear and re-initialize.";
-	ASSERT_EQ(rootNode.getEntryCount(), 0) << "New root should be empty.";
+	ASSERT_EQ(rootNode.getEntryCount(), 0u) << "New root should be empty.";
 
 	// A simple check to ensure the old data is gone.
 	auto results = stringTreeManager_->find(stringRootId_, PropertyValue(generatePaddedKey(0)));
@@ -347,7 +346,7 @@ TEST_F(IndexTreeManagerTest, RemoveCausesLeafRedistributionFromRight) {
 	auto finalLeftLeaf = dataManager_->getIndex(leftLeafId);
 	auto finalRightLeaf = dataManager_->getIndex(rightLeafId);
 
-	ASSERT_GT(finalLeftLeaf.getEntryCount(), 0) << "Left leaf should have received an entry.";
+	ASSERT_GT(finalLeftLeaf.getEntryCount(), 0u) << "Left leaf should have received an entry.";
 	ASSERT_LT(finalRightLeaf.getEntryCount(), rightEntries.size()) << "Right leaf should have given an entry.";
 
 	// Check that the data is still correct.
@@ -356,73 +355,73 @@ TEST_F(IndexTreeManagerTest, RemoveCausesLeafRedistributionFromRight) {
 }
 
 TEST_F(IndexTreeManagerTest, RemoveCausesLeafMerge) {
-    // Start with a fresh tree
-    intTreeManager_->clear(intRootId_);
-    intRootId_ = intTreeManager_->initialize();
+	// Start with a fresh tree
+	intTreeManager_->clear(intRootId_);
+	intRootId_ = intTreeManager_->initialize();
 
-    // 1. Create a simple tree with a small, controlled set of entries
-    // Use a distribution that forces multiple leaf nodes
-    std::vector<int64_t> values;
-    // First leaf should contain values 10-50
-    for (int i = 10; i <= 50; i += 10) {
-        values.push_back(i);
-        intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
-    }
+	// 1. Create a simple tree with a small, controlled set of entries
+	// Use a distribution that forces multiple leaf nodes
+	std::vector<int64_t> values;
+	// First leaf should contain values 10-50
+	for (int i = 10; i <= 50; i += 10) {
+		values.push_back(i);
+		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
+	}
 
-    // Force a split by adding more values
-    // Second leaf should contain values 60-100
-    for (int i = 60; i <= 100; i += 10) {
-        values.push_back(i);
-        intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
-    }
+	// Force a split by adding more values
+	// Second leaf should contain values 60-100
+	for (int i = 60; i <= 100; i += 10) {
+		values.push_back(i);
+		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
+	}
 
-    // 2. Verify the tree structure - we should have at least two leaf nodes
-    int64_t firstLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(static_cast<int64_t>(10)));
-    auto firstLeaf = dataManager_->getIndex(firstLeafId);
-    ASSERT_NE(firstLeaf.getNextLeafId(), 0) << "Test requires at least two leaf nodes";
+	// 2. Verify the tree structure - we should have at least two leaf nodes
+	int64_t firstLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(static_cast<int64_t>(10)));
+	auto firstLeaf = dataManager_->getIndex(firstLeafId);
+	ASSERT_NE(firstLeaf.getNextLeafId(), 0) << "Test requires at least two leaf nodes";
 
-    int64_t secondLeafId = firstLeaf.getNextLeafId();
-    auto secondLeaf = dataManager_->getIndex(secondLeafId);
+	int64_t secondLeafId = firstLeaf.getNextLeafId();
+	auto secondLeaf = dataManager_->getIndex(secondLeafId);
 
-    // Both leaves should have the same parent
-    ASSERT_EQ(firstLeaf.getParentId(), secondLeaf.getParentId());
-    int64_t parentId = firstLeaf.getParentId();
-    auto parent = dataManager_->getIndex(parentId);
+	// Both leaves should have the same parent
+	ASSERT_EQ(firstLeaf.getParentId(), secondLeaf.getParentId());
+	int64_t parentId = firstLeaf.getParentId();
+	auto parent = dataManager_->getIndex(parentId);
 
-    // Save parent's child count before operation
-    size_t parentChildCount_before = parent.getChildCount();
-    ASSERT_GE(parentChildCount_before, 2) << "Parent must have at least 2 children for merge test";
+	// Save parent's child count before operation
+	size_t parentChildCount_before = parent.getChildCount();
+	ASSERT_GE(parentChildCount_before, 2UL) << "Parent must have at least 2 children for merge test";
 
-    // 3. Now remove all entries from first leaf to force a merge
-    for (int i = 10; i <= 50; i += 10) {
-        ASSERT_TRUE(intTreeManager_->remove(intRootId_, PropertyValue(static_cast<int64_t>(i)), i));
-    }
+	// 3. Now remove all entries from first leaf to force a merge
+	for (int i = 10; i <= 50; i += 10) {
+		ASSERT_TRUE(intTreeManager_->remove(intRootId_, PropertyValue(static_cast<int64_t>(i)), i));
+	}
 
-    // 4. After removal, the first leaf should be merged with the second
-    // The parent should have one fewer child
-    auto parent_after = dataManager_->getIndex(parentId);
-    ASSERT_EQ(parent_after.getChildCount(), parentChildCount_before - 1)
-        << "Parent should have one less child after merge";
+	// 4. After removal, the first leaf should be merged with the second
+	// The parent should have one fewer child
+	auto parent_after = dataManager_->getIndex(parentId);
+	ASSERT_EQ(parent_after.getChildCount(), parentChildCount_before - 1)
+			<< "Parent should have one less child after merge";
 
-    // 5. Verify the merged node contains the remaining values
-    int64_t remainingLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(static_cast<int64_t>(60)));
-    auto remainingLeaf = dataManager_->getIndex(remainingLeafId);
-    auto entries = remainingLeaf.getAllEntries(dataManager_);
+	// 5. Verify the merged node contains the remaining values
+	int64_t remainingLeafId = intTreeManager_->findLeafNode(intRootId_, PropertyValue(static_cast<int64_t>(60)));
+	auto remainingLeaf = dataManager_->getIndex(remainingLeafId);
+	auto entries = remainingLeaf.getAllEntries(dataManager_);
 
-    // Should have entries for 60, 70, 80, 90, 100
-    ASSERT_EQ(entries.size(), 5) << "Merged leaf should contain all remaining entries";
+	// Should have entries for 60, 70, 80, 90, 100
+	ASSERT_EQ(entries.size(), 5UL) << "Merged leaf should contain all remaining entries";
 
-    // Verify each expected value is present
-    for (int i = 60; i <= 100; i += 10) {
-        bool found = false;
-        for (const auto& entry : entries) {
-            if (std::get<int64_t>(entry.key.getVariant()) == i) {
-                found = true;
-                break;
-            }
-        }
-        ASSERT_TRUE(found) << "Value " << i << " not found in merged leaf";
-    }
+	// Verify each expected value is present
+	for (int i = 60; i <= 100; i += 10) {
+		bool found = false;
+		for (const auto &entry: entries) {
+			if (std::get<int64_t>(entry.key.getVariant()) == i) {
+				found = true;
+				break;
+			}
+		}
+		ASSERT_TRUE(found) << "Value " << i << " not found in merged leaf";
+	}
 }
 
 /**
@@ -440,14 +439,14 @@ TEST_F(IndexTreeManagerTest, RemoveCausesRecursiveMerge) {
 
 	// This setup can be very sensitive to the fanout factor of nodes.
 	// We'll insert and then delete strategically to create the desired state.
-	const int initial_insert_count = 5000;
+	constexpr int initial_insert_count = 5000;
 	for (int i = 0; i < initial_insert_count; ++i) {
 		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(i), i);
 	}
 
 	auto root_before = dataManager_->getIndex(intRootId_);
 	uint8_t height_before = root_before.getLevel();
-	ASSERT_GE(height_before, 2) << "Test requires a tree of at least height 2.";
+	ASSERT_GE(height_before, 2u) << "Test requires a tree of at least height 2.";
 
 	// Now, delete a large chunk of keys from the middle, which tends to cause
 	// many merges and can trigger recursive merges.
@@ -464,11 +463,11 @@ TEST_F(IndexTreeManagerTest, RemoveCausesRecursiveMerge) {
 
 	// The most important check: data integrity. The remaining data should be findable.
 	auto result1 = intTreeManager_->find(intRootId_, PropertyValue(50));
-	ASSERT_EQ(result1.size(), 1);
+	ASSERT_EQ(result1.size(), 1UL);
 	ASSERT_EQ(result1[0], 50);
 
 	auto result2 = intTreeManager_->find(intRootId_, PropertyValue(4900));
-	ASSERT_EQ(result2.size(), 1);
+	ASSERT_EQ(result2.size(), 1UL);
 	ASSERT_EQ(result2[0], 4900);
 
 	// A specific check for a key that was deleted.

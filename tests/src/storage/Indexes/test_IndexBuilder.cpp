@@ -15,9 +15,9 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/Database.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
-#include "graph/storage/FileStorage.hpp"
 
 constexpr size_t BATCH_SIZE = 1000;
 
@@ -132,17 +132,17 @@ TEST_F(IndexBuilderTest, BuildAllIndexes_WithData_Verification) {
 
 	auto personNodes = nodeLabelIndex->findNodes("Person");
 	auto companyNodes = nodeLabelIndex->findNodes("Company");
-	ASSERT_EQ(personNodes.size(), 2);
+	ASSERT_EQ(personNodes.size(), 2u);
 	EXPECT_NE(std::ranges::find(personNodes, 1), personNodes.end());
 	EXPECT_NE(std::ranges::find(personNodes, 2), personNodes.end());
-	ASSERT_EQ(companyNodes.size(), 1);
+	ASSERT_EQ(companyNodes.size(), 1u);
 	EXPECT_EQ(companyNodes[0], 3);
 
 	auto aliceNodes = nodePropertyIndex->findExactMatch("name", std::string("Alice"));
 	auto ageNodes = nodePropertyIndex->findExactMatch("age", 30);
-	ASSERT_EQ(aliceNodes.size(), 1);
+	ASSERT_EQ(aliceNodes.size(), 1u);
 	EXPECT_EQ(aliceNodes[0], 1);
-	ASSERT_EQ(ageNodes.size(), 1);
+	ASSERT_EQ(ageNodes.size(), 1u);
 	EXPECT_EQ(ageNodes[0], 1);
 
 	// Assert: --- Verify Edge Indexes ---
@@ -151,13 +151,13 @@ TEST_F(IndexBuilderTest, BuildAllIndexes_WithData_Verification) {
 
 	auto knowsEdges = edgeLabelIndex->findNodes("KNOWS"); // findNodes is generic
 	auto worksAtEdges = edgeLabelIndex->findNodes("WORKS_AT");
-	ASSERT_EQ(knowsEdges.size(), 1);
+	ASSERT_EQ(knowsEdges.size(), 1u);
 	EXPECT_EQ(knowsEdges[0], 1);
-	ASSERT_EQ(worksAtEdges.size(), 1);
+	ASSERT_EQ(worksAtEdges.size(), 1u);
 	EXPECT_EQ(worksAtEdges[0], 2);
 
 	auto sinceEdges = edgePropertyIndex->findExactMatch("since", 2020);
-	ASSERT_EQ(sinceEdges.size(), 1);
+	ASSERT_EQ(sinceEdges.size(), 1u);
 	EXPECT_EQ(sinceEdges[0], 1);
 
 	// Assert: --- Verify Inactive Entities Are Not Indexed ---
@@ -184,8 +184,8 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_VerifiesIsolation) {
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 	EXPECT_FALSE(nodeLabelIndex->isEmpty());
 	EXPECT_FALSE(nodePropertyIndex->isEmpty());
-	ASSERT_EQ(nodeLabelIndex->findNodes("Person").size(), 2);
-	ASSERT_EQ(nodePropertyIndex->findExactMatch("name", std::string("Alice")).size(), 1);
+	ASSERT_EQ(nodeLabelIndex->findNodes("Person").size(), 2u);
+	ASSERT_EQ(nodePropertyIndex->findExactMatch("name", std::string("Alice")).size(), 1u);
 
 	// Assert: Verify edge indexes are NOT built
 	auto edgeLabelIndex = indexManager->getEdgeIndexManager()->getLabelIndex();
@@ -207,7 +207,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
 	// Assert: Verify "name" property index is built
 	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 	auto aliceNodes = nodePropertyIndex->findExactMatch("name", std::string("Alice"));
-	ASSERT_EQ(aliceNodes.size(), 1);
+	ASSERT_EQ(aliceNodes.size(), 1u);
 	EXPECT_EQ(aliceNodes[0], 1);
 	EXPECT_TRUE(nodePropertyIndex->hasKeyIndexed("name"));
 
@@ -251,7 +251,7 @@ TEST_F(IndexBuilderTest, GetNodeAndEdgeIdRanges) {
 TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 	// Arrange
 	constexpr int64_t numNodes = BATCH_SIZE + 5;
-	for (int i = 1; i <= numNodes; ++i) {
+	for (int64_t i = 1; i <= numNodes; ++i) {
 		graph::Node node(i, "TestNode");
 		dataManager->addNode(node);
 		dataManager->addNodeProperties(i, {{"test_id", i}});
@@ -267,29 +267,29 @@ TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
 
 	// Check the first node
 	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", 1);
-	ASSERT_EQ(firstNodeResult.size(), 1);
+	ASSERT_EQ(firstNodeResult.size(), 1u);
 	EXPECT_EQ(firstNodeResult[0], 1);
 
 	// Check the last node (from the second batch)
 	auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", numNodes);
-	ASSERT_EQ(lastNodeResult.size(), 1);
+	ASSERT_EQ(lastNodeResult.size(), 1u);
 	EXPECT_EQ(lastNodeResult[0], numNodes);
 
 	// Check the total count
 	auto allTestNodes = nodeLabelIndex->findNodes("TestNode");
-	EXPECT_EQ(allTestNodes.size(), numNodes);
+	EXPECT_EQ(allTestNodes.size(), static_cast<size_t>(numNodes));
 }
 
 // Test that specifically tracks batch processing
 TEST_F(IndexBuilderTest, BuildNodeIndexes_BatchProcessingAnalysis) {
 	// Arrange - Use smaller batches for easier debugging
 	constexpr int smallerBatchSize = 100;
-	constexpr int numNodes = smallerBatchSize * 3 + 5; // Multiple batches with remainder
+	constexpr int64_t numNodes = smallerBatchSize * 3 + 5; // Multiple batches with remainder
 
-	for (int i = 1; i <= numNodes; ++i) {
+	for (int64_t i = 1; i <= numNodes; ++i) {
 		graph::Node node(i, "DebugTestNode");
 		dataManager->addNode(node);
-		dataManager->addNodeProperties(i, {{"batch_id", static_cast<int64_t>(i)}});
+		dataManager->addNodeProperties(i, {{"batch_id", i}});
 	}
 	fileStorage->flush();
 
@@ -310,5 +310,5 @@ TEST_F(IndexBuilderTest, BuildNodeIndexes_BatchProcessingAnalysis) {
 	// Log detailed results
 	std::cout << "Expected nodes: " << numNodes << ", Found nodes: " << allTestNodes.size() << std::endl;
 
-	EXPECT_EQ(allTestNodes.size(), numNodes);
+	EXPECT_EQ(allTestNodes.size(), static_cast<size_t>(numNodes));
 }

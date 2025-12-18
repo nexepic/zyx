@@ -122,7 +122,7 @@ TEST_F(SegmentIndexManagerTest, StartsEmpty) {
 	EXPECT_TRUE(indexManager->getEdgeSegmentIndex().empty());
 
 	// Verify lookup returns 0
-	EXPECT_EQ(indexManager->findSegmentForId(static_cast<uint32_t>(graph::EntityType::Node), 100), 0);
+	EXPECT_EQ(indexManager->findSegmentForId(static_cast<uint32_t>(graph::EntityType::Node), 100), 0ULL);
 }
 
 // ============================================================================
@@ -142,7 +142,7 @@ TEST_F(SegmentIndexManagerTest, InsertAndFindSingleSegment) {
 
 	// Verify internal state
 	const auto &idx = indexManager->getNodeSegmentIndex();
-	ASSERT_EQ(idx.size(), 1);
+	ASSERT_EQ(idx.size(), 1UL);
 	EXPECT_EQ(idx[0].startId, 100);
 	EXPECT_EQ(idx[0].endId, 109);
 	EXPECT_EQ(idx[0].segmentOffset, offset);
@@ -151,8 +151,8 @@ TEST_F(SegmentIndexManagerTest, InsertAndFindSingleSegment) {
 	EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset); // Start
 	EXPECT_EQ(indexManager->findSegmentForId(type, 105), offset); // Middle
 	EXPECT_EQ(indexManager->findSegmentForId(type, 109), offset); // End
-	EXPECT_EQ(indexManager->findSegmentForId(type, 99), 0); // Before
-	EXPECT_EQ(indexManager->findSegmentForId(type, 110), 0); // After
+	EXPECT_EQ(indexManager->findSegmentForId(type, 99), 0ULL); // Before
+	EXPECT_EQ(indexManager->findSegmentForId(type, 110), 0ULL); // After
 }
 
 TEST_F(SegmentIndexManagerTest, MaintainSortedOrder) {
@@ -168,7 +168,7 @@ TEST_F(SegmentIndexManagerTest, MaintainSortedOrder) {
 	indexManager->updateSegmentIndex(createHeader(getSegOffset(2), type, 100, 10), -1);
 
 	const auto &idx = indexManager->getNodeSegmentIndex();
-	ASSERT_EQ(idx.size(), 3);
+	ASSERT_EQ(idx.size(), 3UL);
 
 	// Check ordering
 	EXPECT_EQ(idx[0].startId, 0);
@@ -190,7 +190,7 @@ TEST_F(SegmentIndexManagerTest, UpdateExistingSegmentExtent) {
 	indexManager->updateSegmentIndex(h, -1);
 
 	EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset);
-	EXPECT_EQ(indexManager->findSegmentForId(type, 101), 0); // Not used yet
+	EXPECT_EQ(indexManager->findSegmentForId(type, 101), 0ULL); // Not used yet
 
 	// 2. Update Used count (Simulate adding data) -> [100, 109]
 	h.used = 10;
@@ -202,7 +202,7 @@ TEST_F(SegmentIndexManagerTest, UpdateExistingSegmentExtent) {
 
 	// Internal Check
 	const auto &idx = indexManager->getEdgeSegmentIndex();
-	ASSERT_EQ(idx.size(), 1);
+	ASSERT_EQ(idx.size(), 1UL);
 	EXPECT_EQ(idx[0].endId, 109);
 }
 
@@ -223,7 +223,7 @@ TEST_F(SegmentIndexManagerTest, UpdateStartIdMovesIndex) {
 	indexManager->updateSegmentIndex(createHeader(off2, type, 200, 10), -1);
 
 	// Verify Initial Order
-	ASSERT_EQ(indexManager->getNodeSegmentIndex().size(), 2);
+	ASSERT_EQ(indexManager->getNodeSegmentIndex().size(), 2UL);
 	EXPECT_EQ(indexManager->getNodeSegmentIndex()[1].startId, 200);
 
 	// Action: Move off2 from 200 to 100
@@ -233,7 +233,7 @@ TEST_F(SegmentIndexManagerTest, UpdateStartIdMovesIndex) {
 
 	// Verify
 	const auto &list = indexManager->getNodeSegmentIndex();
-	ASSERT_EQ(list.size(), 2);
+	ASSERT_EQ(list.size(), 2UL);
 
 	// Check Sort Order: [0,9], [100,109]
 	EXPECT_EQ(list[0].segmentOffset, off1);
@@ -244,7 +244,7 @@ TEST_F(SegmentIndexManagerTest, UpdateStartIdMovesIndex) {
 	EXPECT_EQ(list[1].endId, 109);
 
 	// Verify Lookups
-	EXPECT_EQ(indexManager->findSegmentForId(type, 205), 0); // Old location empty
+	EXPECT_EQ(indexManager->findSegmentForId(type, 205), 0ULL); // Old location empty
 	EXPECT_EQ(indexManager->findSegmentForId(type, 105), off2); // New location found
 }
 
@@ -265,8 +265,8 @@ TEST_F(SegmentIndexManagerTest, RemoveSegmentIndex) {
 	indexManager->removeSegmentIndex(h);
 
 	// Verify
-	EXPECT_EQ(indexManager->getNodeSegmentIndex().size(), 0);
-	EXPECT_EQ(indexManager->findSegmentForId(type, 505), 0);
+	EXPECT_EQ(indexManager->getNodeSegmentIndex().size(), 0UL);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 505), 0ULL);
 }
 
 // ============================================================================
@@ -335,7 +335,7 @@ TEST_F(SegmentIndexManagerTest, BuildSegmentIndexesFromChain) {
 
 	// 5. Verify Results
 	const auto &list = indexManager->getNodeSegmentIndex();
-	ASSERT_EQ(list.size(), 2);
+	ASSERT_EQ(list.size(), 2UL);
 
 	// Check Segment 1
 	EXPECT_EQ(list[0].startId, 0);
@@ -365,10 +365,10 @@ TEST_F(SegmentIndexManagerTest, LookupWithGaps) {
 	EXPECT_EQ(indexManager->findSegmentForId(type, 25), getSegOffset(1));
 
 	// Gap check
-	EXPECT_EQ(indexManager->findSegmentForId(type, 15), 0);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 15), 0ULL);
 
 	// End check
-	EXPECT_EQ(indexManager->findSegmentForId(type, 30), 0);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 30), 0ULL);
 }
 
 TEST_F(SegmentIndexManagerTest, InvalidTypeThrows) {

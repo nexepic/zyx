@@ -104,7 +104,7 @@ protected:
 	// Helper: Verify chain links locally
 	void verifyChainLinks(uint32_t type, const std::vector<uint64_t> &expectedOffsets) const {
 		if (expectedOffsets.empty()) {
-			EXPECT_EQ(segmentTracker->getChainHead(type), 0);
+			EXPECT_EQ(segmentTracker->getChainHead(type), 0ULL);
 			return;
 		}
 
@@ -120,14 +120,14 @@ protected:
 
 			// Check Prev
 			if (i == 0) {
-				EXPECT_EQ(h.prev_segment_offset, 0);
+				EXPECT_EQ(h.prev_segment_offset, 0ULL);
 			} else {
 				EXPECT_EQ(h.prev_segment_offset, expectedOffsets[i - 1]);
 			}
 
 			// Check Next
 			if (i == expectedOffsets.size() - 1) {
-				EXPECT_EQ(h.next_segment_offset, 0);
+				EXPECT_EQ(h.next_segment_offset, 0ULL);
 			} else {
 				EXPECT_EQ(h.next_segment_offset, expectedOffsets[i + 1]);
 			}
@@ -216,7 +216,7 @@ TEST_F(SpaceManagerTest, ReuseFreeSegmentsStrategy) {
 
 	EXPECT_EQ(h1.next_segment_offset, seg3);
 	EXPECT_EQ(h3.next_segment_offset, seg4);
-	EXPECT_EQ(h4.next_segment_offset, 0);
+	EXPECT_EQ(h4.next_segment_offset, 0ULL);
 }
 
 // =========================================================================
@@ -246,8 +246,8 @@ TEST_F(SpaceManagerTest, Compaction_SparseToDense_IDRemapping) {
 
 	// Verify Result: [A, B, C] packed at 0, 1, 2
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
-	EXPECT_EQ(h.used, 3);
-	EXPECT_EQ(h.inactive_count, 0);
+	EXPECT_EQ(h.used, 3U);
+	EXPECT_EQ(h.inactive_count, 0U);
 
 	// Check content and IDs
 	// Slot 0: "A", ID unchanged (startId + 0)
@@ -281,8 +281,8 @@ TEST_F(SpaceManagerTest, Compaction_FullSegment_NoOp) {
 
 	// Should be untouched
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
-	EXPECT_EQ(h.used, 5);
-	EXPECT_EQ(h.inactive_count, 0);
+	EXPECT_EQ(h.used, 5U);
+	EXPECT_EQ(h.inactive_count, 0U);
 }
 
 TEST_F(SpaceManagerTest, Compaction_AllDeleted_SegmentFreed) {
@@ -304,7 +304,7 @@ TEST_F(SpaceManagerTest, Compaction_AllDeleted_SegmentFreed) {
 	EXPECT_NE(std::ranges::find(freeList, offset), std::ranges::end(freeList));
 
 	// Chain head should be 0 (if it was the only segment)
-	EXPECT_EQ(segmentTracker->getChainHead(type), 0);
+	EXPECT_EQ(segmentTracker->getChainHead(type), 0ULL);
 }
 
 // =========================================================================
@@ -334,8 +334,8 @@ TEST_F(SpaceManagerTest, Merge_CapacityCheck_ShouldNotMerge) {
 
 	// Should FAIL
 	EXPECT_FALSE(result);
-	EXPECT_EQ(segmentTracker->getSegmentHeader(segA).used, 9);
-	EXPECT_EQ(segmentTracker->getSegmentHeader(segB).used, 2);
+	EXPECT_EQ(segmentTracker->getSegmentHeader(segA).used, 9U);
+	EXPECT_EQ(segmentTracker->getSegmentHeader(segB).used, 2U);
 }
 
 TEST_F(SpaceManagerTest, Merge_EndSegmentIntoFrontSegment) {
@@ -365,7 +365,7 @@ TEST_F(SpaceManagerTest, Merge_EndSegmentIntoFrontSegment) {
 
 	// Expectation: SegB merged into SegA. SegB freed.
 	SegmentHeader hA = segmentTracker->getSegmentHeader(segA);
-	EXPECT_EQ(hA.used, 2);
+	EXPECT_EQ(hA.used, 2U);
 
 	// Verify Content in A
 	// Slot 0: Front

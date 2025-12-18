@@ -68,8 +68,8 @@ TEST_F(PersistenceManagerTest, SnapshotCoordination) {
 
 	// Verify snapshot contents
 	EXPECT_FALSE(snapshot.isEmpty());
-	EXPECT_EQ(snapshot.nodes.size(), 1);
-	EXPECT_EQ(snapshot.edges.size(), 1);
+	EXPECT_EQ(snapshot.nodes.size(), 1UL);
+	EXPECT_EQ(snapshot.edges.size(), 1UL);
 	EXPECT_TRUE(snapshot.nodes.contains(1));
 	EXPECT_TRUE(snapshot.edges.contains(2));
 
@@ -123,7 +123,7 @@ TEST_F(PersistenceManagerTest, GetAllDirtyInfos) {
 	// Query all dirty nodes
 	auto allNodes = manager->getAllDirtyInfos<Node>();
 
-	EXPECT_EQ(allNodes.size(), 2);
+	EXPECT_EQ(allNodes.size(), 2UL);
 
 	// Verify IDs present
 	bool has1 = false, has2 = false;

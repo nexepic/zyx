@@ -82,7 +82,7 @@ TEST_F(NodeManagerTest, AddAndGetNodeWithProperties) {
 	EXPECT_EQ(retrievedNode.getId(), node.getId()) << "Retrieved node should have the same ID";
 	EXPECT_EQ(retrievedNode.getLabel(), "Person") << "Retrieved node should have the same label";
 
-	ASSERT_EQ(retrievedProps.size(), 2);
+	ASSERT_EQ(retrievedProps.size(), 2UL);
 	EXPECT_EQ(std::get<std::string>(retrievedProps.at("name").getVariant()), "John")
 			<< "Retrieved node should have the correct name property";
 	EXPECT_EQ(std::get<int64_t>(retrievedProps.at("age").getVariant()), 30)
@@ -111,7 +111,7 @@ TEST_F(NodeManagerTest, UpdateNode) {
 	auto retrievedProps = nodeManager->getProperties(node.getId());
 
 	EXPECT_EQ(retrievedNode.getLabel(), "Employee") << "Node label should be updated";
-	ASSERT_EQ(retrievedProps.size(), 2);
+	ASSERT_EQ(retrievedProps.size(), 2UL);
 	EXPECT_EQ(std::get<std::string>(retrievedProps.at("name").getVariant()), "John Doe")
 			<< "Node name should be updated";
 	EXPECT_EQ(std::get<int64_t>(retrievedProps.at("salary").getVariant()), 50000)
@@ -155,12 +155,12 @@ TEST_F(NodeManagerTest, BatchOperations) {
 
 	// Test getBatch
 	auto retrievedNodes = nodeManager->getBatch(nodeIds);
-	EXPECT_EQ(retrievedNodes.size(), 5) << "Should retrieve all 5 nodes";
+	EXPECT_EQ(retrievedNodes.size(), 5UL) << "Should retrieve all 5 nodes";
 
 	// Test after removing one node
 	nodeManager->remove(nodes[2]);
 	retrievedNodes = nodeManager->getBatch(nodeIds);
-	EXPECT_EQ(retrievedNodes.size(), 4) << "Should retrieve only active nodes";
+	EXPECT_EQ(retrievedNodes.size(), 4UL) << "Should retrieve only active nodes";
 }
 
 // Test property management
@@ -178,7 +178,7 @@ TEST_F(NodeManagerTest, PropertyManagement) {
 
 	// Retrieve and verify properties
 	auto retrievedProps = nodeManager->getProperties(nodeId);
-	ASSERT_EQ(retrievedProps.size(), 4);
+	ASSERT_EQ(retrievedProps.size(), 4UL);
 	EXPECT_EQ(std::get<std::string>(retrievedProps.at("string").getVariant()), "text value");
 	EXPECT_EQ(std::get<int64_t>(retrievedProps.at("integer").getVariant()), 42);
 	EXPECT_DOUBLE_EQ(std::get<double>(retrievedProps.at("double").getVariant()), 3.14);
@@ -190,7 +190,7 @@ TEST_F(NodeManagerTest, PropertyManagement) {
 	auto updatedProps = nodeManager->getProperties(nodeId);
 	EXPECT_EQ(updatedProps.find("string"), updatedProps.end()) << "Property should be removed";
 	EXPECT_NE(updatedProps.find("integer"), updatedProps.end()) << "Other properties should remain";
-	EXPECT_EQ(updatedProps.size(), 3);
+	EXPECT_EQ(updatedProps.size(), 3UL);
 }
 
 // Test node ID allocation

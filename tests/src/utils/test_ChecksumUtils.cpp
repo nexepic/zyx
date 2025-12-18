@@ -22,32 +22,32 @@ protected:
 
 // Test calculateCrc with various inputs
 TEST_F(ChecksumUtilsTest, CalculateCrcEmptyData) {
-    uint32_t result = graph::utils::calculateCrc(nullptr, 0);
-    EXPECT_EQ(result, 0); // CRC of empty data should be zero
+	uint32_t result = graph::utils::calculateCrc(nullptr, 0);
+	EXPECT_EQ(result, 0u); // CRC of empty data should be zero
 }
 
 TEST_F(ChecksumUtilsTest, CalculateCrcSingleByte) {
 	uint8_t data = 0x42;
 	uint32_t result = graph::utils::calculateCrc(&data, sizeof(data));
-	EXPECT_NE(result, 0);
+	EXPECT_NE(result, 0u);
 }
 
 TEST_F(ChecksumUtilsTest, CalculateCrcMultipleBytes) {
 	std::vector<uint8_t> data = {0x01, 0x02, 0x03, 0x04, 0x05};
 	uint32_t result = graph::utils::calculateCrc(data.data(), data.size());
-	EXPECT_NE(result, 0);
+	EXPECT_NE(result, 0u);
 }
 
 TEST_F(ChecksumUtilsTest, CalculateCrcStringData) {
 	const char *testString = "Hello, World!";
 	uint32_t result = graph::utils::calculateCrc(testString, strlen(testString));
-	EXPECT_NE(result, 0);
+	EXPECT_NE(result, 0u);
 }
 
 TEST_F(ChecksumUtilsTest, CalculateCrcLargeData) {
 	std::vector<uint8_t> largeData(1024, 0xAA);
 	uint32_t result = graph::utils::calculateCrc(largeData.data(), largeData.size());
-	EXPECT_NE(result, 0);
+	EXPECT_NE(result, 0u);
 }
 
 TEST_F(ChecksumUtilsTest, CalculateCrcConsistency) {
@@ -69,7 +69,7 @@ TEST_F(ChecksumUtilsTest, CalculateCrcDifferentData) {
 TEST_F(ChecksumUtilsTest, UpdateCrcZeroInitial) {
 	std::vector<uint8_t> data = {0x01, 0x02, 0x03};
 	uint32_t result = graph::utils::updateCrc(0, data.data(), data.size());
-	EXPECT_NE(result, 0);
+	EXPECT_NE(result, 0u);
 }
 
 TEST_F(ChecksumUtilsTest, UpdateCrcNonZeroInitial) {
@@ -80,10 +80,10 @@ TEST_F(ChecksumUtilsTest, UpdateCrcNonZeroInitial) {
 }
 
 TEST_F(ChecksumUtilsTest, UpdateCrcEmptyData) {
-    uint32_t initialCrc = 0x12345678;
-    uint32_t result = graph::utils::updateCrc(initialCrc, nullptr, 0);
-    // zlib crc32 returns 0 when data is nullptr, regardless of initial value
-    EXPECT_EQ(result, 0);
+	uint32_t initialCrc = 0x12345678;
+	uint32_t result = graph::utils::updateCrc(initialCrc, nullptr, 0);
+	// zlib crc32 returns 0 when data is nullptr, regardless of initial value
+	EXPECT_EQ(result, 0u);
 }
 
 TEST_F(ChecksumUtilsTest, UpdateCrcChaining) {
@@ -109,14 +109,14 @@ TEST_F(ChecksumUtilsTest, UpdateCrcMultipleUpdates) {
 	}
 
 	// Should be different from initial value
-	EXPECT_NE(crc, 0);
+	EXPECT_NE(crc, 0u);
 }
 
 // Boundary and edge cases
 TEST_F(ChecksumUtilsTest, CalculateCrcMaxValues) {
 	std::vector<uint8_t> maxData(1, 0xFF);
 	uint32_t result = graph::utils::calculateCrc(maxData.data(), maxData.size());
-	EXPECT_NE(result, 0);
+	EXPECT_NE(result, 0u);
 }
 
 TEST_F(ChecksumUtilsTest, UpdateCrcMaxInitialValue) {

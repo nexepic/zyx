@@ -151,7 +151,7 @@ TEST_F(PropertyManagerTest, NodeEntityProperties) {
 
 	// Get the properties
 	auto retrievedProps = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
-	EXPECT_EQ(retrievedProps.size(), 3) << "Should retrieve 3 properties";
+	EXPECT_EQ(retrievedProps.size(), 3UL) << "Should retrieve 3 properties";
 	EXPECT_EQ(std::get<std::string>(retrievedProps["name"].getVariant()), "John Doe");
 	EXPECT_EQ(std::get<int64_t>(retrievedProps["age"].getVariant()), 30);
 	EXPECT_EQ(std::get<bool>(retrievedProps["active"].getVariant()), true);
@@ -161,8 +161,8 @@ TEST_F(PropertyManagerTest, NodeEntityProperties) {
 
 	// Verify property was removed
 	retrievedProps = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
-	EXPECT_EQ(retrievedProps.size(), 2) << "Should have 2 properties after removal";
-	EXPECT_EQ(retrievedProps.count("age"), 0) << "Age property should be removed";
+	EXPECT_EQ(retrievedProps.size(), 2UL) << "Should have 2 properties after removal";
+	EXPECT_EQ(retrievedProps.count("age"), 0UL) << "Age property should be removed";
 }
 
 // Test adding and retrieving entity properties (Edge)
@@ -176,7 +176,7 @@ TEST_F(PropertyManagerTest, EdgeEntityProperties) {
 
 	// Get the properties
 	auto retrievedProps = propertyManager->getEntityProperties<graph::Edge>(testEdge.getId());
-	EXPECT_EQ(retrievedProps.size(), 2) << "Should retrieve 2 properties";
+	EXPECT_EQ(retrievedProps.size(), 2UL) << "Should retrieve 2 properties";
 	EXPECT_DOUBLE_EQ(std::get<double>(retrievedProps["weight"].getVariant()), 5.5);
 	EXPECT_EQ(std::get<int64_t>(retrievedProps["timestamp"].getVariant()), 1628097645LL);
 }
@@ -207,8 +207,8 @@ TEST_F(PropertyManagerTest, LargePropertyStorage) {
 
 	// Verify property was removed
 	retrievedProps = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
-	EXPECT_EQ(retrievedProps.size(), 4) << "Should have 4 properties after removal";
-	EXPECT_EQ(retrievedProps.count("large_key_2"), 0) << "Removed property should not exist";
+	EXPECT_EQ(retrievedProps.size(), 4UL) << "Should have 4 properties after removal";
+	EXPECT_EQ(retrievedProps.count("large_key_2"), 0UL) << "Removed property should not exist";
 }
 
 // Test error handling and edge cases
@@ -226,5 +226,5 @@ TEST_F(PropertyManagerTest, ErrorHandlingAndEdgeCases) {
 
 	// Verify that the original property is still there
 	auto props = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
-	EXPECT_EQ(props.size(), 1);
+	EXPECT_EQ(props.size(), 1UL);
 }

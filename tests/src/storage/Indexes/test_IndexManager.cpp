@@ -15,9 +15,9 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/Database.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 
 class IndexManagerTest : public ::testing::Test {
 protected:
@@ -51,13 +51,13 @@ protected:
 
 	static bool hasIndex(const std::vector<std::pair<std::string, std::string>> &indexes, const std::string &type,
 						 const std::string &key = "") {
-		return std::any_of(indexes.begin(), indexes.end(),
+		return std::ranges::any_of(indexes,
 						   [&](const auto &pair) { return pair.first == type && pair.second == key; });
 	}
 
-	bool hasIndexListEntry(const std::string& entityType, const std::string& indexType, const std::string& key = "") {
+	bool hasIndexListEntry(const std::string &entityType, const std::string &indexType, const std::string &key = "") {
 		auto indexes = indexManager->listIndexes(entityType);
-		return std::any_of(indexes.begin(), indexes.end(),
+		return std::ranges::any_of(indexes,
 						   [&](const auto &pair) { return pair.first == indexType && pair.second == key; });
 	}
 
@@ -75,7 +75,7 @@ TEST_F(IndexManagerTest, BuildAndDropNodeIndexes) {
 
 	// Assert: Check that both label and property indexes for "name" and "age" were created.
 	auto nodeIndexes = indexManager->listIndexes("node");
-	ASSERT_EQ(nodeIndexes.size(), 3); // label + name + age
+	ASSERT_EQ(nodeIndexes.size(), 3UL); // label + name + age
 	EXPECT_TRUE(hasIndex(nodeIndexes, "label"));
 	EXPECT_TRUE(hasIndex(nodeIndexes, "property", "name"));
 	EXPECT_TRUE(hasIndex(nodeIndexes, "property", "age"));
@@ -83,13 +83,13 @@ TEST_F(IndexManagerTest, BuildAndDropNodeIndexes) {
 	// Act & Assert: Drop the label index and verify it's gone.
 	EXPECT_TRUE(indexManager->dropIndex("node", "label"));
 	nodeIndexes = indexManager->listIndexes("node");
-	ASSERT_EQ(nodeIndexes.size(), 2);
+	ASSERT_EQ(nodeIndexes.size(), 2UL);
 	EXPECT_FALSE(hasIndex(nodeIndexes, "label"));
 
 	// Act & Assert: Drop one property index and verify.
 	EXPECT_TRUE(indexManager->dropIndex("node", "property", "name"));
 	nodeIndexes = indexManager->listIndexes("node");
-	ASSERT_EQ(nodeIndexes.size(), 1);
+	ASSERT_EQ(nodeIndexes.size(), 1UL);
 	EXPECT_FALSE(hasIndex(nodeIndexes, "property", "name"));
 	EXPECT_TRUE(hasIndex(nodeIndexes, "property", "age"));
 
@@ -107,7 +107,7 @@ TEST_F(IndexManagerTest, BuildAndDropSpecificNodePropertyIndex) {
 
 	// Assert: Check that ONLY the specified property index exists.
 	auto nodeIndexes = indexManager->listIndexes("node");
-	ASSERT_EQ(nodeIndexes.size(), 1);
+	ASSERT_EQ(nodeIndexes.size(), 1UL);
 	EXPECT_TRUE(hasIndex(nodeIndexes, "property", key));
 	EXPECT_FALSE(hasIndex(nodeIndexes, "label"));
 	EXPECT_FALSE(hasIndex(nodeIndexes, "property", "age"));
@@ -130,7 +130,7 @@ TEST_F(IndexManagerTest, BuildAndDropEdgeIndexes) {
 
 	// Assert: Check that edge indexes are created.
 	auto edgeIndexes = indexManager->listIndexes("edge");
-	ASSERT_EQ(edgeIndexes.size(), 2); // label + weight
+	ASSERT_EQ(edgeIndexes.size(), 2UL); // label + weight
 	EXPECT_TRUE(hasIndex(edgeIndexes, "label"));
 	EXPECT_TRUE(hasIndex(edgeIndexes, "property", "weight"));
 
@@ -150,51 +150,51 @@ TEST_F(IndexManagerTest, PersistStateNoThrow) {
 }
 
 TEST_F(IndexManagerTest, LiveIndexUpdate_CreateBeforeInsert) {
-    const std::string propertyKey = "salary";
-    const int64_t targetValue = 5000;
-    // Inserting ID 100 into a fresh DB causes the SegmentTracker/FileStorage
-    // to crash due to sparse segment allocation bugs (Entity range out of bounds).
-    const int64_t nodeId = 1;
+	const std::string propertyKey = "salary";
+	constexpr int64_t targetValue = 5000;
+	// Inserting ID 100 into a fresh DB causes the SegmentTracker/FileStorage
+	// to crash due to sparse segment allocation bugs (Entity range out of bounds).
+	constexpr int64_t nodeId = 1;
 
-    // 1. Create the index explicitly BEFORE adding any data with this property.
-    EXPECT_TRUE(indexManager->buildPropertyIndex("node", propertyKey));
-    EXPECT_TRUE(indexManager->hasPropertyIndex("node", propertyKey));
-    EXPECT_TRUE(hasIndexListEntry("node", "property", propertyKey));
+	// 1. Create the index explicitly BEFORE adding any data with this property.
+	EXPECT_TRUE(indexManager->buildPropertyIndex("node", propertyKey));
+	EXPECT_TRUE(indexManager->hasPropertyIndex("node", propertyKey));
+	EXPECT_TRUE(hasIndexListEntry("node", "property", propertyKey));
 	std::cout << "111" << std::endl;
 
-    // 2. Insert Data
-    // Step 2a: Create Node (Triggers onNodeAdded)
-    graph::Node node(nodeId, "Employee");
+	// 2. Insert Data
+	// Step 2a: Create Node (Triggers onNodeAdded)
+	graph::Node node(nodeId, "Employee");
 	std::cout << "222" << std::endl;
-    dataManager->addNode(node);
+	dataManager->addNode(node);
 	std::cout << "333" << std::endl;
 
-    // Step 2b: Add Property (Triggers onNodeUpdated via DataManager snapshot logic)
-    dataManager->addNodeProperties(nodeId, {{propertyKey, targetValue}});
+	// Step 2b: Add Property (Triggers onNodeUpdated via DataManager snapshot logic)
+	dataManager->addNodeProperties(nodeId, {{propertyKey, targetValue}});
 
-    // 3. Verify Memory State (Immediate Query)
-    auto results = indexManager->findNodeIdsByProperty(propertyKey, targetValue);
-    ASSERT_EQ(results.size(), 1) << "Index failed to update in memory immediately after insertion.";
-    EXPECT_EQ(results[0], nodeId);
+	// 3. Verify Memory State (Immediate Query)
+	auto results = indexManager->findNodeIdsByProperty(propertyKey, targetValue);
+	ASSERT_EQ(results.size(), 1UL) << "Index failed to update in memory immediately after insertion.";
+	EXPECT_EQ(results[0], nodeId);
 
-    fileStorage->flush();
+	fileStorage->flush();
 
-    // 4. Simulate Restart
-    database->close();
+	// 4. Simulate Restart
+	database->close();
 
-    // Reopen
-    auto newDatabase = std::make_unique<graph::Database>(testFilePath.string());
-    newDatabase->open();
-    auto newIndexManager = newDatabase->getQueryEngine()->getIndexManager();
+	// Reopen
+	auto newDatabase = std::make_unique<graph::Database>(testFilePath.string());
+	newDatabase->open();
+	auto newIndexManager = newDatabase->getQueryEngine()->getIndexManager();
 
-    // 5. Verify Disk State (Persistence)
-    // Check if the index definition loaded
-    EXPECT_TRUE(newIndexManager->hasPropertyIndex("node", propertyKey));
+	// 5. Verify Disk State (Persistence)
+	// Check if the index definition loaded
+	EXPECT_TRUE(newIndexManager->hasPropertyIndex("node", propertyKey));
 
-    // Check if the data loaded
-    auto reloadedResults = newIndexManager->findNodeIdsByProperty(propertyKey, targetValue);
-    ASSERT_EQ(reloadedResults.size(), 1) << "Index data was not persisted to disk correctly.";
-    EXPECT_EQ(reloadedResults[0], nodeId);
+	// Check if the data loaded
+	auto reloadedResults = newIndexManager->findNodeIdsByProperty(propertyKey, targetValue);
+	ASSERT_EQ(reloadedResults.size(), 1UL) << "Index data was not persisted to disk correctly.";
+	EXPECT_EQ(reloadedResults[0], nodeId);
 }
 
 TEST_F(IndexManagerTest, LiveLabelIndexUpdate) {
@@ -207,7 +207,7 @@ TEST_F(IndexManagerTest, LiveLabelIndexUpdate) {
 
 	// 3. Check Memory
 	auto results = indexManager->findNodeIdsByLabel("LiveLabelTest");
-	ASSERT_EQ(results.size(), 1);
+	ASSERT_EQ(results.size(), 1UL);
 	EXPECT_EQ(results[0], 1);
 
 	// 4. Persistence
@@ -222,7 +222,7 @@ TEST_F(IndexManagerTest, LiveLabelIndexUpdate) {
 
 	// 6. Check Disk
 	auto loadedResults = newIndexMgr->findNodeIdsByLabel("LiveLabelTest");
-	ASSERT_EQ(loadedResults.size(), 1);
+	ASSERT_EQ(loadedResults.size(), 1UL);
 	EXPECT_EQ(loadedResults[0], 1);
 }
 
@@ -239,7 +239,7 @@ TEST_F(IndexManagerTest, LiveIndexUpdate_PropertyRemoval) {
 	dataManager->addNodeProperties(300, {{key, std::string("Pending")}});
 
 	// Verify addition
-	EXPECT_EQ(indexManager->findNodeIdsByProperty(key, std::string("Pending")).size(), 1);
+	EXPECT_EQ(indexManager->findNodeIdsByProperty(key, std::string("Pending")).size(), 1UL);
 
 	// 3. Update Property (Change Value)
 	// DataManager should snapshot old="Pending", new="Done", and notify IndexManager.
@@ -247,7 +247,7 @@ TEST_F(IndexManagerTest, LiveIndexUpdate_PropertyRemoval) {
 
 	// Verify update
 	EXPECT_TRUE(indexManager->findNodeIdsByProperty(key, std::string("Pending")).empty());
-	EXPECT_EQ(indexManager->findNodeIdsByProperty(key, std::string("Done")).size(), 1);
+	EXPECT_EQ(indexManager->findNodeIdsByProperty(key, std::string("Done")).size(), 1UL);
 
 	// 4. Remove Property
 	dataManager->removeNodeProperty(300, key);
@@ -257,54 +257,52 @@ TEST_F(IndexManagerTest, LiveIndexUpdate_PropertyRemoval) {
 }
 
 TEST_F(IndexManagerTest, LiveIndexUpdate_ExistingPropertyModification_WithColdCache) {
-    const std::string key = "rank";
-    const int64_t initialValue = 10;
-    const int64_t updatedValue = 20;
-    const int64_t nodeId = 1; // Use ID 1 to be safe
+	const std::string key = "rank";
+	constexpr int64_t initialValue = 10;
+	constexpr int64_t updatedValue = 20;
+	constexpr int64_t nodeId = 1; // Use ID 1 to be safe
 
-    // 1. Setup Index and Initial Data
-    EXPECT_TRUE(indexManager->buildPropertyIndex("node", key));
+	// 1. Setup Index and Initial Data
+	EXPECT_TRUE(indexManager->buildPropertyIndex("node", key));
 
-    graph::Node node(nodeId, "Player");
-    dataManager->addNode(node);
-    dataManager->addNodeProperties(nodeId, {{key, initialValue}});
+	graph::Node node(nodeId, "Player");
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(nodeId, {{key, initialValue}});
 
-    // Ensure written to disk so we can reload it
-    fileStorage->flush();
+	// Ensure written to disk so we can reload it
+	fileStorage->flush();
 
-    // ================================================================
-    // [CRITICAL STEP] CLEAR CACHE TO SIMULATE "COLD" READ
-    // This forces the next get(nodeId) to load from disk.
-    // If Node uses Lazy Loading for properties, oldNode will be a shell,
-    // and the "Simple Code" will fail because it lazy-loads AFTER the update.
-    // ================================================================
-    fileStorage->clearCache();
+	// ================================================================
+	// [CRITICAL STEP] CLEAR CACHE TO SIMULATE "COLD" READ
+	// This forces the next get(nodeId) to load from disk.
+	// If Node uses Lazy Loading for properties, oldNode will be a shell,
+	// and the "Simple Code" will fail because it lazy-loads AFTER the update.
+	// ================================================================
+	fileStorage->clearCache();
 
-    // 2. UPDATE the existing property
-    // If using the "Simple Code":
-    //   a. oldNode = get(id) -> Returns Node from disk (Properties might be lazy/empty)
-    //   b. update property in DB -> DB is now 20
-    //   c. notify(oldNode, newNode)
-    //   d. IndexManager calls oldNode.getProperties() -> Lazy loads from DB -> Gets 20!
-    //   e. 20 == 20 -> No Index Update -> FAIL.
-    //
-    // If using the "Fixed Code" (Explicit Snapshot):
-    //   a. oldNode = get(id)
-    //   b. existingProps = getProperties(id) -> Explicitly loads 10
-    //   c. oldNode.setProperties(existingProps) -> oldNode is now frozen as 10
-    //   d. update DB -> 20
-    //   e. notify -> 10 vs 20 -> Index Updates -> PASS.
-    dataManager->addNodeProperties(nodeId, {{key, updatedValue}});
+	// 2. UPDATE the existing property
+	// If using the "Simple Code":
+	//   a. oldNode = get(id) -> Returns Node from disk (Properties might be lazy/empty)
+	//   b. update property in DB -> DB is now 20
+	//   c. notify(oldNode, newNode)
+	//   d. IndexManager calls oldNode.getProperties() -> Lazy loads from DB -> Gets 20!
+	//   e. 20 == 20 -> No Index Update -> FAIL.
+	//
+	// If using the "Fixed Code" (Explicit Snapshot):
+	//   a. oldNode = get(id)
+	//   b. existingProps = getProperties(id) -> Explicitly loads 10
+	//   c. oldNode.setProperties(existingProps) -> oldNode is now frozen as 10
+	//   d. update DB -> 20
+	//   e. notify -> 10 vs 20 -> Index Updates -> PASS.
+	dataManager->addNodeProperties(nodeId, {{key, updatedValue}});
 
-    // 3. Verify Update Logic
-    auto oldResults = indexManager->findNodeIdsByProperty(key, initialValue);
-    EXPECT_TRUE(oldResults.empty())
-        << "Bug Detected: Old index entry (10) remains. Snapshot failed.";
+	// 3. Verify Update Logic
+	auto oldResults = indexManager->findNodeIdsByProperty(key, initialValue);
+	EXPECT_TRUE(oldResults.empty()) << "Bug Detected: Old index entry (10) remains. Snapshot failed.";
 
-    auto newResults = indexManager->findNodeIdsByProperty(key, updatedValue);
-    ASSERT_EQ(newResults.size(), 1)
-        << "Bug Detected: New index entry (20) missing. Snapshot failed.";
-    EXPECT_EQ(newResults[0], nodeId);
+	auto newResults = indexManager->findNodeIdsByProperty(key, updatedValue);
+	ASSERT_EQ(newResults.size(), 1UL) << "Bug Detected: New index entry (20) missing. Snapshot failed.";
+	EXPECT_EQ(newResults[0], nodeId);
 }
 
 TEST_F(IndexManagerTest, Isolation_NodeVsEdgeState) {

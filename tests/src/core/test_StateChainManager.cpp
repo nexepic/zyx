@@ -55,7 +55,7 @@ TEST_F(StateChainManagerTest, CreateStateChainSingleChunk) {
 
 	auto chain = stateChainManager->createStateChain(key, data);
 
-	ASSERT_EQ(chain.size(), 1);
+	ASSERT_EQ(chain.size(), 1UL);
 	EXPECT_EQ(chain[0].getKey(), key);
 	EXPECT_EQ(chain[0].getDataAsString(), data);
 	EXPECT_EQ(chain[0].getChainPosition(), 0);
@@ -69,7 +69,7 @@ TEST_F(StateChainManagerTest, CreateStateChainMultipleChunks) {
 
 	auto chain = stateChainManager->createStateChain(key, data);
 
-	ASSERT_EQ(chain.size(), 3);
+	ASSERT_EQ(chain.size(), 3UL);
 
 	EXPECT_EQ(chain[0].getKey(), key);
 	EXPECT_EQ(chain[0].getChainPosition(), 0);
@@ -93,7 +93,7 @@ TEST_F(StateChainManagerTest, CreateStateChainEmptyData) {
 
 	auto chain = stateChainManager->createStateChain(key, data);
 
-	EXPECT_EQ(chain.size(), 0);
+	EXPECT_EQ(chain.size(), 0UL);
 }
 
 TEST_F(StateChainManagerTest, ReadStateChainSingleState) {
@@ -221,7 +221,7 @@ TEST_F(StateChainManagerTest, GetStateChainIds) {
 
 	auto chainIds = stateChainManager->getStateChainIds(headStateId);
 
-	EXPECT_EQ(chainIds.size(), 3);
+	EXPECT_EQ(chainIds.size(), 3UL);
 	EXPECT_EQ(chainIds[0], 12001);
 	EXPECT_EQ(chainIds[1], 12002);
 	EXPECT_EQ(chainIds[2], 12003);
@@ -242,7 +242,7 @@ TEST_F(StateChainManagerTest, GetStateChainIdsBreakOnInactive) {
 
 	auto chainIds = stateChainManager->getStateChainIds(headStateId);
 
-	EXPECT_EQ(chainIds.size(), 1);
+	EXPECT_EQ(chainIds.size(), 1UL);
 	EXPECT_EQ(chainIds[0], 13001);
 }
 
@@ -278,7 +278,7 @@ TEST_F(StateChainManagerTest, UpdateStateChainSameData) {
 
 	const auto result = stateChainManager->updateStateChain(headStateId, testData);
 
-	EXPECT_EQ(result.size(), 1);
+	EXPECT_EQ(result.size(), 1UL);
 	EXPECT_EQ(result[0].getId(), headStateId);
 }
 
@@ -292,7 +292,7 @@ TEST_F(StateChainManagerTest, UpdateStateChainDifferentData) {
 
 	const auto result = stateChainManager->updateStateChain(headStateId, newData);
 
-	EXPECT_EQ(result.size(), 1);
+	EXPECT_EQ(result.size(), 1UL);
 	EXPECT_EQ(result[0].getDataAsString(), newData);
 }
 
@@ -303,7 +303,7 @@ TEST_F(StateChainManagerTest, SplitDataSingleChunk) {
 	const auto chunks = stateChainManager->createStateChain("key", smallData);
 
 	// Verify the internal splitting worked correctly
-	EXPECT_EQ(chunks.size(), 1);
+	EXPECT_EQ(chunks.size(), 1UL);
 }
 
 TEST_F(StateChainManagerTest, SplitDataMultipleChunks) {
@@ -312,10 +312,10 @@ TEST_F(StateChainManagerTest, SplitDataMultipleChunks) {
 
 	const auto chunks = stateChainManager->createStateChain("key", largeData);
 
-	EXPECT_EQ(chunks.size(), 3);
+	EXPECT_EQ(chunks.size(), 3UL);
 
 	// Verify chunk sizes
 	EXPECT_EQ(chunks[0].getSize(), graph::State::CHUNK_SIZE);
 	EXPECT_EQ(chunks[1].getSize(), graph::State::CHUNK_SIZE);
-	EXPECT_EQ(chunks[2].getSize(), 100u);
+	EXPECT_EQ(chunks[2].getSize(), 100UL);
 }

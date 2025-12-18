@@ -89,5 +89,5 @@ TEST_F(RegistryLifecycleTest, EmptyFlushCycle) {
     registry.commitFlush();         // Commit empty
 
     registry.upsert(makeInfo(1, EntityChangeType::ADDED));
-    EXPECT_EQ(registry.size(), 1);
+    EXPECT_EQ(registry.size(), 1UL);
 }
