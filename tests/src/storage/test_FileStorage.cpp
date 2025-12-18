@@ -13,9 +13,9 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <fstream>
-#include <graph/core/Database.hpp>
 #include <gtest/gtest.h>
 #include <zlib.h>
+#include "graph/core/Database.hpp"
 
 class FileStorageTest : public ::testing::Test {
 protected:

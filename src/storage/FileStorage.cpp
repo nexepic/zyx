@@ -12,22 +12,22 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <graph/core/Database.hpp>
-#include <graph/storage/data/EntityTraits.hpp>
 #include <sstream>
 #include <utility>
 #include <zlib.h>
 #include "graph/core/Blob.hpp"
+#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/storage/DatabaseInspector.hpp"
+#include "graph/storage/data/EntityTraits.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
 
-	FileStorage::FileStorage(std::string path, size_t cacheSize) :
-		dbFilePath(std::move(path)), fileStream(nullptr), cacheSize(cacheSize) {}
+	FileStorage::FileStorage(std::string path, size_t cacheSize, OpenMode mode) :
+		dbFilePath(std::move(path)), fileStream(nullptr), cacheSize(cacheSize), openMode_(mode) {}
 
 	FileStorage::~FileStorage() { close(); }
 
@@ -37,32 +37,42 @@ namespace graph::storage {
 
 		bool fileExists = std::filesystem::exists(dbFilePath);
 
-		// Create a new file with header if it doesn't exist
-		if (!fileExists) {
-			// Create and open the file for reading and writing
+		// --- Strict Mode Validation ---
+		if (openMode_ == OpenMode::OPEN_EXISTING && !fileExists) {
+			throw std::runtime_error("Database file does not exist: " + dbFilePath);
+		}
+		if (openMode_ == OpenMode::CREATE_NEW && fileExists) {
+			throw std::runtime_error("Database file already exists: " + dbFilePath);
+		}
+		// ------------------------------------
+
+		// Logic for creating NEW database
+		if (openMode_ == OpenMode::CREATE_NEW || (openMode_ == OpenMode::CREATE_OR_OPEN && !fileExists)) {
+			// Create and open for Read/Write + Truncate (Wipe previous)
 			fileStream = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out |
 																			std::ios::trunc);
+
 			if (!*fileStream) {
-				throw std::runtime_error("Cannot create or open database file");
+				throw std::runtime_error("Cannot create database file: " + dbFilePath);
 			}
 
-			// Initialize file header through FileHeaderManager
 			fileHeaderManager = std::make_shared<FileHeaderManager>(fileStream, fileHeader);
+			// This physically writes the header bytes, creating the "empty" DB file.
 			fileHeaderManager->initializeFileHeader();
-		} else {
-			// Open file for reading and writing
+		}
+		// Logic for OPENING existing database
+		else {
 			fileStream = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
+
 			if (!*fileStream) {
-				throw std::runtime_error("Cannot open database file");
+				throw std::runtime_error("Cannot open database file: " + dbFilePath);
 			}
 
-			// Validate and read header
 			fileHeaderManager = std::make_shared<FileHeaderManager>(fileStream, fileHeader);
 			fileHeaderManager->validateAndReadHeader();
 		}
-		// Initialize components
-		initializeComponents();
 
+		initializeComponents();
 		isFileOpen = true;
 	}
 
@@ -428,7 +438,8 @@ namespace graph::storage {
 		}
 
 		if (segmentOffset == 0) {
-			throw std::runtime_error("Cannot update entity: entity not found via index lookup. ID: " + std::to_string(id));
+			throw std::runtime_error("Cannot update entity: entity not found via index lookup. ID: " +
+									 std::to_string(id));
 		}
 
 		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
@@ -439,8 +450,8 @@ namespace graph::storage {
 		if (entityIndex >= header.capacity) {
 			std::stringstream ss;
 			ss << "Entity index out of bounds for segment. "
-			   << "ID: " << id << ", StartID: " << header.start_id
-			   << ", Index: " << entityIndex << ", Capacity: " << header.capacity;
+			   << "ID: " << id << ", StartID: " << header.start_id << ", Index: " << entityIndex
+			   << ", Capacity: " << header.capacity;
 			throw std::runtime_error(ss.str());
 		}
 

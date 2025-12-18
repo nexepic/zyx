@@ -8,34 +8,36 @@
  *
  **/
 
+#include "graph/storage/DatabaseInspector.hpp"
 #include <fstream>
-#include <graph/storage/DatabaseInspector.hpp>
-#include <graph/storage/StorageHeaders.hpp>
-#include <graph/utils/TableFormatter.hpp>
 #include <iostream>
 #include <sstream>
+#include "graph/storage/StorageHeaders.hpp"
+#include "graph/utils/TableFormatter.hpp"
 
 namespace graph::storage {
 
 	DatabaseInspector::DatabaseInspector(const FileHeader &fileHeader, std::shared_ptr<std::fstream> &file,
 										 DataManager &dataManager) :
-		fileHeader(fileHeader), file(file), dataManager_(dataManager){};
+		fileHeader(fileHeader), file(file), dataManager_(dataManager) {};
 
 	DatabaseInspector::~DatabaseInspector() = default;
 
-	std::string propertyValueToString(const PropertyValue& value) {
-		return std::visit([](const auto& arg) -> std::string {
-			using T = std::decay_t<decltype(arg)>;
-			if constexpr (std::is_same_v<T, std::monostate>) {
-				return "null";
-			} else if constexpr (std::is_same_v<T, bool>) {
-				return arg ? "true" : "false";
-			} else if constexpr (std::is_same_v<T, std::string>) {
-				return "\"" + arg + "\"";
-			} else { // Catches int64_t and double
-				return std::to_string(arg);
-			}
-		}, value.getVariant());
+	std::string propertyValueToString(const PropertyValue &value) {
+		return std::visit(
+				[](const auto &arg) -> std::string {
+					using T = std::decay_t<decltype(arg)>;
+					if constexpr (std::is_same_v<T, std::monostate>) {
+						return "null";
+					} else if constexpr (std::is_same_v<T, bool>) {
+						return arg ? "true" : "false";
+					} else if constexpr (std::is_same_v<T, std::string>) {
+						return "\"" + arg + "\"";
+					} else { // Catches int64_t and double
+						return std::to_string(arg);
+					}
+				},
+				value.getVariant());
 	}
 
 	void DatabaseInspector::displayDatabaseStructure() const {
@@ -170,7 +172,7 @@ namespace graph::storage {
 						auto properties = dataManager_.getNodeProperties(node.getId());
 
 						// Add Attribute data to the table
-						for (const auto &[key, value] : properties) {
+						for (const auto &[key, value]: properties) {
 							// Use the simplified helper function
 							std::string valueStr = propertyValueToString(value);
 							std::string preview = (valueStr.length() > 50) ? valueStr.substr(0, 47) + "..." : valueStr;
@@ -303,7 +305,7 @@ namespace graph::storage {
 						auto properties = dataManager_.getEdgeProperties(edge.getId());
 
 						// Add Attribute data to the table
-						for (const auto &[key, value] : properties) {
+						for (const auto &[key, value]: properties) {
 							// Use the simplified helper function
 							std::string valueStr = propertyValueToString(value);
 							std::string preview = (valueStr.length() > 50) ? valueStr.substr(0, 47) + "..." : valueStr;

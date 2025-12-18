@@ -9,7 +9,7 @@
  **/
 
 #include "graph/core/Property.hpp"
-#include <graph/storage/IDAllocator.hpp>
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph {

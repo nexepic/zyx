@@ -9,8 +9,8 @@
  **/
 
 #include "graph/cli/CommandLineInterface.hpp"
-#include <iostream>
 #include <filesystem>
+#include <iostream>
 #include "graph/cli/CLI11.hpp"
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
@@ -18,85 +18,111 @@
 
 namespace graph::cli {
 
-    CommandLineInterface::CommandLineInterface() = default;
+	CommandLineInterface::CommandLineInterface() = default;
 
-    int CommandLineInterface::run(const int argc, char** argv) {
-        CLI::App app{"Metrix Database CLI"};
+	int CommandLineInterface::run(const int argc, char **argv) {
+		CLI::App app{"Metrix Database CLI"};
 
-        // Prevent CLI11 from parsing automatically on destruction or throwing exit exceptions
-        // We want to handle return codes manually for testing.
-        app.set_help_all_flag("--help-all", "Expand all help");
+		// Prevent CLI11 from parsing automatically on destruction or throwing exit exceptions
+		// We want to handle return codes manually for testing.
+		app.set_help_all_flag("--help-all", "Expand all help");
 
 		const auto database = app.add_subcommand("database", "Database operations");
-        std::string dbPath;
+		std::string dbPath;
 
-        // --- 1. Create (Interactive) ---
+		// --- 1. Create (Interactive) ---
 		const auto createCmd = database->add_subcommand("create", "Create and open a new database interactively");
-        createCmd->add_option("path", dbPath, "Database directory path")->required();
-        createCmd->callback([&]() {
-            Database db(dbPath);
-            log::Log::info("Database initialized at: ", dbPath);
-            const REPL repl(db);
-            repl.run(); // Blocks until exit
-        });
+		createCmd->add_option("path", dbPath, "Database directory path")->required();
+		createCmd->callback([&]() {
+			try {
+				Database db(dbPath, storage::OpenMode::CREATE_NEW);
 
-        // --- 2. Open (Interactive) ---
+				// Actual creation happens here (when file header is initialized)
+				// If file exists, db.open() (called inside REPL or manually) will throw.
+				// Since REPL constructor might not call open, we should call open() explicitly to trigger the check.
+				db.open();
+
+				log::Log::info("Database initialized at: ", dbPath);
+				const REPL repl(db);
+				repl.run();
+			} catch (const std::exception &e) {
+				std::cerr << "Error: " << e.what() << std::endl;
+				// Don't swallow error, maybe exit(1) or let exception propagate if not handled here
+			}
+		});
+
+		// --- 2. Open (Interactive) ---
 		const auto openCmd = database->add_subcommand("open", "Open an existing database interactively");
-        openCmd->add_option("path", dbPath, "Database directory path")->required();
-        openCmd->callback([&]() {
-            Database db(dbPath);
-            db.open();
-            const REPL repl(db);
-            repl.run(); // Blocks until exit
-            db.close();
-        });
+		openCmd->add_option("path", dbPath, "Database directory path")->required();
 
-        // --- 3. Exec (Script Mode - Testable) ---
-        std::string scriptPath;
+		// Optional flag: Allow creation if missing via explicit flag
+		bool createIfMissing = false;
+		openCmd->add_flag("-c,--create-if-missing", createIfMissing, "Create database if it does not exist");
+
+		openCmd->callback([&]() {
+			try {
+				auto mode = createIfMissing ? storage::OpenMode::CREATE_OR_OPEN : storage::OpenMode::OPEN_EXISTING;
+
+				Database db(dbPath, mode);
+				db.open(); // Will throw if OPEN_EXISTING and file missing
+
+				const REPL repl(db);
+				repl.run();
+				db.close();
+			} catch (const std::exception &e) {
+				std::cerr << "Error: " << e.what() << std::endl;
+			}
+		});
+
+		// --- 3. Exec (Script Mode - Testable) ---
+		std::string scriptPath;
 		const auto execCmd = database->add_subcommand("exec", "Execute a Cypher script and exit");
-        execCmd->add_option("path", dbPath, "Database directory path")->required();
-        execCmd->add_option("script", scriptPath, "Path to .cypher script")->required();
+		execCmd->add_option("path", dbPath, "Database directory path")->required();
+		execCmd->add_option("script", scriptPath, "Path to .cypher script")->required();
 
-        execCmd->callback([&]() {
-            if (!std::filesystem::exists(scriptPath)) {
-                throw std::runtime_error("Script file not found: " + scriptPath);
-            }
+		execCmd->callback([&]() {
+			if (!std::filesystem::exists(scriptPath)) {
+				throw std::runtime_error("Script file not found: " + scriptPath);
+			}
 
-            Database db(dbPath);
-            db.open(); // Will create if not exists or open if exists
+			try {
+				Database db(dbPath, graph::storage::OpenMode::CREATE_OR_OPEN);
+				db.open();
 
-			const REPL repl(db);
-            // Non-blocking execution
-            repl.runScript(scriptPath);
+				const REPL repl(db);
+				repl.runScript(scriptPath);
 
-            if (auto storage = db.getStorage()) {
-                storage->flush();
-            }
-            db.close();
-        });
+				if (auto storage = db.getStorage()) {
+					storage->flush();
+				}
+				db.close();
+			} catch (const std::exception &e) {
+				std::cerr << "Execution Error: " << e.what() << std::endl;
+			}
+		});
 
-        // --- Boilerplate ---
-        database->callback([&]() {
-            if (database->get_subcommands().empty()) {
-                throw CLI::CallForHelp();
-            }
-        });
+		// --- Boilerplate ---
+		database->callback([&]() {
+			if (database->get_subcommands().empty()) {
+				throw CLI::CallForHelp();
+			}
+		});
 
-        app.require_subcommand(0, 1);
+		app.require_subcommand(1, 1);
 
-        try {
-            app.parse(argc, argv);
-        } catch (const CLI::CallForHelp& e) {
-            // output help is not an error
-            return app.exit(e);
-        } catch (const CLI::ParseError& e) {
-            return app.exit(e);
-        } catch (const std::exception& e) {
-            std::cerr << "Runtime Error: " << e.what() << std::endl;
-            return 1;
-        }
+		try {
+			app.parse(argc, argv);
+		} catch (const CLI::CallForHelp &e) {
+			// output help is not an error
+			return app.exit(e);
+		} catch (const CLI::ParseError &e) {
+			return app.exit(e);
+		} catch (const std::exception &e) {
+			std::cerr << "Runtime Error: " << e.what() << std::endl;
+			return 1;
+		}
 
-        return 0;
-    }
+		return 0;
+	}
 
 } // namespace graph::cli

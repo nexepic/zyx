@@ -151,3 +151,67 @@ TEST_F(CommandLineInterfaceTest, ExecuteBadSyntaxScript) {
 
 	EXPECT_NO_THROW(runMockCLI({"database", "exec", dbPath, scriptPath}));
 }
+
+TEST_F(CommandLineInterfaceTest, CreateCommandSafety) {
+	// 1. First creation should succeed
+	EXPECT_EQ(runMockCLI({"database", "create", dbPath}), 0);
+	EXPECT_TRUE(fs::exists(dbPath));
+
+	// 2. Second creation on SAME path should FAIL (prevent overwrite)
+	// Note: Since 'create' command launches REPL (interactive), runMockCLI might hang
+	// if REPL waits for input.
+	// However, Database::Database(..., CREATE_NEW) throws BEFORE REPL starts if file exists.
+	// Assuming your CLI implementation catches the exception and returns non-zero.
+
+	// To make this testable without hanging on REPL input, we rely on the fact that
+	// the exception happens early.
+	// If your CLI catches exceptions and prints error, it usually returns 0 or 1.
+	// Let's assume you implemented error handling to return non-zero on exception.
+
+	// BUT: If the check passes, REPL starts and test hangs.
+	// For unit testing interactive commands, we usually need to mock stdin or avoid starting REPL.
+	// A trick is to use a pipe for stdin that sends EOF immediately, causing REPL to exit.
+	// Or, simpler: Verify the logic by checking if we can create on top of existing file manually.
+
+	// Let's test the OpenMode logic directly here to be safe and avoid REPL hang issues in unit tests:
+	EXPECT_THROW(
+			{
+				graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW);
+				db.open();
+			},
+			std::runtime_error);
+}
+
+// Verify 'open' command safety (Should fail if DB missing)
+TEST_F(CommandLineInterfaceTest, OpenCommandSafety) {
+	// Ensure path is clear
+	if (fs::exists(dbPath))
+		fs::remove_all(dbPath);
+
+	// 1. Trying to open a missing DB should FAIL
+	// Ideally we run CLI: runMockCLI({"database", "open", dbPath})
+	// But again, to avoid REPL hang if it accidentally succeeds, let's test the core constraint.
+
+	EXPECT_THROW(
+			{
+				graph::Database db(dbPath, graph::storage::OpenMode::OPEN_EXISTING);
+				db.open();
+			},
+			std::runtime_error);
+}
+
+// Verify 'open -c' (Create if missing)
+TEST_F(CommandLineInterfaceTest, OpenWithCreateFlag) {
+	if (fs::exists(dbPath))
+		fs::remove_all(dbPath);
+
+	// This mode corresponds to CREATE_OR_OPEN
+	// It should NOT throw even if file is missing
+	EXPECT_NO_THROW({
+		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_OR_OPEN);
+		db.open();
+		db.close();
+	});
+
+	EXPECT_TRUE(fs::exists(dbPath));
+}

@@ -12,9 +12,9 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
-#include <graph/core/Database.hpp>
-#include <graph/query/algorithm/GraphAlgorithm.hpp>
 #include <gtest/gtest.h>
+#include "graph/core/Database.hpp"
+#include "graph/query/algorithm/GraphAlgorithm.hpp"
 
 class GraphAlgorithmTest : public ::testing::Test {
 protected:
@@ -274,8 +274,7 @@ TEST_F(GraphAlgorithmTest, FindConnectedNodesWithEdgeLabel) {
 	auto labeledEdge = graph::Edge(0, node6.getId(), node7.getId(), "special_edge");
 	dataManager->addEdge(labeledEdge);
 
-	std::vector<graph::Node> connectedNodes =
-			algo->findConnectedNodes(node6.getId(), "outgoing", "special_edge");
+	std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node6.getId(), "outgoing", "special_edge");
 
 	ASSERT_EQ(connectedNodes.size(), 1u);
 	EXPECT_EQ(connectedNodes[0].getId(), node7.getId());
@@ -286,8 +285,7 @@ TEST_F(GraphAlgorithmTest, FindConnectedNodesWithNodeLabel) {
 	const graph::Node labeledNode2(node2.getId(), "special_node");
 	dataManager->updateNode(labeledNode2);
 
-	std::vector<graph::Node> connectedNodes =
-			algo->findConnectedNodes(node1.getId(), "outgoing", "", "special_node");
+	std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node1.getId(), "outgoing", "", "special_node");
 
 	ASSERT_EQ(connectedNodes.size(), 1u);
 	EXPECT_EQ(connectedNodes[0].getId(), node2.getId());
@@ -332,8 +330,7 @@ TEST_F(GraphAlgorithmTest, FindConnectedNodesNonexistentNodeLabel) {
 
 TEST_F(GraphAlgorithmTest, FindConnectedNodesInvalidDirection) {
 	// Test with invalid direction parameter
-	const std::vector<graph::Node> connectedNodes =
-			algo->findConnectedNodes(node1.getId(), "invalid_direction");
+	const std::vector<graph::Node> connectedNodes = algo->findConnectedNodes(node1.getId(), "invalid_direction");
 
 	// Should return empty result for invalid direction
 	EXPECT_TRUE(connectedNodes.empty());

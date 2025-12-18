@@ -18,6 +18,7 @@
 #include "IDAllocator.hpp"
 #include "IStorageEventListener.hpp"
 #include "StorageHeaders.hpp"
+#include "StorageTypes.hpp"
 #include "data/DataManager.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
@@ -27,7 +28,7 @@ namespace graph::storage {
 
 	class FileStorage {
 	public:
-		explicit FileStorage(std::string path, size_t cacheSize = 10000);
+		FileStorage(std::string path, size_t cacheSize, OpenMode mode = OpenMode::CREATE_OR_OPEN);
 		~FileStorage();
 
 		void open();
@@ -122,6 +123,8 @@ namespace graph::storage {
 
 		// cacheSize
 		size_t cacheSize;
+
+		OpenMode openMode_;
 
 		std::shared_ptr<IDAllocator> idAllocator;
 

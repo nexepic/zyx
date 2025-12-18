@@ -10,7 +10,7 @@
 
 #include "graph/storage/indexes/LabelIndex.hpp"
 #include <algorithm>
-#include <graph/storage/IDAllocator.hpp>
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"

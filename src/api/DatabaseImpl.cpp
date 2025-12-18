@@ -8,11 +8,6 @@
  *
  **/
 
-/**
- * @file DatabaseImpl.cpp
- * @brief Implementation of the Public API bridge.
- */
-
 #include "metrix/metrix.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/core/Property.hpp"
@@ -92,7 +87,8 @@ namespace metrix {
 
     class DatabaseImpl {
     public:
-        DatabaseImpl(const std::string& path) : db_(path) {}
+        DatabaseImpl(const std::string& path, graph::storage::OpenMode mode)
+            : db_(path, mode) {}
 
         // The internal engine instance
         graph::Database db_;
@@ -100,8 +96,8 @@ namespace metrix {
 
     // --- Database Method Implementations ---
 
-    Database::Database(const std::string& path)
-        : impl_(std::make_unique<DatabaseImpl>(path)) {}
+	Database::Database(const std::string& path)
+		: impl_(std::make_unique<DatabaseImpl>(path, graph::storage::OpenMode::CREATE_OR_OPEN)) {}
 
     // [CRITICAL] The destructor is implemented HERE, where DatabaseImpl is fully defined.
     // This allows unique_ptr to correctly call delete on DatabaseImpl.

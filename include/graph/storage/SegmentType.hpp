@@ -10,7 +10,7 @@
 
 #pragma once
 #include <cstdint>
-#include <graph/core/Types.hpp>
+#include "graph/core/Types.hpp"
 
 namespace graph::storage {
 

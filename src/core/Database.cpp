@@ -13,8 +13,8 @@
 
 namespace graph {
 
-	Database::Database(const std::string &dbPath, size_t cacheSize) : dbPath(dbPath) {
-		storage = std::make_shared<storage::FileStorage>(dbPath, cacheSize);
+	Database::Database(const std::string &dbPath, storage::OpenMode mode, size_t cacheSize) : dbPath(dbPath) {
+		storage = std::make_shared<storage::FileStorage>(dbPath, cacheSize, mode);
 	}
 
 	Database::~Database() { close(); }

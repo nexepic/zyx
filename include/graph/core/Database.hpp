@@ -21,7 +21,8 @@ namespace graph {
 
 	class Database {
 	public:
-		explicit Database(const std::string &dbPath, size_t cacheSize = 10000);
+		explicit Database(const std::string &dbPath, storage::OpenMode mode = storage::OpenMode::CREATE_OR_OPEN,
+						  size_t cacheSize = 10000);
 		~Database();
 
 		void open();

@@ -10,8 +10,8 @@
 
 #include "graph/storage/FileHeaderManager.hpp"
 #include <cstring>
-#include <graph/storage/SegmentType.hpp>
 #include <stdexcept>
+#include "graph/storage/SegmentType.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
