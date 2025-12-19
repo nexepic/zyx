@@ -401,22 +401,83 @@ namespace graph::parser::cypher {
 		return std::any();
 	}
 
-	std::any CypherToPlanVisitor::visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) {
+	// ========================================================================
+	// CREATE INDEX
+	// ========================================================================
+	std::any CypherToPlanVisitor::visitCreateIndexByPattern(CypherParser::CreateIndexByPatternContext *ctx) {
+		// Syntax: CREATE INDEX [name] FOR (n:Label) ON (n.prop)
+
+		// 1. Name (Optional)
+		std::string name = "";
+		if (ctx->symbolicName()) {
+			name = ctx->symbolicName()->getText();
+		}
+
+		// 2. Label (From Pattern)
+		std::string label;
+		auto pat = ctx->nodePattern();
+		if (pat->nodeLabels() && !pat->nodeLabels()->nodeLabel().empty()) {
+			label = extractLabelFromNodeLabel(pat->nodeLabels()->nodeLabel(0));
+		} else {
+			throw std::runtime_error("CREATE INDEX pattern must specify a Label (e.g. :User)");
+		}
+
+		// 3. Property
+		std::string prop = extractPropertyKeyFromExpr(ctx->propertyExpression());
+
+		chainOperator(planner_->createIndexOp(name, label, prop));
+		return std::any();
+	}
+
+	std::string CypherToPlanVisitor::extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext *ctx) {
+		if (!ctx)
+			return "";
+
+		// propertyExpression -> atom (DOT propertyKeyName)*
+
+		// Case A: n.age
+		if (!ctx->propertyKeyName().empty()) {
+			// Return the last part (the key)
+			return ctx->propertyKeyName().back()->getText();
+		}
+
+		// Case B: age (legacy or simplified syntax)
+		// If no DOTs, the key is inside the atom (variable)
+		return ctx->atom()->getText();
+	}
+
+	std::any CypherToPlanVisitor::visitCreateIndexByLabel(CypherParser::CreateIndexByLabelContext *ctx) {
+		// Syntax: CREATE INDEX [name] ON :Label(prop)
+		std::string name = "";
+		if (ctx->symbolicName()) {
+			name = ctx->symbolicName()->getText();
+		}
+
+		std::string label = extractLabelFromNodeLabel(ctx->nodeLabel());
+
+		std::string prop = ctx->propertyKeyName()->getText();
+
+		chainOperator(planner_->createIndexOp(name, label, prop));
+		return std::any();
+	}
+
+	// ========================================================================
+	// DROP INDEX
+	// ========================================================================
+	std::any CypherToPlanVisitor::visitDropIndexByName(CypherParser::DropIndexByNameContext *ctx) {
+		// Syntax: DROP INDEX name
+		std::string name = ctx->symbolicName()->getText();
+		chainOperator(planner_->dropIndexOp(name));
+		return std::any();
+	}
+
+	std::any CypherToPlanVisitor::visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) {
+		// Syntax: DROP INDEX ON :Label(prop)
 		std::string label = extractLabelFromNodeLabel(ctx->nodeLabel());
 
 		std::string prop = ctx->propertyKeyName()->getText();
 
 		chainOperator(planner_->dropIndexOp(label, prop));
-		return std::any();
-	}
-
-	std::any CypherToPlanVisitor::visitCreateIndexStatement(CypherParser::CreateIndexStatementContext *ctx) {
-
-		std::string label = extractLabelFromNodeLabel(ctx->nodeLabel());
-
-		std::string prop = ctx->propertyKeyName()->getText();
-
-		chainOperator(planner_->createIndexOp(label, prop));
 		return std::any();
 	}
 
@@ -499,88 +560,90 @@ namespace graph::parser::cypher {
 	}
 
 	// --- DELETE ---
-    std::any CypherToPlanVisitor::visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) {
-        // Grammar: DETACH? DELETE expression (COMMA expression)*
+	std::any CypherToPlanVisitor::visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) {
+		// Grammar: DETACH? DELETE expression (COMMA expression)*
 
-        bool detach = (ctx->K_DETACH() != nullptr);
-        std::vector<std::string> vars;
+		bool detach = (ctx->K_DETACH() != nullptr);
+		std::vector<std::string> vars;
 
-        for (auto expr : ctx->expression()) {
-            // Simplified: Expect expression to be a variable name (Atom -> Variable)
-            // Need to extract text.
-            // For now, getText() is a reasonable approximation for variable names.
-            vars.push_back(expr->getText());
-        }
+		for (auto expr: ctx->expression()) {
+			// Simplified: Expect expression to be a variable name (Atom -> Variable)
+			// Need to extract text.
+			// For now, getText() is a reasonable approximation for variable names.
+			vars.push_back(expr->getText());
+		}
 
-        if (!rootOp_) {
-            throw std::runtime_error("DELETE cannot be the start of a query. Use MATCH first.");
-        }
+		if (!rootOp_) {
+			throw std::runtime_error("DELETE cannot be the start of a query. Use MATCH first.");
+		}
 
-        rootOp_ = planner_->deleteOp(std::move(rootOp_), vars, detach);
-        return std::any();
-    }
+		rootOp_ = planner_->deleteOp(std::move(rootOp_), vars, detach);
+		return std::any();
+	}
 
-    // --- SET ---
-    std::any CypherToPlanVisitor::visitSetStatement(CypherParser::SetStatementContext *ctx) {
-        // Grammar: SET setItem (COMMA setItem)*
+	// --- SET ---
+	std::any CypherToPlanVisitor::visitSetStatement(CypherParser::SetStatementContext *ctx) {
+		// Grammar: SET setItem (COMMA setItem)*
 
-        std::vector<query::execution::operators::SetItem> items;
+		std::vector<query::execution::operators::SetItem> items;
 
-        for (auto item : ctx->setItem()) {
-            // Grammar: propertyExpression EQ expression
-            if (item->propertyExpression() && item->EQ()) {
-                auto propExpr = item->propertyExpression();
+		for (auto item: ctx->setItem()) {
+			// Grammar: propertyExpression EQ expression
+			if (item->propertyExpression() && item->EQ()) {
+				auto propExpr = item->propertyExpression();
 
-                // Extract Variable and Key
-                // propertyExpression -> atom (DOT key)+
-                std::string varName = propExpr->atom()->getText();
-                std::string keyName = propExpr->propertyKeyName(0)->getText(); // Assume 1 dot for now
+				// Extract Variable and Key
+				// propertyExpression -> atom (DOT key)+
+				std::string varName = propExpr->atom()->getText();
+				std::string keyName = propExpr->propertyKeyName(0)->getText(); // Assume 1 dot for now
 
-                // Extract Value
-                // expression -> ... -> literal
-                // Using helper function logic here
-                // Note: We need to parse expression properly.
-                // For simplicity, we assume the RHS is a literal.
-                auto expr = item->expression();
+				// Extract Value
+				// expression -> ... -> literal
+				// Using helper function logic here
+				// Note: We need to parse expression properly.
+				// For simplicity, we assume the RHS is a literal.
+				auto expr = item->expression();
 
-                // Hacky way to get literal from expression tree without full visitor
-                // In production, use ExpressionVisitor.
-                // Here we assume expression text is parseable (e.g. "10", "'string'")
-                // Or try to find the literal context.
+				// Hacky way to get literal from expression tree without full visitor
+				// In production, use ExpressionVisitor.
+				// Here we assume expression text is parseable (e.g. "10", "'string'")
+				// Or try to find the literal context.
 
-                // Let's try to extract literal text and parse it
-                std::string valText = expr->getText();
-                graph::PropertyValue val;
+				// Let's try to extract literal text and parse it
+				std::string valText = expr->getText();
+				graph::PropertyValue val;
 
-                if (valText.front() == '\'' || valText.front() == '"') {
-                    val = graph::PropertyValue(valText.substr(1, valText.length()-2));
-                } else if (valText == "TRUE" || valText == "true") {
-                    val = graph::PropertyValue(true);
-                } else if (valText == "FALSE" || valText == "false") {
-                    val = graph::PropertyValue(false);
-                } else {
-                    try {
-                        val = graph::PropertyValue(std::stoll(valText));
-                    } catch(...) {
-                         // Double?
-                         try { val = graph::PropertyValue(std::stod(valText)); }
-                         catch(...) { throw std::runtime_error("Unsupported SET value format: " + valText); }
-                    }
-                }
+				if (valText.front() == '\'' || valText.front() == '"') {
+					val = graph::PropertyValue(valText.substr(1, valText.length() - 2));
+				} else if (valText == "TRUE" || valText == "true") {
+					val = graph::PropertyValue(true);
+				} else if (valText == "FALSE" || valText == "false") {
+					val = graph::PropertyValue(false);
+				} else {
+					try {
+						val = graph::PropertyValue(std::stoll(valText));
+					} catch (...) {
+						// Double?
+						try {
+							val = graph::PropertyValue(std::stod(valText));
+						} catch (...) {
+							throw std::runtime_error("Unsupported SET value format: " + valText);
+						}
+					}
+				}
 
-                items.push_back({varName, keyName, val});
-            }
-            else {
-                throw std::runtime_error("Only SET n.prop = val is currently supported.");
-            }
-        }
+				items.push_back({varName, keyName, val});
+			} else {
+				throw std::runtime_error("Only SET n.prop = val is currently supported.");
+			}
+		}
 
-        if (!rootOp_) {
-            throw std::runtime_error("SET cannot be the start of a query.");
-        }
+		if (!rootOp_) {
+			throw std::runtime_error("SET cannot be the start of a query.");
+		}
 
-        rootOp_ = planner_->setOp(std::move(rootOp_), items);
-        return std::any();
-    }
+		rootOp_ = planner_->setOp(std::move(rootOp_), items);
+		return std::any();
+	}
 
 } // namespace graph::parser::cypher

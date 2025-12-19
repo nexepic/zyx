@@ -33,7 +33,8 @@ protected:
 				std::filesystem::temp_directory_path() / ("test_cypher_" + boost::uuids::to_string(uuid) + ".dat");
 
 		// Clean up previous artifacts if any
-		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
+		if (fs::exists(testFilePath))
+			fs::remove_all(testFilePath);
 
 		// Initialize Database
 		db = std::make_unique<graph::Database>(testFilePath.string());
@@ -51,9 +52,7 @@ protected:
 	}
 
 	// Helper to execute Cypher and return result
-	graph::query::QueryResult execute(const std::string &query) const {
-        return db->getQueryEngine()->execute(query);
-    }
+	graph::query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
 };
 
 // ============================================================================
@@ -82,7 +81,7 @@ TEST_F(CypherTest, CreateAndMatchNode) {
 
 TEST_F(CypherTest, CreateAndMatchChain) {
 	// Test: (a)-[r]->(b) creation pipeline
-    // We expect no return data, so void cast to ignore result
+	// We expect no return data, so void cast to ignore result
 	(void) execute("CREATE (a:Person {name: 'A'})-[r:KNOWS {since: 2020}]->(b:Person {name: 'B'})");
 
 	// Verify traversal
@@ -104,43 +103,43 @@ TEST_F(CypherTest, CreateAndMatchChain) {
 // ============================================================================
 
 TEST_F(CypherTest, UpdateProperties) {
-    (void) execute("CREATE (n:UpdateTest {val: 1})");
+	(void) execute("CREATE (n:UpdateTest {val: 1})");
 
-    // Update property
-    auto resSet = execute("MATCH (n:UpdateTest) SET n.val = 2 RETURN n");
-    ASSERT_EQ(resSet.nodeCount(), 1UL);
-    // Should reflect immediate change in returned record
-    EXPECT_EQ(resSet.getNodes()[0].getProperties().at("val").toString(), "2");
+	// Update property
+	auto resSet = execute("MATCH (n:UpdateTest) SET n.val = 2 RETURN n");
+	ASSERT_EQ(resSet.nodeCount(), 1UL);
+	// Should reflect immediate change in returned record
+	EXPECT_EQ(resSet.getNodes()[0].getProperties().at("val").toString(), "2");
 
-    // Verify persistence
-    auto resCheck = execute("MATCH (n:UpdateTest) RETURN n");
-    EXPECT_EQ(resCheck.getNodes()[0].getProperties().at("val").toString(), "2");
+	// Verify persistence
+	auto resCheck = execute("MATCH (n:UpdateTest) RETURN n");
+	EXPECT_EQ(resCheck.getNodes()[0].getProperties().at("val").toString(), "2");
 }
 
 TEST_F(CypherTest, AddNewProperty) {
-    (void) execute("CREATE (n:UpdateTest {val: 1})");
+	(void) execute("CREATE (n:UpdateTest {val: 1})");
 
-    // Add new property 'tag'
-    (void) execute("MATCH (n:UpdateTest) SET n.tag = 'new'");
+	// Add new property 'tag'
+	(void) execute("MATCH (n:UpdateTest) SET n.tag = 'new'");
 
-    auto res = execute("MATCH (n:UpdateTest) RETURN n");
-    const auto& props = res.getNodes()[0].getProperties();
-    EXPECT_EQ(props.at("val").toString(), "1");
-    EXPECT_EQ(props.at("tag").toString(), "new");
+	auto res = execute("MATCH (n:UpdateTest) RETURN n");
+	const auto &props = res.getNodes()[0].getProperties();
+	EXPECT_EQ(props.at("val").toString(), "1");
+	EXPECT_EQ(props.at("tag").toString(), "new");
 }
 
 TEST_F(CypherTest, DeleteNodes) {
-    (void) execute("CREATE (n:DeleteMe)");
+	(void) execute("CREATE (n:DeleteMe)");
 
-    // Ensure exists
-    ASSERT_EQ(execute("MATCH (n:DeleteMe) RETURN n").nodeCount(), 1UL);
+	// Ensure exists
+	ASSERT_EQ(execute("MATCH (n:DeleteMe) RETURN n").nodeCount(), 1UL);
 
-    // Delete
-    (void) execute("MATCH (n:DeleteMe) DELETE n");
+	// Delete
+	(void) execute("MATCH (n:DeleteMe) DELETE n");
 
-    // Verify gone
-    auto res = execute("MATCH (n:DeleteMe) RETURN n");
-    EXPECT_EQ(res.nodeCount(), 0UL);
+	// Verify gone
+	auto res = execute("MATCH (n:DeleteMe) RETURN n");
+	EXPECT_EQ(res.nodeCount(), 0UL);
 }
 
 TEST_F(CypherTest, DeleteNodeWithEdgesConstraint) {
@@ -149,9 +148,7 @@ TEST_F(CypherTest, DeleteNodeWithEdgesConstraint) {
 
 	// 2. Attempt Standard DELETE (Should Fail)
 	// Cypher semantics: Cannot delete a node that still has relationships
-	EXPECT_THROW({
-		execute("MATCH (n:ConstraintTest) DELETE n");
-	}, std::runtime_error);
+	EXPECT_THROW({ execute("MATCH (n:ConstraintTest) DELETE n"); }, std::runtime_error);
 
 	// 3. Verify Data remains untouched
 	auto res = execute("MATCH (n:ConstraintTest) RETURN n");
@@ -220,9 +217,9 @@ TEST_F(CypherTest, FilterByWhereClause) {
 	auto res2 = execute("MATCH (n:Item) WHERE n.price <> 100 RETURN n");
 	ASSERT_EQ(res2.nodeCount(), 2UL); // 200 and 50
 
-    // Test Greater Than (>)
-    auto res3 = execute("MATCH (n:Item) WHERE n.price > 90 RETURN n");
-    ASSERT_EQ(res3.nodeCount(), 2UL); // 100 and 200
+	// Test Greater Than (>)
+	auto res3 = execute("MATCH (n:Item) WHERE n.price > 90 RETURN n");
+	ASSERT_EQ(res3.nodeCount(), 2UL); // 100 and 200
 }
 
 TEST_F(CypherTest, FilterTraversalTarget) {
@@ -273,14 +270,108 @@ TEST_F(CypherTest, DropIndex) {
 
 	// Ensure it's gone
 	auto resShow2 = execute("SHOW INDEXES");
-    // Depending on implementation, might return empty set or set without this index
-    if (!resShow2.isEmpty() && resShow2.rowCount() > 0) {
-        bool found = false;
-        for(const auto& row : resShow2.getRows()) {
-            if (row.at("key").toString() == "name") found = true;
-        }
-        EXPECT_FALSE(found);
-    }
+	// Depending on implementation, might return empty set or set without this index
+	if (!resShow2.isEmpty() && resShow2.rowCount() > 0) {
+		bool found = false;
+		for (const auto &row: resShow2.getRows()) {
+			if (row.at("key").toString() == "name")
+				found = true;
+		}
+		EXPECT_FALSE(found);
+	}
+}
+
+TEST_F(CypherTest, IndexLifecycle_NamedIndex) {
+	// 1. Create Named Index
+	// Syntax: CREATE INDEX <name> FOR (n:<Label>) ON (n.<Prop>)
+	auto resCreate = execute("CREATE INDEX user_age_idx FOR (n:User) ON (n.age)");
+	ASSERT_FALSE(resCreate.isEmpty());
+
+	// 2. Verify Name Persistence (SHOW INDEXES)
+	auto resShow = execute("SHOW INDEXES");
+	bool nameFound = false;
+	bool propFound = false;
+
+	// Iterate rows to check if our specific index exists
+	for (const auto &row: resShow.getRows()) {
+		// Check Name
+		if (row.count("name") && row.at("name").toString() == "user_age_idx") {
+			nameFound = true;
+			// Verify it maps to the correct property
+			if (row.count("properties") && row.at("properties").toString() == "age") {
+				propFound = true;
+			}
+		}
+	}
+	EXPECT_TRUE(nameFound) << "Index name 'user_age_idx' not found in metadata.";
+	EXPECT_TRUE(propFound) << "Index 'user_age_idx' does not point to property 'age'.";
+
+	// 3. Insert Data (Ensure index actually works/doesn't crash)
+	(void) execute("CREATE (u:User {age: 25})");
+
+	// 4. Drop Index By Name
+	(void) execute("DROP INDEX user_age_idx");
+
+	// 5. Verify Removal
+	auto resShowAfter = execute("SHOW INDEXES");
+	bool stillExists = false;
+	if (resShowAfter.rowCount() > 0) {
+		for (const auto &row: resShowAfter.getRows()) {
+			if (row.count("name") && row.at("name").toString() == "user_age_idx") {
+				stillExists = true;
+			}
+		}
+	}
+	EXPECT_FALSE(stillExists) << "Index 'user_age_idx' should be gone after DROP.";
+}
+
+TEST_F(CypherTest, IndexLifecycle_CreateAndDropByDefinition) {
+	// 1. Create Index
+	auto resCreate = execute("CREATE INDEX ON :Product(sku)");
+	// Typically returns "Index created" in result row
+	ASSERT_FALSE(resCreate.isEmpty());
+
+	// 2. Verify Metadata Persistence (Show Indexes)
+	auto resShow1 = execute("SHOW INDEXES");
+	bool found = false;
+	for (const auto &row: resShow1.getRows()) {
+		// Check if property 'sku' is indexed
+		// Note: Depending on your implementation, keys might be "properties" or "key"
+		if (row.count("properties") && row.at("properties").toString() == "sku")
+			found = true;
+	}
+	EXPECT_TRUE(found) << "Index 'sku' should appear in SHOW INDEXES after creation.";
+
+	// 3. Drop Index (Using Definition Syntax)
+	// This tests the logic: dropIndexByDefinition -> lookup Metadata -> dropIndexByName
+	(void) execute("DROP INDEX ON :Product(sku)");
+
+	// 4. Verify Removal
+	auto resShow2 = execute("SHOW INDEXES");
+	found = false;
+	if (resShow2.rowCount() > 0) {
+		for (const auto &row: resShow2.getRows()) {
+			if (row.count("properties") && row.at("properties").toString() == "sku")
+				found = true;
+		}
+	}
+	EXPECT_FALSE(found) << "Index 'sku' should NOT appear after DROP.";
+}
+
+TEST_F(CypherTest, IndexEffectiveness_ScanPushdown) {
+	// 1. Create Index
+	(void) execute("CREATE INDEX ON :User(uid)");
+
+	// 2. Insert Data (Should populate index)
+	(void) execute("CREATE (u:User {uid: 1001, name: 'A'})");
+	(void) execute("CREATE (u:User {uid: 1002, name: 'B'})");
+
+	// 3. Query (Should use index)
+	// Although we can't easily assert "Index was used" without parsing debug logs,
+	// we CAN assert the result is correct.
+	auto res = execute("MATCH (n:User {uid: 1002}) RETURN n");
+	ASSERT_EQ(res.nodeCount(), 1UL);
+	EXPECT_EQ(res.getNodes()[0].getProperties().at("name").toString(), "B");
 }
 
 // ============================================================================
@@ -305,8 +396,10 @@ TEST_F(CypherTest, SystemConfigFlow) {
 	bool foundKey = false;
 	bool foundMode = false;
 	for (const auto &row: res2.getRows()) {
-		if (row.at("key").toString() == "test.key") foundKey = true;
-		if (row.at("key").toString() == "test.mode") foundMode = true;
+		if (row.at("key").toString() == "test.key")
+			foundKey = true;
+		if (row.at("key").toString() == "test.mode")
+			foundMode = true;
 	}
 	EXPECT_TRUE(foundKey);
 	EXPECT_TRUE(foundMode);
@@ -342,7 +435,9 @@ TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
 	auto resIdx = execute("SHOW INDEXES");
 	bool indexFound = false;
 	for (const auto &row: resIdx.getRows()) {
-		if (row.at("key").toString() == "val") indexFound = true;
+		if (row.count("properties") && row.at("properties").toString() == "val") {
+			indexFound = true;
+		}
 	}
 	EXPECT_TRUE(indexFound) << "Index definition lost after restart";
 
@@ -408,4 +503,35 @@ TEST_F(CypherTest, AlgoShortestPathNoPath) {
 
 	// 3. Verify Empty Result
 	EXPECT_TRUE(resPath.isEmpty()) << "Should return empty result for disconnected nodes";
+}
+
+// ============================================================================
+// Update Consistency Tests (SET)
+// ============================================================================
+
+TEST_F(CypherTest, SetProperty_ReadModifyWrite_Consistency) {
+	// 1. Create initial node
+	(void) execute("CREATE (n:Config {version: 1, mode: 'dev'})");
+
+	// 2. Update ONE property (should NOT overwrite 'mode')
+	// This verifies the fix in SetOperator (loading existing props before saving)
+	(void) execute("MATCH (n:Config) SET n.version = 2");
+
+	// 3. Verify
+	auto res = execute("MATCH (n:Config) RETURN n");
+	ASSERT_EQ(res.nodeCount(), 1UL);
+
+	auto props = res.getNodes()[0].getProperties();
+	EXPECT_EQ(props.at("version").toString(), "2"); // Updated
+	EXPECT_EQ(props.at("mode").toString(), "dev"); // Preserved! (Critical)
+}
+
+TEST_F(CypherTest, SetNewProperty) {
+	(void) execute("CREATE (n:Node)");
+
+	// Add property
+	(void) execute("MATCH (n:Node) SET n.new_prop = 'hello'");
+
+	auto res = execute("MATCH (n:Node) RETURN n");
+	EXPECT_EQ(res.getNodes()[0].getProperties().at("new_prop").toString(), "hello");
 }

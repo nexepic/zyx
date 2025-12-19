@@ -12,7 +12,7 @@ options {
     caseInsensitive = true;
 }
 
-// --- Keywords (Prefix K_ to avoid collision with C++ keywords) ---
+// --- Keywords (Prefix K_) ---
 
 K_CALL       : 'CALL';
 K_YIELD      : 'YIELD';
@@ -71,6 +71,17 @@ K_ON         : 'ON';
 K_SHOW       : 'SHOW';
 K_DROP       : 'DROP';
 
+K_FOR        : 'FOR';
+
+K_CONSTRAINT : 'CONSTRAINT';
+K_DO         : 'DO';
+K_REQUIRE    : 'REQUIRE';
+K_UNIQUE     : 'UNIQUE';
+K_MANDATORY  : 'MANDATORY';
+K_SCALAR     : 'SCALAR';
+K_OF         : 'OF';
+K_ADD        : 'ADD';
+
 // --- Symbols ---
 
 EQ           : '=';
@@ -108,10 +119,8 @@ DecimalInteger : [0-9]+ ;
 
 DoubleLiteral  : ([0-9]+ '.' [0-9]+ | '.' [0-9]+ | [0-9]+) ('e' [+-]? [0-9]+)? ;
 
-// Identifiers (Standard and Backticked)
 ID : [a-z_] [a-z0-9_]* | '`' .*? '`' ;
 
-// Strings (Handles single and double quotes)
 StringLiteral
     : '"' ( ~('"'|'\\'|'\r'|'\n') | EscapeSequence )* '"'
     | '\'' ( ~('\''|'\\'|'\r'|'\n') | EscapeSequence )* '\''
@@ -122,7 +131,6 @@ fragment EscapeSequence
     | '\\u' [0-9a-f] [0-9a-f] [0-9a-f] [0-9a-f]
     ;
 
-// Whitespace & Comments
 WS           : [ \t\r\n\u000C]+ -> skip;
 COMMENT      : '/*' .*? '*/'    -> skip;
 LINE_COMMENT : '//' ~[\r\n]*    -> skip;

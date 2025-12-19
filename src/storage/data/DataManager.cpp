@@ -134,9 +134,9 @@ namespace graph::storage {
 		}
 	}
 
-	void DataManager::notifyStateUpdated(const State& oldState, const State& newState) const {
+	void DataManager::notifyStateUpdated(const State &oldState, const State &newState) const {
 		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer : observers_) {
+		for (const auto &observer: observers_) {
 			observer->onStateUpdated(oldState, newState);
 		}
 	}

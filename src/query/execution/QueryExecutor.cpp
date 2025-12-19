@@ -14,7 +14,7 @@
 
 namespace graph::query {
 
-	QueryResult QueryExecutor::execute(std::unique_ptr<execution::PhysicalOperator> plan) const {
+	QueryResult QueryExecutor::execute(std::unique_ptr<execution::PhysicalOperator> plan) {
 		QueryResult result;
 
 		if (!plan) return result;

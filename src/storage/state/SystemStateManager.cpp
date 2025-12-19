@@ -107,6 +107,12 @@ namespace graph::storage::state {
 		dataManager_->addStateProperties(stateKey, props);
 	}
 
+	template std::unordered_map<std::string, std::string>
+	SystemStateManager::getMap<std::string>(const std::string &) const;
+	template void SystemStateManager::setMap<std::string>(const std::string &,
+														  const std::unordered_map<std::string, std::string> &,
+														  UpdateMode);
+
 	// Explicit Instantiations for the types we support
 	template int64_t SystemStateManager::get<int64_t>(const std::string &, const std::string &, int64_t) const;
 	template void SystemStateManager::set<int64_t>(const std::string &, const std::string &, const int64_t &);

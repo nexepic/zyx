@@ -69,7 +69,7 @@ TEST_F(LinenoiseTest, History_AddAndRetrieve) {
     EXPECT_TRUE(ls.AddHistory("command2"));
 
     auto history = ls.GetHistory();
-    ASSERT_EQ(history.size(), 2);
+    ASSERT_EQ(history.size(), 2UL);
     EXPECT_EQ(history[0], "command1");
     EXPECT_EQ(history[1], "command2");
 }
@@ -86,7 +86,7 @@ TEST_F(LinenoiseTest, History_DuplicateHandling) {
     EXPECT_TRUE(ls.AddHistory("command1"));
 
     auto history = ls.GetHistory();
-    ASSERT_EQ(history.size(), 3);
+    ASSERT_EQ(history.size(), 3UL);
     EXPECT_EQ(history[0], "command1");
     EXPECT_EQ(history[1], "command2");
     EXPECT_EQ(history[2], "command1");
@@ -101,7 +101,7 @@ TEST_F(LinenoiseTest, History_MaxLenEnforcement) {
     ls.AddHistory("3"); // Should push out "1"
 
     auto history = ls.GetHistory();
-    ASSERT_EQ(history.size(), 2);
+    ASSERT_EQ(history.size(), 2UL);
     EXPECT_EQ(history[0], "2");
     EXPECT_EQ(history[1], "3");
 }
@@ -116,7 +116,7 @@ TEST_F(LinenoiseTest, History_ResizeSmaller) {
 	ls.SetHistoryMaxLen(2);
 
 	auto history = ls.GetHistory();
-	ASSERT_EQ(history.size(), 2);
+	ASSERT_EQ(history.size(), 2UL);
 	// [Expect Correct Behavior] Keep latest
 	EXPECT_EQ(history[0], "2");
 	EXPECT_EQ(history[1], "3");
@@ -141,7 +141,7 @@ TEST_F(LinenoiseTest, SaveAndLoadHistory) {
         linenoise::linenoiseState ls2;
         EXPECT_TRUE(ls2.LoadHistory(historyPath.string().c_str()));
         auto history = ls2.GetHistory();
-        ASSERT_EQ(history.size(), 2);
+        ASSERT_EQ(history.size(), 2UL);
         EXPECT_EQ(history[0], "save_me_1");
         EXPECT_EQ(history[1], "save_me_2");
     }
@@ -257,7 +257,7 @@ TEST_F(LinenoiseTest, Global_Api_Wrapper) {
     EXPECT_TRUE(linenoise::AddHistory("global_2"));
 
     auto history = linenoise::GetHistory();
-    ASSERT_EQ(history.size(), 2);
+    ASSERT_EQ(history.size(), 2UL);
     EXPECT_EQ(history[0], "global_1");
 
     // Test Save/Load via global

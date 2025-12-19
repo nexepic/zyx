@@ -144,7 +144,7 @@ namespace metrix {
         }
 
         // 3. Build the Physical Operator Plan (skip parsing)
-        auto plan = builder.create("n", label, internalProps).build();
+        auto plan = builder.create_("n", label, internalProps).build();
 
         // 4. Execute the plan
         // Note: ensure QueryEngine::execute(unique_ptr<PhysicalOperator>) is accessible
@@ -165,7 +165,7 @@ namespace metrix {
     	for(const auto& [k, v] : props) edgeProps[k] = toInternal(v);
 
     	// 1. Match Source
-    	builder.match("a", sourceLabel).where("a", sourceKey, toInternal(sourceVal));
+    	builder.match_("a", sourceLabel).where_("a", sourceKey, toInternal(sourceVal));
 
     	// 2. Match Target (This requires QueryBuilder to support multiple matches or we define a specialized operator)
     	// Note: Your current QueryBuilder might need extending to support chaining Matches for creating edges efficiently.

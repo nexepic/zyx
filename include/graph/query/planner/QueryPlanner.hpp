@@ -19,133 +19,124 @@
 #include "graph/query/execution/operators/SetOperator.hpp"
 
 // Forward declarations to reduce compile-time dependencies
-namespace graph::storage { class DataManager; }
-namespace graph::query::indexes { class IndexManager; }
-namespace graph::query::optimizer { class Optimizer; }
-namespace graph::query::execution {
-    class PhysicalOperator;
-    class Record;
+namespace graph::storage {
+	class DataManager;
 }
+namespace graph::query::indexes {
+	class IndexManager;
+}
+namespace graph::query::optimizer {
+	class Optimizer;
+}
+namespace graph::query::execution {
+	class PhysicalOperator;
+	class Record;
+} // namespace graph::query::execution
 
 namespace graph::query {
 
-    class QueryPlanner {
-    public:
-        /**
-         * @brief Constructs the planner and initializes the internal Optimizer.
-         */
-        QueryPlanner(std::shared_ptr<storage::DataManager> dm,
-                     std::shared_ptr<indexes::IndexManager> im);
+	class QueryPlanner {
+	public:
+		/**
+		 * @brief Constructs the planner and initializes the internal Optimizer.
+		 */
+		QueryPlanner(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im);
 
-    	~QueryPlanner();
+		~QueryPlanner();
 
-        // =================================================================
-        // Read Operations (Factories)
-        // =================================================================
+		// =================================================================
+		// Read Operations (Factories)
+		// =================================================================
 
-        /**
-         * @brief Creates a Scan operator.
-         *        The internal Optimizer determines if an IndexScan or FullScan is used.
-         *        If IndexScan is not possible, the Planner appends a FilterOperator automatically.
-         *
-         * @param variable The variable name (e.g., "n").
-         * @param label The label filter (e.g., "User").
-         * @param key Optional property key for index pushdown.
-         * @param value Optional property value for index pushdown.
-         */
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> scanOp(
-            const std::string& variable,
-            const std::string& label,
-            const std::string& key = "",
-            const PropertyValue& value = PropertyValue()
-        ) const;
+		/**
+		 * @brief Creates a Scan operator.
+		 *        The internal Optimizer determines if an IndexScan or FullScan is used.
+		 *        If IndexScan is not possible, the Planner appends a FilterOperator automatically.
+		 *
+		 * @param variable The variable name (e.g., "n").
+		 * @param label The label filter (e.g., "User").
+		 * @param key Optional property key for index pushdown.
+		 * @param value Optional property value for index pushdown.
+		 */
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		scanOp(const std::string &variable, const std::string &label, const std::string &key = "",
+			   const PropertyValue &value = PropertyValue()) const;
 
-        /**
-         * @brief Wraps an operator with a generic predicate filter.
-         *
-         * @param description A string describing the logic (e.g., "n.age > 10") for debugging.
-         */
-        [[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> filterOp(
-            std::unique_ptr<execution::PhysicalOperator> child,
-            std::function<bool(const execution::Record&)> predicate,
-            const std::string& description
-        );
+		/**
+		 * @brief Wraps an operator with a generic predicate filter.
+		 *
+		 * @param description A string describing the logic (e.g., "n.age > 10") for debugging.
+		 */
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		filterOp(std::unique_ptr<execution::PhysicalOperator> child,
+				 std::function<bool(const execution::Record &)> predicate, const std::string &description);
 
-        /**
-         * @brief Expands a node into connected edges and target nodes.
-         */
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> traverseOp(
-            std::unique_ptr<execution::PhysicalOperator> source,
-            const std::string& sourceVar,
-            const std::string& edgeVar,
-            const std::string& targetVar,
-            const std::string& edgeLabel,
-            const std::string& direction
-        ) const;
+		/**
+		 * @brief Expands a node into connected edges and target nodes.
+		 */
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		traverseOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
+				   const std::string &edgeVar, const std::string &targetVar, const std::string &edgeLabel,
+				   const std::string &direction) const;
 
-        /**
-         * @brief Projects specific variables from the stream (SELECT/RETURN).
-         */
-        [[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> projectOp(
-            std::unique_ptr<execution::PhysicalOperator> child,
-            const std::vector<std::string>& variables
-        );
+		/**
+		 * @brief Projects specific variables from the stream (SELECT/RETURN).
+		 */
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		projectOp(std::unique_ptr<execution::PhysicalOperator> child, const std::vector<std::string> &variables);
 
-        // =================================================================
-        // Write Operations (Factories)
-        // =================================================================
+		// =================================================================
+		// Write Operations (Factories)
+		// =================================================================
 
-        // Create Node
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createOp(
-            const std::string& variable,
-            const std::string& label,
-            const std::unordered_map<std::string, PropertyValue>& props
-        ) const;
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		callProcedureOp(const std::string &procedure, const std::vector<PropertyValue> &args) const;
 
-        // Create Edge
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createOp(
-            const std::string& variable,
-            const std::string& label,
-            const std::unordered_map<std::string, PropertyValue>& props,
-            const std::string& sourceVar,
-            const std::string& targetVar
-        ) const;
+		// Create Node
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		createOp(const std::string &variable, const std::string &label,
+				 const std::unordered_map<std::string, PropertyValue> &props) const;
 
-        // Create Index (DDL)
-        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createIndexOp(
-            const std::string& label,
-            const std::string& propertyKey
-        ) const;
+		// Create Edge
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		createOp(const std::string &variable, const std::string &label,
+				 const std::unordered_map<std::string, PropertyValue> &props, const std::string &sourceVar,
+				 const std::string &targetVar) const;
 
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> callProcedureOp(
-			const std::string& procedure,
-			const std::vector<::graph::PropertyValue>& args
-		) const;
-
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexesOp() const;
-
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(
+		// Create Index (DDL)
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createIndexOp(
+			const std::string& indexName,
 			const std::string& label,
 			const std::string& propertyKey
 		) const;
 
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> deleteOp(
-			std::unique_ptr<execution::PhysicalOperator> child,
-			const std::vector<std::string>& variables,
-			bool detach
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(
+			const std::string& indexName
 		) const;
 
-    	[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> setOp(
-			std::unique_ptr<execution::PhysicalOperator> child,
-			const std::vector<execution::operators::SetItem>& items
+		// [NEW] Drop Index By Definition (Legacy/Implicit name)
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(
+			const std::string& label,
+			const std::string& propertyKey
 		) const;
 
-    private:
-        std::shared_ptr<storage::DataManager> dm_;
-        std::shared_ptr<indexes::IndexManager> im_;
+		// --- Administration ---
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexesOp() const;
 
-        // The Brain: Handles logic for selecting the best scan strategy
-        std::unique_ptr<optimizer::Optimizer> optimizer_;
-    };
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		deleteOp(std::unique_ptr<execution::PhysicalOperator> child, const std::vector<std::string> &variables,
+				 bool detach) const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		setOp(std::unique_ptr<execution::PhysicalOperator> child,
+			  const std::vector<execution::operators::SetItem> &items) const;
+
+	private:
+		std::shared_ptr<storage::DataManager> dm_;
+		std::shared_ptr<indexes::IndexManager> im_;
+
+		// The Brain: Handles logic for selecting the best scan strategy
+		std::unique_ptr<optimizer::Optimizer> optimizer_;
+	};
 
 } // namespace graph::query

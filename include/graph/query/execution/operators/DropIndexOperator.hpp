@@ -15,52 +15,64 @@
 
 namespace graph::query::execution::operators {
 
-	class DropIndexOperator : public PhysicalOperator {
-	public:
-		DropIndexOperator(std::shared_ptr<indexes::IndexManager> indexManager,
-						  std::string label,
-						  std::string propertyKey)
-			: indexManager_(std::move(indexManager)),
-			  label_(std::move(label)),
-			  propertyKey_(std::move(propertyKey)) {}
+    class DropIndexOperator : public PhysicalOperator {
+    public:
+        // Constructor for Drop by Name
+        DropIndexOperator(std::shared_ptr<indexes::IndexManager> indexManager,
+                          std::string name)
+            : indexManager_(std::move(indexManager)), name_(std::move(name)) {}
 
-		void open() override { executed_ = false; }
+        // Constructor for Drop by Definition
+        DropIndexOperator(std::shared_ptr<indexes::IndexManager> indexManager,
+                          std::string label,
+                          std::string propertyKey)
+            : indexManager_(std::move(indexManager)),
+              label_(std::move(label)),
+              propertyKey_(std::move(propertyKey)) {}
 
-		std::optional<RecordBatch> next() override {
-			if (executed_) return std::nullopt;
+        void open() override { executed_ = false; }
 
-			// 1. Drop the index
-			// Note: Assuming "property" index type for specific keys.
-			// If key is empty, it might drop a label index depending on implementation.
-			bool success = indexManager_->dropIndex("node", "property", propertyKey_);
+        std::optional<RecordBatch> next() override {
+            if (executed_) return std::nullopt;
 
-			// 2. Return result
-			Record record;
-			std::string msg = success ? "Index dropped" : "Index not found";
-			record.setValue("result", PropertyValue(msg));
+            bool success = false;
 
-			RecordBatch batch;
-			batch.push_back(std::move(record));
+            if (!name_.empty()) {
+                // Case 1: DROP INDEX index_name
+                success = indexManager_->dropIndexByName(name_);
+            } else {
+                // Case 2: DROP INDEX ON :Label(prop)
+                // Defaulting entityType to "node" as per Cypher standard context
+            	success = indexManager_->dropIndexByDefinition(label_, propertyKey_);
+            }
 
-			executed_ = true;
-			return batch;
-		}
+            Record record;
+            record.setValue("result", PropertyValue(success ? "Index dropped" : "Index not found"));
 
-		void close() override {}
+            RecordBatch batch;
+            batch.push_back(std::move(record));
 
-		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
-			return {"result"};
-		}
+            executed_ = true;
+            return batch;
+        }
 
-		[[nodiscard]] std::string toString() const override {
-			return "DropIndex(label=" + label_ + ", key=" + propertyKey_ + ")";
-		}
+        void close() override {}
 
-	private:
-		std::shared_ptr<indexes::IndexManager> indexManager_;
-		std::string label_;
-		std::string propertyKey_;
-		bool executed_ = false;
-	};
+        [[nodiscard]] std::vector<std::string> getOutputVariables() const override {
+            return {"result"};
+        }
+
+        [[nodiscard]] std::string toString() const override {
+            if (!name_.empty()) return "DropIndex(name=" + name_ + ")";
+            return "DropIndex(label=" + label_ + ", key=" + propertyKey_ + ")";
+        }
+
+    private:
+        std::shared_ptr<indexes::IndexManager> indexManager_;
+        std::string name_;
+        std::string label_;
+        std::string propertyKey_;
+        bool executed_ = false;
+    };
 
 } // namespace graph::query::execution::operators

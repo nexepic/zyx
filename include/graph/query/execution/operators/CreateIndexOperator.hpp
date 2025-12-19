@@ -17,39 +17,25 @@ namespace graph::query::execution::operators {
 
     class CreateIndexOperator : public PhysicalOperator {
     public:
-        /**
-         * @brief Constructs the operator.
-         * @param indexManager The manager responsible for building physical indexes.
-         * @param label The node label (e.g., "User").
-         * @param propertyKey The property to index (e.g., "name").
-         */
-        CreateIndexOperator(std::shared_ptr<indexes::IndexManager> indexManager,
+        CreateIndexOperator(std::shared_ptr<indexes::IndexManager> im,
+                            std::string name,
                             std::string label,
                             std::string propertyKey)
-            : indexManager_(std::move(indexManager)),
-              label_(std::move(label)),
-              propertyKey_(std::move(propertyKey)) {}
+            : indexManager_(std::move(im)), name_(std::move(name)),
+              label_(std::move(label)), propertyKey_(std::move(propertyKey)) {}
 
         void open() override { executed_ = false; }
 
-        std::optional<RecordBatch> next() override {
-            if (executed_) return std::nullopt;
+    	std::optional<RecordBatch> next() override {
+        	if (executed_) return std::nullopt;
 
-            // 1. Build the index via IndexManager
-            // Note: Currently IndexManager distinguishes "node" vs "edge".
-            // Since Cypher CREATE INDEX ON :Label implies a Node index, we pass "node".
-            // If your IndexManager supports Label-Specific indexes later, pass label_ here.
-            bool success = indexManager_->buildPropertyIndex("node", propertyKey_);
+        	bool success = indexManager_->createIndex(name_, "node", label_, propertyKey_);
 
-            // 2. Return a summary record
-            Record record;
-            record.setValue("result", PropertyValue(success ? "Index created" : "Index already exists or failed"));
-
-            RecordBatch batch;
-            batch.push_back(std::move(record));
-
-            executed_ = true;
-            return batch;
+        	Record record;
+        	record.setValue("result", PropertyValue(success ? "Index created" : "Failed or Exists"));
+        	RecordBatch batch; batch.push_back(std::move(record));
+        	executed_ = true;
+        	return batch;
         }
 
         void close() override {}
@@ -64,8 +50,7 @@ namespace graph::query::execution::operators {
 
     private:
         std::shared_ptr<indexes::IndexManager> indexManager_;
-        std::string label_;
-        std::string propertyKey_;
+    	std::string name_, label_, propertyKey_;
         bool executed_ = false;
     };
 

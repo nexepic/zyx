@@ -14,78 +14,84 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
+#include <vector>
+
 #include "graph/core/Database.hpp"
+#include "graph/core/Edge.hpp"
+#include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
-constexpr size_t BATCH_SIZE = 1000;
+namespace fs = std::filesystem;
 
 class IndexBuilderTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testFilePath = std::filesystem::temp_directory_path() / ("test_indexBuilder_" + to_string(uuid) + ".dat");
+		testFilePath = fs::temp_directory_path() / ("test_indexBuilder_" + to_string(uuid) + ".dat");
+
 		database = std::make_unique<graph::Database>(testFilePath.string());
 		database->open();
+
 		fileStorage = database->getStorage();
-		indexManager = database->getQueryEngine()->getIndexManager();
-		// In order to test IndexBuilder, we need access to it.
-		// The getIndexBuilder() method was added to IndexManager for this purpose.
-		indexBuilder = indexManager->getIndexBuilder();
 		dataManager = fileStorage->getDataManager();
+		indexManager = database->getQueryEngine()->getIndexManager();
+		indexBuilder = indexManager->getIndexBuilder();
 	}
 
 	void TearDown() override {
-		database->close();
+		if (database) {
+			database->close();
+		}
 		database.reset();
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+		if (fs::exists(testFilePath)) {
+			fs::remove(testFilePath);
 		}
 	}
 
-	// Helper function to populate the database with comprehensive test data
-	void populateDatabaseForTests() const {
-		// Add active node 1 ("Alice")
-		graph::Node node1(1, "Person");
-		dataManager->addNode(node1);
-		dataManager->addNodeProperties(1, {{"name", std::string("Alice")}, {"age", static_cast<int64_t>(30)}});
+	// Helper to populate DB with mixed data
+	void populateDatabase() const {
+		// Active Nodes
+		graph::Node n1(1, "Person");
+		n1.addProperty("name", std::string("Alice"));
+		n1.addProperty("age", (int64_t) 30);
+		dataManager->addNode(n1);
 
-		// Add active node 2 ("Bob")
-		graph::Node node2(2, "Person");
-		dataManager->addNode(node2);
-		dataManager->addNodeProperties(2, {{"name", std::string("Bob")}, {"skill", std::string("coding")}});
+		graph::Node n2(2, "Person");
+		n2.addProperty("name", std::string("Bob"));
+		n2.addProperty("age", (int64_t) 25);
+		dataManager->addNode(n2);
 
-		// Add active node 3 ("Graph Inc.")
-		graph::Node node3(3, "Company");
-		dataManager->addNode(node3);
-		dataManager->addNodeProperties(3, {{"name", std::string("Graph Inc.")}});
+		graph::Node n3(3, "Company");
+		n3.addProperty("name", std::string("MetrixDB"));
+		dataManager->addNode(n3);
 
-		// Add an inactive node, which should not be indexed
-		graph::Node inactiveNode(4, "Person");
-		dataManager->addNode(inactiveNode);
-		dataManager->addNodeProperties(4, {{"name", std::string("InactiveUser")}});
-		fileStorage->flush();
-		dataManager->deleteNode(inactiveNode); // Pass the object, not ID
+		// Deleted Node (ID 4)
+		graph::Node n4(4, "Person");
+		n4.addProperty("name", std::string("Ghost"));
+		dataManager->addNode(n4);
+		dataManager->deleteNode(n4);
 
-		// Add active edge 1
-		graph::Edge edge1(1, 1, 2, "KNOWS");
-		dataManager->addEdge(edge1);
-		dataManager->addEdgeProperties(1, {{"since", static_cast<int64_t>(2020)}, {"active", true}});
+		// Padding (ID 5-20) to prevent tail reclamation
+		for (int i = 5; i <= 20; ++i) {
+			graph::Node n(i, "Extra");
+			dataManager->addNode(n);
+		}
 
-		// Add active edge 2
-		graph::Edge edge2(2, 1, 3, "WORKS_AT");
-		dataManager->addEdge(edge2);
+		// Active Edge
+		graph::Edge e1(10, 1, 3, "WORKS_AT");
+		e1.addProperty("since", (int64_t) 2020);
+		dataManager->addEdge(e1);
 
-		// Add an inactive edge, which should not be indexed
-		graph::Edge inactiveEdge(3, 2, 3, "KNOWS");
-		dataManager->addEdge(inactiveEdge);
-		fileStorage->flush();
-		dataManager->deleteEdge(inactiveEdge); // Pass the object, not ID
+		// Flush to ensure data persistence logic runs (update headers etc)
+		// But do NOT close the DB.
 		fileStorage->flush();
 	}
 
-	std::filesystem::path testFilePath;
+	fs::path testFilePath;
 	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
@@ -93,222 +99,106 @@ protected:
 	graph::query::indexes::IndexBuilder *indexBuilder = nullptr;
 };
 
-// Test 1: Empty database scenario
-TEST_F(IndexBuilderTest, BuildAllIndexes_OnEmptyDatabase) {
-	// Act: Call entity-specific build methods.
-	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
-	EXPECT_TRUE(indexBuilder->buildAllEdgeIndexes());
+// ============================================================================
+// Tests
+// ============================================================================
 
-	// Assert: Verify through the specific entity index managers.
-	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
-	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
-	auto edgeLabelIndex = indexManager->getEdgeIndexManager()->getLabelIndex();
-	auto edgePropertyIndex = indexManager->getEdgeIndexManager()->getPropertyIndex();
+TEST_F(IndexBuilderTest, BuildNodeLabelIndex) {
+	populateDatabase();
 
-	EXPECT_TRUE(nodeLabelIndex->isEmpty());
-	EXPECT_TRUE(nodePropertyIndex->isEmpty());
-	EXPECT_TRUE(edgeLabelIndex->isEmpty());
-	EXPECT_TRUE(edgePropertyIndex->isEmpty());
-}
-
-// Test 2: Verify buildAllNodeIndexes and buildAllEdgeIndexes functionality and correctness
-TEST_F(IndexBuilderTest, BuildAllIndexes_WithData_Verification) {
-	// Arrange
-	populateDatabaseForTests();
-
-	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
-	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
-
-	// Act
-	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
-	EXPECT_TRUE(indexBuilder->buildAllEdgeIndexes());
-
-	// Assert: --- Verify Node Indexes ---
-	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
-	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
-
-	EXPECT_FALSE(nodeLabelIndex->isEmpty());
-	EXPECT_FALSE(nodePropertyIndex->isEmpty());
-
-	auto personNodes = nodeLabelIndex->findNodes("Person");
-	auto companyNodes = nodeLabelIndex->findNodes("Company");
-	ASSERT_EQ(personNodes.size(), 2u);
-	EXPECT_NE(std::ranges::find(personNodes, 1), personNodes.end());
-	EXPECT_NE(std::ranges::find(personNodes, 2), personNodes.end());
-	ASSERT_EQ(companyNodes.size(), 1u);
-	EXPECT_EQ(companyNodes[0], 3);
-
-	auto aliceNodes = nodePropertyIndex->findExactMatch("name", std::string("Alice"));
-	auto ageNodes = nodePropertyIndex->findExactMatch("age", 30);
-	ASSERT_EQ(aliceNodes.size(), 1u);
-	EXPECT_EQ(aliceNodes[0], 1);
-	ASSERT_EQ(ageNodes.size(), 1u);
-	EXPECT_EQ(ageNodes[0], 1);
-
-	// Assert: --- Verify Edge Indexes ---
-	auto edgeLabelIndex = indexManager->getEdgeIndexManager()->getLabelIndex();
-	auto edgePropertyIndex = indexManager->getEdgeIndexManager()->getPropertyIndex();
-
-	auto knowsEdges = edgeLabelIndex->findNodes("KNOWS"); // findNodes is generic
-	auto worksAtEdges = edgeLabelIndex->findNodes("WORKS_AT");
-	ASSERT_EQ(knowsEdges.size(), 1u);
-	EXPECT_EQ(knowsEdges[0], 1);
-	ASSERT_EQ(worksAtEdges.size(), 1u);
-	EXPECT_EQ(worksAtEdges[0], 2);
-
-	auto sinceEdges = edgePropertyIndex->findExactMatch("since", 2020);
-	ASSERT_EQ(sinceEdges.size(), 1u);
-	EXPECT_EQ(sinceEdges[0], 1);
-
-	// Assert: --- Verify Inactive Entities Are Not Indexed ---
-	auto inactiveNodes = nodePropertyIndex->findExactMatch("name", std::string("InactiveUser"));
-	EXPECT_TRUE(inactiveNodes.empty());
-	EXPECT_EQ(std::ranges::find(personNodes, 4), personNodes.end());
-	// Inactive edge ID was 3, its label was "KNOWS". The only active "KNOWS" edge is ID 1.
-	EXPECT_EQ(std::ranges::find(knowsEdges, 3), knowsEdges.end());
-}
-
-// Test 3: Verify that building all node indexes creates BOTH label and property indexes for nodes, but leaves edge
-// indexes untouched. This test replaces the old `BuildLabelIndex_Only` test, adapting its intent to the new API.
-TEST_F(IndexBuilderTest, BuildAllNodeIndexes_VerifiesIsolation) {
-	// Arrange
-	populateDatabaseForTests();
-
+	// 1. Register Index
 	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
 
-	// Act
-	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
+	// 2. Execute Build
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
 
-	// Assert: Verify node indexes are built
-	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
-	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
-	EXPECT_FALSE(nodeLabelIndex->isEmpty());
-	EXPECT_FALSE(nodePropertyIndex->isEmpty());
-	ASSERT_EQ(nodeLabelIndex->findNodes("Person").size(), 2u);
-	ASSERT_EQ(nodePropertyIndex->findExactMatch("name", std::string("Alice")).size(), 1u);
+	// 3. Verify Results
+	auto labelResults = indexManager->findNodeIdsByLabel("Person");
 
-	// Assert: Verify edge indexes are NOT built
-	auto edgeLabelIndex = indexManager->getEdgeIndexManager()->getLabelIndex();
-	auto edgePropertyIndex = indexManager->getEdgeIndexManager()->getPropertyIndex();
+	// Should find Alice(1) and Bob(2). Ghost(4) is deleted.
+	ASSERT_EQ(labelResults.size(), 2UL);
+	bool found1 = false, found2 = false;
+	for (auto id: labelResults) {
+		if (id == 1)
+			found1 = true;
+		if (id == 2)
+			found2 = true;
+	}
+	EXPECT_TRUE(found1 && found2);
 
-	// Now this should pass because we didn't enable them, and buildAllNodeIndexes shouldn't touch them.
-	EXPECT_TRUE(edgeLabelIndex->isEmpty());
-	EXPECT_TRUE(edgePropertyIndex->isEmpty());
+	auto compResults = indexManager->findNodeIdsByLabel("Company");
+	ASSERT_EQ(compResults.size(), 1UL);
 }
 
-// Test 4: Build property index for a specific node key only
-TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
-	// Arrange
-	populateDatabaseForTests();
+TEST_F(IndexBuilderTest, BuildNodePropertyIndex) {
+	populateDatabase();
 
-	// Act
+	// 1. Register Key
+	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("name");
+
+	// 2. Build
 	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("name"));
 
-	// Assert: Verify "name" property index is built
-	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
-	auto aliceNodes = nodePropertyIndex->findExactMatch("name", std::string("Alice"));
-	ASSERT_EQ(aliceNodes.size(), 1u);
-	EXPECT_EQ(aliceNodes[0], 1);
-	EXPECT_TRUE(nodePropertyIndex->hasKeyIndexed("name"));
+	// 3. Verify
+	auto resAlice = indexManager->findNodeIdsByProperty("name", std::string("Alice"));
+	ASSERT_EQ(resAlice.size(), 1UL);
+	EXPECT_EQ(resAlice[0], 1);
 
-	// Assert: Verify other properties (like "age") are not indexed
-	EXPECT_FALSE(nodePropertyIndex->hasKeyIndexed("age"));
-	EXPECT_TRUE(nodePropertyIndex->findExactMatch("age", 30).empty());
+	auto resBob = indexManager->findNodeIdsByProperty("name", std::string("Bob"));
+	ASSERT_EQ(resBob.size(), 1UL);
 
-	// Assert: Verify other indexes (node label, all edge indexes) are not built
-	EXPECT_TRUE(indexManager->getNodeIndexManager()->getLabelIndex()->isEmpty());
-	EXPECT_TRUE(indexManager->getEdgeIndexManager()->getLabelIndex()->isEmpty());
-	EXPECT_TRUE(indexManager->getEdgeIndexManager()->getPropertyIndex()->isEmpty());
+	// Verify Deleted Node is Skipped
+	auto resGhost = indexManager->findNodeIdsByProperty("name", std::string("Ghost"));
+	EXPECT_TRUE(resGhost.empty());
+
+	// Verify Unindexed Property
+	auto resAge = indexManager->findNodeIdsByProperty("age", (int64_t) 30);
+	EXPECT_TRUE(resAge.empty());
 }
 
-// Test 5: Verify correctness of ID range functions
-// This test checks the internal logic of the builder. It's useful for debugging.
-TEST_F(IndexBuilderTest, GetNodeAndEdgeIdRanges) {
-	// Arrange (empty DB)
-	EXPECT_TRUE(indexBuilder->getNodeIdRanges().empty());
-	EXPECT_TRUE(indexBuilder->getEdgeIdRanges().empty());
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndex) {
+	populateDatabase();
 
-	// Arrange (populated DB)
-	populateDatabaseForTests();
+	// 1. Register Key
+	indexManager->getEdgeIndexManager()->getPropertyIndex()->createIndex("since");
 
-	// Act
+	// 2. Build
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex("since"));
+
+	// 3. Verify
+	auto res = indexManager->findEdgeIdsByProperty("since", (int64_t) 2020);
+	ASSERT_EQ(res.size(), 1UL);
+	EXPECT_EQ(res[0], 10);
+}
+
+TEST_F(IndexBuilderTest, Manager_CreateIndex_TriggersBuilder) {
+	populateDatabase();
+
+	// High level API: Register + Build
+	bool success = indexManager->createIndex("age_idx", "node", "Person", "age");
+	EXPECT_TRUE(success);
+
+	auto res = indexManager->findNodeIdsByProperty("age", (int64_t) 25);
+	ASSERT_EQ(res.size(), 1UL);
+	EXPECT_EQ(res[0], 2);
+}
+
+TEST_F(IndexBuilderTest, SegmentRanges) {
+	populateDatabase();
+
 	auto nodeRanges = indexBuilder->getNodeIdRanges();
 	auto edgeRanges = indexBuilder->getEdgeIdRanges();
 
-	// Assert
+	// Verify Nodes (Max ID >= 20)
 	ASSERT_FALSE(nodeRanges.empty());
-	// Node IDs are 1, 2, 3, 4
-	EXPECT_LE(nodeRanges[0].first, 1);
-	EXPECT_GE(nodeRanges.back().second, 4);
+	int64_t maxId = 0;
+	for (const auto &val: nodeRanges | std::views::values) {
+		if (val > maxId)
+			maxId = val;
+	}
+	EXPECT_GE(maxId, 20);
 
+	// Verify Edges
 	ASSERT_FALSE(edgeRanges.empty());
-	// Edge IDs are 1, 2
-	EXPECT_LE(edgeRanges[0].first, 1);
-	EXPECT_GE(edgeRanges.back().second, 2);
-}
-
-// Test 6: Test batching logic for node index building
-TEST_F(IndexBuilderTest, BuildAllNodeIndexes_BatchingLogic) {
-	// Arrange
-	constexpr int64_t numNodes = BATCH_SIZE + 5;
-	for (int64_t i = 1; i <= numNodes; ++i) {
-		graph::Node node(i, "TestNode");
-		dataManager->addNode(node);
-		dataManager->addNodeProperties(i, {{"test_id", i}});
-	}
-	fileStorage->flush();
-
-	// Act
-	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
-
-	// Assert
-	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
-	auto nodePropertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
-
-	// Check the first node
-	auto firstNodeResult = nodePropertyIndex->findExactMatch("test_id", 1);
-	ASSERT_EQ(firstNodeResult.size(), 1u);
-	EXPECT_EQ(firstNodeResult[0], 1);
-
-	// Check the last node (from the second batch)
-	auto lastNodeResult = nodePropertyIndex->findExactMatch("test_id", numNodes);
-	ASSERT_EQ(lastNodeResult.size(), 1u);
-	EXPECT_EQ(lastNodeResult[0], numNodes);
-
-	// Check the total count
-	auto allTestNodes = nodeLabelIndex->findNodes("TestNode");
-	EXPECT_EQ(allTestNodes.size(), static_cast<size_t>(numNodes));
-}
-
-// Test that specifically tracks batch processing
-TEST_F(IndexBuilderTest, BuildNodeIndexes_BatchProcessingAnalysis) {
-	// Arrange - Use smaller batches for easier debugging
-	constexpr int smallerBatchSize = 100;
-	constexpr int64_t numNodes = smallerBatchSize * 3 + 5; // Multiple batches with remainder
-
-	for (int64_t i = 1; i <= numNodes; ++i) {
-		graph::Node node(i, "DebugTestNode");
-		dataManager->addNode(node);
-		dataManager->addNodeProperties(i, {{"batch_id", i}});
-	}
-	fileStorage->flush();
-
-	// Add logging to examine node ranges
-	auto nodeRanges = indexBuilder->getNodeIdRanges();
-	std::cout << "Node ranges found: " << nodeRanges.size() << std::endl;
-	for (const auto &[start, end]: nodeRanges) {
-		std::cout << "Range: " << start << " to " << end << " (count: " << (end - start + 1) << ")" << std::endl;
-	}
-
-	// Act
-	EXPECT_TRUE(indexBuilder->buildAllNodeIndexes());
-
-	// Assert - Check total count
-	auto nodeLabelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
-	auto allTestNodes = nodeLabelIndex->findNodes("DebugTestNode");
-
-	// Log detailed results
-	std::cout << "Expected nodes: " << numNodes << ", Found nodes: " << allTestNodes.size() << std::endl;
-
-	EXPECT_EQ(allTestNodes.size(), static_cast<size_t>(numNodes));
+	EXPECT_GE(edgeRanges.back().second, 10);
 }

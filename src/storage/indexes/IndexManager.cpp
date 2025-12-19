@@ -11,6 +11,7 @@
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
+#include "graph/storage/indexes/IndexMeta.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace graph::query::indexes {
@@ -21,20 +22,14 @@ namespace graph::query::indexes {
 		// Instantiate the Node index manager without the redundant config keys.
 		// The existence of the index data itself determines if it's "enabled".
 		nodeIndexManager_ = std::make_shared<EntityTypeIndexManager>(
-				dataManager_,
-				storage_->getSystemStateManager(),
-				IndexTypes::NODE_LABEL_TYPE,
-				storage::state::keys::Node::LABEL_ROOT,
-				IndexTypes::NODE_PROPERTY_TYPE,
+				dataManager_, storage_->getSystemStateManager(), IndexTypes::NODE_LABEL_TYPE,
+				storage::state::keys::Node::LABEL_ROOT, IndexTypes::NODE_PROPERTY_TYPE,
 				storage::state::keys::Node::PROPERTY_PREFIX);
 
 		// Instantiate the Edge index manager similarly.
 		edgeIndexManager_ = std::make_shared<EntityTypeIndexManager>(
-				dataManager_,
-				storage_->getSystemStateManager(),
-				IndexTypes::EDGE_LABEL_TYPE,
-				storage::state::keys::Edge::LABEL_ROOT,
-				IndexTypes::EDGE_PROPERTY_TYPE,
+				dataManager_, storage_->getSystemStateManager(), IndexTypes::EDGE_LABEL_TYPE,
+				storage::state::keys::Edge::LABEL_ROOT, IndexTypes::EDGE_PROPERTY_TYPE,
 				storage::state::keys::Edge::PROPERTY_PREFIX);
 	}
 
@@ -57,15 +52,19 @@ namespace graph::query::indexes {
 		persistState();
 	}
 
-	bool IndexManager::hasLabelIndex(const std::string& entityType) const {
-		if (entityType == "node") return nodeIndexManager_->hasLabelIndex();
-		if (entityType == "edge") return edgeIndexManager_->hasLabelIndex();
+	bool IndexManager::hasLabelIndex(const std::string &entityType) const {
+		if (entityType == "node")
+			return nodeIndexManager_->hasLabelIndex();
+		if (entityType == "edge")
+			return edgeIndexManager_->hasLabelIndex();
 		return false;
 	}
 
-	bool IndexManager::hasPropertyIndex(const std::string& entityType, const std::string& key) const {
-		if (entityType == "node") return nodeIndexManager_->hasPropertyIndex(key);
-		if (entityType == "edge") return edgeIndexManager_->hasPropertyIndex(key);
+	bool IndexManager::hasPropertyIndex(const std::string &entityType, const std::string &key) const {
+		if (entityType == "node")
+			return nodeIndexManager_->hasPropertyIndex(key);
+		if (entityType == "edge")
+			return edgeIndexManager_->hasPropertyIndex(key);
 		return false;
 	}
 
@@ -74,62 +73,144 @@ namespace graph::query::indexes {
 		return buildFunc();
 	}
 
-	bool IndexManager::buildIndexes(const std::string &entityType) {
+	bool IndexManager::createIndex(const std::string& indexName, const std::string& entityType,
+                                   const std::string& label, const std::string& property) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		if (entityType == "node") {
-			// Explicitly enable label index before building
-			nodeIndexManager_->getLabelIndex()->createIndex();
 
-			return nodeIndexManager_->buildAllIndexes(
-					[&]() { return executeBuildTask([&]() { return indexBuilder_->buildAllNodeIndexes(); }); });
+		// 1. Generate Name if empty
+		// Format: index_node_User_name or index_node_User_LABEL
+		std::string name = indexName;
+		if (name.empty()) {
+			name = "index_" + entityType + "_" + label + "_" + (property.empty() ? "LABEL" : property);
 		}
-		if (entityType == "edge") {
-			edgeIndexManager_->getLabelIndex()->createIndex();
 
-			return edgeIndexManager_->buildAllIndexes(
-					[&]() { return executeBuildTask([&]() { return indexBuilder_->buildAllEdgeIndexes(); }); });
+		// 2. Check Metadata (Prevent duplicate names)
+		// We use SystemStateManager to load the "sys.indexes" map to check existence.
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+
+		if (allIndexes.contains(name)) {
+			// Index name already exists, return false to indicate failure/no-op
+			return false;
 		}
-		return false;
+
+		// 3. Determine Index Type & Execute Physical Build
+		bool success = false;
+		std::string indexType;
+
+		if (property.empty()) {
+			// --- Label Index ---
+			indexType = "label";
+			if (entityType == "node") {
+				success = nodeIndexManager_->createLabelIndex([&]() {
+					return executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
+				});
+			} else if (entityType == "edge") {
+				// Edge label index
+				success = edgeIndexManager_->createLabelIndex([&]() {
+					return executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
+				});
+			}
+		} else {
+			// --- Property Index ---
+			indexType = "property";
+			if (entityType == "node") {
+				// Create property index for nodes
+				// Note: We use the new createPropertyIndex method which handles 'hasKeyIndexed' check internally.
+				success = nodeIndexManager_->createPropertyIndex(property, [&]() {
+					return executeBuildTask([&]() { return indexBuilder_->buildNodePropertyIndex(property); });
+				});
+			} else if (entityType == "edge") {
+				// Create property index for edges
+				success = edgeIndexManager_->createPropertyIndex(property, [&]() {
+					return executeBuildTask([&]() { return indexBuilder_->buildEdgePropertyIndex(property); });
+				});
+			}
+		}
+
+		// 4. Persist Metadata if physical build succeeded
+		// We store the definition string so we can look it up later by name or definition.
+		if (success) {
+			IndexMetadata meta{name, entityType, indexType, label, property};
+
+			// Use 'set' (which performs a Merge in SystemStateManager) to save this new index metadata
+			sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
+		}
+
+		return success;
 	}
 
-	bool IndexManager::buildPropertyIndex(const std::string &entityType, const std::string &key) {
+	// ------------------------------------------------------------------------
+	// Drop Index By Name
+	// ------------------------------------------------------------------------
+	bool IndexManager::dropIndexByName(const std::string &indexName) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		if (entityType == "node") {
-			// Register key immediately (Metadata creation)
-			nodeIndexManager_->getPropertyIndex()->createIndex(key);
 
-			return nodeIndexManager_->buildPropertyIndex(key, [&]() {
-				return executeBuildTask([&]() { return indexBuilder_->buildNodePropertyIndex(key); });
-			});
-		}
-		if (entityType == "edge") {
-			edgeIndexManager_->getPropertyIndex()->createIndex(key);
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
 
-			return edgeIndexManager_->buildPropertyIndex(key, [&]() {
-				return executeBuildTask([&]() { return indexBuilder_->buildEdgePropertyIndex(key); });
-			});
+		// 1. Lookup Metadata
+		auto it = allIndexes.find(indexName);
+		if (it == allIndexes.end()) {
+			return false; // Index not found
 		}
-		return false;
+
+		IndexMetadata meta = IndexMetadata::fromString(indexName, it->second);
+
+		// 2. Drop Physical Index
+		bool physicalDropSuccess = false;
+		if (meta.entityType == "node") {
+			physicalDropSuccess = nodeIndexManager_->dropIndex(meta.indexType, meta.property);
+		} else {
+			physicalDropSuccess = edgeIndexManager_->dropIndex(meta.indexType, meta.property);
+		}
+
+		// 3. Remove Metadata
+		// We must remove this key from the map and save it back
+		if (physicalDropSuccess) {
+			allIndexes.erase(it);
+			// Replace the whole map to persist deletion
+			sysState->setMap(storage::state::keys::SYS_INDEXES, allIndexes, storage::state::UpdateMode::REPLACE);
+		}
+
+		return physicalDropSuccess;
 	}
 
-	bool IndexManager::dropIndex(const std::string &entityType, const std::string &indexType, const std::string &key) {
-		if (entityType == "node") {
-			return nodeIndexManager_->dropIndex(indexType, key);
+	bool IndexManager::dropIndexByDefinition(const std::string& label, const std::string& property) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+
+		// Iterate metadata to find the matching definition
+		for (const auto& [name, rawMeta] : allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+
+			if (meta.label == label && meta.property == property) {
+				return dropIndexByName(name);
+			}
 		}
-		if (entityType == "edge") {
-			return edgeIndexManager_->dropIndex(indexType, key);
-		}
-		return false;
+
+		return false; // Not found
 	}
 
-	std::vector<std::pair<std::string, std::string>> IndexManager::listIndexes(const std::string &entityType) const {
-		if (entityType == "node") {
-			return nodeIndexManager_->listIndexes();
+	// ------------------------------------------------------------------------
+	// List Indexes (Returning Metadata)
+	// ------------------------------------------------------------------------
+	std::vector<std::tuple<std::string, std::string, std::string, std::string>>
+	IndexManager::listIndexesDetailed() const {
+		// Returns: {Name, Type, Label, Property}
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+
+		std::vector<std::tuple<std::string, std::string, std::string, std::string>> result;
+		for (const auto &[name, rawMeta]: allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			result.emplace_back(meta.name, meta.entityType, meta.label, meta.property);
 		}
-		if (entityType == "edge") {
-			return edgeIndexManager_->listIndexes();
-		}
-		return {};
+		return result;
 	}
 
 	void IndexManager::persistState() const {
@@ -157,6 +238,7 @@ namespace graph::query::indexes {
 
 	// --- Query methods delegate to the correct index ---
 	std::vector<int64_t> IndexManager::findNodeIdsByLabel(const std::string &label) const {
+		log::Log::debug("IndexManager::findNodeIdsByLabel - label: {}", label);
 		return nodeIndexManager_->getLabelIndex()->findNodes(label);
 	}
 
@@ -166,10 +248,12 @@ namespace graph::query::indexes {
 	}
 
 	std::vector<int64_t> IndexManager::findEdgeIdsByLabel(const std::string &label) const {
+		log::Log::debug("IndexManager::findEdgeIdsByLabel - label: {}", label);
 		return edgeIndexManager_->getLabelIndex()->findNodes(label);
 	}
 
 	std::vector<int64_t> IndexManager::findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const {
+		log::Log::debug("IndexManager::findEdgeIdsByProperty - key: {}", key);
 		return edgeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
 	}
 

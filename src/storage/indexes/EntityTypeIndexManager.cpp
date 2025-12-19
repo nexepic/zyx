@@ -28,19 +28,18 @@ namespace graph::query::indexes {
 
 	std::shared_ptr<PropertyIndex> EntityTypeIndexManager::getPropertyIndex() const { return propertyIndex_; }
 
-	bool EntityTypeIndexManager::buildLabelIndex(const std::function<bool()> &buildFunc) {
+	bool EntityTypeIndexManager::createLabelIndex(const std::function<bool()>& buildFunc) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		labelIndex_->createIndex();
 		return buildFunc();
 	}
 
-	bool EntityTypeIndexManager::buildPropertyIndex(const std::string &key, const std::function<bool()> &buildFunc) {
+	bool EntityTypeIndexManager::createPropertyIndex(const std::string& key, const std::function<bool()>& buildFunc) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		if (propertyIndex_->hasKeyIndexed(key)) {
+			return false; // Already exists
+		}
 		propertyIndex_->createIndex(key);
-		return buildFunc();
-	}
-
-	bool EntityTypeIndexManager::buildAllIndexes(const std::function<bool()> &buildFunc) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		return buildFunc();
 	}
 
@@ -51,33 +50,10 @@ namespace graph::query::indexes {
 			return true;
 		}
 		if (indexType == "property") {
-			if (key.empty()) {
-				// Drop all property indexes
-				propertyIndex_->drop();
-			} else {
-				// Drop a specific property index
-				propertyIndex_->dropKey(key);
-			}
+			propertyIndex_->dropKey(key);
 			return true;
 		}
 		return false;
-	}
-
-	std::vector<std::pair<std::string, std::string>> EntityTypeIndexManager::listIndexes() const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-		std::vector<std::pair<std::string, std::string>> result;
-
-		// An index "exists" if it's not empty (i.e., has persisted data).
-		if (!labelIndex_->isEmpty()) {
-			result.emplace_back("label", "");
-		}
-
-		auto indexedKeys = propertyIndex_->getIndexedKeys();
-		for (const auto &key: indexedKeys) {
-			result.emplace_back("property", key);
-		}
-
-		return result;
 	}
 
 	void EntityTypeIndexManager::persistState() const {

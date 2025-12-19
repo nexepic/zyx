@@ -41,11 +41,13 @@ showIndexesStatement
 
 // Use LPAREN propertyKeyName RPAREN to explicitly match :Label(prop)
 dropIndexStatement
-    : K_DROP K_INDEX K_ON nodeLabel LPAREN propertyKeyName RPAREN
+    : K_DROP K_INDEX symbolicName                                     # DropIndexByName
+    | K_DROP K_INDEX K_ON nodeLabel LPAREN propertyKeyName RPAREN     # DropIndexByLabel
     ;
 
 createIndexStatement
-    : K_CREATE K_INDEX K_ON nodeLabel LPAREN propertyKeyName RPAREN
+    : K_CREATE K_INDEX symbolicName? K_FOR nodePattern K_ON LPAREN propertyExpression RPAREN # CreateIndexByPattern
+    | K_CREATE K_INDEX symbolicName? K_ON nodeLabel LPAREN propertyKeyName RPAREN            # CreateIndexByLabel
     ;
 
 // ============================================================================

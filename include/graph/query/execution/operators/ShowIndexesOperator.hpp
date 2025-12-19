@@ -27,30 +27,26 @@ namespace graph::query::execution::operators {
 
             RecordBatch batch;
 
-            // 1. Fetch Node Indexes
-            auto nodeIndexes = indexManager_->listIndexes("node");
-            for (const auto& [type, key] : nodeIndexes) {
-                Record r;
-                r.setValue("entity_type", PropertyValue("node"));
-                r.setValue("type", PropertyValue(type));
-                r.setValue("key", PropertyValue(key.empty() ? "<Label Index>" : key));
-                batch.push_back(std::move(r));
-            }
+            // Use the detailed list API from IndexManager
+            auto indexes = indexManager_->listIndexesDetailed();
 
-            // 2. Fetch Edge Indexes
-            auto edgeIndexes = indexManager_->listIndexes("edge");
-            for (const auto& [type, key] : edgeIndexes) {
+            for (const auto& [name, type, label, prop] : indexes) {
                 Record r;
-                r.setValue("entity_type", PropertyValue("edge"));
+                // Set the values in the Record
+                r.setValue("name", PropertyValue(name));
                 r.setValue("type", PropertyValue(type));
-                r.setValue("key", PropertyValue(key.empty() ? "<Label Index>" : key));
+                r.setValue("entity", PropertyValue(type == "node" ? "NODE" : "EDGE"));
+                r.setValue("name", PropertyValue(name));
+                r.setValue("type", PropertyValue(prop.empty() ? "LABEL" : "PROPERTY")); // Infer type from property
+                r.setValue("label", PropertyValue(label));
+                r.setValue("properties", PropertyValue(prop));
+
                 batch.push_back(std::move(r));
             }
 
             executed_ = true;
 
             if (batch.empty()) {
-                // Return a single record indicating no indexes found (optional, or just return empty batch)
                 return std::nullopt;
             }
             return batch;
@@ -59,7 +55,7 @@ namespace graph::query::execution::operators {
         void close() override {}
 
         [[nodiscard]] std::vector<std::string> getOutputVariables() const override {
-            return {"entity_type", "type", "key"};
+            return {"name", "type", "label", "properties"};
         }
 
         [[nodiscard]] std::string toString() const override {

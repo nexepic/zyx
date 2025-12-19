@@ -108,7 +108,7 @@ namespace graph::cli {
 			}
 		});
 
-		app.require_subcommand(1, 1);
+		app.require_subcommand(1);
 
 		try {
 			app.parse(argc, argv);

@@ -46,4 +46,8 @@ namespace graph::storage::state::keys {
 		constexpr char ENABLED[] = "enabled";
 	}
 
+	// Stores metadata map: IndexName -> DefinitionString
+	// DefinitionString format: "TYPE|LABEL|PROPERTY"
+	constexpr char SYS_INDEXES[] = "sys.indexes";
+
 } // namespace graph::storage::state::keys

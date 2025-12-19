@@ -30,7 +30,7 @@ namespace graph::query {
 	QueryEngine::~QueryEngine() = default;
 
 	std::shared_ptr<parser::IQueryParser> QueryEngine::getParser(Language lang) {
-		if (parsers_.find(lang) == parsers_.end()) {
+		if (!parsers_.contains(lang)) {
 			if (lang == Language::Cypher) {
 				// Pass the planner to the parser so it can build trees
 				parsers_[lang] = std::make_shared<parser::cypher::CypherParserImpl>(queryPlanner_);
@@ -41,9 +41,9 @@ namespace graph::query {
 		return parsers_[lang];
 	}
 
-	QueryResult QueryEngine::execute(const std::string& queryStr, Language lang) {
+	QueryResult QueryEngine::execute(const std::string& query, const Language lang) {
 		// 1. Parse into Operator Tree
-		auto planTree = getParser(lang)->parse(queryStr);
+		auto planTree = getParser(lang)->parse(query);
 		// 2. Execute
 		return queryExecutor_->execute(std::move(planTree));
 	}
@@ -51,26 +51,5 @@ namespace graph::query {
 	QueryResult QueryEngine::execute(std::unique_ptr<execution::PhysicalOperator> plan) const {
 		return queryExecutor_->execute(std::move(plan));
 	}
-
-    // --- Index Management Wrappers (Unchanged Logic) ---
-    bool QueryEngine::buildIndexes(const std::string &entityType) const {
-        if (entityType != "node" && entityType != "edge") return false;
-        return indexManager_->buildIndexes(entityType);
-    }
-
-    bool QueryEngine::buildPropertyIndex(const std::string &entityType, const std::string &key) const {
-        if (entityType != "node" && entityType != "edge") return false;
-        return indexManager_->buildPropertyIndex(entityType, key);
-    }
-
-    bool QueryEngine::dropIndex(const std::string &entityType, const std::string &indexType, const std::string &key) const {
-        if (entityType != "node" && entityType != "edge") return false;
-        return indexManager_->dropIndex(entityType, indexType, key);
-    }
-
-    std::vector<std::pair<std::string, std::string>> QueryEngine::listIndexes(const std::string &entityType) const {
-        if (entityType != "node" && entityType != "edge") return {};
-        return indexManager_->listIndexes(entityType);
-    }
 
 } // namespace graph::query

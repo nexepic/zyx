@@ -27,68 +27,56 @@ namespace graph::query::indexes {
 
 	IndexBuilder::~IndexBuilder() = default;
 
-	bool IndexBuilder::buildAllNodeIndexes() const {
+	bool IndexBuilder::buildNodeLabelIndex() const {
 		try {
-			auto nodeIndexManager = indexManager_->getNodeIndexManager();
-			auto labelIndex = nodeIndexManager->getLabelIndex();
-			auto propertyIndex = nodeIndexManager->getPropertyIndex();
-
+			auto labelIndex = indexManager_->getNodeIndexManager()->getLabelIndex();
+			// Clear existing data to rebuild
 			labelIndex->clear();
-			propertyIndex->clear();
 
-			for (const auto &[startId, endId]: getNodeIdRanges()) {
+			for (const auto& [startId, endId] : getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() >= BATCH_SIZE) {
-						processNodeBatch(batchIds, labelIndex, propertyIndex);
+						// Pass nullptr for propertyIndex to only process labels
+						processNodeBatch(batchIds, labelIndex, nullptr, "");
 						batchIds.clear();
 					}
 				}
 				if (!batchIds.empty()) {
-					processNodeBatch(batchIds, labelIndex, propertyIndex);
+					processNodeBatch(batchIds, labelIndex, nullptr, "");
 				}
 			}
-
 			labelIndex->flush();
-			propertyIndex->flush();
-
 			return true;
-		} catch (const std::exception &e) {
-			std::cerr << "Error in buildAllNodeIndexes: " << e.what() << std::endl;
+		} catch (...) {
 			return false;
 		}
 	}
 
-	bool IndexBuilder::buildAllEdgeIndexes() const {
+	bool IndexBuilder::buildEdgeLabelIndex() const {
 		try {
-			auto edgeIndexManager = indexManager_->getEdgeIndexManager();
-			auto labelIndex = edgeIndexManager->getLabelIndex();
-			auto propertyIndex = edgeIndexManager->getPropertyIndex();
-
+			auto labelIndex = indexManager_->getEdgeIndexManager()->getLabelIndex();
+			// Clear existing data to rebuild
 			labelIndex->clear();
-			propertyIndex->clear();
 
-			for (const auto &[startId, endId]: getEdgeIdRanges()) {
+			for (const auto& [startId, endId] : getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() >= BATCH_SIZE) {
-						processEdgeBatch(batchIds, labelIndex, propertyIndex);
+						// Pass nullptr for propertyIndex to only process labels
+						processEdgeBatch(batchIds, labelIndex, nullptr, "");
 						batchIds.clear();
 					}
 				}
 				if (!batchIds.empty()) {
-					processEdgeBatch(batchIds, labelIndex, propertyIndex);
+					processEdgeBatch(batchIds, labelIndex, nullptr, "");
 				}
 			}
-
 			labelIndex->flush();
-			propertyIndex->flush();
-
 			return true;
-		} catch (const std::exception &e) {
-			std::cerr << "Error in buildAllEdgeIndexes: " << e.what() << std::endl;
+		} catch (...) {
 			return false;
 		}
 	}

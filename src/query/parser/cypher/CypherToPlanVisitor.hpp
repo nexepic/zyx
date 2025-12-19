@@ -45,8 +45,14 @@ namespace graph::parser::cypher {
 
 		// --- Administration ---
 		std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) override;
-		std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) override;
-		std::any visitCreateIndexStatement(CypherParser::CreateIndexStatementContext *ctx) override;
+
+		// Drop
+		std::any visitDropIndexByName(CypherParser::DropIndexByNameContext *ctx) override;
+		std::any visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) override;
+
+		// Create
+		std::any visitCreateIndexByPattern(CypherParser::CreateIndexByPatternContext *ctx) override;
+		std::any visitCreateIndexByLabel(CypherParser::CreateIndexByLabelContext *ctx) override;
 
 		std::any visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) override;
 		std::any visitSetStatement(CypherParser::SetStatementContext *ctx) override;
@@ -57,6 +63,8 @@ namespace graph::parser::cypher {
 
 		// --- Helpers ---
 		void chainOperator(std::unique_ptr<query::execution::PhysicalOperator> newOp);
+
+		std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext* ctx);
 
 		std::string extractVariable(CypherParser::VariableContext *ctx);
 		std::string extractLabel(CypherParser::NodeLabelsContext *ctx);

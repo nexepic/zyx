@@ -48,15 +48,28 @@ namespace graph::query::indexes {
 		bool hasLabelIndex(const std::string &entityType) const;
 		bool hasPropertyIndex(const std::string &entityType, const std::string &key) const;
 
-		// Index creation methods now take an entity type
-		bool buildIndexes(const std::string &entityType);
-		bool buildPropertyIndex(const std::string &entityType, const std::string &key);
+		/**
+		 * @brief Creates a named index and persists metadata.
+		 */
+		bool createIndex(const std::string &indexName, const std::string &entityType, const std::string &label,
+						 const std::string &property) const;
 
-		// Drop index method
-		bool dropIndex(const std::string &entityType, const std::string &indexType, const std::string &key = "");
+		/**
+		 * @brief Drops an index by name or definition.
+		 */
+		bool dropIndexByName(const std::string &indexName) const;
 
-		// List indexes for a specific entity type
-		std::vector<std::pair<std::string, std::string>> listIndexes(const std::string &entityType) const;
+		/**
+		 * @brief Drops an index by looking up its definition (Label + Property).
+		 *        Automatically detects if it is a Node or Edge index based on metadata.
+		 * @return true if found and dropped.
+		 */
+		bool dropIndexByDefinition(const std::string& label, const std::string& property) const;
+
+		/**
+		 * @brief Returns list of {Name, EntityType, Label, Property}
+		 */
+		std::vector<std::tuple<std::string, std::string, std::string, std::string>> listIndexesDetailed() const;
 
 		void onStorageFlush() override;
 

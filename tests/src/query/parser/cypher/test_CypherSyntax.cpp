@@ -66,6 +66,30 @@ protected:
 // 1. Read Operations (MATCH)
 // ============================================================================
 
+TEST_F(CypherSyntaxTest, ValidMatchWhere) {
+	// Basic
+	EXPECT_TRUE(validate("MATCH (n) RETURN n"));
+
+	// Property Access
+	EXPECT_TRUE(validate("MATCH (n) WHERE n.age > 10 RETURN n"));
+	EXPECT_TRUE(validate("MATCH (n) WHERE n.age = 30 RETURN n"));
+	EXPECT_TRUE(validate("MATCH (n) WHERE n.price <= 100.5 RETURN n"));
+
+	// String Literal
+	EXPECT_TRUE(validate("MATCH (n) WHERE n.name = 'Alice' RETURN n"));
+
+	// Logic Operators
+	EXPECT_TRUE(validate("MATCH (n) WHERE n.age > 10 AND n.name = 'Bob' RETURN n"));
+}
+
+TEST_F(CypherSyntaxTest, ValidPatterns) {
+	// Multi-hop
+	EXPECT_TRUE(validate("MATCH (a)-[r1]->(b)-[r2]->(c) RETURN a, c"));
+	// Directions
+	EXPECT_TRUE(validate("MATCH (a)<-[r]-(b) RETURN a"));
+	EXPECT_TRUE(validate("MATCH (a)-[r]-(b) RETURN a"));
+}
+
 TEST_F(CypherSyntaxTest, ValidMatchReturn) {
 	EXPECT_TRUE(validate("MATCH (n:Person) RETURN n"));
 	EXPECT_TRUE(validate("MATCH (n)-[r:KNOWS]->(m) RETURN r"));
@@ -121,9 +145,19 @@ TEST_F(CypherSyntaxTest, ValidMerge) {
 // 3. Administration & Procedures
 // ============================================================================
 
-TEST_F(CypherSyntaxTest, ValidAdministration) {
+TEST_F(CypherSyntaxTest, ValidIndexCommands) {
+	// 1. Legacy Syntax (Anonymous)
 	EXPECT_TRUE(validate("CREATE INDEX ON :User(name)"));
 	EXPECT_TRUE(validate("DROP INDEX ON :User(name)"));
+
+	// 2. Named Index Syntax
+	// CREATE INDEX name FOR (n:Label) ON (n.prop)
+	EXPECT_TRUE(validate("CREATE INDEX my_idx FOR (n:User) ON (n.name)"));
+
+	// DROP INDEX name
+	EXPECT_TRUE(validate("DROP INDEX my_idx"));
+
+	// SHOW
 	EXPECT_TRUE(validate("SHOW INDEXES"));
 }
 
@@ -163,4 +197,18 @@ TEST_F(CypherSyntaxTest, InvalidDelete) {
 TEST_F(CypherSyntaxTest, UnfinishedQuery) {
 	EXPECT_FALSE(validate("MATCH (n) WHERE n.age >"));
 	EXPECT_FALSE(validate("CREATE (n:User {name: 'A'"));
+}
+
+TEST_F(CypherSyntaxTest, InvalidWhereSyntax) {
+	// Missing operator
+	EXPECT_FALSE(validate("MATCH (n) WHERE n.age 10"));
+	// Missing property
+	EXPECT_FALSE(validate("MATCH (n) WHERE > 10"));
+}
+
+TEST_F(CypherSyntaxTest, InvalidIndexSyntax) {
+	// Missing ON
+	EXPECT_FALSE(validate("CREATE INDEX :User(name)"));
+	// Missing Parens (if grammar enforces them)
+	EXPECT_FALSE(validate("CREATE INDEX ON :User name"));
 }

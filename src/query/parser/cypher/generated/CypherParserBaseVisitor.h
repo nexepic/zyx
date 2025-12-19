@@ -36,11 +36,19 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *ctx) override {
+  virtual std::any visitDropIndexByName(CypherParser::DropIndexByNameContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitCreateIndexStatement(CypherParser::CreateIndexStatementContext *ctx) override {
+  virtual std::any visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitCreateIndexByPattern(CypherParser::CreateIndexByPatternContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitCreateIndexByLabel(CypherParser::CreateIndexByLabelContext *ctx) override {
     return visitChildren(ctx);
   }
 

@@ -31,9 +31,13 @@ public:
 
     virtual std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *context) = 0;
 
-    virtual std::any visitDropIndexStatement(CypherParser::DropIndexStatementContext *context) = 0;
+    virtual std::any visitDropIndexByName(CypherParser::DropIndexByNameContext *context) = 0;
 
-    virtual std::any visitCreateIndexStatement(CypherParser::CreateIndexStatementContext *context) = 0;
+    virtual std::any visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *context) = 0;
+
+    virtual std::any visitCreateIndexByPattern(CypherParser::CreateIndexByPatternContext *context) = 0;
+
+    virtual std::any visitCreateIndexByLabel(CypherParser::CreateIndexByLabelContext *context) = 0;
 
     virtual std::any visitQuery(CypherParser::QueryContext *context) = 0;
 

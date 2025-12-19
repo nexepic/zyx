@@ -26,7 +26,7 @@ namespace graph::query {
 		 * @param plan The root of the operator tree.
 		 * @return QueryResult containing the aggregated data.
 		 */
-		QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan) const;
+		static QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan);
 	};
 
 } // namespace graph::query

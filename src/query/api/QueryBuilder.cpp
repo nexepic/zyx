@@ -10,78 +10,51 @@
 
 #include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
+#include "graph/query/execution/operators/CreateNodeOperator.hpp"
 
 namespace graph::query {
 
 	QueryBuilder::QueryBuilder(std::shared_ptr<QueryPlanner> planner) : planner_(std::move(planner)) {}
 
-	QueryBuilder &QueryBuilder::create(const std::string &variable, const std::string &label,
-									   const std::unordered_map<std::string, PropertyValue> &props) {
-		auto op = planner_->createOp(variable, label, props);
-		append(std::move(op));
-		return *this;
-	}
-
-	QueryBuilder &QueryBuilder::create(const std::string &variable, const std::string &label,
-									   const std::string &sourceVar, const std::string &targetVar,
-									   const std::unordered_map<std::string, PropertyValue> &props) {
-
-		// Create the edge operator
-		auto op = planner_->createOp(variable, label, props, sourceVar, targetVar);
-
-		// Link it to the existing pipeline (Edge creation needs upstream nodes)
-		if (root_) {
-			// In a perfect world, PhysicalOperator has setChild.
-			// Here we might need a dynamic_cast if the base class doesn't enforce piping.
-			// Assuming CreateEdgeOperator has setChild:
-			if (auto *edgeOp = dynamic_cast<execution::operators::CreateEdgeOperator *>(op.get())) {
-				edgeOp->setChild(std::move(root_));
-			}
-			root_ = std::move(op);
-		} else {
-			throw std::runtime_error("Cannot CREATE relationship without preceding matches (Variables not bound).");
-		}
-
-		return *this;
-	}
-
-	QueryBuilder &QueryBuilder::createIndex(const std::string &label, const std::string &property) {
-		root_ = planner_->createIndexOp(label, property);
-		return *this;
-	}
-
+	// --- Chain Helper ---
 	void QueryBuilder::append(std::unique_ptr<execution::PhysicalOperator> op) {
-		// Simple chaining logic
-		// If 'op' is a filter or something that takes a child, wrap 'root_'.
-		// If 'op' is a source (like CreateNode can be), it might replace root or join.
-		// For simplicity in this example:
-		// 1. If op is CreateNode, it stands alone or creates a Cartesian product (not handled here).
-		// 2. Ideally, use a helper "Pipe" abstraction.
-
-		// Quick fix for this demo: replace root if root is null.
 		if (!root_) {
 			root_ = std::move(op);
-		} else {
-			// If we have a root, and we create a node, we effectively have two disconnected streams.
-			// Real engines use a "CartesianProduct" or "PassThrough" operator here.
-			// For now, let's assume CreateNode replaces root only if root is empty.
-			// OR, if CreateNode is meant to just add to the graph regardless of context:
-			// It becomes the new root, but it doesn't consume the old root?
-			// This logic depends on if you support "MATCH (n) CREATE (m)".
-
-			// Let's assume standalone create for now.
-			root_ = std::move(op);
+			return;
 		}
+
+		// Try to link 'Create' operators to form a chain (Pipe)
+		if (auto *edgeOp = dynamic_cast<execution::operators::CreateEdgeOperator *>(op.get())) {
+			edgeOp->setChild(std::move(root_));
+			root_ = std::move(op);
+			return;
+		}
+		if (auto *nodeOp = dynamic_cast<execution::operators::CreateNodeOperator *>(op.get())) {
+			nodeOp->setChild(std::move(root_));
+			root_ = std::move(op);
+			return;
+		}
+
+		// Default: If the new operator wraps the old root (like Filter/Project/Delete/Set),
+		// it should have been constructed that way by the Caller via Planner.
+		// However, QueryBuilder calls Planner factories which usually take 'child' as arg.
+		// Wait! My QueryPlanner factories (setOp, deleteOp) TAKE the child.
+		// So 'op' already contains 'root_'. We just need to update root_.
+		root_ = std::move(op);
 	}
 
-	QueryBuilder &QueryBuilder::match(const std::string &variable, const std::string &label) {
-		// If root already exists, this would imply a Cartesian Product or Join (simplified here)
-		// For now, assume MATCH starts the chain.
-		root_ = planner_->scanOp(variable, label);
+	// --- Read ---
+
+	QueryBuilder &QueryBuilder::match_(const std::string &variable, const std::string &label, const std::string &key,
+									   const PropertyValue &value) {
+		// If root exists, this implies a Join/Cartesian (not supported in simple builder yet).
+		// For now, we assume MATCH starts the query or resets it.
+		root_ = planner_->scanOp(variable, label, key, value);
 		return *this;
 	}
 
-	QueryBuilder &QueryBuilder::where(const std::string &variable, const std::string &key, const PropertyValue &value) {
+	QueryBuilder &QueryBuilder::where_(const std::string &variable, const std::string &key,
+									   const PropertyValue &value) {
 		if (!root_)
 			throw std::runtime_error("WHERE called without a preceding MATCH/SCAN");
 
@@ -89,19 +62,98 @@ namespace graph::query {
 			auto node = r.getNode(variable);
 			if (!node)
 				return false;
-			// Assuming properties are loaded
 			const auto &props = node->getProperties();
 			auto it = props.find(key);
 			return it != props.end() && it->second == value;
 		};
 
-		std::string description = variable + "." + key + " == " + value.toString();
+		std::string desc = variable + "." + key + " == " + value.toString();
+		// Wraps current root
+		root_ = planner_->filterOp(std::move(root_), predicate, desc);
+		return *this;
+	}
 
-		// Pass the description as the 3rd argument
-		root_ = planner_->filterOp(std::move(root_), predicate, description);
+	// --- Write (Data) ---
 
+	QueryBuilder &QueryBuilder::create_(const std::string &variable, const std::string &label,
+										const std::unordered_map<std::string, PropertyValue> &props) {
+		auto op = planner_->createOp(variable, label, props);
+		append(std::move(op));
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::create_(const std::string &variable, const std::string &label,
+										const std::string &sourceVar, const std::string &targetVar,
+										const std::unordered_map<std::string, PropertyValue> &props) {
+		auto op = planner_->createOp(variable, label, props, sourceVar, targetVar);
+		append(std::move(op));
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::delete_(const std::vector<std::string> &variables, bool detach) {
+		if (!root_)
+			throw std::runtime_error("DELETE must follow a MATCH");
+		// Wraps current root
+		root_ = planner_->deleteOp(std::move(root_), variables, detach);
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::set_(const std::string &variable, const std::string &key, const PropertyValue &value) {
+		if (!root_)
+			throw std::runtime_error("SET must follow a MATCH");
+
+		std::vector<execution::operators::SetItem> items;
+		items.push_back({variable, key, value});
+
+		// Wraps current root
+		root_ = planner_->setOp(std::move(root_), items);
+		return *this;
+	}
+
+	// --- Write (Index) ---
+
+	QueryBuilder &QueryBuilder::createIndex_(const std::string &label, const std::string &property,
+											 const std::string &indexName) {
+		auto op = planner_->createIndexOp(indexName, label, property);
+		append(std::move(op));
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::dropIndex_(const std::string &indexName) {
+		auto op = planner_->dropIndexOp(indexName);
+		append(std::move(op));
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::dropIndex_(const std::string &label, const std::string &property) {
+		auto op = planner_->dropIndexOp(label, property);
+		append(std::move(op));
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::showIndexes_() {
+		auto op = planner_->showIndexesOp();
+		append(std::move(op));
+		return *this;
+	}
+
+	// --- Procedures ---
+
+	QueryBuilder &QueryBuilder::call_(const std::string &procedure, const std::vector<PropertyValue> &args) {
+		auto op = planner_->callProcedureOp(procedure, args);
+		append(std::move(op));
+		return *this;
+	}
+
+	// --- Finalize ---
+
+	QueryBuilder &QueryBuilder::return_(const std::vector<std::string> &variables) {
+		if (!root_)
+			return *this;
+		root_ = planner_->projectOp(std::move(root_), variables);
 		return *this;
 	}
 
 	std::unique_ptr<execution::PhysicalOperator> QueryBuilder::build() { return std::move(root_); }
+
 } // namespace graph::query
