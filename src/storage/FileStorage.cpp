@@ -104,7 +104,7 @@ namespace graph::storage {
 		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
 
 		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
-		databaseInspector->displayDatabaseStructure();
+		// databaseInspector->displayDatabaseStructure();
 	}
 
 	void FileStorage::close() {
@@ -631,7 +631,7 @@ namespace graph::storage {
 						dataManager->clearCache();
 
 						// Just clear the allocator cache. It will lazy-load on next insert.
-						idAllocator->clearAllCaches();
+						idAllocator->resetAfterCompaction();
 
 						dataManager->getSegmentIndexManager()->buildSegmentIndexes();
 					}

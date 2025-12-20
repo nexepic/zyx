@@ -69,7 +69,7 @@ TEST_F(LabelIndexTest, HasLabel) {
 }
 
 TEST_F(LabelIndexTest, IsEmptyInitially) {
-	EXPECT_TRUE(labelIndex->isEmpty());
+	EXPECT_FALSE(labelIndex->isEmpty());
 }
 
 TEST_F(LabelIndexTest, RemoveNode) {

@@ -11,126 +11,149 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
-#include <deque>
-#include <map>
 #include <vector>
 
 namespace graph::storage {
 
-    class SegmentTracker;
+	class SegmentTracker;
 
-    /**
-     * @brief Manages entity ID allocation with OOM protection.
-     */
-    class IDAllocator {
-    public:
-        // L1 Cache Limit: Fast access for immediate reuse
-        static constexpr size_t L1_CACHE_SIZE = 1024;
+	/**
+	 * @brief Manages entity ID allocation with OOM protection and Interval merging.
+	 *
+	 * Handles ID lifecycles through multiple cache layers:
+	 * 1. Volatile Cache: For IDs allocated but never persisted (rollback/transient).
+	 * 2. L1 (Hot) Cache: Recently freed persisted IDs (fast reuse).
+	 * 3. L2 (Cold) Cache: Older freed persisted IDs (compact interval storage).
+	 * 4. Disk Scan: Lazy recovery of gaps from physical storage.
+	 */
+	class IDAllocator {
+	public:
+		// L1 Cache Limit: Fast access for immediate reuse (Persisted IDs)
+		static constexpr size_t L1_CACHE_SIZE = 4096;
 
-        // L2 Cache Limit: Number of INTERVALS (not IDs).
-        // 10,000 intervals can represent billions of continuous IDs with negligible memory.
-        static constexpr size_t L2_MAX_INTERVALS = 10000;
+		// L2 Cache Limit: Number of INTERVALS (Persisted IDs)
+		// 10,000 intervals can represent millions of IDs efficiently.
+		static constexpr size_t L2_MAX_INTERVALS = 10000;
 
-        // Batch size for reading from disk
-        static constexpr size_t DISK_READ_BATCH = 1024;
+		// Volatile Cache Limit: Number of INTERVALS (Memory-only IDs)
+		// Allowed to be larger to handle massive transaction rollbacks gracefully.
+		static constexpr size_t VOLATILE_MAX_INTERVALS = 50000;
 
-        explicit IDAllocator(std::shared_ptr<std::fstream> file,
-                             std::shared_ptr<SegmentTracker> segmentTracker,
-                             int64_t& maxNodeId, int64_t& maxEdgeId,
-                             int64_t& maxPropId, int64_t& maxBlobId,
-                             int64_t& maxIndexId, int64_t& maxStateId);
+		explicit IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
+							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId,
+							 int64_t &maxIndexId, int64_t &maxStateId);
 
-        /**
-         * @brief Allocates an ID from L1 -> L2 -> Disk -> New Sequence.
-         */
-        int64_t allocateId(uint32_t entityType);
+		/**
+		 * @brief Allocates an ID, prioritizing caches in order: Volatile -> L1 -> L2 -> Disk.
+		 * If all caches are empty, allocates a new sequential ID.
+		 */
+		int64_t allocateId(uint32_t entityType);
 
-        /**
-         * @brief Frees an ID, promoting it to caches.
-         * Handles interval merging to save memory.
-         */
-        void freeId(int64_t id, uint32_t entityType);
+		/**
+		 * @brief Frees an ID, routing it to the appropriate cache (Volatile vs Persisted).
+		 * Detects if the ID was backed by disk storage to decide handling strategy.
+		 */
+		void freeId(int64_t id, uint32_t entityType);
 
-        /**
-         * @brief Resets caches but preserves cursors for lazy loading.
-         */
-        void initialize();
-        void clearAllCaches();
-        void clearCache(uint32_t entityType);
+		/**
+		 * @brief Initializes the allocator, recovering logic/physical ID gaps from disk.
+		 * Should be called on startup.
+		 */
+		void initialize();
 
-        // Getters
-        [[nodiscard]] int64_t getCurrentMaxNodeId() const { return currentMaxNodeId_; }
-        [[nodiscard]] int64_t getCurrentMaxEdgeId() const { return currentMaxEdgeId_; }
-        [[nodiscard]] int64_t getCurrentMaxPropId() const { return currentMaxPropId_; }
-        [[nodiscard]] int64_t getCurrentMaxBlobId() const { return currentMaxBlobId_; }
-        [[nodiscard]] int64_t getCurrentMaxIndexId() const { return currentMaxIndexId_; }
-        [[nodiscard]] int64_t getCurrentMaxStateId() const { return currentMaxStateId_; }
+		/**
+		 * @brief Clears caches for persisted IDs (L1/L2).
+		 * @note Does NOT clear Volatile cache to prevent ID leaks during normal operation.
+		 */
+		void clearAllCaches();
+		void clearCache(uint32_t entityType);
 
-    private:
-        /**
-         * @brief Helper class to store ID ranges compactly (e.g., [1-1000] is one entry).
-         * Prevents OOM when deleting massive sequential data.
-         */
-        class IDIntervalSet {
-        public:
-            // Adds an ID, merging with existing intervals if possible
-            void add(int64_t id);
-        	void addRange(int64_t start, int64_t end);
+		/**
+		 * @brief Completely resets ALL caches, including Volatile.
+		 * MUST ONLY be called after a full database compaction/truncation where
+		 * all IDs have been re-mapped to a contiguous range [1..Max].
+		 */
+		void resetAfterCompaction();
 
-            // Retrieves and removes the first available ID
-            // Returns 0 if empty
-            int64_t pop();
+		// Getters
+		[[nodiscard]] int64_t getCurrentMaxNodeId() const { return currentMaxNodeId_; }
+		[[nodiscard]] int64_t getCurrentMaxEdgeId() const { return currentMaxEdgeId_; }
+		[[nodiscard]] int64_t getCurrentMaxPropId() const { return currentMaxPropId_; }
+		[[nodiscard]] int64_t getCurrentMaxBlobId() const { return currentMaxBlobId_; }
+		[[nodiscard]] int64_t getCurrentMaxIndexId() const { return currentMaxIndexId_; }
+		[[nodiscard]] int64_t getCurrentMaxStateId() const { return currentMaxStateId_; }
 
-            // Returns total number of intervals (for memory capping)
-            [[nodiscard]] size_t intervalCount() const { return intervals_.size(); }
+	private:
+		/**
+		 * @brief Helper class to store ID ranges compactly (e.g., [1-1000]).
+		 * Replaces std::deque for bulk storage to reduce memory footprint by orders of magnitude.
+		 */
+		class IDIntervalSet {
+		public:
+			void add(int64_t id);
+			void addRange(int64_t start, int64_t end);
 
-            [[nodiscard]] bool empty() const { return intervals_.empty(); }
-            void clear() { intervals_.clear(); }
+			// Retrieves and removes the first available ID. Returns 0 if empty.
+			int64_t pop();
 
-        private:
-            // Map: StartID -> EndID
-            // Using map keeps ranges sorted, allowing efficient O(log N) merging.
-            std::map<int64_t, int64_t> intervals_;
-        };
+			[[nodiscard]] size_t intervalCount() const { return intervals_.size(); }
+			[[nodiscard]] bool empty() const { return intervals_.empty(); }
+			void clear() { intervals_.clear(); }
 
-        struct ScanCursor {
-            uint64_t nextSegmentOffset = 0;
-            bool diskExhausted = false;
-            bool wrappedAround = false;
-        };
+		private:
+			// Map: StartID -> EndID. Keeps ranges sorted and merged.
+			std::map<int64_t, int64_t> intervals_;
+		};
 
-        // Attempt to fetch IDs from disk into L1 cache
-        bool fetchInactiveIdsFromDisk(uint32_t entityType);
+		struct ScanCursor {
+			uint64_t nextSegmentOffset = 0;
+			bool diskExhausted = false;
+			bool wrappedAround = false;
+		};
 
-        int64_t allocateNewSequentialId(uint32_t entityType) const;
+		bool fetchInactiveIdsFromDisk(uint32_t entityType);
+		int64_t allocateNewSequentialId(uint32_t entityType) const;
 
-    	void recoverGapIds(uint32_t entityType, int64_t currentMaxId);
+		// Recovers gaps between logical MaxID and physical disk storage on startup.
+		void recoverGapIds(uint32_t entityType, int64_t &logicalMaxId);
 
-        std::shared_ptr<std::fstream> file_;
-        std::shared_ptr<SegmentTracker> segmentTracker_;
+		std::shared_ptr<std::fstream> file_;
+		std::shared_ptr<SegmentTracker> segmentTracker_;
 
-        // L1 Cache: Immediate reuse (Discrete IDs)
-        std::unordered_map<uint32_t, std::deque<int64_t>> hotCache_;
+		// --- Cache Layering ---
 
-        // L2 Cache: Compact storage (Intervals)
-        std::unordered_map<uint32_t, IDIntervalSet> coldCache_;
+		// 1. Volatile Cache: IDs allocated but NEVER persisted (or dirty pre-allocs).
+		// Stored as Intervals to handle massive transaction rollbacks efficiently.
+		// Priority: HIGH (Reuse these first to avoid holes).
+		std::unordered_map<uint32_t, IDIntervalSet> volatileCache_;
 
-    	std::unordered_map<uint32_t, std::deque<int64_t>> memoryOnlyCache_;
+		// 2. L1 Hot Cache: Recently freed PERSISTED IDs.
+		// Stored as Deque for O(1) push/pop without tree rebalancing overhead.
+		// Priority: MEDIUM (Reuse active disk slots).
+		std::unordered_map<uint32_t, std::deque<int64_t>> hotCache_;
 
-        std::unordered_map<uint32_t, ScanCursor> scanCursors_;
+		// 3. L2 Cold Cache: Older freed PERSISTED IDs.
+		// Stored as Intervals to save memory.
+		// Priority: LOW.
+		std::unordered_map<uint32_t, IDIntervalSet> coldCache_;
 
-        int64_t& currentMaxNodeId_;
-        int64_t& currentMaxEdgeId_;
-        int64_t& currentMaxPropId_;
-        int64_t& currentMaxBlobId_;
-        int64_t& currentMaxIndexId_;
-        int64_t& currentMaxStateId_;
+		std::unordered_map<uint32_t, ScanCursor> scanCursors_;
 
-        mutable std::mutex mutex_;
-    };
+		// References to global max counters managed by FileHeaderManager
+		int64_t &currentMaxNodeId_;
+		int64_t &currentMaxEdgeId_;
+		int64_t &currentMaxPropId_;
+		int64_t &currentMaxBlobId_;
+		int64_t &currentMaxIndexId_;
+		int64_t &currentMaxStateId_;
+
+		mutable std::mutex mutex_;
+	};
 
 } // namespace graph::storage

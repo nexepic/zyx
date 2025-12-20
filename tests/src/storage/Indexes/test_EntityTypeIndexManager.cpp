@@ -85,14 +85,12 @@ protected:
 // ============================================================================
 
 TEST_F(EntityTypeIndexManagerTest, Constructor) {
-    // Verify index retrieval methods
     EXPECT_NE(nodeIndexManager->getLabelIndex(), nullptr);
     EXPECT_NE(nodeIndexManager->getPropertyIndex(), nullptr);
 
-    // Verify indexes are initially empty/inactive
-    EXPECT_FALSE(nodeIndexManager->hasLabelIndex());
-    // Note: PropertyIndex might not be "empty" if no keys are registered,
-    // but hasKeyIndexed should return false for arbitrary keys.
+    EXPECT_TRUE(nodeIndexManager->hasLabelIndex());
+
+    // Property index works on specific keys, so it remains "false" for arbitrary keys
     EXPECT_FALSE(nodeIndexManager->hasPropertyIndex("any_key"));
 }
 

@@ -57,6 +57,15 @@ TEST_F(LogTest, PrintsInfoLogs) {
 	ASSERT_TRUE(cerr_buffer.str().empty());
 }
 
+// Test warning logs with a single argument
+TEST_F(LogTest, PrintsWarningLogs) {
+	graph::log::Log::warn("This is a warning message with number {}", 789);
+	std::string expected = "\033[1;35m[WARN] This is a warning message with number 789\033[0m\n";
+	ASSERT_EQ(cout_buffer.str(), expected);
+	// Ensure cerr has no output
+	ASSERT_TRUE(cerr_buffer.str().empty());
+}
+
 // Test error logs with a single argument
 TEST_F(LogTest, PrintsErrorLogs) {
 	graph::log::Log::error("This is an error message with number {}", 456);

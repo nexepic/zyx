@@ -36,19 +36,12 @@ namespace graph::query::indexes {
 		// 2. Load Enabled Config
 		// Logic: "Construct config key, then get a bool under field 'enabled'"
 		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-		enabled_ = systemStateManager_->get<bool>(configKey, storage::state::keys::Fields::ENABLED, false);
-
-		// Fallback for backward compatibility
-		if (!enabled_ && rootId_ != 0) {
-			enabled_ = true;
-		}
+		enabled_ = systemStateManager_->get<bool>(configKey, storage::state::keys::Fields::ENABLED, true);
 	}
 
 	void LabelIndex::createIndex() {
 		std::unique_lock lock(mutex_);
 		enabled_ = true;
-		// Ideally, persist immediately or wait for flush.
-		// Setting flag in memory is enough for listIndexes() to work immediately.
 	}
 
 	bool LabelIndex::isEmpty() const {
@@ -72,21 +65,27 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 		enabled_ = false;
 
-		// Explicitly remove the specific states used by this module
+		// Explicitly set ENABLED = false instead of removing the key.
+		// This overrides the "Default True" behavior on next restart.
+		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
+		systemStateManager_->set<bool>(configKey, storage::state::keys::Fields::ENABLED, false);
+
+		// We can remove the Root ID part since data is cleared
 		systemStateManager_->remove(stateKey_);
-		systemStateManager_->remove(stateKey_ + storage::state::keys::SUFFIX_CONFIG);
 	}
 
 	void LabelIndex::saveState() const {
 		std::shared_lock lock(mutex_);
-		if (enabled_) {
-			// Save Root
-			systemStateManager_->set<int64_t>(stateKey_, storage::state::keys::Fields::ROOT_ID, rootId_);
 
-			// Save Enabled Config
-			systemStateManager_->set<bool>(stateKey_ + storage::state::keys::SUFFIX_CONFIG,
-										   storage::state::keys::Fields::ENABLED, true);
+		// Save Root ID (if data exists)
+		if (rootId_ != 0) {
+			systemStateManager_->set<int64_t>(stateKey_, storage::state::keys::Fields::ROOT_ID, rootId_);
 		}
+
+		// Save Enabled Config
+		// We always save the config to make the state explicit
+		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
+		systemStateManager_->set<bool>(configKey, storage::state::keys::Fields::ENABLED, enabled_);
 	}
 
 	void LabelIndex::flush() const {

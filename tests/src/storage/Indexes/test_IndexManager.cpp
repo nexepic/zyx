@@ -131,18 +131,28 @@ TEST_F(IndexManagerTest, DuplicateIndexCreation) {
 }
 
 TEST_F(IndexManagerTest, LabelIndexLifecycle) {
-	// Create Label Index (Empty property)
-	// Pass non-empty name so we can verify it by name
-	EXPECT_TRUE(indexManager->createIndex("idx_labels", "node", "", ""));
-
+	// 1. Initial State: Default ON
 	EXPECT_TRUE(indexManager->hasLabelIndex("node"));
 
-	// Check Metadata
+	// 2. Register a Name for the Label Index
+	// Even if it's already on, this should attach the name "idx_labels" to it in metadata
+	EXPECT_TRUE(indexManager->createIndex("idx_labels", "node", "", ""));
+
+	// 3. Verify Persistence
 	EXPECT_TRUE(hasIndexMetadata("idx_labels", ""));
 
-	// Drop
+	// 4. Drop by Name
+	// This should:
+	// a. Find "idx_labels" in metadata
+	// b. Call nodeIndexManager->dropIndex("label", "") -> sets enabled=false
+	// c. Remove metadata
 	EXPECT_TRUE(indexManager->dropIndexByName("idx_labels"));
+
+	// 5. Verify State is OFF
 	EXPECT_FALSE(indexManager->hasLabelIndex("node"));
+
+	// 6. Verify Metadata is GONE
+	EXPECT_FALSE(hasIndexMetadata("idx_labels", ""));
 }
 
 // ============================================================================

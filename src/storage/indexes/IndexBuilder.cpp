@@ -147,7 +147,9 @@ namespace graph::query::indexes {
 			int64_t nodeId = node.getId();
 
 			if (labelIndex) {
-				labelIndex->addNode(nodeId, node.getLabel());
+				if (!node.getLabel().empty()) {
+					labelIndex->addNode(nodeId, node.getLabel());
+				}
 			}
 
 			if (propertyIndex) {
@@ -177,7 +179,9 @@ namespace graph::query::indexes {
 			int64_t edgeId = edge.getId();
 
 			if (labelIndex) {
-				labelIndex->addNode(edgeId, edge.getLabel()); // Use addNode for generality
+				if (!edge.getLabel().empty()) {
+					labelIndex->addNode(edgeId, edge.getLabel());
+				}
 			}
 
 			if (propertyIndex) {

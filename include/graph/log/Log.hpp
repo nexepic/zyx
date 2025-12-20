@@ -31,6 +31,15 @@ namespace graph::log {
 			std::cout << "[INFO] " << std::vformat(fmt, std::make_format_args(args...)) << std::endl;
 		}
 
+		// Warning Logging (Always printed, to stdout, Magenta color)
+		template<typename... Args>
+		static void warn(std::string_view fmt, Args &&...args) {
+			std::lock_guard<std::mutex> lock(mutex_);
+			// ANSI Magenta color
+			std::cout << "\033[1;35m[WARN] " << std::vformat(fmt, std::make_format_args(args...)) << "\033[0m"
+					  << std::endl;
+		}
+
 		// Error Logging (Always printed, to stderr, Red color)
 		template<typename... Args>
 		static void error(std::string_view fmt, Args &&...args) {
