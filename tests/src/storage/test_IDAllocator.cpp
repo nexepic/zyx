@@ -35,6 +35,7 @@ protected:
 		database = std::make_unique<graph::Database>(testFilePath.string());
 		database->open();
 		fileStorage = database->getStorage();
+		dataManager = fileStorage->getDataManager();
 		allocator = fileStorage->getIDAllocator();
 	}
 
@@ -48,9 +49,29 @@ protected:
 		}
 	}
 
+	graph::Node insertNode(const std::string &label) {
+		int64_t id = allocator->allocateId(graph::Node::typeId);
+		graph::Node node(id, label);
+		dataManager->addNode(node);
+		return node;
+	}
+
+	graph::Edge insertEdge(int64_t startId, int64_t endId, const std::string &label) {
+		int64_t id = allocator->allocateId(graph::Edge::typeId);
+		graph::Edge edge(id, startId, endId, label);
+		dataManager->addEdge(edge);
+		return edge;
+	}
+
+	void deleteNode(int64_t id) {
+		graph::Node node_to_delete(id, "");
+		dataManager->deleteNode(node_to_delete);
+	}
+
 	std::filesystem::path testFilePath;
 	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
+	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::IDAllocator> allocator;
 };
 
@@ -60,8 +81,8 @@ protected:
 
 TEST_F(IDAllocatorTest, SequentialAllocation) {
 	// Verify that IDs increment sequentially when no holes exist.
-	graph::Node n1 = fileStorage->insertNode("A");
-	graph::Node n2 = fileStorage->insertNode("B");
+	graph::Node n1 = insertNode("A");
+	graph::Node n2 = insertNode("B");
 
 	EXPECT_EQ(n1.getId(), 1);
 	EXPECT_EQ(n2.getId(), 2);
@@ -70,18 +91,18 @@ TEST_F(IDAllocatorTest, SequentialAllocation) {
 
 TEST_F(IDAllocatorTest, TypeIsolation) {
 	// Verify that Node IDs and Edge IDs are tracked separately.
-	graph::Node n1 = fileStorage->insertNode("N1");
+	graph::Node n1 = insertNode("N1");
 	// Ensure nodes exist for edge creation
-	graph::Edge e1 = fileStorage->insertEdge(n1.getId(), n1.getId(), "E1");
+	graph::Edge e1 = insertEdge(n1.getId(), n1.getId(), "E1");
 
 	EXPECT_EQ(n1.getId(), 1);
 	EXPECT_EQ(e1.getId(), 1); // Edge ID should also start at 1, independent of Nodes
 
 	// Create a NEW node to test Node ID increment
-	graph::Node n2 = fileStorage->insertNode("N2");
+	graph::Node n2 = insertNode("N2");
 
 	// Insert edge on the new node to test Edge ID increment
-	graph::Edge e2 = fileStorage->insertEdge(n2.getId(), n2.getId(), "E2");
+	graph::Edge e2 = insertEdge(n2.getId(), n2.getId(), "E2");
 
 	EXPECT_EQ(n2.getId(), 2);
 	EXPECT_EQ(e2.getId(), 2);
@@ -95,20 +116,20 @@ TEST_F(IDAllocatorTest, EagerReuse_Verify_NoDiskIO_WithCacheClear) {
 	// This test verifies the critical logic for "Dirty ID" vs "Persisted ID" during cache clearing.
 
 	// 1. Insert 2 nodes and Persist
-	(void) fileStorage->insertNode("A"); // ID 1
-	(void) fileStorage->insertNode("B"); // ID 2
-	fileStorage->save(); // 1 and 2 are on disk (Persisted).
+	(void) insertNode("A"); // ID 1
+	(void) insertNode("B"); // ID 2
+	fileStorage->flush(); // 1 and 2 are on disk (Persisted).
 
 	// 2. Insert Node 3 (Dirty, Memory Only)
-	(void) fileStorage->insertNode("C"); // ID 3
+	(void) insertNode("C"); // ID 3
 
 	// 3. Delete Node 3 (Dirty)
 	// Should go to memoryOnlyCache_ (VolatileCache)
-	fileStorage->deleteNode(3);
+	deleteNode(3);
 
 	// 4. Delete Node 2 (Persisted)
 	// Should go to hotCache_ (L1)
-	fileStorage->deleteNode(2);
+	deleteNode(2);
 
 	// 5. SIMULATE CACHE CLEARING (e.g., during low memory or partial flush)
 	// This clears L1/L2 (Persisted) caches but MUST preserve VolatileCache.
@@ -118,10 +139,10 @@ TEST_F(IDAllocatorTest, EagerReuse_Verify_NoDiskIO_WithCacheClear) {
 
 	// 6. Reuse
 	// Allocation 1: Should hit VolatileCache first (ID 3)
-	graph::Node nFirst = fileStorage->insertNode("Reuse1");
+	graph::Node nFirst = insertNode("Reuse1");
 
 	// Allocation 2: Should scan disk (lazy load) for ID 2
-	graph::Node nSecond = fileStorage->insertNode("Reuse2");
+	graph::Node nSecond = insertNode("Reuse2");
 
 	// We expect both to be reused.
 	std::unordered_set<int64_t> reusedIds = {nFirst.getId(), nSecond.getId()};
@@ -135,20 +156,20 @@ TEST_F(IDAllocatorTest, EagerReuse_Verify_NoDiskIO_WithCacheClear) {
 
 TEST_F(IDAllocatorTest, AllocateId_Returns_MemoryOnly_ID_Direct) {
 	// 1. Insert a node (ID 1) - Do NOT save.
-	graph::Node n1 = fileStorage->insertNode("DirtyNode");
+	graph::Node n1 = insertNode("DirtyNode");
 	EXPECT_EQ(n1.getId(), 1);
 
 	// 2. Delete the node immediately.
-	fileStorage->deleteNode(n1.getId());
+	deleteNode(n1.getId());
 
 	// 3. Insert a new node.
 	// The allocator should pop ID 1 from VolatileCache immediately.
-	graph::Node n2 = fileStorage->insertNode("NewNode");
+	graph::Node n2 = insertNode("NewNode");
 
 	EXPECT_EQ(n2.getId(), 1) << "Allocator failed to reuse Dirty ID";
 
 	// 4. Verify uniqueness
-	graph::Node n3 = fileStorage->insertNode("NextNode");
+	graph::Node n3 = insertNode("NextNode");
 	EXPECT_EQ(n3.getId(), 2);
 }
 
@@ -161,15 +182,16 @@ TEST_F(IDAllocatorTest, LazyLoadFromDiskAfterRestart) {
 	(void) fileStorage->insertNode("A"); // 1
 	(void) fileStorage->insertNode("B"); // 2
 	(void) fileStorage->insertNode("C"); // 3
+
+	// Use save() instead of flush() to persist data WITHOUT triggering compaction.
+	// Compaction would re-map IDs (3->2) and ruin the test assumption.
 	fileStorage->save();
 
 	// 2. Delete ID 2 and Persist
-	// Calling save() ensures the Bitmap on disk is updated to '0' (inactive)
 	fileStorage->deleteNode(2);
-	fileStorage->save();
+	fileStorage->save(); // Persist bitmap change
 
 	// 3. Simulate Restart/OOM
-	// This wipes all caches.
 	allocator->clearAllCaches();
 
 	// 4. Allocate -> Should trigger fetchInactiveIdsFromDisk and find ID 2
@@ -183,13 +205,13 @@ TEST_F(IDAllocatorTest, DiskExhaustionOptimization) {
 	allocator->clearAllCaches();
 
 	// 2. Allocate sequential (Trigger disk scan -> finds nothing -> set exhausted = true)
-	graph::Node n1 = fileStorage->insertNode("1");
+	graph::Node n1 = insertNode("1");
 	EXPECT_EQ(n1.getId(), 1);
 
 	// 3. Allocate again
 	// This should NOT trigger a disk scan (internal optimization verification)
 	// It should directly allocate ID 2
-	graph::Node n2 = fileStorage->insertNode("2");
+	graph::Node n2 = insertNode("2");
 	EXPECT_EQ(n2.getId(), 2);
 }
 
@@ -198,25 +220,27 @@ TEST_F(IDAllocatorTest, DiskExhaustionOptimization) {
 // ==========================================
 
 TEST_F(IDAllocatorTest, L1CacheOverflowToL2) {
-	// L1 limit is 4096 (as per updated code). We will delete more to force L2 usage.
-	constexpr int COUNT = 5000;
+	// L1 = 100, L2 = 10
+	allocator->setCacheLimits(100, 10, 50000);
 
-	// 1. Insert 5000 nodes
+	constexpr int COUNT = 200;
+
+	// 1. Insert 200 nodes
 	for (int i = 0; i < COUNT; ++i) {
 		(void) fileStorage->insertNode("N");
 	}
 	fileStorage->save();
 
-	// 2. Delete all 5000 nodes
+	// 2. Delete all 200 nodes
 	for (int i = 1; i <= COUNT; ++i) {
 		fileStorage->deleteNode(i);
 	}
 
-	// 3. Re-allocate 5000 nodes
-	// Should reuse ALL IDs without increasing max ID > 5000
+	// 3. Re-allocate 200 nodes
+	// Logic check: Should reuse ALL IDs without increasing max ID > 200
 	for (int i = 0; i < COUNT; ++i) {
 		graph::Node n = fileStorage->insertNode("Re");
-		EXPECT_LE(n.getId(), COUNT) << "ID leaked! Allocated " << n.getId() << " but should be <= " << COUNT;
+		EXPECT_LE(n.getId(), COUNT) << "ID leaked! Allocated " << n.getId();
 	}
 
 	// 4. Verify next is new
@@ -228,22 +252,22 @@ TEST_F(IDAllocatorTest, L2IntervalMerging) {
 	// This tests if L2 efficiently handles sequential deletes via merging.
 	constexpr int COUNT = 2000;
 	for (int i = 0; i < COUNT; ++i)
-		(void) fileStorage->insertNode("N");
-	fileStorage->save();
+		(void) insertNode("N");
+	fileStorage->flush();
 
 	// Delete nodes in blocks to trigger merges
 	// Delete 1000..1500
 	for (int i = 1000; i <= 1500; ++i)
-		fileStorage->deleteNode(i);
+		deleteNode(i);
 
 	// Delete 1501..2000 (Should merge with previous interval in L2)
 	for (int i = 1501; i <= COUNT; ++i)
-		fileStorage->deleteNode(i);
+		deleteNode(i);
 
 	// Now re-allocate.
 	std::unordered_set<int64_t> reusedIds;
 	for (int i = 0; i < 1001; ++i) {
-		graph::Node n = fileStorage->insertNode("R");
+		graph::Node n = insertNode("R");
 		reusedIds.insert(n.getId());
 	}
 
@@ -262,12 +286,12 @@ TEST_F(IDAllocatorTest, L2IntervalMerging) {
 
 TEST_F(IDAllocatorTest, DoubleFree_InMemory_Protection) {
 	// 1. Setup: Insert and Persist
-	(void) fileStorage->insertNode("A"); // ID 1
-	fileStorage->save();
+	(void) insertNode("A"); // ID 1
+	fileStorage->flush();
 
 	// 2. First Delete
 	// Sets disk bitmap to Inactive, puts ID 1 into Cache.
-	fileStorage->deleteNode(1);
+	deleteNode(1);
 
 	// 3. Simulate Logic Error: Attempt to free ID 1 again manually.
 	// The allocator should detect that ID 1 is already Inactive on disk
@@ -287,31 +311,31 @@ TEST_F(IDAllocatorTest, DoubleFree_InMemory_Protection) {
 }
 
 TEST_F(IDAllocatorTest, DeleteAndSaveIdempotency) {
-	(void) fileStorage->insertNode("A"); // 1
-	(void) fileStorage->insertNode("B"); // 2
-	fileStorage->save();
+	(void) insertNode("A"); // 1
+	(void) insertNode("B"); // 2
+	fileStorage->flush();
 
 	// 1. Delete Node 2
-	fileStorage->deleteNode(2);
+	deleteNode(2);
 
 	// 2. Reuse check
-	graph::Node nC = fileStorage->insertNode("C");
+	graph::Node nC = insertNode("C");
 	EXPECT_EQ(nC.getId(), 2);
 
 	// 3. Save to ensure ID 2 is marked Active on disk.
 	// Without this, the disk bitmap remains Inactive.
 	// When we delete nC next, freeId() would see "Inactive on disk" and
 	// incorrectly drop the ID as a Double Free, causing ID 2 to be lost.
-	fileStorage->save();
+	fileStorage->flush();
 
 	// 4. Delete Node C (ID 2) again
-	fileStorage->deleteNode(2);
+	deleteNode(2);
 
 	// 5. Save again
-	fileStorage->save();
+	fileStorage->flush();
 
 	// 6. Verify ID 2 is still available
-	graph::Node nD = fileStorage->insertNode("D");
+	graph::Node nD = insertNode("D");
 	EXPECT_EQ(nD.getId(), 2);
 }
 
@@ -322,21 +346,21 @@ TEST_F(IDAllocatorTest, MixedOperationsStress) {
 
 	for (int i = 0; i < 1000; ++i) {
 		if (activeIds.empty() || (gen() % 3 != 0)) { // 66% Insert
-			graph::Node n = fileStorage->insertNode("R");
+			graph::Node n = insertNode("R");
 			activeIds.push_back(n.getId());
 		} else { // 33% Delete
 			std::uniform_int_distribution<> dis(0, activeIds.size() - 1);
 			int idx = dis(gen);
 			int64_t idToDelete = activeIds[idx];
 
-			fileStorage->deleteNode(idToDelete);
+			deleteNode(idToDelete);
 
 			activeIds[idx] = activeIds.back();
 			activeIds.pop_back();
 		}
 	}
 
-	fileStorage->save();
+	fileStorage->flush();
 	EXPECT_LT(allocator->getCurrentMaxNodeId(), 800);
 }
 
@@ -385,15 +409,15 @@ TEST_F(IDAllocatorTest, RecoverGapsOnRestart) {
 	// This tests the `recoverGapIds` logic in initialize()
 
 	// 1. Create IDs [1, 2, 3] and Save.
-	(void) fileStorage->insertNode("1");
-	(void) fileStorage->insertNode("2");
-	(void) fileStorage->insertNode("3");
-	fileStorage->save(); // FileHeader MaxID = 3
+	(void) insertNode("1");
+	(void) insertNode("2");
+	(void) insertNode("3");
+	fileStorage->flush(); // FileHeader MaxID = 3
 
 	// 2. Delete 3 and Save.
 	// ID 3 becomes Inactive on disk.
-	fileStorage->deleteNode(3);
-	fileStorage->save();
+	deleteNode(3);
+	fileStorage->flush();
 
 	// 3. Restart DB
 	database->close();
@@ -405,7 +429,7 @@ TEST_F(IDAllocatorTest, RecoverGapsOnRestart) {
 
 	// 4. Insert New Node
 	// It should reuse 3 (via Lazy Load scan).
-	graph::Node n = fileStorage->insertNode("New");
+	graph::Node n = insertNode("New");
 	EXPECT_EQ(n.getId(), 3);
 }
 
@@ -413,9 +437,9 @@ TEST_F(IDAllocatorTest, Persistence_Restart_NoOverlap) {
 	// 1. Session 1: Create IDs [1, 2, 3]
 	{
 		// Use a local scope to force destruction of DB objects (Simulate Close)
-		graph::Node n1 = fileStorage->insertNode("A");
-		graph::Node n2 = fileStorage->insertNode("B");
-		graph::Node n3 = fileStorage->insertNode("C");
+		graph::Node n1 = insertNode("A");
+		graph::Node n2 = insertNode("B");
+		graph::Node n3 = insertNode("C");
 
 		EXPECT_EQ(n1.getId(), 1);
 		EXPECT_EQ(n2.getId(), 2);
@@ -430,6 +454,7 @@ TEST_F(IDAllocatorTest, Persistence_Restart_NoOverlap) {
 		db2->open();
 		auto store2 = db2->getStorage();
 		auto alloc2 = store2->getIDAllocator();
+		auto dataManager2 = store2->getDataManager();
 
 		// CHECK: Max ID should be recovered correctly from header
 		// If the "Capacity vs Used" bug exists, this might be incorrect (e.g. 1024).
@@ -438,7 +463,9 @@ TEST_F(IDAllocatorTest, Persistence_Restart_NoOverlap) {
 		// Insert new node.
 		// IF the bug exists, it would return 1025 or overlap.
 		// IF fixed, it should return 4.
-		graph::Node n4 = store2->insertNode("D");
+		int64_t id4 = alloc2->allocateId(graph::Node::typeId);
+		graph::Node n4(id4, "D");
+		dataManager2->addNode(n4);
 
 		EXPECT_EQ(n4.getId(), 4) << "ID Overlap or Skip Detected! Allocator logic error.";
 	}
@@ -450,14 +477,14 @@ TEST_F(IDAllocatorTest, CrashRecovery_WithSparseSegment_CapacityVsUsed) {
 
 	// 1. Create a few nodes.
 	// Assume Segment Capacity is large (e.g., 1024). We only use 3 slots.
-	fileStorage->insertNode("1");
-	fileStorage->insertNode("2");
-	fileStorage->insertNode("3");
+	insertNode("1");
+	insertNode("2");
+	insertNode("3");
 
 	// 2. Save and Close.
 	// This ensures the data is written to disk.
 	// Header.used = 3, Header.capacity = 1024.
-	fileStorage->save();
+	fileStorage->flush();
 	database->close();
 	database.reset();
 
@@ -466,6 +493,7 @@ TEST_F(IDAllocatorTest, CrashRecovery_WithSparseSegment_CapacityVsUsed) {
 	database->open();
 	fileStorage = database->getStorage();
 	allocator = fileStorage->getIDAllocator();
+	dataManager = fileStorage->getDataManager();
 
 	// 4. Verify Max ID Recovery
 	// Buggy behavior: recoverGapIds calculates physicalMaxId = 1 + 1024 - 1 = 1024.
@@ -477,6 +505,6 @@ TEST_F(IDAllocatorTest, CrashRecovery_WithSparseSegment_CapacityVsUsed) {
 	// 5. Verify Next Allocation
 	// Buggy behavior: Allocates 1025.
 	// Correct behavior: Allocates 4.
-	graph::Node n4 = fileStorage->insertNode("4");
+	graph::Node n4 = insertNode("4");
 	EXPECT_EQ(n4.getId(), 4) << "Allocator skipped IDs due to incorrect recovery logic!";
 }

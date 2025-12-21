@@ -34,16 +34,11 @@ namespace graph::storage {
 	 */
 	class IDAllocator {
 	public:
-		// L1 Cache Limit: Fast access for immediate reuse (Persisted IDs)
-		static constexpr size_t L1_CACHE_SIZE = 4096;
-
-		// L2 Cache Limit: Number of INTERVALS (Persisted IDs)
-		// 10,000 intervals can represent millions of IDs efficiently.
-		static constexpr size_t L2_MAX_INTERVALS = 10000;
-
-		// Volatile Cache Limit: Number of INTERVALS (Memory-only IDs)
-		// Allowed to be larger to handle massive transaction rollbacks gracefully.
-		static constexpr size_t VOLATILE_MAX_INTERVALS = 50000;
+		void setCacheLimits(size_t l1Size, size_t l2Intervals, size_t volatileIntervals) {
+			l1CacheSize_ = l1Size;
+			l2MaxIntervals_ = l2Intervals;
+			volatileMaxIntervals_ = volatileIntervals;
+		}
 
 		explicit IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
 							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId,
@@ -90,6 +85,14 @@ namespace graph::storage {
 		[[nodiscard]] int64_t getCurrentMaxStateId() const { return currentMaxStateId_; }
 
 	private:
+		// L1 Cache Limit: Fast access for immediate reuse (Persisted IDs)
+		size_t l1CacheSize_ = 4096;
+		// L2 Cache Limit: Number of INTERVALS (Persisted IDs)
+		// 10,000 intervals can represent millions of IDs efficiently.
+		size_t l2MaxIntervals_ = 10000;
+		// Volatile Cache Limit: Number of INTERVALS (Memory-only IDs)
+		// Allowed to be larger to handle massive transaction rollbacks gracefully.
+		size_t volatileMaxIntervals_ = 50000;
 		/**
 		 * @brief Helper class to store ID ranges compactly (e.g., [1-1000]).
 		 * Replaces std::deque for bulk storage to reduce memory footprint by orders of magnitude.

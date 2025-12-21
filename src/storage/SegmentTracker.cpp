@@ -10,7 +10,6 @@
 
 #include "graph/storage/SegmentTracker.hpp"
 #include <algorithm>
-#include <cstring>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
@@ -94,6 +93,10 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		segments_[header.file_offset] = header;
+
+		if (auto indexMgr = segmentIndexManager_.lock()) {
+			indexMgr->updateSegmentIndex(header, -1);
+		}
 	}
 
 	void SegmentTracker::updateSegmentUsage(uint64_t offset, uint32_t used, uint32_t inactive) {
@@ -129,7 +132,7 @@ namespace graph::storage {
 	}
 
 	SegmentHeader &SegmentTracker::getSegmentHeader(uint64_t offset) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		// std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(offset);
 		auto it = segments_.find(offset);
 		if (it == segments_.end()) {
@@ -227,9 +230,7 @@ namespace graph::storage {
 		freeSegments_.insert(offset);
 		segments_.erase(offset);
 
-		auto dirtyIt = std::ranges::find(dirtySegments_, offset);
-		if (dirtyIt != dirtySegments_.end())
-			dirtySegments_.erase(dirtyIt);
+		dirtySegments_.erase(offset);
 
 		SegmentHeader emptyHeader{};
 		emptyHeader.data_type = 0xFF;
@@ -259,9 +260,7 @@ namespace graph::storage {
 		segments_[offset].file_offset = offset;
 		segments_[offset].is_dirty = 0;
 
-		auto dirtyIt = std::ranges::find(dirtySegments_, offset);
-		if (dirtyIt != dirtySegments_.end())
-			dirtySegments_.erase(dirtyIt);
+		dirtySegments_.erase(offset);
 	}
 
 	void SegmentTracker::updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> &updateFn) {
@@ -426,20 +425,24 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::markSegmentDirty(uint64_t offset) {
-		if (std::ranges::find(dirtySegments_, offset) == dirtySegments_.end()) {
-			dirtySegments_.push_back(offset);
-		}
-	}
+        dirtySegments_.insert(offset);
+    }
 
 	void SegmentTracker::flushDirtySegments() {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		auto dirtySegmentsCopy = dirtySegments_;
-		for (uint64_t offset: dirtySegmentsCopy) {
+		if (dirtySegments_.empty()) return;
+
+		// Sort segments by offset to optimize disk seek times (Sequential Write)
+		std::vector sortedSegments(dirtySegments_.begin(), dirtySegments_.end());
+		std::ranges::sort(sortedSegments);
+
+		for (uint64_t offset: sortedSegments) {
 			auto it = segments_.find(offset);
+			// Check valid and dirty flag (double check)
 			if (it != segments_.end() && it->second.is_dirty) {
 				SegmentHeader &header = it->second;
-				SegmentHeader headerToWrite = header;
+				SegmentHeader headerToWrite = header; // Copy to ensure alignment/padding if needed
 
 				file_->seekp(static_cast<std::streamoff>(offset));
 				file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
@@ -447,6 +450,7 @@ namespace graph::storage {
 				it->second.is_dirty = 0;
 			}
 		}
+
 		dirtySegments_.clear();
 		file_->flush();
 	}

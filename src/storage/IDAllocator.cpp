@@ -289,7 +289,7 @@ namespace graph::storage {
 		if (segmentOffset == 0 || isDirtyInPreAlloc) {
 			auto &volCache = volatileCache_[entityType];
 
-			if (volCache.intervalCount() < VOLATILE_MAX_INTERVALS) {
+			if (volCache.intervalCount() < volatileMaxIntervals_) {
 				volCache.add(id);
 				// Log format updated
 				Log::debug("freeId: Added ID {} to VolatileCache", id);
@@ -301,9 +301,9 @@ namespace graph::storage {
 			auto &l1 = hotCache_[entityType];
 			auto &l2 = coldCache_[entityType];
 
-			if (l1.size() < L1_CACHE_SIZE) {
+			if (l1.size() < l1CacheSize_) {
 				l1.push_front(id);
-			} else if (l2.intervalCount() < L2_MAX_INTERVALS) {
+			} else if (l2.intervalCount() < l2MaxIntervals_) {
 				l2.add(id);
 			}
 		}
@@ -345,13 +345,13 @@ namespace graph::storage {
 						l1.push_back(recoveredId);
 						foundAny = true;
 
-						if (l1.size() >= L1_CACHE_SIZE)
+						if (l1.size() >= l1CacheSize_)
 							break;
 					}
 				}
 			}
 
-			if (l1.size() >= L1_CACHE_SIZE) {
+			if (l1.size() >= l1CacheSize_) {
 				cursor.nextSegmentOffset = header.next_segment_offset;
 				return true;
 			}

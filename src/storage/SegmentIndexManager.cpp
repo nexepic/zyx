@@ -91,58 +91,72 @@ namespace graph::storage {
 		// Calculate logical end ID
 		int64_t endId = header.start_id + (header.used > 0 ? header.used - 1 : 0);
 
-		// Check if Primary Key (Start ID) has changed
+		// =========================================================================
+		// SCENARIO 1: NEW SEGMENT INSERTION (Optimization)
+		// =========================================================================
+		if (oldStartId == -1) {
+			if (segmentIndex.empty() || header.start_id > segmentIndex.back().startId) {
+				SegmentIndex newIndex{};
+				newIndex.startId = header.start_id;
+				newIndex.endId = endId;
+				newIndex.segmentOffset = header.file_offset;
+
+				segmentIndex.push_back(newIndex);
+				return;
+			}
+			// Fall through if not strictly appending
+		}
+
+		// =========================================================================
+		// SCENARIO 2: KEY CHANGED (MOVE/COMPACTION)
+		// =========================================================================
 		if (oldStartId != -1 && oldStartId != header.start_id) {
-			// CASE 1: Key Changed (Move Operation)
-			// We must remove the old entry first
+			// [Same as before: Remove old entry logic...]
 			SegmentIndex oldKey{};
 			oldKey.startId = oldStartId;
-
 			auto itOld = std::lower_bound(
-					segmentIndex.begin(), segmentIndex.end(), oldKey,
-					[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
+				segmentIndex.begin(), segmentIndex.end(), oldKey,
+				[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
 
-			// Verify and Remove
 			if (itOld != segmentIndex.end() && itOld->startId == oldStartId &&
 				itOld->segmentOffset == header.file_offset) {
 				segmentIndex.erase(itOld);
 			} else {
-				// Fallback: If binary search failed (shouldn't happen), try linear scan by offset to clean up
-				// This handles edge cases where index might be dirty
 				std::erase_if(segmentIndex,
 							  [&](const SegmentIndex &idx) { return idx.segmentOffset == header.file_offset; });
 			}
-
-			// Now insert the new entry (fall through to insert logic below)
-			// Reset 'it' since we modified the vector
-		} else {
-			// CASE 2: Key Same (Update Operation)
+		}
+		// =========================================================================
+		// SCENARIO 3: IN-PLACE UPDATE (Usage Changed) OR DUPLICATE CHECK
+		// =========================================================================
+		// Optimization: Check if the ID already exists to prevent duplicates (Idempotency)
+		// This handles the case where oldStartId == -1 but the key actually exists.
+		{
 			SegmentIndex searchKey{};
 			searchKey.startId = header.start_id;
 
 			auto it = std::lower_bound(
-					segmentIndex.begin(), segmentIndex.end(), searchKey,
-					[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
+				segmentIndex.begin(), segmentIndex.end(), searchKey,
+				[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
 
+			// If found exact match on StartID, just update it
 			if (it != segmentIndex.end() && it->startId == header.start_id) {
-				if (it->segmentOffset == header.file_offset) {
-					it->endId = endId;
-					return; // Done
-				}
+				it->endId = endId;
+				it->segmentOffset = header.file_offset; // Update offset too just in case
+				return; // DONE
 			}
+
+            // =========================================================================
+            // SCENARIO 4: GENERIC INSERTION (Sorted)
+            // =========================================================================
+            // If we are here, 'it' points to the correct insertion position and keys are unique
+            SegmentIndex newIndex{};
+            newIndex.startId = header.start_id;
+            newIndex.endId = endId;
+            newIndex.segmentOffset = header.file_offset;
+
+            segmentIndex.insert(it, newIndex);
 		}
-
-		// Insert New Entry (for Case 1 or if not found in Case 2)
-		SegmentIndex newIndex{};
-		newIndex.startId = header.start_id;
-		newIndex.endId = endId;
-		newIndex.segmentOffset = header.file_offset;
-
-		auto itNew =
-				std::lower_bound(segmentIndex.begin(), segmentIndex.end(), newIndex,
-								 [](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
-
-		segmentIndex.insert(itNew, newIndex);
 	}
 
 	void SegmentIndexManager::removeSegmentIndex(const SegmentHeader &header) {

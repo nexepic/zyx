@@ -401,3 +401,110 @@ TEST_F(SegmentIndexManagerTest, TypesAreIsolated) {
 	// Finding Edge 100 should return Edge Segment
 	EXPECT_EQ(indexManager->findSegmentForId(static_cast<uint32_t>(graph::EntityType::Edge), 100), offEdge);
 }
+
+// ============================================================================
+// 8. Performance & Optimization Logic (Append Strategy)
+// ============================================================================
+
+TEST_F(SegmentIndexManagerTest, SequentialAppendWorksCorrectly) {
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	size_t count = 1000;
+
+	// 1. Simulate bulk creation of sequential segments
+	// Pattern:
+	// Segment i starts at ID (i * 100)
+	// Segment i has 'used' count of 50
+	// Valid Range for Segment i: [i*100, i*100 + 49]
+	// Gap (Unallocated) for Segment i: [i*100 + 50, i*100 + 99]
+	for (size_t i = 0; i < count; ++i) {
+		uint64_t offset = getSegOffset(static_cast<uint32_t>(i));
+		int64_t startId = static_cast<int64_t>(i * 100);
+
+		// Note: passing -1 indicates a NEW insertion, triggering the O(1) optimization path
+		indexManager->updateSegmentIndex(createHeader(offset, type, startId, 50), -1);
+	}
+
+	const auto& idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), count);
+
+	// 2. Verify Boundaries
+	EXPECT_EQ(idx.front().startId, 0);
+	EXPECT_EQ(idx.back().startId, 99900);
+
+	// 3. Verify Logic: Valid Lookup in the Middle
+	// We check Segment 500.
+	// Start ID: 50000. Used: 50. Valid IDs: [50000, 50049].
+	// Target ID: 50025.
+	EXPECT_EQ(indexManager->findSegmentForId(type, 50025), getSegOffset(500));
+
+	// 4. Verify Logic: Boundary Lookup
+	// The last valid ID of Segment 500 is 50049.
+	EXPECT_EQ(indexManager->findSegmentForId(type, 50049), getSegOffset(500));
+
+	// 5. Verify Logic: Gap Lookup
+	// ID 50050 falls into the unallocated gap between Segment 500 and Segment 501.
+	// It should NOT find a segment.
+	EXPECT_EQ(indexManager->findSegmentForId(type, 50050), 0ULL);
+}
+
+// ============================================================================
+// 9. Robustness & Edge Cases
+// ============================================================================
+
+TEST_F(SegmentIndexManagerTest, IdempotencyOnDuplicateInsert) {
+    // BUG PREVENTER: Verify that adding the exact same segment twice doesn't create duplicates
+    auto type = static_cast<uint32_t>(graph::EntityType::Node);
+    uint64_t offset = getSegOffset(0);
+    SegmentHeader h = createHeader(offset, type, 100, 10);
+
+    // First Insert
+    indexManager->updateSegmentIndex(h, -1);
+    ASSERT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
+
+    // Second Insert (Simulate accidental double-call or recovery logic)
+    // Even with -1 (new), it should detect existing StartID and update/ignore instead of duplicate
+    indexManager->updateSegmentIndex(h, -1);
+
+    // Should still be 1
+    const auto& idx = indexManager->getNodeSegmentIndex();
+    ASSERT_EQ(idx.size(), 1UL) << "Index manager should prevent duplicate entries for same Start ID";
+    EXPECT_EQ(idx[0].segmentOffset, offset);
+}
+
+TEST_F(SegmentIndexManagerTest, UpdateReplacesOldEntryWaitSameStartID) {
+    // Case: offset changes but StartID stays same (e.g. file defragmentation/move without ID change)
+    // Though rare, if StartID is same, we treat it as the "Same Logical Segment"
+
+    auto type = static_cast<uint32_t>(graph::EntityType::Node);
+    int64_t startId = 100;
+
+    // Old location
+    indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, startId, 10), -1);
+
+    // New location, same Start ID
+    // Note: passing -1 means we might treat it as new, but since StartID exists, it should update
+    indexManager->updateSegmentIndex(createHeader(getSegOffset(1), type, startId, 20), -1);
+
+    const auto& idx = indexManager->getNodeSegmentIndex();
+    ASSERT_EQ(idx.size(), 1UL);
+    EXPECT_EQ(idx[0].segmentOffset, getSegOffset(1)); // Should point to new offset
+    EXPECT_EQ(idx[0].endId, 119); // Should reflect new usage
+}
+
+TEST_F(SegmentIndexManagerTest, ZeroUsageHandling) {
+    auto type = static_cast<uint32_t>(graph::EntityType::Node);
+    uint64_t offset = getSegOffset(0);
+
+    // Create segment with USED = 0
+    // Logic: endId = start + (0 > 0 ? -1 : 0) = start
+    indexManager->updateSegmentIndex(createHeader(offset, type, 100, 0), -1);
+
+    // It should effectively cover the range [100, 100] in the current logic
+    // (or just be a placeholder)
+    EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset);
+
+    // Update to Used = 1
+    SegmentHeader h = createHeader(offset, type, 100, 1);
+    indexManager->updateSegmentIndex(h, 100);
+    EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset);
+}

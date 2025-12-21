@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -101,7 +100,7 @@ namespace graph::storage {
 		std::unordered_map<uint64_t, SegmentHeader> segments_;
 
 		std::unordered_set<uint64_t> freeSegments_;
-		std::vector<uint64_t> dirtySegments_;
+		std::unordered_set<uint64_t> dirtySegments_;
 		std::weak_ptr<SegmentIndexManager> segmentIndexManager_;
 
 		SegmentTypeRegistry registry_;

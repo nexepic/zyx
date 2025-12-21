@@ -473,3 +473,43 @@ TEST_F(SegmentTrackerTest, WriteAndReadEntity) {
 		FAIL() << "Entity I/O failed: " << e.what();
 	}
 }
+
+TEST_F(SegmentTrackerTest, RegisterSegmentAutomaticallyUpdatesIndex) {
+	uint64_t offset = getSegmentOffset(0);
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	int64_t startId = 1000;
+	uint32_t capacity = 100;
+	uint32_t used = 10; // Valid range becomes [1000, 1009]
+
+	// 1. Verify IndexManager is initially unaware of this ID
+	// Before registration, lookup should fail.
+	EXPECT_EQ(indexManager->findSegmentForId(type, 1005), 0ULL);
+
+	// 2. Manually construct a SegmentHeader
+	// This simulates the logic inside SpaceManager::allocateSegment
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = capacity;
+	header.start_id = startId;
+	header.used = used;
+	header.inactive_count = 0;
+	header.next_segment_offset = 0;
+	header.prev_segment_offset = 0;
+	header.needs_compaction = 0;
+	header.is_dirty = 0;
+	header.bitmap_size = bitmap::calculateBitmapSize(capacity);
+	std::memset(header.activity_bitmap, 0, sizeof(header.activity_bitmap));
+
+	// 3. Action: Register via Tracker
+	// This is the critical integration point.
+	// Tracker::registerSegment must call IndexManager::updateSegmentIndex.
+	tracker->registerSegment(header);
+
+	// 4. Verification: Check if IndexManager can now find the ID
+	// We search for ID 1005, which is inside the valid range [1000, 1009].
+	uint64_t foundOffset = indexManager->findSegmentForId(type, 1005);
+
+	EXPECT_EQ(foundOffset, offset)
+		<< "IndexManager failed to receive notification from Tracker::registerSegment";
+}
