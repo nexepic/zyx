@@ -68,6 +68,7 @@ namespace graph::storage {
 		}
 		// Call the virtual method that can be overridden by subclasses
 		doRemove(entity);
+		std::cout << "entity " << entity.getId() << " removed" << std::endl;
 
 		// Mark that a deletion has been performed
 		if (const auto dataManager = dataManager_.lock()) {

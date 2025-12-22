@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <vector>
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 
 // Forward declarations to reduce compile-time dependencies
@@ -104,21 +105,20 @@ namespace graph::query {
 				 const std::string &targetVar) const;
 
 		// Create Index (DDL)
-		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> createIndexOp(
-			const std::string& indexName,
-			const std::string& label,
-			const std::string& propertyKey
-		) const;
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		createIndexOp(const std::string &indexName, const std::string &label, const std::string &propertyKey) const;
 
-		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(
-			const std::string& indexName
-		) const;
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		mergeOp(const std::string &variable, const std::string &label,
+				const std::unordered_map<std::string, PropertyValue> &matchProps,
+				const std::vector<execution::operators::SetItem> &onCreateItems,
+				const std::vector<execution::operators::SetItem> &onMatchItems) const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(const std::string &indexName) const;
 
 		// [NEW] Drop Index By Definition (Legacy/Implicit name)
-		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(
-			const std::string& label,
-			const std::string& propertyKey
-		) const;
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(const std::string &label,
+																			   const std::string &propertyKey) const;
 
 		// --- Administration ---
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexesOp() const;
@@ -130,6 +130,10 @@ namespace graph::query {
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		setOp(std::unique_ptr<execution::PhysicalOperator> child,
 			  const std::vector<execution::operators::SetItem> &items) const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		removeOp(std::unique_ptr<execution::PhysicalOperator> child,
+				 const std::vector<execution::operators::RemoveItem> &items) const;
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

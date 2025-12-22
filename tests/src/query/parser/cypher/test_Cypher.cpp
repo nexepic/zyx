@@ -235,6 +235,114 @@ TEST_F(CypherTest, FilterTraversalTarget) {
 }
 
 // ============================================================================
+// MERGE (Upsert) Tests
+// ============================================================================
+
+TEST_F(CypherTest, Merge_CreatesNewNode) {
+    // 1. Ensure DB is clean for this label
+    // 2. MERGE on non-existent node
+    (void) execute("MERGE (n:MergeNew {key: 'unique_1'}) ON CREATE SET n.status = 'created'");
+
+    // 3. Verify Creation
+    auto res = execute("MATCH (n:MergeNew) RETURN n");
+    ASSERT_EQ(res.nodeCount(), 1UL);
+
+    const auto& props = res.getNodes()[0].getProperties();
+    EXPECT_EQ(props.at("key").toString(), "unique_1");
+    EXPECT_EQ(props.at("status").toString(), "created");
+}
+
+TEST_F(CypherTest, Merge_MatchesExistingNode) {
+    // 1. Setup: Create node explicitly
+    (void) execute("CREATE (n:MergeExist {key: 'unique_2', count: 0})");
+
+    // 2. MERGE on existing node
+    // Should NOT create new node. Should execute ON MATCH.
+    (void) execute("MERGE (n:MergeExist {key: 'unique_2'}) "
+                   "ON CREATE SET n.status = 'wrong' "
+                   "ON MATCH SET n.count = 1, n.status = 'matched'");
+
+    // 3. Verify
+    auto res = execute("MATCH (n:MergeExist) RETURN n");
+    ASSERT_EQ(res.nodeCount(), 1UL); // ID count must remain 1
+
+    const auto& props = res.getNodes()[0].getProperties();
+    EXPECT_EQ(props.at("count").toString(), "1");       // Updated
+    EXPECT_EQ(props.at("status").toString(), "matched"); // Updated
+}
+
+TEST_F(CypherTest, Merge_WithIndexOptimization) {
+    // 1. Create Index to ensure Merge uses Index Lookup instead of Scan
+    (void) execute("CREATE INDEX ON :MergeIdx(uid)");
+
+    // 2. MERGE (Create)
+    (void) execute("MERGE (n:MergeIdx {uid: 100}) ON CREATE SET n.step = 1");
+
+    // 3. MERGE (Match)
+    (void) execute("MERGE (n:MergeIdx {uid: 100}) ON MATCH SET n.step = 2");
+
+    // 4. Verify
+    auto res = execute("MATCH (n:MergeIdx) RETURN n");
+    ASSERT_EQ(res.nodeCount(), 1UL);
+    EXPECT_EQ(res.getNodes()[0].getProperties().at("step").toString(), "2");
+}
+
+// ============================================================================
+// Extended Update Tests (REMOVE & SET Label)
+// ============================================================================
+
+TEST_F(CypherTest, RemoveProperty) {
+    // 1. Setup
+    (void) execute("CREATE (n:RemProp {keep: 1, remove_me: 2})");
+
+    // 2. Remove
+    (void) execute("MATCH (n:RemProp) REMOVE n.remove_me");
+
+    // 3. Verify
+    auto res = execute("MATCH (n:RemProp) RETURN n");
+    ASSERT_EQ(res.nodeCount(), 1UL);
+
+    const auto& props = res.getNodes()[0].getProperties();
+    EXPECT_TRUE(props.contains("keep"));
+    EXPECT_FALSE(props.contains("remove_me")) << "Property 'remove_me' should be gone";
+}
+
+TEST_F(CypherTest, SetLabel) {
+    // 1. Setup with Old Label
+    (void) execute("CREATE (n:OldLabel {id: 1})");
+
+    // 2. Change Label
+    // Note: MetrixDB currently replaces the label (Single Label Model)
+    (void) execute("MATCH (n:OldLabel) SET n:NewLabel");
+
+    // 3. Verify Old Label scan returns empty
+    auto resOld = execute("MATCH (n:OldLabel) RETURN n");
+    EXPECT_EQ(resOld.nodeCount(), 0UL);
+
+    // 4. Verify New Label scan finds the node
+    auto resNew = execute("MATCH (n:NewLabel) RETURN n");
+    ASSERT_EQ(resNew.nodeCount(), 1UL);
+    EXPECT_EQ(resNew.getNodes()[0].getProperties().at("id").toString(), "1");
+}
+
+TEST_F(CypherTest, RemoveLabel) {
+    // 1. Setup
+    (void) execute("CREATE (n:TagToRemove {id: 99})");
+
+    // 2. Remove Label
+    (void) execute("MATCH (n:TagToRemove) REMOVE n:TagToRemove");
+
+    // 3. Verify scan by label fails
+    auto res = execute("MATCH (n:TagToRemove) RETURN n");
+    EXPECT_EQ(res.nodeCount(), 0UL);
+
+    // 4. Verify node still exists (via Full Scan/All nodes if supported, or internal ID check)
+    auto resAll = execute("MATCH (n) WHERE n.id = 99 RETURN n");
+    ASSERT_EQ(resAll.nodeCount(), 1UL);
+    EXPECT_EQ(resAll.getNodes()[0].getLabel(), ""); // Should be empty
+}
+
+// ============================================================================
 // 4. Indexing Tests (Admin & Optimization)
 // ============================================================================
 

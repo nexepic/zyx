@@ -180,11 +180,20 @@ TEST_F(DataManagerTest, NodeCRUD) {
 	EXPECT_TRUE(retrievedNode.isActive());
 
 	// 3. Update (while still in 'ADDED' state)
+	// [IMPORTANT] Reset observer to verify the update specifically
+	observer->reset();
+
 	node.setLabel("StagingPerson");
 	dataManager->updateNode(node);
+
 	retrievedNode = dataManager->getNode(node.getId());
 	EXPECT_EQ("StagingPerson", retrievedNode.getLabel());
-	ASSERT_EQ(0UL, observer->updatedNodes.size());
+
+	// Since DataManager now notifies even for ADDED entities, we expect 1 update event.
+	// Old Label: Person, New Label: StagingPerson
+	ASSERT_EQ(1UL, observer->updatedNodes.size());
+	EXPECT_EQ("Person", observer->updatedNodes[0].first.getLabel());
+	EXPECT_EQ("StagingPerson", observer->updatedNodes[0].second.getLabel());
 
 	// 4. Simulate Save & Update
 	simulateSave(); // Replaces markAllSaved()
@@ -204,8 +213,7 @@ TEST_F(DataManagerTest, NodeCRUD) {
 	dataManager->deleteNode(node);
 	dataManager->clearCache();
 	retrievedNode = dataManager->getNode(node.getId());
-	// Depending on get() implementation, it might return empty/inactive node for DELETED items in dirty map
-	// or check persistence manager. Let's assume correct behavior is inactive/empty.
+
 	if (retrievedNode.getId() != 0) {
 		EXPECT_FALSE(retrievedNode.isActive());
 	} else {
@@ -557,20 +565,26 @@ TEST_F(DataManagerTest, AutoFlush) {
 TEST_F(DataManagerTest, ObserverNotifications) {
 	observer->reset();
 
-	// --- PHASE 1 ---
+	// --- PHASE 1: Add ---
 	auto source = createTestNode("Source");
 	auto target = createTestNode("Target");
 	dataManager->addNode(source);
 	dataManager->addNode(target);
+
+	// Adding an edge internally triggers `linkEdge`, which updates the connected nodes
+	// (setting firstOutEdgeId/firstInEdgeId) and the edge itself.
 	auto edge = createTestEdge(source.getId(), target.getId(), "RELATES_TO");
 	dataManager->addEdge(edge);
 
 	EXPECT_EQ(2UL, observer->addedNodes.size());
 	EXPECT_EQ(1UL, observer->addedEdges.size());
-	EXPECT_EQ(0UL, observer->updatedNodes.size());
-	EXPECT_EQ(0UL, observer->updatedEdges.size());
 
-	// --- PHASE 2 ---
+	// Linking the edge updates both Source and Target nodes + the Edge itself.
+	// Since we enabled notifications for ADDED entities, these internal updates are now reported.
+	EXPECT_EQ(2UL, observer->updatedNodes.size()); // Source updated, Target updated
+	EXPECT_EQ(1UL, observer->updatedEdges.size()); // Edge updated (pointers)
+
+	// --- PHASE 2: Explicit Update ---
 	simulateSave();
 	observer->reset();
 
@@ -585,9 +599,11 @@ TEST_F(DataManagerTest, ObserverNotifications) {
 	EXPECT_EQ(1UL, observer->updatedNodes.size());
 	EXPECT_EQ(1UL, observer->updatedEdges.size());
 
-	// --- PHASE 3 ---
+	// --- PHASE 3: Delete ---
 	observer->reset();
 
+	// Deleting the edge unlinks it from the nodes.
+	// `unlinkEdge` calls updateNode on Source and Target.
 	dataManager->deleteEdge(edge);
 	dataManager->deleteNode(target);
 
@@ -597,12 +613,15 @@ TEST_F(DataManagerTest, ObserverNotifications) {
 	EXPECT_EQ(1UL, observer->deletedEdges.size());
 	EXPECT_EQ(edge.getId(), observer->deletedEdges[0].getId());
 
+	// Unlinking the edge updates both Source and Target nodes.
 	EXPECT_EQ(2UL, observer->updatedNodes.size());
 
 	std::vector<int64_t> updatedNodeIds;
 	for (const auto &pair: observer->updatedNodes) {
 		updatedNodeIds.push_back(pair.second.getId());
 	}
+
+	// Verify that both connected nodes were updated during the edge deletion
 	ASSERT_TRUE(std::find(updatedNodeIds.begin(), updatedNodeIds.end(), source.getId()) != updatedNodeIds.end());
 	ASSERT_TRUE(std::find(updatedNodeIds.begin(), updatedNodeIds.end(), target.getId()) != updatedNodeIds.end());
 }
@@ -633,7 +652,7 @@ TEST_F(DataManagerTest, MultipleEntityTypes) {
 	auto retrievedBlob = dataManager->getBlob(blob.getId());
 	EXPECT_EQ(blobData, retrievedBlob.getDataAsString());
 
-	// --- Dirty Check Fix ---
+	// --- Dirty Check ---
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
 	// 1. Check Node

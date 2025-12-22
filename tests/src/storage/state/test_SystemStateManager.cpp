@@ -216,3 +216,41 @@ TEST_F(SystemStateManagerTest, MergeVsReplace) {
 	EXPECT_EQ(res["D"], 40);
 	EXPECT_FALSE(res.contains("A"));
 }
+
+// Test 10: Verify "No-Op" Optimization (Dirty Check)
+// Ensures that writing the same value does not trigger a disk write.
+TEST_F(SystemStateManagerTest, Optimization_NoWriteIfSame) {
+	const std::string key = "opt.test";
+
+	// 1. Initial Write
+	stateManager->set<int64_t>(key, "val", 100);
+
+	// Flush to clear dirty flags in DataManager/PersistenceManager
+	database->getStorage()->flush();
+	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+
+	// 2. Set SAME value (Scalar)
+	// Should be optimized out
+	stateManager->set<int64_t>(key, "val", 100);
+	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+		<< "Optimization Failed: Setting same scalar value triggered a dirty state.";
+
+	// 3. Set DIFFERENT value
+	stateManager->set<int64_t>(key, "val", 101);
+	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+
+	// Flush again
+	database->getStorage()->flush();
+
+	// 4. Test Map Optimization (MERGE mode)
+	std::unordered_map<std::string, int64_t> sameMap = {{"val", 101}};
+	stateManager->setMap(key, sameMap, graph::storage::state::UpdateMode::MERGE);
+	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+		<< "Optimization Failed: Merging identical map triggered a dirty state.";
+
+	// 5. Test Map Optimization (REPLACE mode)
+	// In REPLACE mode, same content should also be optimized
+	stateManager->setMap(key, sameMap, graph::storage::state::UpdateMode::REPLACE);
+	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+		<< "Optimization Failed: Replacing with identical map triggered a dirty state.";
+}

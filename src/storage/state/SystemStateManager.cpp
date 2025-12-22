@@ -22,10 +22,7 @@ namespace graph::storage::state {
 
 	void SystemStateManager::remove(const std::string &stateKey) const { dataManager_->removeState(stateKey); }
 
-	// --- Template Implementations (Must be in header or explicitly instantiated) ---
-	// For simplicity in this example, we implement the logic here but usually
-	// templates stay in .hpp. To keep .hpp clean, we can put these in the .cpp
-	// IF we explicitly instantiate them at the bottom.
+	// --- Template Implementations ---
 
 	// Helper to extract value from PropertyValue
 	template<typename T>
@@ -61,6 +58,7 @@ namespace graph::storage::state {
 	void SystemStateManager::set(const std::string &stateKey, const std::string &field, const T &value) {
 		std::unordered_map<std::string, T> singleMap;
 		singleMap[field] = value;
+		// Use MERGE mode. The optimization in setMap will handle the check.
 		setMap(stateKey, singleMap, UpdateMode::MERGE);
 	}
 
@@ -80,32 +78,77 @@ namespace graph::storage::state {
 	template<typename T>
 	void SystemStateManager::setMap(const std::string &stateKey, const std::unordered_map<std::string, T> &map,
 									UpdateMode mode) {
+		// 1. Handle Empty Input Map
 		if (map.empty()) {
+			// Only remove if we are in REPLACE mode (meaning "set state to empty")
+			// If MERGE, empty map means "do nothing".
 			if (mode == UpdateMode::REPLACE) {
-				remove(stateKey);
+				// Optimization: Check if it exists before trying to remove
+				if (!dataManager_->getStateProperties(stateKey).empty()) {
+					remove(stateKey);
+				}
 			}
 			return;
 		}
 
-		std::unordered_map<std::string, PropertyValue> props;
+		// 2. Load existing data for comparison and merging
+		auto currentProps = dataManager_->getStateProperties(stateKey);
+		bool isDirty = false;
 
-		// [FIX] MERGE logic: Load existing data first
+		// 3. Logic based on Mode
 		if (mode == UpdateMode::MERGE) {
-			props = dataManager_->getStateProperties(stateKey);
-		} else {
-			// REPLACE logic: Explicitly remove old state to ensure clean slate
-			// (Optional if updateStateChain handles full overwrite, but safe to keep)
-			dataManager_->removeState(stateKey);
+			// Iterate through the input map to check for changes
+			for (const auto &[key, value] : map) {
+				PropertyValue newVal(value);
+
+				// Update only if:
+				// a) The key does not exist in current state
+				// b) The key exists but the value is different
+				auto it = currentProps.find(key);
+				if (it == currentProps.end() || it->second != newVal) {
+					currentProps[key] = newVal;
+					isDirty = true;
+				}
+			}
+		}
+		else { // UpdateMode::REPLACE
+			// In REPLACE mode, the new state must EXACTLY match the input map.
+
+			// Optimization: First check if sizes match.
+			if (currentProps.size() != map.size()) {
+				isDirty = true;
+			} else {
+				// Sizes match, check content equality.
+				for (const auto &[key, value] : map) {
+					auto it = currentProps.find(key);
+					// If key missing in old state OR value is different -> Changed
+					if (it == currentProps.end() || it->second != PropertyValue(value)) {
+						isDirty = true;
+						break;
+					}
+				}
+			}
+
+			// If data changed, prepare the new property map from scratch (Replace)
+			if (isDirty) {
+				// Clean the old map completely so we only write the new map
+				currentProps.clear();
+				for (const auto &[key, value] : map) {
+					currentProps[key] = value;
+				}
+				// Explicitly remove old state chain to prevent orphan blobs
+				// (depending on underlying implementation, this is safer for REPLACE)
+				dataManager_->removeState(stateKey);
+			}
 		}
 
-		// Apply updates
-		for (const auto &[k, v]: map) {
-			props[k] = v;
+		// 4. Write back only if changes were detected
+		if (isDirty) {
+			dataManager_->addStateProperties(stateKey, currentProps);
 		}
-
-		// Write full set
-		dataManager_->addStateProperties(stateKey, props);
 	}
+
+	// --- Explicit Instantiations ---
 
 	template std::unordered_map<std::string, std::string>
 	SystemStateManager::getMap<std::string>(const std::string &) const;
@@ -113,7 +156,7 @@ namespace graph::storage::state {
 														  const std::unordered_map<std::string, std::string> &,
 														  UpdateMode);
 
-	// Explicit Instantiations for the types we support
+	// int64_t
 	template int64_t SystemStateManager::get<int64_t>(const std::string &, const std::string &, int64_t) const;
 	template void SystemStateManager::set<int64_t>(const std::string &, const std::string &, const int64_t &);
 	template std::unordered_map<std::string, int64_t> SystemStateManager::getMap<int64_t>(const std::string &) const;
@@ -129,7 +172,7 @@ namespace graph::storage::state {
 															  std::string) const;
 	template void SystemStateManager::set<std::string>(const std::string &, const std::string &, const std::string &);
 
-	// double (This was missing!)
+	// double
 	template double SystemStateManager::get<double>(const std::string &, const std::string &, double) const;
 	template void SystemStateManager::set<double>(const std::string &, const std::string &, const double &);
 

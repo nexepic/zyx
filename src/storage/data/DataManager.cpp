@@ -149,19 +149,28 @@ namespace graph::storage {
 		auto dirtyInfo = persistenceManager_->getDirtyInfo<T>(entity.getId());
 
 		// If entity is marked as ADDED, this update is part of creation.
-		// Keep changeType as ADDED, do not trigger 'Updated' notification.
 		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
+			// Even if it's "ADDED", the content (Label/Props) might have changed since the initial addNode().
+			// We MUST notify observers (IndexManager) to update their in-memory structures.
+
+			// 1. Get the current state from memory (Old Label)
+			T oldEntity = getOldFunc(entity.getId());
+
+			// 2. Perform the update (New Label)
 			internalUpdateFunc(entity);
+
+			// 3. Notify (Old vs New)
+			if (notifyFunc) {
+				notifyFunc(oldEntity, entity);
+			}
 			return;
 		}
 
-		// Get old state
+		// Standard update flow for existing entities
 		T oldEntity = getOldFunc(entity.getId());
 
-		// Perform update
 		internalUpdateFunc(entity);
 
-		// Notify
 		if (notifyFunc)
 			notifyFunc(oldEntity, entity);
 	}

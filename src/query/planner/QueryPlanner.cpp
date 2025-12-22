@@ -18,6 +18,7 @@
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
+#include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
@@ -121,7 +122,7 @@ namespace graph::query {
 	}
 
 	std::unique_ptr<execution::PhysicalOperator>
-	QueryPlanner::callProcedureOp(const std::string &procedure, const std::vector<::graph::PropertyValue> &args) const {
+	QueryPlanner::callProcedureOp(const std::string &procedure, const std::vector<PropertyValue> &args) const {
 		if (procedure == "dbms.setConfig") {
 			if (args.size() != 2)
 				throw std::runtime_error("dbms.setConfig expects (key, value)");
@@ -170,15 +171,20 @@ namespace graph::query {
 		throw std::runtime_error("Unknown procedure: " + procedure);
 	}
 
-	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::createIndexOp(
-        const std::string& indexName,
-        const std::string& label,
-        const std::string& propertyKey
-    ) const {
-        return std::make_unique<execution::operators::CreateIndexOperator>(
-            im_, indexName, label, propertyKey
-        );
-    }
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::createIndexOp(const std::string &indexName,
+																			 const std::string &label,
+																			 const std::string &propertyKey) const {
+		return std::make_unique<execution::operators::CreateIndexOperator>(im_, indexName, label, propertyKey);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::mergeOp(const std::string &variable, const std::string &label,
+						  const std::unordered_map<std::string, PropertyValue> &matchProps,
+						  const std::vector<execution::operators::SetItem> &onCreateItems,
+						  const std::vector<execution::operators::SetItem> &onMatchItems) const {
+		return std::make_unique<execution::operators::MergeNodeOperator>(dm_, im_, variable, label, matchProps,
+																		 onCreateItems, onMatchItems);
+	}
 
 	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::showIndexesOp() const {
 		return std::make_unique<execution::operators::ShowIndexesOperator>(im_);
@@ -203,6 +209,12 @@ namespace graph::query {
 	QueryPlanner::setOp(std::unique_ptr<execution::PhysicalOperator> child,
 						const std::vector<execution::operators::SetItem> &items) const {
 		return std::make_unique<execution::operators::SetOperator>(dm_, std::move(child), items);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::removeOp(std::unique_ptr<execution::PhysicalOperator> child,
+						   const std::vector<execution::operators::RemoveItem> &items) const {
+		return std::make_unique<execution::operators::RemoveOperator>(dm_, std::move(child), items);
 	}
 
 } // namespace graph::query

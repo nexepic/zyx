@@ -15,10 +15,13 @@
 
 namespace graph::query::execution::operators {
 
+	enum class SetActionType { PROPERTY, LABEL };
+
 	struct SetItem {
+		SetActionType type; // Distinguish Property vs Label
 		std::string variable;
-		std::string key;
-		PropertyValue value;
+		std::string key; // Property Key OR Label Name
+		PropertyValue value; // Value (ignored if type == LABEL)
 	};
 
 	class SetOperator : public PhysicalOperator {
@@ -41,45 +44,42 @@ namespace graph::query::execution::operators {
 			outputBatch.reserve(batchOpt->size());
 
 			for (auto record: *batchOpt) {
-				// Apply all updates
 				for (const auto &item: items_) {
 
-					// --- Update Node ---
+					// --- Node Logic ---
 					if (auto nodeOpt = record.getNode(item.variable)) {
 						Node node = *nodeOpt;
 						int64_t id = node.getId();
 
-						// Read-Modify-Write Pattern
-						// 1. Fetch ALL existing properties to prevent overwriting
-						auto props = dm_->getNodeProperties(id);
+						if (item.type == SetActionType::PROPERTY) {
+							// 1. Property Update (Read-Modify-Write)
+							auto props = dm_->getNodeProperties(id);
+							props[item.key] = item.value;
+							dm_->addNodeProperties(id, props);
+							node.setProperties(std::move(props));
+						} else if (item.type == SetActionType::LABEL) {
+							// 2. Label Update
+							// Note: MetrixDB currently supports single Label per node.
+							// SET n:Label replaces the old label.
+							node.setLabel(item.key);
+							dm_->updateNode(node); // Persist label change
+						}
 
-						// 2. Modify in memory
-						props[item.key] = item.value;
-
-						// 3. Write FULL map back to storage
-						// This ensures PersistenceManager has the complete state
-						dm_->addNodeProperties(id, props);
-
-						// 4. Update the record object for downstream operators
-						node.setProperties(std::move(props));
 						record.setNode(item.variable, node);
 					}
 
-					// --- Update Edge ---
+					// --- Edge Logic (Only Properties supported for now) ---
 					else if (auto edgeOpt = record.getEdge(item.variable)) {
 						Edge edge = *edgeOpt;
 						int64_t id = edge.getId();
 
-						// Read-Modify-Write for Edge
-						auto props = dm_->getEdgeProperties(id);
-
-						props[item.key] = item.value;
-
-						dm_->addEdgeProperties(id, props);
-
-						// Update record object (Assuming Edge has setProperties)
-						edge.setProperties(std::move(props));
-						record.setEdge(item.variable, edge);
+						if (item.type == SetActionType::PROPERTY) {
+							auto props = dm_->getEdgeProperties(id);
+							props[item.key] = item.value;
+							dm_->addEdgeProperties(id, props);
+							edge.setProperties(std::move(props));
+							record.setEdge(item.variable, edge);
+						}
 					}
 				}
 				outputBatch.push_back(std::move(record));
@@ -108,5 +108,4 @@ namespace graph::query::execution::operators {
 		std::unique_ptr<PhysicalOperator> child_;
 		std::vector<SetItem> items_;
 	};
-
 } // namespace graph::query::execution::operators

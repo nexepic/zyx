@@ -127,13 +127,6 @@ TEST_F(CypherSyntaxTest, ValidSet) {
 	EXPECT_TRUE(validate("MATCH (n) SET n:Active"));
 }
 
-TEST_F(CypherSyntaxTest, ValidRemove) {
-	// Remove Property
-	EXPECT_TRUE(validate("MATCH (n) REMOVE n.age"));
-	// Remove Label
-	EXPECT_TRUE(validate("MATCH (n) REMOVE n:Active"));
-}
-
 TEST_F(CypherSyntaxTest, ValidMerge) {
 	// MERGE matches standard syntax
 	EXPECT_TRUE(validate("MERGE (n:User {name: 'Alice'})"));
@@ -211,4 +204,50 @@ TEST_F(CypherSyntaxTest, InvalidIndexSyntax) {
 	EXPECT_FALSE(validate("CREATE INDEX :User(name)"));
 	// Missing Parens (if grammar enforces them)
 	EXPECT_FALSE(validate("CREATE INDEX ON :User name"));
+}
+
+// ============================================================================
+// 5. Extended Write Syntax Tests (MERGE, REMOVE, SET Label)
+// ============================================================================
+
+TEST_F(CypherSyntaxTest, ValidMergeComplex) {
+	// Standard Merge
+	EXPECT_TRUE(validate("MERGE (n:User {id: 1})"));
+
+	// Merge with On Create
+	EXPECT_TRUE(validate("MERGE (n:User {id: 1}) ON CREATE SET n.created = 123"));
+
+	// Merge with On Match
+	EXPECT_TRUE(validate("MERGE (n:User {id: 1}) ON MATCH SET n.updated = true"));
+
+	// Full Merge
+	EXPECT_TRUE(validate("MERGE (n:User {id: 1}) ON CREATE SET n.c = 1 ON MATCH SET n.u = 1"));
+
+	// Merge with multiple SET items
+	EXPECT_TRUE(validate("MERGE (n:User {id: 1}) ON CREATE SET n.prop1 = 1, n.prop2 = 'A'"));
+}
+
+TEST_F(CypherSyntaxTest, ValidSetLabel) {
+	// Set Label
+	EXPECT_TRUE(validate("MATCH (n) SET n:Active"));
+	// Set Multiple Labels (Standard Cypher allows this, though MetrixDB might support only one currently)
+	EXPECT_TRUE(validate("MATCH (n) SET n:Active:Admin"));
+	// Mixed Set (Property and Label)
+	EXPECT_TRUE(validate("MATCH (n) SET n.age = 10, n:Person"));
+}
+
+TEST_F(CypherSyntaxTest, ValidRemove) {
+	// Remove Property
+	EXPECT_TRUE(validate("MATCH (n) REMOVE n.prop"));
+	// Remove Label
+	EXPECT_TRUE(validate("MATCH (n) REMOVE n:OldLabel"));
+	// Mixed Remove
+	EXPECT_TRUE(validate("MATCH (n) REMOVE n.prop, n:Label"));
+}
+
+TEST_F(CypherSyntaxTest, InvalidMergeSyntax) {
+	// MERGE requires a pattern
+	EXPECT_FALSE(validate("MERGE"));
+	// Invalid action keyword
+	EXPECT_FALSE(validate("MERGE (n) ON DELETE SET n.a=1"));
 }

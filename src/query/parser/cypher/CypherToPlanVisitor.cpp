@@ -583,34 +583,117 @@ namespace graph::parser::cypher {
 
 	// --- SET ---
 	std::any CypherToPlanVisitor::visitSetStatement(CypherParser::SetStatementContext *ctx) {
-		// Grammar: SET setItem (COMMA setItem)*
-
+		// Prepare a list of items to update
 		std::vector<query::execution::operators::SetItem> items;
 
+		// Iterate through all comma-separated items: SET n.a=1, n:Label
 		for (auto item: ctx->setItem()) {
+
+			// --- Case 1: Property Assignment (n.prop = val) ---
 			// Grammar: propertyExpression EQ expression
 			if (item->propertyExpression() && item->EQ()) {
 				auto propExpr = item->propertyExpression();
 
-				// Extract Variable and Key
-				// propertyExpression -> atom (DOT key)+
-				std::string varName = propExpr->atom()->getText();
-				std::string keyName = propExpr->propertyKeyName(0)->getText(); // Assume 1 dot for now
+				// 1. Extract Variable (n)
+				// propertyExpression -> atom -> variable
+				std::string varName = "";
+				if (propExpr->atom() && propExpr->atom()->variable()) {
+					varName = extractVariable(propExpr->atom()->variable());
+				} else {
+					throw std::runtime_error("SET property must start with a variable (e.g. n.prop)");
+				}
 
-				// Extract Value
-				// expression -> ... -> literal
-				// Using helper function logic here
-				// Note: We need to parse expression properly.
-				// For simplicity, we assume the RHS is a literal.
-				auto expr = item->expression();
+				// 2. Extract Key (prop)
+				// Using the helper defined previously
+				std::string keyName = extractPropertyKeyFromExpr(propExpr);
 
-				// Hacky way to get literal from expression tree without full visitor
-				// In production, use ExpressionVisitor.
-				// Here we assume expression text is parseable (e.g. "10", "'string'")
-				// Or try to find the literal context.
+				// 3. Extract Value (val)
+				// Note: In a full engine, we use an ExpressionVisitor.
+				// Here we use simplified literal parsing based on getText().
+				std::string valText = item->expression()->getText();
+				graph::PropertyValue val;
 
-				// Let's try to extract literal text and parse it
-				std::string valText = expr->getText();
+				if (valText.front() == '\'' || valText.front() == '"') {
+					// String literal
+					val = graph::PropertyValue(valText.substr(1, valText.length() - 2));
+				} else if (valText == "TRUE" || valText == "true") {
+					val = graph::PropertyValue(true);
+				} else if (valText == "FALSE" || valText == "false") {
+					val = graph::PropertyValue(false);
+				} else {
+					// Try numeric parsing
+					try {
+						if (valText.find('.') != std::string::npos) {
+							val = graph::PropertyValue(std::stod(valText));
+						} else {
+							val = graph::PropertyValue(std::stoll(valText));
+						}
+					} catch (...) {
+						// Fallback: If it's a parameter ($param) or complex expr,
+						// we currently store it as a string for debugging.
+						// Ideally throw error if not supported.
+						val = graph::PropertyValue(valText);
+					}
+				}
+
+				// Add to list with PROPERTY type
+				items.push_back({query::execution::operators::SetActionType::PROPERTY, varName, keyName, val});
+			}
+
+			// --- Case 2: Label Assignment (n:Label) ---
+			// Grammar: variable nodeLabels
+			else if (item->variable() && item->nodeLabels()) {
+				std::string varName = extractVariable(item->variable());
+				std::string labelName = extractLabel(item->nodeLabels());
+
+				// Add to list with LABEL type (value is ignored/empty)
+				items.push_back(
+						{query::execution::operators::SetActionType::LABEL, varName, labelName, PropertyValue()});
+			}
+
+			// --- Case 3: Other forms (+=, etc.) are not yet supported ---
+			else {
+				// You might want to log a warning or throw
+				// throw std::runtime_error("Unsupported SET syntax (e.g. += or map assignment)");
+			}
+		}
+
+		// Ensure we have a valid pipeline to operate on
+		if (!rootOp_) {
+			throw std::runtime_error("SET clause must follow a MATCH or CREATE clause.");
+		}
+
+		// Create and chain the SetOperator
+		rootOp_ = planner_->setOp(std::move(rootOp_), items);
+
+		return std::any();
+	}
+
+	// --- Helper: Extract Set Items ---
+	std::vector<query::execution::operators::SetItem>
+	CypherToPlanVisitor::extractSetItems(CypherParser::SetStatementContext *ctx) {
+		std::vector<query::execution::operators::SetItem> items;
+		if (!ctx)
+			return items;
+
+		for (auto item: ctx->setItem()) {
+
+			// --- Case 1: Property Update (n.prop = val) ---
+			if (item->propertyExpression() && item->EQ()) {
+				auto propExpr = item->propertyExpression();
+
+				// 1. Extract Variable
+				std::string varName = "";
+				if (propExpr->atom() && propExpr->atom()->variable()) {
+					varName = extractVariable(propExpr->atom()->variable());
+				}
+
+				// 2. Extract Key
+				std::string keyName = extractPropertyKeyFromExpr(propExpr);
+
+				// 3. Extract Value
+				// Reusing the text parsing logic for simplicity
+				std::string valText = item->expression()->getText();
 				graph::PropertyValue val;
 
 				if (valText.front() == '\'' || valText.front() == '"') {
@@ -621,28 +704,117 @@ namespace graph::parser::cypher {
 					val = graph::PropertyValue(false);
 				} else {
 					try {
-						val = graph::PropertyValue(std::stoll(valText));
-					} catch (...) {
-						// Double?
-						try {
+						if (valText.find('.') != std::string::npos)
 							val = graph::PropertyValue(std::stod(valText));
-						} catch (...) {
-							throw std::runtime_error("Unsupported SET value format: " + valText);
-						}
+						else
+							val = graph::PropertyValue(std::stoll(valText));
+					} catch (...) {
+						val = graph::PropertyValue(valText);
 					}
 				}
 
-				items.push_back({varName, keyName, val});
-			} else {
-				throw std::runtime_error("Only SET n.prop = val is currently supported.");
+				// [FIXED] Added SetActionType::PROPERTY as first argument
+				items.push_back({query::execution::operators::SetActionType::PROPERTY, varName, keyName, val});
+			}
+
+			// --- Case 2: Label Assignment (n:Label) ---
+			else if (item->variable() && item->nodeLabels()) {
+				std::string varName = extractVariable(item->variable());
+				std::string labelName = extractLabel(item->nodeLabels());
+
+				// [FIXED] Handle Label setting in MERGE actions
+				items.push_back({
+						query::execution::operators::SetActionType::LABEL, varName, labelName,
+						graph::PropertyValue() // Empty value for labels
+				});
+			}
+		}
+		return items;
+	}
+
+	std::any CypherToPlanVisitor::visitRemoveStatement(CypherParser::RemoveStatementContext *ctx) {
+		std::vector<query::execution::operators::RemoveItem> items;
+
+		for (auto item: ctx->removeItem()) {
+			// Case 1: n.prop (Property)
+			if (item->propertyExpression()) {
+				auto propExpr = item->propertyExpression();
+				std::string varName = propExpr->atom()->getText();
+				std::string keyName = propExpr->propertyKeyName(0)->getText();
+				items.push_back({query::execution::operators::RemoveActionType::PROPERTY, varName, keyName});
+			}
+			// Case 2: n:Label (Label)
+			else if (item->variable() && item->nodeLabels()) {
+				std::string varName = extractVariable(item->variable());
+				std::string labelName = extractLabel(item->nodeLabels());
+				items.push_back({query::execution::operators::RemoveActionType::LABEL, varName, labelName});
 			}
 		}
 
-		if (!rootOp_) {
-			throw std::runtime_error("SET cannot be the start of a query.");
+		if (!rootOp_)
+			throw std::runtime_error("REMOVE must follow a MATCH or CREATE");
+		rootOp_ = planner_->removeOp(std::move(rootOp_), items);
+		return std::any();
+	}
+
+	// --- MERGE ---
+	std::any CypherToPlanVisitor::visitMergeStatement(CypherParser::MergeStatementContext *ctx) {
+		// Grammar: MERGE patternPart ( ON (MATCH|CREATE) setClause )*
+
+		auto patternPart = ctx->patternPart();
+		// MERGE only supports a single pattern part usually
+		auto element = patternPart->patternElement();
+
+		// 1. Head Node Extraction (Similar to MATCH/CREATE)
+		auto headNodePat = element->nodePattern();
+		std::string var = extractVariable(headNodePat->variable());
+		std::string label = extractLabel(headNodePat->nodeLabels());
+		auto matchProps = extractProperties(headNodePat->properties());
+
+		// 2. Parse Actions
+		std::vector<query::execution::operators::SetItem> onCreateItems;
+		std::vector<query::execution::operators::SetItem> onMatchItems;
+
+		// Iterate children to find ON MATCH / ON CREATE blocks
+		// The grammar structure: ( K_ON ( K_MATCH | K_CREATE ) setClause )*
+		// Since ANTLR flattens lists, we need to iterate carefully or use context methods if named
+
+		// Context accessors return vectors: K_ON(), K_MATCH(), setClause()
+		// We need to zip them.
+		size_t actionCount = ctx->K_ON().size();
+		for (size_t i = 0; i < actionCount; ++i) {
+			bool isMatch = (ctx->K_MATCH(i) != nullptr); // Check if the i-th K_MATCH exists relative to K_ON?
+			// Actually, ctx->K_MATCH() returns a vector of ALL K_MATCH tokens.
+			// We need to check the token stream order or use `children`.
+			// Safer way: Iterate children directly.
 		}
 
-		rootOp_ = planner_->setOp(std::move(rootOp_), items);
+		// Easier approach: Iterate children
+		for (size_t i = 0; i < ctx->children.size(); ++i) {
+			if (ctx->children[i]->getText() == "ON") {
+				// Next is MATCH or CREATE
+				std::string type = ctx->children[i + 1]->getText(); // MATCH / CREATE
+				// Next is SET clause (Parser rule context)
+				auto setCtx = dynamic_cast<CypherParser::SetStatementContext *>(ctx->children[i + 2]);
+
+				auto items = extractSetItems(setCtx);
+				if (type == "MATCH") {
+					onMatchItems.insert(onMatchItems.end(), items.begin(), items.end());
+				} else if (type == "CREATE") {
+					onCreateItems.insert(onCreateItems.end(), items.begin(), items.end());
+				}
+			}
+		}
+
+		// 3. Build Operator
+		// Currently only supporting MERGE (n) (Single Node)
+		// Edge Merge requires traversal logic which is more complex.
+
+		auto op = planner_->mergeOp(var, label, matchProps, onCreateItems, onMatchItems);
+		chainOperator(std::move(op));
+
+		// TODO: Handle pattern chains -[r]->(m)
+
 		return std::any();
 	}
 

@@ -57,6 +57,12 @@ namespace graph::parser::cypher {
 		std::any visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) override;
 		std::any visitSetStatement(CypherParser::SetStatementContext *ctx) override;
 
+		std::any visitRemoveStatement(CypherParser::RemoveStatementContext *ctx) override;
+
+		std::any visitMergeStatement(CypherParser::MergeStatementContext *ctx) override;
+
+		std::vector<query::execution::operators::SetItem> extractSetItems(CypherParser::SetStatementContext* ctx);
+
 	private:
 		std::shared_ptr<query::QueryPlanner> planner_;
 		std::unique_ptr<query::execution::PhysicalOperator> rootOp_;

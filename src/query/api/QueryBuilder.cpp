@@ -98,12 +98,17 @@ namespace graph::query {
 		return *this;
 	}
 
-	QueryBuilder &QueryBuilder::set_(const std::string &variable, const std::string &key, const PropertyValue &value) {
-		if (!root_)
-			throw std::runtime_error("SET must follow a MATCH");
+	QueryBuilder& QueryBuilder::set_(const std::string& variable, const std::string& key, const PropertyValue& value) {
+		if (!root_) throw std::runtime_error("SET must follow a MATCH");
 
 		std::vector<execution::operators::SetItem> items;
-		items.push_back({variable, key, value});
+
+		items.push_back({
+			execution::operators::SetActionType::PROPERTY,
+			variable,
+			key,
+			value
+		});
 
 		// Wraps current root
 		root_ = planner_->setOp(std::move(root_), items);
