@@ -643,3 +643,76 @@ TEST_F(CypherTest, SetNewProperty) {
 	auto res = execute("MATCH (n:Node) RETURN n");
 	EXPECT_EQ(res.getNodes()[0].getProperties().at("new_prop").toString(), "hello");
 }
+
+// ============================================================================
+// Pagination Tests (LIMIT & SKIP) - [NEW]
+// ============================================================================
+
+TEST_F(CypherTest, LimitResults) {
+    // 1. Setup: Create 5 nodes
+    for (int i = 0; i < 5; ++i) {
+        (void) execute("CREATE (n:LimitTest {id: " + std::to_string(i) + "})");
+    }
+
+    // 2. Test Limit < Total
+    auto res = execute("MATCH (n:LimitTest) RETURN n LIMIT 3");
+    ASSERT_EQ(res.nodeCount(), 3UL);
+
+    // 3. Test Limit > Total
+    auto resAll = execute("MATCH (n:LimitTest) RETURN n LIMIT 10");
+    ASSERT_EQ(resAll.nodeCount(), 5UL);
+
+    // 4. Test Limit 0
+    auto resZero = execute("MATCH (n:LimitTest) RETURN n LIMIT 0");
+    ASSERT_EQ(resZero.nodeCount(), 0UL);
+}
+
+TEST_F(CypherTest, SkipResults) {
+    // 1. Setup: Create 5 nodes
+    for (int i = 0; i < 5; ++i) {
+        (void) execute("CREATE (n:SkipTest {id: " + std::to_string(i) + "})");
+    }
+
+    // 2. Test Skip
+    // Total 5, Skip 2 -> Expect 3
+    auto res = execute("MATCH (n:SkipTest) RETURN n SKIP 2");
+    ASSERT_EQ(res.nodeCount(), 3UL);
+
+    // 3. Test Skip All
+    auto resEmpty = execute("MATCH (n:SkipTest) RETURN n SKIP 5");
+    ASSERT_EQ(resEmpty.nodeCount(), 0UL);
+
+    // 4. Test Skip More than Total
+    auto resOver = execute("MATCH (n:SkipTest) RETURN n SKIP 100");
+    ASSERT_EQ(resOver.nodeCount(), 0UL);
+}
+
+TEST_F(CypherTest, SkipAndLimitCombined) {
+    // 1. Setup: Create 10 ordered nodes
+    // Note: Without ORDER BY, the scan order depends on storage insertion order.
+    // Since we insert sequentially in a fresh DB, retrieval is usually sequential.
+    for (int i = 0; i < 10; ++i) {
+        (void) execute("CREATE (n:PageTest {val: " + std::to_string(i) + "})");
+    }
+
+    // 2. Skip 3, Limit 4
+    // Should get items at indices [3, 4, 5, 6] (Total 4 items)
+    auto res = execute("MATCH (n:PageTest) RETURN n SKIP 3 LIMIT 4");
+
+    ASSERT_EQ(res.nodeCount(), 4UL);
+
+    // Verify values (assuming sequential scan order)
+    // We check existence of specific values to be safe against order non-determinism
+    bool found3 = false, found6 = false;
+    for (const auto& node : res.getNodes()) {
+        std::string val = node.getProperties().at("val").toString();
+        if (val == "3") found3 = true;
+        if (val == "6") found6 = true;
+        // Should NOT find 0, 1, 2 (Skipped)
+        EXPECT_NE(val, "0");
+        EXPECT_NE(val, "1");
+        EXPECT_NE(val, "2");
+    }
+    EXPECT_TRUE(found3);
+    EXPECT_TRUE(found6);
+}

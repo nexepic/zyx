@@ -343,13 +343,12 @@ namespace graph::parser::cypher {
 	// --- RETURN ---
 	std::any CypherToPlanVisitor::visitReturnStatement(CypherParser::ReturnStatementContext *ctx) {
 		auto body = ctx->projectionBody();
-		auto items = body->projectionItems();
 
-		if (items->MULTIPLY()) {
-			// RETURN *
-		} else {
+		// 1. Handle Projection (Existing Logic)
+		auto items = body->projectionItems();
+		if (!items->MULTIPLY()) { // If not RETURN *
 			std::vector<std::string> vars;
-			for (auto item: items->projectionItem()) {
+			for (auto item : items->projectionItem()) {
 				std::string exprText = item->expression()->getText();
 				vars.push_back(exprText);
 			}
@@ -357,6 +356,38 @@ namespace graph::parser::cypher {
 				rootOp_ = planner_->projectOp(std::move(rootOp_), vars);
 			}
 		}
+
+		// TODO: Handle Order By (body->orderStatement()) - Requires SortOperator
+
+		// 2. [NEW] Handle SKIP
+		if (body->skipStatement()) {
+			auto skipExpr = body->skipStatement()->expression();
+			int64_t offset = 0;
+			// Simplified parsing: assume literal integer
+			try {
+				offset = std::stoll(skipExpr->getText());
+			} catch(...) {
+				throw std::runtime_error("SKIP requires an integer literal.");
+			}
+
+			// Chain: Skip(Project(...))
+			rootOp_ = planner_->skipOp(std::move(rootOp_), offset);
+		}
+
+		// 3. [NEW] Handle LIMIT
+		if (body->limitStatement()) {
+			auto limitExpr = body->limitStatement()->expression();
+			int64_t limit = 0;
+			try {
+				limit = std::stoll(limitExpr->getText());
+			} catch(...) {
+				throw std::runtime_error("LIMIT requires an integer literal.");
+			}
+
+			// Chain: Limit(Skip(Project(...)))
+			rootOp_ = planner_->limitOp(std::move(rootOp_), limit);
+		}
+
 		return std::any();
 	}
 

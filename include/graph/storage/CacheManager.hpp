@@ -24,6 +24,11 @@ namespace graph::storage {
 		}
 
 		V get(const K& key) {
+			// Early return if capacity is 0
+			if (capacity_ == 0) {
+				return V();
+			}
+
 			auto it = cache_map_.find(key);
 			if (it == cache_map_.end()) {
 				return V();
@@ -35,6 +40,11 @@ namespace graph::storage {
 		}
 
 		void put(const K& key, const V& value) {
+			// Early return if capacity is 0
+			if (capacity_ == 0) {
+				return;
+			}
+
 			auto it = cache_map_.find(key);
 
 			if (it != cache_map_.end()) {

@@ -17,12 +17,14 @@
 #include "graph/query/execution/operators/DeleteOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
+#include "graph/query/execution/operators/LimitOperator.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
+#include "graph/query/execution/operators/SkipOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 
@@ -215,6 +217,20 @@ namespace graph::query {
 	QueryPlanner::removeOp(std::unique_ptr<execution::PhysicalOperator> child,
 						   const std::vector<execution::operators::RemoveItem> &items) const {
 		return std::make_unique<execution::operators::RemoveOperator>(dm_, std::move(child), items);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::limitOp(
+		std::unique_ptr<execution::PhysicalOperator> child,
+		int64_t limit
+	) const {
+		return std::make_unique<execution::operators::LimitOperator>(std::move(child), limit);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::skipOp(
+		std::unique_ptr<execution::PhysicalOperator> child,
+		int64_t offset
+	) const {
+		return std::make_unique<execution::operators::SkipOperator>(std::move(child), offset);
 	}
 
 } // namespace graph::query

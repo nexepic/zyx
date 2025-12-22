@@ -116,7 +116,7 @@ namespace graph::query {
 
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(const std::string &indexName) const;
 
-		// [NEW] Drop Index By Definition (Legacy/Implicit name)
+		// Drop Index By Definition (Legacy/Implicit name)
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(const std::string &label,
 																			   const std::string &propertyKey) const;
 
@@ -134,6 +134,17 @@ namespace graph::query {
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		removeOp(std::unique_ptr<execution::PhysicalOperator> child,
 				 const std::vector<execution::operators::RemoveItem> &items) const;
+
+		// Result Set Control
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> limitOp(
+			std::unique_ptr<execution::PhysicalOperator> child,
+			int64_t limit
+		) const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> skipOp(
+			std::unique_ptr<execution::PhysicalOperator> child,
+			int64_t offset
+		) const;
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

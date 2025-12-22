@@ -251,3 +251,38 @@ TEST_F(CypherSyntaxTest, InvalidMergeSyntax) {
 	// Invalid action keyword
 	EXPECT_FALSE(validate("MERGE (n) ON DELETE SET n.a=1"));
 }
+
+// ============================================================================
+// 6. Pagination Syntax Tests (LIMIT & SKIP) - [NEW]
+// ============================================================================
+
+TEST_F(CypherSyntaxTest, ValidPagination) {
+	// Limit only
+	EXPECT_TRUE(validate("MATCH (n) RETURN n LIMIT 10"));
+
+	// Skip only
+	EXPECT_TRUE(validate("MATCH (n) RETURN n SKIP 5"));
+
+	// Skip and Limit (Standard order)
+	EXPECT_TRUE(validate("MATCH (n) RETURN n SKIP 5 LIMIT 10"));
+
+	// With Where clause
+	EXPECT_TRUE(validate("MATCH (n) WHERE n.age > 20 RETURN n LIMIT 1"));
+}
+
+TEST_F(CypherSyntaxTest, ValidPaginationWithExpressions) {
+	// Although the visitor currently implements simple literals,
+	// the grammar supports expressions. We validate the syntax accepts them.
+	EXPECT_TRUE(validate("MATCH (n) RETURN n LIMIT 1 + 2"));
+}
+
+TEST_F(CypherSyntaxTest, InvalidPaginationSyntax) {
+	// Missing value
+	EXPECT_FALSE(validate("MATCH (n) RETURN n LIMIT"));
+
+	// Wrong order (In Cypher, Order By -> Skip -> Limit)
+	// While specific parsers might be lenient, standard grammar usually enforces order.
+	// Based on your grammar: projectionBody : ... order? skip? limit?
+	// So LIMIT SKIP is invalid.
+	EXPECT_FALSE(validate("MATCH (n) RETURN n LIMIT 10 SKIP 5"));
+}
