@@ -48,4 +48,19 @@ namespace graph::query::execution {
 		return std::nullopt;
 	}
 
+	void Record::merge(const Record& other) {
+		// Merge Nodes
+		for (const auto& [k, v] : other.nodes_) {
+			nodes_[k] = v;
+		}
+		// Merge Edges
+		for (const auto& [k, v] : other.edges_) {
+			edges_[k] = v;
+		}
+		// Merge Values
+		for (const auto& [k, v] : other.values_) {
+			values_[k] = v;
+		}
+	}
+
 } // namespace graph::query::execution

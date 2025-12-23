@@ -338,6 +338,7 @@ schemaName
 symbolicName
     : ID
     | K_COUNT | K_FILTER | K_EXTRACT | K_ANY | K_NONE | K_SINGLE
+    | K_END
     ;
 
 literal

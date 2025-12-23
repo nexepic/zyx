@@ -171,7 +171,7 @@ void cypherparserParserInitialize() {
   	26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60,62,64,66,68,70,
   	72,74,76,78,80,82,84,86,88,90,92,94,96,98,100,102,104,106,108,110,112,
   	114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,
-  	150,0,8,2,0,3,3,8,8,1,0,14,17,1,0,64,69,1,0,70,74,1,0,70,71,2,0,44,49,
+  	150,0,8,2,0,3,3,8,8,1,0,14,17,1,0,64,69,1,0,70,74,1,0,70,71,2,0,43,49,
   	93,93,1,0,36,37,1,0,89,91,780,0,152,1,0,0,0,2,160,1,0,0,0,4,165,1,0,0,
   	0,6,167,1,0,0,0,8,181,1,0,0,0,10,206,1,0,0,0,12,210,1,0,0,0,14,212,1,
   	0,0,0,16,244,1,0,0,0,18,249,1,0,0,0,20,256,1,0,0,0,22,259,1,0,0,0,24,
@@ -953,8 +953,8 @@ CypherParser::CreateIndexStatementContext* CypherParser::createIndexStatement() 
       _errHandler->sync(this);
 
       _la = _input->LA(1);
-      if (((((_la - 44) & ~ 0x3fULL) == 0) &&
-        ((1ULL << (_la - 44)) & 562949953421375) != 0)) {
+      if (((((_la - 43) & ~ 0x3fULL) == 0) &&
+        ((1ULL << (_la - 43)) & 1125899906842751) != 0)) {
         setState(185);
         symbolicName();
       }
@@ -984,8 +984,8 @@ CypherParser::CreateIndexStatementContext* CypherParser::createIndexStatement() 
       _errHandler->sync(this);
 
       _la = _input->LA(1);
-      if (((((_la - 44) & ~ 0x3fULL) == 0) &&
-        ((1ULL << (_la - 44)) & 562949953421375) != 0)) {
+      if (((((_la - 43) & ~ 0x3fULL) == 0) &&
+        ((1ULL << (_la - 43)) & 1125899906842751) != 0)) {
         setState(197);
         symbolicName();
       }
@@ -2469,6 +2469,7 @@ CypherParser::StandaloneCallStatementContext* CypherParser::standaloneCallStatem
           break;
         }
 
+        case CypherParser::K_END:
         case CypherParser::K_COUNT:
         case CypherParser::K_FILTER:
         case CypherParser::K_EXTRACT:
@@ -2824,6 +2825,7 @@ CypherParser::ProjectionItemsContext* CypherParser::projectionItems() {
       case CypherParser::K_FALSE:
       case CypherParser::K_TRUE:
       case CypherParser::K_NULL:
+      case CypherParser::K_END:
       case CypherParser::K_COUNT:
       case CypherParser::K_FILTER:
       case CypherParser::K_EXTRACT:
@@ -3393,8 +3395,8 @@ CypherParser::PatternPartContext* CypherParser::patternPart() {
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (((((_la - 44) & ~ 0x3fULL) == 0) &&
-      ((1ULL << (_la - 44)) & 562949953421375) != 0)) {
+    if (((((_la - 43) & ~ 0x3fULL) == 0) &&
+      ((1ULL << (_la - 43)) & 1125899906842751) != 0)) {
       setState(438);
       variable();
       setState(439);
@@ -3630,8 +3632,8 @@ CypherParser::NodePatternContext* CypherParser::nodePattern() {
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (((((_la - 44) & ~ 0x3fULL) == 0) &&
-      ((1ULL << (_la - 44)) & 562949953421375) != 0)) {
+    if (((((_la - 43) & ~ 0x3fULL) == 0) &&
+      ((1ULL << (_la - 43)) & 1125899906842751) != 0)) {
       setState(462);
       variable();
     }
@@ -3848,8 +3850,8 @@ CypherParser::RelationshipDetailContext* CypherParser::relationshipDetail() {
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (((((_la - 44) & ~ 0x3fULL) == 0) &&
-      ((1ULL << (_la - 44)) & 562949953421375) != 0)) {
+    if (((((_la - 43) & ~ 0x3fULL) == 0) &&
+      ((1ULL << (_la - 43)) & 1125899906842751) != 0)) {
       setState(492);
       variable();
     }
@@ -5322,7 +5324,7 @@ CypherParser::FunctionInvocationContext* CypherParser::functionInvocation() {
 
     _la = _input->LA(1);
     if (((((_la - 32) & ~ 0x3fULL) == 0) &&
-      ((1ULL << (_la - 32)) & 9097641507829313649) != 0)) {
+      ((1ULL << (_la - 32)) & 9097641507829315697) != 0)) {
       setState(632);
       expression();
       setState(637);
@@ -5421,7 +5423,7 @@ CypherParser::ExplicitProcedureInvocationContext* CypherParser::explicitProcedur
 
     _la = _input->LA(1);
     if (((((_la - 32) & ~ 0x3fULL) == 0) &&
-      ((1ULL << (_la - 32)) & 9097641507829313649) != 0)) {
+      ((1ULL << (_la - 32)) & 9097641507829315697) != 0)) {
       setState(646);
       expression();
       setState(651);
@@ -5990,6 +5992,7 @@ CypherParser::SchemaNameContext* CypherParser::schemaName() {
     setState(691);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
+      case CypherParser::K_END:
       case CypherParser::K_COUNT:
       case CypherParser::K_FILTER:
       case CypherParser::K_EXTRACT:
@@ -6093,6 +6096,10 @@ tree::TerminalNode* CypherParser::SymbolicNameContext::K_SINGLE() {
   return getToken(CypherParser::K_SINGLE, 0);
 }
 
+tree::TerminalNode* CypherParser::SymbolicNameContext::K_END() {
+  return getToken(CypherParser::K_END, 0);
+}
+
 
 size_t CypherParser::SymbolicNameContext::getRuleIndex() const {
   return CypherParser::RuleSymbolicName;
@@ -6122,8 +6129,8 @@ CypherParser::SymbolicNameContext* CypherParser::symbolicName() {
     enterOuterAlt(_localctx, 1);
     setState(693);
     _la = _input->LA(1);
-    if (!(((((_la - 44) & ~ 0x3fULL) == 0) &&
-      ((1ULL << (_la - 44)) & 562949953421375) != 0))) {
+    if (!(((((_la - 43) & ~ 0x3fULL) == 0) &&
+      ((1ULL << (_la - 43)) & 1125899906842751) != 0))) {
     _errHandler->recoverInline(this);
     }
     else {
@@ -6529,7 +6536,7 @@ CypherParser::MapLiteralContext* CypherParser::mapLiteral() {
 
     _la = _input->LA(1);
     if ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 7863707164475656) != 0) || _la == CypherParser::ID) {
+      ((1ULL << _la) & 7872503257497864) != 0) || _la == CypherParser::ID) {
       setState(711);
       propertyKeyName();
       setState(712);
@@ -6630,7 +6637,7 @@ CypherParser::ListLiteralContext* CypherParser::listLiteral() {
 
     _la = _input->LA(1);
     if (((((_la - 32) & ~ 0x3fULL) == 0) &&
-      ((1ULL << (_la - 32)) & 9097641507829313649) != 0)) {
+      ((1ULL << (_la - 32)) & 9097641507829315697) != 0)) {
       setState(729);
       expression();
       setState(734);
@@ -6708,6 +6715,7 @@ CypherParser::ParameterContext* CypherParser::parameter() {
     setState(744);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
+      case CypherParser::K_END:
       case CypherParser::K_COUNT:
       case CypherParser::K_FILTER:
       case CypherParser::K_EXTRACT:

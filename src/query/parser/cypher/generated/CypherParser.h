@@ -1324,6 +1324,7 @@ public:
     antlr4::tree::TerminalNode *K_ANY();
     antlr4::tree::TerminalNode *K_NONE();
     antlr4::tree::TerminalNode *K_SINGLE();
+    antlr4::tree::TerminalNode *K_END();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;

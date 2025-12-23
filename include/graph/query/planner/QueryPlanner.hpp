@@ -18,6 +18,7 @@
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
+#include "graph/query/execution/operators/SortOperator.hpp"
 
 // Forward declarations to reduce compile-time dependencies
 namespace graph::storage {
@@ -41,7 +42,7 @@ namespace graph::query {
 		/**
 		 * @brief Constructs the planner and initializes the internal Optimizer.
 		 */
-		QueryPlanner(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im);
+		QueryPlanner(std::shared_ptr<storage::DataManager> dm, const std::shared_ptr<indexes::IndexManager> &im);
 
 		~QueryPlanner();
 
@@ -136,15 +137,25 @@ namespace graph::query {
 				 const std::vector<execution::operators::RemoveItem> &items) const;
 
 		// Result Set Control
-		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> limitOp(
-			std::unique_ptr<execution::PhysicalOperator> child,
-			int64_t limit
-		) const;
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		limitOp(std::unique_ptr<execution::PhysicalOperator> child, int64_t limit);
 
-		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> skipOp(
-			std::unique_ptr<execution::PhysicalOperator> child,
-			int64_t offset
-		) const;
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		skipOp(std::unique_ptr<execution::PhysicalOperator> child, int64_t offset);
+
+		// Sort
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		sortOp(std::unique_ptr<execution::PhysicalOperator> child,
+			   const std::vector<execution::operators::SortItem> &items);
+
+		std::unique_ptr<execution::PhysicalOperator>
+		traverseVarLengthOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
+							const std::string &targetVar, const std::string &edgeLabel, int minHops, int maxHops,
+							const std::string &direction) const;
+
+		static std::unique_ptr<execution::PhysicalOperator>
+		cartesianProductOp(std::unique_ptr<execution::PhysicalOperator> left,
+						   std::unique_ptr<execution::PhysicalOperator> right);
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

@@ -40,6 +40,8 @@ namespace graph::query::execution {
 		void setValue(const std::string& key, const PropertyValue& value);
 		[[nodiscard]] std::optional<PropertyValue> getValue(const std::string& key) const;
 
+		void merge(const Record& other);
+
 	private:
 		std::unordered_map<std::string, Node> nodes_;
 		std::unordered_map<std::string, Edge> edges_;

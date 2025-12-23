@@ -253,7 +253,7 @@ TEST_F(CypherSyntaxTest, InvalidMergeSyntax) {
 }
 
 // ============================================================================
-// 6. Pagination Syntax Tests (LIMIT & SKIP) - [NEW]
+// 6. Pagination Syntax Tests (LIMIT & SKIP)
 // ============================================================================
 
 TEST_F(CypherSyntaxTest, ValidPagination) {
@@ -285,4 +285,40 @@ TEST_F(CypherSyntaxTest, InvalidPaginationSyntax) {
 	// Based on your grammar: projectionBody : ... order? skip? limit?
 	// So LIMIT SKIP is invalid.
 	EXPECT_FALSE(validate("MATCH (n) RETURN n LIMIT 10 SKIP 5"));
+}
+
+// ============================================================================
+// 7. Order By Syntax Tests
+// ============================================================================
+
+TEST_F(CypherSyntaxTest, ValidOrderBy) {
+	EXPECT_TRUE(validate("MATCH (n) RETURN n ORDER BY n.age"));
+	EXPECT_TRUE(validate("MATCH (n) RETURN n ORDER BY n.age ASC"));
+	EXPECT_TRUE(validate("MATCH (n) RETURN n ORDER BY n.age DESC"));
+	// Multiple keys
+	EXPECT_TRUE(validate("MATCH (n) RETURN n ORDER BY n.age DESC, n.name ASC"));
+	// Pagination combined
+	EXPECT_TRUE(validate("MATCH (n) RETURN n ORDER BY n.age SKIP 5 LIMIT 10"));
+}
+
+// ============================================================================
+// 8. Hops Syntax Tests
+// ============================================================================
+
+TEST_F(CypherSyntaxTest, ValidVarLengthPath) {
+	// 1. Any length (* defaults)
+	EXPECT_TRUE(validate("MATCH (a)-[*]->(b) RETURN b"));
+
+	// 2. Fixed length (*3)
+	EXPECT_TRUE(validate("MATCH (a)-[*3]->(b) RETURN b"));
+
+	// 3. Range (*1..5)
+	EXPECT_TRUE(validate("MATCH (a)-[*1..5]->(b) RETURN b"));
+
+	// 4. Open-ended ranges
+	EXPECT_TRUE(validate("MATCH (a)-[*2..]->(b) RETURN b"));
+	EXPECT_TRUE(validate("MATCH (a)-[*..5]->(b) RETURN b"));
+
+	// 5. With Label and Properties
+	EXPECT_TRUE(validate("MATCH (a)-[:ROAD*1..5]->(b) RETURN b"));
 }

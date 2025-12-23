@@ -11,6 +11,7 @@
 #include "graph/query/planner/QueryPlanner.hpp"
 
 #include "graph/query/execution/operators/AlgoShortestPathOperator.hpp"
+#include "graph/query/execution/operators/CartesianProductOperator.hpp"
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
@@ -26,12 +27,13 @@
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/SkipOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
+#include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 
 namespace graph::query {
 
-	QueryPlanner::QueryPlanner(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im) :
-		dm_(std::move(dm)), im_(im) {
+	QueryPlanner::QueryPlanner(std::shared_ptr<storage::DataManager> dm,
+							   const std::shared_ptr<indexes::IndexManager> &im) : dm_(std::move(dm)), im_(im) {
 
 		// Initialize the Optimizer
 		optimizer_ = std::make_unique<optimizer::Optimizer>(im_);
@@ -219,18 +221,34 @@ namespace graph::query {
 		return std::make_unique<execution::operators::RemoveOperator>(dm_, std::move(child), items);
 	}
 
-	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::limitOp(
-		std::unique_ptr<execution::PhysicalOperator> child,
-		int64_t limit
-	) const {
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::limitOp(std::unique_ptr<execution::PhysicalOperator> child, int64_t limit) {
 		return std::make_unique<execution::operators::LimitOperator>(std::move(child), limit);
 	}
 
-	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::skipOp(
-		std::unique_ptr<execution::PhysicalOperator> child,
-		int64_t offset
-	) const {
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::skipOp(std::unique_ptr<execution::PhysicalOperator> child, int64_t offset) {
 		return std::make_unique<execution::operators::SkipOperator>(std::move(child), offset);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::sortOp(std::unique_ptr<execution::PhysicalOperator> child,
+						 const std::vector<execution::operators::SortItem> &items) {
+		return std::make_unique<execution::operators::SortOperator>(std::move(child), items);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::traverseVarLengthOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
+									  const std::string &targetVar, const std::string &edgeLabel, int minHops,
+									  int maxHops, const std::string &direction) const {
+		return std::make_unique<execution::operators::VarLengthTraversalOperator>(
+				dm_, std::move(source), sourceVar, targetVar, edgeLabel, minHops, maxHops, direction);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::cartesianProductOp(std::unique_ptr<execution::PhysicalOperator> left,
+									 std::unique_ptr<execution::PhysicalOperator> right) {
+		return std::make_unique<execution::operators::CartesianProductOperator>(std::move(left), std::move(right));
 	}
 
 } // namespace graph::query

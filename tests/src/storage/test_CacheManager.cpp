@@ -22,7 +22,7 @@ TEST(LRUCacheTest, PutAndGet) {
 
 	EXPECT_EQ(cache.get(1), "one");
 	EXPECT_EQ(cache.get(2), "two");
-	EXPECT_EQ(cache.size(), 2);
+	EXPECT_EQ(cache.size(), 2U);
 }
 
 // Test updating an existing value
@@ -33,7 +33,7 @@ TEST(LRUCacheTest, UpdateValue) {
 
 	cache.put(1, "new_one");
 	EXPECT_EQ(cache.get(1), "new_one");
-	EXPECT_EQ(cache.size(), 1);
+	EXPECT_EQ(cache.size(), 1U);
 }
 
 // Test the 'contains' method
@@ -62,7 +62,7 @@ TEST(LRUCacheTest, EvictionPolicy) {
 	EXPECT_TRUE(cache.contains(1));
 	EXPECT_TRUE(cache.contains(3));
 	EXPECT_TRUE(cache.contains(4));
-	EXPECT_EQ(cache.size(), 3);
+	EXPECT_EQ(cache.size(), 3U);
 }
 
 // Test the 'get' method on a non-existent key
@@ -85,12 +85,12 @@ TEST(LRUCacheTest, Clear) {
 	cache.put(1, 10);
 	cache.put(2, 20);
 
-	ASSERT_EQ(cache.size(), 2);
+	ASSERT_EQ(cache.size(), 2U);
 	ASSERT_TRUE(cache.contains(1));
 
 	cache.clear();
 
-	EXPECT_EQ(cache.size(), 0);
+	EXPECT_EQ(cache.size(), 0U);
 	EXPECT_FALSE(cache.contains(1));
 	EXPECT_FALSE(cache.contains(2));
 }
@@ -102,18 +102,18 @@ TEST(LRUCacheTest, Remove) {
 	cache.put(2, 20);
 	cache.put(3, 30);
 
-	ASSERT_EQ(cache.size(), 3);
+	ASSERT_EQ(cache.size(), 3U);
 
 	// Remove an element from the middle of the recency list
 	cache.remove(2);
-	EXPECT_EQ(cache.size(), 2);
+	EXPECT_EQ(cache.size(), 2U);
 	EXPECT_FALSE(cache.contains(2));
 	EXPECT_TRUE(cache.contains(1));
 	EXPECT_TRUE(cache.contains(3));
 
 	// Try to remove an element that doesn't exist
 	cache.remove(99);
-	EXPECT_EQ(cache.size(), 2);
+	EXPECT_EQ(cache.size(), 2U);
 }
 
 // Test the 'peek' method to ensure it doesn't alter LRU order
@@ -148,10 +148,10 @@ TEST(LRUCacheTest, CapacityOne) {
 	graph::storage::LRUCache<int, std::string> cache(1);
 	cache.put(1, "one");
 	EXPECT_EQ(cache.get(1), "one");
-	EXPECT_EQ(cache.size(), 1);
+	EXPECT_EQ(cache.size(), 1U);
 
 	cache.put(2, "two"); // This should evict key 1
-	EXPECT_EQ(cache.size(), 1);
+	EXPECT_EQ(cache.size(), 1U);
 	EXPECT_FALSE(cache.contains(1));
 	EXPECT_TRUE(cache.contains(2));
 	EXPECT_EQ(cache.get(2), "two");
@@ -161,7 +161,7 @@ TEST(LRUCacheTest, CapacityOne) {
 TEST(LRUCacheTest, CapacityZero) {
 	graph::storage::LRUCache<int, int> cache(0);
 	cache.put(1, 10);
-	EXPECT_EQ(cache.size(), 0);
+	EXPECT_EQ(cache.size(), 0U);
 	EXPECT_FALSE(cache.contains(1));
 }
 
@@ -213,14 +213,14 @@ TEST(LRUCacheTest, MultipleUpdates) {
 	cache.put(1, 30);
 
 	EXPECT_EQ(cache.get(1), 30);
-	EXPECT_EQ(cache.size(), 1);
+	EXPECT_EQ(cache.size(), 1U);
 }
 
 // Test get on empty cache
 TEST(LRUCacheTest, GetFromEmptyCache) {
 	graph::storage::LRUCache<int, int> cache(3);
 	EXPECT_EQ(cache.get(1), 0);
-	EXPECT_EQ(cache.size(), 0);
+	EXPECT_EQ(cache.size(), 0U);
 }
 
 // Test peek on capacity 0 cache
@@ -234,14 +234,14 @@ TEST(LRUCacheTest, PeekCapacityZero) {
 TEST(LRUCacheTest, RemoveFromEmpty) {
 	graph::storage::LRUCache<int, int> cache(2);
 	cache.remove(1); // Should not crash
-	EXPECT_EQ(cache.size(), 0);
+	EXPECT_EQ(cache.size(), 0U);
 }
 
 // Test clear on empty cache
 TEST(LRUCacheTest, ClearEmpty) {
 	graph::storage::LRUCache<int, int> cache(2);
 	cache.clear(); // Should not crash
-	EXPECT_EQ(cache.size(), 0);
+	EXPECT_EQ(cache.size(), 0U);
 }
 
 // Test eviction with multiple accesses
@@ -328,11 +328,11 @@ TEST(LRUCacheTest, FullCapacityBehavior) {
 	cache.put(1, 10);
 	cache.put(2, 20);
 
-	EXPECT_EQ(cache.size(), 2);
+	EXPECT_EQ(cache.size(), 2U);
 
 	cache.put(3, 30); // Should evict oldest
 
-	EXPECT_EQ(cache.size(), 2);
+	EXPECT_EQ(cache.size(), 2U);
 	EXPECT_FALSE(cache.contains(1));
 }
 

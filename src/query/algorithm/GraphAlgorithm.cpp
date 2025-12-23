@@ -187,4 +187,71 @@ namespace graph::query::algorithm {
         }
     }
 
+	std::vector<Node> GraphAlgorithm::findAllPaths(
+        int64_t startNodeId,
+        int minDepth,
+        int maxDepth,
+        const std::string& edgeLabel,
+        const std::string& direction
+    ) const {
+        std::vector<Node> results;
+        std::vector<int64_t> visitedPath;
+
+        // Start DFS
+        dfsVariableLength(startNodeId, 0, minDepth, maxDepth, edgeLabel, direction, visitedPath, results);
+
+        return results;
+    }
+
+    void GraphAlgorithm::dfsVariableLength(
+        int64_t currentId,
+        int currentDepth,
+        int minDepth,
+        int maxDepth,
+        const std::string& edgeLabel,
+        const std::string& direction,
+        std::vector<int64_t>& visitedPath,
+        std::vector<Node>& results
+    ) const {
+        // 1. Cycle Detection (Simple Path)
+        // If current node is already in the current stack, stop.
+        for (int64_t id : visitedPath) {
+            if (id == currentId) return;
+        }
+
+        // 2. Add to current path
+        visitedPath.push_back(currentId);
+
+        // 3. Check Depth Criteria
+        if (currentDepth >= minDepth) {
+            // Found a valid target node
+            // Hydrate it properly
+            Node n = dataManager_->getNode(currentId);
+            auto props = dataManager_->getNodeProperties(currentId);
+            n.setProperties(std::move(props));
+            results.push_back(n);
+        }
+
+        // 4. Continue Recursion if depth allows
+        if (currentDepth < maxDepth) {
+            // Use DataManager's efficient relationship traversal
+            std::vector<Edge> edges = dataManager_->findEdgesByNode(currentId, direction);
+
+            for (const auto& edge : edges) {
+                // Filter by Label
+                if (!edgeLabel.empty() && edge.getLabel() != edgeLabel) continue;
+
+                int64_t nextNodeId = (edge.getSourceNodeId() == currentId)
+                                     ? edge.getTargetNodeId()
+                                     : edge.getSourceNodeId();
+
+                dfsVariableLength(nextNodeId, currentDepth + 1, minDepth, maxDepth,
+                                  edgeLabel, direction, visitedPath, results);
+            }
+        }
+
+        // 5. Backtrack
+        visitedPath.pop_back();
+    }
+
 } // namespace graph::query::algorithm

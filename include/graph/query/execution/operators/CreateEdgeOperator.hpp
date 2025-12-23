@@ -15,100 +15,114 @@
 
 namespace graph::query::execution::operators {
 
-    /**
-     * @class CreateEdgeOperator
-     * @brief Creates a relationship between two existing nodes in the pipeline.
-     */
-    class CreateEdgeOperator : public PhysicalOperator {
-    public:
-        CreateEdgeOperator(std::shared_ptr<storage::DataManager> dm,
-                           std::string variable,
-                           std::string label,
-                           std::unordered_map<std::string, PropertyValue> props,
-                           std::string sourceVar,
-                           std::string targetVar)
-            : dm_(std::move(dm)), variable_(std::move(variable)),
-              label_(std::move(label)), props_(std::move(props)),
-              sourceVar_(std::move(sourceVar)), targetVar_(std::move(targetVar)) {}
+	/**
+	 * @class CreateEdgeOperator
+	 * @brief Creates a relationship between two existing nodes in the pipeline.
+	 */
+	class CreateEdgeOperator : public PhysicalOperator {
+	public:
+		CreateEdgeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string label,
+						   std::unordered_map<std::string, PropertyValue> props, std::string sourceVar,
+						   std::string targetVar) :
+			dm_(std::move(dm)), variable_(std::move(variable)), label_(std::move(label)), props_(std::move(props)),
+			sourceVar_(std::move(sourceVar)), targetVar_(std::move(targetVar)) {}
 
-        void open() override {
-            if(child_) child_->open();
-            // If this is a root operator (unlikely for edges), handle accordingly.
-        }
+		void open() override {
+			if (child_)
+				child_->open();
+			// If this is a root operator (unlikely for edges), handle accordingly.
+		}
 
-        std::optional<RecordBatch> next() override {
-            // Edges usually depend on previous nodes (MATCH (a), (b) CREATE (a)-[e]->(b))
-            // So we act as a Pipe here.
+		std::optional<RecordBatch> next() override {
+			// Edges usually depend on previous nodes (MATCH (a), (b) CREATE (a)-[e]->(b))
+			// So we act as a Pipe here.
 
-            // 1. Get input batch
-            // Note: In a real system, CreateEdge MUST have a child.
-            // If child_ is null, this is a logic error (cannot connect nulls).
-            if (!child_) return std::nullopt;
+			// 1. Get input batch
+			// Note: In a real system, CreateEdge MUST have a child.
+			// If child_ is null, this is a logic error (cannot connect nulls).
+			if (!child_)
+				return std::nullopt;
 
-            auto batchOpt = child_->next();
-            if (!batchOpt) return std::nullopt;
+			auto batchOpt = child_->next();
+			if (!batchOpt)
+				return std::nullopt;
 
-            RecordBatch& batch = *batchOpt;
-            RecordBatch outputBatch;
-            outputBatch.reserve(batch.size());
+			RecordBatch &batch = *batchOpt;
+			RecordBatch outputBatch;
+			outputBatch.reserve(batch.size());
 
-            for (auto& record : batch) {
-                // 2. Resolve endpoints
-                auto srcNode = record.getNode(sourceVar_);
-                auto tgtNode = record.getNode(targetVar_);
+			for (auto &record: batch) {
+				// 2. Resolve endpoints
+				auto srcNode = record.getNode(sourceVar_);
+				auto tgtNode = record.getNode(targetVar_);
 
-                if (srcNode && tgtNode) {
-                    // 3. Persist Edge
-                    Edge newEdge(0, srcNode->getId(), tgtNode->getId(), label_);
-                    dm_->addEdge(newEdge);
+				if (srcNode && tgtNode) {
+					// 3. Persist Edge
+					Edge newEdge(0, srcNode->getId(), tgtNode->getId(), label_);
+					dm_->addEdge(newEdge);
 
-                    if (!props_.empty()) {
-                        dm_->addEdgeProperties(newEdge.getId(), props_);
-                    }
+					if (!props_.empty()) {
+						dm_->addEdgeProperties(newEdge.getId(), props_);
+					}
 
-                    // 4. Update Record
-                    record.setEdge(variable_, newEdge);
-                    outputBatch.push_back(std::move(record));
-                } else {
-                    // If endpoints are missing, strictly we should fail or skip.
-                    // Skipping for now.
-                }
-            }
+					// 4. Update Record
+					record.setEdge(variable_, newEdge);
+					outputBatch.push_back(std::move(record));
+				} else {
+					// If endpoints are missing, strictly we should fail or skip.
+					// Skipping for now.
+				}
+			}
 
-            return outputBatch;
-        }
+			return outputBatch;
+		}
 
-        void close() override { if(child_) child_->close(); }
+		void close() override {
+			if (child_)
+				child_->close();
+		}
 
-        [[nodiscard]] std::vector<std::string> getOutputVariables() const override {
-            auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
-            vars.push_back(variable_);
-            return vars;
-        }
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
+			auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
 
-        // Setter for chaining (Crucial for Pipe operators)
-        void setChild(std::unique_ptr<PhysicalOperator> child) {
-            child_ = std::move(child);
-        }
+			// Deduplication
+			bool exists = false;
+			for (const auto &v: vars) {
+				if (v == variable_) {
+					exists = true;
+					break;
+				}
+			}
 
-    	[[nodiscard]] std::string toString() const override {
-        	return "CreateEdge(var=" + variable_ + ", type=" + label_ +
-				   ", src=" + sourceVar_ + ", tgt=" + targetVar_ + ")";
-        }
+			if (!exists) {
+				vars.push_back(variable_);
+			}
 
-    	[[nodiscard]] std::vector<const PhysicalOperator*> getChildren() const override {
-        	if (child_) return {child_.get()};
-        	return {};
-        }
+			return vars;
+		}
 
-    private:
-        std::shared_ptr<storage::DataManager> dm_;
-        std::unique_ptr<PhysicalOperator> child_; // Upstream operator
+		// Setter for chaining (Crucial for Pipe operators)
+		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
 
-        std::string variable_;
-        std::string label_;
-        std::unordered_map<std::string, PropertyValue> props_;
-        std::string sourceVar_;
-        std::string targetVar_;
-    };
-}
+		[[nodiscard]] std::string toString() const override {
+			return "CreateEdge(var=" + variable_ + ", type=" + label_ + ", src=" + sourceVar_ + ", tgt=" + targetVar_ +
+				   ")";
+		}
+
+		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override {
+			if (child_)
+				return {child_.get()};
+			return {};
+		}
+
+	private:
+		std::shared_ptr<storage::DataManager> dm_;
+		std::unique_ptr<PhysicalOperator> child_; // Upstream operator
+
+		std::string variable_;
+		std::string label_;
+		std::unordered_map<std::string, PropertyValue> props_;
+		std::string sourceVar_;
+		std::string targetVar_;
+	};
+} // namespace graph::query::execution::operators

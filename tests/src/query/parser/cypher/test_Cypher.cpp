@@ -14,7 +14,6 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <string>
-#include <vector>
 #include "graph/cli/CLI11.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/query/api/QueryResult.hpp"
@@ -239,52 +238,52 @@ TEST_F(CypherTest, FilterTraversalTarget) {
 // ============================================================================
 
 TEST_F(CypherTest, Merge_CreatesNewNode) {
-    // 1. Ensure DB is clean for this label
-    // 2. MERGE on non-existent node
-    (void) execute("MERGE (n:MergeNew {key: 'unique_1'}) ON CREATE SET n.status = 'created'");
+	// 1. Ensure DB is clean for this label
+	// 2. MERGE on non-existent node
+	(void) execute("MERGE (n:MergeNew {key: 'unique_1'}) ON CREATE SET n.status = 'created'");
 
-    // 3. Verify Creation
-    auto res = execute("MATCH (n:MergeNew) RETURN n");
-    ASSERT_EQ(res.nodeCount(), 1UL);
+	// 3. Verify Creation
+	auto res = execute("MATCH (n:MergeNew) RETURN n");
+	ASSERT_EQ(res.nodeCount(), 1UL);
 
-    const auto& props = res.getNodes()[0].getProperties();
-    EXPECT_EQ(props.at("key").toString(), "unique_1");
-    EXPECT_EQ(props.at("status").toString(), "created");
+	const auto &props = res.getNodes()[0].getProperties();
+	EXPECT_EQ(props.at("key").toString(), "unique_1");
+	EXPECT_EQ(props.at("status").toString(), "created");
 }
 
 TEST_F(CypherTest, Merge_MatchesExistingNode) {
-    // 1. Setup: Create node explicitly
-    (void) execute("CREATE (n:MergeExist {key: 'unique_2', count: 0})");
+	// 1. Setup: Create node explicitly
+	(void) execute("CREATE (n:MergeExist {key: 'unique_2', count: 0})");
 
-    // 2. MERGE on existing node
-    // Should NOT create new node. Should execute ON MATCH.
-    (void) execute("MERGE (n:MergeExist {key: 'unique_2'}) "
-                   "ON CREATE SET n.status = 'wrong' "
-                   "ON MATCH SET n.count = 1, n.status = 'matched'");
+	// 2. MERGE on existing node
+	// Should NOT create new node. Should execute ON MATCH.
+	(void) execute("MERGE (n:MergeExist {key: 'unique_2'}) "
+				   "ON CREATE SET n.status = 'wrong' "
+				   "ON MATCH SET n.count = 1, n.status = 'matched'");
 
-    // 3. Verify
-    auto res = execute("MATCH (n:MergeExist) RETURN n");
-    ASSERT_EQ(res.nodeCount(), 1UL); // ID count must remain 1
+	// 3. Verify
+	auto res = execute("MATCH (n:MergeExist) RETURN n");
+	ASSERT_EQ(res.nodeCount(), 1UL); // ID count must remain 1
 
-    const auto& props = res.getNodes()[0].getProperties();
-    EXPECT_EQ(props.at("count").toString(), "1");       // Updated
-    EXPECT_EQ(props.at("status").toString(), "matched"); // Updated
+	const auto &props = res.getNodes()[0].getProperties();
+	EXPECT_EQ(props.at("count").toString(), "1"); // Updated
+	EXPECT_EQ(props.at("status").toString(), "matched"); // Updated
 }
 
 TEST_F(CypherTest, Merge_WithIndexOptimization) {
-    // 1. Create Index to ensure Merge uses Index Lookup instead of Scan
-    (void) execute("CREATE INDEX ON :MergeIdx(uid)");
+	// 1. Create Index to ensure Merge uses Index Lookup instead of Scan
+	(void) execute("CREATE INDEX ON :MergeIdx(uid)");
 
-    // 2. MERGE (Create)
-    (void) execute("MERGE (n:MergeIdx {uid: 100}) ON CREATE SET n.step = 1");
+	// 2. MERGE (Create)
+	(void) execute("MERGE (n:MergeIdx {uid: 100}) ON CREATE SET n.step = 1");
 
-    // 3. MERGE (Match)
-    (void) execute("MERGE (n:MergeIdx {uid: 100}) ON MATCH SET n.step = 2");
+	// 3. MERGE (Match)
+	(void) execute("MERGE (n:MergeIdx {uid: 100}) ON MATCH SET n.step = 2");
 
-    // 4. Verify
-    auto res = execute("MATCH (n:MergeIdx) RETURN n");
-    ASSERT_EQ(res.nodeCount(), 1UL);
-    EXPECT_EQ(res.getNodes()[0].getProperties().at("step").toString(), "2");
+	// 4. Verify
+	auto res = execute("MATCH (n:MergeIdx) RETURN n");
+	ASSERT_EQ(res.nodeCount(), 1UL);
+	EXPECT_EQ(res.getNodes()[0].getProperties().at("step").toString(), "2");
 }
 
 // ============================================================================
@@ -292,54 +291,54 @@ TEST_F(CypherTest, Merge_WithIndexOptimization) {
 // ============================================================================
 
 TEST_F(CypherTest, RemoveProperty) {
-    // 1. Setup
-    (void) execute("CREATE (n:RemProp {keep: 1, remove_me: 2})");
+	// 1. Setup
+	(void) execute("CREATE (n:RemProp {keep: 1, remove_me: 2})");
 
-    // 2. Remove
-    (void) execute("MATCH (n:RemProp) REMOVE n.remove_me");
+	// 2. Remove
+	(void) execute("MATCH (n:RemProp) REMOVE n.remove_me");
 
-    // 3. Verify
-    auto res = execute("MATCH (n:RemProp) RETURN n");
-    ASSERT_EQ(res.nodeCount(), 1UL);
+	// 3. Verify
+	auto res = execute("MATCH (n:RemProp) RETURN n");
+	ASSERT_EQ(res.nodeCount(), 1UL);
 
-    const auto& props = res.getNodes()[0].getProperties();
-    EXPECT_TRUE(props.contains("keep"));
-    EXPECT_FALSE(props.contains("remove_me")) << "Property 'remove_me' should be gone";
+	const auto &props = res.getNodes()[0].getProperties();
+	EXPECT_TRUE(props.contains("keep"));
+	EXPECT_FALSE(props.contains("remove_me")) << "Property 'remove_me' should be gone";
 }
 
 TEST_F(CypherTest, SetLabel) {
-    // 1. Setup with Old Label
-    (void) execute("CREATE (n:OldLabel {id: 1})");
+	// 1. Setup with Old Label
+	(void) execute("CREATE (n:OldLabel {id: 1})");
 
-    // 2. Change Label
-    // Note: MetrixDB currently replaces the label (Single Label Model)
-    (void) execute("MATCH (n:OldLabel) SET n:NewLabel");
+	// 2. Change Label
+	// Note: MetrixDB currently replaces the label (Single Label Model)
+	(void) execute("MATCH (n:OldLabel) SET n:NewLabel");
 
-    // 3. Verify Old Label scan returns empty
-    auto resOld = execute("MATCH (n:OldLabel) RETURN n");
-    EXPECT_EQ(resOld.nodeCount(), 0UL);
+	// 3. Verify Old Label scan returns empty
+	auto resOld = execute("MATCH (n:OldLabel) RETURN n");
+	EXPECT_EQ(resOld.nodeCount(), 0UL);
 
-    // 4. Verify New Label scan finds the node
-    auto resNew = execute("MATCH (n:NewLabel) RETURN n");
-    ASSERT_EQ(resNew.nodeCount(), 1UL);
-    EXPECT_EQ(resNew.getNodes()[0].getProperties().at("id").toString(), "1");
+	// 4. Verify New Label scan finds the node
+	auto resNew = execute("MATCH (n:NewLabel) RETURN n");
+	ASSERT_EQ(resNew.nodeCount(), 1UL);
+	EXPECT_EQ(resNew.getNodes()[0].getProperties().at("id").toString(), "1");
 }
 
 TEST_F(CypherTest, RemoveLabel) {
-    // 1. Setup
-    (void) execute("CREATE (n:TagToRemove {id: 99})");
+	// 1. Setup
+	(void) execute("CREATE (n:TagToRemove {id: 99})");
 
-    // 2. Remove Label
-    (void) execute("MATCH (n:TagToRemove) REMOVE n:TagToRemove");
+	// 2. Remove Label
+	(void) execute("MATCH (n:TagToRemove) REMOVE n:TagToRemove");
 
-    // 3. Verify scan by label fails
-    auto res = execute("MATCH (n:TagToRemove) RETURN n");
-    EXPECT_EQ(res.nodeCount(), 0UL);
+	// 3. Verify scan by label fails
+	auto res = execute("MATCH (n:TagToRemove) RETURN n");
+	EXPECT_EQ(res.nodeCount(), 0UL);
 
-    // 4. Verify node still exists (via Full Scan/All nodes if supported, or internal ID check)
-    auto resAll = execute("MATCH (n) WHERE n.id = 99 RETURN n");
-    ASSERT_EQ(resAll.nodeCount(), 1UL);
-    EXPECT_EQ(resAll.getNodes()[0].getLabel(), ""); // Should be empty
+	// 4. Verify node still exists (via Full Scan/All nodes if supported, or internal ID check)
+	auto resAll = execute("MATCH (n) WHERE n.id = 99 RETURN n");
+	ASSERT_EQ(resAll.nodeCount(), 1UL);
+	EXPECT_EQ(resAll.getNodes()[0].getLabel(), ""); // Should be empty
 }
 
 // ============================================================================
@@ -649,70 +648,134 @@ TEST_F(CypherTest, SetNewProperty) {
 // ============================================================================
 
 TEST_F(CypherTest, LimitResults) {
-    // 1. Setup: Create 5 nodes
-    for (int i = 0; i < 5; ++i) {
-        (void) execute("CREATE (n:LimitTest {id: " + std::to_string(i) + "})");
-    }
+	// 1. Setup: Create 5 nodes
+	for (int i = 0; i < 5; ++i) {
+		(void) execute("CREATE (n:LimitTest {id: " + std::to_string(i) + "})");
+	}
 
-    // 2. Test Limit < Total
-    auto res = execute("MATCH (n:LimitTest) RETURN n LIMIT 3");
-    ASSERT_EQ(res.nodeCount(), 3UL);
+	// 2. Test Limit < Total
+	auto res = execute("MATCH (n:LimitTest) RETURN n LIMIT 3");
+	ASSERT_EQ(res.nodeCount(), 3UL);
 
-    // 3. Test Limit > Total
-    auto resAll = execute("MATCH (n:LimitTest) RETURN n LIMIT 10");
-    ASSERT_EQ(resAll.nodeCount(), 5UL);
+	// 3. Test Limit > Total
+	auto resAll = execute("MATCH (n:LimitTest) RETURN n LIMIT 10");
+	ASSERT_EQ(resAll.nodeCount(), 5UL);
 
-    // 4. Test Limit 0
-    auto resZero = execute("MATCH (n:LimitTest) RETURN n LIMIT 0");
-    ASSERT_EQ(resZero.nodeCount(), 0UL);
+	// 4. Test Limit 0
+	auto resZero = execute("MATCH (n:LimitTest) RETURN n LIMIT 0");
+	ASSERT_EQ(resZero.nodeCount(), 0UL);
 }
 
 TEST_F(CypherTest, SkipResults) {
-    // 1. Setup: Create 5 nodes
-    for (int i = 0; i < 5; ++i) {
-        (void) execute("CREATE (n:SkipTest {id: " + std::to_string(i) + "})");
-    }
+	// 1. Setup: Create 5 nodes
+	for (int i = 0; i < 5; ++i) {
+		(void) execute("CREATE (n:SkipTest {id: " + std::to_string(i) + "})");
+	}
 
-    // 2. Test Skip
-    // Total 5, Skip 2 -> Expect 3
-    auto res = execute("MATCH (n:SkipTest) RETURN n SKIP 2");
-    ASSERT_EQ(res.nodeCount(), 3UL);
+	// 2. Test Skip
+	// Total 5, Skip 2 -> Expect 3
+	auto res = execute("MATCH (n:SkipTest) RETURN n SKIP 2");
+	ASSERT_EQ(res.nodeCount(), 3UL);
 
-    // 3. Test Skip All
-    auto resEmpty = execute("MATCH (n:SkipTest) RETURN n SKIP 5");
-    ASSERT_EQ(resEmpty.nodeCount(), 0UL);
+	// 3. Test Skip All
+	auto resEmpty = execute("MATCH (n:SkipTest) RETURN n SKIP 5");
+	ASSERT_EQ(resEmpty.nodeCount(), 0UL);
 
-    // 4. Test Skip More than Total
-    auto resOver = execute("MATCH (n:SkipTest) RETURN n SKIP 100");
-    ASSERT_EQ(resOver.nodeCount(), 0UL);
+	// 4. Test Skip More than Total
+	auto resOver = execute("MATCH (n:SkipTest) RETURN n SKIP 100");
+	ASSERT_EQ(resOver.nodeCount(), 0UL);
 }
 
 TEST_F(CypherTest, SkipAndLimitCombined) {
-    // 1. Setup: Create 10 ordered nodes
-    // Note: Without ORDER BY, the scan order depends on storage insertion order.
-    // Since we insert sequentially in a fresh DB, retrieval is usually sequential.
-    for (int i = 0; i < 10; ++i) {
-        (void) execute("CREATE (n:PageTest {val: " + std::to_string(i) + "})");
-    }
+	// 1. Setup: Create 10 ordered nodes
+	// Note: Without ORDER BY, the scan order depends on storage insertion order.
+	// Since we insert sequentially in a fresh DB, retrieval is usually sequential.
+	for (int i = 0; i < 10; ++i) {
+		(void) execute("CREATE (n:PageTest {val: " + std::to_string(i) + "})");
+	}
 
-    // 2. Skip 3, Limit 4
-    // Should get items at indices [3, 4, 5, 6] (Total 4 items)
-    auto res = execute("MATCH (n:PageTest) RETURN n SKIP 3 LIMIT 4");
+	// 2. Skip 3, Limit 4
+	// Should get items at indices [3, 4, 5, 6] (Total 4 items)
+	auto res = execute("MATCH (n:PageTest) RETURN n SKIP 3 LIMIT 4");
 
-    ASSERT_EQ(res.nodeCount(), 4UL);
+	ASSERT_EQ(res.nodeCount(), 4UL);
 
-    // Verify values (assuming sequential scan order)
-    // We check existence of specific values to be safe against order non-determinism
-    bool found3 = false, found6 = false;
-    for (const auto& node : res.getNodes()) {
-        std::string val = node.getProperties().at("val").toString();
-        if (val == "3") found3 = true;
-        if (val == "6") found6 = true;
-        // Should NOT find 0, 1, 2 (Skipped)
-        EXPECT_NE(val, "0");
-        EXPECT_NE(val, "1");
-        EXPECT_NE(val, "2");
-    }
-    EXPECT_TRUE(found3);
-    EXPECT_TRUE(found6);
+	// Verify values (assuming sequential scan order)
+	// We check existence of specific values to be safe against order non-determinism
+	bool found3 = false, found6 = false;
+	for (const auto &node: res.getNodes()) {
+		std::string val = node.getProperties().at("val").toString();
+		if (val == "3")
+			found3 = true;
+		if (val == "6")
+			found6 = true;
+		// Should NOT find 0, 1, 2 (Skipped)
+		EXPECT_NE(val, "0");
+		EXPECT_NE(val, "1");
+		EXPECT_NE(val, "2");
+	}
+	EXPECT_TRUE(found3);
+	EXPECT_TRUE(found6);
+}
+
+// ============================================================================
+// Sorting Tests (ORDER BY)
+// ============================================================================
+
+TEST_F(CypherTest, OrderByResults) {
+	// 1. Setup
+	(void) execute("CREATE (n:SortTest {val: 3})");
+	(void) execute("CREATE (n:SortTest {val: 1})");
+	(void) execute("CREATE (n:SortTest {val: 2})");
+
+	// 2. ASC Sort
+	auto resAsc = execute("MATCH (n:SortTest) RETURN n ORDER BY n.val ASC");
+	ASSERT_EQ(resAsc.nodeCount(), 3UL);
+	EXPECT_EQ(resAsc.getNodes()[0].getProperties().at("val").toString(), "1");
+	EXPECT_EQ(resAsc.getNodes()[1].getProperties().at("val").toString(), "2");
+	EXPECT_EQ(resAsc.getNodes()[2].getProperties().at("val").toString(), "3");
+
+	// 3. DESC Sort
+	auto resDesc = execute("MATCH (n:SortTest) RETURN n ORDER BY n.val DESC");
+	EXPECT_EQ(resDesc.getNodes()[0].getProperties().at("val").toString(), "3");
+	EXPECT_EQ(resDesc.getNodes()[1].getProperties().at("val").toString(), "2");
+	EXPECT_EQ(resDesc.getNodes()[2].getProperties().at("val").toString(), "1");
+}
+
+// ============================================================================
+// Hops Tests (Variable Length Paths)
+// ============================================================================
+
+TEST_F(CypherTest, VarLengthTraversal) {
+	// 1. Setup Chain: A -> B -> C -> D
+	(void) execute("CREATE (a:HopNode {name:'A'})-[r1:NEXT]->(b:HopNode {name:'B'})");
+	(void) execute("MATCH (b:HopNode {name:'B'}) CREATE (b)-[r2:NEXT]->(c:HopNode {name:'C'})");
+	(void) execute("MATCH (c:HopNode {name:'C'}) CREATE (c)-[r3:NEXT]->(d:HopNode {name:'D'})");
+
+	// 2. Query 1..2 hops from A
+	// Should return B (1 hop) and C (2 hops)
+	auto res1 = execute("MATCH (a:HopNode {name:'A'})-[*1..2]->(x) RETURN x");
+	ASSERT_EQ(res1.nodeCount(), 2UL);
+
+	bool foundB = false;
+	bool foundC = false;
+	for (const auto &node: res1.getNodes()) {
+		std::string name = node.getProperties().at("name").toString();
+		if (name == "B")
+			foundB = true;
+		if (name == "C")
+			foundC = true;
+	}
+	EXPECT_TRUE(foundB);
+	EXPECT_TRUE(foundC);
+
+	// 3. Query exact 3 hops from A
+	// Should return D
+	auto res2 = execute("MATCH (a:HopNode {name:'A'})-[*3]->(x) RETURN x");
+	ASSERT_EQ(res2.nodeCount(), 1UL);
+	EXPECT_EQ(res2.getNodes()[0].getProperties().at("name").toString(), "D");
+
+	// 4. Query with max depth
+	auto res3 = execute("MATCH (a:HopNode {name:'A'})-[*..10]->(x) RETURN x");
+	ASSERT_EQ(res3.nodeCount(), 3UL); // B, C, D
 }

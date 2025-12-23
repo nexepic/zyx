@@ -61,7 +61,7 @@ namespace graph::parser::cypher {
 
 		std::any visitMergeStatement(CypherParser::MergeStatementContext *ctx) override;
 
-		std::vector<query::execution::operators::SetItem> extractSetItems(CypherParser::SetStatementContext* ctx);
+		static std::vector<query::execution::operators::SetItem> extractSetItems(CypherParser::SetStatementContext* ctx);
 
 	private:
 		std::shared_ptr<query::QueryPlanner> planner_;
@@ -70,15 +70,15 @@ namespace graph::parser::cypher {
 		// --- Helpers ---
 		void chainOperator(std::unique_ptr<query::execution::PhysicalOperator> newOp);
 
-		std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext* ctx);
+		static std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext* ctx);
 
-		std::string extractVariable(CypherParser::VariableContext *ctx);
-		std::string extractLabel(CypherParser::NodeLabelsContext *ctx);
-		std::string extractLabelFromNodeLabel(CypherParser::NodeLabelContext *ctx);
-		std::string extractRelType(CypherParser::RelationshipTypesContext *ctx);
+		static std::string extractVariable(CypherParser::VariableContext *ctx);
+		static std::string extractLabel(CypherParser::NodeLabelsContext *ctx);
+		static std::string extractLabelFromNodeLabel(CypherParser::NodeLabelContext *ctx);
+		static std::string extractRelType(CypherParser::RelationshipTypesContext *ctx);
 
-		PropertyValue parseValue(CypherParser::LiteralContext *ctx);
-		std::unordered_map<std::string, PropertyValue> extractProperties(CypherParser::PropertiesContext *ctx);
+		static PropertyValue parseValue(CypherParser::LiteralContext *ctx);
+		static std::unordered_map<std::string, PropertyValue> extractProperties(CypherParser::PropertiesContext *ctx);
 
 		std::function<bool(const query::execution::Record &)> buildWherePredicate(CypherParser::ExpressionContext *expr,
 																				  std::string &outDesc);

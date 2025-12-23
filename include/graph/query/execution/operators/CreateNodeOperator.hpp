@@ -85,7 +85,20 @@ namespace graph::query::execution::operators {
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
-			vars.push_back(variable_);
+
+			// Deduplication: Only add variable_ if it's not already in the list
+			bool exists = false;
+			for (const auto &v: vars) {
+				if (v == variable_) {
+					exists = true;
+					break;
+				}
+			}
+
+			if (!exists) {
+				vars.push_back(variable_);
+			}
+
 			return vars;
 		}
 
