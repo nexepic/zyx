@@ -107,7 +107,7 @@ namespace graph::storage {
 		// Validate file CRC
 		try {
 			if (!validateFileCrc()) {
-				throw std::runtime_error("File CRC mismatch, data corruption detected");
+				throw std::runtime_error("Data corruption detected");
 			}
 		} catch (const std::runtime_error &e) {
 			std::cerr << e.what() << std::endl;
