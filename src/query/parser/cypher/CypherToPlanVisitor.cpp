@@ -11,6 +11,7 @@
 #include "CypherToPlanVisitor.hpp"
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
+#include "graph/query/execution/operators/NodeScanOperator.hpp"
 
 namespace graph::parser::cypher {
 
@@ -33,22 +34,26 @@ namespace graph::parser::cypher {
 
 	// --- Helper: Chain ---
 	void CypherToPlanVisitor::chainOperator(std::unique_ptr<query::execution::PhysicalOperator> newOp) {
-		if (!rootOp_) {
-			rootOp_ = std::move(newOp);
-			return;
-		}
-		if (auto *edgeOp = dynamic_cast<query::execution::operators::CreateEdgeOperator *>(newOp.get())) {
-			edgeOp->setChild(std::move(rootOp_));
-			rootOp_ = std::move(newOp);
-			return;
-		}
-		if (auto *nodeOp = dynamic_cast<query::execution::operators::CreateNodeOperator *>(newOp.get())) {
-			nodeOp->setChild(std::move(rootOp_));
-			rootOp_ = std::move(newOp);
-			return;
-		}
-		rootOp_ = std::move(newOp);
-	}
+        if (!rootOp_) {
+            rootOp_ = std::move(newOp);
+            return;
+        }
+
+        // Case 1: Write Operators (Pipe) -> Wrap the current root
+        if (auto *edgeOp = dynamic_cast<query::execution::operators::CreateEdgeOperator *>(newOp.get())) {
+            edgeOp->setChild(std::move(rootOp_));
+            rootOp_ = std::move(newOp);
+            return;
+        }
+
+        if (auto *nodeOp = dynamic_cast<query::execution::operators::CreateNodeOperator *>(newOp.get())) {
+            nodeOp->setChild(std::move(rootOp_));
+            rootOp_ = std::move(newOp);
+            return;
+        }
+
+        rootOp_ = std::move(newOp);
+    }
 
 	std::function<bool(const query::execution::Record &)>
 	CypherToPlanVisitor::buildWherePredicate(CypherParser::ExpressionContext *expr, std::string &outDesc) {
@@ -165,201 +170,188 @@ namespace graph::parser::cypher {
 
 	// --- MATCH ---
 	std::any CypherToPlanVisitor::visitMatchStatement(CypherParser::MatchStatementContext *ctx) {
-		auto pattern = ctx->pattern();
-		if (!pattern)
-			return std::any();
+        auto pattern = ctx->pattern();
+        if (!pattern) return std::any();
 
-		auto parts = pattern->patternPart();
-		if (parts.empty())
-			return std::any();
+        auto parts = pattern->patternPart();
+        if (parts.empty()) return std::any();
 
-		auto part = parts[0];
-		auto element = part->patternElement();
+        // Iterate over all pattern parts (e.g. MATCH (a), (b))
+        for (auto part : parts) {
+            auto element = part->patternElement();
 
-		// 1. Head Node
-		auto headNodePat = element->nodePattern();
+            // ---------------------------------------------------------
+            // 1. Head Node Processing (Scan)
+            // ---------------------------------------------------------
+            auto headNodePat = element->nodePattern();
 
-		std::string var = extractVariable(headNodePat->variable());
-		std::string label = extractLabel(headNodePat->nodeLabels());
-		auto props = extractProperties(headNodePat->properties());
+            std::string var = extractVariable(headNodePat->variable());
+            std::string label = extractLabel(headNodePat->nodeLabels());
+            auto props = extractProperties(headNodePat->properties());
 
-		// Optimization: Index Pushdown
-		std::string pushKey = "";
-		graph::PropertyValue pushVal;
-		std::vector<std::pair<std::string, graph::PropertyValue>> residualFilters;
+            // --- Optimizer: Index Pushdown ---
+            std::string pushKey = "";
+            graph::PropertyValue pushVal;
+            std::vector<std::pair<std::string, graph::PropertyValue>> residualFilters;
 
-		if (!props.empty()) {
-			auto it = props.begin();
-			pushKey = it->first;
-			pushVal = it->second;
-			for (++it; it != props.end(); ++it) {
-				residualFilters.emplace_back(it->first, it->second);
-			}
-		}
+            if (!props.empty()) {
+                auto it = props.begin();
+                pushKey = it->first;
+                pushVal = it->second;
+                for (++it; it != props.end(); ++it) {
+                    residualFilters.emplace_back(it->first, it->second);
+                }
+            }
 
-		auto currentOp = planner_->scanOp(var, label, pushKey, pushVal);
+            // Create Sub-Plan for this component
+            auto currentOp = planner_->scanOp(var, label, pushKey, pushVal);
 
-		for (const auto &[key, val]: residualFilters) {
-			auto predicate = [var, key, val](const query::execution::Record &r) {
-				auto n = r.getNode(var);
-				if (!n)
-					return false;
-				const auto &p = n->getProperties();
-				return p.contains(key) && p.at(key) == val;
-			};
-			std::string desc = var + "." + key + " == " + val.toString();
-			currentOp = planner_->filterOp(std::move(currentOp), predicate, desc);
-		}
+            // Apply Filters
+            for (const auto &[key, val]: residualFilters) {
+                auto predicate = [var, key, val](const query::execution::Record &r) {
+                    auto n = r.getNode(var);
+                    if (!n) return false;
+                    const auto &p = n->getProperties();
+                    return p.contains(key) && p.at(key) == val;
+                };
+                std::string desc = var + "." + key + " == " + val.toString();
+                currentOp = planner_->filterOp(std::move(currentOp), predicate, desc);
+            }
 
-		if (!rootOp_) {
-			// First MATCH
-			rootOp_ = std::move(currentOp);
-		} else {
-			// Subsequent MATCH -> Cartesian Product
-			// regardless of whether currentOp is Scan or Filter(Scan)
-			rootOp_ = planner_->cartesianProductOp(std::move(rootOp_), std::move(currentOp));
-		}
+            // ---------------------------------------------------------
+            // Merge with Global Pipeline
+            // ---------------------------------------------------------
+            if (!rootOp_) {
+                // First component: It becomes the root
+                rootOp_ = std::move(currentOp);
+            } else {
+                // Subsequent component: Cross Join with existing root
+                // This ensures MATCH (a) MATCH (b) keeps both 'a' and 'b'
+                rootOp_ = planner_->cartesianProductOp(std::move(rootOp_), std::move(currentOp));
+            }
 
-		// 2. Traversal Chain
-		for (auto chain: element->patternElementChain()) {
-			auto relPat = chain->relationshipPattern();
-			auto nodePat = chain->nodePattern();
+            // ---------------------------------------------------------
+            // 2. Traversal Chain (e.g. -[r]->(b))
+            // ---------------------------------------------------------
+            // Note: We extend 'rootOp_' directly now, as it contains the source 'var'
+            for (auto chain: element->patternElementChain()) {
+                auto relPat = chain->relationshipPattern();
+                auto nodePat = chain->nodePattern();
 
-			// --- A. Direction ---
-			std::string direction = "both";
-			bool hasLeft = (relPat->LT() != nullptr);
-			bool hasRight = (relPat->GT() != nullptr);
-			if (hasLeft && !hasRight)
-				direction = "in";
-			else if (!hasLeft && hasRight)
-				direction = "out";
+                // Direction
+                std::string direction = "both";
+                bool hasLeft = (relPat->LT() != nullptr);
+                bool hasRight = (relPat->GT() != nullptr);
+                if (hasLeft && !hasRight) direction = "in";
+                else if (!hasLeft && hasRight) direction = "out";
 
-			// --- B. Relationship Details & Range ---
-			auto relDetail = relPat->relationshipDetail();
-			std::string edgeVar = "", edgeLabel = "";
-			std::unordered_map<std::string, graph::PropertyValue> edgeProps;
+                // Rel Details
+                auto relDetail = relPat->relationshipDetail();
+                std::string edgeVar = "", edgeLabel = "";
+                std::unordered_map<std::string, graph::PropertyValue> edgeProps;
 
-			bool isVarLength = false;
-			int minHops = 1;
-			int maxHops = 1;
+                bool isVarLength = false;
+                int minHops = 1;
+                int maxHops = 1;
 
-			if (relDetail) {
-				edgeVar = extractVariable(relDetail->variable());
-				edgeLabel = extractRelType(relDetail->relationshipTypes());
-				edgeProps = extractProperties(relDetail->properties());
+                if (relDetail) {
+                    edgeVar = extractVariable(relDetail->variable());
+                    edgeLabel = extractRelType(relDetail->relationshipTypes());
+                    edgeProps = extractProperties(relDetail->properties());
 
-				// Parse Range Literal: *1..5
-				if (relDetail->rangeLiteral()) {
-					isVarLength = true;
-					auto range = relDetail->rangeLiteral();
+                    // Variable Length Logic
+                    if (relDetail->rangeLiteral()) {
+                        isVarLength = true;
+                        auto range = relDetail->rangeLiteral();
+                        minHops = 1; maxHops = 15; // Defaults
 
-					// Default values for var-length
-					minHops = 1;
-					maxHops = 15; // Set a reasonable default max depth to prevent infinite loops
+                        auto ints = range->integerLiteral();
+                        bool hasRangeDots = (range->RANGE() != nullptr);
 
-					auto ints = range->integerLiteral();
-					bool hasRangeDots = (range->RANGE() != nullptr); // Checks for '..'
+                        if (hasRangeDots) {
+                            if (ints.size() == 2) { // *1..5
+                                minHops = std::stoi(ints[0]->getText());
+                                maxHops = std::stoi(ints[1]->getText());
+                            } else if (ints.size() == 1) {
+                                std::string rawText = range->getText();
+                                if (rawText.find("..") < rawText.find(ints[0]->getText())) {
+                                    // ..5
+                                    maxHops = std::stoi(ints[0]->getText());
+                                } else {
+                                    // 1..
+                                    minHops = std::stoi(ints[0]->getText());
+                                }
+                            }
+                        } else if (!ints.empty()) {
+                            // *3
+                            minHops = maxHops = std::stoi(ints[0]->getText());
+                        }
+                    }
+                }
 
-					if (hasRangeDots) {
-						// Case: *min..max OR *..max OR *min..
-						if (ints.size() == 2) {
-							// *1..5
-							minHops = std::stoi(ints[0]->getText());
-							maxHops = std::stoi(ints[1]->getText());
-						} else if (ints.size() == 1) {
-							// We need to determine if it is "min.." or "..max"
-							// Simple heuristic: check text position relative to ".."
-							std::string rawText = range->getText();
-							std::string intText = ints[0]->getText();
-							if (rawText.find("..") < rawText.find(intText)) {
-								// ..5 (max is specified)
-								minHops = 1;
-								maxHops = std::stoi(intText);
-							} else {
-								// 1.. (min is specified)
-								minHops = std::stoi(intText);
-								maxHops = 15; // Unbounded (up to limit)
-							}
-						}
-						// Case: *.. (Just use defaults 1..15)
-					} else {
-						// Case: * (1..inf) OR *5 (Fixed length)
-						if (!ints.empty()) {
-							// *5 -> exactly 5 hops
-							int val = std::stoi(ints[0]->getText());
-							minHops = val;
-							maxHops = val;
-						} else {
-							// * -> 1..15
-						}
-					}
-				}
-			}
+                // Target Node
+                std::string targetVar = extractVariable(nodePat->variable());
+                std::string targetLabel = extractLabel(nodePat->nodeLabels());
+                auto targetProps = extractProperties(nodePat->properties());
 
-			// --- C. Target Node ---
-			std::string targetVar = extractVariable(nodePat->variable());
-			std::string targetLabel = extractLabel(nodePat->nodeLabels());
-			auto targetProps = extractProperties(nodePat->properties());
+                // Build Traversal
+                if (isVarLength) {
+                    rootOp_ = planner_->traverseVarLengthOp(
+                        std::move(rootOp_), var, targetVar, edgeLabel, minHops, maxHops, direction
+                    );
+                } else {
+                    rootOp_ = planner_->traverseOp(
+                        std::move(rootOp_), var, edgeVar, targetVar, edgeLabel, direction
+                    );
+                }
 
-			// --- D. Build Operator ---
-			if (isVarLength) {
-				// [NEW] Call the variable length planner method
-				rootOp_ = planner_->traverseVarLengthOp(std::move(rootOp_),
-														var, // Source
-														targetVar, // Target
-														edgeLabel, minHops, maxHops, direction);
-			} else {
-				// Standard 1-hop traversal
-				rootOp_ = planner_->traverseOp(std::move(rootOp_), var, edgeVar, targetVar, edgeLabel, direction);
-			}
+                // Filter Target
+                if (!targetLabel.empty()) {
+                    auto labelPred = [targetVar, targetLabel](const query::execution::Record &r) {
+                        auto n = r.getNode(targetVar);
+                        return n && n->getLabel() == targetLabel;
+                    };
+                    rootOp_ = planner_->filterOp(std::move(rootOp_), labelPred, "Label(" + targetVar + ")=" + targetLabel);
+                }
 
-			// --- E. Filter Target Node ---
-			if (!targetLabel.empty()) {
-				auto labelPred = [targetVar, targetLabel](const query::execution::Record &r) {
-					auto n = r.getNode(targetVar);
-					return n && n->getLabel() == targetLabel;
-				};
-				rootOp_ = planner_->filterOp(std::move(rootOp_), labelPred, "Label(" + targetVar + ")=" + targetLabel);
-			}
+                for (const auto &[key, val]: targetProps) {
+                    auto pred = [targetVar, key, val](const query::execution::Record &r) {
+                        auto n = r.getNode(targetVar);
+                        return n && n->getProperties().contains(key) && n->getProperties().at(key) == val;
+                    };
+                    rootOp_ = planner_->filterOp(std::move(rootOp_), pred, targetVar + "." + key + "=" + val.toString());
+                }
 
-			for (const auto &[key, val]: targetProps) {
-				auto pred = [targetVar, key, val](const query::execution::Record &r) {
-					auto n = r.getNode(targetVar);
-					return n && n->getProperties().contains(key) && n->getProperties().at(key) == val;
-				};
-				rootOp_ = planner_->filterOp(std::move(rootOp_), pred, targetVar + "." + key + "=" + val.toString());
-			}
+                // Filter Edge (Single Hop Only)
+                if (!isVarLength) {
+                    for (const auto &[key, val]: edgeProps) {
+                        auto pred = [edgeVar, key, val](const query::execution::Record &r) {
+                            auto e = r.getEdge(edgeVar);
+                            return e && e->getProperties().contains(key) && e->getProperties().at(key) == val;
+                        };
+                        rootOp_ = planner_->filterOp(std::move(rootOp_), pred, edgeVar + "." + key + "=" + val.toString());
+                    }
+                }
 
-			// --- F. Filter Edge ---
-			// Only apply property filters if it's NOT a variable length path
-			// (or if your engine supports filtering all edges in a path)
-			if (!isVarLength) {
-				for (const auto &[key, val]: edgeProps) {
-					auto pred = [edgeVar, key, val](const query::execution::Record &r) {
-						auto e = r.getEdge(edgeVar);
-						return e && e->getProperties().contains(key) && e->getProperties().at(key) == val;
-					};
-					rootOp_ = planner_->filterOp(std::move(rootOp_), pred, edgeVar + "." + key + "=" + val.toString());
-				}
-			}
+                // Update current variable for next hop
+                var = targetVar;
+            }
+        } // End Parts Loop
 
-			var = targetVar;
-		}
+        // 3. Where Clause
+        if (ctx->where()) {
+            try {
+                std::string desc;
+                auto predicate = buildWherePredicate(ctx->where()->expression(), desc);
+                rootOp_ = planner_->filterOp(std::move(rootOp_), predicate, desc);
+            } catch (const std::exception &e) {
+                std::cerr << "Warning: Failed to parse WHERE clause optimization: " << e.what() << std::endl;
+                throw;
+            }
+        }
 
-		// 3. Where
-		if (ctx->where()) {
-			try {
-				std::string desc;
-				auto predicate = buildWherePredicate(ctx->where()->expression(), desc);
-				rootOp_ = planner_->filterOp(std::move(rootOp_), predicate, desc);
-			} catch (const std::exception &e) {
-				std::cerr << "Warning: Failed to parse WHERE clause optimization: " << e.what() << std::endl;
-				throw;
-			}
-		}
-
-		return std::any();
-	}
+        return std::any();
+    }
 
 	// --- CREATE ---
 	std::any CypherToPlanVisitor::visitCreateStatement(CypherParser::CreateStatementContext *ctx) {

@@ -102,17 +102,25 @@ namespace graph::storage {
 		static constexpr bool supportsExternalProperties = false;
 
 		// Provide empty implementations to avoid compilation errors
-		static bool hasPropertyEntity(const Property &entity) { return false; }
-		static PropertyStorageType getPropertyStorageType(const Property &entity) { return PropertyStorageType::NONE; }
-		static int64_t getPropertyEntityId(const Property &entity) { return 0; }
-		static void setPropertyEntityId(Property &entity, int64_t id, PropertyStorageType type) {}
-		static bool hasProperty(const Property &entity, const std::string &key) { return false; }
-		static void removeProperty(Property &entity, const std::string &key) {}
-		static void addProperty(Property &entity, const std::string &key, const PropertyValue &value) {
+		static bool hasPropertyEntity([[maybe_unused]] const Property &entity) { return false; }
+		static PropertyStorageType getPropertyStorageType([[maybe_unused]] const Property &entity) {
+			return PropertyStorageType::NONE;
+		}
+		static int64_t getPropertyEntityId([[maybe_unused]] const Property &entity) { return 0; }
+		static void setPropertyEntityId([[maybe_unused]] Property &entity, [[maybe_unused]] int64_t id,
+										[[maybe_unused]] PropertyStorageType type) {}
+		static bool hasProperty([[maybe_unused]] const Property &entity, [[maybe_unused]] const std::string &key) {
+			return false;
+		}
+		static void removeProperty([[maybe_unused]] Property &entity, [[maybe_unused]] const std::string &key) {}
+		static void addProperty([[maybe_unused]] Property &entity, [[maybe_unused]] const std::string &key,
+								[[maybe_unused]] const PropertyValue &value) {
 			throw std::runtime_error("Property entities do not support adding properties");
 		}
-		static void clearProperties(Property &entity) {}
-		static std::unordered_map<std::string, PropertyValue> getProperties(const Property &entity) { return {}; }
+		static void clearProperties([[maybe_unused]] Property &entity) {}
+		static std::unordered_map<std::string, PropertyValue> getProperties([[maybe_unused]] const Property &entity) {
+			return {};
+		}
 	};
 
 	// Specialization for Blob - doesn't support properties
@@ -121,17 +129,25 @@ namespace graph::storage {
 		static constexpr bool supportsProperties = false;
 		static constexpr bool supportsExternalProperties = false;
 
-		static bool hasPropertyEntity(const Blob &entity) { return false; }
-		static PropertyStorageType getPropertyStorageType(const Blob &entity) { return PropertyStorageType::NONE; }
-		static int64_t getPropertyEntityId(const Blob &entity) { return 0; }
-		static void setPropertyEntityId(Blob &entity, int64_t id, PropertyStorageType type) {}
-		static bool hasProperty(const Blob &entity, const std::string &key) { return false; }
-		static void removeProperty(Blob &entity, const std::string &key) {}
-		static void addProperty(Blob &entity, const std::string &key, const PropertyValue &value) {
+		static bool hasPropertyEntity([[maybe_unused]] const Blob &entity) { return false; }
+		static PropertyStorageType getPropertyStorageType([[maybe_unused]] const Blob &entity) {
+			return PropertyStorageType::NONE;
+		}
+		static int64_t getPropertyEntityId([[maybe_unused]] const Blob &entity) { return 0; }
+		static void setPropertyEntityId([[maybe_unused]] Blob &entity, [[maybe_unused]] int64_t id,
+										[[maybe_unused]] PropertyStorageType type) {}
+		static bool hasProperty([[maybe_unused]] const Blob &entity, [[maybe_unused]] const std::string &key) {
+			return false;
+		}
+		static void removeProperty([[maybe_unused]] Blob &entity, [[maybe_unused]] const std::string &key) {}
+		static void addProperty([[maybe_unused]] Blob &entity, [[maybe_unused]] const std::string &key,
+								[[maybe_unused]] const PropertyValue &value) {
 			throw std::runtime_error("Blob entities do not support adding properties");
 		}
-		static void clearProperties(Blob &entity) {}
-		static std::unordered_map<std::string, PropertyValue> getProperties(const Blob &entity) { return {}; }
+		static void clearProperties([[maybe_unused]] Blob &entity) {}
+		static std::unordered_map<std::string, PropertyValue> getProperties([[maybe_unused]] const Blob &entity) {
+			return {};
+		}
 	};
 
 	// Specialization for Index - doesn't support properties
@@ -140,17 +156,25 @@ namespace graph::storage {
 		static constexpr bool supportsProperties = false;
 		static constexpr bool supportsExternalProperties = false;
 
-		static bool hasPropertyEntity(const Index &entity) { return false; }
-		static PropertyStorageType getPropertyStorageType(const Index &entity) { return PropertyStorageType::NONE; }
-		static int64_t getPropertyEntityId(const Index &entity) { return 0; }
-		static void setPropertyEntityId(Index &entity, int64_t id, PropertyStorageType type) {}
-		static bool hasProperty(const Index &entity, const std::string &key) { return false; }
-		static void removeProperty(Index &entity, const std::string &key) {}
-		static void addProperty(Index &entity, const std::string &key, const PropertyValue &value) {
+		static bool hasPropertyEntity([[maybe_unused]] const Index &entity) { return false; }
+		static PropertyStorageType getPropertyStorageType([[maybe_unused]] const Index &entity) {
+			return PropertyStorageType::NONE;
+		}
+		static int64_t getPropertyEntityId([[maybe_unused]] const Index &entity) { return 0; }
+		static void setPropertyEntityId([[maybe_unused]] Index &entity, [[maybe_unused]] int64_t id,
+										[[maybe_unused]] PropertyStorageType type) {}
+		static bool hasProperty([[maybe_unused]] const Index &entity, [[maybe_unused]] const std::string &key) {
+			return false;
+		}
+		static void removeProperty([[maybe_unused]] Index &entity, [[maybe_unused]] const std::string &key) {}
+		static void addProperty([[maybe_unused]] Index &entity, [[maybe_unused]] const std::string &key,
+								[[maybe_unused]] const PropertyValue &value) {
 			throw std::runtime_error("Index entities do not support adding properties");
 		}
-		static void clearProperties(Index &entity) {}
-		static std::unordered_map<std::string, PropertyValue> getProperties(const Index &entity) { return {}; }
+		static void clearProperties([[maybe_unused]] Index &entity) {}
+		static std::unordered_map<std::string, PropertyValue> getProperties([[maybe_unused]] const Index &entity) {
+			return {};
+		}
 	};
 
 	// Specialization for State - doesn't support properties
@@ -159,17 +183,25 @@ namespace graph::storage {
 		static constexpr bool supportsProperties = false;
 		static constexpr bool supportsExternalProperties = false;
 
-		static bool hasPropertyEntity(const State &entity) { return false; }
-		static PropertyStorageType getPropertyStorageType(const State &entity) { return PropertyStorageType::NONE; }
-		static int64_t getPropertyEntityId(const State &entity) { return 0; }
-		static void setPropertyEntityId(State &entity, int64_t id, PropertyStorageType type) {}
-		static bool hasProperty(const State &entity, const std::string &key) { return false; }
-		static void removeProperty(State &entity, const std::string &key) {}
-		static void addProperty(State &entity, const std::string &key, const PropertyValue &value) {
+		static bool hasPropertyEntity([[maybe_unused]] const State &entity) { return false; }
+		static PropertyStorageType getPropertyStorageType([[maybe_unused]] const State &entity) {
+			return PropertyStorageType::NONE;
+		}
+		static int64_t getPropertyEntityId([[maybe_unused]] const State &entity) { return 0; }
+		static void setPropertyEntityId([[maybe_unused]] State &entity, [[maybe_unused]] int64_t id,
+										[[maybe_unused]] PropertyStorageType type) {}
+		static bool hasProperty([[maybe_unused]] const State &entity, [[maybe_unused]] const std::string &key) {
+			return false;
+		}
+		static void removeProperty([[maybe_unused]] State &entity, [[maybe_unused]] const std::string &key) {}
+		static void addProperty([[maybe_unused]] State &entity, [[maybe_unused]] const std::string &key,
+								[[maybe_unused]] const PropertyValue &value) {
 			throw std::runtime_error("State entities do not support adding properties");
 		}
-		static void clearProperties(State &entity) {}
-		static std::unordered_map<std::string, PropertyValue> getProperties(const State &entity) { return {}; }
+		static void clearProperties([[maybe_unused]] State &entity) {}
+		static std::unordered_map<std::string, PropertyValue> getProperties([[maybe_unused]] const State &entity) {
+			return {};
+		}
 	};
 
 } // namespace graph::storage

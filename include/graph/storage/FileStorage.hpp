@@ -109,6 +109,10 @@ namespace graph::storage {
 
 		void registerEventListener(std::weak_ptr<IStorageEventListener> listener);
 
+		std::shared_ptr<DatabaseInspector> getInspector() const {
+			return std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
+		}
+
 	private:
 		std::string dbFilePath;
 		std::unordered_map<uint64_t, Node> nodes;

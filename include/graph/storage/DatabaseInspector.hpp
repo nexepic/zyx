@@ -10,35 +10,73 @@
 
 #pragma once
 #include <fstream>
-#include "data/DataManager.hpp"
-#include "StorageHeaders.hpp"
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/StorageHeaders.hpp"
 
 namespace graph::storage {
-	class DatabaseInspector {
-	public:
-		explicit DatabaseInspector(const FileHeader &fileHeader, std::shared_ptr<std::fstream> &file,
+
+    class DatabaseInspector {
+    public:
+    	explicit DatabaseInspector(const FileHeader &fileHeader,
+								   std::shared_ptr<std::fstream> file,
 								   DataManager &dataManager);
-		~DatabaseInspector();
+        ~DatabaseInspector();
 
-		void displayDatabaseStructure() const;
+        /**
+         * @brief Displays the Global File Header and segment usage statistics.
+         */
+        void inspectSummary() const;
 
-		void displayNodeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) const;
+        /**
+         * @brief Inspects a SINGLE Node segment page.
+         * @param pageIndex The 0-based index of the segment in the linked list chain.
+         * @param showUnused If true, displays empty/deleted slots.
+         */
+        void inspectNodeSegments(uint32_t pageIndex, bool showUnused = false) const;
 
-		void displayEdgeSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) const;
+        /**
+         * @brief Inspects a SINGLE Edge segment page.
+         */
+        void inspectEdgeSegments(uint32_t pageIndex, bool showUnused = false) const;
 
-		static void displayPropertySegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+        /**
+         * @brief Inspects a SINGLE Property segment page.
+         */
+        void inspectPropertySegments(uint32_t pageIndex, bool showUnused = false) const;
 
-		static void displayBlobSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+        /**
+         * @brief Inspects a SINGLE Blob segment page.
+         */
+        void inspectBlobSegments(uint32_t pageIndex, bool showUnused = false) const;
 
-		static void displayIndexSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset);
+        /**
+         * @brief Inspects a SINGLE Index segment page.
+         */
+        void inspectIndexSegments(uint32_t pageIndex, bool showUnused = false) const;
 
-		static void displayStateSegmentChain(const std::shared_ptr<std::fstream> &file, uint64_t segmentOffset) ;
+        /**
+         * @brief Inspects a SINGLE State segment page.
+         */
+        void inspectStateSegments(uint32_t pageIndex, bool showUnused = false) const;
 
-	private:
-		FileHeader fileHeader;
+    private:
+    	const FileHeader &fileHeader;
+    	std::shared_ptr<std::fstream> file;
+        DataManager &dataManager_;
 
-		std::shared_ptr<std::fstream> &file;
+        /**
+         * @brief Traverses the linked list of segments to find the physical offset of the Nth segment.
+         * @param headOffset The starting offset from the FileHeader.
+         * @param targetPage The index of the segment to find (0 = head).
+         * @return The file offset of the segment, or 0 if not found/out of bounds.
+         */
+        uint64_t navigateToSegment(uint64_t headOffset, uint32_t targetPage) const;
 
-		DataManager &dataManager_;
-	};
+        // Helper to format property maps into a short string "{k:v, ...}"
+        static std::string formatPropertiesCompact(const std::unordered_map<std::string, PropertyValue>& props);
+    };
+
 } // namespace graph::storage

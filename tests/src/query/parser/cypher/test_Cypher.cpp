@@ -779,3 +779,90 @@ TEST_F(CypherTest, VarLengthTraversal) {
 	auto res3 = execute("MATCH (a:HopNode {name:'A'})-[*..10]->(x) RETURN x");
 	ASSERT_EQ(res3.nodeCount(), 3UL); // B, C, D
 }
+
+// ============================================================================
+// Cartesian Product Tests (Cross Joins)
+// ============================================================================
+
+TEST_F(CypherTest, CartesianProduct_Basic) {
+	// 1. Setup Data
+	(void) execute("CREATE (:GroupA {id: 1})");
+	(void) execute("CREATE (:GroupA {id: 2})");
+	(void) execute("CREATE (:GroupB {val: 10})");
+	(void) execute("CREATE (:GroupB {val: 20})");
+	(void) execute("CREATE (:GroupB {val: 30})");
+
+	// 2. Execute Cartesian Product
+	// [FIX] Return properties to verify row count
+	auto res1 = execute("MATCH (a:GroupA), (b:GroupB) RETURN a.id, b.val");
+	ASSERT_EQ(res1.rowCount(), 6UL);
+
+	// 3. Multi-MATCH Syntax
+	auto res2 = execute("MATCH (a:GroupA) MATCH (b:GroupB) RETURN a.id, b.val");
+	ASSERT_EQ(res2.rowCount(), 6UL);
+}
+
+TEST_F(CypherTest, CartesianProduct_WithRelationships) {
+	// 1. Setup
+	(void) execute("CREATE (u1:User {name:'U1'})-[r1:BUY]->(p1:Product {name:'P1'})");
+	(void) execute("CREATE (u2:User {name:'U2'})-[r2:BUY]->(p2:Product {name:'P2'})");
+	(void) execute("CREATE (c:Category {type:'Tech'})");
+
+	// 2. Query
+	// [FIX] Return properties
+	auto res = execute("MATCH (u)-[r:BUY]->(p), (c:Category) RETURN u.name, c.type");
+
+	ASSERT_EQ(res.rowCount(), 2UL);
+
+	// Verify content
+	for (const auto &row: res.getRows()) {
+		EXPECT_EQ(row.at("c.type").toString(), "Tech");
+		// u.name should be U1 or U2
+		std::string name = row.at("u.name").toString();
+		EXPECT_TRUE(name == "U1" || name == "U2");
+	}
+}
+
+TEST_F(CypherTest, CartesianProduct_EmptySide) {
+	// 1. Setup Group A
+	(void) execute("CREATE (:GroupA)");
+	(void) execute("CREATE (:GroupA)");
+
+	// 2. Query
+	// Logic: 2 * 0 = 0 rows
+	auto res = execute("MATCH (a:GroupA), (b:GroupB) RETURN a, b");
+
+	// [CHECK] If this still fails, it confirms NodeScan leakage.
+	EXPECT_TRUE(res.isEmpty());
+}
+
+TEST_F(CypherTest, CartesianProduct_ReturnStar) {
+	// 1. Setup
+	(void) execute("CREATE (:A {val: 1})");
+	(void) execute("CREATE (:B {val: 2})");
+
+	// 2. Query with RETURN *
+	// This leaves the CartesianProduct as the root operator without a Project wrapper
+	auto res = execute("MATCH (a:A), (b:B) RETURN *");
+
+	// 3. Verify
+	ASSERT_EQ(res.rowCount(), 0UL); // Nodes are not rows
+	// Check we got 1 combo result (1*1)
+	// QueryResult stores nodes in a flat list.
+	// Cartesian Product of 1 node 'a' and 1 node 'b' = 1 record containing {a, b}.
+	// But QueryResult logic adds all nodes found in the record to the vector.
+	// So we expect 2 nodes total in the result list (Node A and Node B).
+	ASSERT_EQ(res.nodeCount(), 2UL);
+
+	// Verify labels to ensure we got both
+	bool foundA = false;
+	bool foundB = false;
+	for (const auto &node: res.getNodes()) {
+		if (node.getLabel() == "A")
+			foundA = true;
+		if (node.getLabel() == "B")
+			foundB = true;
+	}
+	EXPECT_TRUE(foundA);
+	EXPECT_TRUE(foundB);
+}

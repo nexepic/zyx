@@ -104,7 +104,6 @@ namespace graph::storage {
 		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
 
 		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
-		// databaseInspector->displayDatabaseStructure();
 	}
 
 	void FileStorage::close() {

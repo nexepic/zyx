@@ -14,191 +14,269 @@
 
 namespace graph {
 
-    // --- Helpers ---
+	// --- Helpers ---
 
-    std::string trim(const std::string& str) {
-        size_t first = str.find_first_not_of(" \t\r\n");
-        if (std::string::npos == first) {
-            return "";
-        }
-        size_t last = str.find_last_not_of(" \t\r\n");
-        return str.substr(first, (last - first + 1));
-    }
+	std::string trim(const std::string &str) {
+		size_t first = str.find_first_not_of(" \t\r\n");
+		if (std::string::npos == first) {
+			return "";
+		}
+		size_t last = str.find_last_not_of(" \t\r\n");
+		return str.substr(first, (last - first + 1));
+	}
 
-    void printProperties(const std::unordered_map<std::string, PropertyValue>& props) {
-        if (props.empty()) return;
-        std::cout << " {";
-        auto it = props.begin();
-        while (it != props.end()) {
-            std::cout << it->first << ": " << it->second.toString();
-            if (++it != props.end()) std::cout << ", ";
-        }
-        std::cout << "}";
-    }
+	void printProperties(const std::unordered_map<std::string, PropertyValue> &props) {
+		if (props.empty())
+			return;
+		std::cout << " {";
+		auto it = props.begin();
+		while (it != props.end()) {
+			std::cout << it->first << ": " << it->second.toString();
+			if (++it != props.end())
+				std::cout << ", ";
+		}
+		std::cout << "}";
+	}
 
-    void printResult(const query::QueryResult& result) {
-        if (result.isEmpty()) {
-            std::cout << "Empty result (or operation successful with no return data).\n";
-            return;
-        }
+	void printResult(const query::QueryResult &result) {
+		if (result.isEmpty()) {
+			std::cout << "Empty result (or operation successful with no return data).\n";
+			return;
+		}
 
-        if (result.nodeCount() > 0) {
-            std::cout << "--- Nodes (" << result.nodeCount() << ") ---\n";
-            for (const auto& node : result.getNodes()) {
-                std::cout << "ID: " << node.getId()
-                          << " | Label: " << (node.getLabel().empty() ? "<No Label>" : node.getLabel());
-                printProperties(node.getProperties());
-                std::cout << "\n";
-            }
-        }
+		if (result.nodeCount() > 0) {
+			std::cout << "--- Nodes (" << result.nodeCount() << ") ---\n";
+			for (const auto &node: result.getNodes()) {
+				std::cout << "ID: " << node.getId()
+						  << " | Label: " << (node.getLabel().empty() ? "<No Label>" : node.getLabel());
+				printProperties(node.getProperties());
+				std::cout << "\n";
+			}
+		}
 
-        if (result.edgeCount() > 0) {
-            std::cout << "--- Edges (" << result.edgeCount() << ") ---\n";
-            for (const auto& edge : result.getEdges()) {
-                std::cout << "ID: " << edge.getId()
-                          << " | " << edge.getSourceNodeId()
-                          << " -[" << edge.getLabel();
-                printProperties(edge.getProperties());
-                std::cout << "]-> " << edge.getTargetNodeId() << "\n";
-            }
-        }
+		if (result.edgeCount() > 0) {
+			std::cout << "--- Edges (" << result.edgeCount() << ") ---\n";
+			for (const auto &edge: result.getEdges()) {
+				std::cout << "ID: " << edge.getId() << " | " << edge.getSourceNodeId() << " -[" << edge.getLabel();
+				printProperties(edge.getProperties());
+				std::cout << "]-> " << edge.getTargetNodeId() << "\n";
+			}
+		}
 
-        if (result.rowCount() > 0) {
-            std::cout << "--- Records (" << result.rowCount() << ") ---\n";
-            if (result.getRows().empty()) return;
-            for (const auto& row : result.getRows()) {
-                std::cout << "| ";
-                for (const auto& [key, val] : row) {
-                    std::cout << key << ": " << val.toString() << " | ";
-                }
-                std::cout << "\n";
-            }
-        }
-    }
+		if (result.rowCount() > 0) {
+			std::cout << "--- Records (" << result.rowCount() << ") ---\n";
+			if (result.getRows().empty())
+				return;
+			for (const auto &row: result.getRows()) {
+				std::cout << "| ";
+				for (const auto &[key, val]: row) {
+					std::cout << key << ": " << val.toString() << " | ";
+				}
+				std::cout << "\n";
+			}
+		}
+	}
 
-    // --- REPL Implementation ---
+	// --- REPL Implementation ---
 
-    REPL::REPL(Database &db) : db(db) {}
+	REPL::REPL(Database &db) : db(db) {}
 
-    void REPL::run() const {
-        const char *promptNormal = "\033[1;32mmetrix>\033[0m "; // Green
-        const char *promptMulti  = "\033[1;33m     ->\033[0m "; // Yellow
+	void REPL::run() const {
+		const char *promptNormal = "\033[1;32mmetrix>\033[0m "; // Green
+		const char *promptMulti = "\033[1;33m     ->\033[0m "; // Yellow
 
-        linenoise::linenoiseState ls(promptNormal);
-        ls.SetHistoryMaxLen(100);
+		linenoise::linenoiseState ls(promptNormal);
+		ls.EnableMultiLine();
+		ls.SetHistoryMaxLen(100);
 
-        std::cout << "<Metrix> Shell.\n"
-                  << "Type 'help' or 'exit'.\n"
-                  << "Enter queries ending with ';' OR press Enter on an empty line to execute.\n";
+		std::cout << "<Metrix> Shell.\n"
+				  << "Type 'help' or 'exit'.\n"
+				  << "Enter queries ending with ';' OR press Enter on an empty line to execute.\n";
 
-        std::string buffer;
-        std::string line;
+		std::string buffer;
+		std::string line;
 
-        while (true) {
-            // Update prompt based on buffer state
-            if (buffer.empty()) {
-                ls.SetPrompt(promptNormal);
-            } else {
-                ls.SetPrompt(promptMulti);
-            }
+		while (true) {
+			// Update prompt based on buffer state
+			if (buffer.empty()) {
+				ls.SetPrompt(promptNormal);
+			} else {
+				ls.SetPrompt(promptMulti);
+			}
 
-            if (ls.Readline(line)) break; // Ctrl+D to exit
+			if (ls.Readline(line))
+				break; // Ctrl+D to exit
 
-            std::string trimmedLine = trim(line);
+			std::string trimmedLine = trim(line);
 
-            if (trimmedLine == "exit") break;
+			if (trimmedLine == "exit")
+				break;
 
-            // Empty Line Handling (Double Enter)
-            if (trimmedLine.empty()) {
-                // If buffer has content and user hits Enter on a blank line, EXECUTE.
-                if (!buffer.empty()) {
-                    handleCommand(buffer);
-                    buffer.clear();
-                }
-                continue;
-            }
+			// Empty Line Handling (Double Enter)
+			if (trimmedLine.empty()) {
+				// If buffer has content and user hits Enter on a blank line, EXECUTE.
+				if (!buffer.empty()) {
+					handleCommand(buffer);
+					buffer.clear();
+				}
+				continue;
+			}
 
-            ls.AddHistory(line.c_str());
+			ls.AddHistory(line.c_str());
 
-            // Handle System Commands (immediate execution if buffer empty)
-            if (buffer.empty()) {
-                if (trimmedLine == "help" || trimmedLine == "save") {
-                    handleCommand(trimmedLine);
-                    continue;
-                }
-            }
+			// Handle System Commands (immediate execution if buffer empty)
+			if (buffer.empty()) {
+				if (trimmedLine == "help" || trimmedLine == "save") {
+					handleCommand(trimmedLine);
+					continue;
+				}
+			}
 
-            // Accumulate Buffer
-            if (!buffer.empty()) buffer += "\n";
-            buffer += line;
+			// Accumulate Buffer
+			if (!buffer.empty())
+				buffer += "\n";
+			buffer += line;
 
-            // Check for Semicolon at the end
-            if (trimmedLine.back() == ';') {
-                handleCommand(buffer);
-                buffer.clear();
-            }
-        }
-    }
+			// Check for Semicolon at the end
+			if (trimmedLine.back() == ';') {
+				handleCommand(buffer);
+				buffer.clear();
+			}
+		}
+	}
 
-    void REPL::runScript(const std::string& scriptPath) const {
-        std::ifstream file(scriptPath);
-        if (!file.is_open()) {
-            std::cerr << "Error: Could not open file " << scriptPath << "\n";
-            return;
-        }
+	void REPL::runScript(const std::string &scriptPath) const {
+		std::ifstream file(scriptPath);
+		if (!file.is_open()) {
+			std::cerr << "Error: Could not open file " << scriptPath << "\n";
+			return;
+		}
 
-        std::cout << "Executing script: " << scriptPath << "\n";
+		std::cout << "Executing script: " << scriptPath << "\n";
 
-        std::string line;
-        std::string buffer;
-        int lineNum = 0;
-        int statementsExecuted = 0;
+		std::string line;
+		std::string buffer;
+		int statementsExecuted = 0;
 
-        while (std::getline(file, line)) {
-            lineNum++;
-            std::string trimmed = trim(line);
+		while (std::getline(file, line)) {
+			std::string trimmed = trim(line);
 
-            if (trimmed.empty()) continue;
-            if (trimmed.rfind("//", 0) == 0) continue; // Skip comments
+			if (trimmed.empty())
+				continue;
+			if (trimmed.rfind("//", 0) == 0)
+				continue; // Skip comments
 
-            if (!buffer.empty()) buffer += "\n";
-            buffer += line;
+			if (!buffer.empty())
+				buffer += "\n";
+			buffer += line;
 
-            // Check for semicolon
-            if (trim(buffer).back() == ';') {
-                std::cout << "[stmt " << ++statementsExecuted << "] ";
-                handleCommand(buffer);
-                buffer.clear();
-            }
-        }
+			// Check for semicolon
+			if (trim(buffer).back() == ';') {
+				std::cout << "[stmt " << ++statementsExecuted << "] ";
+				handleCommand(buffer);
+				buffer.clear();
+			}
+		}
 
-        if (!trim(buffer).empty()) {
-            std::cout << "[stmt " << ++statementsExecuted << "] (Implicit EOF) ";
-            handleCommand(buffer);
-        }
-    }
+		if (!trim(buffer).empty()) {
+			std::cout << "[stmt " << ++statementsExecuted << "] (Implicit EOF) ";
+			handleCommand(buffer);
+		}
+	}
 
-    void REPL::handleCommand(const std::string &command) const {
-        if (command == "help") {
-            std::cout << "Commands:\n"
-                      << "  save             Persist data to disk\n"
-                      << "  exit             Quit\n"
-                      << "  <Cypher Query>   Ends with ';' or Empty Line\n";
-            return;
-        }
+	void REPL::handleCommand(const std::string &command) const {
+		// --- 1. Basic System Commands ---
 
-        if (command == "save") {
-            db.getStorage()->flush();
-            std::cout << "Database flushed to disk.\n";
-            return;
-        }
+		if (command == "help") {
+			std::cout << "Commands:\n"
+					  << "  save             Persist data to disk\n"
+					  << "  debug			 [summary|nodes|edges|props] [page]\n"
+					  << "  exit             Quit\n"
+					  << "  <Cypher Query>   Ends with ';' or Empty Line\n";
+			return;
+		}
 
-        try {
-            auto result = db.getQueryEngine()->execute(command);
-            printResult(result);
-        } catch (const std::exception &e) {
-            std::cerr << "\033[1;31mError: " << e.what() << "\033[0m\n";
-        }
-    }
+		if (command == "save") {
+			if (auto storage = db.getStorage()) {
+				storage->flush();
+				std::cout << "Database flushed to disk.\n";
+			} else {
+				std::cerr << "Error: Storage not accessible.\n";
+			}
+			return;
+		}
+
+		// --- 2. Debug Command Handler ---
+
+		if (command.rfind("debug", 0) == 0) { // Starts with "debug"
+			auto storage = db.getStorage();
+			if (!storage) {
+				std::cerr << "Storage not available.\n";
+				return;
+			}
+
+			auto inspector = storage->getInspector();
+			if (!inspector) {
+				std::cerr << "Inspector not initialized.\n";
+				return;
+			}
+
+			// Pre-process command to remove trailing semicolon and whitespace
+			std::string cleanCommand = command;
+			while (!cleanCommand.empty() && (cleanCommand.back() == ';' || isspace(cleanCommand.back()))) {
+				cleanCommand.pop_back();
+			}
+
+			// Parse: debug <target> [page]
+			std::istringstream iss(cleanCommand);
+			std::string cmd, subcmd;
+			int page = 0;
+
+			iss >> cmd >> subcmd; // read "debug" then "nodes"/"summary"
+
+			// Default to summary if no subcommand
+			if (subcmd.empty() || subcmd == "summary") {
+				inspector->inspectSummary();
+			} else if (subcmd == "nodes") {
+				if (!(iss >> page))
+					page = 0;
+				// Could parse optional flags like --all here if needed
+				inspector->inspectNodeSegments(page);
+			} else if (subcmd == "edges") {
+				if (!(iss >> page))
+					page = 0;
+				inspector->inspectEdgeSegments(page);
+			} else if (subcmd == "props") {
+				if (!(iss >> page))
+					page = 0;
+				inspector->inspectPropertySegments(page);
+			} else if (subcmd == "blobs") {
+				if (!(iss >> page))
+					page = 0;
+				inspector->inspectBlobSegments(page);
+			} else if (subcmd == "indexes") {
+				if (!(iss >> page))
+					page = 0;
+				inspector->inspectIndexSegments(page);
+			} else if (subcmd == "states") {
+				if (!(iss >> page))
+					page = 0;
+				inspector->inspectStateSegments(page);
+			} else {
+				std::cerr << "Unknown debug target: '" << subcmd
+						  << "'. Valid targets: summary, nodes, edges, props, blobs, indexes, states.\n";
+			}
+			return;
+		}
+
+		// --- 3. Execute Cypher Query ---
+
+		try {
+			auto result = db.getQueryEngine()->execute(command);
+			printResult(result);
+		} catch (const std::exception &e) {
+			std::cerr << "\033[1;31mError: " << e.what() << "\033[0m\n";
+		}
+	}
 
 } // namespace graph

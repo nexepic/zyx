@@ -322,3 +322,23 @@ TEST_F(CypherSyntaxTest, ValidVarLengthPath) {
 	// 5. With Label and Properties
 	EXPECT_TRUE(validate("MATCH (a)-[:ROAD*1..5]->(b) RETURN b"));
 }
+
+// ============================================================================
+// Cartesian Product Tests (Cross Joins)
+// ============================================================================
+
+TEST_F(CypherSyntaxTest, ValidCartesianProduct) {
+	// 1. Comma-separated patterns (Implicit Cartesian Product)
+	// MATCH (a), (b) -> Cartesian Product of a and b
+	EXPECT_TRUE(validate("MATCH (a), (b) RETURN a, b"));
+
+	// 2. Multiple MATCH clauses (Explicit Cartesian Product)
+	EXPECT_TRUE(validate("MATCH (a) MATCH (b) RETURN a, b"));
+
+	// 3. Mixed Pattern with Relationship and Independent Node
+	// (a)->(b) AND (c) are disconnected
+	EXPECT_TRUE(validate("MATCH (a)-[:REL]->(b), (c) RETURN a, b, c"));
+
+	// 4. Complex Chain with multiple MATCH
+	EXPECT_TRUE(validate("MATCH (a:User) WHERE a.age > 10 MATCH (b:Product) RETURN a, b"));
+}
