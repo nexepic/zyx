@@ -98,6 +98,17 @@ namespace graph::query::indexes {
 
 		void saveState() const;
 
+		bool isEnabled() const {
+			std::shared_lock lock(mutex_);
+			return enabled_;
+		}
+
+		// Check if the physical B-Tree exists (Root ID is valid)
+		bool hasPhysicalData() const {
+			std::shared_lock lock(mutex_);
+			return rootId_ != 0;
+		}
+
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
 		std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;

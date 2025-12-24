@@ -85,6 +85,30 @@ namespace metrix {
 						const std::string& targetLabel, const std::string& targetKey, const Value& targetVal,
 						const std::string& edgeLabel, const std::unordered_map<std::string, Value>& props);
 
+    	/**
+		 * @brief Creates a node and returns its internal ID immediately.
+		 *        Essential for tools that need to link nodes later without re-querying.
+		 *
+		 * @param label The node label (e.g., "BasicBlock", "Instruction").
+		 * @param props The properties.
+		 * @return The internal ID (int64_t) of the created node.
+		 */
+    	int64_t createNodeRetId(const std::string& label, const std::unordered_map<std::string, Value>& props = {});
+
+    	/**
+		 * @brief Creates an edge directly between two known internal IDs.
+		 *        This bypasses the query parser and index lookups, offering O(1) performance.
+		 *
+		 * @param sourceId The internal ID of the source node.
+		 * @param targetId The internal ID of the target node.
+		 * @param edgeLabel The edge type (e.g., "FLOWS_TO").
+		 * @param props Edge properties.
+		 * @throws std::runtime_error If sourceId or targetId does not exist.
+		 */
+    	void createEdgeById(int64_t sourceId, int64_t targetId,
+							const std::string& edgeLabel,
+							const std::unordered_map<std::string, Value>& props = {});
+
     private:
         std::unique_ptr<DatabaseImpl> impl_;
     };

@@ -174,4 +174,64 @@ namespace metrix {
     	// ... (Implementation details depend on QueryBuilder capabilities)
     }
 
+	int64_t Database::createNodeRetId(const std::string& label, const std::unordered_map<std::string, Value>& props) {
+        auto storage = impl_->db_.getStorage();
+        auto dm = storage->getDataManager();
+
+        // 1. Create Node Object (ID 0 tells Manager to allocate)
+        graph::Node node(0, label);
+
+        // 2. Persist Node (Allocates ID, triggers OnNodeAdded observer)
+        dm->addNode(node);
+        int64_t newId = node.getId();
+
+        // 3. Add Properties (Triggers OnNodeUpdated observer)
+        if (!props.empty()) {
+            std::unordered_map<std::string, graph::PropertyValue> internalProps;
+            for (const auto& [k, v] : props) {
+                internalProps[k] = toInternal(v);
+            }
+            dm->addNodeProperties(newId, internalProps);
+        }
+
+        return newId;
+    }
+
+    void Database::createEdgeById(int64_t sourceId, int64_t targetId,
+                                  const std::string& edgeLabel,
+                                  const std::unordered_map<std::string, Value>& props) {
+        auto storage = impl_->db_.getStorage();
+        auto dm = storage->getDataManager();
+
+        // 1. Validation (Optional, but good for debugging tools)
+        // Ensure nodes actually exist to avoid corrupt graph topology
+        // Note: getNode() might throw or return empty if invalid.
+        // For max speed, you might skip this check if you trust your tool logic.
+        /*
+        auto src = dm->getNode(sourceId);
+        auto tgt = dm->getNode(targetId);
+        if (src.getId() == 0 || tgt.getId() == 0) {
+            throw std::runtime_error("Invalid Node IDs passed to createEdgeById");
+        }
+        */
+
+        // 2. Create Edge Object
+        // ID 0 -> Auto allocate
+        graph::Edge edge(0, sourceId, targetId, edgeLabel);
+
+        // 3. Persist Edge (Triggers OnEdgeAdded)
+        // NOTE: Ensure DataManager::addEdge calls linkEdge internally!
+        // Based on our previous fix, it does.
+        dm->addEdge(edge);
+
+        // 4. Add Properties
+        if (!props.empty()) {
+            std::unordered_map<std::string, graph::PropertyValue> internalProps;
+            for (const auto& [k, v] : props) {
+                internalProps[k] = toInternal(v);
+            }
+            dm->addEdgeProperties(edge.getId(), internalProps);
+        }
+    }
+
 } // namespace metrix

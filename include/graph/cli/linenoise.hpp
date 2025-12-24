@@ -2391,6 +2391,9 @@ inline bool linenoiseState::Raw(std::string& line) {
 	buf_[0] = '\0';
 	wbuf_[0] = '\0';
 
+		maxrows_ = 0;
+		oldcolpos_ = 0;
+
         auto count = Edit();
         if (count == -1) {
             quit = true;

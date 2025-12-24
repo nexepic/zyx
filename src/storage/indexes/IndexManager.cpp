@@ -44,6 +44,59 @@ namespace graph::query::indexes {
 		storage_->registerEventListener(weak_from_this());
 
 		dataManager_->registerObserver(shared_from_this());
+
+		// ====================================================================
+		// Bootstrap: Auto-build Label Indexes if missing
+		// ====================================================================
+
+		auto sysState = storage_->getSystemStateManager();
+
+		// Helper lambda to register metadata if missing
+		auto ensureMetadata = [&](const std::string &name, const std::string &type) {
+			// Check if metadata exists in sys.indexes
+			auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+			if (!allIndexes.contains(name)) {
+				// Create metadata: Name | EntityType | IndexType | Label | Property
+				// Label Index has empty Label/Property fields in metadata context
+				IndexMetadata meta{name, type, "label", "", ""};
+
+				// Persist
+				sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
+				log::Log::info("Registered system index metadata: {}", name);
+			}
+		};
+
+		// --- Node Label Index ---
+		auto nodeLabelIdx = nodeIndexManager_->getLabelIndex();
+
+		// If enabled (default true) BUT has no B-Tree root (0)
+		if (nodeLabelIdx->isEnabled() && !nodeLabelIdx->hasPhysicalData()) {
+			// Check if there is actual data in the DB to avoid useless IO on empty DBs
+			log::Log::info("Bootstrapping Node Label Index...");
+
+			// Trigger the builder to scan disk and populate the tree
+			// Use executeBuildTask to ensure flushing if needed (though we are at startup)
+			executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
+
+			// Persist the new Root ID immediately so we don't rebuild next time if crash
+			nodeLabelIdx->saveState();
+		}
+
+		if (nodeLabelIdx->isEnabled()) {
+			ensureMetadata("node_label_idx", "node");
+		}
+
+		// --- Edge Label Index ---
+		auto edgeLabelIdx = edgeIndexManager_->getLabelIndex();
+		if (edgeLabelIdx->isEnabled() && !edgeLabelIdx->hasPhysicalData()) {
+			log::Log::info("Bootstrapping Edge Label Index...");
+			executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
+			edgeLabelIdx->saveState();
+		}
+
+		if (edgeLabelIdx->isEnabled()) {
+			ensureMetadata("edge_label_idx", "edge");
+		}
 	}
 
 	void IndexManager::onStorageFlush() {
@@ -73,8 +126,8 @@ namespace graph::query::indexes {
 		return buildFunc();
 	}
 
-	bool IndexManager::createIndex(const std::string& indexName, const std::string& entityType,
-                                   const std::string& label, const std::string& property) const {
+	bool IndexManager::createIndex(const std::string &indexName, const std::string &entityType,
+								   const std::string &label, const std::string &property) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		// 1. Generate Name if empty
@@ -102,14 +155,12 @@ namespace graph::query::indexes {
 			// --- Label Index ---
 			indexType = "label";
 			if (entityType == "node") {
-				success = nodeIndexManager_->createLabelIndex([&]() {
-					return executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
-				});
+				success = nodeIndexManager_->createLabelIndex(
+						[&]() { return executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); }); });
 			} else if (entityType == "edge") {
 				// Edge label index
-				success = edgeIndexManager_->createLabelIndex([&]() {
-					return executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
-				});
+				success = edgeIndexManager_->createLabelIndex(
+						[&]() { return executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); }); });
 			}
 		} else {
 			// --- Property Index ---
@@ -176,14 +227,14 @@ namespace graph::query::indexes {
 		return physicalDropSuccess;
 	}
 
-	bool IndexManager::dropIndexByDefinition(const std::string& label, const std::string& property) const {
+	bool IndexManager::dropIndexByDefinition(const std::string &label, const std::string &property) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		auto sysState = storage_->getSystemStateManager();
 		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
 
 		// Iterate metadata to find the matching definition
-		for (const auto& [name, rawMeta] : allIndexes) {
+		for (const auto &[name, rawMeta]: allIndexes) {
 			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
 
 			if (meta.label == label && meta.property == property) {

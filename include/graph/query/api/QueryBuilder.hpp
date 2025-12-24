@@ -18,103 +18,113 @@
 
 namespace graph::query {
 
-	class QueryBuilder {
-	public:
-		explicit QueryBuilder(std::shared_ptr<QueryPlanner> planner);
+    class QueryBuilder {
+    public:
+        explicit QueryBuilder(std::shared_ptr<QueryPlanner> planner);
 
-		/**
-		 * @brief Starts a query by scanning nodes.
-		 * @param variable The variable name (e.g. "n").
-		 * @param label Optional label filter.
-		 * @param key Optional property key for index pushdown.
-		 * @param value Optional property value for index pushdown.
-		 */
-		QueryBuilder& match_(const std::string& variable,
-							const std::string& label = "",
-							const std::string& key = "",
-							const PropertyValue& value = PropertyValue());
+        // ====================================================================
+        // Read Operations
+        // ====================================================================
 
-		/**
-		 * @brief Filters the current result set.
-		 * @param variable The variable to check.
-		 * @param key The property key.
-		 * @param value The expected value.
-		 */
-		QueryBuilder& where_(const std::string& variable, const std::string& key, const PropertyValue& value);
+        /**
+         * @brief Starts a query by scanning nodes.
+         * @param variable The variable name (e.g. "n").
+         * @param label Optional label filter.
+         * @param key Optional property key for index pushdown.
+         * @param value Optional property value for index pushdown.
+         */
+        QueryBuilder& match_(const std::string& variable,
+                            const std::string& label = "",
+                            const std::string& key = "",
+                            const PropertyValue& value = PropertyValue());
 
-		// --- Optimized Abstraction ---
+        /**
+         * @brief Filters the current result set.
+         */
+        QueryBuilder& where_(const std::string& variable, const std::string& key, const PropertyValue& value);
 
-		// Create Node: create("n", "User", {{"age", 18}})
-		QueryBuilder& create_(const std::string& variable, const std::string& label,
-							 const std::unordered_map<std::string, PropertyValue>& props = {});
+        // ====================================================================
+        // Write Operations (Data)
+        // ====================================================================
 
-		// Create Edge: create("e", "KNOWS", {}, "n", "m")
-		// Overloading allows the user to just think "I want to create something"
-		QueryBuilder& create_(const std::string& variable, const std::string& label,
-							 const std::string& sourceVar, const std::string& targetVar,
-							 const std::unordered_map<std::string, PropertyValue>& props = {});
+        /**
+         * @brief Create Node: create("n", "User", {{"age", 18}})
+         */
+        QueryBuilder& create_(const std::string& variable, const std::string& label,
+                             const std::unordered_map<std::string, PropertyValue>& props = {});
 
-		/**
-		 * @brief Deletes variables in the current scope.
-		 * @param variables List of variables to delete.
-		 * @param detach If true, delete attached relationships first.
-		 */
-		QueryBuilder& delete_(const std::vector<std::string>& variables, bool detach = false);
+        /**
+         * @brief Create Edge: create("e", "KNOWS", "n", "m", {})
+         */
+        QueryBuilder& create_(const std::string& variable, const std::string& label,
+                             const std::string& sourceVar, const std::string& targetVar,
+                             const std::unordered_map<std::string, PropertyValue>& props = {});
 
-		/**
-		 * @brief Updates a property on a variable.
-		 */
-		QueryBuilder& set_(const std::string& variable, const std::string& key, const PropertyValue& value);
+        /**
+         * @brief Deletes variables in the current scope.
+         * @param variables List of variables to delete.
+         * @param detach If true, delete attached relationships first.
+         */
+        QueryBuilder& delete_(const std::vector<std::string>& variables, bool detach = false);
 
-		// ====================================================================
-		// Administration (Index)
-		// ====================================================================
+        /**
+         * @brief Updates a property on a variable.
+         */
+        QueryBuilder& set_(const std::string& variable, const std::string& key, const PropertyValue& value);
 
-		/**
-		 * @brief Creates an index.
-		 * @param label The label to index.
-		 * @param property The property to index.
-		 * @param indexName Optional name for the index.
-		 */
-		QueryBuilder& createIndex_(const std::string& label, const std::string& property, const std::string& indexName = "");
+        /**
+         * @brief Updates a Label on a variable.
+         */
+        QueryBuilder& setLabel_(const std::string& variable, const std::string& label);
 
-		/**
-		 * @brief Drops an index by name.
-		 */
-		QueryBuilder& dropIndex_(const std::string& indexName);
+        /**
+         * @brief Removes a property or label.
+         * @param type "PROPERTY" or "LABEL" (Helper enum logic handled internally).
+         */
+        QueryBuilder& remove_(const std::string& variable, const std::string& key, bool isLabel = false);
 
-		/**
-		 * @brief Drops an index by definition.
-		 */
-		QueryBuilder& dropIndex_(const std::string& label, const std::string& property);
+        // ====================================================================
+        // Administration (Index)
+        // ====================================================================
 
-		QueryBuilder& showIndexes_();
+        QueryBuilder& createIndex_(const std::string& label, const std::string& property, const std::string& indexName = "");
+        QueryBuilder& dropIndex_(const std::string& indexName);
+        QueryBuilder& dropIndex_(const std::string& label, const std::string& property);
+        QueryBuilder& showIndexes_();
 
-		// ====================================================================
-		// Procedures
-		// ====================================================================
+        // ====================================================================
+        // Procedures
+        // ====================================================================
 
-		/**
-		 * @brief Calls a system procedure or algorithm.
-		 */
-		QueryBuilder& call_(const std::string& procedure, const std::vector<PropertyValue>& args = {});
+        QueryBuilder& call_(const std::string& procedure, const std::vector<PropertyValue>& args = {});
 
-		// ====================================================================
-		// Finalize
-		// ====================================================================
+        // ====================================================================
+        // Finalize
+        // ====================================================================
 
-		/**
-		 * @brief Projects specific variables to return.
-		 */
-		QueryBuilder& return_(const std::vector<std::string>& variables);
+        QueryBuilder& return_(const std::vector<std::string>& variables);
 
-		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> build();
+        // Skip & Limit
+        QueryBuilder& skip_(int64_t offset);
+        QueryBuilder& limit_(int64_t limit);
 
-	private:
-		std::shared_ptr<QueryPlanner> planner_;
-		std::unique_ptr<execution::PhysicalOperator> root_;
+        // Order By
+        // Format: {{var, prop, asc}, ...}
+        struct SortOrder {
+            std::string variable;
+            std::string property;
+            bool ascending;
+        };
+        QueryBuilder& orderBy_(const std::vector<SortOrder>& items);
 
-		// Helper to append operator to the chain
-		void append(std::unique_ptr<execution::PhysicalOperator> op);
-	};
-}
+        [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> build();
+
+    private:
+        std::shared_ptr<QueryPlanner> planner_;
+        std::unique_ptr<execution::PhysicalOperator> root_;
+
+        // Helper to append operator to the chain (handling pipes vs sources)
+        void append(std::unique_ptr<execution::PhysicalOperator> op);
+    };
+
+} // namespace graph::query

@@ -35,11 +35,7 @@ namespace graph::query {
 			return;
 		}
 
-		// Default: If the new operator wraps the old root (like Filter/Project/Delete/Set),
-		// it should have been constructed that way by the Caller via Planner.
-		// However, QueryBuilder calls Planner factories which usually take 'child' as arg.
-		// Wait! My QueryPlanner factories (setOp, deleteOp) TAKE the child.
-		// So 'op' already contains 'root_'. We just need to update root_.
+		// Default: New operator wraps the old root
 		root_ = std::move(op);
 	}
 
@@ -47,8 +43,9 @@ namespace graph::query {
 
 	QueryBuilder &QueryBuilder::match_(const std::string &variable, const std::string &label, const std::string &key,
 									   const PropertyValue &value) {
-		// If root exists, this implies a Join/Cartesian (not supported in simple builder yet).
-		// For now, we assume MATCH starts the query or resets it.
+		// Note: CartesianProduct logic for multi-match is currently handled in Visitor.
+		// For Builder, if root exists, we assume we overwrite or chain differently.
+		// For simple usage, MATCH starts the chain.
 		root_ = planner_->scanOp(variable, label, key, value);
 		return *this;
 	}
@@ -68,7 +65,6 @@ namespace graph::query {
 		};
 
 		std::string desc = variable + "." + key + " == " + value.toString();
-		// Wraps current root
 		root_ = planner_->filterOp(std::move(root_), predicate, desc);
 		return *this;
 	}
@@ -93,25 +89,47 @@ namespace graph::query {
 	QueryBuilder &QueryBuilder::delete_(const std::vector<std::string> &variables, bool detach) {
 		if (!root_)
 			throw std::runtime_error("DELETE must follow a MATCH");
-		// Wraps current root
 		root_ = planner_->deleteOp(std::move(root_), variables, detach);
 		return *this;
 	}
 
-	QueryBuilder& QueryBuilder::set_(const std::string& variable, const std::string& key, const PropertyValue& value) {
-		if (!root_) throw std::runtime_error("SET must follow a MATCH");
+	QueryBuilder &QueryBuilder::set_(const std::string &variable, const std::string &key, const PropertyValue &value) {
+		if (!root_)
+			throw std::runtime_error("SET must follow a MATCH");
 
 		std::vector<execution::operators::SetItem> items;
+		// Using SetActionType::PROPERTY
+		items.push_back({execution::operators::SetActionType::PROPERTY, variable, key, value});
 
+		root_ = planner_->setOp(std::move(root_), items);
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::setLabel_(const std::string &variable, const std::string &label) {
+		if (!root_)
+			throw std::runtime_error("SET must follow a MATCH");
+
+		std::vector<execution::operators::SetItem> items;
+		// Using SetActionType::LABEL
 		items.push_back({
-			execution::operators::SetActionType::PROPERTY,
-			variable,
-			key,
-			value
+				execution::operators::SetActionType::LABEL, variable, label,
+				PropertyValue() // Empty val
 		});
 
-		// Wraps current root
 		root_ = planner_->setOp(std::move(root_), items);
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::remove_(const std::string &variable, const std::string &key, bool isLabel) {
+		if (!root_)
+			throw std::runtime_error("REMOVE must follow a MATCH");
+
+		std::vector<execution::operators::RemoveItem> items;
+		items.push_back({isLabel ? execution::operators::RemoveActionType::LABEL
+								 : execution::operators::RemoveActionType::PROPERTY,
+						 variable, key});
+
+		root_ = planner_->removeOp(std::move(root_), items);
 		return *this;
 	}
 
@@ -156,6 +174,33 @@ namespace graph::query {
 		if (!root_)
 			return *this;
 		root_ = planner_->projectOp(std::move(root_), variables);
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::skip_(int64_t offset) {
+		if (!root_)
+			return *this;
+		root_ = planner_->skipOp(std::move(root_), offset);
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::limit_(int64_t limit) {
+		if (!root_)
+			return *this;
+		root_ = planner_->limitOp(std::move(root_), limit);
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::orderBy_(const std::vector<SortOrder> &items) {
+		if (!root_)
+			return *this;
+
+		std::vector<execution::operators::SortItem> sortItems;
+		for (const auto &item: items) {
+			sortItems.push_back({item.variable, item.property, item.ascending});
+		}
+
+		root_ = planner_->sortOp(std::move(root_), sortItems);
 		return *this;
 	}
 

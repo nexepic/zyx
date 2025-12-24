@@ -85,9 +85,9 @@ namespace graph {
 		const char *promptNormal = "\033[1;32mmetrix>\033[0m "; // Green
 		const char *promptMulti = "\033[1;33m     ->\033[0m "; // Yellow
 
-		linenoise::linenoiseState ls(promptNormal);
-		ls.EnableMultiLine();
-		ls.SetHistoryMaxLen(100);
+		// Setup global settings once
+		linenoise::SetMultiLine(true);
+		linenoise::SetHistoryMaxLen(100);
 
 		std::cout << "<Metrix> Shell.\n"
 				  << "Type 'help' or 'exit'.\n"
@@ -97,24 +97,23 @@ namespace graph {
 		std::string line;
 
 		while (true) {
-			// Update prompt based on buffer state
-			if (buffer.empty()) {
-				ls.SetPrompt(promptNormal);
-			} else {
-				ls.SetPrompt(promptMulti);
-			}
+			// Dynamic prompt selection
+			const char *currentPrompt = buffer.empty() ? promptNormal : promptMulti;
 
-			if (ls.Readline(line))
-				break; // Ctrl+D to exit
+			// Use the Static API - cleaner and handles EOF automatically
+			bool quit = false;
+			line = linenoise::Readline(currentPrompt, quit);
+
+			if (quit)
+				break; // Handle Ctrl+D
 
 			std::string trimmedLine = trim(line);
 
 			if (trimmedLine == "exit")
 				break;
 
-			// Empty Line Handling (Double Enter)
+			// Empty Line Handling
 			if (trimmedLine.empty()) {
-				// If buffer has content and user hits Enter on a blank line, EXECUTE.
 				if (!buffer.empty()) {
 					handleCommand(buffer);
 					buffer.clear();
@@ -122,7 +121,7 @@ namespace graph {
 				continue;
 			}
 
-			ls.AddHistory(line.c_str());
+			linenoise::AddHistory(line.c_str());
 
 			// Handle System Commands (immediate execution if buffer empty)
 			if (buffer.empty()) {
@@ -132,12 +131,10 @@ namespace graph {
 				}
 			}
 
-			// Accumulate Buffer
 			if (!buffer.empty())
 				buffer += "\n";
 			buffer += line;
 
-			// Check for Semicolon at the end
 			if (trimmedLine.back() == ';') {
 				handleCommand(buffer);
 				buffer.clear();
