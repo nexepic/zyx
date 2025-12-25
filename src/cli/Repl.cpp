@@ -12,9 +12,48 @@
 #include <iostream>
 #include "graph/cli/linenoise.hpp"
 
+// For isatty() and debugger detection
+#if defined(__unix__) || defined(__APPLE__)
+#include <unistd.h>
+#endif
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
+
 namespace graph {
 
 	// --- Helpers ---
+
+	// Function to check if a debugger is attached (macOS specific)
+	bool isDebuggerAttached() {
+#ifdef __APPLE__
+		int mib[4];
+		struct kinfo_proc info;
+		size_t size;
+
+		// Initialize the flags so we don't touch any random memory.
+		info.kp_proc.p_flag = 0;
+
+		// Initialize mib, which tells sysctl the info we want, in this case
+		// we're looking for information about a specific process ID.
+		mib[0] = CTL_KERN;
+		mib[1] = KERN_PROC;
+		mib[2] = KERN_PROC_PID;
+		mib[3] = getpid();
+
+		// Call sysctl.
+		size = sizeof(info);
+		if (sysctl(mib, std::size(mib), &info, &size, nullptr, 0) != 0) {
+			return false; // Could not retrieve process info
+		}
+
+		// We're being debugged if the P_TRACED flag is set.
+		return (info.kp_proc.p_flag & P_TRACED) != 0;
+#else
+		// Fallback for other Unix-like systems or disable for non-Apple.
+		return false;
+#endif
+	}
 
 	std::string trim(const std::string &str) {
 		size_t first = str.find_first_not_of(" \t\r\n");
@@ -81,11 +120,50 @@ namespace graph {
 
 	REPL::REPL(Database &db) : db(db) {}
 
+	// Fallback REPL for non-interactive sessions (like debugging in some IDEs)
+	void REPL::runBasic() const {
+		std::cout << "<Metrix> Shell (Basic Mode).\n"
+				  << "Type 'exit' to quit.\n";
+
+		std::string line;
+		std::string buffer;
+
+		while (true) {
+			const char *prompt = buffer.empty() ? "metrix> " : "     -> ";
+			std::cout << prompt << std::flush;
+
+			if (!std::getline(std::cin, line)) {
+				break; // EOF (Ctrl+D)
+			}
+
+			std::string trimmedLine = trim(line);
+			if (trimmedLine == "exit") {
+				break;
+			}
+
+			if (!buffer.empty()) {
+				buffer += "\n";
+			}
+			buffer += line;
+
+			if ((!trimmedLine.empty() && trimmedLine.back() == ';') || (trimmedLine.empty() && !buffer.empty())) {
+				handleCommand(buffer);
+				buffer.clear();
+			}
+		}
+	}
+
 	void REPL::run() const {
+		// Check if a debugger is attached or if not in a TTY.
+		// If so, fall back to basic I/O to avoid conflicts.
+		if (isDebuggerAttached() || !isatty(STDIN_FILENO)) {
+			runBasic();
+			return;
+		}
+
 		const char *promptNormal = "\033[1;32mmetrix>\033[0m "; // Green
 		const char *promptMulti = "\033[1;33m     ->\033[0m "; // Yellow
 
-		// Setup global settings once
 		linenoise::SetMultiLine(true);
 		linenoise::SetHistoryMaxLen(100);
 
@@ -94,15 +172,12 @@ namespace graph {
 				  << "Enter queries ending with ';' OR press Enter on an empty line to execute.\n";
 
 		std::string buffer;
-		std::string line;
 
 		while (true) {
-			// Dynamic prompt selection
 			const char *currentPrompt = buffer.empty() ? promptNormal : promptMulti;
 
-			// Use the Static API - cleaner and handles EOF automatically
 			bool quit = false;
-			line = linenoise::Readline(currentPrompt, quit);
+			std::string line = linenoise::Readline(currentPrompt, quit);
 
 			if (quit)
 				break; // Handle Ctrl+D
@@ -112,20 +187,18 @@ namespace graph {
 			if (trimmedLine == "exit")
 				break;
 
-			// Empty Line Handling
 			if (trimmedLine.empty()) {
 				if (!buffer.empty()) {
+					linenoise::AddHistory(buffer.c_str());
 					handleCommand(buffer);
 					buffer.clear();
 				}
 				continue;
 			}
 
-			linenoise::AddHistory(line.c_str());
-
-			// Handle System Commands (immediate execution if buffer empty)
 			if (buffer.empty()) {
 				if (trimmedLine == "help" || trimmedLine == "save") {
+					linenoise::AddHistory(trimmedLine.c_str());
 					handleCommand(trimmedLine);
 					continue;
 				}
@@ -136,6 +209,7 @@ namespace graph {
 			buffer += line;
 
 			if (trimmedLine.back() == ';') {
+				linenoise::AddHistory(buffer.c_str());
 				handleCommand(buffer);
 				buffer.clear();
 			}
@@ -167,7 +241,6 @@ namespace graph {
 				buffer += "\n";
 			buffer += line;
 
-			// Check for semicolon
 			if (trim(buffer).back() == ';') {
 				std::cout << "[stmt " << ++statementsExecuted << "] ";
 				handleCommand(buffer);
@@ -218,26 +291,22 @@ namespace graph {
 				return;
 			}
 
-			// Pre-process command to remove trailing semicolon and whitespace
 			std::string cleanCommand = command;
 			while (!cleanCommand.empty() && (cleanCommand.back() == ';' || isspace(cleanCommand.back()))) {
 				cleanCommand.pop_back();
 			}
 
-			// Parse: debug <target> [page]
 			std::istringstream iss(cleanCommand);
 			std::string cmd, subcmd;
 			int page = 0;
 
-			iss >> cmd >> subcmd; // read "debug" then "nodes"/"summary"
+			iss >> cmd >> subcmd;
 
-			// Default to summary if no subcommand
 			if (subcmd.empty() || subcmd == "summary") {
 				inspector->inspectSummary();
 			} else if (subcmd == "nodes") {
 				if (!(iss >> page))
 					page = 0;
-				// Could parse optional flags like --all here if needed
 				inspector->inspectNodeSegments(page);
 			} else if (subcmd == "edges") {
 				if (!(iss >> page))

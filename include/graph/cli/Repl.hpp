@@ -17,11 +17,12 @@ namespace graph {
 		explicit REPL(Database &db);
 		void run() const;
 
-		void runScript(const std::string& scriptPath) const;
+		void runScript(const std::string &scriptPath) const;
 
 	private:
 		Database &db;
 		void handleCommand(const std::string &command) const;
+		void runBasic() const; // Fallback for non-TTY environments
 	};
 
 	class REPLTest : public REPL {
