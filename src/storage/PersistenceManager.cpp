@@ -25,18 +25,19 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void PersistenceManager::upsert(const DirtyEntityInfo<EntityType> &info) {
-		if constexpr (std::is_same_v<EntityType, Node>)
+		if constexpr (std::is_same_v<EntityType, Node>) {
 			nodeRegistry_->upsert(info);
-		else if constexpr (std::is_same_v<EntityType, Edge>)
+		} else if constexpr (std::is_same_v<EntityType, Edge>) {
 			edgeRegistry_->upsert(info);
-		else if constexpr (std::is_same_v<EntityType, Property>)
+		} else if constexpr (std::is_same_v<EntityType, Property>) {
 			propertyRegistry_->upsert(info);
-		else if constexpr (std::is_same_v<EntityType, Blob>)
+		} else if constexpr (std::is_same_v<EntityType, Blob>) {
 			blobRegistry_->upsert(info);
-		else if constexpr (std::is_same_v<EntityType, Index>)
+		} else if constexpr (std::is_same_v<EntityType, Index>) {
 			indexRegistry_->upsert(info);
-		else if constexpr (std::is_same_v<EntityType, State>)
+		} else if constexpr (std::is_same_v<EntityType, State>) {
 			stateRegistry_->upsert(info);
+		}
 
 		checkAndTriggerAutoFlush();
 	}

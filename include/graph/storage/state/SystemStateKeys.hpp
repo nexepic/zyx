@@ -50,4 +50,8 @@ namespace graph::storage::state::keys {
 	// DefinitionString format: "TYPE|LABEL|PROPERTY"
 	constexpr char SYS_INDEXES[] = "sys.indexes";
 
+	// Key for controlling storage compaction
+	// Value type: boolean (true/false)
+	constexpr char STORAGE_COMPACTION_ENABLED[] = "storage.compaction.enabled";
+
 } // namespace graph::storage::state::keys

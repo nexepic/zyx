@@ -62,7 +62,7 @@ namespace graph::query::indexes {
 
 				// Persist
 				sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
-				log::Log::info("Registered system index metadata: {}", name);
+				log::Log::debug("Registered system index metadata: {}", name);
 			}
 		};
 
@@ -72,7 +72,7 @@ namespace graph::query::indexes {
 		// If enabled (default true) BUT has no B-Tree root (0)
 		if (nodeLabelIdx->isEnabled() && !nodeLabelIdx->hasPhysicalData()) {
 			// Check if there is actual data in the DB to avoid useless IO on empty DBs
-			log::Log::info("Bootstrapping Node Label Index...");
+			log::Log::debug("Bootstrapping Node Label Index...");
 
 			// Trigger the builder to scan disk and populate the tree
 			// Use executeBuildTask to ensure flushing if needed (though we are at startup)
@@ -89,7 +89,7 @@ namespace graph::query::indexes {
 		// --- Edge Label Index ---
 		auto edgeLabelIdx = edgeIndexManager_->getLabelIndex();
 		if (edgeLabelIdx->isEnabled() && !edgeLabelIdx->hasPhysicalData()) {
-			log::Log::info("Bootstrapping Edge Label Index...");
+			log::Log::debug("Bootstrapping Edge Label Index...");
 			executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
 			edgeLabelIdx->saveState();
 		}

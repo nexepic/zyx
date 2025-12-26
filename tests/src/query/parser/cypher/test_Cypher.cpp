@@ -381,7 +381,7 @@ TEST_F(CypherTest, DropIndex) {
 	if (!resShow2.isEmpty() && resShow2.rowCount() > 0) {
 		bool found = false;
 		for (const auto &row: resShow2.getRows()) {
-			if (row.at("key").toString() == "name")
+			if (row.at("properties").toString() == "name")
 				found = true;
 		}
 		EXPECT_FALSE(found);

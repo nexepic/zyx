@@ -30,7 +30,7 @@ namespace graph {
 		}
 
 		storage->open();
-		configManager_ = std::make_shared<config::SystemConfigManager>(storage->getSystemStateManager());
+		configManager_ = std::make_shared<config::SystemConfigManager>(storage->getSystemStateManager(), storage);
 		configManager_->loadAndApplyAll();
 		storage->getDataManager()->registerObserver(configManager_);
 		queryEngine = std::make_shared<query::QueryEngine>(storage);

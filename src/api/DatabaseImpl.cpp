@@ -8,12 +8,13 @@
  *
  **/
 
-#include "metrix/metrix.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/core/Property.hpp"
-#include "graph/query/api/QueryResult.hpp"
+#include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/api/QueryEngine.hpp"
+#include "graph/query/api/QueryResult.hpp"
+#include "metrix/metrix.hpp"
 
 namespace metrix {
 
@@ -31,6 +32,25 @@ namespace metrix {
         // Simplified conversion. In a full implementation, you should check
         // the type of PropertyValue and convert precisely.
         return v.toString();
+    }
+
+	// Helper: Convert Internal PropertyValue to Public Value
+	Value toPublicValue(const graph::PropertyValue& v) {
+    	return std::visit([](auto&& arg) -> Value {
+			return arg; // std::variant conversion
+		}, v.getVariant());
+    }
+
+	// Helper: Convert Internal Node to Public Node
+	Node toPublicNode(const graph::Node& internalNode) {
+        Node pubNode;
+        pubNode.id = internalNode.getId();
+        pubNode.label = internalNode.getLabel();
+
+        for (const auto& [key, val] : internalNode.getProperties()) {
+            pubNode.properties[key] = toPublicValue(val);
+        }
+        return pubNode;
     }
 
     // --- ResultImpl Definition ---
@@ -231,6 +251,32 @@ namespace metrix {
                 internalProps[k] = toInternal(v);
             }
             dm->addEdgeProperties(edge.getId(), internalProps);
+        }
+    }
+
+	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) {
+        try {
+            // 1. Get the DataManager from internal storage
+            auto storage = impl_->db_.getStorage();
+            if (!storage) return {};
+            auto dm = storage->getDataManager();
+
+            // 2. Instantiate the Internal Algorithm
+            graph::query::algorithm::GraphAlgorithm algo(dm);
+
+            // 3. Execute Internal Logic
+            auto internalPath = algo.findShortestPath(startId, endId, "both");
+
+            // 4. Convert to Public Types
+            std::vector<Node> publicPath;
+            publicPath.reserve(internalPath.size());
+            for (const auto& n : internalPath) {
+                publicPath.push_back(toPublicNode(n));
+            }
+
+            return publicPath;
+        } catch (...) {
+            return {}; // Return empty path on error
         }
     }
 

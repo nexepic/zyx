@@ -11,6 +11,8 @@
 #pragma once
 
 #include <memory>
+
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
 namespace graph::config {
@@ -25,7 +27,8 @@ namespace graph::config {
 	 */
 	class SystemConfigManager : public IEntityObserver {
 	public:
-		explicit SystemConfigManager(std::shared_ptr<storage::state::SystemStateManager> systemStateManager);
+		SystemConfigManager(std::shared_ptr<storage::state::SystemStateManager> systemStateManager,
+							const std::shared_ptr<storage::FileStorage> &storage);
 		~SystemConfigManager() override = default;
 
 		/**
@@ -41,10 +44,12 @@ namespace graph::config {
 		void onStateUpdated(const State& oldState, const State& newState) override;
 
 	private:
+		std::weak_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;
 
 		// --- Specific Applicators ---
 		void applyLogLevel() const;
+		void applyCompaction() const;
 		// void applyMemoryLimit(); // Future extension
 	};
 

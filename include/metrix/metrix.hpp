@@ -109,6 +109,12 @@ namespace metrix {
 							const std::string& edgeLabel,
 							const std::unordered_map<std::string, Value>& props = {});
 
+    	/**
+		 * @brief Finds the shortest path between two nodes.
+		 * @return Ordered path of nodes.
+		 */
+    	std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15);
+
     private:
         std::unique_ptr<DatabaseImpl> impl_;
     };

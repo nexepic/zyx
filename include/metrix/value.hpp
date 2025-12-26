@@ -23,4 +23,20 @@ namespace metrix {
 	// Helper to create values easily
 	inline Value null() { return std::monostate{}; }
 
+	// Public Node Representation
+	struct Node {
+		int64_t id;
+		std::string label;
+		std::unordered_map<std::string, Value> properties;
+	};
+
+	// Public Edge Representation
+	struct Edge {
+		int64_t id;
+		int64_t sourceId;
+		int64_t targetId;
+		std::string label;
+		std::unordered_map<std::string, Value> properties;
+	};
+
 } // namespace metrix

@@ -426,7 +426,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_EarlyTermination) {
 	// Stop traversal after visiting node1
 	algo->breadthFirstTraversal(
 			node1.getId(),
-			[&visitedNodeIds](const graph::Node &node, int depth) {
+			[&visitedNodeIds](const graph::Node &node, [[maybe_unused]] int depth) {
 				visitedNodeIds.push_back(node.getId());
 				return false; // Stop traversal immediately
 			},
@@ -444,7 +444,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_IncomingDirection) {
 	// Traverse incoming edges from node5
 	algo->breadthFirstTraversal(
 			node5.getId(),
-			[&visitedNodeIds](const graph::Node &node, int depth) {
+			[&visitedNodeIds](const graph::Node &node, [[maybe_unused]] int depth) {
 				visitedNodeIds.push_back(node.getId());
 				return true;
 			},
@@ -474,7 +474,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_BothDirections) {
 	// Traverse in both directions from node3
 	algo->breadthFirstTraversal(
 			node3.getId(),
-			[&visitedNodeIds](const graph::Node &node, int depth) {
+			[&visitedNodeIds](const graph::Node &node, [[maybe_unused]] int depth) {
 				visitedNodeIds.push_back(node.getId());
 				return true;
 			},
@@ -506,7 +506,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_NoConnections) {
 
 	algo->breadthFirstTraversal(
 			isolatedNode.getId(),
-			[&visitedNodeIds](const graph::Node &node, int depth) {
+			[&visitedNodeIds](const graph::Node &node, [[maybe_unused]] int depth) {
 				visitedNodeIds.push_back(node.getId());
 				return true;
 			},
@@ -556,7 +556,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_ZeroMaxDepth) {
 	// Set max depth to 0 (only the start node)
 	algo->breadthFirstTraversal(
 			node1.getId(),
-			[&visitedNodeIds](const graph::Node &node, int depth) {
+			[&visitedNodeIds](const graph::Node &node, [[maybe_unused]] int depth) {
 				visitedNodeIds.push_back(node.getId());
 				return true;
 			},
@@ -574,7 +574,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_InvalidDirection) {
 	// Use invalid direction
 	algo->breadthFirstTraversal(
 			node1.getId(),
-			[&visitedNodeIds](const graph::Node &node, int depth) {
+			[&visitedNodeIds](const graph::Node &node, [[maybe_unused]] int depth) {
 				visitedNodeIds.push_back(node.getId());
 				return true;
 			},
@@ -607,7 +607,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_CycleDetection) {
 
 	algo->breadthFirstTraversal(
 			nodeA.getId(),
-			[&visitedNodeIds](const graph::Node &node, int depth) {
+			[&visitedNodeIds](const graph::Node &node, [[maybe_unused]] int depth) {
 				visitedNodeIds.push_back(node.getId());
 				return true;
 			},
@@ -635,7 +635,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_NonexistentStartNode) {
 	// Use non-existent node ID
 	algo->breadthFirstTraversal(
 			999,
-			[&visitCalled](const graph::Node &node, int depth) {
+			[&visitCalled]([[maybe_unused]] const graph::Node &node, [[maybe_unused]] int depth) {
 				visitCalled = true;
 				return true;
 			},
@@ -671,7 +671,7 @@ TEST_F(GraphAlgorithmTest, BreadthFirstTraversal_DepthProgression) {
 
 	// Verify that all nodes at depth n are visited before any node at depth n+1
 	int currentDepth = 0;
-	for (const auto &[nodeId, depth]: visitOrder) {
+	for (const auto &depth: visitOrder | std::views::values) {
 		if (depth > currentDepth) {
 			// When depth increases, it should increase by exactly 1
 			EXPECT_EQ(depth, currentDepth + 1);

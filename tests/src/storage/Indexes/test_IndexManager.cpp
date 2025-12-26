@@ -62,6 +62,15 @@ protected:
 		return false;
 	}
 
+	bool hasIndexWithName(const std::string &targetName) {
+		auto list = indexManager->listIndexesDetailed();
+		for (const auto &[name, type, label, prop]: list) {
+			if (name == targetName)
+				return true;
+		}
+		return false;
+	}
+
 	fs::path testFilePath;
 	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
@@ -83,13 +92,19 @@ TEST_F(IndexManagerTest, CreateAndDropNamedIndex) {
 	EXPECT_TRUE(indexManager->hasPropertyIndex("node", "age"));
 
 	// 3. Verify Metadata Existence
-	auto list = indexManager->listIndexesDetailed();
-	ASSERT_EQ(list.size(), 1UL);
+	EXPECT_TRUE(hasIndexWithName("idx_user_age"));
 
-	EXPECT_EQ(std::get<0>(list[0]), "idx_user_age"); // Name
-	EXPECT_EQ(std::get<1>(list[0]), "node"); // Entity Type
-	EXPECT_EQ(std::get<2>(list[0]), "User"); // Label
-	EXPECT_EQ(std::get<3>(list[0]), "age"); // Property
+	auto list = indexManager->listIndexesDetailed();
+	bool found = false;
+	for (const auto &row: list) {
+		if (std::get<0>(row) == "idx_user_age") {
+			EXPECT_EQ(std::get<1>(row), "node");
+			EXPECT_EQ(std::get<2>(row), "User");
+			EXPECT_EQ(std::get<3>(row), "age");
+			found = true;
+		}
+	}
+	EXPECT_TRUE(found);
 
 	// 4. Drop by Name
 	bool dropped = indexManager->dropIndexByName("idx_user_age");
@@ -97,7 +112,7 @@ TEST_F(IndexManagerTest, CreateAndDropNamedIndex) {
 
 	// 5. Verify Removal
 	EXPECT_FALSE(indexManager->hasPropertyIndex("node", "age"));
-	EXPECT_TRUE(indexManager->listIndexesDetailed().empty());
+	EXPECT_FALSE(hasIndexWithName("idx_user_age"));
 }
 
 TEST_F(IndexManagerTest, DropIndexByDefinition) {
@@ -106,8 +121,16 @@ TEST_F(IndexManagerTest, DropIndexByDefinition) {
 
 	// Verify it exists (auto-generated name)
 	auto list = indexManager->listIndexesDetailed();
-	ASSERT_EQ(list.size(), 1UL);
-	std::string autoName = std::get<0>(list[0]);
+	bool found = false;
+	std::string autoName;
+	for (const auto &row: list) {
+		if (std::get<1>(row) == "node" && std::get<2>(row) == "Product" && std::get<3>(row) == "sku") {
+			autoName = std::get<0>(row);
+			found = true;
+			break;
+		}
+	}
+	EXPECT_TRUE(found);
 	EXPECT_FALSE(autoName.empty());
 
 	// 2. Drop by Definition (Simulating DROP INDEX ON :Product(sku))
@@ -115,7 +138,15 @@ TEST_F(IndexManagerTest, DropIndexByDefinition) {
 	EXPECT_TRUE(dropped);
 
 	// 3. Verify Removal
-	EXPECT_TRUE(indexManager->listIndexesDetailed().empty());
+	list = indexManager->listIndexesDetailed();
+	found = false;
+	for (const auto &row: list) {
+		if (std::get<1>(row) == "node" && std::get<2>(row) == "Product" && std::get<3>(row) == "sku") {
+			found = true;
+			break;
+		}
+	}
+	EXPECT_FALSE(found);
 }
 
 TEST_F(IndexManagerTest, DuplicateIndexCreation) {
@@ -322,8 +353,14 @@ TEST_F(IndexManagerTest, PersistenceAfterRestart) {
 
 	// 4. Verify Metadata Loaded
 	auto list = newIndexMgr->listIndexesDetailed();
-	ASSERT_EQ(list.size(), 1UL);
-	EXPECT_EQ(std::get<0>(list[0]), "idx_persist");
+	bool found = false;
+	for (const auto &row: list) {
+		if (std::get<0>(row) == "idx_persist") {
+			found = true;
+			break;
+		}
+	}
+	EXPECT_TRUE(found);
 
 	// 5. Verify Data Searchable
 	auto res = newIndexMgr->findNodeIdsByProperty("val", std::string("test"));

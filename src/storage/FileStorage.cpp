@@ -621,7 +621,7 @@ namespace graph::storage {
 			save();
 
 			// Only check for compaction if delete operations occurred
-			if (deleteOperationPerformed.load()) {
+			if (deleteOperationPerformed.load() && compactionEnabled_.load()) {
 				if (spaceManager->shouldCompact()) {
 					// Use the thread-safe compaction method
 

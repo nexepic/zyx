@@ -43,7 +43,7 @@ protected:
         );
 
         // 4. Create the SystemConfigManager instance under test
-        configManager = std::make_shared<SystemConfigManager>(stateManager);
+        configManager = std::make_shared<SystemConfigManager>(stateManager, database->getStorage());
 
         // 5. Ensure Log is in a known state (INFO/False) before each test
         log::Log::setDebug(false);

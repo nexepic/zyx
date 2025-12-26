@@ -9,6 +9,8 @@
  **/
 
 #include "graph/storage/data/BaseEntityManager.hpp"
+
+#include "graph/log/Log.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
 #include "graph/storage/data/PropertyManager.hpp"
@@ -16,34 +18,35 @@
 namespace graph::storage {
 
 	template<typename EntityType>
-    void BaseEntityManager<EntityType>::add(EntityType &entity) {
-        const auto dataManager = dataManager_.lock();
-        if (!dataManager) return;
+	void BaseEntityManager<EntityType>::add(EntityType &entity) {
+		const auto dataManager = dataManager_.lock();
+		if (!dataManager)
+			return;
 
-        if (entity.getId() == 0) {
-            int64_t newId = doAllocateId();
-            entity.setId(newId);
-        }
+		if (entity.getId() == 0) {
+			int64_t newId = doAllocateId();
+			entity.setId(newId);
+		}
 
-        EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
+		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
 
-        // REFACTORED: Use addToDirty instead of accessing map
-        EntityTraits<EntityType>::addToDirty(dataManager.get(),
-            DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
-
-        dataManager->checkAndTriggerAutoFlush();
-    }
+		// REFACTORED: Use addToDirty instead of accessing map
+		EntityTraits<EntityType>::addToDirty(dataManager.get(),
+											 DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
+	}
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::update(const EntityType &entity) {
 		const auto dataManager = dataManager_.lock();
-		if (!dataManager) return;
+		if (!dataManager)
+			return;
 
 		if (entity.getId() == 0) {
 			return;
 		}
 
-		if (!entity.isActive()) throw std::runtime_error("Update inactive entity");
+		if (!entity.isActive())
+			throw std::runtime_error("Update inactive entity");
 
 		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
 
@@ -52,10 +55,10 @@ namespace graph::storage {
 
 		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
 			EntityTraits<EntityType>::addToDirty(dataManager.get(),
-				DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
+												 DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
 		} else {
 			EntityTraits<EntityType>::addToDirty(dataManager.get(),
-				DirtyEntityInfo<EntityType>(EntityChangeType::MODIFIED, entity));
+												 DirtyEntityInfo<EntityType>(EntityChangeType::MODIFIED, entity));
 		}
 
 		dataManager->checkAndTriggerAutoFlush();
@@ -68,7 +71,8 @@ namespace graph::storage {
 		}
 		// Call the virtual method that can be overridden by subclasses
 		doRemove(entity);
-		std::cout << "entity " << entity.getId() << " removed" << std::endl;
+		log::Log::debug("Entity of type {} with ID {} marked for deletion.",
+						std::to_string(EntityTraits<EntityType>::typeId), entity.getId());
 
 		// Mark that a deletion has been performed
 		if (const auto dataManager = dataManager_.lock()) {

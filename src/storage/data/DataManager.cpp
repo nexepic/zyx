@@ -664,7 +664,9 @@ namespace graph::storage {
 		persistenceManager_->setAutoFlushCallback(std::move(cb));
 	}
 
-	void DataManager::checkAndTriggerAutoFlush() const { persistenceManager_->checkAndTriggerAutoFlush(); }
+	void DataManager::checkAndTriggerAutoFlush() const {
+		persistenceManager_->checkAndTriggerAutoFlush();
+	}
 
 	template<typename EntityType>
 	std::vector<DirtyEntityInfo<EntityType>>

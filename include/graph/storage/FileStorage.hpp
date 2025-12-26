@@ -113,6 +113,14 @@ namespace graph::storage {
 			return std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
 		}
 
+		void setCompactionEnabled(bool enabled) {
+			compactionEnabled_.store(enabled);
+		}
+
+		bool isCompactionEnabled() const {
+			return compactionEnabled_.load();
+		}
+
 	private:
 		std::string dbFilePath;
 		std::unordered_map<uint64_t, Node> nodes;
@@ -167,5 +175,7 @@ namespace graph::storage {
 		std::mutex flushMutex;
 		std::atomic<bool> flushInProgress{false};
 		std::atomic<bool> deleteOperationPerformed{false};
+
+		std::atomic<bool> compactionEnabled_{false};
 	};
 } // namespace graph::storage
