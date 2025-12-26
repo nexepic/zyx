@@ -10,87 +10,80 @@
 
 #pragma once
 
+#include <vector>
+#include <string>
 #include <functional>
 #include <memory>
-#include <string>
-#include <vector>
 #include "graph/core/Node.hpp"
 #include "graph/storage/data/DataManager.hpp"
-#include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::query::algorithm {
 
-	class GraphAlgorithm {
-	public:
-		explicit GraphAlgorithm(std::shared_ptr<storage::DataManager> dataManager);
+    class GraphAlgorithm {
+    public:
+        explicit GraphAlgorithm(std::shared_ptr<storage::DataManager> dataManager);
 
-		/**
-		 * Finds nodes connected to the given node with optional filtering.
-		 * (Original implementation preserved)
-		 */
-		std::vector<Node> findConnectedNodes(
-			int64_t startNodeId,
-			const std::string& direction = "both",
-			const std::string& edgeLabel = "",
-			const std::string& nodeLabel = ""
-		) const;
+        /**
+         * @brief Finds the shortest path between two nodes (Unweighted BFS).
+         *        OPTIMIZED: Uses ID-only traversal.
+         * @return Path as a list of fully hydrated Nodes.
+         */
+        std::vector<Node> findShortestPath(
+            int64_t startNodeId,
+            int64_t endNodeId,
+            const std::string& direction = "both",
+            int maxDepth = 15
+        ) const;
 
-		/**
-		 * Finds the shortest path between two nodes using Dijkstra (unweighted).
-		 * (Original implementation preserved)
-		 */
-		std::vector<Node> findShortestPath(
-			int64_t startNodeId,
-			int64_t endNodeId,
-			const std::string& direction = "both"
-		) const;
+        /**
+         * @brief Finds all reachable target nodes within depth range.
+         *        Used for variable length patterns: (a)-[*min..max]->(b).
+         */
+        std::vector<Node> findAllPaths(
+            int64_t startNodeId,
+            int minDepth,
+            int maxDepth,
+            const std::string& edgeLabel = "",
+            const std::string& direction = "out"
+        ) const;
 
-		/**
-		 * Performs a breadth-first traversal of the graph.
-		 * (Original implementation preserved)
-		 */
-		void breadthFirstTraversal(
-			int64_t startNodeId,
-			const std::function<bool(const Node&, int)>& visitFn,
-			int maxDepth = 10,
-			const std::string& direction = "both"
-		) const;
+        /**
+         * @brief Performs BFS traversal.
+         *        CHANGED: The visitor now receives (int64_t nodeId, int depth).
+         *        REASON: Passing 'Node' object implies loading properties from disk,
+         *                which makes traversal 10x-100x slower.
+         *                The caller should hydrate only if needed.
+         */
+        void breadthFirstTraversal(
+            int64_t startNodeId,
+            std::function<bool(int64_t nodeId, int depth)> visitor,
+            const std::string& direction = "both"
+        ) const;
 
-		/**
-		 * @brief Finds all paths from a start node within a depth range.
-		 *        Used for variable length pattern matching: (a)-[*min..max]->(b).
-		 *
-		 * @param startNodeId Source node.
-		 * @param minDepth Minimum hops (e.g., 1).
-		 * @param maxDepth Maximum hops (e.g., 5).
-		 * @param edgeLabel Filter edges by this label (empty for any).
-		 * @param direction Direction of traversal.
-		 * @return A list of found Target Nodes (b).
-		 *         (Future improvement: Return full Path objects).
-		 */
-		std::vector<Node> findAllPaths(
-			int64_t startNodeId,
-			int minDepth,
-			int maxDepth,
-			const std::string& edgeLabel = "",
-			const std::string& direction = "out"
-		) const;
+        // DFS implementation (optional, good to have)
+        void depthFirstTraversal(
+            int64_t startNodeId,
+            std::function<bool(int64_t nodeId, int depth)> visitor,
+            const std::string& direction = "both"
+        ) const;
 
-	private:
-		std::shared_ptr<storage::DataManager> dataManager_;
-		std::shared_ptr<traversal::RelationshipTraversal> traversal_;
+    private:
+        std::shared_ptr<storage::DataManager> dm_;
 
-		// Internal recursive DFS helper
-		void dfsVariableLength(
-			int64_t currentId,
-			int currentDepth,
-			int minDepth,
-			int maxDepth,
-			const std::string& edgeLabel,
-			const std::string& direction,
-			std::vector<int64_t>& visitedPath, // To prevent loops
-			std::vector<Node>& results
-		) const;
-	};
+        // Internal helper: Fast neighbor lookup (ID only)
+        std::vector<int64_t> getNeighbors(int64_t nodeId, const std::string& direction, const std::string& edgeLabel = "") const;
+
+        // Internal helper: Recursive DFS
+        void dfsVariableLength(
+            int64_t currentId,
+            int currentDepth,
+            int minDepth,
+            int maxDepth,
+            const std::string& edgeLabel,
+            const std::string& direction,
+            std::vector<int64_t>& visitedPath,
+            std::vector<int64_t>& resultIds
+        ) const;
+    };
 
 } // namespace graph::query::algorithm

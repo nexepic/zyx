@@ -179,23 +179,23 @@ TEST_F(IDAllocatorTest, AllocateId_Returns_MemoryOnly_ID_Direct) {
 
 TEST_F(IDAllocatorTest, LazyLoadFromDiskAfterRestart) {
 	// 1. Setup Data
-	(void) fileStorage->insertNode("A"); // 1
-	(void) fileStorage->insertNode("B"); // 2
-	(void) fileStorage->insertNode("C"); // 3
+	(void) insertNode("A"); // 1
+	(void) insertNode("B"); // 2
+	(void) insertNode("C"); // 3
 
 	// Use save() instead of flush() to persist data WITHOUT triggering compaction.
 	// Compaction would re-map IDs (3->2) and ruin the test assumption.
 	fileStorage->save();
 
 	// 2. Delete ID 2 and Persist
-	fileStorage->deleteNode(2);
+	deleteNode(2);
 	fileStorage->save(); // Persist bitmap change
 
 	// 3. Simulate Restart/OOM
 	allocator->clearAllCaches();
 
 	// 4. Allocate -> Should trigger fetchInactiveIdsFromDisk and find ID 2
-	graph::Node nLazy = fileStorage->insertNode("Lazy");
+	graph::Node nLazy = insertNode("Lazy");
 
 	EXPECT_EQ(nLazy.getId(), 2) << "Failed to lazy-load ID 2 from disk bitmap";
 }
@@ -227,24 +227,24 @@ TEST_F(IDAllocatorTest, L1CacheOverflowToL2) {
 
 	// 1. Insert 200 nodes
 	for (int i = 0; i < COUNT; ++i) {
-		(void) fileStorage->insertNode("N");
+		(void) insertNode("N");
 	}
 	fileStorage->save();
 
 	// 2. Delete all 200 nodes
 	for (int i = 1; i <= COUNT; ++i) {
-		fileStorage->deleteNode(i);
+		deleteNode(i);
 	}
 
 	// 3. Re-allocate 200 nodes
 	// Logic check: Should reuse ALL IDs without increasing max ID > 200
 	for (int i = 0; i < COUNT; ++i) {
-		graph::Node n = fileStorage->insertNode("Re");
+		graph::Node n = insertNode("Re");
 		EXPECT_LE(n.getId(), COUNT) << "ID leaked! Allocated " << n.getId();
 	}
 
 	// 4. Verify next is new
-	graph::Node nNext = fileStorage->insertNode("New");
+	graph::Node nNext = insertNode("New");
 	EXPECT_EQ(nNext.getId(), COUNT + 1);
 }
 

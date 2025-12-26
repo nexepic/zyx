@@ -48,21 +48,6 @@ namespace graph::storage {
 
 		uint64_t allocateSegment(uint32_t type, uint32_t capacity) const;
 
-		// Node operations
-		Node insertNode(const std::string &label) const;
-
-		// Edge operations
-		Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const;
-
-		void insertProperties(int64_t entityId, uint32_t entityType,
-							  const std::unordered_map<std::string, PropertyValue> &properties) const;
-
-		void updateNode(const Node &node) const;
-		void updateEdge(const Edge &edge) const;
-
-		void deleteNode(int64_t nodeId);
-		void deleteEdge(int64_t edgeId);
-
 		static void beginWrite();
 		void commitWrite();
 		static void rollbackWrite();
@@ -70,26 +55,11 @@ namespace graph::storage {
 		// Cache management
 		void clearCache() const;
 
-		// Get a single node by ID (uses cache)
-		Node getNode(int64_t id);
-
-		// Get a single edge by ID (uses cache)
-		Edge getEdge(int64_t id);
-
-		std::unordered_map<int64_t, Node> getAllNodes();
-		std::unordered_map<int64_t, Edge> getAllEdges();
-
 		template<typename T>
 		void updateEntityInPlace(const T &entity, uint64_t knownSegmentOffset = 0);
 
 		template<typename T>
 		void deleteEntityOnDisk(const T &entity);
-
-		// Get all properties for a node
-		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId);
-
-		// Get all properties for an edge
-		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId);
 
 		// isFileOpen getter
 		[[nodiscard]] bool isOpen() const { return isFileOpen; }
@@ -113,13 +83,9 @@ namespace graph::storage {
 			return std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
 		}
 
-		void setCompactionEnabled(bool enabled) {
-			compactionEnabled_.store(enabled);
-		}
+		void setCompactionEnabled(bool enabled) { compactionEnabled_.store(enabled); }
 
-		bool isCompactionEnabled() const {
-			return compactionEnabled_.load();
-		}
+		bool isCompactionEnabled() const { return compactionEnabled_.load(); }
 
 	private:
 		std::string dbFilePath;

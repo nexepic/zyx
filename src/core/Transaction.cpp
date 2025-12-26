@@ -16,13 +16,13 @@ namespace graph {
 	Transaction::Transaction(const Database &db) : storage(db.getStorage()) { storage::FileStorage::beginWrite(); }
 
 	Node Transaction::insertNode(const std::string &label) const {
-		Node node = storage->insertNode(label);
-		return node;
+		// Node node = storage->insertNode(label);
+		// return node;
 	}
 
 	Edge Transaction::insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const {
-		Edge edge = storage->insertEdge(from, to, label);
-		return edge;
+		// Edge edge = storage->insertEdge(from, to, label);
+		// return edge;
 	}
 
 	void Transaction::commit() const { storage->commitWrite(); }

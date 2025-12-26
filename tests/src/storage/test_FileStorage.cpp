@@ -66,20 +66,6 @@ TEST_F(FileStorageTest, TestOpenClose) {
 	EXPECT_FALSE(fileStorage->isOpen());
 }
 
-TEST_F(FileStorageTest, TestInsertNode) {
-	const graph::Node node = fileStorage->insertNode("TestNode");
-	const graph::Node retrievedNode = fileStorage->getNode(node.getId());
-	EXPECT_EQ(retrievedNode.getId(), node.getId());
-	EXPECT_EQ(retrievedNode.getLabel(), node.getLabel());
-}
-
-TEST_F(FileStorageTest, TestInsertEdge) {
-	const graph::Edge edge = fileStorage->insertEdge(1, 2, "TestEdge");
-	const graph::Edge retrievedEdge = fileStorage->getEdge(edge.getId());
-	EXPECT_EQ(retrievedEdge.getId(), edge.getId());
-	EXPECT_EQ(retrievedEdge.getLabel(), edge.getLabel());
-}
-
 TEST_F(FileStorageTest, SaveDataEmpty) {
 	std::unordered_map<int64_t, graph::Node> data;
 	uint64_t segmentHead = 0;

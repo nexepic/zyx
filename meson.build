@@ -23,6 +23,7 @@ antlr4_dep = dependency('antlr4-cppruntime', 'antlr4-runtime', required : true)
 # Subdirectories
 subdir('src')
 subdir('apps/cli')
+subdir('apps/benchmark')
 
 if not meson.is_subproject()
 	subdir('tests')

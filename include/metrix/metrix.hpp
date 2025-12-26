@@ -115,6 +115,8 @@ namespace metrix {
 		 */
     	std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15);
 
+    	void bfs(int64_t startNodeId, std::function<bool(const Node&)> visitor);
+
     private:
         std::unique_ptr<DatabaseImpl> impl_;
     };

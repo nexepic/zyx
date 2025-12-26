@@ -18,266 +18,205 @@
 
 namespace metrix {
 
-    // --- Helper: Type Conversion ---
+	// --- Helpers: Type Conversion ---
 
-    // Convert public API Value to internal PropertyValue
-    graph::PropertyValue toInternal(const Value& v) {
-        return std::visit([](auto&& arg) -> graph::PropertyValue {
-            return graph::PropertyValue(arg);
-        }, v);
-    }
+	graph::PropertyValue toInternal(const Value &v) {
+		return std::visit([](auto &&arg) -> graph::PropertyValue { return graph::PropertyValue(arg); }, v);
+	}
 
-    // Convert internal PropertyValue to public API Value
-    Value toPublic(const graph::PropertyValue& v) {
-        // Simplified conversion. In a full implementation, you should check
-        // the type of PropertyValue and convert precisely.
-        return v.toString();
-    }
+	Value toPublic(const graph::PropertyValue &v) {
+		// Use variant internal visit to extract raw value
+		// Note: Make sure PropertyValue has a way to expose raw data or visit it.
+		// Assuming toPublicValue helper logic is integrated here or PropertyValue exposes getter.
+		// For now using toString based on your previous code, but variant copy is better:
+		return v.toString();
+	}
 
-	// Helper: Convert Internal PropertyValue to Public Value
-	Value toPublicValue(const graph::PropertyValue& v) {
-    	return std::visit([](auto&& arg) -> Value {
-			return arg; // std::variant conversion
-		}, v.getVariant());
-    }
+	// Explicit helper for PropertyValue -> Value variant conversion
+	Value toPublicValue(const graph::PropertyValue &v) {
+		return std::visit([](auto &&arg) -> Value { return arg; }, v.getVariant());
+	}
 
-	// Helper: Convert Internal Node to Public Node
-	Node toPublicNode(const graph::Node& internalNode) {
-        Node pubNode;
-        pubNode.id = internalNode.getId();
-        pubNode.label = internalNode.getLabel();
+	Node toPublicNode(const graph::Node &internalNode) {
+		Node pubNode;
+		pubNode.id = internalNode.getId();
+		pubNode.label = internalNode.getLabel();
+		for (const auto &[key, val]: internalNode.getProperties()) {
+			pubNode.properties[key] = toPublicValue(val);
+		}
+		return pubNode;
+	}
 
-        for (const auto& [key, val] : internalNode.getProperties()) {
-            pubNode.properties[key] = toPublicValue(val);
-        }
-        return pubNode;
-    }
+	// --- ResultImpl ---
 
-    // --- ResultImpl Definition ---
+	class ResultImpl {
+	public:
+		explicit ResultImpl(graph::query::QueryResult internalRes) : result_(std::move(internalRes)) {}
+		graph::query::QueryResult result_;
+		size_t cursor_ = 0;
+	};
 
-    class ResultImpl {
-    public:
-        explicit ResultImpl(graph::query::QueryResult internalRes)
-            : result_(std::move(internalRes)) {}
+	Result::~Result() = default;
+	Result::Result() = default;
+	Result::Result(Result &&) noexcept = default;
+	Result &Result::operator=(Result &&) noexcept = default;
 
-        graph::query::QueryResult result_;
-        size_t cursor_ = 0;
-    };
+	bool Result::hasNext() { return impl_ && impl_->cursor_ < impl_->result_.rowCount(); }
 
-    // --- Result Method Implementations ---
+	void Result::next() {
+		if (impl_)
+			impl_->cursor_++;
+	}
 
-    // Destructor must be here where ResultImpl is visible
-    Result::~Result() = default;
+	Value Result::get(const std::string &key) const {
+		if (!impl_)
+			return std::monostate{};
+		const auto &rows = impl_->result_.getRows();
+		if (impl_->cursor_ >= rows.size())
+			return std::monostate{};
 
-    // Default constructor
-    Result::Result() = default;
+		const auto &row = rows[impl_->cursor_];
+		auto it = row.find(key);
+		if (it != row.end())
+			return toPublicValue(it->second);
+		return std::monostate{};
+	}
 
-    // Move constructor
-    Result::Result(Result&&) noexcept = default;
-    Result& Result::operator=(Result&&) noexcept = default;
+	bool Result::isSuccess() const { return true; }
+	std::string Result::getError() const { return ""; }
 
-    bool Result::hasNext() {
-        if (!impl_) return false;
-        // Check if cursor is within bounds of rows
-        return impl_->cursor_ < impl_->result_.rowCount();
-    }
+	// --- DatabaseImpl Definition ---
 
-    void Result::next() {
-        if (impl_) impl_->cursor_++;
-    }
+	class DatabaseImpl {
+	public:
+		DatabaseImpl(const std::string &path) : db_(path) {}
 
-    Value Result::get(const std::string& key) const {
-        if (!impl_) return std::monostate{};
+		graph::Database db_;
+	};
 
-        const auto& rows = impl_->result_.getRows();
-        if (impl_->cursor_ >= rows.size()) return std::monostate{};
+	// --- Database Method Implementations ---
 
-        const auto& row = rows[impl_->cursor_];
-        auto it = row.find(key);
-        if (it != row.end()) {
-            return toPublic(it->second);
-        }
-        return std::monostate{};
-    }
+	Database::Database(const std::string &path) : impl_(std::make_unique<DatabaseImpl>(path)) {}
 
-    bool Result::isSuccess() const { return true; } // Placeholder
-    std::string Result::getError() const { return ""; } // Placeholder
+	Database::~Database() = default;
 
-    // --- DatabaseImpl Definition ---
+	void Database::open() { impl_->db_.open(); }
+	void Database::close() { impl_->db_.close(); }
 
-    class DatabaseImpl {
-    public:
-        DatabaseImpl(const std::string& path, graph::storage::OpenMode mode)
-            : db_(path, mode) {}
+	void Database::save() {
+		if (auto storage = impl_->db_.getStorage()) {
+			storage->flush();
+		}
+	}
 
-        // The internal engine instance
-        graph::Database db_;
-    };
+	Result Database::execute(const std::string &cypher) {
+		try {
+			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
+			return res;
+		} catch (...) {
+			return Result();
+		}
+	}
 
-    // --- Database Method Implementations ---
+	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) {
+		auto builder = impl_->db_.getQueryEngine()->query();
+		std::unordered_map<std::string, graph::PropertyValue> internalProps;
+		for (const auto &[k, v]: props)
+			internalProps[k] = toInternal(v);
 
-	Database::Database(const std::string& path)
-		: impl_(std::make_unique<DatabaseImpl>(path, graph::storage::OpenMode::CREATE_OR_OPEN)) {}
+		auto plan = builder.create_("n", label, internalProps).build();
+		impl_->db_.getQueryEngine()->execute(std::move(plan));
+	}
 
-    // [CRITICAL] The destructor is implemented HERE, where DatabaseImpl is fully defined.
-    // This allows unique_ptr to correctly call delete on DatabaseImpl.
-    Database::~Database() = default;
+	int64_t Database::createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props) {
+		auto storage = impl_->db_.getStorage();
+		auto dm = storage->getDataManager();
 
-    void Database::open() {
-        impl_->db_.open();
-    }
+		graph::Node node(0, label);
+		dm->addNode(node);
+		int64_t newId = node.getId();
 
-    void Database::close() {
-        impl_->db_.close();
-    }
+		if (!props.empty()) {
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v]: props)
+				internalProps[k] = toInternal(v);
+			dm->addNodeProperties(newId, internalProps);
+		}
+		return newId;
+	}
 
-    void Database::save() {
-        if (auto storage = impl_->db_.getStorage()) {
-            storage->flush();
-        }
-    }
+	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
+								  const std::unordered_map<std::string, Value> &props) {
+		auto storage = impl_->db_.getStorage();
+		auto dm = storage->getDataManager();
 
-    Result Database::execute(const std::string& cypher) {
-        try {
-            // 1. Execute query using internal engine
-            auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+		graph::Edge edge(0, sourceId, targetId, edgeLabel);
+		dm->addEdge(edge); // addEdge handles linking
 
-            // 2. Wrap result in Pimpl class
-            Result res;
-            res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
-            return res;
-        } catch (...) {
-            // In case of error, return an empty/error result
-            // (Proper error handling should capture the message)
-            return Result();
-        }
-    }
-
-    void Database::createNode(const std::string& label, const std::unordered_map<std::string, Value>& props) {
-        // 1. Get the QueryBuilder from the internal engine
-        auto builder = impl_->db_.getQueryEngine()->query();
-
-        // 2. Convert properties
-        std::unordered_map<std::string, graph::PropertyValue> internalProps;
-        for(const auto& [k, v] : props) {
-            internalProps[k] = toInternal(v);
-        }
-
-        // 3. Build the Physical Operator Plan (skip parsing)
-        auto plan = builder.create_("n", label, internalProps).build();
-
-        // 4. Execute the plan
-        // Note: ensure QueryEngine::execute(unique_ptr<PhysicalOperator>) is accessible
-        impl_->db_.getQueryEngine()->execute(std::move(plan));
-    }
-
-	void Database::createEdge(
-		const std::string& sourceLabel, const std::string& sourceKey, const Value& sourceVal,
-		const std::string& targetLabel, const std::string& targetKey, const Value& targetVal,
-		const std::string& edgeLabel, const std::unordered_map<std::string, Value>& props)
-    {
-    	// Bypass Parser!
-    	// Logic: MATCH (a:Src {k:v}), (b:Tgt {k:v}) CREATE (a)-[r:Type {props}]->(b)
-
-    	auto builder = impl_->db_.getQueryEngine()->query();
-
-    	std::unordered_map<std::string, graph::PropertyValue> edgeProps;
-    	for(const auto& [k, v] : props) edgeProps[k] = toInternal(v);
-
-    	// 1. Match Source
-    	builder.match_("a", sourceLabel).where_("a", sourceKey, toInternal(sourceVal));
-
-    	// 2. Match Target (This requires QueryBuilder to support multiple matches or we define a specialized operator)
-    	// Note: Your current QueryBuilder might need extending to support chaining Matches for creating edges efficiently.
-    	// For now, let's assume a simplified creation or implementation inside internal engine.
-
-    	// ... (Implementation details depend on QueryBuilder capabilities)
-    }
-
-	int64_t Database::createNodeRetId(const std::string& label, const std::unordered_map<std::string, Value>& props) {
-        auto storage = impl_->db_.getStorage();
-        auto dm = storage->getDataManager();
-
-        // 1. Create Node Object (ID 0 tells Manager to allocate)
-        graph::Node node(0, label);
-
-        // 2. Persist Node (Allocates ID, triggers OnNodeAdded observer)
-        dm->addNode(node);
-        int64_t newId = node.getId();
-
-        // 3. Add Properties (Triggers OnNodeUpdated observer)
-        if (!props.empty()) {
-            std::unordered_map<std::string, graph::PropertyValue> internalProps;
-            for (const auto& [k, v] : props) {
-                internalProps[k] = toInternal(v);
-            }
-            dm->addNodeProperties(newId, internalProps);
-        }
-
-        return newId;
-    }
-
-    void Database::createEdgeById(int64_t sourceId, int64_t targetId,
-                                  const std::string& edgeLabel,
-                                  const std::unordered_map<std::string, Value>& props) {
-        auto storage = impl_->db_.getStorage();
-        auto dm = storage->getDataManager();
-
-        // 1. Validation (Optional, but good for debugging tools)
-        // Ensure nodes actually exist to avoid corrupt graph topology
-        // Note: getNode() might throw or return empty if invalid.
-        // For max speed, you might skip this check if you trust your tool logic.
-        /*
-        auto src = dm->getNode(sourceId);
-        auto tgt = dm->getNode(targetId);
-        if (src.getId() == 0 || tgt.getId() == 0) {
-            throw std::runtime_error("Invalid Node IDs passed to createEdgeById");
-        }
-        */
-
-        // 2. Create Edge Object
-        // ID 0 -> Auto allocate
-        graph::Edge edge(0, sourceId, targetId, edgeLabel);
-
-        // 3. Persist Edge (Triggers OnEdgeAdded)
-        // NOTE: Ensure DataManager::addEdge calls linkEdge internally!
-        // Based on our previous fix, it does.
-        dm->addEdge(edge);
-
-        // 4. Add Properties
-        if (!props.empty()) {
-            std::unordered_map<std::string, graph::PropertyValue> internalProps;
-            for (const auto& [k, v] : props) {
-                internalProps[k] = toInternal(v);
-            }
-            dm->addEdgeProperties(edge.getId(), internalProps);
-        }
-    }
+		if (!props.empty()) {
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v]: props)
+				internalProps[k] = toInternal(v);
+			dm->addEdgeProperties(edge.getId(), internalProps);
+		}
+	}
 
 	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) {
-        try {
-            // 1. Get the DataManager from internal storage
-            auto storage = impl_->db_.getStorage();
-            if (!storage) return {};
-            auto dm = storage->getDataManager();
+		try {
+			auto storage = impl_->db_.getStorage();
+			if (!storage)
+				return {};
+			auto dm = storage->getDataManager();
 
-            // 2. Instantiate the Internal Algorithm
-            graph::query::algorithm::GraphAlgorithm algo(dm);
+			graph::query::algorithm::GraphAlgorithm algo(dm);
+			// Internal API: (start, end, direction, maxDepth)
+			auto internalPath = algo.findShortestPath(startId, endId, "both", maxDepth);
 
-            // 3. Execute Internal Logic
-            auto internalPath = algo.findShortestPath(startId, endId, "both");
+			std::vector<Node> publicPath;
+			publicPath.reserve(internalPath.size());
+			for (const auto &n: internalPath) {
+				publicPath.push_back(toPublicNode(n));
+			}
+			return publicPath;
+		} catch (...) {
+			return {};
+		}
+	}
 
-            // 4. Convert to Public Types
-            std::vector<Node> publicPath;
-            publicPath.reserve(internalPath.size());
-            for (const auto& n : internalPath) {
-                publicPath.push_back(toPublicNode(n));
-            }
+	// BFS Implementation
+	void Database::bfs(int64_t startNodeId, std::function<bool(const Node &)> visitor) {
+		try {
+			auto storage = impl_->db_.getStorage();
+			if (!storage)
+				return;
+			auto dm = storage->getDataManager();
 
-            return publicPath;
-        } catch (...) {
-            return {}; // Return empty path on error
-        }
-    }
+			graph::query::algorithm::GraphAlgorithm algo(dm);
+
+			// Bridge Internal ID-based callback -> Public Node-based callback
+			auto internalVisitor = [&](int64_t nodeId, int depth) -> bool {
+				// 1. Fetch Node Header
+				graph::Node internalNode = dm->getNode(nodeId);
+
+				// 2. Hydrate Properties (Lazy Load)
+				// We load properties because the public API expects a full Node object
+				internalNode.setProperties(dm->getNodeProperties(nodeId));
+
+				// 3. Convert to Public
+				Node publicNode = toPublicNode(internalNode);
+
+				// 4. Invoke User Callback
+				return visitor(publicNode);
+			};
+
+			// Call internal algorithm
+			algo.breadthFirstTraversal(startNodeId, internalVisitor, "both");
+
+		} catch (...) {
+			// Log error
+		}
+	}
 
 } // namespace metrix
