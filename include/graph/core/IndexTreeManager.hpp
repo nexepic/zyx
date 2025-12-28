@@ -69,12 +69,12 @@ namespace graph::query::indexes {
 		/**
 		 * Removes a key-value pair from the tree
 		 *
-		 * @param rootId ID of the root node
+		 * @param rootId Reference to the ID of the root node (may change due to collapse)
 		 * @param key The key to remove
 		 * @param value The value to remove
 		 * @return true if the pair was found and removed
 		 */
-		bool remove(int64_t rootId, const PropertyValue &key, int64_t value);
+		bool remove(int64_t& rootId, const PropertyValue &key, int64_t value);
 
 		/**
 		 * Finds all values associated with a key

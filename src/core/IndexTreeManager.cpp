@@ -10,7 +10,6 @@
 
 #include "graph/core/IndexTreeManager.hpp"
 #include <algorithm>
-#include <cassert>
 #include <ranges>
 #include <stdexcept>
 #include "graph/storage/data/BlobManager.hpp"
@@ -22,7 +21,6 @@ namespace graph::query::indexes {
 		switch (type) {
 			case PropertyType::INTEGER:
 				return [](const auto &a, const auto &b) {
-					// Ensure we're comparing the actual integer values
 					return std::get<int64_t>(a.getVariant()) < std::get<int64_t>(b.getVariant());
 				};
 			case PropertyType::DOUBLE:
@@ -49,8 +47,6 @@ namespace graph::query::indexes {
 
 	int64_t IndexTreeManager::initialize() const {
 		std::unique_lock lock(mutex_);
-
-		// Create a new root node as a leaf
 		return createNewNode(Index::NodeType::LEAF);
 	}
 
@@ -61,34 +57,28 @@ namespace graph::query::indexes {
 		std::vector<int64_t> toDelete;
 		toDelete.push_back(rootId);
 
-		// Use an index-based loop because the vector grows during iteration.
 		for (size_t i = 0; i < toDelete.size(); ++i) {
 			auto entity = dataManager_->getIndex(toDelete[i]);
 			if (entity.getId() == 0)
 				continue;
 
-			// For any node, we must clean up blobs it might own.
 			if (entity.isLeaf()) {
 				auto allEntries = entity.getAllEntries(dataManager_);
 				for (const auto &entry: allEntries) {
-					// Clean up blobs for both keys and values, not just values.
-					if (entry.keyBlobId != 0) {
+					if (entry.keyBlobId != 0)
 						dataManager_->getBlobManager()->deleteBlobChain(entry.keyBlobId);
-					}
-					if (entry.valuesBlobId != 0) {
+					if (entry.valuesBlobId != 0)
 						dataManager_->getBlobManager()->deleteBlobChain(entry.valuesBlobId);
-					}
 				}
-			} else { // Internal node
+			} else {
 				auto allChildren = entity.getAllChildren(dataManager_);
 				for (const auto &child: allChildren) {
-					if (child.keyBlobId != 0) {
+					if (child.keyBlobId != 0)
 						dataManager_->getBlobManager()->deleteBlobChain(child.keyBlobId);
-					}
 					toDelete.push_back(child.childId);
 				}
 			}
-			dataManager_->deleteIndex(entity); // Finally, delete the index node itself
+			dataManager_->deleteIndex(entity);
 		}
 	}
 
@@ -106,56 +96,44 @@ namespace graph::query::indexes {
 			auto current = dataManager_->getIndex(currentId);
 			if (current.isLeaf())
 				return currentId;
-			// Pass dataManager to findChild
 			int64_t childId = current.findChild(key, dataManager_, keyComparator_);
 			if (childId == 0)
-				return 0; // Should not happen in a healthy tree
+				return 0;
 			currentId = childId;
 		}
 	}
 
 	void IndexTreeManager::splitLeaf(Index &leaf, const PropertyValue &newKey, int64_t newValue, int64_t &rootId) {
-		// Get all current entries
 		auto allEntries = leaf.getAllEntries(dataManager_);
-
-		// Find the position to insert the new entry
 		auto it = std::lower_bound(
 				allEntries.begin(), allEntries.end(), newKey,
 				[&](const Index::Entry &a, const PropertyValue &b) { return keyComparator_(a.key, b); });
 
-		// Check if the key already exists
 		bool keyExists =
 				(it != allEntries.end() && !keyComparator_(newKey, it->key) && !keyComparator_(it->key, newKey));
 
 		if (keyExists) {
-			// Key exists - just add the value if it's not already there
 			if (std::find(it->values.begin(), it->values.end(), newValue) == it->values.end()) {
 				it->values.push_back(newValue);
 			}
 		} else {
-			// Insert new entry
 			allEntries.insert(it, {newKey, {newValue}, 0, 0});
 		}
 
-		// Create a new sibling leaf node
 		int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
 		auto newLeaf = dataManager_->getIndex(newLeafId);
 		newLeaf.setLevel(leaf.getLevel());
 		newLeaf.setParentId(leaf.getParentId());
 
-		// Find split point
 		size_t midPointIdx = allEntries.size() / 2;
 		PropertyValue promotedKey = allEntries[midPointIdx].key;
 
-		// Distribute entries
 		std::vector<Index::Entry> leftEntries(allEntries.begin(), allEntries.begin() + midPointIdx);
 		std::vector<Index::Entry> rightEntries(allEntries.begin() + midPointIdx, allEntries.end());
 
-		// Update both nodes with their new entries
 		leaf.setAllEntries(leftEntries, dataManager_);
 		newLeaf.setAllEntries(rightEntries, dataManager_);
 
-		// Update the leaf node chain
 		newLeaf.setNextLeafId(leaf.getNextLeafId());
 		newLeaf.setPrevLeafId(leaf.getId());
 		if (leaf.getNextLeafId() != 0) {
@@ -165,17 +143,14 @@ namespace graph::query::indexes {
 		}
 		leaf.setNextLeafId(newLeafId);
 
-		// Save the nodes
 		dataManager_->updateIndexEntity(leaf);
 		dataManager_->updateIndexEntity(newLeaf);
 
-		// Insert the promoted key into the parent
 		insertIntoParent(leaf, promotedKey, newLeafId, rootId);
 	}
 
 	void IndexTreeManager::insertIntoParent(Index &leftNode, const PropertyValue &key, int64_t rightNodeId,
 											int64_t &rootId) {
-		// Case 1: The left node was the root. A new root must be created.
 		if (leftNode.getParentId() == 0) {
 			int64_t newRootId = createNewNode(Index::NodeType::INTERNAL);
 			auto newRoot = dataManager_->getIndex(newRootId);
@@ -188,14 +163,10 @@ namespace graph::query::indexes {
 			leftNodeFromDb.setParentId(newRootId);
 			rightNodeFromDb.setParentId(newRootId);
 
-			// The new child entry to be inserted into the new root.
 			Index::ChildEntry newChildEntry{key, rightNodeId, 0};
-
-			// The first child has an implicit, "negative infinity" key.
 			Index::ChildEntry firstChild{PropertyValue(std::monostate{}), leftNode.getId(), 0};
 
 			std::vector<Index::ChildEntry> children = {firstChild, newChildEntry};
-			// Let replaceAllChildren handle blob creation for `newChildEntry.key` if needed.
 			newRoot.setAllChildren(children, dataManager_);
 
 			dataManager_->updateIndexEntity(leftNodeFromDb);
@@ -204,11 +175,9 @@ namespace graph::query::indexes {
 			return;
 		}
 
-		// Case 2: Parent exists.
 		auto parent = dataManager_->getIndex(leftNode.getParentId());
 		Index::ChildEntry newChildEntry{key, rightNodeId, 0};
 
-		// If parent is not full, just add the new child.
 		if (!parent.wouldInternalOverflowOnAddChild(newChildEntry, dataManager_)) {
 			parent.addChild(newChildEntry, dataManager_, keyComparator_);
 			auto rightNode = dataManager_->getIndex(rightNodeId);
@@ -216,42 +185,32 @@ namespace graph::query::indexes {
 			dataManager_->updateIndexEntity(parent);
 			dataManager_->updateIndexEntity(rightNode);
 		} else {
-			// Case 3: Parent is full and must also be split ("Push-Up").
 			auto allChildren = parent.getAllChildren(dataManager_);
 			auto it = std::lower_bound(
 					allChildren.begin() + 1, allChildren.end(), key,
 					[&](const Index::ChildEntry &a, const PropertyValue &b) { return keyComparator_(a.key, b); });
 			allChildren.insert(it, newChildEntry);
 
-			// The median entry is PUSHED UP. Its key goes to the grandparent,
-			// and it is REMOVED from this level.
 			size_t midPointIdx = allChildren.size() / 2;
 			Index::ChildEntry promotedEntry = std::move(allChildren[midPointIdx]);
 
-			// Create the new sibling internal node.
 			int64_t newInternalId = createNewNode(Index::NodeType::INTERNAL);
 			auto newInternalNode = dataManager_->getIndex(newInternalId);
 			newInternalNode.setParentId(parent.getParentId());
 			newInternalNode.setLevel(parent.getLevel());
 
-			// The new sibling gets the children to the RIGHT of the promoted entry.
-			// The first child of the new sibling is the one pointed to by the promoted entry.
 			std::vector<Index::ChildEntry> rightChildren;
 			rightChildren.reserve(allChildren.size() - midPointIdx);
-			// The first child is special: it's the one from the promoted entry, but with an implicit key.
+
 			Index::ChildEntry firstRightChild{PropertyValue(std::monostate{}), promotedEntry.childId, 0};
 			rightChildren.push_back(firstRightChild);
-			// The rest of the children are moved from the original list.
 			std::move(allChildren.begin() + midPointIdx + 1, allChildren.end(), std::back_inserter(rightChildren));
 
-			// This will correctly handle any blobs for keys in rightChildren.
 			newInternalNode.setAllChildren(rightChildren, dataManager_);
 
-			// The old node (parent) now contains the children BEFORE the midpoint.
 			allChildren.erase(allChildren.begin() + midPointIdx, allChildren.end());
 			parent.setAllChildren(allChildren, dataManager_);
 
-			// Re-parent the children that were moved.
 			for (const auto &childEntry: newInternalNode.getAllChildren(dataManager_)) {
 				auto child = dataManager_->getIndex(childEntry.childId);
 				child.setParentId(newInternalId);
@@ -261,36 +220,22 @@ namespace graph::query::indexes {
 			dataManager_->updateIndexEntity(parent);
 			dataManager_->updateIndexEntity(newInternalNode);
 
-			// Recursively call insert on the grandparent, using the key from the promoted entry.
 			insertIntoParent(parent, promotedEntry.key, newInternalId, rootId);
 		}
 	}
 
-	/**
-	 * @brief Handles a node that may be under-full after a deletion.
-	 *
-	 * This function is the core of the B+Tree rebalancing strategy after a deletion.
-	 * It first checks if the root needs to be collapsed, then attempts to redistribute
-	 * from a sibling. If redistribution is not possible, it merges the node with a
-	 * sibling. This process may propagate recursively up the tree.
-	 *
-	 * @param node The node to check (can be leaf or internal), passed by reference as it may be modified.
-	 * @param rootId Reference to the root ID, as it may change if the root is merged or collapsed.
-	 */
 	void IndexTreeManager::handleUnderflow(Index &node, int64_t &rootId) {
-		// Case 1: The root is the node. The root is allowed to be under-full.
-		// However, if it's an internal node with only one child, it's redundant.
-		// The root should be removed and its single child becomes the new root.
 		if (node.getParentId() == 0) {
 			if (!node.isLeaf() && node.getChildCount() == 1) {
 				auto children = node.getAllChildren(dataManager_);
-				rootId = children[0].childId;
+				int64_t newRootId = children[0].childId;
 
-				auto newRoot = dataManager_->getIndex(rootId);
+				auto newRoot = dataManager_->getIndex(newRootId);
 				newRoot.setParentId(0);
 				dataManager_->updateIndexEntity(newRoot);
 
-				// FIX: Create a named empty vector to clear owned blobs before deleting.
+				rootId = newRootId;
+
 				std::vector<Index::ChildEntry> emptyChildren;
 				node.setAllChildren(emptyChildren, dataManager_);
 				dataManager_->deleteIndex(node);
@@ -298,21 +243,20 @@ namespace graph::query::indexes {
 			return;
 		}
 
-		// For non-root nodes, get parent and find siblings.
 		auto parent = dataManager_->getIndex(node.getParentId());
 		auto parentChildren = parent.getAllChildren(dataManager_);
 
-		// Find the node's position within its parent's children array.
 		auto it = std::find_if(parentChildren.begin(), parentChildren.end(),
 							   [&](const auto &child) { return child.childId == node.getId(); });
-		int nodeIndexInParent = std::distance(parentChildren.begin(), it);
 
-		// Try to find a left and right sibling.
-		int64_t leftSiblingId = (nodeIndexInParent > 0) ? parentChildren[nodeIndexInParent - 1].childId : 0;
-		int64_t rightSiblingId =
-				(nodeIndexInParent < parentChildren.size() - 1) ? parentChildren[nodeIndexInParent + 1].childId : 0;
+		if (it == parentChildren.end())
+			return;
 
-		// Case 2: Try to redistribute from the right sibling.
+		size_t index = std::distance(parentChildren.begin(), it);
+
+		int64_t leftSiblingId = (index > 0) ? parentChildren[index - 1].childId : 0;
+		int64_t rightSiblingId = (index < parentChildren.size() - 1) ? parentChildren[index + 1].childId : 0;
+
 		if (rightSiblingId != 0) {
 			auto rightSibling = dataManager_->getIndex(rightSiblingId);
 			if (!rightSibling.isUnderflow(UNDERFLOW_THRESHOLD_RATIO + 0.1)) {
@@ -321,7 +265,6 @@ namespace graph::query::indexes {
 			}
 		}
 
-		// Case 3: Try to redistribute from the left sibling.
 		if (leftSiblingId != 0) {
 			auto leftSibling = dataManager_->getIndex(leftSiblingId);
 			if (!leftSibling.isUnderflow(UNDERFLOW_THRESHOLD_RATIO + 0.1)) {
@@ -330,79 +273,52 @@ namespace graph::query::indexes {
 			}
 		}
 
-		// Case 4: Redistribution is not possible, so we must merge.
-		// Merge with the right sibling if it exists.
 		if (rightSiblingId != 0) {
 			auto rightSibling = dataManager_->getIndex(rightSiblingId);
-			PropertyValue separatorKey = parentChildren[nodeIndexInParent + 1].key;
-			mergeNodes(node, rightSibling, parent, separatorKey, rootId);
+			PropertyValue separator = parentChildren[index + 1].key;
+			mergeNodes(node, rightSibling, parent, separator, rootId);
 		} else if (leftSiblingId != 0) {
-			// Otherwise, merge with the left sibling.
 			auto leftSibling = dataManager_->getIndex(leftSiblingId);
-			PropertyValue separatorKey = parentChildren[nodeIndexInParent].key;
-			mergeNodes(leftSibling, node, parent, separatorKey, rootId);
+			PropertyValue separator = parentChildren[index].key;
+			mergeNodes(leftSibling, node, parent, separator, rootId);
 		}
 	}
 
-	/**
-	 * @brief Redistributes entries between two sibling nodes to resolve an underflow.
-	 *
-	 * This function "borrows" an entry from a sufficiently full sibling node.
-	 * The operation involves moving an entry from the sibling, through the parent,
-	 * to the under-full node. This is a less costly operation than merging nodes.
-	 *
-	 * @param node The under-full node that will receive an entry.
-	 * @param sibling The sibling node that will provide an entry.
-	 * @param parent The common parent of the node and the sibling.
-	 * @param isLeftSibling True if the sibling is to the left of the node, false otherwise.
-	 */
 	void IndexTreeManager::redistribute(Index &node, Index &sibling, Index &parent, bool isLeftSibling) {
 		auto parentChildren = parent.getAllChildren(dataManager_);
 
-		if (isLeftSibling) {
-			// --- Borrow from the LEFT sibling ---
-			auto it = std::find_if(parentChildren.begin(), parentChildren.end(),
+		auto nodeIt = std::find_if(parentChildren.begin(), parentChildren.end(),
 								   [&](const auto &c) { return c.childId == node.getId(); });
-			PropertyValue separatorKey = it->key;
+		size_t nodeIdx = std::distance(parentChildren.begin(), nodeIt);
 
+		if (isLeftSibling) {
 			if (node.isLeaf()) {
 				auto nodeEntries = node.getAllEntries(dataManager_);
 				auto siblingEntries = sibling.getAllEntries(dataManager_);
 
-				Index::Entry borrowedEntry = std::move(siblingEntries.back());
+				Index::Entry borrowed = std::move(siblingEntries.back());
 				siblingEntries.pop_back();
+				nodeEntries.insert(nodeEntries.begin(), std::move(borrowed));
 
-				// The key of the borrowed entry becomes the new separator in the parent.
-				parent.removeChild(separatorKey, dataManager_, keyComparator_);
-				Index::ChildEntry newParentEntryForNode = {borrowedEntry.key, node.getId(), 0};
-				parent.addChild(newParentEntryForNode, dataManager_, keyComparator_);
+				parentChildren[nodeIdx].key = nodeEntries.front().key;
 
-				nodeEntries.insert(nodeEntries.begin(), std::move(borrowedEntry));
 				node.setAllEntries(nodeEntries, dataManager_);
 				sibling.setAllEntries(siblingEntries, dataManager_);
-			} else { // Internal node
+			} else { // Internal
 				auto nodeChildren = node.getAllChildren(dataManager_);
 				auto siblingChildren = sibling.getAllChildren(dataManager_);
 
-				Index::ChildEntry borrowedChild = std::move(siblingChildren.back());
+				Index::ChildEntry borrowedChildFromSibling = std::move(siblingChildren.back());
 				siblingChildren.pop_back();
 
-				// The separator key from the parent comes down and becomes the key for the first child of 'node'.
-				// The key for this child was previously implicit.
-				nodeChildren.front().key = separatorKey;
+				PropertyValue oldParentSeparator = parentChildren[nodeIdx].key;
+				parentChildren[nodeIdx].key = borrowedChildFromSibling.key;
 
-				// The borrowed child now becomes the first child of 'node', with an implicit key.
-				auto newFirstChild = std::move(borrowedChild);
-				newFirstChild.key = PropertyValue(std::monostate{}); // It's the first child, key is implicit.
-				nodeChildren.insert(nodeChildren.begin(), std::move(newFirstChild));
+				nodeChildren.front().key = oldParentSeparator;
+				borrowedChildFromSibling.key = PropertyValue(std::monostate{});
+				nodeChildren.insert(nodeChildren.begin(), std::move(borrowedChildFromSibling));
 
-				// The key that was with the borrowed child in the sibling moves up to be the new separator.
-				parent.removeChild(separatorKey, dataManager_, keyComparator_);
-				Index::ChildEntry newParentEntryForNode = {borrowedChild.key, node.getId(), 0};
-				parent.addChild(newParentEntryForNode, dataManager_, keyComparator_);
-
-				// Update parent pointer of the moved child.
-				auto movedChildNode = dataManager_->getIndex(newFirstChild.childId);
+				auto movedChildNode = dataManager_->getIndex(nodeChildren.front().childId);
 				movedChildNode.setParentId(node.getId());
 				dataManager_->updateIndexEntity(movedChildNode);
 
@@ -410,51 +326,36 @@ namespace graph::query::indexes {
 				sibling.setAllChildren(siblingChildren, dataManager_);
 			}
 		} else {
-			// --- Borrow from the RIGHT sibling ---
-			auto it = std::find_if(parentChildren.begin(), parentChildren.end(),
-								   [&](const auto &c) { return c.childId == sibling.getId(); });
-			PropertyValue separatorKey = it->key;
+			size_t rightIdx = nodeIdx + 1;
 
 			if (node.isLeaf()) {
 				auto nodeEntries = node.getAllEntries(dataManager_);
 				auto siblingEntries = sibling.getAllEntries(dataManager_);
 
-				Index::Entry borrowedEntry = std::move(siblingEntries.front());
+				Index::Entry borrowed = std::move(siblingEntries.front());
 				siblingEntries.erase(siblingEntries.begin());
+				nodeEntries.push_back(std::move(borrowed));
 
-				// The key of the *new* first entry in the right sibling becomes the new parent separator.
-				parent.removeChild(separatorKey, dataManager_, keyComparator_);
-				Index::ChildEntry newParentEntryForSibling = {siblingEntries.front().key, sibling.getId(), 0};
-				parent.addChild(newParentEntryForSibling, dataManager_, keyComparator_);
-
-				// The old separator from the parent comes down with the borrowed entry.
-				// The key of the borrowed entry is its own key.
-				nodeEntries.push_back(std::move(borrowedEntry));
+				parentChildren[rightIdx].key = siblingEntries.front().key;
 
 				node.setAllEntries(nodeEntries, dataManager_);
 				sibling.setAllEntries(siblingEntries, dataManager_);
-			} else { // Internal node
+			} else { // Internal
 				auto nodeChildren = node.getAllChildren(dataManager_);
 				auto siblingChildren = sibling.getAllChildren(dataManager_);
 
-				Index::ChildEntry borrowedChild = std::move(siblingChildren.front());
+				PropertyValue oldParentSeparator = parentChildren[rightIdx].key;
+				Index::ChildEntry borrowedChildFromSibling = std::move(siblingChildren.front());
 				siblingChildren.erase(siblingChildren.begin());
 
-				// The separator from the parent comes down to become the key for the child we are borrowing.
-				borrowedChild.key = separatorKey;
-				nodeChildren.push_back(std::move(borrowedChild));
+				parentChildren[rightIdx].key = siblingChildren.front().key;
 
-				// The key that was with the borrowed child moves up to become the new separator for the sibling.
-				// This key is now the key of the new first child of the sibling.
-				parent.removeChild(separatorKey, dataManager_, keyComparator_);
-				Index::ChildEntry newParentEntryForSibling = {siblingChildren.front().key, sibling.getId(), 0};
-				parent.addChild(newParentEntryForSibling, dataManager_, keyComparator_);
+				borrowedChildFromSibling.key = oldParentSeparator;
+				nodeChildren.push_back(std::move(borrowedChildFromSibling));
 
-				// The key of the new first child of the sibling becomes implicit.
 				siblingChildren.front().key = PropertyValue(std::monostate{});
 
-				// Update parent pointer of the moved child.
-				auto movedChildNode = dataManager_->getIndex(borrowedChild.childId);
+				auto movedChildNode = dataManager_->getIndex(nodeChildren.back().childId);
 				movedChildNode.setParentId(node.getId());
 				dataManager_->updateIndexEntity(movedChildNode);
 
@@ -463,27 +364,15 @@ namespace graph::query::indexes {
 			}
 		}
 
+		parent.setAllChildren(parentChildren, dataManager_);
 		dataManager_->updateIndexEntity(parent);
 		dataManager_->updateIndexEntity(node);
 		dataManager_->updateIndexEntity(sibling);
 	}
 
-	/**
-	 * @brief Merges two adjacent nodes (leftNode and rightNode) into one.
-	 *
-	 * This function is called when redistribution is not possible. It moves all entries
-	 * from the right node into the left node, along with the separating key from the parent.
-	 * The right node is then deleted. This operation reduces the number of nodes in the
-	 * tree and may cause the parent to underflow, triggering a recursive call to handleUnderflow.
-	 *
-	 * @param leftNode The left node of the pair, which will receive the merged content.
-	 * @param rightNode The right node of the pair, which will be emptied and deleted.
-	 * @param parent The common parent of the two nodes.
-	 * @param separatorKey The key in the parent that separates the two nodes.
-	 * @param rootId Reference to the root ID, as it may change.
-	 */
 	void IndexTreeManager::mergeNodes(Index &leftNode, Index &rightNode, Index &parent,
 									  const PropertyValue &separatorKey, int64_t &rootId) {
+
 		if (leftNode.isLeaf() != rightNode.isLeaf()) {
 			throw std::logic_error("Attempting to merge a leaf with a non-leaf node.");
 		}
@@ -497,63 +386,104 @@ namespace graph::query::indexes {
 
 			leftNode.setAllEntries(leftEntries, dataManager_);
 			leftNode.setNextLeafId(rightNode.getNextLeafId());
-
 			if (rightNode.getNextLeafId() != 0) {
-				auto nextNextLeaf = dataManager_->getIndex(rightNode.getNextLeafId());
-				nextNextLeaf.setPrevLeafId(leftNode.getId());
-				dataManager_->updateIndexEntity(nextNextLeaf);
+				auto nextNext = dataManager_->getIndex(rightNode.getNextLeafId());
+				nextNext.setPrevLeafId(leftNode.getId());
+				dataManager_->updateIndexEntity(nextNext);
 			}
-		} else {
+		} else { // Internal Merge
 			auto leftChildren = leftNode.getAllChildren(dataManager_);
 			auto rightChildren = rightNode.getAllChildren(dataManager_);
 
-			auto firstChildFromRight = std::move(rightChildren.front());
+			Index::ChildEntry separatorChildEntry{separatorKey, rightChildren.front().childId, 0};
 			rightChildren.erase(rightChildren.begin());
-			firstChildFromRight.key = separatorKey;
 
-			leftChildren.push_back(std::move(firstChildFromRight));
+			leftChildren.push_back(std::move(separatorChildEntry));
 			leftChildren.insert(leftChildren.end(), std::make_move_iterator(rightChildren.begin()),
 								std::make_move_iterator(rightChildren.end()));
 
 			leftNode.setAllChildren(leftChildren, dataManager_);
 
-			auto finalChildren = leftNode.getAllChildren(dataManager_);
-			for (const auto &childEntry: finalChildren) {
-				auto childNode = dataManager_->getIndex(childEntry.childId);
-				if (childNode.getParentId() != leftNode.getId()) {
-					childNode.setParentId(leftNode.getId());
-					dataManager_->updateIndexEntity(childNode);
+			for (const auto &c: leftNode.getAllChildren(dataManager_)) {
+				auto child = dataManager_->getIndex(c.childId);
+				if (child.getParentId() != leftNode.getId()) {
+					child.setParentId(leftNode.getId());
+					dataManager_->updateIndexEntity(child);
 				}
 			}
 		}
 
-		parent.removeChild(separatorKey, dataManager_, keyComparator_);
-		dataManager_->updateIndexEntity(parent);
+		auto parentChildren = parent.getAllChildren(dataManager_);
+		auto rightNodeChildIt = std::find_if(parentChildren.begin(), parentChildren.end(),
+											 [&](const auto &c) { return c.childId == rightNode.getId(); });
+
+		if (rightNodeChildIt != parentChildren.end()) {
+			parentChildren.erase(rightNodeChildIt);
+			parent.setAllChildren(parentChildren, dataManager_);
+			dataManager_->updateIndexEntity(parent);
+		} else {
+			throw std::logic_error("Parent does not contain right sibling in merge (Severe Corruption)");
+		}
+
 		dataManager_->updateIndexEntity(leftNode);
 
-		// The right node is now empty. Clean up its owned blobs and then delete the node.
-		// FIX: Create a named empty vector to pass to the function.
 		if (rightNode.isLeaf()) {
-			std::vector<Index::Entry> emptyEntries;
-			rightNode.setAllEntries(emptyEntries, dataManager_);
+			std::vector<Index::Entry> empty;
+			rightNode.setAllEntries(empty, dataManager_);
 		} else {
-			std::vector<Index::ChildEntry> emptyChildren;
-			rightNode.setAllChildren(emptyChildren, dataManager_);
+			std::vector<Index::ChildEntry> empty;
+			rightNode.setAllChildren(empty, dataManager_);
 		}
 		dataManager_->deleteIndex(rightNode);
 
-		// Only handle underflow if the parent is now underfull (and not root)
-		if (parent.isUnderflow(UNDERFLOW_THRESHOLD_RATIO) && parent.getParentId() != 0) {
+		if (parent.getParentId() == 0) {
 			handleUnderflow(parent, rootId);
+		} else {
+			if (parent.isUnderflow(UNDERFLOW_THRESHOLD_RATIO)) {
+				handleUnderflow(parent, rootId);
+			}
 		}
+	}
+
+	int64_t IndexTreeManager::insertBatch(int64_t rootId,
+										  const std::vector<std::pair<PropertyValue, int64_t>> &entries) {
+		if (entries.empty())
+			return rootId;
+		std::unique_lock lock(mutex_);
+		if (rootId == 0)
+			rootId = initialize();
+
+		auto sortedEntries = entries;
+		std::sort(sortedEntries.begin(), sortedEntries.end(), [&](const auto &a, const auto &b) {
+			if (keyComparator_(a.first, b.first))
+				return true;
+			if (keyComparator_(b.first, a.first))
+				return false;
+			return a.second < b.second;
+		});
+
+		for (const auto &[key, value]: sortedEntries) {
+			int64_t leafId = findLeafNode(rootId, key);
+			if (leafId == 0) {
+				rootId = initialize();
+				leafId = rootId;
+			}
+			auto leaf = dataManager_->getIndex(leafId);
+
+			if (leaf.wouldLeafOverflowOnInsert(key, value, dataManager_, keyComparator_)) {
+				splitLeaf(leaf, key, value, rootId);
+			} else {
+				leaf.insertEntry(key, value, dataManager_, keyComparator_);
+				dataManager_->updateIndexEntity(leaf);
+			}
+		}
+		return rootId;
 	}
 
 	int64_t IndexTreeManager::insert(int64_t rootId, const PropertyValue &key, const int64_t value) {
 		std::unique_lock lock(mutex_);
-
-		if (rootId == 0) {
+		if (rootId == 0)
 			rootId = initialize();
-		}
 
 		int64_t leafId = findLeafNode(rootId, key);
 		if (leafId == 0) {
@@ -562,107 +492,23 @@ namespace graph::query::indexes {
 		}
 
 		auto leaf = dataManager_->getIndex(leafId);
-
-		// Check if insertion would overflow the leaf
 		if (leaf.wouldLeafOverflowOnInsert(key, value, dataManager_, keyComparator_)) {
 			splitLeaf(leaf, key, value, rootId);
 		} else {
 			leaf.insertEntry(key, value, dataManager_, keyComparator_);
 			dataManager_->updateIndexEntity(leaf);
 		}
-
 		return rootId;
 	}
 
-	/**
-     * @brief Inserts multiple entries into the B+ Tree efficiently.
-     *
-     * OPTIMIZATION STRATEGY:
-     * 1. Sort the incoming entries by Key.
-     * 2. Use a "cursor" (last accessed leaf node) to avoid traversing from root for every key.
-     * 3. Insert sequentially.
-     *
-     * @param rootId The current root ID of the tree.
-     * @param entries A vector of {Key, Value} pairs to insert.
-     * @return The new root ID (if the root split, otherwise the same rootId).
-     */
-    int64_t IndexTreeManager::insertBatch(int64_t rootId, const std::vector<std::pair<PropertyValue, int64_t>>& entries) {
-        if (entries.empty()) return rootId;
-
-        std::unique_lock lock(mutex_);
-
-        if (rootId == 0) {
-            rootId = initialize();
-        }
-
-        // 1. Sort entries to maximize locality
-        // We make a copy to sort, or assume the caller passes by value/move.
-        // Here we assume 'entries' is passed const ref, so we copy pointers to sort efficiently
-        // or just copy the vector if it's not huge. Copying pair<Prop, int64> is cheap.
-        auto sortedEntries = entries;
-        std::sort(sortedEntries.begin(), sortedEntries.end(),
-            [&](const auto& a, const auto& b) {
-                // Primary sort key: Property Value
-                if (keyComparator_(a.first, b.first)) return true;
-                if (keyComparator_(b.first, a.first)) return false;
-                // Secondary sort key: Entity ID (Value) to keep identical keys stable
-                return a.second < b.second;
-            });
-
-        // 2. Batch Insertion Loop with Cursor
-        int64_t currentLeafId = 0;
-
-        // Cache the leaf entity to avoid re-fetching from DataManager if we stay in same leaf
-        // Note: We can't easily cache the Index object itself across splits because
-        // splitLeaf invalidates references/IDs. So we just cache the ID.
-
-        for (const auto& [key, value] : sortedEntries) {
-            // Optimization: Check if the key fits in the cached leaf node
-            // For B+ Tree, finding the correct leaf usually requires traversal.
-            // But with sorted keys, the next key is likely in the same leaf or the next one.
-
-            // Heuristic: If we have a cached leaf, check if key >= leaf.minKey.
-            // Since we don't track minKey easily, strictly speaking we should just search.
-            // BUT, findLeafNode is O(logN).
-
-            // To keep implementation robust against edge cases (splits changing IDs),
-            // we will stick to findLeafNode for now, BUT relies on the buffer manager's LRU
-            // to keep the hot leaf page in memory. Since keys are sorted, we are hitting
-            // the same path repeatedly.
-
-            // Future Optimization: Implement `findLeafNode(rootId, key, hintLeafId)`
-
-            int64_t leafId = findLeafNode(rootId, key);
-            if (leafId == 0) {
-                // Should not happen if tree initialized
-                rootId = initialize();
-                leafId = rootId;
-            }
-
-            auto leaf = dataManager_->getIndex(leafId);
-
-            if (leaf.wouldLeafOverflowOnInsert(key, value, dataManager_, keyComparator_)) {
-                splitLeaf(leaf, key, value, rootId);
-                // After split, the tree structure changed. Next iteration will re-find the correct leaf.
-            } else {
-                leaf.insertEntry(key, value, dataManager_, keyComparator_);
-                dataManager_->updateIndexEntity(leaf);
-            }
-        }
-
-        return rootId;
-    }
-
-	bool IndexTreeManager::remove(int64_t rootId, const PropertyValue &key, int64_t value) {
+	bool IndexTreeManager::remove(int64_t &rootId, const PropertyValue &key, int64_t value) {
 		std::unique_lock lock(mutex_);
-		if (rootId == 0) {
+		if (rootId == 0)
 			return false;
-		}
 
 		int64_t leafId = findLeafNode(rootId, key);
-		if (leafId == 0) {
+		if (leafId == 0)
 			return false;
-		}
 
 		auto leaf = dataManager_->getIndex(leafId);
 		bool removed = leaf.removeEntry(key, value, dataManager_, keyComparator_);
@@ -672,12 +518,16 @@ namespace graph::query::indexes {
 			// Trigger rebalancing only if the node is under-full and not the root
 			if (leaf.getId() != rootId && leaf.isUnderflow(UNDERFLOW_THRESHOLD_RATIO)) {
 				handleUnderflow(leaf, rootId);
+			} else if (leaf.getId() == rootId) {
+				// Special check for Root Leaf becoming empty
+				if (leaf.getEntryCount() == 0) {
+					// Optional: You might want to keep an empty root, or delete it.
+					// For now, keeping it is safer.
+				}
 			}
 		}
-
 		return removed;
 	}
-
 
 	std::vector<int64_t> IndexTreeManager::find(int64_t rootId, const PropertyValue &key) {
 		std::shared_lock lock(mutex_);
@@ -709,8 +559,8 @@ namespace graph::query::indexes {
 
 			for (const auto &entry: allEntries) {
 				if (keyComparator_(entry.key, minKey))
-					continue; // Skip if less than minKey
-				if (keyComparator_(maxKey, entry.key)) { // Stop if greater than maxKey
+					continue;
+				if (keyComparator_(maxKey, entry.key)) {
 					continueScan = false;
 					break;
 				}
