@@ -64,6 +64,8 @@ namespace graph::query::indexes {
 		 */
 		int64_t insert(int64_t rootId, const PropertyValue &key, int64_t value);
 
+		int64_t insertBatch(int64_t rootId, const std::vector<std::pair<PropertyValue, int64_t>>& entries);
+
 		/**
 		 * Removes a key-value pair from the tree
 		 *

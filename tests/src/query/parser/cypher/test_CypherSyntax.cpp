@@ -342,3 +342,34 @@ TEST_F(CypherSyntaxTest, ValidCartesianProduct) {
 	// 4. Complex Chain with multiple MATCH
 	EXPECT_TRUE(validate("MATCH (a:User) WHERE a.age > 10 MATCH (b:Product) RETURN a, b"));
 }
+
+// ============================================================================
+// UNWIND Syntax Tests
+// ============================================================================
+
+TEST_F(CypherSyntaxTest, ValidUnwind) {
+	// 1. Simple Integer List
+	EXPECT_TRUE(validate("UNWIND [1, 2, 3] AS x RETURN x"));
+
+	// 2. Mixed Types
+	EXPECT_TRUE(validate("UNWIND [1, 'two', true] AS x RETURN x"));
+
+	// 3. Unwind after Match
+	EXPECT_TRUE(validate("MATCH (n) UNWIND [1, 2] AS id RETURN n, id"));
+
+	// 4. Batch Insert Pattern
+	EXPECT_TRUE(validate("UNWIND [1, 2] AS id CREATE (n {id: id})"));
+}
+
+TEST_F(CypherSyntaxTest, InvalidUnwind) {
+	// Missing AS
+	EXPECT_FALSE(validate("UNWIND [1, 2] x RETURN x"));
+
+	// Missing Expression
+	EXPECT_FALSE(validate("UNWIND AS x RETURN x"));
+
+	// Not a list (Grammatically, UNWIND accepts any expression, but runtime checks type.
+	// However, syntax-wise 'UNWIND 1 AS x' is valid Cypher, though it might fail or unwind to single item at runtime.
+	// So we test syntax error, e.g. malformed list)
+	EXPECT_FALSE(validate("UNWIND [1, 2 AS x")); // Missing bracket
+}

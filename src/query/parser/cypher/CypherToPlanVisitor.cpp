@@ -938,4 +938,89 @@ namespace graph::parser::cypher {
 		return props;
 	}
 
+	// ========================================================================
+    // UNWIND Clause
+    // ========================================================================
+    std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) {
+        // Grammar: UNWIND expression AS variable
+
+        // 1. Extract Alias
+        std::string alias = extractVariable(ctx->variable());
+        if (alias.empty()) {
+            throw std::runtime_error("UNWIND requires a variable alias (AS x)");
+        }
+
+        // 2. Extract List Values
+        // We need to parse the expression. Currently, we support List Literals: [1, 2, 3]
+        std::vector<PropertyValue> listValues;
+
+        auto expr = ctx->expression();
+        if (expr) {
+            listValues = extractListFromExpression(expr);
+        }
+
+        if (listValues.empty()) {
+            // If parsing failed or list is empty, we might want to throw or allow empty unwind (which stops execution)
+            // For now, let's proceed. An empty list in UNWIND stops the pipeline (0 rows).
+        }
+
+        // 3. Build Operator
+        // UNWIND wraps the current pipeline (rootOp_)
+        // If rootOp_ is null, UNWIND acts as a Source.
+        auto op = planner_->unwindOp(std::move(rootOp_), alias, listValues);
+
+        // Update root
+        rootOp_ = std::move(op);
+
+        return std::any();
+    }
+
+    // ========================================================================
+    // Helper: Extract List from Expression
+    // ========================================================================
+    std::vector<PropertyValue>
+    CypherToPlanVisitor::extractListFromExpression(CypherParser::ExpressionContext *ctx) {
+        std::vector<graph::PropertyValue> results;
+
+        // Navigate AST: expression -> or -> xor -> and -> not -> comparison -> arithmetic -> unary -> atom
+        // This is a long chain. We check if the expression effectively boils down to a listLiteral.
+
+        // Safety check helper
+        auto getAtom = [](CypherParser::ExpressionContext* e) -> CypherParser::AtomContext* {
+            if (!e) return nullptr;
+            auto or_ = e->orExpression(); if(!or_) return nullptr;
+            auto xor_ = or_->xorExpression(0); if(!xor_) return nullptr;
+            auto and_ = xor_->andExpression(0); if(!and_) return nullptr;
+            auto not_ = and_->notExpression(0); if(!not_) return nullptr;
+            auto comp = not_->comparisonExpression(); if(!comp) return nullptr;
+            auto arith = comp->arithmeticExpression(0); if(!arith) return nullptr;
+            auto unary = arith->unaryExpression(0); if(!unary) return nullptr;
+            return unary->atom();
+        };
+
+        auto atom = getAtom(ctx);
+        if (atom && atom->listLiteral()) {
+            auto listLit = atom->listLiteral();
+            // listLiteral : LBRACK ( expression ( COMMA expression )* )? RBRACK
+
+            for (auto itemExpr : listLit->expression()) {
+                // Recursively extract literal value from the item expression
+                auto itemAtom = getAtom(itemExpr);
+                if (itemAtom && itemAtom->literal()) {
+                    results.push_back(parseValue(itemAtom->literal()));
+                } else {
+                    // Fallback for non-literal items inside list (e.g. identifiers)
+                    // Currently simplified to string representation
+                    results.push_back(graph::PropertyValue(itemExpr->getText()));
+                }
+            }
+        } else {
+            // Attempt to parse parameter ($param) if implemented, or throw
+            // For now, if it's not a list literal, we throw or return empty
+            // throw std::runtime_error("UNWIND currently only supports List Literals (e.g. [1, 2])");
+        }
+
+        return results;
+    }
+
 } // namespace graph::parser::cypher

@@ -204,6 +204,78 @@ namespace graph::query::indexes {
 		rootMap[key] = treeManager->insert(rootMap[key], value, entityId);
 	}
 
+	void PropertyIndex::addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties) {
+		if (properties.empty()) return;
+
+		std::unique_lock lock(mutex_);
+
+		// Structure: Type -> Key -> List of {Value, EntityID} pairs
+		// We use this to group data for specific B+ Trees.
+		std::map<PropertyType, std::map<std::string, std::vector<std::pair<PropertyValue, int64_t>>>> groupedBatch;
+
+		// 1. Classification & Filtering Phase
+		for (const auto &[entityId, key, value] : properties) {
+			// Determine the type of the value
+			PropertyType valueType = getPropertyType(value);
+			if (valueType == PropertyType::UNKNOWN || valueType == PropertyType::NULL_TYPE) {
+				continue;
+			}
+
+			// Check if this key is registered for indexing
+			auto it = indexedKeyTypes_.find(key);
+			if (it == indexedKeyTypes_.end()) {
+				// [Policy Decision]
+				// For batch operations, we do NOT auto-create indexes to prevent
+				// accidental index explosion during bulk loads.
+				// Use createIndex() explicitly if needed.
+				continue;
+			}
+
+			PropertyType registeredType = it->second;
+
+			if (registeredType == PropertyType::UNKNOWN) {
+				// First time seeing data for this index, set the type
+				indexedKeyTypes_[key] = valueType;
+				registeredType = valueType;
+			} else if (registeredType != valueType) {
+				// Type mismatch (e.g., trying to insert String into Integer index).
+				// Skip this specific property.
+				continue;
+			}
+
+			// Add to the appropriate group
+			groupedBatch[registeredType][key].emplace_back(value, entityId);
+		}
+
+		// 2. Batch Insertion Phase
+		for (auto &[type, keyMap] : groupedBatch) {
+			// Retrieve the correct tree manager and root map for this type
+			auto treeManager = getTreeManagerForType(type);
+			auto &rootMap = getRootMapForType(type);
+
+			if (!treeManager) continue;
+
+			for (auto &[key, entries] : keyMap) {
+				if (entries.empty()) continue;
+
+				// Ensure root node exists
+				if (!rootMap.contains(key)) {
+					rootMap[key] = treeManager->initialize();
+				}
+
+				int64_t currentRootId = rootMap[key];
+
+				// Execute the optimized batch insert on the specific B+ Tree
+				int64_t newRootId = treeManager->insertBatch(currentRootId, entries);
+
+				// Update root ID if the tree grew (root split)
+				if (newRootId != currentRootId) {
+					rootMap[key] = newRootId;
+				}
+			}
+		}
+	}
+
 	void PropertyIndex::removeProperty(int64_t entityId, const std::string &key, const PropertyValue &value) {
 		std::unique_lock lock(mutex_);
 

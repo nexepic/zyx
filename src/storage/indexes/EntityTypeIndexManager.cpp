@@ -132,6 +132,63 @@ namespace graph::query::indexes {
 	}
 
 	template<typename T>
+	void EntityTypeIndexManager::onEntitiesAdded(const std::vector<T> &entities) const {
+		if (entities.empty()) return;
+
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// --- 1. Prepare Label Index Batch ---
+		// Map: Label -> List of IDs
+		std::unordered_map<std::string, std::vector<int64_t>> nodesByLabel;
+
+		// --- 2. Prepare Property Index Batch ---
+		// List of {EntityID, Key, Value}
+		std::vector<std::tuple<int64_t, std::string, PropertyValue>> propBatch;
+
+		// Reserve space to avoid reallocations (heuristic)
+		propBatch.reserve(entities.size() * 3);
+
+		for (const auto &entity : entities) {
+			// A. Collect Label Info
+			if (!entity.getLabel().empty()) {
+				nodesByLabel[entity.getLabel()].push_back(entity.getId());
+			}
+
+			// B. Collect Property Info
+			// Only collect properties that are actually indexed to save memory/processing
+			const auto& props = entity.getProperties();
+			if (!props.empty()) {
+				// We can check 'hasKeyIndexed' here to filter early,
+				// OR let PropertyIndex::addPropertiesBatch handle it.
+				// Letting PropertyIndex handle it allows for auto-creation logic if desired.
+				// Here we pass all, assuming PropertyIndex filters efficiently.
+				for (const auto& [key, value] : props) {
+					// Optimization: Quick check if we should even bother
+					if (propertyIndex_->hasKeyIndexed(key)) {
+						propBatch.emplace_back(entity.getId(), key, value);
+					}
+				}
+			}
+		}
+
+		// --- 3. Execute Batch Updates ---
+
+		// Update Label Index
+		if (!nodesByLabel.empty() && !labelIndex_->isEmpty()) {
+			labelIndex_->addNodesBatch(nodesByLabel);
+		}
+
+		// Update Property Indexes
+		if (!propBatch.empty() && !propertyIndex_->isEmpty()) {
+			propertyIndex_->addPropertiesBatch(propBatch);
+		}
+
+		// --- 4. Persist State ---
+		// We persist once after all batch updates are done.
+		persistState();
+	}
+
+	template<typename T>
 	void EntityTypeIndexManager::onEntityUpdated(const T &oldEntity, const T &newEntity) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		log::Log::debug("Old entity id: {}, label: {}, properties: {}", oldEntity.getId(), oldEntity.getLabel(),
@@ -158,5 +215,8 @@ namespace graph::query::indexes {
 	template void EntityTypeIndexManager::onEntityAdded<Edge>(const Edge &) const;
 	template void EntityTypeIndexManager::onEntityUpdated<Edge>(const Edge &, const Edge &) const;
 	template void EntityTypeIndexManager::onEntityDeleted<Edge>(const Edge &) const;
+
+	template void EntityTypeIndexManager::onEntitiesAdded<Node>(const std::vector<Node>&) const;
+	template void EntityTypeIndexManager::onEntitiesAdded<Edge>(const std::vector<Edge>&) const;
 
 } // namespace graph::query::indexes

@@ -40,6 +40,7 @@ namespace graph::storage {
 
 		// Core CRUD operations - moved implementations to cpp file
 		void add(EntityType &entity) override;
+		virtual void addBatch(std::vector<EntityType>& entities);
 		void update(const EntityType &entity) override;
 		void remove(EntityType &entity) override;
 		EntityType get(int64_t id) override;

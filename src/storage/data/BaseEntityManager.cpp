@@ -36,6 +36,48 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
+	void BaseEntityManager<EntityType>::addBatch(std::vector<EntityType> &entities) {
+		if (entities.empty())
+			return;
+
+		const auto dataManager = dataManager_.lock();
+		if (!dataManager)
+			return;
+
+		// 1. Identify entities needing new IDs
+		// We collect pointers to avoid copying large objects
+		std::vector<EntityType *> newEntities;
+		newEntities.reserve(entities.size());
+
+		for (auto &entity: entities) {
+			if (entity.getId() == 0) {
+				newEntities.push_back(&entity);
+			}
+		}
+
+		// 2. Batch ID Allocation (Critical Optimization)
+		// One mutex lock for N entities.
+		if (!newEntities.empty()) {
+			int64_t startId = dataManager->getIdAllocator()->allocateIdBatch(EntityType::typeId, newEntities.size());
+
+			// Assign sequential IDs
+			for (size_t i = 0; i < newEntities.size(); ++i) {
+				newEntities[i]->setId(startId + static_cast<int64_t>(i));
+			}
+		}
+
+		// 3. Batch Cache Update
+		// Efficiently add to LRU cache
+		for (const auto &entity: entities) {
+			EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
+		}
+
+		// 4. Batch Persistence (Dirty Map)
+		// Updates dirty registry and triggers auto-flush check only once
+		dataManager->getPersistenceManager()->upsertBatch(entities, EntityChangeType::ADDED);
+	}
+
+	template<typename EntityType>
 	void BaseEntityManager<EntityType>::update(const EntityType &entity) {
 		const auto dataManager = dataManager_.lock();
 		if (!dataManager)

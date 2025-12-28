@@ -230,6 +230,50 @@ namespace graph::storage {
 		return allocateNewSequentialId(entityType);
 	}
 
+	int64_t IDAllocator::allocateIdBatch(const uint32_t entityType, size_t count) {
+		if (count == 0) return 0;
+
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		// For batch allocation, we bypass the reuse caches (L1/L2/Volatile)
+		// to guarantee contiguous IDs and maximum speed.
+		// This is a trade-off: slightly more ID space fragmentation vs massive speedup.
+
+		int64_t startId = 0;
+
+		// Use the reference to the global max counter
+		switch (entityType) {
+			case Node::typeId:
+				startId = currentMaxNodeId_ + 1;
+				currentMaxNodeId_ += static_cast<int64_t>(count);
+				break;
+			case Edge::typeId:
+				startId = currentMaxEdgeId_ + 1;
+				currentMaxEdgeId_ += static_cast<int64_t>(count);
+				break;
+			case Property::typeId:
+				startId = currentMaxPropId_ + 1;
+				currentMaxPropId_ += static_cast<int64_t>(count);
+				break;
+			case Blob::typeId:
+				startId = currentMaxBlobId_ + 1;
+				currentMaxBlobId_ += static_cast<int64_t>(count);
+				break;
+			case Index::typeId:
+				startId = currentMaxIndexId_ + 1;
+				currentMaxIndexId_ += static_cast<int64_t>(count);
+				break;
+			case State::typeId:
+				startId = currentMaxStateId_ + 1;
+				currentMaxStateId_ += static_cast<int64_t>(count);
+				break;
+			default:
+				throw std::runtime_error("Invalid entity type for batch allocation");
+		}
+
+		return startId;
+	}
+
 	void IDAllocator::freeId(const int64_t id, const uint32_t entityType) {
 		std::lock_guard<std::mutex> lock(mutex_);
 

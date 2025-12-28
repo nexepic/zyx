@@ -45,9 +45,9 @@ namespace graph::query::execution::operators {
             }
 
 			RecordBatch outputBatch;
-            outputBatch.reserve(1000);
+            outputBatch.reserve(DEFAULT_BATCH_SIZE);
 
-            while (outputBatch.size() < 1000) {
+            while (outputBatch.size() < DEFAULT_BATCH_SIZE) {
                 // Need a new left batch?
                 if (!currentLeftBatch_ || leftIdx_ >= currentLeftBatch_->size()) {
                     if (!left_) return std::nullopt;
@@ -65,7 +65,7 @@ namespace graph::query::execution::operators {
 
                 const auto& leftRecord = (*currentLeftBatch_)[leftIdx_];
 
-                while (rightIdx_ < rightBuffer_.size() && outputBatch.size() < 1000) {
+                while (rightIdx_ < rightBuffer_.size() && outputBatch.size() < DEFAULT_BATCH_SIZE) {
                     const auto& rightRecord = rightBuffer_[rightIdx_];
 
                     Record merged = leftRecord;

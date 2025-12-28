@@ -474,3 +474,140 @@ TEST_F(IndexTreeManagerTest, RemoveCausesRecursiveMerge) {
 	auto result3 = intTreeManager_->find(intRootId_, PropertyValue(2500));
 	ASSERT_TRUE(result3.empty());
 }
+
+// --- Batch Operations Tests ---
+
+TEST_F(IndexTreeManagerTest, InsertBatchSorted) {
+    // Prepare sorted batch
+    std::vector<std::pair<PropertyValue, int64_t>> batch;
+    for (int i = 0; i < 100; ++i) {
+        batch.emplace_back(PropertyValue(generatePaddedKey(i)), i);
+    }
+
+    // Execute batch insert
+    stringRootId_ = stringTreeManager_->insertBatch(stringRootId_, batch);
+
+    // Verify all data is present
+    for (int i = 0; i < 100; ++i) {
+        auto results = stringTreeManager_->find(stringRootId_, PropertyValue(generatePaddedKey(i)));
+        ASSERT_EQ(results.size(), 1UL);
+        ASSERT_EQ(results[0], i);
+    }
+}
+
+TEST_F(IndexTreeManagerTest, InsertBatchUnsorted) {
+    // Prepare unsorted batch
+    std::vector<std::pair<PropertyValue, int64_t>> batch;
+    batch.emplace_back(PropertyValue("C"), 3);
+    batch.emplace_back(PropertyValue("A"), 1);
+    batch.emplace_back(PropertyValue("D"), 4);
+    batch.emplace_back(PropertyValue("B"), 2);
+
+    // Execute batch insert
+    stringRootId_ = stringTreeManager_->insertBatch(stringRootId_, batch);
+
+    // Verify data and order
+    auto resultsA = stringTreeManager_->find(stringRootId_, PropertyValue("A"));
+    ASSERT_EQ(resultsA.size(), 1UL);
+    ASSERT_EQ(resultsA[0], 1);
+
+    auto resultsD = stringTreeManager_->find(stringRootId_, PropertyValue("D"));
+    ASSERT_EQ(resultsD.size(), 1UL);
+    ASSERT_EQ(resultsD[0], 4);
+
+    // Verify range query gives correct order
+    auto range = stringTreeManager_->findRange(stringRootId_, PropertyValue("A"), PropertyValue("Z"));
+    ASSERT_EQ(range.size(), 4UL);
+    ASSERT_EQ(range[0], 1); // A
+    ASSERT_EQ(range[1], 2); // B
+    ASSERT_EQ(range[2], 3); // C
+    ASSERT_EQ(range[3], 4); // D
+}
+
+TEST_F(IndexTreeManagerTest, InsertBatchIntoExistingTree) {
+    // 1. Initial manual inserts
+    stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("key_050"), 50);
+    stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("key_150"), 150);
+
+    // 2. Prepare batch that interleaves with existing keys
+    std::vector<std::pair<PropertyValue, int64_t>> batch;
+    batch.emplace_back(PropertyValue("key_025"), 25);  // Before existing
+    batch.emplace_back(PropertyValue("key_100"), 100); // Between existing
+    batch.emplace_back(PropertyValue("key_200"), 200); // After existing
+
+    // 3. Batch insert
+    stringRootId_ = stringTreeManager_->insertBatch(stringRootId_, batch);
+
+    // 4. Verify
+    ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("key_025")).size(), 1UL);
+    ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("key_050")).size(), 1UL);
+    ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("key_100")).size(), 1UL);
+    ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("key_150")).size(), 1UL);
+    ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue("key_200")).size(), 1UL);
+}
+
+TEST_F(IndexTreeManagerTest, InsertBatchMassiveSplit) {
+    // Prepare a large batch to trigger multiple leaf and internal splits
+    // Assuming fanout is small enough that 1000 items causes splits
+    const int count = 2000;
+    std::vector<std::pair<PropertyValue, int64_t>> batch;
+    batch.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        batch.emplace_back(PropertyValue(generatePaddedKey(i)), i);
+    }
+
+    // Execute batch insert
+    stringRootId_ = stringTreeManager_->insertBatch(stringRootId_, batch);
+
+    // Verify structure (should have height > 0)
+    auto rootNode = dataManager_->getIndex(stringRootId_);
+    ASSERT_GT(rootNode.getLevel(), 0);
+
+    // Verify first and last
+    ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue(generatePaddedKey(0)))[0], 0);
+    ASSERT_EQ(stringTreeManager_->find(stringRootId_, PropertyValue(generatePaddedKey(count - 1)))[0], count - 1);
+
+    // Verify range size
+    auto all = stringTreeManager_->findRange(stringRootId_, PropertyValue(generatePaddedKey(0)), PropertyValue(generatePaddedKey(count)));
+    ASSERT_EQ(all.size(), static_cast<size_t>(count));
+}
+
+TEST_F(IndexTreeManagerTest, InsertBatchWithDuplicates) {
+    std::vector<std::pair<PropertyValue, int64_t>> batch;
+    // Same key, different values
+    batch.emplace_back(PropertyValue("dup_key"), 10);
+    batch.emplace_back(PropertyValue("dup_key"), 20);
+    batch.emplace_back(PropertyValue("dup_key"), 30);
+    // Another key
+    batch.emplace_back(PropertyValue("other_key"), 99);
+
+    stringRootId_ = stringTreeManager_->insertBatch(stringRootId_, batch);
+
+    auto dupResults = stringTreeManager_->find(stringRootId_, PropertyValue("dup_key"));
+    ASSERT_EQ(dupResults.size(), 3UL);
+
+    // Sort to verify contents regardless of internal order
+    std::ranges::sort(dupResults);
+    ASSERT_EQ(dupResults[0], 10);
+    ASSERT_EQ(dupResults[1], 20);
+    ASSERT_EQ(dupResults[2], 30);
+
+    auto otherResults = stringTreeManager_->find(stringRootId_, PropertyValue("other_key"));
+    ASSERT_EQ(otherResults.size(), 1UL);
+}
+
+TEST_F(IndexTreeManagerTest, InsertBatchMixedTypesInteger) {
+    // Testing the Integer Tree Manager specifically
+    std::vector<std::pair<PropertyValue, int64_t>> batch;
+    batch.emplace_back(PropertyValue(static_cast<int64_t>(100)), 1);
+    batch.emplace_back(PropertyValue(static_cast<int64_t>(50)), 2);
+    batch.emplace_back(PropertyValue(static_cast<int64_t>(150)), 3);
+
+    intRootId_ = intTreeManager_->insertBatch(intRootId_, batch);
+
+    auto results = intTreeManager_->findRange(intRootId_, PropertyValue(static_cast<int64_t>(0)), PropertyValue(static_cast<int64_t>(200)));
+    ASSERT_EQ(results.size(), 3UL);
+    ASSERT_EQ(results[0], 2); // Value for 50
+    ASSERT_EQ(results[1], 1); // Value for 100
+    ASSERT_EQ(results[2], 3); // Value for 150
+}

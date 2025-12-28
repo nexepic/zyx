@@ -273,6 +273,10 @@ namespace graph::query::indexes {
 	// --- Event Handlers simply delegate to the appropriate manager ---
 	void IndexManager::onNodeAdded(const Node &node) { nodeIndexManager_->onEntityAdded(node); }
 
+	void IndexManager::onNodesAdded(const std::vector<Node>& nodes) {
+		nodeIndexManager_->onEntitiesAdded(nodes);
+	}
+
 	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
 		nodeIndexManager_->onEntityUpdated(oldNode, newNode);
 	}
@@ -280,6 +284,10 @@ namespace graph::query::indexes {
 	void IndexManager::onNodeDeleted(const Node &node) { nodeIndexManager_->onEntityDeleted(node); }
 
 	void IndexManager::onEdgeAdded(const Edge &edge) { edgeIndexManager_->onEntityAdded(edge); }
+
+	void IndexManager::onEdgesAdded(const std::vector<Edge>& edges) {
+		edgeIndexManager_->onEntitiesAdded(edges);
+	}
 
 	void IndexManager::onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) {
 		edgeIndexManager_->onEntityUpdated(oldEdge, newEdge);

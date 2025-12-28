@@ -63,6 +63,8 @@ namespace graph::parser::cypher {
 
 		static std::vector<query::execution::operators::SetItem> extractSetItems(CypherParser::SetStatementContext* ctx);
 
+		std::any visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) override;
+
 	private:
 		std::shared_ptr<query::QueryPlanner> planner_;
 		std::unique_ptr<query::execution::PhysicalOperator> rootOp_;
@@ -82,6 +84,8 @@ namespace graph::parser::cypher {
 
 		std::function<bool(const query::execution::Record &)> buildWherePredicate(CypherParser::ExpressionContext *expr,
 																				  std::string &outDesc);
+
+		std::vector<PropertyValue> extractListFromExpression(CypherParser::ExpressionContext *ctx);
 	};
 
 } // namespace graph::parser::cypher

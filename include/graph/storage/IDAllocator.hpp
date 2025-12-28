@@ -51,6 +51,15 @@ namespace graph::storage {
 		int64_t allocateId(uint32_t entityType);
 
 		/**
+		 * @brief Allocates a contiguous range of IDs efficiently.
+		 * Ignores cached/recycled IDs to ensure O(1) performance for bulk operations.
+		 * @param entityType The type of entity.
+		 * @param count Number of IDs to allocate.
+		 * @return The first ID in the allocated range. The range is [return, return + count - 1].
+		 */
+		int64_t allocateIdBatch(uint32_t entityType, size_t count);
+
+		/**
 		 * @brief Frees an ID, routing it to the appropriate cache (Volatile vs Persisted).
 		 * Detects if the ID was backed by disk storage to decide handling strategy.
 		 */

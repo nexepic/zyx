@@ -64,9 +64,9 @@ namespace graph::query::execution::operators {
 				return std::nullopt;
 
 			RecordBatch batch;
-			batch.reserve(1000);
+			batch.reserve(DEFAULT_BATCH_SIZE);
 
-			while (batch.size() < 1000 && currentIdx_ < candidateIds_.size()) {
+			while (batch.size() < DEFAULT_BATCH_SIZE && currentIdx_ < candidateIds_.size()) {
 				int64_t id = candidateIds_[currentIdx_++];
 
 				// 2. Load Header

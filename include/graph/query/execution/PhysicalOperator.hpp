@@ -21,6 +21,8 @@ namespace graph::query::execution {
 	public:
 		virtual ~PhysicalOperator() = default;
 
+		static constexpr size_t DEFAULT_BATCH_SIZE = 1000;
+
 		/**
 		 * @brief Prepares the operator for execution.
 		 * Allocates resources, opens files, or initializes iterators.

@@ -47,6 +47,9 @@ namespace graph::storage {
 		void upsert(const DirtyEntityInfo<EntityType> &info);
 
 		template<typename EntityType>
+		void upsertBatch(const std::vector<EntityType> &entities, EntityChangeType changeType);
+
+		template<typename EntityType>
 		void remove(int64_t id);
 
 		template<typename EntityType>

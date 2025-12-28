@@ -11,6 +11,7 @@
 #include "graph/storage/data/DataManager.hpp"
 #include <map>
 #include "graph/core/BlobChainManager.hpp"
+#include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
 #include "graph/storage/DeletionManager.hpp"
 #include "graph/storage/EntityReferenceUpdater.hpp"
@@ -99,6 +100,14 @@ namespace graph::storage {
 		}
 	}
 
+	void DataManager::notifyNodesAdded(const std::vector<Node>& nodes) const {
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
+		for (const auto& observer : observers_) {
+			// Use the new batch interface!
+			observer->onNodesAdded(nodes);
+		}
+	}
+
 	void DataManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) const {
 		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
@@ -117,6 +126,15 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeAdded(edge);
+		}
+	}
+
+	void DataManager::notifyEdgesAdded(const std::vector<Edge>& edges) const {
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
+		for (const auto& observer : observers_) {
+			for (const auto& edge : edges) {
+				observer->onEdgeAdded(edge);
+			}
 		}
 	}
 
@@ -180,6 +198,45 @@ namespace graph::storage {
 	void DataManager::addNode(Node &node) const {
 		nodeManager_->add(node);
 		notifyNodeAdded(node);
+	}
+
+	void DataManager::addNodes(std::vector<Node> &nodes) {
+		if (nodes.empty()) return;
+
+		// -------------------------------------------------------
+		// STEP 1: Batch Store Nodes (Allocates IDs)
+		// -------------------------------------------------------
+		nodeManager_->addBatch(nodes);
+
+		// -------------------------------------------------------
+		// STEP 2: Batch Notify Indexes
+		// -------------------------------------------------------
+		// We notify indexes NOW, while the Node objects still hold their properties inline.
+		// The IndexManager uses the IDs assigned in Step 1.
+		notifyNodesAdded(nodes);
+
+		// -------------------------------------------------------
+		// STEP 3: Handle External Properties (If needed)
+		// -------------------------------------------------------
+		for (auto &node : nodes) {
+			if (node.getProperties().empty()) continue;
+
+			// Check and potentially move properties to external storage.
+			// This function uses node.getId() (valid from Step 1) to link the new
+			// external entity back to this node.
+			propertyManager_->storeProperties(node);
+
+			// Check if storeProperties() decided to move data externally.
+			// If so, the 'node' object has been modified:
+			// 1. It now has a NextPropID pointer.
+			// 2. Its inline properties map has been cleared.
+			if (EntityPropertyTraits<Node>::hasPropertyEntity(node)) {
+				// We must update the PersistenceManager with this new state of the node.
+				// Since the node is already in the dirty map (from Step 1),
+				// this simply updates the record in memory before flush.
+				nodeManager_->update(node);
+			}
+		}
 	}
 
 	void DataManager::updateNode(const Node &node) {
@@ -253,6 +310,29 @@ namespace graph::storage {
 	void DataManager::addEdge(Edge &edge) const {
 		edgeManager_->add(edge);
 		notifyEdgeAdded(edge);
+	}
+
+	void DataManager::addEdges(std::vector<Edge> &edges) {
+		if (edges.empty()) return;
+
+		// 1. Assign IDs and initial persistence
+		edgeManager_->addBatch(edges);
+
+		// 2. Indexing (needs IDs + Props)
+		notifyEdgesAdded(edges);
+
+		// 3. Property Storage Handling
+		for (auto &edge : edges) {
+			if (edge.getProperties().empty()) continue;
+
+			// Links external properties using the ID assigned in Step 1
+			propertyManager_->storeProperties(edge);
+
+			if (EntityPropertyTraits<Edge>::hasPropertyEntity(edge)) {
+				// Persist the modification (link to external prop)
+				edgeManager_->update(edge);
+			}
+		}
 	}
 
 	void DataManager::updateEdge(const Edge &edge) {

@@ -39,9 +39,9 @@ namespace graph::query::indexes {
 		std::shared_ptr<PropertyIndex> getPropertyIndex() const;
 
 		// --- Index Lifecycle ---
-		bool createLabelIndex(const std::function<bool()>& buildFunc);
+		bool createLabelIndex(const std::function<bool()> &buildFunc);
 
-		bool createPropertyIndex(const std::string& key, const std::function<bool()>& buildFunc);
+		bool createPropertyIndex(const std::string &key, const std::function<bool()> &buildFunc);
 
 		bool dropIndex(const std::string &indexType, const std::string &key);
 		void persistState() const;
@@ -49,6 +49,9 @@ namespace graph::query::indexes {
 		// --- Event Handlers for Automatic Index Updates ---
 		template<typename T>
 		void onEntityAdded(const T &entity) const;
+
+		template<typename T>
+		void onEntitiesAdded(const std::vector<T> &entities) const;
 
 		template<typename T>
 		void onEntityUpdated(const T &oldEntity, const T &newEntity) const;

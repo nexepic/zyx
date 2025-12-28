@@ -27,6 +27,7 @@
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/SkipOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
+#include "graph/query/execution/operators/UnwindOperator.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 
@@ -249,6 +250,12 @@ namespace graph::query {
 	QueryPlanner::cartesianProductOp(std::unique_ptr<execution::PhysicalOperator> left,
 									 std::unique_ptr<execution::PhysicalOperator> right) {
 		return std::make_unique<execution::operators::CartesianProductOperator>(std::move(left), std::move(right));
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
+						   const std::vector<PropertyValue> &list) const {
+		return std::make_unique<execution::operators::UnwindOperator>(std::move(child), alias, list);
 	}
 
 } // namespace graph::query

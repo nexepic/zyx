@@ -53,6 +53,8 @@ namespace graph::query::indexes {
 		// Add property to index
 		void addProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
 
+		void addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>>& properties);
+
 		void removeProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
 
 		// Find nodes with exact property match

@@ -43,6 +43,62 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
+	void PersistenceManager::upsertBatch(const std::vector<EntityType> &entities, EntityChangeType changeType) {
+		if (entities.empty()) {
+			return;
+		}
+
+		// Pre-resolve the target registry pointer to avoid repeated conditional checks inside the loop.
+		// Using 'if constexpr' allows the compiler to optimize away unreachable branches for each instantiation.
+		DirtyEntityRegistry<EntityType> *targetRegistry = nullptr;
+
+		if constexpr (std::is_same_v<EntityType, Node>) {
+			targetRegistry = nodeRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Edge>) {
+			targetRegistry = edgeRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Property>) {
+			targetRegistry = propertyRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Blob>) {
+			targetRegistry = blobRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Index>) {
+			targetRegistry = indexRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, State>) {
+			targetRegistry = stateRegistry_.get();
+		}
+
+		if (!targetRegistry) {
+			// This should theoretically never happen if all types are covered.
+			return;
+		}
+
+		// --- Streaming Batch Processing ---
+		// We process entities one by one and check the dirty count threshold continuously.
+		// This prevents "Memory Explosion" (OOM) if the input vector is massive (e.g., 10M entities)
+		// and exceeds the configured 'maxDirtyEntities_' limit.
+
+		for (const auto &entity : entities) {
+			// 1. Insert or Update the entity in the dirty registry.
+			targetRegistry->upsert(DirtyEntityInfo<EntityType>(changeType, entity));
+
+			// 2. Check the high-water mark.
+			// Calculation is fast (simple integer additions).
+			// If total dirty entities exceed the threshold, we trigger an intermediate flush immediately.
+			size_t totalDirtyCount = nodeRegistry_->size() + edgeRegistry_->size() + propertyRegistry_->size() +
+									 blobRegistry_->size() + indexRegistry_->size() + stateRegistry_->size();
+
+			if (totalDirtyCount >= maxDirtyEntities_) {
+				// Trigger the auto-flush callback (usually FileStorage::flush).
+				// This writes current dirty data to disk and clears the registries.
+				checkAndTriggerAutoFlush();
+			}
+		}
+
+		// 3. Final Check (Optional but recommended).
+		// Ensures that if the batch ended exactly at the threshold, we flush now rather than later.
+		checkAndTriggerAutoFlush();
+	}
+
+	template<typename EntityType>
 	void PersistenceManager::remove(int64_t id) {
 		// Assuming DirtyEntityRegistry has a 'remove(id)' or 'erase(id)' method.
 		// If your DirtyEntityRegistry wraps a map, this should just call map.erase(id).
@@ -191,4 +247,11 @@ namespace graph::storage {
 	template std::vector<DirtyEntityInfo<Blob>> PersistenceManager::getAllDirtyInfos<Blob>() const;
 	template std::vector<DirtyEntityInfo<Index>> PersistenceManager::getAllDirtyInfos<Index>() const;
 	template std::vector<DirtyEntityInfo<State>> PersistenceManager::getAllDirtyInfos<State>() const;
+
+	template void PersistenceManager::upsertBatch<Node>(const std::vector<Node> &, EntityChangeType);
+	template void PersistenceManager::upsertBatch<Edge>(const std::vector<Edge> &, EntityChangeType);
+	template void PersistenceManager::upsertBatch<Property>(const std::vector<Property> &, EntityChangeType);
+	template void PersistenceManager::upsertBatch<Blob>(const std::vector<Blob> &, EntityChangeType);
+	template void PersistenceManager::upsertBatch<Index>(const std::vector<Index> &, EntityChangeType);
+	template void PersistenceManager::upsertBatch<State>(const std::vector<State> &, EntityChangeType);
 } // namespace graph::storage

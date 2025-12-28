@@ -204,6 +204,11 @@ namespace graph::query {
 		return *this;
 	}
 
+	QueryBuilder& QueryBuilder::unwind(const std::vector<PropertyValue>& list, const std::string& alias) {
+		root_ = planner_->unwindOp(std::move(root_), alias, list);
+		return *this;
+	}
+
 	std::unique_ptr<execution::PhysicalOperator> QueryBuilder::build() { return std::move(root_); }
 
 } // namespace graph::query

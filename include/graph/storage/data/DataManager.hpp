@@ -94,6 +94,7 @@ namespace graph::storage {
 
 		// Node-specific operations
 		void addNode(Node &node) const;
+		void addNodes(std::vector<Node>& nodes);
 		void updateNode(const Node &node);
 		void deleteNode(Node &node) const;
 		Node getNode(int64_t id) const;
@@ -105,6 +106,7 @@ namespace graph::storage {
 
 		// Edge-specific operations
 		void addEdge(Edge &edge) const;
+		void addEdges(std::vector<Edge>& edges);
 		void updateEdge(const Edge &edge);
 		void deleteEdge(Edge &edge) const;
 		Edge getEdge(int64_t id) const;
@@ -235,6 +237,8 @@ namespace graph::storage {
 		template<typename EntityType>
 		void setEntityDirty(const DirtyEntityInfo<EntityType> &info);
 
+		std::shared_ptr<PersistenceManager> getPersistenceManager() const { return persistenceManager_; }
+
 	private:
 		// Core file and state
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
@@ -307,10 +311,12 @@ namespace graph::storage {
 		void removeEntityProperty(int64_t entityId, const std::string &key);
 
 		void notifyNodeAdded(const Node &node) const;
+		void notifyNodesAdded(const std::vector<Node>& nodes) const;
 		void notifyNodeUpdated(const Node &oldNode, const Node &newNode) const;
 		void notifyNodeDeleted(const Node &node) const;
 
 		void notifyEdgeAdded(const Edge &edge) const;
+		void notifyEdgesAdded(const std::vector<Edge>& edges) const;
 		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const;
 		void notifyEdgeDeleted(const Edge &edge) const;
 

@@ -47,6 +47,8 @@ namespace graph::query::indexes {
 		 */
 		void addNode(int64_t nodeId, const std::string &label);
 
+		void addNodesBatch(const std::unordered_map<std::string, std::vector<int64_t>>& nodesByLabel);
+
 		/**
 		 * Removes a node from a label index
 		 *

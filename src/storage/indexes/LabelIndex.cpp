@@ -105,6 +105,40 @@ namespace graph::query::indexes {
 		}
 	}
 
+	void LabelIndex::addNodesBatch(const std::unordered_map<std::string, std::vector<int64_t>> &nodesByLabel) {
+		// Acquire lock ONCE for the entire batch operation
+		std::unique_lock lock(mutex_);
+
+		if (rootId_ == 0) {
+			rootId_ = treeManager_->initialize();
+		}
+
+		// Iterate over each label group
+		for (const auto &[label, entityIds] : nodesByLabel) {
+			if (entityIds.empty()) continue;
+
+			// Prepare data for IndexTreeManager
+			// Key: Label (String), Value: Entity ID
+			std::vector<std::pair<PropertyValue, int64_t>> batchEntries;
+			batchEntries.reserve(entityIds.size());
+
+			for (int64_t id : entityIds) {
+				batchEntries.emplace_back(PropertyValue(label), id);
+			}
+
+			// Perform batch insertion into the B+ Tree
+			// NOTE: Since LabelIndex uses a SINGLE tree where Key=Label,
+			// all these entries share the same 'label' key but have different IDs.
+			// The IndexTreeManager handles multi-value keys (duplicate keys) correctly.
+
+			int64_t newRootId = treeManager_->insertBatch(rootId_, batchEntries);
+
+			if (newRootId != rootId_) {
+				rootId_ = newRootId;
+			}
+		}
+	}
+
 	void LabelIndex::removeNode(int64_t entityId, const std::string &label) {
 		std::unique_lock lock(mutex_);
 		if (rootId_ == 0) {

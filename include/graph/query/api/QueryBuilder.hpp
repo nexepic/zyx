@@ -117,6 +117,8 @@ namespace graph::query {
         };
         QueryBuilder& orderBy_(const std::vector<SortOrder>& items);
 
+    	QueryBuilder& unwind(const std::vector<PropertyValue>& list, const std::string& alias);
+
         [[nodiscard]] std::unique_ptr<execution::PhysicalOperator> build();
 
     private:

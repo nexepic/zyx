@@ -148,7 +148,7 @@ namespace graph::query {
 		sortOp(std::unique_ptr<execution::PhysicalOperator> child,
 			   const std::vector<execution::operators::SortItem> &items);
 
-		std::unique_ptr<execution::PhysicalOperator>
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		traverseVarLengthOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
 							const std::string &targetVar, const std::string &edgeLabel, int minHops, int maxHops,
 							const std::string &direction) const;
@@ -156,6 +156,10 @@ namespace graph::query {
 		static std::unique_ptr<execution::PhysicalOperator>
 		cartesianProductOp(std::unique_ptr<execution::PhysicalOperator> left,
 						   std::unique_ptr<execution::PhysicalOperator> right);
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
+				 const std::vector<PropertyValue> &list) const;
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

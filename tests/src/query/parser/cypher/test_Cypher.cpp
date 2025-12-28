@@ -866,3 +866,58 @@ TEST_F(CypherTest, CartesianProduct_ReturnStar) {
 	EXPECT_TRUE(foundA);
 	EXPECT_TRUE(foundB);
 }
+
+// ============================================================================
+// UNWIND & Batch Insert Tests
+// ============================================================================
+
+TEST_F(CypherTest, Unwind_BasicValues) {
+    // Query: UNWIND [1, 2, 3] AS x RETURN x
+    auto res = execute("UNWIND [1, 2, 3] AS x RETURN x");
+
+    ASSERT_EQ(res.rowCount(), 3UL);
+
+    // Verify order and values
+    // Note: ProjectOperator puts variable in the row
+    auto rows = res.getRows();
+    EXPECT_EQ(rows[0].at("x").toString(), "1");
+    EXPECT_EQ(rows[1].at("x").toString(), "2");
+    EXPECT_EQ(rows[2].at("x").toString(), "3");
+}
+
+TEST_F(CypherTest, BatchInsert_Nodes) {
+    // 1. Batch Create
+    // UNWIND list -> Create Node for each
+    // Note: Since our current property parser uses 'getText()', {id: id} maps property 'id' to string "id".
+    // To fully support variable reference in CREATE ({id: x}), the CreateNodeOperator needs to resolve "x" from Record.
+    // Assuming your CreateNodeOperator/Visitor handles property value resolution (or we use literal values for now).
+
+    // Test: Creating 3 nodes
+    // Since we might not support dynamic variable binding in props yet (e.g. {val: x}),
+    // we verify that the Loop runs 3 times and creates 3 nodes.
+
+    (void) execute("UNWIND [1, 2, 3] AS x CREATE (n:BatchNode)");
+
+    // 2. Verify Count
+    auto res = execute("MATCH (n:BatchNode) RETURN n");
+    ASSERT_EQ(res.nodeCount(), 3UL);
+}
+
+TEST_F(CypherTest, Unwind_Cartesian) {
+    // 1. Setup 2 Nodes
+    (void) execute("CREATE (:A)");
+    (void) execute("CREATE (:A)");
+
+    // 2. Unwind list of 3 items
+    // Logic: 2 Nodes * 3 Items = 6 Rows
+    auto res = execute("MATCH (n:A) UNWIND [10, 20, 30] AS val RETURN n, val");
+
+    ASSERT_EQ(res.rowCount(), 6UL);
+
+    // Verify values exist
+    bool found10 = false;
+    for(const auto& row : res.getRows()) {
+        if (row.at("val").toString() == "10") found10 = true;
+    }
+    EXPECT_TRUE(found10);
+}

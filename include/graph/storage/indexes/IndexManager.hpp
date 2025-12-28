@@ -77,9 +77,11 @@ namespace graph::query::indexes {
 
 		// --- Entity Event Handlers (Implementing IEntityObserver) ---
 		void onNodeAdded(const Node &node) override;
+		void onNodesAdded(const std::vector<Node>& nodes) override;
 		void onNodeUpdated(const Node &oldNode, const Node &newNode) override;
 		void onNodeDeleted(const Node &node) override;
 		void onEdgeAdded(const Edge &edge) override;
+		void onEdgesAdded(const std::vector<Edge>& edges) override;
 		void onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) override;
 		void onEdgeDeleted(const Edge &edge) override;
 
