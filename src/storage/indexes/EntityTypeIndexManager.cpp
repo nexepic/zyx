@@ -135,27 +135,24 @@ namespace graph::query::indexes {
 	void EntityTypeIndexManager::onEntitiesAdded(const std::vector<T> &entities) const {
 		if (entities.empty()) return;
 
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		// Move lock scope: Only lock when actually invoking the index methods.
+		// Preparing the data does not require the mutex if 'entities' is local.
 
 		// --- 1. Prepare Label Index Batch ---
-		// Map: Label -> List of IDs
 		std::unordered_map<std::string, std::vector<int64_t>> nodesByLabel;
 
 		// --- 2. Prepare Property Index Batch ---
-		// List of {EntityID, Key, Value}
 		std::vector<std::tuple<int64_t, std::string, PropertyValue>> propBatch;
-
-		// Reserve space to avoid reallocations (heuristic)
+		// Tuning reserve: Assume avg 3 props per entity
 		propBatch.reserve(entities.size() * 3);
 
 		for (const auto &entity : entities) {
-			// A. Collect Label Info
+			// A. Label
 			if (!entity.getLabel().empty()) {
 				nodesByLabel[entity.getLabel()].push_back(entity.getId());
 			}
 
-			// B. Collect Property Info
-			// Only collect properties that are actually indexed to save memory/processing
+			// B. Properties
 			const auto& props = entity.getProperties();
 			if (!props.empty()) {
 				// We can check 'hasKeyIndexed' here to filter early,
@@ -171,21 +168,20 @@ namespace graph::query::indexes {
 			}
 		}
 
-		// --- 3. Execute Batch Updates ---
+		// --- 3. Execute Batch Updates (NOW we lock) ---
+		{
+			std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// Update Label Index
-		if (!nodesByLabel.empty() && !labelIndex_->isEmpty()) {
-			labelIndex_->addNodesBatch(nodesByLabel);
+			if (!nodesByLabel.empty() && !labelIndex_->isEmpty()) {
+				labelIndex_->addNodesBatch(nodesByLabel);
+			}
+
+			if (!propBatch.empty() && !propertyIndex_->isEmpty()) {
+				propertyIndex_->addPropertiesBatch(propBatch);
+			}
+
+			persistState();
 		}
-
-		// Update Property Indexes
-		if (!propBatch.empty() && !propertyIndex_->isEmpty()) {
-			propertyIndex_->addPropertiesBatch(propBatch);
-		}
-
-		// --- 4. Persist State ---
-		// We persist once after all batch updates are done.
-		persistState();
 	}
 
 	template<typename T>

@@ -65,7 +65,7 @@ namespace metrix::benchmark {
 	public:
 		using BenchmarkBase::BenchmarkBase;
 
-		void setup(Database& db) override {
+		void setup([[maybe_unused]] Database& db) override {
 			std::ostringstream oss;
 			oss << "UNWIND [";
 			for (int i = 0; i < dataSize_; ++i) {
@@ -85,19 +85,19 @@ namespace metrix::benchmark {
 	};
 
 	class NativeBatchInsertBench : public BenchmarkBase {
-		std::vector<std::unordered_map<std::string, metrix::Value>> preparedData_;
+		std::vector<std::unordered_map<std::string, Value>> preparedData_;
 		std::string label_ = "BatchUser";
 
 	public:
 		using BenchmarkBase::BenchmarkBase;
 
-		void setup(Database& db) override {
+		void setup([[maybe_unused]] Database& db) override {
 			std::cout << " (Preparing memory structures...) " << std::flush;
 
 			preparedData_.reserve(dataSize_);
 			for (int i = 0; i < dataSize_; ++i) {
 				preparedData_.push_back({
-					{"id", (int64_t)i},
+					{"id", static_cast<int64_t>(i)},
 					{"name", "User_" + std::to_string(i)}
 				});
 			}
