@@ -568,6 +568,123 @@ namespace graph {
 		std::memcpy(dataBuffer, data.data(), data.size());
 	}
 
+	size_t Index::getEntrySerializedSize(const Entry& entry) {
+		size_t size = 0;
+
+		// 1. Flags byte
+		size += sizeof(uint8_t); // EntrySerializationFlags
+
+		// 2. Key Size
+		size_t keySize = graph::utils::getSerializedSize(entry.key);
+
+		if (keySize > LEAF_KEY_INLINE_THRESHOLD) {
+			size += sizeof(int64_t); // Blob ID
+		} else {
+			size += keySize;
+		}
+
+		// 3. Value Count
+		size += sizeof(uint32_t);
+
+		// 4. Values Size
+		size_t valuesRawSize = entry.values.size() * sizeof(int64_t);
+
+		if (valuesRawSize > LEAF_VALUES_INLINE_THRESHOLD) {
+			size += sizeof(int64_t); // Blob ID
+		} else {
+			size += valuesRawSize;
+		}
+
+		return size;
+	}
+
+	bool
+	Index::insertEntryInPlace(const PropertyValue &key, int64_t value,
+							  const std::shared_ptr<storage::DataManager> &dataManager,
+							  const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		if (!isLeaf())
+			throw std::logic_error("In-place insertion only for leaf nodes.");
+
+		// For simplicity in this example, we'll fall back to the vector-based approach
+		// if the modification is complex (e.g., adding a new key). The real power comes from the merge function.
+		// A full implementation would find the insertion point, memmove, and write.
+		// However, the `mergeEntriesInPlace` is the most critical for batch performance.
+
+		auto entries = getAllEntries(dataManager);
+		auto it = std::lower_bound(entries.begin(), entries.end(), key,
+								   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
+
+		bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
+
+		if (keyExists) {
+			it->values.push_back(value);
+		} else {
+			entries.insert(it, {key, {value}, 0, 0});
+		}
+
+		// Check for overflow before committing
+		size_t estimatedSize = 0;
+		for (const auto &entry: entries) {
+			estimatedSize += getEntrySerializedSize(entry);
+		}
+
+		if (estimatedSize > DATA_SIZE) {
+			return false; // Signal overflow
+		}
+
+		setAllEntries(entries, dataManager);
+		return true;
+	}
+
+	void
+	Index::mergeEntriesInPlace(std::vector<Entry> &newEntries, const std::shared_ptr<storage::DataManager> &dataManager,
+							   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		if (!isLeaf())
+			throw std::logic_error("In-place merge only for leaf nodes.");
+		if (newEntries.empty())
+			return;
+
+		// 1. Get existing entries ONCE.
+		auto existingEntries = getAllEntries(dataManager);
+
+		// 2. Create a final merged list.
+		std::vector<Entry> merged;
+		merged.reserve(existingEntries.size() + newEntries.size());
+
+		// Sort new entries just in case they aren't.
+		std::sort(newEntries.begin(), newEntries.end(),
+				  [&](const auto &a, const auto &b) { return comparator(a.key, b.key); });
+
+		// 3. Merge existing and new entries. This is the core logic.
+		auto exist_it = existingEntries.begin();
+		auto new_it = newEntries.begin();
+		while (exist_it != existingEntries.end() || new_it != newEntries.end()) {
+			if (exist_it != existingEntries.end() &&
+				(new_it == newEntries.end() || comparator(exist_it->key, new_it->key))) {
+				merged.push_back(std::move(*exist_it));
+				++exist_it;
+			} else if (new_it != newEntries.end() &&
+					   (exist_it == existingEntries.end() || comparator(new_it->key, exist_it->key))) {
+				merged.push_back(std::move(*new_it));
+				++new_it;
+			} else { // Keys are equal, merge values
+				exist_it->values.insert(exist_it->values.end(), new_it->values.begin(), new_it->values.end());
+				// Optional: sort and unique values if needed
+				// std::sort(exist_it->values.begin(), exist_it->values.end());
+				// exist_it->values.erase(std::unique(exist_it->values.begin(), exist_it->values.end()),
+				// exist_it->values.end());
+				merged.push_back(std::move(*exist_it));
+				++exist_it;
+				++new_it;
+			}
+		}
+
+		// 4. Write the final merged list back to the buffer ONCE.
+		// The overflow check must now happen in the calling function (IndexTreeManager)
+		// because this function doesn't know if a split is possible.
+		setAllEntries(merged, dataManager);
+	}
+
 	bool Index::updateChildId(int64_t oldChildId, int64_t newChildId) {
 		if (isLeaf())
 			return false;
