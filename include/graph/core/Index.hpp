@@ -144,24 +144,7 @@ namespace graph {
 		void setAllChildren(std::vector<ChildEntry> &children,
 							const std::shared_ptr<storage::DataManager> &dataManager);
 
-		static size_t getEntrySerializedSize(const Entry& entry);
-
-		/**
-		 * @brief Inserts an entry into a leaf node without full deserialization.
-		 * This is the high-performance path.
-		 * @return True if insertion was successful, false if it would overflow.
-		 */
-		bool insertEntryInPlace(const PropertyValue &key, int64_t value,
-								const std::shared_ptr<storage::DataManager> &dataManager,
-								const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
-
-		/**
-		 * @brief Merges a sorted list of new entries into the leaf node in one operation.
-		 * This is the cornerstone of efficient batch insertion.
-		 */
-		void mergeEntriesInPlace(std::vector<Entry> &newEntries,
-								 const std::shared_ptr<storage::DataManager> &dataManager,
-								 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
+		static size_t getEntrySerializedSize(const Entry &entry);
 
 		bool updateChildId(int64_t oldChildId, int64_t newChildId);
 		[[nodiscard]] std::vector<int64_t> getChildIds() const;
@@ -169,9 +152,5 @@ namespace graph {
 	private:
 		Metadata metadata;
 		char dataBuffer[DATA_SIZE] = {}; // Buffer for serialized key-value pairs or child pointers
-
-		size_t findEntryOffset(const PropertyValue &key,
-							   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator,
-							   bool &keyExists) const;
 	};
 }; // namespace graph
