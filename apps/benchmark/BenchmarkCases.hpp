@@ -56,6 +56,65 @@ namespace metrix::benchmark {
 	};
 
 	// ========================================================================
+	// Scenario: Batch Insertion (High Throughput)
+	// Comparison: UNWIND vs vector<Node>
+	// ========================================================================
+
+	class CypherBatchInsertBench : public BenchmarkBase {
+		std::string query_;
+	public:
+		using BenchmarkBase::BenchmarkBase;
+
+		void setup(Database& db) override {
+			std::ostringstream oss;
+			oss << "UNWIND [";
+			for (int i = 0; i < dataSize_; ++i) {
+				oss << i << (i < dataSize_ - 1 ? "," : "");
+			}
+			oss << "] AS id CREATE (n:BatchUser {id: id})";
+			query_ = oss.str();
+		}
+
+		void run(Database& db) override {
+			db.execute(query_);
+		}
+
+		void teardown(Database&) override {}
+
+		int getItemsPerOp() const override { return dataSize_; }
+	};
+
+	class NativeBatchInsertBench : public BenchmarkBase {
+		std::vector<std::unordered_map<std::string, metrix::Value>> preparedData_;
+		std::string label_ = "BatchUser";
+
+	public:
+		using BenchmarkBase::BenchmarkBase;
+
+		void setup(Database& db) override {
+			std::cout << " (Preparing memory structures...) " << std::flush;
+
+			preparedData_.reserve(dataSize_);
+			for (int i = 0; i < dataSize_; ++i) {
+				preparedData_.push_back({
+					{"id", (int64_t)i},
+					{"name", "User_" + std::to_string(i)}
+				});
+			}
+		}
+
+		void run(Database& db) override {
+			db.createNodes(label_, preparedData_);
+		}
+
+		void teardown(Database&) override {
+			preparedData_.clear();
+		}
+
+		int getItemsPerOp() const override { return dataSize_; }
+	};
+
+	// ========================================================================
 	// Scenario 2: Index Lookup
 	// Metric: Read Latency (Avg/P99)
 	// Logic: 'setup' populates 'dataSize_' nodes. 'run' performs 1 random lookup.
@@ -80,17 +139,30 @@ namespace metrix::benchmark {
 				db.execute("CREATE INDEX ON :User(uid)");
 			}
 
-			// 2. Pre-fill data
+			// 2. Pre-fill primary data (Users)
 			std::cout << " (Pre-filling " << dataSize_ << " nodes) " << std::flush;
 			for (int i = 0; i < dataSize_; ++i) {
 				db.createNode("User", {{"uid", static_cast<int64_t>(i)}});
 			}
 
-			// Add some noise (non-User nodes) to verify Full Scan overhead
-			// If we have 50k Users and 50k Products, Full Scan will check 100k items.
-			// Label Scan will only check 50k.
-			for (int i = 0; i < dataSize_ / 2; ++i) {
-				db.createNode("Product", {{"uid", static_cast<int64_t>(i)}});
+			// Add more noise with multiple different labels to verify Full Scan overhead.
+			// Distribute noise across several labels with varied properties.
+			std::vector<std::string> noiseLabels = {"Product", "Order", "Category", "Device"};
+			int perLabel = std::max(1, dataSize_ / (int)noiseLabels.size());
+
+			for (const auto &lbl : noiseLabels) {
+				for (int i = 0; i < perLabel; ++i) {
+					db.createNode(lbl, {
+						{"uid", static_cast<int64_t>(i)},
+						{"name", lbl + "_" + std::to_string(i)},
+						{"stock", static_cast<int64_t>(i % 100)},
+					});
+				}
+			}
+
+			// Add a small set of VIP users to create label skew and test selective scans.
+			for (int i = 0; i < std::max(1, dataSize_ / 10); ++i) {
+				db.createNode("VIP", {{"uid", static_cast<int64_t>(dataSize_ + i)}, {"tier", "gold"}});
 			}
 
 			db.save();
@@ -100,7 +172,7 @@ namespace metrix::benchmark {
 			int64_t searchId = rand() % dataSize_;
 			std::string q;
 
-			// [OPTIMIZATION] Return n.uid directly to verify value easily
+			// Return n.uid directly to verify value easily
 			switch (mode_) {
 				case QueryMode::PROPERTY_INDEX:
 				case QueryMode::LABEL_SCAN:

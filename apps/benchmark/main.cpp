@@ -20,7 +20,7 @@ using namespace metrix::benchmark;
 namespace conf = config;
 
 int main() {
-    // [Optimization] Force disable debug logging to ensure accurate measurements
+    // Force disable debug logging to ensure accurate measurements
     // metrix::graph::log::Log::setDebug(false);
 
     std::cout << "=================================================================\n";
@@ -33,19 +33,37 @@ int main() {
     // ========================================================================
     // 1. Insertion Benchmarks (Write Throughput)
     // ========================================================================
-    tests.push_back(std::make_unique<CypherInsertBench>(
-        "Insert (Cypher)",
-        std::string(conf::PATH_INSERT_CYPHER),
-        conf::ITERATIONS_WRITE,
-        conf::DEFAULT_DATA_SIZE
-    ));
+	constexpr int TOTAL_ITEMS_TO_INSERT = conf::ITERATIONS_WRITE;
 
-    tests.push_back(std::make_unique<NativeInsertBench>(
-        "Insert (Native)",
-        std::string(conf::PATH_INSERT_NATIVE),
-        conf::ITERATIONS_WRITE,
-        conf::DEFAULT_DATA_SIZE
-    ));
+	tests.push_back(std::make_unique<CypherInsertBench>(
+		"Insert (Cypher)",
+		std::string(conf::PATH_INSERT_CYPHER),
+		TOTAL_ITEMS_TO_INSERT,
+		conf::DEFAULT_DATA_SIZE
+	));
+
+	tests.push_back(std::make_unique<NativeInsertBench>(
+		"Insert (Native)",
+		std::string(conf::PATH_INSERT_NATIVE),
+		TOTAL_ITEMS_TO_INSERT,
+		conf::DEFAULT_DATA_SIZE
+	));
+
+	constexpr int BATCH_ITERATIONS = TOTAL_ITEMS_TO_INSERT / conf::BATCH_WRITE_SIZE;
+
+	tests.push_back(std::make_unique<CypherBatchInsertBench>(
+		"Insert (Batch Cypher UNWIND)",
+		std::string(conf::PATH_INSERT_CYPHER) + "_batch",
+		BATCH_ITERATIONS,
+		conf::BATCH_WRITE_SIZE
+	));
+
+	tests.push_back(std::make_unique<NativeBatchInsertBench>(
+		"Insert (Batch Native API)",
+		std::string(conf::PATH_INSERT_NATIVE) + "_batch",
+		BATCH_ITERATIONS,
+		conf::BATCH_WRITE_SIZE
+	));
 
     // ========================================================================
     // 2. Query Benchmarks (Read Latency & Index Efficiency)
@@ -108,11 +126,24 @@ int main() {
     // ========================================================================
     printHeader();
 
-    for (auto& t : tests) {
-        // Execute setup, run loop, teardown, and calc stats
-        Metrics m = t->execute();
-        printRow(t->getName(), m);
-    }
+	for (auto& t : tests) {
+		Metrics m = t->execute();
+
+		// Use the test's self-reported batch size.
+		// If it's a single op test, getItemsPerOp returns 1.
+		int itemsPerOp = t->getItemsPerOp();
+
+		if (itemsPerOp > 1) {
+			// Convert Batches/Sec -> Items/Sec
+			m.opsPerSec *= itemsPerOp;
+
+			// Convert Latency/Batch -> Latency/Item
+			m.avgLatencyUs /= itemsPerOp;
+			m.p99LatencyUs /= itemsPerOp;
+		}
+
+		printRow(t->getName(), m);
+	}
 
     std::cout << "=================================================================\n";
 

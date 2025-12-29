@@ -561,7 +561,7 @@ TEST_F(IndexTreeManagerTest, InsertBatchIntoExistingTree) {
 TEST_F(IndexTreeManagerTest, InsertBatchMassiveSplit) {
 	// Prepare a large batch to trigger multiple leaf and internal splits
 	// Assuming fanout is small enough that 1000 items causes splits
-	const int count = 2000;
+	constexpr int count = 2000;
 	std::vector<std::pair<PropertyValue, int64_t>> batch;
 	batch.reserve(count);
 	for (int i = 0; i < count; ++i) {
@@ -726,7 +726,7 @@ TEST_F(IndexTreeManagerTest, LeafRedistributeFromLeft) {
 TEST_F(IndexTreeManagerTest, InternalNodeMerge) {
 	// 1. Create a 3-level tree (Root -> Internal -> Leaf)
 	// Insert enough data to ensure we have multiple internal nodes at level 1.
-	const int count = 1000;
+	constexpr int count = 1000;
 	for (int i = 0; i < count; ++i) {
 		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i)), i);
 	}
@@ -764,12 +764,12 @@ TEST_F(IndexTreeManagerTest, StressTest_RandomOps) {
 	std::srand(42); // Fixed seed for reproducibility
 	std::vector<int> keys;
 	std::set<int> activeKeys;
-	const int iterations = 5000;
+	constexpr int iterations = 5000;
 
 	// Phase 1: Random Insertions
 	for (int i = 0; i < iterations; ++i) {
 		int key = std::rand() % 100000;
-		if (activeKeys.find(key) == activeKeys.end()) {
+		if (!activeKeys.contains(key)) {
 			stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(std::to_string(key)), key);
 			activeKeys.insert(key);
 			keys.push_back(key);
@@ -786,7 +786,7 @@ TEST_F(IndexTreeManagerTest, StressTest_RandomOps) {
 	// We shuffle the vector to delete in random order, triggering various merge scenarios.
 	std::random_device rd;
 	std::mt19937 g(rd());
-	std::shuffle(keys.begin(), keys.end(), g);
+	std::ranges::shuffle(keys, g);
 
 	int deleteCount = keys.size() / 2;
 	for (int i = 0; i < deleteCount; ++i) {
@@ -803,7 +803,7 @@ TEST_F(IndexTreeManagerTest, StressTest_RandomOps) {
 	}
 
 	// Phase 4: Delete Everything
-	for (int i = deleteCount; i < keys.size(); ++i) {
+	for (size_t i = static_cast<size_t>(deleteCount); i < keys.size(); ++i) {
 		int key = keys[i];
 		stringTreeManager_->remove(stringRootId_, PropertyValue(std::to_string(key)), key);
 	}

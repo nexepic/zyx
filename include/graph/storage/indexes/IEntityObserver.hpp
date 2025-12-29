@@ -34,8 +34,7 @@ namespace graph {
 		 */
 		virtual void onNodeAdded([[maybe_unused]] const Node &node) {};
 
-		virtual void onNodesAdded(const std::vector<Node>& nodes) {}
-
+		virtual void onNodesAdded([[maybe_unused]] const std::vector<Node> &nodes) {}
 		/**
 		 * @brief Called after a node has been updated.
 		 * @param oldNode The state of the node before the update.
@@ -58,7 +57,7 @@ namespace graph {
 		 */
 		virtual void onEdgeAdded([[maybe_unused]] const Edge &edge) {};
 
-		virtual void onEdgesAdded(const std::vector<Edge>& edges) {}
+		virtual void onEdgesAdded([[maybe_unused]] const std::vector<Edge> &edges) {}
 
 		/**
 		 * @brief Called after an edge has been updated.

@@ -83,7 +83,7 @@ namespace graph::query::indexes {
 		 * @param key The key to search for
 		 * @return Vector of values associated with the key
 		 */
-		std::vector<int64_t> find(int64_t rootId, const PropertyValue &key);
+		std::vector<int64_t> find(int64_t rootId, const PropertyValue &key) const;
 
 		/**
 		 * Finds all values within a range (for numeric keys)
@@ -93,7 +93,7 @@ namespace graph::query::indexes {
 		 * @param maxKey The upper bound of the range
 		 * @return Vector of values within the range
 		 */
-		std::vector<int64_t> findRange(int64_t rootId, const PropertyValue &minKey, const PropertyValue &maxKey);
+		std::vector<int64_t> findRange(int64_t rootId, const PropertyValue &minKey, const PropertyValue &maxKey) const;
 
 		int64_t findLeafNode(int64_t rootId, const PropertyValue &key) const;
 

@@ -105,6 +105,8 @@ namespace metrix::benchmark {
 
 		std::string getName() const { return name_; }
 
+		virtual int getItemsPerOp() const { return 1; }
+
 	protected:
 		std::string name_;
 		std::string dbPath_;

@@ -33,6 +33,8 @@ namespace metrix::benchmark::config {
 	constexpr int ITERATIONS_READ = 500; // Queries
 	constexpr int ITERATIONS_ALGO = 100; // Graph Algorithms
 
+	constexpr int BATCH_WRITE_SIZE = 100; // For batch insertion benchmarks
+
 	// --- Path Settings ---
 	// Base paths for temporary databases
 	constexpr std::string_view PATH_INSERT_CYPHER = "/tmp/metrix_bench_insert_cypher";

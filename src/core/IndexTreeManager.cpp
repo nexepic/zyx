@@ -113,7 +113,7 @@ namespace graph::query::indexes {
 				(it != allEntries.end() && !keyComparator_(newKey, it->key) && !keyComparator_(it->key, newKey));
 
 		if (keyExists) {
-			if (std::find(it->values.begin(), it->values.end(), newValue) == it->values.end()) {
+			if (std::ranges::find(it->values, newValue) == it->values.end()) {
 				it->values.push_back(newValue);
 			}
 		} else {
@@ -246,8 +246,8 @@ namespace graph::query::indexes {
 		auto parent = dataManager_->getIndex(node.getParentId());
 		auto parentChildren = parent.getAllChildren(dataManager_);
 
-		auto it = std::find_if(parentChildren.begin(), parentChildren.end(),
-							   [&](const auto &child) { return child.childId == node.getId(); });
+		auto it =
+				std::ranges::find_if(parentChildren, [&](const auto &child) { return child.childId == node.getId(); });
 
 		if (it == parentChildren.end())
 			return;
@@ -287,8 +287,7 @@ namespace graph::query::indexes {
 	void IndexTreeManager::redistribute(Index &node, Index &sibling, Index &parent, bool isLeftSibling) {
 		auto parentChildren = parent.getAllChildren(dataManager_);
 
-		auto nodeIt = std::find_if(parentChildren.begin(), parentChildren.end(),
-								   [&](const auto &c) { return c.childId == node.getId(); });
+		auto nodeIt = std::ranges::find_if(parentChildren, [&](const auto &c) { return c.childId == node.getId(); });
 		size_t nodeIdx = std::distance(parentChildren.begin(), nodeIt);
 
 		if (isLeftSibling) {
@@ -414,8 +413,8 @@ namespace graph::query::indexes {
 		}
 
 		auto parentChildren = parent.getAllChildren(dataManager_);
-		auto rightNodeChildIt = std::find_if(parentChildren.begin(), parentChildren.end(),
-											 [&](const auto &c) { return c.childId == rightNode.getId(); });
+		auto rightNodeChildIt =
+				std::ranges::find_if(parentChildren, [&](const auto &c) { return c.childId == rightNode.getId(); });
 
 		if (rightNodeChildIt != parentChildren.end()) {
 			parentChildren.erase(rightNodeChildIt);
@@ -454,7 +453,7 @@ namespace graph::query::indexes {
 			rootId = initialize();
 
 		auto sortedEntries = entries;
-		std::sort(sortedEntries.begin(), sortedEntries.end(), [&](const auto &a, const auto &b) {
+		std::ranges::sort(sortedEntries, [&](const auto &a, const auto &b) {
 			if (keyComparator_(a.first, b.first))
 				return true;
 			if (keyComparator_(b.first, a.first))
@@ -529,7 +528,7 @@ namespace graph::query::indexes {
 		return removed;
 	}
 
-	std::vector<int64_t> IndexTreeManager::find(int64_t rootId, const PropertyValue &key) {
+	std::vector<int64_t> IndexTreeManager::find(int64_t rootId, const PropertyValue &key) const {
 		std::shared_lock lock(mutex_);
 		if (rootId == 0)
 			return {};
@@ -541,7 +540,7 @@ namespace graph::query::indexes {
 	}
 
 	std::vector<int64_t> IndexTreeManager::findRange(int64_t rootId, const PropertyValue &minKey,
-													 const PropertyValue &maxKey) {
+													 const PropertyValue &maxKey) const {
 		std::shared_lock lock(mutex_);
 		if (rootId == 0)
 			return {};

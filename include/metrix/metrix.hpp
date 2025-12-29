@@ -81,6 +81,12 @@ namespace metrix {
         // High-performance direct insert APIs
         void createNode(const std::string& label, const std::unordered_map<std::string, Value>& props);
 
+    	/**
+		 * @brief Create multiple nodes in one batch.
+		 *        Essential for high-performance data loading tools.
+		 */
+    	void createNodes(const std::string& label, const std::vector<std::unordered_map<std::string, Value>>& propsList);
+
     	void createEdge(const std::string& sourceLabel, const std::string& sourceKey, const Value& sourceVal,
 						const std::string& targetLabel, const std::string& targetKey, const Value& targetVal,
 						const std::string& edgeLabel, const std::unordered_map<std::string, Value>& props);
