@@ -67,7 +67,6 @@ namespace graph::query::indexes {
 
 	template<typename T>
 	void EntityTypeIndexManager::updateLabelIndex(const T &entity, const std::string &oldLabel, bool isDeleted) const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		// Only update the index if it has been built (i.e., not empty).
 		if (labelIndex_->isEmpty() || entity.getId() == 0)
 			return;
@@ -92,45 +91,53 @@ namespace graph::query::indexes {
 	}
 
 	void EntityTypeIndexManager::updatePropertyIndexes(
-			int64_t entityId, const std::unordered_map<std::string, PropertyValue> &oldProps,
-			const std::unordered_map<std::string, PropertyValue> &newProps) const {
-		// No lock needed here yet, we are preparing data.
-		// Locking happens inside PropertyIndex methods.
+		int64_t entityId,
+		const std::unordered_map<std::string, PropertyValue> &oldProps,
+		const std::unordered_map<std::string, PropertyValue> &newProps) const
+	{
+		if (propertyIndex_->isEmpty()) return;
 
-		if (propertyIndex_->isEmpty())
-			return;
+		// OPTIMIZATION STRATEGY:
+		// Instead of checking every property against the index (Iterate Props -> Check Index),
+		// we should iterate the Index Keys and check if the Entity has them (Iterate Index -> Check Props).
+		// This is better IF (Number of Indexes << Number of Entity Properties).
+		// usually, a graph has few indexes compared to raw data.
 
-		// 1. Handle Removals (Old properties that changed or were deleted)
-		for (const auto &[key, oldValue]: oldProps) {
-			if (!propertyIndex_->hasKeyIndexed(key))
-				continue;
+		const auto& indexedKeys = propertyIndex_->getIndexedKeys(); // Need a lightweight getter for this
 
-			auto newIt = newProps.find(key);
-			// If key is missing in new, or value changed, remove old index
-			if (newIt == newProps.end() || newIt->second != oldValue) {
-				propertyIndex_->removeProperty(entityId, key, oldValue);
-			}
-		}
+		if (indexedKeys.empty()) return;
 
-		// 2. Handle Additions (New properties or changed values)
-		// Optimization: Collect all additions into a batch vector
-		// to minimize lock contention and overhead in PropertyIndex.
 		std::vector<std::tuple<int64_t, std::string, PropertyValue>> addBatch;
-		addBatch.reserve(newProps.size());
+		// Reserve assuming worst case: all indexed keys are present
+		addBatch.reserve(indexedKeys.size());
 
-		for (const auto &[key, newValue]: newProps) {
-			if (!propertyIndex_->hasKeyIndexed(key))
-				continue;
-
+		for (const auto& key : indexedKeys) {
+			// Look up this indexed key in the entity's properties
+			auto newIt = newProps.find(key);
 			auto oldIt = oldProps.find(key);
-			// If key is new, or value changed, add to index
-			if (oldIt == oldProps.end() || oldIt->second != newValue) {
-				addBatch.emplace_back(entityId, key, newValue);
+
+			bool inNew = (newIt != newProps.end());
+			bool inOld = (oldIt != oldProps.end());
+
+			// 1. Handle Removals
+			if (inOld) {
+				// If removed in new, or value changed
+				if (!inNew || newIt->second != oldIt->second) {
+					propertyIndex_->removeProperty(entityId, key, oldIt->second);
+				}
+			}
+
+			// 2. Handle Additions
+			if (inNew) {
+				// If new (not in old), or value changed
+				if (!inOld || newIt->second != oldIt->second) {
+					// Batch the addition
+					addBatch.emplace_back(entityId, key, newIt->second);
+				}
 			}
 		}
 
 		if (!addBatch.empty()) {
-			// Use batch method even for single entity's properties
 			propertyIndex_->addPropertiesBatch(addBatch);
 		}
 	}

@@ -282,56 +282,59 @@ namespace graph {
 		return os.str().size() > DATA_SIZE;
 	}
 
-	Index::InsertResult Index::tryInsertEntry(const PropertyValue &key, int64_t value,
-                         const std::shared_ptr<storage::DataManager> &dataManager,
-                         const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
-        if (!isLeaf()) {
-            throw std::logic_error("Keys can only be inserted into leaf nodes.");
-        }
+	Index::InsertResult
+	Index::tryInsertEntry(const PropertyValue &key, int64_t value,
+						  const std::shared_ptr<storage::DataManager> &dataManager,
+						  const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		if (!isLeaf()) {
+			throw std::logic_error("Keys can only be inserted into leaf nodes.");
+		}
 
-        // 1. DESERIALIZE ONCE
-        auto entries = getAllEntries(dataManager);
+		// 1. DESERIALIZE ONCE
+		auto entries = getAllEntries(dataManager);
 
-        // 2. INSERT IN MEMORY
-        auto it = std::lower_bound(entries.begin(), entries.end(), key,
-                                   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
+		if (entries.capacity() < entries.size() + 1) {
+			entries.reserve(entries.size() + 1);
+		}
 
-        bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
+		// 2. INSERT IN MEMORY
+		auto it = std::lower_bound(entries.begin(), entries.end(), key,
+								   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
 
-        if (keyExists) {
-            auto &values = it->values;
-            // Optimization: Avoid duplicate value check if we trust the caller,
-            // but std::find is safer for consistency.
-            if (std::find(values.begin(), values.end(), value) == values.end()) {
-                values.push_back(value);
-            } else {
-                // Value already exists, nothing changed.
-                // We can strictly say "Success" without serialization overhead if we tracked dirtiness,
-                // but for now, we just return success.
-                return {true, {}};
-            }
-        } else {
-            entries.insert(it, {key, {value}, 0, 0});
-        }
+		bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
 
-        // 3. CALCULATE SIZE (Simulate Serialization)
-        // We calculate the size accurately. If it fits, we serialize for real.
-        size_t estimatedSize = 0;
-        for (const auto &entry : entries) {
-            estimatedSize += getEntrySerializedSize(entry);
-        }
+		if (keyExists) {
+			auto &values = it->values;
+			// Optimization: Avoid duplicate value check if we trust the caller,
+			// but std::find is safer for consistency.
+			if (std::find(values.begin(), values.end(), value) == values.end()) {
+				values.push_back(value);
+			} else {
+				// Value already exists, nothing changed.
+				// We can strictly say "Success" without serialization overhead if we tracked dirtiness,
+				// but for now, we just return success.
+				return {true, {}};
+			}
+		} else {
+			entries.insert(it, {key, {value}, 0, 0});
+		}
 
-        // 4. COMMIT OR RETURN OVERFLOW
-        if (estimatedSize <= DATA_SIZE) {
-            // Fits! Serialize back to dataBuffer.
-            setAllEntries(entries, dataManager);
-            return {true, {}};
-        } else {
-            // Overflow! Return the modified list so the caller can split it.
-            // We DO NOT modify 'this' node's buffer yet.
-            return {false, std::move(entries)};
-        }
-    }
+		// 3. CALCULATE SIZE (Simulate Serialization)
+		// We calculate the size accurately. If it fits, we serialize for real.
+		size_t estimatedSize = 0;
+		for (const auto &entry: entries) {
+			estimatedSize += getEntrySerializedSize(entry);
+			if (estimatedSize > DATA_SIZE) {
+				// Fail early!
+				// If we already exceed size, stop calculating and return overflow.
+				return {false, std::move(entries)};
+			}
+		}
+
+		// Fits!
+		setAllEntries(entries, dataManager);
+		return {true, {}};
+	}
 
 	void Index::insertEntry(const PropertyValue &key, int64_t value,
 							const std::shared_ptr<storage::DataManager> &dataManager,

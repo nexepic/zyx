@@ -200,7 +200,7 @@ namespace graph::storage {
 		notifyNodeAdded(node);
 	}
 
-	void DataManager::addNodes(std::vector<Node> &nodes) {
+	void DataManager::addNodes(std::vector<Node> &nodes) const {
 		if (nodes.empty()) return;
 
 		// -------------------------------------------------------
@@ -312,7 +312,7 @@ namespace graph::storage {
 		notifyEdgeAdded(edge);
 	}
 
-	void DataManager::addEdges(std::vector<Edge> &edges) {
+	void DataManager::addEdges(std::vector<Edge> &edges) const {
 		if (edges.empty()) return;
 
 		// 1. Assign IDs and initial persistence

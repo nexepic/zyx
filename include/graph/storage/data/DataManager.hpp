@@ -94,7 +94,7 @@ namespace graph::storage {
 
 		// Node-specific operations
 		void addNode(Node &node) const;
-		void addNodes(std::vector<Node>& nodes);
+		void addNodes(std::vector<Node>& nodes) const;
 		void updateNode(const Node &node);
 		void deleteNode(Node &node) const;
 		Node getNode(int64_t id) const;
@@ -106,7 +106,7 @@ namespace graph::storage {
 
 		// Edge-specific operations
 		void addEdge(Edge &edge) const;
-		void addEdges(std::vector<Edge>& edges);
+		void addEdges(std::vector<Edge>& edges) const;
 		void updateEdge(const Edge &edge);
 		void deleteEdge(Edge &edge) const;
 		Edge getEdge(int64_t id) const;
