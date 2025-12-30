@@ -282,50 +282,56 @@ namespace graph {
 		return os.str().size() > DATA_SIZE;
 	}
 
-	bool Index::wouldLeafOverflowOnInsert(
-			const PropertyValue &key, int64_t value, const std::shared_ptr<storage::DataManager> &dataManager,
-			const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const {
-		if (!isLeaf())
-			return false;
-		auto entries = getAllEntries(dataManager);
-		auto it = std::lower_bound(entries.begin(), entries.end(), key,
-								   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
+	Index::InsertResult Index::tryInsertEntry(const PropertyValue &key, int64_t value,
+                         const std::shared_ptr<storage::DataManager> &dataManager,
+                         const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+        if (!isLeaf()) {
+            throw std::logic_error("Keys can only be inserted into leaf nodes.");
+        }
 
-		bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
+        // 1. DESERIALIZE ONCE
+        auto entries = getAllEntries(dataManager);
 
-		// Simulate the insertion to calculate the potential size.
-		if (keyExists) {
-			it->values.push_back(value);
-		} else {
-			entries.insert(it, {key, {value}, 0, 0});
-		}
+        // 2. INSERT IN MEMORY
+        auto it = std::lower_bound(entries.begin(), entries.end(), key,
+                                   [&](const Entry &a, const PropertyValue &b) { return comparator(a.key, b); });
 
-		// Simulate the new serialization process to get an accurate size estimate.
-		size_t estimatedSize = 0;
-		for (const auto &entry: entries) {
-			estimatedSize += sizeof(uint8_t); // for flags
+        bool keyExists = (it != entries.end() && !comparator(key, it->key) && !comparator(it->key, key));
 
-			// Account for key size (blob ID or inline data)
-			const bool keyIsBlob = utils::getSerializedSize(entry.key) > LEAF_KEY_INLINE_THRESHOLD;
-			if (keyIsBlob) {
-				estimatedSize += sizeof(int64_t);
-			} else {
-				estimatedSize += utils::getSerializedSize(entry.key);
-			}
+        if (keyExists) {
+            auto &values = it->values;
+            // Optimization: Avoid duplicate value check if we trust the caller,
+            // but std::find is safer for consistency.
+            if (std::find(values.begin(), values.end(), value) == values.end()) {
+                values.push_back(value);
+            } else {
+                // Value already exists, nothing changed.
+                // We can strictly say "Success" without serialization overhead if we tracked dirtiness,
+                // but for now, we just return success.
+                return {true, {}};
+            }
+        } else {
+            entries.insert(it, {key, {value}, 0, 0});
+        }
 
-			// Account for value count
-			estimatedSize += sizeof(uint32_t);
+        // 3. CALCULATE SIZE (Simulate Serialization)
+        // We calculate the size accurately. If it fits, we serialize for real.
+        size_t estimatedSize = 0;
+        for (const auto &entry : entries) {
+            estimatedSize += getEntrySerializedSize(entry);
+        }
 
-			// Account for values size (blob ID or inline data)
-			const bool valuesAreBlob = (entry.values.size() * sizeof(int64_t)) > LEAF_VALUES_INLINE_THRESHOLD;
-			if (valuesAreBlob) {
-				estimatedSize += sizeof(int64_t);
-			} else {
-				estimatedSize += entry.values.size() * sizeof(int64_t);
-			}
-		}
-		return estimatedSize > DATA_SIZE;
-	}
+        // 4. COMMIT OR RETURN OVERFLOW
+        if (estimatedSize <= DATA_SIZE) {
+            // Fits! Serialize back to dataBuffer.
+            setAllEntries(entries, dataManager);
+            return {true, {}};
+        } else {
+            // Overflow! Return the modified list so the caller can split it.
+            // We DO NOT modify 'this' node's buffer yet.
+            return {false, std::move(entries)};
+        }
+    }
 
 	void Index::insertEntry(const PropertyValue &key, int64_t value,
 							const std::shared_ptr<storage::DataManager> &dataManager,

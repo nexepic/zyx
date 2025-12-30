@@ -111,7 +111,7 @@ namespace graph::query::indexes {
 		// Helper methods for B+Tree operations
 		int64_t createNewNode(Index::NodeType type) const;
 
-		void splitLeaf(Index &leaf, const PropertyValue &newKey, int64_t newValue, int64_t &rootId);
+		void splitLeaf(Index &leaf, std::vector<Index::Entry>& allEntries, int64_t &rootId);
 		void insertIntoParent(Index &leftNode, const PropertyValue &key, int64_t rightNodeId, int64_t &rootId);
 
 		/**

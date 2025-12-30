@@ -103,39 +103,39 @@ namespace graph::query::indexes {
 		}
 	}
 
-	void IndexTreeManager::splitLeaf(Index &leaf, const PropertyValue &newKey, int64_t newValue, int64_t &rootId) {
-		auto allEntries = leaf.getAllEntries(dataManager_);
-		auto it = std::lower_bound(
-				allEntries.begin(), allEntries.end(), newKey,
-				[&](const Index::Entry &a, const PropertyValue &b) { return keyComparator_(a.key, b); });
+	void IndexTreeManager::splitLeaf(Index &leaf, std::vector<Index::Entry>& allEntries, int64_t &rootId) {
+		// NOTE: We do NOT need to insert the new key/value here anymore.
+		// 'allEntries' already contains the new data inserted by tryInsertEntry.
 
-		bool keyExists =
-				(it != allEntries.end() && !keyComparator_(newKey, it->key) && !keyComparator_(it->key, newKey));
-
-		if (keyExists) {
-			if (std::ranges::find(it->values, newValue) == it->values.end()) {
-				it->values.push_back(newValue);
-			}
-		} else {
-			allEntries.insert(it, {newKey, {newValue}, 0, 0});
-		}
-
+		// Create new sibling node
 		int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
 		auto newLeaf = dataManager_->getIndex(newLeafId);
 		newLeaf.setLevel(leaf.getLevel());
 		newLeaf.setParentId(leaf.getParentId());
 
+		// Standard B+ Tree Split: 50/50
 		size_t midPointIdx = allEntries.size() / 2;
+
+		// Key to promote to parent (for leaf split, it's a copy of the key at split point)
 		PropertyValue promotedKey = allEntries[midPointIdx].key;
 
-		std::vector<Index::Entry> leftEntries(allEntries.begin(), allEntries.begin() + midPointIdx);
-		std::vector<Index::Entry> rightEntries(allEntries.begin() + midPointIdx, allEntries.end());
+		// Split vector
+		std::vector<Index::Entry> leftEntries(
+			std::make_move_iterator(allEntries.begin()),
+			std::make_move_iterator(allEntries.begin() + midPointIdx));
 
+		std::vector<Index::Entry> rightEntries(
+			std::make_move_iterator(allEntries.begin() + midPointIdx),
+			std::make_move_iterator(allEntries.end()));
+
+		// Serialize both nodes
 		leaf.setAllEntries(leftEntries, dataManager_);
 		newLeaf.setAllEntries(rightEntries, dataManager_);
 
+		// Maintain Linked List
 		newLeaf.setNextLeafId(leaf.getNextLeafId());
 		newLeaf.setPrevLeafId(leaf.getId());
+
 		if (leaf.getNextLeafId() != 0) {
 			auto nextLeaf = dataManager_->getIndex(leaf.getNextLeafId());
 			nextLeaf.setPrevLeafId(newLeafId);
@@ -143,9 +143,11 @@ namespace graph::query::indexes {
 		}
 		leaf.setNextLeafId(newLeafId);
 
+		// Persist changes
 		dataManager_->updateIndexEntity(leaf);
 		dataManager_->updateIndexEntity(newLeaf);
 
+		// Update Parent
 		insertIntoParent(leaf, promotedKey, newLeafId, rootId);
 	}
 
@@ -663,25 +665,35 @@ namespace graph::query::indexes {
     }
 
 	int64_t IndexTreeManager::insert(int64_t rootId, const PropertyValue &key, const int64_t value) {
-		std::unique_lock lock(mutex_);
-		if (rootId == 0)
-			rootId = initialize();
+        std::unique_lock lock(mutex_);
+        if (rootId == 0)
+            rootId = initialize();
 
-		int64_t leafId = findLeafNode(rootId, key);
-		if (leafId == 0) {
-			rootId = initialize();
-			leafId = rootId;
-		}
+        // 1. Traversal (IO Bound, difficult to optimize without caching nodes in IndexTreeManager)
+        int64_t leafId = findLeafNode(rootId, key);
+        if (leafId == 0) {
+            rootId = initialize();
+            leafId = rootId;
+        }
 
-		auto leaf = dataManager_->getIndex(leafId);
-		if (leaf.wouldLeafOverflowOnInsert(key, value, dataManager_, keyComparator_)) {
-			splitLeaf(leaf, key, value, rootId);
-		} else {
-			leaf.insertEntry(key, value, dataManager_, keyComparator_);
-			dataManager_->updateIndexEntity(leaf);
-		}
-		return rootId;
-	}
+        auto leaf = dataManager_->getIndex(leafId);
+
+        // 2. Single-Pass Insert Attempt
+        // tryInsertEntry does: Deserialize -> Modify -> Check Size -> (Serialize OR Return Data)
+        auto result = leaf.tryInsertEntry(key, value, dataManager_, keyComparator_);
+
+        if (result.success) {
+            // Success: The node buffer is already updated in memory.
+            // Just mark dirty in DataManager.
+            dataManager_->updateIndexEntity(leaf);
+        } else {
+            // Overflow: We have the full vector of entries (old + new) in result.overflowEntries.
+            // We pass this directly to splitLeaf, avoiding re-reading.
+            splitLeaf(leaf, result.overflowEntries, rootId);
+        }
+
+        return rootId;
+    }
 
 	bool IndexTreeManager::remove(int64_t &rootId, const PropertyValue &key, int64_t value) {
 		std::unique_lock lock(mutex_);

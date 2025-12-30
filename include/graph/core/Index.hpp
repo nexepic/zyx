@@ -112,6 +112,25 @@ namespace graph {
 			int64_t keyBlobId = 0; // ID of blob for oversized key. 0 if inline.
 		};
 
+		// Result structure for single-pass insertion
+		struct InsertResult {
+			bool success;
+			// If success = false (overflow), this contains the full list of entries
+			// including the one we tried to insert, ready for splitting.
+			std::vector<Entry> overflowEntries;
+		};
+
+		/**
+		 * @brief A combined method to deserialize, try to insert, and serialize back if successful.
+		 * Optimization: Prevents double deserialization (once for check, once for insert).
+		 *
+		 * @return InsertResult containing success status. If overflow occurs,
+		 *         returns the modified entry list to be used by the splitter.
+		 */
+		InsertResult tryInsertEntry(const PropertyValue &key, int64_t value,
+						 const std::shared_ptr<storage::DataManager> &dataManager,
+						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
+
 		void insertEntry(const PropertyValue &key, int64_t value,
 						 const std::shared_ptr<storage::DataManager> &dataManager,
 						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
@@ -123,10 +142,6 @@ namespace graph {
 				   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
 		[[nodiscard]] std::vector<Entry> getAllEntries(const std::shared_ptr<storage::DataManager> &dataManager) const;
 		void setAllEntries(std::vector<Entry> &entries, const std::shared_ptr<storage::DataManager> &dataManager);
-		[[nodiscard]] bool wouldLeafOverflowOnInsert(
-				const PropertyValue &key, int64_t value, const std::shared_ptr<storage::DataManager> &dataManager,
-				const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
-
 
 		[[nodiscard]] bool
 		wouldInternalOverflowOnAddChild(const ChildEntry &newEntry,
