@@ -39,11 +39,11 @@ namespace graph::query::indexes {
 		std::shared_ptr<PropertyIndex> getPropertyIndex() const;
 
 		// --- Index Lifecycle ---
-		bool createLabelIndex(const std::function<bool()> &buildFunc);
+		bool createLabelIndex(const std::function<bool()> &buildFunc) const;
 
-		bool createPropertyIndex(const std::string &key, const std::function<bool()> &buildFunc);
+		bool createPropertyIndex(const std::string &key, const std::function<bool()> &buildFunc) const;
 
-		bool dropIndex(const std::string &indexType, const std::string &key);
+		bool dropIndex(const std::string &indexType, const std::string &key) const;
 		void persistState() const;
 
 		// --- Event Handlers for Automatic Index Updates ---

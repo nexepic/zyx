@@ -103,52 +103,49 @@ namespace graph::query::indexes {
 		}
 	}
 
-	void IndexTreeManager::splitLeaf(Index &leaf, std::vector<Index::Entry>& allEntries, int64_t &rootId) {
-		// NOTE: We do NOT need to insert the new key/value here anymore.
-		// 'allEntries' already contains the new data inserted by tryInsertEntry.
-
-		// Create new sibling node
+	void IndexTreeManager::splitLeaf(Index &leaf, std::vector<Index::Entry> &allEntries, int64_t &rootId) {
+		// 1. Create Sibling Node
 		int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
-		auto newLeaf = dataManager_->getIndex(newLeafId);
-		newLeaf.setLevel(leaf.getLevel());
-		newLeaf.setParentId(leaf.getParentId());
+		Index newLeaf = dataManager_->getIndex(newLeafId);
 
-		// Standard B+ Tree Split: 50/50
-		size_t midPointIdx = allEntries.size() / 2;
+		// 2. Distribute Entries (50/50 split)
+		size_t mid = allEntries.size() / 2;
 
-		// Key to promote to parent (for leaf split, it's a copy of the key at split point)
-		PropertyValue promotedKey = allEntries[midPointIdx].key;
+		// Entries for old leaf (Left)
+		std::vector<Index::Entry> leftEntries(allEntries.begin(), allEntries.begin() + mid);
+		// Entries for new leaf (Right)
+		std::vector<Index::Entry> rightEntries(allEntries.begin() + mid, allEntries.end());
 
-		// Split vector
-		std::vector<Index::Entry> leftEntries(
-			std::make_move_iterator(allEntries.begin()),
-			std::make_move_iterator(allEntries.begin() + midPointIdx));
-
-		std::vector<Index::Entry> rightEntries(
-			std::make_move_iterator(allEntries.begin() + midPointIdx),
-			std::make_move_iterator(allEntries.end()));
-
-		// Serialize both nodes
-		leaf.setAllEntries(leftEntries, dataManager_);
-		newLeaf.setAllEntries(rightEntries, dataManager_);
-
-		// Maintain Linked List
+		// 3. Update Leaf Links
 		newLeaf.setNextLeafId(leaf.getNextLeafId());
 		newLeaf.setPrevLeafId(leaf.getId());
 
+		// If there was a next leaf, update its prev pointer
 		if (leaf.getNextLeafId() != 0) {
-			auto nextLeaf = dataManager_->getIndex(leaf.getNextLeafId());
+			Index nextLeaf = dataManager_->getIndex(leaf.getNextLeafId());
 			nextLeaf.setPrevLeafId(newLeafId);
 			dataManager_->updateIndexEntity(nextLeaf);
 		}
 		leaf.setNextLeafId(newLeafId);
 
-		// Persist changes
+		// 4. Write Data to Nodes
+		// Note: setAllEntries handles serialization and blob management
+		leaf.setAllEntries(leftEntries, dataManager_);
+		newLeaf.setAllEntries(rightEntries, dataManager_);
+
+		// 5. Propagate to Parent
+		// The separator key is the first key of the right node
+		PropertyValue separatorKey = rightEntries.front().key;
+
+		// Ensure new node knows its parent
+		newLeaf.setParentId(leaf.getParentId());
+
+		// Save changes
 		dataManager_->updateIndexEntity(leaf);
 		dataManager_->updateIndexEntity(newLeaf);
 
-		// Update Parent
-		insertIntoParent(leaf, promotedKey, newLeafId, rootId);
+		// 6. Insert into Parent
+		insertIntoParent(leaf, separatorKey, newLeafId, rootId);
 	}
 
 	void IndexTreeManager::insertIntoParent(Index &leftNode, const PropertyValue &key, int64_t rightNodeId,
@@ -446,254 +443,273 @@ namespace graph::query::indexes {
 		}
 	}
 
-	std::vector<Index::Entry> coalesceRawEntries(
-        const std::vector<std::pair<PropertyValue, int64_t>>& rawEntries,
-        const std::function<bool(const PropertyValue&, const PropertyValue&)>& comparator)
-    {
-        if (rawEntries.empty()) return {};
+	std::vector<Index::Entry>
+	coalesceRawEntries(const std::vector<std::pair<PropertyValue, int64_t>> &rawEntries,
+					   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
+		if (rawEntries.empty())
+			return {};
 
-        // 1. Sort raw entries
-        auto sortedEntries = rawEntries;
-        std::ranges::sort(sortedEntries, [&](const auto& a, const auto& b) {
-            if (comparator(a.first, b.first)) return true;
-            if (comparator(b.first, a.first)) return false;
-            return a.second < b.second; // Secondary sort by value
-        });
+		// 1. Sort raw entries
+		auto sortedEntries = rawEntries;
+		std::ranges::sort(sortedEntries, [&](const auto &a, const auto &b) {
+			if (comparator(a.first, b.first))
+				return true;
+			if (comparator(b.first, a.first))
+				return false;
+			return a.second < b.second; // Secondary sort by value
+		});
 
-        // 2. Coalesce
-        std::vector<Index::Entry> coalesced;
-        coalesced.reserve(sortedEntries.size());
+		// 2. Coalesce
+		std::vector<Index::Entry> coalesced;
+		coalesced.reserve(sortedEntries.size());
 
-        for (const auto& [key, value] : sortedEntries) {
-            if (!coalesced.empty()) {
-                auto& last = coalesced.back();
-                // Check if key matches last key (Using !less(a,b) && !less(b,a) for equality)
-                if (!comparator(last.key, key) && !comparator(key, last.key)) {
-                    // Avoid duplicate values for the same key
-                    if (last.values.empty() || last.values.back() != value) {
-                        last.values.push_back(value);
-                    }
-                    continue;
-                }
-            }
-            // New key
-            coalesced.push_back({key, {value}, 0, 0});
-        }
-        return coalesced;
-    }
+		for (const auto &[key, value]: sortedEntries) {
+			if (!coalesced.empty()) {
+				auto &last = coalesced.back();
+				// Check if key matches last key (Using !less(a,b) && !less(b,a) for equality)
+				if (!comparator(last.key, key) && !comparator(key, last.key)) {
+					// Avoid duplicate values for the same key
+					if (last.values.empty() || last.values.back() != value) {
+						last.values.push_back(value);
+					}
+					continue;
+				}
+			}
+			// New key
+			coalesced.push_back({key, {value}, 0, 0});
+		}
+		return coalesced;
+	}
 
-    int64_t IndexTreeManager::insertBatch(int64_t rootId,
-                                          const std::vector<std::pair<PropertyValue, int64_t>> &entries) {
-        if (entries.empty()) return rootId;
-        std::unique_lock lock(mutex_);
-        if (rootId == 0) rootId = initialize();
+	int64_t IndexTreeManager::insertBatch(int64_t rootId,
+										  const std::vector<std::pair<PropertyValue, int64_t>> &entries) {
+		if (entries.empty())
+			return rootId;
+		std::unique_lock lock(mutex_);
+		if (rootId == 0)
+			rootId = initialize();
 
-        // --- STEP 1: Pre-process (Sort & Coalesce) ---
-        std::vector<Index::Entry> coalescedEntries = coalesceRawEntries(entries, keyComparator_);
+		// --- STEP 1: Pre-process (Sort & Coalesce) ---
+		std::vector<Index::Entry> coalescedEntries = coalesceRawEntries(entries, keyComparator_);
 
-        // --- STEP 2: Group by target Leaf Node ---
-        // Map: LeafID -> List of NEW Entries to be inserted there
-        std::map<int64_t, std::vector<Index::Entry>> entriesByLeaf;
+		// --- STEP 2: Group by target Leaf Node ---
+		// Map: LeafID -> List of NEW Entries to be inserted there
+		std::map<int64_t, std::vector<Index::Entry>> entriesByLeaf;
 
-        for (const auto& entry : coalescedEntries) {
-            int64_t leafId = findLeafNode(rootId, entry.key);
-            if (leafId == 0) leafId = rootId; // Should catch root init cases
-            entriesByLeaf[leafId].push_back(entry);
-        }
+		for (const auto &entry: coalescedEntries) {
+			int64_t leafId = findLeafNode(rootId, entry.key);
+			if (leafId == 0)
+				leafId = rootId; // Should catch root init cases
+			entriesByLeaf[leafId].push_back(entry);
+		}
 
-        // --- STEP 3: Process each leaf ---
-        for (auto& [leafId, newEntries] : entriesByLeaf) {
-            auto leaf = dataManager_->getIndex(leafId);
+		// --- STEP 3: Process each leaf ---
+		for (auto &[leafId, newEntries]: entriesByLeaf) {
+			auto leaf = dataManager_->getIndex(leafId);
 
-            // A. Load ALL existing entries
-            auto allEntries = leaf.getAllEntries(dataManager_);
+			// A. Load ALL existing entries
+			auto allEntries = leaf.getAllEntries(dataManager_);
 
-            // B. Merge NEW into EXISTING (Memory Merge)
-            // Since both vectors are sorted by key, we can do a linear merge.
-            // We also need to merge values if keys match.
-            std::vector<Index::Entry> merged;
-            merged.reserve(allEntries.size() + newEntries.size());
+			// B. Merge NEW into EXISTING (Memory Merge)
+			// Since both vectors are sorted by key, we can do a linear merge.
+			// We also need to merge values if keys match.
+			std::vector<Index::Entry> merged;
+			merged.reserve(allEntries.size() + newEntries.size());
 
-            auto existIt = allEntries.begin();
-            auto newIt = newEntries.begin();
+			auto existIt = allEntries.begin();
+			auto newIt = newEntries.begin();
 
-            while (existIt != allEntries.end() || newIt != newEntries.end()) {
-                if (existIt != allEntries.end() && (newIt == newEntries.end() || keyComparator_(existIt->key, newIt->key))) {
-                    merged.push_back(std::move(*existIt));
-                    ++existIt;
-                } else if (newIt != newEntries.end() && (existIt == allEntries.end() || keyComparator_(newIt->key, existIt->key))) {
-                    merged.push_back(std::move(*newIt));
-                    ++newIt;
-                } else {
-                    // Keys are equal: Merge values
-                    existIt->values.insert(existIt->values.end(), newIt->values.begin(), newIt->values.end());
-                    // Deduplicate values (optional but recommended)
-                    std::ranges::sort(existIt->values);
-                    auto last = std::unique(existIt->values.begin(), existIt->values.end());
-                    existIt->values.erase(last, existIt->values.end());
+			while (existIt != allEntries.end() || newIt != newEntries.end()) {
+				if (existIt != allEntries.end() &&
+					(newIt == newEntries.end() || keyComparator_(existIt->key, newIt->key))) {
+					merged.push_back(std::move(*existIt));
+					++existIt;
+				} else if (newIt != newEntries.end() &&
+						   (existIt == allEntries.end() || keyComparator_(newIt->key, existIt->key))) {
+					merged.push_back(std::move(*newIt));
+					++newIt;
+				} else {
+					// Keys are equal: Merge values
+					existIt->values.insert(existIt->values.end(), newIt->values.begin(), newIt->values.end());
+					// Deduplicate values (optional but recommended)
+					std::ranges::sort(existIt->values);
+					auto last = std::ranges::unique(existIt->values).begin();
+					existIt->values.erase(last, existIt->values.end());
 
-                    merged.push_back(std::move(*existIt));
-                    ++existIt;
-                    ++newIt;
-                }
-            }
+					merged.push_back(std::move(*existIt));
+					++existIt;
+					++newIt;
+				}
+			}
 
-            // C. Calculate Size & Check Overflow
-            size_t totalSize = 0;
-            for (const auto& e : merged) totalSize += Index::getEntrySerializedSize(e);
+			// C. Calculate Size & Check Overflow
+			size_t totalSize = 0;
+			for (const auto &e: merged)
+				totalSize += Index::getEntrySerializedSize(e);
 
-            if (totalSize <= Index::DATA_SIZE) {
-                // Happy Path: Everything fits
-                leaf.setAllEntries(merged, dataManager_);
-                dataManager_->updateIndexEntity(leaf);
-            } else {
-                // --- STEP 4: Bulk Split (Fixes "Massive Split" / "Sorted Batch" failures) ---
-                // We have too much data for one node. We need to distribute 'merged' into N nodes.
+			if (totalSize <= Index::DATA_SIZE) {
+				// Happy Path: Everything fits
+				leaf.setAllEntries(merged, dataManager_);
+				dataManager_->updateIndexEntity(leaf);
+			} else {
+				// --- STEP 4: Bulk Split (Fixes "Massive Split" / "Sorted Batch" failures) ---
+				// We have too much data for one node. We need to distribute 'merged' into N nodes.
 
-                // 1. Rewrite the current leaf (leafId) with the first chunk
-                size_t currentSize = 0;
-                auto it = merged.begin();
-                std::vector<Index::Entry> chunk;
+				// 1. Rewrite the current leaf (leafId) with the first chunk
+				size_t currentSize = 0;
+				auto it = merged.begin();
+				std::vector<Index::Entry> chunk;
 
-                // Fill current leaf ~75% full to allow future inserts, or until full
-                // NOTE: Being too aggressive with filling (100%) can cause immediate splits on next insert.
-                // Using a fill factor helps.
-                size_t fillLimit = static_cast<size_t>(Index::DATA_SIZE * 0.9);
+				// Fill current leaf ~75% full to allow future inserts, or until full
+				// NOTE: Being too aggressive with filling (100%) can cause immediate splits on next insert.
+				// Using a fill factor helps.
+				size_t fillLimit = static_cast<size_t>(Index::DATA_SIZE * 0.9);
 
-                while (it != merged.end()) {
-                    size_t entrySize = Index::getEntrySerializedSize(*it);
-                    if (currentSize + entrySize > fillLimit && !chunk.empty()) {
-                        break;
-                    }
-                    currentSize += entrySize;
-                    chunk.push_back(std::move(*it));
-                    ++it;
-                }
+				while (it != merged.end()) {
+					size_t entrySize = Index::getEntrySerializedSize(*it);
+					if (currentSize + entrySize > fillLimit && !chunk.empty()) {
+						break;
+					}
+					currentSize += entrySize;
+					chunk.push_back(std::move(*it));
+					++it;
+				}
 
-                leaf.setAllEntries(chunk, dataManager_);
-                dataManager_->updateIndexEntity(leaf);
+				leaf.setAllEntries(chunk, dataManager_);
+				dataManager_->updateIndexEntity(leaf);
 
-                // 2. Create new leaves for the rest
-                int64_t prevLeafId = leaf.getId();
+				// 2. Create new leaves for the rest
+				int64_t prevLeafId = leaf.getId();
 
-                while (it != merged.end()) {
-                    chunk.clear();
-                    currentSize = 0;
+				while (it != merged.end()) {
+					chunk.clear();
+					currentSize = 0;
 
-                    // The first key of the new node is the separator/promoted key
-                    PropertyValue separatorKey = it->key;
+					// The first key of the new node is the separator/promoted key
+					PropertyValue separatorKey = it->key;
 
-                    // Create new leaf
-                    int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
-                    auto newLeaf = dataManager_->getIndex(newLeafId);
-                    newLeaf.setLevel(leaf.getLevel());
-                    newLeaf.setParentId(leaf.getParentId()); // Initially share parent
+					// Create new leaf
+					int64_t newLeafId = createNewNode(Index::NodeType::LEAF);
+					auto newLeaf = dataManager_->getIndex(newLeafId);
+					newLeaf.setLevel(leaf.getLevel());
+					newLeaf.setParentId(leaf.getParentId()); // Initially share parent
 
-                    // Fill new leaf
-                    while (it != merged.end()) {
-                        size_t entrySize = Index::getEntrySerializedSize(*it);
-                        if (currentSize + entrySize > fillLimit && !chunk.empty()) {
-                            break;
-                        }
-                        currentSize += entrySize;
-                        chunk.push_back(std::move(*it));
-                        ++it;
-                    }
+					// Fill new leaf
+					while (it != merged.end()) {
+						size_t entrySize = Index::getEntrySerializedSize(*it);
+						if (currentSize + entrySize > fillLimit && !chunk.empty()) {
+							break;
+						}
+						currentSize += entrySize;
+						chunk.push_back(std::move(*it));
+						++it;
+					}
 
-                    newLeaf.setAllEntries(chunk, dataManager_);
+					newLeaf.setAllEntries(chunk, dataManager_);
 
-                    // Link Linked-List
-                    int64_t nextId = leaf.getNextLeafId(); // Current chain next
-                    // Wait, we need to correct the linking logic carefully.
-                    // We are inserting a chain: Leaf -> New1 -> New2 -> OldNext
+					// Linking:
+					// newLeaf points back to prevLeafId
+					newLeaf.setPrevLeafId(prevLeafId);
 
-                    // Actually, simpler:
-                    // NewLeaf takes 'prev' from the node we just finished filling
-                    // And we fix 'next' pointers as we go.
+					// If this is the last chunk, it inherits the original leaf's next ptr
+					// But wait, the original leaf's 'next' is currently pointing to "OldNext".
+					// The first new leaf we create is inserted *after* the original leaf.
 
-                    // Linking:
-                    // newLeaf points back to prevLeafId
-                    newLeaf.setPrevLeafId(prevLeafId);
+					// Let's refine the linking logic:
+					// Current sequence: Leaf -> [Original Next]
+					// We want: Leaf -> NewLeaf1 -> NewLeaf2 -> [Original Next]
 
-                    // If this is the last chunk, it inherits the original leaf's next ptr
-                    // But wait, the original leaf's 'next' is currently pointing to "OldNext".
-                    // The first new leaf we create is inserted *after* the original leaf.
+					// Read 'prev' node to set its next pointer
+					auto prevNode = dataManager_->getIndex(prevLeafId);
+					int64_t oldNextId = prevNode.getNextLeafId();
 
-                    // Let's refine the linking logic:
-                    // Current sequence: Leaf -> [Original Next]
-                    // We want: Leaf -> NewLeaf1 -> NewLeaf2 -> [Original Next]
+					prevNode.setNextLeafId(newLeafId);
+					newLeaf.setNextLeafId(oldNextId); // Tentatively point to old next
 
-                    // Read 'prev' node to set its next pointer
-                    auto prevNode = dataManager_->getIndex(prevLeafId);
-                    int64_t oldNextId = prevNode.getNextLeafId();
+					if (oldNextId != 0) {
+						auto oldNext = dataManager_->getIndex(oldNextId);
+						oldNext.setPrevLeafId(newLeafId);
+						dataManager_->updateIndexEntity(oldNext);
+					}
 
-                    prevNode.setNextLeafId(newLeafId);
-                    newLeaf.setNextLeafId(oldNextId); // Tentatively point to old next
+					dataManager_->updateIndexEntity(prevNode);
+					dataManager_->updateIndexEntity(newLeaf);
 
-                    if (oldNextId != 0) {
-                        auto oldNext = dataManager_->getIndex(oldNextId);
-                        oldNext.setPrevLeafId(newLeafId);
-                        dataManager_->updateIndexEntity(oldNext);
-                    }
+					// Insert into Parent
+					// Note: 'separatorKey' is the first key of 'newLeaf'.
+					// In B+ Tree, for leaf splits, we copy the key up.
+					insertIntoParent(prevNode, separatorKey, newLeafId, rootId);
 
-                    dataManager_->updateIndexEntity(prevNode);
-                    dataManager_->updateIndexEntity(newLeaf);
+					// Move cursor
+					prevLeafId = newLeafId;
 
-                    // Insert into Parent
-                    // Note: 'separatorKey' is the first key of 'newLeaf'.
-                    // In B+ Tree, for leaf splits, we copy the key up.
-                    insertIntoParent(prevNode, separatorKey, newLeafId, rootId);
+					// Important: After insertIntoParent, 'rootId' might change (root split),
+					// or 'prevNode' parent might change (internal split).
+					// We need to ensure we fetch fresh parent info if we loop again?
+					// Actually, insertIntoParent handles the parent logic recursively.
+					// The 'newLeaf' we just created has the correct parentId set?
+					// insertIntoParent *might* split the parent. If it does, 'prevNode' and 'newLeaf'
+					// parentIds are updated inside insertIntoParent.
+					// However, for the *next* iteration of this while loop (NewLeaf2),
+					// we need to make sure we attach to the correct parent.
+					// Since NewLeaf2 is split from NewLeaf1, logically it shares NewLeaf1's parent.
+					// But insertIntoParent updates parent pointers. So we are good.
+				}
+			}
+		}
+		return rootId;
+	}
 
-                    // Move cursor
-                    prevLeafId = newLeafId;
+	int64_t IndexTreeManager::insert(int64_t rootId, const PropertyValue &key, int64_t value) {
+		// 1. Acquire Shared Lock on the Tree Structure (handled by caller usually, but good to note)
+		// In the context of the provided code, the caller (LabelIndex/PropertyIndex) holds a unique_lock.
 
-                    // Important: After insertIntoParent, 'rootId' might change (root split),
-                    // or 'prevNode' parent might change (internal split).
-                    // We need to ensure we fetch fresh parent info if we loop again?
-                    // Actually, insertIntoParent handles the parent logic recursively.
-                    // The 'newLeaf' we just created has the correct parentId set?
-                    // insertIntoParent *might* split the parent. If it does, 'prevNode' and 'newLeaf'
-                    // parentIds are updated inside insertIntoParent.
-                    // However, for the *next* iteration of this while loop (NewLeaf2),
-                    // we need to make sure we attach to the correct parent.
-                    // Since NewLeaf2 is split from NewLeaf1, logically it shares NewLeaf1's parent.
-                    // But insertIntoParent updates parent pointers. So we are good.
-                }
-            }
-        }
-        return rootId;
-    }
+		if (rootId == 0) {
+			rootId = initialize();
+		}
 
-	int64_t IndexTreeManager::insert(int64_t rootId, const PropertyValue &key, const int64_t value) {
-        std::unique_lock lock(mutex_);
-        if (rootId == 0)
-            rootId = initialize();
+		// 2. Traverse to Leaf
+		// We use a simple path stack if we need to propagate splits up.
+		// However, standard B+Tree insert usually recurses or uses a parent-pointer loop.
+		// Since your Index entity stores `parentId`, we can iterate down and bubble up using IDs.
 
-        // 1. Traversal (IO Bound, difficult to optimize without caching nodes in IndexTreeManager)
-        int64_t leafId = findLeafNode(rootId, key);
-        if (leafId == 0) {
-            rootId = initialize();
-            leafId = rootId;
-        }
+		int64_t currentNodeId = rootId;
+		Index currentNode = dataManager_->getIndex(currentNodeId);
 
-        auto leaf = dataManager_->getIndex(leafId);
+		// Traverse down to the correct leaf
+		while (!currentNode.isLeaf()) {
+			int64_t childId = currentNode.findChild(key, dataManager_, keyComparator_);
+			if (childId == 0) {
+				// Should not happen in a valid tree unless empty root
+				// Fallback to first child if key < all separators
+				auto children = currentNode.getChildIds();
+				if (!children.empty())
+					childId = children[0];
+				else
+					throw std::runtime_error("Corrupt internal node: no children");
+			}
+			currentNodeId = childId;
+			currentNode = dataManager_->getIndex(currentNodeId);
+		}
 
-        // 2. Single-Pass Insert Attempt
-        // tryInsertEntry does: Deserialize -> Modify -> Check Size -> (Serialize OR Return Data)
-        auto result = leaf.tryInsertEntry(key, value, dataManager_, keyComparator_);
+		// 3. Attempt Insert at Leaf
+		// Use tryInsertEntry to optimize: deserialize -> check/modify -> calculate size -> (serialize OR return
+		// overflow)
+		auto result = currentNode.tryInsertEntry(key, value, dataManager_, keyComparator_);
 
-        if (result.success) {
-            // Success: The node buffer is already updated in memory.
-            // Just mark dirty in DataManager.
-            dataManager_->updateIndexEntity(leaf);
-        } else {
-            // Overflow: We have the full vector of entries (old + new) in result.overflowEntries.
-            // We pass this directly to splitLeaf, avoiding re-reading.
-            splitLeaf(leaf, result.overflowEntries, rootId);
-        }
+		if (result.success) {
+			// Fits in node, update persistence and cache
+			dataManager_->updateIndexEntity(currentNode);
+			return rootId; // Root hasn't changed
+		}
 
-        return rootId;
-    }
+		// 4. Handle Split (Overflow)
+		// result.overflowEntries contains the sorted entries that didn't fit.
+		// We need to split this data between `currentNode` and a `newNode`.
+		splitLeaf(currentNode, result.overflowEntries, rootId);
+
+		return rootId;
+	}
 
 	bool IndexTreeManager::remove(int64_t &rootId, const PropertyValue &key, int64_t value) {
 		std::unique_lock lock(mutex_);
