@@ -40,6 +40,7 @@ namespace metrix::benchmark::config {
 	constexpr std::string_view PATH_INSERT_CYPHER = "/tmp/metrix_bench_insert_cypher";
 	constexpr std::string_view PATH_INSERT_NATIVE = "/tmp/metrix_bench_insert_native";
 	constexpr std::string_view PATH_QUERY_INDEX = "/tmp/metrix_bench_query_index";
+	constexpr std::string_view PATH_QUERY_BASE  = "/tmp/metrix_bench_query_base";
 	constexpr std::string_view PATH_ALGO_CYPHER = "/tmp/metrix_bench_algo_cypher";
 	constexpr std::string_view PATH_ALGO_NATIVE = "/tmp/metrix_bench_algo_native";
 

@@ -65,7 +65,7 @@ namespace graph::config {
 
 		// 2. Read config
 		// Key: "sys.config", Field: "storage.compaction.enabled", Default: true
-		bool enabled = systemStateManager_->get<bool>(keys::SYS_CONFIG, keys::STORAGE_COMPACTION_ENABLED,
+		bool enabled = systemStateManager_->get<bool>(keys::SYS_CONFIG, keys::Config::STORAGE_COMPACTION_ENABLED,
 													  false // Default to enabled for safety
 		);
 

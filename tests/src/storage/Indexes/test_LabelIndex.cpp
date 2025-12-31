@@ -69,7 +69,8 @@ TEST_F(LabelIndexTest, HasLabel) {
 }
 
 TEST_F(LabelIndexTest, IsEmptyInitially) {
-	EXPECT_FALSE(labelIndex->isEmpty());
+	// Default is disabled -> considered empty
+	EXPECT_TRUE(labelIndex->isEmpty());
 }
 
 TEST_F(LabelIndexTest, RemoveNode) {

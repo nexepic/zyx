@@ -67,6 +67,8 @@ namespace graph::query {
 		/**
 		 * @brief Wraps an operator with a generic predicate filter.
 		 *
+		 * @param child
+		 * @param predicate
 		 * @param description A string describing the logic (e.g., "n.age > 10") for debugging.
 		 */
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
@@ -157,9 +159,9 @@ namespace graph::query {
 		cartesianProductOp(std::unique_ptr<execution::PhysicalOperator> left,
 						   std::unique_ptr<execution::PhysicalOperator> right);
 
-		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
 		unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
-				 const std::vector<PropertyValue> &list) const;
+				 const std::vector<PropertyValue> &list);
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

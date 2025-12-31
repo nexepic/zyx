@@ -130,28 +130,28 @@ namespace metrix {
 
     // Batch Node Creation (Direct Storage Access)
     // Essential for NativeBatchInsertBench
-    void Database::createNodes(const std::string& label, const std::vector<std::unordered_map<std::string, Value>>& propsList) {
-        if (propsList.empty()) return;
+	void Database::createNodes(const std::string& label,
+							   const std::vector<std::vector<std::pair<std::string, Value>>>& propsList) {
+    	if (propsList.empty()) return;
+    	auto storage = impl_->db_.getStorage();
+    	if (!storage) return;
 
-        auto storage = impl_->db_.getStorage();
-        if (!storage) return;
+    	std::vector<graph::Node> nodes;
+    	nodes.reserve(propsList.size());
 
-        std::vector<graph::Node> nodes;
-        nodes.reserve(propsList.size());
+    	for (const auto& propsVector : propsList) {
+    		graph::Node n(0, label);
+    		std::unordered_map<std::string, graph::PropertyValue> internalProps;
+    		internalProps.reserve(propsVector.size());
 
-        for (const auto& props : propsList) {
-            graph::Node n(0, label);
-            std::unordered_map<std::string, graph::PropertyValue> internalProps;
-            for (const auto& [k, v] : props) {
-                internalProps[k] = toInternal(v);
-            }
-            // Use setProperties helper to hydrate the object before insertion
-            n.setProperties(std::move(internalProps));
-            nodes.push_back(std::move(n));
-        }
-
-        // Call DataManager::addNodes (Batch API)
-        storage->getDataManager()->addNodes(nodes);
+    		// Iterate vector (linear memory) is much faster than iterating map
+    		for (const auto& pair : propsVector) {
+    			internalProps.emplace(pair.first, toInternal(pair.second));
+    		}
+    		n.setProperties(std::move(internalProps));
+    		nodes.push_back(std::move(n));
+    	}
+    	storage->getDataManager()->addNodes(nodes);
     }
 
     // Create Edge by Logic (MATCH -> CREATE)

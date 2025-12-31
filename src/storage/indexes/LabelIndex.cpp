@@ -30,18 +30,28 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 
 		// 1. Load Root ID
-		// Logic: "Get an int64 from the stateKey under field 'rootId'"
 		rootId_ = systemStateManager_->get<int64_t>(stateKey_, storage::state::keys::Fields::ROOT_ID, 0);
 
 		// 2. Load Enabled Config
-		// Logic: "Construct config key, then get a bool under field 'enabled'"
 		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-		enabled_ = systemStateManager_->get<bool>(configKey, storage::state::keys::Fields::ENABLED, true);
+
+		// Default is FALSE. If the key is missing, it remains false.
+		enabled_ = systemStateManager_->get<bool>(configKey, storage::state::keys::Fields::ENABLED, false);
+
+		// Fallback: If we have physical data, force enable to prevent data drift
+		if (!enabled_ && rootId_ != 0) {
+			enabled_ = true;
+		}
 	}
 
 	void LabelIndex::createIndex() {
 		std::unique_lock lock(mutex_);
 		enabled_ = true;
+
+		// Persist the "Enabled" config immediately.
+		// This ensures that upon next restart, initialize() reads 'true'.
+		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
+		systemStateManager_->set<bool>(configKey, storage::state::keys::Fields::ENABLED, true);
 	}
 
 	bool LabelIndex::isEmpty() const {
@@ -65,10 +75,10 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 		enabled_ = false;
 
-		// Explicitly set ENABLED = false instead of removing the key.
-		// This overrides the "Default True" behavior on next restart.
+		// Instead of setting "enabled=false", we REMOVE the config key.
+		// This restores the "clean" state.
 		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-		systemStateManager_->set<bool>(configKey, storage::state::keys::Fields::ENABLED, false);
+		systemStateManager_->remove(configKey);
 
 		// We can remove the Root ID part since data is cleared
 		systemStateManager_->remove(stateKey_);
@@ -82,10 +92,14 @@ namespace graph::query::indexes {
 			systemStateManager_->set<int64_t>(stateKey_, storage::state::keys::Fields::ROOT_ID, rootId_);
 		}
 
-		// Save Enabled Config
-		// We always save the config to make the state explicit
-		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-		systemStateManager_->set<bool>(configKey, storage::state::keys::Fields::ENABLED, enabled_);
+		// 2. Save Enabled Config
+		// Only persist the config if it is TRUE.
+		// If it is false, we do nothing (or ensure it's removed in drop()).
+		// This prevents "node.index.label.config" from appearing in a default DB.
+		if (enabled_) {
+			std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
+			systemStateManager_->set<bool>(configKey, storage::state::keys::Fields::ENABLED, true);
+		}
 	}
 
 	void LabelIndex::flush() const {
@@ -114,15 +128,16 @@ namespace graph::query::indexes {
 		}
 
 		// Iterate over each label group
-		for (const auto &[label, entityIds] : nodesByLabel) {
-			if (entityIds.empty()) continue;
+		for (const auto &[label, entityIds]: nodesByLabel) {
+			if (entityIds.empty())
+				continue;
 
 			// Prepare data for IndexTreeManager
 			// Key: Label (String), Value: Entity ID
 			std::vector<std::pair<PropertyValue, int64_t>> batchEntries;
 			batchEntries.reserve(entityIds.size());
 
-			for (int64_t id : entityIds) {
+			for (int64_t id: entityIds) {
 				batchEntries.emplace_back(PropertyValue(label), id);
 			}
 

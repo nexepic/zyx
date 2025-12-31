@@ -255,18 +255,20 @@ namespace graph {
 	}
 
 	void REPL::handleCommand(const std::string &command) const {
-		// --- 1. Basic System Commands ---
+		std::string trimmed = trim(command);
 
-		if (command == "help") {
-			std::cout << "Commands:\n"
-					  << "  save             Persist data to disk\n"
-					  << "  debug			 [summary|nodes|edges|props] [page]\n"
-					  << "  exit             Quit\n"
-					  << "  <Cypher Query>   Ends with ';' or Empty Line\n";
+		// --- 1. Basic System Commands ---
+		if (trimmed == "help") {
+			std::cout << "Commands:\n";
+			constexpr int colWidth = 18;
+			std::cout << "  " << std::left << std::setw(colWidth) << "save" << "Persist data to disk\n"
+					  << "  " << std::left << std::setw(colWidth) << "debug" << "Enter debug mode (see 'debug help')\n"
+					  << "  " << std::left << std::setw(colWidth) << "exit" << "Quit\n"
+					  << "  " << std::left << std::setw(colWidth) << "<Query>" << "Cypher query ending in ';'\n";
 			return;
 		}
 
-		if (command == "save") {
+		if (trimmed == "save") {
 			if (auto storage = db.getStorage()) {
 				storage->flush();
 				std::cout << "Database flushed to disk.\n";
@@ -276,67 +278,13 @@ namespace graph {
 			return;
 		}
 
-		// --- 2. Debug Command Handler ---
-
-		if (command.rfind("debug", 0) == 0) { // Starts with "debug"
-			auto storage = db.getStorage();
-			if (!storage) {
-				std::cerr << "Storage not available.\n";
-				return;
-			}
-
-			auto inspector = storage->getInspector();
-			if (!inspector) {
-				std::cerr << "Inspector not initialized.\n";
-				return;
-			}
-
-			std::string cleanCommand = command;
-			while (!cleanCommand.empty() && (cleanCommand.back() == ';' || isspace(cleanCommand.back()))) {
-				cleanCommand.pop_back();
-			}
-
-			std::istringstream iss(cleanCommand);
-			std::string cmd, subcmd;
-			int page = 0;
-
-			iss >> cmd >> subcmd;
-
-			if (subcmd.empty() || subcmd == "summary") {
-				inspector->inspectSummary();
-			} else if (subcmd == "nodes") {
-				if (!(iss >> page))
-					page = 0;
-				inspector->inspectNodeSegments(page);
-			} else if (subcmd == "edges") {
-				if (!(iss >> page))
-					page = 0;
-				inspector->inspectEdgeSegments(page);
-			} else if (subcmd == "props") {
-				if (!(iss >> page))
-					page = 0;
-				inspector->inspectPropertySegments(page);
-			} else if (subcmd == "blobs") {
-				if (!(iss >> page))
-					page = 0;
-				inspector->inspectBlobSegments(page);
-			} else if (subcmd == "indexes") {
-				if (!(iss >> page))
-					page = 0;
-				inspector->inspectIndexSegments(page);
-			} else if (subcmd == "states") {
-				if (!(iss >> page))
-					page = 0;
-				inspector->inspectStateSegments(page);
-			} else {
-				std::cerr << "Unknown debug target: '" << subcmd
-						  << "'. Valid targets: summary, nodes, edges, props, blobs, indexes, states.\n";
-			}
+		// --- 2. Debug Command Handler (Delegated) ---
+		if (trimmed.rfind("debug", 0) == 0) {
+			debugHandler_.handle(trimmed);
 			return;
 		}
 
 		// --- 3. Execute Cypher Query ---
-
 		try {
 			auto result = db.getQueryEngine()->execute(command);
 			printResult(result);

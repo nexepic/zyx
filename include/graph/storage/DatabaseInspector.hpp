@@ -62,6 +62,13 @@ namespace graph::storage {
          */
         void inspectStateSegments(uint32_t pageIndex, bool showUnused = false) const;
 
+    	/**
+		 * @brief Inspects the logical content of a specific State by its Key.
+		 * This reassembles the chain and deserializes properties.
+		 * @param stateKey The unique key of the state (e.g., "sys.config").
+		 */
+    	void inspectStateData(const std::string& stateKey) const;
+
     private:
     	const FileHeader &fileHeader;
     	std::shared_ptr<std::fstream> file;

@@ -36,68 +36,60 @@ namespace graph::query::indexes {
 	IndexManager::~IndexManager() = default;
 
 	void IndexManager::initialize() {
-		// 1. Initialize the builder
-		indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_);
+        // 1. Initialize the builder
+        indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_);
 
-		// 2. Register self as listener
-		// This connects IndexManager to FileStorage without FileStorage knowing about "Indexes"
-		storage_->registerEventListener(weak_from_this());
+        // 2. Register listeners
+        storage_->registerEventListener(weak_from_this());
+        dataManager_->registerObserver(shared_from_this());
 
-		dataManager_->registerObserver(shared_from_this());
+        // ====================================================================
+        // Bootstrap: Auto-build Label Indexes IF enabled in config
+        // ====================================================================
 
-		// ====================================================================
-		// Bootstrap: Auto-build Label Indexes if missing
-		// ====================================================================
+        auto sysState = storage_->getSystemStateManager();
 
-		auto sysState = storage_->getSystemStateManager();
+        auto ensureMetadata = [&](const std::string& name, const std::string& type) {
+            auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+            if (!allIndexes.contains(name)) {
+                IndexMetadata meta{name, type, "label", "", ""};
+                sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
+                log::Log::info("Registered system index metadata: {}", name);
+            }
+        };
 
-		// Helper lambda to register metadata if missing
-		auto ensureMetadata = [&](const std::string &name, const std::string &type) {
-			// Check if metadata exists in sys.indexes
-			auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
-			if (!allIndexes.contains(name)) {
-				// Create metadata: Name | EntityType | IndexType | Label | Property
-				// Label Index has empty Label/Property fields in metadata context
-				IndexMetadata meta{name, type, "label", "", ""};
+        // --- Node Label Index ---
+        auto nodeLabelIdx = nodeIndexManager_->getLabelIndex();
 
-				// Persist
-				sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
-				log::Log::debug("Registered system index metadata: {}", name);
-			}
-		};
+        // [CHECK] Only proceed if enabled (reads from config)
+        if (nodeLabelIdx->isEnabled()) {
+            // Build if missing data
+            if (!nodeLabelIdx->hasPhysicalData()) {
+                if (dataManager_->getIdAllocator()->getCurrentMaxNodeId() > 0) {
+                    log::Log::info("Bootstrapping Node Label Index...");
+                    executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
+                    nodeLabelIdx->saveState();
+                }
+            }
+            // Ensure metadata exists for SHOW INDEXES
+            ensureMetadata("node_label_idx", "node");
+        }
 
-		// --- Node Label Index ---
-		auto nodeLabelIdx = nodeIndexManager_->getLabelIndex();
+        // --- Edge Label Index ---
+        auto edgeLabelIdx = edgeIndexManager_->getLabelIndex();
 
-		// If enabled (default true) BUT has no B-Tree root (0)
-		if (nodeLabelIdx->isEnabled() && !nodeLabelIdx->hasPhysicalData()) {
-			// Check if there is actual data in the DB to avoid useless IO on empty DBs
-			log::Log::debug("Bootstrapping Node Label Index...");
-
-			// Trigger the builder to scan disk and populate the tree
-			// Use executeBuildTask to ensure flushing if needed (though we are at startup)
-			executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
-
-			// Persist the new Root ID immediately so we don't rebuild next time if crash
-			nodeLabelIdx->saveState();
-		}
-
-		if (nodeLabelIdx->isEnabled()) {
-			ensureMetadata("node_label_idx", "node");
-		}
-
-		// --- Edge Label Index ---
-		auto edgeLabelIdx = edgeIndexManager_->getLabelIndex();
-		if (edgeLabelIdx->isEnabled() && !edgeLabelIdx->hasPhysicalData()) {
-			log::Log::debug("Bootstrapping Edge Label Index...");
-			executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
-			edgeLabelIdx->saveState();
-		}
-
-		if (edgeLabelIdx->isEnabled()) {
-			ensureMetadata("edge_label_idx", "edge");
-		}
-	}
+        // [CHECK] Only proceed if enabled
+        if (edgeLabelIdx->isEnabled()) {
+            if (!edgeLabelIdx->hasPhysicalData()) {
+                if (dataManager_->getIdAllocator()->getCurrentMaxEdgeId() > 0) {
+                    log::Log::info("Bootstrapping Edge Label Index...");
+                    executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
+                    edgeLabelIdx->saveState();
+                }
+            }
+            ensureMetadata("edge_label_idx", "edge");
+        }
+    }
 
 	void IndexManager::onStorageFlush() {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);

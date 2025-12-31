@@ -9,6 +9,7 @@
  **/
 
 #pragma once
+
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
@@ -28,8 +29,6 @@ namespace graph::storage {
 	constexpr uint32_t BLOBS_PER_SEGMENT = SEGMENT_SIZE / Blob::getTotalSize();
 	constexpr uint32_t INDEXES_PER_SEGMENT = SEGMENT_SIZE / Index::getTotalSize();
 	constexpr uint32_t STATES_PER_SEGMENT = SEGMENT_SIZE / State::getTotalSize();
-	// constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1 * 512; // 512 bytes per property segment
-	constexpr uint32_t MAX_SEGMENT_PROPERTY_SIZE = 1;
 
 	constexpr size_t FILE_HEADER_SIZE = 128;
 	constexpr size_t SEGMENT_HEADER_SIZE = 128;

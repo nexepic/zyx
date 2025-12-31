@@ -18,22 +18,25 @@ namespace graph::storage::state::keys {
 
 	namespace Config {
 		constexpr char LOG_LEVEL[] = "log.level";
-	}
+		// Key for controlling storage compaction
+		// Value type: boolean (true/false)
+		constexpr char STORAGE_COMPACTION_ENABLED[] = "storage.compaction.enabled";
+	} // namespace Config
 
 	// --- Base Keys for Entities ---
 	namespace Node {
 		constexpr char LABEL_ROOT[] = "node.index.label";
 		constexpr char PROPERTY_PREFIX[] = "node.index.property";
-	}
+	} // namespace Node
 
 	namespace Edge {
 		constexpr char LABEL_ROOT[] = "edge.index.label";
 		constexpr char PROPERTY_PREFIX[] = "edge.index.property";
-	}
+	} // namespace Edge
 
 	// --- Standard Suffixes for State Entries ---
 	// These are appended to base keys to distinguish different storage areas
-	constexpr char SUFFIX_CONFIG[] = ".config";        // For enabled flags
+	constexpr char SUFFIX_CONFIG[] = ".config"; // For enabled flags
 	constexpr char SUFFIX_STRING_ROOTS[] = ".string_roots";
 	constexpr char SUFFIX_INT_ROOTS[] = ".int_roots";
 	constexpr char SUFFIX_DOUBLE_ROOTS[] = ".double_roots";
@@ -44,14 +47,10 @@ namespace graph::storage::state::keys {
 	namespace Fields {
 		constexpr char ROOT_ID[] = "rootId";
 		constexpr char ENABLED[] = "enabled";
-	}
+	} // namespace Fields
 
 	// Stores metadata map: IndexName -> DefinitionString
 	// DefinitionString format: "TYPE|LABEL|PROPERTY"
 	constexpr char SYS_INDEXES[] = "sys.indexes";
-
-	// Key for controlling storage compaction
-	// Value type: boolean (true/false)
-	constexpr char STORAGE_COMPACTION_ENABLED[] = "storage.compaction.enabled";
 
 } // namespace graph::storage::state::keys

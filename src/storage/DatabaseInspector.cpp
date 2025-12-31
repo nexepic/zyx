@@ -69,19 +69,23 @@ namespace graph::storage {
 		table.addColumn("Type");
 		table.addColumn("Head Offset");
 		table.addColumn("Max ID");
+		table.addColumn("Items/Seg");
 
-		table.addRow({"File Magic", std::string(fileHeader.magic, 8), "-"});
-		table.addRow({"Version", std::to_string(fileHeader.version), "-"});
+		table.addRow({"File Magic", std::string(fileHeader.magic, 8), "-", "-"});
+		table.addRow({"Version", std::to_string(fileHeader.version), "-", "-"});
 
-		table.addRow({"Nodes", std::to_string(fileHeader.node_segment_head), std::to_string(fileHeader.max_node_id)});
-		table.addRow({"Edges", std::to_string(fileHeader.edge_segment_head), std::to_string(fileHeader.max_edge_id)});
+		table.addRow({"Nodes", std::to_string(fileHeader.node_segment_head), std::to_string(fileHeader.max_node_id),
+					  std::to_string(NODES_PER_SEGMENT)});
+		table.addRow({"Edges", std::to_string(fileHeader.edge_segment_head), std::to_string(fileHeader.max_edge_id),
+					  std::to_string(EDGES_PER_SEGMENT)});
 		table.addRow({"Properties", std::to_string(fileHeader.property_segment_head),
-					  std::to_string(fileHeader.max_prop_id)});
-		table.addRow({"Blobs", std::to_string(fileHeader.blob_segment_head), std::to_string(fileHeader.max_blob_id)});
-		table.addRow(
-				{"Indexes", std::to_string(fileHeader.index_segment_head), std::to_string(fileHeader.max_index_id)});
-		table.addRow(
-				{"States", std::to_string(fileHeader.state_segment_head), std::to_string(fileHeader.max_state_id)});
+					  std::to_string(fileHeader.max_prop_id), std::to_string(PROPERTIES_PER_SEGMENT)});
+		table.addRow({"Blobs", std::to_string(fileHeader.blob_segment_head), std::to_string(fileHeader.max_blob_id),
+					  std::to_string(BLOBS_PER_SEGMENT)});
+		table.addRow({"Indexes", std::to_string(fileHeader.index_segment_head), std::to_string(fileHeader.max_index_id),
+					  std::to_string(INDEXES_PER_SEGMENT)});
+		table.addRow({"States", std::to_string(fileHeader.state_segment_head), std::to_string(fileHeader.max_state_id),
+					  std::to_string(STATES_PER_SEGMENT)});
 
 		table.print();
 		std::cout << "\nUse 'debug <type> [page]' to inspect segments.\n";
@@ -117,8 +121,8 @@ namespace graph::storage {
 		for (uint32_t i = 0; i < header.capacity; ++i) {
 			bool isActive = bitmap::getBit(header.activity_bitmap, i);
 
-			if (!isActive && !showUnused)
-				continue;
+			// Removed check to always display inactive data
+			// if (!isActive && !showUnused) continue;
 
 			file->seekg(dataStart + static_cast<std::streamoff>(i * Node::getTotalSize()));
 
@@ -165,8 +169,9 @@ namespace graph::storage {
 
 		for (uint32_t i = 0; i < header.capacity; ++i) {
 			bool isActive = bitmap::getBit(header.activity_bitmap, i);
-			if (!isActive && !showUnused)
-				continue;
+
+			// Removed check to always display inactive data
+			// if (!isActive && !showUnused) continue;
 
 			file->seekg(dataStart + static_cast<std::streamoff>(i * Edge::getTotalSize()));
 
@@ -211,8 +216,9 @@ namespace graph::storage {
 
 		for (uint32_t i = 0; i < header.capacity; ++i) {
 			bool isActive = bitmap::getBit(header.activity_bitmap, i);
-			if (!isActive && !showUnused)
-				continue;
+
+			// Removed check to always display inactive data
+			// if (!isActive && !showUnused) continue;
 
 			file->seekg(dataStart + static_cast<std::streamoff>(i * Property::getTotalSize()));
 
@@ -256,8 +262,9 @@ namespace graph::storage {
 
 		for (uint32_t i = 0; i < header.capacity; ++i) {
 			bool isActive = bitmap::getBit(header.activity_bitmap, i);
-			if (!isActive && !showUnused)
-				continue;
+
+			// Removed check to always display inactive data
+			// if (!isActive && !showUnused) continue;
 
 			file->seekg(dataStart + static_cast<std::streamoff>(i * Blob::getTotalSize()));
 
@@ -300,8 +307,9 @@ namespace graph::storage {
 
 		for (uint32_t i = 0; i < header.capacity; ++i) {
 			bool isActive = bitmap::getBit(header.activity_bitmap, i);
-			if (!isActive && !showUnused)
-				continue;
+
+			// Removed check to always display inactive data
+			// if (!isActive && !showUnused) continue;
 
 			file->seekg(dataStart + static_cast<std::streamoff>(i * Index::getTotalSize()));
 
@@ -343,8 +351,9 @@ namespace graph::storage {
 
 		for (uint32_t i = 0; i < header.capacity; ++i) {
 			bool isActive = bitmap::getBit(header.activity_bitmap, i);
-			if (!isActive && !showUnused)
-				continue;
+
+			// Removed check to always display inactive data
+			// if (!isActive && !showUnused) continue;
 
 			file->seekg(dataStart + static_cast<std::streamoff>(i * State::getTotalSize()));
 
@@ -358,6 +367,56 @@ namespace graph::storage {
 			}
 		}
 		table.print();
+	}
+
+	void DatabaseInspector::inspectStateData(const std::string &stateKey) const {
+		std::cout << "\n=== State Inspection: '" << stateKey << "' ===\n";
+
+		// 1. Locate the State Entity
+		// Note: findStateByKey checks the in-memory map first
+		State state = dataManager_.findStateByKey(stateKey);
+
+		if (state.getId() == 0) {
+			std::cout << "State with key '" << stateKey << "' not found.\n";
+			return;
+		}
+
+		// 2. Display Metadata
+		TableFormatter metaTable;
+		metaTable.setTitle("Metadata");
+		metaTable.addColumn("Field");
+		metaTable.addColumn("Value");
+
+		metaTable.addRow({"ID", std::to_string(state.getId())});
+		metaTable.addRow({"Chain Head", state.getKey()});
+		metaTable.addRow({"First Chunk Size", std::to_string(state.getSize())});
+		metaTable.addRow({"Next Chain ID", std::to_string(state.getNextStateId())});
+		metaTable.print();
+
+		std::cout << "\n";
+
+		// 3. Retrieve and Display Content
+		// DataManager handles the complex chain traversal and deserialization
+		auto properties = dataManager_.getStateProperties(stateKey);
+
+		if (properties.empty()) {
+			std::cout << "No properties found (Empty Map).\n";
+			return;
+		}
+
+		TableFormatter propTable;
+		propTable.setTitle("State Properties");
+		propTable.addColumn("Key");
+		propTable.addColumn("Value");
+		propTable.addColumn("Type");
+
+		for (const auto &[key, value]: properties) {
+			// FIX: Use .typeName() method provided by PropertyValue class
+			std::string typeStr = value.typeName();
+
+			propTable.addRow({key, value.toString(), typeStr});
+		}
+		propTable.print();
 	}
 
 } // namespace graph::storage

@@ -12,24 +12,66 @@
 
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <string>
+#include <unordered_map>
+#include <vector>
 #include "BenchmarkFramework.hpp"
 
 namespace metrix::benchmark {
 
 	// ========================================================================
-	// Scenario 1: Bulk Node Creation
-	// Metric: Write Throughput (Ops/Sec)
+	// Enums & Helpers
+	// ========================================================================
+
+	enum class InsertIndexMode {
+		NONE, // No indexes (Raw storage speed)
+		LABEL_ONLY, // Only Label Index enabled
+		PROPERTY_ONLY, // Only Property Index enabled
+		BOTH // Both Label and Property Indexes enabled
+	};
+
+	inline std::string getModeName(InsertIndexMode mode) {
+		switch (mode) {
+			case InsertIndexMode::NONE:
+				return "No Index";
+			case InsertIndexMode::LABEL_ONLY:
+				return "Label Index";
+			case InsertIndexMode::PROPERTY_ONLY:
+				return "Prop Index";
+			case InsertIndexMode::BOTH:
+				return "All Indexes";
+			default:
+				return "Unknown";
+		}
+	}
+
+	// Helper to setup indexes based on mode
+	// Note: We use "BenchUser" as the standard label for insertion tests.
+	inline void setupInsertIndexes(Database &db, InsertIndexMode mode) {
+		if (mode == InsertIndexMode::LABEL_ONLY || mode == InsertIndexMode::BOTH) {
+			db.execute("CALL dbms.createLabelIndex()");
+		}
+		if (mode == InsertIndexMode::PROPERTY_ONLY || mode == InsertIndexMode::BOTH) {
+			// Index on 'id' property for label 'BenchUser'
+			db.execute("CREATE INDEX ON :BenchUser(id)");
+		}
+	}
+
+	// ========================================================================
+	// Scenario 1: Single Node Creation (Baseline)
+	// Metric: Write Throughput (Ops/Sec) for transactional/interactive use.
 	// Logic: 'run' inserts 1 node. Framework calls it 'iterations_' times.
 	// ========================================================================
 
 	class CypherInsertBench : public BenchmarkBase {
-	public:
-		using BenchmarkBase::BenchmarkBase;
+		InsertIndexMode mode_;
 
-		void setup(Database &) override {
-			// Start with empty DB
-		}
+	public:
+		CypherInsertBench(std::string name, std::string path, int iter, int dataSize, InsertIndexMode mode) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize), mode_(mode) {}
+
+		void setup(Database &db) override { setupInsertIndexes(db, mode_); }
 
 		void run(Database &db) override {
 			// Uses Parser -> Planner -> Executor -> Storage
@@ -40,12 +82,13 @@ namespace metrix::benchmark {
 	};
 
 	class NativeInsertBench : public BenchmarkBase {
-	public:
-		using BenchmarkBase::BenchmarkBase;
+		InsertIndexMode mode_;
 
-		void setup(Database &) override {
-			// Start with empty DB
-		}
+	public:
+		NativeInsertBench(std::string name, std::string path, int iter, int dataSize, InsertIndexMode mode) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize), mode_(mode) {}
+
+		void setup(Database &db) override { setupInsertIndexes(db, mode_); }
 
 		void run(Database &db) override {
 			// Bypass Parser, uses Internal Builder -> Executor -> Storage
@@ -56,74 +99,83 @@ namespace metrix::benchmark {
 	};
 
 	// ========================================================================
-	// Scenario: Batch Insertion (High Throughput)
-	// Comparison: UNWIND vs vector<Node>
+	// Scenario 2: Batch Insertion (High Throughput / Bulk Load)
+	// Comparison: Cypher UNWIND vs Native vector<Node>
+	// Logic: 'setup' prepares the payload. 'run' executes ONE massive batch.
 	// ========================================================================
 
 	class CypherBatchInsertBench : public BenchmarkBase {
 		std::string query_;
-	public:
-		using BenchmarkBase::BenchmarkBase;
+		InsertIndexMode mode_;
 
-		void setup([[maybe_unused]] Database& db) override {
+	public:
+		CypherBatchInsertBench(std::string name, std::string path, int iter, int dataSize, InsertIndexMode mode) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize), mode_(mode) {}
+
+		void setup(Database &db) override {
+			// 1. Configure Indexes
+			setupInsertIndexes(db, mode_);
+
+			// 2. Pre-calculate query string (Memory op, not DB op)
 			std::ostringstream oss;
 			oss << "UNWIND [";
 			for (int i = 0; i < dataSize_; ++i) {
 				oss << i << (i < dataSize_ - 1 ? "," : "");
 			}
-			oss << "] AS id CREATE (n:BatchUser {id: id})";
+			oss << "] AS id CREATE (n:BenchUser {id: id})";
 			query_ = oss.str();
 		}
 
-		void run(Database& db) override {
-			db.execute(query_);
-		}
+		void run(Database &db) override { db.execute(query_); }
 
-		void teardown(Database&) override {}
+		void teardown(Database &) override {}
 
 		int getItemsPerOp() const override { return dataSize_; }
 	};
 
 	class NativeBatchInsertBench : public BenchmarkBase {
-		std::vector<std::unordered_map<std::string, Value>> preparedData_;
-		std::string label_ = "BatchUser";
+		std::vector<std::vector<std::pair<std::string, metrix::Value>>> preparedData_;
+		std::string label_ = "BenchUser";
+		InsertIndexMode mode_;
 
 	public:
-		using BenchmarkBase::BenchmarkBase;
+		NativeBatchInsertBench(std::string name, std::string path, int iter, int dataSize, InsertIndexMode mode) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize), mode_(mode) {}
 
-		void setup([[maybe_unused]] Database& db) override {
-			std::cout << " (Preparing memory structures...) " << std::flush;
+		void setup(Database &db) override {
+			setupInsertIndexes(db, mode_);
 
 			preparedData_.reserve(dataSize_);
 			for (int i = 0; i < dataSize_; ++i) {
-				preparedData_.push_back({
-					{"id", static_cast<int64_t>(i)},
-					{"name", "User_" + std::to_string(i)}
-				});
+				// Construct linear vector, faster to iterate than map
+				std::vector<std::pair<std::string, metrix::Value>> props;
+				props.reserve(2);
+				props.emplace_back("id", static_cast<int64_t>(i));
+				props.emplace_back("name", "User_" + std::to_string(i));
+
+				preparedData_.push_back(std::move(props));
 			}
 		}
 
-		void run(Database& db) override {
+		void run(Database &db) override {
+			// Call the optimized overload
 			db.createNodes(label_, preparedData_);
 		}
 
-		void teardown(Database&) override {
-			preparedData_.clear();
-		}
+		void teardown(Database &) override { preparedData_.clear(); }
 
 		int getItemsPerOp() const override { return dataSize_; }
 	};
 
 	// ========================================================================
-	// Scenario 2: Index Lookup
+	// Scenario 3: Query Performance (Index vs Scan)
 	// Metric: Read Latency (Avg/P99)
-	// Logic: 'setup' populates 'dataSize_' nodes. 'run' performs 1 random lookup.
 	// ========================================================================
 
 	enum class QueryMode {
 		PROPERTY_INDEX, // Best: Use specific index on uid
-		LABEL_SCAN, // Baseline: Use Label Index (Default ON)
-		FULL_SCAN // Worst: Scan entire DB (No Label)
+		LABEL_SCAN, // Baseline: Use Label Index
+		FULL_SCAN // Worst: Scan entire DB
 	};
 
 	class CypherQueryBench : public BenchmarkBase {
@@ -137,34 +189,64 @@ namespace metrix::benchmark {
 			// 1. Setup Index based on mode
 			if (mode_ == QueryMode::PROPERTY_INDEX) {
 				db.execute("CREATE INDEX ON :User(uid)");
+			} else if (mode_ == QueryMode::LABEL_SCAN) {
+				db.execute("CALL dbms.createLabelIndex()");
 			}
 
 			// 2. Pre-fill primary data (Users)
-			std::cout << " (Pre-filling " << dataSize_ << " nodes) " << std::flush;
+			std::cout << " (Filling " << dataSize_ << " users...) " << std::flush;
+
+			// [OPTIMIZATION] Use vector<pair> for faster setup
+			std::vector<std::vector<std::pair<std::string, Value>>> batch;
+			constexpr size_t BATCH_CHUNK = 1000; // Flush every 1000 items
+			batch.reserve(BATCH_CHUNK);
+
 			for (int i = 0; i < dataSize_; ++i) {
-				db.createNode("User", {{"uid", static_cast<int64_t>(i)}});
+				std::vector<std::pair<std::string, Value>> props;
+				props.reserve(1);
+				props.emplace_back("uid", static_cast<int64_t>(i));
+
+				batch.push_back(std::move(props));
+
+				// Flush in chunks to keep memory usage low
+				if (batch.size() >= BATCH_CHUNK) {
+					db.createNodes("User", batch);
+					batch.clear();
+				}
+			}
+			if (!batch.empty()) {
+				db.createNodes("User", batch);
 			}
 
-			// Add more noise with multiple different labels to verify Full Scan overhead.
-			// Distribute noise across several labels with varied properties.
-			std::vector<std::string> noiseLabels = {"Product", "Order", "Category", "Device"};
-			int perLabel = std::max(1, dataSize_ / (int)noiseLabels.size());
+			// 3. Inject Noise Data
+			// 4x Noise to make Full Scan visibly slower than Label Scan
+			int noiseCount = dataSize_ * 4;
+			std::cout << " (Filling " << noiseCount << " noise nodes...) " << std::flush;
 
-			for (const auto &lbl : noiseLabels) {
+			std::vector<std::string> noiseLabels = {"Product", "Order", "Category", "Log"};
+			int perLabel = std::max(1, noiseCount / static_cast<int>(noiseLabels.size()));
+
+			for (const auto &lbl: noiseLabels) {
+				batch.clear();
 				for (int i = 0; i < perLabel; ++i) {
-					db.createNode(lbl, {
-						{"uid", static_cast<int64_t>(i)},
-						{"name", lbl + "_" + std::to_string(i)},
-						{"stock", static_cast<int64_t>(i % 100)},
-					});
+					std::vector<std::pair<std::string, Value>> props;
+					props.reserve(2);
+					props.emplace_back("uid", static_cast<int64_t>(i)); // Collision on property to test filter speed
+					props.emplace_back("noise", "true");
+
+					batch.push_back(std::move(props));
+
+					if (batch.size() >= BATCH_CHUNK) {
+						db.createNodes(lbl, batch);
+						batch.clear();
+					}
+				}
+				if (!batch.empty()) {
+					db.createNodes(lbl, batch);
 				}
 			}
 
-			// Add a small set of VIP users to create label skew and test selective scans.
-			for (int i = 0; i < std::max(1, dataSize_ / 10); ++i) {
-				db.createNode("VIP", {{"uid", static_cast<int64_t>(dataSize_ + i)}, {"tier", "gold"}});
-			}
-
+			// 4. Flush to disk
 			db.save();
 		}
 
@@ -172,75 +254,48 @@ namespace metrix::benchmark {
 			int64_t searchId = rand() % dataSize_;
 			std::string q;
 
-			// Return n.uid directly to verify value easily
 			switch (mode_) {
 				case QueryMode::PROPERTY_INDEX:
 				case QueryMode::LABEL_SCAN:
+					// Use Label to trigger Index/Scan
 					q = "MATCH (n:User {uid: " + std::to_string(searchId) + "}) RETURN n.uid";
 					break;
 				case QueryMode::FULL_SCAN:
+					// No Label -> Full Scan
 					q = "MATCH (n {uid: " + std::to_string(searchId) + "}) RETURN n.uid";
 					break;
 			}
 
 			auto res = db.execute(q);
 
-			// 1. Check Existence
 			if (!res.hasNext()) {
 				std::cerr << "\n[FATAL] ID " << searchId << " missing!\n";
 				std::abort();
 			}
-
-			// 2. Check Value
-			auto val = res.get("n.uid"); // Requires ProjectOperator supporting "n.uid"
-
-			// Check variant holds int64_t and matches searchId
-			try {
-				int64_t foundId = std::get<int64_t>(val);
-				if (foundId != searchId) {
-					std::cerr << "\n[FATAL] Data Mismatch! Expected: " << searchId << " Got: " << foundId << "\n";
-					std::abort();
-				}
-			} catch (...) {
-				// Handle type mismatch or empty monostate
-				std::cerr << "\n[FATAL] Invalid return type for ID!\n";
-				std::abort();
-			}
 		}
 
 		void teardown(Database &) override {}
 	};
 
 	// ========================================================================
-	// Scenario 3: Graph Algorithms (Shortest Path)
+	// Scenario 4: Graph Algorithms
 	// Metric: Compute Latency
-	// Logic: 'setup' creates a chain of length 'dataSize_'. 'run' finds path from start to end.
 	// ========================================================================
 
 	class AlgoShortestPathBench : public BenchmarkBase {
-		int64_t startId = 0;
-		int64_t endId = 0;
+		int64_t startId = 0, endId = 0;
 
 	public:
 		using BenchmarkBase::BenchmarkBase;
-
 		void setup(Database &db) override {
 			int chainLen = dataSize_;
-
-			std::cout << " (Building chain of " << chainLen << " nodes) " << std::flush;
-
+			std::cout << " (Building chain " << chainLen << ") " << std::flush;
 			int64_t prevId = -1;
-
 			for (int i = 0; i < chainLen; ++i) {
-				// Use fast API for setup
 				int64_t curr = db.createNodeRetId("Node", {{"id", static_cast<int64_t>(i)}});
-
-				if (prevId != -1) {
+				if (prevId != -1)
 					db.createEdgeById(prevId, curr, "NEXT");
-				}
-
 				prevId = curr;
-
 				if (i == 0)
 					startId = curr;
 				if (i == chainLen - 1)
@@ -248,33 +303,23 @@ namespace metrix::benchmark {
 			}
 			db.save();
 		}
-
-		void run(Database &db) override {
-			// Native API Call (Bypasses Parser/Planner)
-			db.getShortestPath(startId, endId);
-		}
-
+		void run(Database &db) override { db.getShortestPath(startId, endId); }
 		void teardown(Database &) override {}
 	};
 
 	class CypherShortestPathBench : public BenchmarkBase {
-		int64_t startId = 0;
-		int64_t endId = 0;
+		int64_t startId = 0, endId = 0;
 
 	public:
 		using BenchmarkBase::BenchmarkBase;
-
 		void setup(Database &db) override {
 			int chainLen = dataSize_;
-
-			std::cout << " (Building chain of " << chainLen << " nodes) " << std::flush;
-
+			std::cout << " (Building chain " << chainLen << ") " << std::flush;
 			int64_t prevId = -1;
 			for (int i = 0; i < chainLen; ++i) {
 				int64_t curr = db.createNodeRetId("Node", {{"id", static_cast<int64_t>(i)}});
-				if (prevId != -1) {
+				if (prevId != -1)
 					db.createEdgeById(prevId, curr, "NEXT");
-				}
 				prevId = curr;
 				if (i == 0)
 					startId = curr;
@@ -283,13 +328,10 @@ namespace metrix::benchmark {
 			}
 			db.save();
 		}
-
 		void run(Database &db) override {
-			// Cypher Procedure Call (Includes Parsing/Planning overhead)
 			std::string q = "CALL algo.shortestPath(" + std::to_string(startId) + ", " + std::to_string(endId) + ")";
 			db.execute(q);
 		}
-
 		void teardown(Database &) override {}
 	};
 

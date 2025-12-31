@@ -19,17 +19,16 @@
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/LimitOperator.hpp"
-#include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
-#include "graph/query/execution/operators/SetConfigOperator.hpp"
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/SkipOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/execution/operators/UnwindOperator.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
+#include "graph/query/planner/ProcedureRegistry.hpp"
 
 namespace graph::query {
 
@@ -128,49 +127,13 @@ namespace graph::query {
 
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::callProcedureOp(const std::string &procedure, const std::vector<PropertyValue> &args) const {
-		if (procedure == "dbms.setConfig") {
-			if (args.size() != 2)
-				throw std::runtime_error("dbms.setConfig expects (key, value)");
-			// args[0] should be key (string), args[1] is value
-			return std::make_unique<execution::operators::SetConfigOperator>(dm_, args[0].toString(), args[1]);
-		}
 
-		if (procedure == "dbms.listConfig") {
-			return std::make_unique<execution::operators::ListConfigOperator>(dm_);
-		}
+		// 1. Prepare Context
+		const planner::ProcedureContext ctx{dm_, im_};
 
-		if (procedure == "dbms.getConfig") {
-			if (args.size() != 1)
-				throw std::runtime_error("dbms.getConfig expects (key)");
-			return std::make_unique<execution::operators::ListConfigOperator>(dm_, args[0].toString());
-		}
-
-		if (procedure == "algo.shortestPath") {
-			if (args.size() < 2) {
-				throw std::runtime_error("algo.shortestPath requires at least (startId, endId)");
-			}
-
-			// Extract IDs (Assuming arguments are passed as Integers)
-			// If user passes '1', it might be parsed as int64.
-			// Using std::visit or simpler helpers if available.
-			// Here assuming simple conversion via PropertyValue helper logic or direct variant access.
-
-			int64_t startId = 0;
-			int64_t endId = 0;
-
-			// Simple extraction logic (adjust based on your PropertyValue API)
-			try {
-				startId = std::stoll(args[0].toString());
-				endId = std::stoll(args[1].toString());
-			} catch (...) {
-				throw std::runtime_error("IDs must be numeric");
-			}
-
-			std::string dir = "both";
-			if (args.size() > 2)
-				dir = args[2].toString();
-
-			return std::make_unique<execution::operators::AlgoShortestPathOperator>(dm_, startId, endId, dir);
+		// 2. Lookup and Execute Factory
+		if (const auto factory = planner::ProcedureRegistry::instance().get(procedure)) {
+			return factory(ctx, args);
 		}
 
 		throw std::runtime_error("Unknown procedure: " + procedure);
@@ -254,7 +217,7 @@ namespace graph::query {
 
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
-						   const std::vector<PropertyValue> &list) const {
+						   const std::vector<PropertyValue> &list) {
 		return std::make_unique<execution::operators::UnwindOperator>(std::move(child), alias, list);
 	}
 

@@ -17,81 +17,82 @@
 
 namespace metrix {
 
-    // Forward declarations of implementation classes.
-    // These are defined ONLY in the .cpp file to keep this header clean.
-    class DatabaseImpl;
-    class ResultImpl;
+	// Forward declarations of implementation classes.
+	// These are defined ONLY in the .cpp file to keep this header clean.
+	class DatabaseImpl;
+	class ResultImpl;
 
-    /**
-     * @class Result
-     * @brief Represents the output of a query execution.
-     */
-    class Result {
-    public:
-        Result();
+	/**
+	 * @class Result
+	 * @brief Represents the output of a query execution.
+	 */
+	class Result {
+	public:
+		Result();
 
-        /**
-         * @brief Destructor.
-         * MUST be defined in the .cpp file where ResultImpl is fully defined.
-         */
-        ~Result();
+		/**
+		 * @brief Destructor.
+		 * MUST be defined in the .cpp file where ResultImpl is fully defined.
+		 */
+		~Result();
 
-        // Move-only semantics to transfer ownership of the internal result
-        Result(Result&&) noexcept;
-        Result& operator=(Result&&) noexcept;
+		// Move-only semantics to transfer ownership of the internal result
+		Result(Result &&) noexcept;
+		Result &operator=(Result &&) noexcept;
 
-        bool hasNext();
-        void next();
-        Value get(const std::string& key) const;
+		bool hasNext();
+		void next();
+		Value get(const std::string &key) const;
 
-        bool isSuccess() const;
-        std::string getError() const;
+		bool isSuccess() const;
+		std::string getError() const;
 
-    private:
-        std::unique_ptr<ResultImpl> impl_;
-        friend class Database; // Allow Database to create Results
-    };
+	private:
+		std::unique_ptr<ResultImpl> impl_;
+		friend class Database; // Allow Database to create Results
+	};
 
-    /**
-     * @class Database
-     * @brief The main entry point for the database API.
-     */
-    class Database {
-    public:
-        explicit Database(const std::string& path);
+	/**
+	 * @class Database
+	 * @brief The main entry point for the database API.
+	 */
+	class Database {
+	public:
+		explicit Database(const std::string &path);
 
-        /**
-         * @brief Destructor.
-         * MUST be defined in the .cpp file where DatabaseImpl is fully defined.
-         * Otherwise, std::unique_ptr cannot delete the incomplete type.
-         */
-        ~Database();
+		/**
+		 * @brief Destructor.
+		 * MUST be defined in the .cpp file where DatabaseImpl is fully defined.
+		 * Otherwise, std::unique_ptr cannot delete the incomplete type.
+		 */
+		~Database();
 
-        // Disable copying
-        Database(const Database&) = delete;
-        Database& operator=(const Database&) = delete;
+		// Disable copying
+		Database(const Database &) = delete;
+		Database &operator=(const Database &) = delete;
 
-        void open();
-        void close();
-        void save(); // Flushes data to disk
+		void open();
+		void close();
+		void save(); // Flushes data to disk
 
-        // Execute raw Cypher query
-        Result execute(const std::string& cypher);
+		// Execute raw Cypher query
+		Result execute(const std::string &cypher);
 
-        // High-performance direct insert APIs
-        void createNode(const std::string& label, const std::unordered_map<std::string, Value>& props);
+		// High-performance direct insert APIs
+		void createNode(const std::string &label, const std::unordered_map<std::string, Value> &props);
 
-    	/**
+		/**
 		 * @brief Create multiple nodes in one batch.
 		 *        Essential for high-performance data loading tools.
 		 */
-    	void createNodes(const std::string& label, const std::vector<std::unordered_map<std::string, Value>>& propsList);
+		void createNodes(const std::string &label,
+						 const std::vector<std::vector<std::pair<std::string, Value>>> &propsList);
 
-    	void createEdge(const std::string& sourceLabel, const std::string& sourceKey, const Value& sourceVal,
-						const std::string& targetLabel, const std::string& targetKey, const Value& targetVal,
-						const std::string& edgeLabel, const std::unordered_map<std::string, Value>& props);
+		void createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
+						const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
+						const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props);
 
-    	/**
+		/**
 		 * @brief Creates a node and returns its internal ID immediately.
 		 *        Essential for tools that need to link nodes later without re-querying.
 		 *
@@ -99,9 +100,9 @@ namespace metrix {
 		 * @param props The properties.
 		 * @return The internal ID (int64_t) of the created node.
 		 */
-    	int64_t createNodeRetId(const std::string& label, const std::unordered_map<std::string, Value>& props = {});
+		int64_t createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props = {});
 
-    	/**
+		/**
 		 * @brief Creates an edge directly between two known internal IDs.
 		 *        This bypasses the query parser and index lookups, offering O(1) performance.
 		 *
@@ -111,20 +112,19 @@ namespace metrix {
 		 * @param props Edge properties.
 		 * @throws std::runtime_error If sourceId or targetId does not exist.
 		 */
-    	void createEdgeById(int64_t sourceId, int64_t targetId,
-							const std::string& edgeLabel,
-							const std::unordered_map<std::string, Value>& props = {});
+		void createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
+							const std::unordered_map<std::string, Value> &props = {});
 
-    	/**
+		/**
 		 * @brief Finds the shortest path between two nodes.
 		 * @return Ordered path of nodes.
 		 */
-    	std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15);
+		std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15);
 
-    	void bfs(int64_t startNodeId, std::function<bool(const Node&)> visitor);
+		void bfs(int64_t startNodeId, std::function<bool(const Node &)> visitor);
 
-    private:
-        std::unique_ptr<DatabaseImpl> impl_;
-    };
+	private:
+		std::unique_ptr<DatabaseImpl> impl_;
+	};
 
 } // namespace metrix

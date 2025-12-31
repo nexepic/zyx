@@ -9,6 +9,7 @@
  **/
 
 #pragma once
+#include "DebugCommandHandler.hpp"
 #include "graph/core/Database.hpp"
 
 namespace graph {
@@ -23,6 +24,7 @@ namespace graph {
 		Database &db;
 		void handleCommand(const std::string &command) const;
 		void runBasic() const; // Fallback for non-TTY environments
+		cli::DebugCommandHandler debugHandler_{db};
 	};
 
 	class REPLTest : public REPL {
