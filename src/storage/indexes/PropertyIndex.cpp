@@ -30,9 +30,15 @@ namespace graph::query::indexes {
 
 	void PropertyIndex::initialize() {
 		std::unique_lock lock(mutex_);
-		// Load root maps from state using the constructed keys
 		deserializeRootMap();
 		deserializeKeyTypeMap();
+
+		// Rebuild the vector cache from the map
+		indexedKeysList_.clear();
+		indexedKeysList_.reserve(indexedKeyTypes_.size());
+		for (const auto &key: indexedKeyTypes_ | std::views::keys) {
+			indexedKeysList_.push_back(key);
+		}
 	}
 
 	// Clear a specific property key from all type indexes
@@ -66,6 +72,7 @@ namespace graph::query::indexes {
 
 		// Remove from the type map
 		indexedKeyTypes_.erase(it);
+		std::erase(indexedKeysList_, key);
 	}
 
 	void PropertyIndex::dropKey(const std::string &key) {
@@ -108,6 +115,8 @@ namespace graph::query::indexes {
 
 		// Also clear the type map
 		indexedKeyTypes_.clear();
+		// Sync vector
+		indexedKeysList_.clear();
 	}
 
 	void PropertyIndex::drop() {
@@ -130,10 +139,11 @@ namespace graph::query::indexes {
 
 	void PropertyIndex::createIndex(const std::string &key) {
 		std::unique_lock lock(mutex_);
-		// If it doesn't exist, register it with UNKNOWN type.
-		// If it exists, we leave it alone (preserving existing type info).
 		if (!indexedKeyTypes_.contains(key)) {
 			indexedKeyTypes_[key] = PropertyType::UNKNOWN;
+
+			// Sync vector
+			indexedKeysList_.push_back(key);
 		}
 	}
 
@@ -435,14 +445,9 @@ namespace graph::query::indexes {
 		return indexedKeyTypes_.empty();
 	}
 
-	std::vector<std::string> PropertyIndex::getIndexedKeys() const {
+	const std::vector<std::string>& PropertyIndex::getIndexedKeys() const {
 		std::shared_lock lock(mutex_);
-		std::vector<std::string> keys;
-		keys.reserve(indexedKeyTypes_.size());
-		for (const auto &key: indexedKeyTypes_ | std::views::keys) {
-			keys.push_back(key);
-		}
-		return keys;
+		return indexedKeysList_;
 	}
 
 	PropertyType PropertyIndex::getIndexedKeyType(const std::string &key) const {

@@ -113,16 +113,16 @@ namespace metrix::benchmark {
 			BenchmarkBase(std::move(name), std::move(path), iter, dataSize), mode_(mode) {}
 
 		void setup(Database &db) override {
-			// 1. Configure Indexes
 			setupInsertIndexes(db, mode_);
 
-			// 2. Pre-calculate query string (Memory op, not DB op)
 			std::ostringstream oss;
-			oss << "UNWIND [";
+			oss << "CREATE ";
 			for (int i = 0; i < dataSize_; ++i) {
-				oss << i << (i < dataSize_ - 1 ? "," : "");
+				oss << "(:BatchUser {id: " << i << ", name: 'User_" << i << "'})";
+				if (i < dataSize_ - 1) {
+					oss << ", ";
+				}
 			}
-			oss << "] AS id CREATE (n:BenchUser {id: id})";
 			query_ = oss.str();
 		}
 

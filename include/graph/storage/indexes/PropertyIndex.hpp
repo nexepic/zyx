@@ -63,7 +63,7 @@ namespace graph::query::indexes {
 		// Find nodes with property value in range (for numeric types)
 		std::vector<int64_t> findRange(const std::string &key, double minValue, double maxValue) const;
 
-		std::vector<std::string> getIndexedKeys() const;
+		const std::vector<std::string>& getIndexedKeys() const;
 
 		bool isEmpty() const;
 
@@ -95,6 +95,8 @@ namespace graph::query::indexes {
 
 		// Map to store the determined type for each indexed key.
 		std::unordered_map<std::string, PropertyType> indexedKeyTypes_;
+
+		std::vector<std::string> indexedKeysList_;
 
 		std::shared_ptr<IndexTreeManager> getTreeManagerForType(PropertyType type) const;
 		std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type);
