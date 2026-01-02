@@ -57,7 +57,9 @@ conan install . \
     --output-folder="$BUILD_DIR" \
     --build=missing \
     -s build_type=Release \
-    -s compiler.cppstd=20
+    -s compiler.cppstd=20 \
+    -o *:shared=False \
+    -o *:fPIC=True
 
 # ==============================================================================
 # Step 3: Configure Build (Meson)
