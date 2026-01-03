@@ -10,6 +10,7 @@
 
 #include "graph/storage/SegmentTracker.hpp"
 #include <algorithm>
+#include <cstring>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
@@ -424,14 +425,13 @@ namespace graph::storage {
 		}
 	}
 
-	void SegmentTracker::markSegmentDirty(uint64_t offset) {
-        dirtySegments_.insert(offset);
-    }
+	void SegmentTracker::markSegmentDirty(uint64_t offset) { dirtySegments_.insert(offset); }
 
 	void SegmentTracker::flushDirtySegments() {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		if (dirtySegments_.empty()) return;
+		if (dirtySegments_.empty())
+			return;
 
 		// Sort segments by offset to optimize disk seek times (Sequential Write)
 		std::vector sortedSegments(dirtySegments_.begin(), dirtySegments_.end());
