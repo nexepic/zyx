@@ -10,6 +10,7 @@
 
 #include "graph/core/Index.hpp"
 #include <algorithm>
+#include <cstring>
 #include <sstream>
 #include <stdexcept>
 #include "graph/storage/IDAllocator.hpp"
