@@ -38,16 +38,16 @@ namespace graph::storage {
 		bool fileExists = std::filesystem::exists(dbFilePath);
 
 		// --- Strict Mode Validation ---
-		if (openMode_ == OpenMode::OPEN_EXISTING && !fileExists) {
+		if (openMode_ == OpenMode::OPEN_EXISTING_FILE && !fileExists) {
 			throw std::runtime_error("Database file does not exist: " + dbFilePath);
 		}
-		if (openMode_ == OpenMode::CREATE_NEW && fileExists) {
+		if (openMode_ == OpenMode::CREATE_NEW_FILE && fileExists) {
 			throw std::runtime_error("Database file already exists: " + dbFilePath);
 		}
 		// ------------------------------------
 
 		// Logic for creating NEW database
-		if (openMode_ == OpenMode::CREATE_NEW || (openMode_ == OpenMode::CREATE_OR_OPEN && !fileExists)) {
+		if (openMode_ == OpenMode::CREATE_NEW_FILE || (openMode_ == OpenMode::CREATE_OR_OPEN_FILE && !fileExists)) {
 			// Create and open for Read/Write + Truncate (Wipe previous)
 			fileStream = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out |
 																			std::ios::trunc);

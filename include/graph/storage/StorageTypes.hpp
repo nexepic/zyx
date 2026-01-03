@@ -13,9 +13,9 @@
 namespace graph::storage {
 
 	enum class OpenMode {
-		CREATE_NEW,     // Create new file. Fail if exists.
-		OPEN_EXISTING,  // Open existing file. Fail if missing.
-		CREATE_OR_OPEN  // Open if exists, create if missing (Legacy behavior)
+		CREATE_NEW_FILE,     // Create new file. Fail if exists.
+		OPEN_EXISTING_FILE,  // Open existing file. Fail if missing.
+		CREATE_OR_OPEN_FILE  // Open if exists, create if missing (Legacy behavior)
 	};
 
 }
