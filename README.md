@@ -1,4 +1,4 @@
-<p align="center">
+<p align="center" style="padding: 15px 0;">
     <a href="https://github.com/nexepic/metrix">
         <picture>
             <source srcset="./docs/static/img/icon-light.svg" media="(prefers-color-scheme: dark)">
