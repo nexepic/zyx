@@ -9,6 +9,7 @@
  **/
 
 #include "graph/cli/Repl.hpp"
+#include <iomanip>
 #include <iostream>
 #include "graph/cli/linenoise.hpp"
 

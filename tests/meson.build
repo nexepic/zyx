@@ -45,7 +45,8 @@ for root, dirs, files in os.walk(sys.argv[1]):
 											 gmock_main_dep,
 											 antlr4_dep,
 											 boost_dep,
-											 zlib_dep
+											 zlib_dep,
+											 cli11_dep
 										 ],
 										 include_directories : test_include_dirs,
 										 build_by_default : true

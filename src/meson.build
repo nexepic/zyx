@@ -48,6 +48,7 @@ db_lib = static_library('metrix',
 						dependencies : [
 							zlib_dep,
 							boost_dep,
+							cli11_dep,
 							antlr4_dep, # Core may need to reference Parser interfaces
 							cypher_dep  # Link the Parser library built earlier!
 						],
@@ -72,11 +73,11 @@ public_headers = [
 
 # 2. Build Shared Library (Implementation)
 libmetrix = shared_library('metrix',
-							 sources : db_src,
-							 include_directories : inc_dirs,
-							 dependencies : [zlib_dep, boost_dep, antlr4_dep, cypher_dep],
-							 install : true,
-							 install_dir : get_option('libdir')
+						   sources : db_src,
+						   include_directories : inc_dirs,
+						   dependencies : [zlib_dep, boost_dep, cli11_dep, antlr4_dep, cypher_dep],
+						   install : true,
+						   install_dir : get_option('libdir')
 )
 
 # 3. Install Headers (Contract)

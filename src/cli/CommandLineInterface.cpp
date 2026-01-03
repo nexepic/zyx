@@ -9,9 +9,9 @@
  **/
 
 #include "graph/cli/CommandLineInterface.hpp"
+#include <CLI/CLI.hpp>
 #include <filesystem>
 #include <iostream>
-#include "graph/cli/CLI11.hpp"
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/log/Log.hpp"

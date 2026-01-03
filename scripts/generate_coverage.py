@@ -23,7 +23,6 @@ IGNORE_PATTERNS = [
     "/usr/",
     "/opt/",
     "boost",
-    "CLI11",
     "Xcode.app",
     "MSVC",
     "Program Files",

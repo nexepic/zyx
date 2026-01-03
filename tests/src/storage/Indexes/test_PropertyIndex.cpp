@@ -167,19 +167,32 @@ TEST_F(PropertyIndexTest, FindRangeForNumericTypes) {
 }
 
 TEST_F(PropertyIndexTest, GetIndexedKeys) {
-	// Arrange
+	// [FIX] Arrange: Explicitly create the indexes first!
+	// PropertyIndex requires the key to be registered before adding data.
+	propertyIndex->createIndex("k1");
+	propertyIndex->createIndex("k2");
+	propertyIndex->createIndex("k3");
+	propertyIndex->createIndex("k4");
+
+	// Act: Add properties
+	// Now that keys are registered, these calls will actually insert data into B-Trees
 	propertyIndex->addProperty(11, "k1", "v1");
 	propertyIndex->addProperty(12, "k2", 123);
 	propertyIndex->addProperty(13, "k3", 1.23);
 	propertyIndex->addProperty(14, "k4", true);
-	propertyIndex->addProperty(15, "k1", 456); // This should be ignored (type mismatch).
 
-	// Act
+	// Test Type Mismatch logic
+	// k1 is String (inferred from first insert "v1"). 456 is Int. Should be ignored.
+	propertyIndex->addProperty(15, "k1", 456);
+
+	// Act: Retrieve keys
 	auto keys = propertyIndex->getIndexedKeys();
 	std::ranges::sort(keys);
 
 	// Assert
 	const std::vector<std::string> expected_keys = {"k1", "k2", "k3", "k4"};
+
+	// Now this should pass because the keys were registered
 	ASSERT_EQ(keys.size(), 4u);
 	EXPECT_EQ(keys, expected_keys);
 }
@@ -464,116 +477,116 @@ TEST_F(PropertyIndexTest, RepeatedCreateAndDropStress) {
  * 2. Create -> Insert -> Multiple Create (Should preserve type) -> Multiple Drop
  */
 TEST_F(PropertyIndexTest, Robustness_RepetitiveAndInterleavedOps) {
-    const std::string key = "resilient_key";
+	const std::string key = "resilient_key";
 
-    // --- Phase 1: Multiple Create (Idempotency on UNKNOWN) ---
-    // Execute createIndex 5 times consecutively
-    for (int i = 0; i < 5; ++i) {
-        propertyIndex->createIndex(key);
-        // Assert: Key exists, Type is UNKNOWN
-        EXPECT_TRUE(propertyIndex->hasKeyIndexed(key));
-        EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
-    }
+	// --- Phase 1: Multiple Create (Idempotency on UNKNOWN) ---
+	// Execute createIndex 5 times consecutively
+	for (int i = 0; i < 5; ++i) {
+		propertyIndex->createIndex(key);
+		// Assert: Key exists, Type is UNKNOWN
+		EXPECT_TRUE(propertyIndex->hasKeyIndexed(key));
+		EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+	}
 
-    // --- Phase 2: Multiple Drop (Idempotency on Empty) ---
-    // Execute dropKey 5 times consecutively
-    for (int i = 0; i < 5; ++i) {
-        // Should not throw exceptions (even when key is missing on iterations 2-5)
-        EXPECT_NO_THROW(propertyIndex->dropKey(key));
-        // Assert: Key is gone
-        EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
-    }
-    EXPECT_TRUE(propertyIndex->isEmpty());
+	// --- Phase 2: Multiple Drop (Idempotency on Empty) ---
+	// Execute dropKey 5 times consecutively
+	for (int i = 0; i < 5; ++i) {
+		// Should not throw exceptions (even when key is missing on iterations 2-5)
+		EXPECT_NO_THROW(propertyIndex->dropKey(key));
+		// Assert: Key is gone
+		EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
+	}
+	EXPECT_TRUE(propertyIndex->isEmpty());
 
-    // --- Phase 3: Create -> Insert -> Multiple Create (State Protection) ---
+	// --- Phase 3: Create -> Insert -> Multiple Create (State Protection) ---
 
-    // 3a. Initial Create
-    for (int i = 0; i < 3; ++i) {
-        propertyIndex->createIndex(key);
-    }
-    EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+	// 3a. Initial Create
+	for (int i = 0; i < 3; ++i) {
+		propertyIndex->createIndex(key);
+	}
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
 
-    // 3b. Insert Data (Transitions state to INTEGER)
-    propertyIndex->addProperty(1, key, 100);
-    EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
+	// 3b. Insert Data (Transitions state to INTEGER)
+	propertyIndex->addProperty(1, key, 100);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
 
-    // 3c. Multiple Create AGAIN (Must NOT reset to UNKNOWN)
-    for (int i = 0; i < 3; ++i) {
-        propertyIndex->createIndex(key);
-        // Critical Assert: Type must remain INTEGER, data must persist
-        EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER)
-            << "createIndex overwrote existing type definition!";
-    }
+	// 3c. Multiple Create AGAIN (Must NOT reset to UNKNOWN)
+	for (int i = 0; i < 3; ++i) {
+		propertyIndex->createIndex(key);
+		// Critical Assert: Type must remain INTEGER, data must persist
+		EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER)
+				<< "createIndex overwrote existing type definition!";
+	}
 
-    // Verify data is still accessible
-    auto results = propertyIndex->findExactMatch(key, 100);
-    ASSERT_EQ(results.size(), 1u);
-    EXPECT_EQ(results[0], 1);
+	// Verify data is still accessible
+	auto results = propertyIndex->findExactMatch(key, 100);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
 
-    // --- Phase 4: Multiple Drop (Cleanup) ---
-    for (int i = 0; i < 5; ++i) {
-        propertyIndex->dropKey(key);
-        EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
-    }
+	// --- Phase 4: Multiple Drop (Cleanup) ---
+	for (int i = 0; i < 5; ++i) {
+		propertyIndex->dropKey(key);
+		EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
+	}
 
-    // Verify completely empty
-    EXPECT_TRUE(propertyIndex->isEmpty());
-    EXPECT_TRUE(propertyIndex->findExactMatch(key, 100).empty());
+	// Verify completely empty
+	EXPECT_TRUE(propertyIndex->isEmpty());
+	EXPECT_TRUE(propertyIndex->findExactMatch(key, 100).empty());
 }
 
 /**
  * @brief Verifies that multiple property keys can be indexed simultaneously without interference.
  */
 TEST_F(PropertyIndexTest, MultiplePropertyKeysIsolation) {
-    const std::string key1 = "firstname";
-    const std::string key2 = "lastname";
-    const std::string key3 = "age";
+	const std::string key1 = "firstname";
+	const std::string key2 = "lastname";
+	const std::string key3 = "age";
 
-    // 1. Create multiple indexes
-    propertyIndex->createIndex(key1);
-    propertyIndex->createIndex(key2);
-    propertyIndex->createIndex(key3);
+	// 1. Create multiple indexes
+	propertyIndex->createIndex(key1);
+	propertyIndex->createIndex(key2);
+	propertyIndex->createIndex(key3);
 
-    EXPECT_TRUE(propertyIndex->hasKeyIndexed(key1));
-    EXPECT_TRUE(propertyIndex->hasKeyIndexed(key2));
-    EXPECT_TRUE(propertyIndex->hasKeyIndexed(key3));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key1));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key2));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key3));
 
-    // 2. Insert mixed data
-    // Node 1: Alice Smith, 30
-    propertyIndex->addProperty(1, key1, "Alice");
-    propertyIndex->addProperty(1, key2, "Smith");
-    propertyIndex->addProperty(1, key3, 30);
+	// 2. Insert mixed data
+	// Node 1: Alice Smith, 30
+	propertyIndex->addProperty(1, key1, "Alice");
+	propertyIndex->addProperty(1, key2, "Smith");
+	propertyIndex->addProperty(1, key3, 30);
 
-    // Node 2: Bob Jones, 40
-    propertyIndex->addProperty(2, key1, "Bob");
-    propertyIndex->addProperty(2, key2, "Jones");
-    propertyIndex->addProperty(2, key3, 40);
+	// Node 2: Bob Jones, 40
+	propertyIndex->addProperty(2, key1, "Bob");
+	propertyIndex->addProperty(2, key2, "Jones");
+	propertyIndex->addProperty(2, key3, 40);
 
-    // 3. Verify Isolation (Querying one key shouldn't return data from another)
+	// 3. Verify Isolation (Querying one key shouldn't return data from another)
 
-    // Query firstname "Alice" -> Should find Node 1
-    auto res1 = propertyIndex->findExactMatch(key1, "Alice");
-    ASSERT_EQ(res1.size(), 1u);
-    EXPECT_EQ(res1[0], 1);
+	// Query firstname "Alice" -> Should find Node 1
+	auto res1 = propertyIndex->findExactMatch(key1, "Alice");
+	ASSERT_EQ(res1.size(), 1u);
+	EXPECT_EQ(res1[0], 1);
 
-    // Query lastname "Smith" -> Should find Node 1
-    auto res2 = propertyIndex->findExactMatch(key2, "Smith");
-    ASSERT_EQ(res2.size(), 1u);
-    EXPECT_EQ(res2[0], 1);
+	// Query lastname "Smith" -> Should find Node 1
+	auto res2 = propertyIndex->findExactMatch(key2, "Smith");
+	ASSERT_EQ(res2.size(), 1u);
+	EXPECT_EQ(res2[0], 1);
 
-    // Query age 40 -> Should find Node 2
-    auto res3 = propertyIndex->findExactMatch(key3, 40);
-    ASSERT_EQ(res3.size(), 1u);
-    EXPECT_EQ(res3[0], 2);
+	// Query age 40 -> Should find Node 2
+	auto res3 = propertyIndex->findExactMatch(key3, 40);
+	ASSERT_EQ(res3.size(), 1u);
+	EXPECT_EQ(res3[0], 2);
 
-    // Cross-contamination check:
-    // Querying key1 with value from key2 should return empty (unless coincide)
-    // "Smith" is a lastname, not a firstname here.
-    auto res4 = propertyIndex->findExactMatch(key1, "Smith");
-    EXPECT_TRUE(res4.empty());
+	// Cross-contamination check:
+	// Querying key1 with value from key2 should return empty (unless coincide)
+	// "Smith" is a lastname, not a firstname here.
+	auto res4 = propertyIndex->findExactMatch(key1, "Smith");
+	EXPECT_TRUE(res4.empty());
 
-    // 4. Verify Types
-    EXPECT_EQ(propertyIndex->getIndexedKeyType(key1), graph::PropertyType::STRING);
-    EXPECT_EQ(propertyIndex->getIndexedKeyType(key2), graph::PropertyType::STRING);
-    EXPECT_EQ(propertyIndex->getIndexedKeyType(key3), graph::PropertyType::INTEGER);
+	// 4. Verify Types
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key1), graph::PropertyType::STRING);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key2), graph::PropertyType::STRING);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key3), graph::PropertyType::INTEGER);
 }
