@@ -21,8 +21,8 @@
 // Platform specific includes for memory monitoring
 #ifdef _WIN32
 #define NOMINMAX
-#include <psapi.h>
 #include <windows.h>
+#include <psapi.h>
 #else
 #include <sys/resource.h>
 #include <unistd.h>

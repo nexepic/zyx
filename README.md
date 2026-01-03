@@ -1,12 +1,33 @@
-# Metrix
+<p align="center">
+    <a href="https://github.com/nexepic/metrix">
+        <picture>
+            <source srcset="./docs/static/img/icon-light.svg" media="(prefers-color-scheme: dark)">
+            <img src="./docs/static/img/icon.svg" alt="Metrix Logo" width="120" />
+        </picture>
+    </a>
+</p>
 
-[![Build Status](https://github.com/nexepic/metrix/actions/workflows/build.yml/badge.svg)](https://github.com/nexepic/metrix/actions/workflows/build.yml)
-[![codecov](https://codecov.io/github/nexepic/metrix/graph/badge.svg?token=VBCGBBI4YO)](https://codecov.io/github/nexepic/metrix)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![C++](https://img.shields.io/badge/C++-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![Meson](https://img.shields.io/badge/Build-Meson-blue.svg)](https://mesonbuild.com/)
+<p align="center">
+  A high-performance, embeddable graph database engine written in modern C++20, designed for efficient storage, indexing, and querying of graph-structured data.
+</p>
 
-A high-performance, embeddable graph database engine written in modern C++20, designed for efficient storage, indexing, and querying of graph-structured data.
+<p align="center">
+    <a href="https://github.com/nexepic/metrix/actions/workflows/build.yml">
+        <img alt="Build Status" src="https://github.com/nexepic/metrix/actions/workflows/build.yml/badge.svg" />
+    </a>
+    <a href="https://codecov.io/github/nexepic/metrix">
+        <img alt="codecov" src="https://codecov.io/github/nexepic/metrix/graph/badge.svg?token=VBCGBBI4YO" />
+    </a>
+    <a href="LICENSE">
+        <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg" />
+    </a>
+    <a href="https://en.cppreference.com/w/cpp/20">
+        <img alt="C++" src="https://img.shields.io/badge/C++-20-blue.svg" />
+    </a>
+    <a href="https://mesonbuild.com/">
+        <img alt="Meson" src="https://img.shields.io/badge/Build-Meson-blue.svg" />
+    </a>
+</p>
 
 ## Features
 
