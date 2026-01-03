@@ -16,9 +16,17 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <vector>
+
+// Platform specific includes for memory monitoring
+#ifdef _WIN32
+#define NOMINMAX
+#include <psapi.h>
+#include <windows.h>
+#else
 #include <sys/resource.h>
 #include <unistd.h>
-#include <vector>
+#endif
 
 // Include Public API
 #include "metrix/metrix.hpp"
@@ -36,12 +44,20 @@ namespace metrix::benchmark {
 	class SystemMonitor {
 	public:
 		static size_t getPeakRSS() {
+#ifdef _WIN32
+			PROCESS_MEMORY_COUNTERS pmc;
+			if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+				return pmc.PeakWorkingSetSize / 1024; // Bytes -> KB
+			}
+			return 0;
+#else
 			rusage rusage{};
 			getrusage(RUSAGE_SELF, &rusage);
 #ifdef __APPLE__
 			return static_cast<size_t>(rusage.ru_maxrss) / 1024; // macOS returns Bytes -> KB
 #else
 			return (size_t) rusage.ru_maxrss; // Linux returns KB
+#endif
 #endif
 		}
 	};
