@@ -176,7 +176,7 @@ TEST_F(CommandLineInterfaceTest, CreateCommandSafety) {
 	// Let's test the OpenMode logic directly here to be safe and avoid REPL hang issues in unit tests:
 	EXPECT_THROW(
 			{
-				graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW);
+				graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW_FILE);
 				db.open();
 			},
 			std::runtime_error);
@@ -194,7 +194,7 @@ TEST_F(CommandLineInterfaceTest, OpenCommandSafety) {
 
 	EXPECT_THROW(
 			{
-				graph::Database db(dbPath, graph::storage::OpenMode::OPEN_EXISTING);
+				graph::Database db(dbPath, graph::storage::OpenMode::OPEN_EXISTING_FILE);
 				db.open();
 			},
 			std::runtime_error);
@@ -208,7 +208,7 @@ TEST_F(CommandLineInterfaceTest, OpenWithCreateFlag) {
 	// This mode corresponds to CREATE_OR_OPEN
 	// It should NOT throw even if file is missing
 	EXPECT_NO_THROW({
-		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_OR_OPEN);
+		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_OR_OPEN_FILE);
 		db.open();
 		db.close();
 	});
