@@ -22,11 +22,11 @@ jobs:
             llvm_profdata: llvm-profdata-20
 
           # --- Windows Configuration ---
-#          - os: windows-latest
-#            native_file: compiler_options_win64.ini
-#            # Windows specific tools (usually in PATH)
-#            llvm_cov: llvm-cov
-#            llvm_profdata: llvm-profdata
+          - os: windows-latest
+            native_file: compiler_options_win64.ini
+            # Windows specific tools (usually in PATH)
+            llvm_cov: llvm-cov
+            llvm_profdata: llvm-profdata
 
           # --- macOS Configuration ---
 #          - os: macos-latest
