@@ -7,10 +7,11 @@
         </picture>
     </a>
     <br />
+    <br />
 </p>
 
 <p align="center">
-  A high-performance, embeddable graph database engine written in modern C++20, designed for efficient storage, indexing, and querying of graph-structured data.
+  A high-performance, embeddable graph database engine, designed for efficient storage, indexing, and querying of graph-structured data.
 </p>
 
 <p align="center">
