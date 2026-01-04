@@ -26,7 +26,8 @@ IGNORE_PATTERNS = [
     "Xcode.app",
     "MSVC",
     "Program Files",
-    "generated/"
+    "generated/",
+    "linenoise.hpp"
 ]
 
 
