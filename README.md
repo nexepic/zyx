@@ -1,10 +1,12 @@
-<p align="center" style="padding: 15px 0;">
+<p align="center">
+    <br />
     <a href="https://github.com/nexepic/metrix">
         <picture>
             <source srcset="./docs/static/img/icon-light.svg" media="(prefers-color-scheme: dark)">
             <img src="./docs/static/img/icon.svg" alt="Metrix Logo" width="120" />
         </picture>
     </a>
+    <br />
 </p>
 
 <p align="center">

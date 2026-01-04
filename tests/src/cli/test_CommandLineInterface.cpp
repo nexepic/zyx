@@ -61,19 +61,28 @@ protected:
 	 * Converts vector<string> to argc/argv format expected by the run() method.
 	 */
 	int runMockCLI(const std::vector<std::string> &args) const {
-		std::vector<char *> argv;
-		// argv[0] is always the program name
-		std::string progName = "metrix_test";
-		argv.push_back(progName.data());
+	    std::vector<char *> argv;
+	    std::string progName = "metrix_test";
+	    argv.push_back(progName.data());
 
-		// We need mutable copies of strings because argv is char**
-		// (though CLI11 usually treats them as const, the signature requires char**)
-		std::vector<std::string> argsCopy = args;
-		for (auto &arg: argsCopy) {
-			argv.push_back(arg.data());
-		}
+	    std::vector<std::string> argsCopy = args;
+	    for (auto &arg: argsCopy) {
+	        argv.push_back(arg.data());
+	    }
 
-		return cli.run(static_cast<int>(argv.size()), argv.data());
+	    int oldStdin = dup(STDIN_FILENO);
+	    int pipefd[2];
+	    pipe(pipefd);
+	    close(pipefd[1]);
+	    dup2(pipefd[0], STDIN_FILENO);
+	    close(pipefd[0]);
+
+	    int result = cli.run(static_cast<int>(argv.size()), argv.data());
+
+	    dup2(oldStdin, STDIN_FILENO);
+	    close(oldStdin);
+
+	    return result;
 	}
 };
 
