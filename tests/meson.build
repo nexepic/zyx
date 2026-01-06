@@ -49,6 +49,7 @@ for root, dirs, files in os.walk(sys.argv[1]):
 											 cli11_dep
 										 ],
 										 include_directories : test_include_dirs,
+										 link_with : db_lib,
 										 build_by_default : true
 			)
 			test(test_name, test_executable)

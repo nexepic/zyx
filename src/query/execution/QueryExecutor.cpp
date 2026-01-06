@@ -8,67 +8,70 @@
  *
  **/
 
-#include "../../../include/graph/query/execution/QueryExecutor.hpp"
+#include "graph/query/execution/QueryExecutor.hpp"
 #include "debug/PlanVisualizer.hpp"
 #include "graph/log/Log.hpp"
+#include "graph/query/api/QueryResult.hpp"
 
 namespace graph::query {
 
-	QueryResult QueryExecutor::execute(std::unique_ptr<execution::PhysicalOperator> plan) {
-		QueryResult result;
+    QueryResult QueryExecutor::execute(std::unique_ptr<execution::PhysicalOperator> plan) {
+        QueryResult result;
 
-		if (!plan) return result;
+        if (!plan)
+            return result;
 
-		std::string planTree = debug::PlanVisualizer::visualize(plan.get());
-		log::Log::debug("{}", planTree);
+    	std::string planTree = debug::PlanVisualizer::visualize(plan.get());
+    	log::Log::debug("{}", planTree);
 
-		// 1. Initialize resources
-		plan->open();
+        // 1. Initialize resources
+        plan->open();
 
-		// 2. Pipeline Execution Loop
-		// We keep pulling batches until std::nullopt is returned.
-		while (auto batchOpt = plan->next()) {
-			const auto& batch = batchOpt.value();
-			auto vars = plan->getOutputVariables();
+        // Ensure columns are set explicitly from the plan
+        auto outputVars = plan->getOutputVariables();
+        result.setColumns(outputVars);
 
-			// 3. Materialize Results
-			// In a real system, you might not materialize everything immediately.
-			// Here we convert the internal Record format to the public QueryResult.
-			for (const auto& record : batch) {
-				// Determine what to add to the result based on the query.
-				// For now, we dump all found nodes (mimicking "RETURN *").
-				// A 'ProjectionOperator' would normally handle filtering columns here.
+        // 2. Pipeline Execution Loop
+        while (auto batchOpt = plan->next()) {
+            const auto &batch = batchOpt.value();
 
-				for (const auto& var : vars) {
-					if (auto node = record.getNode(var)) {
-						result.addNode(*node);
-					}
-					else if (auto edge = record.getEdge(var)) {
-						result.addEdge(*edge);
-					}
-				}
+            // Reserve space for rows in this batch to avoid reallocations
+            // Note: QueryResult::rows_ is a vector, we could batch append if we exposed an interface,
+            // but loop append is fine.
 
-				// If this Record contains non-graph data, save it as a row
-				std::unordered_map<std::string, PropertyValue> row;
-				bool hasValues = false;
+            for (const auto &record: batch) {
+                QueryResult::Row row;
 
-				for (const auto& var : vars) {
-					if (auto val = record.getValue(var)) {
-						row[var] = *val;
-						hasValues = true;
-					}
-				}
+                // Populate the row with ALL projected variables
+                for (const auto &var: outputVars) {
+                    // Check order optimized for most likely types
+                    if (auto node = record.getNode(var)) {
+                        row[var] = ResultValue(*node);
+                    }
+                    else if (auto val = record.getValue(var)) {
+                        row[var] = ResultValue(*val);
+                    }
+                    else if (auto edge = record.getEdge(var)) {
+                        row[var] = ResultValue(*edge);
+                    }
+                    else {
+                        // Missing value -> Null
+                        row[var] = ResultValue();
+                    }
+                }
 
-				if (hasValues) {
-					result.addRow(std::move(row));
-				}
-			}
-		}
+                // Always add the row. If variables were projected, we need a row
+                // (even if values are null) to maintain cardinality.
+                if (!outputVars.empty()) {
+                    result.addRow(std::move(row));
+                }
+            }
+        }
 
-		// 4. Cleanup
-		plan->close();
+        // 4. Cleanup
+        plan->close();
 
-		return result;
-	}
+        return result;
+    }
 
 } // namespace graph::query

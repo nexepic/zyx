@@ -1,7 +1,7 @@
 benchmark_exe = executable('metrix-bench',
 						   sources : ['main.cpp'],
 
-						   # Allow including "metrix/metrixdb.hpp" from ../include
+						   # Allow including "metrix/metrix.hpp" from ../include
 						   include_directories : [inc_dirs, include_directories('../../include')],
 
 						   # Link core logic

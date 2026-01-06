@@ -12,16 +12,28 @@
 
 #include <string>
 #include <variant>
+#include <unordered_map>
 #include <vector>
-#include <cstdint>
+#include <memory>
 
 namespace metrix {
 
-	// Using standard types for ABI stability
-	using Value = std::variant<std::monostate, bool, int64_t, double, std::string>;
+	// Forward declarations
+	struct Node;
+	struct Edge;
 
-	// Helper to create values easily
-	inline Value null() { return std::monostate{}; }
+	// The universal value type.
+	// Uses shared_ptr for complex types to allow recursive definition and cheap copying.
+	using Value = std::variant<
+		std::monostate,       // Null
+		bool,
+		int64_t,
+		double,
+		std::string,
+		std::shared_ptr<Node>,
+		std::shared_ptr<Edge>,
+		std::vector<std::string> // Optional: For list results
+	>;
 
 	// Public Node Representation
 	struct Node {
@@ -35,7 +47,7 @@ namespace metrix {
 		int64_t id;
 		int64_t sourceId;
 		int64_t targetId;
-		std::string label;
+		std::string label; // Relationship Type
 		std::unordered_map<std::string, Value> properties;
 	};
 

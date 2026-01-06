@@ -21,7 +21,7 @@ namespace conf = config;
 
 // Helper to convert string to lowercase
 std::string toLower(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(),
+    std::ranges::transform(s, s.begin(),
                    [](unsigned char c){ return std::tolower(c); });
     return s;
 }
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
     std::vector<std::unique_ptr<BenchmarkBase>> tests;
 
     // Helper to register insert tests
-    auto addInsertTests = [&](const std::string& prefix, InsertIndexMode mode, std::string modeName) {
+    auto addInsertTests = [&](const std::string& prefix, InsertIndexMode mode, const std::string &modeName) {
         // Single Insert
         tests.push_back(std::make_unique<CypherInsertBench>(
             "Insert Cypher Single (" + modeName + ")",
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     addInsertTests("_none", InsertIndexMode::NONE, "No Index");
     addInsertTests("_label", InsertIndexMode::LABEL_ONLY, "Label Index");
     addInsertTests("_prop", InsertIndexMode::PROPERTY_ONLY, "Prop Index");
-    // addInsertTests("_all", InsertIndexMode::BOTH, "All Indexes");
+    addInsertTests("_all", InsertIndexMode::BOTH, "All Indexes");
 
     // --- 2. Register Query Tests ---
     tests.push_back(std::make_unique<CypherQueryBench>(

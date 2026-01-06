@@ -93,6 +93,27 @@ meson compile -C "$BUILD_DIR"
 # Install (This copies headers and libs to $DIST_DIR)
 meson install -C "$BUILD_DIR"
 
+# macOS Post-Install Fixup
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "Performing macOS dylib fixup..."
+
+    # Define the library path inside the dist folder
+    # Note: Assuming your library is named 'libmetrix.dylib' based on your output.
+    # If it is 'libmetrixdb.dylib', please adjust the name below.
+    LIB_PATH="$DIST_DIR/lib/libmetrix.dylib"
+
+    if [ -f "$LIB_PATH" ]; then
+        # Force the ID to be @rpath/libmetrix.dylib
+        # This makes the library relocatable (can be moved to any folder)
+        install_name_tool -id "@rpath/libmetrix.dylib" "$LIB_PATH"
+
+        # Check if successful
+        otool -D "$LIB_PATH"
+    else
+        echo -e "${RED}Warning: Library not found at $LIB_PATH for fixup.${NC}"
+    fi
+fi
+
 # Verify installation
 if [ ! -f "$DIST_DIR/include/metrix/metrix.hpp" ]; then
     echo -e "${RED}Error: Install failed. Header files missing.${NC}"

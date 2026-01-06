@@ -72,8 +72,8 @@ TEST_F(REPLTest, RunSimpleScript) {
 
 	// Verify side effect in DB
 	auto res = db->getQueryEngine()->execute("MATCH (n:ReplTest) RETURN n");
-	ASSERT_EQ(res.nodeCount(), 1UL);
-	EXPECT_EQ(res.getNodes()[0].getProperties().at("id").toString(), "1");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("id").toString(), "1");
 }
 
 // Test executing a script with multiple statements and comments
@@ -91,11 +91,11 @@ TEST_F(REPLTest, RunMultiLineScriptWithComments) {
 
 	// Verify A exists
 	auto resA = db->getQueryEngine()->execute("MATCH (n:A) RETURN n");
-	EXPECT_EQ(resA.nodeCount(), 1UL);
+	EXPECT_EQ(resA.rowCount(), 1UL);
 
 	// Verify B exists
 	auto resB = db->getQueryEngine()->execute("MATCH (n:B) RETURN n");
-	EXPECT_EQ(resB.nodeCount(), 1UL);
+	EXPECT_EQ(resB.rowCount(), 1UL);
 }
 
 // Test executing a script where statements span multiple lines
@@ -106,8 +106,8 @@ TEST_F(REPLTest, RunMultilineStatement) {
 	repl->runScript(scriptPath);
 
 	auto res = db->getQueryEngine()->execute("MATCH (n:Multiline) RETURN n");
-	ASSERT_EQ(res.nodeCount(), 1UL);
-	EXPECT_EQ(res.getNodes()[0].getProperties().at("val").toString(), "test");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("val").toString(), "test");
 }
 
 // Test robustness when script file is missing

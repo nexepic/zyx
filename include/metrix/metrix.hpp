@@ -45,6 +45,17 @@ namespace metrix {
 		void next();
 		Value get(const std::string &key) const;
 
+		// --- Data Access (By Index) - NEW for C API ---
+		/**
+		 * @brief Get value by column index (0-based).
+		 * @throws std::out_of_range if index is invalid.
+		 */
+		Value get(int index) const;
+
+		// --- Metadata - NEW for C API ---
+		int getColumnCount() const;
+		std::string getColumnName(int index) const;
+
 		bool isSuccess() const;
 		std::string getError() const;
 
@@ -86,8 +97,7 @@ namespace metrix {
 		 * @brief Create multiple nodes in one batch.
 		 *        Essential for high-performance data loading tools.
 		 */
-		void createNodes(const std::string &label,
-						 const std::vector<std::vector<std::pair<std::string, Value>>> &propsList);
+		void createNodes(const std::string& label, const std::vector<std::unordered_map<std::string, Value>>& propsList);
 
 		void createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 						const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,

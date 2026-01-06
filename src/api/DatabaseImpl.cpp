@@ -8,6 +8,7 @@
  *
  **/
 
+#include <algorithm>
 #include "graph/core/Database.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/api/QueryBuilder.hpp"
@@ -17,253 +18,393 @@
 
 namespace metrix {
 
-    // --- Helpers: Type Conversion ---
+	// ========================================================================
+	// 1. Helpers: Type Conversion
+	// ========================================================================
 
-    graph::PropertyValue toInternal(const Value& v) {
-        return std::visit([](auto&& arg) -> graph::PropertyValue {
-            return graph::PropertyValue(arg);
-        }, v);
-    }
+	// Forward declaration
+	Value toPublicValue(const graph::query::ResultValue &v);
+	Value toPublicValue(const graph::PropertyValue &v);
 
-    // Explicit helper for PropertyValue -> Value variant conversion
-    Value toPublicValue(const graph::PropertyValue& v) {
-        return std::visit([](auto&& arg) -> Value {
-            return arg;
-        }, v.getVariant());
-    }
+	// Convert Internal Node to Public Node Pointer (For shared_ptr usage in Value)
+	std::shared_ptr<Node> toPublicNodePtr(const graph::Node &internalNode) {
+		auto pubNode = std::make_shared<Node>();
+		pubNode->id = internalNode.getId();
+		pubNode->label = internalNode.getLabel();
 
-    Value toPublic(const graph::PropertyValue& v) {
-        return v.toString(); // Fallback for string representation if needed
-    }
+		for (const auto &[key, val]: internalNode.getProperties()) {
+			pubNode->properties[key] = toPublicValue(val);
+		}
+		return pubNode;
+	}
 
-    Node toPublicNode(const graph::Node& internalNode) {
-        Node pubNode;
-        pubNode.id = internalNode.getId();
-        pubNode.label = internalNode.getLabel();
-        for (const auto& [key, val] : internalNode.getProperties()) {
-            pubNode.properties[key] = toPublicValue(val);
-        }
-        return pubNode;
-    }
+	// Convert Internal Edge to Public Edge Pointer
+	std::shared_ptr<Edge> toPublicEdgePtr(const graph::Edge &internalEdge) {
+		auto pubEdge = std::make_shared<Edge>();
+		pubEdge->id = internalEdge.getId();
+		pubEdge->sourceId = internalEdge.getSourceNodeId();
+		pubEdge->targetId = internalEdge.getTargetNodeId();
+		pubEdge->label = internalEdge.getLabel();
 
-    // --- ResultImpl ---
+		for (const auto &[key, val]: internalEdge.getProperties()) {
+			pubEdge->properties[key] = toPublicValue(val);
+		}
+		return pubEdge;
+	}
 
-    class ResultImpl {
-    public:
-        explicit ResultImpl(graph::query::QueryResult internalRes)
-            : result_(std::move(internalRes)) {}
-        graph::query::QueryResult result_;
-        size_t cursor_ = 0;
-    };
+	// Convert Internal Node to Public Node (Value Copy for Algorithms)
+	Node toPublicNode(const graph::Node &internalNode) {
+		auto ptr = toPublicNodePtr(internalNode);
+		return *ptr; // Copy the struct
+	}
 
-    Result::~Result() = default;
-    Result::Result() = default;
-    Result::Result(Result&&) noexcept = default;
-    Result& Result::operator=(Result&&) noexcept = default;
+	// Convert internal PropertyValue to public Value variant
+	Value toPublicValue(const graph::PropertyValue &v) {
+		return std::visit(
+				[](auto &&arg) -> Value {
+					using T = std::decay_t<decltype(arg)>;
+					if constexpr (std::is_same_v<T, std::monostate>) {
+						return std::monostate{};
+					} else {
+						// Primitives (int, double, bool, string) map directly
+						return arg;
+					}
+				},
+				v.getVariant());
+	}
 
-    bool Result::hasNext() {
-        return impl_ && impl_->cursor_ < impl_->result_.rowCount();
-    }
+	// Main conversion entry point for ResultValue
+	Value toPublicValue(const graph::query::ResultValue &v) {
+		return std::visit(
+				[](auto &&arg) -> Value {
+					using T = std::decay_t<decltype(arg)>;
 
-    void Result::next() {
-        if (impl_) impl_->cursor_++;
-    }
+					if constexpr (std::is_same_v<T, graph::Node>) {
+						return toPublicNodePtr(arg);
+					} else if constexpr (std::is_same_v<T, graph::Edge>) {
+						return toPublicEdgePtr(arg);
+					} else if constexpr (std::is_same_v<T, graph::PropertyValue>) {
+						return toPublicValue(arg);
+					} else {
+						return std::monostate{};
+					}
+				},
+				v.getVariant());
+	}
 
-    Value Result::get(const std::string& key) const {
-        if (!impl_) return std::monostate{};
-        const auto& rows = impl_->result_.getRows();
-        if (impl_->cursor_ >= rows.size()) return std::monostate{};
+	// Convert public API Value to internal PropertyValue
+	graph::PropertyValue toInternal(const Value &v) {
+		return std::visit(
+				[](auto &&arg) -> graph::PropertyValue {
+					using T = std::decay_t<decltype(arg)>;
+					// Complex types in Public API (shared_ptr) cannot be stored directly in PropertyValue
+					if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
+								  std::is_same_v<T, std::shared_ptr<Edge>> ||
+								  std::is_same_v<T, std::vector<std::string>>) {
+						return graph::PropertyValue(); // Null/Empty for unsupported types
+					} else {
+						return graph::PropertyValue(arg);
+					}
+				},
+				v);
+	}
 
-        const auto& row = rows[impl_->cursor_];
-        auto it = row.find(key);
-        if (it != row.end()) return toPublicValue(it->second);
-        return std::monostate{};
-    }
+	// ========================================================================
+	// 2. Result Implementation
+	// ========================================================================
 
-    bool Result::isSuccess() const { return true; }
-    std::string Result::getError() const { return ""; }
+	class ResultImpl {
+	public:
+		explicit ResultImpl(graph::query::QueryResult internalRes) : result_(std::move(internalRes)) {
+			prepareMetadata();
+		}
 
-    // --- DatabaseImpl Definition ---
+		graph::query::QueryResult result_;
 
-    class DatabaseImpl {
-    public:
-        DatabaseImpl(const std::string& path) : db_(path) {}
-        graph::Database db_;
-    };
+		// Cursor State
+		size_t cursor_ = 0;
+		bool started_ = false;
 
-    // --- Database Method Implementations ---
+		std::vector<std::string> columnNames_;
+		int mode_ = 0; // 0=Rows (Default), 1=NodeStream, 2=EdgeStream
 
-    Database::Database(const std::string& path)
-        : impl_(std::make_unique<DatabaseImpl>(path)) {}
+		void prepareMetadata() {
+			// Priority: Explicit columns from Engine -> Implicit columns from Data
+			const auto &executorCols = result_.getColumns();
+			if (!executorCols.empty()) {
+				columnNames_ = executorCols;
+			} else if (!result_.getRows().empty()) {
+				// Implicit columns: Extract from the first row and SORT for determinism
+				const auto &firstRow = result_.getRows()[0];
+				for (const auto &[k, v]: firstRow)
+					columnNames_.push_back(k);
+				std::sort(columnNames_.begin(), columnNames_.end());
+			}
 
-    Database::~Database() = default;
+			// Determine mode based on content types of the first row
+			// This preserves legacy "stream" behavior for single-entity queries
+			if (columnNames_.size() == 1 && !result_.getRows().empty()) {
+				const auto &firstVal = result_.getRows()[0].at(columnNames_[0]);
+				if (firstVal.isNode()) {
+					mode_ = 1; // Node Stream
+				} else if (firstVal.isEdge()) {
+					mode_ = 2; // Edge Stream
+				}
+			} else {
+				mode_ = 0; // Standard Table Row
+			}
+		}
+	};
 
-    void Database::open() { impl_->db_.open(); }
-    void Database::close() { impl_->db_.close(); }
+	Result::~Result() = default;
+	Result::Result() = default;
+	Result::Result(Result &&) noexcept = default;
+	Result &Result::operator=(Result &&) noexcept = default;
 
-    void Database::save() {
-        if (auto storage = impl_->db_.getStorage()) {
-            storage->flush();
-        }
-    }
+	bool Result::hasNext() {
+		if (!impl_)
+			return false;
+		size_t total = impl_->result_.rowCount(); // Unified: everything is in rows now
 
-    Result Database::execute(const std::string& cypher) {
-        try {
-            auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
-            Result res;
-            res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
-            return res;
-        } catch (...) {
-            return Result();
-        }
-    }
+		// If we haven't started, check if there is at least 1 item
+		if (!impl_->started_)
+			return total > 0;
 
-    // Single Node Creation (via Query Pipeline)
-    void Database::createNode(const std::string& label, const std::unordered_map<std::string, Value>& props) {
-        auto builder = impl_->db_.getQueryEngine()->query();
-        std::unordered_map<std::string, graph::PropertyValue> internalProps;
-        for(const auto& [k, v] : props) internalProps[k] = toInternal(v);
+		// If we have started, check if there is a next item
+		return impl_->cursor_ + 1 < total;
+	}
 
-        auto plan = builder.create_("n", label, internalProps).build();
-        impl_->db_.getQueryEngine()->execute(std::move(plan));
-    }
+	void Result::next() {
+		if (impl_) {
+			if (!impl_->started_) {
+				impl_->started_ = true;
+				impl_->cursor_ = 0;
+			} else {
+				impl_->cursor_++;
+			}
+		}
+	}
 
-    // Batch Node Creation (Direct Storage Access)
-    // Essential for NativeBatchInsertBench
-	void Database::createNodes(const std::string& label,
-							   const std::vector<std::vector<std::pair<std::string, Value>>>& propsList) {
-    	if (propsList.empty()) return;
-    	auto storage = impl_->db_.getStorage();
-    	if (!storage) return;
+	Value Result::get(const std::string &key) const {
+		if (!impl_ || !impl_->started_)
+			return std::monostate{};
 
-    	std::vector<graph::Node> nodes;
-    	nodes.reserve(propsList.size());
+		const auto &rows = impl_->result_.getRows();
+		if (impl_->cursor_ >= rows.size())
+			return std::monostate{};
 
-    	for (const auto& propsVector : propsList) {
-    		graph::Node n(0, label);
-    		std::unordered_map<std::string, graph::PropertyValue> internalProps;
-    		internalProps.reserve(propsVector.size());
+		const auto &row = rows[impl_->cursor_];
 
-    		// Iterate vector (linear memory) is much faster than iterating map
-    		for (const auto& pair : propsVector) {
-    			internalProps.emplace(pair.first, toInternal(pair.second));
-    		}
-    		n.setProperties(std::move(internalProps));
-    		nodes.push_back(std::move(n));
-    	}
-    	storage->getDataManager()->addNodes(nodes);
-    }
+		// --- MODE 0: ROWS (Standard) ---
+		if (impl_->mode_ == 0) {
+			// 1. Exact Match
+			auto it = row.find(key);
+			if (it != row.end())
+				return toPublicValue(it->second);
 
-    // Create Edge by Logic (MATCH -> CREATE)
-    void Database::createEdge(
-        const std::string& sourceLabel, const std::string& sourceKey, const Value& sourceVal,
-        const std::string& targetLabel, const std::string& targetKey, const Value& targetVal,
-        const std::string& edgeLabel, const std::unordered_map<std::string, Value>& props)
-    {
-        auto builder = impl_->db_.getQueryEngine()->query();
+			// 2. Fuzzy Match (User asks "name", DB has "n.name")
+			for (const auto &[dbKey, dbVal]: row) {
+				if (key.find('.') == std::string::npos && dbKey.size() > key.size()) {
+					if (dbKey.ends_with("." + key))
+						return toPublicValue(dbVal);
+				}
+				if (dbKey.find('.') == std::string::npos && key.size() > dbKey.size()) {
+					if (key.ends_with("." + dbKey))
+						return toPublicValue(dbVal);
+				}
+			}
+			return std::monostate{};
+		}
 
-        std::unordered_map<std::string, graph::PropertyValue> edgeProps;
-        for(const auto& [k, v] : props) edgeProps[k] = toInternal(v);
+		// --- MODE 1 & 2: ENTITY STREAM (Legacy Compatibility) ---
+		// In these modes, we assume there is exactly 1 column containing the entity.
+		else if (impl_->mode_ == 1 || impl_->mode_ == 2) {
+			const std::string &colName = impl_->columnNames_[0];
+			const auto &entityVal = row.at(colName); // Safe because mode implies !empty
 
-        // 1. Match Source: MATCH (a:Src {key: val})
-        builder.match_("a", sourceLabel, sourceKey, toInternal(sourceVal));
+			// If requesting the entity itself (key empty or standard aliases)
+			if (key.empty() || key == "n" || key == "node" || key == "e" || key == "edge") {
+				return toPublicValue(entityVal);
+			}
 
-        // 2. Match Target: MATCH (b:Tgt {key: val})
-        // Note: The builder will chain this, creating a CartesianProduct internally in the Visitor/Planner logic
-        // if using the parser, but here we construct raw operators.
-        // Assuming QueryBuilder handles chaining correctly (as implemented).
-        builder.match_("b", targetLabel, targetKey, toInternal(targetVal));
+			// If requesting a property inside the entity
+			if (entityVal.isNode()) {
+				const auto &props = entityVal.asNode().getProperties();
+				auto it = props.find(key);
+				if (it != props.end())
+					return toPublicValue(it->second);
+			} else if (entityVal.isEdge()) {
+				const auto &props = entityVal.asEdge().getProperties();
+				auto it = props.find(key);
+				if (it != props.end())
+					return toPublicValue(it->second);
+			}
+		}
 
-        // 3. Create Edge: CREATE (a)-[r:Type {props}]->(b)
-        builder.create_("e", edgeLabel, "a", "b", edgeProps);
+		return std::monostate{};
+	}
 
-        auto plan = builder.build();
-        impl_->db_.getQueryEngine()->execute(std::move(plan));
-    }
+	Value Result::get(int index) const {
+		if (!impl_ || !impl_->started_ || index < 0 || index >= (int) impl_->columnNames_.size())
+			return std::monostate{};
 
-    // Direct Node Creation (Returns ID)
-    int64_t Database::createNodeRetId(const std::string& label, const std::unordered_map<std::string, Value>& props) {
-        auto storage = impl_->db_.getStorage();
-        auto dm = storage->getDataManager();
+		// In the unified Row model, index maps directly to the sorted column name list
+		return get(impl_->columnNames_[index]);
+	}
 
-        graph::Node node(0, label);
-        // Persist Node
-        dm->addNode(node);
-        int64_t newId = node.getId();
+	int Result::getColumnCount() const { return impl_ ? impl_->columnNames_.size() : 0; }
 
-        // Persist Properties
-        if (!props.empty()) {
-            std::unordered_map<std::string, graph::PropertyValue> internalProps;
-            for (const auto& [k, v] : props) internalProps[k] = toInternal(v);
-            dm->addNodeProperties(newId, internalProps);
-        }
-        return newId;
-    }
+	std::string Result::getColumnName(int index) const {
+		return (impl_ && index >= 0 && index < (int) impl_->columnNames_.size()) ? impl_->columnNames_[index] : "";
+	}
 
-    // Direct Edge Creation (By ID)
-    void Database::createEdgeById(int64_t sourceId, int64_t targetId,
-                                  const std::string& edgeLabel,
-                                  const std::unordered_map<std::string, Value>& props) {
-        auto storage = impl_->db_.getStorage();
-        auto dm = storage->getDataManager();
+	bool Result::isSuccess() const { return true; }
+	std::string Result::getError() const { return ""; }
 
-        graph::Edge edge(0, sourceId, targetId, edgeLabel);
-        dm->addEdge(edge);
+	// ========================================================================
+	// 3. Database Implementation
+	// ========================================================================
 
-        if (!props.empty()) {
-            std::unordered_map<std::string, graph::PropertyValue> internalProps;
-            for (const auto& [k, v] : props) internalProps[k] = toInternal(v);
-            dm->addEdgeProperties(edge.getId(), internalProps);
-        }
-    }
+	class DatabaseImpl {
+	public:
+		DatabaseImpl(const std::string &path) : db_(path) {}
+		graph::Database db_;
+	};
 
-    // Algorithms
-    std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) {
-        try {
-            auto storage = impl_->db_.getStorage();
-            if (!storage) return {};
-            auto dm = storage->getDataManager();
+	Database::Database(const std::string &path) : impl_(std::make_unique<DatabaseImpl>(path)) {}
+	Database::~Database() = default;
 
-            graph::query::algorithm::GraphAlgorithm algo(dm);
+	void Database::open() { impl_->db_.open(); }
+	void Database::close() { impl_->db_.close(); }
+	void Database::save() {
+		if (auto s = impl_->db_.getStorage())
+			s->flush();
+	}
 
-            // Call internal algo
-            auto internalPath = algo.findShortestPath(startId, endId, "both", maxDepth);
+	Result Database::execute(const std::string &cypher) {
+		try {
+			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
+			return res;
+		} catch (...) {
+			return Result();
+		}
+	}
 
-            std::vector<Node> publicPath;
-            publicPath.reserve(internalPath.size());
-            for (const auto& n : internalPath) {
-                publicPath.push_back(toPublicNode(n));
-            }
-            return publicPath;
-        } catch (...) {
-            return {};
-        }
-    }
+	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) {
+		auto builder = impl_->db_.getQueryEngine()->query();
+		std::unordered_map<std::string, graph::PropertyValue> internalProps;
+		for (const auto &[k, v]: props)
+			internalProps[k] = toInternal(v);
+		auto plan = builder.create_("n", label, internalProps).build();
+		impl_->db_.getQueryEngine()->execute(std::move(plan));
+	}
 
-    void Database::bfs(int64_t startNodeId, std::function<bool(const Node&)> visitor) {
-        try {
-            auto storage = impl_->db_.getStorage();
-            if (!storage) return;
-            auto dm = storage->getDataManager();
+	void Database::createNodes(const std::string &label,
+							   const std::vector<std::unordered_map<std::string, Value>> &propsList) {
+		if (propsList.empty())
+			return;
+		auto storage = impl_->db_.getStorage();
+		std::vector<graph::Node> nodes;
+		nodes.reserve(propsList.size());
+		for (const auto &props: propsList) {
+			graph::Node n(0, label);
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v]: props)
+				internalProps[k] = toInternal(v);
+			n.setProperties(std::move(internalProps));
+			nodes.push_back(std::move(n));
+		}
+		storage->getDataManager()->addNodes(nodes);
+	}
 
-            graph::query::algorithm::GraphAlgorithm algo(dm);
+	int64_t Database::createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props) {
+		auto dm = impl_->db_.getStorage()->getDataManager();
+		graph::Node node(0, label);
+		dm->addNode(node);
+		int64_t newId = node.getId();
+		if (!props.empty()) {
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v]: props)
+				internalProps[k] = toInternal(v);
+			dm->addNodeProperties(newId, internalProps);
+		}
+		return newId;
+	}
 
-            auto internalVisitor = [&](int64_t nodeId, [[maybe_unused]] int depth) -> bool {
-                // 1. Fetch Header
-                graph::Node internalNode = dm->getNode(nodeId);
-                // 2. Hydrate
-                internalNode.setProperties(dm->getNodeProperties(nodeId));
-                // 3. Convert
-                Node publicNode = toPublicNode(internalNode);
-                // 4. Callback
-                return visitor(publicNode);
-            };
+	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
+								  const std::unordered_map<std::string, Value> &props) {
+		auto dm = impl_->db_.getStorage()->getDataManager();
+		graph::Edge edge(0, sourceId, targetId, edgeLabel);
+		dm->addEdge(edge);
+		if (!props.empty()) {
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v]: props)
+				internalProps[k] = toInternal(v);
+			dm->addEdgeProperties(edge.getId(), internalProps);
+		}
+	}
 
-            algo.breadthFirstTraversal(startNodeId, internalVisitor, "both");
+	void Database::createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
+							  const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
+							  const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props) {
+		auto builder = impl_->db_.getQueryEngine()->query();
+		std::unordered_map<std::string, graph::PropertyValue> edgeProps;
+		for (const auto &[k, v]: props)
+			edgeProps[k] = toInternal(v);
 
-        } catch (...) {
-            // Log error
-        }
-    }
+		// Ensure variables match create_ arguments
+		builder.match_("a", sourceLabel, sourceKey, toInternal(sourceVal));
+		builder.match_("b", targetLabel, targetKey, toInternal(targetVal));
+		builder.create_("e", edgeLabel, "a", "b", edgeProps);
+		builder.return_({"e"});
+
+		auto plan = builder.build();
+		impl_->db_.getQueryEngine()->execute(std::move(plan));
+	}
+
+	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) {
+		try {
+			auto storage = impl_->db_.getStorage();
+			if (!storage)
+				return {};
+			auto dm = storage->getDataManager();
+
+			graph::query::algorithm::GraphAlgorithm algo(dm);
+			// Default "out" for directed shortest path
+			auto internalPath = algo.findShortestPath(startId, endId, "out", maxDepth);
+
+			std::vector<Node> publicPath;
+			publicPath.reserve(internalPath.size());
+			for (const auto &n: internalPath) {
+				// Fetch full properties
+				graph::Node fullNode = dm->getNode(n.getId());
+				fullNode.setProperties(dm->getNodeProperties(n.getId()));
+				publicPath.push_back(toPublicNode(fullNode));
+			}
+			return publicPath;
+		} catch (...) {
+			return {};
+		}
+	}
+
+	void Database::bfs(int64_t startNodeId, std::function<bool(const Node &)> visitor) {
+		try {
+			auto storage = impl_->db_.getStorage();
+			if (!storage)
+				return;
+			auto dm = storage->getDataManager();
+
+			graph::query::algorithm::GraphAlgorithm algo(dm);
+			auto internalVisitor = [&](int64_t nodeId, int depth) -> bool {
+				graph::Node internalNode = dm->getNode(nodeId);
+				internalNode.setProperties(dm->getNodeProperties(nodeId));
+				return visitor(toPublicNode(internalNode));
+			};
+			algo.breadthFirstTraversal(startNodeId, internalVisitor, "out");
+		} catch (...) {
+		}
+	}
 
 } // namespace metrix

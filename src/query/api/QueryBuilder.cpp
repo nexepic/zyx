@@ -42,11 +42,16 @@ namespace graph::query {
 	// --- Read ---
 
 	QueryBuilder &QueryBuilder::match_(const std::string &variable, const std::string &label, const std::string &key,
-									   const PropertyValue &value) {
-		// Note: CartesianProduct logic for multi-match is currently handled in Visitor.
-		// For Builder, if root exists, we assume we overwrite or chain differently.
-		// For simple usage, MATCH starts the chain.
-		root_ = planner_->scanOp(variable, label, key, value);
+								   const PropertyValue &value) {
+		auto newScan = planner_->scanOp(variable, label, key, value);
+
+		if (!root_) {
+			root_ = std::move(newScan);
+		} else {
+			// Combine new scan with existing plan using Cartesian Product
+			// This ensures 'root_' contains variables from both the old plan AND the new scan.
+			root_ = planner_->cartesianProductOp(std::move(root_), std::move(newScan));
+		}
 		return *this;
 	}
 

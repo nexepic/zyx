@@ -80,41 +80,43 @@ namespace graph {
 
 	void printResult(const query::QueryResult &result) {
 		if (result.isEmpty()) {
-			std::cout << "Empty result (or operation successful with no return data).\n";
+			std::cout << "Empty result.\n";
 			return;
 		}
 
-		if (result.nodeCount() > 0) {
-			std::cout << "--- Nodes (" << result.nodeCount() << ") ---\n";
-			for (const auto &node: result.getNodes()) {
-				std::cout << "ID: " << node.getId()
-						  << " | Label: " << (node.getLabel().empty() ? "<No Label>" : node.getLabel());
-				printProperties(node.getProperties());
-				std::cout << "\n";
-			}
+		std::cout << "+--------------------------------------------------+\n";
+
+		// Print Header
+		const auto& cols = result.getColumns();
+		if(!cols.empty()) {
+			std::cout << "| ";
+			for(const auto& col : cols) std::cout << col << "\t| ";
+			std::cout << "\n+--------------------------------------------------+\n";
 		}
 
-		if (result.edgeCount() > 0) {
-			std::cout << "--- Edges (" << result.edgeCount() << ") ---\n";
-			for (const auto &edge: result.getEdges()) {
-				std::cout << "ID: " << edge.getId() << " | " << edge.getSourceNodeId() << " -[" << edge.getLabel();
-				printProperties(edge.getProperties());
-				std::cout << "]-> " << edge.getTargetNodeId() << "\n";
-			}
-		}
-
-		if (result.rowCount() > 0) {
-			std::cout << "--- Records (" << result.rowCount() << ") ---\n";
-			if (result.getRows().empty())
-				return;
-			for (const auto &row: result.getRows()) {
-				std::cout << "| ";
-				for (const auto &[key, val]: row) {
-					std::cout << key << ": " << val.toString() << " | ";
+		// Print Rows
+		for (const auto &row: result.getRows()) {
+			std::cout << "| ";
+			if (!cols.empty()) {
+				for(const auto& col : cols) {
+					auto it = row.find(col);
+					if(it != row.end()) {
+						std::cout << it->second.toString(); // Uses ResultValue::toString()
+					} else {
+						std::cout << "null";
+					}
+					std::cout << "\t| ";
 				}
-				std::cout << "\n";
+			} else {
+				// Fallback for no-column results (rare)
+				for (const auto &[key, val]: row) {
+					std::cout << key << ": " << val.toString() << "\t| ";
+				}
 			}
+			std::cout << "\n";
 		}
+		std::cout << "+--------------------------------------------------+\n";
+		std::cout << "(" << result.rowCount() << " rows)\n";
 	}
 
 	// --- REPL Implementation ---
