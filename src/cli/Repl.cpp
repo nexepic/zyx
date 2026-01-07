@@ -78,46 +78,115 @@ namespace graph {
 		std::cout << "}";
 	}
 
-	void printResult(const query::QueryResult &result) {
-		if (result.isEmpty()) {
-			std::cout << "Empty result.\n";
-			return;
-		}
+	 void printResult(const query::QueryResult &result) {
+	     if (result.isEmpty()) {
+	         std::cout << "Empty result.\n";
+	         return;
+	     }
 
-		std::cout << "+--------------------------------------------------+\n";
+	     const auto& cols = result.getColumns();
+	     const auto& rows = result.getRows();
 
-		// Print Header
-		const auto& cols = result.getColumns();
-		if(!cols.empty()) {
-			std::cout << "| ";
-			for(const auto& col : cols) std::cout << col << "\t| ";
-			std::cout << "\n+--------------------------------------------------+\n";
-		}
+	     // Handle special case where columns are empty
+	     if (cols.empty()) {
+	         for (const auto &row: rows) {
+	             std::cout << "{ ";
+	             for (const auto &[key, val]: row) {
+	                 std::cout << key << ": " << val.toString() << ", ";
+	             }
+	             std::cout << "}\n";
+	         }
+	         std::cout << "(" << result.rowCount() << " rows)\n";
+	         return;
+	     }
 
-		// Print Rows
-		for (const auto &row: result.getRows()) {
-			std::cout << "| ";
-			if (!cols.empty()) {
-				for(const auto& col : cols) {
-					auto it = row.find(col);
-					if(it != row.end()) {
-						std::cout << it->second.toString(); // Uses ResultValue::toString()
-					} else {
-						std::cout << "null";
-					}
-					std::cout << "\t| ";
-				}
-			} else {
-				// Fallback for no-column results (rare)
-				for (const auto &[key, val]: row) {
-					std::cout << key << ": " << val.toString() << "\t| ";
-				}
-			}
-			std::cout << "\n";
-		}
-		std::cout << "+--------------------------------------------------+\n";
-		std::cout << "(" << result.rowCount() << " rows)\n";
-	}
+	     // Configuration: Stricter max width (30 chars) to prevent line wrapping
+	     const size_t MAX_COL_WIDTH = 30;
+
+	     // Helper: Truncate string with ellipsis
+	     auto truncate = [&](const std::string& str) -> std::string {
+	         if (str.length() > MAX_COL_WIDTH) {
+	             return str.substr(0, MAX_COL_WIDTH - 3) + "...";
+	         }
+	         return str;
+	     };
+
+	     // 1. Process Headers (Apply truncation AND calculate initial width)
+	     std::vector<std::string> displayHeaders;
+	     std::vector<size_t> widths;
+	     displayHeaders.reserve(cols.size());
+	     widths.reserve(cols.size());
+
+	     for (const auto& col : cols) {
+	         // Truncate the header name itself!
+	         std::string headerStr = truncate(col);
+	         displayHeaders.push_back(headerStr);
+	         widths.push_back(headerStr.length());
+	     }
+
+	     // 2. Process Data Rows
+	     std::vector<std::vector<std::string>> dataTable;
+	     dataTable.reserve(rows.size());
+
+	     for (const auto &row: rows) {
+	         std::vector<std::string> rowStrings;
+	         rowStrings.reserve(cols.size());
+	         for (size_t i = 0; i < cols.size(); ++i) {
+	             std::string valStr = "null";
+	             // Use original 'cols' to find data, but align with 'widths' index
+	             auto it = row.find(cols[i]);
+	             if (it != row.end()) {
+	                 valStr = it->second.toString();
+	             }
+
+	             // Apply truncation to data values
+	             valStr = truncate(valStr);
+
+	             // Update max width if data is wider than header
+	             if (valStr.length() > widths[i]) {
+	                 widths[i] = valStr.length();
+	             }
+	             rowStrings.push_back(std::move(valStr));
+	         }
+	         dataTable.push_back(std::move(rowStrings));
+	     }
+
+	     // Add padding (1 space left, 1 space right)
+	     for (auto &w : widths) w += 2;
+
+	     // Helper: Print divider line
+	     auto printDivider = [&](char junction = '+', char dash = '-') {
+	         std::cout << junction;
+	         for (size_t w : widths) {
+	             std::cout << std::string(w, dash) << junction;
+	         }
+	         std::cout << "\n";
+	     };
+
+	     // 3. Print Table
+	     printDivider(); // Top border
+
+	     // Print Header using truncated 'displayHeaders'
+	     std::cout << "|";
+	     for (size_t i = 0; i < cols.size(); ++i) {
+	         std::cout << " " << std::left << std::setw(widths[i] - 1) << displayHeaders[i] << "|";
+	     }
+	     std::cout << "\n";
+
+	     printDivider(); // Header separator
+
+	     // Print Data Rows
+	     for (const auto &rowStrings : dataTable) {
+	         std::cout << "|";
+	         for (size_t i = 0; i < cols.size(); ++i) {
+	             std::cout << " " << std::left << std::setw(widths[i] - 1) << rowStrings[i] << "|";
+	         }
+	         std::cout << "\n";
+	     }
+
+	     printDivider(); // Bottom border
+	     std::cout << "(" << result.rowCount() << " rows)\n";
+	 }
 
 	// --- REPL Implementation ---
 
