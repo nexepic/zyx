@@ -1,11 +1,21 @@
 /**
  * @file DataManager.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/7/24
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -22,10 +32,10 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
-#include "graph/storage/indexes/IEntityObserver.hpp"
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/PersistenceManager.hpp"
+#include "graph/storage/indexes/IEntityObserver.hpp"
 
 namespace graph {
 	class BlobChainManager;
@@ -94,7 +104,7 @@ namespace graph::storage {
 
 		// Node-specific operations
 		void addNode(Node &node) const;
-		void addNodes(std::vector<Node>& nodes) const;
+		void addNodes(std::vector<Node> &nodes) const;
 		void updateNode(const Node &node);
 		void deleteNode(Node &node) const;
 		Node getNode(int64_t id) const;
@@ -106,7 +116,7 @@ namespace graph::storage {
 
 		// Edge-specific operations
 		void addEdge(Edge &edge) const;
-		void addEdges(std::vector<Edge>& edges) const;
+		void addEdges(std::vector<Edge> &edges) const;
 		void updateEdge(const Edge &edge);
 		void deleteEdge(Edge &edge) const;
 		Edge getEdge(int64_t id) const;
@@ -311,12 +321,12 @@ namespace graph::storage {
 		void removeEntityProperty(int64_t entityId, const std::string &key);
 
 		void notifyNodeAdded(const Node &node) const;
-		void notifyNodesAdded(const std::vector<Node>& nodes) const;
+		void notifyNodesAdded(const std::vector<Node> &nodes) const;
 		void notifyNodeUpdated(const Node &oldNode, const Node &newNode) const;
 		void notifyNodeDeleted(const Node &node) const;
 
 		void notifyEdgeAdded(const Edge &edge) const;
-		void notifyEdgesAdded(const std::vector<Edge>& edges) const;
+		void notifyEdgesAdded(const std::vector<Edge> &edges) const;
 		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const;
 		void notifyEdgeDeleted(const Edge &edge) const;
 

@@ -1,11 +1,21 @@
 /**
  * @file PropertyIndex.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/3/21
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/indexes/PropertyIndex.hpp"
@@ -214,8 +224,10 @@ namespace graph::query::indexes {
 		rootMap[key] = treeManager->insert(rootMap[key], value, entityId);
 	}
 
-	void PropertyIndex::addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties) {
-		if (properties.empty()) return;
+	void
+	PropertyIndex::addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties) {
+		if (properties.empty())
+			return;
 
 		std::unique_lock lock(mutex_);
 
@@ -224,7 +236,7 @@ namespace graph::query::indexes {
 		std::map<PropertyType, std::map<std::string, std::vector<std::pair<PropertyValue, int64_t>>>> groupedBatch;
 
 		// 1. Classification & Filtering Phase
-		for (const auto &[entityId, key, value] : properties) {
+		for (const auto &[entityId, key, value]: properties) {
 			// Determine the type of the value
 			PropertyType valueType = getPropertyType(value);
 			if (valueType == PropertyType::UNKNOWN || valueType == PropertyType::NULL_TYPE) {
@@ -258,15 +270,17 @@ namespace graph::query::indexes {
 		}
 
 		// 2. Batch Insertion Phase
-		for (auto &[type, keyMap] : groupedBatch) {
+		for (auto &[type, keyMap]: groupedBatch) {
 			// Retrieve the correct tree manager and root map for this type
 			auto treeManager = getTreeManagerForType(type);
 			auto &rootMap = getRootMapForType(type);
 
-			if (!treeManager) continue;
+			if (!treeManager)
+				continue;
 
-			for (auto &[key, entries] : keyMap) {
-				if (entries.empty()) continue;
+			for (auto &[key, entries]: keyMap) {
+				if (entries.empty())
+					continue;
 
 				// Ensure root node exists
 				if (!rootMap.contains(key)) {
@@ -445,7 +459,7 @@ namespace graph::query::indexes {
 		return indexedKeyTypes_.empty();
 	}
 
-	const std::vector<std::string>& PropertyIndex::getIndexedKeys() const {
+	const std::vector<std::string> &PropertyIndex::getIndexedKeys() const {
 		std::shared_lock lock(mutex_);
 		return indexedKeysList_;
 	}

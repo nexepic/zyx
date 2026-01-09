@@ -1,11 +1,21 @@
 /**
  * @file IndexManager.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/3/20
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -64,7 +74,7 @@ namespace graph::query::indexes {
 		 *        Automatically detects if it is a Node or Edge index based on metadata.
 		 * @return true if found and dropped.
 		 */
-		bool dropIndexByDefinition(const std::string& label, const std::string& property) const;
+		bool dropIndexByDefinition(const std::string &label, const std::string &property) const;
 
 		/**
 		 * @brief Returns list of {Name, EntityType, Label, Property}
@@ -77,11 +87,11 @@ namespace graph::query::indexes {
 
 		// --- Entity Event Handlers (Implementing IEntityObserver) ---
 		void onNodeAdded(const Node &node) override;
-		void onNodesAdded(const std::vector<Node>& nodes) override;
+		void onNodesAdded(const std::vector<Node> &nodes) override;
 		void onNodeUpdated(const Node &oldNode, const Node &newNode) override;
 		void onNodeDeleted(const Node &node) override;
 		void onEdgeAdded(const Edge &edge) override;
-		void onEdgesAdded(const std::vector<Edge>& edges) override;
+		void onEdgesAdded(const std::vector<Edge> &edges) override;
 		void onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) override;
 		void onEdgeDeleted(const Edge &edge) override;
 

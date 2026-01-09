@@ -1,11 +1,21 @@
 /**
  * @file DataManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/7/24
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/data/DataManager.hpp"
@@ -100,9 +110,9 @@ namespace graph::storage {
 		}
 	}
 
-	void DataManager::notifyNodesAdded(const std::vector<Node>& nodes) const {
+	void DataManager::notifyNodesAdded(const std::vector<Node> &nodes) const {
 		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto& observer : observers_) {
+		for (const auto &observer: observers_) {
 			// Use the new batch interface!
 			observer->onNodesAdded(nodes);
 		}
@@ -129,10 +139,10 @@ namespace graph::storage {
 		}
 	}
 
-	void DataManager::notifyEdgesAdded(const std::vector<Edge>& edges) const {
+	void DataManager::notifyEdgesAdded(const std::vector<Edge> &edges) const {
 		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto& observer : observers_) {
-			for (const auto& edge : edges) {
+		for (const auto &observer: observers_) {
+			for (const auto &edge: edges) {
 				observer->onEdgeAdded(edge);
 			}
 		}
@@ -201,7 +211,8 @@ namespace graph::storage {
 	}
 
 	void DataManager::addNodes(std::vector<Node> &nodes) const {
-		if (nodes.empty()) return;
+		if (nodes.empty())
+			return;
 
 		// -------------------------------------------------------
 		// STEP 1: Batch Store Nodes (Allocates IDs)
@@ -218,8 +229,9 @@ namespace graph::storage {
 		// -------------------------------------------------------
 		// STEP 3: Handle External Properties (If needed)
 		// -------------------------------------------------------
-		for (auto &node : nodes) {
-			if (node.getProperties().empty()) continue;
+		for (auto &node: nodes) {
+			if (node.getProperties().empty())
+				continue;
 
 			// Check and potentially move properties to external storage.
 			// This function uses node.getId() (valid from Step 1) to link the new
@@ -313,7 +325,8 @@ namespace graph::storage {
 	}
 
 	void DataManager::addEdges(std::vector<Edge> &edges) const {
-		if (edges.empty()) return;
+		if (edges.empty())
+			return;
 
 		// 1. Assign IDs and initial persistence
 		edgeManager_->addBatch(edges);
@@ -322,8 +335,9 @@ namespace graph::storage {
 		notifyEdgesAdded(edges);
 
 		// 3. Property Storage Handling
-		for (auto &edge : edges) {
-			if (edge.getProperties().empty()) continue;
+		for (auto &edge: edges) {
+			if (edge.getProperties().empty())
+				continue;
 
 			// Links external properties using the ID assigned in Step 1
 			propertyManager_->storeProperties(edge);
@@ -744,9 +758,7 @@ namespace graph::storage {
 		persistenceManager_->setAutoFlushCallback(std::move(cb));
 	}
 
-	void DataManager::checkAndTriggerAutoFlush() const {
-		persistenceManager_->checkAndTriggerAutoFlush();
-	}
+	void DataManager::checkAndTriggerAutoFlush() const { persistenceManager_->checkAndTriggerAutoFlush(); }
 
 	template<typename EntityType>
 	std::vector<DirtyEntityInfo<EntityType>>

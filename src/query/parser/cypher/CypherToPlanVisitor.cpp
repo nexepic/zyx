@@ -1,11 +1,21 @@
 /**
  * @file CypherToPlanVisitor.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/9
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "CypherToPlanVisitor.hpp"
@@ -35,26 +45,26 @@ namespace graph::parser::cypher {
 
 	// --- Helper: Chain ---
 	void CypherToPlanVisitor::chainOperator(std::unique_ptr<query::execution::PhysicalOperator> newOp) {
-        if (!rootOp_) {
-            rootOp_ = std::move(newOp);
-            return;
-        }
+		if (!rootOp_) {
+			rootOp_ = std::move(newOp);
+			return;
+		}
 
-        // Case 1: Write Operators (Pipe) -> Wrap the current root
-        if (auto *edgeOp = dynamic_cast<query::execution::operators::CreateEdgeOperator *>(newOp.get())) {
-            edgeOp->setChild(std::move(rootOp_));
-            rootOp_ = std::move(newOp);
-            return;
-        }
+		// Case 1: Write Operators (Pipe) -> Wrap the current root
+		if (auto *edgeOp = dynamic_cast<query::execution::operators::CreateEdgeOperator *>(newOp.get())) {
+			edgeOp->setChild(std::move(rootOp_));
+			rootOp_ = std::move(newOp);
+			return;
+		}
 
-        if (auto *nodeOp = dynamic_cast<query::execution::operators::CreateNodeOperator *>(newOp.get())) {
-            nodeOp->setChild(std::move(rootOp_));
-            rootOp_ = std::move(newOp);
-            return;
-        }
+		if (auto *nodeOp = dynamic_cast<query::execution::operators::CreateNodeOperator *>(newOp.get())) {
+			nodeOp->setChild(std::move(rootOp_));
+			rootOp_ = std::move(newOp);
+			return;
+		}
 
-        rootOp_ = std::move(newOp);
-    }
+		rootOp_ = std::move(newOp);
+	}
 
 	std::function<bool(const query::execution::Record &)>
 	CypherToPlanVisitor::buildWherePredicate(CypherParser::ExpressionContext *expr, std::string &outDesc) {
@@ -171,188 +181,193 @@ namespace graph::parser::cypher {
 
 	// --- MATCH ---
 	std::any CypherToPlanVisitor::visitMatchStatement(CypherParser::MatchStatementContext *ctx) {
-        auto pattern = ctx->pattern();
-        if (!pattern) return std::any();
+		auto pattern = ctx->pattern();
+		if (!pattern)
+			return std::any();
 
-        auto parts = pattern->patternPart();
-        if (parts.empty()) return std::any();
+		auto parts = pattern->patternPart();
+		if (parts.empty())
+			return std::any();
 
-        // Iterate over all pattern parts (e.g. MATCH (a), (b))
-        for (auto part : parts) {
-            auto element = part->patternElement();
+		// Iterate over all pattern parts (e.g. MATCH (a), (b))
+		for (auto part: parts) {
+			auto element = part->patternElement();
 
-            // ---------------------------------------------------------
-            // 1. Head Node Processing (Scan)
-            // ---------------------------------------------------------
-            auto headNodePat = element->nodePattern();
+			// ---------------------------------------------------------
+			// 1. Head Node Processing (Scan)
+			// ---------------------------------------------------------
+			auto headNodePat = element->nodePattern();
 
-            std::string var = extractVariable(headNodePat->variable());
-            std::string label = extractLabel(headNodePat->nodeLabels());
-            auto props = extractProperties(headNodePat->properties());
+			std::string var = extractVariable(headNodePat->variable());
+			std::string label = extractLabel(headNodePat->nodeLabels());
+			auto props = extractProperties(headNodePat->properties());
 
-            // --- Optimizer: Index Pushdown ---
-            std::string pushKey = "";
-            graph::PropertyValue pushVal;
-            std::vector<std::pair<std::string, graph::PropertyValue>> residualFilters;
+			// --- Optimizer: Index Pushdown ---
+			std::string pushKey = "";
+			PropertyValue pushVal;
+			std::vector<std::pair<std::string, PropertyValue>> residualFilters;
 
-            if (!props.empty()) {
-                auto it = props.begin();
-                pushKey = it->first;
-                pushVal = it->second;
-                for (++it; it != props.end(); ++it) {
-                    residualFilters.emplace_back(it->first, it->second);
-                }
-            }
+			if (!props.empty()) {
+				auto it = props.begin();
+				pushKey = it->first;
+				pushVal = it->second;
+				for (++it; it != props.end(); ++it) {
+					residualFilters.emplace_back(it->first, it->second);
+				}
+			}
 
-            // Create Sub-Plan for this component
-            auto currentOp = planner_->scanOp(var, label, pushKey, pushVal);
+			// Create Sub-Plan for this component
+			auto currentOp = planner_->scanOp(var, label, pushKey, pushVal);
 
-            // Apply Filters
-            for (const auto &[key, val]: residualFilters) {
-                auto predicate = [var, key, val](const query::execution::Record &r) {
-                    auto n = r.getNode(var);
-                    if (!n) return false;
-                    const auto &p = n->getProperties();
-                    return p.contains(key) && p.at(key) == val;
-                };
-                std::string desc = var + "." + key + " == " + val.toString();
-                currentOp = planner_->filterOp(std::move(currentOp), predicate, desc);
-            }
+			// Apply Filters
+			for (const auto &[key, val]: residualFilters) {
+				auto predicate = [var, key, val](const query::execution::Record &r) {
+					auto n = r.getNode(var);
+					if (!n)
+						return false;
+					const auto &p = n->getProperties();
+					return p.contains(key) && p.at(key) == val;
+				};
+				std::string desc = var + "." + key + " == " + val.toString();
+				currentOp = planner_->filterOp(std::move(currentOp), predicate, desc);
+			}
 
-            // ---------------------------------------------------------
-            // Merge with Global Pipeline
-            // ---------------------------------------------------------
-            if (!rootOp_) {
-                // First component: It becomes the root
-                rootOp_ = std::move(currentOp);
-            } else {
-                // Subsequent component: Cross Join with existing root
-                // This ensures MATCH (a) MATCH (b) keeps both 'a' and 'b'
-                rootOp_ = planner_->cartesianProductOp(std::move(rootOp_), std::move(currentOp));
-            }
+			// ---------------------------------------------------------
+			// Merge with Global Pipeline
+			// ---------------------------------------------------------
+			if (!rootOp_) {
+				// First component: It becomes the root
+				rootOp_ = std::move(currentOp);
+			} else {
+				// Subsequent component: Cross Join with existing root
+				// This ensures MATCH (a) MATCH (b) keeps both 'a' and 'b'
+				rootOp_ = planner_->cartesianProductOp(std::move(rootOp_), std::move(currentOp));
+			}
 
-            // ---------------------------------------------------------
-            // 2. Traversal Chain (e.g. -[r]->(b))
-            // ---------------------------------------------------------
-            // Note: We extend 'rootOp_' directly now, as it contains the source 'var'
-            for (auto chain: element->patternElementChain()) {
-                auto relPat = chain->relationshipPattern();
-                auto nodePat = chain->nodePattern();
+			// ---------------------------------------------------------
+			// 2. Traversal Chain (e.g. -[r]->(b))
+			// ---------------------------------------------------------
+			// Note: We extend 'rootOp_' directly now, as it contains the source 'var'
+			for (auto chain: element->patternElementChain()) {
+				auto relPat = chain->relationshipPattern();
+				auto nodePat = chain->nodePattern();
 
-                // Direction
-                std::string direction = "both";
-                bool hasLeft = (relPat->LT() != nullptr);
-                bool hasRight = (relPat->GT() != nullptr);
-                if (hasLeft && !hasRight) direction = "in";
-                else if (!hasLeft && hasRight) direction = "out";
+				// Direction
+				std::string direction = "both";
+				bool hasLeft = (relPat->LT() != nullptr);
+				bool hasRight = (relPat->GT() != nullptr);
+				if (hasLeft && !hasRight)
+					direction = "in";
+				else if (!hasLeft && hasRight)
+					direction = "out";
 
-                // Rel Details
-                auto relDetail = relPat->relationshipDetail();
-                std::string edgeVar = "", edgeLabel = "";
-                std::unordered_map<std::string, graph::PropertyValue> edgeProps;
+				// Rel Details
+				auto relDetail = relPat->relationshipDetail();
+				std::string edgeVar = "", edgeLabel = "";
+				std::unordered_map<std::string, PropertyValue> edgeProps;
 
-                bool isVarLength = false;
-                int minHops = 1;
-                int maxHops = 1;
+				bool isVarLength = false;
+				int minHops = 1;
+				int maxHops = 1;
 
-                if (relDetail) {
-                    edgeVar = extractVariable(relDetail->variable());
-                    edgeLabel = extractRelType(relDetail->relationshipTypes());
-                    edgeProps = extractProperties(relDetail->properties());
+				if (relDetail) {
+					edgeVar = extractVariable(relDetail->variable());
+					edgeLabel = extractRelType(relDetail->relationshipTypes());
+					edgeProps = extractProperties(relDetail->properties());
 
-                    // Variable Length Logic
-                    if (relDetail->rangeLiteral()) {
-                        isVarLength = true;
-                        auto range = relDetail->rangeLiteral();
-                        minHops = 1; maxHops = 15; // Defaults
+					// Variable Length Logic
+					if (relDetail->rangeLiteral()) {
+						isVarLength = true;
+						auto range = relDetail->rangeLiteral();
+						minHops = 1;
+						maxHops = 15; // Defaults
 
-                        auto ints = range->integerLiteral();
-                        bool hasRangeDots = (range->RANGE() != nullptr);
+						auto ints = range->integerLiteral();
 
-                        if (hasRangeDots) {
-                            if (ints.size() == 2) { // *1..5
-                                minHops = std::stoi(ints[0]->getText());
-                                maxHops = std::stoi(ints[1]->getText());
-                            } else if (ints.size() == 1) {
-                                std::string rawText = range->getText();
-                                if (rawText.find("..") < rawText.find(ints[0]->getText())) {
-                                    // ..5
-                                    maxHops = std::stoi(ints[0]->getText());
-                                } else {
-                                    // 1..
-                                    minHops = std::stoi(ints[0]->getText());
-                                }
-                            }
-                        } else if (!ints.empty()) {
-                            // *3
-                            minHops = maxHops = std::stoi(ints[0]->getText());
-                        }
-                    }
-                }
+						if (range->RANGE() != nullptr) {
+							if (ints.size() == 2) { // *1..5
+								minHops = std::stoi(ints[0]->getText());
+								maxHops = std::stoi(ints[1]->getText());
+							} else if (ints.size() == 1) {
+								std::string rawText = range->getText();
+								if (rawText.find("..") < rawText.find(ints[0]->getText())) {
+									// ..5
+									maxHops = std::stoi(ints[0]->getText());
+								} else {
+									// 1..
+									minHops = std::stoi(ints[0]->getText());
+								}
+							}
+						} else if (!ints.empty()) {
+							// *3
+							minHops = maxHops = std::stoi(ints[0]->getText());
+						}
+					}
+				}
 
-                // Target Node
-                std::string targetVar = extractVariable(nodePat->variable());
-                std::string targetLabel = extractLabel(nodePat->nodeLabels());
-                auto targetProps = extractProperties(nodePat->properties());
+				// Target Node
+				std::string targetVar = extractVariable(nodePat->variable());
+				std::string targetLabel = extractLabel(nodePat->nodeLabels());
+				auto targetProps = extractProperties(nodePat->properties());
 
-                // Build Traversal
-                if (isVarLength) {
-                    rootOp_ = planner_->traverseVarLengthOp(
-                        std::move(rootOp_), var, targetVar, edgeLabel, minHops, maxHops, direction
-                    );
-                } else {
-                    rootOp_ = planner_->traverseOp(
-                        std::move(rootOp_), var, edgeVar, targetVar, edgeLabel, direction
-                    );
-                }
+				// Build Traversal
+				if (isVarLength) {
+					rootOp_ = planner_->traverseVarLengthOp(std::move(rootOp_), var, targetVar, edgeLabel, minHops,
+															maxHops, direction);
+				} else {
+					rootOp_ = planner_->traverseOp(std::move(rootOp_), var, edgeVar, targetVar, edgeLabel, direction);
+				}
 
-                // Filter Target
-                if (!targetLabel.empty()) {
-                    auto labelPred = [targetVar, targetLabel](const query::execution::Record &r) {
-                        auto n = r.getNode(targetVar);
-                        return n && n->getLabel() == targetLabel;
-                    };
-                    rootOp_ = planner_->filterOp(std::move(rootOp_), labelPred, "Label(" + targetVar + ")=" + targetLabel);
-                }
+				// Filter Target
+				if (!targetLabel.empty()) {
+					auto labelPred = [targetVar, targetLabel](const query::execution::Record &r) {
+						auto n = r.getNode(targetVar);
+						return n && n->getLabel() == targetLabel;
+					};
+					rootOp_ = planner_->filterOp(std::move(rootOp_), labelPred,
+												 "Label(" + targetVar + ")=" + targetLabel);
+				}
 
-                for (const auto &[key, val]: targetProps) {
-                    auto pred = [targetVar, key, val](const query::execution::Record &r) {
-                        auto n = r.getNode(targetVar);
-                        return n && n->getProperties().contains(key) && n->getProperties().at(key) == val;
-                    };
-                    rootOp_ = planner_->filterOp(std::move(rootOp_), pred, targetVar + "." + key + "=" + val.toString());
-                }
+				for (const auto &[key, val]: targetProps) {
+					auto pred = [targetVar, key, val](const query::execution::Record &r) {
+						auto n = r.getNode(targetVar);
+						return n && n->getProperties().contains(key) && n->getProperties().at(key) == val;
+					};
+					rootOp_ =
+							planner_->filterOp(std::move(rootOp_), pred, targetVar + "." + key + "=" + val.toString());
+				}
 
-                // Filter Edge (Single Hop Only)
-                if (!isVarLength) {
-                    for (const auto &[key, val]: edgeProps) {
-                        auto pred = [edgeVar, key, val](const query::execution::Record &r) {
-                            auto e = r.getEdge(edgeVar);
-                            return e && e->getProperties().contains(key) && e->getProperties().at(key) == val;
-                        };
-                        rootOp_ = planner_->filterOp(std::move(rootOp_), pred, edgeVar + "." + key + "=" + val.toString());
-                    }
-                }
+				// Filter Edge (Single Hop Only)
+				if (!isVarLength) {
+					for (const auto &[key, val]: edgeProps) {
+						auto pred = [edgeVar, key, val](const query::execution::Record &r) {
+							auto e = r.getEdge(edgeVar);
+							return e && e->getProperties().contains(key) && e->getProperties().at(key) == val;
+						};
+						rootOp_ = planner_->filterOp(std::move(rootOp_), pred,
+													 edgeVar + "." + key + "=" + val.toString());
+					}
+				}
 
-                // Update current variable for next hop
-                var = targetVar;
-            }
-        } // End Parts Loop
+				// Update current variable for next hop
+				var = targetVar;
+			}
+		} // End Parts Loop
 
-        // 3. Where Clause
-        if (ctx->where()) {
-            try {
-                std::string desc;
-                auto predicate = buildWherePredicate(ctx->where()->expression(), desc);
-                rootOp_ = planner_->filterOp(std::move(rootOp_), predicate, desc);
-            } catch (const std::exception &e) {
-                std::cerr << "Warning: Failed to parse WHERE clause optimization: " << e.what() << std::endl;
-                throw;
-            }
-        }
+		// 3. Where Clause
+		if (ctx->where()) {
+			try {
+				std::string desc;
+				auto predicate = buildWherePredicate(ctx->where()->expression(), desc);
+				rootOp_ = planner_->filterOp(std::move(rootOp_), predicate, desc);
+			} catch (const std::exception &e) {
+				std::cerr << "Warning: Failed to parse WHERE clause optimization: " << e.what() << std::endl;
+				throw;
+			}
+		}
 
-        return std::any();
-    }
+		return std::any();
+	}
 
 	// --- CREATE ---
 	std::any CypherToPlanVisitor::visitCreateStatement(CypherParser::CreateStatementContext *ctx) {
@@ -407,7 +422,7 @@ namespace graph::parser::cypher {
 	std::any CypherToPlanVisitor::visitReturnStatement(CypherParser::ReturnStatementContext *ctx) {
 		auto body = ctx->projectionBody();
 
-		// FIX: If there is no existing plan (e.g. standalone RETURN 1),
+		// If there is no existing plan (e.g. standalone RETURN 1),
 		// inject a SingleRowOperator to provide a valid pipeline source.
 		// This generates exactly one empty record to allow projection of literals.
 		if (!rootOp_) {
@@ -678,28 +693,28 @@ namespace graph::parser::cypher {
 				// Note: In a full engine, we use an ExpressionVisitor.
 				// Here we use simplified literal parsing based on getText().
 				std::string valText = item->expression()->getText();
-				graph::PropertyValue val;
+				PropertyValue val;
 
 				if (valText.front() == '\'' || valText.front() == '"') {
 					// String literal
-					val = graph::PropertyValue(valText.substr(1, valText.length() - 2));
+					val = PropertyValue(valText.substr(1, valText.length() - 2));
 				} else if (valText == "TRUE" || valText == "true") {
-					val = graph::PropertyValue(true);
+					val = PropertyValue(true);
 				} else if (valText == "FALSE" || valText == "false") {
-					val = graph::PropertyValue(false);
+					val = PropertyValue(false);
 				} else {
 					// Try numeric parsing
 					try {
 						if (valText.find('.') != std::string::npos) {
-							val = graph::PropertyValue(std::stod(valText));
+							val = PropertyValue(std::stod(valText));
 						} else {
-							val = graph::PropertyValue(std::stoll(valText));
+							val = PropertyValue(std::stoll(valText));
 						}
 					} catch (...) {
 						// Fallback: If it's a parameter ($param) or complex expr,
 						// we currently store it as a string for debugging.
 						// Ideally throw error if not supported.
-						val = graph::PropertyValue(valText);
+						val = PropertyValue(valText);
 					}
 				}
 
@@ -837,22 +852,22 @@ namespace graph::parser::cypher {
 				// 3. Extract Value
 				// Reusing the text parsing logic for simplicity
 				std::string valText = item->expression()->getText();
-				graph::PropertyValue val;
+				PropertyValue val;
 
 				if (valText.front() == '\'' || valText.front() == '"') {
-					val = graph::PropertyValue(valText.substr(1, valText.length() - 2));
+					val = PropertyValue(valText.substr(1, valText.length() - 2));
 				} else if (valText == "TRUE" || valText == "true") {
-					val = graph::PropertyValue(true);
+					val = PropertyValue(true);
 				} else if (valText == "FALSE" || valText == "false") {
-					val = graph::PropertyValue(false);
+					val = PropertyValue(false);
 				} else {
 					try {
 						if (valText.find('.') != std::string::npos)
-							val = graph::PropertyValue(std::stod(valText));
+							val = PropertyValue(std::stod(valText));
 						else
-							val = graph::PropertyValue(std::stoll(valText));
+							val = PropertyValue(std::stoll(valText));
 					} catch (...) {
-						val = graph::PropertyValue(valText);
+						val = PropertyValue(valText);
 					}
 				}
 
@@ -868,7 +883,7 @@ namespace graph::parser::cypher {
 				// Handle Label setting in MERGE actions
 				items.push_back({
 						query::execution::operators::SetActionType::LABEL, varName, labelName,
-						graph::PropertyValue() // Empty value for labels
+						PropertyValue() // Empty value for labels
 				});
 			}
 		}
@@ -952,92 +967,105 @@ namespace graph::parser::cypher {
 	}
 
 	// ========================================================================
-    // UNWIND Clause
-    // ========================================================================
-    std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) {
-        // Grammar: UNWIND expression AS variable
+	// UNWIND Clause
+	// ========================================================================
+	std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) {
+		// Grammar: UNWIND expression AS variable
 
-        // 1. Extract Alias
-        std::string alias = extractVariable(ctx->variable());
-        if (alias.empty()) {
-            throw std::runtime_error("UNWIND requires a variable alias (AS x)");
-        }
+		// 1. Extract Alias
+		std::string alias = extractVariable(ctx->variable());
+		if (alias.empty()) {
+			throw std::runtime_error("UNWIND requires a variable alias (AS x)");
+		}
 
-        // 2. Extract List Values
-        // We need to parse the expression. Currently, we support List Literals: [1, 2, 3]
-        std::vector<PropertyValue> listValues;
+		// 2. Extract List Values
+		// We need to parse the expression. Currently, we support List Literals: [1, 2, 3]
+		std::vector<PropertyValue> listValues;
 
-        auto expr = ctx->expression();
-        if (expr) {
-            listValues = extractListFromExpression(expr);
-        }
+		if (const auto expr = ctx->expression()) {
+			listValues = extractListFromExpression(expr);
+		}
 
-        if (listValues.empty()) {
-            // If parsing failed or list is empty, we might want to throw or allow empty unwind (which stops execution)
-            // For now, let's proceed. An empty list in UNWIND stops the pipeline (0 rows).
-        }
+		if (listValues.empty()) {
+			// If parsing failed or list is empty, we might want to throw or allow empty unwind (which stops execution)
+			// For now, let's proceed. An empty list in UNWIND stops the pipeline (0 rows).
+		}
 
 		if (!rootOp_) {
 			rootOp_ = planner_->singleRowOp();
 		}
 
-        // 3. Build Operator
-        // UNWIND wraps the current pipeline (rootOp_)
-        // If rootOp_ is null, UNWIND acts as a Source.
-        auto op = planner_->unwindOp(std::move(rootOp_), alias, listValues);
+		// 3. Build Operator
+		// UNWIND wraps the current pipeline (rootOp_)
+		// If rootOp_ is null, UNWIND acts as a Source.
+		auto op = planner_->unwindOp(std::move(rootOp_), alias, listValues);
 
-        // Update root
-        rootOp_ = std::move(op);
+		// Update root
+		rootOp_ = std::move(op);
 
-        return std::any();
-    }
+		return std::any();
+	}
 
-    // ========================================================================
-    // Helper: Extract List from Expression
-    // ========================================================================
-    std::vector<PropertyValue>
-    CypherToPlanVisitor::extractListFromExpression(CypherParser::ExpressionContext *ctx) {
-        std::vector<graph::PropertyValue> results;
+	// ========================================================================
+	// Helper: Extract List from Expression
+	// ========================================================================
+	std::vector<PropertyValue> CypherToPlanVisitor::extractListFromExpression(CypherParser::ExpressionContext *ctx) {
+		std::vector<PropertyValue> results;
 
-        // Navigate AST: expression -> or -> xor -> and -> not -> comparison -> arithmetic -> unary -> atom
-        // This is a long chain. We check if the expression effectively boils down to a listLiteral.
+		// Navigate AST: expression -> or -> xor -> and -> not -> comparison -> arithmetic -> unary -> atom
+		// This is a long chain. We check if the expression effectively boils down to a listLiteral.
 
-        // Safety check helper
-        auto getAtom = [](CypherParser::ExpressionContext* e) -> CypherParser::AtomContext* {
-            if (!e) return nullptr;
-            auto or_ = e->orExpression(); if(!or_) return nullptr;
-            auto xor_ = or_->xorExpression(0); if(!xor_) return nullptr;
-            auto and_ = xor_->andExpression(0); if(!and_) return nullptr;
-            auto not_ = and_->notExpression(0); if(!not_) return nullptr;
-            auto comp = not_->comparisonExpression(); if(!comp) return nullptr;
-            auto arith = comp->arithmeticExpression(0); if(!arith) return nullptr;
-            auto unary = arith->unaryExpression(0); if(!unary) return nullptr;
-            return unary->atom();
-        };
+		// Safety check helper
+		auto getAtom = [](CypherParser::ExpressionContext *e) -> CypherParser::AtomContext * {
+			if (!e)
+				return nullptr;
+			auto or_ = e->orExpression();
+			if (!or_)
+				return nullptr;
+			auto xor_ = or_->xorExpression(0);
+			if (!xor_)
+				return nullptr;
+			auto and_ = xor_->andExpression(0);
+			if (!and_)
+				return nullptr;
+			auto not_ = and_->notExpression(0);
+			if (!not_)
+				return nullptr;
+			auto comp = not_->comparisonExpression();
+			if (!comp)
+				return nullptr;
+			auto arith = comp->arithmeticExpression(0);
+			if (!arith)
+				return nullptr;
+			auto unary = arith->unaryExpression(0);
+			if (!unary)
+				return nullptr;
+			return unary->atom();
+		};
 
-        auto atom = getAtom(ctx);
-        if (atom && atom->listLiteral()) {
-            auto listLit = atom->listLiteral();
-            // listLiteral : LBRACK ( expression ( COMMA expression )* )? RBRACK
+		auto atom = getAtom(ctx);
+		if (atom && atom->listLiteral()) {
+			auto listLit = atom->listLiteral();
+			// listLiteral : LBRACK ( expression ( COMMA expression )* )? RBRACK
 
-            for (auto itemExpr : listLit->expression()) {
-                // Recursively extract literal value from the item expression
-                auto itemAtom = getAtom(itemExpr);
-                if (itemAtom && itemAtom->literal()) {
-                    results.push_back(parseValue(itemAtom->literal()));
-                } else {
-                    // Fallback for non-literal items inside list (e.g. identifiers)
-                    // Currently simplified to string representation
-                    results.push_back(graph::PropertyValue(itemExpr->getText()));
-                }
-            }
-        } else {
-            // Attempt to parse parameter ($param) if implemented, or throw
-            // For now, if it's not a list literal, we throw or return empty
-            // throw std::runtime_error("UNWIND currently only supports List Literals (e.g. [1, 2])");
-        }
+			for (auto itemExpr: listLit->expression()) {
+				// Recursively extract literal value from the item expression
+				auto itemAtom = getAtom(itemExpr);
+				if (itemAtom && itemAtom->literal()) {
+					results.push_back(parseValue(itemAtom->literal()));
+				} else {
+					// Fallback for non-literal items inside list (e.g. identifiers)
+					// Currently simplified to string representation
+					results.push_back(PropertyValue(itemExpr->getText()));
+				}
+			}
+		} else {
+			// Attempt to parse parameter ($param) if implemented, or throw
+			// For now, if it's not a list literal, we throw or return empty
+			// throw std::runtime_error("UNWIND currently only supports List Literals (e.g. [1, 2])");
+		}
 
-        return results;
-    }
+		return results;
+	}
 
 } // namespace graph::parser::cypher

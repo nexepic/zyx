@@ -1,11 +1,21 @@
 /**
  * @file ShowIndexesOperator.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/12
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -15,56 +25,55 @@
 
 namespace graph::query::execution::operators {
 
-    class ShowIndexesOperator : public PhysicalOperator {
-    public:
-        explicit ShowIndexesOperator(std::shared_ptr<indexes::IndexManager> indexManager)
-            : indexManager_(std::move(indexManager)) {}
+	class ShowIndexesOperator : public PhysicalOperator {
+	public:
+		explicit ShowIndexesOperator(std::shared_ptr<indexes::IndexManager> indexManager) :
+			indexManager_(std::move(indexManager)) {}
 
-        void open() override { executed_ = false; }
+		void open() override { executed_ = false; }
 
-        std::optional<RecordBatch> next() override {
-            if (executed_) return std::nullopt;
+		std::optional<RecordBatch> next() override {
+			if (executed_)
+				return std::nullopt;
 
-            RecordBatch batch;
+			RecordBatch batch;
 
-            // Use the detailed list API from IndexManager
-            auto indexes = indexManager_->listIndexesDetailed();
+			// Use the detailed list API from IndexManager
+			auto indexes = indexManager_->listIndexesDetailed();
 
-            for (const auto& [name, type, label, prop] : indexes) {
-                Record r;
-                // Set the values in the Record
-                r.setValue("name", PropertyValue(name));
-                r.setValue("type", PropertyValue(type));
-                r.setValue("entity", PropertyValue(type == "node" ? "NODE" : "EDGE"));
-                r.setValue("name", PropertyValue(name));
-                r.setValue("type", PropertyValue(prop.empty() ? "LABEL" : "PROPERTY")); // Infer type from property
-                r.setValue("label", PropertyValue(label));
-                r.setValue("properties", PropertyValue(prop));
+			for (const auto &[name, type, label, prop]: indexes) {
+				Record r;
+				// Set the values in the Record
+				r.setValue("name", PropertyValue(name));
+				r.setValue("type", PropertyValue(type));
+				r.setValue("entity", PropertyValue(type == "node" ? "NODE" : "EDGE"));
+				r.setValue("name", PropertyValue(name));
+				r.setValue("type", PropertyValue(prop.empty() ? "LABEL" : "PROPERTY")); // Infer type from property
+				r.setValue("label", PropertyValue(label));
+				r.setValue("properties", PropertyValue(prop));
 
-                batch.push_back(std::move(r));
-            }
+				batch.push_back(std::move(r));
+			}
 
-            executed_ = true;
+			executed_ = true;
 
-            if (batch.empty()) {
-                return std::nullopt;
-            }
-            return batch;
-        }
+			if (batch.empty()) {
+				return std::nullopt;
+			}
+			return batch;
+		}
 
-        void close() override {}
+		void close() override {}
 
-        [[nodiscard]] std::vector<std::string> getOutputVariables() const override {
-            return {"name", "type", "label", "properties"};
-        }
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
+			return {"name", "type", "label", "properties"};
+		}
 
-        [[nodiscard]] std::string toString() const override {
-            return "ShowIndexes()";
-        }
+		[[nodiscard]] std::string toString() const override { return "ShowIndexes()"; }
 
-    private:
-        std::shared_ptr<indexes::IndexManager> indexManager_;
-        bool executed_ = false;
-    };
+	private:
+		std::shared_ptr<indexes::IndexManager> indexManager_;
+		bool executed_ = false;
+	};
 
 } // namespace graph::query::execution::operators

@@ -1,11 +1,21 @@
 /**
  * @file test_SystemStateManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/15
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include <boost/uuid/uuid.hpp>
@@ -233,7 +243,7 @@ TEST_F(SystemStateManagerTest, Optimization_NoWriteIfSame) {
 	// Should be optimized out
 	stateManager->set<int64_t>(key, "val", 100);
 	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
-		<< "Optimization Failed: Setting same scalar value triggered a dirty state.";
+			<< "Optimization Failed: Setting same scalar value triggered a dirty state.";
 
 	// 3. Set DIFFERENT value
 	stateManager->set<int64_t>(key, "val", 101);
@@ -246,11 +256,11 @@ TEST_F(SystemStateManagerTest, Optimization_NoWriteIfSame) {
 	std::unordered_map<std::string, int64_t> sameMap = {{"val", 101}};
 	stateManager->setMap(key, sameMap, graph::storage::state::UpdateMode::MERGE);
 	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
-		<< "Optimization Failed: Merging identical map triggered a dirty state.";
+			<< "Optimization Failed: Merging identical map triggered a dirty state.";
 
 	// 5. Test Map Optimization (REPLACE mode)
 	// In REPLACE mode, same content should also be optimized
 	stateManager->setMap(key, sameMap, graph::storage::state::UpdateMode::REPLACE);
 	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
-		<< "Optimization Failed: Replacing with identical map triggered a dirty state.";
+			<< "Optimization Failed: Replacing with identical map triggered a dirty state.";
 }

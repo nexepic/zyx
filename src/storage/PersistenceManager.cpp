@@ -1,11 +1,21 @@
 /**
  * @file PersistenceManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/1
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/PersistenceManager.hpp"
@@ -76,7 +86,7 @@ namespace graph::storage {
 		// This prevents "Memory Explosion" (OOM) if the input vector is massive (e.g., 10M entities)
 		// and exceeds the configured 'maxDirtyEntities_' limit.
 
-		for (const auto &entity : entities) {
+		for (const auto &entity: entities) {
 			// 1. Insert or Update the entity in the dirty registry.
 			targetRegistry->upsert(DirtyEntityInfo<EntityType>(changeType, entity));
 

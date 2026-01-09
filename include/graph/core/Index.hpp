@@ -1,11 +1,21 @@
 /**
  * @file Index.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/6/12
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -127,9 +137,10 @@ namespace graph {
 		 * @return InsertResult containing success status. If overflow occurs,
 		 *         returns the modified entry list to be used by the splitter.
 		 */
-		InsertResult tryInsertEntry(const PropertyValue &key, int64_t value,
-						 const std::shared_ptr<storage::DataManager> &dataManager,
-						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
+		InsertResult
+		tryInsertEntry(const PropertyValue &key, int64_t value,
+					   const std::shared_ptr<storage::DataManager> &dataManager,
+					   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator);
 
 		void insertEntry(const PropertyValue &key, int64_t value,
 						 const std::shared_ptr<storage::DataManager> &dataManager,

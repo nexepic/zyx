@@ -1,11 +1,21 @@
 /**
  * @file DatabaseImpl.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/16
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include <algorithm>
@@ -255,15 +265,16 @@ namespace metrix {
 	int Result::getColumnCount() const { return impl_ ? impl_->columnNames_.size() : 0; }
 
 	std::string Result::getColumnName(int index) const {
-		return (impl_ && index >= 0 && index < static_cast<int>(impl_->columnNames_.size())) ? impl_->columnNames_[index] : "";
+		return (impl_ && index >= 0 && index < static_cast<int>(impl_->columnNames_.size()))
+					   ? impl_->columnNames_[index]
+					   : "";
 	}
 
-	bool Result::isSuccess() const {
-		return impl_ && impl_->error_msg.empty();
-	}
+	bool Result::isSuccess() const { return impl_ && impl_->error_msg.empty(); }
 
 	std::string Result::getError() const {
-		if (!impl_) return "Result not initialized";
+		if (!impl_)
+			return "Result not initialized";
 		return impl_->error_msg;
 	}
 
@@ -288,25 +299,25 @@ namespace metrix {
 			s->flush();
 	}
 
-	Result Database::execute(const std::string& cypher) const {
-        try {
-            auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
-            Result res;
-            res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
-            return res;
-        } catch (const std::exception& e) {
-            // Return Result in error state
-            Result res;
-            res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult()); // Empty internal result
-            res.impl_->error_msg = e.what();
-            return res;
-        } catch (...) {
-            Result res;
-            res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
-            res.impl_->error_msg = "Unknown error";
-            return res;
-        }
-    }
+	Result Database::execute(const std::string &cypher) const {
+		try {
+			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
+			return res;
+		} catch (const std::exception &e) {
+			// Return Result in error state
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult()); // Empty internal result
+			res.impl_->error_msg = e.what();
+			return res;
+		} catch (...) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = "Unknown error";
+			return res;
+		}
+	}
 
 	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
 		auto builder = impl_->db_.getQueryEngine()->query();
@@ -335,7 +346,8 @@ namespace metrix {
 		storage->getDataManager()->addNodes(nodes);
 	}
 
-	int64_t Database::createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
+	int64_t Database::createNodeRetId(const std::string &label,
+									  const std::unordered_map<std::string, Value> &props) const {
 		auto dm = impl_->db_.getStorage()->getDataManager();
 		graph::Node node(0, label);
 		dm->addNode(node);

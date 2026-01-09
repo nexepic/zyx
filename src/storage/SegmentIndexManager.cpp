@@ -1,11 +1,21 @@
 /**
  * @file SegmentIndexManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/6/10
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/SegmentIndexManager.hpp"
@@ -115,8 +125,8 @@ namespace graph::storage {
 			SegmentIndex oldKey{};
 			oldKey.startId = oldStartId;
 			auto itOld = std::lower_bound(
-				segmentIndex.begin(), segmentIndex.end(), oldKey,
-				[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
+					segmentIndex.begin(), segmentIndex.end(), oldKey,
+					[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
 
 			if (itOld != segmentIndex.end() && itOld->startId == oldStartId &&
 				itOld->segmentOffset == header.file_offset) {
@@ -136,8 +146,8 @@ namespace graph::storage {
 			searchKey.startId = header.start_id;
 
 			auto it = std::lower_bound(
-				segmentIndex.begin(), segmentIndex.end(), searchKey,
-				[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
+					segmentIndex.begin(), segmentIndex.end(), searchKey,
+					[](const SegmentIndex &a, const SegmentIndex &b) { return a.startId < b.startId; });
 
 			// If found exact match on StartID, just update it
 			if (it != segmentIndex.end() && it->startId == header.start_id) {
@@ -146,16 +156,16 @@ namespace graph::storage {
 				return; // DONE
 			}
 
-            // =========================================================================
-            // SCENARIO 4: GENERIC INSERTION (Sorted)
-            // =========================================================================
-            // If we are here, 'it' points to the correct insertion position and keys are unique
-            SegmentIndex newIndex{};
-            newIndex.startId = header.start_id;
-            newIndex.endId = endId;
-            newIndex.segmentOffset = header.file_offset;
+			// =========================================================================
+			// SCENARIO 4: GENERIC INSERTION (Sorted)
+			// =========================================================================
+			// If we are here, 'it' points to the correct insertion position and keys are unique
+			SegmentIndex newIndex{};
+			newIndex.startId = header.start_id;
+			newIndex.endId = endId;
+			newIndex.segmentOffset = header.file_offset;
 
-            segmentIndex.insert(it, newIndex);
+			segmentIndex.insert(it, newIndex);
 		}
 	}
 

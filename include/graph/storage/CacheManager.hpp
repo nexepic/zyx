@@ -1,11 +1,21 @@
 /**
  * @file CacheManager.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/3/21
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -19,11 +29,9 @@ namespace graph::storage {
 	public:
 		explicit LRUCache(size_t capacity) : capacity_(capacity) {}
 
-		bool contains(const K& key) const {
-			return cache_map_.contains(key);
-		}
+		bool contains(const K &key) const { return cache_map_.contains(key); }
 
-		V get(const K& key) {
+		V get(const K &key) {
 			// Early return if capacity is 0
 			if (capacity_ == 0) {
 				return V();
@@ -39,7 +47,7 @@ namespace graph::storage {
 			return it->second->second;
 		}
 
-		void put(const K& key, const V& value) {
+		void put(const K &key, const V &value) {
 			// Early return if capacity is 0
 			if (capacity_ == 0) {
 				return;
@@ -57,7 +65,7 @@ namespace graph::storage {
 			// Check if cache is full
 			if (cache_list_.size() >= capacity_) {
 				// Remove least recently used
-				const auto& last = cache_list_.back();
+				const auto &last = cache_list_.back();
 				cache_map_.erase(last.first);
 				cache_list_.pop_back();
 			}
@@ -68,7 +76,7 @@ namespace graph::storage {
 		}
 
 		// Peek method to look at the value without affecting the cache order
-		V peek(const K& key) const {
+		V peek(const K &key) const {
 			auto it = cache_map_.find(key);
 			if (it == cache_map_.end()) {
 				return V();
@@ -80,7 +88,7 @@ namespace graph::storage {
 		auto begin() const { return cache_list_.begin(); }
 		auto end() const { return cache_list_.end(); }
 
-		void remove(const K& key) {
+		void remove(const K &key) {
 			auto it = cache_map_.find(key);
 			if (it != cache_map_.end()) {
 				cache_list_.erase(it->second);
@@ -93,9 +101,7 @@ namespace graph::storage {
 			cache_list_.clear();
 		}
 
-		[[nodiscard]] size_t size() const {
-			return cache_list_.size();
-		}
+		[[nodiscard]] size_t size() const { return cache_list_.size(); }
 
 	private:
 		size_t capacity_;

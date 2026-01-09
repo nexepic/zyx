@@ -1,11 +1,21 @@
 /**
  * @file test_SegmentIndexManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/4
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include <algorithm>
@@ -424,7 +434,7 @@ TEST_F(SegmentIndexManagerTest, SequentialAppendWorksCorrectly) {
 		indexManager->updateSegmentIndex(createHeader(offset, type, startId, 50), -1);
 	}
 
-	const auto& idx = indexManager->getNodeSegmentIndex();
+	const auto &idx = indexManager->getNodeSegmentIndex();
 	ASSERT_EQ(idx.size(), count);
 
 	// 2. Verify Boundaries
@@ -452,61 +462,61 @@ TEST_F(SegmentIndexManagerTest, SequentialAppendWorksCorrectly) {
 // ============================================================================
 
 TEST_F(SegmentIndexManagerTest, IdempotencyOnDuplicateInsert) {
-    // BUG PREVENTER: Verify that adding the exact same segment twice doesn't create duplicates
-    auto type = static_cast<uint32_t>(graph::EntityType::Node);
-    uint64_t offset = getSegOffset(0);
-    SegmentHeader h = createHeader(offset, type, 100, 10);
+	// BUG PREVENTER: Verify that adding the exact same segment twice doesn't create duplicates
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t offset = getSegOffset(0);
+	SegmentHeader h = createHeader(offset, type, 100, 10);
 
-    // First Insert
-    indexManager->updateSegmentIndex(h, -1);
-    ASSERT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
+	// First Insert
+	indexManager->updateSegmentIndex(h, -1);
+	ASSERT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
 
-    // Second Insert (Simulate accidental double-call or recovery logic)
-    // Even with -1 (new), it should detect existing StartID and update/ignore instead of duplicate
-    indexManager->updateSegmentIndex(h, -1);
+	// Second Insert (Simulate accidental double-call or recovery logic)
+	// Even with -1 (new), it should detect existing StartID and update/ignore instead of duplicate
+	indexManager->updateSegmentIndex(h, -1);
 
-    // Should still be 1
-    const auto& idx = indexManager->getNodeSegmentIndex();
-    ASSERT_EQ(idx.size(), 1UL) << "Index manager should prevent duplicate entries for same Start ID";
-    EXPECT_EQ(idx[0].segmentOffset, offset);
+	// Should still be 1
+	const auto &idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), 1UL) << "Index manager should prevent duplicate entries for same Start ID";
+	EXPECT_EQ(idx[0].segmentOffset, offset);
 }
 
 TEST_F(SegmentIndexManagerTest, UpdateReplacesOldEntryWaitSameStartID) {
-    // Case: offset changes but StartID stays same (e.g. file defragmentation/move without ID change)
-    // Though rare, if StartID is same, we treat it as the "Same Logical Segment"
+	// Case: offset changes but StartID stays same (e.g. file defragmentation/move without ID change)
+	// Though rare, if StartID is same, we treat it as the "Same Logical Segment"
 
-    auto type = static_cast<uint32_t>(graph::EntityType::Node);
-    int64_t startId = 100;
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	int64_t startId = 100;
 
-    // Old location
-    indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, startId, 10), -1);
+	// Old location
+	indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, startId, 10), -1);
 
-    // New location, same Start ID
-    // Note: passing -1 means we might treat it as new, but since StartID exists, it should update
-    indexManager->updateSegmentIndex(createHeader(getSegOffset(1), type, startId, 20), -1);
+	// New location, same Start ID
+	// Note: passing -1 means we might treat it as new, but since StartID exists, it should update
+	indexManager->updateSegmentIndex(createHeader(getSegOffset(1), type, startId, 20), -1);
 
-    const auto& idx = indexManager->getNodeSegmentIndex();
-    ASSERT_EQ(idx.size(), 1UL);
-    EXPECT_EQ(idx[0].segmentOffset, getSegOffset(1)); // Should point to new offset
-    EXPECT_EQ(idx[0].endId, 119); // Should reflect new usage
+	const auto &idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), 1UL);
+	EXPECT_EQ(idx[0].segmentOffset, getSegOffset(1)); // Should point to new offset
+	EXPECT_EQ(idx[0].endId, 119); // Should reflect new usage
 }
 
 TEST_F(SegmentIndexManagerTest, ZeroUsageHandling) {
-    auto type = static_cast<uint32_t>(graph::EntityType::Node);
-    uint64_t offset = getSegOffset(0);
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t offset = getSegOffset(0);
 
-    // Create segment with USED = 0
-    // Logic: endId = start + (0 > 0 ? -1 : 0) = start
-    indexManager->updateSegmentIndex(createHeader(offset, type, 100, 0), -1);
+	// Create segment with USED = 0
+	// Logic: endId = start + (0 > 0 ? -1 : 0) = start
+	indexManager->updateSegmentIndex(createHeader(offset, type, 100, 0), -1);
 
-    // It should effectively cover the range [100, 100] in the current logic
-    // (or just be a placeholder)
-    EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset);
+	// It should effectively cover the range [100, 100] in the current logic
+	// (or just be a placeholder)
+	EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset);
 
-    // Update to Used = 1
-    SegmentHeader h = createHeader(offset, type, 100, 1);
-    indexManager->updateSegmentIndex(h, 100);
-    EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset);
+	// Update to Used = 1
+	SegmentHeader h = createHeader(offset, type, 100, 1);
+	indexManager->updateSegmentIndex(h, 100);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 100), offset);
 }
 
 // ============================================================================
@@ -514,96 +524,96 @@ TEST_F(SegmentIndexManagerTest, ZeroUsageHandling) {
 // ============================================================================
 
 TEST_F(SegmentIndexManagerTest, LookupInEmptyManagerReturnsZero) {
-    // Explicitly test find on an empty vector
-    // (SetUp leaves vectors empty initially)
-    EXPECT_EQ(indexManager->findSegmentForId(static_cast<uint32_t>(graph::EntityType::Node), 0), 0ULL);
-    EXPECT_EQ(indexManager->findSegmentForId(static_cast<uint32_t>(graph::EntityType::Node), 9999), 0ULL);
+	// Explicitly test find on an empty vector
+	// (SetUp leaves vectors empty initially)
+	EXPECT_EQ(indexManager->findSegmentForId(static_cast<uint32_t>(graph::EntityType::Node), 0), 0ULL);
+	EXPECT_EQ(indexManager->findSegmentForId(static_cast<uint32_t>(graph::EntityType::Node), 9999), 0ULL);
 }
 
 TEST_F(SegmentIndexManagerTest, UpdateWithStaleOldIdTriggersFullScanRemoval) {
-    // Covers the `erase_if` path in updateSegmentIndex.
-    // Scenario: The tracker thinks the segment was at 'oldStartId', but the IndexManager
-    // doesn't have a record of 'oldStartId' pointing to that offset (state mismatch).
-    // The manager should fall back to scanning by offset to ensure the old entry is removed.
+	// Covers the `erase_if` path in updateSegmentIndex.
+	// Scenario: The tracker thinks the segment was at 'oldStartId', but the IndexManager
+	// doesn't have a record of 'oldStartId' pointing to that offset (state mismatch).
+	// The manager should fall back to scanning by offset to ensure the old entry is removed.
 
-    auto type = static_cast<uint32_t>(graph::EntityType::Node);
-    uint64_t offset = getSegOffset(0);
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t offset = getSegOffset(0);
 
-    // 1. Initial State: Segment at ID 100
-    indexManager->updateSegmentIndex(createHeader(offset, type, 100, 10), -1);
-    ASSERT_EQ(indexManager->findSegmentForId(type, 100), offset);
+	// 1. Initial State: Segment at ID 100
+	indexManager->updateSegmentIndex(createHeader(offset, type, 100, 10), -1);
+	ASSERT_EQ(indexManager->findSegmentForId(type, 100), offset);
 
-    // 2. Update: Change ID to 200.
-    // BUT pass a wrong 'oldStartId' (e.g., 999) that doesn't exist.
-    // Logic expected:
-    // - Look for 999 -> Not found.
-    // - Fallback: Search entire vector for 'offset', remove it (removes 100).
-    // - Insert 200.
-    SegmentHeader newHeader = createHeader(offset, type, 200, 10);
-    indexManager->updateSegmentIndex(newHeader, 999);
+	// 2. Update: Change ID to 200.
+	// BUT pass a wrong 'oldStartId' (e.g., 999) that doesn't exist.
+	// Logic expected:
+	// - Look for 999 -> Not found.
+	// - Fallback: Search entire vector for 'offset', remove it (removes 100).
+	// - Insert 200.
+	SegmentHeader newHeader = createHeader(offset, type, 200, 10);
+	indexManager->updateSegmentIndex(newHeader, 999);
 
-    const auto& idx = indexManager->getNodeSegmentIndex();
-    ASSERT_EQ(idx.size(), 1UL);
-    EXPECT_EQ(idx[0].startId, 200); // 100 should be gone, 200 added
-    EXPECT_EQ(idx[0].segmentOffset, offset);
+	const auto &idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), 1UL);
+	EXPECT_EQ(idx[0].startId, 200); // 100 should be gone, 200 added
+	EXPECT_EQ(idx[0].segmentOffset, offset);
 }
 
 TEST_F(SegmentIndexManagerTest, RemoveSegmentIgnoredIfOffsetMismatch) {
-    // Covers `removeSegmentIndex` safety check.
-    // Scenario: Trying to remove ID 100, but the provided header has a different file offset
-    // than what is stored in the index. Should NOT remove the entry.
+	// Covers `removeSegmentIndex` safety check.
+	// Scenario: Trying to remove ID 100, but the provided header has a different file offset
+	// than what is stored in the index. Should NOT remove the entry.
 
-    auto type = static_cast<uint32_t>(graph::EntityType::Node);
-    uint64_t correctOffset = getSegOffset(0);
-    uint64_t wrongOffset = getSegOffset(1);
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t correctOffset = getSegOffset(0);
+	uint64_t wrongOffset = getSegOffset(1);
 
-    // Insert [100, 109] at correctOffset
-    indexManager->updateSegmentIndex(createHeader(correctOffset, type, 100, 10), -1);
+	// Insert [100, 109] at correctOffset
+	indexManager->updateSegmentIndex(createHeader(correctOffset, type, 100, 10), -1);
 
-    // Attempt remove [100, 109] but claiming it is at wrongOffset
-    indexManager->removeSegmentIndex(createHeader(wrongOffset, type, 100, 10));
+	// Attempt remove [100, 109] but claiming it is at wrongOffset
+	indexManager->removeSegmentIndex(createHeader(wrongOffset, type, 100, 10));
 
-    // Verify entry still exists
-    EXPECT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
-    EXPECT_EQ(indexManager->findSegmentForId(type, 100), correctOffset);
+	// Verify entry still exists
+	EXPECT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 100), correctOffset);
 }
 
 TEST_F(SegmentIndexManagerTest, RemoveNonExistentSegmentIsSafe) {
-    // Covers `removeSegmentIndex` when ID doesn't exist.
-    auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	// Covers `removeSegmentIndex` when ID doesn't exist.
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
 
-    // Attempt remove something from empty index
-    indexManager->removeSegmentIndex(createHeader(getSegOffset(0), type, 100, 10));
-    EXPECT_TRUE(indexManager->getNodeSegmentIndex().empty());
+	// Attempt remove something from empty index
+	indexManager->removeSegmentIndex(createHeader(getSegOffset(0), type, 100, 10));
+	EXPECT_TRUE(indexManager->getNodeSegmentIndex().empty());
 
-    // Insert valid one
-    indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, 100, 10), -1);
+	// Insert valid one
+	indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, 100, 10), -1);
 
-    // Attempt remove non-existent ID
-    indexManager->removeSegmentIndex(createHeader(getSegOffset(1), type, 500, 10));
-    EXPECT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
+	// Attempt remove non-existent ID
+	indexManager->removeSegmentIndex(createHeader(getSegOffset(1), type, 500, 10));
+	EXPECT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
 }
 
 TEST_F(SegmentIndexManagerTest, AllSegmentTypesSupported) {
-    // Covers the switch cases in getSegmentIndexForType for types not covered by previous tests
-    // (Blob, Index, State).
-    uint64_t offset = getSegOffset(0);
+	// Covers the switch cases in getSegmentIndexForType for types not covered by previous tests
+	// (Blob, Index, State).
+	uint64_t offset = getSegOffset(0);
 
-    // Blob
-    auto typeBlob = static_cast<uint32_t>(graph::EntityType::Blob);
-    indexManager->updateSegmentIndex(createHeader(offset, typeBlob, 10, 1), -1);
-    EXPECT_EQ(indexManager->getBlobSegmentIndex().size(), 1UL);
-    EXPECT_EQ(indexManager->findSegmentForId(typeBlob, 10), offset);
+	// Blob
+	auto typeBlob = static_cast<uint32_t>(graph::EntityType::Blob);
+	indexManager->updateSegmentIndex(createHeader(offset, typeBlob, 10, 1), -1);
+	EXPECT_EQ(indexManager->getBlobSegmentIndex().size(), 1UL);
+	EXPECT_EQ(indexManager->findSegmentForId(typeBlob, 10), offset);
 
-    // Index
-    auto typeIndex = static_cast<uint32_t>(graph::EntityType::Index);
-    indexManager->updateSegmentIndex(createHeader(offset, typeIndex, 20, 1), -1);
-    EXPECT_EQ(indexManager->getIndexSegmentIndex().size(), 1UL);
-    EXPECT_EQ(indexManager->findSegmentForId(typeIndex, 20), offset);
+	// Index
+	auto typeIndex = static_cast<uint32_t>(graph::EntityType::Index);
+	indexManager->updateSegmentIndex(createHeader(offset, typeIndex, 20, 1), -1);
+	EXPECT_EQ(indexManager->getIndexSegmentIndex().size(), 1UL);
+	EXPECT_EQ(indexManager->findSegmentForId(typeIndex, 20), offset);
 
-    // State
-    auto typeState = static_cast<uint32_t>(graph::EntityType::State);
-    indexManager->updateSegmentIndex(createHeader(offset, typeState, 30, 1), -1);
-    EXPECT_EQ(indexManager->getStateSegmentIndex().size(), 1UL);
-    EXPECT_EQ(indexManager->findSegmentForId(typeState, 30), offset);
+	// State
+	auto typeState = static_cast<uint32_t>(graph::EntityType::State);
+	indexManager->updateSegmentIndex(createHeader(offset, typeState, 30, 1), -1);
+	EXPECT_EQ(indexManager->getStateSegmentIndex().size(), 1UL);
+	EXPECT_EQ(indexManager->findSegmentForId(typeState, 30), offset);
 }

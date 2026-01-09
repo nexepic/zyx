@@ -1,22 +1,32 @@
 /**
  * @file IndexBuilder.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/6/24
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
-#include "graph/storage/indexes/LabelIndex.hpp"
-#include "graph/storage/indexes/PropertyIndex.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/LabelIndex.hpp"
+#include "graph/storage/indexes/PropertyIndex.hpp"
 
 namespace graph::query::indexes {
 
@@ -33,7 +43,7 @@ namespace graph::query::indexes {
 			// Clear existing data to rebuild
 			labelIndex->clear();
 
-			for (const auto& [startId, endId] : getNodeIdRanges()) {
+			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
@@ -60,7 +70,7 @@ namespace graph::query::indexes {
 			// Clear existing data to rebuild
 			labelIndex->clear();
 
-			for (const auto& [startId, endId] : getEdgeIdRanges()) {
+			for (const auto &[startId, endId]: getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);

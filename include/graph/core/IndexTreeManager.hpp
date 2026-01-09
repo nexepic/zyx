@@ -1,11 +1,21 @@
 /**
  * @file IndexTreeManager.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/6/13
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -64,7 +74,7 @@ namespace graph::query::indexes {
 		 */
 		int64_t insert(int64_t rootId, const PropertyValue &key, int64_t value);
 
-		int64_t insertBatch(int64_t rootId, const std::vector<std::pair<PropertyValue, int64_t>>& entries);
+		int64_t insertBatch(int64_t rootId, const std::vector<std::pair<PropertyValue, int64_t>> &entries);
 
 		/**
 		 * Removes a key-value pair from the tree
@@ -74,7 +84,7 @@ namespace graph::query::indexes {
 		 * @param value The value to remove
 		 * @return true if the pair was found and removed
 		 */
-		bool remove(int64_t& rootId, const PropertyValue &key, int64_t value);
+		bool remove(int64_t &rootId, const PropertyValue &key, int64_t value);
 
 		/**
 		 * Finds all values associated with a key
@@ -111,7 +121,7 @@ namespace graph::query::indexes {
 		// Helper methods for B+Tree operations
 		int64_t createNewNode(Index::NodeType type) const;
 
-		void splitLeaf(Index &leaf, std::vector<Index::Entry>& allEntries, int64_t &rootId);
+		void splitLeaf(Index &leaf, std::vector<Index::Entry> &allEntries, int64_t &rootId);
 		void insertIntoParent(Index &leftNode, const PropertyValue &key, int64_t rightNodeId, int64_t &rootId);
 
 		/**

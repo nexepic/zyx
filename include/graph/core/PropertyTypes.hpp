@@ -1,20 +1,30 @@
 /**
  * @file PropertyTypes.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/3/25
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
 
+#include <concepts>
 #include <cstdint>
+#include <sstream>
 #include <string>
 #include <variant>
-#include <sstream>
-#include <concepts>
 
 namespace graph {
 
@@ -82,39 +92,45 @@ namespace graph {
 
 		std::string toString() const {
 			return std::visit(
-				[](auto const& value) -> std::string {
-					using T = std::decay_t<decltype(value)>;
+					[](auto const &value) -> std::string {
+						using T = std::decay_t<decltype(value)>;
 
-					if constexpr (std::is_same_v<T, std::monostate>) {
-						return "null";
-					} else if constexpr (std::is_same_v<T, bool>) {
-						return value ? "true" : "false";
-					} else if constexpr (std::is_same_v<T, int64_t>) {
-						return std::to_string(value);
-					} else if constexpr (std::is_same_v<T, double>) {
-						std::ostringstream oss;
-						oss << value;
-						return oss.str();
-					} else if constexpr (std::is_same_v<T, std::string>) {
-						return value;
-					} else {
-						return "";
-					}
-				},
-				data
-			);
+						if constexpr (std::is_same_v<T, std::monostate>) {
+							return "null";
+						} else if constexpr (std::is_same_v<T, bool>) {
+							return value ? "true" : "false";
+						} else if constexpr (std::is_same_v<T, int64_t>) {
+							return std::to_string(value);
+						} else if constexpr (std::is_same_v<T, double>) {
+							std::ostringstream oss;
+							oss << value;
+							return oss.str();
+						} else if constexpr (std::is_same_v<T, std::string>) {
+							return value;
+						} else {
+							return "";
+						}
+					},
+					data);
 		}
 
 		// Helper to get type name for debugging
 		std::string typeName() const {
-			return std::visit([](auto&& arg) -> std::string {
-				using T = std::decay_t<decltype(arg)>;
-				if constexpr (std::is_same_v<T, std::monostate>) return "NULL";
-				else if constexpr (std::is_same_v<T, bool>) return "BOOLEAN";
-				else if constexpr (std::is_same_v<T, int64_t>) return "INTEGER";
-				else if constexpr (std::is_same_v<T, double>) return "DOUBLE";
-				else if constexpr (std::is_same_v<T, std::string>) return "STRING";
-			}, data);
+			return std::visit(
+					[](auto &&arg) -> std::string {
+						using T = std::decay_t<decltype(arg)>;
+						if constexpr (std::is_same_v<T, std::monostate>)
+							return "NULL";
+						else if constexpr (std::is_same_v<T, bool>)
+							return "BOOLEAN";
+						else if constexpr (std::is_same_v<T, int64_t>)
+							return "INTEGER";
+						else if constexpr (std::is_same_v<T, double>)
+							return "DOUBLE";
+						else if constexpr (std::is_same_v<T, std::string>)
+							return "STRING";
+					},
+					data);
 		}
 	};
 
@@ -143,7 +159,7 @@ namespace graph {
 
 	namespace property_utils {
 		size_t getPropertyValueSize(const PropertyValue &value);
-		bool checkPropertyMatch(const PropertyValue& storedValue, const PropertyValue& queryValue);
+		bool checkPropertyMatch(const PropertyValue &storedValue, const PropertyValue &queryValue);
 	} // namespace property_utils
 
 } // namespace graph

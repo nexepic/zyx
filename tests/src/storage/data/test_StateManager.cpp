@@ -1,56 +1,66 @@
 /**
  * @file test_StateManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/8/15
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
-#include <gtest/gtest.h>
 #include <filesystem>
+#include <gtest/gtest.h>
 #include <memory>
+#include "boost/uuid/uuid.hpp"
+#include "boost/uuid/uuid_generators.hpp"
+#include "boost/uuid/uuid_io.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/core/State.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
-#include "boost/uuid/uuid.hpp"
-#include "boost/uuid/uuid_generators.hpp"
-#include "boost/uuid/uuid_io.hpp"
 
 class StateManagerTest : public ::testing::Test {
 protected:
-    std::filesystem::path testFilePath;
-    std::unique_ptr<graph::Database> db;
-    std::shared_ptr<graph::storage::FileStorage> storage;
-    std::shared_ptr<graph::storage::DataManager> dataManager;
-    std::shared_ptr<graph::storage::StateManager> stateManager;
+	std::filesystem::path testFilePath;
+	std::unique_ptr<graph::Database> db;
+	std::shared_ptr<graph::storage::FileStorage> storage;
+	std::shared_ptr<graph::storage::DataManager> dataManager;
+	std::shared_ptr<graph::storage::StateManager> stateManager;
 
-    void SetUp() override {
-        // Create a unique temporary database file
-        boost::uuids::uuid uuid = boost::uuids::random_generator()();
-        testFilePath = std::filesystem::temp_directory_path() / ("test_stateManager_" + to_string(uuid) + ".db");
+	void SetUp() override {
+		// Create a unique temporary database file
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testFilePath = std::filesystem::temp_directory_path() / ("test_stateManager_" + to_string(uuid) + ".db");
 
-        // Initialize database and get managers from the DataManager
-        db = std::make_unique<graph::Database>(testFilePath.string());
-        db->open();
-        storage = db->getStorage();
-        dataManager = storage->getDataManager();
-        // Get the manager instance that was created by the DataManager
-        stateManager = dataManager->getStateManager();
-    }
+		// Initialize database and get managers from the DataManager
+		db = std::make_unique<graph::Database>(testFilePath.string());
+		db->open();
+		storage = db->getStorage();
+		dataManager = storage->getDataManager();
+		// Get the manager instance that was created by the DataManager
+		stateManager = dataManager->getStateManager();
+	}
 
-    void TearDown() override {
-        // Release resources and clean up the file
-        db->close();
-        db.reset();
+	void TearDown() override {
+		// Release resources and clean up the file
+		db->close();
+		db.reset();
 
-        if (std::filesystem::exists(testFilePath)) {
-            std::filesystem::remove(testFilePath);
-        }
-    }
+		if (std::filesystem::exists(testFilePath)) {
+			std::filesystem::remove(testFilePath);
+		}
+	}
 };
 
 // Test adding and retrieving a state and its properties
@@ -102,10 +112,8 @@ TEST_F(StateManagerTest, UpdateState) {
 	EXPECT_NE(idAfterFirstUpdate, 0);
 
 	// Second property addition: re-creates the state AGAIN
-	dataManager->addStateProperties(state.getKey(), {
-		{"counter", graph::PropertyValue(2)},
-		{"updated", graph::PropertyValue(true)}
-	});
+	dataManager->addStateProperties(state.getKey(),
+									{{"counter", graph::PropertyValue(2)}, {"updated", graph::PropertyValue(true)}});
 
 	// Retrieve the state again by key to get the latest version.
 	graph::State stateAfterSecondUpdate = stateManager->findByKey("test.state.key");
@@ -120,42 +128,42 @@ TEST_F(StateManagerTest, UpdateState) {
 
 // Test removing a state
 TEST_F(StateManagerTest, RemoveState) {
-    // Create and add a state
-    graph::State state;
-    state.setKey("test.state.key");
-    stateManager->add(state);
-    int64_t stateId = state.getId();
+	// Create and add a state
+	graph::State state;
+	state.setKey("test.state.key");
+	stateManager->add(state);
+	int64_t stateId = state.getId();
 
-    // Verify the state was added
-    graph::State retrievedState = stateManager->get(stateId);
-    EXPECT_EQ(retrievedState.getId(), stateId) << "State should be retrievable after adding";
+	// Verify the state was added
+	graph::State retrievedState = stateManager->get(stateId);
+	EXPECT_EQ(retrievedState.getId(), stateId) << "State should be retrievable after adding";
 
-    // Remove the state
-    stateManager->remove(state);
+	// Remove the state
+	stateManager->remove(state);
 
-    // Clear cache to ensure it's removed from disk
-    dataManager->clearCache();
+	// Clear cache to ensure it's removed from disk
+	dataManager->clearCache();
 
-    // Verify the state was removed
-    graph::State removedState = stateManager->get(stateId);
-    EXPECT_EQ(removedState.getId(), 0) << "State should not be retrievable after removal";
+	// Verify the state was removed
+	graph::State removedState = stateManager->get(stateId);
+	EXPECT_EQ(removedState.getId(), 0) << "State should not be retrievable after removal";
 }
 
 // Test finding state by key
 TEST_F(StateManagerTest, FindStateByKey) {
-    // Create and add a state
-    graph::State state;
-    state.setKey("test.unique.key");
-    stateManager->add(state);
+	// Create and add a state
+	graph::State state;
+	state.setKey("test.unique.key");
+	stateManager->add(state);
 
-    // Find the state by key
-    graph::State foundState = stateManager->findByKey("test.unique.key");
-    EXPECT_EQ(foundState.getId(), state.getId()) << "Should find state by key";
-    EXPECT_EQ(foundState.getKey(), "test.unique.key") << "Found state should have the correct key";
+	// Find the state by key
+	graph::State foundState = stateManager->findByKey("test.unique.key");
+	EXPECT_EQ(foundState.getId(), state.getId()) << "Should find state by key";
+	EXPECT_EQ(foundState.getKey(), "test.unique.key") << "Found state should have the correct key";
 
-    // Try to find a non-existent state
-    graph::State nonExistentState = stateManager->findByKey("non.existent.key");
-    EXPECT_EQ(nonExistentState.getId(), 0) << "Non-existent state should return default state with ID 0";
+	// Try to find a non-existent state
+	graph::State nonExistentState = stateManager->findByKey("non.existent.key");
+	EXPECT_EQ(nonExistentState.getId(), 0) << "Non-existent state should return default state with ID 0";
 }
 
 // Test batch operations
@@ -177,7 +185,7 @@ TEST_F(StateManagerTest, BatchOperations) {
 
 	// We cannot use getBatch with the original IDs. Instead, we should verify
 	// that all states are accessible via their keys.
-	for(const auto& key : stateKeys) {
+	for (const auto &key: stateKeys) {
 		graph::State retrievedState = stateManager->findByKey(key);
 		EXPECT_NE(retrievedState.getId(), 0) << "State with key " << key << " should be retrievable.";
 	}
@@ -192,7 +200,8 @@ TEST_F(StateManagerTest, BatchOperations) {
 
 	// Verify the other states still exist
 	for (int i = 0; i < 5; ++i) {
-		if (i == 2) continue;
+		if (i == 2)
+			continue;
 		graph::State existingState = stateManager->findByKey(stateKeys[i]);
 		EXPECT_NE(existingState.getId(), 0) << "State with key " << stateKeys[i] << " should still exist.";
 	}
@@ -200,29 +209,29 @@ TEST_F(StateManagerTest, BatchOperations) {
 
 // Test handling non-existent states
 TEST_F(StateManagerTest, NonExistentState) {
-    // Try to get a non-existent state
-    graph::State nonExistentState = stateManager->get(999999);
-    EXPECT_EQ(nonExistentState.getId(), 0) << "Non-existent state should return default state with ID 0";
+	// Try to get a non-existent state
+	graph::State nonExistentState = stateManager->get(999999);
+	EXPECT_EQ(nonExistentState.getId(), 0) << "Non-existent state should return default state with ID 0";
 
-    // Try to update a non-existent state; this should not throw an error
-    graph::State invalidState;
-    invalidState.setId(999999);
-    invalidState.setKey("invalid.key");
-    EXPECT_NO_THROW(stateManager->update(invalidState)) << "Updating non-existent state should not throw";
+	// Try to update a non-existent state; this should not throw an error
+	graph::State invalidState;
+	invalidState.setId(999999);
+	invalidState.setKey("invalid.key");
+	EXPECT_NO_THROW(stateManager->update(invalidState)) << "Updating non-existent state should not throw";
 }
 
 // Test state ID allocation
 TEST_F(StateManagerTest, StateIdAllocation) {
-    // Create multiple states and verify IDs are unique
-    graph::State state1;
-    graph::State state2;
-    state1.setKey("state1");
-    state2.setKey("state2");
+	// Create multiple states and verify IDs are unique
+	graph::State state1;
+	graph::State state2;
+	state1.setKey("state1");
+	state2.setKey("state2");
 
-    stateManager->add(state1);
-    stateManager->add(state2);
+	stateManager->add(state1);
+	stateManager->add(state2);
 
-    EXPECT_NE(state1.getId(), 0);
-    EXPECT_NE(state2.getId(), 0);
-    EXPECT_NE(state1.getId(), state2.getId()) << "State IDs should be unique";
+	EXPECT_NE(state1.getId(), 0);
+	EXPECT_NE(state2.getId(), 0);
+	EXPECT_NE(state1.getId(), state2.getId()) << "State IDs should be unique";
 }

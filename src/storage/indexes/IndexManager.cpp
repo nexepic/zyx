@@ -1,11 +1,21 @@
 /**
  * @file IndexManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/3/21
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -36,60 +46,60 @@ namespace graph::query::indexes {
 	IndexManager::~IndexManager() = default;
 
 	void IndexManager::initialize() {
-        // 1. Initialize the builder
-        indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_);
+		// 1. Initialize the builder
+		indexBuilder_ = std::make_unique<IndexBuilder>(shared_from_this(), storage_);
 
-        // 2. Register listeners
-        storage_->registerEventListener(weak_from_this());
-        dataManager_->registerObserver(shared_from_this());
+		// 2. Register listeners
+		storage_->registerEventListener(weak_from_this());
+		dataManager_->registerObserver(shared_from_this());
 
-        // ====================================================================
-        // Bootstrap: Auto-build Label Indexes IF enabled in config
-        // ====================================================================
+		// ====================================================================
+		// Bootstrap: Auto-build Label Indexes IF enabled in config
+		// ====================================================================
 
-        auto sysState = storage_->getSystemStateManager();
+		auto sysState = storage_->getSystemStateManager();
 
-        auto ensureMetadata = [&](const std::string& name, const std::string& type) {
-            auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
-            if (!allIndexes.contains(name)) {
-                IndexMetadata meta{name, type, "label", "", ""};
-                sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
-                log::Log::info("Registered system index metadata: {}", name);
-            }
-        };
+		auto ensureMetadata = [&](const std::string &name, const std::string &type) {
+			auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+			if (!allIndexes.contains(name)) {
+				IndexMetadata meta{name, type, "label", "", ""};
+				sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
+				log::Log::info("Registered system index metadata: {}", name);
+			}
+		};
 
-        // --- Node Label Index ---
-        auto nodeLabelIdx = nodeIndexManager_->getLabelIndex();
+		// --- Node Label Index ---
+		auto nodeLabelIdx = nodeIndexManager_->getLabelIndex();
 
-        // [CHECK] Only proceed if enabled (reads from config)
-        if (nodeLabelIdx->isEnabled()) {
-            // Build if missing data
-            if (!nodeLabelIdx->hasPhysicalData()) {
-                if (dataManager_->getIdAllocator()->getCurrentMaxNodeId() > 0) {
-                    log::Log::info("Bootstrapping Node Label Index...");
-                    executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
-                    nodeLabelIdx->saveState();
-                }
-            }
-            // Ensure metadata exists for SHOW INDEXES
-            ensureMetadata("node_label_idx", "node");
-        }
+		// [CHECK] Only proceed if enabled (reads from config)
+		if (nodeLabelIdx->isEnabled()) {
+			// Build if missing data
+			if (!nodeLabelIdx->hasPhysicalData()) {
+				if (dataManager_->getIdAllocator()->getCurrentMaxNodeId() > 0) {
+					log::Log::info("Bootstrapping Node Label Index...");
+					executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
+					nodeLabelIdx->saveState();
+				}
+			}
+			// Ensure metadata exists for SHOW INDEXES
+			ensureMetadata("node_label_idx", "node");
+		}
 
-        // --- Edge Label Index ---
-        auto edgeLabelIdx = edgeIndexManager_->getLabelIndex();
+		// --- Edge Label Index ---
+		auto edgeLabelIdx = edgeIndexManager_->getLabelIndex();
 
-        // [CHECK] Only proceed if enabled
-        if (edgeLabelIdx->isEnabled()) {
-            if (!edgeLabelIdx->hasPhysicalData()) {
-                if (dataManager_->getIdAllocator()->getCurrentMaxEdgeId() > 0) {
-                    log::Log::info("Bootstrapping Edge Label Index...");
-                    executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
-                    edgeLabelIdx->saveState();
-                }
-            }
-            ensureMetadata("edge_label_idx", "edge");
-        }
-    }
+		// [CHECK] Only proceed if enabled
+		if (edgeLabelIdx->isEnabled()) {
+			if (!edgeLabelIdx->hasPhysicalData()) {
+				if (dataManager_->getIdAllocator()->getCurrentMaxEdgeId() > 0) {
+					log::Log::info("Bootstrapping Edge Label Index...");
+					executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
+					edgeLabelIdx->saveState();
+				}
+			}
+			ensureMetadata("edge_label_idx", "edge");
+		}
+	}
 
 	void IndexManager::onStorageFlush() {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -265,9 +275,7 @@ namespace graph::query::indexes {
 	// --- Event Handlers simply delegate to the appropriate manager ---
 	void IndexManager::onNodeAdded(const Node &node) { nodeIndexManager_->onEntityAdded(node); }
 
-	void IndexManager::onNodesAdded(const std::vector<Node>& nodes) {
-		nodeIndexManager_->onEntitiesAdded(nodes);
-	}
+	void IndexManager::onNodesAdded(const std::vector<Node> &nodes) { nodeIndexManager_->onEntitiesAdded(nodes); }
 
 	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
 		nodeIndexManager_->onEntityUpdated(oldNode, newNode);
@@ -277,9 +285,7 @@ namespace graph::query::indexes {
 
 	void IndexManager::onEdgeAdded(const Edge &edge) { edgeIndexManager_->onEntityAdded(edge); }
 
-	void IndexManager::onEdgesAdded(const std::vector<Edge>& edges) {
-		edgeIndexManager_->onEntitiesAdded(edges);
-	}
+	void IndexManager::onEdgesAdded(const std::vector<Edge> &edges) { edgeIndexManager_->onEntitiesAdded(edges); }
 
 	void IndexManager::onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) {
 		edgeIndexManager_->onEntityUpdated(oldEdge, newEdge);

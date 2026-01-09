@@ -1,11 +1,21 @@
 /**
  * @file CypherToPlanVisitor.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/9
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -61,7 +71,8 @@ namespace graph::parser::cypher {
 
 		std::any visitMergeStatement(CypherParser::MergeStatementContext *ctx) override;
 
-		static std::vector<query::execution::operators::SetItem> extractSetItems(CypherParser::SetStatementContext* ctx);
+		static std::vector<query::execution::operators::SetItem>
+		extractSetItems(CypherParser::SetStatementContext *ctx);
 
 		std::any visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) override;
 
@@ -72,7 +83,7 @@ namespace graph::parser::cypher {
 		// --- Helpers ---
 		void chainOperator(std::unique_ptr<query::execution::PhysicalOperator> newOp);
 
-		static std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext* ctx);
+		static std::string extractPropertyKeyFromExpr(CypherParser::PropertyExpressionContext *ctx);
 
 		static std::string extractVariable(CypherParser::VariableContext *ctx);
 		static std::string extractLabel(CypherParser::NodeLabelsContext *ctx);
@@ -82,10 +93,10 @@ namespace graph::parser::cypher {
 		static PropertyValue parseValue(CypherParser::LiteralContext *ctx);
 		static std::unordered_map<std::string, PropertyValue> extractProperties(CypherParser::PropertiesContext *ctx);
 
-		std::function<bool(const query::execution::Record &)> buildWherePredicate(CypherParser::ExpressionContext *expr,
-																				  std::string &outDesc);
+		static std::function<bool(const query::execution::Record &)>
+		buildWherePredicate(CypherParser::ExpressionContext *expr, std::string &outDesc);
 
-		std::vector<PropertyValue> extractListFromExpression(CypherParser::ExpressionContext *ctx);
+		static std::vector<PropertyValue> extractListFromExpression(CypherParser::ExpressionContext *ctx);
 	};
 
 } // namespace graph::parser::cypher

@@ -1,11 +1,21 @@
 /**
  * @file test_PropertyTypes.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/7/29
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include <gtest/gtest.h>
@@ -194,7 +204,7 @@ TEST(PropertyValueTest, SizeOfBool) {
 }
 
 TEST(PropertyValueTest, SizeOfIntegers) {
-	graph::PropertyValue v_int = 42;         // implicit int -> int64_t
+	graph::PropertyValue v_int = 42; // implicit int -> int64_t
 	graph::PropertyValue v_int32 = int32_t{42}; // implicit int32 -> int64_t
 	graph::PropertyValue v_int64 = int64_t{42};
 
@@ -204,7 +214,7 @@ TEST(PropertyValueTest, SizeOfIntegers) {
 }
 
 TEST(PropertyValueTest, SizeOfFloats) {
-	graph::PropertyValue v_float = 3.14f;   // implicit float -> double
+	graph::PropertyValue v_float = 3.14f; // implicit float -> double
 	graph::PropertyValue v_double = 3.14;
 
 	EXPECT_EQ(getPropertyValueSize(v_float), sizeof(double));

@@ -1,11 +1,21 @@
 /**
  * @file metrix.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/16
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -98,7 +108,8 @@ namespace metrix {
 		 * @brief Create multiple nodes in one batch.
 		 *        Essential for high-performance data loading tools.
 		 */
-		void createNodes(const std::string& label, const std::vector<std::unordered_map<std::string, Value>>& propsList) const;
+		void createNodes(const std::string &label,
+						 const std::vector<std::unordered_map<std::string, Value>> &propsList) const;
 
 		void createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 						const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
@@ -112,7 +123,8 @@ namespace metrix {
 		 * @param props The properties.
 		 * @return The internal ID (int64_t) of the created node.
 		 */
-		int64_t createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props = {}) const;
+		int64_t createNodeRetId(const std::string &label,
+								const std::unordered_map<std::string, Value> &props = {}) const;
 
 		/**
 		 * @brief Creates an edge directly between two known internal IDs.

@@ -22,7 +22,7 @@
         <img alt="codecov" src="https://codecov.io/github/nexepic/metrix/graph/badge.svg?token=VBCGBBI4YO" />
     </a>
     <a href="LICENSE">
-        <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg" />
+        <img alt="License: Apache 2.0" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" />
     </a>
     <a href="https://en.cppreference.com/w/cpp/20">
         <img alt="C++" src="https://img.shields.io/badge/C++-20-blue.svg" />
@@ -35,20 +35,24 @@
 ## Features
 
 ### Core Capabilities
+
 - **Native Graph Storage**: Purpose-built data structures for nodes, edges, and properties with efficient serialization.
 - **ACID Transactions**: Full transaction support with rollback capabilities and Write-Ahead Logging (WAL).
 - **Advanced Indexing**: Label-based and property-based indexes with automatic index management.
-- **Flexible Schema**: Dynamic property system supporting multiple data types (Int, Long, Double, String, Boolean, Blob).
+- **Flexible Schema**: Dynamic property system supporting multiple data types (Int, Long, Double, String, Boolean,
+  Blob).
 - **State Management**: Temporal state tracking with state chains and blob chain management.
 - **Query Engine**: Unified query interface with optimized query planning and execution strategies.
 
 ### Storage & Performance
+
 - **Custom File Format**: Segment-based storage with checksums and compression support.
 - **Memory Efficiency**: Smart caching with LRU eviction and dirty entity tracking.
 - **Space Management**: Automatic space reclamation and segment management.
 - **Deletion Handling**: Sophisticated tombstone management and reference updating.
 
 ### Developer Experience
+
 - **Interactive REPL**: Full-featured command-line interface for database operations.
 - **Traversal API**: Relationship-based graph traversal with BFS/DFS support.
 - **Type Safety**: Strong type system with compile-time guarantees.
@@ -70,7 +74,8 @@ We provide a convenient shell script to automate the environment setup, building
 
 ### One-Click Build (Recommended)
 
-The `run_tests.sh` script handles dependency installation (Conan), configuration (Meson), compilation, unit testing, and coverage report generation.
+The `run_tests.sh` script handles dependency installation (Conan), configuration (Meson), compilation, unit testing, and
+coverage report generation.
 
 ```bash
 # Clean build, install dependencies, compile, and run tests
@@ -86,43 +91,43 @@ After the script finishes, you can find the build artifacts in `buildDir/` and c
 
 If you prefer to run the steps manually or are integrating into a custom workflow:
 
-1.  **Install Dependencies (Conan)**
-    ```bash
-    # Ensure C++20 and Debug mode are used
-    conan profile detect
-    conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
-    ```
+1. **Install Dependencies (Conan)**
+   ```bash
+   # Ensure C++20 and Debug mode are used
+   conan profile detect
+   conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+   ```
 
-2.  **Configure Build (Meson)**
-    ```bash
-    # Configure with source-based coverage flags
-    export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
-    
-    meson setup buildDir \
-      --native-file buildDir/conan_meson_native.ini \
-      -Dcpp_args="$FLAGS" \
-      -Dcpp_link_args="$FLAGS" \
-      -Dbuildtype=debug
-    ```
+2. **Configure Build (Meson)**
+   ```bash
+   # Configure with source-based coverage flags
+   export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
+   
+   meson setup buildDir \
+     --native-file buildDir/conan_meson_native.ini \
+     -Dcpp_args="$FLAGS" \
+     -Dcpp_link_args="$FLAGS" \
+     -Dbuildtype=debug
+   ```
 
-3.  **Compile**
-    ```bash
-    meson compile -C buildDir
-    ```
+3. **Compile**
+   ```bash
+   meson compile -C buildDir
+   ```
 
-4.  **Run Tests**
-    ```bash
-    # Set profile file location to avoid root directory pollution
-    export LLVM_PROFILE_FILE="$(pwd)/buildDir/coverage/raw/code-%p.profraw"
-    
-    meson test -C buildDir
-    ```
+4. **Run Tests**
+   ```bash
+   # Set profile file location to avoid root directory pollution
+   export LLVM_PROFILE_FILE="$(pwd)/buildDir/coverage/raw/code-%p.profraw"
+   
+   meson test -C buildDir
+   ```
 
-5.  **Generate Coverage Report**
-    ```bash
-    # macOS example (using xcrun)
-    python3 scripts/generate_coverage.py buildDir buildDir/coverage/coverage.lcov "xcrun llvm-cov" "xcrun llvm-profdata"
-    ```
+5. **Generate Coverage Report**
+   ```bash
+   # macOS example (using xcrun)
+   python3 scripts/generate_coverage.py buildDir buildDir/coverage/coverage.lcov "xcrun llvm-cov" "xcrun llvm-profdata"
+   ```
 
 ## Usage
 
@@ -146,7 +151,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License v2.0.<br /> - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

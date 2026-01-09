@@ -1,11 +1,21 @@
 /**
  * @file Entity.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/7/14
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -53,7 +63,9 @@ namespace graph {
 
 		[[nodiscard]] bool isChainEnd() const { return getNextId() == 0 && getPrevId() != 0; }
 
-		[[nodiscard]] int32_t getChainPosition() const { return static_cast<const Derived *>(this)->getMetadata().chainPosition; }
+		[[nodiscard]] int32_t getChainPosition() const {
+			return static_cast<const Derived *>(this)->getMetadata().chainPosition;
+		}
 
 		void setChainPosition(int32_t pos) { static_cast<Derived *>(this)->getMutableMetadata().chainPosition = pos; }
 	};
@@ -66,7 +78,9 @@ namespace graph {
 	public:
 		[[nodiscard]] int64_t getEntityId() const { return static_cast<const Derived *>(this)->getMetadata().entityId; }
 
-		[[nodiscard]] uint32_t getEntityType() const { return static_cast<const Derived *>(this)->getMetadata().entityType; }
+		[[nodiscard]] uint32_t getEntityType() const {
+			return static_cast<const Derived *>(this)->getMetadata().entityType;
+		}
 
 		void setEntityId(int64_t newEntityId) {
 			static_cast<Derived *>(this)->getMutableMetadata().entityId = newEntityId;
@@ -89,7 +103,9 @@ namespace graph {
 	template<typename Derived>
 	class CompressibleMixin {
 	public:
-		[[nodiscard]] uint32_t getOriginalSize() const { return static_cast<const Derived *>(this)->getMetadata().originalSize; }
+		[[nodiscard]] uint32_t getOriginalSize() const {
+			return static_cast<const Derived *>(this)->getMetadata().originalSize;
+		}
 
 		[[nodiscard]] bool isCompressed() const { return static_cast<const Derived *>(this)->getMetadata().compressed; }
 

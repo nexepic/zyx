@@ -1,11 +1,21 @@
 /**
  * @file BenchmarkConfig.hpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/26
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #pragma once
@@ -23,9 +33,9 @@ namespace metrix::benchmark::config {
 	// Default data size to use if not specified
 	constexpr int DEFAULT_DATA_SIZE = DATA_SIZE_MEDIUM;
 
-	constexpr int DATA_SIZE_QUERY   = 5000;
+	constexpr int DATA_SIZE_QUERY = 5000;
 
-	constexpr int DATA_SIZE_ALGO    = 1000;
+	constexpr int DATA_SIZE_ALGO = 1000;
 
 	// --- Iteration Settings ---
 	// How many times to execute the 'run' operation (for averaging latency).
@@ -40,7 +50,7 @@ namespace metrix::benchmark::config {
 	constexpr std::string_view PATH_INSERT_CYPHER = "/tmp/metrix_bench_insert_cypher";
 	constexpr std::string_view PATH_INSERT_NATIVE = "/tmp/metrix_bench_insert_native";
 	constexpr std::string_view PATH_QUERY_INDEX = "/tmp/metrix_bench_query_index";
-	constexpr std::string_view PATH_QUERY_BASE  = "/tmp/metrix_bench_query_base";
+	constexpr std::string_view PATH_QUERY_BASE = "/tmp/metrix_bench_query_base";
 	constexpr std::string_view PATH_ALGO_CYPHER = "/tmp/metrix_bench_algo_cypher";
 	constexpr std::string_view PATH_ALGO_NATIVE = "/tmp/metrix_bench_algo_native";
 

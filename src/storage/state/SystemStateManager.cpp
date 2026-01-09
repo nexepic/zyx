@@ -1,11 +1,21 @@
 /**
  * @file SystemStateManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/12/15
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/state/SystemStateManager.hpp"
@@ -98,7 +108,7 @@ namespace graph::storage::state {
 		// 3. Logic based on Mode
 		if (mode == UpdateMode::MERGE) {
 			// Iterate through the input map to check for changes
-			for (const auto &[key, value] : map) {
+			for (const auto &[key, value]: map) {
 				PropertyValue newVal(value);
 
 				// Update only if:
@@ -110,8 +120,7 @@ namespace graph::storage::state {
 					isDirty = true;
 				}
 			}
-		}
-		else { // UpdateMode::REPLACE
+		} else { // UpdateMode::REPLACE
 			// In REPLACE mode, the new state must EXACTLY match the input map.
 
 			// Optimization: First check if sizes match.
@@ -119,7 +128,7 @@ namespace graph::storage::state {
 				isDirty = true;
 			} else {
 				// Sizes match, check content equality.
-				for (const auto &[key, value] : map) {
+				for (const auto &[key, value]: map) {
 					auto it = currentProps.find(key);
 					// If key missing in old state OR value is different -> Changed
 					if (it == currentProps.end() || it->second != PropertyValue(value)) {
@@ -133,7 +142,7 @@ namespace graph::storage::state {
 			if (isDirty) {
 				// Clean the old map completely so we only write the new map
 				currentProps.clear();
-				for (const auto &[key, value] : map) {
+				for (const auto &[key, value]: map) {
 					currentProps[key] = value;
 				}
 				// Explicitly remove old state chain to prevent orphan blobs

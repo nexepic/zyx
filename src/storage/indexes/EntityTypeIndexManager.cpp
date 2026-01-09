@@ -1,11 +1,21 @@
 /**
  * @file EntityTypeIndexManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/8/4
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
@@ -91,11 +101,10 @@ namespace graph::query::indexes {
 	}
 
 	void EntityTypeIndexManager::updatePropertyIndexes(
-		int64_t entityId,
-		const std::unordered_map<std::string, PropertyValue> &oldProps,
-		const std::unordered_map<std::string, PropertyValue> &newProps) const
-	{
-		if (propertyIndex_->isEmpty()) return;
+			int64_t entityId, const std::unordered_map<std::string, PropertyValue> &oldProps,
+			const std::unordered_map<std::string, PropertyValue> &newProps) const {
+		if (propertyIndex_->isEmpty())
+			return;
 
 		// OPTIMIZATION STRATEGY:
 		// Instead of checking every property against the index (Iterate Props -> Check Index),
@@ -103,15 +112,16 @@ namespace graph::query::indexes {
 		// This is better IF (Number of Indexes << Number of Entity Properties).
 		// usually, a graph has few indexes compared to raw data.
 
-		const auto& indexedKeys = propertyIndex_->getIndexedKeys(); // Need a lightweight getter for this
+		const auto &indexedKeys = propertyIndex_->getIndexedKeys(); // Need a lightweight getter for this
 
-		if (indexedKeys.empty()) return;
+		if (indexedKeys.empty())
+			return;
 
 		std::vector<std::tuple<int64_t, std::string, PropertyValue>> addBatch;
 		// Reserve assuming worst case: all indexed keys are present
 		addBatch.reserve(indexedKeys.size());
 
-		for (const auto& key : indexedKeys) {
+		for (const auto &key: indexedKeys) {
 			// Look up this indexed key in the entity's properties
 			auto newIt = newProps.find(key);
 			auto oldIt = oldProps.find(key);

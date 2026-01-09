@@ -1,11 +1,21 @@
 /**
  * @file BlobChainManager.cpp
  * @author Nexepic
- * @brief This source code is licensed under MIT License.
  * @date 2025/5/20
  *
  * @copyright Copyright (c) 2025 Nexepic
  *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  **/
 
 #include "graph/core/BlobChainManager.hpp"
@@ -76,44 +86,44 @@ namespace graph {
 	}
 
 	bool BlobChainManager::isDataSame(int64_t headBlobId, const std::string &newData) const {
-	    try {
-	        const std::string currentData = readBlobChain(headBlobId);
-	        return currentData == newData;
-	    } catch (const std::exception &) {
-	        // If we can't read the current data, assume it's different
-	        return false;
-	    }
+		try {
+			const std::string currentData = readBlobChain(headBlobId);
+			return currentData == newData;
+		} catch (const std::exception &) {
+			// If we can't read the current data, assume it's different
+			return false;
+		}
 	}
 
 	std::vector<Blob> BlobChainManager::updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
-	                                                  const std::string &data) const {
-	    // First check if the data is actually different
-	    if (isDataSame(headBlobId, data)) {
-	        // Data is the same, return the existing chain
-	        const auto chainIds = getBlobChainIds(headBlobId);
-	        std::vector<Blob> existingChain;
-	        existingChain.reserve(chainIds.size());
+														const std::string &data) const {
+		// First check if the data is actually different
+		if (isDataSame(headBlobId, data)) {
+			// Data is the same, return the existing chain
+			const auto chainIds = getBlobChainIds(headBlobId);
+			std::vector<Blob> existingChain;
+			existingChain.reserve(chainIds.size());
 
-	        for (auto blobId : chainIds) {
-	            Blob blob = dataManager_->getBlob(blobId);
-	            if (blob.getId() != 0 && blob.isActive()) {
-	                existingChain.push_back(blob);
-	            }
-	        }
-	        return existingChain;
-	    }
+			for (auto blobId: chainIds) {
+				Blob blob = dataManager_->getBlob(blobId);
+				if (blob.getId() != 0 && blob.isActive()) {
+					existingChain.push_back(blob);
+				}
+			}
+			return existingChain;
+		}
 
-	    // Data is different, proceed with update
-	    Blob headBlob = dataManager_->getBlob(headBlobId);
-	    if (headBlob.getId() == 0 || !headBlob.isActive()) {
-	        throw std::runtime_error("Head blob not found or inactive");
-	    }
+		// Data is different, proceed with update
+		Blob headBlob = dataManager_->getBlob(headBlobId);
+		if (headBlob.getId() == 0 || !headBlob.isActive()) {
+			throw std::runtime_error("Head blob not found or inactive");
+		}
 
-	    // Delete the existing chain
-	    deleteBlobChain(headBlobId);
+		// Delete the existing chain
+		deleteBlobChain(headBlobId);
 
-	    // Create a new chain with updated data
-	    return createBlobChain(entityId, entityType, data);
+		// Create a new chain with updated data
+		return createBlobChain(entityId, entityType, data);
 	}
 
 	std::string BlobChainManager::readBlobChain(int64_t headBlobId) const {
