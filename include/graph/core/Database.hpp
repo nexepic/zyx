@@ -26,6 +26,7 @@ namespace graph {
 		~Database();
 
 		void open();
+		[[nodiscard]] bool openIfExists();
 		void close() const;
 
 		[[nodiscard]] bool exists() const;

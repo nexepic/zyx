@@ -12,6 +12,7 @@
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
+#include "graph/query/execution/operators/ProjectOperator.hpp"
 
 namespace graph::parser::cypher {
 
@@ -406,16 +407,35 @@ namespace graph::parser::cypher {
 	std::any CypherToPlanVisitor::visitReturnStatement(CypherParser::ReturnStatementContext *ctx) {
 		auto body = ctx->projectionBody();
 
-		// Handle Projection (Existing Logic)
+		// FIX: If there is no existing plan (e.g. standalone RETURN 1),
+		// inject a SingleRowOperator to provide a valid pipeline source.
+		// This generates exactly one empty record to allow projection of literals.
+		if (!rootOp_) {
+			rootOp_ = planner_->singleRowOp();
+		}
+
+		// Handle Projection
 		auto items = body->projectionItems();
 		if (!items->MULTIPLY()) { // If not RETURN *
-			std::vector<std::string> vars;
+			std::vector<query::execution::operators::ProjectItem> projItems;
+
 			for (auto item: items->projectionItem()) {
+				// 1. Expression Text (Source)
 				std::string exprText = item->expression()->getText();
-				vars.push_back(exprText);
+
+				// 2. Alias (Output Name)
+				// If 'AS alias' is present, use it. Otherwise, use expression text.
+				std::string alias = exprText;
+				if (item->K_AS()) {
+					alias = item->variable()->getText();
+				}
+
+				projItems.push_back({exprText, alias});
 			}
-			if (!vars.empty()) {
-				rootOp_ = planner_->projectOp(std::move(rootOp_), vars);
+
+			if (!projItems.empty()) {
+				// Note: Ensure QueryPlanner::projectOp is updated to accept vector<ProjectItem>
+				rootOp_ = planner_->projectOp(std::move(rootOp_), projItems);
 			}
 		}
 
@@ -426,10 +446,6 @@ namespace graph::parser::cypher {
 
 			for (auto item: sortItemList) {
 				// Parse Expression (n.age)
-				// Need to extract variable and property manually here similar to WHERE/SET logic
-				// Simplified extraction via getText() for now, or drill down:
-				// expression -> ... -> atom -> variable / propertyExpression
-
 				std::string varName;
 				std::string propName;
 
@@ -462,14 +478,12 @@ namespace graph::parser::cypher {
 		if (body->skipStatement()) {
 			auto skipExpr = body->skipStatement()->expression();
 			int64_t offset = 0;
-			// Simplified parsing: assume literal integer
 			try {
 				offset = std::stoll(skipExpr->getText());
 			} catch (...) {
 				throw std::runtime_error("SKIP requires an integer literal.");
 			}
 
-			// Chain: Skip(Project(...))
 			rootOp_ = planner_->skipOp(std::move(rootOp_), offset);
 		}
 
@@ -483,7 +497,6 @@ namespace graph::parser::cypher {
 				throw std::runtime_error("LIMIT requires an integer literal.");
 			}
 
-			// Chain: Limit(Skip(Project(...)))
 			rootOp_ = planner_->limitOp(std::move(rootOp_), limit);
 		}
 
@@ -963,6 +976,10 @@ namespace graph::parser::cypher {
             // If parsing failed or list is empty, we might want to throw or allow empty unwind (which stops execution)
             // For now, let's proceed. An empty list in UNWIND stops the pipeline (0 rows).
         }
+
+		if (!rootOp_) {
+			rootOp_ = planner_->singleRowOp();
+		}
 
         // 3. Build Operator
         // UNWIND wraps the current pipeline (rootOp_)

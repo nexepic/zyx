@@ -62,10 +62,17 @@ extern "C" {
      */
     MetrixDB_T* metrix_open(const char* path);
 
+	/**
+	 * @brief Opens the database only if it exists.
+	 * @param path File system path to the database directory.
+	 * @return Pointer to DB handle, or NULL if failed or does not exist.
+	 */
+	MetrixDB_T * metrix_open_if_exists(const char* path);
+
     /**
      * @brief Closes and frees the database handle.
      */
-    void metrix_close(MetrixDB_T* db);
+    void metrix_close(const MetrixDB_T * db);
 
     /**
      * @brief Gets the last error message if a function returned error/null.
@@ -81,9 +88,9 @@ extern "C" {
      * @brief Executes a Cypher query.
      * @return Result handle. Must be freed with metrix_result_close.
      */
-    MetrixResult_T* metrix_execute(MetrixDB_T* db, const char* cypher);
+    MetrixResult_T* metrix_execute(const MetrixDB_T * db, const char* cypher);
 
-    void metrix_result_close(MetrixResult_T* res);
+    void metrix_result_close(const MetrixResult_T * res);
 
     // ========================================================================
     // Result Iteration
@@ -98,7 +105,7 @@ extern "C" {
     /**
      * @brief Returns the number of columns in the current result set.
      */
-    int metrix_result_column_count(MetrixResult_T* res);
+    int metrix_result_column_count(const MetrixResult_T * res);
 
     /**
      * @brief Returns the name of the column at the given index.
@@ -112,12 +119,12 @@ extern "C" {
     /**
      * @brief Gets the type of the value in the current row at column index.
      */
-    MetrixValueType metrix_result_get_type(MetrixResult_T* res, int col_index);
+    MetrixValueType metrix_result_get_type(const MetrixResult_T * res, int col_index);
 
     // Primitives
-    int64_t metrix_result_get_int(MetrixResult_T* res, int col_index);
-    double metrix_result_get_double(MetrixResult_T* res, int col_index);
-    bool metrix_result_get_bool(MetrixResult_T* res, int col_index);
+    int64_t metrix_result_get_int(const MetrixResult_T * res, int col_index);
+    double metrix_result_get_double(const MetrixResult_T * res, int col_index);
+    bool metrix_result_get_bool(const MetrixResult_T * res, int col_index);
 
     /**
      * @brief Returns string pointer. Valid until next() or close().
@@ -140,6 +147,10 @@ extern "C" {
      *        This is efficient for passing to Frontend (JS).
      */
     const char* metrix_result_get_props_json(MetrixResult_T* res, int col_index);
+
+	bool metrix_result_is_success(const MetrixResult_T * res);
+
+	const char* metrix_result_get_error(MetrixResult_T* res);
 
 #ifdef __cplusplus
 }

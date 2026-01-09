@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <vector>
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/query/execution/operators/SortOperator.hpp"
@@ -87,7 +88,8 @@ namespace graph::query {
 		 * @brief Projects specific variables from the stream (SELECT/RETURN).
 		 */
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
-		projectOp(std::unique_ptr<execution::PhysicalOperator> child, const std::vector<std::string> &variables);
+		projectOp(std::unique_ptr<execution::PhysicalOperator> child,
+				  const std::vector<execution::operators::ProjectItem> &items);
 
 		// =================================================================
 		// Write Operations (Factories)
@@ -162,6 +164,9 @@ namespace graph::query {
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
 		unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
 				 const std::vector<PropertyValue> &list);
+
+		// Helper for standalone queries (RETURN 1)
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> singleRowOp();
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

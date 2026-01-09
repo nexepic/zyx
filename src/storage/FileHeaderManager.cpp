@@ -17,9 +17,9 @@
 namespace graph::storage {
 
 	FileHeaderManager::FileHeaderManager(std::shared_ptr<std::fstream> file, FileHeader &header) :
-		file_(std::move(file)), fileHeader_(header) {
-		if (!file_ || !file_->good()) {
-			throw std::runtime_error("Invalid file handle provided to FileHeaderManager");
+	file_(std::move(file)), fileHeader_(header) {
+		if (!file_ || !file_->is_open()) {
+			throw std::runtime_error("Invalid or closed file handle provided to FileHeaderManager");
 		}
 	}
 
@@ -33,12 +33,16 @@ namespace graph::storage {
 		fileHeader_.max_index_id = maxIndexId;
 		fileHeader_.max_state_id = maxStateId;
 
-		// First, update the header without CRC
-		file_->seekp(0);
-		file_->write(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
-		file_->flush();
+		file_->clear();
 
-		// Now calculate and update the file-wide CRC
+		file_->seekp(0, std::ios::beg);
+		file_->write(reinterpret_cast<const char *>(&fileHeader_), sizeof(FileHeader));
+
+		if (file_->fail()) {
+			throw std::runtime_error("Physical I/O error: Failed to write file header to disk.");
+		}
+
+		file_->flush();
 		updateFileCrc();
 	}
 
@@ -86,32 +90,43 @@ namespace graph::storage {
 	}
 
 	void FileHeaderManager::initializeFileHeader() const {
-		fileHeader_.data_crc = utils::calculateCrc(&fileHeader_, offsetof(FileHeader, data_crc));
-
-		file_->write(reinterpret_cast<const char *>(&fileHeader_), sizeof(FileHeader));
-		file_->flush();
-
+		// Ensure stream is clean before starting
 		file_->clear();
+		file_->seekp(0, std::ios::beg);
+
+		// Write initial header with 0 CRC
+		fileHeader_.data_crc = 0;
+		file_->write(reinterpret_cast<const char *>(&fileHeader_), sizeof(FileHeader));
+
+		// Use the file-wide CRC calculation to ensure consistency with validation
+		updateFileCrc();
 	}
 
 	void FileHeaderManager::validateAndReadHeader() const {
-		// Validate magic number
-		if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
-			throw std::runtime_error("Invalid file format");
-		}
+		// 1. Reset the header memory to ensure we aren't validating
+		// the default values set by the constructor.
+		std::memset(fileHeader_.magic, 0, 8);
 
-		// Read file header
-		file_->seekg(0);
+		// 2. Clear any stream error flags (like EOF from previous checks)
+		// and seek to the beginning.
+		file_->clear();
+		file_->seekg(0, std::ios::beg);
+
+		// 3. Perform the read and check if it succeeded
 		file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
 
-		// Validate file CRC
-		try {
-			if (!validateFileCrc()) {
-				throw std::runtime_error("Data corruption detected");
-			}
-		} catch (const std::runtime_error &e) {
-			std::cerr << e.what() << std::endl;
-			std::exit(EXIT_FAILURE); // Exit gracefully
+		if (file_->fail() || file_->gcount() < static_cast<std::streamsize>(sizeof(FileHeader))) {
+			throw std::runtime_error("Database integrity error: File is empty or truncated.");
+		}
+
+		// 4. Now validate the content actually read from the disk
+		if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
+			throw std::runtime_error("Invalid file format: Magic number mismatch.");
+		}
+
+		// 5. Validate file CRC
+		if (!validateFileCrc()) {
+			throw std::runtime_error("Database integrity check failed: Data corruption detected.");
 		}
 	}
 

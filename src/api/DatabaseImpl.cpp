@@ -61,8 +61,8 @@ namespace metrix {
 	// Convert internal PropertyValue to public Value variant
 	Value toPublicValue(const graph::PropertyValue &v) {
 		return std::visit(
-				[](auto &&arg) -> Value {
-					using T = std::decay_t<decltype(arg)>;
+				[]<typename T0>(T0 &&arg) -> Value {
+					using T = std::decay_t<T0>;
 					if constexpr (std::is_same_v<T, std::monostate>) {
 						return std::monostate{};
 					} else {
@@ -76,8 +76,8 @@ namespace metrix {
 	// Main conversion entry point for ResultValue
 	Value toPublicValue(const graph::query::ResultValue &v) {
 		return std::visit(
-				[](auto &&arg) -> Value {
-					using T = std::decay_t<decltype(arg)>;
+				[]<typename T0>(T0 &&arg) -> Value {
+					using T = std::decay_t<T0>;
 
 					if constexpr (std::is_same_v<T, graph::Node>) {
 						return toPublicNodePtr(arg);
@@ -95,8 +95,8 @@ namespace metrix {
 	// Convert public API Value to internal PropertyValue
 	graph::PropertyValue toInternal(const Value &v) {
 		return std::visit(
-				[](auto &&arg) -> graph::PropertyValue {
-					using T = std::decay_t<decltype(arg)>;
+				[]<typename T0>(T0 &&arg) -> graph::PropertyValue {
+					using T = std::decay_t<T0>;
 					// Complex types in Public API (shared_ptr) cannot be stored directly in PropertyValue
 					if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
 								  std::is_same_v<T, std::shared_ptr<Edge>> ||
@@ -127,6 +127,7 @@ namespace metrix {
 
 		std::vector<std::string> columnNames_;
 		int mode_ = 0; // 0=Rows (Default), 1=NodeStream, 2=EdgeStream
+		std::string error_msg;
 
 		void prepareMetadata() {
 			// Priority: Explicit columns from Engine -> Implicit columns from Data
@@ -135,10 +136,9 @@ namespace metrix {
 				columnNames_ = executorCols;
 			} else if (!result_.getRows().empty()) {
 				// Implicit columns: Extract from the first row and SORT for determinism
-				const auto &firstRow = result_.getRows()[0];
-				for (const auto &[k, v]: firstRow)
+				for (const auto &firstRow = result_.getRows()[0]; const auto &k: firstRow | std::views::keys)
 					columnNames_.push_back(k);
-				std::sort(columnNames_.begin(), columnNames_.end());
+				std::ranges::sort(columnNames_);
 			}
 
 			// Determine mode based on content types of the first row
@@ -161,7 +161,7 @@ namespace metrix {
 	Result::Result(Result &&) noexcept = default;
 	Result &Result::operator=(Result &&) noexcept = default;
 
-	bool Result::hasNext() {
+	bool Result::hasNext() const {
 		if (!impl_)
 			return false;
 		size_t total = impl_->result_.rowCount(); // Unified: everything is in rows now
@@ -174,7 +174,7 @@ namespace metrix {
 		return impl_->cursor_ + 1 < total;
 	}
 
-	void Result::next() {
+	void Result::next() const {
 		if (impl_) {
 			if (!impl_->started_) {
 				impl_->started_ = true;
@@ -245,7 +245,7 @@ namespace metrix {
 	}
 
 	Value Result::get(int index) const {
-		if (!impl_ || !impl_->started_ || index < 0 || index >= (int) impl_->columnNames_.size())
+		if (!impl_ || !impl_->started_ || index < 0 || index >= static_cast<int>(impl_->columnNames_.size()))
 			return std::monostate{};
 
 		// In the unified Row model, index maps directly to the sorted column name list
@@ -255,11 +255,17 @@ namespace metrix {
 	int Result::getColumnCount() const { return impl_ ? impl_->columnNames_.size() : 0; }
 
 	std::string Result::getColumnName(int index) const {
-		return (impl_ && index >= 0 && index < (int) impl_->columnNames_.size()) ? impl_->columnNames_[index] : "";
+		return (impl_ && index >= 0 && index < static_cast<int>(impl_->columnNames_.size())) ? impl_->columnNames_[index] : "";
 	}
 
-	bool Result::isSuccess() const { return true; }
-	std::string Result::getError() const { return ""; }
+	bool Result::isSuccess() const {
+		return impl_ && impl_->error_msg.empty();
+	}
+
+	std::string Result::getError() const {
+		if (!impl_) return "Result not initialized";
+		return impl_->error_msg;
+	}
 
 	// ========================================================================
 	// 3. Database Implementation
@@ -274,25 +280,35 @@ namespace metrix {
 	Database::Database(const std::string &path) : impl_(std::make_unique<DatabaseImpl>(path)) {}
 	Database::~Database() = default;
 
-	void Database::open() { impl_->db_.open(); }
-	void Database::close() { impl_->db_.close(); }
-	void Database::save() {
+	void Database::open() const { impl_->db_.open(); }
+	bool Database::openIfExists() const { return impl_->db_.openIfExists(); }
+	void Database::close() const { impl_->db_.close(); }
+	void Database::save() const {
 		if (auto s = impl_->db_.getStorage())
 			s->flush();
 	}
 
-	Result Database::execute(const std::string &cypher) {
-		try {
-			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
-			return res;
-		} catch (...) {
-			return Result();
-		}
-	}
+	Result Database::execute(const std::string& cypher) const {
+        try {
+            auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+            Result res;
+            res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
+            return res;
+        } catch (const std::exception& e) {
+            // Return Result in error state
+            Result res;
+            res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult()); // Empty internal result
+            res.impl_->error_msg = e.what();
+            return res;
+        } catch (...) {
+            Result res;
+            res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+            res.impl_->error_msg = "Unknown error";
+            return res;
+        }
+    }
 
-	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) {
+	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
 		auto builder = impl_->db_.getQueryEngine()->query();
 		std::unordered_map<std::string, graph::PropertyValue> internalProps;
 		for (const auto &[k, v]: props)
@@ -302,7 +318,7 @@ namespace metrix {
 	}
 
 	void Database::createNodes(const std::string &label,
-							   const std::vector<std::unordered_map<std::string, Value>> &propsList) {
+							   const std::vector<std::unordered_map<std::string, Value>> &propsList) const {
 		if (propsList.empty())
 			return;
 		auto storage = impl_->db_.getStorage();
@@ -319,7 +335,7 @@ namespace metrix {
 		storage->getDataManager()->addNodes(nodes);
 	}
 
-	int64_t Database::createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props) {
+	int64_t Database::createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
 		auto dm = impl_->db_.getStorage()->getDataManager();
 		graph::Node node(0, label);
 		dm->addNode(node);
@@ -334,7 +350,7 @@ namespace metrix {
 	}
 
 	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
-								  const std::unordered_map<std::string, Value> &props) {
+								  const std::unordered_map<std::string, Value> &props) const {
 		auto dm = impl_->db_.getStorage()->getDataManager();
 		graph::Edge edge(0, sourceId, targetId, edgeLabel);
 		dm->addEdge(edge);
@@ -348,7 +364,7 @@ namespace metrix {
 
 	void Database::createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 							  const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
-							  const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props) {
+							  const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props) const {
 		auto builder = impl_->db_.getQueryEngine()->query();
 		std::unordered_map<std::string, graph::PropertyValue> edgeProps;
 		for (const auto &[k, v]: props)
@@ -364,7 +380,7 @@ namespace metrix {
 		impl_->db_.getQueryEngine()->execute(std::move(plan));
 	}
 
-	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) {
+	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) const {
 		try {
 			auto storage = impl_->db_.getStorage();
 			if (!storage)
@@ -389,7 +405,7 @@ namespace metrix {
 		}
 	}
 
-	void Database::bfs(int64_t startNodeId, std::function<bool(const Node &)> visitor) {
+	void Database::bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const {
 		try {
 			auto storage = impl_->db_.getStorage();
 			if (!storage)
@@ -397,7 +413,7 @@ namespace metrix {
 			auto dm = storage->getDataManager();
 
 			graph::query::algorithm::GraphAlgorithm algo(dm);
-			auto internalVisitor = [&](int64_t nodeId, int depth) -> bool {
+			auto internalVisitor = [&](int64_t nodeId, [[maybe_unused]] int depth) -> bool {
 				graph::Node internalNode = dm->getNode(nodeId);
 				internalNode.setProperties(dm->getNodeProperties(nodeId));
 				return visitor(toPublicNode(internalNode));

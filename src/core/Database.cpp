@@ -36,6 +36,18 @@ namespace graph {
 		queryEngine = std::make_shared<query::QueryEngine>(storage);
 	}
 
+	bool Database::openIfExists() {
+		if (isOpen()) return true;
+		if (!exists()) return false;
+
+		try {
+			open();
+			return isOpen(); // Verify it's actually open
+		} catch (...) {
+			return false;
+		}
+	}
+
 	void Database::close() const {
 		if (!isOpen()) {
 			return;

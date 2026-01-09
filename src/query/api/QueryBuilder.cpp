@@ -42,7 +42,7 @@ namespace graph::query {
 	// --- Read ---
 
 	QueryBuilder &QueryBuilder::match_(const std::string &variable, const std::string &label, const std::string &key,
-								   const PropertyValue &value) {
+									   const PropertyValue &value) {
 		auto newScan = planner_->scanOp(variable, label, key, value);
 
 		if (!root_) {
@@ -178,7 +178,14 @@ namespace graph::query {
 	QueryBuilder &QueryBuilder::return_(const std::vector<std::string> &variables) {
 		if (!root_)
 			return *this;
-		root_ = planner_->projectOp(std::move(root_), variables);
+
+		// Convert string list to ProjectItem list (alias = expression)
+		std::vector<execution::operators::ProjectItem> items;
+		for (const auto &var: variables) {
+			items.push_back({var, var});
+		}
+
+		root_ = planner_->projectOp(std::move(root_), items);
 		return *this;
 	}
 
@@ -209,7 +216,7 @@ namespace graph::query {
 		return *this;
 	}
 
-	QueryBuilder& QueryBuilder::unwind(const std::vector<PropertyValue>& list, const std::string& alias) {
+	QueryBuilder &QueryBuilder::unwind(const std::vector<PropertyValue> &list, const std::string &alias) {
 		root_ = planner_->unwindOp(std::move(root_), alias, list);
 		return *this;
 	}

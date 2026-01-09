@@ -41,8 +41,8 @@ namespace metrix {
 		Result(Result &&) noexcept;
 		Result &operator=(Result &&) noexcept;
 
-		bool hasNext();
-		void next();
+		bool hasNext() const;
+		void next() const;
 		Value get(const std::string &key) const;
 
 		// --- Data Access (By Index) - NEW for C API ---
@@ -83,25 +83,26 @@ namespace metrix {
 		Database(const Database &) = delete;
 		Database &operator=(const Database &) = delete;
 
-		void open();
-		void close();
-		void save(); // Flushes data to disk
+		void open() const;
+		bool openIfExists() const;
+		void close() const;
+		void save() const; // Flushes data to disk
 
 		// Execute raw Cypher query
-		Result execute(const std::string &cypher);
+		Result execute(const std::string &cypher) const;
 
 		// High-performance direct insert APIs
-		void createNode(const std::string &label, const std::unordered_map<std::string, Value> &props);
+		void createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const;
 
 		/**
 		 * @brief Create multiple nodes in one batch.
 		 *        Essential for high-performance data loading tools.
 		 */
-		void createNodes(const std::string& label, const std::vector<std::unordered_map<std::string, Value>>& propsList);
+		void createNodes(const std::string& label, const std::vector<std::unordered_map<std::string, Value>>& propsList) const;
 
 		void createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 						const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
-						const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props);
+						const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props) const;
 
 		/**
 		 * @brief Creates a node and returns its internal ID immediately.
@@ -111,7 +112,7 @@ namespace metrix {
 		 * @param props The properties.
 		 * @return The internal ID (int64_t) of the created node.
 		 */
-		int64_t createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props = {});
+		int64_t createNodeRetId(const std::string &label, const std::unordered_map<std::string, Value> &props = {}) const;
 
 		/**
 		 * @brief Creates an edge directly between two known internal IDs.
@@ -124,15 +125,15 @@ namespace metrix {
 		 * @throws std::runtime_error If sourceId or targetId does not exist.
 		 */
 		void createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
-							const std::unordered_map<std::string, Value> &props = {});
+							const std::unordered_map<std::string, Value> &props = {}) const;
 
 		/**
 		 * @brief Finds the shortest path between two nodes.
 		 * @return Ordered path of nodes.
 		 */
-		std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15);
+		std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15) const;
 
-		void bfs(int64_t startNodeId, std::function<bool(const Node &)> visitor);
+		void bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const;
 
 	private:
 		std::unique_ptr<DatabaseImpl> impl_;

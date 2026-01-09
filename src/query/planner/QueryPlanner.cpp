@@ -23,6 +23,7 @@
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
+#include "graph/query/execution/operators/SingleRowOperator.hpp"
 #include "graph/query/execution/operators/SkipOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/execution/operators/UnwindOperator.hpp"
@@ -105,8 +106,8 @@ namespace graph::query {
 
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::projectOp(std::unique_ptr<execution::PhysicalOperator> child,
-							const std::vector<std::string> &variables) {
-		return std::make_unique<execution::operators::ProjectOperator>(std::move(child), variables);
+							const std::vector<execution::operators::ProjectItem> &items) {
+		return std::make_unique<execution::operators::ProjectOperator>(std::move(child), items);
 	}
 
 	// --- Write Operations ---
@@ -219,6 +220,10 @@ namespace graph::query {
 	QueryPlanner::unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
 						   const std::vector<PropertyValue> &list) {
 		return std::make_unique<execution::operators::UnwindOperator>(std::move(child), alias, list);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::singleRowOp() {
+		return std::make_unique<execution::operators::SingleRowOperator>();
 	}
 
 } // namespace graph::query

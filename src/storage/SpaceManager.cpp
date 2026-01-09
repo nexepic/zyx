@@ -910,6 +910,9 @@ namespace graph::storage {
 	}
 
 	bool SpaceManager::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) const {
+		if (file_->fail()) {
+			file_->clear();
+		}
 		// Copy data in chunks to avoid large memory allocations
 		constexpr size_t COPY_BLOCK_SIZE = 64 * 1024; // 64KB
 		std::vector<char> buffer(COPY_BLOCK_SIZE);

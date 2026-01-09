@@ -1,0 +1,186 @@
+/**
+ * @file test_FileHeaderManager.cpp
+ * @author Nexepic
+ * @brief This source code is licensed under MIT License.
+ * @date 2026/1/9
+ *
+ * @copyright Copyright (c) 2026 Nexepic
+ *
+ **/
+
+#include <filesystem>
+#include <fstream>
+#include <gtest/gtest.h>
+#include <memory>
+#include <vector>
+#include "graph/storage/FileHeaderManager.hpp"
+#include "graph/storage/StorageHeaders.hpp"
+
+namespace graph::storage::test {
+
+	namespace fs = std::filesystem;
+
+	class FileHeaderManagerTest : public ::testing::Test {
+	protected:
+		const std::string testFilePath = "test_db.mx";
+
+		void SetUp() override {
+			// Ensure a clean state before each test
+			if (fs::exists(testFilePath)) {
+				fs::remove(testFilePath);
+			}
+		}
+
+		void TearDown() override {
+			// Clean up after tests
+			if (fs::exists(testFilePath)) {
+				fs::remove(testFilePath);
+			}
+		}
+
+		// Helper to create an empty file of a specific size
+		static void createDummyFile(const std::string &path, const size_t size) {
+			std::ofstream ofs(path, std::ios::binary | std::ios::out);
+			std::vector<char> padding(size, 0);
+			ofs.write(padding.data(), size);
+			ofs.close();
+		}
+
+		// Helper to flip a bit in the file to simulate corruption
+		static void corruptFileAt(const std::string &path, const std::streamoff offset) {
+			std::fstream fs_stream(path, std::ios::binary | std::ios::in | std::ios::out);
+			fs_stream.seekg(offset);
+			char b;
+			fs_stream.read(&b, 1);
+			b ^= 0xFF; // Flip bits
+			fs_stream.seekp(offset);
+			fs_stream.write(&b, 1);
+			fs_stream.close();
+		}
+	};
+
+	/**
+	 * @test Constructor should throw if the file stream is invalid or null.
+	 */
+	TEST_F(FileHeaderManagerTest, ConstructorThrowsOnInvalidFile) {
+		FileHeader header;
+		// Test Null
+		EXPECT_THROW(FileHeaderManager(nullptr, header), std::runtime_error);
+
+		// Test Not Open
+		auto badStream = std::make_shared<std::fstream>();
+		EXPECT_THROW(FileHeaderManager(badStream, header), std::runtime_error);
+	}
+
+	/**
+	 * @test Verify successful initialization and subsequent validation.
+	 */
+	TEST_F(FileHeaderManagerTest, InitializeAndValidateSuccess) {
+		auto file = std::make_shared<std::fstream>(testFilePath,
+												   std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+
+		ASSERT_NO_THROW(manager.initializeFileHeader());
+		// This should now pass because both use file-wide CRC scan
+		EXPECT_NO_THROW(manager.validateAndReadHeader());
+		EXPECT_EQ(std::memcmp(header.magic, FILE_HEADER_MAGIC_STRING, 8), 0);
+	}
+
+	/**
+	 * @test Verify that a file smaller than FILE_HEADER_SIZE is rejected.
+	 */
+	TEST_F(FileHeaderManagerTest, DetectsTruncatedFileAsIntegrityError) {
+		createDummyFile(testFilePath, 10); // Only 10 bytes, too small
+		auto file = std::make_shared<std::fstream>(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+
+		// Should throw because the file size < sizeof(FileHeader)
+		EXPECT_THROW(manager.validateAndReadHeader(), std::runtime_error);
+	}
+
+	/**
+	 * @test Verify that an invalid Magic Number triggers a format error.
+	 */
+	TEST_F(FileHeaderManagerTest, DetectsInvalidMagicNumber) {
+		// Create a file large enough but with junk magic data
+		createDummyFile(testFilePath, FILE_HEADER_SIZE);
+		auto file = std::make_shared<std::fstream>(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+
+		// Should throw "Invalid file format"
+		EXPECT_THROW(manager.validateAndReadHeader(), std::runtime_error);
+	}
+
+	/**
+	 * @test Verify that bit-level data modification triggers a CRC mismatch error.
+	 */
+	TEST_F(FileHeaderManagerTest, DetectsDataCorruptionViaCrc) {
+		{
+			auto file = std::make_shared<std::fstream>(testFilePath, std::ios::binary | std::ios::in | std::ios::out |
+																			 std::ios::trunc);
+			FileHeader header;
+			FileHeaderManager manager(file, header);
+			manager.initializeFileHeader();
+		} // File closed
+
+		// Corrupt the file on disk
+		std::fstream fs_corrupt(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+		fs_corrupt.seekp(FILE_HEADER_SIZE + 10);
+		fs_corrupt.write("corrupt", 7);
+		fs_corrupt.close();
+
+		auto file2 = std::make_shared<std::fstream>(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+		FileHeader header2;
+		FileHeaderManager manager2(file2, header2);
+
+		// Should detect that file content changed but CRC in header is old
+		EXPECT_THROW(manager2.validateAndReadHeader(), std::runtime_error);
+	}
+
+	/**
+	 * @test Verify that Statistics (Max IDs) are correctly synchronized between struct and manager.
+	 */
+	TEST_F(FileHeaderManagerTest, FlushesAndReadsMetadataCorrectly) {
+		auto file = std::make_shared<std::fstream>(testFilePath,
+												   std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+
+		manager.initializeFileHeader();
+
+		// Modify header through struct and sync to private manager state
+		header.max_node_id = 999;
+		manager.extractFileHeaderInfo();
+
+		EXPECT_NO_THROW(manager.flushFileHeader());
+		file->close();
+
+		auto file2 = std::make_shared<std::fstream>(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
+		FileHeader headerRead;
+		FileHeaderManager manager2(file2, headerRead);
+
+		FileHeader diskHeader = manager2.readFileHeader();
+		EXPECT_EQ(diskHeader.max_node_id, 999);
+	}
+
+	/**
+	 * @test Verify that the stream "Fail Bit" triggers a runtime error during write.
+	 */
+	TEST_F(FileHeaderManagerTest, HandlesStreamIoErrors) {
+		auto file = std::make_shared<std::fstream>(testFilePath,
+												   std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+		manager.initializeFileHeader();
+
+		// Close the file underneath the manager.
+		// clear() cannot recover a closed file handle.
+		file->close();
+
+		EXPECT_THROW(manager.flushFileHeader(), std::runtime_error);
+	}
+
+} // namespace graph::storage::test
