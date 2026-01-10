@@ -18,6 +18,7 @@
  * limitations under the License.
  **/
 
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
