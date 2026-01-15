@@ -145,3 +145,75 @@ TEST_F(LabelIndexTest, FlushNoThrow) {
 	// A simple sanity check that flush can be called without error.
 	EXPECT_NO_THROW(labelIndex->flush());
 }
+
+TEST_F(LabelIndexTest, AddNodesBatch_MixedScenario) {
+	labelIndex->createIndex();
+
+	// Prepare batch data
+	std::unordered_map<std::string, std::vector<int64_t>> batchData;
+
+	// Group 1: Standard batch
+	batchData["GroupA"] = {1, 2, 3};
+
+	// Group 2: Single item batch
+	batchData["GroupB"] = {4};
+
+	// Group 3: Empty vector (Coverage for "if (entityIds.empty()) continue")
+	batchData["GroupEmpty"] = {};
+
+	// Execute Batch Add
+	// This covers the loop, empty check, and batch insertion logic.
+	labelIndex->addNodesBatch(batchData);
+
+	// Verify Results
+	auto resA = labelIndex->findNodes("GroupA");
+	EXPECT_EQ(resA.size(), 3UL);
+	EXPECT_TRUE(labelIndex->hasLabel(1, "GroupA"));
+	EXPECT_TRUE(labelIndex->hasLabel(2, "GroupA"));
+	EXPECT_TRUE(labelIndex->hasLabel(3, "GroupA"));
+
+	auto resB = labelIndex->findNodes("GroupB");
+	EXPECT_EQ(resB.size(), 1UL);
+	EXPECT_TRUE(labelIndex->hasLabel(4, "GroupB"));
+
+	// Verify Empty group was skipped
+	auto resEmpty = labelIndex->findNodes("GroupEmpty");
+	EXPECT_TRUE(resEmpty.empty());
+}
+
+TEST_F(LabelIndexTest, AddNodesBatch_InitializeRoot) {
+	// Ensure index is enabled but physically empty (rootId = 0)
+	labelIndex->createIndex();
+	labelIndex->clear(); // Force rootId_ = 0
+
+	// This should trigger: if (rootId_ == 0) rootId_ = treeManager_->initialize();
+	std::unordered_map<std::string, std::vector<int64_t>> data;
+	data["InitLabel"] = {100};
+
+	labelIndex->addNodesBatch(data);
+
+	EXPECT_FALSE(labelIndex->isEmpty());
+	EXPECT_TRUE(labelIndex->hasPhysicalData()); // Internal check if rootId != 0
+	EXPECT_TRUE(labelIndex->hasLabel(100, "InitLabel"));
+}
+
+TEST_F(LabelIndexTest, AddNodesBatch_TriggerRootSplit) {
+	labelIndex->createIndex();
+
+	// Create a large batch to force tree growth/splits
+	// The exact number depends on B+Tree node size constants,
+	// but usually a few hundred or thousand entries will suffice.
+	std::unordered_map<std::string, std::vector<int64_t>> largeBatch;
+	std::vector<int64_t> ids;
+	for (int i = 0; i < 2000; ++i) {
+		ids.push_back(i + 1000);
+	}
+	largeBatch["LargeGroup"] = ids;
+
+	// This should trigger inserts that cause splits, potentially changing rootId_
+	// Covering: if (newRootId != rootId_) rootId_ = newRootId;
+	labelIndex->addNodesBatch(largeBatch);
+
+	auto results = labelIndex->findNodes("LargeGroup");
+	EXPECT_EQ(results.size(), 2000UL);
+}

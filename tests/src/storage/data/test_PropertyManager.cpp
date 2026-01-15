@@ -27,9 +27,11 @@
 #include "boost/uuid/uuid_io.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
+#include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EdgeManager.hpp"
 #include "graph/storage/data/NodeManager.hpp"
@@ -237,4 +239,136 @@ TEST_F(PropertyManagerTest, ErrorHandlingAndEdgeCases) {
 	// Verify that the original property is still there
 	auto props = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
 	EXPECT_EQ(props.size(), 1UL);
+}
+
+TEST_F(PropertyManagerTest, HasExternalPropertyCheck) {
+	// 1. Test with no external properties (inline only if supported, or just empty)
+	EXPECT_FALSE(propertyManager->hasExternalProperty<graph::Node>(testNode, "any_key"));
+
+	// 2. Test with Property Entity storage (small properties)
+	std::unordered_map<std::string, graph::PropertyValue> smallProps;
+	smallProps["small_key"] = graph::PropertyValue("small_value");
+
+	// Add properties which should be stored in a Property entity (external to Node)
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), smallProps);
+
+	// Refresh node from DB to get updated flags/pointers
+	graph::Node nodeWithProps = nodeManager->get(testNode.getId());
+
+	// Check existing key
+	EXPECT_TRUE(propertyManager->hasExternalProperty<graph::Node>(nodeWithProps, "small_key"));
+	// Check non-existing key
+	EXPECT_FALSE(propertyManager->hasExternalProperty<graph::Node>(nodeWithProps, "missing_key"));
+
+	// 3. Test with Blob storage (large properties)
+	// Create a new node for clean slate
+	graph::Node blobNode;
+	blobNode.setLabelId(dataManager->getOrCreateLabelId("BlobNode"));
+	nodeManager->add(blobNode);
+
+	auto largeProps = createLargePropertyMap();
+	// Add a specific key we will check
+	largeProps["blob_key"] = graph::PropertyValue("blob_value");
+
+	propertyManager->addEntityProperties<graph::Node>(blobNode.getId(), largeProps);
+
+	// Refresh node
+	graph::Node nodeWithBlob = nodeManager->get(blobNode.getId());
+
+	// Check blob-stored key
+	EXPECT_TRUE(propertyManager->hasExternalProperty<graph::Node>(nodeWithBlob, "blob_key"));
+	// Check non-existing key in blob
+	EXPECT_FALSE(propertyManager->hasExternalProperty<graph::Node>(nodeWithBlob, "missing_blob_key"));
+}
+
+TEST_F(PropertyManagerTest, CalculateTotalPropertySize) {
+	// 1. Initial size (empty)
+	size_t size0 = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
+	EXPECT_EQ(size0, 0);
+
+	// 2. Add properties (should be stored externally in Property Entity due to Node design usually)
+	// Or if Node supports inline, it covers that too.
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	std::string key1 = "key1";
+	std::string val1 = "value1";
+	props[key1] = graph::PropertyValue(val1);
+
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), props);
+
+	size_t size1 = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
+
+	// We check > 0 to be safe against implementation details of getPropertyValueSize,
+	// or use >= key.size() + val.size().
+	EXPECT_GT(size1, key1.size() + val1.size());
+
+	// 3. Add Large properties (Blob Storage)
+	graph::Node blobNode;
+	blobNode.setLabelId(dataManager->getOrCreateLabelId("BlobNode"));
+	nodeManager->add(blobNode);
+
+	auto largeProps = createLargePropertyMap();
+	propertyManager->addEntityProperties<graph::Node>(blobNode.getId(), largeProps);
+
+	size_t sizeBlob = propertyManager->calculateEntityTotalPropertySize<graph::Node>(blobNode.getId());
+
+	// Calculate expected size manually
+	size_t expectedBlobSize = 0;
+	for(const auto& [k, v] : largeProps) {
+		expectedBlobSize += k.size();
+		expectedBlobSize += graph::property_utils::getPropertyValueSize(v);
+	}
+
+	EXPECT_EQ(sizeBlob, expectedBlobSize);
+
+	// 4. Non-existent entity
+	size_t sizeInvalid = propertyManager->calculateEntityTotalPropertySize<graph::Node>(99999);
+	EXPECT_EQ(sizeInvalid, 0);
+}
+
+TEST_F(PropertyManagerTest, UnsupportedEntityTypes) {
+	// Assuming Blob entity type does not support arbitrary user properties
+	// We need a valid ID to pass the initial checks in functions
+	graph::Blob blob;
+	blob.setData("some_data");
+	dataManager->addBlobEntity(blob);
+
+	// Test calculateEntityTotalPropertySize for Blob
+	// Should return 0 immediately due to trait check
+	size_t size = propertyManager->calculateEntityTotalPropertySize<graph::Blob>(blob.getId());
+	EXPECT_EQ(size, 0);
+
+	// Test hasExternalProperty for Blob
+	// Should return false immediately
+	bool hasProp = propertyManager->hasExternalProperty<graph::Blob>(blob, "any");
+	EXPECT_FALSE(hasProp);
+
+	// Test addEntityProperties for Blob -> Should throw
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["a"] = graph::PropertyValue(1);
+	EXPECT_THROW(propertyManager->addEntityProperties<graph::Blob>(blob.getId(), props), std::runtime_error);
+}
+
+TEST_F(PropertyManagerTest, CorruptedStorageRecovery) {
+	// 1. Create node with blob properties
+	auto largeProps = createLargePropertyMap();
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), largeProps);
+
+	// 2. Manually corrupt it by deleting the blob chain directly
+	graph::Node node = nodeManager->get(testNode.getId());
+	int64_t blobId = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyEntityId(node);
+
+	// Access blob manager to delete
+	auto blobManager = dataManager->getBlobManager();
+	blobManager->deleteBlobChain(blobId);
+
+	// 3. Try to access properties
+	// getPropertiesFromBlob should catch exception/fail gracefully and return empty
+	auto props = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+
+	// Should return empty map or at least not crash
+	EXPECT_TRUE(props.empty());
+
+	// 4. Try hasExternalProperty
+	// deserialization inside hasExternalProperty might fail, should return false
+	EXPECT_FALSE(propertyManager->hasExternalProperty<graph::Node>(node, "large_key_0"));
 }

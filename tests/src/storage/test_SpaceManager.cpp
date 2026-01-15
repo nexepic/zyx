@@ -103,7 +103,7 @@ protected:
 		std::filesystem::remove(testFilePath);
 	}
 
-	void createActiveNode(uint64_t offset, uint32_t index, int64_t id) {
+	void createActiveNode(uint64_t offset, uint32_t index, int64_t id) const {
 		// Label ID 100 is arbitrary for testing
 		Node n(id, 100);
 		segmentTracker->writeEntity(offset, index, n, Node::getTotalSize());
@@ -499,9 +499,7 @@ TEST_F(SpaceManagerTest, MoveSegment_UpdatesHeadReference) {
 // =========================================================================
 
 TEST_F(SpaceManagerTest, Truncate_PartialTail) {
-	auto type = static_cast<uint32_t>(EntityType::Node);
-
-	uint64_t initialSize = getFileSize();
+	constexpr auto type = static_cast<uint32_t>(EntityType::Node);
 
 	// Alloc A, B, C
 	uint64_t segA = spaceManager->allocateSegment(type, 10);
@@ -731,14 +729,6 @@ TEST_F(SpaceManagerTest, RecalculateMaxIds_IgnoresInactive) {
 // =========================================================================
 
 TEST_F(SpaceManagerTest, UpdateFileHeaderChainHeads_SyncsWithTracker) {
-	// Manually manipulate tracker heads
-	uint64_t mockNodeHead = 12345;
-	uint64_t mockEdgeHead = 67890;
-
-	// Tracker uses internal map, we need to inject valid segments or mock it.
-	// Since we can't easily inject arbitrary values into private map without friends,
-	// we perform real allocations which update tracker, then verify sync.
-
 	uint64_t nodeSeg = spaceManager->allocateSegment(static_cast<uint32_t>(EntityType::Node), 10);
 	uint64_t edgeSeg = spaceManager->allocateSegment(static_cast<uint32_t>(EntityType::Edge), 10);
 
@@ -760,12 +750,6 @@ TEST_F(SpaceManagerTest, UpdateFileHeaderChainHeads_SyncsWithTracker) {
 // =========================================================================
 
 TEST_F(SpaceManagerTest, SafeCompactSegments_PreventsConcurrentExecution) {
-	// This test ensures the atomic flag works.
-	// We launch a thread that holds the lock, then try to call safeCompact from main thread.
-
-	std::atomic<bool> threadReady{false};
-	std::atomic<bool> threadDone{false};
-
 	// Lock the mutex manually to simulate another thread working
 	spaceManager->getMutex().lock(); // Using the general mutex for simulation if compaction uses it?
 	// Wait, the code uses `compactionMutex_` which is private.
@@ -777,7 +761,7 @@ TEST_F(SpaceManagerTest, SafeCompactSegments_PreventsConcurrentExecution) {
 
 	// Real integration test approach:
 	// Create a very large workload that takes time to compact
-	auto type = static_cast<uint32_t>(EntityType::Node);
+	constexpr auto type = static_cast<uint32_t>(EntityType::Node);
 	for (int i = 0; i < 100; ++i)
 		(void) spaceManager->allocateSegment(type, 100); // 100 segments
 
@@ -1081,7 +1065,7 @@ TEST_F(SpaceManagerTest, Merge_ConsolidateFrontSegments) {
 
 TEST_F(SpaceManagerTest, RecalculateMaxIds_AllTypes_Coverage) {
 	// Helper to create a segment of a specific type with one active entity
-	auto createActiveSegment = [&](EntityType et, int64_t id) {
+	auto createActiveSegment = [&](EntityType et, [[maybe_unused]] int64_t id) {
 		uint32_t type = static_cast<uint32_t>(et);
 		uint64_t offset = spaceManager->allocateSegment(type, 10);
 
@@ -1141,7 +1125,7 @@ TEST_F(SpaceManagerTest, Merge_CleansUpEmptySegments) {
 
 	// Calling mergeSegments will iterate candidates.
 	// When it hits segA, it sees active count 0 and should free it immediately.
-	bool result = spaceManager->mergeSegments(type, 0.9);
+	(void) spaceManager->mergeSegments(type, 0.9);
 
 	// Verify A is freed
 	auto freeList = segmentTracker->getFreeSegments();

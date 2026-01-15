@@ -352,3 +352,124 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 														graph::storage::EntityChangeType::DELETED});
 	EXPECT_EQ(allDirtyNodes.size(), 2UL);
 }
+
+TEST_F(BaseEntityManagerTest, ExplicitCacheOperations) {
+	// 1. Setup: Create and add a node (implicitly adds to cache)
+	graph::Node node = createTestNode(dataManager, "CacheTestNode");
+	nodeManager->add(node);
+	int64_t nodeId = node.getId();
+
+	// Verify it is currently in the cache (DataManager exposes specific caches)
+	EXPECT_TRUE(dataManager->getNodeCache().contains(nodeId));
+
+	// 2. Test clearCache(): Should remove all items from the specific entity cache
+	nodeManager->clearCache();
+
+	// Verify cache is empty
+	EXPECT_FALSE(dataManager->getNodeCache().contains(nodeId));
+	EXPECT_EQ(dataManager->getNodeCache().size(), 0UL);
+
+	// 3. Test addToCache(): Should manually put the entity back
+	nodeManager->addToCache(node);
+
+	// Verify it is back in cache
+	EXPECT_TRUE(dataManager->getNodeCache().contains(nodeId));
+	EXPECT_EQ(dataManager->getNodeCache().size(), 1UL);
+}
+
+TEST_F(BaseEntityManagerTest, AddBatchNodes) {
+	// Prepare a vector of nodes without IDs
+	std::vector<graph::Node> nodes;
+	constexpr int BATCH_SIZE = 5;
+	for (int i = 0; i < BATCH_SIZE; ++i) {
+		nodes.push_back(createTestNode(dataManager, "Batch" + std::to_string(i)));
+	}
+
+	// Execute Batch Add
+	nodeManager->addBatch(nodes);
+
+	// Verify IDs were assigned sequentially and entities persist
+	int64_t prevId = 0;
+	for (const auto& node : nodes) {
+		EXPECT_NE(node.getId(), 0);
+		EXPECT_GT(node.getId(), prevId); // Sequential check
+		prevId = node.getId();
+
+		// Verify retrieval
+		graph::Node retrieved = nodeManager->get(node.getId());
+		EXPECT_EQ(retrieved.getId(), node.getId());
+		EXPECT_TRUE(retrieved.isActive());
+	}
+
+	// Verify they are in the dirty list (ADDED state)
+	auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+	// + any previous tests' nodes if not cleared, but at least these 5 should exist
+	int countFound = 0;
+	for (const auto& dn : dirtyNodes) {
+		for (const auto& original : nodes) {
+			if (dn.getId() == original.getId()) countFound++;
+		}
+	}
+	EXPECT_EQ(countFound, BATCH_SIZE);
+}
+
+TEST_F(BaseEntityManagerTest, ZombieManagerSafety) {
+    // 1. Create a weak_ptr that is ALREADY expired.
+    // We do this by creating a shared_ptr in a temporary scope.
+    std::shared_ptr<graph::storage::DataManager> tempDm;
+    {
+        // We can't easily instantiate a real DataManager without a file etc.
+        // But we don't need a real one! We just need a shared_ptr that dies.
+        // We can cast a dummy pointer, but that's unsafe if dereferenced.
+        // Safer: Create a NodeManager with a nullptr shared_ptr.
+
+        // BaseEntityManager takes shared_ptr<DataManager>.
+        // If we pass nullptr, the weak_ptr stored inside will be empty/expired immediately.
+        std::shared_ptr<graph::storage::DataManager> nullDm = nullptr;
+
+        auto zombieNodeMgr = std::make_shared<graph::storage::NodeManager>(
+            nullDm,
+            nullptr // No deletion manager needed
+        );
+
+        // 2. Test methods with expired/null manager
+        graph::Node n;
+        n.setId(123);
+
+        // addToCache
+        // Code: const auto dataManager = dataManager_.lock(); if (!dataManager) return;
+        EXPECT_NO_THROW(zombieNodeMgr->addToCache(n));
+
+        // clearCache
+        EXPECT_NO_THROW(zombieNodeMgr->clearCache());
+
+        // add
+        // Code: if (!dataManager) return;
+        EXPECT_NO_THROW(zombieNodeMgr->add(n));
+
+        // update
+        EXPECT_NO_THROW(zombieNodeMgr->update(n));
+
+        // get
+        graph::Node res = zombieNodeMgr->get(1);
+        EXPECT_EQ(res.getId(), 0);
+
+        // getBatch
+        auto batch = zombieNodeMgr->getBatch({1, 2});
+        EXPECT_TRUE(batch.empty());
+
+        // getInRange
+        auto range = zombieNodeMgr->getInRange(1, 10, 5);
+        EXPECT_TRUE(range.empty());
+
+        // getProperties
+        auto props = zombieNodeMgr->getProperties(1);
+        EXPECT_TRUE(props.empty());
+
+        // addProperties
+        EXPECT_NO_THROW(zombieNodeMgr->addProperties(1, {}));
+
+        // removeProperty
+        EXPECT_NO_THROW(zombieNodeMgr->removeProperty(1, "key"));
+    }
+}

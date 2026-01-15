@@ -38,10 +38,7 @@ namespace graph::storage {
 		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 
 	int64_t PropertyManager::doAllocateId() {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager) {
-			throw std::runtime_error("DataManager is not available for ID allocation.");
-		}
+		const auto dataManager = dataManager_.lock();
 		return dataManager->getIdAllocator()->allocateId(Property::typeId);
 	}
 
@@ -485,12 +482,18 @@ namespace graph::storage {
 				return property.hasPropertyValue(key);
 			}
 		} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
-			Blob blob = dataManager->getBlob(propertyEntityId);
-			if (blob.getId() != 0 && blob.isActive()) {
-				std::string serializedData = blob.getData();
-				std::stringstream ss(serializedData);
-				auto properties = deserializeProperties(ss);
-				return properties.contains(key);
+			if (auto blobManager = dataManager->getBlobManager()) {
+				try {
+					std::string serializedData = blobManager->readBlobChain(propertyEntityId);
+					if (serializedData.empty())
+						return false;
+
+					std::stringstream ss(serializedData);
+					auto properties = deserializeProperties(ss);
+					return properties.contains(key);
+				} catch (...) {
+					return false;
+				}
 			}
 		}
 
@@ -537,15 +540,20 @@ namespace graph::storage {
 					}
 				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
 					// Get blob entity and calculate size from its deserialized properties
-					Blob blob = dataManager->getBlob(propertyEntityId);
-					if (blob.getId() != 0 && blob.isActive()) {
-						std::string serializedData = blob.getData();
-						std::stringstream ss(serializedData);
-						auto properties = deserializeProperties(ss);
+					if (auto blobManager = dataManager->getBlobManager()) {
+						try {
+							std::string serializedData = blobManager->readBlobChain(propertyEntityId);
+							if (!serializedData.empty()) {
+								std::stringstream ss(serializedData);
+								auto properties = deserializeProperties(ss);
 
-						for (const auto &[key, value]: properties) {
-							totalSize += key.size();
-							totalSize += property_utils::getPropertyValueSize(value);
+								for (const auto &[key, value]: properties) {
+									totalSize += key.size();
+									totalSize += property_utils::getPropertyValueSize(value);
+								}
+							}
+						} catch (...) {
+							// Ignore read errors
 						}
 					}
 				}

@@ -30,10 +30,7 @@ namespace graph::storage {
 	void NodeManager::doRemove(Node &node) { deletionManager_->deleteNode(node); }
 
 	int64_t NodeManager::doAllocateId() {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager) {
-			throw std::runtime_error("DataManager is not available for ID allocation.");
-		}
+		const auto dataManager = dataManager_.lock();
 		return dataManager->getIdAllocator()->allocateId(Node::typeId);
 	}
 

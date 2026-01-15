@@ -212,3 +212,121 @@ TEST_F(IndexBuilderTest, SegmentRanges) {
 	ASSERT_FALSE(edgeRanges.empty());
 	EXPECT_GE(edgeRanges.back().second, 10);
 }
+
+TEST_F(IndexBuilderTest, BuildEdgeLabelIndex) {
+	populateDatabase();
+
+	// 1. Register Index (Label index usually enabled by default or via config, but we ensure it's active)
+	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
+
+	// 2. Execute Build
+	// This calls buildEdgeLabelIndex -> processEdgeBatch
+	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+
+	// 3. Verify Results
+	auto labelResults = indexManager->findEdgeIdsByLabel("WORKS_AT");
+
+	// Should find Edge(10)
+	ASSERT_EQ(labelResults.size(), 1UL);
+	EXPECT_EQ(labelResults[0], 10);
+
+	// Verify non-existent label
+	auto missingResults = indexManager->findEdgeIdsByLabel("NON_EXISTENT");
+	EXPECT_TRUE(missingResults.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodeLabelIndex_LargeBatch) {
+	// 1. Create > 1000 nodes to trigger batch processing logic
+	// BATCH_SIZE is 1000. We create 1500 to ensure we have:
+	// - One full batch processed inside the loop
+	// - One partial batch processed after the loop
+
+	constexpr int NODE_COUNT = 1500;
+	int64_t bulkLabelId = dataManager->getOrCreateLabelId("BulkNode");
+
+	// Use raw pointer or reserve to speed up vector if needed,
+	// but here we just loop addNode which is fine for 1500 items.
+	for (int i = 0; i < NODE_COUNT; ++i) {
+		// We let ID be auto-assigned or manage it if needed.
+		// addNode assigns IDs automatically.
+		graph::Node n(0, bulkLabelId);
+		dataManager->addNode(n);
+	}
+
+	// Flush to ensure DataManager persists them so SegmentTracker can see ranges
+	fileStorage->flush();
+
+	// 2. Register Index
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+
+	// 3. Build Index
+	// This will hit: if (batchIds.size() >= BATCH_SIZE) -> processNodeBatch
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	// 4. Verify Results
+	auto results = indexManager->findNodeIdsByLabel("BulkNode");
+
+	// Should find exactly 1500 nodes
+	EXPECT_EQ(results.size(), static_cast<size_t>(NODE_COUNT));
+}
+
+TEST_F(IndexBuilderTest, BuildEdgeLabelIndex_LargeBatch) {
+	// 1. Create > 1000 edges to trigger batch processing logic for edges
+	constexpr int EDGE_COUNT = 1200;
+	int64_t bulkLabelId = dataManager->getOrCreateLabelId("BulkEdge");
+
+	// We need at least two nodes to connect
+	graph::Node n1(1, 0);
+	dataManager->addNode(n1);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n2);
+
+	for (int i = 0; i < EDGE_COUNT; ++i) {
+		graph::Edge e(0, 1, 2, bulkLabelId);
+		dataManager->addEdge(e);
+	}
+
+	fileStorage->flush();
+
+	// 2. Register Index
+	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
+
+	// 3. Build Index
+	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+
+	// 4. Verify Results
+	auto results = indexManager->findEdgeIdsByLabel("BulkEdge");
+	EXPECT_EQ(results.size(), static_cast<size_t>(EDGE_COUNT));
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
+	// 1. Create > 1000 nodes with property
+	constexpr int NODE_COUNT = 1100;
+	int64_t lbl = dataManager->getOrCreateLabelId("PropNode");
+
+	for (int i = 0; i < NODE_COUNT; ++i) {
+		graph::Node n(0, lbl);
+		n.addProperty("bulk_prop", i); // Unique property value just in case
+		dataManager->addNode(n);
+	}
+
+	fileStorage->flush();
+
+	// 2. Register
+	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("bulk_prop");
+
+	// 3. Build
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("bulk_prop"));
+
+	// 4. Verify Range
+	// Check range 0 to 1100. Should find all.
+	// Assuming PropertyIndex::findRange works for integers.
+	// If not, we can check a few samples.
+
+	// Let's check finding ID 0 (property value 0) and ID 1050 (property value 1050)
+	auto res0 = indexManager->findNodeIdsByProperty("bulk_prop", 0);
+	EXPECT_EQ(res0.size(), 1UL);
+
+	auto resLast = indexManager->findNodeIdsByProperty("bulk_prop", 1050);
+	EXPECT_EQ(resLast.size(), 1UL);
+}

@@ -19,6 +19,10 @@
  **/
 
 #include "graph/storage/indexes/IndexManager.hpp"
+#include <functional>
+#include <mutex>
+#include <tuple>
+#include <vector>
 #include "graph/log/Log.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"

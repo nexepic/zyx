@@ -32,7 +32,9 @@
 #include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace fs = std::filesystem;
 
@@ -378,4 +380,145 @@ TEST_F(IndexManagerTest, PersistenceAfterRestart) {
 	auto res = newIndexMgr->findNodeIdsByProperty("val", std::string("test"));
 	ASSERT_EQ(res.size(), 1UL);
 	EXPECT_EQ(res[0], 1);
+}
+
+TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_OnRestart) {
+	// 1. Enable Node Label Index and add data
+	EXPECT_TRUE(indexManager->createIndex("node_label_idx", "node", "", ""));
+
+	int64_t lblId = dataManager->getOrCreateLabelId("BootstrapNode");
+	graph::Node n(1, lblId);
+	dataManager->addNode(n);
+
+	fileStorage->flush();
+
+	// 2. Corrupt the state to force bootstrap
+	// We physically delete the tree data first to simulate data loss
+	indexManager->getNodeIndexManager()->getLabelIndex()->clear();
+
+	// Now we must ensure the State Manager sees RootID = 0.
+	// Since saveState() ignores 0, we manually REMOVE the key or SET it to 0.
+	// Using correct constants from your codebase.
+	auto sysState = fileStorage->getSystemStateManager();
+
+	// The key used in EntityTypeIndexManager for Node Label is storage::state::keys::Node::LABEL_ROOT
+	std::string stateKey = graph::storage::state::keys::Node::LABEL_ROOT;
+
+	// Force Root ID to 0.
+	// Field name is storage::state::keys::Fields::ROOT_ID ("root_id")
+	sysState->set<int64_t>(stateKey, graph::storage::state::keys::Fields::ROOT_ID, 0);
+
+	// Ensure Enabled is still True (it should be, but let's be safe)
+	// Key: stateKey + ".config"
+	std::string configKey = stateKey + graph::storage::state::keys::SUFFIX_CONFIG;
+	sysState->set<bool>(configKey, graph::storage::state::keys::Fields::ENABLED, true);
+
+	fileStorage->flush();
+
+	// 3. Restart Database
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+
+	// 4. Verify Bootstrapping ran
+	// The initialize() method should have detected Enabled=True, Root=0, and Data>0.
+	// It should have rebuilt the index.
+	auto res = newIndexMgr->findNodeIdsByLabel("BootstrapNode");
+	EXPECT_EQ(res.size(), 1UL);
+}
+
+TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_OnRestart) {
+	// Same logic for Edge
+	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+
+	int64_t lblId = dataManager->getOrCreateLabelId("BootstrapEdge");
+	graph::Node n1(1, 0);
+	dataManager->addNode(n1);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n2);
+	graph::Edge e(10, 1, 2, lblId);
+	dataManager->addEdge(e);
+
+	fileStorage->flush();
+
+	// Corrupt state: Enabled=True, Root=0
+	auto sysState = fileStorage->getSystemStateManager();
+	sysState->set<int64_t>("edge.index.label_root", "root_id", 0);
+	fileStorage->flush();
+
+	// Restart
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+
+	// Verify
+	auto res = newIndexMgr->findEdgeIdsByLabel("BootstrapEdge");
+	EXPECT_EQ(res.size(), 1UL);
+}
+
+TEST_F(IndexManagerTest, HasIndex_EdgeCases) {
+	// 1. Edge Label Index
+	// Initially false
+	EXPECT_FALSE(indexManager->hasLabelIndex("edge"));
+
+	// Enable it
+	indexManager->createIndex("edge_idx", "edge", "", "");
+	EXPECT_TRUE(indexManager->hasLabelIndex("edge"));
+
+	// 2. Edge Property Index
+	EXPECT_FALSE(indexManager->hasPropertyIndex("edge", "weight"));
+	indexManager->createIndex("edge_prop_idx", "edge", "R", "weight");
+	EXPECT_TRUE(indexManager->hasPropertyIndex("edge", "weight"));
+
+	// 3. Invalid Entity Types (Coverage for "return false" at end of function)
+	EXPECT_FALSE(indexManager->hasLabelIndex("invalid_type"));
+	EXPECT_FALSE(indexManager->hasLabelIndex(""));
+
+	EXPECT_FALSE(indexManager->hasPropertyIndex("invalid_type", "prop"));
+	EXPECT_FALSE(indexManager->hasPropertyIndex("", "prop"));
+}
+
+TEST_F(IndexManagerTest, ExplicitStorageFlushCall) {
+	// This is just to hit the line coverage for the method wrapper
+	// The actual logic is covered by integration tests, but direct call ensures no crashes.
+	EXPECT_NO_THROW(indexManager->onStorageFlush());
+}
+
+TEST_F(IndexManagerTest, EnsureMetadata_CreatedOnInitialize) {
+	// 1. Enable indexes
+	indexManager->createIndex("node_label_idx", "node", "", "");
+	indexManager->createIndex("edge_label_idx", "edge", "", "");
+
+	// 2. Manually delete metadata from SystemState to force ensureMetadata to run
+	auto sysState = fileStorage->getSystemStateManager();
+	// Assuming we can access the map. If not, we rely on the fact that
+	// restarting with enabled indexes will trigger ensureMetadata.
+	// The Bootstrap tests above implicitly cover this line:
+	// ensureMetadata("node_label_idx", "node");
+
+	// Just verify they exist after restart
+	fileStorage->flush();
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+
+	auto list = newIndexMgr->listIndexesDetailed();
+	bool foundNode = false, foundEdge = false;
+	for (const auto &row: list) {
+		if (std::get<0>(row) == "node_label_idx")
+			foundNode = true;
+		if (std::get<0>(row) == "edge_label_idx")
+			foundEdge = true;
+	}
+	EXPECT_TRUE(foundNode);
+	EXPECT_TRUE(foundEdge);
 }

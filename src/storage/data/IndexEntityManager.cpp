@@ -30,10 +30,7 @@ namespace graph::storage {
 	void IndexEntityManager::doRemove(Index &index) { deletionManager_->deleteIndex(index); }
 
 	int64_t IndexEntityManager::doAllocateId() {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager) {
-			throw std::runtime_error("DataManager is not available for ID allocation.");
-		}
+		const auto dataManager = dataManager_.lock();
 		return dataManager->getIdAllocator()->allocateId(Index::typeId);
 	}
 
