@@ -303,7 +303,7 @@ namespace graph::storage {
 		maxStateId = 0;
 
 		// Scan all segments to determine true max IDs
-		for (uint32_t type = 0; type <= 5; type++) {
+		for (uint32_t type = 0; type <= getMaxEntityType(); type++) {
 			auto segments = segmentTracker_->getSegmentsByType(type);
 
 			for (const auto &header: segments) {
@@ -481,7 +481,7 @@ namespace graph::storage {
 				nextFreeSpot++;
 
 				// Update references immediately if ID has changed
-				if (oldId != newId) {
+				if (oldId != newId && entityReferenceUpdater_) {
 					entityReferenceUpdater_->updateEntityReferences(oldId, &entity, toUnderlying(segmentType));
 				}
 			}
@@ -823,7 +823,7 @@ namespace graph::storage {
 		entity.setId(newId);
 		segmentTracker_->writeEntity(targetOffset, targetNextIndex, entity, itemSize);
 
-		if (oldId != newId) {
+		if (oldId != newId && entityReferenceUpdater_) {
 			entityReferenceUpdater_->updateEntityReferences(oldId, &entity, type);
 		}
 
@@ -913,7 +913,23 @@ namespace graph::storage {
 		std::memcpy(targetHeader.activity_bitmap, newBitmap.data(), bitmapSize);
 		segmentTracker_->writeSegmentHeader(targetOffset, targetHeader);
 
-		updateSegmentChain(targetOffset, sourceHeader);
+		if (sourceHeader.prev_segment_offset != 0) {
+			SegmentHeader prevHeader = segmentTracker_->getSegmentHeader(sourceHeader.prev_segment_offset);
+			segmentTracker_->updateSegmentLinks(sourceHeader.prev_segment_offset, prevHeader.prev_segment_offset,
+												sourceHeader.next_segment_offset);
+		} else {
+			// Source was head
+			segmentTracker_->updateChainHead(type, sourceHeader.next_segment_offset);
+			// If we updated head, we must sync file header
+			updateFileHeaderChainHeads();
+		}
+
+		if (sourceHeader.next_segment_offset != 0) {
+			SegmentHeader nextHeader = segmentTracker_->getSegmentHeader(sourceHeader.next_segment_offset);
+			segmentTracker_->updateSegmentLinks(sourceHeader.next_segment_offset, sourceHeader.prev_segment_offset,
+												nextHeader.next_segment_offset);
+		}
+
 		segmentTracker_->markSegmentFree(sourceOffset);
 
 		return true;
@@ -1096,13 +1112,10 @@ namespace graph::storage {
 		std::vector<uint64_t> result;
 		uint64_t fileSize = calculateCurrentFileSize();
 
-		// Consider segments in the last 20% of the file as candidates
 		uint64_t thresholdOffset = fileSize - (fileSize / 5);
-
 		thresholdOffset = (thresholdOffset / TOTAL_SEGMENT_SIZE) * TOTAL_SEGMENT_SIZE;
 
-		// Check all segment types
-		for (int type = 0; type <= 3; type++) { // Node, Edge, Property, Blob
+		for (uint32_t type = 0; type <= getMaxEntityType(); type++) {
 			auto segments = segmentTracker_->getSegmentsByType(type);
 			for (const auto &header: segments) {
 				if (header.file_offset >= thresholdOffset) {
@@ -1110,7 +1123,6 @@ namespace graph::storage {
 				}
 			}
 		}
-
 		return result;
 	}
 
@@ -1119,7 +1131,7 @@ namespace graph::storage {
 		uint64_t maxOffset = FILE_HEADER_SIZE;
 
 		// Check all segments (active and free)
-		for (int type = 0; type <= 3; type++) {
+		for (uint32_t type = 0; type <= getMaxEntityType(); type++) {
 			auto segments = segmentTracker_->getSegmentsByType(type);
 			for (const auto &header: segments) {
 				// Calculate the end of this segment
@@ -1205,7 +1217,7 @@ namespace graph::storage {
 		// Find the highest used offset in any chain
 		uint64_t highestActiveOffset = 0;
 
-		for (int type = 0; type <= 3; type++) {
+		for (uint32_t type = 0; type <= getMaxEntityType(); type++) {
 			auto segments = segmentTracker_->getSegmentsByType(type);
 			for (const auto &header: segments) {
 				uint64_t endOffset = header.file_offset + TOTAL_SEGMENT_SIZE;

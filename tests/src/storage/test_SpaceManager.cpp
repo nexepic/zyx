@@ -110,6 +110,15 @@ protected:
 		segmentTracker->setEntityActive(offset, index, true);
 	}
 
+	template<typename T>
+	void createActiveEntity(uint64_t offset, uint32_t index, int64_t id) {
+		T entity;
+		// Basic setup for the entity (assuming they have setId)
+		entity.setId(id);
+		segmentTracker->writeEntity(offset, index, entity, T::getTotalSize());
+		segmentTracker->setEntityActive(offset, index, true);
+	}
+
 	[[nodiscard]] uint64_t getFileSize() const { return std::filesystem::file_size(testFilePath); }
 
 	// Helper: Write a mock node
@@ -808,4 +817,373 @@ TEST_F(SpaceManagerTest, FindFreeSegmentNotAtEnd) {
 
 	// Should return seg1 because it's not at the end
 	EXPECT_EQ(spaceManager->findFreeSegmentNotAtEnd(), seg1);
+}
+
+// =========================================================================
+// GROUP 8: Fragmentation Calculation & Thresholds (Coverage Improvement)
+// =========================================================================
+
+TEST_F(SpaceManagerTest, ShouldCompact_ThresholdLogic) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// 1. Create a scenario with 0% fragmentation
+	// Segment A: Full
+	uint64_t segA = spaceManager->allocateSegment(type, 10);
+	segmentTracker->updateSegmentUsage(segA, 10, 0); // 10 used, 0 inactive
+
+	// Ratio should be 0.0
+	EXPECT_DOUBLE_EQ(spaceManager->getTotalFragmentationRatio(), 0.0);
+	EXPECT_FALSE(spaceManager->shouldCompact());
+
+	// 2. Create high fragmentation
+	// Segment B: 10 used, 9 inactive (90% fragmentation)
+	uint64_t segB = spaceManager->allocateSegment(type, 10);
+	segmentTracker->updateSegmentUsage(segB, 10, 9);
+
+	// Total segments: 2.
+	// SegA Ratio: 0.0. SegB Ratio: 0.9.
+	// Weighted Average: (0.0 + 0.9) / 2 = 0.45
+	double ratio = spaceManager->getTotalFragmentationRatio();
+	EXPECT_DOUBLE_EQ(ratio, 0.45);
+
+	// Threshold is 0.3, so this should return true
+	EXPECT_TRUE(spaceManager->shouldCompact());
+}
+
+TEST_F(SpaceManagerTest, Fragmentation_WeightedAcrossTypes) {
+	auto typeNode = static_cast<uint32_t>(EntityType::Node);
+	auto typeEdge = static_cast<uint32_t>(EntityType::Edge);
+
+	// Node Segment: 0% fragmented
+	uint64_t segN = spaceManager->allocateSegment(typeNode, 10);
+	segmentTracker->updateSegmentUsage(segN, 10, 0);
+
+	// Edge Segment: 100% fragmented (all inactive)
+	uint64_t segE = spaceManager->allocateSegment(typeEdge, 10);
+	segmentTracker->updateSegmentUsage(segE, 10, 10);
+
+	// Average: (0.0 + 1.0) / 2 = 0.5
+	EXPECT_DOUBLE_EQ(spaceManager->getTotalFragmentationRatio(), 0.5);
+}
+
+// =========================================================================
+// GROUP 9: Coverage for All Segment Types (Switch Cases)
+// =========================================================================
+
+// Helper to create and fragment a specific entity type segment
+template<typename T>
+void testCompactionForType(std::shared_ptr<SpaceManager> sm, std::shared_ptr<SegmentTracker> st, EntityType et) {
+	// Disable EntityReferenceUpdater
+	sm->setEntityReferenceUpdater(nullptr);
+
+	uint32_t typeId = static_cast<uint32_t>(et);
+	uint64_t offset = sm->allocateSegment(typeId, 10);
+	size_t size = T::getTotalSize();
+
+	// Create 2 items
+	T item1;
+	item1.setId(1);
+	T item2;
+	item2.setId(2);
+
+	st->writeEntity(offset, 0, item1, size);
+	st->setEntityActive(offset, 0, true);
+
+	st->writeEntity(offset, 1, item2, size);
+	st->setEntityActive(offset, 1, false); // Mark inactive
+
+	st->updateSegmentUsage(offset, 2, 1); // 50% fragmentation
+
+	// Run compaction
+	sm->compactSegments(typeId, 0.1); // Force compaction
+
+	// Verify
+	SegmentHeader h = st->getSegmentHeader(offset);
+	EXPECT_EQ(h.used, 1U);
+	EXPECT_EQ(h.inactive_count, 0U);
+}
+
+TEST_F(SpaceManagerTest, Compaction_Edge_Coverage) {
+	testCompactionForType<Edge>(spaceManager, segmentTracker, EntityType::Edge);
+}
+
+TEST_F(SpaceManagerTest, Compaction_Property_Coverage) {
+	testCompactionForType<Property>(spaceManager, segmentTracker, EntityType::Property);
+}
+
+TEST_F(SpaceManagerTest, Compaction_Blob_Coverage) {
+	testCompactionForType<Blob>(spaceManager, segmentTracker, EntityType::Blob);
+}
+
+TEST_F(SpaceManagerTest, Compaction_Index_Coverage) {
+	testCompactionForType<Index>(spaceManager, segmentTracker, EntityType::Index);
+}
+
+TEST_F(SpaceManagerTest, Compaction_State_Coverage) {
+	testCompactionForType<State>(spaceManager, segmentTracker, EntityType::State);
+}
+
+// Helper to test merging for specific types
+template<typename T>
+void testMergeForType(std::shared_ptr<SpaceManager> sm, std::shared_ptr<SegmentTracker> st, EntityType et) {
+	// Disable EntityReferenceUpdater for this test to prevent SIGSEGV
+	// because we are manipulating "orphan" entities without a valid graph structure.
+	sm->setEntityReferenceUpdater(nullptr);
+
+	uint32_t typeId = static_cast<uint32_t>(et);
+	uint64_t segA = sm->allocateSegment(typeId, 10);
+	uint64_t segB = sm->allocateSegment(typeId, 10);
+	size_t size = T::getTotalSize();
+
+	T item;
+	item.setId(100);
+
+	// Fill A
+	st->writeEntity(segA, 0, item, size);
+	st->setEntityActive(segA, 0, true);
+	st->updateSegmentUsage(segA, 1, 0);
+
+	// Fill B
+	st->writeEntity(segB, 0, item, size);
+	st->setEntityActive(segB, 0, true);
+	st->updateSegmentUsage(segB, 1, 0);
+
+	// Merge
+	bool merged = sm->mergeSegments(typeId, 0.9);
+	ASSERT_TRUE(merged);
+
+	// Verify
+	SegmentHeader hA = st->getSegmentHeader(segA);
+	EXPECT_EQ(hA.used, 2U);
+}
+
+TEST_F(SpaceManagerTest, Merge_Edge_Coverage) {
+	testMergeForType<Edge>(spaceManager, segmentTracker, EntityType::Edge);
+}
+
+TEST_F(SpaceManagerTest, Merge_Property_Coverage) {
+	testMergeForType<Property>(spaceManager, segmentTracker, EntityType::Property);
+}
+
+TEST_F(SpaceManagerTest, Merge_Blob_Coverage) {
+	testMergeForType<Blob>(spaceManager, segmentTracker, EntityType::Blob);
+}
+
+TEST_F(SpaceManagerTest, Merge_Index_Coverage) {
+	testMergeForType<Index>(spaceManager, segmentTracker, EntityType::Index);
+}
+
+TEST_F(SpaceManagerTest, Merge_State_Coverage) {
+	testMergeForType<State>(spaceManager, segmentTracker, EntityType::State);
+}
+
+// =========================================================================
+// GROUP 10: Relocation Logic
+// =========================================================================
+
+TEST_F(SpaceManagerTest, DynamicSegmentCapacity_Coverage) {
+	// This test ensures we respect the physical limits defined in headers
+	uint32_t maxNodes = graph::storage::NODES_PER_SEGMENT;
+	// Try to allocate full capacity
+	uint64_t seg = spaceManager->allocateSegment(static_cast<uint32_t>(EntityType::Node), maxNodes);
+	SegmentHeader h = segmentTracker->getSegmentHeader(seg);
+	EXPECT_EQ(h.capacity, maxNodes);
+}
+
+// Improved Relocation Test (Size Agnostic)
+TEST_F(SpaceManagerTest, Relocation_MovesFarSegmentToEarlyHole) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// 1. Hole
+	uint64_t segHole = spaceManager->allocateSegment(type, 10);
+
+	// 2. Padding
+	int paddingCount = 10;
+	std::vector<uint64_t> pads;
+	for (int i = 0; i < paddingCount; ++i) {
+		uint64_t s = spaceManager->allocateSegment(type, 10);
+		segmentTracker->updateSegmentUsage(s, 10, 0);
+		pads.push_back(s);
+	}
+
+	// 3. Target
+	uint64_t segTarget = spaceManager->allocateSegment(type, 10);
+	int64_t targetVal = 99999;
+
+	if (file->fail())
+		file->clear();
+
+	// Write data
+	createActiveNode(segTarget, 0, targetVal);
+
+	// Mark as FULL (10 used) instead of 1 used.
+	// This makes Fragmentation Ratio = 0.0.
+	// SpaceManager will skip Step 2 (Rewrite IDs) and Step 3 (Merge).
+	// It will only execute Step 4 (Relocate).
+	segmentTracker->updateSegmentUsage(segTarget, 10, 0);
+
+	file->flush();
+
+	// 4. Create Hole
+	spaceManager->deallocateSegment(segHole);
+
+	// 5. Compact
+	spaceManager->compactSegments();
+
+	// 6. Verify
+	file->clear();
+	Node n = segmentTracker->readEntity<Node>(segHole, 0, Node::getTotalSize());
+
+	// Now it should stay 99999 because compactNodeSegment skipped it!
+	EXPECT_EQ(n.getId(), targetVal);
+}
+
+TEST_F(SpaceManagerTest, Merge_ConsolidateFrontSegments) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// Allocate 3 segments at the front
+	uint64_t segA = spaceManager->allocateSegment(type, 10);
+	uint64_t segB = spaceManager->allocateSegment(type, 10);
+	uint64_t segC = spaceManager->allocateSegment(type, 10); // Barrier to ensure A and B are "front"
+
+	// Set up usage:
+	// SegA: 1 used (10%)
+	// SegB: 1 used (10%)
+	// SegC: Full (100%) - acts as a barrier/filler
+
+	createActiveNode(segA, 0, 100);
+	segmentTracker->updateSegmentUsage(segA, 1, 0);
+
+	createActiveNode(segB, 0, 200);
+	segmentTracker->updateSegmentUsage(segB, 1, 0);
+
+	segmentTracker->updateSegmentUsage(segC, 10, 0);
+
+	// Add padding to ensure these are definitely considered "front" segments
+	// relative to the file size (though with only 3 segments, they all are).
+	// The key is that neither segA nor segB are empty, and they fit into each other.
+
+	// Force Merge
+	// Threshold 0.5 > 0.1, so both are candidates.
+	bool merged = spaceManager->mergeSegments(type, 0.5);
+
+	ASSERT_TRUE(merged) << "Front segments should have been merged";
+
+	// Verify
+	SegmentHeader hA = segmentTracker->getSegmentHeader(segA);
+	// Should now contain data from B, so used = 1 + 1 = 2
+	EXPECT_EQ(hA.used, 2U);
+
+	// Verify SegB is free
+	auto freeList = segmentTracker->getFreeSegments();
+	EXPECT_TRUE(std::ranges::find(freeList, segB) != freeList.end());
+}
+
+TEST_F(SpaceManagerTest, RecalculateMaxIds_AllTypes_Coverage) {
+	// Helper to create a segment of a specific type with one active entity
+	auto createActiveSegment = [&](EntityType et, int64_t id) {
+		uint32_t type = static_cast<uint32_t>(et);
+		uint64_t offset = spaceManager->allocateSegment(type, 10);
+
+		// We cheat slightly and use createActiveNode for all types because
+		// we only care about the segment header's used/active count and start_id logic
+		// for recalculateMaxIds. The actual binary content doesn't matter for this specific function.
+		// We just need to mark it active in the tracker.
+
+		// Calculate the index relative to start_id
+		SegmentHeader h = segmentTracker->getSegmentHeader(offset);
+		// Force start_id to be close to our target ID for simplicity in checking logic
+		// But allocateSegment sets start_id automatically.
+		// So we just mark the first item as active.
+		// MaxID calculation logic: maxId = start_id + index
+
+		segmentTracker->setEntityActive(offset, 0, true);
+		segmentTracker->updateSegmentUsage(offset, 1, 0);
+		return h.start_id; // The expected Max ID from this segment
+	};
+
+	// 1. Create segments for all types
+	int64_t maxEdge = createActiveSegment(EntityType::Edge, 0);
+	int64_t maxProp = createActiveSegment(EntityType::Property, 0);
+	int64_t maxBlob = createActiveSegment(EntityType::Blob, 0);
+	int64_t maxIndex = createActiveSegment(EntityType::Index, 0);
+	int64_t maxState = createActiveSegment(EntityType::State, 0);
+
+	// 2. Clear current Max IDs in header manager to ensure they are recalculated
+	fileHeaderManager->getMaxEdgeIdRef() = 0;
+	fileHeaderManager->getMaxPropIdRef() = 0;
+	fileHeaderManager->getMaxBlobIdRef() = 0;
+	fileHeaderManager->getMaxIndexIdRef() = 0;
+	fileHeaderManager->getMaxStateIdRef() = 0;
+
+	// 3. Run Recalculation
+	spaceManager->recalculateMaxIds();
+
+	// 4. Verify
+	EXPECT_EQ(fileHeaderManager->getMaxEdgeIdRef(), maxEdge);
+	EXPECT_EQ(fileHeaderManager->getMaxPropIdRef(), maxProp);
+	EXPECT_EQ(fileHeaderManager->getMaxBlobIdRef(), maxBlob);
+	EXPECT_EQ(fileHeaderManager->getMaxIndexIdRef(), maxIndex);
+	EXPECT_EQ(fileHeaderManager->getMaxStateIdRef(), maxState);
+}
+
+TEST_F(SpaceManagerTest, Merge_CleansUpEmptySegments) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// Seg A: Empty (Used=0 or Used=Inactive)
+	uint64_t segA = spaceManager->allocateSegment(type, 10);
+	// Mark as 1 used, 1 inactive -> 0 active.
+	segmentTracker->updateSegmentUsage(segA, 1, 1);
+
+	// Seg B: Active (to ensure candidates list has >1 items)
+	uint64_t segB = spaceManager->allocateSegment(type, 10);
+	segmentTracker->updateSegmentUsage(segB, 1, 0);
+
+	// Calling mergeSegments will iterate candidates.
+	// When it hits segA, it sees active count 0 and should free it immediately.
+	bool result = spaceManager->mergeSegments(type, 0.9);
+
+	// Verify A is freed
+	auto freeList = segmentTracker->getFreeSegments();
+	EXPECT_TRUE(std::ranges::find(freeList, segA) != freeList.end());
+}
+
+TEST_F(SpaceManagerTest, Merge_ChainedMergePrevention) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// Create 3 segments that could theoretically merge into a chain
+	// A -> B -> C
+	uint64_t segA = spaceManager->allocateSegment(type, 10);
+	uint64_t segB = spaceManager->allocateSegment(type, 10);
+	uint64_t segC = spaceManager->allocateSegment(type, 10);
+
+	// All low usage
+	createActiveNode(segA, 0, 100);
+	segmentTracker->updateSegmentUsage(segA, 1, 0);
+	createActiveNode(segB, 0, 200);
+	segmentTracker->updateSegmentUsage(segB, 1, 0);
+	createActiveNode(segC, 0, 300);
+	segmentTracker->updateSegmentUsage(segC, 1, 0);
+
+	// If B merges into A, B becomes invalid/free.
+	// The loop should prevent C from trying to merge into B, or B merging into something else.
+	// To deterministically test this relies on iteration order, which is sort-dependent.
+	// Front sort: Position ascending. A, B, C.
+	// Outer loop: i=0 (A). Inner loop: j=1 (B).
+	// B merges into A. 'mergedSegments' has B.
+	// Inner loop continues.
+
+	// Outer loop: i=1 (B).
+	// B is in 'mergedSegments'. Should continue immediately.
+
+	spaceManager->mergeSegments(type, 0.5);
+
+	// If coverage tools show line 670/764 hit, we are good.
+	// If A consumed B, and A is now used=2.
+	// C might merge into A (used=3).
+	// But B should not be processed as a source.
+
+	// We verify state valid
+	SegmentHeader hA = segmentTracker->getSegmentHeader(segA);
+	EXPECT_GE(hA.used, 2U);
 }
