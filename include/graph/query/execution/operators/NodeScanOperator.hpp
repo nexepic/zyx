@@ -27,16 +27,12 @@
 #include <vector>
 #include "../PhysicalOperator.hpp"
 #include "../ScanConfigs.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query::execution::operators {
 
-	/**
-	 * @brief A pure source operator.
-	 * It does NOT perform property filtering (except implicit filtering via Index lookup).
-	 * It ALWAYS hydrates the node properties.
-	 */
 	class NodeScanOperator : public PhysicalOperator {
 	public:
 		NodeScanOperator(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im,
@@ -67,6 +63,14 @@ namespace graph::query::execution::operators {
 						candidateIds_.push_back(i);
 					break;
 			}
+
+			// Pre-resolve label ID for the scan loop (optimization)
+			targetLabelId_ = 0;
+			if (!config_.label.empty()) {
+				// We use resolveLabelId if available, or just getOrCreateLabelId.
+				// For scanning, if the label doesn't exist in registry, ID is 0, so no node will match.
+				targetLabelId_ = dm_->getOrCreateLabelId(config_.label);
+			}
 		}
 
 		std::optional<RecordBatch> next() override {
@@ -80,18 +84,25 @@ namespace graph::query::execution::operators {
 				int64_t id = candidateIds_[currentIdx_++];
 
 				// 2. Load Header
+				// Note: dm_->getNode(id) automatically hydrates the transient string label via resolveLabelOnRead.
+				// However, for pure filtering speed, we can check IDs directly if we used a lighter-weight fetch,
+				// but here we need the full node object for the result record anyway.
 				Node node = dm_->getNode(id);
+
 				if (!node.isActive())
 					continue;
 
 				// 3. Label Double-Check
 				// Necessary for FULL_SCAN mode, or if Index is slightly stale.
-				if (!config_.label.empty() && node.getLabel() != config_.label) {
-					continue;
+				if (!config_.label.empty()) {
+					// Optimization: Compare IDs instead of strings
+					// node.getLabelId() is populated by dm_->getNode()
+					if (node.getLabelId() != targetLabelId_) {
+						continue;
+					}
 				}
 
 				// 4. Hydrate Properties
-				// MANDATORY: Subsequent FilterOperators depend on this data.
 				auto props = dm_->getNodeProperties(id);
 				node.setProperties(std::move(props));
 
@@ -118,5 +129,6 @@ namespace graph::query::execution::operators {
 
 		std::vector<int64_t> candidateIds_;
 		size_t currentIdx_ = 0;
+		int64_t targetLabelId_ = 0; // Cached ID
 	};
-} // namespace graph::query::execution::operators
+}

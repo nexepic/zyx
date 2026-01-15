@@ -89,7 +89,7 @@ namespace graph::storage {
 		 * @param targetPage The index of the segment to find (0 = head).
 		 * @return The file offset of the segment, or 0 if not found/out of bounds.
 		 */
-		uint64_t navigateToSegment(uint64_t headOffset, uint32_t targetPage) const;
+		[[nodiscard]] uint64_t navigateToSegment(uint64_t headOffset, uint32_t targetPage) const;
 
 		// Helper to format property maps into a short string "{k:v, ...}"
 		static std::string formatPropertiesCompact(const std::unordered_map<std::string, PropertyValue> &props);

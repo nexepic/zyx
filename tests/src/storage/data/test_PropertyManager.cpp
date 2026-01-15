@@ -65,16 +65,16 @@ protected:
 		edgeManager = dataManager->getEdgeManager();
 
 		// Create test entities using the correct API
-		testNode.setLabel("TestNode");
+		testNode.setLabelId(dataManager->getOrCreateLabelId("TestNode"));
 		nodeManager->add(testNode);
 
 		graph::Node targetNode;
-		targetNode.setLabel("TargetNode");
+		targetNode.setLabelId(dataManager->getOrCreateLabelId("TargetNode"));
 		nodeManager->add(targetNode);
 
 		testEdge.setSourceNodeId(testNode.getId());
 		testEdge.setTargetNodeId(targetNode.getId());
-		testEdge.setLabel("CONNECTS_TO");
+		testEdge.setLabelId(dataManager->getOrCreateLabelId("CONNECTS_TO"));
 		edgeManager->add(testEdge);
 	}
 

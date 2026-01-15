@@ -63,10 +63,13 @@ protected:
 
 	void createTestNodes() {
 		// Create source and target nodes for edges
-		sourceNode = graph::Node(0, "SourceNode");
-		targetNode = graph::Node(0, "TargetNode");
+		int64_t srcLabelId = dataManager->getOrCreateLabelId("SourceNode");
+		int64_t tgtLabelId = dataManager->getOrCreateLabelId("TargetNode");
 
 		// Add nodes to storage
+		sourceNode = graph::Node(0, srcLabelId);
+		targetNode = graph::Node(0, tgtLabelId);
+
 		nodeManager->add(sourceNode);
 		nodeManager->add(targetNode);
 	}
@@ -97,41 +100,35 @@ protected:
 
 // Test basic edge creation and retrieval
 TEST_F(EdgeManagerTest, AddAndGetEdge) {
-	// Create an edge between source and target nodes
-	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), "CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 
-	// Add the edge
 	edgeManager->add(edge);
-	EXPECT_NE(edge.getId(), 0) << "Edge should have been assigned an ID";
+	EXPECT_NE(edge.getId(), 0);
 
-	// Retrieve the edge
 	graph::Edge retrievedEdge = edgeManager->get(edge.getId());
 
-	// Verify edge properties
 	EXPECT_EQ(retrievedEdge.getId(), edge.getId());
 	EXPECT_EQ(retrievedEdge.getSourceNodeId(), sourceNode.getId());
 	EXPECT_EQ(retrievedEdge.getTargetNodeId(), targetNode.getId());
-	EXPECT_EQ(retrievedEdge.getLabel(), "CONNECTS_TO");
+
+	EXPECT_EQ(retrievedEdge.getLabelId(), labelId);
+	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "CONNECTS_TO");
+
 	EXPECT_TRUE(retrievedEdge.isActive());
 }
 
 // Test edge removal for an entity that was added and removed in the same context
 TEST_F(EdgeManagerTest, RemoveEdgeInSameContext) {
-	// Create and add an edge
-	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), "CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
+
 	edgeManager->add(edge);
 	int64_t edgeId = edge.getId();
 
-	// Immediately remove the edge
 	edgeManager->remove(edge);
 
-	// Verify the edge is no longer retrievable
 	graph::Edge retrievedEdge = edgeManager->get(edgeId);
-	// get() may return an inactive object or an empty object.
-	// If it's effectively "gone" from both maps (added then deleted), it might be unretrievable (ID=0)
-	// OR it might be in map marked as DELETED.
-	// Assuming DataManager logic: upsert(DELETED).
-	// If it's DELETED, isActive() should be false.
 	if (retrievedEdge.getId() != 0) {
 		EXPECT_FALSE(retrievedEdge.isActive());
 	} else {
@@ -139,84 +136,77 @@ TEST_F(EdgeManagerTest, RemoveEdgeInSameContext) {
 	}
 
 	auto deletedEdges = getDirtyInfo({graph::storage::EntityChangeType::DELETED});
-
 	EXPECT_EQ(deletedEdges.size(), 0UL);
 }
 
 // Test edge removal for an entity that is considered "persisted"
 TEST_F(EdgeManagerTest, RemovePersistedEdge) {
-	// Create and add an edge
-	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), "CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
+
 	edgeManager->add(edge);
 	int64_t edgeId = edge.getId();
 	int64_t sourceId = sourceNode.getId();
 
-	// --- Simulate the entity being in a "persisted" state ---
-	simulateSave(); // Replaces markAllSaved()
+	simulateSave();
 
-	// --- State after simulated persistence ---
-	// The edge now exists in the cache (or disk), but is not in the dirty map.
-
-	// Remove the "persisted" edge
 	graph::Edge persistedEdge = edgeManager->get(edgeId);
-	EXPECT_EQ(persistedEdge.getId(), edgeId) << "Edge should be retrievable.";
+	EXPECT_EQ(persistedEdge.getId(), edgeId);
 	edgeManager->remove(persistedEdge);
 
-	// Verify it is now in the DELETED dirty map
 	auto deletedEdgesInfo = getDirtyInfo({graph::storage::EntityChangeType::DELETED});
-	EXPECT_EQ(deletedEdgesInfo.size(), 1UL) << "One edge should be marked as DELETED.";
+	EXPECT_EQ(deletedEdgesInfo.size(), 1UL);
 	EXPECT_EQ(deletedEdgesInfo[0].backup->getId(), edgeId);
-	EXPECT_FALSE(deletedEdgesInfo[0].backup->isActive()) << "The backup of the deleted edge should be inactive.";
 
-	// Verify that the source node's reference to the edge is cleared
 	graph::Node updatedSource = nodeManager->get(sourceId);
-	EXPECT_EQ(updatedSource.getFirstOutEdgeId(), 0) << "Source node should no longer reference the removed edge.";
+	EXPECT_EQ(updatedSource.getFirstOutEdgeId(), 0);
 }
 
 // Test findByNode functionality
 TEST_F(EdgeManagerTest, FindEdgesByNode) {
-	// Create multiple edges from source to different targets
-	graph::Node target2(0, "Target2");
+	int64_t targetLabelId = dataManager->getOrCreateLabelId("Target2");
+	graph::Node target2(0, targetLabelId);
 	nodeManager->add(target2);
 
-	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), "CONNECTS_TO");
-	graph::Edge edge2(0, sourceNode.getId(), target2.getId(), "REFERS_TO");
+	int64_t connectsLabel = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	int64_t refersLabel = dataManager->getOrCreateLabelId("REFERS_TO");
+
+	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), connectsLabel);
+	graph::Edge edge2(0, sourceNode.getId(), target2.getId(), refersLabel);
 
 	edgeManager->add(edge1);
 	edgeManager->add(edge2);
 
-	// Find outgoing edges from source node
 	auto outgoingEdges = edgeManager->findByNode(sourceNode.getId(), "out");
-	EXPECT_EQ(outgoingEdges.size(), 2UL) << "Should find 2 outgoing edges from source node";
+	EXPECT_EQ(outgoingEdges.size(), 2UL);
 
-	// Find incoming edges to target node
 	auto incomingEdges = edgeManager->findByNode(targetNode.getId(), "in");
-	EXPECT_EQ(incomingEdges.size(), 1UL) << "Should find 1 incoming edge to target node";
+	EXPECT_EQ(incomingEdges.size(), 1UL);
 	EXPECT_EQ(incomingEdges[0].getSourceNodeId(), sourceNode.getId());
 }
 
 // Test edge updating
 TEST_F(EdgeManagerTest, UpdateEdge) {
-	// Create and add an edge
-	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), "INITIAL_LABEL");
+	int64_t initLabel = dataManager->getOrCreateLabelId("INITIAL_LABEL");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), initLabel);
 	edgeManager->add(edge);
 
-	// Update the edge label
-	edge.setLabel("UPDATED_LABEL");
+	int64_t updatedLabel = dataManager->getOrCreateLabelId("UPDATED_LABEL");
+	edge.setLabelId(updatedLabel);
+
 	edgeManager->update(edge);
 
-	// Verify the update
 	graph::Edge retrievedEdge = edgeManager->get(edge.getId());
-	EXPECT_EQ(retrievedEdge.getLabel(), "UPDATED_LABEL") << "Edge label should be updated";
+	EXPECT_EQ(retrievedEdge.getLabelId(), updatedLabel);
+	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "UPDATED_LABEL");
 }
 
 // Test edge properties
 TEST_F(EdgeManagerTest, EdgeProperties) {
-	// Create and add an edge
-	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), "HAS_PROPERTY");
+	int64_t labelId = dataManager->getOrCreateLabelId("HAS_PROPERTY");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 	edgeManager->add(edge);
 
-	// Add properties
 	std::unordered_map<std::string, graph::PropertyValue> properties;
 	properties["weight"] = 2.5;
 	properties["active"] = true;
@@ -224,122 +214,101 @@ TEST_F(EdgeManagerTest, EdgeProperties) {
 
 	edgeManager->addProperties(edge.getId(), properties);
 
-	// Retrieve properties
 	auto retrievedProps = edgeManager->getProperties(edge.getId());
 
-	// Verify properties
 	EXPECT_EQ(std::get<double>(retrievedProps["weight"].getVariant()), 2.5);
 	EXPECT_EQ(std::get<bool>(retrievedProps["active"].getVariant()), true);
 	EXPECT_EQ(std::get<std::string>(retrievedProps["name"].getVariant()), "Connection");
 
-	// Remove a property
 	edgeManager->removeProperty(edge.getId(), "weight");
 	retrievedProps = edgeManager->getProperties(edge.getId());
-	EXPECT_FALSE(retrievedProps.contains("weight")) << "Property should be removed";
+	EXPECT_FALSE(retrievedProps.contains("weight"));
 }
 
 // Test relationship bidirectionality
 TEST_F(EdgeManagerTest, RelationshipBidirectionality) {
-	// Create and add an edge
-	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), "CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 	edgeManager->add(edge);
 
-	// Verify the source node has the edge as outgoing
 	graph::Node updatedSource = nodeManager->get(sourceNode.getId());
-	EXPECT_EQ(updatedSource.getFirstOutEdgeId(), edge.getId()) << "Source node should reference edge as outgoing";
+	EXPECT_EQ(updatedSource.getFirstOutEdgeId(), edge.getId());
 
-	// Verify the target node has the edge as incoming
 	graph::Node updatedTarget = nodeManager->get(targetNode.getId());
-	EXPECT_EQ(updatedTarget.getFirstInEdgeId(), edge.getId()) << "Target node should reference edge as incoming";
+	EXPECT_EQ(updatedTarget.getFirstInEdgeId(), edge.getId());
 }
 
 // Test multiple edges between same nodes
 TEST_F(EdgeManagerTest, MultipleEdgesBetweenSameNodes) {
-	// Create multiple edges between the same nodes
-	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), "KNOWS");
-	graph::Edge edge2(0, sourceNode.getId(), targetNode.getId(), "LIKES");
+	int64_t knowsLabel = dataManager->getOrCreateLabelId("KNOWS");
+	int64_t likesLabel = dataManager->getOrCreateLabelId("LIKES");
+
+	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), knowsLabel);
+	graph::Edge edge2(0, sourceNode.getId(), targetNode.getId(), likesLabel);
 
 	edgeManager->add(edge1);
 	edgeManager->add(edge2);
 
-	// The linking logic PREPENDS new edges to the list.
-	// So, after adding edge2, the chain should be: sourceNode -> edge2 -> edge1
-	// We need to fetch the updated states of both edges from the manager.
-
 	graph::Edge updatedEdge1 = edgeManager->get(edge1.getId());
 	graph::Edge updatedEdge2 = edgeManager->get(edge2.getId());
 
-	// Verify the outgoing chain: edge2 should point to edge1.
-	EXPECT_EQ(updatedEdge2.getNextOutEdgeId(), edge1.getId())
-			<< "Second edge should link to the first edge (outgoing).";
-	EXPECT_EQ(updatedEdge1.getPrevOutEdgeId(), edge2.getId())
-			<< "First edge's prev should be the second edge (outgoing).";
-	EXPECT_EQ(updatedEdge1.getNextOutEdgeId(), 0) << "First edge should be the end of the outgoing chain.";
+	EXPECT_EQ(updatedEdge2.getNextOutEdgeId(), edge1.getId());
+	EXPECT_EQ(updatedEdge1.getPrevOutEdgeId(), edge2.getId());
+	EXPECT_EQ(updatedEdge1.getNextOutEdgeId(), 0);
 
-	// Verify the incoming chain: edge2 should point to edge1.
-	EXPECT_EQ(updatedEdge2.getNextInEdgeId(), edge1.getId()) << "Second edge should link to the first edge (incoming).";
-	EXPECT_EQ(updatedEdge1.getPrevInEdgeId(), edge2.getId())
-			<< "First edge's prev should be the second edge (incoming).";
-	EXPECT_EQ(updatedEdge1.getNextInEdgeId(), 0) << "First edge should be the end of the incoming chain.";
+	EXPECT_EQ(updatedEdge2.getNextInEdgeId(), edge1.getId());
+	EXPECT_EQ(updatedEdge1.getPrevInEdgeId(), edge2.getId());
+	EXPECT_EQ(updatedEdge1.getNextInEdgeId(), 0);
 
-	// Also verify the node now points to edge2 as the head of the list.
 	graph::Node updatedSource = nodeManager->get(sourceNode.getId());
-	EXPECT_EQ(updatedSource.getFirstOutEdgeId(), edge2.getId()) << "Source node should point to the newest edge.";
+	EXPECT_EQ(updatedSource.getFirstOutEdgeId(), edge2.getId());
 }
 
 // Test batch operations
 TEST_F(EdgeManagerTest, BatchOperations) {
-	// Create multiple edges
 	std::vector<graph::Edge> edges;
 	std::vector<int64_t> edgeIds;
 
 	for (int i = 0; i < 5; i++) {
-		graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), "BATCH_EDGE_" + std::to_string(i));
+		int64_t labelId = dataManager->getOrCreateLabelId("BATCH_EDGE_" + std::to_string(i));
+		graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 		edgeManager->add(edge);
 		edges.push_back(edge);
 		edgeIds.push_back(edge.getId());
 	}
 
-	// Test getBatch
 	auto retrievedEdges = edgeManager->getBatch(edgeIds);
-	EXPECT_EQ(retrievedEdges.size(), 5UL) << "Should retrieve all 5 edges";
+	EXPECT_EQ(retrievedEdges.size(), 5UL);
 
-	// Test with removing one edge
 	edgeManager->remove(edges[2]);
 	retrievedEdges = edgeManager->getBatch(edgeIds);
-	EXPECT_EQ(retrievedEdges.size(), 4UL) << "Should retrieve only active edges";
+	EXPECT_EQ(retrievedEdges.size(), 4UL);
 }
 
 // Test edge ID allocation
 TEST_F(EdgeManagerTest, EdgeIdAllocation) {
-	// Create multiple edges and verify IDs are unique and allocated sequentially.
-	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), "EDGE1");
-	graph::Edge edge2(0, sourceNode.getId(), targetNode.getId(), "EDGE2");
+	int64_t label1 = dataManager->getOrCreateLabelId("EDGE1");
+	int64_t label2 = dataManager->getOrCreateLabelId("EDGE2");
+
+	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), label1);
+	graph::Edge edge2(0, sourceNode.getId(), targetNode.getId(), label2);
 
 	edgeManager->add(edge1);
 	edgeManager->add(edge2);
 
-	// --- Verification ---
-
-	// 1. Check that IDs are valid (non-zero).
 	EXPECT_NE(edge1.getId(), 0);
 	EXPECT_NE(edge2.getId(), 0);
-
-	// 2. Check for uniqueness.
 	EXPECT_NE(edge1.getId(), edge2.getId());
-
-	// 3. Check for sequential allocation.
 	EXPECT_EQ(edge2.getId(), edge1.getId() + 1);
 }
 
 // Test error handling for invalid operations
 TEST_F(EdgeManagerTest, ErrorHandling) {
-	// Try to get a non-existent edge
 	graph::Edge nonExistentEdge = edgeManager->get(999999);
-	EXPECT_EQ(nonExistentEdge.getId(), 0) << "Non-existent edge should return default edge with ID 0";
+	EXPECT_EQ(nonExistentEdge.getId(), 0);
 
-	// This test should now pass because of the new validation in BaseEntityManager::update.
-	graph::Edge invalidEdge(999999, sourceNode.getId(), targetNode.getId(), "INVALID");
-	invalidEdge.markInactive(false); // Ensure it's active to bypass the first check
+	int64_t labelId = dataManager->getOrCreateLabelId("INVALID");
+	graph::Edge invalidEdge(999999, sourceNode.getId(), targetNode.getId(), labelId);
+	invalidEdge.markInactive(false);
 	EXPECT_THROW(edgeManager->update(invalidEdge), std::runtime_error);
 }

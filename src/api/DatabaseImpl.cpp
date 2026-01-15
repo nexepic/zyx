@@ -33,14 +33,19 @@ namespace metrix {
 	// ========================================================================
 
 	// Forward declaration
-	Value toPublicValue(const graph::query::ResultValue &v);
+	Value toPublicValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
 	Value toPublicValue(const graph::PropertyValue &v);
 
 	// Convert Internal Node to Public Node Pointer (For shared_ptr usage in Value)
-	std::shared_ptr<Node> toPublicNodePtr(const graph::Node &internalNode) {
+	std::shared_ptr<Node> toPublicNodePtr(const graph::Node &internalNode,
+										  const std::shared_ptr<graph::storage::DataManager> &dm) {
 		auto pubNode = std::make_shared<Node>();
 		pubNode->id = internalNode.getId();
-		pubNode->label = internalNode.getLabel();
+
+		// RESOLVE: ID -> String using DataManager
+		if (dm) {
+			pubNode->label = dm->resolveLabel(internalNode.getLabelId());
+		}
 
 		for (const auto &[key, val]: internalNode.getProperties()) {
 			pubNode->properties[key] = toPublicValue(val);
@@ -49,12 +54,17 @@ namespace metrix {
 	}
 
 	// Convert Internal Edge to Public Edge Pointer
-	std::shared_ptr<Edge> toPublicEdgePtr(const graph::Edge &internalEdge) {
+	std::shared_ptr<Edge> toPublicEdgePtr(const graph::Edge &internalEdge,
+										  const std::shared_ptr<graph::storage::DataManager> &dm) {
 		auto pubEdge = std::make_shared<Edge>();
 		pubEdge->id = internalEdge.getId();
 		pubEdge->sourceId = internalEdge.getSourceNodeId();
 		pubEdge->targetId = internalEdge.getTargetNodeId();
-		pubEdge->label = internalEdge.getLabel();
+
+		// RESOLVE: ID -> String using DataManager
+		if (dm) {
+			pubEdge->label = dm->resolveLabel(internalEdge.getLabelId());
+		}
 
 		for (const auto &[key, val]: internalEdge.getProperties()) {
 			pubEdge->properties[key] = toPublicValue(val);
@@ -63,8 +73,8 @@ namespace metrix {
 	}
 
 	// Convert Internal Node to Public Node (Value Copy for Algorithms)
-	Node toPublicNode(const graph::Node &internalNode) {
-		auto ptr = toPublicNodePtr(internalNode);
+	Node toPublicNode(const graph::Node &internalNode, const std::shared_ptr<graph::storage::DataManager> &dm) {
+		auto ptr = toPublicNodePtr(internalNode, dm);
 		return *ptr; // Copy the struct
 	}
 
@@ -84,15 +94,15 @@ namespace metrix {
 	}
 
 	// Main conversion entry point for ResultValue
-	Value toPublicValue(const graph::query::ResultValue &v) {
+	Value toPublicValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm) {
 		return std::visit(
-				[]<typename T0>(T0 &&arg) -> Value {
+				[&dm]<typename T0>(T0 &&arg) -> Value {
 					using T = std::decay_t<T0>;
 
 					if constexpr (std::is_same_v<T, graph::Node>) {
-						return toPublicNodePtr(arg);
+						return toPublicNodePtr(arg, dm);
 					} else if constexpr (std::is_same_v<T, graph::Edge>) {
-						return toPublicEdgePtr(arg);
+						return toPublicEdgePtr(arg, dm);
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue>) {
 						return toPublicValue(arg);
 					} else {
@@ -111,7 +121,7 @@ namespace metrix {
 					if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
 								  std::is_same_v<T, std::shared_ptr<Edge>> ||
 								  std::is_same_v<T, std::vector<std::string>>) {
-						return graph::PropertyValue(); // Null/Empty for unsupported types
+						return {}; // Null/Empty for unsupported types
 					} else {
 						return graph::PropertyValue(arg);
 					}
@@ -125,11 +135,13 @@ namespace metrix {
 
 	class ResultImpl {
 	public:
-		explicit ResultImpl(graph::query::QueryResult internalRes) : result_(std::move(internalRes)) {
+		explicit ResultImpl(graph::query::QueryResult internalRes, std::shared_ptr<graph::storage::DataManager> dm) :
+			result_(std::move(internalRes)), dataManager_(std::move(dm)) {
 			prepareMetadata();
 		}
 
 		graph::query::QueryResult result_;
+		std::shared_ptr<graph::storage::DataManager> dataManager_;
 
 		// Cursor State
 		size_t cursor_ = 0;
@@ -210,17 +222,17 @@ namespace metrix {
 			// 1. Exact Match
 			auto it = row.find(key);
 			if (it != row.end())
-				return toPublicValue(it->second);
+				return toPublicValue(it->second, impl_->dataManager_);
 
 			// 2. Fuzzy Match (User asks "name", DB has "n.name")
 			for (const auto &[dbKey, dbVal]: row) {
 				if (key.find('.') == std::string::npos && dbKey.size() > key.size()) {
 					if (dbKey.ends_with("." + key))
-						return toPublicValue(dbVal);
+						return toPublicValue(dbVal, impl_->dataManager_);
 				}
 				if (dbKey.find('.') == std::string::npos && key.size() > dbKey.size()) {
 					if (key.ends_with("." + dbKey))
-						return toPublicValue(dbVal);
+						return toPublicValue(dbVal, impl_->dataManager_);
 				}
 			}
 			return std::monostate{};
@@ -234,7 +246,7 @@ namespace metrix {
 
 			// If requesting the entity itself (key empty or standard aliases)
 			if (key.empty() || key == "n" || key == "node" || key == "e" || key == "edge") {
-				return toPublicValue(entityVal);
+				return toPublicValue(entityVal, impl_->dataManager_);
 			}
 
 			// If requesting a property inside the entity
@@ -262,7 +274,7 @@ namespace metrix {
 		return get(impl_->columnNames_[index]);
 	}
 
-	int Result::getColumnCount() const { return impl_ ? impl_->columnNames_.size() : 0; }
+	int Result::getColumnCount() const { return impl_ ? static_cast<int>(impl_->columnNames_.size()) : 0; }
 
 	std::string Result::getColumnName(int index) const {
 		return (impl_ && index >= 0 && index < static_cast<int>(impl_->columnNames_.size()))
@@ -284,7 +296,7 @@ namespace metrix {
 
 	class DatabaseImpl {
 	public:
-		DatabaseImpl(const std::string &path) : db_(path) {}
+		explicit DatabaseImpl(const std::string &path) : db_(path) {}
 		graph::Database db_;
 	};
 
@@ -302,30 +314,34 @@ namespace metrix {
 	Result Database::execute(const std::string &cypher) const {
 		try {
 			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+			// We MUST inject DataManager into ResultImpl to allow label resolution later
+			auto dm = impl_->db_.getStorage()->getDataManager();
+
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
 			return res;
 		} catch (const std::exception &e) {
 			// Return Result in error state
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult()); // Empty internal result
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr); // Empty internal result
 			res.impl_->error_msg = e.what();
 			return res;
 		} catch (...) {
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
 			res.impl_->error_msg = "Unknown error";
 			return res;
 		}
 	}
 
 	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
+		// Use Query Engine for standard creation
 		auto builder = impl_->db_.getQueryEngine()->query();
 		std::unordered_map<std::string, graph::PropertyValue> internalProps;
 		for (const auto &[k, v]: props)
 			internalProps[k] = toInternal(v);
 		auto plan = builder.create_("n", label, internalProps).build();
-		impl_->db_.getQueryEngine()->execute(std::move(plan));
+		(void) impl_->db_.getQueryEngine()->execute(std::move(plan));
 	}
 
 	void Database::createNodes(const std::string &label,
@@ -333,25 +349,39 @@ namespace metrix {
 		if (propsList.empty())
 			return;
 		auto storage = impl_->db_.getStorage();
+		auto dm = storage->getDataManager();
+
+		// 1. Resolve/Create Label ID ONCE for the batch
+		int64_t labelId = dm->getOrCreateLabelId(label);
+
 		std::vector<graph::Node> nodes;
 		nodes.reserve(propsList.size());
+
 		for (const auto &props: propsList) {
-			graph::Node n(0, label);
+			// 2. Use ID constructor
+			graph::Node n(0, labelId);
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
 			for (const auto &[k, v]: props)
 				internalProps[k] = toInternal(v);
 			n.setProperties(std::move(internalProps));
 			nodes.push_back(std::move(n));
 		}
-		storage->getDataManager()->addNodes(nodes);
+
+		dm->addNodes(nodes);
 	}
 
 	int64_t Database::createNodeRetId(const std::string &label,
 									  const std::unordered_map<std::string, Value> &props) const {
 		auto dm = impl_->db_.getStorage()->getDataManager();
-		graph::Node node(0, label);
+
+		// 1. Resolve/Create Label ID
+		int64_t labelId = dm->getOrCreateLabelId(label);
+
+		// 2. Use ID constructor
+		graph::Node node(0, labelId);
 		dm->addNode(node);
 		int64_t newId = node.getId();
+
 		if (!props.empty()) {
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
 			for (const auto &[k, v]: props)
@@ -364,8 +394,14 @@ namespace metrix {
 	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
 								  const std::unordered_map<std::string, Value> &props) const {
 		auto dm = impl_->db_.getStorage()->getDataManager();
-		graph::Edge edge(0, sourceId, targetId, edgeLabel);
+
+		// 1. Resolve/Create Label ID
+		int64_t labelId = dm->getOrCreateLabelId(edgeLabel);
+
+		// 2. Use ID constructor
+		graph::Edge edge(0, sourceId, targetId, labelId);
 		dm->addEdge(edge);
+
 		if (!props.empty()) {
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
 			for (const auto &[k, v]: props)
@@ -377,6 +413,9 @@ namespace metrix {
 	void Database::createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 							  const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
 							  const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props) const {
+		// This uses Query Engine, which internally handles label resolution if implemented correctly there.
+		// Since QueryEngine likely calls DataManager/Storage eventually, or builds a Plan,
+		// we just delegate to it.
 		auto builder = impl_->db_.getQueryEngine()->query();
 		std::unordered_map<std::string, graph::PropertyValue> edgeProps;
 		for (const auto &[k, v]: props)
@@ -389,7 +428,7 @@ namespace metrix {
 		builder.return_({"e"});
 
 		auto plan = builder.build();
-		impl_->db_.getQueryEngine()->execute(std::move(plan));
+		(void) impl_->db_.getQueryEngine()->execute(std::move(plan));
 	}
 
 	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) const {
@@ -409,7 +448,8 @@ namespace metrix {
 				// Fetch full properties
 				graph::Node fullNode = dm->getNode(n.getId());
 				fullNode.setProperties(dm->getNodeProperties(n.getId()));
-				publicPath.push_back(toPublicNode(fullNode));
+				// Pass DM for label resolution
+				publicPath.push_back(toPublicNode(fullNode, dm));
 			}
 			return publicPath;
 		} catch (...) {
@@ -428,7 +468,8 @@ namespace metrix {
 			auto internalVisitor = [&](int64_t nodeId, [[maybe_unused]] int depth) -> bool {
 				graph::Node internalNode = dm->getNode(nodeId);
 				internalNode.setProperties(dm->getNodeProperties(nodeId));
-				return visitor(toPublicNode(internalNode));
+				// Pass DM for label resolution
+				return visitor(toPublicNode(internalNode, dm));
 			};
 			algo.breadthFirstTraversal(startNodeId, internalVisitor, "out");
 		} catch (...) {

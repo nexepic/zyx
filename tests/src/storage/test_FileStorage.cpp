@@ -85,7 +85,7 @@ TEST_F(FileStorageTest, SaveDataEmpty) {
 }
 
 TEST_F(FileStorageTest, SaveDataSingleElement) {
-	std::unordered_map<int64_t, graph::Node> data = {{1, graph::Node(1, "Node1")}};
+	std::unordered_map<int64_t, graph::Node> data = {{1, graph::Node(1, 10)}};
 	uint64_t segmentHead = 0;
 
 	fileStorage->saveData(data, segmentHead, 100);
@@ -95,7 +95,7 @@ TEST_F(FileStorageTest, SaveDataSingleElement) {
 TEST_F(FileStorageTest, SaveDataFitsInOneSegment) {
 	std::unordered_map<int64_t, graph::Node> data;
 	for (int64_t i = 1; i <= 50; ++i) {
-		data[i] = graph::Node(i, "Node" + std::to_string(i));
+		data[i] = graph::Node(i, 100);
 	}
 	uint64_t segmentHead = 0;
 	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
@@ -107,7 +107,7 @@ TEST_F(FileStorageTest, SaveDataFitsInOneSegment) {
 TEST_F(FileStorageTest, SaveDataMultipleSegments) {
 	std::unordered_map<int64_t, graph::Node> data;
 	for (int64_t i = 1; i <= 300; ++i) {
-		data[i] = graph::Node(i, "Node" + std::to_string(i));
+		data[i] = graph::Node(i, 100);
 	}
 	uint64_t segmentHead = 0;
 	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
@@ -119,7 +119,7 @@ TEST_F(FileStorageTest, SaveDataMultipleSegments) {
 TEST_F(FileStorageTest, VerifySegmentLinking) {
 	std::unordered_map<int64_t, graph::Node> data;
 	for (int64_t i = 1; i <= 300; ++i) {
-		data[i] = graph::Node(i, "Node" + std::to_string(i));
+		data[i] = graph::Node(i, 100);
 	}
 	uint64_t segmentHead = 0;
 

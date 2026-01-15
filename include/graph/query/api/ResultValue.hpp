@@ -68,14 +68,8 @@ namespace graph::query {
 							return arg.toString();
 						} else if constexpr (std::is_same_v<T, Node>) {
 							std::ostringstream oss;
-							// Format: (Label:ID {prop1:val, ...})
-							oss << "(";
-							if (!arg.getLabel().empty())
-								oss << ":" << arg.getLabel();
-							else
-								oss << "Node";
-
-							oss << ":" << arg.getId();
+							// We only have ID now.
+							oss << "(:LabelID:" << arg.getLabelId();
 
 							std::string props = formatProps(arg.getProperties());
 							if (!props.empty())
@@ -86,7 +80,7 @@ namespace graph::query {
 						} else if constexpr (std::is_same_v<T, Edge>) {
 							std::ostringstream oss;
 							// Format: [:TYPE:ID {props}]
-							oss << "[:" << arg.getLabel() << ":" << arg.getId();
+							oss << "[:LabelID:" << arg.getLabelId() << ":" << arg.getId();
 
 							std::string props = formatProps(arg.getProperties());
 							if (!props.empty())

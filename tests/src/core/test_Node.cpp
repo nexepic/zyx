@@ -42,43 +42,33 @@ TEST_F(NodeTest, DefaultConstructor) {
 	EXPECT_EQ(node.getFirstInEdgeId(), 0);
 	EXPECT_EQ(node.getPropertyEntityId(), 0);
 	EXPECT_TRUE(node.isActive());
-	EXPECT_EQ(node.getLabel(), "");
+	// Changed: Check Label ID instead of string
+	EXPECT_EQ(node.getLabelId(), 0);
 }
 
 TEST_F(NodeTest, ParameterizedConstructor) {
 	constexpr int64_t id = 123;
-	const std::string label = "TestNode";
+	constexpr int64_t labelId = 888; // Using ID
 
-	const graph::Node node(id, label);
+	const graph::Node node(id, labelId);
 
 	EXPECT_EQ(node.getId(), id);
-	EXPECT_EQ(node.getLabel(), label);
+	EXPECT_EQ(node.getLabelId(), labelId);
 	EXPECT_EQ(node.getFirstOutEdgeId(), 0);
 	EXPECT_EQ(node.getFirstInEdgeId(), 0);
 	EXPECT_TRUE(node.isActive());
 }
 
-TEST_F(NodeTest, SetGetLabel) {
+TEST_F(NodeTest, SetGetLabelId) {
 	graph::Node node;
-	const std::string testLabel = "MyNode";
+	const int64_t testLabelId = 777;
 
-	node.setLabel(testLabel);
+	node.setLabelId(testLabelId);
 
-	EXPECT_EQ(node.getLabel(), testLabel);
+	EXPECT_EQ(node.getLabelId(), testLabelId);
 }
 
-TEST_F(NodeTest, SetLabelTruncation) {
-	graph::Node node;
-	// Create a label longer than LABEL_BUFFER_SIZE
-	const std::string longLabel(graph::Node::LABEL_BUFFER_SIZE + 10, 'X');
-
-	node.setLabel(longLabel);
-
-	// Should be truncated to fit in buffer
-	std::string retrievedLabel = node.getLabel();
-	EXPECT_LT(retrievedLabel.size(), longLabel.size());
-	EXPECT_EQ(retrievedLabel.size(), graph::Node::LABEL_BUFFER_SIZE - 1);
-}
+// Removed: SetLabelTruncation
 
 TEST_F(NodeTest, EdgeRelationshipSetters) {
 	graph::Node node;
@@ -176,21 +166,21 @@ TEST_F(NodeTest, ActiveState) {
 }
 
 TEST_F(NodeTest, SerializeDeserializeEmpty) {
-	graph::Node originalNode(100, "");
+	graph::Node originalNode(100, 0); // ID 100, Label ID 0
 	std::stringstream ss;
 
 	originalNode.serialize(ss);
 	graph::Node deserializedNode = graph::Node::deserialize(ss);
 
 	EXPECT_EQ(deserializedNode.getId(), originalNode.getId());
-	EXPECT_EQ(deserializedNode.getLabel(), originalNode.getLabel());
+	EXPECT_EQ(deserializedNode.getLabelId(), originalNode.getLabelId());
 	EXPECT_EQ(deserializedNode.getFirstOutEdgeId(), originalNode.getFirstOutEdgeId());
 	EXPECT_EQ(deserializedNode.getFirstInEdgeId(), originalNode.getFirstInEdgeId());
 	EXPECT_EQ(deserializedNode.isActive(), originalNode.isActive());
 }
 
 TEST_F(NodeTest, SerializeDeserializeWithData) {
-	graph::Node originalNode(200, "TestNode");
+	graph::Node originalNode(200, 555); // ID 200, Label ID 555
 	originalNode.setFirstOutEdgeId(300);
 	originalNode.setFirstInEdgeId(400);
 	originalNode.setPropertyEntityId(500, graph::PropertyStorageType::PROPERTY_ENTITY);
@@ -201,7 +191,7 @@ TEST_F(NodeTest, SerializeDeserializeWithData) {
 	graph::Node deserializedNode = graph::Node::deserialize(ss);
 
 	EXPECT_EQ(deserializedNode.getId(), originalNode.getId());
-	EXPECT_EQ(deserializedNode.getLabel(), originalNode.getLabel());
+	EXPECT_EQ(deserializedNode.getLabelId(), originalNode.getLabelId());
 	EXPECT_EQ(deserializedNode.getFirstOutEdgeId(), originalNode.getFirstOutEdgeId());
 	EXPECT_EQ(deserializedNode.getFirstInEdgeId(), originalNode.getFirstInEdgeId());
 	EXPECT_EQ(deserializedNode.getPropertyEntityId(), originalNode.getPropertyEntityId());
@@ -210,28 +200,15 @@ TEST_F(NodeTest, SerializeDeserializeWithData) {
 }
 
 TEST_F(NodeTest, GetSerializedSize) {
-	const std::string testLabel = "TestLabel";
-	const graph::Node node(1, testLabel);
+	const graph::Node node(1, 100); // ID 1, Label ID 100
 
 	size_t expectedSize = 0;
-	expectedSize += sizeof(int64_t) * 4; // id, firstOutEdgeId, firstInEdgeId, propertyEntityId
-	expectedSize += sizeof(uint32_t); // propertyStorageType
-	expectedSize += sizeof(bool); // isActive
-	expectedSize += sizeof(uint32_t); // String length prefix
-	expectedSize += testLabel.size(); // String content
-
-	EXPECT_EQ(node.getSerializedSize(), expectedSize);
-}
-
-TEST_F(NodeTest, GetSerializedSizeEmptyLabel) {
-	const graph::Node node(1, "");
-
-	size_t expectedSize = 0;
-	expectedSize += sizeof(int64_t) * 4; // id, firstOutEdgeId, firstInEdgeId, propertyEntityId
-	expectedSize += sizeof(uint32_t); // propertyStorageType
-	expectedSize += sizeof(bool); // isActive
-	expectedSize += sizeof(uint32_t); // String length prefix (0)
-	// No string content for empty label
+	// 5 int64_t fields: id, firstOut, firstIn, propEntity, labelId
+	expectedSize += sizeof(int64_t) * 5;
+	// 1 uint32_t field: propertyStorageType
+	expectedSize += sizeof(uint32_t);
+	// 1 bool field: isActive
+	expectedSize += sizeof(bool);
 
 	EXPECT_EQ(node.getSerializedSize(), expectedSize);
 }
@@ -258,20 +235,20 @@ TEST_F(NodeTest, Constants) {
 	EXPECT_EQ(graph::Node::TOTAL_NODE_SIZE, 256u);
 
 	size_t expectedMetadataSize = 0;
-	expectedMetadataSize += sizeof(int64_t) * 4;
-	expectedMetadataSize += sizeof(uint32_t);
-	expectedMetadataSize += sizeof(bool);
+	// 5 int64_t + 1 uint32_t + 1 bool
+	expectedMetadataSize += offsetof(graph::Node::Metadata, isActive) + sizeof(bool);
 
 	EXPECT_EQ(graph::Node::METADATA_SIZE, expectedMetadataSize);
-	EXPECT_EQ(graph::Node::LABEL_BUFFER_SIZE, graph::Node::TOTAL_NODE_SIZE - graph::Node::METADATA_SIZE);
+	// No more LABEL_BUFFER_SIZE check
 	EXPECT_EQ(graph::Node::typeId, graph::toUnderlying(graph::EntityType::Node));
 }
 
 TEST_F(NodeTest, MetadataAccess) {
-	graph::Node node(42, "TestNode");
+	graph::Node node(42, 999);
 
 	const auto &metadata = node.getMetadata();
 	EXPECT_EQ(metadata.id, 42);
+	EXPECT_EQ(metadata.labelId, 999);
 	EXPECT_EQ(metadata.firstOutEdgeId, 0);
 	EXPECT_EQ(metadata.firstInEdgeId, 0);
 	EXPECT_EQ(metadata.propertyEntityId, 0);
@@ -282,20 +259,7 @@ TEST_F(NodeTest, MetadataAccess) {
 	EXPECT_EQ(node.getFirstOutEdgeId(), 100);
 }
 
-TEST_F(NodeTest, LabelEmptyString) {
-	graph::Node node;
-	node.setLabel("");
-	EXPECT_EQ(node.getLabel(), "");
-}
-
-TEST_F(NodeTest, LabelWithNullCharacters) {
-	graph::Node node;
-	const std::string labelWithNull = "test\0embedded";
-	node.setLabel(labelWithNull);
-
-	// The label should be truncated at the first null character
-	EXPECT_EQ(node.getLabel(), "test");
-}
+// Removed: LabelEmptyString, LabelWithNullCharacters tests
 
 TEST_F(NodeTest, TypeIdConstant) {
 	// Verify that typeId matches the expected entity type

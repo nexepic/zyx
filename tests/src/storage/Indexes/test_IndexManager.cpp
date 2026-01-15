@@ -1,5 +1,5 @@
 /**
- * @file test_IndexBuilder.cpp
+ * @file test_IndexManager.cpp
  * @author Nexepic
  * @date 2025/7/29
  *
@@ -63,7 +63,7 @@ protected:
 	}
 
 	// Helper to check if a specific index exists in the detailed list
-	bool hasIndexMetadata(const std::string &targetName, const std::string &targetProp) const {
+	[[nodiscard]] bool hasIndexMetadata(const std::string &targetName, const std::string &targetProp) const {
 		auto list = indexManager->listIndexesDetailed();
 		for (const auto &[name, type, label, prop]: list) {
 			if (name == targetName && prop == targetProp)
@@ -72,7 +72,7 @@ protected:
 		return false;
 	}
 
-	bool hasIndexWithName(const std::string &targetName) {
+	[[nodiscard]] bool hasIndexWithName(const std::string &targetName) const {
 		auto list = indexManager->listIndexesDetailed();
 		for (const auto &[name, type, label, prop]: list) {
 			if (name == targetName)
@@ -200,17 +200,18 @@ TEST_F(IndexManagerTest, LivePropertyUpdate) {
 	// 1. Setup Index
 	(void) indexManager->createIndex("idx_status", "node", "Task", propKey);
 
-	// 2. Insert Node
-	graph::Node node(1, "Task");
+	int64_t taskLabelId = dataManager->getOrCreateLabelId("Task");
+	graph::Node node(1, taskLabelId);
+
 	dataManager->addNode(node);
 	dataManager->addNodeProperties(1, {{propKey, std::string("TODO")}});
 
-	// Verify Index contains "TODO"
+	// Verify Index contains "TO-DO"
 	auto res1 = indexManager->findNodeIdsByProperty(propKey, std::string("TODO"));
 	ASSERT_EQ(res1.size(), 1UL);
 	EXPECT_EQ(res1[0], 1);
 
-	// 3. Update Node (TODO -> DONE)
+	// 3. Update Node (TO-DO -> DONE)
 	// This triggers onNodeUpdated in IndexManager
 	dataManager->addNodeProperties(1, {{propKey, std::string("DONE")}});
 
@@ -227,7 +228,9 @@ TEST_F(IndexManagerTest, LiveDeletion) {
 	// 1. Setup
 	(void) indexManager->createIndex("idx_del", "node", "User", "id");
 
-	graph::Node node(1, "User");
+	int64_t userLabelId = dataManager->getOrCreateLabelId("User");
+	graph::Node node(1, userLabelId);
+
 	dataManager->addNode(node);
 	dataManager->addNodeProperties(1, {{"id", static_cast<int64_t>(100)}});
 
@@ -247,18 +250,20 @@ TEST_F(IndexManagerTest, LiveDeletion) {
 }
 
 TEST_F(IndexManagerTest, LiveLabelChange) {
-	const std::string labelA = "Draft";
-	const std::string labelB = "Published";
+	const std::string labelAStr = "Draft";
+	const std::string labelBStr = "Published";
+
+	int64_t labelA = dataManager->getOrCreateLabelId(labelAStr);
+	int64_t labelB = dataManager->getOrCreateLabelId(labelBStr);
+
 	constexpr int64_t nodeId = 50;
 
-	// 1. Setup Label Indexes
 	(void) indexManager->createIndex("idx_label_gen", "node", "", "");
 
-	// 2. Insert Node with Label A
 	graph::Node nodeA(nodeId, labelA);
 	indexManager->onNodeAdded(nodeA);
 
-	ASSERT_EQ(indexManager->findNodeIdsByLabel(labelA).size(), 1UL);
+	ASSERT_EQ(indexManager->findNodeIdsByLabel(labelAStr).size(), 1UL);
 
 	// 3. Change Label (A -> B)
 	graph::Node nodeB(nodeId, labelB);
@@ -266,11 +271,11 @@ TEST_F(IndexManagerTest, LiveLabelChange) {
 	indexManager->onNodeUpdated(nodeA, nodeB);
 
 	// 4. Verify
-	auto resA = indexManager->findNodeIdsByLabel(labelA);
-	EXPECT_TRUE(resA.empty()) << "Old label index entry should be removed";
+	auto resA = indexManager->findNodeIdsByLabel(labelAStr);
+	EXPECT_TRUE(resA.empty());
 
-	auto resB = indexManager->findNodeIdsByLabel(labelB);
-	ASSERT_EQ(resB.size(), 1UL) << "New label index entry should be added";
+	auto resB = indexManager->findNodeIdsByLabel(labelBStr);
+	ASSERT_EQ(resB.size(), 1UL);
 	EXPECT_EQ(resB[0], nodeId);
 }
 
@@ -279,14 +284,14 @@ TEST_F(IndexManagerTest, LivePropertyTypeChange) {
 	(void) indexManager->createIndex("idx_mix", "node", "Mix", propKey);
 
 	// 1. Set as String
-	graph::Node n1(200, "Mix");
+	graph::Node n1(200, dataManager->getOrCreateLabelId("Mix"));
 	n1.addProperty(propKey, std::string("100"));
 	indexManager->onNodeAdded(n1);
 
 	ASSERT_EQ(indexManager->findNodeIdsByProperty(propKey, std::string("100")).size(), 1UL);
 
 	// 2. Change to Int
-	graph::Node n2(200, "Mix");
+	graph::Node n2(200, dataManager->getOrCreateLabelId("Mix"));
 	n2.addProperty(propKey, 100);
 
 	indexManager->onNodeUpdated(n1, n2);
@@ -308,26 +313,27 @@ TEST_F(IndexManagerTest, NodeEdgeIsolation) {
 	(void) indexManager->createIndex("idx_node_w", "node", "N", "weight");
 	(void) indexManager->createIndex("idx_edge_w", "edge", "E", "weight");
 
-	// Add Node
-	graph::Node n(1, "N");
+	int64_t nLabel = dataManager->getOrCreateLabelId("N");
+	int64_t eLabel = dataManager->getOrCreateLabelId("E");
+
+	graph::Node n(1, nLabel);
 	dataManager->addNode(n);
 	dataManager->addNodeProperties(1, {{"weight", static_cast<int64_t>(10)}});
 
-	// Add Edge
-	graph::Edge e(100, 1, 1, "E");
+	graph::Edge e(100, 1, 1, eLabel);
 	dataManager->addEdge(e);
 	dataManager->addEdgeProperties(100, {{"weight", static_cast<int64_t>(20)}});
 
 	// Verify Node Index only finds Node
-	auto nodeRes = indexManager->findNodeIdsByProperty("weight", (int64_t) 10);
+	auto nodeRes = indexManager->findNodeIdsByProperty("weight", 10);
 	EXPECT_EQ(nodeRes.size(), 1UL);
 	EXPECT_EQ(nodeRes[0], 1);
 
-	auto nodeResEmpty = indexManager->findNodeIdsByProperty("weight", (int64_t) 20);
+	auto nodeResEmpty = indexManager->findNodeIdsByProperty("weight", 20);
 	EXPECT_TRUE(nodeResEmpty.empty());
 
 	// Verify Edge Index only finds Edge
-	auto edgeRes = indexManager->findEdgeIdsByProperty("weight", (int64_t) 20);
+	auto edgeRes = indexManager->findEdgeIdsByProperty("weight", 20);
 	EXPECT_EQ(edgeRes.size(), 1UL);
 	EXPECT_EQ(edgeRes[0], 100);
 }
@@ -340,7 +346,9 @@ TEST_F(IndexManagerTest, PersistenceAfterRestart) {
 	// 1. Create Index and Data
 	(void) indexManager->createIndex("idx_persist", "node", "SaveMe", "val");
 
-	graph::Node n(1, "SaveMe");
+	int64_t labelId = dataManager->getOrCreateLabelId("SaveMe");
+	graph::Node n(1, labelId);
+
 	dataManager->addNode(n);
 	dataManager->addNodeProperties(1, {{"val", std::string("test")}});
 

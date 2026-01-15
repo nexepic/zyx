@@ -29,10 +29,10 @@ class RegistryLifecycleTest : public ::testing::Test {
 protected:
 	DirtyEntityRegistry<Node> registry;
 
-	static DirtyEntityInfo<Node> makeInfo(int64_t id, EntityChangeType type, const std::string &label = "") {
+	static DirtyEntityInfo<Node> makeInfo(int64_t id, EntityChangeType type, int64_t labelId = 0) {
 		Node n;
 		n.setId(id);
-		n.setLabel(label);
+		n.setLabelId(labelId);
 		return {type, n};
 	}
 };
@@ -40,36 +40,36 @@ protected:
 // SCENARIO: Update Active -> Snapshot -> Update Again (Active) -> Read
 // Verifies that the new update in Active properly masks the old version in Flushing.
 TEST_F(RegistryLifecycleTest, UpdateWhileFlushing) {
-	// 1. Initial Add
-	registry.upsert(makeInfo(1, EntityChangeType::ADDED, "v1"));
+	// 1. Initial Add (Label ID 10)
+	registry.upsert(makeInfo(1, EntityChangeType::ADDED, 10));
 
-	// 2. Snapshot (v1 moves to Flushing)
+	// 2. Snapshot
 	auto snapshot = registry.createFlushSnapshot();
-	EXPECT_EQ(snapshot.at(1).backup->getLabel(), "v1");
+	EXPECT_EQ(snapshot.at(1).backup->getLabelId(), 10);
 
-	// 3. Update while flushing (v2 goes to Active)
-	registry.upsert(makeInfo(1, EntityChangeType::MODIFIED, "v2"));
+	// 3. Update while flushing (Label ID 20)
+	registry.upsert(makeInfo(1, EntityChangeType::MODIFIED, 20));
 
-	// 4. Verify getInfo returns v2 (Priority: Active > Flushing)
+	// 4. Verify Active has priority
 	auto info = registry.getInfo(1);
 	ASSERT_TRUE(info.has_value());
-	EXPECT_EQ(info->backup->getLabel(), "v2");
+	EXPECT_EQ(info->backup->getLabelId(), 20);
 	EXPECT_EQ(info->changeType, EntityChangeType::MODIFIED);
 
-	// 5. Commit Flush (v1 removed from Flushing, v2 stays in Active)
+	// 5. Commit Flush
 	registry.commitFlush();
 
-	// 6. Verify v2 still exists
+	// 6. Verify Active remains
 	info = registry.getInfo(1);
 	ASSERT_TRUE(info.has_value());
-	EXPECT_EQ(info->backup->getLabel(), "v2");
+	EXPECT_EQ(info->backup->getLabelId(), 20);
 }
 
 // SCENARIO: Add -> Snapshot -> Delete -> Read
 // Verifies that a delete operation in Active correctly hides an entity currently being flushed.
 TEST_F(RegistryLifecycleTest, DeleteWhileFlushing) {
 	// 1. Add v1 and Snapshot
-	registry.upsert(makeInfo(1, EntityChangeType::ADDED, "v1"));
+	registry.upsert(makeInfo(1, EntityChangeType::ADDED, 10));
 	registry.createFlushSnapshot();
 
 	// 2. Delete (Active gets DELETED marker)

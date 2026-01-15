@@ -44,14 +44,14 @@ protected:
 		traversal = dataManager->getRelationshipTraversal();
 
 		// Create and add two nodes
-		node1 = graph::Node(1, "Node1");
-		node2 = graph::Node(2, "Node2");
+		node1 = graph::Node(1, dataManager->getOrCreateLabelId("Node1"));
+		node2 = graph::Node(2, dataManager->getOrCreateLabelId("Node2"));
 		dataManager->addNode(node1);
 		dataManager->addNode(node2);
 
 		// Create and add a single edge between them.
 		// dataManager->addEdge() internally calls linkEdge(), establishing the initial state.
-		edge = graph::Edge(10, node1.getId(), node2.getId(), "RELATED_TO");
+		edge = graph::Edge(10, node1.getId(), node2.getId(), dataManager->getOrCreateLabelId("RELATED_TO"));
 		dataManager->addEdge(edge);
 	}
 
@@ -131,7 +131,7 @@ TEST_F(RelationshipTraversalTest, UnlinkSingleEdge) {
 
 TEST_F(RelationshipTraversalTest, TraversalOnNodeWithNoEdges) {
 	// Add a new node that has no connections
-	graph::Node node3(3, "IsolatedNode");
+	graph::Node node3(3, dataManager->getOrCreateLabelId("IsolatedNode"));
 	dataManager->addNode(node3);
 
 	EXPECT_TRUE(traversal->getOutgoingEdges(node3.getId()).empty());
@@ -152,7 +152,7 @@ TEST_F(RelationshipTraversalTest, TraversalIgnoresInactiveEdges) {
 
 TEST_F(RelationshipTraversalTest, GetAllConnectedNodesReturnsUniqueNodes) {
 	// Add a second edge from node1 to node2
-	graph::Edge edge2(11, node1.getId(), node2.getId(), "KNOWS");
+	graph::Edge edge2(11, node1.getId(), node2.getId(), dataManager->getOrCreateLabelId("KNOWS"));
 	dataManager->addEdge(edge2);
 
 	// We have two edges pointing to node2, but should only get one node back
@@ -162,10 +162,10 @@ TEST_F(RelationshipTraversalTest, GetAllConnectedNodesReturnsUniqueNodes) {
 }
 
 TEST_F(RelationshipTraversalTest, SelfReferencingEdge) {
-	graph::Node node3(3, "SelfReferencingNode");
+	graph::Node node3(3, dataManager->getOrCreateLabelId("SelfReferencingNode"));
 	dataManager->addNode(node3);
 
-	graph::Edge selfEdge(12, node3.getId(), node3.getId(), "LOOPS_ON");
+	graph::Edge selfEdge(12, node3.getId(), node3.getId(), dataManager->getOrCreateLabelId("LOOPS_ON"));
 	dataManager->addEdge(selfEdge);
 
 	auto outEdges = traversal->getOutgoingEdges(node3.getId());
@@ -209,10 +209,10 @@ protected:
 		traversal = dataManager->getRelationshipTraversal();
 
 		// Create nodes: n1, n2, n3, n4
-		n1 = graph::Node(1, "N1");
-		n2 = graph::Node(2, "N2");
-		n3 = graph::Node(3, "N3");
-		n4 = graph::Node(4, "N4");
+		n1 = graph::Node(1, dataManager->getOrCreateLabelId("N1"));
+		n2 = graph::Node(2, dataManager->getOrCreateLabelId("N2"));
+		n3 = graph::Node(3, dataManager->getOrCreateLabelId("N3"));
+		n4 = graph::Node(4, dataManager->getOrCreateLabelId("N4"));
 		dataManager->addNode(n1);
 		dataManager->addNode(n2);
 		dataManager->addNode(n3);
@@ -224,9 +224,9 @@ protected:
 		// n1 -> n4 (edge12)
 		// Since linkEdge adds to the front, the final linked-list order for out-edges will be: edge12 -> edge11 ->
 		// edge10
-		edge10 = graph::Edge(10, n1.getId(), n2.getId(), "points_to");
-		edge11 = graph::Edge(11, n1.getId(), n3.getId(), "points_to");
-		edge12 = graph::Edge(12, n1.getId(), n4.getId(), "points_to");
+		edge10 = graph::Edge(10, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("points_to"));
+		edge11 = graph::Edge(11, n1.getId(), n3.getId(), dataManager->getOrCreateLabelId("points_to"));
+		edge12 = graph::Edge(12, n1.getId(), n4.getId(), dataManager->getOrCreateLabelId("points_to"));
 		dataManager->addEdge(edge10);
 		dataManager->addEdge(edge11);
 		dataManager->addEdge(edge12);
@@ -309,16 +309,16 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInChain) {
 }
 
 TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
-	graph::Node n5(5, "N5");
+	graph::Node n5(5, dataManager->getOrCreateLabelId("N5"));
 	dataManager->addNode(n5);
 
-	graph::Edge edge14(14, n1.getId(), n5.getId(), "links_to");
+	graph::Edge edge14(14, n1.getId(), n5.getId(), dataManager->getOrCreateLabelId("links_to"));
 	dataManager->addEdge(edge14);
 
-	graph::Edge edge24(24, n2.getId(), n5.getId(), "links_to");
+	graph::Edge edge24(24, n2.getId(), n5.getId(), dataManager->getOrCreateLabelId("links_to"));
 	dataManager->addEdge(edge24);
 
-	graph::Edge edge34(34, n3.getId(), n5.getId(), "links_to");
+	graph::Edge edge34(34, n3.getId(), n5.getId(), dataManager->getOrCreateLabelId("links_to"));
 	dataManager->addEdge(edge34);
 
 	auto initialInEdges = traversal->getIncomingEdges(n5.getId());

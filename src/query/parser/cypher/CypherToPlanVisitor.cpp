@@ -320,9 +320,14 @@ namespace graph::parser::cypher {
 
 				// Filter Target
 				if (!targetLabel.empty()) {
-					auto labelPred = [targetVar, targetLabel](const query::execution::Record &r) {
+					// RESOLVE ID AT PLAN TIME using Planner's DM
+					// This is cleaner than injecting DM separately into Visitor
+					auto dm = planner_->getDataManager();
+					int64_t targetLabelId = dm->getOrCreateLabelId(targetLabel);
+
+					auto labelPred = [targetVar, targetLabelId](const query::execution::Record &r) {
 						auto n = r.getNode(targetVar);
-						return n && n->getLabel() == targetLabel;
+						return n && n->getLabelId() == targetLabelId;
 					};
 					rootOp_ = planner_->filterOp(std::move(rootOp_), labelPred,
 												 "Label(" + targetVar + ")=" + targetLabel);

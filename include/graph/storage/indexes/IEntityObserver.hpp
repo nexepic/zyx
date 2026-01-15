@@ -22,6 +22,7 @@
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/core/State.hpp"
 
 namespace graph {
 

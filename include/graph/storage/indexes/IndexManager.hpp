@@ -22,11 +22,15 @@
 
 #include <memory>
 #include <string>
-#include "EntityTypeIndexManager.hpp"
 #include "IEntityObserver.hpp"
-#include "graph/storage/FileStorage.hpp"
+#include "graph/storage/IStorageEventListener.hpp"
 
+namespace graph::storage {
+	class DataManager;
+	class FileStorage;
+} // namespace graph::storage
 namespace graph::query::indexes {
+	class EntityTypeIndexManager;
 
 	class IndexBuilder;
 
@@ -36,6 +40,7 @@ namespace graph::query::indexes {
 		constexpr uint32_t NODE_PROPERTY_TYPE = 2;
 		constexpr uint32_t EDGE_LABEL_TYPE = 3;
 		constexpr uint32_t EDGE_PROPERTY_TYPE = 4;
+		constexpr uint32_t SYSTEM_LABEL_DICTIONARY = 5;
 	} // namespace IndexTypes
 
 	namespace StateKeys {

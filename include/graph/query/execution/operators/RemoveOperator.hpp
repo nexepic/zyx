@@ -69,9 +69,12 @@ namespace graph::query::execution::operators {
 							node.setProperties(std::move(props));
 						} else if (item.type == RemoveActionType::LABEL) {
 							// 2. Remove Label
-							// Only remove if it matches current label
-							if (node.getLabel() == item.key) {
-								node.setLabel(""); // Clear label
+							// We need to compare IDs. Resolve the target label string to an ID.
+							// getOrCreate is safe here; if it creates a new ID, it won't match the node anyway.
+							int64_t targetLabelId = dm_->getOrCreateLabelId(item.key);
+
+							if (node.getLabelId() != 0 && node.getLabelId() == targetLabelId) {
+								node.setLabelId(0); // 0 indicates no label
 								dm_->updateNode(node);
 							}
 						}

@@ -178,6 +178,8 @@ namespace graph::query {
 		// Helper for standalone queries (RETURN 1)
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> singleRowOp();
 
+		[[nodiscard]] std::shared_ptr<storage::DataManager> getDataManager() const { return dm_; }
+
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<indexes::IndexManager> im_;

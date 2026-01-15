@@ -60,21 +60,26 @@ protected:
 	}
 
 	graph::Node insertNode(const std::string &label) {
-		int64_t id = allocator->allocateId(graph::Node::typeId);
-		graph::Node node(id, label);
-		dataManager->addNode(node);
-		return node;
-	}
+        int64_t id = allocator->allocateId(graph::Node::typeId);
+
+        int64_t labelId = dataManager->getOrCreateLabelId(label);
+
+        graph::Node node(id, labelId);
+        dataManager->addNode(node);
+        return node;
+    }
 
 	graph::Edge insertEdge(int64_t startId, int64_t endId, const std::string &label) {
 		int64_t id = allocator->allocateId(graph::Edge::typeId);
-		graph::Edge edge(id, startId, endId, label);
+		int64_t labelId = dataManager->getOrCreateLabelId(label);
+
+		graph::Edge edge(id, startId, endId, labelId);
 		dataManager->addEdge(edge);
 		return edge;
 	}
 
 	void deleteNode(int64_t id) {
-		graph::Node node_to_delete(id, "");
+		graph::Node node_to_delete(id, 0);
 		dataManager->deleteNode(node_to_delete);
 	}
 
@@ -474,7 +479,7 @@ TEST_F(IDAllocatorTest, Persistence_Restart_NoOverlap) {
 		// IF the bug exists, it would return 1025 or overlap.
 		// IF fixed, it should return 4.
 		int64_t id4 = alloc2->allocateId(graph::Node::typeId);
-		graph::Node n4(id4, "D");
+		graph::Node n4(id4, 0);
 		dataManager2->addNode(n4);
 
 		EXPECT_EQ(n4.getId(), 4) << "ID Overlap or Skip Detected! Allocator logic error.";

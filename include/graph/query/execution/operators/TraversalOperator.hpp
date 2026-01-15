@@ -51,37 +51,39 @@ namespace graph::query::execution::operators {
 			direction_(std::move(direction)) {}
 
 		void open() override {
-			if (child_)
-				child_->open();
+			if (child_) child_->open();
+
+			// Resolve Edge Label ID (Optimization)
+			edgeLabelId_ = 0;
+			if (!edgeLabel_.empty()) {
+				// Use getOrCreate or resolve. Since we are filtering, getOrCreate is fine.
+				// If it creates a new ID, it won't match existing edges anyway.
+				edgeLabelId_ = dm_->getOrCreateLabelId(edgeLabel_);
+			}
 		}
 
 		std::optional<RecordBatch> next() override {
-			// 1. Pull batch from upstream (Source Nodes)
 			auto batchOpt = child_->next();
-			if (!batchOpt)
-				return std::nullopt;
+			if (!batchOpt) return std::nullopt;
 
 			RecordBatch &inputBatch = *batchOpt;
 			RecordBatch outputBatch;
-
-			// Output can be larger than input (1-to-N relationship), so reserve conservatively
 			outputBatch.reserve(inputBatch.size() * 2);
 
 			for (const auto &record: inputBatch) {
-				// 2. Get Source Node
 				auto sourceNodeOpt = record.getNode(sourceVar_);
-				if (!sourceNodeOpt)
-					continue;
+				if (!sourceNodeOpt) continue;
 				int64_t sourceId = sourceNodeOpt->getId();
 
-				// 3. Find Connected Edges (Low-level Traversal)
-				// DataManager::findEdgesByNode calls RelationshipTraversal internally
+				// Low-level traversal
 				std::vector<Edge> edges = dm_->findEdgesByNode(sourceId, direction_);
 
 				for (auto &edge: edges) {
-					// 4. Filter by Edge Label
-					if (!edgeLabel_.empty() && edge.getLabel() != edgeLabel_) {
-						continue;
+					// 4. Filter by Edge Label (Using ID comparison)
+					if (edgeLabelId_ != 0) {
+						if (edge.getLabelId() != edgeLabelId_) {
+							continue;
+						}
 					}
 
 					// 5. Hydrate Edge Properties
@@ -89,37 +91,28 @@ namespace graph::query::execution::operators {
 					edge.setProperties(std::move(edgeProps));
 
 					// 6. Resolve Target Node
-					// Determine which side is the "other" side
 					int64_t targetNodeId =
 							(edge.getSourceNodeId() == sourceId) ? edge.getTargetNodeId() : edge.getSourceNodeId();
 
 					Node targetNode = dm_->getNode(targetNodeId);
-					if (!targetNode.isActive())
-						continue;
+					if (!targetNode.isActive()) continue;
 
 					// 7. Hydrate Target Node Properties
 					auto nodeProps = dm_->getNodeProperties(targetNodeId);
 					targetNode.setProperties(std::move(nodeProps));
 
 					// 8. Create Extended Record
-					Record newRecord = record; // Copy existing variables
+					Record newRecord = record;
 					newRecord.setEdge(edgeVar_, edge);
 					newRecord.setNode(targetVar_, targetNode);
 
 					outputBatch.push_back(std::move(newRecord));
 				}
 			}
-
-			// If batch was filtered out completely, we might need to fetch next
-			// For simplicity, we return empty batch or check recursively in a robust impl.
-			// Here we return whatever we found.
 			return outputBatch;
 		}
 
-		void close() override {
-			if (child_)
-				child_->close();
-		}
+		void close() override { if (child_) child_->close(); }
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			auto vars = child_->getOutputVariables();
@@ -133,8 +126,7 @@ namespace graph::query::execution::operators {
 		}
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override {
-			if (child_)
-				return {child_.get()};
+			if (child_) return {child_.get()};
 			return {};
 		}
 
@@ -147,6 +139,7 @@ namespace graph::query::execution::operators {
 		std::string targetVar_;
 		std::string edgeLabel_;
 		std::string direction_;
-	};
 
-} // namespace graph::query::execution::operators
+		int64_t edgeLabelId_ = 0; // Cached ID
+	};
+}

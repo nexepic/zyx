@@ -240,7 +240,7 @@ namespace graph::storage {
 		return allocateNewSequentialId(entityType);
 	}
 
-	int64_t IDAllocator::allocateIdBatch(const uint32_t entityType, size_t count) {
+	int64_t IDAllocator::allocateIdBatch(const uint32_t entityType, size_t count) const {
 		if (count == 0)
 			return 0;
 

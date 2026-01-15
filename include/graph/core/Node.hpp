@@ -37,6 +37,7 @@ namespace graph {
 			int64_t firstOutEdgeId = 0; // First outgoing edge
 			int64_t firstInEdgeId = 0; // First incoming edge
 			int64_t propertyEntityId = 0;
+			int64_t labelId = 0;
 			uint32_t propertyStorageType = 0;
 			bool isActive = true;
 			// Padding is implicit
@@ -46,13 +47,14 @@ namespace graph {
 		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
 		static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_NODE_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Node);
+		static constexpr size_t PADDING_SIZE = TOTAL_NODE_SIZE - METADATA_SIZE;
 
 		[[nodiscard]] size_t getSerializedSize() const;
 
 		static constexpr size_t getTotalSize() { return TOTAL_NODE_SIZE; }
 
 		Node() = default;
-		Node(int64_t id, const std::string &label);
+		Node(int64_t id, int64_t labelId);
 
 		// Metadata access for CRTP base class
 		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
@@ -84,13 +86,12 @@ namespace graph {
 			return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
 		}
 
-		// Getters for metadata
-		[[nodiscard]] std::string getLabel() const;
 		[[nodiscard]] bool isActive() const { return metadata.isActive; }
 
-		// Setters for metadata
-		void setLabel(const std::string &label);
 		void markInactive(bool active = false) { metadata.isActive = active; }
+
+		[[nodiscard]] int64_t getLabelId() const { return metadata.labelId; }
+		void setLabelId(int64_t id) { metadata.labelId = id; }
 
 		// Serialization
 		void serialize(std::ostream &os) const;
@@ -99,6 +100,8 @@ namespace graph {
 	private:
 		// Fixed-size metadata structure
 		Metadata metadata;
+
+		char padding[PADDING_SIZE] = {0};
 
 		// Fixed-size buffer for label
 		char labelBuffer[LABEL_BUFFER_SIZE] = {0};

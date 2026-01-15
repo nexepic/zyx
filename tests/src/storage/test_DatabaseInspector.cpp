@@ -32,7 +32,6 @@
 #include "graph/storage/DatabaseInspector.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
-#include "graph/storage/state/SystemStateManager.hpp"
 
 using namespace graph;
 using namespace graph::storage;
@@ -74,8 +73,11 @@ protected:
 
 		// 1. Nodes: Add enough to fill at least one full segment and start a second one.
 		// This ensures Page 0 is full and Page 1 is partially empty (good for testing UNUSED slots).
+		int64_t labelId = dm->getOrCreateLabelId("InspectNode");
+
 		for (uint32_t i = 0; i < NODES_PER_SEGMENT + 1; ++i) {
-			Node n(0, "InspectNode");
+			// Use ID constructor
+			Node n(0, labelId);
 			dm->addNode(n);
 		}
 
@@ -87,7 +89,8 @@ protected:
 		dm->addNodeProperties(2, {{"payload", longData}});
 
 		// 4. Edges
-		Edge e1(0, 1, 2, "CONNECTS");
+		int64_t edgeLabelId = dm->getOrCreateLabelId("CONNECTS");
+		Edge e1(0, 1, 2, edgeLabelId);
 		dm->addEdge(e1);
 
 		// 5. Indexes

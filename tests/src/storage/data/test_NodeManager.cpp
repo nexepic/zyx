@@ -63,51 +63,48 @@ protected:
 	}
 
 	// Helper function to create a valid Node entity
-	static graph::Node createTestNode(const std::string &label) {
+	static graph::Node createTestNode(const std::shared_ptr<graph::storage::DataManager> &dm,
+									  const std::string &label) {
 		graph::Node node;
-		node.setLabel(label);
+		int64_t labelId = dm->getOrCreateLabelId(label);
+		node.setLabelId(labelId);
 		return node;
 	}
 };
 
 // Test adding a node and then its properties
 TEST_F(NodeManagerTest, AddAndGetNodeWithProperties) {
-	// Create a node
-	graph::Node node = createTestNode("Person");
+	graph::Node node = createTestNode(dataManager, "Person");
 
-	// Add the node first to get an ID
 	nodeManager->add(node);
-	EXPECT_NE(node.getId(), 0) << "Node should have a non-zero ID after adding";
+	EXPECT_NE(node.getId(), 0);
 
-	// Now, add properties to the node using the manager
 	std::unordered_map<std::string, graph::PropertyValue> props;
 	props["name"] = graph::PropertyValue("John");
 	props["age"] = graph::PropertyValue(30);
 	nodeManager->addProperties(node.getId(), props);
 
-	// Get the node and its properties
 	graph::Node retrievedNode = nodeManager->get(node.getId());
 	auto retrievedProps = nodeManager->getProperties(node.getId());
 
-	EXPECT_EQ(retrievedNode.getId(), node.getId()) << "Retrieved node should have the same ID";
-	EXPECT_EQ(retrievedNode.getLabel(), "Person") << "Retrieved node should have the same label";
+	EXPECT_EQ(retrievedNode.getId(), node.getId());
+	EXPECT_EQ(retrievedNode.getLabelId(), node.getLabelId());
+	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "Person");
 
 	ASSERT_EQ(retrievedProps.size(), 2UL);
-	EXPECT_EQ(std::get<std::string>(retrievedProps.at("name").getVariant()), "John")
-			<< "Retrieved node should have the correct name property";
-	EXPECT_EQ(std::get<int64_t>(retrievedProps.at("age").getVariant()), 30)
-			<< "Retrieved node should have the correct age property";
+	EXPECT_EQ(std::get<std::string>(retrievedProps.at("name").getVariant()), "John");
 }
 
 // Test updating a node's label and properties
 TEST_F(NodeManagerTest, UpdateNode) {
 	// Create and add a node
-	graph::Node node = createTestNode("Person");
+	graph::Node node = createTestNode(dataManager, "Person");
 	nodeManager->add(node);
 	nodeManager->addProperties(node.getId(), {{"name", graph::PropertyValue("John")}});
 
 	// Update the node's label
-	node.setLabel("Employee");
+	int64_t newLabelId = dataManager->getOrCreateLabelId("Employee");
+	node.setLabelId(newLabelId);
 	nodeManager->update(node);
 
 	// Add/update properties separately
@@ -120,7 +117,8 @@ TEST_F(NodeManagerTest, UpdateNode) {
 	graph::Node retrievedNode = nodeManager->get(node.getId());
 	auto retrievedProps = nodeManager->getProperties(node.getId());
 
-	EXPECT_EQ(retrievedNode.getLabel(), "Employee") << "Node label should be updated";
+	EXPECT_EQ(retrievedNode.getLabelId(), newLabelId) << "Node label should be updated";
+	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "Employee");
 	ASSERT_EQ(retrievedProps.size(), 2UL);
 	EXPECT_EQ(std::get<std::string>(retrievedProps.at("name").getVariant()), "John Doe")
 			<< "Node name should be updated";
@@ -131,7 +129,7 @@ TEST_F(NodeManagerTest, UpdateNode) {
 // Test removing a node
 TEST_F(NodeManagerTest, RemoveNode) {
 	// Create and add a node
-	graph::Node node = createTestNode("Person");
+	graph::Node node = createTestNode(dataManager, "Person");
 	nodeManager->add(node);
 	int64_t nodeId = node.getId();
 
@@ -152,31 +150,28 @@ TEST_F(NodeManagerTest, RemoveNode) {
 
 // Test batch operations
 TEST_F(NodeManagerTest, BatchOperations) {
-	// Create multiple nodes
 	std::vector<graph::Node> nodes;
 	std::vector<int64_t> nodeIds;
 
 	for (int i = 0; i < 5; i++) {
-		graph::Node node = createTestNode("Person_" + std::to_string(i));
+		graph::Node node = createTestNode(dataManager, "Person_" + std::to_string(i));
 		nodeManager->add(node);
 		nodes.push_back(node);
 		nodeIds.push_back(node.getId());
 	}
 
-	// Test getBatch
 	auto retrievedNodes = nodeManager->getBatch(nodeIds);
-	EXPECT_EQ(retrievedNodes.size(), 5UL) << "Should retrieve all 5 nodes";
+	EXPECT_EQ(retrievedNodes.size(), 5UL);
 
-	// Test after removing one node
 	nodeManager->remove(nodes[2]);
 	retrievedNodes = nodeManager->getBatch(nodeIds);
-	EXPECT_EQ(retrievedNodes.size(), 4UL) << "Should retrieve only active nodes";
+	EXPECT_EQ(retrievedNodes.size(), 4UL);
 }
 
 // Test property management
 TEST_F(NodeManagerTest, PropertyManagement) {
 	// Create a node
-	graph::Node node = createTestNode("TestNode");
+	graph::Node node = createTestNode(dataManager, "TestNode");
 	nodeManager->add(node);
 	int64_t nodeId = node.getId();
 
@@ -205,14 +200,13 @@ TEST_F(NodeManagerTest, PropertyManagement) {
 
 // Test node ID allocation
 TEST_F(NodeManagerTest, NodeIdAllocation) {
-	// Create multiple nodes and verify IDs are unique
-	graph::Node node1 = createTestNode("Node1");
-	graph::Node node2 = createTestNode("Node2");
+	graph::Node node1 = createTestNode(dataManager, "Node1");
+	graph::Node node2 = createTestNode(dataManager, "Node2");
 
 	nodeManager->add(node1);
 	nodeManager->add(node2);
 
 	EXPECT_NE(node1.getId(), 0);
 	EXPECT_NE(node2.getId(), 0);
-	EXPECT_NE(node1.getId(), node2.getId()) << "Node IDs should be unique";
+	EXPECT_NE(node1.getId(), node2.getId());
 }

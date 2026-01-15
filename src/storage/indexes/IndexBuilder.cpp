@@ -24,6 +24,7 @@
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/LabelIndex.hpp"
 #include "graph/storage/indexes/PropertyIndex.hpp"
@@ -157,8 +158,11 @@ namespace graph::query::indexes {
 			int64_t nodeId = node.getId();
 
 			if (labelIndex) {
-				if (!node.getLabel().empty()) {
-					labelIndex->addNode(nodeId, node.getLabel());
+				if (node.getLabelId() != 0) {
+					std::string labelStr = dataManager_->resolveLabel(node.getLabelId());
+					if (!labelStr.empty()) {
+						labelIndex->addNode(nodeId, labelStr);
+					}
 				}
 			}
 
@@ -189,8 +193,11 @@ namespace graph::query::indexes {
 			int64_t edgeId = edge.getId();
 
 			if (labelIndex) {
-				if (!edge.getLabel().empty()) {
-					labelIndex->addNode(edgeId, edge.getLabel());
+				if (edge.getLabelId() != 0) {
+					std::string labelStr = dataManager_->resolveLabel(edge.getLabelId());
+					if (!labelStr.empty()) {
+						labelIndex->addNode(edgeId, labelStr);
+					}
 				}
 			}
 

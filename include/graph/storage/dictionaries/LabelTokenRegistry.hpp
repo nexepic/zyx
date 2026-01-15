@@ -1,0 +1,69 @@
+/**
+ * @file LabelTokenRegistry.hpp
+ * @author Nexepic
+ * @date 2026/1/13
+ *
+ * @copyright Copyright (c) 2026 Nexepic
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ **/
+
+#pragma once
+
+#include <string>
+#include <memory>
+#include <shared_mutex>
+#include <unordered_map>
+#include "graph/core/IndexTreeManager.hpp"
+
+namespace graph::storage {
+	namespace state {
+		class SystemStateManager;
+	}
+	class DataManager; // Forward declaration
+
+	class LabelTokenRegistry {
+	public:
+		static constexpr size_t CACHE_SIZE = 5000;
+		static constexpr int64_t NULL_LABEL_ID = 0;
+
+		static constexpr char STORAGE_KEY[] = "sys.dict.label_registry.root";
+
+		LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
+						   std::shared_ptr<state::SystemStateManager> stateManager);
+
+		// Get ID for string, creating if missing.
+		int64_t getOrCreateLabelId(const std::string& label);
+
+		// Get string for ID.
+		std::string getLabelString(int64_t labelId);
+
+		[[nodiscard]] int64_t getRootIndexId() const { return rootIndexId_; }
+
+		void saveState();
+
+	private:
+		std::shared_ptr<DataManager> dataManager_;
+		std::shared_ptr<state::SystemStateManager> stateManager_;
+		std::shared_ptr<query::indexes::IndexTreeManager> indexTree_;
+
+		int64_t rootIndexId_ = 0;
+
+		mutable std::shared_mutex cacheMutex_;
+		std::unordered_map<std::string, int64_t> stringToIdCache_;
+		std::unordered_map<int64_t, std::string> idToStringCache_;
+
+		void addToCache(const std::string& label, int64_t id);
+		void initialize();
+	};
+}

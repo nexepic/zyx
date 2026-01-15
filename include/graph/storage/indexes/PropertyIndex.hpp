@@ -33,7 +33,7 @@ namespace graph::query::indexes {
 
 	class PropertyIndex {
 	public:
-		PropertyIndex(std::shared_ptr<storage::DataManager> &dataManager,
+		PropertyIndex(std::shared_ptr<storage::DataManager> dataManager,
 					  std::shared_ptr<storage::state::SystemStateManager> systemStateManager, uint32_t indexType,
 					  std::string baseStateKey);
 

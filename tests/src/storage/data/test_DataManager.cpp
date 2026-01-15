@@ -35,6 +35,7 @@
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EntityChangeType.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IEntityObserver.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -112,17 +113,18 @@ protected:
 	}
 
 	// Helper methods to create test entities.
-	static Node createTestNode(const std::string &label = "TestNode") {
+	static Node createTestNode(const std::shared_ptr<DataManager> &dm, const std::string &label = "TestNode") {
 		Node node;
-		node.setLabel(label);
+		node.setLabelId(dm->getOrCreateLabelId(label));
 		return node;
 	}
 
-	static Edge createTestEdge(int64_t sourceId, int64_t targetId, const std::string &label = "TestEdge") {
+	static Edge createTestEdge(const std::shared_ptr<DataManager> &dm, int64_t sourceId, int64_t targetId,
+							   const std::string &label = "TestEdge") {
 		Edge edge;
 		edge.setSourceNodeId(sourceId);
 		edge.setTargetNodeId(targetId);
-		edge.setLabel(label);
+		edge.setLabelId(dm->getOrCreateLabelId(label));
 		return edge;
 	}
 
@@ -156,9 +158,9 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
-	std::shared_ptr<graph::storage::FileStorage> fileStorage;
-	std::shared_ptr<graph::storage::DataManager> dataManager;
+	std::unique_ptr<Database> database;
+	std::shared_ptr<FileStorage> fileStorage;
+	std::shared_ptr<DataManager> dataManager;
 	std::shared_ptr<TestEntityObserver> observer;
 };
 
@@ -177,7 +179,7 @@ TEST_F(DataManagerTest, Initialization) {
 
 TEST_F(DataManagerTest, NodeCRUD) {
 	// 1. Create
-	auto node = createTestNode("Person");
+	auto node = createTestNode(dataManager, "Person");
 	dataManager->addNode(node);
 	EXPECT_NE(0, node.getId());
 	ASSERT_EQ(1UL, observer->addedNodes.size());
@@ -186,38 +188,38 @@ TEST_F(DataManagerTest, NodeCRUD) {
 	// 2. Retrieve
 	auto retrievedNode = dataManager->getNode(node.getId());
 	EXPECT_EQ(node.getId(), retrievedNode.getId());
-	EXPECT_EQ("Person", retrievedNode.getLabel());
+	EXPECT_EQ("Person", dataManager->resolveLabel(retrievedNode.getLabelId()));
 	EXPECT_TRUE(retrievedNode.isActive());
 
 	// 3. Update (while still in 'ADDED' state)
 	// [IMPORTANT] Reset observer to verify the update specifically
 	observer->reset();
 
-	node.setLabel("StagingPerson");
+	node.setLabelId(dataManager->getOrCreateLabelId("StagingPerson"));
 	dataManager->updateNode(node);
 
 	retrievedNode = dataManager->getNode(node.getId());
-	EXPECT_EQ("StagingPerson", retrievedNode.getLabel());
+	EXPECT_EQ("StagingPerson", dataManager->resolveLabel(retrievedNode.getLabelId()));
 
 	// Since DataManager now notifies even for ADDED entities, we expect 1 update event.
 	// Old Label: Person, New Label: StagingPerson
 	ASSERT_EQ(1UL, observer->updatedNodes.size());
-	EXPECT_EQ("Person", observer->updatedNodes[0].first.getLabel());
-	EXPECT_EQ("StagingPerson", observer->updatedNodes[0].second.getLabel());
+	EXPECT_EQ("Person", dataManager->resolveLabel(observer->updatedNodes[0].first.getLabelId()));
+	EXPECT_EQ("StagingPerson", dataManager->resolveLabel(observer->updatedNodes[0].second.getLabelId()));
 
 	// 4. Simulate Save & Update
 	simulateSave(); // Replaces markAllSaved()
 	observer->reset();
 
 	Node oldNode = retrievedNode;
-	node.setLabel("UpdatedPerson");
+	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedPerson"));
 	dataManager->updateNode(node);
 	retrievedNode = dataManager->getNode(node.getId());
-	EXPECT_EQ("UpdatedPerson", retrievedNode.getLabel());
+	EXPECT_EQ("UpdatedPerson", dataManager->resolveLabel(retrievedNode.getLabelId()));
 
 	ASSERT_EQ(1UL, observer->updatedNodes.size());
-	EXPECT_EQ(oldNode.getLabel(), observer->updatedNodes[0].first.getLabel());
-	EXPECT_EQ("UpdatedPerson", observer->updatedNodes[0].second.getLabel());
+	EXPECT_EQ(oldNode.getLabelId(), observer->updatedNodes[0].first.getLabelId());
+	EXPECT_EQ("UpdatedPerson", dataManager->resolveLabel(observer->updatedNodes[0].second.getLabelId()));
 
 	// 5. Delete
 	dataManager->deleteNode(node);
@@ -235,7 +237,7 @@ TEST_F(DataManagerTest, NodeCRUD) {
 }
 
 TEST_F(DataManagerTest, NodeProperties) {
-	auto node = createTestNode("Person");
+	auto node = createTestNode(dataManager, "Person");
 	dataManager->addNode(node);
 
 	std::unordered_map<std::string, PropertyValue> properties = {{"name", PropertyValue("John Doe")},
@@ -258,14 +260,14 @@ TEST_F(DataManagerTest, NodeProperties) {
 }
 
 TEST_F(DataManagerTest, EdgeCRUD) {
-	auto sourceNode = createTestNode("Source");
-	auto targetNode = createTestNode("Target");
+	auto sourceNode = createTestNode(dataManager, "Source");
+	auto targetNode = createTestNode(dataManager, "Target");
 	dataManager->addNode(sourceNode);
 	dataManager->addNode(targetNode);
 	observer->reset();
 
 	// 1. Create
-	auto edge = createTestEdge(sourceNode.getId(), targetNode.getId(), "KNOWS");
+	auto edge = createTestEdge(dataManager, sourceNode.getId(), targetNode.getId(), "KNOWS");
 	dataManager->addEdge(edge);
 	EXPECT_NE(0, edge.getId());
 	ASSERT_EQ(1UL, observer->addedEdges.size());
@@ -273,7 +275,7 @@ TEST_F(DataManagerTest, EdgeCRUD) {
 	// 2. Retrieve
 	auto retrievedEdge = dataManager->getEdge(edge.getId());
 	EXPECT_EQ(edge.getId(), retrievedEdge.getId());
-	EXPECT_EQ("KNOWS", retrievedEdge.getLabel());
+	EXPECT_EQ("KNOWS", dataManager->resolveLabel(retrievedEdge.getLabelId()));
 	EXPECT_TRUE(retrievedEdge.isActive());
 
 	// 3. Simulate Save
@@ -282,14 +284,14 @@ TEST_F(DataManagerTest, EdgeCRUD) {
 
 	// 4. Update
 	Edge oldEdge = retrievedEdge;
-	edge.setLabel("UPDATED_KNOWS");
+	edge.setLabelId(dataManager->getOrCreateLabelId("UPDATED_KNOWS"));
 	dataManager->updateEdge(edge);
 	retrievedEdge = dataManager->getEdge(edge.getId());
-	EXPECT_EQ("UPDATED_KNOWS", retrievedEdge.getLabel());
+	EXPECT_EQ("UPDATED_KNOWS", dataManager->resolveLabel(retrievedEdge.getLabelId()));
 
 	ASSERT_EQ(1UL, observer->updatedEdges.size());
-	EXPECT_EQ(oldEdge.getLabel(), observer->updatedEdges[0].first.getLabel());
-	EXPECT_EQ("UPDATED_KNOWS", observer->updatedEdges[0].second.getLabel());
+	EXPECT_EQ(oldEdge.getLabelId(), observer->updatedEdges[0].first.getLabelId());
+	EXPECT_EQ("UPDATED_KNOWS", dataManager->resolveLabel(observer->updatedEdges[0].second.getLabelId()));
 
 	// 5. Delete
 	dataManager->deleteEdge(edge);
@@ -305,11 +307,11 @@ TEST_F(DataManagerTest, EdgeCRUD) {
 }
 
 TEST_F(DataManagerTest, EdgeProperties) {
-	auto sourceNode = createTestNode("Source");
-	auto targetNode = createTestNode("Target");
+	auto sourceNode = createTestNode(dataManager, "Source");
+	auto targetNode = createTestNode(dataManager, "Target");
 	dataManager->addNode(sourceNode);
 	dataManager->addNode(targetNode);
-	auto edge = createTestEdge(sourceNode.getId(), targetNode.getId(), "CONNECTS");
+	auto edge = createTestEdge(dataManager, sourceNode.getId(), targetNode.getId(), "CONNECTS");
 	dataManager->addEdge(edge);
 
 	std::unordered_map<std::string, PropertyValue> properties = {
@@ -329,15 +331,15 @@ TEST_F(DataManagerTest, EdgeProperties) {
 }
 
 TEST_F(DataManagerTest, FindEdgesByNode) {
-	auto node1 = createTestNode("Node1");
-	auto node2 = createTestNode("Node2");
-	auto node3 = createTestNode("Node3");
+	auto node1 = createTestNode(dataManager, "Node1");
+	auto node2 = createTestNode(dataManager, "Node2");
+	auto node3 = createTestNode(dataManager, "Node3");
 	dataManager->addNode(node1);
 	dataManager->addNode(node2);
 	dataManager->addNode(node3);
-	auto edge1 = createTestEdge(node1.getId(), node2.getId(), "CONNECTS_TO");
-	auto edge2 = createTestEdge(node2.getId(), node3.getId(), "CONNECTS_TO");
-	auto edge3 = createTestEdge(node3.getId(), node1.getId(), "CONNECTS_TO");
+	auto edge1 = createTestEdge(dataManager, node1.getId(), node2.getId(), "CONNECTS_TO");
+	auto edge2 = createTestEdge(dataManager, node2.getId(), node3.getId(), "CONNECTS_TO");
+	auto edge3 = createTestEdge(dataManager, node3.getId(), node1.getId(), "CONNECTS_TO");
 	dataManager->addEdge(edge1);
 	dataManager->addEdge(edge2);
 	dataManager->addEdge(edge3);
@@ -357,7 +359,7 @@ TEST_F(DataManagerTest, FindEdgesByNode) {
 }
 
 TEST_F(DataManagerTest, PropertyEntityCRUD) {
-	auto node = createTestNode("PropertyHolder");
+	auto node = createTestNode(dataManager, "PropertyHolder");
 	dataManager->addNode(node);
 
 	std::unordered_map<std::string, PropertyValue> props = {{"test_key", PropertyValue("test_value")}};
@@ -489,7 +491,7 @@ TEST_F(DataManagerTest, StateProperties) {
 TEST_F(DataManagerTest, BatchOperations) {
 	std::vector<int64_t> nodeIds;
 	for (int i = 0; i < 10; i++) {
-		auto node = createTestNode("BatchNode" + std::to_string(i));
+		auto node = createTestNode(dataManager, "BatchNode" + std::to_string(i));
 		dataManager->addNode(node);
 		nodeIds.push_back(node.getId());
 	}
@@ -498,7 +500,7 @@ TEST_F(DataManagerTest, BatchOperations) {
 	ASSERT_EQ(10UL, nodes.size());
 	for (size_t i = 0; i < nodes.size(); i++) {
 		EXPECT_EQ(nodeIds[i], nodes[i].getId());
-		EXPECT_EQ("BatchNode" + std::to_string(i), nodes[i].getLabel());
+		EXPECT_EQ("BatchNode" + std::to_string(i), dataManager->resolveLabel(nodes[i].getLabelId()));
 	}
 
 	auto rangeNodes = dataManager->getNodesInRange(nodeIds.front(), nodeIds.back(), 5);
@@ -509,7 +511,7 @@ TEST_F(DataManagerTest, BatchOperations) {
 }
 
 TEST_F(DataManagerTest, CacheManagement) {
-	auto node = createTestNode("CacheNode");
+	auto node = createTestNode(dataManager, "CacheNode");
 	dataManager->addNode(node);
 
 	auto retrievedNode = dataManager->getNode(node.getId());
@@ -523,7 +525,7 @@ TEST_F(DataManagerTest, CacheManagement) {
 }
 
 TEST_F(DataManagerTest, DirtyTracking) {
-	auto node = createTestNode("DirtyNode");
+	auto node = createTestNode(dataManager, "DirtyNode");
 	dataManager->addNode(node);
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
@@ -535,7 +537,7 @@ TEST_F(DataManagerTest, DirtyTracking) {
 	simulateSave();
 	EXPECT_FALSE(dataManager->hasUnsavedChanges());
 
-	node.setLabel("UpdatedDirtyNode");
+	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedDirtyNode"));
 	dataManager->updateNode(node);
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
@@ -550,23 +552,23 @@ TEST_F(DataManagerTest, AutoFlush) {
 	if (database) {
 		auto idxMgr = database->getQueryEngine()->getIndexManager();
 		// Drop it to disable auto-indexing
-		idxMgr->getNodeIndexManager()->dropIndex("label", "");
+		(void) idxMgr->getNodeIndexManager()->dropIndex("label", "");
 
 		database->getStorage()->flush();
 	}
 
 	// Note: The new auto-flush logic checks SUM of all entities.
-	dataManager->setMaxDirtyEntities(5);
+	dataManager->setMaxDirtyEntities(10);
 	dataManager->setAutoFlushCallback([&autoFlushCalled]() { autoFlushCalled = true; });
 
 	for (int i = 0; i < 4; i++) {
-		auto node = createTestNode("AutoFlushNode" + std::to_string(i));
+		auto node = createTestNode(dataManager, "AutoFlushNode" + std::to_string(i));
 		dataManager->addNode(node);
 	}
-	// With index disabled and dirty count reset, 4 nodes < 5 limit
+	// With index disabled and dirty count reset, 4 nodes < 10 limit
 	EXPECT_FALSE(autoFlushCalled);
 
-	auto node = createTestNode("ThresholdNode");
+	auto node = createTestNode(dataManager, "ThresholdNode");
 	dataManager->addNode(node);
 	// 5 nodes >= 5 limit
 	EXPECT_TRUE(autoFlushCalled);
@@ -576,14 +578,14 @@ TEST_F(DataManagerTest, ObserverNotifications) {
 	observer->reset();
 
 	// --- PHASE 1: Add ---
-	auto source = createTestNode("Source");
-	auto target = createTestNode("Target");
+	auto source = createTestNode(dataManager, "Source");
+	auto target = createTestNode(dataManager, "Target");
 	dataManager->addNode(source);
 	dataManager->addNode(target);
 
 	// Adding an edge internally triggers `linkEdge`, which updates the connected nodes
 	// (setting firstOutEdgeId/firstInEdgeId) and the edge itself.
-	auto edge = createTestEdge(source.getId(), target.getId(), "RELATES_TO");
+	auto edge = createTestEdge(dataManager, source.getId(), target.getId(), "RELATES_TO");
 	dataManager->addEdge(edge);
 
 	EXPECT_EQ(2UL, observer->addedNodes.size());
@@ -599,11 +601,11 @@ TEST_F(DataManagerTest, ObserverNotifications) {
 	observer->reset();
 
 	Node oldSource = dataManager->getNode(source.getId());
-	source.setLabel("UpdatedSource");
+	source.setLabelId(dataManager->getOrCreateLabelId("UpdatedSource"));
 	dataManager->updateNode(source);
 
 	Edge oldEdge = dataManager->getEdge(edge.getId());
-	edge.setLabel("UPDATED_RELATION");
+	edge.setLabelId(dataManager->getOrCreateLabelId("UPDATED_RELATION"));
 	dataManager->updateEdge(edge);
 
 	EXPECT_EQ(1UL, observer->updatedNodes.size());
@@ -627,17 +629,17 @@ TEST_F(DataManagerTest, ObserverNotifications) {
 	EXPECT_EQ(2UL, observer->updatedNodes.size());
 
 	std::vector<int64_t> updatedNodeIds;
-	for (const auto &pair: observer->updatedNodes) {
-		updatedNodeIds.push_back(pair.second.getId());
+	for (const auto &val: observer->updatedNodes | std::views::values) {
+		updatedNodeIds.push_back(val.getId());
 	}
 
 	// Verify that both connected nodes were updated during the edge deletion
-	ASSERT_TRUE(std::find(updatedNodeIds.begin(), updatedNodeIds.end(), source.getId()) != updatedNodeIds.end());
-	ASSERT_TRUE(std::find(updatedNodeIds.begin(), updatedNodeIds.end(), target.getId()) != updatedNodeIds.end());
+	ASSERT_TRUE(std::ranges::find(updatedNodeIds, source.getId()) != std::ranges::end(updatedNodeIds));
+	ASSERT_TRUE(std::ranges::find(updatedNodeIds, target.getId()) != std::ranges::end(updatedNodeIds));
 }
 
 TEST_F(DataManagerTest, MultipleEntityTypes) {
-	auto node = createTestNode("MultiTypeNode");
+	auto node = createTestNode(dataManager, "MultiTypeNode");
 	dataManager->addNode(node);
 
 	auto state = createTestState("multi.type.state");
@@ -651,7 +653,7 @@ TEST_F(DataManagerTest, MultipleEntityTypes) {
 	dataManager->addBlobEntity(blob);
 
 	auto retrievedNode = dataManager->getNode(node.getId());
-	EXPECT_EQ("MultiTypeNode", retrievedNode.getLabel());
+	EXPECT_EQ("MultiTypeNode", dataManager->resolveLabel(retrievedNode.getLabelId()));
 
 	auto retrievedState = dataManager->findStateByKey("multi.type.state");
 	EXPECT_EQ(state.getId(), retrievedState.getId());
@@ -697,7 +699,18 @@ TEST_F(DataManagerTest, MultipleEntityTypes) {
 	EXPECT_TRUE(indexFound) << "The manually created index was not found in dirty list.";
 
 	// 4. Check Blob
-	EXPECT_EQ(1UL, dataManager->getDirtyEntityInfos<Blob>({EntityChangeType::ADDED}).size());
+	auto dirtyBlobs = dataManager->getDirtyEntityInfos<Blob>({EntityChangeType::ADDED});
+	EXPECT_GE(dirtyBlobs.size(), 1UL) << "Should have at least the user-created blob";
+
+	bool blobFound = false;
+	for (const auto &info : dirtyBlobs) {
+		if (info.backup.has_value() && info.backup->getId() == blob.getId()) {
+			blobFound = true;
+			EXPECT_EQ(info.backup->getDataAsString(), blobData);
+			break;
+		}
+	}
+	EXPECT_TRUE(blobFound) << "The user-created blob was not found in dirty list.";
 
 	simulateSave();
 	EXPECT_FALSE(dataManager->hasUnsavedChanges());
@@ -712,14 +725,14 @@ TEST_F(DataManagerTest, LargeEntityCounts) {
 	nodeIds.reserve(entityCount);
 
 	for (int i = 0; i < entityCount; i++) {
-		auto node = createTestNode("LargeNode" + std::to_string(i));
+		auto node = createTestNode(dataManager, "LargeNode" + std::to_string(i));
 		dataManager->addNode(node);
 		nodes.push_back(node);
 		nodeIds.push_back(node.getId());
 	}
 
 	for (int i = 0; i < entityCount - 1; i++) {
-		auto edge = createTestEdge(nodes[i].getId(), nodes[i + 1].getId(), "NEXT");
+		auto edge = createTestEdge(dataManager, nodes[i].getId(), nodes[i + 1].getId(), "NEXT");
 		dataManager->addEdge(edge);
 	}
 
@@ -740,7 +753,7 @@ TEST_F(DataManagerTest, LargeEntityCounts) {
 
 	dataManager->clearCache();
 
-	const int middleIndex = entityCount / 2;
+	constexpr int middleIndex = entityCount / 2;
 	auto retrievedNode = dataManager->getNode(nodes[middleIndex].getId());
 	EXPECT_EQ(nodes[middleIndex].getId(), retrievedNode.getId());
 

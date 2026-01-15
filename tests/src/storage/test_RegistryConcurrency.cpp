@@ -34,10 +34,10 @@ class RegistryConcurrencyTest : public ::testing::Test {
 protected:
 	DirtyEntityRegistry<Node> registry;
 
-	static Node createNode(int64_t id, const std::string &label) {
+	static Node createNode(int64_t id, int64_t labelId) {
 		Node node;
 		node.setId(id);
-		node.setLabel(label);
+		node.setLabelId(labelId);
 		return node;
 	}
 };
@@ -57,7 +57,8 @@ TEST_F(RegistryConcurrencyTest, MultiThreadedWrites) {
 		++activeThreads;
 		for (int i = 0; i < OPS_PER_THREAD; ++i) {
 			int64_t id = threadId * OPS_PER_THREAD + i;
-			auto info = DirtyEntityInfo<Node>(EntityChangeType::ADDED, createNode(id, "T" + std::to_string(threadId)));
+			// Use threadId as Label ID for verification
+			auto info = DirtyEntityInfo(EntityChangeType::ADDED, createNode(id, threadId));
 			registry.upsert(info);
 		}
 		--activeThreads;
@@ -78,9 +79,9 @@ TEST_F(RegistryConcurrencyTest, MultiThreadedWrites) {
 	EXPECT_EQ(registry.size(), static_cast<size_t>(NUM_THREADS * OPS_PER_THREAD));
 
 	// Check random sample
-	auto info = registry.getInfo(55); // Thread 0, item 55
+	auto info = registry.getInfo(55); // Thread 0
 	ASSERT_TRUE(info.has_value());
-	EXPECT_EQ(info->backup->getLabel(), "T0");
+	EXPECT_EQ(info->backup->getLabelId(), 0); // Thread 0 ID
 }
 
 // SCENARIO 2: The "Hot Flush" Test
@@ -88,15 +89,14 @@ TEST_F(RegistryConcurrencyTest, MultiThreadedWrites) {
 // Another thread constantly Flushes (Snapshots and Commits).
 // Verifies: Locking mechanism between Active and Flushing layers.
 TEST_F(RegistryConcurrencyTest, ConcurrentWriteAndFlush) {
-	std::atomic<bool> running{true};
+	std::atomic running{true};
 	constexpr int64_t ENTITY_ID = 1;
 	constexpr int ITERATIONS = 10000;
 
 	// Writer Thread: Continuously updates ID 1 with increasing version numbers
 	std::thread writer([&]() {
 		for (int i = 0; i < ITERATIONS; ++i) {
-			auto info =
-					DirtyEntityInfo<Node>(EntityChangeType::MODIFIED, createNode(ENTITY_ID, "V" + std::to_string(i)));
+			auto info = DirtyEntityInfo(EntityChangeType::MODIFIED, createNode(ENTITY_ID, i));
 			registry.upsert(info);
 			// Small yield to allow flusher to intervene
 			if (i % 100 == 0)
@@ -134,7 +134,7 @@ TEST_F(RegistryConcurrencyTest, ConcurrentWriteAndFlush) {
 	// 2. Internal counters are consistent.
 
 	// We add a new write now to verify registry is still usable
-	registry.upsert(DirtyEntityInfo<Node>(EntityChangeType::ADDED, createNode(2, "Final")));
+	registry.upsert(DirtyEntityInfo(EntityChangeType::ADDED, createNode(2, 9999)));
 	EXPECT_TRUE(registry.contains(2));
 }
 
@@ -153,7 +153,7 @@ TEST_F(RegistryConcurrencyTest, ReaderWriterFlusherRace) {
 		std::uniform_int_distribution<> dis(0, RANGE - 1);
 		while (!stop) {
 			int64_t id = dis(gen);
-			registry.upsert(DirtyEntityInfo<Node>(EntityChangeType::MODIFIED, createNode(id, "Updated")));
+			registry.upsert(DirtyEntityInfo(EntityChangeType::MODIFIED, createNode(id, 100)));
 		}
 	});
 
@@ -192,8 +192,8 @@ TEST_F(RegistryConcurrencyTest, ReaderWriterFlusherRace) {
 
 	// Verify consistency: Check count
 	// It's hard to predict exact count, but we ensure basic sanity
-	registry.upsert(DirtyEntityInfo<Node>(EntityChangeType::ADDED, createNode(10001, "Check")));
+	registry.upsert(DirtyEntityInfo(EntityChangeType::ADDED, createNode(10001, 200)));
 	auto check = registry.getInfo(10001);
 	ASSERT_TRUE(check.has_value());
-	EXPECT_EQ(check->backup->getLabel(), "Check");
+	EXPECT_EQ(check->backup->getLabelId(), 200);
 }

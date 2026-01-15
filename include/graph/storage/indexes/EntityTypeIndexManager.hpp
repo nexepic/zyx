@@ -38,7 +38,7 @@ namespace graph::query::indexes {
 	class EntityTypeIndexManager {
 	public:
 		EntityTypeIndexManager(std::shared_ptr<storage::DataManager> dataManager,
-							   std::shared_ptr<storage::state::SystemStateManager> systemStateManager,
+							   const std::shared_ptr<storage::state::SystemStateManager>& systemStateManager,
 							   uint32_t labelIndexType, const std::string &labelStateKey, uint32_t propertyIndexType,
 							   const std::string &propertyStateKeyPrefix);
 
@@ -74,13 +74,10 @@ namespace graph::query::indexes {
 		bool hasPropertyIndex(const std::string &key) const { return propertyIndex_->hasKeyIndexed(key); }
 
 	private:
-		std::shared_ptr<storage::DataManager> dataManager_;
 		std::shared_ptr<LabelIndex> labelIndex_;
 		std::shared_ptr<PropertyIndex> propertyIndex_;
 		mutable std::recursive_mutex mutex_;
-
-		const std::string configLabelEnabledKey_;
-		const std::string configPropertyKeysKey_;
+		std::shared_ptr<storage::DataManager> dataManager_;
 
 		// --- Automatic Update Logic ---
 		template<typename T>

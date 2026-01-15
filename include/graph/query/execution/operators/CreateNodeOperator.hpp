@@ -43,9 +43,12 @@ namespace graph::query::execution::operators {
 		}
 
 		std::optional<RecordBatch> next() override {
+			// Resolve Label ID once per call.
+			// This ID will be used for all nodes created in this batch/call.
+			int64_t labelId = dm_->getOrCreateLabelId(label_);
+
 			// Case A: Pipeline (Chained to previous MATCH, UNWIND, or CREATE)
 			if (child_) {
-				// If we previously drained the child but still have buffered data to flush
 				if (childExhausted_) {
 					return flushBuffer();
 				}
@@ -56,45 +59,34 @@ namespace graph::query::execution::operators {
 					// Upstream is exhausted
 					if (!batchOpt) {
 						childExhausted_ = true;
-						// Flush any remaining nodes
 						return flushBuffer();
 					}
 
-					// Process input batch
 					RecordBatch &inputBatch = *batchOpt;
 
-					// Optimization: If input is empty, continue fetching
 					if (inputBatch.empty())
 						continue;
 
 					for (auto &record: inputBatch) {
-						// Check if variable is already bound (Reuse existing)
 						auto existingNode = record.getNode(variable_);
 
 						if (existingNode) {
 							if (!nodeBuffer_.empty()) {
-								// Flush what we have so far to preserve order,
-								// then return this single existing record in next call?
-								// That's complex state management.
-
-								// Let's just perform immediate flush + emit existing.
-								// (This might return a batch smaller than standard size)
 								auto flushedBatch = flushBuffer().value_or(RecordBatch{});
 								flushedBatch.push_back(std::move(record));
 								return flushedBatch;
 							}
 
-							// Buffer empty, just return this one record immediately (or small batch)
 							RecordBatch singleBatch;
 							singleBatch.push_back(std::move(record));
 							return singleBatch;
 						} else {
 							// Variable unbound -> Queue for Batch Creation
-							Node newNode(0, label_);
+							// Use ID constructor
+							Node newNode(0, labelId);
 
-							// Pre-set properties in memory so addNodes() can persist them
+							// Pre-set properties in memory
 							if (!props_.empty()) {
-								// Note: addNodes() handles persistence, but we need to set them on the object
 								newNode.setProperties(props_);
 							}
 
@@ -103,12 +95,9 @@ namespace graph::query::execution::operators {
 						}
 					}
 
-					// If buffer is large enough, flush and return
 					if (nodeBuffer_.size() >= BATCH_SIZE) {
 						return flushBuffer();
 					}
-
-					// Otherwise, loop again to fetch more from child
 				}
 			}
 
@@ -116,7 +105,7 @@ namespace graph::query::execution::operators {
 			if (executed_)
 				return std::nullopt;
 
-			Node newNode = performSingleCreate();
+			Node newNode = performSingleCreate(labelId);
 			Record record;
 			record.setNode(variable_, newNode);
 			RecordBatch batch;
@@ -136,7 +125,6 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
 
-			// Deduplication
 			bool exists = false;
 			for (const auto &v: vars) {
 				if (v == variable_) {
@@ -171,9 +159,8 @@ namespace graph::query::execution::operators {
 
 		static constexpr size_t BATCH_SIZE = 1000;
 
-		// Legacy helper for single create
-		Node performSingleCreate() {
-			Node newNode(0, label_);
+		Node performSingleCreate(int64_t labelId) {
+			Node newNode(0, labelId);
 			dm_->addNode(newNode);
 			if (!props_.empty()) {
 				dm_->addNodeProperties(newNode.getId(), props_);
@@ -182,14 +169,13 @@ namespace graph::query::execution::operators {
 			return newNode;
 		}
 
-		// Helper to flush buffered nodes to storage and return a record batch
 		std::optional<RecordBatch> flushBuffer() {
 			if (nodeBuffer_.empty()) {
 				return std::nullopt;
 			}
 
 			// 1. Bulk Insert into Storage
-			// This assigns IDs and handles persistence efficiently
+			// Nodes already have labelId set from constructor in next()
 			dm_->addNodes(nodeBuffer_);
 
 			// 2. Map back to Records
@@ -197,16 +183,11 @@ namespace graph::query::execution::operators {
 			outputBatch.reserve(nodeBuffer_.size());
 
 			for (size_t i = 0; i < nodeBuffer_.size(); ++i) {
-				// Take the context record
 				Record r = std::move(recordBuffer_[i]);
-
-				// Bind the newly created (and ID-assigned) node
 				r.setNode(variable_, nodeBuffer_[i]);
-
 				outputBatch.push_back(std::move(r));
 			}
 
-			// 3. Cleanup
 			nodeBuffer_.clear();
 			recordBuffer_.clear();
 

@@ -63,18 +63,18 @@ protected:
 	}
 
 	// Helper to create a Node using the correct API
-	static graph::Node createTestNode(const std::string &label) {
+	static graph::Node createTestNode(const std::shared_ptr<graph::storage::DataManager> &dm, const std::string &label) {
 		graph::Node node;
-		node.setLabel(label);
+		node.setLabelId(dm->getOrCreateLabelId(label));
 		return node;
 	}
 
 	// Helper to create an Edge using the correct API
-	static graph::Edge createTestEdge(int64_t sourceId, int64_t targetId, const std::string &label) {
+	static graph::Edge createTestEdge(const std::shared_ptr<graph::storage::DataManager> &dm, int64_t sourceId, int64_t targetId, const std::string &label) {
 		graph::Edge edge;
 		edge.setSourceNodeId(sourceId);
 		edge.setTargetNodeId(targetId);
-		edge.setLabel(label);
+		edge.setLabelId(dm->getOrCreateLabelId(label));
 		return edge;
 	}
 
@@ -101,39 +101,37 @@ protected:
 
 // Tests for add method
 TEST_F(BaseEntityManagerTest, AddNodeEntity) {
-	graph::Node node = createTestNode("TestNode");
+	graph::Node node = createTestNode(dataManager, "TestNode");
 	nodeManager->add(node);
 
-	// Verify ID was allocated
 	EXPECT_NE(node.getId(), 0);
 
-	// Verify entity can be retrieved
 	graph::Node retrievedNode = nodeManager->get(node.getId());
 	EXPECT_EQ(retrievedNode.getId(), node.getId());
-	EXPECT_EQ(retrievedNode.getLabel(), "TestNode");
+
+	EXPECT_EQ(retrievedNode.getLabelId(), node.getLabelId());
+	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "TestNode");
+
 	EXPECT_TRUE(retrievedNode.isActive());
 }
 
 // Tests for update method
 TEST_F(BaseEntityManagerTest, UpdateNodeEntity) {
-	// Create and add a node
-	graph::Node node = createTestNode("OriginalLabel");
+	graph::Node node = createTestNode(dataManager, "OriginalLabel");
 	nodeManager->add(node);
 	int64_t nodeId = node.getId();
 
-	// Modify and update the node
-	node.setLabel("UpdatedLabel");
+	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedLabel"));
 	nodeManager->update(node);
 
-	// Verify changes were applied
 	graph::Node retrievedNode = nodeManager->get(nodeId);
-	EXPECT_EQ(retrievedNode.getLabel(), "UpdatedLabel");
+	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "UpdatedLabel");
 }
 
 // Tests for remove method
 TEST_F(BaseEntityManagerTest, RemoveNodeEntity) {
 	// Create and add a node
-	graph::Node node = createTestNode("NodeToRemove");
+	graph::Node node = createTestNode(dataManager, "NodeToRemove");
 	nodeManager->add(node);
 	int64_t nodeId = node.getId();
 
@@ -169,7 +167,7 @@ TEST_F(BaseEntityManagerTest, GetBatchOfNodes) {
 	// Create and add multiple nodes
 	std::vector<int64_t> nodeIds;
 	for (int i = 0; i < 5; i++) {
-		graph::Node node = createTestNode("BatchNode" + std::to_string(i));
+		graph::Node node = createTestNode(dataManager, "BatchNode" + std::to_string(i));
 		nodeManager->add(node);
 		nodeIds.push_back(node.getId());
 	}
@@ -196,7 +194,7 @@ TEST_F(BaseEntityManagerTest, GetNodesInRange) {
 	std::vector<int64_t> nodeIds;
 	int64_t startId = 0;
 	for (int i = 0; i < 10; i++) {
-		graph::Node node = createTestNode("RangeNode" + std::to_string(i));
+		graph::Node node = createTestNode(dataManager, "RangeNode" + std::to_string(i));
 		nodeManager->add(node);
 		nodeIds.push_back(node.getId());
 		if (i == 0)
@@ -220,7 +218,7 @@ TEST_F(BaseEntityManagerTest, GetNodesInRange) {
 
 // Tests for property management
 TEST_F(BaseEntityManagerTest, NodePropertyManagement) {
-	graph::Node node = createTestNode("PropertyNode");
+	graph::Node node = createTestNode(dataManager, "PropertyNode");
 	nodeManager->add(node);
 	int64_t nodeId = node.getId();
 
@@ -246,25 +244,25 @@ TEST_F(BaseEntityManagerTest, NodePropertyManagement) {
 
 // Tests for Edge entity
 TEST_F(BaseEntityManagerTest, EdgeEntityOperations) {
-	graph::Node sourceNode = createTestNode("Source");
-	graph::Node targetNode = createTestNode("Target");
+	graph::Node sourceNode = createTestNode(dataManager, "Source");
+	graph::Node targetNode = createTestNode(dataManager, "Target");
 	nodeManager->add(sourceNode);
 	nodeManager->add(targetNode);
 
-	graph::Edge edge = createTestEdge(sourceNode.getId(), targetNode.getId(), "CONNECTS_TO");
+	graph::Edge edge = createTestEdge(dataManager, sourceNode.getId(), targetNode.getId(), "CONNECTS_TO");
 	edgeManager->add(edge);
 
 	graph::Edge retrievedEdge = edgeManager->get(edge.getId());
 	EXPECT_EQ(retrievedEdge.getId(), edge.getId());
 	EXPECT_EQ(retrievedEdge.getSourceNodeId(), sourceNode.getId());
 	EXPECT_EQ(retrievedEdge.getTargetNodeId(), targetNode.getId());
-	EXPECT_EQ(retrievedEdge.getLabel(), "CONNECTS_TO");
+	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "CONNECTS_TO");
 
-	edge.setLabel("RELATED_TO");
+	edge.setLabelId(dataManager->getOrCreateLabelId("RELATED_TO"));
 	edgeManager->update(edge);
 
 	retrievedEdge = edgeManager->get(edge.getId());
-	EXPECT_EQ(retrievedEdge.getLabel(), "RELATED_TO");
+	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "RELATED_TO");
 
 	edgeManager->remove(edge);
 
@@ -281,7 +279,7 @@ TEST_F(BaseEntityManagerTest, EdgeEntityOperations) {
 TEST_F(BaseEntityManagerTest, SnapshotCommitClearsDirty) {
 	// Create and add multiple nodes
 	for (int i = 0; i < 3; i++) {
-		graph::Node node = createTestNode("SavedNode" + std::to_string(i));
+		graph::Node node = createTestNode(dataManager, "SavedNode" + std::to_string(i));
 		nodeManager->add(node);
 	}
 
@@ -305,24 +303,20 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 	// --- Setup ---
 
 	// 1. ADDED
-	graph::Node addedNode = createTestNode("AddedNode");
-	nodeManager->add(addedNode);
+    graph::Node addedNode = createTestNode(dataManager, "AddedNode");
+    nodeManager->add(addedNode);
 
-	// 2. ADDED then MODIFIED (Should effectively be ADDED in dirty list for new entity)
-	// Note: Our new PersistenceManager logic might report this as ADDED if logic handles it,
-	// OR MODIFIED depending on implementation.
-	// DataManager::updateEntityImpl logic: if already ADDED, keep as ADDED.
-	graph::Node modifiedNode = createTestNode("OriginalLabel");
-	nodeManager->add(modifiedNode);
-	modifiedNode.setLabel("ModifiedLabel");
-	nodeManager->update(modifiedNode);
+    // 2. ADDED then MODIFIED
+    graph::Node modifiedNode = createTestNode(dataManager, "OriginalLabel");
+    nodeManager->add(modifiedNode);
 
-	// 3. ADDED then REMOVED (Should effectively be DELETED or disappear)
-	// DataManager::markEntityDeleted logic: if ADDED, mark DELETED (and maybe remove from map logic?)
-	// In our implementation: upsert(DELETED).
-	graph::Node removedNode = createTestNode("RemovedNode");
-	nodeManager->add(removedNode);
-	nodeManager->remove(removedNode);
+    modifiedNode.setLabelId(dataManager->getOrCreateLabelId("ModifiedLabel"));
+    nodeManager->update(modifiedNode);
+
+    // 3. ADDED then REMOVED
+    graph::Node removedNode = createTestNode(dataManager, "RemovedNode");
+    nodeManager->add(removedNode);
+    nodeManager->remove(removedNode);
 
 	// --- Assertions ---
 

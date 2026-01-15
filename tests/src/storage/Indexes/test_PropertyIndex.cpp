@@ -28,6 +28,7 @@
 #include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/PropertyIndex.hpp"
 

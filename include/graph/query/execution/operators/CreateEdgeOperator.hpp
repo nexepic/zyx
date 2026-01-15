@@ -40,16 +40,9 @@ namespace graph::query::execution::operators {
 		void open() override {
 			if (child_)
 				child_->open();
-			// If this is a root operator (unlikely for edges), handle accordingly.
 		}
 
 		std::optional<RecordBatch> next() override {
-			// Edges usually depend on previous nodes (MATCH (a), (b) CREATE (a)-[e]->(b))
-			// So we act as a Pipe here.
-
-			// 1. Get input batch
-			// Note: In a real system, CreateEdge MUST have a child.
-			// If child_ is null, this is a logic error (cannot connect nulls).
 			if (!child_)
 				return std::nullopt;
 
@@ -61,6 +54,9 @@ namespace graph::query::execution::operators {
 			RecordBatch outputBatch;
 			outputBatch.reserve(batch.size());
 
+			// Optimization: Resolve Label ID once for the entire batch
+			int64_t labelId = dm_->getOrCreateLabelId(label_);
+
 			for (auto &record: batch) {
 				// 2. Resolve endpoints
 				auto srcNode = record.getNode(sourceVar_);
@@ -68,19 +64,22 @@ namespace graph::query::execution::operators {
 
 				if (srcNode && tgtNode) {
 					// 3. Persist Edge
-					Edge newEdge(0, srcNode->getId(), tgtNode->getId(), label_);
+					// Use the ID-based constructor.
+					// ID=0 means "allocate new ID".
+					Edge newEdge(0, srcNode->getId(), tgtNode->getId(), labelId);
+
+					// addEdge persists the entity with the correct labelId
 					dm_->addEdge(newEdge);
 
 					if (!props_.empty()) {
 						dm_->addEdgeProperties(newEdge.getId(), props_);
+						// Keep object in sync for query result
+						newEdge.setProperties(props_);
 					}
 
 					// 4. Update Record
 					record.setEdge(variable_, newEdge);
 					outputBatch.push_back(std::move(record));
-				} else {
-					// If endpoints are missing, strictly we should fail or skip.
-					// Skipping for now.
 				}
 			}
 
@@ -111,7 +110,6 @@ namespace graph::query::execution::operators {
 			return vars;
 		}
 
-		// Setter for chaining (Crucial for Pipe operators)
 		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
 
 		[[nodiscard]] std::string toString() const override {
@@ -127,7 +125,7 @@ namespace graph::query::execution::operators {
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
-		std::unique_ptr<PhysicalOperator> child_; // Upstream operator
+		std::unique_ptr<PhysicalOperator> child_;
 
 		std::string variable_;
 		std::string label_;

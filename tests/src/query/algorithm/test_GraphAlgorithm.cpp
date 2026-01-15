@@ -68,7 +68,7 @@ protected:
 
 		// Create Nodes (IDs 1-12)
 		for (int i = 1; i <= 12; ++i) {
-			graph::Node n(i, "Node" + std::to_string(i));
+			graph::Node n(i, dataManager->getOrCreateLabelId("Node" + std::to_string(i)));
 			dataManager->addNode(n);
 		}
 
@@ -95,7 +95,9 @@ protected:
 				{node9Id, node10Id}, {node9Id, node12Id}, {node11Id, node5Id}, {node11Id, node12Id}};
 
 		for (size_t i = 0; i < connections.size(); ++i) {
-			graph::Edge edge(100 + i, connections[i].first, connections[i].second, "LINK");
+			int64_t edgeId = static_cast<int64_t>(100) + static_cast<int64_t>(i);
+			graph::Edge edge(edgeId, connections[i].first, connections[i].second,
+							 dataManager->getOrCreateLabelId("LINK"));
 			dataManager->addEdge(edge);
 			// Note: DataManager::addEdge MUST call RelationshipTraversal::linkEdge internally!
 		}
@@ -159,7 +161,7 @@ TEST_F(GraphAlgorithmTest, FindShortestPathDisconnected) {
 
 TEST_F(GraphAlgorithmTest, FindShortestPathTrulyIsolated) {
 	// Create a node that is not connected to the main component
-	graph::Node node13(0, "Island");
+	graph::Node node13(0, dataManager->getOrCreateLabelId("Island"));
 	dataManager->addNode(node13);
 
 	// Now this is guaranteed to be empty even with "both"
@@ -259,7 +261,7 @@ TEST_F(GraphAlgorithmTest, BFS_EarlyTermination) {
 TEST_F(GraphAlgorithmTest, BFS_CycleDetection) {
 	// 1 -> 2 -> 3
 	// Add cycle: 3 -> 1
-	graph::Edge cycle(200, node3Id, node1Id, "CYCLE");
+	graph::Edge cycle(200, node3Id, node1Id, dataManager->getOrCreateLabelId("CYCLE"));
 	dataManager->addEdge(cycle);
 	// Flush/Reload usually not needed for in-memory traversal updates if DM is live,
 	// but good practice if tests are flaky.

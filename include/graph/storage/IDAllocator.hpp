@@ -67,7 +67,7 @@ namespace graph::storage {
 		 * @param count Number of IDs to allocate.
 		 * @return The first ID in the allocated range. The range is [return, return + count - 1].
 		 */
-		int64_t allocateIdBatch(uint32_t entityType, size_t count);
+		int64_t allocateIdBatch(uint32_t entityType, size_t count) const;
 
 		/**
 		 * @brief Frees an ID, routing it to the appropriate cache (Volatile vs Persisted).

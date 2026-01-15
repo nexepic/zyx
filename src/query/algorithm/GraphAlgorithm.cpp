@@ -37,11 +37,20 @@ namespace graph::query::algorithm {
 		// This only reads Edge Headers (Small IO)
 		auto edges = dm_->findEdgesByNode(nodeId, direction);
 
+		// OPTIMIZATION: Resolve edge label ID ONCE before the loop
+		int64_t targetLabelId = 0;
+		if (!edgeLabel.empty()) {
+			// Use getOrCreateLabelId (safe for reads, returns existing ID or new unused one)
+			targetLabelId = dm_->getOrCreateLabelId(edgeLabel);
+		}
+
 		neighbors.reserve(edges.size());
 		for (const auto &edge: edges) {
-			// Filter by edge label in memory (cheap)
-			if (!edgeLabel.empty() && edge.getLabel() != edgeLabel) {
-				continue;
+			// Filter by edge label in memory (cheap ID comparison)
+			if (targetLabelId != 0) {
+				if (edge.getLabelId() != targetLabelId) {
+					continue;
+				}
 			}
 
 			int64_t neighborId = (edge.getSourceNodeId() == nodeId) ? edge.getTargetNodeId() : edge.getSourceNodeId();

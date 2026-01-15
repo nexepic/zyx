@@ -30,6 +30,7 @@ namespace graph::query::execution::operators {
 
 	class MergeNodeOperator : public PhysicalOperator {
 	public:
+		// Constructor (Unchanged)
 		MergeNodeOperator(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im,
 						  std::string variable, std::string label,
 						  std::unordered_map<std::string, PropertyValue> matchProps, std::vector<SetItem> onCreateItems,
@@ -42,16 +43,19 @@ namespace graph::query::execution::operators {
 
 		void open() override {
 			executed_ = false;
-			if (child_)
-				child_->open();
+			if (child_) child_->open();
+
+			// Resolve Label ID
+			targetLabelId_ = 0;
+			if (!label_.empty()) {
+				targetLabelId_ = dm_->getOrCreateLabelId(label_);
+			}
 		}
 
 		std::optional<RecordBatch> next() override {
-			// 1. Pipeline Mode
 			if (child_) {
 				auto batchOpt = child_->next();
-				if (!batchOpt)
-					return std::nullopt;
+				if (!batchOpt) return std::nullopt;
 
 				RecordBatch outputBatch;
 				outputBatch.reserve(batchOpt->size());
@@ -64,9 +68,7 @@ namespace graph::query::execution::operators {
 				return outputBatch;
 			}
 
-			// 2. Source Mode
-			if (executed_)
-				return std::nullopt;
+			if (executed_) return std::nullopt;
 
 			Record record;
 			processMerge(record);
@@ -77,18 +79,20 @@ namespace graph::query::execution::operators {
 			return batch;
 		}
 
-		void close() override {
-			if (child_)
-				child_->close();
-		}
-
+		// ... close, getOutputVariables, toString unchanged ...
+		void close() override { if (child_) child_->close(); }
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
 			vars.push_back(variable_);
 			return vars;
 		}
-
 		[[nodiscard]] std::string toString() const override { return "MergeNode(" + variable_ + ":" + label_ + ")"; }
+
+		// Implement missing pure virtual if PhysicalOperator requires it
+		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override {
+			if (child_) return {child_.get()};
+			return {};
+		}
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
@@ -103,18 +107,13 @@ namespace graph::query::execution::operators {
 		std::vector<SetItem> onMatchItems_;
 
 		bool executed_ = false;
+		int64_t targetLabelId_ = 0;
 
 		// --- Core Logic ---
 		void processMerge(Record &record) {
-			// 1. Check if variable is already bound (Pattern Check)
-			if (record.getNode(variable_))
-				return;
+			if (record.getNode(variable_)) return;
 
 			// 2. Try to find existing node
-			// Strategy: Use Index if available, otherwise Full Scan (simplified here)
-			// Note: In production, this "Find" logic should be shared with NodeScanOperator or Optimizer.
-			// Here we implement a simple lookup loop.
-
 			std::vector<int64_t> candidates;
 			bool indexUsed = false;
 
@@ -128,27 +127,26 @@ namespace graph::query::execution::operators {
 			}
 
 			// If no property index, try label index
-			if (!indexUsed && im_->hasLabelIndex("node")) {
+			if (!indexUsed && im_->hasLabelIndex("node") && !label_.empty()) {
 				candidates = im_->findNodeIdsByLabel(label_);
 				indexUsed = true;
 			}
 
-			// If still no index, we must full scan (Expensive! Warn in logs)
 			if (!indexUsed) {
-				// Fallback: Scan all nodes (Simplified: Assuming ID range)
 				int64_t maxId = dm_->getIdAllocator()->getCurrentMaxNodeId();
-				for (int64_t i = 1; i <= maxId; ++i)
-					candidates.push_back(i);
+				for (int64_t i = 1; i <= maxId; ++i) candidates.push_back(i);
 			}
 
 			// Filter candidates
 			int64_t foundId = 0;
 			for (int64_t id: candidates) {
 				Node n = dm_->getNode(id);
-				if (!n.isActive())
-					continue;
-				if (!label_.empty() && n.getLabel() != label_)
-					continue;
+				if (!n.isActive()) continue;
+
+				// Label Check using ID
+				if (targetLabelId_ != 0) {
+					if (n.getLabelId() != targetLabelId_) continue;
+				}
 
 				// Hydrate & Check Properties
 				auto props = dm_->getNodeProperties(id);
@@ -163,10 +161,9 @@ namespace graph::query::execution::operators {
 
 				if (match) {
 					foundId = id;
-					// Hydrate object for record
 					n.setProperties(std::move(props));
 					record.setNode(variable_, n);
-					break; // Found match (Single)
+					break;
 				}
 			}
 
@@ -176,42 +173,43 @@ namespace graph::query::execution::operators {
 				applyUpdates(foundId, onMatchItems_, record);
 			} else {
 				// === NOT MATCHED -> CREATE ===
-				Node newNode(0, label_);
+				// Use ID Constructor
+				Node newNode(0, targetLabelId_);
+
 				dm_->addNode(newNode);
 
-				// Add base properties from MERGE pattern
 				if (!matchProps_.empty()) {
 					dm_->addNodeProperties(newNode.getId(), matchProps_);
 				}
 
-				// Hydrate base
 				newNode.setProperties(matchProps_);
-				record.setNode(variable_, newNode); // Bind early for SetOperator logic
+				record.setNode(variable_, newNode);
 
-				// Apply ON CREATE updates
 				applyUpdates(newNode.getId(), onCreateItems_, record);
 			}
 		}
 
 		void applyUpdates(int64_t nodeId, const std::vector<SetItem> &items, Record &record) {
-			if (items.empty())
-				return;
+			if (items.empty()) return;
 
-			// Read-Modify-Write
 			auto props = dm_->getNodeProperties(nodeId);
 			bool changed = false;
 
 			for (const auto &item: items) {
-				// Ensure the SET targets this variable
 				if (item.variable == variable_) {
-					props[item.key] = item.value;
-					changed = true;
+					// NOTE: Merge (OnCreate/OnMatch) usually sets Properties.
+					// If SET n:Label syntax is used in Merge clause, it's more complex.
+					// Assuming SetItem here is for Properties only based on current logic.
+					if (item.type == SetActionType::PROPERTY) {
+						props[item.key] = item.value;
+						changed = true;
+					}
+					// Handle Label Set if needed in future
 				}
 			}
 
 			if (changed) {
 				dm_->addNodeProperties(nodeId, props);
-				// Update record object
 				if (auto n = record.getNode(variable_)) {
 					Node updatedNode = *n;
 					updatedNode.setProperties(std::move(props));
@@ -220,5 +218,4 @@ namespace graph::query::execution::operators {
 			}
 		}
 	};
-
-} // namespace graph::query::execution::operators
+}

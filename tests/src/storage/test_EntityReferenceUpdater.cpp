@@ -41,6 +41,7 @@
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/SpaceManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/state/SystemStateManager.hpp"
 
 using namespace graph::storage;
 using namespace graph;
@@ -64,6 +65,7 @@ protected:
 	// High-level Components
 	std::shared_ptr<DataManager> dataManager;
 	std::shared_ptr<EntityReferenceUpdater> updater;
+	std::shared_ptr<state::SystemStateManager> systemStateManager;
 
 	void SetUp() override {
 		// 1. Initialize File
@@ -96,6 +98,10 @@ protected:
 		dataManager = std::make_shared<DataManager>(file, 100, header, idAllocator, segmentTracker, spaceManager);
 		dataManager->initialize(); // This initializes EntityReferenceUpdater internally
 
+		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
+
+		dataManager->setSystemStateManager(systemStateManager);
+
 		// Retrieve the updater from SpaceManager (where it was set during DataManager::initialize)
 		updater = dataManager->getEntityReferenceUpdater();
 	}
@@ -122,7 +128,9 @@ protected:
 		if (offset == 0)
 			offset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
 
-		Node node(id, label);
+		int64_t labelId = dataManager->getOrCreateLabelId(label);
+		Node node(id, labelId);
+
 		dataManager->addNode(node);
 
 		// Manual Tracker Sync
@@ -141,7 +149,9 @@ protected:
 		if (offset == 0)
 			offset = spaceManager->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
 
-		Edge edge(id, src, dst, label);
+		int64_t labelId = dataManager->getOrCreateLabelId(label);
+		Edge edge(id, src, dst, labelId);
+
 		dataManager->addEdge(edge);
 
 		SegmentHeader h = segmentTracker->getSegmentHeader(offset);

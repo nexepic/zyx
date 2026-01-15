@@ -26,7 +26,7 @@
 
 namespace graph::query::indexes {
 
-	PropertyIndex::PropertyIndex(std::shared_ptr<storage::DataManager> &dataManager,
+	PropertyIndex::PropertyIndex(std::shared_ptr<storage::DataManager> dataManager,
 								 std::shared_ptr<storage::state::SystemStateManager> systemStateManager,
 								 uint32_t indexType, std::string baseStateKey) :
 		dataManager_(std::move(dataManager)), systemStateManager_(std::move(systemStateManager)),

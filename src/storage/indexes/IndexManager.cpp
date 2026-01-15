@@ -20,6 +20,8 @@
 
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/log/Log.hpp"
+#include "graph/storage/FileStorage.hpp"
+#include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexMeta.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"

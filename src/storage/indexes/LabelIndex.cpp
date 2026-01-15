@@ -169,10 +169,9 @@ namespace graph::query::indexes {
 		if (rootId_ == 0) {
 			return;
 		}
-		int64_t newRootId = treeManager_->remove(rootId_, label, entityId);
-		if (newRootId != rootId_) {
-			rootId_ = newRootId;
-		}
+		bool success = treeManager_->remove(rootId_, label, entityId);
+
+		(void) success;
 	}
 
 	std::vector<int64_t> LabelIndex::findNodes(const std::string &label) const {

@@ -113,6 +113,8 @@ namespace graph::storage {
 
 		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
 
+		dataManager->setSystemStateManager(systemStateManager);
+
 		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
 	}
 

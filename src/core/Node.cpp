@@ -27,23 +27,11 @@
 
 namespace graph {
 
-	Node::Node(const int64_t id, const std::string &label) {
+	Node::Node(const int64_t id, const int64_t labelId) {
 		metadata.id = id;
 		metadata.firstOutEdgeId = 0;
 		metadata.firstInEdgeId = 0;
-		setLabel(label);
-	}
-
-	void Node::setLabel(const std::string &label) {
-		// Copy label to fixed-size buffer, ensuring null termination
-		size_t copySize = std::min(label.size(), LABEL_BUFFER_SIZE - 1);
-		memcpy(labelBuffer, label.data(), copySize);
-		labelBuffer[copySize] = '\0';
-	}
-
-	std::string Node::getLabel() const {
-		// Return label as string
-		return {labelBuffer};
+		metadata.labelId = labelId;
 	}
 
 	void Node::setFirstOutEdgeId(int64_t edgeId) { metadata.firstOutEdgeId = edgeId; }
@@ -88,33 +76,24 @@ namespace graph {
 	}
 
 	void Node::serialize(std::ostream &os) const {
-		// Write metadata fields individually
 		utils::Serializer::writePOD(os, metadata.id);
 		utils::Serializer::writePOD(os, metadata.firstOutEdgeId);
 		utils::Serializer::writePOD(os, metadata.firstInEdgeId);
 		utils::Serializer::writePOD(os, metadata.propertyEntityId);
+		utils::Serializer::writePOD(os, metadata.labelId);
 		utils::Serializer::writePOD(os, metadata.propertyStorageType);
 		utils::Serializer::writePOD(os, metadata.isActive);
-
-		// Write label (using the actual length of the string)
-		utils::Serializer::serialize(os, getLabel());
 	}
 
 	Node Node::deserialize(std::istream &is) {
 		Node node;
-
-		// Read metadata fields individually
 		node.metadata.id = utils::Serializer::readPOD<int64_t>(is);
 		node.metadata.firstOutEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		node.metadata.firstInEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		node.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
+		node.metadata.labelId = utils::Serializer::readPOD<int64_t>(is); // ID ONLY
 		node.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
 		node.metadata.isActive = utils::Serializer::readPOD<bool>(is);
-
-		// Read label
-		std::string label = utils::Serializer::deserialize<std::string>(is);
-		node.setLabel(label);
-
 		return node;
 	}
 
@@ -125,13 +104,9 @@ namespace graph {
 		size += sizeof(metadata.firstOutEdgeId); // int64_t
 		size += sizeof(metadata.firstInEdgeId); // int64_t
 		size += sizeof(metadata.propertyEntityId); // int64_t
+		size += sizeof(metadata.labelId); // int64_t
 		size += sizeof(metadata.propertyStorageType); // uint32_t
 		size += sizeof(metadata.isActive); // bool
-
-		// Calculate size of the serialized string (length prefix + string content)
-		const std::string label = getLabel();
-		size += sizeof(uint32_t); // For string length prefix
-		size += label.size(); // Actual string content
 
 		return size;
 	}

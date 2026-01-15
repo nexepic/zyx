@@ -44,10 +44,10 @@ namespace graph::query {
 		 * @brief Executes a pre-built physical plan directly.
 		 *        Useful for internal API calls or optimized paths bypassing the parser.
 		 */
-		QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan) const;
+		[[nodiscard]] QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan) const;
 
 		// Returns a builder to construct queries programmatically
-		QueryBuilder query() const { return QueryBuilder(queryPlanner_); }
+		[[nodiscard]] QueryBuilder query() const { return QueryBuilder(queryPlanner_); }
 
 		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return indexManager_; }
 

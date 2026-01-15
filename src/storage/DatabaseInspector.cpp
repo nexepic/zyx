@@ -101,7 +101,7 @@ namespace graph::storage {
 		std::cout << "\nUse 'debug <type> [page]' to inspect segments.\n";
 	}
 
-	void DatabaseInspector::inspectNodeSegments(uint32_t pageIndex, bool showUnused) const {
+	void DatabaseInspector::inspectNodeSegments(uint32_t pageIndex, [[maybe_unused]] bool showUnused) const {
 		uint64_t offset = navigateToSegment(fileHeader.node_segment_head, pageIndex);
 
 		if (offset == 0) {
@@ -138,10 +138,17 @@ namespace graph::storage {
 
 			if (isActive) {
 				Node node = Node::deserialize(*file);
+
+				// Manually resolve the Label String using DataManager
+				std::string labelStr = dataManager_.resolveLabel(node.getLabelId());
+				// Format: "LabelName(ID:123)" for better inspection info
+				std::string labelDisplay = labelStr.empty() ? "<No Label>" :
+					(labelStr + " (ID:" + std::to_string(node.getLabelId()) + ")");
+
 				auto props = dataManager_.getNodeProperties(node.getId());
 
 				table.addRow(
-						{std::to_string(i), std::to_string(node.getId()), "ACTIVE", node.getLabel(),
+						{std::to_string(i), std::to_string(node.getId()), "ACTIVE", labelDisplay,
 						 formatPropertiesCompact(props),
 						 std::to_string(node.getFirstOutEdgeId()) + "/" + std::to_string(node.getFirstInEdgeId())});
 			} else {
@@ -151,7 +158,7 @@ namespace graph::storage {
 		table.print();
 	}
 
-	void DatabaseInspector::inspectEdgeSegments(uint32_t pageIndex, bool showUnused) const {
+	void DatabaseInspector::inspectEdgeSegments(uint32_t pageIndex, [[maybe_unused]] bool showUnused) const {
 		uint64_t offset = navigateToSegment(fileHeader.edge_segment_head, pageIndex);
 
 		if (offset == 0) {
@@ -187,9 +194,15 @@ namespace graph::storage {
 
 			if (isActive) {
 				Edge edge = Edge::deserialize(*file);
+
+				// Manually resolve the Label String using DataManager
+				std::string labelStr = dataManager_.resolveLabel(edge.getLabelId());
+				std::string labelDisplay = labelStr.empty() ? "<No Label>" :
+					(labelStr + " (ID:" + std::to_string(edge.getLabelId()) + ")");
+
 				auto props = dataManager_.getEdgeProperties(edge.getId());
 
-				table.addRow({std::to_string(i), std::to_string(edge.getId()), "ACTIVE", edge.getLabel(),
+				table.addRow({std::to_string(i), std::to_string(edge.getId()), "ACTIVE", labelDisplay,
 							  std::to_string(edge.getSourceNodeId()) + "->" + std::to_string(edge.getTargetNodeId()),
 							  formatPropertiesCompact(props),
 							  std::to_string(edge.getPrevOutEdgeId()) + "/" + std::to_string(edge.getNextOutEdgeId())});
@@ -200,7 +213,7 @@ namespace graph::storage {
 		table.print();
 	}
 
-	void DatabaseInspector::inspectPropertySegments(uint32_t pageIndex, bool showUnused) const {
+	void DatabaseInspector::inspectPropertySegments(uint32_t pageIndex, [[maybe_unused]] bool showUnused) const {
 		uint64_t offset = navigateToSegment(fileHeader.property_segment_head, pageIndex);
 		if (offset == 0) {
 			std::cout << "Property segment page " << pageIndex << " does not exist." << std::endl;
@@ -246,7 +259,7 @@ namespace graph::storage {
 		table.print();
 	}
 
-	void DatabaseInspector::inspectBlobSegments(uint32_t pageIndex, bool showUnused) const {
+	void DatabaseInspector::inspectBlobSegments(uint32_t pageIndex, [[maybe_unused]] bool showUnused) const {
 		uint64_t offset = navigateToSegment(fileHeader.blob_segment_head, pageIndex);
 		if (offset == 0) {
 			std::cout << "Blob segment page " << pageIndex << " does not exist." << std::endl;
@@ -290,7 +303,7 @@ namespace graph::storage {
 		table.print();
 	}
 
-	void DatabaseInspector::inspectIndexSegments(uint32_t pageIndex, bool showUnused) const {
+	void DatabaseInspector::inspectIndexSegments(uint32_t pageIndex, [[maybe_unused]] bool showUnused) const {
 		uint64_t offset = navigateToSegment(fileHeader.index_segment_head, pageIndex);
 		if (offset == 0) {
 			std::cout << "Index segment page " << pageIndex << " does not exist." << std::endl;
@@ -335,7 +348,7 @@ namespace graph::storage {
 		table.print();
 	}
 
-	void DatabaseInspector::inspectStateSegments(uint32_t pageIndex, bool showUnused) const {
+	void DatabaseInspector::inspectStateSegments(uint32_t pageIndex, [[maybe_unused]] bool showUnused) const {
 		uint64_t offset = navigateToSegment(fileHeader.state_segment_head, pageIndex);
 		if (offset == 0) {
 			std::cout << "State segment page " << pageIndex << " does not exist." << std::endl;

@@ -26,7 +26,7 @@
 
 namespace graph {
 
-	Edge::Edge(const int64_t id, const int64_t sourceId, const int64_t targetId, const std::string &label) {
+	Edge::Edge(const int64_t id, const int64_t sourceId, const int64_t targetId, const int64_t labelId) {
 		metadata.id = id;
 		metadata.sourceNodeId = sourceId;
 		metadata.targetNodeId = targetId;
@@ -34,21 +34,8 @@ namespace graph {
 		metadata.prevOutEdgeId = 0;
 		metadata.nextInEdgeId = 0;
 		metadata.prevInEdgeId = 0;
+		metadata.labelId = labelId;
 		metadata.isActive = true;
-		setLabel(label);
-	}
-
-	void Edge::setLabel(const std::string &label) {
-		// Copy label to fixed-size buffer, ensuring null termination
-		size_t copySize = std::min(label.size(), LABEL_BUFFER_SIZE - 1);
-		memcpy(labelBuffer, label.data(), copySize);
-		labelBuffer[copySize] = '\0';
-	}
-
-	// TODO: Using return value char* instead of std::string?
-	std::string Edge::getLabel() const {
-		// Return label as string
-		return {labelBuffer};
 	}
 
 	void Edge::setProperties(std::unordered_map<std::string, PropertyValue> props) { properties = std::move(props); }
@@ -98,11 +85,9 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.nextInEdgeId);
 		utils::Serializer::writePOD(os, metadata.prevInEdgeId);
 		utils::Serializer::writePOD(os, metadata.propertyEntityId);
+		utils::Serializer::writePOD(os, metadata.labelId);
 		utils::Serializer::writePOD(os, metadata.propertyStorageType);
 		utils::Serializer::writePOD(os, metadata.isActive);
-
-		// Write label as string (only writes the actual string length, not the full buffer)
-		utils::Serializer::serialize(os, getLabel());
 	}
 
 	Edge Edge::deserialize(std::istream &is) {
@@ -117,12 +102,9 @@ namespace graph {
 		edge.metadata.nextInEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		edge.metadata.prevInEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		edge.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
+		edge.metadata.labelId = utils::Serializer::readPOD<int64_t>(is);
 		edge.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
 		edge.metadata.isActive = utils::Serializer::readPOD<bool>(is);
-
-		// Read label
-		std::string label = utils::Serializer::deserialize<std::string>(is);
-		edge.setLabel(label);
 
 		return edge;
 	}
@@ -138,13 +120,9 @@ namespace graph {
 		size += sizeof(metadata.nextInEdgeId); // int64_t
 		size += sizeof(metadata.prevInEdgeId); // int64_t
 		size += sizeof(metadata.propertyEntityId); // int64_t
+		size += sizeof(metadata.labelId);
 		size += sizeof(metadata.propertyStorageType); // uint32_t
 		size += sizeof(metadata.isActive); // bool
-
-		// Calculate size of the serialized string (length prefix + string content)
-		const std::string label = getLabel();
-		size += sizeof(uint32_t); // For string length prefix
-		size += label.size(); // Actual string content
 
 		return size;
 	}

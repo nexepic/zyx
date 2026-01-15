@@ -40,6 +40,7 @@
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/SpaceManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/state/SystemStateManager.hpp"
 
 using namespace graph::storage;
 using namespace graph;
@@ -65,6 +66,7 @@ protected:
 	// Data Management Components
 	std::shared_ptr<DataManager> dataManager;
 	std::shared_ptr<DeletionManager> deletionManager;
+	std::shared_ptr<state::SystemStateManager> systemStateManager;
 
 	void SetUp() override {
 		// 1. Setup Temporary File
@@ -105,6 +107,9 @@ protected:
 		// Circular dependency resolution usually happens inside DataManager,
 		// ensuring it is initialized.
 		dataManager->initialize();
+
+		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
+		dataManager->setSystemStateManager(systemStateManager);
 	}
 
 	void TearDown() override {
@@ -130,7 +135,9 @@ protected:
 			offset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
 		}
 
-		Node node(id, label);
+		int64_t labelId = dataManager->getOrCreateLabelId(label);
+		Node node(id, labelId);
+
 		dataManager->addNode(node);
 
 		// CRITICAL: Manually update SegmentTracker state to simulate a valid active entity
@@ -155,7 +162,9 @@ protected:
 			offset = spaceManager->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
 		}
 
-		Edge edge(id, srcId, dstId, label);
+		int64_t labelId = dataManager->getOrCreateLabelId(label);
+		Edge edge(id, srcId, dstId, labelId);
+
 		dataManager->addEdge(edge);
 
 		SegmentHeader h = segmentTracker->getSegmentHeader(offset);
@@ -414,7 +423,7 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Triggered) {
 	std::vector<Node> nodes;
 	for (int i = 0; i < 10; i++) {
 		int64_t id = startId + i; // IDs will be e.g., 1, 2, 3... 10
-		Node n(id, "Fill");
+		Node n(id, 10);
 
 		// Write to DataManager so DeletionManager can read it back to verify existence
 		dataManager->addNode(n);
@@ -481,7 +490,7 @@ TEST_F(DeletionManagerTest, CompactionThreshold_NotTriggered) {
 	// Fill 10 nodes
 	std::vector<Node> nodes;
 	for (int i = 0; i < 10; i++) {
-		Node n(h.start_id + i, "A");
+		Node n(h.start_id + i, 10);
 		dataManager->addNode(n);
 		segmentTracker->setEntityActive(offset, i, true);
 		nodes.push_back(n);
@@ -540,7 +549,7 @@ TEST_F(DeletionManagerTest, AnalyzeFragmentation) {
 
 TEST_F(DeletionManagerTest, DeleteZeroId) {
 	// Should gracefully handle ID 0 (No-op)
-	Node n(0, "Invalid");
+	Node n(0, 10);
 	deletionManager->deleteNode(n);
 
 	Property p;

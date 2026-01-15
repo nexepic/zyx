@@ -55,7 +55,14 @@ protected:
 			fs::remove_all(testFilePath);
 	}
 
-	graph::query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
+	[[nodiscard]] graph::query::QueryResult execute(const std::string &query) const {
+		return db->getQueryEngine()->execute(query);
+	}
+
+	// [新增] 辅助函数：将 Label ID 解析为字符串，方便断言
+	[[nodiscard]] std::string resolveLabel(int64_t labelId) const {
+		return db->getStorage()->getDataManager()->resolveLabel(labelId);
+	}
 };
 
 // ============================================================================
@@ -71,7 +78,9 @@ TEST_F(CypherTest, CreateAndMatchNode) {
 	ASSERT_TRUE(row1.at("n").isNode());
 	const auto &node1 = row1.at("n").asNode();
 
-	EXPECT_EQ(node1.getLabel(), "User");
+	// [修改] 使用 resolveLabel 和 getLabelId()
+	EXPECT_EQ(resolveLabel(node1.getLabelId()), "User");
+
 	EXPECT_EQ(node1.getProperties().at("name").toString(), "Alice");
 	EXPECT_EQ(node1.getProperties().at("age").toString(), "30");
 
@@ -80,7 +89,8 @@ TEST_F(CypherTest, CreateAndMatchNode) {
 	ASSERT_EQ(res2.rowCount(), 1UL);
 
 	const auto &node2 = res2.getRows()[0].at("n").asNode();
-	EXPECT_EQ(node2.getLabel(), "User");
+	// [修改] 使用 resolveLabel 和 getLabelId()
+	EXPECT_EQ(resolveLabel(node2.getLabelId()), "User");
 }
 
 TEST_F(CypherTest, CreateAndMatchChain) {
@@ -97,7 +107,10 @@ TEST_F(CypherTest, CreateAndMatchChain) {
 	ASSERT_TRUE(row.at("r").isEdge());
 
 	const auto &edge = row.at("r").asEdge();
-	EXPECT_EQ(edge.getLabel(), "KNOWS");
+
+	// [修改] Edge 也使用了 Label ID (假设 Edge API 为 getLabel() 返回 int64_t)
+	EXPECT_EQ(resolveLabel(edge.getLabelId()), "KNOWS");
+
 	EXPECT_EQ(edge.getProperties().at("since").toString(), "2020");
 }
 
@@ -152,7 +165,7 @@ TEST_F(CypherTest, DeleteNodeWithEdgesConstraint) {
 	(void) execute("CREATE (a:ConstraintTest)-[:REL]->(b:ConstraintTest)");
 
 	// Should fail (Standard DELETE on connected node)
-	EXPECT_THROW({ execute("MATCH (n:ConstraintTest) DELETE n"); }, std::runtime_error);
+	EXPECT_THROW({ (void) execute("MATCH (n:ConstraintTest) DELETE n"); }, std::runtime_error);
 
 	auto res = execute("MATCH (n:ConstraintTest) RETURN n");
 	EXPECT_EQ(res.rowCount(), 2UL);
@@ -223,7 +236,9 @@ TEST_F(CypherTest, FilterTraversalTarget) {
 
 	auto res = execute("MATCH (n:Node)-[r]->(t:Target) RETURN t");
 	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("t").asNode().getLabel(), "Target");
+
+	// [修改] 验证目标节点的 Label
+	EXPECT_EQ(resolveLabel(res.getRows()[0].at("t").asNode().getLabelId()), "Target");
 }
 
 // ============================================================================
@@ -304,7 +319,9 @@ TEST_F(CypherTest, RemoveLabel) {
 
 	auto resAll = execute("MATCH (n) WHERE n.id = 99 RETURN n");
 	ASSERT_EQ(resAll.rowCount(), 1UL);
-	EXPECT_EQ(resAll.getRows()[0].at("n").asNode().getLabel(), "");
+
+	// [修改] 验证 Label 为空字符串
+	EXPECT_EQ(resolveLabel(resAll.getRows()[0].at("n").asNode().getLabelId()), "");
 }
 
 // ============================================================================
@@ -350,7 +367,7 @@ TEST_F(CypherTest, IndexLifecycle_NamedIndex) {
 	auto resShow = execute("SHOW INDEXES");
 	bool nameFound = false;
 	for (const auto &row: resShow.getRows()) {
-		if (row.count("name") && row.at("name").toString() == "user_age_idx") {
+		if (row.contains("name") && row.at("name").toString() == "user_age_idx") {
 			nameFound = true;
 		}
 	}
@@ -364,7 +381,7 @@ TEST_F(CypherTest, IndexLifecycle_NamedIndex) {
 	bool stillExists = false;
 	if (resShowAfter.rowCount() > 0) {
 		for (const auto &row: resShowAfter.getRows()) {
-			if (row.count("name") && row.at("name").toString() == "user_age_idx") {
+			if (row.contains("name") && row.at("name").toString() == "user_age_idx") {
 				stillExists = true;
 			}
 		}
@@ -382,7 +399,7 @@ TEST_F(CypherTest, IndexLifecycle_CreateAndDropByDefinition) {
 	bool found = false;
 	if (resShow2.rowCount() > 0) {
 		for (const auto &row: resShow2.getRows()) {
-			if (row.count("properties") && row.at("properties").toString() == "sku")
+			if (row.contains("properties") && row.at("properties").toString() == "sku")
 				found = true;
 		}
 	}
@@ -440,7 +457,7 @@ TEST_F(CypherTest, DataPersistenceWithIndexAndConfig) {
 	auto resIdx = execute("SHOW INDEXES");
 	bool indexFound = false;
 	for (const auto &row: resIdx.getRows()) {
-		if (row.count("properties") && row.at("properties").toString() == "val") {
+		if (row.contains("properties") && row.at("properties").toString() == "val") {
 			indexFound = true;
 		}
 	}

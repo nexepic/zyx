@@ -41,6 +41,7 @@ namespace graph {
 			int64_t nextInEdgeId = 0; // Next incoming edge to target
 			int64_t prevInEdgeId = 0; // Previous incoming edge to target
 			int64_t propertyEntityId = 0; // Property entity ID (if any)
+			int64_t labelId = 0;
 			uint32_t propertyStorageType = 0; // How properties are stored
 			bool isActive = true;
 			// Padding is implicit
@@ -56,13 +57,14 @@ namespace graph {
 		static constexpr size_t getTotalSize() { return TOTAL_EDGE_SIZE; }
 
 		Edge() = default;
-		Edge(int64_t id, int64_t sourceId, int64_t targetId, const std::string &label);
+		Edge(int64_t id, int64_t sourceId, int64_t targetId, int64_t labelId);
 
 		// Metadata access for CRTP base class
 		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
 		Metadata &getMutableMetadata() { return metadata; }
 
-		[[nodiscard]] std::string getLabel() const;
+		[[nodiscard]] int64_t getLabelId() const { return metadata.labelId; }
+		void setLabelId(int64_t id) { metadata.labelId = id; }
 
 		// Node relationship getters
 		[[nodiscard]] int64_t getSourceNodeId() const { return metadata.sourceNodeId; }
@@ -103,10 +105,6 @@ namespace graph {
 			return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
 		}
 
-		// Type management
-		[[nodiscard]] std::string getType() const;
-		void setType(const std::string &type);
-
 		// Active state
 		[[nodiscard]] bool isActive() const { return metadata.isActive; }
 		void markInactive(bool active = false) { metadata.isActive = active; }
@@ -114,8 +112,6 @@ namespace graph {
 		// Serialization
 		void serialize(std::ostream &os) const;
 		static Edge deserialize(std::istream &is);
-
-		void setLabel(const std::string &label);
 
 	private:
 		// Fixed-size metadata structure

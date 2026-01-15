@@ -104,7 +104,8 @@ protected:
 	}
 
 	void createActiveNode(uint64_t offset, uint32_t index, int64_t id) {
-		Node n(id, "data");
+		// Label ID 100 is arbitrary for testing
+		Node n(id, 100);
 		segmentTracker->writeEntity(offset, index, n, Node::getTotalSize());
 		segmentTracker->setEntityActive(offset, index, true);
 	}
@@ -112,8 +113,8 @@ protected:
 	[[nodiscard]] uint64_t getFileSize() const { return std::filesystem::file_size(testFilePath); }
 
 	// Helper: Write a mock node
-	void writeNode(uint64_t segmentOffset, uint32_t index, int64_t id, const std::string &label) const {
-		Node node(id, label);
+	void writeNode(uint64_t segmentOffset, uint32_t index, int64_t id, int64_t labelId) const {
+		Node node(id, labelId);
 		segmentTracker->writeEntity(segmentOffset, index, node, Node::getTotalSize());
 		segmentTracker->setEntityActive(segmentOffset, index, true);
 	}
@@ -247,39 +248,40 @@ TEST_F(SpaceManagerTest, Compaction_SparseToDense_IDRemapping) {
 
 	// Simulate State: [A, dead, B, dead, C]
 	// Indices: 0, 1, 2, 3, 4
-	writeNode(offset, 0, startId + 0, "A");
-	writeNode(offset, 1, startId + 1, "dead");
-	writeNode(offset, 2, startId + 2, "B");
-	writeNode(offset, 3, startId + 3, "dead");
-	writeNode(offset, 4, startId + 4, "C");
+	// Using distinct Label IDs: 10, 20, 30
+	writeNode(offset, 0, startId + 0, 10); // A
+	writeNode(offset, 1, startId + 1, 999); // Dead
+	writeNode(offset, 2, startId + 2, 20); // B
+	writeNode(offset, 3, startId + 3, 999); // Dead
+	writeNode(offset, 4, startId + 4, 30); // C
 
 	// Mark 1 and 3 as inactive
 	segmentTracker->setEntityActive(offset, 1, false);
 	segmentTracker->setEntityActive(offset, 3, false);
-	segmentTracker->updateSegmentUsage(offset, 5, 2); // 5 used, 2 inactive
+	segmentTracker->updateSegmentUsage(offset, 5, 2);
 
 	// Trigger Compaction
 	spaceManager->compactSegments(type, 0.0);
 
-	// Verify Result: [A, B, C] packed at 0, 1, 2
+	// Verify Result
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 	EXPECT_EQ(h.used, 3U);
 	EXPECT_EQ(h.inactive_count, 0U);
 
 	// Check content and IDs
-	// Slot 0: "A", ID unchanged (startId + 0)
+	// Slot 0: Label ID 10 ("A"), ID unchanged
 	Node n0 = segmentTracker->readEntity<Node>(offset, 0, Node::getTotalSize());
-	EXPECT_EQ(n0.getLabel(), "A");
+	EXPECT_EQ(n0.getLabelId(), 10);
 	EXPECT_EQ(n0.getId(), startId + 0);
 
-	// Slot 1: "B", ID CHANGED from (startId + 2) -> (startId + 1)
+	// Slot 1: Label ID 20 ("B"), ID remapped
 	Node n1 = segmentTracker->readEntity<Node>(offset, 1, Node::getTotalSize());
-	EXPECT_EQ(n1.getLabel(), "B");
+	EXPECT_EQ(n1.getLabelId(), 20);
 	EXPECT_EQ(n1.getId(), startId + 1);
 
-	// Slot 2: "C", ID CHANGED from (startId + 4) -> (startId + 2)
+	// Slot 2: Label ID 30 ("C"), ID remapped
 	Node n2 = segmentTracker->readEntity<Node>(offset, 2, Node::getTotalSize());
-	EXPECT_EQ(n2.getLabel(), "C");
+	EXPECT_EQ(n2.getLabelId(), 30);
 	EXPECT_EQ(n2.getId(), startId + 2);
 }
 
@@ -289,7 +291,7 @@ TEST_F(SpaceManagerTest, Compaction_FullSegment_NoOp) {
 
 	// Fill completely
 	for (int i = 0; i < 5; i++) {
-		writeNode(offset, i, 100 + i, "data");
+		writeNode(offset, i, 100 + i, 50); // Label ID 50
 	}
 	segmentTracker->updateSegmentUsage(offset, 5, 0);
 
@@ -307,8 +309,8 @@ TEST_F(SpaceManagerTest, Compaction_AllDeleted_SegmentFreed) {
 	uint64_t offset = spaceManager->allocateSegment(type, 5);
 
 	// Write 2 items, delete 2 items
-	writeNode(offset, 0, 100, "del");
-	writeNode(offset, 1, 101, "del");
+	writeNode(offset, 0, 100, 99);
+	writeNode(offset, 1, 101, 99);
 	segmentTracker->setEntityActive(offset, 0, false);
 	segmentTracker->setEntityActive(offset, 1, false);
 	segmentTracker->updateSegmentUsage(offset, 2, 2); // 2 used, 2 inactive (100% garbage)
@@ -337,12 +339,12 @@ TEST_F(SpaceManagerTest, Merge_CapacityCheck_ShouldNotMerge) {
 
 	// Fill A with 9 items (1 slot left)
 	for (int i = 0; i < 9; i++)
-		writeNode(segA, i, 100 + i, "A");
+		writeNode(segA, i, 100 + i, 10);
 	segmentTracker->updateSegmentUsage(segA, 9, 0);
 
 	// Fill B with 2 items
 	for (int i = 0; i < 2; i++)
-		writeNode(segB, i, 200 + i, "B");
+		writeNode(segB, i, 200 + i, 20);
 	segmentTracker->updateSegmentUsage(segB, 2, 0);
 
 	// Attempt Merge (B needs 2 slots, A only has 1)
@@ -366,11 +368,11 @@ TEST_F(SpaceManagerTest, Merge_EndSegmentIntoFrontSegment) {
 	uint64_t segB = spaceManager->allocateSegment(type, capacity);
 
 	// SegA: 1 item
-	writeNode(segA, 0, 100, "Front");
+	writeNode(segA, 0, 100, 10);
 	segmentTracker->updateSegmentUsage(segA, 1, 0);
 
 	// SegB: 1 item
-	writeNode(segB, 0, 200, "End");
+	writeNode(segB, 0, 200, 20);
 	segmentTracker->updateSegmentUsage(segB, 1, 0);
 
 	// Gap is full/busy so it's not a merge candidate
@@ -388,7 +390,7 @@ TEST_F(SpaceManagerTest, Merge_EndSegmentIntoFrontSegment) {
 	// Slot 0: Front
 	// Slot 1: End (Moved from B)
 	Node n1 = segmentTracker->readEntity<Node>(segA, 1, Node::getTotalSize());
-	EXPECT_EQ(n1.getLabel(), "End");
+	EXPECT_EQ(n1.getLabelId(), 20);
 
 	// Verify B is freed
 	auto freeList = segmentTracker->getFreeSegments();
@@ -402,7 +404,7 @@ TEST_F(SpaceManagerTest, Merge_DifferentTypes_ShouldNotMix) {
 	uint64_t segNode = spaceManager->allocateSegment(typeNode, 10);
 	uint64_t segEdge = spaceManager->allocateSegment(typeEdge, 10);
 
-	writeNode(segNode, 0, 1, "N");
+	writeNode(segNode, 0, 1, 10);
 	segmentTracker->updateSegmentUsage(segNode, 1, 0);
 
 	// Mock writing edge (using node write helper but tracking it as edge segment)
@@ -574,7 +576,7 @@ TEST_F(SpaceManagerTest, RelocateSegments_MovesTailToFrontHole) {
 	// Calculate physical capacity limit to prevent overwriting adjacent segments.
 	// This ensures robustness even if SEGMENT_SIZE changes in StorageHeaders.hpp.
 	uint32_t maxItemsPerSeg = SEGMENT_SIZE / Node::getTotalSize();
-	ASSERT_GE(maxItemsPerSeg, 2) << "Segment size too small to run this test";
+	ASSERT_GE(maxItemsPerSeg, 2U) << "Segment size too small to run this test";
 
 	// Allocate Segments using the physical limit as capacity
 	uint64_t segHole = spaceManager->allocateSegment(type, maxItemsPerSeg);
@@ -588,14 +590,14 @@ TEST_F(SpaceManagerTest, RelocateSegments_MovesTailToFrontHole) {
 	// Populate segMid (Blocking merge target)
 	int64_t midStartId = segmentTracker->getSegmentHeader(segMid).start_id;
 	for (uint32_t i = 0; i < fillCount; ++i) {
-		writeNode(segMid, i, midStartId + i, "MidData");
+		writeNode(segMid, i, midStartId + i, 50);
 	}
 	segmentTracker->updateSegmentUsage(segMid, fillCount, 0);
 
 	// Populate segTail (Blocking merge source)
 	int64_t tailStartId = segmentTracker->getSegmentHeader(segTail).start_id;
 	for (uint32_t i = 0; i < fillCount; ++i) {
-		writeNode(segTail, i, tailStartId + i, "TailData");
+		writeNode(segTail, i, tailStartId + i, 99);
 	}
 	segmentTracker->updateSegmentUsage(segTail, fillCount, 0);
 
@@ -618,7 +620,7 @@ TEST_F(SpaceManagerTest, RelocateSegments_MovesTailToFrontHole) {
 
 	// 2. Check Content (Must match what was written to Tail)
 	Node n = segmentTracker->readEntity<Node>(segHole, 0, Node::getTotalSize());
-	EXPECT_EQ(n.getLabel(), "TailData");
+	EXPECT_EQ(n.getLabelId(), 99);
 	EXPECT_EQ(n.getId(), tailStartId);
 
 	// 3. Check Old Location Freed
@@ -628,8 +630,8 @@ TEST_F(SpaceManagerTest, RelocateSegments_MovesTailToFrontHole) {
 
 TEST_F(SpaceManagerTest, Relocate_NoHoles_NoOp) {
 	auto type = static_cast<uint32_t>(EntityType::Node);
-	spaceManager->allocateSegment(type, 10); // Seg 1
-	spaceManager->allocateSegment(type, 10); // Seg 2
+	(void) spaceManager->allocateSegment(type, 10); // Seg 1
+	(void) spaceManager->allocateSegment(type, 10); // Seg 2
 
 	// No free segments available
 	spaceManager->compactSegments();
@@ -768,7 +770,7 @@ TEST_F(SpaceManagerTest, SafeCompactSegments_PreventsConcurrentExecution) {
 	// Create a very large workload that takes time to compact
 	auto type = static_cast<uint32_t>(EntityType::Node);
 	for (int i = 0; i < 100; ++i)
-		spaceManager->allocateSegment(type, 100); // 100 segments
+		(void) spaceManager->allocateSegment(type, 100); // 100 segments
 
 	auto future = std::async(std::launch::async, [&]() { return spaceManager->safeCompactSegments(); });
 

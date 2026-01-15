@@ -65,35 +65,35 @@ protected:
 	// Helper to populate DB with mixed data
 	void populateDatabase() const {
 		// Active Nodes
-		graph::Node n1(1, "Person");
+		graph::Node n1(1, dataManager->getOrCreateLabelId("Person"));
 		n1.addProperty("name", std::string("Alice"));
-		n1.addProperty("age", (int64_t) 30);
+		n1.addProperty("age", 30);
 		dataManager->addNode(n1);
 
-		graph::Node n2(2, "Person");
+		graph::Node n2(2, dataManager->getOrCreateLabelId("Person"));
 		n2.addProperty("name", std::string("Bob"));
-		n2.addProperty("age", (int64_t) 25);
+		n2.addProperty("age", 25);
 		dataManager->addNode(n2);
 
-		graph::Node n3(3, "Company");
+		graph::Node n3(3, dataManager->getOrCreateLabelId("Company"));
 		n3.addProperty("name", std::string("MetrixDB"));
 		dataManager->addNode(n3);
 
 		// Deleted Node (ID 4)
-		graph::Node n4(4, "Person");
+		graph::Node n4(4, dataManager->getOrCreateLabelId("Person"));
 		n4.addProperty("name", std::string("Ghost"));
 		dataManager->addNode(n4);
 		dataManager->deleteNode(n4);
 
 		// Padding (ID 5-20) to prevent tail reclamation
 		for (int i = 5; i <= 20; ++i) {
-			graph::Node n(i, "Extra");
+			graph::Node n(i, dataManager->getOrCreateLabelId("Extra"));
 			dataManager->addNode(n);
 		}
 
 		// Active Edge
-		graph::Edge e1(10, 1, 3, "WORKS_AT");
-		e1.addProperty("since", (int64_t) 2020);
+		graph::Edge e1(10, 1, 3, dataManager->getOrCreateLabelId("WORKS_AT"));
+		e1.addProperty("since", 2020);
 		dataManager->addEdge(e1);
 
 		// Flush to ensure data persistence logic runs (update headers etc)

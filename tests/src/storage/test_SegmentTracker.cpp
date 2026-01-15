@@ -111,8 +111,8 @@ protected:
 	}
 
 	// Helper to create and register a fully initialized segment header
-	SegmentHeader createAndRegisterSegment(uint64_t offset, uint32_t type, uint32_t capacity,
-										   int64_t start_id = 0) const {
+	[[nodiscard]] SegmentHeader createAndRegisterSegment(uint64_t offset, uint32_t type, uint32_t capacity,
+														 int64_t start_id = 0) const {
 		SegmentHeader header;
 		header.file_offset = offset;
 		header.data_type = type;
@@ -453,33 +453,23 @@ TEST_F(SegmentTrackerTest, GetSegmentsNeedingCompaction) {
 // ============================================================================
 
 TEST_F(SegmentTrackerTest, WriteAndReadEntity) {
-	// This test assumes Node has a valid FixedSizeSerializer specialization
-	// or is trivially copyable.
-
 	uint64_t segOffset = getSegmentOffset(0);
 	(void) createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Node), 10);
 
-	Node testNode(123, "TestNode");
-	// Calculate size (using Node::getTotalSize() as defined in StorageHeaders constants)
+	Node testNode(123, 555);
 	size_t nodeSize = Node::getTotalSize();
 
 	// Write at index 0
 	tracker->writeEntity<Node>(segOffset, 0, testNode, nodeSize);
 
-	// Verify dirty
 	EXPECT_EQ(tracker->getSegmentHeader(segOffset).is_dirty, 1U);
 
 	// Read back
-	// Note: If FixedSizeSerializer is not linked, this might fail linking.
-	// Assuming the environment matches the user's codebase.
 	try {
 		Node result = tracker->readEntity<Node>(segOffset, 0, nodeSize);
 		EXPECT_EQ(result.getId(), 123);
-		// String label comparison depends on Node implementation (fixed buffer vs pointer)
-		// Assuming fixed buffer for FixedSizeSerializer compatibility.
-		EXPECT_EQ(result.getLabel(), "TestNode");
+		EXPECT_EQ(result.getLabelId(), 555);
 	} catch (const std::exception &e) {
-		// Fallback if Node/Serializer implementation prevents direct testing here
 		FAIL() << "Entity I/O failed: " << e.what();
 	}
 }

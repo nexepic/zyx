@@ -69,10 +69,10 @@ namespace graph::query::execution::operators {
 							node.setProperties(std::move(props));
 						} else if (item.type == SetActionType::LABEL) {
 							// 2. Label Update
-							// Note: MetrixDB currently supports single Label per node.
-							// SET n:Label replaces the old label.
-							node.setLabel(item.key);
-							dm_->updateNode(node); // Persist label change
+							// Resolve string label to ID
+							int64_t newLabelId = dm_->getOrCreateLabelId(item.key);
+							node.setLabelId(newLabelId);
+							dm_->updateNode(node); // Persist label ID change
 						}
 
 						record.setNode(item.variable, node);

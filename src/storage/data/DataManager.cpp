@@ -36,6 +36,8 @@
 #include "graph/storage/data/NodeManager.hpp"
 #include "graph/storage/data/PropertyManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
+#include "graph/storage/dictionaries/LabelTokenRegistry.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::storage {
@@ -71,6 +73,18 @@ namespace graph::storage {
 
 		// Initialize entity managers
 		initializeManagers();
+	}
+
+	void DataManager::setSystemStateManager(const std::shared_ptr<state::SystemStateManager> &systemStateManager) {
+		systemStateManager_ = systemStateManager;
+
+		// Now that we have the high-level state manager, we can initialize the label registry
+		initializeLabelRegistry(systemStateManager);
+	}
+
+	void DataManager::initializeLabelRegistry(std::shared_ptr<state::SystemStateManager> sm) {
+		// Pass the correct high-level SystemStateManager to the registry
+		labelRegistry_ = std::make_unique<LabelTokenRegistry>(shared_from_this(), sm);
 	}
 
 	void DataManager::initializeSegmentIndexes() const {
@@ -201,6 +215,23 @@ namespace graph::storage {
 
 		if (notifyFunc)
 			notifyFunc(oldEntity, entity);
+	}
+
+	int64_t DataManager::getOrCreateLabelId(const std::string& label) const {
+		if (label.empty()) return 0;
+		if (!labelRegistry_) {
+			throw std::runtime_error("LabelTokenRegistry not initialized. Ensure SystemStateManager is set.");
+		}
+		return labelRegistry_->getOrCreateLabelId(label);
+	}
+
+	std::string DataManager::resolveLabel(int64_t labelId) const {
+		if (labelId == 0) return "";
+		if (!labelRegistry_) {
+			return "";
+		}
+
+		return labelRegistry_->getLabelString(labelId);
 	}
 
 	// --- Node Operations (delegate to NodeManager) ---

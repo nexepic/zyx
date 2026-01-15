@@ -46,21 +46,23 @@ TEST_F(EdgeTest, DefaultConstructor) {
 	EXPECT_EQ(edge.getPrevInEdgeId(), 0);
 	EXPECT_EQ(edge.getPropertyEntityId(), 0);
 	EXPECT_TRUE(edge.isActive());
-	EXPECT_EQ(edge.getLabel(), "");
+	// Changed: Check Label ID instead of string
+	EXPECT_EQ(edge.getLabelId(), 0);
 }
 
 TEST_F(EdgeTest, ParameterizedConstructor) {
 	constexpr int64_t id = 123;
 	constexpr int64_t sourceId = 456;
 	constexpr int64_t targetId = 789;
-	const std::string label = "CONNECTED_TO";
+	constexpr int64_t labelId = 999; // Using ID now
 
-	const graph::Edge edge(id, sourceId, targetId, label);
+	const graph::Edge edge(id, sourceId, targetId, labelId);
 
 	EXPECT_EQ(edge.getId(), id);
 	EXPECT_EQ(edge.getSourceNodeId(), sourceId);
 	EXPECT_EQ(edge.getTargetNodeId(), targetId);
-	EXPECT_EQ(edge.getLabel(), label);
+	// Changed: Check Label ID
+	EXPECT_EQ(edge.getLabelId(), labelId);
 	EXPECT_TRUE(edge.isActive());
 	EXPECT_EQ(edge.getNextOutEdgeId(), 0);
 	EXPECT_EQ(edge.getPrevOutEdgeId(), 0);
@@ -68,26 +70,13 @@ TEST_F(EdgeTest, ParameterizedConstructor) {
 	EXPECT_EQ(edge.getPrevInEdgeId(), 0);
 }
 
-TEST_F(EdgeTest, SetGetLabel) {
+TEST_F(EdgeTest, SetGetLabelId) {
 	graph::Edge edge;
-	const std::string testLabel = "TEST_RELATIONSHIP";
+	const int64_t testLabelId = 555;
 
-	edge.setLabel(testLabel);
+	edge.setLabelId(testLabelId);
 
-	EXPECT_EQ(edge.getLabel(), testLabel);
-}
-
-TEST_F(EdgeTest, SetLabelTruncation) {
-	graph::Edge edge;
-	// Create a label longer than LABEL_BUFFER_SIZE
-	const std::string longLabel(graph::Edge::LABEL_BUFFER_SIZE + 10, 'X');
-
-	edge.setLabel(longLabel);
-
-	// Should be truncated to fit in buffer
-	std::string retrievedLabel = edge.getLabel();
-	EXPECT_LT(retrievedLabel.size(), longLabel.size());
-	EXPECT_EQ(retrievedLabel.size(), graph::Edge::LABEL_BUFFER_SIZE - 1);
+	EXPECT_EQ(edge.getLabelId(), testLabelId);
 }
 
 TEST_F(EdgeTest, NodeRelationshipSetters) {
@@ -200,7 +189,8 @@ TEST_F(EdgeTest, ActiveState) {
 }
 
 TEST_F(EdgeTest, SerializeDeserializeEmpty) {
-	graph::Edge originalEdge(100, 200, 300, "");
+	// ID-based constructor: 0 means no label
+	graph::Edge originalEdge(100, 200, 300, 0);
 	std::stringstream ss;
 
 	originalEdge.serialize(ss);
@@ -209,12 +199,12 @@ TEST_F(EdgeTest, SerializeDeserializeEmpty) {
 	EXPECT_EQ(deserializedEdge.getId(), originalEdge.getId());
 	EXPECT_EQ(deserializedEdge.getSourceNodeId(), originalEdge.getSourceNodeId());
 	EXPECT_EQ(deserializedEdge.getTargetNodeId(), originalEdge.getTargetNodeId());
-	EXPECT_EQ(deserializedEdge.getLabel(), originalEdge.getLabel());
+	EXPECT_EQ(deserializedEdge.getLabelId(), originalEdge.getLabelId());
 	EXPECT_EQ(deserializedEdge.isActive(), originalEdge.isActive());
 }
 
 TEST_F(EdgeTest, SerializeDeserializeWithData) {
-	graph::Edge originalEdge(500, 600, 700, "RELATIONSHIP");
+	graph::Edge originalEdge(500, 600, 700, 42); // Label ID 42
 	originalEdge.setNextOutEdgeId(800);
 	originalEdge.setPrevInEdgeId(900);
 	originalEdge.setPropertyEntityId(1000, graph::PropertyStorageType::PROPERTY_ENTITY);
@@ -227,7 +217,7 @@ TEST_F(EdgeTest, SerializeDeserializeWithData) {
 	EXPECT_EQ(deserializedEdge.getId(), originalEdge.getId());
 	EXPECT_EQ(deserializedEdge.getSourceNodeId(), originalEdge.getSourceNodeId());
 	EXPECT_EQ(deserializedEdge.getTargetNodeId(), originalEdge.getTargetNodeId());
-	EXPECT_EQ(deserializedEdge.getLabel(), originalEdge.getLabel());
+	EXPECT_EQ(deserializedEdge.getLabelId(), originalEdge.getLabelId());
 	EXPECT_EQ(deserializedEdge.getNextOutEdgeId(), originalEdge.getNextOutEdgeId());
 	EXPECT_EQ(deserializedEdge.getPrevInEdgeId(), originalEdge.getPrevInEdgeId());
 	EXPECT_EQ(deserializedEdge.getPropertyEntityId(), originalEdge.getPropertyEntityId());
@@ -236,28 +226,16 @@ TEST_F(EdgeTest, SerializeDeserializeWithData) {
 }
 
 TEST_F(EdgeTest, GetSerializedSize) {
-	const std::string testLabel = "TEST_LABEL";
-	const graph::Edge edge(1, 2, 3, testLabel);
+	const graph::Edge edge(1, 2, 3, 10); // Label ID 10
 
+	// Calculate expected size based on POD fields
 	size_t expectedSize = 0;
-	expectedSize += sizeof(int64_t) * 8; // 8 int64_t fields
-	expectedSize += sizeof(uint32_t); // propertyStorageType
-	expectedSize += sizeof(bool); // isActive
-	expectedSize += sizeof(uint32_t); // String length prefix
-	expectedSize += testLabel.size(); // String content
-
-	EXPECT_EQ(edge.getSerializedSize(), expectedSize);
-}
-
-TEST_F(EdgeTest, GetSerializedSizeEmptyLabel) {
-	const graph::Edge edge(1, 2, 3, "");
-
-	size_t expectedSize = 0;
-	expectedSize += sizeof(int64_t) * 8; // 8 int64_t fields
-	expectedSize += sizeof(uint32_t); // propertyStorageType
-	expectedSize += sizeof(bool); // isActive
-	expectedSize += sizeof(uint32_t); // String length prefix
-	// No string content for empty label
+	// 9 int64_t fields: id, source, target, nextOut, prevOut, nextIn, prevIn, propEntity, labelId
+	expectedSize += sizeof(int64_t) * 9;
+	// 1 uint32_t field: propertyStorageType
+	expectedSize += sizeof(uint32_t);
+	// 1 bool field: isActive
+	expectedSize += sizeof(bool);
 
 	EXPECT_EQ(edge.getSerializedSize(), expectedSize);
 }
@@ -284,12 +262,12 @@ TEST_F(EdgeTest, Constants) {
 	EXPECT_EQ(graph::Edge::TOTAL_EDGE_SIZE, 256u);
 
 	size_t expectedMetadataSize = 0;
-	expectedMetadataSize += sizeof(int64_t) * 8;
-	expectedMetadataSize += sizeof(uint32_t);
-	expectedMetadataSize += sizeof(bool);
+	// 9 int64_t + 1 uint32_t + 1 bool
+	expectedMetadataSize += offsetof(graph::Edge::Metadata, isActive) + sizeof(bool);
 
 	EXPECT_EQ(graph::Edge::METADATA_SIZE, expectedMetadataSize);
-	EXPECT_EQ(graph::Edge::LABEL_BUFFER_SIZE, graph::Edge::TOTAL_EDGE_SIZE - graph::Edge::METADATA_SIZE);
+	// No more LABEL_BUFFER_SIZE, checking PADDING_SIZE instead is optional but good practice
+	// EXPECT_EQ(graph::Edge::PADDING_SIZE, 128u - expectedMetadataSize);
 	EXPECT_EQ(graph::Edge::typeId, graph::toUnderlying(graph::EntityType::Edge));
 }
 
