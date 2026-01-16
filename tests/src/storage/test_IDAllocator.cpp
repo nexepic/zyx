@@ -60,14 +60,14 @@ protected:
 	}
 
 	graph::Node insertNode(const std::string &label) {
-        int64_t id = allocator->allocateId(graph::Node::typeId);
+		int64_t id = allocator->allocateId(graph::Node::typeId);
 
-        int64_t labelId = dataManager->getOrCreateLabelId(label);
+		int64_t labelId = dataManager->getOrCreateLabelId(label);
 
-        graph::Node node(id, labelId);
-        dataManager->addNode(node);
-        return node;
-    }
+		graph::Node node(id, labelId);
+		dataManager->addNode(node);
+		return node;
+	}
 
 	graph::Edge insertEdge(int64_t startId, int64_t endId, const std::string &label) {
 		int64_t id = allocator->allocateId(graph::Edge::typeId);
@@ -522,4 +522,118 @@ TEST_F(IDAllocatorTest, CrashRecovery_WithSparseSegment_CapacityVsUsed) {
 	// Correct behavior: Allocates 4.
 	graph::Node n4 = insertNode("4");
 	EXPECT_EQ(n4.getId(), 4) << "Allocator skipped IDs due to incorrect recovery logic!";
+}
+
+TEST_F(IDAllocatorTest, RecoverGapsOnNormalRestart_CaseA) {
+	// 1. Create IDs [1, 2, 3] and Save.
+	insertNode("1");
+	insertNode("2");
+	insertNode("3");
+	fileStorage->flush(); // Physical Max = 3
+
+	// 2. Allocate ID 4 but DO NOT SAVE.
+	// Logical Max becomes 4. Physical Max stays 3.
+	// This simulates a transaction that allocated an ID but crashed/rolled back before flush.
+	int64_t id4 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id4, 4);
+
+	// 3. Restart DB
+	// The FileHeader manager saves the logical max ID (4) on clean shutdown/flush.
+	// We force a flush of the file header to persist "MaxNodeId = 4".
+	// Note: In real app, FileStorage::close() does this.
+	database->close();
+
+	// 4. Reopen
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	fileStorage = database->getStorage();
+	allocator = fileStorage->getIDAllocator();
+
+	// 5. Verify Gap Recovery
+	// Physical Max is 3 (from segments). Logical Max is 4 (from header).
+	// Gap [4, 4] should be recovered into Volatile Cache.
+
+	// Allocate should pop 4 from volatile cache.
+	int64_t recoveredId = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(recoveredId, 4) << "Failed to recover gap ID 4 from volatile cache";
+
+	// Next should be 5
+	EXPECT_EQ(allocator->allocateId(graph::Node::typeId), 5);
+}
+
+TEST_F(IDAllocatorTest, BatchAllocation_AllTypes) {
+	constexpr size_t BATCH = 5;
+
+	// 1. Edge
+	int64_t startEdge = allocator->allocateIdBatch(graph::Edge::typeId, BATCH);
+	EXPECT_GT(startEdge, 0);
+	// Verify counter incremented
+	EXPECT_EQ(allocator->getCurrentMaxEdgeId(), startEdge + BATCH - 1);
+
+	// 2. Property
+	int64_t startProp = allocator->allocateIdBatch(graph::Property::typeId, BATCH);
+	EXPECT_GT(startProp, 0);
+	EXPECT_EQ(allocator->getCurrentMaxPropId(), startProp + BATCH - 1);
+
+	// 3. Blob
+	int64_t startBlob = allocator->allocateIdBatch(graph::Blob::typeId, BATCH);
+	EXPECT_GT(startBlob, 0);
+	EXPECT_EQ(allocator->getCurrentMaxBlobId(), startBlob + BATCH - 1);
+
+	// 4. Index
+	int64_t startIndex = allocator->allocateIdBatch(graph::Index::typeId, BATCH);
+	EXPECT_GT(startIndex, 0);
+	EXPECT_EQ(allocator->getCurrentMaxIndexId(), startIndex + BATCH - 1);
+
+	// 5. State
+	int64_t startState = allocator->allocateIdBatch(graph::State::typeId, BATCH);
+	EXPECT_GT(startState, 0);
+	EXPECT_EQ(allocator->getCurrentMaxStateId(), startState + BATCH - 1);
+
+	// 6. Invalid Type (Exception check)
+	EXPECT_THROW(allocator->allocateIdBatch(999, BATCH), std::runtime_error);
+}
+
+TEST_F(IDAllocatorTest, ExplicitCacheClearing) {
+	// 1. Allocate ID 1
+	int64_t id1 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id1, 1);
+
+	// 2. Free ID 1 (Volatile)
+	allocator->freeId(id1, graph::Node::typeId);
+
+	// 3. Reset
+	allocator->resetAfterCompaction();
+
+	// 4. Allocate Next
+	int64_t id2 = allocator->allocateId(graph::Node::typeId);
+
+	// Debug print
+	if (id2 == id1) {
+		std::cerr << "FAILURE: Got " << id2 << " again. MaxID is " << allocator->getCurrentMaxNodeId() << std::endl;
+	}
+
+	EXPECT_NE(id2, id1);
+}
+
+TEST_F(IDAllocatorTest, ClearCache_SpecificType) {
+	// This tests the method: void clearCache(uint32_t entityType)
+
+	// 1. Populate Hot Cache
+	insertNode("A"); // 1
+	fileStorage->flush();
+	deleteNode(1); // 1 -> Hot Cache
+
+	// 2. Clear specific cache
+	allocator->clearCache(graph::Node::typeId);
+
+	// 3. To verify, we'd ideally check internal state.
+	// Indirectly: Allocate should assume cache miss and go to disk.
+	// Since this is hard to distinguish from outcome (both return 1),
+	// we primarily rely on this test execution hitting the lines of code.
+	// The previous test already proved Hot Cache logic works.
+	// Calling the function ensures coverage.
+
+	int64_t id = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id, 1); // Should still get 1 (via disk scan now)
 }

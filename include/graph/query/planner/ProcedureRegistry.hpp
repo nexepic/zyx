@@ -26,7 +26,6 @@
 #include <string>
 #include <vector>
 
-// Forward declarations
 namespace graph::storage {
 	class DataManager;
 }
@@ -42,24 +41,29 @@ namespace graph {
 
 namespace graph::query::planner {
 
-	// Context object holding all dependencies a procedure might need
 	struct ProcedureContext {
 		std::shared_ptr<storage::DataManager> dataManager;
 		std::shared_ptr<indexes::IndexManager> indexManager;
 	};
 
-	// Factory accepts Context instead of just DataManager
 	using ProcedureFactory = std::function<std::unique_ptr<execution::PhysicalOperator>(
 			const ProcedureContext &ctx, const std::vector<PropertyValue> &args)>;
 
 	class ProcedureRegistry {
 	public:
+		// The implementation in .cpp registers all built-in procedures here.
+		ProcedureRegistry();
+		~ProcedureRegistry() = default;
+
+		// Singleton access (Optional, keep if your Planner uses it)
 		static ProcedureRegistry &instance() {
 			static ProcedureRegistry instance;
 			return instance;
 		}
 
-		void registerProcedure(const std::string &name, const ProcedureFactory &factory) { registry_[name] = factory; }
+		void registerProcedure(const std::string &name, const ProcedureFactory &factory) {
+			registry_[name] = factory;
+		}
 
 		ProcedureFactory get(const std::string &name) {
 			if (const auto it = registry_.find(name); it != registry_.end())
@@ -69,7 +73,6 @@ namespace graph::query::planner {
 
 	private:
 		std::map<std::string, ProcedureFactory> registry_;
-		ProcedureRegistry();
 	};
 
 } // namespace graph::query::planner

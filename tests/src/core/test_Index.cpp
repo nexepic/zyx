@@ -27,6 +27,7 @@
 #include "graph/core/Database.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/storage/data/BlobManager.hpp"
+#include "graph/utils/Serializer.hpp"
 
 using namespace graph;
 using namespace graph::storage;

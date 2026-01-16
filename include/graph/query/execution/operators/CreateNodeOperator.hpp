@@ -68,9 +68,8 @@ namespace graph::query::execution::operators {
 						continue;
 
 					for (auto &record: inputBatch) {
-						auto existingNode = record.getNode(variable_);
 
-						if (existingNode) {
+						if (auto existingNode = record.getNode(variable_)) {
 							if (!nodeBuffer_.empty()) {
 								auto flushedBatch = flushBuffer().value_or(RecordBatch{});
 								flushedBatch.push_back(std::move(record));
@@ -144,6 +143,13 @@ namespace graph::query::execution::operators {
 			return "CreateNode(var=" + variable_ + ", label=" + label_ + ")";
 		}
 
+		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override {
+			if (child_) {
+				return {child_.get()};
+			}
+			return {};
+		}
+
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::unique_ptr<PhysicalOperator> child_;
@@ -159,7 +165,7 @@ namespace graph::query::execution::operators {
 
 		static constexpr size_t BATCH_SIZE = 1000;
 
-		Node performSingleCreate(int64_t labelId) {
+		Node performSingleCreate(int64_t labelId) const {
 			Node newNode(0, labelId);
 			dm_->addNode(newNode);
 			if (!props_.empty()) {

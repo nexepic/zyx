@@ -87,7 +87,9 @@ namespace graph::query {
 
 		/**
 		 * @brief Removes a property or label.
-		 * @param type "PROPERTY" or "LABEL" (Helper enum logic handled internally).
+		 * @param variable The variable name (e.g. "n").
+		 * @param key The property key or label name.
+		 * @param isLabel If true, remove a label; otherwise, remove a property.
 		 */
 		QueryBuilder &remove_(const std::string &variable, const std::string &key, bool isLabel = false);
 

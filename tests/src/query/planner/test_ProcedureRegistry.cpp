@@ -1,0 +1,185 @@
+/**
+ * @file test_ProcedureRegistry.cpp
+ * @author Nexepic
+ * @date 2026/1/16
+ *
+ * @copyright Copyright (c) 2026 Nexepic
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ **/
+
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
+#include <gtest/gtest.h>
+#include <memory>
+#include <vector>
+
+// Your Headers
+#include "graph/query/planner/ProcedureRegistry.hpp"
+#include "graph/storage/FileStorage.hpp"
+#include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
+
+// Operator Headers for RTTI checks
+#include "graph/query/execution/operators/AlgoShortestPathOperator.hpp"
+#include "graph/query/execution/operators/CreateIndexOperator.hpp"
+#include "graph/query/execution/operators/DropIndexOperator.hpp"
+#include "graph/query/execution/operators/ListConfigOperator.hpp"
+#include "graph/query/execution/operators/SetConfigOperator.hpp"
+
+namespace fs = std::filesystem;
+using namespace graph;
+using namespace graph::query::planner;
+using namespace graph::query::execution;
+
+class ProcedureRegistryTest : public ::testing::Test {
+protected:
+	std::filesystem::path testFilePath;
+	std::shared_ptr<graph::storage::FileStorage> storage;
+	std::shared_ptr<graph::storage::DataManager> dataManager;
+	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
+
+	// Test Target: Created as unique_ptr to test isolation
+	std::unique_ptr<ProcedureRegistry> registry;
+	ProcedureContext ctx;
+
+	void SetUp() override {
+		// 1. Infrastructure
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testFilePath = fs::temp_directory_path() / ("test_proc_" + to_string(uuid) + ".db");
+
+		storage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 4096,
+																graph::storage::OpenMode::CREATE_NEW_FILE);
+		storage->open();
+		dataManager = storage->getDataManager();
+		indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+
+		// 2. Context
+		ctx.dataManager = dataManager;
+		ctx.indexManager = indexManager;
+
+		// 3. Registry
+		// Now that the constructor is public, we can create a fresh instance.
+		// This instance will run the constructor code in ProcedureRegistry.cpp
+		// and register all built-in procedures.
+		registry = std::make_unique<ProcedureRegistry>();
+	}
+
+	void TearDown() override {
+		if (storage)
+			storage->close();
+		if (fs::exists(testFilePath))
+			fs::remove(testFilePath);
+	}
+
+	// Helper
+	std::unique_ptr<PhysicalOperator> invoke(const std::string &name, const std::vector<PropertyValue> &args) const {
+		// Use 'get' as per your API
+		auto factory = registry->get(name);
+		if (!factory)
+			return nullptr;
+		return factory(ctx, args);
+	}
+};
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+TEST_F(ProcedureRegistryTest, DbmsSetConfig_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("key"), PropertyValue("val")};
+	auto op = invoke("dbms.setConfig", args);
+
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::SetConfigOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, DbmsSetConfig_Fail_Args) {
+	std::vector<PropertyValue> args = {PropertyValue("key_only")};
+	EXPECT_THROW(invoke("dbms.setConfig", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, DbmsListConfig_Success) {
+	auto op = invoke("dbms.listConfig", {});
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::ListConfigOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, DbmsGetConfig_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("key")};
+	auto op = invoke("dbms.getConfig", args);
+
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::ListConfigOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, DbmsGetConfig_Fail_Args) {
+	EXPECT_THROW(invoke("dbms.getConfig", {}), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, AlgoShortestPath_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("1"), PropertyValue("2")};
+	auto op = invoke("algo.shortestPath", args);
+
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::AlgoShortestPathOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, AlgoShortestPath_Fail_Args) {
+	std::vector<PropertyValue> args = {PropertyValue("1")};
+	EXPECT_THROW(invoke("algo.shortestPath", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, AlgoShortestPath_Fail_Type) {
+	const std::vector<PropertyValue> args = {PropertyValue("abc"), PropertyValue("2")};
+	try {
+		(void) invoke("algo.shortestPath", args);
+		FAIL();
+	} catch (const std::runtime_error &e) {
+		EXPECT_STREQ(e.what(), "IDs must be numeric");
+	}
+}
+
+TEST_F(ProcedureRegistryTest, DbmsCreateLabelIndex) {
+	auto op = invoke("dbms.createLabelIndex", {});
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::CreateIndexOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, DbmsDropLabelIndex) {
+	auto op = invoke("dbms.dropLabelIndex", {});
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::DropIndexOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, UnknownProcedure) {
+	auto op = invoke("unknown", {});
+	EXPECT_EQ(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, ManualRegistration) {
+	// Test the registerProcedure API
+	bool called = false;
+	registry->registerProcedure("custom.proc", [&](const ProcedureContext &, const std::vector<PropertyValue> &) {
+		called = true;
+		// Return a dummy pointer or nullptr (test context doesn't strictly need a valid Op if we just verify logic)
+		return nullptr;
+	});
+
+	auto factory = registry->get("custom.proc");
+	ASSERT_TRUE(factory);
+	(void) factory(ctx, {});
+	EXPECT_TRUE(called);
+}

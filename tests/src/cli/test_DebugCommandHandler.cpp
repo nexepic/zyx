@@ -1,9 +1,9 @@
 /**
- * @file QueryExecutor.hpp
+ * @file test_DebugCommandHandler.cpp
  * @author Nexepic
- * @date 2025/3/20
+ * @date 2026/1/16
  *
- * @copyright Copyright (c) 2025 Nexepic
+ * @copyright Copyright (c) 2026 Nexepic
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,3 @@
  * limitations under the License.
  **/
 
-#pragma once
-
-#include <memory>
-#include "PhysicalOperator.hpp"
-#include "graph/query/api/QueryResult.hpp"
-
-namespace graph::query {
-
-	class QueryExecutor {
-	public:
-		QueryExecutor() = default;
-		~QueryExecutor() = default;
-
-		/**
-		 * @brief Executes a physical plan tree.
-		 * @param plan The root of the operator tree.
-		 * @return QueryResult containing the aggregated data.
-		 */
-		static QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan);
-	};
-
-} // namespace graph::query

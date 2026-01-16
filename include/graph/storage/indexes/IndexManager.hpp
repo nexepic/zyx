@@ -20,8 +20,13 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <tuple>
+#include <vector>
+
 #include "IEntityObserver.hpp"
 #include "graph/storage/IStorageEventListener.hpp"
 

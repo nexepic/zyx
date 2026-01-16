@@ -20,37 +20,38 @@
 
 #pragma once
 
-#include <string>
 #include <memory>
 #include <shared_mutex>
+#include <string>
 #include <unordered_map>
 #include "graph/core/IndexTreeManager.hpp"
+#include "graph/storage/CacheManager.hpp"
 
 namespace graph::storage {
 	namespace state {
 		class SystemStateManager;
 	}
-	class DataManager; // Forward declaration
+	class DataManager;
 
 	class LabelTokenRegistry {
 	public:
+		// Capacity for the LRU cache
 		static constexpr size_t CACHE_SIZE = 5000;
 		static constexpr int64_t NULL_LABEL_ID = 0;
-
 		static constexpr char STORAGE_KEY[] = "sys.dict.label_registry.root";
 
 		LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
 						   std::shared_ptr<state::SystemStateManager> stateManager);
 
 		// Get ID for string, creating if missing.
-		int64_t getOrCreateLabelId(const std::string& label);
+		int64_t getOrCreateLabelId(const std::string &label);
 
 		// Get string for ID.
 		std::string getLabelString(int64_t labelId);
 
 		[[nodiscard]] int64_t getRootIndexId() const { return rootIndexId_; }
 
-		void saveState();
+		void saveState() const;
 
 	private:
 		std::shared_ptr<DataManager> dataManager_;
@@ -59,11 +60,15 @@ namespace graph::storage {
 
 		int64_t rootIndexId_ = 0;
 
-		mutable std::shared_mutex cacheMutex_;
-		std::unordered_map<std::string, int64_t> stringToIdCache_;
-		std::unordered_map<int64_t, std::string> idToStringCache_;
+		// Use std::mutex. LRU caches modify internal state on read (promotion),
+		// so we need exclusive locking anyway.
+		mutable std::mutex cacheMutex_;
 
-		void addToCache(const std::string& label, int64_t id);
+		// Replaced unordered_map with LRUCache
+		LRUCache<std::string, int64_t> stringToIdCache_;
+		LRUCache<int64_t, std::string> idToStringCache_;
+
+		void addToCache(const std::string &label, int64_t id);
 		void initialize();
 	};
-}
+} // namespace graph::storage

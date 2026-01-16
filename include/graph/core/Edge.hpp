@@ -19,13 +19,13 @@
  **/
 
 #pragma once
+
 #include <ostream>
 #include <string>
 #include <unordered_map>
 #include "PropertyTypes.hpp"
 #include "Types.hpp"
 #include "graph/core/Entity.hpp"
-#include "graph/utils/Serializer.hpp"
 
 namespace graph {
 

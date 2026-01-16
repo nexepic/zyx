@@ -169,3 +169,157 @@ TEST_F(PersistenceManagerTest, AutoFlushCountsAllTypes) {
 	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::ADDED, p));
 	EXPECT_EQ(flushCount, 1);
 }
+
+TEST_F(PersistenceManagerTest, UpsertBatch_AllEntityTypes) {
+	// 1. Edge Batch
+	std::vector<Edge> edges;
+	for (int i = 0; i < 5; ++i) {
+		Edge e;
+		e.setId(i + 1);
+		edges.push_back(e);
+	}
+	manager->upsertBatch(edges, EntityChangeType::ADDED);
+
+	auto edgeInfos = manager->getAllDirtyInfos<Edge>();
+	EXPECT_EQ(edgeInfos.size(), 5UL);
+
+	// 2. Property Batch
+	std::vector<Property> props;
+	for (int i = 0; i < 5; ++i) {
+		Property p;
+		p.setId(i + 1);
+		props.push_back(p);
+	}
+	manager->upsertBatch(props, EntityChangeType::ADDED);
+	EXPECT_EQ(manager->getAllDirtyInfos<Property>().size(), 5UL);
+
+	// 3. Blob Batch
+	std::vector<Blob> blobs;
+	for (int i = 0; i < 5; ++i) {
+		Blob b;
+		b.setId(i + 1);
+		blobs.push_back(b);
+	}
+	manager->upsertBatch(blobs, EntityChangeType::ADDED);
+	EXPECT_EQ(manager->getAllDirtyInfos<Blob>().size(), 5UL);
+
+	// 4. Index Batch
+	std::vector<Index> indexes;
+	for (int i = 0; i < 5; ++i) {
+		Index idx;
+		idx.setId(i + 1);
+		indexes.push_back(idx);
+	}
+	manager->upsertBatch(indexes, EntityChangeType::ADDED);
+	EXPECT_EQ(manager->getAllDirtyInfos<Index>().size(), 5UL);
+
+	// 5. State Batch
+	std::vector<State> states;
+	for (int i = 0; i < 5; ++i) {
+		State s;
+		s.setId(i + 1);
+		states.push_back(s);
+	}
+	manager->upsertBatch(states, EntityChangeType::ADDED);
+	EXPECT_EQ(manager->getAllDirtyInfos<State>().size(), 5UL);
+
+	// 6. Empty Batch (Coverage for early return)
+	std::vector<Node> emptyNodes;
+	manager->upsertBatch(emptyNodes, EntityChangeType::ADDED);
+	// Should verify dirty count didn't change (still 0 nodes)
+	EXPECT_EQ(manager->getAllDirtyInfos<Node>().size(), 0UL);
+}
+
+TEST_F(PersistenceManagerTest, Accessors_AllEntityTypes) {
+	// Setup one of each
+	Property p;
+	p.setId(10);
+	Blob b;
+	b.setId(20);
+	Index idx;
+	idx.setId(30);
+	State s;
+	s.setId(40);
+
+	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::ADDED, p));
+	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::ADDED, b));
+	manager->upsert(DirtyEntityInfo<Index>(EntityChangeType::ADDED, idx));
+	manager->upsert(DirtyEntityInfo<State>(EntityChangeType::ADDED, s));
+
+	// Test isDirty
+	EXPECT_TRUE(manager->isDirty<Property>(10));
+	EXPECT_TRUE(manager->isDirty<Blob>(20));
+	EXPECT_TRUE(manager->isDirty<Index>(30));
+	EXPECT_TRUE(manager->isDirty<State>(40));
+
+	// Negative test
+	EXPECT_FALSE(manager->isDirty<Property>(999));
+
+	// Test getAllDirtyInfos
+	auto allProps = manager->getAllDirtyInfos<Property>();
+	ASSERT_EQ(allProps.size(), 1UL);
+	EXPECT_EQ(allProps[0].backup->getId(), 10);
+
+	auto allBlobs = manager->getAllDirtyInfos<Blob>();
+	ASSERT_EQ(allBlobs.size(), 1UL);
+	EXPECT_EQ(allBlobs[0].backup->getId(), 20);
+
+	auto allIndexes = manager->getAllDirtyInfos<Index>();
+	ASSERT_EQ(allIndexes.size(), 1UL);
+	EXPECT_EQ(allIndexes[0].backup->getId(), 30);
+
+	auto allStates = manager->getAllDirtyInfos<State>();
+	ASSERT_EQ(allStates.size(), 1UL);
+	EXPECT_EQ(allStates[0].backup->getId(), 40);
+}
+
+TEST_F(PersistenceManagerTest, ClearAllRegistries) {
+	// Add various entities
+	Node n;
+	n.setId(1);
+	manager->upsert(DirtyEntityInfo<Node>(EntityChangeType::ADDED, n));
+	Edge e;
+	e.setId(2);
+	manager->upsert(DirtyEntityInfo<Edge>(EntityChangeType::ADDED, e));
+	Blob b;
+	b.setId(3);
+	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::ADDED, b));
+
+	EXPECT_TRUE(manager->hasUnsavedChanges());
+
+	// Execute ClearAll
+	manager->clearAll();
+
+	// Verify
+	EXPECT_FALSE(manager->hasUnsavedChanges());
+	EXPECT_FALSE(manager->isDirty<Node>(1));
+	EXPECT_FALSE(manager->isDirty<Edge>(2));
+	EXPECT_FALSE(manager->isDirty<Blob>(3));
+
+	EXPECT_TRUE(manager->getAllDirtyInfos<Node>().empty());
+}
+
+TEST_F(PersistenceManagerTest, RemoveEntityFromRegistry) {
+	// Add entities
+	Property p;
+	p.setId(10);
+	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::ADDED, p));
+
+	Blob b;
+	b.setId(20);
+	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::ADDED, b));
+
+	EXPECT_TRUE(manager->isDirty<Property>(10));
+	EXPECT_TRUE(manager->isDirty<Blob>(20));
+
+	// Remove
+	manager->remove<Property>(10);
+	manager->remove<Blob>(20);
+
+	// Verify
+	EXPECT_FALSE(manager->isDirty<Property>(10));
+	EXPECT_FALSE(manager->isDirty<Blob>(20));
+
+	// Ensure size decreased
+	EXPECT_FALSE(manager->hasUnsavedChanges());
+}

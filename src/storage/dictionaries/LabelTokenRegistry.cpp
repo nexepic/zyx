@@ -26,109 +26,103 @@
 
 namespace graph::storage {
 
-    LabelTokenRegistry::LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
-                                           std::shared_ptr<state::SystemStateManager> stateManager)
-        : dataManager_(std::move(dataManager)),
-          stateManager_(std::move(stateManager)) {
+	LabelTokenRegistry::LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
+										   std::shared_ptr<state::SystemStateManager> stateManager) :
+		dataManager_(std::move(dataManager)), stateManager_(std::move(stateManager)), stringToIdCache_(CACHE_SIZE),
+		idToStringCache_(CACHE_SIZE) {
 
-        // Use a specific internal index type for the dictionary
-        indexTree_ = std::make_shared<query::indexes::IndexTreeManager>(
-                dataManager_, query::indexes::IndexTypes::SYSTEM_LABEL_DICTIONARY, PropertyType::STRING);
+		indexTree_ = std::make_shared<query::indexes::IndexTreeManager>(
+				dataManager_, query::indexes::IndexTypes::SYSTEM_LABEL_DICTIONARY, PropertyType::STRING);
 
-        // Load the root ID from storage immediately upon construction
-        initialize();
-    }
+		initialize();
+	}
 
-    void LabelTokenRegistry::initialize() {
-        // Try to load the root ID from the system state
-        // If the key doesn't exist, it returns 0 (default)
-        rootIndexId_ = stateManager_->get<int64_t>(STORAGE_KEY, "root_id", 0);
+	void LabelTokenRegistry::initialize() {
+		rootIndexId_ = stateManager_->get<int64_t>(STORAGE_KEY, "root_id", 0);
 
-        if (rootIndexId_ == 0) {
-            // New database or first time usage: initialize the B+ Tree
-            rootIndexId_ = indexTree_->initialize();
-            saveState(); // Persist the initial root ID
-        }
-    }
+		if (rootIndexId_ == 0) {
+			rootIndexId_ = indexTree_->initialize();
+			saveState();
+		}
+	}
 
-    void LabelTokenRegistry::saveState() {
-        // Save the current root ID to the SystemStateManager
-        // This marks the State entity as dirty, so FileStorage will flush it to disk.
-        stateManager_->set<int64_t>(STORAGE_KEY, "root_id", rootIndexId_);
-    }
+	void LabelTokenRegistry::saveState() const { stateManager_->set<int64_t>(STORAGE_KEY, "root_id", rootIndexId_); }
 
-    int64_t LabelTokenRegistry::getOrCreateLabelId(const std::string &label) {
-        if (label.empty())
-            return NULL_LABEL_ID;
+	int64_t LabelTokenRegistry::getOrCreateLabelId(const std::string &label) {
+		if (label.empty())
+			return NULL_LABEL_ID;
 
-        {
-            std::shared_lock lock(cacheMutex_);
-            if (auto it = stringToIdCache_.find(label); it != stringToIdCache_.end()) {
-                return it->second;
-            }
-        }
+		// 1. Check Cache
+		{
+			// Exclusive lock required for LRU get() as it modifies list order
+			std::lock_guard<std::mutex> lock(cacheMutex_);
+			if (const int64_t cachedId = stringToIdCache_.get(label); cachedId != 0) {
+				return cachedId;
+			}
+		}
 
-        // Check Index
-        std::vector<int64_t> ids = indexTree_->find(rootIndexId_, PropertyValue(label));
-        if (!ids.empty()) {
-            addToCache(label, ids[0]);
-            return ids[0];
-        }
+		// 2. Check Index (Disk)
+		std::vector<int64_t> ids = indexTree_->find(rootIndexId_, PropertyValue(label));
+		if (!ids.empty()) {
+			addToCache(label, ids[0]);
+			return ids[0];
+		}
 
-        // Create New
-        // 1. Store String in Blob
-        // passing 0,0 as entityId/Type since this is a system blob
-        auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, label);
-        if (blobs.empty())
-            throw std::runtime_error("Failed to store label string");
+		// 3. Create New
+		// Store String in Blob
+		const auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, label);
+		if (blobs.empty())
+			throw std::runtime_error("Failed to store label string");
 
-        int64_t newId = blobs[0].getId();
+		const int64_t newId = blobs[0].getId();
 
-        // 2. Map String -> ID in Index
-        int64_t newRoot = indexTree_->insert(rootIndexId_, PropertyValue(label), newId);
+		// Map String -> ID in Index
 
-        // Update root ID if the tree structure caused a root split/change
-        if (newRoot != rootIndexId_) {
-            rootIndexId_ = newRoot;
-            // CRITICAL: The root of the B+Tree changed, we MUST persist this pointer.
-            saveState();
-        }
+		if (const int64_t newRoot = indexTree_->insert(rootIndexId_, PropertyValue(label), newId);
+			newRoot != rootIndexId_) {
+			rootIndexId_ = newRoot;
+			saveState();
+		}
 
-        addToCache(label, newId);
-        return newId;
-    }
+		addToCache(label, newId);
+		return newId;
+	}
 
-    std::string LabelTokenRegistry::getLabelString(int64_t labelId) {
-        if (labelId == NULL_LABEL_ID)
-            return "";
+	std::string LabelTokenRegistry::getLabelString(int64_t labelId) {
+		if (labelId == NULL_LABEL_ID)
+			return "";
 
-        {
-            std::shared_lock lock(cacheMutex_);
-            if (auto it = idToStringCache_.find(labelId); it != idToStringCache_.end()) {
-                return it->second;
-            }
-        }
+		// 1. Check Cache
+		{
+			std::lock_guard<std::mutex> lock(cacheMutex_);
+			std::string cachedLabel = idToStringCache_.get(labelId);
+			if (!cachedLabel.empty()) {
+				return cachedLabel;
+			}
+		}
 
-        // ID points directly to Blob
-        try {
-            std::string label = dataManager_->getBlobManager()->readBlobChain(labelId);
-            if (!label.empty()) {
-                addToCache(label, labelId);
-            }
-            return label;
-        } catch (...) {
-            return ""; // Fail gracefully
-        }
-    }
+		// 2. Load from Blob (Disk)
+		try {
+			// Ensure BlobManager is accessible
+			if (!dataManager_ || !dataManager_->getBlobManager())
+				return "";
 
-    void LabelTokenRegistry::addToCache(const std::string &label, int64_t id) {
-        std::unique_lock lock(cacheMutex_);
-        if (stringToIdCache_.size() > CACHE_SIZE) {
-            stringToIdCache_.clear();
-            idToStringCache_.clear();
-        }
-        stringToIdCache_[label] = id;
-        idToStringCache_[id] = label;
-    }
+			std::string label = dataManager_->getBlobManager()->readBlobChain(labelId);
+
+			if (!label.empty()) {
+				addToCache(label, labelId);
+			}
+			return label;
+		} catch (...) {
+			return ""; // Fail gracefully
+		}
+	}
+
+	void LabelTokenRegistry::addToCache(const std::string &label, int64_t id) {
+		std::lock_guard<std::mutex> lock(cacheMutex_);
+		// LRUCache handles eviction automatically
+		stringToIdCache_.put(label, id);
+		idToStringCache_.put(id, label);
+	}
 
 } // namespace graph::storage
