@@ -1325,6 +1325,33 @@ public:
     antlr4::tree::TerminalNode *K_NONE();
     antlr4::tree::TerminalNode *K_SINGLE();
     antlr4::tree::TerminalNode *K_END();
+    antlr4::tree::TerminalNode *K_CONTAINS();
+    antlr4::tree::TerminalNode *K_STARTS();
+    antlr4::tree::TerminalNode *K_ENDS();
+    antlr4::tree::TerminalNode *K_TRUE();
+    antlr4::tree::TerminalNode *K_FALSE();
+    antlr4::tree::TerminalNode *K_NULL();
+    antlr4::tree::TerminalNode *K_ORDER();
+    antlr4::tree::TerminalNode *K_BY();
+    antlr4::tree::TerminalNode *K_LIMIT();
+    antlr4::tree::TerminalNode *K_SKIP();
+    antlr4::tree::TerminalNode *K_ASC();
+    antlr4::tree::TerminalNode *K_DESC();
+    antlr4::tree::TerminalNode *K_ASCENDING();
+    antlr4::tree::TerminalNode *K_DESCENDING();
+    antlr4::tree::TerminalNode *K_AS();
+    antlr4::tree::TerminalNode *K_AND();
+    antlr4::tree::TerminalNode *K_OR();
+    antlr4::tree::TerminalNode *K_XOR();
+    antlr4::tree::TerminalNode *K_NOT();
+    antlr4::tree::TerminalNode *K_IN();
+    antlr4::tree::TerminalNode *K_IS();
+    antlr4::tree::TerminalNode *K_DISTINCT();
+    antlr4::tree::TerminalNode *K_CASE();
+    antlr4::tree::TerminalNode *K_WHEN();
+    antlr4::tree::TerminalNode *K_THEN();
+    antlr4::tree::TerminalNode *K_ELSE();
+    antlr4::tree::TerminalNode *K_UNWIND();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;

@@ -245,7 +245,7 @@ namespace metrix {
 			const auto &entityVal = row.at(colName); // Safe because mode implies !empty
 
 			// If requesting the entity itself (key empty or standard aliases)
-			if (key.empty() || key == "n" || key == "node" || key == "e" || key == "edge") {
+			if (key.empty() || key == colName) {
 				return toPublicValue(entityVal, impl_->dataManager_);
 			}
 

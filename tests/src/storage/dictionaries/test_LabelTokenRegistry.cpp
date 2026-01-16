@@ -36,14 +36,15 @@ namespace fs = std::filesystem;
 
 class LabelTokenRegistryTest : public ::testing::Test {
 protected:
-	std::string testDbPath;
+	std::filesystem::path testDbPath;
+
 	std::shared_ptr<graph::storage::FileStorage> storage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::state::SystemStateManager> systemStateManager;
 
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		// Create a unique path for the test database
+
 		testDbPath = std::filesystem::temp_directory_path() / ("test_label_registry_" + to_string(uuid) + ".db");
 
 		// Ensure clean state
@@ -51,9 +52,7 @@ protected:
 			fs::remove(testDbPath);
 		}
 
-		// Initialize storage stack to get a valid DataManager
-		// 4MB cache, Create New mode
-		storage = std::make_shared<graph::storage::FileStorage>(testDbPath, 4 * 1024 * 1024,
+		storage = std::make_shared<graph::storage::FileStorage>(testDbPath.string(), 4 * 1024 * 1024,
 																graph::storage::OpenMode::CREATE_NEW_FILE);
 		storage->open();
 		dataManager = storage->getDataManager();
@@ -75,7 +74,7 @@ protected:
 		if (storage) {
 			storage->close();
 		}
-		storage = std::make_shared<graph::storage::FileStorage>(testDbPath, 4 * 1024 * 1024,
+		storage = std::make_shared<graph::storage::FileStorage>(testDbPath.string(), 4 * 1024 * 1024,
 																graph::storage::OpenMode::OPEN_EXISTING_FILE);
 		storage->open();
 		dataManager = storage->getDataManager();
@@ -274,5 +273,5 @@ TEST_F(LabelTokenRegistryTest, LongLabelSupport) {
 
 	std::string retrieved = registry.getLabelString(id);
 	EXPECT_EQ(retrieved, longLabel);
-	EXPECT_EQ(retrieved.size(), 1024);
+	EXPECT_EQ(retrieved.size(), 1024ULL);
 }

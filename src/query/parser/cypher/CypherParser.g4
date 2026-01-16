@@ -339,6 +339,19 @@ symbolicName
     : ID
     | K_COUNT | K_FILTER | K_EXTRACT | K_ANY | K_NONE | K_SINGLE
     | K_END
+    | K_CONTAINS
+    | K_STARTS
+    | K_ENDS
+    | K_TRUE | K_FALSE | K_NULL
+    | K_ORDER | K_BY
+    | K_LIMIT | K_SKIP
+    | K_ASC | K_DESC | K_ASCENDING | K_DESCENDING
+    | K_AS
+    | K_AND | K_OR | K_XOR | K_NOT
+    | K_IN | K_IS
+    | K_DISTINCT
+    | K_CASE | K_WHEN | K_THEN | K_ELSE
+    | K_UNWIND
     ;
 
 literal
