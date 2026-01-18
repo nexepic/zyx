@@ -357,7 +357,11 @@ TEST_F(FileStorageTest, Flush_TriggersCompaction) {
 	// And `if (safeCompactSegments)` block
 	fileStorage->flush();
 
-	// If coverage tool shows lines hit, we are good.
+	// Explicitly release local references and close storage to ensure
+	// file handles are fully released before TearDown() calls fs::remove().
+	// On Windows, checking and closing handles explicitly avoids "File used by another process" errors.
+	dm.reset();
+	fileStorage->close();
 }
 
 TEST_F(FileStorageTest, Open_CreateFails_InvalidPath) {
