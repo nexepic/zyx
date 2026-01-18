@@ -128,25 +128,9 @@ namespace graph::storage {
 				fileStream.reset();
 			}
 
-			// Clean up components in reverse order of dependencies to avoid dangling references
-			// and ensure all file handles (e.g., from compaction) are released.
-			databaseInspector.reset();
-			systemStateManager.reset();
-
-			if (dataManager) {
-				dataManager->clearCache();
-				dataManager.reset();
-			}
-
-			if (spaceManager) {
-				(void) spaceManager->truncateFile();
-				spaceManager.reset();
-			}
-
-			idAllocator.reset();
-			segmentTracker.reset();
-			fileHeaderManager.reset();
-
+			dataManager->clearCache();
+			dataManager.reset();
+			(void) spaceManager->truncateFile();
 			isFileOpen = false;
 		}
 	}
