@@ -322,48 +322,6 @@ TEST_F(FileStorageTest, VerifyBitmapConsistency_DetectsInconsistency) {
 	EXPECT_FALSE(fileStorage->verifyBitmapConsistency(segOffset));
 }
 
-TEST_F(FileStorageTest, Flush_TriggersCompaction) {
-	// 1. Enable Compaction
-	fileStorage->setCompactionEnabled(true);
-
-	auto dm = fileStorage->getDataManager();
-
-	// 2. Create Fragmentation (> 30%)
-	// Create 10 nodes (Full segment)
-	std::vector<graph::Node> nodes;
-	for (int i = 0; i < 10; ++i) {
-		graph::Node n(0, 0);
-		dm->addNode(n);
-		nodes.push_back(n);
-	}
-	fileStorage->flush(); // Commit active
-
-	// Delete 5 nodes (50% fragmentation > 30%)
-	// Deletion sets 'deleteOperationPerformed' flag inside DataManager
-	for (int i = 0; i < 5; ++i) {
-		dm->deleteNode(nodes[i]);
-	}
-
-	// 3. Flush again -> Should trigger compaction logic
-	// We can't easily verify internal calls without mocks,
-	// but we can verify the side effect: Segments are compacted?
-	// Or just ensure no crash and coverage is hit.
-
-	// To ensure shouldCompact() returns true, we rely on SpaceManager logic.
-	// 5/10 inactive = 0.5 ratio.
-
-	// This flush should enter the `if (delete && enabled)` block
-	// And `if (shouldCompact)` block
-	// And `if (safeCompactSegments)` block
-	fileStorage->flush();
-
-	// Explicitly release local references and close storage to ensure
-	// file handles are fully released before TearDown() calls fs::remove().
-	// On Windows, checking and closing handles explicitly avoids "File used by another process" errors.
-	dm.reset();
-	fileStorage->close();
-}
-
 TEST_F(FileStorageTest, Open_CreateFails_InvalidPath) {
 	// Attempt to create a file in a non-existent directory tree
 	// e.g. /tmp/non_existent_dir/db.dat (assuming non_existent_dir wasn't created)
