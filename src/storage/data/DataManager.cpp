@@ -217,8 +217,9 @@ namespace graph::storage {
 			notifyFunc(oldEntity, entity);
 	}
 
-	int64_t DataManager::getOrCreateLabelId(const std::string& label) const {
-		if (label.empty()) return 0;
+	int64_t DataManager::getOrCreateLabelId(const std::string &label) const {
+		if (label.empty())
+			return 0;
 		if (!labelRegistry_) {
 			throw std::runtime_error("LabelTokenRegistry not initialized. Ensure SystemStateManager is set.");
 		}
@@ -226,7 +227,8 @@ namespace graph::storage {
 	}
 
 	std::string DataManager::resolveLabel(int64_t labelId) const {
-		if (labelId == 0) return "";
+		if (labelId == 0)
+			return "";
 		if (!labelRegistry_) {
 			return "";
 		}
@@ -496,19 +498,19 @@ namespace graph::storage {
 	State DataManager::findStateByKey(const std::string &key) const { return stateManager_->findByKey(key); }
 
 	void DataManager::addStateProperties(const std::string &stateKey,
-										 const std::unordered_map<std::string, PropertyValue> &properties) const {
+										 const std::unordered_map<std::string, PropertyValue> &properties,
+										 bool useBlobStorage) const {
 		// 1. Capture OLD state (Snapshot)
-		// We find the head state of the chain associated with this key
 		const State oldState = stateManager_->findByKey(stateKey);
 
 		// 2. Perform the update (This effectively replaces the chain)
-		stateManager_->addStateProperties(stateKey, properties);
+		// Pass the flag to StateManager
+		stateManager_->addStateProperties(stateKey, properties, useBlobStorage);
 
 		// 3. Capture NEW state
 		const State newState = stateManager_->findByKey(stateKey);
 
 		// 4. Notify Listeners
-		// This tells SystemConfigManager that "sys.config" has changed
 		notifyStateUpdated(oldState, newState);
 	}
 
@@ -821,6 +823,13 @@ namespace graph::storage {
 		return result;
 	}
 
+	template<typename T>
+	T make_inactive() {
+		T entity;
+		entity.markInactive();
+		return entity;
+	}
+
 	template<typename EntityType>
 	EntityType DataManager::getEntityFromMemoryOrDisk(int64_t id) {
 		// 1. Check dirty info via PersistenceManager
@@ -829,7 +838,7 @@ namespace graph::storage {
 		if (dirtyInfo.has_value()) {
 			// CASE A: Entity is marked as DELETED in memory
 			if (dirtyInfo->changeType == EntityChangeType::DELETED) {
-				return EntityType();
+				return make_inactive<EntityType>();
 			}
 
 			// CASE B: Entity is ADDED or MODIFIED
@@ -843,7 +852,7 @@ namespace graph::storage {
 		if (cache.contains(id)) {
 			EntityType entity = cache.get(id);
 			if (!entity.isActive()) {
-				return EntityType(); // Cache hit but inactive -> return empty
+				return make_inactive<EntityType>();
 			}
 			return entity;
 		}
@@ -855,39 +864,51 @@ namespace graph::storage {
 			return entity;
 		}
 
-		return EntityType();
+		return make_inactive<EntityType>();
 	}
 
 	// --- Loading Entities from Disk ---
 
 	Node DataManager::loadNodeFromDisk(const int64_t id) const {
 		auto nodeOpt = findAndReadEntity<Node>(id);
-		return nodeOpt.value_or(Node()); // Return empty node if not found or deleted
+		if (nodeOpt.has_value())
+			return *nodeOpt;
+		return make_inactive<Node>();
 	}
 
 	Edge DataManager::loadEdgeFromDisk(const int64_t id) const {
 		auto edgeOpt = findAndReadEntity<Edge>(id);
-		return edgeOpt.value_or(Edge()); // Return empty edge if not found or deleted
+		if (edgeOpt.has_value())
+			return *edgeOpt;
+		return make_inactive<Edge>();
 	}
 
 	Property DataManager::loadPropertyFromDisk(const int64_t id) const {
 		auto propertyOpt = findAndReadEntity<Property>(id);
-		return propertyOpt.value_or(Property()); // Return empty property if not found or deleted
+		if (propertyOpt.has_value())
+			return *propertyOpt;
+		return make_inactive<Property>();
 	}
 
 	Blob DataManager::loadBlobFromDisk(const int64_t id) const {
 		auto blobOpt = findAndReadEntity<Blob>(id);
-		return blobOpt.value_or(Blob()); // Return empty blob if not found or deleted
+		if (blobOpt.has_value())
+			return *blobOpt;
+		return make_inactive<Blob>();
 	}
 
 	Index DataManager::loadIndexFromDisk(const int64_t id) const {
 		auto indexOpt = findAndReadEntity<Index>(id);
-		return indexOpt.value_or(Index()); // Return empty index if not found or deleted
+		if (indexOpt.has_value())
+			return *indexOpt;
+		return make_inactive<Index>();
 	}
 
 	State DataManager::loadStateFromDisk(const int64_t id) const {
 		auto stateOpt = findAndReadEntity<State>(id);
-		return stateOpt.value_or(State()); // Return empty state if not found or deleted
+		if (stateOpt.has_value())
+			return *stateOpt;
+		return make_inactive<State>();
 	}
 
 	// --- Cache and Transaction Management ---

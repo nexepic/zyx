@@ -65,7 +65,7 @@ namespace graph::storage::state {
 		 *        Merges with existing properties in that State.
 		 */
 		template<typename T>
-		void set(const std::string &stateKey, const std::string &field, const T &value);
+		void set(const std::string &stateKey, const std::string &field, const T &value, bool useBlobStorage = false);
 
 		// --- Generic Map Operations ---
 
@@ -82,7 +82,8 @@ namespace graph::storage::state {
 		 */
 		template<typename T>
 		void setMap(const std::string &stateKey, const std::unordered_map<std::string, T> &map,
-					UpdateMode mode = UpdateMode::REPLACE); // Default to Replace for safety
+					UpdateMode mode = UpdateMode::REPLACE,
+					bool useBlobStorage = false); // Default to Replace for safety
 
 		// --- Lifecycle ---
 

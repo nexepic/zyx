@@ -108,7 +108,7 @@ namespace graph::storage {
 
 		void initializeLabelRegistry(std::shared_ptr<state::SystemStateManager> sm);
 
-		[[nodiscard]] int64_t getOrCreateLabelId(const std::string& label) const;
+		[[nodiscard]] int64_t getOrCreateLabelId(const std::string &label) const;
 		[[nodiscard]] std::string resolveLabel(int64_t labelId) const;
 
 		// Node-specific operations
@@ -161,7 +161,8 @@ namespace graph::storage {
 		State getState(int64_t id) const;
 		State findStateByKey(const std::string &key) const;
 		void addStateProperties(const std::string &stateKey,
-								const std::unordered_map<std::string, PropertyValue> &properties) const;
+								const std::unordered_map<std::string, PropertyValue> &properties,
+								bool useBlobStorage = false) const;
 		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey) const;
 		void removeState(const std::string &stateKey) const;
 

@@ -20,6 +20,8 @@
 
 #include "graph/core/StateChainManager.hpp"
 #include <stdexcept>
+#include "graph/storage/IDAllocator.hpp"
+#include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 namespace graph {
@@ -27,99 +29,57 @@ namespace graph {
 	StateChainManager::StateChainManager(std::shared_ptr<storage::DataManager> dataManager) :
 		dataManager_(std::move(dataManager)) {}
 
-	std::vector<State> StateChainManager::createStateChain(const std::string &key, const std::string &data) const {
-		// Split into chunks
-		const auto chunks = splitData(data);
-		if (chunks.empty()) {
-			return {};
+	std::vector<State> StateChainManager::createStateChain(const std::string &key,
+														   const std::string &data,
+														   bool useBlobStorage) const {
+		int64_t stateId = dataManager_->getIdAllocator()->allocateId(State::typeId);
+		State headState(stateId, key, "");
+
+		std::vector<State> chain;
+		setupStorageForState(headState, data, useBlobStorage, chain);
+
+		for (const auto& state : chain) {
+			dataManager_->addStateEntity(const_cast<State&>(state));
 		}
 
-		// Create state entities
-		std::vector<State> stateChain;
-		stateChain.reserve(chunks.size());
-
-		int64_t prevStateId = 0;
-
-		// Create each state in the chain
-		for (size_t i = 0; i < chunks.size(); i++) {
-			// Only the head state has the actual key, other states have empty keys
-			// as they should only be accessed through the chain
-			std::string stateKey = (i == 0) ? key : "";
-
-			State currentState(0, stateKey, chunks[i]);
-
-			// Set chain position
-			currentState.setChainPosition(static_cast<int32_t>(i));
-
-			// Set previous state ID
-			currentState.setPrevStateId(prevStateId);
-
-			dataManager_->addStateEntity(currentState);
-
-			// Update previous state's next pointer if not the first state
-			if (i > 0) {
-				// Get a reference to the previous state from our local vector.
-				State &prevState = stateChain.back();
-
-				// Set its `next_state_id` to the permanent ID of the current state.
-				prevState.setNextStateId(currentState.getId());
-
-				// We modified `prevState` after it was added, so we must tell the DataManager
-				// to update its version in the dirty map.
-				dataManager_->updateStateEntity(prevState);
-			}
-
-			prevStateId = currentState.getId();
-			stateChain.push_back(currentState);
-		}
-
-		return stateChain;
+		return chain;
 	}
 
 	std::string StateChainManager::readStateChain(const int64_t headStateId) const {
-		// Get the head state
 		const State headState = dataManager_->getState(headStateId);
 		if (headState.getId() == 0 || !headState.isActive()) {
 			throw std::runtime_error("Head state not found or inactive");
 		}
 
-		// Check if this is a single state or a chain
+		if (headState.isBlobStorage()) {
+			if (headState.getExternalId() == 0) return "";
+			return dataManager_->getBlobManager()->readBlobChain(headState.getExternalId());
+		}
+
 		if (!headState.isChained()) {
-			// Single state case
 			return headState.getDataAsString();
 		}
 
-		// Reassemble data from the chain
 		std::string reassembledData;
-		std::vector<int64_t> visitedIds; // To detect cycles
+		std::vector<int64_t> visitedIds;
 		int64_t currentStateId = headStateId;
 		int32_t expectedPosition = 0;
 
 		while (currentStateId != 0) {
-			// Check for cycles
 			if (std::ranges::find(visitedIds, currentStateId) != visitedIds.end()) {
-				throw std::runtime_error("Circular reference detected in state chain");
+				throw std::runtime_error("Circular reference detected");
 			}
 			visitedIds.push_back(currentStateId);
 
 			State currentState = dataManager_->getState(currentStateId);
-
 			if (currentState.getId() == 0 || !currentState.isActive()) {
-				throw std::runtime_error("State chain corrupted: missing state at position " +
-										 std::to_string(expectedPosition));
+				throw std::runtime_error("State chain corrupted");
 			}
-
-			// Verify chain position
 			if (currentState.getChainPosition() != expectedPosition) {
-				throw std::runtime_error("State chain corrupted: expected position " +
-										 std::to_string(expectedPosition) + " but found " +
-										 std::to_string(currentState.getChainPosition()));
+				throw std::runtime_error("Chain position mismatch");
 			}
 
-			// Append data
 			reassembledData.append(currentState.getDataAsString());
-
-			// Move to next state
 			currentStateId = currentState.getNextStateId();
 			expectedPosition++;
 		}
@@ -138,38 +98,82 @@ namespace graph {
 	}
 
 	std::vector<State> StateChainManager::updateStateChain(const int64_t headStateId,
-														   const std::string &newData) const {
-		// Check if the data is actually different
-		if (isDataSame(headStateId, newData)) {
-			// Data is the same, return the existing chain
-			const auto chainIds = getStateChainIds(headStateId);
-			std::vector<State> existingChain;
-			existingChain.reserve(chainIds.size());
+                                                           const std::string &newData,
+                                                           bool useBlobStorage) const {
+        // 1. Same data check
+        if (isDataSame(headStateId, newData)) {
+            // Even if data is same, if storage mode differs, we might want to convert?
+            // For now, assuming isDataSame implies no change needed.
+            // If strict mode switch is required, remove this check or enhance it.
+            const auto chainIds = getStateChainIds(headStateId);
+            std::vector<State> existingChain;
+            for (auto stateId: chainIds) {
+                State state = dataManager_->getState(stateId);
+                if (state.getId() != 0 && state.isActive()) {
+                    existingChain.push_back(state);
+                }
+            }
+            return existingChain;
+        }
 
-			for (auto stateId: chainIds) {
-				State state = dataManager_->getState(stateId);
-				if (state.getId() != 0 && state.isActive()) {
-					existingChain.push_back(state);
-				}
-			}
-			return existingChain;
-		}
+        // 2. Fetch Head
+        State headState = dataManager_->getState(headStateId);
+        if (headState.getId() == 0 || !headState.isActive()) {
+            throw std::runtime_error("Head state not found or inactive");
+        }
 
-		// Data is different, proceed with update
-		const State headState = dataManager_->getState(headStateId);
-		if (headState.getId() == 0 || !headState.isActive()) {
-			throw std::runtime_error("Head state not found or inactive");
-		}
-		const std::string &originalKey = headState.getKey();
+        // 3. Clean up OLD storage
+        // Critical Fix: Ensure we are reading the *current* state of storage
+        if (headState.isBlobStorage()) {
+            if (headState.getExternalId() != 0) {
+                dataManager_->getBlobManager()->deleteBlobChain(headState.getExternalId());
+            }
+        } else {
+            // Delete internal chain
+            int64_t nextId = headState.getNextStateId();
+            // Safety counter to prevent infinite loops in corrupt chains
+            int safety = 0;
+            while (nextId != 0 && safety++ < 100000) {
+                State nextState = dataManager_->getState(nextId);
+                if (nextState.getId() != 0 && nextState.isActive()) {
+                    int64_t tempId = nextState.getNextStateId();
+                    dataManager_->deleteState(nextState);
+                    nextId = tempId;
+                } else {
+                    break;
+                }
+            }
+        }
 
-		deleteStateChain(headStateId);
-		auto updatedChain = createStateChain(originalKey, newData);
+        // 4. Setup NEW storage
+        std::vector<State> newChain;
+        setupStorageForState(headState, newData, useBlobStorage, newChain);
 
-		return updatedChain;
-	}
+        // 5. Apply Updates
+        // Update Head
+        dataManager_->updateStateEntity(newChain[0]);
+
+        // Add Tail states (if any)
+        for (size_t i = 1; i < newChain.size(); i++) {
+            dataManager_->addStateEntity(const_cast<State&>(newChain[i]));
+        }
+
+        return newChain;
+    }
 
 	void StateChainManager::deleteStateChain(const int64_t headStateId) const {
-		// Delete each state in the chain
+		const State headState = dataManager_->getState(headStateId);
+		if (headState.getId() == 0 || !headState.isActive()) return;
+
+		if (headState.isBlobStorage()) {
+			if (headState.getExternalId() != 0) {
+				dataManager_->getBlobManager()->deleteBlobChain(headState.getExternalId());
+			}
+			State mutableState = headState;
+			dataManager_->deleteState(mutableState);
+			return;
+		}
+
 		for (const auto chainIds = getStateChainIds(headStateId); auto stateId: chainIds) {
 			State state = dataManager_->getState(stateId);
 			if (state.getId() != 0 && state.isActive()) {
@@ -182,17 +186,18 @@ namespace graph {
 		std::vector<int64_t> chainIds;
 		int64_t currentStateId = headStateId;
 
+		State head = dataManager_->getState(headStateId);
+		if (head.isBlobStorage()) {
+			if (head.getId() != 0 && head.isActive()) chainIds.push_back(headStateId);
+			return chainIds;
+		}
+
 		while (currentStateId != 0) {
 			State currentState = dataManager_->getState(currentStateId);
-
-			if (currentState.getId() == 0 || !currentState.isActive()) {
-				break;
-			}
-
+			if (currentState.getId() == 0 || !currentState.isActive()) break;
 			chainIds.push_back(currentStateId);
 			currentStateId = currentState.getNextStateId();
 		}
-
 		return chainIds;
 	}
 
@@ -211,6 +216,59 @@ namespace graph {
 		}
 
 		return chunks;
+	}
+
+	void StateChainManager::setupStorageForState(State &headState,
+												 const std::string &data,
+												 bool useBlobStorage,
+												 std::vector<State> &outChainEntities) const {
+		// Reset storage metadata
+		headState.setExternalId(0);
+		headState.setNextStateId(0);
+		headState.setPrevStateId(0);
+		headState.setChainPosition(0);
+		headState.setData("");
+
+		outChainEntities.push_back(headState);
+
+		if (useBlobStorage) {
+			// --- Blob Mode ---
+			auto blobChain = dataManager_->getBlobManager()->createBlobChain(
+				headState.getId(), State::typeId, data
+			);
+
+			if (!blobChain.empty()) {
+				headState.setExternalId(blobChain[0].getId());
+			}
+			outChainEntities[0] = headState;
+		} else {
+			// --- Internal Mode ---
+			auto chunks = splitData(data);
+			if (chunks.empty()) chunks.push_back("");
+
+			headState.setData(chunks[0]);
+			outChainEntities[0] = headState;
+
+			int64_t prevId = headState.getId();
+
+			for (size_t i = 1; i < chunks.size(); i++) {
+				int64_t newId = dataManager_->getIdAllocator()->allocateId(State::typeId);
+				State chunkState(newId, "", chunks[i]);
+
+				chunkState.setChainPosition(static_cast<int32_t>(i));
+				chunkState.setPrevStateId(prevId);
+				chunkState.setExternalId(0);
+
+				outChainEntities.push_back(chunkState);
+
+				if (i == 1) {
+					outChainEntities[0].setNextStateId(newId);
+				} else {
+					outChainEntities[i-1].setNextStateId(newId);
+				}
+				prevId = newId;
+			}
+		}
 	}
 
 } // namespace graph

@@ -45,14 +45,22 @@ namespace graph::storage {
 		// State-specific methods
 		State findByKey(const std::string &key);
 		void addStateProperties(const std::string &stateKey,
-								const std::unordered_map<std::string, PropertyValue> &properties);
+								const std::unordered_map<std::string, PropertyValue> &properties,
+								bool useBlobStorage = false);
 		std::unordered_map<std::string, PropertyValue> getStateProperties(const std::string &stateKey);
 		void removeState(const std::string &stateKey);
 
 		// Chain management methods that delegate to StateChainManager
 		[[nodiscard]] std::string readStateChain(int64_t headStateId) const;
-		[[nodiscard]] std::vector<State> createStateChain(const std::string &key, const std::string &data) const;
-		[[nodiscard]] std::vector<State> updateStateChain(int64_t headStateId, const std::string &newData) const;
+
+		[[nodiscard]] std::vector<State> createStateChain(const std::string &key,
+														  const std::string &data,
+														  bool useBlobStorage = false) const;
+
+		[[nodiscard]] std::vector<State> updateStateChain(int64_t headStateId,
+														  const std::string &newData,
+														  bool useBlobStorage = false) const;
+
 		void deleteStateChain(int64_t headStateId) const;
 
 	protected:

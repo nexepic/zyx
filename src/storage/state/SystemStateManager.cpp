@@ -20,6 +20,8 @@
 
 #include "graph/storage/state/SystemStateManager.hpp"
 
+#include "graph/storage/data/StateManager.hpp"
+
 namespace graph::storage::state {
 
 	SystemStateManager::SystemStateManager(std::shared_ptr<DataManager> dataManager) :
@@ -65,11 +67,11 @@ namespace graph::storage::state {
 	}
 
 	template<typename T>
-	void SystemStateManager::set(const std::string &stateKey, const std::string &field, const T &value) {
+	void SystemStateManager::set(const std::string &stateKey, const std::string &field, const T &value,
+								 bool useBlobStorage) {
 		std::unordered_map<std::string, T> singleMap;
 		singleMap[field] = value;
-		// Use MERGE mode. The optimization in setMap will handle the check.
-		setMap(stateKey, singleMap, UpdateMode::MERGE);
+		setMap(stateKey, singleMap, UpdateMode::MERGE, useBlobStorage);
 	}
 
 	template<typename T>
@@ -87,13 +89,10 @@ namespace graph::storage::state {
 
 	template<typename T>
 	void SystemStateManager::setMap(const std::string &stateKey, const std::unordered_map<std::string, T> &map,
-									UpdateMode mode) {
+									UpdateMode mode, bool useBlobStorage) {
 		// 1. Handle Empty Input Map
 		if (map.empty()) {
-			// Only remove if we are in REPLACE mode (meaning "set state to empty")
-			// If MERGE, empty map means "do nothing".
 			if (mode == UpdateMode::REPLACE) {
-				// Optimization: Check if it exists before trying to remove
 				if (!dataManager_->getStateProperties(stateKey).empty()) {
 					remove(stateKey);
 				}
@@ -101,59 +100,47 @@ namespace graph::storage::state {
 			return;
 		}
 
-		// 2. Load existing data for comparison and merging
+		// 2. Load existing data
 		auto currentProps = dataManager_->getStateProperties(stateKey);
 		bool isDirty = false;
 
 		// 3. Logic based on Mode
 		if (mode == UpdateMode::MERGE) {
-			// Iterate through the input map to check for changes
 			for (const auto &[key, value]: map) {
 				PropertyValue newVal(value);
-
-				// Update only if:
-				// a) The key does not exist in current state
-				// b) The key exists but the value is different
 				auto it = currentProps.find(key);
 				if (it == currentProps.end() || it->second != newVal) {
 					currentProps[key] = newVal;
 					isDirty = true;
 				}
 			}
-		} else { // UpdateMode::REPLACE
-			// In REPLACE mode, the new state must EXACTLY match the input map.
-
-			// Optimization: First check if sizes match.
+		} else { // REPLACE
 			if (currentProps.size() != map.size()) {
 				isDirty = true;
 			} else {
-				// Sizes match, check content equality.
 				for (const auto &[key, value]: map) {
 					auto it = currentProps.find(key);
-					// If key missing in old state OR value is different -> Changed
 					if (it == currentProps.end() || it->second != PropertyValue(value)) {
 						isDirty = true;
 						break;
 					}
 				}
 			}
-
-			// If data changed, prepare the new property map from scratch (Replace)
 			if (isDirty) {
-				// Clean the old map completely so we only write the new map
 				currentProps.clear();
 				for (const auto &[key, value]: map) {
 					currentProps[key] = value;
 				}
-				// Explicitly remove old state chain to prevent orphan blobs
-				// (depending on underlying implementation, this is safer for REPLACE)
+				// Explicit remove not strictly necessary if update handles it,
+				// but keeps logic clean for full replace
 				dataManager_->removeState(stateKey);
 			}
 		}
 
-		// 4. Write back only if changes were detected
+		// 4. Write back
 		if (isDirty) {
-			dataManager_->addStateProperties(stateKey, currentProps);
+			// Call the updated addStateProperties with useBlobStorage
+			dataManager_->addStateProperties(stateKey, currentProps, useBlobStorage);
 		}
 	}
 
@@ -163,26 +150,31 @@ namespace graph::storage::state {
 	SystemStateManager::getMap<std::string>(const std::string &) const;
 	template void SystemStateManager::setMap<std::string>(const std::string &,
 														  const std::unordered_map<std::string, std::string> &,
-														  UpdateMode);
+														  UpdateMode, bool useBlobStorage);
 
 	// int64_t
 	template int64_t SystemStateManager::get<int64_t>(const std::string &, const std::string &, int64_t) const;
-	template void SystemStateManager::set<int64_t>(const std::string &, const std::string &, const int64_t &);
+	template void SystemStateManager::set<int64_t>(const std::string &, const std::string &, const int64_t &,
+												   bool useBlobStorage);
 	template std::unordered_map<std::string, int64_t> SystemStateManager::getMap<int64_t>(const std::string &) const;
 	template void SystemStateManager::setMap<int64_t>(const std::string &,
-													  const std::unordered_map<std::string, int64_t> &, UpdateMode);
+													  const std::unordered_map<std::string, int64_t> &, UpdateMode,
+													  bool useBlobStorage);
 
 	// bool
 	template bool SystemStateManager::get<bool>(const std::string &, const std::string &, bool) const;
-	template void SystemStateManager::set<bool>(const std::string &, const std::string &, const bool &);
+	template void SystemStateManager::set<bool>(const std::string &, const std::string &, const bool &,
+												bool useBlobStorage);
 
 	// std::string
 	template std::string SystemStateManager::get<std::string>(const std::string &, const std::string &,
 															  std::string) const;
-	template void SystemStateManager::set<std::string>(const std::string &, const std::string &, const std::string &);
+	template void SystemStateManager::set<std::string>(const std::string &, const std::string &, const std::string &,
+													   bool useBlobStorage);
 
 	// double
 	template double SystemStateManager::get<double>(const std::string &, const std::string &, double) const;
-	template void SystemStateManager::set<double>(const std::string &, const std::string &, const double &);
+	template void SystemStateManager::set<double>(const std::string &, const std::string &, const double &,
+												  bool useBlobStorage);
 
 } // namespace graph::storage::state

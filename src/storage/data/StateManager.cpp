@@ -125,29 +125,35 @@ namespace graph::storage {
 	}
 
 	void StateManager::addStateProperties(const std::string &stateKey,
-										  const std::unordered_map<std::string, PropertyValue> &properties) {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+                                          const std::unordered_map<std::string, PropertyValue> &properties,
+                                          bool useBlobStorage) {
+        auto dataManager = dataManager_.lock();
+        if (!dataManager)
+            return;
 
-		// Get PropertyManager from DataManager
-		auto propertyManager = dataManager->getPropertyManager();
+        // Serialize the properties
+        std::stringstream ss;
+        PropertyManager::serializeProperties(ss, properties);
+        std::string serializedData = ss.str();
 
-		// Serialize the properties
-		std::stringstream ss;
-		PropertyManager::serializeProperties(ss, properties);
-		std::string serializedData = ss.str();
+        // Heuristic: If data is larger than ~4KB (16 state chunks), prefer Blob storage
+        // This is a simple auto-tuning optimization.
+        if (!useBlobStorage && serializedData.size() > 4096) {
+            useBlobStorage = true;
+        }
 
-		// Find or create the state
-		State state = findByKey(stateKey);
-		if (state.getId() == 0) {
-			// Create a new state chain
-			auto stateChain = createStateChain(stateKey, serializedData);
-		} else {
-			// Update existing state chain
-			auto stateChain = updateStateChain(state.getId(), serializedData);
-		}
-	}
+        // Find or create the state
+        State state = findByKey(stateKey);
+
+        if (state.getId() == 0) {
+            // Create a new state chain
+            auto stateChain = createStateChain(stateKey, serializedData, useBlobStorage);
+        } else {
+            // Update existing state chain
+            // We pass the useBlobStorage preference.
+            auto stateChain = updateStateChain(state.getId(), serializedData, useBlobStorage);
+        }
+    }
 
 	std::unordered_map<std::string, PropertyValue> StateManager::getStateProperties(const std::string &stateKey) {
 		auto dataManager = dataManager_.lock();
@@ -190,14 +196,12 @@ namespace graph::storage {
 		return stateChainManager_->readStateChain(headStateId);
 	}
 
-	std::vector<State> StateManager::createStateChain(const std::string &key, const std::string &data) const {
-		// Delegate to StateChainManager
-		return stateChainManager_->createStateChain(key, data);
+	std::vector<State> StateManager::createStateChain(const std::string &key, const std::string &data, bool useBlobStorage) const {
+		return stateChainManager_->createStateChain(key, data, useBlobStorage);
 	}
 
-	std::vector<State> StateManager::updateStateChain(int64_t headStateId, const std::string &newData) const {
-		// Delegate to StateChainManager
-		return stateChainManager_->updateStateChain(headStateId, newData);
+	std::vector<State> StateManager::updateStateChain(int64_t headStateId, const std::string &newData, bool useBlobStorage) const {
+		return stateChainManager_->updateStateChain(headStateId, newData, useBlobStorage);
 	}
 
 	void StateManager::deleteStateChain(int64_t headStateId) const {

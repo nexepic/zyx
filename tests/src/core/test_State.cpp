@@ -194,6 +194,7 @@ TEST_F(StateTest, GetSerializedSize) {
 	expectedSize += sizeof(int64_t); // id
 	expectedSize += sizeof(int64_t); // nextStateId
 	expectedSize += sizeof(int64_t); // prevStateId
+	expectedSize += sizeof(int64_t); // externalId
 	expectedSize += sizeof(uint32_t); // dataSize
 	expectedSize += sizeof(int32_t); // chainPosition
 	expectedSize += graph::State::MAX_KEY_LENGTH; // key buffer
@@ -210,6 +211,7 @@ TEST_F(StateTest, GetSerializedSizeEmpty) {
 	expectedSize += sizeof(int64_t); // id
 	expectedSize += sizeof(int64_t); // nextStateId
 	expectedSize += sizeof(int64_t); // prevStateId
+	expectedSize += sizeof(int64_t); // externalId
 	expectedSize += sizeof(uint32_t); // dataSize
 	expectedSize += sizeof(int32_t); // chainPosition
 	expectedSize += graph::State::MAX_KEY_LENGTH; // key buffer
@@ -225,7 +227,7 @@ TEST_F(StateTest, Constants) {
 	EXPECT_EQ(graph::State::MAX_KEY_LENGTH, 64u);
 
 	size_t expectedMetadataSize = 0;
-	expectedMetadataSize += sizeof(int64_t) * 3;
+	expectedMetadataSize += sizeof(int64_t) * 4; // id, next, prev, externalId
 	expectedMetadataSize += sizeof(uint32_t);
 	expectedMetadataSize += sizeof(int32_t);
 	expectedMetadataSize += graph::State::MAX_KEY_LENGTH;
@@ -239,7 +241,8 @@ TEST_F(StateTest, Constants) {
 TEST_F(StateTest, MetadataAccess) {
 	graph::State state(42, "test", "data");
 
-	const auto &[id, nextStateId, prevStateId, dataSize, chainPosition, key, isActive] = state.getMetadata();
+	const auto &[id, nextStateId, prevStateId, externalId, dataSize, chainPosition, key, isActive] =
+			state.getMetadata();
 	EXPECT_EQ(id, 42);
 	EXPECT_STREQ(key, "test");
 	EXPECT_TRUE(isActive);
@@ -292,4 +295,19 @@ TEST_F(StateTest, DataBufferBoundary) {
 
 	EXPECT_EQ(state.getSize(), graph::State::CHUNK_SIZE);
 	EXPECT_EQ(state.getDataAsString(), exactSizeData);
+}
+
+TEST_F(StateTest, GetDataRawPointerAccess) {
+	const std::string rawData = "Raw Pointer Test";
+	graph::State state(999, "raw_key", rawData);
+
+	// Explicitly call getData() to ensure coverage
+	const char *buffer = state.getData();
+
+	// Verify content using pointer arithmetic or comparison
+	// We compare the first N characters where N is the data size
+	EXPECT_EQ(std::strncmp(buffer, rawData.c_str(), rawData.size()), 0);
+
+	// Ensure it is not null (since data is present)
+	EXPECT_NE(buffer, nullptr);
 }

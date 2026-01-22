@@ -40,6 +40,7 @@ namespace graph {
 			int64_t id = 0; // Unique identifier
 			int64_t nextStateId = 0; // Next state in chain
 			int64_t prevStateId = 0; // Previous state in chain
+			int64_t externalId = 0; // If != 0, points to the Head Blob ID
 			uint32_t dataSize = 0; // Size of data in current chunk
 			int32_t chainPosition = 0; // Position in the chain
 			char key[MAX_KEY_LENGTH] = {}; // Unique key for state identification
@@ -81,6 +82,11 @@ namespace graph {
 		[[nodiscard]] uint32_t getSize() const { return metadata.dataSize; }
 		void setData(const std::string &newData);
 		[[nodiscard]] static bool canFitData(uint32_t dataSize);
+
+		[[nodiscard]] int64_t getExternalId() const { return metadata.externalId; }
+		void setExternalId(int64_t id) { metadata.externalId = id; }
+
+		[[nodiscard]] bool isBlobStorage() const { return metadata.externalId != 0; }
 
 		// Serialization
 		void serialize(std::ostream &os) const;

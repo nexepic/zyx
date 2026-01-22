@@ -44,9 +44,11 @@ namespace graph {
 		 *
 		 * @param key Unique identifier for the state
 		 * @param data The data to store in the chain
+		 * @param useBlobStorage If true, stores data in Blob entities instead of State chain.
 		 * @return Vector of State entities forming the chain
 		 */
-		[[nodiscard]] std::vector<State> createStateChain(const std::string &key, const std::string &data) const;
+		[[nodiscard]] std::vector<State> createStateChain(const std::string &key, const std::string &data,
+														  bool useBlobStorage = false) const;
 
 		/**
 		 * Reads the complete data from a chain of State entities.
@@ -63,9 +65,11 @@ namespace graph {
 		 *
 		 * @param headStateId ID of the first State in the chain
 		 * @param newData New data to store in the chain
+		 * @param useBlobStorage If true, stores data in Blob entities instead of State chain.
 		 * @return Vector of State entities forming the updated chain
 		 */
-		[[nodiscard]] std::vector<State> updateStateChain(int64_t headStateId, const std::string &newData) const;
+		[[nodiscard]] std::vector<State> updateStateChain(int64_t headStateId, const std::string &newData,
+														  bool useBlobStorage = false) const;
 
 		/**
 		 * Deletes all States in a chain.
@@ -100,6 +104,19 @@ namespace graph {
 		 * @return Vector of data chunks
 		 */
 		static std::vector<std::string> splitData(const std::string &data);
+
+		/**
+		 * Sets up the storage (Blob or Linked List) for a specific Head State.
+		 * This function assumes the Head State already has a valid ID.
+		 * It will modify the headState object and create any necessary subsequent entities.
+		 *
+		 * @param headState The head state entity (modified in place)
+		 * @param data The data to store
+		 * @param useBlobStorage Whether to use blob storage
+		 * @param outChainEntities Output vector to collect all entities in the chain (including head)
+		 */
+		void setupStorageForState(State &headState, const std::string &data, bool useBlobStorage,
+								  std::vector<State> &outChainEntities) const;
 	};
 
 } // namespace graph

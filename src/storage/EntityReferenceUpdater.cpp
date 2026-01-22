@@ -202,45 +202,58 @@ namespace graph::storage {
 	}
 
 	void EntityReferenceUpdater::updateBlobReferences(int64_t oldBlobId, const Blob &newBlob) const {
-		int64_t newBlobId = newBlob.getId();
-		if (oldBlobId == newBlobId)
-			return;
+        int64_t newBlobId = newBlob.getId();
+        if (oldBlobId == newBlobId)
+            return;
 
-		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
+        auto dm = dataManager_.lock();
+        if (!dm)
+            return;
 
-		// 1. Update Owner
-		int64_t entityId = newBlob.getEntityId();
-		uint32_t entityType = newBlob.getEntityType();
+        // 1. Update Owner
+        int64_t entityId = newBlob.getEntityId();
+        uint32_t entityType = newBlob.getEntityType();
 
-		if (entityType == toUnderlying(SegmentType::Node)) {
-			Node node = dm->getNode(entityId);
-			if (node.getId() != 0 && node.isActive() && node.getPropertyEntityId() == oldBlobId &&
-				node.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
+        if (entityType == toUnderlying(SegmentType::Node)) {
+            Node node = dm->getNode(entityId);
+            if (node.getId() != 0 && node.isActive() && node.getPropertyEntityId() == oldBlobId &&
+                node.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
 
-				node.setPropertyEntityId(newBlobId, PropertyStorageType::BLOB_ENTITY);
-				dm->updateNode(node);
-			}
-		} else if (entityType == toUnderlying(SegmentType::Edge)) {
-			Edge edge = dm->getEdge(entityId);
-			if (edge.getId() != 0 && edge.isActive() && edge.getPropertyEntityId() == oldBlobId &&
-				edge.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
+                node.setPropertyEntityId(newBlobId, PropertyStorageType::BLOB_ENTITY);
+                dm->updateNode(node);
+            }
+        } else if (entityType == toUnderlying(SegmentType::Edge)) {
+            Edge edge = dm->getEdge(entityId);
+            if (edge.getId() != 0 && edge.isActive() && edge.getPropertyEntityId() == oldBlobId &&
+                edge.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
 
-				edge.setPropertyEntityId(newBlobId, PropertyStorageType::BLOB_ENTITY);
-				dm->updateEdge(edge);
-			}
-		}
+                edge.setPropertyEntityId(newBlobId, PropertyStorageType::BLOB_ENTITY);
+                dm->updateEdge(edge);
+            }
+        }
+        // --- State Update Logic ---
+        else if (entityType == toUnderlying(SegmentType::State)) {
+            State state = dm->getState(entityId);
+            // Check if state is valid, active, is in blob mode, and actually points to the old blob
+            if (state.getId() != 0 && state.isActive() &&
+                state.isBlobStorage() &&
+                state.getExternalId() == oldBlobId) {
 
-		// 2. Update Chain
-		int64_t nextBlobId = newBlob.getNextBlobId();
-		if (nextBlobId != 0)
-			updateBlobChainReference(oldBlobId, newBlobId, nextBlobId, true, newBlob);
+                state.setExternalId(newBlobId);
+                dm->updateStateEntity(state);
+            }
+        }
+        // ---------------------------------
 
-		int64_t prevBlobId = newBlob.getPrevBlobId();
-		if (prevBlobId != 0)
-			updateBlobChainReference(oldBlobId, newBlobId, prevBlobId, false, newBlob);
-	}
+        // 2. Update Chain (Blob to Blob links)
+        int64_t nextBlobId = newBlob.getNextBlobId();
+        if (nextBlobId != 0)
+            updateBlobChainReference(oldBlobId, newBlobId, nextBlobId, true, newBlob);
+
+        int64_t prevBlobId = newBlob.getPrevBlobId();
+        if (prevBlobId != 0)
+            updateBlobChainReference(oldBlobId, newBlobId, prevBlobId, false, newBlob);
+    }
 
 	void EntityReferenceUpdater::updateIndexReferences(int64_t oldIndexId, const Index &newIndex) {
 		int64_t newIndexId = newIndex.getId();

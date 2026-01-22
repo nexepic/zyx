@@ -58,6 +58,7 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.id);
 		utils::Serializer::writePOD(os, metadata.nextStateId);
 		utils::Serializer::writePOD(os, metadata.prevStateId);
+		utils::Serializer::writePOD(os, metadata.externalId);
 		utils::Serializer::writePOD(os, metadata.dataSize);
 		utils::Serializer::writePOD(os, metadata.chainPosition);
 		utils::Serializer::writeBuffer(os, metadata.key, MAX_KEY_LENGTH);
@@ -74,6 +75,7 @@ namespace graph {
 		state.metadata.id = utils::Serializer::readPOD<int64_t>(is);
 		state.metadata.nextStateId = utils::Serializer::readPOD<int64_t>(is);
 		state.metadata.prevStateId = utils::Serializer::readPOD<int64_t>(is);
+		state.metadata.externalId = utils::Serializer::readPOD<int64_t>(is);
 		state.metadata.dataSize = utils::Serializer::readPOD<uint32_t>(is);
 		state.metadata.chainPosition = utils::Serializer::readPOD<int32_t>(is);
 		utils::Serializer::readBuffer(is, state.metadata.key, MAX_KEY_LENGTH);
