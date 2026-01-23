@@ -54,7 +54,8 @@ db_lib = static_library('metrix_core',
 							boost_dep,
 							cli11_dep,
 							antlr4_dep,
-							cypher_dep
+							cypher_dep,
+							simsimd_dep
 						],
 						install : false
 )
@@ -63,7 +64,7 @@ db_lib = static_library('metrix_core',
 db_dep = declare_dependency(
 	include_directories : inc_dirs,
 	link_with : db_lib,
-	dependencies : [cypher_dep]
+	dependencies : [cypher_dep, simsimd_dep]
 )
 
 # ==============================================================================
@@ -83,7 +84,12 @@ public_headers = [
 libmetrix = shared_library('metrix',
 						   sources : db_src, # db_src already includes api/CApi.cpp via recursive search
 						   include_directories : inc_dirs,
-						   dependencies : [zlib_dep, boost_dep, cli11_dep, antlr4_dep, cypher_dep],
+						   dependencies : [zlib_dep,
+										   boost_dep,
+										   cli11_dep,
+										   antlr4_dep,
+										   cypher_dep,
+										   simsimd_dep],
 						   install : true,
 						   install_dir : get_option('libdir')
 )

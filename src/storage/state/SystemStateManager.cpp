@@ -152,6 +152,10 @@ namespace graph::storage::state {
 														  const std::unordered_map<std::string, std::string> &,
 														  UpdateMode, bool useBlobStorage);
 
+	template void SystemStateManager::setMap<PropertyValue>(const std::string &,
+															const std::unordered_map<std::string, PropertyValue> &,
+															UpdateMode, bool);
+
 	// int64_t
 	template int64_t SystemStateManager::get<int64_t>(const std::string &, const std::string &, int64_t) const;
 	template void SystemStateManager::set<int64_t>(const std::string &, const std::string &, const int64_t &,

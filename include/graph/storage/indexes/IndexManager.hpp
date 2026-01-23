@@ -35,6 +35,7 @@ namespace graph::storage {
 	class FileStorage;
 } // namespace graph::storage
 namespace graph::query::indexes {
+	class VectorIndexManager;
 	class EntityTypeIndexManager;
 
 	class IndexBuilder;
@@ -108,6 +109,9 @@ namespace graph::query::indexes {
 		// --- Accessors ---
 		std::shared_ptr<EntityTypeIndexManager> getNodeIndexManager() const { return nodeIndexManager_; }
 		std::shared_ptr<EntityTypeIndexManager> getEdgeIndexManager() const { return edgeIndexManager_; }
+
+		std::shared_ptr<VectorIndexManager> getVectorIndexManager() const { return vectorIndexManager_; }
+
 		IndexBuilder *getIndexBuilder() const { return indexBuilder_.get(); }
 
 		// Query methods now need to know which index to use
@@ -123,6 +127,8 @@ namespace graph::query::indexes {
 
 		std::shared_ptr<EntityTypeIndexManager> nodeIndexManager_;
 		std::shared_ptr<EntityTypeIndexManager> edgeIndexManager_;
+
+		std::shared_ptr<VectorIndexManager> vectorIndexManager_;
 
 		std::unique_ptr<IndexBuilder> indexBuilder_;
 		mutable std::recursive_mutex mutex_;

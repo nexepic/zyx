@@ -24,6 +24,7 @@
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexMeta.hpp"
+#include "graph/storage/indexes/VectorIndexManager.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace graph::query::indexes {
@@ -43,6 +44,8 @@ namespace graph::query::indexes {
 				dataManager_, storage_->getSystemStateManager(), IndexTypes::EDGE_LABEL_TYPE,
 				storage::state::keys::Edge::LABEL_ROOT, IndexTypes::EDGE_PROPERTY_TYPE,
 				storage::state::keys::Edge::PROPERTY_PREFIX);
+
+		vectorIndexManager_ = std::make_shared<VectorIndexManager>(dataManager_, storage_->getSystemStateManager());
 	}
 
 	IndexManager::~IndexManager() = default;
