@@ -25,6 +25,7 @@
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
+#include "graph/query/execution/operators/CreateVectorIndexOperator.hpp"
 #include "graph/query/execution/operators/DeleteOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
@@ -230,6 +231,13 @@ namespace graph::query {
 	QueryPlanner::unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
 						   const std::vector<PropertyValue> &list) {
 		return std::make_unique<execution::operators::UnwindOperator>(std::move(child), alias, list);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::createVectorIndexOp(const std::string &indexName, const std::string &label,
+									  const std::string &property, int dimension, const std::string &metric) const {
+		return std::make_unique<execution::operators::CreateVectorIndexOperator>(im_, indexName, label, property,
+																				 dimension, metric);
 	}
 
 	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::singleRowOp() {

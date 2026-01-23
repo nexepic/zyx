@@ -76,6 +76,8 @@ namespace graph::parser::cypher {
 
 		std::any visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) override;
 
+		std::any visitCreateVectorIndex(CypherParser::CreateVectorIndexContext *ctx) override;
+
 	private:
 		std::shared_ptr<query::QueryPlanner> planner_;
 		std::unique_ptr<query::execution::PhysicalOperator> rootOp_;

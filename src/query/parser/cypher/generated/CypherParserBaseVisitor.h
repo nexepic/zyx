@@ -52,6 +52,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitCreateVectorIndex(CypherParser::CreateVectorIndexContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitQuery(CypherParser::QueryContext *ctx) override {
     return visitChildren(ctx);
   }

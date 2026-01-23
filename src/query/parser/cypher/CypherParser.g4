@@ -48,7 +48,9 @@ dropIndexStatement
 createIndexStatement
     : K_CREATE K_INDEX symbolicName? K_FOR nodePattern K_ON LPAREN propertyExpression RPAREN # CreateIndexByPattern
     | K_CREATE K_INDEX symbolicName? K_ON nodeLabel LPAREN propertyKeyName RPAREN            # CreateIndexByLabel
-    ;
+    // Vector Index
+	| K_CREATE K_VECTOR K_INDEX symbolicName? K_ON nodeLabel LPAREN propertyKeyName RPAREN (K_OPTIONS mapLiteral)? # CreateVectorIndex
+	;
 
 // ============================================================================
 // QUERY STRUCTURE
@@ -337,21 +339,21 @@ schemaName
 
 symbolicName
     : ID
-    | K_COUNT | K_FILTER | K_EXTRACT | K_ANY | K_NONE | K_SINGLE
-    | K_END
-    | K_CONTAINS
-    | K_STARTS
-    | K_ENDS
-    | K_TRUE | K_FALSE | K_NULL
-    | K_ORDER | K_BY
-    | K_LIMIT | K_SKIP
-    | K_ASC | K_DESC | K_ASCENDING | K_DESCENDING
-    | K_AS
-    | K_AND | K_OR | K_XOR | K_NOT
-    | K_IN | K_IS
-    | K_DISTINCT
-    | K_CASE | K_WHEN | K_THEN | K_ELSE
-    | K_UNWIND
+    // Keywords from Standard Cypher
+    | K_CALL | K_YIELD | K_CREATE | K_DELETE | K_DETACH | K_EXISTS
+    | K_LIMIT | K_MATCH | K_MERGE | K_OPTIONAL | K_ORDER | K_BY | K_SKIP
+    | K_ASCENDING | K_ASC | K_DESCENDING | K_DESC | K_REMOVE | K_RETURN
+    | K_SET | K_WHERE | K_WITH | K_UNION | K_UNWIND | K_AND | K_AS
+    | K_CONTAINS | K_DISTINCT | K_ENDS | K_IN | K_IS | K_NOT | K_OR
+    | K_STARTS | K_XOR | K_FALSE | K_TRUE | K_NULL
+    | K_CASE | K_WHEN | K_THEN | K_ELSE | K_END
+    | K_COUNT | K_FILTER | K_EXTRACT | K_ANY | K_NONE | K_SINGLE | K_ALL
+    // Admin Keywords
+    | K_INDEX | K_ON | K_SHOW | K_DROP
+    | K_FOR | K_CONSTRAINT | K_DO | K_REQUIRE | K_UNIQUE | K_MANDATORY
+    | K_SCALAR | K_OF | K_ADD
+    // Vector Keywords
+    | K_VECTOR | K_OPTIONS
     ;
 
 literal

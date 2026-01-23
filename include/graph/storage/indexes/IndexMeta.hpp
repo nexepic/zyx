@@ -27,7 +27,7 @@ namespace graph::query::indexes {
 	struct IndexMetadata {
 		std::string name;
 		std::string entityType; // node/edge
-		std::string indexType; // label/property
+		std::string indexType;  // "label", "property", "vector"
 		std::string label;
 		std::string property;
 

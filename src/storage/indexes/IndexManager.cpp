@@ -266,9 +266,55 @@ namespace graph::query::indexes {
 		std::vector<std::tuple<std::string, std::string, std::string, std::string>> result;
 		for (const auto &[name, rawMeta]: allIndexes) {
 			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
-			result.emplace_back(meta.name, meta.entityType, meta.label, meta.property);
+			result.emplace_back(meta.name, meta.indexType, meta.label, meta.property);
 		}
 		return result;
+	}
+
+	bool IndexManager::createVectorIndex(const std::string &indexName, const std::string &label,
+										 const std::string &property, int dimension, const std::string &metric) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// 1. Generate default name if empty
+		std::string name = indexName;
+		if (name.empty()) {
+			name = "vec_" + label + "_" + property;
+		}
+
+		// 2. Check Metadata (Prevent duplicate names)
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+
+		if (allIndexes.contains(name)) {
+			log::Log::warn("Vector index '{}' already exists.", name);
+			return false;
+		}
+
+		// 3. Initialize Physical Index via VectorIndexManager
+		// This ensures the configuration is saved to disk
+		vectorIndexManager_->createIndex(name, dimension);
+
+		// 4. Persist Metadata
+		// We set indexType="vector" to distinguish from B-Tree indexes
+		IndexMetadata meta{name, "node", "vector", label, property};
+		sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
+
+		log::Log::info("Created vector index: {} (Label: {}, Prop: {}, Dim: {})", name, label, property, dimension);
+		return true;
+	}
+
+	std::string IndexManager::getVectorIndexName(const std::string &label, const std::string &property) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+
+		for (const auto &[name, rawMeta]: allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			if (meta.indexType == "vector" && meta.label == label && meta.property == property) {
+				return name;
+			}
+		}
+		return "";
 	}
 
 	void IndexManager::persistState() const {

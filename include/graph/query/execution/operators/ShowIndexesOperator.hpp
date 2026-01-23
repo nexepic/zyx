@@ -48,7 +48,6 @@ namespace graph::query::execution::operators {
 				r.setValue("type", PropertyValue(type));
 				r.setValue("entity", PropertyValue(type == "node" ? "NODE" : "EDGE"));
 				r.setValue("name", PropertyValue(name));
-				r.setValue("type", PropertyValue(prop.empty() ? "LABEL" : "PROPERTY")); // Infer type from property
 				r.setValue("label", PropertyValue(label));
 				r.setValue("properties", PropertyValue(prop));
 

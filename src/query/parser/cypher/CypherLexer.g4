@@ -82,6 +82,10 @@ K_SCALAR     : 'SCALAR';
 K_OF         : 'OF';
 K_ADD        : 'ADD';
 
+// Vector
+K_VECTOR     : 'VECTOR';
+K_OPTIONS    : 'OPTIONS';
+
 // --- Symbols ---
 
 EQ           : '=';

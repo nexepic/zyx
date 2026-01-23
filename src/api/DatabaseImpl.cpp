@@ -85,6 +85,13 @@ namespace metrix {
 					using T = std::decay_t<T0>;
 					if constexpr (std::is_same_v<T, std::monostate>) {
 						return std::monostate{};
+					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+						std::vector<std::string> strVec;
+						strVec.reserve(arg.size());
+						for (float val: arg) {
+							strVec.push_back(std::to_string(val));
+						}
+						return strVec;
 					} else {
 						// Primitives (int, double, bool, string) map directly
 						return arg;
@@ -117,11 +124,21 @@ namespace metrix {
 		return std::visit(
 				[]<typename T0>(T0 &&arg) -> graph::PropertyValue {
 					using T = std::decay_t<T0>;
-					// Complex types in Public API (shared_ptr) cannot be stored directly in PropertyValue
-					if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
-								  std::is_same_v<T, std::shared_ptr<Edge>> ||
-								  std::is_same_v<T, std::vector<std::string>>) {
-						return {}; // Null/Empty for unsupported types
+
+					if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+						std::vector<float> vec;
+						vec.reserve(arg.size());
+						try {
+							for (const auto &s: arg) {
+								vec.push_back(std::stof(s));
+							}
+							return graph::PropertyValue(vec);
+						} catch (...) {
+							return graph::PropertyValue();
+						}
+					} else if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
+										 std::is_same_v<T, std::shared_ptr<Edge>>) {
+						return {};
 					} else {
 						return graph::PropertyValue(arg);
 					}

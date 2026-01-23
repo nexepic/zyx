@@ -36,6 +36,7 @@ namespace graph {
 		INTEGER = 3,
 		DOUBLE = 4,
 		STRING = 5,
+		LIST = 6 // Support for Vector/List
 	};
 
 	/**
@@ -46,7 +47,7 @@ namespace graph {
 	private:
 		// The actual data storage.
 		// Order matters for default comparison: null < bool < int < double < string
-		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string>;
+		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string, std::vector<float>>;
 		VariantType data;
 
 	public:
@@ -72,6 +73,8 @@ namespace graph {
 		PropertyValue(std::string &&value) : data(std::move(value)) {}
 		PropertyValue(const char *value) : data(std::string(value)) {}
 
+		explicit PropertyValue(std::vector<float> vec) : data(std::move(vec)) {}
+
 		// Expose the underlying variant for pattern matching with std::visit.
 		const VariantType &getVariant() const { return data; }
 
@@ -92,8 +95,8 @@ namespace graph {
 
 		std::string toString() const {
 			return std::visit(
-					[](auto const &value) -> std::string {
-						using T = std::decay_t<decltype(value)>;
+					[]<typename T0>(T0 const &value) -> std::string {
+						using T = std::decay_t<T0>;
 
 						if constexpr (std::is_same_v<T, std::monostate>) {
 							return "null";
@@ -107,6 +110,14 @@ namespace graph {
 							return oss.str();
 						} else if constexpr (std::is_same_v<T, std::string>) {
 							return value;
+						} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+							std::ostringstream oss;
+							oss << "[";
+							for (size_t i = 0; i < value.size(); ++i) {
+								oss << value[i] << (i < value.size() - 1 ? ", " : "");
+							}
+							oss << "]";
+							return oss.str();
 						} else {
 							return "";
 						}
@@ -117,8 +128,8 @@ namespace graph {
 		// Helper to get type name for debugging
 		std::string typeName() const {
 			return std::visit(
-					[](auto &&arg) -> std::string {
-						using T = std::decay_t<decltype(arg)>;
+					[]<typename T0>([[maybe_unused]] T0 &&arg) -> std::string {
+						using T = std::decay_t<T0>;
 						if constexpr (std::is_same_v<T, std::monostate>)
 							return "NULL";
 						else if constexpr (std::is_same_v<T, bool>)
@@ -129,15 +140,48 @@ namespace graph {
 							return "DOUBLE";
 						else if constexpr (std::is_same_v<T, std::string>)
 							return "STRING";
+						else if constexpr (std::is_same_v<T, std::vector<float>>)
+							return "LIST";
+						else
+							return "UNKNOWN";
 					},
 					data);
 		}
-	};
 
+		/**
+		 * @brief Returns the type of the stored value.
+		 */
+		PropertyType getType() const {
+			if (std::holds_alternative<std::monostate>(data))
+				return PropertyType::NULL_TYPE;
+			if (std::holds_alternative<bool>(data))
+				return PropertyType::BOOLEAN;
+			if (std::holds_alternative<int64_t>(data))
+				return PropertyType::INTEGER;
+			if (std::holds_alternative<double>(data))
+				return PropertyType::DOUBLE;
+			if (std::holds_alternative<std::string>(data))
+				return PropertyType::STRING;
+			if (std::holds_alternative<std::vector<float>>(data))
+				return PropertyType::LIST;
+			return PropertyType::UNKNOWN;
+		}
+
+		/**
+		 * @brief Retrieves the list value if the type is LIST.
+		 * @throws std::runtime_error if the type is not LIST.
+		 */
+		const std::vector<float> &getList() const {
+			if (auto *val = std::get_if<std::vector<float>>(&data)) {
+				return *val;
+			}
+			throw std::runtime_error("PropertyValue is not a List/Vector");
+		}
+	};
 
 	// The centralized helper function now needs to operate on the wrapped variant.
 	inline PropertyType getPropertyType(const PropertyValue &value) {
-		PropertyType type = PropertyType::UNKNOWN;
+		auto type = PropertyType::UNKNOWN;
 		std::visit(
 				[&type]<typename T0>([[maybe_unused]] const T0 &arg) {
 					using T = std::decay_t<T0>;
@@ -151,6 +195,8 @@ namespace graph {
 						type = PropertyType::DOUBLE;
 					} else if constexpr (std::is_same_v<T, std::string>) {
 						type = PropertyType::STRING;
+					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+						type = PropertyType::LIST;
 					}
 				},
 				value.getVariant());

@@ -27,7 +27,8 @@ IGNORE_PATTERNS = [
     "MSVC",
     "Program Files",
     "generated/",
-    "linenoise.hpp"
+    "linenoise.hpp",
+    "subprojects/",
 ]
 
 

@@ -39,6 +39,8 @@ public:
 
     virtual std::any visitCreateIndexByLabel(CypherParser::CreateIndexByLabelContext *context) = 0;
 
+    virtual std::any visitCreateVectorIndex(CypherParser::CreateVectorIndexContext *context) = 0;
+
     virtual std::any visitQuery(CypherParser::QueryContext *context) = 0;
 
     virtual std::any visitRegularQuery(CypherParser::RegularQueryContext *context) = 0;

@@ -129,7 +129,7 @@ namespace graph::storage::state {
 			if (isDirty) {
 				currentProps.clear();
 				for (const auto &[key, value]: map) {
-					currentProps[key] = value;
+					currentProps[key] = PropertyValue(value);
 				}
 				// Explicit remove not strictly necessary if update handles it,
 				// but keeps logic clean for full replace
@@ -146,15 +146,30 @@ namespace graph::storage::state {
 
 	// --- Explicit Instantiations ---
 
+	// Float Vector (std::vector<float>) - Required for Vector Index config
+	using FloatVec = std::vector<float>;
+	template FloatVec SystemStateManager::get<FloatVec>(const std::string &, const std::string &, FloatVec) const;
+	template void SystemStateManager::set<FloatVec>(const std::string &, const std::string &, const FloatVec &, bool);
+	template std::unordered_map<std::string, FloatVec> SystemStateManager::getMap<FloatVec>(const std::string &) const;
+	template void SystemStateManager::setMap<FloatVec>(const std::string &,
+													   const std::unordered_map<std::string, FloatVec> &, UpdateMode,
+													   bool);
+
+	// PropertyValue itself (Useful for generic storage)
+	template void SystemStateManager::setMap<PropertyValue>(const std::string &,
+															const std::unordered_map<std::string, PropertyValue> &,
+															UpdateMode, bool);
+
+	// std::string
 	template std::unordered_map<std::string, std::string>
 	SystemStateManager::getMap<std::string>(const std::string &) const;
 	template void SystemStateManager::setMap<std::string>(const std::string &,
 														  const std::unordered_map<std::string, std::string> &,
 														  UpdateMode, bool useBlobStorage);
-
-	template void SystemStateManager::setMap<PropertyValue>(const std::string &,
-															const std::unordered_map<std::string, PropertyValue> &,
-															UpdateMode, bool);
+	template std::string SystemStateManager::get<std::string>(const std::string &, const std::string &,
+															  std::string) const;
+	template void SystemStateManager::set<std::string>(const std::string &, const std::string &, const std::string &,
+													   bool useBlobStorage);
 
 	// int64_t
 	template int64_t SystemStateManager::get<int64_t>(const std::string &, const std::string &, int64_t) const;
@@ -169,12 +184,6 @@ namespace graph::storage::state {
 	template bool SystemStateManager::get<bool>(const std::string &, const std::string &, bool) const;
 	template void SystemStateManager::set<bool>(const std::string &, const std::string &, const bool &,
 												bool useBlobStorage);
-
-	// std::string
-	template std::string SystemStateManager::get<std::string>(const std::string &, const std::string &,
-															  std::string) const;
-	template void SystemStateManager::set<std::string>(const std::string &, const std::string &, const std::string &,
-													   bool useBlobStorage);
 
 	// double
 	template double SystemStateManager::get<double>(const std::string &, const std::string &, double) const;

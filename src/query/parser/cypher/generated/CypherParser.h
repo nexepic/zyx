@@ -27,13 +27,13 @@ public:
     K_EXTRACT = 46, K_ANY = 47, K_NONE = 48, K_SINGLE = 49, K_ALL = 50, 
     K_INDEX = 51, K_ON = 52, K_SHOW = 53, K_DROP = 54, K_FOR = 55, K_CONSTRAINT = 56, 
     K_DO = 57, K_REQUIRE = 58, K_UNIQUE = 59, K_MANDATORY = 60, K_SCALAR = 61, 
-    K_OF = 62, K_ADD = 63, EQ = 64, NEQ = 65, LT = 66, GT = 67, LTE = 68, 
-    GTE = 69, PLUS = 70, MINUS = 71, MULTIPLY = 72, DIVIDE = 73, MODULO = 74, 
-    POWER = 75, LPAREN = 76, RPAREN = 77, LBRACE = 78, RBRACE = 79, LBRACK = 80, 
-    RBRACK = 81, COMMA = 82, DOT = 83, COLON = 84, PIPE = 85, DOLLAR = 86, 
-    RANGE = 87, SEMI = 88, HexInteger = 89, OctalInteger = 90, DecimalInteger = 91, 
-    DoubleLiteral = 92, ID = 93, StringLiteral = 94, WS = 95, COMMENT = 96, 
-    LINE_COMMENT = 97
+    K_OF = 62, K_ADD = 63, K_VECTOR = 64, K_OPTIONS = 65, EQ = 66, NEQ = 67, 
+    LT = 68, GT = 69, LTE = 70, GTE = 71, PLUS = 72, MINUS = 73, MULTIPLY = 74, 
+    DIVIDE = 75, MODULO = 76, POWER = 77, LPAREN = 78, RPAREN = 79, LBRACE = 80, 
+    RBRACE = 81, LBRACK = 82, RBRACK = 83, COMMA = 84, DOT = 85, COLON = 86, 
+    PIPE = 87, DOLLAR = 88, RANGE = 89, SEMI = 90, HexInteger = 91, OctalInteger = 92, 
+    DecimalInteger = 93, DoubleLiteral = 94, ID = 95, StringLiteral = 96, 
+    WS = 97, COMMENT = 98, LINE_COMMENT = 99
   };
 
   enum {
@@ -297,6 +297,25 @@ public:
     PropertyKeyNameContext *propertyKeyName();
     antlr4::tree::TerminalNode *RPAREN();
     SymbolicNameContext *symbolicName();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  CreateVectorIndexContext : public CreateIndexStatementContext {
+  public:
+    CreateVectorIndexContext(CreateIndexStatementContext *ctx);
+
+    antlr4::tree::TerminalNode *K_CREATE();
+    antlr4::tree::TerminalNode *K_VECTOR();
+    antlr4::tree::TerminalNode *K_INDEX();
+    antlr4::tree::TerminalNode *K_ON();
+    NodeLabelContext *nodeLabel();
+    antlr4::tree::TerminalNode *LPAREN();
+    PropertyKeyNameContext *propertyKeyName();
+    antlr4::tree::TerminalNode *RPAREN();
+    SymbolicNameContext *symbolicName();
+    antlr4::tree::TerminalNode *K_OPTIONS();
+    MapLiteralContext *mapLiteral();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -1318,40 +1337,71 @@ public:
     SymbolicNameContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *ID();
+    antlr4::tree::TerminalNode *K_CALL();
+    antlr4::tree::TerminalNode *K_YIELD();
+    antlr4::tree::TerminalNode *K_CREATE();
+    antlr4::tree::TerminalNode *K_DELETE();
+    antlr4::tree::TerminalNode *K_DETACH();
+    antlr4::tree::TerminalNode *K_EXISTS();
+    antlr4::tree::TerminalNode *K_LIMIT();
+    antlr4::tree::TerminalNode *K_MATCH();
+    antlr4::tree::TerminalNode *K_MERGE();
+    antlr4::tree::TerminalNode *K_OPTIONAL();
+    antlr4::tree::TerminalNode *K_ORDER();
+    antlr4::tree::TerminalNode *K_BY();
+    antlr4::tree::TerminalNode *K_SKIP();
+    antlr4::tree::TerminalNode *K_ASCENDING();
+    antlr4::tree::TerminalNode *K_ASC();
+    antlr4::tree::TerminalNode *K_DESCENDING();
+    antlr4::tree::TerminalNode *K_DESC();
+    antlr4::tree::TerminalNode *K_REMOVE();
+    antlr4::tree::TerminalNode *K_RETURN();
+    antlr4::tree::TerminalNode *K_SET();
+    antlr4::tree::TerminalNode *K_WHERE();
+    antlr4::tree::TerminalNode *K_WITH();
+    antlr4::tree::TerminalNode *K_UNION();
+    antlr4::tree::TerminalNode *K_UNWIND();
+    antlr4::tree::TerminalNode *K_AND();
+    antlr4::tree::TerminalNode *K_AS();
+    antlr4::tree::TerminalNode *K_CONTAINS();
+    antlr4::tree::TerminalNode *K_DISTINCT();
+    antlr4::tree::TerminalNode *K_ENDS();
+    antlr4::tree::TerminalNode *K_IN();
+    antlr4::tree::TerminalNode *K_IS();
+    antlr4::tree::TerminalNode *K_NOT();
+    antlr4::tree::TerminalNode *K_OR();
+    antlr4::tree::TerminalNode *K_STARTS();
+    antlr4::tree::TerminalNode *K_XOR();
+    antlr4::tree::TerminalNode *K_FALSE();
+    antlr4::tree::TerminalNode *K_TRUE();
+    antlr4::tree::TerminalNode *K_NULL();
+    antlr4::tree::TerminalNode *K_CASE();
+    antlr4::tree::TerminalNode *K_WHEN();
+    antlr4::tree::TerminalNode *K_THEN();
+    antlr4::tree::TerminalNode *K_ELSE();
+    antlr4::tree::TerminalNode *K_END();
     antlr4::tree::TerminalNode *K_COUNT();
     antlr4::tree::TerminalNode *K_FILTER();
     antlr4::tree::TerminalNode *K_EXTRACT();
     antlr4::tree::TerminalNode *K_ANY();
     antlr4::tree::TerminalNode *K_NONE();
     antlr4::tree::TerminalNode *K_SINGLE();
-    antlr4::tree::TerminalNode *K_END();
-    antlr4::tree::TerminalNode *K_CONTAINS();
-    antlr4::tree::TerminalNode *K_STARTS();
-    antlr4::tree::TerminalNode *K_ENDS();
-    antlr4::tree::TerminalNode *K_TRUE();
-    antlr4::tree::TerminalNode *K_FALSE();
-    antlr4::tree::TerminalNode *K_NULL();
-    antlr4::tree::TerminalNode *K_ORDER();
-    antlr4::tree::TerminalNode *K_BY();
-    antlr4::tree::TerminalNode *K_LIMIT();
-    antlr4::tree::TerminalNode *K_SKIP();
-    antlr4::tree::TerminalNode *K_ASC();
-    antlr4::tree::TerminalNode *K_DESC();
-    antlr4::tree::TerminalNode *K_ASCENDING();
-    antlr4::tree::TerminalNode *K_DESCENDING();
-    antlr4::tree::TerminalNode *K_AS();
-    antlr4::tree::TerminalNode *K_AND();
-    antlr4::tree::TerminalNode *K_OR();
-    antlr4::tree::TerminalNode *K_XOR();
-    antlr4::tree::TerminalNode *K_NOT();
-    antlr4::tree::TerminalNode *K_IN();
-    antlr4::tree::TerminalNode *K_IS();
-    antlr4::tree::TerminalNode *K_DISTINCT();
-    antlr4::tree::TerminalNode *K_CASE();
-    antlr4::tree::TerminalNode *K_WHEN();
-    antlr4::tree::TerminalNode *K_THEN();
-    antlr4::tree::TerminalNode *K_ELSE();
-    antlr4::tree::TerminalNode *K_UNWIND();
+    antlr4::tree::TerminalNode *K_ALL();
+    antlr4::tree::TerminalNode *K_INDEX();
+    antlr4::tree::TerminalNode *K_ON();
+    antlr4::tree::TerminalNode *K_SHOW();
+    antlr4::tree::TerminalNode *K_DROP();
+    antlr4::tree::TerminalNode *K_FOR();
+    antlr4::tree::TerminalNode *K_CONSTRAINT();
+    antlr4::tree::TerminalNode *K_DO();
+    antlr4::tree::TerminalNode *K_REQUIRE();
+    antlr4::tree::TerminalNode *K_UNIQUE();
+    antlr4::tree::TerminalNode *K_MANDATORY();
+    antlr4::tree::TerminalNode *K_SCALAR();
+    antlr4::tree::TerminalNode *K_OF();
+    antlr4::tree::TerminalNode *K_ADD();
+    antlr4::tree::TerminalNode *K_VECTOR();
+    antlr4::tree::TerminalNode *K_OPTIONS();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;

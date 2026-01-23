@@ -175,6 +175,11 @@ namespace graph::query {
 		unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
 				 const std::vector<PropertyValue> &list);
 
+		std::unique_ptr<execution::PhysicalOperator> createVectorIndexOp(const std::string &indexName,
+																		 const std::string &label,
+																		 const std::string &property, int dimension,
+																		 const std::string &metric) const;
+
 		// Helper for standalone queries (RETURN 1)
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> singleRowOp();
 

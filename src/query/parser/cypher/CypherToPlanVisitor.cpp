@@ -624,6 +624,37 @@ namespace graph::parser::cypher {
 		return std::any();
 	}
 
+	std::any CypherToPlanVisitor::visitCreateVectorIndex(CypherParser::CreateVectorIndexContext *ctx) {
+		std::string name = ctx->symbolicName() ? ctx->symbolicName()->getText() : "";
+		std::string label = extractLabelFromNodeLabel(ctx->nodeLabel());
+		std::string prop = ctx->propertyKeyName()->getText();
+
+		int dim = 0;
+		std::string metric = "L2";
+
+		// Parse OPTIONS
+		if (ctx->K_OPTIONS() && ctx->mapLiteral()) {
+			auto props = extractProperties(reinterpret_cast<CypherParser::PropertiesContext*>(ctx));
+			// Note: Reuse existing extraction logic, but we need to handle keys manually or cast context
+			// Safer manual extraction:
+			auto mapLit = ctx->mapLiteral();
+			auto keys = mapLit->propertyKeyName();
+			auto exprs = mapLit->expression();
+			for(size_t i=0; i<keys.size(); ++i) {
+				std::string k = keys[i]->getText();
+				std::string v = exprs[i]->getText();
+				if (k == "dimension" || k == "dim") dim = std::stoi(v);
+				else if (k == "metric") metric = v.substr(1, v.size()-2); // remove quotes
+			}
+		}
+
+		if (dim == 0) throw std::runtime_error("Vector Index requires 'dimension'");
+
+		// Use a new planner method
+		chainOperator(planner_->createVectorIndexOp(name, label, prop, dim, metric));
+		return std::any();
+	}
+
 	// ========================================================================
 	// DROP INDEX
 	// ========================================================================

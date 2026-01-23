@@ -24,6 +24,7 @@
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
+#include "graph/query/execution/operators/VectorSearchOperator.hpp"
 
 namespace graph::query::planner {
 
@@ -76,5 +77,29 @@ namespace graph::query::planner {
 							  return std::make_unique<execution::operators::DropIndexOperator>(ctx.indexManager,
 																							   "node_label_idx");
 						  });
+
+		registerProcedure("db.index.vector.queryNodes", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() != 3) {
+				throw std::runtime_error("db.index.vector.queryNodes expects (indexName, topK, queryVector)");
+			}
+
+			std::string indexName = args[0].toString();
+			int64_t k = std::stoll(args[1].toString());
+
+			std::vector<float> queryVec;
+
+			if (args[2].getType() == PropertyType::LIST) {
+				// Since the Variant holds std::vector<float>, we can just copy it directly
+				// No need to parse strings if the parser stored it correctly as a LIST.
+				queryVec = args[2].getList();
+			} else {
+				// Fallback: If for some reason the parser didn't produce a LIST type,
+				// check if it's strictly required or handle parsing errors.
+				throw std::runtime_error("queryVector argument must be a List of floats.");
+			}
+
+			return std::make_unique<execution::operators::VectorSearchOperator>(ctx.dataManager, ctx.indexManager,
+																				indexName, k, std::move(queryVec));
+		});
 	}
 } // namespace graph::query::planner

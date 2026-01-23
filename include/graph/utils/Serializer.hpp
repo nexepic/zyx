@@ -110,6 +110,13 @@ namespace graph::utils {
 					} else if constexpr (std::is_same_v<T, std::string>) {
 						writePOD(os, PropertyType::STRING);
 						serialize(os, arg); // Recursively call the std::string specialization
+					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+						writePOD(os, PropertyType::LIST);
+						writePOD(os, static_cast<uint32_t>(arg.size()));
+						if (!arg.empty()) {
+							// Write the raw float array directly
+							os.write(reinterpret_cast<const char *>(arg.data()), arg.size() * sizeof(float));
+						}
 					}
 				},
 				value.getVariant());
@@ -135,6 +142,14 @@ namespace graph::utils {
 			case PropertyType::STRING:
 				// Call the std::string specialization to read the value
 				return PropertyValue(deserialize<std::string>(is));
+			case PropertyType::LIST: {
+				uint32_t count = readPOD<uint32_t>(is);
+				std::vector<float> vec(count);
+				if (count > 0) {
+					is.read(reinterpret_cast<char *>(vec.data()), count * sizeof(float));
+				}
+				return PropertyValue(std::move(vec));
+			}
 			default:
 				throw std::runtime_error("Invalid PropertyType tag in stream during deserialization.");
 		}
@@ -153,6 +168,9 @@ namespace graph::utils {
 					} else if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int64_t> ||
 										 std::is_same_v<T, double>) {
 						size += sizeof(T);
+					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+						size += sizeof(uint32_t); // Count
+						size += arg.size() * sizeof(float); // Data
 					}
 				},
 				value.getVariant());

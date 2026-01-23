@@ -92,6 +92,17 @@ namespace graph::query::indexes {
 		 */
 		std::vector<std::tuple<std::string, std::string, std::string, std::string>> listIndexesDetailed() const;
 
+		/**
+		 * @brief Creates a vector index and persists metadata.
+		 */
+		bool createVectorIndex(const std::string &indexName, const std::string &label, const std::string &property,
+							   int dimension, const std::string &metric) const;
+
+		/**
+		 * @brief Gets a vector index by Label and Property (for optimizer lookup)
+		 */
+		std::string getVectorIndexName(const std::string &label, const std::string &property) const;
+
 		void onStorageFlush() override;
 
 		void persistState() const;

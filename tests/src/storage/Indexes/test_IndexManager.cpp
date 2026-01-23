@@ -110,7 +110,7 @@ TEST_F(IndexManagerTest, CreateAndDropNamedIndex) {
 	bool found = false;
 	for (const auto &row: list) {
 		if (std::get<0>(row) == "idx_user_age") {
-			EXPECT_EQ(std::get<1>(row), "node");
+			EXPECT_EQ(std::get<1>(row), "property");
 			EXPECT_EQ(std::get<2>(row), "User");
 			EXPECT_EQ(std::get<3>(row), "age");
 			found = true;
@@ -136,7 +136,7 @@ TEST_F(IndexManagerTest, DropIndexByDefinition) {
 	bool found = false;
 	std::string autoName;
 	for (const auto &row: list) {
-		if (std::get<1>(row) == "node" && std::get<2>(row) == "Product" && std::get<3>(row) == "sku") {
+		if (std::get<1>(row) == "property" && std::get<2>(row) == "Product" && std::get<3>(row) == "sku") {
 			autoName = std::get<0>(row);
 			found = true;
 			break;
@@ -153,7 +153,7 @@ TEST_F(IndexManagerTest, DropIndexByDefinition) {
 	list = indexManager->listIndexesDetailed();
 	found = false;
 	for (const auto &row: list) {
-		if (std::get<1>(row) == "node" && std::get<2>(row) == "Product" && std::get<3>(row) == "sku") {
+		if (std::get<1>(row) == "property" && std::get<2>(row) == "Product" && std::get<3>(row) == "sku") {
 			found = true;
 			break;
 		}
@@ -468,12 +468,12 @@ TEST_F(IndexManagerTest, HasIndex_EdgeCases) {
 	EXPECT_FALSE(indexManager->hasLabelIndex("edge"));
 
 	// Enable it
-	indexManager->createIndex("edge_idx", "edge", "", "");
+	(void) indexManager->createIndex("edge_idx", "edge", "", "");
 	EXPECT_TRUE(indexManager->hasLabelIndex("edge"));
 
 	// 2. Edge Property Index
 	EXPECT_FALSE(indexManager->hasPropertyIndex("edge", "weight"));
-	indexManager->createIndex("edge_prop_idx", "edge", "R", "weight");
+	(void) indexManager->createIndex("edge_prop_idx", "edge", "R", "weight");
 	EXPECT_TRUE(indexManager->hasPropertyIndex("edge", "weight"));
 
 	// 3. Invalid Entity Types (Coverage for "return false" at end of function)
@@ -492,8 +492,8 @@ TEST_F(IndexManagerTest, ExplicitStorageFlushCall) {
 
 TEST_F(IndexManagerTest, EnsureMetadata_CreatedOnInitialize) {
 	// 1. Enable indexes
-	indexManager->createIndex("node_label_idx", "node", "", "");
-	indexManager->createIndex("edge_label_idx", "edge", "", "");
+	(void) indexManager->createIndex("node_label_idx", "node", "", "");
+	(void) indexManager->createIndex("edge_label_idx", "edge", "", "");
 
 	// 2. Manually delete metadata from SystemState to force ensureMetadata to run
 	auto sysState = fileStorage->getSystemStateManager();
