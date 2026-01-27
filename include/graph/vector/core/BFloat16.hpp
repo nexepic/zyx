@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstring>
 #include <vector>
 
 namespace graph::vector {
