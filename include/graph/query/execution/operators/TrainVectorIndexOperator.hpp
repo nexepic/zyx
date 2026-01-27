@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <chrono>
 #include "graph/log/Log.hpp"
 #include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
