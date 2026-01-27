@@ -20,7 +20,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <unordered_map>
 #include "graph/core/PropertyTypes.hpp"
 
 namespace graph::vector {
@@ -38,15 +40,9 @@ namespace graph::vector {
 		bool isTrained = false;
 
 		std::unordered_map<std::string, PropertyValue> toProperties() const {
-			return {
-	                {"dim", dimension},
-					{"metric", metricType},
-					{"pq_m", pqSubspaces},
-					{"map_root", mappingIndexId},
-					{"entry", entryPointNodeId},
-					{"cb_key", codebookKey},
-					{"trained", isTrained}
-			};
+			return {{"dim", dimension},			  {"metric", metricType},	   {"pq_m", pqSubspaces},
+					{"map_root", mappingIndexId}, {"entry", entryPointNodeId}, {"cb_key", codebookKey},
+					{"trained", isTrained}};
 		}
 
 		static VectorIndexConfig fromProperties(const std::unordered_map<std::string, PropertyValue> &props) {

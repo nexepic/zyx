@@ -20,72 +20,70 @@
 
 #pragma once
 
-#include "graph/vector/core/VectorMetric.hpp"
+#include <cstdint>
+#include <memory>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 namespace graph::vector {
-    class NativeProductQuantizer;
-    class VectorIndexRegistry;
+	class NativeProductQuantizer;
+	class VectorIndexRegistry;
 
-    struct DiskANNConfig {
-        uint32_t dim;
-        uint32_t beamWidth = 100;
-        uint32_t maxDegree = 64;
-        float alpha = 1.2f;
+	struct DiskANNConfig {
+		uint32_t dim;
+		uint32_t beamWidth = 100;
+		uint32_t maxDegree = 64;
+		float alpha = 1.2f;
 
-        // Threshold to trigger auto-training
-        size_t autoTrainThreshold = 2000;
-    	std::string metric = "L2";
-    };
+		// Threshold to trigger auto-training
+		size_t autoTrainThreshold = 2000;
+		std::string metric = "L2";
+	};
 
-    class DiskANNIndex {
-    public:
-        DiskANNIndex(std::shared_ptr<VectorIndexRegistry> registry, const DiskANNConfig &config);
+	class DiskANNIndex {
+	public:
+		DiskANNIndex(std::shared_ptr<VectorIndexRegistry> registry, const DiskANNConfig &config);
 
-        // Core Operations
-        void insert(int64_t nodeId, const std::vector<float>& vec);
-        std::vector<std::pair<int64_t, float>> search(const std::vector<float>& query, size_t k) const;
+		// Core Operations
+		void insert(int64_t nodeId, const std::vector<float> &vec);
+		std::vector<std::pair<int64_t, float>> search(const std::vector<float> &query, size_t k) const;
 
-        // Training
-        void train(const std::vector<std::vector<float>>& samples);
-        bool isPQTrained() const;
-        size_t size() const; // Helper to check current node count
+		// Training
+		void train(const std::vector<std::vector<float>> &samples);
+		bool isPQTrained() const;
+		size_t size() const; // Helper to check current node count
 
-    	void remove(int64_t nodeId);
+		void remove(int64_t nodeId);
 
-        // Sampling for training
-        std::vector<std::vector<float>> sampleVectors(size_t n) const;
+		// Sampling for training
+		std::vector<std::vector<float>> sampleVectors(size_t n) const;
 
-    private:
-        std::shared_ptr<VectorIndexRegistry> registry_;
-        DiskANNConfig config_;
-        std::unique_ptr<NativeProductQuantizer> quantizer_;
+	private:
+		std::shared_ptr<VectorIndexRegistry> registry_;
+		DiskANNConfig config_;
+		std::unique_ptr<NativeProductQuantizer> quantizer_;
 
-        // Cache node count to avoid expensive B-Tree scans
-        mutable size_t cachedCount_ = 0;
+		// Cache node count to avoid expensive B-Tree scans
+		mutable size_t cachedCount_ = 0;
 
-        // --- Distance Calculation ---
+		// --- Distance Calculation ---
 
-        // Unified distance calculator: automatically chooses PQ or Raw
-        float computeDistance(const std::vector<float>& query,
-                              const std::vector<float>& pqTable,
-                              int64_t targetId) const;
+		// Unified distance calculator: automatically chooses PQ or Raw
+		float computeDistance(const std::vector<float> &query, const std::vector<float> &pqTable,
+							  int64_t targetId) const;
 
-        float computeDistance(const std::vector<float>& nodeVec,
-                              int64_t targetId) const;
+		float computeDistance(const std::vector<float> &nodeVec, int64_t targetId) const;
 
-        float distRaw(const std::vector<float>& query, int64_t targetId) const;
-        static float distRaw(const std::vector<float>& vecA, const std::vector<float>& vecB);
-        float distPQ(const std::vector<float>& pqTable, int64_t targetId) const;
+		float distRaw(const std::vector<float> &query, int64_t targetId) const;
+		static float distRaw(const std::vector<float> &vecA, const std::vector<float> &vecB);
+		float distPQ(const std::vector<float> &pqTable, int64_t targetId) const;
 
-        // --- Graph Algorithms ---
+		// --- Graph Algorithms ---
 
-        std::vector<std::pair<int64_t, float>> greedySearch(
-            const std::vector<float>& query,
-            int64_t startNode,
-            size_t beamWidth,
-            const std::vector<float>& pqTable) const;
+		std::vector<std::pair<int64_t, float>> greedySearch(const std::vector<float> &query, int64_t startNode,
+															size_t beamWidth, const std::vector<float> &pqTable) const;
 
-        void prune(int64_t nodeId, std::vector<int64_t>& candidates) const;
-    };
+		void prune(int64_t nodeId, std::vector<int64_t> &candidates) const;
+	};
 } // namespace graph::vector
