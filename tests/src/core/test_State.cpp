@@ -18,6 +18,7 @@
  * limitations under the License.
  **/
 
+#include <cstring>
 #include <gtest/gtest.h>
 #include <sstream>
 #include "graph/core/State.hpp"

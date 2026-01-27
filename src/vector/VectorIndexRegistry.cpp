@@ -201,12 +201,13 @@ namespace graph::vector {
 		return res;
 	}
 
-	std::vector<int64_t> VectorIndexRegistry::getAllNodeIds(size_t limit) {
-		if (config_.mappingIndexId == 0) return {}; // Safety check
+	std::vector<int64_t> VectorIndexRegistry::getAllNodeIds(size_t limit) const {
+		if (config_.mappingIndexId == 0)
+			return {}; // Safety check
 		auto keys = mappingTree_->scanKeys(config_.mappingIndexId, limit);
 		std::vector<int64_t> nodeIds;
 		nodeIds.reserve(keys.size());
-		for(const auto& k : keys) {
+		for (const auto &k: keys) {
 			if (k.getType() == PropertyType::INTEGER) {
 				nodeIds.push_back(std::get<int64_t>(k.getVariant()));
 			}

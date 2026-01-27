@@ -54,7 +54,7 @@ namespace graph::vector {
 		bool isPQTrained() const;
 		size_t size() const; // Helper to check current node count
 
-		void remove(int64_t nodeId);
+		void remove(int64_t nodeId) const;
 
 		// Sampling for training
 		std::vector<std::vector<float>> sampleVectors(size_t n) const;

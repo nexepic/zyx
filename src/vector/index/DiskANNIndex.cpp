@@ -367,7 +367,7 @@ namespace graph::vector {
 		return NativeProductQuantizer::computeDistance(codes, pqTable, M, K);
 	}
 
-	void DiskANNIndex::remove(int64_t nodeId) {
+	void DiskANNIndex::remove(int64_t nodeId) const {
 		// Logical deletion: Remove from Registry Mapping
 		// This effectively makes getBlobPtrs(nodeId) return {0,0,0}
 		registry_->setBlobPtrs(nodeId, {0, 0, 0});

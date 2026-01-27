@@ -81,7 +81,7 @@ namespace graph::vector {
 		 * Used for sampling training data.
 		 * @param limit Max number of IDs to return.
 		 */
-		std::vector<int64_t> getAllNodeIds(size_t limit);
+		std::vector<int64_t> getAllNodeIds(size_t limit) const;
 
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
