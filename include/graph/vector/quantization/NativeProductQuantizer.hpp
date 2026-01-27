@@ -21,7 +21,6 @@
 #pragma once
 
 #include <memory>
-#include <simsimd/simsimd.h>
 #include <vector>
 #include "KMeans.hpp"
 #include "graph/utils/Serializer.hpp"
@@ -85,10 +84,7 @@ namespace graph::vector {
 				const float *subVecPtr = vec.data() + offset;
 
 				for (size_t c = 0; c < numCentroids_; ++c) {
-					// OPTIMIZATION: Use SimSIMD
-					simsimd_distance_t d;
-					simsimd_l2sq_f32(subVecPtr, codebooks_[m][c].data(), static_cast<simsimd_size_t>(subDim_), &d);
-					float dist = static_cast<float>(d);
+					float dist = VectorMetric::computeL2Sqr(subVecPtr, codebooks_[m][c].data(), subDim_);
 
 					if (dist < min_dist) {
 						min_dist = dist;
@@ -108,10 +104,8 @@ namespace graph::vector {
 				const float *querySubPtr = query.data() + offset;
 
 				for (size_t c = 0; c < numCentroids_; ++c) {
-					// OPTIMIZATION: Use SimSIMD
-					simsimd_distance_t d;
-					simsimd_l2sq_f32(querySubPtr, codebooks_[m][c].data(), static_cast<simsimd_size_t>(subDim_), &d);
-					table[m * numCentroids_ + c] = static_cast<float>(d);
+					float dist = VectorMetric::computeL2Sqr(querySubPtr, codebooks_[m][c].data(), subDim_);
+					table[m * numCentroids_ + c] = dist;
 				}
 			}
 			return table;

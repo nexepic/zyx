@@ -330,3 +330,53 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
 	auto resLast = indexManager->findNodeIdsByProperty("bulk_prop", 1050);
 	EXPECT_EQ(resLast.size(), 1UL);
 }
+
+TEST_F(IndexBuilderTest, ProcessBatch_SkipInactive) {
+	// 1. Create a node and delete it immediately
+	int64_t lbl = dataManager->getOrCreateLabelId("SkipMe");
+	graph::Node n(1, lbl);
+	dataManager->addNode(n);
+	dataManager->deleteNode(n); // Mark inactive
+
+	fileStorage->flush();
+
+	// 2. Run Builder
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	(void) indexBuilder->buildNodeLabelIndex();
+
+	// 3. Verify NOT indexed
+	auto res = indexManager->findNodeIdsByLabel("SkipMe");
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexBuilderTest, ProcessBatch_SkipNoLabel) {
+	// Node with ID but LabelID=0
+	graph::Node n(2, 0);
+	dataManager->addNode(n);
+	fileStorage->flush();
+
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	(void) indexBuilder->buildNodeLabelIndex();
+
+	// Hard to verify "nothing happened" other than no crash
+	SUCCEED();
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
+	// Cover the branch `if (propertyKey.empty())` -> else
+	graph::Node n(1, dataManager->getOrCreateLabelId("A"));
+	n.addProperty("target", 100);
+	n.addProperty("ignore", 200);
+	dataManager->addNode(n);
+	fileStorage->flush();
+
+	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("target");
+	(void) indexBuilder->buildNodePropertyIndex("target");
+
+	// Verify target indexed
+	EXPECT_EQ(indexManager->findNodeIdsByProperty("target", 100).size(), 1UL);
+
+	// Verify ignore NOT indexed (by checking property index for it, which shouldn't exist or be empty)
+	// Note: Since we didn't create index for "ignore", finding it returns empty anyway.
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("ignore", 200).empty());
+}

@@ -24,41 +24,68 @@
 #include <unordered_set>
 
 namespace graph::vector {
-	class NativeProductQuantizer;
-	class VectorIndexRegistry;
+    class NativeProductQuantizer;
+    class VectorIndexRegistry;
 
-	struct DiskANNConfig {
-		uint32_t dim;
-		uint32_t beamWidth = 100;
-		uint32_t maxDegree = 64;
-		float alpha = 1.2f;
-	};
+    struct DiskANNConfig {
+        uint32_t dim;
+        uint32_t beamWidth = 100;
+        uint32_t maxDegree = 64;
+        float alpha = 1.2f;
 
-	class DiskANNIndex {
-	public:
-		DiskANNIndex(std::shared_ptr<VectorIndexRegistry> registry, DiskANNConfig config);
+        // Threshold to trigger auto-training
+        size_t autoTrainThreshold = 2000;
+    	std::string metric = "L2";
+    };
 
-		void insert(int64_t nodeId, const std::vector<float>& vec) const;
-		std::vector<std::pair<int64_t, float>> search(const std::vector<float>& query, size_t k) const;
+    class DiskANNIndex {
+    public:
+        DiskANNIndex(std::shared_ptr<VectorIndexRegistry> registry, const DiskANNConfig &config);
 
-		// Train PQ model with sample data and save to registry
-		void train(const std::vector<std::vector<float>>& samples);
+        // Core Operations
+        void insert(int64_t nodeId, const std::vector<float>& vec);
+        std::vector<std::pair<int64_t, float>> search(const std::vector<float>& query, size_t k) const;
 
-	private:
-		std::shared_ptr<VectorIndexRegistry> registry_;
-		DiskANNConfig config_;
-		std::unique_ptr<NativeProductQuantizer> quantizer_;
+        // Training
+        void train(const std::vector<std::vector<float>>& samples);
+        bool isPQTrained() const;
+        size_t size() const; // Helper to check current node count
 
-		std::vector<std::pair<int64_t, float>> greedySearch(
-			const std::vector<float>& query,
-			int64_t startNode,
-			size_t beamWidth,
-			const std::vector<float>& pqTable) const;
+    	void remove(int64_t nodeId);
 
-		void prune(int64_t nodeId, std::vector<int64_t>& candidates) const;
+        // Sampling for training
+        std::vector<std::vector<float>> sampleVectors(size_t n) const;
 
-		float distRaw(const std::vector<float>& query, int64_t targetId) const;
-		static float distRaw(const std::vector<float>& vecA, const std::vector<float>& vecB);
-		float distPQ(const std::vector<float>& pqTable, int64_t targetId) const;
-	};
-}
+    private:
+        std::shared_ptr<VectorIndexRegistry> registry_;
+        DiskANNConfig config_;
+        std::unique_ptr<NativeProductQuantizer> quantizer_;
+
+        // Cache node count to avoid expensive B-Tree scans
+        mutable size_t cachedCount_ = 0;
+
+        // --- Distance Calculation ---
+
+        // Unified distance calculator: automatically chooses PQ or Raw
+        float computeDistance(const std::vector<float>& query,
+                              const std::vector<float>& pqTable,
+                              int64_t targetId) const;
+
+        float computeDistance(const std::vector<float>& nodeVec,
+                              int64_t targetId) const;
+
+        float distRaw(const std::vector<float>& query, int64_t targetId) const;
+        static float distRaw(const std::vector<float>& vecA, const std::vector<float>& vecB);
+        float distPQ(const std::vector<float>& pqTable, int64_t targetId) const;
+
+        // --- Graph Algorithms ---
+
+        std::vector<std::pair<int64_t, float>> greedySearch(
+            const std::vector<float>& query,
+            int64_t startNode,
+            size_t beamWidth,
+            const std::vector<float>& pqTable) const;
+
+        void prune(int64_t nodeId, std::vector<int64_t>& candidates) const;
+    };
+} // namespace graph::vector

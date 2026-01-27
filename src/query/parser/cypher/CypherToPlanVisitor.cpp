@@ -528,33 +528,62 @@ namespace graph::parser::cypher {
 		if (ctx->explicitProcedureInvocation()) {
 			auto invoc = ctx->explicitProcedureInvocation();
 			std::string procName = invoc->procedureName()->getText();
-			std::vector<graph::PropertyValue> args;
+			std::vector<PropertyValue> args;
 
-			if (invoc->expression().empty() == false) {
-				for (auto expr: invoc->expression()) {
-					// Quick parse logic
-					std::string txt = expr->getText();
-					if (txt.front() == '\'' || txt.front() == '"') {
-						args.emplace_back(txt.substr(1, txt.length() - 2));
-					} else if (txt == "TRUE" || txt == "true") {
-						args.emplace_back(true);
-					} else if (txt == "FALSE" || txt == "false") {
-						args.emplace_back(false);
-					} else {
-						try {
-							if (txt.find('.') != std::string::npos)
-								args.emplace_back(std::stod(txt));
-							else
-								args.emplace_back(std::stoll(txt));
-						} catch (...) {
-							args.emplace_back(txt);
-						}
-					}
+			if (!invoc->expression().empty()) {
+				for (auto expr : invoc->expression()) {
+					args.push_back(evaluateExpression(expr));
 				}
 			}
 			auto op = planner_->callProcedureOp(procName, args);
 			chainOperator(std::move(op));
 		}
+		return std::any();
+	}
+
+	std::any CypherToPlanVisitor::visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) {
+		auto invoc = ctx->explicitProcedureInvocation();
+		std::string procName = invoc->procedureName()->getText();
+		std::vector<graph::PropertyValue> args;
+
+		// Parse Arguments
+		if (invoc->expression().empty() == false) {
+			for (auto expr : invoc->expression()) {
+				// Reuse evaluateExpression for robust parsing (handles Lists, etc.)
+				args.push_back(evaluateExpression(expr));
+			}
+		}
+
+		// Create Procedure Operator
+		auto op = planner_->callProcedureOp(procName, args);
+		chainOperator(std::move(op));
+
+		// Handle YIELD
+		if (ctx->K_YIELD() && ctx->yieldItems()) {
+			std::vector<query::execution::operators::ProjectItem> projItems;
+			auto items = ctx->yieldItems();
+
+			for (auto item : items->yieldItem()) {
+				// yieldItem : ( procedureResultField K_AS )? variable
+
+				std::string originalField;
+				std::string outputVar = extractVariable(item->variable());
+
+				if (item->procedureResultField()) {
+					originalField = item->procedureResultField()->getText();
+				} else {
+					// If not renamed (YIELD node), implies field name is same as variable name
+					originalField = outputVar;
+				}
+
+				projItems.push_back({originalField, outputVar});
+			}
+
+			if (!projItems.empty()) {
+				rootOp_ = planner_->projectOp(std::move(rootOp_), projItems);
+			}
+		}
+
 		return std::any();
 	}
 
@@ -634,21 +663,24 @@ namespace graph::parser::cypher {
 
 		// Parse OPTIONS
 		if (ctx->K_OPTIONS() && ctx->mapLiteral()) {
-			auto props = extractProperties(reinterpret_cast<CypherParser::PropertiesContext*>(ctx));
+			auto props = extractProperties(reinterpret_cast<CypherParser::PropertiesContext *>(ctx));
 			// Note: Reuse existing extraction logic, but we need to handle keys manually or cast context
 			// Safer manual extraction:
 			auto mapLit = ctx->mapLiteral();
 			auto keys = mapLit->propertyKeyName();
 			auto exprs = mapLit->expression();
-			for(size_t i=0; i<keys.size(); ++i) {
+			for (size_t i = 0; i < keys.size(); ++i) {
 				std::string k = keys[i]->getText();
 				std::string v = exprs[i]->getText();
-				if (k == "dimension" || k == "dim") dim = std::stoi(v);
-				else if (k == "metric") metric = v.substr(1, v.size()-2); // remove quotes
+				if (k == "dimension" || k == "dim")
+					dim = std::stoi(v);
+				else if (k == "metric")
+					metric = v.substr(1, v.size() - 2); // remove quotes
 			}
 		}
 
-		if (dim == 0) throw std::runtime_error("Vector Index requires 'dimension'");
+		if (dim == 0)
+			throw std::runtime_error("Vector Index requires 'dimension'");
 
 		// Use a new planner method
 		chainOperator(planner_->createVectorIndexOp(name, label, prop, dim, metric));
@@ -979,25 +1011,8 @@ namespace graph::parser::cypher {
 
 		for (size_t i = 0; i < keys.size(); ++i) {
 			std::string key = keys[i]->getText();
-			std::string valStr = exprs[i]->getText();
 
-			// Simplified parsing
-			if (valStr.front() == '\'' || valStr.front() == '"') {
-				props.emplace(key, valStr.substr(1, valStr.length() - 2));
-			} else if (valStr == "TRUE" || valStr == "true") {
-				props.emplace(key, true);
-			} else if (valStr == "FALSE" || valStr == "false") {
-				props.emplace(key, false);
-			} else {
-				try {
-					if (valStr.find('.') != std::string::npos)
-						props.emplace(key, std::stod(valStr));
-					else
-						props.emplace(key, std::stoll(valStr));
-				} catch (...) {
-					props.emplace(key, valStr);
-				}
-			}
+			props[key] = evaluateExpression(exprs[i]);
 		}
 		return props;
 	}
@@ -1102,6 +1117,83 @@ namespace graph::parser::cypher {
 		}
 
 		return results;
+	}
+
+	PropertyValue CypherToPlanVisitor::evaluateExpression(CypherParser::ExpressionContext *ctx) {
+		if (!ctx)
+			return PropertyValue();
+
+		// 1. Traverse down: Expression -> Or -> Xor -> And -> Not -> Comparison -> Arithmetic -> Unary -> Atom
+		// This is tedious but necessary with the full grammar structure.
+		// Or use a recursive visitor pattern if you implemented one.
+		// For now, let's fast-path to the Atom if it's a simple literal/list.
+
+		auto getAtom = [](CypherParser::ExpressionContext *e) -> CypherParser::AtomContext * {
+			if (!e)
+				return nullptr;
+			// Chain: or -> xor -> and -> not -> comparison -> arithmetic -> unary -> atom
+			// Checking for nulls at each step
+			auto or_ = e->orExpression();
+			if (!or_)
+				return nullptr;
+			auto xor_ = or_->xorExpression(0);
+			if (!xor_)
+				return nullptr;
+			auto and_ = xor_->andExpression(0);
+			if (!and_)
+				return nullptr;
+			auto not_ = and_->notExpression(0);
+			if (!not_)
+				return nullptr;
+			auto comp = not_->comparisonExpression();
+			if (!comp)
+				return nullptr;
+			auto arith = comp->arithmeticExpression(0);
+			if (!arith)
+				return nullptr;
+			auto unary = arith->unaryExpression(0);
+			if (!unary)
+				return nullptr;
+			return unary->atom();
+		};
+
+		auto atom = getAtom(ctx);
+		if (!atom)
+			return PropertyValue(); // Complexity not supported here
+
+		// 2. Check Atom Type
+
+		// Case A: Literal (String, Number, Bool, Null, Map)
+		if (atom->literal()) {
+			return parseValue(atom->literal());
+		}
+
+		// Case B: List Literal ([1, 2])
+		if (atom->listLiteral()) {
+			std::vector<float> vec;
+			for (auto itemExpr: atom->listLiteral()->expression()) {
+				// Recursively evaluate items
+				// For simple vectors, we expect numbers.
+				// Using getText() is a shortcut, but evaluating is safer.
+				PropertyValue itemVal = evaluateExpression(itemExpr);
+
+				// Convert to float
+				if (itemVal.getType() == PropertyType::INTEGER) {
+					vec.push_back(static_cast<float>(std::get<int64_t>(itemVal.getVariant())));
+				} else if (itemVal.getType() == PropertyType::DOUBLE) {
+					vec.push_back(static_cast<float>(std::get<double>(itemVal.getVariant())));
+				} else {
+					// Try parsing string if text
+					try {
+						vec.push_back(std::stof(itemVal.toString()));
+					} catch (...) {
+					}
+				}
+			}
+			return PropertyValue(std::move(vec));
+		}
+
+		return PropertyValue();
 	}
 
 } // namespace graph::parser::cypher

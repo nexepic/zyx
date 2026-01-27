@@ -217,3 +217,34 @@ TEST_F(LabelIndexTest, AddNodesBatch_TriggerRootSplit) {
 	auto results = labelIndex->findNodes("LargeGroup");
 	EXPECT_EQ(results.size(), 2000UL);
 }
+
+TEST_F(LabelIndexTest, Initialize_DisabledByDefault) {
+	// Manually create a fresh index that hasn't been enabled
+	auto tempIndex = std::make_shared<graph::query::indexes::LabelIndex>(
+			dataManager, fileStorage->getSystemStateManager(), 100, "temp.idx");
+
+	// Should be empty/disabled
+	EXPECT_TRUE(tempIndex->isEmpty());
+}
+
+TEST_F(LabelIndexTest, AddNodesBatch_EmptyInput) {
+	labelIndex->createIndex();
+	std::unordered_map<std::string, std::vector<int64_t>> emptyBatch;
+
+	// Should do nothing, return immediately
+	labelIndex->addNodesBatch(emptyBatch);
+	EXPECT_TRUE(labelIndex->findNodes("Any").empty());
+}
+
+TEST_F(LabelIndexTest, HasLabel_EmptyRoot) {
+	// Ensure rootId is 0
+	labelIndex->clear();
+	EXPECT_FALSE(labelIndex->hasLabel(1, "Test"));
+}
+
+TEST_F(LabelIndexTest, RemoveNode_EmptyRoot) {
+	labelIndex->clear();
+	// Should simply return
+	labelIndex->removeNode(1, "Test");
+	SUCCEED();
+}

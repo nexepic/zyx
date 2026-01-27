@@ -20,21 +20,6 @@ boost_dep = dependency('boost', modules : ['filesystem', 'system'], static : tru
 cli11_dep = dependency('CLI11')
 antlr4_dep = dependency('antlr4-cppruntime', 'antlr4-runtime', required : true, static : true)
 
-# ==============================================================================
-# Vector Search Dependencies (SimSIMD via Subproject)
-# ==============================================================================
-# 1. Try to find system installed SimSIMD
-simsimd_dep = dependency('simsimd', required : false)
-
-# 2. If not found, use the subproject defined in subprojects/simsimd.wrap
-if not simsimd_dep.found()
-	# This downloads the code and uses the meson.build from packagefiles
-	simsimd_proj = subproject('simsimd')
-
-	# Extract the dependency object declared in packagefiles/simsimd/meson.build
-	simsimd_dep = simsimd_proj.get_variable('simsimd_dep')
-endif
-
 # Subdirectories
 subdir('src')
 subdir('apps/cli')

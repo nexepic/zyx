@@ -23,266 +23,317 @@
 #include <limits>
 #include <ranges>
 #include <stdexcept>
+#include "graph/log/Log.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
 #include "graph/vector/core/BFloat16.hpp"
 
 namespace graph::vector {
 
-	DiskANNIndex::DiskANNIndex(std::shared_ptr<VectorIndexRegistry> registry, DiskANNConfig config) :
+	DiskANNIndex::DiskANNIndex(std::shared_ptr<VectorIndexRegistry> registry, const DiskANNConfig &config) :
 		registry_(std::move(registry)), config_(config) {
 		// Load quantizer from storage on init
 		quantizer_ = registry_->loadQuantizer();
 	}
 
-	void DiskANNIndex::train(const std::vector<std::vector<float>> &samples) {
-		if (samples.empty())
-			return;
+	bool DiskANNIndex::isPQTrained() const {
+        return quantizer_ && quantizer_->isTrained();
+    }
 
-		// Auto-configure subspaces if not set
-		// Standard heuristic: 1 subspace per 8-16 dimensions
-		size_t subDim = 12;
-		size_t M = config_.dim / subDim;
-		if (M == 0)
-			M = 1; // Fallback for low dim
+    size_t DiskANNIndex::size() const {
+        return cachedCount_;
+    }
 
-		quantizer_ = std::make_unique<NativeProductQuantizer>(config_.dim, M);
-		quantizer_->train(samples);
+    void DiskANNIndex::insert(int64_t nodeId, const std::vector<float> &vec) {
+        // --- 1. Auto-Training Logic ---
+        // If not trained and threshold reached, trigger training synchronously.
+        if (!isPQTrained()) {
+            cachedCount_++; // Increment count
+            if (cachedCount_ == config_.autoTrainThreshold) {
+                log::Log::info("Vector Index Auto-Training Triggered (Count: {})", cachedCount_);
+                auto samples = sampleVectors(config_.autoTrainThreshold);
+                // Add current vector to samples to ensure sufficiency
+                samples.push_back(vec);
+                train(samples);
+            }
+        }
 
-		// Persist trained model
-		registry_->saveQuantizer(*quantizer_);
-	}
+        // --- 2. Save Data ---
+        // Always save Raw Vector (Ground Truth)
+        const auto rawBlob = registry_->saveRawVector(toBFloat16(vec));
 
-	void DiskANNIndex::insert(int64_t nodeId, const std::vector<float> &vec) const {
-		if (!quantizer_ || !quantizer_->isTrained()) {
-			throw std::runtime_error("Index not trained. Call train() first.");
-		}
+        // Conditionally save PQ Codes
+        int64_t pqBlob = 0;
+        if (isPQTrained()) {
+            pqBlob = registry_->savePQCodes(quantizer_->encode(vec));
+        }
 
-		// 1. Prepare Data Blobs
-		const auto rawBlob = registry_->saveRawVector(toBFloat16(vec));
-		const auto pqBlob = registry_->savePQCodes(quantizer_->encode(vec));
+        // Update Registry Mapping
+        VectorBlobPtrs ptrs;
+        ptrs.rawBlob = rawBlob;
+        ptrs.pqBlob = pqBlob;
+        ptrs.adjBlob = 0;
+        registry_->setBlobPtrs(nodeId, ptrs);
 
-		// Update Mapping immediately so distRaw works during pruning
-		VectorBlobPtrs ptrs;
-		ptrs.rawBlob = rawBlob;
-		ptrs.pqBlob = pqBlob;
-		ptrs.adjBlob = 0; // Empty initially
-		registry_->setBlobPtrs(nodeId, ptrs);
+        const int64_t entryPoint = registry_->getConfig().entryPointNodeId;
 
-		const int64_t entryPoint = registry_->getConfig().entryPointNodeId;
+        // --- 3. Graph Construction ---
 
-		// 2. Init Graph (First Node)
-		if (entryPoint == 0) {
-			registry_->updateEntryPoint(nodeId);
-			// Save empty adjacency list
-			int64_t adjBlob = registry_->saveAdjacency({});
-			ptrs.adjBlob = adjBlob;
-			registry_->setBlobPtrs(nodeId, ptrs);
-			return;
-		}
+        // Case A: First Node
+        if (entryPoint == 0) {
+            registry_->updateEntryPoint(nodeId);
+            ptrs.adjBlob = registry_->saveAdjacency({});
+            registry_->setBlobPtrs(nodeId, ptrs);
+            return;
+        }
 
-		// 3. Greedy Search to find candidates
-		std::vector<float> pqTable = quantizer_->computeDistanceTable(vec);
-		auto searchRes = greedySearch(vec, entryPoint, config_.beamWidth, pqTable);
+        // Case B: Connect to Graph
+        std::vector<float> pqTable;
+        if (isPQTrained()) {
+            pqTable = quantizer_->computeDistanceTable(vec);
+        }
 
-		std::vector<int64_t> candidates;
-		candidates.reserve(searchRes.size());
-		for (auto &key: searchRes | std::views::keys)
-			candidates.push_back(key);
+        // Search for nearest neighbors
+        auto searchRes = greedySearch(vec, entryPoint, config_.beamWidth, pqTable);
 
-		// 4. Prune & Save Forward Edges
-		prune(nodeId, candidates);
-		int64_t adjBlob = registry_->saveAdjacency(candidates);
+        std::vector<int64_t> candidates;
+        candidates.reserve(searchRes.size());
+        for (auto &key: searchRes | std::views::keys)
+            candidates.push_back(key);
 
-		// Final Mapping Update
-		ptrs.adjBlob = adjBlob;
-		registry_->setBlobPtrs(nodeId, ptrs);
+        // Prune and link
+        prune(nodeId, candidates);
 
-		// 5. Add Back-Links (Bidirectional connection)
-		for (int64_t neighbor: candidates) {
-			auto nPtrs = registry_->getBlobPtrs(neighbor);
-			// In a valid graph, nPtrs.adjBlob should not be 0, but check for safety
-			if (nPtrs.adjBlob == 0)
-				continue;
+        // Save Adjacency
+        ptrs.adjBlob = registry_->saveAdjacency(candidates);
+        registry_->setBlobPtrs(nodeId, ptrs);
 
-			auto nList = registry_->loadAdjacency(nPtrs.adjBlob);
+        // Add Back-Links
+        for (int64_t neighbor: candidates) {
+            auto nPtrs = registry_->getBlobPtrs(neighbor);
+            if (nPtrs.adjBlob == 0) continue;
 
-			// Add self to neighbor's list
-			// Check duplicates first to be safe
-			bool exists = false;
-			for (auto id: nList)
-				if (id == nodeId) {
-					exists = true;
-					break;
-				}
+            auto nList = registry_->loadAdjacency(nPtrs.adjBlob);
+            bool exists = false;
+            for(auto id : nList) if(id == nodeId) { exists = true; break; }
 
-			if (!exists) {
-				nList.push_back(nodeId);
+            if (!exists) {
+                nList.push_back(nodeId);
+                // Robust Prune again if overflow
+                if (nList.size() > config_.maxDegree * 1.2) {
+                    prune(neighbor, nList);
+                }
+                nPtrs.adjBlob = registry_->saveAdjacency(nList);
+                registry_->setBlobPtrs(neighbor, nPtrs);
+            }
+        }
+    }
 
-				// Only prune if exceeding capacity to minimize IO
-				if (nList.size() > config_.maxDegree * 1.2) { // Allow slight overflow before prune
-					prune(neighbor, nList);
-				}
+    std::vector<std::pair<int64_t, float>> DiskANNIndex::search(const std::vector<float> &query, size_t k) const {
+        int64_t entryPoint = registry_->getConfig().entryPointNodeId;
+        if (entryPoint == 0) return {};
 
-				int64_t newAdj = registry_->saveAdjacency(nList);
-				nPtrs.adjBlob = newAdj;
-				registry_->setBlobPtrs(neighbor, nPtrs);
-			}
-		}
-	}
+        std::vector<float> pqTable;
+        if (isPQTrained()) {
+            pqTable = quantizer_->computeDistanceTable(query);
+        }
 
-	std::vector<std::pair<int64_t, float>> DiskANNIndex::search(const std::vector<float> &query, size_t k) const {
-		int64_t entryPoint = registry_->getConfig().entryPointNodeId;
-		if (entryPoint == 0)
-			return {};
+        // 1. Navigation (Hybrid Mode)
+        auto candidates = greedySearch(query, entryPoint, std::max(config_.beamWidth, static_cast<uint32_t>(k) * 2), pqTable);
 
-		// 1. Coarse Search (PQ-Accelerated)
-		std::vector<float> pqTable;
-		if (quantizer_) {
-			pqTable = quantizer_->computeDistanceTable(query);
-		}
-
-		// Search with larger beam width for recall
-		auto candidates =
-				greedySearch(query, entryPoint, std::max(config_.beamWidth, static_cast<uint32_t>(k) * 2), pqTable);
-
-		// 2. Re-rank (Exact BFloat16 via SimSIMD)
+        // 2. Re-ranking (Always Exact)
 		std::vector<std::pair<int64_t, float>> refined;
 		refined.reserve(candidates.size());
 
 		for (auto &id: candidates | std::views::keys) {
-			refined.push_back({id, distRaw(query, id)});
+			float d = distRaw(query, id);
+			// Filter out removed nodes (Infinite distance)
+			if (d < std::numeric_limits<float>::max()) {
+				refined.push_back({id, d});
+			}
 		}
 
 		std::ranges::sort(refined, [](const auto &a, const auto &b) {
-			return a.second < b.second; // Ascending distance
+			return a.second < b.second;
 		});
 
-		if (refined.size() > k)
-			refined.resize(k);
+		if (refined.size() > k) refined.resize(k);
 		return refined;
-	}
+    }
 
-	std::vector<std::pair<int64_t, float>> DiskANNIndex::greedySearch(const std::vector<float> &query,
-																	  int64_t startNode, size_t beamWidth,
-																	  const std::vector<float> &pqTable) const {
-		std::unordered_set<int64_t> visited;
-		// Min-heap <dist, id> to keep top candidates
-		std::priority_queue<std::pair<float, int64_t>, std::vector<std::pair<float, int64_t>>, std::greater<>> queue;
-		std::vector<std::pair<int64_t, float>> results;
+    // --- Sampling & Training ---
 
-		// Init distance
-		float startDist = (!pqTable.empty()) ? distPQ(pqTable, startNode) : distRaw(query, startNode);
+    std::vector<std::vector<float>> DiskANNIndex::sampleVectors(size_t n) const {
+        // Delegate sampling to Registry to avoid leaking B-Tree logic here.
+        // But since we don't want to overcomplicate Registry yet, we can iterate crudely here
+        // or add a method to Registry. Let's add `getAllNodeIds` to Registry.
 
-		queue.push({startDist, startNode});
-		visited.insert(startNode);
-		results.push_back({startNode, startDist});
+        std::vector<std::vector<float>> samples;
+        auto ids = registry_->getAllNodeIds(n * 2); // Get 2x candidates to be safe, or just N
 
-		while (!queue.empty()) {
-			auto [d, u] = queue.top();
-			queue.pop();
+        // Reservoir sampling or just take first N
+        size_t count = 0;
+        for (int64_t id : ids) {
+            if (count >= n) break;
 
-			// Load adjacency list
-			auto ptrs = registry_->getBlobPtrs(u);
-			if (ptrs.adjBlob == 0)
-				continue;
+            auto ptrs = registry_->getBlobPtrs(id);
+            if (ptrs.rawBlob != 0) {
+                auto raw = registry_->loadRawVector(ptrs.rawBlob);
+                samples.push_back(toFloat(raw));
+                count++;
+            }
+        }
+        return samples;
+    }
 
-			auto neighbors = registry_->loadAdjacency(ptrs.adjBlob);
+    void DiskANNIndex::train(const std::vector<std::vector<float>>& samples) {
+        if (samples.empty()) return;
 
-			for (int64_t v: neighbors) {
-				if (visited.contains(v))
-					continue;
-				visited.insert(v);
+        // Heuristic: M (subspaces) = dim / 8 (e.g. 768 -> 96 subspaces)
+        // Ensure sub-dim is small enough for efficient lookup tables
+        size_t subDim = 8;
+        size_t m = config_.dim / subDim;
+        if (m == 0) m = 1;
 
-				float dist = (!pqTable.empty()) ? distPQ(pqTable, v) : distRaw(query, v);
+        log::Log::info("Training PQ Model: Dim={}, Subspaces={}, Samples={}", config_.dim, m, samples.size());
 
-				results.push_back({v, dist});
-				queue.push({dist, v});
-			}
+        auto pq = std::make_unique<NativeProductQuantizer>(config_.dim, m);
+        pq->train(samples);
 
-			// Limit Queue size to avoid explosion (optional implementation detail)
-		}
+        registry_->saveQuantizer(*pq);
+        quantizer_ = std::move(pq);
 
-		// Sort and Top-K
-		std::ranges::sort(results, [](const auto &a, const auto &b) { return a.second < b.second; });
+        // Note: We do NOT update existing nodes here.
+        // Old nodes remain "Flat" (Raw-only). This is the "Hybrid" design.
+        // Only new nodes will get PQ blobs.
+    }
 
-		if (results.size() > beamWidth) {
-			results.resize(beamWidth);
-		}
+    // --- Unified Distance ---
 
-		return results;
-	}
+    float DiskANNIndex::computeDistance(const std::vector<float>& query,
+                                        const std::vector<float>& pqTable,
+                                        int64_t targetId) const {
+        // Hybrid Logic: Use PQ if available, else Raw
+        if (isPQTrained() && !pqTable.empty()) {
+            auto ptrs = registry_->getBlobPtrs(targetId);
+            if (ptrs.pqBlob != 0) {
+                return distPQ(pqTable, targetId);
+            }
+        }
+        return distRaw(query, targetId);
+    }
 
-	void DiskANNIndex::prune(int64_t nodeId, std::vector<int64_t> &candidates) const {
-		// Robust Prune (Vamana Algo 2)
+    float DiskANNIndex::computeDistance(const std::vector<float>& nodeVec, int64_t targetId) const {
+        // Overload for Pruning: Distance between Node A (in memory) and Node B (in storage)
+        // Currently we use Raw for pruning accuracy.
+        // Optimization: Could use PQ here too if pruning speed is bottleneck.
+        return distRaw(nodeVec, targetId);
+    }
 
-		const auto ptrs = registry_->getBlobPtrs(nodeId);
-		const auto nodeVecRaw = registry_->loadRawVector(ptrs.rawBlob);
-		if (nodeVecRaw.empty())
-			return;
+    // --- Graph Algo ---
 
-		// Convert BFloat16 back to float for calculation
-		// Fix: using explicit namespace or argument dependent lookup
-		std::vector<float> nodeVec = toFloat(nodeVecRaw);
+    std::vector<std::pair<int64_t, float>> DiskANNIndex::greedySearch(
+        const std::vector<float> &query,
+        int64_t startNode,
+        size_t beamWidth,
+        const std::vector<float> &pqTable) const {
 
-		// 1. Calculate distances to all candidates
-		std::vector<std::pair<int64_t, float>> candDists;
-		for (int64_t c: candidates) {
-			if (c == nodeId)
-				continue;
-			// Use the float-vector overload of distRaw
-			candDists.push_back({c, distRaw(nodeVec, c)});
-		}
+        std::unordered_set<int64_t> visited;
+        std::priority_queue<std::pair<float, int64_t>, std::vector<std::pair<float, int64_t>>, std::greater<>> queue;
+        std::vector<std::pair<int64_t, float>> results;
 
-		// 2. Sort by distance
-		std::ranges::sort(candDists, [](const auto &a, const auto &b) { return a.second < b.second; });
+        float startDist = computeDistance(query, pqTable, startNode);
+        queue.push({startDist, startNode});
+        visited.insert(startNode);
+        results.push_back({startNode, startDist});
 
-		std::vector<int64_t> result;
-		result.reserve(config_.maxDegree);
+        while (!queue.empty()) {
+            auto [d, u] = queue.top();
+            queue.pop();
 
-		// 3. Alpha Pruning
-		for (const auto &[candId, candDist]: candDists) {
-			if (result.size() >= config_.maxDegree)
-				break;
+            auto ptrs = registry_->getBlobPtrs(u);
+            if (ptrs.adjBlob == 0) continue;
 
-			bool occluded = false;
+            auto neighbors = registry_->loadAdjacency(ptrs.adjBlob);
+            for (int64_t v: neighbors) {
+                if (visited.contains(v)) continue;
+                visited.insert(v);
 
-			auto candPtrs = registry_->getBlobPtrs(candId);
-			auto candVecRaw = registry_->loadRawVector(candPtrs.rawBlob);
-			std::vector<float> candVec = toFloat(candVecRaw);
+                float dist = computeDistance(query, pqTable, v);
 
-			for (int64_t existingId: result) {
-				// distRaw overload for two vectors
-				float distP2C = distRaw(candVec, existingId);
+                results.push_back({v, dist});
+                queue.push({dist, v});
+            }
+        }
 
-				if (config_.alpha * distP2C <= candDist) {
-					occluded = true;
-					break;
-				}
-			}
+        std::ranges::sort(results, [](const auto &a, const auto &b) { return a.second < b.second; });
+        if (results.size() > beamWidth) results.resize(beamWidth);
+        return results;
+    }
 
-			if (!occluded) {
-				result.push_back(candId);
-			}
-		}
-		candidates = result;
-	}
+    void DiskANNIndex::prune(int64_t nodeId, std::vector<int64_t> &candidates) const {
+        // Load target node RAW vector for accurate pruning geometry
+        const auto ptrs = registry_->getBlobPtrs(nodeId);
+        if (ptrs.rawBlob == 0) return;
+
+        // This vector might be large, but needed for Alpha calculation
+        std::vector<float> nodeVec = toFloat(registry_->loadRawVector(ptrs.rawBlob));
+
+        // 1. Sort by distance
+        std::vector<std::pair<int64_t, float>> candDists;
+        for (int64_t c: candidates) {
+            if (c == nodeId) continue;
+            // Use specialized overload for (Vec vs ID)
+            candDists.push_back({c, computeDistance(nodeVec, c)});
+        }
+        std::ranges::sort(candDists, [](const auto &a, const auto &b) { return a.second < b.second; });
+
+        // 2. Alpha Pruning
+        std::vector<int64_t> result;
+        result.reserve(config_.maxDegree);
+
+        for (const auto &[candId, candDist]: candDists) {
+            if (result.size() >= config_.maxDegree) break;
+
+            bool occluded = false;
+            // We need distance between candidate (ID) and existing result (ID)
+            // Here we must load one of them. Loading Candidate is cheaper in loop?
+            // Actually, we can load Candidate Raw Vector once.
+
+            auto candPtrs = registry_->getBlobPtrs(candId);
+            std::vector<float> candVec = toFloat(registry_->loadRawVector(candPtrs.rawBlob));
+
+            for (int64_t existingId: result) {
+                // Here we calculate distance between two in-memory vectors
+                // Overload needed or manual calc
+                float distP2C = distRaw(candVec, toFloat(registry_->loadRawVector(registry_->getBlobPtrs(existingId).rawBlob)));
+                // Optimization: Cache existingId vectors in 'result' loop?
+                // For embedded, reading Blob Cache is fast.
+
+                if (config_.alpha * distP2C <= candDist) {
+                    occluded = true;
+                    break;
+                }
+            }
+            if (!occluded) result.push_back(candId);
+        }
+        candidates = result;
+    }
 
 	// --- Distance Helpers ---
 
 	float DiskANNIndex::distRaw(const std::vector<float> &query, int64_t targetId) const {
-		// Load BF16 from Blob storage
 		const auto ptrs = registry_->getBlobPtrs(targetId);
-		if (ptrs.rawBlob == 0)
-			return std::numeric_limits<float>::max();
-
+		if (ptrs.rawBlob == 0) return std::numeric_limits<float>::max();
 		auto target = registry_->loadRawVector(ptrs.rawBlob);
+
+		if (config_.metric == "IP" || config_.metric == "Cosine") {
+			return VectorMetric::computeIP(toBFloat16(query).data(), target.data(), target.size());
+		}
+		// Default L2
 		return VectorMetric::computeL2Sqr(query.data(), target.data(), target.size());
 	}
 
-	// This helper was missing/conflicted.
-	// It loads the targetId's vector and compares it against vecA (which is in memory)
 	float DiskANNIndex::distRaw(const std::vector<float> &vecA, const std::vector<float> &vecB) {
-		// Manual L2 for pruning (float vs float)
 		float d = 0;
 		for (size_t i = 0; i < vecA.size(); ++i) {
 			float diff = vecA[i] - vecB[i];
@@ -293,16 +344,18 @@ namespace graph::vector {
 
 	float DiskANNIndex::distPQ(const std::vector<float> &pqTable, int64_t targetId) const {
 		auto ptrs = registry_->getBlobPtrs(targetId);
-		if (ptrs.pqBlob == 0)
-			return std::numeric_limits<float>::max();
-
+		// computeDistance checks for 0, but safety here:
+		if (ptrs.pqBlob == 0) return std::numeric_limits<float>::max();
 		const auto codes = registry_->loadPQCodes(ptrs.pqBlob);
-		if (codes.empty())
-			return std::numeric_limits<float>::max();
-
 		const size_t M = codes.size();
 		const size_t K = pqTable.size() / M;
 		return NativeProductQuantizer::computeDistance(codes, pqTable, M, K);
+	}
+
+	void DiskANNIndex::remove(int64_t nodeId) {
+		// Logical deletion: Remove from Registry Mapping
+		// This effectively makes getBlobPtrs(nodeId) return {0,0,0}
+		registry_->setBlobPtrs(nodeId, {0,0,0});
 	}
 
 } // namespace graph::vector

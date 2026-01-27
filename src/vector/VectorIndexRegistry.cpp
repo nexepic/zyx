@@ -20,6 +20,7 @@
 
 #include "graph/vector/VectorIndexRegistry.hpp"
 #include "graph/storage/data/BlobManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 #include "graph/utils/Serializer.hpp"
 
@@ -35,7 +36,8 @@ namespace graph::vector {
 		loadConfig();
 
 		// 1001 is internal ID for Vector Mapping B+Tree
-		mappingTree_ = std::make_shared<query::indexes::IndexTreeManager>(dataManager_, 1001, PropertyType::INTEGER);
+		mappingTree_ = std::make_shared<query::indexes::IndexTreeManager>(
+				dataManager_, query::indexes::IndexTypes::VECTOR_MAPPING_INDEX, PropertyType::INTEGER);
 
 		if (config_.mappingIndexId == 0) {
 			config_.mappingIndexId = mappingTree_->initialize();
@@ -197,5 +199,18 @@ namespace graph::vector {
 		for (uint32_t i = 0; i < count; ++i)
 			res.push_back(utils::Serializer::readPOD<int64_t>(iss));
 		return res;
+	}
+
+	std::vector<int64_t> VectorIndexRegistry::getAllNodeIds(size_t limit) {
+		if (config_.mappingIndexId == 0) return {}; // Safety check
+		auto keys = mappingTree_->scanKeys(config_.mappingIndexId, limit);
+		std::vector<int64_t> nodeIds;
+		nodeIds.reserve(keys.size());
+		for(const auto& k : keys) {
+			if (k.getType() == PropertyType::INTEGER) {
+				nodeIds.push_back(std::get<int64_t>(k.getVariant()));
+			}
+		}
+		return nodeIds;
 	}
 } // namespace graph::vector

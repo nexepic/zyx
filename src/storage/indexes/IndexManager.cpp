@@ -292,7 +292,7 @@ namespace graph::query::indexes {
 
 		// 3. Initialize Physical Index via VectorIndexManager
 		// This ensures the configuration is saved to disk
-		vectorIndexManager_->createIndex(name, dimension);
+		vectorIndexManager_->createIndex(name, dimension, metric);
 
 		// 4. Persist Metadata
 		// We set indexType="vector" to distinguish from B-Tree indexes
@@ -324,15 +324,64 @@ namespace graph::query::indexes {
 	}
 
 	// --- Event Handlers simply delegate to the appropriate manager ---
-	void IndexManager::onNodeAdded(const Node &node) { nodeIndexManager_->onEntityAdded(node); }
+	void IndexManager::onNodeAdded(const Node &node) {
+		nodeIndexManager_->onEntityAdded(node);
 
-	void IndexManager::onNodesAdded(const std::vector<Node> &nodes) { nodeIndexManager_->onEntitiesAdded(nodes); }
+		if (vectorIndexManager_) { // Safety check
+			std::string labelStr;
+			if (node.getLabelId() != 0) {
+				labelStr = dataManager_->resolveLabel(node.getLabelId());
+			}
+			// Pass the node properties directly.
+			// DataManager has already resolved inline properties into the Node object passed here.
+			vectorIndexManager_->updateIndex(node, labelStr, node.getProperties());
+		}
+	}
+
+	void IndexManager::onNodesAdded(const std::vector<Node> &nodes) {
+		// 1. Standard Indexes
+		nodeIndexManager_->onEntitiesAdded(nodes);
+
+		// 2. Vector Indexes (Batch)
+		if (vectorIndexManager_) {
+			for (const auto& node : nodes) {
+				std::string labelStr;
+				if (node.getLabelId() != 0) {
+					labelStr = dataManager_->resolveLabel(node.getLabelId());
+				}
+				vectorIndexManager_->updateIndex(node, labelStr, node.getProperties());
+			}
+		}
+	}
 
 	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
 		nodeIndexManager_->onEntityUpdated(oldNode, newNode);
+
+		// Update Vector Index
+		if (vectorIndexManager_) {
+			std::string labelStr;
+			if (newNode.getLabelId() != 0) {
+				labelStr = dataManager_->resolveLabel(newNode.getLabelId());
+			}
+			vectorIndexManager_->updateIndex(newNode, labelStr, newNode.getProperties());
+		}
 	}
 
-	void IndexManager::onNodeDeleted(const Node &node) { nodeIndexManager_->onEntityDeleted(node); }
+	void IndexManager::onNodeDeleted(const Node &node) {
+		// 1. Update Standard Indexes
+		nodeIndexManager_->onEntityDeleted(node);
+
+		// 2. Update Vector Indexes (Removal)
+		if (vectorIndexManager_) {
+			std::string labelStr;
+			if (node.getLabelId() != 0) {
+				labelStr = dataManager_->resolveLabel(node.getLabelId());
+			}
+
+			// We only need NodeID and Label to find the index and remove the mapping
+			vectorIndexManager_->removeIndex(node.getId(), labelStr);
+		}
+	}
 
 	void IndexManager::onEdgeAdded(const Edge &edge) { edgeIndexManager_->onEntityAdded(edge); }
 

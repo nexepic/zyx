@@ -54,15 +54,17 @@ namespace graph::query::execution::operators {
 			RecordBatch batch;
 			batch.reserve(results.size());
 
-			for (const auto &[nodeId, score]: results) {
-				// Fetch the node from DataManager
+			for (const auto &[nodeId, score] : results) {
 				auto node = dm_->getNode(nodeId);
 
-				// Fix: 'node' is an object, not a pointer/optional.
-				// Check if the node is valid/active.
 				if (node.getId() == 0 || !node.isActive()) {
 					continue;
 				}
+
+				// Hydrate properties!
+				// Get all properties (inline + external)
+				auto props = dm_->getNodeProperties(nodeId);
+				node.setProperties(std::move(props));
 
 				Record record;
 				record.setNode("node", node);

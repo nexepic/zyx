@@ -25,6 +25,9 @@
 #include <string>
 #include <unordered_map>
 
+#include "graph/core/Node.hpp"
+#include "graph/core/PropertyTypes.hpp"
+
 namespace graph::storage {
 	class DataManager;
 	namespace state {
@@ -53,7 +56,19 @@ namespace graph::query::indexes {
 		/**
 		 * @brief Creates a new vector index definition.
 		 */
-		void createIndex(const std::string &name, int dim);
+		void createIndex(const std::string &name, int dim, const std::string& metric);
+
+		/**
+		 * @brief Updates vector indexes when a node is added or updated.
+		 * Checks if the node has a property that is indexed by a vector index.
+		 */
+		void updateIndex(const Node &node, const std::string &label,
+						 const std::unordered_map<std::string, PropertyValue> &props);
+
+		/**
+		 * @brief Remove node from vector index (Optional, for deletion support).
+		 */
+		void removeIndex(int64_t nodeId, const std::string &label);
 
 		/**
 		 * @brief Checks if an index exists (in memory or disk).
@@ -66,7 +81,12 @@ namespace graph::query::indexes {
 
 		// Cache of loaded indexes
 		std::unordered_map<std::string, std::shared_ptr<vector::DiskANNIndex>> indexes_;
-		std::mutex mutex_;
+		std::recursive_mutex mutex_;
+
+		std::unordered_map<std::string, std::string> indexMap_;
+		bool indexMapLoaded_ = false;
+
+		void loadIndexMap();
 	};
 
 } // namespace graph::query::indexes

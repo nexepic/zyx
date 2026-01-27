@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
 Helper script to generate coverage reports using LLVM source-based coverage.
-- Recursively finds .profraw files in the build directory (including subdirs).
-- Generates LCOV or HTML based on output argument.
 """
 
 import os
 import sys
 import subprocess
-import platform
+import argparse
 from pathlib import Path
 
-# ================= CONFIGURATION =================
-# Files matching these patterns will be EXCLUDED from the report.
 IGNORE_PATTERNS = [
     "tests",
     "gtest",
@@ -29,102 +25,110 @@ IGNORE_PATTERNS = [
     "generated/",
     "linenoise.hpp",
     "subprojects/",
+    "antlr4"
 ]
 
 
 def find_test_binaries(build_dir):
-    """Recursively finds executable test files in the build directory."""
     binaries = []
     build_path = Path(build_dir)
-
     for file_path in build_path.rglob("*test*"):
         if not file_path.is_file(): continue
         suffix = file_path.suffix.lower()
-        if suffix in ['.c', '.cpp', '.h', '.hpp', '.o', '.profraw', '.profdata', '.log', '.ninja', '.xml', '.json',
-                      '.dat', '.lcov']: continue
+        if suffix in ['.c', '.cpp', '.h', '.hpp', '.o', '.profraw', '.profdata',
+                      '.log', '.ninja', '.xml', '.json', '.dat', '.lcov', '.txt']: continue
         if suffix in ['.dylib', '.so', '.dll', '.lib', '.a', '.pdb', '.exp']: continue
-        if platform.system() == "Windows" and suffix != '.exe': continue
-        if platform.system() != "Windows" and not os.access(file_path, os.X_OK): continue
-        binaries.append(str(file_path))
-
+        if os.access(file_path, os.X_OK):
+            binaries.append(str(file_path))
     return binaries
 
 
 def main():
-    if len(sys.argv) < 5:
-        print("Usage: python generate_coverage.py <build_dir> <output_path> <llvm_cov_cmd> <llvm_profdata_cmd>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Generate LLVM Coverage Reports")
 
-    build_dir = sys.argv[1]
-    output_path = sys.argv[2]
-    llvm_cov_cmd = sys.argv[3]
-    llvm_prof_cmd = sys.argv[4]
+    # Positional Arguments
+    parser.add_argument("build_dir", help="Path to build directory")
+    parser.add_argument("llvm_cov", help="Path to llvm-cov tool")
+    parser.add_argument("llvm_prof", help="Path to llvm-profdata tool")
 
-    # --- Step 1: Merge Profiles ---
-    print(f"--- [Step 1] Merging profiles in {build_dir} ---")
+    # Optional Arguments
+    parser.add_argument("--html", action="store_true", help="Generate and open HTML report")
+    parser.add_argument("--file", type=str, default=None, help="Show detailed source coverage for a specific file")
 
-    # IMPORTANT: We search recursively using rglob to find profiles in buildDir/coverage/raw/
-    profraw_files = list(Path(build_dir).rglob("*.profraw"))
+    args, unknown = parser.parse_known_args()
 
-    # Place the merged profdata file inside buildDir (or coverage dir if preferred)
-    # Keeping it in build_dir root is fine as it's a temporary build artifact
-    profdata_file = os.path.join(build_dir, "code.profdata")
+    if unknown:
+        print(f"Warning: Ignoring unknown arguments: {unknown}")
+
+    profraw_files = list(Path(args.build_dir).rglob("*.profraw"))
+    profdata_file = os.path.join(args.build_dir, "code.profdata")
 
     if not profraw_files:
-        print(f"Error: No .profraw files found in {build_dir}.")
+        print(f"Error: No .profraw files found in {args.build_dir}")
         sys.exit(1)
 
-    print(f"Found {len(profraw_files)} raw profile(s).")
+    # Step 1: Merge Profiles
+    subprocess.check_call(
+        [args.llvm_prof, "merge", "-sparse"] + [str(p) for p in profraw_files] + ["-o", profdata_file])
 
-    # Convert paths to strings
-    profraw_args = [str(p) for p in profraw_files]
-
-    # Merge command
-    subprocess.check_call([llvm_prof_cmd, "merge", "-sparse"] + profraw_args + ["-o", profdata_file])
-
-    # --- Step 2: Find Binaries ---
-    print(f"--- [Step 2] Finding test binaries ---")
-    binaries = find_test_binaries(build_dir)
+    # Step 2: Binaries
+    binaries = find_test_binaries(args.build_dir)
     if not binaries:
         print("Error: No test binaries found!")
         sys.exit(1)
 
+    # llvm-cov requires at least one binary as a positional argument.
+    # treating the others as -object extensions.
+    main_binary = binaries[0]
+    additional_binaries = binaries[1:]
+
     object_args = []
-    for bin_path in binaries:
+    for bin_path in additional_binaries:
         object_args.extend(["-object", bin_path])
 
     regex_pattern = ".*(" + "|".join(IGNORE_PATTERNS) + ").*"
 
-    # --- Step 3: Generate Report (HTML or LCOV) ---
-    print(f"--- [Step 3] Generating Report ---")
-
-    # Logic: If output ends in .lcov, export LCOV. Otherwise, generate HTML dir.
-    if output_path.endswith(".lcov"):
-        print(f"Mode: Exporting LCOV to {output_path}")
-        with open(output_path, "w") as outfile:
-            cmd = [
-                      llvm_cov_cmd,
-                      "export",
-                      "-format=lcov",
-                      f"-instr-profile={profdata_file}",
-                      f"-ignore-filename-regex={regex_pattern}"
-                  ] + object_args
-            subprocess.check_call(cmd, stdout=outfile)
-    else:
-        print(f"Mode: Generating HTML report in {output_path}")
+    # Step 3: Action Dispatch
+    if args.file:
+        print(f"--- Coverage Detail for: {args.file} ---")
         cmd = [
-                  llvm_cov_cmd,
-                  "show",
-                  "-format=html",
-                  f"-output-dir={output_path}",
+                  args.llvm_cov, "show",
+                  main_binary,  # Positional binary
                   f"-instr-profile={profdata_file}",
                   f"-ignore-filename-regex={regex_pattern}",
+                  "-use-color",
                   "-show-line-counts-or-regions",
-                  "-show-instantiations=false"
+                  "-show-branches=count"
+              ] + object_args + [args.file]  # Filter arg
+        subprocess.call(cmd)
+
+    elif args.html:
+        output_dir = os.path.join(args.build_dir, "coverage", "html")
+        print(f"--- Generating HTML Report in {output_dir} ---")
+        cmd = [
+                  args.llvm_cov, "show", "-format=html",
+                  main_binary,  # Positional binary
+                  f"-output-dir={output_dir}",
+                  f"-instr-profile={profdata_file}",
+                  f"-ignore-filename-regex={regex_pattern}",
+                  "-show-branches=count"
               ] + object_args
         subprocess.check_call(cmd)
 
-    print(f"--- Success! Output ready at {output_path} ---")
+        if sys.platform == "darwin":
+            subprocess.call(["open", os.path.join(output_dir, "index.html")])
+        print(f"Report ready: {output_dir}/index.html")
+
+    else:
+        print("--- Coverage Summary ---")
+        cmd = [
+                  args.llvm_cov, "report",
+                  main_binary,  # Positional binary
+                  f"-instr-profile={profdata_file}",
+                  f"-ignore-filename-regex={regex_pattern}",
+                  "-use-color"
+              ] + object_args
+        subprocess.call(cmd)
 
 
 if __name__ == "__main__":

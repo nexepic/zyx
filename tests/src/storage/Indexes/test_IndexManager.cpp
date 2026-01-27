@@ -522,3 +522,152 @@ TEST_F(IndexManagerTest, EnsureMetadata_CreatedOnInitialize) {
 	EXPECT_TRUE(foundNode);
 	EXPECT_TRUE(foundEdge);
 }
+
+TEST_F(IndexManagerTest, VectorIndexMetadata) {
+	// 1. Create Vector Index
+	bool created = indexManager->createVectorIndex("vec_idx", "Chunk", "embedding", 128, "L2");
+	EXPECT_TRUE(created);
+
+	// 2. Check getVectorIndexName (Covering the loop and if-match)
+	std::string foundName = indexManager->getVectorIndexName("Chunk", "embedding");
+	EXPECT_EQ(foundName, "vec_idx");
+
+	// 3. Check negative case (Covering return "")
+	EXPECT_EQ(indexManager->getVectorIndexName("Chunk", "non_existent"), "");
+
+	// 4. Verify listIndexesDetailed returns correct type
+	auto list = indexManager->listIndexesDetailed();
+	bool found = false;
+	for (const auto &row: list) {
+		if (std::get<0>(row) == "vec_idx") {
+			EXPECT_EQ(std::get<1>(row), "vector");
+			found = true;
+			break;
+		}
+	}
+	EXPECT_TRUE(found);
+}
+
+TEST_F(IndexManagerTest, VectorIndexLifecycle_WithData) {
+	// 1. Setup Vector Index
+	EXPECT_TRUE(indexManager->createVectorIndex("vec_del_test", "Node", "vec", 4, "L2"));
+
+	// 2. Add Node with Vector Property
+	int64_t labelId = dataManager->getOrCreateLabelId("Node");
+	graph::Node node(100, labelId);
+
+	// Construct a float vector property
+	std::vector<float> vecData = {1.0, 2.0, 3.0, 4.0};
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["vec"] = graph::PropertyValue(vecData);
+	node.setProperties(props);
+
+	// Trigger Add (Should call updateIndex)
+	indexManager->onNodeAdded(node);
+
+	// 3. Update Node (Should call updateIndex)
+	graph::Node newNode(100, labelId);
+	std::vector<float> vecData2 = {5.0, 6.0, 7.0, 8.0};
+	props["vec"] = graph::PropertyValue(vecData2);
+	newNode.setProperties(props);
+
+	indexManager->onNodeUpdated(node, newNode);
+
+	// 4. Delete Node (Should call removeIndex)
+	// This hits lines 161-179 in VectorIndexManager::removeIndex
+	indexManager->onNodeDeleted(newNode);
+
+	// 5. Verify no crash.
+	// Ideally verify search result is empty, but that requires VectorSearchOperator dependency.
+	// For unit test coverage of the manager, execution flow is sufficient.
+}
+
+TEST_F(IndexManagerTest, VectorIndex_EdgeCases) {
+	// 1. Create index
+	(void) indexManager->createVectorIndex("vec_edge", "Item", "emb", 4, "L2");
+
+	int64_t labelId = dataManager->getOrCreateLabelId("Item");
+	graph::Node node(200, labelId);
+
+	// Case A: Property Type Mismatch (Not a LIST)
+	// Covers VectorIndexManager.cpp: log::Log::warn("Type mismatch...")
+	std::unordered_map<std::string, graph::PropertyValue> badProps;
+	badProps["emb"] = graph::PropertyValue(std::string("not a vector"));
+	node.setProperties(badProps);
+
+	// Should log warning but not crash
+	indexManager->onNodeAdded(node);
+
+	// Case B: Label Mismatch (No index for this label)
+	// Covers VectorIndexManager.cpp: if (it != indexMap_.end()) else branch
+	int64_t otherLabelId = dataManager->getOrCreateLabelId("Other");
+	graph::Node otherNode(201, otherLabelId);
+	std::unordered_map<std::string, graph::PropertyValue> goodProps;
+	goodProps["emb"] = graph::PropertyValue(std::vector<float>{1, 1, 1, 1});
+	otherNode.setProperties(goodProps);
+
+	indexManager->onNodeAdded(otherNode);
+}
+
+TEST_F(IndexManagerTest, GetVectorIndexName_Coverage) {
+	// 1. Create a Vector Index
+	bool created = indexManager->createVectorIndex("vec_test", "Node", "embedding", 128, "L2");
+	EXPECT_TRUE(created);
+
+	// 2. Test positive match
+	std::string name = indexManager->getVectorIndexName("Node", "embedding");
+	EXPECT_EQ(name, "vec_test");
+
+	// 3. Test negative match (Label mismatch)
+	std::string name2 = indexManager->getVectorIndexName("Other", "embedding");
+	EXPECT_EQ(name2, "");
+
+	// 4. Test negative match (Property mismatch)
+	std::string name3 = indexManager->getVectorIndexName("Node", "other_prop");
+	EXPECT_EQ(name3, "");
+}
+
+TEST_F(IndexManagerTest, VectorIndex_DeleteNode_Coverage) {
+	// This test ensures the code path for vector index removal is executed.
+	// We rely on VectorIndexManager's internal logic not crashing.
+
+	EXPECT_TRUE(indexManager->createVectorIndex("vec_del", "Person", "vec", 4, "L2"));
+
+	// Create node
+	int64_t lbl = dataManager->getOrCreateLabelId("Person");
+	graph::Node node(100, lbl);
+	std::vector<float> data = {1, 2, 3, 4};
+	node.addProperty("vec", graph::PropertyValue(data));
+
+	// Trigger Add
+	indexManager->onNodeAdded(node);
+
+	// Trigger Delete (Should call removeIndex)
+	indexManager->onNodeDeleted(node);
+
+	// Coverage only: Verify no crash
+	SUCCEED();
+}
+
+TEST_F(IndexManagerTest, EdgeEventHandlers_Coverage) {
+	// Simply call all edge event handlers to ensure 100% line coverage for IndexManager delegation
+	int64_t lbl = dataManager->getOrCreateLabelId("REL");
+	graph::Edge e(1, 1, 2, lbl);
+
+	// Add
+	indexManager->onEdgeAdded(e);
+
+	// Batch Add
+	std::vector<graph::Edge> edges = {e};
+	indexManager->onEdgesAdded(edges);
+
+	// Update
+	graph::Edge e2 = e;
+	e2.addProperty("p", 1);
+	indexManager->onEdgeUpdated(e, e2);
+
+	// Delete
+	indexManager->onEdgeDeleted(e2);
+
+	SUCCEED();
+}

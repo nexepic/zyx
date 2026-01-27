@@ -24,6 +24,7 @@
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
+#include "graph/query/execution/operators/TrainVectorIndexOperator.hpp"
 #include "graph/query/execution/operators/VectorSearchOperator.hpp"
 
 namespace graph::query::planner {
@@ -100,6 +101,15 @@ namespace graph::query::planner {
 
 			return std::make_unique<execution::operators::VectorSearchOperator>(ctx.dataManager, ctx.indexManager,
 																				indexName, k, std::move(queryVec));
+		});
+
+		registerProcedure("db.index.vector.train", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() != 1) {
+				throw std::runtime_error("Usage: db.index.vector.train('index_name')");
+			}
+			std::string indexName = args[0].toString();
+
+			return std::make_unique<execution::operators::TrainVectorIndexOperator>(ctx.indexManager, indexName);
 		});
 	}
 } // namespace graph::query::planner

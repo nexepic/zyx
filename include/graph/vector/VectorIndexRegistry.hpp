@@ -22,7 +22,6 @@
 
 #include <memory>
 #include <mutex>
-#include <sstream>
 #include "VectorIndexConfig.hpp"
 #include "graph/core/IndexTreeManager.hpp"
 #include "graph/storage/CacheManager.hpp"
@@ -76,6 +75,13 @@ namespace graph::vector {
 		std::vector<BFloat16> loadRawVector(int64_t blobId) const;
 		std::vector<uint8_t> loadPQCodes(int64_t blobId) const;
 		std::vector<int64_t> loadAdjacency(int64_t blobId) const;
+
+		/**
+		 * @brief Retrieves N node IDs stored in this index.
+		 * Used for sampling training data.
+		 * @param limit Max number of IDs to return.
+		 */
+		std::vector<int64_t> getAllNodeIds(size_t limit);
 
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;

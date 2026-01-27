@@ -19,6 +19,7 @@
  **/
 
 #pragma once
+
 #include <vector>
 
 namespace graph::vector {

@@ -109,6 +109,8 @@ namespace graph::query::indexes {
 
 		std::shared_ptr<storage::DataManager> getDataManager() const { return dataManager_; }
 
+		std::vector<PropertyValue> scanKeys(int64_t rootId, size_t limit) const;
+
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
 		mutable std::shared_mutex mutex_;

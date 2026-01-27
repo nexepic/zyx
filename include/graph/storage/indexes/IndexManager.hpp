@@ -47,6 +47,7 @@ namespace graph::query::indexes {
 		constexpr uint32_t EDGE_LABEL_TYPE = 3;
 		constexpr uint32_t EDGE_PROPERTY_TYPE = 4;
 		constexpr uint32_t SYSTEM_LABEL_DICTIONARY = 5;
+		constexpr uint32_t VECTOR_MAPPING_INDEX = 6;
 	} // namespace IndexTypes
 
 	namespace StateKeys {

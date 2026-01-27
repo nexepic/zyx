@@ -54,8 +54,7 @@ db_lib = static_library('metrix_core',
 							boost_dep,
 							cli11_dep,
 							antlr4_dep,
-							cypher_dep,
-							simsimd_dep
+							cypher_dep
 						],
 						install : false
 )
@@ -64,7 +63,7 @@ db_lib = static_library('metrix_core',
 db_dep = declare_dependency(
 	include_directories : inc_dirs,
 	link_with : db_lib,
-	dependencies : [cypher_dep, simsimd_dep]
+	dependencies : [cypher_dep]
 )
 
 # ==============================================================================
@@ -88,8 +87,8 @@ libmetrix = shared_library('metrix',
 										   boost_dep,
 										   cli11_dep,
 										   antlr4_dep,
-										   cypher_dep,
-										   simsimd_dep],
+										   cypher_dep
+						   ],
 						   install : true,
 						   install_dir : get_option('libdir')
 )

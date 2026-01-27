@@ -231,116 +231,165 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 // Event Handler Tests (Edge)
 // ============================================================================
 
-// TEST_F(EntityTypeIndexManagerTest, EdgeEventHandlers) {
-// 	// Setup
-// 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
-// 	(void) edgeIndexManager->createPropertyIndex("weight", []() { return true; });
-//
-// 	// 1. Add Edge
-// 	int64_t knowsLabel = dataManager->getOrCreateLabelId("KNOWS");
-// 	graph::Edge edge(10, 1, 2, knowsLabel);
-// 	edge.addProperty("weight", 0.5);
-//
-// 	edgeIndexManager->onEntityAdded(edge);
-//
-// 	auto labelIdx = edgeIndexManager->getLabelIndex();
-// 	auto propIdx = edgeIndexManager->getPropertyIndex();
-//
-// 	// Verify Add
-// 	EXPECT_EQ(labelIdx->findNodes("KNOWS").size(), 1UL);
-// 	EXPECT_EQ(propIdx->findExactMatch("weight", 0.5).size(), 1UL);
-//
-// 	// 2. Update Edge
-// 	graph::Edge updatedEdge = edge;
-// 	updatedEdge.setLabelId(dataManager->getOrCreateLabelId("LIKES"));
-// 	updatedEdge.addProperty("weight", 1.0);
-//
-// 	// Sanity Check
-// 	ASSERT_EQ(dataManager->resolveLabel(edge.getLabelId()), "KNOWS");
-//
-// 	edgeIndexManager->onEntityUpdated(edge, updatedEdge);
-//
-// 	// Verify Update
-// 	EXPECT_TRUE(labelIdx->findNodes("KNOWS").empty());
-// 	EXPECT_EQ(labelIdx->findNodes("LIKES").size(), 1UL);
-//
-// 	EXPECT_TRUE(propIdx->findExactMatch("weight", 0.5).empty());
-// 	EXPECT_EQ(propIdx->findExactMatch("weight", 1.0).size(), 1UL);
-//
-// 	// 3. Delete Edge
-// 	edgeIndexManager->onEntityDeleted(updatedEdge);
-// 	EXPECT_TRUE(labelIdx->findNodes("LIKES").empty());
-// 	EXPECT_TRUE(propIdx->findExactMatch("weight", 1.0).empty());
-// }
-//
-// // ============================================================================
-// // Edge Cases
-// // ============================================================================
-//
-// TEST_F(EntityTypeIndexManagerTest, HandleZeroEntityId) {
-// 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
-//
-// 	// Create a node with invalid ID 0
-// 	int64_t lbl = dataManager->getOrCreateLabelId("ZeroNode");
-// 	graph::Node node(0, lbl);
-//
-// 	// Try to add
-// 	nodeIndexManager->onEntityAdded(node);
-//
-// 	// Verify no index entry created (Implementation should guard against ID 0)
-// 	auto labelIdx = nodeIndexManager->getLabelIndex();
-// 	EXPECT_TRUE(labelIdx->findNodes("ZeroNode").empty());
-// }
-//
-// TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
-// 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
-//
-// 	// 1. Add node with empty label (ID 0)
-// 	// Note: getOrCreateLabelId("") returns 0.
-// 	graph::Node node(1, 0);
-// 	nodeIndexManager->onEntityAdded(node);
-//
-// 	// Verify nothing indexed
-// 	auto labelIdx = nodeIndexManager->getLabelIndex();
-// 	// No label string to query, but internal tree shouldn't have entry.
-// 	// We check implicitly by seeing if the next update works cleanly.
-//
-// 	// 2. Update to valid label
-// 	graph::Node validNode = node;
-// 	validNode.setLabelId(dataManager->getOrCreateLabelId("Valid"));
-//
-// 	// updateNode(old=Empty, new=Valid)
-// 	nodeIndexManager->onEntityUpdated(node, validNode);
-//
-// 	EXPECT_EQ(labelIdx->findNodes("Valid").size(), 1UL);
-//
-// 	// 3. Update back to empty
-// 	// updateNode(old=Valid, new=Empty)
-// 	// Should REMOVE "Valid"
-// 	nodeIndexManager->onEntityUpdated(validNode, node);
-//
-// 	auto result = labelIdx->findNodes("Valid");
-// 	EXPECT_TRUE(result.empty()) << "Label 'Valid' should be removed, but found size " << result.size();
-// }
-//
-// TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling_AddRemoveFields) {
-// 	// Setup
-// 	(void) nodeIndexManager->createPropertyIndex("dynamic", []() { return true; });
-// 	auto propIdx = nodeIndexManager->getPropertyIndex();
-//
-// 	// 1. Node without property
-// 	graph::Node node(1, dataManager->getOrCreateLabelId("Node"));
-// 	nodeIndexManager->onEntityAdded(node);
-// 	EXPECT_TRUE(propIdx->findExactMatch("dynamic", 100).empty());
-//
-// 	// 2. Add Property (Update)
-// 	graph::Node withProp = node;
-// 	withProp.addProperty("dynamic", 100);
-//
-// 	nodeIndexManager->onEntityUpdated(node, withProp);
-// 	EXPECT_EQ(propIdx->findExactMatch("dynamic", 100).size(), 1UL);
-//
-// 	// 3. Remove Property (Update)
-// 	nodeIndexManager->onEntityUpdated(withProp, node);
-// 	EXPECT_TRUE(propIdx->findExactMatch("dynamic", 100).empty());
-// }
+TEST_F(EntityTypeIndexManagerTest, EdgeEventHandlers) {
+	// Setup
+	(void) edgeIndexManager->createLabelIndex([]() { return true; });
+	(void) edgeIndexManager->createPropertyIndex("weight", []() { return true; });
+
+	// 1. Add Edge
+	int64_t knowsLabel = dataManager->getOrCreateLabelId("KNOWS");
+	graph::Edge edge(10, 1, 2, knowsLabel);
+	edge.addProperty("weight", 0.5);
+
+	edgeIndexManager->onEntityAdded(edge);
+
+	auto labelIdx = edgeIndexManager->getLabelIndex();
+	auto propIdx = edgeIndexManager->getPropertyIndex();
+
+	// Verify Add
+	EXPECT_EQ(labelIdx->findNodes("KNOWS").size(), 1UL);
+	EXPECT_EQ(propIdx->findExactMatch("weight", 0.5).size(), 1UL);
+
+	// 2. Update Edge
+	graph::Edge updatedEdge = edge;
+	updatedEdge.setLabelId(dataManager->getOrCreateLabelId("LIKES"));
+	updatedEdge.addProperty("weight", 1.0);
+
+	// Sanity Check
+	ASSERT_EQ(dataManager->resolveLabel(edge.getLabelId()), "KNOWS");
+
+	edgeIndexManager->onEntityUpdated(edge, updatedEdge);
+
+	// Verify Update
+	EXPECT_TRUE(labelIdx->findNodes("KNOWS").empty());
+	EXPECT_EQ(labelIdx->findNodes("LIKES").size(), 1UL);
+
+	EXPECT_TRUE(propIdx->findExactMatch("weight", 0.5).empty());
+	EXPECT_EQ(propIdx->findExactMatch("weight", 1.0).size(), 1UL);
+
+	// 3. Delete Edge
+	edgeIndexManager->onEntityDeleted(updatedEdge);
+	EXPECT_TRUE(labelIdx->findNodes("LIKES").empty());
+	EXPECT_TRUE(propIdx->findExactMatch("weight", 1.0).empty());
+}
+
+// ============================================================================
+// Edge Cases
+// ============================================================================
+
+TEST_F(EntityTypeIndexManagerTest, HandleZeroEntityId) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+
+	// Create a node with invalid ID 0
+	int64_t lbl = dataManager->getOrCreateLabelId("ZeroNode");
+	graph::Node node(0, lbl);
+
+	// Try to add
+	nodeIndexManager->onEntityAdded(node);
+
+	// Verify no index entry created (Implementation should guard against ID 0)
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	EXPECT_TRUE(labelIdx->findNodes("ZeroNode").empty());
+}
+
+TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+
+	// 1. Add node with empty label (ID 0)
+	// Note: getOrCreateLabelId("") returns 0.
+	graph::Node node(1, 0);
+	nodeIndexManager->onEntityAdded(node);
+
+	// Verify nothing indexed
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	// No label string to query, but internal tree shouldn't have entry.
+	// We check implicitly by seeing if the next update works cleanly.
+
+	// 2. Update to valid label
+	graph::Node validNode = node;
+	validNode.setLabelId(dataManager->getOrCreateLabelId("Valid"));
+
+	// updateNode(old=Empty, new=Valid)
+	nodeIndexManager->onEntityUpdated(node, validNode);
+
+	EXPECT_EQ(labelIdx->findNodes("Valid").size(), 1UL);
+
+	// 3. Update back to empty
+	// updateNode(old=Valid, new=Empty)
+	// Should REMOVE "Valid"
+	nodeIndexManager->onEntityUpdated(validNode, node);
+
+	auto result = labelIdx->findNodes("Valid");
+	EXPECT_TRUE(result.empty()) << "Label 'Valid' should be removed, but found size " << result.size();
+}
+
+TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling_AddRemoveFields) {
+	// Setup
+	(void) nodeIndexManager->createPropertyIndex("dynamic", []() { return true; });
+	auto propIdx = nodeIndexManager->getPropertyIndex();
+
+	// 1. Node without property
+	graph::Node node(1, dataManager->getOrCreateLabelId("Node"));
+	nodeIndexManager->onEntityAdded(node);
+	EXPECT_TRUE(propIdx->findExactMatch("dynamic", 100).empty());
+
+	// 2. Add Property (Update)
+	graph::Node withProp = node;
+	withProp.addProperty("dynamic", 100);
+
+	nodeIndexManager->onEntityUpdated(node, withProp);
+	EXPECT_EQ(propIdx->findExactMatch("dynamic", 100).size(), 1UL);
+
+	// 3. Remove Property (Update)
+	nodeIndexManager->onEntityUpdated(withProp, node);
+	EXPECT_TRUE(propIdx->findExactMatch("dynamic", 100).empty());
+}
+
+TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_Empty) {
+	std::vector<graph::Node> empty;
+	// Should return early
+	nodeIndexManager->onEntitiesAdded(empty);
+	SUCCEED();
+}
+
+TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_BatchLogic) {
+	// Setup indexes
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+	(void) nodeIndexManager->createPropertyIndex("batch_prop", []() { return true; });
+
+	int64_t lbl = dataManager->getOrCreateLabelId("BatchLabel");
+
+	std::vector<graph::Node> nodes;
+	for (int i = 0; i < 5; ++i) {
+		graph::Node n(i + 100, lbl);
+		n.addProperty("batch_prop", i);
+		nodes.push_back(n);
+	}
+
+	// Batch Insert
+	nodeIndexManager->onEntitiesAdded(nodes);
+
+	// Verify
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	auto propIdx = nodeIndexManager->getPropertyIndex();
+
+	EXPECT_EQ(labelIdx->findNodes("BatchLabel").size(), 5UL);
+	EXPECT_EQ(propIdx->findExactMatch("batch_prop", 2).size(), 1UL);
+}
+
+TEST_F(EntityTypeIndexManagerTest, UpdatePropertyIndex_AddRemoveBatch) {
+	// Use onEntityUpdated to trigger updatePropertyIndexes logic with diff
+	(void) nodeIndexManager->createPropertyIndex("p1", []() { return true; });
+
+	graph::Node oldN(1, 1);
+	oldN.addProperty("p1", "old"); // In Old, Not New -> Remove
+
+	graph::Node newN(1, 1);
+	newN.addProperty("p1", "new"); // In New, Not Old -> Add
+
+	nodeIndexManager->onEntityUpdated(oldN, newN);
+
+	auto propIdx = nodeIndexManager->getPropertyIndex();
+	EXPECT_TRUE(propIdx->findExactMatch("p1", "old").empty());
+	EXPECT_EQ(propIdx->findExactMatch("p1", "new").size(), 1UL);
+}

@@ -792,4 +792,33 @@ namespace graph::query::indexes {
 		return results;
 	}
 
+	std::vector<PropertyValue> IndexTreeManager::scanKeys(int64_t rootId, size_t limit) const {
+		std::shared_lock lock(mutex_);
+		if (rootId == 0) return {};
+
+		std::vector<PropertyValue> keys;
+
+		// Find left-most leaf
+		int64_t currentId = rootId;
+		while (true) {
+			auto node = dataManager_->getIndex(currentId);
+			if (node.isLeaf()) break;
+			auto children = node.getChildIds();
+			if (children.empty()) break;
+			currentId = children[0];
+		}
+
+		// Traverse leaves list
+		while (currentId != 0 && keys.size() < limit) {
+			auto leaf = dataManager_->getIndex(currentId);
+			auto entries = leaf.getAllEntries(dataManager_);
+			for (const auto& entry : entries) {
+				keys.push_back(entry.key);
+				if (keys.size() >= limit) break;
+			}
+			currentId = leaf.getNextLeafId();
+		}
+		return keys;
+	}
+
 } // namespace graph::query::indexes

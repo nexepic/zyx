@@ -22,23 +22,22 @@
 
 #include <limits>
 #include <random>
-#include <simsimd/simsimd.h>
 #include <vector>
+#include "graph/vector/core/VectorMetric.hpp"
 
 namespace graph::vector {
 	class KMeans {
 	public:
 		static std::vector<std::vector<float>> run(const std::vector<std::vector<float>> &data, size_t k,
 												   size_t max_iter = 15) {
-
 			if (data.empty())
 				return {};
 			size_t dim = data[0].size();
 			size_t n = data.size();
 
+			// Initialize Centroids
 			std::vector centroids(k, std::vector<float>(dim));
 			std::vector<int> assignment(n);
-
 			std::mt19937 rng(42);
 			std::uniform_int_distribution<size_t> dist(0, n - 1);
 
@@ -48,7 +47,7 @@ namespace graph::vector {
 
 			for (size_t it = 0; it < max_iter; ++it) {
 				bool changed = false;
-				std::vector<std::vector<float>> sums(k, std::vector<float>(dim, 0.0f));
+				std::vector sums(k, std::vector(dim, 0.0f));
 				std::vector<size_t> counts(k, 0);
 
 				// E-Step: Assign points
@@ -57,11 +56,8 @@ namespace graph::vector {
 					int best_c = 0;
 
 					for (size_t c = 0; c < k; ++c) {
-						// OPTIMIZATION: Use SimSIMD for F32 L2 distance
-						simsimd_distance_t d;
-						simsimd_l2sq_f32(data[i].data(), centroids[c].data(), static_cast<simsimd_size_t>(dim), &d);
+						float dist_val = VectorMetric::computeL2Sqr(data[i].data(), centroids[c].data(), dim);
 
-						float dist_val = static_cast<float>(d);
 						if (dist_val < min_dist) {
 							min_dist = dist_val;
 							best_c = c;
@@ -87,8 +83,7 @@ namespace graph::vector {
 						for (size_t d = 0; d < dim; ++d)
 							centroids[c][d] = sums[c][d] * inv_count;
 					} else {
-						// Re-init empty cluster
-						centroids[c] = data[dist(rng)];
+						centroids[c] = data[dist(rng)]; // Re-init empty cluster
 					}
 				}
 			}

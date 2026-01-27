@@ -2,7 +2,8 @@
 
 # ==============================================================================
 # Script Name: run_tests.sh
-# Purpose: Clean, configure, build, test, and generate HTML & LCOV coverage.
+# Purpose: Clean, configure, build, test, and generate coverage reports.
+# Usage: ./run_tests.sh [--quick] [--html] [--file <filename>]
 # ==============================================================================
 
 set -e # Exit immediately on error
@@ -14,28 +15,38 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# ==============================================================================
-# Configuration & Paths
-# ==============================================================================
+# Configuration
 BUILD_DIR="buildDir"
-# All coverage artifacts go here
 COVERAGE_ROOT="$BUILD_DIR/coverage"
 PROFILES_DIR="$COVERAGE_ROOT/raw"
-HTML_REPORT_DIR="$COVERAGE_ROOT/html"
-LCOV_FILE="$COVERAGE_ROOT/coverage.lcov"
-
 PYTHON_SCRIPT="scripts/generate_coverage.py"
 
-# Set the profile path GLOBALLY at the start.
-# This prevents 'meson setup' compiler checks from writing .profraw files to the root.
-# We use $(pwd) to ensure absolute paths.
+# Set profile path for LLVM
 export LLVM_PROFILE_FILE="$(pwd)/$PROFILES_DIR/code-%p.profraw"
 
-# Argument Parsing (Quick Mode)
+# Argument Parsing
 QUICK_MODE=false
-for arg in "$@"; do
-  case $arg in
-    -q|--quick) QUICK_MODE=true; shift ;;
+REPORT_ARGS=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -q|--quick)
+      QUICK_MODE=true
+      shift
+      ;;
+    --html)
+      REPORT_ARGS+=" --html"
+      shift
+      ;;
+    --file)
+      # Pass both --file and its argument to python
+      REPORT_ARGS+=" --file $2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      exit 1
+      ;;
   esac
 done
 
@@ -44,27 +55,18 @@ done
 # ==============================================================================
 if [ "$QUICK_MODE" = true ] && [ -d "$BUILD_DIR" ]; then
     echo -e "${YELLOW}>>> [1/5] Quick Mode: Skipping full install.${NC}"
-
-    # Even in quick mode, we must ensure the profile directory exists and is clean
-    # so we don't merge old test runs with new ones.
-    rm -rf "$PROFILES_DIR"
+    rm -rf "$PROFILES_DIR" # Clear old profiles
     mkdir -p "$PROFILES_DIR"
 else
     echo -e "${BLUE}>>> [1/5] Cleaning and Installing...${NC}"
-
-    # Clean build directory
     if [ -d "$BUILD_DIR" ]; then rm -rf "$BUILD_DIR"; fi
+    mkdir -p "$BUILD_DIR" "$PROFILES_DIR"
 
-    # Create directories immediately so LLVM_PROFILE_FILE path is valid
-    mkdir -p "$BUILD_DIR"
-    mkdir -p "$PROFILES_DIR"
-
-    # Install dependencies
+    # Install dependencies (Conan)
     conan profile detect 2>/dev/null || true
     conan install . --output-folder="$BUILD_DIR" --build=missing -s build_type=Debug -s compiler.cppstd=20
 fi
 
-# Ensure coverage root exists (double check)
 mkdir -p "$PROFILES_DIR"
 
 # ==============================================================================
@@ -87,8 +89,6 @@ meson compile -C "$BUILD_DIR"
 # Step 3: Run Tests
 # ==============================================================================
 echo -e "${BLUE}>>> [4/5] Running Tests...${NC}"
-
-# Note: LLVM_PROFILE_FILE is already exported at the top of the script.
 meson test -C "$BUILD_DIR"
 
 # ==============================================================================
@@ -101,7 +101,7 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
     exit 1
 fi
 
-# Resolve tools path
+# Detect Tools
 if [[ "$OSTYPE" == "darwin"* ]]; then
     LLVM_COV_CMD=$(xcrun -f llvm-cov)
     LLVM_PROF_CMD=$(xcrun -f llvm-profdata)
@@ -110,19 +110,9 @@ else
     LLVM_PROF_CMD="llvm-profdata"
 fi
 
-# 1. Generate LCOV (Good for parsing/CI)
-echo "Generating LCOV..."
-python3 "$PYTHON_SCRIPT" "$BUILD_DIR" "$LCOV_FILE" "$LLVM_COV_CMD" "$LLVM_PROF_CMD"
-
-# 2. Generate HTML (Good for humans)
-echo "Generating HTML..."
-python3 "$PYTHON_SCRIPT" "$BUILD_DIR" "$HTML_REPORT_DIR" "$LLVM_COV_CMD" "$LLVM_PROF_CMD"
+# Run Python Script with collected args
+# Note: We do NOT put quotes around $REPORT_ARGS so it splits into multiple args
+python3 "$PYTHON_SCRIPT" "$BUILD_DIR" "$LLVM_COV_CMD" "$LLVM_PROF_CMD" $REPORT_ARGS
 
 echo -e "${GREEN}======================================================${NC}"
-echo -e "${GREEN} Success! Reports generated inside '$COVERAGE_ROOT' ${NC}"
-echo -e "${GREEN}======================================================${NC}"
-
-# Open HTML report on macOS
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    open "$HTML_REPORT_DIR/index.html"
-fi
+echo -e "${GREEN} Done! ${NC}"

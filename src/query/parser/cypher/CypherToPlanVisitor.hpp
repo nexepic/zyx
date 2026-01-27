@@ -47,6 +47,8 @@ namespace graph::parser::cypher {
 		std::any visitMatchStatement(CypherParser::MatchStatementContext *ctx) override;
 		std::any visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *ctx) override;
 
+		std::any visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) override;
+
 		// Updating
 		std::any visitCreateStatement(CypherParser::CreateStatementContext *ctx) override;
 
@@ -93,12 +95,14 @@ namespace graph::parser::cypher {
 		static std::string extractRelType(CypherParser::RelationshipTypesContext *ctx);
 
 		static PropertyValue parseValue(CypherParser::LiteralContext *ctx);
-		static std::unordered_map<std::string, PropertyValue> extractProperties(CypherParser::PropertiesContext *ctx);
+		std::unordered_map<std::string, PropertyValue> extractProperties(CypherParser::PropertiesContext *ctx);
 
 		static std::function<bool(const query::execution::Record &)>
 		buildWherePredicate(CypherParser::ExpressionContext *expr, std::string &outDesc);
 
 		static std::vector<PropertyValue> extractListFromExpression(CypherParser::ExpressionContext *ctx);
+
+		PropertyValue evaluateExpression(CypherParser::ExpressionContext *ctx);
 	};
 
 } // namespace graph::parser::cypher
