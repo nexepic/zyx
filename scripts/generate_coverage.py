@@ -48,8 +48,10 @@ def main():
 
     # Positional Arguments
     parser.add_argument("build_dir", help="Path to build directory")
-    parser.add_argument("llvm_cov", help="Path to llvm-cov tool")
-    parser.add_argument("llvm_prof", help="Path to llvm-profdata tool")
+
+    # Named Arguments (Changed from positional to avoid alignment errors)
+    parser.add_argument("--llvm-cov", required=True, help="Path to llvm-cov tool")
+    parser.add_argument("--llvm-prof", required=True, help="Path to llvm-profdata tool")
 
     # Optional Arguments
     parser.add_argument("--html", action="store_true", help="Generate and open HTML report")
@@ -77,8 +79,6 @@ def main():
         print("Error: No test binaries found!")
         sys.exit(1)
 
-    # llvm-cov requires at least one binary as a positional argument.
-    # treating the others as -object extensions.
     main_binary = binaries[0]
     additional_binaries = binaries[1:]
 
@@ -93,13 +93,13 @@ def main():
         print(f"--- Coverage Detail for: {args.file} ---")
         cmd = [
                   args.llvm_cov, "show",
-                  main_binary,  # Positional binary
+                  main_binary,
                   f"-instr-profile={profdata_file}",
                   f"-ignore-filename-regex={regex_pattern}",
                   "-use-color",
                   "-show-line-counts-or-regions",
                   "-show-branches=count"
-              ] + object_args + [args.file]  # Filter arg
+              ] + object_args + [args.file]
         subprocess.call(cmd)
 
     elif args.html:
@@ -107,7 +107,7 @@ def main():
         print(f"--- Generating HTML Report in {output_dir} ---")
         cmd = [
                   args.llvm_cov, "show", "-format=html",
-                  main_binary,  # Positional binary
+                  main_binary,
                   f"-output-dir={output_dir}",
                   f"-instr-profile={profdata_file}",
                   f"-ignore-filename-regex={regex_pattern}",
@@ -123,7 +123,7 @@ def main():
         print("--- Coverage Summary ---")
         cmd = [
                   args.llvm_cov, "report",
-                  main_binary,  # Positional binary
+                  main_binary,
                   f"-instr-profile={profdata_file}",
                   f"-ignore-filename-regex={regex_pattern}",
                   "-use-color"

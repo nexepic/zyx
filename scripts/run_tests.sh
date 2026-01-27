@@ -39,7 +39,6 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --file)
-      # Pass both --file and its argument to python
       REPORT_ARGS+=" --file $2"
       shift 2
       ;;
@@ -62,7 +61,6 @@ else
     if [ -d "$BUILD_DIR" ]; then rm -rf "$BUILD_DIR"; fi
     mkdir -p "$BUILD_DIR" "$PROFILES_DIR"
 
-    # Install dependencies (Conan)
     conan profile detect 2>/dev/null || true
     conan install . --output-folder="$BUILD_DIR" --build=missing -s build_type=Debug -s compiler.cppstd=20
 fi
@@ -101,7 +99,6 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
     exit 1
 fi
 
-# Detect Tools
 if [[ "$OSTYPE" == "darwin"* ]]; then
     LLVM_COV_CMD=$(xcrun -f llvm-cov)
     LLVM_PROF_CMD=$(xcrun -f llvm-profdata)
@@ -110,9 +107,11 @@ else
     LLVM_PROF_CMD="llvm-profdata"
 fi
 
-# Run Python Script with collected args
-# Note: We do NOT put quotes around $REPORT_ARGS so it splits into multiple args
-python3 "$PYTHON_SCRIPT" "$BUILD_DIR" "$LLVM_COV_CMD" "$LLVM_PROF_CMD" $REPORT_ARGS
+# FIX: Passed tools as named arguments instead of positionals to prevent misalignment
+python3 "$PYTHON_SCRIPT" "$BUILD_DIR" \
+    --llvm-cov "$LLVM_COV_CMD" \
+    --llvm-prof "$LLVM_PROF_CMD" \
+    $REPORT_ARGS
 
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN} Done! ${NC}"

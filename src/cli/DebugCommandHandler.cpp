@@ -29,7 +29,10 @@ namespace graph::cli {
 
 	void DebugCommandHandler::handle(const std::string &commandLine) const {
 		auto storage = db_.getStorage();
-		if (!storage) {
+
+		// Check if storage is null OR if it is logically closed.
+		// If closed, getInspector() would fail or cause undefined behavior.
+		if (!storage || !storage->isOpen()) {
 			std::cerr << "Error: Storage is not active. Please open the database first.\n";
 			return;
 		}
@@ -66,7 +69,7 @@ namespace graph::cli {
 			} else if (target == "state" || target == "states") {
 				// If the argument looks like a number, treat it as a page index.
 				// Otherwise, treat it as a string Key for detailed lookup.
-				bool isNumber = !arg.empty() && std::all_of(arg.begin(), arg.end(), ::isdigit);
+				bool isNumber = !arg.empty() && std::ranges::all_of(arg, ::isdigit);
 
 				if (!arg.empty() && !isNumber) {
 					// Inspect specific state data by Key
@@ -78,7 +81,7 @@ namespace graph::cli {
 				}
 			} else {
 				// Handle standard segment inspectors
-				uint32_t page = (!arg.empty() && std::all_of(arg.begin(), arg.end(), ::isdigit)) ? std::stoi(arg) : 0;
+				uint32_t page = (!arg.empty() && std::ranges::all_of(arg, ::isdigit)) ? std::stoi(arg) : 0;
 
 				if (target == "nodes")
 					inspector->inspectNodeSegments(page);
