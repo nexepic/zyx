@@ -38,6 +38,8 @@
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
+#include "graph/query/execution/operators/TrainVectorIndexOperator.hpp"
+#include "graph/query/execution/operators/VectorSearchOperator.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
@@ -129,6 +131,16 @@ TEST_F(ProcedureRegistryTest, DbmsGetConfig_Fail_Args) {
 	EXPECT_THROW(invoke("dbms.getConfig", {}), std::runtime_error);
 }
 
+TEST_F(ProcedureRegistryTest, DbmsGetConfig_Fail_TooManyArgs) {
+	std::vector<PropertyValue> args = {PropertyValue("key"), PropertyValue("extra")};
+	EXPECT_THROW(invoke("dbms.getConfig", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, DbmsSetConfig_Fail_TooManyArgs) {
+	std::vector<PropertyValue> args = {PropertyValue("key"), PropertyValue("val"), PropertyValue("extra")};
+	EXPECT_THROW(invoke("dbms.setConfig", args), std::runtime_error);
+}
+
 TEST_F(ProcedureRegistryTest, AlgoShortestPath_Success) {
 	std::vector<PropertyValue> args = {PropertyValue("1"), PropertyValue("2")};
 	auto op = invoke("algo.shortestPath", args);
@@ -182,4 +194,66 @@ TEST_F(ProcedureRegistryTest, ManualRegistration) {
 	ASSERT_TRUE(factory);
 	(void) factory(ctx, {});
 	EXPECT_TRUE(called);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Success) {
+	// Create a vector argument as a LIST of floats
+	std::vector<float> vec = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> args = {
+		PropertyValue("test_index"),
+		PropertyValue("5"),
+		PropertyValue(vec)
+	};
+
+	auto op = invoke("db.index.vector.queryNodes", args);
+
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::VectorSearchOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_Args_TooFew) {
+	// Test with too few arguments
+	std::vector<PropertyValue> args = {PropertyValue("test_index"), PropertyValue("5")};
+	EXPECT_THROW(invoke("db.index.vector.queryNodes", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_Args_TooMany) {
+	// Test with too many arguments
+	std::vector<float> vec = {1.0f, 2.0f};
+	std::vector<PropertyValue> args = {
+		PropertyValue("test_index"),
+		PropertyValue("5"),
+		PropertyValue(vec),
+		PropertyValue("extra")
+	};
+	EXPECT_THROW(invoke("db.index.vector.queryNodes", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_WrongType) {
+	// Test with wrong type for queryVector (not a LIST)
+	std::vector<PropertyValue> args = {
+		PropertyValue("test_index"),
+		PropertyValue("5"),
+		PropertyValue("not_a_list")
+	};
+	EXPECT_THROW(invoke("db.index.vector.queryNodes", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexTrain_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("test_index")};
+	auto op = invoke("db.index.vector.train", args);
+
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::TrainVectorIndexOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexTrain_Fail_Args_TooFew) {
+	// Test with too few arguments
+	EXPECT_THROW(invoke("db.index.vector.train", {}), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexTrain_Fail_Args_TooMany) {
+	// Test with too many arguments
+	std::vector<PropertyValue> args = {PropertyValue("test_index"), PropertyValue("extra")};
+	EXPECT_THROW(invoke("db.index.vector.train", args), std::runtime_error);
 }

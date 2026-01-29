@@ -25,6 +25,7 @@
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
+#include "graph/vector/quantization/NativeProductQuantizer.hpp"
 
 using namespace graph::vector;
 
@@ -111,4 +112,108 @@ TEST_F(RegistryTest, InvalidLoad) {
 	// but getConfig() should show dimension 0.
 	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "ghost_idx");
 	EXPECT_EQ(registry->getConfig().dimension, 0u);
+}
+
+TEST_F(RegistryTest, SetBlobPtrs_UpdateExisting) {
+	// Test updating blob pointers when mapping already exists
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "idx4");
+	VectorIndexConfig cfg;
+	cfg.dimension = 4;
+	registry->updateConfig(cfg);
+
+	int64_t nodeId = 100;
+	VectorBlobPtrs ptrs1{10, 20, 30};
+	registry->setBlobPtrs(nodeId, ptrs1);
+
+	// Update with new values
+	VectorBlobPtrs ptrs2{40, 50, 60};
+	registry->setBlobPtrs(nodeId, ptrs2);
+
+	// Config should be updated with new mapping root ID
+	auto readCfg = registry->getConfig();
+	EXPECT_GT(readCfg.mappingIndexId, 0);
+
+	// Verify that blob pointers are updated
+	auto readPtrs = registry->getBlobPtrs(nodeId);
+	EXPECT_EQ(readPtrs.rawBlob, 40);
+	EXPECT_EQ(readPtrs.pqBlob, 50);
+	EXPECT_EQ(readPtrs.adjBlob, 60);
+}
+
+TEST_F(RegistryTest, LoadRawVector_LoadZero) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "idx6");
+	VectorIndexConfig cfg;
+	cfg.dimension = 8;
+	registry->updateConfig(cfg);
+
+	// Loading blob ID 0 should return empty vector
+	auto vec = registry->loadRawVector(0);
+	EXPECT_TRUE(vec.empty());
+}
+
+TEST_F(RegistryTest, SaveLoadPQCodes) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "idx7");
+	VectorIndexConfig cfg;
+	cfg.dimension = 16;
+	registry->updateConfig(cfg);
+
+	std::vector<uint8_t> codes = {1, 2, 3, 4, 5};
+	auto blobId = registry->savePQCodes(codes);
+	EXPECT_GT(blobId, 0);
+
+	auto loadedCodes = registry->loadPQCodes(blobId);
+	EXPECT_EQ(loadedCodes.size(), codes.size());
+	for (size_t i = 0; i < codes.size(); ++i) {
+		EXPECT_EQ(loadedCodes[i], codes[i]);
+	}
+}
+
+TEST_F(RegistryTest, LoadPQCodes_EmptyBlobId) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "idx8");
+	VectorIndexConfig cfg;
+	cfg.dimension = 16;
+	registry->updateConfig(cfg);
+
+	// Loading blob ID 0 should return empty codes
+	auto codes = registry->loadPQCodes(0);
+	EXPECT_TRUE(codes.empty());
+}
+
+TEST_F(RegistryTest, SaveLoadAdjacency) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "idx9");
+	VectorIndexConfig cfg;
+	cfg.dimension = 16;
+	registry->updateConfig(cfg);
+
+	std::vector<int64_t> neighbors = {100, 200, 300, 400};
+	auto blobId = registry->saveAdjacency(neighbors);
+	EXPECT_GT(blobId, 0);
+
+	auto loadedNeighbors = registry->loadAdjacency(blobId);
+	EXPECT_EQ(loadedNeighbors.size(), neighbors.size());
+	for (size_t i = 0; i < neighbors.size(); ++i) {
+		EXPECT_EQ(loadedNeighbors[i], neighbors[i]);
+	}
+}
+
+TEST_F(RegistryTest, LoadAdjacency_EmptyBlobId) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "idx10");
+	VectorIndexConfig cfg;
+	cfg.dimension = 16;
+	registry->updateConfig(cfg);
+
+	// Loading blob ID 0 should return empty adjacency list
+	auto neighbors = registry->loadAdjacency(0);
+	EXPECT_TRUE(neighbors.empty());
+}
+
+TEST_F(RegistryTest, GetAllNodeIds_ZeroMappingIndex) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "idx11");
+	VectorIndexConfig cfg;
+	cfg.dimension = 16;
+	registry->updateConfig(cfg);
+
+	// Without a mapping index, getAllNodeIds should return empty
+	auto ids = registry->getAllNodeIds(100);
+	EXPECT_TRUE(ids.empty());
 }
