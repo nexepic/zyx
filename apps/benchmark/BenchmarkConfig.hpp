@@ -54,4 +54,7 @@ namespace metrix::benchmark::config {
 	constexpr std::string_view PATH_ALGO_CYPHER = "/tmp/metrix_bench_algo_cypher";
 	constexpr std::string_view PATH_ALGO_NATIVE = "/tmp/metrix_bench_algo_native";
 
+	const std::string PATH_VEC_INSERT = "/tmp/metrix_bench_vec_insert";
+	const std::string PATH_VEC_SEARCH = "/tmp/metrix_bench_vec_search";
+
 } // namespace metrix::benchmark::config

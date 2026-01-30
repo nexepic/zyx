@@ -25,6 +25,7 @@
 
 #include "BenchmarkCases.hpp"
 #include "BenchmarkConfig.hpp"
+#include "BenchmarkVector.hpp"
 
 using namespace metrix::benchmark;
 namespace conf = config;
@@ -37,7 +38,7 @@ std::string toLower(std::string s) {
 
 int main(int argc, char **argv) {
 	// 1. Parse Filter Argument
-	std::string filter = "";
+	std::string filter;
 	if (argc > 1) {
 		filter = toLower(std::string(argv[1]));
 	}
@@ -102,6 +103,35 @@ int main(int argc, char **argv) {
 															std::string(conf::PATH_ALGO_NATIVE), conf::ITERATIONS_ALGO,
 															conf::DATA_SIZE_ALGO));
 
+	// --- 4. Register Vector Tests ---
+
+	// Dimensions to test
+	constexpr int DIM_SMALL = 128; // Typical embedding size (small)
+	constexpr int DIM_LARGE = 768; // BERT/LLM embedding size
+
+	// A. Vector Insertion (No Index vs Index)
+	tests.push_back(std::make_unique<VectorInsertBench>("Vector Insert (No Index, 128d)",
+														config::PATH_VEC_INSERT + "_no_idx", conf::ITERATIONS_WRITE,
+														conf::DEFAULT_DATA_SIZE, false, DIM_SMALL));
+
+	tests.push_back(std::make_unique<VectorInsertBench>("Vector Insert (Indexed, 128d)",
+														config::PATH_VEC_INSERT + "_idx_128", conf::ITERATIONS_WRITE,
+														conf::DEFAULT_DATA_SIZE, true, DIM_SMALL));
+
+	tests.push_back(std::make_unique<VectorInsertBench>("Vector Insert (Indexed, 768d)",
+														config::PATH_VEC_INSERT + "_idx_768", conf::ITERATIONS_WRITE,
+														conf::DEFAULT_DATA_SIZE, true, DIM_LARGE));
+
+	// B. Vector Search
+	// Scale: Use DATA_SIZE_QUERY (5000) or larger if you want to test PQ speedup
+	tests.push_back(std::make_unique<VectorSearchBench>("Vector Search (128d, Top-10)",
+														config::PATH_VEC_SEARCH + "_128", conf::ITERATIONS_READ,
+														conf::DATA_SIZE_QUERY, DIM_SMALL, 10));
+
+	tests.push_back(std::make_unique<VectorSearchBench>("Vector Search (768d, Top-10)",
+														config::PATH_VEC_SEARCH + "_768", conf::ITERATIONS_READ,
+														conf::DATA_SIZE_QUERY, DIM_LARGE, 10));
+
 	// ========================================================================
 	// Execution Loop with Filter
 	// ========================================================================
@@ -117,17 +147,23 @@ int main(int argc, char **argv) {
 			}
 		}
 
-		Metrics m = t->execute();
+		try {
+			Metrics m = t->execute();
 
-		// Adjust for Batch items
-		int itemsPerOp = t->getItemsPerOp();
-		if (itemsPerOp > 1) {
-			m.opsPerSec *= itemsPerOp;
-			m.avgLatencyUs /= itemsPerOp;
-			m.p99LatencyUs /= itemsPerOp;
+			// Adjust for Batch items
+			int itemsPerOp = t->getItemsPerOp();
+			if (itemsPerOp > 1) {
+				m.opsPerSec *= itemsPerOp;
+				m.avgLatencyUs /= itemsPerOp;
+				m.p99LatencyUs /= itemsPerOp;
+			}
+
+			printRow(t->getName(), m);
+		} catch (const std::exception &e) {
+			std::cerr << "   [FAILED] " << t->getName() << ": " << e.what() << "\n";
+		} catch (...) {
+			std::cerr << "   [CRASH] " << t->getName() << ": Unknown error\n";
 		}
-
-		printRow(t->getName(), m);
 	}
 
 	std::cout << "=================================================================\n";
