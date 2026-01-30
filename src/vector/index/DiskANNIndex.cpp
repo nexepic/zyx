@@ -43,6 +43,11 @@ namespace graph::vector {
 	size_t DiskANNIndex::size() const { return cachedCount_; }
 
 	void DiskANNIndex::insert(int64_t nodeId, const std::vector<float> &vec) {
+		if (vec.size() != config_.dim) {
+			log::Log::error("Insert skipped: Vector dimension mismatch. Expected {}, got {}", config_.dim, vec.size());
+			return; // Skip insertion
+		}
+
 		// --- 1. Auto-Training Logic ---
 		// If not trained and threshold reached, trigger training synchronously.
 		if (!isPQTrained()) {

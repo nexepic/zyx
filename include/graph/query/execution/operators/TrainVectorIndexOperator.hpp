@@ -64,7 +64,10 @@ namespace graph::query::execution::operators {
 
 			if (samples.empty()) {
 				log::Log::warn("Index '{}' has no data. Training skipped.", indexName_);
-				// Return success message but indicate no action
+
+				// Mark as executed to prevent infinite loop
+				executed_ = true;
+
 				return createResultBatch("Skipped (Empty Data)");
 			}
 

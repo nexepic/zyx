@@ -275,6 +275,16 @@ const char *metrix_result_column_name(MetrixResult_T *res, int index) {
 	}
 }
 
+double metrix_result_get_duration(const MetrixResult_T *res) {
+	if (!res)
+		return 0.0;
+	try {
+		return res->cpp_result.getDuration();
+	} catch (...) {
+		return 0.0;
+	}
+}
+
 // --- Data Access ---
 
 MetrixValueType metrix_result_get_type(const MetrixResult_T *res, int col_index) {

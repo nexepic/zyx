@@ -51,23 +51,25 @@ namespace metrix {
 		Result(Result &&) noexcept;
 		Result &operator=(Result &&) noexcept;
 
-		bool hasNext() const;
+		[[nodiscard]] bool hasNext() const;
 		void next() const;
-		Value get(const std::string &key) const;
+		[[nodiscard]] Value get(const std::string &key) const;
 
 		// --- Data Access (By Index) - NEW for C API ---
 		/**
 		 * @brief Get value by column index (0-based).
 		 * @throws std::out_of_range if index is invalid.
 		 */
-		Value get(int index) const;
+		[[nodiscard]] Value get(int index) const;
 
 		// --- Metadata - NEW for C API ---
-		int getColumnCount() const;
-		std::string getColumnName(int index) const;
+		[[nodiscard]] int getColumnCount() const;
+		[[nodiscard]] std::string getColumnName(int index) const;
 
-		bool isSuccess() const;
-		std::string getError() const;
+		[[nodiscard]] double getDuration() const;
+
+		[[nodiscard]] bool isSuccess() const;
+		[[nodiscard]] std::string getError() const;
 
 	private:
 		std::unique_ptr<ResultImpl> impl_;
@@ -94,12 +96,12 @@ namespace metrix {
 		Database &operator=(const Database &) = delete;
 
 		void open() const;
-		bool openIfExists() const;
+		[[nodiscard]] bool openIfExists() const;
 		void close() const;
 		void save() const; // Flushes data to disk
 
 		// Execute raw Cypher query
-		Result execute(const std::string &cypher) const;
+		[[nodiscard]] Result execute(const std::string &cypher) const;
 
 		// High-performance direct insert APIs
 		void createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const;
@@ -123,8 +125,8 @@ namespace metrix {
 		 * @param props The properties.
 		 * @return The internal ID (int64_t) of the created node.
 		 */
-		int64_t createNodeRetId(const std::string &label,
-								const std::unordered_map<std::string, Value> &props = {}) const;
+		[[nodiscard]] int64_t createNodeRetId(const std::string &label,
+											  const std::unordered_map<std::string, Value> &props = {}) const;
 
 		/**
 		 * @brief Creates an edge directly between two known internal IDs.
@@ -143,7 +145,7 @@ namespace metrix {
 		 * @brief Finds the shortest path between two nodes.
 		 * @return Ordered path of nodes.
 		 */
-		std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15) const;
+		[[nodiscard]] std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15) const;
 
 		void bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const;
 

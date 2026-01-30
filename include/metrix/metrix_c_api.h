@@ -20,8 +20,7 @@
 
 #pragma once
 
-#include <stdbool.h>
-#include <stdint.h>
+#include <cstdint>
 
 #ifdef __cplusplus
 extern "C" {
@@ -121,6 +120,11 @@ int metrix_result_column_count(const MetrixResult_T *res);
  * @brief Returns the name of the column at the given index.
  */
 const char *metrix_result_column_name(MetrixResult_T *res, int index);
+
+/**
+ * @brief Returns the execution duration in milliseconds.
+ */
+double metrix_result_get_duration(const MetrixResult_T *res);
 
 // ========================================================================
 // Data Access (Zero-Copy where possible)

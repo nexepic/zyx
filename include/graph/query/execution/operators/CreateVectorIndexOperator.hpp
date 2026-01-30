@@ -44,7 +44,7 @@ namespace graph::query::execution::operators {
 			bool success = im_->createVectorIndex(name_, label_, property_, dimension_, metric_);
 
 			if (!success) {
-				// Optionally log warning or throw, depending on desired behavior for "IF NOT EXISTS" logic
+				throw std::runtime_error("Vector index '" + name_ + "' already exists.");
 			}
 
 			executed_ = true;
@@ -53,10 +53,10 @@ namespace graph::query::execution::operators {
 
 		void close() override {}
 
-		std::vector<std::string> getOutputVariables() const override { return {}; }
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
 
-		// Fix: Implement pure virtual function from PhysicalOperator
-		std::string toString() const override {
+		// Implement pure virtual function from PhysicalOperator
+		[[nodiscard]] std::string toString() const override {
 			return "CreateVectorIndex(name=" + name_ + ", label=" + label_ + ", prop=" + property_ +
 				   ", dim=" + std::to_string(dimension_) + ")";
 		}

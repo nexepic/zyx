@@ -124,9 +124,11 @@ namespace graph::query::indexes {
 		// indexMapLoaded_ = false;
 		if (!indexMapLoaded_) {
 			loadIndexMap();
-			log::Log::info("Loaded Index Map. Count: {}", indexMap_.size());
-			for (auto &[k, v]: indexMap_)
-				log::Log::info("Map: {} -> {}", k, v);
+			if (!indexMap_.empty()) {
+				log::Log::info("Loaded Index Map. Count: {}", indexMap_.size());
+				for (const auto &[k, v]: indexMap_)
+					log::Log::info("Map: {} -> {}", k, v);
+			}
 		}
 
 		if (label.empty())

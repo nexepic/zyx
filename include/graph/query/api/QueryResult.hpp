@@ -38,16 +38,25 @@ namespace graph::query {
 
 		void setColumns(std::vector<std::string> cols) { columns_ = std::move(cols); }
 
-		const std::vector<std::string> &getColumns() const { return columns_; }
+		[[nodiscard]] const std::vector<std::string> &getColumns() const { return columns_; }
 
-		const std::vector<Row> &getRows() const { return rows_; }
-		size_t rowCount() const { return rows_.size(); }
+		[[nodiscard]] const std::vector<Row> &getRows() const { return rows_; }
+		[[nodiscard]] size_t rowCount() const { return rows_.size(); }
 
-		bool isEmpty() const { return rows_.empty(); }
+		[[nodiscard]] bool isEmpty() const { return rows_.empty(); }
+
+		void setDuration(double ms) { duration_ms_ = ms; }
+		[[nodiscard]] double getDuration() const { return duration_ms_; }
+
+		void addNotification(std::string msg) { notifications_.push_back(std::move(msg)); }
+		[[nodiscard]] const std::vector<std::string> &getNotifications() const { return notifications_; }
 
 	private:
 		std::vector<Row> rows_;
 		std::vector<std::string> columns_;
+
+		double duration_ms_ = 0.0;
+		std::vector<std::string> notifications_;
 	};
 
 } // namespace graph::query

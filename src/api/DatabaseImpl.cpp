@@ -193,6 +193,8 @@ namespace metrix {
 				mode_ = 0; // Standard Table Row
 			}
 		}
+
+		double getDuration() const { return result_.getDuration(); }
 	};
 
 	Result::~Result() = default;
@@ -299,6 +301,8 @@ namespace metrix {
 					   : "";
 	}
 
+	double Result::getDuration() const { return impl_ ? impl_->getDuration() : 0.0; }
+
 	bool Result::isSuccess() const { return impl_ && impl_->error_msg.empty(); }
 
 	std::string Result::getError() const {
@@ -330,7 +334,15 @@ namespace metrix {
 
 	Result Database::execute(const std::string &cypher) const {
 		try {
+			auto start = std::chrono::high_resolution_clock::now();
+
 			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+
+			auto end = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double, std::milli> elapsed = end - start;
+
+			internalRes.setDuration(elapsed.count());
+
 			// We MUST inject DataManager into ResultImpl to allow label resolution later
 			auto dm = impl_->db_.getStorage()->getDataManager();
 

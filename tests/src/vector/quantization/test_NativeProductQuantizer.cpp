@@ -53,14 +53,14 @@ TEST_F(NativePQTest, TrainAndEncode) {
 TEST_F(NativePQTest, EncodeWithoutTrain_Throws) {
 	NativeProductQuantizer pq(16, 4);
 	std::vector<float> vec(16);
-	EXPECT_THROW(pq.encode(vec), std::runtime_error);
+	EXPECT_THROW((void) pq.encode(vec), std::runtime_error);
 }
 
 TEST_F(NativePQTest, DimensionMismatch_Throws) {
 	NativeProductQuantizer pq(16, 4);
 	pq.train(trainData);
 	std::vector<float> badVec(15);
-	EXPECT_THROW(pq.encode(badVec), std::runtime_error);
+	EXPECT_THROW((void) pq.encode(badVec), std::runtime_error);
 }
 
 TEST_F(NativePQTest, ExceptionPaths) {
@@ -69,14 +69,14 @@ TEST_F(NativePQTest, ExceptionPaths) {
 	std::vector<float> vec(16, 0.0f);
 
 	// 1. Encode before Train
-	EXPECT_THROW({ pq.encode(vec); }, std::runtime_error); // "PQ not trained"
+	EXPECT_THROW({ (void) pq.encode(vec); }, std::runtime_error); // "PQ not trained"
 
 	// Train it
 	pq.train(trainData);
 
 	// 2. Dimension Mismatch
 	std::vector<float> badVec(10, 0.0f);
-	EXPECT_THROW({ pq.encode(badVec); }, std::runtime_error); // "Encode vector dimension mismatch"
+	EXPECT_THROW({ (void) pq.encode(badVec); }, std::runtime_error); // "Encode vector dimension mismatch"
 
 	// 3. Invalid Constructor (Dim not divisible by subspaces)
 	EXPECT_THROW(

@@ -20,8 +20,8 @@
 
 #include <gtest/gtest.h>
 #include <unordered_map>
-#include "graph/vector/VectorIndexConfig.hpp"
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/vector/VectorIndexConfig.hpp"
 
 class VectorIndexConfigTest : public ::testing::Test {
 protected:
@@ -78,14 +78,10 @@ TEST_F(VectorIndexConfigTest, ToProperties) {
 
 TEST_F(VectorIndexConfigTest, FromProperties_Full) {
 	std::unordered_map<std::string, graph::PropertyValue> props = {
-		{"dim", graph::PropertyValue(128)},
-		{"metric", graph::PropertyValue(1)},
-		{"pq_m", graph::PropertyValue(8)},
-		{"map_root", graph::PropertyValue(100)},
-		{"entry", graph::PropertyValue(200)},
-		{"cb_key", graph::PropertyValue("test_codebook")},
-		{"trained", graph::PropertyValue(true)}
-	};
+			{"dim", graph::PropertyValue(128)},		{"metric", graph::PropertyValue(1)},
+			{"pq_m", graph::PropertyValue(8)},		{"map_root", graph::PropertyValue(100)},
+			{"entry", graph::PropertyValue(200)},	{"cb_key", graph::PropertyValue("test_codebook")},
+			{"trained", graph::PropertyValue(true)}};
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
@@ -99,10 +95,8 @@ TEST_F(VectorIndexConfigTest, FromProperties_Full) {
 }
 
 TEST_F(VectorIndexConfigTest, FromProperties_Partial) {
-	std::unordered_map<std::string, graph::PropertyValue> props = {
-		{"dim", graph::PropertyValue(64)},
-		{"metric", graph::PropertyValue(2)}
-	};
+	std::unordered_map<std::string, graph::PropertyValue> props = {{"dim", graph::PropertyValue(64)},
+																   {"metric", graph::PropertyValue(2)}};
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
@@ -131,9 +125,7 @@ TEST_F(VectorIndexConfigTest, FromProperties_Empty) {
 }
 
 TEST_F(VectorIndexConfigTest, FromProperties_TrainedBool) {
-	std::unordered_map<std::string, graph::PropertyValue> props = {
-		{"trained", graph::PropertyValue(true)}
-	};
+	std::unordered_map<std::string, graph::PropertyValue> props = {{"trained", graph::PropertyValue(true)}};
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
@@ -141,9 +133,7 @@ TEST_F(VectorIndexConfigTest, FromProperties_TrainedBool) {
 }
 
 TEST_F(VectorIndexConfigTest, FromProperties_TrainedIntNonZero) {
-	std::unordered_map<std::string, graph::PropertyValue> props = {
-		{"trained", graph::PropertyValue(1)}
-	};
+	std::unordered_map<std::string, graph::PropertyValue> props = {{"trained", graph::PropertyValue(1)}};
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
@@ -151,9 +141,7 @@ TEST_F(VectorIndexConfigTest, FromProperties_TrainedIntNonZero) {
 }
 
 TEST_F(VectorIndexConfigTest, FromProperties_TrainedIntZero) {
-	std::unordered_map<std::string, graph::PropertyValue> props = {
-		{"trained", graph::PropertyValue(0)}
-	};
+	std::unordered_map<std::string, graph::PropertyValue> props = {{"trained", graph::PropertyValue(0)}};
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
@@ -161,9 +149,7 @@ TEST_F(VectorIndexConfigTest, FromProperties_TrainedIntZero) {
 }
 
 TEST_F(VectorIndexConfigTest, FromProperties_TrainedIntNegative) {
-	std::unordered_map<std::string, graph::PropertyValue> props = {
-		{"trained", graph::PropertyValue(-1)}
-	};
+	std::unordered_map<std::string, graph::PropertyValue> props = {{"trained", graph::PropertyValue(-1)}};
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
@@ -196,9 +182,7 @@ TEST_F(VectorIndexConfigTest, RoundTrip) {
 }
 
 TEST_F(VectorIndexConfigTest, FromProperties_LargeDimension) {
-	std::unordered_map<std::string, graph::PropertyValue> props = {
-		{"dim", graph::PropertyValue(4096)}
-	};
+	std::unordered_map<std::string, graph::PropertyValue> props = {{"dim", graph::PropertyValue(4096)}};
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
@@ -208,9 +192,7 @@ TEST_F(VectorIndexConfigTest, FromProperties_LargeDimension) {
 TEST_F(VectorIndexConfigTest, FromProperties_MetricTypes) {
 	// Test different metric type values
 	for (int metric = 0; metric < 10; ++metric) {
-		std::unordered_map<std::string, graph::PropertyValue> props = {
-			{"metric", graph::PropertyValue(metric)}
-		};
+		std::unordered_map<std::string, graph::PropertyValue> props = {{"metric", graph::PropertyValue(metric)}};
 
 		auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
