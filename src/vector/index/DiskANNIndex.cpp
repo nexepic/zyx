@@ -65,6 +65,8 @@ namespace graph::vector {
 		// Always save Raw Vector (Ground Truth)
 		const auto rawBlob = registry_->saveRawVector(toBFloat16(vec));
 
+		log::Log::info("[DEBUG] Saved RawBlob ID: {} for Node {}", rawBlob, nodeId);
+
 		// Conditionally save PQ Codes
 		int64_t pqBlob = 0;
 		if (isPQTrained()) {
@@ -79,6 +81,8 @@ namespace graph::vector {
 		registry_->setBlobPtrs(nodeId, ptrs);
 
 		const int64_t entryPoint = registry_->getConfig().entryPointNodeId;
+
+		log::Log::info("Insert Node {}. EntryPoint: {}", nodeId, entryPoint);
 
 		// --- 3. Graph Construction ---
 

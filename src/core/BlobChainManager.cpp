@@ -116,7 +116,7 @@ namespace graph {
 		// Data is different, proceed with update
 		Blob headBlob = dataManager_->getBlob(headBlobId);
 		if (headBlob.getId() == 0 || !headBlob.isActive()) {
-			throw std::runtime_error("Head blob not found or inactive");
+			throw std::runtime_error("Head blob not found: " + std::to_string(headBlobId));
 		}
 
 		// Delete the existing chain
@@ -130,7 +130,7 @@ namespace graph {
 		// Get the head blob
 		Blob headBlob = dataManager_->getBlob(headBlobId);
 		if (headBlob.getId() == 0 || !headBlob.isActive()) {
-			throw std::runtime_error("Head blob not found or inactive");
+			throw std::runtime_error("Head blob not found: " + std::to_string(headBlobId));
 		}
 
 		// Check if this is a single blob or a chain

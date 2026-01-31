@@ -51,6 +51,9 @@ namespace graph::property_utils {
 						// For a string, estimate size as its character data plus overhead.
 						// This matches your original logic.
 						return arg.size() + sizeof(size_t);
+					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+						// Size = Count (4 bytes) + Data (N * 4 bytes)
+						return sizeof(uint32_t) + (arg.size() * sizeof(float));
 					}
 
 					return 0; // Should be unreachable if all types are handled.
