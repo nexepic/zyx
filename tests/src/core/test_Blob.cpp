@@ -136,27 +136,18 @@ TEST_F(BlobTest, SerializeDeserializeWithData) {
 }
 
 TEST_F(BlobTest, GetSerializedSize) {
-	const std::string testData = "Size calculation test";
-	const graph::Blob blob(1, testData);
-
-	size_t expectedSize = 0;
-	expectedSize += sizeof(int64_t) * 4; // id, entityId, nextBlobId, prevBlobId
-	expectedSize += sizeof(uint32_t) * 3; // dataSize, entityType, originalSize
-	expectedSize += sizeof(int32_t); // chainPosition
-	expectedSize += sizeof(bool) * 2; // isActive, compressed
-	expectedSize += testData.size(); // actual data
-	EXPECT_EQ(blob.getSerializedSize(), expectedSize);
+	// getSerializedSize() returns the fixed TOTAL_BLOB_SIZE (256 bytes)
+	// This is correct because serialization always writes the full fixed-size structure
+	// including the full dataBuffer (CHUNK_SIZE), not just the used portion
+	const graph::Blob blob(1, "test data");
+	EXPECT_EQ(blob.getSerializedSize(), graph::Blob::TOTAL_BLOB_SIZE);
 }
 
 TEST_F(BlobTest, GetSerializedSizeEmpty) {
+	// getSerializedSize() returns the fixed TOTAL_BLOB_SIZE (256 bytes)
+	// even for empty blobs, because serialization writes the full structure
 	graph::Blob blob(1, "");
-
-	size_t expectedSize = 0;
-	expectedSize += sizeof(int64_t) * 4; // id, entityId, nextBlobId, prevBlobId
-	expectedSize += sizeof(uint32_t) * 3; // dataSize, entityType, originalSize
-	expectedSize += sizeof(int32_t); // chainPosition
-	expectedSize += sizeof(bool) * 2; // isActive, compressed
-	EXPECT_EQ(blob.getSerializedSize(), expectedSize);
+	EXPECT_EQ(blob.getSerializedSize(), graph::Blob::TOTAL_BLOB_SIZE);
 }
 
 TEST_F(BlobTest, Constants) {

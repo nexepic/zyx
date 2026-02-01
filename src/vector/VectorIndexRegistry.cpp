@@ -127,9 +127,9 @@ namespace graph::vector {
 
 	void VectorIndexRegistry::setBlobPtrs(int64_t nodeId, const VectorBlobPtrs &ptrs) {
 		std::string data(reinterpret_cast<const char *>(&ptrs), sizeof(VectorBlobPtrs));
+		std::vector<int64_t> ids = mappingTree_->find(config_.mappingIndexId, PropertyValue(nodeId));
 
-		if (const std::vector<int64_t> ids = mappingTree_->find(config_.mappingIndexId, PropertyValue(nodeId));
-			!ids.empty()) {
+		if (!ids.empty()) {
 			(void) dataManager_->getBlobManager()->updateBlobChain(ids[0], nodeId, 0, data);
 		} else {
 			auto blobs = dataManager_->getBlobManager()->createBlobChain(nodeId, 0, data);
@@ -144,6 +144,7 @@ namespace graph::vector {
 				}
 			}
 		}
+
 		{
 			std::lock_guard<std::mutex> lock(cacheMutex_);
 			mappingCache_.put(nodeId, ptrs);

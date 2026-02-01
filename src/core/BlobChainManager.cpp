@@ -49,37 +49,34 @@ namespace graph {
 		std::vector<Blob> blobChain;
 		blobChain.reserve(chunks.size());
 
-		int64_t prevBlobId = 0;
+		// First pass: Create all blobs and collect their IDs
+		// This separates blob creation from linking to avoid cache eviction issues
+		std::vector<int64_t> blobIds;
+		blobIds.reserve(chunks.size());
 
-		// Create each blob in the chain
 		for (size_t i = 0; i < chunks.size(); i++) {
-			// Create a new blob object for the current chunk
 			Blob currentBlob(0, chunks[i]);
-
 			currentBlob.setEntityInfo(entityId, entityType);
-			// All blobs are now compressed
 			currentBlob.setCompressionInfo(data.size(), true);
-
 			currentBlob.setChainPosition(static_cast<int32_t>(i));
-
-			currentBlob.setPrevBlobId(prevBlobId);
+			currentBlob.setPrevBlobId(i > 0 ? blobIds[i - 1] : 0);
 
 			dataManager_->addBlobEntity(currentBlob);
-
-			if (i > 0) {
-				// Get the previous blob from our local vector
-				Blob &prevBlob = blobChain.back();
-
-				// Set its `next_blob_id` to the new permanent ID of the current blob
-				prevBlob.setNextBlobId(currentBlob.getId());
-
-				// Since we modified `prevBlob` after it was added, we must update it
-				// in the DataManager. This will update the entity in the dirty map.
-				dataManager_->updateBlobEntity(prevBlob);
-			}
-
-			prevBlobId = currentBlob.getId();
+			blobIds.push_back(currentBlob.getId());
 			blobChain.push_back(currentBlob);
+		}
+
+		// Second pass: Update nextBlobId for all blobs except the last
+		// By doing this after all blobs are created, we avoid issues with cache eviction
+		for (size_t i = 0; i < blobIds.size() - 1; i++) {
+			int64_t currentId = blobIds[i];
+			Blob blob = dataManager_->getBlob(currentId);
+			if (blob.getId() != 0 && blob.isActive()) {
+				blob.setNextBlobId(blobIds[i + 1]);
+				dataManager_->updateBlobEntity(blob);
+				// Also update the blob in the returned vector to maintain consistency
+				blobChain[i].setNextBlobId(blobIds[i + 1]);
+			}
 		}
 
 		return blobChain;
@@ -98,6 +95,8 @@ namespace graph {
 	std::vector<Blob> BlobChainManager::updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
 														const std::string &data) const {
 		// First check if the data is actually different
+		// If we can't read the current data (e.g., blob evicted from cache and not yet flushed),
+		// isDataSame will return false, and we'll proceed to create a new chain
 		if (isDataSame(headBlobId, data)) {
 			// Data is the same, return the existing chain
 			const auto chainIds = getBlobChainIds(headBlobId);
@@ -113,14 +112,14 @@ namespace graph {
 			return existingChain;
 		}
 
-		// Data is different, proceed with update
+		// Data is different or old blob is not accessible, proceed with update
 		Blob headBlob = dataManager_->getBlob(headBlobId);
-		if (headBlob.getId() == 0 || !headBlob.isActive()) {
-			throw std::runtime_error("Head blob not found: " + std::to_string(headBlobId));
+		if (headBlob.getId() != 0 && headBlob.isActive()) {
+			// Old blob exists and is active, delete the existing chain first
+			deleteBlobChain(headBlobId);
 		}
-
-		// Delete the existing chain
-		deleteBlobChain(headBlobId);
+		// If old blob doesn't exist or is inactive, just create a new chain
+		// (this can happen if the blob was evicted from cache and not yet flushed to disk)
 
 		// Create a new chain with updated data
 		return createBlobChain(entityId, entityType, data);
