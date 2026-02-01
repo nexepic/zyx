@@ -722,3 +722,147 @@ TEST_F(StateChainManagerTest, ModeSwitchUnderCacheEviction) {
 	readData = stateChainManager->readStateChain(headId);
 	EXPECT_EQ(readData, internalData);
 }
+
+// =============================================================================
+// Exception Path Tests
+// These tests verify error handling and exception cases
+// =============================================================================
+
+// Test that reading a blob storage state with externalId=0 returns empty
+// Tests branch at line 55: if (headState.getExternalId() == 0) return ""
+TEST_F(StateChainManagerTest, BlobStorageWithZeroExternalIdReturnsEmpty) {
+	constexpr int64_t stateId = 5000;
+	const std::string key = "test_key_blob_zero_external";
+
+	// Create a state with blob storage first (non-zero externalId)
+	std::string originalData = "Original data";
+	auto blobChain = stateChainManager->createStateChain(key, originalData, true);
+	ASSERT_GT(blobChain[0].getExternalId(), 0);
+
+	// Now manually set externalId to 0 to test the edge case
+	// This simulates corrupted data where isBlobStorage would return true but externalId is 0
+	graph::State headState = dataManager->getState(blobChain[0].getId());
+	headState.setExternalId(0);
+	dataManager->updateStateEntity(headState);
+
+	// Reading should return empty string (not throw)
+	std::string result = stateChainManager->readStateChain(blobChain[0].getId());
+	EXPECT_EQ(result, "");
+}
+
+// Test that reading a chain with position mismatch throws
+// Tests branch at line 78-80: if (currentState.getChainPosition() != expectedPosition)
+TEST_F(StateChainManagerTest, ReadThrowsOnPositionMismatch) {
+	constexpr int64_t headId = 5100;
+	const std::string key = "test_key_position_mismatch";
+	std::string testData;
+	testData.resize(graph::State::CHUNK_SIZE * 2 + 50);
+	std::mt19937 rng(333);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	// Create a multi-chunk chain
+	auto chain = stateChainManager->createStateChain(key, testData, false);
+
+	ASSERT_GT(chain.size(), 1UL);
+
+	// Manually corrupt the position of the second state
+	graph::State secondState = dataManager->getState(chain[1].getId());
+	secondState.setChainPosition(99);  // Wrong position
+	dataManager->updateStateEntity(secondState);
+
+	// Try to read the corrupted chain - should throw
+	EXPECT_THROW((void) stateChainManager->readStateChain(chain[0].getId()), std::runtime_error);
+}
+
+// Test that deleting a non-existent blob storage state doesn't throw
+// Tests branch at line 166: if (headState.getId() == 0 || !headState.isActive()) return
+TEST_F(StateChainManagerTest, DeleteNonExistentStateSucceeds) {
+	// Deleting a non-existent state should not throw
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(999999));
+}
+
+// Test that deleting a state with inactive intermediate blob chain handles gracefully
+// Tests branch at line 142-144: break when next state is inactive
+TEST_F(StateChainManagerTest, UpdateHandlesInactiveIntermediateStates) {
+	constexpr int64_t headId = 5200;
+	const std::string key = "test_key_inactive_intermediate";
+	std::string testData;
+	testData.resize(graph::State::CHUNK_SIZE * 2 + 50);
+	std::mt19937 rng(444);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	// Create a multi-chunk chain
+	auto chain = stateChainManager->createStateChain(key, testData, false);
+
+	ASSERT_GT(chain.size(), 1UL);
+
+	// Manually delete the middle chunk to simulate corruption
+	if (chain.size() > 1) {
+		graph::State middleState = dataManager->getState(chain[1].getId());
+		dataManager->deleteState(middleState);
+	}
+
+	// Update should still work (it cleans up the old chain)
+	std::string newData = "New data after corruption";
+	EXPECT_NO_THROW({
+		auto newChain = stateChainManager->updateStateChain(chain[0].getId(), newData, false);
+		EXPECT_EQ(newChain[0].getId(), chain[0].getId());
+	});
+
+	// Verify the new data is correct
+	std::string readData = stateChainManager->readStateChain(chain[0].getId());
+	EXPECT_EQ(readData, newData);
+}
+
+// Test that getStateChainIds handles inactive states gracefully
+// Tests branch at line 197: if (currentState.getId() == 0 || !currentState.isActive()) break
+TEST_F(StateChainManagerTest, GetStateChainIdsHandlesInactiveStates) {
+	constexpr int64_t headId = 5300;
+	const std::string key = "test_key_inactive_chain_ids";
+	std::string testData;
+	testData.resize(graph::State::CHUNK_SIZE * 2 + 50);
+	std::mt19937 rng(555);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	// Create a multi-chunk chain
+	auto chain = stateChainManager->createStateChain(key, testData, false);
+
+	ASSERT_GT(chain.size(), 1UL);
+
+	// Get the full chain first
+	auto fullChain = stateChainManager->getStateChainIds(chain[0].getId());
+	EXPECT_EQ(fullChain.size(), chain.size());
+
+	// Manually delete the middle chunk
+	if (chain.size() > 1) {
+		graph::State middleState = dataManager->getState(chain[1].getId());
+		dataManager->deleteState(middleState);
+	}
+
+	// getStateChainIds should return partial chain (stop at inactive state)
+	auto partialChain = stateChainManager->getStateChainIds(chain[0].getId());
+	EXPECT_GT(partialChain.size(), 0UL);
+	EXPECT_LT(partialChain.size(), fullChain.size());
+}
+
+// Test that reading throws on non-existent state
+// Tests branch at line 50-51: if (headState.getId() == 0 || !headState.isActive())
+TEST_F(StateChainManagerTest, ReadThrowsOnNonExistentState) {
+	EXPECT_THROW((void) stateChainManager->readStateChain(999999), std::runtime_error);
+}
+
+// Test that updating throws on non-existent state
+// Tests branch at line 121-122: if (headState.getId() == 0 || !headState.isActive())
+TEST_F(StateChainManagerTest, UpdateThrowsOnNonExistentState) {
+	std::string newData = "New data";
+	EXPECT_THROW((void) stateChainManager->updateStateChain(999999, newData, false), std::runtime_error);
+}

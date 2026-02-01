@@ -431,3 +431,129 @@ TEST_F(BlobChainManagerTest, ReturnedVectorSyncWithDataManager) {
 				<< "Blob " << i << ": chainPosition doesn't match";
 	}
 }
+
+// =============================================================================
+// Exception Path Tests
+// These tests verify error handling and exception cases
+// =============================================================================
+
+// Test that oversized data throws an exception
+// Tests branch at line 38-40: if (processedData.size() > Blob::MAX_COMPRESSED_SIZE)
+TEST_F(BlobChainManagerTest, ThrowsOnOversizedData) {
+	// Create data larger than MAX_COMPRESSED_SIZE (5MB)
+	// Use incompressible data to ensure compressed size is still large
+	std::string oversizedData;
+	oversizedData.resize(graph::Blob::MAX_COMPRESSED_SIZE + 1000);
+	std::mt19937 rng(42);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: oversizedData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	EXPECT_THROW((void) chainManager->createBlobChain(1, 1, oversizedData), std::runtime_error);
+}
+
+// Test that reading a non-existent blob chain throws
+// Tests branch at line 147-148: if (headBlob.getId() == 0 || !headBlob.isActive())
+TEST_F(BlobChainManagerTest, ReadThrowsOnNonExistentBlob) {
+	EXPECT_THROW((void) chainManager->readBlobChain(999999), std::runtime_error);
+}
+
+// Test that reading a chain with missing intermediate blob throws
+// Tests branch at line 170-173: if (currentBlob.getId() == 0 || !currentBlob.isActive())
+TEST_F(BlobChainManagerTest, ReadThrowsOnCorruptedChain) {
+	constexpr int64_t entityId = 700;
+	constexpr int64_t entityTypeId = 7;
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
+	std::mt19937 rng(111);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
+
+	ASSERT_GT(blobChain.size(), 1UL);
+
+	// Add blobs to DataManager
+	for (auto &blob: blobChain) {
+		dataManager->addBlobEntity(blob);
+	}
+
+	// Manually delete the middle blob to simulate corruption
+	if (blobChain.size() > 1) {
+		graph::Blob middleBlob = dataManager->getBlob(blobChain[1].getId());
+		dataManager->deleteBlob(middleBlob);
+	}
+
+	// Try to read the corrupted chain - should throw
+	EXPECT_THROW((void) chainManager->readBlobChain(blobChain[0].getId()), std::runtime_error);
+}
+
+// Test that reading a chain with incorrect position throws
+// Tests branch at line 176-179: if (currentBlob.getChainPosition() != expectedPosition)
+TEST_F(BlobChainManagerTest, ReadThrowsOnPositionMismatch) {
+	constexpr int64_t entityId = 800;
+	constexpr int64_t entityTypeId = 8;
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
+	std::mt19937 rng(222);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
+
+	ASSERT_GT(blobChain.size(), 1UL);
+
+	// Add blobs to DataManager
+	for (auto &blob: blobChain) {
+		dataManager->addBlobEntity(blob);
+	}
+
+	// Manually corrupt the position of the second blob
+	if (blobChain.size() > 1) {
+		graph::Blob secondBlob = dataManager->getBlob(blobChain[1].getId());
+		secondBlob.setChainPosition(99);  // Wrong position
+		dataManager->updateBlobEntity(secondBlob);
+	}
+
+	// Try to read the corrupted chain - should throw
+	EXPECT_THROW((void) chainManager->readBlobChain(blobChain[0].getId()), std::runtime_error);
+}
+
+// Test that isDataSame handles missing blob gracefully
+// Tests branch at line 105-108: catch block in isDataSame
+TEST_F(BlobChainManagerTest, IsDataSameReturnsFalseOnMissingBlob) {
+	constexpr int64_t entityId = 900;
+	constexpr int64_t entityTypeId = 9;
+	std::string testData = "Test data";
+
+	// Create a blob chain
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
+
+	for (auto &blob: blobChain) {
+		dataManager->addBlobEntity(blob);
+	}
+
+	ASSERT_GT(blobChain.size(), 0UL);
+
+	// Delete the blob without updating BlobChainManager
+	graph::Blob headBlob = dataManager->getBlob(blobChain[0].getId());
+	dataManager->deleteBlob(headBlob);
+
+	// isDataSame should return false (not throw) when blob is missing
+	// This tests the exception handling path in isDataSame
+	// Since we can't directly test isDataSame (it's private), we test through updateBlobChain
+	// which calls isDataSame internally
+	std::string newData = "Different data";
+	EXPECT_NO_THROW((void) chainManager->updateBlobChain(blobChain[0].getId(), entityId, entityTypeId, newData));
+}
+
+// Test deleteBlobChain throws on non-existent blob
+// Tests branch at line 199-200: if (headBlob.getId() == 0 || !headBlob.isActive())
+TEST_F(BlobChainManagerTest, DeleteThrowsOnNonExistentBlob) {
+	EXPECT_THROW(chainManager->deleteBlobChain(999999), std::runtime_error);
+}
