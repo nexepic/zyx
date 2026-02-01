@@ -98,7 +98,7 @@ TEST_F(NativePQTest, TrainAndEncode) {
 
 	// Check data integrity before passing
 	ASSERT_FALSE(trainData.empty());
-	ASSERT_EQ(trainData[0].size(), 16);
+	ASSERT_EQ(trainData[0].size(), 16UL);
 
 	EXPECT_NO_THROW(pq.train(trainData));
 

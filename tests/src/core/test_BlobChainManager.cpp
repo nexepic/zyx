@@ -259,3 +259,175 @@ TEST_F(BlobChainManagerTest, TypeIdConstant) {
 	// Verify that Blob typeId matches expected entity type
 	EXPECT_EQ(graph::Blob::typeId, graph::toUnderlying(graph::EntityType::Blob));
 }
+
+// =============================================================================
+// Cache Eviction Edge Case Tests
+// These tests verify that blob chain creation works correctly even when
+// cache eviction occurs during the process. This is critical because:
+// 1. Blobs are value types (copies), not references
+// 2. Cache eviction can happen between addEntity and updateEntity calls
+// 3. The returned blobChain vector must stay in sync with DataManager
+// =============================================================================
+
+TEST_F(BlobChainManagerTest, CreateChainWithSmallCache) {
+	// Create a chain when cache might be nearly full
+	// This tests that two-pass creation works even under memory pressure
+
+	// First, create enough blobs to fill the cache
+	// Default blob cache size is cacheSize/4 (2500 for default cacheSize=10000)
+	// But we can't easily control that, so we create a moderate amount
+
+	// Create multiple large blob chains to potentially trigger eviction
+	std::vector<std::vector<graph::Blob>> allChains;
+
+	for (int round = 0; round < 10; round++) {
+		constexpr int64_t entityTypeId = 1;
+		constexpr int64_t entityId = 1000;
+		// Generate random data to avoid high compression
+		std::string testData;
+		testData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
+		std::mt19937 rng(round); // Different seed each round
+		std::uniform_int_distribution<int> dist(0, 255);
+		for (auto &c: testData) {
+			c = static_cast<char>(dist(rng));
+		}
+
+		auto blobChain = chainManager->createBlobChain(entityId + round, entityTypeId, testData);
+		allChains.push_back(blobChain);
+
+		// Verify chain integrity for each created chain
+		ASSERT_GT(blobChain.size(), 1UL);
+
+		// Critical: Verify nextBlobId is correctly set in the returned vector
+		// This is what could fail if cache eviction causes sync issues
+		for (size_t i = 0; i < blobChain.size() - 1; i++) {
+			EXPECT_EQ(blobChain[i].getNextBlobId(), blobChain[i + 1].getId())
+					<< "Failed at chain " << round << ", blob " << i
+					<< ": nextBlobId should point to next blob in chain";
+		}
+
+		// Verify last blob has no next
+		EXPECT_EQ(blobChain.back().getNextBlobId(), 0)
+				<< "Failed at chain " << round << ": last blob should have nextBlobId=0";
+	}
+}
+
+TEST_F(BlobChainManagerTest, CreateChainUnderCacheEvictionStress) {
+	// Stress test: Create many blob chains rapidly to force cache eviction
+	// This simulates the real-world scenario that caused the original bug
+
+	constexpr int64_t numChains = 50; // Create 50 separate chains
+
+	// Generate different data for each chain to ensure different blob IDs
+	std::mt19937 rng(12345);
+	std::uniform_int_distribution<int> dist(0, 255);
+
+	for (int64_t chainIdx = 0; chainIdx < numChains; chainIdx++) {
+		constexpr int64_t entityTypeId = 1;
+		// Create a 3-blob chain
+		std::string testData;
+		testData.resize(graph::Blob::CHUNK_SIZE * 2 + 50);
+		for (auto &c: testData) {
+			c = static_cast<char>(dist(rng));
+		}
+
+		auto blobChain = chainManager->createBlobChain(chainIdx, entityTypeId, testData);
+
+		// Critical verification: Each blob's nextBlobId must be correct
+		// If the two-pass approach fails or sync is broken, this will fail
+		ASSERT_EQ(blobChain.size(), 3UL) << "Chain " << chainIdx << " should have 3 blobs";
+
+		EXPECT_EQ(blobChain[0].getNextBlobId(), blobChain[1].getId())
+				<< "Chain " << chainIdx << ": blob[0].nextBlobId mismatch";
+		EXPECT_EQ(blobChain[1].getNextBlobId(), blobChain[2].getId())
+				<< "Chain " << chainIdx << ": blob[1].nextBlobId mismatch";
+		EXPECT_EQ(blobChain[2].getNextBlobId(), 0) << "Chain " << chainIdx << ": blob[2].nextBlobId should be 0";
+
+		// Additionally verify by reading back from DataManager
+		// This ensures the chain is actually persisted correctly
+		auto blob0FromManager = dataManager->getBlob(blobChain[0].getId());
+		EXPECT_EQ(blob0FromManager.getNextBlobId(), blobChain[1].getId())
+				<< "Chain " << chainIdx << ": DataManager blob[0].nextBlobId mismatch";
+	}
+}
+
+TEST_F(BlobChainManagerTest, UpdateChainAfterEviction) {
+	// Test updating a blob chain after it might have been evicted from cache
+	// This verifies that updateBlobChain handles cache eviction correctly
+
+	constexpr int64_t entityId = 2000;
+	constexpr int64_t entityTypeId = 2;
+
+	// Create initial chain
+	std::string originalData;
+	originalData.resize(graph::Blob::CHUNK_SIZE * 2);
+	std::mt19937 rng(42);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: originalData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, originalData);
+	ASSERT_GT(blobChain.size(), 1UL);
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Create many other blobs to potentially evict the original chain from cache
+	for (int i = 0; i < 20; i++) {
+		std::string fillerData;
+		fillerData.resize(graph::Blob::CHUNK_SIZE * 2);
+		for (auto &c: fillerData) {
+			c = static_cast<char>(dist(rng));
+		}
+		(void) chainManager->createBlobChain(entityId + 100 + i, entityTypeId, fillerData);
+	}
+
+	// Now update the original chain with new data
+	std::string updatedData;
+	updatedData.resize(graph::Blob::CHUNK_SIZE * 2);
+	for (auto &c: updatedData) {
+		c = static_cast<char>(dist(rng) + 1); // Different data
+	}
+
+	// This should work even if original chain was evicted
+	EXPECT_NO_THROW((void) chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, updatedData));
+
+	// Verify the updated chain can be read correctly
+	std::string readData = chainManager->readBlobChain(headBlobId);
+	EXPECT_EQ(readData, updatedData);
+}
+
+TEST_F(BlobChainManagerTest, ReturnedVectorSyncWithDataManager) {
+	// Verify that the returned blobChain vector stays in sync with DataManager
+	// This is the core issue: blobChain contains copies that must match DataManager
+
+	constexpr int64_t entityId = 3000;
+	constexpr int64_t entityTypeId = 3;
+
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 3); // 3 blobs
+	std::mt19937 rng(789);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
+
+	// For each blob in the returned vector, verify it matches DataManager
+	for (size_t i = 0; i < blobChain.size(); i++) {
+		int64_t blobId = blobChain[i].getId();
+
+		// Fetch from DataManager
+		auto blobFromManager = dataManager->getBlob(blobId);
+
+		// Critical: nextBlobId must match
+		EXPECT_EQ(blobChain[i].getNextBlobId(), blobFromManager.getNextBlobId())
+				<< "Blob " << i << ": returned vector nextBlobId doesn't match DataManager";
+
+		// Also verify other critical fields
+		EXPECT_EQ(blobChain[i].getPrevBlobId(), blobFromManager.getPrevBlobId())
+				<< "Blob " << i << ": prevBlobId doesn't match";
+		EXPECT_EQ(blobChain[i].getChainPosition(), blobFromManager.getChainPosition())
+				<< "Blob " << i << ": chainPosition doesn't match";
+	}
+}

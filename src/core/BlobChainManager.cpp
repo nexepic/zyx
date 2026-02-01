@@ -45,15 +45,29 @@ namespace graph {
 			return {};
 		}
 
-		// Create blob entities
+		// Two-pass blob creation to avoid cache eviction issues during chain linking
+		//
+		// Problem: If we link blobs during creation (e.g., set blob1.nextBlobId = blob2.id),
+		// blob1 might be evicted from cache after creation but before we set its nextBlobId.
+		// When we later update blob1, we update DataManager, but the blobChain vector
+		// contains copies that don't reflect the DataManager updates.
+		//
+		// Solution: Two-pass approach
+		// - Pass 1: Create all blobs and collect their IDs (no linking yet)
+		// - Pass 2: Link all blobs by setting nextBlobId (after all are safely in dirty map)
+		//
+		// This ensures:
+		// 1. All blobs are created before any linking begins
+		// 2. All blobs are in dirty map (protected from eviction effects)
+		// 3. We can safely update DataManager and keep returned vector in sync
+
 		std::vector<Blob> blobChain;
 		blobChain.reserve(chunks.size());
 
-		// First pass: Create all blobs and collect their IDs
-		// This separates blob creation from linking to avoid cache eviction issues
 		std::vector<int64_t> blobIds;
 		blobIds.reserve(chunks.size());
 
+		// Pass 1: Create all blobs (no linking)
 		for (size_t i = 0; i < chunks.size(); i++) {
 			Blob currentBlob(0, chunks[i]);
 			currentBlob.setEntityInfo(entityId, entityType);
@@ -66,17 +80,19 @@ namespace graph {
 			blobChain.push_back(currentBlob);
 		}
 
-		// Second pass: Update nextBlobId for all blobs except the last
-		// By doing this after all blobs are created, we avoid issues with cache eviction
+		// Pass 2: Link blobs by setting nextBlobId
+		// After all blobs are created, we can safely establish forward links
 		for (size_t i = 0; i < blobIds.size() - 1; i++) {
-			int64_t currentId = blobIds[i];
-			Blob blob = dataManager_->getBlob(currentId);
+			// Update DataManager
+			Blob blob = dataManager_->getBlob(blobIds[i]);
 			if (blob.getId() != 0 && blob.isActive()) {
 				blob.setNextBlobId(blobIds[i + 1]);
 				dataManager_->updateBlobEntity(blob);
-				// Also update the blob in the returned vector to maintain consistency
-				blobChain[i].setNextBlobId(blobIds[i + 1]);
 			}
+
+			// Keep returned vector in sync with DataManager
+			// This is critical because blobChain contains copies, not references
+			blobChain[i].setNextBlobId(blobIds[i + 1]);
 		}
 
 		return blobChain;

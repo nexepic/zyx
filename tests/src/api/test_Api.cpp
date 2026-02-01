@@ -254,7 +254,7 @@ TEST_F(CppApiTest, InternalConversionCheck) {
 	db->createNode("N", {{"id", (int64_t) 1}});
 	db->createNode("M", {{"id", (int64_t) 2}});
 	// Create Edge
-	db->execute("MATCH (n:N), (m:M) CREATE (n)-[r:REL {w: 10}]->(m)");
+	(void) db->execute("MATCH (n:N), (m:M) CREATE (n)-[r:REL {w: 10}]->(m)");
 	db->save();
 
 	auto res = db->execute("MATCH (n)-[r]->(m) RETURN n, r");

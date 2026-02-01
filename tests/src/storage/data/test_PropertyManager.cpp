@@ -284,7 +284,7 @@ TEST_F(PropertyManagerTest, HasExternalPropertyCheck) {
 TEST_F(PropertyManagerTest, CalculateTotalPropertySize) {
 	// 1. Initial size (empty)
 	size_t size0 = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
-	EXPECT_EQ(size0, 0);
+	EXPECT_EQ(size0, 0UL);
 
 	// 2. Add properties (should be stored externally in Property Entity due to Node design usually)
 	// Or if Node supports inline, it covers that too.

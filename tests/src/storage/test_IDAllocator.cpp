@@ -568,27 +568,27 @@ TEST_F(IDAllocatorTest, BatchAllocation_AllTypes) {
 	int64_t startEdge = allocator->allocateIdBatch(graph::Edge::typeId, BATCH);
 	EXPECT_GT(startEdge, 0);
 	// Verify counter incremented
-	EXPECT_EQ(allocator->getCurrentMaxEdgeId(), startEdge + BATCH - 1);
+	EXPECT_EQ(static_cast<uint64_t>(allocator->getCurrentMaxEdgeId()), static_cast<uint64_t>(startEdge + BATCH - 1));
 
 	// 2. Property
 	int64_t startProp = allocator->allocateIdBatch(graph::Property::typeId, BATCH);
 	EXPECT_GT(startProp, 0);
-	EXPECT_EQ(allocator->getCurrentMaxPropId(), startProp + BATCH - 1);
+	EXPECT_EQ(static_cast<uint64_t>(allocator->getCurrentMaxPropId()), static_cast<uint64_t>(startProp + BATCH - 1));
 
 	// 3. Blob
 	int64_t startBlob = allocator->allocateIdBatch(graph::Blob::typeId, BATCH);
 	EXPECT_GT(startBlob, 0);
-	EXPECT_EQ(allocator->getCurrentMaxBlobId(), startBlob + BATCH - 1);
+	EXPECT_EQ(static_cast<uint64_t>(allocator->getCurrentMaxBlobId()), static_cast<uint64_t>(startBlob + BATCH - 1));
 
 	// 4. Index
 	int64_t startIndex = allocator->allocateIdBatch(graph::Index::typeId, BATCH);
 	EXPECT_GT(startIndex, 0);
-	EXPECT_EQ(allocator->getCurrentMaxIndexId(), startIndex + BATCH - 1);
+	EXPECT_EQ(static_cast<uint64_t>(allocator->getCurrentMaxIndexId()), static_cast<uint64_t>(startIndex + BATCH - 1));
 
 	// 5. State
 	int64_t startState = allocator->allocateIdBatch(graph::State::typeId, BATCH);
 	EXPECT_GT(startState, 0);
-	EXPECT_EQ(allocator->getCurrentMaxStateId(), startState + BATCH - 1);
+	EXPECT_EQ(static_cast<uint64_t>(allocator->getCurrentMaxStateId()), static_cast<uint64_t>(startState + BATCH - 1));
 
 	// 6. Invalid Type (Exception check)
 	EXPECT_THROW(allocator->allocateIdBatch(999, BATCH), std::runtime_error);

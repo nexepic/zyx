@@ -486,3 +486,239 @@ TEST_F(StateChainManagerTest, UpdateBlobToInternalWithSameData) {
 	// Current implementation: Returns existing chain (Blob), ignores request to switch
 	EXPECT_TRUE(result[0].isBlobStorage());
 }
+
+// =============================================================================
+// Cache Eviction Edge Case Tests for State Chains
+// These tests verify that State chain creation works correctly even when
+// cache eviction occurs during the process. State chains have a different
+// implementation strategy than Blob chains:
+// - Blob: Create entities → Update entities to set links → Must sync returned vector
+// - State: Set links in vector first → Create entities (links already set) → No sync needed
+//
+// These tests verify that State's "pre-link" strategy is robust under cache pressure.
+// =============================================================================
+
+TEST_F(StateChainManagerTest, CreateMultiChunkChainUnderCachePressure) {
+	// Test creating multiple large state chains to potentially trigger cache eviction
+	// This verifies that the "pre-link" strategy works even when cache is under pressure
+
+	const std::string baseKey = "cache_test_key";
+
+	// Create multiple state chains with multiple chunks each
+	std::vector<std::vector<graph::State>> allChains;
+
+	for (int round = 0; round < 15; round++) {
+		std::string key = baseKey + std::to_string(round);
+		// Create data requiring 3 state chunks
+		std::string testData;
+		testData.resize(graph::State::CHUNK_SIZE * 2 + 50);
+		// Fill with varying data to ensure different content
+		for (size_t i = 0; i < testData.size(); i++) {
+			testData[i] = static_cast<char>('A' + (round % 26));
+		}
+
+		auto chain = stateChainManager->createStateChain(key, testData, false);
+		allChains.push_back(chain);
+
+		// Critical verification: nextStateId must be correctly set in returned chain
+		ASSERT_EQ(chain.size(), 3UL) << "Round " << round << ": should create 3 states";
+
+		EXPECT_EQ(chain[0].getNextStateId(), chain[1].getId())
+				<< "Round " << round << ": chain[0].nextStateId mismatch";
+		EXPECT_EQ(chain[1].getNextStateId(), chain[2].getId())
+				<< "Round " << round << ": chain[1].nextStateId mismatch";
+		EXPECT_EQ(chain[2].getNextStateId(), 0) << "Round " << round << ": chain[2].nextStateId should be 0";
+
+		// Verify chain integrity by reading back
+		std::string readData = stateChainManager->readStateChain(chain[0].getId());
+		EXPECT_EQ(readData, testData) << "Round " << round << ": read data mismatch";
+	}
+}
+
+TEST_F(StateChainManagerTest, CreateChainStressTest) {
+	// Stress test: Rapidly create many state chains to force cache eviction
+	// This is similar to the BlobChainManager stress test but for State
+
+	constexpr int numChains = 50;
+	const std::string baseKey = "stress_key";
+
+	std::mt19937 rng(12345);
+	std::uniform_int_distribution<int> dist(0, 255);
+
+	for (int i = 0; i < numChains; i++) {
+		std::string key = baseKey + std::to_string(i);
+
+		// Create varying size data (1-3 chunks)
+		size_t chunkCount = 1 + (i % 3);
+		std::string testData;
+		testData.resize(graph::State::CHUNK_SIZE * chunkCount + (i % 50));
+		for (auto &c: testData) {
+			c = static_cast<char>(dist(rng));
+		}
+
+		auto chain = stateChainManager->createStateChain(key, testData, false);
+
+		// Verify chain linking is correct
+		for (size_t j = 0; j < chain.size(); j++) {
+			if (j == 0) {
+				EXPECT_EQ(chain[j].getPrevStateId(), 0) << "Chain " << i << ": first state should have no prev";
+			} else {
+				EXPECT_EQ(chain[j].getPrevStateId(), chain[j - 1].getId())
+						<< "Chain " << i << ", state " << j << ": prevId mismatch";
+			}
+
+			if (j == chain.size() - 1) {
+				EXPECT_EQ(chain[j].getNextStateId(), 0)
+						<< "Chain " << i << ", state " << j << ": last state should have no next";
+			} else {
+				EXPECT_EQ(chain[j].getNextStateId(), chain[j + 1].getId())
+						<< "Chain " << i << ", state " << j << ": nextId mismatch";
+			}
+		}
+	}
+}
+
+TEST_F(StateChainManagerTest, ReturnedVectorMatchesDataManager) {
+	// Verify that the returned state chain vector matches what's in DataManager
+	// This is the core issue for Blob (value semantics + cache eviction),
+	// and we need to verify State doesn't have this problem
+
+	const std::string key = "sync_test_key";
+	std::string testData;
+	testData.resize(graph::State::CHUNK_SIZE * 3); // 3 chunks
+	for (size_t i = 0; i < testData.size(); i++) {
+		testData[i] = static_cast<char>('Z' - (i % 26));
+	}
+
+	auto chain = stateChainManager->createStateChain(key, testData, false);
+
+	// For each state in the returned vector, verify it matches DataManager
+	for (size_t i = 0; i < chain.size(); i++) {
+		int64_t stateId = chain[i].getId();
+
+		// Fetch from DataManager (this may trigger cache eviction)
+		auto stateFromManager = dataManager->getState(stateId);
+
+		// Critical: All fields must match
+		EXPECT_EQ(chain[i].getNextStateId(), stateFromManager.getNextStateId())
+				<< "State " << i << ": returned vector nextStateId doesn't match DataManager";
+		EXPECT_EQ(chain[i].getPrevStateId(), stateFromManager.getPrevStateId())
+				<< "State " << i << ": returned vector prevStateId doesn't match DataManager";
+		EXPECT_EQ(chain[i].getChainPosition(), stateFromManager.getChainPosition())
+				<< "State " << i << ": chainPosition doesn't match DataManager";
+		EXPECT_EQ(chain[i].getKey(), stateFromManager.getKey()) << "State " << i << ": key doesn't match DataManager";
+	}
+}
+
+TEST_F(StateChainManagerTest, UpdateAfterCacheEviction) {
+	// Test updating a state chain after it might have been evicted from cache
+	// This verifies that updateStateChain handles cache eviction correctly
+
+	const std::string key = "eviction_update_key";
+	std::string originalData;
+	originalData.resize(graph::State::CHUNK_SIZE * 2);
+	for (size_t i = 0; i < originalData.size(); i++) {
+		originalData[i] = static_cast<char>('A');
+	}
+
+	// Create initial chain
+	auto chain = stateChainManager->createStateChain(key, originalData, false);
+	int64_t headId = chain[0].getId();
+	ASSERT_EQ(chain.size(), 2UL);
+
+	// Create many other states to potentially evict the original chain from cache
+	for (int i = 0; i < 30; i++) {
+		std::string fillerKey = "filler_" + std::to_string(i);
+		std::string fillerData;
+		fillerData.resize(graph::State::CHUNK_SIZE * 2);
+		for (size_t j = 0; j < fillerData.size(); j++) {
+			fillerData[j] = static_cast<char>('B' + (i % 25));
+		}
+		(void) stateChainManager->createStateChain(fillerKey, fillerData, false);
+	}
+
+	// Now update the original chain with new data
+	std::string updatedData;
+	updatedData.resize(graph::State::CHUNK_SIZE * 2);
+	for (size_t i = 0; i < updatedData.size(); i++) {
+		updatedData[i] = static_cast<char>('C');
+	}
+
+	// This should work even if original chain was evicted
+	EXPECT_NO_THROW((void) stateChainManager->updateStateChain(headId, updatedData, false));
+
+	// Verify the updated chain can be read correctly
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, updatedData);
+
+	// Also verify the returned chain has correct linking
+	auto updatedChain = stateChainManager->createStateChain(key, updatedData, false);
+	EXPECT_EQ(updatedChain.size(), 2UL);
+	EXPECT_EQ(updatedChain[0].getNextStateId(), updatedChain[1].getId());
+}
+
+TEST_F(StateChainManagerTest, BlobStorageModeCacheEviction) {
+	// Test blob storage mode under cache eviction pressure
+	// This verifies that State chains using Blob storage are also robust
+
+	const std::string baseKey = "blob_evict_test";
+
+	// Create multiple state chains using blob storage
+	for (int i = 0; i < 20; i++) {
+		std::string key = baseKey + std::to_string(i);
+		std::string testData(5000, 'D' + (i % 26)); // 5KB data
+
+		auto chain = stateChainManager->createStateChain(key, testData, true);
+
+		// Verify blob storage mode is set
+		EXPECT_TRUE(chain[0].isBlobStorage());
+		EXPECT_NE(chain[0].getExternalId(), 0);
+
+		// Verify data can be read back
+		std::string readData = stateChainManager->readStateChain(chain[0].getId());
+		EXPECT_EQ(readData, testData);
+	}
+}
+
+TEST_F(StateChainManagerTest, ModeSwitchUnderCacheEviction) {
+	// Test switching storage mode (internal <-> blob) under cache pressure
+	// This is a complex operation that deletes old chains and creates new ones
+
+	const std::string key = "mode_switch_test";
+	std::string internalData = "Internal mode data that is reasonably sized";
+
+	// Create as internal mode
+	auto chain = stateChainManager->createStateChain(key, internalData, false);
+	int64_t headId = chain[0].getId();
+	ASSERT_FALSE(chain[0].isBlobStorage());
+
+	// Create filler states to potentially evict the chain
+	for (int i = 0; i < 20; i++) {
+		std::string fillerKey = "filler_" + std::to_string(i);
+		std::string fillerData(4000, 'F');
+		(void) stateChainManager->createStateChain(fillerKey, fillerData, false);
+	}
+
+	// Switch to blob mode
+	std::string blobData = "New data for blob storage, much larger than before";
+	EXPECT_NO_THROW({
+		auto blobChain = stateChainManager->updateStateChain(headId, blobData, true);
+		EXPECT_TRUE(blobChain[0].isBlobStorage());
+		EXPECT_NE(blobChain[0].getExternalId(), 0);
+	});
+
+	// Verify data integrity
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, blobData);
+
+	// Switch back to internal mode
+	EXPECT_NO_THROW({
+		auto internalChain = stateChainManager->updateStateChain(headId, internalData, false);
+		EXPECT_FALSE(internalChain[0].isBlobStorage());
+		EXPECT_EQ(internalChain[0].getExternalId(), 0);
+	});
+
+	// Verify data integrity after switch back
+	readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, internalData);
+}
