@@ -162,9 +162,12 @@ jobs:
              COV_CMD="${{ matrix.llvm_cov }}"
              PROF_CMD="${{ matrix.llvm_profdata }}"
           fi
-
-          # Call the Python script
-          python scripts/generate_coverage.py buildDir --llvm-cov "$COV_CMD" --llvm-prof "$PROF_CMD"
+          
+          # Call the Python script with named arguments
+          python scripts/generate_coverage.py buildDir \
+            --lcov coverage.lcov \
+            --llvm-cov "$COV_CMD" \
+            --llvm-prof "$PROF_CMD"
         shell: bash
 
       - name: Upload to Codecov

@@ -49,12 +49,13 @@ def main():
     # Positional Arguments
     parser.add_argument("build_dir", help="Path to build directory")
 
-    # Named Arguments (Changed from positional to avoid alignment errors)
+    # Named Arguments
     parser.add_argument("--llvm-cov", required=True, help="Path to llvm-cov tool")
     parser.add_argument("--llvm-prof", required=True, help="Path to llvm-profdata tool")
 
     # Optional Arguments
     parser.add_argument("--html", action="store_true", help="Generate and open HTML report")
+    parser.add_argument("--lcov", type=str, default=None, help="Generate LCOV report to file")
     parser.add_argument("--file", type=str, default=None, help="Show detailed source coverage for a specific file")
 
     args, unknown = parser.parse_known_args()
@@ -118,6 +119,20 @@ def main():
         if sys.platform == "darwin":
             subprocess.call(["open", os.path.join(output_dir, "index.html")])
         print(f"Report ready: {output_dir}/index.html")
+
+    elif args.lcov:
+        print(f"--- Generating LCOV Report to {args.lcov} ---")
+        cmd = [
+                  args.llvm_cov, "export",
+                  "-format=lcov",
+                  main_binary,
+                  f"-instr-profile={profdata_file}",
+                  f"-ignore-filename-regex={regex_pattern}"
+              ] + object_args
+
+        with open(args.lcov, "w") as f:
+            subprocess.check_call(cmd, stdout=f)
+        print(f"LCOV report generated: {args.lcov}")
 
     else:
         print("--- Coverage Summary ---")
