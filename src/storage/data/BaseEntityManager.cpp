@@ -29,19 +29,17 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::add(EntityType &entity) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		if (entity.getId() == 0) {
 			int64_t newId = doAllocateId();
 			entity.setId(newId);
 		}
 
-		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
+		EntityTraits<EntityType>::addToCache(dataManager, entity);
 
 		// REFACTORED: Use addToDirty instead of accessing map
-		EntityTraits<EntityType>::addToDirty(dataManager.get(),
+		EntityTraits<EntityType>::addToDirty(dataManager,
 											 DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
 	}
 
@@ -50,9 +48,7 @@ namespace graph::storage {
 		if (entities.empty())
 			return;
 
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		// 1. Identify entities needing new IDs
 		// We collect pointers to avoid copying large objects
@@ -79,7 +75,7 @@ namespace graph::storage {
 		// 3. Batch Cache Update
 		// Efficiently add to LRU cache
 		for (const auto &entity: entities) {
-			EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
+			EntityTraits<EntityType>::addToCache(dataManager, entity);
 		}
 
 		// 4. Batch Persistence (Dirty Map)
@@ -89,9 +85,7 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::update(const EntityType &entity) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		if (entity.getId() == 0) {
 			return;
@@ -100,16 +94,16 @@ namespace graph::storage {
 		if (!entity.isActive())
 			throw std::runtime_error("Update inactive entity");
 
-		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
+		EntityTraits<EntityType>::addToCache(dataManager, entity);
 
 		// REFACTORED: Check logic via Traits wrapper
-		auto dirtyInfo = EntityTraits<EntityType>::getDirtyInfo(dataManager.get(), entity.getId());
+		auto dirtyInfo = EntityTraits<EntityType>::getDirtyInfo(dataManager, entity.getId());
 
 		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
-			EntityTraits<EntityType>::addToDirty(dataManager.get(),
+			EntityTraits<EntityType>::addToDirty(dataManager,
 												 DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
 		} else {
-			EntityTraits<EntityType>::addToDirty(dataManager.get(),
+			EntityTraits<EntityType>::addToDirty(dataManager,
 												 DirtyEntityInfo<EntityType>(EntityChangeType::MODIFIED, entity));
 		}
 
@@ -127,25 +121,16 @@ namespace graph::storage {
 						std::to_string(EntityTraits<EntityType>::typeId), entity.getId());
 
 		// Mark that a deletion has been performed
-		if (const auto dataManager = dataManager_.lock()) {
-			dataManager->markDeletionPerformed();
-		}
+		getDataManagerPtr()->markDeletionPerformed();
 	}
 
 	template<typename EntityType>
 	EntityType BaseEntityManager<EntityType>::get(int64_t id) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return EntityType();
-
-		return EntityTraits<EntityType>::get(dataManager.get(), id);
+		return EntityTraits<EntityType>::get(getDataManagerPtr(), id);
 	}
 
 	template<typename EntityType>
 	std::vector<EntityType> BaseEntityManager<EntityType>::getBatch(const std::vector<int64_t> &ids) {
-		if (const auto dataManager = dataManager_.lock(); !dataManager)
-			return {};
-
 		std::vector<EntityType> result;
 		result.reserve(ids.size());
 
@@ -161,38 +146,24 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::vector<EntityType> BaseEntityManager<EntityType>::getInRange(int64_t startId, int64_t endId, size_t limit) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return {};
-
-		return dataManager->template getEntitiesInRange<EntityType>(startId, endId, limit);
+		return getDataManagerPtr()->template getEntitiesInRange<EntityType>(startId, endId, limit);
 	}
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::addToCache(const EntityType &entity) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
-		EntityTraits<EntityType>::addToCache(dataManager.get(), entity);
+		EntityTraits<EntityType>::addToCache(getDataManagerPtr(), entity);
 	}
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::clearCache() {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
-		auto &cache = EntityTraits<EntityType>::getCache(dataManager.get());
+		auto *dataManager = getDataManagerPtr();
+		auto &cache = EntityTraits<EntityType>::getCache(dataManager);
 		cache.clear();
 	}
 
 	template<typename EntityType>
 	std::unordered_map<std::string, PropertyValue> BaseEntityManager<EntityType>::getProperties(int64_t entityId) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return {};
-
+		auto *dataManager = getDataManagerPtr();
 		auto propertyManager = dataManager->getPropertyManager();
 		if (!propertyManager)
 			return {};
@@ -204,10 +175,7 @@ namespace graph::storage {
 	void
 	BaseEntityManager<EntityType>::addProperties(int64_t entityId,
 												 const std::unordered_map<std::string, PropertyValue> &properties) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
+		auto *dataManager = getDataManagerPtr();
 		auto propertyManager = dataManager->getPropertyManager();
 		if (!propertyManager)
 			return;
@@ -217,10 +185,7 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::removeProperty(int64_t entityId, const std::string &key) {
-		const auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
+		auto *dataManager = getDataManagerPtr();
 		auto propertyManager = dataManager->getPropertyManager();
 		if (!propertyManager)
 			return;

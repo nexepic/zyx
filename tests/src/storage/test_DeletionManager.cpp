@@ -583,3 +583,222 @@ TEST_F(DeletionManagerTest, DeletePropertyEntity_ExceptionHandling) {
 	// DeletionManager catches and logs to stderr.
 	deletionManager->deletePropertyEntity(99999, PropertyStorageType::PROPERTY_ENTITY);
 }
+
+// =========================================================================
+// Additional Tests for Branch Coverage
+// =========================================================================
+
+TEST_F(DeletionManagerTest, DeleteNodeWithZeroId) {
+	// Test deleteNode with ID 0
+	Node n(0, 10);
+	EXPECT_NO_THROW(deletionManager->deleteNode(n));
+}
+
+TEST_F(DeletionManagerTest, DeleteEdgeWithZeroId) {
+	// Test deleteEdge with ID 0
+	Node n1 = createNode("A");
+	Node n2 = createNode("B");
+	Edge e(0, n1.getId(), n2.getId(), 10);
+
+	EXPECT_NO_THROW(deletionManager->deleteEdge(e));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_WithInactiveProperty) {
+	// Test deletePropertyEntity when property is already inactive
+	Property prop = createProperty();
+
+	// Mark as inactive
+	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint32_t idx = prop.getId() - h.start_id;
+	segmentTracker->setEntityActive(pSeg, idx, false);
+
+	// Should handle gracefully
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(prop.getId(), PropertyStorageType::PROPERTY_ENTITY));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_WithInactiveBlob) {
+	// Test deletePropertyEntity when blob is already inactive
+	Blob blob = createBlob();
+
+	// Mark as inactive
+	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	uint32_t idx = blob.getId() - h.start_id;
+	segmentTracker->setEntityActive(bSeg, idx, false);
+
+	// Should handle gracefully
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(blob.getId(), PropertyStorageType::BLOB_ENTITY));
+}
+
+TEST_F(DeletionManagerTest, DeleteNode_NoPropertyEntity) {
+	// Test deleteNode when node has no property entity
+	Node node = createNode("NoPropNode");
+
+	// Ensure node has no property entity
+	EXPECT_FALSE(node.hasPropertyEntity());
+
+	// Should delete without cascading to property
+	EXPECT_NO_THROW(deletionManager->deleteNode(node));
+	EXPECT_TRUE(isNodeDeleted(node.getId()));
+}
+
+TEST_F(DeletionManagerTest, DeleteEdge_NoPropertyEntity) {
+	// Test deleteEdge when edge has no property entity
+	Node n1 = createNode("A");
+	Node n2 = createNode("B");
+	Edge edge = createEdge(n1.getId(), n2.getId(), "Link");
+
+	// Ensure edge has no property entity
+	EXPECT_FALSE(edge.hasPropertyEntity());
+
+	// Should delete without cascading to property
+	EXPECT_NO_THROW(deletionManager->deleteEdge(edge));
+	EXPECT_TRUE(isEdgeDeleted(edge.getId()));
+}
+
+TEST_F(DeletionManagerTest, MarkNodeInactive_ZeroSegmentOffset) {
+	// Test markNodeInactive when segmentOffset is 0 (node not in any segment)
+	Node node(99999, 10); // Non-existent ID
+
+	// Should handle gracefully - segment offset will be 0
+	EXPECT_NO_THROW(deletionManager->deleteNode(node));
+}
+
+TEST_F(DeletionManagerTest, MarkEdgeInactive_ZeroSegmentOffset) {
+	// Test markEdgeInactive when segmentOffset is 0 (edge not in any segment)
+	Node n1 = createNode("A");
+	Node n2 = createNode("B");
+	Edge edge(99999, n1.getId(), n2.getId(), 10); // Non-existent ID
+
+	// Should handle gracefully - segment offset will be 0
+	EXPECT_NO_THROW(deletionManager->deleteEdge(edge));
+}
+
+TEST_F(DeletionManagerTest, DeleteNodeConnectedEdges_EmptyResult) {
+	// Test deleteNodeConnectedEdges when node has no connected edges
+	Node node = createNode("IsolatedNode");
+
+	// Should handle empty edges list gracefully
+	EXPECT_NO_THROW(deletionManager->deleteNode(node));
+}
+
+TEST_F(DeletionManagerTest, FindSegmentForNonExistentId) {
+	// Test findSegment methods with non-existent IDs
+	EXPECT_EQ(deletionManager->findSegmentForNodeId(999999), 0ULL);
+	EXPECT_EQ(deletionManager->findSegmentForEdgeId(999999), 0ULL);
+	EXPECT_EQ(deletionManager->findSegmentForPropertyId(999999), 0ULL);
+	EXPECT_EQ(deletionManager->findSegmentForBlobId(999999), 0ULL);
+	EXPECT_EQ(deletionManager->findSegmentForIndexId(999999), 0ULL);
+	EXPECT_EQ(deletionManager->findSegmentForStateId(999999), 0ULL);
+}
+
+TEST_F(DeletionManagerTest, MarkForCompactionNotTriggeredBelowThreshold) {
+	// Test that compaction is NOT marked when fragmentation is below threshold
+	uint32_t type = Node::typeId;
+	uint64_t offset = spaceManager->allocateSegment(type, 100);
+	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
+
+	// Fill 100 nodes
+	std::vector<Node> nodes;
+	for (int i = 0; i < 100; i++) {
+		Node n(h.start_id + i, 10);
+		dataManager->addNode(n);
+		segmentTracker->setEntityActive(offset, i, true);
+		nodes.push_back(n);
+	}
+	segmentTracker->updateSegmentUsage(offset, 100, 0);
+
+	// Delete 10 nodes (10% < 30%)
+	for (int i = 0; i < 10; i++) {
+		deletionManager->deleteNode(nodes[i]);
+	}
+
+	// Check that compaction was NOT triggered
+	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
+	EXPECT_EQ(hAfter.needs_compaction, 0U);
+}
+
+TEST_F(DeletionManagerTest, AnalyzeFragmentation_NoSegments) {
+	// Test analyzeSegmentFragmentation when no segments exist for a type
+	// Create a new type that hasn't been used
+	auto fragMap = deletionManager->analyzeSegmentFragmentation(999);
+
+	EXPECT_TRUE(fragMap.empty());
+}
+
+TEST_F(DeletionManagerTest, MultipleDeletesSameNode) {
+	// Test deleting the same node multiple times
+	Node node = createNode("MultiDeleteNode");
+
+	// First delete
+	deletionManager->deleteNode(node);
+	EXPECT_TRUE(isNodeDeleted(node.getId()));
+
+	// Second delete should handle gracefully (idempotent)
+	EXPECT_NO_THROW(deletionManager->deleteNode(node));
+}
+
+TEST_F(DeletionManagerTest, MultipleDeletesSameEdge) {
+	// Test deleting the same edge multiple times
+	Node n1 = createNode("A");
+	Node n2 = createNode("B");
+	Edge edge = createEdge(n1.getId(), n2.getId(), "Link");
+
+	// First delete
+	deletionManager->deleteEdge(edge);
+	EXPECT_TRUE(isEdgeDeleted(edge.getId()));
+
+	// Second delete should handle gracefully (idempotent)
+	EXPECT_NO_THROW(deletionManager->deleteEdge(edge));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntityWithPropertyStorageType) {
+	// Test deletePropertyEntity with PROPERTY_ENTITY type
+	Property prop = createProperty();
+	Node node = createNode("PropNode");
+
+	// Link node to property
+	node.setPropertyEntityId(prop.getId(), PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateNode(node);
+
+	// Delete node (should cascade to property)
+	deletionManager->deleteNode(node);
+
+	// Verify property is deleted
+	EXPECT_TRUE(isNodeDeleted(node.getId()));
+	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	EXPECT_FALSE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntityWithBlobStorageType) {
+	// Test deletePropertyEntity with BLOB_ENTITY type
+	Blob blob = createBlob();
+	Node node = createNode("BlobNode");
+
+	// Link node to blob
+	node.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(node);
+
+	// Delete node (should cascade to blob)
+	deletionManager->deleteNode(node);
+
+	// Verify blob is deleted
+	EXPECT_TRUE(isNodeDeleted(node.getId()));
+	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	EXPECT_FALSE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
+}
+
+TEST_F(DeletionManagerTest, IsActiveIdZero) {
+	// Test isNodeActive and isEdgeActive with ID 0
+	EXPECT_FALSE(deletionManager->isNodeActive(0));
+	EXPECT_FALSE(deletionManager->isEdgeActive(0));
+}
+
+TEST_F(DeletionManagerTest, IsActiveNegativeId) {
+	// Test with negative ID (should return false)
+	EXPECT_FALSE(deletionManager->isNodeActive(-1));
+	EXPECT_FALSE(deletionManager->isEdgeActive(-1));
+}

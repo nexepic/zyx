@@ -46,10 +46,6 @@ namespace graph::storage {
 	}
 
 	void StateManager::update(const State &state) {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
 		// To properly update the key-to-ID map, we need the old key.
 		// The most reliable way to get the old state is from the DataManager itself,
 		// before the update is fully committed.
@@ -81,16 +77,13 @@ namespace graph::storage {
 	}
 
 	void StateManager::populateKeyToIdMap() {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
 		// At initialization, the map is empty, so we perform a clean scan from disk.
 		// We do not need to check in-memory states or use a 'processedIds' set.
 		stateKeyToIdMap_.clear();
 
 		// Get the segment index information for the State entity type.
-		auto &segmentIndices = EntityTraits<State>::getSegmentIndex(dataManager.get());
+		auto *dataManager = getDataManagerPtr();
+		auto &segmentIndices = EntityTraits<State>::getSegmentIndex(dataManager);
 		for (const auto &segmentIndex: segmentIndices) {
 			// Fetch all states within this segment's range.
 			auto states = dataManager->getEntitiesInRange<State>(
@@ -127,10 +120,6 @@ namespace graph::storage {
 	void StateManager::addStateProperties(const std::string &stateKey,
                                           const std::unordered_map<std::string, PropertyValue> &properties,
                                           bool useBlobStorage) {
-        auto dataManager = dataManager_.lock();
-        if (!dataManager)
-            return;
-
         // Serialize the properties
         std::stringstream ss;
         PropertyManager::serializeProperties(ss, properties);
@@ -156,10 +145,6 @@ namespace graph::storage {
     }
 
 	std::unordered_map<std::string, PropertyValue> StateManager::getStateProperties(const std::string &stateKey) {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return {};
-
 		State state = findByKey(stateKey);
 		if (state.getId() == 0) {
 			return {}; // No properties
@@ -174,10 +159,6 @@ namespace graph::storage {
 	}
 
 	void StateManager::removeState(const std::string &stateKey) {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
 		// Find the state by key
 		State state = findByKey(stateKey);
 		if (state.getId() == 0) {
@@ -214,8 +195,7 @@ namespace graph::storage {
 	}
 
 	int64_t StateManager::doAllocateId() {
-		const auto dataManager = dataManager_.lock();
-		return dataManager->getIdAllocator()->allocateId(State::typeId);
+		return getDataManagerPtr()->getIdAllocator()->allocateId(State::typeId);
 	}
 
 } // namespace graph::storage

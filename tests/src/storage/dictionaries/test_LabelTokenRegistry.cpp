@@ -275,3 +275,357 @@ TEST_F(LabelTokenRegistryTest, LongLabelSupport) {
 	EXPECT_EQ(retrieved, longLabel);
 	EXPECT_EQ(retrieved.size(), 1024ULL);
 }
+
+// ==========================================
+// Additional Tests for Branch Coverage
+// ==========================================
+
+TEST_F(LabelTokenRegistryTest, MultipleLabelsCacheMiss) {
+	// Test cache misses after eviction
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	// Create more labels than cache size
+	std::vector<std::string> labels;
+	for (size_t i = 0; i < graph::storage::LabelTokenRegistry::CACHE_SIZE + 5; ++i) {
+		labels.push_back("Label_" + std::to_string(i));
+	}
+
+	std::vector<int64_t> ids;
+	for (const auto &label: labels) {
+		ids.push_back(registry.getOrCreateLabelId(label));
+	}
+
+	// Verify all IDs are unique
+	std::unordered_set<int64_t> idSet(ids.begin(), ids.end());
+	EXPECT_EQ(idSet.size(), labels.size());
+
+	// Verify all labels can be resolved
+	for (size_t i = 0; i < labels.size(); ++i) {
+		EXPECT_EQ(registry.getLabelString(ids[i]), labels[i]);
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, SpecialCharactersInLabel) {
+	// Test labels with special characters
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	std::vector<std::string> specialLabels = {
+		"Label-With-Dashes",
+		"Label_With_Underscores",
+		"Label.With.Dots",
+		"Label@With@Special#Chars",
+		"Label With Spaces",
+		"Label\tWith\tTabs",
+		"Label\nWith\nNewlines"
+	};
+
+	for (const auto &label: specialLabels) {
+		int64_t id = registry.getOrCreateLabelId(label);
+		EXPECT_GT(id, 0);
+
+		std::string retrieved = registry.getLabelString(id);
+		EXPECT_EQ(retrieved, label);
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, UnicodeLabels) {
+	// Test Unicode labels
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	std::vector<std::string> unicodeLabels = {
+		"标签",
+		"Label",
+		"Метки",
+		"Etichette",
+		"Étiquettes",
+		"ラベル"
+	};
+
+	for (const auto &label: unicodeLabels) {
+		int64_t id = registry.getOrCreateLabelId(label);
+		EXPECT_GT(id, 0);
+
+		std::string retrieved = registry.getLabelString(id);
+		EXPECT_EQ(retrieved, label);
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, VeryLongLabel) {
+	// Test a very long label (larger than typical blob)
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	// Create a 10KB string
+	std::string veryLongLabel(10 * 1024, 'X');
+
+	int64_t id = registry.getOrCreateLabelId(veryLongLabel);
+	EXPECT_GT(id, 0);
+
+	std::string retrieved = registry.getLabelString(id);
+	EXPECT_EQ(retrieved, veryLongLabel);
+	EXPECT_EQ(retrieved.size(), 10 * 1024ULL);
+}
+
+TEST_F(LabelTokenRegistryTest, CaseSensitiveLabels) {
+	// Test that labels are case-sensitive
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	int64_t id1 = registry.getOrCreateLabelId("Person");
+	int64_t id2 = registry.getOrCreateLabelId("PERSON");
+	int64_t id3 = registry.getOrCreateLabelId("person");
+	int64_t id4 = registry.getOrCreateLabelId("Person"); // Should match id1
+
+	EXPECT_NE(id1, id2);
+	EXPECT_NE(id2, id3);
+	EXPECT_NE(id1, id3);
+	EXPECT_EQ(id1, id4);
+}
+
+TEST_F(LabelTokenRegistryTest, CacheConsistencyAfterPersistence) {
+	// Test cache consistency across database restart
+	int64_t labelId = 0;
+
+	// Scope 1: Create label and cache it
+	{
+		graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+		labelId = registry.getOrCreateLabelId("CachedLabel");
+		EXPECT_GT(labelId, 0);
+
+		// Verify it's cached
+		EXPECT_EQ(registry.getLabelString(labelId), "CachedLabel");
+
+		storage->flush();
+	}
+
+	// Scope 2: Reopen - cache should be empty but data available
+	reopenStorage();
+
+	{
+		graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+		// Should load from disk (cache miss after restart)
+		EXPECT_EQ(registry.getLabelString(labelId), "CachedLabel");
+
+		// Should also find in index
+		EXPECT_EQ(registry.getOrCreateLabelId("CachedLabel"), labelId);
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, MultipleRegistriesIndependentCaches) {
+	// Test that multiple registry instances maintain independent caches
+	graph::storage::LabelTokenRegistry registry1(dataManager, systemStateManager);
+	graph::storage::LabelTokenRegistry registry2(dataManager, systemStateManager);
+
+	// Create label in registry1
+	int64_t id1 = registry1.getOrCreateLabelId("SharedLabel");
+	EXPECT_GT(id1, 0);
+
+	// Resolve in registry2 - should hit index, not registry2's cache
+	int64_t id2 = registry2.getOrCreateLabelId("SharedLabel");
+	EXPECT_EQ(id2, id1);
+
+	// Both should resolve correctly
+	EXPECT_EQ(registry1.getLabelString(id1), "SharedLabel");
+	EXPECT_EQ(registry2.getLabelString(id2), "SharedLabel");
+}
+
+TEST_F(LabelTokenRegistryTest, EmptyCacheAfterCreation) {
+	// Test behavior when cache is empty (initial state)
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	// First access should populate cache
+	std::string label = "FirstLabel";
+	int64_t id = registry.getOrCreateLabelId(label);
+
+	// Verify it works
+	EXPECT_GT(id, 0);
+	EXPECT_EQ(registry.getLabelString(id), label);
+}
+
+TEST_F(LabelTokenRegistryTest, LabelWithNullBytes) {
+	// Test labels containing null bytes
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	std::string labelWithNull = std::string("Before") + '\0' + "After";
+
+	int64_t id = registry.getOrCreateLabelId(labelWithNull);
+	EXPECT_GT(id, 0);
+
+	std::string retrieved = registry.getLabelString(id);
+	EXPECT_EQ(retrieved, labelWithNull);
+}
+
+TEST_F(LabelTokenRegistryTest, ZeroIdHandling) {
+	// Test handling of ID 0 (null label)
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	// ID 0 should return empty string
+	std::string label = registry.getLabelString(0);
+	EXPECT_EQ(label, "");
+
+	// Empty string should return ID 0
+	int64_t id = registry.getOrCreateLabelId("");
+	EXPECT_EQ(id, graph::storage::LabelTokenRegistry::NULL_LABEL_ID);
+}
+
+TEST_F(LabelTokenRegistryTest, NegativeIdHandling) {
+	// Test handling of negative IDs
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	// Negative IDs should return empty string
+	std::string label = registry.getLabelString(-1);
+	EXPECT_EQ(label, "");
+
+	std::string label2 = registry.getLabelString(-999);
+	EXPECT_EQ(label2, "");
+}
+
+TEST_F(LabelTokenRegistryTest, RapidSequentialCreations) {
+	// Test rapid sequential label creations
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	std::vector<int64_t> ids;
+	for (int i = 0; i < 100; ++i) {
+		std::string label = "RapidLabel_" + std::to_string(i);
+		ids.push_back(registry.getOrCreateLabelId(label));
+	}
+
+	// Verify all unique
+	std::unordered_set<int64_t> idSet(ids.begin(), ids.end());
+	EXPECT_EQ(idSet.size(), 100ULL);
+
+	// Verify all resolvable
+	for (int i = 0; i < 100; ++i) {
+		std::string expected = "RapidLabel_" + std::to_string(i);
+		EXPECT_EQ(registry.getLabelString(ids[i]), expected);
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, LabelWithOnlySpaces) {
+	// Test labels with only spaces
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	std::vector<std::string> spaceLabels = {
+		" ",
+		"  ",
+		"   ",
+		"\t",
+		"\t\t",
+		"\n",
+		" \t\n "
+	};
+
+	for (const auto &label: spaceLabels) {
+		int64_t id = registry.getOrCreateLabelId(label);
+		EXPECT_GT(id, 0);
+
+		std::string retrieved = registry.getLabelString(id);
+		EXPECT_EQ(retrieved, label);
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, LargeBatchOfUniqueLabels) {
+	// Test creating a large batch of unique labels
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	constexpr int LARGE_COUNT = 500;
+	std::vector<std::string> labels;
+	std::vector<int64_t> ids;
+
+	for (int i = 0; i < LARGE_COUNT; ++i) {
+		labels.push_back("BatchLabel_" + std::to_string(i));
+		ids.push_back(registry.getOrCreateLabelId(labels[i]));
+	}
+
+	// Verify all unique
+	std::unordered_set<int64_t> idSet(ids.begin(), ids.end());
+	EXPECT_EQ(idSet.size(), LARGE_COUNT);
+
+	// Verify random subset
+	for (int i = 0; i < 50; ++i) {
+		int idx = rand() % LARGE_COUNT;
+		EXPECT_EQ(registry.getLabelString(ids[idx]), labels[idx]);
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, RootIndexIdChanges) {
+	// Test that rootIndexId changes are detected and persisted
+	int64_t initialRootId = 0;
+
+	{
+		graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+		initialRootId = registry.getRootIndexId();
+		EXPECT_GT(initialRootId, 0);
+
+		// Force root change by creating many labels
+		for (int i = 0; i < 100; ++i) {
+			registry.getOrCreateLabelId("RootChangeLabel_" + std::to_string(i));
+		}
+
+		storage->flush();
+	}
+
+	// Reopen and verify
+	reopenStorage();
+
+	{
+		graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+		int64_t newRootId = registry.getRootIndexId();
+
+		// Root ID should be loaded correctly
+		EXPECT_GT(newRootId, 0);
+
+		// Labels should still be resolvable
+		std::string firstLabel = registry.getLabelString(1);
+		EXPECT_FALSE(firstLabel.empty());
+	}
+}
+
+TEST_F(LabelTokenRegistryTest, CacheHitPath) {
+	// Test the cache hit path explicitly
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	std::string label = "CacheHitLabel";
+	int64_t id = registry.getOrCreateLabelId(label);
+
+	// First call populates cache, second should hit cache
+	int64_t id2 = registry.getOrCreateLabelId(label);
+	EXPECT_EQ(id, id2);
+
+	// Resolve should also hit cache
+	std::string resolved = registry.getLabelString(id);
+	EXPECT_EQ(resolved, label);
+}
+
+TEST_F(LabelTokenRegistryTest, NonExistentIdInCache) {
+	// Test resolving an ID that doesn't exist
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	// This ID was never created
+	int64_t fakeId = 99999;
+	std::string label = registry.getLabelString(fakeId);
+
+	// Should return empty string (not found)
+	EXPECT_EQ(label, "");
+}
+
+TEST_F(LabelTokenRegistryTest, MixedEmptyAndNonEmptyLabels) {
+	// Test mixing empty and non-empty labels
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+
+	// Empty label
+	int64_t emptyId = registry.getOrCreateLabelId("");
+	EXPECT_EQ(emptyId, graph::storage::LabelTokenRegistry::NULL_LABEL_ID);
+
+	// Non-empty labels
+	int64_t id1 = registry.getOrCreateLabelId("Label1");
+	int64_t id2 = registry.getOrCreateLabelId("Label2");
+
+	EXPECT_GT(id1, 0);
+	EXPECT_GT(id2, 0);
+	EXPECT_NE(id1, id2);
+
+	// Verify all can be resolved
+	EXPECT_EQ(registry.getLabelString(emptyId), "");
+	EXPECT_EQ(registry.getLabelString(id1), "Label1");
+	EXPECT_EQ(registry.getLabelString(id2), "Label2");
+}

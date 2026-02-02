@@ -323,3 +323,76 @@ TEST_F(PersistenceManagerTest, RemoveEntityFromRegistry) {
 	// Ensure size decreased
 	EXPECT_FALSE(manager->hasUnsavedChanges());
 }
+
+// Test auto-flush check without callback set
+TEST_F(PersistenceManagerTest, AutoFlushNoCallback) {
+	// Don't set any callback - checkAndTriggerAutoFlush should return early
+	addNode(1);
+	addEdge(2);
+
+	// Verify dirty entities exist
+	EXPECT_TRUE(manager->hasUnsavedChanges());
+
+	// Create snapshot - this internally calls checkAndTriggerAutoFlush
+	// Should not crash even without callback
+	auto snapshot = manager->createSnapshot();
+	EXPECT_FALSE(snapshot.isEmpty());
+}
+
+// Test intermediate flush during batch processing
+TEST_F(PersistenceManagerTest, UpsertBatchIntermediateFlush) {
+	int flushCount = 0;
+
+	// Set a low threshold to trigger intermediate flush
+	manager->setMaxDirtyEntities(3);
+	manager->setAutoFlushCallback([&flushCount]() { flushCount++; });
+
+	// Add some initial entities
+	addNode(1);
+	addNode(2);
+	EXPECT_EQ(flushCount, 0) << "Should not flush yet (2 < 3)";
+
+	// Create a batch that will trigger intermediate flush
+	std::vector<Node> batch;
+	for (int i = 0; i < 5; ++i) {
+		Node n;
+		n.setId(10 + i);
+		batch.push_back(n);
+	}
+
+	// Upsert batch - should trigger flush multiple times during processing
+	manager->upsertBatch(batch, EntityChangeType::ADDED);
+
+	// Should have triggered flush at least once during batch processing
+	EXPECT_GT(flushCount, 0) << "Should have triggered intermediate flush during batch";
+}
+
+// Test isDirty returns false for non-existent entities
+TEST_F(PersistenceManagerTest, IsDirtyNonExistent) {
+	EXPECT_FALSE(manager->isDirty<Node>(999));
+	EXPECT_FALSE(manager->isDirty<Edge>(999));
+	EXPECT_FALSE(manager->isDirty<Property>(999));
+	EXPECT_FALSE(manager->isDirty<Blob>(999));
+	EXPECT_FALSE(manager->isDirty<Index>(999));
+	EXPECT_FALSE(manager->isDirty<State>(999));
+}
+
+// Test getDirtyInfo returns nullopt for non-existent entities
+TEST_F(PersistenceManagerTest, GetDirtyInfoNonExistent) {
+	EXPECT_FALSE(manager->getDirtyInfo<Node>(999).has_value());
+	EXPECT_FALSE(manager->getDirtyInfo<Edge>(999).has_value());
+	EXPECT_FALSE(manager->getDirtyInfo<Property>(999).has_value());
+	EXPECT_FALSE(manager->getDirtyInfo<Blob>(999).has_value());
+	EXPECT_FALSE(manager->getDirtyInfo<Index>(999).has_value());
+	EXPECT_FALSE(manager->getDirtyInfo<State>(999).has_value());
+}
+
+// Test getAllDirtyInfos returns empty for non-existent types
+TEST_F(PersistenceManagerTest, GetAllDirtyInfosEmpty) {
+	EXPECT_TRUE(manager->getAllDirtyInfos<Node>().empty());
+	EXPECT_TRUE(manager->getAllDirtyInfos<Edge>().empty());
+	EXPECT_TRUE(manager->getAllDirtyInfos<Property>().empty());
+	EXPECT_TRUE(manager->getAllDirtyInfos<Blob>().empty());
+	EXPECT_TRUE(manager->getAllDirtyInfos<Index>().empty());
+	EXPECT_TRUE(manager->getAllDirtyInfos<State>().empty());
+}

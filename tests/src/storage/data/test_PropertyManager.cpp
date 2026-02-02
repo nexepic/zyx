@@ -372,3 +372,433 @@ TEST_F(PropertyManagerTest, CorruptedStorageRecovery) {
 	// deserialization inside hasExternalProperty might fail, should return false
 	EXPECT_FALSE(propertyManager->hasExternalProperty<graph::Node>(node, "large_key_0"));
 }
+
+// Test storing empty properties (should return early without storing anything)
+TEST_F(PropertyManagerTest, EmptyPropertiesStorage) {
+	// Get initial node state
+	graph::Node nodeBefore = nodeManager->get(testNode.getId());
+	int64_t propertyIdBefore = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyEntityId(nodeBefore);
+
+	// Try to add empty properties
+	std::unordered_map<std::string, graph::PropertyValue> emptyProps;
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), emptyProps);
+
+	// Verify no property entity was created
+	graph::Node nodeAfter = nodeManager->get(testNode.getId());
+	int64_t propertyIdAfter = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyEntityId(nodeAfter);
+
+	EXPECT_EQ(propertyIdAfter, propertyIdBefore) << "Empty properties should not create external storage";
+	EXPECT_EQ(propertyIdAfter, 0) << "Should have no external property entity";
+
+	// Verify getEntityProperties returns empty for the node
+	auto props = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_TRUE(props.empty()) << "Should have no properties";
+}
+
+// Test removing all properties from blob (should clear blob reference)
+TEST_F(PropertyManagerTest, RemoveAllPropertiesFromBlob) {
+	// Create node with large properties (stored in blob)
+	auto largeProps = createLargePropertyMap();
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), largeProps);
+
+	// Verify properties exist
+	auto propsBefore = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_GT(propsBefore.size(), 0UL);
+
+	// Get blob reference before removal
+	graph::Node nodeBefore = nodeManager->get(testNode.getId());
+	int64_t blobIdBefore = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyEntityId(nodeBefore);
+	EXPECT_NE(blobIdBefore, 0) << "Should have blob reference";
+
+	// Remove all properties one by one
+	std::vector<std::string> keys;
+	for (const auto& [key, value] : propsBefore) {
+		keys.push_back(key);
+	}
+
+	for (const auto& key : keys) {
+		propertyManager->removeEntityProperty<graph::Node>(testNode.getId(), key);
+	}
+
+	// Verify blob reference was cleared
+	graph::Node nodeAfter = nodeManager->get(testNode.getId());
+	int64_t blobIdAfter = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyEntityId(nodeAfter);
+	EXPECT_EQ(blobIdAfter, 0) << "Blob reference should be cleared after removing all properties";
+
+	// Verify all properties are gone
+	auto propsAfter = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_TRUE(propsAfter.empty()) << "Should have no properties after removing all";
+}
+
+// Test removing properties from blob causes blob recreation with remaining properties
+TEST_F(PropertyManagerTest, BlobRecreationAfterPropertyRemoval) {
+	// Create node with large properties (stored in blob)
+	auto largeProps = createLargePropertyMap();
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), largeProps);
+
+	// Verify initial properties
+	auto propsBefore = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_EQ(propsBefore.size(), largeProps.size());
+
+	// Remove one property
+	propertyManager->removeEntityProperty<graph::Node>(testNode.getId(), "large_key_2");
+
+	// Verify blob reference still exists with remaining properties
+	graph::Node nodeAfter = nodeManager->get(testNode.getId());
+	int64_t blobIdAfter = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyEntityId(nodeAfter);
+	EXPECT_NE(blobIdAfter, 0) << "Should still have blob reference with remaining properties";
+
+	// Verify remaining properties exist and count is correct
+	auto propsAfter = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_EQ(propsAfter.size(), largeProps.size() - 1) << "Should have one less property";
+	EXPECT_FALSE(propsAfter.contains("large_key_2")) << "Removed key should not exist";
+
+	// Verify all other keys still exist
+	EXPECT_TRUE(propsAfter.contains("large_key_0"));
+	EXPECT_TRUE(propsAfter.contains("large_key_1"));
+	EXPECT_TRUE(propsAfter.contains("large_key_3"));
+	EXPECT_TRUE(propsAfter.contains("large_key_4"));
+}
+
+// Test serializing and deserializing empty properties
+TEST_F(PropertyManagerTest, SerializeDeserializeEmptyProperties) {
+	std::unordered_map<std::string, graph::PropertyValue> emptyProps;
+
+	// Serialize empty properties
+	std::stringstream ss;
+	propertyManager->serializeProperties(ss, emptyProps);
+	std::string serialized = ss.str();
+
+	// Should at least write the count (0)
+	EXPECT_GT(serialized.size(), 0UL);
+
+	// Deserialize empty properties
+	std::stringstream ssIn(serialized);
+	auto deserialized = propertyManager->deserializeProperties(ssIn);
+
+	EXPECT_TRUE(deserialized.empty());
+}
+
+// Test serializing and deserializing single property
+TEST_F(PropertyManagerTest, SerializeDeserializeSingleProperty) {
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["key1"] = graph::PropertyValue("value1");
+
+	// Serialize
+	std::stringstream ss;
+	propertyManager->serializeProperties(ss, props);
+
+	// Deserialize
+	auto deserialized = propertyManager->deserializeProperties(ss);
+
+	EXPECT_EQ(deserialized.size(), 1UL);
+	EXPECT_TRUE(deserialized.contains("key1"));
+	EXPECT_EQ(std::get<std::string>(deserialized["key1"].getVariant()), "value1");
+}
+
+// Test adding properties multiple times to different entities
+TEST_F(PropertyManagerTest, AddPropertiesToMultipleEntities) {
+	// Create another node
+	graph::Node node2;
+	node2.setLabelId(dataManager->getOrCreateLabelId("Node2"));
+	nodeManager->add(node2);
+
+	// Add different properties to each node
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), {{"name", graph::PropertyValue("Node1")}});
+	propertyManager->addEntityProperties<graph::Node>(node2.getId(), {{"name", graph::PropertyValue("Node2")}});
+
+	// Verify each node has its own properties
+	auto props1 = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	auto props2 = propertyManager->getEntityProperties<graph::Node>(node2.getId());
+
+	EXPECT_EQ(props1.size(), 1UL);
+	EXPECT_EQ(props2.size(), 1UL);
+	EXPECT_EQ(std::get<std::string>(props1["name"].getVariant()), "Node1");
+	EXPECT_EQ(std::get<std::string>(props2["name"].getVariant()), "Node2");
+}
+
+// Test calculateEntityTotalPropertySize with mixed inline and external properties
+TEST_F(PropertyManagerTest, CalculateSizeMixedProperties) {
+	// Start with small properties (stored in Property Entity)
+	std::unordered_map<std::string, graph::PropertyValue> smallProps;
+	smallProps["key1"] = graph::PropertyValue("value1");
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), smallProps);
+
+	size_t sizeSmall = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
+	EXPECT_GT(sizeSmall, 0UL);
+
+	// Now add large properties (should trigger blob storage and replace Property Entity)
+	auto largeProps = createLargePropertyMap();
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), largeProps);
+
+	size_t sizeLarge = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
+	EXPECT_GT(sizeLarge, sizeSmall) << "Size should increase with large properties";
+
+	// Calculate expected size
+	size_t expectedSize = 0;
+	for (const auto& [k, v] : largeProps) {
+		expectedSize += k.size();
+		expectedSize += graph::property_utils::getPropertyValueSize(v);
+	}
+	EXPECT_EQ(sizeLarge, expectedSize);
+}
+
+// Test removeEntityProperty with non-existent entity (idempotent operation)
+TEST_F(PropertyManagerTest, RemovePropertyFromNonExistentEntity) {
+	// Should not throw, just return silently
+	EXPECT_NO_THROW(propertyManager->removeEntityProperty<graph::Node>(99999, "any_key"));
+}
+
+// Test removeEntityProperty with inactive entity
+TEST_F(PropertyManagerTest, RemovePropertyFromInactiveEntity) {
+	// Create a node
+	graph::Node tempNode;
+	tempNode.setLabelId(dataManager->getOrCreateLabelId("TempNode"));
+	nodeManager->add(tempNode);
+
+	// Add properties
+	propertyManager->addEntityProperties<graph::Node>(tempNode.getId(), {{"key", graph::PropertyValue("value")}});
+
+	// Remove (mark as inactive) the node
+	graph::Node node = nodeManager->get(tempNode.getId());
+	nodeManager->remove(node);
+
+	// Try to remove property from inactive node (should not throw)
+	EXPECT_NO_THROW(propertyManager->removeEntityProperty<graph::Node>(tempNode.getId(), "key"));
+}
+
+// Test Edge with empty properties (covers branch at line 110:7 for Edge)
+TEST_F(PropertyManagerTest, EdgeWithEmptyProperties) {
+	// Get initial edge state
+	graph::Edge edgeBefore = edgeManager->get(testEdge.getId());
+	int64_t propertyIdBefore = graph::storage::EntityPropertyTraits<graph::Edge>::getPropertyEntityId(edgeBefore);
+
+	// Try to add empty properties to edge
+	std::unordered_map<std::string, graph::PropertyValue> emptyProps;
+	propertyManager->addEntityProperties<graph::Edge>(testEdge.getId(), emptyProps);
+
+	// Verify no property entity was created
+	graph::Edge edgeAfter = edgeManager->get(testEdge.getId());
+	int64_t propertyIdAfter = graph::storage::EntityPropertyTraits<graph::Edge>::getPropertyEntityId(edgeAfter);
+
+	EXPECT_EQ(propertyIdAfter, propertyIdBefore) << "Empty properties should not create external storage for Edge";
+	EXPECT_EQ(propertyIdAfter, 0) << "Edge should have no external property entity with empty properties";
+
+	// Verify getEntityProperties returns empty for the edge
+	auto props = propertyManager->getEntityProperties<graph::Edge>(testEdge.getId());
+	EXPECT_TRUE(props.empty()) << "Edge should have no properties";
+}
+
+// Test Edge with large properties triggering BLOB storage (covers branches at line 119:8 and 146:7 for Edge)
+TEST_F(PropertyManagerTest, EdgeWithLargePropertiesInBlob) {
+	// Create large property map for edge (larger than PROPERTY_ENTITY_PAYLOAD_SIZE)
+	std::unordered_map<std::string, graph::PropertyValue> largeProps;
+	for (int i = 0; i < 10; i++) {
+		std::string largeValue(1000, 'E'); // Large string value
+		largeProps["edge_large_key_" + std::to_string(i)] = graph::PropertyValue(largeValue);
+	}
+
+	// Add large properties to the edge (should trigger BLOB storage)
+	propertyManager->addEntityProperties<graph::Edge>(testEdge.getId(), largeProps);
+
+	// Verify properties were stored
+	auto retrievedProps = propertyManager->getEntityProperties<graph::Edge>(testEdge.getId());
+	EXPECT_EQ(retrievedProps.size(), largeProps.size()) << "Should retrieve all large edge properties";
+
+	// Verify the edge has a BLOB_ENTITY reference
+	graph::Edge edgeWithBlob = edgeManager->get(testEdge.getId());
+	int64_t propertyId = graph::storage::EntityPropertyTraits<graph::Edge>::getPropertyEntityId(edgeWithBlob);
+	EXPECT_NE(propertyId, 0) << "Edge should have external property reference";
+
+	auto storageType = graph::storage::EntityPropertyTraits<graph::Edge>::getPropertyStorageType(edgeWithBlob);
+	EXPECT_EQ(storageType, graph::PropertyStorageType::BLOB_ENTITY)
+		<< "Large edge properties should be stored in BLOB";
+
+	// Verify content
+	for (int i = 0; i < 10; i++) {
+		std::string key = "edge_large_key_" + std::to_string(i);
+		std::string expectedValue = std::string(1000, 'E');
+		EXPECT_TRUE(retrievedProps.contains(key)) << "Should contain key " << key;
+		EXPECT_EQ(std::get<std::string>(retrievedProps[key].getVariant()), expectedValue)
+			<< "Edge large property " << i << " should match";
+	}
+}
+
+// Test removing blob-stored properties from edge (covers blob cleanup path)
+TEST_F(PropertyManagerTest, RemoveBlobPropertiesFromEdge) {
+	// Add large properties to edge (triggers BLOB storage)
+	std::unordered_map<std::string, graph::PropertyValue> largeProps;
+	for (int i = 0; i < 5; i++) {
+		std::string largeValue(800, 'E');
+		largeProps["edge_blob_key_" + std::to_string(i)] = graph::PropertyValue(largeValue);
+	}
+
+	propertyManager->addEntityProperties<graph::Edge>(testEdge.getId(), largeProps);
+
+	// Verify blob reference exists
+	graph::Edge edgeBefore = edgeManager->get(testEdge.getId());
+	int64_t blobIdBefore = graph::storage::EntityPropertyTraits<graph::Edge>::getPropertyEntityId(edgeBefore);
+	EXPECT_NE(blobIdBefore, 0) << "Edge should have blob reference";
+
+	// Remove all properties
+	std::vector<std::string> keys;
+	for (const auto& [key, value] : largeProps) {
+		keys.push_back(key);
+	}
+
+	for (const auto& key : keys) {
+		propertyManager->removeEntityProperty<graph::Edge>(testEdge.getId(), key);
+	}
+
+	// Verify blob reference was cleared (cleanupExternalProperties with BLOB_ENTITY should execute)
+	graph::Edge edgeAfter = edgeManager->get(testEdge.getId());
+	int64_t blobIdAfter = graph::storage::EntityPropertyTraits<graph::Edge>::getPropertyEntityId(edgeAfter);
+	EXPECT_EQ(blobIdAfter, 0) << "Blob reference should be cleared after removing all edge properties";
+
+	// Verify all properties are gone
+	auto propsAfter = propertyManager->getEntityProperties<graph::Edge>(testEdge.getId());
+	EXPECT_TRUE(propsAfter.empty()) << "Edge should have no properties after removing all";
+}
+
+// Test calculateEntityTotalPropertySize with inactive entity (covers line 292)
+TEST_F(PropertyManagerTest, CalculateSizeInactiveEntity) {
+	// Create a node
+	graph::Node tempNode;
+	tempNode.setLabelId(dataManager->getOrCreateLabelId("TempNode"));
+	nodeManager->add(tempNode);
+
+	// Add properties
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["key1"] = graph::PropertyValue("value1");
+	props["key2"] = graph::PropertyValue(123);
+	propertyManager->addEntityProperties<graph::Node>(tempNode.getId(), props);
+
+	// Get size before deactivation
+	size_t sizeBefore = propertyManager->calculateEntityTotalPropertySize<graph::Node>(tempNode.getId());
+	EXPECT_GT(sizeBefore, 0UL);
+
+	// Remove (deactivate) the node
+	graph::Node node = nodeManager->get(tempNode.getId());
+	nodeManager->remove(node);
+
+	// Try to calculate size for inactive node (should return 0)
+	size_t sizeAfter = propertyManager->calculateEntityTotalPropertySize<graph::Node>(tempNode.getId());
+	EXPECT_EQ(sizeAfter, 0) << "Inactive entity should have 0 property size";
+}
+
+// Test calculateEntityTotalPropertySize with non-existent entity (covers line 290)
+TEST_F(PropertyManagerTest, CalculateSizeNonExistentEntity) {
+	// Test with completely non-existent entity ID
+	size_t size = propertyManager->calculateEntityTotalPropertySize<graph::Node>(999999);
+	EXPECT_EQ(size, 0) << "Non-existent entity should have 0 property size";
+}
+
+// Test calculateEntityTotalPropertySize after clearing all properties
+TEST_F(PropertyManagerTest, CalculateSizeAfterClearingProperties) {
+	// Add properties to node
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["key1"] = graph::PropertyValue("value1");
+	props["key2"] = graph::PropertyValue("value2");
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), props);
+
+	// Verify size is calculated
+	size_t sizeWithProps = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
+	EXPECT_GT(sizeWithProps, 0UL);
+
+	// Remove all properties
+	propertyManager->removeEntityProperty<graph::Node>(testNode.getId(), "key1");
+	propertyManager->removeEntityProperty<graph::Node>(testNode.getId(), "key2");
+
+	// Verify size is 0 after clearing
+	size_t sizeWithoutProps = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
+	EXPECT_EQ(sizeWithoutProps, 0) << "Size should be 0 after removing all properties";
+}
+
+// Test hasExternalProperty with entity that has properties but key doesn't exist
+TEST_F(PropertyManagerTest, HasExternalPropertyMissingKey) {
+	// Add properties to node
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["existing_key"] = graph::PropertyValue("value");
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), props);
+
+	// Refresh node
+	graph::Node node = nodeManager->get(testNode.getId());
+
+	// Check for non-existing key
+	EXPECT_FALSE(propertyManager->hasExternalProperty<graph::Node>(node, "non_existing_key"))
+		<< "Should return false for non-existing key even when entity has properties";
+}
+
+// Test property update from small to blob storage (covers transition paths)
+TEST_F(PropertyManagerTest, UpdatePropertiesSmallToBlob) {
+	// Add small properties first (stored in Property Entity)
+	std::unordered_map<std::string, graph::PropertyValue> smallProps;
+	smallProps["key1"] = graph::PropertyValue("small");
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), smallProps);
+
+	// Verify initial storage type
+	graph::Node nodeBefore = nodeManager->get(testNode.getId());
+	auto storageTypeBefore = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyStorageType(nodeBefore);
+	EXPECT_EQ(storageTypeBefore, graph::PropertyStorageType::PROPERTY_ENTITY);
+
+	// Add large properties (should trigger blob storage)
+	auto largeProps = createLargePropertyMap();
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), largeProps);
+
+	// Verify transition to blob storage
+	graph::Node nodeAfter = nodeManager->get(testNode.getId());
+	auto storageTypeAfter = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyStorageType(nodeAfter);
+	EXPECT_EQ(storageTypeAfter, graph::PropertyStorageType::BLOB_ENTITY);
+
+	// Verify properties are correct
+	auto retrievedProps = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_EQ(retrievedProps.size(), largeProps.size());
+}
+
+// Test property update from blob to small storage
+TEST_F(PropertyManagerTest, UpdatePropertiesBlobToSmall) {
+	// Add large properties first (stored in Blob)
+	auto largeProps = createLargePropertyMap();
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), largeProps);
+
+	// Verify initial blob storage
+	graph::Node nodeBefore = nodeManager->get(testNode.getId());
+	auto storageTypeBefore = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyStorageType(nodeBefore);
+	EXPECT_EQ(storageTypeBefore, graph::PropertyStorageType::BLOB_ENTITY);
+
+	// Update with small properties (should transition back to Property Entity)
+	std::unordered_map<std::string, graph::PropertyValue> smallProps;
+	smallProps["key1"] = graph::PropertyValue("small");
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), smallProps);
+
+	// Verify transition to Property Entity
+	graph::Node nodeAfter = nodeManager->get(testNode.getId());
+	auto storageTypeAfter = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyStorageType(nodeAfter);
+	EXPECT_EQ(storageTypeAfter, graph::PropertyStorageType::PROPERTY_ENTITY);
+
+	// Verify only new properties exist
+	auto retrievedProps = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_EQ(retrievedProps.size(), 1UL);
+	EXPECT_TRUE(retrievedProps.contains("key1"));
+}
+
+// Test multiple sequential property updates
+TEST_F(PropertyManagerTest, MultipleSequentialPropertyUpdates) {
+	// First update
+	std::unordered_map<std::string, graph::PropertyValue> props1;
+	props1["key1"] = graph::PropertyValue("value1");
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), props1);
+
+	auto propsAfter1 = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_EQ(propsAfter1.size(), 1UL);
+
+	// Second update (should replace, not append)
+	std::unordered_map<std::string, graph::PropertyValue> props2;
+	props2["key2"] = graph::PropertyValue("value2");
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), props2);
+
+	auto propsAfter2 = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_EQ(propsAfter2.size(), 1UL) << "New properties should replace old ones";
+	EXPECT_TRUE(propsAfter2.contains("key2"));
+	EXPECT_FALSE(propsAfter2.contains("key1"));
+}

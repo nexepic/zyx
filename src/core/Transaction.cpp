@@ -26,13 +26,17 @@ namespace graph {
 	Transaction::Transaction(const Database &db) : storage(db.getStorage()) { storage::FileStorage::beginWrite(); }
 
 	Node Transaction::insertNode(const std::string &label) const {
+		// TODO: Implement node insertion
 		// Node node = storage->insertNode(label);
 		// return node;
+		return Node(); // Return default-constructed node until implementation is ready
 	}
 
 	Edge Transaction::insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const {
+		// TODO: Implement edge insertion
 		// Edge edge = storage->insertEdge(from, to, label);
 		// return edge;
+		return Edge(); // Return default-constructed edge until implementation is ready
 	}
 
 	void Transaction::commit() const { storage->commitWrite(); }

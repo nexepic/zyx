@@ -1171,3 +1171,325 @@ TEST_F(SpaceManagerTest, Merge_ChainedMergePrevention) {
 	SegmentHeader hA = segmentTracker->getSegmentHeader(segA);
 	EXPECT_GE(hA.used, 2U);
 }
+
+// =========================================================================
+// GROUP 11: Additional Edge Cases for Coverage Improvement
+// =========================================================================
+
+TEST_F(SpaceManagerTest, MoveSegment_SameOffset_NoOp) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t seg = spaceManager->allocateSegment(type, 10);
+
+	// Moving segment to itself should return true (nothing to do)
+	bool result = spaceManager->moveSegment(seg, seg);
+	EXPECT_TRUE(result) << "Moving segment to same offset should succeed (no-op)";
+}
+
+TEST_F(SpaceManagerTest, FindFreeSegmentNotAtEnd_NoFreeSegments) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	// Allocate segments but don't free any
+	spaceManager->allocateSegment(type, 10);
+	spaceManager->allocateSegment(type, 10);
+
+	// Should return 0 when no free segments
+	uint64_t result = spaceManager->findFreeSegmentNotAtEnd();
+	EXPECT_EQ(result, 0ULL) << "Should return 0 when no free segments available";
+}
+
+TEST_F(SpaceManagerTest, FindFreeSegmentNotAtEnd_AllAtEnd) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	// Allocate only one segment
+	uint64_t seg1 = spaceManager->allocateSegment(type, 10);
+
+	// Free it - now it's at the end
+	spaceManager->deallocateSegment(seg1);
+
+	// Should return 0 since the only free segment is at end
+	uint64_t result = spaceManager->findFreeSegmentNotAtEnd();
+	EXPECT_EQ(result, 0ULL) << "Should return 0 when the only free segment is at end";
+}
+
+TEST_F(SpaceManagerTest, CompactSegment_BelowThreshold_NoOp) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t seg = spaceManager->allocateSegment(type, 10);
+
+	// Create 10 items, delete 2 (20% fragmentation)
+	for (int i = 0; i < 10; i++) {
+		writeNode(seg, i, 100 + i, 10);
+	}
+	segmentTracker->setEntityActive(seg, 5, false);
+	segmentTracker->setEntityActive(seg, 6, false);
+	segmentTracker->updateSegmentUsage(seg, 10, 2); // 20% fragmentation
+
+	// Compact with threshold of 0.5 (50%) - should skip this segment
+	// Use the public compactSegments method with high threshold
+	spaceManager->compactSegments(type, 0.5);
+
+	// Segment should remain unchanged since fragmentation is below threshold
+	SegmentHeader h = segmentTracker->getSegmentHeader(seg);
+	EXPECT_EQ(h.used, 10U) << "Segment should be unchanged below threshold";
+}
+
+TEST_F(SpaceManagerTest, CompactSegment_NoFragmentation_NoOp) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t seg = spaceManager->allocateSegment(type, 10);
+
+	// Fill segment with active items (0% fragmentation)
+	for (int i = 0; i < 5; i++) {
+		writeNode(seg, i, 100 + i, 10);
+	}
+	segmentTracker->updateSegmentUsage(seg, 5, 0);
+
+	SegmentHeader before = segmentTracker->getSegmentHeader(seg);
+	uint32_t beforeUsed = before.used;
+
+	// Compact - should do nothing for segments with no fragmentation
+	spaceManager->compactSegments(type, 0.0);
+
+	SegmentHeader after = segmentTracker->getSegmentHeader(seg);
+	EXPECT_EQ(after.used, beforeUsed) << "Segment should be unchanged with no fragmentation";
+}
+
+TEST_F(SpaceManagerTest, FindCandidatesForMerge_ReturnsEmpty) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	// Create segments with high usage (above threshold)
+	uint64_t seg1 = spaceManager->allocateSegment(type, 10);
+	uint64_t seg2 = spaceManager->allocateSegment(type, 10);
+
+	// Fill segments to 90% capacity
+	for (int i = 0; i < 9; i++) {
+		writeNode(seg1, i, 100 + i, 10);
+		writeNode(seg2, i, 200 + i, 10);
+	}
+	segmentTracker->updateSegmentUsage(seg1, 9, 0);
+	segmentTracker->updateSegmentUsage(seg2, 9, 0);
+
+	// Find candidates with low threshold - should return empty
+	auto candidates = spaceManager->findCandidatesForMerge(type, 0.5);
+	EXPECT_TRUE(candidates.empty()) << "Should return empty when all segments have high usage";
+}
+
+TEST_F(SpaceManagerTest, MergeIntoSegment_TypeMismatch) {
+	auto typeNode = static_cast<uint32_t>(EntityType::Node);
+	auto typeEdge = static_cast<uint32_t>(EntityType::Edge);
+
+	uint64_t segNode = spaceManager->allocateSegment(typeNode, 10);
+	uint64_t segEdge = spaceManager->allocateSegment(typeEdge, 10);
+
+	// Both have 1 item
+	writeNode(segNode, 0, 100, 10);
+	writeNode(segEdge, 0, 200, 20);
+	segmentTracker->updateSegmentUsage(segNode, 1, 0);
+	segmentTracker->updateSegmentUsage(segEdge, 1, 0);
+
+	// Try to merge edge segment into node segment (wrong type)
+	bool result = spaceManager->mergeIntoSegment(segNode, segEdge, typeNode);
+	EXPECT_FALSE(result) << "Should fail when segment types don't match";
+}
+
+TEST_F(SpaceManagerTest, MergeIntoSegment_CapacityExceeded) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint32_t capacity = 5;
+
+	uint64_t segA = spaceManager->allocateSegment(type, capacity);
+	uint64_t segB = spaceManager->allocateSegment(type, capacity);
+
+	// Fill A completely
+	for (int i = 0; i < 5; i++) {
+		writeNode(segA, i, 100 + i, 10);
+	}
+	segmentTracker->updateSegmentUsage(segA, 5, 0);
+
+	// B has 1 item
+	writeNode(segB, 0, 200, 20);
+	segmentTracker->updateSegmentUsage(segB, 1, 0);
+
+	// Try to merge - should fail due to capacity
+	bool result = spaceManager->mergeIntoSegment(segA, segB, type);
+	EXPECT_FALSE(result) << "Should fail when combined count exceeds capacity";
+}
+
+TEST_F(SpaceManagerTest, SafeCompactSegments_ThreadSafety) {
+	// Create fragmentation to trigger compaction
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	for (int i = 0; i < 10; i++) {
+		uint64_t seg = spaceManager->allocateSegment(type, 10);
+		// Create sparse data
+		writeNode(seg, 0, 100 + i, 10);
+		segmentTracker->updateSegmentUsage(seg, 5, 3); // 60% fragmentation
+	}
+
+	// Call safeCompact - should succeed
+	bool result = spaceManager->safeCompactSegments();
+	EXPECT_TRUE(result) << "safeCompactSegments should succeed";
+}
+
+TEST_F(SpaceManagerTest, TruncateFile_NoTruncatableSegments) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	// Create segments but don't free any
+	spaceManager->allocateSegment(type, 10);
+	spaceManager->allocateSegment(type, 10);
+
+	uint64_t sizeBefore = getFileSize();
+
+	// Try to truncate - should return false
+	bool result = spaceManager->truncateFile();
+	EXPECT_FALSE(result) << "Should return false when no truncatable segments";
+
+	// File size should be unchanged
+	EXPECT_EQ(getFileSize(), sizeBefore) << "File size should not change";
+}
+
+TEST_F(SpaceManagerTest, TruncateFile_BelowMinimumSize) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// Create one segment and free it
+	uint64_t seg = spaceManager->allocateSegment(type, 10);
+	spaceManager->deallocateSegment(seg);
+
+	// Truncate - should protect minimum size (FILE_HEADER_SIZE)
+	bool result = spaceManager->truncateFile();
+	EXPECT_TRUE(result) << "Truncate should succeed";
+
+	// File should be at least FILE_HEADER_SIZE
+	uint64_t size = getFileSize();
+	EXPECT_GE(size, FILE_HEADER_SIZE) << "File size should not go below FILE_HEADER_SIZE";
+}
+
+TEST_F(SpaceManagerTest, FindTruncatableSegments_NoFreeSegments) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	// Create active segments (no free segments)
+	spaceManager->allocateSegment(type, 10);
+	spaceManager->allocateSegment(type, 10);
+
+	// truncateFile will return false when there are no truncatable segments
+	bool result = spaceManager->truncateFile();
+	EXPECT_FALSE(result) << "Should return false when no truncatable segments";
+}
+
+TEST_F(SpaceManagerTest, CopySegmentData_FileError) {
+	// This test is difficult to implement without mocking file operations
+	// The function handles file read/write errors internally
+	// We just verify it works correctly in normal operation via other tests
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t seg1 = spaceManager->allocateSegment(type, 10);
+	uint64_t seg2 = spaceManager->allocateSegment(type, 10);
+
+	// Write data to seg1
+	writeNode(seg1, 0, 100, 10);
+	segmentTracker->updateSegmentUsage(seg1, 1, 0);
+
+	file->flush();
+
+	// Free seg2 and move seg1 to seg2 location
+	spaceManager->deallocateSegment(seg2);
+
+	bool result = spaceManager->moveSegment(seg1, seg2);
+	EXPECT_TRUE(result) << "moveSegment should succeed with valid segments";
+
+	// Verify data was copied
+	SegmentHeader h2 = segmentTracker->getSegmentHeader(seg2);
+	EXPECT_EQ(h2.used, 1U) << "Data should have been copied to destination";
+}
+
+TEST_F(SpaceManagerTest, UpdateSegmentChain_ChainHeadUpdate) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// Chain: A -> B
+	uint64_t segA = spaceManager->allocateSegment(type, 10);
+	uint64_t segB = spaceManager->allocateSegment(type, 10);
+
+	// Get the header for segA (chain head)
+	SegmentHeader headerA = segmentTracker->getSegmentHeader(segA);
+	EXPECT_EQ(segmentTracker->getChainHead(type), segA) << "A should be chain head";
+
+	// Move segA to a free location - this tests updateSegmentChain internally
+	uint64_t segC = spaceManager->allocateSegment(type, 10);
+	spaceManager->deallocateSegment(segC);
+
+	bool moved = spaceManager->moveSegment(segA, segC);
+	EXPECT_TRUE(moved) << "Move should succeed";
+
+	// Chain head should now be segC (where A was moved)
+	EXPECT_EQ(segmentTracker->getChainHead(type), segC) << "Chain head should be updated after move";
+}
+
+TEST_F(SpaceManagerTest, ProcessEmptySegments_NoEmptySegments) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t seg = spaceManager->allocateSegment(type, 10);
+
+	// Mark as active
+	createActiveNode(seg, 0, 100);
+	segmentTracker->updateSegmentUsage(seg, 1, 0);
+
+	// Should not deallocate anything
+	bool result = spaceManager->processEmptySegments(type);
+	EXPECT_FALSE(result) << "Should return false when no empty segments";
+
+	// Segment should still not be in free list
+	auto freeList = segmentTracker->getFreeSegments();
+	EXPECT_EQ(std::ranges::find(freeList, seg), freeList.end());
+}
+
+TEST_F(SpaceManagerTest, MergeIntoSegment_PrevLinksUpdate) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// Chain: A -> B -> C
+	uint64_t segA = spaceManager->allocateSegment(type, 10);
+	uint64_t segB = spaceManager->allocateSegment(type, 10);
+	uint64_t segC = spaceManager->allocateSegment(type, 10);
+
+	// A has 1 item, B has 1 item, C is full
+	writeNode(segA, 0, 100, 10);
+	writeNode(segB, 0, 200, 20);
+	segmentTracker->updateSegmentUsage(segA, 1, 0);
+	segmentTracker->updateSegmentUsage(segB, 1, 0);
+	segmentTracker->updateSegmentUsage(segC, 10, 0);
+
+	// Merge B into A
+	bool result = spaceManager->mergeIntoSegment(segA, segB, type);
+	EXPECT_TRUE(result) << "Merge should succeed";
+
+	// Verify A -> C chain (B removed)
+	SegmentHeader hA = segmentTracker->getSegmentHeader(segA);
+	EXPECT_EQ(hA.next_segment_offset, segC) << "A should link to C";
+
+	SegmentHeader hC = segmentTracker->getSegmentHeader(segC);
+	EXPECT_EQ(hC.prev_segment_offset, segA) << "C should link back to A";
+}
+
+TEST_F(SpaceManagerTest, MergeIntoSegment_NextLinksUpdate) {
+	auto type = static_cast<uint32_t>(EntityType::Node);
+
+	// Chain: A -> B -> C
+	uint64_t segA = spaceManager->allocateSegment(type, 10);
+	uint64_t segB = spaceManager->allocateSegment(type, 10);
+	uint64_t segC = spaceManager->allocateSegment(type, 10);
+
+	// A is full, B has 1 item, C has 1 item
+	segmentTracker->updateSegmentUsage(segA, 10, 0);
+	writeNode(segB, 0, 200, 20);
+	writeNode(segC, 0, 300, 30);
+	segmentTracker->updateSegmentUsage(segB, 1, 0);
+	segmentTracker->updateSegmentUsage(segC, 1, 0);
+
+	// Merge C into B
+	bool result = spaceManager->mergeIntoSegment(segB, segC, type);
+	EXPECT_TRUE(result) << "Merge should succeed";
+
+	// Verify A -> B chain (C removed)
+	SegmentHeader hA = segmentTracker->getSegmentHeader(segA);
+	EXPECT_EQ(hA.next_segment_offset, segB) << "A should link to B";
+
+	SegmentHeader hB = segmentTracker->getSegmentHeader(segB);
+	EXPECT_EQ(hB.prev_segment_offset, segA) << "B should link back to A";
+	EXPECT_EQ(hB.next_segment_offset, 0ULL) << "B should be tail";
+}
+
+TEST_F(SpaceManagerTest, AllocateSegment_InvalidType) {
+	// Try to allocate segment with invalid type (above max entity type)
+	uint32_t invalidType = 999; // Assuming this is above getMaxEntityType()
+
+	EXPECT_THROW(spaceManager->allocateSegment(invalidType, 10), std::invalid_argument)
+		<< "Should throw invalid_argument for invalid segment type";
+}

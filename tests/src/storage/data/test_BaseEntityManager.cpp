@@ -413,63 +413,294 @@ TEST_F(BaseEntityManagerTest, AddBatchNodes) {
 	EXPECT_EQ(countFound, BATCH_SIZE);
 }
 
-TEST_F(BaseEntityManagerTest, ZombieManagerSafety) {
-    // 1. Create a weak_ptr that is ALREADY expired.
-    // We do this by creating a shared_ptr in a temporary scope.
-    std::shared_ptr<graph::storage::DataManager> tempDm;
-    {
-        // We can't easily instantiate a real DataManager without a file etc.
-        // But we don't need a real one! We just need a shared_ptr that dies.
-        // We can cast a dummy pointer, but that's unsafe if dereferenced.
-        // Safer: Create a NodeManager with a nullptr shared_ptr.
+// NOTE: ZombieManagerSafety test has been removed because it's no longer applicable.
+// The new design uses assert() to guarantee DataManager validity, making null DataManager
+// scenarios impossible by design. DataManager's lifecycle is guaranteed to be longer than
+// all EntityManager instances by the ownership hierarchy (DataManager owns EntityManager).
+//
+// If DataManager could be null, it indicates a programming error that should trigger the
+// assertion for early detection in debug builds, rather than silently returning default values.
+//
+// The old ZombieManagerSafety test checked defensive code paths that are intentionally
+// removed to simplify the code and improve coverage (untestable branches).
 
-        // BaseEntityManager takes shared_ptr<DataManager>.
-        // If we pass nullptr, the weak_ptr stored inside will be empty/expired immediately.
-        std::shared_ptr<graph::storage::DataManager> nullDm = nullptr;
+// Additional tests to improve branch coverage
 
-        auto zombieNodeMgr = std::make_shared<graph::storage::NodeManager>(
-            nullDm,
-            nullptr // No deletion manager needed
-        );
+// Test addBatch with empty vector
+// Tests branch at line 50: if (entities.empty()) return;
+TEST_F(BaseEntityManagerTest, AddBatchEmptyVector) {
+    std::vector<graph::Node> emptyNodes;
+    EXPECT_NO_THROW(nodeManager->addBatch(emptyNodes));
 
-        // 2. Test methods with expired/null manager
-        graph::Node n;
-        n.setId(123);
+    // Verify no nodes were added
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    size_t previousCount = dirtyNodes.size();
 
-        // addToCache
-        // Code: const auto dataManager = dataManager_.lock(); if (!dataManager) return;
-        EXPECT_NO_THROW(zombieNodeMgr->addToCache(n));
+    nodeManager->addBatch(emptyNodes);
 
-        // clearCache
-        EXPECT_NO_THROW(zombieNodeMgr->clearCache());
+    dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    EXPECT_EQ(dirtyNodes.size(), previousCount);
+}
 
-        // add
-        // Code: if (!dataManager) return;
-        EXPECT_NO_THROW(zombieNodeMgr->add(n));
+// Test update with entity that has ID = 0
+// Tests branch at line 96-98: if (entity.getId() == 0) return;
+TEST_F(BaseEntityManagerTest, UpdateEntityWithZeroId) {
+    graph::Node node;
+    node.setId(0); // Explicitly set to zero
+    node.setLabelId(dataManager->getOrCreateLabelId("Test"));
 
-        // update
-        EXPECT_NO_THROW(zombieNodeMgr->update(n));
+    EXPECT_NO_THROW(nodeManager->update(node));
 
-        // get
-        graph::Node res = zombieNodeMgr->get(1);
-        EXPECT_EQ(res.getId(), 0);
+    // Node should not have been added to dirty map
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
+    for (const auto &dn: dirtyNodes) {
+        EXPECT_NE(dn.getLabelId(), node.getLabelId());
+    }
+}
 
-        // getBatch
-        auto batch = zombieNodeMgr->getBatch({1, 2});
-        EXPECT_TRUE(batch.empty());
+// Test update with inactive entity throws exception
+// Tests branch at line 100-101: if (!entity.isActive()) throw
+TEST_F(BaseEntityManagerTest, UpdateInactiveEntityThrows) {
+    graph::Node node = createTestNode(dataManager, "InactiveNode");
+    nodeManager->add(node);
 
-        // getInRange
-        auto range = zombieNodeMgr->getInRange(1, 10, 5);
-        EXPECT_TRUE(range.empty());
+    // Mark node as inactive
+    node.markInactive();
 
-        // getProperties
-        auto props = zombieNodeMgr->getProperties(1);
-        EXPECT_TRUE(props.empty());
+    EXPECT_THROW(nodeManager->update(node), std::runtime_error);
+}
 
-        // addProperties
-        EXPECT_NO_THROW(zombieNodeMgr->addProperties(1, {}));
+// Test remove with entity that has ID = 0
+// Tests branch at line 121-123: if (entity.getId() == 0 || !entity.isActive()) return;
+TEST_F(BaseEntityManagerTest, RemoveEntityWithZeroId) {
+    graph::Node node;
+    node.setId(0);
 
-        // removeProperty
-        EXPECT_NO_THROW(zombieNodeMgr->removeProperty(1, "key"));
+    EXPECT_NO_THROW(nodeManager->remove(node));
+
+    // Should not affect deletion flag
+    // (This tests the early return path)
+}
+
+// Test remove with inactive entity
+// Tests branch at line 121-123: inactive check
+TEST_F(BaseEntityManagerTest, RemoveInactiveEntity) {
+    graph::Node node = createTestNode(dataManager, "AlreadyInactive");
+    node.markInactive(); // Mark as inactive before adding
+
+    EXPECT_NO_THROW(nodeManager->remove(node));
+
+    // Should not have been added or marked for deletion
+}
+
+// Test getBatch with non-existent IDs
+// Tests branch at line 154: if (entity.getId() != 0 && entity.isActive())
+TEST_F(BaseEntityManagerTest, GetBatchWithNonExistentIds) {
+    std::vector<int64_t> nonExistentIds = {99990, 99991, 99992, 99993, 99994};
+
+    auto nodes = nodeManager->getBatch(nonExistentIds);
+
+    EXPECT_TRUE(nodes.empty());
+}
+
+// Test getBatch with mix of existent and non-existent IDs
+TEST_F(BaseEntityManagerTest, GetBatchMixedIds) {
+    // Create some nodes
+    std::vector<int64_t> existingIds;
+    for (int i = 0; i < 3; i++) {
+        graph::Node node = createTestNode(dataManager, "Mixed" + std::to_string(i));
+        nodeManager->add(node);
+        existingIds.push_back(node.getId());
+    }
+
+    // Mix with non-existent IDs
+    std::vector<int64_t> mixedIds = {
+        existingIds[0],
+        99999, // non-existent
+        existingIds[1],
+        88888, // non-existent
+        existingIds[2]
+    };
+
+    auto nodes = nodeManager->getBatch(mixedIds);
+
+    // Should only return existing (active) nodes
+    EXPECT_EQ(nodes.size(), 3UL);
+    for (const auto &node: nodes) {
+        EXPECT_TRUE(node.isActive());
+    }
+}
+
+// Test getInRange with no results
+TEST_F(BaseEntityManagerTest, GetInRangeNoResults) {
+    // Request range where no nodes exist
+    auto nodes = nodeManager->getInRange(50000, 50100, 100);
+
+    EXPECT_TRUE(nodes.empty());
+}
+
+// Test getInRange with startId > endId
+TEST_F(BaseEntityManagerTest, GetInRangeInvalidRange) {
+    auto nodes = nodeManager->getInRange(100, 50, 10);
+
+    EXPECT_TRUE(nodes.empty());
+}
+
+// Test getProperties with non-existent entity
+// Tests branch at line 193-194: if (!dataManager) return {}
+TEST_F(BaseEntityManagerTest, GetPropertiesNonExistent) {
+    auto props = nodeManager->getProperties(99999);
+
+    EXPECT_TRUE(props.empty());
+}
+
+// Test addProperties with non-existent entity
+TEST_F(BaseEntityManagerTest, AddPropertiesNonExistent) {
+    std::unordered_map<std::string, graph::PropertyValue> props;
+    props["test"] = 42;
+
+    // PropertyManager throws for non-existent entities
+    EXPECT_THROW(nodeManager->addProperties(99999, props), std::runtime_error);
+}
+
+// Test removeProperty from non-existent entity
+TEST_F(BaseEntityManagerTest, RemovePropertyNonExistent) {
+    // Should not throw, just no-op
+    EXPECT_NO_THROW(nodeManager->removeProperty(99999, "anyKey"));
+}
+
+// Test removeProperty with non-existent property
+TEST_F(BaseEntityManagerTest, RemoveNonExistentProperty) {
+    graph::Node node = createTestNode(dataManager, "PropertyTest");
+    nodeManager->add(node);
+
+    // Remove property that doesn't exist - should not throw
+    EXPECT_NO_THROW(nodeManager->removeProperty(node.getId(), "nonExistentKey"));
+}
+
+// Test update when entity is in ADDED state (preserves ADDED)
+// Tests branch at line 108-110: dirtyInfo->changeType == EntityChangeType::ADDED
+TEST_F(BaseEntityManagerTest, UpdatePreservesAddedState) {
+    graph::Node node = createTestNode(dataManager, "AddedStateTest");
+    nodeManager->add(node);
+
+    // Update before flushing - should stay in ADDED state
+    node.setLabelId(dataManager->getOrCreateLabelId("Updated"));
+    nodeManager->update(node);
+
+    // Verify still in ADDED state (not MODIFIED)
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    bool found = false;
+    for (const auto &dn: dirtyNodes) {
+        if (dn.getId() == node.getId()) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found) << "Node should still be in ADDED state after update";
+
+    auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
+    found = false;
+    for (const auto &dn: modifiedNodes) {
+        if (dn.getId() == node.getId()) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_FALSE(found) << "Node should not be in MODIFIED state";
+}
+
+// Test update when entity is in MODIFIED state
+// Tests else branch at line 111-114: EntityChangeType::MODIFIED
+TEST_F(BaseEntityManagerTest, UpdateCreatesModifiedState) {
+    graph::Node node = createTestNode(dataManager, "ModifiedStateTest");
+    nodeManager->add(node);
+
+    // Flush to move from ADDED to persistent state
+    dataManager->prepareFlushSnapshot();
+    dataManager->commitFlushSnapshot();
+
+    // Now update - should create MODIFIED state
+    node.setLabelId(dataManager->getOrCreateLabelId("Modified"));
+    nodeManager->update(node);
+
+    // Verify in MODIFIED state
+    auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
+    bool found = false;
+    for (const auto &dn: modifiedNodes) {
+        if (dn.getId() == node.getId()) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found) << "Node should be in MODIFIED state after flush and update";
+}
+
+// Test getBatch filters out inactive entities
+// Tests branch at line 154: if (entity.getId() != 0 && entity.isActive())
+TEST_F(BaseEntityManagerTest, GetBatchFiltersInactive) {
+    // Create nodes
+    std::vector<int64_t> nodeIds;
+    for (int i = 0; i < 5; i++) {
+        graph::Node node = createTestNode(dataManager, "FilterTest" + std::to_string(i));
+        nodeManager->add(node);
+        nodeIds.push_back(node.getId());
+    }
+
+    // Mark some as inactive
+    graph::Node node2 = nodeManager->get(nodeIds[1]);
+    nodeManager->remove(node2);
+
+    graph::Node node4 = nodeManager->get(nodeIds[3]);
+    nodeManager->remove(node4);
+
+    // Get batch - should only return active nodes
+    auto nodes = nodeManager->getBatch(nodeIds);
+
+    EXPECT_EQ(nodes.size(), 3UL);
+    for (const auto &node: nodes) {
+        EXPECT_TRUE(node.isActive());
+        EXPECT_NE(node.getId(), nodeIds[1]);
+        EXPECT_NE(node.getId(), nodeIds[3]);
+    }
+}
+
+// Test addToCache directly
+TEST_F(BaseEntityManagerTest, AddToCacheDirect) {
+    graph::Node node = createTestNode(dataManager, "DirectCache");
+    node.setId(12345); // Manual ID
+
+    nodeManager->addToCache(node);
+
+    // Verify in cache
+    EXPECT_TRUE(dataManager->getNodeCache().contains(12345));
+
+    // Can retrieve it
+    graph::Node retrieved = nodeManager->get(12345);
+    EXPECT_EQ(retrieved.getId(), 12345);
+}
+
+// Test clearCache clears all entities
+TEST_F(BaseEntityManagerTest, ClearCacheRemovesAll) {
+    // Add multiple nodes
+    std::vector<int64_t> nodeIds;
+    for (int i = 0; i < 10; i++) {
+        graph::Node node = createTestNode(dataManager, "ClearTest" + std::to_string(i));
+        nodeManager->add(node);
+        nodeIds.push_back(node.getId());
+    }
+
+    // Verify all in cache
+    for (int64_t id: nodeIds) {
+        EXPECT_TRUE(dataManager->getNodeCache().contains(id));
+    }
+
+    // Clear cache
+    nodeManager->clearCache();
+
+    // Verify none in cache
+    EXPECT_EQ(dataManager->getNodeCache().size(), 0UL);
+    for (int64_t id: nodeIds) {
+        EXPECT_FALSE(dataManager->getNodeCache().contains(id));
     }
 }

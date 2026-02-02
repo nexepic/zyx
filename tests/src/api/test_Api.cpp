@@ -270,3 +270,45 @@ TEST_F(CppApiTest, InternalConversionCheck) {
 	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Edge>>(rVal))
 			<< "Result 'r' should be Edge - Check toPublicValue logic!";
 }
+
+// ============================================================================
+// 6. Null Values and Vector Properties (Coverage Improvement)
+// ============================================================================
+
+TEST_F(CppApiTest, HandleNullPropertyValues) {
+	// Create node with null property (missing in creation)
+	db->createNode("NullTest", {{"name", "Test"}});
+	db->save();
+
+	// Query returns null for missing properties
+	auto res = db->execute("MATCH (n:NullTest) RETURN n.optionalProp");
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto val = res.get("n.optionalProp");
+	// Should be std::monostate (null)
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(val));
+}
+
+TEST_F(CppApiTest, HandleVectorProperties) {
+	// Create node with vector property
+	std::vector<std::string> vecProps = {"1.1", "2.2", "3.3"};
+	db->createNode("VectorTest", {{"embeddings", vecProps}});
+	db->save();
+
+	// Query the vector property
+	auto res = db->execute("MATCH (n:VectorTest) RETURN n.embeddings");
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto val = res.get("n.embeddings");
+	// Vector properties are returned as std::vector<std::string>
+	ASSERT_TRUE(std::holds_alternative<std::vector<std::string>>(val));
+
+	auto vec = std::get<std::vector<std::string>>(val);
+	ASSERT_EQ(vec.size(), 3u);
+	// std::to_string(float) converts with default precision
+	EXPECT_TRUE(vec[0] == "1.100000" || vec[0] == "1.1");
+	EXPECT_TRUE(vec[1] == "2.200000" || vec[1] == "2.2");
+	EXPECT_TRUE(vec[2] == "3.300000" || vec[2] == "3.3");
+}

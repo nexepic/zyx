@@ -38,8 +38,7 @@ namespace graph::storage {
 		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 
 	int64_t PropertyManager::doAllocateId() {
-		const auto dataManager = dataManager_.lock();
-		return dataManager->getIdAllocator()->allocateId(Property::typeId);
+		return getDataManagerPtr()->getIdAllocator()->allocateId(Property::typeId);
 	}
 
 	void PropertyManager::doRemove(Property &property) {
@@ -61,7 +60,7 @@ namespace graph::storage {
 	}
 
 	void PropertyManager::serializeProperties(std::ostream &os,
-											  const std::unordered_map<std::string, PropertyValue> &properties) {
+											 const std::unordered_map<std::string, PropertyValue> &properties) {
 		// Write the number of properties
 		utils::Serializer::writePOD(os, static_cast<uint32_t>(properties.size()));
 
@@ -95,9 +94,7 @@ namespace graph::storage {
 			return;
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		// Step 1: ALWAYS clean up any existing external properties first.
 		// This ensures we start from a clean slate every time properties are modified.
@@ -137,9 +134,7 @@ namespace graph::storage {
 			return; // Do nothing for entity types that don't support external properties
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		if (!EntityPropertyTraits<EntityType>::hasPropertyEntity(entity)) {
 			return;
@@ -170,9 +165,7 @@ namespace graph::storage {
 			return;
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		// This function's responsibility is simple: create a new Property entity.
 		// It assumes any previous external storage has already been cleaned up by the caller (storeProperties).
@@ -187,7 +180,7 @@ namespace graph::storage {
 
 		// Update the parent entity to reference the new property entity.
 		EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, newProperty.getId(),
-															  PropertyStorageType::PROPERTY_ENTITY);
+															 PropertyStorageType::PROPERTY_ENTITY);
 
 		// Clear the properties from the in-memory entity object, as they are now stored externally.
 		EntityPropertyTraits<EntityType>::clearProperties(entity);
@@ -195,16 +188,13 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void PropertyManager::storePropertiesInBlob(EntityType &entity,
-												const std::unordered_map<std::string, PropertyValue> &properties) {
+											 const std::unordered_map<std::string, PropertyValue> &properties) {
 		// Only process entity types that support external properties.
 		if constexpr (!EntityPropertyTraits<EntityType>::supportsExternalProperties) {
 			return;
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
+		auto *dataManager = getDataManagerPtr();
 		auto blobManager = dataManager->getBlobManager();
 		if (!blobManager) {
 			throw std::runtime_error("BlobManager not initialized");
@@ -232,7 +222,7 @@ namespace graph::storage {
 
 			// Update the entity to reference the head of the new blob chain.
 			EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, blobChain.front().getId(),
-																  PropertyStorageType::BLOB_ENTITY);
+															 PropertyStorageType::BLOB_ENTITY);
 
 			// Clear the properties from the in-memory entity object, as they are now stored externally.
 			EntityPropertyTraits<EntityType>::clearProperties(entity);
@@ -243,9 +233,7 @@ namespace graph::storage {
 	}
 
 	std::unordered_map<std::string, PropertyValue> PropertyManager::getPropertiesFromBlob(int64_t blobId) const {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return {};
+		auto *dataManager = getDataManagerPtr();
 
 		try {
 			// Read data from blob chain
@@ -277,9 +265,7 @@ namespace graph::storage {
 			return allProperties; // Return empty properties for unsupported entity types
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return allProperties;
+		auto *dataManager = getDataManagerPtr();
 
 		// Get the entity
 		auto entity = dataManager->getEntity<EntityType>(entityId);
@@ -331,15 +317,13 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void PropertyManager::addEntityProperties(int64_t entityId,
-											  const std::unordered_map<std::string, PropertyValue> &properties) {
+											 const std::unordered_map<std::string, PropertyValue> &properties) {
 		// Only process entity types that support properties
 		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties) {
 			throw std::runtime_error("Entity type does not support properties");
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		// Get the entity
 		auto entity = dataManager->getEntity<EntityType>(entityId);
@@ -371,9 +355,7 @@ namespace graph::storage {
 			return;
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
+		auto *dataManager = getDataManagerPtr();
 
 		// Get the entity.
 		auto entity = dataManager->getEntity<EntityType>(entityId);
@@ -444,7 +426,7 @@ namespace graph::storage {
 							} else {
 								// Failed to create a new chain, clear the reference.
 								EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0,
-																					  PropertyStorageType::NONE);
+																					 PropertyStorageType::NONE);
 							}
 						}
 					}
@@ -465,9 +447,7 @@ namespace graph::storage {
 			return false; // Entities without external property support never have external properties
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return false;
+		auto *dataManager = getDataManagerPtr();
 
 		if (!EntityPropertyTraits<EntityType>::hasPropertyEntity(entity)) {
 			return false;
@@ -507,9 +487,7 @@ namespace graph::storage {
 			return 0; // Entities without property support have no property size
 		}
 
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return 0;
+		auto *dataManager = getDataManagerPtr();
 
 		auto entity = dataManager->getEntity<EntityType>(entityId);
 		if (entity.getId() == 0 || !entity.isActive()) {
@@ -587,10 +565,10 @@ namespace graph::storage {
 														   const std::unordered_map<std::string, PropertyValue> &);
 	template void
 	PropertyManager::storePropertiesInPropertyEntity<Property>(Property &entity,
-															   const std::unordered_map<std::string, PropertyValue> &);
+																const std::unordered_map<std::string, PropertyValue> &);
 	template void
 	PropertyManager::storePropertiesInPropertyEntity<Blob>(Blob &entity,
-														   const std::unordered_map<std::string, PropertyValue> &);
+															const std::unordered_map<std::string, PropertyValue> &);
 	template void
 	PropertyManager::storePropertiesInPropertyEntity<Index>(Index &entity,
 															const std::unordered_map<std::string, PropertyValue> &);
@@ -600,18 +578,18 @@ namespace graph::storage {
 
 	// storePropertiesInBlob instantiations
 	template void PropertyManager::storePropertiesInBlob<Node>(Node &entity,
-															   const std::unordered_map<std::string, PropertyValue> &);
+															 const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::storePropertiesInBlob<Edge>(Edge &entity,
-															   const std::unordered_map<std::string, PropertyValue> &);
+															 const std::unordered_map<std::string, PropertyValue> &);
 	template void
 	PropertyManager::storePropertiesInBlob<Property>(Property &entity,
 													 const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::storePropertiesInBlob<Blob>(Blob &entity,
-															   const std::unordered_map<std::string, PropertyValue> &);
+														const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::storePropertiesInBlob<Index>(Index &entity,
-																const std::unordered_map<std::string, PropertyValue> &);
+															const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::storePropertiesInBlob<State>(State &entity,
-																const std::unordered_map<std::string, PropertyValue> &);
+															const std::unordered_map<std::string, PropertyValue> &);
 
 	// getEntityProperties instantiations
 	template std::unordered_map<std::string, PropertyValue>
@@ -636,11 +614,11 @@ namespace graph::storage {
 	PropertyManager::addEntityProperties<Property>(int64_t entityId,
 												   const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::addEntityProperties<Blob>(int64_t entityId,
-															 const std::unordered_map<std::string, PropertyValue> &);
+														 const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::addEntityProperties<Index>(int64_t entityId,
-															  const std::unordered_map<std::string, PropertyValue> &);
+														  const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::addEntityProperties<State>(int64_t entityId,
-															  const std::unordered_map<std::string, PropertyValue> &);
+														  const std::unordered_map<std::string, PropertyValue> &);
 
 	// removeEntityProperty instantiations
 	template void PropertyManager::removeEntityProperty<Node>(int64_t entityId, const std::string &);

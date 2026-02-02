@@ -29,36 +29,24 @@ namespace graph::storage {
 		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 
 	void EdgeManager::doRemove(Edge &edge) {
-		if (const auto dataManager = dataManager_.lock()) {
-			dataManager->getRelationshipTraversal()->unlinkEdge(edge);
-			deletionManager_->deleteEdge(edge);
-		}
+		getDataManagerPtr()->getRelationshipTraversal()->unlinkEdge(edge);
+		deletionManager_->deleteEdge(edge);
 	}
 
 	void EdgeManager::add(Edge &edge) {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return;
-
 		// Call base implementation
 		BaseEntityManager::add(edge);
 
 		// Edge-specific: Link the edge in the relationship traversal
-		// Edge edgeCopy = edge; // Make a mutable copy
-		dataManager->getRelationshipTraversal()->linkEdge(edge);
+		getDataManagerPtr()->getRelationshipTraversal()->linkEdge(edge);
 	}
 
 	std::vector<Edge> EdgeManager::findByNode(int64_t nodeId, const std::string &direction) const {
-		auto dataManager = dataManager_.lock();
-		if (!dataManager)
-			return {};
-
-		return dataManager->findEdgesByNode(nodeId, direction);
+		return getDataManagerPtr()->findEdgesByNode(nodeId, direction);
 	}
 
 	int64_t EdgeManager::doAllocateId() {
-		const auto dataManager = dataManager_.lock();
-		return dataManager->getIdAllocator()->allocateId(Edge::typeId);
+		return getDataManagerPtr()->getIdAllocator()->allocateId(Edge::typeId);
 	}
 
 } // namespace graph::storage

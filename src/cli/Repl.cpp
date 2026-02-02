@@ -340,6 +340,11 @@ namespace graph {
 	void REPL::handleCommand(const std::string &command) const {
 		std::string trimmed = trim(command);
 
+		// Remove trailing semicolon if present for command matching
+		if (!trimmed.empty() && trimmed.back() == ';') {
+			trimmed = trim(trimmed.substr(0, trimmed.length() - 1));
+		}
+
 		// --- 1. Basic System Commands ---
 		if (trimmed == "help") {
 			std::cout << "Commands:\n";

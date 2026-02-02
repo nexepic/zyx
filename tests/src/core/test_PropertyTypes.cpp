@@ -231,3 +231,114 @@ TEST(PropertyValueTest, SizeOfString) {
 	graph::PropertyValue v_empty("");
 	EXPECT_EQ(getPropertyValueSize(v_empty), 0u + sizeof(size_t));
 }
+
+// ============================================================================
+// LIST Type Tests (std::vector<float>)
+// ============================================================================
+
+TEST(PropertyValueTest, ConstructList) {
+	// Test empty list
+	std::vector<float> emptyList;
+	graph::PropertyValue v1(emptyList);
+	EXPECT_EQ(graph::getPropertyType(v1), PropertyType::LIST);
+	EXPECT_EQ(v1.typeName(), "LIST");
+	EXPECT_TRUE(std::holds_alternative<std::vector<float>>(v1.getVariant()));
+	EXPECT_TRUE(std::get<std::vector<float>>(v1.getVariant()).empty());
+
+	// Test non-empty list
+	std::vector<float> list = {1.0f, 2.0f, 3.0f};
+	graph::PropertyValue v2(list);
+	EXPECT_EQ(graph::getPropertyType(v2), PropertyType::LIST);
+	EXPECT_EQ(std::get<std::vector<float>>(v2.getVariant()).size(), 3u);
+
+	// Test move semantics
+	std::vector<float> source = {4.0f, 5.0f};
+	graph::PropertyValue v3(std::move(source));
+	EXPECT_EQ(std::get<std::vector<float>>(v3.getVariant()).size(), 2u);
+	EXPECT_TRUE(source.empty()); // Verify source was moved
+}
+
+TEST(PropertyValueTest, ListToString) {
+	// Empty list
+	std::vector<float> emptyList;
+	graph::PropertyValue v1(emptyList);
+	EXPECT_EQ(v1.toString(), "[]");
+
+	// Non-empty list
+	std::vector<float> list = {1.5f, 2.5f, 3.5f};
+	graph::PropertyValue v2(list);
+	std::string result = v2.toString();
+	// The toString implementation should produce something like "[1.5, 2.5, 3.5]"
+	EXPECT_TRUE(result.find("[") != std::string::npos);
+	EXPECT_TRUE(result.find("]") != std::string::npos);
+}
+
+TEST(PropertyValueTest, ListEquality) {
+	std::vector<float> list1 = {1.0f, 2.0f, 3.0f};
+	std::vector<float> list2 = {1.0f, 2.0f, 3.0f};
+	std::vector<float> list3 = {1.0f, 2.0f};
+
+	graph::PropertyValue v1(list1);
+	graph::PropertyValue v2(list2);
+	graph::PropertyValue v3(list3);
+
+	EXPECT_TRUE(v1 == v2); // Same elements
+	EXPECT_FALSE(v1 == v3); // Different size
+	EXPECT_FALSE(v1 == graph::PropertyValue(42)); // Different type
+}
+
+TEST(PropertyValueTest, ListRelationalOperators) {
+	// List vs List comparison - uses variant index comparison
+	std::vector<float> list1 = {1.0f};
+	std::vector<float> list2 = {2.0f};
+
+	graph::PropertyValue v1(list1);
+	graph::PropertyValue v2(list2);
+
+	// Same type (LIST), compares by value
+	EXPECT_FALSE(v1 == v2); // Different values
+	EXPECT_TRUE(v1 < v2 || v1 > v2); // One should be less
+
+	// List vs other types - uses variant index comparison
+	// Index order: monostate(0), bool(1), int64_t(2), double(3), string(4), vector(5)
+	graph::PropertyValue intVal(42);
+	graph::PropertyValue doubleVal(3.14);
+	graph::PropertyValue strVal("test");
+
+	// LIST (5) has higher index than INTEGER (2), DOUBLE (3), STRING (4)
+	EXPECT_GT(v1, intVal);  // LIST (5) > INTEGER (2)
+	EXPECT_GT(v1, doubleVal);  // LIST (5) > DOUBLE (3)
+	EXPECT_GT(v1, strVal);  // LIST (5) > STRING (4)
+}
+
+TEST(PropertyValueTest, ListSize) {
+	// Empty list - size is count (uint32_t) + data
+	std::vector<float> emptyList;
+	graph::PropertyValue v1(emptyList);
+	EXPECT_EQ(getPropertyValueSize(v1), sizeof(uint32_t) + sizeof(float) * 0);
+
+	// Non-empty list
+	std::vector<float> list = {1.0f, 2.0f, 3.0f, 4.0f};
+	graph::PropertyValue v2(list);
+	EXPECT_EQ(getPropertyValueSize(v2), sizeof(uint32_t) + sizeof(float) * 4);
+}
+
+TEST(PropertyValueTest, GetListError) {
+	// Test that getList() throws when value is not a LIST type
+	graph::PropertyValue intVal(42);
+	graph::PropertyValue strVal("test");
+	graph::PropertyValue nullVal;
+
+	EXPECT_THROW(intVal.getList(), std::runtime_error);
+	EXPECT_THROW(strVal.getList(), std::runtime_error);
+	EXPECT_THROW(nullVal.getList(), std::runtime_error);
+
+	// Verify getList() works correctly for LIST type
+	std::vector<float> list = {1.0f, 2.0f, 3.0f};
+	graph::PropertyValue listVal(list);
+	const auto &result = listVal.getList();
+	EXPECT_EQ(result.size(), 3u);
+	EXPECT_EQ(result[0], 1.0f);
+	EXPECT_EQ(result[1], 2.0f);
+	EXPECT_EQ(result[2], 3.0f);
+}

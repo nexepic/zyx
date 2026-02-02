@@ -30,8 +30,7 @@ namespace graph::storage {
 	void IndexEntityManager::doRemove(Index &index) { deletionManager_->deleteIndex(index); }
 
 	int64_t IndexEntityManager::doAllocateId() {
-		const auto dataManager = dataManager_.lock();
-		return dataManager->getIdAllocator()->allocateId(Index::typeId);
+		return getDataManagerPtr()->getIdAllocator()->allocateId(Index::typeId);
 	}
 
 } // namespace graph::storage

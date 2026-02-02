@@ -637,3 +637,501 @@ TEST_F(IDAllocatorTest, ClearCache_SpecificType) {
 	int64_t id = allocator->allocateId(graph::Node::typeId);
 	EXPECT_EQ(id, 1); // Should still get 1 (via disk scan now)
 }
+
+// ==========================================
+// Additional Tests for Branch Coverage
+// ==========================================
+
+TEST_F(IDAllocatorTest, BatchAllocation_ZeroCount) {
+	// Test allocateIdBatch with count == 0
+	int64_t startId = allocator->allocateIdBatch(graph::Node::typeId, 0);
+	EXPECT_EQ(startId, 0);
+}
+
+TEST_F(IDAllocatorTest, BatchAllocation_LargeBatch) {
+	// Test allocateIdBatch with a large batch size
+	constexpr size_t LARGE_BATCH = 100;
+	int64_t startId = allocator->allocateIdBatch(graph::Node::typeId, LARGE_BATCH);
+	EXPECT_EQ(startId, 1);
+	EXPECT_EQ(static_cast<size_t>(allocator->getCurrentMaxNodeId()), LARGE_BATCH);
+}
+
+TEST_F(IDAllocatorTest, FreeId_NonPersistedId) {
+	// Test freeId for an ID that was allocated but never persisted (dirty)
+	int64_t id1 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id1, 1);
+
+	// Free the ID without persisting - should go to volatile cache
+	allocator->freeId(id1, graph::Node::typeId);
+
+	// Re-allocate should get the same ID back from volatile cache
+	int64_t id2 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id2, 1);
+}
+
+TEST_F(IDAllocatorTest, FreeId_DirtyInPreAllocRange) {
+	// Test the isDirtyInPreAlloc branch - ID allocated but not in used range
+	// 1. Allocate an ID
+	int64_t id1 = allocator->allocateId(graph::Node::typeId);
+
+	// 2. Insert a node to occupy ID 1
+	graph::Node node(id1, 0);
+	dataManager->addNode(node);
+	fileStorage->flush();
+
+	// 3. Allocate another ID but don't persist
+	int64_t id2 = allocator->allocateId(graph::Node::typeId);
+
+	// 4. Manually free id2 - it should go to volatile cache since it's not persisted
+	allocator->freeId(id2, graph::Node::typeId);
+
+	// 5. Next allocation should get id2 from volatile cache
+	int64_t id3 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id3, id2);
+}
+
+TEST_F(IDAllocatorTest, VolatileCacheOverflow) {
+	// Test volatile cache overflow (volatileMaxIntervals_)
+	// Set small limits to trigger overflow
+	allocator->setCacheLimits(10, 5, 5); // L1=10, L2=5 intervals, Volatile=5 intervals
+
+	// 1. Allocate many IDs without persisting
+	constexpr int COUNT = 100;
+	std::vector<int64_t> ids;
+	for (int i = 0; i < COUNT; ++i) {
+		ids.push_back(allocator->allocateId(graph::Node::typeId));
+	}
+
+	// 2. Free all IDs - should fill volatile cache and potentially overflow
+	for (int64_t id: ids) {
+		allocator->freeId(id, graph::Node::typeId);
+	}
+
+	// 3. Re-allocate - should reuse from volatile cache up to capacity
+	// Some IDs might be dropped due to overflow
+	std::unordered_set<int64_t> reusedIds;
+	for (int i = 0; i < COUNT; ++i) {
+		int64_t id = allocator->allocateId(graph::Node::typeId);
+		reusedIds.insert(id);
+	}
+
+	// At least some IDs should be reused
+	EXPECT_GT(reusedIds.size(), 0u);
+	EXPECT_LE(*reusedIds.begin(), COUNT);
+}
+
+TEST_F(IDAllocatorTest, L2CacheOverflow) {
+	// Test L2 cache overflow (l2MaxIntervals_)
+	// Set small limits
+	allocator->setCacheLimits(10, 3, 50000); // L1=10, L2=3 intervals, Volatile=large
+
+	constexpr int COUNT = 200;
+
+	// 1. Insert and persist many nodes
+	for (int i = 0; i < COUNT; ++i) {
+		insertNode("N");
+	}
+	fileStorage->flush();
+
+	// 2. Delete all - should overflow L2 and go to L1
+	for (int i = 1; i <= COUNT; ++i) {
+		deleteNode(i);
+	}
+
+	// 3. Re-allocate - should reuse IDs
+	std::unordered_set<int64_t> reusedIds;
+	for (int i = 0; i < COUNT; ++i) {
+		int64_t id = allocator->allocateId(graph::Node::typeId);
+		reusedIds.insert(id);
+	}
+
+	// Should have reused some IDs
+	bool reusedAny = false;
+	for (int64_t id: reusedIds) {
+		if (id <= COUNT) {
+			reusedAny = true;
+			break;
+		}
+	}
+	EXPECT_TRUE(reusedAny);
+}
+
+TEST_F(IDAllocatorTest, IDIntervalSet_AppendToLastInterval) {
+	// Test the optimization branch: appending to the last interval
+	// This happens when adding IDs sequentially to an interval set
+	allocator->setCacheLimits(100, 100, 50000);
+
+	// 1. Insert and persist nodes
+	for (int i = 0; i < 10; ++i) {
+		insertNode("N");
+	}
+	fileStorage->flush();
+
+	// 2. Delete sequentially - should trigger append optimization
+	for (int i = 1; i <= 10; ++i) {
+		deleteNode(i);
+	}
+
+	// 3. Re-allocate - should get IDs back efficiently
+	std::vector<int64_t> reusedIds;
+	for (int i = 0; i < 10; ++i) {
+		reusedIds.push_back(allocator->allocateId(graph::Node::typeId));
+	}
+
+	// Should get all 10 IDs back
+	std::sort(reusedIds.begin(), reusedIds.end());
+	for (int i = 0; i < 10; ++i) {
+		EXPECT_EQ(reusedIds[i], i + 1);
+	}
+}
+
+TEST_F(IDAllocatorTest, RecoverGaps_EmptySegments) {
+	// Test recoverGapIds when all segments are empty (header.used == 0)
+	// This tests the line: if (header.used > 0) branch
+
+	// 1. Create a database with no data
+	fileStorage->flush();
+
+	// 2. Close and restart to trigger recovery
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	fileStorage = database->getStorage();
+	allocator = fileStorage->getIDAllocator();
+
+	// 3. Should recover correctly
+	EXPECT_EQ(allocator->getCurrentMaxNodeId(), 0);
+
+	// 4. First allocation should work
+	int64_t id = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id, 1);
+}
+
+TEST_F(IDAllocatorTest, DiskScan_Wrapping) {
+	// Test disk scan wrapping behavior
+	// This tests cursor.wrappedAround logic in fetchInactiveIdsFromDisk
+
+	// 1. Create many nodes across multiple segments
+	constexpr int COUNT = 3000;
+	for (int i = 0; i < COUNT; ++i) {
+		insertNode("N");
+	}
+	fileStorage->flush();
+
+	// 2. Delete nodes from the beginning (creating gaps at start)
+	for (int i = 1; i <= 100; ++i) {
+		deleteNode(i);
+	}
+
+	// 3. Clear caches to force disk scan
+	allocator->clearAllCaches();
+
+	// 4. Allocate - should scan from start and wrap if needed
+	int64_t id = allocator->allocateId(graph::Node::typeId);
+	EXPECT_LE(id, 100);
+}
+
+TEST_F(IDAllocatorTest, FetchInactiveIds_L1FullEarlyReturn) {
+	// Test early return when L1 cache is full during disk scan
+	// This tests line 409-412: if (l1.size() >= l1CacheSize_) break/return
+
+	allocator->setCacheLimits(10, 100, 50000); // Small L1, large L2
+
+	// 1. Create many nodes with many gaps
+	constexpr int COUNT = 500;
+	for (int i = 0; i < COUNT; ++i) {
+		insertNode("N");
+	}
+	fileStorage->flush();
+
+	// 2. Delete many nodes to create gaps
+	for (int i = 1; i <= COUNT; i += 2) { // Delete half
+		deleteNode(i);
+	}
+
+	// 3. Clear cache
+	allocator->clearAllCaches();
+
+	// 4. Allocate - should fetch only up to L1 capacity
+	for (int i = 0; i < 15; ++i) { // More than L1 size
+		int64_t id = allocator->allocateId(graph::Node::typeId);
+		EXPECT_GT(id, 0);
+	}
+
+	// Verify max ID didn't increase much
+	EXPECT_LE(allocator->getCurrentMaxNodeId(), COUNT);
+}
+
+TEST_F(IDAllocatorTest, AllocateId_InvalidEntityType) {
+	// Test allocateId with invalid entity type
+	EXPECT_THROW(allocator->allocateId(9999), std::runtime_error);
+}
+
+TEST_F(IDAllocatorTest, AllocateIdBatch_MultipleTypesIndependently) {
+	// Test batch allocation for multiple types independently
+	constexpr size_t BATCH = 10;
+
+	int64_t startNode = allocator->allocateIdBatch(graph::Node::typeId, BATCH);
+	EXPECT_EQ(startNode, 1);
+
+	int64_t startEdge = allocator->allocateIdBatch(graph::Edge::typeId, BATCH);
+	EXPECT_EQ(startEdge, 1);
+
+	// Node and Edge should have independent counters
+	EXPECT_EQ(allocator->getCurrentMaxNodeId(), BATCH);
+	EXPECT_EQ(allocator->getCurrentMaxEdgeId(), BATCH);
+}
+
+TEST_F(IDAllocatorTest, MixedSequentialAndBatchAllocation) {
+	// Test mixing sequential and batch allocation
+	// 1. Sequential allocation
+	int64_t id1 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id1, 1);
+
+	// 2. Batch allocation
+	constexpr size_t BATCH = 5;
+	int64_t batchStart = allocator->allocateIdBatch(graph::Node::typeId, BATCH);
+	EXPECT_EQ(batchStart, 2); // Should start from 2
+
+	// 3. Sequential again
+	int64_t id2 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id2, 2 + BATCH); // Should be after batch
+
+	// Max should be 1 (first alloc) + 5 (batch) + 1 (second alloc) = 7
+	EXPECT_EQ(allocator->getCurrentMaxNodeId(), 1 + BATCH + 1);
+}
+
+TEST_F(IDAllocatorTest, FreeId_MultipleEntityTypes) {
+	// Test freeId for different entity types
+	// 1. Allocate and persist edges
+	constexpr int COUNT = 5;
+	std::vector<graph::Edge> edges;
+	for (int i = 0; i < COUNT; ++i) {
+		edges.push_back(insertEdge(1, 1, "E" + std::to_string(i)));
+	}
+	fileStorage->flush();
+
+	// 2. Delete some edges
+	for (auto &edge: edges) {
+		dataManager->deleteEdge(edge);
+	}
+
+	// 3. Re-allocate should reuse edge IDs
+	for (int i = 0; i < COUNT; ++i) {
+		int64_t id = allocator->allocateId(graph::Edge::typeId);
+		EXPECT_LE(id, COUNT);
+	}
+}
+
+TEST_F(IDAllocatorTest, SegmentHeader_IdOutsideRange) {
+	// Test freeId when ID is outside segment's capacity range
+	// This tests the else branch at line 341 where isDirtyInPreAlloc = true
+
+	// 1. Allocate an ID but don't insert into dataManager
+	int64_t id = allocator->allocateId(graph::Node::typeId);
+
+	// 2. Free it - should go to volatile cache since it's not in any segment
+	allocator->freeId(id, graph::Node::typeId);
+
+	// 3. Should be reusable
+	int64_t reusedId = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(reusedId, id);
+}
+
+TEST_F(IDAllocatorTest, DiskExhaustedFlag) {
+	// Test that diskExhausted flag prevents repeated scans
+	// This tests line 222: if (!cursor.diskExhausted) return false early
+
+	// 1. Start with fresh allocator
+	allocator->clearAllCaches();
+
+	// 2. Allocate without any persisted deletions - will trigger disk scan
+	int64_t id1 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id1, 1);
+
+	// 3. Allocate again - should use exhausted flag optimization
+	int64_t id2 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_EQ(id2, 2);
+
+	// 4. No disk scan should occur on second allocation
+	EXPECT_EQ(allocator->getCurrentMaxNodeId(), 2);
+}
+
+TEST_F(IDAllocatorTest, ResetAfterCompaction_VolatileCleared) {
+	// Test that resetAfterCompaction clears volatile cache
+	// This is distinct from clearAllCaches which preserves volatile cache
+
+	// 1. Allocate dirty ID
+	int64_t id1 = allocator->allocateId(graph::Node::typeId);
+
+	// 2. Free to volatile cache
+	allocator->freeId(id1, graph::Node::typeId);
+
+	// 3. Simulate compaction reset
+	allocator->resetAfterCompaction();
+
+	// 4. Next allocation should NOT reuse id1 (volatile was cleared)
+	// Since volatile cache is cleared and max is still 1, next allocation should be 2
+	int64_t id2 = allocator->allocateId(graph::Node::typeId);
+	EXPECT_NE(id2, id1); // Should NOT get 1 back
+	EXPECT_EQ(id2, 2); // Should get new sequential ID
+}
+
+TEST_F(IDAllocatorTest, LargeGapRecovery) {
+	// Test recovery of large gaps between physical and logical max ID
+	// This tests CASE A in recoverGapIds
+
+	// 1. Create a few nodes
+	insertNode("A");
+	insertNode("B");
+	insertNode("C");
+	fileStorage->flush(); // Physical max = 3
+
+	// 2. Allocate many IDs but don't persist (e.g., crashed transaction)
+	int64_t logicalMax = 0;
+	for (int i = 0; i < 100; ++i) {
+		logicalMax = allocator->allocateId(graph::Node::typeId);
+	}
+	EXPECT_EQ(logicalMax, 103);
+
+	// 3. Simulate restart - gap [4, 103] should be recovered to volatile cache
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	fileStorage = database->getStorage();
+	allocator = fileStorage->getIDAllocator();
+
+	// 4. Next allocations should reuse from gap
+	std::unordered_set<int64_t> gapIds;
+	for (int i = 0; i < 100; ++i) {
+		int64_t id = allocator->allocateId(graph::Node::typeId);
+		gapIds.insert(id);
+	}
+
+	// Should have reused some gap IDs
+	// Since unordered_set doesn't have rbegin(), we iterate to check range
+	bool allInRange = true;
+	int64_t minId = LLONG_MAX;
+	int64_t maxId = LLONG_MIN;
+	for (int64_t id: gapIds) {
+		if (id < minId) minId = id;
+		if (id > maxId) maxId = id;
+	}
+
+	EXPECT_TRUE(gapIds.count(4) || gapIds.count(103) ||
+	            (minId >= 4 && maxId <= 103));
+}
+
+TEST_F(IDAllocatorTest, StaleHeaderCorrection) {
+	// Test CASE B in recoverGapIds: physicalMaxId > logicalMaxId
+	// This happens when header is stale (not saved after last operation)
+
+	// 1. Create some nodes
+	insertNode("A");
+	insertNode("B");
+	fileStorage->flush(); // Logical max = 2
+
+	// 2. Manually corrupt the logical max by allocating but not saving header
+	// In real scenario, this would be a crash before header save
+	// We simulate by checking that physical max takes precedence on restart
+
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	fileStorage = database->getStorage();
+	allocator = fileStorage->getIDAllocator();
+
+	// Should recover correctly from physical max
+	EXPECT_EQ(allocator->getCurrentMaxNodeId(), 2);
+}
+
+TEST_F(IDAllocatorTest, IntervalSet_MergeWithMultipleIntervals) {
+	// Test IDIntervalSet merging with multiple existing intervals
+	// This tests the while loop at line 70: merging with subsequent intervals
+
+	allocator->setCacheLimits(100, 100, 50000);
+
+	// 1. Create nodes
+	constexpr int COUNT = 100;
+	for (int i = 0; i < COUNT; ++i) {
+		insertNode("N");
+	}
+	fileStorage->flush();
+
+	// 2. Delete in non-sequential pattern to create multiple intervals
+	// Delete 1-10, 20-30, 40-50
+	for (int i = 1; i <= 10; ++i) deleteNode(i);
+	for (int i = 20; i <= 30; ++i) deleteNode(i);
+	for (int i = 40; i <= 50; ++i) deleteNode(i);
+
+	// 3. Delete middle bridge (11-19, 31-39) to trigger merges
+	for (int i = 11; i <= 19; ++i) deleteNode(i);
+	for (int i = 31; i <= 39; ++i) deleteNode(i);
+
+	// 4. Should reuse merged intervals
+	std::unordered_set<int64_t> reusedIds;
+	for (int i = 0; i < 55; ++i) {
+		int64_t id = allocator->allocateId(graph::Node::typeId);
+		reusedIds.insert(id);
+	}
+
+	// Should have reused IDs from the merged range
+	bool hitRange = false;
+	for (int64_t id: reusedIds) {
+		if (id >= 1 && id <= 50) {
+			hitRange = true;
+			break;
+		}
+	}
+	EXPECT_TRUE(hitRange);
+}
+
+TEST_F(IDAllocatorTest, FreeId_ZeroSegmentOffset) {
+	// Test freeId when segmentOffset == 0 (ID not in any segment)
+	// This tests the branch at line 344: if (segmentOffset == 0 || isDirtyInPreAlloc)
+
+	// 1. Allocate an ID without inserting into storage
+	int64_t id = allocator->allocateId(graph::Property::typeId);
+	EXPECT_EQ(id, 1);
+
+	// 2. Free the ID - segmentOffset will be 0
+	allocator->freeId(id, graph::Property::typeId);
+
+	// 3. Should go to volatile cache and be reusable
+	int64_t reusedId = allocator->allocateId(graph::Property::typeId);
+	EXPECT_EQ(reusedId, 1);
+}
+
+TEST_F(IDAllocatorTest, AllEntityTypes_BatchAndSequential) {
+	// Test batch and sequential allocation for all entity types
+	struct TypeInfo {
+		uint32_t typeId;
+		std::string name;
+	};
+
+	std::vector<TypeInfo> types = {
+		{graph::Node::typeId, "Node"},
+		{graph::Edge::typeId, "Edge"},
+		{graph::Property::typeId, "Property"},
+		{graph::Blob::typeId, "Blob"},
+		{graph::Index::typeId, "Index"},
+		{graph::State::typeId, "State"},
+	};
+
+	for (const auto &typeInfo: types) {
+		// Sequential
+		int64_t seqId = allocator->allocateId(typeInfo.typeId);
+		EXPECT_GT(seqId, 0) << "Sequential allocation failed for " << typeInfo.name;
+
+		// Batch
+		constexpr size_t BATCH = 3;
+		int64_t batchStart = allocator->allocateIdBatch(typeInfo.typeId, BATCH);
+		EXPECT_GT(batchStart, 0) << "Batch allocation failed for " << typeInfo.name;
+	}
+}

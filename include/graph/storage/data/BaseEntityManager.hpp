@@ -21,6 +21,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <memory>
 #include <utility>
 #include "DataManager.hpp"
@@ -65,6 +66,28 @@ namespace graph::storage {
 		virtual void removeProperty(int64_t entityId, const std::string &key);
 
 	protected:
+		/**
+		 * @brief Get DataManager pointer with invariant guarantee
+		 * @return DataManager pointer (guaranteed non-null)
+		 *
+		 * @note The DataManager's lifetime is guaranteed by design:
+		 *       - DataManager holds shared_ptr<BaseEntityManager>
+		 *       - BaseEntityManager holds weak_ptr<DataManager>
+		 *       - DataManager destructor destroys BaseEntityManager first
+		 *       - Therefore lock() never returns nullptr
+		 */
+		[[nodiscard]] DataManager* getDataManagerPtr() {
+			auto ptr = dataManager_.lock();
+			assert(ptr && "DataManager must outlive BaseEntityManager");
+			return ptr.get();
+		}
+
+		[[nodiscard]] const DataManager* getDataManagerPtr() const {
+			auto ptr = dataManager_.lock();
+			assert(ptr && "DataManager must outlive BaseEntityManager");
+			return ptr.get();
+		}
+
 		// Abstract method for allocating an ID that can be overridden by subclasses
 		virtual int64_t doAllocateId() = 0;
 

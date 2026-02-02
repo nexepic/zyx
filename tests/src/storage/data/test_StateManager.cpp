@@ -235,3 +235,142 @@ TEST_F(StateManagerTest, StateIdAllocation) {
 	EXPECT_NE(state2.getId(), 0);
 	EXPECT_NE(state1.getId(), state2.getId()) << "State IDs should be unique";
 }
+
+// Test state with empty key
+TEST_F(StateManagerTest, StateWithEmptyKey) {
+	// Create a state with an empty key
+	graph::State state;
+	state.setKey(""); // Empty key
+
+	stateManager->add(state);
+	int64_t stateId = state.getId();
+	EXPECT_NE(stateId, 0) << "State with empty key should still be added";
+
+	// Verify it can be retrieved by ID
+	graph::State retrievedState = stateManager->get(stateId);
+	EXPECT_EQ(retrievedState.getId(), stateId);
+	EXPECT_EQ(retrievedState.getKey(), "");
+
+	// Update state with a key
+	state.setKey("new.key");
+	stateManager->update(state);
+
+	// Now it should be findable by key
+	graph::State foundState = stateManager->findByKey("new.key");
+	EXPECT_EQ(foundState.getId(), state.getId());
+}
+
+// Test updating state with key change
+TEST_F(StateManagerTest, UpdateStateWithKeyChange) {
+	// Create a state with an initial key
+	graph::State state;
+	state.setKey("old.key");
+	stateManager->add(state);
+	int64_t stateId = state.getId();
+
+	// Verify it's findable by the old key
+	graph::State foundByOldKey = stateManager->findByKey("old.key");
+	EXPECT_EQ(foundByOldKey.getId(), stateId);
+
+	// Update the state with a new key
+	state.setKey("new.key");
+	stateManager->update(state);
+
+	// Verify the old key no longer works
+	graph::State notFoundByOldKey = stateManager->findByKey("old.key");
+	EXPECT_EQ(notFoundByOldKey.getId(), 0) << "Old key should not find the state";
+
+	// Verify the new key works
+	graph::State foundByNewKey = stateManager->findByKey("new.key");
+	EXPECT_EQ(foundByNewKey.getId(), stateId) << "New key should find the state";
+}
+
+// Test state with large properties triggers blob storage
+TEST_F(StateManagerTest, LargeStatePropertiesUseBlobStorage) {
+	std::string stateKey = "large.state.key";
+
+	// Create large properties (larger than 4KB threshold)
+	std::unordered_map<std::string, graph::PropertyValue> largeProps;
+	std::string largeValue(5000, 'X'); // 5KB of data
+	largeProps["large_data"] = graph::PropertyValue(largeValue);
+
+	// Add properties - should trigger blob storage
+	dataManager->addStateProperties(stateKey, largeProps);
+
+	// Verify properties were stored
+	auto retrievedProps = dataManager->getStateProperties(stateKey);
+	EXPECT_EQ(retrievedProps.size(), 1UL);
+	EXPECT_EQ(std::get<std::string>(retrievedProps["large_data"].getVariant()).size(), 5000UL);
+}
+
+// Test find inactive state returns empty
+TEST_F(StateManagerTest, FindInactiveState) {
+	// Create and add a state
+	graph::State state;
+	state.setKey("test.inactive.key");
+	stateManager->add(state);
+
+	// Add properties to create a state chain (this will invalidate the original state)
+	dataManager->addStateProperties(state.getKey(), {{"prop", graph::PropertyValue(1)}});
+
+	// The original state ID should now point to an inactive state
+	// findByKey should return an empty state since the original was deleted
+	graph::State foundState = stateManager->findByKey("test.inactive.key");
+	// The new state should be found (has a new ID)
+	EXPECT_NE(foundState.getId(), 0) << "Should find the new active state by key";
+}
+
+// Test get state properties for non-existent key
+TEST_F(StateManagerTest, GetPropertiesForNonExistentKey) {
+	// Try to get properties for a state that doesn't exist
+	auto props = dataManager->getStateProperties("non.existent.key");
+	EXPECT_TRUE(props.empty()) << "Should return empty properties for non-existent key";
+}
+
+// Test remove state with non-existent key
+TEST_F(StateManagerTest, RemoveNonExistentState) {
+	// Try to remove a state that doesn't exist - should not throw
+	EXPECT_NO_THROW(stateManager->removeState("non.existent.key"));
+}
+
+// Test update state when key changes from empty to non-empty
+TEST_F(StateManagerTest, UpdateStateKeyFromEmptyToNonEmpty) {
+	// Create state with empty key
+	graph::State state;
+	state.setKey("");
+	stateManager->add(state);
+	int64_t stateId = state.getId();
+
+	// Update to have a key
+	state.setKey("now.has.key");
+	stateManager->update(state);
+
+	// Verify it's findable by the new key
+	graph::State foundState = stateManager->findByKey("now.has.key");
+	EXPECT_EQ(foundState.getId(), stateId);
+}
+
+// Test update state when key changes from non-empty to empty
+TEST_F(StateManagerTest, UpdateStateKeyFromNonEmptyToEmpty) {
+	// Create state with a key
+	graph::State state;
+	state.setKey("has.key");
+	stateManager->add(state);
+	int64_t stateId = state.getId();
+
+	// Verify it's findable by key
+	graph::State foundBefore = stateManager->findByKey("has.key");
+	EXPECT_EQ(foundBefore.getId(), stateId);
+
+	// Update to have empty key
+	state.setKey("");
+	stateManager->update(state);
+
+	// Verify it's no longer findable by the old key
+	graph::State foundAfter = stateManager->findByKey("has.key");
+	EXPECT_EQ(foundAfter.getId(), 0) << "State should not be findable by old key after changing to empty";
+
+	// But should still be retrievable by ID
+	graph::State byId = stateManager->get(stateId);
+	EXPECT_EQ(byId.getId(), stateId);
+}

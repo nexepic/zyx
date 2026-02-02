@@ -30,8 +30,7 @@ namespace graph::storage {
 	void NodeManager::doRemove(Node &node) { deletionManager_->deleteNode(node); }
 
 	int64_t NodeManager::doAllocateId() {
-		const auto dataManager = dataManager_.lock();
-		return dataManager->getIdAllocator()->allocateId(Node::typeId);
+		return getDataManagerPtr()->getIdAllocator()->allocateId(Node::typeId);
 	}
 
 } // namespace graph::storage

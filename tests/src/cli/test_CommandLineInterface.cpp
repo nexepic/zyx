@@ -228,3 +228,48 @@ TEST_F(CommandLineInterfaceTest, OpenWithCreateFlag) {
 
 	EXPECT_TRUE(fs::exists(dbPath));
 }
+
+// Test create command when database already exists (error handling path)
+TEST_F(CommandLineInterfaceTest, CreateCommandExistingDatabase) {
+	// First create the database
+	EXPECT_EQ(runMockCLI({"database", "create", dbPath}), 0);
+	EXPECT_TRUE(fs::exists(dbPath));
+
+	// Try to create again - should handle error gracefully
+	// The error is caught in the callback, so CLI should not crash
+	EXPECT_EQ(runMockCLI({"database", "create", dbPath}), 0);
+}
+
+// Test open command without create-if-missing flag (should fail for missing DB)
+TEST_F(CommandLineInterfaceTest, OpenCommandMissingDatabase) {
+	// Ensure database doesn't exist
+	if (fs::exists(dbPath))
+		fs::remove_all(dbPath);
+
+	// Try to open non-existent database - error is caught, returns 0
+	EXPECT_EQ(runMockCLI({"database", "open", dbPath}), 0);
+}
+
+// Test open command with create-if-missing flag
+TEST_F(CommandLineInterfaceTest, OpenCommandWithCreateFlag) {
+	// Ensure database doesn't exist
+	if (fs::exists(dbPath))
+		fs::remove_all(dbPath);
+
+	// Open with -c flag should create the database
+	EXPECT_EQ(runMockCLI({"database", "open", "-c", dbPath}), 0);
+	EXPECT_TRUE(fs::exists(dbPath));
+}
+
+// Test open command existing database with create flag
+TEST_F(CommandLineInterfaceTest, OpenCommandExistingWithCreateFlag) {
+	// First create the database
+	{
+		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW_FILE);
+		db.open();
+		db.close();
+	}
+
+	// Open existing database with -c flag should work fine
+	EXPECT_EQ(runMockCLI({"database", "open", "-c", dbPath}), 0);
+}

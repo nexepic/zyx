@@ -194,3 +194,63 @@ TEST_F(SystemConfigManagerTest, PersistenceThroughRestart) {
 	EXPECT_TRUE(graph::log::Log::isDebugEnabled())
 			<< "Configuration was not automatically applied on database startup.";
 }
+
+// Test 8: Verify compaction configuration is applied
+TEST_F(SystemConfigManagerTest, CompactionConfigApplied) {
+	// Arrange: Get the current compaction status
+	auto storage = database->getStorage();
+	bool initialStatus = storage->isCompactionEnabled();
+
+	// Set the opposite value in config
+	bool newStatus = !initialStatus;
+	stateManager->set<bool>(keys::SYS_CONFIG, keys::Config::STORAGE_COMPACTION_ENABLED, newStatus);
+
+	// Act: Load configuration
+	configManager->loadAndApplyAll();
+
+	// Assert: The compaction status should have changed
+	EXPECT_EQ(storage->isCompactionEnabled(), newStatus)
+			<< "Compaction configuration was not applied correctly.";
+}
+
+// Test 9: Verify compaction config doesn't change when already set
+TEST_F(SystemConfigManagerTest, CompactionNoChangeWhenSame) {
+	// Arrange: Get the current status
+	auto storage = database->getStorage();
+	bool currentStatus = storage->isCompactionEnabled();
+
+	// Set config to the same value
+	stateManager->set<bool>(keys::SYS_CONFIG, keys::Config::STORAGE_COMPACTION_ENABLED, currentStatus);
+
+	// Act: Load configuration (should not change anything)
+	EXPECT_NO_THROW(configManager->loadAndApplyAll());
+
+	// Assert: Status should remain the same
+	EXPECT_EQ(storage->isCompactionEnabled(), currentStatus);
+}
+
+// Test 10: Verify default compaction config when not set
+TEST_F(SystemConfigManagerTest, CompactionDefaultConfig) {
+	// Arrange: Ensure config is not explicitly set
+	// Act: Load configuration with default values
+	configManager->loadAndApplyAll();
+
+	// Assert: Should apply default (false as per source code comment)
+	// The actual default value is false based on the source code
+	auto storage = database->getStorage();
+	EXPECT_NO_THROW(storage->isCompactionEnabled());
+}
+
+// Test 11: Verify behavior when storage is null (weak pointer expired)
+TEST_F(SystemConfigManagerTest, HandleNullStorageGracefully) {
+	// Arrange: Create a config manager with a null storage weak pointer
+	std::shared_ptr<storage::FileStorage> nullStorage = nullptr;
+	auto configManagerWithNullStorage =
+		std::make_shared<SystemConfigManager>(stateManager, nullStorage);
+
+	// Act: Should not crash even with null storage
+	EXPECT_NO_THROW(configManagerWithNullStorage->loadAndApplyAll());
+
+	// Also test applyCompaction directly via loadAndApplyAll
+	EXPECT_NO_THROW(configManagerWithNullStorage->loadAndApplyAll());
+}

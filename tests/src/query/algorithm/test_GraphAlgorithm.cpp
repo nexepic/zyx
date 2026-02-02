@@ -308,3 +308,138 @@ TEST_F(GraphAlgorithmTest, BFS_HydrationOnDemand) {
 
 	EXPECT_TRUE(propFound);
 }
+
+// ============================================================================
+// Edge Label Filtering Tests
+// ============================================================================
+
+TEST_F(GraphAlgorithmTest, FindAllPathsWithEdgeLabelFilter) {
+	// Test findAllPaths with edge label filter
+	// Create some edges with a specific label
+	graph::Edge labeled1(300, node1Id, node2Id, dataManager->getOrCreateLabelId("SPECIAL"));
+	graph::Edge labeled2(301, node2Id, node4Id, dataManager->getOrCreateLabelId("SPECIAL"));
+	dataManager->addEdge(labeled1);
+	dataManager->addEdge(labeled2);
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	// Find paths using only SPECIAL labeled edges
+	auto nodes = algo->findAllPaths(node1Id, 1, 2, "SPECIAL", "out");
+
+	std::unordered_set<int64_t> ids;
+	for (const auto &n: nodes)
+		ids.insert(n.getId());
+
+	// Should find node2 (direct SPECIAL edge) and node4 (via SPECIAL edges)
+	EXPECT_TRUE(ids.contains(node2Id));
+	EXPECT_TRUE(ids.contains(node4Id));
+}
+
+TEST_F(GraphAlgorithmTest, FindShortestPathWithSameNode) {
+	// Test the trivial case: start == end
+	auto path = algo->findShortestPath(node1Id, node1Id, "out");
+
+	// Should return a path with just the starting node
+	ASSERT_EQ(path.size(), 1u);
+	EXPECT_EQ(path[0].getId(), node1Id);
+}
+
+TEST_F(GraphAlgorithmTest, FindShortestPathWithMaxDepth) {
+	// Test maxDepth limit
+	// Path from 1 to 5 is: 1 -> 3 -> 5 (2 hops)
+	// With maxDepth=1, should not find the path
+
+	auto path = algo->findShortestPath(node1Id, node5Id, "out", 1);
+	EXPECT_TRUE(path.empty());
+}
+
+TEST_F(GraphAlgorithmTest, FindShortestPathWithMaxDepthSufficient) {
+	// Test with sufficient maxDepth
+	// Path from 1 to 5 is: 1 -> 3 -> 5 (2 hops)
+	// With maxDepth=3, should find the path
+
+	auto path = algo->findShortestPath(node1Id, node5Id, "out", 3);
+	EXPECT_FALSE(path.empty());
+	EXPECT_EQ(path[0].getId(), node1Id);
+	EXPECT_EQ(path.back().getId(), node5Id);
+}
+
+// ============================================================================
+// Depth First Traversal Tests
+// ============================================================================
+
+TEST_F(GraphAlgorithmTest, DFS_Basic) {
+	std::vector<int64_t> visited;
+	std::vector<int> depths;
+
+	algo->depthFirstTraversal(
+		node1Id,
+		[&](int64_t id, int depth) {
+			visited.push_back(id);
+			depths.push_back(depth);
+			return true;
+		},
+		"out");
+
+	EXPECT_GE(visited.size(), 3u);
+	EXPECT_EQ(visited[0], node1Id);
+	EXPECT_EQ(depths[0], 0);
+}
+
+TEST_F(GraphAlgorithmTest, DFS_MaxDepth) {
+	std::vector<int64_t> visited;
+
+	algo->depthFirstTraversal(
+		node1Id,
+		[&](int64_t id, int depth) {
+			if (depth > 1)
+				return false; // Stop at depth 1
+			visited.push_back(id);
+			return true;
+		},
+		"out");
+
+	// Should visit node1 at depth 0, and its direct neighbors at depth 1
+	EXPECT_GE(visited.size(), 1u);
+	EXPECT_EQ(visited[0], node1Id);
+}
+
+TEST_F(GraphAlgorithmTest, DFS_EarlyTermination) {
+	int count = 0;
+
+	algo->depthFirstTraversal(
+		node1Id,
+		[&](int64_t, int) {
+			count++;
+			return false; // Stop immediately
+		},
+		"out");
+
+	EXPECT_EQ(count, 1);
+}
+
+TEST_F(GraphAlgorithmTest, DFS_CycleDetection) {
+	// Add a cycle: 3 -> 1
+	graph::Edge cycle(201, node3Id, node1Id, dataManager->getOrCreateLabelId("CYCLE"));
+	dataManager->addEdge(cycle);
+
+	std::vector<int64_t> visited;
+	algo->depthFirstTraversal(
+		node1Id,
+		[&](int64_t id, int) {
+			visited.push_back(id);
+			return true;
+		},
+		"out");
+
+	// Count occurrences
+	std::unordered_map<int64_t, int> counts;
+	for (auto id: visited)
+		counts[id]++;
+
+	// Should visit node1 only once despite cycle
+	EXPECT_EQ(counts[node1Id], 1);
+}

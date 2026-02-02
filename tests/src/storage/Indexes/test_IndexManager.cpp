@@ -671,3 +671,170 @@ TEST_F(IndexManagerTest, EdgeEventHandlers_Coverage) {
 
 	SUCCEED();
 }
+
+// ============================================================================
+// Missing Branch Coverage Tests
+// ============================================================================
+
+TEST_F(IndexManagerTest, DropNonExistentIndexByName) {
+	// Cover branch: if (it == allIndexes.end()) -> True (line 212)
+	// Try to drop an index that doesn't exist
+	bool dropped = indexManager->dropIndexByName("non_existent_index");
+	EXPECT_FALSE(dropped) << "Should return false when dropping non-existent index";
+}
+
+TEST_F(IndexManagerTest, DropIndexByDefinition_NotFound) {
+	// Cover branch: return false when no matching index found (line 252)
+	// Try to drop by definition that doesn't exist
+	bool dropped = indexManager->dropIndexByDefinition("NonExistentLabel", "non_existent_prop");
+	EXPECT_FALSE(dropped) << "Should return false when no matching index found";
+}
+
+TEST_F(IndexManagerTest, CreateVectorIndex_EmptyName) {
+	// Cover branch: if (name.empty()) -> True (line 280)
+	// Create vector index without providing a name (auto-generate)
+	bool created = indexManager->createVectorIndex("", "Node", "embedding", 128, "L2");
+	EXPECT_TRUE(created) << "Should succeed with empty name and auto-generate one";
+
+	// Verify the index was created with auto-generated name
+	auto list = indexManager->listIndexesDetailed();
+	bool found = false;
+	for (const auto &row: list) {
+		if (std::get<1>(row) == "vector" && std::get<2>(row) == "Node" && std::get<3>(row) == "embedding") {
+			found = true;
+			// Verify auto-generated name is not empty
+			EXPECT_FALSE(std::get<0>(row).empty()) << "Auto-generated name should not be empty";
+			break;
+		}
+	}
+	EXPECT_TRUE(found) << "Vector index should be created with auto-generated name";
+}
+
+TEST_F(IndexManagerTest, NodesAddedWithoutLabels) {
+	// Cover branch: if (node.getLabelId() != 0) -> False (line 349)
+	// Add nodes without labels (labelId = 0)
+
+	// First create an index to observe the behavior
+	(void) indexManager->createIndex("idx_label_test", "node", "", "");
+
+	// Add nodes with labelId = 0
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+
+	indexManager->onNodeAdded(n1);
+	indexManager->onNodeAdded(n2);
+
+	// Nodes without labels should not crash the system
+	// They simply won't be added to the label index
+	SUCCEED();
+}
+
+TEST_F(IndexManagerTest, EdgeLabelIndexCreation) {
+	// Cover branch: else if (entityType == "edge") -> True (line 167)
+	// Create an edge label index
+	bool created = indexManager->createIndex("edge_label_idx", "edge", "", "");
+	EXPECT_TRUE(created) << "Should create edge label index";
+
+	// Verify it was created
+	EXPECT_TRUE(indexManager->hasLabelIndex("edge"));
+
+	// Add some edges and verify they're indexed
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	int64_t edgeLabelId = dataManager->getOrCreateLabelId("CONNECTS");
+	graph::Edge e1(10, 1, 2, edgeLabelId);
+	graph::Edge e2(11, 1, 2, edgeLabelId);
+	dataManager->addEdge(e1);
+	dataManager->addEdge(e2);
+
+	// Verify edges are in the label index
+	auto results = indexManager->findEdgeIdsByLabel("CONNECTS");
+	EXPECT_EQ(results.size(), 2UL);
+}
+
+TEST_F(IndexManagerTest, EdgePropertyIndexCreation) {
+	// Cover branch: else if (entityType == "edge") -> True (line 181)
+	// Create an edge property index
+	bool created = indexManager->createIndex("edge_prop_idx", "edge", "WEIGHT", "weight");
+	EXPECT_TRUE(created) << "Should create edge property index";
+
+	// Verify it was created
+	EXPECT_TRUE(indexManager->hasPropertyIndex("edge", "weight"));
+
+	// Add some edges with properties and verify they're indexed
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	int64_t edgeLabelId = dataManager->getOrCreateLabelId("WEIGHT");
+	graph::Edge e1(10, 1, 2, edgeLabelId);
+	e1.addProperty("weight", static_cast<int64_t>(100));
+	graph::Edge e2(11, 1, 2, edgeLabelId);
+	e2.addProperty("weight", static_cast<int64_t>(200));
+	dataManager->addEdge(e1);
+	dataManager->addEdge(e2);
+
+	// Verify edges are in the property index
+	auto results100 = indexManager->findEdgeIdsByProperty("weight", static_cast<int64_t>(100));
+	auto results200 = indexManager->findEdgeIdsByProperty("weight", static_cast<int64_t>(200));
+	EXPECT_EQ(results100.size(), 1UL);
+	EXPECT_EQ(results200.size(), 1UL);
+}
+
+TEST_F(IndexManagerTest, DropIndex_EdgeIndex) {
+	// Cover branch: else { (for edge entity type) -> True (line 222)
+	// Create and then drop an edge index
+
+	// Create edge label index
+	(void) indexManager->createIndex("edge_drop_test", "edge", "", "");
+	EXPECT_TRUE(indexManager->hasLabelIndex("edge"));
+
+	// Add some edges
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	int64_t edgeLabelId = dataManager->getOrCreateLabelId("TO_DROP");
+	graph::Edge e1(10, 1, 2, edgeLabelId);
+	dataManager->addEdge(e1);
+
+	// Verify edge is indexed
+	auto resultsBefore = indexManager->findEdgeIdsByLabel("TO_DROP");
+	EXPECT_EQ(resultsBefore.size(), 1UL);
+
+	// Drop the index
+	bool dropped = indexManager->dropIndexByName("edge_drop_test");
+	EXPECT_TRUE(dropped);
+
+	// Verify index is gone
+	EXPECT_FALSE(indexManager->hasLabelIndex("edge"));
+}
+
+TEST_F(IndexManagerTest, GetVectorIndexName_NonVectorIndex) {
+	// Cover branch: if (meta.indexType == "vector") -> False
+	// Create a regular property index (not vector)
+	(void) indexManager->createIndex("regular_idx", "node", "Node", "prop");
+
+	// Try to get vector index name for a regular property index
+	std::string name = indexManager->getVectorIndexName("Node", "prop");
+	EXPECT_EQ(name, "") << "Should return empty string for non-vector index";
+}
+
+TEST_F(IndexManagerTest, GetVectorIndexName_NoMatch) {
+	// Cover branch: meta.label == label -> False OR meta.property == property -> False
+	// Create a vector index
+	(void) indexManager->createVectorIndex("vec_idx", "Node", "embedding", 128, "L2");
+
+	// Try to get vector index name with wrong label
+	std::string name1 = indexManager->getVectorIndexName("WrongLabel", "embedding");
+	EXPECT_EQ(name1, "") << "Should return empty for wrong label";
+
+	// Try to get vector index name with wrong property
+	std::string name2 = indexManager->getVectorIndexName("Node", "wrong_property");
+	EXPECT_EQ(name2, "") << "Should return empty for wrong property";
+}

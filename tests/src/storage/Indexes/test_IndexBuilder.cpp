@@ -380,3 +380,350 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
 	// Note: Since we didn't create index for "ignore", finding it returns empty anyway.
 	EXPECT_TRUE(indexManager->findNodeIdsByProperty("ignore", 200).empty());
 }
+
+TEST_F(IndexBuilderTest, ProcessNodeBatch_InactiveNode) {
+	// Cover branch: if (edge.getId() == 0 || !edge.isActive())
+	// For nodes: same logic exists in processNodeBatch
+	int64_t lbl = dataManager->getOrCreateLabelId("InactiveNode");
+	graph::Node n(100, lbl);
+	dataManager->addNode(n);
+	dataManager->deleteNode(n); // Mark inactive
+
+	fileStorage->flush();
+
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	(void) indexBuilder->buildNodeLabelIndex();
+
+	// Should NOT find inactive node
+	auto res = indexManager->findNodeIdsByLabel("InactiveNode");
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexBuilderTest, ProcessEdgeBatch_InactiveEdge) {
+	// Cover branch: if (edge.getId() == 0 || !edge.isActive())
+	int64_t edgeLbl = dataManager->getOrCreateLabelId("InactiveEdge");
+
+	// Create source and target nodes
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	// Create edge and mark it inactive
+	graph::Edge e(100, 1, 2, edgeLbl);
+	e.addProperty("test_prop", 999);
+	dataManager->addEdge(e);
+	dataManager->deleteEdge(e); // Mark inactive
+
+	fileStorage->flush();
+
+	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
+	(void) indexBuilder->buildEdgeLabelIndex();
+
+	// Should NOT find inactive edge
+	auto res = indexManager->findEdgeIdsByLabel("InactiveEdge");
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndex_AllProperties) {
+	// Cover branch: if (propertyKey.empty()) -> index all properties
+	// This requires calling with an empty property key, but the API takes a specific key
+	// Let's test by creating multiple properties and indexing them one by one
+
+	int64_t lbl = dataManager->getOrCreateLabelId("MultiProp");
+	graph::Node n(1, lbl);
+	n.addProperty("prop1", 100);
+	n.addProperty("prop2", 200);
+	n.addProperty("prop3", std::string("value3"));
+	dataManager->addNode(n);
+
+	fileStorage->flush();
+
+	// Create indexes for all properties
+	auto propIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
+	propIndex->createIndex("prop1");
+	propIndex->createIndex("prop2");
+	propIndex->createIndex("prop3");
+
+	// Build each property index
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("prop1"));
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("prop2"));
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("prop3"));
+
+	// Verify all properties are indexed
+	auto res1 = indexManager->findNodeIdsByProperty("prop1", 100);
+	auto res2 = indexManager->findNodeIdsByProperty("prop2", 200);
+	auto res3 = indexManager->findNodeIdsByProperty("prop3", std::string("value3"));
+
+	EXPECT_EQ(res1.size(), 1UL);
+	EXPECT_EQ(res2.size(), 1UL);
+	EXPECT_EQ(res3.size(), 1UL);
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_AllProperties) {
+	// Cover branch for edges: if (propertyKey.empty())
+	int64_t edgeLbl = dataManager->getOrCreateLabelId("MultiPropEdge");
+
+	// Create source and target nodes
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	// Create edge with multiple properties
+	graph::Edge e(10, 1, 2, edgeLbl);
+	e.addProperty("eprop1", 111);
+	e.addProperty("eprop2", 222);
+	dataManager->addEdge(e);
+
+	fileStorage->flush();
+
+	// Create indexes for all edge properties
+	auto propIndex = indexManager->getEdgeIndexManager()->getPropertyIndex();
+	propIndex->createIndex("eprop1");
+	propIndex->createIndex("eprop2");
+
+	// Build each property index
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex("eprop1"));
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex("eprop2"));
+
+	// Verify all properties are indexed
+	auto res1 = indexManager->findEdgeIdsByProperty("eprop1", 111);
+	auto res2 = indexManager->findEdgeIdsByProperty("eprop2", 222);
+
+	EXPECT_EQ(res1.size(), 1UL);
+	EXPECT_EQ(res2.size(), 1UL);
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndex_PropertyNotFound) {
+	// Cover branch: if (auto it = properties.find(propertyKey); it != properties.end()) -> False
+	int64_t lbl = dataManager->getOrCreateLabelId("NoProp");
+	graph::Node n(1, lbl);
+	n.addProperty("has_prop", 100);
+	// Note: NOT adding "missing_prop"
+	dataManager->addNode(n);
+
+	fileStorage->flush();
+
+	// Create index for property that doesn't exist on any node
+	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("missing_prop");
+
+	// Build should still succeed, just won't find anything
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("missing_prop"));
+
+	// Verify no results
+	auto res = indexManager->findNodeIdsByProperty("missing_prop", 999);
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_PropertyNotFound) {
+	// Cover branch for edges: property not found
+	int64_t edgeLbl = dataManager->getOrCreateLabelId("NoEdgeProp");
+
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	graph::Edge e(10, 1, 2, edgeLbl);
+	e.addProperty("has_eprop", 333);
+	dataManager->addEdge(e);
+
+	fileStorage->flush();
+
+	// Create index for property that doesn't exist
+	indexManager->getEdgeIndexManager()->getPropertyIndex()->createIndex("missing_eprop");
+
+	// Build should still succeed
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex("missing_eprop"));
+
+	// Verify no results
+	auto res = indexManager->findEdgeIdsByProperty("missing_eprop", 999);
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildLabelIndex_EmptyDatabase) {
+	// Test building index on empty database
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+
+	// Should succeed even with no data
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	// Verify no results
+	auto res = indexManager->findNodeIdsByLabel("NonExistent");
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildEdgeLabelIndex_EmptyDatabase) {
+	// Test building edge index on empty database
+	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
+
+	// Should succeed even with no edges
+	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+}
+
+TEST_F(IndexBuilderTest, ProcessNodeBatch_NodeWithZeroLabelId) {
+	// Cover branch: if (node.getLabelId() != 0) -> False
+	// Create node with labelId = 0
+	graph::Node n(1, 0); // labelId = 0
+	n.addProperty("name", std::string("NoLabel"));
+	dataManager->addNode(n);
+
+	fileStorage->flush();
+
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	(void) indexBuilder->buildNodeLabelIndex();
+
+	// Node with labelId=0 should not be added to label index
+	// (This is hard to verify directly other than no crash)
+	SUCCEED();
+}
+
+TEST_F(IndexBuilderTest, ProcessEdgeBatch_EdgeWithZeroLabelId) {
+	// Cover branch: if (edge.getLabelId() != 0) -> False
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	// Create edge with labelId = 0
+	graph::Edge e(10, 1, 2, 0);
+	dataManager->addEdge(e);
+
+	fileStorage->flush();
+
+	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
+	(void) indexBuilder->buildEdgeLabelIndex();
+
+	// Edge with labelId=0 should not be added to label index
+	// (This is hard to verify directly other than no crash)
+	SUCCEED();
+}
+
+TEST_F(IndexBuilderTest, ProcessBatch_NodeWithEmptyLabel) {
+	// Cover branch: if (!labelStr.empty()) -> False
+	// This tests when resolveLabel returns an empty string
+	// We need to create a node with a label that won't resolve properly
+
+	// First create a node with a valid label
+	int64_t labelId = dataManager->getOrCreateLabelId("TestLabel");
+	graph::Node n(1, labelId);
+	n.addProperty("name", std::string("Test"));
+	dataManager->addNode(n);
+
+	fileStorage->flush();
+
+	// The label should resolve normally, so this tests the happy path
+	// Testing the empty case would require manipulating the LabelTokenRegistry
+	// which is difficult to do in a unit test
+
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	auto res = indexManager->findNodeIdsByLabel("TestLabel");
+	EXPECT_EQ(res.size(), 1UL);
+}
+
+TEST_F(IndexBuilderTest, BuildNodeLabelIndex_MultipleSegments) {
+	// Create nodes that span multiple segments to test segment iteration
+	// This helps cover the loop in getNodeIdRanges
+
+	constexpr int NODE_COUNT = 2500; // Should span multiple segments
+	int64_t lbl = dataManager->getOrCreateLabelId("MultiSeg");
+
+	for (int i = 0; i < NODE_COUNT; ++i) {
+		graph::Node n(0, lbl);
+		dataManager->addNode(n);
+	}
+
+	fileStorage->flush();
+
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	auto results = indexManager->findNodeIdsByLabel("MultiSeg");
+	EXPECT_EQ(results.size(), static_cast<size_t>(NODE_COUNT));
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_LargeBatch) {
+	// Cover batch processing for edge property index
+	constexpr int EDGE_COUNT = 1100;
+	int64_t edgeLbl = dataManager->getOrCreateLabelId("BulkEdgeProp");
+
+	// Create source and target nodes
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	for (int i = 0; i < EDGE_COUNT; ++i) {
+		graph::Edge e(0, 1, 2, edgeLbl);
+		e.addProperty("bulk_eprop", i * 10);
+		dataManager->addEdge(e);
+	}
+
+	fileStorage->flush();
+
+	// Create and build property index
+	indexManager->getEdgeIndexManager()->getPropertyIndex()->createIndex("bulk_eprop");
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex("bulk_eprop"));
+
+	// Verify some samples
+	auto res0 = indexManager->findEdgeIdsByProperty("bulk_eprop", 0);
+	auto resMid = indexManager->findEdgeIdsByProperty("bulk_eprop", 5000);
+	auto resLast = indexManager->findEdgeIdsByProperty("bulk_eprop", (EDGE_COUNT - 1) * 10);
+
+	EXPECT_EQ(res0.size(), 1UL);
+	EXPECT_EQ(resMid.size(), 1UL);
+	EXPECT_EQ(resLast.size(), 1UL);
+}
+
+TEST_F(IndexBuilderTest, BuildIndex_WithDeletedAndActiveNodes) {
+	// Test mixed scenario with both active and deleted nodes
+	int64_t lbl = dataManager->getOrCreateLabelId("Mixed");
+
+	// Create active nodes
+	for (int i = 1; i <= 10; ++i) {
+		graph::Node n(i, lbl);
+		n.addProperty("id", i);
+		dataManager->addNode(n);
+	}
+
+	// Create and delete some nodes
+	for (int i = 11; i <= 15; ++i) {
+		graph::Node n(i, lbl);
+		n.addProperty("id", i);
+		dataManager->addNode(n);
+		dataManager->deleteNode(n);
+	}
+
+	// Create more active nodes
+	for (int i = 16; i <= 20; ++i) {
+		graph::Node n(i, lbl);
+		n.addProperty("id", i);
+		dataManager->addNode(n);
+	}
+
+	fileStorage->flush();
+
+	// Build label index
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	// Should find only active nodes (1-10, 16-20) = 15 nodes
+	auto res = indexManager->findNodeIdsByLabel("Mixed");
+	EXPECT_EQ(res.size(), 15UL);
+
+	// Build property index
+	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("id");
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("id"));
+
+	// Verify property index also has 15 nodes
+	auto resProp5 = indexManager->findNodeIdsByProperty("id", 5);
+	auto resProp12 = indexManager->findNodeIdsByProperty("id", 12); // Deleted node
+	auto resProp18 = indexManager->findNodeIdsByProperty("id", 18);
+
+	EXPECT_EQ(resProp5.size(), 1UL);
+	EXPECT_EQ(resProp12.size(), 0UL); // Deleted
+	EXPECT_EQ(resProp18.size(), 1UL);
+}

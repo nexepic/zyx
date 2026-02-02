@@ -211,3 +211,112 @@ TEST_F(CompressUtilsTest, ZlibCompressConsistency) {
 	// Both compressions should produce identical results
 	EXPECT_EQ(compressed1, compressed2);
 }
+
+// Additional tests to improve branch coverage
+TEST_F(CompressUtilsTest, ZlibCompressAllNullBytes) {
+	std::string allNulls(1000, '\0');
+	std::string compressed = graph::utils::zlibCompress(allNulls);
+	EXPECT_GT(compressed.size(), 0UL);
+
+	std::string decompressed = graph::utils::zlibDecompress(compressed, allNulls.size());
+	EXPECT_EQ(decompressed, allNulls);
+}
+
+TEST_F(CompressUtilsTest, ZlibCompressAllOnes) {
+	std::string allOnes(1000, '\xFF');
+	std::string compressed = graph::utils::zlibCompress(allOnes);
+	EXPECT_GT(compressed.size(), 0UL);
+
+	std::string decompressed = graph::utils::zlibDecompress(compressed, allOnes.size());
+	EXPECT_EQ(decompressed, allOnes);
+}
+
+TEST_F(CompressUtilsTest, ZlibDecompressTruncatedData) {
+	std::string originalData = "Data for truncation test";
+	std::string compressed = graph::utils::zlibCompress(originalData);
+
+	// Truncate the compressed data
+	if (compressed.size() > 10) {
+		std::string truncatedCompressed = compressed.substr(0, compressed.size() / 2);
+		EXPECT_THROW(graph::utils::zlibDecompress(truncatedCompressed, originalData.size()), std::runtime_error);
+	}
+}
+
+TEST_F(CompressUtilsTest, ZlibDecompressEmptyCompressedData) {
+	EXPECT_THROW(graph::utils::zlibDecompress("", 100), std::runtime_error);
+}
+
+TEST_F(CompressUtilsTest, ZlibDecompressTooLargeOriginalSize) {
+	std::string smallData = "Small";
+	std::string compressed = graph::utils::zlibCompress(smallData);
+
+	// Request much larger size than original
+	// zlib will just decompress to actual size, not throw
+	std::string decompressed = graph::utils::zlibDecompress(compressed, 1000000);
+
+	// Verify it decompressed to actual (smaller) size
+	EXPECT_EQ(decompressed, smallData);
+	EXPECT_LT(decompressed.size(), smallData.size() + 100); // Should not use the full requested size
+}
+
+TEST_F(CompressUtilsTest, ZlibCompressSizeReduction) {
+	// Test that compression actually reduces size for compressible data
+	std::string highlyCompressible(10000, 'A');
+	std::string compressed = graph::utils::zlibCompress(highlyCompressible);
+
+	EXPECT_LT(compressed.size(), highlyCompressible.size());
+	double compressionRatio = static_cast<double>(compressed.size()) / highlyCompressible.size();
+	EXPECT_LT(compressionRatio, 0.1); // Should compress to less than 10%
+}
+
+TEST_F(CompressUtilsTest, ZlibCompressIncompressibleData) {
+	// Random data should not compress as well
+	std::string randomData = generateRandomString(10000);
+	std::string compressed = graph::utils::zlibCompress(randomData);
+
+	// Compressed size might be larger due to zlib overhead
+	EXPECT_GT(compressed.size(), 0UL);
+}
+
+TEST_F(CompressUtilsTest, ZlibDecompressExactSizeMatch) {
+	std::string data = "Test exact size match";
+	std::string compressed = graph::utils::zlibCompress(data);
+	std::string decompressed = graph::utils::zlibDecompress(compressed, data.size());
+
+	EXPECT_EQ(decompressed.size(), data.size());
+	EXPECT_EQ(decompressed, data);
+}
+
+TEST_F(CompressUtilsTest, ZlibCompressDecompressWithNullsInMiddle) {
+	// Create a string with null bytes in the middle
+	std::string data = std::string("Before\0After", 14); // "Before" + '\0' + "After" = 6 + 1 + 5 = 12, but we specify 14 to include null terminator
+	data = std::string("Before") + '\0' + std::string("After"); // Correct way: 6 + 1 + 5 = 12 bytes
+
+	std::string compressed = graph::utils::zlibCompress(data);
+	std::string decompressed = graph::utils::zlibDecompress(compressed, data.size());
+
+	EXPECT_EQ(decompressed.size(), data.size());
+	EXPECT_EQ(decompressed, data);
+}
+
+TEST_F(CompressUtilsTest, ZlibDecompressModifyCompressedHeader) {
+	std::string originalData = "Header modification test";
+	std::string compressed = graph::utils::zlibCompress(originalData);
+
+	// Modify the first byte (header)
+	if (!compressed.empty()) {
+		compressed[0] = ~compressed[0];
+		EXPECT_THROW(graph::utils::zlibDecompress(compressed, originalData.size()), std::runtime_error);
+	}
+}
+
+TEST_F(CompressUtilsTest, ZlibDecompressModifyCompressedTail) {
+	std::string originalData = "Tail modification test";
+	std::string compressed = graph::utils::zlibCompress(originalData);
+
+	// Modify the last byte (checksum/trailer)
+	if (!compressed.empty()) {
+		compressed[compressed.size() - 1] = ~compressed[compressed.size() - 1];
+		EXPECT_THROW(graph::utils::zlibDecompress(compressed, originalData.size()), std::runtime_error);
+	}
+}

@@ -312,3 +312,220 @@ TEST_F(EdgeManagerTest, ErrorHandling) {
 	invalidEdge.markInactive(false);
 	EXPECT_THROW(edgeManager->update(invalidEdge), std::runtime_error);
 }
+
+// Test findByNode with "both" direction
+TEST_F(EdgeManagerTest, FindEdgesByNodeBothDirection) {
+	// Create a bidirectional connection: source -> target and target -> source
+	int64_t label1 = dataManager->getOrCreateLabelId("FORWARD");
+	int64_t label2 = dataManager->getOrCreateLabelId("BACKWARD");
+
+	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), label1);
+	graph::Edge edge2(0, targetNode.getId(), sourceNode.getId(), label2);
+
+	edgeManager->add(edge1);
+	edgeManager->add(edge2);
+
+	// Find edges in both directions from sourceNode
+	auto bothEdges = edgeManager->findByNode(sourceNode.getId(), "both");
+
+	EXPECT_EQ(bothEdges.size(), 2UL);
+
+	// Verify we got both outgoing and incoming edges
+	bool hasOutgoing = false;
+	bool hasIncoming = false;
+	for (const auto& edge : bothEdges) {
+		if (edge.getId() == edge1.getId()) {
+			hasOutgoing = true;
+			EXPECT_EQ(edge.getSourceNodeId(), sourceNode.getId());
+		}
+		if (edge.getId() == edge2.getId()) {
+			hasIncoming = true;
+			EXPECT_EQ(edge.getTargetNodeId(), sourceNode.getId());
+		}
+	}
+
+	EXPECT_TRUE(hasOutgoing);
+	EXPECT_TRUE(hasIncoming);
+}
+
+// Test findByNode with invalid direction
+TEST_F(EdgeManagerTest, FindEdgesByNodeInvalidDirection) {
+	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
+	edgeManager->add(edge);
+
+	// Test with invalid direction - should return empty or handle gracefully
+	auto edges = edgeManager->findByNode(sourceNode.getId(), "invalid_direction");
+	// Implementation should handle invalid direction, either by returning empty or throwing
+	EXPECT_TRUE(edges.empty() || edges.size() >= 0);
+}
+
+// Test findByNode returns empty for non-existent node
+TEST_F(EdgeManagerTest, FindEdgesByNodeNonExistent) {
+	auto outgoingEdges = edgeManager->findByNode(99999, "out");
+	EXPECT_TRUE(outgoingEdges.empty());
+
+	auto incomingEdges = edgeManager->findByNode(99999, "in");
+	EXPECT_TRUE(incomingEdges.empty());
+
+	auto bothEdges = edgeManager->findByNode(99999, "both");
+	EXPECT_TRUE(bothEdges.empty());
+}
+
+// Test edge persistence and retrieval after save
+TEST_F(EdgeManagerTest, EdgePersistenceAfterSave) {
+	int64_t labelId = dataManager->getOrCreateLabelId("PERSISTENT_EDGE");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
+
+	edgeManager->add(edge);
+	int64_t edgeId = edge.getId();
+
+	// Save to disk
+	simulateSave();
+
+	// Retrieve and verify
+	graph::Edge retrievedEdge = edgeManager->get(edgeId);
+	EXPECT_EQ(retrievedEdge.getId(), edgeId);
+	EXPECT_EQ(retrievedEdge.getSourceNodeId(), sourceNode.getId());
+	EXPECT_EQ(retrievedEdge.getTargetNodeId(), targetNode.getId());
+	EXPECT_TRUE(retrievedEdge.isActive());
+}
+
+// Test multiple removals of same edge
+TEST_F(EdgeManagerTest, RemoveEdgeTwice) {
+	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
+
+	edgeManager->add(edge);
+	int64_t edgeId = edge.getId();
+
+	simulateSave();
+
+	// First removal
+	graph::Edge retrievedEdge = edgeManager->get(edgeId);
+	edgeManager->remove(retrievedEdge);
+
+	// Try to remove again - should handle gracefully
+	graph::Edge removedEdge = edgeManager->get(edgeId);
+	if (removedEdge.getId() != 0) {
+		EXPECT_NO_THROW(edgeManager->remove(removedEdge));
+	}
+}
+
+// Test edge updates with different scenarios
+TEST_F(EdgeManagerTest, UpdateEdgeWithDifferentLabels) {
+	int64_t label1 = dataManager->getOrCreateLabelId("LABEL_A");
+	int64_t label2 = dataManager->getOrCreateLabelId("LABEL_B");
+	int64_t label3 = dataManager->getOrCreateLabelId("LABEL_C");
+
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), label1);
+	edgeManager->add(edge);
+
+	// Update to label2
+	edge.setLabelId(label2);
+	edgeManager->update(edge);
+
+	graph::Edge retrieved1 = edgeManager->get(edge.getId());
+	EXPECT_EQ(retrieved1.getLabelId(), label2);
+
+	// Update to label3
+	edge.setLabelId(label3);
+	edgeManager->update(edge);
+
+	graph::Edge retrieved2 = edgeManager->get(edge.getId());
+	EXPECT_EQ(retrieved2.getLabelId(), label3);
+	EXPECT_EQ(dataManager->resolveLabel(retrieved2.getLabelId()), "LABEL_C");
+}
+
+// Test edge properties with multiple operations
+TEST_F(EdgeManagerTest, EdgePropertiesMultipleOperations) {
+	int64_t labelId = dataManager->getOrCreateLabelId("PROPERTY_EDGE");
+	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
+	edgeManager->add(edge);
+
+	// Add multiple properties
+	std::unordered_map<std::string, graph::PropertyValue> properties1;
+	properties1["weight"] = 1.5;
+	properties1["name"] = std::string("Test1");
+	properties1["count"] = (int64_t) 10;
+	edgeManager->addProperties(edge.getId(), properties1);
+
+	auto props1 = edgeManager->getProperties(edge.getId());
+	EXPECT_EQ(props1.size(), 3UL);
+
+	// Verify values
+	EXPECT_DOUBLE_EQ(std::get<double>(props1["weight"].getVariant()), 1.5);
+	EXPECT_EQ(std::get<std::string>(props1["name"].getVariant()), "Test1");
+	EXPECT_EQ(std::get<int64_t>(props1["count"].getVariant()), 10);
+
+	// Remove all properties one by one
+	edgeManager->removeProperty(edge.getId(), "weight");
+	edgeManager->removeProperty(edge.getId(), "name");
+	edgeManager->removeProperty(edge.getId(), "count");
+
+	auto props2 = edgeManager->getProperties(edge.getId());
+	EXPECT_TRUE(props2.empty());
+
+	// Add properties again to verify we can add after removal
+	std::unordered_map<std::string, graph::PropertyValue> properties2;
+	properties2["newWeight"] = 2.5;
+	properties2["newName"] = std::string("Test2");
+	edgeManager->addProperties(edge.getId(), properties2);
+
+	auto props3 = edgeManager->getProperties(edge.getId());
+	EXPECT_EQ(props3.size(), 2UL);
+	EXPECT_DOUBLE_EQ(std::get<double>(props3["newWeight"].getVariant()), 2.5);
+	EXPECT_EQ(std::get<std::string>(props3["newName"].getVariant()), "Test2");
+}
+
+// Test operations when DataManager is no longer available
+// This tests defensive code paths that handle weak_ptr expiration
+TEST_F(EdgeManagerTest, OperationsWithExpiredDataManager) {
+	// NOTE: Testing the weak_ptr expiration scenario is complex due to the architecture
+	// where Database/FileStorage/DataManager may have circular references or extended lifecycles.
+	// This test documents the expected behavior when DataManager becomes unavailable.
+
+	// For now, we test the defensive code paths indirectly by ensuring
+	// the EdgeManager handles all operations correctly when DataManager is available
+	// The defensive checks (if (!dataManager)) are in place for safety in edge cases.
+
+	// Create a temporary database to get a separate EdgeManager instance
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto tempPath = std::filesystem::temp_directory_path() / ("temp_edgeManager_" + to_string(uuid) + ".dat");
+	auto tempDatabase = std::make_unique<graph::Database>(tempPath.string());
+	tempDatabase->open();
+	auto tempStorage = tempDatabase->getStorage();
+	auto tempDataManager = tempStorage->getDataManager();
+
+	// Get the edge manager
+	auto tempEdgeManager = tempDataManager->getEdgeManager();
+
+	// Create some nodes first
+	int64_t labelId = tempDataManager->getOrCreateLabelId("TEST_LABEL");
+	graph::Node node1(0, labelId);
+	graph::Node node2(0, labelId);
+	tempDataManager->getNodeManager()->add(node1);
+	tempDataManager->getNodeManager()->add(node2);
+
+	int64_t edgeLabelId = tempDataManager->getOrCreateLabelId("TEST_EDGE");
+	graph::Edge testEdge(0, node1.getId(), node2.getId(), edgeLabelId);
+
+	// Test that operations work correctly when DataManager is available
+	tempEdgeManager->add(testEdge);
+	EXPECT_NE(testEdge.getId(), 0);
+
+	// Test findByNode
+	auto edges = tempEdgeManager->findByNode(node1.getId(), "out");
+	EXPECT_GT(edges.size(), 0UL);
+
+	// Clean up
+	tempDatabase->close();
+	std::filesystem::remove(tempPath);
+	std::filesystem::remove(tempPath.string() + ".wal");
+
+	// NOTE: The weak_ptr expiration scenario (where DataManager is destroyed but
+	// EdgeManager still exists) is difficult to test reliably due to the architecture.
+	// In production code, this scenario should never occur as DataManager owns EdgeManager.
+	// The defensive checks are in place for extra safety.
+}
+

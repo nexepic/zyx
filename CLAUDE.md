@@ -42,6 +42,35 @@ meson test -C buildDir <test_name>
 - Tests link against internal static library `metrix_core`
 - Coverage uses LLVM instrumentation (`-fprofile-instr-generate -fcoverage-mapping`)
 
+```bash
+# View coverage details for a specific file
+./scripts/run_tests.sh --quick --file xxx.cpp
+```
+
+### Unit Testing Requirements
+
+**CRITICAL**: When working with unit tests, follow these principles:
+
+1. **Root Cause Analysis**: Never blindly adjust test code just to make tests pass. Always analyze whether the issue lies in:
+   - The source code (implementation bug, logic error, missing edge case)
+   - The test code (incorrect assertion, wrong test setup, invalid test scenario)
+
+2. **Fix the Root Cause**:
+   - If the **source code** has a bug → Fix the source code
+   - If the **test code** is wrong → Fix the test code
+   - Ensure tests validate actual behavior, not work around bugs
+
+3. **Test Validity**:
+   - Tests should be meaningful and verify correct behavior
+   - Tests should cover edge cases, error conditions, and boundary scenarios
+   - Avoid tests that always pass regardless of implementation correctness
+   - Each test should be independent and isolated
+
+4. **Coverage Goals**:
+   - Aim for 85%+ coverage across all metrics (line, branch, function)
+   - Focus on branch coverage in particular
+   - Add tests for uncovered branches, not just lines
+
 ## Architecture
 
 ### Layered Architecture
