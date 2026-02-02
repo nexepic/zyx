@@ -106,4 +106,210 @@ namespace graph::utils::test {
 		EXPECT_NE(static_cast<size_t>(stream.gcount()), sizeof(int64_t));
 		EXPECT_TRUE(stream.fail() || stream.eof()); // A more robust check for read failure.
 	}
+
+	// Test PropertyValue with vector (LIST type)
+	TEST_F(SerializerTest, PropertyValue_Vector) {
+		std::vector<float> vec = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+		PropertyValue val(vec);
+
+		std::stringstream stream;
+		Serializer::serialize<PropertyValue>(stream, val);
+		PropertyValue result = Serializer::deserialize<PropertyValue>(stream);
+
+		EXPECT_EQ(val, result);
+
+		// Verify the vector is correctly deserialized
+		auto resultVec = result.getList();
+		EXPECT_EQ(resultVec.size(), 5UL);
+		EXPECT_FLOAT_EQ(resultVec[0], 1.0f);
+		EXPECT_FLOAT_EQ(resultVec[4], 5.0f);
+	}
+
+	// Test PropertyValue with empty vector (covers line 116-119 and 148-150)
+	TEST_F(SerializerTest, PropertyValue_EmptyVector) {
+		std::vector<float> emptyVec;
+		PropertyValue val(emptyVec);
+
+		std::stringstream stream;
+		Serializer::serialize<PropertyValue>(stream, val);
+		PropertyValue result = Serializer::deserialize<PropertyValue>(stream);
+
+		EXPECT_EQ(val, result);
+
+		// Verify the vector is empty
+		auto resultVec = result.getList();
+		EXPECT_TRUE(resultVec.empty());
+	}
+
+	// Test PropertyValue getList() throws on non-list types (covers line 175-179)
+	TEST_F(SerializerTest, PropertyValue_GetListNonListType) {
+		// Test with bool
+		PropertyValue boolVal(true);
+		EXPECT_THROW(boolVal.getList(), std::runtime_error);
+
+		// Test with int64_t
+		PropertyValue intVal(42);
+		EXPECT_THROW(intVal.getList(), std::runtime_error);
+
+		// Test with double
+		PropertyValue doubleVal(3.14);
+		EXPECT_THROW(doubleVal.getList(), std::runtime_error);
+
+		// Test with string
+		PropertyValue stringVal("test");
+		EXPECT_THROW(stringVal.getList(), std::runtime_error);
+
+		// Test with null (std::monostate)
+		PropertyValue nullVal;
+		EXPECT_THROW(nullVal.getList(), std::runtime_error);
+	}
+
+	// Test various invalid type tags (covers line 153-154 default case)
+	TEST_F(SerializerTest, ErrorOnVariousInvalidTypeTags) {
+		auto testInvalidTag = [](uint8_t tagValue) {
+			std::stringstream stream;
+			stream.write(reinterpret_cast<const char*>(&tagValue), sizeof(tagValue));
+			EXPECT_THROW(Serializer::deserialize<PropertyValue>(stream), std::runtime_error)
+				<< "Should throw on invalid type tag: " << static_cast<int>(tagValue);
+		};
+
+		// Test type 0 (UNKNOWN/invalid)
+		testInvalidTag(0);
+
+		// Test type 7 (beyond defined types)
+		testInvalidTag(7);
+
+		// Test type 8 (way beyond defined types)
+		testInvalidTag(8);
+
+		// Test type 254 (one less than 255, also invalid)
+		testInvalidTag(254);
+
+		// Type 255 is already tested in ErrorOnInvalidTypeTag
+	}
+
+	// Test PropertyValue with large vector
+	TEST_F(SerializerTest, PropertyValue_LargeVector) {
+		std::vector<float> largeVec;
+		for (int i = 0; i < 1000; ++i) {
+			largeVec.push_back(static_cast<float>(i));
+		}
+		PropertyValue val(largeVec);
+
+		std::stringstream stream;
+		Serializer::serialize<PropertyValue>(stream, val);
+		PropertyValue result = Serializer::deserialize<PropertyValue>(stream);
+
+		EXPECT_EQ(val, result);
+
+		// Verify the vector is correctly deserialized
+		auto resultVec = result.getList();
+		EXPECT_EQ(resultVec.size(), 1000UL);
+		EXPECT_FLOAT_EQ(resultVec[0], 0.0f);
+		EXPECT_FLOAT_EQ(resultVec[999], 999.0f);
+	}
+
+	// Test PropertyValue round-trip for all types
+	TEST_F(SerializerTest, PropertyValue_RoundTripAllTypes) {
+		std::stringstream stream;
+		auto testPropValue = [&](const PropertyValue &val) {
+			stream.str("");
+			stream.clear();
+			Serializer::serialize<PropertyValue>(stream, val);
+			PropertyValue result = Serializer::deserialize<PropertyValue>(stream);
+			EXPECT_EQ(val, result);
+		};
+
+		// Test all types
+		testPropValue(PropertyValue(std::monostate{})); // NULL
+		testPropValue(PropertyValue(true));
+		testPropValue(PropertyValue(false));
+		testPropValue(PropertyValue(INT64_MIN));
+		testPropValue(PropertyValue(INT64_MAX));
+		testPropValue(PropertyValue(0));
+		testPropValue(PropertyValue(-1.234));
+		testPropValue(PropertyValue(999.888));
+		testPropValue(PropertyValue(""));
+		testPropValue(PropertyValue("Unicode 你好 🌍"));
+		testPropValue(PropertyValue(std::vector<float>{}));
+		testPropValue(PropertyValue(std::vector<float>{1.0f, 2.0f, 3.0f}));
+	}
+
+	// Test getSerializedSize for all PropertyValue types
+	TEST_F(SerializerTest, GetSerializedSize_AllTypes) {
+		// NULL type (monostate)
+		PropertyValue nullVal;
+		size_t nullSize = getSerializedSize(nullVal);
+		EXPECT_EQ(nullSize, sizeof(PropertyType)) << "NULL type should only have type tag size";
+
+		// Boolean
+		PropertyValue boolVal(true);
+		size_t boolSize = getSerializedSize(boolVal);
+		EXPECT_EQ(boolSize, sizeof(PropertyType) + sizeof(bool));
+
+		// Integer
+		PropertyValue intVal(42);
+		size_t intSize = getSerializedSize(intVal);
+		EXPECT_EQ(intSize, sizeof(PropertyType) + sizeof(int64_t));
+
+		// Double
+		PropertyValue doubleVal(3.14);
+		size_t doubleSize = getSerializedSize(doubleVal);
+		EXPECT_EQ(doubleSize, sizeof(PropertyType) + sizeof(double));
+
+		// String
+		PropertyValue stringVal("Hello");
+		size_t stringSize = getSerializedSize(stringVal);
+		EXPECT_EQ(stringSize, sizeof(PropertyType) + sizeof(uint32_t) + 5);
+
+		// Empty string
+		PropertyValue emptyStringVal("");
+		size_t emptyStringSize = getSerializedSize(emptyStringVal);
+		EXPECT_EQ(emptyStringSize, sizeof(PropertyType) + sizeof(uint32_t) + 0);
+
+		// Vector (LIST)
+		PropertyValue vectorVal(std::vector<float>{1.0f, 2.0f, 3.0f});
+		size_t vectorSize = getSerializedSize(vectorVal);
+		EXPECT_EQ(vectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 3 * sizeof(float));
+
+		// Empty vector
+		PropertyValue emptyVectorVal(std::vector<float>{});
+		size_t emptyVectorSize = getSerializedSize(emptyVectorVal);
+		EXPECT_EQ(emptyVectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 0);
+	}
+
+	// Test getSerializedSize with large values
+	TEST_F(SerializerTest, GetSerializedSize_LargeValues) {
+		// Long string
+		std::string longStr(10000, 'A');
+		PropertyValue longStringVal(longStr);
+		size_t longStringSize = getSerializedSize(longStringVal);
+		EXPECT_EQ(longStringSize, sizeof(PropertyType) + sizeof(uint32_t) + 10000);
+
+		// Large vector
+		std::vector<float> largeVec(1000);
+		PropertyValue largeVectorVal(largeVec);
+		size_t largeVectorSize = getSerializedSize(largeVectorVal);
+		EXPECT_EQ(largeVectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 1000 * sizeof(float));
+	}
+
+	// Test serialize/deserialize with multiple values in same stream
+	TEST_F(SerializerTest, MultipleValuesInSameStream) {
+		std::stringstream stream;
+
+		// Write multiple values to the same stream
+		Serializer::serialize(stream, static_cast<int64_t>(42));
+		Serializer::serialize(stream, std::string("Hello"));
+		Serializer::serialize(stream, static_cast<double>(3.14));
+
+		// Read them back in order
+		int64_t intVal = Serializer::deserialize<int64_t>(stream);
+		EXPECT_EQ(intVal, 42);
+
+		std::string stringVal = Serializer::deserialize<std::string>(stream);
+		EXPECT_EQ(stringVal, "Hello");
+
+		double doubleVal = Serializer::deserialize<double>(stream);
+		EXPECT_DOUBLE_EQ(doubleVal, 3.14);
+	}
 } // namespace graph::utils::test

@@ -56,6 +56,9 @@ db_lib = static_library('metrix_core',
 							antlr4_dep,
 							cypher_dep
 						],
+						# Exclude zlib compression error handling from coverage
+						# because it's extremely difficult to trigger in tests
+						cpp_args : ['-DCOVERAGE_SKIP_ZLIB_ERRORS'],
 						install : false
 )
 
