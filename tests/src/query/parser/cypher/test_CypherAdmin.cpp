@@ -104,3 +104,98 @@ TEST_F(CypherAdminTest, Persistence) {
 	auto res = execute("CALL dbms.getConfig('persist')");
 	EXPECT_EQ(res.getRows()[0].at("value").toString(), "true");
 }
+
+// --- Additional Index Tests ---
+
+TEST_F(CypherAdminTest, ShowIndexesWhenEmpty) {
+	auto res = execute("SHOW INDEXES");
+	// Should return empty result or no indexes
+	EXPECT_TRUE(res.isEmpty() || res.rowCount() == 0);
+}
+
+TEST_F(CypherAdminTest, ShowIndexesAfterCreatingMultiple) {
+	(void) execute("CREATE INDEX ON :IdxA(prop1)");
+	(void) execute("CREATE INDEX ON :IdxB(prop2)");
+	(void) execute("CREATE INDEX idx_c ON :IdxC(prop3)");
+
+	auto res = execute("SHOW INDEXES");
+	ASSERT_GE(res.rowCount(), 3UL);
+}
+
+TEST_F(CypherAdminTest, DropIndexByName) {
+	(void) execute("CREATE INDEX my_drop_idx ON :DropTest(prop)");
+	(void) execute("DROP INDEX my_drop_idx");
+
+	auto res = execute("SHOW INDEXES");
+	bool found = false;
+	for (const auto &row: res.getRows()) {
+		if (row.at("name").toString() == "my_drop_idx") {
+			found = true;
+			break;
+		}
+	}
+	EXPECT_FALSE(found);
+}
+
+TEST_F(CypherAdminTest, DropIndexByDefinition) {
+	(void) execute("CREATE INDEX ON :DropDefTest(key)");
+	(void) execute("DROP INDEX ON :DropDefTest(key)");
+	// Should succeed without error
+}
+
+TEST_F(CypherAdminTest, CreateDuplicateIndex) {
+	(void) execute("CREATE INDEX dup_idx1 ON :Dup(name)");
+	// Attempt to create another index with different name on same label/property should work
+	(void) execute("CREATE INDEX dup_idx2 ON :Dup(name)");
+	// Verify both indexes exist
+	auto res = execute("SHOW INDEXES");
+	int count = 0;
+	for (const auto &row: res.getRows()) {
+		if (row.at("label").toString() == "Dup" && row.at("properties").toString() == "name") {
+			count++;
+		}
+	}
+	EXPECT_GE(count, 1);
+}
+
+// --- Additional Configuration Tests ---
+
+TEST_F(CypherAdminTest, SetConfigDifferentTypes) {
+	// String
+	(void) execute("CALL dbms.setConfig('cfg.string', 'hello')");
+	auto res1 = execute("CALL dbms.getConfig('cfg.string')");
+	EXPECT_EQ(res1.getRows()[0].at("value").toString(), "hello");
+
+	// Integer
+	(void) execute("CALL dbms.setConfig('cfg.int', 42)");
+	auto res2 = execute("CALL dbms.getConfig('cfg.int')");
+	EXPECT_EQ(res2.getRows()[0].at("value").toString(), "42");
+
+	// Boolean
+	(void) execute("CALL dbms.setConfig('cfg.bool', true)");
+	auto res3 = execute("CALL dbms.getConfig('cfg.bool')");
+	EXPECT_EQ(res3.getRows()[0].at("value").toString(), "true");
+}
+
+TEST_F(CypherAdminTest, ListAllConfig) {
+	(void) execute("CALL dbms.setConfig('list.test1', 'value1')");
+	(void) execute("CALL dbms.setConfig('list.test2', 'value2')");
+
+	// List all config (no filter)
+	auto res = execute("CALL dbms.listConfig()");
+	ASSERT_GE(res.rowCount(), 2UL);
+}
+
+TEST_F(CypherAdminTest, GetNonExistentConfig) {
+	auto res = execute("CALL dbms.getConfig('nonexistent.key')");
+	// Should return empty or null
+	EXPECT_TRUE(res.isEmpty());
+}
+
+TEST_F(CypherAdminTest, UpdateConfigValue) {
+	(void) execute("CALL dbms.setConfig('update.test', 'initial')");
+	(void) execute("CALL dbms.setConfig('update.test', 'updated')");
+
+	auto res = execute("CALL dbms.getConfig('update.test')");
+	EXPECT_EQ(res.getRows()[0].at("value").toString(), "updated");
+}

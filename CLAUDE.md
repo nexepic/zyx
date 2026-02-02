@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Metrix is a high-performance, embeddable graph database engine written in C++20 with Cypher query support. It uses a custom file-based storage system with segment-based architecture, ACID transactions via Write-Ahead Logging (WAL), and supports advanced features like vector indexes.
+Metrix is a high-performance, embeddable graph database engine written in C++20 with Cypher query support. It uses a
+custom file-based storage system with segment-based architecture, ACID transactions via Write-Ahead Logging (WAL), and
+supports advanced features like vector indexes.
 
 ## Build System
 
@@ -51,25 +53,26 @@ meson test -C buildDir <test_name>
 
 **CRITICAL**: When working with unit tests, follow these principles:
 
-1. **Root Cause Analysis**: Never blindly adjust test code just to make tests pass. Always analyze whether the issue lies in:
-   - The source code (implementation bug, logic error, missing edge case)
-   - The test code (incorrect assertion, wrong test setup, invalid test scenario)
+1. **Root Cause Analysis**: Never blindly adjust test code just to make tests pass. Always analyze whether the issue
+   lies in:
+    - The source code (implementation bug, logic error, missing edge case)
+    - The test code (incorrect assertion, wrong test setup, invalid test scenario)
 
 2. **Fix the Root Cause**:
-   - If the **source code** has a bug → Fix the source code
-   - If the **test code** is wrong → Fix the test code
-   - Ensure tests validate actual behavior, not work around bugs
+    - If the **source code** has a bug → Fix the source code
+    - If the **test code** is wrong → Fix the test code
+    - Ensure tests validate actual behavior, not work around bugs
 
 3. **Test Validity**:
-   - Tests should be meaningful and verify correct behavior
-   - Tests should cover edge cases, error conditions, and boundary scenarios
-   - Avoid tests that always pass regardless of implementation correctness
-   - Each test should be independent and isolated
+    - Tests should be meaningful and verify correct behavior
+    - Tests should cover edge cases, error conditions, and boundary scenarios
+    - Avoid tests that always pass regardless of implementation correctness
+    - Each test should be independent and isolated
 
 4. **Coverage Goals**:
-   - Aim for 85%+ coverage across all metrics (line, branch, function)
-   - Focus on branch coverage in particular
-   - Add tests for uncovered branches, not just lines
+    - Aim for 85%+ coverage across all metrics (line, branch, function)
+    - Focus on branch coverage in particular
+    - Add tests for uncovered branches, not just lines
 
 ## Architecture
 
@@ -90,38 +93,43 @@ Applications (CLI, Benchmark)
 ### Key Components
 
 #### Database (`include/graph/core/Database.hpp`)
+
 - Main entry point for database operations
 - Manages lifecycle: open, close, transactions
 - Coordinates between storage engine and query engine
 - Provides access to `FileStorage` and `QueryEngine`
 
 #### Storage System (`include/graph/storage/FileStorage.hpp`)
+
 - **Segment-based storage**: Custom file format with checksums and compression
 - **Component hierarchy**:
-  - `FileHeaderManager`: Manages file-level metadata
-  - `SegmentTracker`: Tracks segment allocation and usage
-  - `DataManager`: Handles node/edge/property data
-  - `IndexManager`: Manages label and property indexes
-  - `DeletionManager`: Tombstone management and space reclamation
-  - `CacheManager`: LRU cache with dirty entity tracking
+    - `FileHeaderManager`: Manages file-level metadata
+    - `SegmentTracker`: Tracks segment allocation and usage
+    - `DataManager`: Handles node/edge/property data
+    - `IndexManager`: Manages label and property indexes
+    - `DeletionManager`: Tombstone management and space reclamation
+    - `CacheManager`: LRU cache with dirty entity tracking
 - **ACID compliance**: Full transaction support with WAL
 - **State management**: Temporal state tracking via state chains
 
 #### Query Engine (`include/graph/query/`)
+
 - **Parser**: ANTLR4-based Cypher parser (generated code in `src/query/parser/cypher/`)
 - **Planner**: Converts parsed Cypher to logical plans, optimizes with rule-based optimization
 - **Executor**: Executes physical plans with various operators:
-  - Scan operators: `NodeScanOperator`, traversal operations
-  - Modification operators: `CreateNodeOperator`, `MergeNodeOperator`, `DeleteOperator`, etc.
-  - Query operators: `FilterOperator`, `SortOperator`, `ProjectOperator`, etc.
-  - Special operators: `VectorSearchOperator`, `TrainVectorIndexOperator` for vector indexes
+    - Scan operators: `NodeScanOperator`, traversal operations
+    - Modification operators: `CreateNodeOperator`, `MergeNodeOperator`, `DeleteOperator`, etc.
+    - Query operators: `FilterOperator`, `SortOperator`, `ProjectOperator`, etc.
+    - Special operators: `VectorSearchOperator`, `TrainVectorIndexOperator` for vector indexes
 
 #### Transaction System (`include/graph/core/Transaction.hpp`)
+
 - ACID transactions with full rollback capabilities
 - Optimistic locking with versioning
 - Coordinates with WAL for durability
 
 #### Configuration (`include/graph/config/SystemConfigManager.hpp`)
+
 - Dynamic runtime configuration
 - Entity observer pattern for reactive updates
 - Per-module configurations (logging, memory, etc.)
@@ -187,7 +195,13 @@ scripts/                # Build and utility scripts
 3. **Dirty Tracking**: Modified entities are tracked via `DirtyEntityRegistry` for efficient persistence
 4. **LRU Cache**: Hot entities are cached in memory with configurable eviction policy
 5. **WAL Integration**: Write operations are logged to WAL before actual disk writes for durability
-6. **Parser Generation**: ANTLR4 grammar files are in `src/query/parser/cypher/` - generated code should not be manually edited
+6. **Parser Generation**: ANTLR4 grammar files are in `src/query/parser/cypher/` - generated code should not be manually
+   edited
+
+## Unsupported Cypher Features
+
+**IMPORTANT**: For currently unsupported Cypher syntax features, see `UNSUPPORTED_CYHER_FEATURES.md` in the project root
+directory.
 
 ### Library Build Outputs
 

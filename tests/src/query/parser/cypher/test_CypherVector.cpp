@@ -156,3 +156,91 @@ TEST_F(CypherVectorTest, InsertBadDimension) {
 	auto res = execute("CALL db.index.vector.queryNodes('idx_dim', 5, [1.0, 1.0, 1.0, 1.0])");
 	EXPECT_TRUE(res.isEmpty() || res.rowCount() == 0);
 }
+
+// --- Additional Vector Index Tests ---
+
+TEST_F(CypherVectorTest, CreateIndexDifferentMetrics) {
+	// Test with different distance metrics
+	(void) execute("CREATE VECTOR INDEX idx_cosine ON :Cos(v) OPTIONS {dim: 3, metric: 'COSINE'}");
+	(void) execute("CREATE VECTOR INDEX idx_ip ON :IP(v) OPTIONS {dim: 3, metric: 'INNER_PRODUCT'}");
+
+	auto res = execute("SHOW INDEXES");
+	ASSERT_GE(res.rowCount(), 2UL);
+}
+
+TEST_F(CypherVectorTest, SearchTopK) {
+	(void) execute("CREATE VECTOR INDEX idx_topk ON :TopK(vec) OPTIONS {dim: 2}");
+
+	// Insert multiple vectors
+	for (int i = 0; i < 10; ++i) {
+		(void) execute("CREATE (:TopK {id: " + std::to_string(i) + ", vec: [" +
+					   std::to_string(i * 0.1) + ", " + std::to_string(i * 0.1) + "]})");
+	}
+
+	// Search for top 3
+	auto res = execute("CALL db.index.vector.queryNodes('idx_topk', 3, [0.5, 0.5]) YIELD node RETURN node.id");
+	ASSERT_LE(res.rowCount(), 3UL);
+}
+
+TEST_F(CypherVectorTest, SearchWithKZero) {
+	(void) execute("CREATE VECTOR INDEX idx_k0 ON :K0(v) OPTIONS {dim: 2}");
+	(void) execute("CREATE (:K0 {v: [1.0, 0.0]})");
+
+	// Search with k=0 should return empty
+	auto res = execute("CALL db.index.vector.queryNodes('idx_k0', 0, [1.0, 0.0])");
+	EXPECT_TRUE(res.isEmpty() || res.rowCount() == 0);
+}
+
+TEST_F(CypherVectorTest, TrainWithInsufficientData) {
+	(void) execute("CREATE VECTOR INDEX idx_insuf ON :Insuf(v) OPTIONS {dim: 3}");
+
+	// Insert only a few nodes (less than minimum for training)
+	(void) execute("CREATE (:Insuf {v: [1.0, 2.0, 3.0]})");
+	(void) execute("CREATE (:Insuf {v: [4.0, 5.0, 6.0]})");
+
+	auto res = execute("CALL db.index.vector.train('idx_insuf')");
+	// Should handle gracefully
+	EXPECT_TRUE(res.rowCount() >= 1);
+}
+
+TEST_F(CypherVectorTest, CreateIndexNonExistentProperty) {
+	// Index on a property that doesn't exist yet
+	(void) execute("CREATE VECTOR INDEX idx_future ON :Future(prop) OPTIONS {dim: 2}");
+
+	// Later add nodes with that property
+	(void) execute("CREATE (:Future {prop: [1.0, 2.0]})");
+
+	// Should work
+	auto res = execute("CALL db.index.vector.queryNodes('idx_future', 1, [1.0, 2.0])");
+	EXPECT_TRUE(res.rowCount() >= 1);
+}
+
+TEST_F(CypherVectorTest, TrainNonExistentIndex) {
+	EXPECT_THROW({ (void) execute("CALL db.index.vector.train('nonexistent_idx')"); },
+				 std::runtime_error);
+}
+
+TEST_F(CypherVectorTest, VectorIndexPersistence) {
+	(void) execute("CREATE VECTOR INDEX idx_persist ON :Persist(v) OPTIONS {dim: 2}");
+	(void) execute("CREATE (:Persist {id: 1, v: [1.0, 0.0]})");
+
+	// Flush and close
+	db->getStorage()->flush();
+	db->close();
+	db.reset();
+
+	// Reopen
+	db = std::make_unique<graph::Database>(testFilePath.string());
+	db->open();
+
+	// Index should still exist
+	auto res = execute("SHOW INDEXES");
+	bool found = false;
+	for (const auto &row: res.getRows()) {
+		if (row.at("name").toString() == "idx_persist") {
+			found = true;
+			break;
+		}
+	}
+	EXPECT_TRUE(found);
+}

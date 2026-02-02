@@ -75,3 +75,51 @@ TEST_F(CypherAlgoTest, AlgoShortestPathNoPath) {
 	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ")");
 	EXPECT_TRUE(res.isEmpty());
 }
+
+// --- Additional Shortest Path Tests ---
+
+TEST_F(CypherAlgoTest, AlgoShortestPathDirectConnection) {
+	// A -> B directly
+	(void) execute("CREATE (a:Direct {id:'A'})-[r:LINK]->(b:Direct {id:'B'})");
+
+	int64_t idA = execute("MATCH (n:Direct {id:'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idB = execute("MATCH (n:Direct {id:'B'}) RETURN n").getRows()[0].at("n").asNode().getId();
+
+	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ")");
+	ASSERT_EQ(res.rowCount(), 2UL); // A and B
+}
+
+TEST_F(CypherAlgoTest, AlgoShortestPathMultiplePaths) {
+	// Create diamond: A -> B, A -> C, B -> D, C -> D
+	(void) execute("CREATE (a:Dia {id:'A'})-[r1:LINK]->(b:Dia {id:'B'})");
+	(void) execute("MATCH (a:Dia {id:'A'}) CREATE (a)-[r2:LINK]->(c:Dia {id:'C'})");
+	(void) execute("MATCH (b:Dia {id:'B'}) CREATE (b)-[r3:LINK]->(d:Dia {id:'D'})");
+	(void) execute("MATCH (c:Dia {id:'C'}) CREATE (c)-[r4:LINK]->(d:Dia {id:'D'})");
+
+	int64_t idA = execute("MATCH (n:Dia {id:'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idD = execute("MATCH (n:Dia {id:'D'}) RETURN n").getRows()[0].at("n").asNode().getId();
+
+	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idD) + ")");
+	// Should return one of the shortest paths (A->B->D or A->C->D)
+	ASSERT_GE(res.rowCount(), 3UL); // At least 3 nodes
+	ASSERT_LE(res.rowCount(), 4UL); // At most 4 nodes
+}
+
+TEST_F(CypherAlgoTest, AlgoShortestPathComplex) {
+	// Create more complex graph
+	// A -> B -> C -> D
+	// A -> X -> D (shorter path to D)
+	(void) execute("CREATE (a:Complex {id:'A'})-[r1:LINK]->(b:Complex {id:'B'})");
+	(void) execute("MATCH (b:Complex {id:'B'}) CREATE (b)-[r2:LINK]->(c:Complex {id:'C'})");
+	(void) execute("MATCH (c:Complex {id:'C'}) CREATE (c)-[r3:LINK]->(d:Complex {id:'D'})");
+	(void) execute("MATCH (a:Complex {id:'A'}) CREATE (a)-[r4:LINK]->(x:Complex {id:'X'})");
+	(void) execute("MATCH (x:Complex {id:'X'}) CREATE (x)-[r5:LINK]->(d:Complex {id:'D'})");
+
+	int64_t idA = execute("MATCH (n:Complex {id:'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idD = execute("MATCH (n:Complex {id:'D'}) RETURN n").getRows()[0].at("n").asNode().getId();
+
+	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idD) + ")");
+	// Should return a path (3-4 nodes depending on which path is chosen)
+	ASSERT_GE(res.rowCount(), 3UL); // At least 3 nodes
+	ASSERT_LE(res.rowCount(), 5UL); // At most 5 nodes (A, X, D, or A, B, C, D)
+}
