@@ -19,6 +19,7 @@
  **/
 
 #include <algorithm>
+#include <chrono>
 #include "graph/core/Database.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/api/QueryBuilder.hpp"
