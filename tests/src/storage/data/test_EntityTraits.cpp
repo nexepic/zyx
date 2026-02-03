@@ -18,6 +18,9 @@
  * limitations under the License.
  **/
 
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <random>
@@ -43,11 +46,12 @@ using namespace graph::storage;
 class EntityTraitsTest : public ::testing::Test {
 protected:
 	void SetUp() override {
-		// Generate a unique temporary file for each test
-		testFilePath = "/tmp/test_entityTraits_" + std::to_string(std::random_device{}()) + ".dat";
+		// Generate a unique temporary file for each test using UUID
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testFilePath = std::filesystem::temp_directory_path() / ("test_entityTraits_" + to_string(uuid) + ".dat");
 
 		// Initialize Database and get the DataManager instance
-		database = std::make_unique<graph::Database>(testFilePath);
+		database = std::make_unique<graph::Database>(testFilePath.string());
 		database->open();
 		fileStorage = database->getStorage();
 		dataManager = fileStorage->getDataManager();
@@ -58,9 +62,17 @@ protected:
 		if (database) {
 			database->close();
 		}
-		std::filesystem::remove(testFilePath);
+
+		if (std::filesystem::exists(testFilePath)) {
+			std::filesystem::remove(testFilePath);
+		}
+
 		// Also clean up WAL file if exists
-		std::filesystem::remove(testFilePath + ".wal");
+		std::filesystem::path walPath = testFilePath;
+		walPath += ".wal";
+		if (std::filesystem::exists(walPath)) {
+			std::filesystem::remove(walPath);
+		}
 	}
 
 	// Helper methods to create test entities
@@ -112,7 +124,7 @@ protected:
 		return state;
 	}
 
-	std::string testFilePath;
+	std::filesystem::path testFilePath;
 	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<FileStorage> fileStorage;
 	std::shared_ptr<DataManager> dataManager;
@@ -129,7 +141,7 @@ TEST_F(EntityTraitsTest, NodeDataManagerAccess) {
 
 	// Verify cache is the correct type
 	using NodeCacheType = LRUCache<int64_t, Node>;
-	EXPECT_TRUE((std::is_same_v<decltype(nodeCache), NodeCacheType &>));
+	EXPECT_TRUE((std::is_same_v<decltype(nodeCache), NodeCacheType &>) );
 }
 
 TEST_F(EntityTraitsTest, EdgeDataManagerAccess) {
@@ -139,7 +151,7 @@ TEST_F(EntityTraitsTest, EdgeDataManagerAccess) {
 
 	// Verify cache is the correct type
 	using EdgeCacheType = LRUCache<int64_t, Edge>;
-	EXPECT_TRUE((std::is_same_v<decltype(edgeCache), EdgeCacheType &>));
+	EXPECT_TRUE((std::is_same_v<decltype(edgeCache), EdgeCacheType &>) );
 }
 
 TEST_F(EntityTraitsTest, PropertyDataManagerAccess) {
@@ -149,7 +161,7 @@ TEST_F(EntityTraitsTest, PropertyDataManagerAccess) {
 
 	// Verify cache is the correct type
 	using PropertyCacheType = LRUCache<int64_t, Property>;
-	EXPECT_TRUE((std::is_same_v<decltype(propertyCache), PropertyCacheType &>));
+	EXPECT_TRUE((std::is_same_v<decltype(propertyCache), PropertyCacheType &>) );
 }
 
 TEST_F(EntityTraitsTest, BlobDataManagerAccess) {
@@ -159,7 +171,7 @@ TEST_F(EntityTraitsTest, BlobDataManagerAccess) {
 
 	// Verify cache is the correct type
 	using BlobCacheType = LRUCache<int64_t, Blob>;
-	EXPECT_TRUE((std::is_same_v<decltype(blobCache), BlobCacheType &>));
+	EXPECT_TRUE((std::is_same_v<decltype(blobCache), BlobCacheType &>) );
 }
 
 TEST_F(EntityTraitsTest, IndexDataManagerAccess) {
@@ -169,7 +181,7 @@ TEST_F(EntityTraitsTest, IndexDataManagerAccess) {
 
 	// Verify cache is the correct type
 	using IndexCacheType = LRUCache<int64_t, Index>;
-	EXPECT_TRUE((std::is_same_v<decltype(indexCache), IndexCacheType &>));
+	EXPECT_TRUE((std::is_same_v<decltype(indexCache), IndexCacheType &>) );
 }
 
 TEST_F(EntityTraitsTest, StateDataManagerAccess) {
@@ -179,7 +191,7 @@ TEST_F(EntityTraitsTest, StateDataManagerAccess) {
 
 	// Verify cache is the correct type
 	using StateCacheType = LRUCache<int64_t, State>;
-	EXPECT_TRUE((std::is_same_v<decltype(stateCache), StateCacheType &>));
+	EXPECT_TRUE((std::is_same_v<decltype(stateCache), StateCacheType &>) );
 }
 
 TEST_F(EntityTraitsTest, GetSegmentIndex) {
@@ -402,22 +414,22 @@ TEST_F(EntityTraitsTest, EntityTraitsTypeId) {
 TEST_F(EntityTraitsTest, EntityTraitsCacheType) {
 	// Verify CacheType is correctly defined for all entity types
 	using NodeCacheType = LRUCache<int64_t, Node>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Node>::CacheType, NodeCacheType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Node>::CacheType, NodeCacheType>) );
 
 	using EdgeCacheType = LRUCache<int64_t, Edge>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Edge>::CacheType, EdgeCacheType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Edge>::CacheType, EdgeCacheType>) );
 
 	using PropertyCacheType = LRUCache<int64_t, Property>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Property>::CacheType, PropertyCacheType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Property>::CacheType, PropertyCacheType>) );
 
 	using BlobCacheType = LRUCache<int64_t, Blob>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Blob>::CacheType, BlobCacheType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Blob>::CacheType, BlobCacheType>) );
 
 	using IndexCacheType = LRUCache<int64_t, Index>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Index>::CacheType, IndexCacheType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Index>::CacheType, IndexCacheType>) );
 
 	using StateCacheType = LRUCache<int64_t, State>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<State>::CacheType, StateCacheType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<State>::CacheType, StateCacheType>) );
 }
 
 // ============================================================================
@@ -427,20 +439,20 @@ TEST_F(EntityTraitsTest, EntityTraitsCacheType) {
 TEST_F(EntityTraitsTest, EntityTraitsAccessType) {
 	// Verify Access type is correctly defined for all entity types
 	using NodeAccessType = DataManagerAccess<Node>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Node>::Access, NodeAccessType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Node>::Access, NodeAccessType>) );
 
 	using EdgeAccessType = DataManagerAccess<Edge>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Edge>::Access, EdgeAccessType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Edge>::Access, EdgeAccessType>) );
 
 	using PropertyAccessType = DataManagerAccess<Property>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Property>::Access, PropertyAccessType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Property>::Access, PropertyAccessType>) );
 
 	using BlobAccessType = DataManagerAccess<Blob>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Blob>::Access, BlobAccessType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Blob>::Access, BlobAccessType>) );
 
 	using IndexAccessType = DataManagerAccess<Index>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Index>::Access, IndexAccessType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<Index>::Access, IndexAccessType>) );
 
 	using StateAccessType = DataManagerAccess<State>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<State>::Access, StateAccessType>));
+	EXPECT_TRUE((std::is_same_v<EntityTraits<State>::Access, StateAccessType>) );
 }
