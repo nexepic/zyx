@@ -17,11 +17,11 @@
  * limitations under the License.
  **/
 
-#include <gtest/gtest.h>
-#include <filesystem>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
+#include <gtest/gtest.h>
 
 #include "graph/core/Database.hpp"
 #include "graph/query/api/QueryResult.hpp"
@@ -37,21 +37,22 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testDbPath = fs::temp_directory_path() / ("test_db_" + boost::uuids::to_string(uuid) + ".graph");
-		if (fs::exists(testDbPath)) fs::remove_all(testDbPath);
-		db = std::make_unique<Database>(testDbPath);
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 	}
 
 	void TearDown() override {
-		if (db) db->close();
-		if (fs::exists(testDbPath)) fs::remove_all(testDbPath);
+		if (db)
+			db->close();
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
 	}
 
-	graph::query::QueryResult execute(const std::string &query) {
-		return db->getQueryEngine()->execute(query);
-	}
+	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
 
-	std::string testDbPath;
+	std::filesystem::path testDbPath;
 	std::unique_ptr<Database> db;
 };
 
@@ -60,12 +61,12 @@ protected:
  */
 TEST_F(IntegrationDatabaseTest, CompleteDatabaseLifecycle) {
 	// Create data and close
-	execute("CREATE (n:Person {name: 'Alice'})");
+	(void) execute("CREATE (n:Person {name: 'Alice'})");
 	db->close();
 	EXPECT_FALSE(db->isOpen());
 
 	// Reopen and verify data
-	db = std::make_unique<Database>(testDbPath);
+	db = std::make_unique<Database>(testDbPath.string());
 	db->open();
 	ASSERT_TRUE(db->isOpen());
 
@@ -94,12 +95,12 @@ TEST_F(IntegrationDatabaseTest, MultipleOpenCloseCycles) {
  */
 TEST_F(IntegrationDatabaseTest, PersistenceAcrossSessions) {
 	// Session 1: Create data
-	execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 	db->close();
 
 	// Session 2: Verify persistence
-	db = std::make_unique<Database>(testDbPath);
+	db = std::make_unique<Database>(testDbPath.string());
 	db->open();
 
 	auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
@@ -133,7 +134,7 @@ TEST_F(IntegrationDatabaseTest, DatabaseFileSizeGrowth) {
 	// Initial file size
 	db->close();
 	auto initialSize = fs::file_size(testDbPath);
-	EXPECT_GT(initialSize, 0);
+	EXPECT_GT(initialSize, 0ULL);
 
 	// Add data and check size growth
 	db->open();

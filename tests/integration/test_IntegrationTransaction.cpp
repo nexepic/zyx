@@ -17,11 +17,11 @@
  * limitations under the License.
  **/
 
-#include <gtest/gtest.h>
-#include <filesystem>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
+#include <gtest/gtest.h>
 
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
@@ -38,21 +38,22 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testDbPath = fs::temp_directory_path() / ("test_txn_" + boost::uuids::to_string(uuid) + ".graph");
-		if (fs::exists(testDbPath)) fs::remove_all(testDbPath);
-		db = std::make_unique<Database>(testDbPath);
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 	}
 
 	void TearDown() override {
-		if (db) db->close();
-		if (fs::exists(testDbPath)) fs::remove_all(testDbPath);
+		if (db)
+			db->close();
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
 	}
 
-	graph::query::QueryResult execute(const std::string &query) {
-		return db->getQueryEngine()->execute(query);
-	}
+	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
 
-	std::string testDbPath;
+	std::filesystem::path testDbPath;
 	std::unique_ptr<Database> db;
 };
 
@@ -61,8 +62,8 @@ protected:
  */
 TEST_F(IntegrationTransactionTest, Atomicity_Commit) {
 	auto txn = db->beginTransaction();
-	execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 	txn.commit();
 
 	auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
@@ -74,14 +75,14 @@ TEST_F(IntegrationTransactionTest, Atomicity_Commit) {
  * Note: Current implementation may not support full rollback
  */
 TEST_F(IntegrationTransactionTest, Atomicity_Rollback) {
-	execute("CREATE (n:Person {name: 'Charlie', age: 35})");
+	(void) execute("CREATE (n:Person {name: 'Charlie', age: 35})");
 
 	auto beforeResult = execute("MATCH (n:Person) RETURN n.name");
 	ASSERT_EQ(beforeResult.rowCount(), 1UL);
 
 	auto txn = db->beginTransaction();
-	execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 	// Note: rollback() behavior may vary by implementation
 	Transaction::rollback();
 
@@ -96,8 +97,8 @@ TEST_F(IntegrationTransactionTest, Atomicity_Rollback) {
  */
 TEST_F(IntegrationTransactionTest, Consistency_AfterCommit) {
 	auto txn = db->beginTransaction();
-	execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
-	execute("CREATE (b:Person {name: 'Bob'})-[:KNOWS]->(c:Person {name: 'Charlie'})");
+	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
+	(void) execute("CREATE (b:Person {name: 'Bob'})-[:KNOWS]->(c:Person {name: 'Charlie'})");
 	txn.commit();
 
 	// Verify Alice knows Bob
@@ -115,13 +116,13 @@ TEST_F(IntegrationTransactionTest, Consistency_AfterCommit) {
 TEST_F(IntegrationTransactionTest, Isolation_SequentialTransactions) {
 	{
 		auto txn1 = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
 		txn1.commit();
 	}
 
 	{
 		auto txn2 = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 		txn2.commit();
 	}
 
@@ -135,14 +136,14 @@ TEST_F(IntegrationTransactionTest, Isolation_SequentialTransactions) {
 TEST_F(IntegrationTransactionTest, Durability_PersistAfterReopen) {
 	{
 		auto txn = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Alice', age: 30})");
-		execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 		txn.commit();
 		db->close();
 	}
 
 	{
-		Database db2(testDbPath);
+		Database db2(testDbPath.string());
 		db2.open();
 		auto queryEngine2 = db2.getQueryEngine();
 		auto result = queryEngine2->execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
@@ -156,9 +157,9 @@ TEST_F(IntegrationTransactionTest, Durability_PersistAfterReopen) {
  */
 TEST_F(IntegrationTransactionTest, TransactionWithCreate) {
 	auto txn = db->beginTransaction();
-	execute("CREATE (n:Person {name: 'Alice'})");
-	execute("CREATE (n:Person {name: 'Bob'})");
-	execute("CREATE (n:Person {name: 'Charlie'})");
+	(void) execute("CREATE (n:Person {name: 'Alice'})");
+	(void) execute("CREATE (n:Person {name: 'Bob'})");
+	(void) execute("CREATE (n:Person {name: 'Charlie'})");
 	txn.commit();
 
 	auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
@@ -169,12 +170,12 @@ TEST_F(IntegrationTransactionTest, TransactionWithCreate) {
  * Test transaction with UPDATE operations
  */
 TEST_F(IntegrationTransactionTest, TransactionWithUpdate) {
-	execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 
 	auto txn = db->beginTransaction();
 	// Update specific node
-	execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 35");
+	(void) execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 35");
 	txn.commit();
 
 	auto result = execute("MATCH (n:Person) WHERE n.age > 30 RETURN n.name");
@@ -185,12 +186,12 @@ TEST_F(IntegrationTransactionTest, TransactionWithUpdate) {
  * Test transaction with DELETE operations
  */
 TEST_F(IntegrationTransactionTest, TransactionWithDelete) {
-	execute("CREATE (n:Person {name: 'Alice', active: false})");
-	execute("CREATE (n:Person {name: 'Bob', active: false})");
-	execute("CREATE (n:Person {name: 'Charlie', active: true})");
+	(void) execute("CREATE (n:Person {name: 'Alice', active: false})");
+	(void) execute("CREATE (n:Person {name: 'Bob', active: false})");
+	(void) execute("CREATE (n:Person {name: 'Charlie', active: true})");
 
 	auto txn = db->beginTransaction();
-	execute("MATCH (n:Person) WHERE n.active = false DELETE n");
+	(void) execute("MATCH (n:Person) WHERE n.active = false DELETE n");
 	txn.commit();
 
 	auto result = execute("MATCH (n:Person) RETURN n.name");
@@ -202,9 +203,9 @@ TEST_F(IntegrationTransactionTest, TransactionWithDelete) {
  */
 TEST_F(IntegrationTransactionTest, TransactionWithRelationships) {
 	auto txn = db->beginTransaction();
-	execute("CREATE (a:Person {name: 'Alice'})");
-	execute("CREATE (b:Person {name: 'Bob'})");
-	execute("MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
+	(void) execute("CREATE (a:Person {name: 'Alice'})");
+	(void) execute("CREATE (b:Person {name: 'Bob'})");
+	(void) execute("MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
 	txn.commit();
 
 	auto result = execute("MATCH (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person) RETURN b.name");
@@ -217,19 +218,19 @@ TEST_F(IntegrationTransactionTest, TransactionWithRelationships) {
 TEST_F(IntegrationTransactionTest, MultipleSequentialTransactions) {
 	{
 		auto txn1 = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Alice'})");
+		(void) execute("CREATE (n:Person {name: 'Alice'})");
 		txn1.commit();
 	}
 
 	{
 		auto txn2 = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Bob'})");
+		(void) execute("CREATE (n:Person {name: 'Bob'})");
 		txn2.commit();
 	}
 
 	{
 		auto txn3 = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Charlie'})");
+		(void) execute("CREATE (n:Person {name: 'Charlie'})");
 		txn3.commit();
 	}
 

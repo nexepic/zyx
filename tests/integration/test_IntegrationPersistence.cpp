@@ -17,11 +17,11 @@
  * limitations under the License.
  **/
 
-#include <gtest/gtest.h>
-#include <filesystem>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
+#include <gtest/gtest.h>
 
 #include "graph/core/Database.hpp"
 #include "graph/query/api/QueryResult.hpp"
@@ -37,19 +37,20 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testDbPath = fs::temp_directory_path() / ("test_persist_" + boost::uuids::to_string(uuid) + ".graph");
-		if (fs::exists(testDbPath)) fs::remove_all(testDbPath);
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
 	}
 
 	void TearDown() override {
-		if (db) db->close();
-		if (fs::exists(testDbPath)) fs::remove_all(testDbPath);
+		if (db)
+			db->close();
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
 	}
 
-	graph::query::QueryResult execute(const std::string &query) {
-		return db->getQueryEngine()->execute(query);
-	}
+	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
 
-	std::string testDbPath;
+	std::filesystem::path testDbPath;
 	std::unique_ptr<Database> db;
 };
 
@@ -59,16 +60,16 @@ protected:
 TEST_F(IntegrationPersistenceTest, BasicDataPersistence) {
 	// Session 1: Create data
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("CREATE (n:Person {name: 'Alice', age: 30})");
-		execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 		db->close();
 	}
 
 	// Session 2: Verify persistence
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
 		EXPECT_EQ(result.rowCount(), 2UL);
@@ -81,16 +82,16 @@ TEST_F(IntegrationPersistenceTest, BasicDataPersistence) {
 TEST_F(IntegrationPersistenceTest, RelationshipPersistence) {
 	// Session 1: Create graph
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
-		execute("CREATE (b:Person {name: 'Bob'})-[:KNOWS]->(c:Person {name: 'Charlie'})");
+		(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
+		(void) execute("CREATE (b:Person {name: 'Bob'})-[:KNOWS]->(c:Person {name: 'Charlie'})");
 		db->close();
 	}
 
 	// Session 2: Verify relationships
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		auto result = execute("MATCH (a:Person)-[:KNOWS]->(b:Person) RETURN a.name, b.name");
 		EXPECT_EQ(result.rowCount(), 2UL);
@@ -103,17 +104,17 @@ TEST_F(IntegrationPersistenceTest, RelationshipPersistence) {
 TEST_F(IntegrationPersistenceTest, PersistenceAfterUpdates) {
 	// Session 1: Create and update
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("CREATE (n:Person {name: 'Alice', age: 30})");
-		execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 31");
-		execute("MATCH (n:Person {name: 'Alice'}) SET n.city = 'NYC'");
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 31");
+		(void) execute("MATCH (n:Person {name: 'Alice'}) SET n.city = 'NYC'");
 		db->close();
 	}
 
 	// Session 2: Verify updates
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		auto result = execute("MATCH (n:Person {name: 'Alice'}) RETURN n.age, n.city");
 		EXPECT_EQ(result.rowCount(), 1UL);
@@ -126,18 +127,18 @@ TEST_F(IntegrationPersistenceTest, PersistenceAfterUpdates) {
 TEST_F(IntegrationPersistenceTest, PersistenceAfterDeletions) {
 	// Session 1: Create and delete
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("CREATE (n:Person {name: 'Alice'})");
-		execute("CREATE (n:Person {name: 'Bob'})");
-		execute("CREATE (n:Person {name: 'Charlie'})");
-		execute("MATCH (n:Person {name: 'Bob'}) DELETE n");
+		(void) execute("CREATE (n:Person {name: 'Alice'})");
+		(void) execute("CREATE (n:Person {name: 'Bob'})");
+		(void) execute("CREATE (n:Person {name: 'Charlie'})");
+		(void) execute("MATCH (n:Person {name: 'Bob'}) DELETE n");
 		db->close();
 	}
 
 	// Session 2: Verify deletion
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
 		EXPECT_EQ(result.rowCount(), 2UL);
@@ -150,31 +151,31 @@ TEST_F(IntegrationPersistenceTest, PersistenceAfterDeletions) {
 TEST_F(IntegrationPersistenceTest, MultipleReadWriteCycles) {
 	// Cycle 1: Create initial data
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
 		db->close();
 	}
 
 	// Cycle 2: Add more data
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 		db->close();
 	}
 
 	// Cycle 3: Update existing data
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 31");
+		(void) execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 31");
 		db->close();
 	}
 
 	// Cycle 4: Verify all changes
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		auto result = execute("MATCH (n:Person) RETURN n.name, n.age ORDER BY n.name");
 		EXPECT_EQ(result.rowCount(), 2UL);
@@ -185,21 +186,21 @@ TEST_F(IntegrationPersistenceTest, MultipleReadWriteCycles) {
  * Test large dataset persistence
  */
 TEST_F(IntegrationPersistenceTest, LargeDatasetPersistence) {
-	const int nodeCount = 200;
 
 	// Session 1: Create large dataset
 	{
-		db = std::make_unique<Database>(testDbPath);
+		constexpr int nodeCount = 200;
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		for (int i = 0; i < nodeCount; ++i) {
-			execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
+			(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
 		}
 		db->close();
 	}
 
 	// Session 2: Verify large dataset
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		// Verify specific nodes exist
 		auto result1 = execute("MATCH (n:Test {id: 0}) RETURN n");
@@ -219,15 +220,15 @@ TEST_F(IntegrationPersistenceTest, LargeDatasetPersistence) {
 TEST_F(IntegrationPersistenceTest, PersistenceWithTransactions) {
 	// Session 1: Transactional writes
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 
 		auto txn1 = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
 		txn1.commit();
 
 		auto txn2 = db->beginTransaction();
-		execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
 		txn2.commit();
 
 		db->close();
@@ -235,7 +236,7 @@ TEST_F(IntegrationPersistenceTest, PersistenceWithTransactions) {
 
 	// Session 2: Verify transactional data
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
 		EXPECT_EQ(result.rowCount(), 2UL);
@@ -248,16 +249,16 @@ TEST_F(IntegrationPersistenceTest, PersistenceWithTransactions) {
 TEST_F(IntegrationPersistenceTest, MultipleInstancesConsistency) {
 	// Create initial data
 	{
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
-		execute("CREATE (n:Person {name: 'Alice'})");
-		execute("CREATE (n:Person {name: 'Bob'})");
+		(void) execute("CREATE (n:Person {name: 'Alice'})");
+		(void) execute("CREATE (n:Person {name: 'Bob'})");
 		db->close();
 	}
 
 	// Open, read, close multiple times
 	for (int i = 0; i < 3; ++i) {
-		db = std::make_unique<Database>(testDbPath);
+		db = std::make_unique<Database>(testDbPath.string());
 		db->open();
 		auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
 		EXPECT_EQ(result.rowCount(), 2UL);

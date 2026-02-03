@@ -72,7 +72,13 @@ mkdir -p "$PROFILES_DIR"
 # ==============================================================================
 echo -e "${BLUE}>>> [2/5] Configuring & Compiling...${NC}"
 
-export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
+# Set profile path to prevent generating default.profraw in root directory
+# Use absolute path to ensure profraw files go to coverage directory
+PROFILE_PATH="$(pwd)/$PROFILES_DIR/code-%p.profraw"
+export LLVM_PROFILE_FILE="$PROFILE_PATH"
+
+# Specify profile directory in compile flags to prevent default.profraw generation
+export FLAGS="-fprofile-instr-generate=$PROFILE_PATH -fcoverage-mapping -std=c++20"
 
 if [ ! -f "$BUILD_DIR/build.ninja" ]; then
     meson setup "$BUILD_DIR" --native-file "$BUILD_DIR/conan_meson_native.ini" \

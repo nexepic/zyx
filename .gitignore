@@ -3,3 +3,13 @@
 buildDir/
 build_release/
 antlr-*.jar
+
+# LLVM Coverage files
+*.profraw
+*.profdata
+default.profraw
+default.profdata
+
+# Coverage reports
+coverage/
+htmlcov/
