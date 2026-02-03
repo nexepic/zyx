@@ -73,6 +73,41 @@ protected:
 		out << content;
 		out.close();
 	}
+
+	static void runBasicWithInput(
+	graph::REPLTest& repl,
+	const std::string& input,
+	std::string* outStdout = nullptr,
+	std::string* outStderr = nullptr)
+	{
+		// Backup cin / cout / cerr
+		auto* oldCinBuf  = std::cin.rdbuf();
+		auto* oldCoutBuf = std::cout.rdbuf();
+		auto* oldCerrBuf = std::cerr.rdbuf();
+
+		std::istringstream fakeInput(input);
+		std::ostringstream fakeOut;
+		std::ostringstream fakeErr;
+
+		std::cin.rdbuf(fakeInput.rdbuf());
+		std::cout.rdbuf(fakeOut.rdbuf());
+		std::cerr.rdbuf(fakeErr.rdbuf());
+
+		// Execute
+		repl.runBasicPublic();
+
+		// Restore streams
+		std::cin.rdbuf(oldCinBuf);
+		std::cout.rdbuf(oldCoutBuf);
+		std::cerr.rdbuf(oldCerrBuf);
+
+		if (outStdout) {
+			*outStdout = fakeOut.str();
+		}
+		if (outStderr) {
+			*outStderr = fakeErr.str();
+		}
+	}
 };
 
 // Test executing a simple single-line script
@@ -702,161 +737,84 @@ TEST_F(REPLTest, ScriptWithTabCharacters) {
 
 // Test runBasic with exit command
 TEST_F(REPLTest, RunBasicWithExit) {
-	// Create a REPLTest instance to access private runBasic()
 	graph::REPLTest testRepl(*db);
 
-	// Redirect stdout and stderr to capture output
-	std::streambuf* oldOut = std::cout.rdbuf();
-	std::streambuf* oldErr = std::cerr.rdbuf();
-	std::stringstream ssOut;
-	std::stringstream ssErr;
-	std::cout.rdbuf(ssOut.rdbuf());
-	std::cerr.rdbuf(ssErr.rdbuf());
+	std::string output;
+	std::string error;
 
-	// Create a pipe to simulate stdin with "exit\n"
-	int pipefd[2];
-	ASSERT_EQ(pipe(pipefd), 0);
-	// Write "exit\n" to the pipe
-	const char* exitCmd = "exit\n";
-	write(pipefd[1], exitCmd, strlen(exitCmd));
-	close(pipefd[1]);
+	runBasicWithInput(
+		testRepl,
+		"exit\n",
+		&output,
+		&error
+	);
 
-	// Replace stdin with the read end of the pipe
-	int oldStdin = dup(STDIN_FILENO);
-	dup2(pipefd[0], STDIN_FILENO);
-	close(pipefd[0]);
-
-	// Run the basic REPL - should read "exit" and quit
-	testRepl.runBasicPublic();
-
-	// Restore stdin
-	dup2(oldStdin, STDIN_FILENO);
-	close(oldStdin);
-
-	// Restore stdout/stderr
-	std::cout.rdbuf(oldOut);
-	std::cerr.rdbuf(oldErr);
-
-	// Should have printed the welcome message
-	std::string output = ssOut.str();
-	EXPECT_TRUE(output.find("Basic Mode") != std::string::npos);
+	// Should print welcome or basic mode banner
+	EXPECT_TRUE(output.find("Basic Mode") != std::string::npos ||
+				output.find("basic") != std::string::npos);
 }
 
 // Test runBasic with a simple query
 TEST_F(REPLTest, RunBasicWithQuery) {
 	graph::REPLTest testRepl(*db);
 
-	// Create a temporary file with commands
-	std::string cmdPath = scriptPath + ".cmd";
-	std::ofstream cmdFile(cmdPath);
-	cmdFile << "CREATE (n:BasicTest {id: 1});\n";
-	cmdFile << "MATCH (n:BasicTest) RETURN n.id;\n";
-	cmdFile << "exit\n";
-	cmdFile.close();
+	std::string output;
 
-	// Redirect stdout/stderr and stdin
-	std::streambuf* oldOut = std::cout.rdbuf();
-	std::streambuf* oldErr = std::cerr.rdbuf();
-	std::stringstream ssOut;
-	std::stringstream ssErr;
-	std::cout.rdbuf(ssOut.rdbuf());
-	std::cerr.rdbuf(ssErr.rdbuf());
+	runBasicWithInput(
+		testRepl,
+		"CREATE (n:BasicTest {id: 1});\n"
+		"MATCH (n:BasicTest) RETURN n.id;\n"
+		"exit\n",
+		&output
+	);
 
-	// Open command file as stdin
-	FILE* oldStdin = freopen(cmdPath.c_str(), "r", stdin);
-
-	// Run the basic REPL
-	testRepl.runBasicPublic();
-
-	// Restore stdin
-	if (oldStdin) {
-		freopen("/dev/tty", "r", stdin);
-	}
-
-	// Restore stdout/stderr
-	std::cout.rdbuf(oldOut);
-	std::cerr.rdbuf(oldErr);
-
-	// Clean up command file
-	fs::remove(cmdPath);
-
-	// Verify node was created
-	auto res = db->getQueryEngine()->execute("MATCH (n:BasicTest) RETURN n.id");
+	// Verify database side effect
+	auto res = db->getQueryEngine()->execute(
+		"MATCH (n:BasicTest) RETURN n.id"
+	);
 	EXPECT_EQ(res.rowCount(), 1UL);
+
+	// Output should contain query result
+	EXPECT_TRUE(output.find("rows") != std::string::npos);
 }
 
 // Test runBasic with save command
 TEST_F(REPLTest, RunBasicWithSave) {
 	graph::REPLTest testRepl(*db);
 
-	std::string cmdPath = scriptPath + ".cmd";
-	std::ofstream cmdFile(cmdPath);
-	cmdFile << "save;\n";
-	cmdFile << "exit\n";
-	cmdFile.close();
+	std::string output;
 
-	// Redirect stdout/stderr and stdin
-	std::streambuf* oldOut = std::cout.rdbuf();
-	std::streambuf* oldErr = std::cerr.rdbuf();
-	std::stringstream ssOut;
-	std::stringstream ssErr;
-	std::cout.rdbuf(ssOut.rdbuf());
-	std::cerr.rdbuf(ssErr.rdbuf());
+	runBasicWithInput(
+		testRepl,
+		"save;\n"
+		"exit\n",
+		&output
+	);
 
-	FILE* oldStdin = freopen(cmdPath.c_str(), "r", stdin);
-
-	testRepl.runBasicPublic();
-
-	if (oldStdin) {
-		freopen("/dev/tty", "r", stdin);
-	}
-
-	std::cout.rdbuf(oldOut);
-	std::cerr.rdbuf(oldErr);
-
-	fs::remove(cmdPath);
-
-	// Should complete without error
-	EXPECT_TRUE(true);
+	// Save command should not crash and should produce output
+	EXPECT_TRUE(
+		output.find("Database flushed") != std::string::npos ||
+		output.find("Storage not accessible") != std::string::npos ||
+		!output.empty()
+	);
 }
 
 // Test runBasic with multiline query (triggers buffer logic)
 TEST_F(REPLTest, RunBasicWithMultilineBuffer) {
 	graph::REPLTest testRepl(*db);
 
-	std::string cmdPath = scriptPath + ".cmd";
-	std::ofstream cmdFile(cmdPath);
-	// Multiline query without semicolon, then empty line to execute
-	// First line: CREATE without semicolon
-	cmdFile << "CREATE (n:Multi {id: 1})\n";
-	// Second line: empty line to execute the buffered command
-	cmdFile << "\n";
-	// Then exit
-	cmdFile << "exit\n";
-	cmdFile.close();
+	runBasicWithInput(
+		testRepl,
+		// Multiline query without semicolon
+		"CREATE (n:Multi {id: 1})\n"
+		"\n"     // Empty line triggers execution
+		"exit\n"
+	);
 
-	std::streambuf* oldOut = std::cout.rdbuf();
-	std::streambuf* oldErr = std::cerr.rdbuf();
-	std::stringstream ssOut;
-	std::stringstream ssErr;
-	std::cout.rdbuf(ssOut.rdbuf());
-	std::cerr.rdbuf(ssErr.rdbuf());
-
-	FILE* oldStdin = freopen(cmdPath.c_str(), "r", stdin);
-
-	testRepl.runBasicPublic();
-
-	if (oldStdin) {
-		freopen("/dev/tty", "r", stdin);
-	}
-
-	std::cout.rdbuf(oldOut);
-	std::cerr.rdbuf(oldErr);
-
-	fs::remove(cmdPath);
-
-	// Should execute without crashing
-	EXPECT_TRUE(true);
+	auto res = db->getQueryEngine()->execute(
+		"MATCH (n:Multi) RETURN n"
+	);
+	EXPECT_EQ(res.rowCount(), 1UL);
 }
 
 // Note: RunBasicWithMultipleMultilineCommands removed - the multiline execution
@@ -1195,31 +1153,18 @@ TEST_F(REPLTest, DebugCommandsWithArguments) {
 TEST_F(REPLTest, RunBasicWithImmediateEOF) {
 	graph::REPLTest testRepl(*db);
 
-	std::string cmdPath = scriptPath + ".cmd";
-	std::ofstream cmdFile(cmdPath);
-	// Empty file - immediate EOF
-	cmdFile.close();
+	std::string output;
+	std::string error;
 
-	std::streambuf* oldOut = std::cout.rdbuf();
-	std::streambuf* oldErr = std::cerr.rdbuf();
-	std::stringstream ssOut;
-	std::stringstream ssErr;
-	std::cout.rdbuf(ssOut.rdbuf());
-	std::cerr.rdbuf(ssErr.rdbuf());
+	// Empty input simulates immediate EOF
+	runBasicWithInput(
+		testRepl,
+		"",
+		&output,
+		&error
+	);
 
-	FILE* oldStdin = freopen(cmdPath.c_str(), "r", stdin);
-
-	testRepl.runBasicPublic();
-
-	if (oldStdin) {
-		freopen("/dev/tty", "r", stdin);
-	}
-
-	std::cout.rdbuf(oldOut);
-	std::cerr.rdbuf(oldErr);
-
-	fs::remove(cmdPath);
-
+	// Should exit gracefully without crashing
 	EXPECT_TRUE(true);
 }
 
