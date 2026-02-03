@@ -316,3 +316,330 @@ TEST_F(CApiTest, LargeStringPayload) {
 
 	metrix_result_close(res);
 }
+
+// ============================================================================
+// Additional tests for improved coverage
+// ============================================================================
+
+TEST_F(CApiTest, GetDuration) {
+	auto *res = metrix_execute(db, "RETURN 1 AS x");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(metrix_result_next(res));
+
+	double duration = metrix_result_get_duration(res);
+	EXPECT_GE(duration, 0.0);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetDurationWithNullResult) {
+	double duration = metrix_result_get_duration(nullptr);
+	EXPECT_EQ(duration, 0.0);
+}
+
+TEST_F(CApiTest, JSONEscapeSequences) {
+	// Use Cypher's escape syntax for newlines and quotes
+	// Cypher uses backslash escaping within strings
+	metrix_result_close(metrix_execute(db, "CREATE (n:Special {text: 'Line1\\nLine2\\tTab\"Quote\\\\Slash'})"));
+
+	auto *res = metrix_execute(db, "MATCH (n:Special) RETURN n");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	// After Cypher parsing, the string contains actual newlines/tabs
+	// When serialized to JSON, these become escape sequences
+	EXPECT_NE(jsonStr.find("\\n"), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\t"), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\\""), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\\\"), std::string::npos);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, ResultIsSuccess) {
+	auto *goodRes = metrix_execute(db, "RETURN 1");
+	ASSERT_NE(goodRes, nullptr);
+	EXPECT_TRUE(metrix_result_is_success(goodRes));
+	metrix_result_close(goodRes);
+}
+
+TEST_F(CApiTest, ResultGetError) {
+	// Test with valid result (no error)
+	auto *goodRes = metrix_execute(db, "RETURN 1");
+	ASSERT_NE(goodRes, nullptr);
+	const char *err = metrix_result_get_error(goodRes);
+	// Should be empty for successful result
+	EXPECT_STREQ(err, "");
+	metrix_result_close(goodRes);
+}
+
+TEST_F(CApiTest, GetPropsJsonForNonEntity) {
+	// Test get_props_json with a non-entity type (should return {})
+	auto *res = metrix_execute(db, "RETURN 42 AS num");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	EXPECT_STREQ(json, "{}");
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, OpenIfExistsWithNonExistentPath) {
+	// Test opening a non-existent database
+	std::string nonExistentPath = "/tmp/non_existent_db_12345678";
+
+	// Ensure path doesn't exist
+	if (fs::exists(nonExistentPath))
+		fs::remove_all(nonExistentPath);
+
+	MetrixDB_T *db2 = metrix_open_if_exists(nonExistentPath.c_str());
+	EXPECT_EQ(db2, nullptr);
+
+	// Verify error message is set
+	const char *err = metrix_get_last_error();
+	EXPECT_NE(err, nullptr);
+	EXPECT_STRNE(err, "");
+}
+
+TEST_F(CApiTest, CloseNullDatabase) {
+	// Test closing a nullptr database - should not crash
+	metrix_close(nullptr);
+	// If we get here without crash, test passes
+	SUCCEED();
+}
+
+TEST_F(CApiTest, CloseNullResult) {
+	// Test closing a nullptr result - should not crash
+	metrix_result_close(nullptr);
+	// If we get here without crash, test passes
+	SUCCEED();
+}
+
+TEST_F(CApiTest, GetColumnCountWithNullResult) {
+	int count = metrix_result_column_count(nullptr);
+	EXPECT_EQ(count, 0);
+}
+
+TEST_F(CApiTest, GetColumnNameWithNullResult) {
+	const char *name = metrix_result_column_name(nullptr, 0);
+	EXPECT_STREQ(name, "");
+}
+
+TEST_F(CApiTest, JSONControlCharacterEscape) {
+	// Test that JSON escaping works for various special characters
+	// Using Cypher string escape syntax
+	metrix_result_close(metrix_execute(db, "CREATE (n:Ctrl {text: 'Quote:\\\" Slash:\\\\ Backspace:\\b'})"));
+
+	auto *res = metrix_execute(db, "MATCH (n:Ctrl) RETURN n");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	// Verify escape sequences are in JSON output
+	EXPECT_NE(jsonStr.find("\\\""), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\\\"), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\b"), std::string::npos);
+
+	metrix_result_close(res);
+}
+
+// ============================================================================
+// Additional tests for improved coverage
+// ============================================================================
+
+TEST_F(CApiTest, JSONMultiPropertyEscape) {
+	// Test JSON escaping with multiple properties
+	metrix_result_close(metrix_execute(db,
+		"CREATE (n:Multi {prop1: 'Line1\\nLine2', prop2: 'Tab\\there', prop3: 'Quote\\''})"));
+
+	auto *res = metrix_execute(db, "MATCH (n:Multi) RETURN n");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	// Verify multiple properties with escape sequences
+	EXPECT_NE(jsonStr.find("\\n"), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\t"), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\'"), std::string::npos);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, NodeWithComplexProperties) {
+	// Test node with various property types for JSON serialization
+	metrix_result_close(metrix_execute(db,
+		"CREATE (n:Complex {str: 'test', num: 42, bool: true, nullProp: null})"));
+
+	auto *res = metrix_execute(db, "MATCH (n:Complex) RETURN n");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	// Verify different types are serialized
+	EXPECT_NE(jsonStr.find("str"), std::string::npos);
+	EXPECT_NE(jsonStr.find("test"), std::string::npos);
+	EXPECT_NE(jsonStr.find("42"), std::string::npos);
+	EXPECT_NE(jsonStr.find("true"), std::string::npos);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, EdgePropertiesJsonSerialization) {
+	metrix_result_close(metrix_execute(db, "CREATE (a:A), (b:B)"));
+	metrix_result_close(metrix_execute(db,
+		"MATCH (a:A), (b:B) CREATE (a)-[e:LINK {weight: 10.5, active: true}]->(b)"));
+
+	auto *res = metrix_execute(db, "MATCH ()-[e:LINK]->() RETURN e");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	// Verify edge properties are serialized
+	EXPECT_NE(jsonStr.find("weight"), std::string::npos);
+	EXPECT_NE(jsonStr.find("10.5"), std::string::npos);
+	EXPECT_NE(jsonStr.find("active"), std::string::npos);
+	EXPECT_NE(jsonStr.find("true"), std::string::npos);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, ResultIsSuccessWithNull) {
+	// Test is_success with null result
+	bool success = metrix_result_is_success(nullptr);
+	EXPECT_FALSE(success);
+}
+
+TEST_F(CApiTest, GetErrorWithSuccessResult) {
+	// Test get_error with a successful query
+	auto *res = metrix_execute(db, "RETURN 1");
+	ASSERT_NE(res, nullptr);
+
+	const char *err = metrix_result_get_error(res);
+	// Successful result should have empty error message
+	EXPECT_STREQ(err, "");
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetErrorWithNullResult) {
+	// Test get_error with null result - already covered but let's be explicit
+	const char *err = metrix_result_get_error(nullptr);
+	EXPECT_STREQ(err, "Invalid Result Handle");
+}
+
+TEST_F(CApiTest, EmptyNodePropertiesJson) {
+	// Test JSON serialization of node with no properties
+	metrix_result_close(metrix_execute(db, "CREATE (n:Empty)"));
+
+	auto *res = metrix_execute(db, "MATCH (n:Empty) RETURN n");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	EXPECT_STREQ(json, "{}");
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, EmptyEdgePropertiesJson) {
+	metrix_result_close(metrix_execute(db, "CREATE (a:A), (b:B)"));
+	metrix_result_close(metrix_execute(db, "MATCH (a:A), (b:B) CREATE (a)-[e:LINK]->(b)"));
+
+	auto *res = metrix_execute(db, "MATCH ()-[e:LINK]->() RETURN e");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *json = metrix_result_get_props_json(res, 0);
+	EXPECT_STREQ(json, "{}");
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetStringFromNonString) {
+	// Test getting string from non-string column
+	auto *res = metrix_execute(db, "RETURN 42 AS num");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	const char *str = metrix_result_get_string(res, 0);
+	EXPECT_STREQ(str, "");
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetIntFromNonInt) {
+	// Test getting int from non-int column
+	auto *res = metrix_execute(db, "RETURN 'hello' AS str");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	int64_t val = metrix_result_get_int(res, 0);
+	EXPECT_EQ(val, 0);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetDoubleFromNonDouble) {
+	// Test getting double from non-double column
+	auto *res = metrix_execute(db, "RETURN 'test' AS str");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	double val = metrix_result_get_double(res, 0);
+	EXPECT_EQ(val, 0.0);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetBoolFromNonBool) {
+	// Test getting bool from non-bool column
+	auto *res = metrix_execute(db, "RETURN 'test' AS str");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	bool val = metrix_result_get_bool(res, 0);
+	EXPECT_FALSE(val);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetNodeFromNonNode) {
+	// Test getting node from non-node column
+	auto *res = metrix_execute(db, "RETURN 42 AS num");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	MetrixNode node;
+	bool success = metrix_result_get_node(res, 0, &node);
+	EXPECT_FALSE(success);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, GetEdgeFromNonEdge) {
+	// Test getting edge from non-edge column
+	auto *res = metrix_execute(db, "RETURN 42 AS num");
+	ASSERT_TRUE(metrix_result_next(res));
+
+	MetrixEdge edge;
+	bool success = metrix_result_get_edge(res, 0, &edge);
+	EXPECT_FALSE(success);
+
+	metrix_result_close(res);
+}
+
+TEST_F(CApiTest, OpenWithEmptyPath) {
+	// Test opening with empty path
+	MetrixDB_T *db2 = metrix_open("");
+	EXPECT_EQ(db2, nullptr);
+}
+
+TEST_F(CApiTest, ResultIsSuccessValidatesImpl) {
+	// Test is_success validates both res pointer and internal state
+	auto *res = metrix_execute(db, "RETURN 1");
+	ASSERT_NE(res, nullptr);
+
+	// Result should be successful
+	EXPECT_TRUE(metrix_result_is_success(res));
+
+	metrix_result_close(res);
+}
