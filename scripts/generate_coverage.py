@@ -35,9 +35,19 @@ def find_test_binaries(build_dir):
     for file_path in build_path.rglob("*test*"):
         if not file_path.is_file(): continue
         suffix = file_path.suffix.lower()
-        if suffix in ['.c', '.cpp', '.h', '.hpp', '.o', '.profraw', '.profdata',
-                      '.log', '.ninja', '.xml', '.json', '.dat', '.lcov', '.txt']: continue
+
+        # Filter source, data, layout, and config files
+        # Added .pc (pkg-config) and .obj (Windows objects) to prevent llvm-cov errors
+        if suffix in ['.c', '.cpp', '.h', '.hpp', '.o', '.obj', '.profraw', '.profdata',
+                      '.log', '.ninja', '.xml', '.json', '.dat', '.lcov', '.txt', '.pc']: continue
+
+        # Filter libraries (we need the linked executable for coverage mapping)
         if suffix in ['.dylib', '.so', '.dll', '.lib', '.a', '.pdb', '.exp']: continue
+
+        # Windows specific: strict check for .exe because os.access(X_OK) is unreliable
+        if os.name == 'nt' and suffix != '.exe':
+            continue
+
         if os.access(file_path, os.X_OK):
             binaries.append(str(file_path))
     return binaries
