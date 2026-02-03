@@ -217,3 +217,42 @@ TEST_F(DebugCommandHandlerTest, HandleExceptionOutOfRange) {
 	// Expect the catch block to print "Debug Error: ..."
 	EXPECT_NE(err.find("Debug Error:"), std::string::npos);
 }
+
+// ============================================================================
+// Additional tests for improved coverage
+// ============================================================================
+
+// Test debug command with various extra semicolons
+TEST_F(DebugCommandHandlerTest, HandleExtraSemicolons) {
+	DebugCommandHandler handler(*database);
+	handler.handle("debug;;; nodes;;");
+	EXPECT_FALSE(capturedOut_.str().empty());
+}
+
+// Test debug command with tabs instead of spaces
+TEST_F(DebugCommandHandlerTest, HandleTabsInCommand) {
+	DebugCommandHandler handler(*database);
+	handler.handle("debug	nodes	0");
+	EXPECT_FALSE(capturedOut_.str().empty());
+}
+
+// Test debug state with numeric argument
+TEST_F(DebugCommandHandlerTest, HandleStateWithNumericArg) {
+	DebugCommandHandler handler(*database);
+	handler.handle("debug state 1");
+	EXPECT_FALSE(capturedOut_.str().empty());
+}
+
+// Test debug nodes with large page number
+TEST_F(DebugCommandHandlerTest, HandleNodesLargePage) {
+	DebugCommandHandler handler(*database);
+	handler.handle("debug nodes 99999");
+	EXPECT_FALSE(capturedOut_.str().empty());
+}
+
+// Test debug command with trailing whitespace only
+TEST_F(DebugCommandHandlerTest, HandleTrailingWhitespace) {
+	DebugCommandHandler handler(*database);
+	handler.handle("debug nodes    ");
+	EXPECT_FALSE(capturedOut_.str().empty());
+}

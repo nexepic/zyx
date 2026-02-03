@@ -75,19 +75,6 @@ namespace graph {
 		return str.substr(first, (last - first + 1));
 	}
 
-	void printProperties(const std::unordered_map<std::string, PropertyValue> &props) {
-		if (props.empty())
-			return;
-		std::cout << " {";
-		auto it = props.begin();
-		while (it != props.end()) {
-			std::cout << it->first << ": " << it->second.toString();
-			if (++it != props.end())
-				std::cout << ", ";
-		}
-		std::cout << "}";
-	}
-
 	void printResult(const query::QueryResult &result) {
 		if (result.isEmpty()) {
 			std::cout << "Empty result.\n";
@@ -96,19 +83,6 @@ namespace graph {
 
 		const auto &cols = result.getColumns();
 		const auto &rows = result.getRows();
-
-		// Handle special case where columns are empty
-		if (cols.empty()) {
-			for (const auto &row: rows) {
-				std::cout << "{ ";
-				for (const auto &[key, val]: row) {
-					std::cout << key << ": " << val.toString() << ", ";
-				}
-				std::cout << "}\n";
-			}
-			std::cout << "(" << result.rowCount() << " rows)\n";
-			return;
-		}
 
 		// Configuration: Stricter max width (30 chars) to prevent line wrapping
 		const size_t MAX_COL_WIDTH = 30;

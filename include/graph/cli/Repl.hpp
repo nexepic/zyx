@@ -35,11 +35,17 @@ namespace graph {
 		void handleCommand(const std::string &command) const;
 		void runBasic() const; // Fallback for non-TTY environments
 		cli::DebugCommandHandler debugHandler_{db};
+
+		// Allow REPLTest to access private members for testing
+		friend class REPLTest;
 	};
 
 	class REPLTest : public REPL {
 	public:
 		using REPL::REPL;
+
+		// Expose private methods for testing
+		void runBasicPublic() const { REPL::runBasic(); }
 	};
 
 } // namespace graph

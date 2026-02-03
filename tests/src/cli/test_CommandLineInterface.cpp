@@ -273,3 +273,57 @@ TEST_F(CommandLineInterfaceTest, OpenCommandExistingWithCreateFlag) {
 	// Open existing database with -c flag should work fine
 	EXPECT_EQ(runMockCLI({"database", "open", "-c", dbPath}), 0);
 }
+
+// ============================================================================
+// Additional tests for improved coverage
+// ============================================================================
+
+// Test exec command with script that causes runtime error
+TEST_F(CommandLineInterfaceTest, ExecuteScriptWithRuntimeError) {
+	// First create a database
+	{
+		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW_FILE);
+		db.open();
+		db.close();
+	}
+
+	// Create a script that will cause a runtime error during execution
+	createScript("INVALID_CYPHER_QUERY_THAT_WILL_THROW;");
+
+	// Redirect stderr to capture error output
+	std::streambuf* oldErr = std::cerr.rdbuf();
+	std::stringstream ssErr;
+	std::cerr.rdbuf(ssErr.rdbuf());
+
+	int exitCode = runMockCLI({"database", "exec", dbPath, scriptPath});
+
+	std::cerr.rdbuf(oldErr);
+
+	// Should exit with 0 (error is caught internally)
+	EXPECT_EQ(exitCode, 0);
+
+	std::string errOutput = ssErr.str();
+	// Should have some error output
+	EXPECT_TRUE(!errOutput.empty() || errOutput.find("Execution Error") != std::string::npos);
+}
+
+// Test exec command with database open error
+TEST_F(CommandLineInterfaceTest, ExecuteScriptWithDatabaseError) {
+	// Create a directory at dbPath to simulate an invalid database
+	fs::create_directories(dbPath);
+
+	// Create a valid script
+	createScript("CREATE (n:Test {id: 1});");
+
+	// Redirect stderr
+	std::streambuf* oldErr = std::cerr.rdbuf();
+	std::stringstream ssErr;
+	std::cerr.rdbuf(ssErr.rdbuf());
+
+	int exitCode = runMockCLI({"database", "exec", dbPath, scriptPath});
+
+	std::cerr.rdbuf(oldErr);
+
+	// Should handle the error gracefully
+	EXPECT_EQ(exitCode, 0);
+}
