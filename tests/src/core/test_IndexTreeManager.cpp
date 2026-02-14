@@ -143,10 +143,8 @@ TEST_F(IndexTreeManagerTest, InsertCausesLeafSplit) {
 	auto rootNode = dataManager_->getIndex(stringRootId_);
 	ASSERT_TRUE(rootNode.isLeaf());
 
-	int insertedCount = 0;
 	for (int i = 0; i < 500; ++i) {
 		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("key_" + std::to_string(i)), i);
-		insertedCount++;
 		rootNode = dataManager_->getIndex(stringRootId_);
 		if (!rootNode.isLeaf())
 			break;
@@ -212,7 +210,7 @@ TEST_F(IndexTreeManagerTest, RangeQuerySpansMultipleLeaves) {
 // --- End-to-End Blob Storage Tests ---
 
 TEST_F(IndexTreeManagerTest, LeafValuesOverflowToBlob_EndToEnd) {
-	const std::string testKey = "key_with_many_values";
+	constexpr std::string testKey = "key_with_many_values";
 	size_t valueCount = (Index::LEAF_VALUES_INLINE_THRESHOLD / sizeof(int64_t)) + 5;
 
 	for (size_t i = 0; i < valueCount; ++i) {
@@ -349,7 +347,7 @@ TEST_F(IndexTreeManagerTest, RemoveCausesLeafRedistributionFromRight) {
 	dataManager_->updateIndexEntity(rightLeaf);
 
 	// Action: Delete the last entry from the left leaf to trigger underflow.
-	int keyToDelete = std::get<int64_t>(leftEntries[0].key.getVariant());
+	int64_t keyToDelete = std::get<int64_t>(leftEntries[0].key.getVariant());
 	ASSERT_TRUE(intTreeManager_->remove(intRootId_, PropertyValue(keyToDelete), keyToDelete));
 
 	// Verification
@@ -502,6 +500,7 @@ TEST_F(IndexTreeManagerTest, RemoveCausesRecursiveMerge) {
 TEST_F(IndexTreeManagerTest, InsertBatchSorted) {
 	// Prepare sorted batch
 	std::vector<std::pair<PropertyValue, int64_t>> batch;
+	batch.reserve(100);
 	for (int i = 0; i < 100; ++i) {
 		batch.emplace_back(PropertyValue(generatePaddedKey(i)), i);
 	}
@@ -798,8 +797,8 @@ TEST_F(IndexTreeManagerTest, StressTest_RandomOps) {
 	std::mt19937 g(rd());
 	std::ranges::shuffle(keys, g);
 
-	int deleteCount = keys.size() / 2;
-	for (int i = 0; i < deleteCount; ++i) {
+	size_t deleteCount = keys.size() / 2;
+	for (size_t i = 0; i < deleteCount; ++i) {
 		int key = keys[i];
 		bool removed = stringTreeManager_->remove(stringRootId_, PropertyValue(std::to_string(key)), key);
 		ASSERT_TRUE(removed) << "Failed to remove existing key " << key;
@@ -813,7 +812,7 @@ TEST_F(IndexTreeManagerTest, StressTest_RandomOps) {
 	}
 
 	// Phase 4: Delete Everything
-	for (size_t i = static_cast<size_t>(deleteCount); i < keys.size(); ++i) {
+	for (size_t i = deleteCount; i < keys.size(); ++i) {
 		int key = keys[i];
 		stringTreeManager_->remove(stringRootId_, PropertyValue(std::to_string(key)), key);
 	}

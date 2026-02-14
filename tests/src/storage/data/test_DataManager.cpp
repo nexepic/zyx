@@ -844,7 +844,7 @@ TEST_F(DataManagerTest, EmptyBatchOperations) {
 	EXPECT_NO_THROW(dataManager->addEdges(emptyEdges));
 
 	// Verify no new dirty entities were created (should not have unsaved changes)
-	bool hasChanges = dataManager->hasUnsavedChanges();
+	[[maybe_unused]] bool hasChanges = dataManager->hasUnsavedChanges();
 	// Don't assert false here - there might be background entities. Just verify no crash.
 	EXPECT_TRUE(true) << "Empty batch operations should not crash";
 }
@@ -1000,7 +1000,7 @@ TEST_F(DataManagerTest, ResolveLabelNonExistent) {
 	// Since we can't easily create an invalid labelId, test with a high number
 	std::string label = dataManager->resolveLabel(999999);
 	// Behavior depends on implementation - either empty string or throws
-	EXPECT_TRUE(label.empty() || label == "");
+	EXPECT_TRUE(label.empty() || label.empty());
 }
 
 // Test addNodeProperties to already modified node

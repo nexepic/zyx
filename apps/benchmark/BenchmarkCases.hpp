@@ -41,12 +41,12 @@ namespace metrix::benchmark {
 		BOTH // Both Label and Property Indexes enabled
 	};
 
-	inline void setupInsertIndexes(Database &db, InsertIndexMode mode) {
+	inline void setupInsertIndexes(const Database &db, const InsertIndexMode mode) {
 		if (mode == InsertIndexMode::LABEL_ONLY || mode == InsertIndexMode::BOTH) {
-			db.execute("CALL dbms.createLabelIndex()");
+			(void) db.execute("CALL dbms.createLabelIndex()");
 		}
 		if (mode == InsertIndexMode::PROPERTY_ONLY || mode == InsertIndexMode::BOTH) {
-			db.execute("CREATE INDEX ON :BenchUser(uid)");
+			(void) db.execute("CREATE INDEX ON :BenchUser(uid)");
 		}
 	}
 
@@ -63,7 +63,7 @@ namespace metrix::benchmark {
 
 		void setup(Database &db) override { setupInsertIndexes(db, mode_); }
 
-		void run(Database &db) override { db.execute("CREATE (n:BenchUser {id: 1, name: 'TestUser'})"); }
+		void run(Database &db) override { (void)db.execute("CREATE (n:BenchUser {id: 1, name: 'TestUser'})"); }
 
 		void teardown(Database &) override {}
 	};
@@ -111,15 +111,15 @@ namespace metrix::benchmark {
 			query_ = oss.str();
 		}
 
-		void run(Database &db) override { db.execute(query_); }
+		void run(Database &db) override { (void)db.execute(query_); }
 
 		void teardown(Database &) override {}
 
-		int getItemsPerOp() const override { return dataSize_; }
+		[[nodiscard]] int getItemsPerOp() const override { return dataSize_; }
 	};
 
 	class NativeBatchInsertBench : public BenchmarkBase {
-		std::vector<std::unordered_map<std::string, metrix::Value>> preparedData_;
+		std::vector<std::unordered_map<std::string, Value>> preparedData_;
 		std::string label_ = "BenchUser";
 		InsertIndexMode mode_;
 
@@ -133,7 +133,7 @@ namespace metrix::benchmark {
 
 			preparedData_.reserve(dataSize_);
 			for (int i = 0; i < dataSize_; ++i) {
-				std::unordered_map<std::string, metrix::Value> props;
+				std::unordered_map<std::string, Value> props;
 				props.reserve(2);
 				props["id"] = static_cast<int64_t>(i);
 				props["name"] = "User_" + std::to_string(i);
@@ -146,7 +146,7 @@ namespace metrix::benchmark {
 
 		void teardown(Database &) override { preparedData_.clear(); }
 
-		int getItemsPerOp() const override { return dataSize_; }
+		[[nodiscard]] int getItemsPerOp() const override { return dataSize_; }
 	};
 
 	// ========================================================================
@@ -165,9 +165,9 @@ namespace metrix::benchmark {
 		void setup(Database &db) override {
 			// 1. Setup Index
 			if (mode_ == QueryMode::PROPERTY_INDEX) {
-				db.execute("CREATE INDEX ON :User(uid)");
+				(void)db.execute("CREATE INDEX ON :User(uid)");
 			} else if (mode_ == QueryMode::LABEL_SCAN) {
-				db.execute("CALL dbms.createLabelIndex()");
+				(void)db.execute("CALL dbms.createLabelIndex()");
 			}
 
 			// 2. Pre-fill data using batch API
@@ -243,6 +243,7 @@ namespace metrix::benchmark {
 			}
 
 			// Optional: Value check
+
 		}
 
 		void teardown(Database &) override {}
@@ -273,7 +274,7 @@ namespace metrix::benchmark {
 			}
 			db.save();
 		}
-		void run(Database &db) override { db.getShortestPath(startId, endId); }
+		void run(Database &db) override { (void)db.getShortestPath(startId, endId); }
 		void teardown(Database &) override {}
 	};
 
@@ -300,7 +301,7 @@ namespace metrix::benchmark {
 		}
 		void run(Database &db) override {
 			std::string q = "CALL algo.shortestPath(" + std::to_string(startId) + ", " + std::to_string(endId) + ")";
-			db.execute(q);
+			(void)db.execute(q);
 		}
 		void teardown(Database &) override {}
 	};

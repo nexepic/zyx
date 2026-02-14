@@ -59,26 +59,26 @@ protected:
 		}
 	}
 
-	graph::Node insertNode(const std::string &label) {
-		int64_t id = allocator->allocateId(graph::Node::typeId);
+	[[nodiscard]] graph::Node insertNode(const std::string &label) const {
+		const int64_t id = allocator->allocateId(graph::Node::typeId);
 
-		int64_t labelId = dataManager->getOrCreateLabelId(label);
+		const int64_t labelId = dataManager->getOrCreateLabelId(label);
 
 		graph::Node node(id, labelId);
 		dataManager->addNode(node);
 		return node;
 	}
 
-	graph::Edge insertEdge(int64_t startId, int64_t endId, const std::string &label) {
-		int64_t id = allocator->allocateId(graph::Edge::typeId);
-		int64_t labelId = dataManager->getOrCreateLabelId(label);
+	[[nodiscard]] graph::Edge insertEdge(int64_t startId, int64_t endId, const std::string &label) const {
+		const int64_t id = allocator->allocateId(graph::Edge::typeId);
+		const int64_t labelId = dataManager->getOrCreateLabelId(label);
 
 		graph::Edge edge(id, startId, endId, labelId);
 		dataManager->addEdge(edge);
 		return edge;
 	}
 
-	void deleteNode(int64_t id) {
+	void deleteNode(int64_t id) const {
 		graph::Node node_to_delete(id, 0);
 		dataManager->deleteNode(node_to_delete);
 	}
@@ -364,9 +364,9 @@ TEST_F(IDAllocatorTest, MixedOperationsStress) {
 			graph::Node n = insertNode("R");
 			activeIds.push_back(n.getId());
 		} else { // 33% Delete
-			std::uniform_int_distribution<> dis(0, activeIds.size() - 1);
-			int idx = dis(gen);
-			int64_t idToDelete = activeIds[idx];
+			std::uniform_int_distribution<std::size_t> dis(0, activeIds.size() - 1);
+			const std::size_t idx = dis(gen);
+			const int64_t idToDelete = activeIds[idx];
 
 			deleteNode(idToDelete);
 
@@ -492,9 +492,9 @@ TEST_F(IDAllocatorTest, CrashRecovery_WithSparseSegment_CapacityVsUsed) {
 
 	// 1. Create a few nodes.
 	// Assume Segment Capacity is large (e.g., 1024). We only use 3 slots.
-	insertNode("1");
-	insertNode("2");
-	insertNode("3");
+	(void)insertNode("1");
+	(void)insertNode("2");
+	(void)insertNode("3");
 
 	// 2. Save and Close.
 	// This ensures the data is written to disk.
@@ -526,9 +526,9 @@ TEST_F(IDAllocatorTest, CrashRecovery_WithSparseSegment_CapacityVsUsed) {
 
 TEST_F(IDAllocatorTest, RecoverGapsOnNormalRestart_CaseA) {
 	// 1. Create IDs [1, 2, 3] and Save.
-	insertNode("1");
-	insertNode("2");
-	insertNode("3");
+	(void)insertNode("1");
+	(void)insertNode("2");
+	(void)insertNode("3");
 	fileStorage->flush(); // Physical Max = 3
 
 	// 2. Allocate ID 4 but DO NOT SAVE.
@@ -620,7 +620,7 @@ TEST_F(IDAllocatorTest, ClearCache_SpecificType) {
 	// This tests the method: void clearCache(uint32_t entityType)
 
 	// 1. Populate Hot Cache
-	insertNode("A"); // 1
+	(void)insertNode("A"); // 1
 	fileStorage->flush();
 	deleteNode(1); // 1 -> Hot Cache
 
@@ -698,7 +698,8 @@ TEST_F(IDAllocatorTest, VolatileCacheOverflow) {
 	// 1. Allocate many IDs without persisting
 	constexpr int COUNT = 100;
 	std::vector<int64_t> ids;
-	for (int i = 0; i < COUNT; ++i) {
+	ids.reserve(COUNT);
+for (int i = 0; i < COUNT; ++i) {
 		ids.push_back(allocator->allocateId(graph::Node::typeId));
 	}
 
@@ -729,7 +730,7 @@ TEST_F(IDAllocatorTest, L2CacheOverflow) {
 
 	// 1. Insert and persist many nodes
 	for (int i = 0; i < COUNT; ++i) {
-		insertNode("N");
+		(void)insertNode("N");
 	}
 	fileStorage->flush();
 
@@ -763,7 +764,7 @@ TEST_F(IDAllocatorTest, IDIntervalSet_AppendToLastInterval) {
 
 	// 1. Insert and persist nodes
 	for (int i = 0; i < 10; ++i) {
-		insertNode("N");
+		(void)insertNode("N");
 	}
 	fileStorage->flush();
 
@@ -774,12 +775,13 @@ TEST_F(IDAllocatorTest, IDIntervalSet_AppendToLastInterval) {
 
 	// 3. Re-allocate - should get IDs back efficiently
 	std::vector<int64_t> reusedIds;
-	for (int i = 0; i < 10; ++i) {
+	reusedIds.reserve(10);
+for (int i = 0; i < 10; ++i) {
 		reusedIds.push_back(allocator->allocateId(graph::Node::typeId));
 	}
 
 	// Should get all 10 IDs back
-	std::sort(reusedIds.begin(), reusedIds.end());
+	std::ranges::sort(reusedIds);
 	for (int i = 0; i < 10; ++i) {
 		EXPECT_EQ(reusedIds[i], i + 1);
 	}
@@ -816,7 +818,7 @@ TEST_F(IDAllocatorTest, DiskScan_Wrapping) {
 	// 1. Create many nodes across multiple segments
 	constexpr int COUNT = 3000;
 	for (int i = 0; i < COUNT; ++i) {
-		insertNode("N");
+		(void)insertNode("N");
 	}
 	fileStorage->flush();
 
@@ -842,7 +844,7 @@ TEST_F(IDAllocatorTest, FetchInactiveIds_L1FullEarlyReturn) {
 	// 1. Create many nodes with many gaps
 	constexpr int COUNT = 500;
 	for (int i = 0; i < COUNT; ++i) {
-		insertNode("N");
+		(void)insertNode("N");
 	}
 	fileStorage->flush();
 
@@ -880,8 +882,8 @@ TEST_F(IDAllocatorTest, AllocateIdBatch_MultipleTypesIndependently) {
 	EXPECT_EQ(startEdge, 1);
 
 	// Node and Edge should have independent counters
-	EXPECT_EQ(allocator->getCurrentMaxNodeId(), BATCH);
-	EXPECT_EQ(allocator->getCurrentMaxEdgeId(), BATCH);
+	EXPECT_EQ(allocator->getCurrentMaxNodeId(), static_cast<int64_t>(BATCH));
+	EXPECT_EQ(allocator->getCurrentMaxEdgeId(), static_cast<int64_t>(BATCH));
 }
 
 TEST_F(IDAllocatorTest, MixedSequentialAndBatchAllocation) {
@@ -897,10 +899,10 @@ TEST_F(IDAllocatorTest, MixedSequentialAndBatchAllocation) {
 
 	// 3. Sequential again
 	int64_t id2 = allocator->allocateId(graph::Node::typeId);
-	EXPECT_EQ(id2, 2 + BATCH); // Should be after batch
+	EXPECT_EQ(id2, 2 + static_cast<int64_t>(BATCH)); // Should be after batch
 
 	// Max should be 1 (first alloc) + 5 (batch) + 1 (second alloc) = 7
-	EXPECT_EQ(allocator->getCurrentMaxNodeId(), 1 + BATCH + 1);
+	EXPECT_EQ(allocator->getCurrentMaxNodeId(), 1 + static_cast<int64_t>(BATCH) + 1);
 }
 
 TEST_F(IDAllocatorTest, FreeId_MultipleEntityTypes) {
@@ -908,7 +910,8 @@ TEST_F(IDAllocatorTest, FreeId_MultipleEntityTypes) {
 	// 1. Allocate and persist edges
 	constexpr int COUNT = 5;
 	std::vector<graph::Edge> edges;
-	for (int i = 0; i < COUNT; ++i) {
+	edges.reserve(COUNT);
+for (int i = 0; i < COUNT; ++i) {
 		edges.push_back(insertEdge(1, 1, "E" + std::to_string(i)));
 	}
 	fileStorage->flush();
@@ -984,9 +987,9 @@ TEST_F(IDAllocatorTest, LargeGapRecovery) {
 	// This tests CASE A in recoverGapIds
 
 	// 1. Create a few nodes
-	insertNode("A");
-	insertNode("B");
-	insertNode("C");
+	(void)insertNode("A");
+	(void)insertNode("B");
+	(void)insertNode("C");
 	fileStorage->flush(); // Physical max = 3
 
 	// 2. Allocate many IDs but don't persist (e.g., crashed transaction)
@@ -1014,7 +1017,7 @@ TEST_F(IDAllocatorTest, LargeGapRecovery) {
 
 	// Should have reused some gap IDs
 	// Since unordered_set doesn't have rbegin(), we iterate to check range
-	bool allInRange = true;
+	[[maybe_unused]] bool allInRange = true;
 	int64_t minId = LLONG_MAX;
 	int64_t maxId = LLONG_MIN;
 	for (int64_t id: gapIds) {
@@ -1022,7 +1025,7 @@ TEST_F(IDAllocatorTest, LargeGapRecovery) {
 		if (id > maxId) maxId = id;
 	}
 
-	EXPECT_TRUE(gapIds.count(4) || gapIds.count(103) ||
+	EXPECT_TRUE(gapIds.contains(4) || gapIds.contains(103) ||
 	            (minId >= 4 && maxId <= 103));
 }
 
@@ -1031,8 +1034,8 @@ TEST_F(IDAllocatorTest, StaleHeaderCorrection) {
 	// This happens when header is stale (not saved after last operation)
 
 	// 1. Create some nodes
-	insertNode("A");
-	insertNode("B");
+	(void)insertNode("A");
+	(void)insertNode("B");
 	fileStorage->flush(); // Logical max = 2
 
 	// 2. Manually corrupt the logical max by allocating but not saving header
@@ -1060,7 +1063,7 @@ TEST_F(IDAllocatorTest, IntervalSet_MergeWithMultipleIntervals) {
 	// 1. Create nodes
 	constexpr int COUNT = 100;
 	for (int i = 0; i < COUNT; ++i) {
-		insertNode("N");
+		(void)insertNode("N");
 	}
 	fileStorage->flush();
 

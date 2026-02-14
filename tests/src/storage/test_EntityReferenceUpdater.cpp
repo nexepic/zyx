@@ -622,7 +622,7 @@ TEST_F(EntityReferenceUpdaterTest, Functional_GraphTraversal_AfterNodeMove) {
 	// We must manually write "movedB" to disk so DataManager can find it at newId
 	// (This mocks the SpaceManager copying the bytes)
 	{
-		uint64_t newOffset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
+		[[maybe_unused]] uint64_t newOffset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
 		// We cheat a bit on offset calculation for the mock, just ensuring it exists
 		// In reality, we'd calculate where newBId lands.
 		// For this test, we just add it via DataManager which handles placement.

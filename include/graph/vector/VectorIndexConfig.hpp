@@ -39,7 +39,7 @@ namespace graph::vector {
 		std::string codebookKey;
 		bool isTrained = false;
 
-		std::unordered_map<std::string, PropertyValue> toProperties() const {
+		[[nodiscard]] std::unordered_map<std::string, PropertyValue> toProperties() const {
 			return {{"dim", dimension},			  {"metric", metricType},	   {"pq_m", pqSubspaces},
 					{"map_root", mappingIndexId}, {"entry", entryPointNodeId}, {"cb_key", codebookKey},
 					{"trained", isTrained}};

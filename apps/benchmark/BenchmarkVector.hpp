@@ -21,8 +21,8 @@
 #pragma once
 
 #include <random>
-#include <vector>
 #include <sstream>
+#include <vector>
 #include "BenchmarkFramework.hpp"
 
 namespace metrix::benchmark {
@@ -56,7 +56,7 @@ namespace metrix::benchmark {
 				std::string q =
 						"CREATE VECTOR INDEX vec_bench ON :Item(emb) OPTIONS {dimension: " + std::to_string(dim_) +
 						", metric: 'L2'}";
-				db.execute(q);
+				(void) db.execute(q);
 			}
 
 			// Pre-generate data to avoid measuring RNG time
@@ -70,11 +70,11 @@ namespace metrix::benchmark {
 		void run(Database &db) override {
 			// We use native API for speed and precision in benchmark
 			// Single insert per run() call (BenchmarkBase loop handles iterations)
-			static int idx = 0;
+			static std::size_t idx = 0;
 			if (idx >= dataset_.size())
 				idx = 0;
 
-			std::unordered_map<std::string, metrix::Value> props;
+			std::unordered_map<std::string, Value> props;
 
 			// Convert float vector to string list (as per current public API limit)
 			// Or use internal API if benchmark has access?
@@ -111,8 +111,8 @@ namespace metrix::benchmark {
 
 		void setup(Database &db) override {
 			// 1. Create Index
-			db.execute("CREATE VECTOR INDEX vec_bench ON :Item(emb) OPTIONS {dimension: " + std::to_string(dim_) +
-					   ", metric: 'L2'}");
+			(void) db.execute("CREATE VECTOR INDEX vec_bench ON :Item(emb) OPTIONS {dimension: " +
+							  std::to_string(dim_) + ", metric: 'L2'}");
 
 			// 2. Bulk Load Data
 			std::cout << " (Loading " << dataSize_ << " vectors...) " << std::flush;
@@ -120,21 +120,22 @@ namespace metrix::benchmark {
 
 			// Batch insert to speed up setup
 			int batchSize = 1000;
-			std::vector<std::unordered_map<std::string, metrix::Value>> batchData;
+			std::vector<std::unordered_map<std::string, Value>> batchData;
 
 			for (int i = 0; i < dataSize_; ++i) {
 				auto vec = generateVector(dim_, rng);
 				std::vector<std::string> strVec;
-				for (float f: vec)
+				strVec.reserve(vec.size());
+				for (const float f: vec)
 					strVec.push_back(std::to_string(f));
 
-				std::unordered_map<std::string, metrix::Value> props;
+				std::unordered_map<std::string, Value> props;
 				props["emb"] = strVec;
 				props["id"] = static_cast<int64_t>(i);
 
 				batchData.push_back(std::move(props));
 
-				if (batchData.size() >= batchSize) {
+				if (batchData.size() >= static_cast<std::size_t>(batchSize)) {
 					db.createNodes("Item", batchData);
 					batchData.clear();
 				}
@@ -146,7 +147,7 @@ namespace metrix::benchmark {
 			// If data > 5000, trigger explicit training to ensure PQ is used
 			if (dataSize_ > 2000) {
 				std::cout << " (Training Index...) " << std::flush;
-				db.execute("CALL db.index.vector.train('vec_bench')");
+				(void) db.execute("CALL db.index.vector.train('vec_bench')");
 			}
 
 			// 4. Prepare Query
@@ -162,7 +163,7 @@ namespace metrix::benchmark {
 			}
 			oss << "]) YIELD node, score RETURN node.id, score";
 
-			db.execute(oss.str());
+			(void) db.execute(oss.str());
 		}
 
 		void teardown(Database &) override {}

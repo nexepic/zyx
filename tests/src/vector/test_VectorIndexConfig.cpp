@@ -37,11 +37,11 @@ protected:
 TEST_F(VectorIndexConfigTest, DefaultConstructor) {
 	graph::vector::VectorIndexConfig config;
 
-	EXPECT_EQ(config.dimension, 0);
-	EXPECT_EQ(config.metricType, 0);
-	EXPECT_EQ(config.pqSubspaces, 0);
-	EXPECT_EQ(config.mappingIndexId, 0);
-	EXPECT_EQ(config.entryPointNodeId, 0);
+	EXPECT_EQ(config.dimension, 0U);
+	EXPECT_EQ(config.metricType, 0U);
+	EXPECT_EQ(config.pqSubspaces, 0U);
+	EXPECT_EQ(config.mappingIndexId, 0L);
+	EXPECT_EQ(config.entryPointNodeId, 0L);
 	EXPECT_TRUE(config.codebookKey.empty());
 	EXPECT_FALSE(config.isTrained);
 }
@@ -85,11 +85,11 @@ TEST_F(VectorIndexConfigTest, FromProperties_Full) {
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
-	EXPECT_EQ(config.dimension, 128);
-	EXPECT_EQ(config.metricType, 1);
-	EXPECT_EQ(config.pqSubspaces, 8);
-	EXPECT_EQ(config.mappingIndexId, 100);
-	EXPECT_EQ(config.entryPointNodeId, 200);
+	EXPECT_EQ(config.dimension, 128U);
+	EXPECT_EQ(config.metricType, 1U);
+	EXPECT_EQ(config.pqSubspaces, 8U);
+	EXPECT_EQ(config.mappingIndexId, 100L);
+	EXPECT_EQ(config.entryPointNodeId, 200L);
 	EXPECT_EQ(config.codebookKey, "test_codebook");
 	EXPECT_TRUE(config.isTrained);
 }
@@ -100,11 +100,11 @@ TEST_F(VectorIndexConfigTest, FromProperties_Partial) {
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
-	EXPECT_EQ(config.dimension, 64);
-	EXPECT_EQ(config.metricType, 2);
-	EXPECT_EQ(config.pqSubspaces, 0); // Default value
-	EXPECT_EQ(config.mappingIndexId, 0); // Default value
-	EXPECT_EQ(config.entryPointNodeId, 0); // Default value
+	EXPECT_EQ(config.dimension, 64U);
+	EXPECT_EQ(config.metricType, 2U);
+	EXPECT_EQ(config.pqSubspaces, 0U); // Default value
+	EXPECT_EQ(config.mappingIndexId, 0L); // Default value
+	EXPECT_EQ(config.entryPointNodeId, 0L); // Default value
 	EXPECT_TRUE(config.codebookKey.empty()); // Default value
 	EXPECT_FALSE(config.isTrained); // Default value
 }
@@ -115,11 +115,11 @@ TEST_F(VectorIndexConfigTest, FromProperties_Empty) {
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
 	// All fields should have default values
-	EXPECT_EQ(config.dimension, 0);
-	EXPECT_EQ(config.metricType, 0);
-	EXPECT_EQ(config.pqSubspaces, 0);
-	EXPECT_EQ(config.mappingIndexId, 0);
-	EXPECT_EQ(config.entryPointNodeId, 0);
+	EXPECT_EQ(config.dimension, 0U);
+	EXPECT_EQ(config.metricType, 0U);
+	EXPECT_EQ(config.pqSubspaces, 0U);
+	EXPECT_EQ(config.mappingIndexId, 0L);
+	EXPECT_EQ(config.entryPointNodeId, 0L);
 	EXPECT_TRUE(config.codebookKey.empty());
 	EXPECT_FALSE(config.isTrained);
 }
@@ -186,7 +186,7 @@ TEST_F(VectorIndexConfigTest, FromProperties_LargeDimension) {
 
 	auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
-	EXPECT_EQ(config.dimension, 4096);
+	EXPECT_EQ(config.dimension, static_cast<decltype(config.dimension)>(4096));
 }
 
 TEST_F(VectorIndexConfigTest, FromProperties_MetricTypes) {
@@ -196,6 +196,6 @@ TEST_F(VectorIndexConfigTest, FromProperties_MetricTypes) {
 
 		auto config = graph::vector::VectorIndexConfig::fromProperties(props);
 
-		EXPECT_EQ(config.metricType, metric);
+		EXPECT_EQ(config.metricType, static_cast<decltype(config.metricType)>(metric));
 	}
 }

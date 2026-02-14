@@ -9,6 +9,23 @@ cypher_generated = files(
 	generated_dir / 'CypherParserVisitor.cpp'      # Was CypherVisitor.cpp
 )
 
+# Helper classes
+cypher_helpers = files(
+	'helpers/AstExtractor.cpp',
+	'helpers/PropertyValueEvaluator.cpp',
+	'helpers/ExpressionBuilder.cpp',
+	'helpers/PatternBuilder.cpp',
+	'helpers/OperatorChain.cpp'
+)
+
+# Clause handler classes
+cypher_clauses = files(
+	'clauses/ReadingClauseHandler.cpp',
+	'clauses/WritingClauseHandler.cpp',
+	'clauses/ResultClauseHandler.cpp',
+	'clauses/AdminClauseHandler.cpp'
+)
+
 # List your implementation files
 cypher_impl = files(
 	'CypherParserImpl.cpp',
@@ -17,11 +34,10 @@ cypher_impl = files(
 
 # Create a library
 cypher_lib = static_library('cypher_parser',
-							sources : [cypher_generated, cypher_impl],
+							sources : [cypher_generated, cypher_impl, cypher_helpers, cypher_clauses],
 							# Ensure internal headers can find generated files
 							include_directories : [inc_dirs, include_directories('.', generated_dir)],
-							dependencies : [antlr4_dep] # Runtime dependency only
-)
+							dependencies : [antlr4_dep]) # Runtime dependency only
 
 # Declare dependency for the main engine to link
 cypher_dep = declare_dependency(

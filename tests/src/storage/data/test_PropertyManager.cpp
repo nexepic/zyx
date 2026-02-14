@@ -322,7 +322,7 @@ TEST_F(PropertyManagerTest, CalculateTotalPropertySize) {
 
 	// 4. Non-existent entity
 	size_t sizeInvalid = propertyManager->calculateEntityTotalPropertySize<graph::Node>(99999);
-	EXPECT_EQ(sizeInvalid, 0);
+	EXPECT_EQ(sizeInvalid, 0UL);
 }
 
 TEST_F(PropertyManagerTest, UnsupportedEntityTypes) {
@@ -335,7 +335,7 @@ TEST_F(PropertyManagerTest, UnsupportedEntityTypes) {
 	// Test calculateEntityTotalPropertySize for Blob
 	// Should return 0 immediately due to trait check
 	size_t size = propertyManager->calculateEntityTotalPropertySize<graph::Blob>(blob.getId());
-	EXPECT_EQ(size, 0);
+	EXPECT_EQ(size, static_cast<decltype(size)>(0));
 
 	// Test hasExternalProperty for Blob
 	// Should return false immediately
@@ -412,7 +412,7 @@ TEST_F(PropertyManagerTest, RemoveAllPropertiesFromBlob) {
 
 	// Remove all properties one by one
 	std::vector<std::string> keys;
-	for (const auto& [key, value] : propsBefore) {
+	for (const auto &key: propsBefore | std::views::keys) {
 		keys.push_back(key);
 	}
 
@@ -466,7 +466,7 @@ TEST_F(PropertyManagerTest, SerializeDeserializeEmptyProperties) {
 
 	// Serialize empty properties
 	std::stringstream ss;
-	propertyManager->serializeProperties(ss, emptyProps);
+	graph::storage::PropertyManager::serializeProperties(ss, emptyProps);
 	std::string serialized = ss.str();
 
 	// Should at least write the count (0)
@@ -474,7 +474,7 @@ TEST_F(PropertyManagerTest, SerializeDeserializeEmptyProperties) {
 
 	// Deserialize empty properties
 	std::stringstream ssIn(serialized);
-	auto deserialized = propertyManager->deserializeProperties(ssIn);
+	auto deserialized = graph::storage::PropertyManager::deserializeProperties(ssIn);
 
 	EXPECT_TRUE(deserialized.empty());
 }
@@ -486,10 +486,10 @@ TEST_F(PropertyManagerTest, SerializeDeserializeSingleProperty) {
 
 	// Serialize
 	std::stringstream ss;
-	propertyManager->serializeProperties(ss, props);
+	graph::storage::PropertyManager::serializeProperties(ss, props);
 
 	// Deserialize
-	auto deserialized = propertyManager->deserializeProperties(ss);
+	auto deserialized = graph::storage::PropertyManager::deserializeProperties(ss);
 
 	EXPECT_EQ(deserialized.size(), 1UL);
 	EXPECT_TRUE(deserialized.contains("key1"));
@@ -642,7 +642,7 @@ TEST_F(PropertyManagerTest, RemoveBlobPropertiesFromEdge) {
 
 	// Remove all properties
 	std::vector<std::string> keys;
-	for (const auto& [key, value] : largeProps) {
+	for (const auto &key: largeProps | std::views::keys) {
 		keys.push_back(key);
 	}
 
@@ -683,14 +683,14 @@ TEST_F(PropertyManagerTest, CalculateSizeInactiveEntity) {
 
 	// Try to calculate size for inactive node (should return 0)
 	size_t sizeAfter = propertyManager->calculateEntityTotalPropertySize<graph::Node>(tempNode.getId());
-	EXPECT_EQ(sizeAfter, 0) << "Inactive entity should have 0 property size";
+	EXPECT_EQ(sizeAfter, static_cast<decltype(sizeAfter)>(0)) << "Inactive entity should have 0 property size";
 }
 
 // Test calculateEntityTotalPropertySize with non-existent entity (covers line 290)
 TEST_F(PropertyManagerTest, CalculateSizeNonExistentEntity) {
 	// Test with completely non-existent entity ID
 	size_t size = propertyManager->calculateEntityTotalPropertySize<graph::Node>(999999);
-	EXPECT_EQ(size, 0) << "Non-existent entity should have 0 property size";
+	EXPECT_EQ(size, static_cast<decltype(size)>(0)) << "Non-existent entity should have 0 property size";
 }
 
 // Test calculateEntityTotalPropertySize after clearing all properties
@@ -711,7 +711,7 @@ TEST_F(PropertyManagerTest, CalculateSizeAfterClearingProperties) {
 
 	// Verify size is 0 after clearing
 	size_t sizeWithoutProps = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
-	EXPECT_EQ(sizeWithoutProps, 0) << "Size should be 0 after removing all properties";
+	EXPECT_EQ(sizeWithoutProps, static_cast<decltype(sizeWithoutProps)>(0)) << "Size should be 0 after removing all properties";
 }
 
 // Test hasExternalProperty with entity that has properties but key doesn't exist

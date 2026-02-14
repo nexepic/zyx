@@ -514,7 +514,7 @@ TEST_F(DeletionManagerTest, AnalyzeFragmentation) {
 
 	// Setup Segment 1: 50% Fragmented
 	uint64_t seg1 = spaceManager->allocateSegment(type, 10);
-	SegmentHeader h1 = segmentTracker->getSegmentHeader(seg1);
+	[[maybe_unused]] SegmentHeader h1 = segmentTracker->getSegmentHeader(seg1);
 	for (int i = 0; i < 10; i++) {
 		segmentTracker->setEntityActive(seg1, i, true);
 	}
@@ -527,7 +527,7 @@ TEST_F(DeletionManagerTest, AnalyzeFragmentation) {
 
 	// Setup Segment 2: 0% Fragmented
 	uint64_t seg2 = spaceManager->allocateSegment(type, 10);
-	SegmentHeader h2 = segmentTracker->getSegmentHeader(seg2);
+	[[maybe_unused]] SegmentHeader h2 = segmentTracker->getSegmentHeader(seg2);
 	for (int i = 0; i < 10; i++) {
 		segmentTracker->setEntityActive(seg2, i, true);
 	}

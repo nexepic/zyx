@@ -595,7 +595,7 @@ TEST_F(REPLTest, ScriptWithInlineComments) {
 TEST_F(REPLTest, QueryWithSpecialCharacters) {
 	std::string special = "Test\nWith\tTab\rAnd\rNewlines";
 	// We need to escape the string for Cypher
-	std::string escaped = "Test\\nWith\\tTab\\rAnd\\rNewlines";
+	std::string escaped = R"(Test\nWith\tTab\rAnd\rNewlines)";
 
 	db->getQueryEngine()->execute("CREATE (n:Special {text: '" + escaped + "'})");
 

@@ -94,7 +94,7 @@ namespace graph::storage {
 			return;
 		}
 
-		auto *dataManager = getDataManagerPtr();
+		[[maybe_unused]] auto *dataManager = getDataManagerPtr();
 
 		// Step 1: ALWAYS clean up any existing external properties first.
 		// This ensures we start from a clean slate every time properties are modified.

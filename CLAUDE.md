@@ -225,7 +225,15 @@ src/
 ├── traversal/          # Traversal implementation
 ├── api/                # C API implementation
 ├── cli/                # CLI implementation
-└── query/parser/       # ANTLR-generated parser code
+└── query/parser/       # Query parser implementation
+    ├── common/         # Parser common interfaces and infrastructure
+    │   └── IQueryParser.hpp  # Base interface for all DSL parsers
+    └── cypher/         # Cypher query language parser
+        ├── *.g4        # ANTLR4 grammar files (lexer and parser)
+        ├── helpers/    # AST extraction, expression building, pattern building utilities
+        ├── clauses/    # Cypher clause handlers (reading, writing, result, admin)
+        ├── generated/  # ANTLR4 auto-generated code (DO NOT EDIT)
+        └── *.cpp/hpp   # Parser implementation and visitor
 
 apps/
 ├── cli/                # CLI application
