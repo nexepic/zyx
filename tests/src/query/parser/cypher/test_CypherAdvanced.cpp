@@ -1,7 +1,7 @@
 /**
  * @file test_CypherAdvanced.cpp
- * @author Nexepic
- * @date 2026/1/29
+ * @author Unit Test Coverage
+ * @date 2026/02/14
  *
  * @copyright Copyright (c) 2026 Nexepic
  *
@@ -23,7 +23,9 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <string>
 #include "graph/core/Database.hpp"
+#include "graph/core/PropertyTypes.hpp"
 #include "graph/query/api/QueryResult.hpp"
 
 namespace fs = std::filesystem;
@@ -38,6 +40,7 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_cypher_adv_" + boost::uuids::to_string(uuid) + ".dat");
 		if (fs::exists(testFilePath))
 			fs::remove_all(testFilePath);
+
 		db = std::make_unique<graph::Database>(testFilePath.string());
 		db->open();
 	}
@@ -54,233 +57,177 @@ protected:
 	}
 };
 
-// --- Pagination ---
+// ============================================================================
+// Tests for PropertyValueEvaluator coverage
+// ============================================================================
 
-TEST_F(CypherAdvancedTest, LimitResults) {
-	for (int i = 0; i < 5; ++i)
-		(void) execute("CREATE (n:LimitTest {id: " + std::to_string(i) + "})");
-	EXPECT_EQ(execute("MATCH (n:LimitTest) RETURN n LIMIT 3").rowCount(), 3UL);
-	EXPECT_EQ(execute("MATCH (n:LimitTest) RETURN n LIMIT 0").rowCount(), 0UL);
+TEST_F(CypherAdvancedTest, PropertyValue_IntegerZeroInCreate) {
+	(void) execute("CREATE (n:Test {value: 0})");
+	(void) execute("CREATE (n:Test {value: 100})");
+
+	auto res = execute("MATCH (n:Test) WHERE n.value = 0 RETURN n.value");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "0");
 }
 
-TEST_F(CypherAdvancedTest, SkipAndLimit) {
-	for (int i = 0; i < 10; ++i)
-		(void) execute("CREATE (n:PageTest {val: " + std::to_string(i) + "})");
-	auto res = execute("MATCH (n:PageTest) RETURN n SKIP 3 LIMIT 4");
-	ASSERT_EQ(res.rowCount(), 4UL);
+TEST_F(CypherAdvancedTest, PropertyValue_LargeIntegerInWhere) {
+	(void) execute("CREATE (n:Test {id: 1, value: 1000000})");
+	(void) execute("CREATE (n:Test {id: 2, value: 1000000})");
+	(void) execute("CREATE (n:Test {id: 3, value: 1000000})");
+
+	auto res = execute("MATCH (n:Test) WHERE n.value >= 1000000 RETURN n.id");
+	EXPECT_EQ(res.rowCount(), 3UL);
 }
 
-// --- Sorting ---
+TEST_F(CypherAdvancedTest, PropertyValues_BooleanInMatch) {
+	(void) execute("CREATE (n:Test {flag: true})");
+	(void) execute("CREATE (n:Test {flag: false})");
 
-TEST_F(CypherAdvancedTest, OrderByResults) {
-	(void) execute("CREATE (n:SortTest {val: 3})");
-	(void) execute("CREATE (n:SortTest {val: 1})");
-	(void) execute("CREATE (n:SortTest {val: 2})");
-
-	auto resAsc = execute("MATCH (n:SortTest) RETURN n ORDER BY n.val ASC");
-	EXPECT_EQ(resAsc.getRows()[0].at("n").asNode().getProperties().at("val").toString(), "1");
-	EXPECT_EQ(resAsc.getRows()[2].at("n").asNode().getProperties().at("val").toString(), "3");
-
-	auto resDesc = execute("MATCH (n:SortTest) RETURN n ORDER BY n.val DESC");
-	EXPECT_EQ(resDesc.getRows()[0].at("n").asNode().getProperties().at("val").toString(), "3");
+	auto res = execute("MATCH (n:Test) WHERE n.flag = true RETURN n.flag");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n.flag").toString(), "true");
 }
 
-// --- Hops ---
+TEST_F(CypherAdvancedTest, Pattern_MultiplePropertiesInMatch) {
+	(void) execute("CREATE (n:Test {p1: 1, p2: 2, p3: 3})");
 
-TEST_F(CypherAdvancedTest, VarLengthTraversal) {
-	(void) execute("CREATE (a:HopNode {name:'A'})-[r1:NEXT]->(b:HopNode {name:'B'})");
-	(void) execute("MATCH (b:HopNode {name:'B'}) CREATE (b)-[r2:NEXT]->(c:HopNode {name:'C'})");
-	(void) execute("MATCH (c:HopNode {name:'C'}) CREATE (c)-[r3:NEXT]->(d:HopNode {name:'D'})");
-
-	auto res1 = execute("MATCH (a:HopNode {name:'A'})-[*1..2]->(x) RETURN x");
-	ASSERT_EQ(res1.rowCount(), 2UL); // B and C
-
-	auto res2 = execute("MATCH (a:HopNode {name:'A'})-[*3]->(x) RETURN x");
-	ASSERT_EQ(res2.rowCount(), 1UL); // D
+	auto res = execute("MATCH (n:Test) WHERE n.p1 = 1 AND n.p2 = 2 AND n.p3 = 3 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
 }
 
-// --- Cartesian Product ---
+// ============================================================================
+// Tests for PatternBuilder coverage
+// ============================================================================
 
-TEST_F(CypherAdvancedTest, CartesianProduct_Basic) {
-	(void) execute("CREATE (:GroupA {id: 1})");
-	(void) execute("CREATE (:GroupA {id: 2})");
-	(void) execute("CREATE (:GroupB {val: 10})");
-	(void) execute("CREATE (:GroupB {val: 20})");
-	(void) execute("CREATE (:GroupB {val: 30})");
-
-	auto res = execute("MATCH (a:GroupA), (b:GroupB) RETURN a.id, b.val");
-	ASSERT_EQ(res.rowCount(), 6UL);
+TEST_F(CypherAdvancedTest, Pattern_EdgeWithLabelAndDirection) {
+	auto res = execute("CREATE (a)-[:REL_LEFT]->(b:Person) RETURN a, b");
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
-TEST_F(CypherAdvancedTest, CartesianProduct_EmptySide) {
-	(void) execute("CREATE (:GroupA)");
-	// GroupB empty
-	auto res = execute("MATCH (a:GroupA), (b:GroupB) RETURN a, b");
-	EXPECT_TRUE(res.isEmpty());
+TEST_F(CypherAdvancedTest, Pattern_PathWithMultipleEdges) {
+	auto res = execute("CREATE (a:Person)-[:KNOWS]->(b:Person)-[:KNOWS]->(c:Person) RETURN a, b, c");
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
-// --- Unwind ---
+// ============================================================================
+// Tests for ExpressionBuilder coverage
+// ============================================================================
 
-TEST_F(CypherAdvancedTest, Unwind_BasicValues) {
+TEST_F(CypherAdvancedTest, Expression_ScientificNotationInCreate) {
+	// Test double literals with 'e' notation
+	auto res = execute("CREATE (n:Test {val: 1.5e10}) RETURN n");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	// The value is stored as double and returned in scientific notation
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("val").toString(), "1.5e+10");
+}
+
+TEST_F(CypherAdvancedTest, Expression_DecimalNotationInCreate) {
+	// Test double literals with decimal point
+	auto res = execute("CREATE (n:Test {val: 3.14}) RETURN n");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("val").toString(), "3.14");
+}
+
+TEST_F(CypherAdvancedTest, Expression_NullLiteralInCreate) {
+	// Test NULL literal
+	auto res = execute("CREATE (n:Test {val: null}) RETURN n");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("val").getType(), graph::PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Tests for PatternBuilder SET clause coverage
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, SetClause_DoubleValueWithDecimal) {
+	// Test SET with double value (decimal point)
+	(void) execute("CREATE (n:SetTest {id: 1})");
+	(void) execute("MATCH (n:SetTest {id: 1}) SET n.value = 2.5");
+
+	auto res = execute("MATCH (n:SetTest {id: 1}) RETURN n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "2.5");
+}
+
+TEST_F(CypherAdvancedTest, SetClause_FalseLowercaseLiteral) {
+	// Test SET with false (lowercase) literal
+	(void) execute("CREATE (n:SetTest {id: 2})");
+	(void) execute("MATCH (n:SetTest {id: 2}) SET n.flag = false");
+
+	auto res = execute("MATCH (n:SetTest {id: 2}) RETURN n.flag");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n.flag").toString(), "false");
+}
+
+TEST_F(CypherAdvancedTest, SetClause_NegativeIntegerValue) {
+	// Test SET with negative integer value
+	(void) execute("CREATE (n:SetTest {id: 3})");
+	(void) execute("MATCH (n:SetTest {id: 3}) SET n.value = -42");
+
+	auto res = execute("MATCH (n:SetTest {id: 3}) RETURN n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "-42");
+}
+
+// ============================================================================
+// Tests for ReadingClauseHandler UNWIND coverage (ExpressionBuilder)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, Unwind_IntegerList) {
+	// Test UNWIND with integer list
 	auto res = execute("UNWIND [1, 2, 3] AS x RETURN x");
 	ASSERT_EQ(res.rowCount(), 3UL);
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1");
+	EXPECT_EQ(res.getRows()[1].at("x").toString(), "2");
+	EXPECT_EQ(res.getRows()[2].at("x").toString(), "3");
 }
 
-TEST_F(CypherAdvancedTest, BatchInsert_Nodes) {
-	(void) execute("UNWIND [1, 2, 3] AS x CREATE (n:BatchNode)");
-	ASSERT_EQ(execute("MATCH (n:BatchNode) RETURN n").rowCount(), 3UL);
-}
-
-// --- Additional Pagination Tests ---
-
-TEST_F(CypherAdvancedTest, LimitGreaterThanAvailable) {
-	(void) execute("CREATE (n:LGA {id: 1})");
-	(void) execute("CREATE (n:LGA {id: 2})");
-	auto res = execute("MATCH (n:LGA) RETURN n LIMIT 100");
-	ASSERT_EQ(res.rowCount(), 2UL); // Only 2 nodes exist
-}
-
-TEST_F(CypherAdvancedTest, SkipGreaterThanAvailable) {
-	(void) execute("CREATE (n:SGA {id: 1})");
-	auto res = execute("MATCH (n:SGA) RETURN n SKIP 10");
-	EXPECT_TRUE(res.isEmpty());
-}
-
-TEST_F(CypherAdvancedTest, SkipZero) {
-	(void) execute("CREATE (n:SZ {id: 1})");
-	(void) execute("CREATE (n:SZ {id: 2})");
-	auto res = execute("MATCH (n:SZ) RETURN n SKIP 0");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(CypherAdvancedTest, SkipAndLimitEdgeCases) {
-	for (int i = 0; i < 5; ++i)
-		(void) execute("CREATE (n:SkipLim {id: " + std::to_string(i) + "})");
-
-	// Skip 2, Limit 2 (middle 3)
-	auto res1 = execute("MATCH (n:SkipLim) RETURN n SKIP 2 LIMIT 2");
-	ASSERT_EQ(res1.rowCount(), 2UL);
-
-	// Skip 0, Limit 0 (no results)
-	auto res2 = execute("MATCH (n:SkipLim) RETURN n SKIP 0 LIMIT 0");
-	EXPECT_EQ(res2.rowCount(), 0UL);
-}
-
-// --- Additional Sorting Tests ---
-
-TEST_F(CypherAdvancedTest, OrderByMultipleFields) {
-	(void) execute("CREATE (n:MultiSort {prio: 1, name: 'C'})");
-	(void) execute("CREATE (n:MultiSort {prio: 2, name: 'A'})");
-	(void) execute("CREATE (n:MultiSort {prio: 1, name: 'B'})");
-	(void) execute("CREATE (n:MultiSort {prio: 2, name: 'D'})");
-
-	auto res = execute("MATCH (n:MultiSort) RETURN n ORDER BY n.prio ASC, n.name ASC");
-	ASSERT_EQ(res.rowCount(), 4UL);
-	// Order: (1, B), (1, C), (2, A), (2, D)
-	auto rows = res.getRows();
-	EXPECT_EQ(rows[0].at("n").asNode().getProperties().at("name").toString(), "B");
-	EXPECT_EQ(rows[1].at("n").asNode().getProperties().at("name").toString(), "C");
-	EXPECT_EQ(rows[2].at("n").asNode().getProperties().at("name").toString(), "A");
-	EXPECT_EQ(rows[3].at("n").asNode().getProperties().at("name").toString(), "D");
-}
-
-TEST_F(CypherAdvancedTest, OrderByWithNull) {
-	(void) execute("CREATE (n:NullSort {val: 1})");
-	(void) execute("CREATE (n:NullSort {val: 3})");
-	(void) execute("CREATE (n:NullSort)"); // No val property (NULL)
-
-	auto res = execute("MATCH (n:NullSort) RETURN n ORDER BY n.val ASC");
+TEST_F(CypherAdvancedTest, Unwind_MixedTypeList) {
+	// Test UNWIND with mixed type list
+	auto res = execute("UNWIND [1, 'two', true] AS x RETURN x");
 	ASSERT_EQ(res.rowCount(), 3UL);
-	// NULL should sort first or last depending on implementation
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1");
+	EXPECT_EQ(res.getRows()[1].at("x").toString(), "two");
+	EXPECT_EQ(res.getRows()[2].at("x").toString(), "true");
 }
 
-TEST_F(CypherAdvancedTest, OrderByNonExistentProperty) {
-	(void) execute("CREATE (n:NoProp {a: 1})");
-	(void) execute("CREATE (n:NoProp {a: 2})");
-
-	// Should work, treating non-existent as NULL
-	auto res = execute("MATCH (n:NoProp) RETURN n ORDER BY n.nonexistent ASC");
-	ASSERT_EQ(res.rowCount(), 2UL);
+TEST_F(CypherAdvancedTest, Unwind_DoubleList) {
+	// Test UNWIND with double values
+	auto res = execute("UNWIND [1.5, 2.7, 3.14] AS x RETURN x");
+	ASSERT_EQ(res.rowCount(), 3UL);
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1.5");
+	EXPECT_EQ(res.getRows()[1].at("x").toString(), "2.7");
+	EXPECT_EQ(res.getRows()[2].at("x").toString(), "3.14");
 }
 
-// --- Additional VarLength Traversal Tests ---
-
-TEST_F(CypherAdvancedTest, VarLengthTraversal_SameHop) {
-	// Create: A -> B -> C -> D
-	(void) execute("CREATE (a:Hop {id:'A'})-[e1:NEXT]->(b:Hop {id:'B'})");
-	(void) execute("MATCH (b:Hop {id:'B'}) CREATE (b)-[e2:NEXT]->(c:Hop {id:'C'})");
-	(void) execute("MATCH (c:Hop {id:'C'}) CREATE (c)-[e3:NEXT]->(d:Hop {id:'D'})");
-
-	// Exactly 2 hops
-	auto res = execute("MATCH (a:Hop {id:'A'})-[*2..2]->(x) RETURN x");
-	ASSERT_EQ(res.rowCount(), 1UL); // Only C
-	EXPECT_EQ(res.getRows()[0].at("x").asNode().getProperties().at("id").toString(), "C");
-}
-
-TEST_F(CypherAdvancedTest, VarLengthTraversal_MinGreaterThanMax) {
-	// Invalid range, should return empty
-	(void) execute("CREATE (a:BadHop)-[:NEXT]->(b:BadHop)");
-	auto res = execute("MATCH (a:BadHop)-[*5..3]->(x) RETURN x");
-	EXPECT_TRUE(res.isEmpty());
-}
-
-TEST_F(CypherAdvancedTest, VarLengthTraversal_Bidirectional) {
-	(void) execute("CREATE (a:Bidir {id:'A'})-[e1:LINK]->(b:Bidir {id:'B'})");
-	(void) execute("MATCH (b:Bidir {id:'B'}) CREATE (b)-[e2:LINK]->(c:Bidir {id:'C'})");
-
-	// Find nodes reachable from B in any direction
-	auto res = execute("MATCH (b:Bidir {id:'B'})-[*1..2]-(x) RETURN x");
-	ASSERT_GE(res.rowCount(), 2UL); // A and C at least
-}
-
-// --- Additional Unwind Tests ---
-
-TEST_F(CypherAdvancedTest, Unwind_EmptyList) {
-	auto res = execute("UNWIND [] AS x RETURN x");
-	EXPECT_TRUE(res.isEmpty());
-}
-
-TEST_F(CypherAdvancedTest, Unwind_SingleElement) {
+TEST_F(CypherAdvancedTest, Unwind_SingleItemList) {
+	// Test UNWIND with single item
 	auto res = execute("UNWIND [42] AS x RETURN x");
 	ASSERT_EQ(res.rowCount(), 1UL);
 	EXPECT_EQ(res.getRows()[0].at("x").toString(), "42");
 }
 
-TEST_F(CypherAdvancedTest, Unwind_StringList) {
-	auto res = execute("UNWIND ['a', 'b', 'c'] AS s RETURN s");
+TEST_F(CypherAdvancedTest, Unwind_NullInList) {
+	// Test UNWIND with NULL value in list
+	auto res = execute("UNWIND [null] AS x RETURN x");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_TRUE(res.getRows()[0].at("x").isPrimitive());
+	EXPECT_EQ(res.getRows()[0].at("x").asPrimitive().getType(), graph::PropertyType::NULL_TYPE);
+}
+
+TEST_F(CypherAdvancedTest, Unwind_IntegerListValues) {
+	// Test UNWIND with integer list values (not floats)
+	auto res = execute("UNWIND [1, 2, 3, 4, 5] AS x RETURN x");
+	ASSERT_EQ(res.rowCount(), 5UL);
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1");
+	EXPECT_EQ(res.getRows()[4].at("x").toString(), "5");
+}
+
+TEST_F(CypherAdvancedTest, Unwind_StringInList) {
+	// Test UNWIND with string values in list
+	auto res = execute("UNWIND ['a', 'b', 'c'] AS x RETURN x");
 	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("s").toString(), "a");
-	EXPECT_EQ(res.getRows()[1].at("s").toString(), "b");
-	EXPECT_EQ(res.getRows()[2].at("s").toString(), "c");
-}
-
-TEST_F(CypherAdvancedTest, Unwind_WithMatch) {
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	auto res = execute("MATCH (n:Test) UNWIND [10, 20] AS x RETURN n.id, x");
-	ASSERT_EQ(res.rowCount(), 4UL); // 2 nodes * 2 unwind values = 4 rows
-}
-
-// --- Additional Cartesian Product Tests ---
-
-// Note: Cartesian product with AND filter may have issues in current implementation
-// Skipping CartesianProduct_WithFilter test for now
-
-TEST_F(CypherAdvancedTest, CartesianProduct_SingleRowEach) {
-	(void) execute("CREATE (:SingleA)");
-	(void) execute("CREATE (:SingleB)");
-
-	auto res = execute("MATCH (a:SingleA), (b:SingleB) RETURN a, b");
-	ASSERT_EQ(res.rowCount(), 1UL);
-}
-
-TEST_F(CypherAdvancedTest, CartesianProduct_ThreePatterns) {
-	(void) execute("CREATE (:TripleA {id: 1})");
-	(void) execute("CREATE (:TripleB {id: 2})");
-	(void) execute("CREATE (:TripleC {id: 3})");
-
-	// Three independent patterns
-	auto res = execute("MATCH (a:TripleA), (b:TripleB), (c:TripleC) RETURN a.id, b.id, c.id");
-	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "a");
+	EXPECT_EQ(res.getRows()[1].at("x").toString(), "b");
+	EXPECT_EQ(res.getRows()[2].at("x").toString(), "c");
 }

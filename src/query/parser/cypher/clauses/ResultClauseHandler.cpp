@@ -37,31 +37,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 		rootOp = planner->singleRowOp();
 	}
 
-	// Handle Projection
-	auto items = body->projectionItems();
-	if (!items->MULTIPLY()) { // If not RETURN *
-		std::vector<query::execution::operators::ProjectItem> projItems;
-
-		for (auto item : items->projectionItem()) {
-			// 1. Expression Text (Source)
-			std::string exprText = item->expression()->getText();
-
-			// 2. Alias (Output Name)
-			// If 'AS alias' is present, use it. Otherwise, use expression text.
-			std::string alias = exprText;
-			if (item->K_AS()) {
-				alias = helpers::AstExtractor::extractVariable(item->variable());
-			}
-
-			projItems.push_back({exprText, alias});
-		}
-
-		if (!projItems.empty()) {
-			rootOp = planner->projectOp(std::move(rootOp), projItems);
-		}
-	}
-
-	// Order By
+	// Order By (MUST come before Projection so SortOperator has access to full nodes)
 	if (body->orderStatement()) {
 		std::vector<query::execution::operators::SortItem> sortItems;
 		auto sortItemList = body->orderStatement()->sortItem();
@@ -82,9 +58,9 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 			}
 
 			// Determine Direction
-			bool asc = true;
+			bool asc = true;  // Default to ascending
 			if (item->K_DESC() || item->K_DESCENDING()) {
-				asc = false;
+				asc = false;  // Set to false for DESC/DESCENDING
 			}
 
 			sortItems.push_back({varName, propName, asc});
@@ -92,6 +68,30 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 
 		if (!sortItems.empty()) {
 			rootOp = planner->sortOp(std::move(rootOp), sortItems);
+		}
+	}
+
+	// Handle Projection (MUST come after Order By)
+	auto items = body->projectionItems();
+	if (!items->MULTIPLY()) { // If not RETURN *
+		std::vector<query::execution::operators::ProjectItem> projItems;
+
+		for (auto item : items->projectionItem()) {
+			// 1. Expression Text (Source)
+			std::string exprText = item->expression()->getText();
+
+			// 2. Alias (Output Name)
+			// If 'AS alias' is present, use it. Otherwise, use expression text.
+			std::string alias = exprText;
+			if (item->K_AS()) {
+				alias = helpers::AstExtractor::extractVariable(item->variable());
+			}
+
+			projItems.push_back({exprText, alias});
+		}
+
+		if (!projItems.empty()) {
+			rootOp = planner->projectOp(std::move(rootOp), projItems);
 		}
 	}
 

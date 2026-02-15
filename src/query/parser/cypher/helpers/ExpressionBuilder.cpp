@@ -191,8 +191,12 @@ PropertyValue ExpressionBuilder::parseValue(CypherParser::LiteralContext *ctx) {
 	}
 	if (ctx->numberLiteral()) {
 		std::string s = ctx->numberLiteral()->getText();
-		if (s.find('.') != std::string::npos || s.find('e') != std::string::npos)
-			return PropertyValue(std::stod(s));
+		// Check for decimal point or scientific notation (both lowercase 'e' and uppercase 'E')
+		if (s.find('.') != std::string::npos || s.find('e') != std::string::npos || s.find('E') != std::string::npos) {
+			// Force double constructor to avoid integer template deduction
+			double dval = std::stod(s);
+			return PropertyValue(dval);
+		}
 		return PropertyValue(std::stoll(s));
 	}
 	if (ctx->booleanLiteral()) {

@@ -370,9 +370,12 @@ std::vector<query::execution::operators::SetItem> PatternBuilder::extractSetItem
 				val = PropertyValue(false);
 			} else {
 				try {
-					if (valText.find('.') != std::string::npos)
-						val = PropertyValue(std::stod(valText));
-					else
+					// Check for decimal point or scientific notation (both lowercase 'e' and uppercase 'E')
+					if (valText.find('.') != std::string::npos || valText.find('e') != std::string::npos || valText.find('E') != std::string::npos) {
+						// Force double constructor to avoid integer template deduction
+						double dval = std::stod(valText);
+						val = PropertyValue(dval);
+					} else
 						val = PropertyValue(std::stoll(valText));
 				} catch (...) {
 					val = PropertyValue(valText);

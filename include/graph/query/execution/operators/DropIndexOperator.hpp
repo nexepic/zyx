@@ -53,13 +53,17 @@ namespace graph::query::execution::operators {
 				success = indexManager_->dropIndexByDefinition(label_, propertyKey_);
 			}
 
+			executed_ = true;
+
+			// If index was not found, return empty batch (no-op)
+			if (!success)
+				return std::nullopt;
+
 			Record record;
-			record.setValue("result", PropertyValue(success ? "Index dropped" : "Index not found"));
+			record.setValue("result", PropertyValue("Index dropped"));
 
 			RecordBatch batch;
 			batch.push_back(std::move(record));
-
-			executed_ = true;
 			return batch;
 		}
 

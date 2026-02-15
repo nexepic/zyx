@@ -78,8 +78,12 @@ PropertyValue AstExtractor::parseValue(CypherParser::LiteralContext *ctx) {
 	if (ctx->numberLiteral()) {
 		std::string s = ctx->numberLiteral()->getText();
 		// Check for decimal point or scientific notation
-		if (s.find('.') != std::string::npos || s.find('e') != std::string::npos)
-			return PropertyValue(std::stod(s));
+		if (s.find('.') != std::string::npos || s.find('e') != std::string::npos || s.find('E') != std::string::npos) {
+			// Force double constructor to avoid integer template deduction
+			double dval = std::stod(s);
+			return PropertyValue(dval);
+		}
+		// For integers without decimal point or exponent, use stoll to avoid float conversion
 		return PropertyValue(std::stoll(s));
 	}
 

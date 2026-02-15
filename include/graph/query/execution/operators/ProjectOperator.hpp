@@ -200,12 +200,15 @@ namespace graph::query::execution::operators {
 				return PropertyValue();
 
 			// Number (Integer or Double)
-			// Regex for basic number check: optional -, digits, optional .digits
-			static const std::regex numberRegex(R"(^-?\d+(\.\d+)?$)");
+			// Regex for number check: optional -, digits, optional .digits, optional (e|E)digits
+			static const std::regex numberRegex(R"(^-?\d+(\.\d+)?([eE][+-]?\d+)?$)");
 			if (std::regex_match(txt, numberRegex)) {
 				try {
-					if (txt.find('.') != std::string::npos) {
-						return PropertyValue(std::stod(txt));
+					// Check for decimal point or scientific notation (both lowercase 'e' and uppercase 'E')
+					if (txt.find('.') != std::string::npos || txt.find('e') != std::string::npos || txt.find('E') != std::string::npos) {
+						// Force double constructor to avoid integer template deduction
+						double dval = std::stod(txt);
+						return PropertyValue(dval);
 					} else {
 						return PropertyValue(std::stoll(txt));
 					}
