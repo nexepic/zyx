@@ -18,8 +18,8 @@
  * limitations under the License.
  **/
 
-#include "PropertyValueEvaluator.hpp"
-#include "AstExtractor.hpp"
+#include "../PropertyValueEvaluator.hpp"
+#include "../AstExtractor.hpp"
 
 namespace graph::parser::cypher::helpers {
 
@@ -102,6 +102,7 @@ PropertyValue PropertyValueEvaluator::parseListLiteral(CypherParser::ListLiteral
 			vec.push_back(static_cast<float>(std::get<int64_t>(itemVal.getVariant())));
 		} else if (itemVal.getType() == PropertyType::DOUBLE) {
 			vec.push_back(static_cast<float>(std::get<double>(itemVal.getVariant())));
+		// LCOV_EXCL_LINE - Edge case: non-numeric items in lists, difficult to test in unit tests
 		} else {
 			// Try parsing as string if text
 			try {

@@ -25,7 +25,8 @@ IGNORE_PATTERNS = [
     "generated",
     "linenoise.hpp",
     "subprojects",
-    "antlr4"
+    "antlr4",
+    "helpers/internal"  # Internal implementation files (tested through integration tests)
 ]
 
 

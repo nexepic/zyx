@@ -18,7 +18,7 @@
  * limitations under the License.
  **/
 
-#include "AstExtractor.hpp"
+#include "../AstExtractor.hpp"
 
 namespace graph::parser::cypher::helpers {
 

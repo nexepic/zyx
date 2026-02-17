@@ -18,7 +18,7 @@
  * limitations under the License.
  **/
 
-#include "OperatorChain.hpp"
+#include "../OperatorChain.hpp"
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
 

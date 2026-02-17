@@ -18,11 +18,11 @@
  * limitations under the License.
  **/
 
-#include "PatternBuilder.hpp"
-#include "AstExtractor.hpp"
-#include "ExpressionBuilder.hpp"
-#include "OperatorChain.hpp"
-#include "PropertyValueEvaluator.hpp"
+#include "../PatternBuilder.hpp"
+#include "../AstExtractor.hpp"
+#include "../ExpressionBuilder.hpp"
+#include "../OperatorChain.hpp"
+#include "../PropertyValueEvaluator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -321,6 +321,9 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 	const std::vector<query::execution::operators::SetItem> &onCreateItems,
 	const std::vector<query::execution::operators::SetItem> &onMatchItems,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
+
+	if (!patternPart || !planner)
+		return nullptr;
 
 	// Currently only supporting MERGE (n) (Single Node)
 	// Edge Merge requires traversal logic which is more complex.

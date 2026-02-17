@@ -26,7 +26,7 @@ for root, dirs, files in os.walk(sys.argv[1]):
 		endif
 	endforeach
 
-	test_include_dirs = include_directories('include', '../tests/include')
+	test_include_dirs = include_directories('include', '../tests/include', '../src/query/parser/cypher/generated')
 
 	foreach file : test_files
 		if file != '' and file != '.'

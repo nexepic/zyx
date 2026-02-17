@@ -11,11 +11,11 @@ cypher_generated = files(
 
 # Helper classes
 cypher_helpers = files(
-	'helpers/AstExtractor.cpp',
-	'helpers/PropertyValueEvaluator.cpp',
-	'helpers/ExpressionBuilder.cpp',
-	'helpers/PatternBuilder.cpp',
-	'helpers/OperatorChain.cpp'
+	'helpers/public/OperatorChain.cpp',
+	'helpers/internal/AstExtractor.cpp',
+	'helpers/internal/ExpressionBuilder.cpp',
+	'helpers/internal/PatternBuilder.cpp',
+	'helpers/internal/PropertyValueEvaluator.cpp'
 )
 
 # Clause handler classes

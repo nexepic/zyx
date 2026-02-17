@@ -18,13 +18,16 @@
  * limitations under the License.
  **/
 
-#include "ExpressionBuilder.hpp"
+#include "../ExpressionBuilder.hpp"
 
 namespace graph::parser::cypher::helpers {
 
 std::function<bool(const query::execution::Record &)> ExpressionBuilder::buildWherePredicate(
 	CypherParser::ExpressionContext *expr,
 	std::string &outDesc) {
+
+	if (!expr)
+		throw std::runtime_error("Invalid WHERE expression tree");
 
 	// 1. Navigate down to Comparison
 	auto comparison = expr->orExpression()->xorExpression(0)->andExpression(0)->notExpression(0)->comparisonExpression();

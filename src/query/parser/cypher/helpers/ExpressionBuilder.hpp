@@ -65,7 +65,6 @@ public:
 	 */
 	static std::vector<PropertyValue> extractListFromExpression(CypherParser::ExpressionContext *ctx);
 
-private:
 	/**
 	 * @brief Navigate the AST chain to get the AtomContext.
 	 */

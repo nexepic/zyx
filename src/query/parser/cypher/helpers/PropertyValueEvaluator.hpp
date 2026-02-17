@@ -49,7 +49,6 @@ public:
 	 */
 	static PropertyValue evaluate(CypherParser::ExpressionContext *ctx);
 
-private:
 	/**
 	 * @brief Navigate the AST chain to get the AtomContext.
 	 *

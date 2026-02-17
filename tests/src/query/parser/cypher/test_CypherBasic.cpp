@@ -324,3 +324,158 @@ TEST_F(CypherBasicTest, TraversalMultipleEdges) {
 	auto res = execute("MATCH (a:Multi {id:1})-[r:LINK]->(b) RETURN b");
 	ASSERT_EQ(res.rowCount(), 3UL);
 }
+
+// === Additional WHERE Clause Tests for ExpressionBuilder Coverage ===
+
+TEST_F(CypherBasicTest, WhereGreaterThan) {
+	(void) execute("CREATE (n:WhereGT {age: 30})");
+	(void) execute("CREATE (n:WhereGT {age: 25})");
+
+	auto res = execute("MATCH (n:WhereGT) WHERE n.age > 25 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("age").toString(), "30");
+}
+
+TEST_F(CypherBasicTest, WhereNotEquals) {
+	(void) execute("CREATE (n:WhereNE {age: 30})");
+	(void) execute("CREATE (n:WhereNE {age: 25})");
+
+	auto res = execute("MATCH (n:WhereNE) WHERE n.age <> 30 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("age").toString(), "25");
+}
+
+TEST_F(CypherBasicTest, WhereGreaterThanOrEqual) {
+	(void) execute("CREATE (n:WhereGTE {score: 100})");
+	(void) execute("CREATE (n:WhereGTE {score: 90})");
+
+	auto res = execute("MATCH (n:WhereGTE) WHERE n.score >= 90 RETURN n");
+	EXPECT_EQ(res.rowCount(), 2UL);
+}
+
+TEST_F(CypherBasicTest, WhereLessThan) {
+	(void) execute("CREATE (n:WhereLT {age: 30})");
+	(void) execute("CREATE (n:WhereLT {age: 35})");
+
+	auto res = execute("MATCH (n:WhereLT) WHERE n.age < 35 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("age").toString(), "30");
+}
+
+TEST_F(CypherBasicTest, WhereLessThanOrEqual) {
+	(void) execute("CREATE (n:WhereLTE {age: 30})");
+	(void) execute("CREATE (n:WhereLTE {age: 30})");
+
+	auto res = execute("MATCH (n:WhereLTE) WHERE n.age <= 30 RETURN n");
+	EXPECT_EQ(res.rowCount(), 2UL);
+}
+
+TEST_F(CypherBasicTest, WhereStringComparison) {
+	(void) execute("CREATE (n:WhereStr {name: 'Alice'})");
+	(void) execute("CREATE (n:WhereStr {name: 'Bob'})");
+
+	auto res = execute("MATCH (n:WhereStr) WHERE n.name = 'Alice' RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("name").toString(), "Alice");
+}
+
+TEST_F(CypherBasicTest, WhereBooleanComparison) {
+	(void) execute("CREATE (n:WhereBool {active: true})");
+	(void) execute("CREATE (n:WhereBool {active: false})");
+
+	auto res = execute("MATCH (n:WhereBool) WHERE n.active = true RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("active").toString(), "true");
+}
+
+TEST_F(CypherBasicTest, WhereDoubleComparison) {
+	(void) execute("CREATE (n:WhereDbl {value: 3.14})");
+	(void) execute("CREATE (n:WhereDbl {value: 2.71})");
+
+	auto res = execute("MATCH (n:WhereDbl) WHERE n.value = 3.14 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+// Additional WHERE clause tests for ExpressionBuilder coverage
+
+TEST_F(CypherBasicTest, WhereWithNegativeNumber) {
+	// Test WHERE with negative number on RHS
+	(void) execute("CREATE (n:WNeg {value: -10})");
+	(void) execute("CREATE (n:WNeg {value: -20})");
+
+	auto res = execute("MATCH (n:WNeg) WHERE n.value > -15 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherBasicTest, WhereWithZero) {
+	// Test WHERE with zero value
+	(void) execute("CREATE (n:WZero {count: 0})");
+	(void) execute("CREATE (n:WZero {count: 1})");
+
+	auto res = execute("MATCH (n:WZero) WHERE n.count = 0 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherBasicTest, WhereLargeNumberComparison) {
+	// Test WHERE with very large number
+	(void) execute("CREATE (n:WLarge {value: 10000000000})");
+
+	auto res = execute("MATCH (n:WLarge) WHERE n.value > 9999999999 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherBasicTest, WhereScientificNotationComparison) {
+	// Test WHERE with scientific notation
+	(void) execute("CREATE (n:WSci {value: 1.5e10})");
+
+	auto res = execute("MATCH (n:WSci) WHERE n.value = 1.5e10 RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+// CREATE with various numeric literals for PropertyValueEvaluator coverage
+
+TEST_F(CypherBasicTest, CreateWithNegativeInteger) {
+	// Test CREATE with negative integer
+	auto res = execute("CREATE (n:NegInt {value: -42}) RETURN n");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	// Note: The negative sign might be parsed separately
+}
+
+TEST_F(CypherBasicTest, CreateWithNegativeDouble) {
+	// Test CREATE with negative double
+	auto res = execute("CREATE (n:NegDbl {value: -3.14}) RETURN n");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	// Note: The negative sign might be parsed separately
+}
+
+TEST_F(CypherBasicTest, CreateWithScientificNotationLowerE) {
+	// Test CREATE with scientific notation (lowercase e)
+	auto res = execute("CREATE (n:SciLow {value: 1.5e10}) RETURN n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherBasicTest, CreateWithScientificNotationUpperE) {
+	// Test CREATE with scientific notation (uppercase E)
+	auto res = execute("CREATE (n:SciUp {value: 2.0E5}) RETURN n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherBasicTest, CreateWithScientificNotationNegativeExp) {
+	// Test CREATE with scientific notation (negative exponent)
+	auto res = execute("CREATE (n:SciNeg {value: 1.5e-5}) RETURN n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherBasicTest, CreateWithZero) {
+	// Test CREATE with zero value
+	auto res = execute("CREATE (n:ZeroVal {value: 0}) RETURN n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "0");
+}
+
+TEST_F(CypherBasicTest, CreateWithLargeDouble) {
+	// Test CREATE with large double value
+	auto res = execute("CREATE (n:LargeDbl {value: 1.5e10}) RETURN n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+}
+
