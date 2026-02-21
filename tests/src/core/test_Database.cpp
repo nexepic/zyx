@@ -1,0 +1,454 @@
+/**
+ * @file test_Database.cpp
+ * @brief Comprehensive unit tests for Database class
+ * @date 2026/02/21
+ */
+
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
+#include <gtest/gtest.h>
+
+#include "graph/core/Database.hpp"
+
+namespace fs = std::filesystem;
+using namespace graph;
+
+/**
+ * @class DatabaseTest
+ * @brief Unit test fixture for Database class
+ */
+class DatabaseTest : public ::testing::Test {
+protected:
+	void SetUp() override {
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testDbPath = fs::temp_directory_path() / ("test_db_" + boost::uuids::to_string(uuid) + ".graph");
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
+	}
+
+	void TearDown() override {
+		if (fs::exists(testDbPath))
+			fs::remove_all(testDbPath);
+	}
+
+	std::filesystem::path testDbPath;
+};
+
+// ============================================================================
+// Constructor Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, Constructor_WithValidPath) {
+	// Test basic constructor with valid path
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, Constructor_WithOpenMode) {
+	// Test constructor with different open modes
+	auto db1 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE);
+	EXPECT_FALSE(db1->isOpen());
+
+	auto db2 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_EXISTING_FILE);
+	EXPECT_FALSE(db2->isOpen());
+}
+
+TEST_F(DatabaseTest, Constructor_WithCacheSize) {
+	// Test constructor with custom cache size
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE, 1024);
+	EXPECT_FALSE(db->isOpen());
+}
+
+// ============================================================================
+// Open Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, Open_Success) {
+	// Test successful open
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, Open_AlreadyOpened) {
+	// Test opening an already opened database (Line 38-40)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+
+	// Call open again - should just return without error
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, Open_MultipleTimes) {
+	// Test opening database multiple times
+	auto db = std::make_unique<Database>(testDbPath.string());
+
+	for (int i = 0; i < 5; ++i) {
+		db->open();
+		EXPECT_TRUE(db->isOpen());
+	}
+}
+
+// ============================================================================
+// OpenIfExists Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, OpenIfExists_FileDoesNotExist) {
+	// Test openIfExists when file doesn't exist (Line 52-53)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->exists());
+
+	bool result = db->openIfExists();
+	EXPECT_FALSE(result);
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, OpenIfExists_FileExists) {
+	// Test openIfExists when file exists
+	// First create the database
+	{
+		auto db1 = std::make_unique<Database>(testDbPath.string());
+		db1->open();
+		// Create some data
+		auto txn = db1->beginTransaction();
+	}
+	// Database is now closed and file exists
+
+	// Now test openIfExists
+	auto db2 = std::make_unique<Database>(testDbPath.string());
+	EXPECT_TRUE(db2->exists());
+
+	bool result = db2->openIfExists();
+	EXPECT_TRUE(result);
+	EXPECT_TRUE(db2->isOpen());
+}
+
+TEST_F(DatabaseTest, OpenIfExists_AlreadyOpened) {
+	// Test openIfExists when database is already open (Line 50-51)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+
+	bool result = db->openIfExists();
+	EXPECT_TRUE(result);  // Should return true since it's already open
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, OpenIfExists_MultipleCalls) {
+	// Test multiple calls to openIfExists
+	auto db = std::make_unique<Database>(testDbPath.string());
+
+	// File doesn't exist yet
+	EXPECT_FALSE(db->openIfExists());
+
+	// Create database
+	db->open();
+	auto txn = db->beginTransaction();
+	db->close();
+
+	// File exists now
+	bool result = db->openIfExists();
+	EXPECT_TRUE(result);
+	EXPECT_TRUE(db->isOpen());
+
+	// Call again when already open
+	result = db->openIfExists();
+	EXPECT_TRUE(result);
+	EXPECT_TRUE(db->isOpen());
+}
+
+// ============================================================================
+// Close Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, Close_Success) {
+	// Test closing an open database
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, Close_AlreadyClosed) {
+	// Test closing an already closed database (Line 64-66)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+
+	// Close again - should be safe (no-op)
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, Close_MultipleTimes) {
+	// Test closing database multiple times
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	for (int i = 0; i < 5; ++i) {
+		db->close();
+		EXPECT_FALSE(db->isOpen());
+	}
+}
+
+TEST_F(DatabaseTest, Close_WithoutOpen) {
+	// Test close without ever opening
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+}
+
+// ============================================================================
+// IsOpen Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, IsOpen_NotOpened) {
+	// Test isOpen on unopened database
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, IsOpen_AfterOpen) {
+	// Test isOpen after opening
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, IsOpen_AfterClose) {
+	// Test isOpen after closing
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+}
+
+// ============================================================================
+// Exists Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, Exists_NotCreated) {
+	// Test exists on non-existent database
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->exists());
+}
+
+TEST_F(DatabaseTest, Exists_AfterCreation) {
+	// Test exists after creating database
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	EXPECT_TRUE(db->exists());
+}
+
+TEST_F(DatabaseTest, Exists_AfterClose) {
+	// Test exists persists after close
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	db->close();
+	EXPECT_TRUE(db->exists());
+}
+
+// ============================================================================
+// BeginTransaction Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, BeginTransaction_AfterOpen) {
+	// Test beginTransaction when database is open
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	auto txn = db->beginTransaction();
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, BeginTransaction_BeforeOpen) {
+	// Test beginTransaction before open (Line 74-76: auto-open if not open)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+
+	auto txn = db->beginTransaction();
+	// Database should be auto-opened
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, BeginTransaction_AfterClose) {
+	// Test beginTransaction after close (should auto-open)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+
+	auto txn = db->beginTransaction();
+	// Database should be auto-opened again
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, BeginTransaction_Multiple) {
+	// Test multiple transactions sequentially
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	{
+		auto txn1 = db->beginTransaction();
+	}
+	{
+		auto txn2 = db->beginTransaction();
+	}
+	{
+		auto txn3 = db->beginTransaction();
+	}
+
+	EXPECT_TRUE(db->isOpen());
+}
+
+// ============================================================================
+// Lifecycle Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, Lifecycle_CreateOpenClose) {
+	// Test basic lifecycle: create -> open -> close
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, Lifecycle_MultipleOpenClose) {
+	// Test multiple open/close cycles
+	auto db = std::make_unique<Database>(testDbPath.string());
+
+	for (int i = 0; i < 3; ++i) {
+		db->open();
+		EXPECT_TRUE(db->isOpen());
+
+		db->close();
+		EXPECT_FALSE(db->isOpen());
+	}
+}
+
+TEST_F(DatabaseTest, Destructor_ClosesDatabase) {
+	// Test that destructor closes the database
+	{
+		auto db = std::make_unique<Database>(testDbPath.string());
+		db->open();
+		EXPECT_TRUE(db->isOpen());
+		// Destructor called here
+	}
+	// Database should be closed now
+}
+
+TEST_F(DatabaseTest, Lifecycle_CreateReopenClose) {
+	// Test creating, opening, and reopening database
+	{
+		auto db1 = std::make_unique<Database>(testDbPath.string());
+		db1->open();
+		auto txn = db1->beginTransaction();
+	}
+	// Database is closed
+
+	{
+		auto db2 = std::make_unique<Database>(testDbPath.string());
+		db2->open();
+		EXPECT_TRUE(db2->isOpen());
+	}
+}
+
+// ============================================================================
+// Edge Cases
+// ============================================================================
+
+TEST_F(DatabaseTest, EdgeCase_EmptyPath) {
+	// Test with empty path (should use current directory)
+	auto db = std::make_unique<Database>("");
+	// Constructor should not crash
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, EdgeCase_LongPath) {
+	// Test with a long path
+	std::string longPath = (fs::temp_directory_path() / ("a" + std::string(100, 'b'))).string();
+	auto db = std::make_unique<Database>(longPath);
+	EXPECT_FALSE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, EdgeCase_ZeroCacheSize) {
+	// Test with zero cache size
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE, 0);
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, EdgeCase_LargeCacheSize) {
+	// Test with large cache size
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE, 1024 * 1024);
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+}
+
+// ============================================================================
+// QueryEngine Access Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, GetQueryEngine_AfterOpen) {
+	// Test getQueryEngine after open
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	auto engine = db->getQueryEngine();
+	EXPECT_NE(engine, nullptr);
+}
+
+TEST_F(DatabaseTest, GetQueryEngine_BeforeOpen) {
+	// Test getQueryEngine before open
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+
+	// getQueryEngine should return nullptr (not throw)
+	auto engine = db->getQueryEngine();
+	EXPECT_EQ(engine, nullptr);
+}
+
+// ============================================================================
+// OpenMode Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, OpenMode_CreateOrOpen) {
+	// Test CREATE_OR_OPEN_FILE mode
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE);
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+
+	// Should be able to write
+	auto txn = db->beginTransaction();
+	EXPECT_TRUE(db->isOpen());
+}
+
+TEST_F(DatabaseTest, OpenMode_OpenExisting) {
+	// Test OPEN_EXISTING_FILE mode
+	// First create database
+	{
+		auto db1 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE);
+		db1->open();
+	}
+	// Now open in OPEN_EXISTING_FILE mode
+	{
+		auto db2 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_EXISTING_FILE);
+		db2->open();
+		EXPECT_TRUE(db2->isOpen());
+	}
+}

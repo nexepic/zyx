@@ -43,21 +43,18 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
-	if (ctx->explicitProcedureInvocation()) {
-		auto invoc = ctx->explicitProcedureInvocation();
-		std::string procName = invoc->procedureName()->getText();
-		std::vector<PropertyValue> args;
+	// Grammar guarantees explicitProcedureInvocation is always present
+	auto invoc = ctx->explicitProcedureInvocation();
+	std::string procName = invoc->procedureName()->getText();
+	std::vector<PropertyValue> args;
 
-		if (!invoc->expression().empty()) {
-			for (auto expr : invoc->expression()) {
-				args.push_back(helpers::PropertyValueEvaluator::evaluate(expr));
-			}
+	if (!invoc->expression().empty()) {
+		for (auto expr : invoc->expression()) {
+			args.push_back(helpers::PropertyValueEvaluator::evaluate(expr));
 		}
-
-		return planner->callProcedureOp(procName, args);
 	}
 
-	return rootOp;
+	return planner->callProcedureOp(procName, args);
 }
 
 std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleInQueryCall(
@@ -98,9 +95,8 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 			projItems.push_back({originalField, outputVar});
 		}
 
-		if (!projItems.empty()) {
-			rootOp = planner->projectOp(std::move(rootOp), projItems);
-		}
+		// When yieldItems exists, projItems is guaranteed to have at least one element
+		rootOp = planner->projectOp(std::move(rootOp), projItems);
 	}
 
 	return rootOp;
@@ -120,11 +116,9 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	}
 
 	// 2. Extract List Values
-	std::vector<PropertyValue> listValues;
-
-	if (const auto expr = ctx->expression()) {
-		listValues = helpers::ExpressionBuilder::extractListFromExpression(expr);
-	}
+	// Grammar guarantees expression is always present in UNWIND
+	auto expr = ctx->expression();
+	std::vector<PropertyValue> listValues = helpers::ExpressionBuilder::extractListFromExpression(expr);
 
 	if (listValues.empty()) {
 		// If parsing failed or list is empty, allow empty unwind (which stops execution)
