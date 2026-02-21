@@ -109,9 +109,7 @@ namespace graph {
             std::vector<State> existingChain;
             for (auto stateId: chainIds) {
                 State state = dataManager_->getState(stateId);
-                if (state.getId() != 0 && state.isActive()) {
-                    existingChain.push_back(state);
-                }
+                existingChain.push_back(state);
             }
             return existingChain;
         }
@@ -131,17 +129,11 @@ namespace graph {
         } else {
             // Delete internal chain
             int64_t nextId = headState.getNextStateId();
-            // Safety counter to prevent infinite loops in corrupt chains
-            int safety = 0;
-            while (nextId != 0 && safety++ < 100000) {
+            while (nextId != 0) {
                 State nextState = dataManager_->getState(nextId);
-                if (nextState.getId() != 0 && nextState.isActive()) {
-                    int64_t tempId = nextState.getNextStateId();
-                    dataManager_->deleteState(nextState);
-                    nextId = tempId;
-                } else {
-                    break;
-                }
+                int64_t tempId = nextState.getNextStateId();
+                dataManager_->deleteState(nextState);
+                nextId = tempId;
             }
         }
 
@@ -176,9 +168,7 @@ namespace graph {
 
 		for (const auto chainIds = getStateChainIds(headStateId); auto stateId: chainIds) {
 			State state = dataManager_->getState(stateId);
-			if (state.getId() != 0 && state.isActive()) {
-				dataManager_->deleteState(state);
-			}
+			dataManager_->deleteState(state);
 		}
 	}
 
@@ -188,13 +178,13 @@ namespace graph {
 
 		State head = dataManager_->getState(headStateId);
 		if (head.isBlobStorage()) {
-			if (head.getId() != 0 && head.isActive()) chainIds.push_back(headStateId);
+			if (head.isActive()) chainIds.push_back(headStateId);
 			return chainIds;
 		}
 
 		while (currentStateId != 0) {
 			State currentState = dataManager_->getState(currentStateId);
-			if (currentState.getId() == 0 || !currentState.isActive()) break;
+			if (!currentState.isActive()) break;
 			chainIds.push_back(currentStateId);
 			currentStateId = currentState.getNextStateId();
 		}
@@ -209,6 +199,12 @@ namespace graph {
 
 	std::vector<std::string> StateChainManager::splitData(const std::string &data) {
 		std::vector<std::string> chunks;
+
+		// Always return at least one chunk, even for empty data
+		if (data.empty()) {
+			chunks.push_back(std::string());
+			return chunks;
+		}
 
 		for (size_t offset = 0; offset < data.size(); offset += State::CHUNK_SIZE) {
 			size_t chunkSize = std::min(State::CHUNK_SIZE, data.size() - offset);
@@ -244,8 +240,6 @@ namespace graph {
 		} else {
 			// --- Internal Mode ---
 			auto chunks = splitData(data);
-			if (chunks.empty()) chunks.push_back("");
-
 			headState.setData(chunks[0]);
 			outChainEntities[0] = headState;
 

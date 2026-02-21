@@ -30,20 +30,17 @@ namespace graph {
 		dataManager_(std::move(dataManager)) {}
 
 	std::vector<Blob> BlobChainManager::createBlobChain(int64_t entityId, uint32_t entityType,
-														const std::string &data) const {
-		// Compress all data regardless of entity type
-		std::string processedData = compressData(data);
+														const std::string &data, bool compress) const {
+		// Compress data if requested
+		std::string processedData = compress ? compressData(data) : data;
 
 		// Check size limit for all blobs
 		if (processedData.size() > Blob::MAX_COMPRESSED_SIZE) {
 			throw std::runtime_error("Compressed data exceeds maximum size limit of 5MB");
 		}
 
-		// Split into chunks
+		// Split into chunks (always returns at least one chunk)
 		auto chunks = splitData(processedData);
-		if (chunks.empty()) {
-			return {};
-		}
 
 		// Two-pass blob creation to avoid cache eviction issues during chain linking
 		//
@@ -71,7 +68,7 @@ namespace graph {
 		for (size_t i = 0; i < chunks.size(); i++) {
 			Blob currentBlob(0, chunks[i]);
 			currentBlob.setEntityInfo(entityId, entityType);
-			currentBlob.setCompressionInfo(data.size(), true);
+			currentBlob.setCompressionInfo(data.size(), compress);
 			currentBlob.setChainPosition(static_cast<int32_t>(i));
 			currentBlob.setPrevBlobId(i > 0 ? blobIds[i - 1] : 0);
 
@@ -109,7 +106,7 @@ namespace graph {
 	}
 
 	std::vector<Blob> BlobChainManager::updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
-														const std::string &data) const {
+														const std::string &data, bool compress) const {
 		// First check if the data is actually different
 		// If we can't read the current data (e.g., blob evicted from cache and not yet flushed),
 		// isDataSame will return false, and we'll proceed to create a new chain
@@ -121,9 +118,7 @@ namespace graph {
 
 			for (auto blobId: chainIds) {
 				Blob blob = dataManager_->getBlob(blobId);
-				if (blob.getId() != 0 && blob.isActive()) {
-					existingChain.push_back(blob);
-				}
+				existingChain.push_back(blob);
 			}
 			return existingChain;
 		}
@@ -138,7 +133,7 @@ namespace graph {
 		// (this can happen if the blob was evicted from cache and not yet flushed to disk)
 
 		// Create a new chain with updated data
-		return createBlobChain(entityId, entityType, data);
+		return createBlobChain(entityId, entityType, data, compress);
 	}
 
 	std::string BlobChainManager::readBlobChain(int64_t headBlobId) const {
@@ -202,9 +197,8 @@ namespace graph {
 
 		// Delete each blob in the chain
 		for (const auto chainIds = getBlobChainIds(headBlobId); const auto blobId: chainIds) {
-			if (Blob blob = dataManager_->getBlob(blobId); blob.getId() != 0 && blob.isActive()) {
-				dataManager_->deleteBlob(blob);
-			}
+			Blob blob = dataManager_->getBlob(blobId);
+			dataManager_->deleteBlob(blob);
 		}
 	}
 
@@ -212,6 +206,12 @@ namespace graph {
 
 	std::vector<std::string> BlobChainManager::splitData(const std::string &data) {
 		std::vector<std::string> chunks;
+
+		// Always return at least one chunk, even for empty data
+		if (data.empty()) {
+			chunks.push_back(std::string());
+			return chunks;
+		}
 
 		for (size_t offset = 0; offset < data.size(); offset += Blob::CHUNK_SIZE) {
 			size_t chunkSize = std::min(Blob::CHUNK_SIZE, data.size() - offset);

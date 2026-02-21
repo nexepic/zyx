@@ -866,3 +866,104 @@ TEST_F(StateChainManagerTest, UpdateThrowsOnNonExistentState) {
 	std::string newData = "New data";
 	EXPECT_THROW((void) stateChainManager->updateStateChain(999999, newData, false), std::runtime_error);
 }
+
+// Test that update handles mode switch with same data correctly
+// Tests the case where data is same but storage mode differs
+TEST_F(StateChainManagerTest, UpdateWithSameDataButDifferentMode) {
+	constexpr int64_t entityId = 3000;
+	const std::string key = "mode_test_key";
+	const std::string data = "Persistent data";
+
+	// Create as internal
+	auto chain1 = stateChainManager->createStateChain(key, data, false);
+	int64_t headId = chain1[0].getId();
+	EXPECT_FALSE(chain1[0].isBlobStorage());
+
+	// Update with same data but requesting blob mode
+	// The implementation should return the existing chain (no-op)
+	auto chain2 = stateChainManager->updateStateChain(headId, data, true);
+	EXPECT_EQ(chain2.size(), 1UL);
+	EXPECT_FALSE(chain2[0].isBlobStorage()) << "Should remain in internal mode when data is same";
+}
+
+// Test splitData with various sizes
+TEST_F(StateChainManagerTest, SplitDataWithVariousSizes) {
+	// Test empty data
+	auto emptyChain = stateChainManager->createStateChain("empty_key", "", false);
+	ASSERT_EQ(emptyChain.size(), 1UL);
+	EXPECT_EQ(emptyChain[0].getDataAsString(), "");
+
+	// Test data that fits exactly in one chunk
+	std::string exactChunkData(graph::State::CHUNK_SIZE, 'A');
+	auto exactChain = stateChainManager->createStateChain("exact_key", exactChunkData, false);
+	EXPECT_GE(exactChain.size(), 1UL);
+	EXPECT_EQ(stateChainManager->readStateChain(exactChain[0].getId()), exactChunkData);
+
+	// Test data that requires exactly two chunks
+	std::string twoChunkData(graph::State::CHUNK_SIZE + 1, 'B');
+	auto twoChain = stateChainManager->createStateChain("two_chunk_key", twoChunkData, false);
+	EXPECT_EQ(twoChain.size(), 2UL);
+	EXPECT_EQ(stateChainManager->readStateChain(twoChain[0].getId()), twoChunkData);
+
+	// Test data that requires exactly three chunks
+	std::string threeChunkData(graph::State::CHUNK_SIZE * 2 + 1, 'C');
+	auto threeChain = stateChainManager->createStateChain("three_chunk_key", threeChunkData, false);
+	EXPECT_EQ(threeChain.size(), 3UL);
+	EXPECT_EQ(stateChainManager->readStateChain(threeChain[0].getId()), threeChunkData);
+}
+
+// Test findStateByKey
+TEST_F(StateChainManagerTest, FindStateByKey) {
+	const std::string key = "search_test_key";
+	const std::string data = "Searchable data";
+
+	// Create a state chain
+	auto chain = stateChainManager->createStateChain(key, data, false);
+	int64_t headId = chain[0].getId();
+
+	// Find by key should return the state
+	graph::State found = stateChainManager->findStateByKey(key);
+	EXPECT_EQ(found.getId(), headId);
+	EXPECT_EQ(found.getKey(), key);
+
+	// Search for non-existent key should return a state with id=0
+	graph::State notFound = stateChainManager->findStateByKey("non_existent_key");
+	EXPECT_EQ(notFound.getId(), 0);
+}
+
+// Test isDataSame when readStateChain throws
+// Tests branch at line 94-96: exception catch in isDataSame
+TEST_F(StateChainManagerTest, IsDataSameHandlesReadException) {
+	constexpr int64_t headStateId = 14001;
+	const std::string key = "exception_test_key";
+	const std::string originalData = "Original data";
+
+	// Create a state chain
+	graph::State headState(headStateId, key, originalData);
+	headState.setNextStateId(14002);  // Points to non-existent state
+	headState.setChainPosition(0);
+	dataManager->addStateEntity(headState);
+
+	// isDataSame should catch the exception and return false
+	bool result = stateChainManager->isDataSame(headStateId, "Different data");
+	EXPECT_FALSE(result);
+}
+
+// Test updateStateChain with blob storage when data is empty
+// Tests branch at line 240: if (!blobChain.empty())
+TEST_F(StateChainManagerTest, CreateBlobWithEmptyData) {
+	constexpr std::string key = "empty_blob_key";
+	const std::string emptyData = "";
+
+	// Create blob storage with empty data
+	auto chain = stateChainManager->createStateChain(key, emptyData, true);
+
+	EXPECT_EQ(chain.size(), 1UL);
+	EXPECT_TRUE(chain[0].isBlobStorage());
+	// External ID might be 0 or non-zero depending on BlobManager implementation
+	// The key is that it doesn't crash and returns a valid chain
+
+	// Reading should return empty string
+	std::string readData = stateChainManager->readStateChain(chain[0].getId());
+	EXPECT_EQ(readData, "");
+}

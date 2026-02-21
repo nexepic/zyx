@@ -36,12 +36,12 @@ namespace graph {
 
 		// Split data into multiple blob entities
 		[[nodiscard]] std::vector<Blob> createBlobChain(int64_t entityId, uint32_t entityType,
-														const std::string &data) const;
+														const std::string &data, bool compress = true) const;
 
 		[[nodiscard]] bool isDataSame(int64_t headBlobId, const std::string &newData) const;
 
 		[[nodiscard]] std::vector<Blob> updateBlobChain(int64_t headBlobId, int64_t entityId, uint32_t entityType,
-														const std::string &data) const;
+														const std::string &data, bool compress = true) const;
 
 		// Reassemble data from a chain of blob entities
 		[[nodiscard]] std::string readBlobChain(int64_t headBlobId) const;

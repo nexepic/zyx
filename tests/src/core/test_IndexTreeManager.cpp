@@ -822,3 +822,69 @@ TEST_F(IndexTreeManagerTest, StressTest_RandomOps) {
 	ASSERT_TRUE(rootNode.isLeaf());
 	ASSERT_EQ(rootNode.getEntryCount(), 0u);
 }
+
+// --- Edge Case and Coverage Tests ---
+
+TEST_F(IndexTreeManagerTest, FindReturnsEmptyForNonExistentKey) {
+	// Tests that find returns empty vector for non-existent keys
+	auto results = stringTreeManager_->find(stringRootId_, PropertyValue("non_existent_key"));
+	ASSERT_TRUE(results.empty());
+}
+
+TEST_F(IndexTreeManagerTest, FindRangeWithInvalidRange) {
+	// Tests findRange when min > max (should return empty)
+	auto results = stringTreeManager_->findRange(stringRootId_, PropertyValue("Z"), PropertyValue("A"));
+	ASSERT_TRUE(results.empty());
+}
+
+TEST_F(IndexTreeManagerTest, ScanKeysWithZeroLimit) {
+	// Tests scanKeys with limit = 0 (should return empty)
+	auto keys = stringTreeManager_->scanKeys(stringRootId_, 0);
+	ASSERT_TRUE(keys.empty());
+}
+
+TEST_F(IndexTreeManagerTest, ScanKeysWithLimitSmallerThanData) {
+	// Insert some data
+	for (int i = 0; i < 10; ++i) {
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue("key_" + std::to_string(i)), i);
+	}
+
+	// Scan with limit smaller than total entries
+	auto keys = stringTreeManager_->scanKeys(stringRootId_, 5);
+	ASSERT_EQ(keys.size(), 5UL);
+}
+
+TEST_F(IndexTreeManagerTest, InsertWithEmptyRootId) {
+	// Tests that insert initializes tree when rootId is 0
+	int64_t newRootId = stringTreeManager_->insert(0, PropertyValue("test_key"), 100);
+	ASSERT_NE(newRootId, 0);
+
+	auto results = stringTreeManager_->find(newRootId, PropertyValue("test_key"));
+	ASSERT_EQ(results.size(), 1UL);
+	ASSERT_EQ(results[0], 100);
+}
+
+TEST_F(IndexTreeManagerTest, RemoveReturnsFalseForNonExistentKey) {
+	// Tests remove returns false for non-existent keys
+	bool removed = stringTreeManager_->remove(stringRootId_, PropertyValue("non_existent"), 999);
+	ASSERT_FALSE(removed);
+}
+
+TEST_F(IndexTreeManagerTest, RemoveFromZeroRootId) {
+	// Tests remove with rootId = 0 returns false
+	int64_t zeroRootId = 0;
+	bool removed = stringTreeManager_->remove(zeroRootId, PropertyValue("key"), 1);
+	ASSERT_FALSE(removed);
+}
+
+TEST_F(IndexTreeManagerTest, FindWithZeroRootId) {
+	// Tests find with rootId = 0 returns empty
+	auto results = stringTreeManager_->find(0, PropertyValue("key"));
+	ASSERT_TRUE(results.empty());
+}
+
+TEST_F(IndexTreeManagerTest, FindRangeWithZeroRootId) {
+	// Tests findRange with rootId = 0 returns empty
+	auto results = stringTreeManager_->findRange(0, PropertyValue("A"), PropertyValue("Z"));
+	ASSERT_TRUE(results.empty());
+}

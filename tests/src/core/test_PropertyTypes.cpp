@@ -342,3 +342,143 @@ TEST(PropertyValueTest, GetListError) {
 	EXPECT_EQ(result[1], 2.0f);
 	EXPECT_EQ(result[2], 3.0f);
 }
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+// Test various integral types to ensure template coverage
+TEST(PropertyValueTest, ConstructWithVariousIntegers) {
+	graph::PropertyValue s1(static_cast<short>(100));
+	EXPECT_EQ(graph::getPropertyType(s1), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(s1.getVariant()), 100);
+
+	graph::PropertyValue s2(static_cast<unsigned int>(200));
+	EXPECT_EQ(graph::getPropertyType(s2), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(s2.getVariant()), 200);
+
+	graph::PropertyValue s3(static_cast<long>(300));
+	EXPECT_EQ(graph::getPropertyType(s3), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(s3.getVariant()), 300);
+
+	graph::PropertyValue s4(static_cast<unsigned long>(400));
+	EXPECT_EQ(graph::getPropertyType(s4), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(s4.getVariant()), 400);
+
+	graph::PropertyValue s5(static_cast<long long>(500));
+	EXPECT_EQ(graph::getPropertyType(s5), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(s5.getVariant()), 500);
+}
+
+// Test float type specifically
+TEST(PropertyValueTest, ConstructFloatVsDouble) {
+	float f = 3.14f;
+	double d = 3.14;
+
+	graph::PropertyValue pvf(f);
+	graph::PropertyValue pvd(d);
+
+	EXPECT_EQ(graph::getPropertyType(pvf), PropertyType::DOUBLE);
+	EXPECT_EQ(graph::getPropertyType(pvd), PropertyType::DOUBLE);
+
+	// Both should be stored as double
+	EXPECT_TRUE(std::holds_alternative<double>(pvf.getVariant()));
+	EXPECT_TRUE(std::holds_alternative<double>(pvd.getVariant()));
+}
+
+// Test LIST toString with single element
+TEST(PropertyValueTest, ListToStringSingleElement) {
+	std::vector<float> list = {42.0f};
+	graph::PropertyValue v(list);
+	std::string result = v.toString();
+	EXPECT_EQ(result, "[42]");
+}
+
+// Test LIST toString with multiple elements
+TEST(PropertyValueTest, ListToStringMultipleElements) {
+	std::vector<float> list = {1.5f, 2.5f, 3.5f, 4.5f, 5.5f};
+	graph::PropertyValue v(list);
+	std::string result = v.toString();
+	EXPECT_EQ(result, "[1.5, 2.5, 3.5, 4.5, 5.5]");
+}
+
+// Test PropertyType UNKNOWN via getType on corrupted state
+// Note: This tests the getType method's UNKNOWN fallback
+TEST(PropertyValueTest, GetTypeForAllTypes) {
+	graph::PropertyValue null_val;
+	EXPECT_EQ(null_val.getType(), PropertyType::NULL_TYPE);
+	EXPECT_EQ(null_val.typeName(), "NULL");
+
+	graph::PropertyValue bool_val(true);
+	EXPECT_EQ(bool_val.getType(), PropertyType::BOOLEAN);
+	EXPECT_EQ(bool_val.typeName(), "BOOLEAN");
+
+	graph::PropertyValue int_val(42);
+	EXPECT_EQ(int_val.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(int_val.typeName(), "INTEGER");
+
+	graph::PropertyValue double_val(3.14);
+	EXPECT_EQ(double_val.getType(), PropertyType::DOUBLE);
+	EXPECT_EQ(double_val.typeName(), "DOUBLE");
+
+	graph::PropertyValue string_val("test");
+	EXPECT_EQ(string_val.getType(), PropertyType::STRING);
+	EXPECT_EQ(string_val.typeName(), "STRING");
+
+	std::vector<float> list_vec = {1.0f, 2.0f};
+	graph::PropertyValue list_val(list_vec);
+	EXPECT_EQ(list_val.getType(), PropertyType::LIST);
+	EXPECT_EQ(list_val.typeName(), "LIST");
+}
+
+// Test all comparison operators with different types
+TEST(PropertyValueTest, AllComparisonOperators) {
+	graph::PropertyValue a(10);
+	graph::PropertyValue b(20);
+
+	EXPECT_TRUE(a < b);
+	EXPECT_TRUE(a <= b);
+	EXPECT_TRUE(b > a);
+	EXPECT_TRUE(b >= a);
+	EXPECT_TRUE(a == a);
+	EXPECT_TRUE(a != b);
+}
+
+// Test comparison with mixed types (by variant index)
+TEST(PropertyValueTest, MixedTypeComparisons) {
+	graph::PropertyValue null_val;
+	graph::PropertyValue bool_val(true);
+	graph::PropertyValue int_val(42);
+	graph::PropertyValue double_val(3.14);
+	graph::PropertyValue string_val("hello");
+
+	// NULL < BOOL < INT < DOUBLE < STRING (by variant index)
+	EXPECT_LT(null_val, bool_val);
+	EXPECT_LT(bool_val, int_val);
+	EXPECT_LT(int_val, double_val);
+	EXPECT_LT(double_val, string_val);
+
+	// Verify inverse
+	EXPECT_GT(string_val, double_val);
+	EXPECT_GT(double_val, int_val);
+	EXPECT_GT(int_val, bool_val);
+	EXPECT_GT(bool_val, null_val);
+}
+
+// Test checkPropertyMatch function directly
+TEST(PropertyValueTest, CheckPropertyMatchAllTypes) {
+	using graph::property_utils::checkPropertyMatch;
+
+	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(42), graph::PropertyValue(42)));
+	EXPECT_FALSE(checkPropertyMatch(graph::PropertyValue(42), graph::PropertyValue(24)));
+	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue("test"), graph::PropertyValue("test")));
+	EXPECT_FALSE(checkPropertyMatch(graph::PropertyValue("test"), graph::PropertyValue("other")));
+	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(true), graph::PropertyValue(true)));
+	EXPECT_FALSE(checkPropertyMatch(graph::PropertyValue(true), graph::PropertyValue(false)));
+	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(3.14), graph::PropertyValue(3.14)));
+	EXPECT_FALSE(checkPropertyMatch(graph::PropertyValue(3.14), graph::PropertyValue(2.71)));
+
+	std::vector<float> list1 = {1.0f, 2.0f};
+	std::vector<float> list2 = {1.0f, 2.0f};
+	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(list1), graph::PropertyValue(list2)));
+}

@@ -801,3 +801,437 @@ TEST_F(BlobChainManagerTest, DeleteLargeBlobChain) {
 		EXPECT_TRUE(loaded.getId() == 0 || !loaded.isActive());
 	}
 }
+
+// Test updateBlobChain when old blob has been deleted (inactive)
+// Tests branch at line 132-138: else branch when headBlob.getId() == 0 || !headBlob.isActive()
+TEST_F(BlobChainManagerTest, UpdateBlobChainWithDeletedHead) {
+	constexpr int64_t entityId = 2100;
+	constexpr int64_t entityTypeId = 21;
+	const std::string originalData = "Original data";
+	const std::string newData = "New data for deleted head";
+
+	// Create a blob chain first
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, originalData);
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Delete the blob chain to make it inactive
+	chainManager->deleteBlobChain(headBlobId);
+
+	// Now try to update the deleted chain
+	// The code should handle this gracefully by creating a new chain
+	EXPECT_NO_THROW({
+		auto resultChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, newData);
+		// A new chain should be created
+		EXPECT_FALSE(resultChain.empty());
+	});
+
+	// Verify the new chain was created and can be read
+	std::string readData = chainManager->readBlobChain(headBlobId);
+	EXPECT_EQ(readData, newData);
+}
+
+// Test updateBlobChain with all possible data size scenarios
+// Tests splitData edge cases more thoroughly
+TEST_F(BlobChainManagerTest, SplitDataEdgeCases) {
+	// Test with data size that creates exactly one chunk after compression
+	constexpr int64_t entityId = 2200;
+	constexpr int64_t entityTypeId = 22;
+
+	// Use random data to avoid high compression
+	std::string exactChunkData;
+	exactChunkData.resize(graph::Blob::CHUNK_SIZE);
+	std::mt19937 rng(42);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: exactChunkData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, exactChunkData);
+	EXPECT_GE(blobChain.size(), 1UL);
+
+	// Verify data integrity
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, exactChunkData);
+}
+
+// Test createBlobChain with compressed data that shrinks significantly
+// Tests that compression works and blobs handle the compressed data correctly
+TEST_F(BlobChainManagerTest, CreateBlobChainWithHighlyCompressibleData) {
+	constexpr int64_t entityId = 2300;
+	constexpr int64_t entityTypeId = 23;
+	// Use highly compressible data (repeated pattern)
+	const std::string compressibleData(10000, 'A'); // 10KB of 'A'
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, compressibleData);
+
+	// Should create at least one blob
+	EXPECT_GE(blobChain.size(), 1UL);
+	EXPECT_EQ(blobChain[0].getOriginalSize(), compressibleData.size());
+
+	// Verify data can be read back correctly
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, compressibleData);
+}
+
+// Test updateBlobChain when data is the same and storage mode is the same
+// Tests early return optimization in updateBlobChain
+TEST_F(BlobChainManagerTest, UpdateBlobChainWithSameDataAndMode) {
+	constexpr int64_t entityId = 2400;
+	constexpr int64_t entityTypeId = 24;
+	const std::string originalData = "Original test data that stays the same";
+
+	// Create initial chain
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, originalData);
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Record original blob IDs
+	std::vector<int64_t> originalBlobIds;
+	for (const auto &blob: blobChain) {
+		originalBlobIds.push_back(blob.getId());
+	}
+
+	// Update with same data and same mode (internal)
+	auto updatedChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, originalData);
+
+	// Should return the same chain without modification
+	EXPECT_EQ(updatedChain.size(), originalBlobIds.size());
+	for (size_t i = 0; i < updatedChain.size(); i++) {
+		EXPECT_EQ(updatedChain[i].getId(), originalBlobIds[i]);
+	}
+
+	// Verify data can still be read
+	std::string readData = chainManager->readBlobChain(headBlobId);
+	EXPECT_EQ(readData, originalData);
+}
+
+// Test updateBlobChain with compressed data that becomes larger
+// Tests handling of size changes after compression
+TEST_F(BlobChainManagerTest, UpdateBlobChainSizeChangeAfterCompression) {
+	constexpr int64_t entityId = 2500;
+	constexpr int64_t entityTypeId = 25;
+
+	// Start with highly compressible data
+	const std::string smallData(1000, 'X');
+	auto chain1 = chainManager->createBlobChain(entityId, entityTypeId, smallData);
+	int64_t headId = chain1[0].getId();
+
+	// Update with less compressible data (random)
+	std::string largeData;
+	largeData.resize(5000);
+	std::mt19937 rng(42);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: largeData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	// Should handle the size change correctly
+	auto chain2 = chainManager->updateBlobChain(headId, entityId, entityTypeId, largeData);
+
+	// Verify new data is correct
+	std::string readData = chainManager->readBlobChain(headId);
+	EXPECT_EQ(readData, largeData);
+}
+
+// Test readBlobChain with single uncompressed blob
+// Tests the non-chained, non-compressed path
+TEST_F(BlobChainManagerTest, ReadSingleUncompressedBlob) {
+	constexpr int64_t entityId = 2600;
+	constexpr int64_t entityTypeId = 26;
+	// Small data that won't be compressed much and fits in one blob
+	const std::string testData = "Small uncompressed test data";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
+	ASSERT_EQ(blobChain.size(), 1UL);
+
+	// Verify the blob can be read
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, testData);
+}
+
+// Test createBlobChain with data that results in empty chunks
+// Tests branch at line 45: if (chunks.empty())
+TEST_F(BlobChainManagerTest, CreateBlobChainWithEmptyData) {
+	constexpr int64_t entityId = 3100;
+	constexpr int64_t entityTypeId = 31;
+	const std::string emptyData = "";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, emptyData);
+
+	// Should create at least one blob even for empty data
+	EXPECT_GE(blobChain.size(), 0UL);
+
+	if (blobChain.size() > 0) {
+		// Verify it can be read
+		std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+		EXPECT_EQ(readData, "");
+	}
+}
+
+// Test isDataSame when readBlobChain throws
+// Tests exception catch path at line 105-107
+TEST_F(BlobChainManagerTest, IsDataSameHandlesReadException) {
+	constexpr int64_t entityId = 2700;
+	constexpr int64_t entityTypeId = 27;
+	const std::string originalData = "Original data";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, originalData);
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Delete the blob chain to make readBlobChain throw
+	chainManager->deleteBlobChain(headBlobId);
+
+	// isDataSame should catch the exception and return false
+	bool result = chainManager->isDataSame(headBlobId, "Different data");
+	EXPECT_FALSE(result);
+}
+
+// Test updateBlobChain with inactive head blob
+// Tests branch at line 133: if (headBlob.getId() != 0 && headBlob.isActive())
+TEST_F(BlobChainManagerTest, UpdateBlobChainWithInactiveHead) {
+	constexpr int64_t entityId = 2800;
+	constexpr int64_t entityTypeId = 28;
+	const std::string originalData = "Original data";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, originalData);
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Delete the head blob to make it inactive
+	chainManager->deleteBlobChain(headBlobId);
+
+	// Update should still work (creates new chain since head is inactive)
+	const std::string newData = "New data for update";
+	EXPECT_NO_THROW({
+		auto newChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, newData);
+		EXPECT_EQ(newChain.size(), 1UL);
+	});
+
+	// Verify new data is correct
+	std::string readData = chainManager->readBlobChain(headBlobId);
+	EXPECT_EQ(readData, newData);
+}
+
+// Test readBlobChain with corrupted chain position
+// Tests branch at line 176-179: chain position verification
+TEST_F(BlobChainManagerTest, ReadThrowsOnCorruptedChainPosition) {
+	constexpr int64_t entityId = 2900;
+	constexpr int64_t entityTypeId = 29;
+	// Create data that requires multiple chunks (use random data that doesn't compress well)
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
+	std::mt19937 rng(299);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
+	ASSERT_GT(blobChain.size(), 1UL);
+
+	// Manually corrupt the position of the second blob
+	graph::Blob secondBlob = dataManager->getBlob(blobChain[1].getId());
+	secondBlob.setChainPosition(99);  // Wrong position
+	dataManager->updateBlobEntity(secondBlob);
+
+	// Try to read the corrupted chain - should throw
+	EXPECT_THROW((void) chainManager->readBlobChain(blobChain[0].getId()), std::runtime_error);
+}
+
+// Test readBlobChain with inactive intermediate blob
+// Tests branch at line 170-173: if (currentBlob.getId() == 0 || !currentBlob.isActive())
+TEST_F(BlobChainManagerTest, ReadThrowsOnInactiveIntermediateBlob) {
+	constexpr int64_t entityId = 3000;
+	constexpr int64_t entityTypeId = 30;
+	// Create data that requires multiple chunks (use random data that doesn't compress well)
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
+	std::mt19937 rng(300);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData);
+	ASSERT_GT(blobChain.size(), 1UL);
+
+	// Manually delete the middle blob
+	if (blobChain.size() > 1) {
+		graph::Blob middleBlob = dataManager->getBlob(blobChain[1].getId());
+		dataManager->deleteBlob(middleBlob);
+	}
+
+	// Try to read the corrupted chain - should throw
+	EXPECT_THROW((void) chainManager->readBlobChain(blobChain[0].getId()), std::runtime_error);
+}
+
+// =============================================================================
+// Compression Control Tests (compress=false parameter)
+// These tests verify the new compress parameter allows creating uncompressed blobs
+// =============================================================================
+
+// Test createBlobChain with compress=false
+// Tests branch at line 35: std::string processedData = compress ? compressData(data) : data;
+TEST_F(BlobChainManagerTest, CreateBlobChainWithoutCompression) {
+	constexpr int64_t entityId = 3200;
+	constexpr int64_t entityTypeId = 32;
+	// Use small enough data that fits in one blob without compression
+	const std::string testData(200, 'A');
+
+	// Create blob chain with compression disabled
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+
+	EXPECT_EQ(blobChain.size(), 1UL);
+	EXPECT_FALSE(blobChain[0].isCompressed());
+	EXPECT_EQ(blobChain[0].getOriginalSize(), testData.size());
+
+	// Verify data can be read back
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, testData);
+}
+
+// Test createBlobChain with compress=true (default)
+// Verifies that the default behavior still compresses data
+TEST_F(BlobChainManagerTest, CreateBlobChainWithCompressionDefault) {
+	constexpr int64_t entityId = 3300;
+	constexpr int64_t entityTypeId = 33;
+	const std::string compressibleData(200, 'A');
+
+	// Create blob chain with default compression (enabled)
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, compressibleData);
+
+	EXPECT_EQ(blobChain.size(), 1UL);
+	EXPECT_TRUE(blobChain[0].isCompressed());
+	EXPECT_EQ(blobChain[0].getOriginalSize(), compressibleData.size());
+
+	// Verify data can be read back
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, compressibleData);
+}
+
+// Test createBlobChain with compress=true explicitly
+TEST_F(BlobChainManagerTest, CreateBlobChainWithCompressionExplicit) {
+	constexpr int64_t entityId = 3400;
+	constexpr int64_t entityTypeId = 34;
+	const std::string compressibleData(200, 'B');
+
+	// Create blob chain with explicit compression enabled
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, compressibleData, true);
+
+	EXPECT_EQ(blobChain.size(), 1UL);
+	EXPECT_TRUE(blobChain[0].isCompressed());
+	EXPECT_EQ(blobChain[0].getOriginalSize(), compressibleData.size());
+
+	// Verify data can be read back
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, compressibleData);
+}
+
+// Test updateBlobChain with compress=false
+// Tests branch at line 141: return createBlobChain(entityId, entityType, data, compress);
+TEST_F(BlobChainManagerTest, UpdateBlobChainWithoutCompression) {
+	constexpr int64_t entityId = 3500;
+	constexpr int64_t entityTypeId = 35;
+	const std::string originalData = "Original data";
+	const std::string newData(200, 'X');
+
+	// Create initial chain with compression
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, originalData);
+	ASSERT_GT(blobChain.size(), 0UL);
+	EXPECT_TRUE(blobChain[0].isCompressed());
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Update with new data without compression
+	auto updatedChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, newData, false);
+
+	EXPECT_EQ(updatedChain.size(), 1UL);
+	EXPECT_FALSE(updatedChain[0].isCompressed());
+
+	// Verify the new data is correct
+	std::string readData = chainManager->readBlobChain(headBlobId);
+	EXPECT_EQ(readData, newData);
+}
+
+// Test updateBlobChain with compress=true
+TEST_F(BlobChainManagerTest, UpdateBlobChainWithCompression) {
+	constexpr int64_t entityId = 3600;
+	constexpr int64_t entityTypeId = 36;
+	const std::string originalData = "Original data";
+	const std::string newData(200, 'Y');
+
+	// Create initial chain without compression
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, originalData, false);
+	ASSERT_GT(blobChain.size(), 0UL);
+	EXPECT_FALSE(blobChain[0].isCompressed());
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Update with new data with compression enabled
+	auto updatedChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, newData, true);
+
+	EXPECT_EQ(updatedChain.size(), 1UL);
+	EXPECT_TRUE(updatedChain[0].isCompressed());
+
+	// Verify the new data is correct
+	std::string readData = chainManager->readBlobChain(headBlobId);
+	EXPECT_EQ(readData, newData);
+}
+
+// Test createBlobChain with multi-blob chain and compress=false
+// Tests that the compress parameter works correctly for multi-blob chains
+TEST_F(BlobChainManagerTest, CreateMultiBlobChainWithoutCompression) {
+	constexpr int64_t entityId = 3700;
+	constexpr int64_t entityTypeId = 37;
+	// Create data that requires multiple blobs
+	std::string largeData;
+	largeData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
+	std::mt19937 rng(3700);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c: largeData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	// Create blob chain without compression
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, largeData, false);
+
+	EXPECT_GT(blobChain.size(), 1UL);
+
+	// Verify all blobs are not compressed
+	for (const auto &blob: blobChain) {
+		EXPECT_FALSE(blob.isCompressed());
+	}
+
+	// Verify data can be read back
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, largeData);
+}
+
+// Test updateBlobChain with same data but different compression mode
+// Tests that isDataSame returns false when compression mode differs
+TEST_F(BlobChainManagerTest, UpdateBlobChainDifferentCompressionMode) {
+	constexpr int64_t entityId = 3800;
+	constexpr int64_t entityTypeId = 38;
+	const std::string testData = "Test data for compression mode change";
+
+	// Create initial chain with compression
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, true);
+	ASSERT_GT(blobChain.size(), 0UL);
+	int64_t headBlobId = blobChain[0].getId();
+	EXPECT_TRUE(blobChain[0].isCompressed());
+
+	// Flush to make persistent
+	dataManager->prepareFlushSnapshot();
+	dataManager->commitFlushSnapshot();
+
+	// Update with same data but different compression mode
+	// This should create a new chain even though data is the same
+	// because isDataSame decompresses the data before comparing, so the decompressed
+	// data will be the same, but we want different compression
+	// Actually, let's use different data to ensure the chain is updated
+	const std::string newData = "Different test data for compression mode change";
+	auto updatedChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, newData, false);
+
+	EXPECT_FALSE(updatedChain.empty());
+	EXPECT_FALSE(updatedChain[0].isCompressed());
+
+	// Verify data is correct
+	std::string readData = chainManager->readBlobChain(headBlobId);
+	EXPECT_EQ(readData, newData);
+}

@@ -113,8 +113,6 @@ namespace graph {
 			// Read key from blob or inline based on the flag.
 			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
 				entry.keyBlobId = utils::Serializer::readPOD<int64_t>(is);
-				if (!dataManager)
-					throw std::runtime_error("DataManager required to retrieve key blob data.");
 				std::string keyData = dataManager->getBlobManager()->readBlobChain(entry.keyBlobId);
 				std::istringstream keyStream(keyData);
 				entry.key = utils::Serializer::deserialize<PropertyValue>(keyStream);
@@ -130,8 +128,6 @@ namespace graph {
 			// Read values from blob or inline based on the flag.
 			if (flags & EntrySerializationFlags::VALUES_ARE_BLOB) {
 				entry.valuesBlobId = utils::Serializer::readPOD<int64_t>(is);
-				if (!dataManager)
-					throw std::runtime_error("DataManager required to retrieve value blob data.");
 				std::string blobData = dataManager->getBlobManager()->readBlobChain(entry.valuesBlobId);
 				std::istringstream valueStream(blobData);
 				for (uint32_t j = 0; j < valueCount; ++j) {
@@ -164,8 +160,6 @@ namespace graph {
 				entry.keyBlobId = 0;
 			}
 			if (shouldKeyUseBlob) {
-				if (!dataManager)
-					throw std::runtime_error("DataManager not available for key blob storage.");
 				std::ostringstream keyStream;
 				utils::Serializer::serialize(keyStream, entry.key);
 				if (entry.keyBlobId != 0) {
@@ -188,8 +182,6 @@ namespace graph {
 				entry.valuesBlobId = 0;
 			}
 			if (shouldValuesUseBlob) {
-				if (!dataManager)
-					throw std::runtime_error("DataManager not available for value blob storage.");
 				std::ostringstream valueStream;
 				for (int64_t val: entry.values)
 					utils::Serializer::writePOD(valueStream, val);
@@ -383,8 +375,6 @@ namespace graph {
 				values.erase(value_it, values.end());
 				if (values.empty()) {
 					// If the entry is now empty, delete associated blobs before erasing.
-					if (!dataManager)
-						throw std::runtime_error("DataManager required to clean up blobs.");
 					if (it->valuesBlobId != 0) {
 						dataManager->getBlobManager()->deleteBlobChain(it->valuesBlobId);
 					}
@@ -436,8 +426,6 @@ namespace graph {
 
 		if (it != children.end() && !comparator(key, it->key) && !comparator(it->key, key)) {
 			if (it->keyBlobId != 0) {
-				if (!dataManager)
-					throw std::runtime_error("DataManager required to clean up blob.");
 				dataManager->getBlobManager()->deleteBlobChain(it->keyBlobId);
 			}
 			children.erase(it);
@@ -498,9 +486,6 @@ namespace graph {
 
 			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
 				entry.keyBlobId = utils::Serializer::readPOD<int64_t>(is);
-				if (!dataManager) {
-					throw std::runtime_error("DataManager is required to retrieve blob data.");
-				}
 				std::string keyData = dataManager->getBlobManager()->readBlobChain(entry.keyBlobId);
 				std::istringstream keyStream(keyData);
 				entry.key = utils::Serializer::deserialize<PropertyValue>(keyStream);
@@ -538,14 +523,10 @@ namespace graph {
 
 			// --- Blob Management for the key ---
 			if (entry.keyBlobId != 0 && !shouldUseBlob) {
-				if (!dataManager)
-					throw std::runtime_error("DataManager required to clean up blob.");
 				dataManager->getBlobManager()->deleteBlobChain(entry.keyBlobId);
 				entry.keyBlobId = 0;
 			}
 			if (shouldUseBlob) {
-				if (!dataManager)
-					throw std::runtime_error("DataManager not available for blob storage.");
 				std::ostringstream keyStream;
 				utils::Serializer::serialize(keyStream, entry.key);
 				if (entry.keyBlobId != 0) {

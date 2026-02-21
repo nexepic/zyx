@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 #include <sstream>
 #include "graph/core/State.hpp"
+#include "graph/utils/Serializer.hpp"
 
 class StateTest : public ::testing::Test {
 protected:
@@ -311,4 +312,32 @@ TEST_F(StateTest, GetDataRawPointerAccess) {
 
 	// Ensure it is not null (since data is present)
 	EXPECT_NE(buffer, nullptr);
+}
+
+// Test that deserialize throws when dataSize exceeds CHUNK_SIZE
+// Tests branch at line 86-89: if (state.metadata.dataSize > CHUNK_SIZE)
+TEST_F(StateTest, DeserializeThrowsOnOversizedData) {
+	std::stringstream ss;
+
+	// Write metadata with oversized dataSize
+	graph::utils::Serializer::writePOD(ss, static_cast<int64_t>(100)); // id
+	graph::utils::Serializer::writePOD(ss, static_cast<int64_t>(0)); // nextStateId
+	graph::utils::Serializer::writePOD(ss, static_cast<int64_t>(0)); // prevStateId
+	graph::utils::Serializer::writePOD(ss, static_cast<int64_t>(0)); // externalId
+	graph::utils::Serializer::writePOD(ss, static_cast<uint32_t>(graph::State::CHUNK_SIZE + 100)); // dataSize - OVERSIZED!
+	graph::utils::Serializer::writePOD(ss, static_cast<int32_t>(0)); // chainPosition
+
+	// Write key buffer
+	std::string keyBuffer(graph::State::MAX_KEY_LENGTH, '\0');
+	std::memcpy(keyBuffer.data(), "test_key", 8);
+	graph::utils::Serializer::writeBuffer(ss, keyBuffer.data(), graph::State::MAX_KEY_LENGTH);
+
+	graph::utils::Serializer::writePOD(ss, true); // isActive
+
+	// Write data buffer (oversized)
+	std::string dataBuffer(graph::State::CHUNK_SIZE + 100, 'X');
+	graph::utils::Serializer::writeBuffer(ss, dataBuffer.data(), graph::State::CHUNK_SIZE + 100);
+
+	// Deserialize should throw
+	EXPECT_THROW(graph::State::deserialize(ss), std::runtime_error);
 }
