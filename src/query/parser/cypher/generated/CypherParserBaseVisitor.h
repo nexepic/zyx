@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.1
+// Generated from CypherParser.g4 by ANTLR 4.13.2
 
 #pragma once
 
@@ -10,8 +10,6 @@
 #include "antlr4-runtime.h"
 #include "CypherParserVisitor.h"
 
-
-namespace graph::parser::cypher {
 
 /**
  * This class provides an empty implementation of CypherParserVisitor, which can be
@@ -339,4 +337,3 @@ public:
 
 };
 
-}  // namespace graph::parser::cypher

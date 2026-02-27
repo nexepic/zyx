@@ -197,3 +197,114 @@ TEST_F(IntegrationQueryTest, MultipleMatchPatterns) {
 						  "RETURN a.name, b.name, c.name");
 	EXPECT_GT(result.rowCount(), 0UL);
 }
+
+/**
+ * Test IN operator with integer list
+ */
+TEST_F(IntegrationQueryTest, InOperatorIntegerList) {
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	(void) execute("CREATE (n:Person {name: 'Charlie', age: 35})");
+	(void) execute("CREATE (n:Person {name: 'David', age: 40})");
+
+	auto result = execute("MATCH (n:Person) WHERE n.age IN [25, 30, 35] RETURN n.name");
+	EXPECT_EQ(result.rowCount(), 3UL);
+}
+
+/**
+ * Test IN operator with string list
+ */
+TEST_F(IntegrationQueryTest, InOperatorStringList) {
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	(void) execute("CREATE (n:Person {name: 'Charlie', age: 35})");
+
+	auto result = execute("MATCH (n:Person) WHERE n.name IN ['Alice', 'Bob'] RETURN n.name");
+	EXPECT_EQ(result.rowCount(), 2UL);
+}
+
+/**
+ * Test IN operator with empty result set
+ */
+TEST_F(IntegrationQueryTest, InOperatorEmptyResultSet) {
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+
+	auto result = execute("MATCH (n:Person) WHERE n.age IN [40, 50, 60] RETURN n.name");
+	EXPECT_EQ(result.rowCount(), 0UL);
+}
+
+/**
+ * Test IN operator with single value in list
+ */
+TEST_F(IntegrationQueryTest, InOperatorSingleValue) {
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+
+	auto result = execute("MATCH (n:Person) WHERE n.age IN [30] RETURN n.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test SET label syntax
+ */
+TEST_F(IntegrationQueryTest, SetLabelSyntax) {
+	// Create a node without label
+	(void) execute("CREATE (n {name: 'Alice', age: 30})");
+
+	// Add label to existing node
+	(void) execute("MATCH (n {name: 'Alice'}) SET n:Person");
+
+	// Verify the label was added
+	auto result = execute("MATCH (n:Person) RETURN n.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test SET replaces existing label
+ */
+TEST_F(IntegrationQueryTest, SetReplacesLabel) {
+	// Create a node
+	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+
+	// Replace label with new one
+	(void) execute("MATCH (n:Person {name: 'Alice'}) SET n:Employee");
+
+	// Verify node no longer has Person label but has Employee label
+	auto resultOld = execute("MATCH (n:Person) RETURN n.name");
+	EXPECT_EQ(resultOld.rowCount(), 0UL);
+
+	auto resultNew = execute("MATCH (n:Employee) RETURN n.name");
+	EXPECT_EQ(resultNew.rowCount(), 1UL);
+}
+
+/**
+ * Test DISTINCT operator
+ */
+TEST_F(IntegrationQueryTest, DistinctOperator) {
+	// Create nodes with duplicate countries
+	(void) execute("CREATE (n:Person {name: 'Alice', country: 'USA'})");
+	(void) execute("CREATE (n:Person {name: 'Bob', country: 'USA'})");
+	(void) execute("CREATE (n:Person {name: 'Charlie', country: 'UK'})");
+
+	// Without DISTINCT - should return 3 rows
+	auto resultAll = execute("MATCH (n:Person) RETURN n.country");
+	EXPECT_EQ(resultAll.rowCount(), 3UL);
+
+	// With DISTINCT - should return 2 unique countries
+	auto resultDistinct = execute("MATCH (n:Person) RETURN DISTINCT n.country");
+	EXPECT_EQ(resultDistinct.rowCount(), 2UL);
+}
+
+/**
+ * Test DISTINCT with single value
+ */
+TEST_F(IntegrationQueryTest, DistinctSingleValue) {
+	// Create nodes with same property value
+	(void) execute("CREATE (n:Person {name: 'Alice', status: 'active'})");
+	(void) execute("CREATE (n:Person {name: 'Bob', status: 'active'})");
+
+	// DISTINCT should return 1 row
+	auto result = execute("MATCH (n:Person) RETURN DISTINCT n.status");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}

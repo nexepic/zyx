@@ -272,7 +272,7 @@ notExpression
     ;
 
 comparisonExpression
-    : arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE ) arithmeticExpression )*
+    : arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN ) arithmeticExpression )*
     ;
 
 arithmeticExpression

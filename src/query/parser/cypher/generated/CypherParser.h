@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.1
+// Generated from CypherParser.g4 by ANTLR 4.13.2
 
 #pragma once
 
@@ -10,7 +10,6 @@
 #include "antlr4-runtime.h"
 
 
-namespace graph::parser::cypher {
 
 
 class  CypherParser : public antlr4::Parser {
@@ -1047,6 +1046,8 @@ public:
     antlr4::tree::TerminalNode* LTE(size_t i);
     std::vector<antlr4::tree::TerminalNode *> GTE();
     antlr4::tree::TerminalNode* GTE(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> K_IN();
+    antlr4::tree::TerminalNode* K_IN(size_t i);
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -1534,4 +1535,3 @@ public:
 private:
 };
 
-}  // namespace graph::parser::cypher

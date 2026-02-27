@@ -44,8 +44,8 @@ TEST_F(HelpersComprehensiveTest, AstExtractor_AllNullChecks) {
 // Test extractProperties with empty result
 TEST_F(HelpersComprehensiveTest, AstExtractor_ExtractProperties_EmptyResults) {
 	int callCount = 0;
-	std::function<graph::PropertyValue(graph::parser::cypher::CypherParser::ExpressionContext*)> evaluator =
-		[&callCount](graph::parser::cypher::CypherParser::ExpressionContext*) {
+	std::function<graph::PropertyValue(CypherParser::ExpressionContext*)> evaluator =
+		[&callCount](CypherParser::ExpressionContext*) {
 			callCount++;
 			return graph::PropertyValue(42);
 		};

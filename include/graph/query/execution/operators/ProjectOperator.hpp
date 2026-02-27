@@ -25,6 +25,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
@@ -46,9 +47,10 @@ namespace graph::query::execution::operators {
 		 * @brief Constructs a ProjectOperator.
 		 * @param child Upstream operator.
 		 * @param items List of projection items (expression + alias).
+		 * @param distinct If true, eliminate duplicate rows.
 		 */
-		ProjectOperator(std::unique_ptr<PhysicalOperator> child, std::vector<ProjectItem> items) :
-			child_(std::move(child)), items_(std::move(items)) {}
+		ProjectOperator(std::unique_ptr<PhysicalOperator> child, std::vector<ProjectItem> items, bool distinct = false) :
+			child_(std::move(child)), items_(std::move(items)), distinct_(distinct) {}
 
 		void open() override {
 			if (child_)
@@ -134,7 +136,17 @@ namespace graph::query::execution::operators {
 					}
 				}
 
-				outputBatch.push_back(std::move(newRecord));
+				// DISTINCT: Check if we've seen this record before
+				if (distinct_) {
+					std::string recordKey = recordToString(newRecord);
+					if (seenRecords_.find(recordKey) == seenRecords_.end()) {
+						seenRecords_.insert(recordKey);
+						outputBatch.push_back(std::move(newRecord));
+					}
+					// If duplicate, skip adding to outputBatch
+				} else {
+					outputBatch.push_back(std::move(newRecord));
+				}
 			}
 
 			return outputBatch;
@@ -157,6 +169,7 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::string toString() const override {
 			std::ostringstream oss;
 			oss << "Project(";
+			if (distinct_) oss << "DISTINCT ";
 			for (size_t i = 0; i < items_.size(); ++i) {
 				oss << items_[i].expression;
 				if (items_[i].alias != items_[i].expression) {
@@ -178,6 +191,23 @@ namespace graph::query::execution::operators {
 	private:
 		std::unique_ptr<PhysicalOperator> child_;
 		std::vector<ProjectItem> items_;
+		bool distinct_;
+		std::unordered_set<std::string> seenRecords_; // Track seen records for DISTINCT
+
+		/**
+		 * @brief Generate a hash string for a record to use in DISTINCT deduplication.
+		 */
+		std::string recordToString(const Record &record) {
+			std::string result;
+			for (const auto &item: items_) {
+				if (auto val = record.getValue(item.alias)) {
+					result += val->toString() + "|";
+				} else {
+					result += "NULL|";
+				}
+			}
+			return result;
+		}
 
 		/**
 		 * @brief Attempts to parse a string expression as a literal value.

@@ -6,21 +6,32 @@ This document records the Cypher query language features that are currently not 
 
 ### 1.1 IN Operator
 **Syntax**: `WHERE n.id IN [1, 2, 3]`
-**Status**: ❌ Not Supported
-**Workaround**: Use multiple OR conditions
+**Status**: ✅ Fully Supported
+**Note**: Can be used to check if a property value matches any value in a list.
+
 ```cypher
--- Not Supported
+-- Example: Find nodes with specific IDs
 MATCH (n) WHERE n.id IN [1, 2, 3] RETURN n
 
--- Workaround
-MATCH (n) WHERE n.id = 1 OR n.id = 2 OR n.id = 3 RETURN n
+-- Example: Find nodes with specific names
+MATCH (n:Person) WHERE n.name IN ['Alice', 'Bob'] RETURN n
+
+-- Example: Empty result set
+MATCH (n:Person) WHERE n.age IN [40, 50, 60] RETURN n
 ```
 
 ### 1.2 WHERE Clause Parsing Issue
 **Syntax**: `MATCH(n)WHERE n.prop = 1`
-**Status**: ❌ Parse Error
-**Issue**: When `MATCH(n)` is directly followed by `WHERE`, the parser incorrectly merges tokens
-**Workaround**: Use space separation: `MATCH (n) WHERE ...`
+**Status**: ✅ Works with proper spacing
+**Note**: The Cypher grammar requires whitespace between keywords. Use `MATCH (n) WHERE ...` for correct parsing.
+
+```cypher
+-- Correct syntax with spacing
+MATCH (n) WHERE n.prop = 1 RETURN n
+
+-- Avoid syntax without spacing
+MATCH(n)WHERE n.prop = 1  -- May have parsing issues
+```
 
 ## 2. Expression Evaluation
 
@@ -66,7 +77,16 @@ MATCH (n) WHERE n.id = 1 OR n.id = 2 OR n.id = 3 RETURN n
 
 ### 4.1 DISTINCT
 **Syntax**: `RETURN DISTINCT n.val`
-**Status**: ⚠️ May Not Be Supported
+**Status**: ✅ Supported
+**Note**: Eliminates duplicate rows from query results.
+
+```cypher
+-- Example: Return unique countries
+MATCH (n:Person) RETURN DISTINCT n.country
+
+-- Example: Return unique status values
+MATCH (n:Person) WHERE n.active = true RETURN DISTINCT n.status
+```
 
 ### 4.2 range() Function
 **Syntax**: `UNWIND range(1, 5) AS x`
@@ -76,8 +96,16 @@ MATCH (n) WHERE n.id = 1 OR n.id = 2 OR n.id = 3 RETURN n
 
 ### 5.1 SET n:Label (Set Label)
 **Syntax**: `MATCH (n) SET n:NewLabel`
-**Status**: ❌ Not Supported
-**Note**: SET can only be used for setting properties, not for adding labels
+**Status**: ✅ Supported
+**Note**: SET can set both properties and labels. Setting a label replaces the existing label on the node.
+
+```cypher
+-- Example: Set label on a node
+MATCH (n {name: 'Alice'}) SET n:Person
+
+-- Example: Replace a label
+MATCH (n:OldLabel) SET n:NewLabel
+```
 
 ### 5.2 UNWIND Nested Properties
 **Syntax**: `MATCH (n) UNWIND n.arrayProp AS x`

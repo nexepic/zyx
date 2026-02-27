@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.1
+// Generated from CypherParser.g4 by ANTLR 4.13.2
 
 #pragma once
 
@@ -11,7 +11,6 @@
 #include "CypherParser.h"
 
 
-namespace graph::parser::cypher {
 
 /**
  * This class defines an abstract visitor for a parse tree
@@ -184,4 +183,3 @@ public:
 
 };
 
-}  // namespace graph::parser::cypher

@@ -27,8 +27,6 @@
 #include "CypherParser.h"
 #include "antlr4-runtime.h"
 
-using namespace graph::parser::cypher;
-
 class TestErrorListener : public antlr4::BaseErrorListener {
 public:
 	void syntaxError(antlr4::Recognizer * /*recognizer*/, antlr4::Token * /*offendingSymbol*/, size_t line,

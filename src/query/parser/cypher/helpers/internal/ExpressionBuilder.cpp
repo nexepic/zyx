@@ -68,18 +68,10 @@ std::function<bool(const query::execution::Record &)> ExpressionBuilder::buildWh
 
 	std::string propKey = firstAccessor->propertyKeyName()->getText();
 
-	// 3. Parse RHS (Right Hand Side) - Expecting: Literal
-	// Structure: unary -> atom -> literal
-	auto rhsUnary = rhsArith->unaryExpression(0);
-	auto rhsAtom = rhsUnary->atom();
-
-	if (!rhsAtom || !rhsAtom->literal()) {
-		throw std::runtime_error("RHS of WHERE must be a literal value (e.g., 10, 'text')");
-	}
-	auto literalVal = parseValue(rhsAtom->literal());
-
-	// 4. Parse Operator
+	// 3. Parse Operator
 	std::string op = "==";
+	bool isInOp = false;
+
 	if (!comparison->EQ().empty())
 		op = "=";
 	else if (!comparison->NEQ().empty())
@@ -92,37 +84,103 @@ std::function<bool(const query::execution::Record &)> ExpressionBuilder::buildWh
 		op = "<=";
 	else if (!comparison->GTE().empty())
 		op = ">=";
+	else if (!comparison->K_IN().empty()) {
+		op = "IN";
+		isInOp = true;
+	}
 
-	// 5. Build Result
-	outDesc = varName + "." + propKey + " " + op + " " + literalVal.toString();
+	// 4. Parse RHS (Right Hand Side)
+	// For IN operator: Expecting a list literal
+	// For other operators: Expecting a literal value
+	auto rhsUnary = rhsArith->unaryExpression(0);
+	auto rhsAtom = rhsUnary->atom();
 
-	return [varName, propKey, literalVal, op](const query::execution::Record &r) -> bool {
-		auto n = r.getNode(varName);
-		if (!n)
+	if (isInOp) {
+		// IN operator: RHS should be a list literal
+		if (!rhsAtom || !rhsAtom->listLiteral()) {
+			throw std::runtime_error("RHS of IN operator must be a list literal (e.g., [1, 2, 3])");
+		}
+
+		// Extract list values
+		std::vector<PropertyValue> listValues;
+		auto listLit = rhsAtom->listLiteral();
+
+		for (auto itemExpr : listLit->expression()) {
+			auto itemAtom = getAtomFromExpression(itemExpr);
+			if (itemAtom && itemAtom->literal()) {
+				listValues.push_back(parseValue(itemAtom->literal()));
+			} else {
+				throw std::runtime_error("IN list only supports literal values");
+			}
+		}
+
+		// Build description
+		std::string listStr = "[";
+		for (size_t i = 0; i < listValues.size(); ++i) {
+			listStr += listValues[i].toString();
+			if (i < listValues.size() - 1) listStr += ", ";
+		}
+		listStr += "]";
+		outDesc = varName + "." + propKey + " IN " + listStr;
+
+		return [varName, propKey, listValues](const query::execution::Record &r) -> bool {
+			auto n = r.getNode(varName);
+			if (!n)
+				return false;
+
+			const auto &props = n->getProperties();
+			auto it = props.find(propKey);
+			if (it == props.end())
+				return false; // Property missing
+
+			const auto &val = it->second;
+
+			// Check if value is in the list
+			for (const auto &listItem : listValues) {
+				if (val == listItem) {
+					return true;
+				}
+			}
 			return false;
+		};
+	} else {
+		// Standard comparison operators: RHS should be a literal
+		if (!rhsAtom || !rhsAtom->literal()) {
+			throw std::runtime_error("RHS of WHERE must be a literal value (e.g., 10, 'text')");
+		}
+		auto literalVal = parseValue(rhsAtom->literal());
 
-		const auto &props = n->getProperties();
-		auto it = props.find(propKey);
-		if (it == props.end())
-			return false; // Property missing
+		// 5. Build Result
+		outDesc = varName + "." + propKey + " " + op + " " + literalVal.toString();
 
-		const auto &val = it->second;
+		return [varName, propKey, literalVal, op](const query::execution::Record &r) -> bool {
+			auto n = r.getNode(varName);
+			if (!n)
+				return false;
 
-		if (op == "=")
-			return val == literalVal;
-		if (op == "<>")
-			return val != literalVal;
-		if (op == ">")
-			return val > literalVal;
-		if (op == "<")
-			return val < literalVal;
-		if (op == ">=")
-			return val >= literalVal;
-		if (op == "<=")
-			return val <= literalVal;
+			const auto &props = n->getProperties();
+			auto it = props.find(propKey);
+			if (it == props.end())
+				return false; // Property missing
 
-		return false;
-	};
+			const auto &val = it->second;
+
+			if (op == "=")
+				return val == literalVal;
+			if (op == "<>")
+				return val != literalVal;
+			if (op == ">")
+				return val > literalVal;
+			if (op == "<")
+				return val < literalVal;
+			if (op == ">=")
+				return val >= literalVal;
+			if (op == "<=")
+				return val <= literalVal;
+
+			return false;
+		};
+	}
 }
 
 std::vector<PropertyValue> ExpressionBuilder::extractListFromExpression(CypherParser::ExpressionContext *ctx) {

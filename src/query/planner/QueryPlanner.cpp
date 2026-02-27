@@ -117,8 +117,9 @@ namespace graph::query {
 
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::projectOp(std::unique_ptr<execution::PhysicalOperator> child,
-							const std::vector<execution::operators::ProjectItem> &items) {
-		return std::make_unique<execution::operators::ProjectOperator>(std::move(child), items);
+							const std::vector<execution::operators::ProjectItem> &items,
+							bool distinct) {
+		return std::make_unique<execution::operators::ProjectOperator>(std::move(child), items, distinct);
 	}
 
 	// --- Write Operations ---

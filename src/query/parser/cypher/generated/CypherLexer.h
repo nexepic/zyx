@@ -1,5 +1,5 @@
 
-// Generated from CypherLexer.g4 by ANTLR 4.13.1
+// Generated from CypherLexer.g4 by ANTLR 4.13.2
 
 #pragma once
 
@@ -7,7 +7,6 @@
 #include "antlr4-runtime.h"
 
 
-namespace graph::parser::cypher {
 
 
 class  CypherLexer : public antlr4::Lexer {
@@ -69,4 +68,3 @@ private:
 
 };
 
-}  // namespace graph::parser::cypher

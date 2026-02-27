@@ -39,8 +39,8 @@ TEST_F(HelpersIntegrationTest, AstExtractor_AllNullPaths) {
 // Test extractProperties with lambda
 TEST_F(HelpersIntegrationTest, AstExtractor_ExtractProperties_WithLambda) {
 	int callCount = 0;
-	std::function<graph::PropertyValue(graph::parser::cypher::CypherParser::ExpressionContext*)> evaluator =
-		[&callCount](graph::parser::cypher::CypherParser::ExpressionContext*) {
+	std::function<graph::PropertyValue(CypherParser::ExpressionContext*)> evaluator =
+		[&callCount](CypherParser::ExpressionContext*) {
 			callCount++;
 			return graph::PropertyValue(42);
 		};
@@ -53,22 +53,22 @@ TEST_F(HelpersIntegrationTest, AstExtractor_ExtractProperties_WithLambda) {
 // Test extractProperties with different return types
 TEST_F(HelpersIntegrationTest, AstExtractor_ExtractProperties_DifferentReturnTypes) {
 	// Test with lambda returning different PropertyValue types
-	std::function<graph::PropertyValue(graph::parser::cypher::CypherParser::ExpressionContext*)> evaluator1 =
-		[](graph::parser::cypher::CypherParser::ExpressionContext*) {
+	std::function<graph::PropertyValue(CypherParser::ExpressionContext*)> evaluator1 =
+		[](CypherParser::ExpressionContext*) {
 			return graph::PropertyValue("test");
 		};
 	auto result = AstExtractor::extractProperties(nullptr, evaluator1);
 	EXPECT_TRUE(result.empty());
 
-	std::function<graph::PropertyValue(graph::parser::cypher::CypherParser::ExpressionContext*)> evaluator2 =
-		[](graph::parser::cypher::CypherParser::ExpressionContext*) {
+	std::function<graph::PropertyValue(CypherParser::ExpressionContext*)> evaluator2 =
+		[](CypherParser::ExpressionContext*) {
 			return graph::PropertyValue(3.14);
 		};
 	auto result2 = AstExtractor::extractProperties(nullptr, evaluator2);
 	EXPECT_TRUE(result2.empty());
 
-	std::function<graph::PropertyValue(graph::parser::cypher::CypherParser::ExpressionContext*)> evaluator3 =
-		[](graph::parser::cypher::CypherParser::ExpressionContext*) {
+	std::function<graph::PropertyValue(CypherParser::ExpressionContext*)> evaluator3 =
+		[](CypherParser::ExpressionContext*) {
 			return graph::PropertyValue(true);
 		};
 	auto result3 = AstExtractor::extractProperties(nullptr, evaluator3);

@@ -1,5 +1,5 @@
 
-// Generated from CypherLexer.g4 by ANTLR 4.13.1
+// Generated from CypherLexer.g4 by ANTLR 4.13.2
 
 
 #include "CypherLexer.h"
@@ -7,7 +7,6 @@
 
 using namespace antlr4;
 
-using namespace graph::parser::cypher;
 
 
 using namespace antlr4;
@@ -46,7 +45,7 @@ struct CypherLexerStaticData final {
 #if ANTLR4_USE_THREAD_LOCAL_CACHE
 static thread_local
 #endif
-CypherLexerStaticData *cypherlexerLexerStaticData = nullptr;
+std::unique_ptr<CypherLexerStaticData> cypherlexerLexerStaticData = nullptr;
 
 void cypherlexerLexerInitialize() {
 #if ANTLR4_USE_THREAD_LOCAL_CACHE
@@ -384,7 +383,7 @@ void cypherlexerLexerInitialize() {
   for (size_t i = 0; i < count; i++) { 
     staticData->decisionToDFA.emplace_back(staticData->atn->getDecisionState(i), i);
   }
-  cypherlexerLexerStaticData = staticData.release();
+  cypherlexerLexerStaticData = std::move(staticData);
 }
 
 }

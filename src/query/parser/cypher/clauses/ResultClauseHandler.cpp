@@ -31,6 +31,9 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 
 	auto body = ctx->projectionBody();
 
+	// Check for DISTINCT
+	bool distinct = (body->K_DISTINCT() != nullptr);
+
 	// If there is no existing plan (e.g. standalone RETURN 1),
 	// inject a SingleRowOperator to provide a valid pipeline source.
 	if (!rootOp) {
@@ -91,7 +94,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 		}
 
 		if (!projItems.empty()) {
-			rootOp = planner->projectOp(std::move(rootOp), projItems);
+			rootOp = planner->projectOp(std::move(rootOp), projItems, distinct);
 		}
 	}
 

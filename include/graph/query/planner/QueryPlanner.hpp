@@ -96,10 +96,12 @@ namespace graph::query {
 
 		/**
 		 * @brief Projects specific variables from the stream (SELECT/RETURN).
+		 * @param distinct If true, eliminate duplicate rows from output.
 		 */
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
 		projectOp(std::unique_ptr<execution::PhysicalOperator> child,
-				  const std::vector<execution::operators::ProjectItem> &items);
+				  const std::vector<execution::operators::ProjectItem> &items,
+				  bool distinct = false);
 
 		// =================================================================
 		// Write Operations (Factories)

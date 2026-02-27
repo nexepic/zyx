@@ -64,8 +64,8 @@ TEST_F(AstExtractorUnitTest, ParseValue_NullLiteralContext) {
 // ============== extractProperties Tests ==============
 
 TEST_F(AstExtractorUnitTest, ExtractProperties_NullContext) {
-	std::function<graph::PropertyValue(graph::parser::cypher::CypherParser::ExpressionContext*)> evaluator =
-		[](graph::parser::cypher::CypherParser::ExpressionContext*) {
+	std::function<graph::PropertyValue(CypherParser::ExpressionContext*)> evaluator =
+		[](CypherParser::ExpressionContext*) {
 			return graph::PropertyValue();
 		};
 	auto result = AstExtractor::extractProperties(nullptr, evaluator);
@@ -75,8 +75,8 @@ TEST_F(AstExtractorUnitTest, ExtractProperties_NullContext) {
 TEST_F(AstExtractorUnitTest, ExtractProperties_WithEvaluator) {
 	// Tests with null context - evaluator should not be called
 	int callCount = 0;
-	std::function<graph::PropertyValue(graph::parser::cypher::CypherParser::ExpressionContext*)> evaluator =
-		[&callCount](graph::parser::cypher::CypherParser::ExpressionContext*) {
+	std::function<graph::PropertyValue(CypherParser::ExpressionContext*)> evaluator =
+		[&callCount](CypherParser::ExpressionContext*) {
 			callCount++;
 			return graph::PropertyValue();
 		};

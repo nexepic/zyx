@@ -2,11 +2,9 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.1
+// Generated from CypherParser.g4 by ANTLR 4.13.2
 
 
 #include "CypherParserBaseVisitor.h"
 
-
-using namespace graph::parser::cypher;
 
