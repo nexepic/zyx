@@ -332,7 +332,10 @@ TEST_F(StateChainManagerTest, ReadStateChainCircularReference) {
 
 TEST_F(StateChainManagerTest, IsDataSameTrue) {
 	constexpr int64_t headStateId = 9001;
-	constexpr std::string testData = "Test data";
+	const std::string testData = "Test data"; // Note: this works on some C++20 compilers but can fail, keeping as const std::string might trigger warning but errors below are the main issue. Better to use const.
+	// Actually, for simplicity and safety against stricter compilers, let's fix this too even if not in error log.
+	// However, user log didn't complain about these specific lines, so I'll stick to fixing what broke.
+	// But lines below (starting 474) did break.
 
 	graph::State headState(headStateId, "test_key", testData);
 	dataManager->addStateEntity(headState);
@@ -343,8 +346,8 @@ TEST_F(StateChainManagerTest, IsDataSameTrue) {
 
 TEST_F(StateChainManagerTest, IsDataSameFalse) {
 	constexpr int64_t headStateId = 10001;
-	constexpr std::string originalData = "Original data";
-	constexpr std::string newData = "Different data";
+	const std::string originalData = "Original data";
+	const std::string newData = "Different data";
 
 	graph::State headState(headStateId, "test_key", originalData);
 	dataManager->addStateEntity(headState);
@@ -373,7 +376,7 @@ TEST_F(StateChainManagerTest, GetStateChainIdsInternal) {
 }
 
 TEST_F(StateChainManagerTest, GetStateChainIdsBlob) {
-	constexpr std::string key = "ids_blob_key";
+	const std::string key = "ids_blob_key"; // This wasn't flagged but safer as const
 	auto chain = stateChainManager->createStateChain(key, "data", true);
 
 	auto chainIds = stateChainManager->getStateChainIds(chain[0].getId());
@@ -385,7 +388,7 @@ TEST_F(StateChainManagerTest, GetStateChainIdsBlob) {
 }
 
 TEST_F(StateChainManagerTest, DeleteStateChainBlob) {
-	constexpr std::string key = "del_blob_key";
+	const std::string key = "del_blob_key";
 	const auto chain = stateChainManager->createStateChain(key, "data", true);
 	const int64_t headId = chain[0].getId();
 	const int64_t blobId = chain[0].getExternalId();
@@ -402,7 +405,7 @@ TEST_F(StateChainManagerTest, DeleteStateChainBlob) {
 }
 
 TEST_F(StateChainManagerTest, SplitDataSingleChunk) {
-	constexpr std::string smallData = "Small data";
+	const std::string smallData = "Small data";
 	// Note: splitData is private static, testing implicitly via createStateChain
 	const auto chunks = stateChainManager->createStateChain("key", smallData);
 	EXPECT_EQ(chunks.size(), 1UL);
@@ -423,8 +426,8 @@ TEST_F(StateChainManagerTest, SplitDataMultipleChunks) {
 // ==========================================
 
 TEST_F(StateChainManagerTest, UpdateWithSameDataOptimization) {
-	constexpr std::string key = "same_data_key";
-	constexpr std::string data = "Persistent Data";
+	const std::string key = "same_data_key";
+	const std::string data = "Persistent Data";
 
 	// 1. Create initial chain
 	const auto chain = stateChainManager->createStateChain(key, data, false);
@@ -442,15 +445,15 @@ TEST_F(StateChainManagerTest, UpdateWithSameDataOptimization) {
 
 TEST_F(StateChainManagerTest, UpdateNonExistentHead) {
 	constexpr int64_t fakeId = 999999;
-	constexpr std::string data = "New Data";
+	const std::string data = "New Data";
 
 	// This targets lines 121-123: headState.getId() == 0
 	EXPECT_THROW({ (void) stateChainManager->updateStateChain(fakeId, data, false); }, std::runtime_error);
 }
 
 TEST_F(StateChainManagerTest, UpdateInactiveHead) {
-	constexpr std::string key = "inactive_key";
-	constexpr std::string data = "Data";
+	const std::string key = "inactive_key";
+	const std::string data = "Data";
 
 	auto chain = stateChainManager->createStateChain(key, data, false);
 	int64_t headId = chain[0].getId();
@@ -471,8 +474,8 @@ TEST_F(StateChainManagerTest, UpdateBlobToInternalWithSameData) {
 	// Current logic returns early if data matches, IGNORING mode change.
 	// This test confirms that behavior (coverage for line 105 comment).
 
-	constexpr std::string key = "mode_ignore_key";
-	constexpr std::string data = "Static Data";
+	const std::string key = "mode_ignore_key";
+	const std::string data = "Static Data";
 
 	// Create as Blob
 	const auto chain = stateChainManager->createStateChain(key, data, true);
@@ -501,7 +504,7 @@ TEST_F(StateChainManagerTest, CreateMultiChunkChainUnderCachePressure) {
 	// Test creating multiple large state chains to potentially trigger cache eviction
 	// This verifies that the "pre-link" strategy works even when cache is under pressure
 
-	constexpr std::string baseKey = "cache_test_key";
+	const std::string baseKey = "cache_test_key";
 
 	// Create multiple state chains with multiple chunks each
 	std::vector<std::vector<graph::State>> allChains;
@@ -539,7 +542,7 @@ TEST_F(StateChainManagerTest, CreateChainStressTest) {
 	// This is similar to the BlobChainManager stress test but for State
 
 	constexpr int numChains = 50;
-	constexpr std::string baseKey = "stress_key";
+	const std::string baseKey = "stress_key";
 
 	std::mt19937 rng(12345);
 	std::uniform_int_distribution<int> dist(0, 255);
@@ -582,7 +585,7 @@ TEST_F(StateChainManagerTest, ReturnedVectorMatchesDataManager) {
 	// This is the core issue for Blob (value semantics + cache eviction),
 	// and we need to verify State doesn't have this problem
 
-	constexpr std::string key = "sync_test_key";
+	const std::string key = "sync_test_key";
 	std::string testData;
 	testData.resize(graph::State::CHUNK_SIZE * 3); // 3 chunks
 	for (size_t i = 0; i < testData.size(); i++) {
@@ -613,7 +616,7 @@ TEST_F(StateChainManagerTest, UpdateAfterCacheEviction) {
 	// Test updating a state chain after it might have been evicted from cache
 	// This verifies that updateStateChain handles cache eviction correctly
 
-	constexpr std::string key = "eviction_update_key";
+	const std::string key = "eviction_update_key";
 	std::string originalData;
 	originalData.resize(graph::State::CHUNK_SIZE * 2);
 	for (char & i : originalData) {
@@ -660,7 +663,7 @@ TEST_F(StateChainManagerTest, BlobStorageModeCacheEviction) {
 	// Test blob storage mode under cache eviction pressure
 	// This verifies that State chains using Blob storage are also robust
 
-	constexpr std::string baseKey = "blob_evict_test";
+	const std::string baseKey = "blob_evict_test";
 
 	// Create multiple state chains using blob storage
 	for (int i = 0; i < 20; i++) {
@@ -683,7 +686,7 @@ TEST_F(StateChainManagerTest, ModeSwitchUnderCacheEviction) {
 	// Test switching storage mode (internal <-> blob) under cache pressure
 	// This is a complex operation that deletes old chains and creates new ones
 
-	constexpr std::string key = "mode_switch_test";
+	const std::string key = "mode_switch_test";
 	std::string internalData = "Internal mode data that is reasonably sized";
 
 	// Create as internal mode
@@ -734,7 +737,7 @@ TEST_F(StateChainManagerTest, BlobStorageWithZeroExternalIdReturnsEmpty) {
 	const std::string key = "test_key_blob_zero_external";
 
 	// Create a state with blob storage first (non-zero externalId)
-	constexpr std::string originalData = "Original data";
+	const std::string originalData = "Original data";
 	const auto blobChain = stateChainManager->createStateChain(key, originalData, true);
 	ASSERT_GT(blobChain[0].getExternalId(), 0);
 
@@ -951,7 +954,7 @@ TEST_F(StateChainManagerTest, IsDataSameHandlesReadException) {
 // Test updateStateChain with blob storage when data is empty
 // Tests branch at line 240: if (!blobChain.empty())
 TEST_F(StateChainManagerTest, CreateBlobWithEmptyData) {
-	constexpr std::string key = "empty_blob_key";
+	const std::string key = "empty_blob_key";
 	const std::string emptyData = "";
 
 	// Create blob storage with empty data
