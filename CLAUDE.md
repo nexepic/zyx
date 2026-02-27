@@ -131,6 +131,58 @@ Key requirements from CONTRIBUTING.md:
 - Code style and formatting guidelines
 - Pull request requirements
 
+## Git Commit Guidelines
+
+**CRITICAL**: When creating git commits, you MUST strictly follow the guidelines in `CONTRIBUTING.md`. Failure to comply will result in rejected commits.
+
+### Mandatory Commit Message Requirements
+
+When executing `git commit`, follow these rules from `CONTRIBUTING.md`:
+
+1. **Use Imperative Mood**: "Fix bug" not "Fixed bug" or "Fixes bug"
+2. **Be Specific**: Describe what was changed and why
+3. **Keep it Focused**: One logical change per commit
+4. **NO Co-Authored-By**: Do NOT include `Co-Authored-By` trailers in commit messages
+
+### Commit Message Format
+
+```bash
+# Correct format
+git commit -m "Fix memory leak in BlobManager::deleteBlobChain"
+
+# WRONG - Do NOT do this
+git commit -m "Fixed stuff
+Co-Authored-By: Someone <someone@example.com>"
+```
+
+### Commit Workflow
+
+When making changes to the codebase:
+
+1. Stage only related files for a single logical change
+2. Write a clear, specific commit message in imperative mood
+3. NEVER add `Co-Authored-By:` trailers
+4. If changes span multiple features, create separate commits
+
+### Examples
+
+**Good Commit:**
+```
+Implement IN operator for WHERE clause
+
+Add support for IN operator in Cypher WHERE clauses to check if
+property values match any value in a list. This eliminates the
+need for multiple OR conditions.
+```
+
+**Bad Commits:**
+```
+Fixed stuff
+Co-Authored-By: Claude <claude@example.com>
+
+Update files
+```
+
 ## Architecture
 
 ### Layered Architecture
