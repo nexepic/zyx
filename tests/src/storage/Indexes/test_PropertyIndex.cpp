@@ -601,3 +601,285 @@ TEST_F(PropertyIndexTest, MultiplePropertyKeysIsolation) {
 	EXPECT_EQ(propertyIndex->getIndexedKeyType(key2), graph::PropertyType::STRING);
 	EXPECT_EQ(propertyIndex->getIndexedKeyType(key3), graph::PropertyType::INTEGER);
 }
+
+/**
+ * @brief Test dropKey behavior when some root maps still have entries.
+ * This covers the case where after dropping one key, other keys remain in the same type map.
+ * Previously uncovered branches: Lines 93, 99, 102 (when root maps are NOT empty)
+ */
+TEST_F(PropertyIndexTest, DropKey_WithRemainingKeysInSameType) {
+	const std::string key1 = "string_key_1";
+	const std::string key2 = "string_key_2";
+	const std::string key3 = "int_key_1";
+	const std::string key4 = "double_key_1";
+	const std::string key5 = "bool_key_1";
+
+	// Add multiple keys of the same type to trigger "not empty" branches
+	propertyIndex->addProperty(1, key1, "value1");
+	propertyIndex->addProperty(2, key2, "value2");
+	propertyIndex->addProperty(3, key3, 100);
+	propertyIndex->addProperty(4, key4, 3.14);
+	propertyIndex->addProperty(5, key5, true);
+
+	// Flush to ensure state is written
+	propertyIndex->flush();
+
+	// Drop one key at a time, leaving other keys in the same type map
+	// This should trigger the "not empty" branch for each type
+	propertyIndex->dropKey(key1);
+
+	// Verify that key1 is gone but key2 still exists
+	EXPECT_FALSE(propertyIndex->hasKeyIndexed(key1));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key2));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key3));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key4));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key5));
+
+	// Verify remaining data is still accessible
+	auto results = propertyIndex->findExactMatch(key2, "value2");
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 2);
+}
+
+/**
+ * @brief Test clearIndexData with non-existent key.
+ * Covers line 164: when !indexedKeyTypes_.contains(key) is true.
+ */
+TEST_F(PropertyIndexTest, ClearIndexData_NonExistentKey) {
+	const std::string key = "non_existent_key";
+
+	// Should not throw when clearing a key that was never indexed
+	EXPECT_NO_THROW(propertyIndex->clearIndexData(key));
+
+	// Index should remain empty
+	EXPECT_TRUE(propertyIndex->isEmpty());
+}
+
+/**
+ * @brief Test clearIndexData with existing key.
+ * This exercises the lambda at line 170-175.
+ */
+TEST_F(PropertyIndexTest, ClearIndexData_ExistingKey) {
+	const std::string key = "clear_test_key";
+
+	// Add some data
+	propertyIndex->addProperty(1, key, "test_value");
+	propertyIndex->addProperty(2, key, "another_value");
+
+	// Verify data exists
+	auto resultsBefore = propertyIndex->findExactMatch(key, "test_value");
+	ASSERT_EQ(resultsBefore.size(), 1u);
+	EXPECT_EQ(resultsBefore[0], 1);
+
+	// Clear the index data (but keep the key registration)
+	propertyIndex->clearIndexData(key);
+
+	// Data should be gone
+	EXPECT_TRUE(propertyIndex->findExactMatch(key, "test_value").empty());
+	EXPECT_TRUE(propertyIndex->findExactMatch(key, "another_value").empty());
+
+	// But the key should still be registered (type reset to UNKNOWN)
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+
+	// Can add new data of potentially different type
+	propertyIndex->addProperty(3, key, 123);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
+	auto resultsAfter = propertyIndex->findExactMatch(key, 123);
+	ASSERT_EQ(resultsAfter.size(), 1u);
+	EXPECT_EQ(resultsAfter[0], 3);
+}
+
+/**
+ * @brief Test clear behavior when index is already empty.
+ * Covers line 115: when rootMap | std::views::values is empty.
+ */
+TEST_F(PropertyIndexTest, Clear_AlreadyEmpty) {
+	// Index should be empty initially
+	EXPECT_TRUE(propertyIndex->isEmpty());
+
+	// Clear should not throw on empty index
+	EXPECT_NO_THROW(propertyIndex->clear());
+
+	// Should still be empty
+	EXPECT_TRUE(propertyIndex->isEmpty());
+}
+
+/**
+ * @brief Test addPropertiesBatch with empty vector.
+ * Covers line 229: properties.empty() check.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_EmptyVector) {
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> emptyBatch;
+
+	// Should not throw with empty batch
+	EXPECT_NO_THROW(propertyIndex->addPropertiesBatch(emptyBatch));
+
+	// Index should remain empty
+	EXPECT_TRUE(propertyIndex->isEmpty());
+}
+
+/**
+ * @brief Test addPropertiesBatch with type mismatches.
+ * Covers line 262: when registeredType != valueType in batch operations.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_TypeMismatch) {
+	const std::string key = "batch_type_key";
+
+	// Register key as INTEGER type
+	propertyIndex->createIndex(key);
+	propertyIndex->addProperty(1, key, 100);
+
+	// Create batch with mixed types (should ignore string entries)
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(2, key, 200);        // Valid: integer
+	batch.emplace_back(3, key, std::string("invalid"));  // Invalid: string
+	batch.emplace_back(4, key, 300);        // Valid: integer
+	batch.emplace_back(5, key, 3.14);       // Invalid: double
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	// Verify only integers were added
+	auto results = propertyIndex->findExactMatch(key, 200);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 2);
+
+	results = propertyIndex->findExactMatch(key, 300);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 4);
+
+	// String and double should not have been added
+	EXPECT_TRUE(propertyIndex->findExactMatch(key, std::string("invalid")).empty());
+	EXPECT_TRUE(propertyIndex->findExactMatch(key, 3.14).empty());
+}
+
+/**
+ * @brief Test addPropertiesBatch with non-registered keys.
+ * Covers line 248: when key is not in indexedKeyTypes_.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_UnregisteredKey) {
+	const std::string key = "unregistered_key";
+
+	// DO NOT register the key - it should not be auto-created in batch mode
+
+	// Create batch with data for unregistered key
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, key, 100);
+	batch.emplace_back(2, key, 200);
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	// Index should remain empty (key was not auto-created)
+	EXPECT_TRUE(propertyIndex->isEmpty());
+	EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
+}
+
+/**
+ * @brief Test addPropertiesBatch with NULL and UNKNOWN types.
+ * Covers line 242: when valueType is UNKNOWN or NULL_TYPE.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_WithNullValues) {
+	const std::string key = "null_test_key";
+
+	// Register the key
+	propertyIndex->createIndex(key);
+	propertyIndex->addProperty(1, key, "valid_value");
+
+	// Create batch with NULL values
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(2, key, std::string("value2"));
+	batch.emplace_back(3, key, std::monostate{});  // NULL value
+	batch.emplace_back(4, key, std::string("value4"));
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	// Verify NULL value was skipped
+	auto results = propertyIndex->findExactMatch(key, std::string("value2"));
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 2);
+
+	results = propertyIndex->findExactMatch(key, std::string("value4"));
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 4);
+
+	// Should have exactly 3 entries (initial + 2 from batch, NULL skipped)
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::STRING);
+}
+
+/**
+ * @brief Test removeProperty with non-existent key.
+ * Covers line 308: when key is not in indexedKeyTypes_.
+ */
+TEST_F(PropertyIndexTest, RemoveProperty_NonExistentKey) {
+	const std::string key = "non_existent_remove_key";
+
+	// Try to remove from a key that was never indexed
+	EXPECT_NO_THROW(propertyIndex->removeProperty(1, key, 100));
+
+	// Should remain empty
+	EXPECT_TRUE(propertyIndex->isEmpty());
+}
+
+/**
+ * @brief Test removeProperty with type mismatch.
+ * Covers line 316: when registeredType != valueType.
+ */
+TEST_F(PropertyIndexTest, RemoveProperty_TypeMismatch) {
+	const std::string key = "type_mismatch_remove_key";
+
+	// Register as STRING
+	propertyIndex->addProperty(1, key, "string_value");
+
+	// Try to remove with integer type (should be ignored)
+	propertyIndex->removeProperty(1, key, 12345);
+
+	// Original value should still be present
+	auto results = propertyIndex->findExactMatch(key, std::string("string_value"));
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
+}
+
+/**
+ * @brief Test findExactMatch with non-existent key.
+ * Covers line 334: when key is not in indexedKeyTypes_.
+ */
+TEST_F(PropertyIndexTest, FindExactMatch_NonExistentKey) {
+	const std::string key = "find_non_existent";
+
+	// Try to find a key that was never indexed
+	auto results = propertyIndex->findExactMatch(key, "some_value");
+
+	// Should return empty vector
+	EXPECT_TRUE(results.empty());
+}
+
+/**
+ * @brief Test findRange with non-numeric types.
+ * Covers line 351: when type is not INTEGER or DOUBLE.
+ */
+TEST_F(PropertyIndexTest, FindRange_NonNumericType) {
+	const std::string key = "string_range_key";
+
+	// Add a string property
+	propertyIndex->addProperty(1, key, "string_value");
+
+	// Try to find range on string key (should return empty)
+	auto results = propertyIndex->findRange(key, 0.0, 100.0);
+
+	// Should return empty for non-numeric types
+	EXPECT_TRUE(results.empty());
+}
+
+/**
+ * @brief Test findRange with non-existent key.
+ * Covers line 356: when rootIt == rootMap.end().
+ */
+TEST_F(PropertyIndexTest, FindRange_NonExistentKey) {
+	const std::string key = "range_non_existent";
+
+	// Try to find range on a key that was never indexed
+	auto results = propertyIndex->findRange(key, 0.0, 100.0);
+
+	// Should return empty
+	EXPECT_TRUE(results.empty());
+}

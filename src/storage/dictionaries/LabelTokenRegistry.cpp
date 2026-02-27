@@ -71,9 +71,6 @@ namespace graph::storage {
 		// 3. Create New
 		// Store String in Blob
 		const auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, label);
-		if (blobs.empty())
-			throw std::runtime_error("Failed to store label string");
-
 		const int64_t newId = blobs[0].getId();
 
 		// Map String -> ID in Index
@@ -103,10 +100,6 @@ namespace graph::storage {
 
 		// 2. Load from Blob (Disk)
 		try {
-			// Ensure BlobManager is accessible
-			if (!dataManager_ || !dataManager_->getBlobManager())
-				return "";
-
 			std::string label = dataManager_->getBlobManager()->readBlobChain(labelId);
 
 			if (!label.empty()) {

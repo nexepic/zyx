@@ -76,11 +76,6 @@ namespace graph::storage {
 			targetRegistry = stateRegistry_.get();
 		}
 
-		if (!targetRegistry) {
-			// This should theoretically never happen if all types are covered.
-			return;
-		}
-
 		// --- Streaming Batch Processing ---
 		// We process entities one by one and check the dirty count threshold continuously.
 		// This prevents "Memory Explosion" (OOM) if the input vector is massive (e.g., 10M entities)
@@ -130,15 +125,15 @@ namespace graph::storage {
 	std::optional<DirtyEntityInfo<EntityType>> PersistenceManager::getDirtyInfo(int64_t id) const {
 		if constexpr (std::is_same_v<EntityType, Node>)
 			return nodeRegistry_->getInfo(id);
-		else if constexpr (std::is_same_v<EntityType, Edge>)
+		if constexpr (std::is_same_v<EntityType, Edge>)
 			return edgeRegistry_->getInfo(id);
-		else if constexpr (std::is_same_v<EntityType, Property>)
+		if constexpr (std::is_same_v<EntityType, Property>)
 			return propertyRegistry_->getInfo(id);
-		else if constexpr (std::is_same_v<EntityType, Blob>)
+		if constexpr (std::is_same_v<EntityType, Blob>)
 			return blobRegistry_->getInfo(id);
-		else if constexpr (std::is_same_v<EntityType, Index>)
+		if constexpr (std::is_same_v<EntityType, Index>)
 			return indexRegistry_->getInfo(id);
-		else if constexpr (std::is_same_v<EntityType, State>)
+		if constexpr (std::is_same_v<EntityType, State>)
 			return stateRegistry_->getInfo(id);
 		return std::nullopt;
 	}
@@ -147,15 +142,15 @@ namespace graph::storage {
 	std::vector<DirtyEntityInfo<EntityType>> PersistenceManager::getAllDirtyInfos() const {
 		if constexpr (std::is_same_v<EntityType, Node>)
 			return nodeRegistry_->getAllDirtyInfos();
-		else if constexpr (std::is_same_v<EntityType, Edge>)
+		if constexpr (std::is_same_v<EntityType, Edge>)
 			return edgeRegistry_->getAllDirtyInfos();
-		else if constexpr (std::is_same_v<EntityType, Property>)
+		if constexpr (std::is_same_v<EntityType, Property>)
 			return propertyRegistry_->getAllDirtyInfos();
-		else if constexpr (std::is_same_v<EntityType, Blob>)
+		if constexpr (std::is_same_v<EntityType, Blob>)
 			return blobRegistry_->getAllDirtyInfos();
-		else if constexpr (std::is_same_v<EntityType, Index>)
+		if constexpr (std::is_same_v<EntityType, Index>)
 			return indexRegistry_->getAllDirtyInfos();
-		else if constexpr (std::is_same_v<EntityType, State>)
+		if constexpr (std::is_same_v<EntityType, State>)
 			return stateRegistry_->getAllDirtyInfos();
 		return {};
 	}
@@ -164,15 +159,15 @@ namespace graph::storage {
 	bool PersistenceManager::isDirty(int64_t id) const {
 		if constexpr (std::is_same_v<EntityType, Node>)
 			return nodeRegistry_->contains(id);
-		else if constexpr (std::is_same_v<EntityType, Edge>)
+		if constexpr (std::is_same_v<EntityType, Edge>)
 			return edgeRegistry_->contains(id);
-		else if constexpr (std::is_same_v<EntityType, Property>)
+		if constexpr (std::is_same_v<EntityType, Property>)
 			return propertyRegistry_->contains(id);
-		else if constexpr (std::is_same_v<EntityType, Blob>)
+		if constexpr (std::is_same_v<EntityType, Blob>)
 			return blobRegistry_->contains(id);
-		else if constexpr (std::is_same_v<EntityType, Index>)
+		if constexpr (std::is_same_v<EntityType, Index>)
 			return indexRegistry_->contains(id);
-		else if constexpr (std::is_same_v<EntityType, State>)
+		if constexpr (std::is_same_v<EntityType, State>)
 			return stateRegistry_->contains(id);
 		return false;
 	}

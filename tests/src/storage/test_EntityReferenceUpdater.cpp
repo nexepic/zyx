@@ -1376,3 +1376,180 @@ TEST_F(EntityReferenceUpdaterTest, UpdateEdge_WithNoNeighbors) {
 	EXPECT_EQ(updatedEdge.getPrevInEdgeId(), 0);
 	EXPECT_EQ(updatedEdge.getNextInEdgeId(), 0);
 }
+
+// =========================================================================
+// Additional Coverage Improvement Tests
+// =========================================================================
+
+// Test SameId_NoOp for all entity types
+TEST_F(EntityReferenceUpdaterTest, SameId_NoOp_AllEntityTypes) {
+	Node node = createNode("N");
+	Edge edge = createEdge(node.getId(), node.getId(), "E");
+	Property prop = createProperty(node.getId(), toUnderlying(SegmentType::Node));
+	Blob blob = createBlob(node.getId(), toUnderlying(SegmentType::Node));
+	Index idx = createIndex(Index::NodeType::LEAF);
+	State state = createState("S");
+	
+	int64_t nodeId = node.getId();
+	int64_t edgeId = edge.getId();
+	int64_t propId = prop.getId();
+	int64_t blobId = blob.getId();
+	int64_t idxId = idx.getId();
+	int64_t stateId = state.getId();
+	
+	// All should be no-ops - should not crash and nothing should change
+	EXPECT_NO_THROW(updater->updateEntityReferences(nodeId, &node, toUnderlying(SegmentType::Node)));
+	EXPECT_NO_THROW(updater->updateEntityReferences(edgeId, &edge, toUnderlying(SegmentType::Edge)));
+	EXPECT_NO_THROW(updater->updateEntityReferences(propId, &prop, toUnderlying(SegmentType::Property)));
+	EXPECT_NO_THROW(updater->updateEntityReferences(blobId, &blob, toUnderlying(SegmentType::Blob)));
+	EXPECT_NO_THROW(updater->updateEntityReferences(idxId, &idx, toUnderlying(SegmentType::Index)));
+	EXPECT_NO_THROW(updater->updateEntityReferences(stateId, &state, toUnderlying(SegmentType::State)));
+	
+	// Verify IDs haven't changed
+	EXPECT_EQ(dataManager->getNode(nodeId).getId(), nodeId);
+	EXPECT_EQ(dataManager->getEdge(edgeId).getId(), edgeId);
+	EXPECT_EQ(dataManager->getProperty(propId).getId(), propId);
+	EXPECT_EQ(dataManager->getBlob(blobId).getId(), blobId);
+	EXPECT_EQ(dataManager->getIndex(idxId).getId(), idxId);
+	EXPECT_EQ(dataManager->getState(stateId).getId(), stateId);
+}
+
+// Test Edge update with inactive neighbor
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_NeighborInactive) {
+	Node n = createNode("N");
+	Edge e1 = createEdge(n.getId(), n.getId(), "1");
+	Edge e2 = createEdge(n.getId(), n.getId(), "2");
+
+	// Set up chain: e1 -> e2
+	e1.setNextOutEdgeId(e2.getId());
+	e2.setPrevOutEdgeId(e1.getId());
+	dataManager->updateEdge(e1);
+	dataManager->updateEdge(e2);
+
+	// Note: Both edges are active in the DB at this point
+	// The updater will successfully update e2's prev pointer to newE1
+
+	int64_t oldE1 = e1.getId();
+	int64_t newE1 = oldE1 + 100;
+	Edge movedE1 = e1;
+	movedE1.getMutableMetadata().id = newE1;
+
+	// Should handle gracefully - when updater checks e2's prev pointer,
+	// it will try to update e2, but e2 is still active in DB
+	// The key is: the updater checks if e2.prev == oldE1, if so updates to newE1
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldE1, &movedE1, toUnderlying(SegmentType::Edge)));
+
+	// Verify e2's prev pointer was updated to newE1
+	Edge updatedE2 = dataManager->getEdge(e2.getId());
+	EXPECT_EQ(updatedE2.getPrevOutEdgeId(), newE1);
+}
+
+// Test Edge update with non-existent neighbor
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_NeighborDoesNotExist) {
+	Node n = createNode("N");
+	Edge e1 = createEdge(n.getId(), n.getId(), "1");
+
+	// Set nextOut to non-existent edge ID
+	e1.setNextOutEdgeId(99999);
+	dataManager->updateEdge(e1);
+
+	int64_t oldE1 = e1.getId();
+	int64_t newE1 = oldE1 + 100;
+	Edge movedE1 = e1;
+	movedE1.getMutableMetadata().id = newE1;
+
+	// Should handle gracefully - the updater tries to get edge 99999
+	// When it doesn't exist (getId() == 0), it breaks the loop
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldE1, &movedE1, toUnderlying(SegmentType::Edge)));
+
+	// The non-existent neighbor remains unchanged (still 99999)
+	// The updater doesn't clear pointers to non-existent entities
+	Edge updatedE1 = dataManager->getEdge(oldE1);
+	EXPECT_EQ(updatedE1.getNextOutEdgeId(), 99999) << "Non-existent neighbor should remain unchanged";
+}
+
+// Test Property update with entity ID mismatch
+TEST_F(EntityReferenceUpdaterTest, UpdateProperty_EntityIdMismatch) {
+	Node n1 = createNode("N1");
+	Node n2 = createNode("N2");
+	Property prop = createProperty(n1.getId(), toUnderlying(SegmentType::Node));
+	
+	// n2 also claims same property (unusual but should be handled)
+	n2.setPropertyEntityId(prop.getId() + 999, PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateNode(n2);
+	
+	int64_t oldN2 = n2.getId();
+	int64_t newN2 = oldN2 + 100;
+	Node movedN2 = n2;
+	movedN2.getMutableMetadata().id = newN2;
+	
+	// Should not crash - prop should still point to n1 (not updated to n2)
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldN2, &movedN2, toUnderlying(SegmentType::Node)));
+	
+	Property checkProp = dataManager->getProperty(prop.getId());
+	EXPECT_EQ(checkProp.getEntityId(), n1.getId()) << "Property should still point to N1";
+}
+
+// Test Index with child whose parent is already correct
+TEST_F(EntityReferenceUpdaterTest, UpdateIndex_ChildParentAlreadyCorrect) {
+	Index parent = createIndex(Index::NodeType::INTERNAL);
+	Index child = createIndex(Index::NodeType::LEAF);
+	
+	child.setParentId(parent.getId());
+	dataManager->updateIndexEntity(child);
+	
+	// Parent already lists this child
+	std::vector<Index::ChildEntry> children = {
+		{PropertyValue(std::monostate{}), child.getId(), 0}
+	};
+	parent.setAllChildren(children, dataManager);
+	
+	int64_t oldParentId = parent.getId();
+	int64_t newParentId = oldParentId + 100;
+	Index movedParent = parent;
+	movedParent.getMutableMetadata().id = newParentId;
+	
+	// Should update child's parent pointer
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldParentId, &movedParent, toUnderlying(SegmentType::Index)));
+	
+	Index updatedChild = dataManager->getIndex(child.getId());
+	EXPECT_EQ(updatedChild.getParentId(), newParentId);
+}
+
+// Test Index with child not in parent's child list
+TEST_F(EntityReferenceUpdaterTest, UpdateIndex_ChildNotInParentList) {
+	Index parent = createIndex(Index::NodeType::INTERNAL);
+	Index child1 = createIndex(Index::NodeType::LEAF);
+	Index child2 = createIndex(Index::NodeType::LEAF);
+
+	child1.setParentId(parent.getId());
+	child2.setParentId(parent.getId());
+	dataManager->updateIndexEntity(child1);
+	dataManager->updateIndexEntity(child2);
+
+	// Only list child1 - child2 is orphaned (has wrong parent pointer)
+	std::vector<Index::ChildEntry> children = {
+		{PropertyValue(std::monostate{}), child1.getId(), 0}
+	};
+	parent.setAllChildren(children, dataManager);
+	dataManager->updateIndexEntity(parent);
+
+	// When parent moves, only child1 (in the list) gets updated
+	// child2 has parentId = parent.getId() but is NOT in parent's children array
+	// So EntityReferenceUpdater won't find it when iterating parent's children
+	int64_t oldParentId = parent.getId();
+	int64_t newParentId = oldParentId + 100;
+	Index movedParent = parent;
+	movedParent.getMutableMetadata().id = newParentId;
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldParentId, &movedParent, toUnderlying(SegmentType::Index)));
+
+	// Only child1 (in the list) should have updated parent pointer
+	Index updatedChild1 = dataManager->getIndex(child1.getId());
+	EXPECT_EQ(updatedChild1.getParentId(), newParentId);
+
+	// child2's parent pointer is NOT updated because it's not in parent's child list
+	// This is the expected behavior - the updater only updates children listed in the parent
+	Index updatedChild2 = dataManager->getIndex(child2.getId());
+	EXPECT_EQ(updatedChild2.getParentId(), oldParentId) << "Orphaned child not in parent's list should not be updated";
+}

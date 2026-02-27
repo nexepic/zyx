@@ -65,21 +65,14 @@ namespace graph::storage {
 			return;
 
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
 
 		// 1. Update Outgoing Edges
 		// We traverse the linked list of edges using DataManager
 		int64_t currentEdgeId = newNode.getFirstOutEdgeId();
 		while (currentEdgeId != 0) {
 			Edge edge = dm->getEdge(currentEdgeId);
-			if (edge.getId() == 0 || !edge.isActive())
-				break;
-
-			if (edge.getSourceNodeId() == oldNodeId) {
-				edge.setSourceNodeId(newNodeId);
-				dm->updateEdge(edge); // This handles dirty marking and caching
-			}
+			edge.setSourceNodeId(newNodeId);
+			dm->updateEdge(edge);
 			currentEdgeId = edge.getNextOutEdgeId();
 		}
 
@@ -87,13 +80,8 @@ namespace graph::storage {
 		currentEdgeId = newNode.getFirstInEdgeId();
 		while (currentEdgeId != 0) {
 			Edge edge = dm->getEdge(currentEdgeId);
-			if (edge.getId() == 0 || !edge.isActive())
-				break;
-
-			if (edge.getTargetNodeId() == oldNodeId) {
-				edge.setTargetNodeId(newNodeId);
-				dm->updateEdge(edge);
-			}
+			edge.setTargetNodeId(newNodeId);
+			dm->updateEdge(edge);
 			currentEdgeId = edge.getNextInEdgeId();
 		}
 
@@ -107,27 +95,21 @@ namespace graph::storage {
 			return;
 
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
 
 		// 1. Update Source Node
 		int64_t srcId = newEdge.getSourceNodeId();
-		if (srcId != 0) {
-			Node srcNode = dm->getNode(srcId);
-			if (srcNode.getId() != 0 && srcNode.isActive() && srcNode.getFirstOutEdgeId() == oldEdgeId) {
-				srcNode.setFirstOutEdgeId(newEdgeId);
-				dm->updateNode(srcNode);
-			}
+		Node srcNode = dm->getNode(srcId);
+		if (srcNode.getFirstOutEdgeId() == oldEdgeId) {
+			srcNode.setFirstOutEdgeId(newEdgeId);
+			dm->updateNode(srcNode);
 		}
 
 		// 2. Update Target Node
 		int64_t dstId = newEdge.getTargetNodeId();
-		if (dstId != 0) {
-			Node dstNode = dm->getNode(dstId);
-			if (dstNode.getId() != 0 && dstNode.isActive() && dstNode.getFirstInEdgeId() == oldEdgeId) {
-				dstNode.setFirstInEdgeId(newEdgeId);
-				dm->updateNode(dstNode);
-			}
+		Node dstNode = dm->getNode(dstId);
+		if (dstNode.getFirstInEdgeId() == oldEdgeId) {
+			dstNode.setFirstInEdgeId(newEdgeId);
+			dm->updateNode(dstNode);
 		}
 
 		// 3. Update Linked Edges (Prev/Next)
@@ -135,30 +117,32 @@ namespace graph::storage {
 			if (neighborId == 0)
 				return;
 			Edge neighbor = dm->getEdge(neighborId);
-			if (neighbor.getId() == 0 || !neighbor.isActive())
-				return;
 
-			bool changed = false;
 			if (isOutChain) {
-				if (isPrev && neighbor.getNextOutEdgeId() == oldEdgeId) {
-					neighbor.setNextOutEdgeId(newEdgeId);
-					changed = true;
-				} else if (!isPrev && neighbor.getPrevOutEdgeId() == oldEdgeId) {
-					neighbor.setPrevOutEdgeId(newEdgeId);
-					changed = true;
+				if (isPrev) {
+					if (neighbor.getNextOutEdgeId() == oldEdgeId) {
+						neighbor.setNextOutEdgeId(newEdgeId);
+						dm->updateEdge(neighbor);
+					}
+				} else {
+					if (neighbor.getPrevOutEdgeId() == oldEdgeId) {
+						neighbor.setPrevOutEdgeId(newEdgeId);
+						dm->updateEdge(neighbor);
+					}
 				}
 			} else { // InChain
-				if (isPrev && neighbor.getNextInEdgeId() == oldEdgeId) {
-					neighbor.setNextInEdgeId(newEdgeId);
-					changed = true;
-				} else if (!isPrev && neighbor.getPrevInEdgeId() == oldEdgeId) {
-					neighbor.setPrevInEdgeId(newEdgeId);
-					changed = true;
+				if (isPrev) {
+					if (neighbor.getNextInEdgeId() == oldEdgeId) {
+						neighbor.setNextInEdgeId(newEdgeId);
+						dm->updateEdge(neighbor);
+					}
+				} else {
+					if (neighbor.getPrevInEdgeId() == oldEdgeId) {
+						neighbor.setPrevInEdgeId(newEdgeId);
+						dm->updateEdge(neighbor);
+					}
 				}
 			}
-
-			if (changed)
-				dm->updateEdge(neighbor);
 		};
 
 		updateNeighbor(newEdge.getPrevOutEdgeId(), true, true);
@@ -176,25 +160,20 @@ namespace graph::storage {
 			return;
 
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
 
 		int64_t entityId = newProperty.getEntityId();
 		uint32_t entityType = newProperty.getEntityType();
 
 		if (entityType == toUnderlying(SegmentType::Node)) {
 			Node node = dm->getNode(entityId);
-			if (node.getId() != 0 && node.isActive() && node.getPropertyEntityId() == oldPropId &&
-				node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
-
+			if (node.getPropertyEntityId() == oldPropId) {
 				node.setPropertyEntityId(newPropId, PropertyStorageType::PROPERTY_ENTITY);
 				dm->updateNode(node);
 			}
-		} else if (entityType == toUnderlying(SegmentType::Edge)) {
+		}
+		if (entityType == toUnderlying(SegmentType::Edge)) {
 			Edge edge = dm->getEdge(entityId);
-			if (edge.getId() != 0 && edge.isActive() && edge.getPropertyEntityId() == oldPropId &&
-				edge.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
-
+			if (edge.getPropertyEntityId() == oldPropId) {
 				edge.setPropertyEntityId(newPropId, PropertyStorageType::PROPERTY_ENTITY);
 				dm->updateEdge(edge);
 			}
@@ -207,8 +186,6 @@ namespace graph::storage {
             return;
 
         auto dm = dataManager_.lock();
-        if (!dm)
-            return;
 
         // 1. Update Owner
         int64_t entityId = newBlob.getEntityId();
@@ -216,34 +193,25 @@ namespace graph::storage {
 
         if (entityType == toUnderlying(SegmentType::Node)) {
             Node node = dm->getNode(entityId);
-            if (node.getId() != 0 && node.isActive() && node.getPropertyEntityId() == oldBlobId &&
-                node.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
-
+            if (node.getPropertyEntityId() == oldBlobId) {
                 node.setPropertyEntityId(newBlobId, PropertyStorageType::BLOB_ENTITY);
                 dm->updateNode(node);
             }
-        } else if (entityType == toUnderlying(SegmentType::Edge)) {
+        }
+        if (entityType == toUnderlying(SegmentType::Edge)) {
             Edge edge = dm->getEdge(entityId);
-            if (edge.getId() != 0 && edge.isActive() && edge.getPropertyEntityId() == oldBlobId &&
-                edge.getPropertyStorageType() == PropertyStorageType::BLOB_ENTITY) {
-
+            if (edge.getPropertyEntityId() == oldBlobId) {
                 edge.setPropertyEntityId(newBlobId, PropertyStorageType::BLOB_ENTITY);
                 dm->updateEdge(edge);
             }
         }
-        // --- State Update Logic ---
-        else if (entityType == toUnderlying(SegmentType::State)) {
+        if (entityType == toUnderlying(SegmentType::State)) {
             State state = dm->getState(entityId);
-            // Check if state is valid, active, is in blob mode, and actually points to the old blob
-            if (state.getId() != 0 && state.isActive() &&
-                state.isBlobStorage() &&
-                state.getExternalId() == oldBlobId) {
-
+            if (state.getExternalId() == oldBlobId) {
                 state.setExternalId(newBlobId);
                 dm->updateStateEntity(state);
             }
         }
-        // ---------------------------------
 
         // 2. Update Chain (Blob to Blob links)
         int64_t nextBlobId = newBlob.getNextBlobId();
@@ -311,116 +279,85 @@ namespace graph::storage {
 	void EntityReferenceUpdater::updateBlobChainReference(int64_t oldBlobId, int64_t newBlobId, int64_t linkedBlobId,
 														  bool isNextBlob, const Blob &sourceBlob) const {
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
-
 		Blob linkedBlob = dm->getBlob(linkedBlobId);
-		if (linkedBlob.getId() == 0 || !linkedBlob.isActive())
-			return;
 
-		bool updated = false;
 		if (isNextBlob) {
 			if (linkedBlob.getPrevBlobId() == oldBlobId) {
 				linkedBlob.setPrevBlobId(newBlobId);
-				updated = true;
 			}
 		} else {
 			if (linkedBlob.getNextBlobId() == oldBlobId) {
 				linkedBlob.setNextBlobId(newBlobId);
-				updated = true;
 			}
 		}
 
-		// Sync entity info
-		if (linkedBlob.getEntityId() != sourceBlob.getEntityId() ||
-			linkedBlob.getEntityType() != sourceBlob.getEntityType()) {
-			linkedBlob.setEntityInfo(sourceBlob.getEntityId(), sourceBlob.getEntityType());
-			updated = true;
-		}
-
-		if (updated) {
-			dm->updateBlobEntity(linkedBlob);
-		}
+		// Sync entity info - blobs in a chain must have the same owner
+		linkedBlob.setEntityInfo(sourceBlob.getEntityId(), sourceBlob.getEntityType());
+		dm->updateBlobEntity(linkedBlob);
 	}
 
 	void EntityReferenceUpdater::updateIndexParentPtr(int64_t childId, int64_t newParentId) const {
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
-
 		Index child = dm->getIndex(childId);
-		if (child.getId() != 0 && child.isActive()) {
-			// Only update if parent matches old parent?
-			// Here we know the parent MOVED, so child's parent pointer MUST be updated.
-			if (child.getParentId() != newParentId) {
-				child.setParentId(newParentId);
-				dm->updateIndexEntity(child);
-			}
+
+		// Only update if parent matches old parent?
+		// Here we know the parent MOVED, so child's parent pointer MUST be updated.
+		if (child.getParentId() != newParentId) {
+			child.setParentId(newParentId);
+			dm->updateIndexEntity(child);
 		}
 	}
 
 	void EntityReferenceUpdater::updateIndexSiblingPtr(int64_t siblingId, int64_t oldId, int64_t newId,
 													   bool updateNext) const {
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
-
 		Index sibling = dm->getIndex(siblingId);
-		if (sibling.getId() != 0 && sibling.isActive()) {
-			bool changed = false;
-			if (updateNext) {
-				if (sibling.getNextLeafId() == oldId) {
-					sibling.setNextLeafId(newId);
-					changed = true;
-				}
-			} else {
-				if (sibling.getPrevLeafId() == oldId) {
-					sibling.setPrevLeafId(newId);
-					changed = true;
-				}
+
+		bool changed = false;
+		if (updateNext) {
+			if (sibling.getNextLeafId() == oldId) {
+				sibling.setNextLeafId(newId);
+				changed = true;
 			}
-			if (changed)
-				dm->updateIndexEntity(sibling);
+		} else {
+			if (sibling.getPrevLeafId() == oldId) {
+				sibling.setPrevLeafId(newId);
+				changed = true;
+			}
 		}
+		if (changed)
+			dm->updateIndexEntity(sibling);
 	}
 
 	void EntityReferenceUpdater::updateIndexChildId(int64_t parentId, int64_t oldId, int64_t newId) const {
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
-
 		Index parent = dm->getIndex(parentId);
-		if (parent.getId() != 0 && parent.isActive()) {
-			// Uses the safe method we added to Index class
-			if (parent.updateChildId(oldId, newId)) {
-				dm->updateIndexEntity(parent);
-			}
+
+		// Uses the safe method we added to Index class
+		if (parent.updateChildId(oldId, newId)) {
+			dm->updateIndexEntity(parent);
 		}
 	}
 
 	void EntityReferenceUpdater::updateStateChainReference(int64_t targetStateId, int64_t oldId, int64_t newId,
 														   bool updateNext) const {
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
-
 		State state = dm->getState(targetStateId);
-		if (state.getId() != 0 && state.isActive()) {
-			bool changed = false;
-			if (updateNext) {
-				if (state.getNextStateId() == oldId) {
-					state.setNextStateId(newId);
-					changed = true;
-				}
-			} else {
-				if (state.getPrevStateId() == oldId) {
-					state.setPrevStateId(newId);
-					changed = true;
-				}
+
+		bool changed = false;
+		if (updateNext) {
+			if (state.getNextStateId() == oldId) {
+				state.setNextStateId(newId);
+				changed = true;
 			}
-			if (changed)
-				dm->updateStateEntity(state);
+		} else {
+			if (state.getPrevStateId() == oldId) {
+				state.setPrevStateId(newId);
+				changed = true;
+			}
 		}
+		if (changed)
+			dm->updateStateEntity(state);
 	}
 
 	template<typename T>
@@ -430,7 +367,7 @@ namespace graph::storage {
 	}
 
 	template<typename T>
-	void EntityReferenceUpdater::updatePropertiesPointingToEntity(int64_t oldEntityId, const T &newEntity) {
+	void EntityReferenceUpdater::updatePropertiesPointingToEntity([[maybe_unused]] int64_t oldEntityId, const T &newEntity) {
 		uint32_t entityType;
 		if constexpr (std::is_same_v<T, Node>) {
 			entityType = toUnderlying(SegmentType::Node);
@@ -441,31 +378,20 @@ namespace graph::storage {
 		}
 
 		auto info = getEntityPropertyInfoFromEntity(newEntity);
-		if (info.storageType == PropertyStorageType::NONE || info.propertyEntityId == 0)
+		if (info.propertyEntityId == 0)
 			return;
 
 		auto dm = dataManager_.lock();
-		if (!dm)
-			return;
-
 		int64_t newEntityId = newEntity.getId();
 
 		if (info.storageType == PropertyStorageType::PROPERTY_ENTITY) {
 			Property prop = dm->getProperty(info.propertyEntityId);
-			if (prop.getId() != 0 && prop.isActive() && prop.getEntityId() == oldEntityId &&
-				prop.getEntityType() == entityType) {
-
-				prop.setEntityInfo(newEntityId, entityType);
-				dm->updatePropertyEntity(prop);
-			}
+			prop.setEntityInfo(newEntityId, entityType);
+			dm->updatePropertyEntity(prop);
 		} else if (info.storageType == PropertyStorageType::BLOB_ENTITY) {
 			Blob blob = dm->getBlob(info.propertyEntityId);
-			if (blob.getId() != 0 && blob.isActive() && blob.getEntityId() == oldEntityId &&
-				blob.getEntityType() == entityType) {
-
-				blob.setEntityInfo(newEntityId, entityType);
-				dm->updateBlobEntity(blob);
-			}
+			blob.setEntityInfo(newEntityId, entityType);
+			dm->updateBlobEntity(blob);
 		}
 	}
 

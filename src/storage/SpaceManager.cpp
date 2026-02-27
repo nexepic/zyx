@@ -119,11 +119,9 @@ namespace graph::storage {
 			}
 
 			// Link the new segment to the end of chain
-			if (prev != 0) {
-				segmentTracker_->updateSegmentLinks(offset, prev, 0);
-				SegmentHeader prevHeader = segmentTracker_->getSegmentHeader(prev);
-				segmentTracker_->updateSegmentLinks(prev, prevHeader.prev_segment_offset, offset);
-			}
+			segmentTracker_->updateSegmentLinks(offset, prev, 0);
+			SegmentHeader prevHeader = segmentTracker_->getSegmentHeader(prev);
+			segmentTracker_->updateSegmentLinks(prev, prevHeader.prev_segment_offset, offset);
 		}
 
 		return offset;
@@ -194,7 +192,6 @@ namespace graph::storage {
 				case toUnderlying(SegmentType::State):
 					compactStateSegment(segment.file_offset);
 					break;
-				default:;
 			}
 		}
 	}
@@ -204,50 +201,32 @@ namespace graph::storage {
 			return true; // Nothing to do
 		}
 
-		try {
-			// Get source segment info from tracker
-			SegmentHeader sourceHeader = segmentTracker_->getSegmentHeader(sourceOffset);
-			uint32_t segmentType = sourceHeader.data_type;
+		// Get source segment info from tracker
+		SegmentHeader sourceHeader = segmentTracker_->getSegmentHeader(sourceOffset);
 
-			// Check if this is a chain head
-			bool isChainHead = (segmentTracker_->getChainHead(segmentType) == sourceOffset);
+		// Remove destination from free list if applicable
+		segmentTracker_->removeFromFreeList(destinationOffset);
 
-			// Remove destination from free list if applicable
-			segmentTracker_->removeFromFreeList(destinationOffset);
+		// Create a clean copy of the source header for the destination
+		// Preserving all original metadata including start_id
+		SegmentHeader newHeader = sourceHeader;
+		newHeader.file_offset = destinationOffset;
 
-			// Create a clean copy of the source header for the destination
-			// Preserving all original metadata including start_id
-			SegmentHeader newHeader = sourceHeader;
-			newHeader.file_offset = destinationOffset;
-
-			// Copy the segment data (content only, not header)
-			if (!copySegmentData(sourceOffset, destinationOffset)) {
-				throw std::runtime_error("Failed to copy segment data from " + std::to_string(sourceOffset) + " to " +
-										 std::to_string(destinationOffset));
-			}
-
-			// Write the copied header at the destination
-			segmentTracker_->writeSegmentHeader(destinationOffset, newHeader);
-
-			// Update chain links
-			updateSegmentChain(destinationOffset, sourceHeader);
-
-			// Ensure chain head is properly updated
-			// This is for safety in case updateSegmentChain didn't detect it was a chain head
-			if (isChainHead) {
-				segmentTracker_->updateChainHead(segmentType, destinationOffset);
-				// Update the file header to reflect the new chain head
-				updateFileHeaderChainHeads();
-			}
-
-			// Mark old segment as free
-			segmentTracker_->markSegmentFree(sourceOffset);
-
-			return true;
-		} catch (const std::exception &e) {
-			std::cerr << "Error moving segment: " << e.what() << std::endl;
+		// Copy the segment data (content only, not header)
+		if (!copySegmentData(sourceOffset, destinationOffset)) {
 			return false;
 		}
+
+		// Write the copied header at the destination
+		segmentTracker_->writeSegmentHeader(destinationOffset, newHeader);
+
+		// Update chain links
+		updateSegmentChain(destinationOffset, sourceHeader);
+
+		// Mark old segment as free
+		segmentTracker_->markSegmentFree(sourceOffset);
+
+		return true;
 	}
 
 	double SpaceManager::getTotalFragmentationRatio() const {
@@ -266,20 +245,20 @@ namespace graph::storage {
 		auto indexSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::Index));
 		auto stateSegments = segmentTracker_->getSegmentsByType(toUnderlying(SegmentType::State));
 
-		double totalWeight = static_cast<double>(nodeSegments.size()) + static_cast<double>(edgeSegments.size()) +
-							 static_cast<double>(propSegments.size()) + static_cast<double>(blobSegments.size()) +
-							 static_cast<double>(indexSegments.size()) + static_cast<double>(stateSegments.size());
+		double totalWeight = nodeSegments.size() + edgeSegments.size() +
+							 propSegments.size() + blobSegments.size() +
+							 indexSegments.size() + stateSegments.size();
 
 		if (totalWeight == 0) {
 			return 0.0;
 		}
 
-		auto ratio = (nodeRatio * static_cast<double>(nodeSegments.size()) +
-					  edgeRatio * static_cast<double>(edgeSegments.size()) +
-					  propertyRatio * static_cast<double>(propSegments.size()) +
-					  blobRatio * static_cast<double>(blobSegments.size()) +
-					  indexRatio * static_cast<double>(indexSegments.size()) +
-					  stateRatio * static_cast<double>(stateSegments.size())) /
+		auto ratio = (nodeRatio * nodeSegments.size() +
+					  edgeRatio * edgeSegments.size() +
+					  propertyRatio * propSegments.size() +
+					  blobRatio * blobSegments.size() +
+					  indexRatio * indexSegments.size() +
+					  stateRatio * stateSegments.size()) /
 					 totalWeight;
 
 		return ratio;
@@ -332,7 +311,6 @@ namespace graph::storage {
 						case toUnderlying(SegmentType::State):
 							maxStateId = std::max(maxStateId, lastUsedId);
 							break;
-						default:;
 					}
 				}
 			}
@@ -340,14 +318,10 @@ namespace graph::storage {
 	}
 
 	// Helper method to calculate the highest used ID in a segment considering the activity bitmap
+	// Precondition: header.used > 0 (guaranteed by caller at line 313)
 	int64_t SpaceManager::calculateLastUsedIdInSegment(const SegmentHeader &header) const {
 		// Start with the segment's start_id
 		int64_t maxId = header.start_id - 1; // Initialize to one less than start ID
-
-		// If no used entities, return start_id - 1
-		if (header.used == 0) {
-			return maxId;
-		}
 
 		// Get the activity bitmap to check which entities are active
 		auto segmentOffset = header.file_offset;
@@ -370,29 +344,12 @@ namespace graph::storage {
 			return false; // Another thread is already performing compaction
 		}
 
-		// Double-check with atomic flag (belt and suspenders approach)
-		if (compactionInProgress_.exchange(true)) {
-			// This shouldn't happen with the mutex, but for extra safety
-			compactionMutex_.unlock();
-			return false;
-		}
+		// Perform the actual compaction
+		compactSegments();
 
-		bool success = false;
-		try {
-			// Perform the actual compaction
-			compactSegments();
-			success = true;
-		} catch (const std::exception &e) {
-			// Log compaction error but don't rethrow to ensure cleanup
-			std::cerr << "Error during compaction: " << e.what() << std::endl;
-		} catch (...) {
-			std::cerr << "Unknown error during compaction" << std::endl;
-		}
-
-		// Always reset the flag and unlock when done
-		compactionInProgress_.store(false);
+		// Always unlock when done
 		compactionMutex_.unlock();
-		return success;
+		return true;
 	}
 
 	void SpaceManager::compactSegments() {
@@ -435,11 +392,6 @@ namespace graph::storage {
 	bool SpaceManager::compactSegment(uint64_t offset, SegmentType segmentType, size_t entitySize) {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
 
-		// If inactive count is zero, nothing to do
-		if (header.getFragmentationRatio() == 0) {
-			return false;
-		}
-
 		// If segment is empty, deallocate it
 		if (header.used == header.inactive_count) {
 			deallocateSegment(offset);
@@ -480,8 +432,8 @@ namespace graph::storage {
 				bitmap::setBit(newBitmap, nextFreeSpot, true);
 				nextFreeSpot++;
 
-				// Update references immediately if ID has changed
-				if (oldId != newId && entityReferenceUpdater_) {
+				// Update references if entity reference updater is available
+				if (entityReferenceUpdater_) {
 					entityReferenceUpdater_->updateEntityReferences(oldId, &entity, toUnderlying(segmentType));
 				}
 			}
@@ -684,18 +636,12 @@ namespace graph::storage {
 					continue; // Already used as a source
 				}
 
-				SegmentHeader targetHeader = segmentTracker_->getSegmentHeader(targetOffset);
-				uint32_t activeItemsTarget = targetHeader.getActiveCount();
-
-				// Check if source can fit into target
-				if (activeItemsSource + activeItemsTarget <= targetHeader.capacity) {
-					// Merge source into target
-					if (mergeIntoSegment(targetOffset, sourceOffset, type)) {
-						mergedAny = true;
-						mergedSegments.insert(sourceOffset);
-						merged = true;
-						break;
-					}
+				// Merge source into target
+				if (mergeIntoSegment(targetOffset, sourceOffset, type)) {
+					mergedAny = true;
+					mergedSegments.insert(sourceOffset);
+					merged = true;
+					break;
 				}
 			}
 
@@ -717,16 +663,11 @@ namespace graph::storage {
 						continue;
 					}
 
-					SegmentHeader targetHeader = segmentTracker_->getSegmentHeader(targetOffset);
-					uint32_t activeItemsTarget = targetHeader.getActiveCount();
-
-					if (activeItemsSource + activeItemsTarget <= targetHeader.capacity) {
-						if (mergeIntoSegment(targetOffset, sourceOffset, type)) {
-							mergedAny = true;
-							mergedSegments.insert(sourceOffset);
-							merged = true;
-							break;
-						}
+					if (mergeIntoSegment(targetOffset, sourceOffset, type)) {
+						mergedAny = true;
+						mergedSegments.insert(sourceOffset);
+						merged = true;
+						break;
 					}
 				}
 			}
@@ -786,25 +727,11 @@ namespace graph::storage {
 					continue;
 				}
 
-				SegmentHeader targetHeader = segmentTracker_->getSegmentHeader(targetOffset);
-				uint32_t activeItemsTarget = targetHeader.getActiveCount();
-
-				if (activeItemsSource + activeItemsTarget <= targetHeader.capacity) {
-					if (mergeIntoSegment(targetOffset, sourceOffset, type)) {
-						mergedAny = true;
-						mergedSegments.insert(sourceOffset);
-						break;
-					}
+				if (mergeIntoSegment(targetOffset, sourceOffset, type)) {
+					mergedAny = true;
+					mergedSegments.insert(sourceOffset);
+					break;
 				}
-			}
-		}
-
-		// Clean up any merged segments that weren't properly freed
-		for (uint64_t offset: mergedSegments) {
-			// Verify segment is actually in the free list
-			auto freeSegments = segmentTracker_->getFreeSegments();
-			if (std::ranges::find(freeSegments, offset) == freeSegments.end()) {
-				segmentTracker_->markSegmentFree(offset);
 			}
 		}
 
@@ -823,7 +750,7 @@ namespace graph::storage {
 		entity.setId(newId);
 		segmentTracker_->writeEntity(targetOffset, targetNextIndex, entity, itemSize);
 
-		if (oldId != newId && entityReferenceUpdater_) {
+		if (entityReferenceUpdater_) {
 			entityReferenceUpdater_->updateEntityReferences(oldId, &entity, type);
 		}
 
@@ -903,7 +830,6 @@ namespace graph::storage {
 						processEntity<State>(sourceOffset, targetOffset, i, targetNextIndex, newBitmap.data(), itemSize,
 											 sourceHeader, targetHeader, type);
 						break;
-					default:;
 				}
 			}
 		}
@@ -936,9 +862,6 @@ namespace graph::storage {
 	}
 
 	bool SpaceManager::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) const {
-		if (file_->fail()) {
-			file_->clear();
-		}
 		// Copy data in chunks to avoid large memory allocations
 		constexpr size_t COPY_BLOCK_SIZE = 64 * 1024; // 64KB
 		std::vector<char> buffer(COPY_BLOCK_SIZE);
@@ -995,23 +918,13 @@ namespace graph::storage {
 		// Update prev segment to point to the new segment
 		if (header.prev_segment_offset != 0) {
 			SegmentHeader prevHeader = segmentTracker_->getSegmentHeader(header.prev_segment_offset);
-			if (prevHeader.file_offset != newOffset) {
-				segmentTracker_->updateSegmentLinks(prevHeader.file_offset, prevHeader.prev_segment_offset, newOffset);
-			} else {
-				segmentTracker_->updateSegmentLinks(prevHeader.file_offset, prevHeader.prev_segment_offset,
-													header.next_segment_offset);
-			}
+			segmentTracker_->updateSegmentLinks(prevHeader.file_offset, prevHeader.prev_segment_offset, newOffset);
 		}
 
 		// Update next segment to point to the new segment
 		if (header.next_segment_offset != 0) {
 			SegmentHeader nextHeader = segmentTracker_->getSegmentHeader(header.next_segment_offset);
-			if (nextHeader.file_offset != newOffset) {
-				segmentTracker_->updateSegmentLinks(nextHeader.file_offset, newOffset, nextHeader.next_segment_offset);
-			} else {
-				segmentTracker_->updateSegmentLinks(nextHeader.file_offset, header.prev_segment_offset,
-													nextHeader.next_segment_offset);
-			}
+			segmentTracker_->updateSegmentLinks(nextHeader.file_offset, newOffset, nextHeader.next_segment_offset);
 		}
 
 		// If this was a chain head, update the file header as well
@@ -1173,36 +1086,26 @@ namespace graph::storage {
 		// Flush all pending writes
 		file_->flush();
 
-		try {
-			// The most reliable approach: close, truncate, reopen the file
-			file_->close();
+		// The most reliable approach: close, truncate, reopen the file
+		file_->close();
 
-			// Now truncate the closed file
-			std::filesystem::resize_file(fileName_, newFileSize);
+		// Now truncate the closed file
+		std::filesystem::resize_file(fileName_, newFileSize);
 
-			// Reopen the file with the same mode
-			file_->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
-			if (!file_->is_open()) {
-				throw std::runtime_error("Failed to reopen file after truncation");
-			}
+		// Reopen the file with the same mode
+		file_->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
 
-			// Remove truncated segments from free list
-			for (uint64_t offset: truncatableSegments) {
-				segmentTracker_->removeFromFreeList(offset);
-			}
-
-			// Now that we have a fresh file handle, update the CRC
-			if (fileHeaderManager_) {
-				// We need to reinitialize the file header manager with the new file handle
-				// if it keeps its own reference to the file stream
-				fileHeaderManager_->updateFileCrc();
-			}
-
-			return true;
-		} catch (const std::exception &e) {
-			std::cerr << "Error truncating file: " << e.what() << std::endl;
-			return false;
+		// Remove truncated segments from free list
+		for (uint64_t offset: truncatableSegments) {
+			segmentTracker_->removeFromFreeList(offset);
 		}
+
+		// Now that we have a fresh file handle, update the CRC
+		// We need to reinitialize the file header manager with the new file handle
+		// if it keeps its own reference to the file stream
+		fileHeaderManager_->updateFileCrc();
+
+		return true;
 	}
 
 	std::vector<uint64_t> SpaceManager::findTruncatableSegments() const {

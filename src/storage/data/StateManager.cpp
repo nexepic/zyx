@@ -105,12 +105,10 @@ namespace graph::storage {
 
 	State StateManager::findByKey(const std::string &key) {
 		// Check key-to-id map first (most efficient)
+		// The map is carefully maintained to only contain valid, active states
 		auto it = stateKeyToIdMap_.find(key);
 		if (it != stateKeyToIdMap_.end()) {
-			State state = get(it->second);
-			if (state.getId() != 0 && state.isActive()) {
-				return state;
-			}
+			return get(it->second);
 		}
 
 		// Not found

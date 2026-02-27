@@ -512,3 +512,334 @@ TEST_F(SegmentTrackerTest, RegisterSegmentAutomaticallyUpdatesIndex) {
 
 	EXPECT_EQ(foundOffset, offset) << "IndexManager failed to receive notification from Tracker::registerSegment";
 }
+
+// =========================================================================
+// Priority 1: Error Path Tests
+// =========================================================================
+
+TEST_F(SegmentTrackerTest, GetSegmentHeader_SegmentNotFound) {
+	// Test error path: requesting header for non-existent segment
+	uint64_t invalidOffset = getSegmentOffset(999); // Beyond allocated space
+
+	EXPECT_THROW(tracker->getSegmentHeader(invalidOffset), std::runtime_error);
+}
+
+TEST_F(SegmentTrackerTest, GetActivityBitmap_SegmentNotFound) {
+	// Test error path: requesting bitmap for non-existent segment
+	uint64_t invalidOffset = getSegmentOffset(999);
+
+	EXPECT_THROW(tracker->getActivityBitmap(invalidOffset), std::runtime_error);
+}
+
+TEST_F(SegmentTrackerTest, CountActiveEntities_SegmentNotFound) {
+	// Test error path: counting entities in non-existent segment
+	uint64_t invalidOffset = getSegmentOffset(999);
+
+	EXPECT_THROW(tracker->countActiveEntities(invalidOffset), std::runtime_error);
+}
+
+TEST_F(SegmentTrackerTest, GetBitmapBit_SegmentNotFound) {
+	// Test error path: getting bitmap bit for non-existent segment
+	uint64_t invalidOffset = getSegmentOffset(999);
+
+	EXPECT_THROW(tracker->getBitmapBit(invalidOffset, 0), std::runtime_error);
+}
+
+TEST_F(SegmentTrackerTest, SetBitmapBit_SegmentNotFound) {
+	// Test error path: setting bitmap bit for non-existent segment
+	uint64_t invalidOffset = getSegmentOffset(999);
+
+	EXPECT_THROW(tracker->setEntityActive(invalidOffset, 0, true), std::runtime_error);
+}
+
+// =========================================================================
+// Priority 2: Weak Pointer Expiration Tests
+// =========================================================================
+
+TEST_F(SegmentTrackerTest, UpdateSegmentUsage_IndexManagerExpired) {
+	// Test behavior when IndexManager weak_ptr has expired
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	// Create and register a segment
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 100;
+	header.used = 50;
+	header.inactive_count = 5;
+	tracker->registerSegment(header);
+
+	// Reset index manager to expire weak_ptr
+	tracker->setSegmentIndexManager(std::weak_ptr<SegmentIndexManager>());
+	indexManager.reset();
+
+	// Should continue without crashing - the update should still work
+	EXPECT_NO_THROW(tracker->updateSegmentUsage(offset, 75, 2));
+
+	// Verify update happened
+	auto updatedHeader = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(updatedHeader.used, 75U);
+	EXPECT_EQ(updatedHeader.inactive_count, 2U);
+}
+
+TEST_F(SegmentTrackerTest, MarkSegmentFree_IndexManagerExpired) {
+	// Test behavior when IndexManager weak_ptr has expired during markSegmentFree
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	// Create and register a segment
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 100;
+	header.used = 50;
+	tracker->registerSegment(header);
+
+	// Reset index manager to expire weak_ptr
+	tracker->setSegmentIndexManager(std::weak_ptr<SegmentIndexManager>());
+	indexManager.reset();
+
+	// Should continue without crashing
+	EXPECT_NO_THROW(tracker->markSegmentFree(offset));
+}
+
+// =========================================================================
+// Priority 3: Manual Compaction Flag Test
+// =========================================================================
+
+TEST_F(SegmentTrackerTest, GetSegmentsNeedingCompaction_ManualFlag) {
+	// Test the needs_compaction manual flag (line 170 branch)
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	// Create a segment with low fragmentation (full usage)
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 100;
+	header.used = 100;
+	header.inactive_count = 0;
+	header.needs_compaction = 1; // Manually set flag
+	tracker->registerSegment(header);
+
+	// Despite low fragmentation (100% full), manual flag should trigger compaction
+	auto segments = tracker->getSegmentsNeedingCompaction(type, 0.9); // 90% threshold
+
+	EXPECT_EQ(segments.size(), 1UL);
+	EXPECT_EQ(segments[0].file_offset, offset);
+	EXPECT_TRUE(segments[0].needs_compaction);
+}
+
+TEST_F(SegmentTrackerTest, GetSegmentsNeedingCompaction_HighFragmentation) {
+	// Test automatic fragmentation-based compaction detection
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	// Create a segment with high fragmentation (50% inactive)
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 100;
+	header.used = 100;
+	header.inactive_count = 50; // 50% fragmentation
+	header.needs_compaction = 0;
+	tracker->registerSegment(header);
+
+	// Should trigger compaction due to fragmentation >= threshold
+	auto segments = tracker->getSegmentsNeedingCompaction(type, 0.4); // 40% threshold
+
+	EXPECT_EQ(segments.size(), 1UL);
+	EXPECT_EQ(segments[0].file_offset, offset);
+}
+
+// =========================================================================
+// Priority 4: Bitmap Operation Tests
+// =========================================================================
+
+TEST_F(SegmentTrackerTest, SetBitmapBit_DecrementInactiveCount) {
+	// Test the inactive count decrement path (line 304)
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	// Create a segment and mark some entities as inactive
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 16;
+	header.used = 16;
+	header.inactive_count = 0;
+	tracker->registerSegment(header);
+
+	// Mark entities 5 and 10 as inactive
+	std::vector<bool> activityMap(16, true);
+	activityMap[5] = false;
+	activityMap[10] = false;
+	tracker->updateActivityBitmap(offset, activityMap);
+
+	auto h1 = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(h1.inactive_count, 2U);
+	EXPECT_FALSE(tracker->getBitmapBit(offset, 5));
+	EXPECT_FALSE(tracker->getBitmapBit(offset, 10));
+
+	// Reactivate entity 5 - should test the decrement path (line 304)
+	tracker->setEntityActive(offset, 5, true);
+
+	auto h2 = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(h2.inactive_count, 1U) << "Inactive count should decrement";
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 5)) << "Entity 5 should be active";
+	EXPECT_FALSE(tracker->getBitmapBit(offset, 10)) << "Entity 10 should still be inactive";
+}
+
+TEST_F(SegmentTrackerTest, SetBitmapBit_IncrementInactiveCount) {
+	// Test the inactive count increment path
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 16;
+	header.used = 16;
+	header.inactive_count = 0;
+	tracker->registerSegment(header);
+
+	// First mark entity as active (initial state)
+	tracker->setEntityActive(offset, 3, true);
+
+	// Initially all active
+	auto h1 = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(h1.inactive_count, 0U);
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 3));
+
+	// Deactivate entity 3 - should increment inactive count
+	tracker->setEntityActive(offset, 3, false);
+
+	auto h2 = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(h2.inactive_count, 1U);
+	EXPECT_FALSE(tracker->getBitmapBit(offset, 3));
+}
+
+TEST_F(SegmentTrackerTest, UpdateActivityBitmap_BitmapOperations) {
+	// Test comprehensive bitmap update operations
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 32;
+	header.used = 32;
+	header.inactive_count = 0;
+	tracker->registerSegment(header);
+
+	// Create an activity map with some inactive entities
+	std::vector<bool> activityMap(32, true);
+	activityMap[0] = false;
+	activityMap[15] = false;
+	activityMap[31] = false;
+
+	tracker->updateActivityBitmap(offset, activityMap);
+
+	auto h = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(h.inactive_count, 3U);
+	EXPECT_FALSE(tracker->getBitmapBit(offset, 0));
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 1)); // Should still be active
+	EXPECT_FALSE(tracker->getBitmapBit(offset, 15));
+	EXPECT_FALSE(tracker->getBitmapBit(offset, 31));
+}
+
+// =========================================================================
+// Priority 6: Slow Path Lookup Tests
+// =========================================================================
+
+TEST_F(SegmentTrackerTest, GetSegmentOffsetForEntityId_SlowPathNotFound) {
+	// Test slow path lookup with ID not in any segment (line 396 False branch)
+	// Disable index manager to force slow path
+	tracker->setSegmentIndexManager(std::weak_ptr<SegmentIndexManager>());
+
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	// Create a segment with range [1000, 1099]
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 100;
+	header.used = 100;
+	header.start_id = 1000;
+	tracker->registerSegment(header);
+
+	// Set as chain head to enable slow path lookup
+	tracker->updateChainHead(type, offset);
+
+	// Search for ID within segment range - should find it
+	uint64_t foundOffset = tracker->getSegmentOffsetForNodeId(1050);
+	EXPECT_EQ(foundOffset, offset);
+
+	// Search for ID outside segment range (line 396 False branch)
+	uint64_t notFoundOffset = tracker->getSegmentOffsetForNodeId(999);
+	EXPECT_EQ(notFoundOffset, 0ULL);
+
+	notFoundOffset = tracker->getSegmentOffsetForNodeId(1200);
+	EXPECT_EQ(notFoundOffset, 0ULL);
+}
+
+TEST_F(SegmentTrackerTest, GetSegmentOffsetForEntityId_NoSegmentsRegistered) {
+	// Test when no segments are registered for a type
+	auto type = static_cast<uint32_t>(EntityType::Edge);
+
+	// No edge segments registered
+	tracker->setSegmentIndexManager(std::weak_ptr<SegmentIndexManager>());
+
+	uint64_t offset = tracker->getSegmentOffsetForEdgeId(123);
+	EXPECT_EQ(offset, 0ULL);
+}
+
+// =========================================================================
+// Additional Edge Case Tests
+// =========================================================================
+
+TEST_F(SegmentTrackerTest, UpdateSegmentUsage_NoChange) {
+	// Test updating segment with the same values (line 121 branch)
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 100;
+	header.used = 50;
+	header.inactive_count = 5;
+	tracker->registerSegment(header);
+
+	// Update with same values - should be a no-op but not crash
+	EXPECT_NO_THROW(tracker->updateSegmentUsage(offset, 50, 5));
+
+	// Verify no changes
+	auto h = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(h.used, 50U);
+	EXPECT_EQ(h.inactive_count, 5U);
+}
+
+TEST_F(SegmentTrackerTest, FlushDirtySegments_EmptyList) {
+	// Test flushing when no segments are dirty (line 443 True branch)
+	EXPECT_NO_THROW(tracker->flushDirtySegments());
+}
+
+TEST_F(SegmentTrackerTest, RegisterSegment_DuplicateRegistration) {
+	// Test registering the same segment twice
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	uint64_t offset = getSegmentOffset(0);
+
+	SegmentHeader header;
+	header.file_offset = offset;
+	header.data_type = type;
+	header.capacity = 100;
+	header.used = 50;
+
+	tracker->registerSegment(header);
+
+	// Register again - should update or handle gracefully
+	EXPECT_NO_THROW(tracker->registerSegment(header));
+}

@@ -93,14 +93,24 @@ protected:
 		Edge e1(0, 1, 2, edgeLabelId);
 		dm->addEdge(e1);
 
-		// 5. Indexes
+		// 5. Edge with properties (to cover entityType == 1 branch)
+		Edge e2(0, 2, 3, edgeLabelId);
+		dm->addEdge(e2);
+		dm->addEdgeProperties(e2.getId(), {{"weight", static_cast<int64_t>(50)}, {"label", std::string("test_edge")}});
+
+		// 6. Indexes
 		(void) database->getQueryEngine()->getIndexManager()->createIndex("idx_status", "node", "InspectNode",
 																		  "status");
 
-		// 6. States
+		// 7. States
 		// Use direct add to ensure at least one State entity exists
 		State s(0, "test.config.key", "some_data");
 		dm->addStateEntity(s);
+
+		// 8. State with properties for inspectStateData test
+		State s2(0, "test.with.props", "data_with_props");
+		dm->addStateEntity(s2);
+		dm->addStateProperties("test.with.props", {{"config", std::string("value1")}, {"enabled", static_cast<int64_t>(1)}});
 	}
 
 	static std::string captureOutput(const std::function<void()> &func) {
@@ -252,4 +262,34 @@ TEST_F(DatabaseInspectorTest, InspectEmptyDatabase) {
 		EXPECT_TRUE(handled);
 	}
 	std::filesystem::remove(emptyPath);
+}
+
+TEST_F(DatabaseInspectorTest, InspectEdgeWithProperties) {
+	auto inspector = database->getStorage()->getInspector();
+
+	// Look for edge properties (covers entityType == 1 branch in line 254)
+	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectPropertySegments(p); }, "weight");
+	EXPECT_TRUE(found) << "Failed to find edge property 'weight'.";
+}
+
+TEST_F(DatabaseInspectorTest, InspectStateData_ValidKey) {
+	auto inspector = database->getStorage()->getInspector();
+
+	// Test inspectStateData with a valid state key (covers lines 402-443)
+	std::string output = captureOutput([&]() { inspector->inspectStateData("test.with.props"); });
+
+	EXPECT_NE(output.find("State Inspection"), std::string::npos);
+	EXPECT_NE(output.find("Metadata"), std::string::npos);
+	EXPECT_NE(output.find("State Properties"), std::string::npos);
+	EXPECT_NE(output.find("config"), std::string::npos);
+	EXPECT_NE(output.find("value1"), std::string::npos);
+}
+
+TEST_F(DatabaseInspectorTest, InspectStateData_InvalidKey) {
+	auto inspector = database->getStorage()->getInspector();
+
+	// Test inspectStateData with an invalid state key (already covered, but explicit)
+	std::string output = captureOutput([&]() { inspector->inspectStateData("nonexistent.key"); });
+
+	EXPECT_NE(output.find("not found"), std::string::npos);
 }

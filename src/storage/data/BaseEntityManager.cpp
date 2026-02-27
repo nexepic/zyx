@@ -20,6 +20,7 @@
 
 #include "graph/storage/data/BaseEntityManager.hpp"
 
+#include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
@@ -163,6 +164,11 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::unordered_map<std::string, PropertyValue> BaseEntityManager<EntityType>::getProperties(int64_t entityId) {
+		// Only process entity types that support properties
+		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties) {
+			return {};
+		}
+
 		auto *dataManager = getDataManagerPtr();
 		auto propertyManager = dataManager->getPropertyManager();
 		if (!propertyManager)
@@ -175,6 +181,11 @@ namespace graph::storage {
 	void
 	BaseEntityManager<EntityType>::addProperties(int64_t entityId,
 												 const std::unordered_map<std::string, PropertyValue> &properties) {
+		// Only process entity types that support properties
+		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties) {
+			return;
+		}
+
 		auto *dataManager = getDataManagerPtr();
 		auto propertyManager = dataManager->getPropertyManager();
 		if (!propertyManager)
@@ -185,6 +196,11 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::removeProperty(int64_t entityId, const std::string &key) {
+		// Only process entity types that support properties
+		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties) {
+			return;
+		}
+
 		auto *dataManager = getDataManagerPtr();
 		auto propertyManager = dataManager->getPropertyManager();
 		if (!propertyManager)

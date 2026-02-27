@@ -56,9 +56,7 @@ namespace graph::storage {
 	}
 
 	DataManager::~DataManager() {
-		if (file_ && file_->is_open()) {
-			file_->close();
-		}
+		// File is managed by FileStorage through shared_ptr, no need to close here
 	}
 
 	void DataManager::initialize() {
@@ -202,9 +200,7 @@ namespace graph::storage {
 			internalUpdateFunc(entity);
 
 			// 3. Notify (Old vs New)
-			if (notifyFunc) {
-				notifyFunc(oldEntity, entity);
-			}
+			notifyFunc(oldEntity, entity);
 			return;
 		}
 
@@ -213,8 +209,7 @@ namespace graph::storage {
 
 		internalUpdateFunc(entity);
 
-		if (notifyFunc)
-			notifyFunc(oldEntity, entity);
+		notifyFunc(oldEntity, entity);
 	}
 
 	int64_t DataManager::getOrCreateLabelId(const std::string &label) const {
@@ -520,10 +515,6 @@ namespace graph::storage {
 
 	void DataManager::removeState(const std::string &stateKey) const { stateManager_->removeState(stateKey); }
 
-	bool DataManager::isChainHeadState(const State &state) {
-		return state.getId() != 0 && state.isActive() && state.getPrevStateId() == 0;
-	}
-
 	// --- Template Method Implementations ---
 
 	template<typename EntityType>
@@ -542,15 +533,8 @@ namespace graph::storage {
 			updateNode(entity);
 		} else if constexpr (std::is_same_v<EntityType, Edge>) {
 			updateEdge(entity);
-		} else if constexpr (std::is_same_v<EntityType, Property>) {
-			updatePropertyEntity(entity);
-		} else if constexpr (std::is_same_v<EntityType, Blob>) {
-			updateBlobEntity(entity);
-		} else if constexpr (std::is_same_v<EntityType, Index>) {
-			updateIndexEntity(entity);
-		} else if constexpr (std::is_same_v<EntityType, State>) {
-			updateStateEntity(entity);
 		}
+		// Note: Property, Blob, Index, State updates use specialized methods directly
 	}
 
 	template<typename EntityType>

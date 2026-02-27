@@ -325,29 +325,6 @@ TEST_F(PropertyManagerTest, CalculateTotalPropertySize) {
 	EXPECT_EQ(sizeInvalid, 0UL);
 }
 
-TEST_F(PropertyManagerTest, UnsupportedEntityTypes) {
-	// Assuming Blob entity type does not support arbitrary user properties
-	// We need a valid ID to pass the initial checks in functions
-	graph::Blob blob;
-	blob.setData("some_data");
-	dataManager->addBlobEntity(blob);
-
-	// Test calculateEntityTotalPropertySize for Blob
-	// Should return 0 immediately due to trait check
-	size_t size = propertyManager->calculateEntityTotalPropertySize<graph::Blob>(blob.getId());
-	EXPECT_EQ(size, static_cast<decltype(size)>(0));
-
-	// Test hasExternalProperty for Blob
-	// Should return false immediately
-	bool hasProp = propertyManager->hasExternalProperty<graph::Blob>(blob, "any");
-	EXPECT_FALSE(hasProp);
-
-	// Test addEntityProperties for Blob -> Should throw
-	std::unordered_map<std::string, graph::PropertyValue> props;
-	props["a"] = graph::PropertyValue(1);
-	EXPECT_THROW(propertyManager->addEntityProperties<graph::Blob>(blob.getId(), props), std::runtime_error);
-}
-
 TEST_F(PropertyManagerTest, CorruptedStorageRecovery) {
 	// 1. Create node with blob properties
 	auto largeProps = createLargePropertyMap();

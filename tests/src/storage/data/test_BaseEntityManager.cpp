@@ -704,3 +704,49 @@ TEST_F(BaseEntityManagerTest, ClearCacheRemovesAll) {
         EXPECT_FALSE(dataManager->getNodeCache().contains(id));
     }
 }
+
+// =========================================================================
+// Coverage Improvement Test to Reach 85%
+// =========================================================================
+
+// Test addBatch with entities that already have IDs
+// Tests uncovered branches:
+//   Line 59: if (entity.getId() == 0) - False branch (entity has non-zero ID)
+//   Line 66: if (!newEntities.empty()) - False branch (no entities need new IDs)
+TEST_F(BaseEntityManagerTest, AddBatchWithExistingIds) {
+    // Create nodes with pre-existing IDs (simulating re-adding existing entities)
+    std::vector<graph::Node> nodes;
+    nodes.reserve(3);
+
+    // Create nodes with explicit non-zero IDs
+    for (int i = 0; i < 3; ++i) {
+        graph::Node node = createTestNode(dataManager, "ExistingId" + std::to_string(i));
+        node.setId(1000 + i); // Explicitly set non-zero IDs
+        nodes.push_back(node);
+    }
+
+    // Execute Batch Add with entities that already have IDs
+    // This should skip ID allocation (line 66 False branch)
+    // because all entities have non-zero IDs (line 59 False branch)
+    EXPECT_NO_THROW(nodeManager->addBatch(nodes));
+
+    // Verify IDs were NOT changed (no new allocation occurred)
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        EXPECT_EQ(nodes[i].getId(), 1000 + static_cast<int64_t>(i));
+
+        // Verify they are accessible
+        graph::Node retrieved = nodeManager->get(nodes[i].getId());
+        EXPECT_EQ(retrieved.getId(), nodes[i].getId());
+        EXPECT_TRUE(retrieved.isActive());
+    }
+
+    // Verify they are in the dirty list (ADDED state)
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    int countFound = 0;
+    for (const auto& dn : dirtyNodes) {
+        for (const auto& original : nodes) {
+            if (dn.getId() == original.getId()) countFound++;
+        }
+    }
+    EXPECT_EQ(countFound, 3);
+}

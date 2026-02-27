@@ -63,9 +63,9 @@ protected:
 // 1. Basic Creation Tests
 // ==========================================
 
-TEST_F(StateChainManagerTest, CreateStateChainSingleChunk) {
-	constexpr std::string key = "test_key";
-	const std::string data = "Small data that fits in one chunk";
+TEST_F(StateChainManagerTest, CreateSingleChunkInternal) {
+	const std::string key = "test_key";
+	const std::string data = "test_data";
 
 	auto chain = stateChainManager->createStateChain(key, data);
 
@@ -78,8 +78,8 @@ TEST_F(StateChainManagerTest, CreateStateChainSingleChunk) {
 	EXPECT_FALSE(chain[0].isBlobStorage());
 }
 
-TEST_F(StateChainManagerTest, CreateStateChainMultipleChunks) {
-	constexpr std::string key = "large_key";
+TEST_F(StateChainManagerTest, CreateMultiChunkInternal) {
+	const std::string key = "large_key";
 	const std::string data(graph::State::CHUNK_SIZE * 2 + 100, 'X');
 
 	auto chain = stateChainManager->createStateChain(key, data);
@@ -103,10 +103,9 @@ TEST_F(StateChainManagerTest, CreateStateChainMultipleChunks) {
 	EXPECT_EQ(chain[2].getNextStateId(), 0);
 }
 
-// Updated expectation for empty data
-TEST_F(StateChainManagerTest, CreateStateChainEmptyData) {
-	constexpr std::string key = "empty_key";
-	constexpr std::string data;
+TEST_F(StateChainManagerTest, CreateEmptyInternal) {
+	const std::string key = "empty_key";
+	const std::string data;
 
 	auto chain = stateChainManager->createStateChain(key, data);
 
@@ -121,8 +120,8 @@ TEST_F(StateChainManagerTest, CreateStateChainEmptyData) {
 // 2. Blob Storage Tests
 // ==========================================
 
-TEST_F(StateChainManagerTest, CreateStateChainWithBlobStorage) {
-	constexpr std::string key = "blob_key";
+TEST_F(StateChainManagerTest, CreateSingleBlob) {
+	const std::string key = "blob_key";
 	const std::string data = "Data stored in external blob";
 
 	// Create with useBlobStorage = true
@@ -139,8 +138,8 @@ TEST_F(StateChainManagerTest, CreateStateChainWithBlobStorage) {
 	EXPECT_EQ(readData, data);
 }
 
-TEST_F(StateChainManagerTest, CreateStateChainBlobStorageLargeData) {
-	constexpr std::string key = "blob_large_key";
+TEST_F(StateChainManagerTest, CreateLargeBlob) {
+	const std::string key = "blob_large_key";
 	// Data larger than one Blob chunk (typically 4KB+) to force Blob chaining internally
 	const std::string data(10000, 'B');
 
@@ -158,9 +157,9 @@ TEST_F(StateChainManagerTest, CreateStateChainBlobStorageLargeData) {
 // ==========================================
 
 TEST_F(StateChainManagerTest, UpdateInternalToBlob) {
-	constexpr std::string key = "mode_switch_key";
-	constexpr std::string initialData = "Initial Internal Data";
-	constexpr std::string newData = "New Blob Data";
+	const std::string key = "mode_switch_key";
+	const std::string initialData = "Initial Internal Data";
+	const std::string newData = "New Blob Data";
 
 	// 1. Create Internal
 	auto chain = stateChainManager->createStateChain(key, initialData, false);
@@ -181,9 +180,9 @@ TEST_F(StateChainManagerTest, UpdateInternalToBlob) {
 }
 
 TEST_F(StateChainManagerTest, UpdateBlobToInternal) {
-	constexpr std::string key = "mode_switch_key_2";
-	constexpr std::string initialData = "Initial Blob Data";
-	constexpr std::string newData = "New Internal Data";
+	const std::string key = "mode_switch_key_2";
+	const std::string initialData = "Initial Blob Data";
+	const std::string newData = "New Internal Data";
 
 	// 1. Create Blob
 	auto chain = stateChainManager->createStateChain(key, initialData, true);
@@ -209,8 +208,8 @@ TEST_F(StateChainManagerTest, UpdateBlobToInternal) {
 }
 
 TEST_F(StateChainManagerTest, UpdateBlobToBlob) {
-	constexpr std::string key = "blob_update_key";
-	constexpr std::string data1 = "Blob Data V1";
+	const std::string key = "blob_update_key";
+	const std::string data1 = "Blob Data V1";
 	const std::string data2 = "Blob Data V2 (Different)";
 
 	auto chain = stateChainManager->createStateChain(key, data1, true);
@@ -224,7 +223,7 @@ TEST_F(StateChainManagerTest, UpdateBlobToBlob) {
 }
 
 TEST_F(StateChainManagerTest, UpdateMultiChunkInternalToBlob) {
-	constexpr std::string key = "multi_to_blob";
+	const std::string key = "multi_to_blob";
 	// Create data requiring 2 chunks
 	const std::string multiData(graph::State::CHUNK_SIZE + 50, 'M');
 
@@ -253,7 +252,7 @@ TEST_F(StateChainManagerTest, UpdateMultiChunkInternalToBlob) {
 
 TEST_F(StateChainManagerTest, ReadStateChainSingleState) {
 	constexpr int64_t headStateId = 4001;
-	constexpr std::string testData = "Single state data";
+	const std::string testData = "Single state data";
 
 	graph::State headState(headStateId, "test_key", testData);
 	dataManager->addStateEntity(headState);
@@ -265,9 +264,9 @@ TEST_F(StateChainManagerTest, ReadStateChainSingleState) {
 
 TEST_F(StateChainManagerTest, ReadStateChainMultipleStates) {
 	constexpr int64_t headStateId = 5001;
-	constexpr std::string part1 = "First part";
-	constexpr std::string part2 = "Second part";
-	constexpr std::string part3 = "Third part";
+	const std::string part1 = "First part";
+	const std::string part2 = "Second part";
+	const std::string part3 = "Third part";
 
 	// Create chained states
 	graph::State state1(5001, "chain_key", part1);
@@ -870,7 +869,7 @@ TEST_F(StateChainManagerTest, UpdateThrowsOnNonExistentState) {
 // Test that update handles mode switch with same data correctly
 // Tests the case where data is same but storage mode differs
 TEST_F(StateChainManagerTest, UpdateWithSameDataButDifferentMode) {
-	constexpr int64_t entityId = 3000;
+	[[maybe_unused]] constexpr int64_t entityId = 3000;
 	const std::string key = "mode_test_key";
 	const std::string data = "Persistent data";
 

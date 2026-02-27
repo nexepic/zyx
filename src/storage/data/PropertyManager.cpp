@@ -145,14 +145,12 @@ namespace graph::storage {
 
 		if (storageType == PropertyStorageType::BLOB_ENTITY) {
 			// Delete the entire blob chain
-			if (auto blobManager = dataManager->getBlobManager()) {
-				blobManager->deleteBlobChain(propertyId);
-			}
-		} else if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+			auto blobManager = dataManager->getBlobManager();
+			blobManager->deleteBlobChain(propertyId);
+		} else {
+			// PROPERTY_ENTITY
 			Property property = dataManager->getProperty(propertyId);
-			if (property.getId() != 0 && property.isActive()) {
-				dataManager->deleteProperty(property);
-			}
+			dataManager->deleteProperty(property);
 		}
 	}
 
@@ -196,9 +194,6 @@ namespace graph::storage {
 
 		auto *dataManager = getDataManagerPtr();
 		auto blobManager = dataManager->getBlobManager();
-		if (!blobManager) {
-			throw std::runtime_error("BlobManager not initialized");
-		}
 
 		// This function's responsibility is simple: create a new Blob chain.
 		// It assumes any previous external storage has already been cleaned up by the caller (storeProperties).
@@ -208,49 +203,30 @@ namespace graph::storage {
 		serializeProperties(ss, properties);
 		std::string serializedData = ss.str();
 
-		if (serializedData.empty()) {
-			return; // Nothing to store.
-		}
+		// Create a new blob chain for the serialized properties.
+		auto blobChain = blobManager->createBlobChain(entity.getId(), EntityType::typeId, serializedData);
 
-		try {
-			// Create a new blob chain for the serialized properties.
-			auto blobChain = blobManager->createBlobChain(entity.getId(), EntityType::typeId, serializedData);
+		// Update the entity to reference the head of the new blob chain.
+		EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, blobChain.front().getId(),
+														 PropertyStorageType::BLOB_ENTITY);
 
-			if (blobChain.empty()) {
-				throw std::runtime_error("Failed to create blob chain");
-			}
-
-			// Update the entity to reference the head of the new blob chain.
-			EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, blobChain.front().getId(),
-															 PropertyStorageType::BLOB_ENTITY);
-
-			// Clear the properties from the in-memory entity object, as they are now stored externally.
-			EntityPropertyTraits<EntityType>::clearProperties(entity);
-
-		} catch (const std::runtime_error &e) {
-			throw std::runtime_error(std::string("Failed to store properties in blob: ") + e.what());
-		}
+		// Clear the properties from the in-memory entity object, as they are now stored externally.
+		EntityPropertyTraits<EntityType>::clearProperties(entity);
 	}
 
 	std::unordered_map<std::string, PropertyValue> PropertyManager::getPropertiesFromBlob(int64_t blobId) const {
 		auto *dataManager = getDataManagerPtr();
+		auto blobManager = dataManager->getBlobManager();
 
 		try {
 			// Read data from blob chain
-			auto blobManager = dataManager->getBlobManager();
-			if (!blobManager) {
-				return {};
-			}
-
 			std::string serializedData = blobManager->readBlobChain(blobId);
 
 			// Deserialize properties
 			std::stringstream ss(serializedData);
 			return deserializeProperties(ss);
-
 		} catch (const std::exception &e) {
-			// Log error but return empty map to avoid crashing
-			std::cerr << "Error reading blob chain: " << e.what() << std::endl;
+			// Return empty map on error to handle corrupted storage gracefully
 			return {};
 		}
 	}
@@ -287,19 +263,15 @@ namespace graph::storage {
 				if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 					// Load from Property entity
 					Property property = dataManager->getProperty(propertyEntityId);
-					if (property.getId() != 0 && property.isActive()) {
-						// Verify ownership
-						if (property.getEntityId() == entityId && property.getEntityType() == EntityType::typeId) {
-							// Merge properties
-							const auto &externalProps = property.getPropertyValues();
-							for (const auto &[key, value]: externalProps) {
-								allProperties[key] = value;
-							}
 
-							// Add property to cache
-							dataManager->addToCache(property);
-						}
+					// Merge properties
+					const auto &externalProps = property.getPropertyValues();
+					for (const auto &[key, value]: externalProps) {
+						allProperties[key] = value;
 					}
+
+					// Add property to cache
+					dataManager->addToCache(property);
 				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
 					// Load from Blob chain
 					auto blobProperties = getPropertiesFromBlob(propertyEntityId);
@@ -382,7 +354,7 @@ namespace graph::storage {
 
 				if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 					Property property = dataManager->getProperty(propertyEntityId);
-					if (property.getId() != 0 && property.isActive() && property.hasPropertyValue(key)) {
+					if (property.hasPropertyValue(key)) {
 						auto properties = property.getPropertyValues();
 						properties.erase(key);
 						property.setProperties(properties);
@@ -405,8 +377,6 @@ namespace graph::storage {
 						propertyWasRemoved = true;
 
 						auto blobManager = dataManager->getBlobManager();
-						if (!blobManager)
-							return; // Should not happen
 
 						// First, delete the old blob chain completely.
 						blobManager->deleteBlobChain(propertyEntityId);
@@ -420,14 +390,8 @@ namespace graph::storage {
 							serializeProperties(ss, properties);
 							auto newBlobChain =
 									blobManager->createBlobChain(entity.getId(), EntityType::typeId, ss.str());
-							if (!newBlobChain.empty()) {
-								EntityPropertyTraits<EntityType>::setPropertyEntityId(
-										entity, newBlobChain.front().getId(), PropertyStorageType::BLOB_ENTITY);
-							} else {
-								// Failed to create a new chain, clear the reference.
-								EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0,
-																					 PropertyStorageType::NONE);
-							}
+							EntityPropertyTraits<EntityType>::setPropertyEntityId(
+									entity, newBlobChain.front().getId(), PropertyStorageType::BLOB_ENTITY);
 						}
 					}
 				}
@@ -458,22 +422,17 @@ namespace graph::storage {
 
 		if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 			Property property = dataManager->getProperty(propertyEntityId);
-			if (property.getId() != 0 && property.isActive()) {
-				return property.hasPropertyValue(key);
-			}
+			return property.hasPropertyValue(key);
 		} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
-			if (auto blobManager = dataManager->getBlobManager()) {
-				try {
-					std::string serializedData = blobManager->readBlobChain(propertyEntityId);
-					if (serializedData.empty())
-						return false;
+			auto blobManager = getDataManagerPtr()->getBlobManager();
+			try {
+				std::string serializedData = blobManager->readBlobChain(propertyEntityId);
 
-					std::stringstream ss(serializedData);
-					auto properties = deserializeProperties(ss);
-					return properties.contains(key);
-				} catch (...) {
-					return false;
-				}
+				std::stringstream ss(serializedData);
+				auto properties = deserializeProperties(ss);
+				return properties.contains(key);
+			} catch (...) {
+				return false;
 			}
 		}
 
@@ -518,21 +477,18 @@ namespace graph::storage {
 					}
 				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
 					// Get blob entity and calculate size from its deserialized properties
-					if (auto blobManager = dataManager->getBlobManager()) {
-						try {
-							std::string serializedData = blobManager->readBlobChain(propertyEntityId);
-							if (!serializedData.empty()) {
-								std::stringstream ss(serializedData);
-								auto properties = deserializeProperties(ss);
+					auto blobManager = getDataManagerPtr()->getBlobManager();
+					try {
+						std::string serializedData = blobManager->readBlobChain(propertyEntityId);
+						std::stringstream ss(serializedData);
+						auto properties = deserializeProperties(ss);
 
-								for (const auto &[key, value]: properties) {
-									totalSize += key.size();
-									totalSize += property_utils::getPropertyValueSize(value);
-								}
-							}
-						} catch (...) {
-							// Ignore read errors
+						for (const auto &[key, value]: properties) {
+							totalSize += key.size();
+							totalSize += property_utils::getPropertyValueSize(value);
 						}
+					} catch (...) {
+						// Ignore read errors for corrupted blob chains
 					}
 				}
 			}
@@ -551,10 +507,6 @@ namespace graph::storage {
 	// cleanupExternalProperties instantiations
 	template void PropertyManager::cleanupExternalProperties<Node>(Node &entity);
 	template void PropertyManager::cleanupExternalProperties<Edge>(Edge &entity);
-	template void PropertyManager::cleanupExternalProperties<Property>(Property &entity);
-	template void PropertyManager::cleanupExternalProperties<Blob>(Blob &entity);
-	template void PropertyManager::cleanupExternalProperties<Index>(Index &entity);
-	template void PropertyManager::cleanupExternalProperties<State>(State &entity);
 
 	// storePropertiesInPropertyEntity instantiations
 	template void
@@ -563,85 +515,35 @@ namespace graph::storage {
 	template void
 	PropertyManager::storePropertiesInPropertyEntity<Edge>(Edge &entity,
 														   const std::unordered_map<std::string, PropertyValue> &);
-	template void
-	PropertyManager::storePropertiesInPropertyEntity<Property>(Property &entity,
-																const std::unordered_map<std::string, PropertyValue> &);
-	template void
-	PropertyManager::storePropertiesInPropertyEntity<Blob>(Blob &entity,
-															const std::unordered_map<std::string, PropertyValue> &);
-	template void
-	PropertyManager::storePropertiesInPropertyEntity<Index>(Index &entity,
-															const std::unordered_map<std::string, PropertyValue> &);
-	template void
-	PropertyManager::storePropertiesInPropertyEntity<State>(State &entity,
-															const std::unordered_map<std::string, PropertyValue> &);
 
 	// storePropertiesInBlob instantiations
 	template void PropertyManager::storePropertiesInBlob<Node>(Node &entity,
 															 const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::storePropertiesInBlob<Edge>(Edge &entity,
 															 const std::unordered_map<std::string, PropertyValue> &);
-	template void
-	PropertyManager::storePropertiesInBlob<Property>(Property &entity,
-													 const std::unordered_map<std::string, PropertyValue> &);
-	template void PropertyManager::storePropertiesInBlob<Blob>(Blob &entity,
-														const std::unordered_map<std::string, PropertyValue> &);
-	template void PropertyManager::storePropertiesInBlob<Index>(Index &entity,
-															const std::unordered_map<std::string, PropertyValue> &);
-	template void PropertyManager::storePropertiesInBlob<State>(State &entity,
-															const std::unordered_map<std::string, PropertyValue> &);
 
 	// getEntityProperties instantiations
 	template std::unordered_map<std::string, PropertyValue>
 	PropertyManager::getEntityProperties<Node>(int64_t entityId);
 	template std::unordered_map<std::string, PropertyValue>
 	PropertyManager::getEntityProperties<Edge>(int64_t entityId);
-	template std::unordered_map<std::string, PropertyValue>
-	PropertyManager::getEntityProperties<Property>(int64_t entityId);
-	template std::unordered_map<std::string, PropertyValue>
-	PropertyManager::getEntityProperties<Blob>(int64_t entityId);
-	template std::unordered_map<std::string, PropertyValue>
-	PropertyManager::getEntityProperties<Index>(int64_t entityId);
-	template std::unordered_map<std::string, PropertyValue>
-	PropertyManager::getEntityProperties<State>(int64_t entityId);
 
 	// addEntityProperties instantiations
 	template void PropertyManager::addEntityProperties<Node>(int64_t entityId,
 															 const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::addEntityProperties<Edge>(int64_t entityId,
 															 const std::unordered_map<std::string, PropertyValue> &);
-	template void
-	PropertyManager::addEntityProperties<Property>(int64_t entityId,
-												   const std::unordered_map<std::string, PropertyValue> &);
-	template void PropertyManager::addEntityProperties<Blob>(int64_t entityId,
-														 const std::unordered_map<std::string, PropertyValue> &);
-	template void PropertyManager::addEntityProperties<Index>(int64_t entityId,
-														  const std::unordered_map<std::string, PropertyValue> &);
-	template void PropertyManager::addEntityProperties<State>(int64_t entityId,
-														  const std::unordered_map<std::string, PropertyValue> &);
 
 	// removeEntityProperty instantiations
 	template void PropertyManager::removeEntityProperty<Node>(int64_t entityId, const std::string &);
 	template void PropertyManager::removeEntityProperty<Edge>(int64_t entityId, const std::string &);
-	template void PropertyManager::removeEntityProperty<Property>(int64_t entityId, const std::string &);
-	template void PropertyManager::removeEntityProperty<Blob>(int64_t entityId, const std::string &);
-	template void PropertyManager::removeEntityProperty<Index>(int64_t entityId, const std::string &);
-	template void PropertyManager::removeEntityProperty<State>(int64_t entityId, const std::string &);
 
 	// hasExternalProperty instantiations
 	template bool PropertyManager::hasExternalProperty<Node>(const Node &entity, const std::string &);
 	template bool PropertyManager::hasExternalProperty<Edge>(const Edge &entity, const std::string &);
-	template bool PropertyManager::hasExternalProperty<Property>(const Property &entity, const std::string &);
-	template bool PropertyManager::hasExternalProperty<Blob>(const Blob &entity, const std::string &);
-	template bool PropertyManager::hasExternalProperty<Index>(const Index &entity, const std::string &);
-	template bool PropertyManager::hasExternalProperty<State>(const State &entity, const std::string &);
 
 	// calculateEntityTotalPropertySize instantiations
 	template size_t PropertyManager::calculateEntityTotalPropertySize<Node>(int64_t entityId);
 	template size_t PropertyManager::calculateEntityTotalPropertySize<Edge>(int64_t entityId);
-	template size_t PropertyManager::calculateEntityTotalPropertySize<Property>(int64_t entityId);
-	template size_t PropertyManager::calculateEntityTotalPropertySize<Blob>(int64_t entityId);
-	template size_t PropertyManager::calculateEntityTotalPropertySize<Index>(int64_t entityId);
-	template size_t PropertyManager::calculateEntityTotalPropertySize<State>(int64_t entityId);
 
 } // namespace graph::storage

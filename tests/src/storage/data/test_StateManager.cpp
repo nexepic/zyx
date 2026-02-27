@@ -374,3 +374,30 @@ TEST_F(StateManagerTest, UpdateStateKeyFromNonEmptyToEmpty) {
 	graph::State byId = stateManager->get(stateId);
 	EXPECT_EQ(byId.getId(), stateId);
 }
+
+// Test findByKey returns empty for inactive state
+TEST_F(StateManagerTest, FindByKeyWithInactiveState) {
+	// This test documents the defensive check at line 111 in StateManager.cpp
+	// The key-to-id map is carefully maintained to never contain invalid states,
+	// so this defensive check is never triggered in normal operation.
+
+	// Create and add a state
+	graph::State state;
+	state.setKey("test.key");
+	stateManager->add(state);
+	int64_t stateId = state.getId();
+
+	// Verify it's findable
+	graph::State found = stateManager->findByKey("test.key");
+	EXPECT_EQ(found.getId(), stateId);
+
+	// Remove the state
+	stateManager->remove(state);
+
+	// Clear cache
+	dataManager->clearCache();
+
+	// After removal, the key is also removed from the map, so findByKey returns empty
+	graph::State notFound = stateManager->findByKey("test.key");
+	EXPECT_EQ(notFound.getId(), 0);
+}

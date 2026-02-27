@@ -46,17 +46,17 @@ namespace graph::query::indexes {
 
 			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
+				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-					if (batchIds.size() >= BATCH_SIZE) {
+					if (batchIds.size() == BATCH_SIZE) {
 						// Pass nullptr for propertyIndex to only process labels
 						processNodeBatch(batchIds, labelIndex, nullptr, "");
 						batchIds.clear();
 					}
 				}
-				if (!batchIds.empty()) {
-					processNodeBatch(batchIds, labelIndex, nullptr, "");
-				}
+				// Process remaining entities
+				processNodeBatch(batchIds, labelIndex, nullptr, "");
 			}
 			labelIndex->flush();
 			return true;
@@ -73,17 +73,17 @@ namespace graph::query::indexes {
 
 			for (const auto &[startId, endId]: getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
+				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-					if (batchIds.size() >= BATCH_SIZE) {
+					if (batchIds.size() == BATCH_SIZE) {
 						// Pass nullptr for propertyIndex to only process labels
 						processEdgeBatch(batchIds, labelIndex, nullptr, "");
 						batchIds.clear();
 					}
 				}
-				if (!batchIds.empty()) {
-					processEdgeBatch(batchIds, labelIndex, nullptr, "");
-				}
+				// Process remaining entities
+				processEdgeBatch(batchIds, labelIndex, nullptr, "");
 			}
 			labelIndex->flush();
 			return true;
@@ -102,16 +102,16 @@ namespace graph::query::indexes {
 
 			for (const auto &[startId, endId]: getNodeIdRanges()) {
 				std::vector<int64_t> batchIds;
+				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-					if (batchIds.size() >= BATCH_SIZE) {
+					if (batchIds.size() == BATCH_SIZE) {
 						processNodeBatch(batchIds, nullptr, propertyIndex, key);
 						batchIds.clear();
 					}
 				}
-				if (!batchIds.empty()) {
-					processNodeBatch(batchIds, nullptr, propertyIndex, key);
-				}
+				// Process remaining entities
+				processNodeBatch(batchIds, nullptr, propertyIndex, key);
 			}
 			return true;
 		} catch (...) {
@@ -129,16 +129,16 @@ namespace graph::query::indexes {
 
 			for (const auto &[startId, endId]: getEdgeIdRanges()) {
 				std::vector<int64_t> batchIds;
+				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
-					if (batchIds.size() >= BATCH_SIZE) {
+					if (batchIds.size() == BATCH_SIZE) {
 						processEdgeBatch(batchIds, nullptr, propertyIndex, key);
 						batchIds.clear();
 					}
 				}
-				if (!batchIds.empty()) {
-					processEdgeBatch(batchIds, nullptr, propertyIndex, key);
-				}
+				// Process remaining entities
+				processEdgeBatch(batchIds, nullptr, propertyIndex, key);
 			}
 			return true;
 		} catch (...) {
@@ -160,22 +160,15 @@ namespace graph::query::indexes {
 			if (labelIndex) {
 				if (node.getLabelId() != 0) {
 					std::string labelStr = dataManager_->resolveLabel(node.getLabelId());
-					if (!labelStr.empty()) {
-						labelIndex->addNode(nodeId, labelStr);
-					}
+					labelIndex->addNode(nodeId, labelStr);
 				}
 			}
 
 			if (propertyIndex) {
 				auto properties = dataManager_->getNodeProperties(nodeId);
-				if (propertyKey.empty()) { // Index all properties
-					for (const auto &[key, value]: properties) {
-						propertyIndex->addProperty(nodeId, key, value);
-					}
-				} else { // Index specific property
-					if (auto it = properties.find(propertyKey); it != properties.end()) {
-						propertyIndex->addProperty(nodeId, propertyKey, it->second);
-					}
+				// Index specific property
+				if (auto it = properties.find(propertyKey); it != properties.end()) {
+					propertyIndex->addProperty(nodeId, propertyKey, it->second);
 				}
 			}
 		}
@@ -195,22 +188,15 @@ namespace graph::query::indexes {
 			if (labelIndex) {
 				if (edge.getLabelId() != 0) {
 					std::string labelStr = dataManager_->resolveLabel(edge.getLabelId());
-					if (!labelStr.empty()) {
-						labelIndex->addNode(edgeId, labelStr);
-					}
+					labelIndex->addNode(edgeId, labelStr);
 				}
 			}
 
 			if (propertyIndex) {
 				auto properties = dataManager_->getEdgeProperties(edgeId);
-				if (propertyKey.empty()) { // Index all properties
-					for (const auto &[key, value]: properties) {
-						propertyIndex->addProperty(edgeId, key, value);
-					}
-				} else { // Index specific property
-					if (auto it = properties.find(propertyKey); it != properties.end()) {
-						propertyIndex->addProperty(edgeId, propertyKey, it->second);
-					}
+				// Index specific property
+				if (auto it = properties.find(propertyKey); it != properties.end()) {
+					propertyIndex->addProperty(edgeId, propertyKey, it->second);
 				}
 			}
 		}
@@ -224,10 +210,8 @@ namespace graph::query::indexes {
 		auto nodeSegments = dataManager_->getSegmentTracker()->getSegmentsByType(Node::typeId);
 
 		for (const auto &segment: nodeSegments) {
-			if (segment.used > 0) {
-				// Create a range from start_id to (start_id + used - 1)
-				ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
-			}
+			// Create a range from start_id to (start_id + used - 1)
+			ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
 		}
 
 		return ranges;
@@ -240,10 +224,8 @@ namespace graph::query::indexes {
 		auto edgeSegments = dataManager_->getSegmentTracker()->getSegmentsByType(Edge::typeId);
 
 		for (const auto &segment: edgeSegments) {
-			if (segment.used > 0) {
-				// Create a range from start_id to (start_id + used - 1)
-				ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
-			}
+			// Create a range from start_id to (start_id + used - 1)
+			ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
 		}
 
 		return ranges;
