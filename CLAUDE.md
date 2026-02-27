@@ -83,39 +83,43 @@ When extracting test requirements from source code or user requests, follow this
 **Unit Tests vs Integration Tests:**
 
 - **Unit Tests** (`tests/src/`): Test individual components in isolation
-  - Mock external dependencies where appropriate
-  - Test internal logic, edge cases, and error conditions
-  - Focus on code paths and branch coverage
-  - Located in `tests/src/<module>/` matching the source structure
+    - Mock external dependencies where appropriate
+    - Test internal logic, edge cases, and error conditions
+    - Focus on code paths and branch coverage
+    - Located in `tests/src/<module>/` matching the source structure
 
 - **Integration Tests** (`tests/integration/`): Test complete system workflows
-  - Test real database operations end-to-end
-  - Verify ACID properties, persistence, and data recovery
-  - Test complex query workflows and multi-component interactions
-  - Use real database instances with temporary files
+    - Test real database operations end-to-end
+    - Verify ACID properties, persistence, and data recovery
+    - Test complex query workflows and multi-component interactions
+    - Use real database instances with temporary files
 
 #### 2. Extract Test Requirements from Code
 
 When analyzing source code to identify test requirements:
 
 **For Classes/Structures:**
+
 - Public API methods → Functional tests
 - Private/internal methods → Consider white-box testing if critical
 - Constructors/destructors → Lifecycle tests
 - Getters/setters → Property access tests
 
 **For Control Flow:**
+
 - `if/else` branches → Test both true and false paths
 - `for/while` loops → Test with 0, 1, and N iterations
 - Switch/case statements → Test each case
 - Exception handling → Test error conditions
 
 **For State Management:**
+
 - State transitions → Test valid and invalid transitions
 - Default values → Verify initialization
 - State queries → Test state retrieval
 
 **For Data Structures:**
+
 - Empty collections → Test edge cases
 - Single element → Test minimal case
 - Multiple elements → Test normal operation
@@ -123,9 +127,11 @@ When analyzing source code to identify test requirements:
 
 #### 3. Reference Contribution Guidelines
 
-**IMPORTANT**: For testing standards, code patterns, and contribution guidelines, **always consult `CONTRIBUTING.md`** in the project root directory.
+**IMPORTANT**: For testing standards, code patterns, and contribution guidelines, **always consult `CONTRIBUTING.md`**
+in the project root directory.
 
 Key requirements from CONTRIBUTING.md:
+
 - Testing standards and best practices
 - Temporary file handling for cross-platform compatibility
 - Code style and formatting guidelines
@@ -133,7 +139,8 @@ Key requirements from CONTRIBUTING.md:
 
 ## Git Commit Guidelines
 
-**CRITICAL**: When creating git commits, you MUST strictly follow the guidelines in `CONTRIBUTING.md`. Failure to comply will result in rejected commits.
+**CRITICAL**: When creating git commits, you MUST strictly follow the guidelines in `CONTRIBUTING.md`. Failure to comply
+will result in rejected commits.
 
 ### Mandatory Commit Message Requirements
 
@@ -143,45 +150,6 @@ When executing `git commit`, follow these rules from `CONTRIBUTING.md`:
 2. **Be Specific**: Describe what was changed and why
 3. **Keep it Focused**: One logical change per commit
 4. **NO Co-Authored-By**: Do NOT include `Co-Authored-By` trailers in commit messages
-
-### Commit Message Format
-
-```bash
-# Correct format
-git commit -m "Fix memory leak in BlobManager::deleteBlobChain"
-
-# WRONG - Do NOT do this
-git commit -m "Fixed stuff
-Co-Authored-By: Someone <someone@example.com>"
-```
-
-### Commit Workflow
-
-When making changes to the codebase:
-
-1. Stage only related files for a single logical change
-2. Write a clear, specific commit message in imperative mood
-3. NEVER add `Co-Authored-By:` trailers
-4. If changes span multiple features, create separate commits
-
-### Examples
-
-**Good Commit:**
-```
-Implement IN operator for WHERE clause
-
-Add support for IN operator in Cypher WHERE clauses to check if
-property values match any value in a list. This eliminates the
-need for multiple OR conditions.
-```
-
-**Bad Commits:**
-```
-Fixed stuff
-Co-Authored-By: Claude <claude@example.com>
-
-Update files
-```
 
 ## Architecture
 
