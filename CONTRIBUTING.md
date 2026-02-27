@@ -57,3 +57,50 @@ protected:
     std::filesystem::path testFilePath;
     std::unique_ptr<graph::Database> database;
 };
+```
+
+## Code Style and Formatting
+
+When contributing code, please ensure it adheres to the project's coding standards:
+
+- Follow the existing code style and formatting
+- Write clear, self-documenting code with meaningful variable and function names
+- Add comments for complex logic or non-obvious implementations
+- Keep functions focused and concise
+
+## Git Commit Guidelines
+
+### Commit Message Format
+
+Write clear, concise commit messages that describe the **what** and **why** of your changes:
+
+- **Use imperative mood**: "Fix bug" not "Fixed bug" or "Fixes bug"
+- **Be specific**: Describe what was changed and why
+- **Keep it focused**: One logical change per commit
+- **No Co-Authored-By**: Do not include `Co-Authored-By` trailers in commit messages
+
+### Example Commit Messages
+
+**Good:**
+```
+Fix memory leak in BlobManager::deleteBlobChain
+
+Removed double-free issue where blob entities were being deleted
+both individually and during chain cleanup. Now the chain
+cleanup handles all deletions atomically.
+```
+
+**Bad:**
+```
+Fixed stuff
+Co-Authored-By: Someone <someone@example.com>
+```
+
+### Pull Request Requirements
+
+Before submitting a pull request:
+
+1. **Ensure all tests pass**: Run `./scripts/run_tests.sh` and verify 100% pass rate
+2. **Check coverage**: New code should have adequate test coverage (target: 85%+ branch coverage)
+3. **Update documentation**: If your changes affect user-facing functionality, update relevant docs
+4. **One feature per PR**: Keep pull requests focused on a single feature or fix
