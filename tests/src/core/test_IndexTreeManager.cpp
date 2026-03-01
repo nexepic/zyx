@@ -210,7 +210,7 @@ TEST_F(IndexTreeManagerTest, RangeQuerySpansMultipleLeaves) {
 // --- End-to-End Blob Storage Tests ---
 
 TEST_F(IndexTreeManagerTest, LeafValuesOverflowToBlob_EndToEnd) {
-	constexpr std::string testKey = "key_with_many_values";
+	const std::string testKey = "key_with_many_values";
 	size_t valueCount = (Index::LEAF_VALUES_INLINE_THRESHOLD / sizeof(int64_t)) + 5;
 
 	for (size_t i = 0; i < valueCount; ++i) {
