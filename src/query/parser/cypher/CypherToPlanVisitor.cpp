@@ -23,6 +23,7 @@
 #include "clauses/ReadingClauseHandler.hpp"
 #include "clauses/ResultClauseHandler.hpp"
 #include "clauses/WritingClauseHandler.hpp"
+#include "clauses/WithClauseHandler.hpp"
 
 namespace graph::parser::cypher {
 
@@ -61,6 +62,11 @@ std::any CypherToPlanVisitor::visitInQueryCallStatement(CypherParser::InQueryCal
 
 std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) {
 	rootOp_ = clauses::ReadingClauseHandler::handleUnwind(ctx, std::move(rootOp_), planner_);
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitWithStatement(CypherParser::WithStatementContext *ctx) {
+	rootOp_ = clauses::WithClauseHandler::handleWith(ctx, std::move(rootOp_), planner_);
 	return std::any();
 }
 

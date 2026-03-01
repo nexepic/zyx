@@ -136,8 +136,9 @@ TEST_F(ReadingClauseHandlerFullCoverageTest, Match_WithComplexWhere) {
 	(void) execute("CREATE (n:Test {a: 1, b: 2, c: 3})");
 	(void) execute("CREATE (n:Test {a: 2, b: 3, c: 1})");
 
-	auto res = execute("MATCH (n:Test) WHERE n.a > 1 AND n.b < 3 RETURN n");
-	EXPECT_GE(res.rowCount(), 1UL);
+	// Use OR to test both nodes
+	auto res = execute("MATCH (n:Test) WHERE n.a > 1 OR n.b < 3 RETURN n");
+	EXPECT_EQ(res.rowCount(), 2UL);
 }
 
 TEST_F(ReadingClauseHandlerFullCoverageTest, Match_WithOrCondition) {

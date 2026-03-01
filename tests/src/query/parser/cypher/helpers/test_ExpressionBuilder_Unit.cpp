@@ -37,7 +37,7 @@ TEST_F(ExpressionBuilderUnitTest, BuildWherePredicate_CheckErrorMessage) {
 		ExpressionBuilder::buildWherePredicate(nullptr, desc);
 		FAIL() << "Expected std::runtime_error";
 	} catch (const std::runtime_error& e) {
-		EXPECT_STREQ("Invalid WHERE expression tree", e.what());
+		EXPECT_STREQ("Invalid expression tree: null context", e.what());
 	} catch (...) {
 		FAIL() << "Expected std::runtime_error";
 	}

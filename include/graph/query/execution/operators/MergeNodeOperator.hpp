@@ -25,6 +25,8 @@
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/expressions/ExpressionEvaluator.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -200,8 +202,13 @@ namespace graph::query::execution::operators {
 					// NOTE: Merge (OnCreate/OnMatch) usually sets Properties.
 					// If SET n:Label syntax is used in Merge clause, it's more complex.
 					// Assuming SetItem here is for Properties only based on current logic.
-					if (item.type == SetActionType::PROPERTY) {
-						props[item.key] = item.value;
+					if (item.type == SetActionType::PROPERTY && item.expression) {
+						// Evaluate the expression to get the value
+						graph::query::expressions::EvaluationContext context(record);
+						graph::query::expressions::ExpressionEvaluator evaluator(context);
+						PropertyValue value = evaluator.evaluate(item.expression.get());
+
+						props[item.key] = value;
 						changed = true;
 					}
 					// Handle Label Set if needed in future

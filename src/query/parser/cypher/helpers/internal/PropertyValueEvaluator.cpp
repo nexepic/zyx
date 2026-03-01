@@ -27,14 +27,58 @@ PropertyValue PropertyValueEvaluator::evaluate(CypherParser::ExpressionContext *
 	if (!ctx)
 		return PropertyValue();
 
+	// Navigate to the unary expression level
+	auto or_ = ctx->orExpression();
+	if (!or_)
+		return PropertyValue();
+
+	auto xor_ = or_->xorExpression(0);
+	if (!xor_)
+		return PropertyValue();
+
+	auto and_ = xor_->andExpression(0);
+	if (!and_)
+		return PropertyValue();
+
+	auto not_ = and_->notExpression(0);
+	if (!not_)
+		return PropertyValue();
+
+	auto comp = not_->comparisonExpression();
+	if (!comp)
+		return PropertyValue();
+
+	auto arith = comp->arithmeticExpression(0);
+	if (!arith)
+		return PropertyValue();
+
+	auto unary = arith->unaryExpression(0);
+	if (!unary)
+		return PropertyValue();
+
+	// Check for unary minus (e.g., -10, -3.14)
+	bool hasUnaryMinus = (unary->MINUS() != nullptr);
+
 	// Navigate to the atom
-	auto atom = getAtomFromExpression(ctx);
+	auto atom = unary->atom();
 	if (!atom)
 		return PropertyValue(); // Complex expressions not supported yet
 
 	// Case A: Literal (String, Number, Bool, Null)
 	if (atom->literal()) {
-		return parseLiteral(atom->literal());
+		PropertyValue result = parseLiteral(atom->literal());
+
+		// Apply unary negation if needed
+		if (hasUnaryMinus) {
+			if (result.getType() == PropertyType::INTEGER) {
+				result = PropertyValue(-std::get<int64_t>(result.getVariant()));
+			} else if (result.getType() == PropertyType::DOUBLE) {
+				result = PropertyValue(-std::get<double>(result.getVariant()));
+			}
+			// For non-numeric types, unary minus doesn't make sense - leave as-is
+		}
+
+		return result;
 	}
 
 	// Case B: List Literal ([1, 2, 3])

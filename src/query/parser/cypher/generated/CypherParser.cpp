@@ -2435,6 +2435,37 @@ CypherParser::RemoveItemContext* CypherParser::removeItem() {
   return _localctx;
 }
 
+//----------------- WithStatementContext ------------------------------------------------------------------
+
+CypherParser::WithStatementContext::WithStatementContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+tree::TerminalNode* CypherParser::WithStatementContext::K_WITH() {
+  return getToken(CypherParser::K_WITH, 0);
+}
+
+CypherParser::ProjectionBodyContext* CypherParser::WithStatementContext::projectionBody() {
+  return getRuleContext<CypherParser::ProjectionBodyContext>(0);
+}
+
+CypherParser::WhereContext* CypherParser::WithStatementContext::where() {
+  return getRuleContext<CypherParser::WhereContext>(1);
+}
+
+
+size_t CypherParser::WithStatementContext::getRuleIndex() const {
+  return CypherParser::RuleWithStatement;
+}
+
+
+std::any CypherParser::WithStatementContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<CypherParserVisitor*>(visitor))
+    return parserVisitor->visitWithStatement(this);
+  else
+    return visitor->visitChildren(this);
+}
+
 //----------------- ReturnStatementContext ------------------------------------------------------------------
 
 CypherParser::ReturnStatementContext::ReturnStatementContext(ParserRuleContext *parent, size_t invokingState)

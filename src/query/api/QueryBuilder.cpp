@@ -21,6 +21,7 @@
 #include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
 #include "graph/query/execution/operators/CreateNodeOperator.hpp"
+#include "graph/query/expressions/Expression.hpp"
 
 namespace graph::query {
 
@@ -113,8 +114,23 @@ namespace graph::query {
 			throw std::runtime_error("SET must follow a MATCH");
 
 		std::vector<execution::operators::SetItem> items;
-		// Using SetActionType::PROPERTY
-		items.push_back({execution::operators::SetActionType::PROPERTY, variable, key, value});
+
+		// Create a LiteralExpression from the PropertyValue
+		std::shared_ptr<graph::query::expressions::Expression> expr;
+		if (std::holds_alternative<std::string>(value.getVariant())) {
+			expr = std::make_shared<graph::query::expressions::LiteralExpression>(std::get<std::string>(value.getVariant()));
+		} else if (std::holds_alternative<bool>(value.getVariant())) {
+			expr = std::make_shared<graph::query::expressions::LiteralExpression>(std::get<bool>(value.getVariant()));
+		} else if (std::holds_alternative<int64_t>(value.getVariant())) {
+			expr = std::make_shared<graph::query::expressions::LiteralExpression>(std::get<int64_t>(value.getVariant()));
+		} else if (std::holds_alternative<double>(value.getVariant())) {
+			expr = std::make_shared<graph::query::expressions::LiteralExpression>(std::get<double>(value.getVariant()));
+		} else {
+			// NULL value
+			expr = std::make_shared<graph::query::expressions::LiteralExpression>();
+		}
+
+		items.emplace_back(execution::operators::SetActionType::PROPERTY, variable, key, expr);
 
 		root_ = planner_->setOp(std::move(root_), items);
 		return *this;
@@ -125,11 +141,11 @@ namespace graph::query {
 			throw std::runtime_error("SET must follow a MATCH");
 
 		std::vector<execution::operators::SetItem> items;
-		// Using SetActionType::LABEL
-		items.push_back({
+		// Using SetActionType::LABEL - no expression needed for labels
+		items.emplace_back(
 				execution::operators::SetActionType::LABEL, variable, label,
-				PropertyValue() // Empty val
-		});
+				nullptr // No expression for labels
+		);
 
 		root_ = planner_->setOp(std::move(root_), items);
 		return *this;

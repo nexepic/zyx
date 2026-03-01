@@ -28,6 +28,7 @@
 #include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
+#include "graph/query/expressions/Expression.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/execution/Record.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
@@ -85,7 +86,13 @@ protected:
 
 TEST_F(SetOperatorTest, Set_WithNullChild) {
 	// Test with null child operator
-	std::vector<SetItem> items = { {SetActionType::PROPERTY, "n", "key", PropertyValue(42)} };
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY,
+		"n",
+		"key",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(42))
+	);
 	auto op = std::make_unique<SetOperator>(dm, nullptr, items);
 	EXPECT_NO_THROW(op->open());
 	EXPECT_NO_THROW(op->close());
@@ -104,7 +111,13 @@ TEST_F(SetOperatorTest, Set_NodeProperty) {
 	MockOperator *mock = new MockOperator({{r1}});
 
 	// Set new property
-	std::vector<SetItem> items = { {SetActionType::PROPERTY, "n", "newKey", PropertyValue(123)} };
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY,
+		"n",
+		"newKey",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(123))
+	);
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -134,7 +147,13 @@ TEST_F(SetOperatorTest, Set_NodeLabel) {
 	MockOperator *mock = new MockOperator({{r1}});
 
 	// Set new label
-	std::vector<SetItem> items = { {SetActionType::LABEL, "n", "NewLabel", PropertyValue()} };
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::LABEL,
+		"n",
+		"NewLabel",
+		nullptr // No expression for labels
+	);
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -167,7 +186,13 @@ TEST_F(SetOperatorTest, Set_EdgeProperty) {
 	MockOperator *mock = new MockOperator({{r1}});
 
 	// Set edge property
-	std::vector<SetItem> items = { {SetActionType::PROPERTY, "e", "weight", PropertyValue(1.5)} };
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY,
+		"e",
+		"weight",
+		std::make_shared<graph::query::expressions::LiteralExpression>(1.5)
+	);
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -192,10 +217,19 @@ TEST_F(SetOperatorTest, Set_MultipleItems) {
 	MockOperator *mock = new MockOperator({{r1}});
 
 	// Set multiple properties
-	std::vector<SetItem> items = {
-		{SetActionType::PROPERTY, "n", "a", PropertyValue(1)},
-		{SetActionType::PROPERTY, "n", "b", PropertyValue(2)}
-	};
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY,
+		"n",
+		"a",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(1))
+	);
+	items.emplace_back(
+		SetActionType::PROPERTY,
+		"n",
+		"b",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(2))
+	);
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -219,7 +253,13 @@ TEST_F(SetOperatorTest, GetOutputVariablesAndChildren) {
 
 	MockOperator *mock = new MockOperator({{r1}});
 
-	std::vector<SetItem> items = { {SetActionType::PROPERTY, "n", "key", PropertyValue(1)} };
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY,
+		"n",
+		"key",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(1))
+	);
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
 

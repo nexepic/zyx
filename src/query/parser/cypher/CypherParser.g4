@@ -78,6 +78,7 @@ readingClause
     : matchStatement
     | unwindStatement
     | inQueryCallStatement
+    | withStatement
     ;
 
 updatingClause
@@ -100,6 +101,10 @@ unwindStatement
 
 inQueryCallStatement
     : K_CALL explicitProcedureInvocation ( K_YIELD yieldItems )?
+    ;
+
+withStatement
+    : K_WITH projectionBody ( K_WHERE where )?
     ;
 
 // --- Updating ---

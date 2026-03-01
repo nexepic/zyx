@@ -299,13 +299,12 @@ TEST_F(ReadingClauseHandlerTest, EdgeCase_MatchWithNoLabel) {
 
 TEST_F(ReadingClauseHandlerTest, EdgeCase_MatchAnonymousNode) {
 	// Tests MATCH clause with anonymous node (no variable)
-	// Note: COUNT(*) with anonymous node may return null
+	// COUNT(*) now works correctly and returns the count
 	(void) execute("CREATE (:Person {name: 'Alice'})");
 
 	auto res = execute("MATCH (:Person) RETURN count(*)");
 	ASSERT_EQ(res.rowCount(), 1UL);
-	// Implementation limitation: COUNT(*) returns null instead of count
-	EXPECT_EQ(res.getRows()[0].at("count(*)").toString(), "null");
+	EXPECT_EQ(res.getRows()[0].at("count(*)").toString(), "1");
 }
 
 TEST_F(ReadingClauseHandlerTest, EdgeCase_MatchWithVariableLength) {

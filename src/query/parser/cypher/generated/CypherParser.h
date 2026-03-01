@@ -42,7 +42,7 @@ public:
     RuleUpdatingClause = 10, RuleMatchStatement = 11, RuleUnwindStatement = 12, 
     RuleInQueryCallStatement = 13, RuleCreateStatement = 14, RuleMergeStatement = 15, 
     RuleSetStatement = 16, RuleSetItem = 17, RuleDeleteStatement = 18, RuleRemoveStatement = 19, 
-    RuleRemoveItem = 20, RuleReturnStatement = 21, RuleStandaloneCallStatement = 22, 
+    RuleRemoveItem = 20, RuleWithStatement = 21, RuleReturnStatement = 22, RuleStandaloneCallStatement = 23, 
     RuleYieldItems = 23, RuleYieldItem = 24, RuleProjectionBody = 25, RuleProjectionItems = 26, 
     RuleProjectionItem = 27, RuleOrderStatement = 28, RuleSkipStatement = 29, 
     RuleLimitStatement = 30, RuleSortItem = 31, RuleWhere = 32, RulePattern = 33, 
@@ -92,6 +92,7 @@ public:
   class MatchStatementContext;
   class UnwindStatementContext;
   class InQueryCallStatementContext;
+  class WithStatementContext;
   class CreateStatementContext;
   class MergeStatementContext;
   class SetStatementContext;
@@ -571,6 +572,18 @@ public:
   };
 
   RemoveItemContext* removeItem();
+
+  class  WithStatementContext : public antlr4::ParserRuleContext {
+  public:
+    WithStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_WITH();
+    ProjectionBodyContext *projectionBody();
+    WhereContext *where();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+
+  };
 
   class  ReturnStatementContext : public antlr4::ParserRuleContext {
   public:

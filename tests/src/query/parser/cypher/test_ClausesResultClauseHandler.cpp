@@ -421,14 +421,14 @@ TEST_F(ResultClauseHandlerTest, Combined_ProjectionWithOrder) {
 
 TEST_F(ResultClauseHandlerTest, Combined_AliasWithOrder) {
 	// Tests RETURN with alias and ORDER BY
-	// Note: ORDER BY DESC sorts as ASC (implementation bug - reversed comparison)
+	// ORDER BY DESC now sorts correctly in descending order
 	(void) execute("CREATE (n:Person {name: 'Charlie', score: 100})");
 	(void) execute("CREATE (n:Person {name: 'David', score: 200})");
 
 	auto res = execute("MATCH (n:Person) RETURN n.score AS points ORDER BY points DESC");
 	ASSERT_EQ(res.rowCount(), 2UL);
-	EXPECT_EQ(res.getRows()[0].at("points").toString(), "100");
-	EXPECT_EQ(res.getRows()[1].at("points").toString(), "200");
+	EXPECT_EQ(res.getRows()[0].at("points").toString(), "200");
+	EXPECT_EQ(res.getRows()[1].at("points").toString(), "100");
 }
 
 // ============================================================================

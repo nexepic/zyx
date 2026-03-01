@@ -24,6 +24,7 @@
 #include "../OperatorChain.hpp"
 #include "../PropertyValueEvaluator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/expressions/Expression.hpp"
 
 namespace graph::parser::cypher::helpers {
 
@@ -348,7 +349,7 @@ std::vector<query::execution::operators::SetItem> PatternBuilder::extractSetItem
 		return items;
 
 	for (auto item : ctx->setItem()) {
-		// Case 1: Property Update (n.prop = val)
+		// Case 1: Property Update (n.prop = expr)
 		if (item->propertyExpression() && item->EQ()) {
 			auto propExpr = item->propertyExpression();
 
@@ -361,41 +362,30 @@ std::vector<query::execution::operators::SetItem> PatternBuilder::extractSetItem
 			// 2. Extract Key
 			std::string keyName = AstExtractor::extractPropertyKeyFromExpr(propExpr);
 
-			// 3. Extract Value
-			std::string valText = item->expression()->getText();
-			PropertyValue val;
+			// 3. Build Expression AST from the right-hand side
+			auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
 
-			if (valText.front() == '\'' || valText.front() == '"') {
-				val = PropertyValue(valText.substr(1, valText.length() - 2));
-			} else if (valText == "TRUE" || valText == "true") {
-				val = PropertyValue(true);
-			} else if (valText == "FALSE" || valText == "false") {
-				val = PropertyValue(false);
-			} else {
-				try {
-					// Check for decimal point or scientific notation (both lowercase 'e' and uppercase 'E')
-					if (valText.find('.') != std::string::npos || valText.find('e') != std::string::npos || valText.find('E') != std::string::npos) {
-						// Force double constructor to avoid integer template deduction
-						double dval = std::stod(valText);
-						val = PropertyValue(dval);
-					} else
-						val = PropertyValue(std::stoll(valText));
-				} catch (...) {
-					val = PropertyValue(valText);
-				}
-			}
+			// Convert to shared_ptr for storage in SetItem
+			auto expressionShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
 
-			items.push_back({query::execution::operators::SetActionType::PROPERTY, varName, keyName, val});
+			items.emplace_back(
+				query::execution::operators::SetActionType::PROPERTY,
+				varName,
+				keyName,
+				expressionShared
+			);
 		}
 		// Case 2: Label Assignment (n:Label)
 		else if (item->variable() && item->nodeLabels()) {
 			std::string varName = AstExtractor::extractVariable(item->variable());
 			std::string labelName = AstExtractor::extractLabel(item->nodeLabels());
 
-			items.push_back({
-				query::execution::operators::SetActionType::LABEL, varName, labelName,
-				PropertyValue() // Empty value for labels
-			});
+			items.emplace_back(
+				query::execution::operators::SetActionType::LABEL,
+				varName,
+				labelName,
+				nullptr // No expression for labels
+			);
 		}
 	}
 

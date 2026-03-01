@@ -29,6 +29,9 @@
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/expressions/ExpressionEvaluator.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -37,8 +40,106 @@ namespace graph::query::execution::operators {
 	 * @brief Defines a single item in a RETURN clause.
 	 */
 	struct ProjectItem {
-		std::string expression; // The source expression (e.g., "n.age" or "1")
+		std::shared_ptr<graph::query::expressions::Expression> expression; // Expression AST
 		std::string alias; // The output variable name (e.g., "age" or "num")
+
+		// Helper function to check if a character is a valid identifier start
+		static bool isIdentifierStart(char c) {
+			return std::isalpha(c) || c == '_';
+		}
+
+		// Helper function to check if a character is a valid identifier character
+		static bool isIdentifierChar(char c) {
+			return std::isalnum(c) || c == '_';
+		}
+
+		// Helper function to parse simple string expressions into AST
+		static std::shared_ptr<graph::query::expressions::Expression> parseExpression(const std::string& exprText) {
+			using namespace graph::query::expressions;
+
+			// Check if it's a quoted string literal (e.g., "hello" or 'world')
+			if ((exprText.size() >= 2) && ((exprText.front() == '"' && exprText.back() == '"') ||
+			                               (exprText.front() == '\'' && exprText.back() == '\''))) {
+				std::string strVal = exprText.substr(1, exprText.size() - 2);
+				return std::make_shared<LiteralExpression>(strVal);
+			}
+
+			// Check if it's a property access (e.g., n.prop)
+			// Only treat as property access if it starts with a valid identifier
+			size_t dotPos = exprText.find('.');
+			if (dotPos != std::string::npos && dotPos > 0 && isIdentifierStart(exprText[0])) {
+				std::string varName = exprText.substr(0, dotPos);
+				std::string propName = exprText.substr(dotPos + 1);
+				// Verify the rest of the variable name is valid
+				bool validVarName = true;
+				for (char c : varName) {
+					if (!isIdentifierChar(c)) {
+						validVarName = false;
+						break;
+					}
+				}
+				if (validVarName && !propName.empty()) {
+					return std::make_shared<VariableReferenceExpression>(varName, propName);
+				}
+			}
+
+			// Check for NULL keyword (case-insensitive)
+			if (exprText.size() == 4) {
+				std::string upper = exprText;
+				for (auto& c : upper) c = std::toupper(c);
+				if (upper == "NULL") {
+					return std::make_shared<LiteralExpression>();
+				}
+			}
+
+			// Check if it's a boolean literal (case-insensitive)
+			if (exprText.size() <= 5) {
+				std::string upper = exprText;
+				for (auto& c : upper) c = std::toupper(c);
+				if (upper == "TRUE") {
+					return std::make_shared<LiteralExpression>(true);
+				}
+				if (upper == "FALSE") {
+					return std::make_shared<LiteralExpression>(false);
+				}
+			}
+
+			// Check if it's an integer literal
+			try {
+				size_t pos;
+				int64_t intVal = std::stoll(exprText, &pos);
+				if (pos == exprText.length()) {
+					return std::make_shared<LiteralExpression>(intVal);
+				}
+			} catch (...) {
+				// Not an integer, continue
+			}
+
+			// Check if it's a double literal
+			try {
+				size_t pos;
+				double doubleVal = std::stod(exprText, &pos);
+				if (pos == exprText.length()) {
+					return std::make_shared<LiteralExpression>(doubleVal);
+				}
+			} catch (...) {
+				// Not a double, continue
+			}
+
+			// Default: treat as variable reference
+			return std::make_shared<VariableReferenceExpression>(exprText);
+		}
+
+		// Legacy constructor for backward compatibility
+		ProjectItem(std::string exprText, std::string alias)
+			: expression(parseExpression(exprText)), alias(std::move(alias)) {}
+
+		// New constructor for expression AST
+		ProjectItem(std::shared_ptr<graph::query::expressions::Expression> expr, std::string alias)
+			: expression(std::move(expr)), alias(std::move(alias)) {}
+
+		// Default constructor
+		ProjectItem() = default;
 	};
 
 	class ProjectOperator : public PhysicalOperator {
@@ -70,70 +171,54 @@ namespace graph::query::execution::operators {
 				Record newRecord;
 
 				for (const auto &item: items_) {
-					std::string expr = item.expression;
 					std::string key = item.alias;
-					bool found = false;
 
-					// 1. Try Direct Lookup (Node/Edge/Value)
-					// e.g. RETURN n
-					if (auto node = record.getNode(expr)) {
-						newRecord.setNode(key, *node);
-						found = true;
-					} else if (auto edge = record.getEdge(expr)) {
-						newRecord.setEdge(key, *edge);
-						found = true;
-					} else if (auto val = record.getValue(expr)) {
-						newRecord.setValue(key, *val);
-						found = true;
-					}
+					// Check if this is a simple variable reference (no property access)
+					using namespace graph::query::expressions;
+					if (item.expression && item.expression->getExpressionType() == ExpressionType::PROPERTY_ACCESS) {
+						auto* varRef = static_cast<VariableReferenceExpression*>(item.expression.get());
+						if (!varRef->hasProperty()) {
+							// Simple variable reference - try to copy node/edge directly
+							const std::string& varName = varRef->getVariableName();
 
-					// 2. Try Property Access Logic (e.g. "n.age")
-					if (!found) {
-						size_t dotPos = expr.find('.');
-						if (dotPos != std::string::npos) {
-							std::string varName = expr.substr(0, dotPos);
-							std::string propKey = expr.substr(dotPos + 1);
-
-							// Look for Node
+							// Check if it's a node
 							if (auto node = record.getNode(varName)) {
-								// Check if property exists
-								// Note: Properties must be hydrated by ScanOperator!
-								const auto &props = node->getProperties();
-								auto it = props.find(propKey);
-								if (it != props.end()) {
-									// Store as a Value in the new record using the ALIAS as key
-									newRecord.setValue(key, it->second);
-									found = true;
-								} else {
-									// Property missing -> Null
-									newRecord.setValue(key, PropertyValue());
-									found = true;
-								}
+								newRecord.setNode(key, *node);
+								continue;
 							}
-							// Look for Edge (if needed)
-							else if (auto edge = record.getEdge(varName)) {
-								const auto &props = edge->getProperties();
-								auto it = props.find(propKey);
-								if (it != props.end()) {
-									newRecord.setValue(key, it->second);
-									found = true;
-								}
+
+							// Check if it's an edge
+							if (auto edge = record.getEdge(varName)) {
+								newRecord.setEdge(key, *edge);
+								continue;
+							}
+
+							// Check if it's a value
+							if (auto value = record.getValue(varName)) {
+								newRecord.setValue(key, *value);
+								continue;
 							}
 						}
 					}
 
-					// 3. Try Literal Parsing (e.g. RETURN 1)
-					if (!found) {
-						if (auto literalVal = parseLiteral(expr)) {
-							newRecord.setValue(key, *literalVal);
-							found = true;
+					// Evaluate the expression to get the value
+					PropertyValue value;
+					if (item.expression) {
+						try {
+							graph::query::expressions::EvaluationContext context(record);
+							graph::query::expressions::ExpressionEvaluator evaluator(context);
+							value = evaluator.evaluate(item.expression.get());
+						} catch (const graph::query::expressions::UndefinedVariableException&) {
+							// Undefined variable → NULL (Cypher semantics)
+							value = PropertyValue();
 						}
+					} else {
+						// Fallback to NULL for expressions not yet migrated
+						value = PropertyValue();
 					}
 
-					// If still not found (e.g. unknown var), set to Null.
-					if (!found) {
-						newRecord.setValue(key, PropertyValue());
-					}
+					// Store the value in the new record
+					newRecord.setValue(key, value);
 				}
 
 				// DISTINCT: Check if we've seen this record before
@@ -171,8 +256,10 @@ namespace graph::query::execution::operators {
 			oss << "Project(";
 			if (distinct_) oss << "DISTINCT ";
 			for (size_t i = 0; i < items_.size(); ++i) {
-				oss << items_[i].expression;
-				if (items_[i].alias != items_[i].expression) {
+				if (items_[i].expression) {
+					oss << items_[i].expression->toString();
+				}
+				if (items_[i].alias != (items_[i].expression ? items_[i].expression->toString() : "")) {
 					oss << " AS " << items_[i].alias;
 				}
 				if (i < items_.size() - 1)
@@ -207,47 +294,6 @@ namespace graph::query::execution::operators {
 				}
 			}
 			return result;
-		}
-
-		/**
-		 * @brief Attempts to parse a string expression as a literal value.
-		 * Supports Integers, Doubles, Booleans, Strings, and Null.
-		 */
-		std::optional<PropertyValue> parseLiteral(const std::string &txt) {
-			// String: '...' or "..."
-			if (txt.size() >= 2 &&
-				((txt.front() == '\'' && txt.back() == '\'') || (txt.front() == '"' && txt.back() == '"'))) {
-				return PropertyValue(txt.substr(1, txt.size() - 2));
-			}
-			// Boolean
-			if (txt == "TRUE" || txt == "true")
-				return PropertyValue(true);
-			if (txt == "FALSE" || txt == "false")
-				return PropertyValue(false);
-
-			// Null
-			if (txt == "NULL" || txt == "null")
-				return PropertyValue();
-
-			// Number (Integer or Double)
-			// Regex for number check: optional -, digits, optional .digits, optional (e|E)digits
-			static const std::regex numberRegex(R"(^-?\d+(\.\d+)?([eE][+-]?\d+)?$)");
-			if (std::regex_match(txt, numberRegex)) {
-				try {
-					// Check for decimal point or scientific notation (both lowercase 'e' and uppercase 'E')
-					if (txt.find('.') != std::string::npos || txt.find('e') != std::string::npos || txt.find('E') != std::string::npos) {
-						// Force double constructor to avoid integer template deduction
-						double dval = std::stod(txt);
-						return PropertyValue(dval);
-					} else {
-						return PropertyValue(std::stoll(txt));
-					}
-				} catch (...) {
-					return std::nullopt; // Parse error
-				}
-			}
-
-			return std::nullopt; // Not a recognized literal
 		}
 	};
 

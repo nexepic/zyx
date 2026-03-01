@@ -22,6 +22,9 @@
 
 #include "../PhysicalOperator.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/expressions/ExpressionEvaluator.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -31,7 +34,14 @@ namespace graph::query::execution::operators {
 		SetActionType type; // Distinguish Property vs Label
 		std::string variable;
 		std::string key; // Property Key OR Label Name
-		PropertyValue value; // Value (ignored if type == LABEL)
+		std::shared_ptr<graph::query::expressions::Expression> expression; // Expression AST (ignored if type == LABEL)
+
+		// Constructor for expression AST
+		SetItem(SetActionType t, std::string var, std::string k, std::shared_ptr<graph::query::expressions::Expression> expr)
+			: type(t), variable(std::move(var)), key(std::move(k)), expression(std::move(expr)) {}
+
+		// Default constructor
+		SetItem() = default;
 	};
 
 	class SetOperator : public PhysicalOperator {
@@ -56,39 +66,49 @@ namespace graph::query::execution::operators {
 			for (auto record: *batchOpt) {
 				for (const auto &item: items_) {
 
-					// --- Node Logic ---
-					if (auto nodeOpt = record.getNode(item.variable)) {
-						Node node = *nodeOpt;
-						int64_t id = node.getId();
+					// Skip label-only items (no expression evaluation needed)
+					if (item.type == SetActionType::PROPERTY && item.expression) {
+						// Evaluate the expression to get the value
+						graph::query::expressions::EvaluationContext context(record);
+						graph::query::expressions::ExpressionEvaluator evaluator(context);
+						PropertyValue value = evaluator.evaluate(item.expression.get());
 
-						if (item.type == SetActionType::PROPERTY) {
-							// 1. Property Update (Read-Modify-Write)
+						// --- Node Logic ---
+						if (auto nodeOpt = record.getNode(item.variable)) {
+							Node node = *nodeOpt;
+							int64_t id = node.getId();
+
+							// Property Update (Read-Modify-Write)
 							auto props = dm_->getNodeProperties(id);
-							props[item.key] = item.value;
+							props[item.key] = value;
 							dm_->addNodeProperties(id, props);
 							node.setProperties(std::move(props));
-						} else if (item.type == SetActionType::LABEL) {
-							// 2. Label Update
+
+							record.setNode(item.variable, node);
+						}
+						// --- Edge Logic ---
+						else if (auto edgeOpt = record.getEdge(item.variable)) {
+							Edge edge = *edgeOpt;
+							int64_t id = edge.getId();
+
+							auto props = dm_->getEdgeProperties(id);
+							props[item.key] = value;
+							dm_->addEdgeProperties(id, props);
+							edge.setProperties(std::move(props));
+							record.setEdge(item.variable, edge);
+						}
+					} else if (item.type == SetActionType::LABEL) {
+						// --- Label Update ---
+						if (auto nodeOpt = record.getNode(item.variable)) {
+							Node node = *nodeOpt;
+							[[maybe_unused]] int64_t id = node.getId();
+
 							// Resolve string label to ID
 							int64_t newLabelId = dm_->getOrCreateLabelId(item.key);
 							node.setLabelId(newLabelId);
 							dm_->updateNode(node); // Persist label ID change
-						}
 
-						record.setNode(item.variable, node);
-					}
-
-					// --- Edge Logic (Only Properties supported for now) ---
-					else if (auto edgeOpt = record.getEdge(item.variable)) {
-						Edge edge = *edgeOpt;
-						int64_t id = edge.getId();
-
-						if (item.type == SetActionType::PROPERTY) {
-							auto props = dm_->getEdgeProperties(id);
-							props[item.key] = item.value;
-							dm_->addEdgeProperties(id, props);
-							edge.setProperties(std::move(props));
-							record.setEdge(item.variable, edge);
+							record.setNode(item.variable, node);
 						}
 					}
 				}

@@ -190,8 +190,12 @@ TEST_F(ReadingClauseHandlerExtendedCoverageTest, Match_WithComplexWhere) {
 	(void) execute("CREATE (n:Test {a: 1, b: 2, c: 3})");
 	(void) execute("CREATE (n:Test {a: 2, b: 3, c: 1})");
 
-	auto res = execute("MATCH (n:Test) WHERE n.a > 1 AND n.b < 3 RETURN n");
-	EXPECT_GE(res.rowCount(), 1UL);
+	// Corrected test: change b to 1.5 so one node matches
+	// Node1: a=1 > 1? false
+	// Node2: a=2 > 1? true, b=3 < 1.5? false → still no match
+	// Let's use OR instead to test both nodes
+	auto res = execute("MATCH (n:Test) WHERE n.a > 1 OR n.b < 3 RETURN n");
+	EXPECT_EQ(res.rowCount(), 2UL);
 }
 
 TEST_F(ReadingClauseHandlerExtendedCoverageTest, Match_WithOrCondition) {

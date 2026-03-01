@@ -23,7 +23,8 @@ cypher_clauses = files(
 	'clauses/ReadingClauseHandler.cpp',
 	'clauses/WritingClauseHandler.cpp',
 	'clauses/ResultClauseHandler.cpp',
-	'clauses/AdminClauseHandler.cpp'
+	'clauses/AdminClauseHandler.cpp',
+	'clauses/WithClauseHandler.cpp'
 )
 
 # List your implementation files

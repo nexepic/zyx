@@ -20,7 +20,12 @@
 
 #include "ResultClauseHandler.hpp"
 #include "helpers/AstExtractor.hpp"
+#include "helpers/ExpressionBuilder.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/execution/operators/AggregateOperator.hpp"
+#include <algorithm>
+#include <unordered_map>
 
 namespace graph::parser::cypher::clauses {
 
@@ -41,24 +46,48 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 	}
 
 	// Order By (MUST come before Projection so SortOperator has access to full nodes)
+	// However, ORDER BY can reference projection aliases, so we need to collect those first
+	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> projectionAliases; // alias -> expression
+
+	auto items = body->projectionItems();
+	if (!items->MULTIPLY()) { // If not RETURN *
+		for (auto item : items->projectionItem()) {
+			// Build Expression AST from the projection expression
+			auto exprAST = helpers::ExpressionBuilder::buildExpression(item->expression());
+
+			std::string alias;
+			if (item->K_AS()) {
+				alias = helpers::AstExtractor::extractVariable(item->variable());
+			} else {
+				alias = item->expression()->getText();
+			}
+			projectionAliases[alias] = std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+		}
+	}
+
 	if (body->orderStatement()) {
 		std::vector<query::execution::operators::SortItem> sortItems;
 		auto sortItemList = body->orderStatement()->sortItem();
 
 		for (auto item : sortItemList) {
-			// Parse Expression (n.age)
-			std::string varName;
-			std::string propName;
+			// Build Expression AST from the sort expression
+			auto expressionAST = helpers::ExpressionBuilder::buildExpression(item->expression());
 
-			// Hacky parse for "n.prop" string
-			std::string text = item->expression()->getText();
-			size_t dotPos = text.find('.');
-			if (dotPos != std::string::npos) {
-				varName = text.substr(0, dotPos);
-				propName = text.substr(dotPos + 1);
-			} else {
-				varName = text; // Just "n" (Sort by ID)
+			// Check if this is a simple variable reference to a projection alias
+			if (auto varExpr = dynamic_cast<graph::query::expressions::VariableReferenceExpression*>(expressionAST.get())) {
+				if (!varExpr->hasProperty()) {
+					const std::string& varName = varExpr->getVariableName();
+					// Check if this variable name is a projection alias
+					auto it = projectionAliases.find(varName);
+					if (it != projectionAliases.end()) {
+						// Use the original projection expression instead of the alias
+						expressionAST = std::unique_ptr<graph::query::expressions::Expression>(it->second->clone());
+					}
+				}
 			}
+
+			// Convert to shared_ptr for storage
+			auto expressionShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
 
 			// Determine Direction
 			bool asc = true;  // Default to ascending
@@ -66,7 +95,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 				asc = false;  // Set to false for DESC/DESCENDING
 			}
 
-			sortItems.push_back({varName, propName, asc});
+			sortItems.push_back({expressionShared, asc});
 		}
 
 		if (!sortItems.empty()) {
@@ -75,25 +104,83 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 	}
 
 	// Handle Projection (MUST come after Order By)
-	auto items = body->projectionItems();
 	if (!items->MULTIPLY()) { // If not RETURN *
+		// Check for aggregate functions
+		bool hasAggregates = false;
+		std::vector<query::execution::operators::AggregateItem> aggItems;
 		std::vector<query::execution::operators::ProjectItem> projItems;
 
 		for (auto item : items->projectionItem()) {
-			// 1. Expression Text (Source)
-			std::string exprText = item->expression()->getText();
+			// Build Expression AST from the projection expression
+			auto expressionAST = helpers::ExpressionBuilder::buildExpression(item->expression());
 
-			// 2. Alias (Output Name)
-			// If 'AS alias' is present, use it. Otherwise, use expression text.
-			std::string alias = exprText;
-			if (item->K_AS()) {
-				alias = helpers::AstExtractor::extractVariable(item->variable());
+			// Check if this is an aggregate function
+			bool isAggregate = false;
+			query::execution::operators::AggregateFunctionType aggType;
+
+			// Simple check: if the expression is a FunctionCallExpression
+			if (auto funcCall = dynamic_cast<graph::query::expressions::FunctionCallExpression*>(expressionAST.get())) {
+				std::string funcName = funcCall->getFunctionName();
+				if (helpers::ExpressionBuilder::isAggregateFunction(funcName)) {
+					isAggregate = true;
+					hasAggregates = true;
+
+					// Determine aggregate function type
+					std::string nameLower = funcName;
+					std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
+					               [](unsigned char c) { return std::tolower(c); });
+
+					if (nameLower == "count") aggType = query::execution::operators::AggregateFunctionType::COUNT;
+					else if (nameLower == "sum") aggType = query::execution::operators::AggregateFunctionType::SUM;
+					else if (nameLower == "avg") aggType = query::execution::operators::AggregateFunctionType::AVG;
+					else if (nameLower == "min") aggType = query::execution::operators::AggregateFunctionType::MIN;
+					else if (nameLower == "max") aggType = query::execution::operators::AggregateFunctionType::MAX;
+					else if (nameLower == "collect") aggType = query::execution::operators::AggregateFunctionType::COLLECT;
+
+					// Get the argument expression (or nullptr for COUNT(*))
+					std::shared_ptr<graph::query::expressions::Expression> argExpr(nullptr);
+					if (funcCall->getArgumentCount() > 0) {
+						// For aggregate functions, extract the first argument
+						// Note: The function call may have arguments like n, n.prop, etc.
+						// We need to extract the actual argument expression
+						const auto& args = funcCall->getArguments();
+						if (!args.empty()) {
+							argExpr = std::shared_ptr<graph::query::expressions::Expression>(args[0]->clone().release());
+						}
+					}
+
+					// Determine alias
+					std::string alias = item->expression()->getText();
+					if (item->K_AS()) {
+						alias = helpers::AstExtractor::extractVariable(item->variable());
+					}
+
+					aggItems.emplace_back(aggType, argExpr, alias);
+				}
 			}
 
-			projItems.push_back({exprText, alias});
+			// If not an aggregate, add to projection items
+			if (!isAggregate) {
+				// Convert to shared_ptr for storage
+				auto expressionShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+
+				// Alias (Output Name) - use original expression text to preserve formatting
+				std::string alias = item->expression()->getText();
+				if (item->K_AS()) {
+					alias = helpers::AstExtractor::extractVariable(item->variable());
+				}
+
+				projItems.emplace_back(expressionShared, alias);
+			}
 		}
 
-		if (!projItems.empty()) {
+		// Apply appropriate operator
+		if (hasAggregates) {
+			// Use AggregateOperator for aggregations
+			rootOp = std::make_unique<query::execution::operators::AggregateOperator>(
+				std::move(rootOp), aggItems);
+		} else if (!projItems.empty()) {
+			// Use ProjectOperator for regular projections
 			rootOp = planner->projectOp(std::move(rootOp), projItems, distinct);
 		}
 	}

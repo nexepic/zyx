@@ -24,13 +24,28 @@
 #include <string>
 #include <vector>
 #include "../PhysicalOperator.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/expressions/ExpressionEvaluator.hpp"
 
 namespace graph::query::execution::operators {
 
 	struct SortItem {
-		std::string variable; // e.g., "n"
-		std::string property; // e.g., "age" (Empty if sorting by the element itself/ID)
+		std::shared_ptr<graph::query::expressions::Expression> expression; // Expression AST
 		bool ascending = true;
+
+		// Legacy constructor for backward compatibility
+		SortItem([[maybe_unused]] std::string var, [[maybe_unused]] std::string prop, bool asc = true)
+			: ascending(asc) {
+			// This is a temporary bridge - text-based expressions will be replaced by AST
+		}
+
+		// New constructor for expression AST
+		SortItem(std::shared_ptr<graph::query::expressions::Expression> expr, bool asc = true)
+			: expression(std::move(expr)), ascending(asc) {}
+
+		// Default constructor
+		SortItem() = default;
 	};
 
 	class SortOperator : public PhysicalOperator {
@@ -94,7 +109,9 @@ namespace graph::query::execution::operators {
 			std::string s = "Sort(";
 			for (size_t i = 0; i < sortItems_.size(); ++i) {
 				const auto &item = sortItems_[i];
-				s += item.variable + (item.property.empty() ? "" : "." + item.property);
+				if (item.expression) {
+					s += item.expression->toString();
+				}
 
 				s += (item.ascending ? " ASC" : " DESC");
 
@@ -121,27 +138,18 @@ namespace graph::query::execution::operators {
 		void performSort() {
 			std::sort(sortedRecords_.begin(), sortedRecords_.end(), [this](const Record &a, const Record &b) -> bool {
 				for (const auto &item: sortItems_) {
-					// Extract values
+					// Evaluate expressions to get comparison values
 					PropertyValue valA, valB;
 
-					// Helper to extract value from Record based on var.prop
-					auto extract = [&](const Record &r, PropertyValue &out) {
-						if (auto n = r.getNode(item.variable)) {
-							if (item.property.empty())
-								out = PropertyValue(n->getId()); // Default sort by ID
-							else {
-								const auto &p = n->getProperties();
-								if (p.count(item.property))
-									out = p.at(item.property);
-								else
-									out = PropertyValue(); // Null
-							}
-						}
-						// Add Edge support if needed...
-					};
+					if (item.expression) {
+						graph::query::expressions::EvaluationContext contextA(a);
+						graph::query::expressions::ExpressionEvaluator evaluatorA(contextA);
+						valA = evaluatorA.evaluate(item.expression.get());
 
-					extract(a, valA);
-					extract(b, valB);
+						graph::query::expressions::EvaluationContext contextB(b);
+						graph::query::expressions::ExpressionEvaluator evaluatorB(contextB);
+						valB = evaluatorB.evaluate(item.expression.get());
+					}
 
 					if (valA != valB) {
 						if (item.ascending)
