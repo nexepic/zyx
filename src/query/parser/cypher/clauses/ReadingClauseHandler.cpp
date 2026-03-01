@@ -22,8 +22,8 @@
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
 #include "helpers/PatternBuilder.hpp"
-#include "helpers/PropertyValueEvaluator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/planner/PipelineValidator.hpp"
 
 namespace graph::parser::cypher::clauses {
 
@@ -50,7 +50,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 
 	if (!invoc->expression().empty()) {
 		for (auto expr : invoc->expression()) {
-			args.push_back(helpers::PropertyValueEvaluator::evaluate(expr));
+				args.push_back(helpers::ExpressionBuilder::evaluateLiteralExpression(expr));
 		}
 	}
 
@@ -69,7 +69,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	// Parse Arguments
 	if (!invoc->expression().empty()) {
 		for (auto expr : invoc->expression()) {
-			args.push_back(helpers::PropertyValueEvaluator::evaluate(expr));
+				args.push_back(helpers::ExpressionBuilder::evaluateLiteralExpression(expr));
 		}
 	}
 
@@ -125,9 +125,11 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 		// An empty list in UNWIND stops the pipeline (0 rows).
 	}
 
-	if (!rootOp) {
-		rootOp = planner->singleRowOp();
-	}
+	// Ensure valid pipeline (auto-inject singleRowOp if empty)
+	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
+	    std::move(rootOp), planner, "UNWIND",
+	    graph::query::PipelineValidator::ValidationMode::ALLOW_EMPTY
+	);
 
 	// 3. Build Operator
 	rootOp = planner->unwindOp(std::move(rootOp), alias, listValues);

@@ -22,7 +22,6 @@
 #include "../AstExtractor.hpp"
 #include "../ExpressionBuilder.hpp"
 #include "../OperatorChain.hpp"
-#include "../PropertyValueEvaluator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/expressions/Expression.hpp"
 
@@ -73,10 +72,10 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 	std::string var = AstExtractor::extractVariable(headNodePat->variable());
 	std::string label = AstExtractor::extractLabel(headNodePat->nodeLabels());
 
-	// Extract properties using the evaluator
+	// Extract properties using AST-based evaluation
 	auto props = AstExtractor::extractProperties(headNodePat->properties(),
 		[](CypherParser::ExpressionContext *expr) {
-			return PropertyValueEvaluator::evaluate(expr);
+			return ExpressionBuilder::evaluateLiteralExpression(expr);
 		});
 
 	// Optimizer: Index Pushdown
@@ -144,7 +143,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 			edgeLabel = AstExtractor::extractRelType(relDetail->relationshipTypes());
 			edgeProps = AstExtractor::extractProperties(relDetail->properties(),
 				[](CypherParser::ExpressionContext *expr) {
-					return PropertyValueEvaluator::evaluate(expr);
+					return ExpressionBuilder::evaluateLiteralExpression(expr);
 				});
 
 			// Variable Length Logic
@@ -182,7 +181,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 		std::string targetLabel = AstExtractor::extractLabel(nodePat->nodeLabels());
 		auto targetProps = AstExtractor::extractProperties(nodePat->properties(),
 			[](CypherParser::ExpressionContext *expr) {
-				return PropertyValueEvaluator::evaluate(expr);
+				return ExpressionBuilder::evaluateLiteralExpression(expr);
 			});
 
 		// Build Traversal
@@ -275,7 +274,7 @@ void PatternBuilder::processCreatePatternElement(
 	std::string headLabel = AstExtractor::extractLabel(headNodePat->nodeLabels());
 	auto headProps = AstExtractor::extractProperties(headNodePat->properties(),
 		[](CypherParser::ExpressionContext *expr) {
-			return PropertyValueEvaluator::evaluate(expr);
+			return ExpressionBuilder::evaluateLiteralExpression(expr);
 		});
 
 	auto headOp = planner->createOp(headVar, headLabel, headProps);
@@ -291,7 +290,7 @@ void PatternBuilder::processCreatePatternElement(
 		std::string targetLabel = AstExtractor::extractLabel(targetNodePat->nodeLabels());
 		auto targetProps = AstExtractor::extractProperties(targetNodePat->properties(),
 			[](CypherParser::ExpressionContext *expr) {
-				return PropertyValueEvaluator::evaluate(expr);
+				return ExpressionBuilder::evaluateLiteralExpression(expr);
 			});
 
 		auto targetOp = planner->createOp(targetVar, targetLabel, targetProps);
@@ -306,7 +305,7 @@ void PatternBuilder::processCreatePatternElement(
 			edgeLabel = AstExtractor::extractRelType(relDetail->relationshipTypes());
 			edgeProps = AstExtractor::extractProperties(relDetail->properties(),
 				[](CypherParser::ExpressionContext *expr) {
-					return PropertyValueEvaluator::evaluate(expr);
+					return ExpressionBuilder::evaluateLiteralExpression(expr);
 				});
 		}
 
@@ -335,7 +334,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 	std::string label = AstExtractor::extractLabel(headNodePat->nodeLabels());
 	auto matchProps = AstExtractor::extractProperties(headNodePat->properties(),
 		[](CypherParser::ExpressionContext *expr) {
-			return PropertyValueEvaluator::evaluate(expr);
+			return ExpressionBuilder::evaluateLiteralExpression(expr);
 		});
 
 	return planner->mergeOp(var, label, matchProps, onCreateItems, onMatchItems);

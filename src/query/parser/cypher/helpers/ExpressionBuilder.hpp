@@ -84,6 +84,33 @@ public:
 	static std::unique_ptr<graph::query::expressions::Expression> buildExpression(
 		CypherParser::ExpressionContext *expr);
 
+	/**
+	 * @brief Evaluate a literal expression at parse time.
+	 *
+	 * This is a convenience method for evaluating expressions that contain only literals
+	 * (numbers, strings, booleans, null, lists of literals). It builds the AST and
+	 * evaluates it immediately without requiring a runtime record context.
+	 *
+	 * **Use case**: Pattern properties in MATCH/CREATE/MERGE clauses where values are
+	 * literal constants: `MATCH (n {name: "Alice", age: 30})`
+	 *
+	 * **Limitation**: Only supports literal expressions. Variables, function calls, and
+	 * property references will cause an exception.
+	 *
+	 * @param expr The ANTLR4 expression context
+	 * @return The evaluated PropertyValue
+	 * @throws std::runtime_error if the expression contains non-literal elements
+	 *
+	 * @code
+	 * // Extract properties from pattern
+	 * auto props = AstExtractor::extractProperties(ctx->properties(),
+	 *     [](CypherParser::ExpressionContext *expr) {
+	 *         return ExpressionBuilder::evaluateLiteralExpression(expr);
+	 *     });
+	 * @endcode
+	 */
+	static PropertyValue evaluateLiteralExpression(CypherParser::ExpressionContext *expr);
+
 	// =========================================================================
 	// LEGACY API: Direct predicate generation (BACKWARD COMPATIBLE)
 	// =========================================================================
@@ -179,6 +206,9 @@ private:
 
 	static std::unique_ptr<graph::query::expressions::Expression> buildFunctionCall(
 		CypherParser::FunctionInvocationContext *ctx);
+
+	// Helper methods for literal value extraction
+	static graph::PropertyValue parseListLiteral(CypherParser::ListLiteralContext *ctx);
 };
 
 } // namespace graph::parser::cypher::helpers

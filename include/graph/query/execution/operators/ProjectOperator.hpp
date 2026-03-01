@@ -30,6 +30,7 @@
 #include <vector>
 #include "../PhysicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 
@@ -205,9 +206,8 @@ namespace graph::query::execution::operators {
 					PropertyValue value;
 					if (item.expression) {
 						try {
-							graph::query::expressions::EvaluationContext context(record);
-							graph::query::expressions::ExpressionEvaluator evaluator(context);
-							value = evaluator.evaluate(item.expression.get());
+							value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+							    item.expression.get(), record);
 						} catch (const graph::query::expressions::UndefinedVariableException&) {
 							// Undefined variable → NULL (Cypher semantics)
 							value = PropertyValue();

@@ -22,6 +22,8 @@
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/planner/PipelineValidator.hpp"
+#include "graph/query/QueryErrorMessages.hpp"
 #include "graph/query/expressions/Expression.hpp"
 
 namespace graph::parser::cypher::clauses {
@@ -35,10 +37,11 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 		return rootOp;
 	}
 
-	// Ensure we have a valid pipeline to operate on
-	if (!rootOp) {
-		throw std::runtime_error("WITH clause must follow a MATCH or CREATE clause.");
-	}
+	// Ensure valid pipeline (WITH requires preceding clause)
+	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
+	    std::move(rootOp), planner, "WITH",
+	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
+	);
 
 	auto projectionBody = ctx->projectionBody();
 	if (!projectionBody) {

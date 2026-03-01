@@ -27,6 +27,7 @@
 #include <vector>
 #include "../PhysicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "AggregateAccumulator.hpp"
@@ -198,9 +199,6 @@ private:
 
 	void updateAccumulators(const Record& record,
 	                       std::vector<std::unique_ptr<AggregateAccumulator>>& accums) {
-		graph::query::expressions::EvaluationContext context(record);
-		graph::query::expressions::ExpressionEvaluator evaluator(context);
-
 		for (size_t i = 0; i < aggregates_.size(); ++i) {
 			const auto& agg = aggregates_[i];
 
@@ -210,13 +208,15 @@ private:
 					accums[i]->update(PropertyValue(static_cast<int64_t>(1)));
 				} else {
 					// COUNT(expr) - evaluate expression and count non-NULL results
-					PropertyValue value = evaluator.evaluate(agg.expression.get());
+					PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+					    agg.expression.get(), record);
 					accums[i]->update(value);
 				}
 			} else {
 				// Other aggregates require an expression
 				if (agg.expression) {
-					PropertyValue value = evaluator.evaluate(agg.expression.get());
+					PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+					    agg.expression.get(), record);
 					accums[i]->update(value);
 				}
 			}

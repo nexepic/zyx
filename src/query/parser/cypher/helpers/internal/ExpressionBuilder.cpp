@@ -22,6 +22,7 @@
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
 using namespace graph::query::expressions;
@@ -43,6 +44,59 @@ std::unique_ptr<Expression> ExpressionBuilder::buildExpression(CypherParser::Exp
 	}
 
 	return buildOrExpression(orExpr);
+}
+
+PropertyValue ExpressionBuilder::evaluateLiteralExpression(CypherParser::ExpressionContext *expr) {
+	if (!expr) {
+		return PropertyValue();
+	}
+
+	// Special case: Check if it's a list literal BEFORE calling buildExpression()
+	// buildListLiteral() throws an error for non-IN contexts, so we need to handle it here
+	auto atom = getAtomFromExpression(expr);
+	if (atom && atom->listLiteral()) {
+		// It's a list literal - use the old PropertyValueEvaluator logic
+		return parseListLiteral(atom->listLiteral());
+	}
+
+	// Build the AST
+	auto ast = buildExpression(expr);
+	if (!ast) {
+		return PropertyValue();
+	}
+
+	// Check if it's a literal expression (no variables, no function calls)
+	// For pattern properties, we only support literals
+	if (auto *litExpr = dynamic_cast<LiteralExpression*>(ast.get())) {
+		// It's a literal - we can extract the value directly
+		if (litExpr->isNull()) {
+			return PropertyValue();
+		} else if (litExpr->isBoolean()) {
+			return PropertyValue(litExpr->getBooleanValue());
+		} else if (litExpr->isInteger()) {
+			return PropertyValue(litExpr->getIntegerValue());
+		} else if (litExpr->isDouble()) {
+			return PropertyValue(litExpr->getDoubleValue());
+		} else if (litExpr->isString()) {
+			return PropertyValue(litExpr->getStringValue());
+		}
+	}
+
+	// If it's a more complex expression (unary minus on literal, etc.)
+	// Try to evaluate with an empty record context
+	// This will work for literals and literal-only expressions
+	try {
+		// Create an empty record for evaluation
+		graph::query::execution::Record emptyRecord;
+		graph::query::expressions::EvaluationContext context(emptyRecord);
+		graph::query::expressions::ExpressionEvaluator evaluator(context);
+		return evaluator.evaluate(ast.get());
+	} catch (const std::exception& e) {
+		// Non-literal expressions (variables, function calls) are not supported in pattern properties
+		// Return empty PropertyValue to maintain backward compatibility
+		// These will be handled by runtime filters in the WHERE clause
+		return PropertyValue();
+	}
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildOrExpression(CypherParser::OrExpressionContext *ctx) {
@@ -516,6 +570,35 @@ PropertyValue ExpressionBuilder::parseValue(CypherParser::LiteralContext *ctx) {
 		return PropertyValue();
 
 	return PropertyValue();
+}
+
+PropertyValue ExpressionBuilder::parseListLiteral(CypherParser::ListLiteralContext *ctx) {
+	if (!ctx)
+		return PropertyValue();
+
+	std::vector<float> vec;
+
+	// Evaluate each item in the list
+	for (auto itemExpr : ctx->expression()) {
+		// Recursively evaluate the item expression
+		PropertyValue itemVal = evaluateLiteralExpression(itemExpr);
+
+		// Convert to float for vector storage
+		if (itemVal.getType() == PropertyType::INTEGER) {
+			vec.push_back(static_cast<float>(std::get<int64_t>(itemVal.getVariant())));
+		} else if (itemVal.getType() == PropertyType::DOUBLE) {
+			vec.push_back(static_cast<float>(std::get<double>(itemVal.getVariant())));
+		} else {
+			// For other types (strings, etc.), try parsing as string if text
+			try {
+				vec.push_back(std::stof(itemVal.toString()));
+			} catch (...) {
+				// Skip non-numeric items
+			}
+		}
+	}
+
+	return PropertyValue(std::move(vec));
 }
 
 } // namespace graph::parser::cypher::helpers

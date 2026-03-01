@@ -33,7 +33,7 @@ namespace graph::parser::cypher {
  * @brief ANTLR4 visitor that converts Cypher parse trees into physical execution plans.
  *
  * This visitor delegates to specialized helper and handler classes:
- * - Helpers: AstExtractor, ExpressionBuilder, PatternBuilder, PropertyValueEvaluator, OperatorChain
+ * - Helpers: AstExtractor, ExpressionBuilder, PatternBuilder, OperatorChain
  * - Clauses: ReadingClauseHandler, WritingClauseHandler, ResultClauseHandler, AdminClauseHandler
  *
  * The refactored design maintains compatibility with ANTLR4 while improving:

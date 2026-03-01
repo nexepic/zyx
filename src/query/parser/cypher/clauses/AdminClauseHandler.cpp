@@ -20,7 +20,6 @@
 
 #include "AdminClauseHandler.hpp"
 #include "helpers/AstExtractor.hpp"
-#include "helpers/PropertyValueEvaluator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 
 namespace graph::parser::cypher::clauses {

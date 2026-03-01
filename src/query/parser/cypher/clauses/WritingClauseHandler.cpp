@@ -22,6 +22,7 @@
 #include "helpers/AstExtractor.hpp"
 #include "helpers/PatternBuilder.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/planner/PipelineValidator.hpp"
 
 namespace graph::parser::cypher::clauses {
 
@@ -48,10 +49,11 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 	// Use the helper to extract SET items
 	items = helpers::PatternBuilder::extractSetItems(ctx);
 
-	// Ensure we have a valid pipeline to operate on
-	if (!rootOp) {
-		throw std::runtime_error("SET clause must follow a MATCH or CREATE clause.");
-	}
+	// Ensure valid pipeline (SET requires preceding clause)
+	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
+	    std::move(rootOp), planner, "SET",
+	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
+	);
 
 	// Create and chain the SetOperator
 	return planner->setOp(std::move(rootOp), items);
@@ -72,9 +74,11 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 		vars.push_back(expr->getText());
 	}
 
-	if (!rootOp) {
-		throw std::runtime_error("DELETE cannot be the start of a query. Use MATCH first.");
-	}
+	// Ensure valid pipeline (DELETE requires preceding clause)
+	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
+	    std::move(rootOp), planner, "DELETE",
+	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
+	);
 
 	return planner->deleteOp(std::move(rootOp), vars, detach);
 }
@@ -102,8 +106,11 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 		}
 	}
 
-	if (!rootOp)
-		throw std::runtime_error("REMOVE must follow a MATCH or CREATE");
+	// Ensure valid pipeline (REMOVE requires preceding clause)
+	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
+	    std::move(rootOp), planner, "REMOVE",
+	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
+	);
 
 	return planner->removeOp(std::move(rootOp), items);
 }

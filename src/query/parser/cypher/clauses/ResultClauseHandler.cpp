@@ -22,6 +22,7 @@
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/execution/operators/AggregateOperator.hpp"
 #include <algorithm>
@@ -39,11 +40,11 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 	// Check for DISTINCT
 	bool distinct = (body->K_DISTINCT() != nullptr);
 
-	// If there is no existing plan (e.g. standalone RETURN 1),
-	// inject a SingleRowOperator to provide a valid pipeline source.
-	if (!rootOp) {
-		rootOp = planner->singleRowOp();
-	}
+	// Ensure valid pipeline (auto-inject singleRowOp for standalone RETURN)
+	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
+	    std::move(rootOp), planner, "RETURN",
+	    graph::query::PipelineValidator::ValidationMode::ALLOW_EMPTY
+	);
 
 	// Order By (MUST come before Projection so SortOperator has access to full nodes)
 	// However, ORDER BY can reference projection aliases, so we need to collect those first

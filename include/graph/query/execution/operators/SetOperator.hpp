@@ -23,6 +23,7 @@
 #include "../PhysicalOperator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 
@@ -69,9 +70,8 @@ namespace graph::query::execution::operators {
 					// Skip label-only items (no expression evaluation needed)
 					if (item.type == SetActionType::PROPERTY && item.expression) {
 						// Evaluate the expression to get the value
-						graph::query::expressions::EvaluationContext context(record);
-						graph::query::expressions::ExpressionEvaluator evaluator(context);
-						PropertyValue value = evaluator.evaluate(item.expression.get());
+						PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+						    item.expression.get(), record);
 
 						// --- Node Logic ---
 						if (auto nodeOpt = record.getNode(item.variable)) {
