@@ -14,8 +14,7 @@ cypher_helpers = files(
 	'helpers/public/OperatorChain.cpp',
 	'helpers/internal/AstExtractor.cpp',
 	'helpers/internal/ExpressionBuilder.cpp',
-	'helpers/internal/PatternBuilder.cpp',
-	'helpers/internal/PropertyValueEvaluator.cpp'
+	'helpers/internal/PatternBuilder.cpp'
 )
 
 # Clause handler classes

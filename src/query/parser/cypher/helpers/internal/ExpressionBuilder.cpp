@@ -55,7 +55,7 @@ PropertyValue ExpressionBuilder::evaluateLiteralExpression(CypherParser::Express
 	// buildListLiteral() throws an error for non-IN contexts, so we need to handle it here
 	auto atom = getAtomFromExpression(expr);
 	if (atom && atom->listLiteral()) {
-		// It's a list literal - use the old PropertyValueEvaluator logic
+		// It's a list literal - parse directly into PropertyValue
 		return parseListLiteral(atom->listLiteral());
 	}
 

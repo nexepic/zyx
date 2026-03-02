@@ -13,7 +13,6 @@
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
 #include "helpers/PatternBuilder.hpp"
-#include "helpers/PropertyValueEvaluator.hpp"
 
 using namespace graph::parser::cypher;
 
@@ -66,11 +65,6 @@ TEST_F(HelpersRealQueriesTest, AstExtractor_AllNullChecks) {
 	auto props = helpers::AstExtractor::extractProperties(nullptr,
 		[](CypherParser::ExpressionContext*) { return graph::PropertyValue(42); });
 	EXPECT_TRUE(props.empty());
-}
-
-TEST_F(HelpersRealQueriesTest, PropertyValueEvaluator_NullHandling) {
-	auto result = helpers::PropertyValueEvaluator::evaluate(nullptr);
-	EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
 }
 
 // Test PropertyValue type variations (important for branch coverage)
@@ -146,22 +140,6 @@ TEST_F(HelpersRealQueriesTest, ExpressionBuilder_GetAtomFromExpression_Null) {
 
 TEST_F(HelpersRealQueriesTest, ExpressionBuilder_ParseValue_Null) {
 	auto result = helpers::ExpressionBuilder::parseValue(nullptr);
-	EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
-}
-
-// Test PropertyValueEvaluator methods (now public)
-TEST_F(HelpersRealQueriesTest, PropertyValueEvaluator_GetAtomFromExpression_Null) {
-	auto result = helpers::PropertyValueEvaluator::getAtomFromExpression(nullptr);
-	EXPECT_EQ(result, nullptr);
-}
-
-TEST_F(HelpersRealQueriesTest, PropertyValueEvaluator_ParseLiteral_Null) {
-	auto result = helpers::PropertyValueEvaluator::parseLiteral(nullptr);
-	EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
-}
-
-TEST_F(HelpersRealQueriesTest, PropertyValueEvaluator_ParseListLiteral_Null) {
-	auto result = helpers::PropertyValueEvaluator::parseListLiteral(nullptr);
 	EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
 }
 

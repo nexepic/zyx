@@ -5,7 +5,6 @@
  * This file contains additional tests to improve coverage for:
  * - AstExtractor
  * - ExpressionBuilder
- * - PropertyValueEvaluator
  * - OperatorChain
  * - PatternBuilder
  */
@@ -16,7 +15,6 @@
 #include <functional>
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
-#include "helpers/PropertyValueEvaluator.hpp"
 #include "helpers/OperatorChain.hpp"
 #include "helpers/PatternBuilder.hpp"
 
@@ -71,28 +69,6 @@ TEST_F(HelpersComprehensiveTest, ExpressionBuilder_ListOperations) {
 	std::vector<graph::PropertyValue> emptyList;
 	EXPECT_TRUE(emptyList.empty());
 	EXPECT_EQ(emptyList.size(), 0u);
-}
-
-// ============== Additional PropertyValueEvaluator Tests ==============
-
-// Test evaluate with null context
-TEST_F(HelpersComprehensiveTest, PropertyValueEvaluator_Evaluate_Null) {
-	graph::PropertyValue result = PropertyValueEvaluator::evaluate(nullptr);
-	EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
-}
-
-// Test evaluate returns correct type for null context
-TEST_F(HelpersComprehensiveTest, PropertyValueEvaluator_ReturnType_NullContext) {
-	graph::PropertyValue result = PropertyValueEvaluator::evaluate(nullptr);
-	// Should return NULL_TYPE when context is null
-	EXPECT_TRUE(result.getType() == graph::PropertyType::NULL_TYPE ||
-	            result.getType() == graph::PropertyType::UNKNOWN);
-}
-
-// Test PropertyValue default construction
-TEST_F(HelpersComprehensiveTest, PropertyValue_DefaultConstruction) {
-	graph::PropertyValue pv;
-	EXPECT_EQ(pv.getType(), graph::PropertyType::NULL_TYPE);
 }
 
 // ============== Additional OperatorChain Tests ==============

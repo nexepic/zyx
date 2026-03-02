@@ -11,7 +11,6 @@
 #include <functional>
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
-#include "helpers/PropertyValueEvaluator.hpp"
 #include "helpers/PatternBuilder.hpp"
 #include "helpers/OperatorChain.hpp"
 
@@ -89,22 +88,6 @@ TEST_F(HelpersIntegrationTest, ExpressionBuilder_ListEmpty) {
 	std::vector<graph::PropertyValue> list;
 	EXPECT_TRUE(list.empty());
 	EXPECT_EQ(list.size(), 0u);
-}
-
-// ============== PropertyValueEvaluator Extended Tests ==============
-
-// Test evaluate with null returns NULL_TYPE
-TEST_F(HelpersIntegrationTest, PropertyValueEvaluator_Evaluate_NullReturnType) {
-	auto result = PropertyValueEvaluator::evaluate(nullptr);
-	EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
-}
-
-// Test multiple null evaluations
-TEST_F(HelpersIntegrationTest, PropertyValueEvaluator_MultipleNullEvaluations) {
-	for (int i = 0; i < 5; i++) {
-		auto result = PropertyValueEvaluator::evaluate(nullptr);
-		EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
-	}
 }
 
 // ============== OperatorChain Extended Tests ==============
