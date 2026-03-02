@@ -54,13 +54,13 @@ public:
 	/**
 	 * @brief Handle a WITH clause in the query.
 	 *
-	 * @param ctx The WITH statement context from the parser
+	 * @param ctx The WITH clause context from the parser
 	 * @param rootOp The current root operator in the pipeline
 	 * @param planner The query planner for creating operators
 	 * @return The resulting operator after processing WITH
 	 */
 	static std::unique_ptr<graph::query::execution::PhysicalOperator> handleWith(
-		CypherParser::WithStatementContext *ctx,
+		CypherParser::WithClauseContext *ctx,
 		std::unique_ptr<graph::query::execution::PhysicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 };

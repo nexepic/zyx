@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.2
+// Generated from CypherParser.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -71,6 +71,10 @@ public:
   }
 
   virtual std::any visitUpdatingClause(CypherParser::UpdatingClauseContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitWithClause(CypherParser::WithClauseContext *ctx) override {
     return visitChildren(ctx);
   }
 

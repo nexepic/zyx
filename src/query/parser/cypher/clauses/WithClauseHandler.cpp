@@ -29,7 +29,7 @@
 namespace graph::parser::cypher::clauses {
 
 std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::handleWith(
-	CypherParser::WithStatementContext *ctx,
+	CypherParser::WithClauseContext *ctx,
 	std::unique_ptr<graph::query::execution::PhysicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 

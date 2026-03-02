@@ -65,7 +65,8 @@ std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatement
 	return std::any();
 }
 
-std::any CypherToPlanVisitor::visitWithStatement(CypherParser::WithStatementContext *ctx) {
+// --- Projection Clauses ---
+std::any CypherToPlanVisitor::visitWithClause(CypherParser::WithClauseContext *ctx) {
 	rootOp_ = clauses::WithClauseHandler::handleWith(ctx, std::move(rootOp_), planner_);
 	return std::any();
 }

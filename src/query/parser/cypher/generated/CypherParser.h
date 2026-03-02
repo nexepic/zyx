@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.2
+// Generated from CypherParser.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -39,26 +39,27 @@ public:
     RuleCypher = 0, RuleStatement = 1, RuleAdministrationStatement = 2, 
     RuleShowIndexesStatement = 3, RuleDropIndexStatement = 4, RuleCreateIndexStatement = 5, 
     RuleQuery = 6, RuleRegularQuery = 7, RuleSingleQuery = 8, RuleReadingClause = 9, 
-    RuleUpdatingClause = 10, RuleMatchStatement = 11, RuleUnwindStatement = 12, 
-    RuleInQueryCallStatement = 13, RuleCreateStatement = 14, RuleMergeStatement = 15, 
-    RuleSetStatement = 16, RuleSetItem = 17, RuleDeleteStatement = 18, RuleRemoveStatement = 19, 
-    RuleRemoveItem = 20, RuleWithStatement = 21, RuleReturnStatement = 22, RuleStandaloneCallStatement = 23, 
-    RuleYieldItems = 23, RuleYieldItem = 24, RuleProjectionBody = 25, RuleProjectionItems = 26, 
-    RuleProjectionItem = 27, RuleOrderStatement = 28, RuleSkipStatement = 29, 
-    RuleLimitStatement = 30, RuleSortItem = 31, RuleWhere = 32, RulePattern = 33, 
-    RulePatternPart = 34, RulePatternElement = 35, RulePatternElementChain = 36, 
-    RuleNodePattern = 37, RuleRelationshipPattern = 38, RuleRelationshipDetail = 39, 
-    RuleProperties = 40, RuleNodeLabels = 41, RuleNodeLabel = 42, RuleRelationshipTypes = 43, 
-    RuleRangeLiteral = 44, RuleExpression = 45, RuleOrExpression = 46, RuleXorExpression = 47, 
-    RuleAndExpression = 48, RuleNotExpression = 49, RuleComparisonExpression = 50, 
-    RuleArithmeticExpression = 51, RuleUnaryExpression = 52, RuleAccessor = 53, 
-    RuleAtom = 54, RulePropertyExpression = 55, RuleFunctionInvocation = 56, 
-    RuleExplicitProcedureInvocation = 57, RuleImplicitProcedureInvocation = 58, 
-    RuleVariable = 59, RuleLabelName = 60, RuleRelTypeName = 61, RulePropertyKeyName = 62, 
-    RuleProcedureName = 63, RuleProcedureResultField = 64, RuleFunctionName = 65, 
-    RuleNamespace = 66, RuleSchemaName = 67, RuleSymbolicName = 68, RuleLiteral = 69, 
-    RuleBooleanLiteral = 70, RuleNumberLiteral = 71, RuleIntegerLiteral = 72, 
-    RuleMapLiteral = 73, RuleListLiteral = 74, RuleParameter = 75
+    RuleUpdatingClause = 10, RuleWithClause = 11, RuleMatchStatement = 12, 
+    RuleUnwindStatement = 13, RuleInQueryCallStatement = 14, RuleCreateStatement = 15, 
+    RuleMergeStatement = 16, RuleSetStatement = 17, RuleSetItem = 18, RuleDeleteStatement = 19, 
+    RuleRemoveStatement = 20, RuleRemoveItem = 21, RuleReturnStatement = 22, 
+    RuleStandaloneCallStatement = 23, RuleYieldItems = 24, RuleYieldItem = 25, 
+    RuleProjectionBody = 26, RuleProjectionItems = 27, RuleProjectionItem = 28, 
+    RuleOrderStatement = 29, RuleSkipStatement = 30, RuleLimitStatement = 31, 
+    RuleSortItem = 32, RuleWhere = 33, RulePattern = 34, RulePatternPart = 35, 
+    RulePatternElement = 36, RulePatternElementChain = 37, RuleNodePattern = 38, 
+    RuleRelationshipPattern = 39, RuleRelationshipDetail = 40, RuleProperties = 41, 
+    RuleNodeLabels = 42, RuleNodeLabel = 43, RuleRelationshipTypes = 44, 
+    RuleRangeLiteral = 45, RuleExpression = 46, RuleOrExpression = 47, RuleXorExpression = 48, 
+    RuleAndExpression = 49, RuleNotExpression = 50, RuleComparisonExpression = 51, 
+    RuleArithmeticExpression = 52, RuleUnaryExpression = 53, RuleAccessor = 54, 
+    RuleAtom = 55, RulePropertyExpression = 56, RuleFunctionInvocation = 57, 
+    RuleExplicitProcedureInvocation = 58, RuleImplicitProcedureInvocation = 59, 
+    RuleVariable = 60, RuleLabelName = 61, RuleRelTypeName = 62, RulePropertyKeyName = 63, 
+    RuleProcedureName = 64, RuleProcedureResultField = 65, RuleFunctionName = 66, 
+    RuleNamespace = 67, RuleSchemaName = 68, RuleSymbolicName = 69, RuleLiteral = 70, 
+    RuleBooleanLiteral = 71, RuleNumberLiteral = 72, RuleIntegerLiteral = 73, 
+    RuleMapLiteral = 74, RuleListLiteral = 75, RuleParameter = 76
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -89,10 +90,10 @@ public:
   class SingleQueryContext;
   class ReadingClauseContext;
   class UpdatingClauseContext;
+  class WithClauseContext;
   class MatchStatementContext;
   class UnwindStatementContext;
   class InQueryCallStatementContext;
-  class WithStatementContext;
   class CreateStatementContext;
   class MergeStatementContext;
   class SetStatementContext;
@@ -359,6 +360,8 @@ public:
     SingleQueryContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     ReturnStatementContext *returnStatement();
+    std::vector<WithClauseContext *> withClause();
+    WithClauseContext* withClause(size_t i);
     std::vector<ReadingClauseContext *> readingClause();
     ReadingClauseContext* readingClause(size_t i);
     std::vector<UpdatingClauseContext *> updatingClause();
@@ -402,6 +405,22 @@ public:
   };
 
   UpdatingClauseContext* updatingClause();
+
+  class  WithClauseContext : public antlr4::ParserRuleContext {
+  public:
+    WithClauseContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_WITH();
+    ProjectionBodyContext *projectionBody();
+    antlr4::tree::TerminalNode *K_WHERE();
+    WhereContext *where();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  WithClauseContext* withClause();
 
   class  MatchStatementContext : public antlr4::ParserRuleContext {
   public:
@@ -572,18 +591,6 @@ public:
   };
 
   RemoveItemContext* removeItem();
-
-  class  WithStatementContext : public antlr4::ParserRuleContext {
-  public:
-    WithStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *K_WITH();
-    ProjectionBodyContext *projectionBody();
-    WhereContext *where();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-
-  };
 
   class  ReturnStatementContext : public antlr4::ParserRuleContext {
   public:

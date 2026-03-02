@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.2
+// Generated from CypherParser.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -50,6 +50,8 @@ public:
 
     virtual std::any visitUpdatingClause(CypherParser::UpdatingClauseContext *context) = 0;
 
+    virtual std::any visitWithClause(CypherParser::WithClauseContext *context) = 0;
+
     virtual std::any visitMatchStatement(CypherParser::MatchStatementContext *context) = 0;
 
     virtual std::any visitUnwindStatement(CypherParser::UnwindStatementContext *context) = 0;
@@ -69,8 +71,6 @@ public:
     virtual std::any visitRemoveStatement(CypherParser::RemoveStatementContext *context) = 0;
 
     virtual std::any visitRemoveItem(CypherParser::RemoveItemContext *context) = 0;
-
-    virtual std::any visitWithStatement(CypherParser::WithStatementContext *context) = 0;
 
     virtual std::any visitReturnStatement(CypherParser::ReturnStatementContext *context) = 0;
 

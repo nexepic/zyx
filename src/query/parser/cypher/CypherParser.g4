@@ -65,8 +65,15 @@ regularQuery
     : singleQuery ( K_UNION K_ALL? singleQuery )*
     ;
 
+// Support WITH clause as intermediate projection (openCypher compliant)
+// WITH can appear: 1) Multiple times at start, 2) After readingClauses, 3) Before more readingClauses/updatingClauses
+// This allows queries like: WITH n WITH n.value RETURN n.value
 singleQuery
-    : ( readingClause* returnStatement )
+    : ( withClause+ readingClause* returnStatement )
+    | ( withClause+ readingClause* updatingClause+ returnStatement? )
+    | ( readingClause* withClause+ readingClause* returnStatement )
+    | ( readingClause* withClause+ readingClause* updatingClause+ returnStatement? )
+    | ( readingClause* returnStatement )
     | ( readingClause* updatingClause+ returnStatement? )
     ;
 
@@ -78,7 +85,6 @@ readingClause
     : matchStatement
     | unwindStatement
     | inQueryCallStatement
-    | withStatement
     ;
 
 updatingClause
@@ -87,6 +93,12 @@ updatingClause
     | deleteStatement
     | setStatement
     | removeStatement
+    ;
+
+// --- Projection Clauses (WITH and RETURN) ---
+
+withClause
+    : K_WITH projectionBody ( K_WHERE where )?
     ;
 
 // --- Reading ---
@@ -101,10 +113,6 @@ unwindStatement
 
 inQueryCallStatement
     : K_CALL explicitProcedureInvocation ( K_YIELD yieldItems )?
-    ;
-
-withStatement
-    : K_WITH projectionBody ( K_WHERE where )?
     ;
 
 // --- Updating ---

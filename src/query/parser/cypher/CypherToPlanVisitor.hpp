@@ -57,7 +57,9 @@ public:
 	std::any visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *ctx) override;
 	std::any visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) override;
 	std::any visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) override;
-	std::any visitWithStatement(CypherParser::WithStatementContext *ctx) override;
+
+	// --- Projection Clauses ---
+	std::any visitWithClause(CypherParser::WithClauseContext *ctx) override;
 
 	// --- Writing Clauses ---
 	std::any visitCreateStatement(CypherParser::CreateStatementContext *ctx) override;
