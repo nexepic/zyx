@@ -31,10 +31,9 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
+	// Grammar: createStatement : K_CREATE pattern
+	// Parser guarantees pattern is always present
 	auto pattern = ctx->pattern();
-	if (!pattern)
-		return rootOp;
-
 	return helpers::PatternBuilder::buildCreatePattern(pattern, std::move(rootOp), planner);
 }
 

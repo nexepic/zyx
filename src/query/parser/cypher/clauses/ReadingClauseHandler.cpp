@@ -107,13 +107,11 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
-	// Grammar: UNWIND expression AS variable
+	// Grammar: unwindStatement : K_UNWIND expression K_AS variable
+	// Parser guarantees variable is always present and non-empty
 
 	// 1. Extract Alias
 	std::string alias = helpers::AstExtractor::extractVariable(ctx->variable());
-	if (alias.empty()) {
-		throw std::runtime_error("UNWIND requires a variable alias (AS x)");
-	}
 
 	// 2. Extract List Values
 	// Grammar guarantees expression is always present in UNWIND
