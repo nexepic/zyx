@@ -215,3 +215,39 @@ TEST_F(AdminClauseHandlerUnitTest, CreateVectorIndex_OptionsOrderReversed) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {metric: 'L2', dimension: 5}");
 	ASSERT_EQ(res.rowCount(), 0UL);
 }
+
+// ============================================================================
+// Error Cases - Lines 52, 103-104
+// ============================================================================
+
+TEST_F(AdminClauseHandlerUnitTest, CreateIndexByPattern_NoLabelError) {
+	// Tests error path at line 52: CREATE INDEX pattern without label
+	// Covers the else branch that throws runtime_error
+	EXPECT_THROW({
+		execute("CREATE INDEX FOR (n) ON (n.prop)");
+	}, std::runtime_error);
+}
+
+TEST_F(AdminClauseHandlerUnitTest, CreateVectorIndex_NoDimensionError) {
+	// Tests error path at line 103-104: Missing dimension in OPTIONS
+	// Covers the "if (dim == 0)" check and throw
+	EXPECT_THROW({
+		execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {metric: 'L2'}");
+	}, std::runtime_error);
+}
+
+TEST_F(AdminClauseHandlerUnitTest, CreateVectorIndex_NoOptionsError) {
+	// Tests error path when OPTIONS is missing entirely
+	// dim remains 0, triggering the error at line 103-104
+	EXPECT_THROW({
+		execute("CREATE VECTOR INDEX ON :Test(vec)");
+	}, std::runtime_error);
+}
+
+TEST_F(AdminClauseHandlerUnitTest, CreateVectorIndex_EmptyOptionsError) {
+	// Tests error path with empty OPTIONS map
+	// No dimension provided, so dim stays 0
+	EXPECT_THROW({
+		execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {}");
+	}, std::runtime_error);
+}

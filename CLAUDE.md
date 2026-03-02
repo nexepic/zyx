@@ -70,7 +70,7 @@ meson test -C buildDir <test_name>
     - Each test should be independent and isolated
 
 4. **Coverage Goals**:
-    - Aim for 85%+ coverage across all metrics (line, branch, function)
+    - Aim for 95%+ coverage across all metrics (line, branch, function, region)
     - Focus on branch coverage in particular
     - Add tests for uncovered branches, not just lines
 

@@ -117,7 +117,7 @@ class SumAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (graph::query::expressions::EvaluationContext::isNull(value)) {
 			return;
 		}
 
@@ -171,7 +171,7 @@ class AvgAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (graph::query::expressions::EvaluationContext::isNull(value)) {
 			return;
 		}
 
@@ -217,7 +217,7 @@ class MinAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (graph::query::expressions::EvaluationContext::isNull(value)) {
 			return;
 		}
 
@@ -263,7 +263,7 @@ class MaxAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (graph::query::expressions::EvaluationContext::isNull(value)) {
 			return;
 		}
 

@@ -371,3 +371,251 @@ TEST_F(ResultClauseHandlerCoverageTest, Return_OrderBy_AfterReturn) {
 	ASSERT_EQ(res.rowCount(), 2UL);
 	EXPECT_EQ(res.getRows()[0].at("n.id").toString(), "2");
 }
+
+// ============================================================================
+// Aggregate Function Tests - Lines 118-186
+// ============================================================================
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Count_All) {
+	// Tests COUNT(*) - covers line 142-150 (funcCall->getArgumentCount() == 0)
+	(void) execute("CREATE (n:Test {value: 1})");
+	(void) execute("CREATE (n:Test {value: 2})");
+	(void) execute("CREATE (n:Test {value: 3})");
+
+	auto res = execute("MATCH (n:Test) RETURN count(*)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("count(*)").toString(), "3");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Count_Variable) {
+	// Tests COUNT(n) - covers line 143-150 with argument
+	(void) execute("CREATE (n:Test {value: 1})");
+	(void) execute("CREATE (n:Test {value: 2})");
+
+	auto res = execute("MATCH (n:Test) RETURN count(n)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("count(n)").toString(), "2");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Count_Property) {
+	// Tests COUNT(n.prop) with non-null values
+	(void) execute("CREATE (n:Test {value: 1})");
+	(void) execute("CREATE (n:Test {value: 2})");
+	(void) execute("CREATE (n:Test {})"); // No value property
+
+	auto res = execute("MATCH (n:Test) RETURN count(n.value)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("count(n.value)").toString(), "2");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Sum) {
+	// Tests SUM() - covers line 135
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+	(void) execute("CREATE (n:Test {value: 30})");
+
+	auto res = execute("MATCH (n:Test) RETURN sum(n.value)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("sum(n.value)").toString(), "60");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Avg) {
+	// Tests AVG() - covers line 136
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+	(void) execute("CREATE (n:Test {value: 30})");
+
+	auto res = execute("MATCH (n:Test) RETURN avg(n.value)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("avg(n.value)").toString(), "20");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Min) {
+	// Tests MIN() - covers line 137
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 5})");
+	(void) execute("CREATE (n:Test {value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN min(n.value)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("min(n.value)").toString(), "5");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Max) {
+	// Tests MAX() - covers line 138
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 5})");
+	(void) execute("CREATE (n:Test {value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN max(n.value)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("max(n.value)").toString(), "20");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_Collect) {
+	// Tests COLLECT() - covers line 139
+	(void) execute("CREATE (n:Test {value: 1})");
+	(void) execute("CREATE (n:Test {value: 2})");
+	(void) execute("CREATE (n:Test {value: 3})");
+
+	auto res = execute("MATCH (n:Test) RETURN collect(n.value)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	// collect returns a list
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_WithAlias) {
+	// Tests aggregate with AS alias - covers line 154-157
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN sum(n.value) AS total");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("total").toString(), "30");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_MultipleAggregates) {
+	// Tests multiple aggregates in same RETURN - covers loop at line 114
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+	(void) execute("CREATE (n:Test {value: 30})");
+
+	auto res = execute("MATCH (n:Test) RETURN count(n) AS cnt, sum(n.value) AS total, avg(n.value) AS avg");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("cnt").toString(), "3");
+	EXPECT_EQ(res.getRows()[0].at("total").toString(), "60");
+	EXPECT_EQ(res.getRows()[0].at("avg").toString(), "20");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_MixedWithNonAggregate) {
+	// Tests aggregates mixed with non-aggregates - covers line 163-175
+	// When mixing aggregates with non-aggregates, non-aggregates become GROUP BY keys
+	(void) execute("CREATE (n:Test {group: 'A', value: 10})");
+	(void) execute("CREATE (n:Test {group: 'A', value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN n.group, count(n) AS cnt");
+	// Should return 1 row since both nodes have group='A' (grouped by n.group)
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("cnt").toString(), "2");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_UppercaseFunctionName) {
+	// Tests case-insensitive aggregate function names - line 130-132 transform
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN COUNT(n)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("COUNT(n)").toString(), "2");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Aggregate_MixedCaseFunctionName) {
+	// Tests mixed case function names
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN Count(n)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("Count(n)").toString(), "2");
+}
+
+// ============================================================================
+// ORDER BY with Projection Alias - Lines 78-88
+// ============================================================================
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_OrderBy_ProjectionAlias) {
+	// Tests ORDER BY referencing projection alias - covers line 78-88
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+	(void) execute("CREATE (n:Test {value: 15})");
+
+	auto res = execute("MATCH (n:Test) RETURN n.value AS v ORDER BY v");
+	ASSERT_EQ(res.rowCount(), 3UL);
+	EXPECT_EQ(res.getRows()[0].at("v").toString(), "10");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_OrderBy_ProjectionAliasDesc) {
+	// Tests ORDER BY with alias and DESC
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN n.value AS v ORDER BY v DESC");
+	ASSERT_EQ(res.rowCount(), 2UL);
+	EXPECT_EQ(res.getRows()[0].at("v").toString(), "20");
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_OrderBy_PropertyAccessNoAlias) {
+	// Tests ORDER BY with property access that's not a simple variable
+	// Covers line 79 hasProperty() check when property is accessed
+	(void) execute("CREATE (n:Test {value: 10})");
+	(void) execute("CREATE (n:Test {value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN n.value ORDER BY n.value");
+	ASSERT_EQ(res.rowCount(), 2UL);
+	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "10");
+}
+
+// ============================================================================
+// DISTINCT Tests - Line 41
+// ============================================================================
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Distinct_SingleField) {
+	// Tests RETURN DISTINCT - covers True branch at line 41 (K_DISTINCT != nullptr)
+	(void) execute("CREATE (n:Test {value: 1})");
+	(void) execute("CREATE (n:Test {value: 1})");
+	(void) execute("CREATE (n:Test {value: 2})");
+
+	auto res = execute("MATCH (n:Test) RETURN DISTINCT n.value");
+	ASSERT_EQ(res.rowCount(), 2UL);
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Distinct_MultipleFields) {
+	// Tests DISTINCT with multiple fields
+	(void) execute("CREATE (n:Test {a: 1, b: 2})");
+	(void) execute("CREATE (n:Test {a: 1, b: 2})");
+	(void) execute("CREATE (n:Test {a: 1, b: 3})");
+
+	auto res = execute("MATCH (n:Test) RETURN DISTINCT n.a, n.b");
+	ASSERT_EQ(res.rowCount(), 2UL);
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Distinct_WithAggregate) {
+	// Tests DISTINCT with aggregate function
+	(void) execute("CREATE (n:Test {group: 'A', value: 10})");
+	(void) execute("CREATE (n:Test {group: 'A', value: 20})");
+
+	auto res = execute("MATCH (n:Test) RETURN DISTINCT n.group, count(n)");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Distinct_AfterWhere) {
+	// Tests DISTINCT with WHERE clause
+	for (int i = 0; i < 5; ++i) {
+		(void) execute("CREATE (n:Test {value: 1})");
+	}
+	for (int i = 0; i < 3; ++i) {
+		(void) execute("CREATE (n:Test {value: 2})");
+	}
+
+	auto res = execute("MATCH (n:Test) WHERE n.value = 1 RETURN DISTINCT n.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// Error Case Tests - Lines 193-197, 206-210
+// ============================================================================
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Skip_NonInteger_Error) {
+	// Tests SKIP with string literal - should trigger error handling
+	EXPECT_THROW({
+		execute("CREATE (n:Test {id: 1})");
+		execute("MATCH (n:Test) RETURN n SKIP 'invalid'");
+	}, std::runtime_error);
+}
+
+TEST_F(ResultClauseHandlerCoverageTest, Return_Limit_NonInteger_Error) {
+	// Tests LIMIT with string literal - should trigger error handling
+	EXPECT_THROW({
+		execute("CREATE (n:Test {id: 1})");
+		execute("MATCH (n:Test) RETURN n LIMIT 'invalid'");
+	}, std::runtime_error);
+}

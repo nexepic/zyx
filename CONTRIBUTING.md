@@ -101,6 +101,6 @@ Co-Authored-By: Someone <someone@example.com>
 Before submitting a pull request:
 
 1. **Ensure all tests pass**: Run `./scripts/run_tests.sh` and verify 100% pass rate
-2. **Check coverage**: New code should have adequate test coverage (target: 85%+ branch coverage)
+2. **Check coverage**: New code should have adequate test coverage (target: 95%+ branch coverage)
 3. **Update documentation**: If your changes affect user-facing functionality, update relevant docs
 4. **One feature per PR**: Keep pull requests focused on a single feature or fix
