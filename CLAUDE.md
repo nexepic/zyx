@@ -294,8 +294,35 @@ scripts/                # Build and utility scripts
 3. **Dirty Tracking**: Modified entities are tracked via `DirtyEntityRegistry` for efficient persistence
 4. **LRU Cache**: Hot entities are cached in memory with configurable eviction policy
 5. **WAL Integration**: Write operations are logged to WAL before actual disk writes for durability
-6. **Parser Generation**: ANTLR4 grammar files are in `src/query/parser/cypher/` - generated code should not be manually
-   edited
+6. **Parser Generation**: ANTLR4 grammar files are in `src/query/parser/cypher/` - generated code should not be manually edited
+   - **IMPORTANT**: When modifying `.g4` grammar files, you MUST regenerate the parser code
+   - Use the provided script: `src/query/parser/cypher/generate.sh`
+   - This script downloads ANTLR4 JAR if needed and regenerates all C++ parser files
+   - Always run `bash src/query/parser/cypher/generate.sh` after modifying `CypherLexer.g4` or `CypherParser.g4`
+   - The generated files are placed in `src/query/parser/cypher/generated/` directory
+
+### Regenerating ANTLR4 Parser
+
+When you modify the Cypher grammar files (`*.g4`), you MUST regenerate the parser code:
+
+```bash
+# Navigate to the cypher parser directory
+cd src/query/parser/cypher
+
+# Run the generation script
+bash generate.sh
+```
+
+The `generate.sh` script will:
+1. Download ANTLR4 JAR (version 4.13.1) if not present
+2. Generate C++ lexer and parser from the grammar files
+3. Generate visitor classes for AST traversal
+4. Place all generated files in the `generated/` directory
+
+**After regenerating**:
+1. Review the generated files to ensure they look correct
+2. Run tests to verify everything works: `./scripts/run_tests.sh --quick`
+3. Commit both the grammar changes AND the generated files together
 
 ## Unsupported Cypher Features
 
