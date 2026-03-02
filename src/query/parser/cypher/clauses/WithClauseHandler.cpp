@@ -33,9 +33,9 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 	std::unique_ptr<graph::query::execution::PhysicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
-	if (!ctx) {
-		return rootOp;
-	}
+	// Grammar: withClause : K_WITH projectionBody ( K_WHERE where )?
+	// Parser guarantees ctx and projectionBody are always present (non-null)
+	// Following project pattern: trust grammar guarantees like ResultClauseHandler
 
 	// Ensure valid pipeline (WITH requires preceding clause)
 	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
@@ -44,9 +44,6 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 	);
 
 	auto projectionBody = ctx->projectionBody();
-	if (!projectionBody) {
-		return rootOp;
-	}
 
 	// Check for DISTINCT
 	bool distinct = (projectionBody->K_DISTINCT() != nullptr);
