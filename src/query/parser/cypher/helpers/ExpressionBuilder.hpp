@@ -207,6 +207,9 @@ private:
 	static std::unique_ptr<graph::query::expressions::Expression> buildFunctionCall(
 		CypherParser::FunctionInvocationContext *ctx);
 
+	static std::unique_ptr<graph::query::expressions::Expression> buildCaseExpression(
+		CypherParser::CaseExpressionContext *ctx);
+
 	// Helper methods for literal value extraction
 	static graph::PropertyValue parseListLiteral(CypherParser::ListLiteralContext *ctx);
 };

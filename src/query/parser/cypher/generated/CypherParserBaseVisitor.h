@@ -254,6 +254,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitCaseExpression(CypherParser::CaseExpressionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitPropertyExpression(CypherParser::PropertyExpressionContext *ctx) override {
     return visitChildren(ctx);
   }

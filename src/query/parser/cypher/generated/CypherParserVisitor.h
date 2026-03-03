@@ -140,6 +140,8 @@ public:
 
     virtual std::any visitAtom(CypherParser::AtomContext *context) = 0;
 
+    virtual std::any visitCaseExpression(CypherParser::CaseExpressionContext *context) = 0;
+
     virtual std::any visitPropertyExpression(CypherParser::PropertyExpressionContext *context) = 0;
 
     virtual std::any visitFunctionInvocation(CypherParser::FunctionInvocationContext *context) = 0;

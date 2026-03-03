@@ -1071,3 +1071,172 @@ TEST_F(FunctionRegistryTest, ValidateArgCount_Variadic) {
 	EXPECT_TRUE(func.validateArgCount(10));
 	EXPECT_FALSE(func.validateArgCount(0));
 }
+
+// ============================================================================
+// List Function Tests - Range
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, RangeFunction_Basic) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(5)));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_FLOAT_EQ(list[0], 0.0f);
+	EXPECT_FLOAT_EQ(list[1], 1.0f);
+	EXPECT_FLOAT_EQ(list[2], 2.0f);
+	EXPECT_FLOAT_EQ(list[3], 3.0f);
+	EXPECT_FLOAT_EQ(list[4], 4.0f);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_WithPositiveStep) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(10)));
+	args.push_back(PropertyValue(int64_t(2)));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_FLOAT_EQ(list[0], 0.0f);
+	EXPECT_FLOAT_EQ(list[1], 2.0f);
+	EXPECT_FLOAT_EQ(list[2], 4.0f);
+	EXPECT_FLOAT_EQ(list[3], 6.0f);
+	EXPECT_FLOAT_EQ(list[4], 8.0f);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_WithNegativeStep) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(5)));
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(-1)));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_FLOAT_EQ(list[0], 5.0f);
+	EXPECT_FLOAT_EQ(list[1], 4.0f);
+	EXPECT_FLOAT_EQ(list[2], 3.0f);
+	EXPECT_FLOAT_EQ(list[3], 2.0f);
+	EXPECT_FLOAT_EQ(list[4], 1.0f);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_EmptyPositiveStep) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(5)));
+	args.push_back(PropertyValue(int64_t(0))); // start >= end with positive default step
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 0UL);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_EmptyNegativeStep) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(5)));
+	args.push_back(PropertyValue(int64_t(-1))); // start < end with negative step
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 0UL);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_SingleValue) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(1)));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 1UL);
+	EXPECT_FLOAT_EQ(list[0], 0.0f);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_NullArgument) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue()); // NULL end
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_ZeroStep) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(5)));
+	args.push_back(PropertyValue(int64_t(0))); // step = 0
+
+	EXPECT_THROW(func->evaluate(args, *context_), std::runtime_error);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_NegativeStartPositiveEnd) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(-3)));
+	args.push_back(PropertyValue(int64_t(2)));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_FLOAT_EQ(list[0], -3.0f);
+	EXPECT_FLOAT_EQ(list[1], -2.0f);
+	EXPECT_FLOAT_EQ(list[2], -1.0f);
+	EXPECT_FLOAT_EQ(list[3], 0.0f);
+	EXPECT_FLOAT_EQ(list[4], 1.0f);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_LargeStep) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(100)));
+	args.push_back(PropertyValue(int64_t(25)));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	EXPECT_EQ(list.size(), 4UL);
+	EXPECT_FLOAT_EQ(list[0], 0.0f);
+	EXPECT_FLOAT_EQ(list[1], 25.0f);
+	EXPECT_FLOAT_EQ(list[2], 50.0f);
+	EXPECT_FLOAT_EQ(list[3], 75.0f);
+}

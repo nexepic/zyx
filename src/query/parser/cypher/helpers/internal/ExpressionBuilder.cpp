@@ -366,6 +366,11 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 		return buildFunctionCall(ctx->functionInvocation());
 	}
 
+	// CASE expression: CASE WHEN...THEN...ELSE...END
+	if (ctx->caseExpression()) {
+		return buildCaseExpression(ctx->caseExpression());
+	}
+
 	// Special case: count(*) - COUNT keyword with MULTIPLY token
 	if (ctx->K_COUNT() && ctx->MULTIPLY()) {
 		// Create a FunctionCallExpression for count(*) with no arguments
@@ -599,6 +604,64 @@ PropertyValue ExpressionBuilder::parseListLiteral(CypherParser::ListLiteralConte
 	}
 
 	return PropertyValue(std::move(vec));
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildCaseExpression(CypherParser::CaseExpressionContext *ctx) {
+	if (!ctx) {
+		return nullptr;
+	}
+
+	// Get the WHEN...THEN pairs
+	auto whenExprs = ctx->K_WHEN();  // Get all WHEN keywords
+	auto thenExprs = ctx->expression();  // All expressions in order
+
+	// Structure:
+	// Simple CASE: CASE comparisonExpr WHEN expr1 THEN expr2 ... [ELSE expr] END
+	// Searched CASE: CASE WHEN boolExpr1 THEN expr2 ... [ELSE expr] END
+
+	// Check if there's a comparison expression (simple CASE)
+	std::unique_ptr<Expression> comparisonExpr = nullptr;
+	size_t startIndex = 0;
+
+	if (ctx->expression().size() > whenExprs.size() * 2) {
+		// First expression is the comparison expression
+		// Format: CASE expr WHEN expr THEN expr [WHEN expr THEN expr]* [ELSE expr] END
+		comparisonExpr = buildExpression(ctx->expression(0));
+		startIndex = 1;
+	}
+
+	// Create CaseExpression
+	auto caseExpr = comparisonExpr
+		? std::make_unique<CaseExpression>(std::move(comparisonExpr))
+		: std::make_unique<CaseExpression>();
+
+	// Process WHEN...THEN pairs
+	size_t pairCount = whenExprs.size();
+	for (size_t i = 0; i < pairCount; ++i) {
+		// WHEN expression
+		size_t whenIndex = startIndex + (i * 2);
+		// THEN expression
+		size_t thenIndex = whenIndex + 1;
+
+		if (thenIndex >= ctx->expression().size()) {
+			throw std::runtime_error("Invalid CASE expression: missing THEN expression");
+		}
+
+		auto whenExpr = buildExpression(ctx->expression(whenIndex));
+		auto thenExpr = buildExpression(ctx->expression(thenIndex));
+
+		caseExpr->addBranch(std::move(whenExpr), std::move(thenExpr));
+	}
+
+	// Handle ELSE clause if present
+	size_t expectedEndIndex = startIndex + (pairCount * 2);
+	if (expectedEndIndex < ctx->expression().size()) {
+		// There's an ELSE expression
+		auto elseExpr = buildExpression(ctx->expression(expectedEndIndex));
+		caseExpr->setElseExpression(std::move(elseExpr));
+	}
+
+	return caseExpr;
 }
 
 } // namespace graph::parser::cypher::helpers

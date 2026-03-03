@@ -309,9 +309,15 @@ atom
     | parameter
     | K_COUNT LPAREN MULTIPLY RPAREN
     | functionInvocation
+    | caseExpression
     | variable
     | LPAREN expression RPAREN
     | listLiteral
+    ;
+
+// CASE expression support
+caseExpression
+    : K_CASE (expression)? (K_WHEN expression K_THEN expression)+ (K_ELSE expression)? K_END
     ;
 
 // Helper rule for SET/REMOVE clauses that requires a property (not just any atom)

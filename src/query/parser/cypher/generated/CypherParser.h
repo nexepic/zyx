@@ -53,13 +53,13 @@ public:
     RuleRangeLiteral = 45, RuleExpression = 46, RuleOrExpression = 47, RuleXorExpression = 48, 
     RuleAndExpression = 49, RuleNotExpression = 50, RuleComparisonExpression = 51, 
     RuleArithmeticExpression = 52, RuleUnaryExpression = 53, RuleAccessor = 54, 
-    RuleAtom = 55, RulePropertyExpression = 56, RuleFunctionInvocation = 57, 
-    RuleExplicitProcedureInvocation = 58, RuleImplicitProcedureInvocation = 59, 
-    RuleVariable = 60, RuleLabelName = 61, RuleRelTypeName = 62, RulePropertyKeyName = 63, 
-    RuleProcedureName = 64, RuleProcedureResultField = 65, RuleFunctionName = 66, 
-    RuleNamespace = 67, RuleSchemaName = 68, RuleSymbolicName = 69, RuleLiteral = 70, 
-    RuleBooleanLiteral = 71, RuleNumberLiteral = 72, RuleIntegerLiteral = 73, 
-    RuleMapLiteral = 74, RuleListLiteral = 75, RuleParameter = 76
+    RuleAtom = 55, RuleCaseExpression = 56, RulePropertyExpression = 57, 
+    RuleFunctionInvocation = 58, RuleExplicitProcedureInvocation = 59, RuleImplicitProcedureInvocation = 60, 
+    RuleVariable = 61, RuleLabelName = 62, RuleRelTypeName = 63, RulePropertyKeyName = 64, 
+    RuleProcedureName = 65, RuleProcedureResultField = 66, RuleFunctionName = 67, 
+    RuleNamespace = 68, RuleSchemaName = 69, RuleSymbolicName = 70, RuleLiteral = 71, 
+    RuleBooleanLiteral = 72, RuleNumberLiteral = 73, RuleIntegerLiteral = 74, 
+    RuleMapLiteral = 75, RuleListLiteral = 76, RuleParameter = 77
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -135,6 +135,7 @@ public:
   class UnaryExpressionContext;
   class AccessorContext;
   class AtomContext;
+  class CaseExpressionContext;
   class PropertyExpressionContext;
   class FunctionInvocationContext;
   class ExplicitProcedureInvocationContext;
@@ -1145,6 +1146,7 @@ public:
     antlr4::tree::TerminalNode *MULTIPLY();
     antlr4::tree::TerminalNode *RPAREN();
     FunctionInvocationContext *functionInvocation();
+    CaseExpressionContext *caseExpression();
     VariableContext *variable();
     ExpressionContext *expression();
     ListLiteralContext *listLiteral();
@@ -1155,6 +1157,27 @@ public:
   };
 
   AtomContext* atom();
+
+  class  CaseExpressionContext : public antlr4::ParserRuleContext {
+  public:
+    CaseExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_CASE();
+    antlr4::tree::TerminalNode *K_END();
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> K_WHEN();
+    antlr4::tree::TerminalNode* K_WHEN(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> K_THEN();
+    antlr4::tree::TerminalNode* K_THEN(size_t i);
+    antlr4::tree::TerminalNode *K_ELSE();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  CaseExpressionContext* caseExpression();
 
   class  PropertyExpressionContext : public antlr4::ParserRuleContext {
   public:

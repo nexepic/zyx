@@ -19,6 +19,7 @@
  **/
 
 #include "CypherToPlanVisitor.hpp"
+#include "graph/query/execution/operators/UnionOperator.hpp"
 #include "clauses/AdminClauseHandler.hpp"
 #include "clauses/ReadingClauseHandler.hpp"
 #include "clauses/ResultClauseHandler.hpp"
@@ -36,7 +37,48 @@ std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan
 std::any CypherToPlanVisitor::visitCypher(CypherParser::CypherContext *ctx) { return visitChildren(ctx); }
 
 std::any CypherToPlanVisitor::visitRegularQuery(CypherParser::RegularQueryContext *ctx) {
-	return visitChildren(ctx);
+	// Handle UNION operations
+	// Grammar: regularQuery : singleQuery ( K_UNION K_ALL? singleQuery )*
+
+	auto singleQueries = ctx->singleQuery();
+	if (singleQueries.empty()) {
+		return std::any();
+	}
+
+	// Visit first single query to get the initial plan
+	auto firstResult = visitSingleQuery(singleQueries[0]);
+	if (!firstResult.has_value()) {
+		return std::any();
+	}
+
+	// The visitSingleQuery stores the result in rootOp_
+	std::unique_ptr<query::execution::PhysicalOperator> currentPlan = std::move(rootOp_);
+
+	// Process additional single queries connected by UNION
+	auto unionKeywords = ctx->K_UNION();
+	auto allKeywords = ctx->K_ALL();
+
+	for (size_t i = 1; i < singleQueries.size(); ++i) {
+		// Visit the next single query
+		visitSingleQuery(singleQueries[i]);
+
+		// Check if this is UNION ALL (i-1 because there are n-1 UNIONs for n queries)
+		bool isAll = false;
+		if (i - 1 < allKeywords.size() && allKeywords[i - 1] != nullptr) {
+			isAll = true;
+		}
+
+		// Create UnionOperator to combine current plan with the new query
+		currentPlan = std::make_unique<graph::query::execution::operators::UnionOperator>(
+			std::move(currentPlan),
+			std::move(rootOp_),
+			isAll
+		);
+	}
+
+	// Store the final plan
+	rootOp_ = std::move(currentPlan);
+	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitSingleQuery(CypherParser::SingleQueryContext *ctx) {

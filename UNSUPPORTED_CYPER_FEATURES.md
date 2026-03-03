@@ -48,34 +48,85 @@ MATCH(n)WHERE n.prop = 1  -- May have parsing issues
 
 ### 2.3 CASE WHEN Expression
 **Syntax**: `CASE WHEN n.active THEN 'active' ELSE 'inactive' END`
-**Status**: ❌ Not Supported
-**Error**: `mismatched input 'WHEN'`
+**Status**: ✅ Fully Supported
+**Note**: Both simple CASE and searched CASE forms are supported.
+
+```cypher
+-- Simple CASE expression
+MATCH (n:Person)
+RETURN CASE n.status
+  WHEN 'active' THEN 1
+  WHEN 'inactive' THEN 0
+  ELSE -1
+END
+
+-- Searched CASE expression
+MATCH (n:Person)
+RETURN CASE
+  WHEN n.age < 18 THEN 'minor'
+  WHEN n.age < 65 THEN 'adult'
+  ELSE 'senior'
+END
+
+-- CASE in SET clause
+MATCH (n:Person)
+SET n.category = CASE
+  WHEN n.age < 18 THEN 'minor'
+  ELSE 'adult'
+END
+```
 
 ## 3. Aggregate Functions
 
 ### 3.1 COUNT
 **Syntax**: `RETURN count(n)`
-**Status**: ⚠️ May Not Be Supported
+**Status**: ✅ Fully Supported
 
 ### 3.2 SUM
 **Syntax**: `RETURN sum(n.val)`
-**Status**: ⚠️ May Not Be Supported
+**Status**: ✅ Fully Supported
 
 ### 3.3 AVG
 **Syntax**: `RETURN avg(n.val)`
-**Status**: ⚠️ May Not Be Supported
+**Status**: ✅ Fully Supported
 
 ### 3.4 MAX/MIN
 **Syntax**: `RETURN max(n.val), min(n.val)`
-**Status**: ⚠️ May Not Be Supported
+**Status**: ✅ Fully Supported
 
 ### 3.5 collect()
 **Syntax**: `RETURN collect(n)`
-**Status**: ⚠️ May Not Be Supported
+**Status**: ✅ Fully Supported
 
-## 4. Special Syntax
+## 4. Query Combination
 
-### 4.1 DISTINCT
+### 4.1 UNION / UNION ALL
+**Syntax**: `MATCH (n:A) RETURN n.name UNION MATCH (n:B) RETURN n.name`
+**Status**: ✅ Fully Supported
+**Note**: UNION removes duplicates, UNION ALL preserves duplicates.
+
+```cypher
+-- UNION (remove duplicates)
+MATCH (n:Manager) RETURN n.name AS name
+UNION
+MATCH (n:Employee) RETURN n.name AS name
+
+-- UNION ALL (preserve duplicates)
+MATCH (n) RETURN n.val
+UNION ALL
+MATCH (n) RETURN n.val
+
+-- Multiple UNIONs
+MATCH (n:A) RETURN n.name
+UNION
+MATCH (n:B) RETURN n.name
+UNION ALL
+MATCH (n:C) RETURN n.name
+```
+
+## 5. Special Syntax
+
+### 5.1 DISTINCT
 **Syntax**: `RETURN DISTINCT n.val`
 **Status**: ✅ Supported
 **Note**: Eliminates duplicate rows from query results.
@@ -88,11 +139,31 @@ MATCH (n:Person) RETURN DISTINCT n.country
 MATCH (n:Person) WHERE n.active = true RETURN DISTINCT n.status
 ```
 
-### 4.2 range() Function
+### 5.2 range() Function
 **Syntax**: `UNWIND range(1, 5) AS x`
-**Status**: ⚠️ May Not Be Supported
+**Status**: ✅ Fully Supported
+**Note**: Generates a list of integers from start (inclusive) to end (exclusive).
 
-## 5. Label and Property Operations
+```cypher
+-- Basic range
+UNWIND range(0, 5) AS x RETURN x
+-- Returns: [0, 1, 2, 3, 4]
+
+-- Range with step
+UNWIND range(0, 10, 2) AS x RETURN x
+-- Returns: [0, 2, 4, 6, 8]
+
+-- Negative step
+UNWIND range(5, 0, -1) AS x RETURN x
+-- Returns: [5, 4, 3, 2, 1]
+
+-- Create nodes with sequential IDs
+CREATE (n:Test)
+UNWIND range(1, 4) AS i
+SET n.seq = i
+```
+
+## 6. Label and Property Operations
 
 ### 5.1 SET n:Label (Set Label)
 **Syntax**: `MATCH (n) SET n:NewLabel`
@@ -121,25 +192,23 @@ MATCH (n:OldLabel) SET n:NewLabel
 ## Priority Recommendations
 
 ### High Priority
-1. **WHERE clause IN operator** - Common feature affecting query convenience
-2. **Expression evaluation in SET clause** - Affects data update flexibility
-3. **Test data isolation** - Affects test stability
+1. **Expression evaluation in SET clause** - Affects data update flexibility
+2. **Test data isolation** - Affects test stability
 
 ### Medium Priority
-4. **Aggregate functions** (COUNT, SUM, AVG, MAX, MIN) - Core analytics functionality
-5. **CASE WHEN expression** - Conditional logic support
-6. **DISTINCT** - Deduplication functionality
+3. **UNWIND nested properties** - Advanced data manipulation
+4. **UNION optimization** - Current implementation buffers results in memory
 
 ### Low Priority
-7. **range() function** - Can be replaced with other approaches
-8. **collect() function** - Advanced aggregation functionality
+5. **collect() function** - ✅ Already supported
+6. **range() function** - ✅ Already supported
+7. **CASE WHEN expression** - ✅ Already supported
 
 ## Development Suggestions
 
-1. **Fix WHERE clause parser**: Ensure handling of no-space scenarios
-2. **Implement expression evaluation engine**: Support arithmetic and logical operations
-3. **Add aggregate function support**: Start with simple COUNT
-4. **Improve test data isolation**: Use UUID or temporary database instances
+1. **Fix expression evaluation in SET clause**: Implement full expression evaluation
+2. **Improve test data isolation**: Use UUID or temporary database instances
+3. **Optimize UNION for large datasets**: Current implementation may use significant memory for deduplication
 
 ## Testing Notes
 

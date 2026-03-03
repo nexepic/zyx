@@ -450,4 +450,27 @@ public:
 	}
 };
 
+/**
+ * @class RangeFunction
+ * @brief Generates a list of values in a specified range.
+ * Signature: range(start :: INTEGER, end :: INTEGER, step :: INTEGER?) :: LIST<INTEGER>
+ *
+ * Creates a list of integers from start (inclusive) to end (exclusive).
+ * If step is not specified, defaults to 1.
+ * If step is positive, generates incrementing values.
+ * If step is negative, generates decrementing values.
+ * If step is 0, throws an error.
+ */
+class RangeFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("range", 2, 3);
+	}
+};
+
 } // namespace graph::query::expressions

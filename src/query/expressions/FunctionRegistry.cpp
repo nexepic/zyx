@@ -98,6 +98,9 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	// Utility functions
 	registerFunction(std::make_unique<CoalesceFunction>());
 	registerFunction(std::make_unique<SizeFunction>());
+
+	// List functions
+	registerFunction(std::make_unique<RangeFunction>());
 }
 
 // ============================================================================
@@ -453,6 +456,56 @@ PropertyValue SizeFunction::evaluate(
 
 	// For other types, throw error or return NULL
 	return PropertyValue();
+}
+
+PropertyValue RangeFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	// Validate argument count (should be 2 or 3, handled by signature validation)
+	if (args.size() < 2 || args.size() > 3) {
+		return PropertyValue();
+	}
+
+	// Check for NULL arguments
+	for (const auto& arg : args) {
+		if (EvaluationContext::isNull(arg)) {
+			return PropertyValue();
+		}
+	}
+
+	// Extract start and end
+	int64_t start = EvaluationContext::toInteger(args[0]);
+	int64_t end = EvaluationContext::toInteger(args[1]);
+	int64_t step = 1;
+
+	// Extract step if provided
+	if (args.size() == 3) {
+		step = EvaluationContext::toInteger(args[2]);
+	}
+
+	// Validate step is not zero
+	if (step == 0) {
+		throw std::runtime_error("range() step cannot be zero");
+	}
+
+	// Generate the range
+	std::vector<float> result;
+	result.reserve(16); // Reserve space for typical ranges
+
+	if (step > 0) {
+		// Incrementing range
+		for (int64_t i = start; i < end; i += step) {
+			result.push_back(static_cast<float>(i));
+		}
+	} else {
+		// Decrementing range
+		for (int64_t i = start; i > end; i += step) {
+			result.push_back(static_cast<float>(i));
+		}
+	}
+
+	return PropertyValue(result);
 }
 
 } // namespace graph::query::expressions
