@@ -13,3 +13,6 @@ default.profdata
 # Coverage reports
 coverage/
 htmlcov/
+
+# Worktree directory
+.worktrees/
