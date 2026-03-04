@@ -46,14 +46,6 @@ namespace graph::storage::state {
 		return PropertyValue(propVec);
 	}
 
-	// Overload for std::vector<float> to handle conversion to PropertyValue
-	template<>
-	void SystemStateManager::set<std::vector<float>>(const std::string &stateKey, const std::string &field, const std::vector<float> &value, bool useBlobStorage) {
-		std::unordered_map<std::string, PropertyValue> singleMap;
-		singleMap[field] = toPropertyValue(value);
-		setMap(stateKey, singleMap, UpdateMode::MERGE, useBlobStorage);
-	}
-
 	// Helper to extract value from PropertyValue
 	template<typename T>
 	std::optional<T> extract(const PropertyValue &pv) {
