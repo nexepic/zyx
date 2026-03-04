@@ -143,6 +143,7 @@ MATCH (n:Person) WHERE n.active = true RETURN DISTINCT n.status
 **Syntax**: `UNWIND range(1, 5) AS x`
 **Status**: ✅ Fully Supported
 **Note**: Generates a list of integers from start (inclusive) to end (exclusive).
+The function returns a heterogeneous list containing int64_t elements.
 
 ```cypher
 -- Basic range
@@ -162,6 +163,45 @@ CREATE (n:Test)
 UNWIND range(1, 4) AS i
 SET n.seq = i
 ```
+
+### 5.3 Heterogeneous List Support
+**Syntax**: `[1, 'text', true, 3.14, NULL]`
+**Status**: ⚠️ Partially Supported
+
+**Supported:**
+- **Node/Edge Properties**: Lists can be stored as properties and can contain mixed types
+  ```cypher
+  CREATE (n:Test {mixed: [42, 'hello', true, 3.14, NULL]})
+  MATCH (n:Test) RETURN n.mixed
+  ```
+
+- **Nested Lists**: Lists can contain other lists
+  ```cypher
+  CREATE (n:Test {nested: [[1, 2], [3, 4], [5, 6]]})
+  ```
+
+- **Persistence**: Heterogeneous lists are correctly serialized and deserialized
+  ```cypher
+  -- Data persists across database restarts
+  CREATE (n:Test {data: [1, 'text', true]})
+  -- After database close/reopen: data is preserved
+  ```
+
+**Not Yet Supported:**
+- **List Literals in RETURN**: Direct list literals in RETURN clause
+  ```cypher
+  RETURN [1, 2, 3]  -- Not yet supported
+  ```
+
+- **List Slicing in WHERE**: Accessing list elements in WHERE clause
+  ```cypher
+  MATCH (n) WHERE n.list[0] = 1  -- Not yet supported
+  ```
+
+- **List Slicing in RETURN**: Slicing operations in RETURN clause
+  ```cypher
+  RETURN n.list[0..2]  -- Not yet supported
+  ```
 
 ## 6. Label and Property Operations
 

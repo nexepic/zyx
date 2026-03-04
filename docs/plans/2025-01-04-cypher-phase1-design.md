@@ -3,10 +3,62 @@
 **Date**: 2025-01-04
 **Author**: Claude
 **Status**: Approved
+**Updated**: 2026-01-04 - Heterogeneous list support completed
 
 ## Overview
 
 Implement list slicing operations and quantifier functions (ALL, ANY, NONE, SINGLE) to provide foundational list manipulation capabilities for Cypher queries.
+
+## Heterogeneous List Support (Completed)
+
+As of 2026-01-04, heterogeneous list support has been fully implemented:
+
+### What Was Implemented
+- **PropertyValue extended**: Changed from `std::vector<float>` to `std::vector<PropertyValue>`
+- **Mixed-type lists**: Lists can now contain integers, strings, booleans, doubles, null, and nested lists
+  ```cpp
+  std::vector<PropertyValue> list = {
+      PropertyValue(42),
+      PropertyValue("hello"),
+      PropertyValue(true),
+      PropertyValue(3.14)
+  };
+  ```
+
+### Updated Components
+- **PropertyTypes.hpp**: Core list type changed to `std::vector<PropertyValue>`
+- **PropertyTypes.cpp**: Recursive size calculation for heterogeneous lists
+- **Serializer.hpp**: Recursive serialization/deserialization for heterogeneous lists
+- **ExpressionEvaluator.cpp**: List slicing evaluator implemented
+- **FunctionRegistry.cpp**: `range()` function returns `std::vector<PropertyValue>` with int64_t elements
+- **VectorIndexManager.cpp**: Conversion helpers for heterogeneous list to float vector
+- **SystemStateManager.cpp**: Template updates for heterogeneous list storage
+- **C API (DatabaseImpl.cpp)**: Support for heterogeneous list conversions
+
+### Test Coverage
+- **Unit tests**: `test_HeterogeneousLists_Unit.cpp` - comprehensive heterogeneous list tests
+- **Integration tests**: `test_IntegrationHeterogeneousLists.cpp` - end-to-end list operations
+- **Serializer tests**: Updated for heterogeneous list serialization
+- **All existing tests**: Updated to work with new list type
+
+### Current Limitations
+- **List literals in RETURN**: Not yet supported (only works in IN operator context)
+- **List slicing in WHERE**: Not yet supported
+- **List slicing in RETURN**: Not yet supported
+- **Storage**: Heterogeneous lists are fully persistent and work with WAL
+
+### API Examples
+
+```cypher
+-- Node properties can store heterogeneous lists
+CREATE (n:Test {mixed: [42, 'hello', true, 3.14, NULL]})
+
+-- Nested lists are supported
+CREATE (n:Test {nested: [[1, 2], [3, 4], [5, 6]]})
+
+-- range() returns int64_t elements
+UNWIND range(1, 5) AS x RETURN x
+```
 
 ## Architecture
 
