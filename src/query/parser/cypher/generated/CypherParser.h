@@ -1125,8 +1125,10 @@ public:
     antlr4::tree::TerminalNode *DOT();
     PropertyKeyNameContext *propertyKeyName();
     antlr4::tree::TerminalNode *LBRACK();
-    ExpressionContext *expression();
     antlr4::tree::TerminalNode *RBRACK();
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    antlr4::tree::TerminalNode *RANGE();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;

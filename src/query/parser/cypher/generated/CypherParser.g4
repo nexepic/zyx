@@ -298,10 +298,10 @@ unaryExpression
     : ( PLUS | MINUS )? atom ( accessor )*
     ;
 
-// Accessor handles property lookup (.prop) or list indexing ([0])
+// Accessor handles property lookup (.prop), list indexing ([0]), or list slicing ([0..2])
 accessor
     : DOT propertyKeyName
-    | LBRACK expression RBRACK
+    | LBRACK (expression)? (RANGE (expression)?)? RBRACK
     ;
 
 atom
