@@ -38,6 +38,8 @@
 
 namespace fs = std::filesystem;
 
+using graph::PropertyValue;
+
 class IndexManagerTest : public ::testing::Test {
 protected:
 	void SetUp() override {

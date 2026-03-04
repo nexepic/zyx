@@ -15,6 +15,7 @@
 #include "helpers/PatternBuilder.hpp"
 
 using namespace graph::parser::cypher;
+using graph::PropertyValue;
 
 class HelpersRealQueriesTest : public ::testing::Test {
 protected:

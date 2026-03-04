@@ -15,6 +15,7 @@
 #include "helpers/OperatorChain.hpp"
 
 using namespace graph::parser::cypher::helpers;
+using graph::PropertyValue;
 
 class HelpersIntegrationTest : public ::testing::Test {
 protected:
