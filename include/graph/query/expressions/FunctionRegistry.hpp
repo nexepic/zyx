@@ -473,4 +473,33 @@ public:
 	}
 };
 
+/**
+ * @class ReduceFunction
+ * @brief Reduces a list to a single value using an accumulator expression.
+ * Signature: reduce(accumulator = initial, variable IN list | expression) :: ANY
+ *
+ * NOTE: This is a partial implementation. REDUCE has special Cypher syntax that requires
+ * custom parsing in ExpressionBuilder. Currently, this function validates arguments and
+ * throws a "not yet implemented" exception.
+ *
+ * Full implementation requires:
+ * - Special parsing for: reduce(accum = init, x IN list | expression)
+ * - Expression evaluation with accumulator variable binding
+ * - Iteration over list elements
+ *
+ * Example: reduce(total = 0, x IN [1, 2, 3] | total + x) returns 6
+ */
+class ReduceFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		// REDUCE has special syntax, signature is for validation only
+		return FunctionSignature("reduce", 1, SIZE_MAX, true);
+	}
+};
+
 } // namespace graph::query::expressions

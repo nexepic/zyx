@@ -101,6 +101,7 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 
 	// List functions
 	registerFunction(std::make_unique<RangeFunction>());
+	registerFunction(std::make_unique<ReduceFunction>());
 }
 
 // ============================================================================
@@ -506,6 +507,51 @@ PropertyValue RangeFunction::evaluate(
 	}
 
 	return PropertyValue(result);
+}
+
+PropertyValue ReduceFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	// REDUCE has special Cypher syntax: reduce(accum = init, x IN list | expression)
+	// This requires special parsing in ExpressionBuilder to handle the accumulator
+	// initialization and iteration variable binding.
+
+	// For now, validate that we have arguments and throw not-yet-implemented
+	// Full implementation requires:
+	// 1. Parse accumulator expression (e.g., "total = 0")
+	// 2. Parse iteration variable (e.g., "x")
+	// 3. Parse list expression
+	// 4. Parse reduce expression (e.g., "total + x")
+	// 5. Iterate over list, updating accumulator
+	// 6. Return final accumulator value
+
+	if (args.empty()) {
+		throw std::runtime_error("REDUCE function requires at least one argument");
+	}
+
+	// Check if any argument looks like it might be the special REDUCE syntax
+	// This is a heuristic to detect if someone is trying to use REDUCE
+	for (const auto& arg : args) {
+		if (arg.getType() == PropertyType::LIST) {
+			// This might be a list argument for REDUCE
+			throw std::runtime_error(
+				"REDUCE function is not yet fully implemented. "
+				"The REDUCE syntax 'reduce(accum = init, x IN list | expression)' "
+				"requires special parsing support. "
+				"Please use list comprehensions FILTER/EXTRACT as alternatives."
+			);
+		}
+	}
+
+	// If we get here, someone might be calling reduce as a regular function
+	throw std::runtime_error(
+		"REDUCE function is not yet implemented. "
+		"REDUCE has special Cypher syntax that requires custom parsing: "
+		"'reduce(accumulator = initial, variable IN list | expression)'. "
+		"Please use list comprehensions [x IN list | expression] or "
+		"[x IN list WHERE condition] as alternatives."
+	);
 }
 
 } // namespace graph::query::expressions
