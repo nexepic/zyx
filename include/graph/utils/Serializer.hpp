@@ -110,12 +110,12 @@ namespace graph::utils {
 					} else if constexpr (std::is_same_v<T, std::string>) {
 						writePOD(os, PropertyType::STRING);
 						serialize(os, arg); // Recursively call the std::string specialization
-					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
 						writePOD(os, PropertyType::LIST);
 						writePOD(os, static_cast<uint32_t>(arg.size()));
-						if (!arg.empty()) {
-							// Write the raw float array directly
-							os.write(reinterpret_cast<const char *>(arg.data()), arg.size() * sizeof(float));
+						// Recursively serialize each element for heterogeneous list support
+						for (const auto &element : arg) {
+							serialize(os, element);
 						}
 					}
 				},
@@ -144,17 +144,13 @@ namespace graph::utils {
 				return PropertyValue(deserialize<std::string>(is));
 			case PropertyType::LIST: {
 				uint32_t count = readPOD<uint32_t>(is);
-				std::vector<float> vec(count);
-				if (count > 0) {
-					is.read(reinterpret_cast<char *>(vec.data()), count * sizeof(float));
+				std::vector<PropertyValue> vec;
+				vec.reserve(count);
+				// Recursively deserialize each element for heterogeneous list support
+				for (uint32_t i = 0; i < count; ++i) {
+					vec.push_back(deserialize<PropertyValue>(is));
 				}
-				// Convert std::vector<float> to std::vector<PropertyValue> for heterogeneous list support
-				std::vector<PropertyValue> propVec;
-				propVec.reserve(count);
-				for (float f : vec) {
-					propVec.push_back(PropertyValue(static_cast<double>(f)));
-				}
-				return PropertyValue(propVec);
+				return PropertyValue(vec);
 			}
 			default:
 				throw std::runtime_error("Invalid PropertyType tag in stream during deserialization.");
@@ -174,9 +170,12 @@ namespace graph::utils {
 					} else if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int64_t> ||
 										 std::is_same_v<T, double>) {
 						size += sizeof(T);
-					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
 						size += sizeof(uint32_t); // Count
-						size += arg.size() * sizeof(float); // Data
+						// Recursively calculate size for heterogeneous list support
+						for (const auto &element : arg) {
+							size += getSerializedSize(element);
+						}
 					}
 				},
 				value.getVariant());

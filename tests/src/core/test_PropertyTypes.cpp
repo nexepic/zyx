@@ -312,15 +312,18 @@ TEST(PropertyValueTest, ListRelationalOperators) {
 }
 
 TEST(PropertyValueTest, ListSize) {
-	// Empty list - size is count (uint32_t) + data
+	// Empty list - size is count (uint32_t) only
 	std::vector<PropertyValue> emptyList;
 	graph::PropertyValue v1(emptyList);
-	EXPECT_EQ(getPropertyValueSize(v1), sizeof(uint32_t) + sizeof(float) * 0);
+	EXPECT_EQ(getPropertyValueSize(v1), sizeof(uint32_t));
 
-	// Non-empty list
+	// Non-empty list - size is count (uint32_t) + recursive size of each element (each double)
 	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0), PropertyValue(4.0)};
 	graph::PropertyValue v2(list);
-	EXPECT_EQ(getPropertyValueSize(v2), sizeof(uint32_t) + sizeof(float) * 4);
+	// Each element is a double (8 bytes) + variant overhead, so the total depends on recursive calculation
+	// The important thing is that it's calculated correctly, not the exact value
+	size_t expectedSize = sizeof(uint32_t) + 4 * (sizeof(double));
+	EXPECT_EQ(getPropertyValueSize(v2), expectedSize);
 }
 
 TEST(PropertyValueTest, GetListError) {
@@ -333,14 +336,17 @@ TEST(PropertyValueTest, GetListError) {
 	EXPECT_THROW(strVal.getList(), std::runtime_error);
 	EXPECT_THROW(nullVal.getList(), std::runtime_error);
 
-	// Verify getList() works correctly for LIST type
-	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
+	// Verify getList() works correctly for LIST type with heterogeneous elements
+	std::vector<PropertyValue> list = {PropertyValue(1), PropertyValue(2.0), PropertyValue("three")};
 	graph::PropertyValue listVal(list);
 	const auto &result = listVal.getList();
 	EXPECT_EQ(result.size(), 3u);
-	EXPECT_EQ(result[0], 1.0f);
-	EXPECT_EQ(result[1], 2.0f);
-	EXPECT_EQ(result[2], 3.0f);
+	// First element is INTEGER
+	EXPECT_EQ(std::get<int64_t>(result[0].getVariant()), 1);
+	// Second element is DOUBLE
+	EXPECT_EQ(std::get<double>(result[1].getVariant()), 2.0);
+	// Third element is STRING
+	EXPECT_EQ(std::get<std::string>(result[2].getVariant()), "three");
 }
 
 // ============================================================================

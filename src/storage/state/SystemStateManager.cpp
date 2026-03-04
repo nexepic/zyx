@@ -200,6 +200,15 @@ namespace graph::storage::state {
 	// Vector index code now uses the generic set() template with std::vector<PropertyValue>
 	// The conversion happens via the toPropertyValue() helper function
 
+	// Explicit instantiations for std::vector<PropertyValue> (required for SetConfigOperator)
+	using PropVec = std::vector<PropertyValue>;
+	template PropVec SystemStateManager::get<PropVec>(const std::string &, const std::string &, PropVec) const;
+	template void SystemStateManager::set<PropVec>(const std::string &, const std::string &, const PropVec &, bool);
+	template std::unordered_map<std::string, PropVec> SystemStateManager::getMap<PropVec>(const std::string &) const;
+	template void SystemStateManager::setMap<PropVec>(const std::string &,
+															const std::unordered_map<std::string, PropVec> &, UpdateMode,
+															bool);
+
 	// PropertyValue itself (Useful for generic storage)
 	template void SystemStateManager::setMap<PropertyValue>(const std::string &,
 															const std::unordered_map<std::string, PropertyValue> &,

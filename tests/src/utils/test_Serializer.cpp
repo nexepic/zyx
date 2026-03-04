@@ -118,9 +118,10 @@ namespace graph::utils::test {
 
 		EXPECT_EQ(val, result);
 
-		// Verify the vector is correctly deserialized
+		// Verify the vector is correctly deserialized with heterogeneous list support
 		auto resultVec = result.getList();
 		EXPECT_EQ(resultVec.size(), 5UL);
+		// Each element should be a PropertyValue (stored as double in this case)
 		EXPECT_DOUBLE_EQ(std::get<double>(resultVec[0].getVariant()), 1.0);
 		EXPECT_DOUBLE_EQ(std::get<double>(resultVec[4].getVariant()), 5.0);
 	}
@@ -267,10 +268,12 @@ namespace graph::utils::test {
 		size_t emptyStringSize = getSerializedSize(emptyStringVal);
 		EXPECT_EQ(emptyStringSize, sizeof(PropertyType) + sizeof(uint32_t) + 0);
 
-		// Vector (LIST)
+		// Vector (LIST) - recursively serialized heterogeneous list
 		PropertyValue vectorVal(std::vector<PropertyValue>{PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)});
 		size_t vectorSize = getSerializedSize(vectorVal);
-		EXPECT_EQ(vectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 3 * sizeof(float));
+		// Size = type tag (1) + count (4) + 3 * (type tag (1) + double (8)) = 5 + 27 = 32 bytes
+		size_t expectedVectorSize = sizeof(PropertyType) + sizeof(uint32_t) + 3 * (sizeof(PropertyType) + sizeof(double));
+		EXPECT_EQ(vectorSize, expectedVectorSize);
 
 		// Empty vector
 		PropertyValue emptyVectorVal(std::vector<PropertyValue>{});
@@ -286,11 +289,13 @@ namespace graph::utils::test {
 		size_t longStringSize = getSerializedSize(longStringVal);
 		EXPECT_EQ(longStringSize, sizeof(PropertyType) + sizeof(uint32_t) + 10000);
 
-		// Large vector
+		// Large vector (heterogeneous with NULL elements)
 		std::vector<PropertyValue> largeVec(1000);
 		PropertyValue largeVectorVal(largeVec);
 		size_t largeVectorSize = getSerializedSize(largeVectorVal);
-		EXPECT_EQ(largeVectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 1000 * sizeof(float));
+		// Size = type tag (1) + count (4) + 1000 * (type tag (1)) since all are NULL (monostate)
+		size_t expectedLargeVectorSize = sizeof(PropertyType) + sizeof(uint32_t) + 1000 * sizeof(PropertyType);
+		EXPECT_EQ(largeVectorSize, expectedLargeVectorSize);
 	}
 
 	// Test serialize/deserialize with multiple values in same stream
