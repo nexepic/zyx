@@ -592,26 +592,15 @@ PropertyValue ExpressionBuilder::parseListLiteral(CypherParser::ListLiteralConte
 	if (!ctx)
 		return PropertyValue();
 
-	std::vector<float> vec;
+	std::vector<PropertyValue> vec;
 
 	// Evaluate each item in the list
 	for (auto itemExpr : ctx->expression()) {
 		// Recursively evaluate the item expression
 		PropertyValue itemVal = evaluateLiteralExpression(itemExpr);
 
-		// Convert to float for vector storage
-		if (itemVal.getType() == PropertyType::INTEGER) {
-			vec.push_back(static_cast<float>(std::get<int64_t>(itemVal.getVariant())));
-		} else if (itemVal.getType() == PropertyType::DOUBLE) {
-			vec.push_back(static_cast<float>(std::get<double>(itemVal.getVariant())));
-		} else {
-			// For other types (strings, etc.), try parsing as string if text
-			try {
-				vec.push_back(std::stof(itemVal.toString()));
-			} catch (...) {
-				// Skip non-numeric items
-			}
-		}
+		// Store the PropertyValue directly for heterogeneous list support
+		vec.push_back(itemVal);
 	}
 
 	return PropertyValue(std::move(vec));
