@@ -744,12 +744,12 @@ TEST_F(ExpressionsUnitTest, EvaluationContext_ToDouble_InvalidString) {
 }
 
 TEST_F(ExpressionsUnitTest, EvaluationContext_ToInteger_ListThrows) {
-	std::vector<float> list = {1.0f, 2.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0)};
 	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(list)), TypeMismatchException);
 }
 
 TEST_F(ExpressionsUnitTest, EvaluationContext_ToDouble_ListThrows) {
-	std::vector<float> list = {1.0f, 2.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0)};
 	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(list)), TypeMismatchException);
 }
 
@@ -918,12 +918,12 @@ TEST_F(ExpressionsUnitTest, EvaluationContext_ToBoolean_EmptyString) {
 }
 
 TEST_F(ExpressionsUnitTest, EvaluationContext_ToBoolean_EmptyList) {
-	std::vector<float> emptyList;
+	std::vector<PropertyValue> emptyList;
 	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(emptyList)));
 }
 
 TEST_F(ExpressionsUnitTest, EvaluationContext_ToBoolean_NonEmptyList) {
-	std::vector<float> list = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
 	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(list)));
 }
 
@@ -1615,7 +1615,7 @@ TEST_F(ExpressionsUnitTest, FunctionCall_Length_EmptyList) {
 	ASSERT_NE(func, nullptr);
 
 	std::vector<PropertyValue> args;
-	std::vector<float> emptyList;
+	std::vector<PropertyValue> emptyList;
 	args.push_back(PropertyValue(emptyList));
 	PropertyValue result = func->evaluate(args, *context_);
 
@@ -2151,8 +2151,8 @@ TEST_F(ExpressionsUnitTest, EvaluationContext_FinalBranches_ToBoolean) {
 	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(std::string(" "))));
 
 	// Empty list → false
-	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(std::vector<float>())));
-	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(std::vector<float>{1.0f})));
+	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(std::vector<PropertyValue>())));
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})));
 }
 
 TEST_F(ExpressionsUnitTest, EvaluationContext_FinalBranches_ToIntegerThrows) {
@@ -2161,7 +2161,7 @@ TEST_F(ExpressionsUnitTest, EvaluationContext_FinalBranches_ToIntegerThrows) {
 	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(std::string("abc123"))), TypeMismatchException);
 
 	// toInteger with LIST throws
-	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(std::vector<float>{1.0f})), TypeMismatchException);
+	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})), TypeMismatchException);
 }
 
 TEST_F(ExpressionsUnitTest, EvaluationContext_FinalBranches_ToDoubleThrows) {
@@ -2170,7 +2170,7 @@ TEST_F(ExpressionsUnitTest, EvaluationContext_FinalBranches_ToDoubleThrows) {
 	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(std::string("abc"))), TypeMismatchException);
 
 	// toDouble with LIST throws
-	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(std::vector<float>{1.0f})), TypeMismatchException);
+	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})), TypeMismatchException);
 }
 
 TEST_F(ExpressionsUnitTest, EvaluationContext_FinalBranches_ValidStringConversions) {
@@ -2395,7 +2395,7 @@ TEST_F(ExpressionsUnitTest, FunctionRegistry_FinalRegions_Length) {
 	// LIST path
 	{
 		std::vector<PropertyValue> args;
-		args.push_back(PropertyValue(std::vector<float>{1.0f, 2.0f, 3.0f}));
+		args.push_back(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)}));
 		EXPECT_EQ(std::get<int64_t>(func->evaluate(args, *context_).getVariant()), 3);
 	}
 
@@ -2422,7 +2422,7 @@ TEST_F(ExpressionsUnitTest, FunctionRegistry_FinalRegions_Size) {
 	// LIST path
 	{
 		std::vector<PropertyValue> args;
-		args.push_back(PropertyValue(std::vector<float>{1.0f, 2.0f}));
+		args.push_back(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0), PropertyValue(2.0)}));
 		EXPECT_EQ(std::get<int64_t>(func->evaluate(args, *context_).getVariant()), 2);
 	}
 
@@ -2436,7 +2436,7 @@ TEST_F(ExpressionsUnitTest, FunctionRegistry_FinalRegions_Size) {
 	// Empty list
 	{
 		std::vector<PropertyValue> args;
-		args.push_back(PropertyValue(std::vector<float>()));
+		args.push_back(PropertyValue(std::vector<PropertyValue>()));
 		EXPECT_EQ(std::get<int64_t>(func->evaluate(args, *context_).getVariant()), 0);
 	}
 }
@@ -2745,7 +2745,7 @@ TEST_F(ExpressionsUnitTest, FunctionRegistry_AdditionalRegions_UtilityFunctions)
 		EXPECT_EQ(std::get<int64_t>(func->evaluate(args, *context_).getVariant()), 4);
 
 		args.clear();
-		args.push_back(PropertyValue(std::vector<float>{1.0f, 2.0f, 3.0f}));
+		args.push_back(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)}));
 		EXPECT_EQ(std::get<int64_t>(func->evaluate(args, *context_).getVariant()), 3);
 	}
 }

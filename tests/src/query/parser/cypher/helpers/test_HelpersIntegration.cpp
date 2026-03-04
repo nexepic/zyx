@@ -167,7 +167,7 @@ TEST_F(HelpersIntegrationTest, PropertyValue_AllTypes) {
 	EXPECT_EQ(pvString.getType(), graph::PropertyType::STRING);
 
 	// Test vector type
-	std::vector<float> vec = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> vec = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
 	graph::PropertyValue pvVec(vec);
 	EXPECT_EQ(pvVec.getType(), graph::PropertyType::LIST);
 }

@@ -198,7 +198,7 @@ TEST_F(ProcedureRegistryTest, ManualRegistration) {
 
 TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Success) {
 	// Create a vector argument as a LIST of floats
-	std::vector<float> vec = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> vec = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
 	std::vector<PropertyValue> args = {
 		PropertyValue("test_index"),
 		PropertyValue("5"),
@@ -219,7 +219,7 @@ TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_Args_TooFew) {
 
 TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_Args_TooMany) {
 	// Test with too many arguments
-	std::vector<float> vec = {1.0f, 2.0f};
+	std::vector<PropertyValue> vec = {PropertyValue(1.0), PropertyValue(2.0)};
 	std::vector<PropertyValue> args = {
 		PropertyValue("test_index"),
 		PropertyValue("5"),

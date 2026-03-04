@@ -478,7 +478,7 @@ TEST(PropertyValueTest, CheckPropertyMatchAllTypes) {
 	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(3.14), graph::PropertyValue(3.14)));
 	EXPECT_FALSE(checkPropertyMatch(graph::PropertyValue(3.14), graph::PropertyValue(2.71)));
 
-	std::vector<float> list1 = {1.0f, 2.0f};
-	std::vector<float> list2 = {1.0f, 2.0f};
+	std::vector<PropertyValue> list1 = {PropertyValue(1.0), PropertyValue(2.0)};
+	std::vector<PropertyValue> list2 = {PropertyValue(1.0), PropertyValue(2.0)};
 	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(list1), graph::PropertyValue(list2)));
 }

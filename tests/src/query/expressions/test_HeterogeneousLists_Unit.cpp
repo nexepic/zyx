@@ -302,7 +302,7 @@ TEST_F(HeterogeneousListTest, GetPropertyTypeWithList) {
 	};
 	PropertyValue listValue(list);
 
-	EXPECT_EQ(property_utils::getPropertyType(listValue), PropertyType::LIST);
+	EXPECT_EQ(getPropertyType(listValue), PropertyType::LIST);
 }
 
 // Test property_utils::getPropertyValueSize with list

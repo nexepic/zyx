@@ -557,7 +557,7 @@ TEST_F(IndexManagerTest, VectorIndexLifecycle_WithData) {
 	graph::Node node(100, labelId);
 
 	// Construct a float vector property
-	std::vector<float> vecData = {1.0, 2.0, 3.0, 4.0};
+	std::vector<PropertyValue> vecData = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0), PropertyValue(4.0)};
 	std::unordered_map<std::string, graph::PropertyValue> props;
 	props["vec"] = graph::PropertyValue(vecData);
 	node.setProperties(props);
@@ -567,7 +567,7 @@ TEST_F(IndexManagerTest, VectorIndexLifecycle_WithData) {
 
 	// 3. Update Node (Should call updateIndex)
 	graph::Node newNode(100, labelId);
-	std::vector<float> vecData2 = {5.0, 6.0, 7.0, 8.0};
+	std::vector<PropertyValue> vecData2 = {PropertyValue(5.0), PropertyValue(6.0), PropertyValue(7.0), PropertyValue(8.0)};
 	props["vec"] = graph::PropertyValue(vecData2);
 	newNode.setProperties(props);
 
@@ -603,7 +603,7 @@ TEST_F(IndexManagerTest, VectorIndex_EdgeCases) {
 	int64_t otherLabelId = dataManager->getOrCreateLabelId("Other");
 	graph::Node otherNode(201, otherLabelId);
 	std::unordered_map<std::string, graph::PropertyValue> goodProps;
-	goodProps["emb"] = graph::PropertyValue(std::vector<float>{1, 1, 1, 1});
+	goodProps["emb"] = graph::PropertyValue(std::vector<PropertyValue>{1, 1, 1, 1});
 	otherNode.setProperties(goodProps);
 
 	indexManager->onNodeAdded(otherNode);
@@ -636,7 +636,7 @@ TEST_F(IndexManagerTest, VectorIndex_DeleteNode_Coverage) {
 	// Create node
 	int64_t lbl = dataManager->getOrCreateLabelId("Person");
 	graph::Node node(100, lbl);
-	std::vector<float> data = {1, 2, 3, 4};
+	std::vector<PropertyValue> data = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0), PropertyValue(4.0)};
 	node.addProperty("vec", graph::PropertyValue(data));
 
 	// Trigger Add
