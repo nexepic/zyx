@@ -109,7 +109,7 @@ namespace graph::utils::test {
 
 	// Test PropertyValue with vector (LIST type)
 	TEST_F(SerializerTest, PropertyValue_Vector) {
-		std::vector<float> vec = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+		std::vector<PropertyValue> vec = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0), PropertyValue(4.0), PropertyValue(5.0)};
 		PropertyValue val(vec);
 
 		std::stringstream stream;
@@ -121,13 +121,13 @@ namespace graph::utils::test {
 		// Verify the vector is correctly deserialized
 		auto resultVec = result.getList();
 		EXPECT_EQ(resultVec.size(), 5UL);
-		EXPECT_FLOAT_EQ(resultVec[0], 1.0f);
-		EXPECT_FLOAT_EQ(resultVec[4], 5.0f);
+		EXPECT_DOUBLE_EQ(std::get<double>(resultVec[0].getVariant()), 1.0);
+		EXPECT_DOUBLE_EQ(std::get<double>(resultVec[4].getVariant()), 5.0);
 	}
 
 	// Test PropertyValue with empty vector (covers line 116-119 and 148-150)
 	TEST_F(SerializerTest, PropertyValue_EmptyVector) {
-		std::vector<float> emptyVec;
+		std::vector<PropertyValue> emptyVec;
 		PropertyValue val(emptyVec);
 
 		std::stringstream stream;
@@ -190,9 +190,9 @@ namespace graph::utils::test {
 
 	// Test PropertyValue with large vector
 	TEST_F(SerializerTest, PropertyValue_LargeVector) {
-		std::vector<float> largeVec;
+		std::vector<PropertyValue> largeVec;
 		for (int i = 0; i < 1000; ++i) {
-			largeVec.push_back(static_cast<float>(i));
+			largeVec.push_back(PropertyValue(static_cast<double>(i)));
 		}
 		PropertyValue val(largeVec);
 
@@ -231,8 +231,8 @@ namespace graph::utils::test {
 		testPropValue(PropertyValue(999.888));
 		testPropValue(PropertyValue(""));
 		testPropValue(PropertyValue("Unicode 你好 🌍"));
-		testPropValue(PropertyValue(std::vector<float>{}));
-		testPropValue(PropertyValue(std::vector<float>{1.0f, 2.0f, 3.0f}));
+		testPropValue(PropertyValue(std::vector<PropertyValue>{}));
+		testPropValue(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)}));
 	}
 
 	// Test getSerializedSize for all PropertyValue types
@@ -268,12 +268,12 @@ namespace graph::utils::test {
 		EXPECT_EQ(emptyStringSize, sizeof(PropertyType) + sizeof(uint32_t) + 0);
 
 		// Vector (LIST)
-		PropertyValue vectorVal(std::vector<float>{1.0f, 2.0f, 3.0f});
+		PropertyValue vectorVal(std::vector<PropertyValue>{PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)});
 		size_t vectorSize = getSerializedSize(vectorVal);
 		EXPECT_EQ(vectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 3 * sizeof(float));
 
 		// Empty vector
-		PropertyValue emptyVectorVal(std::vector<float>{});
+		PropertyValue emptyVectorVal(std::vector<PropertyValue>{});
 		size_t emptyVectorSize = getSerializedSize(emptyVectorVal);
 		EXPECT_EQ(emptyVectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 0);
 	}
@@ -287,7 +287,7 @@ namespace graph::utils::test {
 		EXPECT_EQ(longStringSize, sizeof(PropertyType) + sizeof(uint32_t) + 10000);
 
 		// Large vector
-		std::vector<float> largeVec(1000);
+		std::vector<PropertyValue> largeVec(1000);
 		PropertyValue largeVectorVal(largeVec);
 		size_t largeVectorSize = getSerializedSize(largeVectorVal);
 		EXPECT_EQ(largeVectorSize, sizeof(PropertyType) + sizeof(uint32_t) + 1000 * sizeof(float));
