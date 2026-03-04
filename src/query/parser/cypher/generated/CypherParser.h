@@ -59,7 +59,7 @@ public:
     RuleProcedureName = 65, RuleProcedureResultField = 66, RuleFunctionName = 67, 
     RuleNamespace = 68, RuleSchemaName = 69, RuleSymbolicName = 70, RuleLiteral = 71, 
     RuleBooleanLiteral = 72, RuleNumberLiteral = 73, RuleIntegerLiteral = 74, 
-    RuleMapLiteral = 75, RuleListLiteral = 76, RuleParameter = 77
+    RuleMapLiteral = 75, RuleListLiteral = 76, RuleParameter = 77, RuleListComprehension = 78
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -156,7 +156,8 @@ public:
   class IntegerLiteralContext;
   class MapLiteralContext;
   class ListLiteralContext;
-  class ParameterContext; 
+  class ParameterContext;
+  class ListComprehensionContext; 
 
   class  CypherContext : public antlr4::ParserRuleContext {
   public:
@@ -1152,6 +1153,7 @@ public:
     VariableContext *variable();
     ExpressionContext *expression();
     ListLiteralContext *listLiteral();
+    ListComprehensionContext *listComprehension();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -1570,6 +1572,28 @@ public:
   };
 
   ParameterContext* parameter();
+
+  class  ListComprehensionContext : public antlr4::ParserRuleContext {
+  public:
+    CypherParser::ExpressionContext *whereExpression = nullptr;
+    CypherParser::ExpressionContext *mapExpression = nullptr;
+    ListComprehensionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *LBRACK();
+    VariableContext *variable();
+    antlr4::tree::TerminalNode *K_IN();
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    antlr4::tree::TerminalNode *RBRACK();
+    antlr4::tree::TerminalNode *K_WHERE();
+    antlr4::tree::TerminalNode *PIPE();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ListComprehensionContext* listComprehension();
 
 
   // By default the static state used to implement the parser is lazily initialized during the first

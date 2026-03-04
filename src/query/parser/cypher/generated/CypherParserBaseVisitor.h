@@ -342,6 +342,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitListComprehension(CypherParser::ListComprehensionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
 
 };
 

@@ -184,6 +184,8 @@ public:
 
     virtual std::any visitParameter(CypherParser::ParameterContext *context) = 0;
 
+    virtual std::any visitListComprehension(CypherParser::ListComprehensionContext *context) = 0;
+
 
 };
 

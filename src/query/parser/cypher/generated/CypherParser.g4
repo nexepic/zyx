@@ -313,6 +313,7 @@ atom
     | variable
     | LPAREN expression RPAREN
     | listLiteral
+    | listComprehension
     ;
 
 // CASE expression support
@@ -399,4 +400,9 @@ listLiteral
 
 parameter
     : DOLLAR ( symbolicName | DecimalInteger )
+    ;
+
+// List comprehension: [x IN list WHERE condition | expression]
+listComprehension
+    : LBRACK variable K_IN expression (K_WHERE whereExpression=expression)? (PIPE mapExpression=expression)? RBRACK
     ;
