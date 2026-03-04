@@ -468,8 +468,56 @@ void ExpressionEvaluator::visit(ListSliceExpression *expr) {
 }
 
 void ExpressionEvaluator::visit(ListComprehensionExpression *expr) {
-	// TODO: Implement list comprehension evaluation in Task 6
-	throw ExpressionEvaluationException("List comprehension evaluation not yet implemented");
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// Evaluate the list expression
+	PropertyValue listValue = evaluate(const_cast<Expression*>(expr->getListExpr()));
+
+	// Type check: must be a list
+	if (listValue.getType() != PropertyType::LIST) {
+		throw ExpressionEvaluationException("List comprehension requires a list value");
+	}
+
+	const auto& elements = listValue.getList();
+	std::vector<PropertyValue> resultList;
+
+	// Iterate over elements
+	for (const auto& element : elements) {
+		// Set iteration variable in context
+		context_.setVariable(expr->getVariable(), element);
+
+		// Evaluate WHERE clause if present
+		if (expr->getWhereExpr()) {
+			PropertyValue whereResult = evaluate(const_cast<Expression*>(expr->getWhereExpr()));
+
+			// Type check: WHERE must return boolean
+			if (whereResult.getType() != PropertyType::BOOLEAN) {
+				throw ExpressionEvaluationException("WHERE clause must return a boolean value");
+			}
+
+			bool condition = std::get<bool>(whereResult.getVariant());
+			if (!condition) {
+				continue;  // Skip this element
+			}
+		}
+
+		// Evaluate MAP expression or preserve element
+		if (expr->getMapExpr()) {
+			PropertyValue mapResult = evaluate(const_cast<Expression*>(expr->getMapExpr()));
+			resultList.push_back(mapResult);
+		} else {
+			// FILTER mode: preserve original element
+			resultList.push_back(element);
+		}
+
+		// Clean up temporary variable to prevent memory growth and stale entries
+		context_.clearVariable(expr->getVariable());
+	}
+
+	result_ = PropertyValue(resultList);
 }
 
 } // namespace graph::query::expressions

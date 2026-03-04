@@ -125,6 +125,24 @@ public:
 	 */
 	[[nodiscard]] const execution::Record &getRecord() const { return record_; }
 
+	/**
+	 * @brief Sets a temporary variable for list comprehension iteration.
+	 *
+	 * This method is used by list comprehensions to temporarily bind
+	 * the iteration variable during evaluation of WHERE and MAP expressions.
+	 *
+	 * @param variableName The name of the variable to set
+	 * @param value The value to bind to the variable
+	 */
+	void setVariable(const std::string &variableName, const PropertyValue &value) const;
+
+	/**
+	 * @brief Clears a temporary variable set by setVariable.
+	 *
+	 * @param variableName The name of the variable to clear
+	 */
+	void clearVariable(const std::string &variableName) const;
+
 	// =========================================================================
 	// Type Coercion Helpers (following Cypher semantics)
 	// =========================================================================
@@ -197,6 +215,7 @@ public:
 
 private:
 	const execution::Record &record_;
+	mutable std::unordered_map<std::string, PropertyValue> temporaryVariables_;
 };
 
 } // namespace graph::query::expressions

@@ -28,6 +28,12 @@ EvaluationContext::EvaluationContext(const execution::Record &record)
 	: record_(record) {}
 
 std::optional<PropertyValue> EvaluationContext::resolveVariable(const std::string &variableName) const {
+	// Check temporary variables first (for list comprehensions)
+	auto it = temporaryVariables_.find(variableName);
+	if (it != temporaryVariables_.end()) {
+		return it->second;
+	}
+
 	// Try to get as a Node first
 	if (auto node = record_.getNode(variableName)) {
 		// For now, convert Node to a simple representation
@@ -194,6 +200,14 @@ std::string EvaluationContext::toString(const PropertyValue &value) {
 
 bool EvaluationContext::isNull(const PropertyValue &value) {
 	return std::holds_alternative<std::monostate>(value.getVariant());
+}
+
+void EvaluationContext::setVariable(const std::string &variableName, const PropertyValue &value) const {
+	temporaryVariables_[variableName] = value;
+}
+
+void EvaluationContext::clearVariable(const std::string &variableName) const {
+	temporaryVariables_.erase(variableName);
 }
 
 } // namespace graph::query::expressions
