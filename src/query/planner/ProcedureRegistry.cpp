@@ -90,9 +90,18 @@ namespace graph::query::planner {
 			std::vector<float> queryVec;
 
 			if (args[2].getType() == PropertyType::LIST) {
-				// Since the Variant holds std::vector<float>, we can just copy it directly
-				// No need to parse strings if the parser stored it correctly as a LIST.
-				queryVec = args[2].getList();
+				// Convert std::vector<PropertyValue> to std::vector<float> for vector index
+				const auto &propVec = args[2].getList();
+				queryVec.reserve(propVec.size());
+				for (const auto &elem : propVec) {
+					if (elem.getType() == PropertyType::DOUBLE) {
+						queryVec.push_back(static_cast<float>(std::get<double>(elem.getVariant())));
+					} else if (elem.getType() == PropertyType::INTEGER) {
+						queryVec.push_back(static_cast<float>(std::get<int64_t>(elem.getVariant())));
+					} else {
+						throw std::runtime_error("Vector index requires numeric values only");
+					}
+				}
 			} else {
 				// Fallback: If for some reason the parser didn't produce a LIST type,
 				// check if it's strictly required or handle parsing errors.

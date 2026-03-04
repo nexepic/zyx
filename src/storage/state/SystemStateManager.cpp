@@ -36,6 +36,24 @@ namespace graph::storage::state {
 
 	// --- Template Implementations ---
 
+	// Helper to convert std::vector<float> to PropertyValue (for vector index config)
+	inline PropertyValue toPropertyValue(const std::vector<float>& vec) {
+		std::vector<PropertyValue> propVec;
+		propVec.reserve(vec.size());
+		for (float f : vec) {
+			propVec.push_back(PropertyValue(static_cast<double>(f)));
+		}
+		return PropertyValue(propVec);
+	}
+
+	// Overload for std::vector<float> to handle conversion to PropertyValue
+	template<>
+	void SystemStateManager::set<std::vector<float>>(const std::string &stateKey, const std::string &field, const std::vector<float> &value, bool useBlobStorage) {
+		std::unordered_map<std::string, PropertyValue> singleMap;
+		singleMap[field] = toPropertyValue(value);
+		setMap(stateKey, singleMap, UpdateMode::MERGE, useBlobStorage);
+	}
+
 	// Helper to extract value from PropertyValue
 	template<typename T>
 	std::optional<T> extract(const PropertyValue &pv) {
@@ -52,6 +70,28 @@ namespace graph::storage::state {
 			return *val;
 		if (const auto *val = std::get_if<int64_t>(&pv.getVariant()))
 			return *val != 0;
+		return std::nullopt;
+	}
+
+	// Specialization for std::vector<float> to extract from std::vector<PropertyValue>
+	// This is needed for vector index embeddings which should stay as float vectors
+	template<>
+	std::optional<std::vector<float>> extract<std::vector<float>>(const PropertyValue &pv) {
+		if (const auto *val = std::get_if<std::vector<PropertyValue>>(&pv.getVariant())) {
+			std::vector<float> result;
+			result.reserve(val->size());
+			for (const auto &elem : *val) {
+				if (elem.getType() == PropertyType::DOUBLE) {
+					result.push_back(static_cast<float>(std::get<double>(elem.getVariant())));
+				} else if (elem.getType() == PropertyType::INTEGER) {
+					result.push_back(static_cast<float>(std::get<int64_t>(elem.getVariant())));
+				} else {
+					// Non-numeric element in vector - return nullopt
+					return std::nullopt;
+				}
+			}
+			return result;
+		}
 		return std::nullopt;
 	}
 
@@ -107,7 +147,13 @@ namespace graph::storage::state {
 		// 3. Logic based on Mode
 		if (mode == UpdateMode::MERGE) {
 			for (const auto &[key, value]: map) {
-				PropertyValue newVal(value);
+				// Handle std::vector<float> specially by converting to PropertyValue
+				PropertyValue newVal;
+				if constexpr (std::is_same_v<T, std::vector<float>>) {
+					newVal = toPropertyValue(value);
+				} else {
+					newVal = PropertyValue(value);
+				}
 				auto it = currentProps.find(key);
 				if (it == currentProps.end() || it->second != newVal) {
 					currentProps[key] = newVal;
@@ -119,8 +165,15 @@ namespace graph::storage::state {
 				isDirty = true;
 			} else {
 				for (const auto &[key, value]: map) {
+					// Handle std::vector<float> specially by converting to PropertyValue
+					PropertyValue compareVal;
+					if constexpr (std::is_same_v<T, std::vector<float>>) {
+						compareVal = toPropertyValue(value);
+					} else {
+						compareVal = PropertyValue(value);
+					}
 					auto it = currentProps.find(key);
-					if (it == currentProps.end() || it->second != PropertyValue(value)) {
+					if (it == currentProps.end() || it->second != compareVal) {
 						isDirty = true;
 						break;
 					}
@@ -129,7 +182,12 @@ namespace graph::storage::state {
 			if (isDirty) {
 				currentProps.clear();
 				for (const auto &[key, value]: map) {
-					currentProps[key] = PropertyValue(value);
+					// Handle std::vector<float> specially by converting to PropertyValue
+					if constexpr (std::is_same_v<T, std::vector<float>>) {
+						currentProps[key] = toPropertyValue(value);
+					} else {
+						currentProps[key] = PropertyValue(value);
+					}
 				}
 				// Explicit remove not strictly necessary if update handles it,
 				// but keeps logic clean for full replace

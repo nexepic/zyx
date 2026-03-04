@@ -372,10 +372,98 @@ void ExpressionEvaluator::visit(ListSliceExpression *expr) {
 		return;
 	}
 
-	// For now, list slicing is not fully implemented
-	// The PropertyValue system only supports vector<float>, not vector<PropertyValue>
-	// This will be implemented when full list support is added
-	throw ExpressionEvaluationException("List slicing is not yet supported");
+	// Evaluate the list expression
+	PropertyValue listValue = evaluate(const_cast<Expression*>(expr->getList()));
+
+	if (listValue.getType() != PropertyType::LIST) {
+		throw ExpressionEvaluationException("Cannot slice non-list value");
+	}
+
+	const auto& list = listValue.getList();
+	size_t listSize = list.size();
+
+	// Single index: list[0]
+	if (!expr->hasRange()) {
+		if (!expr->getStart()) {
+			throw ExpressionEvaluationException("List slice requires index");
+		}
+
+		PropertyValue indexValue = evaluate(const_cast<Expression*>(expr->getStart()));
+
+		if (indexValue.getType() != PropertyType::INTEGER &&
+			indexValue.getType() != PropertyType::DOUBLE) {
+			throw ExpressionEvaluationException("List index must be integer");
+		}
+
+		int64_t index = 0;
+		if (indexValue.getType() == PropertyType::INTEGER) {
+			index = std::get<int64_t>(indexValue.getVariant());
+		} else {
+			index = static_cast<int64_t>(std::get<double>(indexValue.getVariant()));
+		}
+
+		// Handle negative index
+		if (index < 0) {
+			index = listSize + index;
+		}
+
+		// Check bounds
+		if (index < 0 || static_cast<size_t>(index) >= listSize) {
+			result_ = PropertyValue(); // Return null for out of bounds
+			return;
+		}
+
+		result_ = list[index]; // Return the PropertyValue element
+		return;
+	}
+
+	// Range slice: list[0..2]
+	int64_t start = 0;
+	int64_t end = static_cast<int64_t>(listSize);
+
+	if (expr->getStart()) {
+		PropertyValue startValue = evaluate(const_cast<Expression*>(expr->getStart()));
+		if (startValue.getType() == PropertyType::INTEGER) {
+			start = std::get<int64_t>(startValue.getVariant());
+		} else if (startValue.getType() == PropertyType::DOUBLE) {
+			start = static_cast<int64_t>(std::get<double>(startValue.getVariant()));
+		} else {
+			throw ExpressionEvaluationException("List start index must be integer");
+		}
+
+		// Handle negative start
+		if (start < 0) {
+			start = listSize + start;
+		}
+	}
+
+	if (expr->getEnd()) {
+		PropertyValue endValue = evaluate(const_cast<Expression*>(expr->getEnd()));
+		if (endValue.getType() == PropertyType::INTEGER) {
+			end = std::get<int64_t>(endValue.getVariant());
+		} else if (endValue.getType() == PropertyType::DOUBLE) {
+			end = static_cast<int64_t>(std::get<double>(endValue.getVariant()));
+		} else {
+			throw ExpressionEvaluationException("List end index must be integer");
+		}
+
+		// Handle negative end
+		if (end < 0) {
+			end = listSize + end;
+		}
+	}
+
+	// Clamp to valid range
+	start = std::max<int64_t>(0, std::min<int64_t>(start, static_cast<int64_t>(listSize)));
+	end = std::max<int64_t>(0, std::min<int64_t>(end, static_cast<int64_t>(listSize)));
+
+	// Build result list
+	std::vector<PropertyValue> resultVec;
+	for (int64_t i = start; i < end; ++i) {
+		resultVec.push_back(list[i]);
+	}
+
+	result_ = PropertyValue(resultVec);
 }
 
 } // namespace graph::query::expressions

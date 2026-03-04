@@ -230,7 +230,7 @@ PropertyValue LengthFunction::evaluate(
 		const auto& str = std::get<std::string>(arg.getVariant());
 		return PropertyValue(static_cast<int64_t>(str.length()));
 	} else if (type == PropertyType::LIST) {
-		const auto& list = std::get<std::vector<float>>(arg.getVariant());
+		const auto& list = std::get<std::vector<PropertyValue>>(arg.getVariant());
 		return PropertyValue(static_cast<int64_t>(list.size()));
 	}
 
@@ -450,7 +450,7 @@ PropertyValue SizeFunction::evaluate(
 		const auto& str = std::get<std::string>(arg.getVariant());
 		return PropertyValue(static_cast<int64_t>(str.length()));
 	} else if (type == PropertyType::LIST) {
-		const auto& list = std::get<std::vector<float>>(arg.getVariant());
+		const auto& list = std::get<std::vector<PropertyValue>>(arg.getVariant());
 		return PropertyValue(static_cast<int64_t>(list.size()));
 	}
 

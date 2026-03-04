@@ -148,7 +148,13 @@ namespace graph::utils {
 				if (count > 0) {
 					is.read(reinterpret_cast<char *>(vec.data()), count * sizeof(float));
 				}
-				return PropertyValue(std::move(vec));
+				// Convert std::vector<float> to std::vector<PropertyValue> for heterogeneous list support
+				std::vector<PropertyValue> propVec;
+				propVec.reserve(count);
+				for (float f : vec) {
+					propVec.push_back(PropertyValue(static_cast<double>(f)));
+				}
+				return PropertyValue(propVec);
 			}
 			default:
 				throw std::runtime_error("Invalid PropertyType tag in stream during deserialization.");

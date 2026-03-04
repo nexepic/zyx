@@ -142,8 +142,21 @@ namespace graph::query::indexes {
 
 				if (val.getType() == PropertyType::LIST) {
 					try {
-						const auto &vec = val.getList();
+						const auto &propVec = val.getList();
 						auto index = getIndex(indexName);
+
+						// Convert std::vector<PropertyValue> to std::vector<float> for vector index
+						std::vector<float> vec;
+						vec.reserve(propVec.size());
+						for (const auto &elem : propVec) {
+							if (elem.getType() == PropertyType::DOUBLE) {
+								vec.push_back(static_cast<float>(std::get<double>(elem.getVariant())));
+							} else if (elem.getType() == PropertyType::INTEGER) {
+								vec.push_back(static_cast<float>(std::get<int64_t>(elem.getVariant())));
+							} else {
+								throw std::runtime_error("Vector index requires numeric values only");
+							}
+						}
 
 						index->insert(node.getId(), vec);
 
