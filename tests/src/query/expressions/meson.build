@@ -18,3 +18,13 @@ test_FunctionRegistry_Unit = executable(
 )
 
 test('test_FunctionRegistry_Unit', test_FunctionRegistry_Unit)
+
+# HeterogeneousLists unit tests
+test_HeterogeneousLists_Unit = executable(
+  'test_HeterogeneousLists_Unit',
+  'test_HeterogeneousLists_Unit.cpp',
+  dependencies: [gtest_dep, metrix_core_dep],
+  install: false
+)
+
+test('test_HeterogeneousLists_Unit', test_HeterogeneousLists_Unit)

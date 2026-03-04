@@ -431,7 +431,7 @@ TEST_F(FunctionRegistryTest, LengthFunction_List) {
 	ASSERT_NE(func, nullptr);
 
 	std::vector<PropertyValue> args;
-	std::vector<float> list = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
 	args.push_back(PropertyValue(list));
 	PropertyValue result = func->evaluate(args, *context_);
 
@@ -973,7 +973,7 @@ TEST_F(FunctionRegistryTest, SizeFunction_List) {
 	ASSERT_NE(func, nullptr);
 
 	std::vector<PropertyValue> args;
-	std::vector<float> list = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
 	args.push_back(PropertyValue(list));
 	PropertyValue result = func->evaluate(args, *context_);
 
@@ -998,7 +998,7 @@ TEST_F(FunctionRegistryTest, SizeFunction_EmptyList) {
 	ASSERT_NE(func, nullptr);
 
 	std::vector<PropertyValue> args;
-	std::vector<float> list; // Empty
+	std::vector<PropertyValue> list; // Empty
 	args.push_back(PropertyValue(list));
 	PropertyValue result = func->evaluate(args, *context_);
 
@@ -1086,13 +1086,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_Basic) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 5UL);
-	EXPECT_FLOAT_EQ(list[0], 0.0f);
-	EXPECT_FLOAT_EQ(list[1], 1.0f);
-	EXPECT_FLOAT_EQ(list[2], 2.0f);
-	EXPECT_FLOAT_EQ(list[3], 3.0f);
-	EXPECT_FLOAT_EQ(list[4], 4.0f);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 1);
+	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 2);
+	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 3);
+	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 4);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_WithPositiveStep) {
@@ -1106,13 +1106,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_WithPositiveStep) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 5UL);
-	EXPECT_FLOAT_EQ(list[0], 0.0f);
-	EXPECT_FLOAT_EQ(list[1], 2.0f);
-	EXPECT_FLOAT_EQ(list[2], 4.0f);
-	EXPECT_FLOAT_EQ(list[3], 6.0f);
-	EXPECT_FLOAT_EQ(list[4], 8.0f);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 2);
+	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 4);
+	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 6);
+	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 8);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_WithNegativeStep) {
@@ -1126,13 +1126,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_WithNegativeStep) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 5UL);
-	EXPECT_FLOAT_EQ(list[0], 5.0f);
-	EXPECT_FLOAT_EQ(list[1], 4.0f);
-	EXPECT_FLOAT_EQ(list[2], 3.0f);
-	EXPECT_FLOAT_EQ(list[3], 2.0f);
-	EXPECT_FLOAT_EQ(list[4], 1.0f);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 5);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 4);
+	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 3);
+	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 2);
+	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 1);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_EmptyPositiveStep) {
@@ -1145,7 +1145,7 @@ TEST_F(FunctionRegistryTest, RangeFunction_EmptyPositiveStep) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 0UL);
 }
 
@@ -1160,7 +1160,7 @@ TEST_F(FunctionRegistryTest, RangeFunction_EmptyNegativeStep) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 0UL);
 }
 
@@ -1174,9 +1174,9 @@ TEST_F(FunctionRegistryTest, RangeFunction_SingleValue) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 1UL);
-	EXPECT_FLOAT_EQ(list[0], 0.0f);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_NullArgument) {
@@ -1213,13 +1213,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_NegativeStartPositiveEnd) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 5UL);
-	EXPECT_FLOAT_EQ(list[0], -3.0f);
-	EXPECT_FLOAT_EQ(list[1], -2.0f);
-	EXPECT_FLOAT_EQ(list[2], -1.0f);
-	EXPECT_FLOAT_EQ(list[3], 0.0f);
-	EXPECT_FLOAT_EQ(list[4], 1.0f);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), -3);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), -2);
+	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), -1);
+	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 0);
+	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 1);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_LargeStep) {
@@ -1233,10 +1233,10 @@ TEST_F(FunctionRegistryTest, RangeFunction_LargeStep) {
 	PropertyValue result = func->evaluate(args, *context_);
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<float>>(result.getVariant());
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_EQ(list.size(), 4UL);
-	EXPECT_FLOAT_EQ(list[0], 0.0f);
-	EXPECT_FLOAT_EQ(list[1], 25.0f);
-	EXPECT_FLOAT_EQ(list[2], 50.0f);
-	EXPECT_FLOAT_EQ(list[3], 75.0f);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 25);
+	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 50);
+	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 75);
 }

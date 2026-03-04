@@ -238,34 +238,34 @@ TEST(PropertyValueTest, SizeOfString) {
 
 TEST(PropertyValueTest, ConstructList) {
 	// Test empty list
-	std::vector<float> emptyList;
+	std::vector<PropertyValue> emptyList;
 	graph::PropertyValue v1(emptyList);
 	EXPECT_EQ(graph::getPropertyType(v1), PropertyType::LIST);
 	EXPECT_EQ(v1.typeName(), "LIST");
-	EXPECT_TRUE(std::holds_alternative<std::vector<float>>(v1.getVariant()));
-	EXPECT_TRUE(std::get<std::vector<float>>(v1.getVariant()).empty());
+	EXPECT_TRUE(std::holds_alternative<std::vector<PropertyValue>>(v1.getVariant()));
+	EXPECT_TRUE(std::get<std::vector<PropertyValue>>(v1.getVariant()).empty());
 
 	// Test non-empty list
-	std::vector<float> list = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
 	graph::PropertyValue v2(list);
 	EXPECT_EQ(graph::getPropertyType(v2), PropertyType::LIST);
-	EXPECT_EQ(std::get<std::vector<float>>(v2.getVariant()).size(), 3u);
+	EXPECT_EQ(std::get<std::vector<PropertyValue>>(v2.getVariant()).size(), 3u);
 
 	// Test move semantics
-	std::vector<float> source = {4.0f, 5.0f};
+	std::vector<PropertyValue> source = {PropertyValue(4.0), PropertyValue(5.0)};
 	graph::PropertyValue v3(std::move(source));
-	EXPECT_EQ(std::get<std::vector<float>>(v3.getVariant()).size(), 2u);
+	EXPECT_EQ(std::get<std::vector<PropertyValue>>(v3.getVariant()).size(), 2u);
 	EXPECT_TRUE(source.empty()); // Verify source was moved
 }
 
 TEST(PropertyValueTest, ListToString) {
 	// Empty list
-	std::vector<float> emptyList;
+	std::vector<PropertyValue> emptyList;
 	graph::PropertyValue v1(emptyList);
 	EXPECT_EQ(v1.toString(), "[]");
 
 	// Non-empty list
-	std::vector<float> list = {1.5f, 2.5f, 3.5f};
+	std::vector<PropertyValue> list = {PropertyValue(1.5), PropertyValue(2.5), PropertyValue(3.5)};
 	graph::PropertyValue v2(list);
 	std::string result = v2.toString();
 	// The toString implementation should produce something like "[1.5, 2.5, 3.5]"
@@ -274,9 +274,9 @@ TEST(PropertyValueTest, ListToString) {
 }
 
 TEST(PropertyValueTest, ListEquality) {
-	std::vector<float> list1 = {1.0f, 2.0f, 3.0f};
-	std::vector<float> list2 = {1.0f, 2.0f, 3.0f};
-	std::vector<float> list3 = {1.0f, 2.0f};
+	std::vector<PropertyValue> list1 = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
+	std::vector<PropertyValue> list2 = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
+	std::vector<PropertyValue> list3 = {PropertyValue(1.0), PropertyValue(2.0)};
 
 	graph::PropertyValue v1(list1);
 	graph::PropertyValue v2(list2);
@@ -289,8 +289,8 @@ TEST(PropertyValueTest, ListEquality) {
 
 TEST(PropertyValueTest, ListRelationalOperators) {
 	// List vs List comparison - uses variant index comparison
-	std::vector<float> list1 = {1.0f};
-	std::vector<float> list2 = {2.0f};
+	std::vector<PropertyValue> list1 = {PropertyValue(1.0)};
+	std::vector<PropertyValue> list2 = {PropertyValue(2.0)};
 
 	graph::PropertyValue v1(list1);
 	graph::PropertyValue v2(list2);
@@ -313,12 +313,12 @@ TEST(PropertyValueTest, ListRelationalOperators) {
 
 TEST(PropertyValueTest, ListSize) {
 	// Empty list - size is count (uint32_t) + data
-	std::vector<float> emptyList;
+	std::vector<PropertyValue> emptyList;
 	graph::PropertyValue v1(emptyList);
 	EXPECT_EQ(getPropertyValueSize(v1), sizeof(uint32_t) + sizeof(float) * 0);
 
 	// Non-empty list
-	std::vector<float> list = {1.0f, 2.0f, 3.0f, 4.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0), PropertyValue(4.0)};
 	graph::PropertyValue v2(list);
 	EXPECT_EQ(getPropertyValueSize(v2), sizeof(uint32_t) + sizeof(float) * 4);
 }
@@ -334,7 +334,7 @@ TEST(PropertyValueTest, GetListError) {
 	EXPECT_THROW(nullVal.getList(), std::runtime_error);
 
 	// Verify getList() works correctly for LIST type
-	std::vector<float> list = {1.0f, 2.0f, 3.0f};
+	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0)};
 	graph::PropertyValue listVal(list);
 	const auto &result = listVal.getList();
 	EXPECT_EQ(result.size(), 3u);
@@ -388,7 +388,7 @@ TEST(PropertyValueTest, ConstructFloatVsDouble) {
 
 // Test LIST toString with single element
 TEST(PropertyValueTest, ListToStringSingleElement) {
-	std::vector<float> list = {42.0f};
+	std::vector<PropertyValue> list = {PropertyValue(42.0)};
 	graph::PropertyValue v(list);
 	std::string result = v.toString();
 	EXPECT_EQ(result, "[42]");
@@ -396,7 +396,7 @@ TEST(PropertyValueTest, ListToStringSingleElement) {
 
 // Test LIST toString with multiple elements
 TEST(PropertyValueTest, ListToStringMultipleElements) {
-	std::vector<float> list = {1.5f, 2.5f, 3.5f, 4.5f, 5.5f};
+	std::vector<PropertyValue> list = {PropertyValue(1.5), PropertyValue(2.5), PropertyValue(3.5), PropertyValue(4.5), PropertyValue(5.5)};
 	graph::PropertyValue v(list);
 	std::string result = v.toString();
 	EXPECT_EQ(result, "[1.5, 2.5, 3.5, 4.5, 5.5]");
