@@ -48,7 +48,7 @@ namespace graph {
 	private:
 		// The actual data storage.
 		// Order matters for default comparison: null < bool < int < double < string
-		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string, std::vector<float>>;
+		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string, std::vector<PropertyValue>>;
 		VariantType data;
 
 	public:
@@ -74,7 +74,7 @@ namespace graph {
 		PropertyValue(std::string &&value) : data(std::move(value)) {}
 		PropertyValue(const char *value) : data(std::string(value)) {}
 
-		explicit PropertyValue(std::vector<float> vec) : data(std::move(vec)) {}
+		explicit PropertyValue(std::vector<PropertyValue> vec) : data(std::move(vec)) {}
 
 		// Expose the underlying variant for pattern matching with std::visit.
 		const VariantType &getVariant() const { return data; }
@@ -111,11 +111,11 @@ namespace graph {
 							return oss.str();
 						} else if constexpr (std::is_same_v<T, std::string>) {
 							return value;
-						} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+						} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
 							std::ostringstream oss;
 							oss << "[";
 							for (size_t i = 0; i < value.size(); ++i) {
-								oss << value[i] << (i < value.size() - 1 ? ", " : "");
+								oss << value[i].toString() << (i < value.size() - 1 ? ", " : "");
 							}
 							oss << "]";
 							return oss.str();
@@ -141,7 +141,7 @@ namespace graph {
 							return "DOUBLE";
 						else if constexpr (std::is_same_v<T, std::string>)
 							return "STRING";
-						else if constexpr (std::is_same_v<T, std::vector<float>>)
+						else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>)
 							return "LIST";
 						else
 							return "UNKNOWN";
@@ -163,7 +163,7 @@ namespace graph {
 				return PropertyType::DOUBLE;
 			if (std::holds_alternative<std::string>(data))
 				return PropertyType::STRING;
-			if (std::holds_alternative<std::vector<float>>(data))
+			if (std::holds_alternative<std::vector<PropertyValue>>(data))
 				return PropertyType::LIST;
 			return PropertyType::UNKNOWN;
 		}
@@ -172,8 +172,8 @@ namespace graph {
 		 * @brief Retrieves the list value if the type is LIST.
 		 * @throws std::runtime_error if the type is not LIST.
 		 */
-		const std::vector<float> &getList() const {
-			if (auto *val = std::get_if<std::vector<float>>(&data)) {
+		const std::vector<PropertyValue> &getList() const {
+			if (auto *val = std::get_if<std::vector<PropertyValue>>(&data)) {
 				return *val;
 			}
 			throw std::runtime_error("PropertyValue is not a List/Vector");
@@ -196,7 +196,7 @@ namespace graph {
 						type = PropertyType::DOUBLE;
 					} else if constexpr (std::is_same_v<T, std::string>) {
 						type = PropertyType::STRING;
-					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
 						type = PropertyType::LIST;
 					}
 				},
