@@ -214,6 +214,10 @@ private:
 		CypherParser::AccessorContext* ctx,
 		std::unique_ptr<graph::query::expressions::Expression> baseExpr);
 
+	static std::unique_ptr<graph::query::expressions::Expression> buildListComprehensionExpression(
+		CypherParser::ListComprehensionContext* ctx,
+		const std::function<PropertyValue(CypherParser::ExpressionContext*)>& evaluateLiteral);
+
 	// Helper methods for literal value extraction
 	static graph::PropertyValue parseListLiteral(CypherParser::ListLiteralContext *ctx);
 };

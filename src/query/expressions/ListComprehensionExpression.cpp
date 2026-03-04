@@ -1,5 +1,5 @@
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
-#include "graph/query/expressions/ExpressionVisitor.hpp"
+#include "graph/query/expressions/Expression.hpp"
 
 namespace graph::query::expressions {
 

@@ -23,6 +23,7 @@
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
+#include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -384,6 +385,11 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 		throw std::runtime_error("Parameters ($param) are not yet supported");
 	}
 
+	// List comprehension: [x IN list WHERE x > 5]
+	if (ctx->listComprehension()) {
+		return buildListComprehensionExpression(ctx->listComprehension(), evaluateLiteralExpression);
+	}
+
 	throw std::runtime_error("Unsupported atom expression: " + ctx->getText());
 }
 
@@ -703,6 +709,44 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListSliceFromAccessor(
         std::move(endExpr),
         hasRange
     );
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildListComprehensionExpression(
+		CypherParser::ListComprehensionContext* ctx,
+		const std::function<PropertyValue(CypherParser::ExpressionContext*)>& evaluateLiteral) {
+
+	if (!ctx) return nullptr;
+
+	// Extract variable name
+	std::string variable = ctx->variable()->getText();
+
+	// Build list expression
+	auto listExpr = buildExpression(ctx->expression(0));
+
+	// Build WHERE expression if present
+	std::unique_ptr<Expression> whereExpr = nullptr;
+	if (ctx->whereExpression) {
+		whereExpr = buildExpression(ctx->whereExpression);
+	}
+
+	// Build MAP expression if present
+	std::unique_ptr<Expression> mapExpr = nullptr;
+	if (ctx->mapExpression) {
+		mapExpr = buildExpression(ctx->mapExpression);
+	}
+
+	// Determine type
+	ListComprehensionExpression::ComprehensionType type;
+	if (mapExpr) {
+		type = ListComprehensionExpression::ComprehensionType::EXTRACT;
+	} else if (whereExpr) {
+		type = ListComprehensionExpression::ComprehensionType::FILTER;
+	} else {
+		type = ListComprehensionExpression::ComprehensionType::EXTRACT;  // Default
+	}
+
+	return std::make_unique<ListComprehensionExpression>(
+			variable, std::move(listExpr), std::move(whereExpr), std::move(mapExpr), type);
 }
 
 } // namespace graph::parser::cypher::helpers
