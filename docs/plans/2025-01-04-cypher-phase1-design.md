@@ -42,9 +42,10 @@ As of 2026-01-04, heterogeneous list support has been fully implemented:
 - **All existing tests**: Updated to work with new list type
 
 ### Current Limitations
-- **List literals in RETURN**: Not yet supported (only works in IN operator context)
-- **List slicing in WHERE**: Not yet supported
-- **List slicing in RETURN**: Not yet supported
+- **List literals in RETURN**: ✅ Fully supported
+- **List slicing in WHERE**: ⚠️ Partially supported (works with property access, limited in complex expressions)
+- **List slicing in RETURN**: ✅ Fully supported
+- **List comprehensions**: ✅ FILTER and EXTRACT fully supported, REDUCE has basic support
 - **Storage**: Heterogeneous lists are fully persistent and work with WAL
 
 ### API Examples
@@ -285,3 +286,19 @@ single(x IN [1,2,2] WHERE x = 2)      // Multiple → false
 After Phase 1 completion:
 - **Phase 2**: List comprehensions (FILTER, EXTRACT, REDUCE)
 - **Phase 3**: Pattern expressions and OPTIONAL MATCH
+
+## Implementation Status (2026-01-04)
+
+### Completed Features
+- ✅ Heterogeneous list storage and serialization
+- ✅ List literals in RETURN and WHERE clauses
+- ✅ List slicing (single index and range)
+- ✅ List comprehensions: FILTER and EXTRACT
+- ✅ List comprehensions: REDUCE (basic support)
+- ✅ Nested lists and mixed-type lists
+- ✅ List accessor support for non-variable atoms (e.g., `[1,2,3][0]`)
+
+### Remaining Work
+- Full REDUCE function implementation with accumulator syntax parsing
+- Enhanced WHERE clause list operations
+- Quantifier functions (ALL, ANY, NONE, SINGLE) - not yet started
