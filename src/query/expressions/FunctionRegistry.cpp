@@ -490,18 +490,18 @@ PropertyValue RangeFunction::evaluate(
 	}
 
 	// Generate the range
-	std::vector<float> result;
+	std::vector<PropertyValue> result;
 	result.reserve(16); // Reserve space for typical ranges
 
 	if (step > 0) {
 		// Incrementing range
 		for (int64_t i = start; i < end; i += step) {
-			result.push_back(static_cast<float>(i));
+			result.push_back(PropertyValue(static_cast<int64_t>(i)));
 		}
 	} else {
 		// Decrementing range
 		for (int64_t i = start; i > end; i += step) {
-			result.push_back(static_cast<float>(i));
+			result.push_back(PropertyValue(static_cast<int64_t>(i)));
 		}
 	}
 
