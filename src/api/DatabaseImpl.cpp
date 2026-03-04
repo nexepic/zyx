@@ -86,11 +86,11 @@ namespace metrix {
 					using T = std::decay_t<T0>;
 					if constexpr (std::is_same_v<T, std::monostate>) {
 						return std::monostate{};
-					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
+					} else if constexpr (std::is_same_v<T, std::vector<graph::PropertyValue>>) {
 						std::vector<std::string> strVec;
 						strVec.reserve(arg.size());
-						for (float val: arg) {
-							strVec.push_back(std::to_string(val));
+						for (const auto &val: arg) {
+							strVec.push_back(val.toString());
 						}
 						return strVec;
 					} else {
@@ -127,16 +127,36 @@ namespace metrix {
 					using T = std::decay_t<T0>;
 
 					if constexpr (std::is_same_v<T, std::vector<std::string>>) {
-						std::vector<float> vec;
+						std::vector<graph::PropertyValue> vec;
 						vec.reserve(arg.size());
-						try {
-							for (const auto &s: arg) {
-								vec.push_back(std::stof(s));
+						for (const auto &s: arg) {
+							// Try parsing as different types in order
+							// First try int
+							try {
+								size_t pos = 0;
+								int64_t val = std::stoll(s, &pos);
+								if (pos == s.size()) {
+									vec.push_back(graph::PropertyValue(val));
+									continue;
+								}
+							} catch (...) {
+								// Not an int, continue to next type
 							}
-							return graph::PropertyValue(vec);
-						} catch (...) {
-							return graph::PropertyValue();
+							// Then try double
+							try {
+								size_t pos = 0;
+								double val = std::stod(s, &pos);
+								if (pos == s.size()) {
+									vec.push_back(graph::PropertyValue(val));
+									continue;
+								}
+							} catch (...) {
+								// Not a double, continue to next type
+							}
+							// Otherwise store as string
+							vec.push_back(graph::PropertyValue(s));
 						}
+						return graph::PropertyValue(vec);
 					} else if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
 										 std::is_same_v<T, std::shared_ptr<Edge>>) {
 						return {};
