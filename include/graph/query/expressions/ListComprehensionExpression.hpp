@@ -50,7 +50,11 @@ public:
 	[[nodiscard]] ComprehensionType getType() const { return type_; }
 
 	// Expression interface
+	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::LIST_COMPREHENSION; }
 	void accept(ExpressionVisitor& visitor) override;
+	void accept(ConstExpressionVisitor& visitor) const override;
+	[[nodiscard]] std::string toString() const override;
+	[[nodiscard]] std::unique_ptr<Expression> clone() const override;
 
 private:
 	std::string variable_;

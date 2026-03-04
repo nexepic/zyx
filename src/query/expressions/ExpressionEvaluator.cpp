@@ -21,6 +21,7 @@
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
+#include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -464,6 +465,11 @@ void ExpressionEvaluator::visit(ListSliceExpression *expr) {
 	}
 
 	result_ = PropertyValue(resultVec);
+}
+
+void ExpressionEvaluator::visit(ListComprehensionExpression *expr) {
+	// TODO: Implement list comprehension evaluation in Task 6
+	throw ExpressionEvaluationException("List comprehension evaluation not yet implemented");
 }
 
 } // namespace graph::query::expressions

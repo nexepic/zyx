@@ -43,7 +43,8 @@ enum class ExpressionType {
 	UNARY_OP,
 	FUNCTION_CALL,
 	CASE_EXPRESSION,
-	LIST_SLICE
+	LIST_SLICE,
+	LIST_COMPREHENSION
 };
 
 /**
@@ -401,6 +402,7 @@ public:
 	virtual void visit(CaseExpression *expr) = 0;
 	virtual void visit(InExpression *expr) = 0;
 	virtual void visit(class ListSliceExpression *expr) = 0;
+	virtual void visit(class ListComprehensionExpression *expr) = 0;
 };
 
 /**
@@ -419,6 +421,7 @@ public:
 	virtual void visit(const CaseExpression *expr) = 0;
 	virtual void visit(const InExpression *expr) = 0;
 	virtual void visit(const class ListSliceExpression *expr) = 0;
+	virtual void visit(const class ListComprehensionExpression *expr) = 0;
 };
 
 // ============================================================================

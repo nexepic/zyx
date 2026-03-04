@@ -69,6 +69,7 @@ public:
 	void visit(CaseExpression *expr) override;
 	void visit(InExpression *expr) override;
 	void visit(ListSliceExpression *expr) override;
+	void visit(ListComprehensionExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.

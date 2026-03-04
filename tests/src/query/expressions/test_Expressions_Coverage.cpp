@@ -9,6 +9,7 @@
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/FunctionRegistry.hpp"
+#include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 using namespace graph;
@@ -33,6 +34,7 @@ public:
 	void visit(const CaseExpression* expr [[maybe_unused]]) override { visitedCase = true; }
 	void visit(const InExpression* expr [[maybe_unused]]) override { visitedIn = true; }
 	void visit(const ListSliceExpression* expr [[maybe_unused]]) override { visitedListSlice = true; }
+	void visit(const ListComprehensionExpression* expr [[maybe_unused]]) override { visitedListComprehension = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -43,6 +45,7 @@ public:
 	bool visitedCase = false;
 	bool visitedIn = false;
 	bool visitedListSlice = false;
+	bool visitedListComprehension = false;
 };
 
 // ============================================================================
