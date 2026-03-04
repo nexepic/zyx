@@ -403,6 +403,7 @@ public:
 	virtual void visit(InExpression *expr) = 0;
 	virtual void visit(class ListSliceExpression *expr) = 0;
 	virtual void visit(class ListComprehensionExpression *expr) = 0;
+	virtual void visit(class ListLiteralExpression *expr) = 0;
 };
 
 /**
@@ -422,6 +423,7 @@ public:
 	virtual void visit(const InExpression *expr) = 0;
 	virtual void visit(const class ListSliceExpression *expr) = 0;
 	virtual void visit(const class ListComprehensionExpression *expr) = 0;
+	virtual void visit(const class ListLiteralExpression *expr) = 0;
 };
 
 // ============================================================================

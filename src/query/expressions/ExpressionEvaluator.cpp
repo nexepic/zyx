@@ -22,6 +22,7 @@
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
+#include "graph/query/expressions/ListLiteralExpression.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -518,6 +519,16 @@ void ExpressionEvaluator::visit(ListComprehensionExpression *expr) {
 	}
 
 	result_ = PropertyValue(resultList);
+}
+
+void ExpressionEvaluator::visit(ListLiteralExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// Simply return the stored list value
+	result_ = expr->getValue();
 }
 
 } // namespace graph::query::expressions

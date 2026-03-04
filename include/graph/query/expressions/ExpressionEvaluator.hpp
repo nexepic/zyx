@@ -70,6 +70,7 @@ public:
 	void visit(InExpression *expr) override;
 	void visit(ListSliceExpression *expr) override;
 	void visit(ListComprehensionExpression *expr) override;
+	void visit(ListLiteralExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.

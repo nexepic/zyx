@@ -24,6 +24,7 @@
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
+#include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -439,25 +440,11 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListLiteral(CypherParser::Li
 		return nullptr;
 	}
 
-	// Build a list literal expression
-	// For now, we'll handle it as a special case in the IN operator
-	// Store the list items for later use
-	std::vector<PropertyValue> listValues;
+	// Parse the list literal into a PropertyValue
+	PropertyValue listValue = parseListLiteral(ctx);
 
-	for (auto exprCtx : ctx->expression()) {
-		auto atom = getAtomFromExpression(exprCtx);
-		if (atom && atom->literal()) {
-			listValues.push_back(parseValue(atom->literal()));
-		} else {
-			throw std::runtime_error("List literals with expressions are not yet supported");
-		}
-	}
-
-	// TODO: Implement ListLiteralExpression class to support list literals in RETURN/WHERE
-	// REMOVED: Hard-coded limitation that prevented list literals outside IN operator
-	// Original error: "List literals should only be used with IN operator"
-	// throw std::runtime_error("List literals should only be used with IN operator");
-	return nullptr; // Temporary: Return nullptr until ListLiteralExpression is implemented
+	// Create and return a ListLiteralExpression
+	return std::make_unique<ListLiteralExpression>(listValue);
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::FunctionInvocationContext *ctx) {
