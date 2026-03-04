@@ -418,29 +418,40 @@ std::unique_ptr<Expression> ExpressionBuilder::buildVariableOrProperty(CypherPar
 
 	std::string varName = atom->variable()->getText();
 
-	// Check for property accessors: n.prop
+	// Check for property accessors: n.prop or n.prop[index]
 	if (!ctx->accessor().empty()) {
-		auto firstAccessor = ctx->accessor(0);
+		// Build the base expression starting with just the variable
+		std::unique_ptr<Expression> baseExpr = std::make_unique<VariableReferenceExpression>(varName);
 
-		// Property access: n.prop
-		if (firstAccessor->DOT()) {
-			std::string propName = firstAccessor->propertyKeyName()->getText();
-			return std::make_unique<VariableReferenceExpression>(varName, propName);
-		}
-		// List indexing/slicing: n.tags[0], n.tags[0..2]
-		else if (firstAccessor->LBRACK()) {
-			// Check if this is list slicing or indexing
-			auto accessors = ctx->accessor();
-			auto accessorIt = std::find_if(accessors.begin(), accessors.end(),
-				[](auto* a) { return a->LBRACK() != nullptr; });
+		// Process all accessors in order
+		for (auto* accessor : ctx->accessor()) {
+			// Property access: .prop
+			if (accessor->DOT()) {
+				std::string propName = accessor->propertyKeyName()->getText();
 
-			if (accessorIt != accessors.end()) {
-				auto* accessorCtx = *accessorIt;
-				auto baseExpr = std::make_unique<VariableReferenceExpression>(varName);
-				return buildListSliceFromAccessor(accessorCtx, std::move(baseExpr));
+				// Check if there's a list indexing accessor after this property
+				// We need to look ahead to see if the next accessor is a list bracket
+				auto accessors = ctx->accessor();
+				auto currentIt = std::find(accessors.begin(), accessors.end(), accessor);
+				auto nextIt = currentIt + 1;
+
+				if (nextIt != accessors.end() && (*nextIt)->LBRACK()) {
+					// Next accessor is list indexing, so create property access now
+					// and the list slice will be applied in the next iteration
+					baseExpr = std::make_unique<VariableReferenceExpression>(varName, propName);
+				} else {
+					// No more accessors or next is not list indexing, just return the property access
+					return std::make_unique<VariableReferenceExpression>(varName, propName);
+				}
 			}
-			throw std::runtime_error("Invalid accessor");
+			// List indexing/slicing: [0] or [0..2]
+			else if (accessor->LBRACK()) {
+				return buildListSliceFromAccessor(accessor, std::move(baseExpr));
+			}
 		}
+
+		// If we processed all accessors and didn't return, return the base expression
+		return baseExpr;
 	}
 
 	// Simple variable reference

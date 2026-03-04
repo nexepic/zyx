@@ -24,6 +24,7 @@
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/execution/operators/AggregateOperator.hpp"
 #include <algorithm>
 #include <unordered_map>
@@ -74,7 +75,8 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 			// Build Expression AST from the sort expression
 			auto expressionAST = helpers::ExpressionBuilder::buildExpression(item->expression());
 
-			// Check if this is a simple variable reference to a projection alias
+			// Check if this references a projection alias
+			// Case 1: Simple variable reference: vals
 			if (auto varExpr = dynamic_cast<graph::query::expressions::VariableReferenceExpression*>(expressionAST.get())) {
 				if (!varExpr->hasProperty()) {
 					const std::string& varName = varExpr->getVariableName();
@@ -83,6 +85,26 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 					if (it != projectionAliases.end()) {
 						// Use the original projection expression instead of the alias
 						expressionAST = std::unique_ptr<graph::query::expressions::Expression>(it->second->clone());
+					}
+				}
+			}
+			// Case 2: List slicing on alias: vals[0], vals[0..2]
+			else if (auto sliceExpr = dynamic_cast<graph::query::expressions::ListSliceExpression*>(expressionAST.get())) {
+				// Check if the base expression is a variable reference to an alias
+				if (auto baseVarExpr = dynamic_cast<const graph::query::expressions::VariableReferenceExpression*>(sliceExpr->getList())) {
+					if (!baseVarExpr->hasProperty()) {
+						const std::string& varName = baseVarExpr->getVariableName();
+						auto it = projectionAliases.find(varName);
+						if (it != projectionAliases.end()) {
+							// Replace the base expression with the aliased expression
+							auto newSliceExpr = std::make_unique<graph::query::expressions::ListSliceExpression>(
+								std::unique_ptr<graph::query::expressions::Expression>(it->second->clone()),
+								sliceExpr->getStart() ? std::unique_ptr<graph::query::expressions::Expression>(sliceExpr->getStart()->clone()) : nullptr,
+								sliceExpr->getEnd() ? std::unique_ptr<graph::query::expressions::Expression>(sliceExpr->getEnd()->clone()) : nullptr,
+								sliceExpr->hasRange()
+							);
+							expressionAST = std::move(newSliceExpr);
+						}
 					}
 				}
 			}
