@@ -205,8 +205,8 @@ namespace graph::utils::test {
 		// Verify the vector is correctly deserialized
 		auto resultVec = result.getList();
 		EXPECT_EQ(resultVec.size(), 1000UL);
-		EXPECT_FLOAT_EQ(resultVec[0], 0.0f);
-		EXPECT_FLOAT_EQ(resultVec[999], 999.0f);
+		EXPECT_DOUBLE_EQ(std::get<double>(resultVec[0].getVariant()), 0.0);
+		EXPECT_DOUBLE_EQ(std::get<double>(resultVec[999].getVariant()), 999.0);
 	}
 
 	// Test PropertyValue round-trip for all types

@@ -425,7 +425,7 @@ TEST(PropertyValueTest, GetTypeForAllTypes) {
 	EXPECT_EQ(string_val.getType(), PropertyType::STRING);
 	EXPECT_EQ(string_val.typeName(), "STRING");
 
-	std::vector<float> list_vec = {1.0f, 2.0f};
+	std::vector<PropertyValue> list_vec = {PropertyValue(1.0), PropertyValue(2.0)};
 	graph::PropertyValue list_val(list_vec);
 	EXPECT_EQ(list_val.getType(), PropertyType::LIST);
 	EXPECT_EQ(list_val.typeName(), "LIST");
