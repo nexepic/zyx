@@ -50,8 +50,12 @@ namespace graph::property_utils {
 						return sizeof(double);
 					} else if constexpr (std::is_same_v<T, std::string>) {
 						return arg.size() + sizeof(size_t);
-					} else if constexpr (std::is_same_v<T, std::vector<float>>) {
-						return sizeof(uint32_t) + (arg.size() * sizeof(float));
+					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
+						size_t total = sizeof(uint32_t);
+						for (const auto &element : arg) {
+							total += getPropertyValueSize(element);
+						}
+						return total;
 					} else {
 						// All variant types are handled above
 						return 0;
