@@ -22,6 +22,7 @@
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -407,9 +408,19 @@ std::unique_ptr<Expression> ExpressionBuilder::buildVariableOrProperty(CypherPar
 			std::string propName = firstAccessor->propertyKeyName()->getText();
 			return std::make_unique<VariableReferenceExpression>(varName, propName);
 		}
-		// List indexing: n.tags[0] (not yet supported)
+		// List indexing/slicing: n.tags[0], n.tags[0..2]
 		else if (firstAccessor->LBRACK()) {
-			throw std::runtime_error("List indexing is not yet supported");
+			// Check if this is list slicing or indexing
+			auto accessors = ctx->accessor();
+			auto accessorIt = std::find_if(accessors.begin(), accessors.end(),
+				[](auto* a) { return a->LBRACK() != nullptr; });
+
+			if (accessorIt != accessors.end()) {
+				auto* accessorCtx = *accessorIt;
+				auto baseExpr = std::make_unique<VariableReferenceExpression>(varName);
+				return buildListSliceFromAccessor(accessorCtx, std::move(baseExpr));
+			}
+			throw std::runtime_error("Invalid accessor");
 		}
 	}
 
@@ -662,6 +673,45 @@ std::unique_ptr<Expression> ExpressionBuilder::buildCaseExpression(CypherParser:
 	}
 
 	return caseExpr;
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildListSliceFromAccessor(
+    CypherParser::AccessorContext* ctx,
+    std::unique_ptr<Expression> baseExpr) {
+
+    if (!ctx || !ctx->LBRACK()) {
+        return nullptr;
+    }
+
+    // Get the expressions inside brackets
+    auto expressions = ctx->expression();
+
+    std::unique_ptr<Expression> startExpr = nullptr;
+    std::unique_ptr<Expression> endExpr = nullptr;
+    bool hasRange = (ctx->RANGE() != nullptr);
+
+    if (hasRange) {
+        // Has '..' - range slice: [start..end] or [..end] or [start..]
+        size_t exprCount = expressions.size();
+        if (exprCount > 0) {
+            startExpr = buildExpression(expressions[0]);
+        }
+        if (exprCount > 1) {
+            endExpr = buildExpression(expressions[1]);
+        }
+    } else {
+        // Single index: [index]
+        if (expressions.size() > 0) {
+            startExpr = buildExpression(expressions[0]);
+        }
+    }
+
+    return std::make_unique<ListSliceExpression>(
+        std::move(baseExpr),
+        std::move(startExpr),
+        std::move(endExpr),
+        hasRange
+    );
 }
 
 } // namespace graph::parser::cypher::helpers

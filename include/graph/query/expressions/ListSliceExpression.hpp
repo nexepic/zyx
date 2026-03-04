@@ -36,12 +36,16 @@ public:
 
     ~ListSliceExpression() override = default;
 
+    [[nodiscard]] ExpressionType getExpressionType() const override;
+    void accept(ExpressionVisitor &visitor) override;
+    void accept(ConstExpressionVisitor &visitor) const override;
+    [[nodiscard]] std::string toString() const override;
+    [[nodiscard]] std::unique_ptr<Expression> clone() const override;
+
     [[nodiscard]] const Expression* getList() const { return list_.get(); }
     [[nodiscard]] const Expression* getStart() const { return start_.get(); }
     [[nodiscard]] const Expression* getEnd() const { return end_.get(); }
     [[nodiscard]] bool hasRange() const { return hasRange_; }
-
-    [[nodiscard]] std::string toString() const override;
 
 private:
     std::unique_ptr<Expression> list_;

@@ -20,6 +20,7 @@
 
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/FunctionRegistry.hpp"
+#include "graph/query/expressions/ListSliceExpression.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -363,6 +364,18 @@ bool ExpressionEvaluator::propagateNull(const PropertyValue &left, const Propert
 
 bool ExpressionEvaluator::propagateNull(const PropertyValue &value) {
 	return EvaluationContext::isNull(value);
+}
+
+void ExpressionEvaluator::visit(ListSliceExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// For now, list slicing is not fully implemented
+	// The PropertyValue system only supports vector<float>, not vector<PropertyValue>
+	// This will be implemented when full list support is added
+	throw ExpressionEvaluationException("List slicing is not yet supported");
 }
 
 } // namespace graph::query::expressions

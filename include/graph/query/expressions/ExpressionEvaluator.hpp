@@ -68,6 +68,7 @@ public:
 	void visit(FunctionCallExpression *expr) override;
 	void visit(CaseExpression *expr) override;
 	void visit(InExpression *expr) override;
+	void visit(ListSliceExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.

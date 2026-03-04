@@ -16,6 +16,18 @@ ListSliceExpression::ListSliceExpression(
       end_(std::move(end)),
       hasRange_(hasRange) {}
 
+ExpressionType ListSliceExpression::getExpressionType() const {
+    return ExpressionType::LIST_SLICE;
+}
+
+void ListSliceExpression::accept(ExpressionVisitor &visitor) {
+    visitor.visit(this);
+}
+
+void ListSliceExpression::accept(ConstExpressionVisitor &visitor) const {
+    visitor.visit(this);
+}
+
 std::string ListSliceExpression::toString() const {
     std::string result = list_->toString() + "[";
 
@@ -32,6 +44,15 @@ std::string ListSliceExpression::toString() const {
 
     result += "]";
     return result;
+}
+
+std::unique_ptr<Expression> ListSliceExpression::clone() const {
+    return std::make_unique<ListSliceExpression>(
+        list_->clone(),
+        start_ ? start_->clone() : nullptr,
+        end_ ? end_->clone() : nullptr,
+        hasRange_
+    );
 }
 
 } // namespace graph::query::expressions

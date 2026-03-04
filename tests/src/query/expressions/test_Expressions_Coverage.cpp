@@ -32,6 +32,7 @@ public:
 	void visit(const FunctionCallExpression* expr [[maybe_unused]]) override { visitedFunction = true; }
 	void visit(const CaseExpression* expr [[maybe_unused]]) override { visitedCase = true; }
 	void visit(const InExpression* expr [[maybe_unused]]) override { visitedIn = true; }
+	void visit(const ListSliceExpression* expr [[maybe_unused]]) override { visitedListSlice = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -41,6 +42,7 @@ public:
 	bool visitedFunction = false;
 	bool visitedCase = false;
 	bool visitedIn = false;
+	bool visitedListSlice = false;
 };
 
 // ============================================================================

@@ -210,6 +210,10 @@ private:
 	static std::unique_ptr<graph::query::expressions::Expression> buildCaseExpression(
 		CypherParser::CaseExpressionContext *ctx);
 
+	static std::unique_ptr<graph::query::expressions::Expression> buildListSliceFromAccessor(
+		CypherParser::AccessorContext* ctx,
+		std::unique_ptr<graph::query::expressions::Expression> baseExpr);
+
 	// Helper methods for literal value extraction
 	static graph::PropertyValue parseListLiteral(CypherParser::ListLiteralContext *ctx);
 };
