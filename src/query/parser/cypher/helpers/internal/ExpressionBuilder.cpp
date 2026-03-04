@@ -327,6 +327,18 @@ std::unique_ptr<Expression> ExpressionBuilder::buildUnaryExpression(CypherParser
 		}
 	}
 
+	// Handle list slicing accessors on non-variable atoms (e.g., [1,2,3][0])
+	if (!ctx->accessor().empty()) {
+		auto accessors = ctx->accessor();
+		auto accessorIt = std::find_if(accessors.begin(), accessors.end(),
+			[](auto* a) { return a->LBRACK() != nullptr; });
+
+		if (accessorIt != accessors.end()) {
+			auto* accessorCtx = *accessorIt;
+			return buildListSliceFromAccessor(accessorCtx, std::move(atomExpr));
+		}
+	}
+
 	return atomExpr;
 }
 

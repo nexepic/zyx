@@ -58,10 +58,8 @@ protected:
 
 /**
  * Test heterogeneous list literal in RETURN clause
- * NOTE: Currently unsupported - list literals only work in IN operator
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListLiteralInReturn) {
+TEST_F(IntegrationHeterogeneousListsTest, ListLiteralInReturn) {
 	auto result = execute("RETURN [1, 'hello', true, 3.14] AS mixedList");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -75,10 +73,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListLiteralInReturn) {
 
 /**
  * Test list slicing with range notation
- * NOTE: Currently unsupported in RETURN clause
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListSlicingWithRange) {
+TEST_F(IntegrationHeterogeneousListsTest, ListSlicingWithRange) {
 	auto result = execute("RETURN [1, 2, 3, 4, 5][1..3] AS sliced");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -90,10 +86,9 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListSlicingWithRange) {
 
 /**
  * Test list slicing with single index
- * NOTE: Currently unsupported in RETURN clause
- * This test documents the expected future behavior
+ * NOTE: Returns the element directly, not wrapped in a list
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListSlicingWithIndex) {
+TEST_F(IntegrationHeterogeneousListsTest, ListSlicingWithIndex) {
 	auto result = execute("RETURN [10, 20, 30, 40, 50][2] AS element");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -106,10 +101,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListSlicingWithIndex) {
 
 /**
  * Test nested lists
- * NOTE: Currently unsupported
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_NestedLists) {
+TEST_F(IntegrationHeterogeneousListsTest, NestedLists) {
 	auto result = execute("RETURN [[1, 2], [3, 4], [5, 6]] AS nested");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -121,10 +114,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_NestedLists) {
 
 /**
  * Test deeply nested heterogeneous lists
- * NOTE: Currently unsupported
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_DeeplyNestedHeterogeneousLists) {
+TEST_F(IntegrationHeterogeneousListsTest, DeeplyNestedHeterogeneousLists) {
 	auto result = execute("RETURN [[1, 'a'], [2, 'b'], [true, false]] AS deepNested");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -136,10 +127,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_DeeplyNestedHeterogeneousList
 
 /**
  * Test list with NULL values
- * NOTE: Currently unsupported in RETURN clause
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListWithNullValues) {
+TEST_F(IntegrationHeterogeneousListsTest, ListWithNullValues) {
 	auto result = execute("RETURN [1, NULL, 'test', NULL, 3.14] AS withNulls");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -151,10 +140,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListWithNullValues) {
 
 /**
  * Test empty list
- * NOTE: Currently unsupported in RETURN clause
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_EmptyList) {
+TEST_F(IntegrationHeterogeneousListsTest, EmptyList) {
 	auto result = execute("RETURN [] AS empty");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -183,7 +170,7 @@ TEST_F(IntegrationHeterogeneousListsTest, ListInNodeProperties) {
 
 /**
  * Test list slicing in WHERE clause
- * NOTE: List slicing in WHERE is not yet supported
+ * NOTE: List slicing in WHERE clause not yet fully supported
  * This test documents the expected future behavior
  */
 TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListSlicingInWhere) {
@@ -203,10 +190,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListSlicingInWhere) {
 
 /**
  * Test range() function with heterogeneous result
- * NOTE: range() function not yet implemented
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_RangeFunction) {
+TEST_F(IntegrationHeterogeneousListsTest, RangeFunction) {
 	auto result = execute("RETURN range(1, 5) AS numbers");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -262,10 +247,8 @@ TEST_F(IntegrationHeterogeneousListsTest, NestedListPersistence) {
 
 /**
  * Test complex query with multiple list operations
- * NOTE: List slicing in RETURN not yet supported
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ComplexQueryWithLists) {
+TEST_F(IntegrationHeterogeneousListsTest, ComplexQueryWithLists) {
 	// Create test data
 	(void) execute("CREATE (a:User {name: 'Alice', scores: [85, 90, 78, 92]})");
 	(void) execute("CREATE (b:User {name: 'Bob', scores: [76, 88, 95, 81]})");
@@ -282,10 +265,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ComplexQueryWithLists) {
 
 /**
  * Test list concatenation scenarios
- * NOTE: List literals in RETURN not yet supported
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_MixedTypeListsInQueries) {
+TEST_F(IntegrationHeterogeneousListsTest, MixedTypeListsInQueries) {
 	auto result = execute("RETURN [1, 'one', 2.0, true, NULL] AS mixed");
 	EXPECT_EQ(result.rowCount(), 1UL);
 
@@ -297,10 +278,8 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_MixedTypeListsInQueries) {
 
 /**
  * Test large heterogeneous list
- * NOTE: List literals in RETURN not yet supported
- * This test documents the expected future behavior
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_LargeHeterogeneousList) {
+TEST_F(IntegrationHeterogeneousListsTest, LargeHeterogeneousList) {
 	// Create a large list with mixed types
 	std::string query = "RETURN [";
 	for (int i = 0; i < 100; ++i) {
@@ -316,4 +295,45 @@ TEST_F(IntegrationHeterogeneousListsTest, DISABLED_LargeHeterogeneousList) {
 	ASSERT_FALSE(rows.empty());
 	ASSERT_TRUE(rows[0].contains("largeList"));
 	EXPECT_EQ(rows[0].at("largeList").asPrimitive().getType(), PropertyType::LIST);
+}
+
+/**
+ * Test end-to-end list comprehensions
+ */
+TEST_F(IntegrationHeterogeneousListsTest, EndToEndListComprehensions) {
+	// Create test data
+	(void) execute("CREATE (n:User {scores: [85, 90, 78, 92]})");
+
+	// Test comprehension in WHERE
+	auto result = execute("MATCH (n:User) WHERE size([x IN n.scores WHERE x > 80]) > 0 RETURN n");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test complex list operations with comprehensions
+ */
+TEST_F(IntegrationHeterogeneousListsTest, ComplexListComprehensions) {
+	// Test filtering and transformation
+	auto result = execute("RETURN [x IN range(1, 10) WHERE x % 2 = 0 | x * 2] AS doubledEvens");
+	EXPECT_EQ(result.rowCount(), 1UL);
+
+	auto &rows = result.getRows();
+	ASSERT_FALSE(rows.empty());
+	ASSERT_TRUE(rows[0].contains("doubledEvens"));
+	EXPECT_EQ(rows[0].at("doubledEvens").asPrimitive().getType(), PropertyType::LIST);
+}
+
+/**
+ * Test list comprehension with NULL values
+ * NOTE: IS NOT NULL in WHERE clause of comprehension not yet supported by grammar
+ * This test documents the expected future behavior
+ */
+TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListComprehensionWithNulls) {
+	auto result = execute("RETURN [x IN [1, NULL, 3, NULL, 5] WHERE x IS NOT NULL] AS filtered");
+	EXPECT_EQ(result.rowCount(), 1UL);
+
+	auto &rows = result.getRows();
+	ASSERT_FALSE(rows.empty());
+	ASSERT_TRUE(rows[0].contains("filtered"));
+	EXPECT_EQ(rows[0].at("filtered").asPrimitive().getType(), PropertyType::LIST);
 }
