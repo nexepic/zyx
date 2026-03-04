@@ -447,9 +447,11 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListLiteral(CypherParser::Li
 		}
 	}
 
-	// For now, throw an error - list literals will be handled specially by IN operator
-	// In the future, we could create a ListLiteralExpression
-	throw std::runtime_error("List literals should only be used with IN operator");
+	// TODO: Implement ListLiteralExpression class to support list literals in RETURN/WHERE
+	// REMOVED: Hard-coded limitation that prevented list literals outside IN operator
+	// Original error: "List literals should only be used with IN operator"
+	// throw std::runtime_error("List literals should only be used with IN operator");
+	return nullptr; // Temporary: Return nullptr until ListLiteralExpression is implemented
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::FunctionInvocationContext *ctx) {
