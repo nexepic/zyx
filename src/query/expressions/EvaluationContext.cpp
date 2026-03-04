@@ -95,7 +95,7 @@ bool EvaluationContext::toBoolean(const PropertyValue &value) {
 				if (arg == "false") return false;
 				if (arg == "true") return true;
 				return !arg.empty();
-			} else if constexpr (std::is_same_v<TPlain, std::vector<float>>) {
+			} else if constexpr (std::is_same_v<TPlain, std::vector<PropertyValue>>) {
 				// Empty list → false, non-empty → true
 				return !arg.empty();
 			}
@@ -134,7 +134,7 @@ int64_t EvaluationContext::toInteger(const PropertyValue &value) {
 					PropertyType::INTEGER,
 					PropertyType::STRING
 				);
-			} else if constexpr (std::is_same_v<TPlain, std::vector<float>>) {
+			} else if constexpr (std::is_same_v<TPlain, std::vector<PropertyValue>>) {
 				throw TypeMismatchException(
 					"Cannot convert LIST to INTEGER",
 					PropertyType::INTEGER,
@@ -175,7 +175,7 @@ double EvaluationContext::toDouble(const PropertyValue &value) {
 					PropertyType::DOUBLE,
 					PropertyType::STRING
 				);
-			} else if constexpr (std::is_same_v<TPlain, std::vector<float>>) {
+			} else if constexpr (std::is_same_v<TPlain, std::vector<PropertyValue>>) {
 				throw TypeMismatchException(
 					"Cannot convert LIST to DOUBLE",
 					PropertyType::DOUBLE,
