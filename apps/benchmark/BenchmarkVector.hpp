@@ -144,11 +144,11 @@ namespace metrix::benchmark {
 				db.createNodes("Item", batchData);
 
 			// 3. Train (Optional but recommended for large scale)
-			// If data > 5000, trigger explicit training to ensure PQ is used
-			if (dataSize_ > 2000) {
-				std::cout << " (Training Index...) " << std::flush;
-				(void) db.execute("CALL db.index.vector.train('vec_bench')");
-			}
+			// Disabled for faster benchmark execution with smaller datasets
+			// if (dataSize_ > 2000) {
+			// 	std::cout << " (Training Index...) " << std::flush;
+			// 	(void) db.execute("CALL db.index.vector.train('vec_bench')");
+			// }
 
 			// 4. Prepare Query
 			queryVec_ = generateVector(dim_, rng);
