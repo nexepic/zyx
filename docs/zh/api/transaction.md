@@ -1,0 +1,191 @@
+# Transaction 类
+
+Metrix 中的 `Transaction` 类为图数据库操作提供完整的 ACID 事务支持。本参考文档涵盖完整的 API。
+
+## 概述
+
+```cpp
+#include <metrix/metrix.hpp>
+
+namespace metrix {
+
+class Transaction {
+public:
+    // 事务管理
+    void commit();
+    void rollback();
+    bool isActive() const;
+    bool isCommitted() const;
+    bool isRolledBack() const;
+
+    // 查询执行
+    Result execute(const std::string& cypher);
+    Result execute(const std::string& cypher, const Parameters& params);
+};
+
+}
+```
+
+## 创建事务
+
+通过 Database 类创建事务：
+
+```cpp
+#include <metrix/metrix.hpp>
+
+using namespace metrix;
+
+// 打开数据库
+auto db = Database::open("/path/to/database");
+
+// 开始事务
+auto tx = db->beginTransaction();
+
+// 使用事务
+auto result = tx->execute("CREATE (p:Person {name: 'Alice'})");
+
+// 提交事务
+tx->commit();
+```
+
+## 事务方法
+
+### commit()
+
+提交事务中的所有更改到数据库。
+
+```cpp
+void commit();
+```
+
+**示例：**
+
+```cpp
+auto tx = db->beginTransaction();
+
+try {
+    tx->execute("CREATE (p:Person {name: 'Alice'})");
+    tx->execute("CREATE (p:Person {name: 'Bob'})");
+    
+    tx->commit();
+    std::cout << "事务提交成功" << std::endl;
+} catch (const Exception& e) {
+    tx->rollback();
+    std::cerr << "事务失败: " << e.what() << std::endl;
+}
+```
+
+### rollback()
+
+回滚事务中的所有更改。
+
+```cpp
+void rollback();
+```
+
+**示例：**
+
+```cpp
+auto tx = db->beginTransaction();
+
+try {
+    tx->execute("CREATE (p:Person {name: 'Charlie'})");
+    
+    // 验证
+    auto result = tx->execute("MATCH (p:Person {name: 'Charlie'}) RETURN p");
+    if (result.isEmpty()) {
+        // 验证失败，回滚
+        tx->rollback();
+        std::cout << "事务已回滚" << std::endl;
+        return;
+    }
+    
+    tx->commit();
+} catch (const Exception& e) {
+    tx->rollback();
+    throw;
+}
+```
+
+### execute()
+
+执行 Cypher 查询。
+
+```cpp
+Result execute(const std::string& cypher);
+Result execute(const std::string& cypher, const Parameters& params);
+```
+
+**示例：**
+
+```cpp
+auto tx = db->beginTransaction();
+
+// 简单查询
+auto result = tx->execute("MATCH (p:Person) RETURN p.name ORDER BY p.name");
+
+// 处理结果
+for (const auto& row : result) {
+    std::cout << row["p.name"].asString() << std::endl;
+}
+
+tx->commit();
+```
+
+## 使用模式
+
+### RAII 事务管理
+
+```cpp
+class TransactionGuard {
+private:
+    Transaction* tx_;
+
+public:
+    explicit TransactionGuard(Transaction* tx) : tx_(tx) {}
+
+    ~TransactionGuard() {
+        if (tx_ && tx_->isActive()) {
+            tx_->rollback();
+        }
+    }
+
+    void commit() {
+        if (tx_) {
+            tx_->commit();
+            tx_ = nullptr;
+        }
+    }
+};
+
+// 使用
+auto tx = db->beginTransaction();
+TransactionGuard guard(tx.get());
+
+try {
+    tx->execute("CREATE (p:Person {name: 'Frank'})");
+    
+    // 成功则提交
+    guard.commit();
+} catch (const Exception& e) {
+    // 析构函数自动回滚
+    std::cerr << "错误: " << e.what() << std::endl;
+}
+```
+
+## 最佳实践
+
+1. **始终提交或回滚**：确保每个事务都被正确关闭
+2. **保持事务简短**：最小化 begin 和 commit 之间的时间
+3. **使用 RAII**：使用 guard 对象确保清理
+4. **处理异常**：适当捕获和处理异常
+5. **提交前验证**：提交前检查数据完整性
+6. **使用参数化查询**：防止注入并提高性能
+7. **监控持续时间**：跟踪事务性能
+8. **设置超时**：防止长时间运行的事务
+
+## 另请参阅
+
+- [Database 类](/zh/api/cpp-api) - 数据库管理
+- [值类型](/zh/api/types) - 数据类型参考
+- [错误处理](/zh/api/errors) - 异常处理指南
