@@ -25,6 +25,7 @@
 #include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
+#include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -188,42 +189,45 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 		return nullptr;
 	}
 
-	auto unaryExprs = ctx->arithmeticExpression();
-	if (unaryExprs.empty()) {
+	auto arithExprs = ctx->arithmeticExpression();
+	if (arithExprs.empty()) {
 		return buildArithmeticExpression(ctx->arithmeticExpression(0));
 	}
 
-	// Handle comparison operators: arith (COMPARE arith)*
-	auto left = buildArithmeticExpression(unaryExprs[0]);
+	// Handle comparison operators: arith (COMPARE arith)* (IS_NULL)?
+	auto left = buildArithmeticExpression(arithExprs[0]);
 
-	// Check for comparison operators
-	if (!ctx->children.empty()) {
+	// Process binary comparison operators (EQ, NEQ, LT, GT, LTE, GTE, IN)
+	if (!ctx->children.empty() && arithExprs.size() > 1) {
 		// Find the operator token in the children
-		for (size_t i = 1; i < unaryExprs.size(); ++i) {
+		for (size_t i = 1; i < arithExprs.size(); ++i) {
 			BinaryOperatorType op = BinaryOperatorType::ADD; // default
 
 			// Check if this is an IN operator with a list literal
 			if (!ctx->K_IN().empty() && i - 1 < ctx->K_IN().size()) {
 				// Check if RHS is a list literal
-				auto rhsArith = unaryExprs[i];
-				// Get the first (and should be only) unary expression from the arithmetic expression
-				auto rhsUnaryList = rhsArith->unaryExpression();
-				if (!rhsUnaryList.empty() && rhsUnaryList[0]->atom() && rhsUnaryList[0]->atom()->listLiteral()) {
-					// Extract list values
-					std::vector<PropertyValue> listValues;
-					auto listLit = rhsUnaryList[0]->atom()->listLiteral();
-					for (auto itemExpr : listLit->expression()) {
-						auto itemAtom = getAtomFromExpression(itemExpr);
-						if (itemAtom && itemAtom->literal()) {
-							listValues.push_back(parseValue(itemAtom->literal()));
-						} else {
-							throw std::runtime_error("IN list only supports literal values");
+				auto rhsArith = arithExprs[i];
+				// Get the first (and should be only) power expression from the arithmetic expression
+				auto rhsPowerList = rhsArith->powerExpression();
+				if (!rhsPowerList.empty()) {
+					auto rhsUnaryList = rhsPowerList[0]->unaryExpression();
+					if (!rhsUnaryList.empty() && rhsUnaryList[0]->atom() && rhsUnaryList[0]->atom()->listLiteral()) {
+						// Extract list values
+						std::vector<PropertyValue> listValues;
+						auto listLit = rhsUnaryList[0]->atom()->listLiteral();
+						for (auto itemExpr : listLit->expression()) {
+							auto itemAtom = getAtomFromExpression(itemExpr);
+							if (itemAtom && itemAtom->literal()) {
+								listValues.push_back(parseValue(itemAtom->literal()));
+							} else {
+								throw std::runtime_error("IN list only supports literal values");
+							}
 						}
-					}
 
-					// Create an InExpression
-					left = std::make_unique<InExpression>(std::move(left), std::move(listValues));
-					continue;
+						// Create an InExpression
+						left = std::make_unique<InExpression>(std::move(left), std::move(listValues));
+						continue;
+					}
 				}
 				// If not a list literal, fall through to normal handling
 			}
@@ -239,9 +243,15 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 				op = BinaryOperatorType::IN;
 			}
 
-			auto right = buildArithmeticExpression(unaryExprs[i]);
+			auto right = buildArithmeticExpression(arithExprs[i]);
 			left = std::make_unique<BinaryOpExpression>(std::move(left), op, std::move(right));
 		}
+	}
+
+	// Handle IS NULL / IS NOT NULL as a postfix operator
+	if (ctx->K_IS()) {
+		bool isNot = (ctx->K_NOT() != nullptr);
+		left = std::make_unique<IsNullExpression>(std::move(left), isNot);
 	}
 
 	return left;
@@ -252,22 +262,19 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 		return nullptr;
 	}
 
-	auto unaryExprs = ctx->unaryExpression();
-	if (unaryExprs.empty()) {
-		return buildUnaryExpression(ctx->unaryExpression(0));
+	auto powerExprs = ctx->powerExpression();
+	if (powerExprs.empty()) {
+		return buildPowerExpression(ctx->powerExpression(0));
 	}
 
-	// Handle arithmetic operators: unary (PLUS|MINUS|MULTIPLY|DIVIDE|MODULO unary)*
-	auto left = buildUnaryExpression(unaryExprs[0]);
+	// Handle arithmetic operators: power (PLUS|MINUS|MULTIPLY|DIVIDE|MODULO power)*
+	auto left = buildPowerExpression(powerExprs[0]);
 
 	// Process operators from left to right
-	// Note: The grammar has all operators at the same level, so we need to respect precedence
-	// For now, process in order (proper precedence handling requires more complex logic)
-	for (size_t i = 1; i < unaryExprs.size(); ++i) {
+	for (size_t i = 1; i < powerExprs.size(); ++i) {
 		BinaryOperatorType op = BinaryOperatorType::ADD; // default
 
 		// Determine the operator
-		// In the actual grammar, operators are mixed together, so we need to count them
 		size_t plusCount = ctx->PLUS().size();
 		size_t minusCount = ctx->MINUS().size();
 		size_t multiplyCount = ctx->MULTIPLY().size();
@@ -275,7 +282,6 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 		size_t moduloCount = ctx->MODULO().size();
 
 		// Simple approach: use position to determine operator
-		// This is a simplification - proper handling would require parsing the tree structure
 		size_t opIndex = i - 1;
 		if (opIndex < plusCount) op = BinaryOperatorType::ADD;
 		else if (opIndex < plusCount + minusCount) op = BinaryOperatorType::SUBTRACT;
@@ -283,11 +289,33 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount) op = BinaryOperatorType::DIVIDE;
 		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount + moduloCount) op = BinaryOperatorType::MODULO;
 
-		auto right = buildUnaryExpression(unaryExprs[i]);
+		auto right = buildPowerExpression(powerExprs[i]);
 		left = std::make_unique<BinaryOpExpression>(std::move(left), op, std::move(right));
 	}
 
 	return left;
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildPowerExpression(CypherParser::PowerExpressionContext *ctx) {
+	if (!ctx) {
+		return nullptr;
+	}
+
+	auto unaryExprs = ctx->unaryExpression();
+	if (unaryExprs.empty()) {
+		return buildUnaryExpression(ctx->unaryExpression(0));
+	}
+
+	// Handle power operator: unary (POWER unary)*
+	// Power is right-associative, so we process from right to left
+	auto right = buildUnaryExpression(unaryExprs[unaryExprs.size() - 1]);
+
+	for (int i = static_cast<int>(unaryExprs.size()) - 2; i >= 0; --i) {
+		auto left = buildUnaryExpression(unaryExprs[i]);
+		right = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::POWER, std::move(right));
+	}
+
+	return right;
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildUnaryExpression(CypherParser::UnaryExpressionContext *ctx) {
@@ -572,7 +600,11 @@ CypherParser::AtomContext *ExpressionBuilder::getAtomFromExpression(CypherParser
 	if (!arith)
 		return nullptr;
 
-	auto unary = arith->unaryExpression(0);
+	auto power = arith->powerExpression(0);
+	if (!power)
+		return nullptr;
+
+	auto unary = power->unaryExpression(0);
 	if (!unary)
 		return nullptr;
 

@@ -23,6 +23,7 @@
 #include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
+#include "graph/query/expressions/IsNullExpression.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -288,6 +289,9 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 			return PropertyValue(leftInt % rightInt);
 		}
 
+		case BinaryOperatorType::POWER:
+			return PropertyValue(std::pow(leftDouble, rightDouble));
+
 		default:
 			throw ExpressionEvaluationException("Invalid arithmetic operator");
 	}
@@ -529,6 +533,26 @@ void ExpressionEvaluator::visit(ListLiteralExpression *expr) {
 
 	// Simply return the stored list value
 	result_ = expr->getValue();
+}
+
+void ExpressionEvaluator::visit(IsNullExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// Evaluate the left expression
+	PropertyValue leftVal = evaluate(expr->getExpression());
+
+	// IS NULL / IS NOT NULL follows Cypher's three-valued logic:
+	// - NULL IS NULL → true
+	// - NULL IS NOT NULL → false
+	// - 1 IS NULL → false
+	// - 1 IS NOT NULL → true
+	bool isNull = (leftVal.getType() == PropertyType::NULL_TYPE);
+	bool result = expr->isNegated() ? !isNull : isNull;
+
+	result_ = PropertyValue(result);
 }
 
 } // namespace graph::query::expressions

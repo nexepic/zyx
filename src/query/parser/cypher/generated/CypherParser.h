@@ -52,14 +52,14 @@ public:
     RuleNodeLabels = 42, RuleNodeLabel = 43, RuleRelationshipTypes = 44, 
     RuleRangeLiteral = 45, RuleExpression = 46, RuleOrExpression = 47, RuleXorExpression = 48, 
     RuleAndExpression = 49, RuleNotExpression = 50, RuleComparisonExpression = 51, 
-    RuleArithmeticExpression = 52, RuleUnaryExpression = 53, RuleAccessor = 54, 
-    RuleAtom = 55, RuleCaseExpression = 56, RulePropertyExpression = 57, 
-    RuleFunctionInvocation = 58, RuleExplicitProcedureInvocation = 59, RuleImplicitProcedureInvocation = 60, 
-    RuleVariable = 61, RuleLabelName = 62, RuleRelTypeName = 63, RulePropertyKeyName = 64, 
-    RuleProcedureName = 65, RuleProcedureResultField = 66, RuleFunctionName = 67, 
-    RuleNamespace = 68, RuleSchemaName = 69, RuleSymbolicName = 70, RuleLiteral = 71, 
-    RuleBooleanLiteral = 72, RuleNumberLiteral = 73, RuleIntegerLiteral = 74, 
-    RuleMapLiteral = 75, RuleListLiteral = 76, RuleParameter = 77, RuleListComprehension = 78
+    RuleArithmeticExpression = 52, RulePowerExpression = 53, RuleUnaryExpression = 54, 
+    RuleAccessor = 55, RuleAtom = 56, RuleCaseExpression = 57, RulePropertyExpression = 58, 
+    RuleFunctionInvocation = 59, RuleExplicitProcedureInvocation = 60, RuleImplicitProcedureInvocation = 61, 
+    RuleVariable = 62, RuleLabelName = 63, RuleRelTypeName = 64, RulePropertyKeyName = 65, 
+    RuleProcedureName = 66, RuleProcedureResultField = 67, RuleFunctionName = 68, 
+    RuleNamespace = 69, RuleSchemaName = 70, RuleSymbolicName = 71, RuleLiteral = 72, 
+    RuleBooleanLiteral = 73, RuleNumberLiteral = 74, RuleIntegerLiteral = 75, 
+    RuleMapLiteral = 76, RuleListLiteral = 77, RuleParameter = 78, RuleListComprehension = 79
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -132,6 +132,7 @@ public:
   class NotExpressionContext;
   class ComparisonExpressionContext;
   class ArithmeticExpressionContext;
+  class PowerExpressionContext;
   class UnaryExpressionContext;
   class AccessorContext;
   class AtomContext;
@@ -1056,6 +1057,8 @@ public:
     virtual size_t getRuleIndex() const override;
     std::vector<ArithmeticExpressionContext *> arithmeticExpression();
     ArithmeticExpressionContext* arithmeticExpression(size_t i);
+    antlr4::tree::TerminalNode *K_IS();
+    antlr4::tree::TerminalNode *K_NULL();
     std::vector<antlr4::tree::TerminalNode *> EQ();
     antlr4::tree::TerminalNode* EQ(size_t i);
     std::vector<antlr4::tree::TerminalNode *> NEQ();
@@ -1070,6 +1073,7 @@ public:
     antlr4::tree::TerminalNode* GTE(size_t i);
     std::vector<antlr4::tree::TerminalNode *> K_IN();
     antlr4::tree::TerminalNode* K_IN(size_t i);
+    antlr4::tree::TerminalNode *K_NOT();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -1082,8 +1086,8 @@ public:
   public:
     ArithmeticExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    std::vector<UnaryExpressionContext *> unaryExpression();
-    UnaryExpressionContext* unaryExpression(size_t i);
+    std::vector<PowerExpressionContext *> powerExpression();
+    PowerExpressionContext* powerExpression(size_t i);
     std::vector<antlr4::tree::TerminalNode *> PLUS();
     antlr4::tree::TerminalNode* PLUS(size_t i);
     std::vector<antlr4::tree::TerminalNode *> MINUS();
@@ -1101,6 +1105,22 @@ public:
   };
 
   ArithmeticExpressionContext* arithmeticExpression();
+
+  class  PowerExpressionContext : public antlr4::ParserRuleContext {
+  public:
+    PowerExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<UnaryExpressionContext *> unaryExpression();
+    UnaryExpressionContext* unaryExpression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> POWER();
+    antlr4::tree::TerminalNode* POWER(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  PowerExpressionContext* powerExpression();
 
   class  UnaryExpressionContext : public antlr4::ParserRuleContext {
   public:

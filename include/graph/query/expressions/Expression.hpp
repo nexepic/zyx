@@ -30,6 +30,7 @@ namespace graph::query::expressions {
 // Forward declarations
 class ExpressionVisitor;
 class ConstExpressionVisitor;
+class IsNullExpression;
 
 /**
  * @enum ExpressionType
@@ -58,6 +59,7 @@ enum class BinaryOperatorType {
 	MULTIPLY,
 	DIVIDE,
 	MODULO,
+	POWER,
 
 	// Comparison
 	EQUAL,
@@ -404,6 +406,7 @@ public:
 	virtual void visit(class ListSliceExpression *expr) = 0;
 	virtual void visit(class ListComprehensionExpression *expr) = 0;
 	virtual void visit(class ListLiteralExpression *expr) = 0;
+	virtual void visit(IsNullExpression *expr) = 0;
 };
 
 /**
@@ -424,6 +427,7 @@ public:
 	virtual void visit(const class ListSliceExpression *expr) = 0;
 	virtual void visit(const class ListComprehensionExpression *expr) = 0;
 	virtual void visit(const class ListLiteralExpression *expr) = 0;
+	virtual void visit(const IsNullExpression *expr) = 0;
 };
 
 // ============================================================================
