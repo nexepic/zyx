@@ -9,28 +9,35 @@ Metrix 使用自定义的**段式存储引擎**，针对图工作负载优化，
 ### 文件布局
 
 ```mermaid
-block-beta
-    columns 8
+graph TB
+    subgraph DB["数据库文件"]
+        direction TB
+        FH["文件头<br/>256 bytes"]
+        ST["段表<br/>4KB"]
 
-    block:db_file["数据库文件"]
-        fh["文件头<br/>256 字节"]:1:3
-        st["段表<br/>4KB"]:4:6
-        space["<b>...</b>"]:7:8
-
-        block:segments["数据段 (每个 4MB)"]
-            s1["段 0<br/>节点"]:1:2
-            s2["段 1<br/>边"]:3:4
-            s3["段 2<br/>属性"]:5:6
-            s4["段 3<br/>空闲"]:7:8
-            s5["段 4<br/>..."]:1:2
-            s6["段 5<br/>..."]:3:4
-            s7["段 6<br/>..."]:5:6
-            s8["段 7<br/>..."]:7:8
+        subgraph Segs["数据段"]
+            S1["段 0<br/>节点<br/>4MB"]
+            S2["段 1<br/>边<br/>4MB"]
+            S3["段 2<br/>属性<br/>4MB"]
+            S4["段 3<br/>空闲<br/>4MB"]
         end
 
-        bm["位图<br/>64KB"]:1:4
-        idx["索引<br/>2MB"]:5:8
+        BM["分配位图<br/>64KB"]
+        IDX["索引段<br/>2MB"]
+
+        FH --> ST
+        ST --> S1
+        ST --> S2
+        ST --> S3
+        ST --> S4
+        ST --> BM
+        ST --> IDX
     end
+
+    style FH fill:#e1f5ff
+    style ST fill:#fff4e1
+    style S4 fill:#d4edda
+    style IDX fill:#f8d7da
 ```
 
 ### 内部结构
