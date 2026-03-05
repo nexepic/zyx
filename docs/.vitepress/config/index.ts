@@ -1,9 +1,9 @@
-import { defineConfig } from 'vitepress'
-import { mermaidPlugin } from 'vitepress-plugin-mermaid'
+import { withMermaid } from "vitepress-plugin-mermaid";
 import en from './en'
 import zh from './zh'
 
-export default defineConfig({
+// Define the config without the wrapper
+const config = {
   // Base URL for GitHub Pages (update 'metrix' to your repo name)
   base: '/metrix/',
 
@@ -24,9 +24,6 @@ export default defineConfig({
   },
 
   markdown: {
-    config: (md) => {
-      md.use(mermaidPlugin)
-    },
     lineNumbers: true
   },
 
@@ -34,5 +31,13 @@ export default defineConfig({
     outline: {
       level: [2, 3]
     }
+  },
+
+  // Mermaid configuration
+  mermaid: {
+    theme: 'default'
   }
-})
+}
+
+// Export with mermaid wrapper
+export default withMermaid(config)
