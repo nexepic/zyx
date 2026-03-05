@@ -3,14 +3,7 @@ export default {
     { text: 'User Guide', link: '/en/user-guide/installation' },
     { text: 'API Reference', link: '/en/api/cpp-api' },
     { text: 'Architecture', link: '/en/architecture/overview' },
-    { text: 'Contributing', link: '/en/contributing/development-setup' },
-    {
-      text: 'Language',
-      items: [
-        { text: 'English', link: '/en/' },
-        { text: '简体中文', link: '/zh/' }
-      ]
-    }
+    { text: 'Contributing', link: '/en/contributing/development-setup' }
   ],
 
   sidebar: {
