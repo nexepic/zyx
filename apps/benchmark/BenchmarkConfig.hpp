@@ -31,16 +31,16 @@ namespace metrix::benchmark::config {
 	constexpr int DATA_SIZE_LARGE = 10000;
 
 	// Default data size to use if not specified
-	constexpr int DEFAULT_DATA_SIZE = DATA_SIZE_MEDIUM;
+	constexpr int DEFAULT_DATA_SIZE = DATA_SIZE_SMALL;  // Optimized for faster benchmark execution
 
-	constexpr int DATA_SIZE_QUERY = 5000;
+	constexpr int DATA_SIZE_QUERY = 500;  // Reduced from 5000 for faster vector search setup
 
 	constexpr int DATA_SIZE_ALGO = 1000;
 
 	// --- Iteration Settings ---
 	// How many times to execute the 'run' operation (for averaging latency).
-	constexpr int ITERATIONS_WRITE = 1000; // Insertions
-	constexpr int ITERATIONS_READ = 500; // Queries
+	constexpr int ITERATIONS_WRITE = 200; // Insertions (reduced for faster benchmark)
+	constexpr int ITERATIONS_READ = 100; // Queries (reduced for faster benchmark)
 	constexpr int ITERATIONS_ALGO = 100; // Graph Algorithms
 
 	constexpr int BATCH_WRITE_SIZE = 100; // For batch insertion benchmarks
