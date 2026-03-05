@@ -23,7 +23,8 @@ export default defineConfig({
   },
 
   markdown: {
-    lineNumbers: true
+    lineNumbers: true,
+    mermaid: true
   },
 
   themeConfig: {
