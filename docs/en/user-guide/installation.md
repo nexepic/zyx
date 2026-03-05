@@ -2,22 +2,161 @@
 
 ## Prerequisites
 
-- C++20 compatible compiler (GCC 11+, Clang 13+, MSVC 2022+)
-- Meson build system
-- Conan package manager
-- Ninja build backend
+Before building Metrix, ensure you have the following dependencies installed:
+
+### Required Tools
+
+- **C++ Compiler**: C++20 compatible compiler
+  - GCC 11+ or Clang 13+ (Linux)
+  - Xcode 14+ (macOS)
+  - MSVC 2022+ (Windows)
+- **Meson**: Build system (version 0.63+)
+- **Conan**: Package manager (version 1.60+)
+- **Ninja**: Build backend
+
+### Install on macOS
+
+```bash
+brew install meson conan ninja
+```
+
+### Install on Linux (Ubuntu/Debian)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip g++ cmake
+pip3 install meson conan ninja
+```
+
+### Install on Windows
+
+```powershell
+# Using Chocolatey
+choco install meson conan ninja
+
+# Or using pip
+pip install meson conan ninja
+```
 
 ## Build from Source
+
+### Quick Build
+
+The easiest way to build and test Metrix:
 
 ```bash
 # Clone the repository
 git clone https://github.com/yuhong/metrix.git
 cd metrix
 
-# Install dependencies and build
+# Install dependencies, build, and run tests
 ./scripts/run_tests.sh
 ```
 
-## Quick Install
+This script will:
+1. Install all Conan dependencies
+2. Configure the build with Meson
+3. Compile the project
+4. Run all tests with coverage
 
-For detailed build options, see the [Contributing Guide](/en/contributing/development-setup).
+### Quick Build (Skip Dependency Installation)
+
+If you've already built before and dependencies are installed:
+
+```bash
+./scripts/run_tests.sh --quick
+```
+
+### Manual Build Steps
+
+For more control over the build process:
+
+```bash
+# Install Conan dependencies
+conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+
+# Configure Meson build
+meson setup buildDir --native-file buildDir/conan_meson_native.ini
+
+# Compile
+meson compile -C buildDir
+```
+
+## Build Release Version
+
+For production builds:
+
+```bash
+./scripts/build_release.sh
+```
+
+This creates an optimized release build in `buildDir/release/`.
+
+## Verify Installation
+
+After building, verify the CLI tool is available:
+
+```bash
+./buildDir/apps/cli/metrix-cli --help
+```
+
+You should see usage information for the Metrix CLI.
+
+## Installation Location
+
+The build outputs are located in:
+
+- **CLI Tool**: `buildDir/apps/cli/metrix-cli`
+- **Library**: `buildDir/metrix_core.a` (static library for internal use)
+- **Tests**: `buildDir/tests/src/*/test_*`
+
+## Optional: Install System-Wide
+
+To install Metrix system-wide (requires sudo):
+
+```bash
+meson install -C buildDir
+```
+
+This will install:
+- Shared library: `/usr/local/lib/libmetrix.so`
+- Headers: `/usr/local/include/metrix/`
+- pkg-config file for easy integration
+
+## Troubleshooting
+
+### Conan Installation Fails
+
+If Conan fails to install dependencies:
+
+```bash
+# Clear Conan cache
+conan remove ".*" -f
+
+# Retry installation
+conan install . --output-folder=buildDir --build=missing
+```
+
+### Compiler Not Found
+
+Ensure your C++ compiler supports C++20:
+
+```bash
+# Check GCC version
+g++ --version
+
+# Check Clang version
+clang++ --version
+```
+
+### Meson Version Issues
+
+```bash
+pip3 install --upgrade meson
+```
+
+## Next Steps
+
+- [Quick Start Guide](/en/user-guide/quick-start) - Learn how to use the CLI
+- [Development Setup](/en/contributing/development-setup) - Set up development environment
+- [API Reference](/en/api/cpp-api) - Embed Metrix in your application

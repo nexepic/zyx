@@ -3,14 +3,7 @@ export default {
     { text: '用户指南', link: '/zh/user-guide/installation' },
     { text: 'API 参考', link: '/zh/api/cpp-api' },
     { text: '架构设计', link: '/zh/architecture/overview' },
-    { text: '贡献指南', link: '/zh/contributing/development-setup' },
-    {
-      text: '语言',
-      items: [
-        { text: 'English', link: '/en/' },
-        { text: '简体中文', link: '/zh/' }
-      ]
-    }
+    { text: '贡献指南', link: '/zh/contributing/development-setup' }
   ],
 
   sidebar: {
