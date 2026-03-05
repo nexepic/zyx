@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { mermaidPlugin } from 'vitepress-plugin-mermaid'
 import en from './en'
 import zh from './zh'
 
@@ -23,8 +24,10 @@ export default defineConfig({
   },
 
   markdown: {
-    lineNumbers: true,
-    mermaid: true
+    config: (md) => {
+      md.use(mermaidPlugin)
+    },
+    lineNumbers: true
   },
 
   themeConfig: {
