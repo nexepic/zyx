@@ -6,33 +6,123 @@ Metrix uses a custom **segment-based storage engine** optimized for graph worklo
 
 The storage is organized into fixed-size **segments** - contiguous blocks of disk space that can be allocated to different entity types.
 
-```mermaid
-graph LR
-    subgraph "Database File"
-        FH[File Header]
-        ST[Segment Table]
+### File Layout
 
-        subgraph "Data Segments"
-            S1[Segment 1<br/>Nodes]
-            S2[Segment 2<br/>Edges]
-            S3[Segment 3<br/>Properties]
-            S4[Segment 4<br/>Free]
+```mermaid
+block-beta
+    columns 8
+
+    block:db_file["Database File"]
+        fh["File Header<br/>256 bytes"]:1:3
+        st["Segment Table<br/>4KB"]:4:6
+        space["<b>...</b>"]:7:8
+
+        block:segments["Data Segments (4MB each)"]
+            s1["Seg 0<br/>Nodes"]:1:2
+            s2["Seg 1<br/>Edges"]:3:4
+            s3["Seg 2<br/>Props"]:5:6
+            s4["Seg 3<br/>Free"]:7:8
+            s5["Seg 4<br/>..."]:1:2
+            s6["Seg 5<br/>..."]:3:4
+            s7["Seg 6<br/>..."]:5:6
+            s8["Seg 7<br/>..."]:7:8
         end
 
-        BM[Allocation Bitmap]
-        IDX[Index Segment]
+        bm["Bitmap<br/>64KB"]:1:4
+        idx["Index<br/>2MB"]:5:8
     end
+```
 
-    FH --> ST
-    ST --> S1
-    ST --> S2
-    ST --> S3
-    ST --> S4
-    ST --> BM
-    ST --> IDX
+### Internal Structure
 
-    style S4 fill:#bbf,stroke:#333
-    style IDX fill:#fbf,stroke:#333
+```mermaid
+classDiagram
+    class Segment {
+        +uint32_t segmentId
+        +SegmentType type
+        +uint32_t capacity
+        +uint32_t usedCount
+        +Bitmap freeBitmap
+        +DataPage[] pages
+        +allocate() EntityId
+        +deallocate() void
+        +iterate() Iterator
+        +getUsage() float
+    }
+
+    class FileHeader {
+        +uint32_t magic
+        +uint32_t version
+        +uint32_t segmentSize
+        +uint64_t creationTime
+        +uint32_t segmentCount
+        +validate() bool
+    }
+
+    class SegmentTable {
+        +SegmentEntry[] entries
+        +getSegment(id) Segment*
+        +allocateSegment() uint32_t
+        +freeSegment(id) void
+    }
+
+    class DataPage {
+        +uint32_t pageNumber
+        +byte[] data
+        +uint32_t checksum
+        +bool compressed
+        +read(offset) byte[]
+        +write(offset, data) void
+    }
+
+    class Bitmap {
+        +byte[] bits
+        +uint32_t size
+        +set(bit, value) void
+        +get(bit) bool
+        +findFree() uint32_t
+        +countUsed() uint32_t
+    }
+
+    FileHeader --> SegmentTable : manages
+    SegmentTable *-- Segment : tracks
+    Segment *-- Bitmap : uses
+    Segment *-- DataPage : contains
+```
+
+### Storage Model
+
+```mermaid
+erDiagram
+    SEGMENT ||--o{ ENTITY : contains
+    SEGMENT ||--|| BITMAP : tracks
+    SEGMENT {
+        uint32_t id PK
+        string type
+        uint32_t capacity
+        uint32_t used_count
+        uint64_t offset
+    }
+    BITMAP {
+        uint32_t segment_id FK
+        byte[] slot_bits
+        uint32_t total_slots
+        uint32_t used_slots
+    }
+    ENTITY {
+        uint64_t id PK
+        uint32_t segment_id FK
+        uint32_t page_offset
+        bool is_deleted
+        uint32_t version
+    }
+    DATAPAGE {
+        uint32_t page_id PK
+        uint32_t segment_id FK
+        byte[] data
+        uint32_t checksum
+    }
+    SEGMENT ||--o{ DATAPAGE : contains
 ```
 
 ### Segment Structure
@@ -40,20 +130,65 @@ graph LR
 Each segment contains:
 
 ```
-┌─────────────────────────────────┐
-│ Segment Header                  │
-│ - Segment ID                    │
-│ - Type (Node/Edge/Property)     │
-│ - Capacity                      │
-│ - Used Count                    │
-├─────────────────────────────────┤
-│ Free Space Bitmap               │
-│ - Tracks available slots        │
-├─────────────────────────────────┤
-│ Data Pages                      │
-│ - Fixed-size records            │
-│ - Compressed if enabled         │
-└─────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                 SEGMENT HEADER (64 bytes)              │
+├────────────────────────────────────────────────────────┤
+│  Field              │ Offset │ Size    │ Description  │
+├─────────────────────┼────────┼─────────┼─────────────┤
+│  segmentId          │ 0      │ 4 bytes │ Segment ID  │
+│  type               │ 4      │ 4 bytes │ Node/Edge   │
+│  capacity           │ 8      │ 4 bytes │ Max slots   │
+│  usedCount          │ 12     │ 4 bytes │ Used slots  │
+│  checksum           │ 16     │ 4 bytes │ Header CRC  │
+│  flags              │ 20     │ 4 bytes │ Flags       │
+│  reserved           │ 24     │ 40 bytes│ Padding     │
+├────────────────────────────────────────────────────────┤
+│              FREE SPACE BITMAP (8KB)                   │
+│  Bit 0 = Slot 0 │ Bit 1 = Slot 1 │ ... │ Bit 65535   │
+├────────────────────────────────────────────────────────┤
+│                  DATA PAGES (Remaining ~4MB)           │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ Page 0 (4KB)                                    │   │
+│  │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐               │   │
+│  │ │Entity│ │Entity│ │Entity│ │ ... │ 64 records  │   │
+│  │ └─────┘ └─────┘ └─────┘ └─────┘               │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ Page 1 (4KB)                                    │   │
+│  │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐               │   │
+│  │ │Entity│ │Entity│ │Entity│ │ ... │ 64 records  │   │
+│  │ └─────┘ └─────┘ └─────┘ └─────┘               │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ... (512 pages total)                                  │
+└────────────────────────────────────────────────────────┘
+```
+
+### Segment Allocation Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant ST as SegmentTracker
+    participant BM as Bitmap
+    participant FS as FileStorage
+
+    Client->>ST: allocateSegment(type)
+    ST->>ST: findFreeSegment()
+    ST->>FS: growFile(size)
+    FS-->>ST: newOffset
+
+    ST->>BM: initialize(offset)
+    BM->>BM: clearAllBits()
+
+    ST->>ST: updateSegmentTable()
+    ST-->>Client: segmentId
+
+    Note over Client,FS: Segment ready for use
+
+    Client->>ST: freeSegment(segmentId)
+    ST->>BM: markAllFree()
+    ST->>ST: updateSegmentTable(free=true)
+    ST-->>Client: success
 ```
 
 ### Key Benefits
