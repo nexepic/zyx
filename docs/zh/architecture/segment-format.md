@@ -35,20 +35,105 @@ block-beta
 
 ```mermaid
 graph TB
-    A[数据库文件] --> B[文件头]
-    A --> C[段 0]
-    A --> D[段 1]
-    A --> E[段 2]
-    A --> F[段 N]
+    subgraph DB["数据库文件"]
+        direction TB
 
-    C --> C1[段头]
-    C --> C2[实体数据]
-    C --> C3[空闲空间位图]
+        subgraph FH["文件头<br/>(256 字节)"]
+            FH1["魔术数字"]
+            FH2["版本信息"]
+            FH3["段数量"]
+            FH4["WAL 偏移"]
+        end
 
-    C1 --> C1A[段 ID]
-    C1 --> C1B[校验和]
-    C1 --> C1C[实体计数]
-    C1 --> C1D[空闲空间映射]
+        subgraph Seg0["段 0<br/>(4MB)"]
+            direction TB
+            SH0["段头"]
+            BM0["空闲空间位图"]
+            DP0["数据页"]
+        end
+
+        subgraph Seg1["段 1<br/>(4MB)"]
+            direction TB
+            SH1["段头"]
+            BM1["空闲空间位图"]
+            DP1["数据页"]
+        end
+
+        subgraph SegN["段 N<br/>(4MB)"]
+            direction TB
+            SHN["段头"]
+            BMN["空闲空间位图"]
+            DPN["数据页"]
+        end
+
+        FH --> Seg0
+        FH --> Seg1
+        FH --> SegN
+    end
+
+    style FH fill:#e3f2fd
+    style FH1 fill:#bbdefb
+    style FH2 fill:#bbdefb
+    style FH3 fill:#bbdefb
+    style FH4 fill:#bbdefb
+    style Seg0 fill:#f3e5f5
+    style Seg1 fill:#f3e5f5
+    style SegN fill:#f3e5f5
+    style SH0 fill:#e1bee7
+    style SH1 fill:#e1bee7
+    style SHN fill:#e1bee7
+```
+
+### 段内部组成
+
+```mermaid
+classDiagram
+    class DatabaseFile {
+        +FileHeader header
+        +Segment[] segments
+        +WAL wal
+        +open() bool
+        +close() void
+    }
+
+    class Segment {
+        +SegmentHeader header
+        +Bitmap bitmap
+        +DataPage[] pages
+        +allocate() Entity*
+        +free() void
+        +scan() Iterator
+    }
+
+    class SegmentHeader {
+        +uint64_t segmentId
+        +uint32_t entityCount
+        +uint32_t freeBytes
+        +uint32_t checksum
+        +uint8_t[] bitmap
+    }
+
+    class DataPage {
+        +uint32_t pageNumber
+        +EntityHeader header
+        +byte[] entityData
+        +uint32_t checksum
+        +read() Entity*
+        +write() bool
+    }
+
+    class Bitmap {
+        +uint8_t[] bits
+        +size() uint32_t
+        +isFree() bool
+        +markUsed() void
+        +markFree() void
+    }
+
+    DatabaseFile *-- Segment : 包含
+    Segment *-- SegmentHeader : 拥有
+    Segment *-- Bitmap : 使用
+    Segment *-- DataPage : 包含
 ```
 
 ## 文件头
