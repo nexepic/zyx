@@ -9,8 +9,10 @@
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/FunctionRegistry.hpp"
+#include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
+#include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 using namespace graph;
@@ -187,6 +189,58 @@ TEST_F(ExpressionsCoverageTest, ConstExpressionVisitor_InExpression) {
 	constExpr->accept(visitor);
 
 	EXPECT_TRUE(visitor.visitedIn) << "ConstExpressionVisitor should visit InExpression";
+}
+
+TEST_F(ExpressionsCoverageTest, ConstExpressionVisitor_IsNullExpression) {
+	// Test ConstExpressionVisitor::accept for IsNullExpression
+	auto inner = std::make_unique<LiteralExpression>(int64_t(42));
+	auto expr = std::make_unique<IsNullExpression>(std::move(inner), false);
+	const IsNullExpression* constExpr = expr.get();
+
+	TestConstExpressionVisitor visitor;
+	constExpr->accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedIsNull) << "ConstExpressionVisitor should visit IsNullExpression";
+}
+
+TEST_F(ExpressionsCoverageTest, ConstExpressionVisitor_ListLiteralExpression) {
+	// Test ConstExpressionVisitor::accept for ListLiteralExpression
+	std::vector<PropertyValue> list = { PropertyValue(int64_t(1)), PropertyValue(int64_t(2)) };
+	auto expr = std::make_unique<ListLiteralExpression>(PropertyValue(list));
+	const ListLiteralExpression* constExpr = expr.get();
+
+	TestConstExpressionVisitor visitor;
+	constExpr->accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedListLiteral) << "ConstExpressionVisitor should visit ListLiteralExpression";
+}
+
+TEST_F(ExpressionsCoverageTest, ConstExpressionVisitor_ListSliceExpression) {
+	// Test ConstExpressionVisitor::accept for ListSliceExpression
+	std::vector<PropertyValue> list = { PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3)) };
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(list));
+	auto start = std::make_unique<LiteralExpression>(int64_t(0));
+	auto end = std::make_unique<LiteralExpression>(int64_t(2));
+	auto expr = std::make_unique<ListSliceExpression>(std::move(listExpr), std::move(start), std::move(end), true);
+	const ListSliceExpression* constExpr = expr.get();
+
+	TestConstExpressionVisitor visitor;
+	constExpr->accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedListSlice) << "ConstExpressionVisitor should visit ListSliceExpression";
+}
+
+TEST_F(ExpressionsCoverageTest, ConstExpressionVisitor_ListComprehensionExpression) {
+	// Test ConstExpressionVisitor::accept for ListComprehensionExpression
+	std::vector<PropertyValue> list = { PropertyValue(int64_t(1)), PropertyValue(int64_t(2)) };
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(list));
+	auto expr = std::make_unique<ListComprehensionExpression>("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+	const ListComprehensionExpression* constExpr = expr.get();
+
+	TestConstExpressionVisitor visitor;
+	constExpr->accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedListComprehension) << "ConstExpressionVisitor should visit ListComprehensionExpression";
 }
 
 // ============================================================================
@@ -492,6 +546,62 @@ TEST_F(ExpressionsCoverageTest, UnaryOpExpression_CloneDeepCopy) {
 	EXPECT_EQ(clonedStr, "-(5)");
 }
 
+TEST_F(ExpressionsCoverageTest, UnaryOpExpression_NOT_Operator) {
+	// Test UnaryOpExpression with NOT operator
+	{
+		auto operand = std::make_unique<LiteralExpression>(true);
+		UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	{
+		auto operand = std::make_unique<LiteralExpression>(false);
+		UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test NOT with NULL propagation
+	{
+		auto operand = std::make_unique<LiteralExpression>();
+		UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+	}
+}
+
+TEST_F(ExpressionsCoverageTest, UnaryOpExpression_MINUS_Variants) {
+	// Test UnaryOpExpression MINUS with different types
+	{
+		auto operand = std::make_unique<LiteralExpression>(int64_t(42));
+		UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), -42.0);
+	}
+
+	{
+		auto operand = std::make_unique<LiteralExpression>(3.14);
+		UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), -3.14);
+	}
+
+	// Test MINUS with NULL propagation
+	{
+		auto operand = std::make_unique<LiteralExpression>();
+		UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+	}
+}
+
 TEST_F(ExpressionsCoverageTest, FunctionCallExpression_CloneWithMultipleArgs) {
 	// Test FunctionCallExpression clone with multiple arguments
 	std::vector<std::unique_ptr<Expression>> args;
@@ -752,4 +862,785 @@ TEST_F(ExpressionsCoverageTest, ReplaceFunction_NoMatchFound) {
 	EXPECT_EQ(result.getType(), PropertyType::STRING);
 	// Original string should be returned unchanged
 	EXPECT_EQ(std::get<std::string>(result.getVariant()), "hello");
+}
+
+// ============================================================================
+// IsNullExpression Coverage Tests - Target 95%+ coverage
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_CompleteCoverage) {
+	// Test IS NULL with NULL value → true
+	{
+		auto inner = std::make_unique<LiteralExpression>();
+		IsNullExpression expr(std::move(inner), false);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test IS NOT NULL with NULL value → false
+	{
+		auto inner = std::make_unique<LiteralExpression>();
+		IsNullExpression expr(std::move(inner), true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test IS NULL with integer → false
+	{
+		auto inner = std::make_unique<LiteralExpression>(int64_t(42));
+		IsNullExpression expr(std::move(inner), false);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test IS NOT NULL with integer → true
+	{
+		auto inner = std::make_unique<LiteralExpression>(int64_t(42));
+		IsNullExpression expr(std::move(inner), true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test IS NOT NULL with string → true
+	{
+		auto inner = std::make_unique<LiteralExpression>(std::string("hello"));
+		IsNullExpression expr(std::move(inner), true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test IS NULL with double → false
+	{
+		auto inner = std::make_unique<LiteralExpression>(3.14);
+		IsNullExpression expr(std::move(inner), false);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test IS NOT NULL with boolean → true
+	{
+		auto inner = std::make_unique<LiteralExpression>(false);
+		IsNullExpression expr(std::move(inner), true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+	}
+
+	// Test clone with non-null expression
+	{
+		auto inner = std::make_unique<LiteralExpression>(int64_t(42));
+		IsNullExpression original(std::move(inner), true);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "42 IS NOT NULL");
+	}
+
+	// Test clone with null expression (expr_ is nullptr)
+	{
+		auto inner = std::make_unique<LiteralExpression>();
+		IsNullExpression original(std::move(inner), false);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "null IS NULL");
+	}
+
+	// Test toString with different expressions
+	{
+		auto varRef = std::make_unique<VariableReferenceExpression>("n", "age");
+		IsNullExpression expr(std::move(varRef), false);
+		EXPECT_EQ(expr.toString(), "n.age IS NULL");
+	}
+
+	{
+		auto left = std::make_unique<LiteralExpression>(int64_t(5));
+		auto right = std::make_unique<LiteralExpression>(int64_t(3));
+		auto binOp = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::ADD, std::move(right));
+		IsNullExpression expr(std::move(binOp), true);
+		EXPECT_EQ(expr.toString(), "(5 + 3) IS NOT NULL");
+	}
+
+	// Test getExpressionType
+	{
+		auto inner = std::make_unique<LiteralExpression>(int64_t(42));
+		IsNullExpression expr(std::move(inner), false);
+		EXPECT_EQ(expr.getExpressionType(), ExpressionType::BINARY_OP);
+	}
+
+	// Test getters
+	{
+		auto inner = std::make_unique<LiteralExpression>(int64_t(42));
+		IsNullExpression expr(std::move(inner), true);
+		EXPECT_TRUE(expr.isNegated());
+		EXPECT_NE(expr.getExpression(), nullptr);
+	}
+
+	// Test clone with nullptr expression (covers branch: expr_ ? expr_->clone() : nullptr)
+	{
+		IsNullExpression original(nullptr, false);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), " IS NULL");
+	}
+
+	// Test toString with nullptr expression (covers branch: if (expr_) { result = expr_->toString(); })
+	{
+		IsNullExpression expr(nullptr, true);
+		EXPECT_EQ(expr.toString(), " IS NOT NULL");
+	}
+}
+
+// ============================================================================
+// ListLiteralExpression Coverage Tests - Target 95%+ coverage
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, ListLiteralExpression_CompleteCoverage) {
+	// Test constructor throws on non-LIST type
+	EXPECT_THROW({
+		ListLiteralExpression expr(PropertyValue(int64_t(42)));
+	}, std::runtime_error);
+
+	EXPECT_THROW({
+		ListLiteralExpression expr(PropertyValue(std::string("test")));
+	}, std::runtime_error);
+
+	EXPECT_THROW({
+		ListLiteralExpression expr(PropertyValue(true));
+	}, std::runtime_error);
+
+	// Test empty list
+	{
+		std::vector<PropertyValue> emptyList;
+		PropertyValue listValue(emptyList);
+		ListLiteralExpression expr(listValue);
+		EXPECT_EQ(expr.toString(), "[]");
+		EXPECT_EQ(expr.getValue().getList().size(), 0ULL);
+		EXPECT_EQ(expr.getExpressionType(), ExpressionType::LITERAL);
+	}
+
+	// Test single element
+	{
+		std::vector<PropertyValue> list = { PropertyValue(int64_t(42)) };
+		PropertyValue listValue(list);
+		ListLiteralExpression expr(listValue);
+		EXPECT_EQ(expr.toString(), "[42]");
+		EXPECT_EQ(expr.getValue().getList().size(), 1ULL);
+	}
+
+	// Test heterogeneous list
+	{
+		std::vector<PropertyValue> list = {
+			PropertyValue(int64_t(42)),
+			PropertyValue(std::string("hello")),
+			PropertyValue(true),
+			PropertyValue(3.14)
+		};
+		PropertyValue listValue(list);
+		ListLiteralExpression expr(listValue);
+		EXPECT_EQ(expr.getValue().getList().size(), 4ULL);
+	}
+
+	// Test nested lists
+	{
+		std::vector<PropertyValue> inner1 = { PropertyValue(int64_t(1)), PropertyValue(int64_t(2)) };
+		std::vector<PropertyValue> inner2 = { PropertyValue(int64_t(3)), PropertyValue(int64_t(4)) };
+		std::vector<PropertyValue> outer = { PropertyValue(inner1), PropertyValue(inner2) };
+		PropertyValue listValue(outer);
+		ListLiteralExpression expr(listValue);
+		EXPECT_EQ(expr.getValue().getList().size(), 2ULL);
+		EXPECT_EQ(expr.getValue().getList()[0].getType(), PropertyType::LIST);
+	}
+
+	// Test list with nulls
+	{
+		std::vector<PropertyValue> list = {
+			PropertyValue(int64_t(1)),
+			PropertyValue(),
+			PropertyValue(std::string("test"))
+		};
+		PropertyValue listValue(list);
+		ListLiteralExpression expr(listValue);
+		EXPECT_EQ(expr.toString(), "[1, null, test]");
+	}
+
+	// Test clone
+	{
+		std::vector<PropertyValue> list = { PropertyValue(int64_t(1)), PropertyValue(int64_t(2)) };
+		PropertyValue listValue(list);
+		ListLiteralExpression original(listValue);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "[1, 2]");
+	}
+
+	// Test evaluation
+	{
+		std::vector<PropertyValue> list = { PropertyValue(int64_t(10)), PropertyValue(int64_t(20)) };
+		PropertyValue listValue(list);
+		ListLiteralExpression expr(listValue);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(evaluator.getResult().getType(), PropertyType::LIST);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 2ULL);
+		EXPECT_EQ(std::get<int64_t>(result[0].getVariant()), 10);
+		EXPECT_EQ(std::get<int64_t>(result[1].getVariant()), 20);
+	}
+
+	// Test getValue getter
+	{
+		std::vector<PropertyValue> list = { PropertyValue(int64_t(42)) };
+		PropertyValue listValue(list);
+		ListLiteralExpression expr(listValue);
+		EXPECT_EQ(expr.getValue(), listValue);
+	}
+}
+
+// ============================================================================
+// ListSliceExpression Coverage Tests - Target 95%+ coverage
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, ListSliceExpression_CompleteCoverage) {
+	// Helper to create list
+	auto createList = [](const std::vector<int64_t>& values) -> std::unique_ptr<ListLiteralExpression> {
+		std::vector<PropertyValue> list;
+		for (int64_t v : values) {
+			list.push_back(PropertyValue(v));
+		}
+		return std::make_unique<ListLiteralExpression>(PropertyValue(list));
+	};
+
+	// Single index: list[0]
+	{
+		auto listExpr = createList({10, 20, 30, 40, 50});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(0));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), nullptr, false);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 10);
+	}
+
+	// Single negative index: list[-1]
+	{
+		auto listExpr = createList({10, 20, 30, 40, 50});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(-1));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), nullptr, false);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 50);
+	}
+
+	// Single index out of bounds: list[100]
+	{
+		auto listExpr = createList({10, 20, 30});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(100));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), nullptr, false);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+	}
+
+	// Single negative index out of bounds: list[-100]
+	{
+		auto listExpr = createList({10, 20, 30});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(-100));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), nullptr, false);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+	}
+
+	// Range: list[0..2]
+	{
+		auto listExpr = createList({10, 20, 30, 40, 50});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(0));
+		auto endExpr = std::make_unique<LiteralExpression>(int64_t(2));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 2ULL);
+		EXPECT_EQ(std::get<int64_t>(result[0].getVariant()), 10);
+		EXPECT_EQ(std::get<int64_t>(result[1].getVariant()), 20);
+	}
+
+	// Range negative: list[-3..-1]
+	{
+		auto listExpr = createList({10, 20, 30, 40, 50});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(-3));
+		auto endExpr = std::make_unique<LiteralExpression>(int64_t(-1));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 2ULL);
+		EXPECT_EQ(std::get<int64_t>(result[0].getVariant()), 30);
+		EXPECT_EQ(std::get<int64_t>(result[1].getVariant()), 40);
+	}
+
+	// Range without start: list[..2]
+	{
+		auto listExpr = createList({10, 20, 30, 40, 50});
+		auto endExpr = std::make_unique<LiteralExpression>(int64_t(3));
+		ListSliceExpression expr(std::move(listExpr), nullptr, std::move(endExpr), true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 3ULL);
+	}
+
+	// Range without end: list[2..]
+	{
+		auto listExpr = createList({10, 20, 30, 40, 50});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(2));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), nullptr, true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 3ULL);
+	}
+
+	// Full range: list[..]
+	{
+		auto listExpr = createList({10, 20, 30});
+		ListSliceExpression expr(std::move(listExpr), nullptr, nullptr, true);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 3ULL);
+	}
+
+	// Test toString variations
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(0));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), nullptr, false);
+		EXPECT_EQ(expr.toString(), "[1, 2, 3][0]");
+	}
+
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListSliceExpression expr(std::move(listExpr), nullptr, nullptr, true);
+		EXPECT_EQ(expr.toString(), "[1, 2, 3][..]");
+	}
+
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(0));
+		auto endExpr = std::make_unique<LiteralExpression>(int64_t(2));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
+		EXPECT_EQ(expr.toString(), "[1, 2, 3][0..2]");
+	}
+
+	// Test clone with all parameters
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(0));
+		auto endExpr = std::make_unique<LiteralExpression>(int64_t(2));
+		ListSliceExpression original(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "[1, 2, 3][0..2]");
+	}
+
+	// Test clone with no start/end
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListSliceExpression original(std::move(listExpr), nullptr, nullptr, true);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "[1, 2, 3][..]");
+	}
+
+	// Test getters
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto startExpr = std::make_unique<LiteralExpression>(int64_t(0));
+		ListSliceExpression expr(std::move(listExpr), std::move(startExpr), nullptr, false);
+		EXPECT_FALSE(expr.hasRange());
+		EXPECT_NE(expr.getList(), nullptr);
+		EXPECT_NE(expr.getStart(), nullptr);
+		EXPECT_EQ(expr.getEnd(), nullptr);
+	}
+
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListSliceExpression expr(std::move(listExpr), nullptr, nullptr, true);
+		EXPECT_TRUE(expr.hasRange());
+		EXPECT_EQ(expr.getStart(), nullptr);
+		EXPECT_EQ(expr.getEnd(), nullptr);
+	}
+}
+
+// ============================================================================
+// ListComprehensionExpression Coverage Tests - Target 95%+ coverage
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, ListComprehensionExpression_CompleteCoverage) {
+	// Helper to create list
+	auto createList = [](const std::vector<int64_t>& values) -> std::unique_ptr<ListLiteralExpression> {
+		std::vector<PropertyValue> list;
+		for (int64_t v : values) {
+			list.push_back(PropertyValue(v));
+		}
+		return std::make_unique<ListLiteralExpression>(PropertyValue(list));
+	};
+
+	// FILTER without WHERE: [x IN list]
+	{
+		auto listExpr = createList({1, 2, 3, 4, 5});
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		EXPECT_EQ(evaluator.getResult().getType(), PropertyType::LIST);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 5ULL);
+	}
+
+	// FILTER with WHERE: [x IN list WHERE x > 3]
+	{
+		auto listExpr = createList({1, 2, 3, 4, 5});
+		auto varRef = std::make_unique<VariableReferenceExpression>("x");
+		auto lit3 = std::make_unique<LiteralExpression>(int64_t(3));
+		auto whereExpr = std::make_unique<BinaryOpExpression>(std::move(varRef), BinaryOperatorType::GREATER, std::move(lit3));
+		ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 2ULL); // 4 and 5
+	}
+
+	// EXTRACT with MAP: [x IN list | x * 2]
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto varRef = std::make_unique<VariableReferenceExpression>("x");
+		auto lit2 = std::make_unique<LiteralExpression>(int64_t(2));
+		auto mapExpr = std::make_unique<BinaryOpExpression>(std::move(varRef), BinaryOperatorType::MULTIPLY, std::move(lit2));
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 3ULL);
+		EXPECT_EQ(std::get<double>(result[0].getVariant()), 2.0);
+		EXPECT_EQ(std::get<double>(result[1].getVariant()), 4.0);
+		EXPECT_EQ(std::get<double>(result[2].getVariant()), 6.0);
+	}
+
+	// EXTRACT with WHERE and MAP: [x IN list WHERE x > 2 | x * 3]
+	{
+		auto listExpr = createList({1, 2, 3, 4, 5});
+		auto varRef1 = std::make_unique<VariableReferenceExpression>("x");
+		auto lit2 = std::make_unique<LiteralExpression>(int64_t(2));
+		auto whereExpr = std::make_unique<BinaryOpExpression>(std::move(varRef1), BinaryOperatorType::GREATER, std::move(lit2));
+
+		auto varRef2 = std::make_unique<VariableReferenceExpression>("x");
+		auto lit3 = std::make_unique<LiteralExpression>(int64_t(3));
+		auto mapExpr = std::make_unique<BinaryOpExpression>(std::move(varRef2), BinaryOperatorType::MULTIPLY, std::move(lit3));
+
+		ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 3ULL); // 3, 4, 5
+		EXPECT_EQ(std::get<double>(result[0].getVariant()), 9.0);
+		EXPECT_EQ(std::get<double>(result[1].getVariant()), 12.0);
+		EXPECT_EQ(std::get<double>(result[2].getVariant()), 15.0);
+	}
+
+	// REDUCE - Currently returns list like FILTER (REDUCE not fully implemented)
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression expr("total", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::REDUCE);
+		EXPECT_EQ(expr.toString(), "reduce(total = [1, 2, 3])");
+	}
+
+	// Empty list
+	{
+		std::vector<PropertyValue> emptyList;
+		auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(emptyList));
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		ExpressionEvaluator evaluator(*context_);
+		expr.accept(evaluator);
+		const auto& result = evaluator.getResult().getList();
+		EXPECT_EQ(result.size(), 0ULL);
+	}
+
+	// Test toString variations - FILTER without WHERE
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		EXPECT_EQ(expr.toString(), "[x IN [1, 2, 3]]");
+	}
+
+	// FILTER with WHERE
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto whereExpr = std::make_unique<LiteralExpression>(true);
+		ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		EXPECT_EQ(expr.toString(), "[x IN [1, 2, 3] WHERE true]");
+	}
+
+	// EXTRACT without MAP (edge case - just filters elements)
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::EXTRACT);
+		EXPECT_EQ(expr.toString(), "[x IN [1, 2, 3]]");
+	}
+
+	// EXTRACT with MAP
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
+		EXPECT_EQ(expr.toString(), "[x IN [1, 2, 3] | 42]");
+	}
+
+	// EXTRACT with WHERE and MAP
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto whereExpr = std::make_unique<LiteralExpression>(true);
+		auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+		ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
+		EXPECT_EQ(expr.toString(), "[x IN [1, 2, 3] WHERE true | 42]");
+	}
+
+	// REDUCE
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression expr("total", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::REDUCE);
+		EXPECT_EQ(expr.toString(), "reduce(total = [1, 2, 3])");
+	}
+
+	// REDUCE with MAP
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto mapExpr = std::make_unique<LiteralExpression>(int64_t(0));
+		ListComprehensionExpression expr("total", std::move(listExpr), nullptr, std::move(mapExpr), ListComprehensionExpression::ComprehensionType::REDUCE);
+		EXPECT_EQ(expr.toString(), "reduce(total = [1, 2, 3] | 0)");
+	}
+
+	// Test clone
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto whereExpr = std::make_unique<LiteralExpression>(true);
+		auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+		ListComprehensionExpression original("x", std::move(listExpr), std::move(whereExpr), std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "[x IN [1, 2, 3] WHERE true | 42]");
+	}
+
+	// Test clone FILTER without WHERE
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression original("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "[x IN [1, 2, 3]]");
+	}
+
+	// Test clone REDUCE
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression original("total", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::REDUCE);
+		auto cloned = original.clone();
+		ASSERT_NE(cloned, nullptr);
+		EXPECT_EQ(cloned->toString(), "reduce(total = [1, 2, 3])");
+	}
+
+	// Test getters
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		EXPECT_EQ(expr.getVariable(), "x");
+		EXPECT_EQ(expr.getType(), ListComprehensionExpression::ComprehensionType::FILTER);
+		EXPECT_NE(expr.getListExpr(), nullptr);
+		EXPECT_EQ(expr.getWhereExpr(), nullptr);
+		EXPECT_EQ(expr.getMapExpr(), nullptr);
+	}
+
+	{
+		auto listExpr = createList({1, 2, 3});
+		auto whereExpr = std::make_unique<LiteralExpression>(true);
+		auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+		ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
+		EXPECT_NE(expr.getWhereExpr(), nullptr);
+		EXPECT_NE(expr.getMapExpr(), nullptr);
+	}
+
+	// Test getExpressionType
+	{
+		auto listExpr = createList({1, 2, 3});
+		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
+		EXPECT_EQ(expr.getExpressionType(), ExpressionType::LIST_COMPREHENSION);
+	}
+}
+
+// ============================================================================
+// Error Handling Tests for ExpressionEvaluator
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, UndefinedVariableException) {
+	// Test accessing undefined variable throws exception
+	auto varExpr = std::make_unique<VariableReferenceExpression>("undefined_var");
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(varExpr->accept(evaluator), UndefinedVariableException);
+}
+
+TEST_F(ExpressionsCoverageTest, UndefinedVariableWithPropertyReturnsNull) {
+	// Test accessing undefined variable with property returns NULL (not exception)
+	// In Cypher, undefinedVar.prop returns NULL, doesn't throw
+	auto varExpr = std::make_unique<VariableReferenceExpression>("undefined_var", "prop");
+	ExpressionEvaluator evaluator(*context_);
+	varExpr->accept(evaluator);
+	EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(ExpressionsCoverageTest, UnknownFunctionThrowsException) {
+	// Test calling unknown function throws exception
+	std::vector<std::unique_ptr<Expression>> args;
+	args.push_back(std::make_unique<LiteralExpression>(int64_t(42)));
+	auto funcExpr = std::make_unique<FunctionCallExpression>("unknown_function_xyz", std::move(args));
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(funcExpr->accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, DivisionByZero_Integer) {
+	// Test integer division by zero throws exception
+	auto left = std::make_unique<LiteralExpression>(int64_t(10));
+	auto right = std::make_unique<LiteralExpression>(int64_t(0));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+}
+
+TEST_F(ExpressionsCoverageTest, DivisionByZero_Double) {
+	// Test double division by zero throws exception
+	auto left = std::make_unique<LiteralExpression>(10.0);
+	auto right = std::make_unique<LiteralExpression>(0.0);
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+}
+
+TEST_F(ExpressionsCoverageTest, ModuloByZero) {
+	// Test modulo by zero throws exception
+	auto left = std::make_unique<LiteralExpression>(int64_t(10));
+	auto right = std::make_unique<LiteralExpression>(int64_t(0));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+}
+
+TEST_F(ExpressionsCoverageTest, SliceNonListValue) {
+	// Test slicing non-list value throws exception
+	auto nonListExpr = std::make_unique<LiteralExpression>(int64_t(42));
+	auto indexExpr = std::make_unique<LiteralExpression>(int64_t(0));
+	ListSliceExpression expr(std::move(nonListExpr), std::move(indexExpr), nullptr, false);
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, SliceMissingIndex) {
+	// Test slice with missing start index throws exception
+	std::vector<PropertyValue> listVec = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))};
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(listVec));
+	ListSliceExpression expr(std::move(listExpr), nullptr, nullptr, false);
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerIndex) {
+	// Test slice with string index throws exception
+	std::vector<PropertyValue> listVec = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))};
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(listVec));
+	auto indexExpr = std::make_unique<LiteralExpression>(std::string("not_a_number"));
+	ListSliceExpression expr(std::move(listExpr), std::move(indexExpr), nullptr, false);
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerStartIndex) {
+	// Test slice with string start index throws exception
+	std::vector<PropertyValue> listVec = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))};
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(listVec));
+	auto startExpr = std::make_unique<LiteralExpression>(std::string("not_a_number"));
+	auto endExpr = std::make_unique<LiteralExpression>(int64_t(2));
+	ListSliceExpression expr(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerEndIndex) {
+	// Test slice with string end index throws exception
+	std::vector<PropertyValue> listVec = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))};
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(listVec));
+	auto startExpr = std::make_unique<LiteralExpression>(int64_t(0));
+	auto endExpr = std::make_unique<LiteralExpression>(std::string("not_a_number"));
+	ListSliceExpression expr(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, ListComprehensionNonListValue) {
+	// Test list comprehension on non-list value throws exception
+	auto nonListExpr = std::make_unique<LiteralExpression>(int64_t(42));
+	ListComprehensionExpression expr("x", std::move(nonListExpr), nullptr, nullptr,
+		ListComprehensionExpression::ComprehensionType::FILTER);
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, ListComprehensionNonBooleanWhere) {
+	// Test list comprehension with non-boolean WHERE clause throws exception
+	std::vector<PropertyValue> listVec = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))};
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(listVec));
+	auto whereExpr = std::make_unique<LiteralExpression>(int64_t(42)); // Non-boolean
+	ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), nullptr,
+		ListComprehensionExpression::ComprehensionType::FILTER);
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+}
+
+TEST_F(ExpressionsCoverageTest, VariableReferencePropertyAccess) {
+	// Test variable reference with property access
+	// First set up a variable in the context
+	context_->setVariable("node", PropertyValue(std::string("test_value")));
+
+	// Create property access expression - this should work if property exists
+	auto varExpr = std::make_unique<VariableReferenceExpression>("node", "property");
+	ExpressionEvaluator evaluator(*context_);
+	// Missing property returns NULL, doesn't throw
+	varExpr->accept(evaluator);
+	EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluatedWithNullExpression) {
+	// Test evaluating null expression returns null
+	ExpressionEvaluator evaluator(*context_);
+	PropertyValue result = evaluator.evaluate(nullptr);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(ExpressionsCoverageTest, UnaryMinusWithNull) {
+	// Test unary minus with null propagates null
+	auto nullExpr = std::make_unique<LiteralExpression>();
+	UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(nullExpr));
+	ExpressionEvaluator evaluator(*context_);
+	expr.accept(evaluator);
+	EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(ExpressionsCoverageTest, UnaryNotWithNull) {
+	// Test unary NOT with null propagates null
+	auto nullExpr = std::make_unique<LiteralExpression>();
+	UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(nullExpr));
+	ExpressionEvaluator evaluator(*context_);
+	expr.accept(evaluator);
+	EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
 }
