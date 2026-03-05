@@ -1,0 +1,426 @@
+# Cypher Basics
+
+Cypher is a declarative graph query language that allows you to express powerful and efficient queries on graph data. This guide covers the fundamental concepts and syntax of Cypher in Metrix.
+
+## Basic Pattern Matching
+
+The core of Cypher is pattern matching using ASCII-art syntax. The most basic pattern is a node relationship:
+
+```cypher
+MATCH (a:Person)-[:KNOWS]->(b:Person)
+RETURN a, b
+```
+
+### Node Patterns
+
+Nodes are represented with parentheses and can include:
+- Variable names (for referencing)
+- Labels (for node types)
+- Properties (for filtering)
+
+```cypher
+-- Basic node
+MATCH (n) RETURN n
+
+-- Node with label
+MATCH (n:Person) RETURN n
+
+-- Node with property filter
+MATCH (n:Person {name: 'Alice'}) RETURN n
+```
+
+### Relationship Patterns
+
+Relationships connect nodes and can be:
+- Directed (`->` or `<-`)
+- Undirected (`-`)
+- With relationship types
+- With properties
+
+```cypher
+-- Directed relationship
+MATCH (a)-[:KNOWS]->(b) RETURN a, b
+
+-- Undirected relationship
+MATCH (a)-[:KNOWS]-(b) RETURN a, b
+
+-- Relationship with properties
+MATCH (a)-[:KNOWS {since: 2020}]->(b) RETURN a, b
+
+-- Relationship variable
+MATCH (a)-[r:KNOWS]->(b) RETURN a, r, b
+```
+
+## Reading Clauses
+
+### MATCH
+
+The `MATCH` clause is used to search for patterns in the graph:
+
+```cypher
+-- Find all Person nodes
+MATCH (n:Person)
+RETURN n
+
+-- Find people Alice knows
+MATCH (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person)
+RETURN b.name
+
+-- Find friends of friends
+MATCH (a:Person)-[:KNOWS]->(b:Person)-[:KNOWS]->(c:Person)
+WHERE a.name = 'Alice'
+RETURN c.name
+```
+
+### WHERE
+
+The `WHERE` clause adds conditions to your `MATCH`:
+
+```cypher
+-- Simple condition
+MATCH (n:Person)
+WHERE n.name = 'Alice'
+RETURN n
+
+-- Multiple conditions
+MATCH (n:Person)
+WHERE n.age >= 25 AND n.city = 'New York'
+RETURN n
+
+-- Pattern in WHERE
+MATCH (a:Person)-[:KNOWS]->(b:Person)
+WHERE a.name = 'Alice' AND b.age > 30
+RETURN b
+```
+
+### RETURN
+
+The `RETURN` clause specifies what to return from the query:
+
+```cypher
+-- Return specific properties
+MATCH (n:Person)
+RETURN n.name, n.age
+
+-- Return with alias
+MATCH (n:Person)
+RETURN n.name AS person_name, n.age * 2 AS double_age
+
+-- Return unique results
+MATCH (n:Person)
+RETURN DISTINCT n.city
+
+-- Return aggregates
+MATCH (n:Person)
+RETURN COUNT(n), AVG(n.age)
+```
+
+### ORDER BY
+
+Sort your results:
+
+```cypher
+MATCH (n:Person)
+RETURN n.name, n.age
+ORDER BY n.age DESC
+
+-- Multiple sort keys
+MATCH (n:Person)
+RETURN n.name, n.age, n.city
+ORDER BY n.city ASC, n.age DESC
+```
+
+### LIMIT and SKIP
+
+Control result pagination:
+
+```cypher
+-- Limit results
+MATCH (n:Person)
+RETURN n
+ORDER BY n.age
+LIMIT 10
+
+-- Skip and limit (pagination)
+MATCH (n:Person)
+RETURN n
+ORDER BY n.name
+SKIP 10 LIMIT 5
+```
+
+## Writing Clauses
+
+### CREATE
+
+Create new nodes and relationships:
+
+```cypher
+-- Create a single node
+CREATE (n:Person {name: 'Alice', age: 30})
+
+-- Create nodes with relationships
+CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})
+
+-- Create multiple relationships
+CREATE (a:Person {name: 'Alice'})
+CREATE (a)-[:KNOWS]->(b:Person {name: 'Bob'})
+CREATE (a)-[:KNOWS]->(c:Person {name: 'Charlie'})
+```
+
+### MERGE
+
+`MERGE` ensures that a pattern exists - creates it if it doesn't, matches it if it does:
+
+```cypher
+-- Create if not exists
+MERGE (n:Person {name: 'Alice'})
+
+-- MERGE with ON CREATE
+MERGE (n:Person {name: 'Alice'})
+ON CREATE SET n.created = timestamp()
+
+-- MERGE with ON MATCH
+MERGE (n:Person {name: 'Alice'})
+ON MATCH SET n.lastSeen = timestamp()
+
+-- MERGE with both
+MERGE (n:Person {name: 'Alice'})
+ON CREATE SET n.created = timestamp()
+ON MATCH SET n.lastSeen = timestamp()
+
+-- Create relationship if nodes exist
+MERGE (a:Person {name: 'Alice'})
+MERGE (b:Person {name: 'Bob'})
+MERGE (a)-[r:KNOWS]->(b)
+```
+
+### SET and REMOVE
+
+Update properties:
+
+```cypher
+-- Set properties
+MATCH (n:Person {name: 'Alice'})
+SET n.age = 31
+
+-- Set multiple properties
+MATCH (n:Person {name: 'Alice'})
+SET n.age = 31, n.city = 'San Francisco'
+
+-- Remove properties
+MATCH (n:Person {name: 'Alice'})
+REMOVE n.age
+
+-- Add labels
+MATCH (n:Person {name: 'Alice'})
+SET n:Developer
+
+-- Remove labels
+MATCH (n:Person {name: 'Alice'})
+REMOVE n:Developer
+```
+
+### DELETE
+
+Remove nodes and relationships:
+
+```cypher
+-- Delete relationships
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person)
+DELETE r
+
+-- Delete node (must have no relationships)
+MATCH (n:Person {name: 'Bob'})
+DELETE n
+
+-- Delete node and connected relationships
+MATCH (n:Person {name: 'Bob'})-[r]-()
+DELETE n, r
+
+-- Delete all nodes and relationships
+MATCH (n)
+DETACH DELETE n
+```
+
+## Data Types
+
+### Primitive Types
+
+```cypher
+-- String
+MATCH (n:Person) WHERE n.name = 'Alice'
+
+-- Number (integer and float)
+MATCH (n:Person) WHERE n.age = 30
+MATCH (n:Person) WHERE n.score > 95.5
+
+-- Boolean
+MATCH (n:Person) WHERE n.isActive = true
+
+-- Null
+MATCH (n:Person) WHERE n.email IS NOT NULL
+```
+
+### Lists
+
+```cypher
+-- Create list
+RETURN [1, 2, 3, 4, 5]
+
+-- List comprehension
+MATCH (n:Person)
+RETURN [n.name, n.age, n.city]
+
+-- Access list elements
+WITH [1, 2, 3, 4, 5] AS list
+RETURN list[0]
+
+-- List operations
+WITH [1, 2, 3] AS a
+RETURN a + [4, 5],  a * 3
+```
+
+## Operators
+
+### Comparison Operators
+
+```cypher
+=          -- Equal
+<> or !=   -- Not equal
+<          -- Less than
+>          -- Greater than
+<=         -- Less than or equal
+>=         -- Greater than or equal
+```
+
+### Boolean Operators
+
+```cypher
+AND        -- Logical and
+OR         -- Logical or
+NOT        -- Logical not
+```
+
+### String Operators
+
+```cypher
+-- STARTS WITH
+MATCH (n:Person) WHERE n.name STARTS WITH 'A'
+
+-- ENDS WITH
+MATCH (n:Person) WHERE n.email ENDS WITH '@example.com'
+
+-- CONTAINS
+MATCH (n:Person) WHERE n.name CONTAINS 'Alice'
+```
+
+### Arithmetic Operators
+
+```cypher
++          -- Add
+-          -- Subtract
+*          -- Multiply
+/          -- Divide
+%          -- Modulo
+^          -- Power
+```
+
+## Common Functions
+
+### String Functions
+
+```cypher
+-- Convert to uppercase
+RETURN toUpper('alice')
+
+-- Convert to lowercase
+RETURN toLower('ALICE')
+
+-- Get substring
+RETURN substring('Hello World', 0, 5)
+
+-- String length
+RETURN size('Hello')
+
+-- Trim
+RETURN trim('  hello  ')
+```
+
+### Aggregation Functions
+
+```cypher
+-- Count
+MATCH (n:Person) RETURN COUNT(n)
+
+-- Sum
+MATCH (n:Person) RETURN SUM(n.age)
+
+-- Average
+MATCH (n:Person) RETURN AVG(n.age)
+
+-- Min/Max
+MATCH (n:Person) RETURN MIN(n.age), MAX(n.age)
+
+-- Collect to list
+MATCH (n:Person)
+RETURN n.city, COLLECT(n.name)
+```
+
+### List Functions
+
+```cypher
+-- Size of list
+RETURN size([1, 2, 3])
+
+-- Access element
+WITH [10, 20, 30] AS list
+RETURN list[1]
+
+-- Check if exists
+MATCH (n:Person)
+WHERE 'Developer' IN n.labels
+RETURN n
+```
+
+## Combining Clauses
+
+### Multiple MATCH clauses
+
+```cypher
+MATCH (a:Person {name: 'Alice'})
+MATCH (a)-[:KNOWS]->(b:Person)
+MATCH (b)-[:WORKS_AT]->(c:Company)
+RETURN a, b, c
+```
+
+### WITH clause
+
+Chain query parts:
+
+```cypher
+-- Filter based on aggregation
+MATCH (n:Person)
+WITH n.city AS city, COUNT(n) AS count
+WHERE count > 10
+RETURN city, count
+
+-- Pass variables
+MATCH (n:Person)
+WITH n
+WHERE n.age > 30
+RETURN n.name
+```
+
+## Best Practices
+
+1. **Use specific patterns**: Start `MATCH` with specific nodes to improve performance
+2. **Use labels**: Always specify labels in patterns for better query planning
+3. **Use PROFILE**: Analyze query performance with `PROFILE` prefix
+4. **Limit results**: Always use `LIMIT` when exploring data
+5. **Use parameters**: For frequently executed queries, use parameterized queries
+
+## Next Steps
+
+- Learn about [Advanced Queries](/en/user-guide/advanced-queries)
+- Explore [Pattern Matching](/en/user-guide/pattern-matching)
+- Understand [Transaction Control](/en/user-guide/transactions)
