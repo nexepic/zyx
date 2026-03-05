@@ -6,33 +6,123 @@ Metrix 使用自定义的**段式存储引擎**，针对图工作负载优化，
 
 存储被组织成固定大小的**段（Segment）** - 可以分配给不同实体类型的连续磁盘空间块。
 
-```mermaid
-graph LR
-    subgraph "数据库文件"
-        FH[文件头]
-        ST[段表]
+### 文件布局
 
-        subgraph "数据段"
-            S1[段 1<br/>节点]
-            S2[段 2<br/>边]
-            S3[段 3<br/>属性]
-            S4[段 4<br/>空闲]
+```mermaid
+block-beta
+    columns 8
+
+    block:db_file["数据库文件"]
+        fh["文件头<br/>256 字节"]:1:3
+        st["段表<br/>4KB"]:4:6
+        space["<b>...</b>"]:7:8
+
+        block:segments["数据段 (每个 4MB)"]
+            s1["段 0<br/>节点"]:1:2
+            s2["段 1<br/>边"]:3:4
+            s3["段 2<br/>属性"]:5:6
+            s4["段 3<br/>空闲"]:7:8
+            s5["段 4<br/>..."]:1:2
+            s6["段 5<br/>..."]:3:4
+            s7["段 6<br/>..."]:5:6
+            s8["段 7<br/>..."]:7:8
         end
 
-        BM[分配位图]
-        IDX[索引段]
+        bm["位图<br/>64KB"]:1:4
+        idx["索引<br/>2MB"]:5:8
     end
+```
 
-    FH --> ST
-    ST --> S1
-    ST --> S2
-    ST --> S3
-    ST --> S4
-    ST --> BM
-    ST --> IDX
+### 内部结构
 
-    style S4 fill:#bbf,stroke:#333
-    style IDX fill:#fbf,stroke:#333
+```mermaid
+classDiagram
+    class Segment {
+        +uint32_t segmentId
+        +SegmentType type
+        +uint32_t capacity
+        +uint32_t usedCount
+        +Bitmap freeBitmap
+        +DataPage[] pages
+        +allocate() EntityId
+        +deallocate() void
+        +iterate() Iterator
+        +getUsage() float
+    }
+
+    class FileHeader {
+        +uint32_t magic
+        +uint32_t version
+        +uint32_t segmentSize
+        +uint64_t creationTime
+        +uint32_t segmentCount
+        +validate() bool
+    }
+
+    class SegmentTable {
+        +SegmentEntry[] entries
+        +getSegment(id) Segment*
+        +allocateSegment() uint32_t
+        +freeSegment(id) void
+    }
+
+    class DataPage {
+        +uint32_t pageNumber
+        +byte[] data
+        +uint32_t checksum
+        +bool compressed
+        +read(offset) byte[]
+        +write(offset, data) void
+    }
+
+    class Bitmap {
+        +byte[] bits
+        +uint32_t size
+        +set(bit, value) void
+        +get(bit) bool
+        +findFree() uint32_t
+        +countUsed() uint32_t
+    }
+
+    FileHeader --> SegmentTable : 管理
+    SegmentTable *-- Segment : 跟踪
+    Segment *-- Bitmap : 使用
+    Segment *-- DataPage : 包含
+```
+
+### 存储模型
+
+```mermaid
+erDiagram
+    SEGMENT ||--o{ ENTITY : 包含
+    SEGMENT ||--|| BITMAP : 跟踪
+    SEGMENT {
+        uint32_t id PK
+        string type
+        uint32_t capacity
+        uint32_t used_count
+        uint64_t offset
+    }
+    BITMAP {
+        uint32_t segment_id FK
+        byte[] slot_bits
+        uint32_t total_slots
+        uint32_t used_slots
+    }
+    ENTITY {
+        uint64_t id PK
+        uint32_t segment_id FK
+        uint32_t page_offset
+        bool is_deleted
+        uint32_t version
+    }
+    DATAPAGE {
+        uint32_t page_id PK
+        uint32_t segment_id FK
+        byte[] data
+        uint32_t checksum
+    }
+    SEGMENT ||--o{ DATAPAGE : 包含
 ```
 
 ### 段结构
@@ -40,20 +130,65 @@ graph LR
 每个段包含：
 
 ```
-┌─────────────────────────────────┐
-│ 段头                            │
-│ - 段 ID                         │
-│ - 类型 (节点/边/属性)           │
-│ - 容量                          │
-│ - 已用计数                      │
-├─────────────────────────────────┤
-│ 空闲空间位图                    │
-│ - 跟踪可用插槽                  │
-├─────────────────────────────────┤
-│ 数据页                          │
-│ - 固定大小记录                  │
-│ - 如果启用则压缩                │
-└─────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                 段头 (64 字节)                         │
+├────────────────────────────────────────────────────────┤
+│  字段              │ 偏移量 │ 大小    │ 描述          │
+├─────────────────────┼────────┼─────────┼─────────────┤
+│  segmentId          │ 0      │ 4 字节  │ 段 ID        │
+│  type               │ 4      │ 4 字节  │ 节点/边      │
+│  capacity           │ 8      │ 4 字节  │ 最大插槽数   │
+│  usedCount          │ 12     │ 4 字节  │ 已用插槽数   │
+│  checksum           │ 16     │ 4 字节  │ 头部 CRC     │
+│  flags              │ 20     │ 4 字节  │ 标志位       │
+│  reserved           │ 24     │ 40 字节 │ 填充         │
+├────────────────────────────────────────────────────────┤
+│              空闲空间位图 (8KB)                        │
+│  位 0 = 插槽 0 │ 位 1 = 插槽 1 │ ... │ 位 65535     │
+├────────────────────────────────────────────────────────┤
+│                  数据页 (剩余 ~4MB)                    │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ 页 0 (4KB)                                      │   │
+│  │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐               │   │
+│  │ │实体 │ │实体 │ │实体 │ │ ... │ 64 条记录      │   │
+│  │ └─────┘ └─────┘ └─────┘ └─────┘               │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ 页 1 (4KB)                                      │   │
+│  │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐               │   │
+│  │ │实体 │ │实体 │ │实体 │ │ ... │ 64 条记录      │   │
+│  │ └─────┘ └─────┘ └─────┘ └─────┘               │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ... (共 512 页)                                        │
+└────────────────────────────────────────────────────────┘
+```
+
+### 段分配流程
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant ST as SegmentTracker
+    participant BM as Bitmap
+    participant FS as FileStorage
+
+    Client->>ST: allocateSegment(type)
+    ST->>ST: findFreeSegment()
+    ST->>FS: growFile(size)
+    FS-->>ST: newOffset
+
+    ST->>BM: initialize(offset)
+    BM->>BM: clearAllBits()
+
+    ST->>ST: updateSegmentTable()
+    ST-->>Client: segmentId
+
+    Note over Client,FS: 段准备就绪
+
+    Client->>ST: freeSegment(segmentId)
+    ST->>BM: markAllFree()
+    ST->>ST: updateSegmentTable(free=true)
+    ST-->>Client: success
 ```
 
 ### 主要优势

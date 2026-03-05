@@ -11,6 +11,29 @@ The database file is divided into fixed-size segments, each managed independentl
 - **Concurrent operations**: Segment-level locking
 - **Easy recovery**: Segment-level checksums and metadata
 
+### Database File Structure
+
+```mermaid
+block-beta
+    columns 8
+
+    block:db_file["Database File"]
+        fh["File Header<br/>256 bytes"]:1:4
+        st["Segment Table<br/>4KB"]:5:8
+
+        block:segments["Segments (4MB each)"]
+            s0["Seg 0<br/>Nodes"]:1:2
+            s1["Seg 1<br/>Edges"]:3:4
+            s2["Seg 2<br/>Props"]:5:6
+            s3["Seg 3<br/>..."]:7:8
+        end
+
+        wal["WAL<br/>100MB"]:1:8
+    end
+```
+
+### Segment Hierarchy
+
 ```mermaid
 graph TB
     A[Database File] --> B[File Header]
@@ -116,6 +139,49 @@ Offset  Size  Field          Description
 ```
 
 ## Entity Storage
+
+Entities are stored within segments with the following structure:
+
+### Data Page Layout
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    DATA PAGE (4096 bytes)              │
+├─────────────────────────────────────────────────────────┤
+│  Page Header (32 bytes)                                 │
+│  ├─ pageId: 42                                         │
+│  ├─ segmentId: 0                                       │
+│  ├─ entityType: NODE                                   │
+│  ├─ entityCount: 45                                    │
+│  ├─ freeSpace: 1024 bytes                              │
+│  └─ checksum: 0xABCD1234                               │
+├─────────────────────────────────────────────────────────┤
+│  Entity Slot Table (variable size, ~256 bytes)          │
+│  ┌──────────┬──────────┬──────────┬──────────┐        │
+│  │ Slot 0   │ Slot 1   │ Slot 2   │ Slot 3   │        │
+│  │ USED     │ FREE     │ USED     │ USED     │        │
+│  │ Offset:0 │          │ Offset:64│ Offset:92│        │
+│  │ Size:28  │          │ Size:36  │ Size:44  │        │
+│  └──────────┴──────────┴──────────┴──────────┘        │
+│  ... (32 slots per page)                                │
+├─────────────────────────────────────────────────────────┤
+│  Entity Data Area (remaining ~3800 bytes)               │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ Entity 0 (28 bytes)                             │   │
+│  │ id: 0x0001                                      │   │
+│  │ label: "Person"                                 │   │
+│  │ properties: {name: "Alice", age: 30}            │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ Entity 2 (36 bytes)                             │   │
+│  │ id: 0x0003                                      │   │
+│  │ label: "User"                                   │   │
+│  │ properties: {email: "bob@ex.com", active: true} │   │
+│  │ outgoing: [0x0005, 0x0008]                     │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ... (free space interspersed)                           │
+└─────────────────────────────────────────────────────────┘
+```
 
 Entities are stored within segments with the following structure:
 
