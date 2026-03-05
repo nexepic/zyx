@@ -71,7 +71,6 @@ std::string LiteralExpression::toString() const {
 		case LiteralType::STRING:
 			return "'" + stringValue_ + "'";
 	}
-	return "";
 }
 
 std::unique_ptr<Expression> LiteralExpression::clone() const {
