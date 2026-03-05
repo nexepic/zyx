@@ -57,90 +57,35 @@ The database file is divided into fixed-size segments, each managed independentl
 ### Segment Hierarchy
 
 ```mermaid
-graph TB
-    DB["Database File"]
-    FH["File Header<br/>256 bytes"]
-    S0["Segment 0<br/>4MB - Nodes"]
-    S1["Segment 1<br/>4MB - Edges"]
-    S2["Segment 2<br/>4MB - Properties"]
-    SN["Segment N<br/>4MB - ..."]
-    WAL["Write-Ahead Log<br/>100MB"]
+graph LR
+    A[Database File] --> B[File Header]
+    A --> C[Segment 0<br/>4MB]
+    A --> D[Segment 1<br/>4MB]
+    A --> E[Segment 2<br/>4MB]
+    A --> F[Segment N]
+    A --> G[WAL]
 
-    DB --> FH
-    DB --> S0
-    DB --> S1
-    DB --> S2
-    DB --> SN
-    DB --> WAL
-
-    S0 --> SH0["Segment Header"]
-    S0 --> BM0["Free Space Bitmap"]
-    S0 --> DP0["Data Pages"]
-
-    SH0 --> SH0A["Segment ID"]
-    SH0 --> SH0B["Entity Count"]
-    SH0 --> SH0C["Checksum"]
-    SH0 --> SH0D["Free Bytes"]
-
-    style DB fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
-    style FH fill:#bbdefb,stroke:#1976d2
-    style S0 fill:#f3e5f5,stroke:#7b1fa2
-    style S1 fill:#f3e5f5,stroke:#7b1fa2
-    style S2 fill:#f3e5f5,stroke:#7b1fa2
-    style SN fill:#f3e5f5,stroke:#7b1fa2
-    style WAL fill:#fff9c4,stroke:#f57c00
+    C --> H[Segment Header]
+    C --> I[Free Space Bitmap]
+    C --> J[Data Pages]
 ```
 
 ### Segment Internal Composition
 
 ```mermaid
-classDiagram
-    class DatabaseFile {
-        +FileHeader header
-        +Segment[] segments
-        +WAL wal
-        +open() bool
-        +close() void
-    }
+graph LR
+    A[DatabaseFile] --> B[Segment]
+    A --> C[WAL]
 
-    class Segment {
-        +SegmentHeader header
-        +Bitmap bitmap
-        +DataPage[] pages
-        +allocate() Entity*
-        +free() void
-        +scan() Iterator
-    }
+    B --> D[SegmentHeader]
+    B --> E[Bitmap]
+    B --> F[DataPages]
 
-    class SegmentHeader {
-        +uint64_t segmentId
-        +uint32_t entityCount
-        +uint32_t freeBytes
-        +uint32_t checksum
-        +uint8_t[] bitmap
-    }
-
-    class DataPage {
-        +uint32_t pageNumber
-        +EntityHeader header
-        +byte[] entityData
-        +uint32_t checksum
-        +read() Entity*
-        +write() bool
-    }
-
-    class Bitmap {
-        +uint8_t[] bits
-        +size() uint32_t
-        +isFree() bool
-        +markUsed() void
-        +markFree() void
-    }
-
-    DatabaseFile *-- Segment : contains
-    Segment *-- SegmentHeader : has
-    Segment *-- Bitmap : uses
-    Segment *-- DataPage : contains
+    D --> G[SegmentID]
+    D --> H[EntityCount]
+    D --> I[Checksum]
+    E --> J[SlotBits]
+    F --> K[EntityData]
 ```
 
 ## File Header
