@@ -54,11 +54,13 @@ jobs:
 
       - name: Install System Deps (Windows)
         if: runner.os == 'Windows'
-        # Install LLVM 20 and Pkg-Config
+        # Install LLVM 20 and Pkg-Config, then add to PATH
         run: |
           choco install pkgconfiglite --allow-empty-checksums
           choco install llvm --version=20.1.4 --force
-        shell: cmd
+          # Add pkgconfiglite to PATH before Strawberry Perl
+          echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
 
       - name: Install System Deps (Linux)
         if: runner.os == 'Linux'
