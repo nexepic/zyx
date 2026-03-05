@@ -13,76 +13,82 @@ The database file is divided into fixed-size segments, each managed independentl
 
 ### Database File Structure
 
-```mermaid
-block-beta
-    columns 8
-
-    block:db_file["Database File"]
-        fh["File Header<br/>256 bytes"]:1:4
-        st["Segment Table<br/>4KB"]:5:8
-
-        block:segments["Segments (4MB each)"]
-            s0["Seg 0<br/>Nodes"]:1:2
-            s1["Seg 1<br/>Edges"]:3:4
-            s2["Seg 2<br/>Props"]:5:6
-            s3["Seg 3<br/>..."]:7:8
-        end
-
-        wal["WAL<br/>100MB"]:1:8
-    end
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      DATABASE FILE (metrix.db)                 │
+├─────────────────────────────────────────────────────────────────┤
+│  FILE HEADER (256 bytes)                                      │
+│  ├─ Magic: "METRIXXZ" (8 bytes)                              │
+│  ├─ Version: 1 (4 bytes)                                     │
+│  ├─ Page Size: 4096 (4 bytes)                                │
+│  ├─ Segment Size: 4MB (8 bytes)                               │
+│  ├─ Segment Count: N (8 bytes)                                │
+│  └─ WAL Offset: ... (8 bytes)                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  SEGMENT 0 (4MB) - Nodes                                      │
+│  ├─ Segment Header (64 bytes)                                 │
+│  ├─ Free Space Bitmap (8KB)                                   │
+│  └─ Data Pages (~4MB)                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  SEGMENT 1 (4MB) - Edges                                      │
+│  ├─ Segment Header (64 bytes)                                 │
+│  ├─ Free Space Bitmap (8KB)                                   │
+│  └─ Data Pages (~4MB)                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  SEGMENT 2 (4MB) - Properties                                  │
+│  ├─ Segment Header (64 bytes)                                 │
+│  ├─ Free Space Bitmap (8KB)                                   │
+│  └─ Data Pages (~4MB)                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ...                                                            │
+├─────────────────────────────────────────────────────────────────┤
+│  SEGMENT N (4MB)                                                │
+│  ├─ Segment Header                                            │
+│  ├─ Free Space Bitmap                                         │
+│  └─ Data Pages                                                │
+├─────────────────────────────────────────────────────────────────┤
+│  WRITE-AHEAD LOG (WAL) - 100MB                                 │
+│  ├─ Log Entries                                               │
+│  ├─ Checkpoint Metadata                                       │
+│  └─ Transaction Records                                       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Segment Hierarchy
 
 ```mermaid
 graph TB
-    subgraph DB["Database File"]
-        direction TB
+    DB["Database File"]
+    FH["File Header<br/>256 bytes"]
+    S0["Segment 0<br/>4MB - Nodes"]
+    S1["Segment 1<br/>4MB - Edges"]
+    S2["Segment 2<br/>4MB - Properties"]
+    SN["Segment N<br/>4MB - ..."]
+    WAL["Write-Ahead Log<br/>100MB"]
 
-        subgraph FH["File Header<br/>(256 bytes)"]
-            FH1["Magic Number"]
-            FH2["Version Info"]
-            FH3["Segment Count"]
-            FH4["WAL Offset"]
-        end
+    DB --> FH
+    DB --> S0
+    DB --> S1
+    DB --> S2
+    DB --> SN
+    DB --> WAL
 
-        subgraph Seg0["Segment 0<br/>(4MB)"]
-            direction TB
-            SH0["Segment Header"]
-            BM0["Free Space Bitmap"]
-            DP0["Data Pages"]
-        end
+    S0 --> SH0["Segment Header"]
+    S0 --> BM0["Free Space Bitmap"]
+    S0 --> DP0["Data Pages"]
 
-        subgraph Seg1["Segment 1<br/>(4MB)"]
-            direction TB
-            SH1["Segment Header"]
-            BM1["Free Space Bitmap"]
-            DP1["Data Pages"]
-        end
+    SH0 --> SH0A["Segment ID"]
+    SH0 --> SH0B["Entity Count"]
+    SH0 --> SH0C["Checksum"]
+    SH0 --> SH0D["Free Bytes"]
 
-        subgraph SegN["Segment N<br/>(4MB)"]
-            direction TB
-            SHN["Segment Header"]
-            BMN["Free Space Bitmap"]
-            DPN["Data Pages"]
-        end
-
-        FH --> Seg0
-        FH --> Seg1
-        FH --> SegN
-    end
-
-    style FH fill:#e3f2fd
-    style FH1 fill:#bbdefb
-    style FH2 fill:#bbdefb
-    style FH3 fill:#bbdefb
-    style FH4 fill:#bbdefb
-    style Seg0 fill:#f3e5f5
-    style Seg1 fill:#f3e5f5
-    style SegN fill:#f3e5f5
-    style SH0 fill:#e1bee7
-    style SH1 fill:#e1bee7
-    style SHN fill:#e1bee7
+    style DB fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style FH fill:#bbdefb,stroke:#1976d2
+    style S0 fill:#f3e5f5,stroke:#7b1fa2
+    style S1 fill:#f3e5f5,stroke:#7b1fa2
+    style S2 fill:#f3e5f5,stroke:#7b1fa2
+    style SN fill:#f3e5f5,stroke:#7b1fa2
+    style WAL fill:#fff9c4,stroke:#f57c00
 ```
 
 ### Segment Internal Composition
