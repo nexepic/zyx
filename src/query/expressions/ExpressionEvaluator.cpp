@@ -56,8 +56,6 @@ void ExpressionEvaluator::visit(LiteralExpression *expr) {
 		result_ = PropertyValue(expr->getDoubleValue());
 	} else if (expr->isString()) {
 		result_ = PropertyValue(expr->getStringValue());
-	} else {
-		result_ = PropertyValue();
 	}
 }
 
@@ -358,9 +356,6 @@ PropertyValue ExpressionEvaluator::evaluateUnary(UnaryOperatorType op, const Pro
 			bool val = EvaluationContext::toBoolean(operand);
 			return PropertyValue(!val);
 		}
-
-		default:
-			throw ExpressionEvaluationException("Invalid unary operator");
 	}
 }
 
