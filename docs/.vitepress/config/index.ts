@@ -10,7 +10,7 @@ export default defineConfig({
   description: 'High-performance graph database engine',
 
   locales: {
-    root: {
+    en: {
       label: 'English',
       lang: 'en-US',
       themeConfig: en
