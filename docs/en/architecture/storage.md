@@ -9,31 +9,38 @@ The storage is organized into fixed-size **segments** - contiguous blocks of dis
 ### File Layout
 
 ```mermaid
-block-beta
-    columns 8
+graph TB
+    subgraph DB["Database File"]
+        direction TB
+        FH["File Header<br/>256 bytes"]
+        ST["Segment Table<br/>4KB"]
 
-    block:db_file["Database File"]
-        fh["File Header<br/>256 bytes"]:1:3
-        st["Segment Table<br/>4KB"]:4:6
-        space["<b>...</b>"]:7:8
-
-        block:segments["Data Segments (4MB each)"]
-            s1["Seg 0<br/>Nodes"]:1:2
-            s2["Seg 1<br/>Edges"]:3:4
-            s3["Seg 2<br/>Props"]:5:6
-            s4["Seg 3<br/>Free"]:7:8
-            s5["Seg 4<br/>..."]:1:2
-            s6["Seg 5<br/>..."]:3:4
-            s7["Seg 6<br/>..."]:5:6
-            s8["Seg 7<br/>..."]:7:8
+        subgraph Segs["Data Segments"]
+            S1["Seg 0<br/>Nodes<br/>4MB"]
+            S2["Seg 1<br/>Edges<br/>4MB"]
+            S3["Seg 2<br/>Props<br/>4MB"]
+            S4["Seg 3<br/>Free<br/>4MB"]
         end
 
-        bm["Bitmap<br/>64KB"]:1:4
-        idx["Index<br/>2MB"]:5:8
+        BM["Allocation Bitmap<br/>64KB"]
+        IDX["Index Segment<br/>2MB"]
+
+        FH --> ST
+        ST --> S1
+        ST --> S2
+        ST --> S3
+        ST --> S4
+        ST --> BM
+        ST --> IDX
     end
+
+    style FH fill:#e1f5ff
+    style ST fill:#fff4e1
+    style S4 fill:#d4edda
+    style IDX fill:#f8d7da
 ```
 
-### Internal Structure
+### Segment Internal Structure
 
 ```mermaid
 classDiagram
@@ -125,7 +132,7 @@ erDiagram
     SEGMENT ||--o{ DATAPAGE : contains
 ```
 
-### Segment Structure
+### Physical Segment Structure
 
 Each segment contains:
 
