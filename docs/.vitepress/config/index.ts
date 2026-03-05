@@ -3,6 +3,9 @@ import en from './en'
 import zh from './zh'
 
 export default defineConfig({
+  // Base URL for GitHub Pages (update 'metrix' to your repo name)
+  base: '/metrix/',
+
   title: 'Metrix',
   description: 'High-performance graph database engine',
 
