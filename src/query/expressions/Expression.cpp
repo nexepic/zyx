@@ -342,6 +342,7 @@ std::string toString(BinaryOperatorType op) {
 		case BinaryOperatorType::MULTIPLY: return "*";
 		case BinaryOperatorType::DIVIDE: return "/";
 		case BinaryOperatorType::MODULO: return "%";
+		case BinaryOperatorType::POWER: return "^";
 		case BinaryOperatorType::EQUAL: return "=";
 		case BinaryOperatorType::NOT_EQUAL: return "<>";
 		case BinaryOperatorType::LESS: return "<";
@@ -369,7 +370,8 @@ bool isArithmeticOperator(BinaryOperatorType op) {
 	       op == BinaryOperatorType::SUBTRACT ||
 	       op == BinaryOperatorType::MULTIPLY ||
 	       op == BinaryOperatorType::DIVIDE ||
-	       op == BinaryOperatorType::MODULO;
+	       op == BinaryOperatorType::MODULO ||
+	       op == BinaryOperatorType::POWER;
 }
 
 bool isComparisonOperator(BinaryOperatorType op) {

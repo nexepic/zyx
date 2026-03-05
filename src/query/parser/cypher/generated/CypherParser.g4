@@ -285,11 +285,16 @@ notExpression
     ;
 
 comparisonExpression
-    : arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN ) arithmeticExpression )*
+    : arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN ) arithmeticExpression )* ( K_IS K_NOT? K_NULL )?
     ;
 
 arithmeticExpression
-    : unaryExpression ( ( PLUS | MINUS | MULTIPLY | DIVIDE | MODULO ) unaryExpression )*
+    : powerExpression ( ( PLUS | MINUS | MULTIPLY | DIVIDE | MODULO ) powerExpression )*
+    ;
+
+// Power expression has higher precedence than multiply/divide
+powerExpression
+    : unaryExpression ( POWER unaryExpression )*
     ;
 
 // Official structure: An expression is an Atom followed by optional accessors.

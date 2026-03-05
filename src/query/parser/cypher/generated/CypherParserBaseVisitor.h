@@ -242,6 +242,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitPowerExpression(CypherParser::PowerExpressionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitUnaryExpression(CypherParser::UnaryExpressionContext *ctx) override {
     return visitChildren(ctx);
   }

@@ -192,6 +192,9 @@ private:
 	static std::unique_ptr<graph::query::expressions::Expression> buildArithmeticExpression(
 		CypherParser::ArithmeticExpressionContext *ctx);
 
+	static std::unique_ptr<graph::query::expressions::Expression> buildPowerExpression(
+		CypherParser::PowerExpressionContext *ctx);
+
 	static std::unique_ptr<graph::query::expressions::Expression> buildUnaryExpression(
 		CypherParser::UnaryExpressionContext *ctx);
 

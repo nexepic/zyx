@@ -37,6 +37,7 @@ public:
 	void visit(const ListSliceExpression* expr [[maybe_unused]]) override { visitedListSlice = true; }
 	void visit(const ListComprehensionExpression* expr [[maybe_unused]]) override { visitedListComprehension = true; }
 	void visit(const ListLiteralExpression* expr [[maybe_unused]]) override { visitedListLiteral = true; }
+	void visit(const IsNullExpression* expr [[maybe_unused]]) override { visitedIsNull = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -49,6 +50,7 @@ public:
 	bool visitedListSlice = false;
 	bool visitedListComprehension = false;
 	bool visitedListLiteral = false;
+	bool visitedIsNull = false;
 };
 
 // ============================================================================

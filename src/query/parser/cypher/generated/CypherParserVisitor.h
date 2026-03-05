@@ -134,6 +134,8 @@ public:
 
     virtual std::any visitArithmeticExpression(CypherParser::ArithmeticExpressionContext *context) = 0;
 
+    virtual std::any visitPowerExpression(CypherParser::PowerExpressionContext *context) = 0;
+
     virtual std::any visitUnaryExpression(CypherParser::UnaryExpressionContext *context) = 0;
 
     virtual std::any visitAccessor(CypherParser::AccessorContext *context) = 0;
