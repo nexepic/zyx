@@ -162,17 +162,17 @@ struct SegmentHeader {
 
 ### Segment Header Layout
 
-```
-Offset  Size  Field          Description
-------- ----- ------------- ----------------------------------------
-0       8     segmentId     Unique segment identifier
-8       4     entityCount   Number of entities stored
-12      4     freeBytes     Available free space
-16      8     firstFreeOff  First free byte offset
-24      4     checksum      CRC32 of segment data
-28      4     flags         Segment flags
-32      N     bitmap        Free space bitmap (1 bit per 64 bytes)
-```
+| Field | Offset | Size | Description |
+|-------|--------|------|-------------|
+| segmentId | 0 | 8 bytes | Unique segment identifier |
+| type | 8 | 4 bytes | Segment type (Node/Edge/Property) |
+| capacity | 12 | 4 bytes | Maximum number of entities |
+| usedCount | 16 | 4 bytes | Current entity count |
+| freeBytes | 20 | 4 bytes | Available free space |
+| firstFreeOffset | 24 | 8 bytes | First free byte location |
+| checksum | 32 | 4 bytes | CRC32 of segment data |
+| flags | 36 | 4 bytes | Segment flags |
+| bitmap | 40 | N bytes | Free space bitmap |
 
 ## Entity Storage
 

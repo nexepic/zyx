@@ -33,11 +33,6 @@ graph TB
         ST --> BM
         ST --> IDX
     end
-
-    style FH fill:#e1f5ff
-    style ST fill:#fff4e1
-    style S4 fill:#d4edda
-    style IDX fill:#f8d7da
 ```
 
 ### Segment Internal Structure
@@ -134,41 +129,54 @@ erDiagram
 
 ### Physical Segment Structure
 
-Each segment contains:
+```mermaid
+classDiagram
+    class Segment {
+        +SegmentHeader header
+        +Bitmap bitmap
+        +DataPage[] pages
+    }
 
+    class SegmentHeader {
+        +segmentId: uint64_t
+        +type: SegmentType
+        +capacity: uint32_t
+        +usedCount: uint32_t
+        +checksum: uint32_t
+        +flags: uint32_t
+        +bitmap: uint8_t[]
+    }
+
+    class Bitmap {
+        +bits: uint8_t[]
+        +size: uint32_t
+        +freeSlots: uint32_t
+        +isFree(slotIndex) bool
+        +markUsed(slotIndex) void
+        +markFree(slotIndex) void
+    }
+
+    class DataPage {
+        +pageNumber: uint32_t
+        +entities: Entity[]
+        +freeSpace: uint32_t
+        +checksum: uint32_t
+    }
+
+    Segment *-- SegmentHeader : contains
+    Segment *-- Bitmap : uses
+    Segment *-- DataPage : contains
 ```
-┌────────────────────────────────────────────────────────┐
-│                 SEGMENT HEADER (64 bytes)              │
-├────────────────────────────────────────────────────────┤
-│  Field              │ Offset │ Size    │ Description  │
-├─────────────────────┼────────┼─────────┼─────────────┤
-│  segmentId          │ 0      │ 4 bytes │ Segment ID  │
-│  type               │ 4      │ 4 bytes │ Node/Edge   │
-│  capacity           │ 8      │ 4 bytes │ Max slots   │
-│  usedCount          │ 12     │ 4 bytes │ Used slots  │
-│  checksum           │ 16     │ 4 bytes │ Header CRC  │
-│  flags              │ 20     │ 4 bytes │ Flags       │
-│  reserved           │ 24     │ 40 bytes│ Padding     │
-├────────────────────────────────────────────────────────┤
-│              FREE SPACE BITMAP (8KB)                   │
-│  Bit 0 = Slot 0 │ Bit 1 = Slot 1 │ ... │ Bit 65535   │
-├────────────────────────────────────────────────────────┤
-│                  DATA PAGES (Remaining ~4MB)           │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Page 0 (4KB)                                    │   │
-│  │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐               │   │
-│  │ │Entity│ │Entity│ │Entity│ │ ... │ 64 records  │   │
-│  │ └─────┘ └─────┘ └─────┘ └─────┘               │   │
-│  └─────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Page 1 (4KB)                                    │   │
-│  │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐               │   │
-│  │ │Entity│ │Entity│ │Entity│ │ ... │ 64 records  │   │
-│  │ └─────┘ └─────┘ └─────┘ └─────┘               │   │
-│  └─────────────────────────────────────────────────┘   │
-│  ... (512 pages total)                                  │
-└────────────────────────────────────────────────────────┘
-```
+
+**Segment Layout:**
+
+| Component | Size | Location | Description |
+|-----------|------|----------|-------------|
+| **Segment Header** | 64 bytes | Start | Metadata and bitmap |
+| **Free Space Bitmap** | 8 KB | After header | Tracks slot availability |
+| **Data Pages** | ~4 MB | Rest | Stores entity data |
+
+**Bitmap Structure:** Each bit represents one 64-byte block. Bit = 0 means free, Bit = 1 means used.
 
 ### Segment Allocation Flow
 
@@ -412,10 +420,6 @@ graph LR
 
     S3 -.->|Rollback| S2
     S2 -.->|Rollback| S1
-
-    style S1 fill:#dfd
-    style S2 fill:#ffd
-    style S3 fill:#ddf
 ```
 
 ### State Chain Benefits
