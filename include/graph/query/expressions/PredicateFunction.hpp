@@ -36,15 +36,33 @@ class EvaluationContext;
  * - Special parsing for: all(x IN list WHERE x > 0)
  * - Expression evaluation with variable binding
  * - Iteration over list elements with WHERE clause evaluation
+ *
+ * The ScalarFunction::evaluate() method is implemented to throw a not-yet-implemented
+ * error until custom argument parsing is added to ExpressionBuilder.
  */
-class PredicateFunction {
+class PredicateFunction : public ScalarFunction {
 public:
 	virtual ~PredicateFunction() = default;
 
 	/**
+	 * @brief Evaluates the predicate function using the standard ScalarFunction interface.
+	 *
+	 * This implementation throws an error because quantifier functions have special
+	 * Cypher syntax that requires custom parsing in ExpressionBuilder.
+	 *
+	 * @param args The function arguments (unused)
+	 * @param context The evaluation context
+	 * @return Throws runtime_error
+	 */
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	/**
 	 * @brief Gets the function signature.
 	 */
-	[[nodiscard]] virtual FunctionSignature getSignature() const = 0;
+	[[nodiscard]] FunctionSignature getSignature() const override = 0;
 
 	/**
 	 * @brief Gets the function name.
@@ -52,7 +70,7 @@ public:
 	[[nodiscard]] virtual std::string getName() const = 0;
 
 	/**
-	 * @brief Evaluates the predicate function.
+	 * @brief Evaluates the predicate function with custom syntax.
 	 *
 	 * @param variable The iteration variable name
 	 * @param listExpr Expression that evaluates to a list
