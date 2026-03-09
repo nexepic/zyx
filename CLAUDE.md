@@ -134,8 +134,38 @@ Key requirements from CONTRIBUTING.md:
 
 - Testing standards and best practices
 - Temporary file handling for cross-platform compatibility
+- **Enum naming guidelines for Windows macro conflict avoidance**
 - Code style and formatting guidelines
 - Pull request requirements
+
+### ⚠️ Windows Platform Compatibility: Enum Naming
+
+**CRITICAL**: This project must compile on Windows without requiring `#define NOMINMAX` workarounds.
+
+**Problem**: Windows headers define macros that conflict with common enum member names:
+- `min`, `max` - yes, lowercase (from `<windef.h>`)
+- `AND`, `OR`, `XOR`, `NOT`
+- `DELETE`, `CREATE`, `OPEN`, `MODIFY`
+- `FILTER`, `EXTRACT`
+
+**Solution**: All enum members use prefixes to avoid conflicts:
+
+```cpp
+// Binary operators: BOP_* prefix
+BinaryOperatorType { BOP_ADD, BOP_AND, BOP_OR, BOP_XOR }
+
+// Unary operators: UOP_* prefix
+UnaryOperatorType { UOP_MINUS, UOP_NOT }
+
+// Aggregate functions: AGG_* prefix
+AggregateFunctionType { AGG_COUNT, AGG_MIN, AGG_MAX }
+
+// Comprehensions: COMP_* prefix
+ComprehensionType { COMP_FILTER, COMP_EXTRACT, COMP_REDUCE }
+```
+
+**When adding new enum types**: ALWAYS use descriptive prefixes (3-5 chars) followed by underscore.
+This prevents Windows macro conflicts and improves code clarity.
 
 ## Git Commit Guidelines
 
