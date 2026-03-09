@@ -1,9 +1,10 @@
 export default {
   nav: [
-    { text: '用户指南', link: '/zh/user-guide/installation' },
-    { text: 'API 参考', link: '/zh/api/cpp-api' },
-    { text: '架构设计', link: '/zh/architecture/overview' },
-    { text: '贡献指南', link: '/zh/contributing/development-setup' }
+    { text: '用户指南', link: '/zh/user-guide/quick-start', activeMatch: '/zh/user-guide/' },
+    { text: 'API 参考', link: '/zh/api/cpp-api', activeMatch: '/zh/api/' },
+    { text: '算法详解', link: '/zh/algorithms/overview', activeMatch: '/zh/algorithms/' },
+    { text: '架构设计', link: '/zh/architecture/overview', activeMatch: '/zh/architecture/' },
+    { text: '贡献指南', link: '/zh/contributing/development-setup', activeMatch: '/zh/contributing/' }
   ],
 
   sidebar: {
@@ -11,7 +12,6 @@ export default {
       {
         text: '入门指南',
         items: [
-          { text: '安装', link: '/zh/user-guide/installation' },
           { text: '快速开始', link: '/zh/user-guide/quick-start' },
           { text: '基本操作', link: '/zh/user-guide/basic-operations' }
         ]
@@ -52,6 +52,41 @@ export default {
         ]
       }
     ],
+    '/zh/algorithms/': [
+      {
+        text: '算法概述',
+        items: [
+          { text: '概述', link: '/zh/algorithms/overview' }
+        ]
+      },
+      {
+        text: '存储算法',
+        items: [
+          { text: '段分配', link: '/zh/algorithms/segment-allocation' },
+          { text: '位图索引', link: '/zh/algorithms/bitmap-indexing' },
+          { text: '数据压缩', link: '/zh/algorithms/compression' }
+        ]
+      },
+      {
+        text: '事务算法',
+        items: [
+          { text: '状态链与乐观锁', link: '/zh/algorithms/state-chain-optimistic-locking' },
+          { text: 'WAL 恢复', link: '/zh/algorithms/wal-recovery' }
+        ]
+      },
+      {
+        text: '查询算法',
+        items: [
+          { text: '查询优化', link: '/zh/algorithms/query-optimization' }
+        ]
+      },
+      {
+        text: '缓存算法',
+        items: [
+          { text: '缓存淘汰', link: '/zh/algorithms/cache-eviction' }
+        ]
+      }
+    ],
     '/zh/architecture/': [
       {
         text: '核心架构',
@@ -80,9 +115,17 @@ export default {
     ],
     '/zh/contributing/': [
       {
+        text: '快速开始',
+        items: [
+          { text: '安装指南', link: '/zh/contributing/installation' },
+          { text: '系统要求', link: '/zh/contributing/requirements' },
+          { text: '系统配置', link: '/zh/contributing/configuration' },
+          { text: '开发环境', link: '/zh/contributing/development-setup' }
+        ]
+      },
+      {
         text: '开发',
         items: [
-          { text: '开发环境', link: '/zh/contributing/development-setup' },
           { text: '项目结构', link: '/zh/contributing/project-structure' },
           { text: '代码规范', link: '/zh/contributing/code-style' }
         ]

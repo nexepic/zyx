@@ -49,9 +49,6 @@ graph TB
     TX --> FS
     TX --> WAL
     FS --> SM
-
-    style FS fill:#f9f,stroke:#333,stroke-width:4px
-    style WAL fill:#f99,stroke:#333,stroke-width:2px
 ```
 
 ## 核心设计原则

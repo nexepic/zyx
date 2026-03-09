@@ -10,11 +10,6 @@ graph TD
     B[Consistency] --> D
     C[Isolation] --> D
     E[Durability] --> D
-
-    style A fill:#dfd
-    style B fill:#ffd
-    style C fill:#ddf
-    style E fill:#fdd
 ```
 
 ### Atomicity
@@ -100,9 +95,6 @@ graph TD
     A[Commit] --> B[WAL Flush]
     B --> C[Main Storage]
     C --> D[Checkpoint]
-
-    style B fill:#f99,stroke:#333,stroke-width:2px
-    style C fill:#9f9,stroke:#333,stroke-width:2px
 ```
 
 **Guarantees**:
@@ -201,11 +193,6 @@ graph LR
     S2 --> S3[State v3<br/>Modified]
     S3 -.->|Commit| S4[Committed State]
     S3 -.->|Rollback| S1
-
-    style S1 fill:#dfd
-    style S2 fill:#ffd
-    style S3 fill:#ffd
-    style S4 fill:#ddf
 ```
 
 ### Dirty Entity Tracking

@@ -218,7 +218,7 @@ if (tx->isRolledBack()) {
 
 ## Query Execution
 
-### execute(const std::string&)
+### execute(const std::string&amp;)
 
 Execute a Cypher query without parameters.
 
@@ -242,7 +242,7 @@ for (const auto& row : result) {
 tx->commit();
 ```
 
-### execute(const std::string&, const Parameters&)
+### execute(const std::string&amp;, const Parameters&amp;)
 
 Execute a parameterized Cypher query.
 
@@ -271,7 +271,7 @@ if (!result.isEmpty()) {
 tx->commit();
 ```
 
-### executeBatch(const std::vector<std::string>&)
+### executeBatch(const std::vector&lt;std::string&gt;&amp;)
 
 Execute multiple Cypher queries in a batch.
 
@@ -301,7 +301,7 @@ for (size_t i = 0; i < results.size(); ++i) {
 tx->commit();
 ```
 
-### executeBatch(const std::vector<BatchQuery>&)
+### executeBatch(const std::vector&lt;BatchQuery&gt;&amp;)
 
 Execute multiple parameterized queries in a batch.
 
