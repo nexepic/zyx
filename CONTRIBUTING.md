@@ -59,6 +59,55 @@ protected:
 };
 ```
 
+## Windows Platform Compatibility
+
+### Enum Naming Guidelines
+
+**CRITICAL**: When defining or modifying enum types, **NEVER use enum member names that conflict with Windows macros**.
+
+Windows headers (especially `<windef.h>`, `<winnt.h>`) define these problematic macros:
+- **Arithmetic/Logic**: `AND`, `OR`, `XOR`, `NOT`
+- **Comparison**: `min`, `max` (yes, lowercase!)
+- **Common Operations**: `DELETE`, `CREATE`, `OPEN`, `MODIFY`, `FILTER`, `EXTRACT`
+- **Values**: `IN`, `OUT`, `INFINITE`
+
+**Always use prefixes** for enum members to avoid conflicts:
+```cpp
+// ✅ GOOD - Use prefixes
+enum class BinaryOperatorType {
+    BOP_ADD, BOP_SUBTRACT, BOP_MULTIPLY, BOP_DIVIDE, BOP_MODULO,
+    BOP_EQUAL, BOP_NOT_EQUAL, BOP_LESS, BOP_GREATER,
+    BOP_LESS_EQUAL, BOP_GREATER_EQUAL, BOP_IN,
+    BOP_AND, BOP_OR, BOP_XOR
+};
+
+enum class AggregateFunctionType {
+    AGG_COUNT, AGG_SUM, AGG_AVG, AGG_MIN, AGG_MAX, AGG_COLLECT
+};
+
+enum class UnaryOperatorType {
+    UOP_MINUS, UOP_NOT
+};
+
+// ❌ BAD - Will break Windows builds
+enum class AggregateFunctionType {
+    MIN,   // Conflicts with Windows min() macro
+    MAX,   // Conflicts with Windows max() macro
+    // ...
+};
+```
+
+**Required prefixes by enum type:**
+- Binary operators: `BOP_*`
+- Unary operators: `UOP_*`
+- Aggregate functions: `AGG_*`
+- Comprehension types: `COMP_*`
+- Entity change types: `CHANGE_*`
+- File open modes: `OPEN_*`
+
+**Testing on Windows:**
+Always verify compilation on Windows before submitting PR if you add new enum types.
+
 ## Code Style and Formatting
 
 When contributing code, please ensure it adheres to the project's coding standards:
