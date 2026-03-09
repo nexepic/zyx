@@ -1,0 +1,47 @@
+/**
+ * @file ExistsExpression.cpp
+ * @date 2025/3/9
+ *
+ * Implementation of ExistsExpression
+ */
+
+#include "graph/query/expressions/ExistsExpression.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include <sstream>
+
+namespace graph::query::expressions {
+
+ExistsExpression::ExistsExpression(
+	std::string pattern,
+	std::unique_ptr<Expression> whereExpr
+)
+	: pattern_(std::move(pattern))
+	, whereExpr_(std::move(whereExpr)) {
+}
+
+void ExistsExpression::accept(ExpressionVisitor &visitor) {
+	visitor.visit(this);
+}
+
+void ExistsExpression::accept(ConstExpressionVisitor &visitor) const {
+	visitor.visit(this);
+}
+
+std::string ExistsExpression::toString() const {
+	std::ostringstream oss;
+	oss << "EXISTS(" << pattern_;
+	if (whereExpr_) {
+		oss << " WHERE " << whereExpr_->toString();
+	}
+	oss << ")";
+	return oss.str();
+}
+
+std::unique_ptr<Expression> ExistsExpression::clone() const {
+	return std::make_unique<ExistsExpression>(
+		pattern_,
+		whereExpr_ ? whereExpr_->clone() : nullptr
+	);
+}
+
+} // namespace graph::query::expressions

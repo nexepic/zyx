@@ -25,6 +25,7 @@
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
+#include "graph/query/expressions/ExistsExpression.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -590,6 +591,28 @@ void ExpressionEvaluator::visit(QuantifierFunctionExpression *expr) {
 		std::unique_ptr<Expression>(whereExpr->clone()),
 		mutableContext
 	);
+}
+
+void ExpressionEvaluator::visit(ExistsExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// EXISTS pattern expressions require graph traversal and pattern matching
+	// For now, throw a not-yet-implemented error
+	// TODO: Implement full pattern matching support
+	throw ExpressionEvaluationException(
+		"EXISTS pattern expressions are not yet fully implemented. "
+		"The pattern '" + expr->getPattern() + "' requires graph traversal support. "
+		"Please use EXISTS with simple patterns or subqueries."
+	);
+
+	// Future implementation:
+	// 1. Parse the pattern string to extract nodes, relationships, and direction
+	// 2. Use the graph's traversal API to search for matching patterns
+	// 3. Return true if at least one match exists, false otherwise
+	// 4. If there's a WHERE clause, apply it as a filter on matched patterns
 }
 
 } // namespace graph::query::expressions

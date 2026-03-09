@@ -14,6 +14,7 @@
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
+#include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 using namespace graph;
@@ -42,6 +43,7 @@ public:
 	void visit(const ListLiteralExpression* expr [[maybe_unused]]) override { visitedListLiteral = true; }
 	void visit(const IsNullExpression* expr [[maybe_unused]]) override { visitedIsNull = true; }
 	void visit(const QuantifierFunctionExpression* expr [[maybe_unused]]) override { visitedQuantifierFunction = true; }
+	void visit(const ExistsExpression* expr [[maybe_unused]]) override { visitedExists = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -56,6 +58,7 @@ public:
 	bool visitedListLiteral = false;
 	bool visitedIsNull = false;
 	bool visitedQuantifierFunction = false;
+	bool visitedExists = false;
 };
 
 // ============================================================================
