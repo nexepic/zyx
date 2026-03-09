@@ -29,11 +29,6 @@ graph TD
     B -->|prevOutEdgeId| F[null: 0]
     C -->|prevOutEdgeId| B
     D -->|prevOutEdgeId| C
-
-    style A fill:#e1f5ff
-    style B fill:#ffe1e1
-    style C fill:#ffe1e1
-    style D fill:#ffe1e1
 ```
 
 ### 双向边链接
@@ -48,13 +43,6 @@ graph LR
 
     E[节点 B<br/>目标节点] -->|firstIn| C
     C -->|nextIn| F[边 4]
-
-    style A fill:#e1f5ff
-    style E fill:#e1f5ff
-    style B fill:#ffe1e1
-    style C fill:#ffe1e1
-    style D fill:#ffe1e1
-    style F fill:#ffe1e1
 ```
 
 **关键点**：同一条边（边 2）同时出现在节点 A 的出边列表和节点 B 的入边列表中，实现高效的双向遍历。
@@ -511,9 +499,6 @@ graph LR
 
     B -.->|绕过| C
 
-    style A fill:#ffcccc
-    style B fill:#ccffcc
-    style C fill:#ccffcc
 ```
 
 ## 与 Cypher 查询的集成

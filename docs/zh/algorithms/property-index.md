@@ -34,12 +34,6 @@ graph TD
     G --> K[B+Tree: age → 节点 ID]
     H --> L[B+Tree: price → 节点 ID]
     I --> M[B+Tree: active → 节点 ID]
-
-    style A fill:#e1f5ff
-    style B fill:#ffe1e1
-    style C fill:#e1ffe1
-    style D fill:#ffffe1
-    style E fill:#f0e1ff
 ```
 
 ### 基于属性的查询流程

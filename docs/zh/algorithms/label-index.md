@@ -29,13 +29,6 @@ graph TD
     F --> I[节点 ID: 1, 5, 9]
     G --> J[节点 ID: 2, 6, 10]
     H --> K[节点 ID: 3, 7, 11]
-
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style C fill:#f0f0f0
-    style F fill:#ffe1e1
-    style G fill:#ffe1e1
-    style H fill:#ffe1e1
 ```
 
 ### 查询流程

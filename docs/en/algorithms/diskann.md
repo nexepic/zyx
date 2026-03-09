@@ -43,9 +43,6 @@ graph TD
     B -->|distance| F[Node F]
     C -->|distance| G[Node G]
     D -->|distance| H[Node H]
-
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#bbf,stroke:#333,stroke-width:2px
 ```
 
 - **Max Degree**: Each node maintains at most `maxDegree` outgoing edges (default: 64)
@@ -227,10 +224,6 @@ flowchart TD
     Sort --> Limit[Limit to beam width]
     Limit --> Rerank[Re-rank with exact distances]
     Rerank --> Return([Return top-k results])
-
-    style Start fill:#90EE90
-    style Return fill:#90EE90
-    style Rerank fill:#FFB6C1
 ```
 
 **Complexity**: O(beamWidth × maxDegree × dim)
@@ -296,9 +289,6 @@ graph TD
     B -->|0.8| C
     B -->|1.2| D
 
-    style B fill:#90EE90
-    style C fill:#FFB6C1
-    style D fill:#FFB6C1
 
     Note["Candidate 2 is occluded: alpha*0.8 <= 1.5"]
 ```

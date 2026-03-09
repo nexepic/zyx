@@ -34,12 +34,6 @@ graph TD
     G --> K[B+Tree: age → Node IDs]
     H --> L[B+Tree: price → Node IDs]
     I --> M[B+Tree: active → Node IDs]
-
-    style A fill:#e1f5ff
-    style B fill:#ffe1e1
-    style C fill:#e1ffe1
-    style D fill:#ffffe1
-    style E fill:#f0e1ff
 ```
 
 ### Property-Based Query Flow

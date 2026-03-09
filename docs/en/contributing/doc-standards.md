@@ -318,6 +318,151 @@ graph LR
 ```
 ```
 
+#### Visual Diagram Standards
+
+**CRITICAL**: Follow these strict guidelines for all diagrams in documentation.
+
+1. **NO ASCII ART**: Absolutely NO hand-drawn ASCII art diagrams
+   - **Forbidden**: Box-drawing characters like `┌│└─│/\`, `+----+`, `|    |`
+   - **Why**: ASCII art is difficult to maintain, error-prone, renders poorly on different devices, and cannot be easily updated
+   - **Always use**: Mermaid diagrams instead
+
+2. **Color Restrictions**: Professional grayscale only
+   - **FORBIDDEN colors** (never use these):
+     - `fill:#90EE90` (light green)
+     - `fill:#e1f5ff` (light blue)
+     - `fill:#ffe1e1` (light red)
+     - `fill:#ff0`, `fill:#f9f`, `fill:#bbf` (bright colors)
+     - `fill:lightblue`, `fill:lightgreen`, etc.
+     - Any `stroke:` styling with colors
+   - **ALLOWED styling** (use sparingly):
+     - No fill/color at all (default black/white) - **PREFERRED**
+     - Subtle grays only: `fill:#f0f0f0`, `fill:#e0e0e0`, `fill:#d0d0d0`
+   - **Rationale**: Colorful diagrams appear unprofessional, may not print well, and can be distracting. Simple grayscale diagrams are cleaner and more publication-ready.
+
+3. **Diagram Types**: Use appropriate Mermaid diagram types:
+   - **Structure**: `classDiagram` for class hierarchies, data structures
+   - **Flow/Process**: `flowchart TD` or `graph TD` for processes and flows
+   - **State**: `stateDiagram-v2` for state machines
+   - **Sequence**: `sequenceDiagram` for interactions
+   - **Entity Relationship**: `erDiagram` for database schemas
+
+4. **Diagram Clarity**:
+   - Keep diagrams simple and focused
+   - Avoid excessive detail or visual noise
+   - Ensure text is readable and labels are clear
+   - Use consistent styling across all documentation
+
+#### Examples
+
+**GOOD - Clean Mermaid diagram:**
+```mermaid
+classDiagram
+    class Database {
+        +open() void
+        +close() void
+        +execute(query) Result
+    }
+    class Transaction {
+        +commit() bool
+        +rollback() void
+    }
+    Database --> Transaction
+```
+
+**BAD - ASCII art (FORBIDDEN):**
+```
+┌─────────────┐
+│  Database   │
+├─────────────┤
+│  open()     │
+│  close()    │
+│  execute()  │
+└─────────────┘
+```
+
+**BAD - Colorful Mermaid (FORBIDDEN):**
+```mermaid
+graph TD
+    A[Start] --> B[Process]
+    style A fill:#90EE90
+    style B fill:#e1f5ff
+    style A stroke:#f00,stroke-width:4px
+```
+
+**GOOD - Professional grayscale:**
+```mermaid
+graph TD
+    A[Start] --> B[Process]
+    B --> C[End]
+```
+
+#### Code Example Standards
+
+1. **Real Code Only**: All code examples MUST be from actual implementation
+   - **Forbidden**: Hypothetical code, pseudo-code, "simplified" examples
+   - **Required**: Copy directly from source files
+   - **Reference**: Include file paths for context (e.g., `See: include/graph/core/Database.hpp:123-145`)
+
+2. **Code Accuracy**:
+   - Verify all examples compile and work
+   - Keep examples up-to-date with code changes
+   - Include necessary headers and context
+
+3. **Code Formatting**:
+   - Use proper language tags: ` ```cpp `, ` ```bash `, ` ```python `
+   - Include helpful comments
+   - Keep examples focused and concise
+
+#### Bilingual Documentation Requirements
+
+1. **Parallel Structure**:
+   - English files: `docs/en/...`
+   - Chinese files: `docs/zh/...`
+   - Mirror directory structure exactly
+   - Same filenames in both languages
+
+2. **Translation Quality**:
+   - **Forbidden**: Machine translation (Google Translate, DeepL, etc.)
+   - **Required**: Technically accurate human translation
+   - Use proper technical terminology
+   - Maintain consistency with existing translations
+
+3. **Synchronization**:
+   - Both versions must be updated together
+   - Maintain parallel structure and content
+   - Cross-references must work in both languages
+
+4. **Navigation Configuration**:
+   - Update both `docs/.vitepress/config/en.ts` and `docs/.vitepress/config/zh.ts`
+   - Keep sidebar structure synchronized
+   - Use consistent link text (translated appropriately)
+
+#### Documentation Review Checklist
+
+Before submitting documentation changes:
+
+**Visual Standards:**
+- [ ] No ASCII art diagrams present
+- [ ] All Mermaid diagrams use only black/white/gray colors
+- [ ] Diagrams are clean and professional
+- [ ] Diagrams render correctly in the documentation site
+
+**Content Standards:**
+- [ ] Code examples are from actual implementation
+- [ ] Code examples include file paths/references
+- [ ] Both English and Chinese versions exist
+- [ ] Both versions are synchronized
+- [ ] Translation is technically accurate (not machine-translated)
+
+**Technical Standards:**
+- [ ] All links and cross-references work
+- [ ] VitePress config files updated (if adding new files)
+- [ ] Diagrams use appropriate Mermaid types
+- [ ] Code blocks have correct language tags
+- [ ] Tables are properly formatted
+- [ ] Spelling and grammar checked
+
 ## Review Process
 
 ### Documentation Review Checklist

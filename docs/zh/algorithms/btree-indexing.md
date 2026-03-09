@@ -61,34 +61,33 @@ graph TD
     D -.-> E
     E -.-> F
     F -.-> G
-
-    style D fill:#90EE90
-    style E fill:#90EE90
-    style F fill:#90EE90
-    style G fill:#90EE90
 ```
 
 ### 内部节点结构
 
 内部节点包含分隔键和子指针：
 
-```
-┌─────────────────────────────────────────────────────┐
-│ 内部节点 (256 字节)                                 │
-├─────────────────────────────────────────────────────┤
-│ 元数据：                                            │
-│   - 节点类型：INTERNAL                              │
-│   - 条目数：3                                       │
-│   - 子节点数：4                                     │
-│   - 层级：1                                         │
-│   - 父节点 ID：100                                  │
-├─────────────────────────────────────────────────────┤
-│ 子条目：                                            │
-│   [DummyKey] -> 子节点ID: 200                       │
-│   [键: 50]     -> 子节点ID: 201                     │
-│   [键: 100]    -> 子节点ID: 202                     │
-│   [键: 150]    -> 子节点ID: 203                     │
-└─────────────────────────────────────────────────────┘
+```mermaid
+classDiagram
+    class InternalNode {
+        +NodeType: INTERNAL
+        +EntryCount: 3
+        +ChildCount: 4
+        +Level: 1
+        +ParentId: 100
+        +getChildren()
+    }
+
+    class ChildEntry {
+        +Key: PropertyValue
+        +ChildId: int64_t
+    }
+
+    InternalNode "1" --> "4" ChildEntry : contains
+    ChildEntry : [DummyKey] -> ChildId: 200
+    ChildEntry : [Key: 50] -> ChildId: 201
+    ChildEntry : [Key: 100] -> ChildId: 202
+    ChildEntry : [Key: 150] -> ChildId: 203
 ```
 
 **搜索逻辑**：对于键 K，找到最大的分隔键 ≤ K，遍历到该子节点。
@@ -97,24 +96,30 @@ graph TD
 
 叶子节点包含实际的键值对和链表指针：
 
-```
-┌─────────────────────────────────────────────────────┐
-│ 叶子节点 (256 字节)                                 │
-├─────────────────────────────────────────────────────┤
-│ 元数据：                                            │
-│   - 节点类型：LEAF                                  │
-│   - 条目数：4                                       │
-│   - 层级：0                                         │
-│   - 父节点 ID：100                                  │
-│   - 下一叶子：202                                   │
-│   - 上一叶子：200                                   │
-├─────────────────────────────────────────────────────┤
-│ 条目：                                              │
-│   [键: 10]   -> [值: 1, 5, 8]                      │
-│   [键: 25]   -> [值: 3]                             │
-│   [键: 40]   -> [值: 7, 9]                          │
-│   [键: 45]   -> [值: 2, 4, 6]                       │
-└─────────────────────────────────────────────────────┘
+```mermaid
+classDiagram
+    class LeafNode {
+        +NodeType: LEAF
+        +EntryCount: 4
+        +Level: 0
+        +ParentId: 100
+        +NextLeafId: 202
+        +PrevLeafId: 200
+        +getEntries()
+    }
+
+    class Entry {
+        +Key: PropertyValue
+        +Values: vector~int64_t~
+        +KeyBlobId: int64_t
+        +ValuesBlobId: int64_t
+    }
+
+    LeafNode "1" --> "4" Entry : contains
+    Entry : [Key: 10] -> [Values: 1, 5, 8]
+    Entry : [Key: 25] -> [Values: 3]
+    Entry : [Key: 40] -> [Values: 7, 9]
+    Entry : [Key: 45] -> [Values: 2, 4, 6]
 ```
 
 **条目结构**：

@@ -193,15 +193,6 @@ graph TB
     C2 -.->|"centroid[87]"| P2
     C3 -.->|"centroid[203]"| P3
     C4 -.->|"centroid[51]"| P4
-
-    style C1 fill:#e1f5ff
-    style C2 fill:#e1f5ff
-    style C3 fill:#e1f5ff
-    style C4 fill:#e1f5ff
-    style P1 fill:#ffe1e1
-    style P2 fill:#ffe1e1
-    style P3 fill:#ffe1e1
-    style P4 fill:#ffe1e1
 ```
 
 ### Memory Layout
@@ -310,11 +301,6 @@ flowchart TD
     Table --> Lookup
     Lookup --> Sum["Sum M distances<br/>d = Σ T[m, codes[m]]"]
     Sum --> Return([Approximate distance d])
-
-    style Start fill:#90EE90
-    style Return fill:#90EE90
-    style Table fill:#FFE4B5
-    style Lookup fill:#87CEEB
 ```
 
 ### Complexity Analysis
