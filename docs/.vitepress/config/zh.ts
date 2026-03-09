@@ -85,6 +85,29 @@ export default {
         items: [
           { text: '缓存淘汰', link: '/zh/algorithms/cache-eviction' }
         ]
+      },
+      {
+        text: '索引算法',
+        items: [
+          { text: 'B+树索引', link: '/zh/algorithms/btree-indexing' },
+          { text: '标签索引', link: '/zh/algorithms/label-index' },
+          { text: '属性索引', link: '/zh/algorithms/property-index' }
+        ]
+      },
+      {
+        text: '向量算法',
+        items: [
+          { text: 'DiskANN', link: '/zh/algorithms/diskann' },
+          { text: '乘积量化', link: '/zh/algorithms/product-quantization' },
+          { text: 'K-Means 聚类', link: '/zh/algorithms/kmeans' },
+          { text: '向量度量', link: '/zh/algorithms/vector-metrics' }
+        ]
+      },
+      {
+        text: '遍历算法',
+        items: [
+          { text: '关系遍历', link: '/zh/algorithms/relationship-traversal' }
+        ]
       }
     ],
     '/zh/architecture/': [
