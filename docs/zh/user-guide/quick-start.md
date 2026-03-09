@@ -4,9 +4,14 @@
 
 ::: tip 前置要求
 在开始之前，请确保您已经：
-- ✅ 编译了 Metrix 项目
-- ✅ 生成了 `metrix-cli` 可执行文件
+- ✅ 安装了 Metrix（下载预编译版本或使用包管理器）
+- ✅ `metrix-cli` 可执行文件可用
 - ✅ 熟悉基本的 Cypher 查询语言
+
+**安装方式**：
+- 从官网下载预编译的可执行文件
+- 使用系统包管理器（如 Homebrew、APT 等）
+- 或参考 [安装指南](/zh/contributing/installation)
 :::
 
 ## 启动 CLI
@@ -16,7 +21,11 @@ Metrix CLI 提供了一个交互式 REPL（Read-Eval-Print Loop）用于执行 C
 ### 基本用法
 
 ```bash
-./buildDir/apps/cli/metrix-cli ./mydb
+# 如果使用预编译版本
+metrix-cli ./mydb
+
+# 或指定完整路径
+./metrix-cli ./mydb
 ```
 
 ::: info 数据库路径

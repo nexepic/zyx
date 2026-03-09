@@ -693,4 +693,3 @@ float* allocateAlignedVector(size_t dim) {
 - [DiskANN 算法](/zh/algorithms/diskann) - 基于图的向量搜索
 - [乘积量化](/zh/algorithms/product-quantization) - 向量压缩
 - [K-Means 聚类](/zh/algorithms/kmeans) - 聚类算法
-- [向量索引](/zh/architecture/vector-indexing) - 整体向量架构

@@ -713,7 +713,6 @@ for (auto& [docId, score] : documents) {
 ## See Also
 
 - [DiskANN Algorithm](/en/algorithms/diskann) - Graph-based ANN search with PQ
-- [Vector Indexing](/en/architecture/vector-indexing) - Overall vector index architecture
 - [K-Means Clustering](/en/algorithms/kmeans) - PQ training algorithm
 - [Vector Metrics](/en/algorithms/vector-metrics) - Distance metric implementations
 - [Compression Algorithm](/en/algorithms/compression) - Lossless compression techniques

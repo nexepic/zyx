@@ -713,7 +713,6 @@ for (auto& [docId, score] : documents) {
 ## 相关内容
 
 - [DiskANN 算法](/zh/algorithms/diskann) - 基于图的 ANN 搜索与 PQ
-- [向量索引](/zh/architecture/vector-indexing) - 整体向量索引架构
 - [K-Means 聚类](/zh/algorithms/kmeans) - PQ 训练算法
 - [向量度量](/zh/algorithms/vector-metrics) - 距离度量实现
 - [压缩算法](/zh/algorithms/compression) - 无损压缩技术

@@ -617,6 +617,5 @@ if (!duplicates.empty() && duplicates[0].second < 0.01) {
 ## 相关内容
 
 - [乘积量化](/zh/algorithms/product-quantization) - PQ 算法详解
-- [向量索引](/zh/architecture/vector-indexing) - 整体向量索引架构
 - [K-均值聚类](/zh/algorithms/kmeans) - PQ 训练使用 K-均值
 - [向量度量](/zh/algorithms/vector-metrics) - 距离度量实现
