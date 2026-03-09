@@ -29,16 +29,14 @@ struct EntityState {
 
 ### State Chain
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ Entity ID: 42                                           │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  State v1 ──→ State v2 ──→ State v3 ──→ State v4      │
-│  (Initial)    (Modified)   (Modified)   (Committed)     │
-│  Tx: 100      Tx: 105      Tx: 110      Tx: 110         │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    A[State v1<br/>Initial<br/>Tx: 100] --> B[State v2<br/>Modified<br/>Tx: 105]
+    B --> C[State v3<br/>Modified<br/>Tx: 110]
+    C --> D[State v4<br/>Committed<br/>Tx: 110]
+
+    E[Entity ID: 42]
+    E -.-> A
 ```
 
 ## Optimistic Locking Algorithm
@@ -185,27 +183,39 @@ void pruneOldVersions(Entity* entity) {
 
 Two transactions modify same entity:
 
-```
-Timeline:
-  Tx1: Read entity (v1)
-  Tx2: Read entity (v1)
-  Tx1: Write entity (v2) - version 1 → 2
-  Tx1: Commit (success)
-  Tx2: Write entity (v3) - version 1 → 3
-  Tx2: Commit (FAIL! version is now 2, not 1)
+```mermaid
+sequenceDiagram
+    participant Tx1
+    participant Tx2
+    participant Entity
+
+    Tx1->>Entity: Read entity (v1)
+    Tx2->>Entity: Read entity (v1)
+    Tx1->>Entity: Write entity (v2)
+    Note over Tx1,Entity: version 1 → 2
+    Tx1->>Tx1: Commit (success)
+    Tx2->>Entity: Write entity (v3)
+    Note over Tx2,Entity: version 1 → 3
+    Tx2->>Tx2: Commit (FAIL!<br/>version is now 2, not 1)
 ```
 
 ### Read-Write Conflict
 
 Phantom reads prevented by MVCC:
 
-```
-Timeline:
-  Tx1: Read entity (v1)
-  Tx2: Write entity (v2) - version 1 → 2
-  Tx2: Commit (success)
-  Tx1: Read entity (still sees v1) - MVCC snapshot
-  Tx1: Commit (success - no conflict)
+```mermaid
+sequenceDiagram
+    participant Tx1
+    participant Tx2
+    participant Entity
+
+    Tx1->>Entity: Read entity (v1)
+    Tx2->>Entity: Write entity (v2)
+    Note over Tx2,Entity: version 1 → 2
+    Tx2->>Tx2: Commit (success)
+    Tx1->>Entity: Read entity (still sees v1)
+    Note over Tx1: MVCC snapshot
+    Tx1->>Tx1: Commit (success - no conflict)
 ```
 
 ## Version Management

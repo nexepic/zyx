@@ -246,12 +246,14 @@ struct alignas(2) BFloat16 {
 
 **转换图**：
 
-```
-Float32: [SEEEEEEE EMMMMMMM MMMMMMMM MMMMMMMM]
-           │        │
-           └────────┴─── 保留这 16 位
+```mermaid
+graph LR
+    A[Float32<br/>32 bits] --> B[Sign + Exponent<br/>16 bits retained]
+    A --> C[Mantissa<br/>16 bits truncated]
 
-BFloat16:         [SEEEEEEE EMMMMMMM]
+    B --> D[BFloat16<br/>16 bits]
+
+    A2[SEEEEEEE<br/>EMMMMMMM<br/>MMMMMMMM<br/>MMMMMMMM] --> B2[SEEEEEEE<br/>EMMMMMMM]
 ```
 
 - **S**：符号位（1 位）
@@ -382,13 +384,12 @@ sum = _mm256_reduce_add_ps(sq);
 
 ### 决策树
 
-```
-向量是否已归一化？
-├─ 是 → 使用内积（最快）
-└─ 否
-   ├─ 幅度是否重要？
-   │  ├─ 是 → 使用 L2 距离
-   │  └─ 否 → 归一化向量，然后使用 IP
+```mermaid
+flowchart TD
+    A[向量是否已归一化？] -->|是| B[使用内积<br/>（最快）]
+    A -->|否| C{幅度是否重要？}
+    C -->|是| D[使用 L2 距离]
+    C -->|否| E[归一化向量，<br/>然后使用 IP]
 ```
 
 ### 用例示例

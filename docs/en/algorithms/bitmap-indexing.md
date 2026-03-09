@@ -10,12 +10,12 @@ Bitmaps are arrays of bits where each bit represents the state of a fixed-size b
 
 ### Layout
 
-```
-Byte 0: [Bit 0] [Bit 1] [Bit 2] ... [Bit 7]
-Byte 1: [Bit 8] [Bit 9] [Bit 10] ... [Bit 15]
-...
-Byte N: [Bit 8N] ... [Bit 8N+7]
-```
+| Byte | Bit 0 | Bit 1 | Bit 2 | Bit 3 | Bit 4 | Bit 5 | Bit 6 | Bit 7 |
+|------|-------|-------|-------|-------|-------|-------|-------|-------|
+| Byte 0 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+| Byte 1 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
+| Byte N | 8N | 8N+1 | 8N+2 | 8N+3 | 8N+4 | 8N+5 | 8N+6 | 8N+7 |
 
 ### Bitmap Size
 
