@@ -74,6 +74,7 @@ public:
 	void visit(IsNullExpression *expr) override;
 	void visit(QuantifierFunctionExpression *expr) override;
 	void visit(ExistsExpression *expr) override;
+	void visit(PatternComprehensionExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.
