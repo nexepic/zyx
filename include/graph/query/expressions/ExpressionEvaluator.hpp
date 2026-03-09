@@ -72,6 +72,7 @@ public:
 	void visit(ListComprehensionExpression *expr) override;
 	void visit(ListLiteralExpression *expr) override;
 	void visit(IsNullExpression *expr) override;
+	void visit(QuantifierFunctionExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.
