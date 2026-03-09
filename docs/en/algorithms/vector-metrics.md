@@ -246,12 +246,14 @@ struct alignas(2) BFloat16 {
 
 **Conversion Diagram**:
 
-```
-Float32: [SEEEEEEE EMMMMMMM MMMMMMMM MMMMMMMM]
-           │        │
-           └────────┴─── Keep these 16 bits
+```mermaid
+graph LR
+    A[Float32<br/>32 bits] --> B[Sign + Exponent<br/>16 bits retained]
+    A --> C[Mantissa<br/>16 bits truncated]
 
-BFloat16:         [SEEEEEEE EMMMMMMM]
+    B --> D[BFloat16<br/>16 bits]
+
+    A2[SEEEEEEE<br/>EMMMMMMM<br/>MMMMMMMM<br/>MMMMMMMM] --> B2[SEEEEEEE<br/>EMMMMMMM]
 ```
 
 - **S**: Sign bit (1 bit)
@@ -382,13 +384,12 @@ For 1 million vectors with 768 dimensions:
 
 ### Decision Tree
 
-```
-Are vectors normalized?
-├─ Yes → Use Inner Product (fastest)
-└─ No
-   ├─ Is magnitude important?
-   │  ├─ Yes → Use L2 Distance
-   │  └─ No → Normalize vectors, then use IP
+```mermaid
+flowchart TD
+    A[Are vectors normalized?] -->|Yes| B[Use Inner Product<br/>(fastest)]
+    A -->|No| C{Is magnitude important?}
+    C -->|Yes| D[Use L2 Distance]
+    C -->|No| E[Normalize vectors,<br/>then use IP]
 ```
 
 ### Use Case Examples
