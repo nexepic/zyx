@@ -28,6 +28,7 @@
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include "graph/query/expressions/ExistsExpression.hpp"
+#include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {

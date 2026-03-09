@@ -26,6 +26,7 @@
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include "graph/query/expressions/ExistsExpression.hpp"
+#include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -613,6 +614,29 @@ void ExpressionEvaluator::visit(ExistsExpression *expr) {
 	// 2. Use the graph's traversal API to search for matching patterns
 	// 3. Return true if at least one match exists, false otherwise
 	// 4. If there's a WHERE clause, apply it as a filter on matched patterns
+}
+
+void ExpressionEvaluator::visit(PatternComprehensionExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// Pattern comprehensions require graph traversal and pattern matching
+	// For now, throw a not-yet-implemented error
+	// TODO: Implement full pattern matching and comprehension support
+	throw ExpressionEvaluationException(
+		"Pattern comprehensions are not yet fully implemented. "
+		"The pattern '" + expr->getPattern() + "' requires graph traversal support. "
+		"Please use list comprehensions [x IN list | expr] as alternatives."
+	);
+
+	// Future implementation:
+	// 1. Parse the pattern string to extract nodes, relationships, and direction
+	// 2. Use the graph's traversal API to find all pattern matches
+	// 3. For each match, evaluate the map expression and collect results
+	// 4. If there's a WHERE clause, apply it as a filter on matches
+	// 5. Return the collected results as a list
 }
 
 } // namespace graph::query::expressions
