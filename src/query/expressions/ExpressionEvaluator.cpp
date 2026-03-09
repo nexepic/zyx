@@ -24,6 +24,7 @@
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
+#include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -548,6 +549,47 @@ void ExpressionEvaluator::visit(IsNullExpression *expr) {
 	bool result = expr->isNegated() ? !isNull : isNull;
 
 	result_ = PropertyValue(result);
+}
+
+void ExpressionEvaluator::visit(QuantifierFunctionExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// Look up the quantifier function from FunctionRegistry
+	const auto& registry = FunctionRegistry::getInstance();
+	const ScalarFunction* func = registry.lookupScalarFunction(expr->getFunctionName());
+
+	if (!func) {
+		throw ExpressionEvaluationException(
+			"Unknown quantifier function: " + expr->getFunctionName()
+		);
+	}
+
+	// Try to cast to PredicateFunction
+	const PredicateFunction* predFunc = dynamic_cast<const PredicateFunction*>(func);
+	if (!predFunc) {
+		throw ExpressionEvaluationException(
+			"Function " + expr->getFunctionName() + " is not a quantifier function"
+		);
+	}
+
+	// Get the list expression and WHERE expression
+	// Note: We need to get the raw pointers from unique_ptr
+	auto* listExpr = const_cast<Expression*>(expr->getListExpression());
+	auto* whereExpr = const_cast<Expression*>(expr->getWhereExpression());
+
+	// Create a mutable copy of the context
+	EvaluationContext mutableContext = const_cast<EvaluationContext&>(context_);
+
+	// Call the quantifier function's evaluate method
+	result_ = predFunc->evaluate(
+		expr->getVariable(),
+		std::unique_ptr<Expression>(listExpr->clone()),
+		std::unique_ptr<Expression>(whereExpr->clone()),
+		mutableContext
+	);
 }
 
 } // namespace graph::query::expressions

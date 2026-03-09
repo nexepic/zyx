@@ -26,6 +26,7 @@
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
+#include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -505,7 +506,54 @@ std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::F
 
 	std::string functionName = ctx->functionName()->getText();
 
-	// Parse arguments
+	// Convert to lowercase for comparison
+	std::string functionNameLower = functionName;
+	std::transform(functionNameLower.begin(), functionNameLower.end(),
+	               functionNameLower.begin(), [](unsigned char c) { return std::tolower(c); });
+
+	// Check if this is a quantifier function (all, any, none, single)
+	bool isQuantifier = (functionNameLower == "all" || functionNameLower == "any" ||
+	                     functionNameLower == "none" || functionNameLower == "single");
+
+	if (isQuantifier) {
+		// Quantifier functions have special syntax: all(variable IN list WHERE condition)
+		// Parse the arguments to extract the components
+		auto exprs = ctx->expression();
+		if (exprs.size() >= 2) {
+			// We expect at least 2 arguments: variable and list expression
+			// The third argument (if present) is the WHERE condition
+
+			// First argument should be a variable reference
+			auto firstArg = buildExpression(exprs[0]);
+			if (auto *varRef = dynamic_cast<VariableReferenceExpression*>(firstArg.get())) {
+				std::string variable = varRef->getVariableName();
+
+				// Second argument should be the list expression
+				auto listExpr = buildExpression(exprs[1]);
+
+				// Third argument (if present) is the WHERE condition
+				std::unique_ptr<Expression> whereExpr;
+				if (exprs.size() >= 3) {
+					whereExpr = buildExpression(exprs[2]);
+				} else {
+					// If no WHERE clause, use a literal true expression
+					whereExpr = std::make_unique<LiteralExpression>(true);
+				}
+
+				return std::make_unique<QuantifierFunctionExpression>(
+					functionNameLower,
+					variable,
+					std::move(listExpr),
+					std::move(whereExpr)
+				);
+			}
+		}
+
+		// If we can't parse the special syntax, fall through to normal function call
+		// This will result in an error at runtime
+	}
+
+	// Parse arguments for normal function calls
 	std::vector<std::unique_ptr<Expression>> arguments;
 	auto exprs = ctx->expression();
 	for (auto exprCtx : exprs) {
