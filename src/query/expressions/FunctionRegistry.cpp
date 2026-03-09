@@ -20,6 +20,10 @@
 
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/expressions/AllFunction.hpp"
+#include "graph/query/expressions/AnyFunction.hpp"
+#include "graph/query/expressions/NoneFunction.hpp"
+#include "graph/query/expressions/SingleFunction.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cctype>
@@ -102,6 +106,12 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	// List functions
 	registerFunction(std::make_unique<RangeFunction>());
 	registerFunction(std::make_unique<ReduceFunction>());
+
+	// Quantifier functions
+	registerFunction(std::make_unique<AllFunction>());
+	registerFunction(std::make_unique<AnyFunction>());
+	registerFunction(std::make_unique<NoneFunction>());
+	registerFunction(std::make_unique<SingleFunction>());
 }
 
 // ============================================================================

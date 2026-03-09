@@ -28,3 +28,13 @@ test_HeterogeneousLists_Unit = executable(
 )
 
 test('test_HeterogeneousLists_Unit', test_HeterogeneousLists_Unit)
+
+# Quantifier functions unit tests
+test_QuantifierFunctions_Unit = executable(
+  'test_QuantifierFunctions_Unit',
+  'test_QuantifierFunctions_Unit.cpp',
+  dependencies: [gtest_dep, metrix_core_dep],
+  install: false
+)
+
+test('test_QuantifierFunctions_Unit', test_QuantifierFunctions_Unit)
