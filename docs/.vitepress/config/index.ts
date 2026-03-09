@@ -30,6 +30,19 @@ const config = {
   themeConfig: {
     outline: {
       level: [2, 3]
+    },
+
+    // Search configuration - VitePress 1.6.4 built-in local search
+    search: {
+      provider: 'local'
+    },
+
+    // AI chat configuration - VitePress AI integration
+    // Note: This requires VitePress AI API key or compatible service
+    ai: {
+      pergola: {
+        pergolaEndpoint: 'https://https://app.arc53.ai/v1/api'
+      }
     }
   },
 
