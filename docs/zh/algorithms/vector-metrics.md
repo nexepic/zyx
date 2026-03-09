@@ -248,13 +248,20 @@ struct alignas(2) BFloat16 {
 
 ```mermaid
 graph LR
-    A[Float32<br/>32 bits] --> B[Sign + Exponent<br/>16 bits retained]
-    A --> C[Mantissa<br/>16 bits truncated]
+    A[Float32] --> B[Sign + Exponent]
+    A --> C[Mantissa]
 
-    B --> D[BFloat16<br/>16 bits]
+    B --> D[BFloat16]
 
-    A2[SEEEEEEE<br/>EMMMMMMM<br/>MMMMMMMM<br/>MMMMMMMM] --> B2[SEEEEEEE<br/>EMMMMMMM]
+    A2[Float32 layout] --> B2[BFloat16 layout]
 ```
+
+**位表示：**
+- Float32：SEEEEEEE EMMMMMMM MMMMMMMM MMMMMMMM（32 位）
+- BFloat16：SEEEEEEE EMMMMMMM（16 位）
+- S：符号（1 位）
+- E：指数（8 位）
+- M：尾数（BFloat16 中 7 位，Float32 中 23 位）
 
 - **S**：符号位（1 位）
 - **E**：指数（8 位）
@@ -386,10 +393,10 @@ sum = _mm256_reduce_add_ps(sq);
 
 ```mermaid
 flowchart TD
-    A[向量是否已归一化？] -->|是| B[使用内积<br/>（最快）]
+    A[向量是否已归一化？] -->|是| B[使用内积]
     A -->|否| C{幅度是否重要？}
     C -->|是| D[使用 L2 距离]
-    C -->|否| E[归一化向量，<br/>然后使用 IP]
+    C -->|否| E[归一化向量，然后使用 IP]
 ```
 
 ### 用例示例

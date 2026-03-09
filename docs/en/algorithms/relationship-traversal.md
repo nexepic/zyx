@@ -37,13 +37,18 @@ Each edge maintains four pointers for traversal in both directions:
 
 ```mermaid
 graph LR
-    A[Node A<br/>Source] -->|firstOut| B[Edge 1]
+    A[Node A] -->|firstOut| B[Edge 1]
     B -->|nextOut| C[Edge 2]
     C -->|nextOut| D[Edge 3]
 
-    E[Node B<br/>Target] -->|firstIn| C
+    E[Node B] -->|firstIn| C
     C -->|nextIn| F[Edge 4]
 ```
+
+**Bidirectional Edge Linking:**
+- Node A (Source): outgoing edges list
+- Node B (Target): incoming edges list
+- Edge 2 appears in both lists for efficient bidirectional traversal
 
 **Key Point**: The same edge (Edge 2) appears in both Node A's outgoing list and Node B's incoming list, enabling efficient bidirectional traversal.
 
@@ -498,8 +503,11 @@ graph LR
     A -->|next| C[Next Edge]
 
     B -.->|bypass| C
-
 ```
+
+**Edge Unlinking:**
+- Bypass the edge to remove by connecting previous to next
+- O(1) operation thanks to doubly-linked list structure
 
 ## Integration with Cypher Queries
 

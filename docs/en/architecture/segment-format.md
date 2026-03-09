@@ -121,9 +121,9 @@ classDiagram
 ```mermaid
 graph LR
     A[Database File] --> B[File Header]
-    A --> C[Segment 0<br/>4MB]
-    A --> D[Segment 1<br/>4MB]
-    A --> E[Segment 2<br/>4MB]
+    A --> C[Segment 0]
+    A --> D[Segment 1]
+    A --> E[Segment 2]
     A --> F[Segment N]
     A --> G[WAL]
 
@@ -131,6 +131,11 @@ graph LR
     C --> I[Free Space Bitmap]
     C --> J[Data Pages]
 ```
+
+**Segment Organization:**
+- Each segment: 4MB default size
+- Segment 0-N: Data storage segments
+- WAL: Write-Ahead Log for durability
 
 ### Segment Internal Composition
 

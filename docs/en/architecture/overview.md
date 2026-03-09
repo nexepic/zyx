@@ -17,7 +17,7 @@ graph TB
     end
 
     subgraph "Query Engine"
-        P[Parser<br/>ANTLR4]
+        P[Parser]
         QP[Query Planner]
         QE[Query Executor]
     end
@@ -50,6 +50,13 @@ graph TB
     TX --> WAL
     FS --> SM
 ```
+
+**Architecture Layers:**
+- **Application Layer**: CLI tool and embedded applications
+- **API Layer**: C++ and C APIs for integration
+- **Query Engine**: ANTLR4 parser, query planner, and executor
+- **Storage Layer**: FileStorage, WAL, and state management
+- **Core**: Database, transaction, and entity management
 
 ## Key Design Principles
 

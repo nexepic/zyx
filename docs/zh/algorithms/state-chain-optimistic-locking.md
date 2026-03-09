@@ -31,13 +31,19 @@ struct EntityState {
 
 ```mermaid
 graph LR
-    A[State v1<br/>Initial<br/>Tx: 100] --> B[State v2<br/>Modified<br/>Tx: 105]
-    B --> C[State v3<br/>Modified<br/>Tx: 110]
-    C --> D[State v4<br/>Committed<br/>Tx: 110]
+    A[State v1] --> B[State v2]
+    B --> C[State v3]
+    C --> D[State v4]
 
     E[Entity ID: 42]
     E -.-> A
 ```
+
+**状态链演变：**
+- v1：初始状态 (Tx: 100)
+- v2：已修改 (Tx: 105)
+- v3：已修改 (Tx: 110)
+- v4：已提交 (Tx: 110)
 
 ## Optimistic Locking Algorithm
 
@@ -192,11 +198,11 @@ sequenceDiagram
     Tx1->>Entity: Read entity (v1)
     Tx2->>Entity: Read entity (v1)
     Tx1->>Entity: Write entity (v2)
-    Note over Tx1,Entity: version 1 → 2
+    Note over Tx1,Entity: version 1 to 2
     Tx1->>Tx1: Commit (success)
     Tx2->>Entity: Write entity (v3)
-    Note over Tx2,Entity: version 1 → 3
-    Tx2->>Tx2: Commit (FAIL!<br/>version is now 2, not 1)
+    Note over Tx2,Entity: version 1 to 3
+    Tx2->>Tx2: Commit fails: version is now 2, not 1
 ```
 
 ### Read-Write Conflict

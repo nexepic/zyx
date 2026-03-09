@@ -12,18 +12,18 @@ The storage is organized into fixed-size **segments** - contiguous blocks of dis
 graph TB
     subgraph DB["Database File"]
         direction TB
-        FH["File Header<br/>256 bytes"]
-        ST["Segment Table<br/>4KB"]
+        FH["File Header"]
+        ST["Segment Table"]
 
         subgraph Segs["Data Segments"]
-            S1["Seg 0<br/>Nodes<br/>4MB"]
-            S2["Seg 1<br/>Edges<br/>4MB"]
-            S3["Seg 2<br/>Props<br/>4MB"]
-            S4["Seg 3<br/>Free<br/>4MB"]
+            S1["Seg 0"]
+            S2["Seg 1"]
+            S3["Seg 2"]
+            S4["Seg 3"]
         end
 
-        BM["Allocation Bitmap<br/>64KB"]
-        IDX["Index Segment<br/>2MB"]
+        BM["Allocation Bitmap"]
+        IDX["Index Segment"]
 
         FH --> ST
         ST --> S1
@@ -34,6 +34,16 @@ graph TB
         ST --> IDX
     end
 ```
+
+**File Layout Components:**
+- File Header: 256 bytes
+- Segment Table: 4KB
+- Seg 0: Nodes (4MB)
+- Seg 1: Edges (4MB)
+- Seg 2: Properties (4MB)
+- Seg 3: Free (4MB)
+- Allocation Bitmap: 64KB
+- Index Segment: 2MB
 
 ### Segment Internal Structure
 
@@ -415,12 +425,18 @@ Each entity maintains a chain of states for versioning:
 
 ```mermaid
 graph LR
-    S1[State v1<br/>Created] --> S2[State v2<br/>Modified]
-    S2 --> S3[State v3<br/>Committed]
+    S1[State v1] --> S2[State v2]
+    S2 --> S3[State v3]
 
     S3 -.->|Rollback| S2
     S2 -.->|Rollback| S1
 ```
+
+**State Chain Evolution:**
+- v1: Created state
+- v2: Modified state
+- v3: Committed state
+- Rollback support at each stage
 
 ### State Chain Benefits
 
