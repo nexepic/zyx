@@ -31,7 +31,8 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMatchPa
 	CypherParser::PatternContext *pattern,
 	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner,
-	CypherParser::WhereContext *where) {
+	CypherParser::WhereContext *where,
+	bool isOptional) {
 
 	if (!pattern)
 		return rootOp;
@@ -40,6 +41,33 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMatchPa
 	if (parts.empty())
 		return rootOp;
 
+	// For OPTIONAL MATCH, we need to build the pattern operator separately
+	// and then wrap it in OptionalMatchOperator
+	if (isOptional && rootOp) {
+		// Build the pattern operator starting from nullptr (independent of input)
+		std::unique_ptr<query::execution::PhysicalOperator> patternOp = nullptr;
+
+		// Collect required variables and build pattern operator
+		std::vector<std::string> requiredVariables;
+
+		for (auto part : parts) {
+			auto element = part->patternElement();
+
+			// Extract variables from this pattern element
+			collectVariablesFromPatternElement(element, requiredVariables);
+
+			// Build operator for this element
+			patternOp = processMatchPatternElement(element, std::move(patternOp), planner);
+		}
+
+		// Apply WHERE clause if present
+		patternOp = applyWhereFilter(std::move(patternOp), where, planner);
+
+		// Wrap in OptionalMatchOperator
+		return planner->optionalMatchOp(std::move(rootOp), std::move(patternOp), requiredVariables);
+	}
+
+	// Regular MATCH or standalone OPTIONAL MATCH (no input)
 	// Iterate over all pattern parts (e.g. MATCH (a), (b))
 	for (auto part : parts) {
 		auto element = part->patternElement();
@@ -389,6 +417,49 @@ std::vector<query::execution::operators::SetItem> PatternBuilder::extractSetItem
 	}
 
 	return items;
+}
+
+void PatternBuilder::collectVariablesFromPatternElement(
+	CypherParser::PatternElementContext *element,
+	std::vector<std::string> &variables) {
+
+	if (!element)
+		return;
+
+	// Extract variable from head node
+	auto headNodePat = element->nodePattern();
+	std::string headVar = AstExtractor::extractVariable(headNodePat->variable());
+	if (!headVar.empty()) {
+		// Avoid duplicates
+		if (std::find(variables.begin(), variables.end(), headVar) == variables.end()) {
+			variables.push_back(headVar);
+		}
+	}
+
+	// Extract variables from traversal chains
+	for (auto chain : element->patternElementChain()) {
+		auto relPat = chain->relationshipPattern();
+		auto nodePat = chain->nodePattern();
+
+		// Extract edge variable
+		auto relDetail = relPat->relationshipDetail();
+		if (relDetail) {
+			std::string edgeVar = AstExtractor::extractVariable(relDetail->variable());
+			if (!edgeVar.empty()) {
+				if (std::find(variables.begin(), variables.end(), edgeVar) == variables.end()) {
+					variables.push_back(edgeVar);
+				}
+			}
+		}
+
+		// Extract target node variable
+		std::string targetVar = AstExtractor::extractVariable(nodePat->variable());
+		if (!targetVar.empty()) {
+			if (std::find(variables.begin(), variables.end(), targetVar) == variables.end()) {
+				variables.push_back(targetVar);
+			}
+		}
+	}
 }
 
 } // namespace graph::parser::cypher::helpers

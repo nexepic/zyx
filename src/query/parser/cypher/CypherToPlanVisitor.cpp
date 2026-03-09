@@ -88,7 +88,12 @@ std::any CypherToPlanVisitor::visitSingleQuery(CypherParser::SingleQueryContext 
 
 // --- Reading Clauses ---
 std::any CypherToPlanVisitor::visitMatchStatement(CypherParser::MatchStatementContext *ctx) {
-	rootOp_ = clauses::ReadingClauseHandler::handleMatch(ctx, std::move(rootOp_), planner_);
+	// Check if this is an OPTIONAL MATCH
+	if (ctx->K_OPTIONAL()) {
+		rootOp_ = clauses::ReadingClauseHandler::handleOptionalMatch(ctx, std::move(rootOp_), planner_);
+	} else {
+		rootOp_ = clauses::ReadingClauseHandler::handleMatch(ctx, std::move(rootOp_), planner_);
+	}
 	return std::any();
 }
 

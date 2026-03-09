@@ -38,3 +38,13 @@ test_QuantifierFunctions_Unit = executable(
 )
 
 test('test_QuantifierFunctions_Unit', test_QuantifierFunctions_Unit)
+
+# Quantifier functions evaluation tests
+test_QuantifierFunctions_Evaluation = executable(
+  'test_QuantifierFunctions_Evaluation',
+  'test_QuantifierFunctions_Evaluation.cpp',
+  dependencies: [gtest_dep, metrix_core_dep],
+  install: false
+)
+
+test('test_QuantifierFunctions_Evaluation', test_QuantifierFunctions_Evaluation)

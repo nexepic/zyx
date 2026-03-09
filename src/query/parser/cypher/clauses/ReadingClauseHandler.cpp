@@ -135,4 +135,19 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	return rootOp;
 }
 
+std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleOptionalMatch(
+	CypherParser::MatchStatementContext *ctx,
+	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> &planner) {
+
+	auto pattern = ctx->pattern();
+	auto where = ctx->where();
+
+	// OPTIONAL MATCH needs to use OptionalMatchOperator for left outer join semantics
+	// For now, we'll use the regular match pattern building but mark it as optional
+	// TODO: Implement full OptionalMatchOperator with proper left outer join semantics
+
+	return helpers::PatternBuilder::buildMatchPattern(pattern, std::move(rootOp), planner, where, true);
+}
+
 } // namespace graph::parser::cypher::clauses

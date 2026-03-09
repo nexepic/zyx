@@ -173,6 +173,18 @@ namespace graph::query {
 		cartesianProductOp(std::unique_ptr<execution::PhysicalOperator> left,
 						   std::unique_ptr<execution::PhysicalOperator> right);
 
+		/**
+		 * @brief Creates an OPTIONAL MATCH operator with left outer join semantics.
+		 *
+		 * @param input The input operator (left side of join)
+		 * @param optionalPattern The pattern matching operator (right side)
+		 * @param requiredVariables Variables that the pattern introduces (will be NULL if unmatched)
+		 */
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		optionalMatchOp(std::unique_ptr<execution::PhysicalOperator> input,
+					   std::unique_ptr<execution::PhysicalOperator> optionalPattern,
+					   const std::vector<std::string> &requiredVariables);
+
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
 		unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
 				 const std::vector<PropertyValue> &list);

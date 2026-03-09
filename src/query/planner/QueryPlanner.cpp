@@ -32,6 +32,7 @@
 #include "graph/query/execution/operators/LimitOperator.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
+#include "graph/query/execution/operators/OptionalMatchOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/SingleRowOperator.hpp"
@@ -226,6 +227,14 @@ namespace graph::query {
 	QueryPlanner::cartesianProductOp(std::unique_ptr<execution::PhysicalOperator> left,
 									 std::unique_ptr<execution::PhysicalOperator> right) {
 		return std::make_unique<execution::operators::CartesianProductOperator>(std::move(left), std::move(right));
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::optionalMatchOp(std::unique_ptr<execution::PhysicalOperator> input,
+								 std::unique_ptr<execution::PhysicalOperator> optionalPattern,
+								 const std::vector<std::string> &requiredVariables) {
+		return std::make_unique<execution::operators::OptionalMatchOperator>(
+				std::move(input), std::move(optionalPattern), requiredVariables);
 	}
 
 	std::unique_ptr<execution::PhysicalOperator>
