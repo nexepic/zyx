@@ -336,22 +336,22 @@ std::unique_ptr<Expression> CaseExpression::clone() const {
 
 std::string toString(BinaryOperatorType op) {
 	switch (op) {
-		case BinaryOperatorType::ADD: return "+";
-		case BinaryOperatorType::SUBTRACT: return "-";
-		case BinaryOperatorType::MULTIPLY: return "*";
-		case BinaryOperatorType::DIVIDE: return "/";
-		case BinaryOperatorType::MODULO: return "%";
-		case BinaryOperatorType::POWER: return "^";
-		case BinaryOperatorType::EQUAL: return "=";
-		case BinaryOperatorType::NOT_EQUAL: return "<>";
-		case BinaryOperatorType::LESS: return "<";
-		case BinaryOperatorType::GREATER: return ">";
-		case BinaryOperatorType::LESS_EQUAL: return "<=";
-		case BinaryOperatorType::GREATER_EQUAL: return ">=";
-		case BinaryOperatorType::IN: return "IN";
-		case BinaryOperatorType::AND: return "AND";
-		case BinaryOperatorType::OR: return "OR";
-		case BinaryOperatorType::XOR: return "XOR";
+		case BinaryOperatorType::BOP_ADD: return "+";
+		case BinaryOperatorType::BOP_SUBTRACT: return "-";
+		case BinaryOperatorType::BOP_MULTIPLY: return "*";
+		case BinaryOperatorType::BOP_DIVIDE: return "/";
+		case BinaryOperatorType::BOP_MODULO: return "%";
+		case BinaryOperatorType::BOP_POWER: return "^";
+		case BinaryOperatorType::BOP_EQUAL: return "=";
+		case BinaryOperatorType::BOP_NOT_EQUAL: return "<>";
+		case BinaryOperatorType::BOP_LESS: return "<";
+		case BinaryOperatorType::BOP_GREATER: return ">";
+		case BinaryOperatorType::BOP_LESS_EQUAL: return "<=";
+		case BinaryOperatorType::BOP_GREATER_EQUAL: return ">=";
+		case BinaryOperatorType::BOP_IN: return "IN";
+		case BinaryOperatorType::BOP_AND: return "AND";
+		case BinaryOperatorType::BOP_OR: return "OR";
+		case BinaryOperatorType::BOP_XOR: return "XOR";
 	}
 	return "?";
 }
@@ -365,27 +365,27 @@ std::string toString(UnaryOperatorType op) {
 }
 
 bool isArithmeticOperator(BinaryOperatorType op) {
-	return op == BinaryOperatorType::ADD ||
-	       op == BinaryOperatorType::SUBTRACT ||
-	       op == BinaryOperatorType::MULTIPLY ||
-	       op == BinaryOperatorType::DIVIDE ||
-	       op == BinaryOperatorType::MODULO ||
-	       op == BinaryOperatorType::POWER;
+	return op == BinaryOperatorType::BOP_ADD ||
+	       op == BinaryOperatorType::BOP_SUBTRACT ||
+	       op == BinaryOperatorType::BOP_MULTIPLY ||
+	       op == BinaryOperatorType::BOP_DIVIDE ||
+	       op == BinaryOperatorType::BOP_MODULO ||
+	       op == BinaryOperatorType::BOP_POWER;
 }
 
 bool isComparisonOperator(BinaryOperatorType op) {
-	return op == BinaryOperatorType::EQUAL ||
-	       op == BinaryOperatorType::NOT_EQUAL ||
-	       op == BinaryOperatorType::LESS ||
-	       op == BinaryOperatorType::GREATER ||
-	       op == BinaryOperatorType::LESS_EQUAL ||
-	       op == BinaryOperatorType::GREATER_EQUAL;
+	return op == BinaryOperatorType::BOP_EQUAL ||
+	       op == BinaryOperatorType::BOP_NOT_EQUAL ||
+	       op == BinaryOperatorType::BOP_LESS ||
+	       op == BinaryOperatorType::BOP_GREATER ||
+	       op == BinaryOperatorType::BOP_LESS_EQUAL ||
+	       op == BinaryOperatorType::BOP_GREATER_EQUAL;
 }
 
 bool isLogicalOperator(BinaryOperatorType op) {
-	return op == BinaryOperatorType::AND ||
-	       op == BinaryOperatorType::OR ||
-	       op == BinaryOperatorType::XOR;
+	return op == BinaryOperatorType::BOP_AND ||
+	       op == BinaryOperatorType::BOP_OR ||
+	       op == BinaryOperatorType::BOP_XOR;
 }
 
 } // namespace graph::query::expressions

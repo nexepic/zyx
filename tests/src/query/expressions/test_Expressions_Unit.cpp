@@ -262,7 +262,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_VisitVariableReference_MissingPr
 TEST_F(ExpressionsUnitTest, BinaryOp_Addition_Integer) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::ADD, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -272,7 +272,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Addition_Integer) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Addition_Double) {
 	auto left = std::make_unique<LiteralExpression>(2.5);
 	auto right = std::make_unique<LiteralExpression>(1.5);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::ADD, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -282,7 +282,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Addition_Double) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Subtraction) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::SUBTRACT, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_SUBTRACT, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -292,7 +292,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Subtraction) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Multiplication) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::MULTIPLY, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -302,7 +302,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Multiplication) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Division) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(10));
 	auto right = std::make_unique<LiteralExpression>(int64_t(2));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -312,7 +312,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Division) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Modulus) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(10));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -322,7 +322,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Modulus) {
 TEST_F(ExpressionsUnitTest, BinaryOp_DivisionByZero) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(10));
 	auto right = std::make_unique<LiteralExpression>(int64_t(0));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
@@ -331,7 +331,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_DivisionByZero) {
 TEST_F(ExpressionsUnitTest, BinaryOp_ModulusByZero) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(10));
 	auto right = std::make_unique<LiteralExpression>(int64_t(0));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
@@ -344,7 +344,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_ModulusByZero) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Equal_Integer) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(5));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::EQUAL, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_EQUAL, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -354,7 +354,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Equal_Integer) {
 TEST_F(ExpressionsUnitTest, BinaryOp_NotEqual) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::NOT_EQUAL, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_NOT_EQUAL, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -364,7 +364,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_NotEqual) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LessThan) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(3));
 	auto right = std::make_unique<LiteralExpression>(int64_t(5));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::LESS, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_LESS, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -374,7 +374,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LessThan) {
 TEST_F(ExpressionsUnitTest, BinaryOp_GreaterThanOrEqual) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(5));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::GREATER_EQUAL, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_GREATER_EQUAL, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -384,7 +384,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_GreaterThanOrEqual) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Greater) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::GREATER, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_GREATER, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -394,7 +394,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Greater) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LessEqual) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(3));
 	auto right = std::make_unique<LiteralExpression>(int64_t(5));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::LESS_EQUAL, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_LESS_EQUAL, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -408,7 +408,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LessEqual) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalAnd_TrueTrue) {
 	auto left = std::make_unique<LiteralExpression>(true);
 	auto right = std::make_unique<LiteralExpression>(true);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::AND, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_AND, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -418,7 +418,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalAnd_TrueTrue) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalAnd_TrueFalse) {
 	auto left = std::make_unique<LiteralExpression>(true);
 	auto right = std::make_unique<LiteralExpression>(false);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::AND, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_AND, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -428,7 +428,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalAnd_TrueFalse) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalOr_FalseTrue) {
 	auto left = std::make_unique<LiteralExpression>(false);
 	auto right = std::make_unique<LiteralExpression>(true);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::OR, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_OR, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -438,7 +438,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalOr_FalseTrue) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalOr_FalseFalse) {
 	auto left = std::make_unique<LiteralExpression>(false);
 	auto right = std::make_unique<LiteralExpression>(false);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::OR, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_OR, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -448,7 +448,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalOr_FalseFalse) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalXor_TrueTrue) {
 	auto left = std::make_unique<LiteralExpression>(true);
 	auto right = std::make_unique<LiteralExpression>(true);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::XOR, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_XOR, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -458,7 +458,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalXor_TrueTrue) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalXor_TrueFalse) {
 	auto left = std::make_unique<LiteralExpression>(true);
 	auto right = std::make_unique<LiteralExpression>(false);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::XOR, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_XOR, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -512,7 +512,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Not_False) {
 TEST_F(ExpressionsUnitTest, BinaryOp_NullLeft) {
 	auto left = std::make_unique<LiteralExpression>(); // NULL
 	auto right = std::make_unique<LiteralExpression>(int64_t(5));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::ADD, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -522,7 +522,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_NullLeft) {
 TEST_F(ExpressionsUnitTest, BinaryOp_NullRight) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(); // NULL
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::ADD, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -849,20 +849,20 @@ TEST_F(ExpressionsUnitTest, BinaryOp_ToString_AllOperators) {
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
 
 	std::vector<BinaryOperatorType> operators = {
-		BinaryOperatorType::ADD,
-		BinaryOperatorType::SUBTRACT,
-		BinaryOperatorType::MULTIPLY,
-		BinaryOperatorType::DIVIDE,
-		BinaryOperatorType::MODULO,
-		BinaryOperatorType::EQUAL,
-		BinaryOperatorType::NOT_EQUAL,
-		BinaryOperatorType::LESS,
-		BinaryOperatorType::GREATER,
-		BinaryOperatorType::LESS_EQUAL,
-		BinaryOperatorType::GREATER_EQUAL,
-		BinaryOperatorType::AND,
-		BinaryOperatorType::OR,
-		BinaryOperatorType::XOR
+		BinaryOperatorType::BOP_ADD,
+		BinaryOperatorType::BOP_SUBTRACT,
+		BinaryOperatorType::BOP_MULTIPLY,
+		BinaryOperatorType::BOP_DIVIDE,
+		BinaryOperatorType::BOP_MODULO,
+		BinaryOperatorType::BOP_EQUAL,
+		BinaryOperatorType::BOP_NOT_EQUAL,
+		BinaryOperatorType::BOP_LESS,
+		BinaryOperatorType::BOP_GREATER,
+		BinaryOperatorType::BOP_LESS_EQUAL,
+		BinaryOperatorType::BOP_GREATER_EQUAL,
+		BinaryOperatorType::BOP_AND,
+		BinaryOperatorType::BOP_OR,
+		BinaryOperatorType::BOP_XOR
 	};
 
 	for (auto op : operators) {
@@ -1026,7 +1026,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_BinaryOp_UnknownOperator) {
 	// Create an expression but modify the operator to something invalid
 	// This is tricky since we can't directly set an invalid operator
 	// Instead, we'll test with a valid operator to ensure coverage
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::ADD, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_NO_THROW(expr.accept(evaluator));
@@ -1180,7 +1180,7 @@ TEST_F(ExpressionsUnitTest, ContainsFunction_EmptyString) {
 TEST_F(ExpressionsUnitTest, BinaryOp_MultiplyByZero) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(0));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::MULTIPLY, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1190,7 +1190,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_MultiplyByZero) {
 TEST_F(ExpressionsUnitTest, BinaryOp_SubtractNegative) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(-3));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::SUBTRACT, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_SUBTRACT, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1200,7 +1200,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_SubtractNegative) {
 TEST_F(ExpressionsUnitTest, BinaryOp_DivisionNegative) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(-10));
 	auto right = std::make_unique<LiteralExpression>(int64_t(2));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1210,7 +1210,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_DivisionNegative) {
 TEST_F(ExpressionsUnitTest, BinaryOp_CompareStrings) {
 	auto left = std::make_unique<LiteralExpression>(std::string("apple"));
 	auto right = std::make_unique<LiteralExpression>(std::string("banana"));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::LESS, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_LESS, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1220,7 +1220,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_CompareStrings) {
 TEST_F(ExpressionsUnitTest, BinaryOp_CompareStringAndNumber) {
 	auto left = std::make_unique<LiteralExpression>(std::string("42"));
 	auto right = std::make_unique<LiteralExpression>(int64_t(42));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::EQUAL, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_EQUAL, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1230,7 +1230,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_CompareStringAndNumber) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalAnd_ZeroInteger) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(0));
 	auto right = std::make_unique<LiteralExpression>(int64_t(5));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::AND, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_AND, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1240,7 +1240,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalAnd_ZeroInteger) {
 TEST_F(ExpressionsUnitTest, BinaryOp_LogicalOr_ZeroInteger) {
 	auto left = std::make_unique<LiteralExpression>(int64_t(0));
 	auto right = std::make_unique<LiteralExpression>(int64_t(5));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::OR, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_OR, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1626,7 +1626,7 @@ TEST_F(ExpressionsUnitTest, FunctionCall_Length_EmptyList) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Compare_BoolVsInt) {
 	auto left = std::make_unique<LiteralExpression>(true);
 	auto right = std::make_unique<LiteralExpression>(int64_t(1));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::EQUAL, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_EQUAL, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1637,7 +1637,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Compare_BoolVsInt) {
 TEST_F(ExpressionsUnitTest, BinaryOp_Compare_BoolVsDouble) {
 	auto left = std::make_unique<LiteralExpression>(true);
 	auto right = std::make_unique<LiteralExpression>(1.0);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::EQUAL, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_EQUAL, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1830,8 +1830,8 @@ TEST_F(ExpressionsUnitTest, Expression_Clone_Coverage_Bonus) {
 
 	// BinaryOpExpression - test all operator types
 	std::vector<BinaryOperatorType> ops = {
-		BinaryOperatorType::AND, BinaryOperatorType::OR, BinaryOperatorType::XOR,
-		BinaryOperatorType::EQUAL, BinaryOperatorType::NOT_EQUAL
+		BinaryOperatorType::BOP_AND, BinaryOperatorType::BOP_OR, BinaryOperatorType::BOP_XOR,
+		BinaryOperatorType::BOP_EQUAL, BinaryOperatorType::BOP_NOT_EQUAL
 	};
 	for (auto op : ops) {
 		auto left = std::make_unique<LiteralExpression>(true);
@@ -1862,7 +1862,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_MissingBranches) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(10));
 		auto right = std::make_unique<LiteralExpression>(int64_t(0));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
 	}
@@ -1978,9 +1978,9 @@ TEST_F(ExpressionsUnitTest, EvaluationContext_BranchCoverage_StringToNumber) {
 // Missing: test specific operator branches
 TEST_F(ExpressionsUnitTest, ExpressionEvaluator_BranchCoverage_AllComparisons) {
 	std::vector<BinaryOperatorType> comparisonOps = {
-		BinaryOperatorType::EQUAL, BinaryOperatorType::NOT_EQUAL,
-		BinaryOperatorType::LESS, BinaryOperatorType::GREATER,
-		BinaryOperatorType::LESS_EQUAL, BinaryOperatorType::GREATER_EQUAL
+		BinaryOperatorType::BOP_EQUAL, BinaryOperatorType::BOP_NOT_EQUAL,
+		BinaryOperatorType::BOP_LESS, BinaryOperatorType::BOP_GREATER,
+		BinaryOperatorType::BOP_LESS_EQUAL, BinaryOperatorType::BOP_GREATER_EQUAL
 	};
 
 	for (auto op : comparisonOps) {
@@ -2002,7 +2002,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_BranchCoverage_LogicalOps) {
 		for (auto [left, right] : tests) {
 			auto leftExpr = std::make_unique<LiteralExpression>(left);
 			auto rightExpr = std::make_unique<LiteralExpression>(right);
-			BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::AND, std::move(rightExpr));
+			BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::BOP_AND, std::move(rightExpr));
 			ExpressionEvaluator evaluator(*context_);
 			expr.accept(evaluator);
 			EXPECT_EQ(std::get<bool>(evaluator.getResult().getVariant()), left && right);
@@ -2017,7 +2017,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_BranchCoverage_LogicalOps) {
 		for (auto [left, right] : tests) {
 			auto leftExpr = std::make_unique<LiteralExpression>(left);
 			auto rightExpr = std::make_unique<LiteralExpression>(right);
-			BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::OR, std::move(rightExpr));
+			BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::BOP_OR, std::move(rightExpr));
 			ExpressionEvaluator evaluator(*context_);
 			expr.accept(evaluator);
 			EXPECT_EQ(std::get<bool>(evaluator.getResult().getVariant()), left || right);
@@ -2032,7 +2032,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_BranchCoverage_LogicalOps) {
 		for (auto [left, right] : tests) {
 			auto leftExpr = std::make_unique<LiteralExpression>(left);
 			auto rightExpr = std::make_unique<LiteralExpression>(right);
-			BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::XOR, std::move(rightExpr));
+			BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::BOP_XOR, std::move(rightExpr));
 			ExpressionEvaluator evaluator(*context_);
 			expr.accept(evaluator);
 			EXPECT_EQ(std::get<bool>(evaluator.getResult().getVariant()), left != right);
@@ -2196,7 +2196,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 	{
 		auto left = std::make_unique<LiteralExpression>(10.0);
 		auto right = std::make_unique<LiteralExpression>(2.0);
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 5.0);
@@ -2206,7 +2206,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(-10));
 		auto right = std::make_unique<LiteralExpression>(int64_t(3));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), -1);
@@ -2515,8 +2515,8 @@ TEST_F(ExpressionsUnitTest, EvaluationContext_AdditionalBranches) {
 TEST_F(ExpressionsUnitTest, ExpressionEvaluator_AdditionalBranches) {
 	// Test all arithmetic operators with different operand types
 	std::vector<BinaryOperatorType> arithmeticOps = {
-		BinaryOperatorType::ADD, BinaryOperatorType::SUBTRACT,
-		BinaryOperatorType::MULTIPLY, BinaryOperatorType::DIVIDE
+		BinaryOperatorType::BOP_ADD, BinaryOperatorType::BOP_SUBTRACT,
+		BinaryOperatorType::BOP_MULTIPLY, BinaryOperatorType::BOP_DIVIDE
 	};
 
 	for (auto op : arithmeticOps) {
@@ -2529,9 +2529,9 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_AdditionalBranches) {
 
 	// Test all comparison operators with doubles
 	std::vector<BinaryOperatorType> comparisonOps = {
-		BinaryOperatorType::EQUAL, BinaryOperatorType::NOT_EQUAL,
-		BinaryOperatorType::LESS, BinaryOperatorType::GREATER,
-		BinaryOperatorType::LESS_EQUAL, BinaryOperatorType::GREATER_EQUAL
+		BinaryOperatorType::BOP_EQUAL, BinaryOperatorType::BOP_NOT_EQUAL,
+		BinaryOperatorType::BOP_LESS, BinaryOperatorType::BOP_GREATER,
+		BinaryOperatorType::BOP_LESS_EQUAL, BinaryOperatorType::BOP_GREATER_EQUAL
 	};
 
 	for (auto op : comparisonOps) {
@@ -2546,7 +2546,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_AdditionalBranches) {
 	{
 		auto left = std::make_unique<LiteralExpression>(true);
 		auto right = std::make_unique<LiteralExpression>(true);
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::XOR, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_XOR, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -2998,7 +2998,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_UltimateBranches) {
 	{
 		auto left = std::make_unique<LiteralExpression>(7.0);
 		auto right = std::make_unique<LiteralExpression>(2.0);
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 3.5);
@@ -3008,7 +3008,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_UltimateBranches) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(10));
 		auto right = std::make_unique<LiteralExpression>(int64_t(-3));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 	}
@@ -3190,7 +3190,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(true);
 		auto right = std::make_unique<LiteralExpression>(false);
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::XOR, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_XOR, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3200,7 +3200,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(false);
 		auto right = std::make_unique<LiteralExpression>(int64_t(999));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::AND, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_AND, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3210,7 +3210,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(true);
 		auto right = std::make_unique<LiteralExpression>(int64_t(0));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::OR, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_OR, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3292,7 +3292,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_EdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(42));
 		auto right = std::make_unique<LiteralExpression>(int64_t(42));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::EQUAL, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_EQUAL, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3302,7 +3302,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_EdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(42));
 		auto right = std::make_unique<LiteralExpression>(int64_t(43));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::NOT_EQUAL, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_NOT_EQUAL, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3312,7 +3312,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_EdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(5));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::LESS, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_LESS, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3322,7 +3322,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_EdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(5));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::GREATER, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_GREATER, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3335,7 +3335,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_EdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(5));
 		auto right = std::make_unique<LiteralExpression>(int64_t(0));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::ADD, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 5.0);
@@ -3345,7 +3345,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_EdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(7));
 		auto right = std::make_unique<LiteralExpression>(int64_t(1));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::MULTIPLY, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 7.0);
@@ -3392,7 +3392,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_DivisionModulo_FinalEdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(10));
 		auto right = std::make_unique<LiteralExpression>(int64_t(3));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_NEAR(std::get<double>(evaluator.getResult().getVariant()), 3.333, 0.001);
@@ -3402,7 +3402,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_DivisionModulo_FinalEdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(-10));
 		auto right = std::make_unique<LiteralExpression>(int64_t(3));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_NEAR(std::get<double>(evaluator.getResult().getVariant()), -3.333, 0.001);
@@ -3412,7 +3412,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_DivisionModulo_FinalEdgeCases) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(10));
 		auto right = std::make_unique<LiteralExpression>(int64_t(3));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 1);
@@ -3513,7 +3513,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_FinalCombinations) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(5));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::LESS_EQUAL, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_LESS_EQUAL, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3523,7 +3523,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_FinalCombinations) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(5));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::GREATER_EQUAL, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_GREATER_EQUAL, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3533,7 +3533,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_FinalCombinations) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(3));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::LESS_EQUAL, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_LESS_EQUAL, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3543,7 +3543,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Comparison_FinalCombinations) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(7));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::GREATER_EQUAL, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_GREATER_EQUAL, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3610,7 +3610,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_AbsoluteFinal) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(5));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::SUBTRACT, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_SUBTRACT, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 0.0);
@@ -3620,7 +3620,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_AbsoluteFinal) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(3));
 		auto right = std::make_unique<LiteralExpression>(int64_t(5));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::SUBTRACT, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_SUBTRACT, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -2.0);
@@ -3630,7 +3630,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_AbsoluteFinal) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(99));
 		auto right = std::make_unique<LiteralExpression>(int64_t(0));
-		BinaryOpExpression expr(std::move(left), BinaryOperatorType::MULTIPLY, std::move(right));
+		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 0.0);

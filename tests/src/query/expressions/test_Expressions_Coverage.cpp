@@ -113,7 +113,7 @@ TEST_F(ExpressionsCoverageTest, ConstExpressionVisitor_BinaryOpExpression) {
 	// Test ConstExpressionVisitor::accept for BinaryOpExpression
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	auto expr = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::ADD, std::move(right));
+	auto expr = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 	const BinaryOpExpression* constExpr = expr.get();
 
 	TestConstExpressionVisitor visitor;
@@ -514,13 +514,13 @@ TEST_F(ExpressionsCoverageTest, BinaryOpExpression_CloneDeepCopy) {
 	// Test that clone creates a deep copy of BinaryOpExpression
 	auto left = std::make_unique<LiteralExpression>(int64_t(5));
 	auto right = std::make_unique<LiteralExpression>(int64_t(3));
-	BinaryOpExpression original(std::move(left), BinaryOperatorType::ADD, std::move(right));
+	BinaryOpExpression original(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	auto cloned = original.clone();
 	auto* clonedBinary = dynamic_cast<BinaryOpExpression*>(cloned.get());
 
 	ASSERT_NE(clonedBinary, nullptr);
-	EXPECT_EQ(clonedBinary->getOperator(), BinaryOperatorType::ADD);
+	EXPECT_EQ(clonedBinary->getOperator(), BinaryOperatorType::BOP_ADD);
 
 	// Verify it's a deep copy by checking toString
 	std::string originalStr = original.toString();
@@ -960,7 +960,7 @@ TEST_F(ExpressionsCoverageTest, IsNullExpression_CompleteCoverage) {
 	{
 		auto left = std::make_unique<LiteralExpression>(int64_t(5));
 		auto right = std::make_unique<LiteralExpression>(int64_t(3));
-		auto binOp = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::ADD, std::move(right));
+		auto binOp = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 		IsNullExpression expr(std::move(binOp), true);
 		EXPECT_EQ(expr.toString(), "(5 + 3) IS NOT NULL");
 	}
@@ -1307,7 +1307,7 @@ TEST_F(ExpressionsCoverageTest, ListComprehensionExpression_CompleteCoverage) {
 		auto listExpr = createList({1, 2, 3, 4, 5});
 		auto varRef = std::make_unique<VariableReferenceExpression>("x");
 		auto lit3 = std::make_unique<LiteralExpression>(int64_t(3));
-		auto whereExpr = std::make_unique<BinaryOpExpression>(std::move(varRef), BinaryOperatorType::GREATER, std::move(lit3));
+		auto whereExpr = std::make_unique<BinaryOpExpression>(std::move(varRef), BinaryOperatorType::BOP_GREATER, std::move(lit3));
 		ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), nullptr, ListComprehensionExpression::ComprehensionType::FILTER);
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
@@ -1320,7 +1320,7 @@ TEST_F(ExpressionsCoverageTest, ListComprehensionExpression_CompleteCoverage) {
 		auto listExpr = createList({1, 2, 3});
 		auto varRef = std::make_unique<VariableReferenceExpression>("x");
 		auto lit2 = std::make_unique<LiteralExpression>(int64_t(2));
-		auto mapExpr = std::make_unique<BinaryOpExpression>(std::move(varRef), BinaryOperatorType::MULTIPLY, std::move(lit2));
+		auto mapExpr = std::make_unique<BinaryOpExpression>(std::move(varRef), BinaryOperatorType::BOP_MULTIPLY, std::move(lit2));
 		ListComprehensionExpression expr("x", std::move(listExpr), nullptr, std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
@@ -1336,11 +1336,11 @@ TEST_F(ExpressionsCoverageTest, ListComprehensionExpression_CompleteCoverage) {
 		auto listExpr = createList({1, 2, 3, 4, 5});
 		auto varRef1 = std::make_unique<VariableReferenceExpression>("x");
 		auto lit2 = std::make_unique<LiteralExpression>(int64_t(2));
-		auto whereExpr = std::make_unique<BinaryOpExpression>(std::move(varRef1), BinaryOperatorType::GREATER, std::move(lit2));
+		auto whereExpr = std::make_unique<BinaryOpExpression>(std::move(varRef1), BinaryOperatorType::BOP_GREATER, std::move(lit2));
 
 		auto varRef2 = std::make_unique<VariableReferenceExpression>("x");
 		auto lit3 = std::make_unique<LiteralExpression>(int64_t(3));
-		auto mapExpr = std::make_unique<BinaryOpExpression>(std::move(varRef2), BinaryOperatorType::MULTIPLY, std::move(lit3));
+		auto mapExpr = std::make_unique<BinaryOpExpression>(std::move(varRef2), BinaryOperatorType::BOP_MULTIPLY, std::move(lit3));
 
 		ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), std::move(mapExpr), ListComprehensionExpression::ComprehensionType::EXTRACT);
 		ExpressionEvaluator evaluator(*context_);
@@ -1514,7 +1514,7 @@ TEST_F(ExpressionsCoverageTest, DivisionByZero_Integer) {
 	// Test integer division by zero throws exception
 	auto left = std::make_unique<LiteralExpression>(int64_t(10));
 	auto right = std::make_unique<LiteralExpression>(int64_t(0));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
 }
@@ -1523,7 +1523,7 @@ TEST_F(ExpressionsCoverageTest, DivisionByZero_Double) {
 	// Test double division by zero throws exception
 	auto left = std::make_unique<LiteralExpression>(10.0);
 	auto right = std::make_unique<LiteralExpression>(0.0);
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::DIVIDE, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
 }
@@ -1532,7 +1532,7 @@ TEST_F(ExpressionsCoverageTest, ModuloByZero) {
 	// Test modulo by zero throws exception
 	auto left = std::make_unique<LiteralExpression>(int64_t(10));
 	auto right = std::make_unique<LiteralExpression>(int64_t(0));
-	BinaryOpExpression expr(std::move(left), BinaryOperatorType::MODULO, std::move(right));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
 }

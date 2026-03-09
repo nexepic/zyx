@@ -262,22 +262,22 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 	double rightDouble = EvaluationContext::toDouble(right);
 
 	switch (op) {
-		case BinaryOperatorType::ADD:
+		case BinaryOperatorType::BOP_ADD:
 			return PropertyValue(leftDouble + rightDouble);
 
-		case BinaryOperatorType::SUBTRACT:
+		case BinaryOperatorType::BOP_SUBTRACT:
 			return PropertyValue(leftDouble - rightDouble);
 
-		case BinaryOperatorType::MULTIPLY:
+		case BinaryOperatorType::BOP_MULTIPLY:
 			return PropertyValue(leftDouble * rightDouble);
 
-		case BinaryOperatorType::DIVIDE:
+		case BinaryOperatorType::BOP_DIVIDE:
 			if (rightDouble == 0.0) {
 				throw DivisionByZeroException();
 			}
 			return PropertyValue(leftDouble / rightDouble);
 
-		case BinaryOperatorType::MODULO: {
+		case BinaryOperatorType::BOP_MODULO: {
 			// Modulo only makes sense for integers
 			int64_t leftInt = EvaluationContext::toInteger(left);
 			int64_t rightInt = EvaluationContext::toInteger(right);
@@ -287,7 +287,7 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 			return PropertyValue(leftInt % rightInt);
 		}
 
-		case BinaryOperatorType::POWER:
+		case BinaryOperatorType::BOP_POWER:
 			return PropertyValue(std::pow(leftDouble, rightDouble));
 
 		default:
@@ -299,22 +299,22 @@ PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
                                                        const PropertyValue &left,
                                                        const PropertyValue &right) {
 	switch (op) {
-		case BinaryOperatorType::EQUAL:
+		case BinaryOperatorType::BOP_EQUAL:
 			return PropertyValue(left == right);
 
-		case BinaryOperatorType::NOT_EQUAL:
+		case BinaryOperatorType::BOP_NOT_EQUAL:
 			return PropertyValue(left != right);
 
-		case BinaryOperatorType::LESS:
+		case BinaryOperatorType::BOP_LESS:
 			return PropertyValue(left < right);
 
-		case BinaryOperatorType::GREATER:
+		case BinaryOperatorType::BOP_GREATER:
 			return PropertyValue(left > right);
 
-		case BinaryOperatorType::LESS_EQUAL:
+		case BinaryOperatorType::BOP_LESS_EQUAL:
 			return PropertyValue(left <= right);
 
-		case BinaryOperatorType::GREATER_EQUAL:
+		case BinaryOperatorType::BOP_GREATER_EQUAL:
 			return PropertyValue(left >= right);
 
 		default:
@@ -329,15 +329,15 @@ PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
 	bool rightBool = EvaluationContext::toBoolean(right);
 
 	switch (op) {
-		case BinaryOperatorType::AND:
+		case BinaryOperatorType::BOP_AND:
 			// Short-circuit: if left is false, don't evaluate right
 			return PropertyValue(leftBool && rightBool);
 
-		case BinaryOperatorType::OR:
+		case BinaryOperatorType::BOP_OR:
 			// Short-circuit: if left is true, don't evaluate right
 			return PropertyValue(leftBool || rightBool);
 
-		case BinaryOperatorType::XOR:
+		case BinaryOperatorType::BOP_XOR:
 			return PropertyValue(leftBool != rightBool);
 
 		default:
