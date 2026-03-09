@@ -116,7 +116,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildOrExpression(CypherParser::O
 		auto right = buildXorExpression(ctx->xorExpression(i));
 		left = std::make_unique<BinaryOpExpression>(
 			std::move(left),
-			BinaryOperatorType::OR,
+			BinaryOperatorType::BOP_OR,
 			std::move(right)
 		);
 	}
@@ -137,7 +137,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildXorExpression(CypherParser::
 		auto right = buildAndExpression(ctx->andExpression(i));
 		left = std::make_unique<BinaryOpExpression>(
 			std::move(left),
-			BinaryOperatorType::XOR,
+			BinaryOperatorType::BOP_XOR,
 			std::move(right)
 		);
 	}
@@ -158,7 +158,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAndExpression(CypherParser::
 		auto right = buildNotExpression(ctx->notExpression(i));
 		left = std::make_unique<BinaryOpExpression>(
 			std::move(left),
-			BinaryOperatorType::AND,
+			BinaryOperatorType::BOP_AND,
 			std::move(right)
 		);
 	}
@@ -201,7 +201,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 	if (!ctx->children.empty() && arithExprs.size() > 1) {
 		// Find the operator token in the children
 		for (size_t i = 1; i < arithExprs.size(); ++i) {
-			BinaryOperatorType op = BinaryOperatorType::ADD; // default
+			BinaryOperatorType op = BinaryOperatorType::BOP_ADD; // default
 
 			// Check if this is an IN operator with a list literal
 			if (!ctx->K_IN().empty() && i - 1 < ctx->K_IN().size()) {
@@ -233,14 +233,14 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 			}
 
 			// Determine the operator by checking which token is present
-			if (i - 1 < ctx->EQ().size()) op = BinaryOperatorType::EQUAL;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size()) op = BinaryOperatorType::NOT_EQUAL;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size()) op = BinaryOperatorType::LESS;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size()) op = BinaryOperatorType::GREATER;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size()) op = BinaryOperatorType::LESS_EQUAL;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size() + ctx->GTE().size()) op = BinaryOperatorType::GREATER_EQUAL;
+			if (i - 1 < ctx->EQ().size()) op = BinaryOperatorType::BOP_EQUAL;
+			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size()) op = BinaryOperatorType::BOP_NOT_EQUAL;
+			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size()) op = BinaryOperatorType::BOP_LESS;
+			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size()) op = BinaryOperatorType::BOP_GREATER;
+			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size()) op = BinaryOperatorType::BOP_LESS_EQUAL;
+			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size() + ctx->GTE().size()) op = BinaryOperatorType::BOP_GREATER_EQUAL;
 			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size() + ctx->GTE().size() + ctx->K_IN().size()) {
-				op = BinaryOperatorType::IN;
+				op = BinaryOperatorType::BOP_IN;
 			}
 
 			auto right = buildArithmeticExpression(arithExprs[i]);
@@ -272,7 +272,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 
 	// Process operators from left to right
 	for (size_t i = 1; i < powerExprs.size(); ++i) {
-		BinaryOperatorType op = BinaryOperatorType::ADD; // default
+		BinaryOperatorType op = BinaryOperatorType::BOP_ADD; // default
 
 		// Determine the operator
 		size_t plusCount = ctx->PLUS().size();
@@ -283,11 +283,11 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 
 		// Simple approach: use position to determine operator
 		size_t opIndex = i - 1;
-		if (opIndex < plusCount) op = BinaryOperatorType::ADD;
-		else if (opIndex < plusCount + minusCount) op = BinaryOperatorType::SUBTRACT;
-		else if (opIndex < plusCount + minusCount + multiplyCount) op = BinaryOperatorType::MULTIPLY;
-		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount) op = BinaryOperatorType::DIVIDE;
-		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount + moduloCount) op = BinaryOperatorType::MODULO;
+		if (opIndex < plusCount) op = BinaryOperatorType::BOP_ADD;
+		else if (opIndex < plusCount + minusCount) op = BinaryOperatorType::BOP_SUBTRACT;
+		else if (opIndex < plusCount + minusCount + multiplyCount) op = BinaryOperatorType::BOP_MULTIPLY;
+		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount) op = BinaryOperatorType::BOP_DIVIDE;
+		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount + moduloCount) op = BinaryOperatorType::BOP_MODULO;
 
 		auto right = buildPowerExpression(powerExprs[i]);
 		left = std::make_unique<BinaryOpExpression>(std::move(left), op, std::move(right));
@@ -312,7 +312,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildPowerExpression(CypherParser
 
 	for (int i = static_cast<int>(unaryExprs.size()) - 2; i >= 0; --i) {
 		auto left = buildUnaryExpression(unaryExprs[i]);
-		right = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::POWER, std::move(right));
+		right = std::make_unique<BinaryOpExpression>(std::move(left), BinaryOperatorType::BOP_POWER, std::move(right));
 	}
 
 	return right;

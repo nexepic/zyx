@@ -54,28 +54,28 @@ enum class ExpressionType {
  */
 enum class BinaryOperatorType {
 	// Arithmetic
-	ADD,
-	SUBTRACT,
-	MULTIPLY,
-	DIVIDE,
-	MODULO,
-	POWER,
+	BOP_ADD,
+	BOP_SUBTRACT,
+	BOP_MULTIPLY,
+	BOP_DIVIDE,
+	BOP_MODULO,
+	BOP_POWER,
 
 	// Comparison
-	EQUAL,
-	NOT_EQUAL,
-	LESS,
-	GREATER,
-	LESS_EQUAL,
-	GREATER_EQUAL,
+	BOP_EQUAL,
+	BOP_NOT_EQUAL,
+	BOP_LESS,
+	BOP_GREATER,
+	BOP_LESS_EQUAL,
+	BOP_GREATER_EQUAL,
 
 	// Special operators
-	IN,
+	BOP_IN,
 
 	// Logical
-	AND,
-	OR,
-	XOR
+	BOP_AND,
+	BOP_OR,
+	BOP_XOR
 };
 
 /**
