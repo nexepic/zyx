@@ -48,7 +48,7 @@ TEST_F(DatabaseTest, Constructor_WithValidPath) {
 
 TEST_F(DatabaseTest, Constructor_WithOpenMode) {
 	// Test constructor with different open modes
-	auto db1 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE);
+	auto db1 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 	EXPECT_FALSE(db1->isOpen());
 
 	auto db2 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_EXISTING_FILE);
@@ -57,7 +57,7 @@ TEST_F(DatabaseTest, Constructor_WithOpenMode) {
 
 TEST_F(DatabaseTest, Constructor_WithCacheSize) {
 	// Test constructor with custom cache size
-	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE, 1024);
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE, 1024);
 	EXPECT_FALSE(db->isOpen());
 }
 
@@ -388,14 +388,14 @@ TEST_F(DatabaseTest, EdgeCase_LongPath) {
 
 TEST_F(DatabaseTest, EdgeCase_ZeroCacheSize) {
 	// Test with zero cache size
-	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE, 0);
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE, 0);
 	db->open();
 	EXPECT_TRUE(db->isOpen());
 }
 
 TEST_F(DatabaseTest, EdgeCase_LargeCacheSize) {
 	// Test with large cache size
-	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE, 1024 * 1024);
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE, 1024 * 1024);
 	db->open();
 	EXPECT_TRUE(db->isOpen());
 }
@@ -429,7 +429,7 @@ TEST_F(DatabaseTest, GetQueryEngine_BeforeOpen) {
 
 TEST_F(DatabaseTest, OpenMode_CreateOrOpen) {
 	// Test CREATE_OR_OPEN_FILE mode
-	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE);
+	auto db = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 	db->open();
 	EXPECT_TRUE(db->isOpen());
 
@@ -442,7 +442,7 @@ TEST_F(DatabaseTest, OpenMode_OpenExisting) {
 	// Test OPEN_EXISTING_FILE mode
 	// First create database
 	{
-		auto db1 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::CREATE_OR_OPEN_FILE);
+		auto db1 = std::make_unique<Database>(testDbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 		db1->open();
 	}
 	// Now open in OPEN_EXISTING_FILE mode

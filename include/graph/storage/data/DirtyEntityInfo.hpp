@@ -35,7 +35,7 @@ namespace graph::storage {
 		std::optional<T> backup;
 
 		// Default constructor
-		DirtyEntityInfo() : changeType(EntityChangeType::MODIFIED), backup(std::nullopt) {}
+		DirtyEntityInfo() : changeType(EntityChangeType::CHANGE_MODIFIED), backup(std::nullopt) {}
 
 		// Constructor with entity
 		DirtyEntityInfo(EntityChangeType type, const T &entity) : changeType(type) { backup.emplace(entity); }

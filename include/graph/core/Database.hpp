@@ -31,7 +31,7 @@ namespace graph {
 
 	class Database {
 	public:
-		explicit Database(const std::string &dbPath, storage::OpenMode mode = storage::OpenMode::CREATE_OR_OPEN_FILE,
+		explicit Database(const std::string &dbPath, storage::OpenMode mode = storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE,
 						  size_t cacheSize = 10000);
 		~Database();
 

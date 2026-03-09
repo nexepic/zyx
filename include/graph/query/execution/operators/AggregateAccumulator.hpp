@@ -35,12 +35,12 @@ namespace graph::query::execution::operators {
  * @brief Types of aggregate functions supported.
  */
 enum class AggregateFunctionType {
-	COUNT,
-	SUM,
-	AVG,
-	MIN,
-	MAX,
-	COLLECT
+	AGG_COUNT,
+	AGG_SUM,
+	AGG_AVG,
+	AGG_MIN,
+	AGG_MAX,
+	AGG_COLLECT
 };
 
 /**
@@ -345,17 +345,17 @@ private:
  */
 [[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type) {
 	switch (type) {
-		case AggregateFunctionType::COUNT:
+		case AggregateFunctionType::AGG_COUNT:
 			return std::make_unique<CountAccumulator>();
-		case AggregateFunctionType::SUM:
+		case AggregateFunctionType::AGG_SUM:
 			return std::make_unique<SumAccumulator>();
-		case AggregateFunctionType::AVG:
+		case AggregateFunctionType::AGG_AVG:
 			return std::make_unique<AvgAccumulator>();
-		case AggregateFunctionType::MIN:
+		case AggregateFunctionType::AGG_MIN:
 			return std::make_unique<MinAccumulator>();
-		case AggregateFunctionType::MAX:
+		case AggregateFunctionType::AGG_MAX:
 			return std::make_unique<MaxAccumulator>();
-		case AggregateFunctionType::COLLECT:
+		case AggregateFunctionType::AGG_COLLECT:
 			return std::make_unique<CollectAccumulator>();
 		default:
 			return nullptr;

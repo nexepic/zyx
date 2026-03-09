@@ -20,9 +20,9 @@ public:
 	 * @brief Type of list comprehension
 	 */
 	enum class ComprehensionType {
-		FILTER,   ///< [x IN list WHERE condition] - filter elements
-		EXTRACT,  ///< [x IN list | expression] - transform elements
-		REDUCE    ///< reduce(accum = init, x IN list | accum + x) - reduce to single value
+		COMP_FILTER,   ///< [x IN list WHERE condition] - filter elements
+		COMP_EXTRACT,  ///< [x IN list | expression] - transform elements
+		COMP_REDUCE    ///< reduce(accum = init, x IN list | accum + x) - reduce to single value
 	};
 
 	/**

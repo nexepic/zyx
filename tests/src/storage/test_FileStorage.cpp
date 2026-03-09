@@ -334,7 +334,7 @@ TEST_F(FileStorageTest, Open_CreateFails_InvalidPath) {
 
 	EXPECT_THROW(
 			{
-				graph::storage::FileStorage fs(dirPath.string(), 1024, graph::storage::OpenMode::CREATE_NEW_FILE);
+				graph::storage::FileStorage fs(dirPath.string(), 1024, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 				fs.open();
 			},
 			std::runtime_error);

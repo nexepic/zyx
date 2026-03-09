@@ -153,12 +153,12 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 					std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
 					               [](unsigned char c) { return std::tolower(c); });
 
-					if (nameLower == "count") aggType = query::execution::operators::AggregateFunctionType::COUNT;
-					else if (nameLower == "sum") aggType = query::execution::operators::AggregateFunctionType::SUM;
-					else if (nameLower == "avg") aggType = query::execution::operators::AggregateFunctionType::AVG;
-					else if (nameLower == "min") aggType = query::execution::operators::AggregateFunctionType::MIN;
-					else if (nameLower == "max") aggType = query::execution::operators::AggregateFunctionType::MAX;
-					else if (nameLower == "collect") aggType = query::execution::operators::AggregateFunctionType::COLLECT;
+					if (nameLower == "count") aggType = query::execution::operators::AggregateFunctionType::AGG_COUNT;
+					else if (nameLower == "sum") aggType = query::execution::operators::AggregateFunctionType::AGG_SUM;
+					else if (nameLower == "avg") aggType = query::execution::operators::AggregateFunctionType::AGG_AVG;
+					else if (nameLower == "min") aggType = query::execution::operators::AggregateFunctionType::AGG_MIN;
+					else if (nameLower == "max") aggType = query::execution::operators::AggregateFunctionType::AGG_MAX;
+					else if (nameLower == "collect") aggType = query::execution::operators::AggregateFunctionType::AGG_COLLECT;
 
 					// Get the argument expression (or nullptr for COUNT(*))
 					std::shared_ptr<graph::query::expressions::Expression> argExpr(nullptr);

@@ -303,8 +303,8 @@ TEST_F(EntityTraitsTest, EntityTraitsAddToDirty) {
 	Edge testEdge = createTestEdge(2, 1, 2);
 
 	// Create dirty entity info for various entity types
-	DirtyEntityInfo<Node> nodeDirtyInfo(EntityChangeType::ADDED, testNode);
-	DirtyEntityInfo<Edge> edgeDirtyInfo(EntityChangeType::ADDED, testEdge);
+	DirtyEntityInfo<Node> nodeDirtyInfo(EntityChangeType::CHANGE_ADDED, testNode);
+	DirtyEntityInfo<Edge> edgeDirtyInfo(EntityChangeType::CHANGE_ADDED, testEdge);
 
 	// Test addToDirty - should not throw
 	EXPECT_NO_THROW(EntityTraits<Node>::addToDirty(dataManager.get(), nodeDirtyInfo));
@@ -314,7 +314,7 @@ TEST_F(EntityTraitsTest, EntityTraitsAddToDirty) {
 TEST_F(EntityTraitsTest, EntityTraitsGetDirtyInfo) {
 	// Create a test entity and dirty info
 	Node testNode = createTestNode(1);
-	DirtyEntityInfo<Node> dirtyInfo(EntityChangeType::ADDED, testNode);
+	DirtyEntityInfo<Node> dirtyInfo(EntityChangeType::CHANGE_ADDED, testNode);
 	EntityTraits<Node>::addToDirty(dataManager.get(), dirtyInfo);
 
 	// Get dirty info
@@ -324,7 +324,7 @@ TEST_F(EntityTraitsTest, EntityTraitsGetDirtyInfo) {
 	EXPECT_TRUE(dirtyInfoOpt.has_value());
 	if (dirtyInfoOpt.has_value()) {
 		EXPECT_EQ(dirtyInfoOpt->backup->getId(), 1);
-		EXPECT_EQ(dirtyInfoOpt->changeType, EntityChangeType::ADDED);
+		EXPECT_EQ(dirtyInfoOpt->changeType, EntityChangeType::CHANGE_ADDED);
 	}
 }
 
@@ -339,7 +339,7 @@ TEST_F(EntityTraitsTest, EntityTraitsGetDirtyInfoNotPresent) {
 TEST_F(EntityTraitsTest, EntityTraitsGetDirtyInfoModified) {
 	// Create a test entity and mark it as modified
 	Node testNode = createTestNode(1);
-	DirtyEntityInfo<Node> dirtyInfo(EntityChangeType::MODIFIED, testNode);
+	DirtyEntityInfo<Node> dirtyInfo(EntityChangeType::CHANGE_MODIFIED, testNode);
 	EntityTraits<Node>::addToDirty(dataManager.get(), dirtyInfo);
 
 	// Get dirty info
@@ -348,14 +348,14 @@ TEST_F(EntityTraitsTest, EntityTraitsGetDirtyInfoModified) {
 	// Verify dirty info is present with MODIFIED type
 	EXPECT_TRUE(dirtyInfoOpt.has_value());
 	if (dirtyInfoOpt.has_value()) {
-		EXPECT_EQ(dirtyInfoOpt->changeType, EntityChangeType::MODIFIED);
+		EXPECT_EQ(dirtyInfoOpt->changeType, EntityChangeType::CHANGE_MODIFIED);
 	}
 }
 
 TEST_F(EntityTraitsTest, EntityTraitsGetDirtyInfoDeleted) {
 	// Create a test entity and mark it as deleted
 	Node testNode = createTestNode(1);
-	DirtyEntityInfo<Node> dirtyInfo(EntityChangeType::DELETED, testNode);
+	DirtyEntityInfo<Node> dirtyInfo(EntityChangeType::CHANGE_DELETED, testNode);
 	EntityTraits<Node>::addToDirty(dataManager.get(), dirtyInfo);
 
 	// Get dirty info
@@ -364,7 +364,7 @@ TEST_F(EntityTraitsTest, EntityTraitsGetDirtyInfoDeleted) {
 	// Verify dirty info is present with DELETED type
 	EXPECT_TRUE(dirtyInfoOpt.has_value());
 	if (dirtyInfoOpt.has_value()) {
-		EXPECT_EQ(dirtyInfoOpt->changeType, EntityChangeType::DELETED);
+		EXPECT_EQ(dirtyInfoOpt->changeType, EntityChangeType::CHANGE_DELETED);
 	}
 }
 

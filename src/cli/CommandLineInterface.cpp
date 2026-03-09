@@ -45,7 +45,7 @@ namespace graph::cli {
 		createCmd->add_option("path", dbPath, "Database directory path")->required();
 		createCmd->callback([&]() {
 			try {
-				Database db(dbPath, storage::OpenMode::CREATE_NEW_FILE);
+				Database db(dbPath, storage::OpenMode::OPEN_CREATE_NEW_FILE);
 
 				// Actual creation happens here (when file header is initialized)
 				// If file exists, db.open() (called inside REPL or manually) will throw.
@@ -71,7 +71,7 @@ namespace graph::cli {
 
 		openCmd->callback([&]() {
 			try {
-				auto mode = createIfMissing ? storage::OpenMode::CREATE_OR_OPEN_FILE
+				auto mode = createIfMissing ? storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE
 											: storage::OpenMode::OPEN_EXISTING_FILE;
 
 				Database db(dbPath, mode);
@@ -97,7 +97,7 @@ namespace graph::cli {
 			}
 
 			try {
-				Database db(dbPath, graph::storage::OpenMode::CREATE_OR_OPEN_FILE);
+				Database db(dbPath, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 				db.open();
 
 				const REPL repl(db);

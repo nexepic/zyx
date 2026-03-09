@@ -471,7 +471,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalXor_TrueFalse) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Integer) {
 	auto operand = std::make_unique<LiteralExpression>(int64_t(42));
-	UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -480,7 +480,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Integer) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Double) {
 	auto operand = std::make_unique<LiteralExpression>(3.14);
-	UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -489,7 +489,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Double) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Not_True) {
 	auto operand = std::make_unique<LiteralExpression>(true);
-	UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -498,7 +498,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Not_True) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Not_False) {
 	auto operand = std::make_unique<LiteralExpression>(false);
-	UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -531,7 +531,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_NullRight) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_NullOperand) {
 	auto operand = std::make_unique<LiteralExpression>(); // NULL
-	UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -879,8 +879,8 @@ TEST_F(ExpressionsUnitTest, UnaryOp_ToString_AllOperators) {
 	auto operand = std::make_unique<LiteralExpression>(int64_t(42));
 
 	std::vector<UnaryOperatorType> operators = {
-		UnaryOperatorType::MINUS,
-		UnaryOperatorType::NOT
+		UnaryOperatorType::UOP_MINUS,
+		UnaryOperatorType::UOP_NOT
 	};
 
 	for (auto op : operators) {
@@ -1035,7 +1035,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_BinaryOp_UnknownOperator) {
 TEST_F(ExpressionsUnitTest, ExpressionEvaluator_UnaryOp_UnknownOperator) {
 	// Similar to above, we test the valid path
 	auto operand = std::make_unique<LiteralExpression>(int64_t(42));
-	UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_NO_THROW(expr.accept(evaluator));
@@ -1253,7 +1253,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_LogicalOr_ZeroInteger) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Zero) {
 	auto operand = std::make_unique<LiteralExpression>(int64_t(0));
-	UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1262,7 +1262,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Zero) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Minus_NegativeDouble) {
 	auto operand = std::make_unique<LiteralExpression>(-3.14);
-	UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1271,7 +1271,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Minus_NegativeDouble) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Not_ZeroInteger) {
 	auto operand = std::make_unique<LiteralExpression>(int64_t(0));
-	UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1280,7 +1280,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Not_ZeroInteger) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Not_NonZeroInteger) {
 	auto operand = std::make_unique<LiteralExpression>(int64_t(42));
-	UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1646,7 +1646,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Compare_BoolVsDouble) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Not_String) {
 	auto operand = std::make_unique<LiteralExpression>(std::string("hello"));
-	UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1656,7 +1656,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Not_String) {
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Not_EmptyString) {
 	auto operand = std::make_unique<LiteralExpression>(std::string(""));
-	UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
@@ -1844,13 +1844,13 @@ TEST_F(ExpressionsUnitTest, Expression_Clone_Coverage_Bonus) {
 	// UnaryOpExpression - both operators
 	{
 		auto operand = std::make_unique<LiteralExpression>(int64_t(42));
-		UnaryOpExpression expr1(UnaryOperatorType::MINUS, std::move(operand));
+		UnaryOpExpression expr1(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		auto clone1 = expr1.clone();
 		ASSERT_NE(clone1.get(), &expr1);
 	}
 	{
 		auto operand = std::make_unique<LiteralExpression>(true);
-		UnaryOpExpression expr2(UnaryOperatorType::NOT, std::move(operand));
+		UnaryOpExpression expr2(UnaryOperatorType::UOP_NOT, std::move(operand));
 		auto clone2 = expr2.clone();
 		ASSERT_NE(clone2.get(), &expr2);
 	}
@@ -1870,7 +1870,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_MissingBranches) {
 	// Test unary NOT with integer
 	{
 		auto operand = std::make_unique<LiteralExpression>(int64_t(0));
-		UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -2215,7 +2215,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 	// Test unary MINUS with double
 	{
 		auto operand = std::make_unique<LiteralExpression>(3.14);
-		UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -3.14);
@@ -2224,7 +2224,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 	// Test unary NOT with double (non-zero)
 	{
 		auto operand = std::make_unique<LiteralExpression>(1.0);
-		UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -2555,7 +2555,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_AdditionalBranches) {
 	// Test unary MINUS with zero
 	{
 		auto operand = std::make_unique<LiteralExpression>(0.0);
-		UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -0.0);
@@ -3016,7 +3016,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_UltimateBranches) {
 	// Test unary NOT with different numeric types
 	{
 		auto operand = std::make_unique<LiteralExpression>(int64_t(0));
-		UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3024,7 +3024,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_UltimateBranches) {
 
 	{
 		auto operand = std::make_unique<LiteralExpression>(int64_t(5));
-		UnaryOpExpression expr(UnaryOperatorType::NOT, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
@@ -3219,7 +3219,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalCases) {
 	// Unary MINUS with various values
 	{
 		auto operand = std::make_unique<LiteralExpression>(0.0);
-		UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -0.0);
@@ -3227,7 +3227,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalCases) {
 
 	{
 		auto operand = std::make_unique<LiteralExpression>(int64_t(-99));
-		UnaryOpExpression expr(UnaryOperatorType::MINUS, std::move(operand));
+		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
 		EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), 99.0);

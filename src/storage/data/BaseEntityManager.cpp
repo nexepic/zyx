@@ -41,7 +41,7 @@ namespace graph::storage {
 
 		// REFACTORED: Use addToDirty instead of accessing map
 		EntityTraits<EntityType>::addToDirty(dataManager,
-											 DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
+											 DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_ADDED, entity));
 	}
 
 	template<typename EntityType>
@@ -81,7 +81,7 @@ namespace graph::storage {
 
 		// 4. Batch Persistence (Dirty Map)
 		// Updates dirty registry and triggers auto-flush check only once
-		dataManager->getPersistenceManager()->upsertBatch(entities, EntityChangeType::ADDED);
+		dataManager->getPersistenceManager()->upsertBatch(entities, EntityChangeType::CHANGE_ADDED);
 	}
 
 	template<typename EntityType>
@@ -100,12 +100,12 @@ namespace graph::storage {
 		// REFACTORED: Check logic via Traits wrapper
 		auto dirtyInfo = EntityTraits<EntityType>::getDirtyInfo(dataManager, entity.getId());
 
-		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
+		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
 			EntityTraits<EntityType>::addToDirty(dataManager,
-												 DirtyEntityInfo<EntityType>(EntityChangeType::ADDED, entity));
+												 DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_ADDED, entity));
 		} else {
 			EntityTraits<EntityType>::addToDirty(dataManager,
-												 DirtyEntityInfo<EntityType>(EntityChangeType::MODIFIED, entity));
+												 DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_MODIFIED, entity));
 		}
 
 		dataManager->checkAndTriggerAutoFlush();

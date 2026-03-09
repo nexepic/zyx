@@ -83,8 +83,8 @@ enum class BinaryOperatorType {
  * @brief Unary operation types.
  */
 enum class UnaryOperatorType {
-	MINUS,
-	NOT
+	UOP_MINUS,
+	UOP_NOT
 };
 
 /**

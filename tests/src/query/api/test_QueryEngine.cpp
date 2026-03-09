@@ -46,7 +46,7 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_engine_" + to_string(uuid) + ".db");
 
 		storage =
-				std::make_shared<storage::FileStorage>(testFilePath.string(), 4096, storage::OpenMode::CREATE_NEW_FILE);
+				std::make_shared<storage::FileStorage>(testFilePath.string(), 4096, storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		storage->open();
 
 		engine = std::make_unique<QueryEngine>(storage);

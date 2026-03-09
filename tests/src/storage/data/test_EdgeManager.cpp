@@ -135,7 +135,7 @@ TEST_F(EdgeManagerTest, RemoveEdgeInSameContext) {
 		EXPECT_EQ(retrievedEdge.getId(), 0);
 	}
 
-	auto deletedEdges = getDirtyInfo({graph::storage::EntityChangeType::DELETED});
+	auto deletedEdges = getDirtyInfo({graph::storage::EntityChangeType::CHANGE_DELETED});
 	EXPECT_EQ(deletedEdges.size(), 0UL);
 }
 
@@ -154,7 +154,7 @@ TEST_F(EdgeManagerTest, RemovePersistedEdge) {
 	EXPECT_EQ(persistedEdge.getId(), edgeId);
 	edgeManager->remove(persistedEdge);
 
-	auto deletedEdgesInfo = getDirtyInfo({graph::storage::EntityChangeType::DELETED});
+	auto deletedEdgesInfo = getDirtyInfo({graph::storage::EntityChangeType::CHANGE_DELETED});
 	EXPECT_EQ(deletedEdgesInfo.size(), 1UL);
 	EXPECT_EQ(deletedEdgesInfo[0].backup->getId(), edgeId);
 

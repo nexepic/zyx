@@ -58,7 +58,7 @@ TEST_F(RegistryConcurrencyTest, MultiThreadedWrites) {
 		for (int i = 0; i < OPS_PER_THREAD; ++i) {
 			int64_t id = threadId * OPS_PER_THREAD + i;
 			// Use threadId as Label ID for verification
-			auto info = DirtyEntityInfo(EntityChangeType::ADDED, createNode(id, threadId));
+			auto info = DirtyEntityInfo(EntityChangeType::CHANGE_ADDED, createNode(id, threadId));
 			registry.upsert(info);
 		}
 		--activeThreads;
@@ -96,7 +96,7 @@ TEST_F(RegistryConcurrencyTest, ConcurrentWriteAndFlush) {
 	// Writer Thread: Continuously updates ID 1 with increasing version numbers
 	std::thread writer([&]() {
 		for (int i = 0; i < ITERATIONS; ++i) {
-			auto info = DirtyEntityInfo(EntityChangeType::MODIFIED, createNode(ENTITY_ID, i));
+			auto info = DirtyEntityInfo(EntityChangeType::CHANGE_MODIFIED, createNode(ENTITY_ID, i));
 			registry.upsert(info);
 			// Small yield to allow flusher to intervene
 			if (i % 100 == 0)
@@ -134,7 +134,7 @@ TEST_F(RegistryConcurrencyTest, ConcurrentWriteAndFlush) {
 	// 2. Internal counters are consistent.
 
 	// We add a new write now to verify registry is still usable
-	registry.upsert(DirtyEntityInfo(EntityChangeType::ADDED, createNode(2, 9999)));
+	registry.upsert(DirtyEntityInfo(EntityChangeType::CHANGE_ADDED, createNode(2, 9999)));
 	EXPECT_TRUE(registry.contains(2));
 }
 
@@ -153,7 +153,7 @@ TEST_F(RegistryConcurrencyTest, ReaderWriterFlusherRace) {
 		std::uniform_int_distribution<> dis(0, RANGE - 1);
 		while (!stop) {
 			int64_t id = dis(gen);
-			registry.upsert(DirtyEntityInfo(EntityChangeType::MODIFIED, createNode(id, 100)));
+			registry.upsert(DirtyEntityInfo(EntityChangeType::CHANGE_MODIFIED, createNode(id, 100)));
 		}
 	});
 
@@ -192,7 +192,7 @@ TEST_F(RegistryConcurrencyTest, ReaderWriterFlusherRace) {
 
 	// Verify consistency: Check count
 	// It's hard to predict exact count, but we ensure basic sanity
-	registry.upsert(DirtyEntityInfo(EntityChangeType::ADDED, createNode(10001, 200)));
+	registry.upsert(DirtyEntityInfo(EntityChangeType::CHANGE_ADDED, createNode(10001, 200)));
 	auto check = registry.getInfo(10001);
 	ASSERT_TRUE(check.has_value());
 	EXPECT_EQ(check->backup->getLabelId(), 200);

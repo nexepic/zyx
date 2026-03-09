@@ -176,7 +176,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildNotExpression(CypherParser::
 	// Handle NOT operator (single token, not array)
 	if (ctx->K_NOT()) {
 		return std::make_unique<UnaryOpExpression>(
-			UnaryOperatorType::NOT,
+			UnaryOperatorType::UOP_NOT,
 			std::move(operand)
 		);
 	}
@@ -349,7 +349,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildUnaryExpression(CypherParser
 
 			// Otherwise, create a unary negation expression
 			return std::make_unique<UnaryOpExpression>(
-				UnaryOperatorType::MINUS,
+				UnaryOperatorType::UOP_MINUS,
 				std::move(atomExpr)
 			);
 		}
@@ -780,11 +780,11 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListComprehensionExpression(
 	// Determine type
 	ListComprehensionExpression::ComprehensionType type;
 	if (mapExpr) {
-		type = ListComprehensionExpression::ComprehensionType::EXTRACT;
+		type = ListComprehensionExpression::ComprehensionType::COMP_EXTRACT;
 	} else if (whereExpr) {
-		type = ListComprehensionExpression::ComprehensionType::FILTER;
+		type = ListComprehensionExpression::ComprehensionType::COMP_FILTER;
 	} else {
-		type = ListComprehensionExpression::ComprehensionType::EXTRACT;  // Default
+		type = ListComprehensionExpression::ComprehensionType::COMP_EXTRACT;  // Default
 	}
 
 	return std::make_unique<ListComprehensionExpression>(

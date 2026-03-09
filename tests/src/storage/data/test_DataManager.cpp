@@ -529,9 +529,9 @@ TEST_F(DataManagerTest, DirtyTracking) {
 	dataManager->addNode(node);
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
-	auto dirtyNodes = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::ADDED});
+	auto dirtyNodes = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_ADDED});
 	ASSERT_EQ(1UL, dirtyNodes.size());
-	EXPECT_EQ(EntityChangeType::ADDED, dirtyNodes[0].changeType);
+	EXPECT_EQ(EntityChangeType::CHANGE_ADDED, dirtyNodes[0].changeType);
 	EXPECT_EQ(node.getId(), dirtyNodes[0].backup->getId());
 
 	simulateSave();
@@ -541,9 +541,9 @@ TEST_F(DataManagerTest, DirtyTracking) {
 	dataManager->updateNode(node);
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
-	dirtyNodes = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::MODIFIED});
+	dirtyNodes = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_MODIFIED});
 	ASSERT_EQ(1UL, dirtyNodes.size());
-	EXPECT_EQ(EntityChangeType::MODIFIED, dirtyNodes[0].changeType);
+	EXPECT_EQ(EntityChangeType::CHANGE_MODIFIED, dirtyNodes[0].changeType);
 }
 
 TEST_F(DataManagerTest, AutoFlush) {
@@ -668,10 +668,10 @@ TEST_F(DataManagerTest, MultipleEntityTypes) {
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
 	// 1. Check Node
-	EXPECT_EQ(1UL, dataManager->getDirtyEntityInfos<Node>({EntityChangeType::ADDED}).size());
+	EXPECT_EQ(1UL, dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_ADDED}).size());
 
 	// 2. Check State (Expect >= 1 due to system config/index metadata)
-	auto dirtyStates = dataManager->getDirtyEntityInfos<State>({EntityChangeType::ADDED});
+	auto dirtyStates = dataManager->getDirtyEntityInfos<State>({EntityChangeType::CHANGE_ADDED});
 	EXPECT_GE(dirtyStates.size(), 1UL);
 
 	// Verify our specific state is in the list
@@ -685,7 +685,7 @@ TEST_F(DataManagerTest, MultipleEntityTypes) {
 	EXPECT_TRUE(stateFound) << "The manually created state was not found in dirty list.";
 
 	// 3. Check Index (Expect >= 1 due to Label Index B-Tree updates)
-	auto dirtyIndexes = dataManager->getDirtyEntityInfos<Index>({EntityChangeType::ADDED});
+	auto dirtyIndexes = dataManager->getDirtyEntityInfos<Index>({EntityChangeType::CHANGE_ADDED});
 	EXPECT_GE(dirtyIndexes.size(), 1UL);
 
 	// Verify our specific index is in the list
@@ -699,7 +699,7 @@ TEST_F(DataManagerTest, MultipleEntityTypes) {
 	EXPECT_TRUE(indexFound) << "The manually created index was not found in dirty list.";
 
 	// 4. Check Blob
-	auto dirtyBlobs = dataManager->getDirtyEntityInfos<Blob>({EntityChangeType::ADDED});
+	auto dirtyBlobs = dataManager->getDirtyEntityInfos<Blob>({EntityChangeType::CHANGE_ADDED});
 	EXPECT_GE(dirtyBlobs.size(), 1UL) << "Should have at least the user-created blob";
 
 	bool blobFound = false;
@@ -1051,8 +1051,8 @@ TEST_F(DataManagerTest, GetDirtyEntityInfosAllTypes) {
 	dataManager->updateNode(node2);
 
 	// Get all dirty types
-	auto allDirty = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::ADDED, EntityChangeType::MODIFIED,
-															EntityChangeType::DELETED});
+	auto allDirty = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED,
+															EntityChangeType::CHANGE_DELETED});
 
 	// Should find at least our 2 entities in the dirty list
 	EXPECT_GE(allDirty.size(), 2UL);
@@ -1080,7 +1080,7 @@ TEST_F(DataManagerTest, MarkEntityDeletedWhenJustAdded) {
 	// It should be in ADDED state
 	auto dirtyInfo = dataManager->getDirtyInfo<Node>(node.getId());
 	ASSERT_TRUE(dirtyInfo.has_value());
-	EXPECT_EQ(EntityChangeType::ADDED, dirtyInfo->changeType);
+	EXPECT_EQ(EntityChangeType::CHANGE_ADDED, dirtyInfo->changeType);
 
 	// Delete the node (should remove from dirty registry completely)
 	dataManager->deleteNode(node);
@@ -1189,7 +1189,7 @@ TEST_F(DataManagerTest, DeleteModifiedEntity) {
 
 	// 4. Delete the modified node
 	// This should hit the else branch at line 941 in DataManager.cpp:
-	// if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) { ... } else { ... }
+	// if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) { ... } else { ... }
 	dataManager->deleteNode(node);
 
 	// Verify the node is marked as deleted
@@ -1256,7 +1256,7 @@ TEST_F(DataManagerTest, MarkEntityDeletedRemovesFromRegistryWhenJustAdded) {
 	// Verify it's in ADDED state
 	auto dirtyInfo = dataManager->getDirtyInfo<Node>(nodeId);
 	ASSERT_TRUE(dirtyInfo.has_value()) << "Node should be in dirty registry";
-	EXPECT_EQ(EntityChangeType::ADDED, dirtyInfo->changeType);
+	EXPECT_EQ(EntityChangeType::CHANGE_ADDED, dirtyInfo->changeType);
 
 	// Delete it - should remove from registry (line 940)
 	dataManager->deleteNode(node);
@@ -1281,7 +1281,7 @@ TEST_F(DataManagerTest, MarkEntityDeletedMarksInactiveWhenModified) {
 	// Verify it's in MODIFIED state
 	auto dirtyInfo = dataManager->getDirtyInfo<Node>(node.getId());
 	ASSERT_TRUE(dirtyInfo.has_value()) << "Node should be in dirty registry";
-	EXPECT_EQ(EntityChangeType::MODIFIED, dirtyInfo->changeType);
+	EXPECT_EQ(EntityChangeType::CHANGE_MODIFIED, dirtyInfo->changeType);
 
 	// Delete it - should mark as DELETED
 	dataManager->deleteNode(node);
@@ -1289,7 +1289,7 @@ TEST_F(DataManagerTest, MarkEntityDeletedMarksInactiveWhenModified) {
 	// Verify it's marked as DELETED in registry
 	auto afterDeleteInfo = dataManager->getDirtyInfo<Node>(nodeId);
 	ASSERT_TRUE(afterDeleteInfo.has_value()) << "Node should still be in dirty registry";
-	EXPECT_EQ(EntityChangeType::DELETED, afterDeleteInfo->changeType)
+	EXPECT_EQ(EntityChangeType::CHANGE_DELETED, afterDeleteInfo->changeType)
 		<< "MODIFIED entity should be marked DELETED after delete";
 }
 
@@ -1357,18 +1357,18 @@ TEST_F(DataManagerTest, SetEntityDirtyWithInvalidBackup) {
 	invalidNode.setId(0); // Explicitly set ID to 0 (invalid)
 
 	DirtyEntityInfo<Node> dirtyInfo;
-	dirtyInfo.changeType = EntityChangeType::MODIFIED;
+	dirtyInfo.changeType = EntityChangeType::CHANGE_MODIFIED;
 	dirtyInfo.backup = invalidNode; // Backup with ID=0
 
 	// Get initial dirty count
-	auto dirtyBefore = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::MODIFIED});
+	auto dirtyBefore = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_MODIFIED});
 
 	// Call setEntityDirty - should return early without adding to dirty tracking
 	// This tests the guard clause that prevents invalid entities from being tracked
 	dataManager->setEntityDirty(dirtyInfo);
 
 	// Verify that the invalid entity was NOT added to dirty tracking
-	auto dirtyAfter = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::MODIFIED});
+	auto dirtyAfter = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_MODIFIED});
 	EXPECT_EQ(dirtyBefore.size(), dirtyAfter.size())
 		<< "Entity with ID=0 should not be added to dirty tracking";
 }
@@ -1392,7 +1392,7 @@ TEST_F(DataManagerTest, GetDirtyEntityInfosAllTypesWithNoDirtyEntities) {
 
 	// Request all change types when there are no dirty entities
 	auto allDirty = dataManager->getDirtyEntityInfos<Node>(
-		{EntityChangeType::ADDED, EntityChangeType::MODIFIED, EntityChangeType::DELETED});
+		{EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED, EntityChangeType::CHANGE_DELETED});
 
 	// Should return empty vector
 	EXPECT_TRUE(allDirty.empty()) << "Should return empty vector when no dirty entities exist";
@@ -1415,12 +1415,12 @@ TEST_F(DataManagerTest, GetDirtyEntityInfosWithTypeFiltering) {
 
 	// Request only ADDED and MODIFIED types (not DELETED)
 	auto filteredDirty = dataManager->getDirtyEntityInfos<Node>(
-		{EntityChangeType::ADDED, EntityChangeType::MODIFIED});
+		{EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED});
 
 	// Should NOT include the DELETED node
 	for (const auto &info: filteredDirty) {
 		if (info.backup.has_value()) {
-			EXPECT_NE(EntityChangeType::DELETED, info.changeType)
+			EXPECT_NE(EntityChangeType::CHANGE_DELETED, info.changeType)
 				<< "Filtered results should not include DELETED entities";
 		}
 	}
@@ -1434,14 +1434,14 @@ TEST_F(DataManagerTest, GetDirtyEntityInfosWithSingleType) {
 	dataManager->addNode(node);
 
 	// Request only ADDED type
-	auto addedOnly = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::ADDED});
+	auto addedOnly = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_ADDED});
 
 	// All nodes in dirty tracking should be ADDED (since we just added them)
 	EXPECT_GT(addedOnly.size(), 0UL) << "Should find at least one ADDED entity";
 
 	// Verify all returned entities are ADDED
 	for (const auto &info: addedOnly) {
-		EXPECT_EQ(EntityChangeType::ADDED, info.changeType)
+		EXPECT_EQ(EntityChangeType::CHANGE_ADDED, info.changeType)
 			<< "All results should be ADDED when filtering by ADDED only";
 	}
 }
@@ -1544,11 +1544,11 @@ TEST_F(DataManagerTest, LoadNonExistentEntities) {
 TEST_F(DataManagerTest, SetEntityDirtyWithNoBackup) {
 	// Create a DirtyEntityInfo without a backup (backup.has_value() == false)
 	DirtyEntityInfo<Node> dirtyInfo;
-	dirtyInfo.changeType = EntityChangeType::MODIFIED;
+	dirtyInfo.changeType = EntityChangeType::CHANGE_MODIFIED;
 	// Don't set backup - leave it as nullopt
 
 	// Call setEntityDirty - should not return early, should call upsert
-	auto dirtyBefore = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::MODIFIED});
+	auto dirtyBefore = dataManager->getDirtyEntityInfos<Node>({EntityChangeType::CHANGE_MODIFIED});
 	dataManager->setEntityDirty(dirtyInfo);
 
 	// Since backup is nullopt, upsert was called but it won't track anything meaningful

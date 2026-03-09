@@ -347,12 +347,12 @@ PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
 
 PropertyValue ExpressionEvaluator::evaluateUnary(UnaryOperatorType op, const PropertyValue &operand) {
 	switch (op) {
-		case UnaryOperatorType::MINUS: {
+		case UnaryOperatorType::UOP_MINUS: {
 			double val = EvaluationContext::toDouble(operand);
 			return PropertyValue(-val);
 		}
 
-		case UnaryOperatorType::NOT: {
+		case UnaryOperatorType::UOP_NOT: {
 			bool val = EvaluationContext::toBoolean(operand);
 			return PropertyValue(!val);
 		}
