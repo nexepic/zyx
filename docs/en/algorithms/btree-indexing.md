@@ -51,17 +51,23 @@ graph TD
 
 ```mermaid
 graph TD
-    A[Root Node<br/>Level 2] --> B[Internal Node<br/>Level 1]
-    A --> C[Internal Node<br/>Level 1]
-    B --> D[Leaf 1<br/>Level 0]
-    B --> E[Leaf 2<br/>Level 0]
-    C --> F[Leaf 3<br/>Level 0]
-    C --> G[Leaf 4<br/>Level 0]
+    A[Root Node] --> B[Internal Node]
+    A --> C[Internal Node]
+    B --> D[Leaf 1]
+    B --> E[Leaf 2]
+    C --> F[Leaf 3]
+    C --> G[Leaf 4]
 
     D -.-> E
     E -.-> F
     F -.-> G
 ```
+
+**B+Tree Structure:**
+- Root Node: Level 2
+- Internal Nodes: Level 1
+- Leaf Nodes: Level 0 (all at same level)
+- Doubly-linked leaf nodes for sequential access
 
 ### Internal Node Structure
 

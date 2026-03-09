@@ -189,11 +189,16 @@ Each entity maintains a chain of states:
 
 ```mermaid
 graph LR
-    S1[State v1<br/>Initial] --> S2[State v2<br/>Modified]
-    S2 --> S3[State v3<br/>Modified]
+    S1[State v1] --> S2[State v2]
+    S2 --> S3[State v3]
     S3 -.->|Commit| S4[Committed State]
     S3 -.->|Rollback| S1
 ```
+
+**State Chain Evolution:**
+- v1: Initial state
+- v2: Modified state
+- v3: Modified state (can commit or rollback)
 
 ### Dirty Entity Tracking
 

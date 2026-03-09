@@ -248,13 +248,20 @@ struct alignas(2) BFloat16 {
 
 ```mermaid
 graph LR
-    A[Float32<br/>32 bits] --> B[Sign + Exponent<br/>16 bits retained]
-    A --> C[Mantissa<br/>16 bits truncated]
+    A[Float32] --> B[Sign + Exponent]
+    A --> C[Mantissa]
 
-    B --> D[BFloat16<br/>16 bits]
+    B --> D[BFloat16]
 
-    A2[SEEEEEEE<br/>EMMMMMMM<br/>MMMMMMMM<br/>MMMMMMMM] --> B2[SEEEEEEE<br/>EMMMMMMM]
+    A2[Float32 layout] --> B2[BFloat16 layout]
 ```
+
+**Bit Representation:**
+- Float32: SEEEEEEE EMMMMMMM MMMMMMMM MMMMMMMM (32 bits)
+- BFloat16: SEEEEEEE EMMMMMMM (16 bits)
+- S: Sign (1 bit)
+- E: Exponent (8 bits)
+- M: Mantissa (7 bits in BFloat16, 23 bits in Float32)
 
 - **S**: Sign bit (1 bit)
 - **E**: Exponent (8 bits)
@@ -386,10 +393,10 @@ For 1 million vectors with 768 dimensions:
 
 ```mermaid
 flowchart TD
-    A[Are vectors normalized?] -->|Yes| B[Use Inner Product<br/>(fastest)]
+    A[Are vectors normalized?] -->|Yes| B[Use Inner Product]
     A -->|No| C{Is magnitude important?}
     C -->|Yes| D[Use L2 Distance]
-    C -->|No| E[Normalize vectors,<br/>then use IP]
+    C -->|No| E[Normalize vectors, then use IP]
 ```
 
 ### Use Case Examples

@@ -6,13 +6,21 @@ The Metrix Query Engine processes Cypher queries through a three-stage pipeline:
 
 ```mermaid
 graph LR
-    A[Cypher Query] --> B[Parser<br/>ANTLR4]
+    A[Cypher Query] --> B[Parser]
     B --> C[AST]
-    C --> D[Planner<br/>Logical Plan]
-    D --> E[Optimizer<br/>Physical Plan]
-    E --> F[Executor<br/>Operators]
+    C --> D[Planner]
+    D --> E[Optimizer]
+    E --> F[Executor]
     F --> G[Result Set]
 ```
+
+**Query Pipeline Stages:**
+- Parser: ANTLR4-based Cypher parser
+- AST: Abstract Syntax Tree
+- Planner: Creates logical plan
+- Optimizer: Generates physical plan
+- Executor: Executes operators
+- Result Set: Query results
 
 ## Parser
 

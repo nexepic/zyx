@@ -113,19 +113,26 @@ if (!changed) {
 
 ```mermaid
 flowchart TD
-    A[Start] --> B[Initialize Centroids<br/>Random selection from data]
-    B --> C{Max iterations reached?}
-    C -->|No| D[E-Step: Assignment<br/>Assign points to nearest centroid]
+    A[Start] --> B[Initialize Centroids]
+    B --> C{Max iterations?}
+    C -->|No| D[E-Step: Assignment]
     D --> E{Assignments changed?}
-    E -->|Yes| F[M-Step: Update<br/>Recompute centroids as means]
+    E -->|Yes| F[M-Step: Update]
     E -->|No| G[Converged]
-    F --> H{Any empty clusters?}
-    H -->|Yes| I[Re-initialize empty centroids<br/>Random selection]
+    F --> H{Empty clusters?}
+    H -->|Yes| I[Re-initialize]
     H -->|No| C
     I --> C
     C -->|Yes| G[Return Centroids]
     G --> J[End]
 ```
+
+**K-Means Algorithm Flow:**
+- Initialize: Random selection of k centroids from data
+- E-Step: Assign each point to nearest centroid
+- M-Step: Recompute centroids as mean of assigned points
+- Check for convergence or max iterations
+- Handle empty clusters by re-initialization
 
 ## Centroid Initialization Strategies
 

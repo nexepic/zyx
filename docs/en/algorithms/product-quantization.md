@@ -164,24 +164,24 @@ This error is bounded by the within-cluster variance in each subspace.
 ```mermaid
 graph TB
     subgraph "Codebooks"
-        C1["Codebook 1<br/>(256 × 8 floats)"]
-        C2["Codebook 2<br/>(256 × 8 floats)"]
-        C3["Codebook 3<br/>(256 × 8 floats)"]
-        C4["Codebook M<br/>(256 × 8 floats)"]
+        C1["Codebook 1"]
+        C2["Codebook 2"]
+        C3["Codebook 3"]
+        C4["Codebook M"]
     end
 
-    subgraph "Vector x (768D)"
-        V1["Subspace 1<br/>(8D)"]
-        V2["Subspace 2<br/>(8D)"]
-        V3["Subspace 3<br/>(8D)"]
-        V4["Subspace M<br/>(8D)"]
+    subgraph "Vector x"
+        V1["Subspace 1"]
+        V2["Subspace 2"]
+        V3["Subspace 3"]
+        V4["Subspace M"]
     end
 
-    subgraph "PQ Codes (96 bytes)"
-        P1["q₁ = 142"]
-        P2["q₂ = 87"]
-        P3["q₃ = 203"]
-        P4["q_M = 51"]
+    subgraph "PQ Codes"
+        P1["q1 = 142"]
+        P2["q2 = 87"]
+        P3["q3 = 203"]
+        P4["qM = 51"]
     end
 
     V1 -->|"nearest"| P1
@@ -189,11 +189,17 @@ graph TB
     V3 -->|"nearest"| P3
     V4 -->|"nearest"| P4
 
-    C1 -.->|"centroid[142]"| P1
-    C2 -.->|"centroid[87]"| P2
-    C3 -.->|"centroid[203]"| P3
-    C4 -.->|"centroid[51]"| P4
+    C1 -.->|"centroid"| P1
+    C2 -.->|"centroid"| P2
+    C3 -.->|"centroid"| P3
+    C4 -.->|"centroid"| P4
 ```
+
+**Codebook Structure:**
+- Each codebook: 256 × 8 floats (256 codewords, 8 dimensions each)
+- Vector: 768 dimensions total
+- Subspaces: M subspaces, 8D each
+- PQ Codes: 96 bytes (M × 1 byte per subspace)
 
 ### Memory Layout
 
@@ -294,14 +300,19 @@ static float computeDistance(
 ```mermaid
 flowchart TD
     Start([Query Vector q]) --> Precompute[Precompute Distance Table]
-    Precompute --> Table["Table T[M×K]<br/>~96 KB"]
+    Precompute --> Table["Table T"]
 
-    Database["Database Vector x<br/>(PQ codes)"] --> Lookup[Lookup distances from table]
+    Database["Database Vector x"] --> Lookup[Lookup distances]
 
     Table --> Lookup
-    Lookup --> Sum["Sum M distances<br/>d = Σ T[m, codes[m]]"]
+    Lookup --> Sum["Sum M distances"]
     Sum --> Return([Approximate distance d])
 ```
+
+**Distance Computation:**
+- Table T: M × K entries (~96 KB for M=96, K=256)
+- For each database vector: d = Σ T[m, codes[m]]
+- Complexity: O(M) per vector after table precomputation
 
 ### Complexity Analysis
 
