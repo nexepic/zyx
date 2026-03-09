@@ -364,3 +364,124 @@ directory.
 - **`metrix_core`**: Internal static library for tests and CLI (not installed)
 - **`libmetrix`**: Public shared library for embedding (installed to system)
 - **pkg-config**: Generated for easy integration (`pkg-config --libs --cflags Metrix`)
+
+## Documentation Standards
+
+**CRITICAL**: When creating or modifying documentation, you MUST follow these standards strictly.
+
+### Visual Diagrams
+
+1. **NO ASCII ART**: Absolutely NO hand-drawn ASCII art diagrams using box-drawing characters (┌│└─│/\ etc.)
+   - ASCII art is difficult to maintain, error-prone, and renders poorly
+   - Always use proper diagramming tools instead
+
+2. **Use Mermaid Diagrams**: All diagrams MUST use Mermaid syntax
+   - **Supported types**: `classDiagram`, `flowchart TD/LR`, `graph TD/LR`
+   - **State diagrams**: `stateDiagram-v2`
+   - **Sequence diagrams**: `sequenceDiagram`
+   - **Entity Relationship**: `erDiagram`
+
+3. **Color Restrictions**: Mermaid diagrams MUST use ONLY black, white, and gray colors
+   - **FORBIDDEN colors**: `fill:#90EE90`, `fill:#e1f5ff`, `fill:#ff0`, `fill:#f9f`, `fill:lightblue`, etc.
+   - **ALLOWED colors**:
+     - No color styling (default black/white) - **PREFERRED**
+     - Grays only: `fill:#f0f0f0`, `fill:#e0e0e0`, `fill:#d0d0d0` - if necessary for contrast
+   - **Rationale**: Colorful diagrams appear unprofessional and may not print well. Simple grayscale diagrams are cleaner and more publication-ready.
+
+4. **Diagram Clarity**: Diagrams should be:
+   - Simple and focused on the key concept
+   - Professional and publication-ready
+   - Easy to understand without excessive visual noise
+   - Consistent in style across all documentation
+
+### Code Examples
+
+1. **Real Code Only**: All code examples MUST come from actual implementation
+   - No hypothetical or pseudo-code
+   - Copy directly from source files in the codebase
+   - Include file paths for reference
+
+2. **Code Formatting**:
+   - Use proper Markdown code blocks with language tags (```cpp, ```bash, etc.)
+   - Include necessary context and comments
+   - Keep examples focused and concise
+
+3. **Accuracy**: Verify all code examples are accurate and compile/test if possible
+
+### Bilingual Documentation
+
+1. **Chinese and English**: All documentation MUST exist in both languages
+   - English files: `docs/en/...`
+   - Chinese files: `docs/zh/...`
+   - Both versions must be kept in sync
+
+2. **Translation Quality**:
+   - Chinese translations must be technically accurate, not machine-translated
+   - Use proper technical terminology
+   - Maintain consistency across documents
+
+3. **File Organization**:
+   - Mirror directory structure between `docs/en/` and `docs/zh/`
+   - Same filenames in both languages
+   - Consistent navigation and cross-references
+
+### Content Structure
+
+1. **Hierarchy**: Use clear section hierarchy (##, ###, ####)
+2. **Cross-references**: Link to related documentation liberally
+3. **Tables**: Use Markdown tables for comparisons and structured data
+4. **Lists**: Use bullet points for clarity and readability
+
+### VitePress Configuration
+
+1. **Sidebar Updates**: When adding new documentation files:
+   - Update both `docs/.vitepress/config/en.ts` and `docs/.vitepress/config/zh.ts`
+   - Maintain parallel structure between configs
+   - Add descriptive link text
+
+2. **Navigation**: Ensure proper navigation highlighting using `activeMatch` with plain strings (not regex)
+
+### Review Checklist
+
+Before submitting documentation changes, verify:
+- [ ] No ASCII art diagrams present
+- [ ] All Mermaid diagrams use only black/white/gray colors
+- [ ] Code examples are from actual implementation
+- [ ] Both English and Chinese versions exist and are in sync
+- [ ] VitePress config files updated (if adding new files)
+- [ ] All links and cross-references work correctly
+- [ ] Diagrams render correctly in the documentation site
+
+### Examples
+
+**GOOD - Clean Mermaid diagram:**
+```mermaid
+classDiagram
+    class Database {
+        +open() void
+        +close() void
+    }
+    class Transaction {
+        +commit() bool
+        +rollback() void
+    }
+    Database --> Transaction
+```
+
+**BAD - ASCII art (FORBIDDEN):**
+```
+┌─────────────┐
+│  Database   │
+├─────────────┤
+│  open()     │
+│  close()    │
+└─────────────┘
+```
+
+**BAD - Colorful Mermaid (FORBIDDEN):**
+```mermaid
+graph TD
+    A[Start] --> B[Process]
+    style A fill:#90EE90
+    style B fill:#e1f5ff
+```
