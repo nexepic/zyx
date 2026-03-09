@@ -43,9 +43,6 @@ graph TD
     B -->|距离| F[节点 F]
     C -->|距离| G[节点 G]
     D -->|距离| H[节点 H]
-
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#bbf,stroke:#333,stroke-width:2px
 ```
 
 - **最大度数**：每个节点最多维护 `maxDegree` 条出边（默认：64）
@@ -227,10 +224,6 @@ flowchart TD
     Sort --> Limit[限制到束宽]
     Limit --> Rerank[使用精确距离重新排序]
     Rerank --> Return([返回 top-k 结果])
-
-    style Start fill:#90EE90
-    style Return fill:#90EE90
-    style Rerank fill:#FFB6C1
 ```
 
 **复杂度**：O(beamWidth × maxDegree × dim)
@@ -296,9 +289,6 @@ graph TD
     B -->|0.8| C
     B -->|1.2| D
 
-    style B fill:#90EE90
-    style C fill:#FFB6C1
-    style D fill:#FFB6C1
 
     Note["候选 2 被遮挡：alpha*0.8 <= 1.5"]
 ```

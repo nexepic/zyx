@@ -193,15 +193,6 @@ graph TB
     C2 -.->|"质心[87]"| P2
     C3 -.->|"质心[203]"| P3
     C4 -.->|"质心[51]"| P4
-
-    style C1 fill:#e1f5ff
-    style C2 fill:#e1f5ff
-    style C3 fill:#e1f5ff
-    style C4 fill:#e1f5ff
-    style P1 fill:#ffe1e1
-    style P2 fill:#ffe1e1
-    style P3 fill:#ffe1e1
-    style P4 fill:#ffe1e1
 ```
 
 ### 内存布局
@@ -310,11 +301,6 @@ flowchart TD
     Table --> Lookup
     Lookup --> Sum["对 M 个距离求和<br/>d = Σ T[m, codes[m]]"]
     Sum --> Return([近似距离 d])
-
-    style Start fill:#90EE90
-    style Return fill:#90EE90
-    style Table fill:#FFE4B5
-    style Lookup fill:#87CEEB
 ```
 
 ### 复杂度分析

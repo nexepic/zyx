@@ -61,34 +61,33 @@ graph TD
     D -.-> E
     E -.-> F
     F -.-> G
-
-    style D fill:#90EE90
-    style E fill:#90EE90
-    style F fill:#90EE90
-    style G fill:#90EE90
 ```
 
 ### Internal Node Structure
 
 Internal nodes contain separator keys and child pointers:
 
-```
-┌─────────────────────────────────────────────────────┐
-│ Internal Node (256 bytes)                           │
-├─────────────────────────────────────────────────────┤
-│ Metadata:                                           │
-│   - Node Type: INTERNAL                             │
-│   - Entry Count: 3                                  │
-│   - Child Count: 4                                  │
-│   - Level: 1                                        │
-│   - Parent ID: 100                                  │
-├─────────────────────────────────────────────────────┤
-│ Child Entries:                                      │
-│   [DummyKey] -> ChildId: 200                        │
-│   [Key: 50]    -> ChildId: 201                      │
-│   [Key: 100]   -> ChildId: 202                      │
-│   [Key: 150]   -> ChildId: 203                      │
-└─────────────────────────────────────────────────────┘
+```mermaid
+classDiagram
+    class InternalNode {
+        +NodeType: INTERNAL
+        +EntryCount: 3
+        +ChildCount: 4
+        +Level: 1
+        +ParentId: 100
+        +getChildren()
+    }
+
+    class ChildEntry {
+        +Key: PropertyValue
+        +ChildId: int64_t
+    }
+
+    InternalNode "1" --> "4" ChildEntry : contains
+    ChildEntry : [DummyKey] -> ChildId: 200
+    ChildEntry : [Key: 50] -> ChildId: 201
+    ChildEntry : [Key: 100] -> ChildId: 202
+    ChildEntry : [Key: 150] -> ChildId: 203
 ```
 
 **Search Logic**: For a key K, find the largest separator key ≤ K, traverse to that child.
@@ -97,24 +96,30 @@ Internal nodes contain separator keys and child pointers:
 
 Leaf nodes contain actual key-value pairs with linked list pointers:
 
-```
-┌─────────────────────────────────────────────────────┐
-│ Leaf Node (256 bytes)                               │
-├─────────────────────────────────────────────────────┤
-│ Metadata:                                           │
-│   - Node Type: LEAF                                 │
-│   - Entry Count: 4                                  │
-│   - Level: 0                                        │
-│   - Parent ID: 100                                  │
-│   - Next Leaf: 202                                  │
-│   - Prev Leaf: 200                                  │
-├─────────────────────────────────────────────────────┤
-│ Entries:                                            │
-│   [Key: 10]   -> [Values: 1, 5, 8]                 │
-│   [Key: 25]   -> [Values: 3]                        │
-│   [Key: 40]   -> [Values: 7, 9]                    │
-│   [Key: 45]   -> [Values: 2, 4, 6]                 │
-└─────────────────────────────────────────────────────┘
+```mermaid
+classDiagram
+    class LeafNode {
+        +NodeType: LEAF
+        +EntryCount: 4
+        +Level: 0
+        +ParentId: 100
+        +NextLeafId: 202
+        +PrevLeafId: 200
+        +getEntries()
+    }
+
+    class Entry {
+        +Key: PropertyValue
+        +Values: vector~int64_t~
+        +KeyBlobId: int64_t
+        +ValuesBlobId: int64_t
+    }
+
+    LeafNode "1" --> "4" Entry : contains
+    Entry : [Key: 10] -> [Values: 1, 5, 8]
+    Entry : [Key: 25] -> [Values: 3]
+    Entry : [Key: 40] -> [Values: 7, 9]
+    Entry : [Key: 45] -> [Values: 2, 4, 6]
 ```
 
 **Entry Structure**:

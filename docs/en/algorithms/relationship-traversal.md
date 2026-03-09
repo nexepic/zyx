@@ -29,11 +29,6 @@ graph TD
     B -->|prevOutEdgeId| F[null: 0]
     C -->|prevOutEdgeId| B
     D -->|prevOutEdgeId| C
-
-    style A fill:#e1f5ff
-    style B fill:#ffe1e1
-    style C fill:#ffe1e1
-    style D fill:#ffe1e1
 ```
 
 ### Bidirectional Edge Linking
@@ -48,13 +43,6 @@ graph LR
 
     E[Node B<br/>Target] -->|firstIn| C
     C -->|nextIn| F[Edge 4]
-
-    style A fill:#e1f5ff
-    style E fill:#e1f5ff
-    style B fill:#ffe1e1
-    style C fill:#ffe1e1
-    style D fill:#ffe1e1
-    style F fill:#ffe1e1
 ```
 
 **Key Point**: The same edge (Edge 2) appears in both Node A's outgoing list and Node B's incoming list, enabling efficient bidirectional traversal.
@@ -511,9 +499,6 @@ graph LR
 
     B -.->|bypass| C
 
-    style A fill:#ffcccc
-    style B fill:#ccffcc
-    style C fill:#ccffcc
 ```
 
 ## Integration with Cypher Queries
