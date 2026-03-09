@@ -308,3 +308,95 @@ TEST_F(IntegrationQueryTest, DistinctSingleValue) {
 	auto result = execute("MATCH (n:Person) RETURN DISTINCT n.status");
 	EXPECT_EQ(result.rowCount(), 1UL);
 }
+
+/**
+ * Test OPTIONAL MATCH with no matches returns NULL
+ */
+TEST_F(IntegrationQueryTest, OptionalMatchNoMatch) {
+	// Create Alice who knows no one
+	(void) execute("CREATE (a:Person {name: 'Alice'})");
+
+	// OPTIONAL MATCH should return Alice with NULL for b
+	auto result = execute("MATCH (a:Person {name: 'Alice'}) OPTIONAL MATCH (a)-[:KNOWS]->(b:Person) RETURN a.name, b.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test OPTIONAL MATCH with matches returns matched data
+ */
+TEST_F(IntegrationQueryTest, OptionalMatchWithMatch) {
+	// Create Alice who knows Bob
+	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
+
+	// OPTIONAL MATCH should return the matched data
+	auto result = execute("MATCH (a:Person {name: 'Alice'}) OPTIONAL MATCH (a)-[:KNOWS]->(b:Person) RETURN a.name, b.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test OPTIONAL MATCH with WHERE clause
+ */
+TEST_F(IntegrationQueryTest, OptionalMatchWithWhere) {
+	// Create Alice who knows both Bob (age 25) and Charlie (age 35)
+	(void) execute("CREATE (a:Person {name: 'Alice'})");
+	(void) execute("CREATE (b:Person {name: 'Bob', age: 25})");
+	(void) execute("CREATE (c:Person {name: 'Charlie', age: 35})");
+	(void) execute("MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
+	(void) execute("MATCH (a:Person {name: 'Alice'}), (c:Person {name: 'Charlie'}) CREATE (a)-[:KNOWS]->(c)");
+
+	// OPTIONAL MATCH with WHERE should only match Bob
+	auto result = execute("MATCH (a:Person {name: 'Alice'}) OPTIONAL MATCH (a)-[:KNOWS]->(b:Person) WHERE b.age < 30 RETURN a.name, b.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test OPTIONAL MATCH with multiple people
+ */
+TEST_F(IntegrationQueryTest, OptionalMatchMultiplePeople) {
+	// Create Alice who knows Bob, and Charlie who knows no one
+	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
+	(void) execute("CREATE (c:Person {name: 'Charlie'})");
+
+	// All people should be returned, Bob should have NULL for friend
+	auto result = execute("MATCH (p:Person) OPTIONAL MATCH (p)-[:KNOWS]->(f:Person) RETURN p.name, f.name ORDER BY p.name");
+	EXPECT_EQ(result.rowCount(), 3UL);
+}
+
+/**
+ * Test OPTIONAL MATCH after regular MATCH
+ * NOTE: Current implementation doesn't fully support context binding.
+ * This test documents the current behavior and will be updated when
+ * proper variable binding is implemented.
+ */
+TEST_F(IntegrationQueryTest, OptionalMatchAfterRegularMatch) {
+	// Create simple graph: Alice knows Bob
+	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
+
+	// Regular MATCH finds Alice->Bob
+	// OPTIONAL MATCH with no matches for b->c should still return row with NULL c
+	auto result = execute("MATCH (a:Person)-[:KNOWS]->(b:Person) OPTIONAL MATCH (b)-[:KNOWS]->(c:Person) RETURN a.name, b.name, c.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test OPTIONAL MATCH with no input
+ */
+TEST_F(IntegrationQueryTest, OptionalMatchNoInput) {
+	// OPTIONAL MATCH as the first clause should work like regular MATCH
+	(void) execute("CREATE (a:Person {name: 'Alice'})");
+
+	auto result = execute("OPTIONAL MATCH (a:Person) RETURN a.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test OPTIONAL MATCH relationship in reverse direction
+ */
+TEST_F(IntegrationQueryTest, OptionalMatchReverseDirection) {
+	// Create Bob who is known by Alice
+	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
+
+	// OPTIONAL MATCH with incoming relationship
+	auto result = execute("MATCH (b:Person {name: 'Bob'}) OPTIONAL MATCH (a:Person)-[:KNOWS]->(b) RETURN b.name, a.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}

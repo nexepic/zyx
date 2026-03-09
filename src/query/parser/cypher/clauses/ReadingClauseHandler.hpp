@@ -93,6 +93,23 @@ public:
 		CypherParser::UnwindStatementContext *ctx,
 		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
+
+	/**
+	 * @brief Handle an OPTIONAL MATCH statement.
+	 *
+	 * OPTIONAL MATCH provides left outer join semantics. If the pattern
+	 * doesn't match, it returns NULL for unmatched variables instead of
+	 * filtering out the row.
+	 *
+	 * @param ctx The match statement context (with OPTIONAL flag)
+	 * @param rootOp The current root operator (may be null)
+	 * @param planner The query planner for creating operators
+	 * @return The resulting operator after processing OPTIONAL MATCH
+	 */
+	static std::unique_ptr<query::execution::PhysicalOperator> handleOptionalMatch(
+		CypherParser::MatchStatementContext *ctx,
+		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		const std::shared_ptr<query::QueryPlanner> &planner);
 };
 
 } // namespace graph::parser::cypher::clauses

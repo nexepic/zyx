@@ -59,13 +59,15 @@ public:
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
 	 * @param where Optional WHERE clause context
+	 * @param isOptional Whether this is an OPTIONAL MATCH (left outer join semantics)
 	 * @return The resulting operator after processing the pattern
 	 */
 	static std::unique_ptr<query::execution::PhysicalOperator> buildMatchPattern(
 		CypherParser::PatternContext *pattern,
 		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner,
-		CypherParser::WhereContext *where = nullptr);
+		CypherParser::WhereContext *where = nullptr,
+		bool isOptional = false);
 
 	/**
 	 * @brief Build operators for a CREATE pattern.
@@ -132,6 +134,16 @@ private:
 		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
 		CypherParser::WhereContext *where,
 		const std::shared_ptr<query::QueryPlanner> &planner);
+
+	/**
+	 * @brief Collect all variable names introduced by a pattern element.
+	 *
+	 * @param element The pattern element to analyze
+	 * @param variables Output vector to collect variable names
+	 */
+	static void collectVariablesFromPatternElement(
+		CypherParser::PatternElementContext *element,
+		std::vector<std::string> &variables);
 };
 
 } // namespace graph::parser::cypher::helpers
