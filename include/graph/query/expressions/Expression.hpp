@@ -408,6 +408,7 @@ public:
 	virtual void visit(class ListLiteralExpression *expr) = 0;
 	virtual void visit(IsNullExpression *expr) = 0;
 	virtual void visit(class QuantifierFunctionExpression *expr) = 0;
+	virtual void visit(class ExistsExpression *expr) = 0;
 };
 
 /**
@@ -430,6 +431,7 @@ public:
 	virtual void visit(const class ListLiteralExpression *expr) = 0;
 	virtual void visit(const IsNullExpression *expr) = 0;
 	virtual void visit(const class QuantifierFunctionExpression *expr) = 0;
+	virtual void visit(const class ExistsExpression *expr) = 0;
 };
 
 // ============================================================================

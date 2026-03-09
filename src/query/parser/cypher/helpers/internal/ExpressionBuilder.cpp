@@ -27,6 +27,7 @@
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
+#include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -510,6 +511,28 @@ std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::F
 	std::string functionNameLower = functionName;
 	std::transform(functionNameLower.begin(), functionNameLower.end(),
 	               functionNameLower.begin(), [](unsigned char c) { return std::tolower(c); });
+
+	// Check if this is the EXISTS function
+	if (functionNameLower == "exists") {
+		// EXISTS has special syntax: EXISTS((n)-[:FRIENDS]->())
+		// For now, extract the pattern string and create an ExistsExpression
+		auto exprs = ctx->expression();
+		if (!exprs.empty()) {
+			// Get the pattern string from the first argument
+			std::string pattern = exprs[0]->getText();
+
+			// Check if there's a WHERE clause (second argument)
+			std::unique_ptr<Expression> whereExpr;
+			if (exprs.size() >= 2) {
+				whereExpr = buildExpression(exprs[1]);
+			}
+
+			return std::make_unique<ExistsExpression>(pattern, std::move(whereExpr));
+		}
+
+		// If no arguments, return an empty EXISTS expression
+		return std::make_unique<ExistsExpression>("");
+	}
 
 	// Check if this is a quantifier function (all, any, none, single)
 	bool isQuantifier = (functionNameLower == "all" || functionNameLower == "any" ||
