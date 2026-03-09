@@ -1,0 +1,9 @@
+import{_ as s,o as n,c as e,ae as p}from"./chunks/framework.CVcY3S6g.js";const u=JSON.parse('{"title":"架构概述","description":"","frontmatter":{},"headers":[],"relativePath":"zh/architecture/overview.md","filePath":"zh/architecture/overview.md"}'),r={name:"zh/architecture/overview.md"};function l(i,a,t,c,o,d){return n(),e("div",null,[...a[0]||(a[0]=[p(`<h1 id="架构概述" tabindex="-1">架构概述 <a class="header-anchor" href="#架构概述" aria-label="Permalink to &quot;架构概述&quot;">​</a></h1><p>Metrix 设计为分层系统，具有清晰的关注点分离。</p><h2 id="分层架构" tabindex="-1">分层架构 <a class="header-anchor" href="#分层架构" aria-label="Permalink to &quot;分层架构&quot;">​</a></h2><div class="language- vp-adaptive-theme line-numbers-mode"><button title="Copy Code" class="copy"></button><span class="lang"></span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>应用程序 (CLI, Benchmark)</span></span>
+<span class="line"><span>       ↓</span></span>
+<span class="line"><span>公共 API (C++ &amp; C)</span></span>
+<span class="line"><span>       ↓</span></span>
+<span class="line"><span>查询引擎 (解析器 → 规划器 → 执行器)</span></span>
+<span class="line"><span>       ↓</span></span>
+<span class="line"><span>存储层 (FileStorage, WAL, 状态管理)</span></span>
+<span class="line"><span>       ↓</span></span>
+<span class="line"><span>核心 (数据库, 事务, 实体管理)</span></span></code></pre><div class="line-numbers-wrapper" aria-hidden="true"><span class="line-number">1</span><br><span class="line-number">2</span><br><span class="line-number">3</span><br><span class="line-number">4</span><br><span class="line-number">5</span><br><span class="line-number">6</span><br><span class="line-number">7</span><br><span class="line-number">8</span><br><span class="line-number">9</span><br></div></div>`,4)])])}const h=s(r,[["render",l]]);export{u as __pageData,h as default};

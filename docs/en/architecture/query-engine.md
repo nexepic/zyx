@@ -12,10 +12,6 @@ graph LR
     D --> E[Optimizer<br/>Physical Plan]
     E --> F[Executor<br/>Operators]
     F --> G[Result Set]
-
-    style B fill:#dfd
-    style D fill:#ffd
-    style F fill:#ddf
 ```
 
 ## Parser

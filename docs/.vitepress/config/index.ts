@@ -24,7 +24,7 @@ const config = {
   },
 
   markdown: {
-    lineNumbers: true
+    // lineNumbers: true  // Temporarily disabled due to parsing issues
   },
 
   themeConfig: {

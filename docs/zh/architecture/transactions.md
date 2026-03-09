@@ -10,11 +10,6 @@ graph TD
     B[一致性] --> D
     C[隔离性] --> D
     E[持久性] --> D
-
-    style A fill:#dfd
-    style B fill:#ffd
-    style C fill:#ddf
-    style E fill:#fdd
 ```
 
 ### 原子性
@@ -100,9 +95,6 @@ graph TD
     A[提交] --> B[WAL 刷新]
     B --> C[主存储]
     C --> D[检查点]
-
-    style B fill:#f99,stroke:#333,stroke-width:2px
-    style C fill:#9f9,stroke:#333,stroke-width:2px
 ```
 
 **保证**：
@@ -201,11 +193,6 @@ graph LR
     S2 --> S3[状态 v3<br/>已修改]
     S3 -.->|提交| S4[已提交状态]
     S3 -.->|回滚| S1
-
-    style S1 fill:#dfd
-    style S2 fill:#ffd
-    style S3 fill:#ffd
-    style S4 fill:#ddf
 ```
 
 ### 脏实体跟踪

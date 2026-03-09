@@ -12,10 +12,6 @@ graph LR
     D --> E[优化器<br/>物理计划]
     E --> F[执行器<br/>运算符]
     F --> G[结果集]
-
-    style B fill:#dfd
-    style D fill:#ffd
-    style F fill:#ddf
 ```
 
 ## 解析器

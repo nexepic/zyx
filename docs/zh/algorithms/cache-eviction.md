@@ -1,0 +1,322 @@
+# Cache Eviction Algorithm
+
+Metrix implements an LRU (Least Recently Used) cache eviction policy with dirty tracking to optimize memory usage and performance.
+
+## Overview
+
+The cache manager uses:
+
+- **LRU Eviction**: Evict least recently used entities first
+- **Dirty Tracking**: Track modified entities for persistence
+- **Size Limits**: Configurable cache size limits
+- **Hint-Based Eviction**: Optional eviction hints
+
+## LRU Cache Implementation
+
+### Data Structure
+
+```cpp
+template<typename K, typename V>
+class LRUCache {
+private:
+    struct Node {
+        K key;
+        V value;
+        std::list<Node*>::iterator it;
+    };
+
+    std::list<Node*> lruList_;  // Most recent at front
+    std::unordered_map<K, Node*> cache_;
+    size_t capacity_;
+
+public:
+    std::optional<V> get(const K& key) {
+        auto it = cache_.find(key);
+        if (it == cache_.end()) {
+            return std::nullopt;
+        }
+
+        // Move to front (most recently used)
+        Node* node = it->second;
+        lruList_.splice(lruList_.begin(), lruList_, node->it);
+        return node->value;
+    }
+
+    void put(const K& key, const V& value) {
+        auto it = cache_.find(key);
+
+        if (it != cache_.end()) {
+            // Update existing
+            Node* node = it->second;
+            node->value = value;
+            lruList_.splice(lruList_.begin(), lruList_, node->it);
+        } else {
+            // Add new
+            if (cache_.size() >= capacity_) {
+                evict();
+            }
+
+            Node* node = new Node{key, value};
+            lruList_.push_front(node);
+            node->it = lruList_.begin();
+            cache_[key] = node;
+        }
+    }
+
+private:
+    void evict() {
+        // Evict least recently used (back of list)
+        Node* node = lruList_.back();
+        cache_.erase(node->key);
+        lruList_.pop_back();
+
+        // Handle dirty entities before eviction
+        if (isDirty(node)) {
+            flushToDisk(node);
+        }
+
+        delete node;
+    }
+};
+```
+
+## Dirty Entity Tracking
+
+### Dirty Registry
+
+```cpp
+class DirtyEntityRegistry {
+private:
+    std::unordered_set<uint64_t> dirtyEntities_;
+    std::mutex mutex_;
+
+public:
+    void markDirty(uint64_t entityId) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        dirtyEntities_.insert(entityId);
+    }
+
+    void markClean(uint64_t entityId) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        dirtyEntities_.erase(entityId);
+    }
+
+    bool isDirty(uint64_t entityId) const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return dirtyEntities_.count(entityId) > 0;
+    }
+
+    std::vector<uint64_t> getDirtyEntities() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return std::vector<uint64_t>(dirtyEntities_.begin(), dirtyEntities_.end());
+    }
+};
+```
+
+### Cache with Dirty Tracking
+
+```cpp
+class EntityCache {
+private:
+    LRUCache<uint64_t, Entity*> cache_;
+    DirtyEntityRegistry dirtyRegistry_;
+
+public:
+    Entity* getEntity(uint64_t entityId) {
+        auto entity = cache_.get(entityId);
+        if (entity) {
+            cacheHits_++;
+        } else {
+            cacheMisses++;
+        }
+        return entity.value_or(nullptr);
+    }
+
+    void putEntity(uint64_t entityId, Entity* entity, bool isDirty) {
+        cache_.put(entityId, entity);
+        if (isDirty) {
+            dirtyRegistry_.markDirty(entityId);
+        }
+    }
+
+    void updateEntity(uint64_t entityId, Entity* entity) {
+        cache_.put(entityId, entity);
+        dirtyRegistry_.markDirty(entityId);
+    }
+
+    std::vector<uint64_t> flushDirtyEntities() {
+        auto dirty = dirtyRegistry_.getDirtyEntities();
+
+        for (uint64_t entityId : dirty) {
+            Entity* entity = getEntity(entityId);
+            if (entity) {
+                writeToDisk(entity);
+                dirtyRegistry_.markClean(entityId);
+            }
+        }
+
+        return dirty;
+    }
+};
+```
+
+## Eviction Strategies
+
+### Basic LRU
+
+```cpp
+void evictLRU() {
+    if (lruList_.empty()) return;
+
+    // Evict least recently used
+    Node* node = lruList_.back();
+    if (dirtyRegistry_.isDirty(node->key)) {
+        flushToDisk(node->value);
+    }
+
+    cache_.erase(node->key);
+    lruList_.pop_back();
+    delete node;
+}
+```
+
+### LFU (Least Frequently Used)
+
+```cpp
+class LFUCache {
+private:
+    struct Node {
+        uint64_t key;
+        Entity* value;
+        size_t frequency;
+    };
+
+    std::unordered_map<uint64_t, Node*> cache_;
+    std::map<size_t, std::unordered_set<uint64_t>> frequencyMap_;
+
+public:
+    void evictLFU() {
+        // Evict entity with lowest frequency
+        auto& [minFreq, entities] = *frequencyMap_.begin();
+        uint64_t entityId = *entities.begin();
+
+        removeEntity(entityId);
+    }
+
+    void access(uint64_t entityId) {
+        auto* node = cache_[entityId];
+        frequencyMap_[node->frequency].erase(entityId);
+        node->frequency++;
+        frequencyMap_[node->frequency].insert(entityId);
+    }
+};
+```
+
+### ARC (Adaptive Replacement Cache)
+
+```cpp
+class ARCCache {
+private:
+    size_t size_;
+    size_t p_;  // Pivot point
+
+    LRUCache<uint64_t, Entity*> t1_;  // Recent, once
+    LRUCache<uint64_t, Entity*> t2_;  // Recent, twice+
+    LRUCache<uint64_t, Entity*> b1_;  // Frequent, once
+    LRUCache<uint64_t, Entity*> b2_;  // Frequent, twice+
+
+public:
+    void evictARC() {
+        if (t1_.size() >= std::max(p_, size_ / 2)) {
+            // Replace from t1
+            auto* entity = t1_.evict();
+            b1_.put(entity->id, entity);
+        } else {
+            // Replace from t2
+            auto* entity = t2_.evict();
+            b2_.put(entity->id, entity);
+        }
+    }
+};
+```
+
+## Performance Tuning
+
+### Cache Sizing
+
+```cpp
+size_t calculateOptimalCacheSize(size_t availableMemory, size_t workingSetSize) {
+    // Use 70% of available memory
+    size_t recommended = availableMemory * 0.7;
+
+    // But don't exceed working set size by too much
+    return std::min(recommended, workingSetSize * 2);
+}
+```
+
+### Eviction Threshold
+
+```cpp
+struct CacheConfig {
+    size_t maxSize;
+    double evictionThreshold;  // Evict when 90% full
+    double watermarkLow;       // Stop eviction at 70%
+    double watermarkHigh;      // Start eviction at 90%
+};
+
+void manageCacheSize() {
+    if (cache_.size() > config_.maxSize * config_.watermarkHigh) {
+        // Evict until low watermark
+        while (cache_.size() > config_.maxSize * config_.watermarkLow) {
+            evict();
+        }
+    }
+}
+```
+
+## Performance Metrics
+
+### Hit Rate Tracking
+
+```cpp
+struct CacheStats {
+    uint64_t hits;
+    uint64_t misses;
+    uint64_t evictions;
+    uint64_t dirtyFlushes;
+
+    double getHitRate() const {
+        double total = hits + misses;
+        return total > 0 ? hits / total : 0.0;
+    }
+};
+
+CacheStats getStats() const {
+    return {
+        .hits = cacheHits_,
+        .misses = cacheMisses_,
+        .evictions = evictionCount_,
+        .dirtyFlushes = dirtyFlushCount_
+    };
+}
+```
+
+### Target Metrics
+
+- **Hit Rate**: >80% for most workloads
+- **Eviction Rate**: <10% of accesses
+- **Dirty Ratio**: <30% of cached entities
+
+## Best Practices
+
+1. **Monitor hit rate**: Track and optimize
+2. **Tune cache size**: Balance memory and performance
+3. **Flush dirty entities**: Don't let them accumulate
+4. **Use appropriate eviction**: Choose strategy for workload
+5. **Profile access patterns**: Understand your data access
+
+## See Also
+
+- [Cache Management](/en/architecture/cache) - Overall cache architecture
+- [Storage System](/en/architecture/storage) - Persistent storage
+- [Performance Optimization](/en/architecture/optimization) - Performance tuning

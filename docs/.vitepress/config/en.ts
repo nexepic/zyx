@@ -1,9 +1,10 @@
 export default {
   nav: [
-    { text: 'User Guide', link: '/en/user-guide/installation' },
-    { text: 'API Reference', link: '/en/api/cpp-api' },
-    { text: 'Architecture', link: '/en/architecture/overview' },
-    { text: 'Contributing', link: '/en/contributing/development-setup' }
+    { text: 'User Guide', link: '/en/user-guide/quick-start', activeMatch: '/en/user-guide/' },
+    { text: 'API Reference', link: '/en/api/cpp-api', activeMatch: '/en/api/' },
+    { text: 'Algorithms', link: '/en/algorithms/overview', activeMatch: '/en/algorithms/' },
+    { text: 'Architecture', link: '/en/architecture/overview', activeMatch: '/en/architecture/' },
+    { text: 'Contributing', link: '/en/contributing/development-setup', activeMatch: '/en/contributing/' }
   ],
 
   sidebar: {
@@ -11,7 +12,6 @@ export default {
       {
         text: 'Getting Started',
         items: [
-          { text: 'Installation', link: '/en/user-guide/installation' },
           { text: 'Quick Start', link: '/en/user-guide/quick-start' },
           { text: 'Basic Operations', link: '/en/user-guide/basic-operations' }
         ]
@@ -52,6 +52,41 @@ export default {
         ]
       }
     ],
+    '/en/algorithms/': [
+      {
+        text: 'Algorithms Overview',
+        items: [
+          { text: 'Overview', link: '/en/algorithms/overview' }
+        ]
+      },
+      {
+        text: 'Storage Algorithms',
+        items: [
+          { text: 'Segment Allocation', link: '/en/algorithms/segment-allocation' },
+          { text: 'Bitmap Indexing', link: '/en/algorithms/bitmap-indexing' },
+          { text: 'Compression', link: '/en/algorithms/compression' }
+        ]
+      },
+      {
+        text: 'Transaction Algorithms',
+        items: [
+          { text: 'State Chain & Optimistic Locking', link: '/en/algorithms/state-chain-optimistic-locking' },
+          { text: 'WAL Recovery', link: '/en/algorithms/wal-recovery' }
+        ]
+      },
+      {
+        text: 'Query Algorithms',
+        items: [
+          { text: 'Query Optimization', link: '/en/algorithms/query-optimization' }
+        ]
+      },
+      {
+        text: 'Caching Algorithms',
+        items: [
+          { text: 'Cache Eviction', link: '/en/algorithms/cache-eviction' }
+        ]
+      }
+    ],
     '/en/architecture/': [
       {
         text: 'Core Architecture',
@@ -80,9 +115,17 @@ export default {
     ],
     '/en/contributing/': [
       {
+        text: 'Getting Started',
+        items: [
+          { text: 'Installation', link: '/en/contributing/installation' },
+          { text: 'System Requirements', link: '/en/contributing/requirements' },
+          { text: 'Configuration', link: '/en/contributing/configuration' },
+          { text: 'Development Setup', link: '/en/contributing/development-setup' }
+        ]
+      },
+      {
         text: 'Development',
         items: [
-          { text: 'Development Setup', link: '/en/contributing/development-setup' },
           { text: 'Project Structure', link: '/en/contributing/project-structure' },
           { text: 'Code Style', link: '/en/contributing/code-style' }
         ]

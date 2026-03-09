@@ -13,46 +13,108 @@ The database file is divided into fixed-size segments, each managed independentl
 
 ### Database File Structure
 
+#### Overall Layout
+
+```mermaid
+classDiagram
+    class DatabaseFile {
+        +FileHeader header
+        +Segment[] segments
+        +WriteAheadLog wal
+    }
+
+    class FileHeader {
+        +uint8_t magic[8]
+        +uint32_t version
+        +uint32_t pageSize
+        +uint64_t segmentSize
+        +uint64_t segmentCount
+        +uint64_t walOffset
+    }
+
+    class Segment {
+        +SegmentHeader header
+        +FreeSpaceBitmap bitmap
+        +DataPage[] dataPages
+    }
+
+    class WriteAheadLog {
+        +LogEntry[] entries
+        +CheckpointMetadata checkpoints
+        +TransactionRecord[] transactions
+    }
+
+    DatabaseFile *-- "1" FileHeader
+    DatabaseFile *-- "N" Segment
+    DatabaseFile *-- "1" WriteAheadLog
+    Segment *-- "1" SegmentHeader
+    Segment *-- "1" FreeSpaceBitmap
+    Segment *-- "many" DataPage
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      DATABASE FILE (metrix.db)                 │
-├─────────────────────────────────────────────────────────────────┤
-│  FILE HEADER (256 bytes)                                      │
-│  ├─ Magic: "METRIXXZ" (8 bytes)                              │
-│  ├─ Version: 1 (4 bytes)                                     │
-│  ├─ Page Size: 4096 (4 bytes)                                │
-│  ├─ Segment Size: 4MB (8 bytes)                               │
-│  ├─ Segment Count: N (8 bytes)                                │
-│  └─ WAL Offset: ... (8 bytes)                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  SEGMENT 0 (4MB) - Nodes                                      │
-│  ├─ Segment Header (64 bytes)                                 │
-│  ├─ Free Space Bitmap (8KB)                                   │
-│  └─ Data Pages (~4MB)                                          │
-├─────────────────────────────────────────────────────────────────┤
-│  SEGMENT 1 (4MB) - Edges                                      │
-│  ├─ Segment Header (64 bytes)                                 │
-│  ├─ Free Space Bitmap (8KB)                                   │
-│  └─ Data Pages (~4MB)                                          │
-├─────────────────────────────────────────────────────────────────┤
-│  SEGMENT 2 (4MB) - Properties                                  │
-│  ├─ Segment Header (64 bytes)                                 │
-│  ├─ Free Space Bitmap (8KB)                                   │
-│  └─ Data Pages (~4MB)                                          │
-├─────────────────────────────────────────────────────────────────┤
-│  ...                                                            │
-├─────────────────────────────────────────────────────────────────┤
-│  SEGMENT N (4MB)                                                │
-│  ├─ Segment Header                                            │
-│  ├─ Free Space Bitmap                                         │
-│  └─ Data Pages                                                │
-├─────────────────────────────────────────────────────────────────┤
-│  WRITE-AHEAD LOG (WAL) - 100MB                                 │
-│  ├─ Log Entries                                               │
-│  ├─ Checkpoint Metadata                                       │
-│  └─ Transaction Records                                       │
-└─────────────────────────────────────────────────────────────────┘
+
+#### File Header Details
+
+| Field | Size | Description |
+|-------|------|-------------|
+| Magic | 8 bytes | File identifier: "METRIXXZ" |
+| Version | 4 bytes | Format version number |
+| Page Size | 4 bytes | System page size (typically 4096) |
+| Segment Size | 8 bytes | Size of each segment (default: 4MB) |
+| Segment Count | 8 bytes | Total number of segments |
+| WAL Offset | 8 bytes | Offset to Write-Ahead Log |
+
+#### Segment Structure Details
+
+```mermaid
+classDiagram
+    class Segment {
+        +SegmentHeader header
+        +Bitmap bitmap
+        +DataPage[] pages
+    }
+
+    class SegmentHeader {
+        +uint64_t segmentId
+        +SegmentType type
+        +uint32_t capacity
+        +uint32_t usedCount
+        +uint32_t checksum
+        +uint32_t flags
+    }
+
+    class Bitmap {
+        +uint8_t[] bits
+        +uint32_t size
+        +isFree(index) bool
+        +markUsed(index) void
+        +markFree(index) void
+    }
+
+    class DataPage {
+        +uint32_t pageNumber
+        +Entity[] entities
+        +uint32_t freeSpace
+        +uint32_t checksum
+    }
+
+    Segment *-- SegmentHeader
+    Segment *-- Bitmap
+    Segment *-- DataPage
 ```
+
+| Component | Size | Description |
+|-----------|------|-------------|
+| **Segment Header** | 64 bytes | Segment metadata and ID |
+| **Free Space Bitmap** | 8 KB | Tracks allocation of 64-byte blocks |
+| **Data Pages** | ~4 MB | Actual entity storage |
+
+#### Write-Ahead Log (WAL)
+
+| Component | Description |
+|-----------|-------------|
+| Log Entries | Transaction log records |
+| Checkpoint Metadata | Checkpoint information |
+| Transaction Records | Transaction state data |
 
 ### Segment Hierarchy
 
@@ -180,44 +242,81 @@ Entities are stored within segments with the following structure:
 
 ### Data Page Layout
 
+```mermaid
+classDiagram
+    class DataPage {
+        +PageHeader header
+        +EntitySlotTable slotTable
+        +EntityDataArea dataArea
+    }
+
+    class PageHeader {
+        +uint32_t pageId
+        +uint32_t segmentId
+        +uint32_t entityType
+        +uint32_t entityCount
+        +uint32_t freeSpace
+        +uint32_t checksum
+    }
+
+    class EntitySlotTable {
+        +Slot[] slots
+        +getSlot(index) Slot
+        +allocate(size_t) Slot*
+    }
+
+    class Slot {
+        +bool used
+        +uint32_t offset
+        +uint32_t size
+    }
+
+    class EntityDataArea {
+        +Entity[] entities
+        +uint8_t* freeSpace
+        +allocate(size_t) void*
+    }
+
+    DataPage *-- PageHeader
+    DataPage *-- EntitySlotTable
+    DataPage *-- EntityDataArea
+    EntitySlotTable *-- "32" Slot
+    EntityDataArea *-- "many" Entity
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    DATA PAGE (4096 bytes)              │
-├─────────────────────────────────────────────────────────┤
-│  Page Header (32 bytes)                                 │
-│  ├─ pageId: 42                                         │
-│  ├─ segmentId: 0                                       │
-│  ├─ entityType: NODE                                   │
-│  ├─ entityCount: 45                                    │
-│  ├─ freeSpace: 1024 bytes                              │
-│  └─ checksum: 0xABCD1234                               │
-├─────────────────────────────────────────────────────────┤
-│  Entity Slot Table (variable size, ~256 bytes)          │
-│  ┌──────────┬──────────┬──────────┬──────────┐        │
-│  │ Slot 0   │ Slot 1   │ Slot 2   │ Slot 3   │        │
-│  │ USED     │ FREE     │ USED     │ USED     │        │
-│  │ Offset:0 │          │ Offset:64│ Offset:92│        │
-│  │ Size:28  │          │ Size:36  │ Size:44  │        │
-│  └──────────┴──────────┴──────────┴──────────┘        │
-│  ... (32 slots per page)                                │
-├─────────────────────────────────────────────────────────┤
-│  Entity Data Area (remaining ~3800 bytes)               │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Entity 0 (28 bytes)                             │   │
-│  │ id: 0x0001                                      │   │
-│  │ label: "Person"                                 │   │
-│  │ properties: {name: "Alice", age: 30}            │   │
-│  └─────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Entity 2 (36 bytes)                             │   │
-│  │ id: 0x0003                                      │   │
-│  │ label: "User"                                   │   │
-│  │ properties: {email: "bob@ex.com", active: true} │   │
-│  │ outgoing: [0x0005, 0x0008]                     │   │
-│  └─────────────────────────────────────────────────┘   │
-│  ... (free space interspersed)                           │
-└─────────────────────────────────────────────────────────┘
-```
+
+#### Page Header Details
+
+| Field | Type | Description | Example Value |
+|-------|------|-------------|---------------|
+| pageId | uint32_t | Unique page identifier | 42 |
+| segmentId | uint32_t | Segment this page belongs to | 0 |
+| entityType | uint32_t | Type of entities (NODE/EDGE/PROPERTY) | NODE |
+| entityCount | uint32_t | Number of entities stored | 45 |
+| freeSpace | uint32_t | Available free space in bytes | 1024 |
+| checksum | uint32_t | CRC32 checksum for validation | 0xABCD1234 |
+
+#### Entity Slot Table
+
+The slot table tracks entity allocation within the page (32 slots per page):
+
+| Slot | Status | Offset | Size |
+|------|--------|--------|------|
+| 0 | USED | 0 | 28 |
+| 1 | FREE | - | - |
+| 2 | USED | 64 | 36 |
+| 3 | USED | 92 | 44 |
+| ... | ... | ... | ... |
+| 31 | USED | 3850 | 128 |
+
+#### Entity Data Area
+
+Entities are stored contiguously with variable sizes. Free space is interspersed between entities.
+
+| Entity | Offset | Size | Details |
+|--------|--------|------|---------|
+| Entity 0 | 0 | 28 | id: 0x0001, label: "Person", properties: {name: "Alice", age: 30} |
+| Entity 2 | 64 | 36 | id: 0x0003, label: "User", properties: {email: "bob@ex.com"}, outgoing: [0x0005, 0x0008] |
+| ... | ... | ... | ... |
 
 Entities are stored within segments with the following structure:
 
