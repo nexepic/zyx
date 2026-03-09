@@ -153,3 +153,29 @@ Before submitting a pull request:
 2. **Check coverage**: New code should have adequate test coverage (target: 95%+ branch coverage)
 3. **Update documentation**: If your changes affect user-facing functionality, update relevant docs
 4. **One feature per PR**: Keep pull requests focused on a single feature or fix
+
+## Documentation Standards
+
+When contributing documentation, you MUST follow the established documentation standards. See the comprehensive [Documentation Standards Guide](/.worktrees/vitepress-docs/docs/en/contributing/doc-standards.md) for detailed requirements.
+
+### Key Requirements (Summary)
+
+1. **NO ASCII Art**: Absolutely NO hand-drawn ASCII art diagrams
+   - Use Mermaid diagrams only (classDiagram, flowchart, graph TD, etc.)
+   - ASCII art is difficult to maintain and renders poorly
+
+2. **Color Restrictions**: Diagrams must use ONLY black, white, and gray
+   - **FORBIDDEN**: `fill:#90EE90`, `fill:#e1f5ff`, `fill:#ff0`, etc.
+   - **ALLOWED**: No color (default), or grays like `fill:#f0f0f0`
+   - Colorful diagrams appear unprofessional and don't print well
+
+3. **Real Code Only**: All code examples must be from actual implementation
+   - No hypothetical or pseudo-code
+   - Copy directly from source files
+
+4. **Bilingual Documentation**: All docs must exist in both English and Chinese
+   - English: `docs/en/...`
+   - Chinese: `docs/zh/...`
+   - Both must be kept in sync
+
+For complete documentation standards including diagram best practices, code example requirements, and review checklists, refer to the [Documentation Standards Guide](/.worktrees/vitepress-docs/docs/en/contributing/doc-standards.md).
