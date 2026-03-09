@@ -4,9 +4,14 @@ This guide will help you get started with Metrix using the command-line interfac
 
 ::: tip Prerequisites
 Before you begin, make sure you have:
-- ✅ Built the Metrix project
-- ✅ Generated the `metrix-cli` executable
+- ✅ Installed Metrix (downloaded pre-built version or used package manager)
+- ✅ `metrix-cli` executable available
 - ✅ Basic understanding of Cypher query language
+
+**Installation methods:**
+- Download pre-built executable from the official website
+- Use system package manager (Homebrew, APT, etc.)
+- Or follow the [Installation Guide](/en/contributing/installation)
 :::
 
 ## Starting the CLI
@@ -16,7 +21,11 @@ The Metrix CLI provides an interactive REPL (Read-Eval-Print Loop) for executing
 ### Basic Usage
 
 ```bash
-./buildDir/apps/cli/metrix-cli ./mydb
+# If using pre-built version
+metrix-cli ./mydb
+
+# Or specify full path
+./metrix-cli ./mydb
 ```
 
 ::: info Database Path

@@ -611,6 +611,5 @@ If memory is constrained, you can:
 ## See Also
 
 - [Product Quantization](/en/algorithms/product-quantization) - PQ algorithm details
-- [Vector Indexing](/en/architecture/vector-indexing) - Overall vector index architecture
 - [K-Means Clustering](/en/algorithms/kmeans) - PQ training uses K-means
 - [Vector Metrics](/en/algorithms/vector-metrics) - Distance metric implementations

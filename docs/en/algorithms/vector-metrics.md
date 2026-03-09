@@ -693,4 +693,3 @@ Code is portable across platforms:
 - [DiskANN Algorithm](/en/algorithms/diskann) - Graph-based vector search
 - [Product Quantization](/en/algorithms/product-quantization) - Vector compression
 - [K-Means Clustering](/en/algorithms/kmeans) - Clustering algorithm
-- [Vector Indexing](/en/architecture/vector-indexing) - Overall vector architecture
