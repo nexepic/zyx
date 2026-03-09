@@ -2,6 +2,13 @@
 
 本指南将帮助您使用命令行界面（CLI）快速上手 Metrix。
 
+::: tip 前置要求
+在开始之前，请确保您已经：
+- ✅ 编译了 Metrix 项目
+- ✅ 生成了 `metrix-cli` 可执行文件
+- ✅ 熟悉基本的 Cypher 查询语言
+:::
+
 ## 启动 CLI
 
 Metrix CLI 提供了一个交互式 REPL（Read-Eval-Print Loop）用于执行 Cypher 查询。
@@ -12,10 +19,11 @@ Metrix CLI 提供了一个交互式 REPL（Read-Eval-Print Loop）用于执行 C
 ./buildDir/apps/cli/metrix-cli ./mydb
 ```
 
-此命令：
-1. 如果 `./mydb` 不存在，则创建新数据库
-2. 如果数据库已存在，则打开它
-3. 启动交互式 Cypher REPL 会话
+::: info 数据库路径
+- 如果 `./mydb` 不存在，Metrix 将创建新数据库
+- 如果数据库已存在，Metrix 将打开它
+- 路径可以是相对路径或绝对路径
+:::
 
 ### CLI 选项
 
@@ -26,6 +34,10 @@ Options:
   -h, --help     显示使用信息
   -v, --version  显示版本信息
 ```
+
+::: tip 提示
+您可以使用 `--help` 选项查看所有可用的命令行选项。
+:::
 
 ## 第一个查询
 
@@ -38,8 +50,14 @@ CREATE (u:User {name: 'Alice', age: 30})
 ```
 
 这将创建一个节点：
-- 标签：`User`
-- 属性：`name`（字符串）和 `age`（整数）
+- **标签**：`User`
+- **属性**：`name`（字符串）和 `age`（整数）
+
+::: details 节点和标签说明
+- **节点**：图数据库中的基本数据单元，表示实体（如用户、产品等）
+- **标签**：用于对节点进行分类和分组（如 User、Product 等）
+- **属性**：键值对，存储节点的具体信息
+:::
 
 ### 查询节点
 
@@ -158,13 +176,30 @@ MATCH (u:User {name: 'Bob'})
 DELETE u
 ```
 
-::: warning 删除警告
-在删除节点之前，必须先删除连接到该节点的所有关系。
+::: danger 删除警告
+**重要**：在删除节点之前，必须先删除连接到该节点的所有关系，否则操作会失败。
+:::
+
+::: tip 批量删除
+要删除节点及其所有关系，使用 `DETACH DELETE`：
+
+```cypher
+MATCH (u:User {name: 'Bob'})
+DETACH DELETE u
+```
 :::
 
 ## 事务管理
 
-CLI 支持显式事务控制：
+CLI 支持显式事务控制，以确保数据的一致性：
+
+::: info 什么是事务？
+事务是一组作为单个逻辑单元执行的数据库操作。事务具有 ACID 特性：
+- **原子性**（Atomicity）：所有操作要么全部成功，要么全部失败
+- **一致性**（Consistency）：数据库始终保持有效状态
+- **隔离性**（Isolation）：并发事务互不干扰
+- **持久性**（Durability）：已提交的更改永久保存
+:::
 
 ```cypher
 # 开始事务
@@ -180,9 +215,15 @@ CREATE (p:Person {name: 'Eve'})
 :rollback
 ```
 
+::: tip 事务最佳实践
+- 将相关的操作放在同一个事务中
+- 保持事务简短，避免长时间运行
+- 只在需要时才使用事务
+:::
+
 ## 从文件导入数据
 
-您可以从文件导入 Cypher 查询：
+您可以从文件批量导入 Cypher 查询，这在初始化数据库或导入测试数据时非常有用。
 
 ```bash
 # 创建 import.cql
@@ -196,6 +237,13 @@ EOF
 # 导入文件
 metrix-cli ./mydb < import.cql
 ```
+
+::: warning 大文件导入
+对于大型数据集，建议：
+1. 将导入操作包装在事务中
+2. 分批导入数据（例如每 1000 条记录提交一次）
+3. 禁用自动索引以加快导入速度
+:::
 
 ## 示例：社交网络
 
@@ -228,5 +276,15 @@ RETURN me.name, friend.name, fof.name
 
 ## 下一步
 
-- [基本操作](/zh/user-guide/basic-operations) - 学习 CRUD 操作
-- [API 参考](/zh/api/cpp-api) - 在您的应用中嵌入 Metrix
+恭喜！您已经学会了 Metrix CLI 的基本操作。接下来可以：
+
+::: tip 学习路径
+1. **[基本操作](/zh/user-guide/basic-operations)** - 深入学习 CRUD 操作
+2. **[事务控制](/zh/user-guide/transactions)** - 了解高级事务管理
+3. **[高级查询](/zh/user-guide/advanced-queries)** - 掌握复杂查询技巧
+4. **[API 参考](/zh/api/cpp-api)** - 在您的应用中嵌入 Metrix
+:::
+
+::: info 获取帮助
+在 REPL 中，您随时可以输入 `:help` 查看可用命令。
+:::

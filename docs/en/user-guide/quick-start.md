@@ -2,6 +2,13 @@
 
 This guide will help you get started with Metrix using the command-line interface (CLI).
 
+::: tip Prerequisites
+Before you begin, make sure you have:
+- ✅ Built the Metrix project
+- ✅ Generated the `metrix-cli` executable
+- ✅ Basic understanding of Cypher query language
+:::
+
 ## Starting the CLI
 
 The Metrix CLI provides an interactive REPL (Read-Eval-Print Loop) for executing Cypher queries.
@@ -12,10 +19,11 @@ The Metrix CLI provides an interactive REPL (Read-Eval-Print Loop) for executing
 ./buildDir/apps/cli/metrix-cli ./mydb
 ```
 
-This command:
-1. Creates a new database at `./mydb` if it doesn't exist
-2. Opens the database if it already exists
-3. Starts an interactive Cypher REPL session
+::: info Database Path
+- Creates a new database at `./mydb` if it doesn't exist
+- Opens the database if it already exists
+- Accepts both relative and absolute paths
+:::
 
 ### CLI Options
 
@@ -26,6 +34,10 @@ Options:
   -h, --help     Show usage information
   -v, --version  Show version information
 ```
+
+::: tip Pro Tip
+Use the `--help` option to see all available command-line options.
+:::
 
 ## Your First Query
 
@@ -38,8 +50,14 @@ CREATE (u:User {name: 'Alice', age: 30})
 ```
 
 This creates a node with:
-- Label: `User`
-- Properties: `name` (string) and `age` (integer)
+- **Label**: `User`
+- **Properties**: `name` (string) and `age` (integer)
+
+::: details Nodes and Labels Explained
+- **Nodes**: Basic data units in a graph database, representing entities (like users, products, etc.)
+- **Labels**: Used to categorize and group nodes (like User, Product, etc.)
+- **Properties**: Key-value pairs storing specific information about a node
+:::
 
 ### Query the Node
 
@@ -158,13 +176,30 @@ MATCH (u:User {name: 'Bob'})
 DELETE u
 ```
 
-::: warning Delete Warning
-You must delete all relationships connected to a node before deleting the node itself.
+::: danger Deletion Warning
+**Important**: You must delete all relationships connected to a node before deleting the node itself, or the operation will fail.
+:::
+
+::: tip Batch Deletion
+To delete a node and all its relationships, use `DETACH DELETE`:
+
+```cypher
+MATCH (u:User {name: 'Bob'})
+DETACH DELETE u
+```
 :::
 
 ## Transaction Management
 
-The CLI supports explicit transaction control:
+The CLI supports explicit transaction control to ensure data consistency:
+
+::: info What is a Transaction?
+A transaction is a group of database operations that are executed as a single logical unit. Transactions have ACID properties:
+- **Atomicity**: All operations succeed or all fail
+- **Consistency**: Database remains in a valid state
+- **Isolation**: Concurrent transactions don't interfere
+- **Durability**: Committed changes are permanent
+:::
 
 ```cypher
 # Begin a transaction
@@ -180,9 +215,15 @@ CREATE (p:Person {name: 'Eve'})
 :rollback
 ```
 
+::: tip Transaction Best Practices
+- Group related operations in a single transaction
+- Keep transactions short to avoid long-running locks
+- Only use transactions when necessary
+:::
+
 ## Import Data from File
 
-You can import Cypher queries from a file:
+You can import Cypher queries from a file, which is useful for initializing databases or loading test data.
 
 ```bash
 # Create import.cql
@@ -196,6 +237,13 @@ EOF
 # Import the file
 metrix-cli ./mydb < import.cql
 ```
+
+::: warning Large Dataset Imports
+For large datasets, we recommend:
+1. Wrap import operations in transactions
+2. Import data in batches (e.g., commit every 1000 records)
+3. Disable auto-indexing during import for faster performance
+:::
 
 ## Example: Social Network
 
@@ -228,5 +276,15 @@ RETURN me.name, friend.name, fof.name
 
 ## Next Steps
 
-- [Basic Operations](/en/user-guide/basic-operations) - Learn CRUD operations
-- [API Reference](/en/api/cpp-api) - Embed Metrix in your application
+Congratulations! You've learned the basics of using the Metrix CLI. Here's what you can explore next:
+
+::: tip Learning Path
+1. **[Basic Operations](/en/user-guide/basic-operations)** - Deep dive into CRUD operations
+2. **[Transaction Control](/en/user-guide/transactions)** - Advanced transaction management
+3. **[Advanced Queries](/en/user-guide/advanced-queries)** - Master complex query techniques
+4. **[API Reference](/en/api/cpp-api)** - Embed Metrix in your application
+:::
+
+::: info Get Help
+Type `:help` in the REPL at any time to see available commands.
+:::
