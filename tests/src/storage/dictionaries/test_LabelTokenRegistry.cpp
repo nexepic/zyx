@@ -53,7 +53,7 @@ protected:
 		}
 
 		storage = std::make_shared<graph::storage::FileStorage>(testDbPath.string(), 4 * 1024 * 1024,
-																graph::storage::OpenMode::CREATE_NEW_FILE);
+																graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		storage->open();
 		dataManager = storage->getDataManager();
 		systemStateManager = storage->getSystemStateManager();

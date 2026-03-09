@@ -358,8 +358,8 @@ std::string toString(BinaryOperatorType op) {
 
 std::string toString(UnaryOperatorType op) {
 	switch (op) {
-		case UnaryOperatorType::MINUS: return "-";
-		case UnaryOperatorType::NOT: return "NOT";
+		case UnaryOperatorType::UOP_MINUS: return "-";
+		case UnaryOperatorType::UOP_NOT: return "NOT";
 	}
 	return "?";
 }

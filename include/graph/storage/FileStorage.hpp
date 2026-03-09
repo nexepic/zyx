@@ -38,7 +38,7 @@ namespace graph::storage {
 
 	class FileStorage {
 	public:
-		FileStorage(std::string path, size_t cacheSize, OpenMode mode = OpenMode::CREATE_OR_OPEN_FILE);
+		FileStorage(std::string path, size_t cacheSize, OpenMode mode = OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 		~FileStorage();
 
 		void open();

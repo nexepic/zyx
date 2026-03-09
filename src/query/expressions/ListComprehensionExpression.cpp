@@ -28,14 +28,14 @@ std::string ListComprehensionExpression::toString() const {
 	std::string result;
 
 	switch (type_) {
-		case ComprehensionType::FILTER:
+		case ComprehensionType::COMP_FILTER:
 			result = "[" + variable_ + " IN " + listExpr_->toString();
 			if (whereExpr_) {
 				result += " WHERE " + whereExpr_->toString();
 			}
 			result += "]";
 			break;
-		case ComprehensionType::EXTRACT:
+		case ComprehensionType::COMP_EXTRACT:
 			result = "[" + variable_ + " IN " + listExpr_->toString();
 			if (whereExpr_) {
 				result += " WHERE " + whereExpr_->toString();
@@ -45,7 +45,7 @@ std::string ListComprehensionExpression::toString() const {
 			}
 			result += "]";
 			break;
-		case ComprehensionType::REDUCE:
+		case ComprehensionType::COMP_REDUCE:
 			result = "reduce(" + variable_ + " = " + listExpr_->toString();
 			if (mapExpr_) {
 				result += " | " + mapExpr_->toString();

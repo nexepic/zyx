@@ -196,7 +196,7 @@ TEST_F(CommandLineInterfaceTest, CreateCommandSafety) {
 	// Let's stick to testing the DB logic directly for the failure case to be precise about the error type
 	EXPECT_THROW(
 			{
-				graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW_FILE);
+				graph::Database db(dbPath, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 				db.open();
 			},
 			std::runtime_error);
@@ -221,7 +221,7 @@ TEST_F(CommandLineInterfaceTest, OpenWithCreateFlag) {
 		fs::remove_all(dbPath);
 
 	EXPECT_NO_THROW({
-		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_OR_OPEN_FILE);
+		graph::Database db(dbPath, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 		db.open();
 		db.close();
 	});
@@ -265,7 +265,7 @@ TEST_F(CommandLineInterfaceTest, OpenCommandWithCreateFlag) {
 TEST_F(CommandLineInterfaceTest, OpenCommandExistingWithCreateFlag) {
 	// First create the database
 	{
-		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW_FILE);
+		graph::Database db(dbPath, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		db.open();
 		db.close();
 	}
@@ -282,7 +282,7 @@ TEST_F(CommandLineInterfaceTest, OpenCommandExistingWithCreateFlag) {
 TEST_F(CommandLineInterfaceTest, ExecuteScriptWithRuntimeError) {
 	// First create a database
 	{
-		graph::Database db(dbPath, graph::storage::OpenMode::CREATE_NEW_FILE);
+		graph::Database db(dbPath, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		db.open();
 		db.close();
 	}

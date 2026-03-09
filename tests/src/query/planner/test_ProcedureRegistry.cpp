@@ -63,7 +63,7 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_proc_" + to_string(uuid) + ".db");
 
 		storage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 4096,
-																graph::storage::OpenMode::CREATE_NEW_FILE);
+																graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		storage->open();
 		dataManager = storage->getDataManager();
 		indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);

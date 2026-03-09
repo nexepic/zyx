@@ -26,9 +26,9 @@ namespace graph::storage {
 	 * Represents the type of change made to an entity
 	 */
 	enum class EntityChangeType {
-		ADDED, // Entity was newly added
-		MODIFIED, // Entity was modified
-		DELETED // Entity was deleted
+		CHANGE_ADDED, // Entity was newly added
+		CHANGE_MODIFIED, // Entity was modified
+		CHANGE_DELETED // Entity was deleted
 	};
 
 } // namespace graph::storage

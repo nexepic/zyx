@@ -163,12 +163,12 @@ public:
 		for (size_t i = 0; i < aggregates_.size(); ++i) {
 			const auto& agg = aggregates_[i];
 			switch (agg.functionType) {
-				case AggregateFunctionType::COUNT: s += "count("; break;
-				case AggregateFunctionType::SUM: s += "sum("; break;
-				case AggregateFunctionType::AVG: s += "avg("; break;
-				case AggregateFunctionType::MIN: s += "min("; break;
-				case AggregateFunctionType::MAX: s += "max("; break;
-				case AggregateFunctionType::COLLECT: s += "collect("; break;
+				case AggregateFunctionType::AGG_COUNT: s += "count("; break;
+				case AggregateFunctionType::AGG_SUM: s += "sum("; break;
+				case AggregateFunctionType::AGG_AVG: s += "avg("; break;
+				case AggregateFunctionType::AGG_MIN: s += "min("; break;
+				case AggregateFunctionType::AGG_MAX: s += "max("; break;
+				case AggregateFunctionType::AGG_COLLECT: s += "collect("; break;
 			}
 			if (agg.expression) {
 				s += agg.expression->toString();
@@ -202,7 +202,7 @@ private:
 		for (size_t i = 0; i < aggregates_.size(); ++i) {
 			const auto& agg = aggregates_[i];
 
-			if (agg.functionType == AggregateFunctionType::COUNT) {
+			if (agg.functionType == AggregateFunctionType::AGG_COUNT) {
 				// COUNT(*) - count all records
 				if (!agg.expression) {
 					accums[i]->update(PropertyValue(static_cast<int64_t>(1)));

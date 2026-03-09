@@ -41,20 +41,20 @@ protected:
 // Verifies that the new update in Active properly masks the old version in Flushing.
 TEST_F(RegistryLifecycleTest, UpdateWhileFlushing) {
 	// 1. Initial Add (Label ID 10)
-	registry.upsert(makeInfo(1, EntityChangeType::ADDED, 10));
+	registry.upsert(makeInfo(1, EntityChangeType::CHANGE_ADDED, 10));
 
 	// 2. Snapshot
 	auto snapshot = registry.createFlushSnapshot();
 	EXPECT_EQ(snapshot.at(1).backup->getLabelId(), 10);
 
 	// 3. Update while flushing (Label ID 20)
-	registry.upsert(makeInfo(1, EntityChangeType::MODIFIED, 20));
+	registry.upsert(makeInfo(1, EntityChangeType::CHANGE_MODIFIED, 20));
 
 	// 4. Verify Active has priority
 	auto info = registry.getInfo(1);
 	ASSERT_TRUE(info.has_value());
 	EXPECT_EQ(info->backup->getLabelId(), 20);
-	EXPECT_EQ(info->changeType, EntityChangeType::MODIFIED);
+	EXPECT_EQ(info->changeType, EntityChangeType::CHANGE_MODIFIED);
 
 	// 5. Commit Flush
 	registry.commitFlush();
@@ -69,16 +69,16 @@ TEST_F(RegistryLifecycleTest, UpdateWhileFlushing) {
 // Verifies that a delete operation in Active correctly hides an entity currently being flushed.
 TEST_F(RegistryLifecycleTest, DeleteWhileFlushing) {
 	// 1. Add v1 and Snapshot
-	registry.upsert(makeInfo(1, EntityChangeType::ADDED, 10));
+	registry.upsert(makeInfo(1, EntityChangeType::CHANGE_ADDED, 10));
 	registry.createFlushSnapshot();
 
 	// 2. Delete (Active gets DELETED marker)
-	registry.upsert(makeInfo(1, EntityChangeType::DELETED));
+	registry.upsert(makeInfo(1, EntityChangeType::CHANGE_DELETED));
 
 	// 3. Verify getInfo returns DELETED
 	auto info = registry.getInfo(1);
 	ASSERT_TRUE(info.has_value());
-	EXPECT_EQ(info->changeType, EntityChangeType::DELETED);
+	EXPECT_EQ(info->changeType, EntityChangeType::CHANGE_DELETED);
 
 	// 4. Commit Flush (v1 written to disk)
 	// Note: In a real system, PersistenceManager::commitFlush doesn't delete from disk.
@@ -91,7 +91,7 @@ TEST_F(RegistryLifecycleTest, DeleteWhileFlushing) {
 	// It is waiting for the NEXT flush.
 	info = registry.getInfo(1);
 	ASSERT_TRUE(info.has_value());
-	EXPECT_EQ(info->changeType, EntityChangeType::DELETED);
+	EXPECT_EQ(info->changeType, EntityChangeType::CHANGE_DELETED);
 }
 
 // SCENARIO: Empty Flush
@@ -100,6 +100,6 @@ TEST_F(RegistryLifecycleTest, EmptyFlushCycle) {
 	registry.createFlushSnapshot(); // Snapshot empty
 	registry.commitFlush(); // Commit empty
 
-	registry.upsert(makeInfo(1, EntityChangeType::ADDED));
+	registry.upsert(makeInfo(1, EntityChangeType::CHANGE_ADDED));
 	EXPECT_EQ(registry.size(), 1UL);
 }

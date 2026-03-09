@@ -67,7 +67,7 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_builder_" + to_string(uuid) + ".db");
 
 		storage =
-				std::make_shared<storage::FileStorage>(testFilePath.string(), 4096, storage::OpenMode::CREATE_NEW_FILE);
+				std::make_shared<storage::FileStorage>(testFilePath.string(), 4096, storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		storage->open();
 		dataManager = storage->getDataManager();
 		indexManager = std::make_shared<indexes::IndexManager>(storage);

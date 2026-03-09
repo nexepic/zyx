@@ -38,14 +38,14 @@ protected:
 	void addNode(int64_t id) const {
 		Node n;
 		n.setId(id);
-		manager->upsert(DirtyEntityInfo<Node>(EntityChangeType::ADDED, n));
+		manager->upsert(DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, n));
 	}
 
 	// Helper to add an edge
 	void addEdge(int64_t id) const {
 		Edge e;
 		e.setId(id);
-		manager->upsert(DirtyEntityInfo<Edge>(EntityChangeType::ADDED, e));
+		manager->upsert(DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_ADDED, e));
 	}
 };
 
@@ -166,7 +166,7 @@ TEST_F(PersistenceManagerTest, AutoFlushCountsAllTypes) {
 	Property p;
 	p.getMutableMetadata().entityId = 1;
 	p.setId(10);
-	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::ADDED, p));
+	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::CHANGE_ADDED, p));
 	EXPECT_EQ(flushCount, 1);
 }
 
@@ -178,7 +178,7 @@ TEST_F(PersistenceManagerTest, UpsertBatch_AllEntityTypes) {
 		e.setId(i + 1);
 		edges.push_back(e);
 	}
-	manager->upsertBatch(edges, EntityChangeType::ADDED);
+	manager->upsertBatch(edges, EntityChangeType::CHANGE_ADDED);
 
 	auto edgeInfos = manager->getAllDirtyInfos<Edge>();
 	EXPECT_EQ(edgeInfos.size(), 5UL);
@@ -190,7 +190,7 @@ TEST_F(PersistenceManagerTest, UpsertBatch_AllEntityTypes) {
 		p.setId(i + 1);
 		props.push_back(p);
 	}
-	manager->upsertBatch(props, EntityChangeType::ADDED);
+	manager->upsertBatch(props, EntityChangeType::CHANGE_ADDED);
 	EXPECT_EQ(manager->getAllDirtyInfos<Property>().size(), 5UL);
 
 	// 3. Blob Batch
@@ -200,7 +200,7 @@ TEST_F(PersistenceManagerTest, UpsertBatch_AllEntityTypes) {
 		b.setId(i + 1);
 		blobs.push_back(b);
 	}
-	manager->upsertBatch(blobs, EntityChangeType::ADDED);
+	manager->upsertBatch(blobs, EntityChangeType::CHANGE_ADDED);
 	EXPECT_EQ(manager->getAllDirtyInfos<Blob>().size(), 5UL);
 
 	// 4. Index Batch
@@ -210,7 +210,7 @@ TEST_F(PersistenceManagerTest, UpsertBatch_AllEntityTypes) {
 		idx.setId(i + 1);
 		indexes.push_back(idx);
 	}
-	manager->upsertBatch(indexes, EntityChangeType::ADDED);
+	manager->upsertBatch(indexes, EntityChangeType::CHANGE_ADDED);
 	EXPECT_EQ(manager->getAllDirtyInfos<Index>().size(), 5UL);
 
 	// 5. State Batch
@@ -220,12 +220,12 @@ TEST_F(PersistenceManagerTest, UpsertBatch_AllEntityTypes) {
 		s.setId(i + 1);
 		states.push_back(s);
 	}
-	manager->upsertBatch(states, EntityChangeType::ADDED);
+	manager->upsertBatch(states, EntityChangeType::CHANGE_ADDED);
 	EXPECT_EQ(manager->getAllDirtyInfos<State>().size(), 5UL);
 
 	// 6. Empty Batch (Coverage for early return)
 	std::vector<Node> emptyNodes;
-	manager->upsertBatch(emptyNodes, EntityChangeType::ADDED);
+	manager->upsertBatch(emptyNodes, EntityChangeType::CHANGE_ADDED);
 	// Should verify dirty count didn't change (still 0 nodes)
 	EXPECT_EQ(manager->getAllDirtyInfos<Node>().size(), 0UL);
 }
@@ -241,10 +241,10 @@ TEST_F(PersistenceManagerTest, Accessors_AllEntityTypes) {
 	State s;
 	s.setId(40);
 
-	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::ADDED, p));
-	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::ADDED, b));
-	manager->upsert(DirtyEntityInfo<Index>(EntityChangeType::ADDED, idx));
-	manager->upsert(DirtyEntityInfo<State>(EntityChangeType::ADDED, s));
+	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::CHANGE_ADDED, p));
+	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_ADDED, b));
+	manager->upsert(DirtyEntityInfo<Index>(EntityChangeType::CHANGE_ADDED, idx));
+	manager->upsert(DirtyEntityInfo<State>(EntityChangeType::CHANGE_ADDED, s));
 
 	// Test isDirty
 	EXPECT_TRUE(manager->isDirty<Property>(10));
@@ -277,13 +277,13 @@ TEST_F(PersistenceManagerTest, ClearAllRegistries) {
 	// Add various entities
 	Node n;
 	n.setId(1);
-	manager->upsert(DirtyEntityInfo<Node>(EntityChangeType::ADDED, n));
+	manager->upsert(DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, n));
 	Edge e;
 	e.setId(2);
-	manager->upsert(DirtyEntityInfo<Edge>(EntityChangeType::ADDED, e));
+	manager->upsert(DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_ADDED, e));
 	Blob b;
 	b.setId(3);
-	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::ADDED, b));
+	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_ADDED, b));
 
 	EXPECT_TRUE(manager->hasUnsavedChanges());
 
@@ -303,11 +303,11 @@ TEST_F(PersistenceManagerTest, RemoveEntityFromRegistry) {
 	// Add entities
 	Property p;
 	p.setId(10);
-	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::ADDED, p));
+	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::CHANGE_ADDED, p));
 
 	Blob b;
 	b.setId(20);
-	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::ADDED, b));
+	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_ADDED, b));
 
 	EXPECT_TRUE(manager->isDirty<Property>(10));
 	EXPECT_TRUE(manager->isDirty<Blob>(20));
@@ -361,7 +361,7 @@ TEST_F(PersistenceManagerTest, UpsertBatchIntermediateFlush) {
 	}
 
 	// Upsert batch - should trigger flush multiple times during processing
-	manager->upsertBatch(batch, EntityChangeType::ADDED);
+	manager->upsertBatch(batch, EntityChangeType::CHANGE_ADDED);
 
 	// Should have triggered flush at least once during batch processing
 	EXPECT_GT(flushCount, 0) << "Should have triggered intermediate flush during batch";

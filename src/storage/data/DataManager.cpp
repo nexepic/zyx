@@ -189,7 +189,7 @@ namespace graph::storage {
 		auto dirtyInfo = persistenceManager_->getDirtyInfo<T>(entity.getId());
 
 		// If entity is marked as ADDED, this update is part of creation.
-		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
+		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
 			// Even if it's "ADDED", the content (Label/Props) might have changed since the initial addNode().
 			// We MUST notify observers (IndexManager) to update their in-memory structures.
 
@@ -571,7 +571,7 @@ namespace graph::storage {
 				processedIds.insert(currentId);
 
 				// Only add if it's not marked for deletion.
-				if (dirtyInfo->changeType != EntityChangeType::DELETED && dirtyInfo->backup.has_value()) {
+				if (dirtyInfo->changeType != EntityChangeType::CHANGE_DELETED && dirtyInfo->backup.has_value()) {
 					result.push_back(*dirtyInfo->backup);
 				}
 				continue; // Move to the next ID
@@ -821,7 +821,7 @@ namespace graph::storage {
 
 		if (dirtyInfo.has_value()) {
 			// CASE A: Entity is marked as DELETED in memory
-			if (dirtyInfo->changeType == EntityChangeType::DELETED) {
+			if (dirtyInfo->changeType == EntityChangeType::CHANGE_DELETED) {
 				return make_inactive<EntityType>();
 			}
 
@@ -910,13 +910,13 @@ namespace graph::storage {
 	void DataManager::markEntityDeleted(EntityType &entity) {
 		auto dirtyInfo = persistenceManager_->getDirtyInfo<EntityType>(entity.getId());
 
-		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::ADDED) {
+		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
 			// Revert ADD by overwriting with explicit DELETED (or just removing, but DELETED is safer for log)
 			// Actually, if it was just added in memory and never saved, we can technically ignore it,
 			// BUT to be safe in the registry logic, we mark it DELETED.
 			// Better yet, update registry to remove it?
 			// Simpler: Mark DELETED.
-			// persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));
+			// persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_DELETED, entity));
 
 			// Remove from persistence manager completely (Undoes the ADD).
 			// This prevents an unnecessary DELETE record from being written to the WAL/Disk.
@@ -924,7 +924,7 @@ namespace graph::storage {
 			persistenceManager_->remove<EntityType>(id);
 		} else {
 			entity.markInactive();
-			persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::DELETED, entity));
+			persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_DELETED, entity));
 		}
 
 		EntityTraits<EntityType>::removeFromCache(this, entity.getId());

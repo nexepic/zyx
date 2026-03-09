@@ -47,7 +47,7 @@ protected:
 
 // 1. Basic Upsert and Get (Active Layer)
 TEST_F(DirtyEntityRegistryTest, BasicUpsertAndGet) {
-	auto info = createInfo(1, EntityChangeType::ADDED, 10);
+	auto info = createInfo(1, EntityChangeType::CHANGE_ADDED, 10);
 	registry.upsert(info);
 
 	EXPECT_TRUE(registry.contains(1));
@@ -55,7 +55,7 @@ TEST_F(DirtyEntityRegistryTest, BasicUpsertAndGet) {
 
 	auto dirtyInfo = registry.getInfo(1);
 	ASSERT_TRUE(dirtyInfo.has_value());
-	EXPECT_EQ(dirtyInfo->changeType, EntityChangeType::ADDED);
+	EXPECT_EQ(dirtyInfo->changeType, EntityChangeType::CHANGE_ADDED);
 
 	ASSERT_TRUE(dirtyInfo->backup.has_value());
 	EXPECT_EQ(dirtyInfo->backup->getLabelId(), 10);
@@ -63,7 +63,7 @@ TEST_F(DirtyEntityRegistryTest, BasicUpsertAndGet) {
 
 // 2. Snapshot Creation (Moving Active to Flushing)
 TEST_F(DirtyEntityRegistryTest, SnapshotTransition) {
-	registry.upsert(createInfo(1, EntityChangeType::ADDED, 10));
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_ADDED, 10));
 	registry.createFlushSnapshot();
 
 	EXPECT_TRUE(registry.contains(1));
@@ -76,9 +76,9 @@ TEST_F(DirtyEntityRegistryTest, SnapshotTransition) {
 
 // 3. Double Buffering: Write to Active while Flushing exists
 TEST_F(DirtyEntityRegistryTest, DoubleBufferingIsolation) {
-	registry.upsert(createInfo(1, EntityChangeType::ADDED, 10)); // FlushNode
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_ADDED, 10)); // FlushNode
 	registry.createFlushSnapshot();
-	registry.upsert(createInfo(2, EntityChangeType::ADDED, 20)); // ActiveNode
+	registry.upsert(createInfo(2, EntityChangeType::CHANGE_ADDED, 20)); // ActiveNode
 
 	EXPECT_EQ(registry.size(), 2UL);
 
@@ -100,13 +100,13 @@ TEST_F(DirtyEntityRegistryTest, DoubleBufferingIsolation) {
 // 4. Overwrite Logic: Active Update overrides Flushing Data
 TEST_F(DirtyEntityRegistryTest, ActiveOverridesFlushing) {
 	int64_t id = 1;
-	registry.upsert(createInfo(id, EntityChangeType::ADDED, 10)); // v1
+	registry.upsert(createInfo(id, EntityChangeType::CHANGE_ADDED, 10)); // v1
 	registry.createFlushSnapshot();
-	registry.upsert(createInfo(id, EntityChangeType::MODIFIED, 20)); // v2
+	registry.upsert(createInfo(id, EntityChangeType::CHANGE_MODIFIED, 20)); // v2
 
 	auto dirtyInfo = registry.getInfo(id);
 	ASSERT_TRUE(dirtyInfo.has_value());
-	EXPECT_EQ(dirtyInfo->changeType, EntityChangeType::MODIFIED);
+	EXPECT_EQ(dirtyInfo->changeType, EntityChangeType::CHANGE_MODIFIED);
 
 	ASSERT_TRUE(dirtyInfo->backup.has_value());
 	EXPECT_EQ(dirtyInfo->backup->getLabelId(), 20); // Check v2 ID
@@ -115,13 +115,13 @@ TEST_F(DirtyEntityRegistryTest, ActiveOverridesFlushing) {
 // 5. Query View: GetAllDirtyInfos (Merging Active + Flushing)
 TEST_F(DirtyEntityRegistryTest, GetAllDirtyInfosMerge) {
 	// Flushing: ID 1, ID 2
-	registry.upsert(createInfo(1, EntityChangeType::ADDED, 10)); // v1
-	registry.upsert(createInfo(2, EntityChangeType::ADDED, 20));
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_ADDED, 10)); // v1
+	registry.upsert(createInfo(2, EntityChangeType::CHANGE_ADDED, 20));
 	registry.createFlushSnapshot();
 
 	// Active: ID 1 (Updated), ID 3
-	registry.upsert(createInfo(1, EntityChangeType::MODIFIED, 11)); // v2
-	registry.upsert(createInfo(3, EntityChangeType::ADDED, 30));
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_MODIFIED, 11)); // v2
+	registry.upsert(createInfo(3, EntityChangeType::CHANGE_ADDED, 30));
 
 	auto allInfos = registry.getAllDirtyInfos();
 
@@ -133,7 +133,7 @@ TEST_F(DirtyEntityRegistryTest, GetAllDirtyInfosMerge) {
 		if (id == 1) {
 			found1 = true;
 			EXPECT_EQ(info.backup->getLabelId(), 11) << "Should see the Active version";
-			EXPECT_EQ(info.changeType, EntityChangeType::MODIFIED);
+			EXPECT_EQ(info.changeType, EntityChangeType::CHANGE_MODIFIED);
 		} else if (id == 2) {
 			found2 = true;
 			EXPECT_EQ(info.backup->getLabelId(), 20);
@@ -148,7 +148,7 @@ TEST_F(DirtyEntityRegistryTest, GetAllDirtyInfosMerge) {
 // 6. Delete Logic
 TEST_F(DirtyEntityRegistryTest, DeleteMarker) {
 	// Upsert a DELETED info
-	registry.upsert(createInfo(1, EntityChangeType::DELETED));
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_DELETED));
 
 	// It should exist in the registry
 	EXPECT_TRUE(registry.contains(1));
@@ -157,14 +157,14 @@ TEST_F(DirtyEntityRegistryTest, DeleteMarker) {
 	// The registry just stores what it's given.
 	auto info = registry.getInfo(1);
 	ASSERT_TRUE(info.has_value());
-	EXPECT_EQ(info->changeType, EntityChangeType::DELETED);
+	EXPECT_EQ(info->changeType, EntityChangeType::CHANGE_DELETED);
 }
 
 // 7. Clear
 TEST_F(DirtyEntityRegistryTest, Clear) {
-	registry.upsert(createInfo(1, EntityChangeType::ADDED));
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_ADDED));
 	registry.createFlushSnapshot();
-	registry.upsert(createInfo(2, EntityChangeType::ADDED));
+	registry.upsert(createInfo(2, EntityChangeType::CHANGE_ADDED));
 
 	EXPECT_EQ(registry.size(), 2UL);
 

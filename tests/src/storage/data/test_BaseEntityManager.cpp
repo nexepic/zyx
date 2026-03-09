@@ -291,9 +291,9 @@ TEST_F(BaseEntityManagerTest, SnapshotCommitClearsDirty) {
 
 	// Verify dirty list is empty
 	// Using new API helper getDirtyEntities
-	auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED,
-													 graph::storage::EntityChangeType::MODIFIED,
-													 graph::storage::EntityChangeType::DELETED});
+	auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED,
+													 graph::storage::EntityChangeType::CHANGE_MODIFIED,
+													 graph::storage::EntityChangeType::CHANGE_DELETED});
 
 	EXPECT_TRUE(dirtyNodes.empty());
 }
@@ -321,7 +321,7 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 	// --- Assertions ---
 
 	// Get only ADDED nodes
-	auto addedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+	auto addedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED});
 	// Depending on strict logic:
 	// addedNode -> ADDED
 	// modifiedNode -> ADDED (because updateEntityImpl preserved ADDED state)
@@ -336,20 +336,20 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 
 
 	// Get only MODIFIED nodes
-	auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
+	auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_MODIFIED});
 	EXPECT_EQ(modifiedNodes.size(), 0UL);
 
 
 	// Since 'removedNode' was only in memory (ADDED), deleting it simply removes it
 	// from the dirty registry completely. It does NOT create a DELETED record.
-	auto deletedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::DELETED});
+	auto deletedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_DELETED});
 	// In current implementation, we upsert a DELETED record.
 	EXPECT_EQ(deletedNodes.size(), 0UL);
 
 	// Get all dirty nodes. Total = 3 (2 Added + 1 Deleted)
-	auto allDirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED,
-														graph::storage::EntityChangeType::MODIFIED,
-														graph::storage::EntityChangeType::DELETED});
+	auto allDirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED,
+														graph::storage::EntityChangeType::CHANGE_MODIFIED,
+														graph::storage::EntityChangeType::CHANGE_DELETED});
 	EXPECT_EQ(allDirtyNodes.size(), 2UL);
 }
 
@@ -402,7 +402,7 @@ TEST_F(BaseEntityManagerTest, AddBatchNodes) {
 	}
 
 	// Verify they are in the dirty list (ADDED state)
-	auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+	auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED});
 	// + any previous tests' nodes if not cleared, but at least these 5 should exist
 	int countFound = 0;
 	for (const auto& dn : dirtyNodes) {
@@ -433,12 +433,12 @@ TEST_F(BaseEntityManagerTest, AddBatchEmptyVector) {
     EXPECT_NO_THROW(nodeManager->addBatch(emptyNodes));
 
     // Verify no nodes were added
-    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED});
     size_t previousCount = dirtyNodes.size();
 
     nodeManager->addBatch(emptyNodes);
 
-    dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED});
     EXPECT_EQ(dirtyNodes.size(), previousCount);
 }
 
@@ -452,7 +452,7 @@ TEST_F(BaseEntityManagerTest, UpdateEntityWithZeroId) {
     EXPECT_NO_THROW(nodeManager->update(node));
 
     // Node should not have been added to dirty map
-    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_MODIFIED});
     for (const auto &dn: dirtyNodes) {
         EXPECT_NE(dn.getLabelId(), node.getLabelId());
     }
@@ -579,7 +579,7 @@ TEST_F(BaseEntityManagerTest, RemoveNonExistentProperty) {
 }
 
 // Test update when entity is in ADDED state (preserves ADDED)
-// Tests branch at line 108-110: dirtyInfo->changeType == EntityChangeType::ADDED
+// Tests branch at line 108-110: dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED
 TEST_F(BaseEntityManagerTest, UpdatePreservesAddedState) {
     graph::Node node = createTestNode(dataManager, "AddedStateTest");
     nodeManager->add(node);
@@ -589,7 +589,7 @@ TEST_F(BaseEntityManagerTest, UpdatePreservesAddedState) {
     nodeManager->update(node);
 
     // Verify still in ADDED state (not MODIFIED)
-    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED});
     bool found = false;
     for (const auto &dn: dirtyNodes) {
         if (dn.getId() == node.getId()) {
@@ -599,7 +599,7 @@ TEST_F(BaseEntityManagerTest, UpdatePreservesAddedState) {
     }
     EXPECT_TRUE(found) << "Node should still be in ADDED state after update";
 
-    auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
+    auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_MODIFIED});
     found = false;
     for (const auto &dn: modifiedNodes) {
         if (dn.getId() == node.getId()) {
@@ -611,7 +611,7 @@ TEST_F(BaseEntityManagerTest, UpdatePreservesAddedState) {
 }
 
 // Test update when entity is in MODIFIED state
-// Tests else branch at line 111-114: EntityChangeType::MODIFIED
+// Tests else branch at line 111-114: EntityChangeType::CHANGE_MODIFIED
 TEST_F(BaseEntityManagerTest, UpdateCreatesModifiedState) {
     graph::Node node = createTestNode(dataManager, "ModifiedStateTest");
     nodeManager->add(node);
@@ -625,7 +625,7 @@ TEST_F(BaseEntityManagerTest, UpdateCreatesModifiedState) {
     nodeManager->update(node);
 
     // Verify in MODIFIED state
-    auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::MODIFIED});
+    auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_MODIFIED});
     bool found = false;
     for (const auto &dn: modifiedNodes) {
         if (dn.getId() == node.getId()) {
@@ -741,7 +741,7 @@ TEST_F(BaseEntityManagerTest, AddBatchWithExistingIds) {
     }
 
     // Verify they are in the dirty list (ADDED state)
-    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::ADDED});
+    auto dirtyNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_ADDED});
     int countFound = 0;
     for (const auto& dn : dirtyNodes) {
         for (const auto& original : nodes) {

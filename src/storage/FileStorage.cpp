@@ -51,13 +51,13 @@ namespace graph::storage {
 		if (openMode_ == OpenMode::OPEN_EXISTING_FILE && !fileExists) {
 			throw std::runtime_error("Database file does not exist: " + dbFilePath);
 		}
-		if (openMode_ == OpenMode::CREATE_NEW_FILE && fileExists) {
+		if (openMode_ == OpenMode::OPEN_CREATE_NEW_FILE && fileExists) {
 			throw std::runtime_error("Database file already exists: " + dbFilePath);
 		}
 		// ------------------------------------
 
 		// Logic for creating NEW database
-		if (openMode_ == OpenMode::CREATE_NEW_FILE || (openMode_ == OpenMode::CREATE_OR_OPEN_FILE && !fileExists)) {
+		if (openMode_ == OpenMode::OPEN_CREATE_NEW_FILE || (openMode_ == OpenMode::OPEN_CREATE_OR_OPEN_FILE && !fileExists)) {
 			// Create and open for Read/Write + Truncate (Wipe previous)
 			fileStream = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out |
 																			std::ios::trunc);
@@ -161,9 +161,9 @@ namespace graph::storage {
 
 		// 2. PROCESS NODES
 		if (!snapshot.nodes.empty()) {
-			auto newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::ADDED);
-			auto modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::MODIFIED);
-			auto delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::DELETED);
+			auto newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_ADDED);
+			auto modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_MODIFIED);
+			auto delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_DELETED);
 
 			// ... save logic (saveData, updateEntityInPlace, deleteEntityOnDisk) ...
 			if (!newNodes.empty()) {
@@ -180,9 +180,9 @@ namespace graph::storage {
 
 		// 3. PROCESS EDGES
 		if (!snapshot.edges.empty()) {
-			auto newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::ADDED);
-			auto modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::MODIFIED);
-			auto delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::DELETED);
+			auto newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_ADDED);
+			auto modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_MODIFIED);
+			auto delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_DELETED);
 
 			if (!newEdges.empty()) {
 				std::unordered_map<int64_t, Edge> map;
@@ -198,9 +198,9 @@ namespace graph::storage {
 
 		// ... REPEAT FOR Properties, Blobs, Indexes, States ...
 		if (!snapshot.properties.empty()) {
-			auto newProps = getEntitiesByType(snapshot.properties, EntityChangeType::ADDED);
-			auto modProps = getEntitiesByType(snapshot.properties, EntityChangeType::MODIFIED);
-			auto delProps = getEntitiesByType(snapshot.properties, EntityChangeType::DELETED);
+			auto newProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_ADDED);
+			auto modProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_MODIFIED);
+			auto delProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_DELETED);
 
 			if (!newProps.empty()) {
 				std::unordered_map<int64_t, Property> map;
@@ -215,9 +215,9 @@ namespace graph::storage {
 		}
 
 		if (!snapshot.blobs.empty()) {
-			auto newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::ADDED);
-			auto modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::MODIFIED);
-			auto delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::DELETED);
+			auto newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_ADDED);
+			auto modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_MODIFIED);
+			auto delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_DELETED);
 
 			if (!newBlobs.empty()) {
 				std::unordered_map<int64_t, Blob> map;
@@ -232,9 +232,9 @@ namespace graph::storage {
 		}
 
 		if (!snapshot.indexes.empty()) {
-			auto newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::ADDED);
-			auto modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::MODIFIED);
-			auto delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::DELETED);
+			auto newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_ADDED);
+			auto modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_MODIFIED);
+			auto delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_DELETED);
 
 			if (!newIndexes.empty()) {
 				std::unordered_map<int64_t, Index> map;
@@ -249,9 +249,9 @@ namespace graph::storage {
 		}
 
 		if (!snapshot.states.empty()) {
-			auto newStates = getEntitiesByType(snapshot.states, EntityChangeType::ADDED);
-			auto modStates = getEntitiesByType(snapshot.states, EntityChangeType::MODIFIED);
-			auto delStates = getEntitiesByType(snapshot.states, EntityChangeType::DELETED);
+			auto newStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_ADDED);
+			auto modStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_MODIFIED);
+			auto delStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_DELETED);
 
 			if (!newStates.empty()) {
 				std::unordered_map<int64_t, State> map;
