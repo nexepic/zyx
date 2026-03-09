@@ -24,3 +24,20 @@ Metrix 实现了针对图数据库工作负载优化的高效算法。
 ## 缓存算法
 
 - [缓存淘汰](cache-eviction) - LRU 缓存策略
+
+## 索引算法
+
+- [B+树索引](btree-indexing) - B+树结构和操作
+- [标签索引](label-index) - 使用 B+树的节点标签索引
+- [属性索引](property-index) - 类型特定的属性索引
+
+## 向量算法
+
+- [DiskANN](diskann) - 基于磁盘的近似最近邻搜索
+- [乘积量化](product-quantization) - 用于快速搜索的向量压缩
+- [K-Means 聚类](kmeans) - 用于 PQ 码本训练的聚类算法
+- [向量度量](vector-metrics) - 距离计算和相似性度量
+
+## 遍历算法
+
+- [关系遍历](relationship-traversal) - 基于链表的图遍历

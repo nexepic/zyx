@@ -24,3 +24,20 @@ Metrix implements efficient algorithms optimized for graph database workloads.
 ## Caching Algorithms
 
 - [Cache Eviction](cache-eviction) - LRU cache policy
+
+## Indexing Algorithms
+
+- [B+Tree Indexing](btree-indexing) - B+Tree structure and operations
+- [Label Index](label-index) - Node label indexing with B+Tree
+- [Property Index](property-index) - Type-specific property indexing
+
+## Vector Algorithms
+
+- [DiskANN](diskann) - Disk-based Approximate Nearest Neighbor search
+- [Product Quantization](product-quantization) - Vector compression for fast search
+- [K-Means Clustering](kmeans) - Clustering for PQ codebook training
+- [Vector Metrics](vector-metrics) - Distance computation and similarity
+
+## Traversal Algorithms
+
+- [Relationship Traversal](relationship-traversal) - Linked-list based graph traversal

@@ -85,6 +85,29 @@ export default {
         items: [
           { text: 'Cache Eviction', link: '/en/algorithms/cache-eviction' }
         ]
+      },
+      {
+        text: 'Indexing Algorithms',
+        items: [
+          { text: 'B+Tree Indexing', link: '/en/algorithms/btree-indexing' },
+          { text: 'Label Index', link: '/en/algorithms/label-index' },
+          { text: 'Property Index', link: '/en/algorithms/property-index' }
+        ]
+      },
+      {
+        text: 'Vector Algorithms',
+        items: [
+          { text: 'DiskANN', link: '/en/algorithms/diskann' },
+          { text: 'Product Quantization', link: '/en/algorithms/product-quantization' },
+          { text: 'K-Means Clustering', link: '/en/algorithms/kmeans' },
+          { text: 'Vector Metrics', link: '/en/algorithms/vector-metrics' }
+        ]
+      },
+      {
+        text: 'Traversal Algorithms',
+        items: [
+          { text: 'Relationship Traversal', link: '/en/algorithms/relationship-traversal' }
+        ]
       }
     ],
     '/en/architecture/': [
