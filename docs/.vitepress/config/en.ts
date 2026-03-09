@@ -163,7 +163,8 @@ export default {
       {
         text: 'Documentation',
         items: [
-          { text: 'Doc Standards', link: '/en/contributing/doc-standards' }
+          { text: 'Doc Standards', link: '/en/contributing/doc-standards' },
+          { text: 'VitePress Containers Guide', link: '/en/contributing/vitepress-containers' }
         ]
       }
     ]

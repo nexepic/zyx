@@ -163,7 +163,8 @@ export default {
       {
         text: '文档',
         items: [
-          { text: '文档标准', link: '/zh/contributing/doc-standards' }
+          { text: '文档标准', link: '/zh/contributing/doc-standards' },
+          { text: 'VitePress 容器指南', link: '/zh/contributing/vitepress-containers' }
         ]
       }
     ]

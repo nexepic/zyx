@@ -4,6 +4,10 @@ DiskANN (Disk-based Approximate Nearest Neighbor) is a high-performance graph-ba
 
 ## Overview
 
+::: info Algorithm Background
+DiskANN was developed by Microsoft Research specifically for efficient approximate nearest neighbor (ANN) search on large-scale vector datasets. It achieves sub-millisecond query latency with high recall through graph-based indexing and intelligent pruning strategies.
+:::
+
 DiskANN builds a navigable small-world graph where vectors are nodes connected by edges to their approximate nearest neighbors. The algorithm uses:
 
 - **Graph Structure**: Navigable small-world graph for efficient traversal
@@ -14,11 +18,13 @@ DiskANN builds a navigable small-world graph where vectors are nodes connected b
 
 ### Key Benefits
 
+::: tip Core Features
 - **Scalability**: Handles millions of vectors efficiently
 - **Accuracy**: High recall with tunable precision
 - **Memory Efficiency**: PQ compression reduces memory footprint by 8-32x
 - **Fast Search**: Sub-millisecond query latency
 - **Dynamic Updates**: Supports incremental insertions and deletions
+:::
 
 ## Graph Structure
 
@@ -62,7 +68,23 @@ struct DiskANNConfig {
 };
 ```
 
+::: details Configuration Details
+- **dim**: Vector space dimensionality, must match the vectors you're indexing
+- **beamWidth**: Beam search width, controls candidate queue size during search
+- **maxDegree**: Maximum number of neighbors each node maintains in the graph
+- **alpha**: Pruning factor, controls how aggressively the graph is pruned
+- **autoTrainThreshold**: Number of vectors before automatically triggering PQ training
+- **metric**: Distance metric type, supports L2, IP (Inner Product), and Cosine
+:::
+
 ### Parameter Tuning
+
+::: tip Tuning Guidelines
+Adjust these parameters based on your use case:
+- **High Recall Priority**: Increase `beamWidth` and `maxDegree`
+- **Speed Priority**: Decrease `beamWidth` and `maxDegree`
+- **Memory Constrained**: Decrease `maxDegree`, use more aggressive PQ
+:::
 
 | Parameter | Effect | Range | Recommendation |
 |-----------|--------|-------|----------------|
@@ -559,21 +581,32 @@ if (!duplicates.empty() && duplicates[0].second < 0.01) {
 
 ## Best Practices
 
-1. **Dimensionality**: Use PCA to reduce dimensions before indexing
-2. **Normalization**: Normalize vectors for cosine similarity
-3. **Batch Insert**: Insert vectors in batches for better PQ training
-4. **Beam Width**: Increase for higher recall, decrease for speed
-5. **Max Degree**: Balance between connectivity and memory
-6. **PQ Training**: Use representative samples for best compression
-7. **Metric Selection**: Choose metric based on your use case
+::: tip Performance Optimization
+1. **Dimensionality Reduction**: Use PCA to reduce to 128-256 dimensions before indexing
+2. **Vector Normalization**: Normalize vectors for cosine similarity
+3. **Batch Insertion**: Insert vectors in batches for better PQ training results
+4. **Adjust Beam Width**: Increase for higher recall, decrease for speed
+5. **Balance Degree**: Trade off between connectivity and memory
+6. **Training Samples**: Use representative samples for best compression
+7. **Metric Choice**: Choose appropriate distance metric for your use case
+:::
 
-## Limitations
+## Limitations and Considerations
 
-1. **Memory**: Raw vectors still stored for re-ranking
-2. **Training**: PQ requires sufficient training data
-3. **Deletes**: Logical deletion only, no space reclamation
-4. **Updates**: Modify through delete + insert
-5. **Dimension**: High dimensions (>1000) may need reduction
+::: warning Known Limitations
+- **Memory Footprint**: Raw vectors still stored for re-ranking
+- **Training Requirements**: PQ requires sufficient training data (minimum 1000 samples recommended)
+- **Space Reclamation**: Deletions are logical only, space not immediately reclaimed
+- **Update Method**: Vector updates performed through delete + insert
+- **Dimension Limits**: High dimensions (>1000) may require dimensionality reduction for optimal performance
+:::
+
+::: tip Memory Optimization
+If memory is constrained, you can:
+1. Increase PQ compression ratio (reduce subspace dimensionality)
+2. Decrease `maxDegree` parameter
+3. Store only PQ codes, load raw vectors from external storage when needed
+:::
 
 ## See Also
 
