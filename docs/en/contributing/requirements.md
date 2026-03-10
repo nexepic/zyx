@@ -193,6 +193,6 @@ python3 --version
 
 ## See Also
 
-- [Installation](/en/setup/installation) - Build and install instructions
-- [Configuration](/en/setup/configuration) - Runtime configuration options
+- [Installation](/en/contributing/installation) - Build and install instructions
+- [Configuration](/en/contributing/configuration) - Runtime configuration options
 - [Performance Optimization](/en/architecture/optimization) - Tuning guidelines

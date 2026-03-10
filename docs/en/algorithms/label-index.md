@@ -633,7 +633,7 @@ Potential improvements for label index:
 
 ## See Also
 
-- [B+Tree Indexing](/en/algorithms/bplustree-indexing) - B+Tree structure details
+- [B+Tree Indexing](/en/algorithms/btree-indexing) - B+Tree structure details
 - [Property Index](/en/algorithms/property-index) - Property-based indexing
 - [Query Optimization](/en/algorithms/query-optimization) - Index usage in queries
 - [Storage System](/en/architecture/storage) - Overall storage architecture
