@@ -321,7 +321,7 @@ try {
 
 ## 另请参阅
 
-- [安装](/zh/setup/installation) - 构建和设置说明
-- [系统要求](/zh/setup/requirements) - 硬件和软件要求
+- [安装](/zh/contributing/installation) - 构建和设置说明
+- [系统要求](/zh/contributing/requirements) - 硬件和软件要求
 - [性能优化](/zh/architecture/optimization) - 高级调优指南
 - [API 参考](/zh/api/cpp-api) - 编程配置

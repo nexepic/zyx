@@ -321,7 +321,7 @@ Common validation errors:
 
 ## See Also
 
-- [Installation](/en/setup/installation) - Build and setup instructions
-- [System Requirements](/en/setup/requirements) - Hardware and software requirements
+- [Installation](/en/contributing/installation) - Build and setup instructions
+- [System Requirements](/en/contributing/requirements) - Hardware and software requirements
 - [Performance Optimization](/en/architecture/optimization) - Advanced tuning guide
 - [API Reference](/en/api/cpp-api) - Programmatic configuration

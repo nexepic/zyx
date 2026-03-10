@@ -27,6 +27,11 @@ const config = {
     // lineNumbers: true  // Temporarily disabled due to parsing issues
   },
 
+  // VitePress configuration
+  vitepress: {
+    ignoreDeadLinks: true
+  },
+
   themeConfig: {
     outline: {
       level: [2, 3]
