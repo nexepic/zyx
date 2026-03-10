@@ -633,7 +633,7 @@ labelIndex.flush();
 
 ## 参见
 
-- [B+Tree 索引](/zh/algorithms/bplustree-indexing) - B+Tree 结构详情
+- [B+Tree 索引](/zh/algorithms/btree-indexing) - B+Tree 结构详情
 - [属性索引](/zh/algorithms/property-index) - 基于属性的索引
 - [查询优化](/zh/algorithms/query-optimization) - 索引在查询中的使用
 - [存储系统](/zh/architecture/storage) - 整体存储架构
