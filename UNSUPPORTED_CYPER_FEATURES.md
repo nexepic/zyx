@@ -43,8 +43,52 @@ MATCH(n)WHERE n.prop = 1  -- May have parsing issues
 
 ### 2.2 Arithmetic Expressions in RETURN Clause
 **Syntax**: `RETURN n.a + n.b AS sum`
-**Status**: ⚠️ Partially Supported
-**Issue**: Some simple expressions may work, but complex arithmetic operations are not guaranteed
+**Status**: ✅ Fully Supported
+**Note**: All arithmetic operations are fully supported with proper type coercion and operator precedence.
+
+```cypher
+-- Basic arithmetic operations
+RETURN n.a + n.b AS sum
+RETURN n.price * n.quantity AS total
+RETURN n.value / 100.0 AS percentage
+
+-- Complex expressions
+RETURN n.a * n.b + n.c / n.d AS complex
+RETURN (n.x + n.y) * n.z AS nested
+RETURN n.width * n.height AS area
+
+-- Mixed integer and floating-point
+RETURN n.intVal + n.floatVal AS mixed
+RETURN n.total / n.count AS average
+
+-- Operator precedence (multiply before add)
+RETURN n.a + n.b * n.c  -- Evaluates as: n.a + (n.b * n.c)
+
+-- Unary operators
+RETURN -n.value AS negated
+RETURN -n.x + n.y AS expression
+
+-- Power and modulo
+RETURN n.base ^ n.exponent AS power
+RETURN n.total % n.divisor AS remainder
+```
+
+**Supported Operations:**
+- Addition: `+`
+- Subtraction: `-`
+- Multiplication: `*`
+- Division: `/`
+- Modulo: `%`
+- Power: `^`
+- Unary minus: `-x`
+- Unary NOT: `NOT x`
+
+**Type Handling:**
+- Integer operations promote to double when necessary
+- Floating-point operations preserve decimal precision
+- NULL propagation: any operation with NULL yields NULL
+- Division by zero throws `DivisionByZeroException`
+- Modulo by zero throws `DivisionByZeroException`
 
 ### 2.3 CASE WHEN Expression
 **Syntax**: `CASE WHEN n.active THEN 'active' ELSE 'inactive' END`
