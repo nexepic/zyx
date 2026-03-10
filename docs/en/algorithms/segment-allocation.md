@@ -1,0 +1,322 @@
+# Segment Allocation Algorithm
+
+Metrix uses a sophisticated segment allocation algorithm that efficiently manages fixed-size storage blocks while minimizing fragmentation and maximizing performance.
+
+## Overview
+
+Segments are fixed-size blocks (default: 4MB) used to store graph entities. The allocation algorithm manages:
+
+- **Segment Metadata**: Tracking segment usage and availability
+- **Free Space Management**: Bitmap-based free space tracking within segments
+- **Allocation Strategies**: First-fit and best-fit allocation
+- **Segment Reuse**: Reclaiming freed segments
+
+## Data Structures
+
+### Segment Table
+
+```cpp
+struct SegmentTableEntry {
+    uint64_t segmentId;
+    SegmentType type;
+    uint32_t usedSlots;
+    uint32_t totalSlots;
+    uint64_t offset;        // File offset
+    bool isFree;
+};
+```
+
+### Free Segment List
+
+```cpp
+class FreeSegmentList {
+    std::priority_queue<
+        uint64_t,
+        std::vector<uint64_t>,
+        std::greater<uint64_t>
+    > freeSegments;  // Min-heap by segment ID
+
+public:
+    void addFreeSegment(uint64_t segmentId);
+    uint64_t allocateSegment();  // Returns smallest free segment ID
+    void markUsed(uint64_t segmentId);
+};
+```
+
+## Allocation Algorithm
+
+### Step 1: Find Free Segment
+
+```cpp
+uint64_t allocateSegment(Database* db, SegmentType type) {
+    // 1. Check free list first
+    if (!db->freeSegments.empty()) {
+        uint64_t segmentId = db->freeSegments.allocateSegment();
+        if (validateSegment(segmentId, type)) {
+            return segmentId;
+        }
+    }
+
+    // 2. No free segment, allocate new
+    return allocateNewSegment(db, type);
+}
+```
+
+**Complexity**: O(1) for free list, O(1) for new allocation
+
+### Step 2: Find Free Space Within Segment
+
+```cpp
+size_t findFreeSpace(Segment* segment, size_t requiredBlocks) {
+    Bitmap& bitmap = segment->bitmap;
+
+    // First-fit allocation
+    size_t contiguous = 0;
+    size_t startBlock = 0;
+
+    for (size_t i = 0; i < bitmap.totalBlocks(); ++i) {
+        if (bitmap.isFree(i)) {
+            if (contiguous == 0) {
+                startBlock = i;
+            }
+            contiguous++;
+
+            if (contiguous >= requiredBlocks) {
+                return startBlock;
+            }
+        } else {
+            contiguous = 0;
+        }
+    }
+
+    return SIZE_MAX;  // No space found
+}
+```
+
+**Complexity**: O(n) where n is number of blocks in segment
+
+### Step 3: Mark Space as Used
+
+```cpp
+void allocateBlocks(Segment* segment, size_t startBlock, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        segment->bitmap.setUsed(startBlock + i);
+    }
+    segment->header.usedSlots += count;
+}
+```
+
+**Complexity**: O(k) where k is number of blocks
+
+## Deallocation Algorithm
+
+### Step 1: Mark Blocks as Free
+
+```cpp
+void freeBlocks(Segment* segment, size_t startBlock, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        segment->bitmap.setFree(startBlock + i);
+    }
+    segment->header.usedSlots -= count;
+}
+```
+
+**Complexity**: O(k) where k is number of blocks
+
+### Step 2: Check if Segment is Empty
+
+```cpp
+bool isSegmentEmpty(Segment* segment) {
+    return segment->header.usedSlots == 0;
+}
+```
+
+**Complexity**: O(1)
+
+### Step 3: Return Segment to Free List
+
+```cpp
+void deallocateSegment(Database* db, uint64_t segmentId) {
+    Segment* segment = loadSegment(db, segmentId);
+
+    if (isSegmentEmpty(segment)) {
+        // Add to free list for reuse
+        db->freeSegments.addFreeSegment(segmentId);
+    }
+}
+```
+
+**Complexity**: O(log n) for heap insertion
+
+## Optimization Strategies
+
+### Best-Fit Allocation
+
+For better space utilization:
+
+```cpp
+size_t findBestFit(Segment* segment, size_t requiredBlocks) {
+    size_t bestStart = SIZE_MAX;
+    size_t bestSize = SIZE_MAX;
+    size_t contiguous = 0;
+    size_t startBlock = 0;
+
+    for (size_t i = 0; i < bitmap.totalBlocks(); ++i) {
+        if (bitmap.isFree(i)) {
+            if (contiguous == 0) {
+                startBlock = i;
+            }
+            contiguous++;
+        } else {
+            if (contiguous >= requiredBlocks) {
+                if (contiguous < bestSize) {
+                    bestStart = startBlock;
+                    bestSize = contiguous;
+                }
+            }
+            contiguous = 0;
+        }
+    }
+
+    return bestStart;
+}
+```
+
+### Segregation by Size
+
+Maintain separate free lists for different allocation sizes:
+
+```cpp
+class SegregatedFreeList {
+    std::array<FreeSegmentList, 8> lists;  // By size class
+
+public:
+    uint64_t allocate(size_t size) {
+        size_t class = getSizeClass(size);
+        return lists[class].allocateSegment();
+    }
+
+private:
+    size_t getSizeClass(size_t size) {
+        // Power-of-2 size classes
+        return std::bit_width(size) - 1;
+    }
+};
+```
+
+### Coalescing Free Blocks
+
+Merge adjacent free blocks to reduce fragmentation:
+
+```cpp
+void coalesceFreeBlocks(Segment* segment) {
+    bool coalesced;
+    do {
+        coalesced = false;
+        for (size_t i = 0; i < bitmap.totalBlocks() - 1; ++i) {
+            if (bitmap.isFree(i) && bitmap.isFree(i + 1)) {
+                // Merge blocks (implementation-specific)
+                coalesced = true;
+            }
+        }
+    } while (coalesced);
+}
+```
+
+## Performance Characteristics
+
+### Time Complexity
+
+| Operation | Average Case | Worst Case |
+|-----------|-------------|------------|
+| Allocate Segment | O(1) | O(1) |
+| Find Free Space | O(n) | O(n) |
+| Allocate Blocks | O(k) | O(k) |
+| Free Blocks | O(k) | O(k) |
+| Deallocate Segment | O(log n) | O(log n) |
+
+Where:
+- n = number of blocks in segment
+- k = number of blocks being allocated/freed
+
+### Space Complexity
+
+- **Segment Table**: O(m) where m is total segments
+- **Free List**: O(f) where f is free segments
+- **Bitmap**: O(1) per segment (fixed size)
+
+## Fragmentation Management
+
+### Internal Fragmentation
+
+Wasted space within allocated blocks:
+
+- **Cause**: Allocating more space than needed
+- **Mitigation**: Use appropriate block sizes
+
+### External Fragmentation
+
+Free blocks too small to satisfy allocations:
+
+- **Cause**: Random allocation/deallocation pattern
+- **Mitigation**: Coalescing, compaction
+
+### Fragmentation Metrics
+
+```cpp
+struct FragmentationMetrics {
+    size_t totalFreeSpace;
+    size_t largestFreeBlock;
+    size_t fragmentedBlocks;
+    double fragmentationRatio;  // 0-1, higher = more fragmented
+};
+```
+
+## Concurrent Allocation
+
+### Lock-Free Bitmap Operations
+
+Use atomic operations for bitmap updates:
+
+```cpp
+class LockFreeBitmap {
+    std::atomic<uint64_t>* bits_;
+
+public:
+    bool tryAllocate(size_t blockIndex) {
+        uint64_t mask = 1ULL << (blockIndex % 64);
+        uint64_t old = bits_[blockIndex / 64].fetch_or(mask);
+        return !(old & mask);  // Was free
+    }
+};
+```
+
+### Segment-Level Locking
+
+Lock individual segments during allocation:
+
+```cpp
+class SegmentAllocator {
+    std::mutex segmentLocks[MAX_SEGMENTS];
+
+public:
+    size_t allocateInSegment(uint64_t segmentId, size_t blocks) {
+        std::lock_guard<std::mutex> lock(segmentLocks[segmentId]);
+        return findFreeSpace(segmentId, blocks);
+    }
+};
+```
+
+## Best Practices
+
+1. **Allocate in batches**: Group multiple allocations together
+2. **Free adjacent blocks together**: Reduces fragmentation
+3. **Use appropriate segment size**: Match to workload
+4. **Monitor fragmentation**: Compact when needed
+5. **Reuse segments**: Prefer reusing over allocating new
+
+## See Also
+
+- [Bitmap Indexing](/en/algorithms/bitmap-indexing) - Detailed bitmap operations
+- [Storage System](/en/architecture/storage) - Overall storage architecture
+- [Segment Format](/en/architecture/segment-format) - Segment data structure
