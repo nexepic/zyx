@@ -2286,3 +2286,551 @@ TEST_F(ExpressionsCoverageTest, UnaryOp_MinusWithDouble) {
 
 	EXPECT_NEAR(std::get<double>(evaluator.getResult().getVariant()), -3.14, 0.001);
 }
+
+// ============================================================================
+// PatternComprehensionExpression API Tests
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_Getters) {
+	// Test all getter methods of PatternComprehensionExpression
+	auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	PatternComprehensionExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"m",
+		std::move(mapExpr),
+		std::move(whereExpr)
+	);
+
+	EXPECT_EQ(expr.getPattern(), "(n)-[:KNOWS]->(m)");
+	EXPECT_EQ(expr.getVariable(), "m");
+	EXPECT_NE(expr.getMapExpression(), nullptr);
+	EXPECT_NE(expr.getWhereExpression(), nullptr);
+	EXPECT_TRUE(expr.hasWhereClause());
+}
+
+TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_NoWhereClause) {
+	// Test PatternComprehensionExpression without WHERE clause
+	auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	PatternComprehensionExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"m",
+		std::move(mapExpr),
+		nullptr
+	);
+
+	EXPECT_EQ(expr.getPattern(), "(n)-[:KNOWS]->(m)");
+	EXPECT_EQ(expr.getVariable(), "m");
+	EXPECT_NE(expr.getMapExpression(), nullptr);
+	EXPECT_EQ(expr.getWhereExpression(), nullptr);
+	EXPECT_FALSE(expr.hasWhereClause());
+}
+
+TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_ToString) {
+	// Test toString method with and without WHERE clause
+	auto mapExpr1 = std::make_unique<LiteralExpression>(int64_t(42));
+	auto whereExpr1 = std::make_unique<LiteralExpression>(bool(true));
+
+	PatternComprehensionExpression expr1(
+		"(n)-[:KNOWS]->(m)",
+		"m",
+		std::move(mapExpr1),
+		std::move(whereExpr1)
+	);
+
+	std::string str1 = expr1.toString();
+	EXPECT_TRUE(str1.find("(n)-[:KNOWS]->(m)") != std::string::npos);
+	EXPECT_TRUE(str1.find("WHERE") != std::string::npos);
+
+	auto mapExpr2 = std::make_unique<LiteralExpression>(int64_t(42));
+	PatternComprehensionExpression expr2(
+		"(n)-[:KNOWS]->(m)",
+		"m",
+		std::move(mapExpr2),
+		nullptr
+	);
+
+	std::string str2 = expr2.toString();
+	EXPECT_TRUE(str2.find("(n)-[:KNOWS]->(m)") != std::string::npos);
+	EXPECT_TRUE(str2.find("WHERE") == std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_Clone) {
+	// Test clone method
+	auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	PatternComprehensionExpression original(
+		"(n)-[:KNOWS]->(m)",
+		"m",
+		std::move(mapExpr),
+		std::move(whereExpr)
+	);
+
+	auto cloned = original.clone();
+	auto* clonedPattern = dynamic_cast<PatternComprehensionExpression*>(cloned.get());
+
+	ASSERT_NE(clonedPattern, nullptr);
+	EXPECT_EQ(clonedPattern->getPattern(), original.getPattern());
+	EXPECT_EQ(clonedPattern->getVariable(), original.getVariable());
+	EXPECT_NE(clonedPattern->getMapExpression(), nullptr);
+	EXPECT_NE(clonedPattern->getWhereExpression(), nullptr);
+	EXPECT_TRUE(clonedPattern->hasWhereClause());
+
+	EXPECT_EQ(original.toString(), clonedPattern->toString());
+}
+
+TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_CloneNoWhere) {
+	// Test clone method without WHERE clause
+	auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	PatternComprehensionExpression original(
+		"(n)-[:KNOWS]->(m)",
+		"m",
+		std::move(mapExpr),
+		nullptr
+	);
+
+	auto cloned = original.clone();
+	auto* clonedPattern = dynamic_cast<PatternComprehensionExpression*>(cloned.get());
+
+	ASSERT_NE(clonedPattern, nullptr);
+	EXPECT_EQ(clonedPattern->getPattern(), original.getPattern());
+	EXPECT_EQ(clonedPattern->getVariable(), original.getVariable());
+	EXPECT_NE(clonedPattern->getMapExpression(), nullptr);
+	EXPECT_EQ(clonedPattern->getWhereExpression(), nullptr);
+	EXPECT_FALSE(clonedPattern->hasWhereClause());
+}
+
+TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_AcceptVisitor) {
+	// Test both accept methods
+	auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	PatternComprehensionExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"m",
+		std::move(mapExpr),
+		std::move(whereExpr)
+	);
+
+	// Test non-const visitor
+	TestExpressionVisitor visitor;
+	expr.accept(visitor);
+	EXPECT_TRUE(visitor.visitedPatternComprehension);
+
+	// Test const visitor
+	TestConstExpressionVisitor constVisitor;
+	expr.accept(constVisitor);
+	EXPECT_TRUE(constVisitor.visitedPatternComprehension);
+}
+
+
+// ============================================================================
+// IsNullExpression API Tests
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_Getters) {
+	// Test all getter methods of IsNullExpression
+	auto expr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	IsNullExpression isNullExpr(std::move(expr), false);
+
+	EXPECT_NE(isNullExpr.getExpression(), nullptr);
+	EXPECT_FALSE(isNullExpr.isNegated());
+}
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_IsNegatedTrue) {
+	// Test isNegated getter returns true for IS NOT NULL
+	auto expr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	IsNullExpression isNullExpr(std::move(expr), true);
+
+	EXPECT_TRUE(isNullExpr.isNegated());
+}
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_ToString) {
+	// Test toString method for both IS NULL and IS NOT NULL
+	auto expr1 = std::make_unique<LiteralExpression>(int64_t(42));
+
+	IsNullExpression isNullExpr1(std::move(expr1), false);
+	std::string str1 = isNullExpr1.toString();
+	EXPECT_TRUE(str1.find("IS NULL") != std::string::npos);
+
+	auto expr2 = std::make_unique<LiteralExpression>(int64_t(42));
+
+	IsNullExpression isNullExpr2(std::move(expr2), true);
+	std::string str2 = isNullExpr2.toString();
+	EXPECT_TRUE(str2.find("IS NOT NULL") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_Clone) {
+	// Test clone method
+	auto expr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	IsNullExpression original(std::move(expr), true);
+
+	auto cloned = original.clone();
+	auto* clonedIsNull = dynamic_cast<IsNullExpression*>(cloned.get());
+
+	ASSERT_NE(clonedIsNull, nullptr);
+	EXPECT_NE(clonedIsNull->getExpression(), nullptr);
+	EXPECT_EQ(clonedIsNull->isNegated(), original.isNegated());
+
+	EXPECT_EQ(original.toString(), clonedIsNull->toString());
+}
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_AcceptVisitor) {
+	// Test both accept methods
+	auto expr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	IsNullExpression isNullExpr(std::move(expr), false);
+
+	// Test non-const visitor
+	TestExpressionVisitor visitor;
+	isNullExpr.accept(visitor);
+	EXPECT_TRUE(visitor.visitedIsNull);
+
+	// Test const visitor
+	TestConstExpressionVisitor constVisitor;
+	isNullExpr.accept(constVisitor);
+	EXPECT_TRUE(constVisitor.visitedIsNull);
+}
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_ConstGetter) {
+	// Test const version of getExpression
+	auto expr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	const IsNullExpression isNullExpr(std::move(expr), false);
+
+	EXPECT_NE(isNullExpr.getExpression(), nullptr);
+}
+
+// ============================================================================
+// EvaluationContext Exception Tests
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, UndefinedVariableException_GetVariableName) {
+	// Test UndefinedVariableException::getVariableName()
+	UndefinedVariableException ex("testVar");
+
+	EXPECT_EQ(ex.getVariableName(), "testVar");
+	EXPECT_TRUE(ex.what() != nullptr);
+}
+
+TEST_F(ExpressionsCoverageTest, TypeMismatchException_GetTypes) {
+	// Test TypeMismatchException getters
+	TypeMismatchException ex(
+		"Type mismatch",
+		PropertyType::INTEGER,
+		PropertyType::STRING
+	);
+
+	EXPECT_EQ(ex.getExpectedType(), PropertyType::INTEGER);
+	EXPECT_EQ(ex.getActualType(), PropertyType::STRING);
+	EXPECT_TRUE(ex.what() != nullptr);
+}
+
+TEST_F(ExpressionsCoverageTest, DivisionByZeroException_What) {
+	// Test DivisionByZeroException
+	DivisionByZeroException ex;
+
+	EXPECT_TRUE(ex.what() != nullptr);
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_GetRecord) {
+	// Test EvaluationContext::getRecord()
+	Record record;
+	EvaluationContext context(record);
+
+	EXPECT_EQ(&context.getRecord(), &record);
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_SetAndClearVariable) {
+	// Test setVariable and clearVariable methods
+	Record record;
+	EvaluationContext context(record);
+
+	// Set a temporary variable
+	context.setVariable("tempVar", PropertyValue(int64_t(123)));
+
+	// Verify it's set
+	auto resolved = context.resolveVariable("tempVar");
+	ASSERT_TRUE(resolved.has_value());
+	EXPECT_EQ(std::get<int64_t>(resolved->getVariant()), 123);
+
+	// Clear the variable
+	context.clearVariable("tempVar");
+
+	// Verify it's cleared
+	auto resolvedAfterClear = context.resolveVariable("tempVar");
+	EXPECT_FALSE(resolvedAfterClear.has_value());
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_SetVariableOverrides) {
+	// Test that setVariable can override existing variables
+	Record record;
+	EvaluationContext context(record);
+
+	// Set initial value
+	context.setVariable("x", PropertyValue(int64_t(100)));
+
+	// Override with new value
+	context.setVariable("x", PropertyValue(int64_t(200)));
+
+	auto resolved = context.resolveVariable("x");
+	ASSERT_TRUE(resolved.has_value());
+	EXPECT_EQ(std::get<int64_t>(resolved->getVariant()), 200);
+}
+
+// ============================================================================
+// EvaluationContext Type Conversion Tests
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_ToBoolean) {
+	// Test toBoolean with various types
+
+	// NULL -> false
+	PropertyValue nullValue;
+	EXPECT_FALSE(EvaluationContext::toBoolean(nullValue));
+
+	// boolean values
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(bool(true))));
+	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(bool(false))));
+
+	// integer: 0 -> false, non-zero -> true
+	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(int64_t(0))));
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(int64_t(1))));
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(int64_t(-1))));
+
+	// double: 0.0 -> false, non-zero -> true
+	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(double(0.0))));
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(double(1.5))));
+
+	// string: "false" -> false, "true" -> true, others -> true (non-empty)
+	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(std::string("false"))));
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(std::string("true"))));
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(std::string("test"))));
+	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(std::string(""))));
+
+	// list: empty -> false, non-empty -> true
+	std::vector<PropertyValue> emptyList;
+	EXPECT_FALSE(EvaluationContext::toBoolean(PropertyValue(emptyList)));
+
+	std::vector<PropertyValue> nonEmptyList = {PropertyValue(int64_t(1))};
+	EXPECT_TRUE(EvaluationContext::toBoolean(PropertyValue(nonEmptyList)));
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_ToInteger) {
+	// Test toInteger with various types
+
+	// NULL -> 0
+	PropertyValue nullValue;
+	EXPECT_EQ(EvaluationContext::toInteger(nullValue), int64_t(0));
+
+	// boolean -> 0 or 1
+	EXPECT_EQ(EvaluationContext::toInteger(PropertyValue(bool(true))), int64_t(1));
+	EXPECT_EQ(EvaluationContext::toInteger(PropertyValue(bool(false))), int64_t(0));
+
+	// double -> truncated
+	EXPECT_EQ(EvaluationContext::toInteger(PropertyValue(double(3.9))), int64_t(3));
+	EXPECT_EQ(EvaluationContext::toInteger(PropertyValue(double(-2.7))), int64_t(-2));
+
+	// string -> parsed
+	EXPECT_EQ(EvaluationContext::toInteger(PropertyValue(std::string("42"))), int64_t(42));
+	EXPECT_EQ(EvaluationContext::toInteger(PropertyValue(std::string("-10"))), int64_t(-10));
+
+	// Invalid string should throw
+	EXPECT_THROW(
+		EvaluationContext::toInteger(PropertyValue(std::string("abc"))),
+		TypeMismatchException
+	);
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_ToDouble) {
+	// Test toDouble with various types
+
+	// NULL -> 0.0
+	PropertyValue nullValue;
+	EXPECT_DOUBLE_EQ(EvaluationContext::toDouble(nullValue), double(0.0));
+
+	// boolean -> 0.0 or 1.0
+	EXPECT_DOUBLE_EQ(EvaluationContext::toDouble(PropertyValue(bool(true))), double(1.0));
+	EXPECT_DOUBLE_EQ(EvaluationContext::toDouble(PropertyValue(bool(false))), double(0.0));
+
+	// integer -> cast to double
+	EXPECT_DOUBLE_EQ(EvaluationContext::toDouble(PropertyValue(int64_t(42))), double(42.0));
+	EXPECT_DOUBLE_EQ(EvaluationContext::toDouble(PropertyValue(int64_t(-3))), double(-3.0));
+
+	// string -> parsed
+	EXPECT_DOUBLE_EQ(EvaluationContext::toDouble(PropertyValue(std::string("3.14"))), double(3.14));
+	EXPECT_DOUBLE_EQ(EvaluationContext::toDouble(PropertyValue(std::string("-2.5"))), double(-2.5));
+
+	// Invalid string should throw
+	EXPECT_THROW(
+		EvaluationContext::toDouble(PropertyValue(std::string("abc"))),
+		TypeMismatchException
+	);
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_ToStringPropertyValue) {
+	// Test toString with various types
+
+	// NULL -> "null"
+	PropertyValue nullValue;
+	EXPECT_EQ(EvaluationContext::toString(nullValue), std::string("null"));
+
+	// boolean -> "true" or "false"
+	EXPECT_EQ(EvaluationContext::toString(PropertyValue(bool(true))), std::string("true"));
+	EXPECT_EQ(EvaluationContext::toString(PropertyValue(bool(false))), std::string("false"));
+
+	// integer -> decimal string
+	EXPECT_EQ(EvaluationContext::toString(PropertyValue(int64_t(42))), std::string("42"));
+	EXPECT_EQ(EvaluationContext::toString(PropertyValue(int64_t(-10))), std::string("-10"));
+
+	// double -> decimal string
+	EXPECT_EQ(EvaluationContext::toString(PropertyValue(double(3.14))), std::string("3.14"));
+
+	// string -> value as-is
+	EXPECT_EQ(EvaluationContext::toString(PropertyValue(std::string("test"))), std::string("test"));
+
+	// list -> "[...]"
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2))};
+	std::string listStr = EvaluationContext::toString(PropertyValue(list));
+	EXPECT_TRUE(listStr.find("[") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, EvaluationContext_IsNull) {
+	// Test isNull static method
+
+	// NULL value
+	PropertyValue nullValue;
+	EXPECT_TRUE(EvaluationContext::isNull(nullValue));
+
+	// Non-null values
+	EXPECT_FALSE(EvaluationContext::isNull(PropertyValue(bool(true))));
+	EXPECT_FALSE(EvaluationContext::isNull(PropertyValue(int64_t(42))));
+	EXPECT_FALSE(EvaluationContext::isNull(PropertyValue(double(3.14))));
+	EXPECT_FALSE(EvaluationContext::isNull(PropertyValue(std::string("test"))));
+
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(1))};
+	EXPECT_FALSE(EvaluationContext::isNull(PropertyValue(list)));
+}
+
+// ============================================================================
+// getExpressionType() Coverage Tests for Inline Methods
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	ExistsExpression expr("(n)-[:FRIENDS]->()");
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::FUNCTION_CALL);
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto listExpr = std::make_unique<LiteralExpression>(int64_t(42));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::FUNCTION_CALL);
+}
+
+TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	PatternComprehensionExpression expr("(n)-[:KNOWS]->(m)", "m", std::move(mapExpr), nullptr);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LIST_COMPREHENSION);
+}
+
+TEST_F(ExpressionsCoverageTest, IsNullExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto expr = std::make_unique<LiteralExpression>(int64_t(42));
+
+	IsNullExpression isNullExpr(std::move(expr), false);
+	EXPECT_EQ(isNullExpr.getExpressionType(), ExpressionType::BINARY_OP);
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOpExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto left = std::make_unique<LiteralExpression>(int64_t(5));
+	auto right = std::make_unique<LiteralExpression>(int64_t(3));
+
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::BINARY_OP);
+}
+
+TEST_F(ExpressionsCoverageTest, UnaryOpExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto operand = std::make_unique<LiteralExpression>(int64_t(5));
+
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::UNARY_OP);
+}
+
+TEST_F(ExpressionsCoverageTest, LiteralExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	LiteralExpression expr(int64_t(42));
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LITERAL);
+}
+
+TEST_F(ExpressionsCoverageTest, VariableReferenceExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	VariableReferenceExpression expr("n");
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::PROPERTY_ACCESS);
+}
+
+TEST_F(ExpressionsCoverageTest, FunctionCallExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	std::vector<std::unique_ptr<Expression>> args;
+	args.push_back(std::make_unique<LiteralExpression>(int64_t(42)));
+
+	FunctionCallExpression expr("count", std::move(args));
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::FUNCTION_CALL);
+}
+
+TEST_F(ExpressionsCoverageTest, CaseExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	CaseExpression expr;
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::CASE_EXPRESSION);
+}
+
+TEST_F(ExpressionsCoverageTest, InExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto value = std::make_unique<LiteralExpression>(int64_t(5));
+	std::vector<PropertyValue> listValues = {PropertyValue(int64_t(1))};
+
+	InExpression expr(std::move(value), listValues);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::BINARY_OP);
+}
+
+TEST_F(ExpressionsCoverageTest, ListSliceExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto list = std::make_unique<VariableReferenceExpression>("myList");
+	auto start = std::make_unique<LiteralExpression>(int64_t(0));
+	auto end = std::make_unique<LiteralExpression>(int64_t(5));
+
+	ListSliceExpression expr(std::move(list), std::move(start), std::move(end), true);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LIST_SLICE);
+}
+
+TEST_F(ExpressionsCoverageTest, ListComprehensionExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	auto listExpr = std::make_unique<VariableReferenceExpression>("myList");
+	auto mapExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	ListComprehensionExpression expr("x", std::move(listExpr), nullptr, std::move(mapExpr), ListComprehensionExpression::ComprehensionType::COMP_EXTRACT);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LIST_COMPREHENSION);
+}
+
+TEST_F(ExpressionsCoverageTest, ListLiteralExpression_GetExpressionType) {
+	// Test inline getExpressionType() method
+	std::vector<PropertyValue> values = {PropertyValue(int64_t(1))};
+	PropertyValue listValue(values);
+
+	ListLiteralExpression expr(listValue);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LITERAL);
+}
