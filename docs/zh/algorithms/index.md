@@ -1,0 +1,43 @@
+# 算法详解
+
+Metrix 实现了针对图数据库工作负载优化的高效算法。
+
+## 算法概述
+
+- [概述](overview) - 算法分类和复杂度分析
+
+## 存储算法
+
+- [段分配](segment-allocation) - O(1) 分配策略
+- [位图索引](bitmap-indexing) - 使用 SIMD 的空间跟踪
+- [数据压缩](compression) - 数据压缩技术
+
+## 事务算法
+
+- [状态链与乐观锁](state-chain-optimistic-locking) - MVCC 实现
+- [WAL 恢复](wal-recovery) - 崩溃恢复过程
+
+## 查询算法
+
+- [查询优化](query-optimization) - 基于成本的优化器
+
+## 缓存算法
+
+- [缓存淘汰](cache-eviction) - LRU 缓存策略
+
+## 索引算法
+
+- [B+树索引](btree-indexing) - B+树结构和操作
+- [标签索引](label-index) - 使用 B+树的节点标签索引
+- [属性索引](property-index) - 类型特定的属性索引
+
+## 向量算法
+
+- [DiskANN](diskann) - 基于磁盘的近似最近邻搜索
+- [乘积量化](product-quantization) - 用于快速搜索的向量压缩
+- [K-Means 聚类](kmeans) - 用于 PQ 码本训练的聚类算法
+- [向量度量](vector-metrics) - 距离计算和相似性度量
+
+## 遍历算法
+
+- [关系遍历](relationship-traversal) - 基于链表的图遍历

@@ -1,0 +1,435 @@
+# Basic Operations
+
+This guide covers the essential CRUD (Create, Read, Update, Delete) operations in Metrix using the CLI.
+
+## Database Operations
+
+### Create/Open a Database
+
+```bash
+# Create new database
+metrix-cli ./new_database
+
+# Open existing database
+metrix-cli ./existing_database
+```
+
+The database file will be created automatically if it doesn't exist.
+
+### Database File Structure
+
+Metrix creates a single file for the database:
+
+```
+./new_database  # Main database file (contains all data)
+```
+
+::: tip Single File Architecture
+Metrix stores all data (nodes, edges, properties, indexes) in a single file for simplicity and portability.
+:::
+
+## Create Operations
+
+### Create a Single Node
+
+```cypher
+CREATE (p:Person {name: 'Alice', age: 30, city: 'New York'})
+```
+
+### Create Multiple Nodes
+
+```cypher
+CREATE
+  (p1:Person {name: 'Bob', age: 25}),
+  (p2:Person {name: 'Charlie', age: 35})
+```
+
+### Create Nodes with Different Labels
+
+```cypher
+CREATE
+  (u:User {name: 'David', email: 'david@example.com'}),
+  (c:Company {name: 'Tech Corp', founded: 2020})
+```
+
+### Create Relationships
+
+```cypher
+# Find existing nodes and create relationship
+MATCH (alice:Person {name: 'Alice'})
+MATCH (bob:Person {name: 'Bob'})
+CREATE (alice)-[:KNOWS {since: 2020}]->(bob)
+```
+
+### Create Nodes and Relationships Together
+
+```cypher
+CREATE (alice:Person {name: 'Eve'})
+CREATE (bob:Person {name: 'Frank'})
+CREATE (alice)-[:FRIENDS {since: 2021}]->(bob)
+```
+
+### Create Multiple Relationships
+
+```cypher
+MATCH (alice:Person {name: 'Alice'})
+MATCH (bob:Person {name: 'Bob'})
+MATCH (charlie:Person {name: 'Charlie'})
+
+CREATE (alice)-[:KNOWS]->(bob)
+CREATE (alice)-[:KNOWS]->(charlie)
+CREATE (bob)-[:KNOWS]->(charlie)
+```
+
+## Read Operations
+
+### Find All Nodes with a Label
+
+```cypher
+MATCH (p:Person) RETURN p
+```
+
+### Find Specific Node
+
+```cypher
+MATCH (p:Person {name: 'Alice'}) RETURN p
+```
+
+### Filter with WHERE Clause
+
+```cypher
+MATCH (p:Person)
+WHERE p.age > 30
+RETURN p.name, p.age
+```
+
+### Multiple Conditions
+
+```cypher
+MATCH (p:Person)
+WHERE p.age > 25 AND p.city = 'New York'
+RETURN p.name, p.age, p.city
+```
+
+### Pattern Matching
+
+```cypher
+# Find all KNOWS relationships
+MATCH (a:Person)-[r:KNOWS]->(b:Person)
+RETURN a.name AS person1, b.name AS person2, r.since
+```
+
+### Find Relationships by Property
+
+```cypher
+MATCH (a:Person)-[r:KNOWS {since: 2020}]->(b:Person)
+RETURN a.name, b.name
+```
+
+### Variable Length Paths
+
+```cypher
+# Find friends of friends (2 hops)
+MATCH (me:Person {name: 'Alice'})-[:KNOWS]->(friend)-[:KNOWS]->(fof)
+RETURN me.name, friend.name, fof.name
+```
+
+### Count Results
+
+```cypher
+MATCH (p:Person) RETURN count(p)
+```
+
+### Order Results
+
+```cypher
+MATCH (p:Person)
+RETURN p.name, p.age
+ORDER BY p.age DESC
+```
+
+### Limit Results
+
+```cypher
+MATCH (p:Person)
+RETURN p.name, p.age
+ORDER BY p.age DESC
+LIMIT 5
+```
+
+### Aggregate Functions
+
+```cypher
+# Count nodes by label
+MATCH (p:Person)
+RETURN count(p) AS total
+
+# Average age
+MATCH (p:Person)
+RETURN avg(p.age) AS average_age
+
+# Sum, min, max
+MATCH (p:Person)
+RETURN sum(p.age) AS total_age, min(p.age) AS youngest, max(p.age) AS oldest
+```
+
+## Update Operations
+
+### Update Single Property
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+SET p.age = 31
+```
+
+### Update Multiple Properties
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+SET p.age = 31, p.city = 'San Francisco'
+```
+
+### Add New Property
+
+```cypher
+MATCH (p:Person {name: 'Bob'})
+SET p.email = 'bob@example.com'
+```
+
+### Update Relationship Properties
+
+```cypher
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person {name: 'Bob'})
+SET r.since = 2021, r.strength = 'strong'
+```
+
+### Remove Property
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+REMOVE p.city
+```
+
+### Conditional Updates
+
+```cypher
+MATCH (p:Person)
+WHERE p.age < 30
+SET p.category = 'young'
+```
+
+## Delete Operations
+
+### Delete Single Node
+
+```cypher
+MATCH (p:Person {name: 'Charlie'})
+DELETE p
+```
+
+::: warning Delete Constraints
+You cannot delete a node that has relationships without deleting the relationships first.
+:::
+
+### Delete Multiple Nodes
+
+```cypher
+MATCH (p:Person)
+WHERE p.age < 25
+DELETE p
+```
+
+### Delete Relationship
+
+```cypher
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person {name: 'Bob'})
+DELETE r
+```
+
+### Delete Node and Relationships
+
+```cypher
+# Delete relationships first
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person)
+DELETE r
+
+# Then delete the node
+MATCH (p:Person {name: 'Alice'})
+DELETE p
+```
+
+### Detach Delete (Delete Node and All Relationships)
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+DETACH DELETE p
+```
+
+This deletes the node and all its connected relationships in one operation.
+
+### Delete All Nodes
+
+::: danger Destructive Operation
+This will delete all data in the database!
+:::
+
+```cypher
+MATCH (n) DETACH DELETE n
+```
+
+## Transaction Management
+
+### Explicit Transactions
+
+```cypher
+# Begin transaction
+:begin
+
+# Perform operations
+CREATE (p:Person {name: 'Grace', age: 28})
+CREATE (p2:Person {name: 'Henry', age: 32})
+
+# Commit transaction
+:commit
+
+# Or rollback if something went wrong
+:rollback
+```
+
+### Transaction Isolation
+
+Operations within a transaction are isolated from other transactions until committed:
+
+```cypher
+:begin
+
+MATCH (p:Person) RETURN count(p)
+# Result: 5
+
+CREATE (p:Person {name: 'Iris'})
+MATCH (p:Person) RETURN count(p)
+# Result: 6 (only visible in this transaction)
+
+:commit
+
+# Now visible to all
+```
+
+## Batch Operations
+
+### Multiple Queries in One Statement
+
+Separate queries with semicolons:
+
+```cypher
+CREATE (p1:Person {name: 'Jack', age: 30});
+CREATE (p2:Person {name: 'Kate', age: 27});
+CREATE (p3:Person {name: 'Leo', age: 33});
+```
+
+### Using WITH for Chaining
+
+```cypher
+MATCH (p:Person)
+WHERE p.age > 30
+WITH p
+CREATE (p)-[:OLDER_THAN]->(:AgeGroup {name: 'Senior'})
+```
+
+## Import/Export
+
+### Import from File
+
+Create a file `import.cql`:
+
+```cypher
+CREATE (u1:User {name: 'Alice', age: 30});
+CREATE (u2:User {name: 'Bob', age: 25});
+CREATE (u3:User {name: 'Charlie', age: 35});
+MATCH (u1:User {name: 'Alice'}), (u2:User {name: 'Bob'})
+CREATE (u1)-[:KNOWS]->(u2);
+```
+
+Import it:
+
+```bash
+metrix-cli ./mydb < import.cql
+```
+
+### Export Query Results
+
+```bash
+metrix-cli ./mydb > output.txt << 'EOF'
+MATCH (p:Person) RETURN p.name, p.age
+EOF
+```
+
+## Performance Tips
+
+### Use Indexes for Frequent Queries
+
+If you frequently query by a property, consider creating an index (future feature).
+
+### Filter Early
+
+Apply filters in the WHERE clause rather than after fetching all data:
+
+```cypher
+# Good
+MATCH (p:Person)
+WHERE p.age > 30
+RETURN p
+
+# Avoid
+MATCH (p:Person)
+RETURN p
+WHERE p.age > 30  # This is invalid, but the point is to filter early
+```
+
+### Limit Results
+
+When testing queries, use LIMIT to avoid returning large result sets:
+
+```cypher
+MATCH (p:Person) RETURN p LIMIT 10
+```
+
+## Common Patterns
+
+### Upsert (Create if Not Exists)
+
+```cypher
+# Try to find existing node
+MATCH (p:Person {name: 'Alice'})
+RETURN p
+
+# If no results, create it
+CREATE (p:Person {name: 'Alice', age: 30})
+```
+
+### Merge (Create or Update)
+
+```cypher
+MERGE (p:Person {name: 'Alice'})
+SET p.age = 30
+```
+
+### Check Existence
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+RETURN count(p) > 0 AS exists
+```
+
+### Remove Duplicates
+
+```cypher
+MATCH (p:Person)
+RETURN DISTINCT p.city
+```
+
+## Next Steps
+
+- [API Reference](/en/api/cpp-api) - Programmatic access
+- [Query Engine](/en/architecture/query-engine) - How queries are executed
+- [Transactions](/en/architecture/transactions) - Transaction internals

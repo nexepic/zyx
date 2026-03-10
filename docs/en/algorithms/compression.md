@@ -1,0 +1,260 @@
+# Compression Algorithm
+
+Metrix uses lossless compression algorithms to reduce storage footprint and improve I/O performance while maintaining data integrity.
+
+## Overview
+
+Compression is applied to:
+
+- **Large Properties**: String and binary data > 1 KB
+- **Segments**: Entire segments when idle
+- **WAL**: Old WAL entries
+- **Network Data**: Data transferred over network (future)
+
+## Compression Algorithms
+
+### ZLIB (Default)
+
+Balanced compression ratio and speed:
+
+```cpp
+std::vector<uint8_t> compressZLIB(const uint8_t* data, size_t size) {
+    // Initialize compressor
+    z_stream stream;
+    deflateInit(&stream, Z_DEFAULT_COMPRESSION);
+
+    // Allocate output buffer
+    size_t maxCompressed = compressBound(size);
+    std::vector<uint8_t> compressed(maxCompressed);
+
+    // Compress
+    stream.avail_in = size;
+    stream.next_in = (Bytef*)data;
+    stream.avail_out = maxCompressed;
+    stream.next_out = compressed.data();
+
+    deflate(&stream, Z_FINISH);
+    size_t compressedSize = maxCompressed - stream.avail_out;
+
+    // Clean up
+    deflateEnd(&stream);
+
+    compressed.resize(compressedSize);
+    return compressed;
+}
+```
+
+### LZ4 (Fast)
+
+Fast compression, moderate ratio:
+
+```cpp
+std::vector<uint8_t> compressLZ4(const uint8_t* data, size_t size) {
+    // Allocate output buffer
+    size_t maxCompressed = LZ4_compressBound(size);
+    std::vector<uint8_t> compressed(maxCompressed);
+
+    // Compress
+    int compressedSize = LZ4_compress_default(
+        (const char*)data,
+        (char*)compressed.data(),
+        size,
+        maxCompressed
+    );
+
+    compressed.resize(compressedSize);
+    return compressed;
+}
+```
+
+### ZSTD (Best Ratio)
+
+Highest compression ratio:
+
+```cpp
+std::vector<uint8_t> compressZSTD(const uint8_t* data, size_t size) {
+    // Allocate output buffer
+    size_t maxCompressed = ZSTD_compressBound(size);
+    std::vector<uint8_t> compressed(maxCompressed);
+
+    // Compress
+    size_t compressedSize = ZSTD_compress(
+        compressed.data(),
+        maxCompressed,
+        data,
+        size,
+        ZSTD_CLEVEL_DEFAULT  // Compression level 3
+    );
+
+    compressed.resize(compressedSize);
+    return compressed;
+}
+```
+
+## Compression Strategy
+
+### Adaptive Compression
+
+Choose algorithm based on data characteristics:
+
+```cpp
+CompressionType chooseCompressionType(const uint8_t* data, size_t size) {
+    // Measure compressibility
+    double entropy = calculateEntropy(data, size);
+
+    if (entropy < 3.0) {
+        // Highly compressible data
+        return CompressionType::ZSTD;
+    } else if (entropy < 6.0) {
+        // Moderately compressible
+        return CompressionType::ZLIB;
+    } else {
+        // Not very compressible
+        return CompressionType::LZ4;
+    }
+}
+```
+
+### Compression Threshold
+
+Only compress data above size threshold:
+
+```cpp
+bool shouldCompress(const uint8_t* data, size_t size) {
+    // Compress if larger than threshold
+    if (size < COMPRESSION_THRESHOLD) {
+        return false;
+    }
+
+    // Check if data is compressible
+    double ratio = estimateCompressionRatio(data, size);
+    return ratio > 0.7;  // Compress if >30% savings
+}
+```
+
+## Decompression
+
+### ZLIB Decompression
+
+```cpp
+std::vector<uint8_t> decompressZLIB(const uint8_t* compressed, size_t compressedSize,
+                                     size_t originalSize) {
+    // Initialize decompressor
+    z_stream stream;
+    inflateInit(&stream);
+
+    // Allocate output buffer
+    std::vector<uint8_t> decompressed(originalSize);
+
+    // Decompress
+    stream.avail_in = compressedSize;
+    stream.next_in = (Bytef*)compressed;
+    stream.avail_out = originalSize;
+    stream.next_out = decompressed.data();
+
+    inflate(&stream, Z_FINISH);
+
+    // Clean up
+    inflateEnd(&stream);
+
+    return decompressed;
+}
+```
+
+## Compression Levels
+
+```cpp
+enum class CompressionLevel {
+    Fast,       // Level 1-3: Speed over ratio
+    Default,    // Level 4-6: Balanced
+    Maximum     // Level 7-9: Ratio over speed
+};
+
+int getCompressionLevel(CompressionLevel level) {
+    switch (level) {
+        case CompressionLevel::Fast: return 1;
+        case CompressionLevel::Default: return 6;
+        case CompressionLevel::Maximum: return 9;
+    }
+}
+```
+
+## Performance Characteristics
+
+### Compression Ratios
+
+| Data Type | ZLIB | LZ4 | ZSTD |
+|-----------|------|-----|------|
+| Text | 60-70% | 50-60% | 70-80% |
+| JSON | 70-80% | 60-70% | 75-85% |
+| Binary | 30-50% | 20-40% | 40-60% |
+| Already Compressed | <5% | <5% | <5% |
+
+### Speed (MB/s)
+
+| Operation | ZLIB | LZ4 | ZSTD |
+|-----------|------|-----|------|
+| Compress | 100 | 500 | 200 |
+| Decompress | 200 | 1000 | 400 |
+
+## Use Cases
+
+### Property Compression
+
+```cpp
+void setProperty(Entity* entity, const std::string& key,
+                 const std::string& value) {
+    if (value.size() > COMPRESSION_THRESHOLD) {
+        auto compressed = compressZLIB(value);
+        if (compressed.size() < value.size() * 0.7) {
+            entity->setCompressedProperty(key, compressed);
+            return;
+        }
+    }
+
+    entity->setProperty(key, value);
+}
+```
+
+### Segment Compression
+
+```cpp
+void compressSegment(Segment* segment) {
+    // Check if segment is idle
+    if (segment->getLastAccessTime() < IDLE_THRESHOLD) {
+        auto data = segment->getData();
+        auto compressed = compressZSTD(data, segment->getSize());
+
+        if (compressed.size() < data.size() * 0.6) {
+            segment->setCompressedData(compressed);
+            segment->setFlag(FLAG_COMPRESSED);
+        }
+    }
+}
+```
+
+## Configuration
+
+```cpp
+struct CompressionConfig {
+    bool enabled = true;
+    CompressionType defaultType = CompressionType::ZLIB;
+    CompressionLevel level = CompressionLevel::Default;
+    size_t threshold = 1024;  // 1 KB
+    bool adaptive = true;
+};
+```
+
+## Best Practices
+
+1. **Compress large data**: Only compress data > 1 KB
+2. **Check compressibility**: Skip already compressed data
+3. **Use appropriate level**: Balance speed and ratio
+4. **Monitor compression**: Track ratios and performance
+5. **Decompress lazily**: Only when needed
+
+## See Also
+
+- [Storage System](/en/architecture/storage) - Overall storage architecture
+- [Segment Format](/en/architecture/segment-format) - Data storage format
+- [Performance Optimization](/en/architecture/optimization) - Performance tuning
