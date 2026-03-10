@@ -2,7 +2,7 @@ import { withMermaid } from "vitepress-plugin-mermaid";
 import en from './en'
 import zh from './zh'
 
-// Define the config without the wrapper
+// Define the config
 const config = {
   // Base URL for GitHub Pages (update 'metrix' to your repo name)
   base: '/metrix/',
