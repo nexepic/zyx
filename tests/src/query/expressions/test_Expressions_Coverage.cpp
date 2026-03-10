@@ -64,6 +64,44 @@ public:
 	bool visitedPatternComprehension = false;
 };
 
+/**
+ * @brief Test visitor that implements ExpressionVisitor interface (non-const)
+ * Used to test the accept(ExpressionVisitor&) methods on all expression types
+ */
+class TestExpressionVisitor : public ExpressionVisitor {
+public:
+	void visit(LiteralExpression* expr [[maybe_unused]]) override { visitedLiteral = true; }
+	void visit(VariableReferenceExpression* expr [[maybe_unused]]) override { visitedVarRef = true; }
+	void visit(BinaryOpExpression* expr [[maybe_unused]]) override { visitedBinary = true; }
+	void visit(UnaryOpExpression* expr [[maybe_unused]]) override { visitedUnary = true; }
+	void visit(FunctionCallExpression* expr [[maybe_unused]]) override { visitedFunction = true; }
+	void visit(CaseExpression* expr [[maybe_unused]]) override { visitedCase = true; }
+	void visit(InExpression* expr [[maybe_unused]]) override { visitedIn = true; }
+	void visit(ListSliceExpression* expr [[maybe_unused]]) override { visitedListSlice = true; }
+	void visit(ListComprehensionExpression* expr [[maybe_unused]]) override { visitedListComprehension = true; }
+	void visit(ListLiteralExpression* expr [[maybe_unused]]) override { visitedListLiteral = true; }
+	void visit(IsNullExpression* expr [[maybe_unused]]) override { visitedIsNull = true; }
+	void visit(QuantifierFunctionExpression* expr [[maybe_unused]]) override { visitedQuantifierFunction = true; }
+	void visit(ExistsExpression* expr [[maybe_unused]]) override { visitedExists = true; }
+	void visit(PatternComprehensionExpression* expr [[maybe_unused]]) override { visitedPatternComprehension = true; }
+
+	// Track which visit methods were called
+	bool visitedLiteral = false;
+	bool visitedVarRef = false;
+	bool visitedBinary = false;
+	bool visitedUnary = false;
+	bool visitedFunction = false;
+	bool visitedCase = false;
+	bool visitedIn = false;
+	bool visitedListSlice = false;
+	bool visitedListComprehension = false;
+	bool visitedListLiteral = false;
+	bool visitedIsNull = false;
+	bool visitedQuantifierFunction = false;
+	bool visitedExists = false;
+	bool visitedPatternComprehension = false;
+};
+
 // ============================================================================
 // Test Fixture
 // ============================================================================
@@ -1652,4 +1690,219 @@ TEST_F(ExpressionsCoverageTest, UnaryNotWithNull) {
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
 	EXPECT_EQ(evaluator.getResult().getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// ExistsExpression Tests
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_ConstructorPatternOnly) {
+	// Test ExistsExpression constructor with pattern only
+	ExistsExpression expr("(n)-[:FRIENDS]->()");
+
+	EXPECT_EQ(expr.getPattern(), "(n)-[:FRIENDS]->()");
+	EXPECT_FALSE(expr.hasWhereClause());
+	EXPECT_EQ(expr.getWhereExpression(), nullptr);
+}
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_ConstructorWithWhere) {
+	// Test ExistsExpression constructor with pattern and WHERE clause
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	ExistsExpression expr("(n)-[:FRIENDS]->()", std::move(whereExpr));
+
+	EXPECT_EQ(expr.getPattern(), "(n)-[:FRIENDS]->()");
+	EXPECT_TRUE(expr.hasWhereClause());
+	EXPECT_NE(expr.getWhereExpression(), nullptr);
+}
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_ToStringNoWhere) {
+	// Test toString() without WHERE clause
+	ExistsExpression expr("(n)-[:FRIENDS]->()");
+
+	std::string str = expr.toString();
+	EXPECT_EQ(str, "EXISTS((n)-[:FRIENDS]->())");
+}
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_ToStringWithWhere) {
+	// Test toString() with WHERE clause
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	ExistsExpression expr("(n)-[:FRIENDS]->()", std::move(whereExpr));
+
+	std::string str = expr.toString();
+	EXPECT_TRUE(str.find("EXISTS(") != std::string::npos);
+	EXPECT_TRUE(str.find("(n)-[:FRIENDS]->()") != std::string::npos);
+	EXPECT_TRUE(str.find("WHERE") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_CloneNoWhere) {
+	// Test clone() without WHERE clause
+	ExistsExpression expr("(n)-[:FRIENDS]->()");
+	auto cloned = expr.clone();
+
+	ASSERT_NE(cloned, nullptr);
+	auto* clonedExists = dynamic_cast<ExistsExpression*>(cloned.get());
+	ASSERT_NE(clonedExists, nullptr);
+	EXPECT_EQ(clonedExists->getPattern(), expr.getPattern());
+	EXPECT_FALSE(clonedExists->hasWhereClause());
+}
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_CloneWithWhere) {
+	// Test clone() with WHERE clause
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	ExistsExpression expr("(n)-[:FRIENDS]->()", std::move(whereExpr));
+	auto cloned = expr.clone();
+
+	ASSERT_NE(cloned, nullptr);
+	auto* clonedExists = dynamic_cast<ExistsExpression*>(cloned.get());
+	ASSERT_NE(clonedExists, nullptr);
+	EXPECT_EQ(clonedExists->getPattern(), expr.getPattern());
+	EXPECT_TRUE(clonedExists->hasWhereClause());
+	EXPECT_NE(clonedExists->getWhereExpression(), nullptr);
+}
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_AcceptVisitor) {
+	// Test accept() with ExpressionVisitor
+	ExistsExpression expr("(n)-[:FRIENDS]->()");
+
+	TestExpressionVisitor visitor;
+	expr.accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedExists);
+}
+
+TEST_F(ExpressionsCoverageTest, ExistsExpression_AcceptConstVisitor) {
+	// Test accept() with ConstExpressionVisitor
+	const ExistsExpression expr("(n)-[:FRIENDS]->()");
+
+	TestConstExpressionVisitor visitor;
+	expr.accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedExists);
+}
+
+// ============================================================================
+// QuantifierFunctionExpression Tests
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_ConstructorAll) {
+	// Test QuantifierFunctionExpression constructor for 'all'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "all");
+	EXPECT_EQ(expr.getVariable(), "x");
+	EXPECT_NE(expr.getListExpression(), nullptr);
+	EXPECT_NE(expr.getWhereExpression(), nullptr);
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_ConstructorAny) {
+	// Test QuantifierFunctionExpression constructor for 'any'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("any", "item", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "any");
+	EXPECT_EQ(expr.getVariable(), "item");
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_ConstructorNone) {
+	// Test QuantifierFunctionExpression constructor for 'none'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("none", "elem", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "none");
+	EXPECT_EQ(expr.getVariable(), "elem");
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_ConstructorSingle) {
+	// Test QuantifierFunctionExpression constructor for 'single'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("single", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "single");
+	EXPECT_EQ(expr.getVariable(), "x");
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_GetListExpression) {
+	// Test getListExpression() accessor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{
+		PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))
+	}));
+	auto* listPtr = listExpr.get();
+
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getListExpression(), listPtr);
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_GetWhereExpression) {
+	// Test getWhereExpression() accessor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	auto* wherePtr = whereExpr.get();
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getWhereExpression(), wherePtr);
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_ToString) {
+	// Test toString() method
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	std::string str = expr.toString();
+	EXPECT_TRUE(str.find("all") != std::string::npos);
+	EXPECT_TRUE(str.find("x") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_Clone) {
+	// Test clone() method
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+	auto cloned = expr.clone();
+
+	ASSERT_NE(cloned, nullptr);
+	auto* clonedQuantifier = dynamic_cast<QuantifierFunctionExpression*>(cloned.get());
+	ASSERT_NE(clonedQuantifier, nullptr);
+	EXPECT_EQ(clonedQuantifier->getFunctionName(), expr.getFunctionName());
+	EXPECT_EQ(clonedQuantifier->getVariable(), expr.getVariable());
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_AcceptVisitor) {
+	// Test accept() with ExpressionVisitor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	TestExpressionVisitor visitor;
+	expr.accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedQuantifierFunction);
+}
+
+TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_AcceptConstVisitor) {
+	// Test accept() with ConstExpressionVisitor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	const QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	TestConstExpressionVisitor visitor;
+	expr.accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedQuantifierFunction);
 }
