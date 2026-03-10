@@ -760,3 +760,189 @@ TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_NonListArgument_Throws)
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW(evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
 }
+
+/**
+ * Test any() with non-list argument throws exception
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_NonListArgument_Throws) {
+	auto nonListExpr = std::make_unique<LiteralExpression>(int64_t(42));
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"any", "x", std::move(nonListExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	EXPECT_THROW(evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
+}
+
+/**
+ * Test any() with string type coercion (empty strings are falsy)
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_StringCoercion) {
+	// Create list with string values (only one non-empty)
+	std::vector<PropertyValue> stringList = {
+		PropertyValue(std::string("")),
+		PropertyValue(std::string("")),
+		PropertyValue(std::string("hello"))
+	};
+	PropertyValue listValue(stringList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	// WHERE clause: x (coerce string to boolean)
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"any", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));  // "hello" is truthy
+}
+
+/**
+ * Test any() with list type coercion
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_ListCoercion) {
+	// Create list of lists (only one non-empty)
+	std::vector<PropertyValue> outerList = {
+		PropertyValue(std::vector<PropertyValue>{}),                           // empty list
+		PropertyValue(std::vector<PropertyValue>{}),                           // empty list
+		PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(1))})   // non-empty list
+	};
+	PropertyValue listValue(outerList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	// WHERE clause: x (coerce list to boolean)
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"any", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));  // Non-empty list is truthy
+}
+
+/**
+ * Test none() with string type coercion
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_StringCoercion) {
+	// Create list with only empty strings
+	std::vector<PropertyValue> stringList = {
+		PropertyValue(std::string("")),
+		PropertyValue(std::string(""))
+	};
+	PropertyValue listValue(stringList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	// WHERE clause: x (coerce string to boolean)
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"none", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));  // All empty strings are falsy
+}
+
+/**
+ * Test single() with string type coercion
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_StringCoercion) {
+	// Create list with only one non-empty string
+	std::vector<PropertyValue> stringList = {
+		PropertyValue(std::string("")),
+		PropertyValue(std::string("hello")),
+		PropertyValue(std::string(""))
+	};
+	PropertyValue listValue(stringList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	// WHERE clause: x (coerce string to boolean)
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"single", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));  // Exactly one non-empty string
+}
+
+/**
+ * Test single() with list type coercion
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_ListCoercion) {
+	// Create list with only one non-empty list
+	std::vector<PropertyValue> outerList = {
+		PropertyValue(std::vector<PropertyValue>{}),
+		PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(1))}),
+		PropertyValue(std::vector<PropertyValue>{})
+	};
+	PropertyValue listValue(outerList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	// WHERE clause: x (coerce list to boolean)
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"single", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));  // Exactly one non-empty list
+}
+
+/**
+ * Test none() with NULL values in list
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_WithNulls) {
+	auto quantExpr = createQuantifierExpr("none", "x",
+		{PropertyValue(), PropertyValue(), PropertyValue()},
+		0);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));  // NULLs are not > 0
+}
+
+/**
+ * Test single() with NULL values in list
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_WithNulls) {
+	auto quantExpr = createQuantifierExpr("single", "x",
+		{PropertyValue(), PropertyValue(int64_t(1)), PropertyValue()},
+		0);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));  // Exactly one non-null value > 0
+}
+
+/**
+ * Test single() with multiple matches returns false
+ */
+TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_MultipleMatches_ReturnsFalse) {
+	auto quantExpr = createQuantifierExpr("single", "x",
+		{PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))},
+		0);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));  // Multiple values > 0
+}
