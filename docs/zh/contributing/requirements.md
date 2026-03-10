@@ -193,6 +193,6 @@ python3 --version
 
 ## 另请参阅
 
-- [安装](/zh/setup/installation) - 构建和安装说明
-- [配置](/zh/setup/configuration) - 运行时配置选项
+- [安装](/zh/contributing/installation) - 构建和安装说明
+- [配置](/zh/contributing/configuration) - 运行时配置选项
 - [性能优化](/zh/architecture/optimization) - 调优指南
