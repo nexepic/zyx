@@ -655,7 +655,4 @@ constexpr size_t LEAF_VALUES_INLINE_THRESHOLD = 32;
 
 ## 参见
 
-- [标签索引](/zh/architecture/label-index) - 标签索引实现
-- [属性索引](/zh/architecture/property-index) - 属性索引实现
 - [存储系统](/zh/architecture/storage) - 整体存储架构
-- [数据管理器](/zh/architecture/data-manager) - 实体持久化层

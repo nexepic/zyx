@@ -76,7 +76,7 @@ struct Query {
 ### Supported Cypher Features
 
 ::: info Full Cypher Support
-Metrix supports the complete Cypher query language with minor exceptions. See [Unsupported Features](/en/unsupported-features) for details.
+Metrix supports the complete Cypher query language with minor exceptions. See [Unsupported Features](UNSUPPORTED_CYHER_FEATURES.md) for details.
 :::
 
 **Reading Clauses**:

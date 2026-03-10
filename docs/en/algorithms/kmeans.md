@@ -552,6 +552,5 @@ auto compressed = encodeWithPQ(vectors, codebooks);
 ## See Also
 
 - [Product Quantization](/en/algorithms/product-quantization) - Vector compression using K-Means
-- [Vector Index](/en/architecture/vector-index) - Overall vector indexing system
 - [Vector Metrics](/en/algorithms/vector-metrics) - Distance computation details
 - [DiskANN](/en/algorithms/diskann) - Graph-based vector search algorithm

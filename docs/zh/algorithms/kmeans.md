@@ -552,6 +552,5 @@ auto compressed = encodeWithPQ(vectors, codebooks);
 ## 相关内容
 
 - [乘积量化](/zh/algorithms/product-quantization) - 使用 K-Means 的向量压缩
-- [向量索引](/zh/architecture/vector-index) - 整体向量索引系统
 - [向量度量](/zh/algorithms/vector-metrics) - 距离计算细节
 - [DiskANN](/zh/algorithms/diskann) - 基于图的向量搜索算法

@@ -655,7 +655,4 @@ Typical performance characteristics:
 
 ## See Also
 
-- [Label Index](/en/architecture/label-index) - Label indexing implementation
-- [Property Index](/en/architecture/property-index) - Property indexing implementation
 - [Storage System](/en/architecture/storage) - Overall storage architecture
-- [Data Manager](/en/architecture/data-manager) - Entity persistence layer
