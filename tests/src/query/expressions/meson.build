@@ -48,3 +48,13 @@ test_QuantifierFunctions_Evaluation = executable(
 )
 
 test('test_QuantifierFunctions_Evaluation', test_QuantifierFunctions_Evaluation)
+
+# Complex arithmetic expressions tests
+test_ComplexArithmeticExpressions = executable(
+  'test_ComplexArithmeticExpressions',
+  'test_ComplexArithmeticExpressions.cpp',
+  dependencies: [gtest_dep, metrix_core_dep],
+  install: false
+)
+
+test('test_ComplexArithmeticExpressions', test_ComplexArithmeticExpressions)
