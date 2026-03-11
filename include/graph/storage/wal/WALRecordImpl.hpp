@@ -40,6 +40,9 @@ namespace graph::storage::wal {
 
 		static std::unique_ptr<NodeRecord> deserialize(const WALRecordHeader &header, const uint8_t *data);
 
+		// Convert to JSON for debugging
+		[[nodiscard]] std::string toJSON() const;
+
 	private:
 		graph::Node node_;
 	};
@@ -58,6 +61,9 @@ namespace graph::storage::wal {
 
 		static std::unique_ptr<EdgeRecord> deserialize(const WALRecordHeader &header, const uint8_t *data);
 
+		// Convert to JSON for debugging
+		[[nodiscard]] std::string toJSON() const;
+
 	private:
 		graph::Edge edge_;
 	};
@@ -72,6 +78,9 @@ namespace graph::storage::wal {
 		void deserialize(std::istream &in) override;
 
 		static std::unique_ptr<TransactionRecord> deserialize(const WALRecordHeader &header, const uint8_t *data);
+
+		// Convert to JSON for debugging
+		[[nodiscard]] std::string toJSON() const;
 	};
 
 	class CheckpointRecord : public WALRecord {
@@ -81,6 +90,9 @@ namespace graph::storage::wal {
 		size_t getSize() const override;
 		void serialize(uint8_t *buffer) const override;
 		void deserialize(std::istream &in) override;
+
+		// Convert to JSON for debugging
+		[[nodiscard]] std::string toJSON() const;
 
 	private:
 		uint64_t lastAppliedLSN;
