@@ -76,7 +76,7 @@ struct Query {
 ### 支持的 Cypher 特性
 
 ::: info 完整 Cypher 支持
-Metrix 支持完整的 Cypher 查询语言，例外很少。详情请参阅[不支持的功能](UNSUPPORTED_CYHER_FEATURES.md)。
+Metrix 支持完整的 Cypher 查询语言，例外很少。详情请参阅项目根目录。
 :::
 
 **读取子句**：
