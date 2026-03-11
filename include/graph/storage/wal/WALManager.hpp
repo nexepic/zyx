@@ -179,11 +179,27 @@ public:
     void flush();
 
     /**
+     * @brief Set callback function for applying WAL records to main database
+     * @param applyFunc Function to apply each WAL record
+     *
+     * This callback is used during checkpoint to apply WAL records
+     * to the main database file.
+     */
+    void setApplyCallback(std::function<void(const WALRecord*)> applyFunc);
+
+    /**
      * @brief Create checkpoint
      *
-     * Applies all committed WAL records to main database file,
-     * then truncates WAL. This is the critical operation that
-     * makes WAL changes persistent in the main database.
+     * Applies all committed WAL records since last checkpoint to main database,
+     * then truncates WAL. This is the critical operation that makes WAL changes
+     * persistent in the main database.
+     *
+     * Process:
+     * 1. Flush any buffered records
+     * 2. Read all WAL records since last checkpoint
+     * 3. Identify committed transactions
+     * 4. Apply committed transaction records via apply callback
+     * 5. Truncate WAL file
      *
      * @return Last applied LSN
      */
@@ -297,6 +313,9 @@ private:
 
     // Transaction ID generator
     std::atomic<uint64_t> nextTxnId_{1};
+
+    // Callback for applying WAL records to main database
+    std::function<void(const WALRecord*)> applyCallback_;
 
     // Initialization state
     bool initialized_ = false;

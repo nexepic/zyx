@@ -236,19 +236,71 @@ uint64_t WALManager::checkpoint() {
     auto records = readAllRecords();
 
     if (records.empty()) {
+        std::cout << "Checkpoint: No WAL records to apply.\n";
         return lastCheckpointLSN_.load();  // Nothing to checkpoint
     }
 
-    // Apply committed transaction records to main database
-    // Note: The applyFunc is provided by the caller via performRecovery
-    // For checkpoint, we just need to track the last applied LSN
+    std::cout << "Starting checkpoint with " << records.size() << " WAL records...\n";
 
-    uint64_t maxLSN = 0;
+    // Track active transactions (in-progress but not committed)
+    std::unordered_set<uint64_t> activeTransactions;
+
+    // First pass: identify committed transactions
     for (const auto& record : records) {
+        if (record->getType() == WALRecordType::TRANSACTION_BEGIN) {
+            activeTransactions.insert(record->getTransactionId());
+        } else if (record->getType() == WALRecordType::TRANSACTION_COMMIT) {
+            activeTransactions.erase(record->getTransactionId());
+            transactions_[record->getTransactionId()].state = TransactionState::COMMITTED;
+        } else if (record->getType() == WALRecordType::TRANSACTION_ROLLBACK) {
+            activeTransactions.erase(record->getTransactionId());
+            transactions_[record->getTransactionId()].state = TransactionState::ROLLED_BACK;
+        }
+    }
+
+    // Second pass: apply committed transaction records
+    size_t appliedCount = 0;
+    uint64_t maxLSN = 0;
+
+    for (const auto& record : records) {
+        uint64_t txnId = record->getTransactionId();
+
+        // Skip records from uncommitted or rolled back transactions
+        if (txnId != 0) {
+            auto it = transactions_.find(txnId);
+            if (it != transactions_.end() &&
+                it->second.state != TransactionState::COMMITTED) {
+                continue;
+            }
+            if (activeTransactions.count(txnId) > 0) {
+                continue;  // Transaction was active but never committed
+            }
+        }
+
+        // Track max LSN
         if (record->getLSN() > maxLSN) {
             maxLSN = record->getLSN();
         }
+
+        // Apply data operations via callback
+        switch (record->getType()) {
+            case WALRecordType::NODE_INSERT:
+            case WALRecordType::NODE_UPDATE:
+            case WALRecordType::NODE_DELETE:
+            case WALRecordType::EDGE_INSERT:
+            case WALRecordType::EDGE_UPDATE:
+            case WALRecordType::EDGE_DELETE:
+                if (applyCallback_) {
+                    applyCallback_(record.get());
+                    appliedCount++;
+                }
+                break;
+            default:
+                break;  // Skip transaction control records
+        }
     }
+
+    std::cout << "Checkpoint applied " << appliedCount << " records to main database.\n";
 
     // Update checkpoint LSN
     lastCheckpointLSN_.store(maxLSN);
@@ -260,6 +312,11 @@ uint64_t WALManager::checkpoint() {
     transactions_.clear();
 
     return maxLSN;
+}
+
+void WALManager::setApplyCallback(std::function<void(const WALRecord*)> applyFunc) {
+    std::lock_guard<std::mutex> lock(walMutex_);
+    applyCallback_ = std::move(applyFunc);
 }
 
 // ============================================================================
