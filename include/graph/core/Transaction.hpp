@@ -62,6 +62,31 @@ public:
         ROLLED_BACK   // Rolled back
     };
 
+    /**
+     * @brief WriteSet entry types
+     */
+    enum class WriteType {
+        CREATE_NODE,
+        CREATE_EDGE,
+        DELETE_NODE,
+        DELETE_EDGE,
+        UPDATE_PROPERTY
+    };
+
+    /**
+     * @brief WriteSet entry
+     */
+    struct WriteEntry {
+        WriteType type;
+        int64_t entityId;        // Node or Edge ID
+        std::string key;         // For property updates
+        PropertyValue value;     // For property updates
+
+        // For create operations
+        std::optional<Node> node;
+        std::optional<Edge> edge;
+    };
+
     // ========================================================================
     // Graph Operations
     // ========================================================================
@@ -232,35 +257,6 @@ private:
      * @param snapshotId MVCC snapshot ID
      */
     Transaction(const Database& db, uint64_t transactionId, uint64_t snapshotId);
-
-    // ========================================================================
-    // Internal Implementation
-    // ========================================================================
-
-    /**
-     * @brief WriteSet entry types
-     */
-    enum class WriteType {
-        CREATE_NODE,
-        CREATE_EDGE,
-        DELETE_NODE,
-        DELETE_EDGE,
-        UPDATE_PROPERTY
-    };
-
-    /**
-     * @brief WriteSet entry
-     */
-    struct WriteEntry {
-        WriteType type;
-        int64_t entityId;        // Node or Edge ID
-        std::string key;         // For property updates
-        PropertyValue value;     // For property updates
-
-        // For create operations
-        std::optional<Node> node;
-        std::optional<Edge> edge;
-    };
 
     // ========================================================================
     // Member Variables
