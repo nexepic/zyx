@@ -3,7 +3,7 @@
 # ==============================================================================
 # Script Name: build_release.sh
 # Purpose: Build optimized shared libraries and generate the SDK artifact.
-# Output: build/release/dist (folder) and build/metrix-sdk-<ver>-<os>.tar.gz
+# Output: build/release/dist (folder) and build/zyx-sdk-<ver>-<os>.tar.gz
 # ==============================================================================
 
 set -e # Exit immediately on error
@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 # ==============================================================================
 BUILD_DIR="build_release"
 DIST_DIR="$BUILD_DIR/dist"      # This will look like /usr/local/ but inside our folder
-ARTIFACT_NAME="metrix-sdk"
+ARTIFACT_NAME="zyx-sdk"
 VERSION="0.1.0"                 # You could grab this from meson.build using grep if needed
 
 # Detect OS for naming
@@ -98,14 +98,14 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Performing macOS dylib fixup..."
 
     # Define the library path inside the dist folder
-    # Note: Assuming your library is named 'libmetrix.dylib' based on your output.
-    # If it is 'libmetrixdb.dylib', please adjust the name below.
-    LIB_PATH="$DIST_DIR/lib/libmetrix.dylib"
+    # Note: Assuming your library is named 'libzyx.dylib' based on your output.
+    # If it is 'libzyx.dylib', please adjust the name below.
+    LIB_PATH="$DIST_DIR/lib/libzyx.dylib"
 
     if [ -f "$LIB_PATH" ]; then
-        # Force the ID to be @rpath/libmetrix.dylib
+        # Force the ID to be @rpath/libzyx.dylib
         # This makes the library relocatable (can be moved to any folder)
-        install_name_tool -id "@rpath/libmetrix.dylib" "$LIB_PATH"
+        install_name_tool -id "@rpath/libzyx.dylib" "$LIB_PATH"
 
         # Check if successful
         otool -D "$LIB_PATH"
@@ -115,7 +115,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 # Verify installation
-if [ ! -f "$DIST_DIR/include/metrix/metrix.hpp" ]; then
+if [ ! -f "$DIST_DIR/include/zyx/zyx.hpp" ]; then
     echo -e "${RED}Error: Install failed. Header files missing.${NC}"
     exit 1
 fi
