@@ -1,4 +1,4 @@
-project('metrix', 'cpp',
+project('zyx', 'cpp',
         version : '0.1.0',
         default_options : [
             'cpp_std=c++20',
@@ -30,7 +30,6 @@ configure_file(
 # MODIFY: Remove 'include/vendor'.
 # Subprojects handle include paths automatically via dependencies.
 # Include both source and generated (build) directories
-# The generated file will be at buildDir/ProjectConfig.hpp
 inc_dirs = include_directories('include', 'src', '.')
 
 # Dependencies
