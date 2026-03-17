@@ -10,9 +10,27 @@ project('metrix', 'cpp',
 
 cxx = meson.get_compiler('cpp')
 
+# ==============================================================================
+# Project Configuration
+# ==============================================================================
+project_config = configuration_data()
+project_config.set('PROJECT_NAME', 'zyx')
+project_config.set('PROJECT_DISPLAY', 'ZYX')
+project_config.set('PROJECT_VERSION', meson.project_version())
+
+# Generate ProjectConfig.hpp from template
+configure_file(
+    input: 'include/graph/core/ProjectConfig.hpp.in',
+    output: 'ProjectConfig.hpp',
+    configuration: project_config,
+    install: false,
+    install_dir: get_option('includedir') / 'graph' / 'core'
+)
+
 # MODIFY: Remove 'include/vendor'.
 # Subprojects handle include paths automatically via dependencies.
-inc_dirs = include_directories('include', 'src')
+# Include both source and generated (build) directories
+inc_dirs = include_directories('include', 'src', '.')
 
 # Dependencies
 zlib_dep = dependency('zlib', static : true)
