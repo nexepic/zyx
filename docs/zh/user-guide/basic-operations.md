@@ -1,6 +1,6 @@
 # 基本操作
 
-本指南介绍使用 CLI 在 Metrix 中进行基本 CRUD（创建、读取、更新、删除）操作。
+本指南介绍使用 CLI 在 ZYX 中进行基本 CRUD（创建、读取、更新、删除）操作。
 
 ## 数据库操作
 
@@ -8,24 +8,24 @@
 
 ```bash
 # 创建新数据库
-metrix-cli ./new_database
+zyx-cli ./new_database
 
 # 打开现有数据库
-metrix-cli ./existing_database
+zyx-cli ./existing_database
 ```
 
 如果数据库不存在，将自动创建数据库文件。
 
 ### 数据库文件结构
 
-Metrix 为数据库创建单个文件：
+ZYX 为数据库创建单个文件：
 
 ```
 ./new_database  # 主数据库文件（包含所有数据）
 ```
 
 ::: tip 单文件架构
-Metrix 将所有数据（节点、边、属性、索引）存储在单个文件中，以简化部署和提高可移植性。
+ZYX 将所有数据（节点、边、属性、索引）存储在单个文件中，以简化部署和提高可移植性。
 :::
 
 ## 创建操作
@@ -353,13 +353,13 @@ CREATE (u1)-[:KNOWS]->(u2);
 导入：
 
 ```bash
-metrix-cli ./mydb < import.cql
+zyx-cli ./mydb < import.cql
 ```
 
 ### 导出查询结果
 
 ```bash
-metrix-cli ./mydb > output.txt << 'EOF'
+zyx-cli ./mydb > output.txt << 'EOF'
 MATCH (p:Person) RETURN p.name, p.age
 EOF
 ```

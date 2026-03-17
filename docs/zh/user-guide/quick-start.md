@@ -1,11 +1,11 @@
 # 快速开始
 
-本指南将帮助您使用命令行界面（CLI）快速上手 Metrix。
+本指南将帮助您使用命令行界面（CLI）快速上手 ZYX。
 
 ::: tip 前置要求
 在开始之前，请确保您已经：
-- ✅ 安装了 Metrix（下载预编译版本或使用包管理器）
-- ✅ `metrix-cli` 可执行文件可用
+- ✅ 安装了 ZYX（下载预编译版本或使用包管理器）
+- ✅ `zyx-cli` 可执行文件可用
 - ✅ 熟悉基本的 Cypher 查询语言
 
 **安装方式**：
@@ -16,28 +16,28 @@
 
 ## 启动 CLI
 
-Metrix CLI 提供了一个交互式 REPL（Read-Eval-Print Loop）用于执行 Cypher 查询。
+ZYX CLI 提供了一个交互式 REPL（Read-Eval-Print Loop）用于执行 Cypher 查询。
 
 ### 基本用法
 
 ```bash
 # 如果使用预编译版本
-metrix-cli ./mydb
+zyx-cli ./mydb
 
 # 或指定完整路径
-./metrix-cli ./mydb
+./zyx-cli ./mydb
 ```
 
 ::: info 数据库路径
-- 如果 `./mydb` 不存在，Metrix 将创建新数据库
-- 如果数据库已存在，Metrix 将打开它
+- 如果 `./mydb` 不存在，ZYX 将创建新数据库
+- 如果数据库已存在，ZYX 将打开它
 - 路径可以是相对路径或绝对路径
 :::
 
 ### CLI 选项
 
 ```bash
-metrix-cli [database_path] [options]
+zyx-cli [database_path] [options]
 
 Options:
   -h, --help     显示使用信息
@@ -244,7 +244,7 @@ CREATE (u1)-[:KNOWS]->(u2);
 EOF
 
 # 导入文件
-metrix-cli ./mydb < import.cql
+zyx-cli ./mydb < import.cql
 ```
 
 ::: warning 大文件导入
@@ -285,13 +285,13 @@ RETURN me.name, friend.name, fof.name
 
 ## 下一步
 
-恭喜！您已经学会了 Metrix CLI 的基本操作。接下来可以：
+恭喜！您已经学会了 ZYX CLI 的基本操作。接下来可以：
 
 ::: tip 学习路径
 1. **[基本操作](/zh/user-guide/basic-operations)** - 深入学习 CRUD 操作
 2. **[事务控制](/zh/user-guide/transactions)** - 了解高级事务管理
 3. **[高级查询](/zh/user-guide/advanced-queries)** - 掌握复杂查询技巧
-4. **[API 参考](/zh/api/cpp-api)** - 在您的应用中嵌入 Metrix
+4. **[API 参考](/zh/api/cpp-api)** - 在您的应用中嵌入 ZYX
 :::
 
 ::: info 获取帮助

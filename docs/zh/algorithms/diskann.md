@@ -1,6 +1,6 @@
 # DiskANN 算法
 
-DiskANN（Disk-based Approximate Nearest Neighbor，基于磁盘的近似最近邻）是一种高性能的基于图的算法，用于在高维向量空间中进行近似最近邻搜索。Metrix 使用 DiskANN 来支持向量相似性搜索操作，并结合乘积量化（Product Quantization，PQ）实现内存效率。
+DiskANN（Disk-based Approximate Nearest Neighbor，基于磁盘的近似最近邻）是一种高性能的基于图的算法，用于在高维向量空间中进行近似最近邻搜索。ZYX 使用 DiskANN 来支持向量相似性搜索操作，并结合乘积量化（Product Quantization，PQ）实现内存效率。
 
 ## 概述
 
@@ -416,7 +416,7 @@ float computeDistance(
 
 ### 混合模式
 
-Metrix 使用混合方法来平衡速度和准确性：
+ZYX 使用混合方法来平衡速度和准确性：
 
 ```cpp
 float computeDistance(

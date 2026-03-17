@@ -1,10 +1,10 @@
 # 编写测试
 
-全面的测试对 Metrix 的可靠性至关重要。本指南解释如何编写有效的测试。
+全面的测试对 ZYX 的可靠性至关重要。本指南解释如何编写有效的测试。
 
 ## 测试理念
 
-Metrix 遵循以下测试原则：
+ZYX 遵循以下测试原则：
 
 1. **测试行为而非实现**：关注代码做什么，而不是如何做
 2. **高覆盖率**：所有指标目标 95%+ 覆盖率
@@ -21,7 +21,7 @@ Metrix 遵循以下测试原则：
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
 
-using namespace metrix;
+using namespace zyx;
 
 class DatabaseTest : public ::testing::Test {
 protected:

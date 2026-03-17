@@ -1,6 +1,6 @@
 # API 参考
 
-Metrix 提供 C++ 和 C API，用于嵌入到您的应用程序中。
+ZYX 提供 C++ 和 C API，用于嵌入到您的应用程序中。
 
 ## C++ API
 

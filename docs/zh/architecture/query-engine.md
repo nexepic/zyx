@@ -1,6 +1,6 @@
 # 查询引擎
 
-Metrix 查询引擎通过三阶段流水线处理 Cypher 查询：解析器 → 规划器 → 执行器。
+ZYX 查询引擎通过三阶段流水线处理 Cypher 查询：解析器 → 规划器 → 执行器。
 
 ## 查询流水线
 
@@ -28,7 +28,7 @@ graph LR
 
 ### ANTLR4 语法
 
-Metrix 使用 ANTLR4 从语法文件生成解析器：
+ZYX 使用 ANTLR4 从语法文件生成解析器：
 
 - **CypherLexer.g4**：词法单元定义
 - **CypherParser.g4**：语法规则
@@ -76,7 +76,7 @@ struct Query {
 ### 支持的 Cypher 特性
 
 ::: info 完整 Cypher 支持
-Metrix 支持完整的 Cypher 查询语言，例外很少。详情请参阅项目根目录。
+ZYX 支持完整的 Cypher 查询语言，例外很少。详情请参阅项目根目录。
 :::
 
 **读取子句**：
@@ -446,7 +446,7 @@ WHERE u.age > 25 AND u.city = 'NYC'
 
 ## 向量索引支持
 
-Metrix 支持向量索引进行相似性搜索：
+ZYX 支持向量索引进行相似性搜索：
 
 ### 创建向量索引
 

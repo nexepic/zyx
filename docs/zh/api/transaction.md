@@ -1,13 +1,13 @@
 # Transaction 类
 
-Metrix 中的 `Transaction` 类为图数据库操作提供完整的 ACID 事务支持。本参考文档涵盖完整的 API。
+ZYX 中的 `Transaction` 类为图数据库操作提供完整的 ACID 事务支持。本参考文档涵盖完整的 API。
 
 ## 概述
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-namespace metrix {
+namespace zyx {
 
 class Transaction {
 public:
@@ -31,9 +31,9 @@ public:
 通过 Database 类创建事务：
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-using namespace metrix;
+using namespace zyx;
 
 // 打开数据库
 auto db = Database::open("/path/to/database");

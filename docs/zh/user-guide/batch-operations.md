@@ -1,6 +1,6 @@
 # 批处理操作
 
-在 Metrix 中高效处理大数据集需要批处理操作。本指南涵盖批量数据处理技术。
+在 ZYX 中高效处理大数据集需要批处理操作。本指南涵盖批量数据处理技术。
 
 ## 理解批处理操作
 
@@ -19,10 +19,10 @@
 ```bash
 # 每次处理 1000 条记录
 # 批次 1
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {id: 1, name: 'Alice'})
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {id: 1, name: 'Alice'})
 # ... 999 条更多记录 ...
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ## CLI 批处理技术
@@ -44,7 +44,7 @@ COMMIT;
 运行脚本：
 
 ```bash
-$ metrix-cli < batch_import.cypher
+$ zyx-cli < batch_import.cypher
 ```
 
 ## 批处理模式

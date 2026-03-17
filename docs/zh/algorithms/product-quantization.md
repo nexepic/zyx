@@ -1,6 +1,6 @@
 # 乘积量化
 
-乘积量化（Product Quantization，PQ）是一种强大的向量压缩技术，能够在高维空间中实现高效的近似最近邻搜索。Metrix 使用 PQ 来大幅减少向量相似性搜索操作中的内存占用并加速距离计算。
+乘积量化（Product Quantization，PQ）是一种强大的向量压缩技术，能够在高维空间中实现高效的近似最近邻搜索。ZYX 使用 PQ 来大幅减少向量相似性搜索操作中的内存占用并加速距离计算。
 
 ## 概述
 
@@ -479,7 +479,7 @@ std::vector<std::vector<float>> sampleTrainingData(
 
 ### 混合搜索策略
 
-Metrix 使用结合 PQ 和原始向量的混合方法：
+ZYX 使用结合 PQ 和原始向量的混合方法：
 
 ```cpp
 float computeDistance(

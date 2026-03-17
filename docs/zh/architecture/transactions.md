@@ -1,6 +1,6 @@
 # 事务管理
 
-Metrix 提供完整的 ACID 事务支持，具有乐观并发控制和全面的回滚功能。
+ZYX 提供完整的 ACID 事务支持，具有乐观并发控制和全面的回滚功能。
 
 ## ACID 属性
 
@@ -142,7 +142,7 @@ tx->rollback();
 
 ## 乐观并发控制
 
-Metrix 使用带有版本控制的乐观并发控制。
+ZYX 使用带有版本控制的乐观并发控制。
 
 ### 版本跟踪
 
@@ -262,7 +262,7 @@ auto tx = db->beginTransaction(IsolationLevel::Serializable);
 
 ## 嵌套事务
 
-Metrix 支持保存点用于嵌套事务：
+ZYX 支持保存点用于嵌套事务：
 
 ```cpp
 auto tx = db->beginTransaction();

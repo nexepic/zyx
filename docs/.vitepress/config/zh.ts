@@ -171,11 +171,11 @@ export default {
   },
 
   socialLinks: [
-    { icon: 'github', link: 'https://github.com/nexepic/metrix' }
+    { icon: 'github', link: 'https://github.com/nexepic/zyx' }
   ],
 
   footer: {
     message: '基于 MIT 许可证发布',
-    copyright: 'Copyright © 2025-present Metrix Contributors'
+    copyright: 'Copyright © 2025-present ZYX Contributors'
   }
 }

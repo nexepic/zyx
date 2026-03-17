@@ -1,6 +1,6 @@
 # 文档标准
 
-清晰、全面的文档对 Metrix 的可用性和可维护性至关重要。本指南概述文档标准。
+清晰、全面的文档对 ZYX 的可用性和可维护性至关重要。本指南概述文档标准。
 
 ## 文档类型
 
@@ -18,7 +18,7 @@
  * 本文件实现核心 Database 类，提供数据库操作的主要接口，包括打开、
  * 关闭和事务管理。
  *
- * @author Metrix 贡献者
+ * @author ZYX 贡献者
  * @date 2024
  */
 ```
@@ -30,7 +30,7 @@
  * @class Database
  * @brief 图操作的主数据库接口
  *
- * Database 类提供使用 Metrix 图数据库的主要接口。它管理数据库生命周期，
+ * Database 类提供使用 ZYX 图数据库的主要接口。它管理数据库生命周期，
  * 协调存储引擎和查询引擎，并提供事务支持。
  *
  * 示例用法：
@@ -133,9 +133,9 @@ Result execute(const std::string& cypher);
 使用 `Database::create()` 方法创建新数据库：
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-using namespace metrix;
+using namespace zyx;
 
 // 在指定路径创建数据库
 auto db = Database::create("/path/to/database");
@@ -172,7 +172,7 @@ for (const auto& row : result) {
 ```markdown
 ## 事务系统
 
-Metrix 通过预写日志（WAL）提供 ACID 事务。
+ZYX 通过预写日志（WAL）提供 ACID 事务。
 
 ### 事务状态
 
@@ -187,7 +187,7 @@ stateDiagram-v2
 
 ### 事务隔离
 
-Metrix 使用快照隔离来确保事务一致性...
+ZYX 使用快照隔离来确保事务一致性...
 ```
 
 ### 4. 架构文档

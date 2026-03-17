@@ -1,6 +1,6 @@
 # 标签索引
 
-Metrix 使用基于 B+Tree 结构的高性能标签索引，实现节点标签到节点 ID 的高效映射。这为 Cypher 查询如 `MATCH (n:Person) RETURN n` 提供了快速的标签过滤能力。
+ZYX 使用基于 B+Tree 结构的高性能标签索引，实现节点标签到节点 ID 的高效映射。这为 Cypher 查询如 `MATCH (n:Person) RETURN n` 提供了快速的标签过滤能力。
 
 ## 概述
 

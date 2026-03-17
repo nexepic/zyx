@@ -1,10 +1,10 @@
 # 错误处理
 
-Metrix 通过异常和错误码提供全面的错误处理。本指南涵盖错误处理最佳实践和完整的错误 API。
+ZYX 通过异常和错误码提供全面的错误处理。本指南涵盖错误处理最佳实践和完整的错误 API。
 
 ## 异常层次结构
 
-Metrix 使用分层异常系统：
+ZYX 使用分层异常系统：
 
 ```mermaid
 graph TD
@@ -23,14 +23,14 @@ graph TD
 
 ## 基本异常类
 
-所有 Metrix 异常都继承自基类 `Exception`：
+所有 ZYX 异常都继承自基类 `Exception`：
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
 try {
-    // Metrix 操作
-} catch (const metrix::Exception& e) {
+    // ZYX 操作
+} catch (const zyx::Exception& e) {
     std::cerr << "错误: " << e.what() << std::endl;
     std::cerr << "错误码: " << e.getErrorCode() << std::endl;
 }
@@ -44,8 +44,8 @@ try {
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/nonexistent/path");
-} catch (const metrix::DatabaseNotFoundException& e) {
+    auto db = zyx::Database::open("/nonexistent/path");
+} catch (const zyx::DatabaseNotFoundException& e) {
     std::cerr << "数据库未找到: " << e.what() << std::endl;
 }
 ```
@@ -56,8 +56,8 @@ try {
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/locked/path");
-} catch (const metrix::DatabaseLockException& e) {
+    auto db = zyx::Database::open("/locked/path");
+} catch (const zyx::DatabaseLockException& e) {
     std::cerr << "数据库已锁定: " << e.what() << std::endl;
 }
 ```
@@ -74,7 +74,7 @@ auto tx = db->beginTransaction();
 try {
     tx->execute("CREATE (p:Person {name: 'Alice'})");
     tx->commit();
-} catch (const metrix::TransactionCommitException& e) {
+} catch (const zyx::TransactionCommitException& e) {
     tx->rollback();
     std::cerr << "提交失败: " << e.what() << std::endl;
 }
@@ -86,14 +86,14 @@ try {
 
 ```cpp
 auto tx = db->beginTransaction();
-tx->setTimeout(metrix::Duration::seconds(30));
+tx->setTimeout(zyx::Duration::seconds(30));
 
 try {
     // 长时间运行的操作
     while (condition) {
         tx->execute("MATCH (n:Node) RETURN n");
     }
-} catch (const metrix::TransactionTimeoutException& e) {
+} catch (const zyx::TransactionTimeoutException& e) {
     std::cerr << "事务超时: " << e.what() << std::endl;
 }
 ```
@@ -107,7 +107,7 @@ Cypher 查询解析失败时抛出。
 ```cpp
 try {
     auto result = db->execute("INVALID CYPHER QUERY");
-} catch (const metrix::ParseException& e) {
+} catch (const zyx::ParseException& e) {
     std::cerr << "解析错误: " << e.what() << std::endl;
 }
 ```
@@ -119,7 +119,7 @@ try {
 ```cpp
 try {
     auto result = db->execute("MATCH (n:NonExistentLabel) RETURN n");
-} catch (const metrix::ExecutionException& e) {
+} catch (const zyx::ExecutionException& e) {
     std::cerr << "执行错误: " << e.what() << std::endl;
 }
 ```
@@ -132,8 +132,8 @@ try {
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/path/to/db");
-} catch (const metrix::IOException& e) {
+    auto db = zyx::Database::open("/path/to/db");
+} catch (const zyx::IOException& e) {
     std::cerr << "I/O 错误: " << e.what() << std::endl;
 }
 ```
@@ -144,8 +144,8 @@ try {
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/corrupted/db");
-} catch (const metrix::CorruptionException& e) {
+    auto db = zyx::Database::open("/corrupted/db");
+} catch (const zyx::CorruptionException& e) {
     std::cerr << "数据库已损坏: " << e.what() << std::endl;
 }
 ```
@@ -155,9 +155,9 @@ try {
 ### 全面错误处理
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-using namespace metrix;
+using namespace zyx;
 
 int main() {
     try {

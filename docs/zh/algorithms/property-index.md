@@ -1,6 +1,6 @@
 # 属性索引
 
-Metrix 使用类型特定的 B+Tree 结构实现了高性能属性索引系统，能够高效地将属性值映射到对应的实体 ID。这使得 Cypher 查询如 `MATCH (n) WHERE n.age > 25 RETURN n` 或 `MATCH (n) WHERE n.name = 'Alice' RETURN n` 能够快速执行。
+ZYX 使用类型特定的 B+Tree 结构实现了高性能属性索引系统，能够高效地将属性值映射到对应的实体 ID。这使得 Cypher 查询如 `MATCH (n) WHERE n.age > 25 RETURN n` 或 `MATCH (n) WHERE n.name = 'Alice' RETURN n` 能够快速执行。
 
 ## 概述
 

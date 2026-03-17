@@ -1,6 +1,6 @@
 # K-Means 聚类算法
 
-K-Means 是一种基础的无监督机器学习算法，用于根据相似性将数据点分组到聚类中。在 Metrix 中，K-Means 专门用于训练乘积量化（Product Quantization，PQ）码本，这对于高效的向量相似性搜索和压缩至关重要。
+K-Means 是一种基础的无监督机器学习算法，用于根据相似性将数据点分组到聚类中。在 ZYX 中，K-Means 专门用于训练乘积量化（Product Quantization，PQ）码本，这对于高效的向量相似性搜索和压缩至关重要。
 
 ## 概述
 
@@ -198,7 +198,7 @@ for (size_t i = 1; i < k; ++i) {
 
 当聚类变为空（没有分配的点）时，有几种策略：
 
-### 1. 重新初始化策略（Metrix 使用）
+### 1. 重新初始化策略（ZYX 使用）
 
 ```cpp
 if (counts[c] == 0) {
@@ -216,7 +216,7 @@ if (counts[c] == 0) {
 
 ## 完整实现
 
-Metrix 中使用的完整 K-Means 实现：
+ZYX 中使用的完整 K-Means 实现：
 
 ```cpp
 #include <limits>
@@ -497,7 +497,7 @@ for (size_t c = 0; c < k; ++c) {
 }
 ```
 
-## 在 Metrix 中的应用
+## 在 ZYX 中的应用
 
 ### 1. 乘积量化训练
 

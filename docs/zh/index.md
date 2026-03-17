@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Metrix
+  name: ZYX
   text: 高性能图数据库
   tagline: 可嵌入的 C++20 图数据库引擎，支持 Cypher 查询语言
   actions:
@@ -11,7 +11,7 @@ hero:
       link: /zh/user-guide/installation
     - theme: alt
       text: 查看 GitHub
-      link: https://github.com/yuhong/metrix
+      link: https://github.com/yuhong/zyx
 
 features:
   - title: 高性能

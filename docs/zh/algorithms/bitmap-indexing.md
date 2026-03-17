@@ -1,6 +1,6 @@
 # Bitmap Indexing Algorithm
 
-Metrix uses bitmap-based indexing for efficient space tracking and fast lookup operations. Bitmaps provide O(1) space checking with minimal memory overhead.
+ZYX uses bitmap-based indexing for efficient space tracking and fast lookup operations. Bitmaps provide O(1) space checking with minimal memory overhead.
 
 ## Overview
 
@@ -336,7 +336,7 @@ Bitmap operations scale linearly with bitmap size:
 - **O(n)**: Search operations (n = bitmap size)
 - **O(n)**: Count operations (optimizable with SIMD)
 
-## Use Cases in Metrix
+## Use Cases in ZYX
 
 1. **Free Space Tracking**: Track free/used blocks in segments
 2. **Entity Existence**: Quick check if entity exists

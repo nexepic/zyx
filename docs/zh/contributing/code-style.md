@@ -13,4 +13,4 @@
 - 具体说明更改内容
 - 每次提交一个逻辑更改
 
-完整指南请参阅 [CONTRIBUTING.md](https://github.com/yuhong/metrix/blob/main/CONTRIBUTING.md)。
+完整指南请参阅 [CONTRIBUTING.md](https://github.com/yuhong/zyx/blob/main/CONTRIBUTING.md)。

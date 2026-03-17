@@ -2,7 +2,7 @@
 
 ## 前置要求
 
-在构建 Metrix 之前，请确保已安装以下依赖项：
+在构建 ZYX 之前，请确保已安装以下依赖项：
 
 ### 必需工具
 
@@ -42,12 +42,12 @@ pip install meson conan ninja
 
 ### 快速构建
 
-构建和测试 Metrix 的最简单方法：
+构建和测试 ZYX 的最简单方法：
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yuhong/metrix.git
-cd metrix
+git clone https://github.com/yuhong/zyx.git
+cd zyx
 
 # 安装依赖、构建并运行测试
 ./scripts/run_tests.sh
@@ -97,30 +97,30 @@ meson compile -C buildDir
 构建完成后，验证 CLI 工具是否可用：
 
 ```bash
-./buildDir/apps/cli/metrix-cli --help
+./buildDir/apps/cli/zyx-cli --help
 ```
 
-您应该看到 Metrix CLI 的使用信息。
+您应该看到 ZYX CLI 的使用信息。
 
 ## 安装位置
 
 构建输出位于：
 
-- **CLI 工具**: `buildDir/apps/cli/metrix-cli`
-- **库**: `buildDir/metrix_core.a`（内部使用的静态库）
+- **CLI 工具**: `buildDir/apps/cli/zyx-cli`
+- **库**: `buildDir/zyx_core.a`（内部使用的静态库）
 - **测试**: `buildDir/tests/src/*/test_*`
 
 ## 可选：系统级安装
 
-要将 Metrix 安装到系统范围（需要 sudo）：
+要将 ZYX 安装到系统范围（需要 sudo）：
 
 ```bash
 meson install -C buildDir
 ```
 
 这将安装：
-- 共享库：`/usr/local/lib/libmetrix.so`
-- 头文件：`/usr/local/include/metrix/`
+- 共享库：`/usr/local/lib/libzyx.so`
+- 头文件：`/usr/local/include/zyx/`
 - pkg-config 文件以便于集成
 
 ## 故障排除
@@ -159,4 +159,4 @@ pip3 install --upgrade meson
 
 - [快速开始指南](/zh/user-guide/quick-start) - 学习如何使用 CLI
 - [开发环境设置](/zh/contributing/development-setup) - 设置开发环境
-- [API 参考](/zh/api/cpp-api) - 在您的应用中嵌入 Metrix
+- [API 参考](/zh/api/cpp-api) - 在您的应用中嵌入 ZYX

@@ -1,6 +1,6 @@
 # State Chain & Optimistic Locking Algorithm
 
-Metrix implements Multi-Version Concurrency Control (MVCC) using state chains and optimistic locking to provide high concurrency while maintaining data consistency.
+ZYX implements Multi-Version Concurrency Control (MVCC) using state chains and optimistic locking to provide high concurrency while maintaining data consistency.
 
 ## Overview
 

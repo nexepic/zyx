@@ -1,6 +1,6 @@
 # 系统配置
 
-Metrix 提供全面的配置选项，可为您的特定工作负载优化性能和行为。
+ZYX 提供全面的配置选项，可为您的特定工作负载优化性能和行为。
 
 ## 配置概述
 
@@ -200,7 +200,7 @@ enum class LogLevel {
 struct LogConfig {
     LogLevel level = LogLevel::Info;
     bool logToFile = false;
-    std::string logFilePath = "/var/log/metrix.log";
+    std::string logFilePath = "/var/log/zyx.log";
     bool logToConsole = true;
     bool logTransactions = false;    // 详细的事务日志
 };
@@ -256,7 +256,7 @@ struct IOConfig {
   "logging": {
     "level": "Info",
     "logToFile": true,
-    "logFilePath": "/var/log/metrix.log"
+    "logFilePath": "/var/log/zyx.log"
   }
 }
 ```
@@ -303,7 +303,7 @@ db->setQueryOptimization(enabled);
 
 ## 配置验证
 
-Metrix 在启动时验证配置：
+ZYX 在启动时验证配置：
 
 ```cpp
 try {

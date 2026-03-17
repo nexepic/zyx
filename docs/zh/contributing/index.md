@@ -1,10 +1,10 @@
 # 贡献指南
 
-我们欢迎对 Metrix 的贡献！本指南将帮助您开始参与。
+我们欢迎对 ZYX 的贡献！本指南将帮助您开始参与。
 
 ## 快速开始
 
-- [安装指南](installation) - 构建和安装 Metrix
+- [安装指南](installation) - 构建和安装 ZYX
 - [系统要求](requirements) - 软硬件要求
 - [系统配置](configuration) - 运行时配置选项
 - [开发环境](development-setup) - 搭建开发环境
