@@ -22,7 +22,7 @@
 
 #include <string_view>
 
-namespace metrix::benchmark::config {
+namespace zyx::benchmark::config {
 
 	// --- Data Scale Settings ---
 	// How many nodes/edges to create during the 'setup' phase.
@@ -57,4 +57,4 @@ namespace metrix::benchmark::config {
 	const std::string PATH_VEC_INSERT = "/tmp/metrix_bench_vec_insert";
 	const std::string PATH_VEC_SEARCH = "/tmp/metrix_bench_vec_search";
 
-} // namespace metrix::benchmark::config
+} // namespace zyx::benchmark::config

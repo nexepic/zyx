@@ -8,9 +8,9 @@
 
 #pragma once
 
-#define PROJECT_NAME "@PROJECT_NAME@"
-#define PROJECT_DISPLAY "@PROJECT_DISPLAY@"
-#define PROJECT_VERSION "@PROJECT_VERSION@"
+#define PROJECT_NAME_STR "@PROJECT_NAME@"
+#define PROJECT_DISPLAY_STR "@PROJECT_DISPLAY@"
+#define PROJECT_VERSION_STR "@PROJECT_VERSION@"
 
 namespace graph::config {
     constexpr const char* PROJECT_NAME = "@PROJECT_NAME@";

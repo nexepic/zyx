@@ -27,7 +27,7 @@
 #include "BenchmarkConfig.hpp"
 #include "BenchmarkVector.hpp"
 
-using namespace metrix::benchmark;
+using namespace zyx::benchmark;
 namespace conf = config;
 
 // Helper to convert string to lowercase

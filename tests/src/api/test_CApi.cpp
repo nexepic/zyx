@@ -89,7 +89,7 @@ TEST_F(CApiTest, NodeObjectAccess) {
 	auto *res = zyx_execute(db, "MATCH (n:Obj) RETURN n");
 	ASSERT_TRUE(zyx_result_next(res));
 
-	EXPECT_EQ(zyx_result_get_type(res, 0), MX_NODE);
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_NODE);
 
 	ZYXNode node_struct;
 	bool success = zyx_result_get_node(res, 0, &node_struct);
@@ -113,7 +113,7 @@ TEST_F(CApiTest, EdgeObjectAccess) {
 	auto *res = zyx_execute(db, "MATCH ()-[e:REL]->() RETURN e");
 	ASSERT_TRUE(zyx_result_next(res));
 
-	EXPECT_EQ(zyx_result_get_type(res, 0), MX_EDGE);
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_EDGE);
 
 	ZYXEdge edge_struct;
 	bool success = zyx_result_get_edge(res, 0, &edge_struct);
@@ -142,9 +142,9 @@ TEST_F(CApiTest, OutOfBoundsAccess) {
 	zyx_result_next(res);
 
 	// Index 0 valid
-	EXPECT_EQ(zyx_result_get_type(res, 0), MX_NODE);
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_NODE);
 	// Index 1 invalid
-	EXPECT_EQ(zyx_result_get_type(res, 1), MX_NULL);
+	EXPECT_EQ(zyx_result_get_type(res, 1), ZYX_NULL);
 
 	zyx_result_close(res);
 }
@@ -169,7 +169,7 @@ TEST_F(CApiTest, EdgeObjectAccess_Rigorous) {
 	ASSERT_TRUE(zyx_result_next(res)) << "No edge returned.";
 
 	// Rigorous Check 2: Metadata
-	EXPECT_EQ(zyx_result_get_type(res, 0), MX_EDGE);
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_EDGE);
 
 	// Rigorous Check 3: Topology and Props
 	ZYXEdge edge_struct;
@@ -223,7 +223,7 @@ TEST_F(CApiTest, NullHandleSafeguards) {
 	EXPECT_EQ(zyx_result_column_count(nullRes), 0);
 	EXPECT_STREQ(zyx_result_column_name(nullRes, 0), "");
 
-	EXPECT_EQ(zyx_result_get_type(nullRes, 0), MX_NULL);
+	EXPECT_EQ(zyx_result_get_type(nullRes, 0), ZYX_NULL);
 	EXPECT_EQ(zyx_result_get_int(nullRes, 0), 0);
 	EXPECT_DOUBLE_EQ(zyx_result_get_double(nullRes, 0), 0.0);
 	EXPECT_FALSE(zyx_result_get_bool(nullRes, 0));
@@ -247,7 +247,7 @@ TEST_F(CApiTest, TypeMismatchSafeguards) {
 	ASSERT_TRUE(zyx_result_next(res));
 
 	// Valid access: Integer
-	EXPECT_EQ(zyx_result_get_type(res, 0), MX_INT);
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_INT);
 	EXPECT_EQ(zyx_result_get_int(res, 0), 42);
 
 	// Invalid access: Trying to interpret Integer as Node

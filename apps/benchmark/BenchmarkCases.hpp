@@ -28,7 +28,7 @@
 #include <vector>
 #include "BenchmarkFramework.hpp"
 
-namespace metrix::benchmark {
+namespace zyx::benchmark {
 
 	// ========================================================================
 	// Enums & Helpers
@@ -306,4 +306,4 @@ namespace metrix::benchmark {
 		void teardown(Database &) override {}
 	};
 
-} // namespace metrix::benchmark
+} // namespace zyx::benchmark

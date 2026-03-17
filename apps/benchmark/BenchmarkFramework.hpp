@@ -39,9 +39,9 @@
 #endif
 
 // Include Public API
-#include "metrix/metrix.hpp"
+#include "zyx/zyx.hpp"
 
-namespace metrix::benchmark {
+namespace zyx::benchmark {
 
 	struct Metrics {
 		double totalTimeMs;
@@ -167,4 +167,4 @@ namespace metrix::benchmark {
 				  << "| " << std::setw(15) << m.peakMemoryKB << "|\n";
 	}
 
-} // namespace metrix::benchmark
+} // namespace zyx::benchmark

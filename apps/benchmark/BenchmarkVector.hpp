@@ -25,7 +25,7 @@
 #include <vector>
 #include "BenchmarkFramework.hpp"
 
-namespace metrix::benchmark {
+namespace zyx::benchmark {
 
 	// Helper to generate random vectors
 	inline std::vector<float> generateVector(size_t dim, std::mt19937 &rng) {
@@ -78,7 +78,7 @@ namespace metrix::benchmark {
 
 			// Convert float vector to string list (as per current public API limit)
 			// Or use internal API if benchmark has access?
-			// The Public API `metrix::Value` currently requires `vector<string>` for lists based on your previous fix.
+			// The Public API `zyx::Value` currently requires `vector<string>` for lists based on your previous fix.
 			// Let's assume we pass it as vector<string> of floats.
 
 			const auto &vec = dataset_[idx++];
@@ -169,4 +169,4 @@ namespace metrix::benchmark {
 		void teardown(Database &) override {}
 	};
 
-} // namespace metrix::benchmark
+} // namespace zyx::benchmark

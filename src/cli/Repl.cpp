@@ -22,7 +22,7 @@
 #include <iomanip>
 #include <iostream>
 #include "graph/cli/linenoise.hpp"
-#include "graph/core/ProjectConfig.hpp"
+#include "ProjectConfig.hpp"
 
 // For isatty() and debugger detection
 #if defined(__unix__) || defined(__APPLE__)
@@ -180,12 +180,12 @@ namespace graph {
 
 	// Fallback REPL for non-interactive sessions (like debugging in some IDEs)
 	void REPL::runBasic() const {
-		std::cout << "<" << PROJECT_DISPLAY << "> Shell (Basic Mode).\n"
+		std::cout << "<" << PROJECT_DISPLAY_STR << "> Shell (Basic Mode).\n"
 				  << "Type 'exit' to quit.\n";
 
 		std::string line;
 		std::string buffer;
-		static const std::string PROMPT_NORMAL = std::string(PROJECT_DISPLAY) + "> ";
+		static const std::string PROMPT_NORMAL = std::string(PROJECT_DISPLAY_STR) + "> ";
 
 		while (true) {
 			const char *prompt = buffer.empty() ? PROMPT_NORMAL.c_str() : "     -> ";
@@ -222,11 +222,11 @@ namespace graph {
 
 		linenoise::SetMultiLine(true);
 		linenoise::SetHistoryMaxLen(100);
-		static const std::string PROMPT_COLOR = "\033[1;32m" + std::string(PROJECT_DISPLAY) + ">\033[0m ";
+		static const std::string PROMPT_COLOR = "\033[1;32m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
 		const char *promptNormal = PROMPT_COLOR.c_str();
 		const char *promptMulti = "\033[1;33m     ->\033[0m "; // Yellow
 
-		std::cout << "<" << PROJECT_DISPLAY << "> Shell.\n"
+		std::cout << "<" << PROJECT_DISPLAY_STR << "> Shell.\n"
 				  << "Type 'help' or 'exit'.\n"
 				  << "Enter queries ending with ';' OR press Enter on an empty line to execute.\n";
 

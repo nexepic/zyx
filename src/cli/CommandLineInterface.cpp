@@ -25,14 +25,14 @@
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/log/Log.hpp"
-#include "graph/core/ProjectConfig.hpp"
+#include "ProjectConfig.hpp"
 
 namespace graph::cli {
 
 	CommandLineInterface::CommandLineInterface() = default;
 
 	int CommandLineInterface::run(const int argc, char **argv) {
-		CLI::App app{std::string(PROJECT_DISPLAY) + " Database CLI"};
+		CLI::App app{std::string(PROJECT_DISPLAY_STR) + " Database CLI"};
 
 		// Prevent CLI11 from parsing automatically on destruction or throwing exit exceptions
 		// We want to handle return codes manually for testing.
