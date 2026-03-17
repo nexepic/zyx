@@ -1,6 +1,6 @@
 # B+Tree Indexing
 
-Metrix uses B+Tree data structures for efficient indexing of labels and properties, providing fast lookups, range queries, and ordered traversal. The implementation is optimized for disk-based storage with support for large keys and values through blob storage.
+ZYX uses B+Tree data structures for efficient indexing of labels and properties, providing fast lookups, range queries, and ordered traversal. The implementation is optimized for disk-based storage with support for large keys and values through blob storage.
 
 ## Overview
 
@@ -535,7 +535,7 @@ int64_t insert(int64_t rootId, const PropertyValue& key, int64_t value) {
 - Single writer with exclusive access
 - No deadlocks with proper locking order
 
-## Use in Metrix
+## Use in ZYX
 
 ### Label Index
 

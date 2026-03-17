@@ -1,6 +1,6 @@
 # Optimization Strategies
 
-This guide covers performance optimization techniques for Metrix graph database.
+This guide covers performance optimization techniques for ZYX graph database.
 
 ## Query Optimization
 

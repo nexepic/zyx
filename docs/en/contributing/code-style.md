@@ -13,4 +13,4 @@
 - Be specific about what changed
 - One logical change per commit
 
-See [CONTRIBUTING.md](https://github.com/yuhong/metrix/blob/main/CONTRIBUTING.md) for full guidelines.
+See [CONTRIBUTING.md](https://github.com/yuhong/zyx/blob/main/CONTRIBUTING.md) for full guidelines.

@@ -1,6 +1,6 @@
 # Segment Format
 
-Metrix uses a custom segment-based storage format that provides efficient space management, fast access, and ACID compliance. This document describes the segment format in detail.
+ZYX uses a custom segment-based storage format that provides efficient space management, fast access, and ACID compliance. This document describes the segment format in detail.
 
 ## Overview
 

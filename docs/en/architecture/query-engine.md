@@ -1,6 +1,6 @@
 # Query Engine
 
-The Metrix Query Engine processes Cypher queries through a three-stage pipeline: Parser → Planner → Executor.
+The ZYX Query Engine processes Cypher queries through a three-stage pipeline: Parser → Planner → Executor.
 
 ## Query Pipeline
 
@@ -28,7 +28,7 @@ The parser converts Cypher query text into an Abstract Syntax Tree (AST).
 
 ### ANTLR4 Grammar
 
-Metrix uses ANTLR4 to generate the parser from grammar files:
+ZYX uses ANTLR4 to generate the parser from grammar files:
 
 - **CypherLexer.g4**: Token definitions
 - **CypherParser.g4**: Grammar rules
@@ -76,7 +76,7 @@ struct Query {
 ### Supported Cypher Features
 
 ::: info Full Cypher Support
-Metrix supports the complete Cypher query language with minor exceptions. See the project root directory for details.
+ZYX supports the complete Cypher query language with minor exceptions. See the project root directory for details.
 :::
 
 **Reading Clauses**:
@@ -446,7 +446,7 @@ WHERE u.age > 25 AND u.city = 'NYC'
 
 ## Vector Index Support
 
-Metrix supports vector indexes for similarity search:
+ZYX supports vector indexes for similarity search:
 
 ### Creating Vector Index
 

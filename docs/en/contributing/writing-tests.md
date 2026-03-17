@@ -1,10 +1,10 @@
 # Writing Tests
 
-Comprehensive testing is critical for Metrix's reliability. This guide explains how to write effective tests.
+Comprehensive testing is critical for ZYX's reliability. This guide explains how to write effective tests.
 
 ## Testing Philosophy
 
-Metrix follows these testing principles:
+ZYX follows these testing principles:
 
 1. **Test behavior, not implementation**: Focus on what code does, not how
 2. **Aim for high coverage**: Target 95%+ coverage across all metrics
@@ -21,7 +21,7 @@ Metrix follows these testing principles:
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
 
-using namespace metrix;
+using namespace zyx;
 
 class DatabaseTest : public ::testing::Test {
 protected:

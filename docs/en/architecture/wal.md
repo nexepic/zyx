@@ -1,6 +1,6 @@
 # WAL Implementation
 
-Metrix uses Write-Ahead Logging (WAL) to ensure ACID transaction durability and enable crash recovery.
+ZYX uses Write-Ahead Logging (WAL) to ensure ACID transaction durability and enable crash recovery.
 
 ## Overview
 

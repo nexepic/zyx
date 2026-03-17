@@ -1,12 +1,12 @@
 # System Requirements
 
-Metrix has specific requirements for building and running the database engine.
+ZYX has specific requirements for building and running the database engine.
 
 ## Build Requirements
 
 ### Compilers
 
-Metrix requires a C++20 compatible compiler:
+ZYX requires a C++20 compatible compiler:
 
 - **GCC**: Version 11 or later
 - **Clang**: Version 13 or later
@@ -22,7 +22,7 @@ Metrix requires a C++20 compatible compiler:
 
 ### Dependencies
 
-Metrix automatically manages its dependencies through Conan:
+ZYX automatically manages its dependencies through Conan:
 
 - **Boost**: Filesystem and system utilities
 - **zlib**: Data compression
@@ -34,7 +34,7 @@ Metrix automatically manages its dependencies through Conan:
 
 ### Operating Systems
 
-Metrix is tested on:
+ZYX is tested on:
 
 - **Linux**: Ubuntu 20.04+, Debian 11+, CentOS 8+
 - **macOS**: macOS 12+ (Monterey or later)
@@ -111,7 +111,7 @@ For optimal performance, use:
 
 ### Network Filesystems
 
-Metrix has not been tested on network filesystems (NFS, SMB, etc.). Use local filesystems for best results.
+ZYX has not been tested on network filesystems (NFS, SMB, etc.). Use local filesystems for best results.
 
 ### CPU Requirements
 

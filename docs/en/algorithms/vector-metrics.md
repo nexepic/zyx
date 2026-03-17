@@ -1,6 +1,6 @@
 # Vector Metrics
 
-Vector similarity metrics are fundamental to vector search and machine learning operations. Metrix implements optimized distance computations with support for mixed precision (Float32/BFloat16), SIMD optimizations, and efficient integration with DiskANN and Product Quantization.
+Vector similarity metrics are fundamental to vector search and machine learning operations. ZYX implements optimized distance computations with support for mixed precision (Float32/BFloat16), SIMD optimizations, and efficient integration with DiskANN and Product Quantization.
 
 ## Overview
 
@@ -35,7 +35,7 @@ L2(a,b)² = Σ(aᵢ - bᵢ)²
 
 #### Why L2 Squared?
 
-Metrix uses **L2 squared** instead of L2 distance for computational efficiency:
+ZYX uses **L2 squared** instead of L2 distance for computational efficiency:
 
 - **Avoids Square Root**: Computing √x is expensive
 - **Same Ordering**: Squared distance preserves the same ranking as actual distance
@@ -142,7 +142,7 @@ static float computeIP(const float *a, const float *b, size_t dim) {
 }
 ```
 
-**Important**: The result is **negated** because Metrix uses min-heaps for distance sorting. Larger inner products (more similar) should have smaller distance values.
+**Important**: The result is **negated** because ZYX uses min-heaps for distance sorting. Larger inner products (more similar) should have smaller distance values.
 
 #### When to Use Inner Product
 

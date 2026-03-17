@@ -1,6 +1,6 @@
 # Label Index
 
-Metrix implements a high-performance label index using B+Tree structure to efficiently map node labels to their corresponding node IDs. This enables fast label-based queries in Cypher such as `MATCH (n:Person) RETURN n`.
+ZYX implements a high-performance label index using B+Tree structure to efficiently map node labels to their corresponding node IDs. This enables fast label-based queries in Cypher such as `MATCH (n:Person) RETURN n`.
 
 ## Overview
 

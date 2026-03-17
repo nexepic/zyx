@@ -1,6 +1,6 @@
 # Benchmarks
 
-This document presents performance benchmarks for Metrix graph database across various workloads and scenarios.
+This document presents performance benchmarks for ZYX graph database across various workloads and scenarios.
 
 ## Benchmark Methodology
 
@@ -10,7 +10,7 @@ This document presents performance benchmarks for Metrix graph database across v
 - **Storage**: NVMe SSD (Samsung 970 PRO)
 - **OS**: Ubuntu 22.04 LTS
 - **Compiler**: GCC 11.3.0 with -O3 optimization
-- **Metrix Version**: 1.0.0
+- **ZYX Version**: 1.0.0
 
 ### Dataset Descriptions
 
@@ -195,7 +195,7 @@ This document presents performance benchmarks for Metrix graph database across v
 
 | Database | Single Lookup | Pattern Match | Shortest Path |
 |----------|---------------|---------------|---------------|
-| Metrix   | 8,500         | 400           | 125 |
+| ZYX   | 8,500         | 400           | 125 |
 | Neo4j    | 7,200         | 350           | 100 |
 | ArangoDB | 6,800         | 320           | 95 |
 
@@ -203,7 +203,7 @@ This document presents performance benchmarks for Metrix graph database across v
 
 | Database | Single Write | Batch Write (1000) |
 |----------|--------------|-------------------|
-| Metrix   | 833          | 10,000            |
+| ZYX   | 833          | 10,000            |
 | Neo4j    | 700          | 8,500             |
 | ArangoDB | 650          | 7,200             |
 

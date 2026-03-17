@@ -1,6 +1,6 @@
 # Cache Management
 
-Metrix implements a sophisticated multi-level caching system to optimize performance for both read and write operations.
+ZYX implements a sophisticated multi-level caching system to optimize performance for both read and write operations.
 
 ## Overview
 

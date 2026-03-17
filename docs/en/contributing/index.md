@@ -1,10 +1,10 @@
 # Contributing
 
-We welcome contributions to Metrix! This guide will help you get started.
+We welcome contributions to ZYX! This guide will help you get started.
 
 ## Getting Started
 
-- [Installation](installation) - Build and install Metrix
+- [Installation](installation) - Build and install ZYX
 - [System Requirements](requirements) - Required software and hardware
 - [Configuration](configuration) - Runtime configuration options
 - [Development Setup](development-setup) - Set up development environment

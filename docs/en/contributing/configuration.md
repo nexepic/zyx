@@ -1,6 +1,6 @@
 # System Configuration
 
-Metrix provides comprehensive configuration options to optimize performance and behavior for your specific workload.
+ZYX provides comprehensive configuration options to optimize performance and behavior for your specific workload.
 
 ## Configuration Overview
 
@@ -200,7 +200,7 @@ Configure logging destinations:
 struct LogConfig {
     LogLevel level = LogLevel::Info;
     bool logToFile = false;
-    std::string logFilePath = "/var/log/metrix.log";
+    std::string logFilePath = "/var/log/zyx.log";
     bool logToConsole = true;
     bool logTransactions = false;    // Detailed transaction logging
 };
@@ -256,7 +256,7 @@ Use JSON configuration files:
   "logging": {
     "level": "Info",
     "logToFile": true,
-    "logFilePath": "/var/log/metrix.log"
+    "logFilePath": "/var/log/zyx.log"
   }
 }
 ```
@@ -303,7 +303,7 @@ db->setQueryOptimization(enabled);
 
 ## Configuration Validation
 
-Metrix validates configuration on startup:
+ZYX validates configuration on startup:
 
 ```cpp
 try {

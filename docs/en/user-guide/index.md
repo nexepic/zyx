@@ -1,6 +1,6 @@
 # User Guide
 
-Welcome to the Metrix User Guide! This guide will help you get started with using Metrix graph database.
+Welcome to the ZYX User Guide! This guide will help you get started with using ZYX graph database.
 
 ## Getting Started
 

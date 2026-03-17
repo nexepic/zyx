@@ -1,6 +1,6 @@
 # Segment Allocation Algorithm
 
-Metrix uses a sophisticated segment allocation algorithm that efficiently manages fixed-size storage blocks while minimizing fragmentation and maximizing performance.
+ZYX uses a sophisticated segment allocation algorithm that efficiently manages fixed-size storage blocks while minimizing fragmentation and maximizing performance.
 
 ## Overview
 

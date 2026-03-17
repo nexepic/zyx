@@ -1,11 +1,11 @@
 # Quick Start
 
-This guide will help you get started with Metrix using the command-line interface (CLI).
+This guide will help you get started with ZYX using the command-line interface (CLI).
 
 ::: tip Prerequisites
 Before you begin, make sure you have:
-- ✅ Installed Metrix (downloaded pre-built version or used package manager)
-- ✅ `metrix-cli` executable available
+- ✅ Installed ZYX (downloaded pre-built version or used package manager)
+- ✅ `zyx-cli` executable available
 - ✅ Basic understanding of Cypher query language
 
 **Installation methods:**
@@ -16,16 +16,16 @@ Before you begin, make sure you have:
 
 ## Starting the CLI
 
-The Metrix CLI provides an interactive REPL (Read-Eval-Print Loop) for executing Cypher queries.
+The ZYX CLI provides an interactive REPL (Read-Eval-Print Loop) for executing Cypher queries.
 
 ### Basic Usage
 
 ```bash
 # If using pre-built version
-metrix-cli ./mydb
+zyx-cli ./mydb
 
 # Or specify full path
-./metrix-cli ./mydb
+./zyx-cli ./mydb
 ```
 
 ::: info Database Path
@@ -37,7 +37,7 @@ metrix-cli ./mydb
 ### CLI Options
 
 ```bash
-metrix-cli [database_path] [options]
+zyx-cli [database_path] [options]
 
 Options:
   -h, --help     Show usage information
@@ -244,7 +244,7 @@ CREATE (u1)-[:KNOWS]->(u2);
 EOF
 
 # Import the file
-metrix-cli ./mydb < import.cql
+zyx-cli ./mydb < import.cql
 ```
 
 ::: warning Large Dataset Imports
@@ -285,13 +285,13 @@ RETURN me.name, friend.name, fof.name
 
 ## Next Steps
 
-Congratulations! You've learned the basics of using the Metrix CLI. Here's what you can explore next:
+Congratulations! You've learned the basics of using the ZYX CLI. Here's what you can explore next:
 
 ::: tip Learning Path
 1. **[Basic Operations](/en/user-guide/basic-operations)** - Deep dive into CRUD operations
 2. **[Transaction Control](/en/user-guide/transactions)** - Advanced transaction management
 3. **[Advanced Queries](/en/user-guide/advanced-queries)** - Master complex query techniques
-4. **[API Reference](/en/api/cpp-api)** - Embed Metrix in your application
+4. **[API Reference](/en/api/cpp-api)** - Embed ZYX in your application
 :::
 
 ::: info Get Help

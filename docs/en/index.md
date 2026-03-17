@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Metrix
+  name: ZYX
   text: High-Performance Graph Database
   tagline: Embeddable C++20 graph database engine with Cypher query support
   actions:
@@ -11,7 +11,7 @@ hero:
       link: /en/user-guide/installation
     - theme: alt
       text: View on GitHub
-      link: https://github.com/yuhong/metrix
+      link: https://github.com/yuhong/zyx
 
 features:
   - title: High Performance

@@ -1,10 +1,10 @@
 # Error Handling
 
-Metrix provides comprehensive error handling through exceptions and error codes. This guide covers error handling best practices and the complete error API.
+ZYX provides comprehensive error handling through exceptions and error codes. This guide covers error handling best practices and the complete error API.
 
 ## Exception Hierarchy
 
-Metrix uses a hierarchical exception system:
+ZYX uses a hierarchical exception system:
 
 ```mermaid
 graph TD
@@ -31,14 +31,14 @@ graph TD
 
 ## Base Exception Class
 
-All Metrix exceptions inherit from the base `Exception` class:
+All ZYX exceptions inherit from the base `Exception` class:
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
 try {
-    // Metrix operations
-} catch (const metrix::Exception& e) {
+    // ZYX operations
+} catch (const zyx::Exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
     std::cerr << "Error code: " << e.getErrorCode() << std::endl;
 }
@@ -64,8 +64,8 @@ Thrown when attempting to open a non-existent database.
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/nonexistent/path");
-} catch (const metrix::DatabaseNotFoundException& e) {
+    auto db = zyx::Database::open("/nonexistent/path");
+} catch (const zyx::DatabaseNotFoundException& e) {
     std::cerr << "Database not found: " << e.what() << std::endl;
     std::cerr << "Path: " << e.getPath() << std::endl;
 }
@@ -77,8 +77,8 @@ Thrown when attempting to create a database that already exists.
 
 ```cpp
 try {
-    auto db = metrix::Database::create("/existing/path");
-} catch (const metrix::DatabaseAlreadyExistsException& e) {
+    auto db = zyx::Database::create("/existing/path");
+} catch (const zyx::DatabaseAlreadyExistsException& e) {
     std::cerr << "Database already exists: " << e.what() << std::endl;
 }
 ```
@@ -89,8 +89,8 @@ Thrown when the database is locked by another process.
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/locked/path");
-} catch (const metrix::DatabaseLockException& e) {
+    auto db = zyx::Database::open("/locked/path");
+} catch (const zyx::DatabaseLockException& e) {
     std::cerr << "Database is locked: " << e.what() << std::endl;
     std::cerr << "Lock holder: " << e.getLockHolder() << std::endl;
 }
@@ -108,7 +108,7 @@ auto tx = db->beginTransaction();
 try {
     tx->execute("CREATE (p:Person {name: 'Alice'})");
     tx->commit();
-} catch (const metrix::TransactionCommitException& e) {
+} catch (const zyx::TransactionCommitException& e) {
     tx->rollback();
     std::cerr << "Commit failed: " << e.what() << std::endl;
 }
@@ -121,7 +121,7 @@ Thrown when a transaction rollback fails.
 ```cpp
 try {
     tx->rollback();
-} catch (const metrix::TransactionRollbackException& e) {
+} catch (const zyx::TransactionRollbackException& e) {
     std::cerr << "Rollback failed: " << e.what() << std::endl;
     // Manual cleanup may be needed
 }
@@ -133,14 +133,14 @@ Thrown when a transaction exceeds its timeout.
 
 ```cpp
 auto tx = db->beginTransaction();
-tx->setTimeout(metrix::Duration::seconds(30));
+tx->setTimeout(zyx::Duration::seconds(30));
 
 try {
     // Long-running operation
     while (condition) {
         tx->execute("MATCH (n:Node) RETURN n");
     }
-} catch (const metrix::TransactionTimeoutException& e) {
+} catch (const zyx::TransactionTimeoutException& e) {
     std::cerr << "Transaction timeout: " << e.what() << std::endl;
     std::cerr << "Timeout duration: " << e.getTimeout().toSeconds() << "s"
               << std::endl;
@@ -156,7 +156,7 @@ Thrown when Cypher query parsing fails.
 ```cpp
 try {
     auto result = db->execute("INVALID CYPHER QUERY");
-} catch (const metrix::ParseException& e) {
+} catch (const zyx::ParseException& e) {
     std::cerr << "Parse error: " << e.what() << std::endl;
     std::cerr << "Position: " << e.getErrorPosition() << std::endl;
     std::cerr << "Query: " << e.getQuery() << std::endl;
@@ -170,7 +170,7 @@ Thrown when query execution fails.
 ```cpp
 try {
     auto result = db->execute("MATCH (n:NonExistentLabel) RETURN n");
-} catch (const metrix::ExecutionException& e) {
+} catch (const zyx::ExecutionException& e) {
     std::cerr << "Execution error: " << e.what() << std::endl;
     std::cerr << "Query: " << e.getQuery() << std::endl;
 }
@@ -184,8 +184,8 @@ Thrown for I/O related errors.
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/path/to/db");
-} catch (const metrix::IOException& e) {
+    auto db = zyx::Database::open("/path/to/db");
+} catch (const zyx::IOException& e) {
     std::cerr << "I/O error: " << e.what() << std::endl;
     std::cerr << "Path: " << e.getPath() << std::endl;
     std::cerr << "System error: " << e.getSystemError() << std::endl;
@@ -198,8 +198,8 @@ Thrown when database corruption is detected.
 
 ```cpp
 try {
-    auto db = metrix::Database::open("/corrupted/db");
-} catch (const metrix::CorruptionException& e) {
+    auto db = zyx::Database::open("/corrupted/db");
+} catch (const zyx::CorruptionException& e) {
     std::cerr << "Database corrupted: " << e.what() << std::endl;
     std::cerr << "Affected segment: " << e.getSegmentId() << std::endl;
 }
@@ -213,7 +213,7 @@ Thrown when a constraint violation occurs.
 try {
     db->execute("CREATE (p:Person {email: 'alice@example.com'})");
     db->execute("CREATE (p:Person {email: 'alice@example.com'})");
-} catch (const metrix::ConstraintViolationException& e) {
+} catch (const zyx::ConstraintViolationException& e) {
     std::cerr << "Constraint violated: " << e.what() << std::endl;
     std::cerr << "Constraint: " << e.getConstraintName() << std::endl;
 }
@@ -224,9 +224,9 @@ try {
 ### Comprehensive Error Handling
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-using namespace metrix;
+using namespace zyx;
 
 int main() {
     try {
@@ -353,7 +353,7 @@ auto result = retryWithBackoff([&]() {
 
 ## Error Codes
 
-Metrix uses error codes for programmatic error handling:
+ZYX uses error codes for programmatic error handling:
 
 ```cpp
 enum class ErrorCode {
@@ -391,12 +391,12 @@ enum class ErrorCode {
 ```cpp
 try {
     db->execute("CREATE (p:Person {email: 'alice@example.com'})");
-} catch (const metrix::Exception& e) {
+} catch (const zyx::Exception& e) {
     auto code = e.getErrorCode();
 
-    if (code == metrix::ErrorCode::UNIQUE_CONSTRAINT_VIOLATION) {
+    if (code == zyx::ErrorCode::UNIQUE_CONSTRAINT_VIOLATION) {
         std::cerr << "Duplicate email address" << std::endl;
-    } else if (code == metrix::ErrorCode::IO_ERROR) {
+    } else if (code == zyx::ErrorCode::IO_ERROR) {
         std::cerr << "I/O error occurred" << std::endl;
     } else {
         std::cerr << "Unknown error: " << e.what() << std::endl;
@@ -415,7 +415,7 @@ for (int i = 0; i < maxRetries; ++i) {
     try {
         db->execute(query);
         break;
-    } catch (const metrix::TransactionException& e) {
+    } catch (const zyx::TransactionException& e) {
         if (i == maxRetries - 1) throw;
         std::this_thread::sleep_for(std::chrono::milliseconds(100 * (i + 1)));
     }
@@ -424,7 +424,7 @@ for (int i = 0; i < maxRetries; ++i) {
 // 2. Fallback to alternative operation
 try {
     db->execute("MATCH (n:Node) DELETE n");
-} catch (const metrix::ConstraintViolationException& e) {
+} catch (const zyx::ConstraintViolationException& e) {
     // Fallback: Delete in smaller batches
     db->execute("MATCH (n:Node) WITH n LIMIT 1000 DELETE n");
 }
@@ -433,7 +433,7 @@ try {
 try {
     auto result = db->execute("MATCH (n:Node) RETURN n");
     // Process result
-} catch (const metrix::ExecutionException& e) {
+} catch (const zyx::ExecutionException& e) {
     // Return cached data or partial result
     return getCachedData();
 }
@@ -444,16 +444,16 @@ try {
 ```cpp
 // Recover from corruption
 try {
-    auto db = metrix::Database::open("/path/to/db");
-} catch (const metrix::CorruptionException& e) {
+    auto db = zyx::Database::open("/path/to/db");
+} catch (const zyx::CorruptionException& e) {
     std::cerr << "Database corrupted, attempting recovery..." << std::endl;
 
     // Try to recover
     try {
-        auto recovered = metrix::Database::recover("/path/to/db");
+        auto recovered = zyx::Database::recover("/path/to/db");
         std::cerr << "Recovery successful" << std::endl;
         db = recovered;
-    } catch (const metrix::Exception& recoveryError) {
+    } catch (const zyx::Exception& recoveryError) {
         std::cerr << "Recovery failed: " << recoveryError.what() << std::endl;
         // Restore from backup
         restoreFromBackup();
@@ -475,14 +475,14 @@ try {
 ## Logging Errors
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 #include <spdlog/spdlog.h>
 
-void executeWithErrorLogging(metrix::Database* db, const std::string& query) {
+void executeWithErrorLogging(zyx::Database* db, const std::string& query) {
     try {
         auto result = db->execute(query);
         spdlog::info("Query executed successfully: {}", query);
-    } catch (const metrix::Exception& e) {
+    } catch (const zyx::Exception& e) {
         spdlog::error("Query failed: {}", query);
         spdlog::error("Error: {} (Code: {})", e.what(), static_cast<int>(e.getErrorCode()));
         throw;

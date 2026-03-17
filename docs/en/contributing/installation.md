@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-Before building Metrix, ensure you have the following dependencies installed:
+Before building ZYX, ensure you have the following dependencies installed:
 
 ### Required Tools
 
@@ -42,12 +42,12 @@ pip install meson conan ninja
 
 ### Quick Build
 
-The easiest way to build and test Metrix:
+The easiest way to build and test ZYX:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yuhong/metrix.git
-cd metrix
+git clone https://github.com/yuhong/zyx.git
+cd zyx
 
 # Install dependencies, build, and run tests
 ./scripts/run_tests.sh
@@ -97,30 +97,30 @@ This creates an optimized release build in `buildDir/release/`.
 After building, verify the CLI tool is available:
 
 ```bash
-./buildDir/apps/cli/metrix-cli --help
+./buildDir/apps/cli/zyx-cli --help
 ```
 
-You should see usage information for the Metrix CLI.
+You should see usage information for the ZYX CLI.
 
 ## Installation Location
 
 The build outputs are located in:
 
-- **CLI Tool**: `buildDir/apps/cli/metrix-cli`
-- **Library**: `buildDir/metrix_core.a` (static library for internal use)
+- **CLI Tool**: `buildDir/apps/cli/zyx-cli`
+- **Library**: `buildDir/zyx_core.a` (static library for internal use)
 - **Tests**: `buildDir/tests/src/*/test_*`
 
 ## Optional: Install System-Wide
 
-To install Metrix system-wide (requires sudo):
+To install ZYX system-wide (requires sudo):
 
 ```bash
 meson install -C buildDir
 ```
 
 This will install:
-- Shared library: `/usr/local/lib/libmetrix.so`
-- Headers: `/usr/local/include/metrix/`
+- Shared library: `/usr/local/lib/libzyx.so`
+- Headers: `/usr/local/include/zyx/`
 - pkg-config file for easy integration
 
 ## Troubleshooting
@@ -159,4 +159,4 @@ pip3 install --upgrade meson
 
 - [Quick Start Guide](/en/user-guide/quick-start) - Learn how to use the CLI
 - [Development Setup](/en/contributing/development-setup) - Set up development environment
-- [API Reference](/en/api/cpp-api) - Embed Metrix in your application
+- [API Reference](/en/api/cpp-api) - Embed ZYX in your application

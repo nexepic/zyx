@@ -1,6 +1,6 @@
 # Compression Algorithm
 
-Metrix uses lossless compression algorithms to reduce storage footprint and improve I/O performance while maintaining data integrity.
+ZYX uses lossless compression algorithms to reduce storage footprint and improve I/O performance while maintaining data integrity.
 
 ## Overview
 

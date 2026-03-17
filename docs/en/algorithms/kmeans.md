@@ -1,6 +1,6 @@
 # K-Means Clustering Algorithm
 
-K-Means is a fundamental unsupervised machine learning algorithm used for clustering data points into groups based on similarity. In Metrix, K-Means is specifically used for training Product Quantization (PQ) codebooks, which are essential for efficient vector similarity search and compression.
+K-Means is a fundamental unsupervised machine learning algorithm used for clustering data points into groups based on similarity. In ZYX, K-Means is specifically used for training Product Quantization (PQ) codebooks, which are essential for efficient vector similarity search and compression.
 
 ## Overview
 
@@ -198,7 +198,7 @@ for (size_t i = 1; i < k; ++i) {
 
 When a cluster becomes empty (no assigned points), several strategies exist:
 
-### 1. Re-initialization Strategy (Used in Metrix)
+### 1. Re-initialization Strategy (Used in ZYX)
 
 ```cpp
 if (counts[c] == 0) {
@@ -216,7 +216,7 @@ Reduce effective number of clusters (not recommended).
 
 ## Complete Implementation
 
-The complete K-Means implementation used in Metrix:
+The complete K-Means implementation used in ZYX:
 
 ```cpp
 #include <limits>
@@ -497,7 +497,7 @@ for (size_t c = 0; c < k; ++c) {
 }
 ```
 
-## Use Cases in Metrix
+## Use Cases in ZYX
 
 ### 1. Product Quantization Training
 

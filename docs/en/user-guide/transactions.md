@@ -1,12 +1,12 @@
 # Transaction Control
 
-Metrix provides full ACID transaction support through its CLI, allowing you to group multiple operations into atomic units. This guide explains how to control transactions in the CLI.
+ZYX provides full ACID transaction support through its CLI, allowing you to group multiple operations into atomic units. This guide explains how to control transactions in the CLI.
 
 ## Understanding Transactions
 
 ### What is a Transaction?
 
-A transaction is a sequence of operations performed as a single logical unit of work. In Metrix, transactions adhere to ACID properties:
+A transaction is a sequence of operations performed as a single logical unit of work. In ZYX, transactions adhere to ACID properties:
 
 - **Atomicity**: All operations in a transaction succeed or all fail
 - **Consistency**: The database transitions from one valid state to another
@@ -29,10 +29,10 @@ Start a new transaction:
 
 ```bash
 # Start a transaction
-metrix> BEGIN
+zyx> BEGIN
 
 # Transaction is now active
-metrix (transaction)>
+zyx (transaction)>
 ```
 
 ### COMMIT
@@ -41,10 +41,10 @@ Commit the current transaction:
 
 ```bash
 # In transaction mode
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 
 # Transaction is committed and closed
-metrix>
+zyx>
 ```
 
 ### ROLLBACK
@@ -53,10 +53,10 @@ Rollback the current transaction:
 
 ```bash
 # In transaction mode
-metrix (transaction)> ROLLBACK
+zyx (transaction)> ROLLBACK
 
 # All changes are discarded
-metrix>
+zyx>
 ```
 
 ## Transaction Examples
@@ -65,62 +65,62 @@ metrix>
 
 ```bash
 # Start transaction
-metrix> BEGIN
+zyx> BEGIN
 
 # Create nodes
-metrix (transaction)> CREATE (p:Person {name: 'Alice', age: 30})
-metrix (transaction)> CREATE (p:Person {name: 'Bob', age: 25})
+zyx (transaction)> CREATE (p:Person {name: 'Alice', age: 30})
+zyx (transaction)> CREATE (p:Person {name: 'Bob', age: 25})
 
 # Create relationship
-metrix (transaction)> MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'})
-metrix (transaction)> CREATE (a)-[:KNOWS]->(b)
+zyx (transaction)> MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'})
+zyx (transaction)> CREATE (a)-[:KNOWS]->(b)
 
 # Commit all changes
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ### Transaction with Error Handling
 
 ```bash
 # Start transaction
-metrix> BEGIN
+zyx> BEGIN
 
 # Create person
-metrix (transaction)> CREATE (p:Person {name: 'Charlie', age: 35})
+zyx (transaction)> CREATE (p:Person {name: 'Charlie', age: 35})
 
 # Try to create duplicate (will fail)
-metrix (transaction)> CREATE (p:Person {name: 'Alice', age: 30})
+zyx (transaction)> CREATE (p:Person {name: 'Alice', age: 30})
 
 # Rollback on error
-metrix (transaction)> ROLLBACK
+zyx (transaction)> ROLLBACK
 ```
 
 ### Complex Multi-Step Transaction
 
 ```bash
 # Start transaction
-metrix> BEGIN
+zyx> BEGIN
 
 # Create company
-metrix (transaction)> CREATE (c:Company {name: 'TechCorp', founded: 2020})
+zyx (transaction)> CREATE (c:Company {name: 'TechCorp', founded: 2020})
 
 # Create employees
-metrix (transaction)> CREATE (e1:Employee {name: 'Alice', role: 'Engineer'})
-metrix (transaction)> CREATE (e2:Employee {name: 'Bob', role: 'Designer'})
+zyx (transaction)> CREATE (e1:Employee {name: 'Alice', role: 'Engineer'})
+zyx (transaction)> CREATE (e2:Employee {name: 'Bob', role: 'Designer'})
 
 # Create relationships
-metrix (transaction)> MATCH (c:Company {name: 'TechCorp'}), (e1:Employee {name: 'Alice'})
-metrix (transaction)> CREATE (e1)-[:WORKS_FOR]->(c)
+zyx (transaction)> MATCH (c:Company {name: 'TechCorp'}), (e1:Employee {name: 'Alice'})
+zyx (transaction)> CREATE (e1)-[:WORKS_FOR]->(c)
 
-metrix (transaction)> MATCH (c:Company {name: 'TechCorp'}), (e2:Employee {name: 'Bob'})
-metrix (transaction)> CREATE (e2)-[:WORKS_FOR]->(c)
+zyx (transaction)> MATCH (c:Company {name: 'TechCorp'}), (e2:Employee {name: 'Bob'})
+zyx (transaction)> CREATE (e2)-[:WORKS_FOR]->(c)
 
 # Create employee relationship
-metrix (transaction)> MATCH (e1:Employee {name: 'Alice'}), (e2:Employee {name: 'Bob'})
-metrix (transaction)> CREATE (e1)-[:COLLEAGUES]->(e2)
+zyx (transaction)> MATCH (e1:Employee {name: 'Alice'}), (e2:Employee {name: 'Bob'})
+zyx (transaction)> CREATE (e1)-[:COLLEAGUES]->(e2)
 
 # Commit if all succeed
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ## Transaction States
@@ -131,10 +131,10 @@ In auto-commit mode, each statement is executed in its own transaction:
 
 ```bash
 # Auto-commit mode (default)
-metrix> CREATE (p:Person {name: 'Alice'})
+zyx> CREATE (p:Person {name: 'Alice'})
 # Transaction is automatically committed
 
-metrix> CREATE (p:Person {name: 'Bob'})
+zyx> CREATE (p:Person {name: 'Bob'})
 # Another automatic transaction
 ```
 
@@ -144,36 +144,36 @@ In explicit transaction mode, you control when to commit:
 
 ```bash
 # Enter transaction mode
-metrix> BEGIN
+zyx> BEGIN
 
 # All statements are part of this transaction
-metrix (transaction)> CREATE (p:Person {name: 'Charlie'})
-metrix (transaction)> CREATE (p:Person {name: 'Diana'})
+zyx (transaction)> CREATE (p:Person {name: 'Charlie'})
+zyx (transaction)> CREATE (p:Person {name: 'Diana'})
 
 # Only commit when ready
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ## Transaction Isolation
 
-Metrix provides isolation between concurrent transactions:
+ZYX provides isolation between concurrent transactions:
 
 ```bash
 # Terminal 1
-metrix> BEGIN
-metrix (transaction)> MATCH (n:Person) WHERE name = 'Alice'
-metrix (transaction)> SET n.age = 31
+zyx> BEGIN
+zyx (transaction)> MATCH (n:Person) WHERE name = 'Alice'
+zyx (transaction)> SET n.age = 31
 
 # Terminal 2 (concurrent)
-metrix> BEGIN
-metrix (transaction)> MATCH (n:Person) WHERE name = 'Alice'
+zyx> BEGIN
+zyx (transaction)> MATCH (n:Person) WHERE name = 'Alice'
 # Sees the original age value
 
 # Terminal 1
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 
 # Terminal 2
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 # May fail due to concurrent modification
 ```
 
@@ -183,57 +183,57 @@ metrix (transaction)> COMMIT
 
 ```bash
 # GOOD: Short, focused transaction
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {name: 'Eve'})
-metrix (transaction)> COMMIT
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {name: 'Eve'})
+zyx (transaction)> COMMIT
 
 # AVOID: Long-running transaction
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {name: 'Frank'})
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {name: 'Frank'})
 # ... wait for user input ...
-metrix (transaction)> CREATE (p:Person {name: 'Grace'})
-metrix (transaction)> COMMIT
+zyx (transaction)> CREATE (p:Person {name: 'Grace'})
+zyx (transaction)> COMMIT
 ```
 
 ### Handle Errors Gracefully
 
 ```bash
 # Start transaction
-metrix> BEGIN
+zyx> BEGIN
 
 # Try operations
-metrix (transaction)> CREATE (p:Person {name: 'Henry', age: 28})
-metrix (transaction)> CREATE (p:Person {name: 'Iris', age: 32})
+zyx (transaction)> CREATE (p:Person {name: 'Henry', age: 28})
+zyx (transaction)> CREATE (p:Person {name: 'Iris', age: 32})
 
 # Check for errors before committing
-metrix (transaction)> MATCH (n:Person) WHERE n.name IN ['Henry', 'Iris']
-metrix (transaction)> RETURN count(n) AS created
+zyx (transaction)> MATCH (n:Person) WHERE n.name IN ['Henry', 'Iris']
+zyx (transaction)> RETURN count(n) AS created
 
 # If count is 2, commit
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 
 # Otherwise rollback
-metrix (transaction)> ROLLBACK
+zyx (transaction)> ROLLBACK
 ```
 
 ### Use Transactions for Data Integrity
 
 ```bash
 # Ensure referential integrity
-metrix> BEGIN
+zyx> BEGIN
 
 # Create department
-metrix (transaction)> CREATE (d:Department {name: 'Engineering'})
+zyx (transaction)> CREATE (d:Department {name: 'Engineering'})
 
 # Create employee
-metrix (transaction)> CREATE (e:Employee {name: 'Jack'})
+zyx (transaction)> CREATE (e:Employee {name: 'Jack'})
 
 # Link them
-metrix (transaction)> MATCH (d:Department {name: 'Engineering'}), (e:Employee {name: 'Jack'})
-metrix (transaction)> CREATE (e)-[:WORKS_IN]->(d)
+zyx (transaction)> MATCH (d:Department {name: 'Engineering'}), (e:Employee {name: 'Jack'})
+zyx (transaction)> CREATE (e)-[:WORKS_IN]->(d)
 
 # Only commit if all succeed
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ## Transaction Patterns
@@ -242,57 +242,57 @@ metrix (transaction)> COMMIT
 
 ```bash
 # Insert multiple related records
-metrix> BEGIN
+zyx> BEGIN
 
 # Insert user
-metrix (transaction)> CREATE (u:User {id: 1, name: 'Alice'})
+zyx (transaction)> CREATE (u:User {id: 1, name: 'Alice'})
 
 # Insert user settings
-metrix (transaction)> CREATE (s:Settings {user_id: 1, theme: 'dark'})
+zyx (transaction)> CREATE (s:Settings {user_id: 1, theme: 'dark'})
 
 # Link them
-metrix (transaction)> MATCH (u:User {id: 1}), (s:Settings {user_id: 1})
-metrix (transaction)> CREATE (u)-[:HAS_SETTINGS]->(s)
+zyx (transaction)> MATCH (u:User {id: 1}), (s:Settings {user_id: 1})
+zyx (transaction)> CREATE (u)-[:HAS_SETTINGS]->(s)
 
 # Commit all or none
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ### Update with Validation
 
 ```bash
 # Validate before committing
-metrix> BEGIN
+zyx> BEGIN
 
 # Update record
-metrix (transaction)> MATCH (p:Person {name: 'Alice'})
-metrix (transaction)> SET p.age = 32
+zyx (transaction)> MATCH (p:Person {name: 'Alice'})
+zyx (transaction)> SET p.age = 32
 
 # Verify update
-metrix (transaction)> MATCH (p:Person {name: 'Alice'})
-metrix (transaction)> RETURN p.age
+zyx (transaction)> MATCH (p:Person {name: 'Alice'})
+zyx (transaction)> RETURN p.age
 
 # If correct, commit; otherwise rollback
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ### Conditional Transaction
 
 ```bash
 # Transaction with logic
-metrix> BEGIN
+zyx> BEGIN
 
 # Check if person exists
-metrix (transaction)> MATCH (p:Person {name: 'Bob'})
-metrix (transaction)> RETURN p
+zyx (transaction)> MATCH (p:Person {name: 'Bob'})
+zyx (transaction)> RETURN p
 
 # If exists, update; otherwise create
-metrix (transaction)> MERGE (p:Person {name: 'Bob'})
-metrix (transaction)> ON CREATE SET p.age = 25, p.created = timestamp()
-metrix (transaction)> ON MATCH SET p.lastUpdated = timestamp()
+zyx (transaction)> MERGE (p:Person {name: 'Bob'})
+zyx (transaction)> ON CREATE SET p.age = 25, p.created = timestamp()
+zyx (transaction)> ON MATCH SET p.lastUpdated = timestamp()
 
 # Commit result
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ## Transaction Monitoring
@@ -301,17 +301,17 @@ metrix (transaction)> COMMIT
 
 ```bash
 # Check if in transaction
-metrix> SHOW TRANSACTION
+zyx> SHOW TRANSACTION
 
 # View transaction details
-metrix> EXPLAIN TRANSACTION
+zyx> EXPLAIN TRANSACTION
 ```
 
 ### Transaction Statistics
 
 ```bash
 # View transaction statistics
-metrix> SHOW STATS
+zyx> SHOW STATS
 
 # Shows:
 # - Active transactions
@@ -326,10 +326,10 @@ metrix> SHOW STATS
 
 ```bash
 # Unique constraint violation
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {email: 'alice@example.com'})
-metrix (transaction)> CREATE (p:Person {email: 'alice@example.com'})
-metrix (transaction)> COMMIT
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {email: 'alice@example.com'})
+zyx (transaction)> CREATE (p:Person {email: 'alice@example.com'})
+zyx (transaction)> COMMIT
 # ERROR: Unique constraint violated
 # Transaction automatically rolled back
 ```
@@ -338,16 +338,16 @@ metrix (transaction)> COMMIT
 
 ```bash
 # If deadlock occurs
-metrix> BEGIN
+zyx> BEGIN
 # ... operations ...
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 # ERROR: Deadlock detected
 # Transaction automatically rolled back
 
 # Retry the transaction
-metrix> BEGIN
+zyx> BEGIN
 # ... operations ...
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 # Success
 ```
 
@@ -357,15 +357,15 @@ metrix (transaction)> COMMIT
 
 ```bash
 # GOOD: Small, focused transactions
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {name: 'Kevin'})
-metrix (transaction)> COMMIT
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {name: 'Kevin'})
+zyx (transaction)> COMMIT
 
 # AVOID: Very large transactions
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {name: 'Laura'})
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {name: 'Laura'})
 # ... 10,000 more creates ...
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 # May cause performance issues
 ```
 
@@ -373,12 +373,12 @@ metrix (transaction)> COMMIT
 
 ```bash
 # Minimize lock time
-metrix> BEGIN
+zyx> BEGIN
 # Do read operations first
-metrix (transaction)> MATCH (p:Person) WHERE p.age > 30
+zyx (transaction)> MATCH (p:Person) WHERE p.age > 30
 # Then do writes
-metrix (transaction)> MATCH (p:Person {name: 'Alice'}) SET p.age = 31
-metrix (transaction)> COMMIT
+zyx (transaction)> MATCH (p:Person {name: 'Alice'}) SET p.age = 31
+zyx (transaction)> COMMIT
 ```
 
 ## Best Practices Summary

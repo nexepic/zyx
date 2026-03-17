@@ -1,6 +1,6 @@
 # Property Index
 
-Metrix implements a high-performance property index system using type-specific B+Tree structures to efficiently map property values to their corresponding entity IDs. This enables fast property-based queries in Cypher such as `MATCH (n) WHERE n.age > 25 RETURN n` or `MATCH (n) WHERE n.name = 'Alice' RETURN n`.
+ZYX implements a high-performance property index system using type-specific B+Tree structures to efficiently map property values to their corresponding entity IDs. This enables fast property-based queries in Cypher such as `MATCH (n) WHERE n.age > 25 RETURN n` or `MATCH (n) WHERE n.name = 'Alice' RETURN n`.
 
 ## Overview
 

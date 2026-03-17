@@ -1,6 +1,6 @@
 # API Reference
 
-Metrix provides both C++ and C APIs for embedding in your applications.
+ZYX provides both C++ and C APIs for embedding in your applications.
 
 ## C++ API
 

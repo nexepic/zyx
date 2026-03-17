@@ -1,6 +1,6 @@
 # DiskANN Algorithm
 
-DiskANN (Disk-based Approximate Nearest Neighbor) is a high-performance graph-based algorithm for approximate nearest neighbor search in high-dimensional vector spaces. Metrix uses DiskANN to power vector similarity search operations with support for Product Quantization (PQ) for memory efficiency.
+DiskANN (Disk-based Approximate Nearest Neighbor) is a high-performance graph-based algorithm for approximate nearest neighbor search in high-dimensional vector spaces. ZYX uses DiskANN to power vector similarity search operations with support for Product Quantization (PQ) for memory efficiency.
 
 ## Overview
 
@@ -416,7 +416,7 @@ float computeDistance(
 
 ### Hybrid Mode
 
-Metrix uses a hybrid approach:
+ZYX uses a hybrid approach:
 
 ```cpp
 float computeDistance(

@@ -1,6 +1,6 @@
 # Relationship Traversal
 
-Metrix implements a high-performance relationship traversal system using a linked-list based adjacency structure. This enables efficient navigation of graph relationships for Cypher queries like `MATCH (a)-[:KNOWS]->(b)` and provides O(1) access to connected nodes and edges.
+ZYX implements a high-performance relationship traversal system using a linked-list based adjacency structure. This enables efficient navigation of graph relationships for Cypher queries like `MATCH (a)-[:KNOWS]->(b)` and provides O(1) access to connected nodes and edges.
 
 ## Overview
 
@@ -17,7 +17,7 @@ Relationship traversal provides:
 
 ### Adjacency Structure
 
-Metrix uses a linked-list based adjacency structure where each node maintains pointers to its first outgoing and incoming edges:
+ZYX uses a linked-list based adjacency structure where each node maintains pointers to its first outgoing and incoming edges:
 
 ```mermaid
 graph TD
@@ -639,7 +639,7 @@ Per Edge Average: 33.6 bytes
 
 | Approach | Edge Access | Memory | Use Case |
 |----------|------------|--------|----------|
-| **Linked List** (Metrix) | O(k) traversal | 32 bytes/edge | General-purpose graphs |
+| **Linked List** (ZYX) | O(k) traversal | 32 bytes/edge | General-purpose graphs |
 | Adjacency Matrix | O(1) lookup | O(V²) | Dense graphs |
 | Adjacency Array | O(k) scan | O(V + E) | Static graphs |
 | Edge Type Index | O(log n + k) | Additional index | Type-filtered queries |

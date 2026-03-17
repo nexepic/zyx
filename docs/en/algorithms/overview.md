@@ -1,6 +1,6 @@
 # Algorithms Overview
 
-Metrix employs a range of sophisticated algorithms to achieve high performance, data integrity, and efficient resource utilization. This section documents the key algorithms used throughout the system.
+ZYX employs a range of sophisticated algorithms to achieve high performance, data integrity, and efficient resource utilization. This section documents the key algorithms used throughout the system.
 
 ## Algorithm Categories
 
@@ -115,7 +115,7 @@ Efficient caching with eviction:
 
 ### Optimistic Locking
 
-Metrix uses optimistic concurrency control:
+ZYX uses optimistic concurrency control:
 
 1. **Read Phase**: Read data without locks
 2. **Validation Phase**: Check for conflicts on commit
@@ -177,7 +177,7 @@ Minimize disk writes:
 
 ## Algorithm Selection
 
-Metrix carefully selects algorithms based on:
+ZYX carefully selects algorithms based on:
 
 1. **Workload Characteristics**: Read-heavy vs write-heavy
 2. **Data Size**: Small vs large datasets

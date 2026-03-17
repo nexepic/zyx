@@ -1,6 +1,6 @@
 # Basic Operations
 
-This guide covers the essential CRUD (Create, Read, Update, Delete) operations in Metrix using the CLI.
+This guide covers the essential CRUD (Create, Read, Update, Delete) operations in ZYX using the CLI.
 
 ## Database Operations
 
@@ -8,24 +8,24 @@ This guide covers the essential CRUD (Create, Read, Update, Delete) operations i
 
 ```bash
 # Create new database
-metrix-cli ./new_database
+zyx-cli ./new_database
 
 # Open existing database
-metrix-cli ./existing_database
+zyx-cli ./existing_database
 ```
 
 The database file will be created automatically if it doesn't exist.
 
 ### Database File Structure
 
-Metrix creates a single file for the database:
+ZYX creates a single file for the database:
 
 ```
 ./new_database  # Main database file (contains all data)
 ```
 
 ::: tip Single File Architecture
-Metrix stores all data (nodes, edges, properties, indexes) in a single file for simplicity and portability.
+ZYX stores all data (nodes, edges, properties, indexes) in a single file for simplicity and portability.
 :::
 
 ## Create Operations
@@ -353,13 +353,13 @@ CREATE (u1)-[:KNOWS]->(u2);
 Import it:
 
 ```bash
-metrix-cli ./mydb < import.cql
+zyx-cli ./mydb < import.cql
 ```
 
 ### Export Query Results
 
 ```bash
-metrix-cli ./mydb > output.txt << 'EOF'
+zyx-cli ./mydb > output.txt << 'EOF'
 MATCH (p:Person) RETURN p.name, p.age
 EOF
 ```

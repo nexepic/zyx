@@ -1,6 +1,6 @@
 # Import & Export
 
-Moving data in and out of Metrix efficiently is essential for data migration, backup, and integration with other systems. This guide covers import and export operations.
+Moving data in and out of ZYX efficiently is essential for data migration, backup, and integration with other systems. This guide covers import and export operations.
 
 ## Data Import
 
@@ -279,7 +279,7 @@ split -l 100000 large_file.csv chunk_
 
 # Import each chunk separately
 for chunk in chunk_*; do
-  metrix-cli < import_$chunk.cypher
+  zyx-cli < import_$chunk.cypher
 done
 ```
 
@@ -288,13 +288,13 @@ done
 ```bash
 # Import multiple files in parallel
 # Terminal 1
-metrix-cli < import_users_1.cypher &
+zyx-cli < import_users_1.cypher &
 
 # Terminal 2
-metrix-cli < import_users_2.cypher &
+zyx-cli < import_users_2.cypher &
 
 # Terminal 3
-metrix-cli < import_users_3.cypher &
+zyx-cli < import_users_3.cypher &
 
 wait
 ```
@@ -376,8 +376,8 @@ CREATE (u:User {
 # Export from PostgreSQL
 psql -U user -d database -c "COPY users TO STDOUT WITH CSV HEADER" > users.csv
 
-# Import into Metrix
-metrix-cli -c "LOAD CSV WITH HEADERS FROM 'file:///users.csv' AS row CREATE (u:User {id: toInteger(row.id), name: row.name, email: row.email})"
+# Import into ZYX
+zyx-cli -c "LOAD CSV WITH HEADERS FROM 'file:///users.csv' AS row CREATE (u:User {id: toInteger(row.id), name: row.name, email: row.email})"
 ```
 
 ### Import from MongoDB
@@ -387,7 +387,7 @@ metrix-cli -c "LOAD CSV WITH HEADERS FROM 'file:///users.csv' AS row CREATE (u:U
 mongoexport --db mydb --collection users --out users.json
 
 # Transform to CSV if needed
-# Then import into Metrix
+# Then import into ZYX
 ```
 
 ### Export to Analytics System
@@ -462,7 +462,7 @@ CREATE (u:User {
 
 ```bash
 # Log import errors
-metrix-cli < import.cypher 2> import_errors.log
+zyx-cli < import.cypher 2> import_errors.log
 
 # Check log for issues
 grep "ERROR" import_errors.log

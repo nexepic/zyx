@@ -1,6 +1,6 @@
 # Batch Operations
 
-When working with large datasets in Metrix, efficient batch operations are crucial for performance and resource management. This guide covers techniques for bulk data processing.
+When working with large datasets in ZYX, efficient batch operations are crucial for performance and resource management. This guide covers techniques for bulk data processing.
 
 ## Understanding Batch Operations
 
@@ -27,33 +27,33 @@ Use batch operations when:
 ```bash
 # Process 1000 records at a time
 # Batch 1
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {id: 1, name: 'Alice'})
-metrix (transaction)> CREATE (p:Person {id: 2, name: 'Bob'})
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {id: 1, name: 'Alice'})
+zyx (transaction)> CREATE (p:Person {id: 2, name: 'Bob'})
 # ... 998 more records ...
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 
 # Batch 2
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {id: 1001, name: 'Charlie'})
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {id: 1001, name: 'Charlie'})
 # ... next 1000 records ...
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ### Time-Based Batching
 
 ```bash
 # Commit every N seconds
-metrix> BEGIN
+zyx> BEGIN
 # Start timer
 # Process records for 10 seconds
-metrix (transaction)> CREATE (p:Person {name: 'David'})
+zyx (transaction)> CREATE (p:Person {name: 'David'})
 # ... more records ...
 # After 10 seconds:
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 
 # Start next batch
-metrix> BEGIN
+zyx> BEGIN
 # Continue processing...
 ```
 
@@ -61,12 +61,12 @@ metrix> BEGIN
 
 ```bash
 # Monitor memory usage
-metrix> BEGIN
+zyx> BEGIN
 # Process until memory reaches threshold
-metrix (transaction)> CREATE (p:Person {name: 'Eve'})
+zyx (transaction)> CREATE (p:Person {name: 'Eve'})
 # ... more records ...
 # Check memory: if usage > 500MB, commit
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ## CLI Batching Techniques
@@ -96,22 +96,22 @@ COMMIT;
 Run the script:
 
 ```bash
-$ metrix-cli < batch_import.cypher
+$ zyx-cli < batch_import.cypher
 ```
 
 ### Using Parameterized Queries
 
 ```bash
 # Prepare parameterized query
-metrix> :param batch_size => 1000
-metrix> :param start_id => 1
+zyx> :param batch_size => 1000
+zyx> :param start_id => 1
 
 # Execute with parameters
-metrix> BEGIN
-metrix (transaction)> CREATE (p:Person {id: $start_id})
-metrix (transaction)> CREATE (p:Person {id: $start_id + 1})
+zyx> BEGIN
+zyx (transaction)> CREATE (p:Person {id: $start_id})
+zyx (transaction)> CREATE (p:Person {id: $start_id + 1})
 # ... etc ...
-metrix (transaction)> COMMIT
+zyx (transaction)> COMMIT
 ```
 
 ## Batch Import Patterns
@@ -141,7 +141,7 @@ COMMIT;
 EOF
 
   # Execute batch
-  metrix-cli < batch_$START.cypher
+  zyx-cli < batch_$START.cypher
   echo "Imported records $START to $END"
 
   # Clean up
@@ -261,13 +261,13 @@ COMMIT;
 ```bash
 # Run multiple batch operations in parallel
 # Terminal 1
-metrix-cli < batch_1.cypher &
+zyx-cli < batch_1.cypher &
 
 # Terminal 2
-metrix-cli < batch_2.cypher &
+zyx-cli < batch_2.cypher &
 
 # Terminal 3
-metrix-cli < batch_3.cypher &
+zyx-cli < batch_3.cypher &
 
 # Wait for all to complete
 wait
@@ -316,7 +316,7 @@ for BATCH_FILE in batch_*.cypher; do
   echo "Processing $BATCH_FILE"
 
   # Execute batch
-  if metrix-cli < $BATCH_FILE; then
+  if zyx-cli < $BATCH_FILE; then
     echo "Success: $BATCH_FILE"
   else
     echo "Failed: $BATCH_FILE"
@@ -361,7 +361,7 @@ for BATCH in {1..10}; do
   BATCH_START=$(date +%s)
 
   # Process batch
-  metrix-cli < batch_${BATCH}.cypher
+  zyx-cli < batch_${BATCH}.cypher
 
   BATCH_END=$(date +%s)
   BATCH_DURATION=$((BATCH_END - BATCH_START))
@@ -398,7 +398,7 @@ SET p.processed = true
 COMMIT;
 
 // Clear cache
-metrix> CALL db.clearQueryCache();
+zyx> CALL db.clearQueryCache();
 ```
 
 ### Transaction Control
@@ -411,7 +411,7 @@ metrix> CALL db.clearQueryCache();
 # Good practice:
 for BATCH in batch_*.cypher; do
   # Each file has its own transaction
-  metrix-cli < $BATCH
+  zyx-cli < $BATCH
 done
 ```
 
@@ -436,7 +436,7 @@ CREATE (u:User {id: toInteger(row.id), name: row.name, email: row.email})
 COMMIT;
 EOF
 
-  metrix-cli < user_batch_$BATCH.cypher
+  zyx-cli < user_batch_$BATCH.cypher
 done
 ```
 

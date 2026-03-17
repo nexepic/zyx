@@ -1,6 +1,6 @@
 # Cypher Basics
 
-Cypher is a declarative graph query language that allows you to express powerful and efficient queries on graph data. This guide covers the fundamental concepts and syntax of Cypher in Metrix.
+Cypher is a declarative graph query language that allows you to express powerful and efficient queries on graph data. This guide covers the fundamental concepts and syntax of Cypher in ZYX.
 
 ## Basic Pattern Matching
 

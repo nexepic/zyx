@@ -2,7 +2,7 @@
 
 ## Value Types
 
-Metrix supports the following data types:
+ZYX supports the following data types:
 
 - **Null**: `Value()`
 - **Boolean**: `Value(bool)`

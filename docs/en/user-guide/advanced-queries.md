@@ -1,6 +1,6 @@
 # Advanced Queries
 
-This guide covers advanced Cypher query patterns and techniques for complex data retrieval and manipulation in Metrix.
+This guide covers advanced Cypher query patterns and techniques for complex data retrieval and manipulation in ZYX.
 
 ## Aggregation and Grouping
 

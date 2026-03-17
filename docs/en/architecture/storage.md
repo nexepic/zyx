@@ -1,6 +1,6 @@
 # Storage System
 
-Metrix uses a custom **segment-based storage engine** optimized for graph workloads with efficient space management and fast access patterns.
+ZYX uses a custom **segment-based storage engine** optimized for graph workloads with efficient space management and fast access patterns.
 
 ## Segment Architecture
 
@@ -509,7 +509,7 @@ stateDiagram-v2
 
 ## Compression
 
-Metrix uses zlib compression for:
+ZYX uses zlib compression for:
 
 1. **Large Properties**: String and binary data > 1KB
 2. **Segments**: Compress entire segments when idle

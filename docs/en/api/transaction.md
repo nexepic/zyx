@@ -1,13 +1,13 @@
 # Transaction Class
 
-The `Transaction` class in Metrix provides ACID transaction support for graph database operations. This reference covers the complete API.
+The `Transaction` class in ZYX provides ACID transaction support for graph database operations. This reference covers the complete API.
 
 ## Overview
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-namespace metrix {
+namespace zyx {
 
 class Transaction {
 public:
@@ -46,9 +46,9 @@ public:
 Transactions are created through the Database class:
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-using namespace metrix;
+using namespace zyx;
 
 // Open database
 auto db = Database::open("/path/to/database");

@@ -118,8 +118,8 @@ Use for listing completed features or prerequisites:
 ```markdown
 ::: tip Prerequisites
 Before you begin, make sure you have:
-- ✅ Built the Metrix project
-- ✅ Generated the `metrix-cli` executable
+- ✅ Built the ZYX project
+- ✅ Generated the `zyx-cli` executable
 - ✅ Basic understanding of Cypher query language
 :::
 ```
@@ -128,8 +128,8 @@ Before you begin, make sure you have:
 
 ::: tip Prerequisites
 Before you begin, make sure you have:
-- ✅ Built the Metrix project
-- ✅ Generated the `metrix-cli` executable
+- ✅ Built the ZYX project
+- ✅ Generated the `zyx-cli` executable
 - ✅ Basic understanding of Cypher query language
 :::
 

@@ -1,6 +1,6 @@
 # Documentation Standards
 
-Clear, comprehensive documentation is essential for Metrix's usability and maintainability. This guide outlines documentation standards.
+Clear, comprehensive documentation is essential for ZYX's usability and maintainability. This guide outlines documentation standards.
 
 ## Documentation Types
 
@@ -19,7 +19,7 @@ Every source file should have a descriptive header:
  * the main interface for database operations including opening,
  * closing, and transaction management.
  *
- * @author Metrix Contributors
+ * @author ZYX Contributors
  * @date 2024
  */
 ```
@@ -32,7 +32,7 @@ Every source file should have a descriptive header:
  * @brief Main database interface for graph operations
  *
  * The Database class provides the primary interface for working with
- * Metrix graph databases. It manages database lifecycle, coordinates
+ * ZYX graph databases. It manages database lifecycle, coordinates
  * between storage and query engines, and provides transaction support.
  *
  * Example usage:
@@ -138,9 +138,9 @@ User documentation should be tutorial and example-driven:
 To create a new database, use the `Database::create()` method:
 
 ```cpp
-#include <metrix/metrix.hpp>
+#include <zyx/zyx.hpp>
 
-using namespace metrix;
+using namespace zyx;
 
 // Create database at specified path
 auto db = Database::create("/path/to/database");
@@ -177,7 +177,7 @@ Explain concepts clearly with diagrams:
 ```markdown
 ## Transaction System
 
-Metrix provides ACID transactions through a Write-Ahead Log (WAL).
+ZYX provides ACID transactions through a Write-Ahead Log (WAL).
 
 ### Transaction States
 
@@ -192,7 +192,7 @@ stateDiagram-v2
 
 ### Transaction Isolation
 
-Metrix uses snapshot isolation to ensure transaction consistency...
+ZYX uses snapshot isolation to ensure transaction consistency...
 ```
 
 ### 4. Architecture Documentation

@@ -1,6 +1,6 @@
 # Algorithms
 
-Metrix implements efficient algorithms optimized for graph database workloads.
+ZYX implements efficient algorithms optimized for graph database workloads.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # Architecture
 
-Metrix architecture is designed for high performance, scalability, and ACID compliance.
+ZYX architecture is designed for high performance, scalability, and ACID compliance.
 
 ## Core Architecture
 

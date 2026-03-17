@@ -1,6 +1,6 @@
 # Query Optimization Algorithm
 
-Metrix uses a cost-based query optimizer that transforms Cypher queries into efficient execution plans using rule-based optimization and statistics.
+ZYX uses a cost-based query optimizer that transforms Cypher queries into efficient execution plans using rule-based optimization and statistics.
 
 ## Overview
 

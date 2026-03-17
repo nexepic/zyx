@@ -1,6 +1,6 @@
 # Product Quantization
 
-Product Quantization (PQ) is a powerful vector compression technique that enables efficient approximate nearest neighbor search in high-dimensional spaces. Metrix uses PQ to dramatically reduce memory footprint and accelerate distance computations in vector similarity search operations.
+Product Quantization (PQ) is a powerful vector compression technique that enables efficient approximate nearest neighbor search in high-dimensional spaces. ZYX uses PQ to dramatically reduce memory footprint and accelerate distance computations in vector similarity search operations.
 
 ## Overview
 
@@ -479,7 +479,7 @@ std::vector<std::vector<float>> sampleTrainingData(
 
 ### Hybrid Search Strategy
 
-Metrix uses a hybrid approach combining PQ and raw vectors:
+ZYX uses a hybrid approach combining PQ and raw vectors:
 
 ```cpp
 float computeDistance(

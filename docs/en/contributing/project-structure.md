@@ -1,11 +1,11 @@
 # Project Structure
 
-Understanding the Metrix codebase organization is essential for effective contribution. This document explains the directory structure and file organization.
+Understanding the ZYX codebase organization is essential for effective contribution. This document explains the directory structure and file organization.
 
 ## Top-Level Directory Structure
 
 ```
-metrix/
+zyx/
 ├── include/              # Public header files
 ├── src/                  # Implementation source files
 ├── tests/                # Test files
@@ -17,12 +17,12 @@ metrix/
 
 ## Include Directory
 
-### Public Headers (`include/metrix/`)
+### Public Headers (`include/zyx/`)
 
 ```cpp
-include/metrix/
-├── metrix.hpp            # Main public header
-├── metrix_c_api.h        # C API header
+include/zyx/
+├── zyx.hpp            # Main public header
+├── zyx_c_api.h        # C API header
 ├── value.hpp             # Value type definitions
 ├── result.hpp            # Query result types
 ├── transaction.hpp       # Transaction API
@@ -225,9 +225,9 @@ scripts/
 
 ```
 buildDir/
-├── metrix_core/          # Core static library
-├── libmetrix.so          # Public shared library
-├── metrix-cli            # CLI executable
+├── zyx_core/          # Core static library
+├── libzyx.so          # Public shared library
+├── zyx-cli            # CLI executable
 └── tests/                # Test executables
     ├── test_Database
     ├── test_Transaction
@@ -237,7 +237,7 @@ buildDir/
 ## Configuration Files
 
 ```
-metrix/
+zyx/
 ├── meson.build           # Main build file
 ├── conanfile.txt         # Conan dependencies
 ├── .clang-format         # Code formatting rules
@@ -250,8 +250,8 @@ metrix/
 ### 1. Add Public API
 
 ```cpp
-// include/metrix/new_feature.hpp
-namespace metrix {
+// include/zyx/new_feature.hpp
+namespace zyx {
     class NewFeature {
     public:
         void doSomething();
@@ -288,8 +288,8 @@ TEST(NewFeature, DoSomething) {
 
 ```python
 # meson.build
-metrix_core_lib = static_library(
-    'metrix_core',
+zyx_core_lib = static_library(
+    'zyx_core',
     'src/core/NewFeature.cpp',
     # ... other sources
 )

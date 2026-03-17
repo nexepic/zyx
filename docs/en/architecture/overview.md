@@ -1,6 +1,6 @@
 # Architecture Overview
 
-Metrix is a high-performance, embeddable graph database built on a custom storage engine with segment-based architecture.
+ZYX is a high-performance, embeddable graph database built on a custom storage engine with segment-based architecture.
 
 ## System Architecture
 
@@ -61,7 +61,7 @@ graph TB
 ## Key Design Principles
 
 ### 1. Embeddable First
-Metrix is designed as a library, not a server. Embed directly into your C++ application without external dependencies.
+ZYX is designed as a library, not a server. Embed directly into your C++ application without external dependencies.
 
 ### 2. ACID Compliance
 Full transaction support with optimistic concurrency control and Write-Ahead Logging ensures data integrity.
@@ -137,7 +137,7 @@ Applications (CLI, Benchmark)
 ### Application Layer
 
 - **CLI Tool**: Interactive REPL for executing Cypher queries
-- **Embedded Applications**: Custom applications using Metrix as a library
+- **Embedded Applications**: Custom applications using ZYX as a library
 - **Benchmark**: Performance testing suite
 
 ### API Layer
@@ -168,7 +168,7 @@ Applications (CLI, Benchmark)
 
 ### C++20 Features
 
-Metrix leverages modern C++20 features:
+ZYX leverages modern C++20 features:
 
 - **Concepts**: Type constraints for template parameters
 - **Coroutines**: Efficient async operations (future)

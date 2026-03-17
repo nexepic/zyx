@@ -1,6 +1,6 @@
 # Transaction Management
 
-Metrix provides full ACID transaction support with optimistic concurrency control and comprehensive rollback capabilities.
+ZYX provides full ACID transaction support with optimistic concurrency control and comprehensive rollback capabilities.
 
 ## ACID Properties
 
@@ -142,7 +142,7 @@ tx->rollback();
 
 ## Optimistic Concurrency Control
 
-Metrix uses optimistic concurrency control with versioning.
+ZYX uses optimistic concurrency control with versioning.
 
 ### Version Tracking
 
@@ -262,7 +262,7 @@ auto tx = db->beginTransaction(IsolationLevel::Serializable);
 
 ## Nested Transactions
 
-Metrix supports savepoints for nested transactions:
+ZYX supports savepoints for nested transactions:
 
 ```cpp
 auto tx = db->beginTransaction();

@@ -1,6 +1,6 @@
 # Cache Eviction Algorithm
 
-Metrix implements an LRU (Least Recently Used) cache eviction policy with dirty tracking to optimize memory usage and performance.
+ZYX implements an LRU (Least Recently Used) cache eviction policy with dirty tracking to optimize memory usage and performance.
 
 ## Overview
 
