@@ -45,8 +45,8 @@ endforeach
 # ==============================================================================
 
 # Internal Static Library (Used for Unit Tests & CLI)
-# Renamed to 'metrix_core' to avoid name collision with shared lib
-db_lib = static_library('metrix_core',
+# Renamed to 'zyx_core' to avoid name collision with shared lib
+db_lib = static_library('zyx_core',
 						sources : db_src,
 						include_directories : inc_dirs,
 						dependencies : [
@@ -73,43 +73,43 @@ db_dep = declare_dependency(
 # 3. Public SDK Generation (Shared Library)
 # ==============================================================================
 
-# Define headers that will be installed to /usr/local/include/metrix/
-# Ensure filenames match your actual files (metrixdb.hpp)
+# Define headers that will be installed to /usr/local/include/zyx/
+# Ensure filenames match your actual files (zyx.hpp)
 public_headers = [
-	'../include/metrix/metrix.hpp', # Main C++ API
-	'../include/metrix/metrix_c_api.h', # Main C API
-	'../include/metrix/value.hpp'      # Data types
+	'../include/zyx/zyx.hpp', # Main C++ API
+	'../include/zyx/zyx_c_api.h', # Main C API
+	'../include/zyx/value.hpp'      # Data types
 ]
 
 # Build Shared Library (The Product)
-# Named 'metrixdb' -> produces libmetrix.dylib / libmetrix.so
-libmetrix = shared_library('metrix',
-						   sources : db_src, # db_src already includes api/CApi.cpp via recursive search
-						   include_directories : inc_dirs,
-						   dependencies : [zlib_dep,
-										   boost_dep,
-										   cli11_dep,
-										   antlr4_dep,
-										   cypher_dep
-						   ],
-						   install : true,
-						   install_dir : get_option('libdir')
+# Named 'zyx' -> produces libzyx.dylib / libzyx.so
+libzyx = shared_library('zyx',
+						sources : db_src, # db_src already includes api/CApi.cpp via recursive search
+						include_directories : inc_dirs,
+						dependencies : [zlib_dep,
+										boost_dep,
+										cli11_dep,
+										antlr4_dep,
+										cypher_dep
+						],
+						install : true,
+						install_dir : get_option('libdir')
 )
 
 # Install Headers
-install_headers(public_headers, subdir : 'metrix')
+install_headers(public_headers, subdir : 'zyx')
 
 # Generate pkg-config file
 pkg = import('pkgconfig')
-pkg.generate(libmetrix,
-			 name : 'Metrix',
+pkg.generate(libzyx,
+			 name : 'ZYX',
 			 description : 'High-performance Graph Database Engine',
 			 version : '0.1.0',
-			 subdirs : 'metrix'
+			 subdirs : 'zyx'
 )
 
 # Declare dependency for external-like tests (linking against the .dylib)
-metrix_dep = declare_dependency(
-	link_with : libmetrix,
+zyx_dep = declare_dependency(
+	link_with : libzyx,
 	include_directories : include_directories('../include')
 )

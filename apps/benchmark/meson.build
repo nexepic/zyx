@@ -1,7 +1,7 @@
-benchmark_exe = executable('metrix-bench',
+benchmark_exe = executable('zyx-bench',
 						   sources : ['main.cpp'],
 
-						   # Allow including "metrix/metrix.hpp" from ../include
+						   # Allow including "zyx/zyx.hpp" from ../include
 						   include_directories : [inc_dirs, include_directories('../../include')],
 
 						   # Link core logic
