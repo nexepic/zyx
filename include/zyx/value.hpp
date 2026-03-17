@@ -26,7 +26,7 @@
 #include <variant>
 #include <vector>
 
-namespace metrix {
+namespace zyx {
 
 	// Forward declarations
 	struct Node;
@@ -55,4 +55,4 @@ namespace metrix {
 		std::unordered_map<std::string, Value> properties;
 	};
 
-} // namespace metrix
+} // namespace zyx

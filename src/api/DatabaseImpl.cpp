@@ -25,9 +25,9 @@
 #include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/api/QueryResult.hpp"
-#include "metrix/metrix.hpp"
+#include "zyx/zyx.hpp"
 
-namespace metrix {
+namespace zyx {
 
 	// ========================================================================
 	// 1. Helpers: Type Conversion
@@ -526,4 +526,4 @@ namespace metrix {
 		}
 	}
 
-} // namespace metrix
+} // namespace zyx

@@ -1,5 +1,5 @@
 /**
- * @file metrix.hpp
+ * @file zyx.hpp
  * @author Nexepic
  * @date 2025/12/16
  *
@@ -26,7 +26,7 @@
 #include <unordered_map>
 #include "value.hpp"
 
-namespace metrix {
+namespace zyx {
 
 	// Forward declarations of implementation classes.
 	// These are defined ONLY in the .cpp file to keep this header clean.
@@ -153,4 +153,4 @@ namespace metrix {
 		std::unique_ptr<DatabaseImpl> impl_;
 	};
 
-} // namespace metrix
+} // namespace zyx
