@@ -25,15 +25,15 @@
 #include <variant>
 #include <vector>
 
-#include "metrix/metrix.hpp"
-#include "metrix/value.hpp"
+#include "zyx/zyx.hpp"
+#include "zyx/value.hpp"
 
 namespace fs = std::filesystem;
 
 class CppApiTest : public ::testing::Test {
 protected:
 	std::string dbPath;
-	std::unique_ptr<metrix::Database> db;
+	std::unique_ptr<zyx::Database> db;
 
 	void SetUp() override {
 		auto tempDir = fs::temp_directory_path();
@@ -41,7 +41,7 @@ protected:
 		if (fs::exists(dbPath))
 			fs::remove_all(dbPath);
 
-		db = std::make_unique<metrix::Database>(dbPath);
+		db = std::make_unique<zyx::Database>(dbPath);
 		db->open();
 	}
 
@@ -58,7 +58,7 @@ protected:
 // ============================================================================
 
 TEST_F(CppApiTest, CreateNodeAndQueryProperties) {
-	std::unordered_map<std::string, metrix::Value> props;
+	std::unordered_map<std::string, zyx::Value> props;
 	props["name"] = "Alice";
 	props["age"] = (int64_t) 30;
 	props["score"] = 95.5;
@@ -115,9 +115,9 @@ TEST_F(CppApiTest, ReturnFullNode) {
 
 	auto nodeVal = res.get("n");
 	ASSERT_FALSE(std::holds_alternative<std::monostate>(nodeVal)) << "Return 'n' is empty";
-	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Node>>(nodeVal));
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(nodeVal));
 
-	auto nodePtr = std::get<std::shared_ptr<metrix::Node>>(nodeVal);
+	auto nodePtr = std::get<std::shared_ptr<zyx::Node>>(nodeVal);
 	ASSERT_NE(nodePtr, nullptr);
 	EXPECT_EQ(nodePtr->label, "Robot");
 
@@ -172,10 +172,10 @@ TEST_F(CppApiTest, CreateEdgeFullParams) {
 	ASSERT_FALSE(std::holds_alternative<std::monostate>(edgeVal));
 
 	// Explicitly check for Edge Type (verifying toPublicValue/toPublicEdgePtr logic)
-	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Edge>>(edgeVal))
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Edge>>(edgeVal))
 			<< "Expected shared_ptr<Edge>, got something else (maybe Node?)";
 
-	auto edgePtr = std::get<std::shared_ptr<metrix::Edge>>(edgeVal);
+	auto edgePtr = std::get<std::shared_ptr<zyx::Edge>>(edgeVal);
 	EXPECT_EQ(edgePtr->label, "FOLLOWS");
 
 	ASSERT_TRUE(edgePtr->properties.contains("since"));
@@ -236,7 +236,7 @@ TEST_F(CppApiTest, AlgorithmBFS) {
 	db->save();
 
 	std::vector<int64_t> visited;
-	db->bfs(root, [&](const metrix::Node &n) {
+	db->bfs(root, [&](const zyx::Node &n) {
 		visited.push_back(n.id);
 		return true;
 	});
@@ -263,11 +263,11 @@ TEST_F(CppApiTest, InternalConversionCheck) {
 
 	// Check Node (n)
 	auto nVal = res.get("n");
-	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Node>>(nVal)) << "Result 'n' should be Node";
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(nVal)) << "Result 'n' should be Node";
 
 	// Check Edge (r)
 	auto rVal = res.get("r");
-	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Edge>>(rVal))
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Edge>>(rVal))
 			<< "Result 'r' should be Edge - Check toPublicValue logic!";
 }
 
@@ -319,7 +319,7 @@ TEST_F(CppApiTest, HandleVectorProperties) {
 
 TEST_F(CppApiTest, CreateNodesWithEmptyPropsList) {
 	// Test createNodes with empty props list - should handle gracefully
-	std::vector<std::unordered_map<std::string, metrix::Value>> emptyProps;
+	std::vector<std::unordered_map<std::string, zyx::Value>> emptyProps;
 	db->createNodes("EmptyLabel", emptyProps);
 	db->save();
 
@@ -330,7 +330,7 @@ TEST_F(CppApiTest, CreateNodesWithEmptyPropsList) {
 
 TEST_F(CppApiTest, CreateNodesWithMultipleNodes) {
 	// Test batch node creation
-	std::vector<std::unordered_map<std::string, metrix::Value>> propsList;
+	std::vector<std::unordered_map<std::string, zyx::Value>> propsList;
 	propsList.push_back({{"id", (int64_t) 1}, {"name", "First"}});
 	propsList.push_back({{"id", (int64_t) 2}, {"name", "Second"}});
 	propsList.push_back({{"id", (int64_t) 3}, {"name", "Third"}});
@@ -493,7 +493,7 @@ TEST_F(CppApiTest, BFSEarlyTermination) {
 
 	std::vector<int64_t> visited;
 	// Return false after first node to stop traversal early
-	db->bfs(root, [&](const metrix::Node &n) {
+	db->bfs(root, [&](const zyx::Node &n) {
 		visited.push_back(n.id);
 		return false; // Stop after first node
 	});
@@ -541,7 +541,7 @@ TEST_F(CppApiTest, ResultMoveAssignment) {
 	ASSERT_TRUE(res1.hasNext());
 
 	// Test move assignment
-	metrix::Result res2;
+	zyx::Result res2;
 	res2 = std::move(res1);
 
 	ASSERT_TRUE(res2.hasNext());
@@ -571,10 +571,10 @@ TEST_F(CppApiTest, ResultEntityStreamMode) {
 
 	// In entity stream mode, empty key or "n" should return the node
 	auto nodeVal1 = res.get("");
-	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Node>>(nodeVal1));
+	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(nodeVal1));
 
 	auto nodeVal2 = res.get("n");
-	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Node>>(nodeVal2));
+	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(nodeVal2));
 
 	// Can also access properties directly in entity stream mode
 	auto nameVal = res.get("name");
@@ -606,7 +606,7 @@ TEST_F(CppApiTest, ResultMoveConstructor) {
 	ASSERT_TRUE(res1.hasNext());
 
 	// Test move constructor
-	metrix::Result res2 = std::move(res1);
+	zyx::Result res2 = std::move(res1);
 
 	ASSERT_TRUE(res2.hasNext());
 	res2.next();
@@ -651,7 +651,7 @@ TEST_F(CppApiTest, ResultGetAfterEnd) {
 
 TEST_F(CppApiTest, CreateNodesWithSingleEmptyProps) {
 	// Test with a single entry in propsList that is empty
-	std::vector<std::unordered_map<std::string, metrix::Value>> propsList;
+	std::vector<std::unordered_map<std::string, zyx::Value>> propsList;
 	propsList.push_back({}); // Empty properties
 
 	db->createNodes("SingleEmpty", propsList);
@@ -677,7 +677,7 @@ TEST_F(CppApiTest, CreateEdgeByIdNoProps) {
 
 TEST_F(CppApiTest, ResultDefaultConstructor) {
 	// Test default constructed Result
-	metrix::Result res;
+	zyx::Result res;
 
 	EXPECT_FALSE(res.hasNext());
 	EXPECT_EQ(res.getColumnCount(), 0);
@@ -808,7 +808,7 @@ TEST_F(CppApiTest, EdgeWithAllPropertyTypes) {
 	int64_t id2 = db->createNodeRetId("B");
 
 	// Create edge with all property types
-	std::unordered_map<std::string, metrix::Value> edgeProps;
+	std::unordered_map<std::string, zyx::Value> edgeProps;
 	edgeProps["str"] = "test";
 	edgeProps["num"] = (int64_t) 42;
 	edgeProps["dbl"] = 3.14;
@@ -822,9 +822,9 @@ TEST_F(CppApiTest, EdgeWithAllPropertyTypes) {
 	res.next();
 
 	auto edgeVal = res.get("e");
-	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Edge>>(edgeVal));
+	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Edge>>(edgeVal));
 
-	auto edgePtr = std::get<std::shared_ptr<metrix::Edge>>(edgeVal);
+	auto edgePtr = std::get<std::shared_ptr<zyx::Edge>>(edgeVal);
 	EXPECT_EQ(edgePtr->label, "FULL");
 	EXPECT_EQ(edgePtr->properties.size(), 4u);
 }
@@ -889,10 +889,10 @@ TEST_F(CppApiTest, NodePropertiesAccessInStreamMode) {
 
 	// Get the node
 	auto nodeVal = res.get("n");
-	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Node>>(nodeVal));
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(nodeVal));
 
 	// Access properties through the node pointer
-	auto nodePtr = std::get<std::shared_ptr<metrix::Node>>(nodeVal);
+	auto nodePtr = std::get<std::shared_ptr<zyx::Node>>(nodeVal);
 	EXPECT_EQ(nodePtr->label, "User");
 	EXPECT_EQ(nodePtr->properties.size(), 2u);
 
@@ -917,10 +917,10 @@ TEST_F(CppApiTest, EdgePropertiesAccessInStreamMode) {
 
 	// Get the edge
 	auto edgeVal = res.get("e");
-	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Edge>>(edgeVal));
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Edge>>(edgeVal));
 
 	// Access properties through the edge pointer
-	auto edgePtr = std::get<std::shared_ptr<metrix::Edge>>(edgeVal);
+	auto edgePtr = std::get<std::shared_ptr<zyx::Edge>>(edgeVal);
 	EXPECT_EQ(edgePtr->label, "REL");
 	EXPECT_EQ(edgePtr->properties.size(), 2u);
 
@@ -942,7 +942,7 @@ TEST_F(CppApiTest, EmptyColumnNameAccess) {
 
 	// In stream mode, empty key should return the entity
 	auto entityVal = res.get("");
-	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Node>>(entityVal));
+	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(entityVal));
 }
 
 TEST_F(CppApiTest, NonExistentPropertyInStreamMode) {
@@ -993,7 +993,7 @@ TEST_F(CppApiTest, QueryWithAlias) {
 
 	// Should be able to access by alias
 	auto personVal = res.get("person");
-	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<metrix::Node>>(personVal));
+	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(personVal));
 }
 
 TEST_F(CppApiTest, ResultWithCalculatedFields) {
