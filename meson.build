@@ -19,17 +19,18 @@ project_config.set('PROJECT_DISPLAY', 'ZYX')
 project_config.set('PROJECT_VERSION', meson.project_version())
 
 # Generate ProjectConfig.hpp from template
+# The file will be generated at buildDir/ProjectConfig.hpp
 configure_file(
     input: 'include/graph/core/ProjectConfig.hpp.in',
     output: 'ProjectConfig.hpp',
     configuration: project_config,
-    install: false,
-    install_dir: get_option('includedir') / 'graph' / 'core'
+    install: false
 )
 
 # MODIFY: Remove 'include/vendor'.
 # Subprojects handle include paths automatically via dependencies.
 # Include both source and generated (build) directories
+# The generated file will be at buildDir/ProjectConfig.hpp
 inc_dirs = include_directories('include', 'src', '.')
 
 # Dependencies
