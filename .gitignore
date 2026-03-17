@@ -18,5 +18,4 @@ htmlcov/
 .worktrees/
 
 # Auto-generated headers
-buildDir/include/graph/core/ProjectConfig.hpp
 build_*/include/graph/core/ProjectConfig.hpp
