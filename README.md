@@ -1,9 +1,9 @@
 <p align="center">
     <br />
-    <a href="https://github.com/nexepic/metrix">
+    <a href="https://github.com/nexepic/zyx">
         <picture>
             <source srcset="./docs/static/img/icon-light.svg" media="(prefers-color-scheme: dark)">
-            <img src="./docs/static/img/icon.svg" alt="Metrix Logo" width="120" />
+            <img src="./docs/static/img/icon.svg" alt="ZYX Logo" width="120" />
         </picture>
     </a>
     <br />
@@ -15,11 +15,11 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/nexepic/metrix/actions/workflows/build.yml">
-        <img alt="Build Status" src="https://github.com/nexepic/metrix/actions/workflows/build.yml/badge.svg" />
+    <a href="https://github.com/nexepic/zyx/actions/workflows/build.yml">
+        <img alt="Build Status" src="https://github.com/nexepic/zyx/actions/workflows/build.yml/badge.svg" />
     </a>
-    <a href="https://codecov.io/github/nexepic/metrix">
-        <img alt="codecov" src="https://codecov.io/github/nexepic/metrix/graph/badge.svg?token=VBCGBBI4YO" />
+    <a href="https://codecov.io/github/nexepic/zyx">
+        <img alt="codecov" src="https://codecov.io/github/nexepic/zyx/graph/badge.svg?token=VBCGBBI4YO" />
     </a>
     <a href="LICENSE">
         <img alt="License: Apache 2.0" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" />
@@ -131,16 +131,16 @@ If you prefer to run the steps manually or are integrating into a custom workflo
 
 ## Usage
 
-After building, the CLI executable is located at `buildDir/apps/cli/metrix-cli`.
+After building, the CLI executable is located at `buildDir/apps/cli/zyx`.
 
 ### Database Management
 
 ```bash
 # Create and open a new database
-./buildDir/apps/cli/metrix-cli database create mydb.graph
+./buildDir/apps/cli/zyx database create mydb.graph
 
 # Open an existing database
-./buildDir/apps/cli/metrix-cli database open mydb.graph
+./buildDir/apps/cli/zyx database open mydb.graph
 ```
 
 Once inside the REPL, type `help` to see all available commands for node/edge manipulation, querying, and indexing.
@@ -163,5 +163,5 @@ This project is licensed under the Apache License v2.0.<br /> - see the [LICENSE
 
 ## Contact
 
-- **Repository**: [https://github.com/nexepic/metrix](https://github.com/nexepic/metrix)
-- **Issues**: [GitHub Issues](https://github.com/nexepic/metrix/issues)
+- **Repository**: [https://github.com/nexepic/zyx](https://github.com/nexepic/zyx)
+- **Issues**: [GitHub Issues](https://github.com/nexepic/zyx/issues)

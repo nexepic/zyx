@@ -1,4 +1,4 @@
-# Contributing to Metrix Graph Database
+# Contributing to ZYX Graph Database
 
 Thank you for your interest in contributing to our project! To ensure consistency and cross-platform compatibility, please adhere to the following guidelines when writing unit tests.
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Metrix is a high-performance, embeddable graph database engine written in C++20 with Cypher query support. It uses a
+ZYX is a high-performance, embeddable graph database engine written in C++20 with Cypher query support. It uses a
 custom file-based storage system with segment-based architecture, ACID transactions via Write-Ahead Logging (WAL), and
 supports advanced features like vector indexes.
 
@@ -41,7 +41,7 @@ meson test -C buildDir <test_name>
 - Tests use **Google Test** framework
 - Test files follow naming pattern `test_*.cpp` and are automatically discovered by Meson
 - Each test file builds as a separate executable
-- Tests link against internal static library `metrix_core`
+- Tests link against internal static library `zyx_core`
 - Coverage uses LLVM instrumentation (`-fprofile-instr-generate -fcoverage-mapping`)
 
 ```bash
@@ -250,16 +250,16 @@ Applications (CLI, Benchmark)
 
 ### Public API
 
-- **C++ API**: `include/metrix/metrix.hpp` - Embeddable interface for C++ applications
-- **C API**: `include/metrix/metrix_c_api.h` - C-compatible interface for FFI
-- **Types**: `include/metrix/value.hpp` - Data type definitions
-- CLI tool: `buildDir/apps/cli/metrix-cli` - Interactive REPL
+- **C++ API**: `include/zyx/zyx.hpp` - Embeddable interface for C++ applications
+- **C API**: `include/zyx/zyx_c_api.h` - C-compatible interface for FFI
+- **Types**: `include/zyx/value.hpp` - Data type definitions
+- CLI tool: `buildDir/apps/cli/zyx` - Interactive REPL
 
 ### Directory Structure
 
 ```
 include/
-├── metrix/              # Public headers (API)
+├── zyx/                 # Public headers (API)
 └── graph/               # Internal headers
     ├── core/           # Database, Transaction, Entity, State, Index
     ├── storage/        # FileStorage, WAL, cache, deletion management
@@ -361,9 +361,9 @@ directory.
 
 ### Library Build Outputs
 
-- **`metrix_core`**: Internal static library for tests and CLI (not installed)
-- **`libmetrix`**: Public shared library for embedding (installed to system)
-- **pkg-config**: Generated for easy integration (`pkg-config --libs --cflags Metrix`)
+- **`zyx_core`**: Internal static library for tests and CLI (not installed)
+- **`libzyx`**: Public shared library for embedding (installed to system)
+- **pkg-config**: Generated for easy integration (`pkg-config --libs --cflags zyx`)
 
 ## Documentation Standards
 
