@@ -1,6 +1,6 @@
 /*
  * CypherParser.g4
- * Based on openCypher, customized for Metrix database.
+ * Based on openCypher, customized for ZYX database.
  */
 parser grammar CypherParser;
 

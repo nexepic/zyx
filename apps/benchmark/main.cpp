@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
 	}
 
 	std::cout << "=================================================================\n";
-	std::cout << "  MetrixDB Performance Benchmark Suite\n";
+	std::cout << "  ZYX Performance Benchmark Suite\n";
 	if (!filter.empty()) {
 		std::cout << "  Running tests matching: '" << filter << "'\n";
 	} else {

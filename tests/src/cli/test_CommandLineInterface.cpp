@@ -84,7 +84,7 @@ protected:
 	 */
 	int runMockCLI(const std::vector<std::string> &args) const {
 		std::vector<char *> argv;
-		std::string progName = "metrix_test";
+		std::string progName = "zyx_test";
 		argv.push_back(progName.data());
 
 		std::vector<std::string> argsCopy = args;

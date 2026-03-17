@@ -47,14 +47,14 @@ namespace zyx::benchmark::config {
 
 	// --- Path Settings ---
 	// Base paths for temporary databases
-	constexpr std::string_view PATH_INSERT_CYPHER = "/tmp/metrix_bench_insert_cypher";
-	constexpr std::string_view PATH_INSERT_NATIVE = "/tmp/metrix_bench_insert_native";
-	constexpr std::string_view PATH_QUERY_INDEX = "/tmp/metrix_bench_query_index";
-	constexpr std::string_view PATH_QUERY_BASE = "/tmp/metrix_bench_query_base";
-	constexpr std::string_view PATH_ALGO_CYPHER = "/tmp/metrix_bench_algo_cypher";
-	constexpr std::string_view PATH_ALGO_NATIVE = "/tmp/metrix_bench_algo_native";
+	constexpr std::string_view PATH_INSERT_CYPHER = "/tmp/zyx_bench_insert_cypher";
+	constexpr std::string_view PATH_INSERT_NATIVE = "/tmp/zyx_bench_insert_native";
+	constexpr std::string_view PATH_QUERY_INDEX = "/tmp/zyx_bench_query_index";
+	constexpr std::string_view PATH_QUERY_BASE = "/tmp/zyx_bench_query_base";
+	constexpr std::string_view PATH_ALGO_CYPHER = "/tmp/zyx_bench_algo_cypher";
+	constexpr std::string_view PATH_ALGO_NATIVE = "/tmp/zyx_bench_algo_native";
 
-	const std::string PATH_VEC_INSERT = "/tmp/metrix_bench_vec_insert";
-	const std::string PATH_VEC_SEARCH = "/tmp/metrix_bench_vec_search";
+	const std::string PATH_VEC_INSERT = "/tmp/zyx_bench_vec_insert";
+	const std::string PATH_VEC_SEARCH = "/tmp/zyx_bench_vec_search";
 
 } // namespace zyx::benchmark::config

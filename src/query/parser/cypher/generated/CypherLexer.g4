@@ -1,6 +1,6 @@
 /*
  * CypherLexer.g4
- * Based on openCypher, customized for Metrix database.
+ * Based on openCypher, customized for ZYX database.
  */
 lexer grammar CypherLexer;
 

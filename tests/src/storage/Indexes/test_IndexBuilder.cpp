@@ -76,7 +76,7 @@ protected:
 		dataManager->addNode(n2);
 
 		graph::Node n3(3, dataManager->getOrCreateLabelId("Company"));
-		n3.addProperty("name", std::string("MetrixDB"));
+		n3.addProperty("name", std::string("ZYXDB"));
 		dataManager->addNode(n3);
 
 		// Deleted Node (ID 4)

@@ -1,6 +1,6 @@
 /**
  * @file test_FunctionRegistry_Unit.cpp
- * @author Metrix Contributors
+ * @author ZYX Contributors
  * @date 2026
  *
  * @copyright Copyright (c) 2026

@@ -1,9 +1,9 @@
 /**
  * @file OptionalMatchOperator.cpp
- * @author Metrix Graph Database Team
+ * @author ZYX Graph Database Team
  * @date 2025
  *
- * @copyright Copyright (c) 2025 Metrix Graph Database
+ * @copyright Copyright (c) 2025 ZYX Graph Database
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

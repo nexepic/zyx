@@ -1,6 +1,6 @@
 /**
  * @file WithClauseHandler.cpp
- * @author Metrix Contributors
+ * @author ZYX Contributors
  * @date 2025
  *
  * @copyright Copyright (c) 2025

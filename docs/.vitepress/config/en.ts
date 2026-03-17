@@ -171,7 +171,7 @@ export default {
   },
 
   socialLinks: [
-    { icon: 'github', link: 'https://github.com/nexepic/metrix' }
+    { icon: 'github', link: 'https://github.com/nexepic/zyx' }
   ],
 
   footer: {

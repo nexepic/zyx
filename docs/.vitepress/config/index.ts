@@ -4,10 +4,10 @@ import zh from './zh'
 
 // Define the config
 const config = {
-  // Base URL for GitHub Pages (update 'metrix' to your repo name)
-  base: '/metrix/',
+  // Base URL for GitHub Pages (update 'zyx' to your repo name)
+  base: '/zyx/',
 
-  title: 'Metrix',
+  title: 'ZYX',
   description: 'High-performance graph database engine',
 
   locales: {
