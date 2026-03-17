@@ -18,9 +18,9 @@
  * limitations under the License.
  **/
 
-#include "metrix/metrix.hpp"
-#include "metrix/metrix_c_api.h"
-#include "metrix/value.hpp"
+#include "zyx/zyx.hpp"
+#include "zyx/zyx_c_api.h"
+#include "zyx/value.hpp"
 
 #include <cstring>
 #include <filesystem>
@@ -39,18 +39,18 @@ static thread_local std::string g_lastError;
 
 void set_error(const std::string &msg) { g_lastError = msg; }
 
-extern "C" const char *metrix_get_last_error() { return g_lastError.c_str(); }
+extern "C" const char *zyx_get_last_error() { return g_lastError.c_str(); }
 
 // ============================================================================
 // Internal Wrapper Structs
 // ============================================================================
 
-struct MetrixDB_T {
-	std::unique_ptr<metrix::Database> cpp_db;
+struct ZYXDB_T {
+	std::unique_ptr<zyx::Database> cpp_db;
 };
 
-struct MetrixResult_T {
-	metrix::Result cpp_result;
+struct ZYXResult_T {
+	zyx::Result cpp_result;
 
 	// --- Memory Management ---
 	// FFI clients (like Rust) expect 'const char*' to remain valid
@@ -61,7 +61,7 @@ struct MetrixResult_T {
 	// Buffer for the JSON properties string
 	std::string json_buffer;
 
-	MetrixResult_T(metrix::Result res) : cpp_result(std::move(res)) {}
+	ZYXResult_T(zyx::Result res) : cpp_result(std::move(res)) {}
 };
 
 // ============================================================================
@@ -106,7 +106,7 @@ std::string escape_json_string(const std::string &s) {
 }
 
 // Helper to serialize properties map to JSON string
-std::string props_to_json(const std::unordered_map<std::string, metrix::Value> &props) {
+std::string props_to_json(const std::unordered_map<std::string, zyx::Value> &props) {
 	std::ostringstream oss;
 	oss << "{";
 	bool first = true;
@@ -140,7 +140,7 @@ std::string props_to_json(const std::unordered_map<std::string, metrix::Value> &
 }
 
 // Helper to stabilize a string pointer for C API return
-const char *stabilize_string(MetrixResult_T *res, std::string s) {
+const char *stabilize_string(ZYXResult_T *res, std::string s) {
 	res->string_buffer.push_back(std::move(s));
 	return res->string_buffer.back().c_str();
 }
@@ -153,23 +153,23 @@ extern "C" {
 
 // --- Lifecycle ---
 
-MetrixDB_T *metrix_open(const char *path) {
+ZYXDB_T *zyx_open(const char *path) {
 	if (!path)
 		return nullptr;
 	try {
-		auto db = std::make_unique<metrix::Database>(path);
+		auto db = std::make_unique<zyx::Database>(path);
 		db->open();
-		return new MetrixDB_T{std::move(db)};
+		return new ZYXDB_T{std::move(db)};
 	} catch (const std::exception &e) {
 		set_error(e.what());
 		return nullptr;
 	} catch (...) {
-		set_error("Unknown Exception during metrix_open");
+		set_error("Unknown Exception during zyx_open");
 		return nullptr;
 	}
 }
 
-MetrixDB_T *metrix_open_if_exists(const char *path) {
+ZYXDB_T *zyx_open_if_exists(const char *path) {
 	if (!path) {
 		set_error("Path pointer is null");
 		return nullptr;
@@ -180,10 +180,10 @@ MetrixDB_T *metrix_open_if_exists(const char *path) {
 			return nullptr;
 		}
 
-		auto db = std::make_unique<metrix::Database>(path);
+		auto db = std::make_unique<zyx::Database>(path);
 		// openIfExists calls open(), which calls validateAndReadHeader()
 		if (db->openIfExists()) {
-			return new MetrixDB_T{std::move(db)};
+			return new ZYXDB_T{std::move(db)};
 		}
 
 		set_error("Failed to open existing database.");
@@ -198,7 +198,7 @@ MetrixDB_T *metrix_open_if_exists(const char *path) {
 	}
 }
 
-void metrix_close(const MetrixDB_T *db) {
+void zyx_close(const ZYXDB_T *db) {
 	if (db) {
 		try {
 			db->cpp_db->close();
@@ -211,29 +211,29 @@ void metrix_close(const MetrixDB_T *db) {
 
 // --- Execution ---
 
-MetrixResult_T *metrix_execute(const MetrixDB_T *db, const char *cypher) {
+ZYXResult_T *zyx_execute(const ZYXDB_T *db, const char *cypher) {
 	if (!db || !cypher)
 		return nullptr;
 	try {
 		auto res = db->cpp_db->execute(cypher);
-		return new MetrixResult_T(std::move(res));
+		return new ZYXResult_T(std::move(res));
 	} catch (const std::exception &e) {
 		set_error(e.what());
 		return nullptr;
 	} catch (...) {
-		set_error("Unknown Exception during metrix_execute");
+		set_error("Unknown Exception during zyx_execute");
 		return nullptr;
 	}
 }
 
-void metrix_result_close(const MetrixResult_T *res) {
+void zyx_result_close(const ZYXResult_T *res) {
 	if (res)
 		delete res;
 }
 
 // --- Iteration ---
 
-bool metrix_result_next(MetrixResult_T *res) {
+bool zyx_result_next(ZYXResult_T *res) {
 	if (!res)
 		return false;
 	try {
@@ -250,12 +250,12 @@ bool metrix_result_next(MetrixResult_T *res) {
 		set_error(e.what());
 		return false;
 	} catch (...) {
-		set_error("Unknown Exception during metrix_result_next");
+		set_error("Unknown Exception during zyx_result_next");
 		return false;
 	}
 }
 
-int metrix_result_column_count(const MetrixResult_T *res) {
+int zyx_result_column_count(const ZYXResult_T *res) {
 	if (!res)
 		return 0;
 	try {
@@ -265,7 +265,7 @@ int metrix_result_column_count(const MetrixResult_T *res) {
 	}
 }
 
-const char *metrix_result_column_name(MetrixResult_T *res, int index) {
+const char *zyx_result_column_name(ZYXResult_T *res, int index) {
 	if (!res)
 		return "";
 	try {
@@ -275,7 +275,7 @@ const char *metrix_result_column_name(MetrixResult_T *res, int index) {
 	}
 }
 
-double metrix_result_get_duration(const MetrixResult_T *res) {
+double zyx_result_get_duration(const ZYXResult_T *res) {
 	if (!res)
 		return 0.0;
 	try {
@@ -287,37 +287,37 @@ double metrix_result_get_duration(const MetrixResult_T *res) {
 
 // --- Data Access ---
 
-MetrixValueType metrix_result_get_type(const MetrixResult_T *res, int col_index) {
+ZYXValueType zyx_result_get_type(const ZYXResult_T *res, int col_index) {
 	if (!res)
-		return MX_NULL;
+		return ZYX_NULL;
 	try {
 		auto val = res->cpp_result.get(col_index);
 		return std::visit(
-				[]<typename T0>([[maybe_unused]] T0 &&arg) -> MetrixValueType {
+				[]<typename T0>([[maybe_unused]] T0 &&arg) -> ZYXValueType {
 					using T = std::decay_t<T0>;
 					if constexpr (std::is_same_v<T, std::monostate>)
-						return MX_NULL;
+						return ZYX_NULL;
 					if constexpr (std::is_same_v<T, bool>)
-						return MX_BOOL;
+						return ZYX_BOOL;
 					if constexpr (std::is_same_v<T, int64_t>)
-						return MX_INT;
+						return ZYX_INT;
 					if constexpr (std::is_same_v<T, double>)
-						return MX_DOUBLE;
+						return ZYX_DOUBLE;
 					if constexpr (std::is_same_v<T, std::string>)
-						return MX_STRING;
-					if constexpr (std::is_same_v<T, std::shared_ptr<metrix::Node>>)
-						return MX_NODE;
-					if constexpr (std::is_same_v<T, std::shared_ptr<metrix::Edge>>)
-						return MX_EDGE;
-					return MX_NULL;
+						return ZYX_STRING;
+					if constexpr (std::is_same_v<T, std::shared_ptr<zyx::Node>>)
+						return ZYX_NODE;
+					if constexpr (std::is_same_v<T, std::shared_ptr<zyx::Edge>>)
+						return ZYX_EDGE;
+					return ZYX_NULL;
 				},
 				val);
 	} catch (...) {
-		return MX_NULL;
+		return ZYX_NULL;
 	}
 }
 
-int64_t metrix_result_get_int(const MetrixResult_T *res, int col_index) {
+int64_t zyx_result_get_int(const ZYXResult_T *res, int col_index) {
 	if (!res)
 		return 0;
 	try {
@@ -329,7 +329,7 @@ int64_t metrix_result_get_int(const MetrixResult_T *res, int col_index) {
 	return 0;
 }
 
-double metrix_result_get_double(const MetrixResult_T *res, int col_index) {
+double zyx_result_get_double(const ZYXResult_T *res, int col_index) {
 	if (!res)
 		return 0.0;
 	try {
@@ -341,7 +341,7 @@ double metrix_result_get_double(const MetrixResult_T *res, int col_index) {
 	return 0.0;
 }
 
-bool metrix_result_get_bool(const MetrixResult_T *res, int col_index) {
+bool zyx_result_get_bool(const ZYXResult_T *res, int col_index) {
 	if (!res)
 		return false;
 	try {
@@ -353,7 +353,7 @@ bool metrix_result_get_bool(const MetrixResult_T *res, int col_index) {
 	return false;
 }
 
-const char *metrix_result_get_string(MetrixResult_T *res, int col_index) {
+const char *zyx_result_get_string(ZYXResult_T *res, int col_index) {
 	if (!res)
 		return "";
 	try {
@@ -369,12 +369,12 @@ const char *metrix_result_get_string(MetrixResult_T *res, int col_index) {
 
 // --- Complex Types (Node/Edge) ---
 
-bool metrix_result_get_node(MetrixResult_T *res, int col_index, MetrixNode *out_node) {
+bool zyx_result_get_node(ZYXResult_T *res, int col_index, ZYXNode *out_node) {
 	if (!res || !out_node)
 		return false;
 	try {
 		auto val = res->cpp_result.get(col_index);
-		if (auto *nodePtr = std::get_if<std::shared_ptr<metrix::Node>>(&val)) {
+		if (auto *nodePtr = std::get_if<std::shared_ptr<zyx::Node>>(&val)) {
 			auto &node = **nodePtr;
 			out_node->id = node.id;
 			out_node->label = stabilize_string(res, node.label);
@@ -385,12 +385,12 @@ bool metrix_result_get_node(MetrixResult_T *res, int col_index, MetrixNode *out_
 	return false;
 }
 
-bool metrix_result_get_edge(MetrixResult_T *res, int col_index, MetrixEdge *out_edge) {
+bool zyx_result_get_edge(ZYXResult_T *res, int col_index, ZYXEdge *out_edge) {
 	if (!res || !out_edge)
 		return false;
 	try {
 		auto val = res->cpp_result.get(col_index);
-		if (auto *edgePtr = std::get_if<std::shared_ptr<metrix::Edge>>(&val)) {
+		if (auto *edgePtr = std::get_if<std::shared_ptr<zyx::Edge>>(&val)) {
 			auto &edge = **edgePtr;
 			out_edge->id = edge.id;
 			out_edge->source_id = edge.sourceId;
@@ -403,7 +403,7 @@ bool metrix_result_get_edge(MetrixResult_T *res, int col_index, MetrixEdge *out_
 	return false;
 }
 
-const char *metrix_result_get_props_json(MetrixResult_T *res, int col_index) {
+const char *zyx_result_get_props_json(ZYXResult_T *res, int col_index) {
 	if (!res)
 		return "{}";
 	try {
@@ -412,9 +412,9 @@ const char *metrix_result_get_props_json(MetrixResult_T *res, int col_index) {
 		std::visit(
 				[&]<typename T0>(T0 &&arg) {
 					using T = std::decay_t<T0>;
-					if constexpr (std::is_same_v<T, std::shared_ptr<metrix::Node>>) {
+					if constexpr (std::is_same_v<T, std::shared_ptr<zyx::Node>>) {
 						json = props_to_json(arg->properties);
-					} else if constexpr (std::is_same_v<T, std::shared_ptr<metrix::Edge>>) {
+					} else if constexpr (std::is_same_v<T, std::shared_ptr<zyx::Edge>>) {
 						json = props_to_json(arg->properties);
 					} else {
 						json = "{}";
@@ -429,7 +429,7 @@ const char *metrix_result_get_props_json(MetrixResult_T *res, int col_index) {
 	}
 }
 
-bool metrix_result_is_success(const MetrixResult_T *res) {
+bool zyx_result_is_success(const ZYXResult_T *res) {
 	try {
 		return res && res->cpp_result.isSuccess();
 	} catch (...) {
@@ -437,7 +437,7 @@ bool metrix_result_is_success(const MetrixResult_T *res) {
 	}
 }
 
-const char *metrix_result_get_error(MetrixResult_T *res) {
+const char *zyx_result_get_error(ZYXResult_T *res) {
 	if (!res)
 		return "Invalid Result Handle";
 	try {
