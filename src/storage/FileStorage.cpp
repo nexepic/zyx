@@ -667,16 +667,6 @@ namespace graph::storage {
 		flushInProgress.store(false);
 	}
 
-	void FileStorage::beginWrite() {
-		// Placeholder for transaction management
-	}
-
-	void FileStorage::commitWrite() { save(); }
-
-	void FileStorage::rollbackWrite() {
-		// Placeholder for transaction management
-	}
-
 	void FileStorage::clearCache() const { dataManager->clearCache(); }
 
 } // namespace graph::storage

@@ -44,6 +44,23 @@ namespace graph {
 		configManager_->loadAndApplyAll();
 		storage->getDataManager()->registerObserver(configManager_);
 		queryEngine = std::make_shared<query::QueryEngine>(storage);
+
+		// Initialize WAL manager
+		walManager_ = std::make_shared<storage::wal::WALManager>();
+		walManager_->open(dbPath);
+
+		// If WAL needs recovery, replay committed transactions
+		if (walManager_->needsRecovery()) {
+			// For now, just checkpoint (discard incomplete WAL data)
+			// Full replay would deserialize entities and apply them
+			walManager_->checkpoint();
+		}
+
+		// Initialize transaction manager
+		transactionManager_ = std::make_unique<TransactionManager>(storage, walManager_);
+
+		// Set WAL manager reference in DataManager
+		storage->getDataManager()->setWALManager(walManager_.get());
 	}
 
 	bool Database::openIfExists() {
@@ -65,6 +82,11 @@ namespace graph {
 			return;
 		}
 
+		// Close WAL manager
+		if (walManager_) {
+			walManager_->close();
+		}
+
 		storage->close();
 	}
 
@@ -75,8 +97,17 @@ namespace graph {
 			open();
 		}
 
-		storage::FileStorage::beginWrite();
-		return Transaction(*this);
+		// Flush any pending changes to ensure clean start
+		storage->flush();
+
+		// Create transaction via TransactionManager
+		// TransactionManager::begin() acquires the write lock, writes WAL begin,
+		// and sets DataManager's transaction context (flag + txnId).
+		return transactionManager_->begin();
+	}
+
+	bool Database::hasActiveTransaction() const {
+		return transactionManager_ && transactionManager_->hasActiveTransaction();
 	}
 
 } // namespace graph

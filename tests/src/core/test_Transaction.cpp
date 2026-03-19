@@ -19,192 +19,188 @@
  **/
 
 #include <gtest/gtest.h>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
-#include "graph/storage/FileStorage.hpp"
+
+namespace fs = std::filesystem;
 
 class TransactionTest : public ::testing::Test {
 protected:
 	void SetUp() override {
-		// Create a temporary database path
-		testDbPath = "test_transaction_db.graph";
-		// Clean up any existing test database
-		std::filesystem::remove_all(testDbPath);
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testDbPath = fs::temp_directory_path() / ("test_txn_" + boost::uuids::to_string(uuid) + ".graph");
+		fs::remove_all(testDbPath);
 	}
 
-	void TearDown() override {
-		// Clean up test database
-		std::filesystem::remove_all(testDbPath);
-	}
+	void TearDown() override { fs::remove_all(testDbPath); }
 
-	std::string testDbPath;
+	fs::path testDbPath;
 };
 
-TEST_F(TransactionTest, ConstructorInitializesStorage) {
-	// Create a database and verify it can be used to create a transaction
-	graph::Database db(testDbPath);
-	db.open();
-
-	ASSERT_TRUE(db.isOpen());
-
-	// Create a transaction - this should initialize the transaction and begin a write
-	graph::Transaction txn = db.beginTransaction();
-
-	// Transaction should have been created successfully
-	EXPECT_TRUE(db.isOpen());
-}
-
-TEST_F(TransactionTest, TransactionWithExistingDatabase) {
-	// Create and open a database
-	graph::Database db(testDbPath);
+TEST_F(TransactionTest, BeginTransactionReturnsActiveTransaction) {
+	graph::Database db(testDbPath.string());
 	db.open();
 	ASSERT_TRUE(db.isOpen());
 
-	// Create multiple transactions in sequence
-	{
-		graph::Transaction txn1 = db.beginTransaction();
-		EXPECT_TRUE(db.isOpen());
-		txn1.commit();
-	}
-
-	{
-		graph::Transaction txn2 = db.beginTransaction();
-		EXPECT_TRUE(db.isOpen());
-		txn2.commit();
-	}
+	auto txn = db.beginTransaction();
+	EXPECT_TRUE(txn.isActive());
+	EXPECT_EQ(txn.getState(), graph::Transaction::TxnState::TXN_ACTIVE);
+	EXPECT_GT(txn.getId(), 0UL);
+	txn.commit();
 }
 
-TEST_F(TransactionTest, TransactionCommit) {
-	graph::Database db(testDbPath);
+TEST_F(TransactionTest, CommitChangesState) {
+	graph::Database db(testDbPath.string());
 	db.open();
 
-	graph::Transaction txn = db.beginTransaction();
+	auto txn = db.beginTransaction();
+	EXPECT_TRUE(txn.isActive());
 
-	// Commit should complete without throwing
 	EXPECT_NO_THROW(txn.commit());
-
-	// Database should still be open after commit
-	EXPECT_TRUE(db.isOpen());
+	EXPECT_FALSE(txn.isActive());
+	EXPECT_EQ(txn.getState(), graph::Transaction::TxnState::TXN_COMMITTED);
 }
 
-TEST_F(TransactionTest, TransactionRollback) {
-	graph::Database db(testDbPath);
+TEST_F(TransactionTest, RollbackChangesState) {
+	graph::Database db(testDbPath.string());
 	db.open();
 
-	// Rollback is a static method, but we create a transaction first
-	graph::Transaction txn = db.beginTransaction();
+	auto txn = db.beginTransaction();
+	EXPECT_TRUE(txn.isActive());
 
-	// Rollback should complete without throwing
-	EXPECT_NO_THROW(graph::Transaction::rollback());
-
-	// Database should still be open after rollback
-	EXPECT_TRUE(db.isOpen());
+	EXPECT_NO_THROW(txn.rollback());
+	EXPECT_FALSE(txn.isActive());
+	EXPECT_EQ(txn.getState(), graph::Transaction::TxnState::TXN_ROLLED_BACK);
 }
 
-TEST_F(TransactionTest, TransactionCommitAndRollbackSequence) {
-	graph::Database db(testDbPath);
+TEST_F(TransactionTest, DoubleCommitThrows) {
+	graph::Database db(testDbPath.string());
 	db.open();
 
-	// Commit a transaction
-	{
-		graph::Transaction txn1 = db.beginTransaction();
-		EXPECT_NO_THROW(txn1.commit());
-	}
-
-	// Rollback a transaction
-	{
-		graph::Transaction txn2 = db.beginTransaction();
-		EXPECT_NO_THROW(graph::Transaction::rollback());
-	}
-
-	// Commit another transaction
-	{
-		graph::Transaction txn3 = db.beginTransaction();
-		EXPECT_NO_THROW(txn3.commit());
-	}
-
-	EXPECT_TRUE(db.isOpen());
+	auto txn = db.beginTransaction();
+	txn.commit();
+	EXPECT_THROW(txn.commit(), std::runtime_error);
 }
 
-TEST_F(TransactionTest, MultipleTransactionsInSequence) {
-	graph::Database db(testDbPath);
+TEST_F(TransactionTest, DoubleRollbackThrows) {
+	graph::Database db(testDbPath.string());
 	db.open();
 
-	// Create multiple transactions in sequence
+	auto txn = db.beginTransaction();
+	txn.rollback();
+	EXPECT_THROW(txn.rollback(), std::runtime_error);
+}
+
+TEST_F(TransactionTest, CommitAfterRollbackThrows) {
+	graph::Database db(testDbPath.string());
+	db.open();
+
+	auto txn = db.beginTransaction();
+	txn.rollback();
+	EXPECT_THROW(txn.commit(), std::runtime_error);
+}
+
+TEST_F(TransactionTest, AutoRollbackOnScopeExit) {
+	graph::Database db(testDbPath.string());
+	db.open();
+
+	{
+		auto txn = db.beginTransaction();
+		EXPECT_TRUE(txn.isActive());
+		// Destructor auto-rolls back
+	}
+
+	// Should be able to start a new transaction
+	auto txn2 = db.beginTransaction();
+	EXPECT_TRUE(txn2.isActive());
+	txn2.commit();
+}
+
+TEST_F(TransactionTest, MoveSemantics) {
+	graph::Database db(testDbPath.string());
+	db.open();
+
+	auto txn1 = db.beginTransaction();
+	uint64_t id = txn1.getId();
+
+	// Move construction
+	auto txn2 = std::move(txn1);
+	EXPECT_TRUE(txn2.isActive());
+	EXPECT_EQ(txn2.getId(), id);
+	EXPECT_FALSE(txn1.isActive()); // NOLINT - intentionally checking moved-from state
+
+	txn2.commit();
+}
+
+TEST_F(TransactionTest, SequentialTransactions) {
+	graph::Database db(testDbPath.string());
+	db.open();
+
 	for (int i = 0; i < 5; ++i) {
-		graph::Transaction txn = db.beginTransaction();
-		EXPECT_NO_THROW(txn.commit());
-	}
-
-	EXPECT_TRUE(db.isOpen());
-}
-
-TEST_F(TransactionTest, MultipleRollbacksInSequence) {
-	graph::Database db(testDbPath);
-	db.open();
-
-	// Create multiple transactions with rollback in sequence
-	for (int i = 0; i < 5; ++i) {
-		graph::Transaction txn = db.beginTransaction();
-		EXPECT_NO_THROW(graph::Transaction::rollback());
+		auto txn = db.beginTransaction();
+		EXPECT_TRUE(txn.isActive());
+		txn.commit();
 	}
 
 	EXPECT_TRUE(db.isOpen());
 }
 
 TEST_F(TransactionTest, MixedCommitAndRollback) {
-	graph::Database db(testDbPath);
+	graph::Database db(testDbPath.string());
 	db.open();
 
-	// Mix of commits and rollbacks
 	{
-		graph::Transaction txn1 = db.beginTransaction();
-		EXPECT_NO_THROW(txn1.commit());
+		auto txn = db.beginTransaction();
+		txn.commit();
 	}
-
 	{
-		graph::Transaction txn2 = db.beginTransaction();
-		EXPECT_NO_THROW(graph::Transaction::rollback());
+		auto txn = db.beginTransaction();
+		txn.rollback();
 	}
-
 	{
-		graph::Transaction txn3 = db.beginTransaction();
-		EXPECT_NO_THROW(txn3.commit());
+		auto txn = db.beginTransaction();
+		txn.commit();
 	}
-
 	{
-		graph::Transaction txn4 = db.beginTransaction();
-		EXPECT_NO_THROW(graph::Transaction::rollback());
+		auto txn = db.beginTransaction();
+		txn.rollback();
 	}
 
 	EXPECT_TRUE(db.isOpen());
 }
 
-// Test insertNode stub function - improves coverage
-TEST_F(TransactionTest, InsertNodeStub) {
-	graph::Database db(testDbPath);
+TEST_F(TransactionTest, RecordOperations) {
+	graph::Database db(testDbPath.string());
 	db.open();
 
-	graph::Transaction txn = db.beginTransaction();
+	auto txn = db.beginTransaction();
 
-	// Test the stub insertNode function - returns default-constructed Node
-	graph::Node node = txn.insertNode("TestLabel");
-	// The stub returns a default-constructed Node
-	// Just verify the function can be called without throwing
-	EXPECT_TRUE(db.isOpen());
+	// Manually record operations
+	txn.recordOperation({graph::Transaction::TxnOperation::OP_ADD, 0, 1});
+	txn.recordOperation({graph::Transaction::TxnOperation::OP_UPDATE, 0, 1});
+	txn.recordOperation({graph::Transaction::TxnOperation::OP_DELETE, 0, 1});
+
+	EXPECT_EQ(txn.getOperations().size(), 3UL);
+	EXPECT_EQ(txn.getOperations()[0].opType, graph::Transaction::TxnOperation::OP_ADD);
+	EXPECT_EQ(txn.getOperations()[1].opType, graph::Transaction::TxnOperation::OP_UPDATE);
+	EXPECT_EQ(txn.getOperations()[2].opType, graph::Transaction::TxnOperation::OP_DELETE);
+
+	txn.rollback();
 }
 
-// Test insertEdge stub function - improves coverage
-TEST_F(TransactionTest, InsertEdgeStub) {
-	graph::Database db(testDbPath);
+TEST_F(TransactionTest, HasActiveTransaction) {
+	graph::Database db(testDbPath.string());
 	db.open();
 
-	graph::Transaction txn = db.beginTransaction();
+	EXPECT_FALSE(db.hasActiveTransaction());
 
-	// Test the stub insertEdge function - returns default-constructed Edge
-	graph::Edge edge = txn.insertEdge(1, 2, "TestEdgeLabel");
-	// The stub returns a default-constructed Edge
-	// Just verify the function can be called without throwing
-	EXPECT_TRUE(db.isOpen());
+	auto txn = db.beginTransaction();
+	EXPECT_TRUE(db.hasActiveTransaction());
+
+	txn.commit();
+	EXPECT_FALSE(db.hasActiveTransaction());
 }

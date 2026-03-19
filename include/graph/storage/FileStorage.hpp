@@ -58,9 +58,6 @@ namespace graph::storage {
 
 		uint64_t allocateSegment(uint32_t type, uint32_t capacity) const;
 
-		static void beginWrite();
-		void commitWrite();
-		static void rollbackWrite();
 
 		// Cache management
 		void clearCache() const;

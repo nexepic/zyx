@@ -19,27 +19,57 @@
  **/
 
 #pragma once
-#include <unordered_map>
-#include "Edge.hpp"
-#include "Node.hpp"
-#include "graph/storage/FileStorage.hpp"
+
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+namespace graph::storage {
+	class FileStorage;
+}
 
 namespace graph {
 
-	class Database;
+	class TransactionManager;
 
 	class Transaction {
 	public:
-		explicit Transaction(const Database &db);
+		enum class TxnState { TXN_ACTIVE, TXN_COMMITTED, TXN_ROLLED_BACK };
 
-		[[nodiscard]] Node insertNode(const std::string &label) const;
-		[[nodiscard]] Edge insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const;
+		struct TxnOperation {
+			enum OpType : uint8_t { OP_ADD, OP_UPDATE, OP_DELETE };
+			OpType opType;
+			uint8_t entityType; // graph::EntityType value
+			int64_t entityId;
+		};
 
-		void commit() const;
-		static void rollback();
+		~Transaction();
+
+		// Move-only
+		Transaction(Transaction &&other) noexcept;
+		Transaction &operator=(Transaction &&other) noexcept;
+		Transaction(const Transaction &) = delete;
+		Transaction &operator=(const Transaction &) = delete;
+
+		void commit();
+		void rollback();
+
+		[[nodiscard]] uint64_t getId() const { return txnId_; }
+		[[nodiscard]] TxnState getState() const { return state_; }
+		[[nodiscard]] bool isActive() const { return state_ == TxnState::TXN_ACTIVE; }
+
+		void recordOperation(TxnOperation op);
+		[[nodiscard]] const std::vector<TxnOperation> &getOperations() const { return operations_; }
 
 	private:
-		std::shared_ptr<storage::FileStorage> storage;
+		friend class TransactionManager;
+		Transaction(uint64_t txnId, TransactionManager &mgr, std::shared_ptr<storage::FileStorage> storage);
+
+		uint64_t txnId_ = 0;
+		TxnState state_ = TxnState::TXN_ACTIVE;
+		TransactionManager *manager_ = nullptr; // Non-owning
+		std::shared_ptr<storage::FileStorage> storage_;
+		std::vector<TxnOperation> operations_;
 	};
 
 } // namespace graph

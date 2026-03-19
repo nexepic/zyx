@@ -24,8 +24,10 @@
 
 #include "graph/config/SystemConfigManager.hpp"
 #include "graph/core/Transaction.hpp"
+#include "graph/core/TransactionManager.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/wal/WALManager.hpp"
 
 namespace graph {
 
@@ -50,11 +52,16 @@ namespace graph {
 		// Access to storage for advanced operations
 		[[nodiscard]] std::shared_ptr<storage::FileStorage> getStorage() const { return storage; }
 
+		// Check if there is an active transaction
+		[[nodiscard]] bool hasActiveTransaction() const;
+
 	private:
 		std::shared_ptr<storage::FileStorage> storage;
 		std::shared_ptr<query::QueryEngine> queryEngine;
 		std::string dbPath;
 		std::shared_ptr<config::SystemConfigManager> configManager_;
+		std::shared_ptr<storage::wal::WALManager> walManager_;
+		std::unique_ptr<TransactionManager> transactionManager_;
 	};
 
 } // namespace graph

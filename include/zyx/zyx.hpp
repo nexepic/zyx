@@ -32,6 +32,7 @@ namespace zyx {
 	// These are defined ONLY in the .cpp file to keep this header clean.
 	class DatabaseImpl;
 	class ResultImpl;
+	class TransactionImpl;
 
 	/**
 	 * @class Result
@@ -74,6 +75,32 @@ namespace zyx {
 	private:
 		std::unique_ptr<ResultImpl> impl_;
 		friend class Database; // Allow Database to create Results
+		friend class Transaction; // Allow Transaction to create Results
+	};
+
+	/**
+	 * @class Transaction
+	 * @brief Provides ACID transaction semantics.
+	 * Auto-rolls back if destroyed without commit.
+	 */
+	class Transaction {
+	public:
+		~Transaction();
+
+		Transaction(Transaction &&) noexcept;
+		Transaction &operator=(Transaction &&) noexcept;
+		Transaction(const Transaction &) = delete;
+		Transaction &operator=(const Transaction &) = delete;
+
+		Result execute(const std::string &cypher) const;
+		void commit();
+		void rollback();
+		[[nodiscard]] bool isActive() const;
+
+	private:
+		std::unique_ptr<TransactionImpl> impl_;
+		friend class Database;
+		Transaction(); // Only Database can create
 	};
 
 	/**
@@ -100,7 +127,10 @@ namespace zyx {
 		void close() const;
 		void save() const; // Flushes data to disk
 
-		// Execute raw Cypher query
+		// Transaction support
+		[[nodiscard]] Transaction beginTransaction();
+
+		// Execute raw Cypher query (auto-commit: wraps in implicit transaction)
 		[[nodiscard]] Result execute(const std::string &cypher) const;
 
 		// High-performance direct insert APIs

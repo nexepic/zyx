@@ -32,6 +32,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
+#include "graph/core/Transaction.hpp"
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/PersistenceManager.hpp"
@@ -47,6 +48,9 @@ namespace graph::traversal {
 }
 
 namespace graph::storage {
+	namespace wal {
+		class WALManager;
+	}
 	namespace state {
 		class SystemStateManager;
 	}
@@ -266,6 +270,17 @@ namespace graph::storage {
 		 */
 		void setSystemStateManager(const std::shared_ptr<state::SystemStateManager> &systemStateManager);
 
+		// Transaction context management
+		void setActiveTransaction(uint64_t txnId);
+		void clearActiveTransaction();
+		[[nodiscard]] bool hasActiveTransaction() const { return transactionActive_; }
+		[[nodiscard]] uint64_t getActiveTxnId() const { return activeTxnId_; }
+		[[nodiscard]] const std::vector<Transaction::TxnOperation> &getTransactionOps() const { return txnOps_; }
+
+		void setWALManager(wal::WALManager *wal) { walManager_ = wal; }
+
+		void rollbackActiveTransaction();
+
 	private:
 		// Core file and state
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
@@ -286,6 +301,13 @@ namespace graph::storage {
 		std::unordered_map<int64_t, DirtyEntityInfo<Blob>> dirtyBlobs_;
 		std::unordered_map<int64_t, DirtyEntityInfo<Index>> dirtyIndexes_;
 		std::unordered_map<int64_t, DirtyEntityInfo<State>> dirtyStates_;
+
+		// Transaction context (mutable: logically separate from entity state,
+		// needs to be modifiable from const entity mutation methods)
+		mutable bool transactionActive_ = false;
+		mutable uint64_t activeTxnId_ = 0;
+		mutable std::vector<Transaction::TxnOperation> txnOps_;
+		wal::WALManager *walManager_ = nullptr;
 
 		// Flag for deletion tracking
 		std::atomic<bool> *deleteOperationPerformedFlag_ = nullptr;

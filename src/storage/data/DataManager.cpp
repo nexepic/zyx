@@ -23,6 +23,8 @@
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
+#include "graph/core/Types.hpp"
+#include "graph/storage/wal/WALManager.hpp"
 #include "graph/storage/DeletionManager.hpp"
 #include "graph/storage/EntityReferenceUpdater.hpp"
 #include "graph/storage/IDAllocator.hpp"
@@ -231,10 +233,34 @@ namespace graph::storage {
 		return labelRegistry_->getLabelString(labelId);
 	}
 
+	// --- Transaction State Management ---
+
+	void DataManager::setActiveTransaction(uint64_t txnId) {
+		transactionActive_ = true;
+		activeTxnId_ = txnId;
+		txnOps_.clear();
+	}
+
+	void DataManager::clearActiveTransaction() {
+		transactionActive_ = false;
+		activeTxnId_ = 0;
+		txnOps_.clear();
+	}
+
 	// --- Node Operations (delegate to NodeManager) ---
 
 	void DataManager::addNode(Node &node) const {
 		nodeManager_->add(node);
+
+		if (transactionActive_) {
+			txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+							   static_cast<uint8_t>(EntityType::Node), node.getId()});
+			if (walManager_) {
+				walManager_->writeEntityChange(activeTxnId_, static_cast<uint8_t>(EntityType::Node),
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), node.getId(), {});
+			}
+		}
+
 		notifyNodeAdded(node);
 	}
 
@@ -242,44 +268,34 @@ namespace graph::storage {
 		if (nodes.empty())
 			return;
 
-		// -------------------------------------------------------
-		// STEP 1: Batch Store Nodes (Allocates IDs)
-		// -------------------------------------------------------
 		nodeManager_->addBatch(nodes);
-
-		// -------------------------------------------------------
-		// STEP 2: Batch Notify Indexes
-		// -------------------------------------------------------
-		// We notify indexes NOW, while the Node objects still hold their properties inline.
-		// The IndexManager uses the IDs assigned in Step 1.
 		notifyNodesAdded(nodes);
 
-		// -------------------------------------------------------
-		// STEP 3: Handle External Properties (If needed)
-		// -------------------------------------------------------
+		if (transactionActive_) {
+			for (const auto &node: nodes) {
+				txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+								   static_cast<uint8_t>(EntityType::Node), node.getId()});
+			}
+		}
+
 		for (auto &node: nodes) {
 			if (node.getProperties().empty())
 				continue;
 
-			// Check and potentially move properties to external storage.
-			// This function uses node.getId() (valid from Step 1) to link the new
-			// external entity back to this node.
 			propertyManager_->storeProperties(node);
 
-			// Check if storeProperties() decided to move data externally.
-			// If so, the 'node' object has been modified:
-			// 1. It now has a NextPropID pointer.
-			// 2. Its inline properties map has been cleared.
 			if (EntityPropertyTraits<Node>::hasPropertyEntity(node)) {
-				// We must update the PersistenceManager with this new state of the node.
-				// Since the node is already in the dirty map (from Step 1),
-				// this simply updates the record in memory before flush.
 				nodeManager_->update(node);
 			}
 		}
 	}
 
 	void DataManager::updateNode(const Node &node) {
+		if (transactionActive_) {
+			txnOps_.push_back({Transaction::TxnOperation::OP_UPDATE,
+							   static_cast<uint8_t>(EntityType::Node), node.getId()});
+		}
+
 		updateEntityImpl<Node>(
 				node, [this](int64_t id) { return nodeManager_->get(id); },
 				[this](const Node &n) { nodeManager_->update(n); },
@@ -287,6 +303,11 @@ namespace graph::storage {
 	}
 
 	void DataManager::deleteNode(Node &node) const {
+		if (transactionActive_) {
+			txnOps_.push_back({Transaction::TxnOperation::OP_DELETE,
+							   static_cast<uint8_t>(EntityType::Node), node.getId()});
+		}
+
 		nodeManager_->remove(node);
 		notifyNodeDeleted(node);
 	}
@@ -349,6 +370,16 @@ namespace graph::storage {
 
 	void DataManager::addEdge(Edge &edge) const {
 		edgeManager_->add(edge);
+
+		if (transactionActive_) {
+			txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+			if (walManager_) {
+				walManager_->writeEntityChange(activeTxnId_, static_cast<uint8_t>(EntityType::Edge),
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), edge.getId(), {});
+			}
+		}
+
 		notifyEdgeAdded(edge);
 	}
 
@@ -361,6 +392,13 @@ namespace graph::storage {
 
 		// 2. Indexing (needs IDs + Props)
 		notifyEdgesAdded(edges);
+
+		if (transactionActive_) {
+			for (const auto &edge: edges) {
+				txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+								   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+			}
+		}
 
 		// 3. Property Storage Handling
 		for (auto &edge: edges) {
@@ -378,6 +416,11 @@ namespace graph::storage {
 	}
 
 	void DataManager::updateEdge(const Edge &edge) {
+		if (transactionActive_) {
+			txnOps_.push_back({Transaction::TxnOperation::OP_UPDATE,
+							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+		}
+
 		updateEntityImpl<Edge>(
 				edge, [this](int64_t id) { return edgeManager_->get(id); },
 				[this](const Edge &e) { edgeManager_->update(e); },
@@ -385,6 +428,11 @@ namespace graph::storage {
 	}
 
 	void DataManager::deleteEdge(Edge &edge) const {
+		if (transactionActive_) {
+			txnOps_.push_back({Transaction::TxnOperation::OP_DELETE,
+							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+		}
+
 		edgeManager_->remove(edge);
 		notifyEdgeDeleted(edge);
 	}
@@ -775,7 +823,11 @@ namespace graph::storage {
 		persistenceManager_->setAutoFlushCallback(std::move(cb));
 	}
 
-	void DataManager::checkAndTriggerAutoFlush() const { persistenceManager_->checkAndTriggerAutoFlush(); }
+	void DataManager::checkAndTriggerAutoFlush() const {
+		if (transactionActive_)
+			return; // Suppress auto-flush during active transaction
+		persistenceManager_->checkAndTriggerAutoFlush();
+	}
 
 	template<typename EntityType>
 	std::vector<DirtyEntityInfo<EntityType>>
@@ -893,6 +945,50 @@ namespace graph::storage {
 		if (stateOpt.has_value())
 			return *stateOpt;
 		return make_inactive<State>();
+	}
+
+	// --- Transaction Rollback ---
+
+	void DataManager::rollbackActiveTransaction() {
+		// 1. Fire reverse observer notifications to revert index state
+		for (auto it = txnOps_.rbegin(); it != txnOps_.rend(); ++it) {
+			auto entityType = static_cast<EntityType>(it->entityType);
+
+			switch (it->opType) {
+				case Transaction::TxnOperation::OP_ADD: {
+					// Undo ADD: notify observers as if entity was deleted
+					if (entityType == EntityType::Node) {
+						try {
+							Node node = nodeManager_->get(it->entityId);
+							notifyNodeDeleted(node);
+						} catch (...) {
+						}
+					} else if (entityType == EntityType::Edge) {
+						try {
+							Edge edge = edgeManager_->get(it->entityId);
+							notifyEdgeDeleted(edge);
+						} catch (...) {
+						}
+					}
+					break;
+				}
+				case Transaction::TxnOperation::OP_DELETE: {
+					// Undo DELETE: we can't easily restore deleted entities without snapshots.
+					// The dirty registry clearing will handle removing the delete markers.
+					break;
+				}
+				case Transaction::TxnOperation::OP_UPDATE: {
+					// Undo UPDATE: similar to delete, handled by dirty registry clearing
+					break;
+				}
+			}
+		}
+
+		// 2. Clear all dirty registries (revert all entity state changes)
+		persistenceManager_->clearAll();
+
+		// 3. Clear all caches (force reload from disk on next access)
+		clearCache();
 	}
 
 	// --- Cache and Transaction Management ---

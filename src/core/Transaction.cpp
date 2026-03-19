@@ -19,28 +19,66 @@
  **/
 
 #include "graph/core/Transaction.hpp"
-#include "graph/core/Database.hpp"
+#include "graph/core/TransactionManager.hpp"
 
 namespace graph {
 
-	Transaction::Transaction(const Database &db) : storage(db.getStorage()) { storage::FileStorage::beginWrite(); }
+	Transaction::Transaction(uint64_t txnId, TransactionManager &mgr, std::shared_ptr<storage::FileStorage> storage) :
+		txnId_(txnId), manager_(&mgr), storage_(std::move(storage)) {}
 
-	Node Transaction::insertNode(const std::string &label) const {
-		// TODO: Implement node insertion
-		// Node node = storage->insertNode(label);
-		// return node;
-		return Node(); // Return default-constructed node until implementation is ready
+	Transaction::~Transaction() {
+		if (state_ == TxnState::TXN_ACTIVE && manager_) {
+			try {
+				manager_->rollbackTransaction(*this);
+			} catch (...) {
+				// Suppress exceptions in destructor
+			}
+		}
 	}
 
-	Edge Transaction::insertEdge(const int64_t &from, const int64_t &to, const std::string &label) const {
-		// TODO: Implement edge insertion
-		// Edge edge = storage->insertEdge(from, to, label);
-		// return edge;
-		return Edge(); // Return default-constructed edge until implementation is ready
+	Transaction::Transaction(Transaction &&other) noexcept :
+		txnId_(other.txnId_), state_(other.state_), manager_(other.manager_), storage_(std::move(other.storage_)),
+		operations_(std::move(other.operations_)) {
+		other.state_ = TxnState::TXN_ROLLED_BACK; // Prevent other's destructor from rolling back
+		other.manager_ = nullptr;
 	}
 
-	void Transaction::commit() const { storage->commitWrite(); }
+	Transaction &Transaction::operator=(Transaction &&other) noexcept {
+		if (this != &other) {
+			// If this transaction is still active, roll it back
+			if (state_ == TxnState::TXN_ACTIVE && manager_) {
+				try {
+					manager_->rollbackTransaction(*this);
+				} catch (...) {
+				}
+			}
 
-	void Transaction::rollback() { storage::FileStorage::rollbackWrite(); }
+			txnId_ = other.txnId_;
+			state_ = other.state_;
+			manager_ = other.manager_;
+			storage_ = std::move(other.storage_);
+			operations_ = std::move(other.operations_);
+
+			other.state_ = TxnState::TXN_ROLLED_BACK;
+			other.manager_ = nullptr;
+		}
+		return *this;
+	}
+
+	void Transaction::commit() {
+		if (state_ != TxnState::TXN_ACTIVE) {
+			throw std::runtime_error("Cannot commit: transaction is not active");
+		}
+		manager_->commitTransaction(*this);
+	}
+
+	void Transaction::rollback() {
+		if (state_ != TxnState::TXN_ACTIVE) {
+			throw std::runtime_error("Cannot rollback: transaction is not active");
+		}
+		manager_->rollbackTransaction(*this);
+	}
+
+	void Transaction::recordOperation(TxnOperation op) { operations_.push_back(op); }
 
 } // namespace graph

@@ -49,6 +49,7 @@ protected:
 			db->close();
 		if (fs::exists(testDbPath))
 			fs::remove_all(testDbPath);
+		fs::remove(testDbPath.string() + "-wal");
 	}
 
 	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
@@ -71,25 +72,30 @@ TEST_F(IntegrationTransactionTest, Atomicity_Commit) {
 }
 
 /**
- * Test Atomicity: Rollback behavior
- * Note: Current implementation may not support full rollback
+ * Test Atomicity: Rollback reverts all changes
  */
 TEST_F(IntegrationTransactionTest, Atomicity_Rollback) {
-	(void) execute("CREATE (n:Person {name: 'Charlie', age: 35})");
+	// Pre-existing data
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("CREATE (n:Person {name: 'Charlie', age: 35})");
+		txn.commit();
+	}
 
 	auto beforeResult = execute("MATCH (n:Person) RETURN n.name");
 	ASSERT_EQ(beforeResult.rowCount(), 1UL);
 
-	auto txn = db->beginTransaction();
-	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
-	// Note: rollback() behavior may vary by implementation
-	Transaction::rollback();
+	// Transaction that will be rolled back
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		txn.rollback();
+	}
 
-	// Verify database state after rollback attempt
+	// After rollback, only Charlie should remain
 	auto afterResult = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
-	// Check that we can still query the database
-	EXPECT_GT(afterResult.rowCount(), 0UL);
+	EXPECT_EQ(afterResult.rowCount(), 1UL);
 }
 
 /**
@@ -170,13 +176,18 @@ TEST_F(IntegrationTransactionTest, TransactionWithCreate) {
  * Test transaction with UPDATE operations
  */
 TEST_F(IntegrationTransactionTest, TransactionWithUpdate) {
-	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		txn.commit();
+	}
 
-	auto txn = db->beginTransaction();
-	// Update specific node
-	(void) execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 35");
-	txn.commit();
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 35");
+		txn.commit();
+	}
 
 	auto result = execute("MATCH (n:Person) WHERE n.age > 30 RETURN n.name");
 	EXPECT_EQ(result.rowCount(), 1UL);
@@ -186,13 +197,19 @@ TEST_F(IntegrationTransactionTest, TransactionWithUpdate) {
  * Test transaction with DELETE operations
  */
 TEST_F(IntegrationTransactionTest, TransactionWithDelete) {
-	(void) execute("CREATE (n:Person {name: 'Alice', active: false})");
-	(void) execute("CREATE (n:Person {name: 'Bob', active: false})");
-	(void) execute("CREATE (n:Person {name: 'Charlie', active: true})");
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("CREATE (n:Person {name: 'Alice', active: false})");
+		(void) execute("CREATE (n:Person {name: 'Bob', active: false})");
+		(void) execute("CREATE (n:Person {name: 'Charlie', active: true})");
+		txn.commit();
+	}
 
-	auto txn = db->beginTransaction();
-	(void) execute("MATCH (n:Person) WHERE n.active = false DELETE n");
-	txn.commit();
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("MATCH (n:Person) WHERE n.active = false DELETE n");
+		txn.commit();
+	}
 
 	auto result = execute("MATCH (n:Person) RETURN n.name");
 	EXPECT_EQ(result.rowCount(), 1UL);
@@ -236,4 +253,41 @@ TEST_F(IntegrationTransactionTest, MultipleSequentialTransactions) {
 
 	auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
 	EXPECT_EQ(result.rowCount(), 3UL);
+}
+
+/**
+ * Test auto-rollback on scope exit (destructor)
+ */
+TEST_F(IntegrationTransactionTest, AutoRollbackOnScopeExit) {
+	// Pre-existing data
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("CREATE (n:Person {name: 'Alice'})");
+		txn.commit();
+	}
+
+	// This transaction should be auto-rolled back
+	{
+		auto txn = db->beginTransaction();
+		(void) execute("CREATE (n:Person {name: 'Bob'})");
+		// No commit() - destructor auto-rollback
+	}
+
+	// Only Alice should exist
+	auto result = execute("MATCH (n:Person) RETURN n.name");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test transaction commit then query
+ */
+TEST_F(IntegrationTransactionTest, CommitThenQuery) {
+	auto txn = db->beginTransaction();
+	(void) execute("CREATE (n:Animal {name: 'Dog', legs: 4})");
+	(void) execute("CREATE (n:Animal {name: 'Cat', legs: 4})");
+	(void) execute("CREATE (n:Animal {name: 'Spider', legs: 8})");
+	txn.commit();
+
+	auto result = execute("MATCH (n:Animal) WHERE n.legs = 4 RETURN n.name ORDER BY n.name");
+	EXPECT_EQ(result.rowCount(), 2UL);
 }

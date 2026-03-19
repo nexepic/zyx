@@ -20,7 +20,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include "graph/core/Database.hpp"
+#include "graph/core/Transaction.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/api/QueryEngine.hpp"
@@ -342,6 +344,77 @@ namespace zyx {
 		graph::Database db_;
 	};
 
+	// ========================================================================
+	// 4. Transaction Implementation
+	// ========================================================================
+
+	class TransactionImpl {
+	public:
+		explicit TransactionImpl(graph::Transaction internalTxn, DatabaseImpl *dbImpl) :
+			txn_(std::move(internalTxn)), dbImpl_(dbImpl) {}
+
+		graph::Transaction txn_;
+		DatabaseImpl *dbImpl_; // Non-owning reference to parent database
+	};
+
+	Transaction::Transaction() = default;
+	Transaction::~Transaction() = default;
+	Transaction::Transaction(Transaction &&) noexcept = default;
+	Transaction &Transaction::operator=(Transaction &&) noexcept = default;
+
+	Result Transaction::execute(const std::string &cypher) const {
+		if (!impl_ || !impl_->txn_.isActive()) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_->error_msg = "Transaction is not active";
+			return res;
+		}
+
+		try {
+			auto start = std::chrono::high_resolution_clock::now();
+
+			auto internalRes = impl_->dbImpl_->db_.getQueryEngine()->execute(cypher);
+
+			auto end = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double, std::milli> elapsed = end - start;
+			internalRes.setDuration(elapsed.count());
+
+			auto dm = impl_->dbImpl_->db_.getStorage()->getDataManager();
+
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
+			return res;
+		} catch (const std::exception &e) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_->error_msg = e.what();
+			return res;
+		} catch (...) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_->error_msg = "Unknown error";
+			return res;
+		}
+	}
+
+	void Transaction::commit() {
+		if (!impl_)
+			throw std::runtime_error("Transaction not initialized");
+		impl_->txn_.commit();
+	}
+
+	void Transaction::rollback() {
+		if (!impl_)
+			throw std::runtime_error("Transaction not initialized");
+		impl_->txn_.rollback();
+	}
+
+	bool Transaction::isActive() const { return impl_ && impl_->txn_.isActive(); }
+
+	// ========================================================================
+	// 5. Database API Methods
+	// ========================================================================
+
 	Database::Database(const std::string &path) : impl_(std::make_unique<DatabaseImpl>(path)) {}
 	Database::~Database() = default;
 
@@ -353,8 +426,33 @@ namespace zyx {
 			s->flush();
 	}
 
+	Transaction Database::beginTransaction() {
+		if (!impl_->db_.isOpen()) {
+			impl_->db_.open();
+		}
+
+		auto internalTxn = impl_->db_.beginTransaction();
+
+		Transaction txn;
+		txn.impl_ = std::make_unique<TransactionImpl>(std::move(internalTxn), impl_.get());
+		return txn;
+	}
+
 	Result Database::execute(const std::string &cypher) const {
 		try {
+			if (!impl_->db_.isOpen()) {
+				impl_->db_.open();
+			}
+
+			// Auto-commit: wrap in implicit transaction if no explicit transaction is active.
+			// If an explicit transaction is already active, execute directly within it.
+			bool needsAutoCommit = !impl_->db_.hasActiveTransaction();
+			std::optional<graph::Transaction> implicitTxn;
+
+			if (needsAutoCommit) {
+				implicitTxn.emplace(impl_->db_.beginTransaction());
+			}
+
 			auto start = std::chrono::high_resolution_clock::now();
 
 			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
@@ -364,6 +462,10 @@ namespace zyx {
 
 			internalRes.setDuration(elapsed.count());
 
+			if (implicitTxn) {
+				implicitTxn->commit();
+			}
+
 			// We MUST inject DataManager into ResultImpl to allow label resolution later
 			auto dm = impl_->db_.getStorage()->getDataManager();
 
@@ -371,9 +473,9 @@ namespace zyx {
 			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
 			return res;
 		} catch (const std::exception &e) {
-			// Return Result in error state
+			// Implicit transaction auto-rolls back via destructor
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr); // Empty internal result
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
 			res.impl_->error_msg = e.what();
 			return res;
 		} catch (...) {
