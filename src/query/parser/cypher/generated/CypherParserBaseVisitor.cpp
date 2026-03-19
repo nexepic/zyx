@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.1
+// Generated from generated/CypherParser.g4 by ANTLR 4.13.1
 
 
 #include "CypherParserBaseVisitor.h"

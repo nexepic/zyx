@@ -21,6 +21,7 @@
 #include "WritingClauseHandler.hpp"
 #include "helpers/AstExtractor.hpp"
 #include "helpers/PatternBuilder.hpp"
+#include "generated/CypherLexer.h"
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/planner/PipelineValidator.hpp"
 
@@ -127,19 +128,38 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 	std::vector<query::execution::operators::SetItem> onCreateItems;
 	std::vector<query::execution::operators::SetItem> onMatchItems;
 
-	// Iterate children to find ON MATCH / ON CREATE blocks
-	for (size_t i = 0; i < ctx->children.size(); ++i) {
-		if (ctx->children[i]->getText() == "ON") {
-			// Next is MATCH or CREATE
-			std::string type = ctx->children[i + 1]->getText(); // MATCH / CREATE
-			// Next is SET clause (Parser rule context)
-			auto setCtx = dynamic_cast<CypherParser::SetStatementContext *>(ctx->children[i + 2]);
+	// Walk children in order using type-safe token matching
+	// Grammar: K_MERGE patternPart ( K_ON ( K_MATCH | K_CREATE ) setStatement )*
+	bool sawOn = false;
+	bool isOnMatch = false;
 
-			auto items = helpers::PatternBuilder::extractSetItems(setCtx);
-			if (type == "MATCH") {
-				onMatchItems.insert(onMatchItems.end(), items.begin(), items.end());
-			} else if (type == "CREATE") {
-				onCreateItems.insert(onCreateItems.end(), items.begin(), items.end());
+	for (auto* child : ctx->children) {
+		auto* termNode = dynamic_cast<antlr4::tree::TerminalNode*>(child);
+		if (termNode) {
+			auto tokenType = termNode->getSymbol()->getType();
+			if (tokenType == CypherLexer::K_ON) {
+				sawOn = true;
+				continue;
+			}
+			if (sawOn) {
+				if (tokenType == CypherLexer::K_MATCH) {
+					isOnMatch = true;
+				} else if (tokenType == CypherLexer::K_CREATE) {
+					isOnMatch = false;
+				}
+				sawOn = false;
+				continue;
+			}
+		} else {
+			// Rule context - check if it's a setStatement
+			auto* setCtx = dynamic_cast<CypherParser::SetStatementContext*>(child);
+			if (setCtx) {
+				auto items = helpers::PatternBuilder::extractSetItems(setCtx);
+				if (isOnMatch) {
+					onMatchItems.insert(onMatchItems.end(), items.begin(), items.end());
+				} else {
+					onCreateItems.insert(onCreateItems.end(), items.begin(), items.end());
+				}
 			}
 		}
 	}

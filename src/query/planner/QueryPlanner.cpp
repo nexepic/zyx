@@ -30,6 +30,7 @@
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/LimitOperator.hpp"
+#include "graph/query/execution/operators/MergeEdgeOperator.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
@@ -168,6 +169,18 @@ namespace graph::query {
 																		 onCreateItems, onMatchItems);
 	}
 
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::mergeEdgeOp(const std::string &sourceVar, const std::string &edgeVar,
+							  const std::string &targetVar, const std::string &edgeLabel,
+							  const std::unordered_map<std::string, PropertyValue> &matchProps,
+							  const std::string &direction,
+							  const std::vector<execution::operators::SetItem> &onCreateItems,
+							  const std::vector<execution::operators::SetItem> &onMatchItems) const {
+		return std::make_unique<execution::operators::MergeEdgeOperator>(
+			dm_, im_, sourceVar, edgeVar, targetVar, edgeLabel, matchProps, direction,
+			onCreateItems, onMatchItems);
+	}
+
 	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::showIndexesOp() const {
 		return std::make_unique<execution::operators::ShowIndexesOperator>(im_);
 	}
@@ -241,6 +254,12 @@ namespace graph::query {
 	QueryPlanner::unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
 						   const std::vector<PropertyValue> &list) {
 		return std::make_unique<execution::operators::UnwindOperator>(std::move(child), alias, list);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
+						   std::shared_ptr<graph::query::expressions::Expression> listExpr) {
+		return std::make_unique<execution::operators::UnwindOperator>(std::move(child), alias, std::move(listExpr));
 	}
 
 	std::unique_ptr<execution::PhysicalOperator>

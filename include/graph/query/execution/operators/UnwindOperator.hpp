@@ -23,13 +23,21 @@
 #include <string>
 #include <vector>
 #include "../PhysicalOperator.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 
 namespace graph::query::execution::operators {
 
 	class UnwindOperator : public PhysicalOperator {
 	public:
+		// Literal list constructor (compile-time known list)
 		UnwindOperator(std::unique_ptr<PhysicalOperator> child, std::string alias, std::vector<PropertyValue> list) :
 			child_(std::move(child)), alias_(std::move(alias)), list_(std::move(list)) {}
+
+		// Expression-based constructor (runtime evaluated list)
+		UnwindOperator(std::unique_ptr<PhysicalOperator> child, std::string alias,
+		               std::shared_ptr<graph::query::expressions::Expression> listExpr) :
+			child_(std::move(child)), alias_(std::move(alias)), listExpr_(std::move(listExpr)) {}
 
 		void open() override {
 			if (child_)
@@ -39,6 +47,7 @@ namespace graph::query::execution::operators {
 			currentChildBatch_ = std::nullopt;
 			childRecordIndex_ = 0;
 			listIndex_ = 0;
+			currentList_.clear();
 		}
 
 		std::optional<RecordBatch> next() override {
@@ -50,12 +59,24 @@ namespace graph::query::execution::operators {
 			// UNWIND [1,2] AS x
 			// ====================================================
 			if (!child_) {
-				if (listIndex_ >= list_.size())
+				// For expression-based UNWIND without child, evaluate against empty record
+				if (listExpr_ && currentList_.empty() && listIndex_ == 0) {
+					Record emptyRecord;
+					PropertyValue result = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+						listExpr_.get(), emptyRecord);
+					if (result.getType() == PropertyType::LIST) {
+						currentList_ = result.getList();
+					}
+				} else if (!listExpr_ && currentList_.empty() && listIndex_ == 0) {
+					currentList_ = list_;
+				}
+
+				if (listIndex_ >= currentList_.size())
 					return std::nullopt;
 
-				while (outputBatch.size() < DEFAULT_BATCH_SIZE && listIndex_ < list_.size()) {
+				while (outputBatch.size() < DEFAULT_BATCH_SIZE && listIndex_ < currentList_.size()) {
 					Record r;
-					r.setValue(alias_, list_[listIndex_++]);
+					r.setValue(alias_, currentList_[listIndex_++]);
 					outputBatch.push_back(std::move(r));
 				}
 				return outputBatch;
@@ -82,27 +103,46 @@ namespace graph::query::execution::operators {
 					// Reset counters for the new batch
 					childRecordIndex_ = 0;
 					listIndex_ = 0;
+					needsEval_ = true;
 				}
 
 				// 2. Process current input record
 				const auto &inputRecord = (*currentChildBatch_)[childRecordIndex_];
 
-				// 3. Expand list for this record
-				while (listIndex_ < list_.size() && outputBatch.size() < DEFAULT_BATCH_SIZE) {
-					// Copy original record (keep 'u')
+				// 3. Evaluate expression per input record if expression-based
+				if (needsEval_ || listIndex_ == 0) {
+					if (listExpr_) {
+						PropertyValue result = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+							listExpr_.get(), inputRecord);
+						if (result.getType() == PropertyType::LIST) {
+							currentList_ = result.getList();
+						} else {
+							// Non-list expression: treat as single-element list
+							currentList_ = {result};
+						}
+					} else if (currentList_.empty()) {
+						currentList_ = list_;
+					}
+					needsEval_ = false;
+				}
+
+				// 4. Expand list for this record
+				while (listIndex_ < currentList_.size() && outputBatch.size() < DEFAULT_BATCH_SIZE) {
+					// Copy original record
 					Record expandedRecord = inputRecord;
 
-					// Add new variable ('tag')
-					expandedRecord.setValue(alias_, list_[listIndex_]);
+					// Add new variable
+					expandedRecord.setValue(alias_, currentList_[listIndex_]);
 
 					outputBatch.push_back(std::move(expandedRecord));
 					listIndex_++;
 				}
 
-				// 4. Check if we finished the list for the current record
-				if (listIndex_ >= list_.size()) {
+				// 5. Check if we finished the list for the current record
+				if (listIndex_ >= currentList_.size()) {
 					childRecordIndex_++; // Move to next input record
 					listIndex_ = 0; // Reset list for the next record
+					needsEval_ = true;
 				}
 			}
 
@@ -121,6 +161,9 @@ namespace graph::query::execution::operators {
 		}
 
 		[[nodiscard]] std::string toString() const override {
+			if (listExpr_) {
+				return "Unwind(" + alias_ + ", expr=" + listExpr_->toString() + ")";
+			}
 			return "Unwind(" + alias_ + ", size=" + std::to_string(list_.size()) + ")";
 		}
 
@@ -133,12 +176,15 @@ namespace graph::query::execution::operators {
 	private:
 		std::unique_ptr<PhysicalOperator> child_;
 		std::string alias_;
-		std::vector<PropertyValue> list_;
+		std::vector<PropertyValue> list_; // Compile-time literal list
+		std::shared_ptr<graph::query::expressions::Expression> listExpr_; // Runtime expression
 
 		// State Machine Variables
 		std::optional<RecordBatch> currentChildBatch_;
+		std::vector<PropertyValue> currentList_; // Resolved list for current record
 		size_t childRecordIndex_ = 0; // Index in the input batch
 		size_t listIndex_ = 0; // Index in the UNWIND list
+		bool needsEval_ = true; // Whether expression needs re-evaluation
 	};
 
 } // namespace graph::query::execution::operators

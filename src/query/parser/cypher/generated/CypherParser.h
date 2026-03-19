@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from CypherParser.g4 by ANTLR 4.13.1
+// Generated from generated/CypherParser.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -1073,6 +1073,14 @@ public:
     antlr4::tree::TerminalNode* GTE(size_t i);
     std::vector<antlr4::tree::TerminalNode *> K_IN();
     antlr4::tree::TerminalNode* K_IN(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> K_STARTS();
+    antlr4::tree::TerminalNode* K_STARTS(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> K_WITH();
+    antlr4::tree::TerminalNode* K_WITH(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> K_ENDS();
+    antlr4::tree::TerminalNode* K_ENDS(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> K_CONTAINS();
+    antlr4::tree::TerminalNode* K_CONTAINS(size_t i);
     antlr4::tree::TerminalNode *K_NOT();
 
 

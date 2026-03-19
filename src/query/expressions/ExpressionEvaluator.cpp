@@ -102,7 +102,13 @@ void ExpressionEvaluator::visit(BinaryOpExpression *expr) {
 
 	BinaryOperatorType op = expr->getOperator();
 
-	// NULL propagation: if either operand is NULL, result is NULL
+	// For logical operators, handle NULL with three-valued logic (don't propagate blindly)
+	if (isLogicalOperator(op)) {
+		result_ = evaluateLogical(op, leftVal, rightVal);
+		return;
+	}
+
+	// For non-logical operators, propagate NULL: if either operand is NULL, result is NULL
 	if (propagateNull(leftVal, rightVal)) {
 		result_ = PropertyValue();
 		return;
@@ -113,8 +119,6 @@ void ExpressionEvaluator::visit(BinaryOpExpression *expr) {
 		result_ = evaluateArithmetic(op, leftVal, rightVal);
 	} else if (isComparisonOperator(op)) {
 		result_ = evaluateComparison(op, leftVal, rightVal);
-	} else if (isLogicalOperator(op)) {
-		result_ = evaluateLogical(op, leftVal, rightVal);
 	} else {
 		throw ExpressionEvaluationException("Unknown binary operator");
 	}
@@ -260,7 +264,43 @@ void ExpressionEvaluator::visit(CaseExpression *expr) {
 PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
                                                        const PropertyValue &left,
                                                        const PropertyValue &right) {
-	// Convert to double for arithmetic (handles int-int, int-double, double-double)
+	// String concatenation: if either operand is a string and op is ADD, concatenate
+	if (op == BinaryOperatorType::BOP_ADD &&
+	    (left.getType() == PropertyType::STRING || right.getType() == PropertyType::STRING)) {
+		return PropertyValue(EvaluationContext::toString(left) + EvaluationContext::toString(right));
+	}
+
+	// Integer-preserving arithmetic: if both operands are integers, keep integer type
+	bool bothIntegers = (left.getType() == PropertyType::INTEGER &&
+	                     right.getType() == PropertyType::INTEGER);
+
+	if (bothIntegers) {
+		int64_t l = std::get<int64_t>(left.getVariant());
+		int64_t r = std::get<int64_t>(right.getVariant());
+
+		switch (op) {
+			case BinaryOperatorType::BOP_ADD:
+				return PropertyValue(l + r);
+			case BinaryOperatorType::BOP_SUBTRACT:
+				return PropertyValue(l - r);
+			case BinaryOperatorType::BOP_MULTIPLY:
+				return PropertyValue(l * r);
+			case BinaryOperatorType::BOP_DIVIDE:
+				if (r == 0) throw DivisionByZeroException();
+				// Integer division in Cypher produces double if not evenly divisible
+				if (l % r == 0) return PropertyValue(l / r);
+				return PropertyValue(static_cast<double>(l) / static_cast<double>(r));
+			case BinaryOperatorType::BOP_MODULO:
+				if (r == 0) throw DivisionByZeroException();
+				return PropertyValue(l % r);
+			case BinaryOperatorType::BOP_POWER:
+				return PropertyValue(std::pow(static_cast<double>(l), static_cast<double>(r)));
+			default:
+				throw ExpressionEvaluationException("Invalid arithmetic operator");
+		}
+	}
+
+	// Floating-point arithmetic for mixed types or double operands
 	double leftDouble = EvaluationContext::toDouble(left);
 	double rightDouble = EvaluationContext::toDouble(right);
 
@@ -281,7 +321,6 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 			return PropertyValue(leftDouble / rightDouble);
 
 		case BinaryOperatorType::BOP_MODULO: {
-			// Modulo only makes sense for integers
 			int64_t leftInt = EvaluationContext::toInteger(left);
 			int64_t rightInt = EvaluationContext::toInteger(right);
 			if (rightInt == 0) {
@@ -320,6 +359,24 @@ PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
 		case BinaryOperatorType::BOP_GREATER_EQUAL:
 			return PropertyValue(left >= right);
 
+		case BinaryOperatorType::BOP_STARTS_WITH: {
+			std::string l = EvaluationContext::toString(left);
+			std::string r = EvaluationContext::toString(right);
+			return PropertyValue(l.size() >= r.size() && l.substr(0, r.size()) == r);
+		}
+
+		case BinaryOperatorType::BOP_ENDS_WITH: {
+			std::string l = EvaluationContext::toString(left);
+			std::string r = EvaluationContext::toString(right);
+			return PropertyValue(l.size() >= r.size() && l.substr(l.size() - r.size()) == r);
+		}
+
+		case BinaryOperatorType::BOP_CONTAINS: {
+			std::string l = EvaluationContext::toString(left);
+			std::string r = EvaluationContext::toString(right);
+			return PropertyValue(l.find(r) != std::string::npos);
+		}
+
 		default:
 			throw ExpressionEvaluationException("Invalid comparison operator");
 	}
@@ -328,20 +385,42 @@ PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
 PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
                                                     const PropertyValue &left,
                                                     const PropertyValue &right) {
-	bool leftBool = EvaluationContext::toBoolean(left);
-	bool rightBool = EvaluationContext::toBoolean(right);
+	bool leftNull = EvaluationContext::isNull(left);
+	bool rightNull = EvaluationContext::isNull(right);
 
 	switch (op) {
-		case BinaryOperatorType::BOP_AND:
-			// Short-circuit: if left is false, don't evaluate right
-			return PropertyValue(leftBool && rightBool);
+		case BinaryOperatorType::BOP_AND: {
+			// Three-valued logic for AND:
+			// false AND NULL → false
+			// NULL AND false → false
+			// true AND NULL → NULL
+			// NULL AND true → NULL
+			// NULL AND NULL → NULL
+			if (!leftNull && !EvaluationContext::toBoolean(left)) return PropertyValue(false);
+			if (!rightNull && !EvaluationContext::toBoolean(right)) return PropertyValue(false);
+			if (leftNull || rightNull) return PropertyValue(); // NULL
+			return PropertyValue(EvaluationContext::toBoolean(left) && EvaluationContext::toBoolean(right));
+		}
 
-		case BinaryOperatorType::BOP_OR:
-			// Short-circuit: if left is true, don't evaluate right
-			return PropertyValue(leftBool || rightBool);
+		case BinaryOperatorType::BOP_OR: {
+			// Three-valued logic for OR:
+			// true OR NULL → true
+			// NULL OR true → true
+			// false OR NULL → NULL
+			// NULL OR false → NULL
+			// NULL OR NULL → NULL
+			if (!leftNull && EvaluationContext::toBoolean(left)) return PropertyValue(true);
+			if (!rightNull && EvaluationContext::toBoolean(right)) return PropertyValue(true);
+			if (leftNull || rightNull) return PropertyValue(); // NULL
+			return PropertyValue(EvaluationContext::toBoolean(left) || EvaluationContext::toBoolean(right));
+		}
 
-		case BinaryOperatorType::BOP_XOR:
-			return PropertyValue(leftBool != rightBool);
+		case BinaryOperatorType::BOP_XOR: {
+			// Three-valued logic for XOR:
+			// Any NULL operand → NULL
+			if (leftNull || rightNull) return PropertyValue();
+			return PropertyValue(EvaluationContext::toBoolean(left) != EvaluationContext::toBoolean(right));
+		}
 
 		default:
 			throw ExpressionEvaluationException("Invalid logical operator");
@@ -351,6 +430,10 @@ PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
 PropertyValue ExpressionEvaluator::evaluateUnary(UnaryOperatorType op, const PropertyValue &operand) {
 	switch (op) {
 		case UnaryOperatorType::UOP_MINUS: {
+			if (operand.getType() == PropertyType::INTEGER) {
+				int64_t val = std::get<int64_t>(operand.getVariant());
+				return PropertyValue(-val);
+			}
 			double val = EvaluationContext::toDouble(operand);
 			return PropertyValue(-val);
 		}

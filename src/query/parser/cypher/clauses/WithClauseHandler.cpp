@@ -25,6 +25,7 @@
 #include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/QueryErrorMessages.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 
 namespace graph::parser::cypher::clauses {
 
@@ -79,10 +80,12 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 
 	// Handle WHERE clause in WITH (WITH ... WHERE condition)
 	if (ctx->where()) {
-		std::string desc;
-		auto predicate = helpers::ExpressionBuilder::buildWherePredicate(ctx->where()->expression(), desc);
-
-		// Create FilterOperator with the predicate
+		auto ast = helpers::ExpressionBuilder::buildExpression(ctx->where()->expression());
+		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
+		std::string desc = astShared->toString();
+		auto predicate = [astShared](const query::execution::Record &r) -> bool {
+			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r);
+		};
 		rootOp = planner->filterOp(std::move(rootOp), predicate, desc);
 	}
 

@@ -349,6 +349,9 @@ std::string toString(BinaryOperatorType op) {
 		case BinaryOperatorType::BOP_LESS_EQUAL: return "<=";
 		case BinaryOperatorType::BOP_GREATER_EQUAL: return ">=";
 		case BinaryOperatorType::BOP_IN: return "IN";
+		case BinaryOperatorType::BOP_STARTS_WITH: return "STARTS WITH";
+		case BinaryOperatorType::BOP_ENDS_WITH: return "ENDS WITH";
+		case BinaryOperatorType::BOP_CONTAINS: return "CONTAINS";
 		case BinaryOperatorType::BOP_AND: return "AND";
 		case BinaryOperatorType::BOP_OR: return "OR";
 		case BinaryOperatorType::BOP_XOR: return "XOR";
@@ -379,7 +382,10 @@ bool isComparisonOperator(BinaryOperatorType op) {
 	       op == BinaryOperatorType::BOP_LESS ||
 	       op == BinaryOperatorType::BOP_GREATER ||
 	       op == BinaryOperatorType::BOP_LESS_EQUAL ||
-	       op == BinaryOperatorType::BOP_GREATER_EQUAL;
+	       op == BinaryOperatorType::BOP_GREATER_EQUAL ||
+	       op == BinaryOperatorType::BOP_STARTS_WITH ||
+	       op == BinaryOperatorType::BOP_ENDS_WITH ||
+	       op == BinaryOperatorType::BOP_CONTAINS;
 }
 
 bool isLogicalOperator(BinaryOperatorType op) {

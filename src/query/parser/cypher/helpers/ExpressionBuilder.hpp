@@ -36,20 +36,11 @@ namespace graph::parser::cypher::helpers {
 
 /**
  * @class ExpressionBuilder
- * @brief Builds predicates and expressions from Cypher AST contexts.
+ * @brief Builds Expression ASTs from Cypher AST contexts.
  *
- * This class handles two modes of operation:
- *
- * **LEGACY MODE** (for backward compatibility):
- * - buildWherePredicate(): Generates std::function predicates directly
- * - Used by existing FilterOperator implementation
- *
- * **NEW MODE** (AST-based, recommended):
  * - buildExpression(): Returns Expression* AST
- * - More powerful, supports complex expressions
- * - Used by new ExpressionEvaluator
- *
- * Migration path: Old code continues to work, new code should use buildExpression().
+ * - Supports complex expressions including arithmetic, comparison, logical, and string operators
+ * - Used by ExpressionEvaluator for runtime evaluation
  */
 class ExpressionBuilder {
 public:
@@ -112,32 +103,7 @@ public:
 	static PropertyValue evaluateLiteralExpression(CypherParser::ExpressionContext *expr);
 
 	// =========================================================================
-	// LEGACY API: Direct predicate generation (BACKWARD COMPATIBLE)
-	// =========================================================================
-
-	/**
-	 * @brief Build a WHERE predicate function from an expression context.
-	 *
-	 * **DEPRECATED**: Use buildExpression() + ExpressionEvaluator instead.
-	 * This method is kept for backward compatibility with existing FilterOperator code.
-	 *
-	 * Currently supports binary comparisons: n.prop <op> value
-	 * where <op> is one of: =, <>, <, >, <=, >=, IN
-	 *
-	 * @param expr The expression context
-	 * @param outDesc Output parameter for predicate description (e.g., "n.age > 10")
-	 * @return A predicate function that evaluates records
-	 * @throws std::runtime_error if the expression is not supported
-	 *
-	 * @deprecated Use buildExpression() for new code
-	 */
-	[[deprecated("Use buildExpression() + ExpressionEvaluator for new code")]]
-	static std::function<bool(const query::execution::Record &)> buildWherePredicate(
-		CypherParser::ExpressionContext *expr,
-		std::string &outDesc);
-
-	// =========================================================================
-	// Utility Methods (shared by both APIs)
+	// Utility Methods
 	// =========================================================================
 
 	/**

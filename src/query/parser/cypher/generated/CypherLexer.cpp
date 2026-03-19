@@ -1,5 +1,5 @@
 
-// Generated from CypherLexer.g4 by ANTLR 4.13.1
+// Generated from generated/CypherLexer.g4 by ANTLR 4.13.1
 
 
 #include "CypherLexer.h"

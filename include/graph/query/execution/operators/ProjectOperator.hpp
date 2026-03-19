@@ -22,7 +22,6 @@
 
 #include <memory>
 #include <optional>
-#include <regex>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -44,98 +43,7 @@ namespace graph::query::execution::operators {
 		std::shared_ptr<graph::query::expressions::Expression> expression; // Expression AST
 		std::string alias; // The output variable name (e.g., "age" or "num")
 
-		// Helper function to check if a character is a valid identifier start
-		static bool isIdentifierStart(char c) {
-			return std::isalpha(c) || c == '_';
-		}
-
-		// Helper function to check if a character is a valid identifier character
-		static bool isIdentifierChar(char c) {
-			return std::isalnum(c) || c == '_';
-		}
-
-		// Helper function to parse simple string expressions into AST
-		static std::shared_ptr<graph::query::expressions::Expression> parseExpression(const std::string& exprText) {
-			using namespace graph::query::expressions;
-
-			// Check if it's a quoted string literal (e.g., "hello" or 'world')
-			if ((exprText.size() >= 2) && ((exprText.front() == '"' && exprText.back() == '"') ||
-			                               (exprText.front() == '\'' && exprText.back() == '\''))) {
-				std::string strVal = exprText.substr(1, exprText.size() - 2);
-				return std::make_shared<LiteralExpression>(strVal);
-			}
-
-			// Check if it's a property access (e.g., n.prop)
-			// Only treat as property access if it starts with a valid identifier
-			size_t dotPos = exprText.find('.');
-			if (dotPos != std::string::npos && dotPos > 0 && isIdentifierStart(exprText[0])) {
-				std::string varName = exprText.substr(0, dotPos);
-				std::string propName = exprText.substr(dotPos + 1);
-				// Verify the rest of the variable name is valid
-				bool validVarName = true;
-				for (char c : varName) {
-					if (!isIdentifierChar(c)) {
-						validVarName = false;
-						break;
-					}
-				}
-				if (validVarName && !propName.empty()) {
-					return std::make_shared<VariableReferenceExpression>(varName, propName);
-				}
-			}
-
-			// Check for NULL keyword (case-insensitive)
-			if (exprText.size() == 4) {
-				std::string upper = exprText;
-				for (auto& c : upper) c = std::toupper(c);
-				if (upper == "NULL") {
-					return std::make_shared<LiteralExpression>();
-				}
-			}
-
-			// Check if it's a boolean literal (case-insensitive)
-			if (exprText.size() <= 5) {
-				std::string upper = exprText;
-				for (auto& c : upper) c = std::toupper(c);
-				if (upper == "TRUE") {
-					return std::make_shared<LiteralExpression>(true);
-				}
-				if (upper == "FALSE") {
-					return std::make_shared<LiteralExpression>(false);
-				}
-			}
-
-			// Check if it's an integer literal
-			try {
-				size_t pos;
-				int64_t intVal = std::stoll(exprText, &pos);
-				if (pos == exprText.length()) {
-					return std::make_shared<LiteralExpression>(intVal);
-				}
-			} catch (...) {
-				// Not an integer, continue
-			}
-
-			// Check if it's a double literal
-			try {
-				size_t pos;
-				double doubleVal = std::stod(exprText, &pos);
-				if (pos == exprText.length()) {
-					return std::make_shared<LiteralExpression>(doubleVal);
-				}
-			} catch (...) {
-				// Not a double, continue
-			}
-
-			// Default: treat as variable reference
-			return std::make_shared<VariableReferenceExpression>(exprText);
-		}
-
-		// Legacy constructor for backward compatibility
-		ProjectItem(std::string exprText, std::string alias)
-			: expression(parseExpression(exprText)), alias(std::move(alias)) {}
-
-		// New constructor for expression AST
+		// Constructor for expression AST
 		ProjectItem(std::shared_ptr<graph::query::expressions::Expression> expr, std::string alias)
 			: expression(std::move(expr)), alias(std::move(alias)) {}
 

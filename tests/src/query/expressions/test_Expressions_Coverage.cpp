@@ -628,7 +628,7 @@ TEST_F(ExpressionsCoverageTest, UnaryOpExpression_MINUS_Variants) {
 		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
-		EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), -42.0);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), -42);
 	}
 
 	{
@@ -1373,9 +1373,9 @@ TEST_F(ExpressionsCoverageTest, ListComprehensionExpression_CompleteCoverage) {
 		expr.accept(evaluator);
 		const auto& result = evaluator.getResult().getList();
 		EXPECT_EQ(result.size(), 3ULL);
-		EXPECT_EQ(std::get<double>(result[0].getVariant()), 2.0);
-		EXPECT_EQ(std::get<double>(result[1].getVariant()), 4.0);
-		EXPECT_EQ(std::get<double>(result[2].getVariant()), 6.0);
+		EXPECT_EQ(std::get<int64_t>(result[0].getVariant()), 2);
+		EXPECT_EQ(std::get<int64_t>(result[1].getVariant()), 4);
+		EXPECT_EQ(std::get<int64_t>(result[2].getVariant()), 6);
 	}
 
 	// EXTRACT with WHERE and MAP: [x IN list WHERE x > 2 | x * 3]
@@ -1394,9 +1394,9 @@ TEST_F(ExpressionsCoverageTest, ListComprehensionExpression_CompleteCoverage) {
 		expr.accept(evaluator);
 		const auto& result = evaluator.getResult().getList();
 		EXPECT_EQ(result.size(), 3ULL); // 3, 4, 5
-		EXPECT_EQ(std::get<double>(result[0].getVariant()), 9.0);
-		EXPECT_EQ(std::get<double>(result[1].getVariant()), 12.0);
-		EXPECT_EQ(std::get<double>(result[2].getVariant()), 15.0);
+		EXPECT_EQ(std::get<int64_t>(result[0].getVariant()), 9);
+		EXPECT_EQ(std::get<int64_t>(result[1].getVariant()), 12);
+		EXPECT_EQ(std::get<int64_t>(result[2].getVariant()), 15);
 	}
 
 	// REDUCE - Currently returns list like FILTER (REDUCE not fully implemented)

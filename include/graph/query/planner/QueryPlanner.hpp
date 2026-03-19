@@ -131,6 +131,14 @@ namespace graph::query {
 				const std::vector<execution::operators::SetItem> &onCreateItems,
 				const std::vector<execution::operators::SetItem> &onMatchItems) const;
 
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		mergeEdgeOp(const std::string &sourceVar, const std::string &edgeVar,
+					const std::string &targetVar, const std::string &edgeLabel,
+					const std::unordered_map<std::string, PropertyValue> &matchProps,
+					const std::string &direction,
+					const std::vector<execution::operators::SetItem> &onCreateItems,
+					const std::vector<execution::operators::SetItem> &onMatchItems) const;
+
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> dropIndexOp(const std::string &indexName) const;
 
 		// Drop Index By Definition (Legacy/Implicit name)
@@ -188,6 +196,10 @@ namespace graph::query {
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
 		unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
 				 const std::vector<PropertyValue> &list);
+
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		unwindOp(std::unique_ptr<execution::PhysicalOperator> child, const std::string &alias,
+				 std::shared_ptr<graph::query::expressions::Expression> listExpr);
 
 		std::unique_ptr<execution::PhysicalOperator> createVectorIndexOp(const std::string &indexName,
 																		 const std::string &label,

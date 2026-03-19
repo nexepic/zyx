@@ -72,6 +72,11 @@ enum class BinaryOperatorType {
 	// Special operators
 	BOP_IN,
 
+	// String operators
+	BOP_STARTS_WITH,
+	BOP_ENDS_WITH,
+	BOP_CONTAINS,
+
 	// Logical
 	BOP_AND,
 	BOP_OR,

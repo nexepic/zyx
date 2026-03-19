@@ -88,7 +88,7 @@ TEST_F(ComplexArithmeticTest, Basic_Division) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 2.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 2.0);
 }
 
 TEST_F(ComplexArithmeticTest, Basic_Modulo) {
@@ -108,7 +108,7 @@ TEST_F(ComplexArithmeticTest, Basic_Power) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_POWER, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 100.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 100.0);
 }
 
 // ============================================================================
@@ -126,7 +126,7 @@ TEST_F(ComplexArithmeticTest, Complex_AddMultiply) {
 	BinaryOpExpression expr(std::move(mulExpr), BinaryOperatorType::BOP_ADD, std::move(addRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 52.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 52.0);
 }
 
 TEST_F(ComplexArithmeticTest, Complex_AddDivide) {
@@ -141,7 +141,7 @@ TEST_F(ComplexArithmeticTest, Complex_AddDivide) {
 	BinaryOpExpression expr(std::move(addLeft), BinaryOperatorType::BOP_ADD, std::move(divExpr));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 12.5);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 12.5);
 }
 
 TEST_F(ComplexArithmeticTest, Complex_MultiplyAddMultiply) {
@@ -158,7 +158,7 @@ TEST_F(ComplexArithmeticTest, Complex_MultiplyAddMultiply) {
 	BinaryOpExpression expr(std::move(mul1), BinaryOperatorType::BOP_ADD, std::move(mul2));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 70.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 70.0);
 }
 
 TEST_F(ComplexArithmeticTest, Complex_SubtractPower) {
@@ -173,7 +173,7 @@ TEST_F(ComplexArithmeticTest, Complex_SubtractPower) {
 	BinaryOpExpression expr(std::move(subLeft), BinaryOperatorType::BOP_SUBTRACT, std::move(powExpr));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), -15.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), -15.0);
 }
 
 TEST_F(ComplexArithmeticTest, VeryComplex_Expression) {
@@ -198,7 +198,7 @@ TEST_F(ComplexArithmeticTest, VeryComplex_Expression) {
 	BinaryOpExpression expr(std::move(add), BinaryOperatorType::BOP_SUBTRACT, std::move(subRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_NEAR(std::get<double>(result.getVariant()), 48.0714, 0.001);
+	EXPECT_NEAR(getAsDouble(result), 48.0714, 0.001);
 }
 
 // ============================================================================
@@ -212,7 +212,7 @@ TEST_F(ComplexArithmeticTest, Mixed_IntDouble_Addition) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 13.5);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 13.5);
 }
 
 TEST_F(ComplexArithmeticTest, Mixed_IntDouble_Multiplication) {
@@ -222,7 +222,7 @@ TEST_F(ComplexArithmeticTest, Mixed_IntDouble_Multiplication) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 25.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 25.0);
 }
 
 TEST_F(ComplexArithmeticTest, Mixed_DoubleInt_Division) {
@@ -232,7 +232,7 @@ TEST_F(ComplexArithmeticTest, Mixed_DoubleInt_Division) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 0.7);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 0.7);
 }
 
 // ============================================================================
@@ -248,7 +248,7 @@ TEST_F(ComplexArithmeticTest, UnaryMinus_BinaryAdd) {
 	BinaryOpExpression expr(std::move(unaryExpr), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), -5.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), -5.0);
 }
 
 TEST_F(ComplexArithmeticTest, UnaryMinus_BothOperands) {
@@ -262,7 +262,7 @@ TEST_F(ComplexArithmeticTest, UnaryMinus_BothOperands) {
 	BinaryOpExpression expr(std::move(unary1), BinaryOperatorType::BOP_ADD, std::move(unary2));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), -15.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), -15.0);
 }
 
 TEST_F(ComplexArithmeticTest, UnaryMinus_Multiplication) {
@@ -274,7 +274,7 @@ TEST_F(ComplexArithmeticTest, UnaryMinus_Multiplication) {
 	BinaryOpExpression expr(std::move(unaryExpr), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), -50.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), -50.0);
 }
 
 // ============================================================================
@@ -288,7 +288,7 @@ TEST_F(ComplexArithmeticTest, VariableRef_SimpleAdd) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 15.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 15.0);
 }
 
 TEST_F(ComplexArithmeticTest, VariableRef_ComplexExpression) {
@@ -314,7 +314,7 @@ TEST_F(ComplexArithmeticTest, VariableRef_ComplexExpression) {
 	BinaryOpExpression expr(std::move(add), BinaryOperatorType::BOP_SUBTRACT, std::move(subRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_NEAR(std::get<double>(result.getVariant()), 48.0714, 0.001);
+	EXPECT_NEAR(getAsDouble(result), 48.0714, 0.001);
 }
 
 TEST_F(ComplexArithmeticTest, VariableRef_WithUnaryMinus) {
@@ -326,7 +326,7 @@ TEST_F(ComplexArithmeticTest, VariableRef_WithUnaryMinus) {
 	BinaryOpExpression expr(std::move(unaryExpr), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), -5.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), -5.0);
 }
 
 // ============================================================================
@@ -343,7 +343,7 @@ TEST_F(ComplexArithmeticTest, ZeroInExpression) {
 	BinaryOpExpression expr(std::move(mul), BinaryOperatorType::BOP_ADD, std::move(addRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 5.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 5.0);
 }
 
 TEST_F(ComplexArithmeticTest, NegativeNumbers) {
@@ -353,7 +353,7 @@ TEST_F(ComplexArithmeticTest, NegativeNumbers) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), -8.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), -8.0);
 }
 
 TEST_F(ComplexArithmeticTest, LargeNumbers) {
@@ -366,7 +366,7 @@ TEST_F(ComplexArithmeticTest, LargeNumbers) {
 	BinaryOpExpression expr(std::move(mul), BinaryOperatorType::BOP_ADD, std::move(addRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 1000000500000.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 1000000500000.0);
 }
 
 TEST_F(ComplexArithmeticTest, FractionalNumbers) {
@@ -379,7 +379,7 @@ TEST_F(ComplexArithmeticTest, FractionalNumbers) {
 	BinaryOpExpression expr(std::move(mul), BinaryOperatorType::BOP_ADD, std::move(addRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_NEAR(std::get<double>(result.getVariant()), 0.32, 0.0001);
+	EXPECT_NEAR(getAsDouble(result), 0.32, 0.0001);
 }
 
 // ============================================================================
@@ -396,7 +396,7 @@ TEST_F(ComplexArithmeticTest, Nested_LeftAssociative) {
 	BinaryOpExpression expr(std::move(add), BinaryOperatorType::BOP_MULTIPLY, std::move(mulRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 30.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 30.0);
 }
 
 TEST_F(ComplexArithmeticTest, Nested_RightAssociative) {
@@ -410,7 +410,7 @@ TEST_F(ComplexArithmeticTest, Nested_RightAssociative) {
 	BinaryOpExpression expr(std::move(mulLeft), BinaryOperatorType::BOP_MULTIPLY, std::move(add));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 70.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 70.0);
 }
 
 TEST_F(ComplexArithmeticTest, DeeplyNested) {
@@ -438,7 +438,7 @@ TEST_F(ComplexArithmeticTest, DeeplyNested) {
 	BinaryOpExpression expr(std::move(mul), BinaryOperatorType::BOP_DIVIDE, std::move(divRight));
 
 	auto result = evaluate(&expr);
-	EXPECT_NEAR(std::get<double>(result.getVariant()), -34.2857, 0.001);
+	EXPECT_NEAR(getAsDouble(result), -34.2857, 0.001);
 }
 
 // ============================================================================
@@ -459,7 +459,7 @@ TEST_F(ComplexArithmeticTest, Precedence_MultiplyOverAdd) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(mul));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 20.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 20.0);
 }
 
 TEST_F(ComplexArithmeticTest, Precedence_DivisionOverSubtract) {
@@ -476,7 +476,7 @@ TEST_F(ComplexArithmeticTest, Precedence_DivisionOverSubtract) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_SUBTRACT, std::move(div));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 7.5);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 7.5);
 }
 
 TEST_F(ComplexArithmeticTest, Precedence_PowerOverMultiply) {
@@ -493,5 +493,5 @@ TEST_F(ComplexArithmeticTest, Precedence_PowerOverMultiply) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(pow));
 
 	auto result = evaluate(&expr);
-	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 250.0);
+	EXPECT_DOUBLE_EQ(getAsDouble(result), 250.0);
 }

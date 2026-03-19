@@ -19,6 +19,7 @@
  **/
 
 #include "../ExpressionBuilder.hpp"
+#include "generated/CypherLexer.h"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
@@ -200,54 +201,81 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 	// Handle comparison operators: arith (COMPARE arith)* (IS_NULL)?
 	auto left = buildArithmeticExpression(arithExprs[0]);
 
-	// Process binary comparison operators (EQ, NEQ, LT, GT, LTE, GTE, IN)
+	// Process binary comparison operators (EQ, NEQ, LT, GT, LTE, GTE, IN, STARTS WITH, ENDS WITH, CONTAINS)
 	if (!ctx->children.empty() && arithExprs.size() > 1) {
-		// Find the operator token in the children
-		for (size_t i = 1; i < arithExprs.size(); ++i) {
-			BinaryOperatorType op = BinaryOperatorType::BOP_ADD; // default
+		// Walk children in parse order to determine operator type by position
+		size_t arithIdx = 0;
+		BinaryOperatorType pendingOp = BinaryOperatorType::BOP_EQUAL;
+		bool hasPendingOp = false;
+		bool expectWith = false; // For STARTS WITH / ENDS WITH multi-token operators
 
-			// Check if this is an IN operator with a list literal
-			if (!ctx->K_IN().empty() && i - 1 < ctx->K_IN().size()) {
-				// Check if RHS is a list literal
-				auto rhsArith = arithExprs[i];
-				// Get the first (and should be only) power expression from the arithmetic expression
-				auto rhsPowerList = rhsArith->powerExpression();
-				if (!rhsPowerList.empty()) {
-					auto rhsUnaryList = rhsPowerList[0]->unaryExpression();
-					if (!rhsUnaryList.empty() && rhsUnaryList[0]->atom() && rhsUnaryList[0]->atom()->listLiteral()) {
-						// Extract list values
-						std::vector<PropertyValue> listValues;
-						auto listLit = rhsUnaryList[0]->atom()->listLiteral();
-						for (auto itemExpr : listLit->expression()) {
-							auto itemAtom = getAtomFromExpression(itemExpr);
-							if (itemAtom && itemAtom->literal()) {
-								listValues.push_back(parseValue(itemAtom->literal()));
-							} else {
-								throw std::runtime_error("IN list only supports literal values");
+		for (auto* child : ctx->children) {
+			auto* termNode = dynamic_cast<antlr4::tree::TerminalNode*>(child);
+			if (!termNode) {
+				// This is a rule context (arithmeticExpression)
+				if (arithIdx == 0) {
+					arithIdx++;
+					continue; // Skip the first arithmetic expression (already in 'left')
+				}
+				if (!hasPendingOp) {
+					arithIdx++;
+					continue;
+				}
+
+				// Check if IN operator with a list literal on the RHS
+				if (pendingOp == BinaryOperatorType::BOP_IN) {
+					auto rhsArith = arithExprs[arithIdx];
+					auto rhsPowerList = rhsArith->powerExpression();
+					if (!rhsPowerList.empty()) {
+						auto rhsUnaryList = rhsPowerList[0]->unaryExpression();
+						if (!rhsUnaryList.empty() && rhsUnaryList[0]->atom() && rhsUnaryList[0]->atom()->listLiteral()) {
+							std::vector<PropertyValue> listValues;
+							auto listLit = rhsUnaryList[0]->atom()->listLiteral();
+							for (auto itemExpr : listLit->expression()) {
+								auto itemAtom = getAtomFromExpression(itemExpr);
+								if (itemAtom && itemAtom->literal()) {
+									listValues.push_back(parseValue(itemAtom->literal()));
+								} else {
+									throw std::runtime_error("IN list only supports literal values");
+								}
 							}
+							left = std::make_unique<InExpression>(std::move(left), std::move(listValues));
+							hasPendingOp = false;
+							arithIdx++;
+							continue;
 						}
-
-						// Create an InExpression
-						left = std::make_unique<InExpression>(std::move(left), std::move(listValues));
-						continue;
 					}
 				}
-				// If not a list literal, fall through to normal handling
+
+				auto right = buildArithmeticExpression(arithExprs[arithIdx]);
+				left = std::make_unique<BinaryOpExpression>(std::move(left), pendingOp, std::move(right));
+				hasPendingOp = false;
+				arithIdx++;
+				continue;
 			}
 
-			// Determine the operator by checking which token is present
-			if (i - 1 < ctx->EQ().size()) op = BinaryOperatorType::BOP_EQUAL;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size()) op = BinaryOperatorType::BOP_NOT_EQUAL;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size()) op = BinaryOperatorType::BOP_LESS;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size()) op = BinaryOperatorType::BOP_GREATER;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size()) op = BinaryOperatorType::BOP_LESS_EQUAL;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size() + ctx->GTE().size()) op = BinaryOperatorType::BOP_GREATER_EQUAL;
-			else if (i - 1 < ctx->EQ().size() + ctx->NEQ().size() + ctx->LT().size() + ctx->GT().size() + ctx->LTE().size() + ctx->GTE().size() + ctx->K_IN().size()) {
-				op = BinaryOperatorType::BOP_IN;
+			// Terminal node - determine operator type
+			auto tokenType = termNode->getSymbol()->getType();
+
+			if (expectWith) {
+				// We just saw K_STARTS or K_ENDS, expecting K_WITH
+				expectWith = false;
+				continue; // K_WITH consumed, pendingOp already set
 			}
 
-			auto right = buildArithmeticExpression(arithExprs[i]);
-			left = std::make_unique<BinaryOpExpression>(std::move(left), op, std::move(right));
+			switch (tokenType) {
+				case CypherLexer::EQ: pendingOp = BinaryOperatorType::BOP_EQUAL; hasPendingOp = true; break;
+				case CypherLexer::NEQ: pendingOp = BinaryOperatorType::BOP_NOT_EQUAL; hasPendingOp = true; break;
+				case CypherLexer::LT: pendingOp = BinaryOperatorType::BOP_LESS; hasPendingOp = true; break;
+				case CypherLexer::GT: pendingOp = BinaryOperatorType::BOP_GREATER; hasPendingOp = true; break;
+				case CypherLexer::LTE: pendingOp = BinaryOperatorType::BOP_LESS_EQUAL; hasPendingOp = true; break;
+				case CypherLexer::GTE: pendingOp = BinaryOperatorType::BOP_GREATER_EQUAL; hasPendingOp = true; break;
+				case CypherLexer::K_IN: pendingOp = BinaryOperatorType::BOP_IN; hasPendingOp = true; break;
+				case CypherLexer::K_STARTS: pendingOp = BinaryOperatorType::BOP_STARTS_WITH; hasPendingOp = true; expectWith = true; break;
+				case CypherLexer::K_ENDS: pendingOp = BinaryOperatorType::BOP_ENDS_WITH; hasPendingOp = true; expectWith = true; break;
+				case CypherLexer::K_CONTAINS: pendingOp = BinaryOperatorType::BOP_CONTAINS; hasPendingOp = true; break;
+				default: break;
+			}
 		}
 	}
 
@@ -273,27 +301,39 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 	// Handle arithmetic operators: power (PLUS|MINUS|MULTIPLY|DIVIDE|MODULO power)*
 	auto left = buildPowerExpression(powerExprs[0]);
 
-	// Process operators from left to right
-	for (size_t i = 1; i < powerExprs.size(); ++i) {
-		BinaryOperatorType op = BinaryOperatorType::BOP_ADD; // default
+	// Walk children in parse order to determine operator type by position
+	size_t powerIdx = 0;
+	BinaryOperatorType pendingOp = BinaryOperatorType::BOP_ADD;
+	bool hasPendingOp = false;
 
-		// Determine the operator
-		size_t plusCount = ctx->PLUS().size();
-		size_t minusCount = ctx->MINUS().size();
-		size_t multiplyCount = ctx->MULTIPLY().size();
-		size_t divideCount = ctx->DIVIDE().size();
-		size_t moduloCount = ctx->MODULO().size();
+	for (auto* child : ctx->children) {
+		auto* termNode = dynamic_cast<antlr4::tree::TerminalNode*>(child);
+		if (!termNode) {
+			// This is a rule context (powerExpression)
+			if (powerIdx == 0) {
+				powerIdx++;
+				continue; // Skip the first power expression (already in 'left')
+			}
+			if (!hasPendingOp) {
+				powerIdx++;
+				continue;
+			}
+			auto right = buildPowerExpression(powerExprs[powerIdx]);
+			left = std::make_unique<BinaryOpExpression>(std::move(left), pendingOp, std::move(right));
+			hasPendingOp = false;
+			powerIdx++;
+			continue;
+		}
 
-		// Simple approach: use position to determine operator
-		size_t opIndex = i - 1;
-		if (opIndex < plusCount) op = BinaryOperatorType::BOP_ADD;
-		else if (opIndex < plusCount + minusCount) op = BinaryOperatorType::BOP_SUBTRACT;
-		else if (opIndex < plusCount + minusCount + multiplyCount) op = BinaryOperatorType::BOP_MULTIPLY;
-		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount) op = BinaryOperatorType::BOP_DIVIDE;
-		else if (opIndex < plusCount + minusCount + multiplyCount + divideCount + moduloCount) op = BinaryOperatorType::BOP_MODULO;
-
-		auto right = buildPowerExpression(powerExprs[i]);
-		left = std::make_unique<BinaryOpExpression>(std::move(left), op, std::move(right));
+		// Terminal node - determine operator type
+		switch (termNode->getSymbol()->getType()) {
+			case CypherLexer::PLUS: pendingOp = BinaryOperatorType::BOP_ADD; hasPendingOp = true; break;
+			case CypherLexer::MINUS: pendingOp = BinaryOperatorType::BOP_SUBTRACT; hasPendingOp = true; break;
+			case CypherLexer::MULTIPLY: pendingOp = BinaryOperatorType::BOP_MULTIPLY; hasPendingOp = true; break;
+			case CypherLexer::DIVIDE: pendingOp = BinaryOperatorType::BOP_DIVIDE; hasPendingOp = true; break;
+			case CypherLexer::MODULO: pendingOp = BinaryOperatorType::BOP_MODULO; hasPendingOp = true; break;
+			default: break;
+		}
 	}
 
 	return left;
@@ -594,30 +634,6 @@ bool ExpressionBuilder::isAggregateFunction(const std::string& functionName) {
 
 	return nameLower == "count" || nameLower == "sum" || nameLower == "avg" ||
 	       nameLower == "min" || nameLower == "max" || nameLower == "collect";
-}
-
-// ============================================================================
-// LEGACY API: Direct predicate generation (uses new AST internally)
-// ============================================================================
-
-std::function<bool(const query::execution::Record &)> ExpressionBuilder::buildWherePredicate(
-	CypherParser::ExpressionContext *expr,
-	std::string &outDesc) {
-
-	// Build the AST using the new API
-	auto ast = buildExpression(expr);
-	outDesc = ast->toString();
-
-	// Convert to shared_ptr to make the lambda copyable
-	auto astShared = std::shared_ptr<Expression>(ast.release());
-
-	// Return a lambda that uses ExpressionEvaluator
-	return [astShared](const query::execution::Record &record) -> bool {
-		EvaluationContext context(record);
-		ExpressionEvaluator evaluator(context);
-		PropertyValue result = evaluator.evaluate(astShared.get());
-		return EvaluationContext::toBoolean(result);
-	};
 }
 
 std::vector<PropertyValue> ExpressionBuilder::extractListFromExpression(CypherParser::ExpressionContext *ctx) {

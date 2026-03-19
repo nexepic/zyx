@@ -215,23 +215,25 @@ TEST_F(ReadingClauseHandlerTest, Unwind_NullInList) {
 }
 
 TEST_F(ReadingClauseHandlerTest, Unwind_WithMatch) {
-	// Tests UNWIND clause following MATCH
-	// Note: UNWIND on property reference not yet fully supported
+	// Tests UNWIND clause following MATCH with property reference expression
 	(void) execute("CREATE (n:Test {ids: [1, 2, 3]})");
 
 	auto res = execute("MATCH (n:Test) UNWIND n.ids AS x RETURN x");
-	// Implementation limitation: Property reference UNWIND may not work
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 3UL);
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1");
+	EXPECT_EQ(res.getRows()[1].at("x").toString(), "2");
+	EXPECT_EQ(res.getRows()[2].at("x").toString(), "3");
 }
 
 TEST_F(ReadingClauseHandlerTest, Unwind_WithCreate) {
-	// Tests UNWIND clause following CREATE
-	// Note: UNWIND on property reference not yet fully supported
+	// Tests UNWIND clause following CREATE with property reference expression
 	(void) execute("CREATE (n:Test {ids: [10, 20, 30]})");
 
 	auto res = execute("MATCH (n:Test) UNWIND n.ids AS x RETURN x");
-	// Implementation limitation: Property reference UNWIND may not work
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 3UL);
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "10");
+	EXPECT_EQ(res.getRows()[1].at("x").toString(), "20");
+	EXPECT_EQ(res.getRows()[2].at("x").toString(), "30");
 }
 
 TEST_F(ReadingClauseHandlerTest, Unwind_AliasVariable) {
@@ -334,13 +336,14 @@ TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindVeryLargeList) {
 }
 
 TEST_F(ReadingClauseHandlerTest, EdgeCase_MatchAndUnwindChained) {
-	// Tests MATCH followed by UNWIND in same query
-	// Note: UNWIND on property reference not yet fully supported
+	// Tests MATCH followed by UNWIND in same query with property reference
 	(void) execute("CREATE (n:Test {ids: [10, 20, 30]})");
 
 	auto res = execute("MATCH (n:Test) UNWIND n.ids AS x RETURN x");
-	// Implementation limitation: Property reference UNWIND may not work
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 3UL);
+	EXPECT_EQ(res.getRows()[0].at("x").toString(), "10");
+	EXPECT_EQ(res.getRows()[1].at("x").toString(), "20");
+	EXPECT_EQ(res.getRows()[2].at("x").toString(), "30");
 }
 
 TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindAsFirstClause) {

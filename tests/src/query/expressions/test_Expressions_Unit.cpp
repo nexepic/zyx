@@ -266,7 +266,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Addition_Integer) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), 8.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 8);
 }
 
 TEST_F(ExpressionsUnitTest, BinaryOp_Addition_Double) {
@@ -286,7 +286,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Subtraction) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), 2.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 2);
 }
 
 TEST_F(ExpressionsUnitTest, BinaryOp_Multiplication) {
@@ -296,7 +296,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Multiplication) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), 15.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 15);
 }
 
 TEST_F(ExpressionsUnitTest, BinaryOp_Division) {
@@ -306,7 +306,8 @@ TEST_F(ExpressionsUnitTest, BinaryOp_Division) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), 5.0);
+	// 10 / 2 is evenly divisible, so result is integer
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 5);
 }
 
 TEST_F(ExpressionsUnitTest, BinaryOp_Modulus) {
@@ -475,7 +476,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Integer) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), -42.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), -42);
 }
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Double) {
@@ -1184,7 +1185,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_MultiplyByZero) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 0.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 0);
 }
 
 TEST_F(ExpressionsUnitTest, BinaryOp_SubtractNegative) {
@@ -1194,7 +1195,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_SubtractNegative) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 8.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 8);
 }
 
 TEST_F(ExpressionsUnitTest, BinaryOp_DivisionNegative) {
@@ -1204,7 +1205,7 @@ TEST_F(ExpressionsUnitTest, BinaryOp_DivisionNegative) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -5.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), -5);
 }
 
 TEST_F(ExpressionsUnitTest, BinaryOp_CompareStrings) {
@@ -1257,7 +1258,7 @@ TEST_F(ExpressionsUnitTest, UnaryOp_Minus_Zero) {
 
 	ExpressionEvaluator evaluator(*context_);
 	expr.accept(evaluator);
-	EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -0.0);
+	EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 0);
 }
 
 TEST_F(ExpressionsUnitTest, UnaryOp_Minus_NegativeDouble) {
@@ -3230,7 +3231,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_FinalCases) {
 		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
 		EXPECT_NO_THROW(expr.accept(evaluator));
-		EXPECT_EQ(std::get<double>(evaluator.getResult().getVariant()), 99.0);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 99);
 	}
 }
 
@@ -3338,7 +3339,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_EdgeCases) {
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
-		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 5.0);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 5);
 	}
 
 	// Multiply by one
@@ -3348,7 +3349,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_EdgeCases) {
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
-		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 7.0);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 7);
 	}
 }
 
@@ -3613,7 +3614,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_AbsoluteFinal) {
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_SUBTRACT, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
-		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 0.0);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 0);
 	}
 
 	// Subtract to get negative
@@ -3623,7 +3624,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_AbsoluteFinal) {
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_SUBTRACT, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
-		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -2.0);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), -2);
 	}
 
 	// Multiply by zero
@@ -3633,7 +3634,7 @@ TEST_F(ExpressionsUnitTest, ExpressionEvaluator_Arithmetic_AbsoluteFinal) {
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MULTIPLY, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
 		expr.accept(evaluator);
-		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 0.0);
+		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 0);
 	}
 }
 

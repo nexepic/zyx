@@ -285,7 +285,8 @@ notExpression
     ;
 
 comparisonExpression
-    : arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN ) arithmeticExpression )* ( K_IS K_NOT? K_NULL )?
+    : arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN
+        | K_STARTS K_WITH | K_ENDS K_WITH | K_CONTAINS ) arithmeticExpression )* ( K_IS K_NOT? K_NULL )?
     ;
 
 arithmeticExpression

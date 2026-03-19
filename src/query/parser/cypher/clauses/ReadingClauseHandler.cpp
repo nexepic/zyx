@@ -24,6 +24,7 @@
 #include "helpers/PatternBuilder.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/planner/PipelineValidator.hpp"
+#include "graph/query/expressions/Expression.hpp"
 
 namespace graph::parser::cypher::clauses {
 
@@ -92,7 +93,8 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 				originalField = outputVar;
 			}
 
-			projItems.push_back({originalField, outputVar});
+			auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>(originalField);
+			projItems.emplace_back(expr, outputVar);
 		}
 
 		// When yieldItems exists, projItems is guaranteed to have at least one element
@@ -113,15 +115,9 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	// 1. Extract Alias
 	std::string alias = helpers::AstExtractor::extractVariable(ctx->variable());
 
-	// 2. Extract List Values
-	// Grammar guarantees expression is always present in UNWIND
+	// 2. Try literal list first for backward compatibility, fall back to expression-based
 	auto expr = ctx->expression();
 	std::vector<PropertyValue> listValues = helpers::ExpressionBuilder::extractListFromExpression(expr);
-
-	if (listValues.empty()) {
-		// If parsing failed or list is empty, allow empty unwind (which stops execution)
-		// An empty list in UNWIND stops the pipeline (0 rows).
-	}
 
 	// Ensure valid pipeline (auto-inject singleRowOp if empty)
 	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
@@ -130,7 +126,15 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	);
 
 	// 3. Build Operator
-	rootOp = planner->unwindOp(std::move(rootOp), alias, listValues);
+	if (!listValues.empty()) {
+		// Literal list: use compile-time list constructor
+		rootOp = planner->unwindOp(std::move(rootOp), alias, listValues);
+	} else {
+		// Expression-based: build AST and evaluate at runtime
+		auto ast = helpers::ExpressionBuilder::buildExpression(expr);
+		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
+		rootOp = planner->unwindOp(std::move(rootOp), alias, astShared);
+	}
 
 	return rootOp;
 }

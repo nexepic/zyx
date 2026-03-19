@@ -208,7 +208,8 @@ namespace graph::query {
 		// Convert string list to ProjectItem list (alias = expression)
 		std::vector<execution::operators::ProjectItem> items;
 		for (const auto &var: variables) {
-			items.push_back({var, var});
+			auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>(var);
+			items.emplace_back(expr, var);
 		}
 
 		root_ = planner_->projectOp(std::move(root_), items);

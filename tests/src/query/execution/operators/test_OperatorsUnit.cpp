@@ -25,12 +25,60 @@
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/Record.hpp"
+#include "graph/query/expressions/Expression.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
 
 using namespace graph::query::execution;
 using namespace graph::query::execution::operators;
 using namespace graph;
+
+// Test helper: creates a ProjectItem from a string expression text (mirrors old parseExpression)
+inline ProjectItem makeProjectItem(const std::string& exprText, const std::string& alias) {
+	using namespace graph::query::expressions;
+
+	// Quoted string literal
+	if (exprText.size() >= 2 &&
+	    ((exprText.front() == '"' && exprText.back() == '"') ||
+	     (exprText.front() == '\'' && exprText.back() == '\''))) {
+		return ProjectItem(std::make_shared<LiteralExpression>(exprText.substr(1, exprText.size() - 2)), alias);
+	}
+
+	// Property access (n.prop)
+	size_t dotPos = exprText.find('.');
+	if (dotPos != std::string::npos && dotPos > 0 && std::isalpha(exprText[0])) {
+		return ProjectItem(std::make_shared<VariableReferenceExpression>(
+			exprText.substr(0, dotPos), exprText.substr(dotPos + 1)), alias);
+	}
+
+	// NULL
+	{
+		std::string upper = exprText;
+		for (auto& c : upper) c = static_cast<char>(std::toupper(c));
+		if (upper == "NULL") return ProjectItem(std::make_shared<LiteralExpression>(), alias);
+		if (upper == "TRUE") return ProjectItem(std::make_shared<LiteralExpression>(true), alias);
+		if (upper == "FALSE") return ProjectItem(std::make_shared<LiteralExpression>(false), alias);
+	}
+
+	// Integer literal
+	try {
+		size_t pos;
+		int64_t intVal = std::stoll(exprText, &pos);
+		if (pos == exprText.length())
+			return ProjectItem(std::make_shared<LiteralExpression>(intVal), alias);
+	} catch (...) {}
+
+	// Double literal
+	try {
+		size_t pos;
+		double dblVal = std::stod(exprText, &pos);
+		if (pos == exprText.length())
+			return ProjectItem(std::make_shared<LiteralExpression>(dblVal), alias);
+	} catch (...) {}
+
+	// Default: variable reference
+	return ProjectItem(std::make_shared<VariableReferenceExpression>(exprText), alias);
+}
 
 // Mock Operator for testing
 class MockOperator : public PhysicalOperator {
@@ -210,7 +258,7 @@ protected:
 
 TEST_F(ProjectOperatorTest, Project_WithNullChild) {
 	// Test with null child operator
-	std::vector<ProjectItem> items = {{"1", "num"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("1", "num")}};
 	auto op = std::make_unique<ProjectOperator>(nullptr, items);
 	EXPECT_NO_THROW(op->open());
 	EXPECT_NO_THROW(op->close());
@@ -227,7 +275,7 @@ TEST_F(ProjectOperatorTest,Project_DirectNodeLookup) {
 	r1.setNode("n", n1);
 
 	MockOperator *mock = new MockOperator({{r1}});
-	std::vector<ProjectItem> items = {{"n", "node"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("n", "node")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -250,7 +298,7 @@ TEST_F(ProjectOperatorTest, Project_DirectEdgeLookup) {
 	r1.setEdge("e", e1);
 
 	MockOperator *mock = new MockOperator({{r1}});
-	std::vector<ProjectItem> items = {{"e", "edge"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("e", "edge")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -272,7 +320,7 @@ TEST_F(ProjectOperatorTest, Project_DirectValueLookup) {
 	r1.setValue("y", std::string("test"));
 
 	MockOperator *mock = new MockOperator({{r1}});
-	std::vector<ProjectItem> items = {{"x", "a"}, {"y", "b"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("x", "a")}, {makeProjectItem("y", "b")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -303,7 +351,7 @@ TEST_F(ProjectOperatorTest, Project_PropertyAccessOnNode) {
 	r1.setNode("n", n1);
 
 	MockOperator *mock = new MockOperator({{r1}});
-	std::vector<ProjectItem> items = {{"n.name", "name"}, {"n.age", "age"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("n.name", "name")}, {makeProjectItem("n.age", "age")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -334,7 +382,7 @@ TEST_F(ProjectOperatorTest, Project_PropertyAccessOnEdge) {
 	r1.setEdge("e", e1);
 
 	MockOperator *mock = new MockOperator({{r1}});
-	std::vector<ProjectItem> items = {{"e.weight", "weight"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("e.weight", "weight")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -360,7 +408,7 @@ TEST_F(ProjectOperatorTest, Project_MissingPropertyReturnsNull) {
 	r1.setNode("n", n1);
 
 	MockOperator *mock = new MockOperator({{r1}});
-	std::vector<ProjectItem> items = {{"n.age", "age"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("n.age", "age")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -379,7 +427,7 @@ TEST_F(ProjectOperatorTest, Project_MissingPropertyReturnsNull) {
 
 TEST_F(ProjectOperatorTest, Project_LiteralInteger) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"42", "answer"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("42", "answer")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -399,7 +447,7 @@ TEST_F(ProjectOperatorTest, Project_LiteralInteger) {
 
 TEST_F(ProjectOperatorTest, Project_LiteralDouble) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"3.14", "pi"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("3.14", "pi")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -419,7 +467,7 @@ TEST_F(ProjectOperatorTest, Project_LiteralDouble) {
 
 TEST_F(ProjectOperatorTest, Project_LiteralBoolean) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"true", "t"}, {"false", "f"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("true", "t")}, {makeProjectItem("false", "f")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -441,7 +489,7 @@ TEST_F(ProjectOperatorTest, Project_LiteralBoolean) {
 
 TEST_F(ProjectOperatorTest, Project_LiteralString) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"'hello'", "greeting"}, {R"("world")", "place"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("'hello'", "greeting")}, makeProjectItem(R"("world")", "place")};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -467,7 +515,7 @@ TEST_F(ProjectOperatorTest, Project_LiteralString) {
 
 TEST_F(ProjectOperatorTest, Project_LiteralNull) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"NULL", "null_val"}, {"null", "null_val2"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("NULL", "null_val")}, {makeProjectItem("null", "null_val2")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -492,7 +540,7 @@ TEST_F(ProjectOperatorTest, Project_UnknownVariableReturnsNull) {
 	r1.setValue("x", 1);
 
 	MockOperator *mock = new MockOperator({{r1}});
-	std::vector<ProjectItem> items = {{"unknown_var", "result"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("unknown_var", "result")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -510,7 +558,7 @@ TEST_F(ProjectOperatorTest, Project_UnknownVariableReturnsNull) {
 
 TEST_F(ProjectOperatorTest, Project_ToStringAndGetChildren) {
 	MockOperator *mock = new MockOperator();
-	std::vector<ProjectItem> items = {{"n.name", "name"}, {"n.age", "age"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("n.name", "name")}, {makeProjectItem("n.age", "age")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -527,7 +575,7 @@ TEST_F(ProjectOperatorTest, Project_ToStringAndGetChildren) {
 
 TEST_F(ProjectOperatorTest, Project_NegativeInteger) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"-42", "neg"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("-42", "neg")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -546,7 +594,7 @@ TEST_F(ProjectOperatorTest, Project_NegativeInteger) {
 
 TEST_F(ProjectOperatorTest, Project_NegativeDouble) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"-3.14", "neg_pi"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("-3.14", "neg_pi")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -565,7 +613,7 @@ TEST_F(ProjectOperatorTest, Project_NegativeDouble) {
 
 TEST_F(ProjectOperatorTest, Project_CaseSensitivity) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"TRUE", "t1"}, {"true", "t2"}, {"FALSE", "f1"}, {"false", "f2"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("TRUE", "t1")}, {makeProjectItem("true", "t2")}, {makeProjectItem("FALSE", "f1")}, {makeProjectItem("false", "f2")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -594,7 +642,7 @@ TEST_F(ProjectOperatorTest, Project_CaseSensitivity) {
 
 TEST_F(ProjectOperatorTest, Project_Zero) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"0", "zero"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("0", "zero")}};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 
@@ -613,7 +661,7 @@ TEST_F(ProjectOperatorTest, Project_Zero) {
 
 TEST_F(ProjectOperatorTest, Project_EmptyString) {
 	MockOperator *mock = new MockOperator({{Record()}});
-	std::vector<ProjectItem> items = {{"''", "empty1"}, {R"("")", "empty2"}};
+	std::vector<ProjectItem> items = {{makeProjectItem("''", "empty1")}, makeProjectItem(R"("")", "empty2")};
 	auto op = std::unique_ptr<PhysicalOperator>(
 		new ProjectOperator(std::unique_ptr<PhysicalOperator>(mock), items));
 

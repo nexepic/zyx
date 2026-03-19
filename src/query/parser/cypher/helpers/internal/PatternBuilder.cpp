@@ -24,6 +24,9 @@
 #include "../OperatorChain.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
+#include "graph/query/execution/operators/MergeNodeOperator.hpp"
+#include "graph/query/execution/operators/MergeEdgeOperator.hpp"
 
 namespace graph::parser::cypher::helpers {
 
@@ -71,15 +74,18 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMatchPa
 	// Iterate over all pattern parts (e.g. MATCH (a), (b))
 	for (auto part : parts) {
 		auto element = part->patternElement();
-		auto currentOp = processMatchPatternElement(element, std::move(rootOp), planner);
 
-		// Merge with Global Pipeline
 		if (!rootOp) {
-			// First component: It becomes the root
-			rootOp = std::move(currentOp);
+			// First component or no prior pipeline: build from scratch
+			rootOp = processMatchPatternElement(element, nullptr, planner);
+		} else if (parts.size() == 1) {
+			// Single pattern part with existing pipeline: chain directly
+			rootOp = processMatchPatternElement(element, std::move(rootOp), planner);
 		} else {
-			// Subsequent component: Cross Join with existing root
-			rootOp = planner->cartesianProductOp(std::move(rootOp), std::move(currentOp));
+			// Multiple pattern parts with existing pipeline:
+			// Build this part independently, then CartesianProduct with root
+			auto partOp = processMatchPatternElement(element, nullptr, planner);
+			rootOp = planner->cartesianProductOp(std::move(rootOp), std::move(partOp));
 		}
 	}
 
@@ -267,8 +273,12 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::applyWhereFi
 		return rootOp;
 
 	try {
-		std::string desc;
-		auto predicate = ExpressionBuilder::buildWherePredicate(where->expression(), desc);
+		auto ast = ExpressionBuilder::buildExpression(where->expression());
+		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
+		std::string desc = astShared->toString();
+		auto predicate = [astShared](const query::execution::Record &r) -> bool {
+			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r);
+		};
 		return planner->filterOp(std::move(rootOp), predicate, desc);
 	} catch (const std::exception &e) {
 		std::cerr << "Warning: Failed to parse WHERE clause: " << e.what() << std::endl;
@@ -353,19 +363,96 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 	if (!patternPart || !planner)
 		return nullptr;
 
-	// Currently only supporting MERGE (n) (Single Node)
-	// Edge Merge requires traversal logic which is more complex.
 	auto element = patternPart->patternElement();
 	auto headNodePat = element->nodePattern();
 
-	std::string var = AstExtractor::extractVariable(headNodePat->variable());
-	std::string label = AstExtractor::extractLabel(headNodePat->nodeLabels());
-	auto matchProps = AstExtractor::extractProperties(headNodePat->properties(),
+	std::string headVar = AstExtractor::extractVariable(headNodePat->variable());
+	std::string headLabel = AstExtractor::extractLabel(headNodePat->nodeLabels());
+	auto headProps = AstExtractor::extractProperties(headNodePat->properties(),
 		[](CypherParser::ExpressionContext *expr) {
 			return ExpressionBuilder::evaluateLiteralExpression(expr);
 		});
 
-	return planner->mergeOp(var, label, matchProps, onCreateItems, onMatchItems);
+	// Single node MERGE: MERGE (n:Label {props})
+	if (element->patternElementChain().empty()) {
+		return planner->mergeOp(headVar, headLabel, headProps, onCreateItems, onMatchItems);
+	}
+
+	// Edge MERGE: MERGE (a)-[r:TYPE {props}]->(b)
+	// Strategy: First merge source node, then merge target node, then merge edge
+	std::unique_ptr<query::execution::PhysicalOperator> rootOp = nullptr;
+
+	// Merge head node (no ON CREATE/MATCH items for intermediate nodes)
+	std::vector<query::execution::operators::SetItem> emptyItems;
+	rootOp = planner->mergeOp(headVar, headLabel, headProps, emptyItems, emptyItems);
+
+	std::string prevVar = headVar;
+	auto chains = element->patternElementChain();
+
+	for (size_t i = 0; i < chains.size(); ++i) {
+		auto chain = chains[i];
+		auto relPat = chain->relationshipPattern();
+		auto targetNodePat = chain->nodePattern();
+
+		// Target node
+		std::string targetVar = AstExtractor::extractVariable(targetNodePat->variable());
+		std::string targetLabel = AstExtractor::extractLabel(targetNodePat->nodeLabels());
+		auto targetProps = AstExtractor::extractProperties(targetNodePat->properties(),
+			[](CypherParser::ExpressionContext *expr) {
+				return ExpressionBuilder::evaluateLiteralExpression(expr);
+			});
+
+		// Merge target node
+		auto targetMergeOp = planner->mergeOp(targetVar, targetLabel, targetProps, emptyItems, emptyItems);
+		// Chain the target merge as child of root
+		auto* mergeNodeOp = dynamic_cast<query::execution::operators::MergeNodeOperator*>(targetMergeOp.get());
+		if (mergeNodeOp) {
+			mergeNodeOp->setChild(std::move(rootOp));
+			rootOp = std::move(targetMergeOp);
+		}
+
+		// Edge details
+		auto relDetail = relPat->relationshipDetail();
+		std::string edgeVar, edgeLabel;
+		std::unordered_map<std::string, PropertyValue> edgeProps;
+
+		if (relDetail) {
+			edgeVar = AstExtractor::extractVariable(relDetail->variable());
+			edgeLabel = AstExtractor::extractRelType(relDetail->relationshipTypes());
+			edgeProps = AstExtractor::extractProperties(relDetail->properties(),
+				[](CypherParser::ExpressionContext *expr) {
+					return ExpressionBuilder::evaluateLiteralExpression(expr);
+				});
+		}
+
+		// Direction
+		std::string direction = "out";
+		bool hasLeft = (relPat->LT() != nullptr);
+		bool hasRight = (relPat->GT() != nullptr);
+		if (hasLeft && !hasRight)
+			direction = "in";
+		else if (!hasLeft && hasRight)
+			direction = "out";
+		else
+			direction = "both";
+
+		// Apply ON CREATE/MATCH items only to the last edge in the chain
+		bool isLastChain = (i == chains.size() - 1);
+		auto mergeEdge = planner->mergeEdgeOp(
+			prevVar, edgeVar, targetVar, edgeLabel, edgeProps, direction,
+			isLastChain ? onCreateItems : emptyItems,
+			isLastChain ? onMatchItems : emptyItems);
+
+		auto* edgeOp = dynamic_cast<query::execution::operators::MergeEdgeOperator*>(mergeEdge.get());
+		if (edgeOp) {
+			edgeOp->setChild(std::move(rootOp));
+			rootOp = std::move(mergeEdge);
+		}
+
+		prevVar = targetVar;
+	}
+
+	return rootOp;
 }
 
 std::vector<query::execution::operators::SetItem> PatternBuilder::extractSetItems(
