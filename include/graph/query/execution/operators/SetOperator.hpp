@@ -29,7 +29,7 @@
 
 namespace graph::query::execution::operators {
 
-	enum class SetActionType { PROPERTY, LABEL };
+	enum class SetActionType { PROPERTY, LABEL, MAP_MERGE };
 
 	struct SetItem {
 		SetActionType type; // Distinguish Property vs Label

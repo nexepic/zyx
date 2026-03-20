@@ -502,4 +502,258 @@ public:
 	}
 };
 
+// ============================================================================
+// Type Conversion Functions
+// ============================================================================
+
+/**
+ * @class ToIntegerFunction
+ * @brief Converts a value to an integer.
+ * Signature: toInteger(value :: ANY) :: INTEGER
+ */
+class ToIntegerFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("toInteger", 1, 1);
+	}
+};
+
+/**
+ * @class ToFloatFunction
+ * @brief Converts a value to a float.
+ * Signature: toFloat(value :: ANY) :: FLOAT
+ */
+class ToFloatFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("toFloat", 1, 1);
+	}
+};
+
+/**
+ * @class ToBooleanFunction
+ * @brief Converts a value to a boolean.
+ * Signature: toBoolean(value :: ANY) :: BOOLEAN
+ */
+class ToBooleanFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("toBoolean", 1, 1);
+	}
+};
+
+// ============================================================================
+// Additional String Functions
+// ============================================================================
+
+/**
+ * @class LeftFunction
+ * @brief Returns the leftmost n characters of a string.
+ * Signature: left(text :: STRING, length :: INTEGER) :: STRING
+ */
+class LeftFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("left", 2, 2);
+	}
+};
+
+/**
+ * @class RightFunction
+ * @brief Returns the rightmost n characters of a string.
+ * Signature: right(text :: STRING, length :: INTEGER) :: STRING
+ */
+class RightFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("right", 2, 2);
+	}
+};
+
+/**
+ * @class LTrimFunction
+ * @brief Removes leading whitespace from a string.
+ * Signature: lTrim(text :: STRING) :: STRING
+ */
+class LTrimFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("lTrim", 1, 1);
+	}
+};
+
+/**
+ * @class RTrimFunction
+ * @brief Removes trailing whitespace from a string.
+ * Signature: rTrim(text :: STRING) :: STRING
+ */
+class RTrimFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("rTrim", 1, 1);
+	}
+};
+
+/**
+ * @class SplitFunction
+ * @brief Splits a string by a delimiter into a list of strings.
+ * Signature: split(text :: STRING, delimiter :: STRING) :: LIST<STRING>
+ */
+class SplitFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("split", 2, 2);
+	}
+};
+
+/**
+ * @class ReverseFunction
+ * @brief Reverses a string or list.
+ * Signature: reverse(value :: STRING | LIST) :: STRING | LIST
+ */
+class ReverseFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("reverse", 1, 1);
+	}
+};
+
+// ============================================================================
+// List Functions
+// ============================================================================
+
+/**
+ * @class HeadFunction
+ * @brief Returns the first element of a list.
+ * Signature: head(list :: LIST) :: ANY
+ */
+class HeadFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("head", 1, 1);
+	}
+};
+
+/**
+ * @class TailFunction
+ * @brief Returns all but the first element of a list.
+ * Signature: tail(list :: LIST) :: LIST
+ */
+class TailFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("tail", 1, 1);
+	}
+};
+
+/**
+ * @class LastFunction
+ * @brief Returns the last element of a list.
+ * Signature: last(list :: LIST) :: ANY
+ */
+class LastFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("last", 1, 1);
+	}
+};
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * @class TimestampFunction
+ * @brief Returns the current epoch time in milliseconds.
+ * Signature: timestamp() :: INTEGER
+ */
+class TimestampFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("timestamp", 0, 0);
+	}
+};
+
+/**
+ * @class RandomUUIDFunction
+ * @brief Returns a randomly generated UUID v4 string.
+ * Signature: randomUUID() :: STRING
+ */
+class RandomUUIDFunction : public ScalarFunction {
+public:
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override;
+
+	[[nodiscard]] FunctionSignature getSignature() const override {
+		return FunctionSignature("randomUUID", 0, 0);
+	}
+};
+
 } // namespace graph::query::expressions

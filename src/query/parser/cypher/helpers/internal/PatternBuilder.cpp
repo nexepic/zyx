@@ -489,7 +489,54 @@ std::vector<query::execution::operators::SetItem> PatternBuilder::extractSetItem
 				expressionShared
 			);
 		}
-		// Case 2: Label Assignment (n:Label)
+		// Case 2: Map Merge (n += {key: value, ...})
+		else if (item->variable() && item->PLUS() && item->EQ() && item->expression()) {
+			std::string varName = AstExtractor::extractVariable(item->variable());
+
+			// Find mapLiteral by traversing the parse tree
+			CypherParser::MapLiteralContext* mapLit = nullptr;
+			std::function<void(antlr4::tree::ParseTree*)> findMap = [&](antlr4::tree::ParseTree* tree) {
+				if (!tree || mapLit) return;
+				if (auto* m = dynamic_cast<CypherParser::MapLiteralContext*>(tree)) {
+					mapLit = m;
+					return;
+				}
+				for (size_t i = 0; i < tree->children.size(); ++i) {
+					findMap(tree->children[i]);
+				}
+			};
+			findMap(item->expression());
+
+			if (mapLit) {
+				// Extract key-value pairs from map literal and create individual PROPERTY items
+				auto keys = mapLit->propertyKeyName();
+				auto exprs = mapLit->expression();
+				for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+					std::string keyName = keys[i]->getText();
+					auto expressionAST = ExpressionBuilder::buildExpression(exprs[i]);
+					auto expressionShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+
+					items.emplace_back(
+						query::execution::operators::SetActionType::PROPERTY,
+						varName,
+						keyName,
+						expressionShared
+					);
+				}
+			} else {
+				// Non-map expression - build as MAP_MERGE for runtime evaluation
+				auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
+				auto expressionShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+
+				items.emplace_back(
+					query::execution::operators::SetActionType::MAP_MERGE,
+					varName,
+					"",
+					expressionShared
+				);
+			}
+		}
+		// Case 3: Label Assignment (n:Label)
 		else if (item->variable() && item->nodeLabels()) {
 			std::string varName = AstExtractor::extractVariable(item->variable());
 			std::string labelName = AstExtractor::extractLabel(item->nodeLabels());

@@ -25,6 +25,8 @@
 #include "graph/query/expressions/Expression.hpp"
 #include <vector>
 
+namespace graph::storage { class DataManager; }
+
 namespace graph::query::expressions {
 
 /**
@@ -62,7 +64,8 @@ public:
 	 * @throws ExpressionEvaluationException on evaluation errors
 	 */
 	[[nodiscard]] static PropertyValue evaluate(const Expression *expr,
-	                                            const execution::Record &record);
+	                                            const execution::Record &record,
+	                                            storage::DataManager *dataManager = nullptr);
 
 	/**
 	 * @brief Evaluates an expression and converts to boolean.

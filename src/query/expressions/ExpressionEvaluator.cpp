@@ -20,6 +20,7 @@
 
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/FunctionRegistry.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
@@ -148,6 +149,118 @@ void ExpressionEvaluator::visit(FunctionCallExpression *expr) {
 	}
 
 	const std::string& functionName = expr->getFunctionName();
+
+	// Special-case entity introspection functions that need direct Record access
+	std::string funcLower = functionName;
+	std::transform(funcLower.begin(), funcLower.end(), funcLower.begin(),
+	               [](unsigned char c) { return std::tolower(c); });
+
+	if (funcLower == "id" || funcLower == "labels" || funcLower == "type" ||
+	    funcLower == "keys" || funcLower == "properties") {
+		const auto& argsExpr = expr->getArguments();
+		if (argsExpr.size() != 1) {
+			throw ExpressionEvaluationException(
+				funcLower + "() requires exactly 1 argument, got " + std::to_string(argsExpr.size()));
+		}
+
+		// Extract variable name from the argument expression
+		auto* argExpr = argsExpr[0].get();
+		auto* varRef = dynamic_cast<VariableReferenceExpression*>(argExpr);
+		if (!varRef || varRef->hasProperty()) {
+			throw ExpressionEvaluationException(
+				funcLower + "() requires a variable reference argument (e.g., " + funcLower + "(n))");
+		}
+
+		const std::string& varName = varRef->getVariableName();
+		const auto& record = context_.getRecord();
+
+		if (funcLower == "id") {
+			if (auto node = record.getNode(varName)) {
+				result_ = PropertyValue(node->getId());
+				return;
+			}
+			if (auto edge = record.getEdge(varName)) {
+				result_ = PropertyValue(edge->getId());
+				return;
+			}
+			throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");
+		}
+
+		if (funcLower == "labels") {
+			if (auto node = record.getNode(varName)) {
+				int64_t labelId = node->getLabelId();
+				auto* dm = context_.getDataManager();
+				if (dm && labelId != 0) {
+					std::string labelName = dm->resolveLabel(labelId);
+					std::vector<PropertyValue> labels;
+					labels.emplace_back(labelName);
+					result_ = PropertyValue(labels);
+				} else {
+					// Return labelId as fallback
+					std::vector<PropertyValue> labels;
+					if (labelId != 0) {
+						labels.emplace_back(labelId);
+					}
+					result_ = PropertyValue(labels);
+				}
+				return;
+			}
+			throw ExpressionEvaluationException("labels() requires a node variable, '" + varName + "' is not a node");
+		}
+
+		if (funcLower == "type") {
+			if (auto edge = record.getEdge(varName)) {
+				int64_t labelId = edge->getLabelId();
+				auto* dm = context_.getDataManager();
+				if (dm && labelId != 0) {
+					result_ = PropertyValue(dm->resolveLabel(labelId));
+				} else {
+					result_ = PropertyValue(labelId);
+				}
+				return;
+			}
+			throw ExpressionEvaluationException("type() requires a relationship variable, '" + varName + "' is not a relationship");
+		}
+
+		if (funcLower == "keys") {
+			std::unordered_map<std::string, PropertyValue> const* props = nullptr;
+			if (auto node = record.getNode(varName)) {
+				props = &node->getProperties();
+			} else if (auto edge = record.getEdge(varName)) {
+				props = &edge->getProperties();
+			} else {
+				throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");
+			}
+			std::vector<PropertyValue> keys;
+			for (const auto& [key, val] : *props) {
+				keys.emplace_back(key);
+			}
+			result_ = PropertyValue(keys);
+			return;
+		}
+
+		if (funcLower == "properties") {
+			std::unordered_map<std::string, PropertyValue> const* props = nullptr;
+			if (auto node = record.getNode(varName)) {
+				props = &node->getProperties();
+			} else if (auto edge = record.getEdge(varName)) {
+				props = &edge->getProperties();
+			} else {
+				throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");
+			}
+			// Return as list of [key, value] pairs since PropertyValue has no map type
+			std::vector<PropertyValue> entries;
+			for (const auto& [key, val] : *props) {
+				std::vector<PropertyValue> pair;
+				pair.emplace_back(key);
+				pair.push_back(val);
+				entries.push_back(PropertyValue(pair));
+			}
+			result_ = PropertyValue(entries);
+			return;
+		}
+	}
+
 	auto& registry = FunctionRegistry::getInstance();
 
 	// Look up the function

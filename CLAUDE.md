@@ -356,7 +356,7 @@ The `generate.sh` script will:
 
 ## Unsupported Cypher Features
 
-**IMPORTANT**: For currently unsupported Cypher syntax features, see `UNSUPPORTED_CYHER_FEATURES.md` in the project root
+**IMPORTANT**: For currently unsupported Cypher syntax features, see `UNSUPPORTED_CYPHER_FEATURES.md` in the project root
 directory.
 
 ### Library Build Outputs

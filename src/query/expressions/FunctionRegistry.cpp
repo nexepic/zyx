@@ -25,8 +25,10 @@
 #include "graph/query/expressions/NoneFunction.hpp"
 #include "graph/query/expressions/SingleFunction.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cctype>
+#include <random>
 #include <sstream>
 
 namespace graph::query::expressions {
@@ -112,6 +114,28 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	registerFunction(std::make_unique<AnyFunction>());
 	registerFunction(std::make_unique<NoneFunction>());
 	registerFunction(std::make_unique<SingleFunction>());
+
+	// Type conversion functions
+	registerFunction(std::make_unique<ToIntegerFunction>());
+	registerFunction(std::make_unique<ToFloatFunction>());
+	registerFunction(std::make_unique<ToBooleanFunction>());
+
+	// Additional string functions
+	registerFunction(std::make_unique<LeftFunction>());
+	registerFunction(std::make_unique<RightFunction>());
+	registerFunction(std::make_unique<LTrimFunction>());
+	registerFunction(std::make_unique<RTrimFunction>());
+	registerFunction(std::make_unique<SplitFunction>());
+	registerFunction(std::make_unique<ReverseFunction>());
+
+	// Additional list functions
+	registerFunction(std::make_unique<HeadFunction>());
+	registerFunction(std::make_unique<TailFunction>());
+	registerFunction(std::make_unique<LastFunction>());
+
+	// Utility functions
+	registerFunction(std::make_unique<TimestampFunction>());
+	registerFunction(std::make_unique<RandomUUIDFunction>());
 }
 
 // ============================================================================
@@ -562,6 +586,258 @@ PropertyValue ReduceFunction::evaluate(
 		"Please use list comprehensions [x IN list | expression] or "
 		"[x IN list WHERE condition] as alternatives."
 	);
+}
+
+// ============================================================================
+// Type Conversion Function Implementations
+// ============================================================================
+
+PropertyValue ToIntegerFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	return PropertyValue(EvaluationContext::toInteger(args[0]));
+}
+
+PropertyValue ToFloatFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	return PropertyValue(EvaluationContext::toDouble(args[0]));
+}
+
+PropertyValue ToBooleanFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	return PropertyValue(EvaluationContext::toBoolean(args[0]));
+}
+
+// ============================================================================
+// Additional String Function Implementations
+// ============================================================================
+
+PropertyValue LeftFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
+		return PropertyValue();
+	}
+	std::string str = EvaluationContext::toString(args[0]);
+	int64_t length = EvaluationContext::toInteger(args[1]);
+	if (length < 0) {
+		return PropertyValue();
+	}
+	return PropertyValue(str.substr(0, static_cast<size_t>(length)));
+}
+
+PropertyValue RightFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
+		return PropertyValue();
+	}
+	std::string str = EvaluationContext::toString(args[0]);
+	int64_t length = EvaluationContext::toInteger(args[1]);
+	if (length < 0) {
+		return PropertyValue();
+	}
+	size_t len = static_cast<size_t>(length);
+	if (len >= str.size()) {
+		return PropertyValue(str);
+	}
+	return PropertyValue(str.substr(str.size() - len));
+}
+
+PropertyValue LTrimFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	std::string str = EvaluationContext::toString(args[0]);
+	size_t start = 0;
+	while (start < str.length() && std::isspace(static_cast<unsigned char>(str[start]))) {
+		start++;
+	}
+	return PropertyValue(str.substr(start));
+}
+
+PropertyValue RTrimFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	std::string str = EvaluationContext::toString(args[0]);
+	size_t end = str.length();
+	while (end > 0 && std::isspace(static_cast<unsigned char>(str[end - 1]))) {
+		end--;
+	}
+	return PropertyValue(str.substr(0, end));
+}
+
+PropertyValue SplitFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
+		return PropertyValue();
+	}
+	std::string str = EvaluationContext::toString(args[0]);
+	std::string delimiter = EvaluationContext::toString(args[1]);
+
+	std::vector<PropertyValue> result;
+	if (delimiter.empty()) {
+		// Split each character
+		for (char c : str) {
+			result.push_back(PropertyValue(std::string(1, c)));
+		}
+		return PropertyValue(result);
+	}
+
+	size_t pos = 0;
+	size_t found;
+	while ((found = str.find(delimiter, pos)) != std::string::npos) {
+		result.push_back(PropertyValue(str.substr(pos, found - pos)));
+		pos = found + delimiter.length();
+	}
+	result.push_back(PropertyValue(str.substr(pos)));
+	return PropertyValue(result);
+}
+
+PropertyValue ReverseFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+
+	const PropertyValue& arg = args[0];
+	if (arg.getType() == PropertyType::STRING) {
+		std::string str = std::get<std::string>(arg.getVariant());
+		std::reverse(str.begin(), str.end());
+		return PropertyValue(str);
+	} else if (arg.getType() == PropertyType::LIST) {
+		std::vector<PropertyValue> list = std::get<std::vector<PropertyValue>>(arg.getVariant());
+		std::reverse(list.begin(), list.end());
+		return PropertyValue(list);
+	}
+
+	// For other types, convert to string and reverse
+	std::string str = EvaluationContext::toString(arg);
+	std::reverse(str.begin(), str.end());
+	return PropertyValue(str);
+}
+
+// ============================================================================
+// Additional List Function Implementations
+// ============================================================================
+
+PropertyValue HeadFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	if (args[0].getType() != PropertyType::LIST) {
+		return PropertyValue();
+	}
+	const auto& list = std::get<std::vector<PropertyValue>>(args[0].getVariant());
+	if (list.empty()) {
+		return PropertyValue();
+	}
+	return list.front();
+}
+
+PropertyValue TailFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	if (args[0].getType() != PropertyType::LIST) {
+		return PropertyValue();
+	}
+	const auto& list = std::get<std::vector<PropertyValue>>(args[0].getVariant());
+	if (list.empty()) {
+		return PropertyValue(std::vector<PropertyValue>{});
+	}
+	std::vector<PropertyValue> result(list.begin() + 1, list.end());
+	return PropertyValue(result);
+}
+
+PropertyValue LastFunction::evaluate(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	if (args[0].getType() != PropertyType::LIST) {
+		return PropertyValue();
+	}
+	const auto& list = std::get<std::vector<PropertyValue>>(args[0].getVariant());
+	if (list.empty()) {
+		return PropertyValue();
+	}
+	return list.back();
+}
+
+// ============================================================================
+// Additional Utility Function Implementations
+// ============================================================================
+
+PropertyValue TimestampFunction::evaluate(
+	[[maybe_unused]] const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	auto now = std::chrono::system_clock::now();
+	auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+		now.time_since_epoch()
+	).count();
+	return PropertyValue(static_cast<int64_t>(millis));
+}
+
+PropertyValue RandomUUIDFunction::evaluate(
+	[[maybe_unused]] const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) const {
+	static thread_local std::mt19937 gen(std::random_device{}());
+	std::uniform_int_distribution<uint32_t> dist(0, 15);
+	std::uniform_int_distribution<uint32_t> dist2(8, 11);
+
+	const char* hex = "0123456789abcdef";
+	std::string uuid(36, '-');
+	// Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+	for (int i = 0; i < 36; i++) {
+		if (i == 8 || i == 13 || i == 18 || i == 23) {
+			continue; // keep dash
+		} else if (i == 14) {
+			uuid[i] = '4'; // version 4
+		} else if (i == 19) {
+			uuid[i] = hex[dist2(gen)]; // variant
+		} else {
+			uuid[i] = hex[dist(gen)];
+		}
+	}
+	return PropertyValue(uuid);
 }
 
 } // namespace graph::query::expressions

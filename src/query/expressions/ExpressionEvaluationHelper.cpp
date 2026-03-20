@@ -25,12 +25,13 @@
 namespace graph::query::expressions {
 
 PropertyValue ExpressionEvaluationHelper::evaluate(const Expression *expr,
-                                                    const execution::Record &record) {
+                                                    const execution::Record &record,
+                                                    storage::DataManager *dataManager) {
 	if (!expr) {
 		return PropertyValue();
 	}
 
-	EvaluationContext context(record);
+	EvaluationContext context(record, dataManager);
 	ExpressionEvaluator evaluator(context);
 	return evaluator.evaluate(const_cast<Expression *>(expr));
 }

@@ -25,7 +25,11 @@
 namespace graph::query::expressions {
 
 EvaluationContext::EvaluationContext(const execution::Record &record)
-	: record_(record) {}
+	: record_(record), dataManager_(nullptr) {}
+
+EvaluationContext::EvaluationContext(const execution::Record &record,
+                                     storage::DataManager *dataManager)
+	: record_(record), dataManager_(dataManager) {}
 
 std::optional<PropertyValue> EvaluationContext::resolveVariable(const std::string &variableName) const {
 	// Check temporary variables first (for list comprehensions)

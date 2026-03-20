@@ -28,6 +28,8 @@
 #include <unordered_map>
 #include <variant>
 
+namespace graph::storage { class DataManager; }
+
 namespace graph::query::expressions {
 
 // Forward declaration
@@ -103,6 +105,14 @@ public:
 	explicit EvaluationContext(const execution::Record &record);
 
 	/**
+	 * @brief Constructs an evaluation context with DataManager access.
+	 * @param record The record to evaluate expressions against
+	 * @param dataManager Optional DataManager for label resolution
+	 */
+	EvaluationContext(const execution::Record &record,
+	                  storage::DataManager *dataManager);
+
+	/**
 	 * @brief Resolves a variable reference to its PropertyValue.
 	 *
 	 * @param variableName The name of the variable (e.g., "n")
@@ -124,6 +134,12 @@ public:
 	 * @brief Gets the underlying record.
 	 */
 	[[nodiscard]] const execution::Record &getRecord() const { return record_; }
+
+	/**
+	 * @brief Gets the optional DataManager for label resolution.
+	 * @return DataManager pointer, or nullptr if not available
+	 */
+	[[nodiscard]] storage::DataManager *getDataManager() const { return dataManager_; }
 
 	/**
 	 * @brief Sets a temporary variable for list comprehension iteration.
@@ -215,6 +231,7 @@ public:
 
 private:
 	const execution::Record &record_;
+	storage::DataManager *dataManager_ = nullptr;
 	mutable std::unordered_map<std::string, PropertyValue> temporaryVariables_;
 };
 
