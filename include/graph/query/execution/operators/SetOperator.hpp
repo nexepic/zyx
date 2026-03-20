@@ -21,11 +21,15 @@
 #pragma once
 
 #include "../PhysicalOperator.hpp"
-#include "graph/storage/data/DataManager.hpp"
 #include "graph/query/expressions/Expression.hpp"
-#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
-#include "graph/query/expressions/EvaluationContext.hpp"
-#include "graph/query/expressions/ExpressionEvaluator.hpp"
+
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace graph::storage {
+	class DataManager;
+}
 
 namespace graph::query::execution::operators {
 
@@ -51,85 +55,15 @@ namespace graph::query::execution::operators {
 					std::vector<SetItem> items) :
 			dm_(std::move(dm)), child_(std::move(child)), items_(std::move(items)) {}
 
-		void open() override {
-			if (child_)
-				child_->open();
-		}
-
-		std::optional<RecordBatch> next() override {
-			auto batchOpt = child_->next();
-			if (!batchOpt)
-				return std::nullopt;
-
-			RecordBatch outputBatch;
-			outputBatch.reserve(batchOpt->size());
-
-			for (auto record: *batchOpt) {
-				for (const auto &item: items_) {
-
-					// Skip label-only items (no expression evaluation needed)
-					if (item.type == SetActionType::PROPERTY && item.expression) {
-						// Evaluate the expression to get the value
-						PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-						    item.expression.get(), record);
-
-						// --- Node Logic ---
-						if (auto nodeOpt = record.getNode(item.variable)) {
-							Node node = *nodeOpt;
-							int64_t id = node.getId();
-
-							// Property Update (Read-Modify-Write)
-							auto props = dm_->getNodeProperties(id);
-							props[item.key] = value;
-							dm_->addNodeProperties(id, props);
-							node.setProperties(std::move(props));
-
-							record.setNode(item.variable, node);
-						}
-						// --- Edge Logic ---
-						else if (auto edgeOpt = record.getEdge(item.variable)) {
-							Edge edge = *edgeOpt;
-							int64_t id = edge.getId();
-
-							auto props = dm_->getEdgeProperties(id);
-							props[item.key] = value;
-							dm_->addEdgeProperties(id, props);
-							edge.setProperties(std::move(props));
-							record.setEdge(item.variable, edge);
-						}
-					} else if (item.type == SetActionType::LABEL) {
-						// --- Label Update ---
-						if (auto nodeOpt = record.getNode(item.variable)) {
-							Node node = *nodeOpt;
-							[[maybe_unused]] int64_t id = node.getId();
-
-							// Resolve string label to ID
-							int64_t newLabelId = dm_->getOrCreateLabelId(item.key);
-							node.setLabelId(newLabelId);
-							dm_->updateNode(node); // Persist label ID change
-
-							record.setNode(item.variable, node);
-						}
-					}
-				}
-				outputBatch.push_back(std::move(record));
-			}
-
-			return outputBatch;
-		}
-
-		void close() override {
-			if (child_)
-				child_->close();
-		}
+		void open() override;
+		std::optional<RecordBatch> next() override;
+		void close() override;
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			return child_->getOutputVariables();
 		}
 
-		[[nodiscard]] std::string toString() const override {
-			return "Set(" + std::to_string(items_.size()) + " items)";
-		}
+		[[nodiscard]] std::string toString() const override;
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {child_.get()}; }
 

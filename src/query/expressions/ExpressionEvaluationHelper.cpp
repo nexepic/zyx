@@ -33,7 +33,7 @@ PropertyValue ExpressionEvaluationHelper::evaluate(const Expression *expr,
 
 	EvaluationContext context(record, dataManager);
 	ExpressionEvaluator evaluator(context);
-	return evaluator.evaluate(const_cast<Expression *>(expr));
+	return evaluator.evaluate(expr);
 }
 
 bool ExpressionEvaluationHelper::evaluateBool(const Expression *expr,

@@ -20,13 +20,10 @@
 
 #pragma once
 
-#include <algorithm>
 #include <string>
 #include <vector>
 #include "../PhysicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
-#include "graph/query/expressions/EvaluationContext.hpp"
-#include "graph/query/expressions/ExpressionEvaluator.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -53,75 +50,15 @@ namespace graph::query::execution::operators {
 		SortOperator(std::unique_ptr<PhysicalOperator> child, std::vector<SortItem> sortItems) :
 			child_(std::move(child)), sortItems_(std::move(sortItems)) {}
 
-		void open() override {
-			if (child_)
-				child_->open();
-			sortedRecords_.clear();
-			currentOutputIndex_ = 0;
-			isSorted_ = false;
-		}
-
-		std::optional<RecordBatch> next() override {
-			// 1. Materialize Phase (Blocking)
-			if (!isSorted_) {
-				while (true) {
-					auto batchOpt = child_->next();
-					if (!batchOpt)
-						break;
-
-					// Accumulate all records
-					auto &batch = *batchOpt;
-					sortedRecords_.insert(sortedRecords_.end(), std::make_move_iterator(batch.begin()),
-										  std::make_move_iterator(batch.end()));
-				}
-
-				// 2. Sort Phase
-				performSort();
-				isSorted_ = true;
-			}
-
-			// 3. Output Phase (Stream buffered results)
-			if (currentOutputIndex_ >= sortedRecords_.size()) {
-				return std::nullopt;
-			}
-
-			RecordBatch batch;
-			batch.reserve(BATCH_SIZE);
-
-			while (batch.size() < BATCH_SIZE && currentOutputIndex_ < sortedRecords_.size()) {
-				batch.push_back(std::move(sortedRecords_[currentOutputIndex_++]));
-			}
-
-			return batch;
-		}
-
-		void close() override {
-			if (child_)
-				child_->close();
-			sortedRecords_.clear();
-		}
+		void open() override;
+		std::optional<RecordBatch> next() override;
+		void close() override;
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			return child_->getOutputVariables();
 		}
 
-		[[nodiscard]] std::string toString() const override {
-			std::string s = "Sort(";
-			for (size_t i = 0; i < sortItems_.size(); ++i) {
-				const auto &item = sortItems_[i];
-				if (item.expression) {
-					s += item.expression->toString();
-				}
-
-				s += (item.ascending ? " ASC" : " DESC");
-
-				if (i < sortItems_.size() - 1) {
-					s += ", ";
-				}
-			}
-			s += ")";
-			return s;
-		}
+		[[nodiscard]] std::string toString() const override;
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {child_.get()}; }
 
@@ -135,33 +72,7 @@ namespace graph::query::execution::operators {
 		bool isSorted_ = false;
 		static constexpr size_t BATCH_SIZE = 1000;
 
-		void performSort() {
-			std::sort(sortedRecords_.begin(), sortedRecords_.end(), [this](const Record &a, const Record &b) -> bool {
-				for (const auto &item: sortItems_) {
-					// Evaluate expressions to get comparison values
-					PropertyValue valA, valB;
-
-					if (item.expression) {
-						graph::query::expressions::EvaluationContext contextA(a);
-						graph::query::expressions::ExpressionEvaluator evaluatorA(contextA);
-						valA = evaluatorA.evaluate(item.expression.get());
-
-						graph::query::expressions::EvaluationContext contextB(b);
-						graph::query::expressions::ExpressionEvaluator evaluatorB(contextB);
-						valB = evaluatorB.evaluate(item.expression.get());
-					}
-
-					if (valA != valB) {
-						if (item.ascending)
-							return valA < valB;
-						else
-							return valA > valB;
-					}
-					// If equal, continue to next sort key
-				}
-				return false; // Strictly equal
-			});
-		}
+		void performSort();
 	};
 
 } // namespace graph::query::execution::operators

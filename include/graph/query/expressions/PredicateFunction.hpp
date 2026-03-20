@@ -42,6 +42,7 @@ class EvaluationContext;
  */
 class PredicateFunction : public ScalarFunction {
 public:
+	using ScalarFunction::ScalarFunction;
 	virtual ~PredicateFunction() = default;
 
 	/**
@@ -58,11 +59,6 @@ public:
 		const std::vector<PropertyValue>& args,
 		const EvaluationContext& context
 	) const override;
-
-	/**
-	 * @brief Gets the function signature.
-	 */
-	[[nodiscard]] FunctionSignature getSignature() const override = 0;
 
 	/**
 	 * @brief Gets the function name.

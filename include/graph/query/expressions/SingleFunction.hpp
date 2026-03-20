@@ -30,10 +30,7 @@ namespace graph::query::expressions {
  */
 class SingleFunction : public PredicateFunction {
 public:
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		// Signature is for validation only; actual parsing is custom
-		return FunctionSignature("single", 1, SIZE_MAX, true);
-	}
+	SingleFunction() : PredicateFunction(FunctionSignature("single", 1, SIZE_MAX, true)) {}
 
 	[[nodiscard]] std::string getName() const override { return "single"; }
 

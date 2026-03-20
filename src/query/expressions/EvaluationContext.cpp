@@ -108,6 +108,9 @@ bool EvaluationContext::toBoolean(const PropertyValue &value) {
 			} else if constexpr (std::is_same_v<TPlain, std::vector<PropertyValue>>) {
 				// Empty list → false, non-empty → true
 				return !arg.empty();
+			} else if constexpr (std::is_same_v<TPlain, PropertyValue::MapType>) {
+				// Empty map → false, non-empty → true
+				return !arg.empty();
 			}
 			return false;
 		},
@@ -150,6 +153,12 @@ int64_t EvaluationContext::toInteger(const PropertyValue &value) {
 					PropertyType::INTEGER,
 					PropertyType::LIST
 				);
+			} else if constexpr (std::is_same_v<TPlain, PropertyValue::MapType>) {
+				throw TypeMismatchException(
+					"Cannot convert MAP to INTEGER",
+					PropertyType::INTEGER,
+					PropertyType::MAP
+				);
 			}
 			return 0;
 		},
@@ -190,6 +199,12 @@ double EvaluationContext::toDouble(const PropertyValue &value) {
 					"Cannot convert LIST to DOUBLE",
 					PropertyType::DOUBLE,
 					PropertyType::LIST
+				);
+			} else if constexpr (std::is_same_v<TPlain, PropertyValue::MapType>) {
+				throw TypeMismatchException(
+					"Cannot convert MAP to DOUBLE",
+					PropertyType::DOUBLE,
+					PropertyType::MAP
 				);
 			}
 			return 0.0;

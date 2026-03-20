@@ -54,6 +54,9 @@ struct FunctionSignature {
  */
 class ScalarFunction {
 public:
+	explicit ScalarFunction(FunctionSignature signature)
+		: signature_(std::move(signature)) {}
+
 	virtual ~ScalarFunction() = default;
 
 	/**
@@ -68,20 +71,49 @@ public:
 	) const = 0;
 
 	/**
-	 * @brief Returns the function signature.
+	 * @brief Returns the cached function signature.
 	 */
-	[[nodiscard]] virtual FunctionSignature getSignature() const = 0;
+	[[nodiscard]] const FunctionSignature& getSignature() const { return signature_; }
 
 	/**
 	 * @brief Validates argument count against signature.
 	 */
 	[[nodiscard]] bool validateArgCount(size_t argCount) const {
-		const auto& sig = getSignature();
-		if (sig.variadic) {
-			return argCount >= sig.minArgs;
+		if (signature_.variadic) {
+			return argCount >= signature_.minArgs;
 		}
-		return argCount >= sig.minArgs && argCount <= sig.maxArgs;
+		return argCount >= signature_.minArgs && argCount <= signature_.maxArgs;
 	}
+
+private:
+	FunctionSignature signature_;
+};
+
+/**
+ * @brief Function pointer type for scalar function implementations.
+ */
+using ScalarFnPtr = PropertyValue(*)(const std::vector<PropertyValue>&, const EvaluationContext&);
+
+/**
+ * @class LambdaScalarFunction
+ * @brief A ScalarFunction that delegates to a function pointer.
+ *
+ * Eliminates the need for a separate class per simple function.
+ */
+class LambdaScalarFunction : public ScalarFunction {
+public:
+	LambdaScalarFunction(FunctionSignature sig, ScalarFnPtr fn)
+		: ScalarFunction(std::move(sig)), fn_(fn) {}
+
+	[[nodiscard]] PropertyValue evaluate(
+		const std::vector<PropertyValue>& args,
+		const EvaluationContext& context
+	) const override {
+		return fn_(args, context);
+	}
+
+private:
+	ScalarFnPtr fn_;
 };
 
 /**
@@ -140,620 +172,44 @@ private:
 	std::unordered_map<std::string, std::unique_ptr<ScalarFunction>> scalarFunctions_;
 };
 
-// ============================================================================
-// Built-in Scalar Functions
-// ============================================================================
-
 /**
- * @class ToStringFunction
- * @brief Converts any value to its string representation.
- * Signature: toString(value :: ANY) :: STRING
- */
-class ToStringFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("toString", 1, 1);
-	}
-};
-
-/**
- * @class UpperFunction
- * @brief Converts a string to uppercase.
- * Signature: upper(text :: STRING) :: STRING
- */
-class UpperFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("upper", 1, 1);
-	}
-};
-
-/**
- * @class LowerFunction
- * @brief Converts a string to lowercase.
- * Signature: lower(text :: STRING) :: STRING
- */
-class LowerFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("lower", 1, 1);
-	}
-};
-
-/**
- * @class SubstringFunction
- * @brief Extracts a substring from a string.
- * Signature: substring(original :: STRING, start :: INTEGER, length :: INTEGER?) :: STRING
- */
-class SubstringFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("substring", 2, 3);
-	}
-};
-
-/**
- * @class TrimFunction
- * @brief Removes leading and trailing whitespace from a string.
- * Signature: trim(text :: STRING) :: STRING
- */
-class TrimFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("trim", 1, 1);
-	}
-};
-
-/**
- * @class LengthFunction
- * @brief Returns the length of a string or size of a list.
- * Signature: length(value :: STRING | LIST) :: INTEGER
- */
-class LengthFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("length", 1, 1);
-	}
-};
-
-/**
- * @class StartsWithFunction
- * @brief Checks if a string starts with a prefix.
- * Signature: startsWith(text :: STRING, prefix :: STRING) :: BOOLEAN
- */
-class StartsWithFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("startsWith", 2, 2);
-	}
-};
-
-/**
- * @class EndsWithFunction
- * @brief Checks if a string ends with a suffix.
- * Signature: endsWith(text :: STRING, suffix :: STRING) :: BOOLEAN
- */
-class EndsWithFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("endsWith", 2, 2);
-	}
-};
-
-/**
- * @class ContainsFunction
- * @brief Checks if a string contains a substring.
- * Signature: contains(text :: STRING, substring :: STRING) :: BOOLEAN
- */
-class ContainsFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("contains", 2, 2);
-	}
-};
-
-/**
- * @class ReplaceFunction
- * @brief Replaces all occurrences of a substring in a string.
- * Signature: replace(original :: STRING, search :: STRING, replace :: STRING) :: STRING
- */
-class ReplaceFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("replace", 3, 3);
-	}
-};
-
-/**
- * @class AbsFunction
- * @brief Returns the absolute value of a number.
- * Signature: abs(value :: INTEGER | FLOAT) :: INTEGER | FLOAT
- */
-class AbsFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("abs", 1, 1);
-	}
-};
-
-/**
- * @class CeilFunction
- * @brief Rounds a number up to the nearest integer.
- * Signature: ceil(value :: INTEGER | FLOAT) :: FLOAT
- */
-class CeilFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("ceil", 1, 1);
-	}
-};
-
-/**
- * @class FloorFunction
- * @brief Rounds a number down to the nearest integer.
- * Signature: floor(value :: INTEGER | FLOAT) :: FLOAT
- */
-class FloorFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("floor", 1, 1);
-	}
-};
-
-/**
- * @class RoundFunction
- * @brief Rounds a number to the nearest integer.
- * Signature: round(value :: INTEGER | FLOAT) :: FLOAT
- */
-class RoundFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("round", 1, 1);
-	}
-};
-
-/**
- * @class SqrtFunction
- * @brief Returns the square root of a number.
- * Signature: sqrt(value :: INTEGER | FLOAT) :: FLOAT
- */
-class SqrtFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("sqrt", 1, 1);
-	}
-};
-
-/**
- * @class SignFunction
- * @brief Returns the sign of a number (-1, 0, or 1).
- * Signature: sign(value :: INTEGER | FLOAT) :: INTEGER
- */
-class SignFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("sign", 1, 1);
-	}
-};
-
-/**
- * @class CoalesceFunction
- * @brief Returns the first non-NULL value from a list of arguments.
- * Signature: coalesce(value1 :: ANY?, value2 :: ANY?, ...) :: ANY
- */
-class CoalesceFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("coalesce", 1, SIZE_MAX, true);
-	}
-};
-
-/**
- * @class SizeFunction
- * @brief Returns the size of a list or string.
- * Signature: size(value :: LIST | STRING) :: INTEGER
- */
-class SizeFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("size", 1, 1);
-	}
-};
-
-/**
- * @class RangeFunction
- * @brief Generates a list of values in a specified range.
- * Signature: range(start :: INTEGER, end :: INTEGER, step :: INTEGER?) :: LIST<INTEGER>
+ * @class EntityIntrospectionFunction
+ * @brief Marker base class for entity introspection functions (id, labels, type, keys, properties).
  *
- * Creates a list of integers from start (inclusive) to end (exclusive).
- * If step is not specified, defaults to 1.
- * If step is positive, generates incrementing values.
- * If step is negative, generates decrementing values.
- * If step is 0, throws an error.
+ * These functions require direct Record access rather than pre-evaluated arguments.
+ * The evaluator passes the variable name as a string in args[0] instead of
+ * evaluating the argument expression.
  */
-class RangeFunction : public ScalarFunction {
+class EntityIntrospectionFunction : public ScalarFunction {
 public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("range", 2, 3);
-	}
+	using ScalarFunction::ScalarFunction;
 };
 
 /**
- * @class ReduceFunction
- * @brief Reduces a list to a single value using an accumulator expression.
- * Signature: reduce(accumulator = initial, variable IN list | expression) :: ANY
- *
- * NOTE: This is a partial implementation. REDUCE has special Cypher syntax that requires
- * custom parsing in ExpressionBuilder. Currently, this function validates arguments and
- * throws a "not yet implemented" exception.
- *
- * Full implementation requires:
- * - Special parsing for: reduce(accum = init, x IN list | expression)
- * - Expression evaluation with accumulator variable binding
- * - Iteration over list elements
- *
- * Example: reduce(total = 0, x IN [1, 2, 3] | total + x) returns 6
+ * @class LambdaEntityIntrospectionFunction
+ * @brief An EntityIntrospectionFunction that delegates to a function pointer.
  */
-class ReduceFunction : public ScalarFunction {
+class LambdaEntityIntrospectionFunction : public EntityIntrospectionFunction {
 public:
+	LambdaEntityIntrospectionFunction(FunctionSignature sig, ScalarFnPtr fn)
+		: EntityIntrospectionFunction(std::move(sig)), fn_(fn) {}
+
 	[[nodiscard]] PropertyValue evaluate(
 		const std::vector<PropertyValue>& args,
 		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		// REDUCE has special syntax, signature is for validation only
-		return FunctionSignature("reduce", 1, SIZE_MAX, true);
+	) const override {
+		return fn_(args, context);
 	}
+
+private:
+	ScalarFnPtr fn_;
 };
 
-// ============================================================================
-// Type Conversion Functions
-// ============================================================================
-
-/**
- * @class ToIntegerFunction
- * @brief Converts a value to an integer.
- * Signature: toInteger(value :: ANY) :: INTEGER
- */
-class ToIntegerFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("toInteger", 1, 1);
-	}
-};
-
-/**
- * @class ToFloatFunction
- * @brief Converts a value to a float.
- * Signature: toFloat(value :: ANY) :: FLOAT
- */
-class ToFloatFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("toFloat", 1, 1);
-	}
-};
-
-/**
- * @class ToBooleanFunction
- * @brief Converts a value to a boolean.
- * Signature: toBoolean(value :: ANY) :: BOOLEAN
- */
-class ToBooleanFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("toBoolean", 1, 1);
-	}
-};
-
-// ============================================================================
-// Additional String Functions
-// ============================================================================
-
-/**
- * @class LeftFunction
- * @brief Returns the leftmost n characters of a string.
- * Signature: left(text :: STRING, length :: INTEGER) :: STRING
- */
-class LeftFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("left", 2, 2);
-	}
-};
-
-/**
- * @class RightFunction
- * @brief Returns the rightmost n characters of a string.
- * Signature: right(text :: STRING, length :: INTEGER) :: STRING
- */
-class RightFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("right", 2, 2);
-	}
-};
-
-/**
- * @class LTrimFunction
- * @brief Removes leading whitespace from a string.
- * Signature: lTrim(text :: STRING) :: STRING
- */
-class LTrimFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("lTrim", 1, 1);
-	}
-};
-
-/**
- * @class RTrimFunction
- * @brief Removes trailing whitespace from a string.
- * Signature: rTrim(text :: STRING) :: STRING
- */
-class RTrimFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("rTrim", 1, 1);
-	}
-};
-
-/**
- * @class SplitFunction
- * @brief Splits a string by a delimiter into a list of strings.
- * Signature: split(text :: STRING, delimiter :: STRING) :: LIST<STRING>
- */
-class SplitFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("split", 2, 2);
-	}
-};
-
-/**
- * @class ReverseFunction
- * @brief Reverses a string or list.
- * Signature: reverse(value :: STRING | LIST) :: STRING | LIST
- */
-class ReverseFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("reverse", 1, 1);
-	}
-};
-
-// ============================================================================
-// List Functions
-// ============================================================================
-
-/**
- * @class HeadFunction
- * @brief Returns the first element of a list.
- * Signature: head(list :: LIST) :: ANY
- */
-class HeadFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("head", 1, 1);
-	}
-};
-
-/**
- * @class TailFunction
- * @brief Returns all but the first element of a list.
- * Signature: tail(list :: LIST) :: LIST
- */
-class TailFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("tail", 1, 1);
-	}
-};
-
-/**
- * @class LastFunction
- * @brief Returns the last element of a list.
- * Signature: last(list :: LIST) :: ANY
- */
-class LastFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("last", 1, 1);
-	}
-};
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * @class TimestampFunction
- * @brief Returns the current epoch time in milliseconds.
- * Signature: timestamp() :: INTEGER
- */
-class TimestampFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("timestamp", 0, 0);
-	}
-};
-
-/**
- * @class RandomUUIDFunction
- * @brief Returns a randomly generated UUID v4 string.
- * Signature: randomUUID() :: STRING
- */
-class RandomUUIDFunction : public ScalarFunction {
-public:
-	[[nodiscard]] PropertyValue evaluate(
-		const std::vector<PropertyValue>& args,
-		const EvaluationContext& context
-	) const override;
-
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		return FunctionSignature("randomUUID", 0, 0);
-	}
-};
+// Factory functions for entity introspection functions
+std::unique_ptr<ScalarFunction> makeIdFunction();
+std::unique_ptr<ScalarFunction> makeLabelsFunction();
+std::unique_ptr<ScalarFunction> makeTypeFunction();
+std::unique_ptr<ScalarFunction> makeKeysFunction();
+std::unique_ptr<ScalarFunction> makePropertiesFunction();
 
 } // namespace graph::query::expressions

@@ -95,6 +95,10 @@ namespace zyx {
 							strVec.push_back(val.toString());
 						}
 						return strVec;
+					} else if constexpr (std::is_same_v<T, graph::PropertyValue::MapType>) {
+						// Maps are converted to string representation
+						graph::PropertyValue pv(arg);
+						return pv.toString();
 					} else {
 						// Primitives (int, double, bool, string) map directly
 						return arg;

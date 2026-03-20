@@ -44,7 +44,7 @@ namespace graph::query::expressions {
  *   PropertyValue result = evaluator.evaluate(expression);
  * @endcode
  */
-class ExpressionEvaluator : public ExpressionVisitor {
+class ExpressionEvaluator : public ConstExpressionVisitor {
 public:
 	/**
 	 * @brief Constructs an evaluator with the given context.
@@ -58,23 +58,23 @@ public:
 	 * @return The computed PropertyValue
 	 * @throws ExpressionEvaluationException on errors
 	 */
-	[[nodiscard]] PropertyValue evaluate(Expression *expr);
+	[[nodiscard]] PropertyValue evaluate(const Expression *expr);
 
 	// Visitor interface implementation
-	void visit(LiteralExpression *expr) override;
-	void visit(VariableReferenceExpression *expr) override;
-	void visit(BinaryOpExpression *expr) override;
-	void visit(UnaryOpExpression *expr) override;
-	void visit(FunctionCallExpression *expr) override;
-	void visit(CaseExpression *expr) override;
-	void visit(InExpression *expr) override;
-	void visit(ListSliceExpression *expr) override;
-	void visit(ListComprehensionExpression *expr) override;
-	void visit(ListLiteralExpression *expr) override;
-	void visit(IsNullExpression *expr) override;
-	void visit(QuantifierFunctionExpression *expr) override;
-	void visit(ExistsExpression *expr) override;
-	void visit(PatternComprehensionExpression *expr) override;
+	void visit(const LiteralExpression *expr) override;
+	void visit(const VariableReferenceExpression *expr) override;
+	void visit(const BinaryOpExpression *expr) override;
+	void visit(const UnaryOpExpression *expr) override;
+	void visit(const FunctionCallExpression *expr) override;
+	void visit(const CaseExpression *expr) override;
+	void visit(const InExpression *expr) override;
+	void visit(const ListSliceExpression *expr) override;
+	void visit(const ListComprehensionExpression *expr) override;
+	void visit(const ListLiteralExpression *expr) override;
+	void visit(const IsNullExpression *expr) override;
+	void visit(const QuantifierFunctionExpression *expr) override;
+	void visit(const ExistsExpression *expr) override;
+	void visit(const PatternComprehensionExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.

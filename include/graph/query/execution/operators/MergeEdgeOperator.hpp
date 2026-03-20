@@ -25,8 +25,6 @@
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
-#include "graph/query/expressions/EvaluationContext.hpp"
-#include "graph/query/expressions/ExpressionEvaluator.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -56,43 +54,9 @@ namespace graph::query::execution::operators {
 
 		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
 
-		void open() override {
-			executed_ = false;
-			if (child_) child_->open();
-			edgeLabelId_ = 0;
-			if (!edgeLabel_.empty()) {
-				edgeLabelId_ = dm_->getOrCreateLabelId(edgeLabel_);
-			}
-		}
-
-		std::optional<RecordBatch> next() override {
-			if (child_) {
-				auto batchOpt = child_->next();
-				if (!batchOpt) return std::nullopt;
-
-				RecordBatch outputBatch;
-				outputBatch.reserve(batchOpt->size());
-
-				for (const auto &record : *batchOpt) {
-					Record newRecord = record;
-					processMergeEdge(newRecord);
-					outputBatch.push_back(std::move(newRecord));
-				}
-				return outputBatch;
-			}
-
-			if (executed_) return std::nullopt;
-			executed_ = true;
-
-			Record record;
-			processMergeEdge(record);
-
-			RecordBatch batch;
-			batch.push_back(std::move(record));
-			return batch;
-		}
-
-		void close() override { if (child_) child_->close(); }
+		void open() override;
+		std::optional<RecordBatch> next() override;
+		void close() override;
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
@@ -100,9 +64,7 @@ namespace graph::query::execution::operators {
 			return vars;
 		}
 
-		[[nodiscard]] std::string toString() const override {
-			return "MergeEdge(" + sourceVar_ + ")-[" + edgeVar_ + ":" + edgeLabel_ + "]->(" + targetVar_ + ")";
-		}
+		[[nodiscard]] std::string toString() const override;
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override {
 			if (child_) return {child_.get()};
@@ -127,117 +89,8 @@ namespace graph::query::execution::operators {
 		bool executed_ = false;
 		int64_t edgeLabelId_ = 0;
 
-		void processMergeEdge(Record &record) {
-			// Get source and target node IDs from the record
-			auto sourceNode = record.getNode(sourceVar_);
-			auto targetNode = record.getNode(targetVar_);
-
-			if (!sourceNode || !targetNode) {
-				throw std::runtime_error("MERGE edge requires source (" + sourceVar_ +
-				                         ") and target (" + targetVar_ + ") nodes to be resolved");
-			}
-
-			int64_t sourceId = sourceNode->getId();
-			int64_t targetId = targetNode->getId();
-
-			// Try to find existing edge
-			int64_t foundEdgeId = 0;
-			auto edges = dm_->findEdgesByNode(sourceId, "both");
-
-			for (const auto &edge : edges) {
-				if (!edge.isActive()) continue;
-
-				// Check direction
-				bool dirMatch = false;
-				if (direction_ == "out") {
-					dirMatch = (edge.getSourceNodeId() == sourceId && edge.getTargetNodeId() == targetId);
-				} else if (direction_ == "in") {
-					dirMatch = (edge.getSourceNodeId() == targetId && edge.getTargetNodeId() == sourceId);
-				} else {
-					dirMatch = (edge.getSourceNodeId() == sourceId && edge.getTargetNodeId() == targetId) ||
-					           (edge.getSourceNodeId() == targetId && edge.getTargetNodeId() == sourceId);
-				}
-				if (!dirMatch) continue;
-
-				// Check label
-				if (edgeLabelId_ != 0 && edge.getLabelId() != edgeLabelId_) continue;
-
-				// Check properties
-				auto edgeProps = dm_->getEdgeProperties(edge.getId());
-				bool match = true;
-				for (const auto &[k, v] : matchProps_) {
-					auto it = edgeProps.find(k);
-					if (it == edgeProps.end() || it->second != v) {
-						match = false;
-						break;
-					}
-				}
-
-				if (match) {
-					foundEdgeId = edge.getId();
-					if (!edgeVar_.empty()) {
-						Edge matchedEdge = edge;
-						matchedEdge.setProperties(std::move(edgeProps));
-						record.setEdge(edgeVar_, matchedEdge);
-					}
-					break;
-				}
-			}
-
-			if (foundEdgeId != 0) {
-				// MATCHED - apply ON MATCH
-				applyEdgeUpdates(foundEdgeId, onMatchItems_, record);
-			} else {
-				// NOT MATCHED - CREATE
-				int64_t realSourceId = sourceId;
-				int64_t realTargetId = targetId;
-				if (direction_ == "in") {
-					std::swap(realSourceId, realTargetId);
-				}
-
-				Edge newEdge(0, realSourceId, realTargetId, edgeLabelId_);
-				dm_->addEdge(newEdge);
-
-				if (!matchProps_.empty()) {
-					dm_->addEdgeProperties(newEdge.getId(), matchProps_);
-				}
-
-				newEdge.setProperties(matchProps_);
-				if (!edgeVar_.empty()) {
-					record.setEdge(edgeVar_, newEdge);
-				}
-
-				applyEdgeUpdates(newEdge.getId(), onCreateItems_, record);
-			}
-		}
-
-		void applyEdgeUpdates(int64_t edgeId, const std::vector<SetItem> &items, Record &record) {
-			if (items.empty()) return;
-
-			auto props = dm_->getEdgeProperties(edgeId);
-			bool changed = false;
-
-			for (const auto &item : items) {
-				if (item.variable == edgeVar_ && item.type == SetActionType::PROPERTY && item.expression) {
-					graph::query::expressions::EvaluationContext context(record);
-					graph::query::expressions::ExpressionEvaluator evaluator(context);
-					PropertyValue value = evaluator.evaluate(item.expression.get());
-					props[item.key] = value;
-					changed = true;
-				}
-			}
-
-			if (changed) {
-				dm_->addEdgeProperties(edgeId, props);
-				if (!edgeVar_.empty()) {
-					if (auto e = record.getEdge(edgeVar_)) {
-						Edge updatedEdge = *e;
-						updatedEdge.setProperties(std::move(props));
-						record.setEdge(edgeVar_, updatedEdge);
-					}
-				}
-			}
-		}
+		void processMergeEdge(Record &record);
+		void applyEdgeUpdates(int64_t edgeId, const std::vector<SetItem> &items, Record &record);
 	};
 
 } // namespace graph::query::execution::operators

@@ -47,7 +47,12 @@ namespace graph::query::execution::operators {
 			std::visit(
 					[&]<typename T0>(T0 &&arg) {
 						using T = std::decay_t<T0>;
-						if constexpr (!std::is_same_v<T, std::monostate>) {
+						if constexpr (std::is_same_v<T, std::monostate>) {
+							// NULL — nothing to set
+						} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>> ||
+						                     std::is_same_v<T, PropertyValue::MapType>) {
+							throw std::runtime_error("Cannot use LIST or MAP as a config value");
+						} else {
 							stateManager_->set(stateKey, key_, arg);
 						}
 					},

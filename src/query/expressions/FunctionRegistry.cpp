@@ -80,111 +80,58 @@ FunctionRegistry::FunctionRegistry() {
 	initializeBuiltinFunctions();
 }
 
-void FunctionRegistry::initializeBuiltinFunctions() {
-	// String functions
-	registerFunction(std::make_unique<ToStringFunction>());
-	registerFunction(std::make_unique<UpperFunction>());
-	registerFunction(std::make_unique<LowerFunction>());
-	registerFunction(std::make_unique<SubstringFunction>());
-	registerFunction(std::make_unique<TrimFunction>());
-	registerFunction(std::make_unique<LengthFunction>());
-	registerFunction(std::make_unique<StartsWithFunction>());
-	registerFunction(std::make_unique<EndsWithFunction>());
-	registerFunction(std::make_unique<ContainsFunction>());
-	registerFunction(std::make_unique<ReplaceFunction>());
+// ============================================================================
+// Helper: register a lambda scalar function
+// ============================================================================
 
-	// Math functions
-	registerFunction(std::make_unique<AbsFunction>());
-	registerFunction(std::make_unique<CeilFunction>());
-	registerFunction(std::make_unique<FloorFunction>());
-	registerFunction(std::make_unique<RoundFunction>());
-	registerFunction(std::make_unique<SqrtFunction>());
-	registerFunction(std::make_unique<SignFunction>());
-
-	// Utility functions
-	registerFunction(std::make_unique<CoalesceFunction>());
-	registerFunction(std::make_unique<SizeFunction>());
-
-	// List functions
-	registerFunction(std::make_unique<RangeFunction>());
-	registerFunction(std::make_unique<ReduceFunction>());
-
-	// Quantifier functions
-	registerFunction(std::make_unique<AllFunction>());
-	registerFunction(std::make_unique<AnyFunction>());
-	registerFunction(std::make_unique<NoneFunction>());
-	registerFunction(std::make_unique<SingleFunction>());
-
-	// Type conversion functions
-	registerFunction(std::make_unique<ToIntegerFunction>());
-	registerFunction(std::make_unique<ToFloatFunction>());
-	registerFunction(std::make_unique<ToBooleanFunction>());
-
-	// Additional string functions
-	registerFunction(std::make_unique<LeftFunction>());
-	registerFunction(std::make_unique<RightFunction>());
-	registerFunction(std::make_unique<LTrimFunction>());
-	registerFunction(std::make_unique<RTrimFunction>());
-	registerFunction(std::make_unique<SplitFunction>());
-	registerFunction(std::make_unique<ReverseFunction>());
-
-	// Additional list functions
-	registerFunction(std::make_unique<HeadFunction>());
-	registerFunction(std::make_unique<TailFunction>());
-	registerFunction(std::make_unique<LastFunction>());
-
-	// Utility functions
-	registerFunction(std::make_unique<TimestampFunction>());
-	registerFunction(std::make_unique<RandomUUIDFunction>());
+static std::unique_ptr<ScalarFunction> makeFn(const char* name, size_t minArgs, size_t maxArgs, ScalarFnPtr fn, bool variadic = false) {
+	return std::make_unique<LambdaScalarFunction>(FunctionSignature(name, minArgs, maxArgs, variadic), fn);
 }
 
 // ============================================================================
 // String Function Implementations
 // ============================================================================
 
-PropertyValue ToStringFunction::evaluate(
+static PropertyValue toStringImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty()) {
 		return PropertyValue();
 	}
-
 	return PropertyValue(args[0].toString());
 }
 
-PropertyValue UpperFunction::evaluate(
+static PropertyValue upperImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
-
 	std::string str = EvaluationContext::toString(args[0]);
 	std::transform(str.begin(), str.end(), str.begin(),
 	               [](unsigned char c) { return std::toupper(c); });
 	return PropertyValue(str);
 }
 
-PropertyValue LowerFunction::evaluate(
+static PropertyValue lowerImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
-
 	std::string str = EvaluationContext::toString(args[0]);
 	std::transform(str.begin(), str.end(), str.begin(),
 	               [](unsigned char c) { return std::tolower(c); });
 	return PropertyValue(str);
 }
 
-PropertyValue SubstringFunction::evaluate(
+static PropertyValue substringImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
 	}
@@ -192,56 +139,48 @@ PropertyValue SubstringFunction::evaluate(
 	std::string str = EvaluationContext::toString(args[0]);
 	int64_t start = EvaluationContext::toInteger(args[1]);
 
-	// Handle negative start (from end)
 	if (start < 0) {
 		start = std::max<int64_t>(0, static_cast<int64_t>(str.length()) + start);
 	}
 
-	// If start is beyond string length, return empty string
 	if (start >= static_cast<int64_t>(str.length())) {
 		return PropertyValue("");
 	}
 
-	// Check for length parameter
 	if (args.size() >= 3) {
 		if (EvaluationContext::isNull(args[2])) {
 			return PropertyValue();
 		}
 		int64_t length = EvaluationContext::toInteger(args[2]);
 
-		// Handle negative length (from end)
 		if (length < 0) {
 			length = std::max<int64_t>(0, static_cast<int64_t>(str.length()) - start + length);
 		}
 
-		// Clamp length to string bounds
 		int64_t maxLen = static_cast<int64_t>(str.length()) - start;
 		length = std::min(length, maxLen);
 
 		return PropertyValue(str.substr(static_cast<size_t>(start), static_cast<size_t>(length)));
 	}
 
-	// No length specified, return from start to end
 	return PropertyValue(str.substr(static_cast<size_t>(start)));
 }
 
-PropertyValue TrimFunction::evaluate(
+static PropertyValue trimImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
 
 	std::string str = EvaluationContext::toString(args[0]);
 
-	// Trim leading whitespace
 	size_t start = 0;
 	while (start < str.length() && std::isspace(static_cast<unsigned char>(str[start]))) {
 		start++;
 	}
 
-	// Trim trailing whitespace
 	size_t end = str.length();
 	while (end > start && std::isspace(static_cast<unsigned char>(str[end - 1]))) {
 		end--;
@@ -250,10 +189,10 @@ PropertyValue TrimFunction::evaluate(
 	return PropertyValue(str.substr(start, end - start));
 }
 
-PropertyValue LengthFunction::evaluate(
+static PropertyValue lengthImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -269,14 +208,13 @@ PropertyValue LengthFunction::evaluate(
 		return PropertyValue(static_cast<int64_t>(list.size()));
 	}
 
-	// For other types, return 0
 	return PropertyValue(static_cast<int64_t>(0));
 }
 
-PropertyValue StartsWithFunction::evaluate(
+static PropertyValue startsWithImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
 	}
@@ -290,10 +228,10 @@ PropertyValue StartsWithFunction::evaluate(
 	return PropertyValue(result);
 }
 
-PropertyValue EndsWithFunction::evaluate(
+static PropertyValue endsWithImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
 	}
@@ -307,10 +245,10 @@ PropertyValue EndsWithFunction::evaluate(
 	return PropertyValue(result);
 }
 
-PropertyValue ContainsFunction::evaluate(
+static PropertyValue containsImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
 	}
@@ -323,10 +261,10 @@ PropertyValue ContainsFunction::evaluate(
 	return PropertyValue(result);
 }
 
-PropertyValue ReplaceFunction::evaluate(
+static PropertyValue replaceImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 3 || EvaluationContext::isNull(args[0]) ||
 	    EvaluationContext::isNull(args[1]) || EvaluationContext::isNull(args[2])) {
 		return PropertyValue();
@@ -337,7 +275,6 @@ PropertyValue ReplaceFunction::evaluate(
 	std::string replace = EvaluationContext::toString(args[2]);
 
 	if (search.empty()) {
-		// If search string is empty, return original
 		return PropertyValue(text);
 	}
 
@@ -356,10 +293,10 @@ PropertyValue ReplaceFunction::evaluate(
 // Math Function Implementations
 // ============================================================================
 
-PropertyValue AbsFunction::evaluate(
+static PropertyValue absImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -375,75 +312,65 @@ PropertyValue AbsFunction::evaluate(
 		return PropertyValue(std::fabs(val));
 	}
 
-	// For other types, try to convert to double
 	double val = EvaluationContext::toDouble(arg);
 	return PropertyValue(std::fabs(val));
 }
 
-PropertyValue CeilFunction::evaluate(
+static PropertyValue ceilImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
-
 	double val = EvaluationContext::toDouble(args[0]);
 	return PropertyValue(std::ceil(val));
 }
 
-PropertyValue FloorFunction::evaluate(
+static PropertyValue floorImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
-
 	double val = EvaluationContext::toDouble(args[0]);
 	return PropertyValue(std::floor(val));
 }
 
-PropertyValue RoundFunction::evaluate(
+static PropertyValue roundImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
-
 	double val = EvaluationContext::toDouble(args[0]);
 	return PropertyValue(std::round(val));
 }
 
-PropertyValue SqrtFunction::evaluate(
+static PropertyValue sqrtImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
-
 	double val = EvaluationContext::toDouble(args[0]);
-
 	if (val < 0.0) {
-		// sqrt of negative number is undefined, return NULL
 		return PropertyValue();
 	}
-
 	return PropertyValue(std::sqrt(val));
 }
 
-PropertyValue SignFunction::evaluate(
+static PropertyValue signImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
-
 	double val = EvaluationContext::toDouble(args[0]);
-
 	if (val > 0.0) {
 		return PropertyValue(static_cast<int64_t>(1));
 	} else if (val < 0.0) {
@@ -457,23 +384,22 @@ PropertyValue SignFunction::evaluate(
 // Utility Function Implementations
 // ============================================================================
 
-PropertyValue CoalesceFunction::evaluate(
+static PropertyValue coalesceImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	for (const auto& arg : args) {
 		if (!EvaluationContext::isNull(arg)) {
 			return arg;
 		}
 	}
-	// All arguments are NULL
 	return PropertyValue();
 }
 
-PropertyValue SizeFunction::evaluate(
+static PropertyValue sizeImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -489,52 +415,43 @@ PropertyValue SizeFunction::evaluate(
 		return PropertyValue(static_cast<int64_t>(list.size()));
 	}
 
-	// For other types, throw error or return NULL
 	return PropertyValue();
 }
 
-PropertyValue RangeFunction::evaluate(
+static PropertyValue rangeImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
-	// Validate argument count (should be 2 or 3, handled by signature validation)
+) {
 	if (args.size() < 2 || args.size() > 3) {
 		return PropertyValue();
 	}
 
-	// Check for NULL arguments
 	for (const auto& arg : args) {
 		if (EvaluationContext::isNull(arg)) {
 			return PropertyValue();
 		}
 	}
 
-	// Extract start and end
 	int64_t start = EvaluationContext::toInteger(args[0]);
 	int64_t end = EvaluationContext::toInteger(args[1]);
 	int64_t step = 1;
 
-	// Extract step if provided
 	if (args.size() == 3) {
 		step = EvaluationContext::toInteger(args[2]);
 	}
 
-	// Validate step is not zero
 	if (step == 0) {
 		throw std::runtime_error("range() step cannot be zero");
 	}
 
-	// Generate the range
 	std::vector<PropertyValue> result;
-	result.reserve(16); // Reserve space for typical ranges
+	result.reserve(16);
 
 	if (step > 0) {
-		// Incrementing range
 		for (int64_t i = start; i < end; i += step) {
 			result.push_back(PropertyValue(static_cast<int64_t>(i)));
 		}
 	} else {
-		// Decrementing range
 		for (int64_t i = start; i > end; i += step) {
 			result.push_back(PropertyValue(static_cast<int64_t>(i)));
 		}
@@ -543,32 +460,16 @@ PropertyValue RangeFunction::evaluate(
 	return PropertyValue(result);
 }
 
-PropertyValue ReduceFunction::evaluate(
+static PropertyValue reduceImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
-	// REDUCE has special Cypher syntax: reduce(accum = init, x IN list | expression)
-	// This requires special parsing in ExpressionBuilder to handle the accumulator
-	// initialization and iteration variable binding.
-
-	// For now, validate that we have arguments and throw not-yet-implemented
-	// Full implementation requires:
-	// 1. Parse accumulator expression (e.g., "total = 0")
-	// 2. Parse iteration variable (e.g., "x")
-	// 3. Parse list expression
-	// 4. Parse reduce expression (e.g., "total + x")
-	// 5. Iterate over list, updating accumulator
-	// 6. Return final accumulator value
-
+) {
 	if (args.empty()) {
 		throw std::runtime_error("REDUCE function requires at least one argument");
 	}
 
-	// Check if any argument looks like it might be the special REDUCE syntax
-	// This is a heuristic to detect if someone is trying to use REDUCE
 	for (const auto& arg : args) {
 		if (arg.getType() == PropertyType::LIST) {
-			// This might be a list argument for REDUCE
 			throw std::runtime_error(
 				"REDUCE function is not yet fully implemented. "
 				"The REDUCE syntax 'reduce(accum = init, x IN list | expression)' "
@@ -578,7 +479,6 @@ PropertyValue ReduceFunction::evaluate(
 		}
 	}
 
-	// If we get here, someone might be calling reduce as a regular function
 	throw std::runtime_error(
 		"REDUCE function is not yet implemented. "
 		"REDUCE has special Cypher syntax that requires custom parsing: "
@@ -592,30 +492,30 @@ PropertyValue ReduceFunction::evaluate(
 // Type Conversion Function Implementations
 // ============================================================================
 
-PropertyValue ToIntegerFunction::evaluate(
+static PropertyValue toIntegerImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
 	return PropertyValue(EvaluationContext::toInteger(args[0]));
 }
 
-PropertyValue ToFloatFunction::evaluate(
+static PropertyValue toFloatImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
 	return PropertyValue(EvaluationContext::toDouble(args[0]));
 }
 
-PropertyValue ToBooleanFunction::evaluate(
+static PropertyValue toBooleanImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -626,10 +526,10 @@ PropertyValue ToBooleanFunction::evaluate(
 // Additional String Function Implementations
 // ============================================================================
 
-PropertyValue LeftFunction::evaluate(
+static PropertyValue leftImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
 	}
@@ -641,10 +541,10 @@ PropertyValue LeftFunction::evaluate(
 	return PropertyValue(str.substr(0, static_cast<size_t>(length)));
 }
 
-PropertyValue RightFunction::evaluate(
+static PropertyValue rightImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
 	}
@@ -660,10 +560,10 @@ PropertyValue RightFunction::evaluate(
 	return PropertyValue(str.substr(str.size() - len));
 }
 
-PropertyValue LTrimFunction::evaluate(
+static PropertyValue lTrimImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -675,10 +575,10 @@ PropertyValue LTrimFunction::evaluate(
 	return PropertyValue(str.substr(start));
 }
 
-PropertyValue RTrimFunction::evaluate(
+static PropertyValue rTrimImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -690,10 +590,10 @@ PropertyValue RTrimFunction::evaluate(
 	return PropertyValue(str.substr(0, end));
 }
 
-PropertyValue SplitFunction::evaluate(
+static PropertyValue splitImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
 	}
@@ -702,7 +602,6 @@ PropertyValue SplitFunction::evaluate(
 
 	std::vector<PropertyValue> result;
 	if (delimiter.empty()) {
-		// Split each character
 		for (char c : str) {
 			result.push_back(PropertyValue(std::string(1, c)));
 		}
@@ -719,10 +618,10 @@ PropertyValue SplitFunction::evaluate(
 	return PropertyValue(result);
 }
 
-PropertyValue ReverseFunction::evaluate(
+static PropertyValue reverseImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -738,20 +637,19 @@ PropertyValue ReverseFunction::evaluate(
 		return PropertyValue(list);
 	}
 
-	// For other types, convert to string and reverse
 	std::string str = EvaluationContext::toString(arg);
 	std::reverse(str.begin(), str.end());
 	return PropertyValue(str);
 }
 
 // ============================================================================
-// Additional List Function Implementations
+// List Function Implementations
 // ============================================================================
 
-PropertyValue HeadFunction::evaluate(
+static PropertyValue headImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -765,10 +663,10 @@ PropertyValue HeadFunction::evaluate(
 	return list.front();
 }
 
-PropertyValue TailFunction::evaluate(
+static PropertyValue tailImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -783,10 +681,10 @@ PropertyValue TailFunction::evaluate(
 	return PropertyValue(result);
 }
 
-PropertyValue LastFunction::evaluate(
+static PropertyValue lastImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
@@ -801,13 +699,13 @@ PropertyValue LastFunction::evaluate(
 }
 
 // ============================================================================
-// Additional Utility Function Implementations
+// Utility Function Implementations
 // ============================================================================
 
-PropertyValue TimestampFunction::evaluate(
+static PropertyValue timestampImpl(
 	[[maybe_unused]] const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	auto now = std::chrono::system_clock::now();
 	auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
 		now.time_since_epoch()
@@ -815,29 +713,97 @@ PropertyValue TimestampFunction::evaluate(
 	return PropertyValue(static_cast<int64_t>(millis));
 }
 
-PropertyValue RandomUUIDFunction::evaluate(
+static PropertyValue randomUUIDImpl(
 	[[maybe_unused]] const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
-) const {
+) {
 	static thread_local std::mt19937 gen(std::random_device{}());
 	std::uniform_int_distribution<uint32_t> dist(0, 15);
 	std::uniform_int_distribution<uint32_t> dist2(8, 11);
 
 	const char* hex = "0123456789abcdef";
 	std::string uuid(36, '-');
-	// Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
 	for (int i = 0; i < 36; i++) {
 		if (i == 8 || i == 13 || i == 18 || i == 23) {
-			continue; // keep dash
+			continue;
 		} else if (i == 14) {
-			uuid[i] = '4'; // version 4
+			uuid[i] = '4';
 		} else if (i == 19) {
-			uuid[i] = hex[dist2(gen)]; // variant
+			uuid[i] = hex[dist2(gen)];
 		} else {
 			uuid[i] = hex[dist(gen)];
 		}
 	}
 	return PropertyValue(uuid);
+}
+
+// ============================================================================
+// Registration
+// ============================================================================
+
+void FunctionRegistry::initializeBuiltinFunctions() {
+	// String functions
+	registerFunction(makeFn("toString", 1, 1, &toStringImpl));
+	registerFunction(makeFn("upper", 1, 1, &upperImpl));
+	registerFunction(makeFn("lower", 1, 1, &lowerImpl));
+	registerFunction(makeFn("substring", 2, 3, &substringImpl));
+	registerFunction(makeFn("trim", 1, 1, &trimImpl));
+	registerFunction(makeFn("length", 1, 1, &lengthImpl));
+	registerFunction(makeFn("startsWith", 2, 2, &startsWithImpl));
+	registerFunction(makeFn("endsWith", 2, 2, &endsWithImpl));
+	registerFunction(makeFn("contains", 2, 2, &containsImpl));
+	registerFunction(makeFn("replace", 3, 3, &replaceImpl));
+
+	// Math functions
+	registerFunction(makeFn("abs", 1, 1, &absImpl));
+	registerFunction(makeFn("ceil", 1, 1, &ceilImpl));
+	registerFunction(makeFn("floor", 1, 1, &floorImpl));
+	registerFunction(makeFn("round", 1, 1, &roundImpl));
+	registerFunction(makeFn("sqrt", 1, 1, &sqrtImpl));
+	registerFunction(makeFn("sign", 1, 1, &signImpl));
+
+	// Utility functions
+	registerFunction(makeFn("coalesce", 1, SIZE_MAX, &coalesceImpl, true));
+	registerFunction(makeFn("size", 1, 1, &sizeImpl));
+
+	// List functions
+	registerFunction(makeFn("range", 2, 3, &rangeImpl));
+	registerFunction(makeFn("reduce", 1, SIZE_MAX, &reduceImpl, true));
+
+	// Quantifier functions (keep as separate classes — they have special dispatch)
+	registerFunction(std::make_unique<AllFunction>());
+	registerFunction(std::make_unique<AnyFunction>());
+	registerFunction(std::make_unique<NoneFunction>());
+	registerFunction(std::make_unique<SingleFunction>());
+
+	// Type conversion functions
+	registerFunction(makeFn("toInteger", 1, 1, &toIntegerImpl));
+	registerFunction(makeFn("toFloat", 1, 1, &toFloatImpl));
+	registerFunction(makeFn("toBoolean", 1, 1, &toBooleanImpl));
+
+	// Additional string functions
+	registerFunction(makeFn("left", 2, 2, &leftImpl));
+	registerFunction(makeFn("right", 2, 2, &rightImpl));
+	registerFunction(makeFn("lTrim", 1, 1, &lTrimImpl));
+	registerFunction(makeFn("rTrim", 1, 1, &rTrimImpl));
+	registerFunction(makeFn("split", 2, 2, &splitImpl));
+	registerFunction(makeFn("reverse", 1, 1, &reverseImpl));
+
+	// Additional list functions
+	registerFunction(makeFn("head", 1, 1, &headImpl));
+	registerFunction(makeFn("tail", 1, 1, &tailImpl));
+	registerFunction(makeFn("last", 1, 1, &lastImpl));
+
+	// Utility functions
+	registerFunction(makeFn("timestamp", 0, 0, &timestampImpl));
+	registerFunction(makeFn("randomUUID", 0, 0, &randomUUIDImpl));
+
+	// Entity introspection functions
+	registerFunction(makeIdFunction());
+	registerFunction(makeLabelsFunction());
+	registerFunction(makeTypeFunction());
+	registerFunction(makeKeysFunction());
+	registerFunction(makePropertiesFunction());
 }
 
 } // namespace graph::query::expressions

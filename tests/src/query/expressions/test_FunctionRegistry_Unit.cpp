@@ -113,16 +113,13 @@ TEST_F(FunctionRegistryTest, RegisterFunction_CustomFunction) {
 	// Create a custom function
 	class CustomFunction : public ScalarFunction {
 	public:
+		CustomFunction() : ScalarFunction(FunctionSignature("customDouble", 1, 1)) {}
 		[[nodiscard]] PropertyValue evaluate(
 			const std::vector<PropertyValue>& args,
 			[[maybe_unused]] const EvaluationContext& context
 		) const override {
 			if (args.empty()) return PropertyValue();
 			return PropertyValue(std::get<int64_t>(args[0].getVariant()) * 2);
-		}
-
-		[[nodiscard]] FunctionSignature getSignature() const override {
-			return FunctionSignature("customDouble", 1, 1);
 		}
 	};
 
@@ -1036,14 +1033,11 @@ TEST_F(FunctionRegistryTest, SizeFunction_Null) {
 TEST_F(FunctionRegistryTest, ValidateArgCount_FixedArgs) {
 	class TestFunction : public ScalarFunction {
 	public:
+		TestFunction() : ScalarFunction(FunctionSignature("test", 2, 2)) {}
 		[[nodiscard]] PropertyValue evaluate(
 			const std::vector<PropertyValue>&,
 			const EvaluationContext&
 		) const override { return PropertyValue(); }
-
-		[[nodiscard]] FunctionSignature getSignature() const override {
-			return FunctionSignature("test", 2, 2); // Exactly 2 args
-		}
 	};
 
 	TestFunction func;
@@ -1055,14 +1049,11 @@ TEST_F(FunctionRegistryTest, ValidateArgCount_FixedArgs) {
 TEST_F(FunctionRegistryTest, ValidateArgCount_Variadic) {
 	class TestFunction : public ScalarFunction {
 	public:
+		TestFunction() : ScalarFunction(FunctionSignature("test", 1, SIZE_MAX, true)) {}
 		[[nodiscard]] PropertyValue evaluate(
 			const std::vector<PropertyValue>&,
 			const EvaluationContext&
 		) const override { return PropertyValue(); }
-
-		[[nodiscard]] FunctionSignature getSignature() const override {
-			return FunctionSignature("test", 1, SIZE_MAX, true); // At least 1 arg
-		}
 	};
 
 	TestFunction func;

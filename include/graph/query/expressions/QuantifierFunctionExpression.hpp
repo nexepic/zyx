@@ -70,12 +70,12 @@ public:
 	/**
 	 * @brief Gets the list expression
 	 */
-	[[nodiscard]] Expression* getListExpression() const { return listExpr_.get(); }
+	[[nodiscard]] const Expression* getListExpression() const { return listExpr_.get(); }
 
 	/**
 	 * @brief Gets the WHERE condition expression
 	 */
-	[[nodiscard]] Expression* getWhereExpression() const { return whereExpr_.get(); }
+	[[nodiscard]] const Expression* getWhereExpression() const { return whereExpr_.get(); }
 
 private:
 	std::string functionName_;

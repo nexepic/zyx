@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -37,7 +38,8 @@ namespace graph {
 		INTEGER = 3,
 		DOUBLE = 4,
 		STRING = 5,
-		LIST = 6 // Support for Vector/List
+		LIST = 6, // Support for Vector/List
+		MAP = 7   // Support for Map/Dictionary
 	};
 
 	/**
@@ -45,10 +47,12 @@ namespace graph {
 	 * @brief A robust wrapper around a std::variant to represent a property's value.
 	 */
 	struct PropertyValue {
+		using MapType = std::unordered_map<std::string, PropertyValue>;
+
 	private:
 		// The actual data storage.
 		// Order matters for default comparison: null < bool < int < double < string
-		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string, std::vector<PropertyValue>>;
+		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string, std::vector<PropertyValue>, MapType>;
 		VariantType data;
 
 	public:
@@ -76,6 +80,8 @@ namespace graph {
 
 		explicit PropertyValue(std::vector<PropertyValue> vec) : data(std::move(vec)) {}
 
+		explicit PropertyValue(MapType map) : data(std::move(map)) {}
+
 		// Expose the underlying variant for pattern matching with std::visit.
 		const VariantType &getVariant() const { return data; }
 
@@ -84,13 +90,24 @@ namespace graph {
 		bool operator==(const PropertyValue &other) const { return data == other.data; }
 		bool operator!=(const PropertyValue &other) const { return data != other.data; }
 
-		// Note: std::variant default comparison compares the index first, then the value.
-		// e.g., int(5) < double(3.0) might return true because index(int) < index(double).
-		// For a more robust DB, you might want to add type coercion logic here later.
-		bool operator<(const PropertyValue &other) const { return data < other.data; }
-		bool operator>(const PropertyValue &other) const { return data > other.data; }
-		bool operator<=(const PropertyValue &other) const { return data <= other.data; }
-		bool operator>=(const PropertyValue &other) const { return data >= other.data; }
+		// Custom ordering: variant index-based comparison, with MAP type
+		// throwing on ordering (maps are not orderable, only equality).
+		bool operator<(const PropertyValue &other) const {
+			if (data.index() != other.data.index()) return data.index() < other.data.index();
+			// Same type — MAP is not orderable
+			if (std::holds_alternative<MapType>(data)) return false;
+			// For non-MAP types, delegate to variant comparison
+			return std::visit([&other]<typename T>(const T& val) -> bool {
+				if constexpr (std::is_same_v<std::decay_t<T>, MapType>) {
+					return false;
+				} else {
+					return val < std::get<T>(other.data);
+				}
+			}, data);
+		}
+		bool operator>(const PropertyValue &other) const { return other < *this; }
+		bool operator<=(const PropertyValue &other) const { return !(other < *this); }
+		bool operator>=(const PropertyValue &other) const { return !(*this < other); }
 
 		// --- Utilities ---
 
@@ -119,6 +136,17 @@ namespace graph {
 							}
 							oss << "]";
 							return oss.str();
+						} else if constexpr (std::is_same_v<T, MapType>) {
+							std::ostringstream oss;
+							oss << "{";
+							bool first = true;
+							for (const auto& [k, v] : value) {
+								if (!first) oss << ", ";
+								oss << k << ": " << v.toString();
+								first = false;
+							}
+							oss << "}";
+							return oss.str();
 						} else {
 							return "";
 						}
@@ -143,6 +171,8 @@ namespace graph {
 							return "STRING";
 						else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>)
 							return "LIST";
+						else if constexpr (std::is_same_v<T, MapType>)
+							return "MAP";
 						else
 							return "UNKNOWN";
 					},
@@ -165,6 +195,8 @@ namespace graph {
 				return PropertyType::STRING;
 			if (std::holds_alternative<std::vector<PropertyValue>>(data))
 				return PropertyType::LIST;
+			if (std::holds_alternative<MapType>(data))
+				return PropertyType::MAP;
 			return PropertyType::UNKNOWN;
 		}
 
@@ -177,6 +209,13 @@ namespace graph {
 				return *val;
 			}
 			throw std::runtime_error("PropertyValue is not a List/Vector");
+		}
+
+		const MapType &getMap() const {
+			if (auto *val = std::get_if<MapType>(&data)) {
+				return *val;
+			}
+			throw std::runtime_error("PropertyValue is not a Map");
 		}
 	};
 
@@ -198,11 +237,53 @@ namespace graph {
 						type = PropertyType::STRING;
 					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
 						type = PropertyType::LIST;
+					} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
+						type = PropertyType::MAP;
 					}
 				},
 				value.getVariant());
 		return type;
 	}
+
+	/**
+	 * @struct PropertyValueHash
+	 * @brief Hash functor for PropertyValue, enabling use in unordered containers.
+	 */
+	struct PropertyValueHash {
+		size_t operator()(const PropertyValue &value) const {
+			return std::visit(
+				[](const auto &arg) -> size_t {
+					using T = std::decay_t<decltype(arg)>;
+					if constexpr (std::is_same_v<T, std::monostate>) {
+						return 0;
+					} else if constexpr (std::is_same_v<T, bool>) {
+						return std::hash<bool>{}(arg);
+					} else if constexpr (std::is_same_v<T, int64_t>) {
+						return std::hash<int64_t>{}(arg);
+					} else if constexpr (std::is_same_v<T, double>) {
+						return std::hash<double>{}(arg);
+					} else if constexpr (std::is_same_v<T, std::string>) {
+						return std::hash<std::string>{}(arg);
+					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
+						size_t seed = arg.size();
+						for (const auto &elem : arg) {
+							seed ^= PropertyValueHash{}(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+						}
+						return seed;
+					} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
+						size_t seed = arg.size();
+						for (const auto &[k, v] : arg) {
+							// XOR so order doesn't matter (unordered_map)
+							seed ^= std::hash<std::string>{}(k) ^ PropertyValueHash{}(v);
+						}
+						return seed;
+					} else {
+						return 0;
+					}
+				},
+				value.getVariant());
+		}
+	};
 
 	namespace property_utils {
 		size_t getPropertyValueSize(const PropertyValue &value);

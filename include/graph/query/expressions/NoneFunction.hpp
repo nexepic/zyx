@@ -29,10 +29,7 @@ namespace graph::query::expressions {
  */
 class NoneFunction : public PredicateFunction {
 public:
-	[[nodiscard]] FunctionSignature getSignature() const override {
-		// Signature is for validation only; actual parsing is custom
-		return FunctionSignature("none", 1, SIZE_MAX, true);
-	}
+	NoneFunction() : PredicateFunction(FunctionSignature("none", 1, SIZE_MAX, true)) {}
 
 	[[nodiscard]] std::string getName() const override { return "none"; }
 

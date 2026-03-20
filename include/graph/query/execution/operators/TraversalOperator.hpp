@@ -50,69 +50,9 @@ namespace graph::query::execution::operators {
 			edgeVar_(std::move(edgeVar)), targetVar_(std::move(targetVar)), edgeLabel_(std::move(edgeLabel)),
 			direction_(std::move(direction)) {}
 
-		void open() override {
-			if (child_) child_->open();
-
-			// Resolve Edge Label ID (Optimization)
-			edgeLabelId_ = 0;
-			if (!edgeLabel_.empty()) {
-				// Use getOrCreate or resolve. Since we are filtering, getOrCreate is fine.
-				// If it creates a new ID, it won't match existing edges anyway.
-				edgeLabelId_ = dm_->getOrCreateLabelId(edgeLabel_);
-			}
-		}
-
-		std::optional<RecordBatch> next() override {
-			auto batchOpt = child_->next();
-			if (!batchOpt) return std::nullopt;
-
-			RecordBatch &inputBatch = *batchOpt;
-			RecordBatch outputBatch;
-			outputBatch.reserve(inputBatch.size() * 2);
-
-			for (const auto &record: inputBatch) {
-				auto sourceNodeOpt = record.getNode(sourceVar_);
-				if (!sourceNodeOpt) continue;
-				int64_t sourceId = sourceNodeOpt->getId();
-
-				// Low-level traversal
-				std::vector<Edge> edges = dm_->findEdgesByNode(sourceId, direction_);
-
-				for (auto &edge: edges) {
-					// 4. Filter by Edge Label (Using ID comparison)
-					if (edgeLabelId_ != 0) {
-						if (edge.getLabelId() != edgeLabelId_) {
-							continue;
-						}
-					}
-
-					// 5. Hydrate Edge Properties
-					auto edgeProps = dm_->getEdgeProperties(edge.getId());
-					edge.setProperties(std::move(edgeProps));
-
-					// 6. Resolve Target Node
-					int64_t targetNodeId =
-							(edge.getSourceNodeId() == sourceId) ? edge.getTargetNodeId() : edge.getSourceNodeId();
-
-					Node targetNode = dm_->getNode(targetNodeId);
-					if (!targetNode.isActive()) continue;
-
-					// 7. Hydrate Target Node Properties
-					auto nodeProps = dm_->getNodeProperties(targetNodeId);
-					targetNode.setProperties(std::move(nodeProps));
-
-					// 8. Create Extended Record
-					Record newRecord = record;
-					newRecord.setEdge(edgeVar_, edge);
-					newRecord.setNode(targetVar_, targetNode);
-
-					outputBatch.push_back(std::move(newRecord));
-				}
-			}
-			return outputBatch;
-		}
-
-		void close() override { if (child_) child_->close(); }
+		void open() override;
+		std::optional<RecordBatch> next() override;
+		void close() override;
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			auto vars = child_->getOutputVariables();
@@ -121,9 +61,7 @@ namespace graph::query::execution::operators {
 			return vars;
 		}
 
-		[[nodiscard]] std::string toString() const override {
-			return "Traversal(" + sourceVar_ + " - [" + edgeVar_ + ":" + edgeLabel_ + "] -> " + targetVar_ + ")";
-		}
+		[[nodiscard]] std::string toString() const override;
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override {
 			if (child_) return {child_.get()};

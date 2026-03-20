@@ -35,7 +35,7 @@ namespace graph::query::expressions {
 ExpressionEvaluator::ExpressionEvaluator(const EvaluationContext &context)
 	: context_(context), result_() {}
 
-PropertyValue ExpressionEvaluator::evaluate(Expression *expr) {
+PropertyValue ExpressionEvaluator::evaluate(const Expression *expr) {
 	if (!expr) {
 		return PropertyValue();
 	}
@@ -44,7 +44,7 @@ PropertyValue ExpressionEvaluator::evaluate(Expression *expr) {
 	return result_;
 }
 
-void ExpressionEvaluator::visit(LiteralExpression *expr) {
+void ExpressionEvaluator::visit(const LiteralExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -63,7 +63,7 @@ void ExpressionEvaluator::visit(LiteralExpression *expr) {
 	}
 }
 
-void ExpressionEvaluator::visit(VariableReferenceExpression *expr) {
+void ExpressionEvaluator::visit(const VariableReferenceExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -91,7 +91,7 @@ void ExpressionEvaluator::visit(VariableReferenceExpression *expr) {
 	}
 }
 
-void ExpressionEvaluator::visit(BinaryOpExpression *expr) {
+void ExpressionEvaluator::visit(const BinaryOpExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -125,7 +125,7 @@ void ExpressionEvaluator::visit(BinaryOpExpression *expr) {
 	}
 }
 
-void ExpressionEvaluator::visit(UnaryOpExpression *expr) {
+void ExpressionEvaluator::visit(const UnaryOpExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -142,124 +142,13 @@ void ExpressionEvaluator::visit(UnaryOpExpression *expr) {
 	result_ = evaluateUnary(expr->getOperator(), operandVal);
 }
 
-void ExpressionEvaluator::visit(FunctionCallExpression *expr) {
+void ExpressionEvaluator::visit(const FunctionCallExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
 	}
 
 	const std::string& functionName = expr->getFunctionName();
-
-	// Special-case entity introspection functions that need direct Record access
-	std::string funcLower = functionName;
-	std::transform(funcLower.begin(), funcLower.end(), funcLower.begin(),
-	               [](unsigned char c) { return std::tolower(c); });
-
-	if (funcLower == "id" || funcLower == "labels" || funcLower == "type" ||
-	    funcLower == "keys" || funcLower == "properties") {
-		const auto& argsExpr = expr->getArguments();
-		if (argsExpr.size() != 1) {
-			throw ExpressionEvaluationException(
-				funcLower + "() requires exactly 1 argument, got " + std::to_string(argsExpr.size()));
-		}
-
-		// Extract variable name from the argument expression
-		auto* argExpr = argsExpr[0].get();
-		auto* varRef = dynamic_cast<VariableReferenceExpression*>(argExpr);
-		if (!varRef || varRef->hasProperty()) {
-			throw ExpressionEvaluationException(
-				funcLower + "() requires a variable reference argument (e.g., " + funcLower + "(n))");
-		}
-
-		const std::string& varName = varRef->getVariableName();
-		const auto& record = context_.getRecord();
-
-		if (funcLower == "id") {
-			if (auto node = record.getNode(varName)) {
-				result_ = PropertyValue(node->getId());
-				return;
-			}
-			if (auto edge = record.getEdge(varName)) {
-				result_ = PropertyValue(edge->getId());
-				return;
-			}
-			throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");
-		}
-
-		if (funcLower == "labels") {
-			if (auto node = record.getNode(varName)) {
-				int64_t labelId = node->getLabelId();
-				auto* dm = context_.getDataManager();
-				if (dm && labelId != 0) {
-					std::string labelName = dm->resolveLabel(labelId);
-					std::vector<PropertyValue> labels;
-					labels.emplace_back(labelName);
-					result_ = PropertyValue(labels);
-				} else {
-					// Return labelId as fallback
-					std::vector<PropertyValue> labels;
-					if (labelId != 0) {
-						labels.emplace_back(labelId);
-					}
-					result_ = PropertyValue(labels);
-				}
-				return;
-			}
-			throw ExpressionEvaluationException("labels() requires a node variable, '" + varName + "' is not a node");
-		}
-
-		if (funcLower == "type") {
-			if (auto edge = record.getEdge(varName)) {
-				int64_t labelId = edge->getLabelId();
-				auto* dm = context_.getDataManager();
-				if (dm && labelId != 0) {
-					result_ = PropertyValue(dm->resolveLabel(labelId));
-				} else {
-					result_ = PropertyValue(labelId);
-				}
-				return;
-			}
-			throw ExpressionEvaluationException("type() requires a relationship variable, '" + varName + "' is not a relationship");
-		}
-
-		if (funcLower == "keys") {
-			std::unordered_map<std::string, PropertyValue> const* props = nullptr;
-			if (auto node = record.getNode(varName)) {
-				props = &node->getProperties();
-			} else if (auto edge = record.getEdge(varName)) {
-				props = &edge->getProperties();
-			} else {
-				throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");
-			}
-			std::vector<PropertyValue> keys;
-			for (const auto& [key, val] : *props) {
-				keys.emplace_back(key);
-			}
-			result_ = PropertyValue(keys);
-			return;
-		}
-
-		if (funcLower == "properties") {
-			std::unordered_map<std::string, PropertyValue> const* props = nullptr;
-			if (auto node = record.getNode(varName)) {
-				props = &node->getProperties();
-			} else if (auto edge = record.getEdge(varName)) {
-				props = &edge->getProperties();
-			} else {
-				throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");
-			}
-			// Return as list of [key, value] pairs since PropertyValue has no map type
-			std::vector<PropertyValue> entries;
-			for (const auto& [key, val] : *props) {
-				std::vector<PropertyValue> pair;
-				pair.emplace_back(key);
-				pair.push_back(val);
-				entries.push_back(PropertyValue(pair));
-			}
-			result_ = PropertyValue(entries);
-			return;
-		}
-	}
 
 	auto& registry = FunctionRegistry::getInstance();
 
@@ -283,6 +172,22 @@ void ExpressionEvaluator::visit(FunctionCallExpression *expr) {
 		);
 	}
 
+	// Entity introspection functions receive variable name as string, not evaluated value
+	if (dynamic_cast<const EntityIntrospectionFunction*>(function)) {
+		if (argsExpr.size() != 1) {
+			throw ExpressionEvaluationException(
+				functionName + "() requires exactly 1 argument, got " + std::to_string(argsExpr.size()));
+		}
+		auto* varRef = dynamic_cast<const VariableReferenceExpression*>(argsExpr[0].get());
+		if (!varRef || varRef->hasProperty()) {
+			throw ExpressionEvaluationException(
+				functionName + "() requires a variable reference argument (e.g., " + functionName + "(n))");
+		}
+		std::vector<PropertyValue> args = { PropertyValue(varRef->getVariableName()) };
+		result_ = function->evaluate(args, context_);
+		return;
+	}
+
 	// Evaluate arguments
 	std::vector<PropertyValue> args;
 	args.reserve(argsExpr.size());
@@ -295,7 +200,7 @@ void ExpressionEvaluator::visit(FunctionCallExpression *expr) {
 	result_ = function->evaluate(args, context_);
 }
 
-void ExpressionEvaluator::visit(InExpression *expr) {
+void ExpressionEvaluator::visit(const InExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -317,7 +222,7 @@ void ExpressionEvaluator::visit(InExpression *expr) {
 	result_ = PropertyValue(found);
 }
 
-void ExpressionEvaluator::visit(CaseExpression *expr) {
+void ExpressionEvaluator::visit(const CaseExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -566,14 +471,14 @@ bool ExpressionEvaluator::propagateNull(const PropertyValue &value) {
 	return EvaluationContext::isNull(value);
 }
 
-void ExpressionEvaluator::visit(ListSliceExpression *expr) {
+void ExpressionEvaluator::visit(const ListSliceExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
 	}
 
 	// Evaluate the list expression
-	PropertyValue listValue = evaluate(const_cast<Expression*>(expr->getList()));
+	PropertyValue listValue = evaluate(expr->getList());
 
 	if (listValue.getType() != PropertyType::LIST) {
 		throw ExpressionEvaluationException("Cannot slice non-list value");
@@ -588,7 +493,7 @@ void ExpressionEvaluator::visit(ListSliceExpression *expr) {
 			throw ExpressionEvaluationException("List slice requires index");
 		}
 
-		PropertyValue indexValue = evaluate(const_cast<Expression*>(expr->getStart()));
+		PropertyValue indexValue = evaluate(expr->getStart());
 
 		if (indexValue.getType() != PropertyType::INTEGER &&
 			indexValue.getType() != PropertyType::DOUBLE) {
@@ -622,7 +527,7 @@ void ExpressionEvaluator::visit(ListSliceExpression *expr) {
 	int64_t end = static_cast<int64_t>(listSize);
 
 	if (expr->getStart()) {
-		PropertyValue startValue = evaluate(const_cast<Expression*>(expr->getStart()));
+		PropertyValue startValue = evaluate(expr->getStart());
 		if (startValue.getType() == PropertyType::INTEGER) {
 			start = std::get<int64_t>(startValue.getVariant());
 		} else if (startValue.getType() == PropertyType::DOUBLE) {
@@ -638,7 +543,7 @@ void ExpressionEvaluator::visit(ListSliceExpression *expr) {
 	}
 
 	if (expr->getEnd()) {
-		PropertyValue endValue = evaluate(const_cast<Expression*>(expr->getEnd()));
+		PropertyValue endValue = evaluate(expr->getEnd());
 		if (endValue.getType() == PropertyType::INTEGER) {
 			end = std::get<int64_t>(endValue.getVariant());
 		} else if (endValue.getType() == PropertyType::DOUBLE) {
@@ -666,14 +571,14 @@ void ExpressionEvaluator::visit(ListSliceExpression *expr) {
 	result_ = PropertyValue(resultVec);
 }
 
-void ExpressionEvaluator::visit(ListComprehensionExpression *expr) {
+void ExpressionEvaluator::visit(const ListComprehensionExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
 	}
 
 	// Evaluate the list expression
-	PropertyValue listValue = evaluate(const_cast<Expression*>(expr->getListExpr()));
+	PropertyValue listValue = evaluate(expr->getListExpr());
 
 	// Type check: must be a list
 	if (listValue.getType() != PropertyType::LIST) {
@@ -690,7 +595,7 @@ void ExpressionEvaluator::visit(ListComprehensionExpression *expr) {
 
 		// Evaluate WHERE clause if present
 		if (expr->getWhereExpr()) {
-			PropertyValue whereResult = evaluate(const_cast<Expression*>(expr->getWhereExpr()));
+			PropertyValue whereResult = evaluate(expr->getWhereExpr());
 
 			// Type check: WHERE must return boolean
 			if (whereResult.getType() != PropertyType::BOOLEAN) {
@@ -705,7 +610,7 @@ void ExpressionEvaluator::visit(ListComprehensionExpression *expr) {
 
 		// Evaluate MAP expression or preserve element
 		if (expr->getMapExpr()) {
-			PropertyValue mapResult = evaluate(const_cast<Expression*>(expr->getMapExpr()));
+			PropertyValue mapResult = evaluate(expr->getMapExpr());
 			resultList.push_back(mapResult);
 		} else {
 			// FILTER mode: preserve original element
@@ -719,7 +624,7 @@ void ExpressionEvaluator::visit(ListComprehensionExpression *expr) {
 	result_ = PropertyValue(resultList);
 }
 
-void ExpressionEvaluator::visit(ListLiteralExpression *expr) {
+void ExpressionEvaluator::visit(const ListLiteralExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -729,7 +634,7 @@ void ExpressionEvaluator::visit(ListLiteralExpression *expr) {
 	result_ = expr->getValue();
 }
 
-void ExpressionEvaluator::visit(IsNullExpression *expr) {
+void ExpressionEvaluator::visit(const IsNullExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -749,7 +654,7 @@ void ExpressionEvaluator::visit(IsNullExpression *expr) {
 	result_ = PropertyValue(result);
 }
 
-void ExpressionEvaluator::visit(QuantifierFunctionExpression *expr) {
+void ExpressionEvaluator::visit(const QuantifierFunctionExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -773,24 +678,23 @@ void ExpressionEvaluator::visit(QuantifierFunctionExpression *expr) {
 		);
 	}
 
-	// Get the list expression and WHERE expression
-	// Note: We need to get the raw pointers from unique_ptr
-	auto* listExpr = const_cast<Expression*>(expr->getListExpression());
-	auto* whereExpr = const_cast<Expression*>(expr->getWhereExpression());
+	// Clone the list and WHERE expressions for evaluation
+	auto listClone = expr->getListExpression()->clone();
+	auto whereClone = expr->getWhereExpression()->clone();
 
-	// Create a mutable copy of the context
-	EvaluationContext mutableContext = const_cast<EvaluationContext&>(context_);
+	// Create a mutable copy of the context for variable binding during iteration
+	EvaluationContext mutableContext(context_);
 
 	// Call the quantifier function's evaluate method
 	result_ = predFunc->evaluate(
 		expr->getVariable(),
-		std::unique_ptr<Expression>(listExpr->clone()),
-		std::unique_ptr<Expression>(whereExpr->clone()),
+		std::move(listClone),
+		std::move(whereClone),
 		mutableContext
 	);
 }
 
-void ExpressionEvaluator::visit(ExistsExpression *expr) {
+void ExpressionEvaluator::visit(const ExistsExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
@@ -812,7 +716,7 @@ void ExpressionEvaluator::visit(ExistsExpression *expr) {
 	// 4. If there's a WHERE clause, apply it as a filter on matched patterns
 }
 
-void ExpressionEvaluator::visit(PatternComprehensionExpression *expr) {
+void ExpressionEvaluator::visit(const PatternComprehensionExpression *expr) {
 	if (!expr) {
 		result_ = PropertyValue();
 		return;
