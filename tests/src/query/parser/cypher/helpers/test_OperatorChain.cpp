@@ -1,5 +1,5 @@
 /**
- * @file test_OperatorChain_Unit.cpp
+ * @file test_OperatorChain.cpp
  * @brief Unit tests for OperatorChain helper class
  */
 

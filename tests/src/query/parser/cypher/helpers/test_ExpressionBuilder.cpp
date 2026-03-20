@@ -1,5 +1,5 @@
 /**
- * @file test_ExpressionBuilder_Unit.cpp
+ * @file test_ExpressionBuilder.cpp
  * @brief Unit tests for ExpressionBuilder helper class
  */
 

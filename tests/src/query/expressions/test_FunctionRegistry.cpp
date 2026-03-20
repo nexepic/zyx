@@ -1,5 +1,5 @@
 /**
- * @file test_FunctionRegistry_Unit.cpp
+ * @file test_FunctionRegistry.cpp
  * @author ZYX Contributors
  * @date 2026
  *

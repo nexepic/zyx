@@ -18,41 +18,9 @@
  * limitations under the License.
  **/
 
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <filesystem>
-#include <gtest/gtest.h>
-#include "graph/core/Database.hpp"
-#include "graph/query/api/QueryResult.hpp"
+#include "QueryTestFixture.hpp"
 
-namespace fs = std::filesystem;
-
-class CypherAlgoTest : public ::testing::Test {
-protected:
-	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> db;
-
-	void SetUp() override {
-		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_cypher_algo_" + boost::uuids::to_string(uuid) + ".dat");
-		if (fs::exists(testFilePath))
-			fs::remove_all(testFilePath);
-		db = std::make_unique<graph::Database>(testFilePath.string());
-		db->open();
-	}
-
-	void TearDown() override {
-		if (db)
-			db->close();
-		if (fs::exists(testFilePath))
-			fs::remove_all(testFilePath);
-	}
-
-	[[nodiscard]] graph::query::QueryResult execute(const std::string &query) const {
-		return db->getQueryEngine()->execute(query);
-	}
-};
+class CypherAlgoTest : public QueryTestFixture {};
 
 TEST_F(CypherAlgoTest, AlgoShortestPath) {
 	(void) execute("CREATE (a:City {name: 'A'})-[r1:ROAD]->(b:City {name: 'B'})");

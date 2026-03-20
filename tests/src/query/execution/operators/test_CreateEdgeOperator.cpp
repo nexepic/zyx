@@ -1,5 +1,5 @@
 /**
- * @file test_CreateEdgeOperatorUnit.cpp
+ * @file test_CreateEdgeOperator.cpp
  * @date 2026/02/02
  *
  * @copyright Copyright (c) 2026

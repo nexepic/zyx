@@ -1,5 +1,5 @@
 /**
- * @file test_PatternBuilder_Unit.cpp
+ * @file test_PatternBuilder.cpp
  * @brief Unit tests for PatternBuilder helper class
  */
 

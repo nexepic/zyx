@@ -5,38 +5,11 @@
  * Comprehensive tests for list literal support in Cypher queries
  */
 
-#include <gtest/gtest.h>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <filesystem>
-#include "graph/core/Database.hpp"
-#include "graph/query/api/QueryResult.hpp"
+#include "QueryTestFixture.hpp"
 
-namespace fs = std::filesystem;
 using namespace graph;
 
-class CypherListLiteralsTest : public ::testing::Test {
-protected:
-	void SetUp() override {
-		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testDbPath = fs::temp_directory_path() / ("test_lists_" + boost::uuids::to_string(uuid) + ".graph");
-		db = std::make_unique<Database>(testDbPath.string());
-		db->open();
-	}
-
-	void TearDown() override {
-		if (db) db->close();
-		if (fs::exists(testDbPath)) fs::remove(testDbPath);
-	}
-
-	query::QueryResult execute(const std::string& query) const {
-		return db->getQueryEngine()->execute(query);
-	}
-
-	std::filesystem::path testDbPath;
-	std::unique_ptr<Database> db;
-};
+class CypherListLiteralsTest : public QueryTestFixture {};
 
 // ============================================================================
 // Simple List Literals

@@ -1,5 +1,5 @@
 /**
- * @file test_AstExtractor_Unit.cpp
+ * @file test_AstExtractor.cpp
  * @brief Unit tests for AstExtractor helper class
  */
 
