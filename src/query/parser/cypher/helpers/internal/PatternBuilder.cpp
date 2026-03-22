@@ -310,12 +310,34 @@ void PatternBuilder::processCreatePatternElement(
 
 	std::string headVar = AstExtractor::extractVariable(headNodePat->variable());
 	std::string headLabel = AstExtractor::extractLabel(headNodePat->nodeLabels());
-	auto headProps = AstExtractor::extractProperties(headNodePat->properties(),
-		[](CypherParser::ExpressionContext *expr) {
-			return ExpressionBuilder::evaluateLiteralExpression(expr);
-		});
 
-	auto headOp = planner->createOp(headVar, headLabel, headProps);
+	// Extract properties: split into static literals and expression-based
+	std::unordered_map<std::string, PropertyValue> headProps;
+	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> headPropExprs;
+
+	if (headNodePat->properties() && headNodePat->properties()->mapLiteral()) {
+		auto mapLit = headNodePat->properties()->mapLiteral();
+		auto keys = mapLit->propertyKeyName();
+		auto exprs = mapLit->expression();
+		for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+			std::string key = keys[i]->getText();
+			PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
+			if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
+				headProps[key] = litVal;
+			} else {
+				// Non-literal value (variable reference) — build expression AST
+				auto exprAST = ExpressionBuilder::buildExpression(exprs[i]);
+				headPropExprs[key] = std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+			}
+		}
+	}
+
+	std::unique_ptr<query::execution::PhysicalOperator> headOp;
+	if (!headPropExprs.empty()) {
+		headOp = planner->createOp(headVar, headLabel, headProps, std::move(headPropExprs));
+	} else {
+		headOp = planner->createOp(headVar, headLabel, headProps);
+	}
 	rootOp = OperatorChain::chain(std::move(rootOp), std::move(headOp));
 
 	std::string prevVar = headVar;

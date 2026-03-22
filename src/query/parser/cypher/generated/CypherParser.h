@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from generated/CypherParser.g4 by ANTLR 4.13.1
+// Generated from CypherParser.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -53,13 +53,14 @@ public:
     RuleRangeLiteral = 45, RuleExpression = 46, RuleOrExpression = 47, RuleXorExpression = 48, 
     RuleAndExpression = 49, RuleNotExpression = 50, RuleComparisonExpression = 51, 
     RuleArithmeticExpression = 52, RulePowerExpression = 53, RuleUnaryExpression = 54, 
-    RuleAccessor = 55, RuleAtom = 56, RuleCaseExpression = 57, RulePropertyExpression = 58, 
-    RuleFunctionInvocation = 59, RuleExplicitProcedureInvocation = 60, RuleImplicitProcedureInvocation = 61, 
-    RuleVariable = 62, RuleLabelName = 63, RuleRelTypeName = 64, RulePropertyKeyName = 65, 
-    RuleProcedureName = 66, RuleProcedureResultField = 67, RuleFunctionName = 68, 
-    RuleNamespace = 69, RuleSchemaName = 70, RuleSymbolicName = 71, RuleLiteral = 72, 
-    RuleBooleanLiteral = 73, RuleNumberLiteral = 74, RuleIntegerLiteral = 75, 
-    RuleMapLiteral = 76, RuleListLiteral = 77, RuleParameter = 78, RuleListComprehension = 79
+    RuleAccessor = 55, RuleAtom = 56, RuleQuantifierExpression = 57, RuleCaseExpression = 58, 
+    RulePropertyExpression = 59, RuleFunctionInvocation = 60, RuleExplicitProcedureInvocation = 61, 
+    RuleImplicitProcedureInvocation = 62, RuleVariable = 63, RuleLabelName = 64, 
+    RuleRelTypeName = 65, RulePropertyKeyName = 66, RuleProcedureName = 67, 
+    RuleProcedureResultField = 68, RuleFunctionName = 69, RuleNamespace = 70, 
+    RuleSchemaName = 71, RuleSymbolicName = 72, RuleLiteral = 73, RuleBooleanLiteral = 74, 
+    RuleNumberLiteral = 75, RuleIntegerLiteral = 76, RuleMapLiteral = 77, 
+    RuleListLiteral = 78, RuleParameter = 79, RuleListComprehension = 80
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -136,6 +137,7 @@ public:
   class UnaryExpressionContext;
   class AccessorContext;
   class AtomContext;
+  class QuantifierExpressionContext;
   class CaseExpressionContext;
   class PropertyExpressionContext;
   class FunctionInvocationContext;
@@ -1176,6 +1178,7 @@ public:
     antlr4::tree::TerminalNode *LPAREN();
     antlr4::tree::TerminalNode *MULTIPLY();
     antlr4::tree::TerminalNode *RPAREN();
+    QuantifierExpressionContext *quantifierExpression();
     FunctionInvocationContext *functionInvocation();
     CaseExpressionContext *caseExpression();
     VariableContext *variable();
@@ -1189,6 +1192,29 @@ public:
   };
 
   AtomContext* atom();
+
+  class  QuantifierExpressionContext : public antlr4::ParserRuleContext {
+  public:
+    QuantifierExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *LPAREN();
+    VariableContext *variable();
+    antlr4::tree::TerminalNode *K_IN();
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    antlr4::tree::TerminalNode *K_WHERE();
+    antlr4::tree::TerminalNode *RPAREN();
+    antlr4::tree::TerminalNode *K_ALL();
+    antlr4::tree::TerminalNode *K_ANY();
+    antlr4::tree::TerminalNode *K_NONE();
+    antlr4::tree::TerminalNode *K_SINGLE();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  QuantifierExpressionContext* quantifierExpression();
 
   class  CaseExpressionContext : public antlr4::ParserRuleContext {
   public:

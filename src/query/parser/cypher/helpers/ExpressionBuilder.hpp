@@ -179,6 +179,9 @@ private:
 	static std::unique_ptr<graph::query::expressions::Expression> buildCaseExpression(
 		CypherParser::CaseExpressionContext *ctx);
 
+	static std::unique_ptr<graph::query::expressions::Expression> buildQuantifierExpression(
+		CypherParser::QuantifierExpressionContext *ctx);
+
 	static std::unique_ptr<graph::query::expressions::Expression> buildListSliceFromAccessor(
 		CypherParser::AccessorContext* ctx,
 		std::unique_ptr<graph::query::expressions::Expression> baseExpr);

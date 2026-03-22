@@ -22,6 +22,8 @@
 
 #include "../PhysicalOperator.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -30,6 +32,12 @@ namespace graph::query::execution::operators {
 		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string label,
 						   std::unordered_map<std::string, PropertyValue> props) :
 			dm_(std::move(dm)), variable_(std::move(variable)), label_(std::move(label)), props_(std::move(props)) {}
+
+		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string label,
+						   std::unordered_map<std::string, PropertyValue> props,
+						   std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propExprs) :
+			dm_(std::move(dm)), variable_(std::move(variable)), label_(std::move(label)),
+			props_(std::move(props)), propExpressions_(std::move(propExprs)) {}
 
 		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
 
@@ -84,9 +92,10 @@ namespace graph::query::execution::operators {
 							// Use ID constructor
 							Node newNode(0, labelId);
 
-							// Pre-set properties in memory
-							if (!props_.empty()) {
-								newNode.setProperties(props_);
+							// Resolve properties: evaluate expressions against record if available
+							auto resolvedProps = resolveProperties(record);
+							if (!resolvedProps.empty()) {
+								newNode.setProperties(resolvedProps);
 							}
 
 							nodeBuffer_.push_back(std::move(newNode));
@@ -156,6 +165,15 @@ namespace graph::query::execution::operators {
 		std::string variable_;
 		std::string label_;
 		std::unordered_map<std::string, PropertyValue> props_;
+		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propExpressions_;
+
+		std::unordered_map<std::string, PropertyValue> resolveProperties(const Record &record) const {
+			auto resolved = props_;
+			for (const auto &[key, expr] : propExpressions_) {
+				resolved[key] = graph::query::expressions::ExpressionEvaluationHelper::evaluate(expr.get(), record);
+			}
+			return resolved;
+		}
 
 		// State for batching
 		bool executed_ = false;

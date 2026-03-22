@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from generated/CypherParser.g4 by ANTLR 4.13.1
+// Generated from CypherParser.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -255,6 +255,10 @@ public:
   }
 
   virtual std::any visitAtom(CypherParser::AtomContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitQuantifierExpression(CypherParser::QuantifierExpressionContext *ctx) override {
     return visitChildren(ctx);
   }
 

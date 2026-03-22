@@ -29,6 +29,8 @@
 #include "graph/query/expressions/Expression.hpp"
 #include "AggregateAccumulator.hpp"
 
+namespace graph::storage { class DataManager; }
+
 namespace graph::query::execution::operators {
 
 /**
@@ -39,11 +41,21 @@ struct AggregateItem {
 	AggregateFunctionType functionType;
 	std::shared_ptr<graph::query::expressions::Expression> expression; // Expression to aggregate
 	std::string alias; // Output variable name
+	bool distinct = false; // DISTINCT modifier (e.g., count(DISTINCT expr))
 
 	AggregateItem(AggregateFunctionType type,
 	              std::shared_ptr<graph::query::expressions::Expression> expr,
-	              std::string alias)
-		: functionType(type), expression(std::move(expr)), alias(std::move(alias)) {}
+	              std::string alias,
+	              bool distinct = false)
+		: functionType(type), expression(std::move(expr)), alias(std::move(alias)), distinct(distinct) {}
+};
+
+struct GroupByItem {
+	std::shared_ptr<graph::query::expressions::Expression> expression;
+	std::string alias;
+
+	GroupByItem(std::shared_ptr<graph::query::expressions::Expression> expr, std::string alias)
+		: expression(std::move(expr)), alias(std::move(alias)) {}
 };
 
 /**
@@ -66,10 +78,12 @@ public:
 	 */
 	AggregateOperator(std::unique_ptr<PhysicalOperator> child,
 	                 std::vector<AggregateItem> aggregates,
-	                 std::vector<std::string> groupByKeys = {})
+	                 std::vector<GroupByItem> groupByItems = {},
+	                 storage::DataManager *dataManager = nullptr)
 		: child_(std::move(child)),
 		  aggregates_(std::move(aggregates)),
-		  groupByKeys_(std::move(groupByKeys)) {}
+		  groupByItems_(std::move(groupByItems)),
+		  dataManager_(dataManager) {}
 
 	void open() override;
 	std::optional<RecordBatch> next() override;
@@ -77,6 +91,9 @@ public:
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 		std::vector<std::string> vars;
+		for (const auto& item : groupByItems_) {
+			vars.push_back(item.alias);
+		}
 		for (const auto& agg : aggregates_) {
 			vars.push_back(agg.alias);
 		}
@@ -90,17 +107,24 @@ public:
 	}
 
 private:
+	struct GroupData {
+		std::vector<std::unique_ptr<AggregateAccumulator>> accumulators;
+		std::vector<PropertyValue> keyValues; // Actual values for group-by keys
+	};
+
 	std::unique_ptr<PhysicalOperator> child_;
 	std::vector<AggregateItem> aggregates_;
-	std::vector<std::string> groupByKeys_;
+	std::vector<GroupByItem> groupByItems_;
+	storage::DataManager *dataManager_ = nullptr;
 	std::vector<std::unique_ptr<AggregateAccumulator>> accumulators_;
-	std::unordered_map<std::string, std::vector<std::unique_ptr<AggregateAccumulator>>> groups_;
+	std::unordered_map<std::string, GroupData> groups_;
 	bool emitted_ = false;
 
 	void updateAccumulators(const Record& record,
 	                       std::vector<std::unique_ptr<AggregateAccumulator>>& accums);
 	void updateAccumulators(const Record& record);
 	std::string computeGroupKey(const Record& record);
+	std::vector<PropertyValue> evaluateGroupKeyValues(const Record& record);
 };
 
 } // namespace graph::query::execution::operators

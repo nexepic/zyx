@@ -168,7 +168,7 @@ TEST_F(QueryPlannerTest, ProjectOp) {
 	auto scan = planner->scanOp("n", "User");
 	std::vector<graph::query::execution::operators::ProjectItem> items;
 	items.emplace_back(nullptr, "n");
-	auto op = graph::query::QueryPlanner::projectOp(std::move(scan), items);
+	auto op = planner->projectOp(std::move(scan), items);
 	ASSERT_NE(op, nullptr);
 }
 

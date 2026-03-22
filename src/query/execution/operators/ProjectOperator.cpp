@@ -80,7 +80,7 @@ std::optional<RecordBatch> ProjectOperator::next() {
 			if (item.expression) {
 				try {
 					value = ExpressionEvaluationHelper::evaluate(
-					    item.expression.get(), record);
+					    item.expression.get(), record, dataManager_);
 				} catch (const UndefinedVariableException&) {
 					// Undefined variable → NULL (Cypher semantics)
 					value = PropertyValue();

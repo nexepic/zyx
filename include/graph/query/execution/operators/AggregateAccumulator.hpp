@@ -25,6 +25,7 @@
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include <variant>
 
@@ -341,11 +342,42 @@ private:
 };
 
 /**
+ * @class CountDistinctAccumulator
+ * @brief Accumulator for COUNT(DISTINCT expr) function.
+ */
+class CountDistinctAccumulator : public AggregateAccumulator {
+public:
+	void update(const PropertyValue& value) override {
+		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+			seen_.insert(value.toString());
+		}
+	}
+
+	[[nodiscard]] PropertyValue getResult() const override {
+		return PropertyValue(static_cast<int64_t>(seen_.size()));
+	}
+
+	void reset() override {
+		seen_.clear();
+	}
+
+	[[nodiscard]] std::unique_ptr<AggregateAccumulator> clone() const override {
+		auto acc = std::make_unique<CountDistinctAccumulator>();
+		acc->seen_ = seen_;
+		return acc;
+	}
+
+private:
+	std::unordered_set<std::string> seen_;
+};
+
+/**
  * @brief Factory function to create an accumulator for a given aggregate function type.
  */
-[[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type) {
+[[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type, bool distinct = false) {
 	switch (type) {
 		case AggregateFunctionType::AGG_COUNT:
+			if (distinct) return std::make_unique<CountDistinctAccumulator>();
 			return std::make_unique<CountAccumulator>();
 		case AggregateFunctionType::AGG_SUM:
 			return std::make_unique<SumAccumulator>();

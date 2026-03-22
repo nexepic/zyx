@@ -120,8 +120,8 @@ namespace graph::query {
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::projectOp(std::unique_ptr<execution::PhysicalOperator> child,
 							const std::vector<execution::operators::ProjectItem> &items,
-							bool distinct) {
-		return std::make_unique<execution::operators::ProjectOperator>(std::move(child), items, distinct);
+							bool distinct) const {
+		return std::make_unique<execution::operators::ProjectOperator>(std::move(child), items, distinct, dm_.get());
 	}
 
 	// --- Write Operations ---
@@ -130,6 +130,13 @@ namespace graph::query {
 	QueryPlanner::createOp(const std::string &variable, const std::string &label,
 						   const std::unordered_map<std::string, PropertyValue> &props) const {
 		return std::make_unique<execution::operators::CreateNodeOperator>(dm_, variable, label, props);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::createOp(const std::string &variable, const std::string &label,
+						   const std::unordered_map<std::string, PropertyValue> &props,
+						   std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> propExprs) const {
+		return std::make_unique<execution::operators::CreateNodeOperator>(dm_, variable, label, props, std::move(propExprs));
 	}
 
 	std::unique_ptr<execution::PhysicalOperator>

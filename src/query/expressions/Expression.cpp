@@ -215,8 +215,9 @@ std::unique_ptr<Expression> UnaryOpExpression::clone() const {
 // ============================================================================
 
 FunctionCallExpression::FunctionCallExpression(std::string functionName,
-                                               std::vector<std::unique_ptr<Expression>> arguments)
-	: functionName_(std::move(functionName)), arguments_(std::move(arguments)) {}
+                                               std::vector<std::unique_ptr<Expression>> arguments,
+                                               bool distinct)
+	: functionName_(std::move(functionName)), arguments_(std::move(arguments)), distinct_(distinct) {}
 
 void FunctionCallExpression::accept(ExpressionVisitor &visitor) {
 	visitor.visit(this);
@@ -243,7 +244,7 @@ std::unique_ptr<Expression> FunctionCallExpression::clone() const {
 	for (const auto &arg : arguments_) {
 		clonedArgs.push_back(arg->clone());
 	}
-	return std::make_unique<FunctionCallExpression>(functionName_, std::move(clonedArgs));
+	return std::make_unique<FunctionCallExpression>(functionName_, std::move(clonedArgs), distinct_);
 }
 
 // ============================================================================

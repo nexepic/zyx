@@ -29,6 +29,8 @@
 #include "../PhysicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
 
+namespace graph::storage { class DataManager; }
+
 namespace graph::query::execution::operators {
 
 	/**
@@ -55,8 +57,9 @@ namespace graph::query::execution::operators {
 		 * @param items List of projection items (expression + alias).
 		 * @param distinct If true, eliminate duplicate rows.
 		 */
-		ProjectOperator(std::unique_ptr<PhysicalOperator> child, std::vector<ProjectItem> items, bool distinct = false) :
-			child_(std::move(child)), items_(std::move(items)), distinct_(distinct) {}
+		ProjectOperator(std::unique_ptr<PhysicalOperator> child, std::vector<ProjectItem> items, bool distinct = false,
+		                storage::DataManager *dataManager = nullptr) :
+			child_(std::move(child)), items_(std::move(items)), distinct_(distinct), dataManager_(dataManager) {}
 
 		void open() override;
 		std::optional<RecordBatch> next() override;
@@ -77,6 +80,7 @@ namespace graph::query::execution::operators {
 		std::unique_ptr<PhysicalOperator> child_;
 		std::vector<ProjectItem> items_;
 		bool distinct_;
+		storage::DataManager *dataManager_ = nullptr;
 
 		/**
 		 * @brief A record fingerprint for DISTINCT dedup: stores projected values

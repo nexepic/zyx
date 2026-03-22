@@ -448,11 +448,11 @@ static PropertyValue rangeImpl(
 	result.reserve(16);
 
 	if (step > 0) {
-		for (int64_t i = start; i < end; i += step) {
+		for (int64_t i = start; i <= end; i += step) {
 			result.push_back(PropertyValue(static_cast<int64_t>(i)));
 		}
 	} else {
-		for (int64_t i = start; i > end; i += step) {
+		for (int64_t i = start; i >= end; i += step) {
 			result.push_back(PropertyValue(static_cast<int64_t>(i)));
 		}
 	}

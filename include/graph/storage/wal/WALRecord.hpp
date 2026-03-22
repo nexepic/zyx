@@ -65,6 +65,16 @@ namespace graph::storage::wal {
 		// Followed by dataSize bytes of serialized entity
 	};
 
+	struct WALReadRecord {
+		WALRecordHeader header;
+		std::vector<uint8_t> data;
+	};
+
+	struct WALReadResult {
+		std::vector<WALReadRecord> records;
+		bool corrupted = false;
+	};
+
 	uint32_t computeCRC32(const uint8_t *data, size_t size);
 
 	std::vector<uint8_t> serializeRecordHeader(const WALRecordHeader &header);

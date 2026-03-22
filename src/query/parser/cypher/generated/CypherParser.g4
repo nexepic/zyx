@@ -314,12 +314,18 @@ atom
     : literal
     | parameter
     | K_COUNT LPAREN MULTIPLY RPAREN
+    | quantifierExpression
     | functionInvocation
     | caseExpression
     | variable
     | LPAREN expression RPAREN
     | listLiteral
     | listComprehension
+    ;
+
+// Quantifier functions: all(x IN list WHERE cond), any(...), none(...), single(...)
+quantifierExpression
+    : (K_ALL | K_ANY | K_NONE | K_SINGLE) LPAREN variable K_IN expression K_WHERE expression RPAREN
     ;
 
 // CASE expression support

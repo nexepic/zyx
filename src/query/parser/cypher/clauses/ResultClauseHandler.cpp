@@ -178,7 +178,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 						alias = helpers::AstExtractor::extractVariable(item->variable());
 					}
 
-					aggItems.emplace_back(aggType, argExpr, alias);
+					aggItems.emplace_back(aggType, argExpr, alias, funcCall->isDistinct());
 				}
 			}
 
@@ -199,9 +199,14 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 
 		// Apply appropriate operator
 		if (hasAggregates) {
+			// Convert non-aggregate projection items to group-by items
+			std::vector<query::execution::operators::GroupByItem> groupByItems;
+			for (const auto& pi : projItems) {
+				groupByItems.emplace_back(pi.expression, pi.alias);
+			}
 			// Use AggregateOperator for aggregations
 			rootOp = std::make_unique<query::execution::operators::AggregateOperator>(
-				std::move(rootOp), aggItems);
+				std::move(rootOp), aggItems, std::move(groupByItems), planner->getDataManager().get());
 		} else if (!projItems.empty()) {
 			// Use ProjectOperator for regular projections
 			rootOp = planner->projectOp(std::move(rootOp), projItems, distinct);

@@ -276,7 +276,8 @@ private:
 class FunctionCallExpression : public Expression {
 public:
 	FunctionCallExpression(std::string functionName,
-	                       std::vector<std::unique_ptr<Expression>> arguments);
+	                       std::vector<std::unique_ptr<Expression>> arguments,
+	                       bool distinct = false);
 
 	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::FUNCTION_CALL; }
 	void accept(ExpressionVisitor &visitor) override;
@@ -287,10 +288,12 @@ public:
 	[[nodiscard]] const std::string &getFunctionName() const { return functionName_; }
 	[[nodiscard]] size_t getArgumentCount() const { return arguments_.size(); }
 	[[nodiscard]] const std::vector<std::unique_ptr<Expression>> &getArguments() const { return arguments_; }
+	[[nodiscard]] bool isDistinct() const { return distinct_; }
 
 private:
 	std::string functionName_;
 	std::vector<std::unique_ptr<Expression>> arguments_;
+	bool distinct_ = false;
 };
 
 // ============================================================================

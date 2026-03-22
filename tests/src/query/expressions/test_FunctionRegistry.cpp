@@ -1078,12 +1078,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_Basic) {
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
 	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_EQ(list.size(), 6UL);
 	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
 	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 1);
 	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 2);
 	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 3);
 	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 4);
+	EXPECT_EQ(std::get<int64_t>(list[5].getVariant()), 5);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_WithPositiveStep) {
@@ -1098,12 +1099,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_WithPositiveStep) {
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
 	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_EQ(list.size(), 6UL);
 	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
 	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 2);
 	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 4);
 	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 6);
 	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 8);
+	EXPECT_EQ(std::get<int64_t>(list[5].getVariant()), 10);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_WithNegativeStep) {
@@ -1118,12 +1120,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_WithNegativeStep) {
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
 	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_EQ(list.size(), 6UL);
 	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 5);
 	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 4);
 	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 3);
 	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 2);
 	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 1);
+	EXPECT_EQ(std::get<int64_t>(list[5].getVariant()), 0);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_EmptyPositiveStep) {
@@ -1166,8 +1169,9 @@ TEST_F(FunctionRegistryTest, RangeFunction_SingleValue) {
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
 	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	EXPECT_EQ(list.size(), 1UL);
+	EXPECT_EQ(list.size(), 2UL);
 	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 1);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_NullArgument) {
@@ -1205,12 +1209,13 @@ TEST_F(FunctionRegistryTest, RangeFunction_NegativeStartPositiveEnd) {
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
 	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	EXPECT_EQ(list.size(), 5UL);
+	EXPECT_EQ(list.size(), 6UL);
 	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), -3);
 	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), -2);
 	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), -1);
 	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 0);
 	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 1);
+	EXPECT_EQ(std::get<int64_t>(list[5].getVariant()), 2);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_LargeStep) {
@@ -1225,11 +1230,12 @@ TEST_F(FunctionRegistryTest, RangeFunction_LargeStep) {
 
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
 	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	EXPECT_EQ(list.size(), 4UL);
+	EXPECT_EQ(list.size(), 5UL);
 	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 0);
 	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 25);
 	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 50);
 	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 75);
+	EXPECT_EQ(std::get<int64_t>(list[4].getVariant()), 100);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_TooFewArgs) {

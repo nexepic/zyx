@@ -98,10 +98,10 @@ namespace graph::query {
 		 * @brief Projects specific variables from the stream (SELECT/RETURN).
 		 * @param distinct If true, eliminate duplicate rows from output.
 		 */
-		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		projectOp(std::unique_ptr<execution::PhysicalOperator> child,
 				  const std::vector<execution::operators::ProjectItem> &items,
-				  bool distinct = false);
+				  bool distinct = false) const;
 
 		// =================================================================
 		// Write Operations (Factories)
@@ -114,6 +114,12 @@ namespace graph::query {
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		createOp(const std::string &variable, const std::string &label,
 				 const std::unordered_map<std::string, PropertyValue> &props) const;
+
+		// Create Node with expression-based properties (for UNWIND+CREATE)
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		createOp(const std::string &variable, const std::string &label,
+				 const std::unordered_map<std::string, PropertyValue> &props,
+				 std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> propExprs) const;
 
 		// Create Edge
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>

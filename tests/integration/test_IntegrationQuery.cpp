@@ -851,7 +851,11 @@ TEST_F(IntegrationQueryTest, CreateIndex) {
 }
 
 TEST_F(IntegrationQueryTest, MapLiteral) {
-	auto r1 = execute("RETURN {a: 1, b: 'hello', c: true} AS m");
+	// Test map literals in property-setting context (SET +=)
+	(void) execute("CREATE (n:MapLitNode {name: 'test'})");
+	(void) execute("MATCH (n:MapLitNode) SET n += {a: 1, b: 'hello', c: true}");
+
+	auto r1 = execute("MATCH (n:MapLitNode) RETURN n.a, n.b, n.c");
 	EXPECT_EQ(r1.rowCount(), 1UL);
 }
 

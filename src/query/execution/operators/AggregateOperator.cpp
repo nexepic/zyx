@@ -31,9 +31,9 @@ void AggregateOperator::open() {
 	groups_.clear();
 	emitted_ = false;
 
-	// Initialize accumulators for each aggregate
+	// Initialize accumulators for each aggregate (with distinct flag)
 	for (const auto& agg : aggregates_) {
-		accumulators_.push_back(createAccumulator(agg.functionType));
+		accumulators_.push_back(createAccumulator(agg.functionType, agg.distinct));
 	}
 }
 
@@ -45,20 +45,23 @@ std::optional<RecordBatch> AggregateOperator::next() {
 	// Consume all input records and accumulate
 	while (auto batchOpt = child_->next()) {
 		for (const auto& record : *batchOpt) {
-			if (groupByKeys_.empty()) {
+			if (groupByItems_.empty()) {
 				// Global aggregation - update all accumulators
 				updateAccumulators(record);
 			} else {
 				// Grouped aggregation
 				std::string groupKey = computeGroupKey(record);
-				auto& groupAccumulators = groups_[groupKey];
-				if (groupAccumulators.empty()) {
-					// First time seeing this group
+				auto it = groups_.find(groupKey);
+				if (it == groups_.end()) {
+					// First time seeing this group - create accumulators and store key values
+					GroupData data;
 					for (const auto& agg : aggregates_) {
-						groupAccumulators.push_back(createAccumulator(agg.functionType));
+						data.accumulators.push_back(createAccumulator(agg.functionType, agg.distinct));
 					}
+					data.keyValues = evaluateGroupKeyValues(record);
+					it = groups_.emplace(groupKey, std::move(data)).first;
 				}
-				updateAccumulators(record, groupAccumulators);
+				updateAccumulators(record, it->second.accumulators);
 			}
 		}
 	}
@@ -66,7 +69,7 @@ std::optional<RecordBatch> AggregateOperator::next() {
 	// Produce output records
 	RecordBatch outputBatch;
 
-	if (groupByKeys_.empty()) {
+	if (groupByItems_.empty()) {
 		// Global aggregation - single output record
 		Record outputRecord;
 		for (size_t i = 0; i < aggregates_.size(); ++i) {
@@ -75,13 +78,17 @@ std::optional<RecordBatch> AggregateOperator::next() {
 		outputBatch.push_back(std::move(outputRecord));
 	} else {
 		// Grouped aggregation - one output record per group
-		for (auto& [groupKey, groupAccumulators] : groups_) {
+		for (auto& [groupKey, groupData] : groups_) {
 			Record outputRecord;
-			// Add group by keys
-			// TODO: Parse group key and extract values
-			// For now, we'd need to store the original record or group key values
+			// Add group-by key values to the output record
+			for (size_t i = 0; i < groupByItems_.size(); ++i) {
+				if (i < groupData.keyValues.size()) {
+					outputRecord.setValue(groupByItems_[i].alias, groupData.keyValues[i]);
+				}
+			}
+			// Add aggregate results
 			for (size_t i = 0; i < aggregates_.size(); ++i) {
-				outputRecord.setValue(aggregates_[i].alias, groupAccumulators[i]->getResult());
+				outputRecord.setValue(aggregates_[i].alias, groupData.accumulators[i]->getResult());
 			}
 			outputBatch.push_back(std::move(outputRecord));
 		}
@@ -138,14 +145,14 @@ void AggregateOperator::updateAccumulators(const Record& record,
 			} else {
 				// COUNT(expr) - evaluate expression and count non-NULL results
 				PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-				    agg.expression.get(), record);
+				    agg.expression.get(), record, dataManager_);
 				accums[i]->update(value);
 			}
 		} else {
 			// Other aggregates require an expression
 			if (agg.expression) {
 				PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-				    agg.expression.get(), record);
+				    agg.expression.get(), record, dataManager_);
 				accums[i]->update(value);
 			}
 		}
@@ -157,19 +164,29 @@ void AggregateOperator::updateAccumulators(const Record& record) {
 }
 
 std::string AggregateOperator::computeGroupKey(const Record& record) {
-	// Simple implementation: concatenate group by variable values
-	// TODO: Handle NULL values and complex expressions
 	std::string key;
-	for (const auto& var : groupByKeys_) {
-		if (auto node = record.getNode(var)) {
-			key += "N" + std::to_string(node->getId()) + "|";
-		} else if (auto edge = record.getEdge(var)) {
-			key += "E" + std::to_string(edge->getId()) + "|";
-		} else if (auto val = record.getValue(var)) {
-			key += val->toString() + "|";
+	for (const auto& item : groupByItems_) {
+		if (item.expression) {
+			PropertyValue val = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+			    item.expression.get(), record, dataManager_);
+			key += val.toString() + "|";
 		}
 	}
 	return key;
+}
+
+std::vector<PropertyValue> AggregateOperator::evaluateGroupKeyValues(const Record& record) {
+	std::vector<PropertyValue> values;
+	values.reserve(groupByItems_.size());
+	for (const auto& item : groupByItems_) {
+		if (item.expression) {
+			values.push_back(graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+			    item.expression.get(), record));
+		} else {
+			values.emplace_back(); // NULL
+		}
+	}
+	return values;
 }
 
 } // namespace graph::query::execution::operators

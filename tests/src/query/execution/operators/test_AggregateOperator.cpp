@@ -255,7 +255,8 @@ TEST_F(AggregateOperatorTest, GroupedCount_ByValue) {
 	std::vector<AggregateItem> aggs;
 	aggs.emplace_back(AggregateFunctionType::AGG_COUNT, nullptr, "cnt");
 
-	std::vector<std::string> groupBy = {"group"};
+	std::vector<GroupByItem> groupBy;
+	groupBy.emplace_back(std::make_shared<graph::query::expressions::VariableReferenceExpression>("group"), "group");
 	auto op = std::make_unique<AggregateOperator>(std::move(mock), std::move(aggs), std::move(groupBy));
 	op->open();
 
@@ -287,7 +288,8 @@ TEST_F(AggregateOperatorTest, GroupedCount_ByNode) {
 	std::vector<AggregateItem> aggs;
 	aggs.emplace_back(AggregateFunctionType::AGG_COUNT, nullptr, "cnt");
 
-	std::vector<std::string> groupBy = {"n"};
+	std::vector<GroupByItem> groupBy;
+	groupBy.emplace_back(std::make_shared<VariableReferenceExpression>("n"), "n");
 	auto op = std::make_unique<AggregateOperator>(std::move(mock), std::move(aggs), std::move(groupBy));
 	op->open();
 
@@ -312,7 +314,8 @@ TEST_F(AggregateOperatorTest, GroupedCount_ByEdge) {
 	std::vector<AggregateItem> aggs;
 	aggs.emplace_back(AggregateFunctionType::AGG_COUNT, nullptr, "cnt");
 
-	std::vector<std::string> groupBy = {"r"};
+	std::vector<GroupByItem> groupBy;
+	groupBy.emplace_back(std::make_shared<VariableReferenceExpression>("r"), "r");
 	auto op = std::make_unique<AggregateOperator>(std::move(mock), std::move(aggs), std::move(groupBy));
 	op->open();
 
@@ -433,7 +436,8 @@ TEST_F(AggregateOperatorTest, EmptyInput_GroupedAggregation) {
 	auto mock = std::make_unique<AggMockOperator>();
 	std::vector<AggregateItem> aggs;
 	aggs.emplace_back(AggregateFunctionType::AGG_COUNT, nullptr, "cnt");
-	std::vector<std::string> groupBy = {"g"};
+	std::vector<GroupByItem> groupBy;
+	groupBy.emplace_back(std::make_shared<VariableReferenceExpression>("g"), "g");
 
 	auto op = std::make_unique<AggregateOperator>(std::move(mock), std::move(aggs), std::move(groupBy));
 	op->open();
@@ -820,11 +824,9 @@ TEST_F(AggregateOperatorTest, NonCountAggregate_NullExpression) {
 // ============================================================================
 
 TEST_F(AggregateOperatorTest, GroupBy_MissingVariable) {
-	// Covers False branch of if (auto val = record.getValue(var)) in computeGroupKey (line 168)
-	// When groupBy key is not found as node, edge, or value
+	// When groupBy key references an undefined variable, expression evaluator throws
 	Record r1, r2;
 	r1.setValue("x", PropertyValue(int64_t(10)));
-	// "missing_var" is not set in either record
 	r2.setValue("x", PropertyValue(int64_t(20)));
 
 	auto mock = std::make_unique<AggMockOperator>(std::vector<RecordBatch>{{r1, r2}});
@@ -833,17 +835,12 @@ TEST_F(AggregateOperatorTest, GroupBy_MissingVariable) {
 	aggs.emplace_back(AggregateFunctionType::AGG_COUNT, nullptr, "cnt");
 
 	// Group by a variable that doesn't exist in records
-	std::vector<std::string> groupBy = {"missing_var"};
+	std::vector<GroupByItem> groupBy;
+	groupBy.emplace_back(std::make_shared<VariableReferenceExpression>("missing_var"), "missing_var");
 	auto op = std::make_unique<AggregateOperator>(std::move(mock), std::move(aggs), std::move(groupBy));
 	op->open();
 
-	auto batch = op->next();
-	ASSERT_TRUE(batch.has_value());
-	// Both records have the same empty group key, so they should be in one group
-	EXPECT_EQ(batch->size(), 1UL);
-	auto val = (*batch)[0].getValue("cnt");
-	ASSERT_TRUE(val.has_value());
-	EXPECT_EQ(std::get<int64_t>(val->getVariant()), 2);
+	EXPECT_THROW(op->next(), std::runtime_error);
 
 	op->close();
 }

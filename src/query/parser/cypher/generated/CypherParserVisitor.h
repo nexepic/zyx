@@ -2,7 +2,7 @@
     #include "antlr4-runtime.h"
 
 
-// Generated from generated/CypherParser.g4 by ANTLR 4.13.1
+// Generated from CypherParser.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -141,6 +141,8 @@ public:
     virtual std::any visitAccessor(CypherParser::AccessorContext *context) = 0;
 
     virtual std::any visitAtom(CypherParser::AtomContext *context) = 0;
+
+    virtual std::any visitQuantifierExpression(CypherParser::QuantifierExpressionContext *context) = 0;
 
     virtual std::any visitCaseExpression(CypherParser::CaseExpressionContext *context) = 0;
 

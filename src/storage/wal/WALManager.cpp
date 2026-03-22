@@ -176,4 +176,69 @@ namespace graph::storage::wal {
 		return fileSize > static_cast<std::streamoff>(sizeof(WALFileHeader));
 	}
 
+	WALReadResult WALManager::readRecords() {
+		WALReadResult result;
+
+		if (!isOpen_ || !walFile_.is_open())
+			return result;
+
+		if (!validateHeader())
+			return result;
+
+		walFile_.seekg(0, std::ios::end);
+		auto fileSize = static_cast<size_t>(walFile_.tellg());
+
+		size_t pos = sizeof(WALFileHeader);
+
+		while (pos + sizeof(WALRecordHeader) <= fileSize) {
+			walFile_.seekg(static_cast<std::streamoff>(pos));
+
+			// Read record header
+			uint8_t headerBuf[sizeof(WALRecordHeader)];
+			walFile_.read(reinterpret_cast<char *>(headerBuf), sizeof(WALRecordHeader));
+			if (!walFile_.good()) {
+				result.corrupted = true;
+				break;
+			}
+
+			WALRecordHeader recHeader = deserializeRecordHeader(headerBuf);
+
+			// Validate record size
+			if (recHeader.recordSize < sizeof(WALRecordHeader) || pos + recHeader.recordSize > fileSize) {
+				result.corrupted = true;
+				break;
+			}
+
+			uint32_t dataSize = recHeader.recordSize - static_cast<uint32_t>(sizeof(WALRecordHeader));
+
+			std::vector<uint8_t> data;
+			if (dataSize > 0) {
+				data.resize(dataSize);
+				walFile_.read(reinterpret_cast<char *>(data.data()), dataSize);
+				if (!walFile_.good()) {
+					result.corrupted = true;
+					break;
+				}
+
+				// Verify CRC32 checksum
+				uint32_t computed = computeCRC32(data.data(), dataSize);
+				if (computed != recHeader.checksum) {
+					result.corrupted = true;
+					break;
+				}
+			} else {
+				// No data — checksum should be 0
+				if (recHeader.checksum != 0) {
+					result.corrupted = true;
+					break;
+				}
+			}
+
+			result.records.push_back({recHeader, std::move(data)});
+			pos += recHeader.recordSize;
+		}
+
+		return result;
+	}
+
 } // namespace graph::storage::wal

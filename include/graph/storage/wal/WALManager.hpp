@@ -48,6 +48,7 @@ namespace graph::storage::wal {
 
 		[[nodiscard]] bool needsRecovery();
 		[[nodiscard]] bool isOpen() const { return isOpen_; }
+		[[nodiscard]] WALReadResult readRecords();
 		[[nodiscard]] std::string getWALPath() const { return walPath_; }
 
 	private:

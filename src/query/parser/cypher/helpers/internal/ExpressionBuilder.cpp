@@ -431,6 +431,9 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 			return std::make_unique<LiteralExpression>(std::get<double>(lit.getVariant()));
 		} else if (std::holds_alternative<std::string>(lit.getVariant())) {
 			return std::make_unique<LiteralExpression>(std::get<std::string>(lit.getVariant()));
+		} else if (lit.getType() == PropertyType::MAP) {
+			// Map literals: {key: value, ...} - wrap in ListLiteralExpression (generic value wrapper)
+			return std::make_unique<ListLiteralExpression>(std::move(lit));
 		}
 	}
 
@@ -469,12 +472,48 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 		throw std::runtime_error("Parameters ($param) are not yet supported");
 	}
 
+	// Quantifier functions: all(x IN list WHERE cond), any(...), none(...), single(...)
+	if (ctx->quantifierExpression()) {
+		return buildQuantifierExpression(ctx->quantifierExpression());
+	}
+
 	// List comprehension: [x IN list WHERE x > 5]
 	if (ctx->listComprehension()) {
 		return buildListComprehensionExpression(ctx->listComprehension(), evaluateLiteralExpression);
 	}
 
 	throw std::runtime_error("Unsupported atom expression: " + ctx->getText());
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildQuantifierExpression(CypherParser::QuantifierExpressionContext *ctx) {
+	if (!ctx) {
+		return nullptr;
+	}
+
+	// Determine function name from the keyword token
+	std::string funcName;
+	if (ctx->K_ALL()) funcName = "all";
+	else if (ctx->K_ANY()) funcName = "any";
+	else if (ctx->K_NONE()) funcName = "none";
+	else if (ctx->K_SINGLE()) funcName = "single";
+	else throw std::runtime_error("Unknown quantifier function in: " + ctx->getText());
+
+	// Extract variable name
+	std::string variable = ctx->variable()->getText();
+
+	// Build list expression (first expression after IN)
+	auto expressions = ctx->expression();
+	auto listExpr = buildExpression(expressions[0]);
+
+	// Build WHERE condition expression (second expression after WHERE)
+	auto whereExpr = buildExpression(expressions[1]);
+
+	return std::make_unique<QuantifierFunctionExpression>(
+		funcName,
+		variable,
+		std::move(listExpr),
+		std::move(whereExpr)
+	);
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildVariableOrProperty(CypherParser::UnaryExpressionContext *ctx) {
@@ -617,6 +656,9 @@ std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::F
 		// This will result in an error at runtime
 	}
 
+	// Check for DISTINCT modifier in function call (e.g., count(DISTINCT expr))
+	bool isDistinctFunc = (ctx->K_DISTINCT() != nullptr);
+
 	// Parse arguments for normal function calls
 	std::vector<std::unique_ptr<Expression>> arguments;
 	auto exprs = ctx->expression();
@@ -624,7 +666,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::F
 		arguments.push_back(buildExpression(exprCtx));
 	}
 
-	return std::make_unique<FunctionCallExpression>(functionName, std::move(arguments));
+	return std::make_unique<FunctionCallExpression>(functionName, std::move(arguments), isDistinctFunc);
 }
 
 bool ExpressionBuilder::isAggregateFunction(const std::string& functionName) {
@@ -759,6 +801,17 @@ PropertyValue ExpressionBuilder::parseValue(CypherParser::LiteralContext *ctx) {
 	if (ctx->K_NULL())
 		return PropertyValue();
 
+	if (ctx->mapLiteral()) {
+		auto mapLit = ctx->mapLiteral();
+		auto keys = mapLit->propertyKeyName();
+		auto exprs = mapLit->expression();
+		std::unordered_map<std::string, PropertyValue> map;
+		for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+			map[keys[i]->getText()] = evaluateLiteralExpression(exprs[i]);
+		}
+		return PropertyValue(std::move(map));
+	}
+
 	return PropertyValue();
 }
 
@@ -794,14 +847,20 @@ std::unique_ptr<Expression> ExpressionBuilder::buildCaseExpression(CypherParser:
 	// Searched CASE: CASE WHEN boolExpr1 THEN expr2 ... [ELSE expr] END
 
 	// Check if there's a comparison expression (simple CASE)
+	// Simple CASE: CASE expr WHEN ... — the first expression starts BEFORE the first WHEN keyword
+	// Searched CASE: CASE WHEN ... — the first expression starts AFTER the first WHEN keyword
 	std::unique_ptr<Expression> comparisonExpr = nullptr;
 	size_t startIndex = 0;
 
-	if (ctx->expression().size() > whenExprs.size() * 2) {
-		// First expression is the comparison expression
-		// Format: CASE expr WHEN expr THEN expr [WHEN expr THEN expr]* [ELSE expr] END
-		comparisonExpr = buildExpression(ctx->expression(0));
-		startIndex = 1;
+	if (!thenExprs.empty() && !whenExprs.empty()) {
+		auto firstExprStart = thenExprs[0]->getStart()->getTokenIndex();
+		auto firstWhenStart = whenExprs[0]->getSymbol()->getTokenIndex();
+
+		if (firstExprStart < firstWhenStart) {
+			// First expression appears before first WHEN → simple CASE
+			comparisonExpr = buildExpression(ctx->expression(0));
+			startIndex = 1;
+		}
 	}
 
 	// Create CaseExpression

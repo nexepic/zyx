@@ -1582,14 +1582,15 @@ TEST_F(CppApiTest, TransactionExecuteInvalidCypher) {
 // ============================================================================
 
 TEST_F(CppApiTest, ResultWithMapProperty) {
-	// Execute a query that produces a map value
-	auto res = db->execute("RETURN {key: 'value', num: 42} AS m");
+	// Test that map-like properties work through node creation and retrieval
+	db->execute("CREATE (n:MapTestNode {key: 'value', num: 42})");
+	auto res = db->execute("MATCH (n:MapTestNode) RETURN n.key AS k, n.num AS num");
 	ASSERT_TRUE(res.hasNext());
 	res.next();
-	auto val = res.get("m");
-	// Maps are converted to string representation
-	// Just ensure no crash
-	(void)val;
+	auto k = res.get("k");
+	auto num = res.get("num");
+	EXPECT_EQ(std::get<std::string>(k), "value");
+	EXPECT_EQ(std::get<int64_t>(num), 42);
 }
 
 // ============================================================================

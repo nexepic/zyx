@@ -818,6 +818,261 @@ TEST_F(WALManagerTest, DestructorWithPendingRecords) {
 	mgr2.close();
 }
 
+// ============================================================================
+// CRC32 Verification Tests (readRecords)
+// ============================================================================
+
+TEST_F(WALManagerTest, ReadRecords_EmptyWAL) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	auto result = mgr.readRecords();
+	EXPECT_TRUE(result.records.empty());
+	EXPECT_FALSE(result.corrupted);
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_WhenNotOpen) {
+	WALManager mgr;
+	auto result = mgr.readRecords();
+	EXPECT_TRUE(result.records.empty());
+	EXPECT_FALSE(result.corrupted);
+}
+
+TEST_F(WALManagerTest, ReadRecords_BeginCommit) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.sync();
+
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	ASSERT_EQ(result.records.size(), 2U);
+	EXPECT_EQ(result.records[0].header.type, WALRecordType::WAL_TXN_BEGIN);
+	EXPECT_EQ(result.records[0].header.txnId, 1U);
+	EXPECT_EQ(result.records[1].header.type, WALRecordType::WAL_TXN_COMMIT);
+	EXPECT_EQ(result.records[1].header.txnId, 1U);
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_EntityChangeWithData) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	std::vector<uint8_t> data = {0x01, 0x02, 0x03, 0x04};
+	mgr.writeEntityChange(1, 0, 0, 42, data);
+	mgr.writeCommit(1);
+	mgr.sync();
+
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	ASSERT_EQ(result.records.size(), 3U);
+
+	// The entity write record should have data
+	EXPECT_EQ(result.records[1].header.type, WALRecordType::WAL_ENTITY_WRITE);
+	EXPECT_FALSE(result.records[1].data.empty());
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_CorruptedChecksum) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	std::vector<uint8_t> data = {0xAA, 0xBB, 0xCC};
+	mgr.writeEntityChange(1, 0, 0, 10, data);
+	mgr.writeCommit(1);
+	mgr.sync();
+	mgr.close();
+
+	// Corrupt the data payload of the entity write record
+	// File layout: [32-byte file header] [BEGIN record header] [ENTITY_WRITE record header + data] [COMMIT record header]
+	// BEGIN record: sizeof(WALRecordHeader) with no data
+	// We corrupt a byte in the entity write data section
+	{
+		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
+		// Seek past file header + BEGIN record header + ENTITY_WRITE record header
+		auto corruptPos = static_cast<std::streamoff>(
+			sizeof(WALFileHeader) + sizeof(WALRecordHeader) + sizeof(WALRecordHeader) + 1);
+		f.seekp(corruptPos);
+		char garbage = 0xFF;
+		f.write(&garbage, 1);
+		f.flush();
+	}
+
+	WALManager mgr2;
+	mgr2.open(testDbPath.string());
+	auto result = mgr2.readRecords();
+	// Should detect corruption at the entity write record
+	EXPECT_TRUE(result.corrupted);
+	// BEGIN record should have been read successfully before the corrupt one
+	EXPECT_EQ(result.records.size(), 1U);
+	mgr2.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_TruncatedRecord) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	std::vector<uint8_t> data(64, 0x42);
+	mgr.writeEntityChange(1, 0, 0, 99, data);
+	mgr.writeCommit(1);
+	mgr.sync();
+	mgr.close();
+
+	// Truncate the file to cut off the commit record mid-way
+	auto fileSize = fs::file_size(walPath);
+	fs::resize_file(walPath, fileSize - 5);
+
+	WALManager mgr2;
+	mgr2.open(testDbPath.string());
+	auto result = mgr2.readRecords();
+	// The last record (commit) is truncated, but BEGIN and ENTITY should be fine
+	EXPECT_EQ(result.records.size(), 2U);
+	EXPECT_FALSE(result.corrupted); // just ran out of data, not CRC corruption
+	mgr2.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_CorruptedRecordSize) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.sync();
+	mgr.close();
+
+	// Corrupt the recordSize field of the first record to be impossibly large
+	{
+		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
+		f.seekp(static_cast<std::streamoff>(sizeof(WALFileHeader)));
+		uint32_t badSize = 0xFFFFFFFF;
+		f.write(reinterpret_cast<const char *>(&badSize), sizeof(badSize));
+		f.flush();
+	}
+
+	WALManager mgr2;
+	mgr2.open(testDbPath.string());
+	auto result = mgr2.readRecords();
+	EXPECT_TRUE(result.corrupted);
+	EXPECT_TRUE(result.records.empty());
+	mgr2.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_CorruptedRecordSizeTooSmall) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.sync();
+	mgr.close();
+
+	// Set recordSize to less than sizeof(WALRecordHeader)
+	{
+		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
+		f.seekp(static_cast<std::streamoff>(sizeof(WALFileHeader)));
+		uint32_t badSize = 1; // Way too small
+		f.write(reinterpret_cast<const char *>(&badSize), sizeof(badSize));
+		f.flush();
+	}
+
+	WALManager mgr2;
+	mgr2.open(testDbPath.string());
+	auto result = mgr2.readRecords();
+	EXPECT_TRUE(result.corrupted);
+	EXPECT_TRUE(result.records.empty());
+	mgr2.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_NonZeroChecksumOnEmptyData) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	mgr.sync();
+	mgr.close();
+
+	// Corrupt the checksum of the BEGIN record (which has no data, so checksum should be 0)
+	{
+		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
+		// checksum is at offset: recordSize(4) + txnId(8) + type(1) = 13 bytes into the record header
+		auto checksumOffset = static_cast<std::streamoff>(sizeof(WALFileHeader) + offsetof(WALRecordHeader, checksum));
+		f.seekp(checksumOffset);
+		uint32_t badChecksum = 0xDEADBEEF;
+		f.write(reinterpret_cast<const char *>(&badChecksum), sizeof(badChecksum));
+		f.flush();
+	}
+
+	WALManager mgr2;
+	mgr2.open(testDbPath.string());
+	auto result = mgr2.readRecords();
+	EXPECT_TRUE(result.corrupted);
+	EXPECT_TRUE(result.records.empty());
+	mgr2.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_MultipleTransactions) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	for (uint64_t i = 1; i <= 3; ++i) {
+		mgr.writeBegin(i);
+		std::vector<uint8_t> data = {static_cast<uint8_t>(i)};
+		mgr.writeEntityChange(i, 0, 0, static_cast<int64_t>(i * 10), data);
+		mgr.writeCommit(i);
+	}
+	mgr.sync();
+
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	// 3 transactions x 3 records each (BEGIN + ENTITY + COMMIT)
+	EXPECT_EQ(result.records.size(), 9U);
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_AfterCheckpointIsEmpty) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.sync();
+
+	auto before = mgr.readRecords();
+	EXPECT_EQ(before.records.size(), 2U);
+
+	mgr.checkpoint();
+
+	auto after = mgr.readRecords();
+	EXPECT_TRUE(after.records.empty());
+	EXPECT_FALSE(after.corrupted);
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, ReadRecords_InvalidHeader) {
+	// Create WAL with invalid magic
+	{
+		WALFileHeader header;
+		header.magic = 0xDEADBEEF;
+		auto buf = serializeFileHeader(header);
+		std::ofstream f(walPath, std::ios::binary | std::ios::trunc);
+		f.write(reinterpret_cast<const char *>(buf.data()),
+				static_cast<std::streamsize>(buf.size()));
+	}
+
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+	auto result = mgr.readRecords();
+	EXPECT_TRUE(result.records.empty());
+	EXPECT_FALSE(result.corrupted);
+	mgr.close();
+}
+
 // Test multiple write entity changes in a single transaction
 // Exercises writeRecord with data multiple times in sequence
 TEST_F(WALManagerTest, MultipleEntityChangesInTransaction) {
