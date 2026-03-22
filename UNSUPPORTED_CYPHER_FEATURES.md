@@ -116,18 +116,19 @@ All aggregate functions are ✅ Supported: `count()`, `sum()`, `avg()`, `max()`,
 ## 5. Not Yet Implemented
 
 ### 5.1 EXISTS Pattern Expressions
-**Syntax**: `WHERE EXISTS { (n)-[:KNOWS]->(m) }`
-**Status**: ❌ Not Yet Implemented
-**Note**: Requires graph traversal integration with expression evaluator.
+**Syntax**: `WHERE EXISTS { (n)-[:KNOWS]->(m) }` or `WHERE exists((n)-[:KNOWS]->(m))`
+**Status**: ✅ Supported
+**Note**: Evaluates pattern existence using graph traversal within expression evaluator.
 
 ### 5.2 Pattern Comprehensions
 **Syntax**: `[(n)-[:KNOWS]->(m) | m.name]`
-**Status**: ❌ Not Yet Implemented
+**Status**: ✅ Supported
+**Note**: Traverses graph patterns and collects projected expressions into a list.
 
 ### 5.3 REDUCE Function
 **Syntax**: `reduce(total = 0, x IN [1, 2, 3] | total + x)`
-**Status**: ❌ Not Yet Implemented
-**Note**: Requires special parser syntax for accumulator binding.
+**Status**: ✅ Supported
+**Note**: Accumulator-based list reduction with custom body expression.
 
 ### 5.4 Multi-Label Support
 **Syntax**: `(n:Person:Employee)`
@@ -136,7 +137,8 @@ All aggregate functions are ✅ Supported: `count()`, `sum()`, `avg()`, `max()`,
 
 ### 5.5 UNWIND Nested Properties
 **Syntax**: `MATCH (n) UNWIND n.arrayProp AS x`
-**Status**: ⚠️ Limited Support
+**Status**: ✅ Supported
+**Note**: Expression-based UNWIND evaluates property access at runtime.
 
 ## Testing Notes
 

@@ -132,8 +132,9 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 		auto ast = helpers::ExpressionBuilder::buildExpression(ctx->where()->expression());
 		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
 		std::string desc = astShared->toString();
-		auto predicate = [astShared](const query::execution::Record &r) -> bool {
-			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r);
+		auto dm = planner->getDataManager().get();
+		auto predicate = [astShared, dm](const query::execution::Record &r) -> bool {
+			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r, dm);
 		};
 		rootOp = planner->filterOp(std::move(rootOp), predicate, desc);
 	}

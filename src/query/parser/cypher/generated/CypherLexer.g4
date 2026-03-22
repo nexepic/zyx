@@ -64,6 +64,7 @@ K_ANY        : 'ANY';
 K_NONE       : 'NONE';
 K_SINGLE     : 'SINGLE';
 K_ALL        : 'ALL';
+K_REDUCE     : 'REDUCE';
 
 // Admin Keywords
 K_INDEX      : 'INDEX' | 'INDEXES';

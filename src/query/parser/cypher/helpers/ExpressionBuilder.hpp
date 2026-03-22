@@ -190,6 +190,15 @@ private:
 		CypherParser::ListComprehensionContext* ctx,
 		const std::function<PropertyValue(CypherParser::ExpressionContext*)>& evaluateLiteral);
 
+	static std::unique_ptr<graph::query::expressions::Expression> buildReduceExpression(
+		CypherParser::ReduceExpressionContext* ctx);
+
+	static std::unique_ptr<graph::query::expressions::Expression> buildPatternComprehension(
+		CypherParser::PatternComprehensionContext* ctx);
+
+	static std::unique_ptr<graph::query::expressions::Expression> buildExistsExpression(
+		CypherParser::ExistsExpressionContext* ctx);
+
 	// Helper methods for literal value extraction
 	static graph::PropertyValue parseListLiteral(CypherParser::ListLiteralContext *ctx);
 };

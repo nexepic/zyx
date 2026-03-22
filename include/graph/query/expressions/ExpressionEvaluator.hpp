@@ -75,6 +75,7 @@ public:
 	void visit(const QuantifierFunctionExpression *expr) override;
 	void visit(const ExistsExpression *expr) override;
 	void visit(const PatternComprehensionExpression *expr) override;
+	void visit(const ReduceExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.

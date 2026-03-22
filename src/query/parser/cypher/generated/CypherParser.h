@@ -24,15 +24,15 @@ public:
     K_STARTS = 34, K_XOR = 35, K_FALSE = 36, K_TRUE = 37, K_NULL = 38, K_CASE = 39, 
     K_WHEN = 40, K_THEN = 41, K_ELSE = 42, K_END = 43, K_COUNT = 44, K_FILTER = 45, 
     K_EXTRACT = 46, K_ANY = 47, K_NONE = 48, K_SINGLE = 49, K_ALL = 50, 
-    K_INDEX = 51, K_ON = 52, K_SHOW = 53, K_DROP = 54, K_FOR = 55, K_CONSTRAINT = 56, 
-    K_DO = 57, K_REQUIRE = 58, K_UNIQUE = 59, K_MANDATORY = 60, K_SCALAR = 61, 
-    K_OF = 62, K_ADD = 63, K_VECTOR = 64, K_OPTIONS = 65, EQ = 66, NEQ = 67, 
-    LT = 68, GT = 69, LTE = 70, GTE = 71, PLUS = 72, MINUS = 73, MULTIPLY = 74, 
-    DIVIDE = 75, MODULO = 76, POWER = 77, LPAREN = 78, RPAREN = 79, LBRACE = 80, 
-    RBRACE = 81, LBRACK = 82, RBRACK = 83, COMMA = 84, DOT = 85, COLON = 86, 
-    PIPE = 87, DOLLAR = 88, RANGE = 89, SEMI = 90, HexInteger = 91, OctalInteger = 92, 
-    DecimalInteger = 93, DoubleLiteral = 94, ID = 95, StringLiteral = 96, 
-    WS = 97, COMMENT = 98, LINE_COMMENT = 99
+    K_REDUCE = 51, K_INDEX = 52, K_ON = 53, K_SHOW = 54, K_DROP = 55, K_FOR = 56, 
+    K_CONSTRAINT = 57, K_DO = 58, K_REQUIRE = 59, K_UNIQUE = 60, K_MANDATORY = 61, 
+    K_SCALAR = 62, K_OF = 63, K_ADD = 64, K_VECTOR = 65, K_OPTIONS = 66, 
+    EQ = 67, NEQ = 68, LT = 69, GT = 70, LTE = 71, GTE = 72, PLUS = 73, 
+    MINUS = 74, MULTIPLY = 75, DIVIDE = 76, MODULO = 77, POWER = 78, LPAREN = 79, 
+    RPAREN = 80, LBRACE = 81, RBRACE = 82, LBRACK = 83, RBRACK = 84, COMMA = 85, 
+    DOT = 86, COLON = 87, PIPE = 88, DOLLAR = 89, RANGE = 90, SEMI = 91, 
+    HexInteger = 92, OctalInteger = 93, DecimalInteger = 94, DoubleLiteral = 95, 
+    ID = 96, StringLiteral = 97, WS = 98, COMMENT = 99, LINE_COMMENT = 100
   };
 
   enum {
@@ -53,14 +53,15 @@ public:
     RuleRangeLiteral = 45, RuleExpression = 46, RuleOrExpression = 47, RuleXorExpression = 48, 
     RuleAndExpression = 49, RuleNotExpression = 50, RuleComparisonExpression = 51, 
     RuleArithmeticExpression = 52, RulePowerExpression = 53, RuleUnaryExpression = 54, 
-    RuleAccessor = 55, RuleAtom = 56, RuleQuantifierExpression = 57, RuleCaseExpression = 58, 
-    RulePropertyExpression = 59, RuleFunctionInvocation = 60, RuleExplicitProcedureInvocation = 61, 
-    RuleImplicitProcedureInvocation = 62, RuleVariable = 63, RuleLabelName = 64, 
-    RuleRelTypeName = 65, RulePropertyKeyName = 66, RuleProcedureName = 67, 
-    RuleProcedureResultField = 68, RuleFunctionName = 69, RuleNamespace = 70, 
-    RuleSchemaName = 71, RuleSymbolicName = 72, RuleLiteral = 73, RuleBooleanLiteral = 74, 
-    RuleNumberLiteral = 75, RuleIntegerLiteral = 76, RuleMapLiteral = 77, 
-    RuleListLiteral = 78, RuleParameter = 79, RuleListComprehension = 80
+    RuleAccessor = 55, RuleAtom = 56, RuleQuantifierExpression = 57, RuleExistsExpression = 58, 
+    RuleCaseExpression = 59, RulePropertyExpression = 60, RuleFunctionInvocation = 61, 
+    RuleExplicitProcedureInvocation = 62, RuleImplicitProcedureInvocation = 63, 
+    RuleVariable = 64, RuleLabelName = 65, RuleRelTypeName = 66, RulePropertyKeyName = 67, 
+    RuleProcedureName = 68, RuleProcedureResultField = 69, RuleFunctionName = 70, 
+    RuleNamespace = 71, RuleSchemaName = 72, RuleSymbolicName = 73, RuleLiteral = 74, 
+    RuleBooleanLiteral = 75, RuleNumberLiteral = 76, RuleIntegerLiteral = 77, 
+    RuleMapLiteral = 78, RuleListLiteral = 79, RuleParameter = 80, RuleListComprehension = 81, 
+    RuleReduceExpression = 82, RulePatternComprehension = 83
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -138,6 +139,7 @@ public:
   class AccessorContext;
   class AtomContext;
   class QuantifierExpressionContext;
+  class ExistsExpressionContext;
   class CaseExpressionContext;
   class PropertyExpressionContext;
   class FunctionInvocationContext;
@@ -160,7 +162,9 @@ public:
   class MapLiteralContext;
   class ListLiteralContext;
   class ParameterContext;
-  class ListComprehensionContext; 
+  class ListComprehensionContext;
+  class ReduceExpressionContext;
+  class PatternComprehensionContext; 
 
   class  CypherContext : public antlr4::ParserRuleContext {
   public:
@@ -1179,12 +1183,15 @@ public:
     antlr4::tree::TerminalNode *MULTIPLY();
     antlr4::tree::TerminalNode *RPAREN();
     QuantifierExpressionContext *quantifierExpression();
+    ReduceExpressionContext *reduceExpression();
+    ExistsExpressionContext *existsExpression();
     FunctionInvocationContext *functionInvocation();
     CaseExpressionContext *caseExpression();
     VariableContext *variable();
     ExpressionContext *expression();
     ListLiteralContext *listLiteral();
     ListComprehensionContext *listComprehension();
+    PatternComprehensionContext *patternComprehension();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -1215,6 +1222,24 @@ public:
   };
 
   QuantifierExpressionContext* quantifierExpression();
+
+  class  ExistsExpressionContext : public antlr4::ParserRuleContext {
+  public:
+    ExistsExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_EXISTS();
+    antlr4::tree::TerminalNode *LPAREN();
+    PatternElementContext *patternElement();
+    antlr4::tree::TerminalNode *RPAREN();
+    antlr4::tree::TerminalNode *K_WHERE();
+    ExpressionContext *expression();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ExistsExpressionContext* existsExpression();
 
   class  CaseExpressionContext : public antlr4::ParserRuleContext {
   public:
@@ -1489,6 +1514,7 @@ public:
     antlr4::tree::TerminalNode *K_NONE();
     antlr4::tree::TerminalNode *K_SINGLE();
     antlr4::tree::TerminalNode *K_ALL();
+    antlr4::tree::TerminalNode *K_REDUCE();
     antlr4::tree::TerminalNode *K_INDEX();
     antlr4::tree::TerminalNode *K_ON();
     antlr4::tree::TerminalNode *K_SHOW();
@@ -1648,6 +1674,48 @@ public:
   };
 
   ListComprehensionContext* listComprehension();
+
+  class  ReduceExpressionContext : public antlr4::ParserRuleContext {
+  public:
+    ReduceExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_REDUCE();
+    antlr4::tree::TerminalNode *LPAREN();
+    std::vector<VariableContext *> variable();
+    VariableContext* variable(size_t i);
+    antlr4::tree::TerminalNode *EQ();
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    antlr4::tree::TerminalNode *COMMA();
+    antlr4::tree::TerminalNode *K_IN();
+    antlr4::tree::TerminalNode *PIPE();
+    antlr4::tree::TerminalNode *RPAREN();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ReduceExpressionContext* reduceExpression();
+
+  class  PatternComprehensionContext : public antlr4::ParserRuleContext {
+  public:
+    PatternComprehensionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *LBRACK();
+    PatternElementContext *patternElement();
+    antlr4::tree::TerminalNode *PIPE();
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+    antlr4::tree::TerminalNode *RBRACK();
+    antlr4::tree::TerminalNode *K_WHERE();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  PatternComprehensionContext* patternComprehension();
 
 
   // By default the static state used to implement the parser is lazily initialized during the first

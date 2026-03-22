@@ -144,6 +144,8 @@ public:
 
     virtual std::any visitQuantifierExpression(CypherParser::QuantifierExpressionContext *context) = 0;
 
+    virtual std::any visitExistsExpression(CypherParser::ExistsExpressionContext *context) = 0;
+
     virtual std::any visitCaseExpression(CypherParser::CaseExpressionContext *context) = 0;
 
     virtual std::any visitPropertyExpression(CypherParser::PropertyExpressionContext *context) = 0;
@@ -189,6 +191,10 @@ public:
     virtual std::any visitParameter(CypherParser::ParameterContext *context) = 0;
 
     virtual std::any visitListComprehension(CypherParser::ListComprehensionContext *context) = 0;
+
+    virtual std::any visitReduceExpression(CypherParser::ReduceExpressionContext *context) = 0;
+
+    virtual std::any visitPatternComprehension(CypherParser::PatternComprehensionContext *context) = 0;
 
 
 };

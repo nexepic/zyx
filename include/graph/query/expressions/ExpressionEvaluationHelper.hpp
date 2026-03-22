@@ -78,7 +78,8 @@ public:
 	 * @throws ExpressionEvaluationException on evaluation errors
 	 */
 	[[nodiscard]] static bool evaluateBool(const Expression *expr,
-	                                       const execution::Record &record);
+	                                       const execution::Record &record,
+	                                       storage::DataManager *dataManager = nullptr);
 
 	/**
 	 * @brief Evaluates an expression and converts to integer.

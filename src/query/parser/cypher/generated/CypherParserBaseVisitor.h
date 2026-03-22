@@ -262,6 +262,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitExistsExpression(CypherParser::ExistsExpressionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitCaseExpression(CypherParser::CaseExpressionContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -351,6 +355,14 @@ public:
   }
 
   virtual std::any visitListComprehension(CypherParser::ListComprehensionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitReduceExpression(CypherParser::ReduceExpressionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPatternComprehension(CypherParser::PatternComprehensionContext *ctx) override {
     return visitChildren(ctx);
   }
 

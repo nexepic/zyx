@@ -30,6 +30,7 @@
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
+#include "graph/query/expressions/ReduceExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -482,6 +483,21 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 		return buildListComprehensionExpression(ctx->listComprehension(), evaluateLiteralExpression);
 	}
 
+	// Reduce expression: reduce(total = 0, x IN list | total + x)
+	if (ctx->reduceExpression()) {
+		return buildReduceExpression(ctx->reduceExpression());
+	}
+
+	// Pattern comprehension: [(n)-[:KNOWS]->(m) | m.name]
+	if (ctx->patternComprehension()) {
+		return buildPatternComprehension(ctx->patternComprehension());
+	}
+
+	// EXISTS expression: exists((n)-[:KNOWS]->())
+	if (ctx->existsExpression()) {
+		return buildExistsExpression(ctx->existsExpression());
+	}
+
 	throw std::runtime_error("Unsupported atom expression: " + ctx->getText());
 }
 
@@ -595,19 +611,75 @@ std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::F
 	// Check if this is the EXISTS function
 	if (functionNameLower == "exists") {
 		// EXISTS has special syntax: EXISTS((n)-[:FRIENDS]->())
-		// For now, extract the pattern string and create an ExistsExpression
+		// Parse the pattern argument to extract structured fields
 		auto exprs = ctx->expression();
 		if (!exprs.empty()) {
-			// Get the pattern string from the first argument
-			std::string pattern = exprs[0]->getText();
+			std::string patternStr = exprs[0]->getText();
 
-			// Check if there's a WHERE clause (second argument)
+			// Parse pattern string to extract source var, rel type, target label, direction
+			// Pattern format: (var)-[:TYPE]->([:Label]) or (var)<-[:TYPE]-() etc.
+			std::string sourceVar, relType, targetLabel;
+			PatternDirection direction = PatternDirection::PAT_BOTH;
+
+			// Try to parse the pattern text using regex-like logic
+			// Patterns: (n)-[:KNOWS]->(), (n)<-[:KNOWS]-(), (n)-[:KNOWS]-()
+			auto parseExistsPattern = [&]() {
+				std::string p = patternStr;
+				// Find source variable: first (xxx)
+				size_t firstParen = p.find('(');
+				size_t closeParen = p.find(')');
+				if (firstParen != std::string::npos && closeParen != std::string::npos) {
+					std::string inside = p.substr(firstParen + 1, closeParen - firstParen - 1);
+					// Remove label if present (e.g., "n:Person" -> "n")
+					size_t colonPos = inside.find(':');
+					if (colonPos != std::string::npos) {
+						sourceVar = inside.substr(0, colonPos);
+					} else {
+						sourceVar = inside;
+					}
+				}
+
+				// Find relationship type: [:TYPE]
+				size_t lbrack = p.find('[');
+				size_t rbrack = p.find(']');
+				if (lbrack != std::string::npos && rbrack != std::string::npos) {
+					std::string relContent = p.substr(lbrack + 1, rbrack - lbrack - 1);
+					size_t colonInRel = relContent.find(':');
+					if (colonInRel != std::string::npos) {
+						relType = relContent.substr(colonInRel + 1);
+					}
+				}
+
+				// Find direction: -> or <-
+				if (p.find("->") != std::string::npos) {
+					direction = PatternDirection::PAT_OUTGOING;
+				} else if (p.find("<-") != std::string::npos) {
+					direction = PatternDirection::PAT_INCOMING;
+				}
+
+				// Find target label: last (:Label)
+				if (rbrack != std::string::npos) {
+					size_t lastOpen = p.find('(', rbrack);
+					size_t lastClose = p.find(')', lastOpen != std::string::npos ? lastOpen : 0);
+					if (lastOpen != std::string::npos && lastClose != std::string::npos) {
+						std::string targetInside = p.substr(lastOpen + 1, lastClose - lastOpen - 1);
+						size_t colonPos = targetInside.find(':');
+						if (colonPos != std::string::npos) {
+							targetLabel = targetInside.substr(colonPos + 1);
+						}
+					}
+				}
+			};
+			parseExistsPattern();
+
+			// Build WHERE expression if present
 			std::unique_ptr<Expression> whereExpr;
 			if (exprs.size() >= 2) {
 				whereExpr = buildExpression(exprs[1]);
 			}
 
-			return std::make_unique<ExistsExpression>(pattern, std::move(whereExpr));
+			return std::make_unique<ExistsExpression>(
+				patternStr, sourceVar, relType, targetLabel, direction, std::move(whereExpr));
 		}
 
 		// If no arguments, return an empty EXISTS expression
@@ -972,6 +1044,185 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListComprehensionExpression(
 
 	return std::make_unique<ListComprehensionExpression>(
 			variable, std::move(listExpr), std::move(whereExpr), std::move(mapExpr), type);
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildReduceExpression(CypherParser::ReduceExpressionContext *ctx) {
+	if (!ctx) return nullptr;
+
+	// Grammar: K_REDUCE LPAREN variable EQ expression COMMA variable K_IN expression PIPE expression RPAREN
+	auto variables = ctx->variable();
+	auto expressions = ctx->expression();
+
+	std::string accumulator = variables[0]->getText();
+	auto initialExpr = buildExpression(expressions[0]);
+
+	std::string iterVar = variables[1]->getText();
+	auto listExpr = buildExpression(expressions[1]);
+	auto bodyExpr = buildExpression(expressions[2]);
+
+	return std::make_unique<ReduceExpression>(
+		accumulator,
+		std::move(initialExpr),
+		iterVar,
+		std::move(listExpr),
+		std::move(bodyExpr)
+	);
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildPatternComprehension(CypherParser::PatternComprehensionContext *ctx) {
+	if (!ctx) return nullptr;
+
+	// Grammar: LBRACK patternElement (K_WHERE expression)? PIPE expression RBRACK
+	// patternElement: nodePattern patternElementChain*
+	auto patternElem = ctx->patternElement();
+
+	// Determine which expression is WHERE and which is MAP
+	auto expressions = ctx->expression();
+	std::unique_ptr<Expression> mapExpr;
+	std::unique_ptr<Expression> whereExpr;
+	if (ctx->K_WHERE() && expressions.size() >= 2) {
+		whereExpr = buildExpression(expressions[0]);
+		mapExpr = buildExpression(expressions[1]);
+	} else if (!expressions.empty()) {
+		mapExpr = buildExpression(expressions[expressions.size() - 1]);
+	}
+
+	// Parse the pattern to extract structured info
+	std::string sourceVar;
+	std::string targetVar;
+	std::string relType;
+	std::string targetLabel;
+	PatternDirection direction = PatternDirection::PAT_BOTH;
+
+	// Get source node pattern
+	auto nodePattern = patternElem->nodePattern();
+	if (nodePattern && nodePattern->variable()) {
+		sourceVar = nodePattern->variable()->getText();
+	}
+
+	// Get pattern chain (relationship + target node)
+	auto chains = patternElem->patternElementChain();
+	if (!chains.empty()) {
+		auto chain = chains[0];
+
+		// Parse relationship
+		auto relPattern = chain->relationshipPattern();
+		if (relPattern) {
+			// Determine direction from arrow tokens
+			bool hasLeft = (relPattern->LT() != nullptr);
+			bool hasRight = (relPattern->GT() != nullptr);
+			if (hasRight && !hasLeft) {
+				direction = PatternDirection::PAT_OUTGOING;
+			} else if (hasLeft && !hasRight) {
+				direction = PatternDirection::PAT_INCOMING;
+			}
+
+			// Get relationship type
+			auto relDetail = relPattern->relationshipDetail();
+			if (relDetail && relDetail->relationshipTypes()) {
+				auto relTypes = relDetail->relationshipTypes()->relTypeName();
+				if (!relTypes.empty()) {
+					relType = relTypes[0]->getText();
+				}
+			}
+		}
+
+		// Parse target node
+		auto targetNodePattern = chain->nodePattern();
+		if (targetNodePattern) {
+			if (targetNodePattern->variable()) {
+				targetVar = targetNodePattern->variable()->getText();
+			}
+			if (targetNodePattern->nodeLabels()) {
+				auto labels = targetNodePattern->nodeLabels()->nodeLabel();
+				if (!labels.empty()) {
+					targetLabel = labels[0]->labelName()->getText();
+				}
+			}
+		}
+	}
+
+	std::string pattern = patternElem->getText();
+
+	return std::make_unique<PatternComprehensionExpression>(
+		pattern,
+		sourceVar,
+		targetVar,
+		relType,
+		targetLabel,
+		direction,
+		std::move(mapExpr),
+		nullptr  // no WHERE clause in basic pattern comprehension syntax
+	);
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildExistsExpression(CypherParser::ExistsExpressionContext *ctx) {
+	if (!ctx) {
+		return nullptr;
+	}
+
+	auto patternElem = ctx->patternElement();
+	if (!patternElem) {
+		return std::make_unique<ExistsExpression>("");
+	}
+
+	std::string patternStr = patternElem->getText();
+
+	// Extract structured pattern info
+	std::string sourceVar, relType, targetLabel;
+	PatternDirection direction = PatternDirection::PAT_BOTH;
+
+	// Parse source node
+	auto nodePattern = patternElem->nodePattern();
+	if (nodePattern && nodePattern->variable()) {
+		sourceVar = nodePattern->variable()->getText();
+	}
+
+	// Parse relationship chain
+	auto chains = patternElem->patternElementChain();
+	if (!chains.empty()) {
+		auto chain = chains[0];
+		auto relPattern = chain->relationshipPattern();
+		if (relPattern) {
+			// Determine direction from arrow tokens
+			bool hasLeft = (relPattern->LT() != nullptr);
+			bool hasRight = (relPattern->GT() != nullptr);
+			if (hasRight && !hasLeft) {
+				direction = PatternDirection::PAT_OUTGOING;
+			} else if (hasLeft && !hasRight) {
+				direction = PatternDirection::PAT_INCOMING;
+			}
+
+			// Relationship type
+			auto relDetail = relPattern->relationshipDetail();
+			if (relDetail && relDetail->relationshipTypes()) {
+				auto relTypes = relDetail->relationshipTypes()->relTypeName();
+				if (!relTypes.empty()) {
+					relType = relTypes[0]->getText();
+				}
+			}
+		}
+
+		// Target node label
+		auto targetNode = chain->nodePattern();
+		if (targetNode) {
+			if (targetNode->nodeLabels()) {
+				auto labels = targetNode->nodeLabels()->nodeLabel();
+				if (!labels.empty()) {
+					targetLabel = labels[0]->labelName()->getText();
+				}
+			}
+		}
+	}
+
+	// Build WHERE expression if present
+	std::unique_ptr<Expression> whereExpr;
+	if (ctx->K_WHERE()) {
+		whereExpr = buildExpression(ctx->expression());
+	}
+
+	return std::make_unique<ExistsExpression>(
+		patternStr, sourceVar, relType, targetLabel, direction, std::move(whereExpr));
 }
 
 } // namespace graph::parser::cypher::helpers

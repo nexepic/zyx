@@ -315,17 +315,25 @@ atom
     | parameter
     | K_COUNT LPAREN MULTIPLY RPAREN
     | quantifierExpression
+    | reduceExpression
+    | existsExpression
     | functionInvocation
     | caseExpression
     | variable
     | LPAREN expression RPAREN
     | listLiteral
     | listComprehension
+    | patternComprehension
     ;
 
 // Quantifier functions: all(x IN list WHERE cond), any(...), none(...), single(...)
 quantifierExpression
     : (K_ALL | K_ANY | K_NONE | K_SINGLE) LPAREN variable K_IN expression K_WHERE expression RPAREN
+    ;
+
+// EXISTS pattern expression: exists((n)-[:KNOWS]->()) or EXISTS { (n)-[:KNOWS]->() }
+existsExpression
+    : K_EXISTS LPAREN patternElement (K_WHERE expression)? RPAREN
     ;
 
 // CASE expression support
@@ -379,7 +387,7 @@ symbolicName
     | K_CONTAINS | K_DISTINCT | K_ENDS | K_IN | K_IS | K_NOT | K_OR
     | K_STARTS | K_XOR | K_FALSE | K_TRUE | K_NULL
     | K_CASE | K_WHEN | K_THEN | K_ELSE | K_END
-    | K_COUNT | K_FILTER | K_EXTRACT | K_ANY | K_NONE | K_SINGLE | K_ALL
+    | K_COUNT | K_FILTER | K_EXTRACT | K_ANY | K_NONE | K_SINGLE | K_ALL | K_REDUCE
     // Admin Keywords
     | K_INDEX | K_ON | K_SHOW | K_DROP
     | K_FOR | K_CONSTRAINT | K_DO | K_REQUIRE | K_UNIQUE | K_MANDATORY
@@ -417,4 +425,14 @@ parameter
 // List comprehension: [x IN list WHERE condition | expression]
 listComprehension
     : LBRACK variable K_IN expression (K_WHERE whereExpression=expression)? (PIPE mapExpression=expression)? RBRACK
+    ;
+
+// REDUCE function: reduce(accumulator = initial, variable IN list | expression)
+reduceExpression
+    : K_REDUCE LPAREN variable EQ expression COMMA variable K_IN expression PIPE expression RPAREN
+    ;
+
+// Pattern comprehension: [(n)-[:REL]->(m) | m.name]
+patternComprehension
+    : LBRACK patternElement (K_WHERE expression)? PIPE expression RBRACK
     ;

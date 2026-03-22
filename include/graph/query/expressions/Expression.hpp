@@ -418,6 +418,7 @@ public:
 	virtual void visit(class QuantifierFunctionExpression *expr) = 0;
 	virtual void visit(class ExistsExpression *expr) = 0;
 	virtual void visit(class PatternComprehensionExpression *expr) = 0;
+	virtual void visit(class ReduceExpression *expr) = 0;
 };
 
 /**
@@ -442,6 +443,7 @@ public:
 	virtual void visit(const class QuantifierFunctionExpression *expr) = 0;
 	virtual void visit(const class ExistsExpression *expr) = 0;
 	virtual void visit(const class PatternComprehensionExpression *expr) = 0;
+	virtual void visit(const class ReduceExpression *expr) = 0;
 };
 
 // ============================================================================

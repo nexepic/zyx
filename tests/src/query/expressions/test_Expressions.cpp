@@ -34,6 +34,7 @@
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
+#include "graph/query/expressions/ReduceExpression.hpp"
 
 using namespace graph;
 using namespace graph::query::expressions;
@@ -3721,6 +3722,7 @@ public:
 	void visit(const QuantifierFunctionExpression* expr [[maybe_unused]]) override { visitedQuantifierFunction = true; }
 	void visit(const ExistsExpression* expr [[maybe_unused]]) override { visitedExists = true; }
 	void visit(const PatternComprehensionExpression* expr [[maybe_unused]]) override { visitedPatternComprehension = true; }
+	void visit(const ReduceExpression* expr [[maybe_unused]]) override {}
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -3759,6 +3761,7 @@ public:
 	void visit(QuantifierFunctionExpression* expr [[maybe_unused]]) override { visitedQuantifierFunction = true; }
 	void visit(ExistsExpression* expr [[maybe_unused]]) override { visitedExists = true; }
 	void visit(PatternComprehensionExpression* expr [[maybe_unused]]) override { visitedPatternComprehension = true; }
+	void visit(ReduceExpression* expr [[maybe_unused]]) override {}
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -5963,7 +5966,7 @@ TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_Getters) {
 	);
 
 	EXPECT_EQ(expr.getPattern(), "(n)-[:KNOWS]->(m)");
-	EXPECT_EQ(expr.getVariable(), "m");
+	EXPECT_EQ(expr.getTargetVar(), "m");
 	EXPECT_NE(expr.getMapExpression(), nullptr);
 	EXPECT_NE(expr.getWhereExpression(), nullptr);
 	EXPECT_TRUE(expr.hasWhereClause());
@@ -5981,7 +5984,7 @@ TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_NoWhereClause) {
 	);
 
 	EXPECT_EQ(expr.getPattern(), "(n)-[:KNOWS]->(m)");
-	EXPECT_EQ(expr.getVariable(), "m");
+	EXPECT_EQ(expr.getTargetVar(), "m");
 	EXPECT_NE(expr.getMapExpression(), nullptr);
 	EXPECT_EQ(expr.getWhereExpression(), nullptr);
 	EXPECT_FALSE(expr.hasWhereClause());
@@ -6033,7 +6036,7 @@ TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_Clone) {
 
 	ASSERT_NE(clonedPattern, nullptr);
 	EXPECT_EQ(clonedPattern->getPattern(), original.getPattern());
-	EXPECT_EQ(clonedPattern->getVariable(), original.getVariable());
+	EXPECT_EQ(clonedPattern->getTargetVar(), original.getTargetVar());
 	EXPECT_NE(clonedPattern->getMapExpression(), nullptr);
 	EXPECT_NE(clonedPattern->getWhereExpression(), nullptr);
 	EXPECT_TRUE(clonedPattern->hasWhereClause());
@@ -6057,7 +6060,7 @@ TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_CloneNoWhere) {
 
 	ASSERT_NE(clonedPattern, nullptr);
 	EXPECT_EQ(clonedPattern->getPattern(), original.getPattern());
-	EXPECT_EQ(clonedPattern->getVariable(), original.getVariable());
+	EXPECT_EQ(clonedPattern->getTargetVar(), original.getTargetVar());
 	EXPECT_NE(clonedPattern->getMapExpression(), nullptr);
 	EXPECT_EQ(clonedPattern->getWhereExpression(), nullptr);
 	EXPECT_FALSE(clonedPattern->hasWhereClause());
@@ -6569,6 +6572,7 @@ public:
 	void visit(class QuantifierFunctionExpression *) override { visitCount++; }
 	void visit(class ExistsExpression *) override { visitCount++; }
 	void visit(class PatternComprehensionExpression *) override { visitCount++; }
+	void visit(class ReduceExpression *) override { visitCount++; }
 };
 
 TEST_F(ExpressionsCoverageTest, LiteralExpression_NonConstAccept) {

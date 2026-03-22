@@ -37,8 +37,9 @@ PropertyValue ExpressionEvaluationHelper::evaluate(const Expression *expr,
 }
 
 bool ExpressionEvaluationHelper::evaluateBool(const Expression *expr,
-                                               const execution::Record &record) {
-	PropertyValue value = evaluate(expr, record);
+                                               const execution::Record &record,
+                                               storage::DataManager *dataManager) {
+	PropertyValue value = evaluate(expr, record, dataManager);
 	return EvaluationContext::toBoolean(value);
 }
 

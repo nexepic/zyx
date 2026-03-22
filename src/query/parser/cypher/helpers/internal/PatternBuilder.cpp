@@ -276,8 +276,9 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::applyWhereFi
 		auto ast = ExpressionBuilder::buildExpression(where->expression());
 		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
 		std::string desc = astShared->toString();
-		auto predicate = [astShared](const query::execution::Record &r) -> bool {
-			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r);
+		auto dm = planner->getDataManager().get();
+		auto predicate = [astShared, dm](const query::execution::Record &r) -> bool {
+			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r, dm);
 		};
 		return planner->filterOp(std::move(rootOp), predicate, desc);
 	} catch (const std::exception &e) {

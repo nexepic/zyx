@@ -21,15 +21,15 @@ public:
     K_STARTS = 34, K_XOR = 35, K_FALSE = 36, K_TRUE = 37, K_NULL = 38, K_CASE = 39, 
     K_WHEN = 40, K_THEN = 41, K_ELSE = 42, K_END = 43, K_COUNT = 44, K_FILTER = 45, 
     K_EXTRACT = 46, K_ANY = 47, K_NONE = 48, K_SINGLE = 49, K_ALL = 50, 
-    K_INDEX = 51, K_ON = 52, K_SHOW = 53, K_DROP = 54, K_FOR = 55, K_CONSTRAINT = 56, 
-    K_DO = 57, K_REQUIRE = 58, K_UNIQUE = 59, K_MANDATORY = 60, K_SCALAR = 61, 
-    K_OF = 62, K_ADD = 63, K_VECTOR = 64, K_OPTIONS = 65, EQ = 66, NEQ = 67, 
-    LT = 68, GT = 69, LTE = 70, GTE = 71, PLUS = 72, MINUS = 73, MULTIPLY = 74, 
-    DIVIDE = 75, MODULO = 76, POWER = 77, LPAREN = 78, RPAREN = 79, LBRACE = 80, 
-    RBRACE = 81, LBRACK = 82, RBRACK = 83, COMMA = 84, DOT = 85, COLON = 86, 
-    PIPE = 87, DOLLAR = 88, RANGE = 89, SEMI = 90, HexInteger = 91, OctalInteger = 92, 
-    DecimalInteger = 93, DoubleLiteral = 94, ID = 95, StringLiteral = 96, 
-    WS = 97, COMMENT = 98, LINE_COMMENT = 99
+    K_REDUCE = 51, K_INDEX = 52, K_ON = 53, K_SHOW = 54, K_DROP = 55, K_FOR = 56, 
+    K_CONSTRAINT = 57, K_DO = 58, K_REQUIRE = 59, K_UNIQUE = 60, K_MANDATORY = 61, 
+    K_SCALAR = 62, K_OF = 63, K_ADD = 64, K_VECTOR = 65, K_OPTIONS = 66, 
+    EQ = 67, NEQ = 68, LT = 69, GT = 70, LTE = 71, GTE = 72, PLUS = 73, 
+    MINUS = 74, MULTIPLY = 75, DIVIDE = 76, MODULO = 77, POWER = 78, LPAREN = 79, 
+    RPAREN = 80, LBRACE = 81, RBRACE = 82, LBRACK = 83, RBRACK = 84, COMMA = 85, 
+    DOT = 86, COLON = 87, PIPE = 88, DOLLAR = 89, RANGE = 90, SEMI = 91, 
+    HexInteger = 92, OctalInteger = 93, DecimalInteger = 94, DoubleLiteral = 95, 
+    ID = 96, StringLiteral = 97, WS = 98, COMMENT = 99, LINE_COMMENT = 100
   };
 
   enum {

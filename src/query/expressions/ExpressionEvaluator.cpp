@@ -28,6 +28,8 @@
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
+#include "graph/query/expressions/ReduceExpression.hpp"
+#include "graph/traversal/RelationshipTraversal.hpp"
 #include <cmath>
 
 namespace graph::query::expressions {
@@ -709,20 +711,69 @@ void ExpressionEvaluator::visit(const ExistsExpression *expr) {
 		return;
 	}
 
-	// EXISTS pattern expressions require graph traversal and pattern matching
-	// For now, throw a not-yet-implemented error
-	// TODO: Implement full pattern matching support
-	throw ExpressionEvaluationException(
-		"EXISTS pattern expressions are not yet fully implemented. "
-		"The pattern '" + expr->getPattern() + "' requires graph traversal support. "
-		"Please use EXISTS with simple patterns or subqueries."
-	);
+	// Get DataManager from context for traversal
+	auto* dataManager = context_.getDataManager();
+	if (!dataManager) {
+		throw ExpressionEvaluationException(
+			"EXISTS pattern expressions require a DataManager in the evaluation context");
+	}
 
-	// Future implementation:
-	// 1. Parse the pattern string to extract nodes, relationships, and direction
-	// 2. Use the graph's traversal API to search for matching patterns
-	// 3. Return true if at least one match exists, false otherwise
-	// 4. If there's a WHERE clause, apply it as a filter on matched patterns
+	// Resolve source node from context
+	const std::string& sourceVar = expr->getSourceVar();
+	auto sourceNode = context_.getRecord().getNode(sourceVar);
+	if (!sourceNode) {
+		// Variable might be in values (e.g. from projection)
+		result_ = PropertyValue(false);
+		return;
+	}
+
+	int64_t sourceNodeId = sourceNode->getId();
+
+	// Create traversal
+	auto dmShared = dataManager->shared_from_this();
+	graph::traversal::RelationshipTraversal traversal(dmShared);
+
+	// Get edges based on direction
+	std::vector<Edge> edges;
+	auto direction = expr->getDirection();
+	if (direction == PatternDirection::PAT_OUTGOING) {
+		edges = traversal.getOutgoingEdges(sourceNodeId);
+	} else if (direction == PatternDirection::PAT_INCOMING) {
+		edges = traversal.getIncomingEdges(sourceNodeId);
+	} else {
+		edges = traversal.getAllConnectedEdges(sourceNodeId);
+	}
+
+	// Filter by relationship type if specified
+	const std::string& relType = expr->getRelType();
+	const std::string& targetLabel = expr->getTargetLabel();
+
+	for (const auto& edge : edges) {
+		// Filter by relationship type
+		if (!relType.empty()) {
+			std::string edgeLabel = dataManager->resolveLabel(edge.getLabelId());
+			if (edgeLabel != relType) {
+				continue;
+			}
+		}
+
+		// Filter by target label
+		if (!targetLabel.empty()) {
+			int64_t targetId = (direction == PatternDirection::PAT_INCOMING)
+				? edge.getSourceNodeId() : edge.getTargetNodeId();
+			Node targetNode = dataManager->getNode(targetId);
+			std::string nodeLabel = dataManager->resolveLabel(targetNode.getLabelId());
+			if (nodeLabel != targetLabel) {
+				continue;
+			}
+		}
+
+		// Found a match
+		result_ = PropertyValue(true);
+		return;
+	}
+
+	result_ = PropertyValue(false);
 }
 
 void ExpressionEvaluator::visit(const PatternComprehensionExpression *expr) {
@@ -731,21 +782,123 @@ void ExpressionEvaluator::visit(const PatternComprehensionExpression *expr) {
 		return;
 	}
 
-	// Pattern comprehensions require graph traversal and pattern matching
-	// For now, throw a not-yet-implemented error
-	// TODO: Implement full pattern matching and comprehension support
-	throw ExpressionEvaluationException(
-		"Pattern comprehensions are not yet fully implemented. "
-		"The pattern '" + expr->getPattern() + "' requires graph traversal support. "
-		"Please use list comprehensions [x IN list | expr] as alternatives."
-	);
+	auto* dm = context_.getDataManager();
+	if (!dm) {
+		throw ExpressionEvaluationException(
+			"Pattern comprehensions require DataManager access for graph traversal");
+	}
 
-	// Future implementation:
-	// 1. Parse the pattern string to extract nodes, relationships, and direction
-	// 2. Use the graph's traversal API to find all pattern matches
-	// 3. For each match, evaluate the map expression and collect results
-	// 4. If there's a WHERE clause, apply it as a filter on matches
-	// 5. Return the collected results as a list
+	// Resolve source node from context
+	const std::string& sourceVar = expr->getSourceVar();
+	auto sourceNode = context_.getRecord().getNode(sourceVar);
+	if (!sourceNode) {
+		result_ = PropertyValue(std::vector<PropertyValue>{});
+		return;
+	}
+
+	int64_t nodeId = sourceNode->getId();
+	auto dmShared = dm->shared_from_this();
+	graph::traversal::RelationshipTraversal traversal(dmShared);
+
+	// Get edges based on direction
+	std::vector<Edge> edges;
+	auto dir = expr->getDirection();
+	if (dir == PatternDirection::PAT_OUTGOING) {
+		edges = traversal.getOutgoingEdges(nodeId);
+	} else if (dir == PatternDirection::PAT_INCOMING) {
+		edges = traversal.getIncomingEdges(nodeId);
+	} else {
+		edges = traversal.getAllConnectedEdges(nodeId);
+	}
+
+	// Filter by relationship type if specified
+	const std::string& relType = expr->getRelType();
+	std::vector<PropertyValue> resultList;
+
+	for (const auto& edge : edges) {
+		// Filter by relationship type
+		if (!relType.empty()) {
+			std::string edgeLabel = dm->resolveLabel(edge.getLabelId());
+			if (edgeLabel != relType) continue;
+		}
+
+		// Get the target node
+		int64_t targetId = (dir == PatternDirection::PAT_INCOMING)
+			? edge.getSourceNodeId() : edge.getTargetNodeId();
+
+		Node targetNode = dm->getNode(targetId);
+
+		// Filter by target label if specified
+		const std::string& targetLabel = expr->getTargetLabel();
+		if (!targetLabel.empty()) {
+			std::string nodeLabel = dm->resolveLabel(targetNode.getLabelId());
+			if (nodeLabel != targetLabel) continue;
+		}
+
+		// Bind target variable in context
+		const std::string& targetVar = expr->getTargetVar();
+		if (!targetVar.empty()) {
+			// Set the target node as a temporary variable with its properties
+			auto props = dm->getNodeProperties(targetId);
+			for (const auto& [key, val] : props) {
+				context_.setVariable(targetVar + "." + key, val);
+			}
+			context_.setVariable(targetVar, PropertyValue(targetId));
+		}
+
+		// Evaluate WHERE clause if present
+		if (expr->getWhereExpression()) {
+			PropertyValue whereResult = evaluate(expr->getWhereExpression());
+			if (whereResult.getType() != PropertyType::BOOLEAN ||
+				!std::get<bool>(whereResult.getVariant())) {
+				if (!targetVar.empty()) context_.clearVariable(targetVar);
+				continue;
+			}
+		}
+
+		// Evaluate map expression
+		if (expr->getMapExpression()) {
+			PropertyValue mapResult = evaluate(expr->getMapExpression());
+			resultList.push_back(std::move(mapResult));
+		} else {
+			resultList.push_back(PropertyValue(targetId));
+		}
+
+		if (!targetVar.empty()) context_.clearVariable(targetVar);
+	}
+
+	result_ = PropertyValue(std::move(resultList));
+}
+
+void ExpressionEvaluator::visit(const ReduceExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// 1. Evaluate initial value and set accumulator
+	PropertyValue accumValue = evaluate(expr->getInitialExpr());
+	context_.setVariable(expr->getAccumulator(), accumValue);
+
+	// 2. Evaluate list expression
+	PropertyValue listValue = evaluate(expr->getListExpr());
+	if (listValue.getType() != PropertyType::LIST) {
+		throw ExpressionEvaluationException("REDUCE requires a list expression");
+	}
+
+	// 3. Iterate over list, updating accumulator
+	const auto& elements = listValue.getList();
+	for (const auto& element : elements) {
+		context_.setVariable(expr->getVariable(), element);
+		accumValue = evaluate(expr->getBodyExpr());
+		context_.setVariable(expr->getAccumulator(), accumValue);
+	}
+
+	// 4. Clean up temporary variables
+	context_.clearVariable(expr->getAccumulator());
+	context_.clearVariable(expr->getVariable());
+
+	result_ = accumValue;
 }
 
 } // namespace graph::query::expressions
