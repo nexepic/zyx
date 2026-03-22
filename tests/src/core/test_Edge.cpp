@@ -275,3 +275,19 @@ TEST_F(EdgeTest, TypeIdConstant) {
 	// Verify that typeId matches the expected entity type
 	EXPECT_EQ(graph::Edge::typeId, graph::toUnderlying(graph::EntityType::Edge));
 }
+
+TEST_F(EdgeTest, HasPropertyEntityWithStorageTypeButZeroId) {
+	// Cover branch: getPropertyStorageType() != NONE but propertyEntityId == 0
+	graph::Edge edge;
+
+	// Directly set the storage type to non-NONE via mutable metadata, keep propertyEntityId at 0
+	auto &meta = edge.getMutableMetadata();
+	meta.propertyStorageType = static_cast<uint32_t>(graph::PropertyStorageType::PROPERTY_ENTITY);
+	meta.propertyEntityId = 0;
+
+	// storageType != NONE is true, but propertyEntityId == 0 so hasPropertyEntity() should be false
+	EXPECT_EQ(edge.getPropertyStorageType(), graph::PropertyStorageType::PROPERTY_ENTITY);
+	EXPECT_EQ(edge.getPropertyEntityId(), 0);
+	EXPECT_FALSE(edge.hasPropertyEntity());
+}
+

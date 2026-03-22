@@ -1235,3 +1235,506 @@ TEST_F(BlobChainManagerTest, UpdateBlobChainDifferentCompressionMode) {
 	std::string readData = chainManager->readBlobChain(headBlobId);
 	EXPECT_EQ(readData, newData);
 }
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+TEST_F(BlobChainManagerTest, ReadBlobChain_NonCompressedChained) {
+	// Cover branch: readBlobChain with chained blobs that are NOT compressed (line 188)
+	// This exercises the non-compressed chained read path
+	constexpr int64_t entityId = 3900;
+	constexpr int64_t entityTypeId = 39;
+
+	// Create data large enough to require multiple blobs, without compression
+	std::string largeData;
+	largeData.resize(graph::Blob::CHUNK_SIZE * 2 + 50);
+	std::mt19937 rng(3900);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c : largeData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, largeData, false);
+	ASSERT_GT(blobChain.size(), 1UL) << "Should create a multi-blob chain";
+	EXPECT_FALSE(blobChain[0].isCompressed());
+	EXPECT_TRUE(blobChain[0].isChained());
+
+	// Read back the non-compressed chained data
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, largeData);
+}
+
+TEST_F(BlobChainManagerTest, UpdateBlobChain_HeadBlobInactiveOrMissing) {
+	// Cover branch: updateBlobChain when headBlob.getId() == 0 || !headBlob.isActive() (line 128)
+	// This covers the case where old blob doesn't exist
+	constexpr int64_t entityId = 4000;
+	constexpr int64_t entityTypeId = 40;
+	const std::string newData = "brand new data";
+
+	// Use a non-existent blob ID
+	auto updatedChain = chainManager->updateBlobChain(99999, entityId, entityTypeId, newData, false);
+
+	// Should create a new chain since old one doesn't exist
+	ASSERT_FALSE(updatedChain.empty());
+	std::string readData = chainManager->readBlobChain(updatedChain[0].getId());
+	EXPECT_EQ(readData, newData);
+}
+
+TEST_F(BlobChainManagerTest, IsDataSame_ReadException) {
+	// Cover branch: isDataSame catches exception and returns false (line 102-104)
+	// Use an invalid blob ID that will cause readBlobChain to throw
+	bool result = chainManager->isDataSame(99999, "some data");
+	EXPECT_FALSE(result);
+}
+
+TEST_F(BlobChainManagerTest, UpdateBlobChain_SameDataReturnsExistingChain) {
+	// Cover branch: isDataSame returns true (line 113-124)
+	constexpr int64_t entityId = 4100;
+	constexpr int64_t entityTypeId = 41;
+	const std::string testData = "Data that won't change";
+
+	// Create initial chain
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_FALSE(blobChain.empty());
+	int64_t headBlobId = blobChain[0].getId();
+
+	// Update with the same data
+	auto updatedChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, testData, false);
+
+	// Should return the existing chain without modification
+	ASSERT_FALSE(updatedChain.empty());
+	EXPECT_EQ(updatedChain[0].getId(), headBlobId);
+}
+
+TEST_F(BlobChainManagerTest, CreateBlobChain_EmptyData) {
+	// Cover: splitData with empty data (line 211-213)
+	constexpr int64_t entityId = 4200;
+	constexpr int64_t entityTypeId = 42;
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, "", false);
+	ASSERT_EQ(blobChain.size(), 1UL);
+
+	// Read back
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, "");
+}
+
+// Removed: GetBlobChainIds_InactiveBlob - getBlobChainIds is private
+
+// ============================================================================
+// Additional Branch Coverage Tests - Round 2
+// ============================================================================
+
+// Test splitData with empty data when compress=false
+// Covers branch at line 211: data.empty() -> return single empty chunk
+TEST_F(BlobChainManagerTest, SplitDataEmptyWithoutCompression) {
+	constexpr int64_t entityId = 4300;
+	constexpr int64_t entityTypeId = 43;
+
+	// Create with compress=false and empty data
+	// This ensures the processedData is empty (no compression to add headers)
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, "", false);
+	ASSERT_EQ(blobChain.size(), 1UL);
+
+	// Verify data can be read back
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, "");
+}
+
+// Test readBlobChain single blob non-compressed path
+// Covers branch at line 147-154: !isChained() && !isCompressed()
+TEST_F(BlobChainManagerTest, ReadSingleBlobNonCompressedNonChained) {
+	constexpr int64_t entityId = 4400;
+	constexpr int64_t entityTypeId = 44;
+	const std::string testData = "Small uncompressed data";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_EQ(blobChain.size(), 1UL);
+	EXPECT_FALSE(blobChain[0].isCompressed());
+	EXPECT_FALSE(blobChain[0].isChained());
+
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, testData);
+}
+
+// Test updateBlobChain where head blob is active and data differs
+// Forces the path: isDataSame=false, headBlob active, delete then recreate
+TEST_F(BlobChainManagerTest, UpdateBlobChainActiveHeadDifferentData) {
+	constexpr int64_t entityId = 4500;
+	constexpr int64_t entityTypeId = 45;
+	const std::string original = "Original blob data";
+	const std::string updated = "Completely new blob data with more content";
+
+	auto chain = chainManager->createBlobChain(entityId, entityTypeId, original, false);
+	int64_t headId = chain[0].getId();
+
+	// Update with different data - head is active
+	auto newChain = chainManager->updateBlobChain(headId, entityId, entityTypeId, updated, false);
+	EXPECT_FALSE(newChain.empty());
+
+	std::string readData = chainManager->readBlobChain(headId);
+	EXPECT_EQ(readData, updated);
+}
+
+// ============================================================================
+// Branch Coverage Improvement Tests
+// ============================================================================
+
+// Test createBlobChain pass 2 when blob becomes inactive during linking
+// Covers branch at line 85: blob.getId() != 0 && blob.isActive() - False branch
+TEST_F(BlobChainManagerTest, CreateBlobChain_Pass2InactiveBlobDuringLinking) {
+	// This tests edge case where a blob created in pass 1 becomes inactive
+	// before pass 2 can link it. In practice this is rare but possible
+	// with concurrent operations.
+	// We can't easily trigger this without mocking, but we test the normal
+	// multi-blob path thoroughly to ensure pass 2 linking works correctly.
+	constexpr int64_t entityId = 5000;
+	constexpr int64_t entityTypeId = 50;
+
+	// Create data requiring exactly 2 blobs
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE + 1);
+	std::mt19937 rng(5000);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c : testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_EQ(blobChain.size(), 2UL);
+
+	// Verify pass 2 linking was done correctly
+	auto blob0 = dataManager->getBlob(blobChain[0].getId());
+	EXPECT_EQ(blob0.getNextBlobId(), blobChain[1].getId());
+	EXPECT_TRUE(blob0.isActive());
+}
+
+// Test getBlobChainIds when head blob has getId() == 0
+// Covers branch at line 231: currentBlob.getId() == 0 break
+TEST_F(BlobChainManagerTest, UpdateBlobChain_WithNonExistentHeadId) {
+	// Use headBlobId that doesn't exist at all (getId returns 0)
+	constexpr int64_t entityId = 5100;
+	constexpr int64_t entityTypeId = 51;
+	const std::string newData = "data for non-existent head";
+
+	// Update with a blob ID that was never created
+	auto result = chainManager->updateBlobChain(0, entityId, entityTypeId, newData, false);
+
+	// Should create a new chain since old one doesn't exist
+	ASSERT_FALSE(result.empty());
+	std::string readData = chainManager->readBlobChain(result[0].getId());
+	EXPECT_EQ(readData, newData);
+}
+
+// Test readBlobChain when head blob is inactive (not getId()==0)
+// Covers branch at line 142: !headBlob.isActive() path
+TEST_F(BlobChainManagerTest, ReadBlobChain_InactiveHeadBlob) {
+	constexpr int64_t entityId = 5200;
+	constexpr int64_t entityTypeId = 52;
+	const std::string testData = "data for inactive head test";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_EQ(blobChain.size(), 1UL);
+	int64_t headId = blobChain[0].getId();
+
+	// Delete the head blob
+	graph::Blob headBlob = dataManager->getBlob(headId);
+	dataManager->deleteBlob(headBlob);
+
+	// Should throw since head is inactive
+	EXPECT_THROW((void)chainManager->readBlobChain(headId), std::runtime_error);
+}
+
+// Test deleteBlobChain when head is inactive
+// Covers branch at line 194: headBlob.isActive() false path
+TEST_F(BlobChainManagerTest, DeleteBlobChain_InactiveHead) {
+	constexpr int64_t entityId = 5300;
+	constexpr int64_t entityTypeId = 53;
+	const std::string testData = "data for inactive delete test";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_EQ(blobChain.size(), 1UL);
+	int64_t headId = blobChain[0].getId();
+
+	// Delete the head blob to make it inactive
+	graph::Blob headBlob = dataManager->getBlob(headId);
+	dataManager->deleteBlob(headBlob);
+
+	// Trying to delete an already-inactive chain should throw
+	EXPECT_THROW(chainManager->deleteBlobChain(headId), std::runtime_error);
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests - Round 3
+// ============================================================================
+
+// Test updateBlobChain where old head is active and data differs (ensures delete + recreate)
+// Covers: line 128-131 headBlob.getId() != 0 && headBlob.isActive() True -> delete old chain
+TEST_F(BlobChainManagerTest, UpdateActiveHeadWithDifferentDataDeletesOld) {
+	constexpr int64_t entityId = 5400;
+	constexpr int64_t entityTypeId = 54;
+	const std::string original = "Original data for active head";
+	const std::string updated = "Completely different updated data";
+
+	auto chain = chainManager->createBlobChain(entityId, entityTypeId, original, false);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Verify head is active
+	graph::Blob headBlob = dataManager->getBlob(headId);
+	EXPECT_TRUE(headBlob.isActive());
+
+	// Update with different data - old chain should be deleted, new one created
+	auto newChain = chainManager->updateBlobChain(headId, entityId, entityTypeId, updated, false);
+	EXPECT_FALSE(newChain.empty());
+
+	std::string readData = chainManager->readBlobChain(headId);
+	EXPECT_EQ(readData, updated);
+}
+
+// Test getBlobChainIds traversal stops at inactive blob in middle
+// Covers: line 231-233 break when currentBlob.getId() == 0 || !currentBlob.isActive()
+TEST_F(BlobChainManagerTest, GetBlobChainIdsStopsAtInactiveMiddle) {
+	constexpr int64_t entityId = 5500;
+	constexpr int64_t entityTypeId = 55;
+
+	// Create a 3-blob chain
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 50);
+	std::mt19937 rng(5500);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c : testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_EQ(blobChain.size(), 3UL);
+
+	// Delete the middle blob
+	graph::Blob middleBlob = dataManager->getBlob(blobChain[1].getId());
+	dataManager->deleteBlob(middleBlob);
+
+	// Reading the chain should throw due to the inactive middle blob
+	EXPECT_THROW((void)chainManager->readBlobChain(blobChain[0].getId()), std::runtime_error);
+
+	// Deleting the chain should still work (stops at inactive blob)
+	// deleteBlobChain uses getBlobChainIds internally
+	EXPECT_NO_THROW(chainManager->deleteBlobChain(blobChain[0].getId()));
+}
+
+// Test createBlobChain with data that compresses to a smaller multi-blob chain
+// Covers: pass 2 linking with multiple blobs when compression is enabled
+TEST_F(BlobChainManagerTest, CreateCompressedMultiBlobChainLinking) {
+	constexpr int64_t entityId = 5600;
+	constexpr int64_t entityTypeId = 56;
+
+	// Random data that doesn't compress well, requiring 3+ blobs
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 3 + 100);
+	std::mt19937 rng(5600);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c : testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, true);
+	ASSERT_GT(blobChain.size(), 1UL);
+
+	// Verify linking is correct after pass 2
+	for (size_t i = 0; i < blobChain.size() - 1; i++) {
+		EXPECT_EQ(blobChain[i].getNextBlobId(), blobChain[i + 1].getId())
+			<< "Blob " << i << " should link to blob " << i + 1;
+		// Also verify DataManager agrees
+		auto blobFromManager = dataManager->getBlob(blobChain[i].getId());
+		EXPECT_EQ(blobFromManager.getNextBlobId(), blobChain[i + 1].getId());
+	}
+	EXPECT_EQ(blobChain.back().getNextBlobId(), 0);
+
+	// Verify data integrity
+	std::string readData = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readData, testData);
+}
+
+// Test isDataSame returns true when data actually matches
+// Covers: line 100-101 the true path of isDataSame
+TEST_F(BlobChainManagerTest, IsDataSameReturnsTrueWhenMatching) {
+	constexpr int64_t entityId = 5700;
+	constexpr int64_t entityTypeId = 57;
+	const std::string testData = "Matching data test";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_FALSE(blobChain.empty());
+
+	bool result = chainManager->isDataSame(blobChain[0].getId(), testData);
+	EXPECT_TRUE(result);
+}
+
+// Test isDataSame returns false when data differs
+// Covers: line 101 false path of string comparison
+TEST_F(BlobChainManagerTest, IsDataSameReturnsFalseWhenDifferent) {
+	constexpr int64_t entityId = 5800;
+	constexpr int64_t entityTypeId = 58;
+	const std::string testData = "Original data";
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_FALSE(blobChain.empty());
+
+	bool result = chainManager->isDataSame(blobChain[0].getId(), "Different data");
+	EXPECT_FALSE(result);
+}
+
+// Test deleteBlobChain for multi-blob chain
+// Covers: line 199 loop iterating over multiple blob IDs
+TEST_F(BlobChainManagerTest, DeleteMultiBlobChainVerifiesAllDeleted) {
+	constexpr int64_t entityId = 5900;
+	constexpr int64_t entityTypeId = 59;
+
+	std::string testData;
+	testData.resize(graph::Blob::CHUNK_SIZE * 2 + 50);
+	std::mt19937 rng(5900);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c : testData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, testData, false);
+	ASSERT_EQ(blobChain.size(), 3UL);
+
+	// Store IDs before deletion
+	std::vector<int64_t> ids;
+	for (const auto& blob : blobChain) {
+		ids.push_back(blob.getId());
+	}
+
+	chainManager->deleteBlobChain(blobChain[0].getId());
+
+	// Verify all blobs are inactive
+	for (auto id : ids) {
+		auto blob = dataManager->getBlob(id);
+		EXPECT_TRUE(blob.getId() == 0 || !blob.isActive())
+			<< "Blob " << id << " should be deleted";
+	}
+}
+
+// ==========================================
+// Additional Branch Coverage Tests
+// ==========================================
+
+// Cover line 128: updateBlobChain where head blob exists but is inactive
+// Forces the False branch of (headBlob.getId() != 0 && headBlob.isActive())
+// When the old head is inactive, update should skip deletion and just create new chain
+TEST_F(BlobChainManagerTest, UpdateBlobChainInactiveHeadSkipsDeletion) {
+	constexpr int64_t entityId = 6100;
+	constexpr int64_t entityTypeId = 61;
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, "original data", false);
+	ASSERT_FALSE(blobChain.empty());
+	int64_t headId = blobChain[0].getId();
+
+	// Delete the chain to make head inactive
+	chainManager->deleteBlobChain(headId);
+
+	// Now update with different data - head is inactive so it should skip deletion
+	// and just create a new chain
+	auto newChain = chainManager->updateBlobChain(headId, entityId, entityTypeId, "new data", false);
+	EXPECT_FALSE(newChain.empty());
+
+	// Verify we can read the new chain
+	std::string readBack = chainManager->readBlobChain(newChain[0].getId());
+	EXPECT_EQ(readBack, "new data");
+}
+
+// Cover line 142: readBlobChain where head blob has getId() != 0 but !isActive()
+// Forces the True branch of !headBlob.isActive() in read
+TEST_F(BlobChainManagerTest, ReadBlobChainInactiveHeadThrows) {
+	constexpr int64_t entityId = 6200;
+	constexpr int64_t entityTypeId = 62;
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, "data to read", false);
+	ASSERT_FALSE(blobChain.empty());
+	int64_t headId = blobChain[0].getId();
+
+	// Delete to make inactive
+	chainManager->deleteBlobChain(headId);
+
+	// Reading should throw because head is inactive
+	EXPECT_THROW((void)chainManager->readBlobChain(headId), std::runtime_error);
+}
+
+// Cover line 165: readBlobChain where intermediate blob in chain is inactive
+// Forces the True branch of !currentBlob.isActive() during chain traversal
+TEST_F(BlobChainManagerTest, ReadBlobChainInactiveIntermediateBlobThrows) {
+	constexpr int64_t entityId = 6300;
+	constexpr int64_t entityTypeId = 63;
+
+	// Create a multi-blob chain (needs data > CHUNK_SIZE)
+	std::string largeData;
+	largeData.resize(graph::Blob::CHUNK_SIZE * 2 + 100);
+	std::mt19937 rng(6300);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c : largeData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, largeData, false);
+	ASSERT_GE(blobChain.size(), 3UL);
+
+	// Mark the second blob as inactive by deleting it directly
+	graph::Blob secondBlob = dataManager->getBlob(blobChain[1].getId());
+	dataManager->deleteBlob(secondBlob);
+
+	// Reading should throw because of corrupted chain (inactive intermediate blob)
+	EXPECT_THROW((void)chainManager->readBlobChain(blobChain[0].getId()), std::runtime_error);
+}
+
+// Cover line 194: deleteBlobChain where head blob is inactive
+// Forces the True branch of !headBlob.isActive() in delete
+TEST_F(BlobChainManagerTest, DeleteBlobChainAlreadyDeletedThrows) {
+	constexpr int64_t entityId = 6400;
+	constexpr int64_t entityTypeId = 64;
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, "data to delete twice", false);
+	ASSERT_FALSE(blobChain.empty());
+	int64_t headId = blobChain[0].getId();
+
+	// Delete once
+	chainManager->deleteBlobChain(headId);
+
+	// Delete again - head is now inactive, should throw
+	EXPECT_THROW(chainManager->deleteBlobChain(headId), std::runtime_error);
+}
+
+// getBlobChainIds is private - tested indirectly through deleteBlobChain and updateBlobChain
+
+// Cover line 85: createBlobChain pass 2 where blob.getId() != 0 && blob.isActive()
+// is False. This is hard to trigger through public API since blobs are always active
+// after creation. This test verifies the normal True path is exercised for multi-blob chains.
+TEST_F(BlobChainManagerTest, CreateMultiBlobChainPass2LinkingVerification) {
+	constexpr int64_t entityId = 6600;
+	constexpr int64_t entityTypeId = 66;
+
+	// Create a multi-blob chain to exercise pass 2 linking
+	std::string largeData;
+	largeData.resize(graph::Blob::CHUNK_SIZE + 100);
+	std::mt19937 rng(6600);
+	std::uniform_int_distribution<int> dist(0, 255);
+	for (auto &c : largeData) {
+		c = static_cast<char>(dist(rng));
+	}
+
+	auto blobChain = chainManager->createBlobChain(entityId, entityTypeId, largeData, false);
+	ASSERT_GE(blobChain.size(), 2UL);
+
+	// Verify the forward links are correctly set
+	for (size_t i = 0; i < blobChain.size() - 1; i++) {
+		graph::Blob blob = dataManager->getBlob(blobChain[i].getId());
+		EXPECT_NE(blob.getId(), 0);
+		EXPECT_TRUE(blob.isActive());
+		EXPECT_EQ(blob.getNextBlobId(), blobChain[i + 1].getId());
+	}
+
+	// Verify the data can be read back correctly
+	std::string readBack = chainManager->readBlobChain(blobChain[0].getId());
+	EXPECT_EQ(readBack, largeData);
+}

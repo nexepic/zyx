@@ -750,3 +750,497 @@ TEST_F(BaseEntityManagerTest, AddBatchWithExistingIds) {
     }
     EXPECT_EQ(countFound, 3);
 }
+
+// =========================================================================
+// Additional Branch Coverage Tests
+// =========================================================================
+
+// Test add with entity that already has a non-zero ID
+// Tests branch at line 35: if (entity.getId() == 0) - False branch
+TEST_F(BaseEntityManagerTest, AddEntityWithExistingId) {
+    graph::Node node = createTestNode(dataManager, "PreIdNode");
+    node.setId(50000); // Manually set a non-zero ID
+
+    nodeManager->add(node);
+
+    // ID should remain the same (no allocation)
+    EXPECT_EQ(node.getId(), 50000);
+
+    // Should be retrievable
+    graph::Node retrieved = nodeManager->get(50000);
+    EXPECT_EQ(retrieved.getId(), 50000);
+    EXPECT_TRUE(retrieved.isActive());
+}
+
+// Test edge operations through BaseEntityManager
+TEST_F(BaseEntityManagerTest, EdgePropertyManagement) {
+    // Create source and target nodes
+    graph::Node source = createTestNode(dataManager, "EdgePropSource");
+    graph::Node target = createTestNode(dataManager, "EdgePropTarget");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    // Create edge
+    graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "HAS_PROP");
+    edgeManager->add(edge);
+    int64_t edgeId = edge.getId();
+
+    // Add properties to edge
+    std::unordered_map<std::string, graph::PropertyValue> props;
+    props["weight"] = 42;
+    props["label"] = std::string("test");
+    edgeManager->addProperties(edgeId, props);
+
+    // Get properties
+    auto retrievedProps = edgeManager->getProperties(edgeId);
+    EXPECT_EQ(retrievedProps.size(), 2UL);
+    EXPECT_EQ(std::get<int64_t>(retrievedProps["weight"].getVariant()), 42);
+
+    // Remove a property
+    edgeManager->removeProperty(edgeId, "weight");
+    retrievedProps = edgeManager->getProperties(edgeId);
+    EXPECT_EQ(retrievedProps.size(), 1UL);
+    EXPECT_EQ(retrievedProps.count("weight"), 0UL);
+}
+
+// Test getBatch with all inactive entities
+TEST_F(BaseEntityManagerTest, GetBatchAllInactive) {
+    // Create and remove all nodes
+    std::vector<int64_t> nodeIds;
+    for (int i = 0; i < 3; i++) {
+        graph::Node node = createTestNode(dataManager, "AllInactive" + std::to_string(i));
+        nodeManager->add(node);
+        nodeIds.push_back(node.getId());
+    }
+
+    // Remove all
+    for (int64_t id : nodeIds) {
+        graph::Node node = nodeManager->get(id);
+        nodeManager->remove(node);
+    }
+
+    // getBatch should return empty since all are inactive
+    auto nodes = nodeManager->getBatch(nodeIds);
+    EXPECT_TRUE(nodes.empty());
+}
+
+// Test edge getBatch
+TEST_F(BaseEntityManagerTest, EdgeGetBatch) {
+    graph::Node source = createTestNode(dataManager, "BatchEdgeSource");
+    graph::Node target = createTestNode(dataManager, "BatchEdgeTarget");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    std::vector<int64_t> edgeIds;
+    for (int i = 0; i < 3; i++) {
+        graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(),
+                                           "BATCH_EDGE" + std::to_string(i));
+        edgeManager->add(edge);
+        edgeIds.push_back(edge.getId());
+    }
+
+    auto edges = edgeManager->getBatch(edgeIds);
+    EXPECT_EQ(edges.size(), 3UL);
+    for (const auto &edge : edges) {
+        EXPECT_TRUE(edge.isActive());
+    }
+}
+
+// Test edge update
+TEST_F(BaseEntityManagerTest, EdgeUpdate) {
+    graph::Node source = createTestNode(dataManager, "UpdEdgeSrc");
+    graph::Node target = createTestNode(dataManager, "UpdEdgeTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "ORIG_LABEL");
+    edgeManager->add(edge);
+
+    // Update the edge
+    edge.setLabelId(dataManager->getOrCreateLabelId("NEW_LABEL"));
+    edgeManager->update(edge);
+
+    graph::Edge retrieved = edgeManager->get(edge.getId());
+    EXPECT_EQ(dataManager->resolveLabel(retrieved.getLabelId()), "NEW_LABEL");
+}
+
+// Test edge clearCache and addToCache
+TEST_F(BaseEntityManagerTest, EdgeCacheOperations) {
+    graph::Node source = createTestNode(dataManager, "CacheEdgeSrc");
+    graph::Node target = createTestNode(dataManager, "CacheEdgeTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "CACHE_EDGE");
+    edgeManager->add(edge);
+    int64_t edgeId = edge.getId();
+
+    // Verify in cache
+    EXPECT_TRUE(dataManager->getEdgeCache().contains(edgeId));
+
+    // Clear cache
+    edgeManager->clearCache();
+    EXPECT_FALSE(dataManager->getEdgeCache().contains(edgeId));
+
+    // Add back to cache
+    edgeManager->addToCache(edge);
+    EXPECT_TRUE(dataManager->getEdgeCache().contains(edgeId));
+}
+
+// Test addBatch for edges
+TEST_F(BaseEntityManagerTest, EdgeAddBatch) {
+    graph::Node source = createTestNode(dataManager, "BatchEdgeSrc");
+    graph::Node target = createTestNode(dataManager, "BatchEdgeTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    std::vector<graph::Edge> edges;
+    for (int i = 0; i < 5; ++i) {
+        edges.push_back(createTestEdge(dataManager, source.getId(), target.getId(),
+                                        "BATCH" + std::to_string(i)));
+    }
+
+    edgeManager->addBatch(edges);
+
+    // Verify IDs assigned
+    for (const auto &edge : edges) {
+        EXPECT_NE(edge.getId(), 0);
+        graph::Edge retrieved = edgeManager->get(edge.getId());
+        EXPECT_EQ(retrieved.getId(), edge.getId());
+        EXPECT_TRUE(retrieved.isActive());
+    }
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests for BaseEntityManager.cpp
+// ============================================================================
+
+// Test addBatch with a mix of entities: some with existing IDs, some without
+// This covers the case where newEntities is non-empty but smaller than entities
+// Exercises: line 60 (getId() == 0) both True and False branches within the same call,
+// and line 67 (newEntities not empty) True branch with partial allocation
+TEST_F(BaseEntityManagerTest, AddBatchMixedIds) {
+    std::vector<graph::Node> nodes;
+
+    // Two nodes with zero IDs (need allocation)
+    graph::Node nodeA = createTestNode(dataManager, "MixedA");
+    graph::Node nodeB = createTestNode(dataManager, "MixedB");
+    EXPECT_EQ(nodeA.getId(), 0);
+    EXPECT_EQ(nodeB.getId(), 0);
+    nodes.push_back(nodeA);
+    nodes.push_back(nodeB);
+
+    // One node with pre-set ID (no allocation needed)
+    graph::Node nodeC = createTestNode(dataManager, "MixedC");
+    nodeC.setId(60000);
+    nodes.push_back(nodeC);
+
+    // Another node with zero ID
+    graph::Node nodeD = createTestNode(dataManager, "MixedD");
+    EXPECT_EQ(nodeD.getId(), 0);
+    nodes.push_back(nodeD);
+
+    nodeManager->addBatch(nodes);
+
+    // Verify: nodeA and nodeB got allocated IDs (non-zero)
+    EXPECT_NE(nodes[0].getId(), 0) << "Node A should have an allocated ID";
+    EXPECT_NE(nodes[1].getId(), 0) << "Node B should have an allocated ID";
+    // nodeC kept its pre-set ID
+    EXPECT_EQ(nodes[2].getId(), 60000) << "Node C should keep its pre-set ID";
+    // nodeD got allocated ID
+    EXPECT_NE(nodes[3].getId(), 0) << "Node D should have an allocated ID";
+
+    // All should be retrievable
+    for (const auto &node : nodes) {
+        graph::Node retrieved = nodeManager->get(node.getId());
+        EXPECT_EQ(retrieved.getId(), node.getId());
+        EXPECT_TRUE(retrieved.isActive());
+    }
+}
+
+// Test update on entity already persisted that has dirtyInfo present and is MODIFIED
+// This specifically covers the else branch of dirtyInfo->changeType == CHANGE_ADDED
+// at line 106-108, where an already-modified entity is updated again
+TEST_F(BaseEntityManagerTest, UpdateModifiedEntityAgain) {
+    // Create and add a node
+    graph::Node node = createTestNode(dataManager, "DoubleModify");
+    nodeManager->add(node);
+
+    // Flush to persist
+    dataManager->prepareFlushSnapshot();
+    dataManager->commitFlushSnapshot();
+
+    // First update creates MODIFIED state
+    node.setLabelId(dataManager->getOrCreateLabelId("FirstMod"));
+    nodeManager->update(node);
+
+    // Second update should also use MODIFIED state (dirtyInfo exists, is MODIFIED)
+    node.setLabelId(dataManager->getOrCreateLabelId("SecondMod"));
+    nodeManager->update(node);
+
+    // Verify in MODIFIED state
+    auto modifiedNodes = getDirtyEntities<graph::Node>({graph::storage::EntityChangeType::CHANGE_MODIFIED});
+    bool found = false;
+    for (const auto &dn : modifiedNodes) {
+        if (dn.getId() == node.getId()) {
+            found = true;
+            EXPECT_EQ(dataManager->resolveLabel(dn.getLabelId()), "SecondMod");
+            break;
+        }
+    }
+    EXPECT_TRUE(found) << "Node should be in MODIFIED state after second update";
+}
+
+// Test getBatch where entity.getId() != 0 but entity.isActive() is false
+// Covers the False path of entity.isActive() check at line 140
+TEST_F(BaseEntityManagerTest, GetBatchIdNonZeroButInactive) {
+    // Create a node, add it, then remove it
+    graph::Node node = createTestNode(dataManager, "InactiveBatch");
+    nodeManager->add(node);
+    int64_t nodeId = node.getId();
+
+    // Remove the node (marks it inactive/deleted)
+    nodeManager->remove(node);
+
+    // getBatch with the removed node's ID
+    std::vector<int64_t> ids = {nodeId};
+    auto nodes = nodeManager->getBatch(ids);
+
+    // The node has a non-zero ID but is inactive, so it should be filtered out
+    EXPECT_TRUE(nodes.empty()) << "Inactive node should be filtered from getBatch";
+}
+
+// Test add for edge with zero ID (exercises the add() id==0 branch for Edge type)
+TEST_F(BaseEntityManagerTest, AddEdgeWithZeroId) {
+    graph::Node source = createTestNode(dataManager, "ZeroEdgeSrc");
+    graph::Node target = createTestNode(dataManager, "ZeroEdgeTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "ZERO_ID_EDGE");
+    EXPECT_EQ(edge.getId(), 0) << "Edge should start with zero ID";
+
+    edgeManager->add(edge);
+
+    EXPECT_NE(edge.getId(), 0) << "Edge should get allocated ID";
+    graph::Edge retrieved = edgeManager->get(edge.getId());
+    EXPECT_EQ(retrieved.getId(), edge.getId());
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests for Edge addBatch
+// ============================================================================
+
+// Test edge addBatch with empty vector
+// Covers: addBatch line 49 True branch for Edge template instantiation
+TEST_F(BaseEntityManagerTest, EdgeAddBatchEmpty) {
+    std::vector<graph::Edge> emptyEdges;
+    EXPECT_NO_THROW(edgeManager->addBatch(emptyEdges));
+}
+
+// Test edge addBatch with pre-set IDs (non-zero)
+// Covers: addBatch line 60 False branch (getId() != 0) for Edge template
+// Covers: addBatch line 67 False branch (newEntities.empty()) for Edge template
+TEST_F(BaseEntityManagerTest, EdgeAddBatchWithExistingIds) {
+    graph::Node source = createTestNode(dataManager, "BatchIdSrc");
+    graph::Node target = createTestNode(dataManager, "BatchIdTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    std::vector<graph::Edge> edges;
+    for (int i = 0; i < 3; ++i) {
+        graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(),
+                                           "BATCH_ID_" + std::to_string(i));
+        edge.setId(70000 + i); // Pre-set non-zero IDs
+        edges.push_back(edge);
+    }
+
+    // All edges have non-zero IDs, so newEntities should be empty
+    // This hits the False branch of !newEntities.empty() (line 67)
+    EXPECT_NO_THROW(edgeManager->addBatch(edges));
+
+    // Verify IDs were not changed
+    for (int i = 0; i < 3; ++i) {
+        EXPECT_EQ(edges[i].getId(), 70000 + i);
+        graph::Edge retrieved = edgeManager->get(edges[i].getId());
+        EXPECT_EQ(retrieved.getId(), edges[i].getId());
+        EXPECT_TRUE(retrieved.isActive());
+    }
+}
+
+// Test edge addBatch with mixed IDs (some zero, some non-zero)
+// Covers both True and False paths of getId() == 0 for Edge template (line 60)
+TEST_F(BaseEntityManagerTest, EdgeAddBatchMixedIds) {
+    graph::Node source = createTestNode(dataManager, "MixEdgeSrc");
+    graph::Node target = createTestNode(dataManager, "MixEdgeTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    std::vector<graph::Edge> edges;
+
+    // Edge with zero ID (needs allocation)
+    graph::Edge e1 = createTestEdge(dataManager, source.getId(), target.getId(), "MIX_ZERO");
+    EXPECT_EQ(e1.getId(), 0);
+    edges.push_back(e1);
+
+    // Edge with pre-set ID (no allocation needed)
+    graph::Edge e2 = createTestEdge(dataManager, source.getId(), target.getId(), "MIX_SET");
+    e2.setId(80000);
+    edges.push_back(e2);
+
+    // Another edge with zero ID
+    graph::Edge e3 = createTestEdge(dataManager, source.getId(), target.getId(), "MIX_ZERO2");
+    EXPECT_EQ(e3.getId(), 0);
+    edges.push_back(e3);
+
+    edgeManager->addBatch(edges);
+
+    // e1 and e3 should get allocated IDs
+    EXPECT_NE(edges[0].getId(), 0) << "Edge e1 should get allocated ID";
+    // e2 should keep pre-set ID
+    EXPECT_EQ(edges[1].getId(), 80000) << "Edge e2 should keep pre-set ID";
+    // e3 should get allocated ID
+    EXPECT_NE(edges[2].getId(), 0) << "Edge e3 should get allocated ID";
+
+    // All should be retrievable
+    for (const auto &edge : edges) {
+        graph::Edge retrieved = edgeManager->get(edge.getId());
+        EXPECT_EQ(retrieved.getId(), edge.getId());
+        EXPECT_TRUE(retrieved.isActive());
+    }
+}
+
+// Test edge update with zero ID
+// Covers: update line 91 True branch for Edge template
+TEST_F(BaseEntityManagerTest, EdgeUpdateWithZeroId) {
+    graph::Edge edge;
+    edge.setId(0);
+    edge.setLabelId(dataManager->getOrCreateLabelId("ZeroIdUpdate"));
+
+    // Should return early without error
+    EXPECT_NO_THROW(edgeManager->update(edge));
+}
+
+// Test edge update with inactive entity
+// Covers: update line 95-96 for Edge template
+TEST_F(BaseEntityManagerTest, EdgeUpdateInactiveThrows) {
+    graph::Node source = createTestNode(dataManager, "InactEdgeSrc");
+    graph::Node target = createTestNode(dataManager, "InactEdgeTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "INACTIVE_UPD");
+    edgeManager->add(edge);
+
+    edge.markInactive();
+    EXPECT_THROW(edgeManager->update(edge), std::runtime_error);
+}
+
+// Test edge remove with zero ID
+// Covers: remove line 116 True branch for Edge template
+TEST_F(BaseEntityManagerTest, EdgeRemoveWithZeroId) {
+    graph::Edge edge;
+    edge.setId(0);
+
+    EXPECT_NO_THROW(edgeManager->remove(edge));
+}
+
+// Test edge remove with inactive entity
+// Covers: remove line 116 !isActive() branch for Edge template
+TEST_F(BaseEntityManagerTest, EdgeRemoveInactive) {
+    graph::Node source = createTestNode(dataManager, "RemInactSrc");
+    graph::Node target = createTestNode(dataManager, "RemInactTgt");
+    nodeManager->add(source);
+    nodeManager->add(target);
+
+    graph::Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "REM_INACT");
+    edge.markInactive();
+
+    EXPECT_NO_THROW(edgeManager->remove(edge));
+}
+
+// ============================================================================
+// Branch Coverage: addBatch where all entities already have IDs
+// Covers: BaseEntityManager.cpp line 60: entity.getId() == 0 -> False (all have IDs)
+// and line 67: !newEntities.empty() -> False (no new entities to allocate)
+// ============================================================================
+
+TEST_F(BaseEntityManagerTest, AddBatch_AllEntitiesHaveIds) {
+	// Create nodes that already have IDs assigned
+	// This should skip the ID allocation batch entirely
+	std::vector<graph::Node> nodes;
+	for (int i = 1; i <= 5; ++i) {
+		graph::Node node;
+		node.setId(static_cast<int64_t>(10000 + i));
+		node.setLabelId(dataManager->getOrCreateLabelId("PreAssigned"));
+		nodes.push_back(node);
+	}
+
+	EXPECT_NO_THROW(nodeManager->addBatch(nodes));
+
+	// Verify nodes can be retrieved
+	for (int i = 1; i <= 5; ++i) {
+		graph::Node retrieved = nodeManager->get(10000 + i);
+		EXPECT_EQ(retrieved.getId(), 10000 + i);
+	}
+}
+
+// ============================================================================
+// Branch Coverage: addBatch with mixed IDs (some pre-assigned, some need allocation)
+// Covers: Both branches of entity.getId() == 0 in the addBatch loop (line 60)
+// ============================================================================
+
+TEST_F(BaseEntityManagerTest, AddBatch_MixedIds) {
+	std::vector<graph::Node> nodes;
+
+	// Node with pre-assigned ID
+	graph::Node nodeWithId;
+	nodeWithId.setId(20001);
+	nodeWithId.setLabelId(dataManager->getOrCreateLabelId("Mixed"));
+	nodes.push_back(nodeWithId);
+
+	// Node without ID (needs allocation)
+	graph::Node nodeWithoutId;
+	nodeWithoutId.setLabelId(dataManager->getOrCreateLabelId("Mixed"));
+	nodes.push_back(nodeWithoutId);
+
+	EXPECT_NO_THROW(nodeManager->addBatch(nodes));
+
+	// The pre-assigned node should still have its original ID
+	graph::Node retrieved = nodeManager->get(20001);
+	EXPECT_EQ(retrieved.getId(), 20001);
+}
+
+// ============================================================================
+// Branch Coverage: addBatch for Edge entities (covers Edge template instantiation)
+// Covers: BaseEntityManager.cpp line 49: entities.empty() -> False for Edge
+// ============================================================================
+
+TEST_F(BaseEntityManagerTest, EdgeAddBatch_AllWithIds) {
+	graph::Node src = createTestNode(dataManager, "BSrc");
+	graph::Node tgt = createTestNode(dataManager, "BTgt");
+	nodeManager->add(src);
+	nodeManager->add(tgt);
+
+	std::vector<graph::Edge> edges;
+	for (int i = 1; i <= 3; ++i) {
+		graph::Edge edge;
+		edge.setId(static_cast<int64_t>(30000 + i));
+		edge.setSourceNodeId(src.getId());
+		edge.setTargetNodeId(tgt.getId());
+		edge.setLabelId(dataManager->getOrCreateLabelId("BATCH_EDGE"));
+		edges.push_back(edge);
+	}
+
+	EXPECT_NO_THROW(edgeManager->addBatch(edges));
+}
+
+// ============================================================================
+// Branch Coverage: addBatch with empty vector for Edge
+// Covers: BaseEntityManager.cpp line 49: entities.empty() -> True for Edge
+// ============================================================================
+
+TEST_F(BaseEntityManagerTest, EdgeAddBatch_Empty) {
+	std::vector<graph::Edge> emptyEdges;
+	EXPECT_NO_THROW(edgeManager->addBatch(emptyEdges));
+}

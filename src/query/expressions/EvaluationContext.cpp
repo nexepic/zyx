@@ -112,7 +112,6 @@ bool EvaluationContext::toBoolean(const PropertyValue &value) {
 				// Empty map → false, non-empty → true
 				return !arg.empty();
 			}
-			return false;
 		},
 		value.getVariant());
 }
@@ -160,7 +159,6 @@ int64_t EvaluationContext::toInteger(const PropertyValue &value) {
 					PropertyType::MAP
 				);
 			}
-			return 0;
 		},
 		value.getVariant());
 }
@@ -207,7 +205,6 @@ double EvaluationContext::toDouble(const PropertyValue &value) {
 					PropertyType::MAP
 				);
 			}
-			return 0.0;
 		},
 		value.getVariant());
 }

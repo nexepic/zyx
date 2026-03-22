@@ -401,3 +401,207 @@ TEST_F(StateManagerTest, FindByKeyWithInactiveState) {
 	graph::State notFound = stateManager->findByKey("test.key");
 	EXPECT_EQ(notFound.getId(), 0);
 }
+
+// ============================================================================
+// Branch Coverage Improvement Tests for StateManager.cpp
+// ============================================================================
+
+// Test update when the key does NOT change (oldKey == newKey)
+// Covers: Branch (58) False path - when oldKey == newKey, the if block is skipped
+TEST_F(StateManagerTest, UpdateStateWithSameKey) {
+	graph::State state;
+	state.setKey("same.key");
+	stateManager->add(state);
+	int64_t stateId = state.getId();
+
+	// Verify findable by key
+	graph::State found = stateManager->findByKey("same.key");
+	EXPECT_EQ(found.getId(), stateId);
+
+	// Update the state without changing the key - just modify some other aspect
+	// The key stays the same so the key-change branch is skipped
+	stateManager->update(state);
+
+	// Key mapping should still work
+	graph::State stillFound = stateManager->findByKey("same.key");
+	EXPECT_EQ(stillFound.getId(), stateId);
+}
+
+// Test addStateProperties with explicit useBlobStorage=true
+// Covers: Branch (128) True path - useBlobStorage is already true,
+// so the auto-upgrade check is skipped (different path)
+TEST_F(StateManagerTest, AddStatePropertiesExplicitBlobStorage) {
+	std::string stateKey = "explicit.blob.key";
+
+	// Create properties smaller than 4KB but force blob storage
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["small_data"] = graph::PropertyValue(std::string("small"));
+
+	// Pass useBlobStorage = true explicitly
+	stateManager->addStateProperties(stateKey, props, true);
+
+	// Verify properties were stored and are retrievable
+	auto retrievedProps = stateManager->getStateProperties(stateKey);
+	EXPECT_EQ(retrievedProps.size(), 1UL);
+	EXPECT_EQ(std::get<std::string>(retrievedProps["small_data"].getVariant()), "small");
+}
+
+// Test addStateProperties where data exceeds 4KB auto-triggers blob storage
+// Covers: Branch (128) when !useBlobStorage && serializedData.size() > 4096
+// The auto-upgrade to blob storage is triggered
+TEST_F(StateManagerTest, AddStatePropertiesAutoUpgradeToBlobStorage) {
+	std::string stateKey = "auto.blob.key";
+
+	// Create properties larger than 4KB to trigger auto-upgrade
+	std::unordered_map<std::string, graph::PropertyValue> largeProps;
+	std::string largeValue(5000, 'Y'); // 5KB string, > 4096 threshold
+	largeProps["big_data"] = graph::PropertyValue(largeValue);
+
+	// useBlobStorage = false, but data exceeds threshold so it auto-upgrades
+	stateManager->addStateProperties(stateKey, largeProps, false);
+
+	// Verify properties were stored
+	auto retrievedProps = stateManager->getStateProperties(stateKey);
+	EXPECT_EQ(retrievedProps.size(), 1UL);
+	EXPECT_EQ(std::get<std::string>(retrievedProps["big_data"].getVariant()).size(), 5000UL);
+}
+
+// Test populateKeyToIdMap after database restart with persisted states
+// Covers the iteration in populateKeyToIdMap where isChainHeadState is checked
+// and non-head states (prevStateId != 0) are skipped
+TEST_F(StateManagerTest, PopulateKeyToIdMapAfterRestart) {
+	// Create several states with properties (which create state chains)
+	std::string key1 = "persist.key1";
+	std::string key2 = "persist.key2";
+
+	stateManager->addStateProperties(key1, {{"prop1", graph::PropertyValue(1)}});
+	stateManager->addStateProperties(key2, {{"prop2", graph::PropertyValue(2)}});
+
+	// Flush and restart database to test populateKeyToIdMap
+	storage->flush();
+	db->close();
+	db->open();
+	storage = db->getStorage();
+	dataManager = storage->getDataManager();
+	stateManager = dataManager->getStateManager();
+
+	// After restart, populateKeyToIdMap should have rebuilt the key mapping
+	graph::State found1 = stateManager->findByKey(key1);
+	EXPECT_NE(found1.getId(), 0) << "Key1 should be found after restart";
+
+	graph::State found2 = stateManager->findByKey(key2);
+	EXPECT_NE(found2.getId(), 0) << "Key2 should be found after restart";
+
+	// Verify properties survived the restart
+	auto props1 = stateManager->getStateProperties(key1);
+	EXPECT_EQ(props1.size(), 1UL);
+	auto props2 = stateManager->getStateProperties(key2);
+	EXPECT_EQ(props2.size(), 1UL);
+}
+
+// Test populateKeyToIdMap skips non-head states (prevStateId != 0)
+// Covers: isChainHeadState returning false in populateKeyToIdMap (line 96 False path)
+// and isChainHeadState function returning false via prevStateId != 0 (line 192 False path)
+TEST_F(StateManagerTest, PopulateKeyToIdMap_SkipsNonHeadStates) {
+	// Create a state chain with data large enough to span multiple State entities.
+	// Non-head (tail) states have prevStateId != 0, so isChainHeadState returns false.
+	std::string stateKey = "multichain.key";
+
+	// State::CHUNK_SIZE is ~150 bytes. Create data > 300 bytes to get 2+ chunks.
+	std::string largeData(400, 'A');
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["big_data"] = graph::PropertyValue(largeData);
+
+	// Use internal storage (useBlobStorage=false) to create actual state chain entities
+	stateManager->addStateProperties(stateKey, props, false);
+
+	// Verify state is findable
+	graph::State found = stateManager->findByKey(stateKey);
+	EXPECT_NE(found.getId(), 0) << "State should be findable by key";
+
+	// Flush to disk so populateKeyToIdMap can scan segments
+	storage->flush();
+
+	// Restart database to trigger populateKeyToIdMap
+	db->close();
+	db->open();
+	storage = db->getStorage();
+	dataManager = storage->getDataManager();
+	stateManager = dataManager->getStateManager();
+
+	// After restart, populateKeyToIdMap should have:
+	// - Found head state (isChainHeadState returns true) -> added to map
+	// - Found tail states (isChainHeadState returns false) -> skipped
+	graph::State recovered = stateManager->findByKey(stateKey);
+	EXPECT_NE(recovered.getId(), 0) << "State should still be findable after restart";
+}
+
+// Test populateKeyToIdMap skips chain head states with empty keys
+// Covers: !state.getKey().empty() returning false in populateKeyToIdMap (line 98 False path)
+TEST_F(StateManagerTest, PopulateKeyToIdMap_SkipsEmptyKeyHeadStates) {
+	// Create a state with empty key - it's a head state but has empty key
+	graph::State emptyKeyState;
+	emptyKeyState.setKey(""); // Empty key
+	stateManager->add(emptyKeyState);
+	EXPECT_NE(emptyKeyState.getId(), 0);
+
+	// Also create a state with a non-empty key for comparison
+	std::string validKey = "valid.key";
+	stateManager->addStateProperties(validKey, {{"prop", graph::PropertyValue(42)}});
+
+	// Flush and restart
+	storage->flush();
+	db->close();
+	db->open();
+	storage = db->getStorage();
+	dataManager = storage->getDataManager();
+	stateManager = dataManager->getStateManager();
+
+	// The empty key state should NOT be in the key-to-id map
+	// (isChainHeadState returns true but key is empty, so it's skipped)
+	graph::State emptyKeyFound = stateManager->findByKey("");
+	// findByKey("") should return empty since empty keys are not mapped
+	EXPECT_EQ(emptyKeyFound.getId(), 0) << "Empty key state should not be in the key map";
+
+	// The valid key state should still be findable
+	graph::State validFound = stateManager->findByKey(validKey);
+	EXPECT_NE(validFound.getId(), 0) << "Valid key state should be in the key map after restart";
+}
+
+// Test isChainHeadState returns false for inactive state
+// Covers: state.isActive() returning false in isChainHeadState (line 192 second condition False)
+TEST_F(StateManagerTest, IsChainHeadState_InactiveStateReturnsFalse) {
+	// Create a state, add properties, flush, then remove and flush
+	std::string key = "to.remove.head";
+	stateManager->addStateProperties(key, {{"val", graph::PropertyValue(1)}});
+
+	graph::State found = stateManager->findByKey(key);
+	EXPECT_NE(found.getId(), 0);
+
+	// Remove the state
+	stateManager->removeState(key);
+
+	// Flush so the inactive state is persisted to disk
+	storage->flush();
+
+	// Create another state that will survive
+	stateManager->addStateProperties("survivor.key", {{"v", graph::PropertyValue(2)}});
+	storage->flush();
+
+	// Restart - populateKeyToIdMap scans disk, finding both active and inactive states
+	// Inactive states should fail isChainHeadState (isActive() returns false)
+	db->close();
+	db->open();
+	storage = db->getStorage();
+	dataManager = storage->getDataManager();
+	stateManager = dataManager->getStateManager();
+
+	// The removed state should not be found
+	graph::State removed = stateManager->findByKey(key);
+	EXPECT_EQ(removed.getId(), 0) << "Removed state should not be in key map";
+
+	// Survivor should be found
+	graph::State survivor = stateManager->findByKey("survivor.key");
+	EXPECT_NE(survivor.getId(), 0) << "Survivor state should be in key map";
+}
+

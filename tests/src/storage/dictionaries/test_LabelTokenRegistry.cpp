@@ -538,7 +538,7 @@ TEST_F(LabelTokenRegistryTest, LargeBatchOfUniqueLabels) {
 
 	// Verify all unique
 	std::unordered_set<int64_t> idSet(ids.begin(), ids.end());
-	EXPECT_EQ(idSet.size(), LARGE_COUNT);
+	EXPECT_EQ(idSet.size(), static_cast<size_t>(LARGE_COUNT));
 
 	// Verify random subset
 	for (int i = 0; i < 50; ++i) {

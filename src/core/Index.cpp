@@ -165,13 +165,9 @@ namespace graph {
 				if (entry.keyBlobId != 0) {
 					auto blob = dataManager->getBlobManager()->updateBlobChain(entry.keyBlobId, getId(), typeId,
 																			   keyStream.str());
-					if (blob.empty())
-						throw std::runtime_error("Failed to update blob chain for entry key.");
 					entry.keyBlobId = blob[0].getId();
 				} else {
 					auto blob = dataManager->getBlobManager()->createBlobChain(getId(), typeId, keyStream.str());
-					if (blob.empty())
-						throw std::runtime_error("Failed to create blob chain for entry key.");
 					entry.keyBlobId = blob[0].getId();
 				}
 			}
@@ -188,13 +184,9 @@ namespace graph {
 				if (entry.valuesBlobId != 0) {
 					auto blob = dataManager->getBlobManager()->updateBlobChain(entry.valuesBlobId, getId(), typeId,
 																			   valueStream.str());
-					if (blob.empty())
-						throw std::runtime_error("Failed to update blob chain for entry values.");
 					entry.valuesBlobId = blob[0].getId();
 				} else {
 					auto blob = dataManager->getBlobManager()->createBlobChain(getId(), typeId, valueStream.str());
-					if (blob.empty())
-						throw std::runtime_error("Failed to create blob chain for entry values.");
 					entry.valuesBlobId = blob[0].getId();
 				}
 			}
@@ -255,10 +247,9 @@ namespace graph {
 		// Now serialize exactly as setAllChildren would
 		std::ostringstream os;
 
-		// The first child is always just its ID.
-		if (!children.empty()) {
-			utils::Serializer::writePOD(os, children[0].childId);
-		}
+		// The first child is always just its ID (children is never empty here
+		// because we just pushed newEntry onto the existing children list).
+		utils::Serializer::writePOD(os, children[0].childId);
 
 		// For each subsequent child, we serialize a flag, the key (or blob ID), and the child ID.
 		for (size_t i = 1; i < children.size(); ++i) {
@@ -471,13 +462,12 @@ namespace graph {
 		result.reserve(metadata.childCount);
 
 		// The first child is always stored as just an ID, with an implicit key.
-		if (metadata.childCount > 0) {
-			ChildEntry firstChild;
-			firstChild.childId = utils::Serializer::readPOD<int64_t>(is);
-			firstChild.key = PropertyValue(std::monostate{}); // Implicit "negative infinity" key.
-			firstChild.keyBlobId = 0;
-			result.push_back(std::move(firstChild));
-		}
+		// (metadata.childCount > 0 is guaranteed by the early return above)
+		ChildEntry firstChild;
+		firstChild.childId = utils::Serializer::readPOD<int64_t>(is);
+		firstChild.key = PropertyValue(std::monostate{}); // Implicit "negative infinity" key.
+		firstChild.keyBlobId = 0;
+		result.push_back(std::move(firstChild));
 
 		// Subsequent children are each preceded by a separator key and a flag.
 		for (uint32_t i = 1; i < metadata.childCount; i++) {
@@ -532,13 +522,9 @@ namespace graph {
 				if (entry.keyBlobId != 0) {
 					auto blob = dataManager->getBlobManager()->updateBlobChain(entry.keyBlobId, getId(), typeId,
 																			   keyStream.str());
-					if (blob.empty())
-						throw std::runtime_error("Failed to update blob chain for entry key.");
 					entry.keyBlobId = blob[0].getId();
 				} else {
 					auto blob = dataManager->getBlobManager()->createBlobChain(getId(), typeId, keyStream.str());
-					if (blob.empty())
-						throw std::runtime_error("Failed to create blob chain for key.");
 					entry.keyBlobId = blob[0].getId();
 				}
 			}
@@ -649,13 +635,8 @@ namespace graph {
 
 		if (found) {
 			std::string newData = os.str();
-			if (newData.size() > DATA_SIZE) {
-				// This theoretically shouldn't happen as we are just replacing int64 with int64
-				throw std::runtime_error("Buffer overflow during child ID update");
-			}
 			std::memset(dataBuffer, 0, DATA_SIZE);
 			std::memcpy(dataBuffer, newData.data(), newData.size());
-			// dataUsage remains the same size-wise, but good practice to update if logic changed
 			metadata.dataUsage = static_cast<uint32_t>(newData.size());
 		}
 

@@ -951,6 +951,87 @@ TEST_F(StateChainManagerTest, IsDataSameHandlesReadException) {
 	EXPECT_FALSE(result);
 }
 
+// Test readStateChain with blob storage where externalId is 0 (manually set)
+// Covers branch at line 55: headState.getExternalId() == 0 -> return ""
+TEST_F(StateChainManagerTest, ReadBlobWithZeroExternalIdAfterManualSet) {
+	const std::string key = "blob_zero_ext_manual";
+	const std::string data = "Blob data to be corrupted";
+
+	auto chain = stateChainManager->createStateChain(key, data, true);
+	ASSERT_EQ(chain.size(), 1UL);
+	ASSERT_TRUE(chain[0].isBlobStorage());
+	int64_t headId = chain[0].getId();
+
+	// Manually set externalId to 0 to simulate corruption
+	graph::State head = dataManager->getState(headId);
+	head.setExternalId(0);
+	dataManager->updateStateEntity(head);
+
+	// Reading should return empty string (branch: externalId == 0)
+	std::string result = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(result, "");
+}
+
+// Test deleteStateChain where blob head has externalId == 0
+// Covers branch at line 161: headState.getExternalId() != 0 -> False
+TEST_F(StateChainManagerTest, DeleteBlobChainWithManuallyZeroedExternalId) {
+	const std::string key = "delete_blob_zero_ext";
+	const std::string data = "Delete me";
+
+	auto chain = stateChainManager->createStateChain(key, data, true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually zero the externalId
+	graph::State head = dataManager->getState(headId);
+	head.setExternalId(0);
+	dataManager->updateStateEntity(head);
+
+	// Delete should handle gracefully (skip blob deletion since externalId is 0)
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(headId));
+
+	// Verify state was deleted
+	EXPECT_THROW((void)stateChainManager->readStateChain(headId), std::runtime_error);
+}
+
+// Test updateStateChain where blob storage head has externalId == 0
+// Covers branch at line 126: headState.getExternalId() != 0 -> False
+TEST_F(StateChainManagerTest, UpdateBlobChainFromZeroedExternalId) {
+	const std::string key = "update_zeroed_ext";
+	const std::string data = "Original";
+
+	auto chain = stateChainManager->createStateChain(key, data, true);
+	int64_t headId = chain[0].getId();
+
+	// Manually zero the externalId
+	graph::State head = dataManager->getState(headId);
+	head.setExternalId(0);
+	dataManager->updateStateEntity(head);
+
+	// Update with different data should work (skip old blob deletion)
+	auto newChain = stateChainManager->updateStateChain(headId, "New data", false);
+	EXPECT_GE(newChain.size(), 1UL);
+	EXPECT_EQ(newChain[0].getId(), headId);
+
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, "New data");
+}
+
+// Test getStateChainIds for inactive blob head (head.isActive() is false)
+// Covers branch at line 181: head.isActive() -> False
+TEST_F(StateChainManagerTest, GetStateChainIdsForDeletedBlobHead) {
+	const std::string key = "deleted_blob_ids";
+	auto chain = stateChainManager->createStateChain(key, "data", true);
+	int64_t headId = chain[0].getId();
+
+	// Delete the head
+	stateChainManager->deleteStateChain(headId);
+
+	// getStateChainIds should return empty for inactive blob head
+	auto ids = stateChainManager->getStateChainIds(headId);
+	EXPECT_TRUE(ids.empty());
+}
+
 // Test updateStateChain with blob storage when data is empty
 // Tests branch at line 240: if (!blobChain.empty())
 TEST_F(StateChainManagerTest, CreateBlobWithEmptyData) {
@@ -969,3 +1050,843 @@ TEST_F(StateChainManagerTest, CreateBlobWithEmptyData) {
 	std::string readData = stateChainManager->readStateChain(chain[0].getId());
 	EXPECT_EQ(readData, "");
 }
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+// Test deleteStateChain with blob storage where externalId == 0
+// Covers branch at line 161: if (headState.getExternalId() != 0) -> False
+TEST_F(StateChainManagerTest, DeleteBlobChainWithZeroExternalId) {
+	const std::string key = "blob_zero_ext_key";
+
+	// Create a blob state manually with externalId = 0
+	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	graph::State headState(stateId, key, "");
+	headState.setExternalId(0);
+	// Mark as blob storage by setting the blob flag
+	// We need to create it via createStateChain with empty data
+	auto chain = stateChainManager->createStateChain(key, "", true);
+	ASSERT_EQ(chain.size(), 1UL);
+
+	int64_t headId = chain[0].getId();
+
+	// Delete the blob chain - should handle externalId == 0 gracefully
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(headId));
+
+	// Verify the state is deleted (reading should throw)
+	EXPECT_THROW((void)stateChainManager->readStateChain(headId), std::runtime_error);
+}
+
+// Test getStateChainIds for inactive blob head
+// Covers branch at line 181: if (head.isActive()) -> False for blob storage
+TEST_F(StateChainManagerTest, GetStateChainIdsForInactiveBlobHead) {
+	const std::string key = "inactive_blob_key";
+	const std::string data = "blob data";
+
+	// Create a blob chain
+	auto chain = stateChainManager->createStateChain(key, data, true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete the chain to make it inactive
+	stateChainManager->deleteStateChain(headId);
+
+	// getStateChainIds for an inactive blob head should return empty
+	auto chainIds = stateChainManager->getStateChainIds(headId);
+	EXPECT_TRUE(chainIds.empty());
+}
+
+// Test readStateChain with blob storage and externalId == 0
+// Covers branch at line 55: if (headState.getExternalId() == 0) return ""
+TEST_F(StateChainManagerTest, ReadBlobChainWithZeroExternalId) {
+	const std::string key = "blob_read_zero_ext";
+
+	// Create a blob chain with empty data (results in externalId potentially being 0)
+	auto chain = stateChainManager->createStateChain(key, "", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Read should return empty string for blob with externalId == 0
+	std::string result = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(result, "");
+}
+
+// Test deleteStateChain on already-deleted (inactive) state
+// Covers branch at line 158: if (headState.getId() == 0 || !headState.isActive()) return
+TEST_F(StateChainManagerTest, DeleteAlreadyDeletedStateChain) {
+	const std::string key = "double_delete_key";
+	const std::string data = "data to delete";
+
+	auto chain = stateChainManager->createStateChain(key, data, false);
+	int64_t headId = chain[0].getId();
+
+	// Delete once
+	stateChainManager->deleteStateChain(headId);
+
+	// Delete again - should be a no-op (early return)
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(headId));
+}
+
+// Test updateStateChain with blob storage where old blob externalId == 0
+// Covers branch at line 126: if (headState.getExternalId() != 0) -> False in update cleanup
+TEST_F(StateChainManagerTest, UpdateBlobChainFromEmptyData) {
+	const std::string key = "update_empty_blob_key";
+
+	// Create with empty blob data
+	auto chain = stateChainManager->createStateChain(key, "", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Update to non-empty data - should handle old externalId == 0 gracefully
+	auto newChain = stateChainManager->updateStateChain(headId, "new data", true);
+	EXPECT_GE(newChain.size(), 1UL);
+
+	// Verify new data can be read
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, "new data");
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests - Round 3
+// ============================================================================
+
+// Test readStateChain where head state exists (getId() != 0) but is inactive
+// Covers branch at line 50: !headState.isActive() when getId() != 0
+TEST_F(StateChainManagerTest, ReadThrowsOnInactiveExistingState) {
+	const std::string key = "inactive_read_key";
+	const std::string data = "some data";
+
+	// Create a state chain
+	auto chain = stateChainManager->createStateChain(key, data, false);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete the state (makes it inactive but ID still exists in storage)
+	graph::State head = dataManager->getState(headId);
+	dataManager->deleteState(head);
+
+	// Reading an inactive but existing state should throw
+	EXPECT_THROW((void)stateChainManager->readStateChain(headId), std::runtime_error);
+}
+
+// Test updateStateChain where head is blob with externalId == 0 (cleanup skips delete)
+// Covers branch at line 126: headState.getExternalId() != 0 -> False
+TEST_F(StateChainManagerTest, UpdateBlobChainWithZeroExternalIdCleanup) {
+	const std::string key = "blob_zero_ext_update";
+
+	// Create a blob chain with empty data (externalId might be 0)
+	auto chain = stateChainManager->createStateChain(key, "", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually set externalId to 0 to ensure we test the skip-delete path
+	graph::State headState = dataManager->getState(headId);
+	headState.setExternalId(0);
+	dataManager->updateStateEntity(headState);
+
+	// Now update - the cleanup code should skip blob deletion since externalId == 0
+	auto newChain = stateChainManager->updateStateChain(headId, "updated data", false);
+	EXPECT_GE(newChain.size(), 1UL);
+
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, "updated data");
+}
+
+// Test deleteStateChain blob path where externalId == 0
+// Covers branch at line 161: headState.getExternalId() != 0 -> False
+TEST_F(StateChainManagerTest, DeleteBlobStateWithZeroExternalIdGracefully) {
+	const std::string key = "del_blob_zero_ext";
+
+	// Create a blob chain
+	auto chain = stateChainManager->createStateChain(key, "data", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually set externalId to 0
+	graph::State headState = dataManager->getState(headId);
+	headState.setExternalId(0);
+	dataManager->updateStateEntity(headState);
+
+	// Delete should handle externalId == 0 gracefully (skip blob chain deletion)
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(headId));
+
+	// Verify state is deleted
+	graph::State deletedState = dataManager->getState(headId);
+	EXPECT_FALSE(deletedState.isActive());
+}
+
+// Test getStateChainIds for inactive blob head (head.isActive() returns false)
+// Covers branch at line 181: head.isActive() -> False
+TEST_F(StateChainManagerTest, GetStateChainIdsInactiveBlobReturnsEmpty) {
+	const std::string key = "inactive_blob_ids";
+
+	// Create a blob chain and then delete it
+	auto chain = stateChainManager->createStateChain(key, "blob data", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete the state
+	stateChainManager->deleteStateChain(headId);
+
+	// getStateChainIds should return empty for inactive blob head
+	auto chainIds = stateChainManager->getStateChainIds(headId);
+	EXPECT_TRUE(chainIds.empty());
+}
+
+// Test updateStateChain where old storage is internal chain with multiple states
+// Covers branch at line 130-137: delete internal chain with nextStateId != 0
+TEST_F(StateChainManagerTest, UpdateMultiChunkInternalCleansUpOldChain) {
+	const std::string key = "multi_cleanup_key";
+	// Create data requiring 2 internal chunks
+	std::string multiData(graph::State::CHUNK_SIZE + 50, 'Q');
+
+	auto chain = stateChainManager->createStateChain(key, multiData, false);
+	ASSERT_EQ(chain.size(), 2UL);
+	int64_t headId = chain[0].getId();
+	int64_t tailId = chain[1].getId();
+
+	// Update to a short internal string (should clean up old tail)
+	auto newChain = stateChainManager->updateStateChain(headId, "short", false);
+	EXPECT_EQ(newChain.size(), 1UL);
+
+	// Verify old tail is deleted
+	graph::State tail = dataManager->getState(tailId);
+	EXPECT_FALSE(tail.isActive()) << "Old tail state should be deleted after update";
+
+	// Verify new data
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, "short");
+}
+
+// Test isDataSame returns false when head doesn't exist
+// Covers the catch branch at line 94-96 more directly
+TEST_F(StateChainManagerTest, IsDataSameReturnsFalseForNonExistentId) {
+	bool result = stateChainManager->isDataSame(999999, "any data");
+	EXPECT_FALSE(result);
+}
+
+// Test createStateChain with blob and non-empty data that creates blob entries
+// Ensures the blob chain non-empty check at line 236 is properly exercised
+TEST_F(StateChainManagerTest, CreateBlobChainWithNonEmptyData) {
+	const std::string key = "blob_nonempty_key";
+	const std::string data = "Non-empty blob data";
+
+	auto chain = stateChainManager->createStateChain(key, data, true);
+	ASSERT_EQ(chain.size(), 1UL);
+	EXPECT_TRUE(chain[0].isBlobStorage());
+	EXPECT_NE(chain[0].getExternalId(), 0) << "Blob should have valid external ID";
+
+	std::string readData = stateChainManager->readStateChain(chain[0].getId());
+	EXPECT_EQ(readData, data);
+}
+
+// Test setupStorageForState with internal mode and exactly one chunk
+// Covers the path where chunks.size() == 1, so the for loop at line 248 doesn't execute
+TEST_F(StateChainManagerTest, SetupStorageSingleChunkInternal) {
+	const std::string key = "single_chunk_key";
+	const std::string data = "Small data that fits in one chunk";
+
+	auto chain = stateChainManager->createStateChain(key, data, false);
+	ASSERT_EQ(chain.size(), 1UL);
+	EXPECT_EQ(chain[0].getNextStateId(), 0) << "Single chunk should have no next state";
+	EXPECT_EQ(chain[0].getDataAsString(), data);
+}
+
+// ==========================================
+// Branch Coverage Improvement Tests
+// ==========================================
+
+// Cover line 50: readStateChain where head isActive() == false (second condition)
+// We need a state that exists (getId() != 0) but is inactive
+TEST_F(StateChainManagerTest, ReadStateChainInactiveHead) {
+	// Create a chain first
+	auto chain = stateChainManager->createStateChain("inactive_test", "data", false);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete the chain to mark head as inactive
+	stateChainManager->deleteStateChain(headId);
+
+	// Now try to read - should throw because head is inactive
+	EXPECT_THROW((void)stateChainManager->readStateChain(headId), std::runtime_error);
+}
+
+// Cover line 55: readStateChain with blob storage where externalId == 0
+TEST_F(StateChainManagerTest, ReadBlobChainWithExternalIdZero) {
+	// Create a blob chain
+	auto chain = stateChainManager->createStateChain("blob_zero_ext", "some data", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually set externalId to 0 to test the branch
+	graph::State state = dataManager->getState(headId);
+	ASSERT_TRUE(state.isBlobStorage());
+	state.setExternalId(0);
+	dataManager->updateStateEntity(state);
+
+	// Read should return empty string when externalId is 0
+	std::string result = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(result, "");
+}
+
+// Cover line 75: readStateChain where intermediate state isActive() false (second condition)
+TEST_F(StateChainManagerTest, ReadChainedStateWithInactiveIntermediate) {
+	// Create a multi-chunk chain
+	const std::string data(graph::State::CHUNK_SIZE * 2 + 100, 'A');
+	auto chain = stateChainManager->createStateChain("inactive_mid", data, false);
+	ASSERT_GE(chain.size(), 3UL);
+
+	// Mark the second state as inactive by deleting it
+	graph::State secondState = dataManager->getState(chain[1].getId());
+	dataManager->deleteState(secondState);
+
+	// Reading should throw because of corrupted chain (inactive intermediate)
+	EXPECT_THROW((void)stateChainManager->readStateChain(chain[0].getId()), std::runtime_error);
+}
+
+// Cover line 119: updateStateChain where head is active but getId()!=0 && !isActive()
+TEST_F(StateChainManagerTest, UpdateInactiveHeadThrows) {
+	// Create a chain
+	auto chain = stateChainManager->createStateChain("upd_inactive", "data", false);
+	int64_t headId = chain[0].getId();
+
+	// Delete to make inactive
+	stateChainManager->deleteStateChain(headId);
+
+	// Update should throw because head is inactive
+	EXPECT_THROW((void)stateChainManager->updateStateChain(headId, "new data"), std::runtime_error);
+}
+
+// Cover line 126: updateStateChain where headState has blob with externalId == 0
+TEST_F(StateChainManagerTest, UpdateBlobChainWithZeroExternalId) {
+	// Create a blob chain
+	auto chain = stateChainManager->createStateChain("upd_blob_zero", "data", true);
+	int64_t headId = chain[0].getId();
+
+	// Manually set externalId to 0
+	graph::State state = dataManager->getState(headId);
+	state.setExternalId(0);
+	dataManager->updateStateEntity(state);
+
+	// Update should handle the zero externalId (skip deleteBlobChain)
+	// and create new storage
+	auto updated = stateChainManager->updateStateChain(headId, "new data", false);
+	EXPECT_FALSE(updated.empty());
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, "new data");
+}
+
+// Cover line 158: deleteStateChain where head isActive() false (second condition)
+TEST_F(StateChainManagerTest, DeleteAlreadyInactiveChain) {
+	// Create a chain
+	auto chain = stateChainManager->createStateChain("del_inactive", "data", false);
+	int64_t headId = chain[0].getId();
+
+	// Delete once
+	stateChainManager->deleteStateChain(headId);
+
+	// Delete again - should be no-op since head is already inactive
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(headId));
+}
+
+// Cover line 161: deleteStateChain blob path where externalId != 0 false branch
+TEST_F(StateChainManagerTest, DeleteBlobChainWithZeroExternalIdDirect) {
+	// Create a blob chain
+	auto chain = stateChainManager->createStateChain("del_blob_zero_direct", "data", true);
+	int64_t headId = chain[0].getId();
+
+	// Manually set externalId to 0
+	graph::State state = dataManager->getState(headId);
+	state.setExternalId(0);
+	dataManager->updateStateEntity(state);
+
+	// Delete should handle zero externalId gracefully (skip blob deletion)
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(headId));
+}
+
+// Cover line 181: getStateChainIds blob path where isActive() false
+TEST_F(StateChainManagerTest, GetStateChainIdsBlobInactiveHead) {
+	// Create a blob chain
+	auto chain = stateChainManager->createStateChain("ids_blob_inactive", "data", true);
+	int64_t headId = chain[0].getId();
+
+	// Delete to make inactive
+	stateChainManager->deleteStateChain(headId);
+
+	// Get chain IDs - should return empty since head is inactive
+	auto ids = stateChainManager->getStateChainIds(headId);
+	EXPECT_TRUE(ids.empty());
+}
+
+// ==========================================
+// Additional Branch Coverage Tests - Round 4
+// ==========================================
+
+// Test updateStateChain with multi-chunk internal where some tail states exist
+// Covers: line 132-137 where nextId != 0 loop iterates multiple times
+TEST_F(StateChainManagerTest, UpdateMultiChunkInternalWithThreeChunks) {
+	const std::string key = "three_chunk_update";
+	// Create data requiring 3 internal chunks
+	std::string threeChunkData(graph::State::CHUNK_SIZE * 2 + 50, 'R');
+
+	auto chain = stateChainManager->createStateChain(key, threeChunkData, false);
+	ASSERT_EQ(chain.size(), 3UL);
+	int64_t headId = chain[0].getId();
+	int64_t mid1Id = chain[1].getId();
+	int64_t mid2Id = chain[2].getId();
+
+	// Update to a short internal string (should clean up both tail states)
+	auto newChain = stateChainManager->updateStateChain(headId, "tiny", false);
+	EXPECT_EQ(newChain.size(), 1UL);
+
+	// Verify both old tail states are deleted
+	graph::State tail1 = dataManager->getState(mid1Id);
+	EXPECT_FALSE(tail1.isActive()) << "First tail state should be deleted";
+	graph::State tail2 = dataManager->getState(mid2Id);
+	EXPECT_FALSE(tail2.isActive()) << "Second tail state should be deleted";
+
+	// Verify new data is correct
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, "tiny");
+}
+
+// Test updateStateChain from multi-chunk to multi-chunk (both internal)
+// Covers: update path where old chain has multiple states and new chain also has multiple
+TEST_F(StateChainManagerTest, UpdateMultiChunkToMultiChunk) {
+	const std::string key = "multi_to_multi";
+	std::string data1(graph::State::CHUNK_SIZE + 10, 'A');
+	std::string data2(graph::State::CHUNK_SIZE + 20, 'B');
+
+	auto chain = stateChainManager->createStateChain(key, data1, false);
+	ASSERT_EQ(chain.size(), 2UL);
+	int64_t headId = chain[0].getId();
+
+	// Update with different multi-chunk data
+	auto newChain = stateChainManager->updateStateChain(headId, data2, false);
+	EXPECT_EQ(newChain.size(), 2UL);
+	EXPECT_EQ(newChain[0].getId(), headId);
+
+	std::string readData = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readData, data2);
+}
+
+// Test isDataSame when head exists but chain is corrupted (readStateChain throws)
+// Covers: line 94-96 catch branch more specifically
+TEST_F(StateChainManagerTest, IsDataSameCorruptedChainReturnsFalse) {
+	const std::string key = "corrupted_isdata";
+	std::string multiData(graph::State::CHUNK_SIZE + 50, 'Z');
+
+	auto chain = stateChainManager->createStateChain(key, multiData, false);
+	ASSERT_EQ(chain.size(), 2UL);
+	int64_t headId = chain[0].getId();
+
+	// Corrupt chain by deleting the tail state
+	graph::State tailState = dataManager->getState(chain[1].getId());
+	dataManager->deleteState(tailState);
+
+	// isDataSame should catch the exception from readStateChain and return false
+	bool result = stateChainManager->isDataSame(headId, "any data");
+	EXPECT_FALSE(result);
+}
+
+// Test getStateChainIds for internal chain where an intermediate state
+// has getId() == 0 (non-existent)
+// Covers: line 187 !currentState.isActive() break in getStateChainIds
+TEST_F(StateChainManagerTest, GetStateChainIdsWithNonExistentIntermediate) {
+	// Create a chain where head points to a non-existent state
+	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	graph::State headState(stateId, "orphan_key", "data");
+	headState.setNextStateId(999888); // Points to non-existent state
+	dataManager->addStateEntity(headState);
+
+	// getStateChainIds should return only the head
+	auto ids = stateChainManager->getStateChainIds(stateId);
+	EXPECT_EQ(ids.size(), 1UL);
+	EXPECT_EQ(ids[0], stateId);
+}
+
+// Test deleteStateChain for internal chain with multiple states
+// Covers: line 169-172 loop in deleteStateChain for internal chain
+TEST_F(StateChainManagerTest, DeleteMultiChunkInternalChain) {
+	const std::string key = "del_multi_internal";
+	std::string multiData(graph::State::CHUNK_SIZE * 2 + 50, 'D');
+
+	auto chain = stateChainManager->createStateChain(key, multiData, false);
+	ASSERT_EQ(chain.size(), 3UL);
+	int64_t headId = chain[0].getId();
+
+	stateChainManager->deleteStateChain(headId);
+
+	// Verify all states are deleted
+	for (const auto& state : chain) {
+		graph::State s = dataManager->getState(state.getId());
+		EXPECT_FALSE(s.isActive()) << "State " << state.getId() << " should be deleted";
+	}
+}
+
+// Test updateStateChain with same data on multi-chunk chain
+// Covers: line 104-114 where isDataSame returns true for multi-chunk chain
+TEST_F(StateChainManagerTest, UpdateSameDataMultiChunkReturnsExisting) {
+	const std::string key = "same_multi_key";
+	std::string multiData(graph::State::CHUNK_SIZE + 50, 'S');
+
+	auto chain = stateChainManager->createStateChain(key, multiData, false);
+	ASSERT_EQ(chain.size(), 2UL);
+	int64_t headId = chain[0].getId();
+
+	// Update with same data - should return existing chain
+	auto resultChain = stateChainManager->updateStateChain(headId, multiData, false);
+	EXPECT_EQ(resultChain.size(), 2UL);
+	EXPECT_EQ(resultChain[0].getId(), headId);
+	EXPECT_EQ(resultChain[1].getId(), chain[1].getId());
+}
+
+// ==========================================
+// Additional Branch Coverage Tests
+// ==========================================
+
+// Cover line 50: readStateChain where headState.getId() != 0 but !isActive()
+// Ensures the !isActive() True branch is hit when the state exists but was deleted
+TEST_F(StateChainManagerTest, ReadInactiveHeadStateThrowsRuntime) {
+	auto chain = stateChainManager->createStateChain("read_inactive_head2", "test data", false);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete the state to make it inactive
+	graph::State s = dataManager->getState(headId);
+	ASSERT_TRUE(s.isActive());
+	dataManager->deleteState(s);
+
+	// Verify the state is now inactive but still has a valid ID
+	(void)dataManager->getState(headId);
+	// readStateChain should throw
+	EXPECT_THROW((void)stateChainManager->readStateChain(headId), std::runtime_error);
+}
+
+// Cover line 119: updateStateChain with inactive head after delete
+// Ensures the !isActive() True branch after isDataSame check
+TEST_F(StateChainManagerTest, UpdateAfterDeleteThrowsInactiveHead) {
+	auto chain = stateChainManager->createStateChain("upd_del_head", "original", false);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete the chain
+	stateChainManager->deleteStateChain(headId);
+
+	// Attempt to update - isDataSame will return false (read throws),
+	// then getState will return inactive head -> should throw
+	EXPECT_THROW((void)stateChainManager->updateStateChain(headId, "new data", false), std::runtime_error);
+}
+
+// Cover line 126: updateStateChain where isBlobStorage but externalId == 0
+// Forces the False branch of getExternalId() != 0
+TEST_F(StateChainManagerTest, UpdateBlobChainWithZeroExternalIdSkipsDelete) {
+	auto chain = stateChainManager->createStateChain("upd_blob_zero_ext", "blob data", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually set externalId to 0 to simulate the edge case
+	graph::State headState = dataManager->getState(headId);
+	ASSERT_TRUE(headState.isBlobStorage());
+	headState.setExternalId(0);
+	dataManager->updateStateEntity(headState);
+
+	// Update with different data - should not crash when externalId is 0
+	auto result = stateChainManager->updateStateChain(headId, "new blob data", true);
+	EXPECT_FALSE(result.empty());
+
+	// Verify the update worked
+	std::string readBack = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readBack, "new blob data");
+}
+
+// Cover line 158: deleteStateChain where head exists but !isActive()
+// The early return path in delete
+TEST_F(StateChainManagerTest, DeleteInactiveHeadReturnsEarly) {
+	auto chain = stateChainManager->createStateChain("del_inactive_head2", "data", false);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete once
+	stateChainManager->deleteStateChain(headId);
+
+	// Delete again - should early return without error
+	stateChainManager->deleteStateChain(headId);
+	// No throw = success
+}
+
+// Cover line 161: deleteStateChain where isBlobStorage but externalId == 0
+// Forces the False branch of getExternalId() != 0 in delete
+TEST_F(StateChainManagerTest, DeleteBlobStateZeroExternalIdSkipsBlobDelete) {
+	auto chain = stateChainManager->createStateChain("del_blob_zero", "blob data", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually zero the external ID
+	graph::State headState = dataManager->getState(headId);
+	headState.setExternalId(0);
+	dataManager->updateStateEntity(headState);
+
+	// Delete should not crash - skips blob deletion, still deletes the state itself
+	stateChainManager->deleteStateChain(headId);
+
+	// Verify state is now inactive
+	graph::State afterDelete = dataManager->getState(headId);
+	EXPECT_FALSE(afterDelete.isActive());
+}
+
+// Cover line 181: getStateChainIds for blob head where isActive() returns false
+// Forces the False branch of head.isActive() in blob mode
+TEST_F(StateChainManagerTest, GetStateChainIdsBlobInactiveReturnsEmpty2) {
+	auto chain = stateChainManager->createStateChain("ids_blob_inactive2", "data", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete to make inactive
+	stateChainManager->deleteStateChain(headId);
+
+	// getStateChainIds should return empty for inactive blob head
+	auto ids = stateChainManager->getStateChainIds(headId);
+	EXPECT_TRUE(ids.empty());
+}
+
+// Cover line 236: setupStorageForState blob mode where blobChain is empty
+// This is defensive code for when createBlobChain returns empty
+TEST_F(StateChainManagerTest, CreateBlobStorageWithEmptyDataVerifySetup) {
+	// Empty data blob storage - createBlobChain should still return at least one blob
+	auto chain = stateChainManager->createStateChain("empty_blob_setup", "", true);
+	ASSERT_FALSE(chain.empty());
+
+	// Read back should return empty string
+	std::string result = stateChainManager->readStateChain(chain[0].getId());
+	EXPECT_EQ(result, "");
+}
+
+// ==========================================
+// Additional branch coverage tests
+// ==========================================
+
+// Cover line 126: updateStateChain blob path where getExternalId() == 0 (False branch)
+// When a blob-storage state has externalId manually set to 0, the update should
+// skip blob deletion and still create new storage
+TEST_F(StateChainManagerTest, UpdateBlobChainExternalIdZeroSkipsDeletion) {
+	const std::string key = "upd_blob_ext_zero";
+	auto chain = stateChainManager->createStateChain(key, "original blob data", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually zero out the externalId to test the False branch of (getExternalId() != 0)
+	graph::State headState = dataManager->getState(headId);
+	ASSERT_TRUE(headState.isBlobStorage());
+	headState.setExternalId(0);
+	dataManager->updateStateEntity(headState);
+
+	// Update with different data - should succeed despite externalId being 0
+	auto newChain = stateChainManager->updateStateChain(headId, "new blob data", true);
+	ASSERT_FALSE(newChain.empty());
+
+	// Verify we can read the new data
+	std::string readBack = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(readBack, "new blob data");
+}
+
+// Cover line 161: deleteStateChain blob path where getExternalId() == 0 (False branch)
+// When deleting a blob-storage state that has externalId == 0, it should skip
+// blob chain deletion but still delete the state itself
+TEST_F(StateChainManagerTest, DeleteBlobChainExternalIdZeroSkipsBlobDeletion) {
+	const std::string key = "del_blob_ext_zero";
+	auto chain = stateChainManager->createStateChain(key, "blob data to delete", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Manually zero out the externalId
+	graph::State headState = dataManager->getState(headId);
+	ASSERT_TRUE(headState.isBlobStorage());
+	headState.setExternalId(0);
+	dataManager->updateStateEntity(headState);
+
+	// Delete should succeed - skipping blob deletion but still deleting the state
+	stateChainManager->deleteStateChain(headId);
+
+	// Verify state is now inactive
+	graph::State afterDelete = dataManager->getState(headId);
+	EXPECT_FALSE(afterDelete.isActive());
+}
+
+// Cover line 181: getStateChainIds blob path where head.isActive() == false
+// Tests the False branch of (head.isActive()) in getStateChainIds for blob storage
+TEST_F(StateChainManagerTest, GetStateChainIdsBlobInactiveReturnsEmptyList) {
+	const std::string key = "gids_blob_inactive";
+	auto chain = stateChainManager->createStateChain(key, "blob for ids", true);
+	ASSERT_EQ(chain.size(), 1UL);
+	int64_t headId = chain[0].getId();
+
+	// Delete to make inactive
+	stateChainManager->deleteStateChain(headId);
+
+	// Verify the head is truly inactive
+	graph::State deletedHead = dataManager->getState(headId);
+	EXPECT_FALSE(deletedHead.isActive());
+
+	// getStateChainIds should return empty list for inactive blob head
+	auto ids = stateChainManager->getStateChainIds(headId);
+	EXPECT_TRUE(ids.empty());
+}
+
+// Cover line 236: setupStorageForState blob mode where blobChain is empty
+// This exercises the False branch of (!blobChain.empty()) at line 236
+// We create with empty data in blob mode - createBlobChain always returns at least
+// one blob even for empty data, so this branch is defensive. Testing with empty data
+// to get closest to the edge.
+TEST_F(StateChainManagerTest, CreateBlobStorageWithEmptyDataStillSetsExternalId) {
+	const std::string key = "blob_empty_setup";
+	auto chain = stateChainManager->createStateChain(key, "", true);
+	ASSERT_EQ(chain.size(), 1UL);
+
+	// Even empty data should produce a blob chain, so externalId should be set
+	graph::State headState = dataManager->getState(chain[0].getId());
+	EXPECT_TRUE(headState.isBlobStorage());
+	// The externalId should be non-zero since createBlobChain returns at least one blob
+	EXPECT_NE(headState.getExternalId(), 0);
+}
+
+// ==========================================
+// Targeted Branch Coverage Tests
+// These tests use markInactive() + updateStateEntity() to create states
+// that have valid IDs but isActive() == false, which is the only way to
+// hit the second condition in short-circuit OR checks like:
+//   if (getId() == 0 || !isActive())
+// When deleteState() is used, the entity is removed from cache entirely
+// so getState() returns a default State with id=0, hitting the first
+// condition instead.
+// ==========================================
+
+// Covers line 50 branch 2: readStateChain where getId() != 0 but !isActive()
+// We use addStateEntity to insert an inactive state directly into cache,
+// bypassing updateStateEntity which rejects inactive entities.
+TEST_F(StateChainManagerTest, ReadStateChainWithMarkInactiveHead) {
+	// Allocate a valid state ID
+	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+
+	// Create a state, mark it inactive, then add to cache
+	graph::State inactiveState(stateId, "inactive_head_key", "data");
+	inactiveState.markInactive();
+	dataManager->addStateEntity(inactiveState);
+
+	// Verify the state is inactive but has a valid ID
+	graph::State check = dataManager->getState(stateId);
+	EXPECT_NE(check.getId(), 0);
+	EXPECT_FALSE(check.isActive());
+
+	// readStateChain should throw via the !isActive() branch (not getId()==0)
+	EXPECT_THROW((void)stateChainManager->readStateChain(stateId), std::runtime_error);
+}
+
+// Covers line 75 branch 2: readStateChain where intermediate state has
+// getId() != 0 but !isActive()
+TEST_F(StateChainManagerTest, ReadChainWithMarkInactiveIntermediate) {
+	// Create head state (active, chained)
+	int64_t headId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t midId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+
+	graph::State headState(headId, "chain_head", "part1");
+	headState.setNextStateId(midId);
+	headState.setChainPosition(0);
+	dataManager->addStateEntity(headState);
+
+	// Create intermediate state (inactive but with valid ID)
+	graph::State midState(midId, "", "part2");
+	midState.setPrevStateId(headId);
+	midState.setChainPosition(1);
+	midState.markInactive();
+	dataManager->addStateEntity(midState);
+
+	// Verify intermediate is inactive with valid ID
+	graph::State check = dataManager->getState(midId);
+	EXPECT_NE(check.getId(), 0);
+	EXPECT_FALSE(check.isActive());
+
+	// readStateChain should throw "State chain corrupted" via !isActive() branch
+	EXPECT_THROW((void)stateChainManager->readStateChain(headId), std::runtime_error);
+}
+
+// Covers line 119 branch 2: updateStateChain where head has getId() != 0
+// but !isActive()
+TEST_F(StateChainManagerTest, UpdateStateChainWithMarkInactiveHead) {
+	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+
+	// Add an inactive state with valid ID
+	graph::State inactiveState(stateId, "inactive_upd_key", "data");
+	inactiveState.markInactive();
+	dataManager->addStateEntity(inactiveState);
+
+	// Verify setup
+	graph::State check = dataManager->getState(stateId);
+	EXPECT_NE(check.getId(), 0);
+	EXPECT_FALSE(check.isActive());
+
+	// updateStateChain should throw via the !isActive() branch
+	EXPECT_THROW((void)stateChainManager->updateStateChain(stateId, "new data", false),
+				 std::runtime_error);
+}
+
+// Covers line 158 branch 2: deleteStateChain where head has getId() != 0
+// but !isActive() - should early return
+TEST_F(StateChainManagerTest, DeleteStateChainWithMarkInactiveHead) {
+	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+
+	// Add an inactive state with valid ID
+	graph::State inactiveState(stateId, "inactive_del_key", "data");
+	inactiveState.markInactive();
+	dataManager->addStateEntity(inactiveState);
+
+	// deleteStateChain should early return (no-op) for inactive head
+	EXPECT_NO_THROW(stateChainManager->deleteStateChain(stateId));
+}
+
+// Covers line 181: getStateChainIds for blob head where isActive() is false
+// Creates an inactive state with externalId != 0 (so isBlobStorage() is true)
+// to hit the False branch of head.isActive() in the blob path
+TEST_F(StateChainManagerTest, GetStateChainIdsBlobHeadInactiveViaMarkInactive) {
+	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+
+	// Create a state with externalId != 0 (so isBlobStorage() returns true)
+	// but inactive
+	graph::State blobState(stateId, "inactive_blob_ids_key", "");
+	blobState.setExternalId(999); // Makes isBlobStorage() return true
+	blobState.markInactive();
+	dataManager->addStateEntity(blobState);
+
+	// Verify setup: state is blob storage and inactive
+	graph::State check = dataManager->getState(stateId);
+	EXPECT_TRUE(check.isBlobStorage());
+	EXPECT_FALSE(check.isActive());
+
+	// getStateChainIds should return empty for inactive blob head
+	auto ids = stateChainManager->getStateChainIds(stateId);
+	EXPECT_TRUE(ids.empty());
+}
+
+// ==========================================
+// Branch Coverage: readStateChain blob storage with externalId==0
+// Covers: StateChainManager.cpp line 55: headState.getExternalId() == 0 -> True
+// ==========================================
+
+TEST_F(StateChainManagerTest, ReadBlobStorageWithZeroExternalIdReturnsEmpty) {
+	// Create a blob-mode state via createStateChain then clear its externalId
+	auto chain = stateChainManager->createStateChain("zero_ext_blob_read", "some data", true);
+	int64_t headId = chain[0].getId();
+	ASSERT_TRUE(chain[0].isBlobStorage());
+	ASSERT_NE(chain[0].getExternalId(), 0);
+
+	// Now update the state to have externalId=0 while keeping blob storage mode
+	graph::State head = dataManager->getState(headId);
+	head.setExternalId(0);
+	dataManager->updateStateEntity(head);
+
+	// Verify: readStateChain should return empty string for blob with externalId==0
+	std::string result = stateChainManager->readStateChain(headId);
+	EXPECT_EQ(result, "");
+}
+

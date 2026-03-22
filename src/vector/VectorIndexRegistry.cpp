@@ -181,11 +181,18 @@ namespace graph::vector {
 	}
 
 	int64_t VectorIndexRegistry::saveAdjacency(const std::vector<int64_t> &neighbors) const {
-		std::ostringstream oss;
-		utils::Serializer::writePOD(oss, static_cast<uint32_t>(neighbors.size()));
-		for (auto id: neighbors)
-			utils::Serializer::writePOD(oss, id);
-		auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, oss.str());
+		const size_t dataSize = sizeof(uint32_t) + neighbors.size() * sizeof(int64_t);
+		std::string data(dataSize, '\0');
+		char *ptr = data.data();
+
+		auto count = static_cast<uint32_t>(neighbors.size());
+		std::memcpy(ptr, &count, sizeof(uint32_t));
+		ptr += sizeof(uint32_t);
+
+		if (!neighbors.empty())
+			std::memcpy(ptr, neighbors.data(), neighbors.size() * sizeof(int64_t));
+
+		auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, data);
 		return blobs.empty() ? 0 : blobs[0].getId();
 	}
 
@@ -193,12 +200,17 @@ namespace graph::vector {
 		if (blobId == 0)
 			return {};
 		std::string data = dataManager_->getBlobManager()->readBlobChain(blobId);
-		std::istringstream iss(data);
-		auto count = utils::Serializer::readPOD<uint32_t>(iss);
-		std::vector<int64_t> res;
-		res.reserve(count);
-		for (uint32_t i = 0; i < count; ++i)
-			res.push_back(utils::Serializer::readPOD<int64_t>(iss));
+		if (data.size() < sizeof(uint32_t))
+			return {};
+
+		const char *ptr = data.data();
+		uint32_t count;
+		std::memcpy(&count, ptr, sizeof(uint32_t));
+		ptr += sizeof(uint32_t);
+
+		std::vector<int64_t> res(count);
+		if (count > 0)
+			std::memcpy(res.data(), ptr, count * sizeof(int64_t));
 		return res;
 	}
 

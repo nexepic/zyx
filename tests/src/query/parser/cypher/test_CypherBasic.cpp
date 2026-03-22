@@ -448,3 +448,44 @@ TEST_F(CypherBasicTest, CreateWithLargeDouble) {
 	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
+// --- UNION Tests (covers CypherToPlanVisitor::visitRegularQuery branches) ---
+
+TEST_F(CypherBasicTest, UnionCombinesTwoQueries) {
+	// UNION (without ALL) combines results from two queries with deduplication
+	// Exercises the UNION loop body and isAll=false branch in visitRegularQuery
+	(void) execute("CREATE (n:UnionA {name: 'Alice'})");
+	(void) execute("CREATE (n:UnionB {name: 'Bob'})");
+
+	auto res = execute("MATCH (n:UnionA) RETURN n.name AS name UNION MATCH (n:UnionB) RETURN n.name AS name");
+	ASSERT_EQ(res.rowCount(), 2UL);
+}
+
+TEST_F(CypherBasicTest, UnionAllCombinesTwoQueries) {
+	// UNION ALL combines results from two queries without deduplication
+	// Exercises the UNION ALL branch where isAll=true in visitRegularQuery
+	(void) execute("CREATE (n:UnionAllA {name: 'Alice'})");
+	(void) execute("CREATE (n:UnionAllB {name: 'Bob'})");
+
+	auto res = execute("MATCH (n:UnionAllA) RETURN n.name AS name UNION ALL MATCH (n:UnionAllB) RETURN n.name AS name");
+	ASSERT_EQ(res.rowCount(), 2UL);
+}
+
+TEST_F(CypherBasicTest, UnionDeduplicatesDuplicateRows) {
+	// UNION should deduplicate rows with the same values
+	(void) execute("CREATE (n:UnionDedupX {name: 'Same'})");
+	(void) execute("CREATE (n:UnionDedupY {name: 'Same'})");
+
+	auto res = execute("MATCH (n:UnionDedupX) RETURN n.name AS name UNION MATCH (n:UnionDedupY) RETURN n.name AS name");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("name").toString(), "Same");
+}
+
+TEST_F(CypherBasicTest, UnionAllKeepsDuplicateRows) {
+	// UNION ALL should keep duplicates
+	(void) execute("CREATE (n:UnionAllDupX {name: 'Same'})");
+	(void) execute("CREATE (n:UnionAllDupY {name: 'Same'})");
+
+	auto res = execute("MATCH (n:UnionAllDupX) RETURN n.name AS name UNION ALL MATCH (n:UnionAllDupY) RETURN n.name AS name");
+	ASSERT_EQ(res.rowCount(), 2UL);
+}
+

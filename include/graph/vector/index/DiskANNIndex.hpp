@@ -47,6 +47,7 @@ namespace graph::vector {
 
 		// Core Operations
 		void insert(int64_t nodeId, const std::vector<float> &vec);
+		void batchInsert(const std::vector<std::pair<int64_t, std::vector<float>>> &batch);
 		std::vector<std::pair<int64_t, float>> search(const std::vector<float> &query, size_t k) const;
 
 		// Training

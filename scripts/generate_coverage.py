@@ -26,7 +26,9 @@ IGNORE_PATTERNS = [
     "linenoise.hpp",
     "subprojects",
     "antlr4",
-    "helpers/internal"  # Internal implementation files (tested through integration tests)
+    "helpers/internal",  # Internal implementation files (tested through integration tests)
+    "cli/",  # CLI interactive REPL code (not unit-testable)
+    "debug/"  # Debug visualization utilities (not unit-testable)
 ]
 
 

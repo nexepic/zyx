@@ -89,12 +89,7 @@ namespace graph::parser::cypher {
 		lexer.addErrorListener(&errorListener);
 
 		// 1. Parse
-		CypherParser::CypherContext *tree = nullptr;
-		try {
-			tree = parser.cypher();
-		} catch ([[maybe_unused]] const std::exception &e) {
-			throw;
-		}
+		CypherParser::CypherContext *tree = parser.cypher();
 
 		// 2. Visit
 		CypherToPlanVisitor visitor(planner_);
@@ -106,11 +101,6 @@ namespace graph::parser::cypher {
 		}
 
 		// 3. Extract result
-		auto plan = visitor.getPlan();
-		if (!plan) {
-			throw std::runtime_error("Query successfully parsed but generated no execution plan.");
-		}
-
-		return plan;
+		return visitor.getPlan();
 	}
 } // namespace graph::parser::cypher

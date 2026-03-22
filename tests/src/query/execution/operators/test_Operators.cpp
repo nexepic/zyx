@@ -683,3 +683,223 @@ TEST_F(ProjectOperatorTest, Project_EmptyString) {
 
 	op->close();
 }
+
+// ============================================================================
+// ProjectOperator DISTINCT Branch Coverage
+// ============================================================================
+
+TEST_F(ProjectOperatorTest, Project_Distinct_RemovesDuplicates) {
+	// Cover: distinct_=true branch (line 98-103) where seenRecords_.insert returns false
+	Record r1;
+	r1.setValue("x", 42);
+	Record r2;
+	r2.setValue("x", 42); // duplicate
+	Record r3;
+	r3.setValue("x", 99); // unique
+
+	MockOperator *mock = new MockOperator({{r1, r2, r3}});
+	std::vector<ProjectItem> items = {makeProjectItem("x", "val")};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, true); // distinct=true
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 2UL); // 42 and 99 (duplicate 42 removed)
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_Distinct_AllSame) {
+	// Cover: distinct_=true where all records are duplicates
+	Record r1;
+	r1.setValue("x", 10);
+	Record r2;
+	r2.setValue("x", 10);
+	Record r3;
+	r3.setValue("x", 10);
+
+	MockOperator *mock = new MockOperator({{r1, r2, r3}});
+	std::vector<ProjectItem> items = {makeProjectItem("x", "val")};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, true);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1UL); // Only one unique record
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_Distinct_AllUnique) {
+	// Cover: distinct_=true where all records are unique
+	Record r1;
+	r1.setValue("x", 1);
+	Record r2;
+	r2.setValue("x", 2);
+	Record r3;
+	r3.setValue("x", 3);
+
+	MockOperator *mock = new MockOperator({{r1, r2, r3}});
+	std::vector<ProjectItem> items = {makeProjectItem("x", "val")};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, true);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 3UL); // All unique
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_Distinct_MultipleFields) {
+	// Cover: DISTINCT with multiple projected fields in fingerprint
+	Record r1;
+	r1.setValue("x", 1);
+	r1.setValue("y", std::string("a"));
+	Record r2;
+	r2.setValue("x", 1);
+	r2.setValue("y", std::string("a")); // duplicate
+	Record r3;
+	r3.setValue("x", 1);
+	r3.setValue("y", std::string("b")); // different y
+
+	MockOperator *mock = new MockOperator({{r1, r2, r3}});
+	std::vector<ProjectItem> items = {
+		makeProjectItem("x", "col1"),
+		makeProjectItem("y", "col2")
+	};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, true);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 2UL); // (1, "a") and (1, "b")
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_NullExpression_Fallback) {
+	// Cover: item.expression is null (line 88-91)
+	// This covers the else branch where expression is nullptr
+	ProjectItem nullItem;
+	nullItem.alias = "nullcol";
+	nullItem.expression = nullptr;
+
+	Record r1;
+	r1.setValue("x", 42);
+
+	MockOperator *mock = new MockOperator({{r1}});
+	std::vector<ProjectItem> items = {nullItem};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, false);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1UL);
+
+	auto val = (*batch)[0].getValue("nullcol");
+	ASSERT_TRUE(val.has_value());
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(val->getVariant()));
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_ToString_Distinct) {
+	// Cover: toString() with distinct_=true (line 120)
+	MockOperator *mock = new MockOperator({});
+	std::vector<ProjectItem> items = {makeProjectItem("x", "val")};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, true);
+
+	std::string str = op->toString();
+	EXPECT_NE(str.find("DISTINCT"), std::string::npos);
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_ToString_WithAlias) {
+	// Cover: toString() where alias differs from expression (line 125-127)
+	MockOperator *mock = new MockOperator({});
+	std::vector<ProjectItem> items = {makeProjectItem("42", "answer")};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, false);
+
+	std::string str = op->toString();
+	EXPECT_NE(str.find("AS"), std::string::npos);
+	EXPECT_NE(str.find("answer"), std::string::npos);
+}
+
+TEST_F(ProjectOperatorTest, Project_GetChildren_NullChild) {
+	// Cover: getChildren() when child_ is null (line 136-138)
+	std::vector<ProjectItem> items = {makeProjectItem("1", "num")};
+	auto op = std::make_unique<ProjectOperator>(nullptr, items);
+
+	auto children = op->getChildren();
+	EXPECT_TRUE(children.empty());
+}
+
+TEST_F(ProjectOperatorTest, Project_Distinct_FingerprintMissingValue) {
+	// Cover: buildFingerprint where record.getValue returns nullopt (line 147-148)
+	// This covers the else branch in buildFingerprint
+	Record r1;
+	// Only set "x", not "y"
+	r1.setValue("x", 42);
+
+	Record r2;
+	r2.setValue("x", 42);
+
+	MockOperator *mock = new MockOperator({{r1, r2}});
+	std::vector<ProjectItem> items = {
+		makeProjectItem("x", "col1"),
+		makeProjectItem("y", "col2") // y doesn't exist in record
+	};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, true);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	// Both records are same (x=42, y=null), so distinct should keep only 1
+	EXPECT_EQ(batch->size(), 1UL);
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_EmptyBatch) {
+	// Cover: next() returns nullopt when child returns nullopt
+	MockOperator *mock = new MockOperator({});
+	std::vector<ProjectItem> items = {makeProjectItem("1", "num")};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items);
+
+	op->open();
+	auto batch = op->next();
+	EXPECT_FALSE(batch.has_value());
+
+	op->close();
+}
+
+TEST_F(ProjectOperatorTest, Project_ToString_MultipleItems) {
+	// Cover: toString() with multiple items to exercise comma separator (line 128-129)
+	MockOperator *mock = new MockOperator({});
+	std::vector<ProjectItem> items = {
+		makeProjectItem("x", "a"),
+		makeProjectItem("y", "b"),
+		makeProjectItem("z", "c")
+	};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items, false);
+
+	std::string str = op->toString();
+	// Should contain commas separating items
+	size_t commaCount = 0;
+	for (char c : str) {
+		if (c == ',') commaCount++;
+	}
+	EXPECT_EQ(commaCount, 2UL);
+}

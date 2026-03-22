@@ -119,7 +119,7 @@ TEST_F(QuantifierFunctionsTest, AllFunction_StandardEvaluateThrows) {
     args.push_back(PropertyValue(static_cast<int64_t>(1)));
 
     EXPECT_THROW({
-        func->evaluate(args, *context_);
+        (void)func->evaluate(args, *context_);
     }, std::runtime_error);
 }
 
@@ -131,7 +131,7 @@ TEST_F(QuantifierFunctionsTest, AnyFunction_StandardEvaluateThrows) {
     args.push_back(PropertyValue(static_cast<int64_t>(1)));
 
     EXPECT_THROW({
-        func->evaluate(args, *context_);
+        (void)func->evaluate(args, *context_);
     }, std::runtime_error);
 }
 
@@ -143,7 +143,7 @@ TEST_F(QuantifierFunctionsTest, NoneFunction_StandardEvaluateThrows) {
     args.push_back(PropertyValue(static_cast<int64_t>(1)));
 
     EXPECT_THROW({
-        func->evaluate(args, *context_);
+        (void)func->evaluate(args, *context_);
     }, std::runtime_error);
 }
 
@@ -155,7 +155,7 @@ TEST_F(QuantifierFunctionsTest, SingleFunction_StandardEvaluateThrows) {
     args.push_back(PropertyValue(static_cast<int64_t>(1)));
 
     EXPECT_THROW({
-        func->evaluate(args, *context_);
+        (void)func->evaluate(args, *context_);
     }, std::runtime_error);
 }
 
@@ -167,7 +167,7 @@ TEST_F(QuantifierFunctionsTest, AllFunction_ErrorMessageHelpful) {
     args.push_back(PropertyValue(static_cast<int64_t>(1)));
 
     try {
-        func->evaluate(args, *context_);
+        (void)func->evaluate(args, *context_);
         FAIL() << "Expected std::runtime_error";
     } catch (const std::runtime_error& e) {
         std::string msg = e.what();
@@ -472,7 +472,7 @@ TEST_F(QuantifierFunctionsEvaluationTest, UnknownFunction_Throws) {
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
+	EXPECT_THROW((void)evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
 }
 
 TEST_F(QuantifierFunctionsEvaluationTest, AllFunction_ShortCircuit) {
@@ -526,7 +526,7 @@ TEST_F(QuantifierFunctionsEvaluationTest, AllFunction_NonListArgument_Throws) {
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
+	EXPECT_THROW((void)evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
 }
 
 TEST_F(QuantifierFunctionsEvaluationTest, AllFunction_DoubleCoercion) {
@@ -748,7 +748,7 @@ TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_NonListArgument_Throws) {
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
+	EXPECT_THROW((void)evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
 }
 
 TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_NonListArgument_Throws) {
@@ -760,7 +760,7 @@ TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_NonListArgument_Throws)
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
+	EXPECT_THROW((void)evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
 }
 
 TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_NonListArgument_Throws) {
@@ -772,7 +772,7 @@ TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_NonListArgument_Throws) {
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
+	EXPECT_THROW((void)evaluator.visit(quantExpr.get()), ExpressionEvaluationException);
 }
 
 TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_StringCoercion) {
@@ -889,4 +889,105 @@ TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_MultipleMatches_Returns
 	evaluator.visit(quantExpr.get());
 
 	EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
+}
+
+// ============================================================================
+// Branch Coverage Tests for NoneFunction.cpp
+// ============================================================================
+
+// Test NoneFunction with INTEGER truthiness (covers line 67-68 True branch)
+// The where expression evaluates to an integer, exercising the INTEGER branch
+// in NoneFunction::evaluatePredicate
+TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_IntegerTruthiness_NonZero) {
+	// Create a list of integers and use the variable directly as the where expression
+	// The variable x will be set to each integer, and the where expression returns x itself
+	// This exercises the INTEGER branch in evaluatePredicate
+	std::vector<PropertyValue> intList = {
+		PropertyValue(int64_t(1)),
+		PropertyValue(int64_t(2)),
+		PropertyValue(int64_t(3))
+	};
+	PropertyValue listValue(intList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	// Use variable reference as where expression - returns the integer itself
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"none", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	// All integers are non-zero (truthy), so none() should return false
+	EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
+}
+
+TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_IntegerTruthiness_AllZero) {
+	// All zeros - none should return true since no element is truthy
+	std::vector<PropertyValue> intList = {
+		PropertyValue(int64_t(0)),
+		PropertyValue(int64_t(0)),
+		PropertyValue(int64_t(0))
+	};
+	PropertyValue listValue(intList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"none", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+}
+
+// Test NoneFunction with LIST truthiness (covers line 74-76 True branch)
+// The where expression evaluates to a list, exercising the LIST branch
+// in NoneFunction::evaluatePredicate
+TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_ListTruthiness_NonEmpty) {
+	// Create a list of lists - the where expression returns the list element itself
+	std::vector<PropertyValue> outerList = {
+		PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(1))}),
+		PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(2))})
+	};
+	PropertyValue listValue(outerList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"none", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	// Non-empty lists are truthy, so none() should return false
+	EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
+}
+
+TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_ListTruthiness_AllEmpty) {
+	// All empty lists - none should return true since empty lists are falsy
+	std::vector<PropertyValue> outerList = {
+		PropertyValue(std::vector<PropertyValue>{}),
+		PropertyValue(std::vector<PropertyValue>{})
+	};
+	PropertyValue listValue(outerList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"none", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
 }

@@ -36,7 +36,7 @@ namespace graph::storage {
 	 */
 	class PropertyManager final : public BaseEntityManager<Property> {
 	public:
-		PropertyManager(const std::shared_ptr<DataManager> &dataManager,
+		PropertyManager(DataManager* dataManager,
 						std::shared_ptr<DeletionManager> deletionManager);
 
 		// Serialization methods

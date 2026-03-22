@@ -34,6 +34,7 @@
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/IndexMeta.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace fs = std::filesystem;
@@ -839,4 +840,586 @@ TEST_F(IndexManagerTest, GetVectorIndexName_NoMatch) {
 	// Try to get vector index name with wrong property
 	std::string name2 = indexManager->getVectorIndexName("Node", "wrong_property");
 	EXPECT_EQ(name2, "") << "Should return empty for wrong property";
+}
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+TEST_F(IndexManagerTest, OnNodesAdded_EmptyPropertiesNodes) {
+	// Cover branch: nodes with empty properties in onNodesAdded (line 352)
+	// The vectorIndexManager_ should skip nodes with empty properties
+	(void) indexManager->createVectorIndex("vec_batch", "BatchNode", "emb", 4, "L2");
+
+	int64_t labelId = dataManager->getOrCreateLabelId("BatchNode");
+
+	// Create nodes without any properties
+	std::vector<graph::Node> nodes;
+	for (int i = 0; i < 3; ++i) {
+		graph::Node n(i + 500, labelId);
+		// No properties set
+		nodes.push_back(n);
+	}
+
+	// Should not crash - nodes with empty properties are skipped
+	EXPECT_NO_THROW(indexManager->onNodesAdded(nodes));
+}
+
+TEST_F(IndexManagerTest, OnNodesAdded_NodesWithoutLabels) {
+	// Cover branch: if (node.getLabelId() != 0) -> False in onNodesAdded (line 355)
+	(void) indexManager->createVectorIndex("vec_nolabel", "TestNode", "emb", 4, "L2");
+
+	std::vector<graph::Node> nodes;
+	for (int i = 0; i < 3; ++i) {
+		graph::Node n(i + 600, 0); // labelId = 0
+		std::vector<graph::PropertyValue> vecData = {
+			graph::PropertyValue(1.0), graph::PropertyValue(2.0),
+			graph::PropertyValue(3.0), graph::PropertyValue(4.0)
+		};
+		n.addProperty("emb", graph::PropertyValue(vecData));
+		nodes.push_back(n);
+	}
+
+	// Nodes without labels should be skipped (labelStr empty)
+	EXPECT_NO_THROW(indexManager->onNodesAdded(nodes));
+}
+
+TEST_F(IndexManagerTest, OnNodesAdded_MixedNodes) {
+	// Cover multiple branches in onNodesAdded:
+	// - Nodes with properties
+	// - Nodes without properties
+	// - Nodes with/without labels
+	(void) indexManager->createVectorIndex("vec_mixed", "MixedNode", "emb", 4, "L2");
+
+	int64_t labelId = dataManager->getOrCreateLabelId("MixedNode");
+
+	std::vector<graph::Node> nodes;
+
+	// Node with label and vector property
+	graph::Node n1(700, labelId);
+	std::vector<graph::PropertyValue> vecData = {
+		graph::PropertyValue(1.0), graph::PropertyValue(2.0),
+		graph::PropertyValue(3.0), graph::PropertyValue(4.0)
+	};
+	n1.addProperty("emb", graph::PropertyValue(vecData));
+	nodes.push_back(n1);
+
+	// Node with label but no properties
+	graph::Node n2(701, labelId);
+	nodes.push_back(n2);
+
+	// Node without label but with properties
+	graph::Node n3(702, 0);
+	n3.addProperty("emb", graph::PropertyValue(vecData));
+	nodes.push_back(n3);
+
+	EXPECT_NO_THROW(indexManager->onNodesAdded(nodes));
+}
+
+TEST_F(IndexManagerTest, OnNodeDeleted_WithoutLabel) {
+	// Cover branch: if (node.getLabelId() != 0) -> False in onNodeDeleted (line 386)
+	graph::Node node(800, 0); // No label
+	EXPECT_NO_THROW(indexManager->onNodeDeleted(node));
+}
+
+TEST_F(IndexManagerTest, OnNodeUpdated_WithoutLabel) {
+	// Cover branch: if (newNode.getLabelId() != 0) -> False in onNodeUpdated (line 372)
+	graph::Node oldNode(900, 0);
+	graph::Node newNode(900, 0);
+	EXPECT_NO_THROW(indexManager->onNodeUpdated(oldNode, newNode));
+}
+
+TEST_F(IndexManagerTest, CreateVectorIndex_DuplicateName) {
+	// Cover branch: if (allIndexes.contains(name)) -> True (line 288-291)
+	EXPECT_TRUE(indexManager->createVectorIndex("vec_dup", "Node", "emb", 4, "L2"));
+	EXPECT_FALSE(indexManager->createVectorIndex("vec_dup", "Other", "emb", 8, "Cosine"));
+}
+
+TEST_F(IndexManagerTest, CreateIndex_EmptyName) {
+	// Cover branch: if (name.empty()) -> True (line 143-145) for auto-generated name
+	bool created = indexManager->createIndex("", "node", "AutoLabel", "auto_prop");
+	EXPECT_TRUE(created);
+
+	// Verify auto-generated name exists
+	auto list = indexManager->listIndexesDetailed();
+	bool found = false;
+	for (const auto &row : list) {
+		if (std::get<2>(row) == "AutoLabel" && std::get<3>(row) == "auto_prop") {
+			found = true;
+			EXPECT_FALSE(std::get<0>(row).empty());
+			break;
+		}
+	}
+	EXPECT_TRUE(found);
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests for IndexManager
+// ============================================================================
+
+TEST_F(IndexManagerTest, OnNodesAdded_EmptyVector) {
+	// Cover branch: nodes.empty() check in onNodesAdded (line 346)
+	std::vector<graph::Node> emptyNodes;
+	EXPECT_NO_THROW(indexManager->onNodesAdded(emptyNodes));
+}
+
+TEST_F(IndexManagerTest, OnNodeAdded_NodeWithLabelIdZeroAndVecIndex) {
+	// Cover branch: if (node.getLabelId() != 0) -> false in onNodeAdded (line 332)
+	(void) indexManager->createVectorIndex("vec_nolabel3", "TestNode", "emb", 4, "L2");
+
+	graph::Node node(900, 0); // labelId = 0
+	std::vector<graph::PropertyValue> vecData = {
+		graph::PropertyValue(1.0), graph::PropertyValue(2.0),
+		graph::PropertyValue(3.0), graph::PropertyValue(4.0)
+	};
+	node.addProperty("emb", graph::PropertyValue(vecData));
+
+	EXPECT_NO_THROW(indexManager->onNodeAdded(node));
+}
+
+TEST_F(IndexManagerTest, CreateIndex_InvalidEntityType_LabelIndex) {
+	// Cover: entityType is neither "node" nor "edge" for label index path
+	// success remains false, metadata not persisted
+	bool res = indexManager->createIndex("inv_label", "invalid_entity", "Label", "");
+	EXPECT_FALSE(res);
+}
+
+TEST_F(IndexManagerTest, CreateIndex_InvalidEntityType_PropertyIndex) {
+	// Cover: entityType is neither "node" nor "edge" for property index path
+	bool res = indexManager->createIndex("inv_prop", "invalid_entity", "Label", "prop");
+	EXPECT_FALSE(res);
+}
+
+TEST_F(IndexManagerTest, DropIndexByName_EdgeEntityTypePath) {
+	// Cover branch: else (meta.entityType != "node") in dropIndexByName (line 222-223)
+	(void) indexManager->createIndex("edge_drop_test2", "edge", "KNOWS", "weight");
+	EXPECT_TRUE(indexManager->hasPropertyIndex("edge", "weight"));
+
+	bool dropped = indexManager->dropIndexByName("edge_drop_test2");
+	EXPECT_TRUE(dropped);
+	EXPECT_FALSE(indexManager->hasPropertyIndex("edge", "weight"));
+}
+
+TEST_F(IndexManagerTest, OnNodesAdded_BatchWithVectorAndLabels) {
+	// Cover lines 351-362: batch path with vector properties grouped by label
+	(void) indexManager->createVectorIndex("vec_batch3", "BatchNode3", "emb", 4, "L2");
+
+	int64_t labelId = dataManager->getOrCreateLabelId("BatchNode3");
+
+	std::vector<graph::Node> nodes;
+	for (int i = 0; i < 5; ++i) {
+		graph::Node n(i + 1000, labelId);
+		std::vector<graph::PropertyValue> vecData = {
+			graph::PropertyValue(static_cast<double>(i)),
+			graph::PropertyValue(static_cast<double>(i + 1)),
+			graph::PropertyValue(static_cast<double>(i + 2)),
+			graph::PropertyValue(static_cast<double>(i + 3))
+		};
+		n.addProperty("emb", graph::PropertyValue(vecData));
+		nodes.push_back(n);
+	}
+
+	EXPECT_NO_THROW(indexManager->onNodesAdded(nodes));
+}
+
+// ============================================================================
+// Branch Coverage: Auto-generated name with empty property (label-only index)
+// ============================================================================
+
+TEST_F(IndexManagerTest, CreateIndex_EmptyName_EmptyProperty_GeneratesLabelSuffix) {
+	// Cover branch: property.empty() ? "LABEL" : property (line 144)
+	// When name is empty AND property is empty, auto-name should end with "_LABEL"
+	bool created = indexManager->createIndex("", "node", "AutoLabel", "");
+	EXPECT_TRUE(created);
+
+	// Verify auto-generated name contains "LABEL" suffix
+	auto list = indexManager->listIndexesDetailed();
+	bool found = false;
+	for (const auto &row : list) {
+		const auto &name = std::get<0>(row);
+		if (name.find("AutoLabel") != std::string::npos && name.find("LABEL") != std::string::npos) {
+			found = true;
+			// The auto-generated name should be "index_node_AutoLabel_LABEL"
+			EXPECT_EQ(name, "index_node_AutoLabel_LABEL");
+			EXPECT_EQ(std::get<1>(row), "label");
+			break;
+		}
+	}
+	EXPECT_TRUE(found) << "Should find auto-generated label index with LABEL suffix";
+}
+
+TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_NoData_SkipsRebuild) {
+	// Cover branch: getCurrentMaxNodeId() > 0 -> FALSE (line 83)
+	// When the label index is enabled but there are no nodes, bootstrap should skip rebuild.
+
+	// Enable node label index but DON'T add any nodes
+	EXPECT_TRUE(indexManager->createIndex("node_label_idx", "node", "", ""));
+
+	// Corrupt state to force bootstrap path
+	auto sysState = fileStorage->getSystemStateManager();
+	std::string stateKey = graph::storage::state::keys::Node::LABEL_ROOT;
+	sysState->set<int64_t>(stateKey, graph::storage::state::keys::Fields::ROOT_ID, 0);
+	std::string configKey = stateKey + graph::storage::state::keys::SUFFIX_CONFIG;
+	sysState->set<bool>(configKey, graph::storage::state::keys::Fields::ENABLED, true);
+	fileStorage->flush();
+
+	// Restart - should NOT attempt rebuild since no nodes exist
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	EXPECT_NO_THROW(database->open());
+
+	// The index should still be registered but with no data
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	auto res = newIndexMgr->findNodeIdsByLabel("NonExistent");
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_NoData_SkipsRebuild) {
+	// Cover branch: getCurrentMaxEdgeId() > 0 -> FALSE (line 99)
+	// When edge label index is enabled but no edges exist, bootstrap should skip rebuild.
+
+	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+
+	// Corrupt state to force bootstrap check
+	auto sysState = fileStorage->getSystemStateManager();
+	sysState->set<int64_t>("edge.index.label_root", "root_id", 0);
+	std::string configKey = std::string("edge.index.label_root") + graph::storage::state::keys::SUFFIX_CONFIG;
+	sysState->set<bool>(configKey, graph::storage::state::keys::Fields::ENABLED, true);
+	fileStorage->flush();
+
+	// Restart - no edges, so getCurrentMaxEdgeId() <= 0
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	EXPECT_NO_THROW(database->open());
+
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	auto res = newIndexMgr->findEdgeIdsByLabel("NonExistent");
+	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexManagerTest, Initialize_NodeLabelEnabled_WithPhysicalData_SkipsRebuild) {
+	// Cover branch: !nodeLabelIdx->hasPhysicalData() -> FALSE (line 82)
+	// When label index is enabled AND has physical data, it should NOT rebuild.
+	EXPECT_TRUE(indexManager->createIndex("node_label_idx", "node", "", ""));
+
+	int64_t lblId = dataManager->getOrCreateLabelId("TestNode");
+	graph::Node n(1, lblId);
+	dataManager->addNode(n);
+
+	fileStorage->flush();
+
+	// Restart WITHOUT corrupting state - physical data should exist
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	EXPECT_NO_THROW(database->open());
+
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	auto res = newIndexMgr->findNodeIdsByLabel("TestNode");
+	EXPECT_EQ(res.size(), 1UL);
+}
+
+TEST_F(IndexManagerTest, Initialize_EdgeLabelEnabled_WithPhysicalData_SkipsRebuild) {
+	// Cover branch: !edgeLabelIdx->hasPhysicalData() -> FALSE (line 98)
+	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	int64_t eLbl = dataManager->getOrCreateLabelId("CONNECTS");
+	graph::Edge e(10, 1, 2, eLbl);
+	dataManager->addEdge(e);
+
+	fileStorage->flush();
+
+	// Restart WITHOUT corrupting state
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	EXPECT_NO_THROW(database->open());
+
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	auto res = newIndexMgr->findEdgeIdsByLabel("CONNECTS");
+	EXPECT_EQ(res.size(), 1UL);
+}
+
+TEST_F(IndexManagerTest, Initialize_NodeLabelNotEnabled_SkipsAll) {
+	// Cover branch: nodeLabelIdx->isEnabled() -> FALSE (line 80)
+	// When label index is NOT enabled, initialize should skip entirely.
+	// Just open a fresh database without creating any label index
+	// and verify initialization succeeds without issues.
+
+	// Close and reopen fresh database
+	database->close();
+	database.reset();
+
+	// Remove existing file to start fresh
+	if (fs::exists(testFilePath)) fs::remove(testFilePath);
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	EXPECT_NO_THROW(database->open());
+
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	// No label index should be present
+	EXPECT_FALSE(newIndexMgr->hasLabelIndex("node"));
+	EXPECT_FALSE(newIndexMgr->hasLabelIndex("edge"));
+}
+
+TEST_F(IndexManagerTest, CreateIndex_EmptyNameAutoGenerated_EdgeLabelIndex) {
+	// Cover auto-name generation for edge label index path
+	bool created = indexManager->createIndex("", "edge", "KNOWS", "");
+	EXPECT_TRUE(created);
+
+	auto list = indexManager->listIndexesDetailed();
+	bool found = false;
+	for (const auto &row : list) {
+		if (std::get<0>(row) == "index_edge_KNOWS_LABEL") {
+			found = true;
+			EXPECT_EQ(std::get<1>(row), "label");
+			break;
+		}
+	}
+	EXPECT_TRUE(found);
+}
+
+TEST_F(IndexManagerTest, CreateIndex_EmptyNameAutoGenerated_EdgePropertyIndex) {
+	// Cover auto-name generation for edge property index path
+	bool created = indexManager->createIndex("", "edge", "KNOWS", "since");
+	EXPECT_TRUE(created);
+
+	auto list = indexManager->listIndexesDetailed();
+	bool found = false;
+	for (const auto &row : list) {
+		if (std::get<0>(row) == "index_edge_KNOWS_since") {
+			found = true;
+			EXPECT_EQ(std::get<1>(row), "property");
+			break;
+		}
+	}
+	EXPECT_TRUE(found);
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests - Uncovered paths
+// ============================================================================
+
+TEST_F(IndexManagerTest, DropIndexByDefinition_MultipleIndexes_NonMatchingIteration) {
+	// Cover branch: meta.label == label -> False in dropIndexByDefinition (line 247)
+	// Create multiple indexes so the loop iterates past non-matching entries
+	(void) indexManager->createIndex("idx_first", "node", "LabelA", "propA");
+	(void) indexManager->createIndex("idx_second", "node", "LabelB", "propB");
+	(void) indexManager->createIndex("idx_target", "node", "LabelC", "propC");
+
+	// Drop by definition matching the third one - loop must skip first two
+	bool dropped = indexManager->dropIndexByDefinition("LabelC", "propC");
+	EXPECT_TRUE(dropped);
+
+	// Verify only the target was dropped
+	EXPECT_TRUE(hasIndexWithName("idx_first"));
+	EXPECT_TRUE(hasIndexWithName("idx_second"));
+	EXPECT_FALSE(hasIndexWithName("idx_target"));
+}
+
+TEST_F(IndexManagerTest, DropIndexByDefinition_LabelMatchPropertyMismatch) {
+	// Cover branch: meta.label == label -> True but meta.property == property -> False (line 247)
+	(void) indexManager->createIndex("idx_labelmatch", "node", "SameLabel", "propX");
+
+	// Label matches but property doesn't
+	bool dropped = indexManager->dropIndexByDefinition("SameLabel", "propY");
+	EXPECT_FALSE(dropped);
+
+	// Original index should still exist
+	EXPECT_TRUE(hasIndexWithName("idx_labelmatch"));
+}
+
+TEST_F(IndexManagerTest, DropIndex_PhysicalDropFails_MetadataNotRemoved) {
+	// Cover branch: physicalDropSuccess == false (line 228)
+	// The dropIndex for an unknown indexType returns false.
+	// We need to create an index with a custom metadata type that won't match "label" or "property".
+	// We can do this by directly manipulating the SystemStateManager.
+
+	auto sysState = fileStorage->getSystemStateManager();
+	// Manually insert a fake index metadata with an unknown type
+	// Format: entityType|indexType|label|property
+	sysState->set(graph::storage::state::keys::SYS_INDEXES, "fake_idx",
+				  std::string("node|unknown_type|FakeLabel|fakeProp"));
+
+	// Verify it exists in metadata
+	EXPECT_TRUE(hasIndexWithName("fake_idx"));
+
+	// Try to drop - physical drop should fail because "unknown_type" is neither "label" nor "property"
+	bool dropped = indexManager->dropIndexByName("fake_idx");
+	EXPECT_FALSE(dropped);
+
+	// Metadata should still exist because physical drop failed
+	EXPECT_TRUE(hasIndexWithName("fake_idx"));
+}
+
+TEST_F(IndexManagerTest, EnsureMetadata_NewEntryCreated) {
+	// Cover branch: !allIndexes.contains(name) -> True in ensureMetadata (line 69)
+	// This happens during initialize() when label index is enabled but metadata is missing.
+
+	// 1. Enable both label indexes
+	EXPECT_TRUE(indexManager->createIndex("node_label_idx", "node", "", ""));
+	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+
+	// 2. Remove ONLY the metadata (not the physical index) to force ensureMetadata to recreate it
+	auto sysState = fileStorage->getSystemStateManager();
+	auto allIndexes = sysState->getMap<std::string>(graph::storage::state::keys::SYS_INDEXES);
+	allIndexes.erase("node_label_idx");
+	allIndexes.erase("edge_label_idx");
+	sysState->setMap(graph::storage::state::keys::SYS_INDEXES, allIndexes,
+					 graph::storage::state::UpdateMode::REPLACE);
+
+	// Verify metadata is gone
+	EXPECT_FALSE(hasIndexWithName("node_label_idx"));
+	EXPECT_FALSE(hasIndexWithName("edge_label_idx"));
+
+	fileStorage->flush();
+
+	// 3. Restart - initialize() should detect enabled indexes and recreate metadata
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+
+	// 4. Verify metadata was recreated by ensureMetadata
+	auto list = newIndexMgr->listIndexesDetailed();
+	bool foundNode = false, foundEdge = false;
+	for (const auto &row : list) {
+		if (std::get<0>(row) == "node_label_idx")
+			foundNode = true;
+		if (std::get<0>(row) == "edge_label_idx")
+			foundEdge = true;
+	}
+	EXPECT_TRUE(foundNode) << "ensureMetadata should have recreated node_label_idx";
+	EXPECT_TRUE(foundEdge) << "ensureMetadata should have recreated edge_label_idx";
+}
+
+TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_WithData_Rebuilds) {
+	// Cover branches: edgeLabelIdx->isEnabled() -> True (line 97)
+	//                 !edgeLabelIdx->hasPhysicalData() -> True (line 98)
+	//                 getCurrentMaxEdgeId() > 0 -> True (line 99)
+	// Strategy: Add edge data first WITHOUT building the index,
+	// then set enabled=true in config so on restart it bootstraps.
+
+	// Add edges so getCurrentMaxEdgeId() > 0
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	int64_t lblId = dataManager->getOrCreateLabelId("BootEdge");
+	graph::Edge e(10, 1, 2, lblId);
+	dataManager->addEdge(e);
+
+	fileStorage->flush();
+
+	// Set edge label index as "enabled" but DON'T build it.
+	// This means rootId stays 0 (no physical data) but enabled=true.
+	auto sysState = fileStorage->getSystemStateManager();
+	std::string stateKey = graph::storage::state::keys::Edge::LABEL_ROOT;
+	std::string configKey = stateKey + graph::storage::state::keys::SUFFIX_CONFIG;
+	sysState->set<bool>(configKey, graph::storage::state::keys::Fields::ENABLED, true);
+
+	fileStorage->flush();
+
+	// Restart - should bootstrap edge label index since enabled=true but no physical data
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+
+	// Verify edge data is searchable (bootstrap rebuilt the index)
+	auto res = newIndexMgr->findEdgeIdsByLabel("BootEdge");
+	EXPECT_EQ(res.size(), 1UL);
+}
+
+TEST_F(IndexManagerTest, DropIndexByDefinition_NoLabelMatch_IteratesAll) {
+	// Cover branch: meta.label == label -> False (line 247)
+	// Create indexes with specific labels, then try to drop by non-matching label
+	(void) indexManager->createIndex("idx_x", "node", "LabelX", "propX");
+	(void) indexManager->createIndex("idx_y", "node", "LabelY", "propY");
+
+	// Drop by a label that doesn't match any index
+	bool dropped = indexManager->dropIndexByDefinition("NoMatchLabel", "propX");
+	EXPECT_FALSE(dropped);
+	// Both indexes should still exist
+	EXPECT_TRUE(hasIndexWithName("idx_x"));
+	EXPECT_TRUE(hasIndexWithName("idx_y"));
+}
+
+TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_EnabledWithData_Rebuilds) {
+	// Cover branch: nodeLabelIdx->isEnabled() -> True (line 80)
+	// and getCurrentMaxNodeId() > 0 -> True (line 83)
+
+	// Add a node so getCurrentMaxNodeId() > 0
+	int64_t lblId = dataManager->getOrCreateLabelId("BootNode");
+	graph::Node n(1, lblId);
+	dataManager->addNode(n);
+	fileStorage->flush();
+
+	// Set the node label index as enabled but with no physical data
+	auto sysState = fileStorage->getSystemStateManager();
+	std::string stateKey = graph::storage::state::keys::Node::LABEL_ROOT;
+	std::string configKey = stateKey + graph::storage::state::keys::SUFFIX_CONFIG;
+	sysState->set<bool>(configKey, graph::storage::state::keys::Fields::ENABLED, true);
+	// ROOT_ID stays 0 (no physical data) since we never created the index
+
+	fileStorage->flush();
+
+	// Restart the database - should trigger bootstrap of node label index
+	database->close();
+	database.reset();
+
+	database = std::make_unique<graph::Database>(testFilePath.string());
+	database->open();
+	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+
+	// Verify the node can be found via label index (bootstrap built it)
+	auto res = newIndexMgr->findNodeIdsByLabel("BootNode");
+	EXPECT_EQ(res.size(), 1UL);
+}
+
+// ============================================================================
+// IndexMetadata::fromString branch coverage
+// ============================================================================
+
+TEST(IndexMetadataTest, FromStringWithEmptyInput) {
+	// Cover: !str.empty() being false (empty string)
+	auto meta = graph::query::indexes::IndexMetadata::fromString("test", "");
+	// Empty string has no parts, so parts.size() < 4 is true
+	EXPECT_EQ(meta.name, "test");
+	EXPECT_EQ(meta.entityType, "unknown");
+	EXPECT_EQ(meta.indexType, "unknown");
+}
+
+TEST(IndexMetadataTest, FromStringWithTooFewParts) {
+	// Cover: parts.size() < 4 being true
+	auto meta = graph::query::indexes::IndexMetadata::fromString("test", "node|label");
+	EXPECT_EQ(meta.name, "test");
+	EXPECT_EQ(meta.entityType, "unknown");
+	EXPECT_EQ(meta.indexType, "unknown");
+}
+
+TEST(IndexMetadataTest, FromStringRoundTrip) {
+	graph::query::indexes::IndexMetadata original{"myIndex", "node", "property", "Person", "name"};
+	std::string serialized = original.toString();
+	auto deserialized = graph::query::indexes::IndexMetadata::fromString("myIndex", serialized);
+	EXPECT_EQ(deserialized.entityType, "node");
+	EXPECT_EQ(deserialized.indexType, "property");
+	EXPECT_EQ(deserialized.label, "Person");
+	EXPECT_EQ(deserialized.property, "name");
 }

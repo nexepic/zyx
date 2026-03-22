@@ -85,10 +85,20 @@ namespace graph::vector {
 		/**
 		 * @brief Compute L2 Squared distance: BFloat16 vs BFloat16.
 		 * Used for internal graph maintenance.
+		 * Optimized with 4-way unrolling.
 		 */
 		static float computeL2Sqr(const BFloat16 *a, const BFloat16 *b, size_t dim) {
 			float sum = 0.0f;
 			size_t i = 0;
+
+			for (; i + 4 <= dim; i += 4) {
+				float d0 = a[i].toFloat() - b[i].toFloat();
+				float d1 = a[i + 1].toFloat() - b[i + 1].toFloat();
+				float d2 = a[i + 2].toFloat() - b[i + 2].toFloat();
+				float d3 = a[i + 3].toFloat() - b[i + 3].toFloat();
+
+				sum += d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
+			}
 
 			for (; i < dim; ++i) {
 				float d = a[i].toFloat() - b[i].toFloat();
@@ -121,10 +131,18 @@ namespace graph::vector {
 
 		/**
 		 * @brief Compute Inner Product: Float32 vs BFloat16.
+		 * Optimized with 4-way unrolling.
 		 */
 		static float computeIP(const float *a, const BFloat16 *b, size_t dim) {
 			float sum = 0.0f;
-			for (size_t i = 0; i < dim; ++i) {
+			size_t i = 0;
+
+			for (; i + 4 <= dim; i += 4) {
+				sum += a[i] * b[i].toFloat() + a[i + 1] * b[i + 1].toFloat() + a[i + 2] * b[i + 2].toFloat() +
+					   a[i + 3] * b[i + 3].toFloat();
+			}
+
+			for (; i < dim; ++i) {
 				sum += a[i] * b[i].toFloat();
 			}
 			return -sum;
@@ -132,10 +150,18 @@ namespace graph::vector {
 
 		/**
 		 * @brief Compute Inner Product: BFloat16 vs BFloat16.
+		 * Optimized with 4-way unrolling.
 		 */
 		static float computeIP(const BFloat16 *a, const BFloat16 *b, size_t dim) {
 			float sum = 0.0f;
-			for (size_t i = 0; i < dim; ++i) {
+			size_t i = 0;
+
+			for (; i + 4 <= dim; i += 4) {
+				sum += a[i].toFloat() * b[i].toFloat() + a[i + 1].toFloat() * b[i + 1].toFloat() +
+					   a[i + 2].toFloat() * b[i + 2].toFloat() + a[i + 3].toFloat() * b[i + 3].toFloat();
+			}
+
+			for (; i < dim; ++i) {
 				sum += a[i].toFloat() * b[i].toFloat();
 			}
 			return -sum;

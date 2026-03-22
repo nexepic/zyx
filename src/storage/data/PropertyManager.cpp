@@ -33,7 +33,7 @@
 
 namespace graph::storage {
 
-	PropertyManager::PropertyManager(const std::shared_ptr<DataManager> &dataManager,
+	PropertyManager::PropertyManager(DataManager* dataManager,
 									 std::shared_ptr<DeletionManager> deletionManager) :
 		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 

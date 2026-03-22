@@ -172,6 +172,60 @@ namespace graph::query::indexes {
 		}
 	}
 
+	void VectorIndexManager::updateIndexBatch(
+			const std::vector<std::pair<Node, std::unordered_map<std::string, PropertyValue>>> &nodesWithProps,
+			const std::string &label) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		if (!indexMapLoaded_)
+			loadIndexMap();
+
+		if (label.empty() || nodesWithProps.empty())
+			return;
+
+		// Group vectors by index name
+		std::unordered_map<std::string, std::vector<std::pair<int64_t, std::vector<float>>>> batchByIndex;
+
+		for (const auto &[node, props]: nodesWithProps) {
+			for (const auto &[key, val]: props) {
+				std::string mapKey = label + ":" + key;
+				auto it = indexMap_.find(mapKey);
+				if (it == indexMap_.end())
+					continue;
+
+				if (val.getType() != PropertyType::LIST)
+					continue;
+
+				try {
+					const auto &propVec = val.getList();
+					std::vector<float> vec;
+					vec.reserve(propVec.size());
+					for (const auto &elem: propVec) {
+						if (elem.getType() == PropertyType::DOUBLE)
+							vec.push_back(static_cast<float>(std::get<double>(elem.getVariant())));
+						else if (elem.getType() == PropertyType::INTEGER)
+							vec.push_back(static_cast<float>(std::get<int64_t>(elem.getVariant())));
+						else
+							throw std::runtime_error("Vector index requires numeric values only");
+					}
+					batchByIndex[it->second].push_back({node.getId(), std::move(vec)});
+				} catch (const std::exception &e) {
+					log::Log::error("Batch vector conversion failed: {}", e.what());
+				}
+			}
+		}
+
+		// Execute batch inserts per index
+		for (auto &[indexName, batch]: batchByIndex) {
+			try {
+				auto index = getIndex(indexName);
+				index->batchInsert(batch);
+			} catch (const std::exception &e) {
+				log::Log::error("Batch insert failed for index {}: {}", indexName, e.what());
+			}
+		}
+	}
+
 	void VectorIndexManager::removeIndex(int64_t nodeId, const std::string &label) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		if (!indexMapLoaded_)

@@ -100,14 +100,14 @@ namespace graph::storage {
 		stateChainManager_ = std::make_shared<StateChainManager>(shared_from_this());
 
 		// Create property manager first as others depend on it
-		propertyManager_ = std::make_shared<PropertyManager>(shared_from_this(), deletionManager_);
+		propertyManager_ = std::make_shared<PropertyManager>(this, deletionManager_);
 
 		// Create entity managers
-		nodeManager_ = std::make_shared<NodeManager>(shared_from_this(), deletionManager_);
-		edgeManager_ = std::make_shared<EdgeManager>(shared_from_this(), deletionManager_);
-		blobManager_ = std::make_shared<BlobManager>(shared_from_this(), blobChainManager_, deletionManager_);
-		indexEntityManager_ = std::make_shared<IndexEntityManager>(shared_from_this(), deletionManager_);
-		stateManager_ = std::make_shared<StateManager>(shared_from_this(), stateChainManager_, deletionManager_);
+		nodeManager_ = std::make_shared<NodeManager>(this, deletionManager_);
+		edgeManager_ = std::make_shared<EdgeManager>(this, deletionManager_);
+		blobManager_ = std::make_shared<BlobManager>(this, blobChainManager_, deletionManager_);
+		indexEntityManager_ = std::make_shared<IndexEntityManager>(this, deletionManager_);
+		stateManager_ = std::make_shared<StateManager>(this, stateChainManager_, deletionManager_);
 	}
 
 	void DataManager::registerObserver(std::shared_ptr<IEntityObserver> observer) {

@@ -462,9 +462,12 @@ TEST_F(CApiTest, JSONMultiPropertyEscape) {
 	std::string jsonStr(json);
 
 	// Verify multiple properties with escape sequences
+	// After parser unescaping, \n and \t become real control chars,
+	// which escape_json_string then re-escapes for JSON output
 	EXPECT_NE(jsonStr.find("\\n"), std::string::npos);
 	EXPECT_NE(jsonStr.find("\\t"), std::string::npos);
-	EXPECT_NE(jsonStr.find("\\'"), std::string::npos);
+	// Single quote is stored as literal ' after unescaping, no JSON escaping needed
+	EXPECT_NE(jsonStr.find("'"), std::string::npos);
 
 	zyx_result_close(res);
 }
@@ -640,6 +643,395 @@ TEST_F(CApiTest, ResultIsSuccessValidatesImpl) {
 
 	// Result should be successful
 	EXPECT_TRUE(zyx_result_is_success(res));
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, OpenIfExistsWithNullPath) {
+	ZYXDB_T *db2 = zyx_open_if_exists(nullptr);
+	EXPECT_EQ(db2, nullptr);
+	const char *err = zyx_get_last_error();
+	EXPECT_NE(err, nullptr);
+	EXPECT_STRNE(err, "");
+}
+
+TEST_F(CApiTest, ExecuteWithNullCypher) {
+	ZYXResult_T *res = zyx_execute(db, nullptr);
+	EXPECT_EQ(res, nullptr);
+}
+
+TEST_F(CApiTest, ExecuteWithNullDb) {
+	ZYXResult_T *res = zyx_execute(nullptr, "RETURN 1");
+	EXPECT_EQ(res, nullptr);
+}
+
+TEST_F(CApiTest, JSONFormFeedAndCarriageReturn) {
+	// Test escape_json_string for \f and \r chars
+	zyx_result_close(zyx_execute(db, "CREATE (n:Esc {text: 'abc\\fdef\\rghi'})"));
+	auto *res = zyx_execute(db, "MATCH (n:Esc) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+	EXPECT_NE(jsonStr.find("\\f"), std::string::npos);
+	EXPECT_NE(jsonStr.find("\\r"), std::string::npos);
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, BooleanPropertyJsonSerialization) {
+	zyx_result_close(zyx_execute(db, "CREATE (n:BoolNode {active: true, deleted: false})"));
+	auto *res = zyx_execute(db, "MATCH (n:BoolNode) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+	EXPECT_NE(jsonStr.find("true"), std::string::npos);
+	EXPECT_NE(jsonStr.find("false"), std::string::npos);
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, DoublePropertyJsonSerialization) {
+	zyx_result_close(zyx_execute(db, "CREATE (n:DblNode {pi: 3.14})"));
+	auto *res = zyx_execute(db, "MATCH (n:DblNode) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+	EXPECT_NE(jsonStr.find("3.14"), std::string::npos);
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, NullPropertyJsonSerialization) {
+	zyx_result_close(zyx_execute(db, "CREATE (n:NullNode {val: null})"));
+	auto *res = zyx_execute(db, "MATCH (n:NullNode) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+	// Null properties may not be serialized or serialize as "null"
+	// Either way, it shouldn't crash
+	EXPECT_FALSE(jsonStr.empty());
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetNodeWithNullOutParam) {
+	zyx_result_close(zyx_execute(db, "CREATE (n:N1)"));
+	auto *res = zyx_execute(db, "MATCH (n:N1) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+	// null out_node
+	EXPECT_FALSE(zyx_result_get_node(res, 0, nullptr));
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetEdgeWithNullOutParam) {
+	zyx_result_close(zyx_execute(db, "CREATE (a:E1), (b:E2)"));
+	zyx_result_close(zyx_execute(db, "MATCH (a:E1), (b:E2) CREATE (a)-[e:EREL]->(b)"));
+	auto *res = zyx_execute(db, "MATCH ()-[e:EREL]->() RETURN e");
+	ASSERT_TRUE(zyx_result_next(res));
+	// null out_edge
+	EXPECT_FALSE(zyx_result_get_edge(res, 0, nullptr));
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, NodeWithBoolPropertyFalse) {
+	// Test props_to_json with false bool property
+	zyx_result_close(zyx_execute(db, "CREATE (n:BoolFalse {active: false})"));
+
+	auto *res = zyx_execute(db, "MATCH (n:BoolFalse) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	EXPECT_NE(jsonStr.find("false"), std::string::npos);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, NodeWithDoubleProperty) {
+	// Test props_to_json with double property
+	zyx_result_close(zyx_execute(db, "CREATE (n:DblNode {pi: 3.14})"));
+
+	auto *res = zyx_execute(db, "MATCH (n:DblNode) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	EXPECT_NE(jsonStr.find("3.14"), std::string::npos);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, NodeWithNullProperty) {
+	// Test props_to_json with null property
+	zyx_result_close(zyx_execute(db, "CREATE (n:NullNode {val: null})"));
+
+	auto *res = zyx_execute(db, "MATCH (n:NullNode) RETURN n");
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	// Null properties might not be stored, but if they are, check for "null"
+	// The important thing is no crash
+	EXPECT_NE(json, nullptr);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, MultipleResultRows) {
+	// Test iteration over multiple result rows
+	zyx_result_close(zyx_execute(db, "CREATE (n:Row {x: 1})"));
+	zyx_result_close(zyx_execute(db, "CREATE (n:Row {x: 2})"));
+	zyx_result_close(zyx_execute(db, "CREATE (n:Row {x: 3})"));
+
+	auto *res = zyx_execute(db, "MATCH (n:Row) RETURN n.x");
+	ASSERT_NE(res, nullptr);
+
+	int count = 0;
+	while (zyx_result_next(res)) {
+		count++;
+	}
+	EXPECT_EQ(count, 3);
+
+	// After exhausting, next should return false
+	EXPECT_FALSE(zyx_result_next(res));
+
+	zyx_result_close(res);
+}
+
+// ============================================================================
+// Tests targeting specific uncovered branches
+// ============================================================================
+
+TEST_F(CApiTest, GetTypeBool) {
+	// Cover the unexecuted bool instantiation of zyx_result_get_type visitor
+	auto *res = zyx_execute(db, "RETURN true AS b");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_BOOL);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetTypeDouble) {
+	// Cover the unexecuted double instantiation of zyx_result_get_type visitor
+	auto *res = zyx_execute(db, "RETURN 3.14 AS d");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_DOUBLE);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetTypeString) {
+	// Cover the unexecuted string instantiation of zyx_result_get_type visitor
+	auto *res = zyx_execute(db, "RETURN 'hello' AS s");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_STRING);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, JSONUnicodeControlCharEscape) {
+	// Cover the control character branch in escape_json_string (c <= '\x1f')
+	// Use Cypher \u0001 escape to store a control character in a property
+	zyx_result_close(zyx_execute(db, "CREATE (n:CtrlChar {text: 'abc\\u0001def'})"));
+
+	auto *res = zyx_execute(db, "MATCH (n:CtrlChar) RETURN n");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	std::string jsonStr(json);
+
+	// The control character \x01 should be escaped as \u0001 in JSON output
+	EXPECT_NE(jsonStr.find("\\u0001"), std::string::npos)
+		<< "Control character should be escaped as \\u0001 in JSON. Got: " << jsonStr;
+
+	zyx_result_close(res);
+}
+
+// ============================================================================
+// Tests targeting vector<string> variant and remaining uncovered branches
+// ============================================================================
+
+TEST_F(CApiTest, GetTypeForListResult) {
+	// labels(n) returns a vector<string> via the public API
+	zyx_result_close(zyx_execute(db, "CREATE (n:LblTest {x: 1})"));
+	auto *res = zyx_execute(db, "MATCH (n:LblTest) RETURN labels(n) AS lbls");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	// The vector<string> variant should map to ZYX_NULL via the fallback return
+	ZYXValueType t = zyx_result_get_type(res, 0);
+	// vector<string> doesn't have a dedicated ZYX type, so it falls through to ZYX_NULL
+	EXPECT_EQ(t, ZYX_NULL);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetPropsJsonForListResult) {
+	// Exercise the unexecuted vector<string> instantiation in get_props_json visitor
+	zyx_result_close(zyx_execute(db, "CREATE (n:LblTest2 {x: 1})"));
+	auto *res = zyx_execute(db, "MATCH (n:LblTest2) RETURN labels(n) AS lbls");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	// Non-entity types return "{}"
+	EXPECT_STREQ(json, "{}");
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetPropsJsonForBoolResult) {
+	// Exercise the unexecuted bool instantiation in get_props_json visitor
+	auto *res = zyx_execute(db, "RETURN true AS b");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	EXPECT_STREQ(json, "{}");
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetPropsJsonForDoubleResult) {
+	// Exercise the unexecuted double instantiation in get_props_json visitor
+	auto *res = zyx_execute(db, "RETURN 3.14 AS d");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	EXPECT_STREQ(json, "{}");
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetPropsJsonForStringResult) {
+	// Exercise the unexecuted string instantiation in get_props_json visitor
+	auto *res = zyx_execute(db, "RETURN 'hello' AS s");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	EXPECT_STREQ(json, "{}");
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetPropsJsonForMonostateResult) {
+	// Exercise the unexecuted monostate instantiation in get_props_json visitor
+	auto *res = zyx_execute(db, "RETURN null AS n");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	EXPECT_STREQ(json, "{}");
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, KeysFunctionProducesListValue) {
+	// keys(n) returns vector<string> - exercise vector<string> variant paths
+	zyx_result_close(zyx_execute(db, "CREATE (n:KeyTest {a: 1, b: 'two'})"));
+	auto *res = zyx_execute(db, "MATCH (n:KeyTest) RETURN keys(n) AS k");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	// Type should be ZYX_NULL (no dedicated list type in C API)
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_NULL);
+
+	// get_int, get_double, get_bool, get_string should return defaults
+	EXPECT_EQ(zyx_result_get_int(res, 0), 0);
+	EXPECT_DOUBLE_EQ(zyx_result_get_double(res, 0), 0.0);
+	EXPECT_FALSE(zyx_result_get_bool(res, 0));
+	EXPECT_STREQ(zyx_result_get_string(res, 0), "");
+
+	// get_node and get_edge should return false
+	ZYXNode node;
+	EXPECT_FALSE(zyx_result_get_node(res, 0, &node));
+	ZYXEdge edge;
+	EXPECT_FALSE(zyx_result_get_edge(res, 0, &edge));
+
+	// get_props_json should return "{}"
+	EXPECT_STREQ(zyx_result_get_props_json(res, 0), "{}");
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetTypeNull) {
+	// Exercise the monostate instantiation of get_type visitor
+	auto *res = zyx_execute(db, "RETURN null AS n");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_NULL);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, PropsToJsonWithListPropertyInNode) {
+	// If a node has a property value that is a vector<string>,
+	// it should hit the ComplexObject branch in props_to_json
+	// This can happen if we store a list property through Cypher
+	// Cypher doesn't support list properties directly in CREATE, so
+	// this may not be reachable. Let's at least verify no crash.
+	zyx_result_close(zyx_execute(db, "CREATE (n:ListNode {name: 'test'})"));
+	auto *res = zyx_execute(db, "MATCH (n:ListNode) RETURN n");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	const char *json = zyx_result_get_props_json(res, 0);
+	EXPECT_NE(json, nullptr);
+	std::string jsonStr(json);
+	EXPECT_NE(jsonStr.find("test"), std::string::npos);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetBoolTrue) {
+	// Exercise the get_bool path with true value
+	auto *res = zyx_execute(db, "RETURN true AS b");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_TRUE(zyx_result_get_bool(res, 0));
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetBoolFalse) {
+	// Exercise the get_bool path with false value
+	auto *res = zyx_execute(db, "RETURN false AS b");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_FALSE(zyx_result_get_bool(res, 0));
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetDoubleValid) {
+	// Exercise the get_double path with valid double
+	auto *res = zyx_execute(db, "RETURN 2.718 AS e");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_DOUBLE_EQ(zyx_result_get_double(res, 0), 2.718);
+
+	zyx_result_close(res);
+}
+
+TEST_F(CApiTest, GetStringValid) {
+	// Exercise the get_string path with valid string
+	auto *res = zyx_execute(db, "RETURN 'world' AS w");
+	ASSERT_NE(res, nullptr);
+	ASSERT_TRUE(zyx_result_next(res));
+
+	EXPECT_STREQ(zyx_result_get_string(res, 0), "world");
 
 	zyx_result_close(res);
 }

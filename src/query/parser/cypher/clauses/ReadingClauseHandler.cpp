@@ -41,7 +41,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 
 std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleStandaloneCall(
 	CypherParser::StandaloneCallStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+	std::unique_ptr<query::execution::PhysicalOperator> /*rootOp*/,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
 	// Grammar guarantees explicitProcedureInvocation is always present

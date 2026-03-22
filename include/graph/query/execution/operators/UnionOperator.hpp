@@ -63,6 +63,12 @@ public:
 	 */
 	~UnionOperator() override = default;
 
+	// Move-only type (unique_ptr members)
+	UnionOperator(UnionOperator&&) noexcept = default;
+	UnionOperator& operator=(UnionOperator&&) noexcept = default;
+	UnionOperator(const UnionOperator&) = delete;
+	UnionOperator& operator=(const UnionOperator&) = delete;
+
 	/**
 	 * @brief Opens the operator pipeline.
 	 * Opens both child operators and buffers the right query results.

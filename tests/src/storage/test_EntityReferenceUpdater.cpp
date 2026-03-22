@@ -1553,3 +1553,979 @@ TEST_F(EntityReferenceUpdaterTest, UpdateIndex_ChildNotInParentList) {
 	Index updatedChild2 = dataManager->getIndex(child2.getId());
 	EXPECT_EQ(updatedChild2.getParentId(), oldParentId) << "Orphaned child not in parent's list should not be updated";
 }
+
+// =========================================================================
+// 9. Additional Branch Coverage Tests for EntityReferenceUpdater
+// =========================================================================
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_NodeOwner_PropertyEntityIdMismatch) {
+	// Test updateBlobReferences where node.getPropertyEntityId() != oldBlobId
+	// (line 196 false branch in updateBlobReferences)
+	Node node = createNode("Owner");
+	Blob blob = createBlob(node.getId(), toUnderlying(SegmentType::Node));
+
+	// Set node to point to a DIFFERENT blob id (not this one)
+	node.setPropertyEntityId(blob.getId() + 999, PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(node);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 100;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	// Should not update node since its propertyEntityId doesn't match
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	Node updatedNode = dataManager->getNode(node.getId());
+	EXPECT_EQ(updatedNode.getPropertyEntityId(), blob.getId() + 999);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_EdgeOwner_PropertyEntityIdMismatch) {
+	// Test updateBlobReferences where edge.getPropertyEntityId() != oldBlobId
+	// (line 202 false branch in updateBlobReferences)
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Blob blob = createBlob(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	// Set edge to point to a DIFFERENT blob id
+	edge.setPropertyEntityId(blob.getId() + 999, PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 100;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	Edge updatedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(updatedEdge.getPropertyEntityId(), blob.getId() + 999);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_StateOwner_ExternalIdMismatch) {
+	// Test updateBlobReferences where state.getExternalId() != oldBlobId
+	// (line 209 false branch in updateBlobReferences)
+	State s = createState("TestState");
+	Blob blob = createBlob(s.getId(), toUnderlying(SegmentType::State));
+
+	// Set state external ID to something else
+	s.setExternalId(blob.getId() + 999);
+	dataManager->updateStateEntity(s);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 100;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	State updatedState = dataManager->getState(s.getId());
+	EXPECT_EQ(updatedState.getExternalId(), blob.getId() + 999);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_NoNextNoPrev) {
+	// Test updateBlobReferences when nextBlobId=0 and prevBlobId=0
+	// (line 218 and 222 false branches)
+	Node n = createNode("N");
+	Blob blob = createBlob(n.getId(), toUnderlying(SegmentType::Node));
+
+	// No chain links
+	blob.setNextBlobId(0);
+	blob.setPrevBlobId(0);
+	dataManager->updateBlobEntity(blob);
+
+	n.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(n);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 100;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	// Should not crash - no chain to update
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	Node updatedNode = dataManager->getNode(n.getId());
+	EXPECT_EQ(updatedNode.getPropertyEntityId(), newBlobId);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateProperty_OwnerNode_MismatchPropId) {
+	// Test updatePropertyReferences where node.getPropertyEntityId() != oldPropId
+	// (line 169 false branch)
+	Node node = createNode("N");
+	Property prop = createProperty(node.getId(), toUnderlying(SegmentType::Node));
+
+	// Node points to a DIFFERENT property
+	node.setPropertyEntityId(prop.getId() + 999, PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateNode(node);
+
+	int64_t oldPropId = prop.getId();
+	int64_t newPropId = oldPropId + 50;
+	Property movedProp = prop;
+	movedProp.setId(newPropId);
+
+	updater->updateEntityReferences(oldPropId, &movedProp, toUnderlying(SegmentType::Property));
+
+	// Node should not have been updated since IDs don't match
+	Node updatedNode = dataManager->getNode(node.getId());
+	EXPECT_EQ(updatedNode.getPropertyEntityId(), prop.getId() + 999);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateProperty_OwnerEdge_MismatchPropId) {
+	// Test updatePropertyReferences where edge.getPropertyEntityId() != oldPropId
+	// (line 176 false branch)
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Property prop = createProperty(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	// Edge points to a DIFFERENT property
+	edge.setPropertyEntityId(prop.getId() + 999, PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldPropId = prop.getId();
+	int64_t newPropId = oldPropId + 50;
+	Property movedProp = prop;
+	movedProp.setId(newPropId);
+
+	updater->updateEntityReferences(oldPropId, &movedProp, toUnderlying(SegmentType::Property));
+
+	Edge updatedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(updatedEdge.getPropertyEntityId(), prop.getId() + 999);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateIndex_LeafNoSiblings) {
+	// Test updateIndexReferences for a leaf with no prev/next siblings
+	// (line 240 and 245 false branches: prevLeafId/nextLeafId == 0)
+	Index leaf = createIndex(Index::NodeType::LEAF);
+	leaf.setPrevLeafId(0);
+	leaf.setNextLeafId(0);
+	dataManager->updateIndexEntity(leaf);
+
+	int64_t oldId = leaf.getId();
+	int64_t newId = oldId + 50;
+	Index movedLeaf = leaf;
+	movedLeaf.getMutableMetadata().id = newId;
+
+	// Should handle gracefully - no siblings to update
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldId, &movedLeaf, toUnderlying(SegmentType::Index)));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateIndex_NoParent) {
+	// Test updateIndexReferences when parentId == 0
+	// (line 233 false branch: parentId != 0)
+	Index leaf = createIndex(Index::NodeType::LEAF);
+	leaf.setParentId(0); // No parent (root)
+	dataManager->updateIndexEntity(leaf);
+
+	int64_t oldId = leaf.getId();
+	int64_t newId = oldId + 50;
+	Index movedLeaf = leaf;
+	movedLeaf.getMutableMetadata().id = newId;
+
+	// Should handle gracefully - no parent to update
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldId, &movedLeaf, toUnderlying(SegmentType::Index)));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateState_NoPrev) {
+	// Test updateStateReferences when prevStateId == 0
+	// (line 265 false branch: prevStateId != 0)
+	State s1 = createState("S1");
+	State s2 = createState("S2");
+
+	s1.setNextStateId(s2.getId());
+	s1.setPrevStateId(0); // No prev
+	s2.setPrevStateId(s1.getId());
+	s2.setNextStateId(0);
+	dataManager->updateStateEntity(s1);
+	dataManager->updateStateEntity(s2);
+
+	int64_t oldS1 = s1.getId();
+	int64_t newS1 = oldS1 + 50;
+	State movedS1 = s1;
+	movedS1.getMutableMetadata().id = newS1;
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldS1, &movedS1, toUnderlying(SegmentType::State)));
+
+	// s2's prev should be updated
+	State updatedS2 = dataManager->getState(s2.getId());
+	EXPECT_EQ(updatedS2.getPrevStateId(), newS1);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateState_NoNext) {
+	// Test updateStateReferences when nextStateId == 0
+	// (line 269 false branch: nextStateId != 0)
+	State s1 = createState("S1");
+	s1.setNextStateId(0); // No next
+	s1.setPrevStateId(0);
+	dataManager->updateStateEntity(s1);
+
+	int64_t oldS1 = s1.getId();
+	int64_t newS1 = oldS1 + 50;
+	State movedS1 = s1;
+	movedS1.getMutableMetadata().id = newS1;
+
+	// Should handle gracefully - nothing to update
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldS1, &movedS1, toUnderlying(SegmentType::State)));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_SourceNodeFirstOutNotOldEdge) {
+	// Test updateEdgeReferences when srcNode.getFirstOutEdgeId() != oldEdgeId
+	// (line 102 false branch)
+	Node src = createNode("S");
+	Node dst = createNode("D");
+	Edge e1 = createEdge(src.getId(), dst.getId(), "E1");
+	Edge e2 = createEdge(src.getId(), dst.getId(), "E2");
+
+	// src's firstOut points to e1, not e2
+	src.setFirstOutEdgeId(e1.getId());
+	dataManager->updateNode(src);
+
+	int64_t oldE2 = e2.getId();
+	int64_t newE2 = oldE2 + 200;
+	Edge movedE2 = e2;
+	movedE2.getMutableMetadata().id = newE2;
+
+	updater->updateEntityReferences(oldE2, &movedE2, toUnderlying(SegmentType::Edge));
+
+	// src's firstOut should NOT have been updated (it points to e1, not e2)
+	Node updatedSrc = dataManager->getNode(src.getId());
+	EXPECT_EQ(updatedSrc.getFirstOutEdgeId(), e1.getId());
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_TargetNodeFirstInNotOldEdge) {
+	// Test updateEdgeReferences when dstNode.getFirstInEdgeId() != oldEdgeId
+	// (line 110 false branch)
+	Node src = createNode("S");
+	Node dst = createNode("D");
+	Edge e1 = createEdge(src.getId(), dst.getId(), "E1");
+	Edge e2 = createEdge(src.getId(), dst.getId(), "E2");
+
+	// dst's firstIn points to e1, not e2
+	dst.setFirstInEdgeId(e1.getId());
+	dataManager->updateNode(dst);
+
+	int64_t oldE2 = e2.getId();
+	int64_t newE2 = oldE2 + 200;
+	Edge movedE2 = e2;
+	movedE2.getMutableMetadata().id = newE2;
+
+	updater->updateEntityReferences(oldE2, &movedE2, toUnderlying(SegmentType::Edge));
+
+	// dst's firstIn should NOT have been updated
+	Node updatedDst = dataManager->getNode(dst.getId());
+	EXPECT_EQ(updatedDst.getFirstInEdgeId(), e1.getId());
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_BlobPropertyOnEdge) {
+	// Test updatePropertiesPointingToEntity for Edge with BLOB storage
+	// (line 391 branch in updatePropertiesPointingToEntity)
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Blob blob = createBlob(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldEdgeId = edge.getId();
+	int64_t newEdgeId = oldEdgeId + 100;
+	Edge movedEdge = edge;
+	movedEdge.getMutableMetadata().id = newEdgeId;
+
+	updater->updateEntityReferences(oldEdgeId, &movedEdge, toUnderlying(SegmentType::Edge));
+
+	// Blob should now point to the new edge ID
+	Blob updatedBlob = dataManager->getBlob(blob.getId());
+	EXPECT_EQ(updatedBlob.getEntityId(), newEdgeId);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateStateChain_TargetPrevIdMismatch) {
+	// Test updateStateChainReference when the target state's prev/next ID
+	// doesn't match the old ID (line 349/354 false branches)
+	State s1 = createState("S1");
+	State s2 = createState("S2");
+	State s3 = createState("S3");
+
+	// s1 -> s2 -> s3
+	s1.setNextStateId(s2.getId());
+	s2.setPrevStateId(s1.getId());
+	s2.setNextStateId(s3.getId());
+	s3.setPrevStateId(s2.getId());
+	dataManager->updateStateEntity(s1);
+	dataManager->updateStateEntity(s2);
+	dataManager->updateStateEntity(s3);
+
+	// Now manually change s3's prevStateId to something else (not s2)
+	s3.setPrevStateId(99999);
+	dataManager->updateStateEntity(s3);
+
+	int64_t oldS2 = s2.getId();
+	int64_t newS2 = oldS2 + 100;
+	State movedS2 = s2;
+	movedS2.getMutableMetadata().id = newS2;
+
+	// When updating references for s2, s3's prev won't match oldS2 (it's 99999)
+	// so it should NOT be updated
+	updater->updateEntityReferences(oldS2, &movedS2, toUnderlying(SegmentType::State));
+
+	State updatedS3 = dataManager->getState(s3.getId());
+	EXPECT_EQ(updatedS3.getPrevStateId(), 99999) << "s3 prev should not be updated since it didn't match old s2 ID";
+
+	// s1's next should be updated because it matches oldS2
+	State updatedS1 = dataManager->getState(s1.getId());
+	EXPECT_EQ(updatedS1.getNextStateId(), newS2);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateIndexSibling_IdMismatch) {
+	// Test updateIndexSiblingPtr when sibling's prev/next doesn't match oldId
+	// (line 318/323 false branches)
+	Index leaf1 = createIndex(Index::NodeType::LEAF);
+	Index leaf2 = createIndex(Index::NodeType::LEAF);
+
+	leaf1.setNextLeafId(leaf2.getId());
+	leaf2.setPrevLeafId(99999); // Not leaf1's ID
+	dataManager->updateIndexEntity(leaf1);
+	dataManager->updateIndexEntity(leaf2);
+
+	int64_t oldL1 = leaf1.getId();
+	int64_t newL1 = oldL1 + 100;
+	Index movedL1 = leaf1;
+	movedL1.getMutableMetadata().id = newL1;
+
+	updater->updateEntityReferences(oldL1, &movedL1, toUnderlying(SegmentType::Index));
+
+	// leaf2's prev should NOT be updated since it doesn't match leaf1's old ID
+	Index updatedL2 = dataManager->getIndex(leaf2.getId());
+	EXPECT_EQ(updatedL2.getPrevLeafId(), 99999);
+}
+
+// =========================================================================
+// Branch Coverage Improvement Tests
+// =========================================================================
+
+// Test updateEntityReferences with default (unknown) entity type
+// Covers line 58: default case in switch
+TEST_F(EntityReferenceUpdaterTest, UpdateEntityReferences_UnknownType) {
+	Node node = createNode("N");
+	int64_t oldId = node.getId();
+	int64_t newId = oldId + 100;
+	Node movedNode = node;
+	movedNode.getMutableMetadata().id = newId;
+
+	// Use invalid entity type (999) - should hit default: and do nothing
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldId, &movedNode, 999));
+}
+
+// Test updateNodeReferences when old == new ID (no-op)
+// Covers line 64: if (oldNodeId == newNodeId) return
+TEST_F(EntityReferenceUpdaterTest, UpdateNodeReferences_SameId) {
+	Node node = createNode("N");
+	int64_t id = node.getId();
+
+	// Same old and new ID - should be a no-op
+	EXPECT_NO_THROW(updater->updateEntityReferences(id, &node, toUnderlying(SegmentType::Node)));
+}
+
+// Test updateEdgeReferences when old == new ID (no-op)
+// Covers line 94: if (oldEdgeId == newEdgeId) return
+TEST_F(EntityReferenceUpdaterTest, UpdateEdgeReferences_SameId) {
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	int64_t id = edge.getId();
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(id, &edge, toUnderlying(SegmentType::Edge)));
+}
+
+// Test updatePropertyReferences when old == new ID (no-op)
+// Covers line 159: if (oldPropId == newPropId) return
+TEST_F(EntityReferenceUpdaterTest, UpdatePropertyReferences_SameId) {
+	Node n = createNode("N");
+	Property prop = createProperty(n.getId(), toUnderlying(SegmentType::Node));
+	int64_t id = prop.getId();
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(id, &prop, toUnderlying(SegmentType::Property)));
+}
+
+// Test updateBlobReferences when old == new ID (no-op)
+// Covers line 185: if (oldBlobId == newBlobId) return
+TEST_F(EntityReferenceUpdaterTest, UpdateBlobReferences_SameId) {
+	Node n = createNode("N");
+	Blob blob = createBlob(n.getId(), toUnderlying(SegmentType::Node));
+	int64_t id = blob.getId();
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(id, &blob, toUnderlying(SegmentType::Blob)));
+}
+
+// Test updateIndexReferences when old == new ID (no-op)
+// Covers line 228: if (oldIndexId == newIndexId) return
+TEST_F(EntityReferenceUpdaterTest, UpdateIndexReferences_SameId) {
+	Index idx = createIndex(Index::NodeType::LEAF);
+	int64_t id = idx.getId();
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(id, &idx, toUnderlying(SegmentType::Index)));
+}
+
+// Test updateStateReferences when old == new ID (no-op)
+// Covers line 261: if (oldStateId == newStateId) return
+TEST_F(EntityReferenceUpdaterTest, UpdateStateReferences_SameId) {
+	State st = createState("S");
+	int64_t id = st.getId();
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(id, &st, toUnderlying(SegmentType::State)));
+}
+
+// Test updateBlobReferences for Edge-owned blob
+// Covers line 201-206: entityType == Edge in updateBlobReferences
+TEST_F(EntityReferenceUpdaterTest, UpdateBlobReferences_EdgeOwner) {
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Blob blob = createBlob(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 100;
+	Blob movedBlob = blob;
+	movedBlob.getMutableMetadata().id = newBlobId;
+
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	// Edge should now point to the new blob ID
+	Edge updatedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(updatedEdge.getPropertyEntityId(), newBlobId);
+}
+
+// Test updatePropertyReferences for Edge-owned property
+// Covers line 174: entityType == Edge in updatePropertyReferences
+TEST_F(EntityReferenceUpdaterTest, UpdatePropertyReferences_EdgeOwner) {
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Property prop = createProperty(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(prop.getId(), PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldPropId = prop.getId();
+	int64_t newPropId = oldPropId + 100;
+	Property movedProp = prop;
+	movedProp.setId(newPropId);
+
+	updater->updateEntityReferences(oldPropId, &movedProp, toUnderlying(SegmentType::Property));
+
+	// Edge should now point to the new property ID
+	Edge updatedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(updatedEdge.getPropertyEntityId(), newPropId);
+}
+
+// Test updatePropertiesPointingToEntity with zero propertyEntityId
+// Covers line 381: if (info.propertyEntityId == 0) return
+TEST_F(EntityReferenceUpdaterTest, UpdateNodeReferences_NoPropertyEntity) {
+	Node node = createNode("N");
+	// Node has no property entity (propertyEntityId == 0)
+	EXPECT_EQ(node.getPropertyEntityId(), 0);
+
+	int64_t oldId = node.getId();
+	int64_t newId = oldId + 100;
+	Node movedNode = node;
+	movedNode.getMutableMetadata().id = newId;
+
+	// Should not crash when there's no property entity
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldId, &movedNode, toUnderlying(SegmentType::Node)));
+}
+
+// =========================================================================
+// Additional Branch Coverage Tests
+// =========================================================================
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlobChainRef_NextBlob_PrevMismatch) {
+	// Test updateBlobChainReference where isNextBlob=true but
+	// linkedBlob.getPrevBlobId() != oldBlobId (line 285 false branch)
+	Node n = createNode("N");
+	Blob b1 = createBlob(n.getId(), toUnderlying(SegmentType::Node));
+	Blob b2 = createBlob(n.getId(), toUnderlying(SegmentType::Node));
+
+	// b1 -> b2 chain
+	b1.setNextBlobId(b2.getId());
+	// But b2's prev points to something else (not b1)
+	b2.setPrevBlobId(99999);
+	dataManager->updateBlobEntity(b1);
+	dataManager->updateBlobEntity(b2);
+
+	n.setPropertyEntityId(b1.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(n);
+
+	int64_t oldB1 = b1.getId();
+	int64_t newB1 = oldB1 + 100;
+	Blob movedB1 = b1;
+	movedB1.setId(newB1);
+
+	// When updating b1, it tries to update b2's prev to newB1
+	// But b2.prev != oldB1 (it's 99999), so it should NOT update the pointer
+	updater->updateEntityReferences(oldB1, &movedB1, toUnderlying(SegmentType::Blob));
+
+	Blob updatedB2 = dataManager->getBlob(b2.getId());
+	// b2's prev should remain 99999 since it didn't match oldB1
+	EXPECT_EQ(updatedB2.getPrevBlobId(), 99999);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlobChainRef_PrevBlob_NextMismatch) {
+	// Test updateBlobChainReference where isNextBlob=false but
+	// linkedBlob.getNextBlobId() != oldBlobId (line 289-291 false branch)
+	Node n = createNode("N");
+	Blob b1 = createBlob(n.getId(), toUnderlying(SegmentType::Node));
+	Blob b2 = createBlob(n.getId(), toUnderlying(SegmentType::Node));
+
+	// b1 <- b2 chain (b2 points back to b1)
+	b2.setPrevBlobId(b1.getId());
+	// But b1's next points to something else (not b2)
+	b1.setNextBlobId(99999);
+	dataManager->updateBlobEntity(b1);
+	dataManager->updateBlobEntity(b2);
+
+	n.setPropertyEntityId(b2.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(n);
+
+	int64_t oldB2 = b2.getId();
+	int64_t newB2 = oldB2 + 100;
+	Blob movedB2 = b2;
+	movedB2.setId(newB2);
+
+	// When updating b2, it tries to update b1's next to newB2
+	// But b1.next != oldB2 (it's 99999), so it should NOT update
+	updater->updateEntityReferences(oldB2, &movedB2, toUnderlying(SegmentType::Blob));
+
+	Blob updatedB1 = dataManager->getBlob(b1.getId());
+	EXPECT_EQ(updatedB1.getNextBlobId(), 99999);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_PropertyStorageNone) {
+	// Test updatePropertiesPointingToEntity for Edge with NONE storage type
+	// (the branch where propertyEntityId == 0 is already tested for Node,
+	//  but this tests the Edge code path specifically)
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+
+	// Edge has no property (propertyEntityId == 0)
+	EXPECT_EQ(edge.getPropertyEntityId(), 0);
+
+	int64_t oldEdgeId = edge.getId();
+	int64_t newEdgeId = oldEdgeId + 100;
+	Edge movedEdge = edge;
+	movedEdge.getMutableMetadata().id = newEdgeId;
+
+	// Should handle gracefully
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldEdgeId, &movedEdge, toUnderlying(SegmentType::Edge)));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateNode_MultipleOutgoingEdges) {
+	// Test node reference update when node has multiple outgoing edges
+	// This tests the while loop traversal in updateNodeReferences (lines 72-77)
+	Node nodeA = createNode("A");
+	Node nodeB = createNode("B");
+	Node nodeC = createNode("C");
+
+	Edge e1 = createEdge(nodeA.getId(), nodeB.getId(), "E1");
+	Edge e2 = createEdge(nodeA.getId(), nodeC.getId(), "E2");
+
+	// Chain: A.firstOut -> e2 -> e1
+	e2.setNextOutEdgeId(e1.getId());
+	e1.setPrevOutEdgeId(e2.getId());
+	dataManager->updateEdge(e1);
+	dataManager->updateEdge(e2);
+
+	nodeA.setFirstOutEdgeId(e2.getId());
+	dataManager->updateNode(nodeA);
+
+	int64_t oldId = nodeA.getId();
+	int64_t newId = oldId + 500;
+	Node movedNode = nodeA;
+	movedNode.getMutableMetadata().id = newId;
+
+	updater->updateEntityReferences(oldId, &movedNode, toUnderlying(SegmentType::Node));
+
+	// Both edges should have their sourceNodeId updated
+	Edge updatedE1 = dataManager->getEdge(e1.getId());
+	Edge updatedE2 = dataManager->getEdge(e2.getId());
+	EXPECT_EQ(updatedE1.getSourceNodeId(), newId);
+	EXPECT_EQ(updatedE2.getSourceNodeId(), newId);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateNode_MultipleIncomingEdges) {
+	// Test node reference update when node has multiple incoming edges
+	// This tests the while loop traversal for incoming edges (lines 80-86)
+	Node nodeA = createNode("A");
+	Node nodeB = createNode("B");
+	Node nodeC = createNode("C");
+
+	Edge e1 = createEdge(nodeB.getId(), nodeA.getId(), "E1");
+	Edge e2 = createEdge(nodeC.getId(), nodeA.getId(), "E2");
+
+	// Chain: A.firstIn -> e2 -> e1
+	e2.setNextInEdgeId(e1.getId());
+	e1.setPrevInEdgeId(e2.getId());
+	dataManager->updateEdge(e1);
+	dataManager->updateEdge(e2);
+
+	nodeA.setFirstInEdgeId(e2.getId());
+	dataManager->updateNode(nodeA);
+
+	int64_t oldId = nodeA.getId();
+	int64_t newId = oldId + 500;
+	Node movedNode = nodeA;
+	movedNode.getMutableMetadata().id = newId;
+
+	updater->updateEntityReferences(oldId, &movedNode, toUnderlying(SegmentType::Node));
+
+	// Both edges should have their targetNodeId updated
+	Edge updatedE1 = dataManager->getEdge(e1.getId());
+	Edge updatedE2 = dataManager->getEdge(e2.getId());
+	EXPECT_EQ(updatedE1.getTargetNodeId(), newId);
+	EXPECT_EQ(updatedE2.getTargetNodeId(), newId);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateIndex_LeafWithOnlyPrevSibling) {
+	// Test leaf index with only prev sibling (nextLeafId == 0)
+	// Covers line 245 false branch (nextLeafId == 0)
+	Index leaf1 = createIndex(Index::NodeType::LEAF);
+	Index leaf2 = createIndex(Index::NodeType::LEAF);
+
+	leaf1.setNextLeafId(leaf2.getId());
+	leaf1.setPrevLeafId(0);
+	leaf2.setPrevLeafId(leaf1.getId());
+	leaf2.setNextLeafId(0); // No next sibling
+	dataManager->updateIndexEntity(leaf1);
+	dataManager->updateIndexEntity(leaf2);
+
+	int64_t oldL2 = leaf2.getId();
+	int64_t newL2 = oldL2 + 100;
+	Index movedL2 = leaf2;
+	movedL2.getMutableMetadata().id = newL2;
+
+	updater->updateEntityReferences(oldL2, &movedL2, toUnderlying(SegmentType::Index));
+
+	// leaf1's next should be updated
+	Index updatedL1 = dataManager->getIndex(leaf1.getId());
+	EXPECT_EQ(updatedL1.getNextLeafId(), newL2);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateIndex_LeafWithOnlyNextSibling) {
+	// Test leaf index with only next sibling (prevLeafId == 0)
+	// Covers line 240 false branch (prevLeafId == 0)
+	Index leaf1 = createIndex(Index::NodeType::LEAF);
+	Index leaf2 = createIndex(Index::NodeType::LEAF);
+
+	leaf1.setNextLeafId(leaf2.getId());
+	leaf1.setPrevLeafId(0); // No prev sibling
+	leaf2.setPrevLeafId(leaf1.getId());
+	leaf2.setNextLeafId(0);
+	dataManager->updateIndexEntity(leaf1);
+	dataManager->updateIndexEntity(leaf2);
+
+	int64_t oldL1 = leaf1.getId();
+	int64_t newL1 = oldL1 + 100;
+	Index movedL1 = leaf1;
+	movedL1.getMutableMetadata().id = newL1;
+
+	updater->updateEntityReferences(oldL1, &movedL1, toUnderlying(SegmentType::Index));
+
+	// leaf2's prev should be updated
+	Index updatedL2 = dataManager->getIndex(leaf2.getId());
+	EXPECT_EQ(updatedL2.getPrevLeafId(), newL1);
+}
+
+// =========================================================================
+// Additional Branch Coverage Tests - Round 5
+// =========================================================================
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_BlobPropertyOnNode) {
+	// Test updatePropertiesPointingToEntity for Node with BLOB storage
+	// Covers the BLOB_ENTITY branch in updatePropertiesPointingToEntity for Node
+	Node node = createNode("N");
+	Blob blob = createBlob(node.getId(), toUnderlying(SegmentType::Node));
+
+	node.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(node);
+
+	int64_t oldNodeId = node.getId();
+	int64_t newNodeId = oldNodeId + 300;
+	Node movedNode = node;
+	movedNode.getMutableMetadata().id = newNodeId;
+
+	updater->updateEntityReferences(oldNodeId, &movedNode, toUnderlying(SegmentType::Node));
+
+	// Blob entity info should now point to the new node ID
+	Blob updatedBlob = dataManager->getBlob(blob.getId());
+	EXPECT_EQ(updatedBlob.getEntityId(), newNodeId);
+	EXPECT_EQ(updatedBlob.getEntityType(), toUnderlying(SegmentType::Node));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_PropertyOnEdgeStorageBlob) {
+	// Test updatePropertiesPointingToEntity for Edge with BLOB storage
+	// Covers line 391-394 for Edge type specifically
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Blob blob = createBlob(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldEdgeId = edge.getId();
+	int64_t newEdgeId = oldEdgeId + 400;
+	Edge movedEdge = edge;
+	movedEdge.getMutableMetadata().id = newEdgeId;
+
+	updater->updateEntityReferences(oldEdgeId, &movedEdge, toUnderlying(SegmentType::Edge));
+
+	// Blob entity info should now point to new edge ID
+	Blob updatedBlob = dataManager->getBlob(blob.getId());
+	EXPECT_EQ(updatedBlob.getEntityId(), newEdgeId);
+	EXPECT_EQ(updatedBlob.getEntityType(), toUnderlying(SegmentType::Edge));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_PropertyOnEdgeStorageProperty) {
+	// Test updatePropertiesPointingToEntity for Edge with PROPERTY storage
+	// Covers line 387-390 for Edge type specifically
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Property prop = createProperty(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(prop.getId(), PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldEdgeId = edge.getId();
+	int64_t newEdgeId = oldEdgeId + 500;
+	Edge movedEdge = edge;
+	movedEdge.getMutableMetadata().id = newEdgeId;
+
+	updater->updateEntityReferences(oldEdgeId, &movedEdge, toUnderlying(SegmentType::Edge));
+
+	// Property entity info should now point to new edge ID
+	Property updatedProp = dataManager->getProperty(prop.getId());
+	EXPECT_EQ(updatedProp.getEntityId(), newEdgeId);
+	EXPECT_EQ(updatedProp.getEntityType(), toUnderlying(SegmentType::Edge));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateNode_NoOutgoingNoIncomingEdges) {
+	// Test updateNodeReferences when node has no outgoing AND no incoming edges
+	// Both while loops (lines 72 and 81) should immediately exit
+	Node node = createNode("Isolated");
+
+	// Ensure no edges
+	node.setFirstOutEdgeId(0);
+	node.setFirstInEdgeId(0);
+	dataManager->updateNode(node);
+
+	int64_t oldId = node.getId();
+	int64_t newId = oldId + 700;
+	Node movedNode = node;
+	movedNode.getMutableMetadata().id = newId;
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldId, &movedNode, toUnderlying(SegmentType::Node)));
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_NodeOwner_MatchingPropertyEntityId) {
+	// Test updateBlobReferences where node.getPropertyEntityId() == oldBlobId
+	// (line 196 true branch)
+	Node node = createNode("Owner");
+	Blob blob = createBlob(node.getId(), toUnderlying(SegmentType::Node));
+
+	// Set node to point to THIS blob
+	node.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateNode(node);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 100;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	Node updatedNode = dataManager->getNode(node.getId());
+	EXPECT_EQ(updatedNode.getPropertyEntityId(), newBlobId);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_EdgeOwner_MatchingPropertyEntityId) {
+	// Test updateBlobReferences where edge.getPropertyEntityId() == oldBlobId
+	// (line 203 true branch)
+	Node n = createNode("N");
+	Edge edge = createEdge(n.getId(), n.getId(), "E");
+	Blob blob = createBlob(edge.getId(), toUnderlying(SegmentType::Edge));
+
+	edge.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateEdge(edge);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 200;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	Edge updatedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(updatedEdge.getPropertyEntityId(), newBlobId);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateBlob_StateOwner_MatchingExternalId) {
+	// Test updateBlobReferences where state.getExternalId() == oldBlobId
+	// (line 210 true branch)
+	State s = createState("BlobState");
+	Blob blob = createBlob(s.getId(), toUnderlying(SegmentType::State));
+
+	s.setExternalId(blob.getId());
+	dataManager->updateStateEntity(s);
+
+	int64_t oldBlobId = blob.getId();
+	int64_t newBlobId = oldBlobId + 300;
+	Blob movedBlob = blob;
+	movedBlob.setId(newBlobId);
+
+	updater->updateEntityReferences(oldBlobId, &movedBlob, toUnderlying(SegmentType::Blob));
+
+	State updatedState = dataManager->getState(s.getId());
+	EXPECT_EQ(updatedState.getExternalId(), newBlobId);
+}
+
+// ============================================================================
+// Branch coverage: Mismatch guards in updateEdgeReferences
+// ============================================================================
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_NeighborOutNextMismatch) {
+	// Cover: line 123 false branch - neighbor.getNextOutEdgeId() != oldEdgeId
+	// Create an edge chain and then break the back-reference before moving
+	Node n1 = createNode("MismatchNode1");
+	Node n2 = createNode("MismatchNode2");
+
+	// Create two edges from n1 to n2: chain is [edgeB, edgeA] (LIFO)
+	Edge edgeA = createEdge(n1.getId(), n2.getId(), "MIS_LINK");
+	Edge edgeB = createEdge(n1.getId(), n2.getId(), "MIS_LINK");
+
+	// edgeB is head of outgoing chain, edgeB.nextOutEdge = edgeA
+	// edgeA.prevOutEdge = edgeB
+	Edge storedA = dataManager->getEdge(edgeA.getId());
+	Edge storedB = dataManager->getEdge(edgeB.getId());
+	ASSERT_EQ(storedA.getPrevOutEdgeId(), edgeB.getId());
+	ASSERT_EQ(storedB.getNextOutEdgeId(), edgeA.getId());
+
+	// Break the back-reference: set edgeB.nextOutEdge to 0
+	storedB.setNextOutEdgeId(0);
+	dataManager->updateEdge(storedB);
+
+	// Now move edgeA to new ID. The updater will look at edgeA.prevOutEdge (edgeB),
+	// check if edgeB.nextOutEdge == oldEdgeAId. Since we changed it to 0, the check fails.
+	int64_t oldEdgeAId = edgeA.getId();
+	int64_t newEdgeAId = oldEdgeAId + 500;
+	Edge movedA = dataManager->getEdge(edgeA.getId());
+	movedA.setId(newEdgeAId);
+
+	updater->updateEntityReferences(oldEdgeAId, &movedA, toUnderlying(SegmentType::Edge));
+
+	// Verify edgeB.nextOutEdge was NOT updated (since it didn't match)
+	Edge checkB = dataManager->getEdge(edgeB.getId());
+	EXPECT_EQ(checkB.getNextOutEdgeId(), 0);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_NeighborInNextMismatch) {
+	// Cover: line 135 false branch - neighbor.getNextInEdgeId() != oldEdgeId
+	Node n1 = createNode("InMisNode1");
+	Node n2 = createNode("InMisNode2");
+	Node n3 = createNode("InMisNode3");
+
+	// Create two edges targeting n2 from different sources
+	Edge edgeA = createEdge(n1.getId(), n2.getId(), "IN_MIS");
+	Edge edgeB = createEdge(n3.getId(), n2.getId(), "IN_MIS");
+
+	// Incoming chain for n2: [edgeB, edgeA] (LIFO)
+	Edge storedA = dataManager->getEdge(edgeA.getId());
+	Edge storedB = dataManager->getEdge(edgeB.getId());
+	ASSERT_EQ(storedA.getPrevInEdgeId(), edgeB.getId());
+	ASSERT_EQ(storedB.getNextInEdgeId(), edgeA.getId());
+
+	// Break the in-chain back-reference
+	storedB.setNextInEdgeId(0);
+	dataManager->updateEdge(storedB);
+
+	// Move edgeA
+	int64_t oldId = edgeA.getId();
+	int64_t newId = oldId + 600;
+	Edge movedA = dataManager->getEdge(edgeA.getId());
+	movedA.setId(newId);
+
+	updater->updateEntityReferences(oldId, &movedA, toUnderlying(SegmentType::Edge));
+
+	// edgeB.nextInEdge should NOT have been updated
+	Edge checkB = dataManager->getEdge(edgeB.getId());
+	EXPECT_EQ(checkB.getNextInEdgeId(), 0);
+}
+
+TEST_F(EntityReferenceUpdaterTest, UpdateNode_PropertyEntityType) {
+	// Cover: line 387 true branch and line 391 false branch
+	// Node with PROPERTY_ENTITY storage type: hits line 387 (true) and skips line 391.
+	Node n = createNode("PropNode");
+	Property prop = createProperty(n.getId(), toUnderlying(SegmentType::Node));
+
+	// Set node's property entity to a PROPERTY_ENTITY type
+	n.setPropertyEntityId(prop.getId(), PropertyStorageType::PROPERTY_ENTITY);
+	dataManager->updateNode(n);
+
+	int64_t oldNodeId = n.getId();
+	int64_t newNodeId = oldNodeId + 800;
+	Node movedNode = dataManager->getNode(n.getId());
+	movedNode.setId(newNodeId);
+
+	updater->updateEntityReferences(oldNodeId, &movedNode, toUnderlying(SegmentType::Node));
+
+	// The property's entityInfo should be updated to newNodeId
+	Property updatedProp = dataManager->getProperty(prop.getId());
+	EXPECT_EQ(updatedProp.getEntityId(), newNodeId);
+}
+
+// =========================================================================
+// Branch Coverage: Move a node that has no outgoing/incoming edges
+// This exercises the early-return paths in updateEntityReferences where
+// firstOutEdgeId and firstInEdgeId are 0
+// =========================================================================
+
+TEST_F(EntityReferenceUpdaterTest, UpdateNode_NoEdgeConnections) {
+	Node node = createNode("IsolatedNode");
+	// Node has no edges connected (firstOutEdgeId == 0, firstInEdgeId == 0)
+
+	int64_t oldId = node.getId();
+	int64_t newId = oldId + 3000;
+	Node movedNode = node;
+	movedNode.getMutableMetadata().id = newId;
+
+	// Should complete without error even though there are no edges to update
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldId, &movedNode, toUnderlying(SegmentType::Node)));
+}
+
+// =========================================================================
+// Branch Coverage: Move an edge that has no chain links (prev/next all 0)
+// Covers: paths where prevOutEdgeId, nextOutEdgeId etc. are all 0
+// =========================================================================
+
+TEST_F(EntityReferenceUpdaterTest, UpdateEdge_NoChainLinks) {
+	Node nodeA = createNode("ChainA");
+	Node nodeB = createNode("ChainB");
+	Edge edge = createEdge(nodeA.getId(), nodeB.getId(), "ISOLATED_EDGE");
+
+	// Do not set any edge chain pointers (prevOut, nextOut, prevIn, nextIn all 0)
+	// But do set node pointers to this edge
+	nodeA.setFirstOutEdgeId(edge.getId());
+	nodeB.setFirstInEdgeId(edge.getId());
+	dataManager->updateNode(nodeA);
+	dataManager->updateNode(nodeB);
+
+	int64_t oldId = edge.getId();
+	int64_t newId = oldId + 5000;
+	Edge movedEdge = edge;
+	movedEdge.getMutableMetadata().id = newId;
+
+	EXPECT_NO_THROW(updater->updateEntityReferences(oldId, &movedEdge, toUnderlying(SegmentType::Edge)));
+
+	// Verify node pointers updated
+	Node updatedA = dataManager->getNode(nodeA.getId());
+	Node updatedB = dataManager->getNode(nodeB.getId());
+	EXPECT_EQ(updatedA.getFirstOutEdgeId(), newId);
+	EXPECT_EQ(updatedB.getFirstInEdgeId(), newId);
+}
+

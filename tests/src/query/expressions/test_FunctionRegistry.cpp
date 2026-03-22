@@ -1191,7 +1191,7 @@ TEST_F(FunctionRegistryTest, RangeFunction_ZeroStep) {
 	args.push_back(PropertyValue(int64_t(5)));
 	args.push_back(PropertyValue(int64_t(0))); // step = 0
 
-	EXPECT_THROW(func->evaluate(args, *context_), std::runtime_error);
+	EXPECT_THROW((void)func->evaluate(args, *context_), std::runtime_error);
 }
 
 TEST_F(FunctionRegistryTest, RangeFunction_NegativeStartPositiveEnd) {
@@ -1230,4 +1230,1167 @@ TEST_F(FunctionRegistryTest, RangeFunction_LargeStep) {
 	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 25);
 	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 50);
 	EXPECT_EQ(std::get<int64_t>(list[3].getVariant()), 75);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, RangeFunction_TooManyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("range");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(0)));
+	args.push_back(PropertyValue(int64_t(5)));
+	args.push_back(PropertyValue(int64_t(1)));
+	args.push_back(PropertyValue(int64_t(1)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Type Conversion Function Tests - toInteger
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, ToIntegerFunction_FromInteger) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tointeger");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 42);
+}
+
+TEST_F(FunctionRegistryTest, ToIntegerFunction_FromDouble) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tointeger");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(3.7));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 3);
+}
+
+TEST_F(FunctionRegistryTest, ToIntegerFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tointeger");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, ToIntegerFunction_Empty) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tointeger");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Type Conversion Function Tests - toFloat
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, ToFloatFunction_FromInteger) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tofloat");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::DOUBLE);
+	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 42.0);
+}
+
+TEST_F(FunctionRegistryTest, ToFloatFunction_FromDouble) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tofloat");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(3.14));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::DOUBLE);
+	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 3.14);
+}
+
+TEST_F(FunctionRegistryTest, ToFloatFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tofloat");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, ToFloatFunction_Empty) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tofloat");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Type Conversion Function Tests - toBoolean
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, ToBooleanFunction_True) {
+	const ScalarFunction* func = registry->lookupScalarFunction("toboolean");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(true));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::BOOLEAN);
+	EXPECT_TRUE(std::get<bool>(result.getVariant()));
+}
+
+TEST_F(FunctionRegistryTest, ToBooleanFunction_False) {
+	const ScalarFunction* func = registry->lookupScalarFunction("toboolean");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(false));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::BOOLEAN);
+	EXPECT_FALSE(std::get<bool>(result.getVariant()));
+}
+
+TEST_F(FunctionRegistryTest, ToBooleanFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("toboolean");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, ToBooleanFunction_Empty) {
+	const ScalarFunction* func = registry->lookupScalarFunction("toboolean");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Additional String Function Tests - left
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, LeftFunction_Basic) {
+	const ScalarFunction* func = registry->lookupScalarFunction("left");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(int64_t(3)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "hel");
+}
+
+TEST_F(FunctionRegistryTest, LeftFunction_LengthExceedsString) {
+	const ScalarFunction* func = registry->lookupScalarFunction("left");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hi")));
+	args.push_back(PropertyValue(int64_t(10)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "hi");
+}
+
+TEST_F(FunctionRegistryTest, LeftFunction_NegativeLength) {
+	const ScalarFunction* func = registry->lookupScalarFunction("left");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(int64_t(-1)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, LeftFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("left");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	args.push_back(PropertyValue(int64_t(3)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Additional String Function Tests - right
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, RightFunction_Basic) {
+	const ScalarFunction* func = registry->lookupScalarFunction("right");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(int64_t(3)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "llo");
+}
+
+TEST_F(FunctionRegistryTest, RightFunction_LengthExceedsString) {
+	const ScalarFunction* func = registry->lookupScalarFunction("right");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hi")));
+	args.push_back(PropertyValue(int64_t(10)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "hi");
+}
+
+TEST_F(FunctionRegistryTest, RightFunction_NegativeLength) {
+	const ScalarFunction* func = registry->lookupScalarFunction("right");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(int64_t(-1)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, RightFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("right");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	args.push_back(PropertyValue(int64_t(3)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Additional String Function Tests - lTrim
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, LTrimFunction_LeadingSpaces) {
+	const ScalarFunction* func = registry->lookupScalarFunction("ltrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("  hello  ")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "hello  ");
+}
+
+TEST_F(FunctionRegistryTest, LTrimFunction_NoSpaces) {
+	const ScalarFunction* func = registry->lookupScalarFunction("ltrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "hello");
+}
+
+TEST_F(FunctionRegistryTest, LTrimFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("ltrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, LTrimFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("ltrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Additional String Function Tests - rTrim
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, RTrimFunction_TrailingSpaces) {
+	const ScalarFunction* func = registry->lookupScalarFunction("rtrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("  hello  ")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "  hello");
+}
+
+TEST_F(FunctionRegistryTest, RTrimFunction_NoSpaces) {
+	const ScalarFunction* func = registry->lookupScalarFunction("rtrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "hello");
+}
+
+TEST_F(FunctionRegistryTest, RTrimFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("rtrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, RTrimFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("rtrim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Additional String Function Tests - split
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, SplitFunction_Basic) {
+	const ScalarFunction* func = registry->lookupScalarFunction("split");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("a,b,c")));
+	args.push_back(PropertyValue(std::string(",")));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(list.size(), 3UL);
+	EXPECT_EQ(std::get<std::string>(list[0].getVariant()), "a");
+	EXPECT_EQ(std::get<std::string>(list[1].getVariant()), "b");
+	EXPECT_EQ(std::get<std::string>(list[2].getVariant()), "c");
+}
+
+TEST_F(FunctionRegistryTest, SplitFunction_EmptyDelimiter) {
+	const ScalarFunction* func = registry->lookupScalarFunction("split");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("abc")));
+	args.push_back(PropertyValue(std::string("")));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(list.size(), 3UL);
+	EXPECT_EQ(std::get<std::string>(list[0].getVariant()), "a");
+	EXPECT_EQ(std::get<std::string>(list[1].getVariant()), "b");
+	EXPECT_EQ(std::get<std::string>(list[2].getVariant()), "c");
+}
+
+TEST_F(FunctionRegistryTest, SplitFunction_NoMatch) {
+	const ScalarFunction* func = registry->lookupScalarFunction("split");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(std::string(",")));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(list.size(), 1UL);
+	EXPECT_EQ(std::get<std::string>(list[0].getVariant()), "hello");
+}
+
+TEST_F(FunctionRegistryTest, SplitFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("split");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	args.push_back(PropertyValue(std::string(",")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Additional String Function Tests - reverse
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, ReverseFunction_String) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reverse");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "olleh");
+}
+
+TEST_F(FunctionRegistryTest, ReverseFunction_List) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reverse");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))};
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& rlist = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(rlist.size(), 3UL);
+	EXPECT_EQ(std::get<int64_t>(rlist[0].getVariant()), 3);
+	EXPECT_EQ(std::get<int64_t>(rlist[1].getVariant()), 2);
+	EXPECT_EQ(std::get<int64_t>(rlist[2].getVariant()), 1);
+}
+
+TEST_F(FunctionRegistryTest, ReverseFunction_NonStringNonList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reverse");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(123)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "321");
+}
+
+TEST_F(FunctionRegistryTest, ReverseFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reverse");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, ReverseFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reverse");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// List Function Tests - head
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, HeadFunction_NonEmptyList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("head");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(10)), PropertyValue(int64_t(20)), PropertyValue(int64_t(30))};
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 10);
+}
+
+TEST_F(FunctionRegistryTest, HeadFunction_EmptyList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("head");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list;
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, HeadFunction_NonList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("head");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, HeadFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("head");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// List Function Tests - tail
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, TailFunction_NonEmptyList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tail");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(10)), PropertyValue(int64_t(20)), PropertyValue(int64_t(30))};
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& rlist = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(rlist.size(), 2UL);
+	EXPECT_EQ(std::get<int64_t>(rlist[0].getVariant()), 20);
+	EXPECT_EQ(std::get<int64_t>(rlist[1].getVariant()), 30);
+}
+
+TEST_F(FunctionRegistryTest, TailFunction_EmptyList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tail");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list;
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& rlist = std::get<std::vector<PropertyValue>>(result.getVariant());
+	EXPECT_EQ(rlist.size(), 0UL);
+}
+
+TEST_F(FunctionRegistryTest, TailFunction_SingleElement) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tail");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(10))};
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+
+	EXPECT_EQ(result.getType(), PropertyType::LIST);
+	const auto& rlist = std::get<std::vector<PropertyValue>>(result.getVariant());
+	EXPECT_EQ(rlist.size(), 0UL);
+}
+
+TEST_F(FunctionRegistryTest, TailFunction_NonList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tail");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, TailFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tail");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// List Function Tests - last
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, LastFunction_NonEmptyList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("last");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(10)), PropertyValue(int64_t(20)), PropertyValue(int64_t(30))};
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 30);
+}
+
+TEST_F(FunctionRegistryTest, LastFunction_EmptyList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("last");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list;
+	args.push_back(PropertyValue(list));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, LastFunction_NonList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("last");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, LastFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("last");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Utility Function Tests - timestamp
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, TimestampFunction_ReturnsInteger) {
+	const ScalarFunction* func = registry->lookupScalarFunction("timestamp");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_GT(std::get<int64_t>(result.getVariant()), 0);
+}
+
+TEST_F(FunctionRegistryTest, TimestampFunction_IncreasingValues) {
+	const ScalarFunction* func = registry->lookupScalarFunction("timestamp");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result1 = func->evaluate(args, *context_);
+	PropertyValue result2 = func->evaluate(args, *context_);
+	EXPECT_GE(std::get<int64_t>(result2.getVariant()), std::get<int64_t>(result1.getVariant()));
+}
+
+// ============================================================================
+// Utility Function Tests - randomUUID
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, RandomUUIDFunction_ReturnsString) {
+	const ScalarFunction* func = registry->lookupScalarFunction("randomuuid");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	const auto& uuid = std::get<std::string>(result.getVariant());
+	EXPECT_EQ(uuid.size(), 36UL);
+	EXPECT_EQ(uuid[8], '-');
+	EXPECT_EQ(uuid[13], '-');
+	EXPECT_EQ(uuid[14], '4'); // Version 4
+	EXPECT_EQ(uuid[18], '-');
+	EXPECT_EQ(uuid[23], '-');
+}
+
+TEST_F(FunctionRegistryTest, RandomUUIDFunction_UniqueValues) {
+	const ScalarFunction* func = registry->lookupScalarFunction("randomuuid");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result1 = func->evaluate(args, *context_);
+	PropertyValue result2 = func->evaluate(args, *context_);
+	EXPECT_NE(std::get<std::string>(result1.getVariant()),
+	           std::get<std::string>(result2.getVariant()));
+}
+
+// ============================================================================
+// Reduce Function Tests
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, ReduceFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reduce");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	EXPECT_THROW((void)func->evaluate(args, *context_), std::runtime_error);
+}
+
+TEST_F(FunctionRegistryTest, ReduceFunction_WithListArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reduce");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(1))};
+	args.push_back(PropertyValue(list));
+	EXPECT_THROW((void)func->evaluate(args, *context_), std::runtime_error);
+}
+
+TEST_F(FunctionRegistryTest, ReduceFunction_WithNonListArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("reduce");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	EXPECT_THROW((void)func->evaluate(args, *context_), std::runtime_error);
+}
+
+// ============================================================================
+// Substring Edge Cases
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, SubstringFunction_NullLengthArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("substring");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(int64_t(1)));
+	args.push_back(PropertyValue()); // NULL length
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, SubstringFunction_NegativeLength) {
+	const ScalarFunction* func = registry->lookupScalarFunction("substring");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(int64_t(1)));
+	args.push_back(PropertyValue(int64_t(-1)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+}
+
+// ============================================================================
+// Abs Edge Cases
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, AbsFunction_StringToDouble) {
+	const ScalarFunction* func = registry->lookupScalarFunction("abs");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("-5")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::DOUBLE);
+	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 5.0);
+}
+
+TEST_F(FunctionRegistryTest, AbsFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("abs");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Length Edge Cases
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, LengthFunction_NonStringNonList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("length");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 0);
+}
+
+TEST_F(FunctionRegistryTest, LengthFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("length");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Size Edge Cases
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, SizeFunction_NonStringNonList) {
+	const ScalarFunction* func = registry->lookupScalarFunction("size");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(int64_t(42)));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, SizeFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("size");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// StartsWith/EndsWith/Contains Edge Cases
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, StartsWithFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("startswith");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	args.push_back(PropertyValue(std::string("he")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, EndsWithFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("endswith");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	args.push_back(PropertyValue(std::string("lo")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, ContainsFunction_Null) {
+	const ScalarFunction* func = registry->lookupScalarFunction("contains");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue());
+	args.push_back(PropertyValue(std::string("he")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Upper/Lower Edge Cases
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, UpperFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("upper");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, LowerFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("lower");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, TrimFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("trim");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, HeadFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("head");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, TailFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("tail");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, LastFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("last");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: substring with fewer than 2 args
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, SubstringFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("substring");
+	ASSERT_NE(func, nullptr);
+
+	// Only 1 arg: hits args.size() < 2 true branch
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: startsWith with fewer than 2 args
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, StartsWithFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("startswith");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: endsWith with fewer than 2 args
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, EndsWithFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("endswith");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: contains with fewer than 2 args
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, ContainsFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("contains");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: replace with fewer than 3 args, null args[0], null args[1]
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, ReplaceFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("replace");
+	ASSERT_NE(func, nullptr);
+
+	// Only 2 args: hits args.size() < 3 true branch
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue(std::string("world")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, ReplaceFunction_NullFirstArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("replace");
+	ASSERT_NE(func, nullptr);
+
+	// Null first arg: hits isNull(args[0]) true branch
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue()); // NULL
+	args.push_back(PropertyValue(std::string("world")));
+	args.push_back(PropertyValue(std::string("there")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, ReplaceFunction_NullSecondArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("replace");
+	ASSERT_NE(func, nullptr);
+
+	// Null second arg: hits isNull(args[1]) true branch
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue()); // NULL
+	args.push_back(PropertyValue(std::string("there")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: ceil/floor/round/sqrt/sign with empty args
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, CeilFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("ceil");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, FloorFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("floor");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, RoundFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("round");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, SqrtFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("sqrt");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, SignFunction_EmptyArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("sign");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: left/right with too few args and null second arg
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, LeftFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("left");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, LeftFunction_NullSecondArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("left");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue()); // NULL length
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, RightFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("right");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, RightFunction_NullSecondArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("right");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue()); // NULL length
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+// ============================================================================
+// Branch Coverage: lTrim/rTrim with empty string (loop boundary)
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, LTrimFunction_EmptyString) {
+	const ScalarFunction* func = registry->lookupScalarFunction("ltrim");
+	ASSERT_NE(func, nullptr);
+
+	// Empty string: start < str.length() is immediately false
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "");
+}
+
+TEST_F(FunctionRegistryTest, RTrimFunction_EmptyString) {
+	const ScalarFunction* func = registry->lookupScalarFunction("rtrim");
+	ASSERT_NE(func, nullptr);
+
+	// Empty string: end > 0 is immediately false
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), "");
+}
+
+// ============================================================================
+// Branch Coverage: split with too few args and null second arg
+// ============================================================================
+
+TEST_F(FunctionRegistryTest, SplitFunction_TooFewArgs) {
+	const ScalarFunction* func = registry->lookupScalarFunction("split");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, SplitFunction_NullSecondArg) {
+	const ScalarFunction* func = registry->lookupScalarFunction("split");
+	ASSERT_NE(func, nullptr);
+
+	std::vector<PropertyValue> args;
+	args.push_back(PropertyValue(std::string("hello")));
+	args.push_back(PropertyValue()); // NULL delimiter
+	PropertyValue result = func->evaluate(args, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
 }

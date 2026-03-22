@@ -66,6 +66,15 @@ namespace graph::query::indexes {
 						 const std::unordered_map<std::string, PropertyValue> &props);
 
 		/**
+		 * @brief Batch update vector indexes for multiple nodes.
+		 * More efficient than calling updateIndex() for each node individually
+		 * as it batches inserts per index to reduce graph construction overhead.
+		 */
+		void updateIndexBatch(
+				const std::vector<std::pair<Node, std::unordered_map<std::string, PropertyValue>>> &nodesWithProps,
+				const std::string &label);
+
+		/**
 		 * @brief Remove node from vector index (Optional, for deletion support).
 		 */
 		void removeIndex(int64_t nodeId, const std::string &label);

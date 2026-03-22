@@ -400,3 +400,631 @@ TEST_F(IntegrationQueryTest, OptionalMatchReverseDirection) {
 	auto result = execute("MATCH (b:Person {name: 'Bob'}) OPTIONAL MATCH (a:Person)-[:KNOWS]->(b) RETURN b.name, a.name");
 	EXPECT_EQ(result.rowCount(), 1UL);
 }
+
+// ============================================================================
+// Expression Evaluator branch coverage tests
+// ============================================================================
+
+TEST_F(IntegrationQueryTest, ArithmeticMixedTypes) {
+	// Integer + Double -> Double path in evaluateArithmetic
+	auto r1 = execute("RETURN 5 + 2.5 AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// Double - Integer
+	auto r2 = execute("RETURN 10.0 - 3 AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// Double * Double
+	auto r3 = execute("RETURN 2.0 * 3.0 AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	// Double / Double
+	auto r4 = execute("RETURN 10.0 / 3.0 AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+
+	// Integer division that produces double (not evenly divisible)
+	auto r5 = execute("RETURN 7 / 2 AS val");
+	EXPECT_EQ(r5.rowCount(), 1UL);
+
+	// Integer division that produces integer (evenly divisible)
+	auto r6 = execute("RETURN 6 / 3 AS val");
+	EXPECT_EQ(r6.rowCount(), 1UL);
+
+	// Power operator
+	auto r7 = execute("RETURN 2 ^ 3 AS val");
+	EXPECT_EQ(r7.rowCount(), 1UL);
+
+	// Modulo operator
+	auto r8 = execute("RETURN 10 % 3 AS val");
+	EXPECT_EQ(r8.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, StringConcatenation) {
+	// String + String
+	auto r1 = execute("RETURN 'hello' + ' world' AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// String + Integer (coercion)
+	auto r2 = execute("RETURN 'count: ' + 42 AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, ComparisonOperators) {
+	// Various comparisons covering all branches
+	auto r1 = execute("RETURN 5 < 10 AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	auto r2 = execute("RETURN 10 > 5 AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	auto r3 = execute("RETURN 5 <= 5 AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	auto r4 = execute("RETURN 5 >= 5 AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+
+	auto r5 = execute("RETURN 5 <> 10 AS val");
+	EXPECT_EQ(r5.rowCount(), 1UL);
+
+	// String operators
+	auto r6 = execute("RETURN 'hello world' STARTS WITH 'hello' AS val");
+	EXPECT_EQ(r6.rowCount(), 1UL);
+
+	auto r7 = execute("RETURN 'hello world' ENDS WITH 'world' AS val");
+	EXPECT_EQ(r7.rowCount(), 1UL);
+
+	auto r8 = execute("RETURN 'hello world' CONTAINS 'lo wo' AS val");
+	EXPECT_EQ(r8.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, LogicalOperatorsThreeValuedLogic) {
+	// AND with NULL
+	auto r1 = execute("RETURN false AND null AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	auto r2 = execute("RETURN null AND false AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	auto r3 = execute("RETURN true AND null AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	// OR with NULL
+	auto r4 = execute("RETURN true OR null AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+
+	auto r5 = execute("RETURN null OR true AS val");
+	EXPECT_EQ(r5.rowCount(), 1UL);
+
+	auto r6 = execute("RETURN false OR null AS val");
+	EXPECT_EQ(r6.rowCount(), 1UL);
+
+	// XOR with NULL
+	auto r7 = execute("RETURN null XOR true AS val");
+	EXPECT_EQ(r7.rowCount(), 1UL);
+
+	// XOR without NULL
+	auto r8 = execute("RETURN true XOR false AS val");
+	EXPECT_EQ(r8.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, UnaryOperators) {
+	// Unary minus on integer
+	auto r1 = execute("RETURN -5 AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// Unary minus on double
+	auto r2 = execute("RETURN -3.14 AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// NOT operator
+	auto r3 = execute("RETURN NOT true AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	auto r4 = execute("RETURN NOT false AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, NullPropagation) {
+	// NULL in arithmetic
+	auto r1 = execute("RETURN null + 5 AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	auto r2 = execute("RETURN 5 + null AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// NULL in comparison
+	auto r3 = execute("RETURN null = 5 AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	// IS NULL / IS NOT NULL
+	auto r4 = execute("RETURN null IS NULL AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+
+	auto r5 = execute("RETURN null IS NOT NULL AS val");
+	EXPECT_EQ(r5.rowCount(), 1UL);
+
+	auto r6 = execute("RETURN 1 IS NULL AS val");
+	EXPECT_EQ(r6.rowCount(), 1UL);
+
+	auto r7 = execute("RETURN 1 IS NOT NULL AS val");
+	EXPECT_EQ(r7.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, ListSlicing) {
+	// Single index
+	auto r1 = execute("RETURN [1, 2, 3][0] AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// Negative index
+	auto r2 = execute("RETURN [1, 2, 3][-1] AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// Out of bounds
+	auto r3 = execute("RETURN [1, 2, 3][10] AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	// Range slice
+	auto r4 = execute("RETURN [1, 2, 3, 4, 5][1..3] AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+
+	// Range with negative
+	auto r5 = execute("RETURN [1, 2, 3, 4, 5][0..-1] AS val");
+	EXPECT_EQ(r5.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, CaseExpression) {
+	(void) execute("CREATE (n:CaseNode {status: 'active', score: 85})");
+
+	// Simple CASE
+	auto r1 = execute("MATCH (n:CaseNode) RETURN CASE n.status WHEN 'active' THEN 'yes' WHEN 'inactive' THEN 'no' ELSE 'unknown' END AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// Searched CASE
+	auto r2 = execute("MATCH (n:CaseNode) RETURN CASE WHEN n.score > 90 THEN 'A' WHEN n.score > 80 THEN 'B' ELSE 'C' END AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// CASE with no matching branch (uses ELSE)
+	auto r3 = execute("MATCH (n:CaseNode) RETURN CASE n.status WHEN 'deleted' THEN 'yes' ELSE 'no' END AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	// CASE without ELSE (returns NULL)
+	auto r4 = execute("MATCH (n:CaseNode) RETURN CASE n.status WHEN 'deleted' THEN 'yes' END AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, InExpression) {
+	auto r1 = execute("RETURN 3 IN [1, 2, 3, 4] AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	auto r2 = execute("RETURN 5 IN [1, 2, 3, 4] AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, ListComprehension) {
+	// Filter-only comprehension
+	auto r1 = execute("RETURN [x IN [1, 2, 3, 4, 5] WHERE x > 3] AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// Map-only comprehension
+	auto r2 = execute("RETURN [x IN [1, 2, 3] | x * 2] AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// Filter + Map comprehension
+	auto r3 = execute("RETURN [x IN [1, 2, 3, 4, 5] WHERE x > 2 | x * 10] AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, QuantifierFunctions) {
+	// Quantifier functions tested at unit level; Cypher syntax uses '|' for predicate
+	// Simple integration smoke test with list comprehension syntax
+	auto r1 = execute("RETURN [x IN [2, 4, 6] WHERE x > 3] AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, MergeNode) {
+	// MERGE with ON CREATE SET
+	auto r1 = execute("MERGE (n:MergeTest {name: 'Alice'}) ON CREATE SET n.created = true RETURN n.name");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// MERGE same node again - should match (ON MATCH)
+	auto r2 = execute("MERGE (n:MergeTest {name: 'Alice'}) ON MATCH SET n.matched = true RETURN n.name");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, MergeEdge) {
+	(void) execute("CREATE (a:MENode {name: 'A'}), (b:MENode {name: 'B'})");
+
+	// MERGE edge - create
+	auto r1 = execute("MATCH (a:MENode {name: 'A'}), (b:MENode {name: 'B'}) MERGE (a)-[r:LINKED]->(b) RETURN r");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// MERGE same edge - should match
+	auto r2 = execute("MATCH (a:MENode {name: 'A'}), (b:MENode {name: 'B'}) MERGE (a)-[r:LINKED]->(b) RETURN r");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, UnionAll) {
+	auto r1 = execute("RETURN 1 AS val UNION ALL RETURN 2 AS val");
+	EXPECT_GE(r1.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, UnionDistinct) {
+	(void) execute("CREATE (n:UD1 {val: 1}), (m:UD2 {val: 1})");
+
+	auto r1 = execute("MATCH (n:UD1) RETURN n.val AS val UNION MATCH (m:UD2) RETURN m.val AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, DeleteNodeAndEdge) {
+	(void) execute("CREATE (a:Del1 {name: 'A'})-[:DREL]->(b:Del2 {name: 'B'})");
+
+	// DETACH DELETE
+	auto r1 = execute("MATCH (n:Del1) DETACH DELETE n");
+	(void) r1;
+
+	auto r2 = execute("MATCH (n:Del1) RETURN n");
+	EXPECT_EQ(r2.rowCount(), 0UL);
+}
+
+TEST_F(IntegrationQueryTest, SetAndRemoveProperty) {
+	(void) execute("CREATE (n:SRNode {name: 'Test'})");
+
+	// SET property
+	(void) execute("MATCH (n:SRNode) SET n.age = 30");
+
+	auto r1 = execute("MATCH (n:SRNode) RETURN n.age");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// REMOVE property
+	(void) execute("MATCH (n:SRNode) REMOVE n.age");
+
+	auto r2 = execute("MATCH (n:SRNode) RETURN n.age");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, SetLabel) {
+	(void) execute("CREATE (n:LabelNode {name: 'Test'})");
+
+	// SET label
+	(void) execute("MATCH (n:LabelNode) SET n:ExtraLabel");
+}
+
+TEST_F(IntegrationQueryTest, OrderBySkipLimit) {
+	(void) execute("CREATE (a:ONode {val: 3}), (b:ONode {val: 1}), (c:ONode {val: 2})");
+
+	// ORDER BY ASC
+	auto r1 = execute("MATCH (n:ONode) RETURN n.val ORDER BY n.val ASC");
+	EXPECT_EQ(r1.rowCount(), 3UL);
+
+	// ORDER BY DESC with LIMIT
+	auto r2 = execute("MATCH (n:ONode) RETURN n.val ORDER BY n.val DESC LIMIT 2");
+	EXPECT_EQ(r2.rowCount(), 2UL);
+
+	// SKIP
+	auto r3 = execute("MATCH (n:ONode) RETURN n.val ORDER BY n.val SKIP 1");
+	EXPECT_EQ(r3.rowCount(), 2UL);
+
+	// SKIP + LIMIT
+	auto r4 = execute("MATCH (n:ONode) RETURN n.val ORDER BY n.val SKIP 1 LIMIT 1");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, DistinctReturn) {
+	(void) execute("CREATE (a:DNode {val: 1}), (b:DNode {val: 1}), (c:DNode {val: 2})");
+
+	auto r1 = execute("MATCH (n:DNode) RETURN DISTINCT n.val");
+	EXPECT_EQ(r1.rowCount(), 2UL);
+}
+
+TEST_F(IntegrationQueryTest, AggregationFunctions) {
+	(void) execute("CREATE (a:ANode {val: 10}), (b:ANode {val: 20}), (c:ANode {val: 30})");
+
+	// COUNT
+	auto r1 = execute("MATCH (n:ANode) RETURN count(n) AS cnt");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// SUM
+	auto r2 = execute("MATCH (n:ANode) RETURN sum(n.val) AS total");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// AVG
+	auto r3 = execute("MATCH (n:ANode) RETURN avg(n.val) AS average");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	// MIN / MAX
+	auto r4 = execute("MATCH (n:ANode) RETURN min(n.val) AS mn, max(n.val) AS mx");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+
+	// COLLECT
+	auto r5 = execute("MATCH (n:ANode) RETURN collect(n.val) AS vals");
+	EXPECT_EQ(r5.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, WithClause) {
+	(void) execute("CREATE (a:WNode {val: 10}), (b:WNode {val: 20})");
+
+	auto r1 = execute("MATCH (n:WNode) WITH n.val AS v WHERE v > 15 RETURN v");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, UnwindClause) {
+	auto r1 = execute("UNWIND [1, 2, 3] AS x RETURN x");
+	EXPECT_EQ(r1.rowCount(), 3UL);
+}
+
+TEST_F(IntegrationQueryTest, ScalarFunctions) {
+	// toInteger
+	auto r1 = execute("RETURN toInteger('42') AS val");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	// toFloat
+	auto r2 = execute("RETURN toFloat('3.14') AS val");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	// toString
+	auto r3 = execute("RETURN toString(42) AS val");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+
+	// size on string
+	auto r4 = execute("RETURN size('hello') AS val");
+	EXPECT_EQ(r4.rowCount(), 1UL);
+
+	// size on list
+	auto r5 = execute("RETURN size([1, 2, 3]) AS val");
+	EXPECT_EQ(r5.rowCount(), 1UL);
+
+	// abs
+	auto r6 = execute("RETURN abs(-5) AS val");
+	EXPECT_EQ(r6.rowCount(), 1UL);
+
+	// ceil, floor, round
+	auto r7 = execute("RETURN ceil(2.3) AS c, floor(2.7) AS f, round(2.5) AS r");
+	EXPECT_EQ(r7.rowCount(), 1UL);
+
+	// coalesce
+	auto r8 = execute("RETURN coalesce(null, null, 'found') AS val");
+	EXPECT_EQ(r8.rowCount(), 1UL);
+
+	// type (edge function)
+	(void) execute("CREATE (a:TNode)-[:TREL]->(b:TNode)");
+	auto r9 = execute("MATCH ()-[r:TREL]->() RETURN type(r) AS val");
+	EXPECT_EQ(r9.rowCount(), 1UL);
+
+	// String functions
+	auto r10 = execute("RETURN lower('HELLO') AS l, upper('hello') AS u, trim('  hi  ') AS t");
+	EXPECT_EQ(r10.rowCount(), 1UL);
+
+	// substring
+	auto r11 = execute("RETURN substring('hello', 1, 3) AS val");
+	EXPECT_EQ(r11.rowCount(), 1UL);
+
+	// replace
+	auto r12 = execute("RETURN replace('hello world', 'world', 'there') AS val");
+	EXPECT_EQ(r12.rowCount(), 1UL);
+
+	// head, last, tail
+	auto r13 = execute("RETURN head([1, 2, 3]) AS h, last([1, 2, 3]) AS l, tail([1, 2, 3]) AS t");
+	EXPECT_EQ(r13.rowCount(), 1UL);
+
+	// reverse
+	auto r14 = execute("RETURN reverse([1, 2, 3]) AS val");
+	EXPECT_EQ(r14.rowCount(), 1UL);
+
+	// keys function
+	(void) execute("CREATE (n:KeyNode {a: 1, b: 2})");
+	auto r15 = execute("MATCH (n:KeyNode) RETURN keys(n) AS val");
+	EXPECT_EQ(r15.rowCount(), 1UL);
+
+	// range function
+	auto r16 = execute("RETURN range(0, 5) AS val");
+	EXPECT_EQ(r16.rowCount(), 1UL);
+
+	// range with step
+	auto r17 = execute("RETURN range(0, 10, 3) AS val");
+	EXPECT_EQ(r17.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, EntityIntrospectionFunctions) {
+	(void) execute("CREATE (n:IntrNode {name: 'test'})");
+
+	auto r1 = execute("MATCH (n:IntrNode) RETURN id(n) AS nid");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+
+	auto r2 = execute("MATCH (n:IntrNode) RETURN labels(n) AS lbls");
+	EXPECT_EQ(r2.rowCount(), 1UL);
+
+	auto r3 = execute("MATCH (n:IntrNode) RETURN properties(n) AS props");
+	EXPECT_EQ(r3.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, CreateIndex) {
+	(void) execute("CREATE (n:IdxNode {name: 'A', age: 30})");
+
+	auto r1 = execute("CREATE INDEX idx_name FOR (n:IdxNode) ON (n.name)");
+	(void) r1;
+
+	auto r2 = execute("SHOW INDEXES");
+	EXPECT_GE(r2.rowCount(), 1UL);
+
+	auto r3 = execute("DROP INDEX idx_name");
+	(void) r3;
+}
+
+TEST_F(IntegrationQueryTest, MapLiteral) {
+	auto r1 = execute("RETURN {a: 1, b: 'hello', c: true} AS m");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+}
+
+TEST_F(IntegrationQueryTest, SetPropertyMap) {
+	(void) execute("CREATE (n:MapNode {name: 'X'})");
+	(void) execute("MATCH (n:MapNode) SET n += {age: 25, city: 'NYC'}");
+
+	auto r1 = execute("MATCH (n:MapNode) RETURN n.age, n.city");
+	EXPECT_EQ(r1.rowCount(), 1UL);
+}
+
+// ============================================================================
+// Additional integration tests for QueryExecutor and Database branch coverage
+// ============================================================================
+
+/**
+ * Test DELETE node after creation within same session (covers QueryExecutor
+ * delete paths and FileStorage deletion flush paths)
+ */
+TEST_F(IntegrationQueryTest, DeleteNodeAfterCreation) {
+	(void) execute("CREATE (n:DelNode {name: 'ToDelete'})");
+	auto before = execute("MATCH (n:DelNode) RETURN n");
+	EXPECT_EQ(before.rowCount(), 1UL);
+
+	(void) execute("MATCH (n:DelNode {name: 'ToDelete'}) DELETE n");
+	auto after = execute("MATCH (n:DelNode) RETURN n");
+	EXPECT_EQ(after.rowCount(), 0UL);
+}
+
+/**
+ * Test DELETE edge without deleting nodes (covers edge deletion path)
+ */
+TEST_F(IntegrationQueryTest, DeleteEdgeOnly) {
+	(void) execute("CREATE (a:EDelNode {name: 'A'})-[:EDEL_REL {w: 1}]->(b:EDelNode {name: 'B'})");
+
+	// Verify edge exists
+	auto before = execute("MATCH ()-[r:EDEL_REL]->() RETURN r");
+	EXPECT_EQ(before.rowCount(), 1UL);
+
+	// Delete just the edge
+	(void) execute("MATCH ()-[r:EDEL_REL]->() DELETE r");
+
+	// Edge should be gone but nodes should remain
+	auto afterEdge = execute("MATCH ()-[r:EDEL_REL]->() RETURN r");
+	EXPECT_EQ(afterEdge.rowCount(), 0UL);
+
+	auto afterNodes = execute("MATCH (n:EDelNode) RETURN n");
+	EXPECT_EQ(afterNodes.rowCount(), 2UL);
+}
+
+/**
+ * Test bulk node creation and deletion (exercises many FileStorage save paths)
+ */
+TEST_F(IntegrationQueryTest, BulkCreateAndDelete) {
+	for (int i = 0; i < 20; ++i) {
+		execute("CREATE (n:BulkNode {id: " + std::to_string(i) + "})");
+	}
+
+	auto created = execute("MATCH (n:BulkNode) RETURN n.id");
+	EXPECT_EQ(created.rowCount(), 20UL);
+
+	// Delete half
+	(void) execute("MATCH (n:BulkNode) WHERE n.id < 10 DELETE n");
+	auto remaining = execute("MATCH (n:BulkNode) RETURN n.id");
+	EXPECT_EQ(remaining.rowCount(), 10UL);
+}
+
+/**
+ * Test DETACH DELETE on node with multiple edges
+ * (covers RelationshipTraversal unlinkEdge paths)
+ */
+TEST_F(IntegrationQueryTest, DetachDeleteNodeWithMultipleEdges) {
+	(void) execute("CREATE (c:Center {name: 'Hub'})");
+	(void) execute("CREATE (a:Spoke {name: 'A'})");
+	(void) execute("CREATE (b:Spoke {name: 'B'})");
+	(void) execute("CREATE (d:Spoke {name: 'C'})");
+	(void) execute("MATCH (c:Center), (a:Spoke {name: 'A'}) CREATE (c)-[:LINK]->(a)");
+	(void) execute("MATCH (c:Center), (b:Spoke {name: 'B'}) CREATE (c)-[:LINK]->(b)");
+	(void) execute("MATCH (c:Center), (d:Spoke {name: 'C'}) CREATE (d)-[:LINK]->(c)");
+
+	// DETACH DELETE the center node
+	(void) execute("MATCH (c:Center) DETACH DELETE c");
+
+	auto centerResult = execute("MATCH (n:Center) RETURN n");
+	EXPECT_EQ(centerResult.rowCount(), 0UL);
+
+	// Spokes should still exist
+	auto spokeResult = execute("MATCH (n:Spoke) RETURN n");
+	EXPECT_EQ(spokeResult.rowCount(), 3UL);
+
+	// All edges should be gone
+	auto edgeResult = execute("MATCH ()-[r:LINK]->() RETURN r");
+	EXPECT_EQ(edgeResult.rowCount(), 0UL);
+}
+
+/**
+ * Test query returning edge values (covers QueryExecutor edge result path)
+ */
+TEST_F(IntegrationQueryTest, QueryReturnsEdgeValues) {
+	(void) execute("CREATE (a:EV1 {name: 'A'})-[:EV_REL {weight: 42, tag: 'test'}]->(b:EV2 {name: 'B'})");
+
+	auto result = execute("MATCH (a)-[r:EV_REL]->(b) RETURN r, a, b");
+	EXPECT_EQ(result.rowCount(), 1UL);
+
+	// Verify columns include edge
+	auto cols = result.getColumns();
+	EXPECT_EQ(cols.size(), 3UL);
+}
+
+/**
+ * Test query with CREATE only (no RETURN clause)
+ * The engine may or may not produce output rows for bare CREATE statements.
+ */
+TEST_F(IntegrationQueryTest, QueryCreateOnly) {
+	auto result = execute("CREATE (n:NoRetNode {val: 1})");
+	// Just verify the query succeeded and node was created
+	auto verify = execute("MATCH (n:NoRetNode) RETURN n.val");
+	EXPECT_EQ(verify.rowCount(), 1UL);
+}
+
+/**
+ * Test query that produces null values in result (covers null/monostate result paths)
+ */
+TEST_F(IntegrationQueryTest, QueryWithNullValues) {
+	(void) execute("CREATE (n:NullNode {name: 'Test'})");
+
+	auto result = execute("MATCH (n:NullNode) RETURN n.name, n.nonexistent");
+	EXPECT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getColumns().size(), 2UL);
+}
+
+/**
+ * Test close-reopen-query cycle (covers Database close/reopen with WAL)
+ */
+TEST_F(IntegrationQueryTest, CloseReopenQuery) {
+	(void) execute("CREATE (n:ReOpenNode {val: 100})");
+	db->close();
+
+	db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	auto result = execute("MATCH (n:ReOpenNode) RETURN n.val");
+	EXPECT_EQ(result.rowCount(), 1UL);
+}
+
+/**
+ * Test multiple close-reopen cycles with data modification
+ * (covers FileStorage flush/close/reopen sequences and WAL recovery)
+ */
+TEST_F(IntegrationQueryTest, MultipleCloseReopenWithModification) {
+	// Cycle 1: Create
+	(void) execute("CREATE (n:CycleNode {val: 1})");
+	db->close();
+
+	// Cycle 2: Add more
+	db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	(void) execute("CREATE (n:CycleNode {val: 2})");
+	db->close();
+
+	// Cycle 3: Verify all data
+	db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	auto result = execute("MATCH (n:CycleNode) RETURN n.val ORDER BY n.val");
+	EXPECT_EQ(result.rowCount(), 2UL);
+}
+
+/**
+ * Test hasActiveTransaction branch in Database
+ */
+TEST_F(IntegrationQueryTest, HasActiveTransactionCheck) {
+	EXPECT_FALSE(db->hasActiveTransaction());
+
+	auto txn = db->beginTransaction();
+	EXPECT_TRUE(db->hasActiveTransaction());
+}

@@ -342,15 +342,24 @@ namespace graph::query::indexes {
 		// 1. Standard Indexes
 		nodeIndexManager_->onEntitiesAdded(nodes);
 
-		// 2. Vector Indexes (Batch)
-		if (vectorIndexManager_) {
-			for (const auto& node : nodes) {
+		// 2. Vector Indexes (Batch) — use batch API for graph construction efficiency
+		if (vectorIndexManager_ && !nodes.empty()) {
+			std::unordered_map<std::string,
+							   std::vector<std::pair<Node, std::unordered_map<std::string, PropertyValue>>>>
+					byLabel;
+
+			for (const auto &node: nodes) {
+				if (node.getProperties().empty())
+					continue;
 				std::string labelStr;
-				if (node.getLabelId() != 0) {
+				if (node.getLabelId() != 0)
 					labelStr = dataManager_->resolveLabel(node.getLabelId());
-				}
-				vectorIndexManager_->updateIndex(node, labelStr, node.getProperties());
+				if (!labelStr.empty())
+					byLabel[labelStr].push_back({node, node.getProperties()});
 			}
+
+			for (auto &[label, batch]: byLabel)
+				vectorIndexManager_->updateIndexBatch(batch, label);
 		}
 	}
 

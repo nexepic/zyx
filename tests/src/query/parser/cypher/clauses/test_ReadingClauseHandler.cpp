@@ -26,14 +26,14 @@ class ReadingClauseHandlerTest : public QueryTestFixture {};
 TEST_F(ReadingClauseHandlerTest, Call_InQueryNoArgs) {
 	// Tests in-query CALL without arguments
 	EXPECT_THROW({
-		execute("CALL db.stats() YIELD label RETURN label");
+		(void)execute("CALL db.stats() YIELD label RETURN label");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_InQueryUnknownProcedure) {
 	// Tests in-query CALL with unknown procedure
 	EXPECT_THROW({
-		execute("CALL unknown.proc() RETURN x");
+		(void)execute("CALL unknown.proc() RETURN x");
 	}, std::exception);
 }
 
@@ -46,7 +46,7 @@ TEST_F(ReadingClauseHandlerTest, Call_InQueryWithoutYield) {
 
 	// CALL in query without YIELD - if procedure doesn't exist, expect error
 	EXPECT_THROW({
-		execute("CALL db.stats() RETURN count(*)");
+		(void)execute("CALL db.stats() RETURN count(*)");
 	}, std::exception);
 }
 
@@ -55,14 +55,14 @@ TEST_F(ReadingClauseHandlerTest, Call_InQuery_UnknownProcedure) {
 	(void) execute("CREATE (n:Test)");
 
 	EXPECT_THROW({
-		execute("MATCH (n:Test) CALL unknown.proc() RETURN n");
+		(void)execute("MATCH (n:Test) CALL unknown.proc() RETURN n");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_MultipleArguments) {
 	// Tests with multiple arguments
 	EXPECT_THROW({
-		execute("CALL some.proc(1, 2, 3)");
+		(void)execute("CALL some.proc(1, 2, 3)");
 	}, std::exception);
 }
 
@@ -70,21 +70,21 @@ TEST_F(ReadingClauseHandlerTest, Call_NoArguments) {
 	// Covers False branch at line 51:7 (empty expressions)
 	// Line 74:18 also needs empty expression loop
 	EXPECT_THROW({
-		execute("CALL some.procedure()");
+		(void)execute("CALL some.procedure()");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_SingleArgument) {
 	// Tests with single argument
 	EXPECT_THROW({
-		execute("CALL some.proc(1)");
+		(void)execute("CALL some.proc(1)");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_StandaloneNoArgs) {
 	// Tests standalone CALL without arguments
 	EXPECT_THROW({
-		execute("CALL db.stats()");
+		(void)execute("CALL db.stats()");
 	}, std::exception);
 }
 
@@ -100,28 +100,28 @@ TEST_F(ReadingClauseHandlerTest, Call_StandaloneWithoutYield) {
 	// CALL without YIELD - just verify it doesn't crash
 	// If procedure doesn't exist, it will throw
 	EXPECT_THROW({
-		execute("CALL db.stats()");
+		(void)execute("CALL db.stats()");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_Standalone_UnknownProcedure) {
 	// Tests CALL with unknown procedure
 	EXPECT_THROW({
-		execute("CALL unknown.procedure()");
+		(void)execute("CALL unknown.procedure()");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_UnknownProcedure) {
 	// Tests CALL with unknown procedure (Line 46 True branch has explicitProcedureInvocation)
 	EXPECT_THROW({
-		execute("CALL unknown.procedure()");
+		(void)execute("CALL unknown.procedure()");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_WithArguments) {
 	// Tests CALL with procedure arguments
 	EXPECT_THROW({
-		execute("CALL some.procedure(1, 2, 3)");
+		(void)execute("CALL some.procedure(1, 2, 3)");
 	}, std::exception);
 }
 
@@ -129,21 +129,21 @@ TEST_F(ReadingClauseHandlerTest, Call_WithEmptyExpressions) {
 	// Tests CALL with no expressions (empty args)
 	// Covers Line 51 and 73 False branches
 	EXPECT_THROW({
-		execute("CALL unknown.proc()");
+		(void)execute("CALL unknown.proc()");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_WithExpressionArgs) {
 	// Tests CALL with expression arguments
 	EXPECT_THROW({
-		execute("CALL db.stats(1 + 2)");
+		(void)execute("CALL db.stats(1 + 2)");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_WithMixedArguments) {
 	// Tests CALL with mixed type arguments
 	EXPECT_THROW({
-		execute("CALL some.proc(1, 'test', true, 3.14)");
+		(void)execute("CALL some.proc(1, 'test', true, 3.14)");
 	}, std::exception);
 }
 
@@ -157,35 +157,35 @@ TEST_F(ReadingClauseHandlerTest, Call_WithMultipleArguments) {
 
 	// CALL with multiple args - if procedure doesn't exist, expect error
 	EXPECT_THROW({
-		execute("CALL db.labels() YIELD label RETURN count(*)");
+		(void)execute("CALL db.labels() YIELD label RETURN count(*)");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_WithNullArgument) {
 	// Tests with null argument
 	EXPECT_THROW({
-		execute("CALL some.proc(null)");
+		(void)execute("CALL some.proc(null)");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_WithStringArgument) {
 	// Tests with string argument
 	EXPECT_THROW({
-		execute("CALL some.proc('test')");
+		(void)execute("CALL some.proc('test')");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_WithStringArguments) {
 	// Tests CALL with string arguments
 	EXPECT_THROW({
-		execute("CALL some.procedure('arg1', 'arg2')");
+		(void)execute("CALL some.procedure('arg1', 'arg2')");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Call_WithVariableArgs) {
 	// Tests CALL with variable references
 	EXPECT_THROW({
-		execute("MATCH (n) CALL db.stats(n.id)");
+		(void)execute("MATCH (n) CALL db.stats(n.id)");
 	}, std::exception);
 }
 
@@ -194,7 +194,7 @@ TEST_F(ReadingClauseHandlerTest, Call_YieldMultipleFields) {
 	// This tests the yieldItems iteration with multiple items
 	// db.labels may not be implemented, so expect exception
 	EXPECT_THROW({
-		execute("CALL db.labels() YIELD label RETURN label");
+		(void)execute("CALL db.labels() YIELD label RETURN label");
 	}, std::exception);
 }
 
@@ -202,7 +202,7 @@ TEST_F(ReadingClauseHandlerTest, Call_YieldSingleField) {
 	// Tests CALL YIELD with single field
 	// db.labels may not be implemented, so expect exception
 	EXPECT_THROW({
-		execute("CALL db.labels() YIELD label RETURN label");
+		(void)execute("CALL db.labels() YIELD label RETURN label");
 	}, std::exception);
 }
 
@@ -340,14 +340,14 @@ TEST_F(ReadingClauseHandlerTest, InQueryCall_NoArguments) {
 	// Covers False branch at line 73:6 and 74:18
 	// CALL in query without arguments
 	EXPECT_THROW({
-		execute("CALL some.proc() RETURN x");
+		(void)execute("CALL some.proc() RETURN x");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, InQueryCall_WithEmptyExpressions) {
 	// Tests in-query CALL with no expressions
 	EXPECT_THROW({
-		execute("CALL unknown.proc() YIELD result");
+		(void)execute("CALL unknown.proc() YIELD result");
 	}, std::exception);
 }
 
@@ -1478,21 +1478,21 @@ TEST_F(ReadingClauseHandlerTest, Unwind_Zero) {
 TEST_F(ReadingClauseHandlerTest, Yield_Asterisk) {
 	// Tests CALL ... YIELD * (all fields)
 	EXPECT_THROW({
-		execute("CALL some.proc() YIELD *");
+		(void)execute("CALL some.proc() YIELD *");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_ProcedureResultField_NumericLike) {
 	// Tests YIELD with numeric-like field names
 	EXPECT_THROW({
-		execute("CALL some.proc() YIELD field1 AS var1");
+		(void)execute("CALL some.proc() YIELD field1 AS var1");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_ProcedureResultField_WithNamespace) {
 	// Tests YIELD with namespaced procedure result field
 	EXPECT_THROW({
-		execute("CALL some.proc() YIELD field.subfield AS result");
+		(void)execute("CALL some.proc() YIELD field.subfield AS result");
 	}, std::exception);
 }
 
@@ -1505,21 +1505,21 @@ TEST_F(ReadingClauseHandlerTest, Yield_WithAllRenamedFields) {
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_AndWhere) {
 	// Tests YIELD field AS var with WHERE clause
 	EXPECT_THROW({
-		execute("CALL unknown.proc() YIELD result AS x WHERE x > 0");
+		(void)execute("CALL unknown.proc() YIELD result AS x WHERE x > 0");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_LongNames) {
 	// Tests YIELD with long field names
 	EXPECT_THROW({
-		execute("CALL some.long.procedure.name() YIELD veryLongFieldName AS anotherLongVariableName");
+		(void)execute("CALL some.long.procedure.name() YIELD veryLongFieldName AS anotherLongVariableName");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_MixedCase) {
 	// Tests YIELD with mixed case names
 	EXPECT_THROW({
-		execute("CALL someProc() YIELD FieldName AS VariableName");
+		(void)execute("CALL someProc() YIELD FieldName AS VariableName");
 	}, std::exception);
 }
 
@@ -1545,28 +1545,28 @@ TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_SingleField) {
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_ThreeFields) {
 	// Tests YIELD with three renamed fields
 	EXPECT_THROW({
-		execute("CALL db.stats() YIELD label AS lbl, count AS cnt, value AS val");
+		(void)execute("CALL db.stats() YIELD label AS lbl, count AS cnt, value AS val");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_Underscores) {
 	// Tests YIELD with underscores in names
 	EXPECT_THROW({
-		execute("CALL some_proc() YIELD field_name AS var_name");
+		(void)execute("CALL some_proc() YIELD field_name AS var_name");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithMixedFields) {
 	// Tests YIELD with both renamed and non-renamed fields
 	EXPECT_THROW({
-		execute("CALL some.proc() YIELD field1, field2 AS new2");
+		(void)execute("CALL some.proc() YIELD field1, field2 AS new2");
 	}, std::exception);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithoutFieldRenaming_MultipleFields) {
 	// Tests YIELD with multiple fields without renaming
 	EXPECT_THROW({
-		execute("CALL some.proc() YIELD field1, field2, field3");
+		(void)execute("CALL some.proc() YIELD field1, field2, field3");
 	}, std::exception);
 }
 
@@ -1574,7 +1574,7 @@ TEST_F(ReadingClauseHandlerTest, Yield_WithoutFieldRenaming_SingleField) {
 	// Tests CALL ... YIELD var (no AS clause)
 	// This triggers Line 91 False branch
 	EXPECT_THROW({
-		execute("CALL unknown.proc() YIELD result");
+		(void)execute("CALL unknown.proc() YIELD result");
 	}, std::exception);
 }
 

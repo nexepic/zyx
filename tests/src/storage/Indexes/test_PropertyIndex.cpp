@@ -31,6 +31,7 @@
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/PropertyIndex.hpp"
+#include "graph/storage/state/SystemStateKeys.hpp"
 
 class PropertyIndexTest : public ::testing::Test {
 protected:
@@ -883,3 +884,978 @@ TEST_F(PropertyIndexTest, FindRange_NonExistentKey) {
 	// Should return empty
 	EXPECT_TRUE(results.empty());
 }
+
+/**
+ * @brief Test findExactMatch when key exists but type doesn't match the query value type.
+ * Covers: findExactMatch line 334: it->second != valueType branch.
+ */
+TEST_F(PropertyIndexTest, FindExactMatch_TypeMismatchOnExistingKey) {
+	const std::string key = "typed_key";
+
+	// Register key as INTEGER type
+	propertyIndex->addProperty(1, key, 42);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
+
+	// Try to find with STRING type - should return empty due to type mismatch
+	auto results = propertyIndex->findExactMatch(key, std::string("42"));
+	EXPECT_TRUE(results.empty());
+
+	// Also try DOUBLE
+	auto results2 = propertyIndex->findExactMatch(key, 42.0);
+	EXPECT_TRUE(results2.empty());
+
+	// But INTEGER should work
+	auto results3 = propertyIndex->findExactMatch(key, 42);
+	ASSERT_EQ(results3.size(), 1u);
+	EXPECT_EQ(results3[0], 1);
+}
+
+/**
+ * @brief Test findRange when key is registered but no root exists yet.
+ * Covers: findRange line 356: rootIt == rootMap.end() for a key with type but no root.
+ */
+TEST_F(PropertyIndexTest, FindRange_KeyRegisteredButNoRoot) {
+	const std::string key = "range_no_root";
+
+	// Create the index (registers as UNKNOWN type)
+	propertyIndex->createIndex(key);
+
+	// findRange on UNKNOWN type returns empty (not INTEGER or DOUBLE)
+	auto results = propertyIndex->findRange(key, 0.0, 100.0);
+	EXPECT_TRUE(results.empty());
+}
+
+/**
+ * @brief Test removeProperty when key exists but no root node in root map.
+ * Covers: removeProperty line 324: rootIt == rootMap.end().
+ */
+TEST_F(PropertyIndexTest, RemoveProperty_KeyExistsButNoRoot) {
+	const std::string key = "remove_no_root";
+
+	// Create the index as UNKNOWN, then set type via addProperty, then clearIndexData
+	propertyIndex->addProperty(1, key, 100);
+	propertyIndex->clearIndexData(key);
+
+	// Now key is registered as UNKNOWN, add a new value
+	propertyIndex->addProperty(2, key, 200);
+
+	// Remove a value that doesn't actually have a root for the original type
+	// Since clearIndexData resets to UNKNOWN, but addProperty transitions to INTEGER
+	// Let's try a different approach: remove from a key with correct type but cleared root
+	const std::string key2 = "remove_no_root2";
+	propertyIndex->createIndex(key2);
+
+	// Register type by adding and then clear data
+	propertyIndex->addProperty(10, key2, std::string("val"));
+	propertyIndex->clearIndexData(key2);
+
+	// Now key2 is UNKNOWN type - try remove with a string
+	// Type won't match UNKNOWN, so registeredType != valueType returns early
+	propertyIndex->removeProperty(10, key2, std::string("val"));
+	// Just verify no crash
+	SUCCEED();
+}
+
+/**
+ * @brief Test addPropertiesBatch with UNKNOWN type keys transitioning to concrete types.
+ * Covers: addPropertiesBatch line 258: registeredType == PropertyType::UNKNOWN branch.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_UnknownTypeTransition) {
+	const std::string key = "batch_unknown_key";
+
+	// Register the key (will be UNKNOWN type)
+	propertyIndex->createIndex(key);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+
+	// Add batch with data - should transition from UNKNOWN to INTEGER
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, key, 100);
+	batch.emplace_back(2, key, 200);
+	batch.emplace_back(3, key, 300);
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	// Verify type transitioned
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
+
+	// Verify data was added
+	auto results = propertyIndex->findExactMatch(key, 200);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 2);
+}
+
+/**
+ * @brief Test dropKey with double type to cover doubleRoots_.empty() false branch.
+ * Covers: dropKey line 99-101 (doubleRoots_ not empty).
+ */
+TEST_F(PropertyIndexTest, DropKey_DoubleAndBoolRootsNotEmpty) {
+	// Add keys of different types
+	propertyIndex->addProperty(1, "double_key1", 3.14);
+	propertyIndex->addProperty(2, "double_key2", 2.71);
+	propertyIndex->addProperty(3, "bool_key1", true);
+	propertyIndex->addProperty(4, "bool_key2", false);
+
+	// Drop one double key - doubleRoots still has double_key2
+	propertyIndex->dropKey("double_key1");
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed("double_key2"));
+
+	// Drop one bool key - boolRoots still has bool_key2
+	propertyIndex->dropKey("bool_key1");
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed("bool_key2"));
+
+	// Verify remaining data accessible
+	auto dblRes = propertyIndex->findExactMatch("double_key2", 2.71);
+	ASSERT_EQ(dblRes.size(), 1u);
+	EXPECT_EQ(dblRes[0], 2);
+}
+
+/**
+ * @brief Test findRange for DOUBLE type explicitly.
+ * Covers: findRange line 363-364 (type == DOUBLE, minKey/maxKey as double).
+ */
+TEST_F(PropertyIndexTest, FindRange_DoubleType) {
+	propertyIndex->addProperty(1, "dbl_range", 1.5);
+	propertyIndex->addProperty(2, "dbl_range", 2.5);
+	propertyIndex->addProperty(3, "dbl_range", 3.5);
+	propertyIndex->addProperty(4, "dbl_range", 4.5);
+
+	auto results = propertyIndex->findRange("dbl_range", 2.0, 3.5);
+	EXPECT_GE(results.size(), 2u);
+	EXPECT_TRUE(vectorContains(results, 2));
+	EXPECT_TRUE(vectorContains(results, 3));
+}
+
+/**
+ * @brief Test clearKey on a key that was never indexed.
+ * Covers: clearKey line 59: it == indexedKeyTypes_.end() early return.
+ */
+TEST_F(PropertyIndexTest, ClearKey_NonExistentKey) {
+	EXPECT_NO_THROW(propertyIndex->clearKey("never_existed"));
+	EXPECT_TRUE(propertyIndex->isEmpty());
+}
+
+/**
+ * @brief Test serializeRootMap with only bool roots populated.
+ * Covers: serializeRootMap line 427-428 (boolRoots_ not empty).
+ */
+TEST_F(PropertyIndexTest, SerializeRootMap_OnlyBoolRoots) {
+	propertyIndex->addProperty(1, "only_bool", true);
+	propertyIndex->flush();
+
+	// Reload
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+
+	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_bool"));
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_bool"), graph::PropertyType::BOOLEAN);
+	auto results = reloadedIndex->findExactMatch("only_bool", true);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
+}
+
+/**
+ * @brief Test serializeRootMap with only double roots populated.
+ * Covers: serializeRootMap line 423-425 (doubleRoots_ not empty).
+ */
+TEST_F(PropertyIndexTest, SerializeRootMap_OnlyDoubleRoots) {
+	propertyIndex->addProperty(1, "only_double", 99.9);
+	propertyIndex->flush();
+
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+
+	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_double"));
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_double"), graph::PropertyType::DOUBLE);
+	auto results = reloadedIndex->findExactMatch("only_double", 99.9);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
+}
+
+// =========================================================================
+// Additional Branch Coverage Tests for PropertyIndex
+// =========================================================================
+
+/**
+ * @brief Test initialize with pre-existing indexed keys (persistence reload path).
+ * Covers: Line 49 - indexedKeyTypes_ iteration in initialize().
+ * When a PropertyIndex is reloaded from persisted state, the indexedKeyTypes_
+ * map is non-empty, so the loop at line 49 iterates.
+ */
+TEST_F(PropertyIndexTest, Initialize_WithPersistedKeys) {
+	// Add data of multiple types to populate the indexed keys
+	propertyIndex->addProperty(1, "str_key", std::string("hello"));
+	propertyIndex->addProperty(2, "int_key", 42);
+	propertyIndex->addProperty(3, "dbl_key", 3.14);
+	propertyIndex->addProperty(4, "bool_key", false);
+
+	// Flush to persist
+	propertyIndex->flush();
+
+	// Reload - this triggers initialize() with non-empty indexedKeyTypes_
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+
+	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+
+	// Verify all keys were loaded during initialize
+	auto keys = reloadedIndex->getIndexedKeys();
+	EXPECT_EQ(keys.size(), 4u);
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("str_key"));
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("int_key"));
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("dbl_key"));
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("bool_key"));
+
+	// Verify types
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("str_key"), graph::PropertyType::STRING);
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("int_key"), graph::PropertyType::INTEGER);
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("dbl_key"), graph::PropertyType::DOUBLE);
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("bool_key"), graph::PropertyType::BOOLEAN);
+}
+
+/**
+ * @brief Test serializeRootMap when only int roots are populated.
+ * Covers: serializeRootMap line 420-421 (intRoots_ not empty, others empty).
+ */
+TEST_F(PropertyIndexTest, SerializeRootMap_OnlyIntRoots) {
+	propertyIndex->addProperty(1, "only_int", 777);
+	propertyIndex->flush();
+
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+
+	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_int"));
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_int"), graph::PropertyType::INTEGER);
+	auto results = reloadedIndex->findExactMatch("only_int", 777);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
+}
+
+/**
+ * @brief Test serializeRootMap when only string roots are populated.
+ * Covers: serializeRootMap line 417-419 (stringRoots_ not empty, others empty).
+ */
+TEST_F(PropertyIndexTest, SerializeRootMap_OnlyStringRoots) {
+	propertyIndex->addProperty(1, "only_str", std::string("test_string"));
+	propertyIndex->flush();
+
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+
+	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_str"));
+	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_str"), graph::PropertyType::STRING);
+	auto results = reloadedIndex->findExactMatch("only_str", std::string("test_string"));
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
+}
+
+/**
+ * @brief Test dropKey with all root maps non-empty.
+ * Covers: dropKey lines 93, 96, 99, 102 - when root maps are NOT empty.
+ */
+TEST_F(PropertyIndexTest, DropKey_AllRootMapsNonEmpty) {
+	// Populate all four root map types
+	propertyIndex->addProperty(1, "str_a", std::string("val_a"));
+	propertyIndex->addProperty(2, "str_b", std::string("val_b"));
+	propertyIndex->addProperty(3, "int_a", 100);
+	propertyIndex->addProperty(4, "dbl_a", 1.5);
+	propertyIndex->addProperty(5, "bool_a", true);
+
+	// Drop str_a - all root maps still have data from other keys
+	propertyIndex->dropKey("str_a");
+
+	// Verify str_a is gone but all others remain
+	EXPECT_FALSE(propertyIndex->hasKeyIndexed("str_a"));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed("str_b"));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed("int_a"));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed("dbl_a"));
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed("bool_a"));
+}
+
+/**
+ * @brief Test findRange with INTEGER type for ceil/floor conversion.
+ * Covers: findRange line 360-362 (type == INTEGER, ceil/floor).
+ */
+TEST_F(PropertyIndexTest, FindRange_IntegerWithFractionalBounds) {
+	propertyIndex->addProperty(1, "int_range", 10);
+	propertyIndex->addProperty(2, "int_range", 20);
+	propertyIndex->addProperty(3, "int_range", 30);
+
+	// Test with fractional bounds that require ceil/floor
+	auto results = propertyIndex->findRange("int_range", 10.5, 29.5);
+	// ceil(10.5) = 11, floor(29.5) = 29
+	// So only value 20 is in range [11, 29]
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 2);
+}
+
+/**
+ * @brief Test addPropertiesBatch with root split (newRootId != currentRootId).
+ * Covers: addPropertiesBatch line 296 (root split during batch insert).
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_CausesRootSplit) {
+	const std::string key = "batch_split_key";
+	propertyIndex->createIndex(key);
+
+	// Insert a large batch to potentially cause B+ tree root splits
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	for (int i = 1; i <= 500; ++i) {
+		batch.emplace_back(i, key, i);
+	}
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	// Verify all data was inserted
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
+	auto results = propertyIndex->findExactMatch(key, 250);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 250);
+}
+
+/**
+ * @brief Test addPropertiesBatch with multiple keys and types.
+ * Covers batch insertion with entries for different keys/trees.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_MultipleKeysAndTypes) {
+	propertyIndex->createIndex("batch_str");
+	propertyIndex->createIndex("batch_int");
+	propertyIndex->createIndex("batch_dbl");
+	propertyIndex->createIndex("batch_bool");
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, "batch_str", std::string("hello"));
+	batch.emplace_back(2, "batch_int", 42);
+	batch.emplace_back(3, "batch_dbl", 3.14);
+	batch.emplace_back(4, "batch_bool", true);
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("batch_str"), graph::PropertyType::STRING);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("batch_int"), graph::PropertyType::INTEGER);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("batch_dbl"), graph::PropertyType::DOUBLE);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("batch_bool"), graph::PropertyType::BOOLEAN);
+}
+
+/**
+ * @brief Test clearKey on a key that has UNKNOWN type (created but no data).
+ * Covers: clearKey line 68 (type == PropertyType::UNKNOWN early return).
+ */
+TEST_F(PropertyIndexTest, ClearKey_UnknownTypeKey) {
+	const std::string key = "unknown_type_clear";
+
+	// Create key but don't add any data (type remains UNKNOWN)
+	propertyIndex->createIndex(key);
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+
+	// Clear key with UNKNOWN type - should hit the UNKNOWN early return
+	propertyIndex->clearKey(key);
+
+	// Key should be removed
+	EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
+}
+
+/**
+ * @brief Test clearKey on a key with concrete data.
+ * Covers: clearKey lines 74-85 (normal logic for concrete types).
+ */
+TEST_F(PropertyIndexTest, ClearKey_ConcreteTypeKey) {
+	const std::string key = "concrete_clear";
+
+	// Add data to establish concrete type
+	propertyIndex->addProperty(1, key, 42);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::INTEGER);
+
+	// Verify data exists
+	auto results = propertyIndex->findExactMatch(key, 42);
+	ASSERT_EQ(results.size(), 1u);
+
+	// Clear - removes from root map and type map
+	propertyIndex->clearKey(key);
+
+	// Key and data should be gone
+	EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
+	EXPECT_TRUE(propertyIndex->findExactMatch(key, 42).empty());
+}
+
+/**
+ * @brief Test clear with multiple types populated.
+ * Covers: clear lines 121-124 (clearAllRoots lambda for all four types).
+ */
+TEST_F(PropertyIndexTest, Clear_WithAllTypesPopulated) {
+	propertyIndex->addProperty(1, "str", std::string("v"));
+	propertyIndex->addProperty(2, "num", 100);
+	propertyIndex->addProperty(3, "flt", 2.5);
+	propertyIndex->addProperty(4, "flg", true);
+
+	EXPECT_FALSE(propertyIndex->isEmpty());
+
+	propertyIndex->clear();
+
+	EXPECT_TRUE(propertyIndex->isEmpty());
+	EXPECT_TRUE(propertyIndex->findExactMatch("str", std::string("v")).empty());
+	EXPECT_TRUE(propertyIndex->findExactMatch("num", 100).empty());
+}
+
+/**
+ * @brief Test removeProperty when rootMap has key but entity not found.
+ * Covers: removeProperty line 328 (treeManager->remove called).
+ */
+TEST_F(PropertyIndexTest, RemoveProperty_EntityNotInTree) {
+	const std::string key = "remove_missing_entity";
+
+	propertyIndex->addProperty(1, key, 100);
+
+	// Try to remove entity 999 which was never added (should not crash)
+	EXPECT_NO_THROW(propertyIndex->removeProperty(999, key, 100));
+
+	// Original entity should still be there
+	auto results = propertyIndex->findExactMatch(key, 100);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
+}
+
+/**
+ * @brief Test addProperty auto-creation (key not registered, auto-register).
+ * Covers: addProperty line 205-207 (auto-creation when key not found).
+ */
+TEST_F(PropertyIndexTest, AddProperty_AutoCreatesIndex) {
+	const std::string key = "auto_created";
+
+	// Don't call createIndex - addProperty should auto-register
+	EXPECT_FALSE(propertyIndex->hasKeyIndexed(key));
+
+	propertyIndex->addProperty(1, key, std::string("auto"));
+
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed(key));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::STRING);
+}
+
+// =========================================================================
+// Branch Coverage: State Inconsistency Tests
+// These tests create PropertyIndex instances from manipulated persisted state
+// to cover defensive branches that check for missing root map entries.
+// =========================================================================
+
+/**
+ * @brief Test removeProperty when key has concrete type but no root in rootMap.
+ * Covers: PropertyIndex.cpp line 324: rootIt == rootMap.end() early return.
+ *
+ * Creates a state where indexedKeyTypes_ has a key with INTEGER type,
+ * but intRoots_ does not contain that key (simulating data corruption or
+ * partial state recovery).
+ */
+TEST_F(PropertyIndexTest, RemoveProperty_TypeExistsButNoRoot) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	// Set up state: key "orphan_key" has INTEGER type but no int root entry
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["orphan_key"] = static_cast<int64_t>(graph::PropertyType::INTEGER);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	// Do NOT set any int roots for "orphan_key"
+	// (leave SUFFIX_INT_ROOTS empty or without "orphan_key")
+
+	// Create a new PropertyIndex from this state
+	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	// Verify setup: key is indexed as INTEGER but has no root
+	EXPECT_TRUE(inconsistentIndex->hasKeyIndexed("orphan_key"));
+	EXPECT_EQ(inconsistentIndex->getIndexedKeyType("orphan_key"), graph::PropertyType::INTEGER);
+
+	// This should hit line 324: rootIt == rootMap.end() -> return
+	EXPECT_NO_THROW(inconsistentIndex->removeProperty(1, "orphan_key", 42));
+}
+
+/**
+ * @brief Test findExactMatch when key has concrete type but no root in rootMap.
+ * Covers: PropertyIndex.cpp line 339: rootIt == rootMap.end() early return.
+ */
+TEST_F(PropertyIndexTest, FindExactMatch_TypeExistsButNoRoot) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	// Set up state: key "orphan_str" has STRING type but no string root entry
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["orphan_str"] = static_cast<int64_t>(graph::PropertyType::STRING);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(inconsistentIndex->hasKeyIndexed("orphan_str"));
+	EXPECT_EQ(inconsistentIndex->getIndexedKeyType("orphan_str"), graph::PropertyType::STRING);
+
+	// This should hit line 339: rootIt == rootMap.end() -> return {}
+	auto results = inconsistentIndex->findExactMatch("orphan_str", std::string("anything"));
+	EXPECT_TRUE(results.empty());
+}
+
+/**
+ * @brief Test findRange when key has numeric type but no root in rootMap.
+ * Covers: PropertyIndex.cpp line 356: rootIt == rootMap.end() early return.
+ */
+TEST_F(PropertyIndexTest, FindRange_TypeExistsButNoRoot) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	// Set up state: key "orphan_dbl" has DOUBLE type but no double root entry
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["orphan_dbl"] = static_cast<int64_t>(graph::PropertyType::DOUBLE);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(inconsistentIndex->hasKeyIndexed("orphan_dbl"));
+	EXPECT_EQ(inconsistentIndex->getIndexedKeyType("orphan_dbl"), graph::PropertyType::DOUBLE);
+
+	// This should hit line 356: rootIt == rootMap.end() -> return {}
+	auto results = inconsistentIndex->findRange("orphan_dbl", 0.0, 100.0);
+	EXPECT_TRUE(results.empty());
+}
+
+/**
+ * @brief Test findRange for INTEGER type with no root in rootMap.
+ * Covers: findRange line 356 for INTEGER type path (distinct from DOUBLE).
+ */
+TEST_F(PropertyIndexTest, FindRange_IntegerTypeNoRoot) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["orphan_int"] = static_cast<int64_t>(graph::PropertyType::INTEGER);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	auto results = inconsistentIndex->findRange("orphan_int", 0.0, 100.0);
+	EXPECT_TRUE(results.empty());
+}
+
+/**
+ * @brief Test addProperty with a LIST-type PropertyValue.
+ * Covers: PropertyIndex.cpp line 200: valueType != UNKNOWN && valueType != NULL_TYPE
+ * but the value is a LIST which has no tree manager, testing the boundary.
+ * Note: LIST values bypass the NULL_TYPE/UNKNOWN check but getTreeManagerForType
+ * returns nullptr for LIST, which would cause issues. This verifies that the
+ * addProperty code path with non-indexable types is handled.
+ *
+ * Actually, LIST type passes line 200 check (it's not UNKNOWN or NULL_TYPE),
+ * so it would proceed. But since there's no tree manager for LIST,
+ * we test that the index doesn't crash for this scenario.
+ */
+
+/**
+ * @brief Test addPropertiesBatch with batch containing ONLY null values for a registered key.
+ * Covers: line 242 true branch (all entries filtered), and the case where
+ * groupedBatch ends up empty after filtering.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_AllNullValues) {
+	const std::string key = "all_null_batch";
+	propertyIndex->createIndex(key);
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, key, std::monostate{});
+	batch.emplace_back(2, key, std::monostate{});
+	batch.emplace_back(3, key, std::monostate{});
+
+	EXPECT_NO_THROW(propertyIndex->addPropertiesBatch(batch));
+
+	// Key type should remain UNKNOWN since all values were null
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+}
+
+/**
+ * @brief Test saveState when index is completely empty (no indexed keys).
+ * Covers: serializeKeyTypeMap line 439 false branch (indexedKeyTypes_ empty).
+ * Also covers serializeRootMap lines 417/420/423/427 false branches (all roots empty).
+ */
+TEST_F(PropertyIndexTest, SaveState_EmptyIndex) {
+	EXPECT_TRUE(propertyIndex->isEmpty());
+
+	// Should not throw - just does nothing since all maps are empty
+	EXPECT_NO_THROW(propertyIndex->saveState());
+}
+
+/**
+ * @brief Test addPropertiesBatch where batch transitions UNKNOWN key to BOOLEAN.
+ * Covers: addPropertiesBatch line 258 for BOOLEAN type transition,
+ * and exercises the BOOLEAN tree manager path in batch insertion.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_BooleanTypeTransition) {
+	const std::string key = "batch_bool_transition";
+	propertyIndex->createIndex(key);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, key, true);
+	batch.emplace_back(2, key, false);
+	batch.emplace_back(3, key, true);
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::BOOLEAN);
+	auto results = propertyIndex->findExactMatch(key, true);
+	EXPECT_GE(results.size(), 1u);
+}
+
+/**
+ * @brief Test addPropertiesBatch where batch transitions UNKNOWN key to DOUBLE.
+ * Covers the DOUBLE tree manager path in batch insertion phase 2.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_DoubleTypeTransition) {
+	const std::string key = "batch_dbl_transition";
+	propertyIndex->createIndex(key);
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, key, 1.1);
+	batch.emplace_back(2, key, 2.2);
+	batch.emplace_back(3, key, 3.3);
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::DOUBLE);
+	auto results = propertyIndex->findExactMatch(key, 2.2);
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 2);
+}
+
+/**
+ * @brief Test addPropertiesBatch where batch transitions UNKNOWN key to STRING.
+ * Covers the STRING tree manager path in batch insertion phase 2.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_StringTypeTransition) {
+	const std::string key = "batch_str_transition";
+	propertyIndex->createIndex(key);
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, key, std::string("alpha"));
+	batch.emplace_back(2, key, std::string("beta"));
+	batch.emplace_back(3, key, std::string("gamma"));
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::STRING);
+	auto results = propertyIndex->findExactMatch(key, std::string("beta"));
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 2);
+}
+
+/**
+ * @brief Test removeProperty on BOOLEAN type key with no root.
+ * Covers line 324 for BOOLEAN type path.
+ */
+TEST_F(PropertyIndexTest, RemoveProperty_BooleanTypeNoRoot) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["orphan_bool"] = static_cast<int64_t>(graph::PropertyType::BOOLEAN);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	// Should hit line 324 for BOOLEAN root map
+	EXPECT_NO_THROW(inconsistentIndex->removeProperty(1, "orphan_bool", true));
+}
+
+/**
+ * @brief Test findExactMatch on BOOLEAN type key with no root.
+ * Covers line 339 for BOOLEAN root map path.
+ */
+TEST_F(PropertyIndexTest, FindExactMatch_BooleanTypeNoRoot) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["orphan_bool_find"] = static_cast<int64_t>(graph::PropertyType::BOOLEAN);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	auto results = inconsistentIndex->findExactMatch("orphan_bool_find", false);
+	EXPECT_TRUE(results.empty());
+}
+
+// =========================================================================
+// Additional Branch Coverage: NULL_TYPE and batch edge cases
+// =========================================================================
+
+/**
+ * @brief Test addProperty with NULL_TYPE value on a pre-registered key.
+ * Covers: addProperty line 200 (valueType == NULL_TYPE early return)
+ * when key is already registered.
+ */
+TEST_F(PropertyIndexTest, AddProperty_NullTypeOnRegisteredKey) {
+	propertyIndex->createIndex("null_registered");
+
+	// Add a NULL value - should return early at line 200
+	propertyIndex->addProperty(1, "null_registered", std::monostate{});
+
+	// Type should remain UNKNOWN
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("null_registered"), graph::PropertyType::UNKNOWN);
+}
+
+/**
+ * @brief Test addPropertiesBatch where all entries for a registered key are NULL.
+ * Covers: addPropertiesBatch line 242 (NULL_TYPE continue in classification loop).
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_AllNullForRegisteredKey) {
+	propertyIndex->createIndex("batch_all_null");
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, "batch_all_null", std::monostate{});
+	batch.emplace_back(2, "batch_all_null", std::monostate{});
+
+	EXPECT_NO_THROW(propertyIndex->addPropertiesBatch(batch));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("batch_all_null"), graph::PropertyType::UNKNOWN);
+}
+
+/**
+ * @brief Test addPropertiesBatch transitioning UNKNOWN keys to all four types.
+ * Covers: batch line 258 (UNKNOWN transition) for BOOLEAN, DOUBLE, STRING paths.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_AllTypeTransitions) {
+	propertyIndex->createIndex("bt_str");
+	propertyIndex->createIndex("bt_dbl");
+	propertyIndex->createIndex("bt_bool");
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, "bt_str", std::string("val"));
+	batch.emplace_back(2, "bt_dbl", 2.5);
+	batch.emplace_back(3, "bt_bool", true);
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("bt_str"), graph::PropertyType::STRING);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("bt_dbl"), graph::PropertyType::DOUBLE);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("bt_bool"), graph::PropertyType::BOOLEAN);
+}
+
+/**
+ * @brief Test addPropertiesBatch with large batch triggering root splits.
+ * Covers: addPropertiesBatch line 296 (newRootId != currentRootId true branch).
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_LargeBatchRootSplit) {
+	propertyIndex->createIndex("big_batch");
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	for (int i = 1; i <= 2000; ++i) {
+		batch.emplace_back(i, "big_batch", i);
+	}
+
+	propertyIndex->addPropertiesBatch(batch);
+
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("big_batch"), graph::PropertyType::INTEGER);
+	auto first = propertyIndex->findExactMatch("big_batch", 1);
+	ASSERT_EQ(first.size(), 1u);
+	EXPECT_EQ(first[0], 1);
+	auto last = propertyIndex->findExactMatch("big_batch", 2000);
+	ASSERT_EQ(last.size(), 1u);
+	EXPECT_EQ(last[0], 2000);
+}
+
+/**
+ * @brief Test saveState on an empty index (no keys, no roots).
+ * Covers: serializeRootMap false branches (all root maps empty)
+ * and serializeKeyTypeMap false branch (indexedKeyTypes_ empty).
+ */
+TEST_F(PropertyIndexTest, SaveState_EmptyIndexNoop) {
+	EXPECT_TRUE(propertyIndex->isEmpty());
+	EXPECT_NO_THROW(propertyIndex->saveState());
+	EXPECT_TRUE(propertyIndex->isEmpty());
+}
+
+// =========================================================================
+// Additional Branch Coverage Tests - targeting remaining uncovered branches
+// =========================================================================
+
+/**
+ * @brief Test addProperty with UNKNOWN valueType (e.g., LIST type).
+ * Covers: addProperty line 200 - valueType == UNKNOWN early return.
+ * A LIST PropertyValue has type LIST which maps to UNKNOWN in getPropertyType.
+ */
+TEST_F(PropertyIndexTest, AddProperty_ListTypeThrows) {
+	// LIST type is not indexable - getRootMapForType throws for LIST
+	std::vector<graph::PropertyValue> listVal;
+	listVal.push_back(graph::PropertyValue(int64_t(1)));
+	listVal.push_back(graph::PropertyValue(int64_t(2)));
+	graph::PropertyValue listProp(listVal);
+
+	// Adding a LIST type throws because there is no tree manager for LIST
+	EXPECT_THROW(propertyIndex->addProperty(1, "list_key", listProp), std::invalid_argument);
+}
+
+/**
+ * @brief Test addPropertiesBatch with MAP type values (which also have no tree manager).
+ * Covers: addPropertiesBatch - MAP/LIST types cause issues in batch too.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_MapTypeThrows) {
+	propertyIndex->createIndex("map_batch");
+
+	graph::PropertyValue::MapType mapVal;
+	mapVal["k"] = graph::PropertyValue(int64_t(1));
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, "map_batch", graph::PropertyValue(mapVal));
+
+	// MAP type has no tree manager, should throw
+	EXPECT_THROW(propertyIndex->addPropertiesBatch(batch), std::invalid_argument);
+}
+
+/**
+ * @brief Test addProperty type mismatch on already-concrete key (not UNKNOWN).
+ * Covers: addProperty line 211 - it->second != valueType return path.
+ */
+TEST_F(PropertyIndexTest, AddProperty_TypeMismatchOnConcreteKey) {
+	propertyIndex->createIndex("concrete_type");
+	propertyIndex->addProperty(1, "concrete_type", 100); // Transitions to INTEGER
+
+	// Try adding STRING to an INTEGER key - should be silently rejected
+	propertyIndex->addProperty(2, "concrete_type", std::string("mismatch"));
+
+	// Only the integer value should be present
+	auto results = propertyIndex->findExactMatch("concrete_type", 100);
+	ASSERT_EQ(results.size(), 1u);
+
+	// String should not have been added
+	EXPECT_TRUE(propertyIndex->findExactMatch("concrete_type", std::string("mismatch")).empty());
+}
+
+/**
+ * @brief Test clearKey where rootIt == rootMap.end() (key in type map but no root).
+ * Covers: clearKey line 77 - rootIt != rootMap.end() false branch.
+ */
+TEST_F(PropertyIndexTest, ClearKey_TypeExistsButNoRoot) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	// Set up state: key has INTEGER type but no integer root
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["no_root_clear"] = static_cast<int64_t>(graph::PropertyType::INTEGER);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto idx = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(idx->hasKeyIndexed("no_root_clear"));
+
+	// clearKey should handle missing root gracefully
+	EXPECT_NO_THROW(idx->clearKey("no_root_clear"));
+	EXPECT_FALSE(idx->hasKeyIndexed("no_root_clear"));
+}
+
+/**
+ * @brief Test dropKey when indexedKeyTypes_ becomes empty after drop.
+ * Covers: dropKey line 106 - indexedKeyTypes_.empty() true branch.
+ */
+TEST_F(PropertyIndexTest, DropKey_LastKeyMakesTypeMapEmpty) {
+	propertyIndex->addProperty(1, "only_key", 42);
+	EXPECT_FALSE(propertyIndex->isEmpty());
+
+	propertyIndex->dropKey("only_key");
+
+	EXPECT_TRUE(propertyIndex->isEmpty());
+	// After dropping the last key, indexedKeyTypes_ is empty
+	// so the SUFFIX_KEY_TYPES state should be removed
+}
+
+/**
+ * @brief Test findRange on BOOLEAN type (neither INTEGER nor DOUBLE).
+ * Covers: findRange line 351 - type != INTEGER && type != DOUBLE early return.
+ */
+TEST_F(PropertyIndexTest, FindRange_BooleanTypeReturnsEmpty) {
+	propertyIndex->addProperty(1, "bool_range", true);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("bool_range"), graph::PropertyType::BOOLEAN);
+
+	// findRange on BOOLEAN should return empty (not a numeric type)
+	auto results = propertyIndex->findRange("bool_range", 0.0, 1.0);
+	EXPECT_TRUE(results.empty());
+}
+
+// =========================================================================
+// Branch Coverage: Batch with LIST type triggering null treeManager
+// =========================================================================
+
+/**
+ * @brief Test addPropertiesBatch where a LIST-typed value gets through classification.
+ * Covers: PropertyIndex.cpp line 275 (getTreeManagerForType for non-standard type)
+ * and line 276 (getRootMapForType for LIST throws before treeManager null check).
+ *
+ * Note: getRootMapForType throws for LIST before the !treeManager null check
+ * can be reached, so line 278 is unreachable dead code.
+ */
+TEST_F(PropertyIndexTest, AddPropertiesBatch_ListTypeThrowsFromRootMap) {
+	const std::string key = "list_batch_key";
+
+	// Register the key as UNKNOWN so it can transition to LIST type
+	propertyIndex->createIndex(key);
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
+
+	// Create a batch with LIST values
+	std::vector<graph::PropertyValue> listVal;
+	listVal.push_back(graph::PropertyValue(int64_t(1)));
+	listVal.push_back(graph::PropertyValue(int64_t(2)));
+
+	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
+	batch.emplace_back(1, key, graph::PropertyValue(listVal));
+
+	// LIST type transitions from UNKNOWN in classification phase,
+	// but getRootMapForType(LIST) throws in insertion phase.
+	EXPECT_THROW(propertyIndex->addPropertiesBatch(batch), std::invalid_argument);
+}
+
+/**
+ * @brief Test const getRootMapForType with invalid type (default case).
+ * Covers: PropertyIndex.cpp line 411 (default branch in const getRootMapForType).
+ *
+ * This is triggered when findExactMatch or findRange is called for a key
+ * whose registered type has no corresponding root map (e.g., LIST type).
+ */
+TEST_F(PropertyIndexTest, FindExactMatch_ListTypeThrowsFromRootMap) {
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	// Set up state: key has LIST type (which has no root map)
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["list_key"] = static_cast<int64_t>(graph::PropertyType::LIST);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto idx = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	EXPECT_TRUE(idx->hasKeyIndexed("list_key"));
+
+	// findExactMatch with a LIST-typed key will call const getRootMapForType(LIST)
+	// which hits the default case and throws
+	std::vector<graph::PropertyValue> listVal;
+	listVal.push_back(graph::PropertyValue(int64_t(1)));
+	EXPECT_THROW(idx->findExactMatch("list_key", graph::PropertyValue(listVal)), std::invalid_argument);
+}
+

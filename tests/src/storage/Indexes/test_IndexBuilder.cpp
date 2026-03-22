@@ -727,3 +727,108 @@ TEST_F(IndexBuilderTest, BuildIndex_WithDeletedAndActiveNodes) {
 	EXPECT_EQ(resProp12.size(), 0UL); // Deleted
 	EXPECT_EQ(resProp18.size(), 1UL);
 }
+
+// ============================================================================
+// Additional Branch Coverage Tests
+// ============================================================================
+
+// Test explicit destruction of IndexBuilder to cover ~IndexBuilder() (line 39)
+TEST_F(IndexBuilderTest, DestructorCoverage) {
+	// Create an IndexBuilder on the heap and explicitly destroy it.
+	// This covers the destructor which shows 0 hits because the Database
+	// destructor ordering may cause profiling data loss.
+	auto builder = std::make_unique<graph::query::indexes::IndexBuilder>(
+		indexManager, fileStorage);
+	EXPECT_NE(builder, nullptr);
+	builder.reset(); // Explicitly destroy -> triggers ~IndexBuilder()
+	SUCCEED();
+}
+
+// Test that processNodeBatch skips deleted nodes that are still in segment ranges.
+// The key: create nodes, flush to persist to disk (so segment ranges include them),
+// then delete WITHOUT flushing. getNode() returns id=0 for dirty-deleted entities.
+// This covers the getId()==0 True branch in processNodeBatch (line 163).
+TEST_F(IndexBuilderTest, ProcessNodeBatch_DeletedInMemory) {
+	int64_t lbl = dataManager->getOrCreateLabelId("MemDeleteTest");
+
+	// Create 10 nodes
+	std::vector<int64_t> nodeIds;
+	for (int i = 0; i < 10; ++i) {
+		graph::Node n(0, lbl);
+		n.addProperty("val", i);
+		dataManager->addNode(n);
+		nodeIds.push_back(n.getId());
+	}
+
+	// Flush to persist all nodes to disk (segment ranges will include them)
+	fileStorage->flush();
+
+	// Delete middle nodes WITHOUT flushing again.
+	// These are marked DELETED in the dirty map, so getNode() returns id=0.
+	for (int i = 3; i <= 6; ++i) {
+		graph::Node n = dataManager->getNode(nodeIds[i]);
+		dataManager->deleteNode(n);
+	}
+
+	// Build label index - processNodeBatch iterates segment ranges (all 10 IDs)
+	// but getNode() returns id=0 for the 4 deleted nodes -> triggers continue
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	// Only 6 active nodes should be indexed
+	auto results = indexManager->findNodeIdsByLabel("MemDeleteTest");
+	EXPECT_EQ(results.size(), 6UL);
+}
+
+// Test that processEdgeBatch skips deleted edges that are still in segment ranges.
+// Same approach as ProcessNodeBatch_DeletedInMemory: flush first, then delete without flushing.
+// This covers the getId()==0 True branch in processEdgeBatch (line 191).
+TEST_F(IndexBuilderTest, ProcessEdgeBatch_DeletedInMemory) {
+	int64_t edgeLbl = dataManager->getOrCreateLabelId("EdgeMemDeleteTest");
+
+	// Create source and target nodes
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	// Create 10 edges
+	std::vector<int64_t> edgeIds;
+	for (int i = 0; i < 10; ++i) {
+		graph::Edge e(0, 1, 2, edgeLbl);
+		e.addProperty("val", i);
+		dataManager->addEdge(e);
+		edgeIds.push_back(e.getId());
+	}
+
+	// Flush to persist all edges (segment ranges will include them)
+	fileStorage->flush();
+
+	// Delete some edges WITHOUT flushing again.
+	// getEdge() will return id=0 for these -> triggers continue in processEdgeBatch.
+	for (int i = 2; i <= 5; ++i) {
+		graph::Edge e = dataManager->getEdge(edgeIds[i]);
+		dataManager->deleteEdge(e);
+	}
+
+	// Build edge label index
+	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
+	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+
+	// Only 6 active edges should be indexed
+	auto results = indexManager->findEdgeIdsByLabel("EdgeMemDeleteTest");
+	EXPECT_EQ(results.size(), 6UL);
+}
+
+// Test buildNodePropertyIndex on empty database (no segments) to trigger
+// the empty ranges path and cover batchIds.empty() -> False branch
+TEST_F(IndexBuilderTest, BuildNodePropertyIndex_EmptyDatabase) {
+	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("nonexistent");
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex("nonexistent"));
+}
+
+// Test buildEdgePropertyIndex on empty database
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_EmptyDatabase) {
+	indexManager->getEdgeIndexManager()->getPropertyIndex()->createIndex("nonexistent");
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex("nonexistent"));
+}

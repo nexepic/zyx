@@ -273,6 +273,94 @@ TEST_F(SetOperatorTest, GetOutputVariablesAndChildren) {
 	op->close();
 }
 
+TEST_F(SetOperatorTest, Set_ToString) {
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY, "n", "key",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(1))
+	);
+	items.emplace_back(
+		SetActionType::LABEL, "n", "Label", nullptr
+	);
+	auto op = std::make_unique<SetOperator>(dm, nullptr, items);
+	std::string str = op->toString();
+	EXPECT_EQ(str, "Set(2 items)");
+}
+
+TEST_F(SetOperatorTest, Set_PropertyItemWithNullExpression) {
+	// Covers: item.type == PROPERTY && item.expression is nullptr (skip branch)
+	Node n1(1, 100);
+	dm->addNode(n1);
+
+	Record r1;
+	r1.setNode("n", n1);
+
+	MockOperator *mock = new MockOperator({{r1}});
+
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY, "n", "key", nullptr // null expression
+	);
+	auto op = std::unique_ptr<PhysicalOperator>(
+		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1UL);
+
+	// Property should NOT have been set (skipped due to null expression)
+	auto props = dm->getNodeProperties(1);
+	EXPECT_FALSE(props.contains("key"));
+
+	op->close();
+}
+
+TEST_F(SetOperatorTest, Set_PropertyOnUnknownVariable) {
+	// Covers: variable not found as node or edge (both getNode and getEdge return nullopt)
+	Record r1;
+	r1.setValue("x", PropertyValue(static_cast<int64_t>(42)));
+
+	MockOperator *mock = new MockOperator({{r1}});
+
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY, "n", "key",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(99))
+	);
+	auto op = std::unique_ptr<PhysicalOperator>(
+		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1UL);
+
+	op->close();
+}
+
+TEST_F(SetOperatorTest, Set_LabelOnUnknownVariable) {
+	// Covers: LABEL type with variable not found as node (nodeOpt is nullopt)
+	Record r1;
+	r1.setValue("x", PropertyValue(static_cast<int64_t>(42)));
+
+	MockOperator *mock = new MockOperator({{r1}});
+
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::LABEL, "n", "NewLabel", nullptr
+	);
+	auto op = std::unique_ptr<PhysicalOperator>(
+		new SetOperator(dm, std::unique_ptr<PhysicalOperator>(mock), items));
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1UL);
+
+	op->close();
+}
+
 // ============================================================================
 // RemoveOperator Tests
 // ============================================================================

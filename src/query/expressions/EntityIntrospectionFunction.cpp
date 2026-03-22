@@ -93,10 +93,13 @@ static PropertyValue keysImpl(
 	const std::string& varName = std::get<std::string>(args[0].getVariant());
 	const auto& record = context.getRecord();
 
-	std::unordered_map<std::string, PropertyValue> const* props = nullptr;
-	if (auto node = record.getNode(varName)) {
+	auto node = record.getNode(varName);
+	auto edge = record.getEdge(varName);
+
+	const std::unordered_map<std::string, PropertyValue>* props = nullptr;
+	if (node) {
 		props = &node->getProperties();
-	} else if (auto edge = record.getEdge(varName)) {
+	} else if (edge) {
 		props = &edge->getProperties();
 	} else {
 		throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");
@@ -115,10 +118,13 @@ static PropertyValue propertiesImpl(
 	const std::string& varName = std::get<std::string>(args[0].getVariant());
 	const auto& record = context.getRecord();
 
-	std::unordered_map<std::string, PropertyValue> const* props = nullptr;
-	if (auto node = record.getNode(varName)) {
+	auto node = record.getNode(varName);
+	auto edge = record.getEdge(varName);
+
+	const std::unordered_map<std::string, PropertyValue>* props = nullptr;
+	if (node) {
 		props = &node->getProperties();
-	} else if (auto edge = record.getEdge(varName)) {
+	} else if (edge) {
 		props = &edge->getProperties();
 	} else {
 		throw ExpressionEvaluationException("Variable '" + varName + "' is not a node or relationship");

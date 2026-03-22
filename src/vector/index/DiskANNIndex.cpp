@@ -25,10 +25,12 @@
 #include <queue>
 #include <ranges>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
 #include "graph/log/Log.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
 #include "graph/vector/core/BFloat16.hpp"
+#include "graph/vector/core/VectorMetric.hpp"
 
 namespace graph::vector {
 
@@ -62,27 +64,17 @@ namespace graph::vector {
 		}
 
 		// --- 2. Save Data ---
-		// Always save Raw Vector (Ground Truth)
 		const auto rawBlob = registry_->saveRawVector(toBFloat16(vec));
 
-		log::Log::info("[DEBUG] Saved RawBlob ID: {} for Node {}", rawBlob, nodeId);
-
-		// Conditionally save PQ Codes
 		int64_t pqBlob = 0;
-		if (isPQTrained()) {
+		if (isPQTrained())
 			pqBlob = registry_->savePQCodes(quantizer_->encode(vec));
-		}
 
-		// Update Registry Mapping
 		VectorBlobPtrs ptrs;
 		ptrs.rawBlob = rawBlob;
 		ptrs.pqBlob = pqBlob;
-		ptrs.adjBlob = 0;
-		registry_->setBlobPtrs(nodeId, ptrs);
 
 		const int64_t entryPoint = registry_->getConfig().entryPointNodeId;
-
-		log::Log::info("Insert Node {}. EntryPoint: {}", nodeId, entryPoint);
 
 		// --- 3. Graph Construction ---
 
@@ -95,12 +87,14 @@ namespace graph::vector {
 		}
 
 		// Case B: Connect to Graph
-		std::vector<float> pqTable;
-		if (isPQTrained()) {
-			pqTable = quantizer_->computeDistanceTable(vec);
-		}
+		// Save initial mapping so greedy search can find this node
+		ptrs.adjBlob = 0;
+		registry_->setBlobPtrs(nodeId, ptrs);
 
-		// Search for nearest neighbors
+		std::vector<float> pqTable;
+		if (isPQTrained())
+			pqTable = quantizer_->computeDistanceTable(vec);
+
 		auto searchRes = greedySearch(vec, entryPoint, config_.beamWidth, pqTable);
 
 		std::vector<int64_t> candidates;
@@ -108,10 +102,8 @@ namespace graph::vector {
 		for (auto &key: searchRes | std::views::keys)
 			candidates.push_back(key);
 
-		// Prune and link
 		prune(nodeId, candidates);
 
-		// Save Adjacency
 		ptrs.adjBlob = registry_->saveAdjacency(candidates);
 		registry_->setBlobPtrs(nodeId, ptrs);
 
@@ -138,6 +130,114 @@ namespace graph::vector {
 				nPtrs.adjBlob = registry_->saveAdjacency(nList);
 				registry_->setBlobPtrs(neighbor, nPtrs);
 			}
+		}
+	}
+
+	void DiskANNIndex::batchInsert(const std::vector<std::pair<int64_t, std::vector<float>>> &batch) {
+		if (batch.empty())
+			return;
+
+		// Phase 1: Auto-training check with entire batch
+		if (!isPQTrained()) {
+			cachedCount_ += batch.size();
+			if (cachedCount_ >= config_.autoTrainThreshold) {
+				log::Log::info("Vector Index Auto-Training Triggered (Count: {})", cachedCount_);
+				auto samples = sampleVectors(config_.autoTrainThreshold);
+				for (const auto &[id, vec]: batch)
+					samples.push_back(vec);
+				train(samples);
+			}
+		}
+
+		// Phase 2: Batch save all raw vectors and PQ codes
+		struct InsertEntry {
+			int64_t nodeId;
+			const std::vector<float> *vec; // Pointer to original vector (avoids copy)
+			VectorBlobPtrs ptrs{};
+		};
+		std::vector<InsertEntry> entries;
+		entries.reserve(batch.size());
+
+		for (const auto &[nodeId, vec]: batch) {
+			if (vec.size() != config_.dim) {
+				log::Log::error("Batch insert skipped node {}: dimension mismatch", nodeId);
+				continue;
+			}
+
+			InsertEntry entry;
+			entry.nodeId = nodeId;
+			entry.vec = &vec;
+			entry.ptrs.rawBlob = registry_->saveRawVector(toBFloat16(vec));
+			entry.ptrs.pqBlob = isPQTrained() ? registry_->savePQCodes(quantizer_->encode(vec)) : 0;
+			entry.ptrs.adjBlob = 0;
+			registry_->setBlobPtrs(nodeId, entry.ptrs);
+			entries.push_back(entry);
+		}
+
+		if (entries.empty())
+			return;
+
+		// Phase 3: Graph construction
+		int64_t entryPoint = registry_->getConfig().entryPointNodeId;
+
+		size_t startIdx = 0;
+		if (entryPoint == 0) {
+			auto &first = entries[0];
+			registry_->updateEntryPoint(first.nodeId);
+			first.ptrs.adjBlob = registry_->saveAdjacency({});
+			registry_->setBlobPtrs(first.nodeId, first.ptrs);
+			entryPoint = first.nodeId;
+			startIdx = 1;
+		}
+
+		// Collect back-link updates to batch them
+		std::unordered_map<int64_t, std::vector<int64_t>> pendingBackLinks;
+
+		for (size_t idx = startIdx; idx < entries.size(); ++idx) {
+			auto &entry = entries[idx];
+			const auto &vec = *entry.vec;
+
+			std::vector<float> pqTable;
+			if (isPQTrained())
+				pqTable = quantizer_->computeDistanceTable(vec);
+
+			auto searchRes = greedySearch(vec, entryPoint, config_.beamWidth, pqTable);
+
+			std::vector<int64_t> candidates;
+			candidates.reserve(searchRes.size());
+			for (auto &key: searchRes | std::views::keys)
+				candidates.push_back(key);
+
+			prune(entry.nodeId, candidates);
+
+			entry.ptrs.adjBlob = registry_->saveAdjacency(candidates);
+			registry_->setBlobPtrs(entry.nodeId, entry.ptrs);
+
+			for (int64_t neighbor: candidates)
+				pendingBackLinks[neighbor].push_back(entry.nodeId);
+		}
+
+		// Phase 4: Batch apply back-links (single I/O per neighbor)
+		for (auto &[neighborId, newLinks]: pendingBackLinks) {
+			auto nPtrs = registry_->getBlobPtrs(neighborId);
+			if (nPtrs.adjBlob == 0)
+				continue;
+
+			auto nList = registry_->loadAdjacency(nPtrs.adjBlob);
+			std::unordered_set<int64_t> existing(nList.begin(), nList.end());
+
+			for (int64_t newId: newLinks) {
+				if (!existing.contains(newId)) {
+					nList.push_back(newId);
+					existing.insert(newId);
+				}
+			}
+
+			if (nList.size() > static_cast<size_t>(config_.maxDegree * 1.2))
+				prune(neighborId, nList);
+
+			nPtrs.adjBlob = registry_->saveAdjacency(nList);
+			registry_->setBlobPtrs(neighborId, nPtrs);
 		}
 	}
 
@@ -252,17 +352,26 @@ namespace graph::vector {
 																	  const std::vector<float> &pqTable) const {
 
 		std::unordered_set<int64_t> visited;
-		std::priority_queue<std::pair<float, int64_t>, std::vector<std::pair<float, int64_t>>, std::greater<>> queue;
-		std::vector<std::pair<int64_t, float>> results;
+		visited.reserve(beamWidth * 4);
+
+		// Min-heap for expansion frontier (closest first)
+		std::priority_queue<std::pair<float, int64_t>, std::vector<std::pair<float, int64_t>>, std::greater<>> frontier;
+		// Max-heap for result set (furthest first, for bounded eviction)
+		std::priority_queue<std::pair<float, int64_t>> results;
 
 		float startDist = computeDistance(query, pqTable, startNode);
-		queue.push({startDist, startNode});
+		frontier.push({startDist, startNode});
+		results.push({startDist, startNode});
 		visited.insert(startNode);
-		results.push_back({startNode, startDist});
 
-		while (!queue.empty()) {
-			auto [d, u] = queue.top();
-			queue.pop();
+		while (!frontier.empty()) {
+			auto [d, u] = frontier.top();
+			frontier.pop();
+
+			// Early termination: if closest unexpanded node is worse than
+			// the furthest node in our result set, we can't improve
+			if (results.size() >= beamWidth && d > results.top().first)
+				break;
 
 			auto ptrs = registry_->getBlobPtrs(u);
 			if (ptrs.adjBlob == 0)
@@ -276,67 +385,74 @@ namespace graph::vector {
 
 				float dist = computeDistance(query, pqTable, v);
 
-				results.push_back({v, dist});
-				queue.push({dist, v});
+				// Only add to frontier/results if it could improve our result set
+				if (results.size() < beamWidth || dist < results.top().first) {
+					frontier.push({dist, v});
+					results.push({dist, v});
+					if (results.size() > beamWidth)
+						results.pop();
+				}
 			}
 		}
 
-		std::ranges::sort(results, [](const auto &a, const auto &b) { return a.second < b.second; });
-		if (results.size() > beamWidth)
-			results.resize(beamWidth);
-		return results;
+		// Extract results from max-heap into sorted vector
+		std::vector<std::pair<int64_t, float>> output;
+		output.reserve(results.size());
+		while (!results.empty()) {
+			auto [dist, id] = results.top();
+			results.pop();
+			output.push_back({id, dist});
+		}
+		std::ranges::sort(output, [](const auto &a, const auto &b) { return a.second < b.second; });
+		return output;
 	}
 
 	void DiskANNIndex::prune(int64_t nodeId, std::vector<int64_t> &candidates) const {
-		// Load target node RAW vector for accurate pruning geometry
 		const auto ptrs = registry_->getBlobPtrs(nodeId);
 		if (ptrs.rawBlob == 0)
 			return;
 
-		// This vector might be large, but needed for Alpha calculation
 		std::vector<float> nodeVec = toFloat(registry_->loadRawVector(ptrs.rawBlob));
 
-		// 1. Sort by distance
+		// 1. Compute distances and sort candidates
 		std::vector<std::pair<int64_t, float>> candDists;
+		candDists.reserve(candidates.size());
 		for (int64_t c: candidates) {
 			if (c == nodeId)
 				continue;
-			// Use specialized overload for (Vec vs ID)
 			candDists.push_back({c, computeDistance(nodeVec, c)});
 		}
 		std::ranges::sort(candDists, [](const auto &a, const auto &b) { return a.second < b.second; });
 
-		// 2. Alpha Pruning
+		// 2. Alpha pruning with vector cache to avoid redundant I/O
 		std::vector<int64_t> result;
+		std::vector<std::vector<float>> resultVecs; // Cache vectors of accepted nodes
 		result.reserve(config_.maxDegree);
+		resultVecs.reserve(config_.maxDegree);
 
 		for (const auto &[candId, candDist]: candDists) {
 			if (result.size() >= config_.maxDegree)
 				break;
 
-			bool occluded = false;
-			// We need distance between candidate (ID) and existing result (ID)
-			// Here we must load one of them. Loading Candidate is cheaper in loop?
-			// Actually, we can load Candidate Raw Vector once.
-
+			// Load candidate vector once for all occlusion checks
 			auto candPtrs = registry_->getBlobPtrs(candId);
+			if (candPtrs.rawBlob == 0)
+				continue;
 			std::vector<float> candVec = toFloat(registry_->loadRawVector(candPtrs.rawBlob));
 
-			for (int64_t existingId: result) {
-				// Here we calculate distance between two in-memory vectors
-				// Overload needed or manual calc
-				float distP2C =
-						distRaw(candVec, toFloat(registry_->loadRawVector(registry_->getBlobPtrs(existingId).rawBlob)));
-				// Optimization: Cache existingId vectors in 'result' loop?
-				// For embedded, reading Blob Cache is fast.
-
+			bool occluded = false;
+			for (size_t i = 0; i < result.size(); ++i) {
+				float distP2C = distRaw(candVec, resultVecs[i]);
 				if (config_.alpha * distP2C <= candDist) {
 					occluded = true;
 					break;
 				}
 			}
-			if (!occluded)
+
+			if (!occluded) {
 				result.push_back(candId);
+				resultVecs.push_back(std::move(candVec));
+			}
 		}
 		candidates = result;
 	}
@@ -350,19 +466,14 @@ namespace graph::vector {
 		auto target = registry_->loadRawVector(ptrs.rawBlob);
 
 		if (config_.metric == "IP" || config_.metric == "Cosine") {
-			return VectorMetric::computeIP(toBFloat16(query).data(), target.data(), target.size());
+			return VectorMetric::computeIP(query.data(), target.data(), target.size());
 		}
 		// Default L2
 		return VectorMetric::computeL2Sqr(query.data(), target.data(), target.size());
 	}
 
 	float DiskANNIndex::distRaw(const std::vector<float> &vecA, const std::vector<float> &vecB) {
-		float d = 0;
-		for (size_t i = 0; i < vecA.size(); ++i) {
-			float diff = vecA[i] - vecB[i];
-			d += diff * diff;
-		}
-		return d;
+		return VectorMetric::computeL2Sqr(vecA.data(), vecB.data(), vecA.size());
 	}
 
 	float DiskANNIndex::distPQ(const std::vector<float> &pqTable, int64_t targetId) const {

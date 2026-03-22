@@ -443,3 +443,89 @@ TEST_F(GraphAlgorithmTest, DFS_CycleDetection) {
 	// Should visit node1 only once despite cycle
 	EXPECT_EQ(counts[node1Id], 1);
 }
+
+// ============================================================================
+// Branch Coverage Improvement Tests
+// ============================================================================
+
+// Tests DFS traversal with invalid (non-existent) start node
+// Covers: Branch (209:7) True path - dm_->getNode(startNodeId).getId() == 0
+TEST_F(GraphAlgorithmTest, DFS_InvalidStartNode) {
+	int count = 0;
+	algo->depthFirstTraversal(
+		999999, // Non-existent node
+		[&](int64_t, int) {
+			count++;
+			return true;
+		},
+		"out");
+
+	// Should not visit any nodes since start node doesn't exist
+	EXPECT_EQ(count, 0);
+}
+
+// Tests DFS variable length path with a cycle
+// Covers: Branch (151:8) True path - cycle detection in dfsVariableLength
+TEST_F(GraphAlgorithmTest, FindAllPaths_CycleInVariableLength) {
+	// Add a cycle: 3 -> 1 to create a cycle 1->3->1
+	graph::Edge cycle(202, node3Id, node1Id, dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(cycle);
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	// findAllPaths with enough depth to encounter the cycle
+	auto nodes = algo->findAllPaths(node1Id, 0, 5, "", "out");
+
+	// Should not contain duplicates due to cycle detection
+	std::unordered_map<int64_t, int> counts;
+	for (const auto &n : nodes)
+		counts[n.getId()]++;
+
+	// Node 1 should appear at most once
+	EXPECT_LE(counts[node1Id], 1);
+}
+
+// Tests findShortestPath trivial case where the start node does not exist
+// Covers: Branch (68:8) False path - n.getId() == 0 when startNodeId == endNodeId
+TEST_F(GraphAlgorithmTest, FindShortestPathSameNodeNonExistent) {
+	// Use a node ID that doesn't exist
+	auto path = algo->findShortestPath(999999, 999999, "out");
+
+	// Should return a single node with id 0 (empty/invalid node)
+	ASSERT_EQ(path.size(), 1u);
+	EXPECT_EQ(path[0].getId(), 0);
+}
+
+// Tests DFS traversal where stack may push duplicates
+// Covers: Branch (218:8) False path - visited.contains(currId) is true
+// This happens when a node is pushed to the stack from multiple parents
+// before it gets popped and marked as visited
+TEST_F(GraphAlgorithmTest, DFS_DuplicateInStack) {
+	// Node 3 is reachable from both node1 and node2
+	// When doing DFS from node1:
+	// - Stack: [(1,0)]
+	// - Pop 1, push neighbors 2,3: Stack: [(2,1),(3,1)]
+	// - Pop 2 (or 3 depending on order), push its neighbors including 3
+	// - When we pop node 3 from the stack, it may already be visited
+	// Using "both" direction increases chance of duplicates in stack
+	std::vector<int64_t> visited;
+	algo->depthFirstTraversal(
+		node1Id,
+		[&](int64_t id, int) {
+			visited.push_back(id);
+			return true;
+		},
+		"both"); // "both" direction gives more edges, increasing duplicate pushes
+
+	// Count occurrences - each node should appear exactly once
+	std::unordered_map<int64_t, int> counts;
+	for (auto id : visited)
+		counts[id]++;
+
+	for (const auto &[id, count] : counts) {
+		EXPECT_EQ(count, 1) << "Node " << id << " should appear exactly once in DFS";
+	}
+}

@@ -470,3 +470,253 @@ TEST_F(CypherAdvancedTest, CreateWithVector_ZeroValues) {
 	auto res = execute("CREATE (n:ZeroVec {vec: [0.0, 0, 0.0]}) RETURN n");
 	ASSERT_EQ(res.rowCount(), 1UL);
 }
+
+// ============================================================================
+// OPTIONAL MATCH Coverage (PatternBuilder lines 49-70)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, OptionalMatch_Basic) {
+	// Exercise the isOptional branch in buildMatchPattern
+	(void) execute("CREATE (a:OptA {name: 'Alice'})");
+	(void) execute("CREATE (b:OptB {name: 'Bob'})");
+	(void) execute("CREATE (a:OptA {name: 'Alice'})-[:KNOWS]->(b:OptB {name: 'Bob'})");
+
+	auto res = execute("MATCH (a:OptA) OPTIONAL MATCH (a)-[:KNOWS]->(b:OptB) RETURN a.name, b.name");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherAdvancedTest, OptionalMatch_NoMatch) {
+	// OPTIONAL MATCH where the optional part has no match
+	(void) execute("CREATE (a:OptNoMatch {name: 'Solo'})");
+
+	auto res = execute("MATCH (a:OptNoMatch) OPTIONAL MATCH (a)-[:MISSING]->(b) RETURN a.name");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("a.name").toString(), "Solo");
+}
+
+TEST_F(CypherAdvancedTest, OptionalMatch_WithEdgeVariable) {
+	// OPTIONAL MATCH with named edge variable to cover collectVariablesFromPatternElement
+	(void) execute("CREATE (a:OptEdge)-[r:LINK {weight: 5}]->(b:OptEdge)");
+
+	auto res = execute("MATCH (a:OptEdge) OPTIONAL MATCH (a)-[r:LINK]->(b) RETURN a, r");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherAdvancedTest, OptionalMatch_WithWhere) {
+	// OPTIONAL MATCH with WHERE clause to cover applyWhereFilter in optional path
+	(void) execute("CREATE (a:OptWhere {name: 'Alice'})-[:KNOWS]->(b:OptWhere {age: 25})");
+	(void) execute("CREATE (a:OptWhere {name: 'Alice'})-[:KNOWS]->(c:OptWhere {age: 15})");
+
+	auto res = execute("MATCH (a:OptWhere {name: 'Alice'}) OPTIONAL MATCH (a)-[:KNOWS]->(b:OptWhere) WHERE b.age > 20 RETURN a.name, b.age");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// Multiple Node Properties / Residual Filters (PatternBuilder lines 120-142)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, MatchMultiplePropertiesOnNode) {
+	// Multiple properties on node pattern pushes first to index, rest to residual filters
+	(void) execute("CREATE (n:MultiProp {name: 'Alice', age: 30, city: 'NYC'})");
+	(void) execute("CREATE (n:MultiProp {name: 'Bob', age: 25, city: 'LA'})");
+
+	auto res = execute("MATCH (n:MultiProp {name: 'Alice', age: 30}) RETURN n.city");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n.city").toString(), "NYC");
+}
+
+TEST_F(CypherAdvancedTest, MatchThreePropertiesOnNode) {
+	// Three properties: first is index pushdown, other two are residual filters
+	(void) execute("CREATE (n:TriProp {a: 1, b: 2, c: 3})");
+	(void) execute("CREATE (n:TriProp {a: 1, b: 2, c: 99})");
+
+	auto res = execute("MATCH (n:TriProp {a: 1, b: 2, c: 3}) RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// Multiple Pattern Parts with Existing Pipeline (PatternBuilder line 81-89)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, MultipleMatchCartesianWithTraversal) {
+	// MATCH (a)-[]->(b), (c) exercises multiple pattern parts with existing pipeline
+	(void) execute("CREATE (a:CartTrav)-[:LINK]->(b:CartTrav)");
+	(void) execute("CREATE (c:CartTravOther)");
+
+	auto res = execute("MATCH (a:CartTrav)-[:LINK]->(b), (c:CartTravOther) RETURN a, b, c");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// MERGE Edge Pattern (PatternBuilder lines 363-453)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, MergeEdge_Basic) {
+	// MERGE with edge pattern exercises buildMergePattern edge path
+	(void) execute("CREATE (a:MergeEdgeA {name: 'A'})");
+	(void) execute("CREATE (b:MergeEdgeB {name: 'B'})");
+
+	auto res = execute("MERGE (a:MergeEdgeA {name: 'A'})-[:KNOWS]->(b:MergeEdgeB {name: 'B'}) RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherAdvancedTest, MergeEdge_WithProperties) {
+	// MERGE edge with edge properties
+	(void) execute("CREATE (a:MergeEdgePropA {name: 'X'})");
+	(void) execute("CREATE (b:MergeEdgePropB {name: 'Y'})");
+
+	auto res = execute("MERGE (a:MergeEdgePropA {name: 'X'})-[r:LINKED {since: 2024}]->(b:MergeEdgePropB {name: 'Y'}) RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherAdvancedTest, MergeEdge_IncomingDirection) {
+	// MERGE with incoming edge direction to cover the left arrow branch
+	(void) execute("CREATE (a:MergeInA {name: 'P'})");
+	(void) execute("CREATE (b:MergeInB {name: 'Q'})");
+
+	auto res = execute("MERGE (a:MergeInA {name: 'P'})<-[:FOLLOWS]-(b:MergeInB {name: 'Q'}) RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherAdvancedTest, MergeEdge_UndirectedBothDirection) {
+	// MERGE with undirected edge (both direction branch)
+	(void) execute("CREATE (a:MergeUndirA {name: 'M'})");
+	(void) execute("CREATE (b:MergeUndirB {name: 'N'})");
+
+	auto res = execute("MERGE (a:MergeUndirA {name: 'M'})-[:RELATED]-(b:MergeUndirB {name: 'N'}) RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+TEST_F(CypherAdvancedTest, MergeEdge_WithOnCreate) {
+	// MERGE edge with ON CREATE SET
+	auto res = execute("MERGE (a:MergeEdgeOC {name: 'R'})-[r:WORKS_AT]->(b:MergeEdgeOC {name: 'S'}) ON CREATE SET r.created = true RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// SET Label Assignment (PatternBuilder lines 540-550)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, SetLabelAssignment) {
+	// SET n:Label exercises the label assignment branch in extractSetItems
+	(void) execute("CREATE (n:SetLblOld {id: 1})");
+	(void) execute("MATCH (n:SetLblOld) SET n:SetLblNew");
+
+	// After label change, old label query returns 0, new returns 1
+	EXPECT_EQ(execute("MATCH (n:SetLblOld) RETURN n").rowCount(), 0UL);
+	EXPECT_EQ(execute("MATCH (n:SetLblNew) RETURN n").rowCount(), 1UL);
+}
+
+// ============================================================================
+// SET Map Merge (PatternBuilder lines 493-537)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, SetMapMerge) {
+	// SET n += {key: value} exercises the map merge branch in extractSetItems
+	(void) execute("CREATE (n:MapMergeTest {id: 1, name: 'old'})");
+	(void) execute("MATCH (n:MapMergeTest {id: 1}) SET n += {name: 'new', extra: 42}");
+
+	auto res = execute("MATCH (n:MapMergeTest {id: 1}) RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	auto props = res.getRows()[0].at("n").asNode().getProperties();
+	EXPECT_EQ(props.at("name").toString(), "new");
+}
+
+// ============================================================================
+// Bidirectional/Undirected Traversal (PatternBuilder lines 158-164)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, UndirectedTraversal) {
+	// Match with undirected relationship (both directions)
+	(void) execute("CREATE (a:Undir)-[:KNOWS]->(b:Undir)");
+
+	auto res = execute("MATCH (a:Undir)-[:KNOWS]-(b:Undir) RETURN a, b");
+	// Undirected should find matches in both directions
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// AstExtractor parseValue Coverage (lines 59-100)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, CreateWithBooleanProperty_True) {
+	// Exercises AstExtractor::parseValue boolean path
+	auto res = execute("CREATE (n:BoolPV {flag: true}) RETURN n");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("flag").toString(), "true");
+}
+
+TEST_F(CypherAdvancedTest, CreateWithBooleanProperty_False) {
+	// Exercises AstExtractor::parseValue boolean false path
+	auto res = execute("CREATE (n:BoolPV2 {flag: false}) RETURN n");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("flag").toString(), "false");
+}
+
+TEST_F(CypherAdvancedTest, VarLengthStar_NoBounds) {
+	// Test variable-length relationship with just * (no range numbers)
+	(void) execute("CREATE (a:VarNoBound)-[:KNOWS]->(b:VarNoBound)-[:KNOWS]->(c:VarNoBound)");
+
+	auto res = execute("MATCH (a:VarNoBound)-[*]->(b) RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// Target Node Properties on Traversal (PatternBuilder lines 241-247)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, TraversalWithTargetProperties) {
+	// Target node with properties in traversal
+	(void) execute("CREATE (a:SrcProp)-[:LINK]->(b:TgtProp {status: 'active'})");
+	(void) execute("CREATE (a:SrcProp)-[:LINK]->(c:TgtProp {status: 'inactive'})");
+
+	auto res = execute("MATCH (a:SrcProp)-[:LINK]->(b:TgtProp {status: 'active'}) RETURN b");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// Edge Properties on Fixed-Length Traversal (PatternBuilder lines 250-258)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, EdgePropertyFilterMultiple) {
+	// Multiple edge properties - exercises edge property filter loop
+	(void) execute("CREATE (a:EPM)-[r:REL {w: 1, t: 'A'}]->(b:EPM)");
+	(void) execute("CREATE (c:EPM)-[r:REL {w: 2, t: 'B'}]->(d:EPM)");
+
+	auto res = execute("MATCH (a:EPM)-[r:REL {w: 1}]->(b) RETURN a, b");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// No Relationship Details (PatternBuilder line 175: relDetail is null)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, TraversalNoRelDetail) {
+	// Traverse with no relationship detail: (a)-->(b)
+	(void) execute("CREATE (a:NoRelD)-[:ANY]->(b:NoRelD)");
+
+	auto res = execute("MATCH (a:NoRelD)-->(b:NoRelD) RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// Create Pattern with Relationship Chain (PatternBuilder lines 323-354)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, CreateWithRelNoDetail) {
+	// CREATE with relationship that has no detail (no variable, no type)
+	auto res = execute("CREATE (a:CreateNoRel)-->(b:CreateNoRel) RETURN a, b");
+	EXPECT_GE(res.rowCount(), 1UL);
+}
+
+// ============================================================================
+// WHERE Clause Exception Handling (PatternBuilder lines 275-286)
+// ============================================================================
+
+TEST_F(CypherAdvancedTest, WhereClauseWithComplexExpression) {
+	// WHERE clause with complex expression to exercise applyWhereFilter
+	(void) execute("CREATE (n:WhereComplex {x: 10, y: 20})");
+
+	auto res = execute("MATCH (n:WhereComplex) WHERE n.x < n.y RETURN n");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}

@@ -204,3 +204,96 @@ TEST_F(TransactionTest, HasActiveTransaction) {
 	txn.commit();
 	EXPECT_FALSE(db.hasActiveTransaction());
 }
+
+// ============================================================================
+// Branch Coverage Tests: Move assignment operator (lines 46-66)
+// ============================================================================
+
+TEST_F(TransactionTest, MoveAssignmentToDefaultConstructedLikeTransaction) {
+	graph::Database db(testDbPath.string());
+	db.open();
+
+	// Create first transaction, commit it (not active)
+	auto txn1 = db.beginTransaction();
+	txn1.commit();
+
+	// Create second transaction (active)
+	auto txn2 = db.beginTransaction();
+	uint64_t id2 = txn2.getId();
+	EXPECT_TRUE(txn2.isActive());
+
+	// Move-assign txn2 into txn1: exercises operator=(Transaction&&)
+	// txn1 is not active (committed), so the "if active, rollback" check inside
+	// operator= will take the false branch (state_ != TXN_ACTIVE).
+	txn1 = std::move(txn2);
+
+	EXPECT_TRUE(txn1.isActive());
+	EXPECT_EQ(txn1.getId(), id2);
+	EXPECT_FALSE(txn2.isActive()); // NOLINT - intentionally checking moved-from state
+
+	txn1.commit();
+}
+
+TEST_F(TransactionTest, MoveAssignmentFromActiveToActive) {
+	// Cover: operator=(&&) line 49 True branch: state_ == TXN_ACTIVE && manager_
+	// We need txn1 to be ACTIVE when we move-assign txn2 into it.
+	// Since we use single-writer lock, we need two separate TransactionManagers
+	// each with their own database to have two active transactions.
+
+	// Create two separate databases with separate TransactionManagers
+	boost::uuids::uuid uuid2 = boost::uuids::random_generator()();
+	auto testDbPath2 = fs::temp_directory_path() / ("test_txn_move2_" + boost::uuids::to_string(uuid2) + ".graph");
+	fs::remove_all(testDbPath2);
+
+	graph::Database db1(testDbPath.string());
+	db1.open();
+	graph::Database db2(testDbPath2.string());
+	db2.open();
+
+	// txn1 is active from db1
+	auto txn1 = db1.beginTransaction();
+	EXPECT_TRUE(txn1.isActive());
+
+	// txn2 is active from db2
+	auto txn2 = db2.beginTransaction();
+	uint64_t id2 = txn2.getId();
+	EXPECT_TRUE(txn2.isActive());
+
+	// Move-assign txn2 into txn1
+	// This should trigger auto-rollback of txn1 (active -> rolled back)
+	// then take ownership of txn2's state
+	txn1 = std::move(txn2);
+
+	EXPECT_TRUE(txn1.isActive());
+	EXPECT_EQ(txn1.getId(), id2);
+	EXPECT_FALSE(txn2.isActive()); // NOLINT - checking moved-from state
+
+	txn1.commit();
+
+	// db1's transaction was auto-rolled-back via move-assign, so we can begin another
+	auto txn3 = db1.beginTransaction();
+	txn3.commit();
+
+	db1.close();
+	db2.close();
+	fs::remove_all(testDbPath2);
+	fs::remove(testDbPath2.string() + "-wal");
+}
+
+TEST_F(TransactionTest, MoveAssignmentSelfAssignment) {
+	// Cover: operator=(&&) line 47 False branch: this == &other (self-assignment)
+	graph::Database db(testDbPath.string());
+	db.open();
+
+	auto txn = db.beginTransaction();
+	uint64_t id = txn.getId();
+	EXPECT_TRUE(txn.isActive());
+
+	// Self-assignment should be a no-op
+	txn = std::move(txn); // NOLINT - intentionally testing self-assignment
+
+	EXPECT_TRUE(txn.isActive());
+	EXPECT_EQ(txn.getId(), id);
+
+	txn.commit();
+}

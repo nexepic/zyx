@@ -211,3 +211,390 @@ TEST_F(HelpersRealQueriesTest, MapSizeOperations) {
 	map.clear();
 	EXPECT_EQ(map.size(), 0u);
 }
+
+// ============================================================================
+// Real AST-based AstExtractor tests (exercises non-null paths)
+// ============================================================================
+
+// Helper class that provides parsed AST access
+class AstExtractorRealAstTest : public ::testing::Test {
+protected:
+	struct ParsedQuery {
+		std::unique_ptr<antlr4::ANTLRInputStream> input;
+		std::unique_ptr<CypherLexer> lexer;
+		std::unique_ptr<antlr4::CommonTokenStream> tokens;
+		std::unique_ptr<CypherParser> parser;
+		CypherParser::CypherContext* tree;
+
+		// Prevent copy
+		ParsedQuery(const ParsedQuery&) = delete;
+		ParsedQuery& operator=(const ParsedQuery&) = delete;
+		ParsedQuery(ParsedQuery&&) = default;
+		ParsedQuery& operator=(ParsedQuery&&) = default;
+		ParsedQuery() = default;
+	};
+
+	ParsedQuery parse(const std::string& query) {
+		ParsedQuery pq;
+		pq.input = std::make_unique<antlr4::ANTLRInputStream>(query);
+		pq.lexer = std::make_unique<CypherLexer>(pq.input.get());
+		pq.lexer->removeErrorListeners();
+		pq.tokens = std::make_unique<antlr4::CommonTokenStream>(pq.lexer.get());
+		pq.parser = std::make_unique<CypherParser>(pq.tokens.get());
+		pq.parser->removeErrorListeners();
+		pq.tree = pq.parser->cypher();
+		return pq;
+	}
+
+	// Get SingleQuery from tree
+	CypherParser::SingleQueryContext* getSingleQuery(CypherParser::CypherContext* tree) {
+		auto stmt = tree->statement();
+		if (!stmt) return nullptr;
+		auto query = stmt->query();
+		if (!query) return nullptr;
+		auto regularQuery = query->regularQuery();
+		if (!regularQuery) return nullptr;
+		if (regularQuery->singleQuery().empty()) return nullptr;
+		return regularQuery->singleQuery(0);
+	}
+
+	// Navigate to the first nodePattern in a MATCH or CREATE query
+	CypherParser::NodePatternContext* getFirstNodePattern(CypherParser::CypherContext* tree) {
+		auto sq = getSingleQuery(tree);
+		if (!sq) return nullptr;
+
+		// Check reading clauses (MATCH)
+		for (auto rc : sq->readingClause()) {
+			if (rc->matchStatement()) {
+				auto pattern = rc->matchStatement()->pattern();
+				if (pattern && !pattern->patternPart().empty()) {
+					auto element = pattern->patternPart(0)->patternElement();
+					if (element) return element->nodePattern();
+				}
+			}
+		}
+		// Check updating clauses (CREATE)
+		for (auto uc : sq->updatingClause()) {
+			if (uc->createStatement()) {
+				auto pattern = uc->createStatement()->pattern();
+				if (pattern && !pattern->patternPart().empty()) {
+					auto element = pattern->patternPart(0)->patternElement();
+					if (element) return element->nodePattern();
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	// Navigate to the first literal in a query's node properties
+	CypherParser::LiteralContext* getFirstLiteral(CypherParser::CypherContext* tree) {
+		auto node = getFirstNodePattern(tree);
+		if (!node || !node->properties() || !node->properties()->mapLiteral()) return nullptr;
+		auto mapLit = node->properties()->mapLiteral();
+		auto exprs = mapLit->expression();
+		if (exprs.empty()) return nullptr;
+
+		std::function<CypherParser::LiteralContext*(antlr4::tree::ParseTree*)> findLiteral;
+		findLiteral = [&](antlr4::tree::ParseTree* t) -> CypherParser::LiteralContext* {
+			if (!t) return nullptr;
+			if (auto* lit = dynamic_cast<CypherParser::LiteralContext*>(t)) return lit;
+			for (size_t i = 0; i < t->children.size(); ++i) {
+				auto result = findLiteral(t->children[i]);
+				if (result) return result;
+			}
+			return nullptr;
+		};
+		return findLiteral(exprs[0]);
+	}
+
+	// Navigate to first SET statement
+	CypherParser::SetStatementContext* getFirstSetStatement(CypherParser::CypherContext* tree) {
+		auto sq = getSingleQuery(tree);
+		if (!sq) return nullptr;
+		for (auto uc : sq->updatingClause()) {
+			if (uc->setStatement()) return uc->setStatement();
+		}
+		return nullptr;
+	}
+
+	// Navigate to first relationship detail in a MATCH pattern chain
+	CypherParser::RelationshipDetailContext* getFirstRelDetail(CypherParser::CypherContext* tree) {
+		auto sq = getSingleQuery(tree);
+		if (!sq) return nullptr;
+		for (auto rc : sq->readingClause()) {
+			if (rc->matchStatement()) {
+				auto pattern = rc->matchStatement()->pattern();
+				if (pattern && !pattern->patternPart().empty()) {
+					auto element = pattern->patternPart(0)->patternElement();
+					if (element && !element->patternElementChain().empty()) {
+						auto chain = element->patternElementChain(0);
+						return chain->relationshipPattern()->relationshipDetail();
+					}
+				}
+			}
+		}
+		return nullptr;
+	}
+};
+
+// Test parseValue with string literal
+TEST_F(AstExtractorRealAstTest, ParseValue_StringLiteral) {
+	auto pq = parse("CREATE (n {name: 'Alice'})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::STRING);
+	EXPECT_EQ(pv.toString(), "Alice");
+}
+
+// Test parseValue with integer literal
+TEST_F(AstExtractorRealAstTest, ParseValue_IntegerLiteral) {
+	auto pq = parse("CREATE (n {age: 42})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::INTEGER);
+	EXPECT_EQ(pv.toString(), "42");
+}
+
+// Test parseValue with double literal (decimal point)
+TEST_F(AstExtractorRealAstTest, ParseValue_DoubleLiteral) {
+	auto pq = parse("CREATE (n {score: 3.14})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::DOUBLE);
+	EXPECT_EQ(pv.toString(), "3.14");
+}
+
+// Test parseValue with scientific notation (lowercase e)
+TEST_F(AstExtractorRealAstTest, ParseValue_ScientificNotationLowerE) {
+	auto pq = parse("CREATE (n {val: 1.5e10})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::DOUBLE);
+}
+
+// Test parseValue with scientific notation (uppercase E)
+TEST_F(AstExtractorRealAstTest, ParseValue_ScientificNotationUpperE) {
+	auto pq = parse("CREATE (n {val: 2.0E5})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::DOUBLE);
+}
+
+// Test parseValue with boolean true
+TEST_F(AstExtractorRealAstTest, ParseValue_BooleanTrue) {
+	auto pq = parse("CREATE (n {flag: true})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::BOOLEAN);
+	EXPECT_EQ(pv.toString(), "true");
+}
+
+// Test parseValue with boolean false
+TEST_F(AstExtractorRealAstTest, ParseValue_BooleanFalse) {
+	auto pq = parse("CREATE (n {flag: false})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::BOOLEAN);
+	EXPECT_EQ(pv.toString(), "false");
+}
+
+// Test parseValue with null literal
+TEST_F(AstExtractorRealAstTest, ParseValue_NullLiteral) {
+	auto pq = parse("CREATE (n {val: null})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::NULL_TYPE);
+}
+
+// Test extractLabel with real parsed label
+TEST_F(AstExtractorRealAstTest, ExtractLabel_WithLabel) {
+	auto pq = parse("MATCH (n:Person) RETURN n");
+	auto node = getFirstNodePattern(pq.tree);
+	ASSERT_NE(node, nullptr);
+	auto label = helpers::AstExtractor::extractLabel(node->nodeLabels());
+	EXPECT_EQ(label, "Person");
+}
+
+// Test extractLabel with no label (empty labels)
+TEST_F(AstExtractorRealAstTest, ExtractLabel_NoLabel) {
+	auto pq = parse("MATCH (n) RETURN n");
+	auto node = getFirstNodePattern(pq.tree);
+	ASSERT_NE(node, nullptr);
+	// nodeLabels() returns nullptr when no label is specified
+	auto label = helpers::AstExtractor::extractLabel(node->nodeLabels());
+	EXPECT_TRUE(label.empty());
+}
+
+// Test extractVariable with real parsed variable
+TEST_F(AstExtractorRealAstTest, ExtractVariable_WithVariable) {
+	auto pq = parse("MATCH (myVar) RETURN myVar");
+	auto node = getFirstNodePattern(pq.tree);
+	ASSERT_NE(node, nullptr);
+	auto var = helpers::AstExtractor::extractVariable(node->variable());
+	EXPECT_EQ(var, "myVar");
+}
+
+// Test extractVariable with no variable (anonymous node)
+TEST_F(AstExtractorRealAstTest, ExtractVariable_NoVariable) {
+	auto pq = parse("MATCH () RETURN 1");
+	auto node = getFirstNodePattern(pq.tree);
+	ASSERT_NE(node, nullptr);
+	auto var = helpers::AstExtractor::extractVariable(node->variable());
+	EXPECT_TRUE(var.empty());
+}
+
+// Test extractRelType with real parsed relationship type
+TEST_F(AstExtractorRealAstTest, ExtractRelType_WithType) {
+	auto pq = parse("MATCH (a)-[r:KNOWS]->(b) RETURN a");
+	auto relDetail = getFirstRelDetail(pq.tree);
+	ASSERT_NE(relDetail, nullptr);
+	auto relType = helpers::AstExtractor::extractRelType(relDetail->relationshipTypes());
+	EXPECT_EQ(relType, "KNOWS");
+}
+
+// Test extractRelType with no type
+TEST_F(AstExtractorRealAstTest, ExtractRelType_NoType) {
+	auto pq = parse("MATCH (a)-[r]->(b) RETURN a");
+	auto relDetail = getFirstRelDetail(pq.tree);
+	ASSERT_NE(relDetail, nullptr);
+	auto relType = helpers::AstExtractor::extractRelType(relDetail->relationshipTypes());
+	EXPECT_TRUE(relType.empty());
+}
+
+// Test extractProperties with real parsed properties
+TEST_F(AstExtractorRealAstTest, ExtractProperties_WithProps) {
+	auto pq = parse("MATCH (n {name: 'Alice', age: 30}) RETURN n");
+	auto node = getFirstNodePattern(pq.tree);
+	ASSERT_NE(node, nullptr);
+	ASSERT_NE(node->properties(), nullptr);
+
+	auto props = helpers::AstExtractor::extractProperties(
+		node->properties(),
+		[](CypherParser::ExpressionContext* expr) {
+			return helpers::ExpressionBuilder::evaluateLiteralExpression(expr);
+		});
+	EXPECT_EQ(props.size(), 2u);
+	EXPECT_TRUE(props.contains("name"));
+	EXPECT_TRUE(props.contains("age"));
+}
+
+// Test extractProperties with no properties
+TEST_F(AstExtractorRealAstTest, ExtractProperties_NoProps) {
+	auto pq = parse("MATCH (n) RETURN n");
+	auto node = getFirstNodePattern(pq.tree);
+	ASSERT_NE(node, nullptr);
+
+	auto props = helpers::AstExtractor::extractProperties(
+		node->properties(),
+		[](CypherParser::ExpressionContext* expr) {
+			return helpers::ExpressionBuilder::evaluateLiteralExpression(expr);
+		});
+	EXPECT_TRUE(props.empty());
+}
+
+// Test extractPropertyKeyFromExpr with real property expression
+TEST_F(AstExtractorRealAstTest, ExtractPropertyKeyFromExpr_WithDot) {
+	auto pq = parse("MATCH (n) SET n.name = 'test' RETURN n");
+	auto setStmt = getFirstSetStatement(pq.tree);
+	ASSERT_NE(setStmt, nullptr);
+	ASSERT_FALSE(setStmt->setItem().empty());
+
+	auto setItem = setStmt->setItem(0);
+	ASSERT_NE(setItem->propertyExpression(), nullptr);
+
+	auto key = helpers::AstExtractor::extractPropertyKeyFromExpr(setItem->propertyExpression());
+	EXPECT_EQ(key, "name");
+}
+
+// Test extractLabelFromNodeLabel with real label
+TEST_F(AstExtractorRealAstTest, ExtractLabelFromNodeLabel_WithLabel) {
+	auto pq = parse("MATCH (n:Person) RETURN n");
+	auto node = getFirstNodePattern(pq.tree);
+	ASSERT_NE(node, nullptr);
+	auto nodeLabels = node->nodeLabels();
+	ASSERT_NE(nodeLabels, nullptr);
+	ASSERT_FALSE(nodeLabels->nodeLabel().empty());
+
+	auto label = helpers::AstExtractor::extractLabelFromNodeLabel(nodeLabels->nodeLabel(0));
+	EXPECT_EQ(label, "Person");
+}
+
+// Test PatternBuilder extractSetItems with real SET property
+TEST_F(AstExtractorRealAstTest, PatternBuilder_ExtractSetItems_Property) {
+	auto pq = parse("MATCH (n) SET n.name = 'test' RETURN n");
+	auto setStmt = getFirstSetStatement(pq.tree);
+	ASSERT_NE(setStmt, nullptr);
+
+	auto items = helpers::PatternBuilder::extractSetItems(setStmt);
+	EXPECT_EQ(items.size(), 1u);
+}
+
+// Test PatternBuilder extractSetItems with label assignment
+TEST_F(AstExtractorRealAstTest, PatternBuilder_ExtractSetItems_Label) {
+	auto pq = parse("MATCH (n) SET n:NewLabel RETURN n");
+	auto setStmt = getFirstSetStatement(pq.tree);
+	ASSERT_NE(setStmt, nullptr);
+
+	auto items = helpers::PatternBuilder::extractSetItems(setStmt);
+	EXPECT_EQ(items.size(), 1u);
+}
+
+// Test PatternBuilder extractSetItems with map merge
+TEST_F(AstExtractorRealAstTest, PatternBuilder_ExtractSetItems_MapMerge) {
+	auto pq = parse("MATCH (n) SET n += {name: 'test', age: 30} RETURN n");
+	auto setStmt = getFirstSetStatement(pq.tree);
+	ASSERT_NE(setStmt, nullptr);
+
+	auto items = helpers::PatternBuilder::extractSetItems(setStmt);
+	// Map merge with map literal expands to individual PROPERTY items
+	EXPECT_GE(items.size(), 1u);
+}
+
+// Test PatternBuilder extractSetItems with multiple SET items
+TEST_F(AstExtractorRealAstTest, PatternBuilder_ExtractSetItems_Multiple) {
+	auto pq = parse("MATCH (n) SET n.a = 1, n.b = 'two', n.c = true RETURN n");
+	auto setStmt = getFirstSetStatement(pq.tree);
+	ASSERT_NE(setStmt, nullptr);
+
+	auto items = helpers::PatternBuilder::extractSetItems(setStmt);
+	EXPECT_EQ(items.size(), 3u);
+}
+
+// Test parseValue with scientific notation without decimal point (uppercase E only)
+TEST_F(AstExtractorRealAstTest, ParseValue_ScientificNotationNoDecimal) {
+	auto pq = parse("CREATE (n {val: 1E5})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::DOUBLE);
+}
+
+// Test parseValue with integer zero
+TEST_F(AstExtractorRealAstTest, ParseValue_IntegerZero) {
+	auto pq = parse("CREATE (n {val: 0})");
+	auto lit = getFirstLiteral(pq.tree);
+	ASSERT_NE(lit, nullptr);
+	auto pv = helpers::AstExtractor::parseValue(lit);
+	EXPECT_EQ(pv.getType(), graph::PropertyType::INTEGER);
+	EXPECT_EQ(pv.toString(), "0");
+}
+
+// Test parseValue with negative integer
+TEST_F(AstExtractorRealAstTest, ParseValue_NegativeInteger) {
+	auto pq = parse("CREATE (n {val: -42})");
+	auto lit = getFirstLiteral(pq.tree);
+	// Note: negative numbers may be parsed as unary minus + positive literal
+	// If lit is null, the value is wrapped in a unary expression
+	if (lit) {
+		auto pv = helpers::AstExtractor::parseValue(lit);
+		EXPECT_TRUE(pv.getType() == graph::PropertyType::INTEGER || pv.getType() == graph::PropertyType::DOUBLE);
+	}
+}

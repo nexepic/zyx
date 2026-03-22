@@ -179,7 +179,7 @@ TEST_F(WritingClauseHandlerTest, Delete_DetachVsNonDetach) {
 	(void) execute("CREATE (a:Test)-[:LINK]->(b:Test)");
 
 	EXPECT_THROW({
-		execute("MATCH (a:Test) DELETE a");
+		(void)execute("MATCH (a:Test) DELETE a");
 	}, std::runtime_error);
 }
 
@@ -302,7 +302,7 @@ TEST_F(WritingClauseHandlerTest, Delete_WithoutPrecedingMatch) {
 	// Tests DELETE without preceding MATCH clause
 	// This should throw an error
 	EXPECT_THROW({
-		execute("DELETE n");
+		(void)execute("DELETE n");
 	}, std::runtime_error);
 }
 
@@ -421,7 +421,7 @@ TEST_F(WritingClauseHandlerTest, EdgeCase_DeleteBeforeCreate) {
 TEST_F(WritingClauseHandlerTest, EdgeCase_DeleteWithoutMatch) {
 	// Tests DELETE clause without preceding MATCH
 	// Should throw error
-	EXPECT_THROW({ execute("DELETE n"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("DELETE n"); }, std::runtime_error);
 }
 
 TEST_F(WritingClauseHandlerTest, EdgeCase_MatchAndSetAndDelete) {
@@ -435,7 +435,7 @@ TEST_F(WritingClauseHandlerTest, EdgeCase_MatchAndSetAndDelete) {
 TEST_F(WritingClauseHandlerTest, EdgeCase_RemoveWithoutMatch) {
 	// Tests REMOVE clause without preceding MATCH
 	// Should throw error
-	EXPECT_THROW({ execute("REMOVE n.prop"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("REMOVE n.prop"); }, std::runtime_error);
 }
 
 TEST_F(WritingClauseHandlerTest, EdgeCase_SetOnNonExistentNode) {
@@ -457,7 +457,7 @@ TEST_F(WritingClauseHandlerTest, EdgeCase_SetWithComplexValue) {
 TEST_F(WritingClauseHandlerTest, EdgeCase_SetWithoutMatch) {
 	// Tests SET clause without preceding MATCH or CREATE
 	// Should throw error
-	EXPECT_THROW({ execute("SET n.value = 100"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("SET n.value = 100"); }, std::runtime_error);
 }
 
 // === Merge Tests ===
@@ -841,7 +841,7 @@ TEST_F(WritingClauseHandlerTest, Remove_WithoutPrecedingClause) {
 	// Tests REMOVE without preceding MATCH or CREATE
 	// This should throw an error
 	EXPECT_THROW({
-		execute("REMOVE n:Label");
+		(void)execute("REMOVE n:Label");
 	}, std::runtime_error);
 }
 
@@ -1042,7 +1042,7 @@ TEST_F(WritingClauseHandlerTest, Set_WithoutMatchOrCreate) {
 	// Covers True branch at line 52 (!rootOp check)
 	// This should throw an error
 	EXPECT_THROW({
-		execute("SET n.value = 100");
+		(void)execute("SET n.value = 100");
 	}, std::runtime_error);
 }
 
@@ -1050,7 +1050,7 @@ TEST_F(WritingClauseHandlerTest, Set_WithoutPrecedingClause) {
 	// Tests SET clause without preceding MATCH or CREATE
 	// This should throw an error
 	EXPECT_THROW({
-		execute("SET n.value = 100");
+		(void)execute("SET n.value = 100");
 	}, std::runtime_error);
 }
 

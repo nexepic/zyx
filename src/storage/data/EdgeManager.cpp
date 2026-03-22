@@ -24,7 +24,7 @@
 
 namespace graph::storage {
 
-	EdgeManager::EdgeManager(const std::shared_ptr<DataManager> &dataManager,
+	EdgeManager::EdgeManager(DataManager* dataManager,
 							 std::shared_ptr<DeletionManager> deletionManager) :
 		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 

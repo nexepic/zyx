@@ -20,6 +20,8 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/core/Node.hpp"
+#include "graph/core/Edge.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
 #include "graph/query/execution/operators/SingleRowOperator.hpp"
 #include "graph/query/execution/Record.hpp"
@@ -275,6 +277,132 @@ TEST_F(OptionalMatchOperatorTest, ReturnsAllPatternMatches) {
 	ASSERT_TRUE(resultOpt.has_value());
 	// Should have 2 records (one for each pattern match)
 	EXPECT_EQ(resultOpt->size(), 2UL);
+
+	op.close();
+}
+
+/**
+ * Test OptionalMatchOperator toString with multiple required variables
+ * Covers the comma separator branch (i > 0) in toString()
+ */
+TEST_F(OptionalMatchOperatorTest, ToStringWithMultipleRequiredVariables) {
+	auto inputOp = std::make_unique<MockInputOperator>(std::vector<Record>{});
+	auto patternOp = std::make_unique<MockPatternOperator>(std::vector<Record>{}, false);
+
+	OptionalMatchOperator op(std::move(inputOp), std::move(patternOp), {"a", "b", "c"});
+
+	auto str = op.toString();
+	EXPECT_TRUE(str.find("a") != std::string::npos);
+	EXPECT_TRUE(str.find("b") != std::string::npos);
+	EXPECT_TRUE(str.find("c") != std::string::npos);
+	// Verify commas are present (covers i > 0 branch)
+	EXPECT_TRUE(str.find(", ") != std::string::npos);
+}
+
+/**
+ * Test OptionalMatchOperator with empty required variables list
+ * Covers the case where requiredVariables_ is empty in toString() and createNullExtendedRecord()
+ */
+TEST_F(OptionalMatchOperatorTest, ToStringWithEmptyRequiredVariables) {
+	auto inputOp = std::make_unique<MockInputOperator>(std::vector<Record>{});
+	auto patternOp = std::make_unique<MockPatternOperator>(std::vector<Record>{}, false);
+
+	OptionalMatchOperator op(std::move(inputOp), std::move(patternOp), {});
+
+	auto str = op.toString();
+	EXPECT_TRUE(str.find("OptionalMatchOperator") != std::string::npos);
+	EXPECT_TRUE(str.find("[]") != std::string::npos);
+}
+
+/**
+ * Test createNullExtendedRecord when required variable already exists as a node
+ * Covers the nodeOpt.has_value() true branch in createNullExtendedRecord()
+ */
+TEST_F(OptionalMatchOperatorTest, NullExtensionSkipsExistingNodeVariable) {
+	Record inputRecord;
+	inputRecord.setValue("input", PropertyValue(42));
+	// Set a node for the required variable - it already exists
+	Node node(1, 100);
+	inputRecord.setNode("pattern", node);
+
+	auto inputOp = std::make_unique<MockInputOperator>(std::vector<Record>{inputRecord});
+	auto patternOp = std::make_unique<MockPatternOperator>(std::vector<Record>{}, false);
+
+	OptionalMatchOperator op(std::move(inputOp), std::move(patternOp), {"pattern"});
+
+	op.open();
+	auto resultOpt = op.next();
+	ASSERT_TRUE(resultOpt.has_value());
+	EXPECT_EQ(resultOpt->size(), 1UL);
+
+	// The node should still exist (not overwritten with NULL)
+	auto nodeOpt = (*resultOpt)[0].getNode("pattern");
+	EXPECT_TRUE(nodeOpt.has_value());
+	EXPECT_EQ(nodeOpt->getId(), 1);
+
+	op.close();
+}
+
+/**
+ * Test createNullExtendedRecord when required variable already exists as an edge
+ * Covers the edgeOpt.has_value() true branch in createNullExtendedRecord()
+ */
+TEST_F(OptionalMatchOperatorTest, NullExtensionSkipsExistingEdgeVariable) {
+	Record inputRecord;
+	inputRecord.setValue("input", PropertyValue(42));
+	// Set an edge for the required variable - it already exists
+	Edge edge(10, 1, 2, 200);
+	inputRecord.setEdge("rel", edge);
+
+	auto inputOp = std::make_unique<MockInputOperator>(std::vector<Record>{inputRecord});
+	auto patternOp = std::make_unique<MockPatternOperator>(std::vector<Record>{}, false);
+
+	OptionalMatchOperator op(std::move(inputOp), std::move(patternOp), {"rel"});
+
+	op.open();
+	auto resultOpt = op.next();
+	ASSERT_TRUE(resultOpt.has_value());
+	EXPECT_EQ(resultOpt->size(), 1UL);
+
+	// The edge should still exist (not overwritten with NULL)
+	auto edgeOpt = (*resultOpt)[0].getEdge("rel");
+	EXPECT_TRUE(edgeOpt.has_value());
+	EXPECT_EQ(edgeOpt->getId(), 10);
+
+	op.close();
+}
+
+/**
+ * Test OptionalMatchOperator with input returning empty batch
+ * Covers the batchOpt->empty() true branch in next()
+ */
+TEST_F(OptionalMatchOperatorTest, HandlesEmptyBatchFromInput) {
+	// Custom mock that returns an empty batch
+	class EmptyBatchOperator : public PhysicalOperator {
+	public:
+		EmptyBatchOperator() : returned_(false) {}
+		void open() override { returned_ = false; }
+		std::optional<RecordBatch> next() override {
+			if (returned_) return std::nullopt;
+			returned_ = true;
+			return RecordBatch{}; // empty batch
+		}
+		void close() override {}
+		std::vector<std::string> getOutputVariables() const override { return {"input"}; }
+		std::string toString() const override { return "EmptyBatchOperator"; }
+	private:
+		bool returned_;
+	};
+
+	auto inputOp = std::make_unique<EmptyBatchOperator>();
+	auto patternOp = std::make_unique<MockPatternOperator>(std::vector<Record>{}, false);
+
+	OptionalMatchOperator op(std::move(inputOp), std::move(patternOp), {"pattern"});
+
+	op.open();
+	auto resultOpt = op.next();
+	// Empty batch should cause inputExhausted_ = true and return nullopt
+	EXPECT_FALSE(resultOpt.has_value());
 
 	op.close();
 }

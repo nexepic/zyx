@@ -106,10 +106,7 @@ namespace graph::query::indexes {
 			auto current = dataManager_->getIndex(currentId);
 			if (current.isLeaf())
 				return currentId;
-			int64_t childId = current.findChild(key, dataManager_, keyComparator_);
-			if (childId == 0)
-				return 0;
-			currentId = childId;
+			currentId = current.findChild(key, dataManager_, keyComparator_);
 		}
 	}
 
@@ -258,9 +255,6 @@ namespace graph::query::indexes {
 		auto it =
 				std::ranges::find_if(parentChildren, [&](const auto &child) { return child.childId == node.getId(); });
 
-		if (it == parentChildren.end())
-			return;
-
 		size_t index = std::distance(parentChildren.begin(), it);
 
 		int64_t leftSiblingId = (index > 0) ? parentChildren[index - 1].childId : 0;
@@ -381,10 +375,6 @@ namespace graph::query::indexes {
 	void IndexTreeManager::mergeNodes(Index &leftNode, Index &rightNode, Index &parent,
 									  const PropertyValue &separatorKey, int64_t &rootId) {
 
-		if (leftNode.isLeaf() != rightNode.isLeaf()) {
-			throw std::logic_error("Attempting to merge a leaf with a non-leaf node.");
-		}
-
 		if (leftNode.isLeaf()) {
 			auto leftEntries = leftNode.getAllEntries(dataManager_);
 			auto rightEntries = rightNode.getAllEntries(dataManager_);
@@ -425,13 +415,9 @@ namespace graph::query::indexes {
 		auto rightNodeChildIt =
 				std::ranges::find_if(parentChildren, [&](const auto &c) { return c.childId == rightNode.getId(); });
 
-		if (rightNodeChildIt != parentChildren.end()) {
-			parentChildren.erase(rightNodeChildIt);
-			parent.setAllChildren(parentChildren, dataManager_);
-			dataManager_->updateIndexEntity(parent);
-		} else {
-			throw std::logic_error("Parent does not contain right sibling in merge (Severe Corruption)");
-		}
+		parentChildren.erase(rightNodeChildIt);
+		parent.setAllChildren(parentChildren, dataManager_);
+		dataManager_->updateIndexEntity(parent);
 
 		dataManager_->updateIndexEntity(leftNode);
 
@@ -456,9 +442,6 @@ namespace graph::query::indexes {
 	std::vector<Index::Entry>
 	coalesceRawEntries(const std::vector<std::pair<PropertyValue, int64_t>> &rawEntries,
 					   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
-		if (rawEntries.empty())
-			return {};
-
 		// 1. Sort raw entries
 		auto sortedEntries = rawEntries;
 		std::ranges::sort(sortedEntries, [&](const auto &a, const auto &b) {
@@ -497,7 +480,7 @@ namespace graph::query::indexes {
 			return rootId;
 		std::unique_lock lock(mutex_);
 		if (rootId == 0)
-			rootId = initialize();
+			rootId = createNewNode(Index::NodeType::LEAF);
 
 		// --- STEP 1: Pre-process (Sort & Coalesce) ---
 		std::vector<Index::Entry> coalescedEntries = coalesceRawEntries(entries, keyComparator_);
@@ -507,10 +490,7 @@ namespace graph::query::indexes {
 		std::map<int64_t, std::vector<Index::Entry>> entriesByLeaf;
 
 		for (const auto &entry: coalescedEntries) {
-			int64_t leafId = findLeafNode(rootId, entry.key);
-			if (leafId == 0)
-				leafId = rootId; // Should catch root init cases
-			entriesByLeaf[leafId].push_back(entry);
+			entriesByLeaf[findLeafNode(rootId, entry.key)].push_back(entry);
 		}
 
 		// --- STEP 3: Process each leaf ---
@@ -688,17 +668,7 @@ namespace graph::query::indexes {
 
 		// Traverse down to the correct leaf
 		while (!currentNode.isLeaf()) {
-			int64_t childId = currentNode.findChild(key, dataManager_, keyComparator_);
-			if (childId == 0) {
-				// Should not happen in a valid tree unless empty root
-				// Fallback to first child if key < all separators
-				auto children = currentNode.getChildIds();
-				if (!children.empty())
-					childId = children[0];
-				else
-					throw std::runtime_error("Corrupt internal node: no children");
-			}
-			currentNodeId = childId;
+			currentNodeId = currentNode.findChild(key, dataManager_, keyComparator_);
 			currentNode = dataManager_->getIndex(currentNodeId);
 		}
 
@@ -727,9 +697,6 @@ namespace graph::query::indexes {
 			return false;
 
 		int64_t leafId = findLeafNode(rootId, key);
-		if (leafId == 0)
-			return false;
-
 		auto leaf = dataManager_->getIndex(leafId);
 		bool removed = leaf.removeEntry(key, value, dataManager_, keyComparator_);
 
@@ -754,8 +721,6 @@ namespace graph::query::indexes {
 		if (rootId == 0)
 			return {};
 		int64_t leafId = findLeafNode(rootId, key);
-		if (leafId == 0)
-			return {};
 		auto leaf = dataManager_->getIndex(leafId);
 		return leaf.findValues(key, dataManager_, keyComparator_);
 	}
@@ -767,9 +732,6 @@ namespace graph::query::indexes {
 			return {};
 
 		int64_t leafId = findLeafNode(rootId, minKey);
-		if (leafId == 0)
-			return {};
-
 		std::vector<int64_t> results;
 		bool continueScan = true;
 
@@ -803,9 +765,7 @@ namespace graph::query::indexes {
 		while (true) {
 			auto node = dataManager_->getIndex(currentId);
 			if (node.isLeaf()) break;
-			auto children = node.getChildIds();
-			if (children.empty()) break;
-			currentId = children[0];
+			currentId = node.getChildIds()[0];
 		}
 
 		// Traverse leaves list

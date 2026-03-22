@@ -41,17 +41,11 @@ std::any CypherToPlanVisitor::visitRegularQuery(CypherParser::RegularQueryContex
 	// Grammar: regularQuery : singleQuery ( K_UNION K_ALL? singleQuery )*
 
 	auto singleQueries = ctx->singleQuery();
-	if (singleQueries.empty()) {
-		return std::any();
-	}
 
 	// Visit first single query to get the initial plan
-	auto firstResult = visitSingleQuery(singleQueries[0]);
-	if (!firstResult.has_value()) {
-		return std::any();
-	}
+	// Note: singleQueries is guaranteed non-empty by grammar (regularQuery requires at least one singleQuery)
+	visitSingleQuery(singleQueries[0]);
 
-	// The visitSingleQuery stores the result in rootOp_
 	std::unique_ptr<query::execution::PhysicalOperator> currentPlan = std::move(rootOp_);
 
 	// Process additional single queries connected by UNION

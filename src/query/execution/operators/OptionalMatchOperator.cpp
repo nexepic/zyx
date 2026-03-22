@@ -152,7 +152,7 @@ Record OptionalMatchOperator::createNullExtendedRecord(const Record& inputRecord
 	return result;
 }
 
-std::vector<Record> OptionalMatchOperator::tryMatchPattern(const Record& inputRecord) {
+std::vector<Record> OptionalMatchOperator::tryMatchPattern(const Record& /*inputRecord*/) {
 	std::vector<Record> matches;
 
 	// For OPTIONAL MATCH, we need to execute the pattern matcher

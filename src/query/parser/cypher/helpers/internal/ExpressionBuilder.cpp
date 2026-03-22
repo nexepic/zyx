@@ -705,7 +705,43 @@ PropertyValue ExpressionBuilder::parseValue(CypherParser::LiteralContext *ctx) {
 
 	if (ctx->StringLiteral()) {
 		std::string s = ctx->StringLiteral()->getText();
-		return PropertyValue(s.substr(1, s.length() - 2));
+		std::string raw = s.substr(1, s.length() - 2);
+		// Process escape sequences per Cypher spec
+		std::string unescaped;
+		unescaped.reserve(raw.size());
+		for (size_t i = 0; i < raw.size(); ++i) {
+			if (raw[i] == '\\' && i + 1 < raw.size()) {
+				char next = raw[i + 1];
+				switch (next) {
+					case 'b': unescaped += '\b'; ++i; break;
+					case 't': unescaped += '\t'; ++i; break;
+					case 'n': unescaped += '\n'; ++i; break;
+					case 'f': unescaped += '\f'; ++i; break;
+					case 'r': unescaped += '\r'; ++i; break;
+					case '"': unescaped += '"'; ++i; break;
+					case '\'': unescaped += '\''; ++i; break;
+					case '\\': unescaped += '\\'; ++i; break;
+					case 'u':
+						if (i + 5 < raw.size()) {
+							std::string hex = raw.substr(i + 2, 4);
+							char16_t cp = static_cast<char16_t>(std::stoul(hex, nullptr, 16));
+							if (cp < 0x80) {
+								unescaped += static_cast<char>(cp);
+							}
+							i += 5;
+						} else {
+							unescaped += raw[i];
+						}
+						break;
+					default:
+						unescaped += raw[i];
+						break;
+				}
+			} else {
+				unescaped += raw[i];
+			}
+		}
+		return PropertyValue(unescaped);
 	}
 	if (ctx->numberLiteral()) {
 		std::string s = ctx->numberLiteral()->getText();
@@ -843,7 +879,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListSliceFromAccessor(
 
 std::unique_ptr<Expression> ExpressionBuilder::buildListComprehensionExpression(
 		CypherParser::ListComprehensionContext* ctx,
-		const std::function<PropertyValue(CypherParser::ExpressionContext*)>& evaluateLiteral) {
+		const std::function<PropertyValue(CypherParser::ExpressionContext*)>& /*evaluateLiteral*/) {
 
 	if (!ctx) return nullptr;
 

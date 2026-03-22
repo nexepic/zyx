@@ -419,51 +419,51 @@ TEST_F(AdminClauseHandlerTest, Lifecycle_MixedIndexAndVectorIndex) {
 // === Error/Edge Case Tests ===
 
 TEST_F(AdminClauseHandlerTest, Error_CreateIndexWithEmptyLabel) {
-	EXPECT_THROW({ execute("CREATE INDEX ON :(name)"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("CREATE INDEX ON :(name)"); }, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, Error_CreateIndexWithEmptyProperty) {
-	EXPECT_THROW({ execute("CREATE INDEX ON :Person()"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("CREATE INDEX ON :Person()"); }, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, Error_CreateIndexByPatternNoLabel) {
-	EXPECT_THROW({ execute("CREATE INDEX FOR (n) ON (n.prop)"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("CREATE INDEX FOR (n) ON (n.prop)"); }, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, Error_DropIndexWithEmptyName) {
-	EXPECT_THROW({ execute("DROP INDEX ''"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("DROP INDEX ''"); }, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, Error_CreateVectorIndexWithoutOptions) {
-	EXPECT_THROW({ execute("CREATE VECTOR INDEX ON :Test(vec)"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("CREATE VECTOR INDEX ON :Test(vec)"); }, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, Error_CreateVectorIndexEmptyOptions) {
-	EXPECT_THROW({ execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {}"); }, std::runtime_error);
+	EXPECT_THROW({ (void)execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {}"); }, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, Error_CreateVectorIndexNoDimension) {
 	EXPECT_THROW({
-		execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {metric: 'L2'}");
+		(void)execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {metric: 'L2'}");
 	}, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, Error_CreateVectorIndexDimensionZero) {
 	EXPECT_THROW({
-		execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dimension: 0}");
+		(void)execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dimension: 0}");
 	}, std::runtime_error);
 }
 
 TEST_F(AdminClauseHandlerTest, EdgeCase_CreateVectorIndexNegativeDimension) {
 	// Implementation accepts negative dimensions (doesn't throw) - verify no crash
-	EXPECT_NO_THROW({ execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dimension: -5}"); });
+	EXPECT_NO_THROW({ (void)execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dimension: -5}"); });
 }
 
 TEST_F(AdminClauseHandlerTest, EdgeCase_CreateSameIndexTwice) {
 	(void) execute("CREATE INDEX duplicate_test ON :Person(name)");
 
 	// Should either succeed idempotently or fail, but not crash
-	EXPECT_NO_THROW({ execute("CREATE INDEX duplicate_test ON :Person(name)"); });
+	EXPECT_NO_THROW({ (void)execute("CREATE INDEX duplicate_test ON :Person(name)"); });
 }
 
 TEST_F(AdminClauseHandlerTest, EdgeCase_MultipleIndexesSameProperty) {

@@ -1087,3 +1087,182 @@ TEST_F(DeletionManagerTest, DeleteStateWithZeroId) {
 	// Verify no exception or crash
 	SUCCEED();
 }
+
+// =========================================================================
+// Branch Coverage: deletePropertyEntity direct paths (lines 122-141)
+// =========================================================================
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_ActivePropertyDirect) {
+	// Test deletePropertyEntity with PROPERTY_ENTITY storage type on an active property
+	// Covers line 127-131: storageType == PROPERTY_ENTITY && property active
+	Property prop = createProperty();
+	ASSERT_GT(prop.getId(), 0);
+
+	// Verify property is active before deletion
+	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	ASSERT_TRUE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
+
+	// Call deletePropertyEntity directly with the active property
+	deletionManager->deletePropertyEntity(prop.getId(), PropertyStorageType::PROPERTY_ENTITY);
+
+	// Verify property is now inactive
+	EXPECT_FALSE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_ActiveBlobDirect) {
+	// Test deletePropertyEntity with BLOB_ENTITY storage type on an active blob
+	// Covers line 132-136: storageType == BLOB_ENTITY && blob active
+	Blob blob = createBlob();
+	ASSERT_GT(blob.getId(), 0);
+
+	// Verify blob is active before deletion
+	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	ASSERT_TRUE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
+
+	// Call deletePropertyEntity directly with the active blob
+	deletionManager->deletePropertyEntity(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+
+	// Verify blob is now inactive
+	EXPECT_FALSE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_NoneStorageType) {
+	// Test deletePropertyEntity with NONE storage type
+	// Covers the implicit fall-through (neither PROPERTY_ENTITY nor BLOB_ENTITY)
+	// Should do nothing since it doesn't match either branch
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(1, PropertyStorageType::NONE));
+}
+
+TEST_F(DeletionManagerTest, DeleteEdge_CascadesToBlobEntity) {
+	// Test deleteEdge cascading to blob entity via hasPropertyEntity()
+	// Covers line 52: edge.hasPropertyEntity() true branch with BLOB_ENTITY type
+	Node n1 = createNode("A");
+	Node n2 = createNode("B");
+	Edge edge = createEdge(n1.getId(), n2.getId(), "BlobLink");
+	Blob blob = createBlob();
+
+	// Link Edge to Blob Entity
+	edge.setPropertyEntityId(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+	dataManager->updateEdge(edge);
+
+	// Verify edge has property entity
+	ASSERT_TRUE(edge.hasPropertyEntity());
+
+	// Delete Edge
+	deletionManager->deleteEdge(edge);
+
+	// Verify Edge is deleted
+	EXPECT_TRUE(isEdgeDeleted(edge.getId()));
+
+	// Verify Blob is deleted
+	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	EXPECT_FALSE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
+}
+
+// =========================================================================
+// Branch Coverage: Compaction threshold for Index and State entity types
+// =========================================================================
+
+TEST_F(DeletionManagerTest, CompactionThreshold_Index) {
+	// Test compaction triggering for indexes
+	// Covers lines 214-220: markIndexInactive compaction check
+	uint32_t type = Index::typeId;
+	uint64_t offset = spaceManager->allocateSegment(type, 10);
+	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
+
+	// Create and activate 10 indexes
+	std::vector<Index> indexes;
+	for (int i = 0; i < 10; i++) {
+		Index idx;
+		idx.setId(h.start_id + i);
+		dataManager->addIndexEntity(idx);
+		segmentTracker->setEntityActive(offset, i, true);
+		indexes.push_back(idx);
+	}
+	segmentTracker->updateSegmentUsage(offset, 10, 0);
+
+	// Delete 4 indexes (40% fragmentation >= 30% threshold)
+	for (int i = 0; i < 4; i++) {
+		deletionManager->deleteIndex(indexes[i]);
+	}
+
+	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
+	EXPECT_EQ(hAfter.needs_compaction, 1U);
+}
+
+TEST_F(DeletionManagerTest, CompactionThreshold_State) {
+	// Test compaction triggering for states
+	// Covers lines 227-233: markStateInactive compaction check
+	uint32_t type = State::typeId;
+	uint64_t offset = spaceManager->allocateSegment(type, 10);
+	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
+
+	// Create and activate 10 states
+	std::vector<State> states;
+	for (int i = 0; i < 10; i++) {
+		State state;
+		state.setId(h.start_id + i);
+		dataManager->addStateEntity(state);
+		segmentTracker->setEntityActive(offset, i, true);
+		states.push_back(state);
+	}
+	segmentTracker->updateSegmentUsage(offset, 10, 0);
+
+	// Delete 4 states (40% fragmentation >= 30% threshold)
+	for (int i = 0; i < 4; i++) {
+		deletionManager->deleteState(states[i]);
+	}
+
+	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
+	EXPECT_EQ(hAfter.needs_compaction, 1U);
+}
+
+// =========================================================================
+// Branch Coverage: deletePropertyEntity with inactive/zero-id entities
+// =========================================================================
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_ZeroId) {
+	// Cover: propertyId == 0 -> early return (line 123)
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(0, PropertyStorageType::PROPERTY_ENTITY));
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(0, PropertyStorageType::BLOB_ENTITY));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_NonExistentPropertyId) {
+	// Cover: property.getId() != 0 && property.isActive() -> False path (line 129)
+	// Getting a non-existent property returns an entity with id=0
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(99999, PropertyStorageType::PROPERTY_ENTITY));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_NonExistentBlobId) {
+	// Cover: blob.getId() != 0 && blob.isActive() -> False path (line 134)
+	// Getting a non-existent blob returns an entity with id=0
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(99999, PropertyStorageType::BLOB_ENTITY));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_InactiveProperty) {
+	// Cover: property.isActive() -> False (line 129)
+	// Create a property, then mark it inactive, then try to delete it
+	Property prop = createProperty();
+	ASSERT_GT(prop.getId(), 0);
+
+	// Mark it as deleted first
+	deletionManager->deletePropertyEntity(prop.getId(), PropertyStorageType::PROPERTY_ENTITY);
+
+	// Now try to delete it again - should hit the inactive branch
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(prop.getId(), PropertyStorageType::PROPERTY_ENTITY));
+}
+
+TEST_F(DeletionManagerTest, DeletePropertyEntity_InactiveBlob) {
+	// Cover: blob.isActive() -> False (line 134)
+	Blob blob = createBlob();
+	ASSERT_GT(blob.getId(), 0);
+
+	// Delete it once
+	deletionManager->deletePropertyEntity(blob.getId(), PropertyStorageType::BLOB_ENTITY);
+
+	// Delete again - should hit inactive branch
+	EXPECT_NO_THROW(deletionManager->deletePropertyEntity(blob.getId(), PropertyStorageType::BLOB_ENTITY));
+}

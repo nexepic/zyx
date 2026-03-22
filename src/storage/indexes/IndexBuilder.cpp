@@ -44,9 +44,9 @@ namespace graph::query::indexes {
 			// Clear existing data to rebuild
 			labelIndex->clear();
 
+			std::vector<int64_t> batchIds;
+			batchIds.reserve(BATCH_SIZE);
 			for (const auto &[startId, endId]: getNodeIdRanges()) {
-				std::vector<int64_t> batchIds;
-				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() == BATCH_SIZE) {
@@ -55,7 +55,9 @@ namespace graph::query::indexes {
 						batchIds.clear();
 					}
 				}
-				// Process remaining entities
+			}
+			// Process remaining entities
+			if (!batchIds.empty()) {
 				processNodeBatch(batchIds, labelIndex, nullptr, "");
 			}
 			labelIndex->flush();
@@ -71,9 +73,9 @@ namespace graph::query::indexes {
 			// Clear existing data to rebuild
 			labelIndex->clear();
 
+			std::vector<int64_t> batchIds;
+			batchIds.reserve(BATCH_SIZE);
 			for (const auto &[startId, endId]: getEdgeIdRanges()) {
-				std::vector<int64_t> batchIds;
-				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() == BATCH_SIZE) {
@@ -82,7 +84,9 @@ namespace graph::query::indexes {
 						batchIds.clear();
 					}
 				}
-				// Process remaining entities
+			}
+			// Process remaining entities
+			if (!batchIds.empty()) {
 				processEdgeBatch(batchIds, labelIndex, nullptr, "");
 			}
 			labelIndex->flush();
@@ -100,9 +104,9 @@ namespace graph::query::indexes {
 			// clearKey would remove the definition; clearIndexData only resets the tree/data.
 			propertyIndex->clearIndexData(key);
 
+			std::vector<int64_t> batchIds;
+			batchIds.reserve(BATCH_SIZE);
 			for (const auto &[startId, endId]: getNodeIdRanges()) {
-				std::vector<int64_t> batchIds;
-				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() == BATCH_SIZE) {
@@ -110,7 +114,9 @@ namespace graph::query::indexes {
 						batchIds.clear();
 					}
 				}
-				// Process remaining entities
+			}
+			// Process remaining entities
+			if (!batchIds.empty()) {
 				processNodeBatch(batchIds, nullptr, propertyIndex, key);
 			}
 			return true;
@@ -127,9 +133,9 @@ namespace graph::query::indexes {
 			// CRITICAL CHANGE: Use clearIndexData instead of clearKey.
 			propertyIndex->clearIndexData(key);
 
+			std::vector<int64_t> batchIds;
+			batchIds.reserve(BATCH_SIZE);
 			for (const auto &[startId, endId]: getEdgeIdRanges()) {
-				std::vector<int64_t> batchIds;
-				batchIds.reserve(BATCH_SIZE);
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() == BATCH_SIZE) {
@@ -137,7 +143,9 @@ namespace graph::query::indexes {
 						batchIds.clear();
 					}
 				}
-				// Process remaining entities
+			}
+			// Process remaining entities
+			if (!batchIds.empty()) {
 				processEdgeBatch(batchIds, nullptr, propertyIndex, key);
 			}
 			return true;
@@ -150,8 +158,8 @@ namespace graph::query::indexes {
 										const std::shared_ptr<LabelIndex> &labelIndex,
 										const std::shared_ptr<PropertyIndex> &propertyIndex,
 										const std::string &propertyKey) const {
-		auto nodeBatch = dataManager_->getNodeBatch(nodeIds);
-		for (const auto &node: nodeBatch) {
+		for (int64_t id: nodeIds) {
+			Node node = dataManager_->getNode(id);
 			if (node.getId() == 0 || !node.isActive())
 				continue;
 
@@ -178,8 +186,8 @@ namespace graph::query::indexes {
 										const std::shared_ptr<LabelIndex> &labelIndex,
 										const std::shared_ptr<PropertyIndex> &propertyIndex,
 										const std::string &propertyKey) const {
-		auto edgeBatch = dataManager_->getEdgeBatch(edgeIds);
-		for (const auto &edge: edgeBatch) {
+		for (int64_t id: edgeIds) {
+			Edge edge = dataManager_->getEdge(id);
 			if (edge.getId() == 0 || !edge.isActive())
 				continue;
 

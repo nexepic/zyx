@@ -25,7 +25,7 @@
 
 namespace graph::storage {
 
-	BlobManager::BlobManager(const std::shared_ptr<DataManager> &dataManager,
+	BlobManager::BlobManager(DataManager* dataManager,
 							 std::shared_ptr<BlobChainManager> blobChainManager,
 							 std::shared_ptr<DeletionManager> deletionManager) :
 		BaseEntityManager(dataManager, std::move(deletionManager)), blobChainManager_(std::move(blobChainManager)) {}

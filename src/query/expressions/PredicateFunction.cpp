@@ -13,7 +13,7 @@
 namespace graph::query::expressions {
 
 PropertyValue PredicateFunction::evaluate(
-	const std::vector<PropertyValue>& args,
+	const std::vector<PropertyValue>& /*args*/,
 	[[maybe_unused]] const EvaluationContext& context
 ) const {
 	// Quantifier functions have special Cypher syntax that requires custom parsing

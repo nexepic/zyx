@@ -174,11 +174,11 @@ void ExpressionEvaluator::visit(const FunctionCallExpression *expr) {
 
 	// Entity introspection functions receive variable name as string, not evaluated value
 	if (dynamic_cast<const EntityIntrospectionFunction*>(function)) {
-		if (argsExpr.size() != 1) {
-			throw ExpressionEvaluationException(
-				functionName + "() requires exactly 1 argument, got " + std::to_string(argsExpr.size()));
-		}
-		auto* varRef = dynamic_cast<const VariableReferenceExpression*>(argsExpr[0].get());
+		// Note: validateArgCount above already ensures arg count is valid for the function's signature.
+		// All built-in entity introspection functions require exactly 1 argument, enforced by their signatures.
+		auto* varRef = (argsExpr.size() == 1)
+			? dynamic_cast<const VariableReferenceExpression*>(argsExpr[0].get())
+			: nullptr;
 		if (!varRef || varRef->hasProperty()) {
 			throw ExpressionEvaluationException(
 				functionName + "() requires a variable reference argument (e.g., " + functionName + "(n))");
@@ -314,8 +314,10 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 			case BinaryOperatorType::BOP_POWER:
 				return PropertyValue(std::pow(static_cast<double>(l), static_cast<double>(r)));
 			default:
-				throw ExpressionEvaluationException("Invalid arithmetic operator");
+				break;
 		}
+		// All arithmetic operators are handled above; this is unreachable but satisfies the compiler.
+		throw ExpressionEvaluationException("Invalid arithmetic operator");
 	}
 
 	// Floating-point arithmetic for mixed types or double operands
@@ -349,10 +351,11 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 
 		case BinaryOperatorType::BOP_POWER:
 			return PropertyValue(std::pow(leftDouble, rightDouble));
-
 		default:
-			throw ExpressionEvaluationException("Invalid arithmetic operator");
+			break;
 	}
+	// All arithmetic operators are handled above; this is unreachable but satisfies the compiler.
+	throw ExpressionEvaluationException("Invalid arithmetic operator");
 }
 
 PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
@@ -394,10 +397,11 @@ PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
 			std::string r = EvaluationContext::toString(right);
 			return PropertyValue(l.find(r) != std::string::npos);
 		}
-
 		default:
-			throw ExpressionEvaluationException("Invalid comparison operator");
+			break;
 	}
+	// All comparison operators are handled above; unreachable but satisfies the compiler.
+	throw ExpressionEvaluationException("Invalid comparison operator");
 }
 
 PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
@@ -417,7 +421,8 @@ PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
 			if (!leftNull && !EvaluationContext::toBoolean(left)) return PropertyValue(false);
 			if (!rightNull && !EvaluationContext::toBoolean(right)) return PropertyValue(false);
 			if (leftNull || rightNull) return PropertyValue(); // NULL
-			return PropertyValue(EvaluationContext::toBoolean(left) && EvaluationContext::toBoolean(right));
+			// Both non-null and both truthy (left not false, right not false) → true
+			return PropertyValue(true);
 		}
 
 		case BinaryOperatorType::BOP_OR: {
@@ -430,7 +435,8 @@ PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
 			if (!leftNull && EvaluationContext::toBoolean(left)) return PropertyValue(true);
 			if (!rightNull && EvaluationContext::toBoolean(right)) return PropertyValue(true);
 			if (leftNull || rightNull) return PropertyValue(); // NULL
-			return PropertyValue(EvaluationContext::toBoolean(left) || EvaluationContext::toBoolean(right));
+			// Both non-null and both falsy (left not true, right not true) → false
+			return PropertyValue(false);
 		}
 
 		case BinaryOperatorType::BOP_XOR: {
@@ -439,10 +445,11 @@ PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
 			if (leftNull || rightNull) return PropertyValue();
 			return PropertyValue(EvaluationContext::toBoolean(left) != EvaluationContext::toBoolean(right));
 		}
-
 		default:
-			throw ExpressionEvaluationException("Invalid logical operator");
+			break;
 	}
+	// All logical operators are handled above; unreachable but satisfies the compiler.
+	throw ExpressionEvaluationException("Invalid logical operator");
 }
 
 PropertyValue ExpressionEvaluator::evaluateUnary(UnaryOperatorType op, const PropertyValue &operand) {
@@ -461,6 +468,8 @@ PropertyValue ExpressionEvaluator::evaluateUnary(UnaryOperatorType op, const Pro
 			return PropertyValue(!val);
 		}
 	}
+	// All unary operators are handled above; unreachable but satisfies the compiler.
+	return PropertyValue();
 }
 
 bool ExpressionEvaluator::propagateNull(const PropertyValue &left, const PropertyValue &right) {

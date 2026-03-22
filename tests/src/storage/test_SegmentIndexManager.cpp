@@ -617,3 +617,276 @@ TEST_F(SegmentIndexManagerTest, AllSegmentTypesSupported) {
 	EXPECT_EQ(indexManager->getStateSegmentIndex().size(), 1UL);
 	EXPECT_EQ(indexManager->findSegmentForId(typeState, 30), offset);
 }
+
+// ============================================================================
+// 11. Additional Branch Coverage Tests
+// ============================================================================
+
+TEST_F(SegmentIndexManagerTest, UpdateSegmentIndex_NewInsertionNotAppending) {
+	// Test new insertion (oldStartId == -1) that is NOT appending to end
+	// (line 108 false branch: header.start_id <= segmentIndex.back().startId)
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+
+	// Insert a segment with high start ID first
+	indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, 1000, 10), -1);
+
+	// Now insert with lower start ID (oldStartId == -1 but not appending)
+	// This falls through to the generic insertion path
+	indexManager->updateSegmentIndex(createHeader(getSegOffset(1), type, 500, 10), -1);
+
+	const auto &idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), 2UL);
+	// Should be sorted: 500 first, then 1000
+	EXPECT_EQ(idx[0].startId, 500);
+	EXPECT_EQ(idx[1].startId, 1000);
+}
+
+TEST_F(SegmentIndexManagerTest, UpdateSegmentIndex_KeyChangedWithCorrectOldEntry) {
+	// Test key change where old entry is found via binary search (line 131-133)
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t offset = getSegOffset(0);
+
+	// Insert at start ID 100
+	indexManager->updateSegmentIndex(createHeader(offset, type, 100, 10), -1);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 105), offset);
+
+	// Change key from 100 to 200 - old entry should be found and removed
+	SegmentHeader newH = createHeader(offset, type, 200, 10);
+	indexManager->updateSegmentIndex(newH, 100);
+
+	const auto &idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), 1UL);
+	EXPECT_EQ(idx[0].startId, 200);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 100), 0ULL); // Old gone
+	EXPECT_EQ(indexManager->findSegmentForId(type, 205), offset); // New found
+}
+
+TEST_F(SegmentIndexManagerTest, FindSegmentForId_NotInRange) {
+	// Test findSegmentForId where lower_bound finds an entry but ID is NOT in its range
+	// (line 89 false branch: id < it->startId)
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+
+	// Insert segment [100, 109]
+	indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, 100, 10), -1);
+
+	// Search for ID 50 - lower_bound finds [100,109] but 50 < 100
+	EXPECT_EQ(indexManager->findSegmentForId(type, 50), 0ULL);
+}
+
+TEST_F(SegmentIndexManagerTest, UpdateSegmentIndex_InPlaceUpdate) {
+	// Test in-place update (scenario 3) when startId matches existing entry
+	auto type = static_cast<uint32_t>(graph::EntityType::Edge);
+	uint64_t offset = getSegOffset(0);
+
+	// Insert [100, 100] (used=1)
+	SegmentHeader h = createHeader(offset, type, 100, 1);
+	indexManager->updateSegmentIndex(h, -1);
+
+	// Update same startId but different used count
+	// This should hit the in-place update path (line 153)
+	h.used = 50;
+	indexManager->updateSegmentIndex(h, 100); // oldStartId == current startId
+
+	const auto &idx = indexManager->getEdgeSegmentIndex();
+	ASSERT_EQ(idx.size(), 1UL);
+	EXPECT_EQ(idx[0].endId, 149); // Updated
+}
+
+TEST_F(SegmentIndexManagerTest, BuildSegmentIndex_WithZeroUsed) {
+	// Test buildSegmentIndex with a segment where used == 0 (line 71)
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t offset = getSegOffset(0);
+
+	// Register a segment with used = 0
+	SegmentHeader h;
+	h.file_offset = offset;
+	h.data_type = type;
+	h.capacity = 100;
+	h.start_id = 100;
+	h.used = 0; // Zero used
+	h.next_segment_offset = 0;
+	h.prev_segment_offset = 0;
+	h.inactive_count = 0;
+	h.needs_compaction = 0;
+	h.is_dirty = 0;
+	h.bitmap_size = bitmap::calculateBitmapSize(h.capacity);
+	std::memset(h.activity_bitmap, 0, sizeof(h.activity_bitmap));
+	tracker->registerSegment(h);
+
+	// Set chain head and rebuild
+	nodeHead = offset;
+	indexManager->buildSegmentIndexes();
+
+	const auto &idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), 1UL);
+	// endId should be start_id + 0 = 100 (since used == 0, endId = startId + 0)
+	EXPECT_EQ(idx[0].startId, 100);
+	EXPECT_EQ(idx[0].endId, 100);
+}
+
+TEST_F(SegmentIndexManagerTest, BuildSegmentIndexes_NullHeadPointers) {
+	// Test buildSegmentIndexes when head pointers are null (line 54-59 ternary)
+	// Reset the index manager without calling initialize (head pointers are null)
+	auto newIndexManager = std::make_shared<SegmentIndexManager>(tracker);
+
+	// buildSegmentIndexes should use 0 for null head pointers
+	EXPECT_NO_THROW(newIndexManager->buildSegmentIndexes());
+
+	// All indexes should be empty
+	EXPECT_TRUE(newIndexManager->getNodeSegmentIndex().empty());
+	EXPECT_TRUE(newIndexManager->getEdgeSegmentIndex().empty());
+}
+
+TEST_F(SegmentIndexManagerTest, PropertySegmentIndex) {
+	// Test Property type specifically for getSegmentIndexForType switch case
+	auto type = static_cast<uint32_t>(graph::EntityType::Property);
+	uint64_t offset = getSegOffset(0);
+
+	indexManager->updateSegmentIndex(createHeader(offset, type, 50, 5), -1);
+	EXPECT_EQ(indexManager->getPropertySegmentIndex().size(), 1UL);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 52), offset);
+}
+
+TEST_F(SegmentIndexManagerTest, RemoveSegmentIndex_MatchesByStartIdButNotOffset) {
+	// Test removeSegmentIndex when startId matches but offset doesn't (line 183)
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t correctOffset = getSegOffset(0);
+	uint64_t wrongOffset = getSegOffset(1);
+
+	// Insert at correctOffset
+	indexManager->updateSegmentIndex(createHeader(correctOffset, type, 100, 10), -1);
+
+	// Try to remove with matching startId but wrong offset
+	SegmentHeader remHeader = createHeader(wrongOffset, type, 100, 10);
+	indexManager->removeSegmentIndex(remHeader);
+
+	// Should NOT have removed
+	EXPECT_EQ(indexManager->getNodeSegmentIndex().size(), 1UL);
+}
+
+// ============================================================================
+// 12. Additional Branch Coverage Tests
+// ============================================================================
+
+TEST_F(SegmentIndexManagerTest, FindSegmentForId_LowerBoundFindsButIdBeyondEndId) {
+	// Covers: line 89 - id <= it->endId False branch
+	// lower_bound finds a segment whose endId >= id (by design), but then
+	// id < it->startId makes the id NOT in range.
+	// Actually the condition is: id >= it->startId && id <= it->endId
+	// We need lower_bound to find an entry but id > endId or id < startId.
+	//
+	// Scenario: two segments [0,9] and [100,109] with gap [10,99].
+	// Search for id=50: lower_bound on endId finds [100,109] (since 109 >= 50).
+	// Then: 50 >= 100 is false -> return 0. This covers id < startId.
+	//
+	// For id > endId: Segment [0,9], search for id=15.
+	// lower_bound finds end (no entry with endId >= 15 if only [0,9]).
+	// Actually lower_bound(15) on [endId=9] -> 9 < 15 so it skips, returns end.
+	// That hits it == segmentIndex.end() -> return 0.
+	//
+	// For the exact branch "id <= it->endId" False:
+	// We need lower_bound to return a valid iterator but id > it->endId.
+	// lower_bound finds first entry where endId >= id. So endId >= id is always true.
+	// Unless... segments have overlapping ranges or adjacent. Let me think.
+	//
+	// Actually: lower_bound uses endId < value, so it finds first entry where
+	// !(endId < id), i.e., endId >= id. So if found, endId >= id is guaranteed.
+	// Then the condition id >= startId && id <= endId checks both bounds.
+	// Since endId >= id is guaranteed by lower_bound, the only way "id <= endId"
+	// can be false is if it == end(). But that's a different branch.
+	//
+	// Wait - looking more carefully at the code, let me re-read:
+	// lower_bound with comparator: index.endId < value
+	// This finds first entry where !(endId < id), i.e., endId >= id.
+	// So when found: endId >= id.
+	// Then: id >= startId && id <= endId.
+	// Since endId >= id (from lower_bound), the check "id <= endId" is always true
+	// when iterator is valid. So the False branch for "id <= endId" only occurs
+	// when it == end(), which is already the other branch.
+	//
+	// The uncovered branch must be from the combined condition.
+	// Actually the coverage shows:
+	// Branch (89:7): [True: 10.0k, False: 180k] - it != end()
+	// Branch (89:35): [True: 10.0k, False: 21] - id >= startId
+	// Branch (89:56): [True: 10.0k, False: 0] - id <= endId
+	//
+	// So id >= startId has been False 21 times, but id <= endId has never been False.
+	// As analyzed above, when lower_bound returns valid iterator, endId >= id,
+	// so id <= endId is always true. This branch is UNREACHABLE.
+	//
+	// However, we can still try to create a scenario and verify correctness.
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+
+	// Single segment [100, 109]
+	indexManager->updateSegmentIndex(createHeader(getSegOffset(0), type, 100, 10), -1);
+
+	// Search for id=50: lower_bound finds [100,109] because 109 >= 50
+	// But id=50 < startId=100, so returns 0 (covers startId branch False)
+	EXPECT_EQ(indexManager->findSegmentForId(type, 50), 0ULL);
+
+	// Search for id=110: lower_bound finds end() because 109 < 110
+	// it == end(), returns 0
+	EXPECT_EQ(indexManager->findSegmentForId(type, 110), 0ULL);
+}
+
+TEST_F(SegmentIndexManagerTest, UpdateSegmentIndex_KeyChangedOldStartIdFoundButOffsetMismatch) {
+	// Covers: line 131-132 - itOld found by startId but offset doesn't match
+	// This triggers the erase_if fallback at line 135
+	auto type = static_cast<uint32_t>(graph::EntityType::Node);
+	uint64_t offset1 = getSegOffset(0);
+	uint64_t offset2 = getSegOffset(1);
+
+	// Insert two segments at different offsets but nearby IDs
+	// Segment A: [100, 109] at offset1
+	indexManager->updateSegmentIndex(createHeader(offset1, type, 100, 10), -1);
+	// Segment B: [200, 209] at offset2
+	indexManager->updateSegmentIndex(createHeader(offset2, type, 200, 10), -1);
+
+	ASSERT_EQ(indexManager->getNodeSegmentIndex().size(), 2UL);
+
+	// Now update segment B (offset2) claiming old start was 100 (which is segment A's start)
+	// This means:
+	// - binary search for oldStartId=100 finds itOld pointing to segment A at offset1
+	// - itOld->segmentOffset (offset1) != header.file_offset (offset2) -> offset mismatch!
+	// - Falls through to erase_if, which removes by offset2
+	SegmentHeader newH = createHeader(offset2, type, 300, 10);
+	indexManager->updateSegmentIndex(newH, 100);
+
+	// Segment A ([100,109]) should still exist (not erased by startId match since offset didn't match)
+	// But erase_if removes all entries with offset == offset2, so segment B is gone
+	// And new entry [300,309] is added at offset2
+	const auto &idx = indexManager->getNodeSegmentIndex();
+	ASSERT_EQ(idx.size(), 2UL);
+	// Should have [100,109] and [300,309]
+	EXPECT_EQ(indexManager->findSegmentForId(type, 105), offset1);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 305), offset2);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 205), 0ULL); // Old B range gone
+}
+
+TEST_F(SegmentIndexManagerTest, InvalidTypeThrowsOnNonConstPath) {
+	// Covers: line 203 default branch in non-const getSegmentIndexForType
+	// updateSegmentIndex calls non-const getSegmentIndexForType
+	auto invalidType = 255u;
+	SegmentHeader h = createHeader(getSegOffset(0), invalidType, 100, 10);
+
+	EXPECT_THROW(indexManager->updateSegmentIndex(h, -1), std::invalid_argument);
+}
+
+TEST_F(SegmentIndexManagerTest, RemoveSegmentIndex_FoundByStartIdButDifferentOffset) {
+	// Covers: line 183 - it->segmentOffset == header.file_offset False branch
+	// (This is similar to RemoveSegmentIgnoredIfOffsetMismatch but explicitly for this path)
+	auto type = static_cast<uint32_t>(graph::EntityType::Edge);
+	uint64_t offset1 = getSegOffset(0);
+	uint64_t offset2 = getSegOffset(1);
+
+	// Insert at offset1
+	indexManager->updateSegmentIndex(createHeader(offset1, type, 100, 10), -1);
+
+	// Try to remove with same startId but different offset
+	SegmentHeader remH = createHeader(offset2, type, 100, 10);
+	indexManager->removeSegmentIndex(remH);
+
+	// Should not have removed since offsets don't match
+	EXPECT_EQ(indexManager->getEdgeSegmentIndex().size(), 1UL);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 105), offset1);
+}

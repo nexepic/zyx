@@ -196,9 +196,14 @@ namespace graph::storage::state {
 
 	// --- Explicit Instantiations ---
 
-	// NOTE: Removed explicit instantiations for std::vector<float>
-	// Vector index code now uses the generic set() template with std::vector<PropertyValue>
-	// The conversion happens via the toPropertyValue() helper function
+	// std::vector<float> (required for vector index embeddings and extract<std::vector<float>> coverage)
+	using FloatVec = std::vector<float>;
+	template FloatVec SystemStateManager::get<FloatVec>(const std::string &, const std::string &, FloatVec) const;
+	template void SystemStateManager::set<FloatVec>(const std::string &, const std::string &, const FloatVec &, bool);
+	template std::unordered_map<std::string, FloatVec> SystemStateManager::getMap<FloatVec>(const std::string &) const;
+	template void SystemStateManager::setMap<FloatVec>(const std::string &,
+													   const std::unordered_map<std::string, FloatVec> &, UpdateMode,
+													   bool);
 
 	// Explicit instantiations for std::vector<PropertyValue> (required for SetConfigOperator)
 	using PropVec = std::vector<PropertyValue>;

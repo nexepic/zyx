@@ -265,3 +265,17 @@ TEST_F(NodeTest, TypeIdConstant) {
 	// Verify that typeId matches the expected entity type
 	EXPECT_EQ(graph::Node::typeId, graph::toUnderlying(graph::EntityType::Node));
 }
+
+// Branch coverage: hasPropertyEntity() when storageType != NONE but propertyEntityId == 0
+TEST_F(NodeTest, HasPropertyEntityWithNonNoneStorageTypeButZeroId) {
+	graph::Node node;
+	// Directly set the metadata to have a non-NONE storage type but zero property entity ID
+	auto &meta = node.getMutableMetadata();
+	meta.propertyStorageType = static_cast<uint32_t>(graph::PropertyStorageType::PROPERTY_ENTITY);
+	meta.propertyEntityId = 0;
+
+	// storageType != NONE (true), but propertyEntityId == 0 (false) => hasPropertyEntity() should be false
+	EXPECT_FALSE(node.hasPropertyEntity());
+	EXPECT_NE(node.getPropertyStorageType(), graph::PropertyStorageType::NONE);
+	EXPECT_EQ(node.getPropertyEntityId(), 0);
+}

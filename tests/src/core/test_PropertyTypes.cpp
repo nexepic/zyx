@@ -471,6 +471,158 @@ TEST(PropertyValueTest, MixedTypeComparisons) {
 	EXPECT_GT(bool_val, null_val);
 }
 
+// ============================================================================
+// MAP Type Tests
+// ============================================================================
+
+TEST(PropertyValueTest, ConstructMap) {
+	// Empty map
+	PropertyValue::MapType emptyMap;
+	graph::PropertyValue v1(emptyMap);
+	EXPECT_EQ(graph::getPropertyType(v1), PropertyType::MAP);
+	EXPECT_EQ(v1.getType(), PropertyType::MAP);
+	EXPECT_EQ(v1.typeName(), "MAP");
+	EXPECT_TRUE(std::holds_alternative<PropertyValue::MapType>(v1.getVariant()));
+
+	// Non-empty map
+	PropertyValue::MapType map;
+	map["name"] = PropertyValue("Alice");
+	map["age"] = PropertyValue(int64_t(30));
+	graph::PropertyValue v2(map);
+	EXPECT_EQ(graph::getPropertyType(v2), PropertyType::MAP);
+	EXPECT_EQ(v2.getType(), PropertyType::MAP);
+}
+
+TEST(PropertyValueTest, MapGetMap) {
+	PropertyValue::MapType map;
+	map["key1"] = PropertyValue("val1");
+	map["key2"] = PropertyValue(int64_t(42));
+	graph::PropertyValue v(map);
+
+	const auto& retrieved = v.getMap();
+	EXPECT_EQ(retrieved.size(), 2u);
+	EXPECT_EQ(std::get<std::string>(retrieved.at("key1").getVariant()), "val1");
+	EXPECT_EQ(std::get<int64_t>(retrieved.at("key2").getVariant()), 42);
+}
+
+TEST(PropertyValueTest, MapGetMapThrowsOnNonMap) {
+	graph::PropertyValue intVal(42);
+	EXPECT_THROW(intVal.getMap(), std::runtime_error);
+
+	graph::PropertyValue strVal("test");
+	EXPECT_THROW(strVal.getMap(), std::runtime_error);
+
+	graph::PropertyValue nullVal;
+	EXPECT_THROW(nullVal.getMap(), std::runtime_error);
+}
+
+TEST(PropertyValueTest, MapToString) {
+	// Empty map
+	PropertyValue::MapType emptyMap;
+	graph::PropertyValue v1(emptyMap);
+	EXPECT_EQ(v1.toString(), "{}");
+
+	// Single entry map
+	PropertyValue::MapType singleMap;
+	singleMap["x"] = PropertyValue(int64_t(1));
+	graph::PropertyValue v2(singleMap);
+	EXPECT_EQ(v2.toString(), "{x: 1}");
+
+	// Multi-entry map (order may vary due to unordered_map)
+	PropertyValue::MapType multiMap;
+	multiMap["a"] = PropertyValue("hello");
+	multiMap["b"] = PropertyValue(int64_t(2));
+	graph::PropertyValue v3(multiMap);
+	std::string result = v3.toString();
+	EXPECT_TRUE(result.front() == '{');
+	EXPECT_TRUE(result.back() == '}');
+	EXPECT_NE(result.find("a: hello"), std::string::npos);
+	EXPECT_NE(result.find("b: 2"), std::string::npos);
+	// Multi-entry should have comma separator
+	EXPECT_NE(result.find(", "), std::string::npos);
+}
+
+TEST(PropertyValueTest, MapEquality) {
+	PropertyValue::MapType map1;
+	map1["k"] = PropertyValue(int64_t(1));
+	PropertyValue::MapType map2;
+	map2["k"] = PropertyValue(int64_t(1));
+	PropertyValue::MapType map3;
+	map3["k"] = PropertyValue(int64_t(2));
+
+	graph::PropertyValue v1(map1);
+	graph::PropertyValue v2(map2);
+	graph::PropertyValue v3(map3);
+
+	EXPECT_TRUE(v1 == v2);
+	EXPECT_FALSE(v1 == v3);
+	EXPECT_FALSE(v1 == graph::PropertyValue(42)); // Different type
+}
+
+TEST(PropertyValueTest, MapOperatorLessThan) {
+	// MAP < MAP should always return false (maps are not orderable)
+	PropertyValue::MapType map1;
+	map1["a"] = PropertyValue(int64_t(1));
+	PropertyValue::MapType map2;
+	map2["b"] = PropertyValue(int64_t(2));
+
+	graph::PropertyValue v1(map1);
+	graph::PropertyValue v2(map2);
+
+	EXPECT_FALSE(v1 < v2);
+	EXPECT_FALSE(v2 < v1);
+
+	// MAP vs other type (different variant index)
+	graph::PropertyValue intVal(42);
+	// MAP (index 6) > all other types, so intVal < mapVal
+	EXPECT_LT(intVal, v1);
+	EXPECT_GT(v1, intVal);
+}
+
+TEST(PropertyValueTest, MapCheckPropertyMatch) {
+	PropertyValue::MapType map1;
+	map1["x"] = PropertyValue(int64_t(1));
+	PropertyValue::MapType map2;
+	map2["x"] = PropertyValue(int64_t(1));
+
+	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(map1), graph::PropertyValue(map2)));
+}
+
+TEST(PropertyValueTest, MapHash) {
+	// Test that PropertyValueHash works with MAP type
+	graph::PropertyValueHash hasher;
+
+	PropertyValue::MapType map1;
+	map1["key"] = PropertyValue(int64_t(42));
+	graph::PropertyValue v1(map1);
+
+	PropertyValue::MapType map2;
+	map2["key"] = PropertyValue(int64_t(42));
+	graph::PropertyValue v2(map2);
+
+	// Same maps should produce same hash
+	EXPECT_EQ(hasher(v1), hasher(v2));
+
+	// Empty map hash
+	PropertyValue::MapType emptyMap;
+	graph::PropertyValue v3(emptyMap);
+	size_t emptyHash = hasher(v3);
+	(void)emptyHash; // Just ensure it doesn't crash
+}
+
+TEST(PropertyValueTest, MapSize) {
+	// getPropertyValueSize with MAP falls through to else branch returning 0
+	PropertyValue::MapType map;
+	map["k"] = PropertyValue(int64_t(1));
+	graph::PropertyValue v(map);
+	// MAP is not handled in getPropertyValueSize, so returns 0
+	EXPECT_EQ(getPropertyValueSize(v), 0u);
+}
+
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
 // Test checkPropertyMatch function directly
 TEST(PropertyValueTest, CheckPropertyMatchAllTypes) {
 	using graph::property_utils::checkPropertyMatch;

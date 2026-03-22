@@ -27,7 +27,7 @@ TEST_F(HeterogeneousListTest, IntegerList) {
 
 	ASSERT_EQ(listValue.getType(), PropertyType::LIST);
 	const auto& retrievedList = listValue.getList();
-	ASSERT_EQ(retrievedList.size(), 3);
+	ASSERT_EQ(retrievedList.size(), 3u);
 
 	EXPECT_EQ(retrievedList[0].getType(), PropertyType::INTEGER);
 	EXPECT_EQ(std::get<int64_t>(retrievedList[0].getVariant()), 1);
@@ -315,7 +315,7 @@ TEST_F(HeterogeneousListTest, GetPropertyValueSizeWithList) {
 	PropertyValue listValue(list);
 
 	size_t size = property_utils::getPropertyValueSize(listValue);
-	EXPECT_GT(size, 0);  // Should be non-zero
+	EXPECT_GT(size, 0u);  // Should be non-zero
 }
 
 // Test list with all types

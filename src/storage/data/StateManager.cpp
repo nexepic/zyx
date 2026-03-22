@@ -28,7 +28,7 @@
 
 namespace graph::storage {
 
-	StateManager::StateManager(const std::shared_ptr<DataManager> &dataManager,
+	StateManager::StateManager(DataManager* dataManager,
 							   std::shared_ptr<StateChainManager> stateChainManager,
 							   std::shared_ptr<DeletionManager> deletionManager) :
 		BaseEntityManager(dataManager, std::move(deletionManager)), stateChainManager_(std::move(stateChainManager)) {

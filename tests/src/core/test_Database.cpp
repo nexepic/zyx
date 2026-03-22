@@ -452,3 +452,104 @@ TEST_F(DatabaseTest, OpenMode_OpenExisting) {
 		EXPECT_TRUE(db2->isOpen());
 	}
 }
+
+// ============================================================================
+// HasActiveTransaction Tests (Database.cpp line 109-111)
+// ============================================================================
+
+TEST_F(DatabaseTest, HasActiveTransaction_NoTransactionManager) {
+	// Test hasActiveTransaction when transactionManager_ is null (before open)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->hasActiveTransaction());
+}
+
+TEST_F(DatabaseTest, HasActiveTransaction_NoActiveTransaction) {
+	// Test hasActiveTransaction when no transaction is active
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	EXPECT_FALSE(db->hasActiveTransaction());
+}
+
+TEST_F(DatabaseTest, HasActiveTransaction_WithActiveTransaction) {
+	// Test hasActiveTransaction returns true when transaction is active
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	auto txn = db->beginTransaction();
+	EXPECT_TRUE(db->hasActiveTransaction());
+}
+
+// ============================================================================
+// Close with WAL Manager Tests (Database.cpp lines 86-88)
+// ============================================================================
+
+TEST_F(DatabaseTest, Close_WithWALManager) {
+	// Test close() when walManager_ is initialized (line 86-88)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	// WAL manager is created during open()
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+	// Opening again should reinitialize WAL
+	db->open();
+	EXPECT_TRUE(db->isOpen());
+}
+
+// ============================================================================
+// Open with WAL Recovery Tests (Database.cpp lines 53-57)
+// ============================================================================
+
+TEST_F(DatabaseTest, Open_WithWALRecovery) {
+	// Test open path where WAL recovery might be needed
+	// First open creates WAL
+	{
+		auto db1 = std::make_unique<Database>(testDbPath.string());
+		db1->open();
+		auto txn = db1->beginTransaction();
+		// Don't commit - just let it close
+	}
+	// Re-open should trigger WAL recovery check (line 53)
+	{
+		auto db2 = std::make_unique<Database>(testDbPath.string());
+		EXPECT_NO_THROW(db2->open());
+		EXPECT_TRUE(db2->isOpen());
+	}
+}
+
+// ============================================================================
+// BeginTransaction flush path (Database.cpp lines 101-106)
+// ============================================================================
+
+TEST_F(DatabaseTest, BeginTransaction_FlushesBeforeStart) {
+	// Test that beginTransaction flushes pending changes (line 101)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	// Add data through the query engine
+	auto engine = db->getQueryEngine();
+	ASSERT_NE(engine, nullptr);
+	engine->execute("CREATE (n:FlushTest {val: 1})");
+
+	// beginTransaction should flush before creating transaction
+	auto txn = db->beginTransaction();
+	EXPECT_TRUE(db->isOpen());
+}
+
+// ============================================================================
+// GetStorage Tests
+// ============================================================================
+
+TEST_F(DatabaseTest, GetStorage_AfterOpen) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	auto storage = db->getStorage();
+	EXPECT_NE(storage, nullptr);
+	EXPECT_TRUE(storage->isOpen());
+}
+
+TEST_F(DatabaseTest, GetStorage_BeforeOpen) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	auto storage = db->getStorage();
+	// Storage object exists but file isn't open
+	EXPECT_NE(storage, nullptr);
+	EXPECT_FALSE(storage->isOpen());
+}

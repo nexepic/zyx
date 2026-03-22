@@ -117,7 +117,7 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 
 std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handleMerge(
 	CypherParser::MergeStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+	std::unique_ptr<query::execution::PhysicalOperator> /*rootOp*/,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
 	// Grammar: MERGE patternPart ( ON (MATCH|CREATE) setClause )*

@@ -21,7 +21,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cassert>
 #include <memory>
 #include <utility>
 #include "DataManager.hpp"
@@ -41,11 +40,11 @@ namespace graph::storage {
 	template<typename EntityType>
 	class BaseEntityManager : public EntityManagerInterface<EntityType> {
 	protected:
-		std::weak_ptr<DataManager> dataManager_;
+		DataManager* dataManager_;
 		std::shared_ptr<DeletionManager> deletionManager_;
 
 	public:
-		BaseEntityManager(const std::shared_ptr<DataManager> &dataManager,
+		BaseEntityManager(DataManager* dataManager,
 						  std::shared_ptr<DeletionManager> deletionManager) :
 			dataManager_(dataManager), deletionManager_(std::move(deletionManager)) {}
 
@@ -72,20 +71,16 @@ namespace graph::storage {
 		 *
 		 * @note The DataManager's lifetime is guaranteed by design:
 		 *       - DataManager holds shared_ptr<BaseEntityManager>
-		 *       - BaseEntityManager holds weak_ptr<DataManager>
+		 *       - BaseEntityManager stores raw DataManager*
 		 *       - DataManager destructor destroys BaseEntityManager first
-		 *       - Therefore lock() never returns nullptr
+		 *       - Therefore dataManager_ is always valid
 		 */
 		[[nodiscard]] DataManager* getDataManagerPtr() {
-			auto ptr = dataManager_.lock();
-			assert(ptr && "DataManager must outlive BaseEntityManager");
-			return ptr.get();
+			return dataManager_;
 		}
 
-		[[nodiscard]] const DataManager* getDataManagerPtr() const {
-			auto ptr = dataManager_.lock();
-			assert(ptr && "DataManager must outlive BaseEntityManager");
-			return ptr.get();
+		[[nodiscard]] DataManager* getDataManagerPtr() const {
+			return dataManager_;
 		}
 
 		// Abstract method for allocating an ID that can be overridden by subclasses

@@ -27,7 +27,7 @@ namespace graph::storage {
 
 	class EdgeManager final : public BaseEntityManager<Edge> {
 	public:
-		EdgeManager(const std::shared_ptr<DataManager> &dataManager, std::shared_ptr<DeletionManager> deletionManager);
+		EdgeManager(DataManager* dataManager, std::shared_ptr<DeletionManager> deletionManager);
 
 		// Override add to handle special edge creation logic (linking)
 		void add(Edge &edge) override;

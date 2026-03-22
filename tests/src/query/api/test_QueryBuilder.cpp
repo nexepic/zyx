@@ -301,3 +301,221 @@ TEST_F(QueryBuilderTest, Unwind) {
 	auto plan = qb.unwind({PropertyValue(1), PropertyValue(2)}, "x").build();
 	EXPECT_NE(dynamic_cast<operators::UnwindOperator *>(plan.get()), nullptr);
 }
+
+// ============================================================================
+// Additional coverage: Set with different value types
+// ============================================================================
+
+TEST_F(QueryBuilderTest, Set_BoolProperty) {
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").set_("n", "active", PropertyValue(true)).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::SetOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, Set_DoubleProperty) {
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").set_("n", "score", PropertyValue(3.14)).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::SetOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, Set_NullProperty) {
+	QueryBuilder qb(planner);
+	// Null value goes through the else branch (monostate)
+	auto plan = qb.match_("n").set_("n", "removed", PropertyValue()).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::SetOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, Set_StringProperty) {
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").set_("n", "name", PropertyValue(std::string("Bob"))).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::SetOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, Match_WithKeyValue) {
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n", "Person", "name", PropertyValue(std::string("Alice"))).build();
+	ASSERT_NE(plan, nullptr);
+}
+
+TEST_F(QueryBuilderTest, Delete_Detach) {
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").delete_({"n"}, true).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::DeleteOperator *>(plan.get()), nullptr);
+}
+
+// ============================================================================
+// Additional branch coverage tests
+// ============================================================================
+
+TEST_F(QueryBuilderTest, Set_Int64Property) {
+	// Covers the int64_t branch in set_ (line 124-125)
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").set_("n", "count", PropertyValue(int64_t(42))).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::SetOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, Append_CreateEdge_ChainsChild) {
+	// Covers the CreateEdgeOperator dynamic_cast branch in append (line 38-41)
+	// When a CreateEdgeOperator is appended, it should setChild on the existing root
+	QueryBuilder qb(planner);
+	auto plan = qb.create_("a", "Person")
+	    .create_("b", "Person")
+	    .create_("r", "KNOWS", "a", "b")
+	    .build();
+	ASSERT_NE(plan, nullptr);
+	auto edgeOp = dynamic_cast<operators::CreateEdgeOperator *>(plan.get());
+	ASSERT_NE(edgeOp, nullptr);
+	EXPECT_FALSE(edgeOp->getChildren().empty());
+}
+
+TEST_F(QueryBuilderTest, Append_DefaultPath_NonCreateOperator) {
+	// Covers the default path in append (line 49-50) where op is neither
+	// CreateEdgeOperator nor CreateNodeOperator
+	// ShowIndexes creates a ShowIndexesOperator, which triggers the default path
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").showIndexes_().build();
+	ASSERT_NE(plan, nullptr);
+	// ShowIndexes replaces root since it's not a Create operator
+	EXPECT_NE(dynamic_cast<operators::ShowIndexesOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, Remove_Label_IsLabel) {
+	// Covers remove_ with isLabel=true explicitly
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").remove_("n", "OldLabel", true).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::RemoveOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, Remove_Property_IsNotLabel) {
+	// Covers remove_ with isLabel=false explicitly (default)
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").remove_("n", "someProp", false).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_NE(dynamic_cast<operators::RemoveOperator *>(plan.get()), nullptr);
+}
+
+TEST_F(QueryBuilderTest, SetLabel_NoMatch_Throws) {
+	// Covers setLabel_ without match - throws runtime error
+	QueryBuilder qb(planner);
+	EXPECT_THROW({ qb.setLabel_("n", "Label"); }, std::runtime_error);
+}
+
+TEST_F(QueryBuilderTest, Create_MultipleNodes_ChainedAppend) {
+	// Covers multiple CreateNodeOperator appends - each chains as child
+	QueryBuilder qb(planner);
+	auto plan = qb.create_("a", "Person").create_("b", "Person").build();
+	ASSERT_NE(plan, nullptr);
+	auto nodeOp = dynamic_cast<operators::CreateNodeOperator *>(plan.get());
+	ASSERT_NE(nodeOp, nullptr);
+	// Second create should have the first as child
+	EXPECT_FALSE(nodeOp->getChildren().empty());
+}
+
+// ============================================================================
+// WHERE predicate lambda branch coverage
+// ============================================================================
+
+TEST_F(QueryBuilderTest, Where_Predicate_NodeFound_PropertyMatch) {
+	// Covers: where_ lambda branches - node found, property exists and matches
+	// First, CREATE a node via QueryBuilder to ensure ID allocator is updated
+	{
+		QueryBuilder createQb(planner);
+		auto createPlan = createQb.create_("n", "Person", {{"age", PropertyValue(int64_t(30))}}).build();
+		ASSERT_NE(createPlan, nullptr);
+		createPlan->open();
+		createPlan->next();
+		createPlan->close();
+	}
+
+	// Now MATCH + WHERE - FULL_SCAN will find the created node
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").where_("n", "age", PropertyValue(int64_t(30))).build();
+	ASSERT_NE(plan, nullptr);
+
+	plan->open();
+	auto batch = plan->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_FALSE(batch->empty());
+	plan->close();
+}
+
+TEST_F(QueryBuilderTest, Where_Predicate_NodeFound_PropertyNoMatch) {
+	// Covers: where_ lambda - node found, property exists but value does NOT match
+	{
+		QueryBuilder createQb(planner);
+		auto createPlan = createQb.create_("n", "Animal", {{"age", PropertyValue(int64_t(99))}}).build();
+		ASSERT_NE(createPlan, nullptr);
+		createPlan->open();
+		createPlan->next();
+		createPlan->close();
+	}
+
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").where_("n", "age", PropertyValue(int64_t(1))).build();
+	ASSERT_NE(plan, nullptr);
+
+	plan->open();
+	auto batch = plan->next();
+	// The node's age=99, filter asks for age=1 => should filter it out
+	if (batch.has_value()) {
+		EXPECT_TRUE(batch->empty());
+	}
+	plan->close();
+}
+
+TEST_F(QueryBuilderTest, Where_Predicate_NodeFound_PropertyMissing) {
+	// Covers: where_ lambda - node found, but property key doesn't exist
+	{
+		QueryBuilder createQb(planner);
+		auto createPlan = createQb.create_("n", "Robot").build();
+		ASSERT_NE(createPlan, nullptr);
+		createPlan->open();
+		createPlan->next();
+		createPlan->close();
+	}
+
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").where_("n", "nonexistent", PropertyValue(int64_t(1))).build();
+	ASSERT_NE(plan, nullptr);
+
+	plan->open();
+	auto batch = plan->next();
+	// No "nonexistent" property => filtered out
+	if (batch.has_value()) {
+		EXPECT_TRUE(batch->empty());
+	}
+	plan->close();
+}
+
+TEST_F(QueryBuilderTest, Where_Predicate_NodeNotInRecord) {
+	// Covers: where_ lambda - node variable not found in record
+	// Exercises line 76: !node is True (returns false)
+	{
+		QueryBuilder createQb(planner);
+		auto createPlan = createQb.create_("x", "Thing", {{"key", PropertyValue(int64_t(1))}}).build();
+		ASSERT_NE(createPlan, nullptr);
+		createPlan->open();
+		createPlan->next();
+		createPlan->close();
+	}
+
+	// match_ scans with variable "n", but where_ looks for variable "m" which won't be in the record
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n").where_("m", "key", PropertyValue(int64_t(1))).build();
+	ASSERT_NE(plan, nullptr);
+
+	plan->open();
+	auto batch = plan->next();
+	// "m" not in record => predicate returns false for all records
+	if (batch.has_value()) {
+		EXPECT_TRUE(batch->empty());
+	}
+	plan->close();
+}

@@ -26,6 +26,7 @@
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/execution/Record.hpp"
 #include "graph/core/Entity.hpp"
+#include "graph/query/api/ResultValue.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
@@ -181,7 +182,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluationHelper_EvaluateBatch_MultipleRecords
 	records.push_back(std::move(r2));
 
 	std::vector<PropertyValue> results = ExpressionEvaluationHelper::evaluateBatch(expr.get(), records);
-	EXPECT_EQ(results.size(), 2);
+	EXPECT_EQ(results.size(), 2u);
 	EXPECT_EQ(std::get<int64_t>(results[0].getVariant()), 10);
 	EXPECT_EQ(std::get<int64_t>(results[1].getVariant()), 10);
 }
@@ -252,7 +253,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_VisitVariableReference_Property) {
 TEST_F(ExpressionsTest, ExpressionEvaluator_VisitVariableReference_UndefinedVariable) {
 	VariableReferenceExpression expr(std::string("undefined"));
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), UndefinedVariableException);
+	EXPECT_THROW((void)expr.accept(evaluator), UndefinedVariableException);
 }
 
 TEST_F(ExpressionsTest, ExpressionEvaluator_VisitVariableReference_MissingProperty) {
@@ -333,7 +334,7 @@ TEST_F(ExpressionsTest, BinaryOp_DivisionByZero) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+	EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 }
 
 TEST_F(ExpressionsTest, BinaryOp_ModulusByZero) {
@@ -342,7 +343,7 @@ TEST_F(ExpressionsTest, BinaryOp_ModulusByZero) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+	EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 }
 
 // ============================================================================
@@ -606,7 +607,7 @@ TEST_F(ExpressionsTest, FunctionCall_UnknownFunction) {
 	FunctionCallExpression expr("unknownFunction", std::move(args));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsTest, FunctionCall_InvalidArgumentCount) {
@@ -615,7 +616,7 @@ TEST_F(ExpressionsTest, FunctionCall_InvalidArgumentCount) {
 	FunctionCallExpression expr("tostring", std::move(args));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 // ============================================================================
@@ -744,21 +745,21 @@ TEST_F(ExpressionsTest, CaseExpression_Searched_NullCondition) {
 // ============================================================================
 
 TEST_F(ExpressionsTest, EvaluationContext_ToInteger_InvalidString) {
-	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(std::string("not a number"))), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toInteger(PropertyValue(std::string("not a number"))), TypeMismatchException);
 }
 
 TEST_F(ExpressionsTest, EvaluationContext_ToDouble_InvalidString) {
-	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(std::string("not a number"))), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toDouble(PropertyValue(std::string("not a number"))), TypeMismatchException);
 }
 
 TEST_F(ExpressionsTest, EvaluationContext_ToInteger_ListThrows) {
 	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0)};
-	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(list)), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toInteger(PropertyValue(list)), TypeMismatchException);
 }
 
 TEST_F(ExpressionsTest, EvaluationContext_ToDouble_ListThrows) {
 	std::vector<PropertyValue> list = {PropertyValue(1.0), PropertyValue(2.0)};
-	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(list)), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toDouble(PropertyValue(list)), TypeMismatchException);
 }
 
 TEST_F(ExpressionsTest, EvaluationContext_ToBoolean_StringTrue) {
@@ -1037,7 +1038,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_BinaryOp_UnknownOperator) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_NO_THROW(expr.accept(evaluator));
+	EXPECT_NO_THROW((void)expr.accept(evaluator));
 }
 
 TEST_F(ExpressionsTest, ExpressionEvaluator_UnaryOp_UnknownOperator) {
@@ -1046,7 +1047,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_UnaryOp_UnknownOperator) {
 	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_NO_THROW(expr.accept(evaluator));
+	EXPECT_NO_THROW((void)expr.accept(evaluator));
 }
 
 // ============================================================================
@@ -1872,7 +1873,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_MissingBranches) {
 		auto right = std::make_unique<LiteralExpression>(int64_t(0));
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+		EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 	}
 
 	// Test unary NOT with integer
@@ -1889,7 +1890,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_MissingBranches) {
 		std::vector<std::unique_ptr<Expression>> args;
 		FunctionCallExpression expr("tostring", std::move(args));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+		EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 	}
 }
 
@@ -1997,7 +1998,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_BranchCoverage_AllComparisons) {
 		BinaryOpExpression expr(std::move(left), op, std::move(right));
 
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 	}
 }
 
@@ -2165,20 +2166,20 @@ TEST_F(ExpressionsTest, EvaluationContext_FinalBranches_ToBoolean) {
 
 TEST_F(ExpressionsTest, EvaluationContext_FinalBranches_ToIntegerThrows) {
 	// toInteger with invalid string throws
-	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(std::string("not a number"))), TypeMismatchException);
-	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(std::string("abc123"))), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toInteger(PropertyValue(std::string("not a number"))), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toInteger(PropertyValue(std::string("abc123"))), TypeMismatchException);
 
 	// toInteger with LIST throws
-	EXPECT_THROW(EvaluationContext::toInteger(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toInteger(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})), TypeMismatchException);
 }
 
 TEST_F(ExpressionsTest, EvaluationContext_FinalBranches_ToDoubleThrows) {
 	// toDouble with invalid string throws
-	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(std::string("not a number"))), TypeMismatchException);
-	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(std::string("abc"))), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toDouble(PropertyValue(std::string("not a number"))), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toDouble(PropertyValue(std::string("abc"))), TypeMismatchException);
 
 	// toDouble with LIST throws
-	EXPECT_THROW(EvaluationContext::toDouble(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})), TypeMismatchException);
+	EXPECT_THROW((void)EvaluationContext::toDouble(PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})), TypeMismatchException);
 }
 
 TEST_F(ExpressionsTest, EvaluationContext_FinalBranches_ValidStringConversions) {
@@ -2206,7 +2207,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 		auto right = std::make_unique<LiteralExpression>(2.0);
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 5.0);
 	}
 
@@ -2216,7 +2217,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 		auto right = std::make_unique<LiteralExpression>(int64_t(3));
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), -1);
 	}
 
@@ -2225,7 +2226,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 		auto operand = std::make_unique<LiteralExpression>(3.14);
 		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -3.14);
 	}
 
@@ -2234,7 +2235,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalBranches_DefaultCase) {
 		auto operand = std::make_unique<LiteralExpression>(1.0);
 		UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
 	}
 }
@@ -2532,7 +2533,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_AdditionalBranches) {
 		auto right = std::make_unique<LiteralExpression>(1.5);
 		BinaryOpExpression expr(std::move(left), op, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 	}
 
 	// Test all comparison operators with doubles
@@ -2547,7 +2548,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_AdditionalBranches) {
 		auto right = std::make_unique<LiteralExpression>(2.71);
 		BinaryOpExpression expr(std::move(left), op, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 	}
 
 	// Test XOR specifically
@@ -2565,7 +2566,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_AdditionalBranches) {
 		auto operand = std::make_unique<LiteralExpression>(0.0);
 		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -0.0);
 	}
 }
@@ -3008,7 +3009,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_UltimateBranches) {
 		auto right = std::make_unique<LiteralExpression>(2.0);
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), 3.5);
 	}
 
@@ -3018,7 +3019,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_UltimateBranches) {
 		auto right = std::make_unique<LiteralExpression>(int64_t(-3));
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 	}
 
 	// Test unary NOT with different numeric types
@@ -3026,7 +3027,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_UltimateBranches) {
 		auto operand = std::make_unique<LiteralExpression>(int64_t(0));
 		UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
 	}
 
@@ -3034,7 +3035,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_UltimateBranches) {
 		auto operand = std::make_unique<LiteralExpression>(int64_t(5));
 		UnaryOpExpression expr(UnaryOperatorType::UOP_NOT, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
 	}
 }
@@ -3210,7 +3211,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalCases) {
 		auto right = std::make_unique<LiteralExpression>(int64_t(999));
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_AND, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_FALSE(std::get<bool>(evaluator.getResult().getVariant()));
 	}
 
@@ -3220,7 +3221,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalCases) {
 		auto right = std::make_unique<LiteralExpression>(int64_t(0));
 		BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_OR, std::move(right));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
 	}
 
@@ -3229,7 +3230,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalCases) {
 		auto operand = std::make_unique<LiteralExpression>(0.0);
 		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_DOUBLE_EQ(std::get<double>(evaluator.getResult().getVariant()), -0.0);
 	}
 
@@ -3237,7 +3238,7 @@ TEST_F(ExpressionsTest, ExpressionEvaluator_FinalCases) {
 		auto operand = std::make_unique<LiteralExpression>(int64_t(-99));
 		UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
 		ExpressionEvaluator evaluator(*context_);
-		EXPECT_NO_THROW(expr.accept(evaluator));
+		EXPECT_NO_THROW((void)expr.accept(evaluator));
 		EXPECT_EQ(std::get<int64_t>(evaluator.getResult().getVariant()), 99);
 	}
 }
@@ -5194,7 +5195,7 @@ TEST_F(ExpressionsCoverageTest, UndefinedVariableException) {
 	// Test accessing undefined variable throws exception
 	auto varExpr = std::make_unique<VariableReferenceExpression>("undefined_var");
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(varExpr->accept(evaluator), UndefinedVariableException);
+	EXPECT_THROW((void)varExpr->accept(evaluator), UndefinedVariableException);
 }
 
 TEST_F(ExpressionsCoverageTest, UndefinedVariableWithPropertyReturnsNull) {
@@ -5212,7 +5213,7 @@ TEST_F(ExpressionsCoverageTest, UnknownFunctionThrowsException) {
 	args.push_back(std::make_unique<LiteralExpression>(int64_t(42)));
 	auto funcExpr = std::make_unique<FunctionCallExpression>("unknown_function_xyz", std::move(args));
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(funcExpr->accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)funcExpr->accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, DivisionByZero_Integer) {
@@ -5221,7 +5222,7 @@ TEST_F(ExpressionsCoverageTest, DivisionByZero_Integer) {
 	auto right = std::make_unique<LiteralExpression>(int64_t(0));
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+	EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 }
 
 TEST_F(ExpressionsCoverageTest, DivisionByZero_Double) {
@@ -5230,7 +5231,7 @@ TEST_F(ExpressionsCoverageTest, DivisionByZero_Double) {
 	auto right = std::make_unique<LiteralExpression>(0.0);
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_DIVIDE, std::move(right));
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+	EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 }
 
 TEST_F(ExpressionsCoverageTest, ModuloByZero) {
@@ -5239,7 +5240,7 @@ TEST_F(ExpressionsCoverageTest, ModuloByZero) {
 	auto right = std::make_unique<LiteralExpression>(int64_t(0));
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_MODULO, std::move(right));
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+	EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 }
 
 TEST_F(ExpressionsCoverageTest, SliceNonListValue) {
@@ -5248,7 +5249,7 @@ TEST_F(ExpressionsCoverageTest, SliceNonListValue) {
 	auto indexExpr = std::make_unique<LiteralExpression>(int64_t(0));
 	ListSliceExpression expr(std::move(nonListExpr), std::move(indexExpr), nullptr, false);
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, SliceMissingIndex) {
@@ -5257,7 +5258,7 @@ TEST_F(ExpressionsCoverageTest, SliceMissingIndex) {
 	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(listVec));
 	ListSliceExpression expr(std::move(listExpr), nullptr, nullptr, false);
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerIndex) {
@@ -5267,7 +5268,7 @@ TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerIndex) {
 	auto indexExpr = std::make_unique<LiteralExpression>(std::string("not_a_number"));
 	ListSliceExpression expr(std::move(listExpr), std::move(indexExpr), nullptr, false);
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerStartIndex) {
@@ -5278,7 +5279,7 @@ TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerStartIndex) {
 	auto endExpr = std::make_unique<LiteralExpression>(int64_t(2));
 	ListSliceExpression expr(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerEndIndex) {
@@ -5289,7 +5290,7 @@ TEST_F(ExpressionsCoverageTest, SliceWithNonIntegerEndIndex) {
 	auto endExpr = std::make_unique<LiteralExpression>(std::string("not_a_number"));
 	ListSliceExpression expr(std::move(listExpr), std::move(startExpr), std::move(endExpr), true);
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, ListComprehensionNonListValue) {
@@ -5298,7 +5299,7 @@ TEST_F(ExpressionsCoverageTest, ListComprehensionNonListValue) {
 	ListComprehensionExpression expr("x", std::move(nonListExpr), nullptr, nullptr,
 		ListComprehensionExpression::ComprehensionType::COMP_FILTER);
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, ListComprehensionNonBooleanWhere) {
@@ -5309,7 +5310,7 @@ TEST_F(ExpressionsCoverageTest, ListComprehensionNonBooleanWhere) {
 	ListComprehensionExpression expr("x", std::move(listExpr), std::move(whereExpr), nullptr,
 		ListComprehensionExpression::ComprehensionType::COMP_FILTER);
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, VariableReferencePropertyAccess) {
@@ -5578,7 +5579,7 @@ TEST_F(ExpressionsCoverageTest, FunctionCallExpression_UnknownFunction_Throws) {
 	FunctionCallExpression expr("unknownFunction", std::move(args));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, FunctionCallExpression_InvalidArgumentCount_Throws) {
@@ -5593,7 +5594,7 @@ TEST_F(ExpressionsCoverageTest, FunctionCallExpression_InvalidArgumentCount_Thro
 	FunctionCallExpression expr("abs", std::move(args));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, InExpression_ElementInList) {
@@ -5654,7 +5655,7 @@ TEST_F(ExpressionsCoverageTest, BinaryOp_DivisionByZero_Throws) {
 	BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::BOP_DIVIDE, std::move(rightExpr));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+	EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 }
 
 TEST_F(ExpressionsCoverageTest, BinaryOp_ModuloByZero_Throws) {
@@ -5665,7 +5666,7 @@ TEST_F(ExpressionsCoverageTest, BinaryOp_ModuloByZero_Throws) {
 	BinaryOpExpression expr(std::move(leftExpr), BinaryOperatorType::BOP_MODULO, std::move(rightExpr));
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), DivisionByZeroException);
+	EXPECT_THROW((void)expr.accept(evaluator), DivisionByZeroException);
 }
 
 TEST_F(ExpressionsCoverageTest, BinaryOp_PowerOperator) {
@@ -5811,7 +5812,7 @@ TEST_F(ExpressionsCoverageTest, ListComprehension_NonBooleanWhere_Throws) {
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, ListComprehension_NonListValue_Throws) {
@@ -5828,7 +5829,7 @@ TEST_F(ExpressionsCoverageTest, ListComprehension_NonListValue_Throws) {
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, ExistsExpression_NotImplemented_Throws) {
@@ -5836,7 +5837,7 @@ TEST_F(ExpressionsCoverageTest, ExistsExpression_NotImplemented_Throws) {
 	ExistsExpression expr("(n)-[:KNOWS]->()");
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, PatternComprehension_NotImplemented_Throws) {
@@ -5849,7 +5850,7 @@ TEST_F(ExpressionsCoverageTest, PatternComprehension_NotImplemented_Throws) {
 	);
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(expr.accept(evaluator), ExpressionEvaluationException);
+	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
 
 TEST_F(ExpressionsCoverageTest, CaseExpression_SimpleCase_AllBranchesFail) {
@@ -5918,7 +5919,7 @@ TEST_F(ExpressionsCoverageTest, VariableReferenceExpression_UndefinedVariable_Th
 	auto varExpr = std::make_unique<VariableReferenceExpression>("nonexistent_var");
 
 	ExpressionEvaluator evaluator(*context_);
-	EXPECT_THROW(varExpr->accept(evaluator), UndefinedVariableException);
+	EXPECT_THROW((void)varExpr->accept(evaluator), UndefinedVariableException);
 }
 
 TEST_F(ExpressionsCoverageTest, UnaryOp_NotWithDouble) {
@@ -6302,7 +6303,7 @@ TEST_F(ExpressionsCoverageTest, EvaluationContext_ToInteger) {
 
 	// Invalid string should throw
 	EXPECT_THROW(
-		EvaluationContext::toInteger(PropertyValue(std::string("abc"))),
+		(void)EvaluationContext::toInteger(PropertyValue(std::string("abc"))),
 		TypeMismatchException
 	);
 }
@@ -6328,7 +6329,7 @@ TEST_F(ExpressionsCoverageTest, EvaluationContext_ToDouble) {
 
 	// Invalid string should throw
 	EXPECT_THROW(
-		EvaluationContext::toDouble(PropertyValue(std::string("abc"))),
+		(void)EvaluationContext::toDouble(PropertyValue(std::string("abc"))),
 		TypeMismatchException
 	);
 }
@@ -6491,4 +6492,300 @@ TEST_F(ExpressionsCoverageTest, ListLiteralExpression_GetExpressionType) {
 
 	ListLiteralExpression expr(listValue);
 	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LITERAL);
+}
+
+// ============================================================================
+// Branch coverage: LiteralExpression::toString with false boolean (line 63 False branch)
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, LiteralExpression_ToString_FalseBoolean) {
+	LiteralExpression expr(false);
+	EXPECT_EQ(expr.toString(), "false");
+}
+
+// ============================================================================
+// Branch coverage: toString(BinaryOperatorType) for BOP_POWER, BOP_IN,
+// BOP_STARTS_WITH, BOP_ENDS_WITH, BOP_CONTAINS (lines 344, 351-354)
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, BinaryOperatorType_ToString_Power) {
+	EXPECT_EQ(graph::query::expressions::toString(BinaryOperatorType::BOP_POWER), "^");
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOperatorType_ToString_In) {
+	EXPECT_EQ(graph::query::expressions::toString(BinaryOperatorType::BOP_IN), "IN");
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOperatorType_ToString_StartsWith) {
+	EXPECT_EQ(graph::query::expressions::toString(BinaryOperatorType::BOP_STARTS_WITH), "STARTS WITH");
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOperatorType_ToString_EndsWith) {
+	EXPECT_EQ(graph::query::expressions::toString(BinaryOperatorType::BOP_ENDS_WITH), "ENDS WITH");
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOperatorType_ToString_Contains) {
+	EXPECT_EQ(graph::query::expressions::toString(BinaryOperatorType::BOP_CONTAINS), "CONTAINS");
+}
+
+// ============================================================================
+// Branch coverage: isComparisonOperator for STARTS_WITH, ENDS_WITH, CONTAINS
+// (lines 386-388 - these never get reached because earlier conditions catch)
+// We need to call isComparisonOperator with these specific operators.
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, IsComparisonOperator_StartsWith) {
+	EXPECT_TRUE(isComparisonOperator(BinaryOperatorType::BOP_STARTS_WITH));
+}
+
+TEST_F(ExpressionsCoverageTest, IsComparisonOperator_EndsWith) {
+	EXPECT_TRUE(isComparisonOperator(BinaryOperatorType::BOP_ENDS_WITH));
+}
+
+TEST_F(ExpressionsCoverageTest, IsComparisonOperator_Contains) {
+	EXPECT_TRUE(isComparisonOperator(BinaryOperatorType::BOP_CONTAINS));
+}
+
+// ============================================================================
+// Branch coverage: Non-const accept(ExpressionVisitor&) for all expression types
+// Lines 50-52, 139-141, 170-172, 195-197, 221-223, 253-255, 294-296
+// ============================================================================
+
+// A simple mock ExpressionVisitor to exercise non-const accept methods
+class MockExpressionVisitor : public ExpressionVisitor {
+public:
+	int visitCount = 0;
+	void visit(LiteralExpression *) override { visitCount++; }
+	void visit(VariableReferenceExpression *) override { visitCount++; }
+	void visit(BinaryOpExpression *) override { visitCount++; }
+	void visit(UnaryOpExpression *) override { visitCount++; }
+	void visit(FunctionCallExpression *) override { visitCount++; }
+	void visit(CaseExpression *) override { visitCount++; }
+	void visit(InExpression *) override { visitCount++; }
+	void visit(class ListSliceExpression *) override { visitCount++; }
+	void visit(class ListComprehensionExpression *) override { visitCount++; }
+	void visit(class ListLiteralExpression *) override { visitCount++; }
+	void visit(IsNullExpression *) override { visitCount++; }
+	void visit(class QuantifierFunctionExpression *) override { visitCount++; }
+	void visit(class ExistsExpression *) override { visitCount++; }
+	void visit(class PatternComprehensionExpression *) override { visitCount++; }
+};
+
+TEST_F(ExpressionsCoverageTest, LiteralExpression_NonConstAccept) {
+	MockExpressionVisitor visitor;
+	LiteralExpression expr(int64_t(42));
+	expr.accept(visitor);
+	EXPECT_EQ(visitor.visitCount, 1);
+}
+
+TEST_F(ExpressionsCoverageTest, VariableReferenceExpression_NonConstAccept) {
+	MockExpressionVisitor visitor;
+	VariableReferenceExpression expr("x");
+	expr.accept(visitor);
+	EXPECT_EQ(visitor.visitCount, 1);
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOpExpression_NonConstAccept) {
+	MockExpressionVisitor visitor;
+	auto left = std::make_unique<LiteralExpression>(int64_t(1));
+	auto right = std::make_unique<LiteralExpression>(int64_t(2));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	expr.accept(visitor);
+	EXPECT_EQ(visitor.visitCount, 1);
+}
+
+TEST_F(ExpressionsCoverageTest, UnaryOpExpression_NonConstAccept) {
+	MockExpressionVisitor visitor;
+	auto operand = std::make_unique<LiteralExpression>(int64_t(1));
+	UnaryOpExpression expr(UnaryOperatorType::UOP_MINUS, std::move(operand));
+	expr.accept(visitor);
+	EXPECT_EQ(visitor.visitCount, 1);
+}
+
+TEST_F(ExpressionsCoverageTest, FunctionCallExpression_NonConstAccept) {
+	MockExpressionVisitor visitor;
+	std::vector<std::unique_ptr<Expression>> args;
+	args.push_back(std::make_unique<LiteralExpression>(int64_t(1)));
+	FunctionCallExpression expr("toUpper", std::move(args));
+	expr.accept(visitor);
+	EXPECT_EQ(visitor.visitCount, 1);
+}
+
+TEST_F(ExpressionsCoverageTest, InExpression_NonConstAccept) {
+	MockExpressionVisitor visitor;
+	auto value = std::make_unique<LiteralExpression>(int64_t(5));
+	std::vector<PropertyValue> listValues = {PropertyValue(int64_t(1))};
+	InExpression expr(std::move(value), listValues);
+	expr.accept(visitor);
+	EXPECT_EQ(visitor.visitCount, 1);
+}
+
+TEST_F(ExpressionsCoverageTest, CaseExpression_NonConstAccept) {
+	MockExpressionVisitor visitor;
+	CaseExpression expr;
+	expr.accept(visitor);
+	EXPECT_EQ(visitor.visitCount, 1);
+}
+
+// ============================================================================
+// Branch coverage: CaseExpression::toString with null elseExpression_ (line 312 False)
+// and CaseExpression::clone with null elseExpression_ (line 327 False)
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, CaseExpression_ToString_NullElse) {
+	CaseExpression expr;
+	// Set elseExpression_ to nullptr
+	expr.setElseExpression(nullptr);
+	expr.addBranch(
+		std::make_unique<LiteralExpression>(true),
+		std::make_unique<LiteralExpression>(int64_t(1))
+	);
+	std::string result = expr.toString();
+	// Should not contain "ELSE" since elseExpression_ is null
+	EXPECT_TRUE(result.find("CASE") != std::string::npos);
+	EXPECT_TRUE(result.find("WHEN") != std::string::npos);
+	EXPECT_TRUE(result.find("ELSE") == std::string::npos);
+	EXPECT_TRUE(result.find("END") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, CaseExpression_Clone_NullElse) {
+	// When elseExpression_ is null, clone() skips setElseExpression on the clone.
+	// The clone's default constructor provides a default elseExpression_ (LiteralExpression null).
+	// This test exercises the False branch of "if (elseExpression_)" at line 327.
+	CaseExpression expr;
+	expr.setElseExpression(nullptr);
+	expr.addBranch(
+		std::make_unique<LiteralExpression>(true),
+		std::make_unique<LiteralExpression>(int64_t(1))
+	);
+	auto cloned = expr.clone();
+	ASSERT_NE(cloned, nullptr);
+	// The clone gets a default ELSE (null literal) from its constructor
+	std::string result = cloned->toString();
+	EXPECT_NE(result.find("WHEN"), std::string::npos);
+	EXPECT_NE(result.find("END"), std::string::npos);
+}
+
+// ============================================================================
+// Branch coverage: BinaryOpExpression::toString with various uncovered operators
+// This exercises the toString(BinaryOperatorType) through BinaryOpExpression
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, BinaryOpExpression_ToString_Power) {
+	auto left = std::make_unique<LiteralExpression>(int64_t(2));
+	auto right = std::make_unique<LiteralExpression>(int64_t(3));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_POWER, std::move(right));
+	std::string result = expr.toString();
+	EXPECT_TRUE(result.find("^") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOpExpression_ToString_StartsWith) {
+	auto left = std::make_unique<LiteralExpression>(std::string("hello"));
+	auto right = std::make_unique<LiteralExpression>(std::string("he"));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_STARTS_WITH, std::move(right));
+	std::string result = expr.toString();
+	EXPECT_TRUE(result.find("STARTS WITH") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOpExpression_ToString_EndsWith) {
+	auto left = std::make_unique<LiteralExpression>(std::string("hello"));
+	auto right = std::make_unique<LiteralExpression>(std::string("lo"));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ENDS_WITH, std::move(right));
+	std::string result = expr.toString();
+	EXPECT_TRUE(result.find("ENDS WITH") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOpExpression_ToString_Contains) {
+	auto left = std::make_unique<LiteralExpression>(std::string("hello"));
+	auto right = std::make_unique<LiteralExpression>(std::string("ell"));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_CONTAINS, std::move(right));
+	std::string result = expr.toString();
+	EXPECT_TRUE(result.find("CONTAINS") != std::string::npos);
+}
+
+TEST_F(ExpressionsCoverageTest, BinaryOpExpression_ToString_In) {
+	auto left = std::make_unique<LiteralExpression>(int64_t(1));
+	auto right = std::make_unique<LiteralExpression>(int64_t(2));
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_IN, std::move(right));
+	std::string result = expr.toString();
+	EXPECT_TRUE(result.find("IN") != std::string::npos);
+}
+
+// ============================================================================
+// Branch coverage: FunctionCallExpression::toString with zero arguments
+// Line 232 False branch (empty loop)
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, FunctionCallExpression_ToString_NoArgs) {
+	std::vector<std::unique_ptr<Expression>> args;
+	FunctionCallExpression expr("now", std::move(args));
+	std::string result = expr.toString();
+	EXPECT_EQ(result, "now()");
+}
+
+// ============================================================================
+// Branch coverage: FunctionCallExpression::clone with zero arguments
+// ============================================================================
+
+TEST_F(ExpressionsCoverageTest, FunctionCallExpression_Clone_NoArgs) {
+	std::vector<std::unique_ptr<Expression>> args;
+	FunctionCallExpression expr("now", std::move(args));
+	auto cloned = expr.clone();
+	ASSERT_NE(cloned, nullptr);
+	EXPECT_EQ(cloned->toString(), "now()");
+}
+
+// ============================================================================
+// ResultValue coverage: Edge toString branch
+// Covers the Edge variant of ResultValue::toString() which was previously uncovered
+// ============================================================================
+
+TEST_F(ExpressionsTest, ResultValue_ToString_Edge) {
+	Edge edge(10, 1, 2, 42);
+	std::unordered_map<std::string, PropertyValue> props;
+	props["weight"] = PropertyValue(1.5);
+	edge.setProperties(props);
+
+	graph::query::ResultValue rv(edge);
+	std::string result = rv.toString();
+	EXPECT_TRUE(result.find("[:LabelID:42:10") != std::string::npos);
+	EXPECT_TRUE(result.find("weight") != std::string::npos);
+}
+
+TEST_F(ExpressionsTest, ResultValue_ToString_EdgeNoProps) {
+	Edge edge(5, 1, 2, 99);
+	graph::query::ResultValue rv(edge);
+	std::string result = rv.toString();
+	EXPECT_TRUE(result.find("[:LabelID:99:5") != std::string::npos);
+	EXPECT_TRUE(result.find("]") != std::string::npos);
+}
+
+// ============================================================================
+// EvaluationContext coverage: toBoolean with Map
+// Covers the MapType variant of toBoolean which was previously uncovered
+// ============================================================================
+
+TEST_F(ExpressionsTest, EvaluationContext_ToBoolean_EmptyMap) {
+	PropertyValue::MapType emptyMap;
+	PropertyValue pv(emptyMap);
+	EXPECT_FALSE(EvaluationContext::toBoolean(pv));
+}
+
+TEST_F(ExpressionsTest, EvaluationContext_ToBoolean_NonEmptyMap) {
+	PropertyValue::MapType map;
+	map["key"] = PropertyValue(int64_t(1));
+	PropertyValue pv(map);
+	EXPECT_TRUE(EvaluationContext::toBoolean(pv));
+}
+
+// ============================================================================
+// EvaluationContext coverage: toDouble with Map
+// Covers the MapType variant of toDouble which throws TypeMismatchException
+// ============================================================================
+
+TEST_F(ExpressionsTest, EvaluationContext_ToDouble_Map) {
+	PropertyValue::MapType map;
+	map["key"] = PropertyValue(int64_t(1));
+	PropertyValue pv(map);
+	EXPECT_THROW((void)EvaluationContext::toDouble(pv), TypeMismatchException);
 }

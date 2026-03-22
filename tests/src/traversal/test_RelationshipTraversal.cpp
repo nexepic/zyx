@@ -27,6 +27,8 @@
 #include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/DeletionManager.hpp"
+#include "graph/storage/data/DirtyEntityInfo.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 
 // Test Fixture for basic, single-edge scenarios
@@ -349,33 +351,552 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
 }
 
 TEST(RelationshipTraversalLifetimeTest, HandlesExpiredDataManagerGracefully) {
-	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testFilePath = std::filesystem::temp_directory_path() / ("test_lifetime_" + to_string(uuid) + ".dat");
+	// Use a null shared_ptr to guarantee dataManager_.lock() returns null
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
 
-	// 1. Create a DataManager whose lifetime we can fully control
-	auto database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	std::shared_ptr<graph::storage::DataManager> dataManager = database->getStorage()->getDataManager();
-
-	// 2. Create Traversal, whose internal weak_ptr now points to our DataManager
-	auto traversal = std::make_shared<graph::traversal::RelationshipTraversal>(dataManager);
-
-	// 3. Key step: destroy the DataManager.
-	// We reset the shared_ptr to bring the reference count to zero, triggering its destructor.
-	// Now, the weak_ptr inside traversal is expired (dangling).
-	dataManager.reset();
-	database->close();
-
-	// 4. Call methods on Traversal.
-	// Inside these methods, `dataManager_.lock()` will fail and return a null pointer.
-	// We expect these calls to complete safely, throw no exceptions, and return empty results.
+	// All methods should return empty results when DataManager is null
 	std::vector<graph::Edge> outEdges;
-	EXPECT_NO_THROW(outEdges = traversal->getOutgoingEdges(123));
+	EXPECT_NO_THROW(outEdges = traversal.getOutgoingEdges(123));
 	EXPECT_TRUE(outEdges.empty());
 
 	std::vector<graph::Node> connectedNodes;
-	EXPECT_NO_THROW(connectedNodes = traversal->getAllConnectedNodes(123));
+	EXPECT_NO_THROW(connectedNodes = traversal.getAllConnectedNodes(123));
 	EXPECT_TRUE(connectedNodes.empty());
-
-	std::filesystem::remove(testFilePath);
 }
+
+// ============================================================================
+// Coverage Tests: Expired weak_ptr in getConnectedTargetNodes, getConnectedSourceNodes,
+// getIncomingEdges, linkEdge, unlinkEdge
+// ============================================================================
+
+TEST(RelationshipTraversalLifetimeTest, ExpiredDataManager_GetIncomingEdges) {
+	// Cover: dataManager_.lock() -> null in getIncomingEdges (line 63)
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	std::vector<graph::Edge> inEdges;
+	EXPECT_NO_THROW(inEdges = traversal.getIncomingEdges(123));
+	EXPECT_TRUE(inEdges.empty());
+}
+
+TEST(RelationshipTraversalLifetimeTest, ExpiredDataManager_GetConnectedTargetNodes) {
+	// Cover: dataManager_.lock() -> null in getConnectedTargetNodes (line 104-106)
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	std::vector<graph::Node> targetNodes;
+	EXPECT_NO_THROW(targetNodes = traversal.getConnectedTargetNodes(123));
+	EXPECT_TRUE(targetNodes.empty());
+}
+
+TEST(RelationshipTraversalLifetimeTest, ExpiredDataManager_GetConnectedSourceNodes) {
+	// Cover: dataManager_.lock() -> null in getConnectedSourceNodes (line 120-122)
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	std::vector<graph::Node> sourceNodes;
+	EXPECT_NO_THROW(sourceNodes = traversal.getConnectedSourceNodes(123));
+	EXPECT_TRUE(sourceNodes.empty());
+}
+
+TEST(RelationshipTraversalLifetimeTest, ExpiredDataManager_LinkEdge) {
+	// Cover: dataManager_.lock() -> null in linkEdge (line 161-163)
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	graph::Edge edge(1, 1, 2, 1);
+	EXPECT_NO_THROW(traversal.linkEdge(edge));
+}
+
+TEST(RelationshipTraversalLifetimeTest, ExpiredDataManager_UnlinkEdge) {
+	// Cover: dataManager_.lock() -> null in unlinkEdge (line 204-207)
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	graph::Edge edge(1, 1, 2, 1);
+	EXPECT_NO_THROW(traversal.unlinkEdge(edge));
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests for RelationshipTraversal
+// ============================================================================
+
+TEST(RelationshipTraversalLifetimeTest, ExpiredDataManager_GetAllConnectedNodes) {
+	// Cover: dataManager_.lock() -> null in getAllConnectedNodes (line 134-136)
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	std::vector<graph::Node> allNodes;
+	EXPECT_NO_THROW(allNodes = traversal.getAllConnectedNodes(123));
+	EXPECT_TRUE(allNodes.empty());
+}
+
+TEST_F(RelationshipTraversalTest, LinkEdge_TargetNodeFirstInEdge) {
+	// Cover: linkEdge when target node has firstInEdgeId == 0 (line 186-188)
+	// and when it's not 0 (lines 189-198)
+	// The basic SetUp already creates one edge (node1->node2), so node2's firstInEdgeId is non-zero
+
+	// Add a new isolated node
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	dataManager->addNode(node3);
+
+	// Add edge to node3 (node3 has no incoming edges, firstInEdgeId == 0)
+	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("CONNECTS"));
+	dataManager->addEdge(edge2);
+
+	auto inEdges = traversal->getIncomingEdges(node3.getId());
+	ASSERT_EQ(inEdges.size(), 1UL);
+	EXPECT_EQ(inEdges[0].getId(), edge2.getId());
+}
+
+TEST_F(RelationshipTraversalTest, UnlinkEdge_MiddleInChain_IncomingEdges) {
+	// Cover: unlinkEdge where prevInEdgeId != 0 and nextInEdgeId != 0 (lines 237-248)
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node4(4, dataManager->getOrCreateLabelId("Node4"));
+	dataManager->addNode(node3);
+	dataManager->addNode(node4);
+
+	// Create multiple incoming edges to node2
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge2);
+
+	graph::Edge edge3(30, node4.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge3);
+
+	// Now node2 has incoming edges: [edge3, edge2, edge(10)]
+	auto inBefore = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(inBefore.size(), 3UL);
+
+	// Unlink the middle edge (edge2)
+	auto edgeToUnlink = dataManager->getEdge(edge2.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	auto inAfter = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(inAfter.size(), 2UL);
+}
+
+TEST_F(RelationshipTraversalTest, GetConnectedSourceNodes_MultipleEdges) {
+	// Cover: getConnectedSourceNodes loop with multiple incoming edges
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node4(4, dataManager->getOrCreateLabelId("Node4"));
+	dataManager->addNode(node3);
+	dataManager->addNode(node4);
+
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge2);
+
+	graph::Edge edge3(30, node4.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge3);
+
+	auto sourceNodes = traversal->getConnectedSourceNodes(node2.getId());
+	ASSERT_EQ(sourceNodes.size(), 3UL);
+}
+
+TEST_F(RelationshipTraversalTest, GetAllConnectedNodes_DeduplicatesFromBothDirections) {
+	// Cover: getAllConnectedNodes when incoming edges produce duplicate node IDs (line 149)
+	// node1 -> node2 (existing edge)
+	// Also add node2 -> node1 (reverse edge)
+	graph::Edge reverseEdge(40, node2.getId(), node1.getId(), dataManager->getOrCreateLabelId("REVERSE"));
+	dataManager->addEdge(reverseEdge);
+
+	// From node1's perspective: outgoing to node2, incoming from node2
+	// node2 should appear only once
+	auto connectedNodes = traversal->getAllConnectedNodes(node1.getId());
+	ASSERT_EQ(connectedNodes.size(), 1UL);
+	EXPECT_EQ(connectedNodes[0].getId(), node2.getId());
+}
+
+// ============================================================================
+// Additional Branch Coverage: Unlink tail edge from incoming chain
+// ============================================================================
+
+TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInIncomingChain) {
+	// Cover: unlinkEdge where prevInEdgeId != 0 but nextInEdgeId == 0
+	// Create multiple incoming edges to n2
+	graph::Node n5(5, dataManager->getOrCreateLabelId("N5"));
+	dataManager->addNode(n5);
+
+	graph::Edge edgeA(50, n2.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	dataManager->addEdge(edgeA);
+
+	graph::Edge edgeB(51, n3.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	dataManager->addEdge(edgeB);
+
+	// n5 has incoming: [edgeB, edgeA] (LIFO order)
+	auto inBefore = traversal->getIncomingEdges(n5.getId());
+	ASSERT_EQ(inBefore.size(), 2UL);
+
+	// Unlink the last edge in the chain (edgeA)
+	auto edgeToUnlink = dataManager->getEdge(edgeA.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	auto inAfter = traversal->getIncomingEdges(n5.getId());
+	ASSERT_EQ(inAfter.size(), 1UL);
+	EXPECT_EQ(inAfter[0].getId(), edgeB.getId());
+
+	// Verify the new tail has no next
+	auto tailEdge = dataManager->getEdge(edgeB.getId());
+	EXPECT_EQ(tailEdge.getNextInEdgeId(), 0);
+}
+
+TEST_F(RelationshipTraversalAdvancedTest, UnlinkFirstEdgeInIncomingChain) {
+	// Cover: unlinkEdge where prevInEdgeId == 0 (head of incoming chain)
+	graph::Node n5(5, dataManager->getOrCreateLabelId("N5"));
+	dataManager->addNode(n5);
+
+	graph::Edge edgeA(50, n2.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	dataManager->addEdge(edgeA);
+
+	graph::Edge edgeB(51, n3.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	dataManager->addEdge(edgeB);
+
+	// n5 has incoming: [edgeB, edgeA] (LIFO order)
+	// Unlink the first (head) edge (edgeB)
+	auto edgeToUnlink = dataManager->getEdge(edgeB.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	auto inAfter = traversal->getIncomingEdges(n5.getId());
+	ASSERT_EQ(inAfter.size(), 1UL);
+	EXPECT_EQ(inAfter[0].getId(), edgeA.getId());
+}
+
+TEST_F(RelationshipTraversalTest, GetConnectedTargetNodes_MultipleOutgoing) {
+	// Cover: getConnectedTargetNodes loop with multiple outgoing edges
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node4(4, dataManager->getOrCreateLabelId("Node4"));
+	dataManager->addNode(node3);
+	dataManager->addNode(node4);
+
+	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge2);
+
+	graph::Edge edge3(30, node1.getId(), node4.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge3);
+
+	auto targets = traversal->getConnectedTargetNodes(node1.getId());
+	// Should have node2 (from setup edge) + node3 + node4
+	ASSERT_EQ(targets.size(), 3UL);
+}
+
+TEST_F(RelationshipTraversalTest, GetAllConnectedEdges_BothDirections) {
+	// Cover: getAllConnectedEdges with edges in both directions
+	graph::Edge reverseEdge(50, node2.getId(), node1.getId(), dataManager->getOrCreateLabelId("BACK"));
+	dataManager->addEdge(reverseEdge);
+
+	auto allEdges = traversal->getAllConnectedEdges(node1.getId());
+	// node1 has 1 outgoing (edge from setup) + 1 incoming (reverseEdge)
+	ASSERT_EQ(allEdges.size(), 2UL);
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests for RelationshipTraversal.cpp
+// ============================================================================
+
+TEST_F(RelationshipTraversalTest, GetOutgoingEdges_MixActiveAndInactive) {
+	// Cover: getOutgoingEdges where some edges in the chain are inactive (line 52-54)
+	// The traversal should skip inactive edges but continue following the chain
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	dataManager->addNode(node3);
+
+	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge2);
+
+	// Now node1 has outgoing edges: [edge2, edge(10)]
+	auto outBefore = traversal->getOutgoingEdges(node1.getId());
+	ASSERT_EQ(outBefore.size(), 2UL);
+
+	// Delete edge2 (marks it inactive) - it remains in the chain but is inactive
+	dataManager->deleteEdge(edge2);
+
+	// Now traversal should skip the inactive edge2 and only return edge(10)
+	auto outAfter = traversal->getOutgoingEdges(node1.getId());
+	ASSERT_EQ(outAfter.size(), 1UL);
+	EXPECT_EQ(outAfter[0].getId(), edge.getId());
+}
+
+TEST_F(RelationshipTraversalTest, GetIncomingEdges_MixActiveAndInactive) {
+	// Cover: getIncomingEdges where some edges are inactive (line 82-84)
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	dataManager->addNode(node3);
+
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge2);
+
+	// Now node2 has incoming edges: [edge2, edge(10)]
+	auto inBefore = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(inBefore.size(), 2UL);
+
+	// Delete edge2 (marks it inactive)
+	dataManager->deleteEdge(edge2);
+
+	// Only the original edge should remain active
+	auto inAfter = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(inAfter.size(), 1UL);
+	EXPECT_EQ(inAfter[0].getId(), edge.getId());
+}
+
+TEST_F(RelationshipTraversalTest, LinkEdge_SourceNodeFirstOutIsZero) {
+	// Cover: linkEdge when source node's firstOutEdgeId == 0 (line 169-171)
+	// Create a new isolated node with no edges
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Isolated"));
+	dataManager->addNode(node3);
+
+	// Create an edge from node3 (which has firstOutEdgeId == 0)
+	graph::Edge newEdge(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("NEW"));
+	dataManager->addEdge(newEdge); // internally calls linkEdge
+
+	auto outEdges = traversal->getOutgoingEdges(node3.getId());
+	ASSERT_EQ(outEdges.size(), 1UL);
+	EXPECT_EQ(outEdges[0].getId(), newEdge.getId());
+
+	// Verify node3's firstOutEdgeId was set
+	auto updatedNode3 = dataManager->getNode(node3.getId());
+	EXPECT_EQ(updatedNode3.getFirstOutEdgeId(), newEdge.getId());
+}
+
+TEST_F(RelationshipTraversalTest, LinkEdge_SourceNodeFirstOutIsNonZero) {
+	// Cover: linkEdge when source node already has firstOutEdgeId != 0 (line 172-181)
+	// node1 already has an outgoing edge, so adding another should trigger the else branch
+
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	dataManager->addNode(node3);
+
+	graph::Edge newEdge(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("SECOND"));
+	dataManager->addEdge(newEdge); // internally calls linkEdge
+
+	auto outEdges = traversal->getOutgoingEdges(node1.getId());
+	ASSERT_EQ(outEdges.size(), 2UL);
+
+	// The new edge should be the first (LIFO)
+	EXPECT_EQ(outEdges[0].getId(), newEdge.getId());
+	EXPECT_EQ(outEdges[1].getId(), edge.getId());
+}
+
+TEST_F(RelationshipTraversalTest, UnlinkEdge_HeadOfOutgoingChain) {
+	// Cover: unlinkEdge where prevOutEdgeId == 0 (head of outgoing chain, line 215-218)
+	// node1 has one outgoing edge (the setup edge)
+	// Unlinking it should set node1's firstOutEdgeId to nextOutEdgeId (0)
+	traversal->unlinkEdge(edge);
+
+	auto updatedNode1 = dataManager->getNode(node1.getId());
+	EXPECT_EQ(updatedNode1.getFirstOutEdgeId(), 0);
+}
+
+TEST_F(RelationshipTraversalTest, UnlinkEdge_HeadOfIncomingChain) {
+	// Cover: unlinkEdge where prevInEdgeId == 0 (head of incoming chain, line 234-236)
+	// node2 has one incoming edge (the setup edge)
+	// Unlinking it should set node2's firstInEdgeId to nextInEdgeId (0)
+	traversal->unlinkEdge(edge);
+
+	auto updatedNode2 = dataManager->getNode(node2.getId());
+	EXPECT_EQ(updatedNode2.getFirstInEdgeId(), 0);
+}
+
+TEST_F(RelationshipTraversalTest, GetConnectedSourceNodes_EmptyOutgoing) {
+	// Cover: getConnectedSourceNodes when node has no incoming edges
+	// node1 has no incoming edges
+	auto sourceNodes = traversal->getConnectedSourceNodes(node1.getId());
+	EXPECT_TRUE(sourceNodes.empty());
+}
+
+TEST_F(RelationshipTraversalTest, GetConnectedTargetNodes_NoOutgoing) {
+	// Cover: getConnectedTargetNodes when node has no outgoing edges
+	// node2 has no outgoing edges
+	auto targetNodes = traversal->getConnectedTargetNodes(node2.getId());
+	EXPECT_TRUE(targetNodes.empty());
+}
+
+TEST_F(RelationshipTraversalTest, GetAllConnectedNodes_NoEdges) {
+	// Cover: getAllConnectedNodes when node has no edges at all
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Isolated"));
+	dataManager->addNode(node3);
+
+	auto connectedNodes = traversal->getAllConnectedNodes(node3.getId());
+	EXPECT_TRUE(connectedNodes.empty());
+}
+
+TEST_F(RelationshipTraversalAdvancedTest, UnlinkEdge_WithNextOutEdge) {
+	// Cover: unlinkEdge where nextOutEdgeId != 0 (line 225-229)
+	// In the advanced fixture, we have 3 edges: e12 -> e11 -> e10
+	// Unlinking e12 (head) means nextOutEdgeId = e11 != 0
+	// e11 should have its prevOutEdgeId set to 0
+	auto edgeToUnlink = dataManager->getEdge(edge12.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	auto updatedE11 = dataManager->getEdge(edge11.getId());
+	EXPECT_EQ(updatedE11.getPrevOutEdgeId(), 0) << "After unlinking head, next edge prev should be 0";
+}
+
+TEST_F(RelationshipTraversalAdvancedTest, UnlinkEdge_MiddleWithBothNeighbors) {
+	// Cover: unlinkEdge where prevOutEdgeId != 0 AND nextOutEdgeId != 0 (lines 219-222, 225-229)
+	// Unlink e11 (middle): e12 -> e11 -> e10 becomes e12 -> e10
+	auto edgeToUnlink = dataManager->getEdge(edge11.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	auto updatedE12 = dataManager->getEdge(edge12.getId());
+	auto updatedE10 = dataManager->getEdge(edge10.getId());
+
+	EXPECT_EQ(updatedE12.getNextOutEdgeId(), edge10.getId());
+	EXPECT_EQ(updatedE10.getPrevOutEdgeId(), edge12.getId());
+}
+
+// ============================================================================
+// Additional Branch Coverage Tests - Round 5
+// ============================================================================
+
+TEST_F(RelationshipTraversalTest, GetOutgoingEdges_NoEdgesFromTarget) {
+	// node2 has no outgoing edges - tests while loop not entered (line 43 false)
+	auto outEdges = traversal->getOutgoingEdges(node2.getId());
+	EXPECT_TRUE(outEdges.empty());
+}
+
+TEST_F(RelationshipTraversalTest, GetIncomingEdges_NoEdgesToSource) {
+	// node1 has no incoming edges - tests while loop not entered (line 73 false)
+	auto inEdges = traversal->getIncomingEdges(node1.getId());
+	EXPECT_TRUE(inEdges.empty());
+}
+
+TEST_F(RelationshipTraversalTest, LinkEdge_TargetNodeAlreadyHasIncomingEdge) {
+	// Cover: linkEdge else branch for target in-edge chain (lines 189-198)
+	// node2 already has an incoming edge from setUp, add another
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	dataManager->addNode(node3);
+
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("ALSO"));
+	dataManager->addEdge(edge2); // internally calls linkEdge
+
+	auto inEdges = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(inEdges.size(), 2UL);
+
+	// LIFO: edge2 should be first, original edge second
+	EXPECT_EQ(inEdges[0].getId(), edge2.getId());
+	EXPECT_EQ(inEdges[1].getId(), edge.getId());
+}
+
+TEST_F(RelationshipTraversalAdvancedTest, UnlinkEdge_LastEdge_NoNextOutEdge) {
+	// Cover: unlinkEdge where nextOutEdgeId == 0 (line 225 false branch)
+	// Unlink edge10, the tail of the chain
+	auto edgeToUnlink = dataManager->getEdge(edge10.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	// The next-to-last edge (edge11) should now have nextOutEdgeId == 0
+	auto updatedE11 = dataManager->getEdge(edge11.getId());
+	EXPECT_EQ(updatedE11.getNextOutEdgeId(), 0);
+}
+
+TEST_F(RelationshipTraversalAdvancedTest, UnlinkEdge_LastEdge_NoNextInEdge) {
+	// Cover: unlinkEdge where nextInEdgeId == 0 (line 244 false branch)
+	// for incoming chain - n2 has edge10 as its only incoming edge
+	auto edgeToUnlink = dataManager->getEdge(edge10.getId());
+	traversal->unlinkEdge(edgeToUnlink);
+
+	// After unlinking, n2 should have no incoming edges
+	auto inEdges = traversal->getIncomingEdges(n2.getId());
+	EXPECT_TRUE(inEdges.empty());
+}
+
+// ============================================================================
+// Branch coverage: null weak_ptr (expired DataManager) for all methods
+// ============================================================================
+
+TEST(RelationshipTraversalNullPtrTest, GetOutgoingEdges_NullDataManager) {
+	// Cover: dataManager_.lock() returns null in getOutgoingEdges (line 33 true branch)
+	std::shared_ptr<graph::storage::DataManager> nullPtr;
+	graph::traversal::RelationshipTraversal traversal(nullPtr);
+
+	auto result = traversal.getOutgoingEdges(1);
+	EXPECT_TRUE(result.empty());
+}
+
+TEST(RelationshipTraversalNullPtrTest, GetIncomingEdges_NullDataManager) {
+	// Cover: dataManager_.lock() returns null in getIncomingEdges (line 63 true branch)
+	std::shared_ptr<graph::storage::DataManager> nullPtr;
+	graph::traversal::RelationshipTraversal traversal(nullPtr);
+
+	auto result = traversal.getIncomingEdges(1);
+	EXPECT_TRUE(result.empty());
+}
+
+TEST(RelationshipTraversalNullPtrTest, GetConnectedTargetNodes_NullDataManager) {
+	// Cover: dataManager_.lock() returns null in getConnectedTargetNodes (line 105 true branch)
+	std::shared_ptr<graph::storage::DataManager> nullPtr;
+	graph::traversal::RelationshipTraversal traversal(nullPtr);
+
+	auto result = traversal.getConnectedTargetNodes(1);
+	EXPECT_TRUE(result.empty());
+}
+
+TEST(RelationshipTraversalNullPtrTest, GetConnectedSourceNodes_NullDataManager) {
+	// Cover: dataManager_.lock() returns null in getConnectedSourceNodes (line 121 true branch)
+	std::shared_ptr<graph::storage::DataManager> nullPtr;
+	graph::traversal::RelationshipTraversal traversal(nullPtr);
+
+	auto result = traversal.getConnectedSourceNodes(1);
+	EXPECT_TRUE(result.empty());
+}
+
+TEST(RelationshipTraversalNullPtrTest, GetAllConnectedNodes_NullDataManager) {
+	// Cover: dataManager_.lock() returns null in getAllConnectedNodes (line 135 true branch)
+	std::shared_ptr<graph::storage::DataManager> nullPtr;
+	graph::traversal::RelationshipTraversal traversal(nullPtr);
+
+	auto result = traversal.getAllConnectedNodes(1);
+	EXPECT_TRUE(result.empty());
+}
+
+TEST(RelationshipTraversalNullPtrTest, LinkEdge_NullDataManager) {
+	// Cover: dataManager_.lock() returns null in linkEdge (line 162 true branch)
+	std::shared_ptr<graph::storage::DataManager> nullPtr;
+	graph::traversal::RelationshipTraversal traversal(nullPtr);
+
+	graph::Edge e(1, 1, 2, 1);
+	EXPECT_NO_THROW(traversal.linkEdge(e));
+}
+
+TEST(RelationshipTraversalNullPtrTest, UnlinkEdge_NullDataManager) {
+	// Cover: dataManager_.lock() returns null in unlinkEdge (line 205 true branch)
+	std::shared_ptr<graph::storage::DataManager> nullPtr;
+	graph::traversal::RelationshipTraversal traversal(nullPtr);
+
+	graph::Edge e(1, 1, 2, 1);
+	EXPECT_NO_THROW(traversal.unlinkEdge(e));
+}
+
+// ============================================================================
+// Branch coverage: inactive edge in incoming chain (line 82 false branch)
+// ============================================================================
+
+TEST_F(RelationshipTraversalTest, GetIncomingEdges_InactiveEdgeInChainSkipped) {
+	// Cover: getIncomingEdges where edge.isActive() is false (line 82 false branch)
+	// We need an inactive edge that is still linked in the incoming chain.
+	// To achieve this, we retrieve the edge preserving its linked list pointers,
+	// mark it inactive, then register it as a dirty "modified" entity with the
+	// inactive copy as the backup. When getEdge is called during traversal,
+	// the dirty info returns this backup, which is inactive but has valid pointers.
+
+	// Add a second incoming edge to node2
+	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	dataManager->addNode(node3);
+
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	dataManager->addEdge(edge2);
+
+	// Incoming chain for node2: [edge2(20), edge(10)]
+	auto inBefore = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(inBefore.size(), 2UL);
+
+	// Get the edge from storage (preserves linked list pointers), mark inactive,
+	// and register it as a dirty modified entity so getEdge returns it with pointers intact.
+	auto storedEdge2 = dataManager->getEdge(edge2.getId());
+	storedEdge2.markInactive();
+	graph::storage::DirtyEntityInfo<graph::Edge> dirtyInfo(
+			graph::storage::EntityChangeType::CHANGE_MODIFIED, storedEdge2);
+	dataManager->setEntityDirty<graph::Edge>(dirtyInfo);
+
+	// Now traverse: edge2 is still in the chain but inactive, should be skipped
+	auto inAfter = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(inAfter.size(), 1UL);
+	EXPECT_EQ(inAfter[0].getId(), edge.getId());
+}
+
