@@ -164,18 +164,18 @@ int main(int argc, char **argv) {
 			"Conc BatchInsert (" + std::to_string(hwThreads) + " threads)", "/tmp/zyx_bench_conc_insert_n", 5,
 			CONC_DATA_SIZE, hwThreads));
 
-	// 5D. Parallel PQ Training (small scale due to DiskANN insert cost)
+	// 5D. Parallel PQ Training
 	tests.push_back(std::make_unique<ConcurrentPQTrainBench>("Conc PQTrain (1 thread)",
-															 "/tmp/zyx_bench_conc_pq_1", 1, 100, 1, DIM_SMALL));
+															 "/tmp/zyx_bench_conc_pq_1", 1, 1000, 1, DIM_SMALL));
 	tests.push_back(std::make_unique<ConcurrentPQTrainBench>(
-			"Conc PQTrain (" + std::to_string(hwThreads) + " threads)", "/tmp/zyx_bench_conc_pq_n", 1, 100,
+			"Conc PQTrain (" + std::to_string(hwThreads) + " threads)", "/tmp/zyx_bench_conc_pq_n", 1, 1000,
 			hwThreads, DIM_SMALL));
 
-	// 5E. Parallel Vector Search (small scale due to DiskANN insert cost)
+	// 5E. Parallel Vector Search
 	tests.push_back(std::make_unique<ConcurrentVectorSearchBench>(
-			"Conc VecSearch (1 thread)", "/tmp/zyx_bench_conc_vsearch_1", 5, 100, 1, DIM_SMALL, 10));
+			"Conc VecSearch (1 thread)", "/tmp/zyx_bench_conc_vsearch_1", 5, 1000, 1, DIM_SMALL, 10));
 	tests.push_back(std::make_unique<ConcurrentVectorSearchBench>(
-			"Conc VecSearch (" + std::to_string(hwThreads) + " threads)", "/tmp/zyx_bench_conc_vsearch_n", 5, 100,
+			"Conc VecSearch (" + std::to_string(hwThreads) + " threads)", "/tmp/zyx_bench_conc_vsearch_n", 5, 1000,
 			hwThreads, DIM_SMALL, 10));
 
 	// ========================================================================

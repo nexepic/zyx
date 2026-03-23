@@ -97,6 +97,19 @@ namespace graph {
 		return node;
 	}
 
+	Node Node::deserializeFromBuffer(const char *buf) {
+		Node node;
+		size_t off = 0;
+		std::memcpy(&node.metadata.id, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(&node.metadata.firstOutEdgeId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(&node.metadata.firstInEdgeId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(&node.metadata.propertyEntityId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(&node.metadata.labelId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(&node.metadata.propertyStorageType, buf + off, sizeof(uint32_t)); off += sizeof(uint32_t);
+		std::memcpy(&node.metadata.isActive, buf + off, sizeof(bool));
+		return node;
+	}
+
 	size_t Node::getSerializedSize() const {
 		// Calculate size of all metadata fields
 		size_t size = 0;

@@ -67,6 +67,8 @@ namespace graph {
 		// Serialization methods
 		void serialize(std::ostream &os) const;
 		static Property deserialize(std::istream &is);
+		// Zero-copy deserialization from raw memory buffer (no istream overhead).
+		static Property deserializeFromBuffer(const char *buf);
 		[[nodiscard]] size_t getSerializedSize() const;
 
 	private:

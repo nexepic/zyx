@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -28,7 +27,6 @@
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
-#include "graph/concurrent/ThreadPool.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -52,8 +50,6 @@ namespace graph::query::execution::operators {
 		}
 
 		std::optional<RecordBatch> next() override {
-			static constexpr size_t PARALLEL_FILTER_THRESHOLD = 4096;
-
 			while (true) {
 				auto batchOpt = child_->next();
 				if (!batchOpt)
@@ -61,36 +57,20 @@ namespace graph::query::execution::operators {
 
 				RecordBatch &inputBatch = *batchOpt;
 
-				if (threadPool_ && !threadPool_->isSingleThreaded() &&
-					inputBatch.size() >= PARALLEL_FILTER_THRESHOLD) {
-					// Parallel predicate evaluation
-					std::vector<bool> mask(inputBatch.size());
-					threadPool_->parallelFor(0, inputBatch.size(), [&](size_t i) {
-						mask[i] = predicate_(inputBatch[i]);
-					});
+				// Sequential predicate evaluation. Filter predicates are typically
+				// simple property comparisons where thread dispatch overhead exceeds
+				// the computation cost. The real parallelism benefit comes from the
+				// upstream operator (e.g. NodeScanOperator) doing parallel I/O.
+				RecordBatch outputBatch;
+				outputBatch.reserve(inputBatch.size());
 
-					RecordBatch outputBatch;
-					outputBatch.reserve(inputBatch.size());
-					for (size_t i = 0; i < inputBatch.size(); ++i) {
-						if (mask[i])
-							outputBatch.push_back(std::move(inputBatch[i]));
-					}
-
-					if (!outputBatch.empty())
-						return outputBatch;
-				} else {
-					// Sequential path
-					RecordBatch outputBatch;
-					outputBatch.reserve(inputBatch.size());
-
-					for (auto &record : inputBatch) {
-						if (predicate_(record))
-							outputBatch.push_back(std::move(record));
-					}
-
-					if (!outputBatch.empty())
-						return outputBatch;
+				for (auto &record : inputBatch) {
+					if (predicate_(record))
+						outputBatch.push_back(std::move(record));
 				}
+
+				if (!outputBatch.empty())
+					return outputBatch;
 			}
 		}
 

@@ -70,6 +70,36 @@ namespace graph {
 		return property;
 	}
 
+	Property Property::deserializeFromBuffer(const char *buf) {
+		Property property;
+
+		// memcpy for fixed metadata
+		size_t off = 0;
+		std::memcpy(&property.metadata.id, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(&property.metadata.entityId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(&property.metadata.entityType, buf + off, sizeof(uint32_t)); off += sizeof(uint32_t);
+		std::memcpy(&property.metadata.isActive, buf + off, sizeof(bool)); off += sizeof(bool);
+
+		// istream for variable-length property key-value pairs
+		struct membuf : std::streambuf {
+			membuf(const char *p, size_t s) {
+				char *mp = const_cast<char *>(p);
+				setg(mp, mp, mp + s);
+			}
+		};
+		membuf mb(buf + off, TOTAL_PROPERTY_SIZE - off);
+		std::istream stream(&mb);
+
+		auto propertyCount = utils::Serializer::readPOD<uint32_t>(stream);
+		for (uint32_t i = 0; i < propertyCount; ++i) {
+			std::string key = utils::Serializer::deserialize<std::string>(stream);
+			PropertyValue value = utils::Serializer::deserialize<PropertyValue>(stream);
+			property.values[key] = std::move(value);
+		}
+
+		return property;
+	}
+
 	size_t Property::getSerializedSize() const {
 		// Calculate size of all metadata fields
 		size_t size = 0;

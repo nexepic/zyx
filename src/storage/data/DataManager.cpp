@@ -23,6 +23,7 @@
 #include <map>
 #include <sstream>
 #include <unistd.h>
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
@@ -428,6 +429,139 @@ namespace graph::storage {
 		}
 
 		return allProperties;
+	}
+
+	std::unordered_map<std::string, PropertyValue> DataManager::getNodePropertiesFromMap(
+		const Node &node, const std::unordered_map<int64_t, Property> &propertyMap) {
+		if (node.getId() == 0 || !node.isActive())
+			return {};
+
+		auto allProperties = EntityPropertyTraits<Node>::getProperties(node);
+
+		if (EntityPropertyTraits<Node>::hasPropertyEntity(node)) {
+			auto storageType = EntityPropertyTraits<Node>::getPropertyStorageType(node);
+			auto propertyEntityId = EntityPropertyTraits<Node>::getPropertyEntityId(node);
+
+			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+				auto it = propertyMap.find(propertyEntityId);
+				if (it != propertyMap.end() && it->second.getId() != 0) {
+					for (const auto &[key, value] : it->second.getPropertyValues()) {
+						allProperties[key] = value;
+					}
+				}
+			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+				auto blobProperties = propertyManager_->getPropertiesFromBlob(propertyEntityId);
+				for (const auto &[key, value] : blobProperties) {
+					allProperties[key] = value;
+				}
+			}
+		}
+
+		return allProperties;
+	}
+
+	std::unordered_map<int64_t, Property> DataManager::bulkLoadPropertyEntities(
+		const std::vector<int64_t> &ids, concurrent::ThreadPool *pool) const {
+		std::unordered_map<int64_t, Property> result;
+		if (ids.empty() || readFd_ < 0)
+			return result;
+
+		// Sort IDs and group by segment for sequential I/O
+		std::vector<int64_t> sortedIds(ids);
+		std::sort(sortedIds.begin(), sortedIds.end());
+
+		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+		constexpr size_t entitySize = Property::getTotalSize();
+
+		// Find relevant segments and their ID ranges
+		struct SegWork {
+			size_t segIdx;
+			size_t idBegin, idEnd; // indices into sortedIds
+		};
+		std::vector<SegWork> work;
+		for (size_t s = 0; s < segIndex.size(); ++s) {
+			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
+			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
+			if (lo != hi) {
+				work.push_back({s,
+					static_cast<size_t>(lo - sortedIds.begin()),
+					static_cast<size_t>(hi - sortedIds.begin())});
+			}
+		}
+
+		if (work.empty())
+			return result;
+
+		// Parallel path: each thread processes one segment
+		if (pool && !pool->isSingleThreaded() && work.size() > 1) {
+			std::vector<std::vector<std::pair<int64_t, Property>>> perSeg(work.size());
+
+			pool->parallelFor(0, work.size(), [&](size_t wi) {
+				const auto &w = work[wi];
+				const auto &seg = segIndex[w.segIdx];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0)
+					return;
+
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				ssize_t n = ::pread(readFd_, buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes))
+					return;
+
+				auto &local = perSeg[wi];
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					int64_t id = sortedIds[i];
+					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used)
+						continue;
+					Property prop = Property::deserializeFromBuffer(
+						buf.data() + slot * entitySize);
+					if (prop.isActive())
+						local.emplace_back(id, std::move(prop));
+				}
+			});
+
+			// Merge thread-local results
+			size_t totalCount = 0;
+			for (const auto &v : perSeg)
+				totalCount += v.size();
+			result.reserve(totalCount);
+			for (auto &v : perSeg) {
+				for (auto &[id, prop] : v)
+					result[id] = std::move(prop);
+			}
+		} else {
+			// Sequential path
+			result.reserve(ids.size());
+			for (const auto &w : work) {
+				const auto &seg = segIndex[w.segIdx];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0)
+					continue;
+
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				ssize_t n = ::pread(readFd_, buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes))
+					continue;
+
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					int64_t id = sortedIds[i];
+					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used)
+						continue;
+					Property prop = Property::deserializeFromBuffer(
+						buf.data() + slot * entitySize);
+					if (prop.isActive())
+						result[id] = std::move(prop);
+				}
+			}
+		}
+
+		return result;
 	}
 
 	// --- Edge Operations (delegate to EdgeManager) ---

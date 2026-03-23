@@ -174,19 +174,17 @@ namespace graph::query::execution::operators {
 					candidateIds_.begin() + batchEnd);
 			}
 
-			// Parallel phase: each thread processes a chunk of segments.
-			// Per segment: one pread to load all entities, then filter + load properties.
-			// This minimizes syscalls (one per segment instead of one per entity).
+			// ── Phase 1: Parallel bulk-read Node segments + collect property IDs ──
 			size_t numSegs = relevantSegIdxs.size();
-			std::vector<RecordBatch> threadBatches(numSegs);
+			std::vector<std::vector<Node>> segNodes(numSegs);
+			std::vector<std::vector<int64_t>> segPropIds(numSegs);
 
 			threadPool_->parallelFor(0, numSegs, [&](size_t si) {
 				const auto &seg = segIndex[relevantSegIdxs[si]];
-				auto header = dm_->getSegmentTracker()->getSegmentHeader(seg.segmentOffset);
+				auto header = dm_->getSegmentTracker()->getSegmentHeaderCopy(seg.segmentOffset);
 				if (header.used == 0)
 					return;
 
-				// One pread for the entire segment data area
 				constexpr size_t entitySize = Node::getTotalSize();
 				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 				std::vector<char> buf(dataBytes);
@@ -195,34 +193,49 @@ namespace graph::query::execution::operators {
 				if (n < static_cast<ssize_t>(dataBytes))
 					return;
 
-				RecordBatch &localBatch = threadBatches[si];
+				auto &localNodes = segNodes[si];
+				auto &localPropIds = segPropIds[si];
 
 				for (uint32_t i = 0; i < header.used; ++i) {
 					int64_t entityId = header.start_id + i;
 					if (entityId < startId || entityId > endId)
 						continue;
-
-					// For index-based scans, check membership
 					if (!candidateSet.empty() && !candidateSet.count(entityId))
 						continue;
 
-					// Deserialize from buffer (no syscall)
-					// Use a stack-local membuf to avoid allocation
-					char *entPtr = buf.data() + i * entitySize;
-					struct membuf : std::streambuf {
-						membuf(char *p, size_t s) { setg(p, p, p + s); }
-					} mb(entPtr, entitySize);
-					std::istream stream(&mb);
-					Node node = Node::deserialize(stream);
+					Node node = Node::deserializeFromBuffer(buf.data() + i * entitySize);
 
 					if (!node.isActive())
 						continue;
-
 					if (!config_.label.empty() && node.getLabelId() != targetLabelId_)
 						continue;
 
-					// Load properties (pread per property entity — still needed)
-					auto props = dm_->getNodePropertiesDirect(node);
+					// Collect property entity IDs for bulk loading
+					if (node.hasPropertyEntity() &&
+						node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
+						localPropIds.push_back(node.getPropertyEntityId());
+					}
+
+					localNodes.push_back(std::move(node));
+				}
+			});
+
+			// ── Phase 2: Bulk-load all needed Property entities (segment-sequential) ──
+			std::vector<int64_t> allPropIds;
+			for (const auto &pids : segPropIds) {
+				allPropIds.insert(allPropIds.end(), pids.begin(), pids.end());
+			}
+			auto propertyMap = dm_->bulkLoadPropertyEntities(allPropIds, threadPool_);
+
+			// ── Phase 3: Parallel property assignment + Record creation ──
+			std::vector<RecordBatch> threadBatches(numSegs);
+
+			threadPool_->parallelFor(0, numSegs, [&](size_t si) {
+				RecordBatch &localBatch = threadBatches[si];
+				localBatch.reserve(segNodes[si].size());
+
+				for (auto &node : segNodes[si]) {
+					auto props = dm_->getNodePropertiesFromMap(node, propertyMap);
 					node.setProperties(std::move(props));
 
 					Record r;

@@ -21,6 +21,7 @@
 #include "graph/query/execution/operators/SortOperator.hpp"
 #include <algorithm>
 #include <string>
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 
@@ -93,9 +94,8 @@ std::string SortOperator::toString() const {
 }
 
 void SortOperator::performSort() {
-	std::sort(sortedRecords_.begin(), sortedRecords_.end(), [this](const Record &a, const Record &b) -> bool {
+	auto comparator = [this](const Record &a, const Record &b) -> bool {
 		for (const auto &item: sortItems_) {
-			// Evaluate expressions to get comparison values
 			PropertyValue valA, valB;
 
 			if (item.expression) {
@@ -114,10 +114,67 @@ void SortOperator::performSort() {
 				else
 					return valA > valB;
 			}
-			// If equal, continue to next sort key
 		}
-		return false; // Strictly equal
+		return false;
+	};
+
+	static constexpr size_t PARALLEL_SORT_THRESHOLD = 8192;
+
+	if (!threadPool_ || threadPool_->isSingleThreaded() ||
+		sortedRecords_.size() < PARALLEL_SORT_THRESHOLD) {
+		// Sequential sort for small datasets
+		std::sort(sortedRecords_.begin(), sortedRecords_.end(), comparator);
+		return;
+	}
+
+	// Parallel sort: split into chunks, sort each in parallel, then k-way merge
+	size_t numChunks = threadPool_->getThreadCount();
+	size_t total = sortedRecords_.size();
+	size_t chunkSize = total / numChunks;
+	size_t remainder = total % numChunks;
+
+	// Phase 1: Parallel sort of chunks
+	struct ChunkRange {
+		size_t begin, end;
+	};
+	std::vector<ChunkRange> chunks;
+	chunks.reserve(numChunks);
+	size_t pos = 0;
+	for (size_t c = 0; c < numChunks; ++c) {
+		size_t sz = chunkSize + (c < remainder ? 1 : 0);
+		chunks.push_back({pos, pos + sz});
+		pos += sz;
+	}
+
+	threadPool_->parallelFor(0, numChunks, [&](size_t c) {
+		std::sort(sortedRecords_.begin() + chunks[c].begin,
+				  sortedRecords_.begin() + chunks[c].end, comparator);
 	});
+
+	// Phase 2: Sequential k-way merge (merge pairs bottom-up)
+	// This is an iterative merge: merge adjacent sorted chunks pairwise
+	size_t step = 1;
+	while (step < numChunks) {
+		size_t numPairs = (numChunks + 2 * step - 1) / (2 * step);
+		// Parallel merge of independent pairs
+		threadPool_->parallelFor(0, numPairs, [&](size_t p) {
+			size_t left = p * 2 * step;
+			size_t right = left + step;
+			if (right >= numChunks)
+				return;
+
+			size_t mergeBegin = chunks[left].begin;
+			size_t mergeMid = chunks[right].begin;
+			size_t mergeEnd = std::min(right + step, numChunks) <= numChunks
+								 ? chunks[std::min(right + step, numChunks) - 1].end
+								 : chunks[numChunks - 1].end;
+
+			std::inplace_merge(sortedRecords_.begin() + mergeBegin,
+							   sortedRecords_.begin() + mergeMid,
+							   sortedRecords_.begin() + mergeEnd, comparator);
+		});
+		step *= 2;
+	}
 }
 
 } // namespace graph::query::execution::operators

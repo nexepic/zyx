@@ -44,6 +44,10 @@ namespace graph {
 	class StateChainManager;
 } // namespace graph
 
+namespace graph::concurrent {
+	class ThreadPool;
+}
+
 namespace graph::traversal {
 	class RelationshipTraversal;
 }
@@ -128,6 +132,13 @@ namespace graph::storage {
 		// Lock-free property loading for parallel scans. Accepts an already-loaded node
 		// to avoid redundant reads, and uses loadEntityDirect for Property entities.
 		std::unordered_map<std::string, PropertyValue> getNodePropertiesDirect(const Node &node);
+		// Resolve node properties using a pre-loaded property map (avoids per-entity pread).
+		// Falls back to getNodePropertiesDirect for blob-stored properties.
+		std::unordered_map<std::string, PropertyValue> getNodePropertiesFromMap(
+			const Node &node, const std::unordered_map<int64_t, Property> &propertyMap);
+		// Bulk-load Property entities by a set of IDs using parallel segment pread.
+		std::unordered_map<int64_t, Property> bulkLoadPropertyEntities(
+			const std::vector<int64_t> &ids, concurrent::ThreadPool *pool = nullptr) const;
 		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeNodeProperty(int64_t nodeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;

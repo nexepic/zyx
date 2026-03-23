@@ -96,6 +96,9 @@ namespace graph {
 		// Serialization
 		void serialize(std::ostream &os) const;
 		static Node deserialize(std::istream &is);
+		// Zero-copy deserialization from raw memory buffer (no istream overhead).
+		// Buffer must point to at least METADATA_SIZE bytes.
+		static Node deserializeFromBuffer(const char *buf);
 
 	private:
 		// Fixed-size metadata structure

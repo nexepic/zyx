@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include "VectorIndexConfig.hpp"
 #include "graph/core/IndexTreeManager.hpp"
 #include "graph/storage/CacheManager.hpp"
@@ -92,7 +93,7 @@ namespace graph::vector {
 		VectorIndexConfig config_;
 		std::shared_ptr<query::indexes::IndexTreeManager> mappingTree_;
 
-		mutable std::mutex cacheMutex_;
+		mutable std::shared_mutex cacheMutex_;
 		storage::LRUCache<int64_t, VectorBlobPtrs> mappingCache_;
 
 		void loadConfig();

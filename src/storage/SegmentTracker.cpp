@@ -144,13 +144,34 @@ namespace graph::storage {
 	}
 
 	SegmentHeader &SegmentTracker::getSegmentHeader(uint64_t offset) {
-		// std::lock_guard<std::recursive_mutex> lock(mutex_);
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(offset);
 		auto it = segments_.find(offset);
 		if (it == segments_.end()) {
 			throw std::runtime_error("Segment not found at offset " + std::to_string(offset));
 		}
 		return it->second;
+	}
+
+	SegmentHeader SegmentTracker::getSegmentHeaderCopy(uint64_t offset) const {
+		// Fast path: shared_lock allows concurrent readers
+		{
+			std::shared_lock<std::shared_mutex> lock(rwMutex_);
+			auto it = segments_.find(offset);
+			if (it != segments_.end())
+				return it->second;
+		}
+		// Slow path: segment not cached (should be rare after initialization)
+		// Fall back to pread the header directly without caching
+		if (readFd_ >= 0) {
+			SegmentHeader header;
+			ssize_t n = ::pread(readFd_, &header, sizeof(SegmentHeader), static_cast<off_t>(offset));
+			if (n >= static_cast<ssize_t>(sizeof(SegmentHeader))) {
+				header.file_offset = offset;
+				return header;
+			}
+		}
+		throw std::runtime_error("Segment not found at offset " + std::to_string(offset));
 	}
 
 	std::vector<SegmentHeader> SegmentTracker::getSegmentsByType(uint32_t type) const {

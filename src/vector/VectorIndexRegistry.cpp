@@ -102,7 +102,7 @@ namespace graph::vector {
 
 	VectorBlobPtrs VectorIndexRegistry::getBlobPtrs(int64_t nodeId) {
 		{
-			std::lock_guard<std::mutex> lock(cacheMutex_);
+			std::shared_lock lock(cacheMutex_);
 			if (mappingCache_.contains(nodeId))
 				return mappingCache_.get(nodeId);
 		}
@@ -119,7 +119,7 @@ namespace graph::vector {
 		std::memcpy(&ptrs, data.data(), sizeof(VectorBlobPtrs));
 
 		{
-			std::lock_guard<std::mutex> lock(cacheMutex_);
+			std::unique_lock lock(cacheMutex_);
 			mappingCache_.put(nodeId, ptrs);
 		}
 		return ptrs;
@@ -146,7 +146,7 @@ namespace graph::vector {
 		}
 
 		{
-			std::lock_guard<std::mutex> lock(cacheMutex_);
+			std::unique_lock lock(cacheMutex_);
 			mappingCache_.put(nodeId, ptrs);
 		}
 	}

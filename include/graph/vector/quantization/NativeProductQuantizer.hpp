@@ -45,7 +45,10 @@ namespace graph::vector {
 
 			codebooks_.resize(numSubspaces_);
 
-			auto trainSubspace = [&](size_t m) {
+			// When parallelizing across subspaces, each KMeans runs sequentially
+			// (passing pool to KMeans from inside parallelFor would cause deadlock).
+			// When running subspaces sequentially, pass pool to KMeans for inner parallelism.
+			auto trainSubspace = [&](size_t m, concurrent::ThreadPool *kmeansPool) {
 				std::vector<std::vector<float>> subData;
 				subData.reserve(trainingData.size());
 
@@ -64,14 +67,18 @@ namespace graph::vector {
 					subData.push_back(std::move(sub));
 				}
 
-				codebooks_[m] = KMeans::run(subData, numCentroids_);
+				codebooks_[m] = KMeans::run(subData, numCentroids_, 15, kmeansPool);
 			};
 
 			if (pool && !pool->isSingleThreaded()) {
-				pool->parallelFor(0, numSubspaces_, trainSubspace);
+				// Outer parallelism across subspaces; KMeans runs sequentially per subspace
+				pool->parallelFor(0, numSubspaces_, [&](size_t m) {
+					trainSubspace(m, nullptr);
+				});
 			} else {
+				// Sequential subspaces; each KMeans gets the pool for inner parallelism
 				for (size_t m = 0; m < numSubspaces_; ++m)
-					trainSubspace(m);
+					trainSubspace(m, pool);
 			}
 			isTrained_ = true;
 		}
@@ -103,7 +110,9 @@ namespace graph::vector {
 				codes[m] = best_idx;
 			};
 
-			if (pool && !pool->isSingleThreaded()) {
+			// Only parallelize for high subspace counts; for <=32 subspaces
+			// thread dispatch overhead exceeds the compute savings
+			if (pool && !pool->isSingleThreaded() && numSubspaces_ > 32) {
 				pool->parallelFor(0, numSubspaces_, encodeSubspace);
 			} else {
 				for (size_t m = 0; m < numSubspaces_; ++m)
@@ -126,7 +135,7 @@ namespace graph::vector {
 				}
 			};
 
-			if (pool && !pool->isSingleThreaded()) {
+			if (pool && !pool->isSingleThreaded() && numSubspaces_ > 32) {
 				pool->parallelFor(0, numSubspaces_, computeSubspace);
 			} else {
 				for (size_t m = 0; m < numSubspaces_; ++m)

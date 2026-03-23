@@ -47,6 +47,9 @@ namespace graph::storage {
 		void markForCompaction(uint64_t offset, bool needsCompaction);
 
 		SegmentHeader &getSegmentHeader(uint64_t offset);
+		// Thread-safe read-only access for parallel scans. Returns a copy to avoid
+		// lifetime issues with references into the mutable segments_ map.
+		SegmentHeader getSegmentHeaderCopy(uint64_t offset) const;
 		std::vector<SegmentHeader> getSegmentsByType(uint32_t type) const;
 		std::vector<SegmentHeader> getSegmentsNeedingCompaction(uint32_t type, double threshold) const;
 		double calculateFragmentationRatio(uint32_t type) const;

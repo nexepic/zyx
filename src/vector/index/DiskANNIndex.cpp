@@ -261,17 +261,35 @@ namespace graph::vector {
 		auto candidates =
 				greedySearch(query, entryPoint, std::max(config_.beamWidth, static_cast<uint32_t>(k) * 2), pqTable);
 
-		// 2. Re-ranking (Always Exact) - parallelized
-		// Collect candidate IDs for parallel distance computation
+		// 2. Re-ranking: batch-load vectors first, then compute distances
 		std::vector<int64_t> candidateIds;
 		candidateIds.reserve(candidates.size());
 		for (auto &id : candidates | std::views::keys)
 			candidateIds.push_back(id);
 
+		// Phase A: Batch-load all raw vectors (sequential I/O, avoids lock contention)
+		std::vector<std::vector<float>> rawVectors(candidateIds.size());
+		for (size_t i = 0; i < candidateIds.size(); ++i) {
+			auto ptrs = registry_->getBlobPtrs(candidateIds[i]);
+			if (ptrs.rawBlob != 0) {
+				rawVectors[i] = toFloat(registry_->loadRawVector(ptrs.rawBlob));
+			}
+		}
+
+		// Phase B: Compute distances in parallel (pure compute, no I/O)
 		std::vector<std::pair<int64_t, float>> refined(candidateIds.size());
 
 		auto computeRank = [&](size_t i) {
-			float d = distRaw(query, candidateIds[i]);
+			if (rawVectors[i].empty()) {
+				refined[i] = {candidateIds[i], std::numeric_limits<float>::max()};
+				return;
+			}
+			float d;
+			if (config_.metric == "IP" || config_.metric == "Cosine") {
+				d = VectorMetric::computeIP(query.data(), rawVectors[i].data(), rawVectors[i].size());
+			} else {
+				d = VectorMetric::computeL2Sqr(query.data(), rawVectors[i].data(), rawVectors[i].size());
+			}
 			refined[i] = {candidateIds[i], d};
 		};
 
