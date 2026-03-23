@@ -28,6 +28,10 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/PropertyTypes.hpp"
 
+namespace graph::concurrent {
+	class ThreadPool;
+}
+
 namespace graph::storage {
 	class DataManager;
 	namespace state {
@@ -84,6 +88,8 @@ namespace graph::query::indexes {
 		 */
 		bool hasIndex(const std::string &name);
 
+		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
 		std::shared_ptr<storage::state::SystemStateManager> stateManager_;
@@ -94,6 +100,7 @@ namespace graph::query::indexes {
 
 		std::unordered_map<std::string, std::string> indexMap_;
 		bool indexMapLoaded_ = false;
+		concurrent::ThreadPool *threadPool_ = nullptr;
 
 		void loadIndexMap();
 	};

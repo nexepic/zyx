@@ -26,6 +26,10 @@
 #include <unordered_set>
 #include <vector>
 
+namespace graph::concurrent {
+	class ThreadPool;
+}
+
 namespace graph::vector {
 	class NativeProductQuantizer;
 	class VectorIndexRegistry;
@@ -60,10 +64,14 @@ namespace graph::vector {
 		// Sampling for training
 		std::vector<std::vector<float>> sampleVectors(size_t n) const;
 
+		// Thread pool for parallel operations
+		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+
 	private:
 		std::shared_ptr<VectorIndexRegistry> registry_;
 		DiskANNConfig config_;
 		std::unique_ptr<NativeProductQuantizer> quantizer_;
+		concurrent::ThreadPool *threadPool_ = nullptr;
 
 		// Cache node count to avoid expensive B-Tree scans
 		mutable size_t cachedCount_ = 0;

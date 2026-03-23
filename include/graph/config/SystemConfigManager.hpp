@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include "graph/storage/FileStorage.hpp"
@@ -53,6 +54,12 @@ namespace graph::config {
 
 		void onStateUpdated(const State &oldState, const State &newState) override;
 
+		/**
+		 * @brief Reads the configured thread pool size from state.
+		 * @return Thread pool size (0 = auto, 1 = single-threaded, >1 = N threads)
+		 */
+		[[nodiscard]] size_t getThreadPoolSize() const;
+
 	private:
 		std::weak_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;
@@ -60,7 +67,6 @@ namespace graph::config {
 		// --- Specific Applicators ---
 		void applyLogLevel() const;
 		void applyCompaction() const;
-		// void applyMemoryLimit(); // Future extension
 	};
 
 } // namespace graph::config

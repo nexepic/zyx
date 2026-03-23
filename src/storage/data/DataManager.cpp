@@ -19,7 +19,10 @@
  **/
 
 #include "graph/storage/data/DataManager.hpp"
+#include <fcntl.h>
 #include <map>
+#include <sstream>
+#include <unistd.h>
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
@@ -46,11 +49,23 @@ namespace graph::storage {
 
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
-							 std::shared_ptr<SpaceManager> spaceManager) :
+							 std::shared_ptr<SpaceManager> spaceManager,
+							 const std::string &filePath) :
 		file_(std::move(file)), fileHeader_(fileHeader), nodeCache_(cacheSize), edgeCache_(cacheSize),
 		propertyCache_(cacheSize * 2), blobCache_(cacheSize / 4), indexCache_(cacheSize), stateCache_(cacheSize),
 		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)),
 		spaceManager_(std::move(spaceManager)) {
+
+		// Open a read-only file descriptor for pread()-based parallel reads.
+		// pread() is atomic (no seek+read race) so multiple threads can call it
+		// concurrently on the same fd without any synchronization.
+		if (!filePath.empty()) {
+			readFd_ = ::open(filePath.c_str(), O_RDONLY);
+			// Share the fd with SegmentTracker so its ensureSegmentCached() is also lock-free
+			if (readFd_ >= 0) {
+				segmentTracker_->setReadFd(readFd_);
+			}
+		}
 
 		persistenceManager_ = std::make_shared<PersistenceManager>();
 		segmentIndexManager_ = std::make_shared<SegmentIndexManager>(segmentTracker_);
@@ -58,8 +73,26 @@ namespace graph::storage {
 	}
 
 	DataManager::~DataManager() {
-		// File is managed by FileStorage through shared_ptr, no need to close here
+		if (readFd_ >= 0) {
+			::close(readFd_);
+			readFd_ = -1;
+		}
 	}
+
+	ssize_t DataManager::preadBytes(void *buf, size_t count, off_t offset) const {
+		if (readFd_ < 0)
+			return -1;
+		return ::pread(readFd_, buf, count, offset);
+	}
+
+	// Helper streambuf that wraps an existing memory buffer for zero-copy deserialization.
+	// This lets us pread() into a stack buffer, then deserialize via the existing istream API.
+	namespace {
+		class membuf : public std::streambuf {
+		public:
+			membuf(char *base, size_t size) { this->setg(base, base, base + size); }
+		};
+	} // namespace
 
 	void DataManager::initialize() {
 		// Initialize low-level components
@@ -364,6 +397,37 @@ namespace graph::storage {
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) const {
 		return nodeManager_->getProperties(nodeId);
+	}
+
+	std::unordered_map<std::string, PropertyValue> DataManager::getNodePropertiesDirect(const Node &node) {
+		if (node.getId() == 0 || !node.isActive())
+			return {};
+
+		// Start with inline properties (no I/O needed)
+		auto allProperties = EntityPropertyTraits<Node>::getProperties(node);
+
+		// Load external properties via direct disk read (bypasses cache)
+		if (EntityPropertyTraits<Node>::hasPropertyEntity(node)) {
+			auto storageType = EntityPropertyTraits<Node>::getPropertyStorageType(node);
+			auto propertyEntityId = EntityPropertyTraits<Node>::getPropertyEntityId(node);
+
+			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+				Property property = loadEntityDirect<Property>(propertyEntityId);
+				if (property.getId() != 0) {
+					for (const auto &[key, value] : property.getPropertyValues()) {
+						allProperties[key] = value;
+					}
+				}
+			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+				// Blob chain reads are more complex; fall back to regular path
+				auto blobProperties = propertyManager_->getPropertiesFromBlob(propertyEntityId);
+				for (const auto &[key, value] : blobProperties) {
+					allProperties[key] = value;
+				}
+			}
+		}
+
+		return allProperties;
 	}
 
 	// --- Edge Operations (delegate to EdgeManager) ---
@@ -704,12 +768,26 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::optional<EntityType> DataManager::readEntityFromDisk(const int64_t fileOffset) const {
-		file_->seekg(fileOffset);
-		EntityType entity = EntityType::deserialize(*file_);
+		EntityType entity;
 
-		// Check if the entity is marked as inactive
+		if (readFd_ >= 0) {
+			// Thread-safe path: pread() is atomic and needs no synchronization
+			constexpr size_t entitySize = EntityType::getTotalSize();
+			char buf[entitySize];
+			ssize_t n = ::pread(readFd_, buf, entitySize, fileOffset);
+			if (n < static_cast<ssize_t>(entitySize))
+				return std::nullopt;
+			membuf mb(buf, entitySize);
+			std::istream stream(&mb);
+			entity = EntityType::deserialize(stream);
+		} else {
+			// Legacy path: requires external synchronization
+			file_->seekg(fileOffset);
+			entity = EntityType::deserialize(*file_);
+		}
+
 		if (!entity.isActive()) {
-			return std::nullopt; // Return empty optional if marked as inactive
+			return std::nullopt;
 		}
 
 		return entity;
@@ -733,14 +811,20 @@ namespace graph::storage {
 			return std::nullopt; // ID is out of range for this segment
 		}
 
-		// Check if the entity is active
-		if (!segmentTracker_->isEntityActive(segmentOffset, relativePosition)) {
-			return std::nullopt; // Entity is marked as inactive
-		}
-
 		// Calculate file offset for this entity
 		auto entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) +
 														relativePosition * EntityType::getTotalSize());
+
+		if (readFd_ >= 0) {
+			// pread path: skip bitmap check — readEntityFromDisk checks isActive() on the
+			// deserialized entity itself. This avoids a shared_lock on SegmentTracker per read.
+			return readEntityFromDisk<EntityType>(entityOffset);
+		}
+
+		// fstream path: use bitmap to avoid unnecessary disk seek
+		if (!segmentTracker_->isEntityActive(segmentOffset, relativePosition)) {
+			return std::nullopt;
+		}
 
 		return readEntityFromDisk<EntityType>(entityOffset);
 	}
@@ -771,7 +855,7 @@ namespace graph::storage {
 		// Reserve space for the maximum possible entities
 		result.reserve(count);
 
-		// Seek to the first entity
+		// Calculate starting file offset
 		auto entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) +
 														startOffset * EntityType::getTotalSize());
 
@@ -783,10 +867,20 @@ namespace graph::storage {
 					result.push_back(entityOpt.value());
 				}
 			} else {
-				// If we're not filtering deleted entities, read directly
-				file_->seekg(entityOffset);
-				EntityType entity = EntityType::deserialize(*file_);
-				result.push_back(entity);
+				if (readFd_ >= 0) {
+					constexpr size_t entitySize = EntityType::getTotalSize();
+					char buf[entitySize];
+					ssize_t n = ::pread(readFd_, buf, entitySize, entityOffset);
+					if (n >= static_cast<ssize_t>(entitySize)) {
+						membuf mb(buf, entitySize);
+						std::istream stream(&mb);
+						result.push_back(EntityType::deserialize(stream));
+					}
+				} else {
+					file_->seekg(entityOffset);
+					EntityType entity = EntityType::deserialize(*file_);
+					result.push_back(entity);
+				}
 			}
 
 			// Move to next entity
@@ -883,25 +977,109 @@ namespace graph::storage {
 			}
 		}
 
-		// 2. Check Cache
+		// 2. Check Cache (use peek() — shared read lock, no LRU mutation)
+		// This avoids exclusive lock contention during parallel scans.
 		auto &cache = EntityTraits<EntityType>::getCache(this);
-		if (cache.contains(id)) {
-			EntityType entity = cache.get(id);
-			if (!entity.isActive()) {
-				return make_inactive<EntityType>();
+		{
+			EntityType entity = cache.peek(id);
+			if (entity.getId() != 0) {
+				if (!entity.isActive())
+					return make_inactive<EntityType>();
+				return entity;
 			}
-			return entity;
 		}
 
 		// 3. Load from Disk
+		// When pread is available, reads are thread-safe without locking.
+		// Otherwise falls back to fstream (must be single-threaded).
 		EntityType entity = EntityTraits<EntityType>::loadFromDisk(this, id);
 		if (entity.getId() != 0 && entity.isActive()) {
-			cache.put(id, entity);
+			// Use tryPut to avoid blocking on cache lock during parallel scans.
+			// If another thread holds the lock, we skip caching — the entity
+			// will be re-read from disk next time (still fast via pread).
+			cache.tryPut(id, entity);
 			return entity;
 		}
 
 		return make_inactive<EntityType>();
 	}
+
+	template<typename EntityType>
+	EntityType DataManager::loadEntityDirect(int64_t id) {
+		// 1. Check dirty info (uncommitted changes must be visible)
+		auto dirtyInfo = getDirtyInfo<EntityType>(id);
+		if (dirtyInfo.has_value()) {
+			if (dirtyInfo->changeType == EntityChangeType::CHANGE_DELETED)
+				return make_inactive<EntityType>();
+			if (dirtyInfo->backup.has_value())
+				return *dirtyInfo->backup;
+		}
+
+		// 2. Read directly from disk via pread (no cache, no locks)
+		return EntityTraits<EntityType>::loadFromDisk(this, id);
+	}
+
+	// Explicit instantiations for loadEntityDirect
+	template Node DataManager::loadEntityDirect<Node>(int64_t);
+	template Edge DataManager::loadEntityDirect<Edge>(int64_t);
+	template Property DataManager::loadEntityDirect<Property>(int64_t);
+	template Blob DataManager::loadEntityDirect<Blob>(int64_t);
+	template Index DataManager::loadEntityDirect<Index>(int64_t);
+	template State DataManager::loadEntityDirect<State>(int64_t);
+
+	template<typename EntityType>
+	std::vector<EntityType> DataManager::bulkLoadEntities(int64_t filterStartId, int64_t filterEndId) const {
+		if (readFd_ < 0)
+			return {}; // Requires pread support
+
+		// Get sorted segment list for this entity type
+		const auto &segIndex = EntityTraits<EntityType>::getSegmentIndex(this);
+		constexpr size_t entitySize = EntityType::getTotalSize();
+
+		std::vector<EntityType> result;
+		result.reserve(segIndex.size() * 4); // Rough estimate
+
+		for (const auto &seg : segIndex) {
+			// Skip segments entirely outside the ID range
+			if (seg.endId < filterStartId || seg.startId > filterEndId)
+				continue;
+
+			// Get segment header (cached in memory, no lock needed)
+			SegmentHeader header = segmentTracker_->getSegmentHeader(seg.segmentOffset);
+			if (header.used == 0)
+				continue;
+
+			// Read entire segment data area in one pread syscall
+			size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+			std::vector<char> buf(dataBytes);
+			auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
+			ssize_t n = ::pread(readFd_, buf.data(), dataBytes, dataOffset);
+			if (n < static_cast<ssize_t>(dataBytes))
+				continue;
+
+			// Deserialize all entities from the buffer
+			for (uint32_t i = 0; i < header.used; ++i) {
+				int64_t entityId = header.start_id + i;
+				if (entityId < filterStartId || entityId > filterEndId)
+					continue;
+
+				membuf mb(buf.data() + i * entitySize, entitySize);
+				std::istream stream(&mb);
+				EntityType entity = EntityType::deserialize(stream);
+
+				if (entity.isActive()) {
+					result.push_back(std::move(entity));
+				}
+			}
+		}
+
+		return result;
+	}
+
+	// Explicit instantiations for bulkLoadEntities
+	template std::vector<Node> DataManager::bulkLoadEntities<Node>(int64_t, int64_t) const;
+	template std::vector<Edge> DataManager::bulkLoadEntities<Edge>(int64_t, int64_t) const;
+	template std::vector<Property> DataManager::bulkLoadEntities<Property>(int64_t, int64_t) const;
 
 	// --- Loading Entities from Disk ---
 

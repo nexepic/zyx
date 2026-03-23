@@ -20,8 +20,10 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/config/SystemConfigManager.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/core/TransactionManager.hpp"
@@ -55,6 +57,12 @@ namespace graph {
 		// Check if there is an active transaction
 		[[nodiscard]] bool hasActiveTransaction() const;
 
+		// Access to thread pool for parallel operations
+		[[nodiscard]] std::shared_ptr<concurrent::ThreadPool> getThreadPool() const { return threadPool_; }
+
+		// Resize the thread pool at runtime
+		void setThreadPoolSize(size_t poolSize);
+
 	private:
 		std::shared_ptr<storage::FileStorage> storage;
 		std::shared_ptr<query::QueryEngine> queryEngine;
@@ -62,6 +70,7 @@ namespace graph {
 		std::shared_ptr<config::SystemConfigManager> configManager_;
 		std::shared_ptr<storage::wal::WALManager> walManager_;
 		std::unique_ptr<TransactionManager> transactionManager_;
+		std::shared_ptr<concurrent::ThreadPool> threadPool_;
 	};
 
 } // namespace graph

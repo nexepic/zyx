@@ -24,6 +24,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -97,12 +98,16 @@ namespace graph::storage {
 			segmentIndexManager_ = std::move(indexManager);
 		}
 
+		void setReadFd(int fd) { readFd_ = fd; }
+
 		// get segment type registry
 		SegmentTypeRegistry getSegmentTypeRegistry() const { return registry_; }
 
 	private:
 		std::shared_ptr<std::fstream> file_;
-		mutable std::recursive_mutex mutex_;
+		int readFd_ = -1; // pread fd for thread-safe reads (not owned, do not close)
+		mutable std::shared_mutex rwMutex_;    // Read-write lock for concurrent read access
+		mutable std::recursive_mutex mutex_;   // Legacy exclusive lock for write operations
 
 		// Segment cache - stores actual segment headers
 		std::unordered_map<uint64_t, SegmentHeader> segments_;

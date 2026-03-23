@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -27,6 +28,7 @@
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -44,9 +46,58 @@ namespace graph::query::execution::operators {
 		FilterOperator(std::unique_ptr<PhysicalOperator> child, Predicate predicate, std::string predicateStr) :
 			child_(std::move(child)), predicate_(std::move(predicate)), predicateStr_(std::move(predicateStr)) {}
 
-		void open() override;
-		std::optional<RecordBatch> next() override;
-		void close() override;
+		void open() override {
+			if (child_)
+				child_->open();
+		}
+
+		std::optional<RecordBatch> next() override {
+			static constexpr size_t PARALLEL_FILTER_THRESHOLD = 4096;
+
+			while (true) {
+				auto batchOpt = child_->next();
+				if (!batchOpt)
+					return std::nullopt;
+
+				RecordBatch &inputBatch = *batchOpt;
+
+				if (threadPool_ && !threadPool_->isSingleThreaded() &&
+					inputBatch.size() >= PARALLEL_FILTER_THRESHOLD) {
+					// Parallel predicate evaluation
+					std::vector<bool> mask(inputBatch.size());
+					threadPool_->parallelFor(0, inputBatch.size(), [&](size_t i) {
+						mask[i] = predicate_(inputBatch[i]);
+					});
+
+					RecordBatch outputBatch;
+					outputBatch.reserve(inputBatch.size());
+					for (size_t i = 0; i < inputBatch.size(); ++i) {
+						if (mask[i])
+							outputBatch.push_back(std::move(inputBatch[i]));
+					}
+
+					if (!outputBatch.empty())
+						return outputBatch;
+				} else {
+					// Sequential path
+					RecordBatch outputBatch;
+					outputBatch.reserve(inputBatch.size());
+
+					for (auto &record : inputBatch) {
+						if (predicate_(record))
+							outputBatch.push_back(std::move(record));
+					}
+
+					if (!outputBatch.empty())
+						return outputBatch;
+				}
+			}
+		}
+
+		void close() override {
+			if (child_)
+				child_->close();
+		}
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			return child_ ? child_->getOutputVariables() : std::vector<std::string>{};

@@ -22,6 +22,7 @@
 #include <atomic>
 #include <string>
 #include <unordered_map>
+#include "graph/concurrent/ThreadPool.hpp"
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
 #include "FileHeaderManager.hpp"
@@ -94,6 +95,8 @@ namespace graph::storage {
 
 		bool isCompactionEnabled() const { return compactionEnabled_.load(); }
 
+		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+
 	private:
 		std::string dbFilePath;
 		std::unordered_map<uint64_t, Node> nodes;
@@ -150,5 +153,6 @@ namespace graph::storage {
 		std::atomic<bool> deleteOperationPerformed{false};
 
 		std::atomic<bool> compactionEnabled_{false};
+		concurrent::ThreadPool *threadPool_ = nullptr;
 	};
 } // namespace graph::storage

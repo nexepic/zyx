@@ -25,6 +25,10 @@
 #include <vector>
 #include "Record.hpp"
 
+namespace graph::concurrent {
+	class ThreadPool;
+}
+
 namespace graph::query::execution {
 
 	class PhysicalOperator {
@@ -68,6 +72,16 @@ namespace graph::query::execution {
 		 * Default implementation returns empty (leaf node).
 		 */
 		[[nodiscard]] virtual std::vector<const PhysicalOperator *> getChildren() const { return {}; }
+
+		/**
+		 * @brief Sets the thread pool for parallel execution within operators.
+		 * Propagated to child operators automatically.
+		 */
+		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+		[[nodiscard]] concurrent::ThreadPool *getThreadPool() const { return threadPool_; }
+
+	protected:
+		concurrent::ThreadPool *threadPool_ = nullptr;
 	};
 
 } // namespace graph::query::execution

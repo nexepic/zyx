@@ -24,6 +24,7 @@
 #include <string>
 #include "QueryBuilder.hpp"
 #include "QueryResult.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/execution/QueryExecutor.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "query/parser/common/IQueryParser.hpp"
@@ -51,6 +52,8 @@ namespace graph::query {
 
 		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return indexManager_; }
 
+		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<indexes::IndexManager> indexManager_;
@@ -58,7 +61,11 @@ namespace graph::query {
 		std::unique_ptr<QueryExecutor> queryExecutor_;
 
 		std::unordered_map<Language, std::shared_ptr<parser::IQueryParser>> parsers_;
+		concurrent::ThreadPool *threadPool_ = nullptr;
+
 		std::shared_ptr<parser::IQueryParser> getParser(Language lang);
+
+		static void propagateThreadPool(execution::PhysicalOperator *op, concurrent::ThreadPool *pool);
 	};
 
 } // namespace graph::query

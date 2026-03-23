@@ -24,6 +24,7 @@
 #include <functional>
 #include <iostream>
 #include <stdexcept>
+#include <unistd.h>
 #include <vector>
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTypeRegistry.hpp"
@@ -293,6 +294,7 @@ namespace graph::storage {
 	}
 
 	void SegmentTracker::setBitmapBit(uint64_t offset, uint32_t index, bool value) {
+		std::unique_lock<std::shared_mutex> rwLock(rwMutex_); // Block concurrent readers
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(offset);
 		SegmentHeader &header = segments_[offset];
@@ -312,7 +314,7 @@ namespace graph::storage {
 	}
 
 	bool SegmentTracker::getBitmapBit(uint64_t offset, uint32_t index) const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		std::shared_lock<std::shared_mutex> lock(rwMutex_); // Read lock — multiple threads can read concurrently
 		auto it = segments_.find(offset);
 		if (it != segments_.end()) {
 			return bitmap::getBit(it->second.activity_bitmap, index);
@@ -360,7 +362,7 @@ namespace graph::storage {
 	bool SegmentTracker::isEntityActive(uint64_t offset, uint32_t index) const { return getBitmapBit(offset, index); }
 
 	uint32_t SegmentTracker::countActiveEntities(uint64_t offset) const {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		std::shared_lock<std::shared_mutex> lock(rwMutex_);
 		auto it = segments_.find(offset);
 		if (it == segments_.end())
 			throw std::runtime_error("Segment not found");
@@ -379,9 +381,7 @@ namespace graph::storage {
 	// OPTIMIZED LOOKUP: Uses SegmentIndexManager for O(log N) performance
 	// =========================================================================
 	uint64_t SegmentTracker::getSegmentOffsetForEntityId(EntityType type, int64_t entityId) {
-		std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-		// 1. Fast Path: Use Index Manager
+		// 1. Fast Path: Use Index Manager (its own shared_lock protects the index)
 		if (auto indexMgr = segmentIndexManager_.lock()) {
 			uint64_t offset = indexMgr->findSegmentForId(static_cast<uint32_t>(type), entityId);
 			if (offset != 0) {
@@ -390,6 +390,7 @@ namespace graph::storage {
 		}
 
 		// 2. Slow Path: Linear Scan (Fallback if index is not ready)
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		uint64_t offset = registry_.getChainHead(type);
 		while (offset != 0) {
 			SegmentHeader &header = getSegmentHeader(offset);
@@ -424,9 +425,16 @@ namespace graph::storage {
 	void SegmentTracker::ensureSegmentCached(uint64_t offset) {
 		if (!segments_.contains(offset)) {
 			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(offset));
-			if (!file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader))) {
-				throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
+			if (readFd_ >= 0) {
+				ssize_t n = ::pread(readFd_, &header, sizeof(SegmentHeader), static_cast<off_t>(offset));
+				if (n < static_cast<ssize_t>(sizeof(SegmentHeader))) {
+					throw std::runtime_error("Failed to pread segment header at offset " + std::to_string(offset));
+				}
+			} else {
+				file_->seekg(static_cast<std::streamoff>(offset));
+				if (!file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader))) {
+					throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
+				}
 			}
 			header.file_offset = offset;
 			header.needs_compaction = 0;

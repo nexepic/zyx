@@ -20,6 +20,8 @@
 
 #include "graph/core/Database.hpp"
 #include <filesystem>
+#include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/VectorIndexManager.hpp"
 
 namespace graph {
 
@@ -43,7 +45,21 @@ namespace graph {
 		configManager_ = std::make_shared<config::SystemConfigManager>(storage->getSystemStateManager(), storage);
 		configManager_->loadAndApplyAll();
 		storage->getDataManager()->registerObserver(configManager_);
+
+		// Initialize thread pool from configuration
+		size_t poolSize = configManager_->getThreadPoolSize();
+		threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
+
+		// Wire thread pool to storage layer
+		storage->setThreadPool(threadPool_.get());
+
 		queryEngine = std::make_shared<query::QueryEngine>(storage);
+		queryEngine->setThreadPool(threadPool_.get());
+
+		// Wire thread pool to vector index subsystem
+		auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
+		if (vim)
+			vim->setThreadPool(threadPool_.get());
 
 		// Initialize WAL manager
 		walManager_ = std::make_shared<storage::wal::WALManager>();
@@ -108,6 +124,20 @@ namespace graph {
 
 	bool Database::hasActiveTransaction() const {
 		return transactionManager_ && transactionManager_->hasActiveTransaction();
+	}
+
+	void Database::setThreadPoolSize(size_t poolSize) {
+		threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
+
+		// Re-wire the new pool to all subsystems
+		if (storage)
+			storage->setThreadPool(threadPool_.get());
+		if (queryEngine) {
+			queryEngine->setThreadPool(threadPool_.get());
+			auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
+			if (vim)
+				vim->setThreadPool(threadPool_.get());
+		}
 	}
 
 } // namespace graph

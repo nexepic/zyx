@@ -102,9 +102,9 @@ namespace graph::storage {
 		spaceManager =
 				std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager, idAllocator);
 
-		// Initialize data manager
+		// Initialize data manager (pass filePath for pread-based parallel reads)
 		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,
-													spaceManager);
+													spaceManager, dbFilePath);
 		dataManager->initialize();
 		dataManager->setDeletionFlagReference(&deleteOperationPerformed);
 
@@ -159,115 +159,148 @@ namespace graph::storage {
 		if (snapshot.isEmpty())
 			return;
 
-		// 2. PROCESS NODES
-		if (!snapshot.nodes.empty()) {
-			auto newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_ADDED);
-			auto modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_MODIFIED);
-			auto delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_DELETED);
+		// 2. PARALLEL DATA PREPARATION PHASE
+		// Classify entities by change type for all entity types in parallel.
+		// This is pure in-memory work with no I/O dependencies.
+		std::vector<Node> newNodes, modNodes, delNodes;
+		std::vector<Edge> newEdges, modEdges, delEdges;
+		std::vector<Property> newProps, modProps, delProps;
+		std::vector<Blob> newBlobs, modBlobs, delBlobs;
+		std::vector<Index> newIndexes, modIndexes, delIndexes;
+		std::vector<State> newStates, modStates, delStates;
 
-			// ... save logic (saveData, updateEntityInPlace, deleteEntityOnDisk) ...
-			if (!newNodes.empty()) {
-				std::unordered_map<int64_t, Node> map;
-				for (auto &e: newNodes)
-					map[e.getId()] = e;
-				saveData(map, fileHeader.node_segment_head, NODES_PER_SEGMENT);
+		if (threadPool_ && !threadPool_->isSingleThreaded()) {
+			std::vector<std::future<void>> prep;
+
+			if (!snapshot.nodes.empty()) {
+				prep.push_back(threadPool_->submit([&] {
+					newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_ADDED);
+					modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_MODIFIED);
+					delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_DELETED);
+				}));
 			}
-			for (const auto &n: modNodes)
-				updateEntityInPlace(n);
-			for (const auto &n: delNodes)
-				deleteEntityOnDisk(n);
+			if (!snapshot.edges.empty()) {
+				prep.push_back(threadPool_->submit([&] {
+					newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_ADDED);
+					modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_MODIFIED);
+					delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_DELETED);
+				}));
+			}
+			if (!snapshot.properties.empty()) {
+				prep.push_back(threadPool_->submit([&] {
+					newProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_ADDED);
+					modProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_MODIFIED);
+					delProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_DELETED);
+				}));
+			}
+			if (!snapshot.blobs.empty()) {
+				prep.push_back(threadPool_->submit([&] {
+					newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_ADDED);
+					modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_MODIFIED);
+					delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_DELETED);
+				}));
+			}
+			if (!snapshot.indexes.empty()) {
+				prep.push_back(threadPool_->submit([&] {
+					newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_ADDED);
+					modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_MODIFIED);
+					delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_DELETED);
+				}));
+			}
+			if (!snapshot.states.empty()) {
+				prep.push_back(threadPool_->submit([&] {
+					newStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_ADDED);
+					modStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_MODIFIED);
+					delStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_DELETED);
+				}));
+			}
+
+			for (auto &f : prep)
+				f.get();
+		} else {
+			// Sequential preparation
+			if (!snapshot.nodes.empty()) {
+				newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_ADDED);
+				modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_MODIFIED);
+				delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_DELETED);
+			}
+			if (!snapshot.edges.empty()) {
+				newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_ADDED);
+				modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_MODIFIED);
+				delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_DELETED);
+			}
+			if (!snapshot.properties.empty()) {
+				newProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_ADDED);
+				modProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_MODIFIED);
+				delProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_DELETED);
+			}
+			if (!snapshot.blobs.empty()) {
+				newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_ADDED);
+				modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_MODIFIED);
+				delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_DELETED);
+			}
+			if (!snapshot.indexes.empty()) {
+				newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_ADDED);
+				modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_MODIFIED);
+				delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_DELETED);
+			}
+			if (!snapshot.states.empty()) {
+				newStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_ADDED);
+				modStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_MODIFIED);
+				delStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_DELETED);
+			}
 		}
 
-		// 3. PROCESS EDGES
-		if (!snapshot.edges.empty()) {
-			auto newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_ADDED);
-			auto modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_MODIFIED);
-			auto delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_DELETED);
-
-			if (!newEdges.empty()) {
-				std::unordered_map<int64_t, Edge> map;
-				for (auto &e: newEdges)
-					map[e.getId()] = e;
-				saveData(map, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
-			}
-			for (const auto &e: modEdges)
-				updateEntityInPlace(e);
-			for (const auto &e: delEdges)
-				deleteEntityOnDisk(e);
+		// 3. SEQUENTIAL I/O PHASE (single fstream constraint)
+		if (!newNodes.empty()) {
+			std::unordered_map<int64_t, Node> map;
+			for (auto &e : newNodes) map[e.getId()] = e;
+			saveData(map, fileHeader.node_segment_head, NODES_PER_SEGMENT);
 		}
+		for (const auto &n : modNodes) updateEntityInPlace(n);
+		for (const auto &n : delNodes) deleteEntityOnDisk(n);
 
-		// ... REPEAT FOR Properties, Blobs, Indexes, States ...
-		if (!snapshot.properties.empty()) {
-			auto newProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_ADDED);
-			auto modProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_MODIFIED);
-			auto delProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_DELETED);
-
-			if (!newProps.empty()) {
-				std::unordered_map<int64_t, Property> map;
-				for (auto &e: newProps)
-					map[e.getId()] = e;
-				saveData(map, fileHeader.property_segment_head, PROPERTIES_PER_SEGMENT);
-			}
-			for (const auto &p: modProps)
-				updateEntityInPlace(p);
-			for (const auto &p: delProps)
-				deleteEntityOnDisk(p);
+		if (!newEdges.empty()) {
+			std::unordered_map<int64_t, Edge> map;
+			for (auto &e : newEdges) map[e.getId()] = e;
+			saveData(map, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
 		}
+		for (const auto &e : modEdges) updateEntityInPlace(e);
+		for (const auto &e : delEdges) deleteEntityOnDisk(e);
 
-		if (!snapshot.blobs.empty()) {
-			auto newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_ADDED);
-			auto modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_MODIFIED);
-			auto delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_DELETED);
-
-			if (!newBlobs.empty()) {
-				std::unordered_map<int64_t, Blob> map;
-				for (auto &e: newBlobs)
-					map[e.getId()] = e;
-				saveData(map, fileHeader.blob_segment_head, BLOBS_PER_SEGMENT);
-			}
-			for (const auto &b: modBlobs)
-				updateEntityInPlace(b);
-			for (const auto &b: delBlobs)
-				deleteEntityOnDisk(b);
+		if (!newProps.empty()) {
+			std::unordered_map<int64_t, Property> map;
+			for (auto &e : newProps) map[e.getId()] = e;
+			saveData(map, fileHeader.property_segment_head, PROPERTIES_PER_SEGMENT);
 		}
+		for (const auto &p : modProps) updateEntityInPlace(p);
+		for (const auto &p : delProps) deleteEntityOnDisk(p);
 
-		if (!snapshot.indexes.empty()) {
-			auto newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_ADDED);
-			auto modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_MODIFIED);
-			auto delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_DELETED);
-
-			if (!newIndexes.empty()) {
-				std::unordered_map<int64_t, Index> map;
-				for (auto &e: newIndexes)
-					map[e.getId()] = e;
-				saveData(map, fileHeader.index_segment_head, INDEXES_PER_SEGMENT);
-			}
-			for (const auto &i: modIndexes)
-				updateEntityInPlace(i);
-			for (const auto &i: delIndexes)
-				deleteEntityOnDisk(i);
+		if (!newBlobs.empty()) {
+			std::unordered_map<int64_t, Blob> map;
+			for (auto &e : newBlobs) map[e.getId()] = e;
+			saveData(map, fileHeader.blob_segment_head, BLOBS_PER_SEGMENT);
 		}
+		for (const auto &b : modBlobs) updateEntityInPlace(b);
+		for (const auto &b : delBlobs) deleteEntityOnDisk(b);
 
-		if (!snapshot.states.empty()) {
-			auto newStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_ADDED);
-			auto modStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_MODIFIED);
-			auto delStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_DELETED);
-
-			if (!newStates.empty()) {
-				std::unordered_map<int64_t, State> map;
-				for (auto &e: newStates)
-					map[e.getId()] = e;
-				saveData(map, fileHeader.state_segment_head, STATES_PER_SEGMENT);
-			}
-			for (const auto &s: modStates)
-				updateEntityInPlace(s);
-			for (const auto &s: delStates)
-				deleteEntityOnDisk(s);
+		if (!newIndexes.empty()) {
+			std::unordered_map<int64_t, Index> map;
+			for (auto &e : newIndexes) map[e.getId()] = e;
+			saveData(map, fileHeader.index_segment_head, INDEXES_PER_SEGMENT);
 		}
+		for (const auto &i : modIndexes) updateEntityInPlace(i);
+		for (const auto &i : delIndexes) deleteEntityOnDisk(i);
+
+		if (!newStates.empty()) {
+			std::unordered_map<int64_t, State> map;
+			for (auto &e : newStates) map[e.getId()] = e;
+			saveData(map, fileHeader.state_segment_head, STATES_PER_SEGMENT);
+		}
+		for (const auto &s : modStates) updateEntityInPlace(s);
+		for (const auto &s : delStates) deleteEntityOnDisk(s);
 
 		// 4. COMMIT: Clear the snapshot data
-		// Only the data contained in 'snapshot' is removed from PersistenceManager's flushing layer.
-		// New data that entered active layer during IO remains untouched.
 		dataManager->commitFlushSnapshot();
 	}
 

@@ -23,6 +23,7 @@
 #include <memory>
 #include <vector>
 #include "KMeans.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph::vector {
@@ -37,13 +38,14 @@ namespace graph::vector {
 			subDim_ = dim_ / numSubspaces_;
 		}
 
-		void train(const std::vector<std::vector<float>> &trainingData) {
+		void train(const std::vector<std::vector<float>> &trainingData,
+				   concurrent::ThreadPool *pool = nullptr) {
 			if (trainingData.empty())
 				return;
 
 			codebooks_.resize(numSubspaces_);
 
-			for (size_t m = 0; m < numSubspaces_; ++m) {
+			auto trainSubspace = [&](size_t m) {
 				std::vector<std::vector<float>> subData;
 				subData.reserve(trainingData.size());
 
@@ -54,21 +56,28 @@ namespace graph::vector {
 					throw std::runtime_error("PQ Subspace offset out of bounds");
 				}
 
-				for (const auto &vec: trainingData) {
+				for (const auto &vec : trainingData) {
 					if (vec.size() != dim_) {
 						throw std::runtime_error("Training vector dimension mismatch");
 					}
-					// Extract sub-vector
 					std::vector<float> sub(vec.begin() + offset, vec.begin() + offset + subDim_);
 					subData.push_back(std::move(sub));
 				}
 
 				codebooks_[m] = KMeans::run(subData, numCentroids_);
+			};
+
+			if (pool && !pool->isSingleThreaded()) {
+				pool->parallelFor(0, numSubspaces_, trainSubspace);
+			} else {
+				for (size_t m = 0; m < numSubspaces_; ++m)
+					trainSubspace(m);
 			}
 			isTrained_ = true;
 		}
 
-		[[nodiscard]] std::vector<uint8_t> encode(const std::vector<float> &vec) const {
+		[[nodiscard]] std::vector<uint8_t> encode(const std::vector<float> &vec,
+											  concurrent::ThreadPool *pool = nullptr) const {
 			if (!isTrained_)
 				throw std::runtime_error("PQ not trained");
 			if (vec.size() != dim_)
@@ -76,7 +85,7 @@ namespace graph::vector {
 
 			std::vector<uint8_t> codes(numSubspaces_);
 
-			for (size_t m = 0; m < numSubspaces_; ++m) {
+			auto encodeSubspace = [&](size_t m) {
 				size_t offset = m * subDim_;
 				float min_dist = std::numeric_limits<float>::max();
 				uint8_t best_idx = 0;
@@ -92,14 +101,22 @@ namespace graph::vector {
 					}
 				}
 				codes[m] = best_idx;
+			};
+
+			if (pool && !pool->isSingleThreaded()) {
+				pool->parallelFor(0, numSubspaces_, encodeSubspace);
+			} else {
+				for (size_t m = 0; m < numSubspaces_; ++m)
+					encodeSubspace(m);
 			}
 			return codes;
 		}
 
-		[[nodiscard]] std::vector<float> computeDistanceTable(const std::vector<float> &query) const {
+		[[nodiscard]] std::vector<float> computeDistanceTable(const std::vector<float> &query,
+													   concurrent::ThreadPool *pool = nullptr) const {
 			std::vector<float> table(numSubspaces_ * numCentroids_);
 
-			for (size_t m = 0; m < numSubspaces_; ++m) {
+			auto computeSubspace = [&](size_t m) {
 				size_t offset = m * subDim_;
 				const float *querySubPtr = query.data() + offset;
 
@@ -107,6 +124,13 @@ namespace graph::vector {
 					float dist = VectorMetric::computeL2Sqr(querySubPtr, codebooks_[m][c].data(), subDim_);
 					table[m * numCentroids_ + c] = dist;
 				}
+			};
+
+			if (pool && !pool->isSingleThreaded()) {
+				pool->parallelFor(0, numSubspaces_, computeSubspace);
+			} else {
+				for (size_t m = 0; m < numSubspaces_; ++m)
+					computeSubspace(m);
 			}
 			return table;
 		}

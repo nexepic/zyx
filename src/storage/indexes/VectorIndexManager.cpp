@@ -51,6 +51,8 @@ namespace graph::query::indexes {
 				daCfg.metric = "L2";
 
 			indexes_[name] = std::make_shared<vector::DiskANNIndex>(registry, daCfg);
+			if (threadPool_)
+				indexes_[name]->setThreadPool(threadPool_);
 		}
 		return indexes_[name];
 	}
@@ -74,6 +76,8 @@ namespace graph::query::indexes {
 		daCfg.dim = dim;
 		daCfg.metric = metric; // Set runtime config
 		indexes_[name] = std::make_shared<vector::DiskANNIndex>(registry, daCfg);
+		if (threadPool_)
+			indexes_[name]->setThreadPool(threadPool_);
 
 		indexMapLoaded_ = false;
 	}

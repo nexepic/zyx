@@ -442,6 +442,8 @@ namespace zyx {
 		return txn;
 	}
 
+	void Database::setThreadPoolSize(size_t poolSize) const { impl_->db_.setThreadPoolSize(poolSize); }
+
 	Result Database::execute(const std::string &cypher) const {
 		try {
 			if (!impl_->db_.isOpen()) {

@@ -20,14 +20,19 @@
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
 #include "../ScanConfigs.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/IDAllocator.hpp"
+#include "graph/storage/SegmentIndexManager.hpp"
+#include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -77,32 +82,42 @@ namespace graph::query::execution::operators {
 			if (currentIdx_ >= candidateIds_.size())
 				return std::nullopt;
 
+			// When thread pool is available and enough candidates remain,
+			// use a larger batch to amortize parallelization overhead.
+			static constexpr size_t PARALLEL_SCAN_THRESHOLD = 4096;
+			size_t effectiveBatchSize = DEFAULT_BATCH_SIZE;
+			bool canParallelize = threadPool_ && !threadPool_->isSingleThreaded();
+			size_t remaining = candidateIds_.size() - currentIdx_;
+			if (canParallelize && remaining >= PARALLEL_SCAN_THRESHOLD) {
+				// Use all remaining candidates as one large parallel batch
+				effectiveBatchSize = remaining;
+			}
+
+			size_t batchStart = currentIdx_;
+			size_t batchEnd = std::min(currentIdx_ + effectiveBatchSize, candidateIds_.size());
+			size_t batchCount = batchEnd - batchStart;
+			currentIdx_ = batchEnd;
+
+			if (canParallelize && batchCount >= PARALLEL_SCAN_THRESHOLD) {
+				return parallelLoadBatch(batchStart, batchEnd);
+			}
+
+			// Sequential path
 			RecordBatch batch;
-			batch.reserve(DEFAULT_BATCH_SIZE);
+			batch.reserve(batchCount);
 
-			while (batch.size() < DEFAULT_BATCH_SIZE && currentIdx_ < candidateIds_.size()) {
-				int64_t id = candidateIds_[currentIdx_++];
-
-				// 2. Load Header
-				// Note: dm_->getNode(id) automatically hydrates the transient string label via resolveLabelOnRead.
-				// However, for pure filtering speed, we can check IDs directly if we used a lighter-weight fetch,
-				// but here we need the full node object for the result record anyway.
+			for (size_t idx = batchStart; idx < batchEnd; ++idx) {
+				int64_t id = candidateIds_[idx];
 				Node node = dm_->getNode(id);
 
 				if (!node.isActive())
 					continue;
 
-				// 3. Label Double-Check
-				// Necessary for FULL_SCAN mode, or if Index is slightly stale.
 				if (!config_.label.empty()) {
-					// Optimization: Compare IDs instead of strings
-					// node.getLabelId() is populated by dm_->getNode()
-					if (node.getLabelId() != targetLabelId_) {
+					if (node.getLabelId() != targetLabelId_)
 						continue;
-					}
 				}
 
-				// 4. Hydrate Properties
 				auto props = dm_->getNodeProperties(id);
 				node.setProperties(std::move(props));
 
@@ -130,5 +145,107 @@ namespace graph::query::execution::operators {
 		std::vector<int64_t> candidateIds_;
 		size_t currentIdx_ = 0;
 		int64_t targetLabelId_ = 0; // Cached ID
+
+		std::optional<RecordBatch> parallelLoadBatch(size_t batchStart, size_t batchEnd) {
+			// Get the sorted segment index for Nodes
+			const auto &segIndex = dm_->getSegmentIndexManager()->getNodeSegmentIndex();
+			int64_t startId = candidateIds_[batchStart];
+			int64_t endId = candidateIds_[batchEnd - 1];
+
+			// Filter to segments that overlap our ID range
+			std::vector<size_t> relevantSegIdxs;
+			relevantSegIdxs.reserve(segIndex.size());
+			for (size_t s = 0; s < segIndex.size(); ++s) {
+				if (segIndex[s].endId >= startId && segIndex[s].startId <= endId)
+					relevantSegIdxs.push_back(s);
+			}
+
+			if (relevantSegIdxs.empty()) {
+				if (currentIdx_ >= candidateIds_.size())
+					return std::nullopt;
+				return RecordBatch{};
+			}
+
+			// For non-FULL_SCAN, build a set for fast membership testing
+			std::unordered_set<int64_t> candidateSet;
+			if (config_.type != ScanType::FULL_SCAN) {
+				candidateSet.insert(
+					candidateIds_.begin() + batchStart,
+					candidateIds_.begin() + batchEnd);
+			}
+
+			// Parallel phase: each thread processes a chunk of segments.
+			// Per segment: one pread to load all entities, then filter + load properties.
+			// This minimizes syscalls (one per segment instead of one per entity).
+			size_t numSegs = relevantSegIdxs.size();
+			std::vector<RecordBatch> threadBatches(numSegs);
+
+			threadPool_->parallelFor(0, numSegs, [&](size_t si) {
+				const auto &seg = segIndex[relevantSegIdxs[si]];
+				auto header = dm_->getSegmentTracker()->getSegmentHeader(seg.segmentOffset);
+				if (header.used == 0)
+					return;
+
+				// One pread for the entire segment data area
+				constexpr size_t entitySize = Node::getTotalSize();
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(storage::SegmentHeader));
+				ssize_t n = dm_->preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes))
+					return;
+
+				RecordBatch &localBatch = threadBatches[si];
+
+				for (uint32_t i = 0; i < header.used; ++i) {
+					int64_t entityId = header.start_id + i;
+					if (entityId < startId || entityId > endId)
+						continue;
+
+					// For index-based scans, check membership
+					if (!candidateSet.empty() && !candidateSet.count(entityId))
+						continue;
+
+					// Deserialize from buffer (no syscall)
+					// Use a stack-local membuf to avoid allocation
+					char *entPtr = buf.data() + i * entitySize;
+					struct membuf : std::streambuf {
+						membuf(char *p, size_t s) { setg(p, p, p + s); }
+					} mb(entPtr, entitySize);
+					std::istream stream(&mb);
+					Node node = Node::deserialize(stream);
+
+					if (!node.isActive())
+						continue;
+
+					if (!config_.label.empty() && node.getLabelId() != targetLabelId_)
+						continue;
+
+					// Load properties (pread per property entity — still needed)
+					auto props = dm_->getNodePropertiesDirect(node);
+					node.setProperties(std::move(props));
+
+					Record r;
+					r.setNode(config_.variable, std::move(node));
+					localBatch.push_back(std::move(r));
+				}
+			});
+
+			// Merge thread-local batches
+			size_t totalSize = 0;
+			for (const auto &tb : threadBatches)
+				totalSize += tb.size();
+
+			RecordBatch batch;
+			batch.reserve(totalSize);
+			for (auto &tb : threadBatches) {
+				for (auto &r : tb)
+					batch.push_back(std::move(r));
+			}
+
+			if (batch.empty() && currentIdx_ >= candidateIds_.size())
+				return std::nullopt;
+			return batch;
+		}
 	};
 }

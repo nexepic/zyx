@@ -53,12 +53,30 @@ namespace graph::query {
 	QueryResult QueryEngine::execute(const std::string &query, const Language lang) {
 		// 1. Parse into Operator Tree
 		auto planTree = getParser(lang)->parse(query);
+
+		// Propagate thread pool to all operators in the tree
+		if (threadPool_)
+			propagateThreadPool(planTree.get(), threadPool_);
+
 		// 2. Execute
 		return queryExecutor_->execute(std::move(planTree));
 	}
 
 	QueryResult QueryEngine::execute(std::unique_ptr<execution::PhysicalOperator> plan) const {
+		if (threadPool_)
+			propagateThreadPool(plan.get(), threadPool_);
 		return queryExecutor_->execute(std::move(plan));
+	}
+
+	void QueryEngine::propagateThreadPool(execution::PhysicalOperator *op, concurrent::ThreadPool *pool) {
+		if (!op)
+			return;
+		op->setThreadPool(pool);
+		// getChildren() returns const pointers; we need to traverse the mutable tree
+		// Since operators own their children, we use const_cast for propagation only
+		for (auto *child : op->getChildren()) {
+			propagateThreadPool(const_cast<execution::PhysicalOperator *>(child), pool);
+		}
 	}
 
 } // namespace graph::query

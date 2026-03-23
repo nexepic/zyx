@@ -130,6 +130,9 @@ namespace zyx {
 		// Transaction support
 		[[nodiscard]] Transaction beginTransaction();
 
+		// Resize the thread pool at runtime (0=auto, 1=single-thread, >1=N threads)
+		void setThreadPoolSize(size_t poolSize) const;
+
 		// Execute raw Cypher query (auto-commit: wraps in implicit transaction)
 		[[nodiscard]] Result execute(const std::string &cypher) const;
 

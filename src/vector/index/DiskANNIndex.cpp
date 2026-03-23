@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
 #include "graph/vector/core/BFloat16.hpp"
@@ -66,6 +67,9 @@ namespace graph::vector {
 		// --- 2. Save Data ---
 		const auto rawBlob = registry_->saveRawVector(toBFloat16(vec));
 
+		log::Log::debug("[DEBUG] Saved RawBlob ID: {} for Node {}", rawBlob, nodeId);
+
+		// Conditionally save PQ Codes
 		int64_t pqBlob = 0;
 		if (isPQTrained())
 			pqBlob = registry_->savePQCodes(quantizer_->encode(vec));
@@ -75,6 +79,8 @@ namespace graph::vector {
 		ptrs.pqBlob = pqBlob;
 
 		const int64_t entryPoint = registry_->getConfig().entryPointNodeId;
+
+		log::Log::debug("Insert Node {}. EntryPoint: {}", nodeId, entryPoint);
 
 		// --- 3. Graph Construction ---
 
@@ -248,30 +254,47 @@ namespace graph::vector {
 
 		std::vector<float> pqTable;
 		if (isPQTrained()) {
-			pqTable = quantizer_->computeDistanceTable(query);
+			pqTable = quantizer_->computeDistanceTable(query, threadPool_);
 		}
 
 		// 1. Navigation (Hybrid Mode)
 		auto candidates =
 				greedySearch(query, entryPoint, std::max(config_.beamWidth, static_cast<uint32_t>(k) * 2), pqTable);
 
-		// 2. Re-ranking (Always Exact)
-		std::vector<std::pair<int64_t, float>> refined;
-		refined.reserve(candidates.size());
+		// 2. Re-ranking (Always Exact) - parallelized
+		// Collect candidate IDs for parallel distance computation
+		std::vector<int64_t> candidateIds;
+		candidateIds.reserve(candidates.size());
+		for (auto &id : candidates | std::views::keys)
+			candidateIds.push_back(id);
 
-		for (auto &id: candidates | std::views::keys) {
-			float d = distRaw(query, id);
-			// Filter out removed nodes (Infinite distance)
-			if (d < std::numeric_limits<float>::max()) {
-				refined.push_back({id, d});
-			}
+		std::vector<std::pair<int64_t, float>> refined(candidateIds.size());
+
+		auto computeRank = [&](size_t i) {
+			float d = distRaw(query, candidateIds[i]);
+			refined[i] = {candidateIds[i], d};
+		};
+
+		if (threadPool_ && !threadPool_->isSingleThreaded() && candidateIds.size() > 16) {
+			threadPool_->parallelFor(0, candidateIds.size(), computeRank);
+		} else {
+			for (size_t i = 0; i < candidateIds.size(); ++i)
+				computeRank(i);
 		}
 
-		std::ranges::sort(refined, [](const auto &a, const auto &b) { return a.second < b.second; });
+		// Filter removed nodes and sort
+		std::vector<std::pair<int64_t, float>> filtered;
+		filtered.reserve(refined.size());
+		for (auto &[id, d] : refined) {
+			if (d < std::numeric_limits<float>::max())
+				filtered.push_back({id, d});
+		}
 
-		if (refined.size() > k)
-			refined.resize(k);
-		return refined;
+		std::ranges::sort(filtered, [](const auto &a, const auto &b) { return a.second < b.second; });
+
+		if (filtered.size() > k)
+			filtered.resize(k);
+		return filtered;
 	}
 
 	// --- Sampling & Training ---
@@ -314,7 +337,7 @@ namespace graph::vector {
 		log::Log::info("Training PQ Model: Dim={}, Subspaces={}, Samples={}", config_.dim, m, samples.size());
 
 		auto pq = std::make_unique<NativeProductQuantizer>(config_.dim, m);
-		pq->train(samples);
+		pq->train(samples, threadPool_);
 
 		registry_->saveQuantizer(*pq);
 		quantizer_ = std::move(pq);

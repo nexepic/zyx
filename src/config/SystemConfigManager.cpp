@@ -87,4 +87,9 @@ namespace graph::config {
 		}
 	}
 
+	size_t SystemConfigManager::getThreadPoolSize() const {
+		auto val = systemStateManager_->get<int64_t>(keys::SYS_CONFIG, keys::Config::THREAD_POOL_SIZE, 1);
+		return val < 0 ? 1 : static_cast<size_t>(val);
+	}
+
 } // namespace graph::config

@@ -31,6 +31,9 @@ namespace graph::storage::state::keys {
 		// Key for controlling storage compaction
 		// Value type: boolean (true/false)
 		constexpr char STORAGE_COMPACTION_ENABLED[] = "storage.compaction.enabled";
+		// Key for controlling thread pool size
+		// Value type: int64_t (0 = auto-detect, 1 = single-threaded, >1 = N threads)
+		constexpr char THREAD_POOL_SIZE[] = "thread.pool.size";
 	} // namespace Config
 
 	// --- Base Keys for Entities ---

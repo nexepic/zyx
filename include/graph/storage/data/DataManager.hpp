@@ -24,6 +24,7 @@
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include "DirtyEntityInfo.hpp"
 #include "graph/core/Blob.hpp"
@@ -87,7 +88,8 @@ namespace graph::storage {
 		 */
 		explicit DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
-							 std::shared_ptr<SpaceManager> spaceManager);
+							 std::shared_ptr<SpaceManager> spaceManager,
+							 const std::string &filePath = "");
 
 		/**
 		 * Destructor that ensures the file is closed
@@ -123,6 +125,9 @@ namespace graph::storage {
 		Node getNode(int64_t id) const;
 		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Node> getNodesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
+		// Lock-free property loading for parallel scans. Accepts an already-loaded node
+		// to avoid redundant reads, and uses loadEntityDirect for Property entities.
+		std::unordered_map<std::string, PropertyValue> getNodePropertiesDirect(const Node &node);
 		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeNodeProperty(int64_t nodeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;
@@ -199,6 +204,24 @@ namespace graph::storage {
 		// Helper method to retrieve an entity from memory (dirty collections and cache) or disk
 		template<typename EntityType>
 		EntityType getEntityFromMemoryOrDisk(int64_t id);
+
+		// Lock-free read path for parallel scans. Uses pread() to bypass cache entirely.
+		// Only checks dirty entities (uncommitted changes), then reads directly from disk.
+		// Returns default-constructed entity (id==0) if not found.
+		template<typename EntityType>
+		EntityType loadEntityDirect(int64_t id);
+
+		// Bulk-load all active entities of a type using segment-sequential pread.
+		// Reads entire segment data areas in single pread calls, drastically reducing
+		// syscall count compared to per-entity reads. Returns entities with IDs in
+		// [filterStartId, filterEndId]. Pass 0,INT64_MAX to get all.
+		template<typename EntityType>
+		std::vector<EntityType> bulkLoadEntities(int64_t filterStartId = 0,
+												 int64_t filterEndId = INT64_MAX) const;
+
+		// Thread-safe read via pread (no locks needed)
+		[[nodiscard]] bool hasPreadSupport() const { return readFd_ >= 0; }
+		[[nodiscard]] ssize_t preadBytes(void *buf, size_t count, off_t offset) const;
 
 		// Loading entities from disk
 		[[nodiscard]] Node loadNodeFromDisk(int64_t id) const;
@@ -377,6 +400,11 @@ namespace graph::storage {
 
 		std::vector<std::shared_ptr<IEntityObserver>> observers_;
 		mutable std::recursive_mutex observer_mutex_;
+
+		// File descriptor for thread-safe pread() based parallel reads.
+		// pread() is atomic (no separate seek+read) and multiple threads
+		// can call it concurrently on the same fd without synchronization.
+		int readFd_ = -1;
 	};
 
 } // namespace graph::storage
