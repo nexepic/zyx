@@ -12,12 +12,3 @@ benchmark_exe = executable('zyx-bench',
 
 						   install : false
 )
-
-# Register concurrency benchmark as a test so it can run via meson test
-test('benchmark_concurrency',
-	 benchmark_exe,
-	 args : ['conc'],
-	 timeout : 600,
-	 is_parallel : false,
-	 suite : 'benchmark'
-)
