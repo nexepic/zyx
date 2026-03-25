@@ -19,15 +19,14 @@
  **/
 
 #include "graph/storage/data/DataManager.hpp"
-#include <fcntl.h>
 #include <map>
 #include <sstream>
-#include <unistd.h>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
 #include "graph/core/Types.hpp"
+#include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 #include "graph/storage/DeletionManager.hpp"
 #include "graph/storage/EntityReferenceUpdater.hpp"
@@ -61,7 +60,7 @@ namespace graph::storage {
 		// pread() is atomic (no seek+read race) so multiple threads can call it
 		// concurrently on the same fd without any synchronization.
 		if (!filePath.empty()) {
-			readFd_ = ::open(filePath.c_str(), O_RDONLY);
+			readFd_ = storage::portable_open(filePath.c_str(), O_RDONLY);
 			// Share the fd with SegmentTracker so its ensureSegmentCached() is also lock-free
 			if (readFd_ >= 0) {
 				segmentTracker_->setReadFd(readFd_);
@@ -75,7 +74,7 @@ namespace graph::storage {
 
 	DataManager::~DataManager() {
 		if (readFd_ >= 0) {
-			::close(readFd_);
+			storage::portable_close(readFd_);
 			readFd_ = -1;
 		}
 	}
@@ -83,7 +82,7 @@ namespace graph::storage {
 	ssize_t DataManager::preadBytes(void *buf, size_t count, off_t offset) const {
 		if (readFd_ < 0)
 			return -1;
-		return ::pread(readFd_, buf, count, offset);
+		return storage::portable_pread(readFd_, buf, count, offset);
 	}
 
 	// Helper streambuf that wraps an existing memory buffer for zero-copy deserialization.
@@ -506,7 +505,7 @@ namespace graph::storage {
 				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 				std::vector<char> buf(dataBytes);
 				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = ::pread(readFd_, buf.data(), dataBytes, dataOffset);
+				ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
 				if (n < static_cast<ssize_t>(dataBytes))
 					return;
 
@@ -544,7 +543,7 @@ namespace graph::storage {
 				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 				std::vector<char> buf(dataBytes);
 				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = ::pread(readFd_, buf.data(), dataBytes, dataOffset);
+				ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
 				if (n < static_cast<ssize_t>(dataBytes))
 					continue;
 
@@ -908,7 +907,7 @@ namespace graph::storage {
 			// Thread-safe path: pread() is atomic and needs no synchronization
 			constexpr size_t entitySize = EntityType::getTotalSize();
 			char buf[entitySize];
-			ssize_t n = ::pread(readFd_, buf, entitySize, fileOffset);
+			ssize_t n = storage::portable_pread(readFd_, buf, entitySize, fileOffset);
 			if (n < static_cast<ssize_t>(entitySize))
 				return std::nullopt;
 			membuf mb(buf, entitySize);
@@ -1004,7 +1003,7 @@ namespace graph::storage {
 				if (readFd_ >= 0) {
 					constexpr size_t entitySize = EntityType::getTotalSize();
 					char buf[entitySize];
-					ssize_t n = ::pread(readFd_, buf, entitySize, entityOffset);
+					ssize_t n = storage::portable_pread(readFd_, buf, entitySize, entityOffset);
 					if (n >= static_cast<ssize_t>(entitySize)) {
 						membuf mb(buf, entitySize);
 						std::istream stream(&mb);
@@ -1187,7 +1186,7 @@ namespace graph::storage {
 			size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 			std::vector<char> buf(dataBytes);
 			auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
-			ssize_t n = ::pread(readFd_, buf.data(), dataBytes, dataOffset);
+			ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
 			if (n < static_cast<ssize_t>(dataBytes))
 				continue;
 

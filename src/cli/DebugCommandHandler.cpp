@@ -19,6 +19,7 @@
  **/
 
 #include "graph/cli/DebugCommandHandler.hpp"
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include "graph/storage/DatabaseInspector.hpp"

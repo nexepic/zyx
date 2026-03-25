@@ -26,6 +26,14 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <cstdint>
+
+// Platform-specific type definitions for Windows compatibility
+#ifdef _WIN32
+using ssize_t = intptr_t;
+using off_t = int64_t;
+#endif
+
 #include "DirtyEntityInfo.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"

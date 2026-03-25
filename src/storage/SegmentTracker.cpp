@@ -24,8 +24,8 @@
 #include <functional>
 #include <iostream>
 #include <stdexcept>
-#include <unistd.h>
 #include <vector>
+#include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTypeRegistry.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
@@ -165,7 +165,7 @@ namespace graph::storage {
 		// Fall back to pread the header directly without caching
 		if (readFd_ >= 0) {
 			SegmentHeader header;
-			ssize_t n = ::pread(readFd_, &header, sizeof(SegmentHeader), static_cast<off_t>(offset));
+			ssize_t n = storage::portable_pread(readFd_, &header, sizeof(SegmentHeader), static_cast<off_t>(offset));
 			if (n >= static_cast<ssize_t>(sizeof(SegmentHeader))) {
 				header.file_offset = offset;
 				return header;
@@ -447,7 +447,7 @@ namespace graph::storage {
 		if (!segments_.contains(offset)) {
 			SegmentHeader header;
 			if (readFd_ >= 0) {
-				ssize_t n = ::pread(readFd_, &header, sizeof(SegmentHeader), static_cast<off_t>(offset));
+				ssize_t n = storage::portable_pread(readFd_, &header, sizeof(SegmentHeader), static_cast<off_t>(offset));
 				if (n < static_cast<ssize_t>(sizeof(SegmentHeader))) {
 					throw std::runtime_error("Failed to pread segment header at offset " + std::to_string(offset));
 				}
