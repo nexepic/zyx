@@ -20,6 +20,7 @@
 
 #pragma once
 #include <list>
+#include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
 
