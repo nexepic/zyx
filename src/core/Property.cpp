@@ -19,6 +19,7 @@
  **/
 
 #include "graph/core/Property.hpp"
+#include <cstring>
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 

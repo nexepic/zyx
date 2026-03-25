@@ -19,6 +19,7 @@
  **/
 
 #include "graph/vector/VectorIndexRegistry.hpp"
+#include <cstring>
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
