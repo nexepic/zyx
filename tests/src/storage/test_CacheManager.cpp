@@ -19,6 +19,7 @@
  **/
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <ranges>
 #include <string>
 #include <vector>
