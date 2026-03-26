@@ -267,13 +267,19 @@ namespace graph::vector {
 		for (auto &id : candidates | std::views::keys)
 			candidateIds.push_back(id);
 
-		// Phase A: Batch-load all raw vectors (sequential I/O, avoids lock contention)
+		// Phase A: Batch-load all raw vectors
 		std::vector<std::vector<float>> rawVectors(candidateIds.size());
-		for (size_t i = 0; i < candidateIds.size(); ++i) {
+		auto loadVector = [&](size_t i) {
 			auto ptrs = registry_->getBlobPtrs(candidateIds[i]);
 			if (ptrs.rawBlob != 0) {
 				rawVectors[i] = toFloat(registry_->loadRawVector(ptrs.rawBlob));
 			}
+		};
+		if (threadPool_ && !threadPool_->isSingleThreaded() && candidateIds.size() > 16) {
+			threadPool_->parallelFor(0, candidateIds.size(), loadVector);
+		} else {
+			for (size_t i = 0; i < candidateIds.size(); ++i)
+				loadVector(i);
 		}
 
 		// Phase B: Compute distances in parallel (pure compute, no I/O)

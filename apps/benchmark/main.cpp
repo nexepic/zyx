@@ -229,13 +229,13 @@ namespace {
 		add("concurrency.vector_search.single_thread", BenchmarkType::CONCURRENCY, concVecSearchOneName,
 				[concVecSearchOneName]() {
 					return std::make_unique<ConcurrentVectorSearchBench>(concVecSearchOneName,
-																 "/tmp/zyx_bench_conc_vsearch_1", 5, 1000, 1, DIM_SMALL,
+																 "/tmp/zyx_bench_conc_vsearch_1", 5, 1000, 1, DIM_LARGE,
 																 10);
 				});
 		add("concurrency.vector_search.multi_thread", BenchmarkType::CONCURRENCY, concVecSearchManyName,
 				[concVecSearchManyName, hwThreads]() {
 					return std::make_unique<ConcurrentVectorSearchBench>(
-							concVecSearchManyName, "/tmp/zyx_bench_conc_vsearch_n", 5, 1000, hwThreads, DIM_SMALL, 10);
+							concVecSearchManyName, "/tmp/zyx_bench_conc_vsearch_n", 5, 1000, hwThreads, DIM_LARGE, 10);
 				});
 
 		const std::string implicitTxnName = "Implicit Txn Insert (1000 nodes)";
