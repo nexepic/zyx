@@ -506,7 +506,7 @@ namespace graph::storage {
 			}
 
 			// Calculate number of items to write
-			uint32_t writeCount = std::min(remaining, static_cast<uint32_t>(entitiesForNewSlots.end() - dataIt));
+			uint32_t writeCount = (std::min)(remaining, static_cast<uint32_t>(entitiesForNewSlots.end() - dataIt));
 			std::vector<T> batch(dataIt, dataIt + writeCount);
 
 			// Write data

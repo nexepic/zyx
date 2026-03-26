@@ -107,13 +107,13 @@ inline int portable_open(const char* filePath, int flags) {
 	}
 
 	// Cast HANDLE to int for storage (safe for x64)
-	return static_cast<int>(reinterpret_cast<intptr_t>(hFile));
+	return static_cast<int>(reinterpret_cast<uintptr_t>(hFile));
 }
 
 inline int portable_close(int fd) {
 	if (fd < 0) return -1;
 
-	HANDLE hFile = reinterpret_cast<HANDLE>(reinterpret_cast<intptr_t>(fd));
+	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
 	return ::CloseHandle(hFile) ? 0 : -1;
 }
 
@@ -122,7 +122,7 @@ inline ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset) {
 		return -1;
 	}
 
-	HANDLE hFile = reinterpret_cast<HANDLE>(reinterpret_cast<intptr_t>(fd));
+	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
 
 	// OVERLAPPED structure for position-independent read
 	OVERLAPPED overlapped = {};

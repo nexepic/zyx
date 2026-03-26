@@ -47,7 +47,10 @@ inline int portable_open_rw(const char* filePath) {
 		nullptr
 	);
 	if (hFile == INVALID_HANDLE_VALUE) return -1;
-	return static_cast<int>(reinterpret_cast<intptr_t>(hFile));
+	// Cast HANDLE (void*) to int using pointer-to-int conversion
+	// On 64-bit Windows, this truncates from 64-bit to 32-bit, which is safe
+	// as we're just storing a handle identifier
+	return static_cast<int>(reinterpret_cast<uintptr_t>(hFile));
 #else
 	return ::open(filePath, O_RDWR);
 #endif
@@ -64,7 +67,8 @@ inline pwrite_ssize_t portable_pwrite(int fd, const void* buf, size_t count, pwr
 	if (fd < 0 || !buf || count == 0) return -1;
 
 #ifdef _WIN32
-	HANDLE hFile = reinterpret_cast<HANDLE>(reinterpret_cast<intptr_t>(fd));
+	// Cast int back to HANDLE
+	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
 	OVERLAPPED overlapped = {};
 	overlapped.Offset = static_cast<DWORD>(offset & 0xFFFFFFFF);
 	overlapped.OffsetHigh = static_cast<DWORD>((offset >> 32) & 0xFFFFFFFF);
@@ -83,7 +87,7 @@ inline int portable_fsync(int fd) {
 	if (fd < 0) return -1;
 
 #ifdef _WIN32
-	HANDLE hFile = reinterpret_cast<HANDLE>(reinterpret_cast<intptr_t>(fd));
+	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
 	return ::FlushFileBuffers(hFile) ? 0 : -1;
 #else
 #ifdef __APPLE__
@@ -101,7 +105,7 @@ inline int portable_close_rw(int fd) {
 	if (fd < 0) return -1;
 
 #ifdef _WIN32
-	HANDLE hFile = reinterpret_cast<HANDLE>(reinterpret_cast<intptr_t>(fd));
+	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
 	return ::CloseHandle(hFile) ? 0 : -1;
 #else
 	return ::close(fd);
