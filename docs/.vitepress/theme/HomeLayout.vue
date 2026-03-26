@@ -40,12 +40,12 @@ interface FeatureData {
 }
 
 const features: FeatureData[] = [
-  { icon: 'IO', titleEn: 'Throughput Engine', titleZh: '吞吐引擎', descEn: 'Segmented storage and parallel IO keep heavy workloads stable.', descZh: '分段存储与并行 IO 让高负载查询保持稳定吞吐。', axis: 'x+' },
-  { icon: 'TX', titleEn: 'Transactional Core', titleZh: '事务核心', descEn: 'WAL + optimistic control + rollback keep state transitions safe.', descZh: 'WAL、乐观并发与回滚机制共同保障状态转换安全。', axis: 'x-' },
-  { icon: 'CY', titleEn: 'Cypher Native', titleZh: 'Cypher 原生', descEn: 'Parser, planner, and optimizer tuned for graph-first semantics.', descZh: '解析、规划、优化链路面向图语义原生设计。', axis: 'y+' },
-  { icon: 'VS', titleEn: 'Vector Path', titleZh: '向量路径', descEn: 'DiskANN and quantization integrate ANN into transactional graphs.', descZh: 'DiskANN 与量化流程将 ANN 能力融入事务系统。', axis: 'y-' },
-  { icon: 'EM', titleEn: 'Embeddable API', titleZh: '可嵌入 API', descEn: 'Lean C++/C interfaces with no external daemon requirement.', descZh: '轻量 C++/C 接口，无需外部守护进程即可集成。', axis: 'z+' },
-  { icon: 'OS', titleEn: 'Open Source', titleZh: '开源协作', descEn: 'MIT-licensed codebase designed for transparent evolution.', descZh: 'MIT 许可，演进路径透明，便于长期协作与维护。', axis: 'z-' }
+  { icon: 'IO', titleEn: 'Throughput Core', titleZh: '高吞吐核心', descEn: 'Segmented storage and parallel IO deliver sustained throughput with predictable latency under heavy concurrency.', descZh: '段式存储与并行 IO 协同优化，在高并发负载下提供持续吞吐与可预测时延。', axis: 'x+' },
+  { icon: 'TX', titleEn: 'ACID Transactions', titleZh: 'ACID 事务', descEn: 'WAL, optimistic concurrency control, and rollbackable state chains preserve correctness for multi-step graph mutations.', descZh: 'WAL、乐观并发控制与可回滚状态链协同，保障多步骤图更新的 ACID 正确性。', axis: 'x-' },
+  { icon: 'CY', titleEn: 'Cypher Native', titleZh: 'Cypher 原生', descEn: 'Parser, planner, and optimizer are purpose-built for graph semantics and complex pattern matching.', descZh: '解析器、规划器与优化器围绕图语义原生设计，复杂模式匹配依然高效。', axis: 'y+' },
+  { icon: 'VS', titleEn: 'Graph + Vector', titleZh: '图向量融合', descEn: 'DiskANN and quantization fuse ANN retrieval with graph traversal in a unified query path for AI workloads.', descZh: 'DiskANN 与量化索引将 ANN 检索与图遍历融合到统一查询链路，面向 AI 负载原生优化。', axis: 'y-' },
+  { icon: 'EM', titleEn: 'Embedded Runtime', titleZh: '嵌入式运行时', descEn: 'Integrate directly through C/C++ APIs with no standalone server or daemon process.', descZh: '通过 C/C++ API 直接集成，无需部署独立服务器或守护进程。', axis: 'z+' },
+  { icon: 'OS', titleEn: 'Open and Governable', titleZh: '开源可控', descEn: 'MIT-licensed architecture with transparent evolution for enterprise governance, auditing, and customization.', descZh: 'MIT 开源许可与透明演进路径，支持企业级治理、审计、定制与长期迭代。', axis: 'z-' }
 ]
 
 // === Carousel Logic ===
@@ -335,16 +335,16 @@ onUnmounted(() => {
       <!-- Unified Central Flex Container -->
       <main class="hero-center">
         <!-- Hero Content -->
-        <div class="hero-badge">{{ isEn ? 'GRAPH DATABASE ENGINE' : '图数据库引擎' }}</div>
-        <h1 class="hero-title" v-if="isEn">Coordinate-native graph runtime</h1>
-        <h1 class="hero-title" v-else>坐标原生的图数据库运行时</h1>
+        <div class="hero-badge">{{ isEn ? 'EMBEDDED GRAPH DATABASE' : '嵌入式图数据库' }}</div>
+        <h1 class="hero-title" v-if="isEn">AI-Native Graph Engine</h1>
+        <h1 class="hero-title" v-else>AI 原生图引擎</h1>
         <p class="hero-subtitle" v-if="isEn">
-          A unified dimension of transactional consistency and high throughput.<br>
-          Designed for uncompromising scale and performance.
+          Unify graph reasoning, vector retrieval, and ACID transactions in one local runtime.<br>
+          Built for RAG, agent memory, and knowledge graph applications with low-latency control, no standalone server required.
         </p>
         <p class="hero-subtitle" v-else>
-          构建事务一致性与高吞吐的统一数据维度。<br>
-          为无妥协的扩展性与极致性能而原生设计。
+          在单一本地引擎中统一图推理、向量检索与 ACID 事务。<br>
+          为 RAG、Agent 与知识图谱应用提供可控、低延迟的数据底座，无需独立服务器。
         </p>
         <div class="hero-actions">
           <a :href="quickStartLink" class="btn-primary">
@@ -564,11 +564,14 @@ onUnmounted(() => {
 .bracket-bl { bottom: 0; left: 0; border-width: 0 0 1px 1px; }
 .bracket-br { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
 
-/* Fixed viewport guarantees zero vertical jitter */
+/* 
+  Fixed viewport guarantees zero vertical jitter. 
+  Increased to 115px to safely fit 2 lines of description text.
+*/
 .hud-viewport {
   position: relative;
   width: 100%;
-  height: 95px; /* Locked height */
+  height: 115px; 
   overflow: hidden;
 }
 
@@ -604,12 +607,24 @@ onUnmounted(() => {
   letter-spacing: 0.03em;
 }
 
+/* 
+  Description Text
+  Uses CSS Line-Clamp to restrict to exactly 2 lines. 
+  Adds an ellipsis (...) if text overflows.
+*/
 .hud-desc {
   margin: 0;
   font-size: 0.85rem;
   line-height: 1.5;
   color: #8a9bb0;
-  max-width: 480px; /* Constrains line length for elegant reading */
+  max-width: 480px; 
+  
+  /* Truncate at 2 lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Data-feed vertical blur slide (Sci-fi feel) */
