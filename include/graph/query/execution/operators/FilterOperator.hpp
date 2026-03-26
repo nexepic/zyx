@@ -29,6 +29,7 @@
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
 
 namespace graph::query::execution::operators {
@@ -36,6 +37,8 @@ namespace graph::query::execution::operators {
 	class FilterOperator : public PhysicalOperator {
 	public:
 		using Predicate = std::function<bool(const Record &)>;
+
+		static constexpr size_t PARALLEL_FILTER_THRESHOLD = 4096;
 
 		/**
 		 * @brief Constructs a FilterOperator.
@@ -60,19 +63,32 @@ namespace graph::query::execution::operators {
 
 				RecordBatch &inputBatch = *batchOpt;
 
-				// Sequential predicate evaluation. Filter predicates are typically
-				// simple property comparisons where thread dispatch overhead exceeds
-				// the computation cost. The real parallelism benefit comes from the
-				// upstream operator (e.g. NodeScanOperator) doing parallel I/O.
-				RecordBatch outputBatch;
-				outputBatch.reserve(inputBatch.size());
-
 				using Clock = std::chrono::steady_clock;
 				auto filterStart = Clock::now();
-				for (auto &record : inputBatch) {
-					if (predicate_(record))
-						outputBatch.push_back(std::move(record));
+
+				RecordBatch outputBatch;
+
+				if (threadPool_ && !threadPool_->isSingleThreaded()
+					&& inputBatch.size() >= PARALLEL_FILTER_THRESHOLD) {
+					// Parallel two-pass: evaluate predicates then compact
+					std::vector<uint8_t> keep(inputBatch.size());
+					threadPool_->parallelFor(0, inputBatch.size(), [&](size_t i) {
+						keep[i] = predicate_(inputBatch[i]) ? 1 : 0;
+					});
+					outputBatch.reserve(inputBatch.size());
+					for (size_t i = 0; i < inputBatch.size(); ++i) {
+						if (keep[i])
+							outputBatch.push_back(std::move(inputBatch[i]));
+					}
+				} else {
+					// Sequential path
+					outputBatch.reserve(inputBatch.size());
+					for (auto &record : inputBatch) {
+						if (predicate_(record))
+							outputBatch.push_back(std::move(record));
+					}
 				}
+
 				debug::PerfTrace::addDuration(
 						"filter",
 						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -

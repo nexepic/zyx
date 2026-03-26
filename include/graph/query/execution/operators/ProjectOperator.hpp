@@ -51,6 +51,8 @@ namespace graph::query::execution::operators {
 
 	class ProjectOperator : public PhysicalOperator {
 	public:
+		static constexpr size_t PARALLEL_PROJECT_THRESHOLD = 4096;
+
 		/**
 		 * @brief Constructs a ProjectOperator.
 		 * @param child Upstream operator.
@@ -111,6 +113,11 @@ namespace graph::query::execution::operators {
 		 * @brief Build a fingerprint for a record from its projected values.
 		 */
 		RecordFingerprint buildFingerprint(const Record &record);
+
+		/**
+		 * @brief Project a single input record into an output record.
+		 */
+		Record projectRecord(const Record &input) const;
 	};
 
 } // namespace graph::query::execution::operators

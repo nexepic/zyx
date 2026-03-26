@@ -20,6 +20,7 @@
 
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include <sstream>
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
@@ -31,76 +32,83 @@ void ProjectOperator::open() {
 		child_->open();
 }
 
-std::optional<RecordBatch> ProjectOperator::next() {
+Record ProjectOperator::projectRecord(const Record &record) const {
 	using namespace graph::query::expressions;
 
+	Record newRecord;
+
+	for (const auto &item: items_) {
+		std::string key = item.alias;
+
+		// Check if this is a simple variable reference (no property access)
+		if (item.expression && item.expression->getExpressionType() == ExpressionType::PROPERTY_ACCESS) {
+			auto* varRef = static_cast<VariableReferenceExpression*>(item.expression.get());
+			if (!varRef->hasProperty()) {
+				const std::string& varName = varRef->getVariableName();
+
+				if (auto node = record.getNode(varName)) {
+					newRecord.setNode(key, *node);
+					continue;
+				}
+				if (auto edge = record.getEdge(varName)) {
+					newRecord.setEdge(key, *edge);
+					continue;
+				}
+				if (auto value = record.getValue(varName)) {
+					newRecord.setValue(key, *value);
+					continue;
+				}
+			}
+		}
+
+		// Evaluate the expression to get the value
+		PropertyValue value;
+		if (item.expression) {
+			try {
+				value = ExpressionEvaluationHelper::evaluate(
+				    item.expression.get(), record, dataManager_);
+			} catch (const UndefinedVariableException&) {
+				value = PropertyValue();
+			}
+		} else {
+			value = PropertyValue();
+		}
+
+		newRecord.setValue(key, value);
+	}
+
+	return newRecord;
+}
+
+std::optional<RecordBatch> ProjectOperator::next() {
 	auto batchOpt = child_->next();
 	if (!batchOpt)
 		return std::nullopt;
 
 	RecordBatch &inputBatch = *batchOpt;
+
+	// Parallel path for non-DISTINCT projections on large batches
+	if (!distinct_ && threadPool_ && !threadPool_->isSingleThreaded()
+		&& inputBatch.size() >= PARALLEL_PROJECT_THRESHOLD) {
+		RecordBatch outputBatch(inputBatch.size());
+		threadPool_->parallelFor(0, inputBatch.size(), [&](size_t i) {
+			outputBatch[i] = projectRecord(inputBatch[i]);
+		});
+		return outputBatch;
+	}
+
+	// Sequential path
 	RecordBatch outputBatch;
 	outputBatch.reserve(inputBatch.size());
 
 	for (const auto &record: inputBatch) {
-		Record newRecord;
+		Record newRecord = projectRecord(record);
 
-		for (const auto &item: items_) {
-			std::string key = item.alias;
-
-			// Check if this is a simple variable reference (no property access)
-			if (item.expression && item.expression->getExpressionType() == ExpressionType::PROPERTY_ACCESS) {
-				auto* varRef = static_cast<VariableReferenceExpression*>(item.expression.get());
-				if (!varRef->hasProperty()) {
-					// Simple variable reference - try to copy node/edge directly
-					const std::string& varName = varRef->getVariableName();
-
-					// Check if it's a node
-					if (auto node = record.getNode(varName)) {
-						newRecord.setNode(key, *node);
-						continue;
-					}
-
-					// Check if it's an edge
-					if (auto edge = record.getEdge(varName)) {
-						newRecord.setEdge(key, *edge);
-						continue;
-					}
-
-					// Check if it's a value
-					if (auto value = record.getValue(varName)) {
-						newRecord.setValue(key, *value);
-						continue;
-					}
-				}
-			}
-
-			// Evaluate the expression to get the value
-			PropertyValue value;
-			if (item.expression) {
-				try {
-					value = ExpressionEvaluationHelper::evaluate(
-					    item.expression.get(), record, dataManager_);
-				} catch (const UndefinedVariableException&) {
-					// Undefined variable → NULL (Cypher semantics)
-					value = PropertyValue();
-				}
-			} else {
-				// Fallback to NULL for expressions not yet migrated
-				value = PropertyValue();
-			}
-
-			// Store the value in the new record
-			newRecord.setValue(key, value);
-		}
-
-		// DISTINCT: Check if we've seen this record before
 		if (distinct_) {
 			auto fp = buildFingerprint(newRecord);
 			if (seenRecords_.insert(std::move(fp)).second) {
 				outputBatch.push_back(std::move(newRecord));
 			}
-			// If duplicate, skip adding to outputBatch
 		} else {
 			outputBatch.push_back(std::move(newRecord));
 		}

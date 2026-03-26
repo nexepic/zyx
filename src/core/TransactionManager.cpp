@@ -33,6 +33,23 @@ namespace graph {
 
 	Transaction TransactionManager::begin() { return begin(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout)); }
 
+	Transaction TransactionManager::beginReadOnly() {
+		return beginReadOnly(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout));
+	}
+
+	Transaction TransactionManager::beginReadOnly(std::chrono::milliseconds /*timeout*/) {
+		// Read-only transactions do NOT acquire the write mutex.
+		// They see committed state only (skip dirty entity lookups).
+		uint64_t txnId = nextTxnId_.fetch_add(1);
+
+		auto dm = storage_->getDataManager();
+		dm->setSkipDirtyLookup(true);
+
+		Transaction txn(txnId, *this, storage_);
+		txn.readOnly_ = true;
+		return txn;
+	}
+
 	Transaction TransactionManager::begin(std::chrono::milliseconds timeout) {
 		// Acquire single-writer lock with timeout using a local lock first
 		// to avoid releasing the existing writeLock_ before acquiring the new one
@@ -62,6 +79,14 @@ namespace graph {
 		using Clock = std::chrono::steady_clock;
 
 		if (txn.getState() != Transaction::TxnState::TXN_ACTIVE) {
+			return;
+		}
+
+		// Read-only transactions: just clear state and return
+		if (txn.isReadOnly()) {
+			auto dm = storage_->getDataManager();
+			dm->setSkipDirtyLookup(false);
+			txn.state_ = Transaction::TxnState::TXN_COMMITTED;
 			return;
 		}
 
@@ -112,6 +137,14 @@ namespace graph {
 
 	void TransactionManager::rollbackTransaction(Transaction &txn) {
 		if (txn.getState() != Transaction::TxnState::TXN_ACTIVE) {
+			return;
+		}
+
+		// Read-only transactions: just clear state and return
+		if (txn.isReadOnly()) {
+			auto dm = storage_->getDataManager();
+			if (dm) dm->setSkipDirtyLookup(false);
+			txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;
 			return;
 		}
 

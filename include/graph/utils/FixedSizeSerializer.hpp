@@ -19,6 +19,7 @@
  **/
 
 #pragma once
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -48,6 +49,14 @@ namespace graph::utils {
 				std::vector<char> padding(static_cast<std::streamoff>(fixedSize) - bytesWritten, 0);
 				os.write(padding.data(), static_cast<std::streamsize>(padding.size()));
 			}
+		}
+
+		template<typename T>
+		static std::vector<char> serializeToBuffer(const T &obj, size_t fixedSize) {
+			std::ostringstream oss(std::ios::binary);
+			serializeWithFixedSize(oss, obj, fixedSize);
+			auto str = oss.str();
+			return {str.begin(), str.end()};
 		}
 
 		template<typename T>

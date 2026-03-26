@@ -154,5 +154,9 @@ namespace graph::storage {
 
 		std::atomic<bool> compactionEnabled_{false};
 		concurrent::ThreadPool *threadPool_ = nullptr;
+
+		// File descriptor for pwrite-based parallel writes.
+		// Opened alongside fstream in open(), closed in close().
+		int writeFd_ = -1;
 	};
 } // namespace graph::storage

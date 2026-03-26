@@ -312,6 +312,10 @@ namespace graph::storage {
 		 */
 		void setSystemStateManager(const std::shared_ptr<state::SystemStateManager> &systemStateManager);
 
+		// Read-write separation: skip dirty entity lookups for read-only transactions
+		void setSkipDirtyLookup(bool skip) { skipDirtyLookup_.store(skip, std::memory_order_release); }
+		[[nodiscard]] bool getSkipDirtyLookup() const { return skipDirtyLookup_.load(std::memory_order_acquire); }
+
 		// Transaction context management
 		void setActiveTransaction(uint64_t txnId);
 		void clearActiveTransaction();
@@ -419,6 +423,10 @@ namespace graph::storage {
 
 		std::vector<std::shared_ptr<IEntityObserver>> observers_;
 		mutable std::recursive_mutex observer_mutex_;
+
+		// When true, getEntityFromMemoryOrDisk skips dirty map lookups.
+		// Used by read-only transactions to see only committed state.
+		std::atomic<bool> skipDirtyLookup_{false};
 
 		// File descriptor for thread-safe pread() based parallel reads.
 		// pread() is atomic (no separate seek+read) and multiple threads

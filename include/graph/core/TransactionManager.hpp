@@ -46,6 +46,8 @@ namespace graph {
 
 		Transaction begin();
 		Transaction begin(std::chrono::milliseconds timeout);
+		Transaction beginReadOnly();
+		Transaction beginReadOnly(std::chrono::milliseconds timeout);
 		void commitTransaction(Transaction &txn);
 		void rollbackTransaction(Transaction &txn);
 		[[nodiscard]] bool hasActiveTransaction() const;

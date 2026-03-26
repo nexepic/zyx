@@ -57,6 +57,7 @@ namespace graph {
 		[[nodiscard]] uint64_t getId() const { return txnId_; }
 		[[nodiscard]] TxnState getState() const { return state_; }
 		[[nodiscard]] bool isActive() const { return state_ == TxnState::TXN_ACTIVE; }
+		[[nodiscard]] bool isReadOnly() const { return readOnly_; }
 
 		void recordOperation(TxnOperation op);
 		[[nodiscard]] const std::vector<TxnOperation> &getOperations() const { return operations_; }
@@ -67,6 +68,7 @@ namespace graph {
 
 		uint64_t txnId_ = 0;
 		TxnState state_ = TxnState::TXN_ACTIVE;
+		bool readOnly_ = false;
 		TransactionManager *manager_ = nullptr; // Non-owning
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::vector<TxnOperation> operations_;

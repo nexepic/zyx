@@ -19,6 +19,7 @@
  **/
 
 #include "graph/storage/data/DataManager.hpp"
+#include <cstring>
 #include <map>
 #include <sstream>
 #include "graph/concurrent/ThreadPool.hpp"
@@ -27,6 +28,7 @@
 #include "graph/core/StateChainManager.hpp"
 #include "graph/core/Types.hpp"
 #include "graph/storage/PreadHelper.hpp"
+#include "graph/storage/SegmentReadUtils.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 #include "graph/storage/DeletionManager.hpp"
 #include "graph/storage/EntityReferenceUpdater.hpp"
@@ -491,34 +493,49 @@ namespace graph::storage {
 		if (work.empty())
 			return result;
 
-		// Parallel path: each thread processes one segment
+		// Parallel path: coalesce consecutive segments into single large I/O calls
 		if (pool && !pool->isSingleThreaded() && work.size() > 1) {
+			// Build segment index list from work items
+			std::vector<size_t> workSegIndices;
+			workSegIndices.reserve(work.size());
+			for (const auto &w : work)
+				workSegIndices.push_back(w.segIdx);
+
+			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
 			std::vector<std::vector<std::pair<int64_t, Property>>> perSeg(work.size());
 
-			pool->parallelFor(0, work.size(), [&](size_t wi) {
-				const auto &w = work[wi];
-				const auto &seg = segIndex[w.segIdx];
-				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
-				if (header.used == 0)
+			pool->parallelFor(0, groups.size(), [&](size_t gi) {
+				const auto &group = groups[gi];
+				// Single pread for the entire coalesced group
+				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				auto groupOffset = static_cast<off_t>(group.startOffset);
+				ssize_t n = storage::portable_pread(readFd_, groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes))
 					return;
 
-				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-				std::vector<char> buf(dataBytes);
-				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes))
-					return;
+				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+					size_t wi = group.memberIndices[mi];
+					const auto &w = work[wi];
+					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
 
-				auto &local = perSeg[wi];
-				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-					int64_t id = sortedIds[i];
-					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
-					if (slot >= header.used)
+					SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
+					if (header.used == 0)
 						continue;
-					Property prop = Property::deserializeFromBuffer(
-						buf.data() + slot * entitySize);
-					if (prop.isActive())
-						local.emplace_back(id, std::move(prop));
+
+					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
+					auto &local = perSeg[wi];
+					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+						int64_t id = sortedIds[i];
+						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+						if (slot >= header.used)
+							continue;
+						Property prop = Property::deserializeFromBuffer(
+							dataBuf + slot * entitySize);
+						if (prop.isActive())
+							local.emplace_back(id, std::move(prop));
+					}
 				}
 			});
 
@@ -1096,17 +1113,20 @@ namespace graph::storage {
 	template<typename EntityType>
 	EntityType DataManager::getEntityFromMemoryOrDisk(int64_t id) {
 		// 1. Check dirty info via PersistenceManager
-		auto dirtyInfo = getDirtyInfo<EntityType>(id);
+		// Skip dirty lookups when reading committed state (read-only transactions)
+		if (!skipDirtyLookup_.load(std::memory_order_acquire)) {
+			auto dirtyInfo = getDirtyInfo<EntityType>(id);
 
-		if (dirtyInfo.has_value()) {
-			// CASE A: Entity is marked as DELETED in memory
-			if (dirtyInfo->changeType == EntityChangeType::CHANGE_DELETED) {
-				return make_inactive<EntityType>();
-			}
+			if (dirtyInfo.has_value()) {
+				// CASE A: Entity is marked as DELETED in memory
+				if (dirtyInfo->changeType == EntityChangeType::CHANGE_DELETED) {
+					return make_inactive<EntityType>();
+				}
 
-			// CASE B: Entity is ADDED or MODIFIED
-			if (dirtyInfo->backup.has_value()) {
-				return *dirtyInfo->backup;
+				// CASE B: Entity is ADDED or MODIFIED
+				if (dirtyInfo->backup.has_value()) {
+					return *dirtyInfo->backup;
+				}
 			}
 		}
 

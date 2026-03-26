@@ -23,6 +23,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
@@ -35,6 +36,7 @@
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
+#include "graph/storage/SegmentReadUtils.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -201,49 +203,61 @@ namespace graph::query::execution::operators {
 			}
 
 			// ── Phase 1: Parallel bulk-read Node segments + collect property IDs ──
+			// Build coalesced groups to merge consecutive segment reads into single large I/O calls
+			auto groups = storage::buildCoalescedGroups(relevantSegIdxs, segIndex);
 			size_t numSegs = relevantSegIdxs.size();
 			std::vector<std::vector<Node>> segNodes(numSegs);
 			std::vector<std::vector<int64_t>> segPropIds(numSegs);
 
 			const auto phase1Start = profileEnabled ? Clock::now() : Clock::time_point{};
-			threadPool_->parallelFor(0, numSegs, [&](size_t si) {
-				const auto &seg = segIndex[relevantSegIdxs[si]];
-				auto header = dm_->getSegmentTracker()->getSegmentHeaderCopy(seg.segmentOffset);
-				if (header.used == 0)
+			threadPool_->parallelFor(0, groups.size(), [&](size_t gi) {
+				const auto &group = groups[gi];
+				// Single pread for the entire coalesced group
+				size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				auto groupOffset = static_cast<off_t>(group.startOffset);
+				ssize_t n = dm_->preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes))
 					return;
 
 				constexpr size_t entitySize = Node::getTotalSize();
-				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-				std::vector<char> buf(dataBytes);
-				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(storage::SegmentHeader));
-				ssize_t n = dm_->preadBytes(buf.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes))
-					return;
 
-				auto &localNodes = segNodes[si];
-				auto &localPropIds = segPropIds[si];
+				// Process each segment within the coalesced buffer
+				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+					size_t si = group.memberIndices[mi];
+					size_t bufOffset = mi * storage::TOTAL_SEGMENT_SIZE;
 
-				for (uint32_t i = 0; i < header.used; ++i) {
-					int64_t entityId = header.start_id + i;
-					if (entityId < startId || entityId > endId)
-						continue;
-					if (!candidateSet.empty() && !candidateSet.count(entityId))
+					// Parse the segment header from the buffer
+					storage::SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(storage::SegmentHeader));
+					if (header.used == 0)
 						continue;
 
-					Node node = Node::deserializeFromBuffer(buf.data() + i * entitySize);
+					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(storage::SegmentHeader);
+					auto &localNodes = segNodes[si];
+					auto &localPropIds = segPropIds[si];
 
-					if (!node.isActive())
-						continue;
-					if (!config_.label.empty() && node.getLabelId() != targetLabelId_)
-						continue;
+					for (uint32_t i = 0; i < header.used; ++i) {
+						int64_t entityId = header.start_id + i;
+						if (entityId < startId || entityId > endId)
+							continue;
+						if (!candidateSet.empty() && !candidateSet.count(entityId))
+							continue;
 
-					// Collect property entity IDs for bulk loading
-					if (node.hasPropertyEntity() &&
-						node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
-						localPropIds.push_back(node.getPropertyEntityId());
+						Node node = Node::deserializeFromBuffer(dataBuf + i * entitySize);
+
+						if (!node.isActive())
+							continue;
+						if (!config_.label.empty() && node.getLabelId() != targetLabelId_)
+							continue;
+
+						if (node.hasPropertyEntity() &&
+							node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
+							localPropIds.push_back(node.getPropertyEntityId());
+						}
+
+						localNodes.push_back(std::move(node));
 					}
-
-					localNodes.push_back(std::move(node));
 				}
 			});
 			if (profileEnabled) {

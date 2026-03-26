@@ -22,11 +22,14 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <sstream>
 #include <utility>
 #include <zlib.h>
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
@@ -86,6 +89,10 @@ namespace graph::storage {
 		}
 
 		initializeComponents();
+
+		// Open a separate fd for pwrite-based parallel writes
+		writeFd_ = portable_open_rw(dbFilePath.c_str());
+
 		isFileOpen = true;
 	}
 
@@ -124,6 +131,12 @@ namespace graph::storage {
 	void FileStorage::close() {
 		if (isFileOpen) {
 			flush(); // Ensure any pending changes are written
+
+			// Close pwrite fd before fstream
+			if (writeFd_ >= 0) {
+				portable_close_rw(writeFd_);
+				writeFd_ = -1;
+			}
 
 			if (fileStream) {
 				fileStream->flush();
@@ -264,55 +277,102 @@ namespace graph::storage {
 													 prepStart)
 												   .count()));
 
-		// 3. SEQUENTIAL I/O PHASE (single fstream constraint)
+		// 3. I/O PHASE
 		auto ioStart = Clock::now();
+
+		// Step 1: Sequential — new entities (need segment allocation via SpaceManager)
 		if (!newNodes.empty()) {
 			std::unordered_map<int64_t, Node> map;
 			for (auto &e : newNodes) map[e.getId()] = e;
 			saveData(map, fileHeader.node_segment_head, NODES_PER_SEGMENT);
 		}
-		for (const auto &n : modNodes) updateEntityInPlace(n);
-		for (const auto &n : delNodes) deleteEntityOnDisk(n);
-
 		if (!newEdges.empty()) {
 			std::unordered_map<int64_t, Edge> map;
 			for (auto &e : newEdges) map[e.getId()] = e;
 			saveData(map, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
 		}
-		for (const auto &e : modEdges) updateEntityInPlace(e);
-		for (const auto &e : delEdges) deleteEntityOnDisk(e);
-
 		if (!newProps.empty()) {
 			std::unordered_map<int64_t, Property> map;
 			for (auto &e : newProps) map[e.getId()] = e;
 			saveData(map, fileHeader.property_segment_head, PROPERTIES_PER_SEGMENT);
 		}
-		for (const auto &p : modProps) updateEntityInPlace(p);
-		for (const auto &p : delProps) deleteEntityOnDisk(p);
-
 		if (!newBlobs.empty()) {
 			std::unordered_map<int64_t, Blob> map;
 			for (auto &e : newBlobs) map[e.getId()] = e;
 			saveData(map, fileHeader.blob_segment_head, BLOBS_PER_SEGMENT);
 		}
-		for (const auto &b : modBlobs) updateEntityInPlace(b);
-		for (const auto &b : delBlobs) deleteEntityOnDisk(b);
-
 		if (!newIndexes.empty()) {
 			std::unordered_map<int64_t, Index> map;
 			for (auto &e : newIndexes) map[e.getId()] = e;
 			saveData(map, fileHeader.index_segment_head, INDEXES_PER_SEGMENT);
 		}
-		for (const auto &i : modIndexes) updateEntityInPlace(i);
-		for (const auto &i : delIndexes) deleteEntityOnDisk(i);
-
 		if (!newStates.empty()) {
 			std::unordered_map<int64_t, State> map;
 			for (auto &e : newStates) map[e.getId()] = e;
 			saveData(map, fileHeader.state_segment_head, STATES_PER_SEGMENT);
 		}
-		for (const auto &s : modStates) updateEntityInPlace(s);
-		for (const auto &s : delStates) deleteEntityOnDisk(s);
+
+		// Step 2: Modified + deleted entities (known offsets, non-overlapping regions)
+		// When thread pool available, parallelize across entity types using pwrite
+		if (threadPool_ && !threadPool_->isSingleThreaded()) {
+			std::vector<std::future<void>> ioTasks;
+
+			if (!modNodes.empty() || !delNodes.empty()) {
+				ioTasks.push_back(threadPool_->submit([&] {
+					for (const auto &n : modNodes) updateEntityInPlace(n);
+					for (const auto &n : delNodes) deleteEntityOnDisk(n);
+				}));
+			}
+			if (!modEdges.empty() || !delEdges.empty()) {
+				ioTasks.push_back(threadPool_->submit([&] {
+					for (const auto &e : modEdges) updateEntityInPlace(e);
+					for (const auto &e : delEdges) deleteEntityOnDisk(e);
+				}));
+			}
+			if (!modProps.empty() || !delProps.empty()) {
+				ioTasks.push_back(threadPool_->submit([&] {
+					for (const auto &p : modProps) updateEntityInPlace(p);
+					for (const auto &p : delProps) deleteEntityOnDisk(p);
+				}));
+			}
+			if (!modBlobs.empty() || !delBlobs.empty()) {
+				ioTasks.push_back(threadPool_->submit([&] {
+					for (const auto &b : modBlobs) updateEntityInPlace(b);
+					for (const auto &b : delBlobs) deleteEntityOnDisk(b);
+				}));
+			}
+			if (!modIndexes.empty() || !delIndexes.empty()) {
+				ioTasks.push_back(threadPool_->submit([&] {
+					for (const auto &i : modIndexes) updateEntityInPlace(i);
+					for (const auto &i : delIndexes) deleteEntityOnDisk(i);
+				}));
+			}
+			if (!modStates.empty() || !delStates.empty()) {
+				ioTasks.push_back(threadPool_->submit([&] {
+					for (const auto &s : modStates) updateEntityInPlace(s);
+					for (const auto &s : delStates) deleteEntityOnDisk(s);
+				}));
+			}
+
+			for (auto &f : ioTasks) f.get();
+		} else {
+			// Sequential fallback
+			for (const auto &n : modNodes) updateEntityInPlace(n);
+			for (const auto &n : delNodes) deleteEntityOnDisk(n);
+			for (const auto &e : modEdges) updateEntityInPlace(e);
+			for (const auto &e : delEdges) deleteEntityOnDisk(e);
+			for (const auto &p : modProps) updateEntityInPlace(p);
+			for (const auto &p : delProps) deleteEntityOnDisk(p);
+			for (const auto &b : modBlobs) updateEntityInPlace(b);
+			for (const auto &b : delBlobs) deleteEntityOnDisk(b);
+			for (const auto &i : modIndexes) updateEntityInPlace(i);
+			for (const auto &i : delIndexes) deleteEntityOnDisk(i);
+			for (const auto &s : modStates) updateEntityInPlace(s);
+			for (const auto &s : delStates) deleteEntityOnDisk(s);
+		}
+
+		// Step 3: Single fsync to flush all writes
+		if (writeFd_ >= 0) portable_fsync(writeFd_);
 
 		debug::PerfTrace::addDuration(
 				"save.io", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
@@ -466,28 +526,37 @@ namespace graph::storage {
 
 	template<typename T>
 	void FileStorage::writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t baseUsed) {
-		// Calculate item size
 		const size_t itemSize = T::getTotalSize();
-
-		// Write data
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + baseUsed * itemSize;
-		fileStream->seekp(static_cast<std::streamoff>(dataOffset));
-		for (const auto &item: data) {
-			utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, item, itemSize);
-			dataOffset += itemSize;
+
+		if (writeFd_ >= 0) {
+			// pwrite path: build entire payload into a single buffer
+			size_t totalSize = data.size() * itemSize;
+			std::vector<char> buf(totalSize);
+			size_t pos = 0;
+			for (const auto &item : data) {
+				auto serialized = utils::FixedSizeSerializer::serializeToBuffer(item, itemSize);
+				std::memcpy(buf.data() + pos, serialized.data(), serialized.size());
+				pos += itemSize;
+			}
+			portable_pwrite(writeFd_, buf.data(), totalSize,
+							static_cast<pwrite_off_t>(dataOffset));
+		} else {
+			// fstream fallback
+			fileStream->seekp(static_cast<std::streamoff>(dataOffset));
+			for (const auto &item: data) {
+				utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, item, itemSize);
+			}
+			fileStream->flush();
 		}
 
 		// Use the tracker to update the segment header
 		segmentTracker->updateSegmentHeader(segmentOffset, [&](SegmentHeader &header) {
-			// Update header fields
 			header.used = baseUsed + static_cast<uint32_t>(data.size());
 			if (baseUsed == 0 && !data.empty()) {
 				header.start_id = data.front().getId();
 			}
 		});
-
-		// Flush file stream to ensure data is written
-		fileStream->flush();
 
 		// Update bitmap for the newly added entities directly
 		if (!data.empty()) {
@@ -525,10 +594,17 @@ namespace graph::storage {
 		// Calculate file offset for this entity
 		uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + entityIndex * T::getTotalSize();
 
-		// Write entity
-		fileStream->seekp(static_cast<std::streamoff>(entityOffset));
-		utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, T::getTotalSize());
-		fileStream->flush();
+		if (writeFd_ >= 0) {
+			// pwrite path: serialize to buffer, single pwrite call
+			auto buf = utils::FixedSizeSerializer::serializeToBuffer(entity, T::getTotalSize());
+			portable_pwrite(writeFd_, buf.data(), buf.size(),
+							static_cast<pwrite_off_t>(entityOffset));
+		} else {
+			// fstream fallback
+			fileStream->seekp(static_cast<std::streamoff>(entityOffset));
+			utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, T::getTotalSize());
+			fileStream->flush();
+		}
 
 		// Update bitmap to reflect entity's active state
 		updateBitmapForEntity<T>(segmentOffset, id, entity.isActive());
