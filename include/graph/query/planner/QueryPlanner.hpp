@@ -30,6 +30,7 @@
 #include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/query/execution/operators/SortOperator.hpp"
+#include "graph/query/execution/operators/TransactionControlOperator.hpp"
 
 // Forward declarations to reduce compile-time dependencies
 namespace graph::storage {
@@ -211,6 +212,10 @@ namespace graph::query {
 																		 const std::string &label,
 																		 const std::string &property, int dimension,
 																		 const std::string &metric) const;
+
+		// Transaction control
+		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator>
+		transactionControlOp(execution::operators::TransactionCommand cmd);
 
 		// Helper for standalone queries (RETURN 1)
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> singleRowOp();

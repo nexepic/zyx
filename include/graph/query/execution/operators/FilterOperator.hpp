@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <chrono>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -27,6 +29,7 @@
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -64,10 +67,17 @@ namespace graph::query::execution::operators {
 				RecordBatch outputBatch;
 				outputBatch.reserve(inputBatch.size());
 
+				using Clock = std::chrono::steady_clock;
+				auto filterStart = Clock::now();
 				for (auto &record : inputBatch) {
 					if (predicate_(record))
 						outputBatch.push_back(std::move(record));
 				}
+				debug::PerfTrace::addDuration(
+						"filter",
+						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+													filterStart)
+												 .count()));
 
 				if (!outputBatch.empty())
 					return outputBatch;

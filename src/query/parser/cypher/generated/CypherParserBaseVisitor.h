@@ -30,6 +30,18 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitTxnBegin(CypherParser::TxnBeginContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitTxnCommit(CypherParser::TxnCommitContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitTxnRollback(CypherParser::TxnRollbackContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) override {
     return visitChildren(ctx);
   }

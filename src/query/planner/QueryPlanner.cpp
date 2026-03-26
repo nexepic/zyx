@@ -280,4 +280,9 @@ namespace graph::query {
 		return std::make_unique<execution::operators::SingleRowOperator>();
 	}
 
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::transactionControlOp(execution::operators::TransactionCommand cmd) {
+		return std::make_unique<execution::operators::TransactionControlOperator>(cmd);
+	}
+
 } // namespace graph::query

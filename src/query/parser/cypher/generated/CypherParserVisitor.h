@@ -28,6 +28,12 @@ public:
 
     virtual std::any visitAdministrationStatement(CypherParser::AdministrationStatementContext *context) = 0;
 
+    virtual std::any visitTxnBegin(CypherParser::TxnBeginContext *context) = 0;
+
+    virtual std::any visitTxnCommit(CypherParser::TxnCommitContext *context) = 0;
+
+    virtual std::any visitTxnRollback(CypherParser::TxnRollbackContext *context) = 0;
+
     virtual std::any visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *context) = 0;
 
     virtual std::any visitDropIndexByName(CypherParser::DropIndexByNameContext *context) = 0;

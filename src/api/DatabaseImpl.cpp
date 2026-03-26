@@ -19,8 +19,11 @@
  **/
 
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <chrono>
 #include <optional>
+#include <string_view>
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
@@ -34,6 +37,136 @@ namespace zyx {
 	// ========================================================================
 	// 1. Helpers: Type Conversion
 	// ========================================================================
+
+	namespace {
+		size_t skipSpaces(const std::string_view s, size_t i) {
+			while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) {
+				++i;
+			}
+			return i;
+		}
+
+		std::string toUpperCopy(const std::string_view s) {
+			std::string out;
+			out.reserve(s.size());
+			for (char ch : s) {
+				out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+			}
+			return out;
+		}
+
+		std::string readToken(const std::string_view s, size_t &i) {
+			i = skipSpaces(s, i);
+			size_t start = i;
+			while (i < s.size()) {
+				const unsigned char ch = static_cast<unsigned char>(s[i]);
+				if (std::isalnum(ch) || ch == '_' || ch == '.') {
+					++i;
+				} else {
+					break;
+				}
+			}
+			return std::string(s.substr(start, i - start));
+		}
+
+		bool isTokenBoundary(const std::string_view s, size_t pos, size_t len) {
+			const bool leftBoundary =
+					pos == 0 ||
+					(!std::isalnum(static_cast<unsigned char>(s[pos - 1])) && s[pos - 1] != '_');
+			const size_t end = pos + len;
+			const bool rightBoundary =
+					end >= s.size() ||
+					(!std::isalnum(static_cast<unsigned char>(s[end])) && s[end] != '_');
+			return leftBoundary && rightBoundary;
+		}
+
+		bool containsToken(const std::string_view s, const std::string_view token) {
+			if (token.empty() || s.empty()) {
+				return false;
+			}
+			size_t pos = s.find(token);
+			while (pos != std::string_view::npos) {
+				if (isTokenBoundary(s, pos, token.size())) {
+					return true;
+				}
+				pos = s.find(token, pos + 1);
+			}
+			return false;
+		}
+
+		enum class CypherTxnKind { NONE, TXN_BEGIN, TXN_COMMIT, TXN_ROLLBACK };
+
+		CypherTxnKind detectCypherTxnStatement(const std::string_view query) {
+			size_t pos = 0;
+			std::string first = readToken(query, pos);
+			std::string upper = toUpperCopy(first);
+			if (upper == "BEGIN") {
+				return CypherTxnKind::TXN_BEGIN;
+			}
+			if (upper == "COMMIT") {
+				return CypherTxnKind::TXN_COMMIT;
+			}
+			if (upper == "ROLLBACK") {
+				return CypherTxnKind::TXN_ROLLBACK;
+			}
+			return CypherTxnKind::NONE;
+		}
+
+		bool isReadOnlyProcedure(const std::string_view procUpper) {
+			static constexpr std::array<std::string_view, 4> kReadOnlyProcedures = {
+					"DB.INDEX.VECTOR.QUERYNODES",
+					"DBMS.LISTCONFIG",
+					"DBMS.GETCONFIG",
+					"ALGO.SHORTESTPATH",
+			};
+			return std::ranges::find(kReadOnlyProcedures, procUpper) != kReadOnlyProcedures.end();
+		}
+
+		bool isLikelyReadOnlyQuery(const std::string_view query) {
+			if (query.empty()) {
+				return false;
+			}
+
+			const std::string upper = toUpperCopy(query);
+			std::string_view view = upper;
+
+			// Skip EXPLAIN/PROFILE prefix if present.
+			size_t pos = 0;
+			std::string first = readToken(view, pos);
+			if (first == "EXPLAIN" || first == "PROFILE") {
+				first = readToken(view, pos);
+			}
+			if (first.empty()) {
+				return false;
+			}
+
+			static constexpr std::array<std::string_view, 8> kWriteTokens = {
+					"CREATE", "MERGE", "DELETE", "SET",
+					"REMOVE", "DROP", "INSERT", "TRAIN",
+			};
+			for (const auto token : kWriteTokens) {
+				if (containsToken(view, token)) {
+					return false;
+				}
+			}
+
+			// Conservative fallback: if CALL is present but not the leading clause,
+			// route through transactional path to avoid misclassifying mixed queries.
+			if (containsToken(view, "CALL") && first != "CALL") {
+				return false;
+			}
+
+			if (first == "CALL") {
+				std::string proc = readToken(view, pos);
+				return isReadOnlyProcedure(proc);
+			}
+
+			static constexpr std::array<std::string_view, 6> kReadLeadingTokens = {
+					"MATCH", "RETURN", "WITH", "UNWIND", "OPTIONAL", "SHOW",
+			};
+			return std::ranges::find(kReadLeadingTokens, first) != kReadLeadingTokens.end();
+		}
+	} // namespace
 
 	// Forward declaration
 	Value toPublicValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
@@ -353,6 +486,7 @@ namespace zyx {
 	public:
 		explicit DatabaseImpl(const std::string &path) : db_(path) {}
 		graph::Database db_;
+		std::optional<graph::Transaction> cypherTxn_;
 	};
 
 	// ========================================================================
@@ -449,6 +583,10 @@ namespace zyx {
 		return txn;
 	}
 
+	bool Database::hasActiveTransaction() const {
+		return impl_->db_.hasActiveTransaction() || impl_->cypherTxn_.has_value();
+	}
+
 	void Database::setThreadPoolSize(size_t poolSize) const { impl_->db_.setThreadPoolSize(poolSize); }
 
 	Result Database::execute(const std::string &cypher) const {
@@ -457,12 +595,57 @@ namespace zyx {
 				impl_->db_.open();
 			}
 
-			// Auto-commit: wrap in implicit transaction if no explicit transaction is active.
-			// If an explicit transaction is already active, execute directly within it.
-			bool needsAutoCommit = !impl_->db_.hasActiveTransaction();
+			// Intercept transaction control statements (BEGIN/COMMIT/ROLLBACK)
+			auto txnKind = detectCypherTxnStatement(cypher);
+			if (txnKind != CypherTxnKind::NONE) {
+				graph::query::QueryResult txnResult;
+				auto start = std::chrono::high_resolution_clock::now();
+
+				switch (txnKind) {
+					case CypherTxnKind::TXN_BEGIN:
+						if (impl_->cypherTxn_.has_value()) {
+							throw std::runtime_error("Nested transactions are not supported: transaction already active");
+						}
+						impl_->cypherTxn_.emplace(impl_->db_.beginTransaction());
+						txnResult.addRow({{"result", graph::query::ResultValue(graph::PropertyValue("Transaction started"))}});
+						break;
+					case CypherTxnKind::TXN_COMMIT:
+						if (!impl_->cypherTxn_.has_value()) {
+							throw std::runtime_error("No active transaction to commit");
+						}
+						impl_->cypherTxn_->commit();
+						impl_->cypherTxn_.reset();
+						txnResult.addRow({{"result", graph::query::ResultValue(graph::PropertyValue("Transaction committed"))}});
+						break;
+					case CypherTxnKind::TXN_ROLLBACK:
+						if (!impl_->cypherTxn_.has_value()) {
+							throw std::runtime_error("No active transaction to rollback");
+						}
+						impl_->cypherTxn_.reset(); // destructor auto-rolls back
+						txnResult.addRow({{"result", graph::query::ResultValue(graph::PropertyValue("Transaction rolled back"))}});
+						break;
+					default:
+						break;
+				}
+
+				auto end = std::chrono::high_resolution_clock::now();
+				std::chrono::duration<double, std::milli> elapsed = end - start;
+				txnResult.setDuration(elapsed.count());
+
+				Result res;
+				res.impl_ = std::make_unique<ResultImpl>(std::move(txnResult), nullptr);
+				return res;
+			}
+
+			// Auto-commit for writes:
+			// - If explicit/cypher transaction exists, execute within it.
+			// - If no explicit transaction and query is read-only, bypass implicit transaction.
+			// - Otherwise, wrap in an implicit transaction.
+			bool needsAutoCommit = !impl_->db_.hasActiveTransaction() && !impl_->cypherTxn_.has_value();
+			bool isReadOnlyFastPath = needsAutoCommit && isLikelyReadOnlyQuery(cypher);
 			std::optional<graph::Transaction> implicitTxn;
 
-			if (needsAutoCommit) {
+			if (needsAutoCommit && !isReadOnlyFastPath) {
 				implicitTxn.emplace(impl_->db_.beginTransaction());
 			}
 
@@ -513,6 +696,12 @@ namespace zyx {
 							   const std::vector<std::unordered_map<std::string, Value>> &propsList) const {
 		if (propsList.empty())
 			return;
+
+		std::optional<graph::Transaction> implicitTxn;
+		if (!impl_->db_.hasActiveTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
 		auto storage = impl_->db_.getStorage();
 		auto dm = storage->getDataManager();
 
@@ -533,10 +722,19 @@ namespace zyx {
 		}
 
 		dm->addNodes(nodes);
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
 	}
 
 	int64_t Database::createNodeRetId(const std::string &label,
 									  const std::unordered_map<std::string, Value> &props) const {
+		std::optional<graph::Transaction> implicitTxn;
+		if (!impl_->db_.hasActiveTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
 		auto dm = impl_->db_.getStorage()->getDataManager();
 
 		// 1. Resolve/Create Label ID
@@ -553,11 +751,20 @@ namespace zyx {
 				internalProps[k] = toInternal(v);
 			dm->addNodeProperties(newId, internalProps);
 		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
 		return newId;
 	}
 
 	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
 								  const std::unordered_map<std::string, Value> &props) const {
+		std::optional<graph::Transaction> implicitTxn;
+		if (!impl_->db_.hasActiveTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
 		auto dm = impl_->db_.getStorage()->getDataManager();
 
 		// 1. Resolve/Create Label ID
@@ -572,6 +779,10 @@ namespace zyx {
 			for (const auto &[k, v]: props)
 				internalProps[k] = toInternal(v);
 			dm->addEdgeProperties(edge.getId(), internalProps);
+		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
 		}
 	}
 

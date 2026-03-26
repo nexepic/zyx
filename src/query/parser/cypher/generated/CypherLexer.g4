@@ -83,6 +83,12 @@ K_SCALAR     : 'SCALAR';
 K_OF         : 'OF';
 K_ADD        : 'ADD';
 
+// Transaction
+K_BEGIN       : 'BEGIN';
+K_COMMIT      : 'COMMIT';
+K_ROLLBACK    : 'ROLLBACK';
+K_TRANSACTION : 'TRANSACTION';
+
 // Vector
 K_VECTOR     : 'VECTOR';
 K_OPTIONS    : 'OPTIONS';

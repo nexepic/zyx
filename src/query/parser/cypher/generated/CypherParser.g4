@@ -33,6 +33,13 @@ administrationStatement
     : showIndexesStatement
     | dropIndexStatement
     | createIndexStatement
+    | transactionStatement
+    ;
+
+transactionStatement
+    : K_BEGIN K_TRANSACTION?    # TxnBegin
+    | K_COMMIT K_TRANSACTION?   # TxnCommit
+    | K_ROLLBACK K_TRANSACTION? # TxnRollback
     ;
 
 showIndexesStatement
@@ -375,6 +382,7 @@ namespace : ( symbolicName DOT )* ;
 schemaName
     : symbolicName
     | K_INDEX | K_ON | K_MATCH | K_CREATE | K_WHERE | K_RETURN
+    | K_BEGIN | K_COMMIT | K_ROLLBACK | K_TRANSACTION
     ;
 
 symbolicName
@@ -394,6 +402,8 @@ symbolicName
     | K_SCALAR | K_OF | K_ADD
     // Vector Keywords
     | K_VECTOR | K_OPTIONS
+    // Transaction Keywords
+    | K_BEGIN | K_COMMIT | K_ROLLBACK | K_TRANSACTION
     ;
 
 literal

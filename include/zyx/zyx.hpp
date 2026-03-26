@@ -129,6 +129,7 @@ namespace zyx {
 
 		// Transaction support
 		[[nodiscard]] Transaction beginTransaction();
+		[[nodiscard]] bool hasActiveTransaction() const;
 
 		// Resize the thread pool at runtime (0=auto, 1=single-thread, >1=N threads)
 		void setThreadPoolSize(size_t poolSize) const;

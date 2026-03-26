@@ -20,8 +20,10 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 
 namespace graph::storage {
 	class FileStorage;
@@ -40,17 +42,20 @@ namespace graph {
 						   std::shared_ptr<storage::wal::WALManager> walManager);
 		~TransactionManager() = default;
 
+		static constexpr auto kDefaultTxnTimeout = std::chrono::seconds{30};
+
 		Transaction begin();
+		Transaction begin(std::chrono::milliseconds timeout);
 		void commitTransaction(Transaction &txn);
 		void rollbackTransaction(Transaction &txn);
 		[[nodiscard]] bool hasActiveTransaction() const;
 
 	private:
 		friend class Transaction;
-		std::mutex writeMutex_;
-		std::unique_lock<std::mutex> writeLock_;
+		std::timed_mutex writeMutex_;
+		std::unique_lock<std::timed_mutex> writeLock_;
 		std::atomic<uint64_t> nextTxnId_{1};
-		bool hasActive_ = false;
+		std::atomic<bool> hasActive_{false};
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::wal::WALManager> walManager_;
 	};

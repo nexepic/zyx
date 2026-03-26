@@ -18,7 +18,10 @@
  **/
 
 #include "graph/core/TransactionManager.hpp"
+#include <chrono>
+#include <cstdint>
 #include "graph/core/Transaction.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 
@@ -28,9 +31,16 @@ namespace graph {
 										   std::shared_ptr<storage::wal::WALManager> walManager) :
 		storage_(std::move(storage)), walManager_(std::move(walManager)) {}
 
-	Transaction TransactionManager::begin() {
-		// Acquire single-writer lock
-		writeLock_ = std::unique_lock<std::mutex>(writeMutex_);
+	Transaction TransactionManager::begin() { return begin(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout)); }
+
+	Transaction TransactionManager::begin(std::chrono::milliseconds timeout) {
+		// Acquire single-writer lock with timeout using a local lock first
+		// to avoid releasing the existing writeLock_ before acquiring the new one
+		std::unique_lock<std::timed_mutex> lock(writeMutex_, std::defer_lock);
+		if (!lock.try_lock_for(timeout)) {
+			throw std::runtime_error("Transaction begin timed out: another transaction is active");
+		}
+		writeLock_ = std::move(lock);
 
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
@@ -49,22 +59,41 @@ namespace graph {
 	}
 
 	void TransactionManager::commitTransaction(Transaction &txn) {
+		using Clock = std::chrono::steady_clock;
+
 		if (txn.getState() != Transaction::TxnState::TXN_ACTIVE) {
 			return;
 		}
 
 		// Write WAL commit record and sync
 		if (walManager_ && walManager_->isOpen()) {
+			auto walStart = Clock::now();
 			walManager_->writeCommit(txn.getId());
 			walManager_->sync();
+			debug::PerfTrace::addDuration(
+					"wal.commit_sync",
+					static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+												 walStart)
+												 .count()));
 		}
 
 		// Persist dirty data to main DB file
+		auto saveStart = Clock::now();
 		storage_->save();
+		debug::PerfTrace::addDuration(
+				"txn.save", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+												 saveStart)
+											  .count()));
 
 		// Checkpoint WAL (truncate - data is now in main DB)
 		if (walManager_ && walManager_->isOpen()) {
+			auto checkpointStart = Clock::now();
 			walManager_->checkpoint();
+			debug::PerfTrace::addDuration(
+					"checkpoint",
+					static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+												 checkpointStart)
+												 .count()));
 		}
 
 		// Clear DataManager transaction context
@@ -114,6 +143,6 @@ namespace graph {
 		}
 	}
 
-	bool TransactionManager::hasActiveTransaction() const { return hasActive_; }
+	bool TransactionManager::hasActiveTransaction() const { return hasActive_.load(std::memory_order_acquire); }
 
 } // namespace graph

@@ -22,10 +22,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <unordered_map>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Platform specific includes for memory monitoring
@@ -39,6 +42,7 @@
 #endif
 
 // Include Public API
+#include "graph/debug/PerfTrace.hpp"
 #include "zyx/zyx.hpp"
 
 namespace zyx::benchmark {
@@ -49,6 +53,7 @@ namespace zyx::benchmark {
 		double avgLatencyUs;
 		double p99LatencyUs;
 		size_t peakMemoryKB;
+		std::vector<std::pair<std::string, double>> stageAvgMs;
 	};
 
 	class SystemMonitor {
@@ -84,6 +89,18 @@ namespace zyx::benchmark {
 		virtual void teardown(Database &) {}
 
 		Metrics execute() {
+			struct PerfGuard {
+				PerfGuard() {
+					graph::debug::PerfTrace::setEnabled(true);
+					graph::debug::PerfTrace::reset();
+				}
+
+				~PerfGuard() {
+					graph::debug::PerfTrace::setEnabled(false);
+					graph::debug::PerfTrace::reset();
+				}
+			} perfGuard;
+
 			// 1. Cleanup & Init
 			if (std::filesystem::exists(dbPath_)) {
 				std::filesystem::remove_all(dbPath_);
@@ -104,14 +121,21 @@ namespace zyx::benchmark {
 				// 3. Execution Loop
 				std::vector<double> latencies;
 				latencies.reserve(iterations_);
+				std::unordered_map<std::string, uint64_t> stageTotalNs;
 
 				auto startTotal = std::chrono::high_resolution_clock::now();
 
 				for (int i = 0; i < iterations_; ++i) {
+					graph::debug::PerfTrace::reset();
 					auto t0 = std::chrono::high_resolution_clock::now();
 					run(db);
 					auto t1 = std::chrono::high_resolution_clock::now();
 					latencies.push_back(std::chrono::duration<double, std::micro>(t1 - t0).count());
+
+					auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+					for (const auto &[key, entry] : snapshot) {
+						stageTotalNs[key] += entry.totalNs;
+					}
 				}
 
 				auto endTotal = std::chrono::high_resolution_clock::now();
@@ -123,9 +147,19 @@ namespace zyx::benchmark {
 				// 5. Calculate
 				double totalMs = std::chrono::duration<double, std::milli>(endTotal - startTotal).count();
 				std::ranges::sort(latencies);
+				std::vector<std::pair<std::string, double>> stageAvgMs;
+				stageAvgMs.reserve(stageTotalNs.size());
+				for (const auto &[key, ns] : stageTotalNs) {
+					double avgMsPerOp = iterations_ > 0
+											? static_cast<double>(ns) / static_cast<double>(iterations_) / 1000000.0
+											: 0.0;
+					stageAvgMs.emplace_back(key, avgMsPerOp);
+				}
+				std::ranges::sort(stageAvgMs, [](const auto &a, const auto &b) { return a.second > b.second; });
 
 				return Metrics{totalMs, iterations_ / (totalMs / 1000.0), totalMs * 1000.0 / iterations_,
-							   latencies[static_cast<size_t>(iterations_ * 0.99)], SystemMonitor::getPeakRSS()};
+							   latencies[static_cast<size_t>(iterations_ * 0.99)], SystemMonitor::getPeakRSS(),
+							   std::move(stageAvgMs)};
 			}
 		}
 
@@ -165,6 +199,23 @@ namespace zyx::benchmark {
 				  << std::setprecision(2) << m.opsPerSec << "| " << std::setw(15) << std::fixed << std::setprecision(2)
 				  << m.avgLatencyUs << "| " << std::setw(15) << std::fixed << std::setprecision(2) << m.p99LatencyUs
 				  << "| " << std::setw(15) << m.peakMemoryKB << "|\n";
+	}
+
+	inline void printStageBreakdown(const Metrics &m, size_t maxStages = 16) {
+		if (m.stageAvgMs.empty()) {
+			return;
+		}
+
+		size_t count = std::min(maxStages, m.stageAvgMs.size());
+		std::cout << "    [Stage avg ms/op] ";
+		for (size_t i = 0; i < count; ++i) {
+			const auto &[name, avgMs] = m.stageAvgMs[i];
+			std::cout << name << "=" << std::fixed << std::setprecision(3) << avgMs;
+			if (i + 1 < count) {
+				std::cout << ", ";
+			}
+		}
+		std::cout << "\n";
 	}
 
 } // namespace zyx::benchmark

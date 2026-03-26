@@ -22,6 +22,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <thread>
 #include "graph/core/Database.hpp"
 #include "graph/core/TransactionManager.hpp"
 #include "graph/storage/wal/WALManager.hpp"
@@ -438,4 +439,52 @@ TEST(TransactionManagerClosedWALTest, TransactionWithClosedWAL) {
 	testDb.reset();
 	fs::remove_all(testPath);
 	fs::remove(testPath.string() + "-wal");
+}
+
+// ============================================================================
+// Coverage Tests: Transaction timeout
+// ============================================================================
+
+TEST(TransactionManagerTimeoutTest, TimeoutOnBusyMutex) {
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_txnmgr_timeout_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+
+	// Shared TransactionManager so both threads use the same mutex
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	// First transaction holds the lock
+	auto txn1 = txnMgr.begin();
+	EXPECT_TRUE(txn1.isActive());
+
+	// Second thread should timeout trying to acquire the same mutex
+	std::thread t([&txnMgr]() {
+		EXPECT_THROW(txnMgr.begin(std::chrono::milliseconds(100)), std::runtime_error);
+	});
+	t.join();
+
+	txnMgr.commitTransaction(txn1);
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
+}
+
+TEST_F(TransactionManagerTest, AtomicHasActiveAfterCommit) {
+	auto txn = db->beginTransaction();
+	EXPECT_TRUE(db->hasActiveTransaction());
+	txn.commit();
+	EXPECT_FALSE(db->hasActiveTransaction());
+}
+
+TEST_F(TransactionManagerTest, AtomicHasActiveAfterRollback) {
+	auto txn = db->beginTransaction();
+	EXPECT_TRUE(db->hasActiveTransaction());
+	txn.rollback();
+	EXPECT_FALSE(db->hasActiveTransaction());
 }

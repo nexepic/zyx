@@ -19,13 +19,18 @@
  **/
 
 #include "graph/query/execution/QueryExecutor.hpp"
+#include <chrono>
+#include <cstdint>
 #include "debug/PlanVisualizer.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/query/api/QueryResult.hpp"
 
 namespace graph::query {
 
 	QueryResult QueryExecutor::execute(std::unique_ptr<execution::PhysicalOperator> plan) {
+		using Clock = std::chrono::steady_clock;
+
 		QueryResult result;
 
 		if (!plan)
@@ -35,14 +40,31 @@ namespace graph::query {
 		log::Log::debug("{}", planTree);
 
 		// 1. Initialize resources
+		auto openStart = Clock::now();
 		plan->open();
+		debug::PerfTrace::addDuration(
+				"executor.open", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+																   openStart)
+														  .count()));
 
 		// Ensure columns are set explicitly from the plan
 		auto outputVars = plan->getOutputVariables();
 		result.setColumns(outputVars);
 
 		// 2. Pipeline Execution Loop
-		while (auto batchOpt = plan->next()) {
+		uint64_t pullNsTotal = 0;
+		uint64_t materializeNsTotal = 0;
+		while (true) {
+			auto pullStart = Clock::now();
+			auto batchOpt = plan->next();
+			pullNsTotal += static_cast<uint64_t>(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - pullStart).count());
+
+			if (!batchOpt) {
+				break;
+			}
+
+			auto materializeStart = Clock::now();
 			const auto &batch = batchOpt.value();
 
 			// Reserve space for rows in this batch to avoid reallocations
@@ -73,10 +95,20 @@ namespace graph::query {
 					result.addRow(std::move(row));
 				}
 			}
+
+			materializeNsTotal += static_cast<uint64_t>(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - materializeStart).count());
 		}
+		debug::PerfTrace::addDuration("executor.pull", pullNsTotal);
+		debug::PerfTrace::addDuration("materialize", materializeNsTotal);
 
 		// 4. Cleanup
+		auto closeStart = Clock::now();
 		plan->close();
+		debug::PerfTrace::addDuration(
+				"executor.close", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+																    closeStart)
+														   .count()));
 
 		return result;
 	}

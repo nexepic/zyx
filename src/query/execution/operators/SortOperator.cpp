@@ -20,8 +20,11 @@
 
 #include "graph/query/execution/operators/SortOperator.hpp"
 #include <algorithm>
+#include <chrono>
+#include <cstdint>
 #include <string>
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 
@@ -94,6 +97,9 @@ std::string SortOperator::toString() const {
 }
 
 void SortOperator::performSort() {
+	using Clock = std::chrono::steady_clock;
+	auto sortStart = Clock::now();
+
 	auto comparator = [this](const Record &a, const Record &b) -> bool {
 		for (const auto &item: sortItems_) {
 			PropertyValue valA, valB;
@@ -124,6 +130,10 @@ void SortOperator::performSort() {
 		sortedRecords_.size() < PARALLEL_SORT_THRESHOLD) {
 		// Sequential sort for small datasets
 		std::sort(sortedRecords_.begin(), sortedRecords_.end(), comparator);
+		debug::PerfTrace::addDuration(
+				"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+														 sortStart)
+												  .count()));
 		return;
 	}
 
@@ -175,6 +185,11 @@ void SortOperator::performSort() {
 		});
 		step *= 2;
 	}
+
+	debug::PerfTrace::addDuration(
+			"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+													 sortStart)
+											  .count()));
 }
 
 } // namespace graph::query::execution::operators

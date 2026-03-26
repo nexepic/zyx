@@ -306,4 +306,75 @@ namespace zyx::benchmark {
 		void teardown(Database &) override {}
 	};
 
+	// ========================================================================
+	// Scenario 5: Transaction Performance (Implicit vs Explicit)
+	// ========================================================================
+
+	class ImplicitTxnInsertBench : public BenchmarkBase {
+	public:
+		ImplicitTxnInsertBench(std::string name, std::string path, int iter, int dataSize) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize) {}
+
+		void setup(Database &) override {}
+
+		void run(Database &db) override {
+			// Each CREATE is auto-committed individually (implicit transaction)
+			for (int i = 0; i < dataSize_; ++i) {
+				(void) db.execute("CREATE (n:TxnBench {id: " + std::to_string(i) + "})");
+			}
+		}
+
+		void teardown(Database &) override {}
+
+		[[nodiscard]] int getItemsPerOp() const override { return dataSize_; }
+	};
+
+	class ExplicitTxnInsertBench : public BenchmarkBase {
+	public:
+		ExplicitTxnInsertBench(std::string name, std::string path, int iter, int dataSize) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize) {}
+
+		void setup(Database &) override {}
+
+		void run(Database &db) override {
+			// Single explicit transaction wrapping all CREATEs
+			(void) db.execute("BEGIN");
+			for (int i = 0; i < dataSize_; ++i) {
+				(void) db.execute("CREATE (n:TxnBench {id: " + std::to_string(i) + "})");
+			}
+			(void) db.execute("COMMIT");
+		}
+
+		void teardown(Database &) override {}
+
+		[[nodiscard]] int getItemsPerOp() const override { return dataSize_; }
+	};
+
+	class ExplicitTxnBatchInsertBench : public BenchmarkBase {
+	public:
+		ExplicitTxnBatchInsertBench(std::string name, std::string path, int iter, int dataSize) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize) {}
+
+		void setup(Database &) override {}
+
+		void run(Database &db) override {
+			// Single explicit transaction with a single batch CREATE
+			(void) db.execute("BEGIN");
+			std::ostringstream oss;
+			oss << "CREATE ";
+			for (int i = 0; i < dataSize_; ++i) {
+				oss << "(:TxnBench {id: " << i << "})";
+				if (i < dataSize_ - 1) {
+					oss << ", ";
+				}
+			}
+			(void) db.execute(oss.str());
+			(void) db.execute("COMMIT");
+		}
+
+		void teardown(Database &) override {}
+
+		[[nodiscard]] int getItemsPerOp() const override { return dataSize_; }
+	};
+
 } // namespace zyx::benchmark

@@ -21,6 +21,8 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -30,6 +32,7 @@
 #include "../PhysicalOperator.hpp"
 #include "../ScanConfigs.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
@@ -79,6 +82,10 @@ namespace graph::query::execution::operators {
 		}
 
 		std::optional<RecordBatch> next() override {
+			using Clock = std::chrono::steady_clock;
+			const bool profileEnabled = debug::PerfTrace::isEnabled();
+			const auto scanStart = profileEnabled ? Clock::now() : Clock::time_point{};
+
 			if (currentIdx_ >= candidateIds_.size())
 				return std::nullopt;
 
@@ -99,7 +106,15 @@ namespace graph::query::execution::operators {
 			currentIdx_ = batchEnd;
 
 			if (canParallelize && batchCount >= PARALLEL_SCAN_THRESHOLD) {
-				return parallelLoadBatch(batchStart, batchEnd);
+				auto batch = parallelLoadBatch(batchStart, batchEnd);
+				if (profileEnabled) {
+					debug::PerfTrace::addDuration(
+							"scan.parallel",
+							static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+														   Clock::now() - scanStart)
+													   .count()));
+				}
+				return batch;
 			}
 
 			// Sequential path
@@ -128,6 +143,14 @@ namespace graph::query::execution::operators {
 
 			if (batch.empty() && currentIdx_ >= candidateIds_.size())
 				return std::nullopt;
+
+			if (profileEnabled) {
+				debug::PerfTrace::addDuration(
+						"scan.sequential",
+						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+														scanStart)
+												 .count()));
+			}
 			return batch;
 		}
 
@@ -147,6 +170,9 @@ namespace graph::query::execution::operators {
 		int64_t targetLabelId_ = 0; // Cached ID
 
 		std::optional<RecordBatch> parallelLoadBatch(size_t batchStart, size_t batchEnd) {
+			using Clock = std::chrono::steady_clock;
+			const bool profileEnabled = debug::PerfTrace::isEnabled();
+
 			// Get the sorted segment index for Nodes
 			const auto &segIndex = dm_->getSegmentIndexManager()->getNodeSegmentIndex();
 			int64_t startId = candidateIds_[batchStart];
@@ -179,6 +205,7 @@ namespace graph::query::execution::operators {
 			std::vector<std::vector<Node>> segNodes(numSegs);
 			std::vector<std::vector<int64_t>> segPropIds(numSegs);
 
+			const auto phase1Start = profileEnabled ? Clock::now() : Clock::time_point{};
 			threadPool_->parallelFor(0, numSegs, [&](size_t si) {
 				const auto &seg = segIndex[relevantSegIdxs[si]];
 				auto header = dm_->getSegmentTracker()->getSegmentHeaderCopy(seg.segmentOffset);
@@ -219,17 +246,33 @@ namespace graph::query::execution::operators {
 					localNodes.push_back(std::move(node));
 				}
 			});
+			if (profileEnabled) {
+				debug::PerfTrace::addDuration(
+						"scan.parallel.phase1",
+						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+														phase1Start)
+												 .count()));
+			}
 
 			// ── Phase 2: Bulk-load all needed Property entities (segment-sequential) ──
 			std::vector<int64_t> allPropIds;
 			for (const auto &pids : segPropIds) {
 				allPropIds.insert(allPropIds.end(), pids.begin(), pids.end());
 			}
+			const auto phase2Start = profileEnabled ? Clock::now() : Clock::time_point{};
 			auto propertyMap = dm_->bulkLoadPropertyEntities(allPropIds, threadPool_);
+			if (profileEnabled) {
+				debug::PerfTrace::addDuration(
+						"scan.parallel.phase2",
+						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+														phase2Start)
+												 .count()));
+			}
 
 			// ── Phase 3: Parallel property assignment + Record creation ──
 			std::vector<RecordBatch> threadBatches(numSegs);
 
+			const auto phase3Start = profileEnabled ? Clock::now() : Clock::time_point{};
 			threadPool_->parallelFor(0, numSegs, [&](size_t si) {
 				RecordBatch &localBatch = threadBatches[si];
 				localBatch.reserve(segNodes[si].size());
@@ -243,6 +286,13 @@ namespace graph::query::execution::operators {
 					localBatch.push_back(std::move(r));
 				}
 			});
+			if (profileEnabled) {
+				debug::PerfTrace::addDuration(
+						"scan.parallel.phase3",
+						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+														phase3Start)
+												 .count()));
+			}
 
 			// Merge thread-local batches
 			size_t totalSize = 0;

@@ -238,6 +238,22 @@ namespace {
 							concVecSearchManyName, "/tmp/zyx_bench_conc_vsearch_n", 5, 1000, hwThreads, DIM_SMALL, 10);
 				});
 
+		const std::string implicitTxnName = "Implicit Txn Insert (1000 nodes)";
+		const std::string explicitTxnName = "Explicit Txn Insert (1000 nodes)";
+		const std::string explicitBatchTxnName = "Explicit Txn Batch Insert (1000 nodes)";
+
+		add("transaction.implicit_insert", BenchmarkType::TRANSACTION, implicitTxnName, [implicitTxnName]() {
+			return std::make_unique<ImplicitTxnInsertBench>(implicitTxnName, "/tmp/zyx_bench_txn_implicit", 1, 1000);
+		});
+		add("transaction.explicit_insert", BenchmarkType::TRANSACTION, explicitTxnName, [explicitTxnName]() {
+			return std::make_unique<ExplicitTxnInsertBench>(explicitTxnName, "/tmp/zyx_bench_txn_explicit", 1, 1000);
+		});
+		add("transaction.explicit_batch_insert", BenchmarkType::TRANSACTION, explicitBatchTxnName,
+				[explicitBatchTxnName]() {
+					return std::make_unique<ExplicitTxnBatchInsertBench>(explicitBatchTxnName,
+																		"/tmp/zyx_bench_txn_explicit_batch", 1, 1000);
+				});
+
 		return registry;
 	}
 
@@ -310,7 +326,7 @@ int main(const int argc, char **argv) {
 	bool listTypesOnly = false;
 
 	app.add_option("-t,--type", typeTokens,
-				   "Benchmark types (comma-separated or repeated): insert/query/algo/vector/concurrency/storage/all")
+				   "Benchmark types (comma-separated or repeated): insert/query/algo/vector/concurrency/storage/transaction/all")
 			->delimiter(',');
 	app.add_option("-b,--bench", benchmarkTokens,
 				   "Exact benchmark ID(s), comma-separated or repeated. Use --list to inspect IDs")
@@ -427,6 +443,7 @@ int main(const int argc, char **argv) {
 					metrics.p99LatencyUs /= itemsPerOp;
 				}
 				printRow(benchmark->getName(), metrics);
+				printStageBreakdown(metrics);
 			} catch (const std::exception &e) {
 				std::cerr << "   [FAILED] " << benchmark->getName() << ": " << e.what() << "\n";
 			} catch (...) {

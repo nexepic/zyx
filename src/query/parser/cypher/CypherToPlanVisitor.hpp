@@ -79,6 +79,11 @@ public:
 	std::any visitDropIndexByName(CypherParser::DropIndexByNameContext *ctx) override;
 	std::any visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) override;
 
+	// --- Transaction Control ---
+	std::any visitTxnBegin(CypherParser::TxnBeginContext *ctx) override;
+	std::any visitTxnCommit(CypherParser::TxnCommitContext *ctx) override;
+	std::any visitTxnRollback(CypherParser::TxnRollbackContext *ctx) override;
+
 private:
 	std::shared_ptr<query::QueryPlanner> planner_;
 	std::unique_ptr<query::execution::PhysicalOperator> rootOp_;

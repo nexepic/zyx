@@ -30,7 +30,7 @@
 
 namespace zyx::benchmark {
 
-	enum class BenchmarkType { INSERT, QUERY, ALGO, VECTOR, CONCURRENCY, STORAGE };
+	enum class BenchmarkType { INSERT, QUERY, ALGO, VECTOR, CONCURRENCY, STORAGE, TRANSACTION };
 
 	struct BenchmarkTypeInfo {
 		BenchmarkType type;
@@ -43,13 +43,14 @@ namespace zyx::benchmark {
 		std::set<std::string> selectedIds;
 	};
 
-	inline constexpr std::array<BenchmarkTypeInfo, 6> BENCHMARK_TYPE_INFOS{{
+	inline constexpr std::array<BenchmarkTypeInfo, 7> BENCHMARK_TYPE_INFOS{{
 			{BenchmarkType::INSERT, "insert", "Insert and bulk-write workloads"},
 			{BenchmarkType::QUERY, "query", "Read/query workloads (index vs scan)"},
 			{BenchmarkType::ALGO, "algo", "Graph algorithm workloads"},
 			{BenchmarkType::VECTOR, "vector", "Vector insert/search workloads"},
 			{BenchmarkType::CONCURRENCY, "concurrency", "Parallel execution workloads"},
 			{BenchmarkType::STORAGE, "storage", "Storage footprint profiling workloads"},
+			{BenchmarkType::TRANSACTION, "transaction", "Implicit vs explicit transaction workloads"},
 	}};
 
 	inline std::string toLowerCopy(std::string text) {
@@ -87,6 +88,9 @@ namespace zyx::benchmark {
 		}
 		if (normalized == "storage" || normalized == "footprint") {
 			return BenchmarkType::STORAGE;
+		}
+		if (normalized == "transaction" || normalized == "txn") {
+			return BenchmarkType::TRANSACTION;
 		}
 		return std::nullopt;
 	}

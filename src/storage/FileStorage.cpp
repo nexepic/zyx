@@ -20,6 +20,8 @@
 
 #include "graph/storage/FileStorage.hpp"
 #include <algorithm>
+#include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -30,6 +32,7 @@
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/DatabaseInspector.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
@@ -148,10 +151,14 @@ namespace graph::storage {
 	}
 
 	void FileStorage::save() {
+		using Clock = std::chrono::steady_clock;
+
 		if (!isFileOpen)
 			throw std::runtime_error("Database must be open before saving");
 		if (!dataManager->hasUnsavedChanges())
 			return;
+
+		auto totalStart = Clock::now();
 
 		// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
 		auto snapshot = dataManager->prepareFlushSnapshot();
@@ -162,6 +169,7 @@ namespace graph::storage {
 		// 2. PARALLEL DATA PREPARATION PHASE
 		// Classify entities by change type for all entity types in parallel.
 		// This is pure in-memory work with no I/O dependencies.
+		auto prepStart = Clock::now();
 		std::vector<Node> newNodes, modNodes, delNodes;
 		std::vector<Edge> newEdges, modEdges, delEdges;
 		std::vector<Property> newProps, modProps, delProps;
@@ -251,7 +259,13 @@ namespace graph::storage {
 			}
 		}
 
+		debug::PerfTrace::addDuration(
+				"save.prepare", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+													 prepStart)
+												   .count()));
+
 		// 3. SEQUENTIAL I/O PHASE (single fstream constraint)
+		auto ioStart = Clock::now();
 		if (!newNodes.empty()) {
 			std::unordered_map<int64_t, Node> map;
 			for (auto &e : newNodes) map[e.getId()] = e;
@@ -300,8 +314,17 @@ namespace graph::storage {
 		for (const auto &s : modStates) updateEntityInPlace(s);
 		for (const auto &s : delStates) deleteEntityOnDisk(s);
 
+		debug::PerfTrace::addDuration(
+				"save.io", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+													ioStart)
+												.count()));
+
 		// 4. COMMIT: Clear the snapshot data
 		dataManager->commitFlushSnapshot();
+		debug::PerfTrace::addDuration(
+				"save.total", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+													  totalStart)
+													.count()));
 	}
 
 	template<typename T>

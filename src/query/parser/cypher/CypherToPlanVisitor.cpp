@@ -19,6 +19,7 @@
  **/
 
 #include "CypherToPlanVisitor.hpp"
+#include "graph/query/execution/operators/TransactionControlOperator.hpp"
 #include "graph/query/execution/operators/UnionOperator.hpp"
 #include "clauses/AdminClauseHandler.hpp"
 #include "clauses/ReadingClauseHandler.hpp"
@@ -172,6 +173,25 @@ std::any CypherToPlanVisitor::visitDropIndexByName(CypherParser::DropIndexByName
 
 std::any CypherToPlanVisitor::visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) {
 	rootOp_ = clauses::AdminClauseHandler::handleDropIndexByLabel(ctx, planner_);
+	return std::any();
+}
+
+// --- Transaction Control ---
+std::any CypherToPlanVisitor::visitTxnBegin(CypherParser::TxnBeginContext *) {
+	rootOp_ = query::QueryPlanner::transactionControlOp(
+			query::execution::operators::TransactionCommand::TXN_CTL_BEGIN);
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitTxnCommit(CypherParser::TxnCommitContext *) {
+	rootOp_ = query::QueryPlanner::transactionControlOp(
+			query::execution::operators::TransactionCommand::TXN_CTL_COMMIT);
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitTxnRollback(CypherParser::TxnRollbackContext *) {
+	rootOp_ = query::QueryPlanner::transactionControlOp(
+			query::execution::operators::TransactionCommand::TXN_CTL_ROLLBACK);
 	return std::any();
 }
 

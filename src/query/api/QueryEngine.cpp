@@ -19,7 +19,9 @@
  **/
 
 #include "graph/query/api/QueryEngine.hpp"
+#include <chrono>
 #include "CypherParserImpl.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query {
@@ -51,8 +53,15 @@ namespace graph::query {
 	}
 
 	QueryResult QueryEngine::execute(const std::string &query, const Language lang) {
+		using Clock = std::chrono::steady_clock;
+
 		// 1. Parse into Operator Tree
+		auto parseStart = Clock::now();
 		auto planTree = getParser(lang)->parse(query);
+		debug::PerfTrace::addDuration(
+				"parse", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+															  parseStart)
+													 .count()));
 
 		// Propagate thread pool to all operators in the tree
 		if (threadPool_)

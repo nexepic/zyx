@@ -26,6 +26,7 @@
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/query/api/QueryResult.hpp"
+#include "zyx/zyx.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
@@ -290,4 +291,74 @@ TEST_F(IntegrationTransactionTest, CommitThenQuery) {
 
 	auto result = execute("MATCH (n:Animal) WHERE n.legs = 4 RETURN n.name ORDER BY n.name");
 	EXPECT_EQ(result.rowCount(), 2UL);
+}
+
+// ============================================================================
+// Bulk API Transaction Tests (via zyx::Database public API)
+// ============================================================================
+
+class BulkApiTransactionTest : public ::testing::Test {
+protected:
+	void SetUp() override {
+		boost::uuids::uuid uuid = boost::uuids::random_generator()();
+		testDbPath = fs::temp_directory_path() / ("test_bulk_txn_" + boost::uuids::to_string(uuid) + ".graph");
+		fs::remove_all(testDbPath);
+
+		db = std::make_unique<zyx::Database>(testDbPath.string());
+		db->open();
+	}
+
+	void TearDown() override {
+		db.reset();
+		fs::remove_all(testDbPath);
+		fs::remove(testDbPath.string() + "-wal");
+	}
+
+	fs::path testDbPath;
+	std::unique_ptr<zyx::Database> db;
+};
+
+TEST_F(BulkApiTransactionTest, BulkApiWithImplicitTransaction) {
+	// createNodes without active txn should auto-commit
+	std::vector<std::unordered_map<std::string, zyx::Value>> batch;
+	for (int i = 0; i < 5; ++i) {
+		batch.push_back({{"id", static_cast<int64_t>(i)}});
+	}
+	db->createNodes("BulkTest", batch);
+
+	auto res = db->execute("MATCH (n:BulkTest) RETURN n.id");
+	EXPECT_TRUE(res.isSuccess());
+	int count = 0;
+	while (res.hasNext()) {
+		res.next();
+		count++;
+	}
+	EXPECT_EQ(count, 5);
+}
+
+TEST_F(BulkApiTransactionTest, BulkApiWithExplicitTransaction) {
+	// Begin explicit transaction, use bulk API, commit
+	auto txn = db->beginTransaction();
+
+	int64_t nodeId = db->createNodeRetId("BulkTest", {{"name", std::string("Alice")}});
+	EXPECT_GT(nodeId, 0);
+
+	txn.commit();
+
+	auto res = db->execute("MATCH (n:BulkTest) RETURN n.name");
+	EXPECT_TRUE(res.isSuccess());
+	EXPECT_TRUE(res.hasNext());
+}
+
+TEST_F(BulkApiTransactionTest, BulkApiRollback) {
+	// Begin explicit transaction, use bulk API, rollback
+	auto txn = db->beginTransaction();
+
+	(void) db->createNodeRetId("BulkTest", {{"name", std::string("Bob")}});
+
+	txn.rollback();
+
+	auto res = db->execute("MATCH (n:BulkTest) RETURN n.name");
+	EXPECT_TRUE(res.isSuccess());
+	EXPECT_FALSE(res.hasNext());
 }
