@@ -37,6 +37,13 @@ namespace zyx::benchmark::config {
 
 	constexpr int DATA_SIZE_ALGO = 1000;
 
+	// --- Storage Profiling Scale ---
+	constexpr int STORAGE_PROFILE_NODE_COUNT = 5000;
+	constexpr int STORAGE_PROFILE_LONG_TEXT_NODE_COUNT = 2000;
+	constexpr int STORAGE_PROFILE_GRAPH_NODE_COUNT = 3000;
+	constexpr int STORAGE_PROFILE_VECTOR_NODE_COUNT = 1200;
+	constexpr int STORAGE_PROFILE_VECTOR_DIM = 128;
+
 	// --- Iteration Settings ---
 	// How many times to execute the 'run' operation (for averaging latency).
 	constexpr int ITERATIONS_WRITE = 200; // Insertions (reduced for faster benchmark)
@@ -53,6 +60,8 @@ namespace zyx::benchmark::config {
 	constexpr std::string_view PATH_QUERY_BASE = "/tmp/zyx_bench_query_base";
 	constexpr std::string_view PATH_ALGO_CYPHER = "/tmp/zyx_bench_algo_cypher";
 	constexpr std::string_view PATH_ALGO_NATIVE = "/tmp/zyx_bench_algo_native";
+	constexpr std::string_view PATH_STORAGE_BASE = "/tmp/zyx_bench_storage";
+	constexpr std::string_view PATH_STORAGE_CSV = "/tmp/zyx_storage_profile.csv";
 
 	const std::string PATH_VEC_INSERT = "/tmp/zyx_bench_vec_insert";
 	const std::string PATH_VEC_SEARCH = "/tmp/zyx_bench_vec_search";

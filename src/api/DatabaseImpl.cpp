@@ -132,7 +132,14 @@ namespace zyx {
 				[]<typename T0>(T0 &&arg) -> graph::PropertyValue {
 					using T = std::decay_t<T0>;
 
-					if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+					if constexpr (std::is_same_v<T, std::vector<float>>) {
+						std::vector<graph::PropertyValue> vec;
+						vec.reserve(arg.size());
+						for (const auto value: arg) {
+							vec.emplace_back(static_cast<double>(value));
+						}
+						return graph::PropertyValue(vec);
+					} else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
 						std::vector<graph::PropertyValue> vec;
 						vec.reserve(arg.size());
 						for (const auto &s: arg) {

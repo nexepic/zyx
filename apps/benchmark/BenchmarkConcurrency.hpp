@@ -215,13 +215,13 @@ namespace zyx::benchmark {
 			batchData.reserve(batchSize);
 
 			for (int i = 0; i < dataSize_; ++i) {
-				std::vector<std::string> strVec;
-				strVec.reserve(dim_);
+				std::vector<float> vec;
+				vec.reserve(dim_);
 				for (int d = 0; d < dim_; ++d)
-					strVec.push_back(std::to_string(dist(rng)));
+					vec.push_back(dist(rng));
 
 				std::unordered_map<std::string, Value> props;
-				props["emb"] = strVec;
+				props["emb"] = vec;
 				props["id"] = static_cast<int64_t>(i);
 				batchData.push_back(std::move(props));
 
@@ -272,13 +272,13 @@ namespace zyx::benchmark {
 			std::vector<std::unordered_map<std::string, Value>> batchData;
 
 			for (int i = 0; i < dataSize_; ++i) {
-				std::vector<std::string> strVec;
-				strVec.reserve(dim_);
+				std::vector<float> vec;
+				vec.reserve(dim_);
 				for (int d = 0; d < dim_; ++d)
-					strVec.push_back(std::to_string(dist(rng)));
+					vec.push_back(dist(rng));
 
 				std::unordered_map<std::string, Value> props;
-				props["emb"] = strVec;
+				props["emb"] = vec;
 				props["id"] = static_cast<int64_t>(i);
 				batchData.push_back(std::move(props));
 

@@ -36,7 +36,8 @@ namespace zyx {
 	// Uses shared_ptr for complex types to allow recursive definition and cheap copying.
 	using Value = std::variant<std::monostate, // Null
 							   bool, int64_t, double, std::string, std::shared_ptr<Node>, std::shared_ptr<Edge>,
-							   std::vector<std::string> // Optional: For list results
+							   std::vector<float>, // Compact numeric vector (e.g. embeddings)
+							   std::vector<std::string> // Optional: Generic list/string-list interop
 							   >;
 
 	// Public Node Representation

@@ -76,18 +76,8 @@ namespace zyx::benchmark {
 
 			std::unordered_map<std::string, Value> props;
 
-			// Convert float vector to string list (as per current public API limit)
-			// Or use internal API if benchmark has access?
-			// The Public API `zyx::Value` currently requires `vector<string>` for lists based on your previous fix.
-			// Let's assume we pass it as vector<string> of floats.
-
 			const auto &vec = dataset_[idx++];
-			std::vector<std::string> strVec;
-			strVec.reserve(vec.size());
-			for (float f: vec)
-				strVec.push_back(std::to_string(f));
-
-			props["emb"] = strVec;
+			props["emb"] = vec;
 			props["id"] = static_cast<int64_t>(idx);
 
 			db.createNode("Item", props);
@@ -124,13 +114,9 @@ namespace zyx::benchmark {
 
 			for (int i = 0; i < dataSize_; ++i) {
 				auto vec = generateVector(dim_, rng);
-				std::vector<std::string> strVec;
-				strVec.reserve(vec.size());
-				for (const float f: vec)
-					strVec.push_back(std::to_string(f));
 
 				std::unordered_map<std::string, Value> props;
-				props["emb"] = strVec;
+				props["emb"] = vec;
 				props["id"] = static_cast<int64_t>(i);
 
 				batchData.push_back(std::move(props));
