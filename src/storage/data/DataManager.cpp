@@ -890,7 +890,7 @@ namespace graph::storage {
 		}
 
 		// Reserve memory to avoid reallocations.
-		result.reserve(std::min(static_cast<size_t>(endId - startId + 1), limit));
+		result.reserve((std::min)(static_cast<size_t>(endId - startId + 1), limit));
 
 		// This set will keep track of IDs that have already been processed (from memory)
 		// to avoid adding them again from the disk-based load.
@@ -951,8 +951,8 @@ namespace graph::storage {
 			int64_t segmentStartId = header.start_id;
 			int64_t segmentEndId = header.start_id + header.used - 1;
 
-			int64_t intersectStart = std::max(startId, segmentStartId);
-			int64_t intersectEnd = std::min(endId, segmentEndId);
+			int64_t intersectStart = (std::max)(startId, segmentStartId);
+			int64_t intersectEnd = (std::min)(endId, segmentEndId);
 
 			if (intersectStart > intersectEnd) {
 				continue; // No overlap with this segment.
@@ -1074,8 +1074,8 @@ namespace graph::storage {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate effective start and end positions
-		uint64_t effectiveStartId = std::max(startId, header.start_id);
-		uint64_t effectiveEndId = std::min(endId, header.start_id + header.used - 1);
+		uint64_t effectiveStartId = (std::max)(startId, header.start_id);
+		uint64_t effectiveEndId = (std::min)(endId, header.start_id + header.used - 1);
 
 		if (effectiveStartId > effectiveEndId) {
 			return result;
@@ -1083,7 +1083,7 @@ namespace graph::storage {
 
 		// Calculate offsets
 		uint64_t startOffset = effectiveStartId - header.start_id;
-		uint64_t count = std::min(effectiveEndId - effectiveStartId + 1, static_cast<uint64_t>(limit));
+		uint64_t count = (std::min)(effectiveEndId - effectiveStartId + 1, static_cast<uint64_t>(limit));
 
 		// Reserve space for the maximum possible entities
 		result.reserve(count);

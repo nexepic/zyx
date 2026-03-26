@@ -86,6 +86,7 @@ ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset);
 
 inline int portable_open(const char* filePath, int flags) {
 	if (!filePath) return -1;
+	(void)flags;  // Unused on Windows, always opens read-only
 
 	DWORD desiredAccess = GENERIC_READ;
 	DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE;
