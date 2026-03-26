@@ -31,7 +31,8 @@
 // Platform-specific type definitions for Windows compatibility
 #ifdef _WIN32
 using ssize_t = intptr_t;
-using off_t = int64_t;
+// Don't define off_t - Windows SDK already defines it in sys/types.h
+// Use int64_t in function signatures instead to avoid conflicts
 #endif
 
 #include "DirtyEntityInfo.hpp"
@@ -248,7 +249,7 @@ namespace graph::storage {
 
 		// Thread-safe read via pread (no locks needed)
 		[[nodiscard]] bool hasPreadSupport() const { return readFd_ >= 0; }
-		[[nodiscard]] ssize_t preadBytes(void *buf, size_t count, off_t offset) const;
+		[[nodiscard]] ssize_t preadBytes(void *buf, size_t count, int64_t offset) const;
 
 		// Loading entities from disk
 		[[nodiscard]] Node loadNodeFromDisk(int64_t id) const;

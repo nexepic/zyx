@@ -85,7 +85,7 @@ namespace graph::storage {
 		}
 	}
 
-	ssize_t DataManager::preadBytes(void *buf, size_t count, off_t offset) const {
+	ssize_t DataManager::preadBytes(void *buf, size_t count, int64_t offset) const {
 		if (readFd_ < 0)
 			return -1;
 		return storage::portable_pread(readFd_, buf, count, offset);
@@ -555,7 +555,7 @@ namespace graph::storage {
 				// Single pread for the entire coalesced group
 				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<off_t>(group.startOffset);
+				auto groupOffset = static_cast<int64_t>(group.startOffset);
 				ssize_t n = storage::portable_pread(readFd_, groupBuf.data(), totalBytes, groupOffset);
 				if (n < static_cast<ssize_t>(totalBytes))
 					return;
@@ -605,7 +605,7 @@ namespace graph::storage {
 
 				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 				std::vector<char> buf(dataBytes);
-				auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
 				ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
 				if (n < static_cast<ssize_t>(dataBytes))
 					continue;
@@ -1369,7 +1369,7 @@ namespace graph::storage {
 			// Read entire segment data area in one pread syscall
 			size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 			std::vector<char> buf(dataBytes);
-			auto dataOffset = static_cast<off_t>(seg.segmentOffset + sizeof(SegmentHeader));
+			auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
 			ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
 			if (n < static_cast<ssize_t>(dataBytes))
 				continue;

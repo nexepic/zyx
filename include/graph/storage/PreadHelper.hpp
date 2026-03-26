@@ -27,9 +27,10 @@ namespace graph::storage {
  * @brief Platform-specific type definitions
  */
 #ifdef _WIN32
+	// Windows doesn't have ssize_t, define it
 	using ssize_t = intptr_t;
-	using off_t = int64_t;
-
+	// Use int64_t directly instead of redefining off_t to avoid conflicts with Windows SDK
+	// Windows SDK defines off_t as long (32-bit) in sys/types.h
 	// Constants for Windows compatibility
 	constexpr int O_RDONLY = 0x0000;
 #endif
@@ -72,10 +73,10 @@ int portable_close(int fd);
  *   - Windows: HANDLE (cast to int)
  * @param buf Buffer to read data into
  * @param count Number of bytes to read
- * @param offset File offset to read from
+ * @param offset File offset to read from (use int64_t to avoid Windows SDK conflicts)
  * @return Number of bytes read, or -1 on error
  */
-ssize_t portable_pread(int fd, void* buf, size_t count, off_t offset);
+ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset);
 
 // ============================================================================
 // Platform-specific implementations
@@ -116,7 +117,7 @@ inline int portable_close(int fd) {
 	return ::CloseHandle(hFile) ? 0 : -1;
 }
 
-inline ssize_t portable_pread(int fd, void* buf, size_t count, off_t offset) {
+inline ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset) {
 	if (fd < 0 || !buf || count == 0) {
 		return -1;
 	}
@@ -154,12 +155,12 @@ inline int portable_close(int fd) {
 	return ::close(fd);
 }
 
-inline ssize_t portable_pread(int fd, void* buf, size_t count, off_t offset) {
+inline ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset) {
 	if (fd < 0 || !buf || count == 0) {
 		return -1;
 	}
 
-	return ::pread(fd, buf, count, offset);
+	return ::pread(fd, buf, count, static_cast<off_t>(offset));
 }
 
 #endif

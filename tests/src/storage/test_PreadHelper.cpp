@@ -133,7 +133,7 @@ TEST_F(PreadHelperTest, LargeOffsetOnWindows) {
 	ASSERT_GE(fd, 0);
 
 	// Test offset > 4GB to verify OffsetHigh is used
-	const off_t largeOffset = static_cast<off_t>(5ULL * 1024ULL * 1024ULL * 1024ULL);
+	const int64_t largeOffset = static_cast<int64_t>(5ULL * 1024ULL * 1024ULL * 1024ULL);
 	char buffer[256];
 	ssize_t bytesRead = portable_pread(fd, buffer, sizeof(buffer), largeOffset);
 
