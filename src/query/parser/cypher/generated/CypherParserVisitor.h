@@ -46,6 +46,30 @@ public:
 
     virtual std::any visitCreateVectorIndex(CypherParser::CreateVectorIndexContext *context) = 0;
 
+    virtual std::any visitCreateNodeConstraint(CypherParser::CreateNodeConstraintContext *context) = 0;
+
+    virtual std::any visitCreateEdgeConstraint(CypherParser::CreateEdgeConstraintContext *context) = 0;
+
+    virtual std::any visitConstraintNodePattern(CypherParser::ConstraintNodePatternContext *context) = 0;
+
+    virtual std::any visitConstraintEdgePattern(CypherParser::ConstraintEdgePatternContext *context) = 0;
+
+    virtual std::any visitUniqueConstraintBody(CypherParser::UniqueConstraintBodyContext *context) = 0;
+
+    virtual std::any visitNotNullConstraintBody(CypherParser::NotNullConstraintBodyContext *context) = 0;
+
+    virtual std::any visitPropertyTypeConstraintBody(CypherParser::PropertyTypeConstraintBodyContext *context) = 0;
+
+    virtual std::any visitNodeKeyConstraintBody(CypherParser::NodeKeyConstraintBodyContext *context) = 0;
+
+    virtual std::any visitConstraintTypeName(CypherParser::ConstraintTypeNameContext *context) = 0;
+
+    virtual std::any visitDropConstraintByName(CypherParser::DropConstraintByNameContext *context) = 0;
+
+    virtual std::any visitDropConstraintIfExists(CypherParser::DropConstraintIfExistsContext *context) = 0;
+
+    virtual std::any visitShowConstraintsStatement(CypherParser::ShowConstraintsStatementContext *context) = 0;
+
     virtual std::any visitQuery(CypherParser::QueryContext *context) = 0;
 
     virtual std::any visitRegularQuery(CypherParser::RegularQueryContext *context) = 0;

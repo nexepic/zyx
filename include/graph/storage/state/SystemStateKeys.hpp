@@ -66,4 +66,8 @@ namespace graph::storage::state::keys {
 	// DefinitionString format: "TYPE|LABEL|PROPERTY"
 	constexpr char SYS_INDEXES[] = "sys.indexes";
 
+	// Stores metadata map: ConstraintName -> DefinitionString
+	// DefinitionString format: "ENTITY_TYPE|CONSTRAINT_TYPE|LABEL|PROPERTIES|OPTIONS"
+	constexpr char SYS_CONSTRAINTS[] = "sys.constraints";
+
 } // namespace graph::storage::state::keys

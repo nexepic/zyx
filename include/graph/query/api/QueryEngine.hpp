@@ -29,6 +29,10 @@
 #include "graph/storage/FileStorage.hpp"
 #include "query/parser/common/IQueryParser.hpp"
 
+namespace graph::storage::constraints {
+	class ConstraintManager;
+}
+
 namespace graph::query {
 
 	enum class Language { Cypher };
@@ -51,12 +55,14 @@ namespace graph::query {
 		[[nodiscard]] QueryBuilder query() const { return QueryBuilder(queryPlanner_); }
 
 		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return indexManager_; }
+		[[nodiscard]] std::shared_ptr<storage::constraints::ConstraintManager> getConstraintManager() const { return constraintManager_; }
 
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
 
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<indexes::IndexManager> indexManager_;
+		std::shared_ptr<storage::constraints::ConstraintManager> constraintManager_;
 		std::shared_ptr<QueryPlanner> queryPlanner_; // Shared so Builder can use it
 		std::unique_ptr<QueryExecutor> queryExecutor_;
 

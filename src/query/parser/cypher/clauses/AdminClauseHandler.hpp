@@ -107,6 +107,23 @@ public:
 	static std::unique_ptr<query::execution::PhysicalOperator> handleDropIndexByLabel(
 		CypherParser::DropIndexByLabelContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
+
+	// --- Constraint DDL ---
+
+	static std::unique_ptr<query::execution::PhysicalOperator> handleCreateNodeConstraint(
+		CypherParser::CreateNodeConstraintContext *ctx,
+		const std::shared_ptr<query::QueryPlanner> &planner);
+
+	static std::unique_ptr<query::execution::PhysicalOperator> handleCreateEdgeConstraint(
+		CypherParser::CreateEdgeConstraintContext *ctx,
+		const std::shared_ptr<query::QueryPlanner> &planner);
+
+	static std::unique_ptr<query::execution::PhysicalOperator> handleDropConstraint(
+		const std::string &name, bool ifExists,
+		const std::shared_ptr<query::QueryPlanner> &planner);
+
+	static std::unique_ptr<query::execution::PhysicalOperator> handleShowConstraints(
+		const std::shared_ptr<query::QueryPlanner> &planner);
 };
 
 } // namespace graph::parser::cypher::clauses

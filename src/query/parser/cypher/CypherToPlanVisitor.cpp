@@ -176,6 +176,32 @@ std::any CypherToPlanVisitor::visitDropIndexByLabel(CypherParser::DropIndexByLab
 	return std::any();
 }
 
+// --- Constraint DDL ---
+std::any CypherToPlanVisitor::visitCreateNodeConstraint(CypherParser::CreateNodeConstraintContext *ctx) {
+	rootOp_ = clauses::AdminClauseHandler::handleCreateNodeConstraint(ctx, planner_);
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitCreateEdgeConstraint(CypherParser::CreateEdgeConstraintContext *ctx) {
+	rootOp_ = clauses::AdminClauseHandler::handleCreateEdgeConstraint(ctx, planner_);
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitDropConstraintByName(CypherParser::DropConstraintByNameContext *ctx) {
+	rootOp_ = clauses::AdminClauseHandler::handleDropConstraint(ctx->symbolicName()->getText(), false, planner_);
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitDropConstraintIfExists(CypherParser::DropConstraintIfExistsContext *ctx) {
+	rootOp_ = clauses::AdminClauseHandler::handleDropConstraint(ctx->symbolicName()->getText(), true, planner_);
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitShowConstraintsStatement(CypherParser::ShowConstraintsStatementContext *) {
+	rootOp_ = clauses::AdminClauseHandler::handleShowConstraints(planner_);
+	return std::any();
+}
+
 // --- Transaction Control ---
 std::any CypherToPlanVisitor::visitTxnBegin(CypherParser::TxnBeginContext *) {
 	rootOp_ = query::QueryPlanner::transactionControlOp(

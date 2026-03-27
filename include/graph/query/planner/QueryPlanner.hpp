@@ -36,6 +36,9 @@
 namespace graph::storage {
 	class DataManager;
 }
+namespace graph::storage::constraints {
+	class ConstraintManager;
+}
 namespace graph::query::indexes {
 	class IndexManager;
 }
@@ -54,7 +57,8 @@ namespace graph::query {
 		/**
 		 * @brief Constructs the planner and initializes the internal Optimizer.
 		 */
-		QueryPlanner(std::shared_ptr<storage::DataManager> dm, const std::shared_ptr<indexes::IndexManager> &im);
+		QueryPlanner(std::shared_ptr<storage::DataManager> dm, const std::shared_ptr<indexes::IndexManager> &im,
+					 std::shared_ptr<storage::constraints::ConstraintManager> cm = nullptr);
 
 		~QueryPlanner();
 
@@ -172,6 +176,18 @@ namespace graph::query {
 		// --- Administration ---
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showIndexesOp() const;
 
+		// Constraint DDL
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		createConstraintOp(const std::string &name, const std::string &entityType,
+						   const std::string &constraintType, const std::string &label,
+						   const std::vector<std::string> &properties,
+						   const std::string &options = "") const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		dropConstraintOp(const std::string &name, bool ifExists = false) const;
+
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator> showConstraintsOp() const;
+
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		deleteOp(std::unique_ptr<execution::PhysicalOperator> child, const std::vector<std::string> &variables,
 				 bool detach) const;
@@ -242,6 +258,7 @@ namespace graph::query {
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<indexes::IndexManager> im_;
+		std::shared_ptr<storage::constraints::ConstraintManager> cm_;
 
 		// The Brain: Handles logic for selecting the best scan strategy
 		std::unique_ptr<optimizer::Optimizer> optimizer_;

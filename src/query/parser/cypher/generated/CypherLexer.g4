@@ -71,6 +71,7 @@ K_INDEX      : 'INDEX' | 'INDEXES';
 K_ON         : 'ON';
 K_SHOW       : 'SHOW';
 K_DROP       : 'DROP';
+K_IF         : 'IF';
 
 K_FOR        : 'FOR';
 
@@ -88,6 +89,16 @@ K_BEGIN       : 'BEGIN';
 K_COMMIT      : 'COMMIT';
 K_ROLLBACK    : 'ROLLBACK';
 K_TRANSACTION : 'TRANSACTION';
+
+// Constraint type keywords
+K_KEY        : 'KEY';
+K_NODE       : 'NODE';
+K_BOOLEAN    : 'BOOLEAN';
+K_INTEGER    : 'INTEGER';
+K_FLOAT      : 'FLOAT';
+K_STRING     : 'STRING';
+K_LIST       : 'LIST';
+K_MAP        : 'MAP';
 
 // Vector
 K_VECTOR     : 'VECTOR';

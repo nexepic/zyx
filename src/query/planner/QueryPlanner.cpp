@@ -35,6 +35,9 @@
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
+#include "graph/query/execution/operators/CreateConstraintOperator.hpp"
+#include "graph/query/execution/operators/DropConstraintOperator.hpp"
+#include "graph/query/execution/operators/ShowConstraintsOperator.hpp"
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/SingleRowOperator.hpp"
 #include "graph/query/execution/operators/SkipOperator.hpp"
@@ -47,7 +50,9 @@
 namespace graph::query {
 
 	QueryPlanner::QueryPlanner(std::shared_ptr<storage::DataManager> dm,
-							   const std::shared_ptr<indexes::IndexManager> &im) : dm_(std::move(dm)), im_(im) {
+							   const std::shared_ptr<indexes::IndexManager> &im,
+							   std::shared_ptr<storage::constraints::ConstraintManager> cm)
+		: dm_(std::move(dm)), im_(im), cm_(std::move(cm)) {
 
 		// Initialize the Optimizer
 		optimizer_ = std::make_unique<optimizer::Optimizer>(im_);
@@ -334,6 +339,26 @@ namespace graph::query {
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::transactionControlOp(execution::operators::TransactionCommand cmd) {
 		return std::make_unique<execution::operators::TransactionControlOperator>(cmd);
+	}
+
+	// --- Constraint DDL ---
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::createConstraintOp(const std::string &name, const std::string &entityType,
+									 const std::string &constraintType, const std::string &label,
+									 const std::vector<std::string> &properties,
+									 const std::string &options) const {
+		return std::make_unique<execution::operators::CreateConstraintOperator>(
+			cm_, name, entityType, constraintType, label, properties, options);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::dropConstraintOp(const std::string &name, bool ifExists) const {
+		return std::make_unique<execution::operators::DropConstraintOperator>(cm_, name, ifExists);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::showConstraintsOp() const {
+		return std::make_unique<execution::operators::ShowConstraintsOperator>(cm_);
 	}
 
 } // namespace graph::query

@@ -79,6 +79,13 @@ public:
 	std::any visitDropIndexByName(CypherParser::DropIndexByNameContext *ctx) override;
 	std::any visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) override;
 
+	// --- Constraint DDL ---
+	std::any visitCreateNodeConstraint(CypherParser::CreateNodeConstraintContext *ctx) override;
+	std::any visitCreateEdgeConstraint(CypherParser::CreateEdgeConstraintContext *ctx) override;
+	std::any visitDropConstraintByName(CypherParser::DropConstraintByNameContext *ctx) override;
+	std::any visitDropConstraintIfExists(CypherParser::DropConstraintIfExistsContext *ctx) override;
+	std::any visitShowConstraintsStatement(CypherParser::ShowConstraintsStatementContext *ctx) override;
+
 	// --- Transaction Control ---
 	std::any visitTxnBegin(CypherParser::TxnBeginContext *ctx) override;
 	std::any visitTxnCommit(CypherParser::TxnCommitContext *ctx) override;

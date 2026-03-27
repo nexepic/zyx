@@ -226,8 +226,9 @@ namespace graph::query::indexes {
 
 	void
 	PropertyIndex::addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties) {
-		if (properties.empty())
+		if (properties.empty()) {
 			return;
+		}
 
 		std::unique_lock lock(mutex_);
 
@@ -331,15 +332,16 @@ namespace graph::query::indexes {
 	std::vector<int64_t> PropertyIndex::findExactMatch(const std::string &key, const PropertyValue &value) const {
 		std::shared_lock lock(mutex_);
 		const PropertyType valueType = getPropertyType(value);
-		if (const auto it = indexedKeyTypes_.find(key); it == indexedKeyTypes_.end() || it->second != valueType)
+		if (const auto it = indexedKeyTypes_.find(key); it == indexedKeyTypes_.end() || it->second != valueType) {
 			return {};
+		}
 
 		const auto &rootMap = getRootMapForType(valueType);
 		const auto rootIt = rootMap.find(key);
-		if (rootIt == rootMap.end())
+		if (rootIt == rootMap.end()) {
 			return {};
+		}
 
-		// Pass the PropertyValue directly
 		return getTreeManagerForType(valueType)->find(rootIt->second, value);
 	}
 

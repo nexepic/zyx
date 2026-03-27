@@ -68,13 +68,12 @@ namespace graph::query::execution::operators {
 					// ID=0 means "allocate new ID".
 					Edge newEdge(0, srcNode->getId(), tgtNode->getId(), labelId);
 
-					// addEdge persists the entity with the correct labelId
+					// Set properties on edge before addEdge so constraint validation sees them
+					newEdge.setProperties(props_);
 					dm_->addEdge(newEdge);
 
 					if (!props_.empty()) {
 						dm_->addEdgeProperties(newEdge.getId(), props_);
-						// Keep object in sync for query result
-						newEdge.setProperties(props_);
 					}
 
 					// 4. Update Record

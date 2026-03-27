@@ -45,6 +45,7 @@ using off_t = int64_t;
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/PersistenceManager.hpp"
+#include "graph/storage/constraints/IEntityValidator.hpp"
 #include "graph/storage/indexes/IEntityObserver.hpp"
 
 namespace graph {
@@ -120,6 +121,7 @@ namespace graph::storage {
 		[[nodiscard]] uint32_t getFileVersion() const { return fileHeader_.version; }
 
 		void registerObserver(std::shared_ptr<IEntityObserver> observer);
+		void registerValidator(std::shared_ptr<constraints::IEntityValidator> validator);
 
 		template<typename T>
 		void updateEntityImpl(const T &entity, std::function<T(int64_t)> getOldFunc,
@@ -429,7 +431,14 @@ namespace graph::storage {
 		void notifyStateUpdated(const State &oldState, const State &newState) const;
 
 		std::vector<std::shared_ptr<IEntityObserver>> observers_;
+		std::vector<std::shared_ptr<constraints::IEntityValidator>> validators_;
 		mutable std::recursive_mutex observer_mutex_;
+
+		// When true, notifyNode/EdgeUpdated are suppressed.
+		// Used by addNodeProperties/addEdgeProperties/removeNodeProperty/removeEdgeProperty
+		// to prevent intermediate notifications from updateEntity calls inside PropertyManager,
+		// which would fire with incorrect (cleared inline) property state.
+		mutable bool suppressNotifications_ = false;
 
 		// Thread-local snapshot pointer for read-only transactions.
 		// Each reader thread has its own snapshot pointer, set at transaction begin.

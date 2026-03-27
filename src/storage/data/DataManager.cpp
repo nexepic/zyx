@@ -154,6 +154,11 @@ namespace graph::storage {
 		observers_.push_back(std::move(observer));
 	}
 
+	void DataManager::registerValidator(std::shared_ptr<constraints::IEntityValidator> validator) {
+		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
+		validators_.push_back(std::move(validator));
+	}
+
 	// --- Notification Helper Implementations ---
 
 	void DataManager::notifyNodeAdded(const Node &node) const {
@@ -172,6 +177,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) const {
+		if (suppressNotifications_) return;
 		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onNodeUpdated(oldNode, newNode);
@@ -202,6 +208,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const {
+		if (suppressNotifications_) return;
 		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
 		for (const auto &observer: observers_) {
 			observer->onEdgeUpdated(oldEdge, newEdge);
@@ -289,6 +296,12 @@ namespace graph::storage {
 	// --- Node Operations (delegate to NodeManager) ---
 
 	void DataManager::addNode(Node &node) const {
+		// Phase 1: Validate
+		for (const auto &v : validators_) {
+			v->validateNodeInsert(node, node.getProperties());
+		}
+
+		// Phase 2: Write
 		nodeManager_->add(node);
 
 		if (transactionActive_) {
@@ -307,6 +320,14 @@ namespace graph::storage {
 		if (nodes.empty())
 			return;
 
+		// Phase 1: Validate all nodes before any writes (atomicity)
+		for (const auto &node : nodes) {
+			for (const auto &v : validators_) {
+				v->validateNodeInsert(node, node.getProperties());
+			}
+		}
+
+		// Phase 2: Write
 		nodeManager_->addBatch(nodes);
 		notifyNodesAdded(nodes);
 
@@ -370,15 +391,27 @@ namespace graph::storage {
 		auto existingProps = nodeManager_->getProperties(nodeId);
 		oldNode.setProperties(existingProps);
 
-		// 2. Perform the modification
+		// 1.5. Validate: build merged new props for constraint checking
+		auto mergedProps = existingProps;
+		for (const auto &[key, val] : properties) {
+			mergedProps[key] = val;
+		}
+		for (const auto &v : validators_) {
+			v->validateNodeUpdate(oldNode, existingProps, mergedProps);
+		}
+
+		// 2. Perform the modification (suppress intermediate notifications from updateEntity
+		//    inside PropertyManager, which would fire with cleared inline properties)
+		suppressNotifications_ = true;
 		nodeManager_->addProperties(nodeId, properties);
+		suppressNotifications_ = false;
 
 		// 3. Snapshot NEW state
 		Node newNode = nodeManager_->get(nodeId);
 		auto newProps = nodeManager_->getProperties(nodeId);
 		newNode.setProperties(newProps);
 
-		// 4. Notify with valid snapshots
+		// 4. Notify with valid snapshots (full properties, not just inline)
 		notifyNodeUpdated(oldNode, newNode);
 	}
 
@@ -389,8 +422,17 @@ namespace graph::storage {
 		auto existingProps = nodeManager_->getProperties(nodeId);
 		oldNode.setProperties(existingProps);
 
-		// 2. Perform removal
+		// 1.5. Validate: build props with key removed
+		auto removedProps = existingProps;
+		removedProps.erase(key);
+		for (const auto &v : validators_) {
+			v->validateNodeUpdate(oldNode, existingProps, removedProps);
+		}
+
+		// 2. Perform removal (suppress intermediate notifications)
+		suppressNotifications_ = true;
 		nodeManager_->removeProperty(nodeId, key);
+		suppressNotifications_ = false;
 
 		// 3. Snapshot NEW state
 		Node newNode = nodeManager_->get(nodeId);
@@ -587,6 +629,12 @@ namespace graph::storage {
 	// --- Edge Operations (delegate to EdgeManager) ---
 
 	void DataManager::addEdge(Edge &edge) const {
+		// Phase 1: Validate
+		for (const auto &v : validators_) {
+			v->validateEdgeInsert(edge, edge.getProperties());
+		}
+
+		// Phase 2: Write
 		edgeManager_->add(edge);
 
 		if (transactionActive_) {
@@ -604,6 +652,13 @@ namespace graph::storage {
 	void DataManager::addEdges(std::vector<Edge> &edges) const {
 		if (edges.empty())
 			return;
+
+		// Phase 1: Validate all edges before any writes (atomicity)
+		for (const auto &edge : edges) {
+			for (const auto &v : validators_) {
+				v->validateEdgeInsert(edge, edge.getProperties());
+			}
+		}
 
 		// 1. Assign IDs and initial persistence
 		edgeManager_->addBatch(edges);
@@ -673,8 +728,19 @@ namespace graph::storage {
 		auto existingProps = edgeManager_->getProperties(edgeId);
 		oldEdge.setProperties(existingProps);
 
-		// 2. Perform modification
+		// 1.5. Validate: build merged new props for constraint checking
+		auto mergedProps = existingProps;
+		for (const auto &[key, val] : properties) {
+			mergedProps[key] = val;
+		}
+		for (const auto &v : validators_) {
+			v->validateEdgeUpdate(oldEdge, existingProps, mergedProps);
+		}
+
+		// 2. Perform modification (suppress intermediate notifications)
+		suppressNotifications_ = true;
 		edgeManager_->addProperties(edgeId, properties);
+		suppressNotifications_ = false;
 
 		// 3. Snapshot NEW state
 		Edge newEdge = edgeManager_->get(edgeId);
@@ -691,8 +757,17 @@ namespace graph::storage {
 		auto existingProps = edgeManager_->getProperties(edgeId);
 		oldEdge.setProperties(existingProps);
 
-		// 2. Perform removal
+		// 1.5. Validate: build props with key removed
+		auto removedProps = existingProps;
+		removedProps.erase(key);
+		for (const auto &v : validators_) {
+			v->validateEdgeUpdate(oldEdge, existingProps, removedProps);
+		}
+
+		// 2. Perform removal (suppress intermediate notifications)
+		suppressNotifications_ = true;
 		edgeManager_->removeProperty(edgeId, key);
+		suppressNotifications_ = false;
 
 		// 3. Snapshot NEW state
 		Edge newEdge = edgeManager_->get(edgeId);
@@ -738,9 +813,13 @@ namespace graph::storage {
 
 	// --- Index Operations ---
 
-	void DataManager::addIndexEntity(Index &index) const { indexEntityManager_->add(index); }
+	void DataManager::addIndexEntity(Index &index) const {
+		indexEntityManager_->add(index);
+	}
 
-	void DataManager::updateIndexEntity(const Index &index) const { indexEntityManager_->update(index); }
+	void DataManager::updateIndexEntity(const Index &index) const {
+		indexEntityManager_->update(index);
+	}
 
 	void DataManager::deleteIndex(Index &index) const { indexEntityManager_->remove(index); }
 

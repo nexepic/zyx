@@ -201,11 +201,12 @@ namespace graph::query::execution::operators {
 			for (size_t i = 1; i < labelIds.size(); ++i) {
 				newNode.addLabelId(labelIds[i]);
 			}
+			// Set properties on node before addNode so constraint validation sees them
+			newNode.setProperties(props_);
 			dm_->addNode(newNode);
 			if (!props_.empty()) {
 				dm_->addNodeProperties(newNode.getId(), props_);
 			}
-			newNode.setProperties(props_);
 			return newNode;
 		}
 

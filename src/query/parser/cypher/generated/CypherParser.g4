@@ -33,6 +33,9 @@ administrationStatement
     : showIndexesStatement
     | dropIndexStatement
     | createIndexStatement
+    | createConstraintStatement
+    | dropConstraintStatement
+    | showConstraintsStatement
     | transactionStatement
     ;
 
@@ -58,6 +61,41 @@ createIndexStatement
     // Vector Index
 	| K_CREATE K_VECTOR K_INDEX symbolicName? K_ON nodeLabel LPAREN propertyKeyName RPAREN (K_OPTIONS mapLiteral)? # CreateVectorIndex
 	;
+
+// --- Constraint DDL ---
+
+createConstraintStatement
+    : K_CREATE K_CONSTRAINT symbolicName K_FOR constraintNodePattern K_REQUIRE constraintBody  # CreateNodeConstraint
+    | K_CREATE K_CONSTRAINT symbolicName K_FOR constraintEdgePattern K_REQUIRE constraintBody  # CreateEdgeConstraint
+    ;
+
+constraintNodePattern
+    : LPAREN variable COLON labelName RPAREN
+    ;
+
+constraintEdgePattern
+    : LPAREN RPAREN MINUS LBRACK variable COLON labelName RBRACK MINUS LPAREN RPAREN
+    ;
+
+constraintBody
+    : propertyExpression K_IS K_UNIQUE                                                       # UniqueConstraintBody
+    | propertyExpression K_IS K_NOT K_NULL                                                   # NotNullConstraintBody
+    | propertyExpression K_IS COLON COLON constraintTypeName                                 # PropertyTypeConstraintBody
+    | LPAREN propertyExpression (COMMA propertyExpression)* RPAREN K_IS K_NODE K_KEY         # NodeKeyConstraintBody
+    ;
+
+constraintTypeName
+    : K_BOOLEAN | K_INTEGER | K_FLOAT | K_STRING | K_LIST | K_MAP
+    ;
+
+dropConstraintStatement
+    : K_DROP K_CONSTRAINT symbolicName                     # DropConstraintByName
+    | K_DROP K_CONSTRAINT symbolicName K_IF K_EXISTS       # DropConstraintIfExists
+    ;
+
+showConstraintsStatement
+    : K_SHOW K_CONSTRAINT
+    ;
 
 // ============================================================================
 // QUERY STRUCTURE
@@ -383,6 +421,8 @@ schemaName
     : symbolicName
     | K_INDEX | K_ON | K_MATCH | K_CREATE | K_WHERE | K_RETURN
     | K_BEGIN | K_COMMIT | K_ROLLBACK | K_TRANSACTION
+    | K_KEY | K_NODE | K_CONSTRAINT
+    | K_BOOLEAN | K_INTEGER | K_FLOAT | K_STRING | K_LIST | K_MAP
     ;
 
 symbolicName
@@ -399,7 +439,9 @@ symbolicName
     // Admin Keywords
     | K_INDEX | K_ON | K_SHOW | K_DROP
     | K_FOR | K_CONSTRAINT | K_DO | K_REQUIRE | K_UNIQUE | K_MANDATORY
-    | K_SCALAR | K_OF | K_ADD
+    | K_SCALAR | K_OF | K_ADD | K_KEY | K_NODE
+    | K_BOOLEAN | K_INTEGER | K_FLOAT | K_STRING | K_LIST | K_MAP
+    | K_IF
     // Vector Keywords
     | K_VECTOR | K_OPTIONS
     // Transaction Keywords

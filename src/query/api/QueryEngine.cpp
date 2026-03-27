@@ -22,6 +22,7 @@
 #include <chrono>
 #include "CypherParserImpl.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/constraints/ConstraintManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query {
@@ -33,8 +34,13 @@ namespace graph::query {
 		indexManager_->initialize();
 		dm->registerObserver(indexManager_);
 
+		// Initialize ConstraintManager (pre-write validation)
+		constraintManager_ = std::make_shared<storage::constraints::ConstraintManager>(storage_, indexManager_);
+		constraintManager_->initialize();
+		dm->registerValidator(constraintManager_);
+
 		// Note: queryPlanner_ is now shared_ptr for the Builder
-		queryPlanner_ = std::make_shared<QueryPlanner>(dm, indexManager_);
+		queryPlanner_ = std::make_shared<QueryPlanner>(dm, indexManager_, constraintManager_);
 		queryExecutor_ = std::make_unique<QueryExecutor>();
 	}
 

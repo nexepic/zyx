@@ -66,6 +66,54 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitCreateNodeConstraint(CypherParser::CreateNodeConstraintContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitCreateEdgeConstraint(CypherParser::CreateEdgeConstraintContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstraintNodePattern(CypherParser::ConstraintNodePatternContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstraintEdgePattern(CypherParser::ConstraintEdgePatternContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitUniqueConstraintBody(CypherParser::UniqueConstraintBodyContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitNotNullConstraintBody(CypherParser::NotNullConstraintBodyContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPropertyTypeConstraintBody(CypherParser::PropertyTypeConstraintBodyContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitNodeKeyConstraintBody(CypherParser::NodeKeyConstraintBodyContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstraintTypeName(CypherParser::ConstraintTypeNameContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitDropConstraintByName(CypherParser::DropConstraintByNameContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitDropConstraintIfExists(CypherParser::DropConstraintIfExistsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitShowConstraintsStatement(CypherParser::ShowConstraintsStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitQuery(CypherParser::QueryContext *ctx) override {
     return visitChildren(ctx);
   }

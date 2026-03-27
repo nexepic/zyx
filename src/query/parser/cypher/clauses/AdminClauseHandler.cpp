@@ -126,4 +126,89 @@ std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleDr
 	return planner->dropIndexOp(label, prop);
 }
 
+// --- Constraint DDL ---
+
+std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCreateNodeConstraint(
+	CypherParser::CreateNodeConstraintContext *ctx,
+	const std::shared_ptr<query::QueryPlanner> &planner) {
+
+	std::string name = ctx->symbolicName()->getText();
+
+	// Extract label from constraintNodePattern: (variable:label)
+	auto pattern = ctx->constraintNodePattern();
+	std::string label = pattern->labelName()->getText();
+
+	// Parse the constraint body
+	auto body = ctx->constraintBody();
+
+	if (auto *unique = dynamic_cast<CypherParser::UniqueConstraintBodyContext *>(body)) {
+		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(unique->propertyExpression());
+		return planner->createConstraintOp(name, "node", "unique", label, {prop});
+	}
+
+	if (auto *notNull = dynamic_cast<CypherParser::NotNullConstraintBodyContext *>(body)) {
+		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(notNull->propertyExpression());
+		return planner->createConstraintOp(name, "node", "not_null", label, {prop});
+	}
+
+	if (auto *propType = dynamic_cast<CypherParser::PropertyTypeConstraintBodyContext *>(body)) {
+		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(propType->propertyExpression());
+		std::string typeName = propType->constraintTypeName()->getText();
+		return planner->createConstraintOp(name, "node", "property_type", label, {prop}, typeName);
+	}
+
+	if (auto *nodeKey = dynamic_cast<CypherParser::NodeKeyConstraintBodyContext *>(body)) {
+		std::vector<std::string> props;
+		for (auto *propExpr : nodeKey->propertyExpression()) {
+			props.push_back(helpers::AstExtractor::extractPropertyKeyFromExpr(propExpr));
+		}
+		return planner->createConstraintOp(name, "node", "node_key", label, props);
+	}
+
+	throw std::runtime_error("Unknown constraint body type");
+}
+
+std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCreateEdgeConstraint(
+	CypherParser::CreateEdgeConstraintContext *ctx,
+	const std::shared_ptr<query::QueryPlanner> &planner) {
+
+	std::string name = ctx->symbolicName()->getText();
+
+	// Extract label from constraintEdgePattern: ()-[variable:label]-()
+	auto pattern = ctx->constraintEdgePattern();
+	std::string label = pattern->labelName()->getText();
+
+	// Parse the constraint body
+	auto body = ctx->constraintBody();
+
+	if (auto *unique = dynamic_cast<CypherParser::UniqueConstraintBodyContext *>(body)) {
+		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(unique->propertyExpression());
+		return planner->createConstraintOp(name, "edge", "unique", label, {prop});
+	}
+
+	if (auto *notNull = dynamic_cast<CypherParser::NotNullConstraintBodyContext *>(body)) {
+		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(notNull->propertyExpression());
+		return planner->createConstraintOp(name, "edge", "not_null", label, {prop});
+	}
+
+	if (auto *propType = dynamic_cast<CypherParser::PropertyTypeConstraintBodyContext *>(body)) {
+		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(propType->propertyExpression());
+		std::string typeName = propType->constraintTypeName()->getText();
+		return planner->createConstraintOp(name, "edge", "property_type", label, {prop}, typeName);
+	}
+
+	throw std::runtime_error("Unknown constraint body type for edge constraint");
+}
+
+std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleDropConstraint(
+	const std::string &name, bool ifExists,
+	const std::shared_ptr<query::QueryPlanner> &planner) {
+	return planner->dropConstraintOp(name, ifExists);
+}
+
+std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleShowConstraints(
+	const std::shared_ptr<query::QueryPlanner> &planner) {
+	return planner->showConstraintsOp();
+}
+
 } // namespace graph::parser::cypher::clauses

@@ -24,45 +24,50 @@ public:
     K_STARTS = 34, K_XOR = 35, K_FALSE = 36, K_TRUE = 37, K_NULL = 38, K_CASE = 39, 
     K_WHEN = 40, K_THEN = 41, K_ELSE = 42, K_END = 43, K_COUNT = 44, K_FILTER = 45, 
     K_EXTRACT = 46, K_ANY = 47, K_NONE = 48, K_SINGLE = 49, K_ALL = 50, 
-    K_REDUCE = 51, K_INDEX = 52, K_ON = 53, K_SHOW = 54, K_DROP = 55, K_FOR = 56, 
-    K_CONSTRAINT = 57, K_DO = 58, K_REQUIRE = 59, K_UNIQUE = 60, K_MANDATORY = 61, 
-    K_SCALAR = 62, K_OF = 63, K_ADD = 64, K_BEGIN = 65, K_COMMIT = 66, K_ROLLBACK = 67, 
-    K_TRANSACTION = 68, K_VECTOR = 69, K_OPTIONS = 70, EQ = 71, NEQ = 72, 
-    LT = 73, GT = 74, LTE = 75, GTE = 76, PLUS = 77, MINUS = 78, MULTIPLY = 79, 
-    DIVIDE = 80, MODULO = 81, POWER = 82, LPAREN = 83, RPAREN = 84, LBRACE = 85, 
-    RBRACE = 86, LBRACK = 87, RBRACK = 88, COMMA = 89, DOT = 90, COLON = 91, 
-    PIPE = 92, DOLLAR = 93, RANGE = 94, SEMI = 95, HexInteger = 96, OctalInteger = 97, 
-    DecimalInteger = 98, DoubleLiteral = 99, ID = 100, StringLiteral = 101, 
-    WS = 102, COMMENT = 103, LINE_COMMENT = 104
+    K_REDUCE = 51, K_INDEX = 52, K_ON = 53, K_SHOW = 54, K_DROP = 55, K_IF = 56, 
+    K_FOR = 57, K_CONSTRAINT = 58, K_DO = 59, K_REQUIRE = 60, K_UNIQUE = 61, 
+    K_MANDATORY = 62, K_SCALAR = 63, K_OF = 64, K_ADD = 65, K_BEGIN = 66, 
+    K_COMMIT = 67, K_ROLLBACK = 68, K_TRANSACTION = 69, K_KEY = 70, K_NODE = 71, 
+    K_BOOLEAN = 72, K_INTEGER = 73, K_FLOAT = 74, K_STRING = 75, K_LIST = 76, 
+    K_MAP = 77, K_VECTOR = 78, K_OPTIONS = 79, EQ = 80, NEQ = 81, LT = 82, 
+    GT = 83, LTE = 84, GTE = 85, PLUS = 86, MINUS = 87, MULTIPLY = 88, DIVIDE = 89, 
+    MODULO = 90, POWER = 91, LPAREN = 92, RPAREN = 93, LBRACE = 94, RBRACE = 95, 
+    LBRACK = 96, RBRACK = 97, COMMA = 98, DOT = 99, COLON = 100, PIPE = 101, 
+    DOLLAR = 102, RANGE = 103, SEMI = 104, HexInteger = 105, OctalInteger = 106, 
+    DecimalInteger = 107, DoubleLiteral = 108, ID = 109, StringLiteral = 110, 
+    WS = 111, COMMENT = 112, LINE_COMMENT = 113
   };
 
   enum {
     RuleCypher = 0, RuleStatement = 1, RuleAdministrationStatement = 2, 
     RuleTransactionStatement = 3, RuleShowIndexesStatement = 4, RuleDropIndexStatement = 5, 
-    RuleCreateIndexStatement = 6, RuleQuery = 7, RuleRegularQuery = 8, RuleSingleQuery = 9, 
-    RuleReadingClause = 10, RuleUpdatingClause = 11, RuleWithClause = 12, 
-    RuleMatchStatement = 13, RuleUnwindStatement = 14, RuleInQueryCallStatement = 15, 
-    RuleCreateStatement = 16, RuleMergeStatement = 17, RuleSetStatement = 18, 
-    RuleSetItem = 19, RuleDeleteStatement = 20, RuleRemoveStatement = 21, 
-    RuleRemoveItem = 22, RuleReturnStatement = 23, RuleStandaloneCallStatement = 24, 
-    RuleYieldItems = 25, RuleYieldItem = 26, RuleProjectionBody = 27, RuleProjectionItems = 28, 
-    RuleProjectionItem = 29, RuleOrderStatement = 30, RuleSkipStatement = 31, 
-    RuleLimitStatement = 32, RuleSortItem = 33, RuleWhere = 34, RulePattern = 35, 
-    RulePatternPart = 36, RulePatternElement = 37, RulePatternElementChain = 38, 
-    RuleNodePattern = 39, RuleRelationshipPattern = 40, RuleRelationshipDetail = 41, 
-    RuleProperties = 42, RuleNodeLabels = 43, RuleNodeLabel = 44, RuleRelationshipTypes = 45, 
-    RuleRangeLiteral = 46, RuleExpression = 47, RuleOrExpression = 48, RuleXorExpression = 49, 
-    RuleAndExpression = 50, RuleNotExpression = 51, RuleComparisonExpression = 52, 
-    RuleArithmeticExpression = 53, RulePowerExpression = 54, RuleUnaryExpression = 55, 
-    RuleAccessor = 56, RuleAtom = 57, RuleQuantifierExpression = 58, RuleExistsExpression = 59, 
-    RuleCaseExpression = 60, RulePropertyExpression = 61, RuleFunctionInvocation = 62, 
-    RuleExplicitProcedureInvocation = 63, RuleImplicitProcedureInvocation = 64, 
-    RuleVariable = 65, RuleLabelName = 66, RuleRelTypeName = 67, RulePropertyKeyName = 68, 
-    RuleProcedureName = 69, RuleProcedureResultField = 70, RuleFunctionName = 71, 
-    RuleNamespace = 72, RuleSchemaName = 73, RuleSymbolicName = 74, RuleLiteral = 75, 
-    RuleBooleanLiteral = 76, RuleNumberLiteral = 77, RuleIntegerLiteral = 78, 
-    RuleMapLiteral = 79, RuleListLiteral = 80, RuleParameter = 81, RuleListComprehension = 82, 
-    RuleReduceExpression = 83, RulePatternComprehension = 84
+    RuleCreateIndexStatement = 6, RuleCreateConstraintStatement = 7, RuleConstraintNodePattern = 8, 
+    RuleConstraintEdgePattern = 9, RuleConstraintBody = 10, RuleConstraintTypeName = 11, 
+    RuleDropConstraintStatement = 12, RuleShowConstraintsStatement = 13, 
+    RuleQuery = 14, RuleRegularQuery = 15, RuleSingleQuery = 16, RuleReadingClause = 17, 
+    RuleUpdatingClause = 18, RuleWithClause = 19, RuleMatchStatement = 20, 
+    RuleUnwindStatement = 21, RuleInQueryCallStatement = 22, RuleCreateStatement = 23, 
+    RuleMergeStatement = 24, RuleSetStatement = 25, RuleSetItem = 26, RuleDeleteStatement = 27, 
+    RuleRemoveStatement = 28, RuleRemoveItem = 29, RuleReturnStatement = 30, 
+    RuleStandaloneCallStatement = 31, RuleYieldItems = 32, RuleYieldItem = 33, 
+    RuleProjectionBody = 34, RuleProjectionItems = 35, RuleProjectionItem = 36, 
+    RuleOrderStatement = 37, RuleSkipStatement = 38, RuleLimitStatement = 39, 
+    RuleSortItem = 40, RuleWhere = 41, RulePattern = 42, RulePatternPart = 43, 
+    RulePatternElement = 44, RulePatternElementChain = 45, RuleNodePattern = 46, 
+    RuleRelationshipPattern = 47, RuleRelationshipDetail = 48, RuleProperties = 49, 
+    RuleNodeLabels = 50, RuleNodeLabel = 51, RuleRelationshipTypes = 52, 
+    RuleRangeLiteral = 53, RuleExpression = 54, RuleOrExpression = 55, RuleXorExpression = 56, 
+    RuleAndExpression = 57, RuleNotExpression = 58, RuleComparisonExpression = 59, 
+    RuleArithmeticExpression = 60, RulePowerExpression = 61, RuleUnaryExpression = 62, 
+    RuleAccessor = 63, RuleAtom = 64, RuleQuantifierExpression = 65, RuleExistsExpression = 66, 
+    RuleCaseExpression = 67, RulePropertyExpression = 68, RuleFunctionInvocation = 69, 
+    RuleExplicitProcedureInvocation = 70, RuleImplicitProcedureInvocation = 71, 
+    RuleVariable = 72, RuleLabelName = 73, RuleRelTypeName = 74, RulePropertyKeyName = 75, 
+    RuleProcedureName = 76, RuleProcedureResultField = 77, RuleFunctionName = 78, 
+    RuleNamespace = 79, RuleSchemaName = 80, RuleSymbolicName = 81, RuleLiteral = 82, 
+    RuleBooleanLiteral = 83, RuleNumberLiteral = 84, RuleIntegerLiteral = 85, 
+    RuleMapLiteral = 86, RuleListLiteral = 87, RuleParameter = 88, RuleListComprehension = 89, 
+    RuleReduceExpression = 90, RulePatternComprehension = 91
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -89,6 +94,13 @@ public:
   class ShowIndexesStatementContext;
   class DropIndexStatementContext;
   class CreateIndexStatementContext;
+  class CreateConstraintStatementContext;
+  class ConstraintNodePatternContext;
+  class ConstraintEdgePatternContext;
+  class ConstraintBodyContext;
+  class ConstraintTypeNameContext;
+  class DropConstraintStatementContext;
+  class ShowConstraintsStatementContext;
   class QueryContext;
   class RegularQueryContext;
   class SingleQueryContext;
@@ -204,6 +216,9 @@ public:
     ShowIndexesStatementContext *showIndexesStatement();
     DropIndexStatementContext *dropIndexStatement();
     CreateIndexStatementContext *createIndexStatement();
+    CreateConstraintStatementContext *createConstraintStatement();
+    DropConstraintStatementContext *dropConstraintStatement();
+    ShowConstraintsStatementContext *showConstraintsStatement();
     TransactionStatementContext *transactionStatement();
 
 
@@ -379,6 +394,230 @@ public:
   };
 
   CreateIndexStatementContext* createIndexStatement();
+
+  class  CreateConstraintStatementContext : public antlr4::ParserRuleContext {
+  public:
+    CreateConstraintStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+   
+    CreateConstraintStatementContext() = default;
+    void copyFrom(CreateConstraintStatementContext *context);
+    using antlr4::ParserRuleContext::copyFrom;
+
+    virtual size_t getRuleIndex() const override;
+
+   
+  };
+
+  class  CreateNodeConstraintContext : public CreateConstraintStatementContext {
+  public:
+    CreateNodeConstraintContext(CreateConstraintStatementContext *ctx);
+
+    antlr4::tree::TerminalNode *K_CREATE();
+    antlr4::tree::TerminalNode *K_CONSTRAINT();
+    SymbolicNameContext *symbolicName();
+    antlr4::tree::TerminalNode *K_FOR();
+    ConstraintNodePatternContext *constraintNodePattern();
+    antlr4::tree::TerminalNode *K_REQUIRE();
+    ConstraintBodyContext *constraintBody();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  CreateEdgeConstraintContext : public CreateConstraintStatementContext {
+  public:
+    CreateEdgeConstraintContext(CreateConstraintStatementContext *ctx);
+
+    antlr4::tree::TerminalNode *K_CREATE();
+    antlr4::tree::TerminalNode *K_CONSTRAINT();
+    SymbolicNameContext *symbolicName();
+    antlr4::tree::TerminalNode *K_FOR();
+    ConstraintEdgePatternContext *constraintEdgePattern();
+    antlr4::tree::TerminalNode *K_REQUIRE();
+    ConstraintBodyContext *constraintBody();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  CreateConstraintStatementContext* createConstraintStatement();
+
+  class  ConstraintNodePatternContext : public antlr4::ParserRuleContext {
+  public:
+    ConstraintNodePatternContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *LPAREN();
+    VariableContext *variable();
+    antlr4::tree::TerminalNode *COLON();
+    LabelNameContext *labelName();
+    antlr4::tree::TerminalNode *RPAREN();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ConstraintNodePatternContext* constraintNodePattern();
+
+  class  ConstraintEdgePatternContext : public antlr4::ParserRuleContext {
+  public:
+    ConstraintEdgePatternContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<antlr4::tree::TerminalNode *> LPAREN();
+    antlr4::tree::TerminalNode* LPAREN(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> RPAREN();
+    antlr4::tree::TerminalNode* RPAREN(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> MINUS();
+    antlr4::tree::TerminalNode* MINUS(size_t i);
+    antlr4::tree::TerminalNode *LBRACK();
+    VariableContext *variable();
+    antlr4::tree::TerminalNode *COLON();
+    LabelNameContext *labelName();
+    antlr4::tree::TerminalNode *RBRACK();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ConstraintEdgePatternContext* constraintEdgePattern();
+
+  class  ConstraintBodyContext : public antlr4::ParserRuleContext {
+  public:
+    ConstraintBodyContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+   
+    ConstraintBodyContext() = default;
+    void copyFrom(ConstraintBodyContext *context);
+    using antlr4::ParserRuleContext::copyFrom;
+
+    virtual size_t getRuleIndex() const override;
+
+   
+  };
+
+  class  NodeKeyConstraintBodyContext : public ConstraintBodyContext {
+  public:
+    NodeKeyConstraintBodyContext(ConstraintBodyContext *ctx);
+
+    antlr4::tree::TerminalNode *LPAREN();
+    std::vector<PropertyExpressionContext *> propertyExpression();
+    PropertyExpressionContext* propertyExpression(size_t i);
+    antlr4::tree::TerminalNode *RPAREN();
+    antlr4::tree::TerminalNode *K_IS();
+    antlr4::tree::TerminalNode *K_NODE();
+    antlr4::tree::TerminalNode *K_KEY();
+    std::vector<antlr4::tree::TerminalNode *> COMMA();
+    antlr4::tree::TerminalNode* COMMA(size_t i);
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  UniqueConstraintBodyContext : public ConstraintBodyContext {
+  public:
+    UniqueConstraintBodyContext(ConstraintBodyContext *ctx);
+
+    PropertyExpressionContext *propertyExpression();
+    antlr4::tree::TerminalNode *K_IS();
+    antlr4::tree::TerminalNode *K_UNIQUE();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  PropertyTypeConstraintBodyContext : public ConstraintBodyContext {
+  public:
+    PropertyTypeConstraintBodyContext(ConstraintBodyContext *ctx);
+
+    PropertyExpressionContext *propertyExpression();
+    antlr4::tree::TerminalNode *K_IS();
+    std::vector<antlr4::tree::TerminalNode *> COLON();
+    antlr4::tree::TerminalNode* COLON(size_t i);
+    ConstraintTypeNameContext *constraintTypeName();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  NotNullConstraintBodyContext : public ConstraintBodyContext {
+  public:
+    NotNullConstraintBodyContext(ConstraintBodyContext *ctx);
+
+    PropertyExpressionContext *propertyExpression();
+    antlr4::tree::TerminalNode *K_IS();
+    antlr4::tree::TerminalNode *K_NOT();
+    antlr4::tree::TerminalNode *K_NULL();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  ConstraintBodyContext* constraintBody();
+
+  class  ConstraintTypeNameContext : public antlr4::ParserRuleContext {
+  public:
+    ConstraintTypeNameContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_BOOLEAN();
+    antlr4::tree::TerminalNode *K_INTEGER();
+    antlr4::tree::TerminalNode *K_FLOAT();
+    antlr4::tree::TerminalNode *K_STRING();
+    antlr4::tree::TerminalNode *K_LIST();
+    antlr4::tree::TerminalNode *K_MAP();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ConstraintTypeNameContext* constraintTypeName();
+
+  class  DropConstraintStatementContext : public antlr4::ParserRuleContext {
+  public:
+    DropConstraintStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+   
+    DropConstraintStatementContext() = default;
+    void copyFrom(DropConstraintStatementContext *context);
+    using antlr4::ParserRuleContext::copyFrom;
+
+    virtual size_t getRuleIndex() const override;
+
+   
+  };
+
+  class  DropConstraintIfExistsContext : public DropConstraintStatementContext {
+  public:
+    DropConstraintIfExistsContext(DropConstraintStatementContext *ctx);
+
+    antlr4::tree::TerminalNode *K_DROP();
+    antlr4::tree::TerminalNode *K_CONSTRAINT();
+    SymbolicNameContext *symbolicName();
+    antlr4::tree::TerminalNode *K_IF();
+    antlr4::tree::TerminalNode *K_EXISTS();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  DropConstraintByNameContext : public DropConstraintStatementContext {
+  public:
+    DropConstraintByNameContext(DropConstraintStatementContext *ctx);
+
+    antlr4::tree::TerminalNode *K_DROP();
+    antlr4::tree::TerminalNode *K_CONSTRAINT();
+    SymbolicNameContext *symbolicName();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  DropConstraintStatementContext* dropConstraintStatement();
+
+  class  ShowConstraintsStatementContext : public antlr4::ParserRuleContext {
+  public:
+    ShowConstraintsStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_SHOW();
+    antlr4::tree::TerminalNode *K_CONSTRAINT();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ShowConstraintsStatementContext* showConstraintsStatement();
 
   class  QueryContext : public antlr4::ParserRuleContext {
   public:
@@ -1503,6 +1742,15 @@ public:
     antlr4::tree::TerminalNode *K_COMMIT();
     antlr4::tree::TerminalNode *K_ROLLBACK();
     antlr4::tree::TerminalNode *K_TRANSACTION();
+    antlr4::tree::TerminalNode *K_KEY();
+    antlr4::tree::TerminalNode *K_NODE();
+    antlr4::tree::TerminalNode *K_CONSTRAINT();
+    antlr4::tree::TerminalNode *K_BOOLEAN();
+    antlr4::tree::TerminalNode *K_INTEGER();
+    antlr4::tree::TerminalNode *K_FLOAT();
+    antlr4::tree::TerminalNode *K_STRING();
+    antlr4::tree::TerminalNode *K_LIST();
+    antlr4::tree::TerminalNode *K_MAP();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -1580,6 +1828,15 @@ public:
     antlr4::tree::TerminalNode *K_SCALAR();
     antlr4::tree::TerminalNode *K_OF();
     antlr4::tree::TerminalNode *K_ADD();
+    antlr4::tree::TerminalNode *K_KEY();
+    antlr4::tree::TerminalNode *K_NODE();
+    antlr4::tree::TerminalNode *K_BOOLEAN();
+    antlr4::tree::TerminalNode *K_INTEGER();
+    antlr4::tree::TerminalNode *K_FLOAT();
+    antlr4::tree::TerminalNode *K_STRING();
+    antlr4::tree::TerminalNode *K_LIST();
+    antlr4::tree::TerminalNode *K_MAP();
+    antlr4::tree::TerminalNode *K_IF();
     antlr4::tree::TerminalNode *K_VECTOR();
     antlr4::tree::TerminalNode *K_OPTIONS();
     antlr4::tree::TerminalNode *K_BEGIN();
