@@ -22,12 +22,10 @@
 
 #include <cstdint>
 #include <memory>
-#include <shared_mutex>
 #include <vector>
 
 namespace graph::storage {
 	class FileStorage;
-	struct CommittedSnapshot;
 }
 
 namespace graph {
@@ -64,8 +62,6 @@ namespace graph {
 		void recordOperation(TxnOperation op);
 		[[nodiscard]] const std::vector<TxnOperation> &getOperations() const { return operations_; }
 
-		[[nodiscard]] const storage::CommittedSnapshot *getSnapshot() const { return snapshot_.get(); }
-
 	private:
 		friend class TransactionManager;
 		Transaction(uint64_t txnId, TransactionManager &mgr, std::shared_ptr<storage::FileStorage> storage);
@@ -76,13 +72,6 @@ namespace graph {
 		TransactionManager *manager_ = nullptr; // Non-owning
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::vector<TxnOperation> operations_;
-
-		// Shared lock held for read-only transaction's lifetime (RAII)
-		// Write lock is stored on TransactionManager (single writer)
-		std::shared_lock<std::shared_mutex> readLock_;
-
-		// Snapshot for read-only transactions (immutable once acquired)
-		std::shared_ptr<storage::CommittedSnapshot> snapshot_;
 	};
 
 } // namespace graph

@@ -20,21 +20,16 @@
 #include "graph/core/TransactionManager.hpp"
 #include <chrono>
 #include <cstdint>
-#include <thread>
 #include "graph/core/Transaction.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
-#include "graph/storage/SnapshotManager.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 
 namespace graph {
 
 	TransactionManager::TransactionManager(std::shared_ptr<storage::FileStorage> storage,
 										   std::shared_ptr<storage::wal::WALManager> walManager) :
-		storage_(std::move(storage)), walManager_(std::move(walManager)),
-		snapshotManager_(std::make_unique<storage::SnapshotManager>()) {}
-
-	TransactionManager::~TransactionManager() = default;
+		storage_(std::move(storage)), walManager_(std::move(walManager)) {}
 
 	Transaction TransactionManager::begin() { return begin(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout)); }
 
@@ -43,36 +38,24 @@ namespace graph {
 	}
 
 	Transaction TransactionManager::beginReadOnly(std::chrono::milliseconds /*timeout*/) {
-		// Acquire shared lock — multiple readers can hold this concurrently
-		std::shared_lock<std::shared_mutex> lock(rwMutex_);
-
+		// Read-only transactions do NOT acquire the write mutex.
+		// They see committed state only (skip dirty entity lookups).
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
-		// Acquire an immutable snapshot of committed state
-		auto snapshot = snapshotManager_->acquireSnapshot();
-
-		// Set up thread-local snapshot for DataManager reads
 		auto dm = storage_->getDataManager();
-		dm->setCurrentSnapshot(snapshot.get());
+		dm->setSkipDirtyLookup(true);
 
 		Transaction txn(txnId, *this, storage_);
 		txn.readOnly_ = true;
-		txn.readLock_ = std::move(lock);
-		txn.snapshot_ = std::move(snapshot);
 		return txn;
 	}
 
 	Transaction TransactionManager::begin(std::chrono::milliseconds timeout) {
-		// Acquire exclusive lock — blocks until all readers and writers finish
-		std::unique_lock<std::shared_mutex> lock(rwMutex_, std::defer_lock);
-
-		// Try to acquire with timeout
-		auto deadline = std::chrono::steady_clock::now() + timeout;
-		while (!lock.try_lock()) {
-			if (std::chrono::steady_clock::now() >= deadline) {
-				throw std::runtime_error("Transaction begin timed out: another transaction is active");
-			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		// Acquire single-writer lock with timeout using a local lock first
+		// to avoid releasing the existing writeLock_ before acquiring the new one
+		std::unique_lock<std::timed_mutex> lock(writeMutex_, std::defer_lock);
+		if (!lock.try_lock_for(timeout)) {
+			throw std::runtime_error("Transaction begin timed out: another transaction is active");
 		}
 		writeLock_ = std::move(lock);
 
@@ -87,7 +70,7 @@ namespace graph {
 		auto dm = storage_->getDataManager();
 		dm->setActiveTransaction(txnId);
 
-		activeWriteTxn_ = true;
+		hasActive_ = true;
 
 		return Transaction(txnId, *this, storage_);
 	}
@@ -99,14 +82,11 @@ namespace graph {
 			return;
 		}
 
-		// Read-only transactions: release snapshot and shared lock
+		// Read-only transactions: just clear state and return
 		if (txn.isReadOnly()) {
 			auto dm = storage_->getDataManager();
-			dm->clearCurrentSnapshot();
-			txn.snapshot_.reset();
+			dm->setSkipDirtyLookup(false);
 			txn.state_ = Transaction::TxnState::TXN_COMMITTED;
-			// shared_lock released via RAII when txn.readLock_ is destroyed/moved
-			txn.readLock_ = {};
 			return;
 		}
 
@@ -141,21 +121,15 @@ namespace graph {
 												 .count()));
 		}
 
-		// Build and publish new snapshot from current committed state
-		// (After save, dirty registries have been flushed, so snapshot is empty —
-		//  this is correct because the data is now on disk)
-		auto newSnapshot = std::make_shared<storage::CommittedSnapshot>();
-		snapshotManager_->publishSnapshot(std::move(newSnapshot));
-
 		// Clear DataManager transaction context
 		auto dm = storage_->getDataManager();
 		dm->clearActiveTransaction();
 
 		// Update transaction state
 		txn.state_ = Transaction::TxnState::TXN_COMMITTED;
-		activeWriteTxn_ = false;
+		hasActive_ = false;
 
-		// Release exclusive lock via RAII
+		// Release single-writer lock via RAII
 		if (writeLock_.owns_lock()) {
 			writeLock_.unlock();
 		}
@@ -166,13 +140,11 @@ namespace graph {
 			return;
 		}
 
-		// Read-only transactions: release snapshot and shared lock
+		// Read-only transactions: just clear state and return
 		if (txn.isReadOnly()) {
 			auto dm = storage_->getDataManager();
-			if (dm) dm->clearCurrentSnapshot();
-			txn.snapshot_.reset();
+			if (dm) dm->setSkipDirtyLookup(false);
 			txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;
-			txn.readLock_ = {};
 			return;
 		}
 
@@ -196,14 +168,14 @@ namespace graph {
 
 		// Update transaction state
 		txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;
-		activeWriteTxn_ = false;
+		hasActive_ = false;
 
-		// Release exclusive lock via RAII
+		// Release single-writer lock via RAII
 		if (writeLock_.owns_lock()) {
 			writeLock_.unlock();
 		}
 	}
 
-	bool TransactionManager::hasActiveTransaction() const { return activeWriteTxn_.load(std::memory_order_acquire); }
+	bool TransactionManager::hasActiveTransaction() const { return hasActive_.load(std::memory_order_acquire); }
 
 } // namespace graph

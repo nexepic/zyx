@@ -32,18 +32,13 @@ namespace graph {
 				manager_->rollbackTransaction(*this);
 			} catch (...) {
 				// Suppress exceptions in destructor
-				// Release read lock even if rollback fails
-				readLock_ = {};
 			}
 		}
 	}
 
 	Transaction::Transaction(Transaction &&other) noexcept :
-		txnId_(other.txnId_), state_(other.state_), readOnly_(other.readOnly_), manager_(other.manager_),
-		storage_(std::move(other.storage_)),
-		operations_(std::move(other.operations_)),
-		readLock_(std::move(other.readLock_)),
-		snapshot_(std::move(other.snapshot_)) {
+		txnId_(other.txnId_), state_(other.state_), manager_(other.manager_), storage_(std::move(other.storage_)),
+		operations_(std::move(other.operations_)) {
 		other.state_ = TxnState::TXN_ROLLED_BACK; // Prevent other's destructor from rolling back
 		other.manager_ = nullptr;
 	}
@@ -60,12 +55,9 @@ namespace graph {
 
 			txnId_ = other.txnId_;
 			state_ = other.state_;
-			readOnly_ = other.readOnly_;
 			manager_ = other.manager_;
 			storage_ = std::move(other.storage_);
 			operations_ = std::move(other.operations_);
-			readLock_ = std::move(other.readLock_);
-			snapshot_ = std::move(other.snapshot_);
 
 			other.state_ = TxnState::TXN_ROLLED_BACK;
 			other.manager_ = nullptr;

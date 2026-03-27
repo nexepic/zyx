@@ -23,7 +23,6 @@
 #include <map>
 #include <sstream>
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
@@ -49,9 +48,6 @@
 #include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::storage {
-
-	// Thread-local snapshot pointer for read-only transactions
-	thread_local const CommittedSnapshot *DataManager::currentSnapshot_ = nullptr;
 
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
@@ -1116,15 +1112,9 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	EntityType DataManager::getEntityFromMemoryOrDisk(int64_t id) {
-		// Check if we're in a read-only transaction with a snapshot
-		const auto *snapshot = currentSnapshot_;
-		if (snapshot != nullptr) {
-			// Read-only transaction: check snapshot for dirty state, then go to disk
-			return getEntityWithSnapshot<EntityType>(id, snapshot);
-		}
-
-		// 1. Check dirty info via PersistenceManager (write transaction or no-txn context)
-		{
+		// 1. Check dirty info via PersistenceManager
+		// Skip dirty lookups when reading committed state (read-only transactions)
+		if (!skipDirtyLookup_.load(std::memory_order_acquire)) {
 			auto dirtyInfo = getDirtyInfo<EntityType>(id);
 
 			if (dirtyInfo.has_value()) {
@@ -1166,81 +1156,6 @@ namespace graph::storage {
 
 		return make_inactive<EntityType>();
 	}
-
-	// Helper: get the snapshot map for a given entity type
-	namespace {
-		template<typename EntityType>
-		const std::unordered_map<int64_t, DirtyEntityInfo<EntityType>> &
-		getSnapshotMap(const CommittedSnapshot &snapshot);
-
-		template<>
-		const std::unordered_map<int64_t, DirtyEntityInfo<Node>> &
-		getSnapshotMap<Node>(const CommittedSnapshot &snapshot) { return snapshot.nodes; }
-
-		template<>
-		const std::unordered_map<int64_t, DirtyEntityInfo<Edge>> &
-		getSnapshotMap<Edge>(const CommittedSnapshot &snapshot) { return snapshot.edges; }
-
-		template<>
-		const std::unordered_map<int64_t, DirtyEntityInfo<Property>> &
-		getSnapshotMap<Property>(const CommittedSnapshot &snapshot) { return snapshot.properties; }
-
-		template<>
-		const std::unordered_map<int64_t, DirtyEntityInfo<Blob>> &
-		getSnapshotMap<Blob>(const CommittedSnapshot &snapshot) { return snapshot.blobs; }
-
-		template<>
-		const std::unordered_map<int64_t, DirtyEntityInfo<Index>> &
-		getSnapshotMap<Index>(const CommittedSnapshot &snapshot) { return snapshot.indexes; }
-
-		template<>
-		const std::unordered_map<int64_t, DirtyEntityInfo<State>> &
-		getSnapshotMap<State>(const CommittedSnapshot &snapshot) { return snapshot.states; }
-	} // namespace
-
-	template<typename EntityType>
-	EntityType DataManager::getEntityWithSnapshot(int64_t id, const CommittedSnapshot *snapshot) {
-		// 1. Check snapshot dirty state
-		const auto &snapshotMap = getSnapshotMap<EntityType>(*snapshot);
-		auto it = snapshotMap.find(id);
-		if (it != snapshotMap.end()) {
-			const auto &info = it->second;
-			if (info.changeType == EntityChangeType::CHANGE_DELETED) {
-				return make_inactive<EntityType>();
-			}
-			if (info.backup.has_value()) {
-				return *info.backup;
-			}
-		}
-
-		// 2. Check Cache (use peek() — shared read lock, no LRU mutation)
-		auto &cache = EntityTraits<EntityType>::getCache(this);
-		{
-			EntityType entity = cache.peek(id);
-			if (entity.getId() != 0) {
-				if (!entity.isActive())
-					return make_inactive<EntityType>();
-				return entity;
-			}
-		}
-
-		// 3. Load from Disk via pread (thread-safe)
-		EntityType entity = EntityTraits<EntityType>::loadFromDisk(this, id);
-		if (entity.getId() != 0 && entity.isActive()) {
-			cache.tryPut(id, entity);
-			return entity;
-		}
-
-		return make_inactive<EntityType>();
-	}
-
-	// Explicit instantiations for getEntityWithSnapshot
-	template Node DataManager::getEntityWithSnapshot<Node>(int64_t, const CommittedSnapshot *);
-	template Edge DataManager::getEntityWithSnapshot<Edge>(int64_t, const CommittedSnapshot *);
-	template Property DataManager::getEntityWithSnapshot<Property>(int64_t, const CommittedSnapshot *);
-	template Blob DataManager::getEntityWithSnapshot<Blob>(int64_t, const CommittedSnapshot *);
-	template Index DataManager::getEntityWithSnapshot<Index>(int64_t, const CommittedSnapshot *);
-	template State DataManager::getEntityWithSnapshot<State>(int64_t, const CommittedSnapshot *);
 
 	template<typename EntityType>
 	EntityType DataManager::loadEntityDirect(int64_t id) {
