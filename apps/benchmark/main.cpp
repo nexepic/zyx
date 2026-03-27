@@ -238,6 +238,19 @@ namespace {
 							concVecSearchManyName, "/tmp/zyx_bench_conc_vsearch_n", 5, 1000, hwThreads, DIM_LARGE, 10);
 				});
 
+		const std::string concReadOneName = "Conc Read (1 thread)";
+		const std::string concReadManyName = "Conc Read (" + std::to_string(hwThreads) + " threads)";
+
+		add("concurrency.read.single_thread", BenchmarkType::CONCURRENCY, concReadOneName, [concReadOneName]() {
+			return std::make_unique<ConcurrentReadBench>(concReadOneName, "/tmp/zyx_bench_conc_read_1", CONC_ITER,
+															 CONC_DATA_SIZE, 1);
+		});
+		add("concurrency.read.multi_thread", BenchmarkType::CONCURRENCY, concReadManyName,
+				[concReadManyName, hwThreads]() {
+					return std::make_unique<ConcurrentReadBench>(concReadManyName, "/tmp/zyx_bench_conc_read_n",
+																 CONC_ITER, CONC_DATA_SIZE, hwThreads);
+				});
+
 		const std::string implicitTxnName = "Implicit Txn Insert (1000 nodes)";
 		const std::string explicitTxnName = "Explicit Txn Insert (1000 nodes)";
 		const std::string explicitBatchTxnName = "Explicit Txn Batch Insert (1000 nodes)";

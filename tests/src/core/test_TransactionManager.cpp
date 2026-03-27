@@ -18,6 +18,7 @@
  **/
 
 #include <gtest/gtest.h>
+#include <barrier>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -487,4 +488,241 @@ TEST_F(TransactionManagerTest, AtomicHasActiveAfterRollback) {
 	EXPECT_TRUE(db->hasActiveTransaction());
 	txn.rollback();
 	EXPECT_FALSE(db->hasActiveTransaction());
+}
+
+// ============================================================================
+// Concurrent Read Transaction Tests
+// ============================================================================
+
+TEST(ConcurrentReadTest, MultipleReadTransactionsSimultaneously) {
+	// Multiple threads can hold read-only transactions concurrently
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_conc_read_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	constexpr int NUM_READERS = 4;
+	std::atomic<int> started{0};
+	std::barrier syncPoint(NUM_READERS);
+	std::atomic<bool> allReached{false};
+
+	std::vector<std::thread> threads;
+	threads.reserve(NUM_READERS);
+	for (int i = 0; i < NUM_READERS; ++i) {
+		threads.emplace_back([&txnMgr, &started, &syncPoint, &allReached]() {
+			auto txn = txnMgr.beginReadOnly();
+			EXPECT_TRUE(txn.isReadOnly());
+			EXPECT_TRUE(txn.isActive());
+
+			started.fetch_add(1);
+			// Wait for all threads to have active transactions
+			syncPoint.arrive_and_wait();
+			allReached.store(true);
+
+			txnMgr.commitTransaction(txn);
+		});
+	}
+
+	for (auto &t : threads) t.join();
+
+	// All NUM_READERS threads were concurrently holding read transactions
+	EXPECT_EQ(started.load(), NUM_READERS);
+	EXPECT_TRUE(allReached.load());
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
+}
+
+TEST(ConcurrentReadTest, ReadTransactionGetsSnapshot) {
+	// Read-only transaction gets a snapshot pointer
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_read_snapshot_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	auto txn = txnMgr.beginReadOnly();
+	EXPECT_TRUE(txn.isReadOnly());
+	EXPECT_TRUE(txn.isActive());
+	EXPECT_NE(txn.getSnapshot(), nullptr);
+
+	txnMgr.commitTransaction(txn);
+	EXPECT_EQ(txn.getSnapshot(), nullptr); // snapshot released on commit
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
+}
+
+TEST(ConcurrentReadTest, ReadDoesNotBlockRead) {
+	// A read-only transaction does not block other read-only transactions
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_read_no_block_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	// First reader
+	auto txn1 = txnMgr.beginReadOnly();
+	EXPECT_TRUE(txn1.isActive());
+
+	// Second reader should succeed immediately (not blocked)
+	auto txn2 = txnMgr.beginReadOnly();
+	EXPECT_TRUE(txn2.isActive());
+
+	// Both can be committed
+	txnMgr.commitTransaction(txn1);
+	txnMgr.commitTransaction(txn2);
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
+}
+
+TEST(ConcurrentReadTest, WriteBlocksOnActiveReaders) {
+	// A write transaction must wait for all active readers to finish
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_write_blocks_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	// Start a reader
+	auto readTxn = txnMgr.beginReadOnly();
+	EXPECT_TRUE(readTxn.isActive());
+
+	// Writer should timeout because reader holds shared lock
+	EXPECT_THROW(txnMgr.begin(std::chrono::milliseconds(50)), std::runtime_error);
+
+	// After reader commits, writer should succeed
+	txnMgr.commitTransaction(readTxn);
+	auto writeTxn = txnMgr.begin(std::chrono::milliseconds(1000));
+	EXPECT_TRUE(writeTxn.isActive());
+	txnMgr.commitTransaction(writeTxn);
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
+}
+
+TEST(ConcurrentReadTest, HasActiveTransactionOnlyTracksWrites) {
+	// hasActiveTransaction() only returns true for write transactions
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_has_active_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	// Read-only transaction should NOT set hasActiveTransaction
+	auto readTxn = txnMgr.beginReadOnly();
+	EXPECT_FALSE(txnMgr.hasActiveTransaction());
+
+	txnMgr.commitTransaction(readTxn);
+
+	// Write transaction SHOULD set hasActiveTransaction
+	auto writeTxn = txnMgr.begin();
+	EXPECT_TRUE(txnMgr.hasActiveTransaction());
+	txnMgr.commitTransaction(writeTxn);
+	EXPECT_FALSE(txnMgr.hasActiveTransaction());
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
+}
+
+TEST(ConcurrentReadTest, ReadRollbackReleasesLock) {
+	// Rolling back a read-only transaction releases the shared lock
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_read_rollback_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	auto readTxn = txnMgr.beginReadOnly();
+	EXPECT_TRUE(readTxn.isActive());
+
+	txnMgr.rollbackTransaction(readTxn);
+	EXPECT_FALSE(readTxn.isActive());
+	EXPECT_EQ(readTxn.getSnapshot(), nullptr);
+
+	// Writer should succeed after reader rolled back
+	auto writeTxn = txnMgr.begin(std::chrono::milliseconds(100));
+	EXPECT_TRUE(writeTxn.isActive());
+	txnMgr.commitTransaction(writeTxn);
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
+}
+
+TEST(ConcurrentReadTest, MultipleReadersOneWriter) {
+	// N reader threads + 1 writer thread, verify isolation
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_multi_rw_" + boost::uuids::to_string(uuid) + ".graph");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	constexpr int NUM_READERS = 3;
+	std::atomic<int> readersFinished{0};
+	std::atomic<bool> writerDone{false};
+
+	// Start readers
+	std::vector<std::thread> readers;
+	for (int i = 0; i < NUM_READERS; ++i) {
+		readers.emplace_back([&txnMgr, &readersFinished]() {
+			auto txn = txnMgr.beginReadOnly();
+			EXPECT_TRUE(txn.isReadOnly());
+			// Simulate some read work
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			txnMgr.commitTransaction(txn);
+			readersFinished.fetch_add(1);
+		});
+	}
+
+	// Wait for all readers to finish
+	for (auto &t : readers) t.join();
+	EXPECT_EQ(readersFinished.load(), NUM_READERS);
+
+	// Now writer can proceed
+	auto writeTxn = txnMgr.begin(std::chrono::milliseconds(1000));
+	EXPECT_TRUE(writeTxn.isActive());
+	txnMgr.commitTransaction(writeTxn);
+	writerDone = true;
+
+	EXPECT_TRUE(writerDone.load());
+
+	testDb->close();
+	testDb.reset();
+	fs::remove_all(testPath);
+	fs::remove(testPath.string() + "-wal");
 }

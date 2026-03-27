@@ -309,4 +309,66 @@ namespace zyx::benchmark {
 		void teardown(Database &) override {}
 	};
 
+	// ========================================================================
+	// Concurrency Benchmark: Concurrent Read Transactions
+	// Tests: Multiple reader threads with snapshot isolation
+	// ========================================================================
+
+	class ConcurrentReadBench : public BenchmarkBase {
+		size_t threadCount_;
+
+	public:
+		ConcurrentReadBench(std::string name, std::string path, int iter, int dataSize, size_t threadCount) :
+			BenchmarkBase(std::move(name), std::move(path), iter, dataSize), threadCount_(threadCount) {}
+
+		void setup(Database &db) override {
+			std::cout << " (Filling " << dataSize_ << " users...) " << std::flush;
+
+			std::vector<std::unordered_map<std::string, Value>> batch;
+			constexpr size_t BATCH_CHUNK = 1000;
+			batch.reserve(BATCH_CHUNK);
+
+			for (int i = 0; i < dataSize_; ++i) {
+				std::unordered_map<std::string, Value> props;
+				props["uid"] = static_cast<int64_t>(i);
+				props["name"] = "User_" + std::to_string(i);
+				props["score"] = static_cast<double>(i % 100);
+				batch.push_back(std::move(props));
+
+				if (batch.size() >= BATCH_CHUNK) {
+					db.createNodes("User", batch);
+					batch.clear();
+				}
+			}
+			if (!batch.empty())
+				db.createNodes("User", batch);
+
+			db.save();
+		}
+
+		void run(Database &db) override {
+			// Launch threadCount_ reader threads, each running a read query
+			std::vector<std::thread> threads;
+			threads.reserve(threadCount_);
+			std::atomic<int> completed{0};
+
+			for (size_t i = 0; i < threadCount_; ++i) {
+				threads.emplace_back([&db, &completed, i, this]() {
+					// Each thread queries a different UID
+					int64_t uid = static_cast<int64_t>(i % dataSize_);
+					auto res = db.execute("MATCH (n:User) WHERE n.uid = " + std::to_string(uid) + " RETURN n.name");
+					while (res.hasNext())
+						res.next();
+					completed.fetch_add(1);
+				});
+			}
+
+			for (auto &t : threads) t.join();
+		}
+
+		void teardown(Database &) override {}
+
+		[[nodiscard]] int getItemsPerOp() const override { return static_cast<int>(threadCount_); }
+	};
+
 } // namespace zyx::benchmark
