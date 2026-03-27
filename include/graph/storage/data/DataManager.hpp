@@ -61,6 +61,7 @@ namespace graph::traversal {
 }
 
 namespace graph::storage {
+	struct CommittedSnapshot;
 	namespace wal {
 		class WALManager;
 	}
@@ -225,6 +226,10 @@ namespace graph::storage {
 		template<typename EntityType>
 		EntityType getEntityFromMemoryOrDisk(int64_t id);
 
+		// Snapshot-aware read: checks snapshot dirty state, then cache/disk
+		template<typename EntityType>
+		EntityType getEntityWithSnapshot(int64_t id, const CommittedSnapshot *snapshot);
+
 		// Lock-free read path for parallel scans. Uses pread() to bypass cache entirely.
 		// Only checks dirty entities (uncommitted changes), then reads directly from disk.
 		// Returns default-constructed entity (id==0) if not found.
@@ -313,9 +318,10 @@ namespace graph::storage {
 		 */
 		void setSystemStateManager(const std::shared_ptr<state::SystemStateManager> &systemStateManager);
 
-		// Read-write separation: skip dirty entity lookups for read-only transactions
-		void setSkipDirtyLookup(bool skip) { skipDirtyLookup_.store(skip, std::memory_order_release); }
-		[[nodiscard]] bool getSkipDirtyLookup() const { return skipDirtyLookup_.load(std::memory_order_acquire); }
+		// Per-transaction snapshot for read-only transactions (thread-local)
+		void setCurrentSnapshot(const CommittedSnapshot *snapshot) { currentSnapshot_ = snapshot; }
+		void clearCurrentSnapshot() { currentSnapshot_ = nullptr; }
+		[[nodiscard]] const CommittedSnapshot *getCurrentSnapshot() const { return currentSnapshot_; }
 
 		// Transaction context management
 		void setActiveTransaction(uint64_t txnId);
@@ -425,9 +431,9 @@ namespace graph::storage {
 		std::vector<std::shared_ptr<IEntityObserver>> observers_;
 		mutable std::recursive_mutex observer_mutex_;
 
-		// When true, getEntityFromMemoryOrDisk skips dirty map lookups.
-		// Used by read-only transactions to see only committed state.
-		std::atomic<bool> skipDirtyLookup_{false};
+		// Thread-local snapshot pointer for read-only transactions.
+		// Each reader thread has its own snapshot pointer, set at transaction begin.
+		static thread_local const CommittedSnapshot *currentSnapshot_;
 
 		// File descriptor for thread-safe pread() based parallel reads.
 		// pread() is atomic (no separate seek+read) and multiple threads

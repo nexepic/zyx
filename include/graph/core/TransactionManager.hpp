@@ -23,10 +23,12 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <stdexcept>
 
 namespace graph::storage {
 	class FileStorage;
+	class SnapshotManager;
 	namespace wal {
 		class WALManager;
 	}
@@ -40,7 +42,7 @@ namespace graph {
 	public:
 		TransactionManager(std::shared_ptr<storage::FileStorage> storage,
 						   std::shared_ptr<storage::wal::WALManager> walManager);
-		~TransactionManager() = default;
+		~TransactionManager();
 
 		static constexpr auto kDefaultTxnTimeout = std::chrono::seconds{30};
 
@@ -54,12 +56,13 @@ namespace graph {
 
 	private:
 		friend class Transaction;
-		std::timed_mutex writeMutex_;
-		std::unique_lock<std::timed_mutex> writeLock_;
+		std::shared_mutex rwMutex_;
+		std::unique_lock<std::shared_mutex> writeLock_; // single-writer lock
 		std::atomic<uint64_t> nextTxnId_{1};
-		std::atomic<bool> hasActive_{false};
+		std::atomic<bool> activeWriteTxn_{false};
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::wal::WALManager> walManager_;
+		std::unique_ptr<storage::SnapshotManager> snapshotManager_;
 	};
 
 } // namespace graph
