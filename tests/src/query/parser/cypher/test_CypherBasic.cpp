@@ -104,7 +104,8 @@ TEST_F(CypherBasicTest, RemoveProperty) {
 TEST_F(CypherBasicTest, SetLabel) {
 	(void) execute("CREATE (n:OldLabel {id: 1})");
 	(void) execute("MATCH (n:OldLabel) SET n:NewLabel");
-	EXPECT_EQ(execute("MATCH (n:OldLabel) RETURN n").rowCount(), 0UL);
+	// SET now appends labels (multi-label support), so node has BOTH labels
+	EXPECT_EQ(execute("MATCH (n:OldLabel) RETURN n").rowCount(), 1UL);
 	EXPECT_EQ(execute("MATCH (n:NewLabel) RETURN n").rowCount(), 1UL);
 }
 
@@ -113,7 +114,8 @@ TEST_F(CypherBasicTest, RemoveLabel) {
 	(void) execute("MATCH (n:TagToRemove) REMOVE n:TagToRemove");
 	EXPECT_EQ(execute("MATCH (n:TagToRemove) RETURN n").rowCount(), 0UL);
 	auto res = execute("MATCH (n) WHERE n.id = 99 RETURN n");
-	EXPECT_EQ(resolveLabel(res.getRows()[0].at("n").asNode().getLabelId()), "");
+	// After removing the only label, node should have no labels
+	EXPECT_EQ(res.getRows()[0].at("n").asNode().getLabelCount(), 0);
 }
 
 // --- Filtering ---

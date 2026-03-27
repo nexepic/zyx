@@ -66,6 +66,18 @@ namespace graph::query {
 		return *this;
 	}
 
+	QueryBuilder &QueryBuilder::match_(const std::string &variable, const std::vector<std::string> &labels,
+									   const std::string &key, const PropertyValue &value) {
+		auto newScan = planner_->scanOp(variable, labels, key, value);
+
+		if (!root_) {
+			root_ = std::move(newScan);
+		} else {
+			root_ = planner_->cartesianProductOp(std::move(root_), std::move(newScan));
+		}
+		return *this;
+	}
+
 	QueryBuilder &QueryBuilder::where_(const std::string &variable, const std::string &key,
 									   const PropertyValue &value) {
 		if (!root_)
@@ -90,6 +102,13 @@ namespace graph::query {
 	QueryBuilder &QueryBuilder::create_(const std::string &variable, const std::string &label,
 										const std::unordered_map<std::string, PropertyValue> &props) {
 		auto op = planner_->createOp(variable, label, props);
+		append(std::move(op));
+		return *this;
+	}
+
+	QueryBuilder &QueryBuilder::create_(const std::string &variable, const std::vector<std::string> &labels,
+										const std::unordered_map<std::string, PropertyValue> &props) {
+		auto op = planner_->createOp(variable, labels, props);
 		append(std::move(op));
 		return *this;
 	}

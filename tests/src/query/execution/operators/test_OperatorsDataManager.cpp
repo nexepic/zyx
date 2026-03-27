@@ -161,10 +161,12 @@ TEST_F(SetOperatorTest, Set_NodeLabel) {
 	auto batch = op->next();
 	ASSERT_TRUE(batch.has_value());
 
-	// Verify label was set
+	// Verify label was appended (SET now appends, not replaces)
 	auto node = dm->getNode(1);
-	int64_t labelId = dm->getOrCreateLabelId("NewLabel");
-	EXPECT_EQ(node.getLabelId(), labelId);
+	int64_t newLabelId = dm->getOrCreateLabelId("NewLabel");
+	EXPECT_EQ(node.getLabelId(), 100); // Original label preserved
+	EXPECT_TRUE(node.hasLabelId(newLabelId)); // New label added
+	EXPECT_EQ(node.getLabelCount(), 2);
 
 	op->close();
 }

@@ -43,7 +43,8 @@ namespace zyx {
 	// Public Node Representation
 	struct Node {
 		int64_t id;
-		std::string label;
+		std::string label; // First label (backward compat)
+		std::vector<std::string> labels; // All labels
 		std::unordered_map<std::string, Value> properties;
 	};
 

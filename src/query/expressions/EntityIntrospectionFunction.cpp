@@ -51,17 +51,16 @@ static PropertyValue labelsImpl(
 	const auto& record = context.getRecord();
 
 	if (auto node = record.getNode(varName)) {
-		int64_t labelId = node->getLabelId();
+		auto labelIds = node->getLabelIds();
 		auto* dm = context.getDataManager();
-		if (dm && labelId != 0) {
-			std::string labelName = dm->resolveLabel(labelId);
-			std::vector<PropertyValue> labels;
-			labels.emplace_back(labelName);
-			return PropertyValue(labels);
-		}
 		std::vector<PropertyValue> labels;
-		if (labelId != 0) {
-			labels.emplace_back(labelId);
+		for (int64_t labelId : labelIds) {
+			if (labelId == 0) continue;
+			if (dm) {
+				labels.emplace_back(dm->resolveLabel(labelId));
+			} else {
+				labels.emplace_back(labelId);
+			}
 		}
 		return PropertyValue(labels);
 	}

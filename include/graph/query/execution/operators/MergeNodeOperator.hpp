@@ -40,12 +40,12 @@ namespace graph::query::execution::operators {
 
 	class MergeNodeOperator : public PhysicalOperator {
 	public:
-		// Constructor
+		// Constructor (multi-label)
 		MergeNodeOperator(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im,
-						  std::string variable, std::string label,
+						  std::string variable, std::vector<std::string> labels,
 						  std::unordered_map<std::string, PropertyValue> matchProps, std::vector<SetItem> onCreateItems,
 						  std::vector<SetItem> onMatchItems) :
-			dm_(std::move(dm)), im_(std::move(im)), variable_(std::move(variable)), label_(std::move(label)),
+			dm_(std::move(dm)), im_(std::move(im)), variable_(std::move(variable)), labels_(std::move(labels)),
 			matchProps_(std::move(matchProps)), onCreateItems_(std::move(onCreateItems)),
 			onMatchItems_(std::move(onMatchItems)) {}
 
@@ -74,14 +74,14 @@ namespace graph::query::execution::operators {
 		std::unique_ptr<PhysicalOperator> child_;
 
 		std::string variable_;
-		std::string label_;
+		std::vector<std::string> labels_;
 		std::unordered_map<std::string, PropertyValue> matchProps_;
 
 		std::vector<SetItem> onCreateItems_;
 		std::vector<SetItem> onMatchItems_;
 
 		bool executed_ = false;
-		int64_t targetLabelId_ = 0;
+		std::vector<int64_t> targetLabelIds_;
 
 		void processMerge(Record &record);
 		void applyUpdates(int64_t nodeId, const std::vector<SetItem> &items, Record &record);

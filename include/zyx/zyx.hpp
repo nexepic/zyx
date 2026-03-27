@@ -139,6 +139,7 @@ namespace zyx {
 
 		// High-performance direct insert APIs
 		void createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const;
+		void createNode(const std::vector<std::string> &labels, const std::unordered_map<std::string, Value> &props) const;
 
 		/**
 		 * @brief Create multiple nodes in one batch.

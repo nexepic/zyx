@@ -104,7 +104,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 	auto headNodePat = element->nodePattern();
 
 	std::string var = AstExtractor::extractVariable(headNodePat->variable());
-	std::string label = AstExtractor::extractLabel(headNodePat->nodeLabels());
+	auto labels = AstExtractor::extractLabels(headNodePat->nodeLabels());
 
 	// Extract properties using AST-based evaluation
 	auto props = AstExtractor::extractProperties(headNodePat->properties(),
@@ -126,7 +126,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 		}
 	}
 
-	auto currentOp = planner->scanOp(var, label, pushKey, pushVal);
+	auto currentOp = planner->scanOp(var, labels, pushKey, pushVal);
 
 	// Apply Filters
 	for (const auto &[key, val] : residualFilters) {
@@ -212,7 +212,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 
 		// Target Node
 		std::string targetVar = AstExtractor::extractVariable(nodePat->variable());
-		std::string targetLabel = AstExtractor::extractLabel(nodePat->nodeLabels());
+		auto targetLabels = AstExtractor::extractLabels(nodePat->nodeLabels());
 		auto targetProps = AstExtractor::extractProperties(nodePat->properties(),
 			[](CypherParser::ExpressionContext *expr) {
 				return ExpressionBuilder::evaluateLiteralExpression(expr);
@@ -226,16 +226,26 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 			rootOp = planner->traverseOp(std::move(rootOp), var, edgeVar, targetVar, edgeLabel, direction);
 		}
 
-		// Filter Target
-		if (!targetLabel.empty()) {
+		// Filter Target by labels (AND semantics: node must have ALL labels)
+		if (!targetLabels.empty()) {
 			auto dm = planner->getDataManager();
-			int64_t targetLabelId = dm->getOrCreateLabelId(targetLabel);
+			std::vector<int64_t> targetLabelIds;
+			std::string labelDesc;
+			for (const auto &lbl : targetLabels) {
+				targetLabelIds.push_back(dm->getOrCreateLabelId(lbl));
+				if (!labelDesc.empty()) labelDesc += ":";
+				labelDesc += lbl;
+			}
 
-			auto labelPred = [targetVar, targetLabelId](const query::execution::Record &r) {
+			auto labelPred = [targetVar, targetLabelIds](const query::execution::Record &r) {
 				auto n = r.getNode(targetVar);
-				return n && n->getLabelId() == targetLabelId;
+				if (!n) return false;
+				for (int64_t tid : targetLabelIds) {
+					if (!n->hasLabelId(tid)) return false;
+				}
+				return true;
 			};
-			rootOp = planner->filterOp(std::move(rootOp), labelPred, "Label(" + targetVar + ")=" + targetLabel);
+			rootOp = planner->filterOp(std::move(rootOp), labelPred, "Label(" + targetVar + ")=" + labelDesc);
 		}
 
 		for (const auto &[key, val] : targetProps) {
@@ -310,7 +320,7 @@ void PatternBuilder::processCreatePatternElement(
 	auto headNodePat = element->nodePattern();
 
 	std::string headVar = AstExtractor::extractVariable(headNodePat->variable());
-	std::string headLabel = AstExtractor::extractLabel(headNodePat->nodeLabels());
+	auto headLabels = AstExtractor::extractLabels(headNodePat->nodeLabels());
 
 	// Extract properties: split into static literals and expression-based
 	std::unordered_map<std::string, PropertyValue> headProps;
@@ -335,9 +345,9 @@ void PatternBuilder::processCreatePatternElement(
 
 	std::unique_ptr<query::execution::PhysicalOperator> headOp;
 	if (!headPropExprs.empty()) {
-		headOp = planner->createOp(headVar, headLabel, headProps, std::move(headPropExprs));
+		headOp = planner->createOp(headVar, headLabels, headProps, std::move(headPropExprs));
 	} else {
-		headOp = planner->createOp(headVar, headLabel, headProps);
+		headOp = planner->createOp(headVar, headLabels, headProps);
 	}
 	rootOp = OperatorChain::chain(std::move(rootOp), std::move(headOp));
 
@@ -348,13 +358,13 @@ void PatternBuilder::processCreatePatternElement(
 		auto targetNodePat = chain->nodePattern();
 
 		std::string targetVar = AstExtractor::extractVariable(targetNodePat->variable());
-		std::string targetLabel = AstExtractor::extractLabel(targetNodePat->nodeLabels());
+		auto targetLabels = AstExtractor::extractLabels(targetNodePat->nodeLabels());
 		auto targetProps = AstExtractor::extractProperties(targetNodePat->properties(),
 			[](CypherParser::ExpressionContext *expr) {
 				return ExpressionBuilder::evaluateLiteralExpression(expr);
 			});
 
-		auto targetOp = planner->createOp(targetVar, targetLabel, targetProps);
+		auto targetOp = planner->createOp(targetVar, targetLabels, targetProps);
 		rootOp = OperatorChain::chain(std::move(rootOp), std::move(targetOp));
 
 		auto relDetail = relPat->relationshipDetail();
@@ -390,7 +400,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 	auto headNodePat = element->nodePattern();
 
 	std::string headVar = AstExtractor::extractVariable(headNodePat->variable());
-	std::string headLabel = AstExtractor::extractLabel(headNodePat->nodeLabels());
+	auto headLabels = AstExtractor::extractLabels(headNodePat->nodeLabels());
 	auto headProps = AstExtractor::extractProperties(headNodePat->properties(),
 		[](CypherParser::ExpressionContext *expr) {
 			return ExpressionBuilder::evaluateLiteralExpression(expr);
@@ -398,7 +408,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 
 	// Single node MERGE: MERGE (n:Label {props})
 	if (element->patternElementChain().empty()) {
-		return planner->mergeOp(headVar, headLabel, headProps, onCreateItems, onMatchItems);
+		return planner->mergeOp(headVar, headLabels, headProps, onCreateItems, onMatchItems);
 	}
 
 	// Edge MERGE: MERGE (a)-[r:TYPE {props}]->(b)
@@ -407,7 +417,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 
 	// Merge head node (no ON CREATE/MATCH items for intermediate nodes)
 	std::vector<query::execution::operators::SetItem> emptyItems;
-	rootOp = planner->mergeOp(headVar, headLabel, headProps, emptyItems, emptyItems);
+	rootOp = planner->mergeOp(headVar, headLabels, headProps, emptyItems, emptyItems);
 
 	std::string prevVar = headVar;
 	auto chains = element->patternElementChain();
@@ -419,14 +429,14 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 
 		// Target node
 		std::string targetVar = AstExtractor::extractVariable(targetNodePat->variable());
-		std::string targetLabel = AstExtractor::extractLabel(targetNodePat->nodeLabels());
+		auto targetLabels = AstExtractor::extractLabels(targetNodePat->nodeLabels());
 		auto targetProps = AstExtractor::extractProperties(targetNodePat->properties(),
 			[](CypherParser::ExpressionContext *expr) {
 				return ExpressionBuilder::evaluateLiteralExpression(expr);
 			});
 
 		// Merge target node
-		auto targetMergeOp = planner->mergeOp(targetVar, targetLabel, targetProps, emptyItems, emptyItems);
+		auto targetMergeOp = planner->mergeOp(targetVar, targetLabels, targetProps, emptyItems, emptyItems);
 		// Chain the target merge as child of root
 		auto* mergeNodeOp = dynamic_cast<query::execution::operators::MergeNodeOperator*>(targetMergeOp.get());
 		if (mergeNodeOp) {

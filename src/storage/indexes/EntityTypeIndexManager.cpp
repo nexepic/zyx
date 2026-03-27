@@ -20,6 +20,7 @@
 
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/log/Log.hpp"
+#include <type_traits>
 
 namespace graph::query::indexes {
 
@@ -81,20 +82,57 @@ namespace graph::query::indexes {
 			return;
 
 		const int64_t entityId = entity.getId();
-		std::string newLabel;
-		if (entity.getLabelId() != 0) {
-			newLabel = dataManager_->resolveLabel(entity.getLabelId());
-		}
 
-		if (isDeleted) {
-			if (!newLabel.empty()) labelIndex_->removeNode(entityId, newLabel);
-		} else {
-			// Handle changes
-			if (!oldLabel.empty() && oldLabel != newLabel) {
-				labelIndex_->removeNode(entityId, oldLabel);
+		if constexpr (std::is_same_v<T, Node>) {
+			// Multi-label support for Nodes
+			auto labelIds = entity.getLabelIds();
+			std::vector<std::string> newLabels;
+			for (int64_t lid : labelIds) {
+				if (lid != 0) {
+					newLabels.push_back(dataManager_->resolveLabel(lid));
+				}
 			}
-			if (!newLabel.empty() && oldLabel != newLabel) {
-				labelIndex_->addNode(entityId, newLabel);
+
+			if (isDeleted) {
+				for (const auto &lbl : newLabels) {
+					labelIndex_->removeNode(entityId, lbl);
+				}
+			} else {
+				// For multi-label updates, we receive oldLabels as a single comma-free string
+				// from the caller (backward compat). For proper diff, use the overloaded version.
+				// Simple approach: remove old label if present, add all new labels
+				if (!oldLabel.empty()) {
+					// Check if oldLabel is still in newLabels
+					bool stillPresent = false;
+					for (const auto &nl : newLabels) {
+						if (nl == oldLabel) { stillPresent = true; break; }
+					}
+					if (!stillPresent) {
+						labelIndex_->removeNode(entityId, oldLabel);
+					}
+				}
+				for (const auto &nl : newLabels) {
+					if (nl != oldLabel) {
+						labelIndex_->addNode(entityId, nl);
+					}
+				}
+			}
+		} else {
+			// Edge: single-label
+			std::string newLabel;
+			if (entity.getLabelId() != 0) {
+				newLabel = dataManager_->resolveLabel(entity.getLabelId());
+			}
+
+			if (isDeleted) {
+				if (!newLabel.empty()) labelIndex_->removeNode(entityId, newLabel);
+			} else {
+				if (!oldLabel.empty() && oldLabel != newLabel) {
+					labelIndex_->removeNode(entityId, oldLabel);
+				}
+				if (!newLabel.empty() && oldLabel != newLabel) {
+					labelIndex_->addNode(entityId, newLabel);
+				}
 			}
 		}
 	}
@@ -165,29 +203,33 @@ namespace graph::query::indexes {
 		if (entities.empty())
 			return;
 
-		// Move lock scope: Only lock when actually invoking the index methods.
-		// Preparing the data does not require the mutex if 'entities' is local.
-
 		// --- 1. Prepare Label Index Batch ---
 		// Optimization: Group by LabelID first to minimize string resolution lookups
 		std::unordered_map<int64_t, std::vector<int64_t>> nodesByLabelId;
 
 		// --- 2. Prepare Property Index Batch ---
 		std::vector<std::tuple<int64_t, std::string, PropertyValue>> propBatch;
-		// Tuning reserve: Assume avg 3 props per entity
 		propBatch.reserve(entities.size() * 3);
 
 		for (const auto &entity: entities) {
 			// A. Label (Group by Integer ID first)
-			if (entity.getLabelId() != 0) {
-				nodesByLabelId[entity.getLabelId()].push_back(entity.getId());
+			if constexpr (std::is_same_v<T, Node>) {
+				// Multi-label: register under ALL labels
+				for (int64_t lid : entity.getLabelIds()) {
+					if (lid != 0) {
+						nodesByLabelId[lid].push_back(entity.getId());
+					}
+				}
+			} else {
+				if (entity.getLabelId() != 0) {
+					nodesByLabelId[entity.getLabelId()].push_back(entity.getId());
+				}
 			}
 
 			// B. Properties (Unchanged logic)
 			const auto &props = entity.getProperties();
 			if (!props.empty()) {
 				for (const auto &[key, value]: props) {
-					// Optimization: Quick check if we should even bother
 					if (propertyIndex_->hasKeyIndexed(key)) {
 						propBatch.emplace_back(entity.getId(), key, value);
 					}
@@ -204,10 +246,8 @@ namespace graph::query::indexes {
 				std::unordered_map<std::string, std::vector<int64_t>> nodesByLabelStr;
 
 				for (auto& [labelId, ids] : nodesByLabelId) {
-					// Resolve Label String ONCE per label group
 					std::string labelStr = dataManager_->resolveLabel(labelId);
 					if (!labelStr.empty()) {
-						// Move the vector to avoid copying
 						nodesByLabelStr[labelStr] = std::move(ids);
 					}
 				}
@@ -228,12 +268,44 @@ namespace graph::query::indexes {
 	template<typename T>
 	void EntityTypeIndexManager::onEntityUpdated(const T &oldEntity, const T &newEntity) const {
 		// Update Label Index
-		std::string oldLabelStr;
-		if (oldEntity.getLabelId() != 0) {
-			oldLabelStr = dataManager_->resolveLabel(oldEntity.getLabelId());
-		}
+		if constexpr (std::is_same_v<T, Node>) {
+			// Multi-label: compute diff between old and new label sets
+			if (!labelIndex_->isEmpty() && newEntity.getId() != 0) {
+				auto oldLabelIds = oldEntity.getLabelIds();
+				auto newLabelIds = newEntity.getLabelIds();
+				int64_t entityId = newEntity.getId();
 
-		updateLabelIndex(newEntity, oldLabelStr, false);
+				// Remove labels that are in old but not in new
+				for (int64_t oldLid : oldLabelIds) {
+					if (oldLid == 0) continue;
+					bool found = false;
+					for (int64_t newLid : newLabelIds) {
+						if (newLid == oldLid) { found = true; break; }
+					}
+					if (!found) {
+						labelIndex_->removeNode(entityId, dataManager_->resolveLabel(oldLid));
+					}
+				}
+
+				// Add labels that are in new but not in old
+				for (int64_t newLid : newLabelIds) {
+					if (newLid == 0) continue;
+					bool found = false;
+					for (int64_t oldLid : oldLabelIds) {
+						if (oldLid == newLid) { found = true; break; }
+					}
+					if (!found) {
+						labelIndex_->addNode(entityId, dataManager_->resolveLabel(newLid));
+					}
+				}
+			}
+		} else {
+			std::string oldLabelStr;
+			if (oldEntity.getLabelId() != 0) {
+				oldLabelStr = dataManager_->resolveLabel(oldEntity.getLabelId());
+			}
+			updateLabelIndex(newEntity, oldLabelStr, false);
+		}
 
 		// Update Property Indexes
 		updatePropertyIndexes(newEntity.getId(), oldEntity.getProperties(), newEntity.getProperties());
@@ -242,11 +314,22 @@ namespace graph::query::indexes {
 	template<typename T>
 	void EntityTypeIndexManager::onEntityDeleted(const T &entity) const {
 		// Update Label Index
-		std::string labelStr;
-		if (entity.getLabelId() != 0) {
-			labelStr = dataManager_->resolveLabel(entity.getLabelId());
+		if constexpr (std::is_same_v<T, Node>) {
+			// Multi-label: remove from ALL label indexes
+			if (!labelIndex_->isEmpty() && entity.getId() != 0) {
+				for (int64_t lid : entity.getLabelIds()) {
+					if (lid != 0) {
+						labelIndex_->removeNode(entity.getId(), dataManager_->resolveLabel(lid));
+					}
+				}
+			}
+		} else {
+			std::string labelStr;
+			if (entity.getLabelId() != 0) {
+				labelStr = dataManager_->resolveLabel(entity.getLabelId());
+			}
+			updateLabelIndex(entity, labelStr, true);
 		}
-		updateLabelIndex(entity, labelStr, true);
 
 		// Update Property Indexes
 		updatePropertyIndexes(entity.getId(), entity.getProperties(), {});

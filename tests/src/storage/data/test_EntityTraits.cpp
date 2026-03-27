@@ -79,7 +79,8 @@ protected:
 	Node createTestNode(int64_t id) {
 		Node node;
 		node.getMutableMetadata().id = id;
-		node.getMutableMetadata().labelId = 100;
+		node.getMutableMetadata().labelIds[0] = 100;
+		node.getMutableMetadata().labelCount = 1;
 		node.getMutableMetadata().isActive = true;
 		return node;
 	}

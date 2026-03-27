@@ -602,8 +602,8 @@ TEST_F(CypherAdvancedTest, SetLabelAssignment) {
 	(void) execute("CREATE (n:SetLblOld {id: 1})");
 	(void) execute("MATCH (n:SetLblOld) SET n:SetLblNew");
 
-	// After label change, old label query returns 0, new returns 1
-	EXPECT_EQ(execute("MATCH (n:SetLblOld) RETURN n").rowCount(), 0UL);
+	// SET appends labels (multi-label), so node has BOTH labels
+	EXPECT_EQ(execute("MATCH (n:SetLblOld) RETURN n").rowCount(), 1UL);
 	EXPECT_EQ(execute("MATCH (n:SetLblNew) RETURN n").rowCount(), 1UL);
 }
 

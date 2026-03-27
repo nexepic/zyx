@@ -82,7 +82,7 @@ TEST_F(MergeNodeOperatorTest, CreateNewNode_NoExisting) {
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["name"] = PropertyValue(std::string("Alice"));
 
-	MergeNodeOperator op(dm, im, "n", "Person", matchProps, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"Person"}, matchProps, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -114,7 +114,7 @@ TEST_F(MergeNodeOperatorTest, MatchExistingNode) {
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["name"] = PropertyValue(std::string("Bob"));
 
-	MergeNodeOperator op(dm, im, "n", "Person", matchProps, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"Person"}, matchProps, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -136,7 +136,7 @@ TEST_F(MergeNodeOperatorTest, DeletedNode_StillVisible) {
 	dm->deleteNode(n1);
 
 	// Merge finds the node (deletion doesn't prevent scan matching)
-	MergeNodeOperator op(dm, im, "n", "Skip", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"Skip"}, {}, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -154,7 +154,7 @@ TEST_F(MergeNodeOperatorTest, LabelMismatch_CreatesNew) {
 	dm->addNode(dogNode);
 
 	// Merge with label "Cat" - should not match
-	MergeNodeOperator op(dm, im, "n", "Cat", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"Cat"}, {}, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -179,7 +179,7 @@ TEST_F(MergeNodeOperatorTest, PropertyMismatch_CreatesNew) {
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["name"] = PropertyValue(std::string("Y"));
 
-	MergeNodeOperator op(dm, im, "n", "PMism", matchProps, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"PMism"}, matchProps, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -198,7 +198,7 @@ TEST_F(MergeNodeOperatorTest, WithChild_Pipeline) {
 	r.setValue("m", PropertyValue(int64_t(1)));
 	child->batches.push_back({r});
 
-	MergeNodeOperator op(dm, im, "n", "New", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"New"}, {}, {}, {});
 	op.setChild(std::move(child));
 
 	op.open();
@@ -224,7 +224,7 @@ TEST_F(MergeNodeOperatorTest, NodeAlreadyInRecord_Skip) {
 	r.setNode("n", existingNode);
 	child->batches.push_back({r});
 
-	MergeNodeOperator op(dm, im, "n", "Label", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"Label"}, {}, {}, {});
 	op.setChild(std::move(child));
 
 	op.open();
@@ -246,7 +246,7 @@ TEST_F(MergeNodeOperatorTest, OnCreate_AppliesUpdates) {
 	std::vector<SetItem> onCreateItems;
 	onCreateItems.emplace_back(SetActionType::PROPERTY, "n", "status", statusExpr);
 
-	MergeNodeOperator op(dm, im, "n", "OCNode", {}, onCreateItems, {});
+	MergeNodeOperator op(dm, im, "n", {"OCNode"}, {}, onCreateItems, {});
 
 	op.open();
 	auto batch = op.next();
@@ -281,7 +281,7 @@ TEST_F(MergeNodeOperatorTest, OnMatch_AppliesUpdates) {
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["name"] = PropertyValue(std::string("existing"));
 
-	MergeNodeOperator op(dm, im, "n", "OMNode", matchProps, {}, onMatchItems);
+	MergeNodeOperator op(dm, im, "n", {"OMNode"}, matchProps, {}, onMatchItems);
 
 	op.open();
 	auto batch = op.next();
@@ -310,7 +310,7 @@ TEST_F(MergeNodeOperatorTest, ApplyUpdates_DifferentVariable_Ignored) {
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
-	MergeNodeOperator op(dm, im, "n", "DiffVar", {}, {}, onMatchItems);
+	MergeNodeOperator op(dm, im, "n", {"DiffVar"}, {}, {}, onMatchItems);
 
 	op.open();
 	auto batch = op.next();
@@ -332,7 +332,7 @@ TEST_F(MergeNodeOperatorTest, ApplyUpdates_NonPropertyType_Ignored) {
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
-	MergeNodeOperator op(dm, im, "n", "LblTest", {}, {}, onMatchItems);
+	MergeNodeOperator op(dm, im, "n", {"LblTest"}, {}, {}, onMatchItems);
 
 	op.open();
 	auto batch = op.next();
@@ -350,7 +350,7 @@ TEST_F(MergeNodeOperatorTest, ApplyUpdates_NullExpression_Ignored) {
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
-	MergeNodeOperator op(dm, im, "n", "NullExpr", {}, {}, onMatchItems);
+	MergeNodeOperator op(dm, im, "n", {"NullExpr"}, {}, {}, onMatchItems);
 
 	op.open();
 	auto batch = op.next();
@@ -371,7 +371,7 @@ TEST_F(MergeNodeOperatorTest, EmptyLabel_FullScan) {
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["name"] = PropertyValue(std::string("X"));
 
-	MergeNodeOperator op(dm, im, "n", "", matchProps, {}, {});
+	MergeNodeOperator op(dm, im, "n", std::vector<std::string>{}, matchProps, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -386,13 +386,13 @@ TEST_F(MergeNodeOperatorTest, EmptyLabel_FullScan) {
 }
 
 TEST_F(MergeNodeOperatorTest, ToString) {
-	MergeNodeOperator op(dm, im, "n", "Person", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"Person"}, {}, {}, {});
 	EXPECT_EQ(op.toString(), "MergeNode(n:Person)");
 }
 
 TEST_F(MergeNodeOperatorTest, EmptyMatchProps_CreateWithNoProperties) {
 	// MERGE (n:EmptyProps) - no match properties
-	MergeNodeOperator op(dm, im, "n", "EmptyProps", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"EmptyProps"}, {}, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -419,7 +419,7 @@ TEST_F(MergeNodeOperatorTest, PropertyKeyExists_ValueMismatch) {
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["name"] = PropertyValue(std::string("Bob"));
 
-	MergeNodeOperator op(dm, im, "n", "ValMis", matchProps, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"ValMis"}, matchProps, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -441,7 +441,7 @@ TEST_F(MergeNodeOperatorTest, OnCreate_MultipleProperties) {
 	onCreateItems.emplace_back(SetActionType::PROPERTY, "n", "status", statusExpr);
 	onCreateItems.emplace_back(SetActionType::PROPERTY, "n", "score", scoreExpr);
 
-	MergeNodeOperator op(dm, im, "n", "MultiCreate", {}, onCreateItems, {});
+	MergeNodeOperator op(dm, im, "n", {"MultiCreate"}, {}, onCreateItems, {});
 
 	op.open();
 	auto batch = op.next();
@@ -469,7 +469,7 @@ TEST_F(MergeNodeOperatorTest, OnMatch_MultipleProperties) {
 	onMatchItems.emplace_back(SetActionType::PROPERTY, "n", "status", statusExpr);
 	onMatchItems.emplace_back(SetActionType::PROPERTY, "n", "score", scoreExpr);
 
-	MergeNodeOperator op(dm, im, "n", "MultiMatch", {}, {}, onMatchItems);
+	MergeNodeOperator op(dm, im, "n", {"MultiMatch"}, {}, {}, onMatchItems);
 
 	op.open();
 	auto batch = op.next();
@@ -503,7 +503,7 @@ TEST_F(MergeNodeOperatorTest, WithChild_MultipleBatches) {
 	batch.push_back(r2);
 	child->batches.push_back(batch);
 
-	MergeNodeOperator op(dm, im, "n", "BatchTest", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"BatchTest"}, {}, {}, {});
 	op.setChild(std::move(child));
 
 	op.open();
@@ -527,7 +527,7 @@ TEST_F(MergeNodeOperatorTest, WithChild_MultipleBatches) {
 TEST_F(MergeNodeOperatorTest, CreateNode_EmptyMatchProps) {
 	// Tests CREATE path when matchProps_ is empty (line 144 false branch)
 	// No properties should be added to the new node
-	MergeNodeOperator op(dm, im, "n", "EmptyPropCreate", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"EmptyPropCreate"}, {}, {}, {});
 
 	op.open();
 	auto result = op.next();
@@ -561,7 +561,7 @@ TEST_F(MergeNodeOperatorTest, MultipleMatchProps_PropertyMismatchOnSecondKey) {
 	matchProps["name"] = PropertyValue(std::string("Alice"));
 	matchProps["age"] = PropertyValue(int64_t(25));
 
-	MergeNodeOperator op(dm, im, "n", "MultiKey", matchProps, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"MultiKey"}, matchProps, {}, {});
 
 	op.open();
 	auto result = op.next();
@@ -583,7 +583,7 @@ TEST_F(MergeNodeOperatorTest, OnCreate_EmptyItems) {
 
 	std::vector<SetItem> emptyItems;
 
-	MergeNodeOperator op(dm, im, "n", "EmptyOC", matchProps, emptyItems, {});
+	MergeNodeOperator op(dm, im, "n", {"EmptyOC"}, matchProps, emptyItems, {});
 
 	op.open();
 	auto result = op.next();
@@ -604,7 +604,7 @@ TEST_F(MergeNodeOperatorTest, OnMatch_EmptyItems) {
 
 	std::vector<SetItem> emptyItems;
 
-	MergeNodeOperator op(dm, im, "n", "EmptyOM", {}, {}, emptyItems);
+	MergeNodeOperator op(dm, im, "n", {"EmptyOM"}, {}, {}, emptyItems);
 
 	op.open();
 	auto result = op.next();
@@ -624,7 +624,7 @@ TEST_F(MergeNodeOperatorTest, WithChild_EmptyBatch) {
 	RecordBatch emptyBatch;
 	child->batches.push_back(emptyBatch);
 
-	MergeNodeOperator op(dm, im, "n", "EmptyBatch", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"EmptyBatch"}, {}, {}, {});
 	op.setChild(std::move(child));
 
 	op.open();
@@ -643,7 +643,7 @@ TEST_F(MergeNodeOperatorTest, WithLabelIndex_MatchExistingNode) {
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
-	MergeNodeOperator op(dm, im, "n", "LblIdx", {}, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"LblIdx"}, {}, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -670,7 +670,7 @@ TEST_F(MergeNodeOperatorTest, WithPropertyIndex_MatchExistingNode) {
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["name"] = PropertyValue(std::string("IndexedName"));
 
-	MergeNodeOperator op(dm, im, "n", "PropIdx", matchProps, {}, {});
+	MergeNodeOperator op(dm, im, "n", {"PropIdx"}, matchProps, {}, {});
 
 	op.open();
 	auto batch = op.next();
@@ -686,7 +686,7 @@ TEST_F(MergeNodeOperatorTest, WithPropertyIndex_MatchExistingNode) {
 TEST_F(MergeNodeOperatorTest, GetOutputVariablesWithChild) {
 	// Cover MergeNodeOperator::getOutputVariables() when child_ is set (line 59 True branch)
 	auto child = std::make_unique<MergeNodeMockOperator>();
-	MergeNodeOperator op(dm, im, "m", "TestLabel", {}, {}, {});
+	MergeNodeOperator op(dm, im, "m", {"TestLabel"}, {}, {}, {});
 	op.setChild(std::move(child));
 
 	auto vars = op.getOutputVariables();

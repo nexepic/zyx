@@ -75,7 +75,7 @@ protected:
 // Case B: Source mode (no child) - single create with no properties
 TEST_F(CreateNodeOperatorBranchTest, SourceMode_BasicCreate) {
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 
 	op->open();
 	auto batch = op->next();
@@ -98,7 +98,7 @@ TEST_F(CreateNodeOperatorBranchTest, SourceMode_CreateWithProperties) {
 		{"name", PropertyValue(std::string("Alice"))},
 		{"age", PropertyValue(int64_t(30))}
 	};
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", props);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, props);
 
 	op->open();
 	auto batch = op->next();
@@ -119,7 +119,7 @@ TEST_F(CreateNodeOperatorBranchTest, SourceMode_CreateWithProperties) {
 // Case B: Source mode with empty properties (tests !props_.empty() branch = false)
 TEST_F(CreateNodeOperatorBranchTest, SourceMode_EmptyProperties) {
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 
 	op->open();
 	auto batch = op->next();
@@ -142,7 +142,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_UnboundVariable) {
 	std::unordered_map<std::string, PropertyValue> props = {
 		{"key", PropertyValue(std::string("val"))}
 	};
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", props);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, props);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -173,7 +173,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_ChildReturnsEmptyBatch) {
 		std::vector<RecordBatch>{emptyBatch, realBatch});
 
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -189,7 +189,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_ChildExhaustedImmediately) {
 	auto mock = std::make_unique<CreateNodeMockChild>(std::vector<RecordBatch>{});
 
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -210,7 +210,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_ExistingNodeBound) {
 	auto mock = std::make_unique<CreateNodeMockChild>(std::vector<RecordBatch>{{r1}});
 
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -242,7 +242,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_ExistingNodeWithPendingBuffer)
 	auto mock = std::make_unique<CreateNodeMockChild>(std::vector<RecordBatch>{{r1, r2}});
 
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -263,7 +263,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_ChildExhaustedSecondCall) {
 	auto mock = std::make_unique<CreateNodeMockChild>(std::vector<RecordBatch>{{r1}});
 
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -284,7 +284,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_ChildExhaustedSecondCall) {
 TEST_F(CreateNodeOperatorBranchTest, GetOutputVariables_WithChild) {
 	auto mock = std::make_unique<CreateNodeMockChild>();
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	auto vars = op->getOutputVariables();
@@ -296,7 +296,7 @@ TEST_F(CreateNodeOperatorBranchTest, GetOutputVariables_WithChild) {
 // Metadata: getOutputVariables without child
 TEST_F(CreateNodeOperatorBranchTest, GetOutputVariables_NoChild) {
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 
 	auto vars = op->getOutputVariables();
 	EXPECT_EQ(vars.size(), 1UL);
@@ -308,7 +308,7 @@ TEST_F(CreateNodeOperatorBranchTest, GetOutputVariables_DifferentVariable) {
 	auto mock = std::make_unique<CreateNodeMockChild>();
 	// Mock returns {"n"}, but we create with variable "m"
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "m", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "m", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	auto vars = op->getOutputVariables();
@@ -319,8 +319,8 @@ TEST_F(CreateNodeOperatorBranchTest, GetOutputVariables_DifferentVariable) {
 // Metadata: toString
 TEST_F(CreateNodeOperatorBranchTest, ToString) {
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
-	EXPECT_EQ(op->toString(), "CreateNode(var=n, label=Person)");
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
+	EXPECT_EQ(op->toString(), "CreateNode(var=n, labels=Person)");
 }
 
 // Metadata: getChildren with and without child
@@ -328,13 +328,13 @@ TEST_F(CreateNodeOperatorBranchTest, GetChildren) {
 	std::unordered_map<std::string, PropertyValue> emptyProps;
 
 	// Without child
-	auto op1 = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op1 = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	EXPECT_TRUE(op1->getChildren().empty());
 
 	// With child
 	auto mock = std::make_unique<CreateNodeMockChild>();
 	auto *mockRaw = mock.get();
-	auto op2 = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op2 = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op2->setChild(std::move(mock));
 	auto children = op2->getChildren();
 	ASSERT_EQ(children.size(), 1UL);
@@ -345,7 +345,7 @@ TEST_F(CreateNodeOperatorBranchTest, GetChildren) {
 TEST_F(CreateNodeOperatorBranchTest, OpenCloseWithChild) {
 	auto mock = std::make_unique<CreateNodeMockChild>();
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	// Should not crash
@@ -356,7 +356,7 @@ TEST_F(CreateNodeOperatorBranchTest, OpenCloseWithChild) {
 // open()/close() without child
 TEST_F(CreateNodeOperatorBranchTest, OpenCloseWithoutChild) {
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 
 	EXPECT_NO_THROW(op->open());
 	EXPECT_NO_THROW(op->close());
@@ -376,7 +376,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_BatchSizeThresholdFlush) {
 	auto mock = std::make_unique<CreateNodeMockChild>(std::vector<RecordBatch>{std::move(bigBatch)});
 
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -401,7 +401,7 @@ TEST_F(CreateNodeOperatorBranchTest, SourceMode_PerformSingleCreate_WithProps) {
 	std::unordered_map<std::string, PropertyValue> props = {
 		{"name", PropertyValue(std::string("Bob"))},
 	};
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Worker", props);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Worker"}, props);
 
 	op->open();
 	auto batch = op->next();
@@ -433,7 +433,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_MultipleEmptyBatches) {
 		std::vector<RecordBatch>{emptyBatch1, emptyBatch2, realBatch});
 
 	std::unordered_map<std::string, PropertyValue> emptyProps;
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Person", emptyProps);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Person"}, emptyProps);
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -454,7 +454,7 @@ TEST_F(CreateNodeOperatorBranchTest, PipelineMode_WithProperties) {
 	std::unordered_map<std::string, PropertyValue> props = {
 		{"status", PropertyValue(std::string("active"))}
 	};
-	auto op = std::make_unique<CreateNodeOperator>(dm, "n", "Task", props);
+	auto op = std::make_unique<CreateNodeOperator>(dm, "n", std::vector<std::string>{"Task"}, props);
 	op->setChild(std::move(mock));
 
 	op->open();

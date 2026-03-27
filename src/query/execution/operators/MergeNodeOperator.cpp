@@ -31,10 +31,10 @@ void MergeNodeOperator::open() {
 	executed_ = false;
 	if (child_) child_->open();
 
-	// Resolve Label ID
-	targetLabelId_ = 0;
-	if (!label_.empty()) {
-		targetLabelId_ = dm_->getOrCreateLabelId(label_);
+	// Resolve all Label IDs
+	targetLabelIds_.clear();
+	for (const auto &lbl : labels_) {
+		targetLabelIds_.push_back(dm_->getOrCreateLabelId(lbl));
 	}
 }
 
@@ -70,7 +70,12 @@ void MergeNodeOperator::close() {
 }
 
 std::string MergeNodeOperator::toString() const {
-	return "MergeNode(" + variable_ + ":" + label_ + ")";
+	std::string labelStr;
+	for (size_t i = 0; i < labels_.size(); ++i) {
+		if (i > 0) labelStr += ":";
+		labelStr += labels_[i];
+	}
+	return "MergeNode(" + variable_ + ":" + labelStr + ")";
 }
 
 void MergeNodeOperator::processMerge(Record &record) {
@@ -89,9 +94,9 @@ void MergeNodeOperator::processMerge(Record &record) {
 		}
 	}
 
-	// If no property index, try label index
-	if (!indexUsed && im_->hasLabelIndex("node") && !label_.empty()) {
-		candidates = im_->findNodeIdsByLabel(label_);
+	// If no property index, try label index (use first label)
+	if (!indexUsed && im_->hasLabelIndex("node") && !labels_.empty()) {
+		candidates = im_->findNodeIdsByLabel(labels_[0]);
 		indexUsed = true;
 	}
 
@@ -106,9 +111,13 @@ void MergeNodeOperator::processMerge(Record &record) {
 		Node n = dm_->getNode(id);
 		if (!n.isActive()) continue;
 
-		// Label Check using ID
-		if (targetLabelId_ != 0) {
-			if (n.getLabelId() != targetLabelId_) continue;
+		// Label Check: node must have ALL target labels (AND semantics)
+		if (!targetLabelIds_.empty()) {
+			bool allMatch = true;
+			for (int64_t tid : targetLabelIds_) {
+				if (!n.hasLabelId(tid)) { allMatch = false; break; }
+			}
+			if (!allMatch) continue;
 		}
 
 		// Hydrate & Check Properties
@@ -136,8 +145,10 @@ void MergeNodeOperator::processMerge(Record &record) {
 		applyUpdates(foundId, onMatchItems_, record);
 	} else {
 		// === NOT MATCHED -> CREATE ===
-		// Use ID Constructor
-		Node newNode(0, targetLabelId_);
+		Node newNode(0, targetLabelIds_.empty() ? 0 : targetLabelIds_[0]);
+		for (size_t i = 1; i < targetLabelIds_.size(); ++i) {
+			newNode.addLabelId(targetLabelIds_[i]);
+		}
 
 		dm_->addNode(newNode);
 

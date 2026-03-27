@@ -26,6 +26,16 @@ std::string AstExtractor::extractVariable(CypherParser::VariableContext *ctx) {
 	return ctx ? ctx->getText() : "";
 }
 
+std::vector<std::string> AstExtractor::extractLabels(CypherParser::NodeLabelsContext *ctx) {
+	std::vector<std::string> labels;
+	if (!ctx)
+		return labels;
+	for (auto *nodeLabel : ctx->nodeLabel()) {
+		labels.push_back(nodeLabel->labelName()->getText());
+	}
+	return labels;
+}
+
 std::string AstExtractor::extractLabel(CypherParser::NodeLabelsContext *ctx) {
 	if (!ctx || ctx->nodeLabel().empty())
 		return "";

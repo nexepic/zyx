@@ -23,6 +23,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include "generated/CypherParser.h"
 #include "graph/core/PropertyTypes.hpp"
 
@@ -48,7 +49,14 @@ public:
 
 	// --- Label Extraction ---
 	/**
-	 * @brief Extract label name from NodeLabelsContext.
+	 * @brief Extract all label names from NodeLabelsContext.
+	 * @param ctx The node labels context (may be null)
+	 * @return Vector of label names, empty if ctx is null or has no labels
+	 */
+	static std::vector<std::string> extractLabels(CypherParser::NodeLabelsContext *ctx);
+
+	/**
+	 * @brief Extract first label name from NodeLabelsContext (backward compat).
 	 * @param ctx The node labels context (may be null)
 	 * @return The first label name, or empty string if ctx is null or has no labels
 	 */

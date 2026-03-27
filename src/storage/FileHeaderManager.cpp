@@ -134,7 +134,13 @@ namespace graph::storage {
 			throw std::runtime_error("Invalid file format: Magic number mismatch.");
 		}
 
-		// 5. Validate file CRC
+		// 5. Validate version
+		if (fileHeader_.version != 0x00000002) {
+			throw std::runtime_error("Unsupported file format version: " + std::to_string(fileHeader_.version)
+				+ " (expected " + std::to_string(0x00000002) + ")");
+		}
+
+		// 6. Validate file CRC
 		if (!validateFileCrc()) {
 			throw std::runtime_error("Database integrity check failed: Data corruption detected.");
 		}

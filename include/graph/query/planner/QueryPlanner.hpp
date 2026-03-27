@@ -73,6 +73,11 @@ namespace graph::query {
 		 * @param value Optional property value for index pushdown.
 		 */
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		scanOp(const std::string &variable, const std::vector<std::string> &labels, const std::string &key = "",
+			   const PropertyValue &value = PropertyValue()) const;
+
+		// Single-label convenience overload
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		scanOp(const std::string &variable, const std::string &label, const std::string &key = "",
 			   const PropertyValue &value = PropertyValue()) const;
 
@@ -111,18 +116,23 @@ namespace graph::query {
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		callProcedureOp(const std::string &procedure, const std::vector<PropertyValue> &args) const;
 
-		// Create Node
+		// Create Node (multi-label)
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
-		createOp(const std::string &variable, const std::string &label,
+		createOp(const std::string &variable, const std::vector<std::string> &labels,
 				 const std::unordered_map<std::string, PropertyValue> &props) const;
 
 		// Create Node with expression-based properties (for UNWIND+CREATE)
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
-		createOp(const std::string &variable, const std::string &label,
+		createOp(const std::string &variable, const std::vector<std::string> &labels,
 				 const std::unordered_map<std::string, PropertyValue> &props,
 				 std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> propExprs) const;
 
-		// Create Edge
+		// Create Node (single-label convenience)
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		createOp(const std::string &variable, const std::string &label,
+				 const std::unordered_map<std::string, PropertyValue> &props) const;
+
+		// Create Edge (edges always single label)
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		createOp(const std::string &variable, const std::string &label,
 				 const std::unordered_map<std::string, PropertyValue> &props, const std::string &sourceVar,
@@ -132,6 +142,13 @@ namespace graph::query {
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		createIndexOp(const std::string &indexName, const std::string &label, const std::string &propertyKey) const;
 
+		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
+		mergeOp(const std::string &variable, const std::vector<std::string> &labels,
+				const std::unordered_map<std::string, PropertyValue> &matchProps,
+				const std::vector<execution::operators::SetItem> &onCreateItems,
+				const std::vector<execution::operators::SetItem> &onMatchItems) const;
+
+		// Single-label convenience overload
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		mergeOp(const std::string &variable, const std::string &label,
 				const std::unordered_map<std::string, PropertyValue> &matchProps,

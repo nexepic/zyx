@@ -178,9 +178,15 @@ namespace zyx {
 		auto pubNode = std::make_shared<Node>();
 		pubNode->id = internalNode.getId();
 
-		// RESOLVE: ID -> String using DataManager
+		// RESOLVE: All label IDs -> Strings using DataManager
 		if (dm) {
-			pubNode->label = dm->resolveLabel(internalNode.getLabelId());
+			for (int64_t lid : internalNode.getLabelIds()) {
+				if (lid != 0) {
+					pubNode->labels.push_back(dm->resolveLabel(lid));
+				}
+			}
+			// Backward compat: first label
+			pubNode->label = pubNode->labels.empty() ? "" : pubNode->labels[0];
 		}
 
 		for (const auto &[key, val]: internalNode.getProperties()) {
@@ -690,6 +696,40 @@ namespace zyx {
 			internalProps[k] = toInternal(v);
 		auto plan = builder.create_("n", label, internalProps).build();
 		(void) impl_->db_.getQueryEngine()->execute(std::move(plan));
+	}
+
+	void Database::createNode(const std::vector<std::string> &labels,
+							  const std::unordered_map<std::string, Value> &props) const {
+		std::optional<graph::Transaction> implicitTxn;
+		if (!impl_->db_.hasActiveTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
+		auto dm = impl_->db_.getStorage()->getDataManager();
+
+		// Resolve all label IDs
+		std::vector<int64_t> labelIds;
+		for (const auto &lbl : labels) {
+			labelIds.push_back(dm->getOrCreateLabelId(lbl));
+		}
+
+		int64_t firstLabelId = labelIds.empty() ? 0 : labelIds[0];
+		graph::Node node(0, firstLabelId);
+		for (size_t i = 1; i < labelIds.size(); ++i) {
+			node.addLabelId(labelIds[i]);
+		}
+		dm->addNode(node);
+
+		if (!props.empty()) {
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v] : props)
+				internalProps[k] = toInternal(v);
+			dm->addNodeProperties(node.getId(), internalProps);
+		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
 	}
 
 	void Database::createNodes(const std::string &label,

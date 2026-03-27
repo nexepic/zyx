@@ -58,12 +58,12 @@ namespace graph::query {
 	// --- Read Operations ---
 
 	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::scanOp(const std::string &variable,
-																	  const std::string &label, const std::string &key,
+																	  const std::vector<std::string> &labels,
+																	  const std::string &key,
 																	  const PropertyValue &value) const {
 
 		// 1. Consult the Optimizer
-		// The optimizer decides if we can use an IndexScan or must fallback to FullScan.
-		auto config = optimizer_->optimizeNodeScan(variable, label, key, value);
+		auto config = optimizer_->optimizeNodeScan(variable, labels, key, value);
 
 		// 2. Build the Scan Operator
 		// The Scan Operator purely executes the config (fetching IDs).
@@ -75,6 +75,25 @@ namespace graph::query {
 		// - If Optimizer chose PROPERTY_SCAN: The Scan result is already filtered by the Index.
 		// - If Optimizer chose LABEL/FULL_SCAN: The Scan result contains ALL nodes.
 		//   We MUST add a FilterOperator to check the property.
+
+		// Multi-label: additional labels beyond the first need filtering
+		// (first label handled by index/scan, rest are residual filters)
+		if (labels.size() > 1) {
+			auto allLabelIds = std::vector<int64_t>();
+			for (const auto &lbl : labels) {
+				allLabelIds.push_back(dm_->getOrCreateLabelId(lbl));
+			}
+			auto predicate = [variable, allLabelIds](const execution::Record &r) {
+				auto n = r.getNode(variable);
+				if (!n) return false;
+				for (int64_t lid : allLabelIds) {
+					if (!n->hasLabelId(lid)) return false;
+				}
+				return true;
+			};
+			std::string desc = "MultiLabel(" + variable + ")";
+			rootOp = filterOp(std::move(rootOp), predicate, desc);
+		}
 
 		if (!key.empty()) {
 			if (config.type != execution::ScanType::PROPERTY_SCAN) {
@@ -102,6 +121,15 @@ namespace graph::query {
 		return rootOp;
 	}
 
+	// Single-label convenience overload
+	std::unique_ptr<execution::PhysicalOperator> QueryPlanner::scanOp(const std::string &variable,
+																	  const std::string &label, const std::string &key,
+																	  const PropertyValue &value) const {
+		std::vector<std::string> labels;
+		if (!label.empty()) labels.push_back(label);
+		return scanOp(variable, labels, key, value);
+	}
+
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::filterOp(std::unique_ptr<execution::PhysicalOperator> child,
 						   std::function<bool(const execution::Record &)> predicate, const std::string &description) {
@@ -126,19 +154,30 @@ namespace graph::query {
 
 	// --- Write Operations ---
 
+	// Multi-label createOp
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::createOp(const std::string &variable, const std::vector<std::string> &labels,
+						   const std::unordered_map<std::string, PropertyValue> &props) const {
+		return std::make_unique<execution::operators::CreateNodeOperator>(dm_, variable, labels, props);
+	}
+
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::createOp(const std::string &variable, const std::vector<std::string> &labels,
+						   const std::unordered_map<std::string, PropertyValue> &props,
+						   std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> propExprs) const {
+		return std::make_unique<execution::operators::CreateNodeOperator>(dm_, variable, labels, props, std::move(propExprs));
+	}
+
+	// Single-label convenience
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::createOp(const std::string &variable, const std::string &label,
 						   const std::unordered_map<std::string, PropertyValue> &props) const {
-		return std::make_unique<execution::operators::CreateNodeOperator>(dm_, variable, label, props);
+		std::vector<std::string> labels;
+		if (!label.empty()) labels.push_back(label);
+		return createOp(variable, labels, props);
 	}
 
-	std::unique_ptr<execution::PhysicalOperator>
-	QueryPlanner::createOp(const std::string &variable, const std::string &label,
-						   const std::unordered_map<std::string, PropertyValue> &props,
-						   std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> propExprs) const {
-		return std::make_unique<execution::operators::CreateNodeOperator>(dm_, variable, label, props, std::move(propExprs));
-	}
-
+	// Create Edge (always single label)
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::createOp(const std::string &variable, const std::string &label,
 						   const std::unordered_map<std::string, PropertyValue> &props, const std::string &sourceVar,
@@ -167,13 +206,25 @@ namespace graph::query {
 		return std::make_unique<execution::operators::CreateIndexOperator>(im_, indexName, label, propertyKey);
 	}
 
+	// Multi-label mergeOp
+	std::unique_ptr<execution::PhysicalOperator>
+	QueryPlanner::mergeOp(const std::string &variable, const std::vector<std::string> &labels,
+						  const std::unordered_map<std::string, PropertyValue> &matchProps,
+						  const std::vector<execution::operators::SetItem> &onCreateItems,
+						  const std::vector<execution::operators::SetItem> &onMatchItems) const {
+		return std::make_unique<execution::operators::MergeNodeOperator>(dm_, im_, variable, labels, matchProps,
+																		 onCreateItems, onMatchItems);
+	}
+
+	// Single-label convenience
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::mergeOp(const std::string &variable, const std::string &label,
 						  const std::unordered_map<std::string, PropertyValue> &matchProps,
 						  const std::vector<execution::operators::SetItem> &onCreateItems,
 						  const std::vector<execution::operators::SetItem> &onMatchItems) const {
-		return std::make_unique<execution::operators::MergeNodeOperator>(dm_, im_, variable, label, matchProps,
-																		 onCreateItems, onMatchItems);
+		std::vector<std::string> labels;
+		if (!label.empty()) labels.push_back(label);
+		return mergeOp(variable, labels, matchProps, onCreateItems, onMatchItems);
 	}
 
 	std::unique_ptr<execution::PhysicalOperator>

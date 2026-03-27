@@ -29,14 +29,16 @@ namespace graph::query::execution::operators {
 
 	class CreateNodeOperator : public PhysicalOperator {
 	public:
-		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string label,
+		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable,
+						   std::vector<std::string> labels,
 						   std::unordered_map<std::string, PropertyValue> props) :
-			dm_(std::move(dm)), variable_(std::move(variable)), label_(std::move(label)), props_(std::move(props)) {}
+			dm_(std::move(dm)), variable_(std::move(variable)), labels_(std::move(labels)), props_(std::move(props)) {}
 
-		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string label,
+		CreateNodeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable,
+						   std::vector<std::string> labels,
 						   std::unordered_map<std::string, PropertyValue> props,
 						   std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propExprs) :
-			dm_(std::move(dm)), variable_(std::move(variable)), label_(std::move(label)),
+			dm_(std::move(dm)), variable_(std::move(variable)), labels_(std::move(labels)),
 			props_(std::move(props)), propExpressions_(std::move(propExprs)) {}
 
 		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
@@ -51,9 +53,12 @@ namespace graph::query::execution::operators {
 		}
 
 		std::optional<RecordBatch> next() override {
-			// Resolve Label ID once per call.
-			// This ID will be used for all nodes created in this batch/call.
-			int64_t labelId = dm_->getOrCreateLabelId(label_);
+			// Resolve all Label IDs once per call.
+			std::vector<int64_t> labelIds;
+			for (const auto &lbl : labels_) {
+				labelIds.push_back(dm_->getOrCreateLabelId(lbl));
+			}
+			int64_t labelId = labelIds.empty() ? 0 : labelIds[0];
 
 			// Case A: Pipeline (Chained to previous MATCH, UNWIND, or CREATE)
 			if (child_) {
@@ -89,8 +94,10 @@ namespace graph::query::execution::operators {
 							return singleBatch;
 						} else {
 							// Variable unbound -> Queue for Batch Creation
-							// Use ID constructor
 							Node newNode(0, labelId);
+							for (size_t li = 1; li < labelIds.size(); ++li) {
+								newNode.addLabelId(labelIds[li]);
+							}
 
 							// Resolve properties: evaluate expressions against record if available
 							auto resolvedProps = resolveProperties(record);
@@ -113,7 +120,7 @@ namespace graph::query::execution::operators {
 			if (executed_)
 				return std::nullopt;
 
-			Node newNode = performSingleCreate(labelId);
+			Node newNode = performSingleCreate(labelIds);
 			Record record;
 			record.setNode(variable_, newNode);
 			RecordBatch batch;
@@ -149,7 +156,12 @@ namespace graph::query::execution::operators {
 		}
 
 		[[nodiscard]] std::string toString() const override {
-			return "CreateNode(var=" + variable_ + ", label=" + label_ + ")";
+			std::string labelStr;
+			for (size_t i = 0; i < labels_.size(); ++i) {
+				if (i > 0) labelStr += ":";
+				labelStr += labels_[i];
+			}
+			return "CreateNode(var=" + variable_ + ", labels=" + labelStr + ")";
 		}
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override {
@@ -163,7 +175,7 @@ namespace graph::query::execution::operators {
 		std::shared_ptr<storage::DataManager> dm_;
 		std::unique_ptr<PhysicalOperator> child_;
 		std::string variable_;
-		std::string label_;
+		std::vector<std::string> labels_;
 		std::unordered_map<std::string, PropertyValue> props_;
 		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propExpressions_;
 
@@ -183,8 +195,12 @@ namespace graph::query::execution::operators {
 
 		static constexpr size_t BATCH_SIZE = 1000;
 
-		Node performSingleCreate(int64_t labelId) const {
-			Node newNode(0, labelId);
+		Node performSingleCreate(const std::vector<int64_t> &labelIds) const {
+			Node newNode(0, labelIds.empty() ? 0 : labelIds[0]);
+			// Add additional labels
+			for (size_t i = 1; i < labelIds.size(); ++i) {
+				newNode.addLabelId(labelIds[i]);
+			}
 			dm_->addNode(newNode);
 			if (!props_.empty()) {
 				dm_->addNodeProperties(newNode.getId(), props_);

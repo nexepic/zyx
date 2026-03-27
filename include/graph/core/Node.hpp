@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstring>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,13 +32,16 @@ namespace graph {
 
 	class Node : public EntityBase<Node> {
 	public:
+		static constexpr uint8_t MAX_LABELS = 6;
+
 		// Metadata struct to contain fixed node data
 		struct Metadata {
 			int64_t id = 0;
 			int64_t firstOutEdgeId = 0; // First outgoing edge
 			int64_t firstInEdgeId = 0; // First incoming edge
 			int64_t propertyEntityId = 0;
-			int64_t labelId = 0;
+			int64_t labelIds[MAX_LABELS] = {};
+			uint8_t labelCount = 0;
 			uint32_t propertyStorageType = 0;
 			bool isActive = true;
 			// Padding is implicit
@@ -45,7 +49,6 @@ namespace graph {
 
 		static constexpr size_t TOTAL_NODE_SIZE = 256;
 		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
-		static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_NODE_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Node);
 		static constexpr size_t PADDING_SIZE = TOTAL_NODE_SIZE - METADATA_SIZE;
 
@@ -90,14 +93,27 @@ namespace graph {
 
 		void markInactive(bool active = false) { metadata.isActive = active; }
 
-		[[nodiscard]] int64_t getLabelId() const { return metadata.labelId; }
-		void setLabelId(int64_t id) { metadata.labelId = id; }
+		// Backward-compatible single-label API
+		[[nodiscard]] int64_t getLabelId() const { return metadata.labelCount > 0 ? metadata.labelIds[0] : 0; }
+		void setLabelId(int64_t id) {
+			std::memset(metadata.labelIds, 0, sizeof(metadata.labelIds));
+			if (id != 0) {
+				metadata.labelIds[0] = id;
+				metadata.labelCount = 1;
+			} else {
+				metadata.labelCount = 0;
+			}
+		}
 
-		// Serialization
+		// Multi-label API
+		bool addLabelId(int64_t id);
+		bool removeLabelId(int64_t id);
+		[[nodiscard]] bool hasLabelId(int64_t id) const;
+		[[nodiscard]] std::vector<int64_t> getLabelIds() const;
+		[[nodiscard]] uint8_t getLabelCount() const { return metadata.labelCount; }
+
 		void serialize(std::ostream &os) const;
 		static Node deserialize(std::istream &is);
-		// Zero-copy deserialization from raw memory buffer (no istream overhead).
-		// Buffer must point to at least METADATA_SIZE bytes.
 		static Node deserializeFromBuffer(const char *buf);
 
 	private:
@@ -105,9 +121,6 @@ namespace graph {
 		Metadata metadata;
 
 		char padding[PADDING_SIZE] = {0};
-
-		// Fixed-size buffer for label
-		char labelBuffer[LABEL_BUFFER_SIZE] = {0};
 
 		// Variable-sized structures (not included in the 128-byte alignment)
 		std::unordered_map<std::string, PropertyValue> properties;

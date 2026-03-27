@@ -22,6 +22,7 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 #include "graph/core/Property.hpp"
 
 namespace graph::query::execution {
@@ -35,18 +36,26 @@ namespace graph::query::execution {
 	struct NodeScanConfig {
 		ScanType type = ScanType::FULL_SCAN;
 		std::string variable;
-		std::string label;
+		std::vector<std::string> labels;
 
 		// For Property Index
 		std::string indexKey;
 		PropertyValue indexValue;
 
+		// Backward-compat: get first label or empty string
+		[[nodiscard]] std::string label() const { return labels.empty() ? "" : labels[0]; }
+
 		// Visualization helper
 		std::string toString() const {
+			std::string labelStr;
+			for (size_t i = 0; i < labels.size(); ++i) {
+				if (i > 0) labelStr += ":";
+				labelStr += labels[i];
+			}
 			if (type == ScanType::PROPERTY_SCAN)
-				return "IndexScan(" + label + ", " + indexKey + "=" + indexValue.toString() + ")";
+				return "IndexScan(" + labelStr + ", " + indexKey + "=" + indexValue.toString() + ")";
 			if (type == ScanType::LABEL_SCAN)
-				return "LabelScan(" + label + ")";
+				return "LabelScan(" + labelStr + ")";
 			return "FullScan";
 		}
 	};

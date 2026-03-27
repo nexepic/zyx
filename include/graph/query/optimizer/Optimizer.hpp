@@ -21,6 +21,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "graph/query/execution/ScanConfigs.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -38,11 +39,12 @@ namespace graph::query::optimizer {
 		/**
 		 * @brief Resolves the best strategy for scanning nodes.
 		 */
-		[[nodiscard]] execution::NodeScanConfig optimizeNodeScan(const std::string &variable, const std::string &label,
+		[[nodiscard]] execution::NodeScanConfig optimizeNodeScan(const std::string &variable,
+																 const std::vector<std::string> &labels,
 																 const std::string &key,
 																 const PropertyValue &value) const {
 			// Delegate to the specific rule
-			return indexPushdownRule_->apply(variable, label, key, value);
+			return indexPushdownRule_->apply(variable, labels, key, value);
 		}
 
 		// Future methods:

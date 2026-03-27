@@ -112,7 +112,7 @@ TEST_F(NodeScanOperatorBranchTest, FullScan_WithLabelFilter) {
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
 	config.variable = "n";
-	config.label = "Person";
+	config.labels = {"Person"};
 
 	auto op = std::make_unique<NodeScanOperator>(dm, im, config);
 	op->open();
@@ -133,7 +133,7 @@ TEST_F(NodeScanOperatorBranchTest, FullScan_EmptyLabel) {
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
 	config.variable = "n";
-	config.label = "";
+	config.labels = {};
 
 	auto op = std::make_unique<NodeScanOperator>(dm, im, config);
 	op->open();
@@ -185,7 +185,7 @@ TEST_F(NodeScanOperatorBranchTest, LabelScan) {
 	NodeScanConfig config;
 	config.type = ScanType::LABEL_SCAN;
 	config.variable = "n";
-	config.label = "Person";
+	config.labels = {"Person"};
 
 	auto op = std::make_unique<NodeScanOperator>(dm, im, config);
 	op->open();
@@ -206,7 +206,7 @@ TEST_F(NodeScanOperatorBranchTest, LabelScan_NoMatches) {
 	NodeScanConfig config;
 	config.type = ScanType::LABEL_SCAN;
 	config.variable = "n";
-	config.label = "NonexistentLabel";
+	config.labels = {"NonexistentLabel"};
 
 	auto op = std::make_unique<NodeScanOperator>(dm, im, config);
 	op->open();
@@ -242,7 +242,7 @@ TEST_F(NodeScanOperatorBranchTest, ToString_LabelScan) {
 	NodeScanConfig config;
 	config.type = ScanType::LABEL_SCAN;
 	config.variable = "n";
-	config.label = "Person";
+	config.labels = {"Person"};
 
 	auto op = std::make_unique<NodeScanOperator>(dm, im, config);
 	EXPECT_EQ(op->toString(), "LabelScan(Person)");
@@ -252,7 +252,7 @@ TEST_F(NodeScanOperatorBranchTest, ToString_PropertyScan) {
 	NodeScanConfig config;
 	config.type = ScanType::PROPERTY_SCAN;
 	config.variable = "n";
-	config.label = "Person";
+	config.labels = {"Person"};
 	config.indexKey = "name";
 	config.indexValue = PropertyValue(std::string("Alice"));
 
@@ -274,7 +274,7 @@ TEST_F(NodeScanOperatorBranchTest, PropertyScan) {
 	NodeScanConfig config;
 	config.type = ScanType::PROPERTY_SCAN;
 	config.variable = "n";
-	config.label = "Person";
+	config.labels = {"Person"};
 	config.indexKey = "name";
 	config.indexValue = PropertyValue(std::string("Alice"));
 
@@ -296,7 +296,7 @@ TEST_F(NodeScanOperatorBranchTest, PropertyScan_NoMatches) {
 	NodeScanConfig config;
 	config.type = ScanType::PROPERTY_SCAN;
 	config.variable = "n";
-	config.label = "Person";
+	config.labels = {"Person"};
 	config.indexKey = "name";
 	config.indexValue = PropertyValue(std::string("NonExistent"));
 

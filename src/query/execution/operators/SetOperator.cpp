@@ -71,15 +71,14 @@ std::optional<RecordBatch> SetOperator::next() {
 					record.setEdge(item.variable, edge);
 				}
 			} else if (item.type == SetActionType::LABEL) {
-				// --- Label Update ---
+				// --- Label Update (append, not replace) ---
 				if (auto nodeOpt = record.getNode(item.variable)) {
 					Node node = *nodeOpt;
-					[[maybe_unused]] int64_t id = node.getId();
 
-					// Resolve string label to ID
+					// Resolve string label to ID and add it
 					int64_t newLabelId = dm_->getOrCreateLabelId(item.key);
-					node.setLabelId(newLabelId);
-					dm_->updateNode(node); // Persist label ID change
+					node.addLabelId(newLabelId);
+					dm_->updateNode(node); // Persist label change
 
 					record.setNode(item.variable, node);
 				}

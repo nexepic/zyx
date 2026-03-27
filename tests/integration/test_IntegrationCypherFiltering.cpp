@@ -310,17 +310,25 @@ TEST_F(IntegrationCypherFilteringTest, SetMapMerge) {
 TEST_F(IntegrationCypherFilteringTest, RemoveLabel) {
 	(void) execute("CREATE (n:RLNode {name: 'Test'})");
 
-	// SET a new label (replaces old one in single-label system)
+	// SET appends a label (multi-label support)
 	(void) execute("MATCH (n:RLNode) SET n:NewLabel");
 
-	// Old label should be gone
+	// Node should have BOTH labels now
 	auto rOld = execute("MATCH (n:RLNode) RETURN n.name");
-	EXPECT_EQ(rOld.rowCount(), 0UL);
+	EXPECT_EQ(rOld.rowCount(), 1UL);
 
-	// New label should exist
 	auto rNew = execute("MATCH (n:NewLabel) RETURN n.name");
 	ASSERT_EQ(rNew.rowCount(), 1UL);
 	EXPECT_EQ(val(rNew, "n.name"), "Test");
+
+	// Now REMOVE the original label
+	(void) execute("MATCH (n:RLNode) REMOVE n:RLNode");
+	auto rRemoved = execute("MATCH (n:RLNode) RETURN n.name");
+	EXPECT_EQ(rRemoved.rowCount(), 0UL);
+
+	// NewLabel should still exist
+	auto rStill = execute("MATCH (n:NewLabel) RETURN n.name");
+	ASSERT_EQ(rStill.rowCount(), 1UL);
 }
 
 // ============================================================================

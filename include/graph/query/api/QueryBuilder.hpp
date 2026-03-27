@@ -23,6 +23,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 
@@ -46,6 +47,10 @@ namespace graph::query {
 		QueryBuilder &match_(const std::string &variable, const std::string &label = "", const std::string &key = "",
 							 const PropertyValue &value = PropertyValue());
 
+		// Multi-label match overload
+		QueryBuilder &match_(const std::string &variable, const std::vector<std::string> &labels,
+							 const std::string &key = "", const PropertyValue &value = PropertyValue());
+
 		/**
 		 * @brief Filters the current result set.
 		 */
@@ -59,6 +64,10 @@ namespace graph::query {
 		 * @brief Create Node: create("n", "User", {{"age", 18}})
 		 */
 		QueryBuilder &create_(const std::string &variable, const std::string &label,
+							  const std::unordered_map<std::string, PropertyValue> &props = {});
+
+		// Multi-label create overload
+		QueryBuilder &create_(const std::string &variable, const std::vector<std::string> &labels,
 							  const std::unordered_map<std::string, PropertyValue> &props = {});
 
 		/**

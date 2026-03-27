@@ -31,7 +31,10 @@ namespace graph {
 		metadata.id = id;
 		metadata.firstOutEdgeId = 0;
 		metadata.firstInEdgeId = 0;
-		metadata.labelId = labelId;
+		if (labelId != 0) {
+			metadata.labelIds[0] = labelId;
+			metadata.labelCount = 1;
+		}
 	}
 
 	void Node::setFirstOutEdgeId(int64_t edgeId) { metadata.firstOutEdgeId = edgeId; }
@@ -75,12 +78,52 @@ namespace graph {
 		return totalSize;
 	}
 
+	bool Node::addLabelId(int64_t id) {
+		if (id == 0) return false;
+		// Check if already present
+		for (uint8_t i = 0; i < metadata.labelCount; ++i) {
+			if (metadata.labelIds[i] == id) return true; // already exists
+		}
+		if (metadata.labelCount >= MAX_LABELS) return false;
+		metadata.labelIds[metadata.labelCount++] = id;
+		return true;
+	}
+
+	bool Node::removeLabelId(int64_t id) {
+		for (uint8_t i = 0; i < metadata.labelCount; ++i) {
+			if (metadata.labelIds[i] == id) {
+				// Shift remaining labels down
+				for (uint8_t j = i; j + 1 < metadata.labelCount; ++j) {
+					metadata.labelIds[j] = metadata.labelIds[j + 1];
+				}
+				metadata.labelIds[--metadata.labelCount] = 0;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool Node::hasLabelId(int64_t id) const {
+		for (uint8_t i = 0; i < metadata.labelCount; ++i) {
+			if (metadata.labelIds[i] == id) return true;
+		}
+		return false;
+	}
+
+	std::vector<int64_t> Node::getLabelIds() const {
+		return {metadata.labelIds, metadata.labelIds + metadata.labelCount};
+	}
+
 	void Node::serialize(std::ostream &os) const {
 		utils::Serializer::writePOD(os, metadata.id);
 		utils::Serializer::writePOD(os, metadata.firstOutEdgeId);
 		utils::Serializer::writePOD(os, metadata.firstInEdgeId);
 		utils::Serializer::writePOD(os, metadata.propertyEntityId);
-		utils::Serializer::writePOD(os, metadata.labelId);
+		// Always write v2 format: all MAX_LABELS slots (fixed layout)
+		for (uint8_t i = 0; i < MAX_LABELS; ++i) {
+			utils::Serializer::writePOD(os, metadata.labelIds[i]);
+		}
+		utils::Serializer::writePOD(os, metadata.labelCount);
 		utils::Serializer::writePOD(os, metadata.propertyStorageType);
 		utils::Serializer::writePOD(os, metadata.isActive);
 	}
@@ -91,7 +134,10 @@ namespace graph {
 		node.metadata.firstOutEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		node.metadata.firstInEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		node.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
-		node.metadata.labelId = utils::Serializer::readPOD<int64_t>(is); // ID ONLY
+		for (uint8_t i = 0; i < MAX_LABELS; ++i) {
+			node.metadata.labelIds[i] = utils::Serializer::readPOD<int64_t>(is);
+		}
+		node.metadata.labelCount = utils::Serializer::readPOD<uint8_t>(is);
 		node.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
 		node.metadata.isActive = utils::Serializer::readPOD<bool>(is);
 		return node;
@@ -104,23 +150,23 @@ namespace graph {
 		std::memcpy(&node.metadata.firstOutEdgeId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
 		std::memcpy(&node.metadata.firstInEdgeId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
 		std::memcpy(&node.metadata.propertyEntityId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
-		std::memcpy(&node.metadata.labelId, buf + off, sizeof(int64_t)); off += sizeof(int64_t);
+		std::memcpy(node.metadata.labelIds, buf + off, sizeof(int64_t) * MAX_LABELS); off += sizeof(int64_t) * MAX_LABELS;
+		std::memcpy(&node.metadata.labelCount, buf + off, sizeof(uint8_t)); off += sizeof(uint8_t);
 		std::memcpy(&node.metadata.propertyStorageType, buf + off, sizeof(uint32_t)); off += sizeof(uint32_t);
 		std::memcpy(&node.metadata.isActive, buf + off, sizeof(bool));
 		return node;
 	}
 
 	size_t Node::getSerializedSize() const {
-		// Calculate size of all metadata fields
 		size_t size = 0;
-		size += sizeof(metadata.id); // int64_t
-		size += sizeof(metadata.firstOutEdgeId); // int64_t
-		size += sizeof(metadata.firstInEdgeId); // int64_t
-		size += sizeof(metadata.propertyEntityId); // int64_t
-		size += sizeof(metadata.labelId); // int64_t
-		size += sizeof(metadata.propertyStorageType); // uint32_t
-		size += sizeof(metadata.isActive); // bool
-
+		size += sizeof(metadata.id);                  // int64_t
+		size += sizeof(metadata.firstOutEdgeId);       // int64_t
+		size += sizeof(metadata.firstInEdgeId);        // int64_t
+		size += sizeof(metadata.propertyEntityId);     // int64_t
+		size += sizeof(int64_t) * MAX_LABELS;          // labelIds[6]
+		size += sizeof(metadata.labelCount);           // uint8_t
+		size += sizeof(metadata.propertyStorageType);  // uint32_t
+		size += sizeof(metadata.isActive);             // bool
 		return size;
 	}
 

@@ -132,8 +132,8 @@ All aggregate functions are ✅ Supported: `count()`, `sum()`, `avg()`, `max()`,
 
 ### 5.4 Multi-Label Support
 **Syntax**: `(n:Person:Employee)`
-**Status**: ❌ Not Yet Implemented
-**Note**: Storage layer supports single label ID per node. Requires architectural change.
+**Status**: ✅ Supported
+**Note**: Nodes support up to 6 labels. MATCH uses AND semantics (node must have ALL specified labels). SET appends labels, REMOVE removes individual labels.
 
 ### 5.5 UNWIND Nested Properties
 **Syntax**: `MATCH (n) UNWIND n.arrayProp AS x`

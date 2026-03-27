@@ -61,7 +61,7 @@ namespace graph::query::execution::operators {
 
 				case ScanType::LABEL_SCAN:
 					// Implicit Filtering: The Index returns IDs with this label.
-					candidateIds_ = im_->findNodeIdsByLabel(config_.label);
+					candidateIds_ = im_->findNodeIdsByLabel(config_.label());
 					break;
 
 				case ScanType::FULL_SCAN:
@@ -74,12 +74,12 @@ namespace graph::query::execution::operators {
 					break;
 			}
 
-			// Pre-resolve label ID for the scan loop (optimization)
-			targetLabelId_ = 0;
-			if (!config_.label.empty()) {
-				// We use resolveLabelId if available, or just getOrCreateLabelId.
-				// For scanning, if the label doesn't exist in registry, ID is 0, so no node will match.
-				targetLabelId_ = dm_->getOrCreateLabelId(config_.label);
+			// Pre-resolve label IDs for the scan loop (optimization)
+			targetLabelIds_.clear();
+			if (!config_.labels.empty()) {
+				for (const auto &lbl : config_.labels) {
+					targetLabelIds_.push_back(dm_->getOrCreateLabelId(lbl));
+				}
 			}
 		}
 
@@ -130,9 +130,12 @@ namespace graph::query::execution::operators {
 				if (!node.isActive())
 					continue;
 
-				if (!config_.label.empty()) {
-					if (node.getLabelId() != targetLabelId_)
-						continue;
+				if (!targetLabelIds_.empty()) {
+					bool allMatch = true;
+					for (int64_t tid : targetLabelIds_) {
+						if (!node.hasLabelId(tid)) { allMatch = false; break; }
+					}
+					if (!allMatch) continue;
 				}
 
 				auto props = dm_->getNodeProperties(id);
@@ -169,7 +172,7 @@ namespace graph::query::execution::operators {
 
 		std::vector<int64_t> candidateIds_;
 		size_t currentIdx_ = 0;
-		int64_t targetLabelId_ = 0; // Cached ID
+		std::vector<int64_t> targetLabelIds_; // Cached label IDs (AND semantics)
 
 		std::optional<RecordBatch> parallelLoadBatch(size_t batchStart, size_t batchEnd) {
 			using Clock = std::chrono::steady_clock;
@@ -248,8 +251,13 @@ namespace graph::query::execution::operators {
 
 						if (!node.isActive())
 							continue;
-						if (!config_.label.empty() && node.getLabelId() != targetLabelId_)
-							continue;
+						if (!targetLabelIds_.empty()) {
+							bool allMatch = true;
+							for (int64_t tid : targetLabelIds_) {
+								if (!node.hasLabelId(tid)) { allMatch = false; break; }
+							}
+							if (!allMatch) continue;
+						}
 
 						if (node.hasPropertyEntity() &&
 							node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {

@@ -263,16 +263,16 @@ TEST_F(IntegrationQueryTest, SetLabelSyntax) {
 /**
  * Test SET replaces existing label
  */
-TEST_F(IntegrationQueryTest, SetReplacesLabel) {
+TEST_F(IntegrationQueryTest, SetAppendsLabel) {
 	// Create a node
 	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
 
-	// Replace label with new one
+	// Append a new label (multi-label: SET appends, not replaces)
 	(void) execute("MATCH (n:Person {name: 'Alice'}) SET n:Employee");
 
-	// Verify node no longer has Person label but has Employee label
+	// Node should have BOTH Person and Employee labels
 	auto resultOld = execute("MATCH (n:Person) RETURN n.name");
-	EXPECT_EQ(resultOld.rowCount(), 0UL);
+	EXPECT_EQ(resultOld.rowCount(), 1UL);
 
 	auto resultNew = execute("MATCH (n:Employee) RETURN n.name");
 	EXPECT_EQ(resultNew.rowCount(), 1UL);

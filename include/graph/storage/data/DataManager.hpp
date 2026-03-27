@@ -116,6 +116,7 @@ namespace graph::storage {
 		// Header access
 		[[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
 		FileHeader &getFileHeaderRef() const { return fileHeader_; }
+		[[nodiscard]] uint32_t getFileVersion() const { return fileHeader_.version; }
 
 		void registerObserver(std::shared_ptr<IEntityObserver> observer);
 

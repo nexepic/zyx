@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query::optimizer::rules {
@@ -40,16 +41,18 @@ namespace graph::query::optimizer::rules {
 		 * @param value The property value (e.g., 25).
 		 * @return execution::NodeScanConfig The optimized configuration.
 		 */
-		[[nodiscard]] execution::NodeScanConfig apply(const std::string &variable, const std::string &label,
+		[[nodiscard]] execution::NodeScanConfig apply(const std::string &variable, const std::vector<std::string> &labels,
 													  const std::string &key, const PropertyValue &value) const {
 			execution::NodeScanConfig config;
 			config.variable = variable;
-			config.label = label;
+			config.labels = labels;
 
 			// --- Optimization Logic (Moved from QueryPlanner) ---
+			// Use first label for index pushdown (label indexes are per-label)
+			std::string firstLabel = labels.empty() ? "" : labels[0];
 
 			bool hasPropIndex = !key.empty() && indexManager_->hasPropertyIndex("node", key);
-			bool hasLabelIndex = !label.empty() && indexManager_->hasLabelIndex("node");
+			bool hasLabelIndex = !firstLabel.empty() && indexManager_->hasLabelIndex("node");
 
 			// Heuristic 1: Property Index is usually most selective (O(log N))
 			if (hasPropIndex) {

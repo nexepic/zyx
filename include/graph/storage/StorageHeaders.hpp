@@ -64,7 +64,7 @@ namespace graph::storage {
 		int64_t max_index_id = 0;
 		int64_t max_state_id = 0;
 
-		uint32_t version = 0x00000001; // File format version
+		uint32_t version = 0x00000002; // File format version (v2: multi-label nodes)
 
 		// Checksum
 		uint32_t data_crc = 0;

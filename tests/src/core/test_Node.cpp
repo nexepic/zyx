@@ -203,8 +203,12 @@ TEST_F(NodeTest, GetSerializedSize) {
 	const graph::Node node(1, 100); // ID 1, Label ID 100
 
 	size_t expectedSize = 0;
-	// 5 int64_t fields: id, firstOut, firstIn, propEntity, labelId
-	expectedSize += sizeof(int64_t) * 5;
+	// 4 int64_t fields: id, firstOut, firstIn, propEntity
+	expectedSize += sizeof(int64_t) * 4;
+	// 6 int64_t fields: labelIds[MAX_LABELS]
+	expectedSize += sizeof(int64_t) * graph::Node::MAX_LABELS;
+	// 1 uint8_t field: labelCount
+	expectedSize += sizeof(uint8_t);
 	// 1 uint32_t field: propertyStorageType
 	expectedSize += sizeof(uint32_t);
 	// 1 bool field: isActive
@@ -248,7 +252,8 @@ TEST_F(NodeTest, MetadataAccess) {
 
 	const auto &metadata = node.getMetadata();
 	EXPECT_EQ(metadata.id, 42);
-	EXPECT_EQ(metadata.labelId, 999);
+	EXPECT_EQ(metadata.labelIds[0], 999);
+	EXPECT_EQ(metadata.labelCount, 1);
 	EXPECT_EQ(metadata.firstOutEdgeId, 0);
 	EXPECT_EQ(metadata.firstInEdgeId, 0);
 	EXPECT_EQ(metadata.propertyEntityId, 0);
