@@ -66,7 +66,7 @@ db_lib = static_library('zyx_core',
 db_dep = declare_dependency(
 	include_directories : inc_dirs,
 	link_with : db_lib,
-	dependencies : [cypher_dep]
+	dependencies : [cypher_dep, zlib_dep]
 )
 
 # ==============================================================================
