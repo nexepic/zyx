@@ -19,3 +19,15 @@ htmlcov/
 
 # Auto-generated headers
 build_*/include/graph/core/ProjectConfig.hpp
+
+# NexDoc documentation build artifacts
+# Next.js build output and cache
+.next/
+out/
+.next/cache/
+.next/turbopack/
+
+# Documentation build cache
+docs/apps/docs/.next/
+docs/node_modules/
+docs/.turbo/
