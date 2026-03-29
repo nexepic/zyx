@@ -1,0 +1,506 @@
+---
+title: Import & Export
+description: Moving data in and out of ZYX efficiently is essential for data migration, backup, and integration with other systems. This guide covers import and ex
+category: Advanced
+order: 8
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Import & Export
+
+Moving data in and out of ZYX efficiently is essential for data migration, backup, and integration with other systems. This guide covers import and export operations.
+
+## Data Import
+
+### CSV Import
+
+#### Basic CSV Import
+
+```cypher
+// Import from CSV file
+LOAD CSV FROM 'file:///path/to/users.csv' AS row
+CREATE (u:User {
+  id: toInteger(row[0]),
+  name: row[1],
+  email: row[2]
+})
+```
+
+#### CSV with Headers
+
+```cypher
+// Import CSV with header row
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+CREATE (u:User {
+  id: toInteger(row.id),
+  name: row.name,
+  email: row.email,
+  age: toInteger(row.age)
+})
+```
+
+#### Batch CSV Import
+
+```cypher
+// Import in batches for better performance
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+CREATE (u:User {
+  id: toInteger(row.id),
+  name: row.name,
+  email: row.email
+})
+```
+
+### JSON Import
+
+#### Line-Delimited JSON
+
+```cypher
+// Import line-delimited JSON
+// Each line: {"id": 1, "name": "Alice"}
+CALL apoc.loadJson('file:///path/to/users.json')
+YIELD value
+CREATE (u:User {
+  id: value.id,
+  name: value.name,
+  email: value.email
+})
+```
+
+#### Nested JSON Structures
+
+```cypher
+// Import complex nested JSON
+CALL apoc.loadJson('file:///path/to/complex.json')
+YIELD value
+CREATE (u:User {
+  id: value.id,
+  name: value.profile.name,
+  email: value.profile.contact.email,
+  tags: value.tags
+})
+```
+
+### Relationship Import
+
+#### Import Relationships from CSV
+
+```cypher
+// Import relationships after nodes exist
+LOAD CSV WITH HEADERS FROM 'file:///path/to/relationships.csv' AS row
+MATCH (a:User {id: toInteger(row.from_id)})
+MATCH (b:User {id: toInteger(row.to_id)})
+CREATE (a)-[:KNOWS {since: toInteger(row.since)}]->(b)
+```
+
+#### Import Multiple Relationship Types
+
+```cypher
+// Import different relationship types
+LOAD CSV WITH HEADERS FROM 'file:///path/to/relationships.csv' AS row
+MATCH (a:User {id: toInteger(row.from_id)})
+MATCH (b:User {id: toInteger(row.to_id)})
+CALL apoc.create.relationship(a, row.type, {
+  since: toInteger(row.since),
+  weight: toFloat(row.weight)
+}, b) YIELD rel
+RETURN rel
+```
+
+## Data Export
+
+### Export to CSV
+
+#### Export All Nodes
+
+```cypher
+// Export all nodes to CSV
+MATCH (n:User)
+RETURN n.id AS id, n.name AS name, n.email AS email
+CALL apoc.export.csv.query(
+  'MATCH (n:User) RETURN n.id AS id, n.name AS name, n.email AS email',
+  'users_export.csv',
+  {}
+)
+```
+
+#### Export with Custom Headers
+
+```cypher
+// Export with specific columns
+MATCH (u:User)
+WHERE u.active = true
+RETURN u.id AS user_id,
+       u.name AS full_name,
+       u.email AS contact_email,
+       u.createdAt AS registration_date
+```
+
+### Export Query Results
+
+#### Export Filtered Data
+
+```cypher
+// Export filtered results
+MATCH (u:User)-[:KNOWS]->(friend)
+WHERE u.age > 30
+RETURN u.name AS user, friend.name AS friend, friend.age AS friend_age
+```
+
+#### Export Aggregations
+
+```cypher
+// Export aggregated data
+MATCH (u:User)
+RETURN u.city,
+       count(u) AS user_count,
+       avg(u.age) AS average_age
+ORDER BY user_count DESC
+```
+
+### Export Relationships
+
+#### Export Relationship Data
+
+```cypher
+// Export relationships
+MATCH (a:User)-[r:KNOWS]->(b:User)
+RETURN a.id AS from_user,
+       b.id AS to_user,
+       type(r) AS relationship_type,
+       r.since AS since_year
+```
+
+#### Export Path Data
+
+```cypher
+// Export paths
+MATCH path = (a:User)-[:KNOWS*2..3]-(b:User)
+WHERE a.name = 'Alice'
+RETURN [n IN nodes(path) | n.name] AS connection_chain,
+       length(path) AS hops
+```
+
+## Import Strategies
+
+### Incremental Import
+
+```cypher
+// Import only new records
+LOAD CSV WITH HEADERS FROM 'file:///path/to/new_users.csv' AS row
+MERGE (u:User {id: toInteger(row.id)})
+ON CREATE SET
+  u.name = row.name,
+  u.email = row.email,
+  u.createdAt = timestamp()
+ON MATCH SET
+  u.lastUpdated = timestamp()
+```
+
+### Upsert Operations
+
+```cypher
+// Update if exists, create if not
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+MERGE (u:User {email: row.email})
+SET u.name = row.name,
+    u.age = toInteger(row.age)
+```
+
+### Conditional Import
+
+```cypher
+// Import with validation
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+WITH row
+WHERE row.age >= 18 AND row.email CONTAINS '@'
+CREATE (u:User {
+  id: toInteger(row.id),
+  name: row.name,
+  email: row.email,
+  age: toInteger(row.age)
+})
+```
+
+## Export Strategies
+
+### Partitioned Export
+
+```cypher
+// Export data in partitions
+// Partition 1: Users A-F
+MATCH (u:User)
+WHERE u.name >= 'A' AND u.name < 'G'
+RETURN u.id, u.name, u.email
+// Save to users_a_f.csv
+
+// Partition 2: Users G-M
+MATCH (u:User)
+WHERE u.name >= 'G' AND u.name < 'N'
+RETURN u.id, u.name, u.email
+// Save to users_g_m.csv
+```
+
+### Time-Based Export
+
+```cypher
+// Export data by time periods
+// Last 30 days
+MATCH (u:User)
+WHERE u.createdAt >= timestamp() - (30 * 24 * 60 * 60 * 1000)
+RETURN u.id, u.name, u.email
+// Save to users_last_30_days.csv
+```
+
+### Incremental Export
+
+```cypher
+// Export only changes since last export
+// Assuming last export timestamp
+MATCH (u:User)
+WHERE u.lastUpdated > $last_export_timestamp
+RETURN u.id, u.name, u.email, u.lastUpdated
+// Save to users_delta.csv
+```
+
+## Working with Large Datasets
+
+### Stream Processing
+
+```cypher
+// Process large files in chunks
+USING PERIODIC COMMIT 5000
+LOAD CSV WITH HEADERS FROM 'file:///path/to/large_file.csv' AS row
+CREATE (n:Node {
+  id: toInteger(row.id),
+  data: row.data
+})
+```
+
+### Memory Management
+
+```bash
+# For very large files, use external tools
+# Split CSV into smaller chunks
+split -l 100000 large_file.csv chunk_
+
+# Import each chunk separately
+for chunk in chunk_*; do
+  zyx-cli < import_$chunk.cypher
+done
+```
+
+### Parallel Import
+
+```bash
+# Import multiple files in parallel
+# Terminal 1
+zyx-cli < import_users_1.cypher &
+
+# Terminal 2
+zyx-cli < import_users_2.cypher &
+
+# Terminal 3
+zyx-cli < import_users_3.cypher &
+
+wait
+```
+
+## Data Transformation
+
+### Transform During Import
+
+```cypher
+// Transform data format
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+CREATE (u:User {
+  id: toInteger(row.id),
+  fullName: row.firstName + ' ' + row.lastName,
+  emailAddress: toLower(row.email),
+  birthYear: toInteger(substring(row.birthDate, 0, 4))
+})
+```
+
+### Enrichment During Import
+
+```cypher
+// Add computed fields
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+CREATE (u:User {
+  id: toInteger(row.id),
+  name: row.name,
+  email: row.email,
+  age: toInteger(row.age),
+  ageGroup: CASE
+    WHEN toInteger(row.age) < 18 THEN 'Minor'
+    WHEN toInteger(row.age) < 65 THEN 'Adult'
+    ELSE 'Senior'
+  END
+})
+```
+
+## Backup and Restore
+
+### Full Backup
+
+```cypher
+// Export all data
+CALL apoc.export.csv.all('full_backup.csv', {})
+```
+
+### Selective Backup
+
+```cypher
+// Backup specific data
+MATCH (u:User)
+WHERE u.active = true
+OPTIONAL MATCH (u)-[r]-(related)
+RETURN u, r, related
+CALL apoc.export.csv.query(
+  'MATCH (u:User) WHERE u.active = true RETURN u',
+  'active_users_backup.csv',
+  {}
+)
+```
+
+### Restore from Backup
+
+```cypher
+// Restore data
+LOAD CSV WITH HEADERS FROM 'file:///path/to/backup.csv' AS row
+CREATE (u:User {
+  id: toInteger(row.id),
+  name: row.name,
+  email: row.email
+})
+```
+
+## Integration Examples
+
+### Import from SQL Database
+
+```bash
+# Export from PostgreSQL
+psql -U user -d database -c "COPY users TO STDOUT WITH CSV HEADER" > users.csv
+
+# Import into ZYX
+zyx-cli -c "LOAD CSV WITH HEADERS FROM 'file:///users.csv' AS row CREATE (u:User {id: toInteger(row.id), name: row.name, email: row.email})"
+```
+
+### Import from MongoDB
+
+```bash
+# Export from MongoDB
+mongoexport --db mydb --collection users --out users.json
+
+# Transform to CSV if needed
+# Then import into ZYX
+```
+
+### Export to Analytics System
+
+```cypher
+// Prepare data for analytics
+MATCH (u:User)
+RETURN u.id AS user_id,
+       u.name AS user_name,
+       u.city AS location,
+       size((u)-[:PURCHASED]->()) AS total_purchases,
+       sum((u)-[:PURCHASED]->(p:Product) | p.price) AS total_spent
+// Export to analytics tool
+```
+
+## Performance Tips
+
+### Optimize Import Performance
+
+```cypher
+// Disable indexes during import
+CALL db.indexes.drop()
+
+// Import data
+USING PERIODIC COMMIT 10000
+LOAD CSV WITH HEADERS FROM 'file:///path/to/data.csv' AS row
+CREATE (n:Node {id: toInteger(row.id)})
+
+// Recreate indexes
+CREATE INDEX ON :Node(id)
+```
+
+### Optimize Export Performance
+
+```cypher
+// Use LIMIT for large exports
+MATCH (n:Node)
+RETURN n
+LIMIT 1000000
+
+// Export in batches
+// Then process multiple batches
+```
+
+### Use Periodic Commit
+
+```cypher
+// For very large imports
+USING PERIODIC COMMIT 10000
+LOAD CSV WITH HEADERS FROM 'file:///path/to/huge_file.csv' AS row
+CREATE (n:Node {data: row.data})
+```
+
+## Error Handling
+
+### Handle Import Errors
+
+```cypher
+// Skip invalid rows
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+WITH row
+WHERE row.email CONTAINS '@' AND row.age IS NOT NULL
+CREATE (u:User {
+  id: toInteger(row.id),
+  name: row.name,
+  email: row.email,
+  age: toInteger(row.age)
+})
+```
+
+### Log Failed Imports
+
+```bash
+# Log import errors
+zyx-cli < import.cypher 2> import_errors.log
+
+# Check log for issues
+grep "ERROR" import_errors.log
+```
+
+### Validation Before Import
+
+```cypher
+// Validate CSV structure first
+LOAD CSV WITH HEADERS FROM 'file:///path/to/users.csv' AS row
+RETURN count(*) AS total_rows,
+       count(row.id) AS rows_with_id,
+       count(row.name) AS rows_with_name
+```
+
+## Best Practices
+
+1. **Use periodic commit**: For large imports (>100K rows)
+2. **Validate first**: Check data quality before importing
+3. **Backup existing data**: Before bulk operations
+4. **Use transactions**: Group related operations
+5. **Monitor resources**: Watch memory and disk usage
+6. **Test with samples**: Import small sample first
+7. **Document mappings**: Keep track of field mappings
+8. **Handle errors**: Plan for invalid data
+
+## Next Steps
+
+- Learn about [Batch Operations](/en/zyx/user-guide/batch-operations) for efficient processing
+- Understand [Transaction Control](/en/zyx/user-guide/transactions) for data consistency
+- Explore [Advanced Queries](/en/zyx/user-guide/advanced-queries) for complex operations

@@ -1,0 +1,562 @@
+---
+title: Transaction Class
+description: The Transaction class in ZYX provides ACID transaction support for graph database operations. This reference covers the complete API.
+category: C++ API
+order: 2
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Transaction Class
+
+The `Transaction` class in ZYX provides ACID transaction support for graph database operations. This reference covers the complete API.
+
+## Overview
+
+```cpp
+#include <zyx/zyx.hpp>
+
+namespace zyx {
+
+class Transaction {
+public:
+    // Transaction management
+    void commit();
+    void rollback();
+    bool isActive() const;
+    bool isCommitted() const;
+    bool isRolledBack() const;
+
+    // Query execution
+    Result execute(const std::string& cypher);
+    Result execute(const std::string& cypher, const Parameters& params);
+
+    // Batch operations
+    std::vector<Result> executeBatch(const std::vector<std::string>& cypherQueries);
+    std::vector<Result> executeBatch(const std::vector<BatchQuery>& queries);
+
+    // State management
+    std::string getId() const;
+    Timestamp getStartTime() const;
+    Duration getDuration() const;
+
+    // Configuration
+    void setTimeout(Duration timeout);
+    Duration getTimeout() const;
+};
+
+}
+```
+
+## Transaction Lifecycle
+
+### Creating a Transaction
+
+Transactions are created through the Database class:
+
+```cpp
+#include <zyx/zyx.hpp>
+
+using namespace zyx;
+
+// Open database
+auto db = Database::open("/path/to/database");
+
+// Begin transaction
+auto tx = db->beginTransaction();
+
+// Use transaction
+auto result = tx->execute("CREATE (p:Person {name: 'Alice'})");
+
+// Commit transaction
+tx->commit();
+```
+
+### Transaction States
+
+A transaction can be in one of these states:
+
+```cpp
+auto tx = db->beginTransaction();
+
+// Check transaction state
+if (tx->isActive()) {
+    std::cout << "Transaction is active" << std::endl;
+}
+
+if (tx->isCommitted()) {
+    std::cout << "Transaction has been committed" << std::endl;
+}
+
+if (tx->isRolledBack()) {
+    std::cout << "Transaction has been rolled back" << std::endl;
+}
+```
+
+## Transaction Methods
+
+### commit()
+
+Commit all changes made in this transaction to the database.
+
+```cpp
+void commit();
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+try {
+    tx->execute("CREATE (p:Person {name: 'Alice'})");
+    tx->execute("CREATE (p:Person {name: 'Bob'})");
+    tx->execute("MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'}) "
+                "CREATE (a)-[:KNOWS]->(b)");
+
+    tx->commit();
+    std::cout << "Transaction committed successfully" << std::endl;
+} catch (const Exception& e) {
+    tx->rollback();
+    std::cerr << "Transaction failed: " << e.what() << std::endl;
+}
+```
+
+**Throws:**
+- `TransactionException` if transaction is not active
+- `ConstraintViolationException` if constraints are violated
+- `StorageException` if storage operation fails
+
+### rollback()
+
+Rollback all changes made in this transaction.
+
+```cpp
+void rollback();
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+try {
+    tx->execute("CREATE (p:Person {name: 'Charlie'})");
+
+    // Some validation
+    auto result = tx->execute("MATCH (p:Person {name: 'Charlie'}) RETURN p");
+    if (result.isEmpty()) {
+        // Validation failed, rollback
+        tx->rollback();
+        std::cout << "Transaction rolled back" << std::endl;
+        return;
+    }
+
+    tx->commit();
+} catch (const Exception& e) {
+    tx->rollback();
+    throw;
+}
+```
+
+### isActive()
+
+Check if the transaction is currently active.
+
+```cpp
+bool isActive() const;
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+if (tx->isActive()) {
+    std::cout << "Transaction is active" << std::endl;
+}
+
+tx->commit();
+
+if (!tx->isActive()) {
+    std::cout << "Transaction is no longer active" << std::endl;
+}
+```
+
+### isCommitted()
+
+Check if the transaction has been committed.
+
+```cpp
+bool isCommitted() const;
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+tx->execute("CREATE (p:Person {name: 'Diana'})");
+
+if (!tx->isCommitted()) {
+    tx->commit();
+}
+```
+
+### isRolledBack()
+
+Check if the transaction has been rolled back.
+
+```cpp
+bool isRolledBack() const;
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+tx->execute("CREATE (p:Person {name: 'Eve'})");
+
+if (someErrorCondition) {
+    tx->rollback();
+}
+
+if (tx->isRolledBack()) {
+    std::cout << "Transaction was rolled back" << std::endl;
+}
+```
+
+## Query Execution
+
+### execute(const std::string&amp;)
+
+Execute a Cypher query without parameters.
+
+```cpp
+Result execute(const std::string& cypher);
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+// Simple query
+auto result = tx->execute("MATCH (p:Person) RETURN p.name ORDER BY p.name");
+
+// Process results
+for (const auto& row : result) {
+    std::cout << row["p.name"].asString() << std::endl;
+}
+
+tx->commit();
+```
+
+### execute(const std::string&amp;, const Parameters&amp;)
+
+Execute a parameterized Cypher query.
+
+```cpp
+Result execute(const std::string& cypher, const Parameters& params);
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+// Parameterized query
+std::string query = "MATCH (p:Person {name: $name}) RETURN p";
+Parameters params;
+params.add("name", "Alice");
+
+auto result = tx->execute(query, params);
+
+if (!result.isEmpty()) {
+    auto person = result.peek()["p"].asNode();
+    std::cout << "Found person: " << person.getProperty("name").asString()
+              << std::endl;
+}
+
+tx->commit();
+```
+
+### executeBatch(const std::vector&lt;std::string&gt;&amp;)
+
+Execute multiple Cypher queries in a batch.
+
+```cpp
+std::vector<Result> executeBatch(const std::vector<std::string>& cypherQueries);
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+std::vector<std::string> queries = {
+    "CREATE (p:Person {name: 'Alice', age: 30})",
+    "CREATE (p:Person {name: 'Bob', age: 25})",
+    "CREATE (p:Person {name: 'Charlie', age: 35})"
+};
+
+auto results = tx->executeBatch(queries);
+
+for (size_t i = 0; i < results.size(); ++i) {
+    std::cout << "Query " << i << " affected "
+              << results[i].getStatistics().getNodesCreated()
+              << " nodes" << std::endl;
+}
+
+tx->commit();
+```
+
+### executeBatch(const std::vector&lt;BatchQuery&gt;&amp;)
+
+Execute multiple parameterized queries in a batch.
+
+```cpp
+std::vector<Result> executeBatch(const std::vector<BatchQuery>& queries);
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+std::vector<BatchQuery> batchQueries = {
+    {"CREATE (p:Person {name: $name, age: $age})", {{"name", "Alice"}, {"age", 30}}},
+    {"CREATE (p:Person {name: $name, age: $age})", {{"name", "Bob"}, {"age", 25}}},
+    {"CREATE (p:Person {name: $name, age: $age})", {{"name", "Charlie"}, {"age", 35}}}
+};
+
+auto results = tx->executeBatch(batchQueries);
+
+// All queries execute in the same transaction
+tx->commit();
+```
+
+## State Management
+
+### getId()
+
+Get the unique identifier for this transaction.
+
+```cpp
+std::string getId() const;
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+std::cout << "Transaction ID: " << tx->getId() << std::endl;
+```
+
+### getStartTime()
+
+Get the timestamp when the transaction was created.
+
+```cpp
+Timestamp getStartTime() const;
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+auto startTime = tx->getStartTime();
+std::cout << "Transaction started at: " << startTime.toString() << std::endl;
+```
+
+### getDuration()
+
+Get the duration since the transaction was created.
+
+```cpp
+Duration getDuration() const;
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+// ... perform operations ...
+
+auto duration = tx->getDuration();
+std::cout << "Transaction duration: " << duration.toMilliseconds()
+          << " ms" << std::endl;
+```
+
+## Configuration
+
+### setTimeout()
+
+Set the timeout for this transaction.
+
+```cpp
+void setTimeout(Duration timeout);
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+
+// Set 30 second timeout
+tx->setTimeout(Duration::seconds(30));
+
+// Execute operations
+tx->execute("MATCH (p:Person) RETURN count(p)");
+
+tx->commit();
+```
+
+### getTimeout()
+
+Get the timeout for this transaction.
+
+```cpp
+Duration getTimeout() const;
+```
+
+**Example:**
+
+```cpp
+auto tx = db->beginTransaction();
+auto timeout = tx->getTimeout();
+std::cout << "Transaction timeout: " << timeout.toSeconds() << " seconds"
+          << std::endl;
+```
+
+## Usage Patterns
+
+### RAII Transaction Management
+
+```cpp
+class TransactionGuard {
+private:
+    Transaction* tx_;
+
+public:
+    explicit TransactionGuard(Transaction* tx) : tx_(tx) {}
+
+    ~TransactionGuard() {
+        if (tx_ && tx_->isActive()) {
+            tx_->rollback();
+        }
+    }
+
+    void commit() {
+        if (tx_) {
+            tx_->commit();
+            tx_ = nullptr;
+        }
+    }
+};
+
+// Usage
+auto tx = db->beginTransaction();
+TransactionGuard guard(tx.get());
+
+try {
+    tx->execute("CREATE (p:Person {name: 'Frank'})");
+    tx->execute("CREATE (p:Person {name: 'Grace'})");
+
+    // Commit if successful
+    guard.commit();
+} catch (const Exception& e) {
+    // Automatically rolled back by destructor
+    std::cerr << "Error: " << e.what() << std::endl;
+}
+```
+
+### Transaction Retry
+
+```cpp
+auto maxRetries = 3;
+auto retries = 0;
+
+while (retries < maxRetries) {
+    auto tx = db->beginTransaction();
+
+    try {
+        tx->execute("MATCH (p:Person {name: 'Henry'}) "
+                    "SET p.lastAccess = timestamp()");
+
+        tx->commit();
+        break; // Success
+    } catch (const TransactionException& e) {
+        retries++;
+        if (retries >= maxRetries) {
+            throw;
+        }
+        // Backoff before retry
+        std::this_thread::sleep_for(std::chrono::milliseconds(100 * retries));
+    }
+}
+```
+
+### Nested Operations
+
+```cpp
+auto tx = db->beginTransaction();
+
+// Create multiple related entities
+tx->execute("CREATE (c:Company {name: 'TechCorp'})");
+
+auto result = tx->execute("MATCH (c:Company {name: 'TechCorp'}) RETURN id(c) AS id");
+auto companyId = result.peek()["id"].asInteger();
+
+// Create employees linked to company
+tx->execute("CREATE (p:Person {name: 'Iris', companyId: $companyId})",
+            {{"companyId", companyId}});
+
+// Validate before committing
+auto validation = tx->execute("MATCH (c:Company {name: 'TechCorp'}) "
+                              "RETURN size((c)<-[:WORKS_FOR]-()) AS employeeCount");
+
+if (validation.peek()["employeeCount"].asInteger() > 0) {
+    tx->commit();
+} else {
+    tx->rollback();
+}
+```
+
+## Best Practices
+
+1. **Always commit or rollback**: Ensure every transaction is properly closed
+2. **Keep transactions short**: Minimize time between begin and commit
+3. **Use RAII**: Use guard objects to ensure cleanup
+4. **Handle exceptions**: Catch and handle exceptions appropriately
+5. **Validate before commit**: Check data integrity before committing
+6. **Use parameterized queries**: Prevent injection and improve performance
+7. **Monitor duration**: Track transaction performance
+8. **Set timeouts**: Prevent long-running transactions
+
+## Error Handling
+
+```cpp
+auto tx = db->beginTransaction();
+
+try {
+    tx->execute("CREATE (p:Person {name: 'Jack'})");
+    tx->commit();
+} catch (const ConstraintViolationException& e) {
+    tx->rollback();
+    std::cerr << "Constraint violated: " << e.what() << std::endl;
+} catch (const StorageException& e) {
+    tx->rollback();
+    std::cerr << "Storage error: " << e.what() << std::endl;
+} catch (const TransactionException& e) {
+    tx->rollback();
+    std::cerr << "Transaction error: " << e.what() << std::endl;
+}
+```
+
+## See Also
+
+- [Database Class](/en/zyx/api/cpp-api) - Database management
+- [Value Types](/en/zyx/api/types) - Data type reference
+- [Error Handling](/en/zyx/api/errors) - Exception handling guide

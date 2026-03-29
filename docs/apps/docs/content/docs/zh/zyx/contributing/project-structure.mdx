@@ -1,0 +1,109 @@
+---
+title: 项目结构
+description: 理解 ZYX 代码库组织对于有效贡献至关重要。本文档解释目录结构和文件组织。
+category: Contributing
+order: 3
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# 项目结构
+
+理解 ZYX 代码库组织对于有效贡献至关重要。本文档解释目录结构和文件组织。
+
+## 顶层目录结构
+
+```
+zyx/
+├── include/              # 公共头文件
+├── src/                  # 实现源文件
+├── tests/                # 测试文件
+├── apps/                 # 应用程序（CLI、基准测试）
+├── scripts/              # 构建和实用脚本
+├── docs/                 # 文档
+└── buildDir/             # 构建输出（生成）
+```
+
+## Include 目录
+
+### 公共头文件 (`include/zyx/`)
+
+包含面向公共的 API 头文件。
+
+### 内部头文件 (`include/graph/`)
+
+包含内部实现头文件，按模块组织。
+
+## Source 目录
+
+包含所有实现源文件，镜像 include 目录的结构。
+
+## Test 目录
+
+### 集成测试 (`tests/integration/`)
+
+端到端测试，验证完整系统工作流。
+
+### 单元测试 (`tests/src/`)
+
+按模块组织的单元测试。
+
+## 组件职责
+
+### 核心组件
+
+**Database**：主入口点，生命周期管理，组件协调
+
+**Transaction**：ACID 事务管理，操作批处理，回滚处理
+
+**Entity**：节点和边表示，属性管理，状态跟踪
+
+### 存储组件
+
+**FileStorage**：文件 I/O 操作，段管理，空间分配
+
+**WAL**：写前日志，崩溃恢复，检查点管理
+
+**Cache**：LRU 缓存，脏跟踪，预取
+
+### 查询组件
+
+**QueryEngine**：查询编排，结果聚合，错误处理
+
+**QueryPlanner**：逻辑计划生成，优化规则，计划选择
+
+**QueryExecutor**：物理计划执行，操作符调度，结果流式传输
+
+## 文件命名约定
+
+### 头文件
+
+- **公共头文件**：`PascalCase.hpp`（例如 `Database.hpp`）
+- **内部头文件**：`PascalCase.hpp`（例如 `QueryPlanner.hpp`）
+
+### 源文件
+
+- **实现**：与头文件名匹配的 `PascalCase.cpp`
+- **测试**：`test_PascalCase.cpp`（例如 `test_Database.cpp`）
+
+## 添加新功能
+
+1. 添加公共 API
+2. 实现功能
+3. 添加测试
+4. 更新构建文件
+
+## 代码组织原则
+
+1. **关注点分离**：每个组件具有单一职责
+2. **分层架构**：清晰的依赖方向
+3. **接口隔离**：小而专注的接口
+4. **依赖注入**：组件通过构造函数接收依赖
+5. **可测试性**：所有组件都可以单元测试
+
+## 另请参阅
+
+- [开发设置](/zh/zyx/contributing/development-setup) - 入门指南
+- [代码规范](/zh/zyx/contributing/code-style) - 编码标准
+- [测试指南](/zh/zyx/contributing/testing) - 测试实践

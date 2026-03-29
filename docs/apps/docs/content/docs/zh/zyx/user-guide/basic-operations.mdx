@@ -1,0 +1,445 @@
+---
+title: 基本操作
+description: 本指南介绍使用 CLI 在 ZYX 中进行基本 CRUD（创建、读取、更新、删除）操作。
+category: 核心概念
+order: 2
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# 基本操作
+
+本指南介绍使用 CLI 在 ZYX 中进行基本 CRUD（创建、读取、更新、删除）操作。
+
+## 数据库操作
+
+### 创建/打开数据库
+
+```bash
+# 创建新数据库
+zyx-cli ./new_database
+
+# 打开现有数据库
+zyx-cli ./existing_database
+```
+
+如果数据库不存在，将自动创建数据库文件。
+
+### 数据库文件结构
+
+ZYX 为数据库创建单个文件：
+
+```
+./new_database  # 主数据库文件（包含所有数据）
+```
+
+::: tip 单文件架构
+ZYX 将所有数据（节点、边、属性、索引）存储在单个文件中，以简化部署和提高可移植性。
+:::
+
+## 创建操作
+
+### 创建单个节点
+
+```cypher
+CREATE (p:Person {name: 'Alice', age: 30, city: 'New York'})
+```
+
+### 创建多个节点
+
+```cypher
+CREATE
+  (p1:Person {name: 'Bob', age: 25}),
+  (p2:Person {name: 'Charlie', age: 35})
+```
+
+### 创建带有不同标签的节点
+
+```cypher
+CREATE
+  (u:User {name: 'David', email: 'david@example.com'}),
+  (c:Company {name: 'Tech Corp', founded: 2020})
+```
+
+### 创建关系
+
+```cypher
+# 查找现有节点并创建关系
+MATCH (alice:Person {name: 'Alice'})
+MATCH (bob:Person {name: 'Bob'})
+CREATE (alice)-[:KNOWS {since: 2020}]->(bob)
+```
+
+### 同时创建节点和关系
+
+```cypher
+CREATE (alice:Person {name: 'Eve'})
+CREATE (bob:Person {name: 'Frank'})
+CREATE (alice)-[:FRIENDS {since: 2021}]->(bob)
+```
+
+### 创建多个关系
+
+```cypher
+MATCH (alice:Person {name: 'Alice'})
+MATCH (bob:Person {name: 'Bob'})
+MATCH (charlie:Person {name: 'Charlie'})
+
+CREATE (alice)-[:KNOWS]->(bob)
+CREATE (alice)-[:KNOWS]->(charlie)
+CREATE (bob)-[:KNOWS]->(charlie)
+```
+
+## 读取操作
+
+### 查找带有标签的所有节点
+
+```cypher
+MATCH (p:Person) RETURN p
+```
+
+### 查找特定节点
+
+```cypher
+MATCH (p:Person {name: 'Alice'}) RETURN p
+```
+
+### 使用 WHERE 子句过滤
+
+```cypher
+MATCH (p:Person)
+WHERE p.age > 30
+RETURN p.name, p.age
+```
+
+### 多个条件
+
+```cypher
+MATCH (p:Person)
+WHERE p.age > 25 AND p.city = 'New York'
+RETURN p.name, p.age, p.city
+```
+
+### 模式匹配
+
+```cypher
+# 查找所有 KNOWS 关系
+MATCH (a:Person)-[r:KNOWS]->(b:Person)
+RETURN a.name AS person1, b.name AS person2, r.since
+```
+
+### 按属性查找关系
+
+```cypher
+MATCH (a:Person)-[r:KNOWS {since: 2020}]->(b:Person)
+RETURN a.name, b.name
+```
+
+### 可变长度路径
+
+```cypher
+# 查找朋友的朋友（2 跳）
+MATCH (me:Person {name: 'Alice'})-[:KNOWS]->(friend)-[:KNOWS]->(fof)
+RETURN me.name, friend.name, fof.name
+```
+
+### 计数结果
+
+```cypher
+MATCH (p:Person) RETURN count(p)
+```
+
+### 排序结果
+
+```cypher
+MATCH (p:Person)
+RETURN p.name, p.age
+ORDER BY p.age DESC
+```
+
+### 限制结果
+
+```cypher
+MATCH (p:Person)
+RETURN p.name, p.age
+ORDER BY p.age DESC
+LIMIT 5
+```
+
+### 聚合函数
+
+```cypher
+# 按标签计数节点
+MATCH (p:Person)
+RETURN count(p) AS total
+
+# 平均年龄
+MATCH (p:Person)
+RETURN avg(p.age) AS average_age
+
+# 总和、最小值、最大值
+MATCH (p:Person)
+RETURN sum(p.age) AS total_age, min(p.age) AS youngest, max(p.age) AS oldest
+```
+
+## 更新操作
+
+### 更新单个属性
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+SET p.age = 31
+```
+
+### 更新多个属性
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+SET p.age = 31, p.city = 'San Francisco'
+```
+
+### 添加新属性
+
+```cypher
+MATCH (p:Person {name: 'Bob'})
+SET p.email = 'bob@example.com'
+```
+
+### 更新关系属性
+
+```cypher
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person {name: 'Bob'})
+SET r.since = 2021, r.strength = 'strong'
+```
+
+### 删除属性
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+REMOVE p.city
+```
+
+### 条件更新
+
+```cypher
+MATCH (p:Person)
+WHERE p.age < 30
+SET p.category = 'young'
+```
+
+## 删除操作
+
+### 删除单个节点
+
+```cypher
+MATCH (p:Person {name: 'Charlie'})
+DELETE p
+```
+
+::: warning 删除约束
+不能删除具有关系的节点，必须先删除关系。
+:::
+
+### 删除多个节点
+
+```cypher
+MATCH (p:Person)
+WHERE p.age < 25
+DELETE p
+```
+
+### 删除关系
+
+```cypher
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person {name: 'Bob'})
+DELETE r
+```
+
+### 删除节点和关系
+
+```cypher
+# 先删除关系
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person)
+DELETE r
+
+# 然后删除节点
+MATCH (p:Person {name: 'Alice'})
+DELETE p
+```
+
+### 分离删除（删除节点及所有关系）
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+DETACH DELETE p
+```
+
+这将一次性删除节点及其所有连接的关系。
+
+### 删除所有节点
+
+::: danger 破坏性操作
+这将删除数据库中的所有数据！
+:::
+
+```cypher
+MATCH (n) DETACH DELETE n
+```
+
+## 事务管理
+
+### 显式事务
+
+```cypher
+# 开始事务
+:begin
+
+# 执行操作
+CREATE (p:Person {name: 'Grace', age: 28})
+CREATE (p2:Person {name: 'Henry', age: 32})
+
+# 提交事务
+:commit
+
+# 或如果出现问题则回滚
+:rollback
+```
+
+### 事务隔离
+
+事务中的操作在提交之前与其他事务隔离：
+
+```cypher
+:begin
+
+MATCH (p:Person) RETURN count(p)
+# 结果：5
+
+CREATE (p:Person {name: 'Iris'})
+MATCH (p:Person) RETURN count(p)
+# 结果：6（仅在此事务中可见）
+
+:commit
+
+# 现在对所有会话可见
+```
+
+## 批量操作
+
+### 单条语句中的多个查询
+
+用分号分隔查询：
+
+```cypher
+CREATE (p1:Person {name: 'Jack', age: 30});
+CREATE (p2:Person {name: 'Kate', age: 27});
+CREATE (p3:Person {name: 'Leo', age: 33});
+```
+
+### 使用 WITH 链接
+
+```cypher
+MATCH (p:Person)
+WHERE p.age > 30
+WITH p
+CREATE (p)-[:OLDER_THAN]->(:AgeGroup {name: 'Senior'})
+```
+
+## 导入/导出
+
+### 从文件导入
+
+创建文件 `import.cql`：
+
+```cypher
+CREATE (u1:User {name: 'Alice', age: 30});
+CREATE (u2:User {name: 'Bob', age: 25});
+CREATE (u3:User {name: 'Charlie', age: 35});
+MATCH (u1:User {name: 'Alice'}), (u2:User {name: 'Bob'})
+CREATE (u1)-[:KNOWS]->(u2);
+```
+
+导入：
+
+```bash
+zyx-cli ./mydb < import.cql
+```
+
+### 导出查询结果
+
+```bash
+zyx-cli ./mydb > output.txt << 'EOF'
+MATCH (p:Person) RETURN p.name, p.age
+EOF
+```
+
+## 性能提示
+
+### 为频繁查询使用索引
+
+如果经常按属性查询，请考虑创建索引（未来功能）。
+
+### 尽早过滤
+
+在 WHERE 子句中应用过滤器，而不是在获取所有数据之后：
+
+```cypher
+# 好的做法
+MATCH (p:Person)
+WHERE p.age > 30
+RETURN p
+
+# 避免
+MATCH (p:Person)
+RETURN p
+WHERE p.age > 30  # 这是无效的，但重点是尽早过滤
+```
+
+### 限制结果
+
+测试查询时，使用 LIMIT 避免返回大型结果集：
+
+```cypher
+MATCH (p:Person) RETURN p LIMIT 10
+```
+
+## 常见模式
+
+### Upsert（如果不存在则创建）
+
+```cypher
+# 尝试查找现有节点
+MATCH (p:Person {name: 'Alice'})
+RETURN p
+
+# 如果没有结果，创建它
+CREATE (p:Person {name: 'Alice', age: 30})
+```
+
+### Merge（创建或更新）
+
+```cypher
+MERGE (p:Person {name: 'Alice'})
+SET p.age = 30
+```
+
+### 检查存在性
+
+```cypher
+MATCH (p:Person {name: 'Alice'})
+RETURN count(p) > 0 AS exists
+```
+
+### 去除重复
+
+```cypher
+MATCH (p:Person)
+RETURN DISTINCT p.city
+```
+
+## 下一步
+
+- [API 参考](/zh/zyx/api/cpp-api) - 编程访问
+- [查询引擎](/zh/zyx/architecture/query-engine) - 如何执行查询
+- [事务](/zh/zyx/architecture/transactions) - 事务内部机制

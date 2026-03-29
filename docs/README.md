@@ -1,54 +1,43 @@
-# Metrix Documentation
+# NexDoc Site
 
-This directory contains the VitePress documentation for the Metrix graph database project.
+Documentation site scaffolded with **NexDoc**.
 
-## Local Development
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm 9+
-
-### Install Dependencies
+## Development
 
 ```bash
-pnpm install
+bun install
+bun run dev
 ```
 
-### Development Server
+Open:
+
+- `http://localhost:3000/en`
+- `http://localhost:3000/zh`
+
+## Build
 
 ```bash
-pnpm run dev
+bun run build
+bun run start
 ```
 
-The site will be available at `http://localhost:5173`
-
-### Build
+Clear local caches:
 
 ```bash
-pnpm run build
+bun run clean
 ```
 
-The built site will be in `.vitepress/dist/`
+## Generated Caches
 
-### Preview Build
+Local build caches are generated automatically and should stay untracked:
 
-```bash
-pnpm run preview
-```
+- `apps/docs/.content-collections/`
+- `apps/docs/.next/`
+- `apps/docs/.swc/`
 
-## Languages
+## Content
 
-- **English**: `/en/` (primary)
-- **Chinese**: `/zh/` (secondary)
+Write docs in:
 
-## Deployment
-
-Documentation is automatically deployed to GitHub Pages when changes are pushed to the `main` branch.
-
-## Adding Content
-
-1. Create or edit markdown files in `en/` or `zh/`
-2. Update sidebar configuration in `.vitepress/config/en.ts` or `.vitepress/config/zh.ts`
-3. Test locally with `pnpm run dev`
-4. Commit and push to trigger deployment
+- `apps/docs/content/docs/en/*.mdx`
+- `apps/docs/content/docs/zh/*.mdx`

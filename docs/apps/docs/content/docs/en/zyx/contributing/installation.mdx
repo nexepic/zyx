@@ -1,0 +1,172 @@
+---
+title: Installation
+description: Before building ZYX, ensure you have the following dependencies installed:
+category: Getting Started
+order: 2
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Installation
+
+## Prerequisites
+
+Before building ZYX, ensure you have the following dependencies installed:
+
+### Required Tools
+
+- **C++ Compiler**: C++20 compatible compiler
+  - GCC 11+ or Clang 13+ (Linux)
+  - Xcode 14+ (macOS)
+  - MSVC 2022+ (Windows)
+- **Meson**: Build system (version 0.63+)
+- **Conan**: Package manager (version 1.60+)
+- **Ninja**: Build backend
+
+### Install on macOS
+
+```bash
+brew install meson conan ninja
+```
+
+### Install on Linux (Ubuntu/Debian)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip g++ cmake
+pip3 install meson conan ninja
+```
+
+### Install on Windows
+
+```powershell
+# Using Chocolatey
+choco install meson conan ninja
+
+# Or using pip
+pip install meson conan ninja
+```
+
+## Build from Source
+
+### Quick Build
+
+The easiest way to build and test ZYX:
+
+```bash
+# Clone the repository
+git clone https://github.com/yuhong/zyx.git
+cd zyx
+
+# Install dependencies, build, and run tests
+./scripts/run_tests.sh
+```
+
+This script will:
+1. Install all Conan dependencies
+2. Configure the build with Meson
+3. Compile the project
+4. Run all tests with coverage
+
+### Quick Build (Skip Dependency Installation)
+
+If you've already built before and dependencies are installed:
+
+```bash
+./scripts/run_tests.sh --quick
+```
+
+### Manual Build Steps
+
+For more control over the build process:
+
+```bash
+# Install Conan dependencies
+conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+
+# Configure Meson build
+meson setup buildDir --native-file buildDir/conan_meson_native.ini
+
+# Compile
+meson compile -C buildDir
+```
+
+## Build Release Version
+
+For production builds:
+
+```bash
+./scripts/build_release.sh
+```
+
+This creates an optimized release build in `buildDir/release/`.
+
+## Verify Installation
+
+After building, verify the CLI tool is available:
+
+```bash
+./buildDir/apps/cli/zyx-cli --help
+```
+
+You should see usage information for the ZYX CLI.
+
+## Installation Location
+
+The build outputs are located in:
+
+- **CLI Tool**: `buildDir/apps/cli/zyx-cli`
+- **Library**: `buildDir/zyx_core.a` (static library for internal use)
+- **Tests**: `buildDir/tests/src/*/test_*`
+
+## Optional: Install System-Wide
+
+To install ZYX system-wide (requires sudo):
+
+```bash
+meson install -C buildDir
+```
+
+This will install:
+- Shared library: `/usr/local/lib/libzyx.so`
+- Headers: `/usr/local/include/zyx/`
+- pkg-config file for easy integration
+
+## Troubleshooting
+
+### Conan Installation Fails
+
+If Conan fails to install dependencies:
+
+```bash
+# Clear Conan cache
+conan remove ".*" -f
+
+# Retry installation
+conan install . --output-folder=buildDir --build=missing
+```
+
+### Compiler Not Found
+
+Ensure your C++ compiler supports C++20:
+
+```bash
+# Check GCC version
+g++ --version
+
+# Check Clang version
+clang++ --version
+```
+
+### Meson Version Issues
+
+```bash
+pip3 install --upgrade meson
+```
+
+## Next Steps
+
+- [Quick Start Guide](/en/zyx/user-guide/quick-start) - Learn how to use the CLI
+- [Development Setup](/en/zyx/contributing/development-setup) - Set up development environment
+- [API Reference](/en/zyx/api/cpp-api) - Embed ZYX in your application

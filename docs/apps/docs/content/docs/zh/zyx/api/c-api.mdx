@@ -1,0 +1,27 @@
+---
+title: C API 参考
+description: c
+category: C API
+order: 5
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# C API 参考
+
+## `zyx_database_open()`
+
+```c
+METRIX_EXPORT zyx_database_t* zyx_database_open(const char* path);
+```
+
+打开或创建数据库。
+
+## `zyx_database_close()`
+
+```c
+METRIX_EXPORT void zyx_database_close(zyx_database_t* db);
+```
+
+关闭并释放数据库实例。

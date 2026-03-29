@@ -1,0 +1,309 @@
+---
+title: Quick Start
+description: This guide will help you get started with ZYX using the command-line interface (CLI).
+category: Getting Started
+order: 1
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Quick Start
+
+This guide will help you get started with ZYX using the command-line interface (CLI).
+
+::: tip Prerequisites
+Before you begin, make sure you have:
+- ✅ Installed ZYX (downloaded pre-built version or used package manager)
+- ✅ `zyx-cli` executable available
+- ✅ Basic understanding of Cypher query language
+
+**Installation methods:**
+- Download pre-built executable from the official website
+- Use system package manager (Homebrew, APT, etc.)
+- Or follow the [Installation Guide](/en/zyx/contributing/installation)
+:::
+
+## Starting the CLI
+
+The ZYX CLI provides an interactive REPL (Read-Eval-Print Loop) for executing Cypher queries.
+
+### Basic Usage
+
+```bash
+# If using pre-built version
+zyx-cli ./mydb
+
+# Or specify full path
+./zyx-cli ./mydb
+```
+
+::: info Database Path
+- Creates a new database at `./mydb` if it doesn't exist
+- Opens the database if it already exists
+- Accepts both relative and absolute paths
+:::
+
+### CLI Options
+
+```bash
+zyx-cli [database_path] [options]
+
+Options:
+  -h, --help     Show usage information
+  -v, --version  Show version information
+```
+
+::: tip Pro Tip
+Use the `--help` option to see all available command-line options.
+:::
+
+## Your First Query
+
+Once in the REPL, you'll see the `cypher>` prompt. Let's create some data!
+
+### Create a Node
+
+```cypher
+CREATE (u:User {name: 'Alice', age: 30})
+```
+
+This creates a node with:
+- **Label**: `User`
+- **Properties**: `name` (string) and `age` (integer)
+
+::: details Nodes and Labels Explained
+- **Nodes**: Basic data units in a graph database, representing entities (like users, products, etc.)
+- **Labels**: Used to categorize and group nodes (like User, Product, etc.)
+- **Properties**: Key-value pairs storing specific information about a node
+:::
+
+### Query the Node
+
+```cypher
+MATCH (u:User {name: 'Alice'}) RETURN u
+```
+
+This retrieves the node we just created.
+
+### Create Multiple Nodes
+
+```cypher
+CREATE
+  (u1:User {name: 'Bob', age: 25}),
+  (u2:User {name: 'Charlie', age: 35})
+```
+
+### Create Relationships
+
+```cypher
+MATCH (alice:User {name: 'Alice'})
+MATCH (bob:User {name: 'Bob'})
+CREATE (alice)-[:KNOWS {since: 2020}]->(bob)
+```
+
+This creates a `KNOWS` relationship from Alice to Bob with a `since` property.
+
+### Query Relationships
+
+```cypher
+MATCH (a:User {name: 'Alice'})-[:KNOWS]->(b:User)
+RETURN a.name AS alice, b.name AS friend, b.age AS friend_age
+```
+
+Result:
+```
++-------+--------+------------+
+| alice | friend | friend_age |
++-------+--------+------------+
+| Alice | Bob    | 25         |
++-------+--------+------------+
+```
+
+## Working with the REPL
+
+### Multi-line Queries
+
+For complex queries, you can spread them across multiple lines:
+
+```cypher
+MATCH (u:User)
+WHERE u.age > 25
+RETURN u.name, u.age
+ORDER BY u.age DESC
+```
+
+Press `Enter` twice to execute the query.
+
+### Running Multiple Queries
+
+Separate queries with a semicolon:
+
+```cypher
+CREATE (p:Person {name: 'David'});
+MATCH (p:Person) RETURN p;
+```
+
+### Clear Screen
+
+```cypher
+:clear
+```
+
+### Exit the CLI
+
+```cypher
+:exit
+```
+
+or press `Ctrl+D`
+
+## Common Patterns
+
+### Find All Nodes with a Label
+
+```cypher
+MATCH (u:User) RETURN u
+```
+
+### Filter with Conditions
+
+```cypher
+MATCH (u:User)
+WHERE u.age > 30
+RETURN u.name, u.age
+```
+
+### Update Properties
+
+```cypher
+MATCH (u:User {name: 'Alice'})
+SET u.age = 31, u.city = 'New York'
+```
+
+### Delete Relationships
+
+```cypher
+MATCH (a:User {name: 'Alice'})-[r:KNOWS]->(b:User)
+DELETE r
+```
+
+### Delete Nodes
+
+```cypher
+MATCH (u:User {name: 'Bob'})
+DELETE u
+```
+
+::: danger Deletion Warning
+**Important**: You must delete all relationships connected to a node before deleting the node itself, or the operation will fail.
+:::
+
+::: tip Batch Deletion
+To delete a node and all its relationships, use `DETACH DELETE`:
+
+```cypher
+MATCH (u:User {name: 'Bob'})
+DETACH DELETE u
+```
+:::
+
+## Transaction Management
+
+The CLI supports explicit transaction control to ensure data consistency:
+
+::: info What is a Transaction?
+A transaction is a group of database operations that are executed as a single logical unit. Transactions have ACID properties:
+- **Atomicity**: All operations succeed or all fail
+- **Consistency**: Database remains in a valid state
+- **Isolation**: Concurrent transactions don't interfere
+- **Durability**: Committed changes are permanent
+:::
+
+```cypher
+# Begin a transaction
+:begin
+
+# Execute operations
+CREATE (p:Person {name: 'Eve'})
+
+# Commit the transaction
+:commit
+
+# Or rollback
+:rollback
+```
+
+::: tip Transaction Best Practices
+- Group related operations in a single transaction
+- Keep transactions short to avoid long-running locks
+- Only use transactions when necessary
+:::
+
+## Import Data from File
+
+You can import Cypher queries from a file, which is useful for initializing databases or loading test data.
+
+```bash
+# Create import.cql
+cat > import.cql << 'EOF'
+CREATE (u1:User {name: 'Frank', age: 28});
+CREATE (u2:User {name: 'Grace', age: 32});
+MATCH (u1:User {name: 'Frank'}), (u2:User {name: 'Grace'})
+CREATE (u1)-[:KNOWS]->(u2);
+EOF
+
+# Import the file
+zyx-cli ./mydb < import.cql
+```
+
+::: warning Large Dataset Imports
+For large datasets, we recommend:
+1. Wrap import operations in transactions
+2. Import data in batches (e.g., commit every 1000 records)
+3. Disable auto-indexing during import for faster performance
+:::
+
+## Example: Social Network
+
+Let's create a simple social network:
+
+```cypher
+# Create users
+CREATE
+  (alice:User {name: 'Alice', age: 30}),
+  (bob:User {name: 'Bob', age: 25}),
+  (charlie:User {name: 'Charlie', age: 35}),
+  (diana:User {name: 'Diana', age: 28})
+
+# Create relationships
+MATCH (alice:User {name: 'Alice'})
+MATCH (bob:User {name: 'Bob'})
+MATCH (charlie:User {name: 'Charlie'})
+MATCH (diana:User {name: 'Diana'})
+
+CREATE (alice)-[:KNOWS {since: 2020}]->(bob)
+CREATE (alice)-[:KNOWS {since: 2021}]->(charlie)
+CREATE (bob)-[:KNOWS {since: 2019}]->(diana)
+CREATE (charlie)-[:KNOWS {since: 2022}]->(diana)
+
+# Find friends of friends
+MATCH (me:User {name: 'Alice'})-[:KNOWS]->(friend)-[:KNOWS]->(fof)
+WHERE NOT (me)-[:KNOWS]->(fof) AND fof <> me
+RETURN me.name, friend.name, fof.name
+```
+
+## Next Steps
+
+Congratulations! You've learned the basics of using the ZYX CLI. Here's what you can explore next:
+
+::: tip Learning Path
+1. **[Basic Operations](/en/zyx/user-guide/basic-operations)** - Deep dive into CRUD operations
+2. **[Transaction Control](/en/zyx/user-guide/transactions)** - Advanced transaction management
+3. **[Advanced Queries](/en/zyx/user-guide/advanced-queries)** - Master complex query techniques
+4. **[API Reference](/en/zyx/api/cpp-api)** - Embed ZYX in your application
+:::
+
+::: info Get Help
+Type `:help` in the REPL at any time to see available commands.
+:::

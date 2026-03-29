@@ -1,0 +1,427 @@
+---
+title: Writing Tests
+description: Comprehensive testing is critical for ZYX's reliability. This guide explains how to write effective tests.
+category: Contributing
+order: 8
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Writing Tests
+
+Comprehensive testing is critical for ZYX's reliability. This guide explains how to write effective tests.
+
+## Testing Philosophy
+
+ZYX follows these testing principles:
+
+1. **Test behavior, not implementation**: Focus on what code does, not how
+2. **Aim for high coverage**: Target 95%+ coverage across all metrics
+3. **Test edge cases**: Boundary conditions, error cases, and invalid inputs
+4. **Keep tests independent**: Each test should be isolated and repeatable
+5. **Use descriptive names**: Test names should clearly indicate what they test
+
+## Test Structure
+
+### Basic Test File
+
+```cpp
+// tests/src/core/test_Database.cpp
+#include <gtest/gtest.h>
+#include "graph/core/Database.hpp"
+
+using namespace zyx;
+
+class DatabaseTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Create temporary database
+        testDbPath_ = createTempPath();
+        db_ = Database::create(testDbPath_);
+    }
+
+    void TearDown() override {
+        // Clean up
+        if (db_) {
+            db_->close();
+        }
+        removeTempPath(testDbPath_);
+    }
+
+    std::string testDbPath_;
+    Database* db_ = nullptr;
+};
+```
+
+### Test Naming Convention
+
+```cpp
+// GOOD: Descriptive name
+TEST_F(DatabaseTest, CreateNodeWithPropertiesSucceeds) {
+    // Test implementation
+}
+
+// GOOD: Indicates scenario
+TEST_F(DatabaseTest, CreateDuplicateNodeThrowsException) {
+    // Test implementation
+}
+
+// AVOID: Vague name
+TEST_F(DatabaseTest, TestNode) {
+    // What does this test?
+}
+```
+
+## Unit Tests
+
+### Testing Individual Methods
+
+```cpp
+TEST_F(DatabaseTest, ExecuteQueryReturnsCorrectResult) {
+    // Arrange
+    std::string query = "CREATE (n:Person {name: 'Alice'})";
+
+    // Act
+    auto result = db_->execute(query);
+
+    // Assert
+    ASSERT_FALSE(result.isEmpty());
+    EXPECT_EQ(1, result.getStatistics().getNodesCreated());
+}
+```
+
+### Testing Edge Cases
+
+```cpp
+TEST_F(DatabaseTest, HandleEmptyQuery) {
+    // Arrange
+    std::string emptyQuery = "";
+
+    // Act & Assert
+    EXPECT_THROW(db_->execute(emptyQuery), ParseException);
+}
+
+TEST_F(DatabaseTest, HandleVeryLongQuery) {
+    // Arrange
+    std::string longQuery(1000000, ' ');
+
+    // Act & Assert
+    EXPECT_THROW(db_->execute(longQuery), ParseException);
+}
+```
+
+### Testing Error Conditions
+
+```cpp
+TEST_F(DatabaseTest, InvalidPropertyTypeThrowsException) {
+    // Arrange
+    std::string query = "CREATE (n:Person {age: 'not a number'})";
+
+    // Act & Assert
+    EXPECT_THROW(db_->execute(query), ExecutionException);
+}
+```
+
+## Integration Tests
+
+### Testing Complete Workflows
+
+```cpp
+TEST_F(IntegrationTest, CompleteCrudWorkflow) {
+    // Create
+    db_->execute("CREATE (n:Person {name: 'Alice', age: 30})");
+
+    // Read
+    auto result = db_->execute("MATCH (n:Person {name: 'Alice'}) RETURN n");
+    ASSERT_FALSE(result.isEmpty());
+
+    // Update
+    db_->execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 31");
+
+    // Verify update
+    result = db_->execute("MATCH (n:Person {name: 'Alice'}) RETURN n.age");
+    EXPECT_EQ(31, result.peek()["n.age"].asInteger());
+
+    // Delete
+    db_->execute("MATCH (n:Person {name: 'Alice'}) DELETE n");
+
+    // Verify deletion
+    result = db_->execute("MATCH (n:Person {name: 'Alice'}) RETURN n");
+    EXPECT_TRUE(result.isEmpty());
+}
+```
+
+### Testing Transaction Behavior
+
+```cpp
+TEST_F(TransactionTest, CommitPersistsChanges) {
+    auto tx = db_->beginTransaction();
+
+    tx->execute("CREATE (n:Person {name: 'Bob'})");
+
+    // Changes not visible before commit
+    auto result = db_->execute("MATCH (n:Person {name: 'Bob'}) RETURN n");
+    EXPECT_TRUE(result.isEmpty());
+
+    tx->commit();
+
+    // Changes visible after commit
+    result = db_->execute("MATCH (n:Person {name: 'Bob'}) RETURN n");
+    EXPECT_FALSE(result.isEmpty());
+}
+```
+
+## Testing Asynchronous Code
+
+### Testing Concurrent Operations
+
+```cpp
+TEST_F(ConcurrencyTest, MultipleThreadsCanRead) {
+    // Create test data
+    db_->execute("CREATE (n:Person {name: 'Alice'})");
+
+    const int numThreads = 10;
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([this]() {
+            auto result = db_->execute("MATCH (n:Person) RETURN count(n)");
+            EXPECT_EQ(1, result.peek()["count(n)"].asInteger());
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+}
+```
+
+## Parameterized Tests
+
+### Testing Multiple Inputs
+
+```cpp
+class QueryParameterizedTest
+    : public ::testing::TestWithParam<std::string> {
+protected:
+    Database* db_ = nullptr;
+    void SetUp() override {
+        db_ = Database::create(createTempPath());
+    }
+    void TearDown() override {
+        db_->close();
+    }
+};
+
+TEST_P(QueryParameterizedTest, ValidQueriesSucceed) {
+    std::string query = GetParam();
+
+    EXPECT_NO_THROW({
+        auto result = db_->execute(query);
+    });
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ValidQueries,
+    QueryParameterizedTest,
+    ::testing::Values(
+        "CREATE (n:Person)",
+        "MATCH (n) RETURN n",
+        "MATCH (n)-[r]->(m) RETURN n, r, m"
+    )
+);
+```
+
+## Test Fixtures
+
+### Reusable Test Setup
+
+```cpp
+class GraphTestFixture : public ::testing::Test {
+protected:
+    void SetUp() override {
+        db_ = Database::create(createTempPath());
+
+        // Create test graph
+        db_->execute("CREATE (a:Person {name: 'Alice'})");
+        db_->execute("CREATE (b:Person {name: 'Bob'})");
+        db_->execute("CREATE (c:Person {name: 'Charlie'})");
+        db_->execute("MATCH (a:Person {name: 'Alice'}), "
+                     "(b:Person {name: 'Bob'}) "
+                     "CREATE (a)-[:KNOWS]->(b)");
+    }
+
+    void TearDown() override {
+        db_->close();
+    }
+
+    Database* db_;
+};
+
+TEST_F(GraphTestFixture, FindShortestPath) {
+    auto result = db_->execute(
+        "MATCH path = shortestPath("
+        "(a:Person {name: 'Alice'})-[:KNOWS*]-(b:Person {name: 'Charlie'})"
+        ") RETURN path"
+    );
+
+    // Assert path found
+    EXPECT_FALSE(result.isEmpty());
+}
+```
+
+## Mocking and Fakes
+
+### Using Mocks
+
+```cpp
+class MockStorage : public IStorage {
+public:
+    MOCK_METHOD(Entity*, loadEntity, (uint64_t id), (override));
+    MOCK_METHOD(void, saveEntity, (Entity* entity), (override));
+};
+
+TEST_F(QueryExecutorTest, UseMockStorage) {
+    MockStorage mockStorage;
+
+    EXPECT_CALL(mockStorage, loadEntity(123))
+        .WillOnce(Return(testEntity));
+
+    QueryExecutor executor(&mockStorage);
+    executor.execute("MATCH (n) WHERE id(n) = 123 RETURN n");
+}
+```
+
+## Performance Tests
+
+### Benchmarking
+
+```cpp
+TEST_F(PerformanceTest, LargeGraphQuery) {
+    // Create large graph
+    const int numNodes = 100000;
+    for (int i = 0; i < numNodes; ++i) {
+        db_->execute("CREATE (n:Node {id: " + std::to_string(i) + "})");
+    }
+
+    // Measure query time
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto result = db_->execute("MATCH (n:Node) RETURN count(n)");
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    EXPECT_LT(duration.count(), 1000); // Should complete in < 1 second
+}
+```
+
+## Coverage Requirements
+
+### Statement Coverage
+
+Every line of code should be executed by at least one test.
+
+### Branch Coverage
+
+Every conditional branch should be tested with both true and false outcomes.
+
+```cpp
+TEST_F(BranchCoverageTest, BothBranchesTested) {
+    // Test true branch
+    auto result1 = db_->execute("MATCH (n) WHERE n.age > 30 RETURN n");
+    ASSERT_GE(result1.size(), 0);
+
+    // Test false branch
+    auto result2 = db_->execute("MATCH (n) WHERE n.age <= 30 RETURN n");
+    ASSERT_GE(result2.size(), 0);
+}
+```
+
+## Best Practices
+
+### 1. Use AAA Pattern
+
+```cpp
+TEST_F(ArrangeActAssert, Example) {
+    // Arrange: Set up test data and conditions
+    std::string query = "CREATE (n:Person {name: 'Alice'})";
+
+    // Act: Execute the code under test
+    auto result = db_->execute(query);
+
+    // Assert: Verify expected outcomes
+    EXPECT_EQ(1, result.getStatistics().getNodesCreated());
+}
+```
+
+### 2. Test One Thing
+
+```cpp
+// GOOD: Tests single behavior
+TEST_F(NodeTest, CreateNodeSucceeds) {
+    auto result = db_->execute("CREATE (n:Person)");
+    EXPECT_EQ(1, result.getStatistics().getNodesCreated());
+}
+
+// AVOID: Tests multiple behaviors
+TEST_F(NodeTest, CreateAndDelete) {
+    // Creates and deletes, not clear what's being tested
+}
+```
+
+### 3. Use Descriptive Assertions
+
+```cpp
+// GOOD: Clear assertion message
+EXPECT_EQ(expected, actual) << "Node count should match";
+
+// GOOD: Detailed failure information
+ASSERT_TRUE(found) << "Node with id " << nodeId << " not found";
+```
+
+### 4. Clean Up Resources
+
+```cpp
+TEST_F(ResourceTest, CleanupAfterTest) {
+    auto* tempFile = createTempFile();
+
+    // Test code
+
+    // Always clean up
+    removeTempFile(tempFile);
+}
+```
+
+## Running Tests
+
+### Run All Tests
+
+```bash
+./scripts/run_tests.sh
+```
+
+### Run Specific Test
+
+```bash
+meson test -C buildDir test_Database
+```
+
+### Run with Coverage
+
+```bash
+./scripts/run_tests.sh --html
+```
+
+### View Coverage for File
+
+```bash
+./scripts/run_tests.sh --quick --file src/core/Database.cpp
+```
+
+## See Also
+
+- [Testing Guidelines](/en/zyx/contributing/testing) - Overall testing strategy
+- [Code Style](/en/zyx/contributing/code-style) - Coding standards
+- [Development Setup](/en/zyx/contributing/development-setup) - Getting started

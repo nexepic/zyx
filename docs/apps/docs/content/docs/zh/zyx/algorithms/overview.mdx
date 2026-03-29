@@ -1,0 +1,210 @@
+---
+title: Algorithms Overview
+description: ZYX employs a range of sophisticated algorithms to achieve high performance, data integrity, and efficient resource utilization. This section document
+category: 概述
+order: 1
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Algorithms Overview
+
+ZYX employs a range of sophisticated algorithms to achieve high performance, data integrity, and efficient resource utilization. This section documents the key algorithms used throughout the system.
+
+## Algorithm Categories
+
+### Storage Algorithms
+
+Algorithms for managing persistent data storage:
+
+- **[Segment Allocation](/en/algorithms/segment-allocation)** - How segments are allocated and managed
+- **[Bitmap Indexing](/en/algorithms/bitmap-indexing)** - Space tracking using bitmap structures
+- **[Compression](/en/algorithms/compression)** - Data compression techniques
+
+### Transaction Algorithms
+
+Algorithms ensuring ACID properties:
+
+- **[State Chain & Optimistic Locking](/en/algorithms/state-chain-optimistic-locking)** - MVCC implementation
+- **[WAL Recovery](/en/algorithms/wal-recovery)** - Crash recovery mechanisms
+
+### Query Algorithms
+
+Algorithms for efficient query execution:
+
+- **[Query Optimization](/en/algorithms/query-optimization)** - Query planning and optimization
+
+### Caching Algorithms
+
+Algorithms for memory management:
+
+- **[Cache Eviction](/en/algorithms/cache-eviction)** - LRU cache policies
+
+## Design Principles
+
+### Performance
+
+All algorithms are designed with performance as a primary consideration:
+
+- **Time Complexity**: Algorithms chosen for optimal big-O performance
+- **Space Efficiency**: Minimal memory overhead
+- **Cache Locality**: Data structures optimized for CPU cache
+
+### Reliability
+
+Algorithms ensure data integrity and consistency:
+
+- **ACID Compliance**: Transactional guarantees maintained
+- **Crash Recovery**: Database can recover from failures
+- **Data Validation**: Checksums and validation throughout
+
+### Scalability
+
+Algorithms scale with database size and workload:
+
+- **Horizontal Scaling**: Partitioning and distribution (future)
+- **Vertical Scaling**: Efficient resource utilization
+- **Concurrency**: Multi-threaded operation support
+
+## Algorithm Complexity
+
+### Storage Operations
+
+| Operation | Time Complexity | Space Complexity |
+|-----------|----------------|------------------|
+| Allocate Segment | O(1) | O(1) |
+| Allocate Entity | O(1) | O(1) |
+| Free Entity | O(1) | O(1) |
+| Find Free Space | O(n) worst case | O(1) |
+
+### Transaction Operations
+
+| Operation | Time Complexity | Space Complexity |
+|-----------|----------------|------------------|
+| Begin Transaction | O(1) | O(1) |
+| Commit | O(n) dirty entities | O(1) |
+| Rollback | O(1) | O(1) |
+| Conflict Detection | O(1) | O(1) |
+
+### Query Operations
+
+| Operation | Time Complexity | Space Complexity |
+|-----------|----------------|------------------|
+| Parse Query | O(n) query length | O(n) AST size |
+| Optimize Plan | O(n²) rules × operators | O(n) plan size |
+| Execute Plan | O(result size) | O(result size) |
+
+## Data Structures
+
+### Bitmap
+
+Efficient space allocation tracking:
+
+- **Structure**: Array of bits
+- **Operations**: Set, clear, test
+- **Complexity**: O(1) per operation
+
+### State Chain
+
+Version tracking for MVCC:
+
+- **Structure**: Linked list of entity versions
+- **Operations**: Append, traverse, prune
+- **Complexity**: O(1) append, O(n) traversal
+
+### LRU Cache
+
+Efficient caching with eviction:
+
+- **Structure**: Hash map + doubly linked list
+- **Operations**: Get, put, evict
+- **Complexity**: O(1) per operation
+
+## Concurrency Control
+
+### Optimistic Locking
+
+ZYX uses optimistic concurrency control:
+
+1. **Read Phase**: Read data without locks
+2. **Validation Phase**: Check for conflicts on commit
+3. **Write Phase**: Apply changes if no conflicts
+4. **Retry**: Rollback and retry on conflict
+
+**Benefits**:
+- No blocking reads
+- High throughput for read-heavy workloads
+- Simple implementation
+
+**Trade-offs**:
+- Contention on write-heavy workloads
+- Retry overhead on conflicts
+
+## Lock-Free Algorithms
+
+Some operations use lock-free algorithms:
+
+- **Reference Counting**: Atomic operations for entity lifetime
+- **State Updates**: Compare-and-swap for state transitions
+- **Bitmap Operations**: Atomic bit operations
+
+## Memory Management
+
+### Pool Allocation
+
+Efficient memory allocation:
+
+- **Object Pools**: Pre-allocated memory for common objects
+- **Arena Allocation**: Temporary memory for queries
+- **Stack Allocation**: Small objects on stack
+
+### Memory Reuse
+
+Reuse allocated memory:
+
+- **Free Lists**: Track freed memory for reuse
+- **Object Reuse**: Reuse entity objects
+- **Buffer Pooling**: Reuse I/O buffers
+
+## Disk I/O Optimization
+
+### Sequential Access
+
+Optimize for sequential disk access:
+
+- **Segment Layout**: Data organized sequentially
+- **Batch Writes**: Group writes together
+- **Read-Ahead**: Prefetch data
+
+### Write Optimization
+
+Minimize disk writes:
+
+- **WAL Buffering**: Buffer log entries
+- **Dirty Tracking**: Only write modified data
+- **Group Commit**: Batch commits
+
+## Algorithm Selection
+
+ZYX carefully selects algorithms based on:
+
+1. **Workload Characteristics**: Read-heavy vs write-heavy
+2. **Data Size**: Small vs large datasets
+3. **Concurrency Requirements**: Single vs multi-threaded
+4. **Hardware**: CPU, memory, disk characteristics
+
+## Future Improvements
+
+Planned algorithm enhancements:
+
+- **Adaptive Algorithms**: Adjust behavior based on workload
+- **Machine Learning**: Use ML for optimization
+- **Parallel Algorithms**: More parallel operations
+- **Distributed Algorithms**: Cluster support
+
+## See Also
+
+- [Storage System](/en/architecture/storage) - Overall storage architecture
+- [Transaction Management](/en/architecture/transactions) - Transaction implementation
+- [Query Engine](/en/architecture/query-engine) - Query execution details

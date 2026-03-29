@@ -1,0 +1,284 @@
+---
+title: Cypher 基础
+description: Cypher 是一种声明式图查询语言，允许您在图数据上表达强大而高效的查询。本指南介绍 ZYX 中 Cypher 的基本概念和语法。
+category: 核心概念
+order: 3
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Cypher 基础
+
+Cypher 是一种声明式图查询语言，允许您在图数据上表达强大而高效的查询。本指南介绍 ZYX 中 Cypher 的基本概念和语法。
+
+## 基本模式匹配
+
+Cypher 的核心是使用 ASCII 艺术语法的模式匹配。最基本的模式是节点关系：
+
+```cypher
+MATCH (a:Person)-[:KNOWS]->(b:Person)
+RETURN a, b
+```
+
+### 节点模式
+
+节点用圆括号表示，可以包含：
+- 变量名（用于引用）
+- 标签（用于节点类型）
+- 属性（用于过滤）
+
+```cypher
+-- 匿名节点
+MATCH () RETURN 1
+
+-- 命名节点
+MATCH (n) RETURN n
+
+-- 带标签的节点
+MATCH (n:Person) RETURN n
+
+-- 带属性的节点
+MATCH (n:Person {name: 'Alice'}) RETURN n
+```
+
+### 关系模式
+
+关系连接节点，可以是：
+- 有向的（`->` 或 `<-`）
+- 无向的（`-`）
+- 带关系类型
+- 带属性
+
+```cypher
+-- 有向关系
+MATCH (a)-[:KNOWS]->(b) RETURN a, b
+
+-- 无向关系
+MATCH (a)-[:KNOWS]-(b) RETURN a, b
+
+-- 带属性的关系
+MATCH (a)-[:KNOWS {since: 2020}]->(b) RETURN a, b
+```
+
+## 读取子句
+
+### MATCH
+
+`MATCH` 子句用于在图中搜索模式：
+
+```cypher
+-- 查找所有 Person 节点
+MATCH (n:Person)
+RETURN n
+
+-- 查找 Alice 认识的人
+MATCH (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person)
+RETURN b.name
+```
+
+### WHERE
+
+`WHERE` 子句为 `MATCH` 添加条件：
+
+```cypher
+-- 简单条件
+MATCH (n:Person)
+WHERE n.name = 'Alice'
+RETURN n
+
+-- 多个条件
+MATCH (n:Person)
+WHERE n.age >= 25 AND n.city = 'New York'
+RETURN n
+```
+
+### RETURN
+
+`RETURN` 子句指定从查询中返回什么：
+
+```cypher
+-- 返回特定属性
+MATCH (n:Person)
+RETURN n.name, n.age
+
+-- 返回聚合结果
+MATCH (n:Person)
+RETURN COUNT(n), AVG(n.age)
+```
+
+## 编写子句
+
+### CREATE
+
+创建新节点和关系：
+
+```cypher
+-- 创建单个节点
+CREATE (n:Person {name: 'Alice', age: 30})
+
+-- 创建节点和关系
+CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})
+```
+
+### MERGE
+
+`MERGE` 确保模式存在 - 如果不存在则创建，如果存在则匹配：
+
+```cypher
+-- 不存在则创建
+MERGE (n:Person {name: 'Alice'})
+
+-- 创建时设置
+MERGE (n:Person {name: 'Alice'})
+ON CREATE SET n.created = timestamp()
+
+-- 匹配时设置
+MERGE (n:Person {name: 'Alice'})
+ON MATCH SET n.lastSeen = timestamp()
+```
+
+### SET 和 REMOVE
+
+更新属性：
+
+```cypher
+-- 设置属性
+MATCH (n:Person {name: 'Alice'})
+SET n.age = 31
+
+-- 删除属性
+MATCH (n:Person {name: 'Alice'})
+REMOVE n.age
+```
+
+### DELETE
+
+删除节点和关系：
+
+```cypher
+-- 删除关系
+MATCH (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person)
+DELETE r
+
+-- 删除节点（必须没有关系）
+MATCH (n:Person {name: 'Bob'})
+DELETE n
+
+-- 删除节点及其连接的关系
+MATCH (n:Person {name: 'Bob'})-[r]-()
+DELETE n, r
+```
+
+## 数据类型
+
+### 基本类型
+
+```cypher
+-- 字符串
+MATCH (n:Person) WHERE n.name = 'Alice'
+
+-- 数字（整数和浮点数）
+MATCH (n:Person) WHERE n.age = 30
+
+-- 布尔值
+MATCH (n:Person) WHERE n.isActive = true
+
+-- 空值
+MATCH (n:Person) WHERE n.email IS NOT NULL
+```
+
+### 列表
+
+```cypher
+-- 创建列表
+RETURN [1, 2, 3, 4, 5]
+
+-- 列表推导
+MATCH (n:Person)
+RETURN [n.name, n.age, n.city]
+
+-- 访问列表元素
+WITH [1, 2, 3, 4, 5] AS list
+RETURN list[0]
+```
+
+## 操作符
+
+### 比较操作符
+
+```cypher
+=          -- 等于
+<> 或 !=   -- 不等于
+<          -- 小于
+>          -- 大于
+<=         -- 小于等于
+>=         -- 大于等于
+```
+
+### 布尔操作符
+
+```cypher
+AND        -- 逻辑与
+OR         -- 逻辑或
+NOT        -- 逻辑非
+```
+
+### 字符串操作符
+
+```cypher
+-- STARTS WITH
+MATCH (n:Person) WHERE n.name STARTS WITH 'A'
+
+-- ENDS WITH
+MATCH (n:Person) WHERE n.email ENDS WITH '@example.com'
+
+-- CONTAINS
+MATCH (n:Person) WHERE n.name CONTAINS 'Alice'
+```
+
+## 常用函数
+
+### 字符串函数
+
+```cypher
+-- 转换为大写
+RETURN toUpper('alice')
+
+-- 转换为小写
+RETURN toLower('ALICE')
+
+-- 子字符串
+RETURN substring('Hello World', 0, 5)
+```
+
+### 聚合函数
+
+```cypher
+-- 计数
+MATCH (n:Person) RETURN COUNT(n)
+
+-- 求和
+MATCH (n:Person) RETURN SUM(n.age)
+
+-- 平均值
+MATCH (n:Person) RETURN AVG(n.age)
+
+-- 收集到列表
+MATCH (n:Person)
+RETURN n.city, COLLECT(n.name)
+```
+
+## 最佳实践
+
+1. **使用特定模式**：从特定节点开始 `MATCH` 以提高性能
+2. **使用标签**：在模式中始终指定标签以改善查询规划
+3. **使用 PROFILE**：使用 `PROFILE` 前缀分析查询性能
+4. **限制结果**：探索数据时始终使用 `LIMIT`
+5. **使用参数**：对于频繁执行的查询，使用参数化查询
+
+## 下一步
+
+- 学习[高级查询](/zh/zyx/user-guide/advanced-queries)
+- 探索[模式匹配](/zh/zyx/user-guide/pattern-matching)
+- 了解[事务控制](/zh/zyx/user-guide/transactions)

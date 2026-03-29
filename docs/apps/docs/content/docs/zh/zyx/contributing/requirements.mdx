@@ -1,0 +1,208 @@
+---
+title: 系统要求
+description: ZYX 对构建和运行数据库引擎有特定要求。
+category: Contributing
+order: 5
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# 系统要求
+
+ZYX 对构建和运行数据库引擎有特定要求。
+
+## 构建要求
+
+### 编译器
+
+ZYX 需要 C++20 兼容的编译器：
+
+- **GCC**: 版本 11 或更高
+- **Clang**: 版本 13 或更高
+- **MSVC**: 版本 2022 或更高（Visual Studio 17）
+- **Apple Clang**: 版本 14 或更高（Xcode 14+）
+
+### 构建工具
+
+- **Meson**: 版本 0.63 或更高
+- **Conan**: 版本 1.60 或更高
+- **Ninja**: 版本 1.10 或更高
+- **Python**: 版本 3.8 或更高（用于构建脚本）
+
+### 依赖项
+
+ZYX 通过 Conan 自动管理其依赖：
+
+- **Boost**: 文件系统和系统工具
+- **zlib**: 数据压缩
+- **Google Test**: 测试框架
+- **CLI11**: 命令行界面
+- **ANTLR4 C++ Runtime**: 解析器生成（4.13.1）
+
+## 运行时要求
+
+### 操作系统
+
+ZYX 在以下系统上测试：
+
+- **Linux**: Ubuntu 20.04+、Debian 11+、CentOS 8+
+- **macOS**: macOS 12+（Monterey 或更高版本）
+- **Windows**: Windows 10+ 和 MSVC 2022
+
+### CPU 架构
+
+- **x86_64**: 主要支持的架构
+- **ARM64**: 实验性支持（Apple Silicon、ARM64 Linux）
+
+### 内存要求
+
+**最低配置**: 512 MB RAM
+**推荐配置**: 2 GB RAM 或更多
+
+内存使用随以下因素扩展：
+- 数据库大小
+- 缓存配置
+- 并发事务
+- 查询复杂度
+
+### 磁盘空间
+
+**最低配置**: 100 MB 可用空间
+**推荐配置**: 生产环境 1 GB 或更多
+
+磁盘空间用于：
+- 数据库文件（基于段的存储）
+- 写前日志（WAL）
+- 索引
+- 操作期间的临时文件
+
+## 平台特定说明
+
+### Linux
+
+**必需的系统包**：
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y g++ python3-pip
+
+# Fedora/RHEL
+sudo dnf install -y gcc-c++ python3-pip
+```
+
+**内核要求**: Linux 内核 3.10 或更高版本
+
+### macOS
+
+**必需工具**: Xcode 命令行工具
+```bash
+xcode-select --install
+```
+
+**文件系统**: 推荐使用 APFS 或 HFS+
+
+### Windows
+
+**必需软件**：
+- Visual Studio 2022 和 C++ 开发工具
+- Python 3.8+ 来自 python.org 或 Microsoft Store
+- Git for Windows
+
+**构建环境**: 使用开发者命令提示符或 PowerShell
+
+## 性能考虑
+
+### 存储性能
+
+为了获得最佳性能，请使用：
+- **SSD**: 生产环境推荐固态硬盘
+- **NVMe**: 高吞吐量工作负载的最佳性能
+- **HDD**: 开发和低吞吐量场景可接受
+
+### 网络文件系统
+
+ZYX 未在网络文件系统（NFS、SMB 等）上进行测试。使用本地文件系统以获得最佳结果。
+
+### CPU 要求
+
+单线程性能对于以下方面很重要：
+- 查询执行
+- 事务处理
+- 压缩操作
+
+多核利用用于：
+- 并发查询
+- 并行索引操作
+- 后台压缩
+
+## 开发与生产
+
+### 开发要求
+
+用于开发和测试：
+- 4 GB RAM
+- 2 个 CPU 核心
+- 10 GB 磁盘空间
+- 推荐使用 SSD，但非必需
+
+### 生产要求
+
+用于生产部署：
+- 8 GB RAM 或更多
+- 4+ 个 CPU 核心
+- 本地 SSD 存储
+- 定期备份策略
+
+## 资源限制
+
+### 最大数据库大小
+
+- **理论上限**: 16 TB（受文件系统限制）
+- **已测试**: 高达 1 TB
+
+### 最大并发连接数
+
+- **默认**: 无限制（受系统资源限制）
+- **推荐**: 每个 CPU 核心 100 个并发事务
+
+### 最大段大小
+
+- **默认**: 每段 4 MB
+- **可配置**: 1 MB 到 1 GB
+
+## 兼容性矩阵
+
+| 编译器版本 | Linux | macOS | Windows |
+|-----------|-------|-------|---------|
+| GCC 11    | ✓     | -     | -       |
+| GCC 12    | ✓     | -     | -       |
+| GCC 13    | ✓     | -     | -       |
+| Clang 13  | ✓     | ✓     | -       |
+| Clang 14  | ✓     | ✓     | -       |
+| Clang 15  | ✓     | ✓     | -       |
+| Apple Clang 14 | - | ✓     | -       |
+| Apple Clang 15 | - | ✓     | -       |
+| MSVC 2022 | -     | -     | ✓       |
+
+## 验证
+
+安装后，验证您的环境：
+
+```bash
+# 检查编译器
+g++ --version  # 或 clang++ --version
+
+# 检查构建工具
+meson --version
+conan --version
+ninja --version
+
+# 检查 Python
+python3 --version
+```
+
+## 另请参阅
+
+- [安装](/zh/zyx/contributing/installation) - 构建和安装说明
+- [配置](/zh/zyx/contributing/configuration) - 运行时配置选项
+- [性能优化](/zh/zyx/architecture/optimization) - 调优指南

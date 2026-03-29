@@ -1,20 +1,25 @@
 {
-  "name": "zyx-docs",
-  "version": "1.0.0",
+  "name": "zyx-docs-temp",
+  "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview"
+    "dev": "cd apps/docs && bun run dev",
+    "build": "cd apps/docs && bun run build",
+    "start": "cd apps/docs && bun run start",
+    "clean": "rm -rf apps/docs/.next apps/docs/.swc apps/docs/.content-collections apps/docs/tsconfig.tsbuildinfo",
+    "lint": "cd apps/docs && bun run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {
-    "mermaid": "^11.12.3",
-    "vitepress": "^1.6.0",
-    "vue": "^3.5.13"
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
   },
-  "dependencies": {
-    "three": "^0.183.2",
-    "vitepress-plugin-mermaid": "^2.0.17"
-  }
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "bun@1.0.0"
 }
