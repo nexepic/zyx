@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 #include <fstream>
 #include <cstring>
+#include <chrono>
 #include "graph/storage/PreadHelper.hpp"
 
 using namespace graph::storage;
@@ -49,7 +50,7 @@ TEST_F(PreadHelperTest, ReadAtBeginning) {
 	char buffer[256];
 	ssize_t bytesRead = portable_pread(fd, buffer, sizeof(buffer), 0);
 
-	EXPECT_EQ(bytesRead, sizeof(buffer));
+	EXPECT_EQ(bytesRead, static_cast<ssize_t>(sizeof(buffer)));
 	for (size_t i = 0; i < sizeof(buffer); ++i) {
 		EXPECT_EQ(buffer[i], static_cast<char>(i % 256))
 			<< "Mismatch at byte " << i;
@@ -66,7 +67,7 @@ TEST_F(PreadHelperTest, ReadAtOffset) {
 	char buffer[256];
 	ssize_t bytesRead = portable_pread(fd, buffer, sizeof(buffer), offset);
 
-	EXPECT_EQ(bytesRead, sizeof(buffer));
+	EXPECT_EQ(bytesRead, static_cast<ssize_t>(sizeof(buffer)));
 	for (size_t i = 0; i < sizeof(buffer); ++i) {
 		EXPECT_EQ(buffer[i], static_cast<char>((offset + i) % 256))
 			<< "Mismatch at byte " << i;
@@ -86,8 +87,8 @@ TEST_F(PreadHelperTest, MultipleReadsNoInterference) {
 	ssize_t n1 = portable_pread(fd, buffer1, sizeof(buffer1), 0);
 	ssize_t n2 = portable_pread(fd, buffer2, sizeof(buffer2), 2048);
 
-	EXPECT_EQ(n1, sizeof(buffer1));
-	EXPECT_EQ(n2, sizeof(buffer2));
+	EXPECT_EQ(n1, static_cast<ssize_t>(sizeof(buffer1)));
+	EXPECT_EQ(n2, static_cast<ssize_t>(sizeof(buffer2)));
 
 	// Verify data integrity
 	EXPECT_EQ(buffer1[0], 0);
@@ -104,7 +105,7 @@ TEST_F(PreadHelperTest, ReadBeyondFileSize) {
 	ssize_t bytesRead = portable_pread(fd, buffer, sizeof(buffer), testSize_ + 1000);
 
 	// Platform-specific behavior: may return 0 or partial data
-	EXPECT_LE(bytesRead, sizeof(buffer));
+	EXPECT_LE(bytesRead, static_cast<ssize_t>(sizeof(buffer)));
 
 	portable_close(fd);
 }
@@ -138,7 +139,7 @@ TEST_F(PreadHelperTest, LargeOffsetOnWindows) {
 	ssize_t bytesRead = portable_pread(fd, buffer, sizeof(buffer), largeOffset);
 
 	// Should gracefully handle reads beyond file
-	EXPECT_LE(bytesRead, sizeof(buffer));
+	EXPECT_LE(bytesRead, static_cast<ssize_t>(sizeof(buffer)));
 
 	portable_close(fd);
 }
@@ -153,13 +154,13 @@ TEST_F(PreadHelperTest, DISABLED_PerformanceComparison) {
 	ASSERT_GE(fd, 0);
 
 	std::vector<char> buffer(readSize);
-	auto start = std::chrono::high_resolution_clock::now();
+	auto start = std::chrono::steady_clock::now();
 
 	for (int i = 0; i < iterations; ++i) {
 		portable_pread(fd, buffer.data(), readSize, 0);
 	}
 
-	auto end = std::chrono::high_resolution_clock::now();
+	auto end = std::chrono::steady_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
 	std::cout << "Read " << iterations << " x " << readSize
