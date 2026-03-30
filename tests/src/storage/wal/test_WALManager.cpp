@@ -21,13 +21,20 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <filesystem>
 #include "graph/storage/wal/WALManager.hpp"
 #include "graph/storage/wal/WALRecord.hpp"
+
+#ifdef _WIN32
+	#include <windows.h>
+	#include <io.h>
+	#include <fcntl.h>
+#else
+	#include <sys/types.h>
+	#include <sys/stat.h>
+	#include <fcntl.h>
+	#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 using namespace graph::storage::wal;
@@ -1256,6 +1263,18 @@ TEST_F(WALManagerTest, ValidateHeader_StreamBadAfterRead) {
 
 	// Delete the WAL file and truncate via fd to try to break the stream
 	{
+#ifdef _WIN32
+		// On Windows, truncate the file using Windows API
+		HANDLE hFile = CreateFileA(walPath.c_str(), GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile != INVALID_HANDLE_VALUE) {
+			LARGE_INTEGER size;
+			size.QuadPart = sizeof(WALFileHeader);
+			SetFilePointerEx(hFile, size, NULL, FILE_BEGIN);
+			SetEndOfFile(hFile);
+			CloseHandle(hFile);
+		}
+#else
+		// On POSIX systems, truncate to exactly header size
 		// Truncate to exactly header size (so fileSize check at line 80 passes)
 		// but the content becomes sparse/zeros
 		int fd = ::open(walPath.c_str(), O_WRONLY | O_TRUNC);
@@ -1264,6 +1283,7 @@ TEST_F(WALManagerTest, ValidateHeader_StreamBadAfterRead) {
 			ftruncate(fd, sizeof(WALFileHeader));
 			::close(fd);
 		}
+#endif
 	}
 
 	// validateHeader: walFile_.is_open()=true, fileSize >= header size,
