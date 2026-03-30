@@ -22,7 +22,7 @@
 
 #include <memory>
 #include "generated/CypherParser.h"
-#include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::query {
 	class QueryPlanner;
@@ -49,13 +49,13 @@ public:
 	 * - LIMIT
 	 *
 	 * @param ctx The return statement context
-	 * @param rootOp The current root operator (may be null, injects SingleRowOperator if needed)
+	 * @param rootOp The current root operator (may be null, injects LogicalSingleRow if needed)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing RETURN
+	 * @return The resulting logical operator after processing RETURN
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleReturn(
+	static std::unique_ptr<query::logical::LogicalOperator> handleReturn(
 		CypherParser::ReturnStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 };
 

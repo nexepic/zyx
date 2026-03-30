@@ -24,22 +24,23 @@
 #include <string>
 #include "generated/CypherParserBaseVisitor.h"
 #include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 
 namespace graph::parser::cypher {
 
 /**
  * @class CypherToPlanVisitor
- * @brief ANTLR4 visitor that converts Cypher parse trees into physical execution plans.
+ * @brief ANTLR4 visitor that converts Cypher parse trees into logical execution plans,
+ *        then optimizes and converts to physical plans in getPlan().
  *
  * This visitor delegates to specialized helper and handler classes:
  * - Helpers: AstExtractor, ExpressionBuilder, PatternBuilder, OperatorChain
  * - Clauses: ReadingClauseHandler, WritingClauseHandler, ResultClauseHandler, AdminClauseHandler
  *
- * The refactored design maintains compatibility with ANTLR4 while improving:
- * - Code organization (smaller, focused classes)
- * - Testability (each component can be tested independently)
- * - Maintainability (clear separation of concerns)
+ * The visitor builds a logical IR (LogicalOperator tree) during traversal.
+ * getPlan() runs the optimizer and PhysicalPlanConverter to produce the
+ * final PhysicalOperator tree for execution.
  */
 class CypherToPlanVisitor : public CypherParserBaseVisitor {
 public:
@@ -93,7 +94,7 @@ public:
 
 private:
 	std::shared_ptr<query::QueryPlanner> planner_;
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp_;
+	std::unique_ptr<query::logical::LogicalOperator> rootOp_;
 };
 
 } // namespace graph::parser::cypher

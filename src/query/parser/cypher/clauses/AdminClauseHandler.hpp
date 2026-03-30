@@ -22,7 +22,7 @@
 
 #include <memory>
 #include "generated/CypherParser.h"
-#include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::query {
 	class QueryPlanner;
@@ -43,9 +43,9 @@ public:
 	 *
 	 * @param ctx The show indexes statement context
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator that shows indexes
+	 * @return The resulting logical operator that shows indexes
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleShowIndexes(
+	static std::unique_ptr<query::logical::LogicalOperator> handleShowIndexes(
 		CypherParser::ShowIndexesStatementContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
@@ -55,9 +55,9 @@ public:
 	 *
 	 * @param ctx The create index by pattern context
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator that creates the index
+	 * @return The resulting logical operator that creates the index
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleCreateIndexByPattern(
+	static std::unique_ptr<query::logical::LogicalOperator> handleCreateIndexByPattern(
 		CypherParser::CreateIndexByPatternContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
@@ -67,9 +67,9 @@ public:
 	 *
 	 * @param ctx The create index by label context
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator that creates the index
+	 * @return The resulting logical operator that creates the index
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleCreateIndexByLabel(
+	static std::unique_ptr<query::logical::LogicalOperator> handleCreateIndexByLabel(
 		CypherParser::CreateIndexByLabelContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
@@ -78,9 +78,9 @@ public:
 	 *
 	 * @param ctx The create vector index context
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator that creates the vector index
+	 * @return The resulting logical operator that creates the vector index
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleCreateVectorIndex(
+	static std::unique_ptr<query::logical::LogicalOperator> handleCreateVectorIndex(
 		CypherParser::CreateVectorIndexContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
@@ -90,9 +90,9 @@ public:
 	 *
 	 * @param ctx The drop index by name context
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator that drops the index
+	 * @return The resulting logical operator that drops the index
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleDropIndexByName(
+	static std::unique_ptr<query::logical::LogicalOperator> handleDropIndexByName(
 		CypherParser::DropIndexByNameContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
@@ -102,27 +102,27 @@ public:
 	 *
 	 * @param ctx The drop index by label context
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator that drops the index
+	 * @return The resulting logical operator that drops the index
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleDropIndexByLabel(
+	static std::unique_ptr<query::logical::LogicalOperator> handleDropIndexByLabel(
 		CypherParser::DropIndexByLabelContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	// --- Constraint DDL ---
 
-	static std::unique_ptr<query::execution::PhysicalOperator> handleCreateNodeConstraint(
+	static std::unique_ptr<query::logical::LogicalOperator> handleCreateNodeConstraint(
 		CypherParser::CreateNodeConstraintContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
-	static std::unique_ptr<query::execution::PhysicalOperator> handleCreateEdgeConstraint(
+	static std::unique_ptr<query::logical::LogicalOperator> handleCreateEdgeConstraint(
 		CypherParser::CreateEdgeConstraintContext *ctx,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
-	static std::unique_ptr<query::execution::PhysicalOperator> handleDropConstraint(
+	static std::unique_ptr<query::logical::LogicalOperator> handleDropConstraint(
 		const std::string &name, bool ifExists,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
-	static std::unique_ptr<query::execution::PhysicalOperator> handleShowConstraints(
+	static std::unique_ptr<query::logical::LogicalOperator> handleShowConstraints(
 		const std::shared_ptr<query::QueryPlanner> &planner);
 };
 

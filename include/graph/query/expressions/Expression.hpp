@@ -45,7 +45,9 @@ enum class ExpressionType {
 	FUNCTION_CALL,
 	CASE_EXPRESSION,
 	LIST_SLICE,
-	LIST_COMPREHENSION
+	LIST_COMPREHENSION,
+	IS_NULL,
+	IN_LIST
 };
 
 /**
@@ -312,7 +314,7 @@ public:
 	InExpression(std::unique_ptr<Expression> value, std::vector<PropertyValue> listValues)
 		: value_(std::move(value)), listValues_(std::move(listValues)) {}
 
-	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::BINARY_OP; }
+	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::IN_LIST; }
 	void accept(ExpressionVisitor &visitor) override;
 	void accept(ConstExpressionVisitor &visitor) const override;
 	[[nodiscard]] std::string toString() const override;

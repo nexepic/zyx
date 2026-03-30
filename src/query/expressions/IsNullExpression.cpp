@@ -42,7 +42,7 @@ std::unique_ptr<Expression> IsNullExpression::clone() const {
 }
 
 ExpressionType IsNullExpression::getExpressionType() const {
-	return ExpressionType::BINARY_OP;  // Reuse binary op type for now
+	return ExpressionType::IS_NULL;
 }
 
 std::string IsNullExpression::toString() const {

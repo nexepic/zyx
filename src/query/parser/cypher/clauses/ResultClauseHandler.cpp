@@ -25,31 +25,35 @@
 #include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
-#include "graph/query/execution/operators/AggregateOperator.hpp"
+#include "graph/query/logical/operators/LogicalProject.hpp"
+#include "graph/query/logical/operators/LogicalSort.hpp"
+#include "graph/query/logical/operators/LogicalLimit.hpp"
+#include "graph/query/logical/operators/LogicalSkip.hpp"
+#include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include <algorithm>
 #include <unordered_map>
 
 namespace graph::parser::cypher::clauses {
 
-std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleReturn(
+std::unique_ptr<query::logical::LogicalOperator> ResultClauseHandler::handleReturn(
 	CypherParser::ReturnStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	auto body = ctx->projectionBody();
 
 	// Check for DISTINCT
 	bool distinct = (body->K_DISTINCT() != nullptr);
 
-	// Ensure valid pipeline (auto-inject singleRowOp for standalone RETURN)
-	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
-	    std::move(rootOp), planner, "RETURN",
+	// Ensure valid logical pipeline (auto-inject LogicalSingleRow for standalone RETURN)
+	rootOp = graph::query::PipelineValidator::ensureValidLogicalPipeline(
+	    std::move(rootOp), "RETURN",
 	    graph::query::PipelineValidator::ValidationMode::ALLOW_EMPTY
 	);
 
 	// Order By (MUST come before Projection so SortOperator has access to full nodes)
 	// However, ORDER BY can reference projection aliases, so we need to collect those first
-	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> projectionAliases; // alias -> expression
+	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> projectionAliases;
 
 	auto items = body->projectionItems();
 	if (!items->MULTIPLY()) { // If not RETURN *
@@ -68,7 +72,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 	}
 
 	if (body->orderStatement()) {
-		std::vector<query::execution::operators::SortItem> sortItems;
+		std::vector<query::logical::LogicalSortItem> sortItems;
 		auto sortItemList = body->orderStatement()->sortItem();
 
 		for (auto item : sortItemList) {
@@ -118,11 +122,12 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 				asc = false;  // Set to false for DESC/DESCENDING
 			}
 
-			sortItems.push_back({expressionShared, asc});
+			sortItems.emplace_back(expressionShared, asc);
 		}
 
 		if (!sortItems.empty()) {
-			rootOp = planner->sortOp(std::move(rootOp), sortItems);
+			rootOp = std::make_unique<query::logical::LogicalSort>(
+				std::move(rootOp), std::move(sortItems));
 		}
 	}
 
@@ -130,8 +135,8 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 	if (!items->MULTIPLY()) { // If not RETURN *
 		// Check for aggregate functions
 		bool hasAggregates = false;
-		std::vector<query::execution::operators::AggregateItem> aggItems;
-		std::vector<query::execution::operators::ProjectItem> projItems;
+		std::vector<query::logical::LogicalAggItem> aggItems;
+		std::vector<query::logical::LogicalProjectItem> projItems;
 
 		for (auto item : items->projectionItem()) {
 			// Build Expression AST from the projection expression
@@ -139,7 +144,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 
 			// Check if this is an aggregate function
 			bool isAggregate = false;
-			query::execution::operators::AggregateFunctionType aggType;
+			std::string aggFuncName;
 
 			// Simple check: if the expression is a FunctionCallExpression
 			if (auto funcCall = dynamic_cast<graph::query::expressions::FunctionCallExpression*>(expressionAST.get())) {
@@ -148,24 +153,14 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 					isAggregate = true;
 					hasAggregates = true;
 
-					// Determine aggregate function type
-					std::string nameLower = funcName;
-					std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
+					// Store the function name in lowercase for LogicalAggregate
+					aggFuncName = funcName;
+					std::transform(aggFuncName.begin(), aggFuncName.end(), aggFuncName.begin(),
 					               [](unsigned char c) { return std::tolower(c); });
-
-					if (nameLower == "count") aggType = query::execution::operators::AggregateFunctionType::AGG_COUNT;
-					else if (nameLower == "sum") aggType = query::execution::operators::AggregateFunctionType::AGG_SUM;
-					else if (nameLower == "avg") aggType = query::execution::operators::AggregateFunctionType::AGG_AVG;
-					else if (nameLower == "min") aggType = query::execution::operators::AggregateFunctionType::AGG_MIN;
-					else if (nameLower == "max") aggType = query::execution::operators::AggregateFunctionType::AGG_MAX;
-					else if (nameLower == "collect") aggType = query::execution::operators::AggregateFunctionType::AGG_COLLECT;
 
 					// Get the argument expression (or nullptr for COUNT(*))
 					std::shared_ptr<graph::query::expressions::Expression> argExpr(nullptr);
 					if (funcCall->getArgumentCount() > 0) {
-						// For aggregate functions, extract the first argument
-						// Note: The function call may have arguments like n, n.prop, etc.
-						// We need to extract the actual argument expression
 						const auto& args = funcCall->getArguments();
 						if (!args.empty()) {
 							argExpr = std::shared_ptr<graph::query::expressions::Expression>(args[0]->clone().release());
@@ -178,7 +173,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 						alias = helpers::AstExtractor::extractVariable(item->variable());
 					}
 
-					aggItems.emplace_back(aggType, argExpr, alias, funcCall->isDistinct());
+					aggItems.emplace_back(aggFuncName, argExpr, alias, funcCall->isDistinct());
 				}
 			}
 
@@ -197,19 +192,21 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 			}
 		}
 
-		// Apply appropriate operator
+		// Apply appropriate logical operator
 		if (hasAggregates) {
-			// Convert non-aggregate projection items to group-by items
-			std::vector<query::execution::operators::GroupByItem> groupByItems;
+			// Convert non-aggregate projection items to group-by expressions with aliases
+			std::vector<std::shared_ptr<graph::query::expressions::Expression>> groupByExprs;
+			std::vector<std::string> groupByAliases;
 			for (const auto& pi : projItems) {
-				groupByItems.emplace_back(pi.expression, pi.alias);
+				groupByExprs.push_back(pi.expression);
+				groupByAliases.push_back(pi.alias);
 			}
-			// Use AggregateOperator for aggregations
-			rootOp = std::make_unique<query::execution::operators::AggregateOperator>(
-				std::move(rootOp), aggItems, std::move(groupByItems), planner->getDataManager().get());
+			rootOp = std::make_unique<query::logical::LogicalAggregate>(
+				std::move(rootOp), std::move(groupByExprs), std::move(aggItems),
+				std::move(groupByAliases));
 		} else if (!projItems.empty()) {
-			// Use ProjectOperator for regular projections
-			rootOp = planner->projectOp(std::move(rootOp), projItems, distinct);
+			rootOp = std::make_unique<query::logical::LogicalProject>(
+				std::move(rootOp), std::move(projItems), distinct);
 		}
 	}
 
@@ -223,7 +220,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 			throw std::runtime_error("SKIP requires an integer literal.");
 		}
 
-		rootOp = planner->skipOp(std::move(rootOp), offset);
+		rootOp = std::make_unique<query::logical::LogicalSkip>(std::move(rootOp), offset);
 	}
 
 	// Handle LIMIT
@@ -236,7 +233,7 @@ std::unique_ptr<query::execution::PhysicalOperator> ResultClauseHandler::handleR
 			throw std::runtime_error("LIMIT requires an integer literal.");
 		}
 
-		rootOp = planner->limitOp(std::move(rootOp), limit);
+		rootOp = std::make_unique<query::logical::LogicalLimit>(std::move(rootOp), limit);
 	}
 
 	return rootOp;

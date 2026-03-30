@@ -19,8 +19,10 @@
  **/
 
 #include "CypherToPlanVisitor.hpp"
-#include "graph/query/execution/operators/TransactionControlOperator.hpp"
-#include "graph/query/execution/operators/UnionOperator.hpp"
+#include "graph/query/logical/operators/LogicalTransactionControl.hpp"
+#include "graph/query/logical/operators/LogicalUnion.hpp"
+#include "graph/query/optimizer/Optimizer.hpp"
+#include "graph/query/planner/PhysicalPlanConverter.hpp"
 #include "clauses/AdminClauseHandler.hpp"
 #include "clauses/ReadingClauseHandler.hpp"
 #include "clauses/ResultClauseHandler.hpp"
@@ -32,7 +34,39 @@ namespace graph::parser::cypher {
 CypherToPlanVisitor::CypherToPlanVisitor(std::shared_ptr<query::QueryPlanner> planner) :
 	planner_(std::move(planner)) {}
 
-std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan() { return std::move(rootOp_); }
+std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan() {
+	if (!rootOp_) {
+		return nullptr;
+	}
+
+	// Run the optimizer on read-oriented plans (skip DDL/transaction control)
+	auto rootType = rootOp_->getType();
+	bool isOptimizable = (rootType != query::logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
+	                      rootType != query::logical::LogicalOpType::LOP_CREATE_INDEX &&
+	                      rootType != query::logical::LogicalOpType::LOP_DROP_INDEX &&
+	                      rootType != query::logical::LogicalOpType::LOP_SHOW_INDEXES &&
+	                      rootType != query::logical::LogicalOpType::LOP_CREATE_VECTOR_INDEX &&
+	                      rootType != query::logical::LogicalOpType::LOP_CREATE_CONSTRAINT &&
+	                      rootType != query::logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
+	                      rootType != query::logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
+	                      rootType != query::logical::LogicalOpType::LOP_LIST_CONFIG &&
+	                      rootType != query::logical::LogicalOpType::LOP_SET_CONFIG);
+
+	if (isOptimizable) {
+		auto *opt = planner_->getOptimizer();
+		if (opt) {
+			rootOp_ = opt->optimize(std::move(rootOp_));
+		}
+	}
+
+	// Convert logical plan to physical plan using managers from the planner
+	auto dm = planner_->getDataManager();
+	auto im = planner_->getIndexManager();
+	auto cm = planner_->getConstraintManager();
+
+	query::PhysicalPlanConverter converter(dm, im, cm);
+	return converter.convert(rootOp_.get());
+}
 
 // --- Entry Points ---
 std::any CypherToPlanVisitor::visitCypher(CypherParser::CypherContext *ctx) { return visitChildren(ctx); }
@@ -47,7 +81,7 @@ std::any CypherToPlanVisitor::visitRegularQuery(CypherParser::RegularQueryContex
 	// Note: singleQueries is guaranteed non-empty by grammar (regularQuery requires at least one singleQuery)
 	visitSingleQuery(singleQueries[0]);
 
-	std::unique_ptr<query::execution::PhysicalOperator> currentPlan = std::move(rootOp_);
+	std::unique_ptr<query::logical::LogicalOperator> currentPlan = std::move(rootOp_);
 
 	// Process additional single queries connected by UNION
 	auto unionKeywords = ctx->K_UNION();
@@ -63,8 +97,8 @@ std::any CypherToPlanVisitor::visitRegularQuery(CypherParser::RegularQueryContex
 			isAll = true;
 		}
 
-		// Create UnionOperator to combine current plan with the new query
-		currentPlan = std::make_unique<graph::query::execution::operators::UnionOperator>(
+		// Create LogicalUnion to combine current plan with the new query
+		currentPlan = std::make_unique<query::logical::LogicalUnion>(
 			std::move(currentPlan),
 			std::move(rootOp_),
 			isAll
@@ -204,20 +238,20 @@ std::any CypherToPlanVisitor::visitShowConstraintsStatement(CypherParser::ShowCo
 
 // --- Transaction Control ---
 std::any CypherToPlanVisitor::visitTxnBegin(CypherParser::TxnBeginContext *) {
-	rootOp_ = query::QueryPlanner::transactionControlOp(
-			query::execution::operators::TransactionCommand::TXN_CTL_BEGIN);
+	rootOp_ = std::make_unique<query::logical::LogicalTransactionControl>(
+		query::logical::LogicalTxnCommand::LTXN_BEGIN);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitTxnCommit(CypherParser::TxnCommitContext *) {
-	rootOp_ = query::QueryPlanner::transactionControlOp(
-			query::execution::operators::TransactionCommand::TXN_CTL_COMMIT);
+	rootOp_ = std::make_unique<query::logical::LogicalTransactionControl>(
+		query::logical::LogicalTxnCommand::LTXN_COMMIT);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitTxnRollback(CypherParser::TxnRollbackContext *) {
-	rootOp_ = query::QueryPlanner::transactionControlOp(
-			query::execution::operators::TransactionCommand::TXN_CTL_ROLLBACK);
+	rootOp_ = std::make_unique<query::logical::LogicalTransactionControl>(
+		query::logical::LogicalTxnCommand::LTXN_ROLLBACK);
 	return std::any();
 }
 

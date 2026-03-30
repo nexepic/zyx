@@ -31,6 +31,14 @@ namespace execution {
 class PhysicalOperator;
 }
 
+} // namespace graph::query
+
+namespace graph::query::logical {
+class LogicalOperator;
+}
+
+namespace graph::query {
+
 /**
  * @class PipelineValidator
  * @brief Unified pipeline validation for Cypher clauses.
@@ -79,7 +87,7 @@ public:
 	};
 
 	/**
-	 * @brief Ensure pipeline is valid according to the specified mode.
+	 * @brief Ensure physical pipeline is valid according to the specified mode.
 	 *
 	 * @param rootOp The current pipeline root (may be null)
 	 * @param planner The query planner (for singleRowOp injection)
@@ -91,6 +99,23 @@ public:
 	[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> ensureValidPipeline(
 	    std::unique_ptr<execution::PhysicalOperator> rootOp,
 	    const std::shared_ptr<QueryPlanner> &planner,
+	    const std::string &clauseName,
+	    ValidationMode mode = ValidationMode::REQUIRE_PRECEDING);
+
+	/**
+	 * @brief Ensure logical pipeline is valid according to the specified mode.
+	 *
+	 * Overload for the logical IR pipeline. When ALLOW_EMPTY and rootOp is null,
+	 * injects a LogicalSingleRow operator.
+	 *
+	 * @param rootOp The current logical pipeline root (may be null)
+	 * @param clauseName The name of the clause (for error messages)
+	 * @param mode The validation mode to apply
+	 * @return Validated (possibly injected) logical pipeline root
+	 * @throws std::runtime_error if validation fails in REQUIRE_PRECEDING mode
+	 */
+	[[nodiscard]] static std::unique_ptr<logical::LogicalOperator> ensureValidLogicalPipeline(
+	    std::unique_ptr<logical::LogicalOperator> rootOp,
 	    const std::string &clauseName,
 	    ValidationMode mode = ValidationMode::REQUIRE_PRECEDING);
 

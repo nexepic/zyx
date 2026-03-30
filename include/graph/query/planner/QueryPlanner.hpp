@@ -254,6 +254,9 @@ namespace graph::query {
 		[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> singleRowOp();
 
 		[[nodiscard]] std::shared_ptr<storage::DataManager> getDataManager() const { return dm_; }
+		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return im_; }
+		[[nodiscard]] std::shared_ptr<storage::constraints::ConstraintManager> getConstraintManager() const { return cm_; }
+		[[nodiscard]] optimizer::Optimizer* getOptimizer() const { return optimizer_.get(); }
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

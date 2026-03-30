@@ -23,8 +23,7 @@
 #include <memory>
 #include <vector>
 #include "generated/CypherParser.h"
-#include "graph/query/execution/PhysicalOperator.hpp"
-#include "graph/query/execution/operators/SetOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::query {
 	class QueryPlanner;
@@ -46,11 +45,11 @@ public:
 	 * @param ctx The create statement context
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing CREATE
+	 * @return The resulting logical operator after processing CREATE
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleCreate(
+	static std::unique_ptr<query::logical::LogicalOperator> handleCreate(
 		CypherParser::CreateStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -59,12 +58,12 @@ public:
 	 * @param ctx The set statement context
 	 * @param rootOp The current root operator (must not be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing SET
+	 * @return The resulting logical operator after processing SET
 	 * @throws std::runtime_error if rootOp is null
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleSet(
+	static std::unique_ptr<query::logical::LogicalOperator> handleSet(
 		CypherParser::SetStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -73,12 +72,12 @@ public:
 	 * @param ctx The delete statement context
 	 * @param rootOp The current root operator (must not be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing DELETE
+	 * @return The resulting logical operator after processing DELETE
 	 * @throws std::runtime_error if rootOp is null
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleDelete(
+	static std::unique_ptr<query::logical::LogicalOperator> handleDelete(
 		CypherParser::DeleteStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -87,12 +86,12 @@ public:
 	 * @param ctx The remove statement context
 	 * @param rootOp The current root operator (must not be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing REMOVE
+	 * @return The resulting logical operator after processing REMOVE
 	 * @throws std::runtime_error if rootOp is null
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleRemove(
+	static std::unique_ptr<query::logical::LogicalOperator> handleRemove(
 		CypherParser::RemoveStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -101,11 +100,11 @@ public:
 	 * @param ctx The merge statement context
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing MERGE
+	 * @return The resulting logical operator after processing MERGE
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleMerge(
+	static std::unique_ptr<query::logical::LogicalOperator> handleMerge(
 		CypherParser::MergeStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 };
 

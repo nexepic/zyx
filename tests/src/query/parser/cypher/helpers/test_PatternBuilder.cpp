@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 #include "helpers/PatternBuilder.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 using namespace graph::parser::cypher::helpers;
 
@@ -30,7 +31,7 @@ TEST_F(PatternBuilderUnitTest, BuildMatchPattern_NullPattern) {
 }
 
 TEST_F(PatternBuilderUnitTest, BuildMatchPattern_NullPatternWithRoot) {
-	auto mockRoot = std::unique_ptr<graph::query::execution::PhysicalOperator>(nullptr);
+	std::unique_ptr<graph::query::logical::LogicalOperator> mockRoot = nullptr;
 	auto result = PatternBuilder::buildMatchPattern(
 		nullptr,
 		std::move(mockRoot),
@@ -52,7 +53,7 @@ TEST_F(PatternBuilderUnitTest, BuildCreatePattern_NullPattern) {
 }
 
 TEST_F(PatternBuilderUnitTest, BuildCreatePattern_NullPatternWithRoot) {
-	auto mockRoot = std::unique_ptr<graph::query::execution::PhysicalOperator>(nullptr);
+	std::unique_ptr<graph::query::logical::LogicalOperator> mockRoot = nullptr;
 	auto result = PatternBuilder::buildCreatePattern(
 		nullptr,
 		std::move(mockRoot),

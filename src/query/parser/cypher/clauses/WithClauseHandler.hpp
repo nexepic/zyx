@@ -23,7 +23,7 @@
 #include <memory>
 #include <string>
 #include "generated/CypherParser.h"
-#include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::query {
 	class QueryPlanner;
@@ -57,11 +57,11 @@ public:
 	 * @param ctx The WITH clause context from the parser
 	 * @param rootOp The current root operator in the pipeline
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing WITH
+	 * @return The resulting logical operator after processing WITH
 	 */
-	static std::unique_ptr<graph::query::execution::PhysicalOperator> handleWith(
+	static std::unique_ptr<query::logical::LogicalOperator> handleWith(
 		CypherParser::WithClauseContext *ctx,
-		std::unique_ptr<graph::query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 };
 

@@ -31,6 +31,7 @@
 #include "BenchmarkCases.hpp"
 #include "BenchmarkConcurrency.hpp"
 #include "BenchmarkConfig.hpp"
+#include "BenchmarkOptimizer.hpp"
 #include "BenchmarkSelection.hpp"
 #include "BenchmarkStorage.hpp"
 #include "BenchmarkVector.hpp"
@@ -250,6 +251,29 @@ namespace {
 					return std::make_unique<ConcurrentReadBench>(concReadManyName, "/tmp/zyx_bench_conc_read_n",
 																 CONC_ITER, CONC_DATA_SIZE, hwThreads);
 				});
+
+		// --- Optimizer benchmarks ---
+		const std::string optFilterPushName = "Optimizer: WHERE→Scan Pushdown";
+		const std::string optInlineBaseName = "Optimizer: Inline Property (Baseline)";
+		const std::string optAndSplitName = "Optimizer: AND Split+Pushdown";
+		const std::string optJoinFilterName = "Optimizer: Join Filter Pushdown";
+
+		add("query.optimizer.filter_pushdown", BenchmarkType::QUERY, optFilterPushName, [optFilterPushName]() {
+			return std::make_unique<OptimizerFilterPushdownBench>(
+				optFilterPushName, "/tmp/zyx_bench_opt_filter", conf::ITERATIONS_READ, conf::DATA_SIZE_QUERY);
+		});
+		add("query.optimizer.inline_baseline", BenchmarkType::QUERY, optInlineBaseName, [optInlineBaseName]() {
+			return std::make_unique<OptimizerInlineBaselineBench>(
+				optInlineBaseName, "/tmp/zyx_bench_opt_inline", conf::ITERATIONS_READ, conf::DATA_SIZE_QUERY);
+		});
+		add("query.optimizer.and_split", BenchmarkType::QUERY, optAndSplitName, [optAndSplitName]() {
+			return std::make_unique<OptimizerAndSplitBench>(
+				optAndSplitName, "/tmp/zyx_bench_opt_and", conf::ITERATIONS_READ / 5, conf::DATA_SIZE_QUERY);
+		});
+		add("query.optimizer.join_filter", BenchmarkType::QUERY, optJoinFilterName, [optJoinFilterName]() {
+			return std::make_unique<OptimizerJoinFilterBench>(
+				optJoinFilterName, "/tmp/zyx_bench_opt_join", conf::ITERATIONS_READ / 10, 200, 100);
+		});
 
 		const std::string implicitTxnName = "Implicit Txn Insert (1000 nodes)";
 		const std::string explicitTxnName = "Explicit Txn Insert (1000 nodes)";

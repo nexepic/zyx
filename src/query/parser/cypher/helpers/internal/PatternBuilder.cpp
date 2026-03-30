@@ -18,22 +18,29 @@
  * limitations under the License.
  **/
 
+#include <functional>
+#include <iostream>
 #include "../PatternBuilder.hpp"
 #include "../AstExtractor.hpp"
 #include "../ExpressionBuilder.hpp"
 #include "../OperatorChain.hpp"
-#include "graph/query/planner/QueryPlanner.hpp"
-#include "graph/query/expressions/Expression.hpp"
-#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
-#include "graph/query/execution/operators/MergeNodeOperator.hpp"
-#include "graph/query/execution/operators/MergeEdgeOperator.hpp"
+#include "graph/query/logical/operators/LogicalNodeScan.hpp"
+#include "graph/query/logical/operators/LogicalFilter.hpp"
+#include "graph/query/logical/operators/LogicalJoin.hpp"
+#include "graph/query/logical/operators/LogicalTraversal.hpp"
+#include "graph/query/logical/operators/LogicalVarLengthTraversal.hpp"
+#include "graph/query/logical/operators/LogicalOptionalMatch.hpp"
+#include "graph/query/logical/operators/LogicalCreateNode.hpp"
+#include "graph/query/logical/operators/LogicalCreateEdge.hpp"
+#include "graph/query/logical/operators/LogicalMergeNode.hpp"
+#include "graph/query/logical/operators/LogicalMergeEdge.hpp"
 
 namespace graph::parser::cypher::helpers {
 
-std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMatchPattern(
+std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::buildMatchPattern(
 	CypherParser::PatternContext *pattern,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner,
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/,
 	CypherParser::WhereContext *where,
 	bool isOptional) {
 
@@ -45,10 +52,10 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMatchPa
 		return rootOp;
 
 	// For OPTIONAL MATCH, we need to build the pattern operator separately
-	// and then wrap it in OptionalMatchOperator
+	// and then wrap it in LogicalOptionalMatch
 	if (isOptional && rootOp) {
 		// Build the pattern operator starting from nullptr (independent of input)
-		std::unique_ptr<query::execution::PhysicalOperator> patternOp = nullptr;
+		std::unique_ptr<query::logical::LogicalOperator> patternOp = nullptr;
 
 		// Collect required variables and build pattern operator
 		std::vector<std::string> requiredVariables;
@@ -60,14 +67,15 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMatchPa
 			collectVariablesFromPatternElement(element, requiredVariables);
 
 			// Build operator for this element
-			patternOp = processMatchPatternElement(element, std::move(patternOp), planner);
+			patternOp = processMatchPatternElement(element, std::move(patternOp));
 		}
 
 		// Apply WHERE clause if present
-		patternOp = applyWhereFilter(std::move(patternOp), where, planner);
+		patternOp = applyWhereFilter(std::move(patternOp), where);
 
-		// Wrap in OptionalMatchOperator
-		return planner->optionalMatchOp(std::move(rootOp), std::move(patternOp), requiredVariables);
+		// Wrap in LogicalOptionalMatch
+		return std::make_unique<query::logical::LogicalOptionalMatch>(
+			std::move(rootOp), std::move(patternOp), requiredVariables);
 	}
 
 	// Regular MATCH or standalone OPTIONAL MATCH (no input)
@@ -77,28 +85,28 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMatchPa
 
 		if (!rootOp) {
 			// First component or no prior pipeline: build from scratch
-			rootOp = processMatchPatternElement(element, nullptr, planner);
+			rootOp = processMatchPatternElement(element, nullptr);
 		} else if (parts.size() == 1) {
 			// Single pattern part with existing pipeline: chain directly
-			rootOp = processMatchPatternElement(element, std::move(rootOp), planner);
+			rootOp = processMatchPatternElement(element, std::move(rootOp));
 		} else {
 			// Multiple pattern parts with existing pipeline:
-			// Build this part independently, then CartesianProduct with root
-			auto partOp = processMatchPatternElement(element, nullptr, planner);
-			rootOp = planner->cartesianProductOp(std::move(rootOp), std::move(partOp));
+			// Build this part independently, then Join with root
+			auto partOp = processMatchPatternElement(element, nullptr);
+			rootOp = std::make_unique<query::logical::LogicalJoin>(
+				std::move(rootOp), std::move(partOp));
 		}
 	}
 
 	// Apply WHERE clause if present
-	rootOp = applyWhereFilter(std::move(rootOp), where, planner);
+	rootOp = applyWhereFilter(std::move(rootOp), where);
 
 	return rootOp;
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatchPatternElement(
+std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPatternElement(
 	CypherParser::PatternElementContext *element,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp) {
 
 	// 1. Head Node Processing (Scan)
 	auto headNodePat = element->nodePattern();
@@ -112,41 +120,21 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 			return ExpressionBuilder::evaluateLiteralExpression(expr);
 		});
 
-	// Optimizer: Index Pushdown
-	std::string pushKey = "";
-	PropertyValue pushVal;
-	std::vector<std::pair<std::string, PropertyValue>> residualFilters;
-
-	if (!props.empty()) {
-		auto it = props.begin();
-		pushKey = it->first;
-		pushVal = it->second;
-		for (++it; it != props.end(); ++it) {
-			residualFilters.emplace_back(it->first, it->second);
-		}
+	// Build property predicates vector for LogicalNodeScan
+	std::vector<std::pair<std::string, PropertyValue>> propertyPredicates;
+	for (const auto &[key, val] : props) {
+		propertyPredicates.emplace_back(key, val);
 	}
 
-	auto currentOp = planner->scanOp(var, labels, pushKey, pushVal);
-
-	// Apply Filters
-	for (const auto &[key, val] : residualFilters) {
-		auto predicate = [var, key, val](const query::execution::Record &r) {
-			auto n = r.getNode(var);
-			if (!n)
-				return false;
-			const auto &p = n->getProperties();
-			return p.contains(key) && p.at(key) == val;
-		};
-		std::string desc = var + "." + key + " == " + val.toString();
-		currentOp = planner->filterOp(std::move(currentOp), predicate, desc);
-	}
+	auto currentOp = std::make_unique<query::logical::LogicalNodeScan>(var, labels, propertyPredicates);
 
 	// If this is the first component, set it as root
 	if (!rootOp) {
 		rootOp = std::move(currentOp);
 	} else {
 		// Cross join with existing root
-		rootOp = planner->cartesianProductOp(std::move(rootOp), std::move(currentOp));
+		rootOp = std::make_unique<query::logical::LogicalJoin>(
+			std::move(rootOp), std::move(currentOp));
 	}
 
 	// 2. Traversal Chain (e.g. -[r]->(b))
@@ -213,58 +201,26 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 		// Target Node
 		std::string targetVar = AstExtractor::extractVariable(nodePat->variable());
 		auto targetLabels = AstExtractor::extractLabels(nodePat->nodeLabels());
-		auto targetProps = AstExtractor::extractProperties(nodePat->properties(),
+		auto targetPropsMap = AstExtractor::extractProperties(nodePat->properties(),
 			[](CypherParser::ExpressionContext *expr) {
 				return ExpressionBuilder::evaluateLiteralExpression(expr);
 			});
 
-		// Build Traversal
+		// Convert target properties map to vector of pairs
+		std::vector<std::pair<std::string, PropertyValue>> targetProps;
+		for (const auto &[k, v] : targetPropsMap) {
+			targetProps.emplace_back(k, v);
+		}
+
+		// Build Traversal with target/edge filter data stored on the operator
 		if (isVarLength) {
-			rootOp = planner->traverseVarLengthOp(std::move(rootOp), var, targetVar, edgeLabel, minHops,
-												  maxHops, direction);
+			rootOp = std::make_unique<query::logical::LogicalVarLengthTraversal>(
+				std::move(rootOp), var, edgeVar, targetVar, edgeLabel, direction,
+				minHops, maxHops, targetLabels, targetProps);
 		} else {
-			rootOp = planner->traverseOp(std::move(rootOp), var, edgeVar, targetVar, edgeLabel, direction);
-		}
-
-		// Filter Target by labels (AND semantics: node must have ALL labels)
-		if (!targetLabels.empty()) {
-			auto dm = planner->getDataManager();
-			std::vector<int64_t> targetLabelIds;
-			std::string labelDesc;
-			for (const auto &lbl : targetLabels) {
-				targetLabelIds.push_back(dm->getOrCreateLabelId(lbl));
-				if (!labelDesc.empty()) labelDesc += ":";
-				labelDesc += lbl;
-			}
-
-			auto labelPred = [targetVar, targetLabelIds](const query::execution::Record &r) {
-				auto n = r.getNode(targetVar);
-				if (!n) return false;
-				for (int64_t tid : targetLabelIds) {
-					if (!n->hasLabelId(tid)) return false;
-				}
-				return true;
-			};
-			rootOp = planner->filterOp(std::move(rootOp), labelPred, "Label(" + targetVar + ")=" + labelDesc);
-		}
-
-		for (const auto &[key, val] : targetProps) {
-			auto pred = [targetVar, key, val](const query::execution::Record &r) {
-				auto n = r.getNode(targetVar);
-				return n && n->getProperties().contains(key) && n->getProperties().at(key) == val;
-			};
-			rootOp = planner->filterOp(std::move(rootOp), pred, targetVar + "." + key + "=" + val.toString());
-		}
-
-		// Filter Edge (Single Hop Only)
-		if (!isVarLength) {
-			for (const auto &[key, val] : edgeProps) {
-				auto pred = [edgeVar, key, val](const query::execution::Record &r) {
-					auto e = r.getEdge(edgeVar);
-					return e && e->getProperties().contains(key) && e->getProperties().at(key) == val;
-				};
-				rootOp = planner->filterOp(std::move(rootOp), pred, edgeVar + "." + key + "=" + val.toString());
-			}
+			rootOp = std::make_unique<query::logical::LogicalTraversal>(
+				std::move(rootOp), var, edgeVar, targetVar, edgeLabel, direction,
+				targetLabels, targetProps, edgeProps);
 		}
 
 		// Update current variable for next hop
@@ -274,10 +230,9 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::processMatch
 	return rootOp;
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::applyWhereFilter(
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	CypherParser::WhereContext *where,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::applyWhereFilter(
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	CypherParser::WhereContext *where) {
 
 	if (!where)
 		return rootOp;
@@ -285,28 +240,23 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::applyWhereFi
 	try {
 		auto ast = ExpressionBuilder::buildExpression(where->expression());
 		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
-		std::string desc = astShared->toString();
-		auto dm = planner->getDataManager().get();
-		auto predicate = [astShared, dm](const query::execution::Record &r) -> bool {
-			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r, dm);
-		};
-		return planner->filterOp(std::move(rootOp), predicate, desc);
+		return std::make_unique<query::logical::LogicalFilter>(std::move(rootOp), astShared);
 	} catch (const std::exception &e) {
 		std::cerr << "Warning: Failed to parse WHERE clause: " << e.what() << std::endl;
 		throw;
 	}
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildCreatePattern(
+std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::buildCreatePattern(
 	CypherParser::PatternContext *pattern,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	if (!pattern)
 		return rootOp;
 
 	for (auto part : pattern->patternPart()) {
-		processCreatePatternElement(part->patternElement(), rootOp, planner);
+		processCreatePatternElement(part->patternElement(), rootOp);
 	}
 
 	return rootOp;
@@ -314,8 +264,7 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildCreateP
 
 void PatternBuilder::processCreatePatternElement(
 	CypherParser::PatternElementContext *element,
-	std::unique_ptr<query::execution::PhysicalOperator> &rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> &rootOp) {
 
 	auto headNodePat = element->nodePattern();
 
@@ -343,12 +292,8 @@ void PatternBuilder::processCreatePatternElement(
 		}
 	}
 
-	std::unique_ptr<query::execution::PhysicalOperator> headOp;
-	if (!headPropExprs.empty()) {
-		headOp = planner->createOp(headVar, headLabels, headProps, std::move(headPropExprs));
-	} else {
-		headOp = planner->createOp(headVar, headLabels, headProps);
-	}
+	auto headOp = std::make_unique<query::logical::LogicalCreateNode>(
+		headVar, headLabels, headProps, headPropExprs);
 	rootOp = OperatorChain::chain(std::move(rootOp), std::move(headOp));
 
 	std::string prevVar = headVar;
@@ -364,7 +309,9 @@ void PatternBuilder::processCreatePatternElement(
 				return ExpressionBuilder::evaluateLiteralExpression(expr);
 			});
 
-		auto targetOp = planner->createOp(targetVar, targetLabels, targetProps);
+		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> emptyPropExprs;
+		auto targetOp = std::make_unique<query::logical::LogicalCreateNode>(
+			targetVar, targetLabels, targetProps, emptyPropExprs);
 		rootOp = OperatorChain::chain(std::move(rootOp), std::move(targetOp));
 
 		auto relDetail = relPat->relationshipDetail();
@@ -380,20 +327,21 @@ void PatternBuilder::processCreatePatternElement(
 				});
 		}
 
-		auto edgeOp = planner->createOp(edgeVar, edgeLabel, edgeProps, prevVar, targetVar);
+		auto edgeOp = std::make_unique<query::logical::LogicalCreateEdge>(
+			edgeVar, edgeLabel, edgeProps, prevVar, targetVar);
 		rootOp = OperatorChain::chain(std::move(rootOp), std::move(edgeOp));
 
 		prevVar = targetVar;
 	}
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePattern(
+std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::buildMergePattern(
 	CypherParser::PatternPartContext *patternPart,
 	const std::vector<query::execution::operators::SetItem> &onCreateItems,
 	const std::vector<query::execution::operators::SetItem> &onMatchItems,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
-	if (!patternPart || !planner)
+	if (!patternPart)
 		return nullptr;
 
 	auto element = patternPart->patternElement();
@@ -406,18 +354,34 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 			return ExpressionBuilder::evaluateLiteralExpression(expr);
 		});
 
+	// Convert SetItem vectors to MergeSetAction vectors
+	auto convertToMergeActions = [](const std::vector<query::execution::operators::SetItem> &items) {
+		std::vector<query::logical::MergeSetAction> actions;
+		actions.reserve(items.size());
+		for (const auto &item : items) {
+			actions.push_back({item.variable, item.key, item.expression});
+		}
+		return actions;
+	};
+
+	auto onCreateActions = convertToMergeActions(onCreateItems);
+	auto onMatchActions = convertToMergeActions(onMatchItems);
+
 	// Single node MERGE: MERGE (n:Label {props})
 	if (element->patternElementChain().empty()) {
-		return planner->mergeOp(headVar, headLabels, headProps, onCreateItems, onMatchItems);
+		return std::make_unique<query::logical::LogicalMergeNode>(
+			headVar, headLabels, headProps,
+			std::move(onCreateActions), std::move(onMatchActions));
 	}
 
 	// Edge MERGE: MERGE (a)-[r:TYPE {props}]->(b)
 	// Strategy: First merge source node, then merge target node, then merge edge
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp = nullptr;
+	std::vector<query::logical::MergeSetAction> emptyActions;
 
 	// Merge head node (no ON CREATE/MATCH items for intermediate nodes)
-	std::vector<query::execution::operators::SetItem> emptyItems;
-	rootOp = planner->mergeOp(headVar, headLabels, headProps, emptyItems, emptyItems);
+	std::unique_ptr<query::logical::LogicalOperator> rootOp =
+		std::make_unique<query::logical::LogicalMergeNode>(
+			headVar, headLabels, headProps, emptyActions, emptyActions);
 
 	std::string prevVar = headVar;
 	auto chains = element->patternElementChain();
@@ -435,14 +399,11 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 				return ExpressionBuilder::evaluateLiteralExpression(expr);
 			});
 
-		// Merge target node
-		auto targetMergeOp = planner->mergeOp(targetVar, targetLabels, targetProps, emptyItems, emptyItems);
-		// Chain the target merge as child of root
-		auto* mergeNodeOp = dynamic_cast<query::execution::operators::MergeNodeOperator*>(targetMergeOp.get());
-		if (mergeNodeOp) {
-			mergeNodeOp->setChild(std::move(rootOp));
-			rootOp = std::move(targetMergeOp);
-		}
+		// Merge target node (set previous merge as child)
+		auto targetMergeOp = std::make_unique<query::logical::LogicalMergeNode>(
+			targetVar, targetLabels, targetProps, emptyActions, emptyActions,
+			std::move(rootOp));
+		rootOp = std::move(targetMergeOp);
 
 		// Edge details
 		auto relDetail = relPat->relationshipDetail();
@@ -471,16 +432,11 @@ std::unique_ptr<query::execution::PhysicalOperator> PatternBuilder::buildMergePa
 
 		// Apply ON CREATE/MATCH items only to the last edge in the chain
 		bool isLastChain = (i == chains.size() - 1);
-		auto mergeEdge = planner->mergeEdgeOp(
-			prevVar, edgeVar, targetVar, edgeLabel, edgeProps, direction,
-			isLastChain ? onCreateItems : emptyItems,
-			isLastChain ? onMatchItems : emptyItems);
-
-		auto* edgeOp = dynamic_cast<query::execution::operators::MergeEdgeOperator*>(mergeEdge.get());
-		if (edgeOp) {
-			edgeOp->setChild(std::move(rootOp));
-			rootOp = std::move(mergeEdge);
-		}
+		rootOp = std::make_unique<query::logical::LogicalMergeEdge>(
+			prevVar, edgeVar, targetVar, edgeLabel, direction, edgeProps,
+			isLastChain ? std::move(onCreateActions) : emptyActions,
+			isLastChain ? std::move(onMatchActions) : emptyActions,
+			std::move(rootOp));
 
 		prevVar = targetVar;
 	}

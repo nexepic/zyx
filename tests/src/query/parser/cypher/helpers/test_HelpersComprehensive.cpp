@@ -17,6 +17,7 @@
 #include "helpers/ExpressionBuilder.hpp"
 #include "helpers/OperatorChain.hpp"
 #include "helpers/PatternBuilder.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 using namespace graph::parser::cypher::helpers;
 
@@ -114,8 +115,8 @@ TEST_F(HelpersComprehensiveTest, EdgeCase_EmptyVectors) {
 
 // Test nullptr comparison patterns
 TEST_F(HelpersComprehensiveTest, EdgeCase_NullptrComparisons) {
-	std::unique_ptr<graph::query::execution::PhysicalOperator> op1(nullptr);
-	std::unique_ptr<graph::query::execution::PhysicalOperator> op2(nullptr);
+	std::unique_ptr<graph::query::logical::LogicalOperator> op1(nullptr);
+	std::unique_ptr<graph::query::logical::LogicalOperator> op2(nullptr);
 
 	EXPECT_EQ(op1, nullptr);
 	EXPECT_EQ(op2, nullptr);

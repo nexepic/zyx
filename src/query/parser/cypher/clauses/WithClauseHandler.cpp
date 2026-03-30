@@ -25,26 +25,26 @@
 #include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/QueryErrorMessages.hpp"
 #include "graph/query/expressions/Expression.hpp"
-#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
-#include "graph/query/execution/operators/AggregateOperator.hpp"
+#include "graph/query/logical/operators/LogicalProject.hpp"
+#include "graph/query/logical/operators/LogicalSort.hpp"
+#include "graph/query/logical/operators/LogicalFilter.hpp"
+#include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include <algorithm>
 
 namespace graph::parser::cypher::clauses {
 
-std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::handleWith(
+std::unique_ptr<query::logical::LogicalOperator> WithClauseHandler::handleWith(
 	CypherParser::WithClauseContext *ctx,
-	std::unique_ptr<graph::query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Grammar: withClause : K_WITH projectionBody ( K_WHERE where )?
 	// Parser guarantees ctx and projectionBody are always present (non-null)
-	// Following project pattern: trust grammar guarantees like ResultClauseHandler
 
-	// Ensure valid pipeline (WITH requires preceding clause)
-	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
-	    std::move(rootOp), planner, "WITH",
-	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
-	);
+	// Validate pipeline (WITH requires preceding clause)
+	if (!rootOp) {
+		throw std::runtime_error("WITH clause must follow a MATCH or CREATE clause.");
+	}
 
 	auto projectionBody = ctx->projectionBody();
 
@@ -57,8 +57,8 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 	// Process projection
 	if (!items->MULTIPLY()) { // If not WITH *
 		bool hasAggregates = false;
-		std::vector<query::execution::operators::AggregateItem> aggItems;
-		std::vector<graph::query::execution::operators::ProjectItem> projItems;
+		std::vector<query::logical::LogicalAggItem> aggItems;
+		std::vector<query::logical::LogicalProjectItem> projItems;
 
 		for (auto item : items->projectionItem()) {
 			// Build Expression AST from the projection expression
@@ -66,7 +66,7 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 
 			// Check if this is an aggregate function
 			bool isAggregate = false;
-			query::execution::operators::AggregateFunctionType aggType{};
+			std::string aggFuncName;
 
 			if (auto funcCall = dynamic_cast<graph::query::expressions::FunctionCallExpression*>(expressionAST.get())) {
 				std::string funcName = funcCall->getFunctionName();
@@ -74,16 +74,9 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 					isAggregate = true;
 					hasAggregates = true;
 
-					std::string nameLower = funcName;
-					std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
+					aggFuncName = funcName;
+					std::transform(aggFuncName.begin(), aggFuncName.end(), aggFuncName.begin(),
 					               [](unsigned char c) { return std::tolower(c); });
-
-					if (nameLower == "count") aggType = query::execution::operators::AggregateFunctionType::AGG_COUNT;
-					else if (nameLower == "sum") aggType = query::execution::operators::AggregateFunctionType::AGG_SUM;
-					else if (nameLower == "avg") aggType = query::execution::operators::AggregateFunctionType::AGG_AVG;
-					else if (nameLower == "min") aggType = query::execution::operators::AggregateFunctionType::AGG_MIN;
-					else if (nameLower == "max") aggType = query::execution::operators::AggregateFunctionType::AGG_MAX;
-					else if (nameLower == "collect") aggType = query::execution::operators::AggregateFunctionType::AGG_COLLECT;
 
 					std::shared_ptr<graph::query::expressions::Expression> argExpr(nullptr);
 					if (funcCall->getArgumentCount() > 0) {
@@ -98,7 +91,7 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 						alias = helpers::AstExtractor::extractVariable(item->variable());
 					}
 
-					aggItems.emplace_back(aggType, argExpr, alias, funcCall->isDistinct());
+					aggItems.emplace_back(aggFuncName, argExpr, alias, funcCall->isDistinct());
 				}
 			}
 
@@ -115,15 +108,19 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 		}
 
 		if (hasAggregates) {
-			// Convert non-aggregate projection items to group-by items
-			std::vector<query::execution::operators::GroupByItem> groupByItems;
+			// Convert non-aggregate projection items to group-by expressions with aliases
+			std::vector<std::shared_ptr<graph::query::expressions::Expression>> groupByExprs;
+			std::vector<std::string> groupByAliases;
 			for (const auto& pi : projItems) {
-				groupByItems.emplace_back(pi.expression, pi.alias);
+				groupByExprs.push_back(pi.expression);
+				groupByAliases.push_back(pi.alias);
 			}
-			rootOp = std::make_unique<query::execution::operators::AggregateOperator>(
-				std::move(rootOp), aggItems, std::move(groupByItems), planner->getDataManager().get());
+			rootOp = std::make_unique<query::logical::LogicalAggregate>(
+				std::move(rootOp), std::move(groupByExprs), std::move(aggItems),
+				std::move(groupByAliases));
 		} else if (!projItems.empty()) {
-			rootOp = planner->projectOp(std::move(rootOp), projItems, distinct);
+			rootOp = std::make_unique<query::logical::LogicalProject>(
+				std::move(rootOp), std::move(projItems), distinct);
 		}
 	}
 
@@ -131,12 +128,7 @@ std::unique_ptr<graph::query::execution::PhysicalOperator> WithClauseHandler::ha
 	if (ctx->where()) {
 		auto ast = helpers::ExpressionBuilder::buildExpression(ctx->where()->expression());
 		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
-		std::string desc = astShared->toString();
-		auto dm = planner->getDataManager().get();
-		auto predicate = [astShared, dm](const query::execution::Record &r) -> bool {
-			return graph::query::expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r, dm);
-		};
-		rootOp = planner->filterOp(std::move(rootOp), predicate, desc);
+		rootOp = std::make_unique<query::logical::LogicalFilter>(std::move(rootOp), astShared);
 	}
 
 	return rootOp;

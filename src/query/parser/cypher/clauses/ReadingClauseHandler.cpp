@@ -25,12 +25,15 @@
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/logical/operators/LogicalCallProcedure.hpp"
+#include "graph/query/logical/operators/LogicalProject.hpp"
+#include "graph/query/logical/operators/LogicalUnwind.hpp"
 
 namespace graph::parser::cypher::clauses {
 
-std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleMatch(
+std::unique_ptr<query::logical::LogicalOperator> ReadingClauseHandler::handleMatch(
 	CypherParser::MatchStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
 	auto pattern = ctx->pattern();
@@ -39,10 +42,10 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	return helpers::PatternBuilder::buildMatchPattern(pattern, std::move(rootOp), planner, where);
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleStandaloneCall(
+std::unique_ptr<query::logical::LogicalOperator> ReadingClauseHandler::handleStandaloneCall(
 	CypherParser::StandaloneCallStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> /*rootOp*/,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> /*rootOp*/,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Grammar guarantees explicitProcedureInvocation is always present
 	auto invoc = ctx->explicitProcedureInvocation();
@@ -55,13 +58,13 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 		}
 	}
 
-	return planner->callProcedureOp(procName, args);
+	return std::make_unique<query::logical::LogicalCallProcedure>(procName, args);
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleInQueryCall(
+std::unique_ptr<query::logical::LogicalOperator> ReadingClauseHandler::handleInQueryCall(
 	CypherParser::InQueryCallStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> /*rootOp*/,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	auto invoc = ctx->explicitProcedureInvocation();
 	std::string procName = invoc->procedureName()->getText();
@@ -74,12 +77,13 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 		}
 	}
 
-	// Create Procedure Operator
-	rootOp = planner->callProcedureOp(procName, args);
+	// Create LogicalCallProcedure operator
+	std::unique_ptr<query::logical::LogicalOperator> result =
+		std::make_unique<query::logical::LogicalCallProcedure>(procName, args);
 
 	// Handle YIELD
 	if (ctx->K_YIELD() && ctx->yieldItems()) {
-		std::vector<query::execution::operators::ProjectItem> projItems;
+		std::vector<query::logical::LogicalProjectItem> projItems;
 		auto items = ctx->yieldItems();
 
 		for (auto item : items->yieldItem()) {
@@ -98,16 +102,17 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 		}
 
 		// When yieldItems exists, projItems is guaranteed to have at least one element
-		rootOp = planner->projectOp(std::move(rootOp), projItems);
+		result = std::make_unique<query::logical::LogicalProject>(
+			std::move(result), std::move(projItems));
 	}
 
-	return rootOp;
+	return result;
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleUnwind(
+std::unique_ptr<query::logical::LogicalOperator> ReadingClauseHandler::handleUnwind(
 	CypherParser::UnwindStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Grammar: unwindStatement : K_UNWIND expression K_AS variable
 	// Parser guarantees variable is always present and non-empty
@@ -119,38 +124,35 @@ std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handle
 	auto expr = ctx->expression();
 	std::vector<PropertyValue> listValues = helpers::ExpressionBuilder::extractListFromExpression(expr);
 
-	// Ensure valid pipeline (auto-inject singleRowOp if empty)
-	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
-	    std::move(rootOp), planner, "UNWIND",
+	// Ensure valid logical pipeline (auto-inject LogicalSingleRow if empty)
+	rootOp = graph::query::PipelineValidator::ensureValidLogicalPipeline(
+	    std::move(rootOp), "UNWIND",
 	    graph::query::PipelineValidator::ValidationMode::ALLOW_EMPTY
 	);
 
-	// 3. Build Operator
+	// 3. Build Logical Operator
 	if (!listValues.empty()) {
 		// Literal list: use compile-time list constructor
-		rootOp = planner->unwindOp(std::move(rootOp), alias, listValues);
+		return std::make_unique<query::logical::LogicalUnwind>(
+			std::move(rootOp), alias, listValues);
 	} else {
 		// Expression-based: build AST and evaluate at runtime
 		auto ast = helpers::ExpressionBuilder::buildExpression(expr);
 		auto astShared = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
-		rootOp = planner->unwindOp(std::move(rootOp), alias, astShared);
+		return std::make_unique<query::logical::LogicalUnwind>(
+			std::move(rootOp), alias, astShared);
 	}
-
-	return rootOp;
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> ReadingClauseHandler::handleOptionalMatch(
+std::unique_ptr<query::logical::LogicalOperator> ReadingClauseHandler::handleOptionalMatch(
 	CypherParser::MatchStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
 	auto pattern = ctx->pattern();
 	auto where = ctx->where();
 
-	// OPTIONAL MATCH needs to use OptionalMatchOperator for left outer join semantics
-	// For now, we'll use the regular match pattern building but mark it as optional
-	// TODO: Implement full OptionalMatchOperator with proper left outer join semantics
-
+	// OPTIONAL MATCH needs to use LogicalOptionalMatch for left outer join semantics
 	return helpers::PatternBuilder::buildMatchPattern(pattern, std::move(rootOp), planner, where, true);
 }
 

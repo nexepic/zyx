@@ -21,16 +21,17 @@
 #pragma once
 
 #include <memory>
-#include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::parser::cypher::helpers {
 
 /**
  * @class OperatorChain
- * @brief Utility class for managing operator chaining in query execution plans.
+ * @brief Utility class for managing logical operator chaining in query plans.
  *
- * This class handles the logic of properly chaining operators together based on their type:
- * - Write operators (CreateEdgeOperator, CreateNodeOperator) wrap the current pipeline
+ * This class handles the logic of properly chaining logical operators together:
+ * - Write operators (LogicalCreateEdge, LogicalCreateNode) wrap the current pipeline
+ *   by setting the existing root as their child
  * - Other operators replace the current pipeline
  *
  * This simplifies the common pattern of building operator chains during query parsing.
@@ -38,20 +39,15 @@ namespace graph::parser::cypher::helpers {
 class OperatorChain {
 public:
 	/**
-	 * @brief Chain a new operator with the current root operator.
+	 * @brief Chain a new logical operator with the current root operator.
 	 *
 	 * @param rootOp The current root operator (may be null)
 	 * @param newOp The new operator to chain
 	 * @return The updated root operator after chaining
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> chain(
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-		std::unique_ptr<query::execution::PhysicalOperator> newOp);
-
-private:
-	// Forward declarations for operator types we need to detect
-	class CreateEdgeOperator;
-	class CreateNodeOperator;
+	static std::unique_ptr<query::logical::LogicalOperator> chain(
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> newOp);
 };
 
 } // namespace graph::parser::cypher::helpers

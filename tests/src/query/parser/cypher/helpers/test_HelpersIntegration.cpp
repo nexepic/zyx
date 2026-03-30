@@ -13,6 +13,7 @@
 #include "helpers/ExpressionBuilder.hpp"
 #include "helpers/PatternBuilder.hpp"
 #include "helpers/OperatorChain.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 using namespace graph::parser::cypher::helpers;
 using graph::PropertyValue;
@@ -101,8 +102,8 @@ TEST_F(HelpersIntegrationTest, OperatorChain_BothNull) {
 
 // Test chain variations
 TEST_F(HelpersIntegrationTest, OperatorChain_ChainVariations) {
-	std::unique_ptr<graph::query::execution::PhysicalOperator> op1(nullptr);
-	std::unique_ptr<graph::query::execution::PhysicalOperator> op2(nullptr);
+	std::unique_ptr<graph::query::logical::LogicalOperator> op1(nullptr);
+	std::unique_ptr<graph::query::logical::LogicalOperator> op2(nullptr);
 
 	auto result1 = OperatorChain::chain(nullptr, nullptr);
 	EXPECT_EQ(result1, nullptr);

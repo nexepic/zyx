@@ -4678,7 +4678,7 @@ TEST_F(ExpressionsCoverageTest, IsNullExpression_CompleteCoverage) {
 	{
 		auto inner = std::make_unique<LiteralExpression>(int64_t(42));
 		IsNullExpression expr(std::move(inner), false);
-		EXPECT_EQ(expr.getExpressionType(), ExpressionType::BINARY_OP);
+		EXPECT_EQ(expr.getExpressionType(), ExpressionType::IS_NULL);
 	}
 
 	// Test getters
@@ -6413,7 +6413,7 @@ TEST_F(ExpressionsCoverageTest, IsNullExpression_GetExpressionType) {
 	auto expr = std::make_unique<LiteralExpression>(int64_t(42));
 
 	IsNullExpression isNullExpr(std::move(expr), false);
-	EXPECT_EQ(isNullExpr.getExpressionType(), ExpressionType::BINARY_OP);
+	EXPECT_EQ(isNullExpr.getExpressionType(), ExpressionType::IS_NULL);
 }
 
 TEST_F(ExpressionsCoverageTest, BinaryOpExpression_GetExpressionType) {
@@ -6466,7 +6466,7 @@ TEST_F(ExpressionsCoverageTest, InExpression_GetExpressionType) {
 	std::vector<PropertyValue> listValues = {PropertyValue(int64_t(1))};
 
 	InExpression expr(std::move(value), listValues);
-	EXPECT_EQ(expr.getExpressionType(), ExpressionType::BINARY_OP);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::IN_LIST);
 }
 
 TEST_F(ExpressionsCoverageTest, ListSliceExpression_GetExpressionType) {

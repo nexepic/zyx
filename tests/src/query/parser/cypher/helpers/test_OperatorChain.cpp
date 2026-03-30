@@ -18,14 +18,14 @@ protected:
 
 TEST_F(OperatorChainUnitTest, Chain_NullRoot) {
 	// Test when rootOp is null - newOp becomes the root
-	auto newOp = std::unique_ptr<graph::query::execution::PhysicalOperator>(nullptr);
+	auto newOp = std::unique_ptr<graph::query::logical::LogicalOperator>(nullptr);
 	auto result = OperatorChain::chain(nullptr, std::move(newOp));
 	EXPECT_EQ(result, nullptr);
 }
 
 TEST_F(OperatorChainUnitTest, Chain_NullNewOp) {
 	// Test when newOp is null
-	auto rootOp = std::unique_ptr<graph::query::execution::PhysicalOperator>(nullptr);
+	auto rootOp = std::unique_ptr<graph::query::logical::LogicalOperator>(nullptr);
 	auto result = OperatorChain::chain(std::move(rootOp), nullptr);
 	EXPECT_EQ(result, nullptr);
 }

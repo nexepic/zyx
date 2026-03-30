@@ -516,5 +516,5 @@ TEST(ExpressionClone, ExpressionTypes) {
 	auto val = std::make_unique<LiteralExpression>(int64_t(1));
 	std::vector<graph::PropertyValue> list;
 	InExpression inExpr(std::move(val), std::move(list));
-	EXPECT_EQ(inExpr.getExpressionType(), ExpressionType::BINARY_OP);
+	EXPECT_EQ(inExpr.getExpressionType(), ExpressionType::IN_LIST);
 }

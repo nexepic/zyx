@@ -21,19 +21,26 @@
 #include "AdminClauseHandler.hpp"
 #include "helpers/AstExtractor.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/logical/operators/LogicalShowIndexes.hpp"
+#include "graph/query/logical/operators/LogicalCreateIndex.hpp"
+#include "graph/query/logical/operators/LogicalDropIndex.hpp"
+#include "graph/query/logical/operators/LogicalCreateVectorIndex.hpp"
+#include "graph/query/logical/operators/LogicalCreateConstraint.hpp"
+#include "graph/query/logical/operators/LogicalDropConstraint.hpp"
+#include "graph/query/logical/operators/LogicalShowConstraints.hpp"
 
 namespace graph::parser::cypher::clauses {
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleShowIndexes(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleShowIndexes(
 	CypherParser::ShowIndexesStatementContext * /*ctx*/,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
-	return planner->showIndexesOp();
+	return std::make_unique<query::logical::LogicalShowIndexes>();
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCreateIndexByPattern(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleCreateIndexByPattern(
 	CypherParser::CreateIndexByPatternContext *ctx,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Syntax: CREATE INDEX [name] FOR (n:Label) ON (n.prop)
 
@@ -55,12 +62,12 @@ std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCr
 	// 3. Property
 	std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(ctx->propertyExpression());
 
-	return planner->createIndexOp(name, label, prop);
+	return std::make_unique<query::logical::LogicalCreateIndex>(name, label, prop);
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCreateIndexByLabel(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleCreateIndexByLabel(
 	CypherParser::CreateIndexByLabelContext *ctx,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Syntax: CREATE INDEX [name] ON :Label(prop)
 	std::string name = "";
@@ -71,12 +78,12 @@ std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCr
 	std::string label = helpers::AstExtractor::extractLabelFromNodeLabel(ctx->nodeLabel());
 	std::string prop = ctx->propertyKeyName()->getText();
 
-	return planner->createIndexOp(name, label, prop);
+	return std::make_unique<query::logical::LogicalCreateIndex>(name, label, prop);
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCreateVectorIndex(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleCreateVectorIndex(
 	CypherParser::CreateVectorIndexContext *ctx,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	std::string name = ctx->symbolicName() ? ctx->symbolicName()->getText() : "";
 	std::string label = helpers::AstExtractor::extractLabelFromNodeLabel(ctx->nodeLabel());
@@ -103,34 +110,34 @@ std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCr
 	if (dim == 0)
 		throw std::runtime_error("Vector Index requires 'dimension'");
 
-	return planner->createVectorIndexOp(name, label, prop, dim, metric);
+	return std::make_unique<query::logical::LogicalCreateVectorIndex>(name, label, prop, dim, metric);
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleDropIndexByName(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleDropIndexByName(
 	CypherParser::DropIndexByNameContext *ctx,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Syntax: DROP INDEX name
 	std::string name = ctx->symbolicName()->getText();
-	return planner->dropIndexOp(name);
+	return std::make_unique<query::logical::LogicalDropIndex>(name, "", "");
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleDropIndexByLabel(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleDropIndexByLabel(
 	CypherParser::DropIndexByLabelContext *ctx,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Syntax: DROP INDEX ON :Label(prop)
 	std::string label = helpers::AstExtractor::extractLabelFromNodeLabel(ctx->nodeLabel());
 	std::string prop = ctx->propertyKeyName()->getText();
 
-	return planner->dropIndexOp(label, prop);
+	return std::make_unique<query::logical::LogicalDropIndex>("", label, prop);
 }
 
 // --- Constraint DDL ---
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCreateNodeConstraint(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleCreateNodeConstraint(
 	CypherParser::CreateNodeConstraintContext *ctx,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	std::string name = ctx->symbolicName()->getText();
 
@@ -143,18 +150,21 @@ std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCr
 
 	if (auto *unique = dynamic_cast<CypherParser::UniqueConstraintBodyContext *>(body)) {
 		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(unique->propertyExpression());
-		return planner->createConstraintOp(name, "node", "unique", label, {prop});
+		return std::make_unique<query::logical::LogicalCreateConstraint>(
+			name, "node", "unique", label, std::vector<std::string>{prop}, "");
 	}
 
 	if (auto *notNull = dynamic_cast<CypherParser::NotNullConstraintBodyContext *>(body)) {
 		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(notNull->propertyExpression());
-		return planner->createConstraintOp(name, "node", "not_null", label, {prop});
+		return std::make_unique<query::logical::LogicalCreateConstraint>(
+			name, "node", "not_null", label, std::vector<std::string>{prop}, "");
 	}
 
 	if (auto *propType = dynamic_cast<CypherParser::PropertyTypeConstraintBodyContext *>(body)) {
 		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(propType->propertyExpression());
 		std::string typeName = propType->constraintTypeName()->getText();
-		return planner->createConstraintOp(name, "node", "property_type", label, {prop}, typeName);
+		return std::make_unique<query::logical::LogicalCreateConstraint>(
+			name, "node", "property_type", label, std::vector<std::string>{prop}, typeName);
 	}
 
 	if (auto *nodeKey = dynamic_cast<CypherParser::NodeKeyConstraintBodyContext *>(body)) {
@@ -162,15 +172,16 @@ std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCr
 		for (auto *propExpr : nodeKey->propertyExpression()) {
 			props.push_back(helpers::AstExtractor::extractPropertyKeyFromExpr(propExpr));
 		}
-		return planner->createConstraintOp(name, "node", "node_key", label, props);
+		return std::make_unique<query::logical::LogicalCreateConstraint>(
+			name, "node", "node_key", label, props, "");
 	}
 
 	throw std::runtime_error("Unknown constraint body type");
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCreateEdgeConstraint(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleCreateEdgeConstraint(
 	CypherParser::CreateEdgeConstraintContext *ctx,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	std::string name = ctx->symbolicName()->getText();
 
@@ -183,32 +194,35 @@ std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleCr
 
 	if (auto *unique = dynamic_cast<CypherParser::UniqueConstraintBodyContext *>(body)) {
 		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(unique->propertyExpression());
-		return planner->createConstraintOp(name, "edge", "unique", label, {prop});
+		return std::make_unique<query::logical::LogicalCreateConstraint>(
+			name, "edge", "unique", label, std::vector<std::string>{prop}, "");
 	}
 
 	if (auto *notNull = dynamic_cast<CypherParser::NotNullConstraintBodyContext *>(body)) {
 		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(notNull->propertyExpression());
-		return planner->createConstraintOp(name, "edge", "not_null", label, {prop});
+		return std::make_unique<query::logical::LogicalCreateConstraint>(
+			name, "edge", "not_null", label, std::vector<std::string>{prop}, "");
 	}
 
 	if (auto *propType = dynamic_cast<CypherParser::PropertyTypeConstraintBodyContext *>(body)) {
 		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(propType->propertyExpression());
 		std::string typeName = propType->constraintTypeName()->getText();
-		return planner->createConstraintOp(name, "edge", "property_type", label, {prop}, typeName);
+		return std::make_unique<query::logical::LogicalCreateConstraint>(
+			name, "edge", "property_type", label, std::vector<std::string>{prop}, typeName);
 	}
 
 	throw std::runtime_error("Unknown constraint body type for edge constraint");
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleDropConstraint(
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleDropConstraint(
 	const std::string &name, bool ifExists,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
-	return planner->dropConstraintOp(name, ifExists);
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
+	return std::make_unique<query::logical::LogicalDropConstraint>(name, ifExists);
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> AdminClauseHandler::handleShowConstraints(
-	const std::shared_ptr<query::QueryPlanner> &planner) {
-	return planner->showConstraintsOp();
+std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleShowConstraints(
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
+	return std::make_unique<query::logical::LogicalShowConstraints>();
 }
 
 } // namespace graph::parser::cypher::clauses

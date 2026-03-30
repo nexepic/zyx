@@ -19,29 +19,29 @@
  **/
 
 #include "../OperatorChain.hpp"
-#include "graph/query/execution/operators/CreateEdgeOperator.hpp"
-#include "graph/query/execution/operators/CreateNodeOperator.hpp"
+#include "graph/query/logical/operators/LogicalCreateEdge.hpp"
+#include "graph/query/logical/operators/LogicalCreateNode.hpp"
 
 namespace graph::parser::cypher::helpers {
 
-std::unique_ptr<query::execution::PhysicalOperator> OperatorChain::chain(
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	std::unique_ptr<query::execution::PhysicalOperator> newOp) {
+std::unique_ptr<query::logical::LogicalOperator> OperatorChain::chain(
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	std::unique_ptr<query::logical::LogicalOperator> newOp) {
 
 	if (!rootOp) {
 		// No existing root - newOp becomes the root
 		return newOp;
 	}
 
-	// Case 1: Write Operators (Pipe) -> Wrap the current root
+	// Case 1: Write Operators (Pipe) -> Wrap the current root as child
 	// These operators need to process records from the child operator
-	if (auto *edgeOp = dynamic_cast<query::execution::operators::CreateEdgeOperator *>(newOp.get())) {
-		edgeOp->setChild(std::move(rootOp));
+	if (auto *edgeOp = dynamic_cast<query::logical::LogicalCreateEdge *>(newOp.get())) {
+		edgeOp->setChild(0, std::move(rootOp));
 		return newOp;
 	}
 
-	if (auto *nodeOp = dynamic_cast<query::execution::operators::CreateNodeOperator *>(newOp.get())) {
-		nodeOp->setChild(std::move(rootOp));
+	if (auto *nodeOp = dynamic_cast<query::logical::LogicalCreateNode *>(newOp.get())) {
+		nodeOp->setChild(0, std::move(rootOp));
 		return newOp;
 	}
 

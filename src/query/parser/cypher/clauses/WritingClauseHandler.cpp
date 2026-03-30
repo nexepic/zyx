@@ -24,12 +24,17 @@
 #include "generated/CypherLexer.h"
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/planner/PipelineValidator.hpp"
+#include "graph/query/execution/operators/SetOperator.hpp"
+#include "graph/query/execution/operators/RemoveOperator.hpp"
+#include "graph/query/logical/operators/LogicalSet.hpp"
+#include "graph/query/logical/operators/LogicalDelete.hpp"
+#include "graph/query/logical/operators/LogicalRemove.hpp"
 
 namespace graph::parser::cypher::clauses {
 
-std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handleCreate(
+std::unique_ptr<query::logical::LogicalOperator> WritingClauseHandler::handleCreate(
 	CypherParser::CreateStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
 	// Grammar: createStatement : K_CREATE pattern
@@ -38,31 +43,48 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 	return helpers::PatternBuilder::buildCreatePattern(pattern, std::move(rootOp), planner);
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handleSet(
+std::unique_ptr<query::logical::LogicalOperator> WritingClauseHandler::handleSet(
 	CypherParser::SetStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
-	// Prepare a list of items to update
-	std::vector<query::execution::operators::SetItem> items;
+	// Extract physical SetItems from the SET clause
+	auto physicalItems = helpers::PatternBuilder::extractSetItems(ctx);
 
-	// Use the helper to extract SET items
-	items = helpers::PatternBuilder::extractSetItems(ctx);
+	// Validate pipeline (SET requires preceding clause)
+	if (!rootOp) {
+		throw std::runtime_error("SET clause must follow a MATCH or CREATE clause.");
+	}
 
-	// Ensure valid pipeline (SET requires preceding clause)
-	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
-	    std::move(rootOp), planner, "SET",
-	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
-	);
+	// Convert physical SetItem to LogicalSetItem
+	std::vector<query::logical::LogicalSetItem> logicalItems;
+	logicalItems.reserve(physicalItems.size());
+	for (const auto &item : physicalItems) {
+		query::logical::SetActionType logType;
+		switch (item.type) {
+			case query::execution::operators::SetActionType::PROPERTY:
+				logType = query::logical::SetActionType::LSET_PROPERTY;
+				break;
+			case query::execution::operators::SetActionType::LABEL:
+				logType = query::logical::SetActionType::LSET_LABEL;
+				break;
+			case query::execution::operators::SetActionType::MAP_MERGE:
+				logType = query::logical::SetActionType::LSET_MAP_MERGE;
+				break;
+			default:
+				logType = query::logical::SetActionType::LSET_PROPERTY;
+				break;
+		}
+		logicalItems.push_back({logType, item.variable, item.key, item.expression});
+	}
 
-	// Create and chain the SetOperator
-	return planner->setOp(std::move(rootOp), items);
+	return std::make_unique<query::logical::LogicalSet>(std::move(logicalItems), std::move(rootOp));
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handleDelete(
+std::unique_ptr<query::logical::LogicalOperator> WritingClauseHandler::handleDelete(
 	CypherParser::DeleteStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
 	// Grammar: DETACH? DELETE expression (COMMA expression)*
 
@@ -74,21 +96,20 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 		vars.push_back(expr->getText());
 	}
 
-	// Ensure valid pipeline (DELETE requires preceding clause)
-	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
-	    std::move(rootOp), planner, "DELETE",
-	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
-	);
+	// Validate pipeline (DELETE requires preceding clause)
+	if (!rootOp) {
+		throw std::runtime_error("DELETE clause must follow a MATCH or CREATE clause.");
+	}
 
-	return planner->deleteOp(std::move(rootOp), vars, detach);
+	return std::make_unique<query::logical::LogicalDelete>(vars, detach, std::move(rootOp));
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handleRemove(
+std::unique_ptr<query::logical::LogicalOperator> WritingClauseHandler::handleRemove(
 	CypherParser::RemoveStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-	const std::shared_ptr<query::QueryPlanner> &planner) {
+	std::unique_ptr<query::logical::LogicalOperator> rootOp,
+	const std::shared_ptr<query::QueryPlanner> & /*planner*/) {
 
-	std::vector<query::execution::operators::RemoveItem> items;
+	std::vector<query::logical::LogicalRemoveItem> logicalItems;
 
 	for (auto item : ctx->removeItem()) {
 		// Case 1: n.prop (Property)
@@ -96,28 +117,29 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 			auto propExpr = item->propertyExpression();
 			std::string varName = propExpr->atom()->getText();
 			std::string keyName = propExpr->propertyKeyName(0)->getText();
-			items.push_back({query::execution::operators::RemoveActionType::PROPERTY, varName, keyName});
+			logicalItems.push_back(
+				{query::logical::LogicalRemoveActionType::LREM_PROPERTY, varName, keyName});
 		}
 		// Case 2: n:Label (Label)
 		else if (item->variable() && item->nodeLabels()) {
 			std::string varName = helpers::AstExtractor::extractVariable(item->variable());
 			std::string labelName = helpers::AstExtractor::extractLabel(item->nodeLabels());
-			items.push_back({query::execution::operators::RemoveActionType::LABEL, varName, labelName});
+			logicalItems.push_back(
+				{query::logical::LogicalRemoveActionType::LREM_LABEL, varName, labelName});
 		}
 	}
 
-	// Ensure valid pipeline (REMOVE requires preceding clause)
-	rootOp = graph::query::PipelineValidator::ensureValidPipeline(
-	    std::move(rootOp), planner, "REMOVE",
-	    graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING
-	);
+	// Validate pipeline (REMOVE requires preceding clause)
+	if (!rootOp) {
+		throw std::runtime_error("REMOVE clause must follow a MATCH or CREATE clause.");
+	}
 
-	return planner->removeOp(std::move(rootOp), items);
+	return std::make_unique<query::logical::LogicalRemove>(std::move(logicalItems), std::move(rootOp));
 }
 
-std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handleMerge(
+std::unique_ptr<query::logical::LogicalOperator> WritingClauseHandler::handleMerge(
 	CypherParser::MergeStatementContext *ctx,
-	std::unique_ptr<query::execution::PhysicalOperator> /*rootOp*/,
+	std::unique_ptr<query::logical::LogicalOperator> /*rootOp*/,
 	const std::shared_ptr<query::QueryPlanner> &planner) {
 
 	// Grammar: MERGE patternPart ( ON (MATCH|CREATE) setClause )*
@@ -164,7 +186,7 @@ std::unique_ptr<query::execution::PhysicalOperator> WritingClauseHandler::handle
 		}
 	}
 
-	// Build Operator
+	// Build Logical Operator
 	return helpers::PatternBuilder::buildMergePattern(patternPart, onCreateItems, onMatchItems, planner);
 }
 

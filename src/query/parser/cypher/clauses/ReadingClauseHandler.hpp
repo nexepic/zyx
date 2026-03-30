@@ -25,7 +25,7 @@
 #include <vector>
 #include "generated/CypherParser.h"
 #include "graph/core/Types.hpp"
-#include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::query {
 	class QueryPlanner;
@@ -48,11 +48,11 @@ public:
 	 * @param ctx The match statement context
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing MATCH
+	 * @return The resulting logical operator after processing MATCH
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleMatch(
+	static std::unique_ptr<query::logical::LogicalOperator> handleMatch(
 		CypherParser::MatchStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -61,11 +61,11 @@ public:
 	 * @param ctx The standalone call statement context
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing CALL
+	 * @return The resulting logical operator after processing CALL
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleStandaloneCall(
+	static std::unique_ptr<query::logical::LogicalOperator> handleStandaloneCall(
 		CypherParser::StandaloneCallStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -74,11 +74,11 @@ public:
 	 * @param ctx The in-query call statement context
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing CALL with YIELD
+	 * @return The resulting logical operator after processing CALL with YIELD
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleInQueryCall(
+	static std::unique_ptr<query::logical::LogicalOperator> handleInQueryCall(
 		CypherParser::InQueryCallStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -87,11 +87,11 @@ public:
 	 * @param ctx The unwind statement context
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing UNWIND
+	 * @return The resulting logical operator after processing UNWIND
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleUnwind(
+	static std::unique_ptr<query::logical::LogicalOperator> handleUnwind(
 		CypherParser::UnwindStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
@@ -104,11 +104,11 @@ public:
 	 * @param ctx The match statement context (with OPTIONAL flag)
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing OPTIONAL MATCH
+	 * @return The resulting logical operator after processing OPTIONAL MATCH
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> handleOptionalMatch(
+	static std::unique_ptr<query::logical::LogicalOperator> handleOptionalMatch(
 		CypherParser::MatchStatementContext *ctx,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 };
 

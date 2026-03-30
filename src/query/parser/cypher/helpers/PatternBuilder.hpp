@@ -26,8 +26,8 @@
 #include <vector>
 #include "generated/CypherParser.h"
 #include "graph/core/PropertyTypes.hpp"
-#include "graph/query/execution/PhysicalOperator.hpp"
-#include "graph/query/execution/operators/SetOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
+#include "graph/query/execution/operators/SetOperator.hpp"  // for SetItem (used by WritingClauseHandler)
 
 namespace graph::query {
 	class QueryPlanner;
@@ -37,10 +37,10 @@ namespace graph::parser::cypher::helpers {
 
 /**
  * @class PatternBuilder
- * @brief Builds operators for MATCH, CREATE, and MERGE patterns.
+ * @brief Builds logical operators for MATCH, CREATE, and MERGE patterns.
  *
  * This class handles the complex logic of translating Cypher pattern syntax
- * into physical operators. It supports:
+ * into logical operators. It supports:
  * - Node patterns with labels and properties
  * - Relationship patterns with direction, type, and properties
  * - Pattern chains (traversal)
@@ -50,9 +50,9 @@ namespace graph::parser::cypher::helpers {
 class PatternBuilder {
 public:
 	/**
-	 * @brief Build operators for a MATCH pattern.
+	 * @brief Build logical operators for a MATCH pattern.
 	 *
-	 * Creates scan and traversal operators based on the pattern.
+	 * Creates LogicalNodeScan and LogicalTraversal operators based on the pattern.
 	 * Handles multiple pattern parts (e.g., MATCH (a), (b)).
 	 *
 	 * @param pattern The pattern context from MATCH
@@ -60,32 +60,32 @@ public:
 	 * @param planner The query planner for creating operators
 	 * @param where Optional WHERE clause context
 	 * @param isOptional Whether this is an OPTIONAL MATCH (left outer join semantics)
-	 * @return The resulting operator after processing the pattern
+	 * @return The resulting logical operator after processing the pattern
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> buildMatchPattern(
+	static std::unique_ptr<query::logical::LogicalOperator> buildMatchPattern(
 		CypherParser::PatternContext *pattern,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner,
 		CypherParser::WhereContext *where = nullptr,
 		bool isOptional = false);
 
 	/**
-	 * @brief Build operators for a CREATE pattern.
+	 * @brief Build logical operators for a CREATE pattern.
 	 *
-	 * Creates CreateNodeOperator and CreateEdgeOperator instances.
+	 * Creates LogicalCreateNode and LogicalCreateEdge instances.
 	 *
 	 * @param pattern The pattern context from CREATE
 	 * @param rootOp The current root operator (may be null)
 	 * @param planner The query planner for creating operators
-	 * @return The resulting operator after processing the pattern
+	 * @return The resulting logical operator after processing the pattern
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> buildCreatePattern(
+	static std::unique_ptr<query::logical::LogicalOperator> buildCreatePattern(
 		CypherParser::PatternContext *pattern,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
 		const std::shared_ptr<query::QueryPlanner> &planner);
 
 	/**
-	 * @brief Build an operator for a MERGE pattern.
+	 * @brief Build a logical operator for a MERGE pattern.
 	 *
 	 * Currently supports single node MERGE only.
 	 *
@@ -93,9 +93,9 @@ public:
 	 * @param onCreateItems SET items for ON CREATE clause
 	 * @param onMatchItems SET items for ON MATCH clause
 	 * @param planner The query planner for creating operators
-	 * @return The resulting merge operator
+	 * @return The resulting logical merge operator
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> buildMergePattern(
+	static std::unique_ptr<query::logical::LogicalOperator> buildMergePattern(
 		CypherParser::PatternPartContext *patternPart,
 		const std::vector<query::execution::operators::SetItem> &onCreateItems,
 		const std::vector<query::execution::operators::SetItem> &onMatchItems,
@@ -114,26 +114,23 @@ private:
 	/**
 	 * @brief Process a single pattern element for MATCH.
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> processMatchPatternElement(
+	static std::unique_ptr<query::logical::LogicalOperator> processMatchPatternElement(
 		CypherParser::PatternElementContext *element,
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-		const std::shared_ptr<query::QueryPlanner> &planner);
+		std::unique_ptr<query::logical::LogicalOperator> rootOp);
 
 	/**
 	 * @brief Process a single pattern element for CREATE.
 	 */
 	static void processCreatePatternElement(
 		CypherParser::PatternElementContext *element,
-		std::unique_ptr<query::execution::PhysicalOperator> &rootOp,
-		const std::shared_ptr<query::QueryPlanner> &planner);
+		std::unique_ptr<query::logical::LogicalOperator> &rootOp);
 
 	/**
-	 * @brief Apply WHERE clause filter to an operator.
+	 * @brief Apply WHERE clause filter to a logical operator.
 	 */
-	static std::unique_ptr<query::execution::PhysicalOperator> applyWhereFilter(
-		std::unique_ptr<query::execution::PhysicalOperator> rootOp,
-		CypherParser::WhereContext *where,
-		const std::shared_ptr<query::QueryPlanner> &planner);
+	static std::unique_ptr<query::logical::LogicalOperator> applyWhereFilter(
+		std::unique_ptr<query::logical::LogicalOperator> rootOp,
+		CypherParser::WhereContext *where);
 
 	/**
 	 * @brief Collect all variable names introduced by a pattern element.
