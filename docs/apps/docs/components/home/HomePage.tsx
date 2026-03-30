@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectGroup } from "@/lib/docs";
 
@@ -262,6 +263,8 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
   const leaveResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const animationIdRef = useRef<number | null>(null);
+  const tickRef = useRef<(() => void) | null>(null);
+  const isAnimatingRef = useRef(false);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   const widthRef = useRef(0);
@@ -476,6 +479,30 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
     cycleTimerRef.current = null;
   }, []);
 
+  const stopAnimation = useCallback(() => {
+    isAnimatingRef.current = false;
+    if (animationIdRef.current === null) {
+      return;
+    }
+
+    window.cancelAnimationFrame(animationIdRef.current);
+    animationIdRef.current = null;
+  }, []);
+
+  const startAnimation = useCallback(() => {
+    if (isAnimatingRef.current) {
+      return;
+    }
+
+    const tick = tickRef.current;
+    if (!tick) {
+      return;
+    }
+
+    isAnimatingRef.current = true;
+    animationIdRef.current = window.requestAnimationFrame(tick);
+  }, []);
+
   useEffect(() => {
     if (isMobile) {
       stopAutoCycle();
@@ -632,19 +659,22 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       }
 
       drawAxes(canvasCtx, cosX, sinX, cosY, sinY, cx, cy, fov, axisAlpha);
+      if (!isAnimatingRef.current) {
+        return;
+      }
+
       animationIdRef.current = window.requestAnimationFrame(tick);
     };
 
     window.addEventListener("resize", resizeCanvas);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseleave", handleMouseLeave);
-    animationIdRef.current = window.requestAnimationFrame(tick);
+    tickRef.current = tick;
+    startAnimation();
 
     return () => {
-      if (animationIdRef.current) {
-        window.cancelAnimationFrame(animationIdRef.current);
-      }
-
+      stopAnimation();
+      tickRef.current = null;
       stopAutoCycle();
       window.removeEventListener("resize", resizeCanvas);
       window.removeEventListener("mousemove", handleMouseMove);
@@ -652,9 +682,52 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
 
       if (leaveResetTimerRef.current) {
         clearTimeout(leaveResetTimerRef.current);
+        leaveResetTimerRef.current = null;
       }
     };
-  }, [resizeCanvas, stopAutoCycle]);
+  }, [resizeCanvas, startAnimation, stopAnimation, stopAutoCycle]);
+
+  useEffect(() => {
+    const restartIfVisible = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      startAnimation();
+      if (!isMobileRef.current) {
+        startAutoCycle();
+      }
+    };
+
+    const handlePageShow = () => {
+      restartIfVisible();
+    };
+
+    const handlePageHide = () => {
+      stopAnimation();
+      stopAutoCycle();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        stopAnimation();
+        stopAutoCycle();
+        return;
+      }
+
+      restartIfVisible();
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [startAnimation, stopAnimation, startAutoCycle, stopAutoCycle]);
 
   const activeFeature = features[activeFeatureIndex];
   const leavingFeature =
@@ -712,25 +785,26 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
                   one local runtime.
                   <br />
                   Built for RAG, agent memory, and knowledge graph applications with
-                  low-latency control, no standalone server required.
+                  low-latency control, no standalone server required. All data lives
+                  in a single database file.
                 </>
               ) : (
                 <>
                   在单一本地引擎中统一图推理、向量检索与 ACID 事务。
                   <br />
-                  为 RAG、Agent 与知识图谱应用提供可控、低延迟的数据底座，无需独立服务器。
+                  为 RAG、Agent 与知识图谱应用提供可控、低延迟的数据底座，无需独立服务器。单个数据库文件持久化存储全量数据。
                 </>
               )}
             </p>
 
             <div className="mb-0 flex w-full flex-col gap-4 md:mb-14 md:w-auto md:flex-row">
-              <a
+              <Link
                 href={quickStartLink}
                 className="inline-flex w-full min-w-[140px] items-center justify-center gap-2 rounded-[8px] border border-[rgba(122,144,170,0.7)] bg-[rgba(35,48,63,0.6)] px-[1.4rem] py-3 text-[0.88rem] text-[#e7edf5] no-underline backdrop-blur-[4px] transition-all duration-[250ms] ease-in-out hover:bg-[#778ea7] hover:text-[#0b0f14] md:w-auto"
               >
                 {isEn ? "Get Started" : "快速开始"}
                 <span aria-hidden="true">&rarr;</span>
-              </a>
+              </Link>
 
               <a
                 href="https://github.com/nexepic/zyx"

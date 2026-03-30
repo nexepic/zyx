@@ -156,7 +156,7 @@ Before submitting a pull request:
 
 ## Documentation Standards
 
-When contributing documentation, you MUST follow the established documentation standards. See the comprehensive [Documentation Standards Guide](/.worktrees/vitepress-docs/docs/en/contributing/doc-standards.md) for detailed requirements.
+When contributing documentation, you MUST follow the established documentation standards. See the comprehensive [Documentation Standards Guide](/docs/apps/docs/content/docs/en/zyx/contributing/doc-standards.mdx) for detailed requirements.
 
 ### Key Requirements (Summary)
 
@@ -174,8 +174,8 @@ When contributing documentation, you MUST follow the established documentation s
    - Copy directly from source files
 
 4. **Bilingual Documentation**: All docs must exist in both English and Chinese
-   - English: `docs/en/...`
-   - Chinese: `docs/zh/...`
+   - English: `docs/apps/docs/content/docs/en/...`
+   - Chinese: `docs/apps/docs/content/docs/zh/...`
    - Both must be kept in sync
 
-For complete documentation standards including diagram best practices, code example requirements, and review checklists, refer to the [Documentation Standards Guide](/.worktrees/vitepress-docs/docs/en/contributing/doc-standards.md).
+For complete documentation standards including diagram best practices, code example requirements, and review checklists, refer to the [Documentation Standards Guide](/docs/apps/docs/content/docs/en/zyx/contributing/doc-standards.mdx).

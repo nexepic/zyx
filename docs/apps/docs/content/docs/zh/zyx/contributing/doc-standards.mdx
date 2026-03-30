@@ -421,8 +421,8 @@ graph TD
 #### 双语文档要求
 
 1. **平行结构**：
-   - 英文文件：`docs/en/...`
-   - 中文文件：`docs/zh/...`
+   - 英文文件：`docs/apps/docs/content/docs/en/...`
+   - 中文文件：`docs/apps/docs/content/docs/zh/...`
    - 完全镜像目录结构
    - 两种语言使用相同的文件名
 
@@ -438,9 +438,9 @@ graph TD
    - 交叉引用必须在两种语言中都有效
 
 4. **导航配置**：
-   - 更新 `docs/.vitepress/config/en.ts` 和 `docs/.vitepress/config/zh.ts`
-   - 保持侧边栏结构同步
-   - 使用一致的链接文本（适当翻译）
+   - 保持 frontmatter 元数据（`category`、`order`、project 字段）完整。
+   - 保持双语侧边栏结构同步。
+   - 使用一致的链接文案（按语言正确翻译）。
 
 #### 文档审查清单
 
@@ -461,7 +461,7 @@ graph TD
 
 **技术标准：**
 - [ ] 所有链接和交叉引用有效
-- [ ] VitePress 配置文件已更新（如果添加新文件）
+- [ ] NexDoc 元数据完整且排序行为符合预期
 - [ ] 图表使用适当的 Mermaid 类型
 - [ ] 代码块具有正确的语言标签
 - [ ] 表格格式正确
@@ -493,7 +493,7 @@ graph TD
 ### 文档生成器
 
 - **Doxygen**：从代码注释生成 API 文档
-- **VitePress**：用户和架构文档
+- **NexDoc**（`docs/apps/docs`）：用户和架构文档
 
 ### 图表工具
 

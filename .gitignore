@@ -29,5 +29,6 @@ out/
 
 # Documentation build cache
 docs/apps/docs/.next/
+docs/apps/docs/.content-collections/
 docs/node_modules/
 docs/.turbo/

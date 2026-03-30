@@ -427,8 +427,8 @@ graph TD
 #### Bilingual Documentation Requirements
 
 1. **Parallel Structure**:
-   - English files: `docs/en/...`
-   - Chinese files: `docs/zh/...`
+   - English files: `docs/apps/docs/content/docs/en/...`
+   - Chinese files: `docs/apps/docs/content/docs/zh/...`
    - Mirror directory structure exactly
    - Same filenames in both languages
 
@@ -444,9 +444,9 @@ graph TD
    - Cross-references must work in both languages
 
 4. **Navigation Configuration**:
-   - Update both `docs/.vitepress/config/en.ts` and `docs/.vitepress/config/zh.ts`
-   - Keep sidebar structure synchronized
-   - Use consistent link text (translated appropriately)
+   - Keep frontmatter metadata (`category`, `order`, project fields) complete.
+   - Keep sidebar structure synchronized across both locales.
+   - Use consistent link text (translated appropriately).
 
 #### Documentation Review Checklist
 
@@ -467,7 +467,7 @@ Before submitting documentation changes:
 
 **Technical Standards:**
 - [ ] All links and cross-references work
-- [ ] VitePress config files updated (if adding new files)
+- [ ] NexDoc metadata is complete and ordering behaves as expected
 - [ ] Diagrams use appropriate Mermaid types
 - [ ] Code blocks have correct language tags
 - [ ] Tables are properly formatted
@@ -499,7 +499,7 @@ When making code changes:
 ### Documentation Generator
 
 - **Doxygen**: For API documentation from code comments
-- **VitePress**: For user and architecture documentation
+- **NexDoc** (`docs/apps/docs`): For user and architecture documentation
 
 ### Diagram Tools
 

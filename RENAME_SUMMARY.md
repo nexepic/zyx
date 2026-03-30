@@ -164,8 +164,7 @@ All commits (chronological order):
 
 **Files Updated:**
 - `.gitignore`
-- `.vitepress/config/en.ts`
-- `.vitepress/config/zh.ts`
+- `docs/apps/docs/*` (docs app config/content)
 - `conanfile.py`
 - `scripts/*` (all build scripts)
 
@@ -320,7 +319,7 @@ The following were intentionally NOT changed:
 2. **Integration Tests**: All integration tests pass
 3. **Build Verification**: Clean build from scratch successful
 4. **CLI Testing**: Manual CLI testing completed
-5. **Documentation Build**: VitePress documentation builds successfully
+5. **Documentation Build**: NexDoc documentation builds successfully
 6. **API Compatibility**: Verified C++ and C API functionality
 
 ### Code Review

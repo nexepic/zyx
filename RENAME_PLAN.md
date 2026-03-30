@@ -75,7 +75,7 @@ All code includes this header for project constants
 
 **Documentation (~40-50 files):**
 - All `.md` files in `docs/en/` and `docs/zh/`
-- VitePress config files
+- NexDoc documentation app configuration
 
 ## Naming Convention
 

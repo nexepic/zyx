@@ -411,8 +411,8 @@ directory.
 ### Bilingual Documentation
 
 1. **Chinese and English**: All documentation MUST exist in both languages
-   - English files: `docs/en/...`
-   - Chinese files: `docs/zh/...`
+   - English files: `docs/apps/docs/content/docs/en/...`
+   - Chinese files: `docs/apps/docs/content/docs/zh/...`
    - Both versions must be kept in sync
 
 2. **Translation Quality**:
@@ -421,7 +421,7 @@ directory.
    - Maintain consistency across documents
 
 3. **File Organization**:
-   - Mirror directory structure between `docs/en/` and `docs/zh/`
+   - Mirror directory structure between `docs/apps/docs/content/docs/en/` and `docs/apps/docs/content/docs/zh/`
    - Same filenames in both languages
    - Consistent navigation and cross-references
 
@@ -432,14 +432,21 @@ directory.
 3. **Tables**: Use Markdown tables for comparisons and structured data
 4. **Lists**: Use bullet points for clarity and readability
 
-### VitePress Configuration
+### NexDoc Configuration
 
-1. **Sidebar Updates**: When adding new documentation files:
-   - Update both `docs/.vitepress/config/en.ts` and `docs/.vitepress/config/zh.ts`
-   - Maintain parallel structure between configs
-   - Add descriptive link text
+1. **Content Source**: NexDoc reads MDX content from:
+   - `docs/apps/docs/content/docs/en/...`
+   - `docs/apps/docs/content/docs/zh/...`
+   - Maintain mirrored file structure and synchronized content across locales.
 
-2. **Navigation**: Ensure proper navigation highlighting using `activeMatch` with plain strings (not regex)
+2. **Frontmatter Requirements**: New docs should include metadata fields used by NexDoc:
+   - Required: `title`
+   - Recommended: `description`, `category`, `order`
+   - Optional project grouping: `project`, `projectLabel`, `projectDescription`, `projectOrder`
+
+3. **Navigation/Sidebar**:
+   - Navigation is generated from document metadata in `docs/apps/docs/lib/docs.ts`.
+   - Keep category/order/project metadata consistent so sidebar ordering is deterministic.
 
 ### Review Checklist
 
@@ -448,7 +455,7 @@ Before submitting documentation changes, verify:
 - [ ] All Mermaid diagrams use only black/white/gray colors
 - [ ] Code examples are from actual implementation
 - [ ] Both English and Chinese versions exist and are in sync
-- [ ] VitePress config files updated (if adding new files)
+- [ ] NexDoc frontmatter metadata is complete and ordering is correct
 - [ ] All links and cross-references work correctly
 - [ ] Diagrams render correctly in the documentation site
 
