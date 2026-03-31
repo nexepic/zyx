@@ -62,27 +62,39 @@ protected:
 		}
 	}
 
+	// Helper: add a node and externalize its properties to PropertyEntities
+	// so they survive serialization/deserialization round-trips.
+	void addNodeWithProperties(graph::Node &node,
+							   const std::unordered_map<std::string, graph::PropertyValue> &props) const {
+		dataManager->addNode(node);
+		if (!props.empty()) {
+			dataManager->addNodeProperties(node.getId(), props);
+		}
+	}
+
+	void addEdgeWithProperties(graph::Edge &edge,
+							   const std::unordered_map<std::string, graph::PropertyValue> &props) const {
+		dataManager->addEdge(edge);
+		if (!props.empty()) {
+			dataManager->addEdgeProperties(edge.getId(), props);
+		}
+	}
+
 	// Helper to populate DB with mixed data
 	void populateDatabase() const {
-		// Active Nodes
+		// Active Nodes - use addNodeWithProperties to externalize properties
 		graph::Node n1(1, dataManager->getOrCreateLabelId("Person"));
-		n1.addProperty("name", std::string("Alice"));
-		n1.addProperty("age", 30);
-		dataManager->addNode(n1);
+		addNodeWithProperties(n1, {{"name", std::string("Alice")}, {"age", graph::PropertyValue(30)}});
 
 		graph::Node n2(2, dataManager->getOrCreateLabelId("Person"));
-		n2.addProperty("name", std::string("Bob"));
-		n2.addProperty("age", 25);
-		dataManager->addNode(n2);
+		addNodeWithProperties(n2, {{"name", std::string("Bob")}, {"age", graph::PropertyValue(25)}});
 
 		graph::Node n3(3, dataManager->getOrCreateLabelId("Company"));
-		n3.addProperty("name", std::string("ZYXDB"));
-		dataManager->addNode(n3);
+		addNodeWithProperties(n3, {{"name", std::string("ZYXDB")}});
 
 		// Deleted Node (ID 4)
 		graph::Node n4(4, dataManager->getOrCreateLabelId("Person"));
-		n4.addProperty("name", std::string("Ghost"));
-		dataManager->addNode(n4);
+		addNodeWithProperties(n4, {{"name", std::string("Ghost")}});
 		dataManager->deleteNode(n4);
 
 		// Padding (ID 5-20) to prevent tail reclamation
@@ -93,8 +105,7 @@ protected:
 
 		// Active Edge
 		graph::Edge e1(10, 1, 3, dataManager->getOrCreateLabelId("WORKS_AT"));
-		e1.addProperty("since", 2020);
-		dataManager->addEdge(e1);
+		addEdgeWithProperties(e1, {{"since", graph::PropertyValue(2020)}});
 
 		// Flush to ensure data persistence logic runs (update headers etc)
 		// But do NOT close the DB.
@@ -306,8 +317,8 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
 
 	for (int i = 0; i < NODE_COUNT; ++i) {
 		graph::Node n(0, lbl);
-		n.addProperty("bulk_prop", i); // Unique property value just in case
 		dataManager->addNode(n);
+		dataManager->addNodeProperties(n.getId(), {{"bulk_prop", graph::PropertyValue(i)}});
 	}
 
 	fileStorage->flush();
@@ -365,9 +376,8 @@ TEST_F(IndexBuilderTest, ProcessBatch_SkipNoLabel) {
 TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
 	// Cover the branch `if (propertyKey.empty())` -> else
 	graph::Node n(1, dataManager->getOrCreateLabelId("A"));
-	n.addProperty("target", 100);
-	n.addProperty("ignore", 200);
 	dataManager->addNode(n);
+	dataManager->addNodeProperties(1, {{"target", graph::PropertyValue(100)}, {"ignore", graph::PropertyValue(200)}});
 	fileStorage->flush();
 
 	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("target");
@@ -411,7 +421,6 @@ TEST_F(IndexBuilderTest, ProcessEdgeBatch_InactiveEdge) {
 
 	// Create edge and mark it inactive
 	graph::Edge e(100, 1, 2, edgeLbl);
-	e.addProperty("test_prop", 999);
 	dataManager->addEdge(e);
 	dataManager->deleteEdge(e); // Mark inactive
 
@@ -432,10 +441,10 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_AllProperties) {
 
 	int64_t lbl = dataManager->getOrCreateLabelId("MultiProp");
 	graph::Node n(1, lbl);
-	n.addProperty("prop1", 100);
-	n.addProperty("prop2", 200);
-	n.addProperty("prop3", std::string("value3"));
 	dataManager->addNode(n);
+	dataManager->addNodeProperties(1, {{"prop1", graph::PropertyValue(100)},
+										{"prop2", graph::PropertyValue(200)},
+										{"prop3", graph::PropertyValue(std::string("value3"))}});
 
 	fileStorage->flush();
 
@@ -472,9 +481,9 @@ TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_AllProperties) {
 
 	// Create edge with multiple properties
 	graph::Edge e(10, 1, 2, edgeLbl);
-	e.addProperty("eprop1", 111);
-	e.addProperty("eprop2", 222);
 	dataManager->addEdge(e);
+	dataManager->addEdgeProperties(10, {{"eprop1", graph::PropertyValue(111)},
+										 {"eprop2", graph::PropertyValue(222)}});
 
 	fileStorage->flush();
 
@@ -499,9 +508,8 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_PropertyNotFound) {
 	// Cover branch: if (auto it = properties.find(propertyKey); it != properties.end()) -> False
 	int64_t lbl = dataManager->getOrCreateLabelId("NoProp");
 	graph::Node n(1, lbl);
-	n.addProperty("has_prop", 100);
-	// Note: NOT adding "missing_prop"
 	dataManager->addNode(n);
+	dataManager->addNodeProperties(1, {{"has_prop", graph::PropertyValue(100)}});
 
 	fileStorage->flush();
 
@@ -526,8 +534,8 @@ TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_PropertyNotFound) {
 	dataManager->addNode(n2);
 
 	graph::Edge e(10, 1, 2, edgeLbl);
-	e.addProperty("has_eprop", 333);
 	dataManager->addEdge(e);
+	dataManager->addEdgeProperties(10, {{"has_eprop", graph::PropertyValue(333)}});
 
 	fileStorage->flush();
 
@@ -566,7 +574,6 @@ TEST_F(IndexBuilderTest, ProcessNodeBatch_NodeWithZeroLabelId) {
 	// Cover branch: if (node.getLabelId() != 0) -> False
 	// Create node with labelId = 0
 	graph::Node n(1, 0); // labelId = 0
-	n.addProperty("name", std::string("NoLabel"));
 	dataManager->addNode(n);
 
 	fileStorage->flush();
@@ -608,7 +615,6 @@ TEST_F(IndexBuilderTest, ProcessBatch_NodeWithEmptyLabel) {
 	// First create a node with a valid label
 	int64_t labelId = dataManager->getOrCreateLabelId("TestLabel");
 	graph::Node n(1, labelId);
-	n.addProperty("name", std::string("Test"));
 	dataManager->addNode(n);
 
 	fileStorage->flush();
@@ -658,8 +664,8 @@ TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_LargeBatch) {
 
 	for (int i = 0; i < EDGE_COUNT; ++i) {
 		graph::Edge e(0, 1, 2, edgeLbl);
-		e.addProperty("bulk_eprop", i * 10);
 		dataManager->addEdge(e);
+		dataManager->addEdgeProperties(e.getId(), {{"bulk_eprop", graph::PropertyValue(i * 10)}});
 	}
 
 	fileStorage->flush();
@@ -685,23 +691,23 @@ TEST_F(IndexBuilderTest, BuildIndex_WithDeletedAndActiveNodes) {
 	// Create active nodes
 	for (int i = 1; i <= 10; ++i) {
 		graph::Node n(i, lbl);
-		n.addProperty("id", i);
 		dataManager->addNode(n);
+		dataManager->addNodeProperties(i, {{"id", graph::PropertyValue(i)}});
 	}
 
 	// Create and delete some nodes
 	for (int i = 11; i <= 15; ++i) {
 		graph::Node n(i, lbl);
-		n.addProperty("id", i);
 		dataManager->addNode(n);
+		dataManager->addNodeProperties(i, {{"id", graph::PropertyValue(i)}});
 		dataManager->deleteNode(n);
 	}
 
 	// Create more active nodes
 	for (int i = 16; i <= 20; ++i) {
 		graph::Node n(i, lbl);
-		n.addProperty("id", i);
 		dataManager->addNode(n);
+		dataManager->addNodeProperties(i, {{"id", graph::PropertyValue(i)}});
 	}
 
 	fileStorage->flush();
@@ -755,7 +761,6 @@ TEST_F(IndexBuilderTest, ProcessNodeBatch_DeletedInMemory) {
 	std::vector<int64_t> nodeIds;
 	for (int i = 0; i < 10; ++i) {
 		graph::Node n(0, lbl);
-		n.addProperty("val", i);
 		dataManager->addNode(n);
 		nodeIds.push_back(n.getId());
 	}
@@ -796,7 +801,6 @@ TEST_F(IndexBuilderTest, ProcessEdgeBatch_DeletedInMemory) {
 	std::vector<int64_t> edgeIds;
 	for (int i = 0; i < 10; ++i) {
 		graph::Edge e(0, 1, 2, edgeLbl);
-		e.addProperty("val", i);
 		dataManager->addEdge(e);
 		edgeIds.push_back(e.getId());
 	}

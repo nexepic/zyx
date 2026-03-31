@@ -18,9 +18,12 @@
  **/
 
 #include "graph/storage/wal/WALManager.hpp"
+#include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
+#include <thread>
 
 namespace graph::storage::wal {
 
@@ -34,29 +37,48 @@ namespace graph::storage::wal {
 
 		bool exists = std::filesystem::exists(walPath_);
 
-		if (exists) {
-			// Open existing WAL for reading (recovery check) and appending
-			walFile_.open(walPath_, std::ios::binary | std::ios::in | std::ios::out);
-			if (!walFile_.is_open()) {
-				throw std::runtime_error("Cannot open WAL file: " + walPath_);
+		if (!exists) {
+			// Create new WAL file — use fstream to create, then close and reopen with native fd
+			{
+				std::ofstream tmp(walPath_, std::ios::binary | std::ios::trunc);
+				if (!tmp.is_open()) {
+					throw std::runtime_error("Cannot create WAL file: " + walPath_);
+				}
 			}
-		} else {
-			// Create new WAL file
-			walFile_.open(walPath_, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
-			if (!walFile_.is_open()) {
-				throw std::runtime_error("Cannot create WAL file: " + walPath_);
-			}
-			writeHeader();
 		}
 
+		// Open with native file descriptor for pwrite/pread/fsync
+		walFd_ = portable_open_rw(walPath_.c_str());
+		if (walFd_ == INVALID_FILE_HANDLE) {
+			throw std::runtime_error("Cannot open WAL file with native fd: " + walPath_);
+		}
+
+		if (!exists) {
+			writeHeader();
+			currentWriteOffset_ = sizeof(WALFileHeader);
+		} else {
+			// Determine current file size for write offset
+			// Read to find end of file
+			// Use lseek or stat to get file size
+			auto fileSize = std::filesystem::file_size(walPath_);
+			currentWriteOffset_ = fileSize;
+		}
+
+		lastSyncedOffset_ = currentWriteOffset_;
 		isOpen_ = true;
 	}
 
 	void WALManager::close() {
 		if (isOpen_) {
-			if (walFile_.is_open()) {
-				walFile_.flush();
-				walFile_.close();
+			{
+				std::lock_guard lock(commitMutex_);
+				if (!writeBuffer_.empty()) {
+					flushAndSync();
+				}
+			}
+			if (walFd_ != INVALID_FILE_HANDLE) {
+				portable_close_rw(walFd_);
+				walFd_ = INVALID_FILE_HANDLE;
 			}
 			isOpen_ = false;
 		}
@@ -65,26 +87,24 @@ namespace graph::storage::wal {
 	void WALManager::writeHeader() {
 		WALFileHeader header;
 		auto buf = serializeFileHeader(header);
-		walFile_.seekp(0);
-		walFile_.write(reinterpret_cast<const char *>(buf.data()), static_cast<std::streamsize>(buf.size()));
-		walFile_.flush();
+		ssize_t n = portable_pwrite(walFd_, buf.data(), buf.size(), 0);
+		if (n < static_cast<ssize_t>(buf.size())) {
+			throw std::runtime_error("Failed to write WAL header");
+		}
+		portable_fsync(walFd_);
 	}
 
 	bool WALManager::validateHeader() {
-		if (!walFile_.is_open())
+		if (walFd_ == INVALID_FILE_HANDLE)
 			return false;
 
-		walFile_.seekg(0, std::ios::end);
-		auto fileSize = walFile_.tellg();
-
-		if (fileSize < static_cast<std::streamoff>(sizeof(WALFileHeader)))
+		auto fileSize = std::filesystem::file_size(walPath_);
+		if (fileSize < sizeof(WALFileHeader))
 			return false;
 
-		walFile_.seekg(0);
 		uint8_t buf[sizeof(WALFileHeader)];
-		walFile_.read(reinterpret_cast<char *>(buf), sizeof(WALFileHeader));
-
-		if (!walFile_.good())
+		ssize_t n = portable_pread(walFd_, buf, sizeof(WALFileHeader), 0);
+		if (n < static_cast<ssize_t>(sizeof(WALFileHeader)))
 			return false;
 
 		WALFileHeader header = deserializeFileHeader(buf);
@@ -103,20 +123,44 @@ namespace graph::storage::wal {
 
 		auto headerBuf = serializeRecordHeader(recordHeader);
 
-		// Seek to end for append
-		walFile_.seekp(0, std::ios::end);
-		walFile_.write(reinterpret_cast<const char *>(headerBuf.data()), static_cast<std::streamsize>(headerBuf.size()));
-
+		// Append to write buffer (under commitMutex_)
+		std::lock_guard lock(commitMutex_);
+		writeBuffer_.insert(writeBuffer_.end(), headerBuf.begin(), headerBuf.end());
 		if (data && dataSize > 0) {
-			walFile_.write(reinterpret_cast<const char *>(data), dataSize);
+			writeBuffer_.insert(writeBuffer_.end(), data, data + dataSize);
 		}
+
+		// If buffer is full, flush to file (no fsync)
+		if (writeBuffer_.size() >= walBufferSize_) {
+			flushBuffer();
+		}
+	}
+
+	void WALManager::flushBuffer() {
+		// Must be called with commitMutex_ held
+		if (writeBuffer_.empty())
+			return;
+
+		ssize_t n = portable_pwrite(walFd_, writeBuffer_.data(), writeBuffer_.size(),
+									static_cast<int64_t>(currentWriteOffset_));
+		if (n < static_cast<ssize_t>(writeBuffer_.size())) {
+			throw std::runtime_error("Failed to write WAL buffer");
+		}
+		currentWriteOffset_ += writeBuffer_.size();
+		writeBuffer_.clear();
+	}
+
+	void WALManager::flushAndSync() {
+		// Must be called with commitMutex_ held
+		flushBuffer();
+		portable_fsync(walFd_);
+		lastSyncedOffset_ = currentWriteOffset_;
 	}
 
 	void WALManager::writeBegin(uint64_t txnId) { writeRecord(WALRecordType::WAL_TXN_BEGIN, txnId); }
 
 	void WALManager::writeEntityChange(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
 									   const std::vector<uint8_t> &serializedData) {
-		// Build payload: WALEntityPayload header + serialized data
 		WALEntityPayload payload{};
 		payload.entityType = entityType;
 		payload.changeType = changeType;
@@ -125,7 +169,6 @@ namespace graph::storage::wal {
 
 		auto payloadHeader = serializeEntityPayload(payload);
 
-		// Combine payload header + entity data
 		std::vector<uint8_t> fullData;
 		fullData.reserve(payloadHeader.size() + serializedData.size());
 		fullData.insert(fullData.end(), payloadHeader.begin(), payloadHeader.end());
@@ -134,16 +177,51 @@ namespace graph::storage::wal {
 		writeRecord(WALRecordType::WAL_ENTITY_WRITE, txnId, fullData.data(), static_cast<uint32_t>(fullData.size()));
 	}
 
-	void WALManager::writeCommit(uint64_t txnId) { writeRecord(WALRecordType::WAL_TXN_COMMIT, txnId); }
+	void WALManager::writeCommit(uint64_t txnId) {
+		// Append COMMIT record to buffer
+		writeRecord(WALRecordType::WAL_TXN_COMMIT, txnId);
 
-	void WALManager::writeRollback(uint64_t txnId) { writeRecord(WALRecordType::WAL_TXN_ROLLBACK, txnId); }
+		std::unique_lock lock(commitMutex_);
+
+		// Record the target offset that needs to be synced
+		uint64_t myOffset = currentWriteOffset_ + writeBuffer_.size();
+
+		if (commitInProgress_) {
+			// Another thread is performing group commit — wait for it
+			commitCV_.wait(lock, [this, myOffset] { return lastSyncedOffset_ >= myOffset; });
+			return;
+		}
+
+		// Become the group commit leader
+		commitInProgress_ = true;
+
+		// Wait briefly to accumulate more commits from other threads
+		if (groupCommitDelayUs_ > 0) {
+			lock.unlock();
+			std::this_thread::sleep_for(std::chrono::microseconds(groupCommitDelayUs_));
+			lock.lock();
+		}
+
+		// Flush buffer + fsync
+		flushAndSync();
+		commitInProgress_ = false;
+
+		// Wake all waiting committers
+		commitCV_.notify_all();
+	}
+
+	void WALManager::writeRollback(uint64_t txnId) {
+		writeRecord(WALRecordType::WAL_TXN_ROLLBACK, txnId);
+
+		// Flush buffer (no fsync needed for rollback)
+		std::lock_guard lock(commitMutex_);
+		flushBuffer();
+	}
 
 	void WALManager::sync() {
-		if (isOpen_ && walFile_.is_open()) {
-			walFile_.flush();
-			// Note: std::fstream::flush() doesn't guarantee fsync.
-			// For production use, we'd need platform-specific fsync.
-			// For now, flush() provides reasonable durability.
+		if (isOpen_ && walFd_ != INVALID_FILE_HANDLE) {
+			std::lock_guard lock(commitMutex_);
+			flushAndSync();
 		}
 	}
 
@@ -151,52 +229,68 @@ namespace graph::storage::wal {
 		if (!isOpen_)
 			return;
 
-		// Close existing WAL
-		walFile_.close();
-
-		// Truncate by reopening in trunc mode
-		walFile_.open(walPath_, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
-		if (!walFile_.is_open()) {
-			throw std::runtime_error("Cannot truncate WAL file: " + walPath_);
+		// Flush any remaining buffer
+		{
+			std::lock_guard lock(commitMutex_);
+			flushAndSync();
 		}
+
+		// Close fd
+		if (walFd_ != INVALID_FILE_HANDLE) {
+			portable_close_rw(walFd_);
+			walFd_ = INVALID_FILE_HANDLE;
+		}
+
+		// Truncate by removing and recreating
+		std::filesystem::remove(walPath_);
+
+		// Reopen
+		{
+			std::ofstream tmp(walPath_, std::ios::binary | std::ios::trunc);
+			if (!tmp.is_open()) {
+				throw std::runtime_error("Cannot recreate WAL file: " + walPath_);
+			}
+		}
+
+		walFd_ = portable_open_rw(walPath_.c_str());
+		if (walFd_ == INVALID_FILE_HANDLE) {
+			throw std::runtime_error("Cannot reopen WAL file: " + walPath_);
+		}
+
 		writeHeader();
+		currentWriteOffset_ = sizeof(WALFileHeader);
+		lastSyncedOffset_ = currentWriteOffset_;
+		writeBuffer_.clear();
 	}
 
 	bool WALManager::needsRecovery() {
-		if (!isOpen_ || !walFile_.is_open())
+		if (!isOpen_ || walFd_ == INVALID_FILE_HANDLE)
 			return false;
 
 		if (!validateHeader())
 			return false;
 
-		// Check if there are any records beyond the file header
-		walFile_.seekg(0, std::ios::end);
-		auto fileSize = walFile_.tellg();
-
-		return fileSize > static_cast<std::streamoff>(sizeof(WALFileHeader));
+		auto fileSize = std::filesystem::file_size(walPath_);
+		return fileSize > sizeof(WALFileHeader);
 	}
 
 	WALReadResult WALManager::readRecords() {
 		WALReadResult result;
 
-		if (!isOpen_ || !walFile_.is_open())
+		if (!isOpen_ || walFd_ == INVALID_FILE_HANDLE)
 			return result;
 
 		if (!validateHeader())
 			return result;
 
-		walFile_.seekg(0, std::ios::end);
-		auto fileSize = static_cast<size_t>(walFile_.tellg());
-
+		auto fileSize = std::filesystem::file_size(walPath_);
 		size_t pos = sizeof(WALFileHeader);
 
 		while (pos + sizeof(WALRecordHeader) <= fileSize) {
-			walFile_.seekg(static_cast<std::streamoff>(pos));
-
-			// Read record header
+			// Read record header via pread
 			uint8_t headerBuf[sizeof(WALRecordHeader)];
-			walFile_.read(reinterpret_cast<char *>(headerBuf), sizeof(WALRecordHeader));
-			if (!walFile_.good()) {
+			ssize_t n = portable_pread(walFd_, headerBuf, sizeof(WALRecordHeader), static_cast<int64_t>(pos));
+			if (n < static_cast<ssize_t>(sizeof(WALRecordHeader))) {
 				result.corrupted = true;
 				break;
 			}
@@ -214,8 +308,9 @@ namespace graph::storage::wal {
 			std::vector<uint8_t> data;
 			if (dataSize > 0) {
 				data.resize(dataSize);
-				walFile_.read(reinterpret_cast<char *>(data.data()), dataSize);
-				if (!walFile_.good()) {
+				n = portable_pread(walFd_, data.data(), dataSize,
+								   static_cast<int64_t>(pos + sizeof(WALRecordHeader)));
+				if (n < static_cast<ssize_t>(dataSize)) {
 					result.corrupted = true;
 					break;
 				}
@@ -227,7 +322,6 @@ namespace graph::storage::wal {
 					break;
 				}
 			} else {
-				// No data — checksum should be 0
 				if (recHeader.checksum != 0) {
 					result.corrupted = true;
 					break;

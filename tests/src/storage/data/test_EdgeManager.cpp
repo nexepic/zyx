@@ -82,8 +82,7 @@ protected:
 
 	// Helper to simulate "Save" (Flush to disk and clear dirty state)
 	void simulateSave() const {
-		(void) dataManager->prepareFlushSnapshot();
-		dataManager->commitFlushSnapshot();
+		fileStorage->flush();
 	}
 
 	std::filesystem::path testFilePath;

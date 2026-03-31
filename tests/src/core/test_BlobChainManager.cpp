@@ -574,8 +574,7 @@ TEST_F(BlobChainManagerTest, UpdateBlobChainWithDifferentData) {
 	int64_t headBlobId = blobChain[0].getId();
 
 	// Flush to make it persistent
-	dataManager->prepareFlushSnapshot();
-	dataManager->commitFlushSnapshot();
+	fileStorage->flush();
 
 	// Update with different data - should delete old chain and create new one
 	auto updatedChain = chainManager->updateBlobChain(headBlobId, entityId, entityTypeId, newData);
@@ -679,8 +678,7 @@ TEST_F(BlobChainManagerTest, GetBlobChainIdsWithInactiveBlob) {
 	ASSERT_GT(blobChain.size(), 1UL);
 
 	// Flush to make persistent before marking inactive
-	dataManager->prepareFlushSnapshot();
-	dataManager->commitFlushSnapshot();
+	fileStorage->flush();
 
 	// Mark middle blob as inactive
 	if (blobChain.size() > 1) {
@@ -1217,8 +1215,7 @@ TEST_F(BlobChainManagerTest, UpdateBlobChainDifferentCompressionMode) {
 	EXPECT_TRUE(blobChain[0].isCompressed());
 
 	// Flush to make persistent
-	dataManager->prepareFlushSnapshot();
-	dataManager->commitFlushSnapshot();
+	fileStorage->flush();
 
 	// Update with same data but different compression mode
 	// This should create a new chain even though data is the same

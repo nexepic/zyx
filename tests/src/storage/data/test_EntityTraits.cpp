@@ -31,7 +31,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
-#include "graph/storage/CacheManager.hpp"
+#include "graph/storage/PageBufferPool.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
@@ -136,63 +136,34 @@ protected:
 // ============================================================================
 
 TEST_F(EntityTraitsTest, NodeDataManagerAccess) {
-	// Test getCache for Node
-	auto &nodeCache = DataManagerAccess<Node>::getCache(dataManager.get());
-	EXPECT_NE(&nodeCache, nullptr);
-
-	// Verify cache is the correct type
-	using NodeCacheType = LRUCache<int64_t, Node>;
-	EXPECT_TRUE((std::is_same_v<decltype(nodeCache), NodeCacheType &>) );
+	// Test loadFromDisk for Node (returns default entity since no data on disk)
+	auto result = DataManagerAccess<Node>::loadFromDisk(dataManager.get(), 999);
+	EXPECT_EQ(result.getId(), 0); // No entity on disk
 }
 
 TEST_F(EntityTraitsTest, EdgeDataManagerAccess) {
-	// Test getCache for Edge
-	auto &edgeCache = DataManagerAccess<Edge>::getCache(dataManager.get());
-	EXPECT_NE(&edgeCache, nullptr);
-
-	// Verify cache is the correct type
-	using EdgeCacheType = LRUCache<int64_t, Edge>;
-	EXPECT_TRUE((std::is_same_v<decltype(edgeCache), EdgeCacheType &>) );
+	auto result = DataManagerAccess<Edge>::loadFromDisk(dataManager.get(), 999);
+	EXPECT_EQ(result.getId(), 0);
 }
 
 TEST_F(EntityTraitsTest, PropertyDataManagerAccess) {
-	// Test getCache for Property
-	auto &propertyCache = DataManagerAccess<Property>::getCache(dataManager.get());
-	EXPECT_NE(&propertyCache, nullptr);
-
-	// Verify cache is the correct type
-	using PropertyCacheType = LRUCache<int64_t, Property>;
-	EXPECT_TRUE((std::is_same_v<decltype(propertyCache), PropertyCacheType &>) );
+	auto result = DataManagerAccess<Property>::loadFromDisk(dataManager.get(), 999);
+	EXPECT_EQ(result.getId(), 0);
 }
 
 TEST_F(EntityTraitsTest, BlobDataManagerAccess) {
-	// Test getCache for Blob
-	auto &blobCache = DataManagerAccess<Blob>::getCache(dataManager.get());
-	EXPECT_NE(&blobCache, nullptr);
-
-	// Verify cache is the correct type
-	using BlobCacheType = LRUCache<int64_t, Blob>;
-	EXPECT_TRUE((std::is_same_v<decltype(blobCache), BlobCacheType &>) );
+	auto result = DataManagerAccess<Blob>::loadFromDisk(dataManager.get(), 999);
+	EXPECT_EQ(result.getId(), 0);
 }
 
 TEST_F(EntityTraitsTest, IndexDataManagerAccess) {
-	// Test getCache for Index
-	auto &indexCache = DataManagerAccess<Index>::getCache(dataManager.get());
-	EXPECT_NE(&indexCache, nullptr);
-
-	// Verify cache is the correct type
-	using IndexCacheType = LRUCache<int64_t, Index>;
-	EXPECT_TRUE((std::is_same_v<decltype(indexCache), IndexCacheType &>) );
+	auto result = DataManagerAccess<Index>::loadFromDisk(dataManager.get(), 999);
+	EXPECT_EQ(result.getId(), 0);
 }
 
 TEST_F(EntityTraitsTest, StateDataManagerAccess) {
-	// Test getCache for State
-	auto &stateCache = DataManagerAccess<State>::getCache(dataManager.get());
-	EXPECT_NE(&stateCache, nullptr);
-
-	// Verify cache is the correct type
-	using StateCacheType = LRUCache<int64_t, State>;
-	EXPECT_TRUE((std::is_same_v<decltype(stateCache), StateCacheType &>) );
+	auto result = DataManagerAccess<State>::loadFromDisk(dataManager.get(), 999);
+	EXPECT_EQ(result.getId(), 0);
 }
 
 TEST_F(EntityTraitsTest, GetSegmentIndex) {
@@ -220,78 +191,39 @@ TEST_F(EntityTraitsTest, GetSegmentIndex) {
 // EntityTraits Cache Management Tests
 // ============================================================================
 
-TEST_F(EntityTraitsTest, EntityTraitsGetCache) {
-	// Test EntityTraits::getCache for all entity types
-	auto &nodeCache = EntityTraits<Node>::getCache(dataManager.get());
-	EXPECT_NE(&nodeCache, nullptr);
-
-	auto &edgeCache = EntityTraits<Edge>::getCache(dataManager.get());
-	EXPECT_NE(&edgeCache, nullptr);
-
-	auto &propertyCache = EntityTraits<Property>::getCache(dataManager.get());
-	EXPECT_NE(&propertyCache, nullptr);
-
-	auto &blobCache = EntityTraits<Blob>::getCache(dataManager.get());
-	EXPECT_NE(&blobCache, nullptr);
-
-	auto &indexCache = EntityTraits<Index>::getCache(dataManager.get());
-	EXPECT_NE(&indexCache, nullptr);
-
-	auto &stateCache = EntityTraits<State>::getCache(dataManager.get());
-	EXPECT_NE(&stateCache, nullptr);
+TEST_F(EntityTraitsTest, EntityTraitsPagePool) {
+	// With PageBufferPool, the page pool is accessed via DataManager
+	auto &pool = dataManager->getPagePool();
+	EXPECT_EQ(pool.size(), 0u);
 }
 
 TEST_F(EntityTraitsTest, EntityTraitsAddToCache) {
-	// Create test entities
+	// addToCache is now a no-op with PageBufferPool
 	Node testNode = createTestNode(1);
 	Edge testEdge = createTestEdge(2, 1, 2);
-	// Note: Skip Property test as it may have different cache behavior
 	Blob testBlob = createTestBlob(4);
 	Index testIndex = createTestIndex(5);
 	State testState = createTestState(6);
 
-	// Test addToCache for all entity types
+	// These are no-ops — should not crash
 	EntityTraits<Node>::addToCache(dataManager.get(), testNode);
 	EntityTraits<Edge>::addToCache(dataManager.get(), testEdge);
 	EntityTraits<Blob>::addToCache(dataManager.get(), testBlob);
 	EntityTraits<Index>::addToCache(dataManager.get(), testIndex);
 	EntityTraits<State>::addToCache(dataManager.get(), testState);
 
-	// Verify entities are in cache using contains()
-	auto &nodeCache = EntityTraits<Node>::getCache(dataManager.get());
-	auto &edgeCache = EntityTraits<Edge>::getCache(dataManager.get());
-	auto &blobCache = EntityTraits<Blob>::getCache(dataManager.get());
-	auto &indexCache = EntityTraits<Index>::getCache(dataManager.get());
-	auto &stateCache = EntityTraits<State>::getCache(dataManager.get());
-
-	EXPECT_TRUE(nodeCache.contains(1));
-	EXPECT_TRUE(edgeCache.contains(2));
-	EXPECT_TRUE(blobCache.contains(4));
-	EXPECT_TRUE(indexCache.contains(5));
-	EXPECT_TRUE(stateCache.contains(6));
-
-	// Verify we can retrieve the entities
-	Node retrievedNode = nodeCache.get(1);
-	EXPECT_EQ(retrievedNode.getId(), 1);
-
-	Edge retrievedEdge = edgeCache.get(2);
-	EXPECT_EQ(retrievedEdge.getId(), 2);
+	// Page pool remains empty (addToCache is no-op)
+	EXPECT_EQ(dataManager->getPagePool().size(), 0u);
 }
 
 TEST_F(EntityTraitsTest, EntityTraitsRemoveFromCache) {
-	// Add entity to cache
-	Node testNode = createTestNode(1);
-	EntityTraits<Node>::addToCache(dataManager.get(), testNode);
-
-	// Verify entity is in cache
-	auto &nodeCache = EntityTraits<Node>::getCache(dataManager.get());
-	EXPECT_TRUE(nodeCache.contains(1));
-
-	// Remove from cache
+	// removeFromCache is now a no-op with PageBufferPool — should not crash
 	EntityTraits<Node>::removeFromCache(dataManager.get(), 1);
-
-	// Verify entity is removed
-	EXPECT_FALSE(nodeCache.contains(1));
+	EntityTraits<Edge>::removeFromCache(dataManager.get(), 2);
+	EntityTraits<Property>::removeFromCache(dataManager.get(), 3);
+	EntityTraits<Blob>::removeFromCache(dataManager.get(), 4);
+	EntityTraits<Index>::removeFromCache(dataManager.get(), 5);
+	EntityTraits<State>::removeFromCache(dataManager.get(), 6);
 }
 
 // ============================================================================
@@ -406,31 +338,6 @@ TEST_F(EntityTraitsTest, EntityTraitsTypeId) {
 	EXPECT_EQ(EntityTraits<Blob>::typeId, Blob::typeId);
 	EXPECT_EQ(EntityTraits<Index>::typeId, Index::typeId);
 	EXPECT_EQ(EntityTraits<State>::typeId, State::typeId);
-}
-
-// ============================================================================
-// EntityTraits CacheType Tests
-// ============================================================================
-
-TEST_F(EntityTraitsTest, EntityTraitsCacheType) {
-	// Verify CacheType is correctly defined for all entity types
-	using NodeCacheType = LRUCache<int64_t, Node>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Node>::CacheType, NodeCacheType>) );
-
-	using EdgeCacheType = LRUCache<int64_t, Edge>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Edge>::CacheType, EdgeCacheType>) );
-
-	using PropertyCacheType = LRUCache<int64_t, Property>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Property>::CacheType, PropertyCacheType>) );
-
-	using BlobCacheType = LRUCache<int64_t, Blob>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Blob>::CacheType, BlobCacheType>) );
-
-	using IndexCacheType = LRUCache<int64_t, Index>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<Index>::CacheType, IndexCacheType>) );
-
-	using StateCacheType = LRUCache<int64_t, State>;
-	EXPECT_TRUE((std::is_same_v<EntityTraits<State>::CacheType, StateCacheType>) );
 }
 
 // ============================================================================

@@ -381,7 +381,11 @@ namespace graph::storage {
 			for (const auto &s : delStates) deleteEntityOnDisk(s);
 		}
 
-		// Step 3: Single fsync to flush all writes
+		// Step 3: Persist segment headers (so pread-based reads see correct used/start_id)
+		persistSegmentHeaders();
+		fileHeaderManager->flushFileHeader();
+
+		// Step 4: Single fsync to flush all writes (entity data + segment headers)
 		if (writeFd_ != INVALID_FILE_HANDLE) portable_fsync(writeFd_);
 
 		debug::PerfTrace::addDuration(
@@ -389,8 +393,9 @@ namespace graph::storage {
 													ioStart)
 												.count()));
 
-		// 4. COMMIT: Clear the snapshot data
+		// 5. COMMIT: Clear the snapshot data and invalidate stale cached pages
 		dataManager->commitFlushSnapshot();
+		dataManager->getPagePool().clear();
 		debug::PerfTrace::addDuration(
 				"save.total", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 													  totalStart)
@@ -482,14 +487,23 @@ namespace graph::storage {
 		auto dataIt = entitiesForNewSlots.begin();
 		while (dataIt != entitiesForNewSlots.end()) {
 			uint32_t remaining = 0;
+			bool needNewSegment = (currentSegmentOffset == 0);
 
 			// Calculate remaining space in current segment (if it exists)
 			if (currentSegmentOffset != 0) {
 				currentSegHeader = readSegmentHeader(currentSegmentOffset);
 				remaining = currentSegHeader.capacity - currentSegHeader.used;
+
+				// Check if the next entity's ID is contiguous with the segment.
+				// Segment stores entities at position = id - start_id, so the next
+				// expected ID is start_id + used. If there's a gap, start a new segment.
+				int64_t expectedNextId = currentSegHeader.start_id + currentSegHeader.used;
+				if (remaining == 0 || dataIt->getId() != expectedNextId) {
+					needNewSegment = true;
+				}
 			}
 
-			if (currentSegmentOffset == 0 || remaining == 0) {
+			if (needNewSegment) {
 				// Allocate new segment
 				// Note: SpaceManager will handle all segment linking automatically
 				uint64_t newOffset = allocateSegment(T::typeId, itemsPerSegment);
@@ -515,8 +529,16 @@ namespace graph::storage {
 				remaining = currentSegHeader.capacity;
 			}
 
-			// Calculate number of items to write
-			uint32_t writeCount = (std::min)(remaining, static_cast<uint32_t>(entitiesForNewSlots.end() - dataIt));
+			// Calculate number of items to write, limited to contiguous IDs.
+			// Entities are sorted by ID, so we count sequential IDs from the current position.
+			uint32_t maxCount = (std::min)(remaining, static_cast<uint32_t>(entitiesForNewSlots.end() - dataIt));
+			int64_t expectedId = dataIt->getId();
+			uint32_t writeCount = 0;
+			for (auto it = dataIt; writeCount < maxCount; ++it, ++writeCount) {
+				if (it->getId() != expectedId) break;
+				expectedId++;
+			}
+
 			std::vector<T> batch(dataIt, dataIt + writeCount);
 
 			// Write data

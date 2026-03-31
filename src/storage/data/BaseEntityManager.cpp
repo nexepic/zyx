@@ -158,8 +158,7 @@ namespace graph::storage {
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::clearCache() {
 		auto *dataManager = getDataManagerPtr();
-		auto &cache = EntityTraits<EntityType>::getCache(dataManager);
-		cache.clear();
+		dataManager->clearCache();
 	}
 
 	template<typename EntityType>

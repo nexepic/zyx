@@ -22,6 +22,8 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <fstream>
+#include <thread>
 #include "graph/storage/wal/WALManager.hpp"
 #include "graph/storage/wal/WALRecord.hpp"
 
@@ -1200,11 +1202,9 @@ TEST_F(WALManagerTest, ValidateHeaderTruncatedContent) {
 // Branch Coverage Round 4 - Targeting remaining uncovered branches
 // ============================================================================
 
-// Target: Line 159 - checkpoint() truncate reopen failure
-// When checkpoint() closes the file (line 155), then tries to reopen with trunc mode
-// (line 158), if walPath_ now points to a directory, the open fails and we hit
-// the throw at line 160. This also leaves isOpen_=true but walFile_ closed,
-// exercising the defensive branches at lines 57, 74, 142, and 166.
+// Target: checkpoint() failure when WAL path becomes unwritable
+// After opening, we replace the WAL path with a non-empty directory so
+// fs::remove fails and checkpoint throws.
 TEST_F(WALManagerTest, CheckpointTruncateReopenFailure) {
 	WALManager mgr;
 	mgr.open(testDbPath.string());
@@ -1212,39 +1212,29 @@ TEST_F(WALManagerTest, CheckpointTruncateReopenFailure) {
 	mgr.writeCommit(1);
 	mgr.sync();
 
-	// Replace the WAL file with a directory so fstream::open fails on trunc-reopen
+	// Replace the WAL file with a non-empty directory so fs::remove fails
 	fs::remove(walPath);
 	fs::create_directory(walPath);
+	// Create a file inside the directory to make it non-empty
+	std::ofstream((fs::path(walPath) / "blocker").string());
 
 	// checkpoint() will:
-	// 1. walFile_.close() - succeeds (file was already deleted, but fstream still valid)
-	// 2. walFile_.open(walPath_, trunc) - FAILS because walPath_ is now a directory
-	// 3. Throws runtime_error "Cannot truncate WAL file"
-	EXPECT_THROW(mgr.checkpoint(), std::runtime_error);
+	// 1. flushAndSync - succeeds (fd is still valid from original file)
+	// 2. portable_close_rw - succeeds
+	// 3. fs::remove - throws because walPath is a non-empty directory
+	EXPECT_THROW(mgr.checkpoint(), std::filesystem::filesystem_error);
 
-	// Now mgr is in a state where isOpen_=true but walFile_ is not open.
-	// This lets us exercise all the defensive branches:
+	// Cleanup
+	fs::remove_all(walPath);
 
-	// Line 57: close() with isOpen_=true but walFile_.is_open()=false
-	// Line 142: sync() with isOpen_=true but walFile_.is_open()=false
-	// Line 166: needsRecovery() with isOpen_=true but walFile_.is_open()=false
-	EXPECT_NO_THROW(mgr.sync());  // covers line 142 false branch
-	EXPECT_FALSE(mgr.needsRecovery());  // covers line 166 false branch
-
-	// Cleanup directory before close/destructor
-	fs::remove(walPath);
-
-	// close() covers line 57 false branch
+	// close() should be safe
 	EXPECT_NO_THROW(mgr.close());
 }
 
-// Target: Line 87 - validateHeader() when walFile_.good() returns false after read
-// We trigger this by deleting the WAL file while the fstream is open and then
-// attempting to read from it. On macOS/POSIX, the file remains accessible via
-// the fd until closed, so we also truncate it. If good() still returns true,
-// the data will be zeros and the magic/version check at line 91 handles it.
+// Target: validateHeader() when file is truncated after open
+// We truncate the WAL file to invalidate its header content while the fd is open.
 TEST_F(WALManagerTest, ValidateHeader_StreamBadAfterRead) {
-	// Create a pre-existing WAL file with valid header
+	// Create a pre-existing WAL file with valid header and extra data
 	{
 		WALFileHeader header;
 		header.magic = WAL_MAGIC;
@@ -1253,7 +1243,6 @@ TEST_F(WALManagerTest, ValidateHeader_StreamBadAfterRead) {
 		std::ofstream f(walPath, std::ios::binary | std::ios::trunc);
 		f.write(reinterpret_cast<const char *>(buf.data()),
 				static_cast<std::streamsize>(buf.size()));
-		// Add extra data beyond header
 		uint8_t extra[32] = {0x01};
 		f.write(reinterpret_cast<const char *>(extra), sizeof(extra));
 	}
@@ -1261,34 +1250,14 @@ TEST_F(WALManagerTest, ValidateHeader_StreamBadAfterRead) {
 	WALManager mgr;
 	mgr.open(testDbPath.string());
 
-	// Delete the WAL file and truncate via fd to try to break the stream
+	// Truncate the file to zero bytes externally
 	{
-#ifdef _WIN32
-		// On Windows, truncate the file using Windows API
-		HANDLE hFile = CreateFileA(walPath.c_str(), GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-		if (hFile != INVALID_HANDLE_VALUE) {
-			LARGE_INTEGER size;
-			size.QuadPart = sizeof(WALFileHeader);
-			SetFilePointerEx(hFile, size, NULL, FILE_BEGIN);
-			SetEndOfFile(hFile);
-			CloseHandle(hFile);
-		}
-#else
-		// On POSIX systems, truncate to exactly header size
-		// Truncate to exactly header size (so fileSize check at line 80 passes)
-		// but the content becomes sparse/zeros
-		int fd = ::open(walPath.c_str(), O_WRONLY | O_TRUNC);
-		if (fd >= 0) {
-			// Extend to header size with zeros using ftruncate
-			ftruncate(fd, sizeof(WALFileHeader));
-			::close(fd);
-		}
-#endif
+		std::ofstream f(walPath, std::ios::binary | std::ios::trunc);
+		// File is now empty
 	}
 
-	// validateHeader: walFile_.is_open()=true, fileSize >= header size,
-	// read succeeds but data is all zeros -> magic check fails at line 91
-	// Either way, needsRecovery returns false
+	// validateHeader uses filesystem::file_size which sees the truncated file,
+	// so it returns false (file size < header size) => needsRecovery returns false
 	EXPECT_FALSE(mgr.needsRecovery());
 	mgr.close();
 }
@@ -1315,5 +1284,146 @@ TEST_F(WALManagerTest, WriteEntityChange_EmptySerializedDataHasPayloadHeader) {
 	// Verify data was written (records exist beyond header)
 	mgr.sync();
 	EXPECT_TRUE(mgr.needsRecovery());
+	mgr.close();
+}
+
+// ============================================================================
+// Group Commit Tests
+// ============================================================================
+
+TEST_F(WALManagerTest, GroupCommitBasic) {
+	WALManager mgr;
+	mgr.setGroupCommitDelayUs(0); // Disable delay for deterministic test
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	std::vector<uint8_t> data = {0x01, 0x02, 0x03};
+	mgr.writeEntityChange(1, 0, 0, 10, data);
+	mgr.writeCommit(1);
+
+	// Verify data is persisted (fsync'd by group commit)
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	EXPECT_EQ(result.records.size(), 3u); // BEGIN + ENTITY_WRITE + COMMIT
+
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, GroupCommitMultipleTransactions) {
+	WALManager mgr;
+	mgr.setGroupCommitDelayUs(0);
+	mgr.open(testDbPath.string());
+
+	for (uint64_t i = 1; i <= 5; ++i) {
+		mgr.writeBegin(i);
+		std::vector<uint8_t> data = {static_cast<uint8_t>(i)};
+		mgr.writeEntityChange(i, 0, 0, static_cast<int64_t>(i * 10), data);
+		mgr.writeCommit(i);
+	}
+
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	EXPECT_EQ(result.records.size(), 15u); // 5 * (BEGIN + ENTITY_WRITE + COMMIT)
+
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, GroupCommitConcurrent) {
+	WALManager mgr;
+	mgr.setGroupCommitDelayUs(500); // 0.5ms delay to allow grouping
+	mgr.open(testDbPath.string());
+
+	constexpr int NUM_THREADS = 4;
+	constexpr int TXN_PER_THREAD = 10;
+
+	std::vector<std::thread> threads;
+	for (int t = 0; t < NUM_THREADS; ++t) {
+		threads.emplace_back([&mgr, t]() {
+			for (int i = 0; i < TXN_PER_THREAD; ++i) {
+				uint64_t txnId = static_cast<uint64_t>(t * TXN_PER_THREAD + i + 1);
+				mgr.writeBegin(txnId);
+				std::vector<uint8_t> data = {static_cast<uint8_t>(t), static_cast<uint8_t>(i)};
+				mgr.writeEntityChange(txnId, 0, 0, static_cast<int64_t>(txnId * 10), data);
+				mgr.writeCommit(txnId);
+			}
+		});
+	}
+
+	for (auto &th : threads) {
+		th.join();
+	}
+
+	// All transactions should be persisted
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	EXPECT_EQ(result.records.size(), static_cast<size_t>(NUM_THREADS * TXN_PER_THREAD * 3));
+
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, WriteBufferFlushOnFull) {
+	WALManager mgr;
+	mgr.setGroupCommitDelayUs(0);
+	mgr.setBufferSize(256); // Small buffer to trigger frequent flushes
+	mgr.open(testDbPath.string());
+
+	// Write enough data to trigger buffer flush
+	for (uint64_t i = 1; i <= 20; ++i) {
+		mgr.writeBegin(i);
+		std::vector<uint8_t> data(50, static_cast<uint8_t>(i));
+		mgr.writeEntityChange(i, 0, 0, static_cast<int64_t>(i), data);
+		mgr.writeCommit(i);
+	}
+
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	EXPECT_EQ(result.records.size(), 60u); // 20 * 3
+
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, RollbackFlushesBuffer) {
+	WALManager mgr;
+	mgr.setGroupCommitDelayUs(0);
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	std::vector<uint8_t> data = {0x01};
+	mgr.writeEntityChange(1, 0, 0, 10, data);
+	mgr.writeRollback(1);
+
+	// Rollback flushes buffer (no fsync)
+	auto result = mgr.readRecords();
+	EXPECT_FALSE(result.corrupted);
+	EXPECT_EQ(result.records.size(), 3u); // BEGIN + ENTITY_WRITE + ROLLBACK
+
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, NativeFdFsync) {
+	WALManager mgr;
+	mgr.setGroupCommitDelayUs(0);
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.sync();
+
+	EXPECT_TRUE(mgr.needsRecovery());
+
+	mgr.checkpoint();
+	EXPECT_FALSE(mgr.needsRecovery());
+
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, GroupCommitSetters) {
+	WALManager mgr;
+	mgr.setGroupCommitDelayUs(5000);
+	mgr.setBufferSize(1024 * 1024);
+
+	mgr.open(testDbPath.string());
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
 	mgr.close();
 }

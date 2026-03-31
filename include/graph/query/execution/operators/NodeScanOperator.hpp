@@ -55,18 +55,15 @@ namespace graph::query::execution::operators {
 			// 1. Determine Candidate IDs
 			switch (config_.type) {
 				case ScanType::PROPERTY_SCAN:
-					// Implicit Filtering: The Index returns ONLY IDs that match key=value.
 					candidateIds_ = im_->findNodeIdsByProperty(config_.indexKey, config_.indexValue);
 					break;
 
 				case ScanType::LABEL_SCAN:
-					// Implicit Filtering: The Index returns IDs with this label.
 					candidateIds_ = im_->findNodeIdsByLabel(config_.label());
 					break;
 
 				case ScanType::FULL_SCAN:
 				default:
-					// No Filtering: Get all IDs.
 					int64_t maxId = dm_->getIdAllocator()->getCurrentMaxNodeId();
 					candidateIds_.reserve(maxId);
 					for (int64_t i = 1; i <= maxId; ++i)
@@ -127,13 +124,16 @@ namespace graph::query::execution::operators {
 				int64_t id = candidateIds_[idx];
 				Node node = dm_->getNode(id);
 
-				if (!node.isActive())
+				if (!node.isActive()) {
 					continue;
+				}
 
 				if (!targetLabelIds_.empty()) {
 					bool allMatch = true;
 					for (int64_t tid : targetLabelIds_) {
-						if (!node.hasLabelId(tid)) { allMatch = false; break; }
+						if (!node.hasLabelId(tid)) {
+							allMatch = false; break;
+						}
 					}
 					if (!allMatch) continue;
 				}

@@ -19,10 +19,13 @@
 
 #pragma once
 
-#include <fstream>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <vector>
 #include "WALRecord.hpp"
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/PreadHelper.hpp"
 
 namespace graph::storage {
 	class DataManager;
@@ -51,14 +54,38 @@ namespace graph::storage::wal {
 		[[nodiscard]] WALReadResult readRecords();
 		[[nodiscard]] std::string getWALPath() const { return walPath_; }
 
+		void setGroupCommitDelayUs(uint32_t delayUs) { groupCommitDelayUs_ = delayUs; }
+		void setBufferSize(size_t size) { walBufferSize_ = size; }
+
 	private:
 		std::string walPath_;
-		std::fstream walFile_;
 		bool isOpen_ = false;
+
+		// Native file descriptor for pwrite/pread/fsync
+		file_handle_t walFd_ = INVALID_FILE_HANDLE;
+
+		// Write buffer
+		std::vector<uint8_t> writeBuffer_;
+		size_t walBufferSize_ = 65536; // 64KB default
+
+		// Group commit coordination
+		std::mutex commitMutex_;
+		std::condition_variable commitCV_;
+		uint64_t lastSyncedOffset_ = 0;
+		uint64_t currentWriteOffset_ = 0;
+		bool commitInProgress_ = false;
+
+		// Group commit timing
+		uint32_t groupCommitDelayUs_ = 1000; // 1ms max wait
 
 		void writeRecord(WALRecordType type, uint64_t txnId, const uint8_t *data = nullptr, uint32_t dataSize = 0);
 		void writeHeader();
 		[[nodiscard]] bool validateHeader();
+
+		// Flush write buffer to file (no fsync)
+		void flushBuffer();
+		// Flush buffer + fsync
+		void flushAndSync();
 	};
 
 } // namespace graph::storage::wal

@@ -57,8 +57,8 @@ namespace graph::storage {
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<SpaceManager> spaceManager,
 							 const std::string &filePath) :
-		file_(std::move(file)), fileHeader_(fileHeader), nodeCache_(cacheSize), edgeCache_(cacheSize),
-		propertyCache_(cacheSize * 2), blobCache_(cacheSize / 4), indexCache_(cacheSize), stateCache_(cacheSize),
+		file_(std::move(file)), fileHeader_(fileHeader),
+		pagePool_(std::make_unique<PageBufferPool>(cacheSize)),
 		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)),
 		spaceManager_(std::move(spaceManager)) {
 
@@ -896,40 +896,23 @@ namespace graph::storage {
 		// to avoid adding them again from the disk-based load.
 		std::unordered_set<int64_t> processedIds;
 
-		// --- PASS 1: Populate from Memory (PersistenceManager & Cache) ---
+		// --- PASS 1: Populate from Memory (PersistenceManager dirty entries) ---
 		// This pass ensures data consistency by prioritizing in-memory changes over stale disk data.
-
-		// Get reference to cache via EntityTraits (Adapter)
-		auto &cache = EntityTraits<EntityType>::getCache(this);
 
 		for (int64_t currentId = startId; currentId <= endId; ++currentId) {
 			if (result.size() >= limit) {
 				break;
 			}
 
-			// 1. Check PersistenceManager first (Highest Priority)
-			// It checks both the Active Layer (new writes) and Flushing Layer (currently saving).
+			// Check PersistenceManager first (Highest Priority)
 			auto dirtyInfo = persistenceManager_->getDirtyInfo<EntityType>(currentId);
 
 			if (dirtyInfo.has_value()) {
-				// Mark this ID as processed so we don't fetch it from cache or disk.
 				processedIds.insert(currentId);
 
-				// Only add if it's not marked for deletion.
 				if (dirtyInfo->changeType != EntityChangeType::CHANGE_DELETED && dirtyInfo->backup.has_value()) {
 					result.push_back(*dirtyInfo->backup);
 				}
-				continue; // Move to the next ID
-			}
-
-			// 2. If not dirty, check the LRU Cache.
-			if (cache.contains(currentId)) {
-				EntityType entity = cache.peek(currentId); // Use peek to avoid changing LRU order
-				if (entity.isActive()) {
-					result.push_back(entity);
-				}
-				// Mark as processed so we don't fetch it from disk.
-				processedIds.insert(currentId);
 			}
 		}
 
@@ -1193,12 +1176,37 @@ namespace graph::storage {
 		return entity;
 	}
 
+	// Helper: deserialize an entity from a cached page's raw bytes.
+	// Returns default entity (id==0) if the entity is not in range or inactive.
+	template<typename EntityType>
+	EntityType deserializeEntityFromPage(const Page &page, int64_t id) {
+		// Parse segment header from the cached page bytes
+		if (page.data.size() < SEGMENT_HEADER_SIZE) {
+			return EntityType{};
+		}
+		const auto *header = reinterpret_cast<const SegmentHeader *>(page.data.data());
+
+		int64_t relativePosition = id - header->start_id;
+		if (relativePosition < 0 || static_cast<uint32_t>(relativePosition) >= header->used) {
+			return EntityType{};
+		}
+
+		constexpr size_t entitySize = EntityType::getTotalSize();
+		size_t entityOffset = SEGMENT_HEADER_SIZE + static_cast<size_t>(relativePosition) * entitySize;
+		if (entityOffset + entitySize > page.data.size()) {
+			return EntityType{};
+		}
+
+		membuf mb(const_cast<char *>(reinterpret_cast<const char *>(page.data.data() + entityOffset)), entitySize);
+		std::istream stream(&mb);
+		return EntityType::deserialize(stream);
+	}
+
 	template<typename EntityType>
 	EntityType DataManager::getEntityFromMemoryOrDisk(int64_t id) {
 		// Check if we're in a read-only transaction with a snapshot
 		const auto *snapshot = currentSnapshot_;
 		if (snapshot != nullptr) {
-			// Read-only transaction: check snapshot for dirty state, then go to disk
 			return getEntityWithSnapshot<EntityType>(id, snapshot);
 		}
 
@@ -1207,39 +1215,50 @@ namespace graph::storage {
 			auto dirtyInfo = getDirtyInfo<EntityType>(id);
 
 			if (dirtyInfo.has_value()) {
-				// CASE A: Entity is marked as DELETED in memory
 				if (dirtyInfo->changeType == EntityChangeType::CHANGE_DELETED) {
 					return make_inactive<EntityType>();
 				}
-
-				// CASE B: Entity is ADDED or MODIFIED
 				if (dirtyInfo->backup.has_value()) {
 					return *dirtyInfo->backup;
 				}
 			}
 		}
 
-		// 2. Check Cache (use peek() — shared read lock, no LRU mutation)
-		// This avoids exclusive lock contention during parallel scans.
-		auto &cache = EntityTraits<EntityType>::getCache(this);
+		// 2. Try PageBufferPool (segment-level cache)
 		{
-			EntityType entity = cache.peek(id);
-			if (entity.getId() != 0) {
-				if (!entity.isActive())
+			uint64_t segmentOffset = findSegmentForEntityId<EntityType>(id);
+			if (segmentOffset != 0) {
+				// Check pool first
+				const Page *page = pagePool_->getPage(segmentOffset);
+				if (page != nullptr) {
+					EntityType entity = deserializeEntityFromPage<EntityType>(*page, id);
+					if (entity.getId() != 0 && entity.isActive()) {
+						return entity;
+					}
 					return make_inactive<EntityType>();
-				return entity;
+				}
+
+				// Page pool miss — read full segment from disk, populate pool
+				if (readFd_ >= 0) {
+					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
+					ssize_t n = storage::portable_pread(readFd_, segData.data(), TOTAL_SEGMENT_SIZE,
+														static_cast<int64_t>(segmentOffset));
+					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
+						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
+						EntityType entity = deserializeEntityFromPage<EntityType>(
+								Page{segmentOffset, std::move(segData)}, id);
+						if (entity.getId() != 0 && entity.isActive()) {
+							return entity;
+						}
+						return make_inactive<EntityType>();
+					}
+				}
 			}
 		}
 
-		// 3. Load from Disk
-		// When pread is available, reads are thread-safe without locking.
-		// Otherwise falls back to fstream (must be single-threaded).
+		// 3. Fallback: load single entity from disk (handles segment index miss gracefully)
 		EntityType entity = EntityTraits<EntityType>::loadFromDisk(this, id);
 		if (entity.getId() != 0 && entity.isActive()) {
-			// Use tryPut to avoid blocking on cache lock during parallel scans.
-			// If another thread holds the lock, we skip caching — the entity
-			// will be re-read from disk next time (still fast via pread).
-			cache.tryPut(id, entity);
 			return entity;
 		}
 
@@ -1292,24 +1311,41 @@ namespace graph::storage {
 			}
 		}
 
-		// 2. Check Cache (use peek() — shared read lock, no LRU mutation)
-		auto &cache = EntityTraits<EntityType>::getCache(this);
+		// 2. Try PageBufferPool (segment-level cache)
 		{
-			EntityType entity = cache.peek(id);
-			if (entity.getId() != 0) {
-				if (!entity.isActive())
+			uint64_t segmentOffset = findSegmentForEntityId<EntityType>(id);
+			if (segmentOffset != 0) {
+				const Page *page = pagePool_->getPage(segmentOffset);
+				if (page != nullptr) {
+					EntityType entity = deserializeEntityFromPage<EntityType>(*page, id);
+					if (entity.getId() != 0 && entity.isActive()) {
+						return entity;
+					}
 					return make_inactive<EntityType>();
-				return entity;
+				}
+
+				if (readFd_ >= 0) {
+					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
+					ssize_t n = storage::portable_pread(readFd_, segData.data(), TOTAL_SEGMENT_SIZE,
+														static_cast<int64_t>(segmentOffset));
+					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
+						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
+						EntityType entity = deserializeEntityFromPage<EntityType>(
+								Page{segmentOffset, std::move(segData)}, id);
+						if (entity.getId() != 0 && entity.isActive()) {
+							return entity;
+						}
+						return make_inactive<EntityType>();
+					}
+				}
 			}
 		}
 
-		// 3. Load from Disk via pread (thread-safe)
+		// 3. Fallback: load single entity from disk
 		EntityType entity = EntityTraits<EntityType>::loadFromDisk(this, id);
 		if (entity.getId() != 0 && entity.isActive()) {
-			cache.tryPut(id, entity);
 			return entity;
 		}
-
 		return make_inactive<EntityType>();
 	}
 
@@ -1489,12 +1525,7 @@ namespace graph::storage {
 	// --- Cache and Transaction Management ---
 
 	void DataManager::clearCache() const {
-		nodeCache_.clear();
-		edgeCache_.clear();
-		propertyCache_.clear();
-		blobCache_.clear();
-		indexCache_.clear();
-		stateCache_.clear();
+		pagePool_->clear();
 	}
 
 	template<typename EntityType>

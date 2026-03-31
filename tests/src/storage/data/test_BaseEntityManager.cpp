@@ -354,27 +354,23 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
 }
 
 TEST_F(BaseEntityManagerTest, ExplicitCacheOperations) {
-	// 1. Setup: Create and add a node (implicitly adds to cache)
+	// 1. Setup: Create and add a node (goes to dirty registry)
 	graph::Node node = createTestNode(dataManager, "CacheTestNode");
 	nodeManager->add(node);
 	int64_t nodeId = node.getId();
 
-	// Verify it is currently in the cache (DataManager exposes specific caches)
-	EXPECT_TRUE(dataManager->getNodeCache().contains(nodeId));
+	// Entity should be retrievable (from dirty registry)
+	graph::Node retrieved = nodeManager->get(nodeId);
+	EXPECT_EQ(retrieved.getId(), nodeId);
+	EXPECT_TRUE(retrieved.isActive());
 
-	// 2. Test clearCache(): Should remove all items from the specific entity cache
+	// 2. Test clearCache(): clears the page buffer pool
 	nodeManager->clearCache();
+	EXPECT_EQ(dataManager->getPagePool().size(), 0UL);
 
-	// Verify cache is empty
-	EXPECT_FALSE(dataManager->getNodeCache().contains(nodeId));
-	EXPECT_EQ(dataManager->getNodeCache().size(), 0UL);
-
-	// 3. Test addToCache(): Should manually put the entity back
-	nodeManager->addToCache(node);
-
-	// Verify it is back in cache
-	EXPECT_TRUE(dataManager->getNodeCache().contains(nodeId));
-	EXPECT_EQ(dataManager->getNodeCache().size(), 1UL);
+	// 3. Entity is still retrievable after cache clear (from dirty registry)
+	retrieved = nodeManager->get(nodeId);
+	EXPECT_EQ(retrieved.getId(), nodeId);
 }
 
 TEST_F(BaseEntityManagerTest, AddBatchNodes) {
@@ -665,24 +661,23 @@ TEST_F(BaseEntityManagerTest, GetBatchFiltersInactive) {
     }
 }
 
-// Test addToCache directly
+// Test addToCache directly (now a no-op with PageBufferPool, but entity is still retrievable)
 TEST_F(BaseEntityManagerTest, AddToCacheDirect) {
     graph::Node node = createTestNode(dataManager, "DirectCache");
     node.setId(12345); // Manual ID
 
     nodeManager->addToCache(node);
 
-    // Verify in cache
-    EXPECT_TRUE(dataManager->getNodeCache().contains(12345));
-
-    // Can retrieve it
+    // addToCache is a no-op with PageBufferPool, so entity won't be found
+    // unless it's in the dirty registry or on disk
     graph::Node retrieved = nodeManager->get(12345);
-    EXPECT_EQ(retrieved.getId(), 12345);
+    // Entity was not added to dirty registry, so it won't be found
+    EXPECT_EQ(retrieved.getId(), 0);
 }
 
-// Test clearCache clears all entities
+// Test clearCache clears the page buffer pool
 TEST_F(BaseEntityManagerTest, ClearCacheRemovesAll) {
-    // Add multiple nodes
+    // Add multiple nodes (goes to dirty registry, not page pool)
     std::vector<int64_t> nodeIds;
     for (int i = 0; i < 10; i++) {
         graph::Node node = createTestNode(dataManager, "ClearTest" + std::to_string(i));
@@ -690,18 +685,16 @@ TEST_F(BaseEntityManagerTest, ClearCacheRemovesAll) {
         nodeIds.push_back(node.getId());
     }
 
-    // Verify all in cache
-    for (int64_t id: nodeIds) {
-        EXPECT_TRUE(dataManager->getNodeCache().contains(id));
-    }
-
     // Clear cache
     nodeManager->clearCache();
 
-    // Verify none in cache
-    EXPECT_EQ(dataManager->getNodeCache().size(), 0UL);
+    // Page pool is empty
+    EXPECT_EQ(dataManager->getPagePool().size(), 0UL);
+
+    // Entities are still retrievable from dirty registry
     for (int64_t id: nodeIds) {
-        EXPECT_FALSE(dataManager->getNodeCache().contains(id));
+        graph::Node retrieved = nodeManager->get(id);
+        EXPECT_EQ(retrieved.getId(), id);
     }
 }
 
@@ -875,16 +868,17 @@ TEST_F(BaseEntityManagerTest, EdgeCacheOperations) {
     edgeManager->add(edge);
     int64_t edgeId = edge.getId();
 
-    // Verify in cache
-    EXPECT_TRUE(dataManager->getEdgeCache().contains(edgeId));
+    // Edge should be retrievable (from dirty registry)
+    graph::Edge retrieved = edgeManager->get(edgeId);
+    EXPECT_EQ(retrieved.getId(), edgeId);
 
     // Clear cache
     edgeManager->clearCache();
-    EXPECT_FALSE(dataManager->getEdgeCache().contains(edgeId));
+    EXPECT_EQ(dataManager->getPagePool().size(), 0UL);
 
-    // Add back to cache
-    edgeManager->addToCache(edge);
-    EXPECT_TRUE(dataManager->getEdgeCache().contains(edgeId));
+    // Edge still retrievable from dirty registry
+    retrieved = edgeManager->get(edgeId);
+    EXPECT_EQ(retrieved.getId(), edgeId);
 }
 
 // Test addBatch for edges

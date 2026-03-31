@@ -107,9 +107,8 @@ protected:
 
 	// Helper to simulate "Save" (Flush to disk and clear dirty state)
 	void simulateSave() const {
-		// New Architecture: Prepare snapshot then commit it
-		(void) dataManager->prepareFlushSnapshot();
-		dataManager->commitFlushSnapshot();
+		// Use real flush path: writes dirty entities to disk, commits snapshot, clears page pool
+		fileStorage->flush();
 	}
 
 	// Helper methods to create test entities.

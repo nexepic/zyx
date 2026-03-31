@@ -43,8 +43,8 @@ using ssize_t = intptr_t;
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
 #include "graph/core/Transaction.hpp"
-#include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
+#include "graph/storage/PageBufferPool.hpp"
 #include "graph/storage/PersistenceManager.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/constraints/IEntityValidator.hpp"
@@ -260,13 +260,8 @@ namespace graph::storage {
 		[[nodiscard]] Index loadIndexFromDisk(int64_t id) const;
 		[[nodiscard]] State loadStateFromDisk(int64_t id) const;
 
-		// Cache access (for backward compatibility)
-		[[nodiscard]] LRUCache<int64_t, Node> &getNodeCache() const { return nodeCache_; }
-		[[nodiscard]] LRUCache<int64_t, Edge> &getEdgeCache() const { return edgeCache_; }
-		[[nodiscard]] LRUCache<int64_t, Property> &getPropertyCache() const { return propertyCache_; }
-		[[nodiscard]] LRUCache<int64_t, Blob> &getBlobCache() const { return blobCache_; }
-		[[nodiscard]] LRUCache<int64_t, Index> &getIndexCache() const { return indexCache_; }
-		[[nodiscard]] LRUCache<int64_t, State> &getStateCache() const { return stateCache_; }
+		// Page buffer pool access
+		[[nodiscard]] PageBufferPool &getPagePool() const { return *pagePool_; }
 
 		// Helper method for DeletionManager to update entity status in memory without recursion
 		template<typename EntityType>
@@ -343,13 +338,8 @@ namespace graph::storage {
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		FileHeader &fileHeader_; // Cached file header
 
-		// Caches
-		mutable LRUCache<int64_t, Node> nodeCache_;
-		mutable LRUCache<int64_t, Edge> edgeCache_;
-		mutable LRUCache<int64_t, Property> propertyCache_;
-		mutable LRUCache<int64_t, Blob> blobCache_;
-		mutable LRUCache<int64_t, Index> indexCache_;
-		mutable LRUCache<int64_t, State> stateCache_;
+		// Unified page buffer pool (replaces 6 entity-level LRU caches)
+		std::unique_ptr<PageBufferPool> pagePool_;
 
 		// Dirty tracking
 		std::unordered_map<int64_t, DirtyEntityInfo<Node>> dirtyNodes_;
