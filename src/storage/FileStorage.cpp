@@ -27,14 +27,17 @@
 #include <fstream>
 #include <future>
 #include <sstream>
+#include "graph/storage/StorageBootstrap.hpp"
 #include <utility>
 #include <zlib.h>
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
+#include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
+#include "graph/core/State.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/DatabaseInspector.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
@@ -104,12 +107,12 @@ namespace graph::storage {
 
 		segmentTracker = std::make_shared<SegmentTracker>(fileStream, fileHeader);
 
-		// Initialize ID allocator
+		// Initialize ID allocator (without chain walk — StorageBootstrap will provide data)
 		idAllocator = std::make_unique<IDAllocator>(
 				fileStream, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
 				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
-		idAllocator->initialize();
+		idAllocator->clearAllCaches();
 
 		// Then create the space manager
 		spaceManager =
@@ -118,7 +121,39 @@ namespace graph::storage {
 		// Initialize data manager (pass filePath for pread-based parallel reads)
 		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,
 													spaceManager, dbFilePath);
-		dataManager->initialize();
+
+		// --- Merged segment chain walk via StorageBootstrap ---
+		// Walk each chain ONCE, feeding results to both IDAllocator and SegmentIndexManager.
+		StorageBootstrap bootstrap(segmentTracker);
+		auto segmentIndexManager = dataManager->getSegmentIndexManager();
+
+		// Initialize segment index head pointers (skip chain walk — we'll provide data below)
+		segmentIndexManager->initialize(fileHeader.node_segment_head, fileHeader.edge_segment_head,
+										fileHeader.property_segment_head, fileHeader.blob_segment_head,
+										fileHeader.index_segment_head, fileHeader.state_segment_head,
+										/*skipBuild=*/true);
+
+		struct ChainInfo {
+			uint64_t head;
+			uint32_t entityType;
+		};
+		const ChainInfo chains[] = {
+			{fileHeader.node_segment_head,     Node::typeId},
+			{fileHeader.edge_segment_head,     Edge::typeId},
+			{fileHeader.property_segment_head, Property::typeId},
+			{fileHeader.blob_segment_head,     Blob::typeId},
+			{fileHeader.index_segment_head,    Index::typeId},
+			{fileHeader.state_segment_head,    State::typeId},
+		};
+
+		for (const auto &chain : chains) {
+			auto result = bootstrap.scanChain(chain.head);
+			idAllocator->initializeFromScan(chain.entityType, result.physicalMaxId);
+			segmentIndexManager->setSegmentIndex(chain.entityType, std::move(result.segmentIndexEntries));
+		}
+
+		// Initialize DataManager components (skip segment index build — already done above)
+		dataManager->initialize(/*skipSegmentIndexBuild=*/true);
 		dataManager->setDeletionFlagReference(&deleteOperationPerformed);
 
 		// Always set up auto-flush callback

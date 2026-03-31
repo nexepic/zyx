@@ -29,7 +29,8 @@ namespace graph::storage {
 		segmentTracker_(std::move(segmentTracker)) {}
 
 	void SegmentIndexManager::initialize(uint64_t &nodeHead, uint64_t &edgeHead, uint64_t &propertyHead,
-										 uint64_t &blobHead, uint64_t &indexHead, uint64_t &stateHead) {
+										 uint64_t &blobHead, uint64_t &indexHead, uint64_t &stateHead,
+										 bool skipBuild) {
 		std::unique_lock<std::shared_mutex> lock(mutex_); // Write lock
 
 		nodeSegmentHead_ = &nodeHead;
@@ -39,13 +40,10 @@ namespace graph::storage {
 		indexSegmentHead_ = &indexHead;
 		stateSegmentHead_ = &stateHead;
 
-		// Internal call doesn't need lock (we already hold it)
-		// But buildSegmentIndexes is public and locks, so we refactor logic or call unsafe internal.
-		// For safety/simplicity, we release lock and call public method,
-		// or just duplicate the build logic here since it's init.
-		// Let's call the public buildSegmentIndexes which handles locking.
-		lock.unlock();
-		buildSegmentIndexes();
+		if (!skipBuild) {
+			lock.unlock();
+			buildSegmentIndexes();
+		}
 	}
 
 	void SegmentIndexManager::buildSegmentIndexes() {
@@ -75,6 +73,13 @@ namespace graph::storage {
 			currentOffset = header.next_segment_offset;
 		}
 
+		sortSegmentIndex(segmentIndex);
+	}
+
+	void SegmentIndexManager::setSegmentIndex(uint32_t type, std::vector<SegmentIndex> entries) {
+		std::unique_lock<std::shared_mutex> lock(mutex_);
+		auto &segmentIndex = getSegmentIndexForType(type);
+		segmentIndex = std::move(entries);
 		sortSegmentIndex(segmentIndex);
 	}
 

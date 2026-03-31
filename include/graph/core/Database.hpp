@@ -21,6 +21,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 
 #include "graph/concurrent/ThreadPool.hpp"
@@ -48,8 +49,8 @@ namespace graph {
 
 		Transaction beginTransaction();
 
-		// Query engine access
-		std::shared_ptr<query::QueryEngine> getQueryEngine() { return queryEngine; }
+		// Query engine access (lazy-initialized on first call)
+		std::shared_ptr<query::QueryEngine> getQueryEngine();
 
 		// Access to storage for advanced operations
 		[[nodiscard]] std::shared_ptr<storage::FileStorage> getStorage() const { return storage; }
@@ -57,8 +58,8 @@ namespace graph {
 		// Check if there is an active transaction
 		[[nodiscard]] bool hasActiveTransaction() const;
 
-		// Access to thread pool for parallel operations
-		[[nodiscard]] std::shared_ptr<concurrent::ThreadPool> getThreadPool() const { return threadPool_; }
+		// Access to thread pool for parallel operations (lazy-initialized on first call)
+		std::shared_ptr<concurrent::ThreadPool> getThreadPool();
 
 		// Resize the thread pool at runtime
 		void setThreadPoolSize(size_t poolSize);
@@ -71,6 +72,15 @@ namespace graph {
 		std::shared_ptr<storage::wal::WALManager> walManager_;
 		std::unique_ptr<TransactionManager> transactionManager_;
 		std::shared_ptr<concurrent::ThreadPool> threadPool_;
+
+		// Lazy initialization flags
+		mutable std::once_flag threadPoolInitFlag_;
+		mutable std::once_flag queryEngineInitFlag_;
+		mutable std::once_flag walInitFlag_;
+
+		void ensureThreadPool();
+		void ensureQueryEngine();
+		void ensureWALAndTransactionManager();
 	};
 
 } // namespace graph

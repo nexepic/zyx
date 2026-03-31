@@ -123,7 +123,11 @@ TEST_F(TransactionManagerTest, SequentialTransactionsIncrementId) {
 
 TEST_F(TransactionManagerTest, WALFileCreatedOnOpen) {
 	std::string walPath = testDbPath.string() + "-wal";
+	// WAL is lazily initialized — not created until first transaction
+	EXPECT_FALSE(fs::exists(walPath));
+	auto txn = db->beginTransaction();
 	EXPECT_TRUE(fs::exists(walPath));
+	txn.rollback();
 }
 
 // ============================================================================

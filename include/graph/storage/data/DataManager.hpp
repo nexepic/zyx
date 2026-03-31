@@ -36,6 +36,8 @@ using ssize_t = intptr_t;
 #endif
 
 #include "DirtyEntityInfo.hpp"
+#include "EntityObserverManager.hpp"
+#include "TransactionContext.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
@@ -113,17 +115,26 @@ namespace graph::storage {
 		~DataManager();
 
 		/**
-		 * Initializes all managers and components
+		 * Initializes all managers and components.
+		 * @param skipSegmentIndexBuild If true, skips building segment indexes
+		 *        (caller has already populated them via StorageBootstrap).
 		 */
-		void initialize();
+		void initialize(bool skipSegmentIndexBuild = false);
 
 		// Header access
 		[[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
 		FileHeader &getFileHeaderRef() const { return fileHeader_; }
 		[[nodiscard]] uint32_t getFileVersion() const { return fileHeader_.version; }
 
-		void registerObserver(std::shared_ptr<IEntityObserver> observer);
-		void registerValidator(std::shared_ptr<constraints::IEntityValidator> validator);
+		void registerObserver(std::shared_ptr<IEntityObserver> observer) {
+			observerManager_.registerObserver(std::move(observer));
+		}
+		void registerValidator(std::shared_ptr<constraints::IEntityValidator> validator) {
+			observerManager_.registerValidator(std::move(validator));
+		}
+
+		[[nodiscard]] EntityObserverManager &getObserverManager() { return observerManager_; }
+		[[nodiscard]] const EntityObserverManager &getObserverManager() const { return observerManager_; }
 
 		template<typename T>
 		void updateEntityImpl(const T &entity, std::function<T(int64_t)> getOldFunc,
@@ -323,13 +334,16 @@ namespace graph::storage {
 		[[nodiscard]] const CommittedSnapshot *getCurrentSnapshot() const { return currentSnapshot_; }
 
 		// Transaction context management
-		void setActiveTransaction(uint64_t txnId);
-		void clearActiveTransaction();
-		[[nodiscard]] bool hasActiveTransaction() const { return transactionActive_; }
-		[[nodiscard]] uint64_t getActiveTxnId() const { return activeTxnId_; }
-		[[nodiscard]] const std::vector<Transaction::TxnOperation> &getTransactionOps() const { return txnOps_; }
+		void setActiveTransaction(uint64_t txnId) { txnContext_.setActive(txnId); }
+		void clearActiveTransaction() { txnContext_.clear(); }
+		[[nodiscard]] bool hasActiveTransaction() const { return txnContext_.isActive(); }
+		[[nodiscard]] uint64_t getActiveTxnId() const { return txnContext_.activeTxnId(); }
+		[[nodiscard]] const std::vector<Transaction::TxnOperation> &getTransactionOps() const {
+			return txnContext_.getOps();
+		}
 
-		void setWALManager(wal::WALManager *wal) { walManager_ = wal; }
+		void setWALManager(wal::WALManager *wal) { txnContext_.setWALManager(wal); }
+		[[nodiscard]] TransactionContext &getTransactionContext() { return txnContext_; }
 
 		void rollbackActiveTransaction();
 
@@ -349,12 +363,9 @@ namespace graph::storage {
 		std::unordered_map<int64_t, DirtyEntityInfo<Index>> dirtyIndexes_;
 		std::unordered_map<int64_t, DirtyEntityInfo<State>> dirtyStates_;
 
-		// Transaction context (mutable: logically separate from entity state,
+		// Transaction bookkeeping (mutable: logically separate from entity state,
 		// needs to be modifiable from const entity mutation methods)
-		mutable bool transactionActive_ = false;
-		mutable uint64_t activeTxnId_ = 0;
-		mutable std::vector<Transaction::TxnOperation> txnOps_;
-		wal::WALManager *walManager_ = nullptr;
+		mutable TransactionContext txnContext_;
 
 		// Flag for deletion tracking
 		std::atomic<bool> *deleteOperationPerformedFlag_ = nullptr;
@@ -410,27 +421,7 @@ namespace graph::storage {
 		template<typename EntityType>
 		void removeEntityProperty(int64_t entityId, const std::string &key);
 
-		void notifyNodeAdded(const Node &node) const;
-		void notifyNodesAdded(const std::vector<Node> &nodes) const;
-		void notifyNodeUpdated(const Node &oldNode, const Node &newNode) const;
-		void notifyNodeDeleted(const Node &node) const;
-
-		void notifyEdgeAdded(const Edge &edge) const;
-		void notifyEdgesAdded(const std::vector<Edge> &edges) const;
-		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const;
-		void notifyEdgeDeleted(const Edge &edge) const;
-
-		void notifyStateUpdated(const State &oldState, const State &newState) const;
-
-		std::vector<std::shared_ptr<IEntityObserver>> observers_;
-		std::vector<std::shared_ptr<constraints::IEntityValidator>> validators_;
-		mutable std::recursive_mutex observer_mutex_;
-
-		// When true, notifyNode/EdgeUpdated are suppressed.
-		// Used by addNodeProperties/addEdgeProperties/removeNodeProperty/removeEdgeProperty
-		// to prevent intermediate notifications from updateEntity calls inside PropertyManager,
-		// which would fire with incorrect (cleared inline) property state.
-		mutable bool suppressNotifications_ = false;
+		EntityObserverManager observerManager_;
 
 		// Thread-local snapshot pointer for read-only transactions.
 		// Each reader thread has its own snapshot pointer, set at transaction begin.

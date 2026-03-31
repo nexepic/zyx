@@ -100,15 +100,17 @@ namespace graph::storage {
 		};
 	} // namespace
 
-	void DataManager::initialize() {
+	void DataManager::initialize(bool skipSegmentIndexBuild) {
 		// Initialize low-level components
 		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), spaceManager_, idAllocator_);
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(shared_from_this());
 		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(shared_from_this());
 
-		// Initialize segment indexes
-		initializeSegmentIndexes();
+		// Initialize segment indexes (unless pre-built by StorageBootstrap)
+		if (!skipSegmentIndexBuild) {
+			initializeSegmentIndexes();
+		}
 
 		// Initialize entity managers
 		initializeManagers();
@@ -149,85 +151,8 @@ namespace graph::storage {
 		stateManager_ = std::make_shared<StateManager>(this, stateChainManager_, deletionManager_);
 	}
 
-	void DataManager::registerObserver(std::shared_ptr<IEntityObserver> observer) {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		observers_.push_back(std::move(observer));
-	}
-
-	void DataManager::registerValidator(std::shared_ptr<constraints::IEntityValidator> validator) {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		validators_.push_back(std::move(validator));
-	}
-
-	// --- Notification Helper Implementations ---
-
-	void DataManager::notifyNodeAdded(const Node &node) const {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			observer->onNodeAdded(node);
-		}
-	}
-
-	void DataManager::notifyNodesAdded(const std::vector<Node> &nodes) const {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			// Use the new batch interface!
-			observer->onNodesAdded(nodes);
-		}
-	}
-
-	void DataManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) const {
-		if (suppressNotifications_) return;
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			observer->onNodeUpdated(oldNode, newNode);
-		}
-	}
-
-	void DataManager::notifyNodeDeleted(const Node &node) const {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			observer->onNodeDeleted(node);
-		}
-	}
-
-	void DataManager::notifyEdgeAdded(const Edge &edge) const {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			observer->onEdgeAdded(edge);
-		}
-	}
-
-	void DataManager::notifyEdgesAdded(const std::vector<Edge> &edges) const {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			for (const auto &edge: edges) {
-				observer->onEdgeAdded(edge);
-			}
-		}
-	}
-
-	void DataManager::notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const {
-		if (suppressNotifications_) return;
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			observer->onEdgeUpdated(oldEdge, newEdge);
-		}
-	}
-
-	void DataManager::notifyEdgeDeleted(const Edge &edge) const {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			observer->onEdgeDeleted(edge);
-		}
-	}
-
-	void DataManager::notifyStateUpdated(const State &oldState, const State &newState) const {
-		std::lock_guard<std::recursive_mutex> lock(observer_mutex_);
-		for (const auto &observer: observers_) {
-			observer->onStateUpdated(oldState, newState);
-		}
-	}
+	// Observer registration is now inline in DataManager.hpp, delegating to observerManager_.
+	// All notification methods are now on EntityObserverManager.
 
 	template<typename T>
 	void DataManager::updateEntityImpl(const T &entity, std::function<T(int64_t)> getOldFunc,
@@ -281,39 +206,30 @@ namespace graph::storage {
 
 	// --- Transaction State Management ---
 
-	void DataManager::setActiveTransaction(uint64_t txnId) {
-		transactionActive_ = true;
-		activeTxnId_ = txnId;
-		txnOps_.clear();
-	}
-
-	void DataManager::clearActiveTransaction() {
-		transactionActive_ = false;
-		activeTxnId_ = 0;
-		txnOps_.clear();
-	}
+	// setActiveTransaction / clearActiveTransaction are now inline in DataManager.hpp,
+	// delegating to txnContext_.
 
 	// --- Node Operations (delegate to NodeManager) ---
 
 	void DataManager::addNode(Node &node) const {
 		// Phase 1: Validate
-		for (const auto &v : validators_) {
+		for (const auto &v : observerManager_.getValidators()) {
 			v->validateNodeInsert(node, node.getProperties());
 		}
 
 		// Phase 2: Write
 		nodeManager_->add(node);
 
-		if (transactionActive_) {
-			txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+		if (txnContext_.isActive()) {
+			txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
-			if (walManager_) {
-				walManager_->writeEntityChange(activeTxnId_, static_cast<uint8_t>(EntityType::Node),
+			if (txnContext_.getWALManager()) {
+				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Node),
 											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), node.getId(), {});
 			}
 		}
 
-		notifyNodeAdded(node);
+		observerManager_.notifyNodeAdded(node);
 	}
 
 	void DataManager::addNodes(std::vector<Node> &nodes) const {
@@ -322,18 +238,18 @@ namespace graph::storage {
 
 		// Phase 1: Validate all nodes before any writes (atomicity)
 		for (const auto &node : nodes) {
-			for (const auto &v : validators_) {
+			for (const auto &v : observerManager_.getValidators()) {
 				v->validateNodeInsert(node, node.getProperties());
 			}
 		}
 
 		// Phase 2: Write
 		nodeManager_->addBatch(nodes);
-		notifyNodesAdded(nodes);
+		observerManager_.notifyNodesAdded(nodes);
 
-		if (transactionActive_) {
+		if (txnContext_.isActive()) {
 			for (const auto &node: nodes) {
-				txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+				txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 								   static_cast<uint8_t>(EntityType::Node), node.getId()});
 			}
 		}
@@ -351,25 +267,25 @@ namespace graph::storage {
 	}
 
 	void DataManager::updateNode(const Node &node) {
-		if (transactionActive_) {
-			txnOps_.push_back({Transaction::TxnOperation::OP_UPDATE,
+		if (txnContext_.isActive()) {
+			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
 		}
 
 		updateEntityImpl<Node>(
 				node, [this](int64_t id) { return nodeManager_->get(id); },
 				[this](const Node &n) { nodeManager_->update(n); },
-				[this](const Node &o, const Node &n) { notifyNodeUpdated(o, n); });
+				[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
 	}
 
 	void DataManager::deleteNode(Node &node) const {
-		if (transactionActive_) {
-			txnOps_.push_back({Transaction::TxnOperation::OP_DELETE,
+		if (txnContext_.isActive()) {
+			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
 		}
 
 		nodeManager_->remove(node);
-		notifyNodeDeleted(node);
+		observerManager_.notifyNodeDeleted(node);
 	}
 
 	Node DataManager::getNode(int64_t id) const { return nodeManager_->get(id); }
@@ -396,15 +312,15 @@ namespace graph::storage {
 		for (const auto &[key, val] : properties) {
 			mergedProps[key] = val;
 		}
-		for (const auto &v : validators_) {
+		for (const auto &v : observerManager_.getValidators()) {
 			v->validateNodeUpdate(oldNode, existingProps, mergedProps);
 		}
 
 		// 2. Perform the modification (suppress intermediate notifications from updateEntity
 		//    inside PropertyManager, which would fire with cleared inline properties)
-		suppressNotifications_ = true;
+		observerManager_.setSuppressNotifications(true);
 		nodeManager_->addProperties(nodeId, properties);
-		suppressNotifications_ = false;
+		observerManager_.setSuppressNotifications(false);
 
 		// 3. Snapshot NEW state
 		Node newNode = nodeManager_->get(nodeId);
@@ -412,7 +328,7 @@ namespace graph::storage {
 		newNode.setProperties(newProps);
 
 		// 4. Notify with valid snapshots (full properties, not just inline)
-		notifyNodeUpdated(oldNode, newNode);
+		observerManager_.notifyNodeUpdated(oldNode, newNode);
 	}
 
 	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) const {
@@ -425,14 +341,14 @@ namespace graph::storage {
 		// 1.5. Validate: build props with key removed
 		auto removedProps = existingProps;
 		removedProps.erase(key);
-		for (const auto &v : validators_) {
+		for (const auto &v : observerManager_.getValidators()) {
 			v->validateNodeUpdate(oldNode, existingProps, removedProps);
 		}
 
 		// 2. Perform removal (suppress intermediate notifications)
-		suppressNotifications_ = true;
+		observerManager_.setSuppressNotifications(true);
 		nodeManager_->removeProperty(nodeId, key);
-		suppressNotifications_ = false;
+		observerManager_.setSuppressNotifications(false);
 
 		// 3. Snapshot NEW state
 		Node newNode = nodeManager_->get(nodeId);
@@ -440,7 +356,7 @@ namespace graph::storage {
 		newNode.setProperties(newProps);
 
 		// 4. Notify
-		notifyNodeUpdated(oldNode, newNode);
+		observerManager_.notifyNodeUpdated(oldNode, newNode);
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) const {
@@ -630,23 +546,23 @@ namespace graph::storage {
 
 	void DataManager::addEdge(Edge &edge) const {
 		// Phase 1: Validate
-		for (const auto &v : validators_) {
+		for (const auto &v : observerManager_.getValidators()) {
 			v->validateEdgeInsert(edge, edge.getProperties());
 		}
 
 		// Phase 2: Write
 		edgeManager_->add(edge);
 
-		if (transactionActive_) {
-			txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+		if (txnContext_.isActive()) {
+			txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
-			if (walManager_) {
-				walManager_->writeEntityChange(activeTxnId_, static_cast<uint8_t>(EntityType::Edge),
+			if (txnContext_.getWALManager()) {
+				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Edge),
 											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), edge.getId(), {});
 			}
 		}
 
-		notifyEdgeAdded(edge);
+		observerManager_.notifyEdgeAdded(edge);
 	}
 
 	void DataManager::addEdges(std::vector<Edge> &edges) const {
@@ -655,7 +571,7 @@ namespace graph::storage {
 
 		// Phase 1: Validate all edges before any writes (atomicity)
 		for (const auto &edge : edges) {
-			for (const auto &v : validators_) {
+			for (const auto &v : observerManager_.getValidators()) {
 				v->validateEdgeInsert(edge, edge.getProperties());
 			}
 		}
@@ -664,11 +580,11 @@ namespace graph::storage {
 		edgeManager_->addBatch(edges);
 
 		// 2. Indexing (needs IDs + Props)
-		notifyEdgesAdded(edges);
+		observerManager_.notifyEdgesAdded(edges);
 
-		if (transactionActive_) {
+		if (txnContext_.isActive()) {
 			for (const auto &edge: edges) {
-				txnOps_.push_back({Transaction::TxnOperation::OP_ADD,
+				txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 								   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
 			}
 		}
@@ -689,25 +605,25 @@ namespace graph::storage {
 	}
 
 	void DataManager::updateEdge(const Edge &edge) {
-		if (transactionActive_) {
-			txnOps_.push_back({Transaction::TxnOperation::OP_UPDATE,
+		if (txnContext_.isActive()) {
+			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
 		}
 
 		updateEntityImpl<Edge>(
 				edge, [this](int64_t id) { return edgeManager_->get(id); },
 				[this](const Edge &e) { edgeManager_->update(e); },
-				[this](const Edge &o, const Edge &n) { notifyEdgeUpdated(o, n); });
+				[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
 	}
 
 	void DataManager::deleteEdge(Edge &edge) const {
-		if (transactionActive_) {
-			txnOps_.push_back({Transaction::TxnOperation::OP_DELETE,
+		if (txnContext_.isActive()) {
+			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
 		}
 
 		edgeManager_->remove(edge);
-		notifyEdgeDeleted(edge);
+		observerManager_.notifyEdgeDeleted(edge);
 	}
 
 	Edge DataManager::getEdge(int64_t id) const { return edgeManager_->get(id); }
@@ -733,21 +649,21 @@ namespace graph::storage {
 		for (const auto &[key, val] : properties) {
 			mergedProps[key] = val;
 		}
-		for (const auto &v : validators_) {
+		for (const auto &v : observerManager_.getValidators()) {
 			v->validateEdgeUpdate(oldEdge, existingProps, mergedProps);
 		}
 
 		// 2. Perform modification (suppress intermediate notifications)
-		suppressNotifications_ = true;
+		observerManager_.setSuppressNotifications(true);
 		edgeManager_->addProperties(edgeId, properties);
-		suppressNotifications_ = false;
+		observerManager_.setSuppressNotifications(false);
 
 		// 3. Snapshot NEW state
 		Edge newEdge = edgeManager_->get(edgeId);
 		auto newProps = edgeManager_->getProperties(edgeId);
 		newEdge.setProperties(newProps);
 
-		notifyEdgeUpdated(oldEdge, newEdge);
+		observerManager_.notifyEdgeUpdated(oldEdge, newEdge);
 	}
 
 	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) const {
@@ -760,21 +676,21 @@ namespace graph::storage {
 		// 1.5. Validate: build props with key removed
 		auto removedProps = existingProps;
 		removedProps.erase(key);
-		for (const auto &v : validators_) {
+		for (const auto &v : observerManager_.getValidators()) {
 			v->validateEdgeUpdate(oldEdge, existingProps, removedProps);
 		}
 
 		// 2. Perform removal (suppress intermediate notifications)
-		suppressNotifications_ = true;
+		observerManager_.setSuppressNotifications(true);
 		edgeManager_->removeProperty(edgeId, key);
-		suppressNotifications_ = false;
+		observerManager_.setSuppressNotifications(false);
 
 		// 3. Snapshot NEW state
 		Edge newEdge = edgeManager_->get(edgeId);
 		auto newProps = edgeManager_->getProperties(edgeId);
 		newEdge.setProperties(newProps);
 
-		notifyEdgeUpdated(oldEdge, newEdge);
+		observerManager_.notifyEdgeUpdated(oldEdge, newEdge);
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) const {
@@ -851,7 +767,7 @@ namespace graph::storage {
 		const State newState = stateManager_->findByKey(stateKey);
 
 		// 4. Notify Listeners
-		notifyStateUpdated(oldState, newState);
+		observerManager_.notifyStateUpdated(oldState, newState);
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getStateProperties(const std::string &stateKey) const {
@@ -1134,7 +1050,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::checkAndTriggerAutoFlush() const {
-		if (transactionActive_)
+		if (txnContext_.isActive())
 			return; // Suppress auto-flush during active transaction
 		persistenceManager_->checkAndTriggerAutoFlush();
 	}
@@ -1482,7 +1398,7 @@ namespace graph::storage {
 
 	void DataManager::rollbackActiveTransaction() {
 		// 1. Fire reverse observer notifications to revert index state
-		for (auto it = txnOps_.rbegin(); it != txnOps_.rend(); ++it) {
+		for (auto it = txnContext_.getOps().rbegin(); it != txnContext_.getOps().rend(); ++it) {
 			auto entityType = static_cast<EntityType>(it->entityType);
 
 			switch (it->opType) {
@@ -1491,13 +1407,13 @@ namespace graph::storage {
 					if (entityType == EntityType::Node) {
 						try {
 							Node node = nodeManager_->get(it->entityId);
-							notifyNodeDeleted(node);
+							observerManager_.notifyNodeDeleted(node);
 						} catch (...) {
 						}
 					} else if (entityType == EntityType::Edge) {
 						try {
 							Edge edge = edgeManager_->get(it->entityId);
-							notifyEdgeDeleted(edge);
+							observerManager_.notifyEdgeDeleted(edge);
 						} catch (...) {
 						}
 					}

@@ -20,8 +20,11 @@
 
 #include "graph/core/Database.hpp"
 #include <filesystem>
+#include "graph/concurrent/ThreadPool.hpp"
+#include "graph/query/api/QueryEngine.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/VectorIndexManager.hpp"
+#include "graph/storage/wal/WALManager.hpp"
 
 namespace graph {
 
@@ -41,42 +44,14 @@ namespace graph {
 			return;
 		}
 
+		// Essential initialization — always needed at open()
 		storage->open();
 		configManager_ = std::make_shared<config::SystemConfigManager>(storage->getSystemStateManager(), storage);
 		configManager_->loadAndApplyAll();
 		storage->getDataManager()->registerObserver(configManager_);
 
-		// Initialize thread pool from configuration
-		size_t poolSize = configManager_->getThreadPoolSize();
-		threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
-
-		// Wire thread pool to storage layer
-		storage->setThreadPool(threadPool_.get());
-
-		queryEngine = std::make_shared<query::QueryEngine>(storage);
-		queryEngine->setThreadPool(threadPool_.get());
-
-		// Wire thread pool to vector index subsystem
-		auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
-		if (vim)
-			vim->setThreadPool(threadPool_.get());
-
-		// Initialize WAL manager
-		walManager_ = std::make_shared<storage::wal::WALManager>();
-		walManager_->open(dbPath);
-
-		// If WAL needs recovery, replay committed transactions
-		if (walManager_->needsRecovery()) {
-			// For now, just checkpoint (discard incomplete WAL data)
-			// Full replay would deserialize entities and apply them
-			walManager_->checkpoint();
-		}
-
-		// Initialize transaction manager
-		transactionManager_ = std::make_unique<TransactionManager>(storage, walManager_);
-
-		// Set WAL manager reference in DataManager
-		storage->getDataManager()->setWALManager(walManager_.get());
+		// ThreadPool, QueryEngine, WALManager, TransactionManager are deferred
+		// to first use via ensure*() methods with std::call_once.
 	}
 
 	bool Database::openIfExists() {
@@ -98,7 +73,7 @@ namespace graph {
 			return;
 		}
 
-		// Close WAL manager
+		// Close WAL manager (only if it was initialized)
 		if (walManager_) {
 			walManager_->close();
 		}
@@ -112,6 +87,9 @@ namespace graph {
 		if (!isOpen()) {
 			open();
 		}
+
+		// Ensure WAL and transaction manager are ready
+		const_cast<Database *>(this)->ensureWALAndTransactionManager();
 
 		// Flush any pending changes to ensure clean start
 		storage->flush();
@@ -138,6 +116,62 @@ namespace graph {
 			if (vim)
 				vim->setThreadPool(threadPool_.get());
 		}
+	}
+
+	// --- Lazy initialization methods ---
+
+	void Database::ensureThreadPool() {
+		std::call_once(threadPoolInitFlag_, [this]() {
+			size_t poolSize = configManager_->getThreadPoolSize();
+			threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
+			storage->setThreadPool(threadPool_.get());
+		});
+	}
+
+	void Database::ensureQueryEngine() {
+		std::call_once(queryEngineInitFlag_, [this]() {
+			ensureThreadPool();
+			queryEngine = std::make_shared<query::QueryEngine>(storage);
+			queryEngine->setThreadPool(threadPool_.get());
+
+			// Wire thread pool to vector index subsystem
+			auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
+			if (vim)
+				vim->setThreadPool(threadPool_.get());
+		});
+	}
+
+	void Database::ensureWALAndTransactionManager() {
+		std::call_once(walInitFlag_, [this]() {
+			ensureThreadPool();
+
+			// Initialize WAL manager
+			walManager_ = std::make_shared<storage::wal::WALManager>();
+			walManager_->open(dbPath);
+
+			// If WAL needs recovery, replay committed transactions
+			if (walManager_->needsRecovery()) {
+				walManager_->checkpoint();
+			}
+
+			// Initialize transaction manager
+			transactionManager_ = std::make_unique<TransactionManager>(storage, walManager_);
+
+			// Set WAL manager reference in DataManager
+			storage->getDataManager()->setWALManager(walManager_.get());
+		});
+	}
+
+	std::shared_ptr<query::QueryEngine> Database::getQueryEngine() {
+		if (!isOpen()) return nullptr;
+		ensureQueryEngine();
+		return queryEngine;
+	}
+
+	std::shared_ptr<concurrent::ThreadPool> Database::getThreadPool() {
+		if (!isOpen()) return nullptr;
+		ensureThreadPool();
+		return threadPool_;
 	}
 
 } // namespace graph

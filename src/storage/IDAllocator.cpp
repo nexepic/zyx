@@ -156,6 +156,35 @@ namespace graph::storage {
 		}
 	}
 
+	void IDAllocator::initializeFromScan(uint32_t entityType, int64_t physicalMaxId) {
+		// Map entityType to the corresponding logical max ID reference
+		int64_t *logicalMaxPtr = nullptr;
+		switch (entityType) {
+			case 0: logicalMaxPtr = &currentMaxNodeId_; break;  // Node
+			case 1: logicalMaxPtr = &currentMaxEdgeId_; break;  // Edge
+			case 2: logicalMaxPtr = &currentMaxPropId_; break;  // Property
+			case 3: logicalMaxPtr = &currentMaxBlobId_; break;  // Blob
+			case 4: logicalMaxPtr = &currentMaxIndexId_; break; // Index
+			case 5: logicalMaxPtr = &currentMaxStateId_; break; // State
+			default: return;
+		}
+
+		int64_t &logicalMaxId = *logicalMaxPtr;
+
+		// Same gap recovery logic as recoverGapIds, but without the chain walk
+		if (logicalMaxId > physicalMaxId) {
+			int64_t gapStart = physicalMaxId + 1;
+			int64_t gapEnd = logicalMaxId;
+			volatileCache_[entityType].addRange(gapStart, gapEnd);
+			Log::info("IDAllocator: Recovered gaps for Type {}: [{}, {}]", entityType, gapStart, gapEnd);
+		} else if (physicalMaxId > logicalMaxId) {
+			Log::warn("IDAllocator: Detected stale header for Type {}. Logical: {}, Physical: {}. Correcting to "
+					  "Physical Max.",
+					  entityType, logicalMaxId, physicalMaxId);
+			logicalMaxId = physicalMaxId;
+		}
+	}
+
 	void IDAllocator::clearAllCaches() {
 		std::lock_guard<std::mutex> lock(mutex_);
 		hotCache_.clear();

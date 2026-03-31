@@ -82,6 +82,12 @@ namespace graph::storage {
 		void initialize();
 
 		/**
+		 * @brief Initializes gap recovery for a single entity type using pre-scanned physical max ID.
+		 * Used by StorageBootstrap to avoid duplicate chain walks.
+		 */
+		void initializeFromScan(uint32_t entityType, int64_t physicalMaxId);
+
+		/**
 		 * @brief Clears caches for persisted IDs (L1/L2).
 		 * @note Does NOT clear Volatile cache to prevent ID leaks during normal operation.
 		 */

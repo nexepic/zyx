@@ -48,7 +48,7 @@ namespace graph::storage {
 		explicit SegmentIndexManager(std::shared_ptr<SegmentTracker> segmentTracker);
 
 		void initialize(uint64_t &nodeHead, uint64_t &edgeHead, uint64_t &propertyHead, uint64_t &blobHead,
-						uint64_t &indexHead, uint64_t &stateHead);
+						uint64_t &indexHead, uint64_t &stateHead, bool skipBuild = false);
 
 		/**
 		 * @brief Find the segment containing an entity ID.
@@ -68,6 +68,12 @@ namespace graph::storage {
 		 * @brief Full rebuild of indexes (Used during initialization/compaction).
 		 */
 		void buildSegmentIndexes();
+
+		/**
+		 * @brief Sets pre-built segment index entries for a given entity type.
+		 * Used by StorageBootstrap to avoid duplicate chain walks.
+		 */
+		void setSegmentIndex(uint32_t type, std::vector<SegmentIndex> entries);
 
 		/**
 		 * @brief Updates or Inserts a segment index entry based on the header.
