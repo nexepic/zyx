@@ -29,6 +29,7 @@
 #include "EntityReferenceUpdater.hpp"
 #include "FileHeaderManager.hpp"
 #include "IDAllocator.hpp"
+#include "PwriteHelper.hpp"
 #include "SegmentTracker.hpp"
 #include "SegmentType.hpp"
 #include "StorageHeaders.hpp"
@@ -72,8 +73,13 @@ namespace graph::storage {
 		bool processEmptySegments(uint32_t type) const;
 		void processAllEmptySegments() const;
 
-		// Truncates the file by removing unused trailing segments
-		bool truncateFile() const;
+		// Truncates the file by removing unused trailing segments.
+		// When @p nativeFd is a valid handle (from portable_open_rw), uses
+		// portable_ftruncate() for an efficient in-place truncation that
+		// avoids closing and reopening the fstream.
+		// When INVALID_FILE_HANDLE (the default), falls back to the
+		// close → resize_file → reopen pattern.
+		bool truncateFile(file_handle_t nativeFd = INVALID_FILE_HANDLE) const;
 
 		std::mutex &getMutex() { return mutex_; }
 

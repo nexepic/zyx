@@ -36,16 +36,16 @@ protected:
 };
 
 TEST_F(PreadHelperTest, OpenAndCloseFile) {
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0) << "Failed to open test file";
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE) << "Failed to open test file";
 
 	int result = portable_close(fd);
 	EXPECT_EQ(result, 0) << "Failed to close file";
 }
 
 TEST_F(PreadHelperTest, ReadAtBeginning) {
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0);
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	char buffer[256];
 	ssize_t bytesRead = portable_pread(fd, buffer, sizeof(buffer), 0);
@@ -60,8 +60,8 @@ TEST_F(PreadHelperTest, ReadAtBeginning) {
 }
 
 TEST_F(PreadHelperTest, ReadAtOffset) {
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0);
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	const size_t offset = 1024;
 	char buffer[256];
@@ -77,8 +77,8 @@ TEST_F(PreadHelperTest, ReadAtOffset) {
 }
 
 TEST_F(PreadHelperTest, MultipleReadsNoInterference) {
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0);
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	// Read from two different positions
 	char buffer1[100];
@@ -98,8 +98,8 @@ TEST_F(PreadHelperTest, MultipleReadsNoInterference) {
 }
 
 TEST_F(PreadHelperTest, ReadBeyondFileSize) {
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0);
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	char buffer[256];
 	ssize_t bytesRead = portable_pread(fd, buffer, sizeof(buffer), testSize_ + 1000);
@@ -112,14 +112,14 @@ TEST_F(PreadHelperTest, ReadBeyondFileSize) {
 
 TEST_F(PreadHelperTest, InvalidFileDescriptor) {
 	char buffer[256];
-	ssize_t bytesRead = portable_pread(-1, buffer, sizeof(buffer), 0);
+	ssize_t bytesRead = portable_pread(INVALID_FILE_HANDLE, buffer, sizeof(buffer), 0);
 
 	EXPECT_EQ(bytesRead, -1);
 }
 
 TEST_F(PreadHelperTest, NullBuffer) {
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0);
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	ssize_t bytesRead = portable_pread(fd, nullptr, 256, 0);
 
@@ -130,8 +130,8 @@ TEST_F(PreadHelperTest, NullBuffer) {
 
 #ifdef _WIN32
 TEST_F(PreadHelperTest, LargeOffsetOnWindows) {
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0);
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	// Test offset > 4GB to verify OffsetHigh is used
 	const int64_t largeOffset = static_cast<int64_t>(5ULL * 1024ULL * 1024ULL * 1024ULL);
@@ -150,8 +150,8 @@ TEST_F(PreadHelperTest, DISABLED_PerformanceComparison) {
 	const int iterations = 10000;
 	const size_t readSize = 4096;
 
-	int fd = portable_open(testFile_.c_str(), O_RDONLY);
-	ASSERT_GE(fd, 0);
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	std::vector<char> buffer(readSize);
 	auto start = std::chrono::steady_clock::now();

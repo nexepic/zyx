@@ -25,6 +25,7 @@
 #include <iostream>
 #include <unordered_set>
 #include <utility>
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/SegmentType.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
@@ -1064,7 +1065,7 @@ namespace graph::storage {
 		return maxOffset;
 	}
 
-	bool SpaceManager::truncateFile() const {
+	bool SpaceManager::truncateFile(file_handle_t nativeFd) const {
 		// Find segments at the end of file that can be truncated
 		auto truncatableSegments = findTruncatableSegments();
 
@@ -1083,17 +1084,38 @@ namespace graph::storage {
 			newFileSize = FILE_HEADER_SIZE;
 		}
 
-		// Flush all pending writes
+		// Flush all pending writes from the fstream buffer
 		file_->flush();
 
-		// The most reliable approach: close, truncate, reopen the file
-		file_->close();
+		if (nativeFd != INVALID_FILE_HANDLE) {
+			// Preferred path: truncate via native file handle.
+			// This avoids the close/reopen cycle that can leave leaked handles
+			// (especially problematic on Windows where open handles prevent file
+			// deletion) and is more efficient since no kernel-level open/close
+			// overhead is incurred.
+			if (portable_ftruncate(nativeFd, newFileSize) != 0) {
+				return false;
+			}
 
-		// Now truncate the closed file
-		std::filesystem::resize_file(fileName_, newFileSize);
-
-		// Reopen the file with the same mode
-		file_->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
+			// The fstream's internal HANDLE/fd still points to the same file
+			// which has now been shortened underneath it. Reset its state so
+			// subsequent I/O (e.g. updateFileCrc) works correctly.
+			//
+			// Precondition: the caller must have flushed all pending writes
+			// and drained any cached reads BEFORE calling truncateFile().
+			// This ensures the fstream has no stale buffered data that could
+			// reference offsets beyond the new file size.
+			file_->clear();
+			file_->seekg(0, std::ios::beg);
+			file_->seekp(0, std::ios::beg);
+		} else {
+			// Fallback: close, truncate via filesystem API, reopen.
+			// Used when no native fd is available (e.g. unit tests that create
+			// SpaceManager without a companion pwrite handle).
+			file_->close();
+			std::filesystem::resize_file(fileName_, newFileSize);
+			file_->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
+		}
 
 		// Remove truncated segments from free list
 		for (uint64_t offset: truncatableSegments) {

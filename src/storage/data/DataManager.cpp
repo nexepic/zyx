@@ -68,7 +68,7 @@ namespace graph::storage {
 		if (!filePath.empty()) {
 			readFd_ = storage::portable_open(filePath.c_str(), O_RDONLY);
 			// Share the fd with SegmentTracker so its ensureSegmentCached() is also lock-free
-			if (readFd_ >= 0) {
+			if (readFd_ != storage::INVALID_FILE_HANDLE) {
 				segmentTracker_->setReadFd(readFd_);
 			}
 		}
@@ -79,14 +79,14 @@ namespace graph::storage {
 	}
 
 	DataManager::~DataManager() {
-		if (readFd_ >= 0) {
+		if (readFd_ != storage::INVALID_FILE_HANDLE) {
 			storage::portable_close(readFd_);
-			readFd_ = -1;
+			readFd_ = storage::INVALID_FILE_HANDLE;
 		}
 	}
 
 	ssize_t DataManager::preadBytes(void *buf, size_t count, int64_t offset) const {
-		if (readFd_ < 0)
+		if (readFd_ == storage::INVALID_FILE_HANDLE)
 			return -1;
 		return storage::portable_pread(readFd_, buf, count, offset);
 	}

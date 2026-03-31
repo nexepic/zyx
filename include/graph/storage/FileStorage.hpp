@@ -23,6 +23,7 @@
 #include <string>
 #include <unordered_map>
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/storage/PwriteHelper.hpp"
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
 #include "FileHeaderManager.hpp"
@@ -155,8 +156,8 @@ namespace graph::storage {
 		std::atomic<bool> compactionEnabled_{false};
 		concurrent::ThreadPool *threadPool_ = nullptr;
 
-		// File descriptor for pwrite-based parallel writes.
+		// Native file handle for pwrite-based parallel writes and truncation.
 		// Opened alongside fstream in open(), closed in close().
-		int writeFd_ = -1;
+		file_handle_t writeFd_ = INVALID_FILE_HANDLE;
 	};
 } // namespace graph::storage

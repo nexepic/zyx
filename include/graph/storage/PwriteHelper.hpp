@@ -22,19 +22,35 @@
 
 namespace graph::storage {
 
+/**
+ * @brief Cross-platform file handle type.
+ *
+ * On Windows, HANDLE is void* (8 bytes on 64-bit). Using intptr_t avoids
+ * the undefined-behavior truncation that static_cast<int>(...) would cause
+ * when a HANDLE value exceeds INT_MAX.
+ * On POSIX, file descriptors are plain int.
+ */
 #ifdef _WIN32
+using file_handle_t = intptr_t;
 using pwrite_ssize_t = intptr_t;
 using pwrite_off_t = int64_t;
 #else
+using file_handle_t = int;
 using pwrite_ssize_t = ssize_t;
 using pwrite_off_t = off_t;
 #endif
 
+/// Sentinel value: invalid / not-yet-opened handle.
+/// On Windows this matches INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR)-1)
+/// after reinterpret_cast<intptr_t>; on POSIX it matches the -1
+/// returned by open() on failure.
+constexpr file_handle_t INVALID_FILE_HANDLE = -1;
+
 /**
  * @brief Cross-platform file open for read-write access
  */
-inline int portable_open_rw(const char* filePath) {
-	if (!filePath) return -1;
+inline file_handle_t portable_open_rw(const char* filePath) {
+	if (!filePath) return INVALID_FILE_HANDLE;
 
 #ifdef _WIN32
 	HANDLE hFile = ::CreateFileA(
@@ -46,11 +62,9 @@ inline int portable_open_rw(const char* filePath) {
 		FILE_ATTRIBUTE_NORMAL,
 		nullptr
 	);
-	if (hFile == INVALID_HANDLE_VALUE) return -1;
-	// Cast HANDLE (void*) to int using pointer-to-int conversion
-	// On 64-bit Windows, this truncates from 64-bit to 32-bit, which is safe
-	// as we're just storing a handle identifier
-	return static_cast<int>(reinterpret_cast<uintptr_t>(hFile));
+	if (hFile == INVALID_HANDLE_VALUE) return INVALID_FILE_HANDLE;
+	// intptr_t can hold a HANDLE on both 32-bit and 64-bit Windows
+	return reinterpret_cast<file_handle_t>(hFile);
 #else
 	return ::open(filePath, O_RDWR);
 #endif
@@ -63,12 +77,11 @@ inline int portable_open_rw(const char* filePath) {
  * Thread-safe: multiple threads can call concurrently on the same fd
  * as long as they write to non-overlapping regions.
  */
-inline pwrite_ssize_t portable_pwrite(int fd, const void* buf, size_t count, pwrite_off_t offset) {
-	if (fd < 0 || !buf || count == 0) return -1;
+inline pwrite_ssize_t portable_pwrite(file_handle_t fd, const void* buf, size_t count, pwrite_off_t offset) {
+	if (fd == INVALID_FILE_HANDLE || !buf || count == 0) return -1;
 
 #ifdef _WIN32
-	// Cast int back to HANDLE
-	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
+	HANDLE hFile = reinterpret_cast<HANDLE>(fd);
 	OVERLAPPED overlapped = {};
 	overlapped.Offset = static_cast<DWORD>(offset & 0xFFFFFFFF);
 	overlapped.OffsetHigh = static_cast<DWORD>((offset >> 32) & 0xFFFFFFFF);
@@ -83,11 +96,11 @@ inline pwrite_ssize_t portable_pwrite(int fd, const void* buf, size_t count, pwr
 /**
  * @brief Cross-platform fsync/fdatasync wrapper
  */
-inline int portable_fsync(int fd) {
-	if (fd < 0) return -1;
+inline int portable_fsync(file_handle_t fd) {
+	if (fd == INVALID_FILE_HANDLE) return -1;
 
 #ifdef _WIN32
-	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
+	HANDLE hFile = reinterpret_cast<HANDLE>(fd);
 	return ::FlushFileBuffers(hFile) ? 0 : -1;
 #else
 #ifdef __APPLE__
@@ -101,14 +114,38 @@ inline int portable_fsync(int fd) {
 /**
  * @brief Close a file descriptor opened by portable_open_rw
  */
-inline int portable_close_rw(int fd) {
-	if (fd < 0) return -1;
+inline int portable_close_rw(file_handle_t fd) {
+	if (fd == INVALID_FILE_HANDLE) return -1;
 
 #ifdef _WIN32
-	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
+	HANDLE hFile = reinterpret_cast<HANDLE>(fd);
 	return ::CloseHandle(hFile) ? 0 : -1;
 #else
 	return ::close(fd);
+#endif
+}
+
+/**
+ * @brief Cross-platform file truncation
+ *
+ * Truncates (or extends) the file to exactly @p newSize bytes.
+ * The file handle remains open and valid after the call.
+ *
+ * @param fd  Handle previously returned by portable_open_rw()
+ * @param newSize  Desired file size in bytes
+ * @return 0 on success, -1 on error
+ */
+inline int portable_ftruncate(file_handle_t fd, uint64_t newSize) {
+	if (fd == INVALID_FILE_HANDLE) return -1;
+
+#ifdef _WIN32
+	HANDLE hFile = reinterpret_cast<HANDLE>(fd);
+	LARGE_INTEGER li;
+	li.QuadPart = static_cast<LONGLONG>(newSize);
+	if (!::SetFilePointerEx(hFile, li, nullptr, FILE_BEGIN)) return -1;
+	return ::SetEndOfFile(hFile) ? 0 : -1;
+#else
+	return ::ftruncate(fd, static_cast<off_t>(newSize));
 #endif
 }
 

@@ -8,6 +8,10 @@ ZYX is a high-performance, embeddable graph database engine written in C++20 wit
 custom file-based storage system with segment-based architecture, ACID transactions via Write-Ahead Logging (WAL), and
 supports advanced features like vector indexes.
 
+**CRITICAL Platform Requirement**: ZYX is a **cross-platform** graph database project and must support **macOS**,
+**Linux**, and **Windows**. All design, implementation, build, and test changes must preserve compatibility across
+these three platforms.
+
 ## Build System
 
 The project uses **Meson** as the build system with **Conan** for dependency management and **Ninja** as the backend.

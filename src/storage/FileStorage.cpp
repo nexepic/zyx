@@ -90,8 +90,11 @@ namespace graph::storage {
 
 		initializeComponents();
 
-		// Open a separate fd for pwrite-based parallel writes
+		// Open a separate fd for pwrite-based parallel writes and native truncation
 		writeFd_ = portable_open_rw(dbFilePath.c_str());
+		if (writeFd_ == INVALID_FILE_HANDLE) {
+			throw std::runtime_error("Cannot open native file handle for parallel writes: " + dbFilePath);
+		}
 
 		isFileOpen = true;
 	}
@@ -132,21 +135,28 @@ namespace graph::storage {
 		if (isFileOpen) {
 			flush(); // Ensure any pending changes are written
 
-			// Close pwrite fd before fstream
-			if (writeFd_ >= 0) {
+			dataManager->clearCache();
+
+			// Truncate free trailing segments while all handles are still open.
+			// Pass the native fd so truncation uses portable_ftruncate()
+			// instead of the close-reopen pattern (which leaves a leaked handle
+			// on Windows and causes "file in use" errors on deletion).
+			(void) spaceManager->truncateFile(writeFd_);
+
+			// Close the native pwrite handle
+			if (writeFd_ != INVALID_FILE_HANDLE) {
 				portable_close_rw(writeFd_);
-				writeFd_ = -1;
+				writeFd_ = INVALID_FILE_HANDLE;
 			}
 
+			// Close the fstream
 			if (fileStream) {
 				fileStream->flush();
 				fileStream->close();
 				fileStream.reset();
 			}
 
-			dataManager->clearCache();
 			dataManager.reset();
-			(void) spaceManager->truncateFile();
 			isFileOpen = false;
 		}
 	}
@@ -372,7 +382,7 @@ namespace graph::storage {
 		}
 
 		// Step 3: Single fsync to flush all writes
-		if (writeFd_ >= 0) portable_fsync(writeFd_);
+		if (writeFd_ != INVALID_FILE_HANDLE) portable_fsync(writeFd_);
 
 		debug::PerfTrace::addDuration(
 				"save.io", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
@@ -529,7 +539,7 @@ namespace graph::storage {
 		const size_t itemSize = T::getTotalSize();
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + baseUsed * itemSize;
 
-		if (writeFd_ >= 0) {
+		if (writeFd_ != INVALID_FILE_HANDLE) {
 			// pwrite path: build entire payload into a single buffer
 			size_t totalSize = data.size() * itemSize;
 			std::vector<char> buf(totalSize);
@@ -594,7 +604,7 @@ namespace graph::storage {
 		// Calculate file offset for this entity
 		uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + entityIndex * T::getTotalSize();
 
-		if (writeFd_ >= 0) {
+		if (writeFd_ != INVALID_FILE_HANDLE) {
 			// pwrite path: serialize to buffer, single pwrite call
 			auto buf = utils::FixedSizeSerializer::serializeToBuffer(entity, T::getTotalSize());
 			portable_pwrite(writeFd_, buf.data(), buf.size(),

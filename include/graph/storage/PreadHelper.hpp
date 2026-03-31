@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <string>
+#include "PwriteHelper.hpp" // for file_handle_t, INVALID_FILE_HANDLE
 
 #ifdef _WIN32
 	#ifndef WIN32_LEAN_AND_MEAN
@@ -36,56 +37,19 @@ namespace graph::storage {
 #endif
 
 /**
- * @brief Cross-platform file open function
+ * @brief Cross-platform file open function (read-only)
  *
  * Opens a file for reading in a platform-independent manner.
  * On Unix/Linux, uses standard open() system call.
  * On Windows, uses CreateFile() with read-only access.
  *
  * @param filePath Path to the file
- * @return File descriptor (Unix) or HANDLE cast to int (Windows), or -1 on error
+ * @param flags Open flags (O_RDONLY on POSIX; ignored on Windows)
+ * @return Native file handle, or INVALID_FILE_HANDLE on error
  */
-int portable_open(const char* filePath, int flags);
-
-/**
- * @brief Cross-platform file close function
- *
- * Closes a file descriptor opened by portable_open().
- *
- * @param fd File descriptor to close
- * @return 0 on success, -1 on error
- */
-int portable_close(int fd);
-
-/**
- * @brief Cross-platform pread wrapper function
- *
- * Performs an atomic position-independent read from a file.
- * This function does not affect the file position indicator,
- * allowing multiple threads to read concurrently without synchronization.
- *
- * Platform behavior:
- * - Unix/Linux: Uses native pread() system call
- * - Windows: Uses ReadFile() with OVERLAPPED structure
- *
- * @param fd File descriptor/handle
- *   - Unix/Linux: File descriptor (int)
- *   - Windows: HANDLE (cast to int)
- * @param buf Buffer to read data into
- * @param count Number of bytes to read
- * @param offset File offset to read from (use int64_t to avoid Windows SDK conflicts)
- * @return Number of bytes read, or -1 on error
- */
-ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset);
-
-// ============================================================================
-// Platform-specific implementations
-// ============================================================================
-
+inline file_handle_t portable_open(const char* filePath, int flags) {
 #ifdef _WIN32
-
-inline int portable_open(const char* filePath, int flags) {
-	if (!filePath) return -1;
+	if (!filePath) return INVALID_FILE_HANDLE;
 	(void)flags;  // Unused on Windows, always opens read-only
 
 	DWORD desiredAccess = GENERIC_READ;
@@ -104,26 +68,55 @@ inline int portable_open(const char* filePath, int flags) {
 	);
 
 	if (hFile == INVALID_HANDLE_VALUE) {
-		return -1;
+		return INVALID_FILE_HANDLE;
 	}
 
-	// Cast HANDLE to int for storage (safe for x64)
-	return static_cast<int>(reinterpret_cast<uintptr_t>(hFile));
+	// intptr_t can hold a HANDLE on both 32-bit and 64-bit Windows
+	return reinterpret_cast<file_handle_t>(hFile);
+#else
+	return ::open(filePath, flags);
+#endif
 }
 
-inline int portable_close(int fd) {
-	if (fd < 0) return -1;
+/**
+ * @brief Cross-platform file close function
+ *
+ * Closes a file handle opened by portable_open().
+ *
+ * @param fd File handle to close
+ * @return 0 on success, -1 on error
+ */
+inline int portable_close(file_handle_t fd) {
+	if (fd == INVALID_FILE_HANDLE) return -1;
 
-	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
+#ifdef _WIN32
+	HANDLE hFile = reinterpret_cast<HANDLE>(fd);
 	return ::CloseHandle(hFile) ? 0 : -1;
+#else
+	return ::close(fd);
+#endif
 }
 
-inline ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset) {
-	if (fd < 0 || !buf || count == 0) {
+/**
+ * @brief Cross-platform pread wrapper function
+ *
+ * Performs an atomic position-independent read from a file.
+ * This function does not affect the file position indicator,
+ * allowing multiple threads to read concurrently without synchronization.
+ *
+ * @param fd File handle from portable_open()
+ * @param buf Buffer to read data into
+ * @param count Number of bytes to read
+ * @param offset File offset to read from
+ * @return Number of bytes read, or -1 on error
+ */
+inline ssize_t portable_pread(file_handle_t fd, void* buf, size_t count, int64_t offset) {
+	if (fd == INVALID_FILE_HANDLE || !buf || count == 0) {
 		return -1;
 	}
 
-	HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(fd));
+#ifdef _WIN32
+	HANDLE hFile = reinterpret_cast<HANDLE>(fd);
 
 	// OVERLAPPED structure for position-independent read
 	OVERLAPPED overlapped = {};
@@ -144,26 +137,9 @@ inline ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset) {
 	}
 
 	return static_cast<ssize_t>(bytesRead);
-}
-
-#else // Unix/Linux
-
-inline int portable_open(const char* filePath, int flags) {
-	return ::open(filePath, flags);
-}
-
-inline int portable_close(int fd) {
-	return ::close(fd);
-}
-
-inline ssize_t portable_pread(int fd, void* buf, size_t count, int64_t offset) {
-	if (fd < 0 || !buf || count == 0) {
-		return -1;
-	}
-
+#else
 	return ::pread(fd, buf, count, static_cast<off_t>(offset));
-}
-
 #endif
+}
 
 } // namespace graph::storage

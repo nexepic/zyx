@@ -163,7 +163,7 @@ namespace graph::storage {
 		}
 		// Slow path: segment not cached (should be rare after initialization)
 		// Fall back to pread the header directly without caching
-		if (readFd_ >= 0) {
+		if (readFd_ != INVALID_FILE_HANDLE) {
 			SegmentHeader header;
 			ssize_t n = storage::portable_pread(readFd_, &header, sizeof(SegmentHeader), static_cast<int64_t>(offset));
 			if (n >= static_cast<ssize_t>(sizeof(SegmentHeader))) {
@@ -446,7 +446,7 @@ namespace graph::storage {
 	void SegmentTracker::ensureSegmentCached(uint64_t offset) {
 		if (!segments_.contains(offset)) {
 			SegmentHeader header;
-			if (readFd_ >= 0) {
+			if (readFd_ != INVALID_FILE_HANDLE) {
 				ssize_t n = storage::portable_pread(readFd_, &header, sizeof(SegmentHeader), static_cast<int64_t>(offset));
 				if (n < static_cast<ssize_t>(sizeof(SegmentHeader))) {
 					throw std::runtime_error("Failed to pread segment header at offset " + std::to_string(offset));

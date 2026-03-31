@@ -46,6 +46,7 @@ using ssize_t = intptr_t;
 #include "graph/storage/CacheManager.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/PersistenceManager.hpp"
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/constraints/IEntityValidator.hpp"
 #include "graph/storage/indexes/IEntityObserver.hpp"
 
@@ -248,7 +249,7 @@ namespace graph::storage {
 												 int64_t filterEndId = INT64_MAX) const;
 
 		// Thread-safe read via pread (no locks needed)
-		[[nodiscard]] bool hasPreadSupport() const { return readFd_ >= 0; }
+		[[nodiscard]] bool hasPreadSupport() const { return readFd_ != INVALID_FILE_HANDLE; }
 		[[nodiscard]] ssize_t preadBytes(void *buf, size_t count, int64_t offset) const;
 
 		// Loading entities from disk
@@ -445,10 +446,10 @@ namespace graph::storage {
 		// Each reader thread has its own snapshot pointer, set at transaction begin.
 		static thread_local const CommittedSnapshot *currentSnapshot_;
 
-		// File descriptor for thread-safe pread() based parallel reads.
+		// Native file handle for thread-safe pread() based parallel reads.
 		// pread() is atomic (no separate seek+read) and multiple threads
 		// can call it concurrently on the same fd without synchronization.
-		int readFd_ = -1;
+		file_handle_t readFd_ = INVALID_FILE_HANDLE;
 	};
 
 } // namespace graph::storage

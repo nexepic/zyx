@@ -29,6 +29,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "PwriteHelper.hpp"
 #include "SegmentTypeRegistry.hpp"
 #include "StorageHeaders.hpp"
 
@@ -101,14 +102,14 @@ namespace graph::storage {
 			segmentIndexManager_ = std::move(indexManager);
 		}
 
-		void setReadFd(int fd) { readFd_ = fd; }
+		void setReadFd(file_handle_t fd) { readFd_ = fd; }
 
 		// get segment type registry
 		SegmentTypeRegistry getSegmentTypeRegistry() const { return registry_; }
 
 	private:
 		std::shared_ptr<std::fstream> file_;
-		int readFd_ = -1; // pread fd for thread-safe reads (not owned, do not close)
+		file_handle_t readFd_ = INVALID_FILE_HANDLE; // pread fd for thread-safe reads (not owned, do not close)
 		mutable std::shared_mutex rwMutex_;    // Read-write lock for concurrent read access
 		mutable std::recursive_mutex mutex_;   // Legacy exclusive lock for write operations
 
