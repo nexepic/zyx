@@ -49,6 +49,7 @@ K_NOT        : 'NOT';
 K_OR         : 'OR';
 K_STARTS     : 'STARTS';
 K_XOR        : 'XOR';
+K_BETWEEN    : 'BETWEEN';
 K_FALSE      : 'FALSE';
 K_TRUE       : 'TRUE';
 K_NULL       : 'NULL';

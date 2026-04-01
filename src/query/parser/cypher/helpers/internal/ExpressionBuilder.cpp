@@ -199,6 +199,26 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 		return buildArithmeticExpression(ctx->arithmeticExpression(0));
 	}
 
+	// Handle BETWEEN: expr BETWEEN lo AND hi → (expr >= lo) AND (expr <= hi)
+	if (ctx->K_BETWEEN() && arithExprs.size() == 3) {
+		auto expr = buildArithmeticExpression(arithExprs[0]);
+		auto lo = buildArithmeticExpression(arithExprs[1]);
+		auto hi = buildArithmeticExpression(arithExprs[2]);
+
+		// We need to duplicate expr for the two comparisons.
+		// Since expr is a unique_ptr, we build it once and clone via re-parsing is not possible.
+		// Instead, build a second copy from the same parse tree node.
+		auto exprCopy = buildArithmeticExpression(arithExprs[0]);
+
+		auto geExpr = std::make_unique<BinaryOpExpression>(
+			std::move(expr), BinaryOperatorType::BOP_GREATER_EQUAL, std::move(lo));
+		auto leExpr = std::make_unique<BinaryOpExpression>(
+			std::move(exprCopy), BinaryOperatorType::BOP_LESS_EQUAL, std::move(hi));
+
+		return std::make_unique<BinaryOpExpression>(
+			std::move(geExpr), BinaryOperatorType::BOP_AND, std::move(leExpr));
+	}
+
 	// Handle comparison operators: arith (COMPARE arith)* (IS_NULL)?
 	auto left = buildArithmeticExpression(arithExprs[0]);
 

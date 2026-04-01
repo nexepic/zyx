@@ -59,10 +59,20 @@ std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleCreat
 		throw std::runtime_error("CREATE INDEX pattern must specify a Label (e.g. :User)");
 	}
 
-	// 3. Property
-	std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(ctx->propertyExpression());
-
-	return std::make_unique<query::logical::LogicalCreateIndex>(name, label, prop);
+	// 3. Properties (single or multiple for composite index)
+	auto propExprs = ctx->propertyExpression();
+	if (propExprs.size() == 1) {
+		// Single property index
+		std::string prop = helpers::AstExtractor::extractPropertyKeyFromExpr(propExprs[0]);
+		return std::make_unique<query::logical::LogicalCreateIndex>(name, label, prop);
+	} else {
+		// Composite index: multiple properties
+		std::vector<std::string> props;
+		for (auto *propExpr : propExprs) {
+			props.push_back(helpers::AstExtractor::extractPropertyKeyFromExpr(propExpr));
+		}
+		return std::make_unique<query::logical::LogicalCreateIndex>(name, label, std::move(props));
+	}
 }
 
 std::unique_ptr<query::logical::LogicalOperator> AdminClauseHandler::handleCreateIndexByLabel(

@@ -56,7 +56,7 @@ dropIndexStatement
     ;
 
 createIndexStatement
-    : K_CREATE K_INDEX symbolicName? K_FOR nodePattern K_ON LPAREN propertyExpression RPAREN # CreateIndexByPattern
+    : K_CREATE K_INDEX symbolicName? K_FOR nodePattern K_ON LPAREN propertyExpression (COMMA propertyExpression)* RPAREN # CreateIndexByPattern
     | K_CREATE K_INDEX symbolicName? K_ON nodeLabel LPAREN propertyKeyName RPAREN            # CreateIndexByLabel
     // Vector Index
 	| K_CREATE K_VECTOR K_INDEX symbolicName? K_ON nodeLabel LPAREN propertyKeyName RPAREN (K_OPTIONS mapLiteral)? # CreateVectorIndex
@@ -330,7 +330,8 @@ notExpression
     ;
 
 comparisonExpression
-    : arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN
+    : arithmeticExpression K_BETWEEN arithmeticExpression K_AND arithmeticExpression
+    | arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN
         | K_STARTS K_WITH | K_ENDS K_WITH | K_CONTAINS ) arithmeticExpression )* ( K_IS K_NOT? K_NULL )?
     ;
 
@@ -433,7 +434,7 @@ symbolicName
     | K_ASCENDING | K_ASC | K_DESCENDING | K_DESC | K_REMOVE | K_RETURN
     | K_SET | K_WHERE | K_WITH | K_UNION | K_UNWIND | K_AND | K_AS
     | K_CONTAINS | K_DISTINCT | K_ENDS | K_IN | K_IS | K_NOT | K_OR
-    | K_STARTS | K_XOR | K_FALSE | K_TRUE | K_NULL
+    | K_STARTS | K_XOR | K_BETWEEN | K_FALSE | K_TRUE | K_NULL
     | K_CASE | K_WHEN | K_THEN | K_ELSE | K_END
     | K_COUNT | K_FILTER | K_EXTRACT | K_ANY | K_NONE | K_SINGLE | K_ALL | K_REDUCE
     // Admin Keywords
