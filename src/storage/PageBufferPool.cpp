@@ -18,6 +18,7 @@
  **/
 
 #include "graph/storage/PageBufferPool.hpp"
+#include <mutex>
 
 namespace graph::storage {
 
