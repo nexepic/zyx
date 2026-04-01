@@ -58,6 +58,16 @@ namespace graph::query::execution::operators {
 					candidateIds_ = im_->findNodeIdsByProperty(config_.indexKey, config_.indexValue);
 					break;
 
+				case ScanType::RANGE_SCAN:
+					candidateIds_ = im_->findNodeIdsByPropertyRange(
+						config_.indexKey, config_.rangeMin, config_.rangeMax);
+					break;
+
+				case ScanType::COMPOSITE_SCAN:
+					candidateIds_ = im_->findNodeIdsByCompositeIndex(
+						config_.compositeKeys, config_.compositeValues);
+					break;
+
 				case ScanType::LABEL_SCAN:
 					candidateIds_ = im_->findNodeIdsByLabel(config_.label());
 					break;

@@ -24,10 +24,17 @@ namespace graph::query::logical {
  */
 class LogicalCreateIndex : public LogicalOperator {
 public:
+	// Single-property constructor
 	LogicalCreateIndex(std::string indexName, std::string label, std::string propertyKey)
 		: indexName_(std::move(indexName))
 		, label_(std::move(label))
-		, propertyKey_(std::move(propertyKey)) {}
+		, propertyKeys_({std::move(propertyKey)}) {}
+
+	// Multi-property (composite) constructor
+	LogicalCreateIndex(std::string indexName, std::string label, std::vector<std::string> propertyKeys)
+		: indexName_(std::move(indexName))
+		, label_(std::move(label))
+		, propertyKeys_(std::move(propertyKeys)) {}
 
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_CREATE_INDEX; }
 
@@ -36,7 +43,7 @@ public:
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
-		return std::make_unique<LogicalCreateIndex>(indexName_, label_, propertyKey_);
+		return std::make_unique<LogicalCreateIndex>(indexName_, label_, propertyKeys_);
 	}
 
 	[[nodiscard]] std::string toString() const override {
@@ -53,12 +60,14 @@ public:
 
 	[[nodiscard]] const std::string &getIndexName() const { return indexName_; }
 	[[nodiscard]] const std::string &getLabel() const { return label_; }
-	[[nodiscard]] const std::string &getPropertyKey() const { return propertyKey_; }
+	[[nodiscard]] const std::string &getPropertyKey() const { return propertyKeys_[0]; }
+	[[nodiscard]] const std::vector<std::string> &getPropertyKeys() const { return propertyKeys_; }
+	[[nodiscard]] bool isComposite() const { return propertyKeys_.size() > 1; }
 
 private:
 	std::string indexName_;
 	std::string label_;
-	std::string propertyKey_;
+	std::vector<std::string> propertyKeys_;
 };
 
 } // namespace graph::query::logical

@@ -143,7 +143,9 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNodeScan(
 
 	// Use the optimizer to choose the best scan strategy
 	optimizer::rules::IndexPushdownRule pushdown(im_);
-	NodeScanConfig config = pushdown.apply(scan->getVariable(), scan->getLabels(), key, val);
+	NodeScanConfig config = pushdown.apply(
+		scan->getVariable(), scan->getLabels(), key, val,
+		scan->getRangePredicates(), scan->getCompositeEquality());
 
 	std::unique_ptr<PhysicalOperator> root =
 		std::make_unique<NodeScanOperator>(dm_, im_, config);
@@ -171,8 +173,16 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNodeScan(
 	// Residual property filters for all predicates not handled by index scan
 	for (size_t i = 0; i < predicates.size(); ++i) {
 		const auto &[pKey, pVal] = predicates[i];
-		// Skip the first predicate if it was handled by a property scan
+		// Skip the first predicate if it was handled by a property or composite scan
 		if (i == 0 && config.type == ScanType::PROPERTY_SCAN) continue;
+		if (config.type == ScanType::COMPOSITE_SCAN) {
+			// Skip predicates that are part of the composite index
+			bool inComposite = false;
+			for (const auto &ck : config.compositeKeys) {
+				if (ck == pKey) { inComposite = true; break; }
+			}
+			if (inComposite) continue;
+		}
 
 		std::string variable = scan->getVariable();
 		std::string filterKey = pKey;
@@ -185,6 +195,36 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNodeScan(
 			return it != props.end() && it->second == filterVal;
 		};
 		std::string desc = variable + "." + filterKey + " == " + filterVal.toString() + " (Residual)";
+		root = std::make_unique<FilterOperator>(std::move(root), predicate, desc);
+	}
+
+	// Residual range filters for predicates not handled by range scan
+	for (const auto &rp : scan->getRangePredicates()) {
+		// Skip the range predicate that was handled by the range scan
+		if (config.type == ScanType::RANGE_SCAN && rp.key == config.indexKey) continue;
+
+		std::string variable = scan->getVariable();
+		std::string filterKey = rp.key;
+		PropertyValue filterMin = rp.minValue;
+		PropertyValue filterMax = rp.maxValue;
+		bool minIncl = rp.minInclusive;
+		bool maxIncl = rp.maxInclusive;
+		auto predicate = [variable, filterKey, filterMin, filterMax, minIncl, maxIncl](const Record &r) -> bool {
+			auto n = r.getNode(variable);
+			if (!n) return false;
+			const auto &props = n->getProperties();
+			auto it = props.find(filterKey);
+			if (it == props.end()) return false;
+			const auto &v = it->second;
+			if (filterMin.getType() != PropertyType::NULL_TYPE) {
+				if (minIncl ? v < filterMin : v <= filterMin) return false;
+			}
+			if (filterMax.getType() != PropertyType::NULL_TYPE) {
+				if (maxIncl ? v > filterMax : v >= filterMax) return false;
+			}
+			return true;
+		};
+		std::string desc = variable + "." + filterKey + " range (Residual)";
 		root = std::make_unique<FilterOperator>(std::move(root), predicate, desc);
 	}
 
@@ -636,6 +676,10 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertCreateIndex(
 	const LogicalOperator *op) const {
 
 	const auto *ci = static_cast<const LogicalCreateIndex *>(op);
+	if (ci->isComposite()) {
+		return std::make_unique<CreateIndexOperator>(im_, ci->getIndexName(), ci->getLabel(),
+		                                             ci->getPropertyKeys());
+	}
 	return std::make_unique<CreateIndexOperator>(im_, ci->getIndexName(), ci->getLabel(),
 	                                             ci->getPropertyKey());
 }

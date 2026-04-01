@@ -8,6 +8,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -49,6 +50,21 @@ public:
 		                                : PropertyStatistics::rangeSelectivity();
 		double estimatedRows = static_cast<double>(stats.estimateLabelCount(label)) * selectivity;
 		return estimatedRows * INDEX_LOOKUP_COST;
+	}
+
+	/** Cost of a range index scan. */
+	[[nodiscard]] static double rangeIndexCost(const Statistics &stats, const std::string &label,
+	                                           const std::string & /*property*/) {
+		double baseRows = static_cast<double>(stats.estimateLabelCount(label));
+		return baseRows * 0.3 * INDEX_LOOKUP_COST;  // Range selectivity ~30%
+	}
+
+	/** Cost of a composite index scan. */
+	[[nodiscard]] static double compositeIndexCost(const Statistics &stats, const std::string &label,
+	                                                size_t matchedFields) {
+		double baseRows = static_cast<double>(stats.estimateLabelCount(label));
+		double selectivity = std::pow(0.1, static_cast<double>(matchedFields));
+		return baseRows * selectivity * INDEX_LOOKUP_COST;
 	}
 
 	/** Estimated cardinality of a cross join. */

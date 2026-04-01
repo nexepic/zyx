@@ -163,19 +163,19 @@ TEST_F(PropertyIndexTest, FindRangeForNumericTypes) {
 	propertyIndex->addProperty(11, "rating", 5.0);
 	propertyIndex->addProperty(12, "name", "a string"); // Non-numeric for boundary check
 
-	// Act & Assert: Test integer range query.
-	auto foundInts = propertyIndex->findRange("level", 15.0, 25.0);
+	// Act & Assert: Test integer range query (using PropertyValue).
+	auto foundInts = propertyIndex->findRange("level", graph::PropertyValue(15), graph::PropertyValue(25));
 	ASSERT_EQ(foundInts.size(), 1u);
 	EXPECT_EQ(foundInts[0], 9);
 
 	// Act & Assert: Test double range query.
-	auto foundDoubles = propertyIndex->findRange("rating", 4.0, 5.0);
+	auto foundDoubles = propertyIndex->findRange("rating", graph::PropertyValue(4.0), graph::PropertyValue(5.0));
 	ASSERT_EQ(foundDoubles.size(), 2u);
 	EXPECT_TRUE(vectorContains(foundDoubles, 10));
 	EXPECT_TRUE(vectorContains(foundDoubles, 11));
 
 	// Act & Assert: A range query on a key indexed with a non-numeric type should return nothing.
-	EXPECT_TRUE(propertyIndex->findRange("name", 0, 100).empty());
+	EXPECT_TRUE(propertyIndex->findRange("name", graph::PropertyValue(0), graph::PropertyValue(100)).empty());
 }
 
 TEST_F(PropertyIndexTest, GetIndexedKeys) {
@@ -864,11 +864,12 @@ TEST_F(PropertyIndexTest, FindRange_NonNumericType) {
 	// Add a string property
 	propertyIndex->addProperty(1, key, "string_value");
 
-	// Try to find range on string key (should return empty)
-	auto results = propertyIndex->findRange(key, 0.0, 100.0);
+	// String type is now supported for range queries - test it works
+	auto results = propertyIndex->findRange(key, graph::PropertyValue(std::string("a")), graph::PropertyValue(std::string("z")));
 
-	// Should return empty for non-numeric types
-	EXPECT_TRUE(results.empty());
+	// Should find the string value in range
+	ASSERT_EQ(results.size(), 1u);
+	EXPECT_EQ(results[0], 1);
 }
 
 /**
@@ -879,7 +880,7 @@ TEST_F(PropertyIndexTest, FindRange_NonExistentKey) {
 	const std::string key = "range_non_existent";
 
 	// Try to find range on a key that was never indexed
-	auto results = propertyIndex->findRange(key, 0.0, 100.0);
+	auto results = propertyIndex->findRange(key, graph::PropertyValue(0.0), graph::PropertyValue(100.0));
 
 	// Should return empty
 	EXPECT_TRUE(results.empty());
@@ -920,8 +921,8 @@ TEST_F(PropertyIndexTest, FindRange_KeyRegisteredButNoRoot) {
 	// Create the index (registers as UNKNOWN type)
 	propertyIndex->createIndex(key);
 
-	// findRange on UNKNOWN type returns empty (not INTEGER or DOUBLE)
-	auto results = propertyIndex->findRange(key, 0.0, 100.0);
+	// findRange on UNKNOWN type returns empty (not INTEGER, DOUBLE or STRING)
+	auto results = propertyIndex->findRange(key, graph::PropertyValue(0.0), graph::PropertyValue(100.0));
 	EXPECT_TRUE(results.empty());
 }
 
@@ -1019,7 +1020,7 @@ TEST_F(PropertyIndexTest, FindRange_DoubleType) {
 	propertyIndex->addProperty(3, "dbl_range", 3.5);
 	propertyIndex->addProperty(4, "dbl_range", 4.5);
 
-	auto results = propertyIndex->findRange("dbl_range", 2.0, 3.5);
+	auto results = propertyIndex->findRange("dbl_range", graph::PropertyValue(2.0), graph::PropertyValue(3.5));
 	EXPECT_GE(results.size(), 2u);
 	EXPECT_TRUE(vectorContains(results, 2));
 	EXPECT_TRUE(vectorContains(results, 3));
@@ -1193,8 +1194,8 @@ TEST_F(PropertyIndexTest, FindRange_IntegerWithFractionalBounds) {
 	propertyIndex->addProperty(2, "int_range", 20);
 	propertyIndex->addProperty(3, "int_range", 30);
 
-	// Test with fractional bounds that require ceil/floor
-	auto results = propertyIndex->findRange("int_range", 10.5, 29.5);
+	// Test with fractional bounds that require ceil/floor (using double values for int key)
+	auto results = propertyIndex->findRange("int_range", graph::PropertyValue(10.5), graph::PropertyValue(29.5));
 	// ceil(10.5) = 11, floor(29.5) = 29
 	// So only value 20 is in range [11, 29]
 	ASSERT_EQ(results.size(), 1u);
@@ -1428,7 +1429,7 @@ TEST_F(PropertyIndexTest, FindRange_TypeExistsButNoRoot) {
 	EXPECT_EQ(inconsistentIndex->getIndexedKeyType("orphan_dbl"), graph::PropertyType::DOUBLE);
 
 	// This should hit line 356: rootIt == rootMap.end() -> return {}
-	auto results = inconsistentIndex->findRange("orphan_dbl", 0.0, 100.0);
+	auto results = inconsistentIndex->findRange("orphan_dbl", graph::PropertyValue(0.0), graph::PropertyValue(100.0));
 	EXPECT_TRUE(results.empty());
 }
 
@@ -1448,7 +1449,7 @@ TEST_F(PropertyIndexTest, FindRange_IntegerTypeNoRoot) {
 	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
 			dataManager, sysState, indexType, stateKeyPrefix);
 
-	auto results = inconsistentIndex->findRange("orphan_int", 0.0, 100.0);
+	auto results = inconsistentIndex->findRange("orphan_int", graph::PropertyValue(static_cast<int64_t>(0)), graph::PropertyValue(static_cast<int64_t>(100)));
 	EXPECT_TRUE(results.empty());
 }
 
@@ -1794,7 +1795,7 @@ TEST_F(PropertyIndexTest, FindRange_BooleanTypeReturnsEmpty) {
 	EXPECT_EQ(propertyIndex->getIndexedKeyType("bool_range"), graph::PropertyType::BOOLEAN);
 
 	// findRange on BOOLEAN should return empty (not a numeric type)
-	auto results = propertyIndex->findRange("bool_range", 0.0, 1.0);
+	auto results = propertyIndex->findRange("bool_range", graph::PropertyValue(0.0), graph::PropertyValue(1.0));
 	EXPECT_TRUE(results.empty());
 }
 

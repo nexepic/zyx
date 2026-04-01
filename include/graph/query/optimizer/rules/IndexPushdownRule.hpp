@@ -21,8 +21,10 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
+#include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query::optimizer::rules {
@@ -35,40 +37,60 @@ namespace graph::query::optimizer::rules {
 		/**
 		 * @brief Decides the optimal scan configuration based on available indexes.
 		 *
-		 * @param variable The query variable (e.g., "n").
-		 * @param label The label filter (e.g., "User").
-		 * @param key The property key (e.g., "age").
-		 * @param value The property value (e.g., 25).
-		 * @return execution::NodeScanConfig The optimized configuration.
+		 * Supports equality, range, and composite scan strategies.
 		 */
-		[[nodiscard]] execution::NodeScanConfig apply(const std::string &variable, const std::vector<std::string> &labels,
-													  const std::string &key, const PropertyValue &value) const {
+		[[nodiscard]] execution::NodeScanConfig apply(
+				const std::string &variable, const std::vector<std::string> &labels,
+				const std::string &key, const PropertyValue &value,
+				const std::vector<logical::RangePredicate> &rangePredicates = {},
+				const std::optional<logical::CompositeEqualityPredicate> &compositeEquality = std::nullopt) const {
 			execution::NodeScanConfig config;
 			config.variable = variable;
 			config.labels = labels;
 
-			// --- Optimization Logic (Moved from QueryPlanner) ---
-			// Use first label for index pushdown (label indexes are per-label)
 			std::string firstLabel = labels.empty() ? "" : labels[0];
 
 			bool hasPropIndex = !key.empty() && indexManager_->hasPropertyIndex("node", key);
 			bool hasLabelIndex = !firstLabel.empty() && indexManager_->hasLabelIndex("node");
 
-			// Heuristic 1: Property Index is usually most selective (O(log N))
+			// Priority 1: Composite index (most selective when matching 2+ fields)
+			if (compositeEquality && compositeEquality->keys.size() >= 2 &&
+				indexManager_->hasCompositeIndex("node", compositeEquality->keys)) {
+				config.type = execution::ScanType::COMPOSITE_SCAN;
+				config.compositeKeys = compositeEquality->keys;
+				config.compositeValues = compositeEquality->values;
+				return config;
+			}
+
+			// Priority 2: Property equality (O(log N))
 			if (hasPropIndex) {
 				config.type = execution::ScanType::PROPERTY_SCAN;
 				config.indexKey = key;
 				config.indexValue = value;
-			}
-			// Heuristic 2: Label Index reduces search space (O(N_label))
-			else if (hasLabelIndex) {
-				config.type = execution::ScanType::LABEL_SCAN;
-			}
-			// Fallback: Full Scan (O(N_total))
-			else {
-				config.type = execution::ScanType::FULL_SCAN;
+				return config;
 			}
 
+			// Priority 3: Range scan with index
+			for (const auto &rp : rangePredicates) {
+				if (indexManager_->hasPropertyIndex("node", rp.key)) {
+					config.type = execution::ScanType::RANGE_SCAN;
+					config.indexKey = rp.key;
+					config.rangeMin = rp.minValue;
+					config.rangeMax = rp.maxValue;
+					config.minInclusive = rp.minInclusive;
+					config.maxInclusive = rp.maxInclusive;
+					return config;
+				}
+			}
+
+			// Priority 4: Label scan
+			if (hasLabelIndex) {
+				config.type = execution::ScanType::LABEL_SCAN;
+				return config;
+			}
+
+			// Fallback: Full Scan
+			config.type = execution::ScanType::FULL_SCAN;
 			return config;
 		}
 

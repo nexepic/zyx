@@ -208,6 +208,97 @@ private:
     }
 
     // -------------------------------------------------------------------------
+    // Check whether a predicate is a range comparison suitable for merging
+    // into a NodeScan's rangePredicates.
+    //
+    // Matches: <var>.prop >/>=/</<= <literal>  or  <literal> >/>=/</<= <var>.prop
+    // Returns true and sets key, value, isMin (bound direction), inclusive.
+    // -------------------------------------------------------------------------
+
+    static bool extractPropertyRange(
+        const expressions::Expression *pred,
+        const std::string &scanVariable,
+        std::string &outKey,
+        graph::PropertyValue &outValue,
+        bool &outIsMin,
+        bool &outInclusive) {
+
+        if (!pred) return false;
+        if (pred->getExpressionType() != expressions::ExpressionType::BINARY_OP)
+            return false;
+
+        const auto *bin = static_cast<const expressions::BinaryOpExpression *>(pred);
+        auto op = bin->getOperator();
+
+        // Only handle comparison operators
+        if (op != expressions::BinaryOperatorType::BOP_LESS &&
+            op != expressions::BinaryOperatorType::BOP_LESS_EQUAL &&
+            op != expressions::BinaryOperatorType::BOP_GREATER &&
+            op != expressions::BinaryOperatorType::BOP_GREATER_EQUAL)
+            return false;
+
+        const expressions::Expression *lhs = bin->getLeft();
+        const expressions::Expression *rhs = bin->getRight();
+
+        // Try (var.prop OP literal)
+        auto tryMatch = [&](const expressions::Expression *propSide,
+                            const expressions::Expression *litSide,
+                            bool reversed) -> bool {
+            if (!propSide || !litSide) return false;
+            if (propSide->getExpressionType() != expressions::ExpressionType::PROPERTY_ACCESS)
+                return false;
+            if (litSide->getExpressionType() != expressions::ExpressionType::LITERAL)
+                return false;
+
+            const auto *varExpr =
+                static_cast<const expressions::VariableReferenceExpression *>(propSide);
+            if (varExpr->getVariableName() != scanVariable) return false;
+            if (!varExpr->hasProperty()) return false;
+
+            const auto *litExpr =
+                static_cast<const expressions::LiteralExpression *>(litSide);
+            outKey = varExpr->getPropertyName();
+
+            if (litExpr->isNull()) return false; // null range makes no sense
+            if (litExpr->isBoolean()) return false; // boolean range not meaningful
+            if (litExpr->isInteger()) outValue = graph::PropertyValue(litExpr->getIntegerValue());
+            else if (litExpr->isDouble()) outValue = graph::PropertyValue(litExpr->getDoubleValue());
+            else outValue = graph::PropertyValue(litExpr->getStringValue());
+
+            // Determine direction:
+            // var.prop > literal  → literal is min bound (exclusive)
+            // var.prop >= literal → literal is min bound (inclusive)
+            // var.prop < literal  → literal is max bound (exclusive)
+            // var.prop <= literal → literal is max bound (inclusive)
+            // When reversed (literal OP var.prop), flip the direction
+            auto effectiveOp = op;
+            if (reversed) {
+                if (op == expressions::BinaryOperatorType::BOP_LESS)
+                    effectiveOp = expressions::BinaryOperatorType::BOP_GREATER;
+                else if (op == expressions::BinaryOperatorType::BOP_LESS_EQUAL)
+                    effectiveOp = expressions::BinaryOperatorType::BOP_GREATER_EQUAL;
+                else if (op == expressions::BinaryOperatorType::BOP_GREATER)
+                    effectiveOp = expressions::BinaryOperatorType::BOP_LESS;
+                else if (op == expressions::BinaryOperatorType::BOP_GREATER_EQUAL)
+                    effectiveOp = expressions::BinaryOperatorType::BOP_LESS_EQUAL;
+            }
+
+            if (effectiveOp == expressions::BinaryOperatorType::BOP_GREATER) {
+                outIsMin = true; outInclusive = false;
+            } else if (effectiveOp == expressions::BinaryOperatorType::BOP_GREATER_EQUAL) {
+                outIsMin = true; outInclusive = true;
+            } else if (effectiveOp == expressions::BinaryOperatorType::BOP_LESS) {
+                outIsMin = false; outInclusive = false;
+            } else { // BOP_LESS_EQUAL
+                outIsMin = false; outInclusive = true;
+            }
+            return true;
+        };
+
+        return tryMatch(lhs, rhs, false) || tryMatch(rhs, lhs, true);
+    }
+
+    // -------------------------------------------------------------------------
     // Core recursive rewrite
     // -------------------------------------------------------------------------
 
@@ -338,6 +429,45 @@ private:
                     // Return just the child (scan), dropping the filter wrapper.
                     return filterNode->detachChild(0);
                 }
+            }
+
+            // --- 4d. Merge range comparison into NodeScan ---
+            std::string rangeKey;
+            graph::PropertyValue rangeValue;
+            bool isMin = false;
+            bool inclusive = true;
+
+            if (extractPropertyRange(predicate.get(), scan->getVariable(),
+                                     rangeKey, rangeValue, isMin, inclusive)) {
+                auto rangePreds = scan->getRangePredicates();
+                // Find or create a RangePredicate for this key
+                logical::RangePredicate *existing = nullptr;
+                for (auto &rp : rangePreds) {
+                    if (rp.key == rangeKey) { existing = &rp; break; }
+                }
+                if (!existing) {
+                    rangePreds.push_back(logical::RangePredicate{rangeKey, {}, {}, true, true});
+                    existing = &rangePreds.back();
+                }
+                if (isMin) {
+                    // Keep tighter bound
+                    if (existing->minValue.getType() == graph::PropertyType::NULL_TYPE ||
+                        rangeValue > existing->minValue ||
+                        (rangeValue == existing->minValue && !inclusive)) {
+                        existing->minValue = rangeValue;
+                        existing->minInclusive = inclusive;
+                    }
+                } else {
+                    // Keep tighter bound
+                    if (existing->maxValue.getType() == graph::PropertyType::NULL_TYPE ||
+                        rangeValue < existing->maxValue ||
+                        (rangeValue == existing->maxValue && !inclusive)) {
+                        existing->maxValue = rangeValue;
+                        existing->maxInclusive = inclusive;
+                    }
+                }
+                scan->setRangePredicates(std::move(rangePreds));
+                return filterNode->detachChild(0);
             }
         }
 

@@ -48,6 +48,7 @@ namespace graph::query::indexes {
 		constexpr uint32_t EDGE_PROPERTY_TYPE = 4;
 		constexpr uint32_t SYSTEM_LABEL_DICTIONARY = 5;
 		constexpr uint32_t VECTOR_MAPPING_INDEX = 6;
+		constexpr uint32_t COMPOSITE_NODE_PROPERTY_TYPE = 7;
 	} // namespace IndexTypes
 
 	namespace StateKeys {
@@ -129,6 +130,18 @@ namespace graph::query::indexes {
 		// Query methods now need to know which index to use
 		std::vector<int64_t> findNodeIdsByLabel(const std::string &label) const;
 		std::vector<int64_t> findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const;
+		std::vector<int64_t> findNodeIdsByPropertyRange(const std::string &key,
+		                                                 const PropertyValue &minValue,
+		                                                 const PropertyValue &maxValue) const;
+
+		// Composite index API
+		bool createCompositeIndex(const std::string &indexName, const std::string &entityType,
+		                          const std::string &label, const std::vector<std::string> &properties) const;
+		bool hasCompositeIndex(const std::string &entityType,
+		                       const std::vector<std::string> &keys) const;
+		std::vector<int64_t> findNodeIdsByCompositeIndex(
+		    const std::vector<std::string> &keys,
+		    const std::vector<PropertyValue> &values) const;
 
 		std::vector<int64_t> findEdgeIdsByLabel(const std::string &label) const;
 		std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const;
@@ -146,6 +159,10 @@ namespace graph::query::indexes {
 		mutable std::recursive_mutex mutex_;
 
 		bool executeBuildTask(const std::function<bool()> &buildFunc) const;
+
+		// Composite index maintenance helpers
+		void updateCompositeIndexForNode(const Node &node);
+		void removeCompositeIndexForNode(const Node &node);
 	};
 
 } // namespace graph::query::indexes

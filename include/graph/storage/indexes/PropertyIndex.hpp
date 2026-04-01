@@ -70,8 +70,10 @@ namespace graph::query::indexes {
 		// Find nodes with exact property match
 		std::vector<int64_t> findExactMatch(const std::string &key, const PropertyValue &value) const;
 
-		// Find nodes with property value in range (for numeric types)
-		std::vector<int64_t> findRange(const std::string &key, double minValue, double maxValue) const;
+		// Find nodes with property value in range
+		std::vector<int64_t> findRange(const std::string &key,
+		                                const PropertyValue &minValue,
+		                                const PropertyValue &maxValue) const;
 
 		const std::vector<std::string> &getIndexedKeys() const;
 
@@ -83,6 +85,29 @@ namespace graph::query::indexes {
 		}
 
 		PropertyType getIndexedKeyType(const std::string &key) const;
+
+		// --- Composite Index API ---
+
+		void createCompositeIndex(const std::vector<std::string> &keys);
+		void removeCompositeIndex(const std::vector<std::string> &keys);
+		bool hasCompositeIndex(const std::vector<std::string> &keys) const;
+
+		void addCompositeEntry(int64_t entityId,
+		                       const std::vector<std::string> &keys,
+		                       const std::vector<PropertyValue> &values);
+		void removeCompositeEntry(int64_t entityId,
+		                          const std::vector<std::string> &keys,
+		                          const std::vector<PropertyValue> &values);
+
+		std::vector<int64_t> findCompositeExact(
+		    const std::vector<std::string> &keys,
+		    const std::vector<PropertyValue> &values) const;
+
+		std::vector<int64_t> findCompositePrefix(
+		    const std::vector<std::string> &prefixKeys,
+		    const std::vector<PropertyValue> &prefixValues) const;
+
+		void saveCompositeState() const;
 
 	private:
 		std::shared_ptr<storage::DataManager> dataManager_;
@@ -117,6 +142,17 @@ namespace graph::query::indexes {
 
 		void serializeKeyTypeMap() const;
 		void deserializeKeyTypeMap();
+
+		// --- Composite Index internals ---
+		std::shared_ptr<IndexTreeManager> compositeTreeManager_;
+		std::unordered_map<std::string, int64_t> compositeRootIds_;  // "name,age" -> rootId
+		std::unordered_map<std::string, std::vector<std::string>> compositeKeyDefinitions_;  // "name,age" -> ["name","age"]
+
+		static std::string compositeKeyString(const std::vector<std::string> &keys);
+		PropertyValue encodeCompositeKey(const std::vector<PropertyValue> &values) const;
+
+		void serializeCompositeState() const;
+		void deserializeCompositeState();
 	};
 
 } // namespace graph::query::indexes

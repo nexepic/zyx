@@ -27,10 +27,17 @@ namespace graph::query::execution::operators {
 
 	class CreateIndexOperator : public PhysicalOperator {
 	public:
+		// Single-property constructor
 		CreateIndexOperator(std::shared_ptr<indexes::IndexManager> im, std::string name, std::string label,
 							std::string propertyKey) :
 			indexManager_(std::move(im)), name_(std::move(name)), label_(std::move(label)),
-			propertyKey_(std::move(propertyKey)) {}
+			propertyKeys_({std::move(propertyKey)}) {}
+
+		// Multi-property (composite) constructor
+		CreateIndexOperator(std::shared_ptr<indexes::IndexManager> im, std::string name, std::string label,
+							std::vector<std::string> propertyKeys) :
+			indexManager_(std::move(im)), name_(std::move(name)), label_(std::move(label)),
+			propertyKeys_(std::move(propertyKeys)) {}
 
 		void open() override { executed_ = false; }
 
@@ -38,7 +45,14 @@ namespace graph::query::execution::operators {
 			if (executed_)
 				return std::nullopt;
 
-			bool success = indexManager_->createIndex(name_, "node", label_, propertyKey_);
+			bool success = false;
+			if (propertyKeys_.size() > 1) {
+				// Composite index
+				success = indexManager_->createCompositeIndex(name_, "node", label_, propertyKeys_);
+			} else {
+				// Single property index
+				success = indexManager_->createIndex(name_, "node", label_, propertyKeys_[0]);
+			}
 
 			Record record;
 			record.setValue("result", PropertyValue(success ? "Index created" : "Failed or Exists"));
@@ -53,12 +67,18 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"result"}; }
 
 		[[nodiscard]] std::string toString() const override {
-			return "CreateIndex(label=" + label_ + ", prop=" + propertyKey_ + ")";
+			std::string props;
+			for (size_t i = 0; i < propertyKeys_.size(); ++i) {
+				if (i > 0) props += ",";
+				props += propertyKeys_[i];
+			}
+			return "CreateIndex(label=" + label_ + ", props=" + props + ")";
 		}
 
 	private:
 		std::shared_ptr<indexes::IndexManager> indexManager_;
-		std::string name_, label_, propertyKey_;
+		std::string name_, label_;
+		std::vector<std::string> propertyKeys_;
 		bool executed_ = false;
 	};
 

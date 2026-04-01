@@ -28,9 +28,11 @@
 namespace graph::query::execution {
 
 	enum class ScanType {
-		FULL_SCAN, // Iterate all segments
-		LABEL_SCAN, // Use Label Index
-		PROPERTY_SCAN // Use Property Index
+		FULL_SCAN,       // Iterate all segments
+		LABEL_SCAN,      // Use Label Index
+		PROPERTY_SCAN,   // Use Property Index (equality)
+		RANGE_SCAN,      // Use Property Index (range)
+		COMPOSITE_SCAN   // Use Composite Property Index
 	};
 
 	struct NodeScanConfig {
@@ -38,9 +40,19 @@ namespace graph::query::execution {
 		std::string variable;
 		std::vector<std::string> labels;
 
-		// For Property Index
+		// For Property Index (equality)
 		std::string indexKey;
 		PropertyValue indexValue;
+
+		// For Range Scan
+		PropertyValue rangeMin;          // monostate = unbounded
+		PropertyValue rangeMax;          // monostate = unbounded
+		bool minInclusive = true;        // >= vs >
+		bool maxInclusive = true;        // <= vs <
+
+		// For Composite Index
+		std::vector<std::string> compositeKeys;
+		std::vector<PropertyValue> compositeValues;
 
 		// Backward-compat: get first label or empty string
 		[[nodiscard]] std::string label() const { return labels.empty() ? "" : labels[0]; }
@@ -54,6 +66,16 @@ namespace graph::query::execution {
 			}
 			if (type == ScanType::PROPERTY_SCAN)
 				return "IndexScan(" + labelStr + ", " + indexKey + "=" + indexValue.toString() + ")";
+			if (type == ScanType::RANGE_SCAN)
+				return "RangeScan(" + labelStr + ", " + indexKey + " range)";
+			if (type == ScanType::COMPOSITE_SCAN) {
+				std::string keys;
+				for (size_t i = 0; i < compositeKeys.size(); ++i) {
+					if (i > 0) keys += ",";
+					keys += compositeKeys[i];
+				}
+				return "CompositeScan(" + labelStr + ", [" + keys + "])";
+			}
 			if (type == ScanType::LABEL_SCAN)
 				return "LabelScan(" + labelStr + ")";
 			return "FullScan";

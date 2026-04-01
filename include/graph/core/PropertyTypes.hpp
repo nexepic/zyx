@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <concepts>
 #include <cstdint>
 #include <sstream>
@@ -39,8 +40,11 @@ namespace graph {
 		DOUBLE = 4,
 		STRING = 5,
 		LIST = 6, // Support for Vector/List
-		MAP = 7   // Support for Map/Dictionary
+		MAP = 7,  // Support for Map/Dictionary
+		COMPOSITE = 8 // Multi-property composite key
 	};
+
+	// CompositeKey is defined after PropertyValue (uses PropertyValue in components)
 
 	/**
 	 * @struct PropertyValue
@@ -216,6 +220,45 @@ namespace graph {
 				return *val;
 			}
 			throw std::runtime_error("PropertyValue is not a Map");
+		}
+	};
+
+	/**
+	 * @struct CompositeKey
+	 * @brief A multi-component key for composite indexes.
+	 *
+	 * Supports lexicographic comparison for prefix matching and range scans.
+	 * NOT stored in PropertyValue variant — used only at the index layer.
+	 */
+	struct CompositeKey {
+		std::vector<PropertyValue> components;
+
+		bool operator==(const CompositeKey &other) const {
+			return components == other.components;
+		}
+
+		bool operator<(const CompositeKey &other) const {
+			size_t len = std::min(components.size(), other.components.size());
+			for (size_t i = 0; i < len; ++i) {
+				if (components[i] < other.components[i]) return true;
+				if (other.components[i] < components[i]) return false;
+			}
+			return components.size() < other.components.size();
+		}
+
+		bool operator>(const CompositeKey &other) const { return other < *this; }
+		bool operator<=(const CompositeKey &other) const { return !(other < *this); }
+		bool operator>=(const CompositeKey &other) const { return !(*this < other); }
+
+		std::string toString() const {
+			std::ostringstream oss;
+			oss << "(";
+			for (size_t i = 0; i < components.size(); ++i) {
+				if (i > 0) oss << ", ";
+				oss << components[i].toString();
+			}
+			oss << ")";
+			return oss.str();
 		}
 	};
 

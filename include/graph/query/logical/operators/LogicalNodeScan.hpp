@@ -11,12 +11,32 @@
 #include "graph/query/execution/ScanConfigs.hpp"
 #include "graph/core/PropertyTypes.hpp"
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace graph::query::logical {
+
+/**
+ * @brief Describes a range predicate on a single property (e.g. age > 18 AND age < 65).
+ */
+struct RangePredicate {
+    std::string key;
+    graph::PropertyValue minValue;     // monostate = no lower bound
+    graph::PropertyValue maxValue;     // monostate = no upper bound
+    bool minInclusive = true;
+    bool maxInclusive = true;
+};
+
+/**
+ * @brief Describes a composite equality predicate (e.g. n.name = 'Alice' AND n.age = 30).
+ */
+struct CompositeEqualityPredicate {
+    std::vector<std::string> keys;
+    std::vector<graph::PropertyValue> values;
+};
 
 /**
  * @class LogicalNodeScan
@@ -65,7 +85,11 @@ public:
     }
 
     [[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
-        return std::make_unique<LogicalNodeScan>(variable_, labels_, propertyPredicates_);
+        auto cloned = std::make_unique<LogicalNodeScan>(variable_, labels_, propertyPredicates_);
+        cloned->rangePredicates_ = rangePredicates_;
+        cloned->compositeEquality_ = compositeEquality_;
+        cloned->preferredScanType_ = preferredScanType_;
+        return cloned;
     }
 
     void setChild(size_t /*index*/, std::unique_ptr<LogicalOperator> /*child*/) override {
@@ -94,6 +118,22 @@ public:
         propertyPredicates_ = std::move(predicates);
     }
 
+    // Range predicates
+    [[nodiscard]] const std::vector<RangePredicate> &getRangePredicates() const {
+        return rangePredicates_;
+    }
+    void setRangePredicates(std::vector<RangePredicate> predicates) {
+        rangePredicates_ = std::move(predicates);
+    }
+
+    // Composite equality predicate
+    [[nodiscard]] const std::optional<CompositeEqualityPredicate> &getCompositeEquality() const {
+        return compositeEquality_;
+    }
+    void setCompositeEquality(CompositeEqualityPredicate pred) {
+        compositeEquality_ = std::move(pred);
+    }
+
     /** @brief Sets the preferred scan strategy chosen by EnhancedIndexSelectionRule. */
     void setPreferredScanType(graph::query::execution::ScanType t) {
         preferredScanType_ = t;
@@ -108,6 +148,8 @@ private:
     std::string variable_;
     std::vector<std::string> labels_;
     std::vector<std::pair<std::string, graph::PropertyValue>> propertyPredicates_;
+    std::vector<RangePredicate> rangePredicates_;
+    std::optional<CompositeEqualityPredicate> compositeEquality_;
     graph::query::execution::ScanType preferredScanType_ =
         graph::query::execution::ScanType::FULL_SCAN;
 };

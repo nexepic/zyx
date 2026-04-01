@@ -116,6 +116,47 @@ private:
             }
         }
 
+        // ----- Check if multiple equality predicates can form a composite index -----
+        if (propPreds.size() >= 2) {
+            std::vector<std::string> keys;
+            std::vector<PropertyValue> values;
+            for (const auto &kv : propPreds) {
+                keys.push_back(kv.first);
+                values.push_back(kv.second);
+            }
+            if (indexManager_->hasCompositeIndex("node", keys)) {
+                logical::CompositeEqualityPredicate compPred;
+                compPred.keys = keys;
+                compPred.values = values;
+                scan->setCompositeEquality(std::move(compPred));
+            }
+        }
+
+        // ----- Range scan -----
+        const auto &rangePreds = scan->getRangePredicates();
+        for (const auto &rp : rangePreds) {
+            if (!indexManager_->hasPropertyIndex("node", rp.key)) continue;
+
+            double rangeCost = CostModel::rangeIndexCost(stats, firstLabel, rp.key);
+            if (rangeCost < bestCost) {
+                bestCost = rangeCost;
+                bestType = execution::ScanType::RANGE_SCAN;
+            }
+        }
+
+        // ----- Composite scan -----
+        const auto &compositeEq = scan->getCompositeEquality();
+        if (compositeEq && compositeEq->keys.size() >= 2) {
+            if (indexManager_->hasCompositeIndex("node", compositeEq->keys)) {
+                double compositeCost = CostModel::compositeIndexCost(
+                    stats, firstLabel, compositeEq->keys.size());
+                if (compositeCost < bestCost) {
+                    bestCost = compositeCost;
+                    bestType = execution::ScanType::COMPOSITE_SCAN;
+                }
+            }
+        }
+
         scan->setPreferredScanType(bestType);
     }
 };

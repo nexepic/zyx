@@ -21,6 +21,7 @@
 #include "graph/storage/indexes/PropertyIndex.hpp"
 #include <cmath>
 #include <ranges>
+#include <sstream>
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
@@ -42,6 +43,7 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 		deserializeRootMap();
 		deserializeKeyTypeMap();
+		deserializeCompositeState();
 
 		// Rebuild the vector cache from the map
 		indexedKeysList_.clear();
@@ -191,6 +193,9 @@ namespace graph::query::indexes {
 
 		// Save the key->type map
 		serializeKeyTypeMap();
+
+		// Save composite index state
+		serializeCompositeState();
 	}
 
 	void PropertyIndex::addProperty(int64_t entityId, const std::string &key, const PropertyValue &value) {
@@ -345,12 +350,18 @@ namespace graph::query::indexes {
 		return getTreeManagerForType(valueType)->find(rootIt->second, value);
 	}
 
-	std::vector<int64_t> PropertyIndex::findRange(const std::string &key, double minValue, double maxValue) const {
+	std::vector<int64_t> PropertyIndex::findRange(const std::string &key,
+	                                                const PropertyValue &minValue,
+	                                                const PropertyValue &maxValue) const {
 		std::shared_lock lock(mutex_);
-		// ... logic to find key type remains ...
 
-		PropertyType type = getIndexedKeyType(key);
-		if (type != PropertyType::INTEGER && type != PropertyType::DOUBLE)
+		// Access indexedKeyTypes_ directly to avoid re-entrant lock bug
+		auto typeIt = indexedKeyTypes_.find(key);
+		if (typeIt == indexedKeyTypes_.end())
+			return {};
+
+		PropertyType type = typeIt->second;
+		if (type != PropertyType::INTEGER && type != PropertyType::DOUBLE && type != PropertyType::STRING)
 			return {};
 
 		const auto &rootMap = getRootMapForType(type);
@@ -358,14 +369,31 @@ namespace graph::query::indexes {
 		if (rootIt == rootMap.end())
 			return {};
 
-		PropertyValue minKey, maxKey;
-		if (type == PropertyType::INTEGER) {
-			minKey = static_cast<int64_t>(std::ceil(minValue));
-			maxKey = static_cast<int64_t>(std::floor(maxValue));
-		} else {
-			minKey = minValue;
-			maxKey = maxValue;
-		}
+		// Prepare min/max keys with type promotion if needed
+		PropertyValue minKey = minValue;
+		PropertyValue maxKey = maxValue;
+
+		auto promoteToType = [&](PropertyValue &val, PropertyType targetType) -> bool {
+			if (val.getType() == PropertyType::NULL_TYPE) return true; // monostate = unbounded
+			if (val.getType() == targetType) return true; // already correct type
+
+			// int -> double promotion
+			if (targetType == PropertyType::DOUBLE && val.getType() == PropertyType::INTEGER) {
+				val = PropertyValue(static_cast<double>(std::get<int64_t>(val.getVariant())));
+				return true;
+			}
+			// double -> int promotion (ceil for min, floor for max)
+			else if (targetType == PropertyType::INTEGER && val.getType() == PropertyType::DOUBLE) {
+				double dval = std::get<double>(val.getVariant());
+				val = PropertyValue(static_cast<int64_t>(&val == &minKey ? std::ceil(dval) : std::floor(dval)));
+				return true;
+			}
+			// Incompatible types (e.g., int/double query on string index)
+			return false;
+		};
+
+		if (!promoteToType(minKey, type) || !promoteToType(maxKey, type))
+			return {};
 
 		return getTreeManagerForType(type)->findRange(rootIt->second, minKey, maxKey);
 	}
@@ -472,6 +500,187 @@ namespace graph::query::indexes {
 			return it->second;
 		}
 		return PropertyType::UNKNOWN;
+	}
+
+	// ====================================================================
+	// Composite Index Implementation
+	// ====================================================================
+
+	std::string PropertyIndex::compositeKeyString(const std::vector<std::string> &keys) {
+		std::string result;
+		for (size_t i = 0; i < keys.size(); ++i) {
+			if (i > 0) result += ",";
+			result += keys[i];
+		}
+		return result;
+	}
+
+	PropertyValue PropertyIndex::encodeCompositeKey(const std::vector<PropertyValue> &values) const {
+		// Encode as a string representation for B+Tree storage
+		// Format: "v1\0v2\0v3" where each value is toString()
+		std::string encoded;
+		for (size_t i = 0; i < values.size(); ++i) {
+			if (i > 0) encoded += '\0';
+			encoded += values[i].toString();
+		}
+		return PropertyValue(std::move(encoded));
+	}
+
+	void PropertyIndex::createCompositeIndex(const std::vector<std::string> &keys) {
+		std::unique_lock lock(mutex_);
+
+		std::string keyStr = compositeKeyString(keys);
+		if (compositeKeyDefinitions_.contains(keyStr))
+			return;
+
+		if (!compositeTreeManager_) {
+			// Initialize composite tree manager with STRING type for encoded keys
+			compositeTreeManager_ = std::make_shared<IndexTreeManager>(
+				dataManager_, static_cast<uint32_t>(7), // COMPOSITE_NODE_PROPERTY_TYPE
+				PropertyType::STRING);
+		}
+
+		compositeKeyDefinitions_[keyStr] = keys;
+		compositeRootIds_[keyStr] = compositeTreeManager_->initialize();
+	}
+
+	void PropertyIndex::removeCompositeIndex(const std::vector<std::string> &keys) {
+		std::unique_lock lock(mutex_);
+
+		std::string keyStr = compositeKeyString(keys);
+		auto rootIt = compositeRootIds_.find(keyStr);
+		if (rootIt != compositeRootIds_.end()) {
+			if (compositeTreeManager_) {
+				compositeTreeManager_->clear(rootIt->second);
+			}
+			compositeRootIds_.erase(rootIt);
+		}
+		compositeKeyDefinitions_.erase(keyStr);
+	}
+
+	bool PropertyIndex::hasCompositeIndex(const std::vector<std::string> &keys) const {
+		std::shared_lock lock(mutex_);
+		return compositeKeyDefinitions_.contains(compositeKeyString(keys));
+	}
+
+	void PropertyIndex::addCompositeEntry(int64_t entityId,
+	                                       const std::vector<std::string> &keys,
+	                                       const std::vector<PropertyValue> &values) {
+		std::unique_lock lock(mutex_);
+
+		std::string keyStr = compositeKeyString(keys);
+		auto rootIt = compositeRootIds_.find(keyStr);
+		if (rootIt == compositeRootIds_.end() || !compositeTreeManager_)
+			return;
+
+		PropertyValue encodedKey = encodeCompositeKey(values);
+		compositeRootIds_[keyStr] = compositeTreeManager_->insert(rootIt->second, encodedKey, entityId);
+	}
+
+	void PropertyIndex::removeCompositeEntry(int64_t entityId,
+	                                          const std::vector<std::string> &keys,
+	                                          const std::vector<PropertyValue> &values) {
+		std::unique_lock lock(mutex_);
+
+		std::string keyStr = compositeKeyString(keys);
+		auto rootIt = compositeRootIds_.find(keyStr);
+		if (rootIt == compositeRootIds_.end() || !compositeTreeManager_)
+			return;
+
+		PropertyValue encodedKey = encodeCompositeKey(values);
+		compositeTreeManager_->remove(rootIt->second, encodedKey, entityId);
+	}
+
+	std::vector<int64_t> PropertyIndex::findCompositeExact(
+	    const std::vector<std::string> &keys,
+	    const std::vector<PropertyValue> &values) const {
+		std::shared_lock lock(mutex_);
+
+		std::string keyStr = compositeKeyString(keys);
+		auto rootIt = compositeRootIds_.find(keyStr);
+		if (rootIt == compositeRootIds_.end() || !compositeTreeManager_)
+			return {};
+
+		PropertyValue encodedKey = encodeCompositeKey(values);
+		return compositeTreeManager_->find(rootIt->second, encodedKey);
+	}
+
+	std::vector<int64_t> PropertyIndex::findCompositePrefix(
+	    const std::vector<std::string> &prefixKeys,
+	    const std::vector<PropertyValue> &prefixValues) const {
+		std::shared_lock lock(mutex_);
+
+		// Find a composite index that starts with prefixKeys
+		for (const auto &[keyStr, keyDef] : compositeKeyDefinitions_) {
+			if (keyDef.size() < prefixKeys.size()) continue;
+
+			// Check if prefixKeys is a prefix of keyDef
+			bool isPrefix = true;
+			for (size_t i = 0; i < prefixKeys.size(); ++i) {
+				if (keyDef[i] != prefixKeys[i]) { isPrefix = false; break; }
+			}
+			if (!isPrefix) continue;
+
+			auto rootIt = compositeRootIds_.find(keyStr);
+			if (rootIt == compositeRootIds_.end() || !compositeTreeManager_)
+				continue;
+
+			// Range scan: from prefix\0 to prefix\xFF
+			std::string encodedMin;
+			for (size_t i = 0; i < prefixValues.size(); ++i) {
+				if (i > 0) encodedMin += '\0';
+				encodedMin += prefixValues[i].toString();
+			}
+			std::string encodedMax = encodedMin;
+			// Append high sentinel for range scan
+			encodedMax += '\xFF';
+
+			return compositeTreeManager_->findRange(
+				rootIt->second,
+				PropertyValue(encodedMin),
+				PropertyValue(encodedMax));
+		}
+		return {};
+	}
+
+	void PropertyIndex::saveCompositeState() const {
+		serializeCompositeState();
+	}
+
+	void PropertyIndex::serializeCompositeState() const {
+		if (!compositeRootIds_.empty()) {
+			systemStateManager_->setMap(baseStateKey_ + ".composite_roots", compositeRootIds_);
+		}
+		if (!compositeKeyDefinitions_.empty()) {
+			// Serialize definitions as "key1,key2" -> "key1,key2" (stored as string)
+			std::unordered_map<std::string, std::string> defsMap;
+			for (const auto &[keyStr, keys] : compositeKeyDefinitions_) {
+				defsMap[keyStr] = keyStr; // The key string IS the definition
+			}
+			systemStateManager_->setMap(baseStateKey_ + ".composite_defs", defsMap);
+		}
+	}
+
+	void PropertyIndex::deserializeCompositeState() {
+		compositeRootIds_ = systemStateManager_->getMap<int64_t>(baseStateKey_ + ".composite_roots");
+		auto defsMap = systemStateManager_->getMap<std::string>(baseStateKey_ + ".composite_defs");
+		compositeKeyDefinitions_.clear();
+		for (const auto &[keyStr, defStr] : defsMap) {
+			// Parse "name,age" back to vector
+			std::vector<std::string> keys;
+			std::stringstream ss(defStr);
+			std::string segment;
+			while (std::getline(ss, segment, ',')) {
+				keys.push_back(segment);
+			}
+			compositeKeyDefinitions_[keyStr] = keys;
+		}
+
+		// Initialize composite tree manager if there are composite indexes
+		if (!compositeRootIds_.empty() && !compositeTreeManager_) {
+			compositeTreeManager_ = std::make_shared<IndexTreeManager>(
+				dataManager_, static_cast<uint32_t>(7), PropertyType::STRING);
+		}
 	}
 
 } // namespace graph::query::indexes

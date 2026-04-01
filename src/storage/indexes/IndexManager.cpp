@@ -19,11 +19,13 @@
  **/
 
 #include "graph/storage/indexes/IndexManager.hpp"
+#include <sstream>
 #include "graph/log/Log.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexMeta.hpp"
+#include "graph/storage/indexes/PropertyIndex.hpp"
 #include "graph/storage/indexes/VectorIndexManager.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
@@ -327,6 +329,9 @@ namespace graph::query::indexes {
 	void IndexManager::onNodeAdded(const Node &node) {
 		nodeIndexManager_->onEntityAdded(node);
 
+		// Update composite indexes
+		updateCompositeIndexForNode(node);
+
 		if (vectorIndexManager_) { // Safety check
 			std::string labelStr;
 			if (node.getLabelId() != 0) {
@@ -366,6 +371,10 @@ namespace graph::query::indexes {
 	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
 		nodeIndexManager_->onEntityUpdated(oldNode, newNode);
 
+		// Update composite indexes
+		removeCompositeIndexForNode(oldNode);
+		updateCompositeIndexForNode(newNode);
+
 		// Update Vector Index
 		if (vectorIndexManager_) {
 			std::string labelStr;
@@ -380,7 +389,10 @@ namespace graph::query::indexes {
 		// 1. Update Standard Indexes
 		nodeIndexManager_->onEntityDeleted(node);
 
-		// 2. Update Vector Indexes (Removal)
+		// 2. Update composite indexes
+		removeCompositeIndexForNode(node);
+
+		// 3. Update Vector Indexes (Removal)
 		if (vectorIndexManager_) {
 			std::string labelStr;
 			if (node.getLabelId() != 0) {
@@ -413,6 +425,69 @@ namespace graph::query::indexes {
 		return nodeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
 	}
 
+	std::vector<int64_t> IndexManager::findNodeIdsByPropertyRange(const std::string &key,
+	                                                               const PropertyValue &minValue,
+	                                                               const PropertyValue &maxValue) const {
+		log::Log::debug("IndexManager::findNodeIdsByPropertyRange - key: {}", key);
+		return nodeIndexManager_->getPropertyIndex()->findRange(key, minValue, maxValue);
+	}
+
+	// --- Composite Index API ---
+
+	bool IndexManager::createCompositeIndex(const std::string &indexName, const std::string &entityType,
+	                                         const std::string &label, const std::vector<std::string> &properties) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Generate name if empty
+		std::string name = indexName;
+		if (name.empty()) {
+			name = "index_" + entityType + "_" + label + "_composite_";
+			for (size_t i = 0; i < properties.size(); ++i) {
+				if (i > 0) name += "_";
+				name += properties[i];
+			}
+		}
+
+		// Check duplicate
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+		if (allIndexes.contains(name))
+			return false;
+
+		// Create physical composite index
+		if (entityType == "node") {
+			nodeIndexManager_->getPropertyIndex()->createCompositeIndex(properties);
+		} else {
+			return false; // Composite index only supported for nodes
+		}
+
+		// Persist metadata
+		std::string propStr;
+		for (size_t i = 0; i < properties.size(); ++i) {
+			if (i > 0) propStr += ",";
+			propStr += properties[i];
+		}
+		IndexMetadata meta{name, entityType, "composite", label, propStr};
+		sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
+
+		log::Log::info("Created composite index: {} (Label: {}, Props: {})", name, label, propStr);
+		return true;
+	}
+
+	bool IndexManager::hasCompositeIndex(const std::string &entityType,
+	                                      const std::vector<std::string> &keys) const {
+		if (entityType == "node")
+			return nodeIndexManager_->getPropertyIndex()->hasCompositeIndex(keys);
+		return false;
+	}
+
+	std::vector<int64_t> IndexManager::findNodeIdsByCompositeIndex(
+	    const std::vector<std::string> &keys,
+	    const std::vector<PropertyValue> &values) const {
+		log::Log::debug("IndexManager::findNodeIdsByCompositeIndex");
+		return nodeIndexManager_->getPropertyIndex()->findCompositeExact(keys, values);
+	}
+
 	std::vector<int64_t> IndexManager::findEdgeIdsByLabel(const std::string &label) const {
 		log::Log::debug("IndexManager::findEdgeIdsByLabel - label: {}", label);
 		return edgeIndexManager_->getLabelIndex()->findNodes(label);
@@ -421,6 +496,89 @@ namespace graph::query::indexes {
 	std::vector<int64_t> IndexManager::findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const {
 		log::Log::debug("IndexManager::findEdgeIdsByProperty - key: {}", key);
 		return edgeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
+	}
+
+	// --- Composite Index Maintenance Helpers ---
+
+	void IndexManager::updateCompositeIndexForNode(const Node &node) {
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex) return;
+
+		const auto &props = node.getProperties();
+		if (props.empty()) return;
+
+		// For each composite index definition, check if this node has all required properties
+		// Access composite definitions through PropertyIndex's public API
+		// We iterate through all known composite indexes (stored in metadata)
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+
+		for (const auto &[name, rawMeta] : allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			if (meta.indexType != "composite") continue;
+
+			// Parse properties from comma-separated string
+			std::vector<std::string> keys;
+			std::stringstream ss(meta.property);
+			std::string segment;
+			while (std::getline(ss, segment, ',')) {
+				keys.push_back(segment);
+			}
+
+			// Check if node has all required properties
+			std::vector<PropertyValue> values;
+			bool allPresent = true;
+			for (const auto &key : keys) {
+				auto it = props.find(key);
+				if (it == props.end() || it->second.getType() == PropertyType::NULL_TYPE) {
+					allPresent = false;
+					break;
+				}
+				values.push_back(it->second);
+			}
+
+			if (allPresent) {
+				propIndex->addCompositeEntry(node.getId(), keys, values);
+			}
+		}
+	}
+
+	void IndexManager::removeCompositeIndexForNode(const Node &node) {
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex) return;
+
+		const auto &props = node.getProperties();
+		if (props.empty()) return;
+
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+
+		for (const auto &[name, rawMeta] : allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			if (meta.indexType != "composite") continue;
+
+			std::vector<std::string> keys;
+			std::stringstream ss(meta.property);
+			std::string segment;
+			while (std::getline(ss, segment, ',')) {
+				keys.push_back(segment);
+			}
+
+			std::vector<PropertyValue> values;
+			bool allPresent = true;
+			for (const auto &key : keys) {
+				auto it = props.find(key);
+				if (it == props.end() || it->second.getType() == PropertyType::NULL_TYPE) {
+					allPresent = false;
+					break;
+				}
+				values.push_back(it->second);
+			}
+
+			if (allPresent) {
+				propIndex->removeCompositeEntry(node.getId(), keys, values);
+			}
+		}
 	}
 
 } // namespace graph::query::indexes
