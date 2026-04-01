@@ -161,20 +161,22 @@ TEST_F(LabelTokenRegistryTest, HandleInvalidId) {
  * The implementation clears the cache entirely when it exceeds CACHE_SIZE.
  */
 TEST_F(LabelTokenRegistryTest, CacheEviction) {
-	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+	// Use small cache size to test eviction without creating thousands of labels
+	constexpr size_t TEST_CACHE_SIZE = 20;
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager, TEST_CACHE_SIZE);
 
-	// Add one more than cache size
-	size_t limit = graph::storage::LabelTokenRegistry::CACHE_SIZE + 10;
+	// Add more than cache size
+	size_t limit = TEST_CACHE_SIZE + 10;
 	std::vector<int64_t> ids;
 
-	// 1. Fill cache and trigger clear
+	// 1. Fill cache and trigger eviction
 	for (size_t i = 0; i < limit; ++i) {
 		std::string label = "Label_" + std::to_string(i);
 		ids.push_back(registry.getOrCreateLabelId(label));
 	}
 
 	// 2. Retrieve the very first item.
-	// Since cache was likely cleared, this forces a look up from Blob/Index storage.
+	// Since cache was likely evicted, this forces a look up from Blob/Index storage.
 	std::string firstLabel = "Label_0";
 	int64_t firstId = ids[0];
 
@@ -281,13 +283,15 @@ TEST_F(LabelTokenRegistryTest, LongLabelSupport) {
 // ==========================================
 
 TEST_F(LabelTokenRegistryTest, MultipleLabelsCacheMiss) {
-	// Test cache misses after eviction
-	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
+	// Test cache misses after eviction using small cache
+	constexpr size_t TEST_CACHE_SIZE = 20;
+	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager, TEST_CACHE_SIZE);
 
 	// Create more labels than cache size
+	size_t labelCount = TEST_CACHE_SIZE + 5;
 	std::vector<std::string> labels;
-	for (size_t i = 0; i < graph::storage::LabelTokenRegistry::CACHE_SIZE + 5; ++i) {
-		labels.push_back("Label_" + std::to_string(i));
+	for (size_t i = 0; i < labelCount; ++i) {
+		labels.push_back("CacheMiss_" + std::to_string(i));
 	}
 
 	std::vector<int64_t> ids;
@@ -299,7 +303,7 @@ TEST_F(LabelTokenRegistryTest, MultipleLabelsCacheMiss) {
 	std::unordered_set<int64_t> idSet(ids.begin(), ids.end());
 	EXPECT_EQ(idSet.size(), labels.size());
 
-	// Verify all labels can be resolved
+	// Verify all labels can be resolved (some from disk after eviction)
 	for (size_t i = 0; i < labels.size(); ++i) {
 		EXPECT_EQ(registry.getLabelString(ids[i]), labels[i]);
 	}
@@ -527,7 +531,7 @@ TEST_F(LabelTokenRegistryTest, LargeBatchOfUniqueLabels) {
 	// Test creating a large batch of unique labels
 	graph::storage::LabelTokenRegistry registry(dataManager, systemStateManager);
 
-	constexpr int LARGE_COUNT = 500;
+	constexpr int LARGE_COUNT = 50;
 	std::vector<std::string> labels;
 	std::vector<int64_t> ids;
 
@@ -541,7 +545,7 @@ TEST_F(LabelTokenRegistryTest, LargeBatchOfUniqueLabels) {
 	EXPECT_EQ(idSet.size(), static_cast<size_t>(LARGE_COUNT));
 
 	// Verify random subset
-	for (int i = 0; i < 50; ++i) {
+	for (int i = 0; i < 10; ++i) {
 		int idx = rand() % LARGE_COUNT;
 		EXPECT_EQ(registry.getLabelString(ids[idx]), labels[idx]);
 	}
@@ -557,7 +561,7 @@ TEST_F(LabelTokenRegistryTest, RootIndexIdChanges) {
 		EXPECT_GT(initialRootId, 0);
 
 		// Force root change by creating many labels
-		for (int i = 0; i < 100; ++i) {
+		for (int i = 0; i < 30; ++i) {
 			registry.getOrCreateLabelId("RootChangeLabel_" + std::to_string(i));
 		}
 

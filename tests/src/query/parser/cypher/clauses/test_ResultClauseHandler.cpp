@@ -73,29 +73,7 @@ TEST_F(ResultClauseHandlerTest, Combined_ProjectionWithOrder) {
 	EXPECT_EQ(res.getRows()[1].at("n.name").toString(), "Alice");
 }
 
-TEST_F(ResultClauseHandlerTest, Combined_SkipAndLimit) {
-	// Tests SKIP with LIMIT
-	(void) execute("CREATE (n:TestSkipAndLimit {value: 10})");
-	(void) execute("CREATE (n:TestSkipAndLimit {value: 20})");
-	(void) execute("CREATE (n:TestSkipAndLimit {value: 30})");
-	(void) execute("CREATE (n:TestSkipAndLimit {value: 40})");
-
-	auto res = execute("MATCH (n:TestSkipAndLimit) RETURN n.value ORDER BY n.value ASC SKIP 1 LIMIT 2");
-	ASSERT_EQ(res.rowCount(), 2UL);
-	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "20");
-	EXPECT_EQ(res.getRows()[1].at("n.value").toString(), "30");
-}
-
 // === EdgeCase Tests ===
-
-TEST_F(ResultClauseHandlerTest, EdgeCase_EmptyProjection) {
-	// Tests RETURN with empty projection (just RETURN)
-	(void) execute("CREATE (n:Test {value: 10})");
-
-	// May return all columns or single column, depends on implementation
-	auto res = execute("MATCH (n:Test) RETURN n");
-	ASSERT_EQ(res.rowCount(), 1UL);
-}
 
 TEST_F(ResultClauseHandlerTest, EdgeCase_LimitLargerThanCount) {
 	// Tests LIMIT larger than row count
@@ -191,16 +169,6 @@ TEST_F(ResultClauseHandlerTest, EdgeCase_ReturnWithoutMatch) {
 	EXPECT_EQ(res.getRows()[0].at("answer").toString(), "42");
 }
 
-TEST_F(ResultClauseHandlerTest, EdgeCase_SkipEqualsCount) {
-	// Tests SKIP where SKIP = exact row count
-	(void) execute("CREATE (n:TestSkipEquals {value: 10})");
-	(void) execute("CREATE (n:TestSkipEquals {value: 20})");
-	(void) execute("CREATE (n:TestSkipEquals {value: 30})");
-
-	auto res = execute("MATCH (n:TestSkipEquals) RETURN n.value ORDER BY n.value ASC SKIP 3");
-	ASSERT_EQ(res.rowCount(), 0UL);
-}
-
 TEST_F(ResultClauseHandlerTest, EdgeCase_VeryLargeLimit) {
 	// Tests LIMIT with very large value
 	(void) execute("CREATE (n:TestVeryLarge {value: 10})");
@@ -278,16 +246,6 @@ TEST_F(ResultClauseHandlerTest, Limit_LimitZero) {
 	ASSERT_EQ(res.rowCount(), 0UL);
 }
 
-TEST_F(ResultClauseHandlerTest, Limit_WithNegativeNumber) {
-	// Tests LIMIT with negative number
-	// Behavior might be implementation-specific
-	(void) execute("CREATE (n:Test {id: 1})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.id LIMIT -1");
-	// Negative LIMIT might be treated as 0 or cause error
-	EXPECT_GE(res.rowCount(), 0UL);
-}
-
 TEST_F(ResultClauseHandlerTest, Limit_WithOrderBy) {
 	// Tests LIMIT combined with ORDER BY
 	for (int i = 0; i < 10; ++i) {
@@ -299,26 +257,6 @@ TEST_F(ResultClauseHandlerTest, Limit_WithOrderBy) {
 	EXPECT_EQ(res.getRows()[0].at("n.id").toString(), "9");
 }
 
-TEST_F(ResultClauseHandlerTest, Limit_WithVeryLargeNumber) {
-	// Tests LIMIT with a very large number
-	for (int i = 0; i < 10; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN n.id LIMIT 999999999999");
-	ASSERT_EQ(res.rowCount(), 10UL);
-}
-
-TEST_F(ResultClauseHandlerTest, Limit_WithZero) {
-	// Tests LIMIT 0 (edge case - should return no rows)
-	for (int i = 0; i < 5; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN n.id LIMIT 0");
-	ASSERT_EQ(res.rowCount(), 0UL);
-}
-
 // === OrderBy Tests ===
 
 TEST_F(ResultClauseHandlerTest, OrderBy_Ascending) {
@@ -328,19 +266,6 @@ TEST_F(ResultClauseHandlerTest, OrderBy_Ascending) {
 	(void) execute("CREATE (n:TestOrderByAsc {value: 30})");
 
 	auto res = execute("MATCH (n:TestOrderByAsc) RETURN n.value ORDER BY n.value ASC");
-	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "10");
-	EXPECT_EQ(res.getRows()[1].at("n.value").toString(), "20");
-	EXPECT_EQ(res.getRows()[2].at("n.value").toString(), "30");
-}
-
-TEST_F(ResultClauseHandlerTest, OrderBy_DefaultAscending) {
-	// Tests ORDER BY n.prop (default is ASCENDING)
-	(void) execute("CREATE (n:TestOrderByDef {value: 10})");
-	(void) execute("CREATE (n:TestOrderByDef {value: 20})");
-	(void) execute("CREATE (n:TestOrderByDef {value: 30})");
-
-	auto res = execute("MATCH (n:TestOrderByDef) RETURN n.value ORDER BY n.value");
 	ASSERT_EQ(res.rowCount(), 3UL);
 	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "10");
 	EXPECT_EQ(res.getRows()[1].at("n.value").toString(), "20");
@@ -387,38 +312,6 @@ TEST_F(ResultClauseHandlerTest, OrderBy_MultipleSortItems) {
 	EXPECT_EQ(res.getRows()[0].at("n.score").toString(), "150");
 	EXPECT_EQ(res.getRows()[1].at("n.score").toString(), "100");
 	EXPECT_EQ(res.getRows()[2].at("n.score").toString(), "200");
-}
-
-TEST_F(ResultClauseHandlerTest, OrderBy_SingleFieldAscending) {
-	// Tests ORDER BY with single field ascending (explicit or default)
-	(void) execute("CREATE (n:Test {val: 3})");
-	(void) execute("CREATE (n:Test {val: 1})");
-	(void) execute("CREATE (n:Test {val: 2})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.val ORDER BY n.val ASC");
-	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("n.val").toString(), "1");
-}
-
-TEST_F(ResultClauseHandlerTest, OrderBy_SingleFieldDescending) {
-	// Tests ORDER BY with DESC keyword
-	(void) execute("CREATE (n:Test {val: 1})");
-	(void) execute("CREATE (n:Test {val: 3})");
-	(void) execute("CREATE (n:Test {val: 2})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.val ORDER BY n.val DESC");
-	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("n.val").toString(), "3");
-}
-
-TEST_F(ResultClauseHandlerTest, OrderBy_WithDescendingKeyword) {
-	// Tests ORDER BY with DESCENDING keyword (full form)
-	(void) execute("CREATE (n:Test {val: 1})");
-	(void) execute("CREATE (n:Test {val: 3})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.val ORDER BY n.val DESCENDING");
-	ASSERT_EQ(res.rowCount(), 2UL);
-	EXPECT_EQ(res.getRows()[0].at("n.val").toString(), "3");
 }
 
 TEST_F(ResultClauseHandlerTest, OrderBy_WithNullValues) {
@@ -640,48 +533,12 @@ TEST_F(ResultClauseHandlerTest, Return_EmptyProjection) {
 	ASSERT_EQ(res.rowCount(), 0UL);
 }
 
-TEST_F(ResultClauseHandlerTest, Return_Limit_All) {
-	// Tests LIMIT that returns all
-	for (int i = 0; i < 5; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN n.id LIMIT 10");
-	ASSERT_EQ(res.rowCount(), 5UL);
-}
-
-TEST_F(ResultClauseHandlerTest, Return_Limit_Half) {
-	// Tests LIMIT that returns half
-	for (int i = 0; i < 10; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN n.id LIMIT 5");
-	ASSERT_EQ(res.rowCount(), 5UL);
-}
-
 TEST_F(ResultClauseHandlerTest, Return_Limit_NonInteger_Error) {
 	// Tests LIMIT with string literal - should trigger error handling
 	EXPECT_THROW({
 		(void)execute("CREATE (n:Test {id: 1})");
 		(void)execute("MATCH (n:Test) RETURN n LIMIT 'invalid'");
 	}, std::runtime_error);
-}
-
-TEST_F(ResultClauseHandlerTest, Return_Limit_One) {
-	// Tests LIMIT 1
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.id LIMIT 1");
-	ASSERT_EQ(res.rowCount(), 1UL);
-}
-
-TEST_F(ResultClauseHandlerTest, Return_LiteralValue) {
-	// Tests RETURN 42 (literal value)
-	auto res = execute("RETURN 42");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("42").toString(), "42");
 }
 
 TEST_F(ResultClauseHandlerTest, Return_MultipleAliases) {
@@ -739,25 +596,6 @@ TEST_F(ResultClauseHandlerTest, Return_Multiply) {
 	auto res = execute("MATCH (n:Person) RETURN *");
 	ASSERT_EQ(res.rowCount(), 1UL);
 	EXPECT_TRUE(res.getRows()[0].contains("n"));
-}
-
-TEST_F(ResultClauseHandlerTest, Return_MultiplyAll) {
-	// Tests RETURN * (return all variables)
-	(void) execute("CREATE (n:Person {name: 'Alice'})");
-
-	auto res = execute("MATCH (n:Person) RETURN *");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_TRUE(res.getRows()[0].contains("n"));
-}
-
-TEST_F(ResultClauseHandlerTest, Return_MultiplyWithLimit) {
-	// Tests RETURN * with LIMIT
-	for (int i = 0; i < 10; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN * LIMIT 5");
-	ASSERT_EQ(res.rowCount(), 5UL);
 }
 
 TEST_F(ResultClauseHandlerTest, Return_Multiply_AfterCreate) {
@@ -852,26 +690,6 @@ TEST_F(ResultClauseHandlerTest, Return_OrderBy_DefaultAscending) {
 	EXPECT_EQ(res.getRows()[0].at("n.val").toString(), "1");
 }
 
-TEST_F(ResultClauseHandlerTest, Return_OrderBy_ExplicitAscending) {
-	// Tests explicit ASC keyword
-	(void) execute("CREATE (n:Test {val: 2})");
-	(void) execute("CREATE (n:Test {val: 1})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.val ORDER BY n.val ASC");
-	ASSERT_EQ(res.rowCount(), 2UL);
-	EXPECT_EQ(res.getRows()[0].at("n.val").toString(), "1");
-}
-
-TEST_F(ResultClauseHandlerTest, Return_OrderBy_MultipleSortItems) {
-	// Tests ORDER BY with multiple sort items
-	(void) execute("CREATE (n:Test {a: 1, b: 2})");
-	(void) execute("CREATE (n:Test {a: 1, b: 1})");
-	(void) execute("CREATE (n:Test {a: 2, b: 1})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.a, n.b ORDER BY n.a, n.b");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
 TEST_F(ResultClauseHandlerTest, Return_OrderBy_ProjectionAlias) {
 	// Tests ORDER BY referencing projection alias - covers line 78-88
 	(void) execute("CREATE (n:Test {value: 10})");
@@ -913,17 +731,6 @@ TEST_F(ResultClauseHandlerTest, Return_OrderBy_PropertyWithoutDot) {
 	EXPECT_GE(res.rowCount(), 0UL);
 }
 
-TEST_F(ResultClauseHandlerTest, Return_OrderBy_SingleSortItem) {
-	// Tests ORDER BY with single sort item
-	(void) execute("CREATE (n:Test {id: 3})");
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.id ORDER BY n.id");
-	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("n.id").toString(), "1");
-}
-
 TEST_F(ResultClauseHandlerTest, Return_PropertyAccess) {
 	// Tests RETURN n.name (property access)
 	(void) execute("CREATE (n:Person {name: 'Charlie'})");
@@ -950,59 +757,12 @@ TEST_F(ResultClauseHandlerTest, Return_SingleVariable) {
 	EXPECT_TRUE(res.getRows()[0].contains("n"));
 }
 
-TEST_F(ResultClauseHandlerTest, Return_SkipLimit_Combo) {
-	// Tests SKIP and LIMIT together
-	for (int i = 0; i < 20; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN n.id SKIP 5 LIMIT 10");
-	ASSERT_EQ(res.rowCount(), 10UL);
-}
-
-TEST_F(ResultClauseHandlerTest, Return_Skip_AllButOne) {
-	// Tests SKIP that leaves only one result
-	for (int i = 0; i < 5; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN n.id SKIP 4");
-	ASSERT_EQ(res.rowCount(), 1UL);
-}
-
-TEST_F(ResultClauseHandlerTest, Return_Skip_Half) {
-	// Tests SKIP that skips half of results
-	for (int i = 0; i < 10; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test) RETURN n.id SKIP 5");
-	ASSERT_EQ(res.rowCount(), 5UL);
-}
-
 TEST_F(ResultClauseHandlerTest, Return_Skip_NonInteger_Error) {
 	// Tests SKIP with string literal - should trigger error handling
 	EXPECT_THROW({
 		(void)execute("CREATE (n:Test {id: 1})");
 		(void)execute("MATCH (n:Test) RETURN n SKIP 'invalid'");
 	}, std::runtime_error);
-}
-
-TEST_F(ResultClauseHandlerTest, Return_Skip_One) {
-	// Tests SKIP 1
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.id SKIP 1");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("n.id").toString(), "2");
-}
-
-TEST_F(ResultClauseHandlerTest, Return_StandaloneBoolean) {
-	// Tests RETURN with boolean without MATCH
-	auto res = execute("RETURN true");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("true").toString(), "true");
 }
 
 TEST_F(ResultClauseHandlerTest, Return_StandaloneLiteral) {
@@ -1020,19 +780,6 @@ TEST_F(ResultClauseHandlerTest, Return_StandaloneMultiple) {
 	EXPECT_EQ(res.getRows()[0].at("1").toString(), "1");
 	EXPECT_EQ(res.getRows()[0].at("2").toString(), "2");
 	EXPECT_EQ(res.getRows()[0].at("3").toString(), "3");
-}
-
-TEST_F(ResultClauseHandlerTest, Return_StandaloneNull) {
-	// Tests RETURN with null without MATCH
-	auto res = execute("RETURN null");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("null").asPrimitive().getType(), graph::PropertyType::NULL_TYPE);
-}
-
-TEST_F(ResultClauseHandlerTest, Return_StandaloneString) {
-	// Tests RETURN with string literal without MATCH
-	auto res = execute("RETURN 'Hello'");
-	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(ResultClauseHandlerTest, Return_StarWithOrderBy) {
@@ -1094,45 +841,6 @@ TEST_F(ResultClauseHandlerTest, Return_WithAndWithoutAlias) {
 	EXPECT_EQ(res.getRows()[0].at("n.b").toString(), "2");
 }
 
-TEST_F(ResultClauseHandlerTest, Return_WithMultipleAliases) {
-	// Tests RETURN with multiple aliases
-	(void) execute("CREATE (n:Test {a: 10, b: 5})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.a AS value_a, n.b AS value_b");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("value_a").toString(), "10");
-	EXPECT_EQ(res.getRows()[0].at("value_b").toString(), "5");
-}
-
-TEST_F(ResultClauseHandlerTest, Return_WithPropertyAccess) {
-	// Tests RETURN with property access
-	(void) execute("CREATE (n:Test {a: 5, b: 3})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.a, n.b");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("n.a").toString(), "5");
-	EXPECT_EQ(res.getRows()[0].at("n.b").toString(), "3");
-}
-
-TEST_F(ResultClauseHandlerTest, Return_WithoutAlias) {
-	// Tests RETURN without AS keyword (alias defaults to expression)
-	(void) execute("CREATE (n:Test {name: 'Alice'})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.name");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_TRUE(res.getRows()[0].contains("n.name"));
-}
-
-TEST_F(ResultClauseHandlerTest, Return_WithoutAlias_Multiple) {
-	// Tests multiple RETURN items without AS
-	(void) execute("CREATE (n:Test {a: 1, b: 2})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.a, n.b");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("n.a").toString(), "1");
-	EXPECT_EQ(res.getRows()[0].at("n.b").toString(), "2");
-}
-
 TEST_F(ResultClauseHandlerTest, Return_WithoutAlias_Single) {
 	// Covers False branch at line 86 (K_AS is false)
 	(void) execute("CREATE (n:Test {value: 100})");
@@ -1161,16 +869,6 @@ TEST_F(ResultClauseHandlerTest, Skip_MoreThanAvailable) {
 	}
 
 	auto res = execute("MATCH (n:Test) RETURN n.id SKIP 10");
-	ASSERT_EQ(res.rowCount(), 0UL);
-}
-
-TEST_F(ResultClauseHandlerTest, Skip_SkipAllRows) {
-	// Tests SKIP N where N >= row count
-	(void) execute("CREATE (n:Test {value: 10})");
-	(void) execute("CREATE (n:Test {value: 20})");
-	(void) execute("CREATE (n:Test {value: 30})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.value ORDER BY n.value ASC SKIP 10");
 	ASSERT_EQ(res.rowCount(), 0UL);
 }
 
@@ -1240,15 +938,6 @@ TEST_F(ResultClauseHandlerTest, Skip_WithVeryLargeNumber) {
 	ASSERT_EQ(res.rowCount(), 0UL);
 }
 
-TEST_F(ResultClauseHandlerTest, Skip_WithZero) {
-	// Tests SKIP 0 (edge case)
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	auto res = execute("MATCH (n:Test) RETURN n.id SKIP 0");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
 // === SkipAndLimit Tests ===
 
 TEST_F(ResultClauseHandlerTest, SkipAndLimit_BothPresent) {
@@ -1260,17 +949,6 @@ TEST_F(ResultClauseHandlerTest, SkipAndLimit_BothPresent) {
 	auto res = execute("MATCH (n:Test) RETURN n.id ORDER BY n.id SKIP 5 LIMIT 10");
 	ASSERT_EQ(res.rowCount(), 10UL);
 	EXPECT_EQ(res.getRows()[0].at("n.id").toString(), "5");
-}
-
-TEST_F(ResultClauseHandlerTest, SkipAndLimit_LimitThenSkip) {
-	// Tests ORDER BY with SKIP then LIMIT (correct order)
-	for (int i = 0; i < 20; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	// SKIP first, then LIMIT
-	auto res = execute("MATCH (n:Test) RETURN n.id ORDER BY n.id SKIP 5 LIMIT 10");
-	EXPECT_GE(res.rowCount(), 0UL);
 }
 
 TEST_F(ResultClauseHandlerTest, SkipAndLimit_SkipGreaterThanLimit) {

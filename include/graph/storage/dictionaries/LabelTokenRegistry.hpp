@@ -41,7 +41,8 @@ namespace graph::storage {
 		static constexpr char STORAGE_KEY[] = "sys.dict.label_registry.root";
 
 		LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
-						   std::shared_ptr<state::SystemStateManager> stateManager);
+						   std::shared_ptr<state::SystemStateManager> stateManager,
+						   size_t cacheSize = CACHE_SIZE);
 
 		// Get ID for string, creating if missing.
 		int64_t getOrCreateLabelId(const std::string &label);

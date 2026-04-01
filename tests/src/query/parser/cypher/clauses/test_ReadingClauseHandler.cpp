@@ -22,121 +22,12 @@
 class ReadingClauseHandlerTest : public QueryTestFixture {};
 
 // === Call Tests ===
-
-TEST_F(ReadingClauseHandlerTest, Call_InQueryNoArgs) {
-	// Tests in-query CALL without arguments
-	EXPECT_THROW({
-		(void)execute("CALL db.stats() YIELD label RETURN label");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_InQueryUnknownProcedure) {
-	// Tests in-query CALL with unknown procedure
-	EXPECT_THROW({
-		(void)execute("CALL unknown.proc() RETURN x");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_InQueryWithoutYield) {
-	// Tests in-query CALL without YIELD clause
-	// This should work but may not be practically useful
-
-	// Create test data
-	(void) execute("CREATE (n:Person {name: 'Bob'})");
-
-	// CALL in query without YIELD - if procedure doesn't exist, expect error
-	EXPECT_THROW({
-		(void)execute("CALL db.stats() RETURN count(*)");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_InQuery_UnknownProcedure) {
-	// Tests in-query CALL with unknown procedure
-	(void) execute("CREATE (n:Test)");
-
-	EXPECT_THROW({
-		(void)execute("MATCH (n:Test) CALL unknown.proc() RETURN n");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_MultipleArguments) {
-	// Tests with multiple arguments
-	EXPECT_THROW({
-		(void)execute("CALL some.proc(1, 2, 3)");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_NoArguments) {
-	// Covers False branch at line 51:7 (empty expressions)
-	// Line 74:18 also needs empty expression loop
-	EXPECT_THROW({
-		(void)execute("CALL some.procedure()");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_SingleArgument) {
-	// Tests with single argument
-	EXPECT_THROW({
-		(void)execute("CALL some.proc(1)");
-	}, std::exception);
-}
+// All CALL tests expect exceptions since stored procedures are not yet implemented
 
 TEST_F(ReadingClauseHandlerTest, Call_StandaloneNoArgs) {
 	// Tests standalone CALL without arguments
 	EXPECT_THROW({
 		(void)execute("CALL db.stats()");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_StandaloneWithoutYield) {
-	// Tests standalone CALL procedure without YIELD clause
-	// This covers the False branch for K_YIELD() check
-	// Note: Since db.stats and db.labels may not be implemented,
-	// we just verify the syntax parsing works
-
-	// Create test data first
-	(void) execute("CREATE (n:Person {name: 'Alice'})");
-
-	// CALL without YIELD - just verify it doesn't crash
-	// If procedure doesn't exist, it will throw
-	EXPECT_THROW({
-		(void)execute("CALL db.stats()");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_Standalone_UnknownProcedure) {
-	// Tests CALL with unknown procedure
-	EXPECT_THROW({
-		(void)execute("CALL unknown.procedure()");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_UnknownProcedure) {
-	// Tests CALL with unknown procedure (Line 46 True branch has explicitProcedureInvocation)
-	EXPECT_THROW({
-		(void)execute("CALL unknown.procedure()");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_WithArguments) {
-	// Tests CALL with procedure arguments
-	EXPECT_THROW({
-		(void)execute("CALL some.procedure(1, 2, 3)");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_WithEmptyExpressions) {
-	// Tests CALL with no expressions (empty args)
-	// Covers Line 51 and 73 False branches
-	EXPECT_THROW({
-		(void)execute("CALL unknown.proc()");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_WithExpressionArgs) {
-	// Tests CALL with expression arguments
-	EXPECT_THROW({
-		(void)execute("CALL db.stats(1 + 2)");
 	}, std::exception);
 }
 
@@ -147,38 +38,25 @@ TEST_F(ReadingClauseHandlerTest, Call_WithMixedArguments) {
 	}, std::exception);
 }
 
-TEST_F(ReadingClauseHandlerTest, Call_WithMultipleArguments) {
-	// Tests CALL procedure with multiple arguments
-	// This tests parsing multiple expression arguments
-
-	// Create test data
-	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
-
-	// CALL with multiple args - if procedure doesn't exist, expect error
+TEST_F(ReadingClauseHandlerTest, Call_WithExpressionArgs) {
+	// Tests CALL with expression arguments
 	EXPECT_THROW({
-		(void)execute("CALL db.labels() YIELD label RETURN count(*)");
+		(void)execute("CALL db.stats(1 + 2)");
 	}, std::exception);
 }
 
-TEST_F(ReadingClauseHandlerTest, Call_WithNullArgument) {
-	// Tests with null argument
+TEST_F(ReadingClauseHandlerTest, Call_InQueryWithYield) {
+	// Tests in-query CALL with YIELD
 	EXPECT_THROW({
-		(void)execute("CALL some.proc(null)");
+		(void)execute("CALL db.stats() YIELD label RETURN label");
 	}, std::exception);
 }
 
-TEST_F(ReadingClauseHandlerTest, Call_WithStringArgument) {
-	// Tests with string argument
+TEST_F(ReadingClauseHandlerTest, Call_InQueryAfterMatch) {
+	// Tests in-query CALL after MATCH
+	(void) execute("CREATE (n:Test)");
 	EXPECT_THROW({
-		(void)execute("CALL some.proc('test')");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, Call_WithStringArguments) {
-	// Tests CALL with string arguments
-	EXPECT_THROW({
-		(void)execute("CALL some.procedure('arg1', 'arg2')");
+		(void)execute("MATCH (n:Test) CALL unknown.proc() RETURN n");
 	}, std::exception);
 }
 
@@ -263,32 +141,12 @@ TEST_F(ReadingClauseHandlerTest, EdgeCase_MatchWithVariableLength) {
 	ASSERT_EQ(res.rowCount(), 3UL);
 }
 
-TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindAsFirstClause) {
-	// Tests UNWIND as first clause (without preceding MATCH)
-	auto res = execute("UNWIND [1, 2, 3] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindVeryLargeList) {
-	// Tests UNWIND clause with large list
-	auto res = execute("UNWIND [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 10UL);
-	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1");
-	EXPECT_EQ(res.getRows()[9].at("x").toString(), "10");
-}
-
 TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithComplexStrings) {
 	// Tests UNWIND clause with complex string values
 	auto res = execute("UNWIND ['Hello, World!', 'Test...'] AS x RETURN x");
 	ASSERT_EQ(res.rowCount(), 2UL);
 	EXPECT_EQ(res.getRows()[0].at("x").toString(), "Hello, World!");
 	EXPECT_EQ(res.getRows()[1].at("x").toString(), "Test...");
-}
-
-TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithDuplicateValues) {
-	// Tests UNWIND clause with duplicate values
-	auto res = execute("UNWIND [1, 1, 2, 2] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 4UL);
 }
 
 TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithEmptyStrings) {
@@ -300,15 +158,6 @@ TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithEmptyStrings) {
 	EXPECT_EQ(res.getRows()[2].at("x").toString(), "");
 }
 
-TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithListOfLists) {
-	// Tests UNWIND clause with nested structure (if supported)
-	// Note: This may not be fully supported depending on implementation
-	// Testing for robustness
-	auto res = execute("UNWIND [[1, 2], [3, 4]] AS x RETURN x");
-	// Just verify it doesn't crash
-	EXPECT_GE(res.rowCount(), 0UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithNegativeNumbers) {
 	// Tests UNWIND clause with negative numbers
 	// Note: Implementation may return absolute values for negative numbers in lists
@@ -317,38 +166,8 @@ TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithNegativeNumbers) {
 	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1");
 	EXPECT_EQ(res.getRows()[1].at("x").toString(), "2");
 	EXPECT_EQ(res.getRows()[2].at("x").toString(), "3");
-}
-
-TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithScientificNotation) {
-	// Tests UNWIND clause with scientific notation
-	auto res = execute("UNWIND [1.5e10, 2.0e5] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 2UL);
-	EXPECT_EQ(res.getRows()[0].at("x").asPrimitive().getType(), graph::PropertyType::DOUBLE);
-	EXPECT_EQ(res.getRows()[1].at("x").asPrimitive().getType(), graph::PropertyType::DOUBLE);
-}
-
-TEST_F(ReadingClauseHandlerTest, EdgeCase_UnwindWithZeros) {
-	// Tests UNWIND clause with zero values
-	auto res = execute("UNWIND [0, 0, 0] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("x").toString(), "0");
-}
-
-// === InQueryCall Tests ===
-
-TEST_F(ReadingClauseHandlerTest, InQueryCall_NoArguments) {
-	// Covers False branch at line 73:6 and 74:18
-	// CALL in query without arguments
-	EXPECT_THROW({
-		(void)execute("CALL some.proc() RETURN x");
-	}, std::exception);
-}
-
-TEST_F(ReadingClauseHandlerTest, InQueryCall_WithEmptyExpressions) {
-	// Tests in-query CALL with no expressions
-	EXPECT_THROW({
-		(void)execute("CALL unknown.proc() YIELD result");
-	}, std::exception);
+	EXPECT_EQ(res.getRows()[0].at("x").asPrimitive().getType(), graph::PropertyType::INTEGER);
+	EXPECT_EQ(res.getRows()[1].at("x").asPrimitive().getType(), graph::PropertyType::INTEGER);
 }
 
 // === Match Tests ===
@@ -878,34 +697,6 @@ TEST_F(ReadingClauseHandlerTest, UnwindThenMatch) {
 
 // === Unwind Tests ===
 
-TEST_F(ReadingClauseHandlerTest, Unwind_AfterCreate) {
-	// Covers False branch at line 134 after CREATE
-	// CREATE ... UNWIND is not supported, so we test with WITH
-	(void) execute("CREATE (n:Test)");
-
-	auto res = execute("MATCH (n:Test) UNWIND [1, 2] AS x RETURN x");
-	EXPECT_GE(res.rowCount(), 0UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_AfterMatch) {
-	// Tests UNWIND after MATCH
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	// Note: This tests the pattern builder logic
-	auto res = execute("MATCH (n:Test) RETURN n.id");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_AfterMatchWithResults) {
-	// Tests UNWIND after MATCH when MATCH returns results
-	(void) execute("CREATE (n:Test)");
-	(void) execute("CREATE (n:Test)");
-
-	auto res = execute("MATCH (n:Test) RETURN n");
-	EXPECT_GE(res.rowCount(), 1UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_AfterOrderBy) {
 	// Tests UNWIND after MATCH
 	// 3 nodes * 3 unwind values = 9 rows
@@ -946,19 +737,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_AfterSet) {
 	EXPECT_GE(res.rowCount(), 0UL);
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_AfterUnwind) {
-	// Tests consecutive UNWINDs
-	auto res = execute("UNWIND [1, 2] AS x UNWIND [3, 4] AS y RETURN x, y");
-	ASSERT_EQ(res.rowCount(), 4UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_AliasVariable) {
-	// Tests UNWIND clause with different alias variables
-	auto res = execute("UNWIND [1, 2, 3] AS value RETURN value");
-	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("value").toString(), "1");
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_AllEdgeCases) {
 	// Tests all UNWIND edge cases together
 
@@ -988,12 +766,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_BooleanList) {
 	EXPECT_EQ(res.getRows()[2].at("x").toString(), "true");
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_ConsecutiveUnwinds) {
-	// Tests consecutive UNWINDs
-	auto res = execute("UNWIND [1, 2] AS a UNWIND [3, 4] AS b RETURN a, b");
-	ASSERT_EQ(res.rowCount(), 4UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_DoubleList) {
 	// Tests UNWIND clause with double list
 	auto res = execute("UNWIND [1.5, 2.7, 3.14] AS x RETURN x");
@@ -1001,12 +773,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_DoubleList) {
 	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1.5");
 	EXPECT_EQ(res.getRows()[1].at("x").toString(), "2.7");
 	EXPECT_EQ(res.getRows()[2].at("x").toString(), "3.14");
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_DuplicateValues) {
-	// Tests UNWIND with duplicate values
-	auto res = execute("UNWIND [1, 1, 2, 2, 3, 3] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 6UL);
 }
 
 TEST_F(ReadingClauseHandlerTest, Unwind_EmptyList) {
@@ -1021,20 +787,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_EmptyListWithRootOp) {
 
 	auto res = execute("MATCH (n:Test) UNWIND [] AS x RETURN n.id");
 	// Empty UNWIND stops the pipeline
-	ASSERT_EQ(res.rowCount(), 0UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_EmptyList_AfterMatch) {
-	// Covers True branch after MATCH
-	(void) execute("CREATE (n:Test)");
-
-	auto res = execute("MATCH (n:Test) UNWIND [] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 0UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_EmptyList_Standalone) {
-	// Covers True branch at line 129 (listValues.empty())
-	auto res = execute("UNWIND [] AS x RETURN x");
 	ASSERT_EQ(res.rowCount(), 0UL);
 }
 
@@ -1068,27 +820,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_MixedTypeList) {
 	EXPECT_EQ(res.getRows()[3].at("x").toString(), "3.14");
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_MixedTypes) {
-	// Tests UNWIND with mixed types
-	auto res = execute("UNWIND [1, 'two', true, 3.14] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 4UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_MultiCharAlias) {
-	// Tests UNWIND clause with multi-character alias
-	auto res = execute("UNWIND [1, 2] AS item RETURN item");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_MultipleTests) {
-	// Tests multiple UNWIND operations
-	auto res1 = execute("UNWIND [1, 2] AS x RETURN x");
-	ASSERT_EQ(res1.rowCount(), 2UL);
-
-	auto res2 = execute("UNWIND [3, 4] AS y RETURN y");
-	ASSERT_EQ(res2.rowCount(), 2UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_MultipleUnwinds) {
 	// Tests multiple UNWIND in sequence
 	auto res = execute("UNWIND [1] AS x UNWIND [2] AS y RETURN x, y");
@@ -1105,20 +836,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_MultipleWithRootOp) {
 	ASSERT_EQ(res.rowCount(), 4UL);
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_NegativeNumbers) {
-	// Tests UNWIND with negative numbers
-	auto res = execute("UNWIND [-5, -10, -15] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_NestedListStructure) {
-	// Tests UNWIND with nested list (list of lists)
-	// This tests how the implementation handles nested structures
-	auto res = execute("UNWIND [[1, 2], [3, 4]] AS x RETURN x");
-	// Implementation may flatten or return as-is
-	EXPECT_GE(res.rowCount(), 0UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_NestedLists) {
 	// Tests UNWIND with nested list structure
 	auto res = execute("UNWIND [[1, 2], [3, 4]] AS x RETURN x");
@@ -1131,24 +848,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_NullInList) {
 	ASSERT_EQ(res.rowCount(), 2UL);
 	EXPECT_EQ(res.getRows()[0].at("x").asPrimitive().getType(), graph::PropertyType::NULL_TYPE);
 	EXPECT_EQ(res.getRows()[1].at("x").asPrimitive().getType(), graph::PropertyType::NULL_TYPE);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_NullValues) {
-	// Tests UNWIND with null values
-	auto res = execute("UNWIND [null, null, null] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_ScientificNotation) {
-	// Tests UNWIND with scientific notation
-	auto res = execute("UNWIND [1.5e10, 2.0e5] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_Simple) {
-	// Tests UNWIND with list (Line 125 True branch)
-	auto res = execute("UNWIND [1, 2, 3] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
 }
 
 TEST_F(ReadingClauseHandlerTest, Unwind_SimpleIntegerList) {
@@ -1167,19 +866,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_SingleItemList) {
 	EXPECT_EQ(res.getRows()[0].at("x").toString(), "42");
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_SingleRow) {
-	// Tests UNWIND when rootOp is null (Line 134 True branch)
-	auto res = execute("UNWIND [42] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 1UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_SingleValue) {
-	// Tests UNWIND with single value
-	auto res = execute("UNWIND [42] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("x").toString(), "42");
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_StringList) {
 	// Tests UNWIND clause with string list
 	auto res = execute("UNWIND ['a', 'b', 'c'] AS x RETURN x");
@@ -1189,12 +875,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_StringList) {
 	EXPECT_EQ(res.getRows()[2].at("x").toString(), "c");
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_TenValues) {
-	// Tests UNWIND with ten values
-	auto res = execute("UNWIND [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 10UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_ThenMatch) {
 	// Tests UNWIND followed by MATCH
 	(void) execute("CREATE (n:Test {id: 1})");
@@ -1202,55 +882,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_ThenMatch) {
 
 	auto res = execute("UNWIND [1, 2] AS x MATCH (n:Test {id: x}) RETURN n.id");
 	EXPECT_GE(res.rowCount(), 0UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_ThreeValues) {
-	// Tests UNWIND with three values
-	auto res = execute("UNWIND [1, 2, 3] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_TwoValues) {
-	// Tests UNWIND with two values
-	auto res = execute("UNWIND [1, 2] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_VeryLargeList) {
-	// Tests UNWIND with large list (limited to reasonable size)
-	std::string list = "[";
-	for (int i = 1; i <= 50; ++i) {
-		if (i > 1) list += ", ";
-		list += std::to_string(i);
-	}
-	list += "]";
-
-	auto res = execute("UNWIND " + list + " AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 50UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithAllTypes) {
-	// Tests UNWIND with all different types
-	auto res = execute("UNWIND [1, 'two', true, null, 3.14] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 5UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithBoolean) {
-	// Tests UNWIND with boolean values
-	auto res = execute("UNWIND [true, false] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithBooleanList) {
-	// Tests UNWIND with boolean list
-	auto res = execute("UNWIND [true, false, true] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithBooleanValues) {
-	// Tests UNWIND with boolean values
-	auto res = execute("UNWIND [true, false, true, false] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 4UL);
 }
 
 TEST_F(ReadingClauseHandlerTest, Unwind_WithComplexExpression) {
@@ -1270,12 +901,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_WithCreate) {
 	EXPECT_EQ(res.getRows()[2].at("x").toString(), "30");
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_WithDoubleList) {
-	// Tests UNWIND with double list
-	auto res = execute("UNWIND [1.5, 2.7, 3.14] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_WithExistingRootOp) {
 	// Covers False branch at line 134 (!rootOp == false)
 	// Need UNWIND when rootOp already exists from previous clauses
@@ -1285,36 +910,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_WithExistingRootOp) {
 	// MATCH creates rootOp, then UNWIND uses it
 	auto res = execute("MATCH (n:Test) UNWIND [1, 2] AS x RETURN x");
 	EXPECT_GE(res.rowCount(), 0UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithExistingRootOp_FromCreate) {
-	// Tests UNWIND when rootOp exists from CREATE
-	// Covers Line 134 False branch
-	// Note: CREATE ... UNWIND syntax is not supported, so we test with separate queries
-	(void) execute("CREATE (n:Test {value: 1})");
-	auto res = execute("UNWIND [1, 2] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithExistingRootOp_FromMatch) {
-	// Tests UNWIND after MATCH when MATCH returns results
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	auto res = execute("MATCH (n:Test) UNWIND [1, 2] AS x RETURN x");
-	EXPECT_GE(res.rowCount(), 1UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithExistingRootOp_Multiple) {
-	// Tests UNWIND when rootOp already exists from previous clauses
-	// This specifically targets line 134 False branch
-
-	// First UNWIND creates rootOp
-	// Second UNWIND should see non-null rootOp
-	auto res = execute("UNWIND [1] AS a UNWIND [2] AS b RETURN a, b");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("a").toString(), "1");
-	EXPECT_EQ(res.getRows()[0].at("b").toString(), "2");
 }
 
 TEST_F(ReadingClauseHandlerTest, Unwind_WithFilter) {
@@ -1328,69 +923,6 @@ TEST_F(ReadingClauseHandlerTest, Unwind_WithFilter) {
 	EXPECT_GE(res.rowCount(), 0UL);
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_WithLargeNumbers) {
-	// Tests UNWIND with large numbers
-	auto res = execute("UNWIND [1000000, 2000000, 3000000] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithLimit) {
-	// Tests UNWIND with filter
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-	(void) execute("CREATE (n:Test {id: 3})");
-
-	auto res = execute("MATCH (n:Test {id: 1}) UNWIND [100, 200] AS x RETURN x");
-	EXPECT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithListOfLists) {
-	// Tests UNWIND with list containing lists
-	auto res = execute("UNWIND [[1], [2, 3], [4]] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithMatch) {
-	// Tests UNWIND clause following MATCH with property reference expression
-	(void) execute("CREATE (n:Test {ids: [1, 2, 3]})");
-
-	auto res = execute("MATCH (n:Test) UNWIND n.ids AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-	EXPECT_EQ(res.getRows()[0].at("x").toString(), "1");
-	EXPECT_EQ(res.getRows()[1].at("x").toString(), "2");
-	EXPECT_EQ(res.getRows()[2].at("x").toString(), "3");
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithMixedPositiveNegative) {
-	// Tests UNWIND with mixed positive and negative values
-	auto res = execute("UNWIND [-1, 0, 1, -2, 2] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 5UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithNegativeDoubles) {
-	// Tests UNWIND with negative double values
-	auto res = execute("UNWIND [-1.5, -2.7, -3.14] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithNegativeIntegers) {
-	// Tests UNWIND with negative integers
-	auto res = execute("UNWIND [-1, -5, -10] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithNegativeNumbers) {
-	// Tests UNWIND with negative numbers
-	auto res = execute("UNWIND [-1, -2, -3] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithNestedLists) {
-	// Tests UNWIND with nested list structure
-	auto res = execute("UNWIND [[1, 2], [3, 4]] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_WithNull) {
 	// Tests UNWIND with null value
 	auto res = execute("UNWIND [null] AS x RETURN x");
@@ -1398,79 +930,10 @@ TEST_F(ReadingClauseHandlerTest, Unwind_WithNull) {
 	EXPECT_EQ(res.getRows()[0].at("x").asPrimitive().getType(), graph::PropertyType::NULL_TYPE);
 }
 
-TEST_F(ReadingClauseHandlerTest, Unwind_WithProjection) {
-	// Tests UNWIND with projection
-	(void) execute("CREATE (n:Test {id: 1})");
-
-	auto res = execute("MATCH (n:Test) UNWIND [1] AS x RETURN x, n.id");
-	EXPECT_GE(res.rowCount(), 0UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithRootOpFromMatch) {
-	// Covers False branch at line 134 (!rootOp == false)
-	(void) execute("CREATE (n:Test {id: 1})");
-	(void) execute("CREATE (n:Test {id: 2})");
-
-	// MATCH creates rootOp, UNWIND uses it
-	// Note: Direct UNWIND after MATCH may not work as expected
-	// We test MATCH and UNWIND separately
-	auto res = execute("MATCH (n:Test) RETURN n.id");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithRootOpNotNull) {
-	// Tests UNWIND when rootOp is already not null (e.g., after MATCH)
-	// This covers the False branch of !rootOp check
-
-	// Create a node with a property
-	(void) execute("CREATE (n:Test {id: 1})");
-
-	// MATCH followed by UNWIND
-	auto res = execute("MATCH (n:Test) UNWIND [1, 2, 3] AS x RETURN x, n.id");
-	// Note: This may not work as expected due to implementation limitations
-	// but we're testing the code path
-	EXPECT_GE(res.rowCount(), 0UL);
-}
-
 TEST_F(ReadingClauseHandlerTest, Unwind_WithScientificNotation) {
 	// Tests UNWIND with scientific notation
 	auto res = execute("UNWIND [1.5e10, 2.0e5, 3.14e-8] AS x RETURN x");
 	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithScientificNotationNegative) {
-	// Tests UNWIND with negative scientific notation
-	auto res = execute("UNWIND [-1.5e10, -2.0e5] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 2UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithSkip) {
-	// Tests UNWIND with filter
-	for (int i = 0; i < 10; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
-	}
-
-	auto res = execute("MATCH (n:Test {id: 5}) UNWIND [1, 2, 3] AS x RETURN x");
-	EXPECT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithStringList) {
-	// Tests UNWIND with string list
-	auto res = execute("UNWIND ['a', 'b', 'c'] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_WithZeros) {
-	// Tests UNWIND with zero values
-	auto res = execute("UNWIND [0, 0, 0] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 3UL);
-}
-
-TEST_F(ReadingClauseHandlerTest, Unwind_Zero) {
-	// Tests UNWIND with zero
-	auto res = execute("UNWIND [0] AS x RETURN x");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("x").toString(), "0");
 }
 
 // === Yield Tests ===

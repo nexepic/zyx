@@ -27,9 +27,10 @@
 namespace graph::storage {
 
 	LabelTokenRegistry::LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
-										   std::shared_ptr<state::SystemStateManager> stateManager) :
-		dataManager_(std::move(dataManager)), stateManager_(std::move(stateManager)), stringToIdCache_(CACHE_SIZE),
-		idToStringCache_(CACHE_SIZE) {
+										   std::shared_ptr<state::SystemStateManager> stateManager,
+										   size_t cacheSize) :
+		dataManager_(std::move(dataManager)), stateManager_(std::move(stateManager)), stringToIdCache_(cacheSize),
+		idToStringCache_(cacheSize) {
 
 		indexTree_ = std::make_shared<query::indexes::IndexTreeManager>(
 				dataManager_, query::indexes::IndexTypes::SYSTEM_LABEL_DICTIONARY, PropertyType::STRING);

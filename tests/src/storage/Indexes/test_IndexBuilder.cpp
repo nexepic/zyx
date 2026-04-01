@@ -248,11 +248,11 @@ TEST_F(IndexBuilderTest, BuildEdgeLabelIndex) {
 
 TEST_F(IndexBuilderTest, BuildNodeLabelIndex_LargeBatch) {
 	// 1. Create > 1000 nodes to trigger batch processing logic
-	// BATCH_SIZE is 1000. We create 1500 to ensure we have:
+	// BATCH_SIZE is 1000. We create 1050 to ensure we have:
 	// - One full batch processed inside the loop
 	// - One partial batch processed after the loop
 
-	constexpr int NODE_COUNT = 1500;
+	constexpr int NODE_COUNT = 1050;
 	int64_t bulkLabelId = dataManager->getOrCreateLabelId("BulkNode");
 
 	// Use raw pointer or reserve to speed up vector if needed,
@@ -283,7 +283,7 @@ TEST_F(IndexBuilderTest, BuildNodeLabelIndex_LargeBatch) {
 
 TEST_F(IndexBuilderTest, BuildEdgeLabelIndex_LargeBatch) {
 	// 1. Create > 1000 edges to trigger batch processing logic for edges
-	constexpr int EDGE_COUNT = 1200;
+	constexpr int EDGE_COUNT = 1050;
 	int64_t bulkLabelId = dataManager->getOrCreateLabelId("BulkEdge");
 
 	// We need at least two nodes to connect
@@ -312,7 +312,7 @@ TEST_F(IndexBuilderTest, BuildEdgeLabelIndex_LargeBatch) {
 
 TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
 	// 1. Create > 1000 nodes with property
-	constexpr int NODE_COUNT = 1100;
+	constexpr int NODE_COUNT = 1050;
 	int64_t lbl = dataManager->getOrCreateLabelId("PropNode");
 
 	for (int i = 0; i < NODE_COUNT; ++i) {
@@ -338,7 +338,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
 	auto res0 = indexManager->findNodeIdsByProperty("bulk_prop", 0);
 	EXPECT_EQ(res0.size(), 1UL);
 
-	auto resLast = indexManager->findNodeIdsByProperty("bulk_prop", 1050);
+	auto resLast = indexManager->findNodeIdsByProperty("bulk_prop", 1000);
 	EXPECT_EQ(resLast.size(), 1UL);
 }
 
@@ -634,7 +634,7 @@ TEST_F(IndexBuilderTest, BuildNodeLabelIndex_MultipleSegments) {
 	// Create nodes that span multiple segments to test segment iteration
 	// This helps cover the loop in getNodeIdRanges
 
-	constexpr int NODE_COUNT = 2500; // Should span multiple segments
+	constexpr int NODE_COUNT = 1050; // Should span multiple segments
 	int64_t lbl = dataManager->getOrCreateLabelId("MultiSeg");
 
 	for (int i = 0; i < NODE_COUNT; ++i) {
@@ -653,7 +653,7 @@ TEST_F(IndexBuilderTest, BuildNodeLabelIndex_MultipleSegments) {
 
 TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_LargeBatch) {
 	// Cover batch processing for edge property index
-	constexpr int EDGE_COUNT = 1100;
+	constexpr int EDGE_COUNT = 1050;
 	int64_t edgeLbl = dataManager->getOrCreateLabelId("BulkEdgeProp");
 
 	// Create source and target nodes

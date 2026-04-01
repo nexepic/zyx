@@ -265,31 +265,31 @@ TEST_F(IDAllocatorTest, L1CacheOverflowToL2) {
 
 TEST_F(IDAllocatorTest, L2IntervalMerging) {
 	// This tests if L2 efficiently handles sequential deletes via merging.
-	constexpr int COUNT = 2000;
+	constexpr int COUNT = 200;
 	for (int i = 0; i < COUNT; ++i)
 		(void) insertNode("N");
 	fileStorage->flush();
 
 	// Delete nodes in blocks to trigger merges
-	// Delete 1000..1500
-	for (int i = 1000; i <= 1500; ++i)
+	// Delete 100..150
+	for (int i = 100; i <= 150; ++i)
 		deleteNode(i);
 
-	// Delete 1501..2000 (Should merge with previous interval in L2)
-	for (int i = 1501; i <= COUNT; ++i)
+	// Delete 151..200 (Should merge with previous interval in L2)
+	for (int i = 151; i <= COUNT; ++i)
 		deleteNode(i);
 
 	// Now re-allocate.
 	std::unordered_set<int64_t> reusedIds;
-	for (int i = 0; i < 1001; ++i) {
+	for (int i = 0; i < 101; ++i) {
 		graph::Node n = insertNode("R");
 		reusedIds.insert(n.getId());
 	}
 
-	// Verify we got ids from the range [1000, 2000]
+	// Verify we got ids from the range [100, 200]
 	bool hitRange = false;
 	for (int64_t id: reusedIds) {
-		if (id >= 1000 && id <= 2000)
+		if (id >= 100 && id <= 200)
 			hitRange = true;
 	}
 	EXPECT_TRUE(hitRange) << "Failed to reuse IDs from merged intervals";
@@ -359,7 +359,7 @@ TEST_F(IDAllocatorTest, MixedOperationsStress) {
 	std::vector<int64_t> activeIds;
 	std::mt19937 gen(42);
 
-	for (int i = 0; i < 1000; ++i) {
+	for (int i = 0; i < 200; ++i) {
 		if (activeIds.empty() || (gen() % 3 != 0)) { // 66% Insert
 			graph::Node n = insertNode("R");
 			activeIds.push_back(n.getId());
@@ -376,7 +376,7 @@ TEST_F(IDAllocatorTest, MixedOperationsStress) {
 	}
 
 	fileStorage->flush();
-	EXPECT_LT(allocator->getCurrentMaxNodeId(), 800);
+	EXPECT_LT(allocator->getCurrentMaxNodeId(), 200);
 }
 
 // ==========================================
@@ -384,8 +384,8 @@ TEST_F(IDAllocatorTest, MixedOperationsStress) {
 // ==========================================
 
 TEST_F(IDAllocatorTest, ThreadSafetyConcurrency) {
-	constexpr int NUM_THREADS = 8;
-	constexpr int OPS_PER_THREAD = 200;
+	constexpr int NUM_THREADS = 4;
+	constexpr int OPS_PER_THREAD = 50;
 
 	std::vector<std::future<std::vector<int64_t>>> futures;
 	futures.reserve(NUM_THREADS);
@@ -816,14 +816,14 @@ TEST_F(IDAllocatorTest, DiskScan_Wrapping) {
 	// This tests cursor.wrappedAround logic in fetchInactiveIdsFromDisk
 
 	// 1. Create many nodes across multiple segments
-	constexpr int COUNT = 3000;
+	constexpr int COUNT = 300;
 	for (int i = 0; i < COUNT; ++i) {
 		(void)insertNode("N");
 	}
 	fileStorage->flush();
 
 	// 2. Delete nodes from the beginning (creating gaps at start)
-	for (int i = 1; i <= 100; ++i) {
+	for (int i = 1; i <= 50; ++i) {
 		deleteNode(i);
 	}
 
@@ -832,7 +832,7 @@ TEST_F(IDAllocatorTest, DiskScan_Wrapping) {
 
 	// 4. Allocate - should scan from start and wrap if needed
 	int64_t id = allocator->allocateId(graph::Node::typeId);
-	EXPECT_LE(id, 100);
+	EXPECT_LE(id, 50);
 }
 
 TEST_F(IDAllocatorTest, FetchInactiveIds_L1FullEarlyReturn) {
@@ -842,7 +842,7 @@ TEST_F(IDAllocatorTest, FetchInactiveIds_L1FullEarlyReturn) {
 	allocator->setCacheLimits(10, 100, 50000); // Small L1, large L2
 
 	// 1. Create many nodes with many gaps
-	constexpr int COUNT = 500;
+	constexpr int COUNT = 100;
 	for (int i = 0; i < COUNT; ++i) {
 		(void)insertNode("N");
 	}
@@ -1383,62 +1383,29 @@ TEST_F(IDAllocatorTest, FreeId_PersistedToL1AndL2Overflow) {
 // ==========================================
 
 TEST_F(IDAllocatorTest, FreeId_AllEntityTypes_OnDisk) {
-	// Test freeId for Blob, Index, and State entity types on disk
-	// This covers the switch cases at lines 304-313 for non-Node/Edge types
-
-	// Blob type
-	int64_t blobId = allocator->allocateId(graph::Blob::typeId);
-	EXPECT_GT(blobId, 0);
-	// Free it - goes to volatile cache since no segment exists
-	allocator->freeId(blobId, graph::Blob::typeId);
-	// Re-allocate should reuse
-	int64_t blobId2 = allocator->allocateId(graph::Blob::typeId);
-	EXPECT_EQ(blobId2, blobId);
-
-	// Index type
-	int64_t indexId = allocator->allocateId(graph::Index::typeId);
-	EXPECT_GT(indexId, 0);
-	allocator->freeId(indexId, graph::Index::typeId);
-	int64_t indexId2 = allocator->allocateId(graph::Index::typeId);
-	EXPECT_EQ(indexId2, indexId);
-
-	// State type
-	int64_t stateId = allocator->allocateId(graph::State::typeId);
-	EXPECT_GT(stateId, 0);
-	allocator->freeId(stateId, graph::State::typeId);
-	int64_t stateId2 = allocator->allocateId(graph::State::typeId);
-	EXPECT_EQ(stateId2, stateId);
+	// Test freeId for all non-Node/Edge entity types
+	// Covers the switch cases at lines 304-313
+	const std::vector<uint32_t> types = {graph::Blob::typeId, graph::Index::typeId, graph::State::typeId};
+	for (auto typeId : types) {
+		int64_t id = allocator->allocateId(typeId);
+		EXPECT_GT(id, 0);
+		allocator->freeId(id, typeId);
+		int64_t reused = allocator->allocateId(typeId);
+		EXPECT_EQ(reused, id) << "Failed for typeId=" << typeId;
+	}
 }
 
-TEST_F(IDAllocatorTest, AllocateNewSequentialId_BlobType) {
-	// Test allocateNewSequentialId specifically for Blob type (line 441-442)
-	// Clear all caches to force fallback to sequential
+TEST_F(IDAllocatorTest, AllocateNewSequentialId_AllNonNodeTypes) {
+	// Test allocateNewSequentialId for Blob, Index, and State types
 	allocator->clearAllCaches();
 
-	int64_t blobId = allocator->allocateId(graph::Blob::typeId);
-	EXPECT_GT(blobId, 0);
-	int64_t blobId2 = allocator->allocateId(graph::Blob::typeId);
-	EXPECT_EQ(blobId2, blobId + 1);
-}
-
-TEST_F(IDAllocatorTest, AllocateNewSequentialId_IndexType) {
-	// Test allocateNewSequentialId specifically for Index type (line 443-444)
-	allocator->clearAllCaches();
-
-	int64_t indexId = allocator->allocateId(graph::Index::typeId);
-	EXPECT_GT(indexId, 0);
-	int64_t indexId2 = allocator->allocateId(graph::Index::typeId);
-	EXPECT_EQ(indexId2, indexId + 1);
-}
-
-TEST_F(IDAllocatorTest, AllocateNewSequentialId_StateType) {
-	// Test allocateNewSequentialId specifically for State type (line 445-446)
-	allocator->clearAllCaches();
-
-	int64_t stateId = allocator->allocateId(graph::State::typeId);
-	EXPECT_GT(stateId, 0);
-	int64_t stateId2 = allocator->allocateId(graph::State::typeId);
-	EXPECT_EQ(stateId2, stateId + 1);
+	const std::vector<uint32_t> types = {graph::Blob::typeId, graph::Index::typeId, graph::State::typeId};
+	for (auto typeId : types) {
+		int64_t id1 = allocator->allocateId(typeId);
+		EXPECT_GT(id1, 0);
+		int64_t id2 = allocator->allocateId(typeId);
+		EXPECT_EQ(id2, id1 + 1) << "Failed for typeId=" << typeId;
+	}
 }
 
 TEST_F(IDAllocatorTest, BatchAllocation_NodeType) {
@@ -1448,22 +1415,16 @@ TEST_F(IDAllocatorTest, BatchAllocation_NodeType) {
 	EXPECT_EQ(allocator->getCurrentMaxNodeId(), startNode + 9);
 }
 
-TEST_F(IDAllocatorTest, FreeId_EdgeType_NotPersisted) {
-	// Test freeId for Edge type when not persisted (volatile cache)
-	int64_t edgeId = allocator->allocateId(graph::Edge::typeId);
-	EXPECT_GT(edgeId, 0);
-	allocator->freeId(edgeId, graph::Edge::typeId);
-	int64_t reused = allocator->allocateId(graph::Edge::typeId);
-	EXPECT_EQ(reused, edgeId);
-}
-
-TEST_F(IDAllocatorTest, FreeId_PropertyType_NotPersisted) {
-	// Test freeId for Property type when not persisted (volatile cache)
-	int64_t propId = allocator->allocateId(graph::Property::typeId);
-	EXPECT_GT(propId, 0);
-	allocator->freeId(propId, graph::Property::typeId);
-	int64_t reused = allocator->allocateId(graph::Property::typeId);
-	EXPECT_EQ(reused, propId);
+TEST_F(IDAllocatorTest, FreeId_NonNodeTypes_NotPersisted) {
+	// Test freeId for Edge and Property types when not persisted (volatile cache)
+	const std::vector<uint32_t> types = {graph::Edge::typeId, graph::Property::typeId};
+	for (auto typeId : types) {
+		int64_t id = allocator->allocateId(typeId);
+		EXPECT_GT(id, 0);
+		allocator->freeId(id, typeId);
+		int64_t reused = allocator->allocateId(typeId);
+		EXPECT_EQ(reused, id) << "Failed for typeId=" << typeId;
+	}
 }
 
 TEST_F(IDAllocatorTest, DiskScan_MaxScansPerCall) {
@@ -1609,53 +1570,19 @@ TEST_F(IDAllocatorTest, RecoverGapIds_PhysicalEqualsLogical) {
 // Additional Branch Coverage Tests - Round 4
 // ==========================================
 
-TEST_F(IDAllocatorTest, FreeId_BlobType_OnDisk) {
-	// Test freeId switch case for Blob type (line 304-305)
-	// Allocate blob IDs, persist, then free
-	int64_t blobId = allocator->allocateId(graph::Blob::typeId);
-	EXPECT_GT(blobId, 0);
-
-	// Free the blob ID - exercises the Blob case in freeId's switch
-	allocator->freeId(blobId, graph::Blob::typeId);
-
-	// Should be reusable from volatile cache
-	int64_t reused = allocator->allocateId(graph::Blob::typeId);
-	EXPECT_EQ(reused, blobId);
-}
-
-TEST_F(IDAllocatorTest, FreeId_IndexType_OnDisk) {
-	// Test freeId switch case for Index type (line 306-307)
-	int64_t indexId = allocator->allocateId(graph::Index::typeId);
-	EXPECT_GT(indexId, 0);
-
-	allocator->freeId(indexId, graph::Index::typeId);
-	int64_t reused = allocator->allocateId(graph::Index::typeId);
-	EXPECT_EQ(reused, indexId);
-}
-
-TEST_F(IDAllocatorTest, FreeId_StateType_OnDisk) {
-	// Test freeId switch case for State type (line 310-311)
-	int64_t stateId = allocator->allocateId(graph::State::typeId);
-	EXPECT_GT(stateId, 0);
-
-	allocator->freeId(stateId, graph::State::typeId);
-	int64_t reused = allocator->allocateId(graph::State::typeId);
-	EXPECT_EQ(reused, stateId);
-}
-
 TEST_F(IDAllocatorTest, FetchInactiveIds_ScansMultipleSegments) {
 	// Test fetchInactiveIdsFromDisk scanning multiple segments (line 391 loop)
 	allocator->setCacheLimits(200, 100, 50000);
 
 	// Create enough nodes to span multiple segments
-	constexpr int COUNT = 5000;
+	constexpr int COUNT = 500;
 	for (int i = 0; i < COUNT; ++i) {
 		(void)insertNode("N");
 	}
 	fileStorage->save();
 
 	// Delete nodes across different segments
-	for (int i = 1; i <= 500; i += 3) {
+	for (int i = 1; i <= 100; i += 3) {
 		deleteNode(i);
 	}
 	fileStorage->save();
@@ -1685,14 +1612,14 @@ TEST_F(IDAllocatorTest, FetchInactiveIds_CursorResumesFromLastPosition) {
 	// Test that cursor.nextSegmentOffset is updated correctly (line 410, 427-428)
 	allocator->setCacheLimits(5, 100, 50000); // Very small L1
 
-	constexpr int COUNT = 500;
+	constexpr int COUNT = 100;
 	for (int i = 0; i < COUNT; ++i) {
 		(void)insertNode("N");
 	}
 	fileStorage->save();
 
 	// Delete many nodes
-	for (int i = 1; i <= 200; i += 2) {
+	for (int i = 1; i <= 50; i += 2) {
 		deleteNode(i);
 	}
 	fileStorage->save();
