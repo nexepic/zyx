@@ -25,6 +25,9 @@ The project uses **Meson** as the build system with **Conan** for dependency man
 # Quick build (skip Conan install if dependencies already exist)
 ./scripts/run_tests.sh --quick
 
+# Skip Conan and use system-installed dependencies (e.g. Homebrew)
+./scripts/run_tests.sh --no-conan
+
 # Generate HTML coverage report
 ./scripts/run_tests.sh --html
 

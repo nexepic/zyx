@@ -33,25 +33,24 @@ configure_file(
 inc_dirs = include_directories('include', 'src', '.')
 
 # Dependencies
-zlib_dep = dependency('zlib', static : true)
-boost_dep = dependency('boost', modules : ['filesystem', 'system'], method : 'pkg-config')
+zlib_dep = dependency('zlib')
+boost_dep = dependency('boost', modules : ['filesystem', 'system'])
 cli11_dep = dependency('CLI11')
 
-# Add NOMINMAX on Windows for antlr4 to prevent min/max macro conflicts
-# See: https://github.com/antlr/antlr4/issues/2875
-antlr4_extra_args = []
+# Windows SDK headers define macros (min/max from minwindef.h, ERROR from wingdi.h)
+# that conflict with third-party headers like antlr4-runtime.
+# NOMINMAX: prevents min/max function-like macros
+# NOGDI:    prevents wingdi.h inclusion (which defines #define ERROR 0)
 if host_machine.system() == 'windows'
-    antlr4_extra_args = ['-DNOMINMAX']
+    add_project_arguments('-DNOMINMAX', '-DNOGDI', language : 'cpp')
 endif
 
-antlr4_dep = dependency('antlr4-cppruntime', 'antlr4-runtime', required : true, static : true)
-
-# Wrap antlr4 dependency with extra compile args for Windows
-# This ensures NOMINMAX is defined only when compiling code that includes antlr4 headers
-antlr4_dep_with_args = declare_dependency(
-    dependencies : antlr4_dep,
-    compile_args : antlr4_extra_args
-)
+# antlr4: Conan provides 'antlr4-cppruntime' via pkg-config,
+# Homebrew provides 'antlr4-runtime' via cmake
+antlr4_dep = dependency('antlr4-cppruntime', required : false)
+if not antlr4_dep.found()
+    antlr4_dep = dependency('antlr4-runtime', method : 'cmake', modules : ['antlr4_static'], required : true)
+endif
 
 # Subdirectories
 subdir('src')

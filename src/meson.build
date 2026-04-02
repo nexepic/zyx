@@ -53,7 +53,7 @@ db_lib = static_library('zyx_core',
 							zlib_dep,
 							boost_dep,
 							cli11_dep,
-							antlr4_dep_with_args,
+							antlr4_dep,
 							cypher_dep
 						],
 						# Exclude zlib compression error handling from coverage
@@ -66,7 +66,7 @@ db_lib = static_library('zyx_core',
 db_dep = declare_dependency(
 	include_directories : inc_dirs,
 	link_with : db_lib,
-	dependencies : [cypher_dep, zlib_dep]
+	dependencies : [cypher_dep, zlib_dep, boost_dep, cli11_dep, antlr4_dep]
 )
 
 # ==============================================================================
@@ -89,7 +89,7 @@ libzyx = shared_library('zyx',
 						dependencies : [zlib_dep,
 										boost_dep,
 										cli11_dep,
-										antlr4_dep_with_args,
+										antlr4_dep,
 										cypher_dep
 						],
 						install : true,
