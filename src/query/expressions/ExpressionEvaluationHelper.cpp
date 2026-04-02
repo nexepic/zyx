@@ -36,10 +36,34 @@ PropertyValue ExpressionEvaluationHelper::evaluate(const Expression *expr,
 	return evaluator.evaluate(expr);
 }
 
+PropertyValue ExpressionEvaluationHelper::evaluate(const Expression *expr,
+                                                    const execution::Record &record,
+                                                    storage::DataManager *dataManager,
+                                                    const std::unordered_map<std::string, PropertyValue> *parameters) {
+	if (!expr) {
+		return PropertyValue();
+	}
+	if (!parameters) {
+		return evaluate(expr, record, dataManager);
+	}
+
+	EvaluationContext context(record, dataManager, *parameters);
+	ExpressionEvaluator evaluator(context);
+	return evaluator.evaluate(expr);
+}
+
 bool ExpressionEvaluationHelper::evaluateBool(const Expression *expr,
                                                const execution::Record &record,
                                                storage::DataManager *dataManager) {
 	PropertyValue value = evaluate(expr, record, dataManager);
+	return EvaluationContext::toBoolean(value);
+}
+
+bool ExpressionEvaluationHelper::evaluateBool(const Expression *expr,
+                                               const execution::Record &record,
+                                               storage::DataManager *dataManager,
+                                               const std::unordered_map<std::string, PropertyValue> *parameters) {
+	PropertyValue value = evaluate(expr, record, dataManager, parameters);
 	return EvaluationContext::toBoolean(value);
 }
 

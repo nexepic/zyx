@@ -19,9 +19,23 @@
  **/
 
 #include "graph/query/execution/operators/FilterOperator.hpp"
+#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
+#include "graph/query/QueryContext.hpp"
 
 namespace graph::query::execution::operators {
 
 std::string FilterOperator::toString() const { return "Filter(" + predicateStr_ + ")"; }
+
+bool FilterOperator::evaluateRecord(const Record &record) const {
+	if (filterExpr_) {
+		const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+		if (queryContext_ && !queryContext_->parameters.empty()) {
+			params = &queryContext_->parameters;
+		}
+		return expressions::ExpressionEvaluationHelper::evaluateBool(
+			filterExpr_.get(), record, dataManager_, params);
+	}
+	return predicate_(record);
+}
 
 } // namespace graph::query::execution::operators

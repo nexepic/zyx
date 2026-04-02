@@ -31,6 +31,7 @@
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/expressions/ReduceExpression.hpp"
+#include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -488,9 +489,16 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 		return std::make_unique<FunctionCallExpression>("count", std::vector<std::unique_ptr<Expression>>());
 	}
 
-	// Parameter: $param (not yet supported)
+	// Parameter: $param
 	if (ctx->parameter()) {
-		throw std::runtime_error("Parameters ($param) are not yet supported");
+		auto paramCtx = ctx->parameter();
+		std::string paramName;
+		if (paramCtx->symbolicName()) {
+			paramName = paramCtx->symbolicName()->getText();
+		} else {
+			paramName = paramCtx->DecimalInteger()->getText();
+		}
+		return std::make_unique<ParameterExpression>(std::move(paramName));
 	}
 
 	// Quantifier functions: all(x IN list WHERE cond), any(...), none(...), single(...)

@@ -24,6 +24,7 @@
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
+#include "graph/query/QueryContext.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -65,8 +66,12 @@ Record ProjectOperator::projectRecord(const Record &record) const {
 		PropertyValue value;
 		if (item.expression) {
 			try {
+				const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+				if (queryContext_ && !queryContext_->parameters.empty()) {
+					params = &queryContext_->parameters;
+				}
 				value = ExpressionEvaluationHelper::evaluate(
-				    item.expression.get(), record, dataManager_);
+				    item.expression.get(), record, dataManager_, params);
 			} catch (const UndefinedVariableException&) {
 				value = PropertyValue();
 			}

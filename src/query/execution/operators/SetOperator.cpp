@@ -21,6 +21,7 @@
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
+#include "graph/query/QueryContext.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -42,9 +43,12 @@ std::optional<RecordBatch> SetOperator::next() {
 
 			// Skip label-only items (no expression evaluation needed)
 			if (item.type == SetActionType::PROPERTY && item.expression) {
-				// Evaluate the expression to get the value
+				const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+				if (queryContext_ && !queryContext_->parameters.empty()) {
+					params = &queryContext_->parameters;
+				}
 				PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-				    item.expression.get(), record);
+				    item.expression.get(), record, nullptr, params);
 
 				// --- Node Logic ---
 				if (auto nodeOpt = record.getNode(item.variable)) {

@@ -20,6 +20,7 @@
 
 #include "graph/query/execution/operators/AggregateOperator.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
+#include "graph/query/QueryContext.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -139,20 +140,23 @@ void AggregateOperator::updateAccumulators(const Record& record,
 		const auto& agg = aggregates_[i];
 
 		if (agg.functionType == AggregateFunctionType::AGG_COUNT) {
-			// COUNT(*) - count all records
 			if (!agg.expression) {
 				accums[i]->update(PropertyValue(static_cast<int64_t>(1)));
 			} else {
-				// COUNT(expr) - evaluate expression and count non-NULL results
+				const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+				if (queryContext_ && !queryContext_->parameters.empty())
+					params = &queryContext_->parameters;
 				PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-				    agg.expression.get(), record, dataManager_);
+				    agg.expression.get(), record, dataManager_, params);
 				accums[i]->update(value);
 			}
 		} else {
-			// Other aggregates require an expression
 			if (agg.expression) {
+				const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+				if (queryContext_ && !queryContext_->parameters.empty())
+					params = &queryContext_->parameters;
 				PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-				    agg.expression.get(), record, dataManager_);
+				    agg.expression.get(), record, dataManager_, params);
 				accums[i]->update(value);
 			}
 		}
@@ -167,8 +171,11 @@ std::string AggregateOperator::computeGroupKey(const Record& record) {
 	std::string key;
 	for (const auto& item : groupByItems_) {
 		if (item.expression) {
+			const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+			if (queryContext_ && !queryContext_->parameters.empty())
+				params = &queryContext_->parameters;
 			PropertyValue val = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-			    item.expression.get(), record, dataManager_);
+			    item.expression.get(), record, dataManager_, params);
 			key += val.toString() + "|";
 		}
 	}
@@ -180,8 +187,11 @@ std::vector<PropertyValue> AggregateOperator::evaluateGroupKeyValues(const Recor
 	values.reserve(groupByItems_.size());
 	for (const auto& item : groupByItems_) {
 		if (item.expression) {
+			const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+			if (queryContext_ && !queryContext_->parameters.empty())
+				params = &queryContext_->parameters;
 			values.push_back(graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-			    item.expression.get(), record));
+			    item.expression.get(), record, nullptr, params));
 		} else {
 			values.emplace_back(); // NULL
 		}

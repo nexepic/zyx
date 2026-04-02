@@ -25,6 +25,8 @@
 #include "QueryBuilder.hpp"
 #include "QueryResult.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/query/QueryContext.hpp"
+#include "graph/query/cache/PlanCache.hpp"
 #include "graph/query/execution/QueryExecutor.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "query/parser/common/IQueryParser.hpp"
@@ -44,6 +46,7 @@ namespace graph::query {
 
 		// --- Main Execution ---
 		QueryResult execute(const std::string &query, Language lang = Language::Cypher);
+		QueryResult execute(const std::string &query, const QueryContext &ctx, Language lang = Language::Cypher);
 
 		/**
 		 * @brief Executes a pre-built physical plan directly.
@@ -59,6 +62,9 @@ namespace graph::query {
 
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
 
+		[[nodiscard]] cache::PlanCache &getPlanCache() { return planCache_; }
+		[[nodiscard]] const cache::PlanCache &getPlanCache() const { return planCache_; }
+
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<indexes::IndexManager> indexManager_;
@@ -68,10 +74,12 @@ namespace graph::query {
 
 		std::unordered_map<Language, std::shared_ptr<parser::IQueryParser>> parsers_;
 		concurrent::ThreadPool *threadPool_ = nullptr;
+		cache::PlanCache planCache_;
 
 		std::shared_ptr<parser::IQueryParser> getParser(Language lang);
 
 		static void propagateThreadPool(execution::PhysicalOperator *op, concurrent::ThreadPool *pool);
+		static void propagateQueryContext(execution::PhysicalOperator *op, const QueryContext *ctx);
 	};
 
 } // namespace graph::query

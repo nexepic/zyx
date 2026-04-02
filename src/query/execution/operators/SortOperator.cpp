@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include "graph/query/QueryContext.hpp"
 #include <string>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -105,11 +106,16 @@ void SortOperator::performSort() {
 			PropertyValue valA, valB;
 
 			if (item.expression) {
-				graph::query::expressions::EvaluationContext contextA(a);
+				auto makeCtx = [this](const Record &r) {
+					if (queryContext_ && !queryContext_->parameters.empty())
+						return graph::query::expressions::EvaluationContext(r, queryContext_->parameters);
+					return graph::query::expressions::EvaluationContext(r);
+				};
+				auto contextA = makeCtx(a);
 				graph::query::expressions::ExpressionEvaluator evaluatorA(contextA);
 				valA = evaluatorA.evaluate(item.expression.get());
 
-				graph::query::expressions::EvaluationContext contextB(b);
+				auto contextB = makeCtx(b);
 				graph::query::expressions::ExpressionEvaluator evaluatorB(contextB);
 				valB = evaluatorB.evaluate(item.expression.get());
 			}

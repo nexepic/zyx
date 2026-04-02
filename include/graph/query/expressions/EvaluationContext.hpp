@@ -113,6 +113,26 @@ public:
 	                  storage::DataManager *dataManager);
 
 	/**
+	 * @brief Constructs an evaluation context with parameters.
+	 */
+	EvaluationContext(const execution::Record &record,
+	                  const std::unordered_map<std::string, PropertyValue> &parameters);
+
+	/**
+	 * @brief Constructs an evaluation context with DataManager and parameters.
+	 */
+	EvaluationContext(const execution::Record &record,
+	                  storage::DataManager *dataManager,
+	                  const std::unordered_map<std::string, PropertyValue> &parameters);
+
+	/**
+	 * @brief Resolves a query parameter ($name) to its PropertyValue.
+	 * @param name The parameter name (without the $ prefix)
+	 * @return The parameter value, or nullopt if not found
+	 */
+	[[nodiscard]] std::optional<PropertyValue> resolveParameter(const std::string &name) const;
+
+	/**
 	 * @brief Resolves a variable reference to its PropertyValue.
 	 *
 	 * @param variableName The name of the variable (e.g., "n")
@@ -232,6 +252,7 @@ public:
 private:
 	const execution::Record &record_;
 	storage::DataManager *dataManager_ = nullptr;
+	const std::unordered_map<std::string, PropertyValue> *parameters_ = nullptr;
 	mutable std::unordered_map<std::string, PropertyValue> temporaryVariables_;
 };
 

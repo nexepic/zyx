@@ -29,6 +29,10 @@ namespace graph::concurrent {
 	class ThreadPool;
 }
 
+namespace graph::query {
+	struct QueryContext;
+}
+
 namespace graph::query::execution {
 
 	class PhysicalOperator {
@@ -80,8 +84,12 @@ namespace graph::query::execution {
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
 		[[nodiscard]] concurrent::ThreadPool *getThreadPool() const { return threadPool_; }
 
+		void setQueryContext(const query::QueryContext *ctx) { queryContext_ = ctx; }
+		[[nodiscard]] const query::QueryContext *getQueryContext() const { return queryContext_; }
+
 	protected:
 		concurrent::ThreadPool *threadPool_ = nullptr;
+		const query::QueryContext *queryContext_ = nullptr;
 	};
 
 } // namespace graph::query::execution

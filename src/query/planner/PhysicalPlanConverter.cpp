@@ -240,11 +240,9 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertFilter(
 
 	auto astShared = filter->getPredicate();
 	auto *dm = dm_.get();
-	auto predicate = [astShared, dm](const Record &r) -> bool {
-		return expressions::ExpressionEvaluationHelper::evaluateBool(astShared.get(), r, dm);
-	};
 
-	return std::make_unique<FilterOperator>(std::move(childPhys), predicate, filter->toString());
+	return std::make_unique<FilterOperator>(
+		std::move(childPhys), astShared, dm, filter->toString());
 }
 
 std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertProject(

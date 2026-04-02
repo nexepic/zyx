@@ -22,6 +22,7 @@
 
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/core/PropertyTypes.hpp"
 #include <stack>
 
@@ -76,6 +77,7 @@ public:
 	void visit(const ExistsExpression *expr) override;
 	void visit(const PatternComprehensionExpression *expr) override;
 	void visit(const ReduceExpression *expr) override;
+	void visit(const ParameterExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.

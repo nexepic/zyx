@@ -47,7 +47,8 @@ enum class ExpressionType {
 	LIST_SLICE,
 	LIST_COMPREHENSION,
 	IS_NULL,
-	IN_LIST
+	IN_LIST,
+	PARAMETER
 };
 
 /**
@@ -421,6 +422,7 @@ public:
 	virtual void visit(class ExistsExpression *expr) = 0;
 	virtual void visit(class PatternComprehensionExpression *expr) = 0;
 	virtual void visit(class ReduceExpression *expr) = 0;
+	virtual void visit(class ParameterExpression *expr) = 0;
 };
 
 /**
@@ -446,6 +448,7 @@ public:
 	virtual void visit(const class ExistsExpression *expr) = 0;
 	virtual void visit(const class PatternComprehensionExpression *expr) = 0;
 	virtual void visit(const class ReduceExpression *expr) = 0;
+	virtual void visit(const class ParameterExpression *expr) = 0;
 };
 
 // ============================================================================

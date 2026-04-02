@@ -103,4 +103,30 @@ namespace graph::parser::cypher {
 		// 3. Extract result
 		return visitor.getPlan();
 	}
+
+	std::unique_ptr<query::logical::LogicalOperator> CypherParserImpl::parseToLogical(const std::string &query) const {
+		antlr4::ANTLRInputStream input(query);
+		CypherLexer lexer(&input);
+		antlr4::CommonTokenStream tokens(&lexer);
+		CypherParser parser(&tokens);
+
+		parser.removeErrorListeners();
+		lexer.removeErrorListeners();
+
+		ThrowingErrorListener errorListener;
+		parser.addErrorListener(&errorListener);
+		lexer.addErrorListener(&errorListener);
+
+		CypherParser::CypherContext *tree = parser.cypher();
+
+		CypherToPlanVisitor visitor(planner_);
+
+		try {
+			visitor.visit(tree);
+		} catch (const std::exception &e) {
+			throw std::runtime_error(std::string("Plan generation failed: ") + e.what());
+		}
+
+		return visitor.getLogicalPlan();
+	}
 } // namespace graph::parser::cypher

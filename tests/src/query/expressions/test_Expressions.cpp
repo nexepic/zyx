@@ -35,6 +35,7 @@
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/expressions/ReduceExpression.hpp"
+#include "graph/query/expressions/ParameterExpression.hpp"
 
 using namespace graph;
 using namespace graph::query::expressions;
@@ -3723,6 +3724,7 @@ public:
 	void visit(const ExistsExpression* expr [[maybe_unused]]) override { visitedExists = true; }
 	void visit(const PatternComprehensionExpression* expr [[maybe_unused]]) override { visitedPatternComprehension = true; }
 	void visit(const ReduceExpression* expr [[maybe_unused]]) override {}
+	void visit(const ParameterExpression* expr [[maybe_unused]]) override { visitedParameter = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -3739,6 +3741,7 @@ public:
 	bool visitedQuantifierFunction = false;
 	bool visitedExists = false;
 	bool visitedPatternComprehension = false;
+	bool visitedParameter = false;
 };
 
 /**
@@ -3762,6 +3765,7 @@ public:
 	void visit(ExistsExpression* expr [[maybe_unused]]) override { visitedExists = true; }
 	void visit(PatternComprehensionExpression* expr [[maybe_unused]]) override { visitedPatternComprehension = true; }
 	void visit(ReduceExpression* expr [[maybe_unused]]) override {}
+	void visit(ParameterExpression* expr [[maybe_unused]]) override { visitedParameter = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -3778,6 +3782,7 @@ public:
 	bool visitedQuantifierFunction = false;
 	bool visitedExists = false;
 	bool visitedPatternComprehension = false;
+	bool visitedParameter = false;
 };
 
 // ============================================================================
@@ -6573,6 +6578,7 @@ public:
 	void visit(class ExistsExpression *) override { visitCount++; }
 	void visit(class PatternComprehensionExpression *) override { visitCount++; }
 	void visit(class ReduceExpression *) override { visitCount++; }
+	void visit(class ParameterExpression *) override { visitCount++; }
 };
 
 TEST_F(ExpressionsCoverageTest, LiteralExpression_NonConstAccept) {

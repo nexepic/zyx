@@ -21,6 +21,7 @@
 #include "graph/query/execution/operators/MergeEdgeOperator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
+#include "graph/query/QueryContext.hpp"
 #include <stdexcept>
 #include <utility>
 
@@ -162,7 +163,12 @@ void MergeEdgeOperator::applyEdgeUpdates(int64_t edgeId, const std::vector<SetIt
 
 	for (const auto &item : items) {
 		if (item.variable == edgeVar_ && item.type == SetActionType::PROPERTY && item.expression) {
-			graph::query::expressions::EvaluationContext context(record);
+			auto makeContext = [&]() {
+				if (queryContext_ && !queryContext_->parameters.empty())
+					return graph::query::expressions::EvaluationContext(record, queryContext_->parameters);
+				return graph::query::expressions::EvaluationContext(record);
+			};
+			auto context = makeContext();
 			graph::query::expressions::ExpressionEvaluator evaluator(context);
 			PropertyValue value = evaluator.evaluate(item.expression.get());
 			props[item.key] = value;

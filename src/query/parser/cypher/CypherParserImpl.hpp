@@ -59,6 +59,9 @@ namespace graph::parser::cypher {
 		[[nodiscard]] std::unique_ptr<query::execution::PhysicalOperator>
 		parse(const std::string &query) const override;
 
+		[[nodiscard]] std::unique_ptr<query::logical::LogicalOperator>
+		parseToLogical(const std::string &query) const override;
+
 	private:
 		std::shared_ptr<query::QueryPlanner> planner_;
 	};

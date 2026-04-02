@@ -901,4 +901,13 @@ void ExpressionEvaluator::visit(const ReduceExpression *expr) {
 	result_ = accumValue;
 }
 
+void ExpressionEvaluator::visit(const ParameterExpression *expr) {
+	auto value = context_.resolveParameter(expr->getParameterName());
+	if (!value.has_value()) {
+		throw ExpressionEvaluationException(
+			"Missing query parameter: $" + expr->getParameterName());
+	}
+	result_ = *value;
+}
+
 } // namespace graph::query::expressions

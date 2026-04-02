@@ -23,6 +23,7 @@
 #include <memory>
 #include <string>
 #include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::parser {
 
@@ -36,12 +37,15 @@ namespace graph::parser {
 
 		/**
 		 * @brief Parses a raw query string into an executable Operator Tree.
-		 *
-		 * @param query The source query string.
-		 * @return std::unique_ptr<graph::query::execution::PhysicalOperator> The root of the execution tree.
 		 */
 		[[nodiscard]] virtual std::unique_ptr<query::execution::PhysicalOperator>
 		parse(const std::string &query) const = 0;
+
+		/**
+		 * @brief Parses and optimizes a query, returning the logical plan (cacheable).
+		 */
+		[[nodiscard]] virtual std::unique_ptr<query::logical::LogicalOperator>
+		parseToLogical(const std::string &query) const = 0;
 	};
 
 } // namespace graph::parser

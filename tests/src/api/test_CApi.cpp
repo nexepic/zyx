@@ -864,10 +864,9 @@ TEST_F(CApiTest, GetTypeForListResult) {
 	ASSERT_NE(res, nullptr);
 	ASSERT_TRUE(zyx_result_next(res));
 
-	// The vector<string> variant should map to ZYX_NULL via the fallback return
+	// The vector<string> variant should map to ZYX_LIST
 	ZYXValueType t = zyx_result_get_type(res, 0);
-	// vector<string> doesn't have a dedicated ZYX type, so it falls through to ZYX_NULL
-	EXPECT_EQ(t, ZYX_NULL);
+	EXPECT_EQ(t, ZYX_LIST);
 
 	zyx_result_close(res);
 }
@@ -941,8 +940,8 @@ TEST_F(CApiTest, KeysFunctionProducesListValue) {
 	ASSERT_NE(res, nullptr);
 	ASSERT_TRUE(zyx_result_next(res));
 
-	// Type should be ZYX_NULL (no dedicated list type in C API)
-	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_NULL);
+	// Type should be ZYX_LIST (list type now supported in C API)
+	EXPECT_EQ(zyx_result_get_type(res, 0), ZYX_LIST);
 
 	// get_int, get_double, get_bool, get_string should return defaults
 	EXPECT_EQ(zyx_result_get_int(res, 0), 0);

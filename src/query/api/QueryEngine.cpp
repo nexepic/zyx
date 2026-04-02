@@ -22,6 +22,7 @@
 #include <chrono>
 #include "CypherParserImpl.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/planner/PhysicalPlanConverter.hpp"
 #include "graph/storage/constraints/ConstraintManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -59,21 +60,81 @@ namespace graph::query {
 	}
 
 	QueryResult QueryEngine::execute(const std::string &query, const Language lang) {
+		return execute(query, QueryContext{}, lang);
+	}
+
+	QueryResult QueryEngine::execute(const std::string &query, const QueryContext &ctx, const Language lang) {
 		using Clock = std::chrono::steady_clock;
 
-		// 1. Parse into Operator Tree
 		auto parseStart = Clock::now();
-		auto planTree = getParser(lang)->parse(query);
+
+		std::unique_ptr<execution::PhysicalOperator> planTree;
+
+		// Try plan cache first
+		auto cachedLogical = planCache_.get(query);
+		if (cachedLogical) {
+			// Cache hit: convert cached logical plan to physical
+			auto dm = storage_->getDataManager();
+			PhysicalPlanConverter converter(dm, indexManager_, constraintManager_);
+			planTree = converter.convert(cachedLogical.get());
+		} else {
+			// Cache miss: parse to logical, cache if cacheable, then convert
+			auto parser = getParser(lang);
+			auto logicalPlan = parser->parseToLogical(query);
+
+			if (logicalPlan) {
+				// Determine if the plan is cacheable (skip DDL/transaction control)
+				auto rootType = logicalPlan->getType();
+				bool isCacheable = (rootType != logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
+				                    rootType != logical::LogicalOpType::LOP_CREATE_INDEX &&
+				                    rootType != logical::LogicalOpType::LOP_DROP_INDEX &&
+				                    rootType != logical::LogicalOpType::LOP_SHOW_INDEXES &&
+				                    rootType != logical::LogicalOpType::LOP_CREATE_VECTOR_INDEX &&
+				                    rootType != logical::LogicalOpType::LOP_CREATE_CONSTRAINT &&
+				                    rootType != logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
+				                    rootType != logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
+				                    rootType != logical::LogicalOpType::LOP_LIST_CONFIG &&
+				                    rootType != logical::LogicalOpType::LOP_SET_CONFIG);
+
+				// DDL operations invalidate the cache (schema changes affect plans)
+				bool isDDL = (rootType == logical::LogicalOpType::LOP_CREATE_INDEX ||
+				              rootType == logical::LogicalOpType::LOP_DROP_INDEX ||
+				              rootType == logical::LogicalOpType::LOP_CREATE_VECTOR_INDEX ||
+				              rootType == logical::LogicalOpType::LOP_CREATE_CONSTRAINT ||
+				              rootType == logical::LogicalOpType::LOP_DROP_CONSTRAINT);
+				if (isDDL) {
+					planCache_.clear();
+				}
+
+				if (isCacheable) {
+					planCache_.put(query, logicalPlan.get());
+				}
+
+				// Convert logical to physical
+				auto dm = storage_->getDataManager();
+				PhysicalPlanConverter converter(dm, indexManager_, constraintManager_);
+				planTree = converter.convert(logicalPlan.get());
+			}
+		}
+
 		debug::PerfTrace::addDuration(
 				"parse", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 															  parseStart)
 													 .count()));
 
+		if (!planTree) {
+			return QueryResult{};
+		}
+
 		// Propagate thread pool to all operators in the tree
 		if (threadPool_)
 			propagateThreadPool(planTree.get(), threadPool_);
 
-		// 2. Execute
+		// Propagate query context (parameters) to operators
+		if (!ctx.parameters.empty())
+			propagateQueryContext(planTree.get(), &ctx);
+
+		// Execute
 		return queryExecutor_->execute(std::move(planTree));
 	}
 
@@ -87,10 +148,17 @@ namespace graph::query {
 		if (!op)
 			return;
 		op->setThreadPool(pool);
-		// getChildren() returns const pointers; we need to traverse the mutable tree
-		// Since operators own their children, we use const_cast for propagation only
 		for (auto *child : op->getChildren()) {
 			propagateThreadPool(const_cast<execution::PhysicalOperator *>(child), pool);
+		}
+	}
+
+	void QueryEngine::propagateQueryContext(execution::PhysicalOperator *op, const QueryContext *ctx) {
+		if (!op)
+			return;
+		op->setQueryContext(ctx);
+		for (auto *child : op->getChildren()) {
+			propagateQueryContext(const_cast<execution::PhysicalOperator *>(child), ctx);
 		}
 	}
 

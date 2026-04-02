@@ -34,7 +34,7 @@ namespace graph::parser::cypher {
 CypherToPlanVisitor::CypherToPlanVisitor(std::shared_ptr<query::QueryPlanner> planner) :
 	planner_(std::move(planner)) {}
 
-std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan() {
+std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogicalPlan() {
 	if (!rootOp_) {
 		return nullptr;
 	}
@@ -59,13 +59,22 @@ std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan
 		}
 	}
 
+	return std::move(rootOp_);
+}
+
+std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan() {
+	auto logicalPlan = getLogicalPlan();
+	if (!logicalPlan) {
+		return nullptr;
+	}
+
 	// Convert logical plan to physical plan using managers from the planner
 	auto dm = planner_->getDataManager();
 	auto im = planner_->getIndexManager();
 	auto cm = planner_->getConstraintManager();
 
 	query::PhysicalPlanConverter converter(dm, im, cm);
-	return converter.convert(rootOp_.get());
+	return converter.convert(logicalPlan.get());
 }
 
 // --- Entry Points ---

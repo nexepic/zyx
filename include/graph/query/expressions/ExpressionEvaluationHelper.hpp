@@ -23,6 +23,8 @@
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/execution/Record.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace graph::storage { class DataManager; }
@@ -68,6 +70,14 @@ public:
 	                                            storage::DataManager *dataManager = nullptr);
 
 	/**
+	 * @brief Evaluates an expression with query parameters.
+	 */
+	[[nodiscard]] static PropertyValue evaluate(const Expression *expr,
+	                                            const execution::Record &record,
+	                                            storage::DataManager *dataManager,
+	                                            const std::unordered_map<std::string, PropertyValue> *parameters);
+
+	/**
 	 * @brief Evaluates an expression and converts to boolean.
 	 *
 	 * Convenience method for filter/condition evaluation.
@@ -80,6 +90,14 @@ public:
 	[[nodiscard]] static bool evaluateBool(const Expression *expr,
 	                                       const execution::Record &record,
 	                                       storage::DataManager *dataManager = nullptr);
+
+	/**
+	 * @brief Evaluates an expression as boolean with query parameters.
+	 */
+	[[nodiscard]] static bool evaluateBool(const Expression *expr,
+	                                       const execution::Record &record,
+	                                       storage::DataManager *dataManager,
+	                                       const std::unordered_map<std::string, PropertyValue> *parameters);
 
 	/**
 	 * @brief Evaluates an expression and converts to integer.

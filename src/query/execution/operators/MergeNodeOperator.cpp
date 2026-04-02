@@ -22,6 +22,7 @@
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 
@@ -172,8 +173,12 @@ void MergeNodeOperator::applyUpdates(int64_t nodeId, const std::vector<SetItem> 
 	for (const auto &item: items) {
 		if (item.variable == variable_) {
 			if (item.type == SetActionType::PROPERTY && item.expression) {
-				// Evaluate the expression to get the value
-				graph::query::expressions::EvaluationContext context(record);
+				auto makeContext = [&]() {
+					if (queryContext_ && !queryContext_->parameters.empty())
+						return graph::query::expressions::EvaluationContext(record, queryContext_->parameters);
+					return graph::query::expressions::EvaluationContext(record);
+				};
+				auto context = makeContext();
 				graph::query::expressions::ExpressionEvaluator evaluator(context);
 				PropertyValue value = evaluator.evaluate(item.expression.get());
 

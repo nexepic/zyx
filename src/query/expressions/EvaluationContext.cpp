@@ -31,6 +31,22 @@ EvaluationContext::EvaluationContext(const execution::Record &record,
                                      storage::DataManager *dataManager)
 	: record_(record), dataManager_(dataManager) {}
 
+EvaluationContext::EvaluationContext(const execution::Record &record,
+                                     const std::unordered_map<std::string, PropertyValue> &parameters)
+	: record_(record), dataManager_(nullptr), parameters_(&parameters) {}
+
+EvaluationContext::EvaluationContext(const execution::Record &record,
+                                     storage::DataManager *dataManager,
+                                     const std::unordered_map<std::string, PropertyValue> &parameters)
+	: record_(record), dataManager_(dataManager), parameters_(&parameters) {}
+
+std::optional<PropertyValue> EvaluationContext::resolveParameter(const std::string &name) const {
+	if (!parameters_) return std::nullopt;
+	auto it = parameters_->find(name);
+	if (it != parameters_->end()) return it->second;
+	return std::nullopt;
+}
+
 std::optional<PropertyValue> EvaluationContext::resolveVariable(const std::string &variableName) const {
 	// Check temporary variables first (for list comprehensions)
 	auto it = temporaryVariables_.find(variableName);

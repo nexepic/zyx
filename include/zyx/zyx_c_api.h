@@ -31,6 +31,8 @@ extern "C" {
 // ========================================================================
 typedef struct ZYXDB_T ZYXDB_T;
 typedef struct ZYXResult_T ZYXResult_T;
+typedef struct ZYXTxn_T ZYXTxn_T;
+typedef struct ZYXParams_T ZYXParams_T;
 
 // ========================================================================
 // Data Structures (Mapped to Rust structs via repr(C))
@@ -43,7 +45,9 @@ typedef enum {
 	ZYX_DOUBLE = 3,
 	ZYX_STRING = 4,
 	ZYX_NODE = 5,
-	ZYX_EDGE = 6
+	ZYX_EDGE = 6,
+	ZYX_LIST = 7,
+	ZYX_MAP = 8
 } ZYXValueType;
 
 // Lightweight Node view (Topology optimized)
@@ -99,7 +103,92 @@ const char *zyx_get_last_error();
  */
 ZYXResult_T *zyx_execute(const ZYXDB_T *db, const char *cypher);
 
+/**
+ * @brief Executes a parameterized Cypher query.
+ * @return Result handle. Must be freed with zyx_result_close.
+ */
+ZYXResult_T *zyx_execute_params(const ZYXDB_T *db, const char *cypher, const ZYXParams_T *params);
+
 void zyx_result_close(const ZYXResult_T *res);
+
+// ========================================================================
+// Transaction Control
+// ========================================================================
+
+/**
+ * @brief Begins a new transaction.
+ * @return Transaction handle, or NULL on failure. Must be freed with zyx_txn_close.
+ */
+ZYXTxn_T *zyx_begin_transaction(ZYXDB_T *db);
+
+/**
+ * @brief Executes a Cypher query within a transaction.
+ */
+ZYXResult_T *zyx_txn_execute(ZYXTxn_T *txn, const char *cypher);
+
+/**
+ * @brief Executes a parameterized Cypher query within a transaction.
+ */
+ZYXResult_T *zyx_txn_execute_params(ZYXTxn_T *txn, const char *cypher, const ZYXParams_T *params);
+
+/**
+ * @brief Commits the transaction. Returns true on success.
+ */
+bool zyx_txn_commit(ZYXTxn_T *txn);
+
+/**
+ * @brief Rolls back the transaction.
+ */
+void zyx_txn_rollback(ZYXTxn_T *txn);
+
+/**
+ * @brief Closes and frees the transaction handle.
+ *        Auto-rolls back if not committed.
+ */
+void zyx_txn_close(ZYXTxn_T *txn);
+
+// ========================================================================
+// Parameters
+// ========================================================================
+
+/**
+ * @brief Creates a new parameter set for parameterized queries.
+ */
+ZYXParams_T *zyx_params_create();
+
+void zyx_params_set_int(ZYXParams_T *p, const char *key, int64_t val);
+void zyx_params_set_double(ZYXParams_T *p, const char *key, double val);
+void zyx_params_set_string(ZYXParams_T *p, const char *key, const char *val);
+void zyx_params_set_bool(ZYXParams_T *p, const char *key, bool val);
+void zyx_params_set_null(ZYXParams_T *p, const char *key);
+
+/**
+ * @brief Frees the parameter set.
+ */
+void zyx_params_close(ZYXParams_T *p);
+
+// ========================================================================
+// Batch Operations
+// ========================================================================
+
+/**
+ * @brief Creates a node with a label and properties.
+ * @return true on success.
+ */
+bool zyx_create_node(ZYXDB_T *db, const char *label, const ZYXParams_T *props);
+
+/**
+ * @brief Creates a node and returns its internal ID.
+ * @return The node ID, or -1 on failure.
+ */
+int64_t zyx_create_node_ret_id(ZYXDB_T *db, const char *label, const ZYXParams_T *props);
+
+/**
+ * @brief Creates an edge between two nodes by their internal IDs.
+ * @return true on success.
+ */
+bool zyx_create_edge_by_id(ZYXDB_T *db, int64_t source_id, int64_t target_id,
+                            const char *label, const ZYXParams_T *props);
 
 // ========================================================================
 // Result Iteration
@@ -161,6 +250,38 @@ bool zyx_result_get_edge(ZYXResult_T *res, int col_index, ZYXEdge *out_edge);
  *        This is efficient for passing to Frontend (JS).
  */
 const char *zyx_result_get_props_json(ZYXResult_T *res, int col_index);
+
+// ========================================================================
+// List Access
+// ========================================================================
+
+/**
+ * @brief Returns the number of elements in a list value.
+ */
+int zyx_result_list_size(const ZYXResult_T *res, int col_index);
+
+/**
+ * @brief Gets the type of a list element.
+ */
+ZYXValueType zyx_result_list_get_type(const ZYXResult_T *res, int col_index, int list_index);
+
+int64_t zyx_result_list_get_int(const ZYXResult_T *res, int col_index, int list_index);
+double zyx_result_list_get_double(const ZYXResult_T *res, int col_index, int list_index);
+bool zyx_result_list_get_bool(const ZYXResult_T *res, int col_index, int list_index);
+const char *zyx_result_list_get_string(ZYXResult_T *res, int col_index, int list_index);
+
+// ========================================================================
+// Map Access
+// ========================================================================
+
+/**
+ * @brief Returns a map value as a JSON string.
+ */
+const char *zyx_result_get_map_json(ZYXResult_T *res, int col_index);
+
+// ========================================================================
+// Status
+// ========================================================================
 
 bool zyx_result_is_success(const ZYXResult_T *res);
 

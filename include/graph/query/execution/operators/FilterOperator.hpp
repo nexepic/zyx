@@ -31,6 +31,10 @@
 #include "../PhysicalOperator.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/expressions/Expression.hpp"
+
+namespace graph::storage { class DataManager; }
+namespace graph::query { struct QueryContext; }
 
 namespace graph::query::execution::operators {
 
@@ -41,14 +45,20 @@ namespace graph::query::execution::operators {
 		static constexpr size_t PARALLEL_FILTER_THRESHOLD = 4096;
 
 		/**
-		 * @brief Constructs a FilterOperator.
-		 *
-		 * @param child The upstream operator.
-		 * @param predicate The generic lambda function for filtering.
-		 * @param predicateStr A string representation of the logic (for debugging/visualization).
+		 * @brief Constructs a FilterOperator with a predicate lambda.
 		 */
 		FilterOperator(std::unique_ptr<PhysicalOperator> child, Predicate predicate, std::string predicateStr) :
 			child_(std::move(child)), predicate_(std::move(predicate)), predicateStr_(std::move(predicateStr)) {}
+
+		/**
+		 * @brief Constructs a FilterOperator with an expression AST (supports parameters).
+		 */
+		FilterOperator(std::unique_ptr<PhysicalOperator> child,
+		               std::shared_ptr<expressions::Expression> expr,
+		               storage::DataManager *dm,
+		               std::string predicateStr) :
+			child_(std::move(child)), filterExpr_(std::move(expr)),
+			dataManager_(dm), predicateStr_(std::move(predicateStr)) {}
 
 		void open() override {
 			if (child_)
@@ -70,10 +80,9 @@ namespace graph::query::execution::operators {
 
 				if (threadPool_ && !threadPool_->isSingleThreaded()
 					&& inputBatch.size() >= PARALLEL_FILTER_THRESHOLD) {
-					// Parallel two-pass: evaluate predicates then compact
 					std::vector<uint8_t> keep(inputBatch.size());
 					threadPool_->parallelFor(0, inputBatch.size(), [&](size_t i) {
-						keep[i] = predicate_(inputBatch[i]) ? 1 : 0;
+						keep[i] = evaluateRecord(inputBatch[i]) ? 1 : 0;
 					});
 					outputBatch.reserve(inputBatch.size());
 					for (size_t i = 0; i < inputBatch.size(); ++i) {
@@ -81,10 +90,9 @@ namespace graph::query::execution::operators {
 							outputBatch.push_back(std::move(inputBatch[i]));
 					}
 				} else {
-					// Sequential path
 					outputBatch.reserve(inputBatch.size());
 					for (auto &record : inputBatch) {
-						if (predicate_(record))
+						if (evaluateRecord(record))
 							outputBatch.push_back(std::move(record));
 					}
 				}
@@ -121,7 +129,11 @@ namespace graph::query::execution::operators {
 	private:
 		std::unique_ptr<PhysicalOperator> child_;
 		Predicate predicate_;
+		std::shared_ptr<expressions::Expression> filterExpr_;
+		storage::DataManager *dataManager_ = nullptr;
 		std::string predicateStr_;
+
+		bool evaluateRecord(const Record &record) const;
 	};
 
 } // namespace graph::query::execution::operators

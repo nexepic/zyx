@@ -48,6 +48,12 @@ public:
 
 	std::unique_ptr<query::execution::PhysicalOperator> getPlan();
 
+	/**
+	 * @brief Returns the optimized logical plan without physical conversion.
+	 * Used by PlanCache to store reusable logical plans.
+	 */
+	std::unique_ptr<query::logical::LogicalOperator> getLogicalPlan();
+
 	// --- Entry Points ---
 	std::any visitCypher(CypherParser::CypherContext *ctx) override;
 	std::any visitRegularQuery(CypherParser::RegularQueryContext *ctx) override;

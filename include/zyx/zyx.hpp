@@ -93,6 +93,8 @@ namespace zyx {
 		Transaction &operator=(const Transaction &) = delete;
 
 		Result execute(const std::string &cypher) const;
+		Result execute(const std::string &cypher,
+		               const std::unordered_map<std::string, Value> &params) const;
 		void commit();
 		void rollback();
 		[[nodiscard]] bool isActive() const;
@@ -136,6 +138,10 @@ namespace zyx {
 
 		// Execute raw Cypher query (auto-commit: wraps in implicit transaction)
 		[[nodiscard]] Result execute(const std::string &cypher) const;
+
+		// Execute parameterized Cypher query
+		[[nodiscard]] Result execute(const std::string &cypher,
+		                             const std::unordered_map<std::string, Value> &params) const;
 
 		// High-performance direct insert APIs
 		void createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const;
