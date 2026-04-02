@@ -30,7 +30,7 @@ TEST(StorageHeadersTest, FileHeaderInitialization) {
 	EXPECT_EQ(fileHeader.max_node_id, 0u);
 	EXPECT_EQ(fileHeader.max_edge_id, 0u);
 	EXPECT_EQ(fileHeader.data_crc, 0u);
-	EXPECT_EQ(fileHeader.version, 0x0002u);
+	EXPECT_EQ(fileHeader.version, 0x0003u);
 }
 
 TEST(StorageHeadersTest, SegmentHeaderInitialization) {

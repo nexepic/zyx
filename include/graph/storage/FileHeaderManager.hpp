@@ -20,8 +20,10 @@
 
 #pragma once
 
+#include <cstdint>
 #include <fstream>
 #include <memory>
+#include <vector>
 #include "SegmentTracker.hpp"
 #include "SegmentType.hpp"
 #include "StorageHeaders.hpp"
@@ -63,9 +65,8 @@ namespace graph::storage {
 
 		[[nodiscard]] FileHeader &getFileHeader() const { return fileHeader_; }
 
-		void updateFileCrc() const;
-
-		[[nodiscard]] bool validateFileCrc() const;
+		// Update aggregated CRC from segment CRC list (pure memory computation, no I/O)
+		void updateAggregatedCrc(const std::vector<uint32_t> &segmentCrcs);
 
 	private:
 		std::shared_ptr<std::fstream> file_;
@@ -78,8 +79,6 @@ namespace graph::storage {
 		int64_t maxBlobId = 0;
 		int64_t maxIndexId = 0;
 		int64_t maxStateId = 0;
-
-		[[nodiscard]] uint32_t calculateFileCrc() const;
 	};
 
 } // namespace graph::storage

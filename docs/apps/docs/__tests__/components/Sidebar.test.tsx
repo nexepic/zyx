@@ -24,7 +24,7 @@ describe('Sidebar', () => {
     mockPathname = '/en/docs/getting-started/introduction'
     render(<Sidebar />)
 
-    expect(screen.getByText('Onboarding')).toBeInTheDocument()
+    expect(screen.getByText('Setup')).toBeInTheDocument()
     expect(screen.getByText('Introduction')).toBeInTheDocument()
     expect(screen.getByText('Installation and First Run')).toBeInTheDocument()
     expect(screen.queryByText('Information Architecture')).not.toBeInTheDocument()
@@ -36,7 +36,7 @@ describe('Sidebar', () => {
 
     expect(screen.getByText('Guide')).toBeInTheDocument()
     expect(screen.getByText('Information Architecture')).toBeInTheDocument()
-    expect(screen.queryByText('Onboarding')).not.toBeInTheDocument()
+    expect(screen.queryByText('Setup')).not.toBeInTheDocument()
   })
 
   it('highlights current page link', () => {

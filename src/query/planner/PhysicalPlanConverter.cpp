@@ -8,6 +8,8 @@
 #include "graph/query/planner/PhysicalPlanConverter.hpp"
 
 #include "graph/query/execution/operators/AggregateOperator.hpp"
+#include "graph/query/execution/operators/ExplainOperator.hpp"
+#include "graph/query/execution/operators/ProfileOperator.hpp"
 #include "graph/query/execution/operators/CartesianProductOperator.hpp"
 #include "graph/query/execution/operators/CreateConstraintOperator.hpp"
 #include "graph/query/execution/operators/CreateEdgeOperator.hpp"
@@ -47,6 +49,7 @@
 #include "graph/query/logical/operators/LogicalDelete.hpp"
 #include "graph/query/logical/operators/LogicalDropConstraint.hpp"
 #include "graph/query/logical/operators/LogicalDropIndex.hpp"
+#include "graph/query/logical/operators/LogicalExplain.hpp"
 #include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalJoin.hpp"
 #include "graph/query/logical/operators/LogicalLimit.hpp"
@@ -54,6 +57,7 @@
 #include "graph/query/logical/operators/LogicalMergeNode.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/logical/operators/LogicalOptionalMatch.hpp"
+#include "graph/query/logical/operators/LogicalProfile.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalRemove.hpp"
 #include "graph/query/logical/operators/LogicalSet.hpp"
@@ -121,6 +125,8 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convert(
 		case LogicalOpType::LOP_SHOW_CONSTRAINTS:     return convertShowConstraints(logicalOp);
 		case LogicalOpType::LOP_TRANSACTION_CONTROL:  return convertTransactionControl(logicalOp);
 		case LogicalOpType::LOP_CALL_PROCEDURE:       return convertCallProcedure(logicalOp);
+		case LogicalOpType::LOP_EXPLAIN:              return convertExplain(logicalOp);
+		case LogicalOpType::LOP_PROFILE:              return convertProfile(logicalOp);
 		default:
 			throw std::runtime_error(
 				"PhysicalPlanConverter: unsupported logical operator type: " +
@@ -752,12 +758,29 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertCallProcedure(
 
 	const auto *cp = static_cast<const LogicalCallProcedure *>(op);
 
-	const planner::ProcedureContext ctx{dm_, im_};
+	const planner::ProcedureContext ctx{dm_, im_, planCacheHits_, planCacheMisses_};
 	if (const auto factory = planner::ProcedureRegistry::instance().get(cp->getProcedureName())) {
 		return factory(ctx, cp->getArgs());
 	}
 
 	throw std::runtime_error("PhysicalPlanConverter: unknown procedure: " + cp->getProcedureName());
+}
+
+std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertExplain(
+	const LogicalOperator *op) const {
+
+	const auto *explain = static_cast<const LogicalExplain *>(op);
+	// Pass the inner logical plan to ExplainOperator — it prints the plan without executing
+	return std::make_unique<ExplainOperator>(explain->getInnerPlan());
+}
+
+std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertProfile(
+	const LogicalOperator *op) const {
+
+	const auto *profile = static_cast<const LogicalProfile *>(op);
+	// Convert the inner logical plan to physical, then wrap in ProfileOperator
+	auto innerPhys = convert(profile->getInnerPlan());
+	return std::make_unique<ProfileOperator>(std::move(innerPhys));
 }
 
 } // namespace graph::query

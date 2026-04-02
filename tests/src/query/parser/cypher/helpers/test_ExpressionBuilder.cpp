@@ -43,10 +43,14 @@ protected:
 		result->parser->removeErrorListeners();
 
 		auto tree = result->parser->cypher();
-		if (!tree || !tree->statement() || !tree->statement()->query())
+		if (!tree || !tree->statement())
 			return nullptr;
 
-		auto query_ = tree->statement()->query();
+		auto* regularStmt = dynamic_cast<CypherParser::RegularStatementContext*>(tree->statement());
+		if (!regularStmt || !regularStmt->query())
+			return nullptr;
+
+		auto query_ = regularStmt->query();
 		auto regularQuery = query_->regularQuery();
 		if (!regularQuery)
 			return nullptr;
@@ -81,10 +85,14 @@ protected:
 		result->parser->removeErrorListeners();
 
 		auto tree = result->parser->cypher();
-		if (!tree || !tree->statement() || !tree->statement()->query())
+		if (!tree || !tree->statement())
 			return nullptr;
 
-		auto query_ = tree->statement()->query();
+		auto* regularStmt = dynamic_cast<CypherParser::RegularStatementContext*>(tree->statement());
+		if (!regularStmt || !regularStmt->query())
+			return nullptr;
+
+		auto query_ = regularStmt->query();
 		auto regularQuery = query_->regularQuery();
 		if (!regularQuery)
 			return nullptr;

@@ -22,7 +22,19 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitStatement(CypherParser::StatementContext *ctx) override {
+  virtual std::any visitExplainStatement(CypherParser::ExplainStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitProfileStatement(CypherParser::ProfileStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitRegularStatement(CypherParser::RegularStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitAdminStatement(CypherParser::AdminStatementContext *ctx) override {
     return visitChildren(ctx);
   }
 

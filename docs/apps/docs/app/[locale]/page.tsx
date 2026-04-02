@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { buildHomeJsonLd, generateSiteMetadata } from "@/lib/metadata";
 import { defaultLocale, locales } from "@/lib/i18n";
 import { getFirstDocHref, getProjectGroups } from "@/lib/docs";
-import { ZyxHomePage as HomePageView } from "@/components/home/HomePage";
+import { CustomHomePage } from "@/home/custom-home";
 
 const homeMetaCopy = {
   en: {
@@ -14,7 +14,7 @@ const homeMetaCopy = {
     title: "文档",
     subtitle: "快速上手、集成和构建所需的一切。",
   },
-} as const
+} as const;
 
 export async function generateMetadata({
   params,
@@ -54,7 +54,7 @@ export default async function LocaleHomePage({
   const jsonLd = buildHomeJsonLd(locale);
 
   return (
-    <HomePageView
+    <CustomHomePage
       locale={locale}
       firstDocHref={firstDocHref}
       projects={projects}

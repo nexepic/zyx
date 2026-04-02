@@ -56,6 +56,10 @@ namespace graph::storage::wal {
 
 		void setGroupCommitDelayUs(uint32_t delayUs) { groupCommitDelayUs_ = delayUs; }
 		void setBufferSize(size_t size) { walBufferSize_ = size; }
+		void setAutoCheckpointThreshold(size_t bytes) { autoCheckpointThreshold_ = bytes; }
+		[[nodiscard]] size_t getAutoCheckpointThreshold() const { return autoCheckpointThreshold_; }
+		[[nodiscard]] uint64_t getWALSize() const { return currentWriteOffset_; }
+		[[nodiscard]] bool shouldCheckpoint() const { return currentWriteOffset_ > autoCheckpointThreshold_; }
 
 	private:
 		std::string walPath_;
@@ -77,6 +81,9 @@ namespace graph::storage::wal {
 
 		// Group commit timing
 		uint32_t groupCommitDelayUs_ = 1000; // 1ms max wait
+
+		// Auto-checkpoint threshold (default 1MB)
+		size_t autoCheckpointThreshold_ = 1048576;
 
 		void writeRecord(WALRecordType type, uint64_t txnId, const uint8_t *data = nullptr, uint32_t dataSize = 0);
 		void writeHeader();

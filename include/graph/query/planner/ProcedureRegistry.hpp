@@ -44,6 +44,8 @@ namespace graph::query::planner {
 	struct ProcedureContext {
 		std::shared_ptr<storage::DataManager> dataManager;
 		std::shared_ptr<indexes::IndexManager> indexManager;
+		uint64_t planCacheHits = 0;
+		uint64_t planCacheMisses = 0;
 	};
 
 	using ProcedureFactory = std::function<std::unique_ptr<execution::PhysicalOperator>(

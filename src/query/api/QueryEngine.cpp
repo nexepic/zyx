@@ -75,7 +75,8 @@ namespace graph::query {
 		if (cachedLogical) {
 			// Cache hit: convert cached logical plan to physical
 			auto dm = storage_->getDataManager();
-			PhysicalPlanConverter converter(dm, indexManager_, constraintManager_);
+			PhysicalPlanConverter converter(dm, indexManager_, constraintManager_,
+			                                planCache_.hits(), planCache_.misses());
 			planTree = converter.convert(cachedLogical.get());
 		} else {
 			// Cache miss: parse to logical, cache if cacheable, then convert
@@ -94,7 +95,9 @@ namespace graph::query {
 				                    rootType != logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
 				                    rootType != logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
 				                    rootType != logical::LogicalOpType::LOP_LIST_CONFIG &&
-				                    rootType != logical::LogicalOpType::LOP_SET_CONFIG);
+				                    rootType != logical::LogicalOpType::LOP_SET_CONFIG &&
+				                    rootType != logical::LogicalOpType::LOP_EXPLAIN &&
+				                    rootType != logical::LogicalOpType::LOP_PROFILE);
 
 				// DDL operations invalidate the cache (schema changes affect plans)
 				bool isDDL = (rootType == logical::LogicalOpType::LOP_CREATE_INDEX ||
@@ -112,7 +115,8 @@ namespace graph::query {
 
 				// Convert logical to physical
 				auto dm = storage_->getDataManager();
-				PhysicalPlanConverter converter(dm, indexManager_, constraintManager_);
+				PhysicalPlanConverter converter(dm, indexManager_, constraintManager_,
+				                                planCache_.hits(), planCache_.misses());
 				planTree = converter.convert(logicalPlan.get());
 			}
 		}

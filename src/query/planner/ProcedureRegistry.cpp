@@ -23,7 +23,9 @@
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
+#include "graph/query/execution/operators/ResetStatsOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
+#include "graph/query/execution/operators/ShowStatsOperator.hpp"
 #include "graph/query/execution/operators/TrainVectorIndexOperator.hpp"
 #include "graph/query/execution/operators/VectorSearchOperator.hpp"
 
@@ -119,6 +121,16 @@ namespace graph::query::planner {
 			std::string indexName = args[0].toString();
 
 			return std::make_unique<execution::operators::TrainVectorIndexOperator>(ctx.indexManager, indexName);
+		});
+
+		// --- Statistics ---
+		registerProcedure("dbms.showStats", [](const ProcedureContext &ctx, const auto & /*args*/) {
+			execution::operators::ShowStatsOperator::CacheStats planStats{ctx.planCacheHits, ctx.planCacheMisses};
+			return std::make_unique<execution::operators::ShowStatsOperator>(ctx.dataManager, ctx.indexManager, planStats);
+		});
+
+		registerProcedure("dbms.resetStats", [](const ProcedureContext &ctx, const auto & /*args*/) {
+			return std::make_unique<execution::operators::ResetStatsOperator>(ctx.dataManager, ctx.indexManager);
 		});
 	}
 } // namespace graph::query::planner

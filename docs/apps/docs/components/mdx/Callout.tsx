@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 type CalloutType = 'info' | 'warning' | 'danger' | 'success' | 'note' | 'tip'
 
@@ -25,31 +24,27 @@ const typeMap: Record<CalloutType, 'info' | 'warning' | 'danger' | 'success'> = 
 const styles = {
   info: {
     icon: Info,
-    bg: 'bg-[#58a6ff]/[0.06]',
-    borderColor: 'border-[#58a6ff]/15',
-    iconColor: 'text-[#58a6ff]',
-    titleColor: 'text-[#58a6ff]',
+    colorVar: '--callout-info',
+    bgVar: '--callout-info-bg',
+    borderVar: '--callout-info-border',
   },
   warning: {
     icon: AlertTriangle,
-    bg: 'bg-[#d29922]/[0.06]',
-    borderColor: 'border-[#d29922]/15',
-    iconColor: 'text-[#d29922]',
-    titleColor: 'text-[#d29922]',
+    colorVar: '--callout-warning',
+    bgVar: '--callout-warning-bg',
+    borderVar: '--callout-warning-border',
   },
   danger: {
     icon: AlertCircle,
-    bg: 'bg-[#f85149]/[0.06]',
-    borderColor: 'border-[#f85149]/15',
-    iconColor: 'text-[#f85149]',
-    titleColor: 'text-[#f85149]',
+    colorVar: '--callout-danger',
+    bgVar: '--callout-danger-bg',
+    borderVar: '--callout-danger-border',
   },
   success: {
     icon: CheckCircle2,
-    bg: 'bg-[#3fb950]/[0.06]',
-    borderColor: 'border-[#3fb950]/15',
-    iconColor: 'text-[#3fb950]',
-    titleColor: 'text-[#3fb950]',
+    colorVar: '--callout-success',
+    bgVar: '--callout-success-bg',
+    borderVar: '--callout-success-border',
   },
 }
 
@@ -63,17 +58,20 @@ export function Callout({ type = 'info', title, compact: initialCompact, childre
 
   return (
     <aside
-      className={cn(
-        'relative my-5 overflow-hidden rounded-lg border',
-        style.bg,
-        style.borderColor,
-      )}
+      className="relative my-5 overflow-hidden rounded-lg border"
+      style={{
+        background: `var(${style.bgVar})`,
+        borderColor: `var(${style.borderVar})`,
+      }}
     >
       <div className="px-4 py-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Icon className={cn('h-[16px] w-[16px] flex-shrink-0', style.iconColor)} />
-            <span className={cn('text-[13px] font-medium', style.titleColor)}>
+            <Icon
+              className="h-[16px] w-[16px] flex-shrink-0"
+              style={{ color: `var(${style.colorVar})` }}
+            />
+            <span className="text-[13px] font-medium" style={{ color: `var(${style.colorVar})` }}>
               {title || defaultTitles[normalizedType]}
             </span>
           </div>

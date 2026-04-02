@@ -60,6 +60,10 @@ namespace graph::config {
 		 */
 		[[nodiscard]] size_t getThreadPoolSize() const;
 
+		[[nodiscard]] bool isSlowLogEnabled() const;
+		[[nodiscard]] int64_t getSlowLogThresholdMs() const;
+		[[nodiscard]] bool isStatsEnabled() const;
+
 	private:
 		std::weak_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;

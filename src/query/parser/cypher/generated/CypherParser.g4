@@ -21,8 +21,10 @@ cypher
     ;
 
 statement
-    : query
-    | administrationStatement
+    : K_EXPLAIN ( query | administrationStatement )   # ExplainStatement
+    | K_PROFILE ( query | administrationStatement )    # ProfileStatement
+    | query                                            # RegularStatement
+    | administrationStatement                          # AdminStatement
     ;
 
 // ============================================================================
@@ -447,6 +449,8 @@ symbolicName
     | K_VECTOR | K_OPTIONS
     // Transaction Keywords
     | K_BEGIN | K_COMMIT | K_ROLLBACK | K_TRANSACTION
+    // Observability Keywords
+    | K_EXPLAIN | K_PROFILE
     ;
 
 literal

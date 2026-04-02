@@ -250,7 +250,9 @@ protected:
 	CypherParser::SingleQueryContext* getSingleQuery(CypherParser::CypherContext* tree) {
 		auto stmt = tree->statement();
 		if (!stmt) return nullptr;
-		auto query = stmt->query();
+		auto* regularStmt = dynamic_cast<CypherParser::RegularStatementContext*>(stmt);
+		if (!regularStmt) return nullptr;
+		auto query = regularStmt->query();
 		if (!query) return nullptr;
 		auto regularQuery = query->regularQuery();
 		if (!regularQuery) return nullptr;

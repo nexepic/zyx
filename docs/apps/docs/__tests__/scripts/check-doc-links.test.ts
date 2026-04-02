@@ -38,7 +38,7 @@ describe('check-doc-links script', () => {
 
     writeFile(
       workspace,
-      'lib/site.ts',
+      'nexdoc.config.ts',
       "export const siteConfig = { nav: [{ href: '/docs/getting-started/introduction' }] }\n"
     )
 
@@ -71,7 +71,7 @@ See [Missing Page](/en/docs/getting-started/missing-page)
 
     writeFile(
       workspace,
-      'lib/site.ts',
+      'nexdoc.config.ts',
       "export const siteConfig = { nav: [{ href: '/docs/getting-started/introduction' }] }\n"
     )
 
@@ -110,5 +110,71 @@ order: 2
 
     expect(result.status).toBe(0)
     expect(output).toContain('[check-doc-links] All doc links are valid.')
+  })
+
+  it('fails when a bare relative doc link target does not exist', () => {
+    const workspace = createWorkspace()
+    workspaces.push(workspace)
+
+    writeFile(
+      workspace,
+      'nexdoc.config.ts',
+      "export const siteConfig = { nav: [{ href: '/docs/getting-started/introduction' }] }\n"
+    )
+
+    writeFile(
+      workspace,
+      'content/docs/en/getting-started/introduction.mdx',
+      `---
+title: Introduction
+description: Intro page
+category: Setup
+order: 1
+---
+
+# Introduction
+
+See [Missing Page](missing-page)
+`
+    )
+
+    const result = runChecker(workspace)
+    const output = `${result.stdout}\n${result.stderr}`
+
+    expect(result.status).toBe(1)
+    expect(output).toContain('relative target doc not found')
+  })
+
+  it('fails when JSX href expression points to a missing doc', () => {
+    const workspace = createWorkspace()
+    workspaces.push(workspace)
+
+    writeFile(
+      workspace,
+      'nexdoc.config.ts',
+      "export const siteConfig = { nav: [{ href: '/docs/getting-started/introduction' }] }\n"
+    )
+
+    writeFile(
+      workspace,
+      'content/docs/en/getting-started/introduction.mdx',
+      `---
+title: Introduction
+description: Intro page
+category: Setup
+order: 1
+---
+
+# Introduction
+
+<a href={'/en/docs/getting-started/missing-page'}>Missing</a>
+`
+    )
+
+    const result = runChecker(workspace)
+    const output = `${result.stdout}\n${result.stderr}`
+
+    expect(result.status).toBe(1)
+    expect(output).toContain('target doc not found')
   })
 })

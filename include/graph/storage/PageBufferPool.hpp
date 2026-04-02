@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <list>
 #include <shared_mutex>
@@ -48,11 +49,20 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t capacity() const { return capacity_; }
 
+		[[nodiscard]] uint64_t hits() const { return hits_.load(std::memory_order_relaxed); }
+		[[nodiscard]] uint64_t misses() const { return misses_.load(std::memory_order_relaxed); }
+		void resetStats() {
+			hits_.store(0, std::memory_order_relaxed);
+			misses_.store(0, std::memory_order_relaxed);
+		}
+
 	private:
 		size_t capacity_;
 		mutable std::list<Page> pages_;
 		mutable std::unordered_map<uint64_t, std::list<Page>::iterator> pageMap_;
 		mutable std::shared_mutex mutex_;
+		mutable std::atomic<uint64_t> hits_{0};
+		mutable std::atomic<uint64_t> misses_{0};
 	};
 
 } // namespace graph::storage

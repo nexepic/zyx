@@ -53,7 +53,6 @@ namespace graph::storage {
 		}
 
 		file_->flush();
-		updateFileCrc();
 	}
 
 	FileHeader FileHeaderManager::readFileHeader() const {
@@ -100,49 +99,38 @@ namespace graph::storage {
 	}
 
 	void FileHeaderManager::initializeFileHeader() const {
-		// Ensure stream is clean before starting
 		file_->clear();
 		file_->seekp(0, std::ios::beg);
 
-		// Write initial header with 0 CRC
 		fileHeader_.data_crc = 0;
 		file_->write(reinterpret_cast<const char *>(&fileHeader_), sizeof(FileHeader));
-
-		// Use the file-wide CRC calculation to ensure consistency with validation
-		updateFileCrc();
+		file_->flush();
 	}
 
 	void FileHeaderManager::validateAndReadHeader() const {
-		// 1. Reset the header memory to ensure we aren't validating
-		// the default values set by the constructor.
+		// 1. Reset the header memory
 		std::memset(fileHeader_.magic, 0, 8);
 
-		// 2. Clear any stream error flags (like EOF from previous checks)
-		// and seek to the beginning.
+		// 2. Clear stream flags and seek to beginning
 		file_->clear();
 		file_->seekg(0, std::ios::beg);
 
-		// 3. Perform the read and check if it succeeded
+		// 3. Read the header
 		file_->read(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
 
 		if (file_->fail() || file_->gcount() < static_cast<std::streamsize>(sizeof(FileHeader))) {
 			throw std::runtime_error("Database integrity error: File is empty or truncated.");
 		}
 
-		// 4. Now validate the content actually read from the disk
+		// 4. Validate magic string
 		if (memcmp(fileHeader_.magic, FILE_HEADER_MAGIC_STRING, 8) != 0) {
 			throw std::runtime_error("Invalid file format: Magic number mismatch.");
 		}
 
-		// 5. Validate version
-		if (fileHeader_.version != 0x00000002) {
+		// 5. Validate version (v3: segment-level CRC)
+		if (fileHeader_.version != 0x00000003) {
 			throw std::runtime_error("Unsupported file format version: " + std::to_string(fileHeader_.version)
-				+ " (expected " + std::to_string(0x00000002) + ")");
-		}
-
-		// 6. Validate file CRC
-		if (!validateFileCrc()) {
-			throw std::runtime_error("Database integrity check failed: Data corruption detected.");
+				+ " (expected " + std::to_string(0x00000003) + ")");
 		}
 	}
 
@@ -155,75 +143,12 @@ namespace graph::storage {
 		maxStateId = fileHeader_.max_state_id;
 	}
 
-	uint32_t FileHeaderManager::calculateFileCrc() const {
-		// Save current position
-		auto originalPos = file_->tellg();
-
-		// Create a buffer for reading chunks of the file
-		constexpr size_t BUFFER_SIZE = 8192; // 8KB buffer
-		std::vector<char> buffer(BUFFER_SIZE);
-
-		// Calculate CRC for header (excluding the CRC field itself)
-		file_->seekg(0);
-		uint32_t crc = 0;
-
-		// Read header part before CRC field
-		size_t crcFieldOffset = offsetof(FileHeader, data_crc);
-
-		file_->read(buffer.data(), static_cast<std::streamsize>(crcFieldOffset));
-		size_t bytesRead = file_->gcount();
-		crc = utils::updateCrc(crc, buffer.data(), bytesRead);
-
-		// Skip CRC field (4 bytes)
-		file_->seekg(static_cast<std::streamoff>(crcFieldOffset + sizeof(uint32_t)));
-
-		// Read header part after CRC field
-		size_t headerSize = sizeof(FileHeader);
-		if (headerSize > crcFieldOffset + sizeof(uint32_t)) {
-			size_t remainingHeaderBytes = headerSize - (crcFieldOffset + sizeof(uint32_t));
-			file_->read(buffer.data(), static_cast<std::streamsize>(remainingHeaderBytes));
-			size_t bytesReadAfterCRC = file_->gcount();
-			crc = utils::updateCrc(crc, buffer.data(), bytesReadAfterCRC);
+	void FileHeaderManager::updateAggregatedCrc(const std::vector<uint32_t> &segmentCrcs) {
+		uint32_t aggCrc = 0;
+		if (!segmentCrcs.empty()) {
+			aggCrc = utils::calculateCrc(segmentCrcs.data(), segmentCrcs.size() * sizeof(uint32_t));
 		}
-
-		// Calculate CRC for the rest of the file
-		file_->seekg(static_cast<std::streamsize>(headerSize));
-		while (*file_) {
-			file_->read(buffer.data(), BUFFER_SIZE);
-			size_t bytesReadRest = file_->gcount();
-			if (bytesReadRest > 0) {
-				crc = utils::updateCrc(crc, buffer.data(), bytesReadRest);
-			} else {
-				break;
-			}
-		}
-
-		// Restore original position
-		file_->clear(); // Clear EOF flag
-		file_->seekg(originalPos);
-
-		return crc;
-	}
-
-	void FileHeaderManager::updateFileCrc() const {
-		// Calculate CRC for the entire file except the CRC field itself
-		uint32_t fileCrc = calculateFileCrc();
-
-		// Update the CRC field
-		fileHeader_.data_crc = fileCrc;
-
-		// Write back the updated header
-		file_->seekp(0);
-		file_->write(reinterpret_cast<char *>(&fileHeader_), sizeof(FileHeader));
-		file_->flush();
-	}
-
-	bool FileHeaderManager::validateFileCrc() const {
-		// Calculate the current file CRC
-		uint32_t calculatedCrc = calculateFileCrc();
-
-		// Compare with stored CRC
-		return calculatedCrc == fileHeader_.data_crc;
+		fileHeader_.data_crc = aggCrc;
 	}
 
 } // namespace graph::storage

@@ -10,7 +10,7 @@ import { PrevNext } from '@/components/layout/PrevNext'
 import { useMDXComponents } from '@/mdx-components'
 import { buildDocJsonLd, generateSiteMetadata } from '@/lib/metadata'
 import { buildEditUrl, getAllDocs, getDocBySlug } from '@/lib/docs'
-import { stripLeadingH1, transformAdmonitions } from '@/lib/mdx'
+import { stripLeadingH1, transformAdmonitions, transformMermaidFences } from '@/lib/mdx'
 import { siteConfig } from '@/lib/site'
 
 const mdxComponents = useMDXComponents({})
@@ -23,7 +23,10 @@ const mdxOptions = {
       [
         rehypePrettyCode,
         {
-          theme: 'github-dark-dimmed',
+          theme: {
+            light: 'github-light',
+            dark: 'github-dark-dimmed',
+          },
           keepBackground: false,
           // Only default fenced code blocks to plaintext.
           // Do not force inline code through pretty-code transforms.
@@ -80,7 +83,14 @@ export default async function DocPage({
     notFound()
   }
 
-  const transformedContent = transformAdmonitions(stripLeadingH1(doc.content))
+  const contentWithoutTitle = stripLeadingH1(doc.content)
+  const contentWithAdmonitions = transformAdmonitions(contentWithoutTitle)
+  const transformedContent = siteConfig.mermaid.enabled
+    ? transformMermaidFences(contentWithAdmonitions, {
+        theme: siteConfig.mermaid.theme,
+        securityLevel: siteConfig.mermaid.securityLevel,
+      })
+    : contentWithAdmonitions
   const readLabel = doc.locale === 'zh' ? '分钟阅读' : 'min read'
   const editLabel = doc.locale === 'zh' ? '编辑此页' : 'Edit this page'
   const jsonLd = buildDocJsonLd({

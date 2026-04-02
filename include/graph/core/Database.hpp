@@ -58,6 +58,8 @@ namespace graph {
 		// Check if there is an active transaction
 		[[nodiscard]] bool hasActiveTransaction() const;
 
+		[[nodiscard]] std::shared_ptr<config::SystemConfigManager> getConfigManager() const { return configManager_; }
+
 		// Access to thread pool for parallel operations (lazy-initialized on first call)
 		std::shared_ptr<concurrent::ThreadPool> getThreadPool();
 

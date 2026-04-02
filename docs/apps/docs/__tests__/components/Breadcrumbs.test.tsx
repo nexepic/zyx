@@ -30,7 +30,7 @@ describe('Breadcrumbs', () => {
 
     expect(screen.getByTestId('home-icon')).toBeInTheDocument()
     expect(screen.getByText('Docs')).toBeInTheDocument()
-    expect(screen.getByText('Onboarding')).toBeInTheDocument()
+    expect(screen.getByText('Setup')).toBeInTheDocument()
     expect(screen.getByText('Introduction')).toBeInTheDocument()
   })
 

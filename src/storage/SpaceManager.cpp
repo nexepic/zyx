@@ -1122,11 +1122,6 @@ namespace graph::storage {
 			segmentTracker_->removeFromFreeList(offset);
 		}
 
-		// Now that we have a fresh file handle, update the CRC
-		// We need to reinitialize the file header manager with the new file handle
-		// if it keeps its own reference to the file stream
-		fileHeaderManager_->updateFileCrc();
-
 		return true;
 	}
 

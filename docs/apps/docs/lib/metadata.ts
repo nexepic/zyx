@@ -34,6 +34,13 @@ function localeAlternates(pathname: string): Record<string, string> {
   return alternates
 }
 
+function toAbsoluteAssetUrl(assetPath: string): string {
+  if (/^https?:\/\//.test(assetPath)) {
+    return assetPath
+  }
+  return withSiteUrl(assetPath.startsWith('/') ? assetPath : `/${assetPath}`)
+}
+
 export function generateSiteMetadata({
   title,
   description,
@@ -44,6 +51,16 @@ export function generateSiteMetadata({
   const fullTitle = title ? `${title} | ${siteConfig.name}` : siteConfig.title
   const fullDescription = description || siteConfig.description
   const canonicalUrl = withSiteUrl(pathname)
+  const favicon =
+    siteConfig.assets?.icons?.favicon
+    || siteConfig.assets?.icons?.icon
+    || siteConfig.brand?.favicon
+    || '/favicon.ico'
+  const icon = siteConfig.assets?.icons?.icon || favicon
+  const shortcut = siteConfig.assets?.icons?.shortcut || favicon
+  const apple = siteConfig.assets?.icons?.apple || favicon
+  const ogImage = siteConfig.assets?.social?.ogImage
+  const twitterImage = siteConfig.assets?.social?.twitterImage || ogImage
 
   return {
     metadataBase: new URL(getSiteUrl()),
@@ -56,6 +73,12 @@ export function generateSiteMetadata({
       canonical: canonicalUrl,
       languages: localeAlternates(pathname),
     },
+    icons: {
+      icon: [{ url: icon }],
+      shortcut: [{ url: shortcut }],
+      apple: [{ url: apple }],
+    },
+    manifest: siteConfig.assets?.manifest,
     robots: {
       index: !noIndex,
       follow: !noIndex,
@@ -74,11 +97,13 @@ export function generateSiteMetadata({
       title: fullTitle,
       description: fullDescription,
       url: canonicalUrl,
+      images: ogImage ? [toAbsoluteAssetUrl(ogImage)] : undefined,
     },
     twitter: {
       card: 'summary_large_image',
       title: fullTitle,
       description: fullDescription,
+      images: twitterImage ? [toAbsoluteAssetUrl(twitterImage)] : undefined,
     },
   }
 }

@@ -9,6 +9,7 @@ import { defaultLocale, localeNames, locales } from '@/lib/i18n'
 import { getDocByHref, hasLocalizedDoc } from '@/lib/docs'
 import { siteConfig } from '@/lib/site'
 import { SearchDialog } from '@/components/search/SearchDialog'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { cn } from '@/lib/utils'
 
 interface HeaderProps {
@@ -41,6 +42,7 @@ export function Header({
 
   const [showLocaleMenu, setShowLocaleMenu] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark')
   const currentDoc = useMemo(() => getDocByHref(pathname), [pathname])
 
   const navEntries = useMemo(() => {
@@ -58,6 +60,14 @@ export function Header({
     () => (locale === 'zh' ? '文档' : 'Documentation'),
     [locale]
   )
+  const brandAlt = siteConfig.assets?.brand?.alt || siteConfig.brand?.alt || siteConfig.name
+  const brandIconDefault = siteConfig.assets?.brand?.icon || siteConfig.brand?.icon
+  const brandIconLight = siteConfig.assets?.brand?.iconLight || siteConfig.brand?.iconLight
+  const brandIconDark = siteConfig.assets?.brand?.iconDark || siteConfig.brand?.iconDark
+  const brandIcon = resolvedTheme === 'dark'
+    ? brandIconDark || brandIconDefault || brandIconLight
+    : brandIconLight || brandIconDefault || brandIconDark
+  const brandLogo = siteConfig.assets?.brand?.logo || siteConfig.brand?.logo
 
   // Global keyboard shortcut for search
   useEffect(() => {
@@ -69,6 +79,31 @@ export function Header({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    const resolveTheme = (): 'light' | 'dark' => {
+      return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+    }
+
+    const syncTheme = () => {
+      setResolvedTheme(resolveTheme())
+    }
+
+    syncTheme()
+
+    const observer = new MutationObserver((records) => {
+      if (records.some((record) => record.attributeName === 'data-theme')) {
+        syncTheme()
+      }
+    })
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
+
+    return () => observer.disconnect()
   }, [])
 
   // Close locale menu on route change
@@ -126,12 +161,20 @@ export function Header({
             </button>
           )}
           <Link href={`/${locale || defaultLocale}` as any} className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)]">
-              <Command className="h-4 w-4" />
-            </div>
-            <span className="text-[16px] font-bold tracking-tight text-[var(--text-primary)]">
-              {siteConfig.name}
-            </span>
+            {brandIcon ? (
+              <img src={brandIcon} alt={`${brandAlt} icon`} className="h-7 w-7 object-contain" />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--text-primary)] text-[var(--bg-primary)]">
+                <Command className="h-4 w-4" />
+              </div>
+            )}
+            {brandLogo ? (
+              <img src={brandLogo} alt={brandAlt} className="h-5 w-auto object-contain" />
+            ) : (
+              <span className="text-[16px] font-bold tracking-tight text-[var(--text-primary)]">
+                {siteConfig.name}
+              </span>
+            )}
             <span className="hidden rounded-full bg-[var(--accent-subtle)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--accent)] sm:inline">
               {docsBadgeLabel}
             </span>
@@ -178,12 +221,12 @@ export function Header({
           )}
         </div>
 
-        {/* Right: search + github + locale */}
+        {/* Right: search + theme + github + locale */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setShowSearch(true)}
-            className="group flex h-8 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] px-3 text-[13px] text-[var(--text-tertiary)] transition-all hover:border-[var(--border-hover)] hover:text-[var(--text-primary)] sm:w-48 xl:w-64"
+            className="group flex h-8 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] px-3 text-[13px] text-[var(--text-tertiary)] transition-all hover:border-[var(--border-hover)] hover:text-[var(--text-primary)] sm:w-44 xl:w-56"
           >
             <Search className="h-4 w-4" />
             <span className="hidden flex-1 text-left sm:inline">{searchButtonLabel}</span>
@@ -192,64 +235,64 @@ export function Header({
             </kbd>
           </button>
 
-          <div className="flex items-center gap-1 pl-2">
-            {/* GitHub */}
-            <a
-              href={siteConfig.github}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
-              aria-label="GitHub"
-            >
-              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor">
-                <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
-              </svg>
-            </a>
+          <ThemeToggle />
 
-            {/* Locale switcher */}
-            <div className="relative" ref={localeMenuRef}>
-              <button
-                type="button"
-                onClick={() => setShowLocaleMenu((o) => !o)}
-                className={cn(
-                  'inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition-colors',
-                  showLocaleMenu
-                    ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
-                    : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
-                )}
-                aria-label="Switch language"
-              >
-                <Languages className="h-[18px] w-[18px]" />
-              </button>
+          {/* GitHub */}
+          <a
+            href={siteConfig.github}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+            aria-label="GitHub"
+          >
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+            </svg>
+          </a>
 
-              {showLocaleMenu && (
-                <div className="absolute right-0 mt-2 min-w-[160px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-1.5 shadow-xl">
-                  <div className="flex flex-col gap-1">
-                    {locales.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => switchLocale(t)}
-                        className={cn(
-                          'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors',
-                          locale === t
-                            ? 'text-[var(--text-primary)] bg-[var(--accent-subtle)]'
-                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
-                        )}
-                      >
-                        <span className={cn(
-                          'flex h-4 w-4 items-center justify-center text-[11px]',
-                          locale === t ? 'text-[var(--accent)]' : 'opacity-0'
-                        )}>
-                          &#10003;
-                        </span>
-                        <span>{localeNames[t]}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          {/* Locale switcher */}
+          <div className="relative" ref={localeMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowLocaleMenu((o) => !o)}
+              className={cn(
+                'inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition-colors',
+                showLocaleMenu
+                  ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'
+                  : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
               )}
-            </div>
+              aria-label="Switch language"
+            >
+              <Languages className="h-[18px] w-[18px]" />
+            </button>
+
+            {showLocaleMenu && (
+              <div className="absolute right-0 mt-2 min-w-[160px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-1.5 shadow-xl">
+                <div className="flex flex-col gap-1">
+                  {locales.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => switchLocale(t)}
+                      className={cn(
+                        'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors',
+                        locale === t
+                          ? 'text-[var(--text-primary)] bg-[var(--accent-subtle)]'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
+                      )}
+                    >
+                      <span className={cn(
+                        'flex h-4 w-4 items-center justify-center text-[11px]',
+                        locale === t ? 'text-[var(--accent)]' : 'opacity-0'
+                      )}>
+                        &#10003;
+                      </span>
+                      <span>{localeNames[t]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

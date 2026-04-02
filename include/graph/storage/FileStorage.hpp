@@ -98,6 +98,21 @@ namespace graph::storage {
 
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
 
+		struct SegmentVerifyResult {
+			uint64_t offset = 0;
+			int64_t startId = 0;
+			uint32_t capacity = 0;
+			uint32_t dataType = 0;
+			bool passed = false;
+		};
+
+		struct IntegrityResult {
+			bool allPassed = true;
+			std::vector<SegmentVerifyResult> segments;
+		};
+
+		[[nodiscard]] IntegrityResult verifyIntegrity() const;
+
 	private:
 		std::string dbFilePath;
 		std::unordered_map<uint64_t, Node> nodes;

@@ -73,35 +73,39 @@ export function Sidebar({ isMobileMenuOpen = false, onMobileMenuClose }: Sidebar
 
   const sidebarContent = (
     <nav className="docs-nav-font space-y-6 py-8 pr-4">
-      {filteredGroups.map((group) => (
-        <div key={group.title}>
-          <p className="docs-nav-label mb-1.5 text-[12px] uppercase tracking-wider text-[var(--text-tertiary)]">
-            {group.title}
-          </p>
-          <ul className="space-y-0.5">
-            {group.items.map((item) => {
-              const active = pathname === item.href || pathname.endsWith(item.href)
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href as any}
-                    onClick={onMobileMenuClose}
-                    style={active ? { color: 'var(--accent)' } : undefined}
-                    className={cn(
-                      'docs-nav-item block py-1.5 pl-3 text-[14px] leading-normal rounded-md transition-colors duration-100',
-                      active
-                        ? 'bg-[var(--bg-elevated)]'
-                        : 'hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
-                    )}
-                  >
-                    {item.title}
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      ))}
+      {filteredGroups.map((group, groupIndex) => {
+        // Use first item's href to create a unique key for groups with same title
+        const groupKey = group.items.length > 0 ? `${group.title}-${group.items[0].href}` : `${group.title}-${groupIndex}`
+        return (
+          <div key={groupKey}>
+            <p className="docs-nav-label mb-1.5 text-[12px] uppercase tracking-wider text-[var(--text-tertiary)]">
+              {group.title}
+            </p>
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = pathname === item.href || pathname.endsWith(item.href)
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href as any}
+                      onClick={onMobileMenuClose}
+                      style={active ? { color: 'var(--accent)' } : undefined}
+                      className={cn(
+                        'docs-nav-item block py-1.5 pl-3 text-[14px] leading-normal rounded-md transition-colors duration-100',
+                        active
+                          ? 'bg-[var(--bg-elevated)]'
+                          : 'hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                      )}
+                    >
+                      {item.title}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )
+      })}
     </nav>
   )
 
@@ -119,7 +123,7 @@ export function Sidebar({ isMobileMenuOpen = false, onMobileMenuClose }: Sidebar
       <aside
         ref={sidebarRef}
         className={cn(
-          'scrollbar-auto-hide fixed left-0 top-14 z-40 h-[calc(100vh-56px)] w-[280px] shrink-0 overflow-y-auto overscroll-y-contain border-r border-[var(--border)] bg-[var(--bg-primary)] pl-6 transition-transform duration-200 ease-out lg:translate-x-0',
+          'scrollbar-auto-hide fixed left-0 top-14 z-40 h-[calc(100vh-56px)] w-[280px] shrink-0 overflow-y-auto overscroll-y-contain border-r border-[var(--border)] bg-[var(--bg-code-strong)] pl-6 transition-transform duration-200 ease-out lg:translate-x-0',
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >

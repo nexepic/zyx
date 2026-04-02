@@ -36,6 +36,8 @@ jest.mock('lucide-react', () => ({
   X: () => <svg data-testid="x-icon" />,
   Languages: () => <svg data-testid="languages-icon" />,
   Command: () => <svg data-testid="command-icon" />,
+  SunMedium: () => <svg data-testid="sun-icon" />,
+  MoonStar: () => <svg data-testid="moon-icon" />,
 }))
 
 describe('Header', () => {

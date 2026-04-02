@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import './custom.css'
 import { generateSiteMetadata } from '@/lib/metadata'
 
 export const metadata: Metadata = generateSiteMetadata({
@@ -9,14 +10,34 @@ export const metadata: Metadata = generateSiteMetadata({
 })
 
 export const viewport: Viewport = {
-  themeColor: '#0b0f14',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f5f7fb' },
+    { media: '(prefers-color-scheme: dark)', color: '#0b0f14' },
+  ],
   width: 'device-width',
   initialScale: 1,
 }
 
+const themeBootstrapScript = `
+(() => {
+  try {
+    const key = 'nexdoc-theme'
+    const stored = window.localStorage.getItem(key)
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const theme = stored === 'light' || stored === 'dark'
+      ? stored
+      : (systemDark ? 'dark' : 'light')
+    document.documentElement.dataset.theme = theme
+  } catch {}
+})()
+`
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+      </head>
       <body className="app-shell">{children}</body>
     </html>
   )

@@ -19,6 +19,7 @@
  **/
 
 #pragma once
+#include <atomic>
 #include <list>
 #include <mutex>
 #include <shared_mutex>
@@ -40,14 +41,17 @@ namespace graph::storage {
 			std::unique_lock lock(mutex_);
 			// Early return if capacity is 0
 			if (capacity_ == 0) {
+				misses_.fetch_add(1, std::memory_order_relaxed);
 				return V();
 			}
 
 			auto it = cache_map_.find(key);
 			if (it == cache_map_.end()) {
+				misses_.fetch_add(1, std::memory_order_relaxed);
 				return V();
 			}
 
+			hits_.fetch_add(1, std::memory_order_relaxed);
 			// Move to front (most recently used)
 			cache_list_.splice(cache_list_.begin(), cache_list_, it->second);
 			return it->second->second;
@@ -151,11 +155,20 @@ namespace graph::storage {
 			return cache_list_.size();
 		}
 
+		[[nodiscard]] uint64_t hits() const { return hits_.load(std::memory_order_relaxed); }
+		[[nodiscard]] uint64_t misses() const { return misses_.load(std::memory_order_relaxed); }
+		void resetStats() {
+			hits_.store(0, std::memory_order_relaxed);
+			misses_.store(0, std::memory_order_relaxed);
+		}
+
 	private:
 		size_t capacity_;
 		std::list<std::pair<K, V>> cache_list_;
 		std::unordered_map<K, typename std::list<std::pair<K, V>>::iterator> cache_map_;
 		mutable std::shared_mutex mutex_;
+		std::atomic<uint64_t> hits_{0};
+		std::atomic<uint64_t> misses_{0};
 	};
 
 } // namespace graph::storage

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -146,6 +147,13 @@ namespace graph::query::indexes {
 		std::vector<int64_t> findEdgeIdsByLabel(const std::string &label) const;
 		std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 
+		[[nodiscard]] uint64_t lookups() const { return lookups_.load(std::memory_order_relaxed); }
+		[[nodiscard]] uint64_t indexHits() const { return indexHits_.load(std::memory_order_relaxed); }
+		void resetStats() {
+			lookups_.store(0, std::memory_order_relaxed);
+			indexHits_.store(0, std::memory_order_relaxed);
+		}
+
 	private:
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::DataManager> dataManager_;
@@ -163,6 +171,9 @@ namespace graph::query::indexes {
 		// Composite index maintenance helpers
 		void updateCompositeIndexForNode(const Node &node);
 		void removeCompositeIndexForNode(const Node &node);
+
+		mutable std::atomic<uint64_t> lookups_{0};
+		mutable std::atomic<uint64_t> indexHits_{0};
 	};
 
 } // namespace graph::query::indexes

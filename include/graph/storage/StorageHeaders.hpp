@@ -64,7 +64,7 @@ namespace graph::storage {
 		int64_t max_index_id = 0;
 		int64_t max_state_id = 0;
 
-		uint32_t version = 0x00000002; // File format version (v2: multi-label nodes)
+		uint32_t version = 0x00000003; // File format version (v3: segment-level CRC)
 
 		// Checksum
 		uint32_t data_crc = 0;
@@ -99,6 +99,7 @@ namespace graph::storage {
 		uint32_t data_type = 0;
 		uint32_t bitmap_size = 0; // Size of the activity bitmap in bytes
 		uint8_t activity_bitmap[MAX_BITMAP_SIZE] = {}; // Bitmap tracking active/inactive status (1=active, 0=inactive)
+		uint32_t segment_crc = 0; // CRC32 of this segment's data region
 		uint8_t needs_compaction = 0; // Flag indicating if segment needs compaction (0=no, 1=yes)
 		uint8_t is_dirty = 0; // Flag indicating if segment data has been modified (0=no, 1=yes)
 

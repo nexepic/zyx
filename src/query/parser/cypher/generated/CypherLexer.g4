@@ -105,6 +105,10 @@ K_MAP        : 'MAP';
 K_VECTOR     : 'VECTOR';
 K_OPTIONS    : 'OPTIONS';
 
+// Observability
+K_EXPLAIN    : 'EXPLAIN';
+K_PROFILE    : 'PROFILE';
+
 // --- Symbols ---
 
 EQ           : '=';

@@ -130,8 +130,8 @@ namespace graph {
 												 saveStart)
 											  .count()));
 
-		// Checkpoint WAL (truncate - data is now in main DB)
-		if (walManager_ && walManager_->isOpen()) {
+		// Checkpoint WAL if size exceeds threshold (data is now in main DB)
+		if (walManager_ && walManager_->isOpen() && walManager_->shouldCheckpoint()) {
 			auto checkpointStart = Clock::now();
 			walManager_->checkpoint();
 			debug::PerfTrace::addDuration(

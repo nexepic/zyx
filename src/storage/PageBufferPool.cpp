@@ -28,8 +28,10 @@ namespace graph::storage {
 		std::unique_lock lock(mutex_);
 		auto it = pageMap_.find(segmentOffset);
 		if (it == pageMap_.end()) {
+			misses_.fetch_add(1, std::memory_order_relaxed);
 			return nullptr;
 		}
+		hits_.fetch_add(1, std::memory_order_relaxed);
 		// Move to front (most recently used) — requires exclusive lock since splice mutates the list
 		pages_.splice(pages_.begin(), pages_, it->second);
 		return &(*it->second);

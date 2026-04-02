@@ -26,6 +26,7 @@
 #include <string_view>
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
+#include "graph/log/Log.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/api/QueryEngine.hpp"
@@ -114,11 +115,13 @@ namespace zyx {
 		}
 
 		bool isReadOnlyProcedure(const std::string_view procUpper) {
-			static constexpr std::array<std::string_view, 4> kReadOnlyProcedures = {
+			static constexpr std::array<std::string_view, 6> kReadOnlyProcedures = {
 					"DB.INDEX.VECTOR.QUERYNODES",
 					"DBMS.LISTCONFIG",
 					"DBMS.GETCONFIG",
 					"ALGO.SHORTESTPATH",
+					"DBMS.SHOWSTATS",
+					"DBMS.RESETSTATS",
 			};
 			return std::ranges::find(kReadOnlyProcedures, procUpper) != kReadOnlyProcedures.end();
 		}
@@ -711,6 +714,13 @@ namespace zyx {
 
 			internalRes.setDuration(elapsed.count());
 
+			// Slow query logging
+			if (auto cm = impl_->db_.getConfigManager(); cm && cm->isSlowLogEnabled()) {
+				if (elapsed.count() > static_cast<double>(cm->getSlowLogThresholdMs())) {
+					graph::log::Log::warn("Slow query ({}ms): {}", static_cast<int64_t>(elapsed.count()), cypher);
+				}
+			}
+
 			if (implicitTxn) {
 				implicitTxn->commit();
 			}
@@ -764,6 +774,13 @@ namespace zyx {
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double, std::milli> elapsed = end - start;
 			internalRes.setDuration(elapsed.count());
+
+			// Slow query logging
+			if (auto cm = impl_->db_.getConfigManager(); cm && cm->isSlowLogEnabled()) {
+				if (elapsed.count() > static_cast<double>(cm->getSlowLogThresholdMs())) {
+					graph::log::Log::warn("Slow query ({}ms): {}", static_cast<int64_t>(elapsed.count()), cypher);
+				}
+			}
 
 			if (implicitTxn) {
 				implicitTxn->commit();

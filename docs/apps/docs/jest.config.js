@@ -12,6 +12,8 @@ const customJestConfig = {
   testPathIgnorePatterns: ['<rootDir>/.next/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^@nexdoc/core$': '<rootDir>/../../packages/core/src/index.ts',
+    '^@nexdoc/core/(.*)$': '<rootDir>/../../packages/core/src/$1',
   },
   collectCoverageFrom: [
     'components/**/*.{js,jsx,ts,tsx}',

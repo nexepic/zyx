@@ -62,7 +62,11 @@ enum class LogicalOpType {
 	LOP_CALL_PROCEDURE,
 	LOP_ALGO_SHORTEST_PATH,
 	LOP_VECTOR_SEARCH,
-	LOP_TRAIN_VECTOR_INDEX
+	LOP_TRAIN_VECTOR_INDEX,
+
+	// Observability (pass-through)
+	LOP_EXPLAIN,
+	LOP_PROFILE
 };
 
 /**
@@ -138,6 +142,8 @@ inline std::string toString(LogicalOpType type) {
 		case LogicalOpType::LOP_ALGO_SHORTEST_PATH: return "ShortestPath";
 		case LogicalOpType::LOP_VECTOR_SEARCH: return "VectorSearch";
 		case LogicalOpType::LOP_TRAIN_VECTOR_INDEX: return "TrainVectorIndex";
+		case LogicalOpType::LOP_EXPLAIN: return "Explain";
+		case LogicalOpType::LOP_PROFILE: return "Profile";
 		default: return "Unknown";
 	}
 }

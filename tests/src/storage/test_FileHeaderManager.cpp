@@ -126,7 +126,8 @@ namespace graph::storage::test {
 	}
 
 	/**
-	 * @test Verify that bit-level data modification triggers a CRC mismatch error.
+	 * @test Verify that validateAndReadHeader only checks magic and version (no file-level CRC).
+	 * Data corruption is now detected via segment-level CRC during reads, not on open.
 	 */
 	TEST_F(FileHeaderManagerTest, DetectsDataCorruptionViaCrc) {
 		{
@@ -137,7 +138,7 @@ namespace graph::storage::test {
 			manager.initializeFileHeader();
 		} // File closed
 
-		// Corrupt the file on disk
+		// Corrupt the file on disk (after the header)
 		std::fstream fs_corrupt(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
 		fs_corrupt.seekp(FILE_HEADER_SIZE + 10);
 		fs_corrupt.write("corrupt", 7);
@@ -147,8 +148,9 @@ namespace graph::storage::test {
 		FileHeader header2;
 		FileHeaderManager manager2(file2, header2);
 
-		// Should detect that file content changed but CRC in header is old
-		EXPECT_THROW(manager2.validateAndReadHeader(), std::runtime_error);
+		// validateAndReadHeader no longer checks file-level CRC; it only validates magic + version.
+		// Data corruption is detected lazily via segment CRC during reads.
+		EXPECT_NO_THROW(manager2.validateAndReadHeader());
 	}
 
 	/**

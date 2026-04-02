@@ -26,13 +26,14 @@ public:
     K_UNIQUE = 62, K_MANDATORY = 63, K_SCALAR = 64, K_OF = 65, K_ADD = 66, 
     K_BEGIN = 67, K_COMMIT = 68, K_ROLLBACK = 69, K_TRANSACTION = 70, K_KEY = 71, 
     K_NODE = 72, K_BOOLEAN = 73, K_INTEGER = 74, K_FLOAT = 75, K_STRING = 76, 
-    K_LIST = 77, K_MAP = 78, K_VECTOR = 79, K_OPTIONS = 80, EQ = 81, NEQ = 82, 
-    LT = 83, GT = 84, LTE = 85, GTE = 86, PLUS = 87, MINUS = 88, MULTIPLY = 89, 
-    DIVIDE = 90, MODULO = 91, POWER = 92, LPAREN = 93, RPAREN = 94, LBRACE = 95, 
-    RBRACE = 96, LBRACK = 97, RBRACK = 98, COMMA = 99, DOT = 100, COLON = 101, 
-    PIPE = 102, DOLLAR = 103, RANGE = 104, SEMI = 105, HexInteger = 106, 
-    OctalInteger = 107, DecimalInteger = 108, DoubleLiteral = 109, ID = 110, 
-    StringLiteral = 111, WS = 112, COMMENT = 113, LINE_COMMENT = 114
+    K_LIST = 77, K_MAP = 78, K_VECTOR = 79, K_OPTIONS = 80, K_EXPLAIN = 81, 
+    K_PROFILE = 82, EQ = 83, NEQ = 84, LT = 85, GT = 86, LTE = 87, GTE = 88, 
+    PLUS = 89, MINUS = 90, MULTIPLY = 91, DIVIDE = 92, MODULO = 93, POWER = 94, 
+    LPAREN = 95, RPAREN = 96, LBRACE = 97, RBRACE = 98, LBRACK = 99, RBRACK = 100, 
+    COMMA = 101, DOT = 102, COLON = 103, PIPE = 104, DOLLAR = 105, RANGE = 106, 
+    SEMI = 107, HexInteger = 108, OctalInteger = 109, DecimalInteger = 110, 
+    DoubleLiteral = 111, ID = 112, StringLiteral = 113, WS = 114, COMMENT = 115, 
+    LINE_COMMENT = 116
   };
 
   enum {

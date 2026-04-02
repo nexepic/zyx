@@ -34,6 +34,9 @@ namespace graph::storage::state::keys {
 		// Key for controlling thread pool size
 		// Value type: int64_t (0 = auto-detect, 1 = single-threaded, >1 = N threads)
 		constexpr char THREAD_POOL_SIZE[] = "thread.pool.size";
+		constexpr char SLOW_LOG_ENABLED[] = "query.slow_log.enabled";
+		constexpr char SLOW_LOG_THRESHOLD_MS[] = "query.slow_log.threshold_ms";
+		constexpr char STATS_ENABLED[] = "stats.enabled";
 	} // namespace Config
 
 	// --- Base Keys for Entities ---

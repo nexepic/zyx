@@ -38,8 +38,10 @@ class PhysicalPlanConverter {
 public:
 	PhysicalPlanConverter(std::shared_ptr<storage::DataManager> dm,
 	                      std::shared_ptr<indexes::IndexManager> im,
-	                      std::shared_ptr<storage::constraints::ConstraintManager> cm = nullptr)
-		: dm_(std::move(dm)), im_(std::move(im)), cm_(std::move(cm)) {}
+	                      std::shared_ptr<storage::constraints::ConstraintManager> cm = nullptr,
+	                      uint64_t planCacheHits = 0, uint64_t planCacheMisses = 0)
+		: dm_(std::move(dm)), im_(std::move(im)), cm_(std::move(cm)),
+		  planCacheHits_(planCacheHits), planCacheMisses_(planCacheMisses) {}
 
 	/**
 	 * @brief Converts the root of a logical plan tree into a physical operator tree.
@@ -51,6 +53,8 @@ private:
 	std::shared_ptr<storage::DataManager> dm_;
 	std::shared_ptr<indexes::IndexManager> im_;
 	std::shared_ptr<storage::constraints::ConstraintManager> cm_;
+	uint64_t planCacheHits_ = 0;
+	uint64_t planCacheMisses_ = 0;
 
 	// Conversion methods for each logical operator type
 	std::unique_ptr<execution::PhysicalOperator> convertNodeScan(
@@ -116,6 +120,12 @@ private:
 	std::unique_ptr<execution::PhysicalOperator> convertTransactionControl(
 		const logical::LogicalOperator *op) const;
 	std::unique_ptr<execution::PhysicalOperator> convertCallProcedure(
+		const logical::LogicalOperator *op) const;
+
+	// Observability operators
+	std::unique_ptr<execution::PhysicalOperator> convertExplain(
+		const logical::LogicalOperator *op) const;
+	std::unique_ptr<execution::PhysicalOperator> convertProfile(
 		const logical::LogicalOperator *op) const;
 };
 

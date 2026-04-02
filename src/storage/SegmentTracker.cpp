@@ -264,6 +264,7 @@ namespace graph::storage {
 		segments_.erase(offset);
 
 		dirtySegments_.erase(offset);
+		validatedSegments_.erase(offset);
 
 		SegmentHeader emptyHeader{};
 		emptyHeader.data_type = 0xFF;
@@ -283,7 +284,30 @@ namespace graph::storage {
 
 	void SegmentTracker::writeSegmentHeader(uint64_t offset, const SegmentHeader &header) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+		// Recompute segment CRC before writing the header (only if stream is healthy)
 		SegmentHeader headerToWrite = header;
+		if (file_->good()) {
+			file_->flush();
+
+			uint64_t dataOffset = offset + sizeof(SegmentHeader);
+			std::vector<char> buffer(SEGMENT_SIZE, 0);
+
+			if (readFd_ != INVALID_FILE_HANDLE) {
+				ssize_t n = portable_pread(readFd_, buffer.data(), SEGMENT_SIZE, static_cast<int64_t>(dataOffset));
+				if (n > 0) {
+					headerToWrite.segment_crc = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
+				}
+			} else {
+				file_->seekg(static_cast<std::streamoff>(dataOffset));
+				file_->read(buffer.data(), SEGMENT_SIZE);
+				if (file_->gcount() > 0) {
+					headerToWrite.segment_crc = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
+				}
+				file_->clear();
+			}
+		}
+
 		file_->seekp(static_cast<std::streamoff>(offset));
 		file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
 		if (!*file_)
@@ -294,6 +318,7 @@ namespace graph::storage {
 		segments_[offset].is_dirty = 0;
 
 		dirtySegments_.erase(offset);
+		validatedSegments_.erase(offset);
 	}
 
 	void SegmentTracker::updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> &updateFn) {
@@ -472,16 +497,26 @@ namespace graph::storage {
 		if (dirtySegments_.empty())
 			return;
 
+		// Flush pending writes so CRC reads see the latest data
+		file_->flush();
+
 		// Sort segments by offset to optimize disk seek times (Sequential Write)
 		std::vector sortedSegments(dirtySegments_.begin(), dirtySegments_.end());
 		std::ranges::sort(sortedSegments);
 
+		// Compute CRC for each dirty segment's data region before writing headers
 		for (uint64_t offset: sortedSegments) {
 			auto it = segments_.find(offset);
-			// Check valid and dirty flag (double check)
+			if (it != segments_.end() && it->second.is_dirty) {
+				calculateAndUpdateSegmentCrc(offset);
+			}
+		}
+
+		for (uint64_t offset: sortedSegments) {
+			auto it = segments_.find(offset);
 			if (it != segments_.end() && it->second.is_dirty) {
 				SegmentHeader &header = it->second;
-				SegmentHeader headerToWrite = header; // Copy to ensure alignment/padding if needed
+				SegmentHeader headerToWrite = header;
 
 				file_->seekp(static_cast<std::streamoff>(offset));
 				file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
@@ -499,6 +534,12 @@ namespace graph::storage {
 	T SegmentTracker::readEntity(uint64_t segmentOffset, uint32_t itemIndex, size_t itemSize) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(segmentOffset);
+
+		// Lazy CRC validation: verify segment data on first read
+		if (!validatedSegments_.contains(segmentOffset)) {
+			validateSegmentCrc(segmentOffset);
+		}
+
 		uint64_t itemOffset = segmentOffset + sizeof(SegmentHeader) + itemIndex * itemSize;
 		file_->seekg(static_cast<std::streamoff>(itemOffset));
 		return utils::FixedSizeSerializer::deserializeWithFixedSize<T>(*file_, itemSize);
@@ -517,6 +558,9 @@ namespace graph::storage {
 			it->second.is_dirty = 1;
 			markSegmentDirty(segmentOffset);
 		}
+
+		// Invalidate CRC validation cache since data changed
+		validatedSegments_.erase(segmentOffset);
 	}
 
 	template Node SegmentTracker::readEntity<Node>(uint64_t, uint32_t, size_t);
@@ -532,5 +576,93 @@ namespace graph::storage {
 	template void SegmentTracker::writeEntity<Blob>(uint64_t, uint32_t, const Blob &, size_t);
 	template void SegmentTracker::writeEntity<Index>(uint64_t, uint32_t, const Index &, size_t);
 	template void SegmentTracker::writeEntity<State>(uint64_t, uint32_t, const State &, size_t);
+
+	void SegmentTracker::calculateAndUpdateSegmentCrc(uint64_t segmentOffset) {
+		// Caller must have flushed the file before calling this method.
+		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader);
+		std::vector<char> buffer(SEGMENT_SIZE, 0);
+
+		if (readFd_ != INVALID_FILE_HANDLE) {
+			ssize_t n = portable_pread(readFd_, buffer.data(), SEGMENT_SIZE, static_cast<int64_t>(dataOffset));
+			if (n <= 0) return;
+		} else {
+			file_->clear();
+			file_->seekg(static_cast<std::streamoff>(dataOffset));
+			file_->read(buffer.data(), SEGMENT_SIZE);
+			if (file_->gcount() <= 0) return;
+			file_->clear();
+		}
+
+		uint32_t crc = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
+
+		auto it = segments_.find(segmentOffset);
+		if (it != segments_.end()) {
+			it->second.segment_crc = crc;
+		}
+	}
+
+	void SegmentTracker::validateSegmentCrc(uint64_t segmentOffset) {
+		auto it = segments_.find(segmentOffset);
+		if (it == segments_.end()) {
+			return;
+		}
+
+		const SegmentHeader &header = it->second;
+
+		// Skip validation for empty segments or dirty segments (CRC not yet computed)
+		if (header.used == 0 || header.is_dirty || dirtySegments_.contains(segmentOffset)) {
+			validatedSegments_.insert(segmentOffset);
+			return;
+		}
+
+		// Read data region
+		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader);
+		std::vector<char> buffer(SEGMENT_SIZE, 0);
+
+		if (readFd_ != INVALID_FILE_HANDLE) {
+			file_->flush();
+			ssize_t n = portable_pread(readFd_, buffer.data(), SEGMENT_SIZE, static_cast<int64_t>(dataOffset));
+			if (n <= 0) {
+				throw std::runtime_error("Failed to read segment data at offset " + std::to_string(segmentOffset));
+			}
+		} else {
+			file_->flush();
+			file_->clear();
+			file_->seekg(static_cast<std::streamoff>(dataOffset));
+			file_->read(buffer.data(), SEGMENT_SIZE);
+			if (file_->gcount() <= 0) {
+				throw std::runtime_error("Failed to read segment data at offset " + std::to_string(segmentOffset));
+			}
+			file_->clear();
+		}
+
+		uint32_t computed = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
+
+		if (computed != header.segment_crc) {
+			throw std::runtime_error(
+				"Segment data corruption detected at offset " + std::to_string(segmentOffset)
+				+ ", entity ID range [" + std::to_string(header.start_id)
+				+ ", " + std::to_string(header.start_id + header.capacity - 1) + "]"
+			);
+		}
+
+		validatedSegments_.insert(segmentOffset);
+	}
+
+	std::vector<uint32_t> SegmentTracker::collectSegmentCrcs() const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		std::vector<std::pair<uint64_t, uint32_t>> ordered;
+		ordered.reserve(segments_.size());
+		for (const auto &[offset, header] : segments_) {
+			ordered.emplace_back(offset, header.segment_crc);
+		}
+		std::ranges::sort(ordered, {}, &std::pair<uint64_t, uint32_t>::first);
+		std::vector<uint32_t> crcs;
+		crcs.reserve(ordered.size());
+		for (const auto &[offset, crc] : ordered) {
+			crcs.push_back(crc);
+		}
+		return crcs;
+	}
 
 } // namespace graph::storage

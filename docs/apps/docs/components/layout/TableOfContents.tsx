@@ -270,7 +270,7 @@ export function TableOfContents() {
       {/* Desktop */}
       <aside
         ref={desktopTocRef}
-        className="docs-nav-font scrollbar-auto-hide absolute inset-y-0 right-3 hidden h-full w-[260px] overflow-y-auto overscroll-y-contain py-10 pl-2 pr-4 xl:block"
+        className="docs-nav-font scrollbar-auto-hide absolute inset-y-0 right-0 hidden h-full w-[260px] overflow-y-auto overscroll-y-contain py-10 pl-2 pr-4 min-[1400px]:right-[clamp(24px,calc((100vw-1840px)/2),999px)] min-[1400px]:block"
       >
         <p className="docs-nav-label mb-4 inline-flex items-center gap-2 text-[13px] leading-none" style={{ color: 'var(--text-primary)' }}>
           {tocTitleIcon}
@@ -281,7 +281,7 @@ export function TableOfContents() {
 
       {/* Mobile */}
       {headings.length > 0 && (
-        <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 xl:hidden">
+        <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 min-[1400px]:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
@@ -298,11 +298,12 @@ export function TableOfContents() {
         <>
           <button
             type="button"
-            className="fixed inset-0 z-50 bg-black/50 xl:hidden"
+            className="fixed inset-0 z-50 min-[1400px]:hidden"
+            style={{ background: 'var(--overlay-scrim)' }}
             onClick={() => setMobileOpen(false)}
             aria-label="Close"
           />
-          <div className="docs-nav-font scrollbar-auto-hide fixed bottom-0 left-0 right-0 z-50 max-h-[50vh] overflow-y-auto overscroll-y-contain rounded-t-xl border-t border-[var(--border)] bg-[var(--bg-secondary)] px-5 py-4 xl:hidden">
+          <div className="docs-nav-font scrollbar-auto-hide fixed bottom-0 left-0 right-0 z-50 max-h-[50vh] overflow-y-auto overscroll-y-contain rounded-t-xl border-t border-[var(--border)] bg-[var(--bg-secondary)] px-5 py-4 min-[1400px]:hidden">
             <p className="docs-nav-label mb-3 text-[12px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
               {title}
             </p>

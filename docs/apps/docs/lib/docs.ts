@@ -382,7 +382,6 @@ export function getNavGroups(localeInput: string, options?: NavGroupFilterOption
   return groups
 }
 
-
 export function getPrevNext(localeInput: string, currentSlug: string): {
   prev?: DocRecord
   next?: DocRecord

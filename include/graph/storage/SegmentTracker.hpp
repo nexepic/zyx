@@ -32,6 +32,7 @@
 #include "PwriteHelper.hpp"
 #include "SegmentTypeRegistry.hpp"
 #include "StorageHeaders.hpp"
+#include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
 
@@ -107,6 +108,11 @@ namespace graph::storage {
 		// get segment type registry
 		SegmentTypeRegistry getSegmentTypeRegistry() const { return registry_; }
 
+		// Segment CRC methods
+		void calculateAndUpdateSegmentCrc(uint64_t segmentOffset);
+		void validateSegmentCrc(uint64_t segmentOffset);
+		[[nodiscard]] std::vector<uint32_t> collectSegmentCrcs() const;
+
 	private:
 		std::shared_ptr<std::fstream> file_;
 		file_handle_t readFd_ = INVALID_FILE_HANDLE; // pread fd for thread-safe reads (not owned, do not close)
@@ -118,6 +124,7 @@ namespace graph::storage {
 
 		std::unordered_set<uint64_t> freeSegments_;
 		std::unordered_set<uint64_t> dirtySegments_;
+		std::unordered_set<uint64_t> validatedSegments_;
 		std::weak_ptr<SegmentIndexManager> segmentIndexManager_;
 
 		SegmentTypeRegistry registry_;

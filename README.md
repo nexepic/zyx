@@ -2,8 +2,8 @@
     <br />
     <a href="https://github.com/nexepic/zyx">
         <picture>
-            <source srcset="./docs/static/img/icon-light.svg" media="(prefers-color-scheme: dark)">
-            <img src="./docs/static/img/icon.svg" alt="ZYX Logo" width="120" />
+            <source srcset="./assets/branding/icon-light.svg" media="(prefers-color-scheme: dark)">
+            <img src="./assets/branding/icon.svg" alt="ZYX Logo" width="120" />
         </picture>
     </a>
     <br />

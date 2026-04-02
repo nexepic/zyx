@@ -24,7 +24,13 @@ public:
    */
     virtual std::any visitCypher(CypherParser::CypherContext *context) = 0;
 
-    virtual std::any visitStatement(CypherParser::StatementContext *context) = 0;
+    virtual std::any visitExplainStatement(CypherParser::ExplainStatementContext *context) = 0;
+
+    virtual std::any visitProfileStatement(CypherParser::ProfileStatementContext *context) = 0;
+
+    virtual std::any visitRegularStatement(CypherParser::RegularStatementContext *context) = 0;
+
+    virtual std::any visitAdminStatement(CypherParser::AdminStatementContext *context) = 0;
 
     virtual std::any visitAdministrationStatement(CypherParser::AdministrationStatementContext *context) = 0;
 

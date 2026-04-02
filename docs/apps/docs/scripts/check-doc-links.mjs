@@ -5,7 +5,7 @@ import path from 'node:path'
 
 const cwd = process.cwd()
 const docsRoot = path.join(cwd, 'content', 'docs')
-const siteConfigPath = path.join(cwd, 'lib', 'site.ts')
+const siteConfigPath = path.join(cwd, 'nexdoc.config.ts')
 const appRoot = path.join(cwd, 'app')
 const componentsRoot = path.join(cwd, 'components')
 
@@ -87,6 +87,21 @@ function normalizePathname(href) {
   return href.split('#')[0].split('?')[0]
 }
 
+function hasFileExtension(value) {
+  const lastSegment = value.split('/').filter(Boolean).pop()
+  if (!lastSegment) {
+    return false
+  }
+  return /\.[A-Za-z0-9]+$/.test(lastSegment)
+}
+
+function normalizeRelativeHref(href) {
+  if (href.startsWith('./') || href.startsWith('../')) {
+    return href
+  }
+  return `./${href}`
+}
+
 function resolveRelativeSlug(currentSlug, href) {
   const currentDir = path.posix.dirname(currentSlug)
   const resolved = path.posix.normalize(path.posix.join(currentDir, href))
@@ -121,7 +136,7 @@ function validateInternalHref({ href, file, line, locale, currentSlug, locales, 
 
   if (cleaned.startsWith('/')) {
     const segments = cleaned.split('/').filter(Boolean)
-    if (segments.length < 2) {
+    if (segments.length < 1) {
       return
     }
 
@@ -130,7 +145,12 @@ function validateInternalHref({ href, file, line, locale, currentSlug, locales, 
       return
     }
 
+    if (segments.length === 1) {
+      return
+    }
+
     if (segments[1] !== 'docs') {
+      errors.push(`${file}:${line} -> ${href} (missing /docs segment, expected /{locale}/docs/...)`)
       return
     }
 
@@ -146,16 +166,19 @@ function validateInternalHref({ href, file, line, locale, currentSlug, locales, 
     return
   }
 
-  if (cleaned.startsWith('./') || cleaned.startsWith('../')) {
-    const targetSlug = resolveRelativeSlug(currentSlug, cleaned)
-    if (!targetSlug) {
-      errors.push(`${file}:${line} -> ${href} (invalid relative doc path)`)
-      return
-    }
+  if (hasFileExtension(cleaned)) {
+    return
+  }
 
-    if (!docsByLocale.get(locale)?.has(targetSlug)) {
-      errors.push(`${file}:${line} -> ${href} (relative target doc not found)`)
-    }
+  const relativeHref = normalizeRelativeHref(cleaned)
+  const targetSlug = resolveRelativeSlug(currentSlug, relativeHref)
+  if (!targetSlug) {
+    errors.push(`${file}:${line} -> ${href} (invalid relative doc path)`)
+    return
+  }
+
+  if (!docsByLocale.get(locale)?.has(targetSlug)) {
+    errors.push(`${file}:${line} -> ${href} (relative target doc not found)`)
   }
 }
 
@@ -225,8 +248,9 @@ function checkFrontmatterSanity({ locales, errors }) {
 }
 
 function checkMdxLinks({ locales, docsByLocale, errors }) {
-  const markdownLinkPattern = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+  const markdownLinkPattern = /\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g
   const jsxHrefPattern = /\bhref\s*=\s*["']([^"']+)["']/g
+  const jsxExprHrefPattern = /\bhref\s*=\s*\{\s*["']([^"']+)["']\s*\}/g
 
   for (const locale of locales) {
     const localeRoot = path.join(docsRoot, locale)
@@ -279,6 +303,20 @@ function checkMdxLinks({ locales, docsByLocale, errors }) {
           })
         }
         jsxHrefPattern.lastIndex = 0
+
+        while ((match = jsxExprHrefPattern.exec(line))) {
+          validateInternalHref({
+            href: match[1],
+            file,
+            line: i + 1,
+            locale,
+            currentSlug,
+            locales,
+            docsByLocale,
+            errors,
+          })
+        }
+        jsxExprHrefPattern.lastIndex = 0
       }
     }
   }

@@ -33,6 +33,7 @@
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Database.hpp"
+#include "graph/utils/ChecksumUtils.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
@@ -418,6 +419,11 @@ namespace graph::storage {
 
 		// Step 3: Persist segment headers (so pread-based reads see correct used/start_id)
 		persistSegmentHeaders();
+
+		// Update aggregated CRC from segment CRCs before flushing file header
+		auto segmentCrcs = segmentTracker->collectSegmentCrcs();
+		fileHeaderManager->updateAggregatedCrc(segmentCrcs);
+
 		fileHeaderManager->flushFileHeader();
 
 		// Step 4: Single fsync to flush all writes (entity data + segment headers)
@@ -853,6 +859,10 @@ namespace graph::storage {
 			// Persist segment headers
 			persistSegmentHeaders();
 
+			// Update aggregated CRC from segment CRCs before flushing file header
+			auto flushSegCrcs = segmentTracker->collectSegmentCrcs();
+			fileHeaderManager->updateAggregatedCrc(flushSegCrcs);
+
 			fileHeaderManager->flushFileHeader();
 		} catch (const std::exception &e) {
 			// Log the error
@@ -867,5 +877,47 @@ namespace graph::storage {
 	}
 
 	void FileStorage::clearCache() const { dataManager->clearCache(); }
+
+	FileStorage::IntegrityResult FileStorage::verifyIntegrity() const {
+		IntegrityResult result;
+
+		auto registry = segmentTracker->getSegmentTypeRegistry();
+		for (const auto &type : registry.getAllTypes()) {
+			auto segments = segmentTracker->getSegmentsByType(static_cast<uint32_t>(type));
+			for (const auto &header : segments) {
+				SegmentVerifyResult segResult;
+				segResult.offset = header.file_offset;
+				segResult.startId = header.start_id;
+				segResult.capacity = header.capacity;
+				segResult.dataType = header.data_type;
+
+				// Read the segment data region and compute CRC
+				uint64_t dataOffset = header.file_offset + sizeof(SegmentHeader);
+				std::vector<char> buffer(SEGMENT_SIZE, 0);
+
+				fileStream->seekg(static_cast<std::streamoff>(dataOffset));
+				fileStream->read(buffer.data(), SEGMENT_SIZE);
+				auto bytesRead = fileStream->gcount();
+
+				if (bytesRead > 0) {
+					uint32_t computed = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
+					segResult.passed = (computed == header.segment_crc);
+				} else {
+					segResult.passed = false;
+				}
+
+				if (!segResult.passed) {
+					result.allPassed = false;
+				}
+
+				result.segments.push_back(segResult);
+			}
+		}
+
+		// Clear any stream errors from seeking/reading
+		fileStream->clear();
+
+		return result;
+	}
 
 } // namespace graph::storage

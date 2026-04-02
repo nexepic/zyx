@@ -56,6 +56,10 @@ public:
 
 	// --- Entry Points ---
 	std::any visitCypher(CypherParser::CypherContext *ctx) override;
+	std::any visitExplainStatement(CypherParser::ExplainStatementContext *ctx) override;
+	std::any visitProfileStatement(CypherParser::ProfileStatementContext *ctx) override;
+	std::any visitRegularStatement(CypherParser::RegularStatementContext *ctx) override;
+	std::any visitAdminStatement(CypherParser::AdminStatementContext *ctx) override;
 	std::any visitRegularQuery(CypherParser::RegularQueryContext *ctx) override;
 	std::any visitSingleQuery(CypherParser::SingleQueryContext *ctx) override;
 

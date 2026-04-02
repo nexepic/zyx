@@ -9,6 +9,7 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'mdx', 'ts', 'tsx'],
+  transpilePackages: ['@nexdoc/core'],
   basePath,
   assetPrefix: basePath || undefined,
 }

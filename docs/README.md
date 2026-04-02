@@ -41,3 +41,17 @@ Write docs in:
 
 - `apps/docs/content/docs/en/*.mdx`
 - `apps/docs/content/docs/zh/*.mdx`
+
+Static site assets live in:
+
+- `apps/docs/public/assets/brand`
+- `apps/docs/public/assets/icons`
+- `apps/docs/public/assets/social`
+
+Project-specific CSS overrides:
+
+- `apps/docs/app/custom.css`
+
+Project-specific homepage overrides:
+
+- `apps/docs/home/custom-home.tsx`

@@ -19,6 +19,8 @@
  **/
 
 #include "CypherToPlanVisitor.hpp"
+#include "graph/query/logical/operators/LogicalExplain.hpp"
+#include "graph/query/logical/operators/LogicalProfile.hpp"
 #include "graph/query/logical/operators/LogicalTransactionControl.hpp"
 #include "graph/query/logical/operators/LogicalUnion.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
@@ -50,7 +52,9 @@ std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogical
 	                      rootType != query::logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
 	                      rootType != query::logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
 	                      rootType != query::logical::LogicalOpType::LOP_LIST_CONFIG &&
-	                      rootType != query::logical::LogicalOpType::LOP_SET_CONFIG);
+	                      rootType != query::logical::LogicalOpType::LOP_SET_CONFIG &&
+	                      rootType != query::logical::LogicalOpType::LOP_EXPLAIN &&
+	                      rootType != query::logical::LogicalOpType::LOP_PROFILE);
 
 	if (isOptimizable) {
 		auto *opt = planner_->getOptimizer();
@@ -79,6 +83,30 @@ std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan
 
 // --- Entry Points ---
 std::any CypherToPlanVisitor::visitCypher(CypherParser::CypherContext *ctx) { return visitChildren(ctx); }
+
+std::any CypherToPlanVisitor::visitExplainStatement(CypherParser::ExplainStatementContext *ctx) {
+	// Visit inner query/admin statement to build rootOp_
+	visitChildren(ctx);
+	// Wrap in LogicalExplain
+	rootOp_ = std::make_unique<query::logical::LogicalExplain>(std::move(rootOp_));
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitProfileStatement(CypherParser::ProfileStatementContext *ctx) {
+	// Visit inner query/admin statement to build rootOp_
+	visitChildren(ctx);
+	// Wrap in LogicalProfile
+	rootOp_ = std::make_unique<query::logical::LogicalProfile>(std::move(rootOp_));
+	return std::any();
+}
+
+std::any CypherToPlanVisitor::visitRegularStatement(CypherParser::RegularStatementContext *ctx) {
+	return visitChildren(ctx);
+}
+
+std::any CypherToPlanVisitor::visitAdminStatement(CypherParser::AdminStatementContext *ctx) {
+	return visitChildren(ctx);
+}
 
 std::any CypherToPlanVisitor::visitRegularQuery(CypherParser::RegularQueryContext *ctx) {
 	// Handle UNION operations

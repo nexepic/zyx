@@ -417,19 +417,28 @@ namespace graph::query::indexes {
 	// --- Query methods delegate to the correct index ---
 	std::vector<int64_t> IndexManager::findNodeIdsByLabel(const std::string &label) const {
 		log::Log::debug("IndexManager::findNodeIdsByLabel - label: {}", label);
-		return nodeIndexManager_->getLabelIndex()->findNodes(label);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getLabelIndex()->findNodes(label);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
 	}
 
 	std::vector<int64_t> IndexManager::findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const {
 		log::Log::debug("IndexManager::findNodeIdsByProperty - key: {}", key);
-		return nodeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
 	}
 
 	std::vector<int64_t> IndexManager::findNodeIdsByPropertyRange(const std::string &key,
 	                                                               const PropertyValue &minValue,
 	                                                               const PropertyValue &maxValue) const {
 		log::Log::debug("IndexManager::findNodeIdsByPropertyRange - key: {}", key);
-		return nodeIndexManager_->getPropertyIndex()->findRange(key, minValue, maxValue);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->findRange(key, minValue, maxValue);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
 	}
 
 	// --- Composite Index API ---
@@ -485,17 +494,26 @@ namespace graph::query::indexes {
 	    const std::vector<std::string> &keys,
 	    const std::vector<PropertyValue> &values) const {
 		log::Log::debug("IndexManager::findNodeIdsByCompositeIndex");
-		return nodeIndexManager_->getPropertyIndex()->findCompositeExact(keys, values);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->findCompositeExact(keys, values);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
 	}
 
 	std::vector<int64_t> IndexManager::findEdgeIdsByLabel(const std::string &label) const {
 		log::Log::debug("IndexManager::findEdgeIdsByLabel - label: {}", label);
-		return edgeIndexManager_->getLabelIndex()->findNodes(label);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = edgeIndexManager_->getLabelIndex()->findNodes(label);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
 	}
 
 	std::vector<int64_t> IndexManager::findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const {
 		log::Log::debug("IndexManager::findEdgeIdsByProperty - key: {}", key);
-		return edgeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = edgeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
 	}
 
 	// --- Composite Index Maintenance Helpers ---

@@ -46,16 +46,15 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           <main
             id="docs-main"
             ref={mainRef}
-            className="scrollbar-auto-hide min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-20 pt-10 [-webkit-overflow-scrolling:touch] sm:px-10 lg:px-12 xl:pl-16 xl:pr-[300px]"
+            className="scrollbar-auto-hide min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-20 pt-10 [-webkit-overflow-scrolling:touch] sm:px-10 lg:px-12 xl:px-8"
           >
-            <div className="mx-auto w-full max-w-[1360px]">
+            <div className="mx-auto w-full max-w-[1560px] min-[1400px]:pr-[280px]">
               <div className="mx-auto max-w-[880px]">
                 {children}
               </div>
             </div>
           </main>
 
-          {/* TOC: fixed in right pane (outside main scroll), keeps main scrollbar at far right */}
           <TableOfContents />
         </div>
       </div>

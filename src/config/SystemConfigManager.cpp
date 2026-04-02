@@ -92,4 +92,16 @@ namespace graph::config {
 		return val < 0 ? 1 : static_cast<size_t>(val);
 	}
 
+	bool SystemConfigManager::isSlowLogEnabled() const {
+		return systemStateManager_->get<bool>(keys::SYS_CONFIG, keys::Config::SLOW_LOG_ENABLED, false);
+	}
+
+	int64_t SystemConfigManager::getSlowLogThresholdMs() const {
+		return systemStateManager_->get<int64_t>(keys::SYS_CONFIG, keys::Config::SLOW_LOG_THRESHOLD_MS, 1000);
+	}
+
+	bool SystemConfigManager::isStatsEnabled() const {
+		return systemStateManager_->get<bool>(keys::SYS_CONFIG, keys::Config::STATS_ENABLED, true);
+	}
+
 } // namespace graph::config
