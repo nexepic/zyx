@@ -177,4 +177,51 @@ order: 1
     expect(result.status).toBe(1)
     expect(output).toContain('target doc not found')
   })
+
+  it('passes when index.mdx uses relative links to docs in the same directory', () => {
+    const workspace = createWorkspace()
+    workspaces.push(workspace)
+
+    writeFile(
+      workspace,
+      'nexdoc.config.ts',
+      "export const siteConfig = { nav: [{ href: '/docs/guide' }] }\n"
+    )
+
+    writeFile(
+      workspace,
+      'content/docs/en/guide/index.mdx',
+      `---
+title: Guide
+description: Guide index
+category: Guide
+order: 1
+---
+
+# Guide
+
+- [Overview](overview)
+`
+    )
+
+    writeFile(
+      workspace,
+      'content/docs/en/guide/overview.mdx',
+      `---
+title: Overview
+description: Guide overview
+category: Guide
+order: 2
+---
+
+# Overview
+`
+    )
+
+    const result = runChecker(workspace)
+    const output = `${result.stdout}\n${result.stderr}`
+
+    expect(result.status).toBe(0)
+    expect(output).toContain('[check-doc-links] All doc links are valid.')
+  })
 })

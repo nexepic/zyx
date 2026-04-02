@@ -149,7 +149,7 @@ export function Header({
     <header className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--bg-primary)]/95 backdrop-blur-sm">
       <div className="flex h-14 items-center px-4 lg:px-6">
         {/* Left: hamburger + logo - width matches sidebar */}
-        <div className="flex items-center gap-3 lg:w-[280px]">
+        <div className="flex items-center gap-3 lg:w-[320px]">
           {showSidebarToggle && (
             <button
               type="button"
@@ -160,7 +160,7 @@ export function Header({
               {isMobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
           )}
-          <Link href={`/${locale || defaultLocale}` as any} className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
+          <Link href={`/${locale || defaultLocale}` as any} className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80">
             {brandIcon ? (
               <img src={brandIcon} alt={`${brandAlt} icon`} className="h-7 w-7 object-contain" />
             ) : (
@@ -171,7 +171,10 @@ export function Header({
             {brandLogo ? (
               <img src={brandLogo} alt={brandAlt} className="h-5 w-auto object-contain" />
             ) : (
-              <span className="text-[16px] font-bold tracking-tight text-[var(--text-primary)]">
+              <span
+                className="max-w-[340px] truncate whitespace-nowrap text-[16px] font-bold tracking-tight text-[var(--text-primary)] sm:max-w-[420px]"
+                title={siteConfig.name}
+              >
                 {siteConfig.name}
               </span>
             )}
@@ -184,7 +187,7 @@ export function Header({
         {/* Center: nav entries */}
         <div className="flex flex-1 justify-center">
           {navEntries.length > 0 && (
-            <nav className="hidden items-center gap-1.5 md:flex">
+            <nav className="hidden items-center gap-1.5 whitespace-nowrap md:flex">
               {navEntries.map((entry) => {
                 // Active if current doc slug matches this nav section prefix.
                 const entryPrefixes = entry.matchPrefixes ?? []
@@ -198,7 +201,7 @@ export function Header({
                     href={entry.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-8 items-center justify-center rounded-full px-3.5 text-[14px] font-medium text-[var(--text-tertiary)] transition-all duration-200 hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]"
+                    className="inline-flex h-8 shrink-0 whitespace-nowrap items-center justify-center rounded-full px-3.5 text-[14px] font-medium text-[var(--text-tertiary)] transition-all duration-200 hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]"
                   >
                     {entry.displayLabel}
                   </a>
@@ -207,7 +210,7 @@ export function Header({
                     key={entry.href}
                     href={entry.fullHref as any}
                     className={cn(
-                      'inline-flex h-8 items-center justify-center rounded-full px-3.5 text-[14px] font-medium transition-all duration-200',
+                      'inline-flex h-8 shrink-0 whitespace-nowrap items-center justify-center rounded-full px-3.5 text-[14px] font-medium transition-all duration-200',
                       isActive
                         ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)]'
                         : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]'

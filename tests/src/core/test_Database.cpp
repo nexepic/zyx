@@ -553,3 +553,54 @@ TEST_F(DatabaseTest, GetStorage_BeforeOpen) {
 	EXPECT_NE(storage, nullptr);
 	EXPECT_FALSE(storage->isOpen());
 }
+
+// ============================================================================
+// Thread pool management (Database.cpp lines 107-118, 171-175)
+// ============================================================================
+
+TEST_F(DatabaseTest, SetThreadPoolSize) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	// Initialize query engine first so all subsystems exist
+	auto engine = db->getQueryEngine();
+	ASSERT_NE(engine, nullptr);
+
+	// Should not throw — wires thread pool to storage + query engine + VIM
+	EXPECT_NO_THROW(db->setThreadPoolSize(4));
+}
+
+TEST_F(DatabaseTest, GetThreadPool_BeforeOpen) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+
+	auto tp = db->getThreadPool();
+	EXPECT_EQ(tp, nullptr);
+}
+
+TEST_F(DatabaseTest, GetThreadPool_AfterOpen) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	auto tp = db->getThreadPool();
+	EXPECT_NE(tp, nullptr);
+}
+
+// ============================================================================
+// Close with WAL manager initialized via beginTransaction
+// ============================================================================
+
+TEST_F(DatabaseTest, Close_AfterBeginTransaction_WALInitialized) {
+	// Ensure close() hits the walManager_->close() path (line 77)
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	{
+		auto txn = db->beginTransaction();
+		// walManager_ is now initialized
+	}
+
+	// close() should call walManager_->close()
+	EXPECT_NO_THROW(db->close());
+	EXPECT_FALSE(db->isOpen());
+}

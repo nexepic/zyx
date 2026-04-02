@@ -126,3 +126,64 @@ TEST_F(WithClauseHandlerTest, With_BeforeCreate) {
 	}
 }
 
+// ============================================================================
+// Aggregate function path (covers lines 59-124)
+// ============================================================================
+
+TEST_F(WithClauseHandlerTest, With_AggregateCount) {
+	// Test WITH using aggregate function — covers hasAggregates=true, LogicalAggregate
+	(void)execute("CREATE (n:Color {name: 'red'})");
+	(void)execute("CREATE (n:Color {name: 'blue'})");
+	(void)execute("CREATE (n:Color {name: 'red'})");
+
+	auto res = execute("MATCH (n:Color) WITH count(n) AS cnt RETURN cnt");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	if (res.rowCount() >= 1) {
+		EXPECT_EQ(res.getRows()[0].at("cnt").toString(), "3");
+	}
+}
+
+TEST_F(WithClauseHandlerTest, With_AggregateWithGroupBy) {
+	// Test aggregate WITH group-by — covers groupByExprs + aggItems paths
+	(void)execute("CREATE (n:Item {type: 'a', val: 10})");
+	(void)execute("CREATE (n:Item {type: 'a', val: 20})");
+	(void)execute("CREATE (n:Item {type: 'b', val: 30})");
+
+	auto res = execute("MATCH (n:Item) WITH n.type AS t, count(n) AS cnt RETURN t, cnt");
+	EXPECT_EQ(res.rowCount(), 2UL);
+}
+
+TEST_F(WithClauseHandlerTest, With_AggregateSum) {
+	// Test WITH using sum() aggregate
+	(void)execute("CREATE (n:Score {val: 10})");
+	(void)execute("CREATE (n:Score {val: 20})");
+	(void)execute("CREATE (n:Score {val: 30})");
+
+	auto res = execute("MATCH (n:Score) WITH sum(n.val) AS total RETURN total");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	if (res.rowCount() >= 1) {
+		EXPECT_EQ(res.getRows()[0].at("total").toString(), "60");
+	}
+}
+
+TEST_F(WithClauseHandlerTest, With_AggregateWithAlias) {
+	// Test aggregate with K_AS alias — covers the K_AS() branch in aggregate path
+	(void)execute("CREATE (n:X {v: 1})");
+	(void)execute("CREATE (n:X {v: 2})");
+
+	auto res = execute("MATCH (n:X) WITH count(n) AS total_count RETURN total_count");
+	EXPECT_EQ(res.rowCount(), 1UL);
+	if (res.rowCount() >= 1) {
+		EXPECT_EQ(res.getRows()[0].at("total_count").toString(), "2");
+	}
+}
+
+TEST_F(WithClauseHandlerTest, With_AggregateNoAlias) {
+	// Test aggregate without explicit AS alias
+	(void)execute("CREATE (n:Y {v: 1})");
+	(void)execute("CREATE (n:Y {v: 2})");
+
+	auto res = execute("MATCH (n:Y) WITH count(n) RETURN `count(n)`");
+	EXPECT_EQ(res.rowCount(), 1UL);
+}
+

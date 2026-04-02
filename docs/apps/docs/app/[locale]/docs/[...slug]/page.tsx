@@ -10,7 +10,12 @@ import { PrevNext } from '@/components/layout/PrevNext'
 import { useMDXComponents } from '@/mdx-components'
 import { buildDocJsonLd, generateSiteMetadata } from '@/lib/metadata'
 import { buildEditUrl, getAllDocs, getDocBySlug } from '@/lib/docs'
-import { stripLeadingH1, transformAdmonitions, transformMermaidFences } from '@/lib/mdx'
+import {
+  rewriteIndexRelativeDocLinks,
+  stripLeadingH1,
+  transformAdmonitions,
+  transformMermaidFences,
+} from '@/lib/mdx'
 import { siteConfig } from '@/lib/site'
 
 const mdxComponents = useMDXComponents({})
@@ -85,12 +90,18 @@ export default async function DocPage({
 
   const contentWithoutTitle = stripLeadingH1(doc.content)
   const contentWithAdmonitions = transformAdmonitions(contentWithoutTitle)
+  const isIndexDoc = /[\\/]index\.mdx$/i.test(doc.filePath)
+  const contentWithResolvedIndexLinks = rewriteIndexRelativeDocLinks(contentWithAdmonitions, {
+    locale: doc.locale,
+    docSlug: doc.slug,
+    isIndexDoc,
+  })
   const transformedContent = siteConfig.mermaid.enabled
-    ? transformMermaidFences(contentWithAdmonitions, {
+    ? transformMermaidFences(contentWithResolvedIndexLinks, {
         theme: siteConfig.mermaid.theme,
         securityLevel: siteConfig.mermaid.securityLevel,
       })
-    : contentWithAdmonitions
+    : contentWithResolvedIndexLinks
   const readLabel = doc.locale === 'zh' ? '分钟阅读' : 'min read'
   const editLabel = doc.locale === 'zh' ? '编辑此页' : 'Edit this page'
   const jsonLd = buildDocJsonLd({

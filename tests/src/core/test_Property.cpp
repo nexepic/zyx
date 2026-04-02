@@ -332,3 +332,63 @@ TEST_F(PropertyTest, PropertyMapReplacement) {
 	EXPECT_FALSE(property.hasPropertyValue("old_key"));
 	EXPECT_TRUE(property.hasPropertyValue("new_key"));
 }
+
+// ============================================================================
+// deserializeFromBuffer — the main uncovered method
+// ============================================================================
+
+TEST_F(PropertyTest, DeserializeFromBufferEmpty) {
+	graph::Property original(100, 200, 1);
+
+	// Serialize to get a buffer
+	std::stringstream ss;
+	original.serialize(ss);
+	std::string data = ss.str();
+
+	// Pad to TOTAL_PROPERTY_SIZE
+	data.resize(graph::Property::TOTAL_PROPERTY_SIZE, '\0');
+
+	auto restored = graph::Property::deserializeFromBuffer(data.data());
+
+	EXPECT_EQ(restored.getMetadata().id, 100);
+	EXPECT_EQ(restored.getMetadata().entityId, 200);
+	EXPECT_EQ(restored.getMetadata().entityType, 1u);
+	EXPECT_TRUE(restored.getMetadata().isActive);
+	EXPECT_EQ(restored.getPropertyValues().size(), 0UL);
+}
+
+TEST_F(PropertyTest, DeserializeFromBufferWithValues) {
+	graph::Property original(42, 84, 0);
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["name"] = graph::PropertyValue("Alice");
+	props["age"] = graph::PropertyValue(static_cast<int64_t>(30));
+	props["active"] = graph::PropertyValue(true);
+	original.setProperties(props);
+
+	std::stringstream ss;
+	original.serialize(ss);
+	std::string data = ss.str();
+	data.resize(graph::Property::TOTAL_PROPERTY_SIZE, '\0');
+
+	auto restored = graph::Property::deserializeFromBuffer(data.data());
+
+	EXPECT_EQ(restored.getMetadata().id, 42);
+	EXPECT_EQ(restored.getMetadata().entityId, 84);
+	EXPECT_EQ(restored.getPropertyValues().size(), 3UL);
+	EXPECT_EQ(restored.getPropertyValues().at("name"), graph::PropertyValue("Alice"));
+	EXPECT_EQ(restored.getPropertyValues().at("age"), graph::PropertyValue(static_cast<int64_t>(30)));
+	EXPECT_EQ(restored.getPropertyValues().at("active"), graph::PropertyValue(true));
+}
+
+TEST_F(PropertyTest, DeserializeFromBufferInactive) {
+	graph::Property original(1, 2, 0);
+	original.markInactive();
+
+	std::stringstream ss;
+	original.serialize(ss);
+	std::string data = ss.str();
+	data.resize(graph::Property::TOTAL_PROPERTY_SIZE, '\0');
+
+	auto restored = graph::Property::deserializeFromBuffer(data.data());
+	EXPECT_FALSE(restored.getMetadata().isActive);
+}

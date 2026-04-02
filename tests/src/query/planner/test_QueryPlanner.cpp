@@ -36,9 +36,15 @@
 #include "graph/query/execution/operators/CreateVectorIndexOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
+#include "graph/query/execution/operators/CreateConstraintOperator.hpp"
+#include "graph/query/execution/operators/DropConstraintOperator.hpp"
+#include "graph/query/execution/operators/ShowConstraintsOperator.hpp"
+#include "graph/query/execution/operators/TransactionControlOperator.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/constraints/ConstraintManager.hpp"
+#include "graph/query/expressions/Expression.hpp"
 
 namespace fs = std::filesystem;
 
@@ -48,6 +54,7 @@ protected:
 	std::shared_ptr<graph::storage::FileStorage> storage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
+	std::shared_ptr<graph::storage::constraints::ConstraintManager> constraintManager;
 	std::shared_ptr<graph::query::QueryPlanner> planner;
 
 	void SetUp() override {
@@ -59,8 +66,10 @@ protected:
 		storage->open();
 		dataManager = storage->getDataManager();
 		indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+		constraintManager = std::make_shared<graph::storage::constraints::ConstraintManager>(storage, indexManager);
+		constraintManager->initialize();
 
-		planner = std::make_shared<graph::query::QueryPlanner>(dataManager, indexManager);
+		planner = std::make_shared<graph::query::QueryPlanner>(dataManager, indexManager, constraintManager);
 	}
 
 	void TearDown() override {
@@ -295,4 +304,95 @@ TEST_F(QueryPlannerTest, GetDataManager) {
 	auto dm = planner->getDataManager();
 	EXPECT_NE(dm, nullptr);
 	EXPECT_EQ(dm, dataManager);
+}
+
+// ============================================================================
+// Transaction control operator
+// ============================================================================
+
+TEST_F(QueryPlannerTest, TransactionControlOp_Begin) {
+	using TC = graph::query::execution::operators::TransactionCommand;
+	auto op = graph::query::QueryPlanner::transactionControlOp(TC::TXN_CTL_BEGIN);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(QueryPlannerTest, TransactionControlOp_Commit) {
+	using TC = graph::query::execution::operators::TransactionCommand;
+	auto op = graph::query::QueryPlanner::transactionControlOp(TC::TXN_CTL_COMMIT);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(QueryPlannerTest, TransactionControlOp_Rollback) {
+	using TC = graph::query::execution::operators::TransactionCommand;
+	auto op = graph::query::QueryPlanner::transactionControlOp(TC::TXN_CTL_ROLLBACK);
+	ASSERT_NE(op, nullptr);
+}
+
+// ============================================================================
+// Constraint DDL operators
+// ============================================================================
+
+TEST_F(QueryPlannerTest, CreateConstraintOp) {
+	auto op = planner->createConstraintOp(
+		"unique_name", "Node", "UNIQUE", "Person", {"name"});
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(QueryPlannerTest, DropConstraintOp) {
+	auto op = planner->dropConstraintOp("unique_name", false);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(QueryPlannerTest, DropConstraintOp_IfExists) {
+	auto op = planner->dropConstraintOp("nonexistent", true);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(QueryPlannerTest, ShowConstraintsOp) {
+	auto op = planner->showConstraintsOp();
+	ASSERT_NE(op, nullptr);
+}
+
+// ============================================================================
+// Multi-label scanOp
+// ============================================================================
+
+TEST_F(QueryPlannerTest, ScanOp_MultiLabel) {
+	// Create nodes with two labels
+	int64_t lid1 = dataManager->getOrCreateLabelId("A");
+	int64_t lid2 = dataManager->getOrCreateLabelId("B");
+	graph::Node node(0, lid1);
+	node.addLabelId(lid2);
+	dataManager->addNode(node);
+
+	auto op = planner->scanOp("n", std::vector<std::string>{"A", "B"});
+	ASSERT_NE(op, nullptr);
+
+	// Multi-label should wrap with a filter
+	auto *filterOp = dynamic_cast<graph::query::execution::operators::FilterOperator *>(op.get());
+	EXPECT_NE(filterOp, nullptr) << "Multi-label scan should have a filter for additional labels";
+}
+
+// ============================================================================
+// createOp with expression-based properties
+// ============================================================================
+
+TEST_F(QueryPlannerTest, CreateNodeOp_WithPropExpressions) {
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propExprs;
+	propExprs["computed"] = std::make_shared<graph::query::expressions::LiteralExpression>(
+		static_cast<int64_t>(42));
+
+	auto op = planner->createOp("n", std::vector<std::string>{"Label"}, props, std::move(propExprs));
+	ASSERT_NE(op, nullptr);
+}
+
+// ============================================================================
+// Multi-label mergeOp
+// ============================================================================
+
+TEST_F(QueryPlannerTest, MergeNodeOp_MultiLabel) {
+	auto op = planner->mergeOp("n", std::vector<std::string>{"A", "B"},
+		{{"key", graph::PropertyValue("val")}}, {}, {});
+	ASSERT_NE(op, nullptr);
 }

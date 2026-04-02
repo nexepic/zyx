@@ -2,8 +2,8 @@ import { defineNexDocConfig } from '@/lib/config'
 import { withMermaid } from '@/lib/plugins/mermaid'
 
 const baseSiteConfig = defineNexDocConfig({
-  name: 'ZYX',
-  title: 'ZYX Documentation',
+  name: 'ZYX Developers',
+  title: 'ZYX Developers',
   description:
     'High-performance embedded graph database engine for RAG, agent memory, and knowledge graph applications.',
   keywords: [

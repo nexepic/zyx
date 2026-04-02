@@ -1,9 +1,11 @@
 /**
- * @file test_LogicalOperators.cpp
- * @brief Unit tests for logical operator classes.
+ * @file test_LogicalReadOperators.cpp
+ * @brief Unit tests for logical read operator classes.
  *
  * Tests cover construction, type identification, children management,
- * output variables, cloning, and toString for all major logical operators.
+ * output variables, cloning, and toString for read-path logical operators:
+ * NodeScan, Filter, Project, Join, Sort, Aggregate, Limit, Skip,
+ * SingleRow, Unwind, OptionalMatch, Union.
  */
 
 #include <gtest/gtest.h>
@@ -18,13 +20,9 @@
 #include "graph/query/logical/operators/LogicalSkip.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalUnwind.hpp"
+#include "graph/query/logical/operators/LogicalOptionalMatch.hpp"
+#include "graph/query/logical/operators/LogicalUnion.hpp"
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
-#include "graph/query/logical/operators/LogicalCreateNode.hpp"
-#include "graph/query/logical/operators/LogicalCreateEdge.hpp"
-#include "graph/query/logical/operators/LogicalDelete.hpp"
-#include "graph/query/logical/operators/LogicalSet.hpp"
-#include "graph/query/logical/operators/LogicalMergeNode.hpp"
-#include "graph/query/logical/operators/LogicalMergeEdge.hpp"
 #include "graph/query/expressions/Expression.hpp"
 
 using namespace graph::query::logical;
@@ -507,31 +505,306 @@ TEST(LogicalSingleRowTest, Clone) {
 }
 
 // =============================================================================
-// LogicalOpType toString
+// LogicalUnwind
 // =============================================================================
 
-TEST(LogicalOpTypeTest, ToStringCoversAllTypes) {
-    EXPECT_EQ(toString(LogicalOpType::LOP_NODE_SCAN), "NodeScan");
-    EXPECT_EQ(toString(LogicalOpType::LOP_FILTER), "Filter");
-    EXPECT_EQ(toString(LogicalOpType::LOP_PROJECT), "Project");
-    EXPECT_EQ(toString(LogicalOpType::LOP_AGGREGATE), "Aggregate");
-    EXPECT_EQ(toString(LogicalOpType::LOP_SORT), "Sort");
-    EXPECT_EQ(toString(LogicalOpType::LOP_LIMIT), "Limit");
-    EXPECT_EQ(toString(LogicalOpType::LOP_SKIP), "Skip");
-    EXPECT_EQ(toString(LogicalOpType::LOP_JOIN), "Join");
-    EXPECT_EQ(toString(LogicalOpType::LOP_OPTIONAL_MATCH), "OptionalMatch");
-    EXPECT_EQ(toString(LogicalOpType::LOP_TRAVERSAL), "Traversal");
-    EXPECT_EQ(toString(LogicalOpType::LOP_VAR_LENGTH_TRAVERSAL), "VarLengthTraversal");
-    EXPECT_EQ(toString(LogicalOpType::LOP_UNWIND), "Unwind");
-    EXPECT_EQ(toString(LogicalOpType::LOP_UNION), "Union");
-    EXPECT_EQ(toString(LogicalOpType::LOP_SINGLE_ROW), "SingleRow");
-    EXPECT_EQ(toString(LogicalOpType::LOP_CREATE_NODE), "CreateNode");
-    EXPECT_EQ(toString(LogicalOpType::LOP_CREATE_EDGE), "CreateEdge");
-    EXPECT_EQ(toString(LogicalOpType::LOP_SET), "Set");
-    EXPECT_EQ(toString(LogicalOpType::LOP_DELETE), "Delete");
-    EXPECT_EQ(toString(LogicalOpType::LOP_REMOVE), "Remove");
-    EXPECT_EQ(toString(LogicalOpType::LOP_MERGE_NODE), "MergeNode");
-    EXPECT_EQ(toString(LogicalOpType::LOP_MERGE_EDGE), "MergeEdge");
+class LogicalUnwindTest : public ::testing::Test {};
+
+TEST_F(LogicalUnwindTest, LiteralListConstruction) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    std::vector<graph::PropertyValue> vals;
+    vals.emplace_back(int64_t(1));
+    vals.emplace_back(int64_t(2));
+    LogicalUnwind unwind(std::move(child), "x", std::move(vals));
+
+    EXPECT_EQ(unwind.getType(), LogicalOpType::LOP_UNWIND);
+    EXPECT_EQ(unwind.getAlias(), "x");
+    EXPECT_TRUE(unwind.hasLiteralList());
+    EXPECT_EQ(unwind.getListValues().size(), 2u);
+    EXPECT_EQ(unwind.getListExpr(), nullptr);
+}
+
+TEST_F(LogicalUnwindTest, ExpressionConstruction) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    auto expr = makeVarRefExpr("myList");
+    LogicalUnwind unwind(std::move(child), "elem", expr);
+
+    EXPECT_FALSE(unwind.hasLiteralList());
+    EXPECT_NE(unwind.getListExpr(), nullptr);
+    EXPECT_TRUE(unwind.getListValues().empty());
+}
+
+TEST_F(LogicalUnwindTest, OutputVariablesIncludesAlias) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    std::vector<graph::PropertyValue> vals;
+    vals.emplace_back(int64_t(1));
+    LogicalUnwind unwind(std::move(child), "x", std::move(vals));
+
+    auto vars = unwind.getOutputVariables();
+    ASSERT_EQ(vars.size(), 2u);
+    EXPECT_EQ(vars[0], "n");
+    EXPECT_EQ(vars[1], "x");
+}
+
+TEST_F(LogicalUnwindTest, CloneLiteralList) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    std::vector<graph::PropertyValue> vals;
+    vals.emplace_back(int64_t(42));
+    LogicalUnwind unwind(std::move(child), "x", std::move(vals));
+
+    auto cloned = unwind.clone();
+    auto *cu = dynamic_cast<LogicalUnwind *>(cloned.get());
+    ASSERT_NE(cu, nullptr);
+    EXPECT_TRUE(cu->hasLiteralList());
+    EXPECT_EQ(cu->getAlias(), "x");
+    EXPECT_EQ(cu->getListValues().size(), 1u);
+}
+
+TEST_F(LogicalUnwindTest, CloneExpression) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    auto expr = makeVarRefExpr("myList");
+    LogicalUnwind unwind(std::move(child), "elem", expr);
+
+    auto cloned = unwind.clone();
+    auto *cu = dynamic_cast<LogicalUnwind *>(cloned.get());
+    ASSERT_NE(cu, nullptr);
+    EXPECT_FALSE(cu->hasLiteralList());
+    EXPECT_NE(cu->getListExpr(), nullptr);
+}
+
+TEST_F(LogicalUnwindTest, SetAndDetachChild) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    std::vector<graph::PropertyValue> vals;
+    LogicalUnwind unwind(std::move(child), "x", std::move(vals));
+
+    auto detached = unwind.detachChild(0);
+    ASSERT_NE(detached, nullptr);
+    EXPECT_EQ(unwind.getChildren()[0], nullptr);
+
+    unwind.setChild(0, std::move(detached));
+    EXPECT_NE(unwind.getChildren()[0], nullptr);
+}
+
+TEST_F(LogicalUnwindTest, OutOfRangeChild) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    std::vector<graph::PropertyValue> vals;
+    LogicalUnwind unwind(std::move(child), "x", std::move(vals));
+
+    EXPECT_THROW(unwind.setChild(1, nullptr), std::out_of_range);
+    EXPECT_THROW(unwind.detachChild(1), std::out_of_range);
+}
+
+TEST_F(LogicalUnwindTest, ToString) {
+    auto child = std::make_unique<LogicalNodeScan>("n");
+    std::vector<graph::PropertyValue> vals;
+    LogicalUnwind unwind(std::move(child), "x", std::move(vals));
+
+    EXPECT_EQ(unwind.toString(), "Unwind(x)");
+}
+
+// =============================================================================
+// LogicalOptionalMatch
+// =============================================================================
+
+class LogicalOptionalMatchTest : public ::testing::Test {};
+
+TEST_F(LogicalOptionalMatchTest, BasicConstruction) {
+    auto input = std::make_unique<LogicalNodeScan>("n");
+    auto optional = std::make_unique<LogicalNodeScan>("m");
+    LogicalOptionalMatch om(std::move(input), std::move(optional));
+
+    EXPECT_EQ(om.getType(), LogicalOpType::LOP_OPTIONAL_MATCH);
+    ASSERT_EQ(om.getChildren().size(), 2u);
+    EXPECT_NE(om.getInput(), nullptr);
+    EXPECT_NE(om.getOptionalPattern(), nullptr);
+    EXPECT_TRUE(om.getRequiredVariables().empty());
+}
+
+TEST_F(LogicalOptionalMatchTest, RequiredVariables) {
+    auto input = std::make_unique<LogicalNodeScan>("n");
+    auto optional = std::make_unique<LogicalNodeScan>("m");
+    LogicalOptionalMatch om(std::move(input), std::move(optional), {"n"});
+
+    ASSERT_EQ(om.getRequiredVariables().size(), 1u);
+    EXPECT_EQ(om.getRequiredVariables()[0], "n");
+}
+
+TEST_F(LogicalOptionalMatchTest, OutputVariablesBothChildren) {
+    auto input = std::make_unique<LogicalNodeScan>("n");
+    auto optional = std::make_unique<LogicalNodeScan>("m");
+    LogicalOptionalMatch om(std::move(input), std::move(optional));
+
+    auto vars = om.getOutputVariables();
+    ASSERT_EQ(vars.size(), 2u);
+    EXPECT_EQ(vars[0], "n");
+    EXPECT_EQ(vars[1], "m");
+}
+
+TEST_F(LogicalOptionalMatchTest, OutputVariablesWithNullChildren) {
+    LogicalOptionalMatch om(nullptr, nullptr);
+    auto vars = om.getOutputVariables();
+    EXPECT_TRUE(vars.empty());
+}
+
+TEST_F(LogicalOptionalMatchTest, OutputVariablesOneChildNull) {
+    auto input = std::make_unique<LogicalNodeScan>("n");
+    LogicalOptionalMatch om(std::move(input), nullptr);
+    auto vars = om.getOutputVariables();
+    ASSERT_EQ(vars.size(), 1u);
+    EXPECT_EQ(vars[0], "n");
+}
+
+TEST_F(LogicalOptionalMatchTest, SetAndDetachChildren) {
+    auto input = std::make_unique<LogicalNodeScan>("n");
+    auto optional = std::make_unique<LogicalNodeScan>("m");
+    LogicalOptionalMatch om(std::move(input), std::move(optional));
+
+    auto d0 = om.detachChild(0);
+    ASSERT_NE(d0, nullptr);
+    EXPECT_EQ(om.getInput(), nullptr);
+
+    auto d1 = om.detachChild(1);
+    ASSERT_NE(d1, nullptr);
+    EXPECT_EQ(om.getOptionalPattern(), nullptr);
+
+    om.setChild(0, std::move(d0));
+    om.setChild(1, std::move(d1));
+    EXPECT_NE(om.getInput(), nullptr);
+    EXPECT_NE(om.getOptionalPattern(), nullptr);
+}
+
+TEST_F(LogicalOptionalMatchTest, OutOfRangeChild) {
+    LogicalOptionalMatch om(nullptr, nullptr);
+    EXPECT_THROW(om.setChild(2, nullptr), std::out_of_range);
+    EXPECT_THROW(om.detachChild(2), std::out_of_range);
+}
+
+TEST_F(LogicalOptionalMatchTest, Clone) {
+    auto input = std::make_unique<LogicalNodeScan>("n");
+    auto optional = std::make_unique<LogicalNodeScan>("m");
+    LogicalOptionalMatch om(std::move(input), std::move(optional), {"n"});
+
+    auto cloned = om.clone();
+    auto *com = dynamic_cast<LogicalOptionalMatch *>(cloned.get());
+    ASSERT_NE(com, nullptr);
+    EXPECT_NE(com->getInput(), nullptr);
+    EXPECT_NE(com->getOptionalPattern(), nullptr);
+    ASSERT_EQ(com->getRequiredVariables().size(), 1u);
+    EXPECT_EQ(com->getRequiredVariables()[0], "n");
+}
+
+TEST_F(LogicalOptionalMatchTest, CloneWithNullChildren) {
+    LogicalOptionalMatch om(nullptr, nullptr);
+    auto cloned = om.clone();
+    auto *com = dynamic_cast<LogicalOptionalMatch *>(cloned.get());
+    ASSERT_NE(com, nullptr);
+    EXPECT_EQ(com->getInput(), nullptr);
+    EXPECT_EQ(com->getOptionalPattern(), nullptr);
+}
+
+TEST_F(LogicalOptionalMatchTest, ToString) {
+    LogicalOptionalMatch om(nullptr, nullptr);
+    EXPECT_EQ(om.toString(), "OptionalMatch");
+}
+
+// =============================================================================
+// LogicalUnion
+// =============================================================================
+
+class LogicalUnionTest : public ::testing::Test {};
+
+TEST_F(LogicalUnionTest, UnionAllConstruction) {
+    auto left = std::make_unique<LogicalNodeScan>("n");
+    auto right = std::make_unique<LogicalNodeScan>("n");
+    LogicalUnion u(std::move(left), std::move(right), true);
+
+    EXPECT_EQ(u.getType(), LogicalOpType::LOP_UNION);
+    EXPECT_TRUE(u.isAll());
+    EXPECT_NE(u.getLeft(), nullptr);
+    EXPECT_NE(u.getRight(), nullptr);
+}
+
+TEST_F(LogicalUnionTest, UnionDistinctConstruction) {
+    auto left = std::make_unique<LogicalNodeScan>("n");
+    auto right = std::make_unique<LogicalNodeScan>("n");
+    LogicalUnion u(std::move(left), std::move(right), false);
+
+    EXPECT_FALSE(u.isAll());
+}
+
+TEST_F(LogicalUnionTest, ToStringDifference) {
+    auto left1 = std::make_unique<LogicalNodeScan>("n");
+    auto right1 = std::make_unique<LogicalNodeScan>("n");
+    LogicalUnion unionAll(std::move(left1), std::move(right1), true);
+    EXPECT_EQ(unionAll.toString(), "UnionAll");
+
+    auto left2 = std::make_unique<LogicalNodeScan>("n");
+    auto right2 = std::make_unique<LogicalNodeScan>("n");
+    LogicalUnion unionDistinct(std::move(left2), std::move(right2), false);
+    EXPECT_EQ(unionDistinct.toString(), "Union");
+}
+
+TEST_F(LogicalUnionTest, OutputVariablesFromLeft) {
+    auto left = std::make_unique<LogicalNodeScan>("n");
+    auto right = std::make_unique<LogicalNodeScan>("m");
+    LogicalUnion u(std::move(left), std::move(right), true);
+
+    auto vars = u.getOutputVariables();
+    ASSERT_EQ(vars.size(), 1u);
+    EXPECT_EQ(vars[0], "n");
+}
+
+TEST_F(LogicalUnionTest, OutputVariablesNullLeft) {
+    LogicalUnion u(nullptr, std::make_unique<LogicalNodeScan>("m"), true);
+    EXPECT_TRUE(u.getOutputVariables().empty());
+}
+
+TEST_F(LogicalUnionTest, SetAndDetachChildren) {
+    auto left = std::make_unique<LogicalNodeScan>("n");
+    auto right = std::make_unique<LogicalNodeScan>("m");
+    LogicalUnion u(std::move(left), std::move(right), true);
+
+    auto d0 = u.detachChild(0);
+    ASSERT_NE(d0, nullptr);
+    EXPECT_EQ(u.getLeft(), nullptr);
+
+    auto d1 = u.detachChild(1);
+    ASSERT_NE(d1, nullptr);
+    EXPECT_EQ(u.getRight(), nullptr);
+
+    u.setChild(0, std::move(d0));
+    u.setChild(1, std::move(d1));
+    EXPECT_NE(u.getLeft(), nullptr);
+    EXPECT_NE(u.getRight(), nullptr);
+}
+
+TEST_F(LogicalUnionTest, OutOfRangeChild) {
+    LogicalUnion u(nullptr, nullptr, true);
+    EXPECT_THROW(u.setChild(2, nullptr), std::out_of_range);
+    EXPECT_THROW(u.detachChild(2), std::out_of_range);
+}
+
+TEST_F(LogicalUnionTest, Clone) {
+    auto left = std::make_unique<LogicalNodeScan>("n");
+    auto right = std::make_unique<LogicalNodeScan>("m");
+    LogicalUnion u(std::move(left), std::move(right), true);
+
+    auto cloned = u.clone();
+    auto *cu = dynamic_cast<LogicalUnion *>(cloned.get());
+    ASSERT_NE(cu, nullptr);
+    EXPECT_TRUE(cu->isAll());
+    EXPECT_NE(cu->getLeft(), nullptr);
+    EXPECT_NE(cu->getRight(), nullptr);
+}
+
+TEST_F(LogicalUnionTest, CloneWithNullChildren) {
+    LogicalUnion u(nullptr, nullptr, false);
+    auto cloned = u.clone();
+    auto *cu = dynamic_cast<LogicalUnion *>(cloned.get());
+    ASSERT_NE(cu, nullptr);
+    EXPECT_FALSE(cu->isAll());
+    EXPECT_EQ(cu->getLeft(), nullptr);
+    EXPECT_EQ(cu->getRight(), nullptr);
 }
 
 // =============================================================================

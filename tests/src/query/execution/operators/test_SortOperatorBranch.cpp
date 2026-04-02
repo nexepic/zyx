@@ -25,6 +25,7 @@
 #include "graph/query/execution/operators/SortOperator.hpp"
 #include "graph/query/execution/Record.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 
 using namespace graph;
 using namespace graph::query::execution;
@@ -276,6 +277,132 @@ TEST_F(SortOperatorBranchTest, SortWithEqualValues) {
 	ASSERT_TRUE(val1.has_value());
 	EXPECT_EQ(std::get<int64_t>(val0->getVariant()), 1);
 	EXPECT_EQ(std::get<int64_t>(val1->getVariant()), 2);
+
+	op->close();
+}
+
+/**
+ * Test SortOperator with parallel sort path (threadPool_ + large dataset)
+ * Covers: the parallel chunk sort + k-way merge branch in performSort()
+ */
+TEST_F(SortOperatorBranchTest, ParallelSort_LargeDataset) {
+	// Build dataset above PARALLEL_SORT_THRESHOLD (8192)
+	constexpr size_t N = 10000;
+	RecordBatch batch;
+	batch.reserve(N);
+	for (size_t i = 0; i < N; ++i) {
+		Record r;
+		r.setValue("x", PropertyValue(static_cast<int64_t>(N - i)));
+		batch.push_back(std::move(r));
+	}
+
+	auto mock = new SortMockOperator({std::move(batch)});
+
+	auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>("x");
+	SortItem item(expr, true); // ascending
+	std::vector<SortItem> sortItems = {item};
+
+	auto op = std::make_unique<SortOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), sortItems);
+
+	// Wire in a real thread pool with multiple threads
+	graph::concurrent::ThreadPool pool(4);
+	op->setThreadPool(&pool);
+
+	op->open();
+
+	// Collect all output batches
+	std::vector<Record> allRecords;
+	while (auto b = op->next()) {
+		allRecords.insert(allRecords.end(),
+			std::make_move_iterator(b->begin()),
+			std::make_move_iterator(b->end()));
+	}
+
+	ASSERT_EQ(allRecords.size(), N);
+
+	// Verify ascending order
+	for (size_t i = 1; i < allRecords.size(); ++i) {
+		auto prev = allRecords[i - 1].getValue("x");
+		auto curr = allRecords[i].getValue("x");
+		ASSERT_TRUE(prev.has_value() && curr.has_value());
+		EXPECT_LE(std::get<int64_t>(prev->getVariant()),
+				  std::get<int64_t>(curr->getVariant()));
+	}
+
+	op->close();
+}
+
+/**
+ * Test SortOperator with single-threaded thread pool (falls back to sequential)
+ * Covers: threadPool_->isSingleThreaded() == true branch
+ */
+TEST_F(SortOperatorBranchTest, SingleThreadedPoolFallsBackToSequential) {
+	Record r1, r2, r3;
+	r1.setValue("x", PropertyValue(static_cast<int64_t>(3)));
+	r2.setValue("x", PropertyValue(static_cast<int64_t>(1)));
+	r3.setValue("x", PropertyValue(static_cast<int64_t>(2)));
+
+	auto mock = new SortMockOperator({{r1, r2, r3}});
+
+	auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>("x");
+	SortItem item(expr, true);
+	std::vector<SortItem> sortItems = {item};
+
+	auto op = std::make_unique<SortOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), sortItems);
+
+	// Single-threaded pool
+	graph::concurrent::ThreadPool pool(1);
+	op->setThreadPool(&pool);
+
+	op->open();
+	auto result = op->next();
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->size(), 3UL);
+
+	auto val0 = (*result)[0].getValue("x");
+	EXPECT_EQ(std::get<int64_t>(val0->getVariant()), 1);
+
+	op->close();
+}
+
+/**
+ * Test SortOperator with multiple input batches
+ * Covers: the while(true) loop in next() accumulating multiple batches
+ */
+TEST_F(SortOperatorBranchTest, MultipleBatchesAccumulated) {
+	RecordBatch batch1, batch2;
+	Record r1, r2, r3, r4;
+	r1.setValue("x", PropertyValue(static_cast<int64_t>(4)));
+	r2.setValue("x", PropertyValue(static_cast<int64_t>(2)));
+	r3.setValue("x", PropertyValue(static_cast<int64_t>(3)));
+	r4.setValue("x", PropertyValue(static_cast<int64_t>(1)));
+	batch1 = {r1, r2};
+	batch2 = {r3, r4};
+
+	auto mock = new SortMockOperator({batch1, batch2});
+
+	auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>("x");
+	SortItem item(expr, true);
+	std::vector<SortItem> sortItems = {item};
+
+	auto op = std::make_unique<SortOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), sortItems);
+
+	op->open();
+	auto result = op->next();
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->size(), 4UL);
+
+	// Verify sorted: 1, 2, 3, 4
+	for (size_t i = 0; i < 4; ++i) {
+		auto v = (*result)[i].getValue("x");
+		EXPECT_EQ(std::get<int64_t>(v->getVariant()), static_cast<int64_t>(i + 1));
+	}
+
+	// Second call should return nullopt
+	EXPECT_FALSE(op->next().has_value());
 
 	op->close();
 }

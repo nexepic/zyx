@@ -64,14 +64,22 @@ function collectDocSlugs(locales) {
   for (const locale of locales) {
     const localeRoot = path.join(docsRoot, locale)
     const files = walkMdxFiles(localeRoot)
-    const slugs = new Set(
-      files.map((file) =>
-        path
-          .relative(localeRoot, file)
-          .replace(/\\/g, '/')
-          .replace(/\.mdx$/, '')
-      )
-    )
+    const slugs = new Set()
+
+    for (const file of files) {
+      const rawSlug = path
+        .relative(localeRoot, file)
+        .replace(/\\/g, '/')
+        .replace(/\.mdx$/, '')
+      const normalized = normalizeDocSlug(rawSlug)
+
+      slugs.add(normalized)
+
+      const routeSlug = toRouteSlug(normalized)
+      if (routeSlug) {
+        slugs.add(routeSlug)
+      }
+    }
 
     docsByLocale.set(locale, slugs)
   }
@@ -85,6 +93,27 @@ function toPosixPath(value) {
 
 function normalizePathname(href) {
   return href.split('#')[0].split('?')[0]
+}
+
+function normalizeDocSlug(slug) {
+  if (!slug) {
+    return ''
+  }
+  return slug
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/$/, '')
+}
+
+function toRouteSlug(slug) {
+  if (!slug || slug === 'index') {
+    return ''
+  }
+  if (slug.endsWith('/index')) {
+    return slug.slice(0, -('/index'.length))
+  }
+  return slug
 }
 
 function hasFileExtension(value) {
@@ -110,7 +139,7 @@ function resolveRelativeSlug(currentSlug, href) {
     return null
   }
 
-  return resolved.replace(/^\.\//, '')
+  return normalizeDocSlug(resolved)
 }
 
 function validateInternalHref({ href, file, line, locale, currentSlug, locales, docsByLocale, errors }) {
@@ -171,7 +200,8 @@ function validateInternalHref({ href, file, line, locale, currentSlug, locales, 
   }
 
   const relativeHref = normalizeRelativeHref(cleaned)
-  const targetSlug = resolveRelativeSlug(currentSlug, relativeHref)
+  const normalizedCurrentSlug = normalizeDocSlug(currentSlug)
+  const targetSlug = resolveRelativeSlug(normalizedCurrentSlug, relativeHref)
   if (!targetSlug) {
     errors.push(`${file}:${line} -> ${href} (invalid relative doc path)`)
     return
