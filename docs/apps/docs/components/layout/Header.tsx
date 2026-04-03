@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
-import { Menu, Search, X, Languages, Command } from 'lucide-react'
+import { Menu, Search, X, Languages, Command, ChevronDown } from 'lucide-react'
 import { defaultLocale, localeNames, locales } from '@/lib/i18n'
 import { getDocByHref, hasLocalizedDoc } from '@/lib/docs'
 import { siteConfig } from '@/lib/site'
@@ -39,7 +39,9 @@ export function Header({
   const router = useRouter()
   const pathname = usePathname()
   const localeMenuRef = useRef<HTMLDivElement>(null)
+  const navMenuRef = useRef<HTMLDivElement>(null)
 
+  const [showNavMenu, setShowNavMenu] = useState(false)
   const [showLocaleMenu, setShowLocaleMenu] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark')
@@ -58,6 +60,10 @@ export function Header({
   )
   const docsBadgeLabel = useMemo(
     () => (locale === 'zh' ? '文档' : 'Documentation'),
+    [locale]
+  )
+  const navMenuLabel = useMemo(
+    () => (locale === 'zh' ? '导航' : 'Navigation'),
     [locale]
   )
   const brandAlt = siteConfig.assets?.brand?.alt || siteConfig.brand?.alt || siteConfig.name
@@ -108,6 +114,7 @@ export function Header({
 
   // Close locale menu on route change
   useEffect(() => {
+    setShowNavMenu(false)
     setShowLocaleMenu(false)
   }, [pathname])
 
@@ -122,6 +129,18 @@ export function Header({
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [showLocaleMenu])
+
+  // Close center nav menu on outside click
+  useEffect(() => {
+    if (!showNavMenu) return
+    const onClick = (e: MouseEvent) => {
+      if (navMenuRef.current && !navMenuRef.current.contains(e.target as Node)) {
+        setShowNavMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [showNavMenu])
 
   const switchLocale = (targetLocale: string) => {
     setShowLocaleMenu(false)
@@ -143,6 +162,17 @@ export function Header({
       }
     }
     router.push(`/${[...leadingSegments, targetLocale, ...remaining].join('/')}` as any, { scroll: false })
+  }
+
+  const isNavEntryActive = (entry: (typeof navEntries)[number]) => {
+    const entryPrefixes = entry.matchPrefixes ?? []
+    if (currentDoc) {
+      return (
+        entryPrefixes.length > 0
+        && entryPrefixes.some((prefix) => matchesPrefix(currentDoc.slug, prefix))
+      )
+    }
+    return pathname.startsWith(entry.fullHref)
   }
 
   return (
@@ -185,42 +215,102 @@ export function Header({
         </div>
 
         {/* Center: nav entries */}
-        <div className="flex flex-1 justify-center">
+        <div className="flex min-w-0 flex-1 justify-center">
           {navEntries.length > 0 && (
-            <nav className="hidden items-center gap-1.5 whitespace-nowrap md:flex">
-              {navEntries.map((entry) => {
-                // Active if current doc slug matches this nav section prefix.
-                const entryPrefixes = entry.matchPrefixes ?? []
-                const isActive = currentDoc
-                  ? entryPrefixes.length > 0
-                    && entryPrefixes.some((prefix) => matchesPrefix(currentDoc.slug, prefix))
-                  : pathname.startsWith(entry.fullHref)
-                return entry.external ? (
-                  <a
-                    key={entry.href}
-                    href={entry.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-8 shrink-0 whitespace-nowrap items-center justify-center rounded-full px-3.5 text-[14px] font-medium text-[var(--text-tertiary)] transition-all duration-200 hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]"
-                  >
-                    {entry.displayLabel}
-                  </a>
-                ) : (
-                  <Link
-                    key={entry.href}
-                    href={entry.fullHref as any}
+            <>
+              <nav className="hidden items-center gap-1.5 whitespace-nowrap xl:flex">
+                {navEntries.map((entry) => {
+                  const isActive = isNavEntryActive(entry)
+                  return entry.external ? (
+                    <a
+                      key={entry.href}
+                      href={entry.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-8 shrink-0 whitespace-nowrap items-center justify-center rounded-full px-3.5 text-[14px] font-medium text-[var(--text-tertiary)] transition-all duration-200 hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]"
+                    >
+                      {entry.displayLabel}
+                    </a>
+                  ) : (
+                    <Link
+                      key={entry.href}
+                      href={entry.fullHref as any}
+                      className={cn(
+                        'inline-flex h-8 shrink-0 whitespace-nowrap items-center justify-center rounded-full px-3.5 text-[14px] font-medium transition-all duration-200',
+                        isActive
+                          ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)]'
+                          : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]'
+                      )}
+                    >
+                      {entry.displayLabel}
+                    </Link>
+                  )
+                })}
+              </nav>
+
+              <div className="relative hidden md:block xl:hidden" ref={navMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLocaleMenu(false)
+                    setShowNavMenu((open) => !open)
+                  }}
+                  className={cn(
+                    'inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] px-3 text-[13px] font-medium text-[var(--text-tertiary)] transition-colors',
+                    showNavMenu
+                      ? 'border-[var(--border-hover)] text-[var(--text-primary)]'
+                      : 'hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]'
+                  )}
+                  aria-haspopup="menu"
+                  aria-expanded={showNavMenu}
+                  aria-label={navMenuLabel}
+                >
+                  <span>{navMenuLabel}</span>
+                  <ChevronDown
                     className={cn(
-                      'inline-flex h-8 shrink-0 whitespace-nowrap items-center justify-center rounded-full px-3.5 text-[14px] font-medium transition-all duration-200',
-                      isActive
-                        ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)]'
-                        : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]'
+                      'h-4 w-4 transition-transform duration-200',
+                      showNavMenu ? 'rotate-180' : 'rotate-0'
                     )}
-                  >
-                    {entry.displayLabel}
-                  </Link>
-                )
-              })}
-            </nav>
+                  />
+                </button>
+
+                {showNavMenu && (
+                  <div className="absolute left-1/2 top-full z-50 mt-2 w-[240px] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-1.5 shadow-xl">
+                    <div className="flex flex-col gap-1">
+                      {navEntries.map((entry) => {
+                        const isActive = isNavEntryActive(entry)
+                        return entry.external ? (
+                          <a
+                            key={entry.href}
+                            href={entry.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={() => setShowNavMenu(false)}
+                            className="flex w-full items-center rounded-lg px-3 py-2 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+                          >
+                            {entry.displayLabel}
+                          </a>
+                        ) : (
+                          <Link
+                            key={entry.href}
+                            href={entry.fullHref as any}
+                            onClick={() => setShowNavMenu(false)}
+                            className={cn(
+                              'flex w-full items-center rounded-lg px-3 py-2 text-[13px] font-medium transition-colors',
+                              isActive
+                                ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)]'
+                                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
+                            )}
+                          >
+                            {entry.displayLabel}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 
@@ -257,7 +347,10 @@ export function Header({
           <div className="relative" ref={localeMenuRef}>
             <button
               type="button"
-              onClick={() => setShowLocaleMenu((o) => !o)}
+              onClick={() => {
+                setShowNavMenu(false)
+                setShowLocaleMenu((o) => !o)
+              }}
               className={cn(
                 'inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition-colors',
                 showLocaleMenu

@@ -281,6 +281,10 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
   const targetMouseYawRef = useRef(0);
   const targetMousePitchRef = useRef(0);
 
+  // Z-axis camera targets to create depth zoom effect when expanded
+  const targetCamZRef = useRef(0);
+  const currentCamZRef = useRef(0);
+
   const ambientParticlesRef = useRef<AmbientParticle[]>([]);
   const glyphParticlesRef = useRef<GlyphParticle[]>([]);
 
@@ -288,9 +292,12 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   const [activeFeatureIndex, setActiveFeatureIndex] = useState(0);
-  const [leavingFeatureIndex, setLeavingFeatureIndex] = useState<number | null>(
-    null,
-  );
+  const [leavingFeatureIndex, setLeavingFeatureIndex] = useState<number | null>(null);
+
+  // States handling the expanded layout format
+  const [isExpanded, setIsExpanded] = useState(false);
+  const expandedRef = useRef(false);
+  const lastToggleTimeRef = useRef(0);
 
   const updateMobileFlag = useCallback(() => {
     const nextIsMobile = window.innerWidth <= 768;
@@ -461,7 +468,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
   }, []);
 
   const startAutoCycle = useCallback(() => {
-    if (isMobileRef.current) {
+    if (isMobileRef.current || expandedRef.current) {
       return;
     }
 
@@ -482,6 +489,27 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
     clearInterval(cycleTimerRef.current);
     cycleTimerRef.current = null;
   }, []);
+
+  // Expand logic to manage virtual scrolling state
+  const toggleExpandState = useCallback((shouldExpand: boolean) => {
+    const now = Date.now();
+    if (now - lastToggleTimeRef.current < 800) return;
+
+    if (shouldExpand !== expandedRef.current) {
+      setIsExpanded(shouldExpand);
+      expandedRef.current = shouldExpand;
+      lastToggleTimeRef.current = now;
+
+      // Move camera deeper into Z-space for depth effect
+      targetCamZRef.current = shouldExpand ? 400 : 0;
+
+      if (shouldExpand) {
+        stopAutoCycle();
+      } else {
+        startAutoCycle();
+      }
+    }
+  }, [startAutoCycle, stopAutoCycle]);
 
   const stopAnimation = useCallback(() => {
     isAnimatingRef.current = false;
@@ -506,6 +534,42 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
     isAnimatingRef.current = true;
     animationIdRef.current = window.requestAnimationFrame(tick);
   }, []);
+
+  // Listeners for virtual scrolling trigger
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY > 40) {
+        toggleExpandState(true);
+      } else if (e.deltaY < -40) {
+        toggleExpandState(false);
+      }
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+    const handleTouchEnd = (e: TouchEvent) => {
+      const endY = e.changedTouches[0].clientY;
+      const deltaY = touchStartY - endY;
+
+      if (deltaY > 50) {
+        toggleExpandState(true);
+      } else if (deltaY < -50) {
+        toggleExpandState(false);
+      }
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: true });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [toggleExpandState]);
 
   useEffect(() => {
     if (isMobile) {
@@ -563,6 +627,9 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       currentMousePitchRef.current +=
         (targetMousePitchRef.current - currentMousePitchRef.current) * 0.05;
 
+      // Lerp camera zoom
+      currentCamZRef.current += (targetCamZRef.current - currentCamZRef.current) * 0.04;
+
       const rx = currentMousePitchRef.current;
       const ry = BASE_YAW + currentMouseYawRef.current;
       const cosX = Math.cos(rx);
@@ -576,7 +643,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       const t = (frameCountRef.current % MORPH_CYCLE) / MORPH_CYCLE;
       const gather = smoothstep(0.4, 0.55, t);
       const release = smoothstep(0.75, 0.9, t);
-      const glyphMorph = clamp(gather - release, 0, 1);
+      const glyphMorph = clamp(gather - release, 0, 1) * (expandedRef.current ? 0.8 : 1);
       const axisAlpha = smoothstep(0.1, 0.5, 1 - glyphMorph);
 
       const ambientParticles = ambientParticlesRef.current;
@@ -610,7 +677,9 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
         const x1 = particle.x * cosY - particle.z * sinY;
         const z1 = particle.x * sinY + particle.z * cosY;
         const y2 = particle.y * cosX - z1 * sinX;
-        const z2 = particle.y * sinX + z1 * cosX;
+        
+        // Add zoom logic to Z coordinate
+        const z2 = particle.y * sinX + z1 * cosX + currentCamZRef.current;
 
         if (z2 <= -fov + 20) {
           continue;
@@ -643,14 +712,18 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
         const x1 = particle.x * cosY - particle.z * sinY;
         const z1 = particle.x * sinY + particle.z * cosY;
         const y2 = particle.y * cosX - z1 * sinX;
-        const z2 = particle.y * sinX + z1 * cosX;
+        
+        // Add zoom logic to Z coordinate
+        const z2 = particle.y * sinX + z1 * cosX + currentCamZRef.current;
 
         if (z2 <= -fov + 20) {
           continue;
         }
 
         const scale = fov / (fov + z2);
-        canvasCtx.globalAlpha = 0.3 + glyphMorph * 0.6;
+        // Fade the center glyph heavily when user expands the grid
+        const expandDim = expandedRef.current ? 0.2 : 1;
+        canvasCtx.globalAlpha = (0.3 + glyphMorph * 0.6) * expandDim;
         canvasCtx.fillStyle = particle.color;
 
         const size = particle.baseRadius * scale * (1 + glyphMorph * 0.3) * 2;
@@ -662,7 +735,10 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
         );
       }
 
-      drawAxes(canvasCtx, cosX, sinX, cosY, sinY, cx, cy, fov, axisAlpha);
+      // Hide axes to reduce visual noise when grid is open
+      const finalAxisAlpha = axisAlpha * (expandedRef.current ? 0.05 : 1);
+      drawAxes(canvasCtx, cosX, sinX, cosY, sinY, cx, cy, fov, finalAxisAlpha);
+      
       if (!isAnimatingRef.current) {
         return;
       }
@@ -698,7 +774,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       }
 
       startAnimation();
-      if (!isMobileRef.current) {
+      if (!isMobileRef.current && !expandedRef.current) {
         startAutoCycle();
       }
     };
@@ -734,8 +810,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
   }, [startAnimation, stopAnimation, startAutoCycle, stopAutoCycle]);
 
   const activeFeature = features[activeFeatureIndex];
-  const leavingFeature =
-    leavingFeatureIndex === null ? null : features[leavingFeatureIndex];
+  const leavingFeature = leavingFeatureIndex === null ? null : features[leavingFeatureIndex];
 
   return (
     <>
@@ -773,7 +848,17 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
         <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_50%,rgba(11,15,20,0.6)_0%,transparent_60%)]" />
 
         <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col">
-          <main className="pointer-events-auto absolute left-1/2 top-[40%] flex w-[calc(100vw-2.4rem)] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center md:top-[52%] md:w-[min(860px,92vw)]">
+          {/* Main Hero Container
+              - Collapsed state: EXACTLY matching your original layout (top-[40%] md:top-[52%] -translate-y-1/2 -translate-x-1/2)
+              - Expanded state: top-[12%] md:top-[16%] translate-y-0 (translate-y-0 is required to remove the initial -50% Y shift so it doesn't fly off screen)
+          */}
+          <main 
+            className={`pointer-events-auto absolute left-1/2 flex w-[calc(100vw-2.4rem)] -translate-x-1/2 flex-col items-center text-center transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] md:w-[min(860px,92vw)] ${
+              isExpanded 
+                ? "top-[12%] md:top-[16%] translate-y-0 scale-[0.96] md:scale-100" 
+                : "top-[40%] md:top-[52%] -translate-y-1/2 scale-100"
+            }`}
+          >
             <div className="mb-[1.2rem] inline-flex rounded-[50px] border border-[rgba(122,144,170,0.3)] bg-[rgba(22,30,39,0.4)] px-4 py-[0.48rem] text-[0.72rem] font-medium uppercase tracking-[0.16em] text-[#aec0d2] backdrop-blur-[4px]">
               {isEn ? "EMBEDDED GRAPH DATABASE" : "嵌入式图数据库"}
             </div>
@@ -782,26 +867,58 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
               {isEn ? "AI-Native Graph Engine" : "AI 原生图引擎"}
             </h1>
 
-            <p className="mb-8 mt-[1.2rem] text-[0.95rem] leading-[1.6] text-[#9db0c4] md:text-[clamp(0.95rem,1.4vw,1.05rem)]">
-              {isEn ? (
-                <>
-                  Unify graph reasoning, vector retrieval, and ACID transactions in
-                  one local runtime.
-                  <br />
-                  Built for RAG, agent memory, and knowledge graph applications with
-                  low-latency control, no standalone server required. All data lives
-                  in a single database file.
-                </>
-              ) : (
-                <>
-                  在单一本地引擎中统一图推理、向量检索与 ACID 事务。
-                  <br />
-                  为 RAG、Agent 与知识图谱应用提供可控、低延迟的数据底座，无需独立服务器。单个数据库文件持久化存储全量数据。
-                </>
-              )}
-            </p>
+            {/* Grid structure to overlay the descriptions and crossfade them smoothly */}
+            <div className="grid mb-8 mt-[1.2rem] text-[0.95rem] leading-[1.6] text-[#9db0c4] md:text-[clamp(0.95rem,1.4vw,1.05rem)]">
+              {/* Collapsed Description (Original Text) */}
+              <p 
+                className={`col-start-1 row-start-1 m-0 transition-all duration-[700ms] ease-in-out ${
+                  isExpanded ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100 translate-y-0 delay-100 pointer-events-auto'
+                }`}
+              >
+                {isEn ? (
+                  <>
+                    Unify graph reasoning, vector retrieval, and ACID transactions in
+                    one local runtime.
+                    <br />
+                    Built for RAG, agent memory, and knowledge graph applications with
+                    low-latency control, no standalone server required. All data lives
+                    in a single database file.
+                  </>
+                ) : (
+                  <>
+                    在单一本地引擎中统一图推理、向量检索与 ACID 事务。
+                    <br />
+                    为 RAG、Agent 与知识图谱应用提供可控、低延迟的数据底座，无需独立服务器。单个数据库文件持久化存储全量数据。
+                  </>
+                )}
+              </p>
 
-            <div className="mb-0 flex w-full flex-col gap-4 md:mb-14 md:w-auto md:flex-row">
+              {/* Expanded Description (Cross-Platform/Deployment Focus) */}
+              <p 
+                className={`col-start-1 row-start-1 m-0 transition-all duration-[700ms] ease-in-out ${
+                  isExpanded ? 'opacity-100 translate-y-0 delay-100 pointer-events-auto' : 'opacity-0 -translate-y-4 pointer-events-none'
+                }`}
+              >
+                {isEn ? (
+                  <>
+                    Seamlessly deploy across Windows, macOS, Linux, and embedded edge architectures.
+                    <br />
+                    With native C/C++ APIs, WebAssembly, and broad language bindings, ZYX integrates instantly into any software stack with zero IPC overhead.
+                  </>
+                ) : (
+                  <>
+                    无缝支持 Windows、macOS、Linux 及各类嵌入式边缘架构。
+                    <br />
+                    通过原生 C/C++ API、WebAssembly 及丰富多语言绑定，ZYX 能够以零进程间通信开销，极速集成至任何应用栈。
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Original Buttons - Fades out seamlessly without modifying base original layout */}
+            <div className={`mb-0 flex w-full flex-col gap-4 md:mb-14 md:w-auto md:flex-row transition-all duration-500 ${
+              isExpanded ? "opacity-0 pointer-events-none -translate-y-2" : "opacity-100 translate-y-0"
+            }`}>
               <Link
                 href={quickStartLink}
                 className="inline-flex w-full min-w-[140px] items-center justify-center gap-2 rounded-[8px] border border-[rgba(122,144,170,0.7)] bg-[rgba(35,48,63,0.6)] px-[1.4rem] py-3 text-[0.88rem] text-[#e7edf5] no-underline backdrop-blur-[4px] transition-all duration-[250ms] ease-in-out hover:bg-[#778ea7] hover:text-[#0b0f14] md:w-auto"
@@ -820,9 +937,12 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
               </a>
             </div>
 
+            {/* Original collapsing central HUD for Desktop (hidden when expanded) */}
             {!isMobile && (
               <div
-                className="group relative w-full max-w-[580px] bg-[radial-gradient(ellipse_at_center,rgba(148,168,190,0.06)_0%,transparent_70%)] py-6"
+                className={`group relative w-full max-w-[580px] bg-[radial-gradient(ellipse_at_center,rgba(148,168,190,0.06)_0%,transparent_70%)] py-6 transition-all duration-[600ms] ease-in-out ${
+                  isExpanded ? "opacity-0 scale-[0.85] pointer-events-none" : "opacity-100 scale-100 pointer-events-auto"
+                }`}
                 onMouseEnter={stopAutoCycle}
                 onMouseLeave={startAutoCycle}
               >
@@ -832,7 +952,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
                 <span className="absolute bottom-0 right-0 h-3 w-3 border-b border-r border-[rgba(122,144,170,0.4)] transition-[border-color,box-shadow] duration-300 ease-in-out group-hover:border-[rgba(148,168,190,0.8)] group-hover:[box-shadow:0_0_8px_rgba(148,168,190,0.2)]" />
 
                 <div className="relative h-[115px] w-full overflow-hidden">
-                  {leavingFeature && leavingFeatureIndex !== activeFeatureIndex && (
+                  {leavingFeature && leavingFeatureIndex !== activeFeatureIndex && !isExpanded && (
                     <HudFeatureCard
                       feature={leavingFeature}
                       isEn={isEn}
@@ -840,19 +960,61 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
                     />
                   )}
 
-                  <HudFeatureCard
-                    key={`${activeFeature.titleEn}-${activeFeatureIndex}`}
-                    feature={activeFeature}
-                    isEn={isEn}
-                    animation="data-feed-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards"
-                  />
+                  {!isExpanded && (
+                    <HudFeatureCard
+                      key={`${activeFeature.titleEn}-${activeFeatureIndex}`}
+                      feature={activeFeature}
+                      isEn={isEn}
+                      animation="data-feed-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards"
+                    />
+                  )}
                 </div>
               </div>
             )}
           </main>
 
+          {/* New High-End Expanded Grid Layout - Strictly matched to your provided layout logic */}
+          <div 
+            className={`pointer-events-none absolute left-1/2 w-[calc(100vw-2.4rem)] max-w-[1100px] -translate-x-1/2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-6 transition-all duration-[800ms] cubic-bezier(0.16,1,0.3,1) max-h-[70vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
+              isExpanded 
+                ? "top-[36%] md:top-[45%] opacity-100 scale-100 pointer-events-auto" 
+                : "top-[55%] md:top-[60%] opacity-0 scale-95"
+            }`}
+          >
+            {features.map((feature, i) => (
+              <div
+                key={`grid-${feature.titleEn}`}
+                style={{ transitionDelay: isExpanded ? `${i * 60}ms` : '0ms' }}
+                className={`group relative flex flex-col p-6 md:p-8 rounded-[12px] bg-gradient-to-br from-[rgba(26,35,46,0.65)] to-[rgba(13,18,24,0.85)] border border-[rgba(122,144,170,0.15)] backdrop-blur-xl transition-all duration-[500ms] ease-out hover:-translate-y-[4px] hover:border-[rgba(148,168,190,0.4)] hover:bg-[rgba(32,43,58,0.7)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden ${
+                  isExpanded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+                }`}
+              >
+                {/* Tech glowing accent line at the top */}
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[rgba(148,168,190,0.5)] to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                
+                {/* Left side minimal accent bar */}
+                <div className="absolute left-0 top-8 bottom-8 w-[2px] bg-gradient-to-b from-transparent via-[rgba(107,130,156,0.2)] to-transparent group-hover:via-[#94a8be] transition-colors duration-300" />
+
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-[8px] bg-[rgba(122,144,170,0.1)] border border-[rgba(122,144,170,0.15)] font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.7rem] font-bold tracking-widest text-[#94a8be] group-hover:bg-[rgba(148,168,190,0.15)] group-hover:text-[#e7edf5] transition-all duration-300">
+                    {feature.icon}
+                  </div>
+                  <h3 className="m-0 text-[1.05rem] font-semibold tracking-[0.02em] text-[#e7edf5] group-hover:text-white transition-colors duration-300">
+                    {isEn ? feature.titleEn : feature.titleZh}
+                  </h3>
+                </div>
+                <p className="m-0 text-[0.88rem] leading-[1.65] text-[#8a9bb0] group-hover:text-[#aec0d2] transition-colors duration-300">
+                  {isEn ? feature.descEn : feature.descZh}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Original Mobile Carousel (Strictly original code when not expanded) */}
           {isMobile && (
-            <div className="pointer-events-auto absolute bottom-8 left-0 right-0 flex gap-[0.8rem] overflow-x-auto px-[1.2rem] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className={`pointer-events-auto absolute bottom-8 left-0 right-0 flex gap-[0.8rem] overflow-x-auto px-[1.2rem] transition-all duration-[600ms] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
+              isExpanded ? "opacity-0 translate-y-8 pointer-events-none" : "opacity-100 translate-y-0"
+            }`}>
               {features.map((feature) => (
                 <div
                   key={feature.titleEn}
@@ -872,6 +1034,31 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
             </div>
           )}
 
+          {/* Subtle scroll hint UI to guide users */}
+          <div 
+            className={`absolute bottom-[2.5rem] md:bottom-[2rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#566b82] transition-all duration-[600ms] ${
+              isExpanded ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-60 hover:opacity-100"
+            }`}
+          >
+            <div className="text-[0.6rem] tracking-[0.25em] uppercase text-center font-medium">
+              {isEn ? "Scroll" : "滚动"}
+            </div>
+            <div className="w-[1px] h-6 bg-gradient-to-b from-[#6b829c] to-transparent animate-pulse" />
+          </div>
+
+          {/* Reverse scroll hint when in expanded mode */}
+          <div 
+            className={`absolute bottom-[1rem] md:bottom-[2rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#566b82] transition-all duration-[600ms] ${
+              isExpanded ? "opacity-60 hover:opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+            }`}
+          >
+            <div className="w-[1px] h-6 bg-gradient-to-t from-[#6b829c] to-transparent animate-pulse" />
+            <div className="text-[0.6rem] tracking-[0.25em] uppercase text-center font-medium">
+              {isEn ? "Collapse" : "收起"}
+            </div>
+          </div>
+
+          {/* Footer - Strictly untouched */}
           <footer className="absolute bottom-[0.8rem] left-1/2 -translate-x-1/2 text-[0.7rem] text-[#566b82]">
             MIT License &copy; 2025 ZYX Contributors
           </footer>
@@ -890,4 +1077,4 @@ export function CustomHomePage(props: ZyxHomePageProps) {
   return <ZyxHomePage {...props} />;
 }
 
-export default CustomHomePage
+export default CustomHomePage;
