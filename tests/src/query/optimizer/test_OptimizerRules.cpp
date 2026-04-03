@@ -560,6 +560,17 @@ TEST_F(JoinReorderTest, NullPlanPassthrough) {
     EXPECT_EQ(result, nullptr);
 }
 
+TEST_F(JoinReorderTest, DegenerateJoinWithNullChildFallsBackToSingleInput) {
+    auto onlyInput = std::make_unique<LogicalNodeScan>(
+        "n", std::vector<std::string>{"Person"});
+    auto degenerate = std::make_unique<LogicalJoin>(nullptr, std::move(onlyInput));
+
+    auto stats = makeTestStats();
+    auto result = rule.apply(std::move(degenerate), stats);
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_NODE_SCAN);
+}
+
 // =============================================================================
 // Optimizer Framework Tests
 // =============================================================================
@@ -569,6 +580,13 @@ class OptimizerTest : public ::testing::Test {};
 TEST_F(OptimizerTest, NullPlanReturnsNull) {
     Optimizer opt(nullptr);
     auto result = opt.optimize(nullptr, Statistics{});
+    EXPECT_EQ(result, nullptr);
+}
+
+TEST_F(OptimizerTest, NullPlanReturnsNullForConvenienceOverload) {
+    Optimizer opt(nullptr);
+    std::unique_ptr<LogicalOperator> nullPlan;
+    auto result = opt.optimize(std::move(nullPlan));
     EXPECT_EQ(result, nullptr);
 }
 
@@ -619,4 +637,9 @@ TEST_F(OptimizerTest, AddCustomRule) {
 
 TEST_F(OptimizerTest, MaxIterationsConstant) {
     EXPECT_EQ(Optimizer::MAX_ITERATIONS, 10);
+}
+
+TEST_F(OptimizerTest, InvalidateStatisticsWithoutCollectorIsNoop) {
+    Optimizer opt(nullptr);
+    EXPECT_NO_THROW(opt.invalidateStatistics());
 }

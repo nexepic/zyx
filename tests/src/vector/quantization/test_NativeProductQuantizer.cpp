@@ -19,7 +19,9 @@
  **/
 
 #include <gtest/gtest.h>
+#include <sstream>
 #include <random>
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/vector/quantization/NativeProductQuantizer.hpp"
 
 using namespace graph::vector;
@@ -84,4 +86,54 @@ TEST_F(NativePQTest, ExceptionPaths) {
 				NativeProductQuantizer badPQ(10, 3); // 10 % 3 != 0
 			},
 			std::invalid_argument);
+}
+
+TEST_F(NativePQTest, TrainWithEmptyDataReturnsEarly) {
+	NativeProductQuantizer pq(16, 4, 8);
+	pq.train({});
+	EXPECT_FALSE(pq.isTrained());
+}
+
+TEST_F(NativePQTest, TrainWithDimensionMismatchThrows) {
+	NativeProductQuantizer pq(8, 2, 4);
+	std::vector<std::vector<float>> badData = {
+		{1.0f, 2.0f, 3.0f}
+	};
+	EXPECT_THROW(pq.train(badData), std::runtime_error);
+}
+
+TEST_F(NativePQTest, ParallelTrainEncodeAndDistanceTablePath) {
+	std::vector<std::vector<float>> data(12, std::vector<float>(64, 0.0f));
+	for (size_t i = 0; i < data.size(); ++i) {
+		for (size_t d = 0; d < data[i].size(); ++d) {
+			data[i][d] = static_cast<float>((i + d) % 7) / 7.0f;
+		}
+	}
+
+	NativeProductQuantizer pq(64, 64, 4);
+	graph::concurrent::ThreadPool pool(2);
+	pq.train(data, &pool);
+	ASSERT_TRUE(pq.isTrained());
+
+	std::vector<float> query(64, 0.25f);
+	auto codes = pq.encode(query, &pool);
+	EXPECT_EQ(codes.size(), 64UL);
+
+	auto table = pq.computeDistanceTable(query, &pool);
+	EXPECT_EQ(table.size(), 64UL * 4UL);
+}
+
+TEST_F(NativePQTest, SerializeAndDeserializeUntrainedQuantizer) {
+	NativeProductQuantizer pq(16, 4, 8);
+
+	std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+	pq.serialize(ss);
+	ss.seekg(0);
+
+	auto restored = NativeProductQuantizer::deserialize(ss);
+	ASSERT_NE(restored, nullptr);
+	EXPECT_FALSE(restored->isTrained());
+
+	std::vector<float> vec(16, 0.5f);
+	EXPECT_THROW((void)restored->encode(vec), std::runtime_error);
 }

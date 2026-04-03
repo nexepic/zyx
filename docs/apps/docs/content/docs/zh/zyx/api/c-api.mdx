@@ -1,8 +1,8 @@
 ---
 title: C API 参考
-description: c
+description: 基于 include/zyx/zyx_c_api.h 的当前 C 语言接口。
 category: C API
-order: 5
+order: 6
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,18 +10,56 @@ projectOrder: 1
 ---
 # C API 参考
 
-## `zyx_database_open()`
+头文件：`include/zyx/zyx_c_api.h`
 
-```c
-METRIX_EXPORT zyx_database_t* zyx_database_open(const char* path);
-```
+## 生命周期
 
-打开或创建数据库。
+- `zyx_open(path)`
+- `zyx_open_if_exists(path)`
+- `zyx_close(db)`
+- `zyx_get_last_error()`
 
-## `zyx_database_close()`
+## 查询执行
 
-```c
-METRIX_EXPORT void zyx_database_close(zyx_database_t* db);
-```
+- `zyx_execute(db, cypher)`
+- `zyx_execute_params(db, cypher, params)`
+- `zyx_result_close(res)`
 
-关闭并释放数据库实例。
+## 事务
+
+- `zyx_begin_transaction(db)`
+- `zyx_txn_execute(...)`
+- `zyx_txn_execute_params(...)`
+- `zyx_txn_commit(txn)`
+- `zyx_txn_rollback(txn)`
+- `zyx_txn_close(txn)`
+
+## 参数构造
+
+- `zyx_params_create()`
+- `zyx_params_set_int/double/string/bool/null(...)`
+- `zyx_params_close(...)`
+
+## 高性能写入接口
+
+- `zyx_create_node(...)`
+- `zyx_create_node_ret_id(...)`
+- `zyx_create_edge_by_id(...)`
+
+## 结果读取
+
+- 行推进：`zyx_result_next(res)`
+- 列元数据：`zyx_result_column_count` / `zyx_result_column_name`
+- 类型判断：`zyx_result_get_type`
+- 标量读取：`zyx_result_get_int/double/bool/string`
+- 图实体读取：`zyx_result_get_node` / `zyx_result_get_edge`
+- 复合类型：
+  - `zyx_result_get_props_json`
+  - `zyx_result_list_*`
+  - `zyx_result_get_map_json`
+- 状态：`zyx_result_is_success` / `zyx_result_get_error`
+
+## 资源管理约定
+
+- `ZYXDB_T*`、`ZYXTxn_T*`、`ZYXResult_T*`、`ZYXParams_T*` 都由调用方释放。
+- 字符串指针生命周期见 [C API 类型](c-types)。

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -79,6 +80,13 @@ namespace graph::query::execution::operators {
 					for (int64_t i = 1; i <= maxId; ++i)
 						candidateIds_.push_back(i);
 					break;
+			}
+
+			// Parallel segment loading assumes candidate IDs are in ascending order
+			// to derive a valid [startId, endId] window and avoid empty segment matches.
+			if (candidateIds_.size() > 1) {
+				std::sort(candidateIds_.begin(), candidateIds_.end());
+				candidateIds_.erase(std::unique(candidateIds_.begin(), candidateIds_.end()), candidateIds_.end());
 			}
 
 			// Pre-resolve label IDs for the scan loop (optimization)

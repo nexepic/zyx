@@ -88,6 +88,27 @@ export interface SiteAssetsConfig {
   manifest?: string
 }
 
+export interface HomeLocaleMetadataConfig {
+  /**
+   * Home page title used in browser tab / SEO metadata.
+   */
+  title?: string
+  /**
+   * Home page description used in metadata description.
+   */
+  description?: string
+}
+
+export interface HomeConfig {
+  /**
+   * Localized home page metadata.
+   * Use locale keys like "en", "zh", and optional "default" fallback.
+   */
+  metadata?: Record<string, HomeLocaleMetadataConfig> & {
+    default?: HomeLocaleMetadataConfig
+  }
+}
+
 export interface NexDocBaseConfig {
   name: string
   title: string
@@ -98,6 +119,7 @@ export interface NexDocBaseConfig {
   docsEditEnabled: boolean
   docsEditBase: string
   nav: NavEntry[]
+  home?: HomeConfig
   assets?: SiteAssetsConfig
   /**
    * @deprecated Use assets.brand and assets.icons.

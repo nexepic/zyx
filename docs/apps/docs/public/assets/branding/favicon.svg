@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZYX favicon">
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="#111827"/>
+  <g transform="translate(6.5 17.6) scale(0.463)">
+    <polygon points="0 0 13.74 13.74 68.89 13.78 82.67 0 0 0" fill="#f9fafb"/>
+    <polygon points="41.33 20.67 0 62 20.67 62 62 20.67 41.33 20.67" fill="#f9fafb"/>
+    <polygon points="89.55 0 48.22 41.33 68.89 41.33 110.22 0 89.55 0" fill="#f9fafb"/>
+    <polygon points="41.33 48.23 27.56 62 110.22 61.97 96.47 48.22 41.33 48.23" fill="#f9fafb"/>
+  </g>
+</svg>

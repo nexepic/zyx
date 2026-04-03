@@ -120,6 +120,11 @@ TEST_F(LogicalNodeScanTest, ToString) {
     EXPECT_NE(str.find("Person"), std::string::npos);
 }
 
+TEST_F(LogicalNodeScanTest, ToStringWithoutLabelsCoversEmptyBranch) {
+    LogicalNodeScan scan("n");
+    EXPECT_EQ(scan.toString(), "NodeScan(n)");
+}
+
 TEST_F(LogicalNodeScanTest, LeafNodeRejectsChildren) {
     LogicalNodeScan scan("n");
     EXPECT_THROW(scan.setChild(0, std::make_unique<LogicalNodeScan>("m")), std::logic_error);

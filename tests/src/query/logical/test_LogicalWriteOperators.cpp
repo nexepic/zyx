@@ -202,6 +202,18 @@ TEST_F(LogicalCreateEdgeTest, Clone) {
     EXPECT_EQ(cce->getChildren().size(), 1u);
 }
 
+TEST_F(LogicalCreateEdgeTest, NullChildGetChildrenAndCloneCoverage) {
+    std::unordered_map<std::string, graph::PropertyValue> props;
+    LogicalCreateEdge ce("r", "KNOWS", props, "n", "m");
+
+    EXPECT_TRUE(ce.getChildren().empty());
+
+    auto cloned = ce.clone();
+    auto *cce = dynamic_cast<LogicalCreateEdge *>(cloned.get());
+    ASSERT_NE(cce, nullptr);
+    EXPECT_TRUE(cce->getChildren().empty());
+}
+
 TEST_F(LogicalCreateEdgeTest, InvalidChildIndex) {
     std::unordered_map<std::string, graph::PropertyValue> props;
     LogicalCreateEdge ce("r", "KNOWS", props, "n", "m");
@@ -266,6 +278,17 @@ TEST_F(LogicalDeleteTest, Clone) {
     EXPECT_TRUE(cd->isDetach());
     EXPECT_EQ(cd->getVariables().size(), 2u);
     EXPECT_EQ(cd->getChildren().size(), 1u);
+}
+
+TEST_F(LogicalDeleteTest, NullChildGetChildrenAndCloneCoverage) {
+    LogicalDelete del({"n"}, false);
+
+    EXPECT_TRUE(del.getChildren().empty());
+
+    auto cloned = del.clone();
+    auto *cd = dynamic_cast<LogicalDelete *>(cloned.get());
+    ASSERT_NE(cd, nullptr);
+    EXPECT_TRUE(cd->getChildren().empty());
 }
 
 TEST_F(LogicalDeleteTest, InvalidChildIndex) {

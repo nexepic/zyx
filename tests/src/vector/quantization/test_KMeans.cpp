@@ -19,6 +19,7 @@
  **/
 
 #include <gtest/gtest.h>
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/vector/quantization/KMeans.hpp"
 
 using namespace graph::vector;
@@ -52,4 +53,37 @@ TEST(KMeansTest, EmptyData) {
 	std::vector<std::vector<float>> data;
 	auto res = KMeans::run(data, 5);
 	EXPECT_TRUE(res.empty());
+}
+
+TEST(KMeansTest, ParallelPathWithThreadPool) {
+	std::vector<std::vector<float>> data;
+	data.reserve(256);
+	for (int i = 0; i < 256; ++i) {
+		const float v = static_cast<float>(i) * 0.25f;
+		data.push_back({v, v * 0.5f});
+	}
+
+	graph::concurrent::ThreadPool pool(4);
+	auto centroids = KMeans::run(data, 8, 5, &pool);
+
+	ASSERT_EQ(centroids.size(), 8UL);
+	for (const auto &c : centroids) {
+		EXPECT_EQ(c.size(), 2UL);
+	}
+}
+
+TEST(KMeansTest, ParallelPathReseedsEmptyClustersWhenKExceedsDataSize) {
+	std::vector<std::vector<float>> data;
+	data.reserve(256);
+	for (int i = 0; i < 256; ++i) {
+		data.push_back({static_cast<float>(i), static_cast<float>(i % 7)});
+	}
+
+	graph::concurrent::ThreadPool pool(4);
+	auto centroids = KMeans::run(data, 300, 3, &pool);
+
+	ASSERT_EQ(centroids.size(), 300UL);
+	for (const auto &c : centroids) {
+		EXPECT_EQ(c.size(), 2UL);
+	}
 }

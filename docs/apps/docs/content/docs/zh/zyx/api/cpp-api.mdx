@@ -1,8 +1,8 @@
 ---
 title: C++ API 参考
-description: cpp
+description: 基于 include/zyx/zyx.hpp 的当前 C++ API 能力说明。
 category: C++ API
-order: 1
+order: 2
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,17 +10,63 @@ projectOrder: 1
 ---
 # C++ API 参考
 
-## Database 类
+头文件：`include/zyx/zyx.hpp`
 
-### `open()`
+## 核心类
+
+### Database
+
+构造：
 
 ```cpp
-static std::unique_ptr<Database> Database::open(const std::string& path)
+zyx::Database db("/path/to/db");
 ```
 
-打开或创建指定路径的数据库。
+主要方法：
 
-**参数:**
-- `path`: 数据库目录的文件系统路径
+- 生命周期：`open()`、`openIfExists()`、`close()`、`save()`
+- 事务：`beginTransaction()`、`hasActiveTransaction()`
+- 查询：`execute(cypher)`、`execute(cypher, params)`
+- 线程池：`setThreadPoolSize(size_t)`
+- 高性能写入：`createNode*`、`createEdge*`、`createNodes`、`createNodeRetId`
+- 图算法快捷接口：`getShortestPath(...)`、`bfs(...)`
 
-**返回:** Database 实例的唯一指针
+### Transaction
+
+由 `Database::beginTransaction()` 创建，支持：
+
+- `execute(cypher)`
+- `execute(cypher, params)`
+- `commit()`
+- `rollback()`
+- `isActive()`
+
+该类型是 move-only，析构时若仍活跃会自动回滚。
+
+### Result
+
+`execute` 返回 `Result`，统一通过游标读取：
+
+- 迭代：`hasNext()` / `next()`
+- 取值：`get("col")` / `get(index)`
+- 元数据：`getColumnCount()` / `getColumnName(index)` / `getDuration()`
+- 状态：`isSuccess()` / `getError()`
+
+## 参数化查询
+
+参数类型为：
+
+```cpp
+std::unordered_map<std::string, zyx::Value>
+```
+
+`zyx::Value` 支持：
+
+- `null`、`bool`、`int64_t`、`double`、`std::string`
+- `std::shared_ptr<zyx::Node>`、`std::shared_ptr<zyx::Edge>`
+- `std::vector<float>`、`std::vector<std::string>`
+
+## 源码定位
+
+- Public API：`include/zyx/zyx.hpp`
+- 实现：`src/api/DatabaseImpl.cpp`

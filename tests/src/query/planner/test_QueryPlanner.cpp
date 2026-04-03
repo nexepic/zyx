@@ -12,6 +12,7 @@
 
 #include "graph/core/Database.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/optimizer/Optimizer.hpp"
 #include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
@@ -66,6 +67,7 @@ protected:
 		storage->open();
 		dataManager = storage->getDataManager();
 		indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+		indexManager->initialize();
 		constraintManager = std::make_shared<graph::storage::constraints::ConstraintManager>(storage, indexManager);
 		constraintManager->initialize();
 
@@ -115,7 +117,11 @@ TEST_F(QueryPlannerTest, ScanOp_WithKeyAndPropertyIndex) {
 	dataManager->addNodeProperties(node.getId(), {{"prop", graph::PropertyValue("val")}});
 
 	// Create the property index
-	indexManager->createIndex("idx_test", "Node", "Indexed", "prop");
+	indexManager->createIndex("idx_test", "node", "Indexed", "prop");
+
+	auto cfg = planner->getOptimizer()->optimizeNodeScan(
+		"n", std::vector<std::string>{"Indexed"}, "prop", graph::PropertyValue("val"));
+	EXPECT_EQ(cfg.type, graph::query::execution::ScanType::PROPERTY_SCAN);
 
 	auto op = planner->scanOp("n", "Indexed", "prop", graph::PropertyValue("val"));
 	ASSERT_NE(op, nullptr);
@@ -127,6 +133,54 @@ TEST_F(QueryPlannerTest, ScanOp_WithKeyAndPropertyIndex) {
 	// depending on optimizer behavior. Either way, no crash.
 	EXPECT_TRUE(scanOp != nullptr ||
 		dynamic_cast<graph::query::execution::operators::FilterOperator *>(op.get()) != nullptr);
+}
+
+TEST_F(QueryPlannerTest, ScanOp_MultiLabelResidualFilterExecutesPredicateBranches) {
+	const auto labelA = dataManager->getOrCreateLabelId("A");
+	const auto labelB = dataManager->getOrCreateLabelId("B");
+
+	graph::Node onlyA(1, labelA);
+	graph::Node both(2, labelA);
+	(void)both.addLabelId(labelB);
+	graph::Node onlyB(3, labelB);
+
+	dataManager->addNode(onlyA);
+	dataManager->addNode(both);
+	dataManager->addNode(onlyB);
+	ASSERT_TRUE(indexManager->createIndex("idx_label_scan", "node", "A", ""));
+
+	auto op = planner->scanOp("n", std::vector<std::string>{"A", "B"});
+	ASSERT_NE(op, nullptr);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+
+	auto matched = (*batch)[0].getNode("n");
+	ASSERT_TRUE(matched.has_value());
+	EXPECT_EQ(matched->getId(), 2);
+	op->close();
+}
+
+TEST_F(QueryPlannerTest, ScanOp_ResidualFilterHandlesMissingProperty) {
+	const auto labelId = dataManager->getOrCreateLabelId("User");
+	graph::Node n1(1, labelId);
+	graph::Node n2(2, labelId);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+	dataManager->addNodeProperties(n1.getId(), {{"name", graph::PropertyValue("Alice")}});
+	// n2 intentionally does not have key "age"
+
+	auto op = planner->scanOp("n", "User", "age", graph::PropertyValue(int64_t(30)));
+	ASSERT_NE(op, nullptr);
+
+	op->open();
+	auto batch = op->next();
+	if (batch.has_value()) {
+		EXPECT_TRUE(batch->empty());
+	}
+	op->close();
 }
 
 // ============================================================================
@@ -150,6 +204,11 @@ TEST_F(QueryPlannerTest, CallProcedureOp_KnownProcedure) {
 
 TEST_F(QueryPlannerTest, CreateNodeOp) {
 	auto op = planner->createOp("n", "Label", {{"key", graph::PropertyValue("val")}});
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(QueryPlannerTest, CreateNodeOp_EmptySingleLabelUsesFallbackPath) {
+	auto op = planner->createOp("n", "", {{"key", graph::PropertyValue("val")}});
 	ASSERT_NE(op, nullptr);
 }
 
@@ -228,6 +287,11 @@ TEST_F(QueryPlannerTest, RemoveOp) {
 
 TEST_F(QueryPlannerTest, MergeNodeOp) {
 	auto op = planner->mergeOp("n", "User", {{"name", graph::PropertyValue("Alice")}}, {}, {});
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(QueryPlannerTest, MergeNodeOp_EmptySingleLabelUsesFallbackPath) {
+	auto op = planner->mergeOp("n", "", {{"name", graph::PropertyValue("Alice")}}, {}, {});
 	ASSERT_NE(op, nullptr);
 }
 

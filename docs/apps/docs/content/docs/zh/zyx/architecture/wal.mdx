@@ -1,8 +1,8 @@
 ---
 title: WAL 实现
-description: ZYX 使用写前日志（WAL）来确保 ACID 事务持久性并支持崩溃恢复。
+description: WAL 文件结构、记录类型、组提交与 checkpoint 机制。
 category: 核心组件
-order: 99
+order: 6
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,72 +10,41 @@ projectOrder: 1
 ---
 # WAL 实现
 
-ZYX 使用写前日志（WAL）来确保 ACID 事务持久性并支持崩溃恢复。
+WAL 由 `WALManager` 管理，文件路径为 `<db_path>-wal`。
 
-## 概述
+## 记录类型
 
-写前日志在将更改应用到主数据库文件之前记录所有更改。这确保了：
-- **原子性**：所有事务更改在提交前被记录
-- **持久性**：提交的更改在系统崩溃后仍然存在
-- **恢复**：数据库可以恢复到一致状态
+`WALRecordType` 当前包含：
 
-## WAL 结构
+- `WAL_TXN_BEGIN`
+- `WAL_TXN_COMMIT`
+- `WAL_TXN_ROLLBACK`
+- `WAL_ENTITY_WRITE`
 
-### WAL 文件布局
+每条记录含 header 与 CRC32 校验。
 
-包含 WAL 头和 WAL 记录序列。
+## 写入机制
 
-### WAL 记录格式
+- 内存缓冲：`writeBuffer_`
+- 缓冲满时先刷盘（不 fsync）
+- commit 时采用 group commit（微秒级延迟窗口）
+- `sync()` 执行 flush + fsync
 
-每条记录包含：
-- 序列号
-- 事务 ID
-- 记录类型
-- 时间戳
-- 数据
+## checkpoint
 
-## 写入过程
+满足条件时执行 checkpoint：
 
-### 事务开始
+- 刷新并 fsync
+- 重建 WAL 文件并写入新 header
+- 重置写偏移
 
-记录事务开始，确保后续操作可以被回滚。
+## 关于恢复
 
-### 记录操作
+当前启动阶段会检查 WAL 是否有未消费数据，并进行 checkpoint 清理。恢复路径仍在持续演进中，文档应以 `Database::ensureWALAndTransactionManager()` 的当前实现为准。
 
-将每个数据修改操作写入 WAL。
+## 源码定位
 
-### 事务提交
-
-写入提交记录并刷新到磁盘，确保持久性。
-
-## 恢复过程
-
-扫描 WAL 记录，分离已提交和未提交的事务，重放已提交的事务。
-
-## 检查点
-
-定期检查点以截断 WAL 并减少恢复时间。
-
-## 性能优化
-
-### 组提交
-
-批量提交多个事务以提高吞吐量。
-
-### WAL 缓冲
-
-缓冲 WAL 写入以减少 I/O 操作。
-
-## 最佳实践
-
-1. **监控 WAL 大小**：在增长过大前检查点
-2. **使用组提交**：批量提交以提高吞吐量
-3. **调整缓冲区大小**：平衡内存和性能
-4. **定期检查点**：防止长时间恢复
-5. **监控恢复时间**：跟踪恢复需要多长时间
-
-## 另请参阅
-
-- [存储系统](/zh/docs/zyx/architecture/storage) - 整体存储架构
-- [段格式](/zh/docs/zyx/architecture/segment-format) - 数据存储格式
-- [事务系统](/zh/docs/zyx/architecture/transactions) - 事务管理
+- `include/graph/storage/wal/WALManager.hpp`
+- `include/graph/storage/wal/WALRecord.hpp`
+- `src/storage/wal/WALManager.cpp`
+- `src/core/Database.cpp`

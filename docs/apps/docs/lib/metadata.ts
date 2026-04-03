@@ -41,6 +41,44 @@ function toAbsoluteAssetUrl(assetPath: string): string {
   return withSiteUrl(assetPath.startsWith('/') ? assetPath : `/${assetPath}`)
 }
 
+function inferIconMimeType(iconPath: string): string | undefined {
+  const normalizedPath = iconPath.split('#')[0].split('?')[0].toLowerCase()
+  if (normalizedPath.endsWith('.svg')) return 'image/svg+xml'
+  if (normalizedPath.endsWith('.png')) return 'image/png'
+  if (normalizedPath.endsWith('.ico')) return 'image/x-icon'
+  if (normalizedPath.endsWith('.webp')) return 'image/webp'
+  if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg')) return 'image/jpeg'
+  return undefined
+}
+
+function buildIconDescriptor(iconPath: string, media?: string) {
+  const mimeType = inferIconMimeType(iconPath)
+  return {
+    url: iconPath,
+    ...(media ? { media } : {}),
+    ...(mimeType ? { type: mimeType } : {}),
+    ...(mimeType === 'image/svg+xml' ? { sizes: 'any' } : {}),
+  }
+}
+
+function dedupeIconDescriptors(
+  icons: Array<ReturnType<typeof buildIconDescriptor>>
+): Array<ReturnType<typeof buildIconDescriptor>> {
+  const seen = new Set<string>()
+  const deduped: Array<ReturnType<typeof buildIconDescriptor>> = []
+
+  for (const icon of icons) {
+    const key = `${icon.url}|${icon.media || ''}`
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    deduped.push(icon)
+  }
+
+  return deduped
+}
+
 export function generateSiteMetadata({
   title,
   description,
@@ -59,6 +97,27 @@ export function generateSiteMetadata({
   const icon = siteConfig.assets?.icons?.icon || favicon
   const shortcut = siteConfig.assets?.icons?.shortcut || favicon
   const apple = siteConfig.assets?.icons?.apple || favicon
+  const hasExplicitIcons =
+    Boolean(siteConfig.assets?.icons?.icon)
+    || Boolean(siteConfig.assets?.icons?.favicon)
+    || Boolean(siteConfig.assets?.icons?.shortcut)
+    || Boolean(siteConfig.assets?.icons?.apple)
+  const brandLightIcon = hasExplicitIcons
+    ? undefined
+    : (siteConfig.assets?.brand?.iconLight || siteConfig.brand?.iconLight)
+  const brandDarkIcon = hasExplicitIcons
+    ? undefined
+    : (siteConfig.assets?.brand?.iconDark || siteConfig.brand?.iconDark)
+  const iconLinks = dedupeIconDescriptors([
+    ...(brandLightIcon
+      ? [buildIconDescriptor(brandLightIcon, '(prefers-color-scheme: light)')]
+      : []),
+    ...(brandDarkIcon
+      ? [buildIconDescriptor(brandDarkIcon, '(prefers-color-scheme: dark)')]
+      : []),
+    buildIconDescriptor(icon),
+    ...(icon !== favicon ? [buildIconDescriptor(favicon)] : []),
+  ])
   const ogImage = siteConfig.assets?.social?.ogImage
   const twitterImage = siteConfig.assets?.social?.twitterImage || ogImage
 
@@ -74,9 +133,9 @@ export function generateSiteMetadata({
       languages: localeAlternates(pathname),
     },
     icons: {
-      icon: [{ url: icon }],
-      shortcut: [{ url: shortcut }],
-      apple: [{ url: apple }],
+      icon: iconLinks,
+      shortcut: [buildIconDescriptor(shortcut)],
+      apple: [buildIconDescriptor(apple)],
     },
     manifest: siteConfig.assets?.manifest,
     robots: {

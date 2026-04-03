@@ -46,26 +46,19 @@ namespace graph::concurrent {
 	 * thread and parallelFor() runs sequentially. This ensures zero overhead when
 	 * concurrency is disabled.
 	 */
-	class ThreadPool {
-	public:
+		class ThreadPool {
+		public:
 		/**
 		 * @brief Construct a thread pool.
 		 * @param threadCount Number of threads. 0 = auto-detect, 1 = single-threaded (inline).
 		 */
-		explicit ThreadPool(size_t threadCount = 0) {
-			if (threadCount == 0) {
-				threadCount = std::thread::hardware_concurrency();
-				if (threadCount == 0)
-					threadCount = 2; // Fallback if hardware_concurrency returns 0
-			}
+			explicit ThreadPool(size_t threadCount = 0) {
+				threadCount_ = resolveThreadCount(threadCount, std::thread::hardware_concurrency());
 
-			threadCount_ = threadCount;
-
-			if (threadCount_ <= 1) {
-				// Single-threaded mode: no worker threads needed
-				threadCount_ = 1;
-				return;
-			}
+				if (threadCount_ <= 1) {
+					// Single-threaded mode: no worker threads needed
+					return;
+				}
 
 			// Multi-threaded mode: launch worker threads
 			workers_.reserve(threadCount_);
@@ -195,9 +188,22 @@ namespace graph::concurrent {
 		 */
 		[[nodiscard]] bool isSingleThreaded() const { return threadCount_ <= 1; }
 
-	private:
-		void workerLoop() {
-			while (true) {
+		private:
+			static size_t resolveThreadCount(size_t requestedThreadCount, unsigned int hardwareThreadCount) {
+				if (requestedThreadCount == 0) {
+					requestedThreadCount = static_cast<size_t>(hardwareThreadCount);
+					if (requestedThreadCount == 0) {
+						return 2; // Fallback if hardware_concurrency returns 0
+					}
+				}
+				if (requestedThreadCount <= 1) {
+					return 1;
+				}
+				return requestedThreadCount;
+			}
+
+			void workerLoop() {
+				while (true) {
 				std::function<void()> task;
 				{
 					std::unique_lock lock(mutex_);

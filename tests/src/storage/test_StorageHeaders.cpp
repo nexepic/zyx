@@ -42,3 +42,12 @@ TEST(StorageHeadersTest, SegmentHeaderInitialization) {
 	EXPECT_EQ(segmentHeader.used, 0u);
 	EXPECT_EQ(segmentHeader.data_type, 0u);
 }
+
+TEST(StorageHeadersTest, FragmentationRatioHandlesZeroCapacity) {
+	graph::storage::SegmentHeader header;
+	header.capacity = 0;
+	header.used = 10;
+	header.inactive_count = 2;
+
+	EXPECT_EQ(graph::storage::calculateFragmentationRatio(header), 0.0);
+}

@@ -138,6 +138,21 @@ TEST_F(LogicalTraversalTest, ToString) {
     EXPECT_NE(str.find("KNOWS"), std::string::npos);
 }
 
+TEST_F(LogicalTraversalTest, NullChildOutputAndCloneCoverage) {
+    LogicalTraversal trav(nullptr, "n", "r", "m", "KNOWS", "OUT");
+
+    auto vars = trav.getOutputVariables();
+    ASSERT_EQ(vars.size(), 2u);
+    EXPECT_EQ(vars[0], "r");
+    EXPECT_EQ(vars[1], "m");
+
+    auto cloned = trav.clone();
+    auto *ct = dynamic_cast<LogicalTraversal *>(cloned.get());
+    ASSERT_NE(ct, nullptr);
+    ASSERT_EQ(ct->getChildren().size(), 1u);
+    EXPECT_EQ(ct->getChildren()[0], nullptr);
+}
+
 // =============================================================================
 // LogicalVarLengthTraversal
 // =============================================================================
@@ -239,4 +254,19 @@ TEST_F(LogicalVarLengthTraversalTest, ToString) {
     auto str = vlt.toString();
     EXPECT_NE(str.find("VarLengthTraversal"), std::string::npos);
     EXPECT_NE(str.find("1..3"), std::string::npos);
+}
+
+TEST_F(LogicalVarLengthTraversalTest, NullChildOutputAndCloneCoverage) {
+    LogicalVarLengthTraversal vlt(nullptr, "n", "r", "m", "KNOWS", "OUT", 1, 3);
+
+    auto vars = vlt.getOutputVariables();
+    ASSERT_EQ(vars.size(), 2u);
+    EXPECT_EQ(vars[0], "r");
+    EXPECT_EQ(vars[1], "m");
+
+    auto cloned = vlt.clone();
+    auto *cv = dynamic_cast<LogicalVarLengthTraversal *>(cloned.get());
+    ASSERT_NE(cv, nullptr);
+    ASSERT_EQ(cv->getChildren().size(), 1u);
+    EXPECT_EQ(cv->getChildren()[0], nullptr);
 }

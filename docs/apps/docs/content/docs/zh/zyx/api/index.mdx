@@ -1,8 +1,8 @@
 ---
 title: API 参考
-description: ZYX 提供 C++ 和 C API，用于嵌入到您的应用程序中。
+description: ZYX 当前可用的 C++/C 嵌入式 API 总览与选型建议。
 category: 概述
-order: 99
+order: 1
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,21 +10,35 @@ projectOrder: 1
 ---
 # API 参考
 
-ZYX 提供 C++ 和 C API，用于嵌入到您的应用程序中。
+本节以当前源码为准，描述 ZYX 的公开嵌入式接口：
 
-## C++ API
+- C++ API：`include/zyx/zyx.hpp`
+- C API：`include/zyx/zyx_c_api.h`
 
-C++ API 为 C++20 应用程序提供现代的、类型安全的接口。
+## 如何选择
 
-- [数据库类](cpp-api) - 主数据库接口
-- [事务类](transaction) - 事务管理
-- [值类型](types) - 数据类型系统
-- [错误处理](errors) - 异常处理
+- 使用 C++20 开发，优先选 C++ API（类型更完整、接口更自然）。
+- 做 Rust/Go/Node 等 FFI 绑定，优先选 C API（句柄式接口、边界清晰）。
 
-## C API
+## 目录
 
-C API 提供与 C 兼容的接口，用于 FFI 绑定。
+### C++ API
 
-- [函数](c-api) - C API 函数
-- [类型](c-types) - C 类型定义
-- [错误码](c-errors) - 错误码参考
+- [C++ API 总览](cpp-api)
+- [事务模型](transaction)
+- [类型系统](types)
+- [错误与返回语义](errors)
+
+### C API
+
+- [C API 函数](c-api)
+- [C API 类型](c-types)
+- [C API 错误处理](c-errors)
+
+## 设计约定
+
+- 查询执行统一返回 `Result`/`ZYXResult_T`，由调用方显式迭代结果集。
+- 事务支持两种方式：
+  - API 显式事务（`beginTransaction` / `zyx_begin_transaction`）
+  - Cypher 事务语句（`BEGIN` / `COMMIT` / `ROLLBACK`）
+- 所有文档以当前实现能力为准，不再使用过时的模板异常体系命名。

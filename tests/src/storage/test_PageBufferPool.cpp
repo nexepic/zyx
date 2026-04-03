@@ -186,3 +186,23 @@ TEST(PageBufferPoolTest, MoveSemantics) {
 	// The data pointer should be the same (moved, not copied)
 	EXPECT_EQ(page->data.data(), dataPtr);
 }
+
+TEST(PageBufferPoolTest, StatsAndCapacityAccessors) {
+	PageBufferPool pool(2);
+	EXPECT_EQ(pool.capacity(), 2u);
+	EXPECT_EQ(pool.hits(), 0u);
+	EXPECT_EQ(pool.misses(), 0u);
+
+	// Miss path increments misses.
+	EXPECT_EQ(pool.getPage(999), nullptr);
+	EXPECT_EQ(pool.misses(), 1u);
+
+	// Hit path increments hits.
+	pool.putPage(100, std::vector<uint8_t>(8, 0x01));
+	EXPECT_NE(pool.getPage(100), nullptr);
+	EXPECT_EQ(pool.hits(), 1u);
+
+	pool.resetStats();
+	EXPECT_EQ(pool.hits(), 0u);
+	EXPECT_EQ(pool.misses(), 0u);
+}

@@ -1,210 +1,43 @@
 ---
-title: Algorithms Overview
-description: ZYX employs a range of sophisticated algorithms to achieve high performance, data integrity, and efficient resource utilization. This section document
+title: 算法总览
+description: ZYX 算法按查询、存储、索引、向量四大类分层协同。
 category: 概述
-order: 1
+order: 2
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Algorithms Overview
+# 算法总览
 
-ZYX employs a range of sophisticated algorithms to achieve high performance, data integrity, and efficient resource utilization. This section documents the key algorithms used throughout the system.
+## 一、查询与优化
 
-## Algorithm Categories
+- 逻辑重写：谓词简化、过滤下推、投影下推
+- 代价驱动：增强索引选择、Join 重排
+- 位置：`src/query/optimizer/*`
 
-### Storage Algorithms
+## 二、索引与查找
 
-Algorithms for managing persistent data storage:
+- B+Tree 基础结构：`IndexTreeManager`
+- 标签索引：`LabelIndex`
+- 属性索引：`PropertyIndex`（含复合索引）
+- 位置：`include/graph/core/IndexTreeManager.hpp`、`src/storage/indexes/*`
 
-- **[Segment Allocation](/en/docs/zyx/algorithms/segment-allocation)** - How segments are allocated and managed
-- **[Bitmap Indexing](/en/docs/zyx/algorithms/bitmap-indexing)** - Space tracking using bitmap structures
-- **[Compression](/en/docs/zyx/algorithms/compression)** - Data compression techniques
+## 三、存储与空间管理
 
-### Transaction Algorithms
+- 段链管理、空闲段复用、压缩/整理
+- activity bitmap 跟踪槽位活跃性
+- LRU 缓存降低热点读取开销
+- 位置：`src/storage/*`
 
-Algorithms ensuring ACID properties:
+## 四、向量检索
 
-- **[State Chain & Optimistic Locking](/en/docs/zyx/algorithms/state-chain-optimistic-locking)** - MVCC implementation
-- **[WAL Recovery](/en/docs/zyx/algorithms/wal-recovery)** - Crash recovery mechanisms
+- 距离函数（L2/IP）
+- KMeans 训练码本
+- Product Quantization 编码与近似距离
+- DiskANN 图索引搜索
+- 位置：`include/graph/vector/*`、`src/vector/*`
 
-### Query Algorithms
+## 组合关系
 
-Algorithms for efficient query execution:
-
-- **[Query Optimization](/en/docs/zyx/algorithms/query-optimization)** - Query planning and optimization
-
-### Caching Algorithms
-
-Algorithms for memory management:
-
-- **[Cache Eviction](/en/docs/zyx/algorithms/cache-eviction)** - LRU cache policies
-
-## Design Principles
-
-### Performance
-
-All algorithms are designed with performance as a primary consideration:
-
-- **Time Complexity**: Algorithms chosen for optimal big-O performance
-- **Space Efficiency**: Minimal memory overhead
-- **Cache Locality**: Data structures optimized for CPU cache
-
-### Reliability
-
-Algorithms ensure data integrity and consistency:
-
-- **ACID Compliance**: Transactional guarantees maintained
-- **Crash Recovery**: Database can recover from failures
-- **Data Validation**: Checksums and validation throughout
-
-### Scalability
-
-Algorithms scale with database size and workload:
-
-- **Horizontal Scaling**: Partitioning and distribution (future)
-- **Vertical Scaling**: Efficient resource utilization
-- **Concurrency**: Multi-threaded operation support
-
-## Algorithm Complexity
-
-### Storage Operations
-
-| Operation | Time Complexity | Space Complexity |
-|-----------|----------------|------------------|
-| Allocate Segment | O(1) | O(1) |
-| Allocate Entity | O(1) | O(1) |
-| Free Entity | O(1) | O(1) |
-| Find Free Space | O(n) worst case | O(1) |
-
-### Transaction Operations
-
-| Operation | Time Complexity | Space Complexity |
-|-----------|----------------|------------------|
-| Begin Transaction | O(1) | O(1) |
-| Commit | O(n) dirty entities | O(1) |
-| Rollback | O(1) | O(1) |
-| Conflict Detection | O(1) | O(1) |
-
-### Query Operations
-
-| Operation | Time Complexity | Space Complexity |
-|-----------|----------------|------------------|
-| Parse Query | O(n) query length | O(n) AST size |
-| Optimize Plan | O(n²) rules × operators | O(n) plan size |
-| Execute Plan | O(result size) | O(result size) |
-
-## Data Structures
-
-### Bitmap
-
-Efficient space allocation tracking:
-
-- **Structure**: Array of bits
-- **Operations**: Set, clear, test
-- **Complexity**: O(1) per operation
-
-### State Chain
-
-Version tracking for MVCC:
-
-- **Structure**: Linked list of entity versions
-- **Operations**: Append, traverse, prune
-- **Complexity**: O(1) append, O(n) traversal
-
-### LRU Cache
-
-Efficient caching with eviction:
-
-- **Structure**: Hash map + doubly linked list
-- **Operations**: Get, put, evict
-- **Complexity**: O(1) per operation
-
-## Concurrency Control
-
-### Optimistic Locking
-
-ZYX uses optimistic concurrency control:
-
-1. **Read Phase**: Read data without locks
-2. **Validation Phase**: Check for conflicts on commit
-3. **Write Phase**: Apply changes if no conflicts
-4. **Retry**: Rollback and retry on conflict
-
-**Benefits**:
-- No blocking reads
-- High throughput for read-heavy workloads
-- Simple implementation
-
-**Trade-offs**:
-- Contention on write-heavy workloads
-- Retry overhead on conflicts
-
-## Lock-Free Algorithms
-
-Some operations use lock-free algorithms:
-
-- **Reference Counting**: Atomic operations for entity lifetime
-- **State Updates**: Compare-and-swap for state transitions
-- **Bitmap Operations**: Atomic bit operations
-
-## Memory Management
-
-### Pool Allocation
-
-Efficient memory allocation:
-
-- **Object Pools**: Pre-allocated memory for common objects
-- **Arena Allocation**: Temporary memory for queries
-- **Stack Allocation**: Small objects on stack
-
-### Memory Reuse
-
-Reuse allocated memory:
-
-- **Free Lists**: Track freed memory for reuse
-- **Object Reuse**: Reuse entity objects
-- **Buffer Pooling**: Reuse I/O buffers
-
-## Disk I/O Optimization
-
-### Sequential Access
-
-Optimize for sequential disk access:
-
-- **Segment Layout**: Data organized sequentially
-- **Batch Writes**: Group writes together
-- **Read-Ahead**: Prefetch data
-
-### Write Optimization
-
-Minimize disk writes:
-
-- **WAL Buffering**: Buffer log entries
-- **Dirty Tracking**: Only write modified data
-- **Group Commit**: Batch commits
-
-## Algorithm Selection
-
-ZYX carefully selects algorithms based on:
-
-1. **Workload Characteristics**: Read-heavy vs write-heavy
-2. **Data Size**: Small vs large datasets
-3. **Concurrency Requirements**: Single vs multi-threaded
-4. **Hardware**: CPU, memory, disk characteristics
-
-## Future Improvements
-
-Planned algorithm enhancements:
-
-- **Adaptive Algorithms**: Adjust behavior based on workload
-- **Machine Learning**: Use ML for optimization
-- **Parallel Algorithms**: More parallel operations
-- **Distributed Algorithms**: Cluster support
-
-## See Also
-
-- [Storage System](/en/docs/zyx/architecture/storage) - Overall storage architecture
-- [Transaction Management](/en/docs/zyx/architecture/transactions) - Transaction implementation
-- [Query Engine](/en/docs/zyx/architecture/query-engine) - Query execution details
+这些算法不是孤立调用：查询优化会选择索引策略，索引读写又依赖存储结构；向量索引与普通图查询通过过程调用和算子集成在同一执行框架中。

@@ -117,12 +117,27 @@ TEST_F(PreadHelperTest, InvalidFileDescriptor) {
 	EXPECT_EQ(bytesRead, -1);
 }
 
+TEST_F(PreadHelperTest, CloseInvalidHandle) {
+	EXPECT_EQ(portable_close(INVALID_FILE_HANDLE), -1);
+}
+
 TEST_F(PreadHelperTest, NullBuffer) {
 	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
 	ASSERT_NE(fd, INVALID_FILE_HANDLE);
 
 	ssize_t bytesRead = portable_pread(fd, nullptr, 256, 0);
 
+	EXPECT_EQ(bytesRead, -1);
+
+	portable_close(fd);
+}
+
+TEST_F(PreadHelperTest, ZeroCountReadReturnsError) {
+	file_handle_t fd = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
+
+	char buffer[16];
+	ssize_t bytesRead = portable_pread(fd, buffer, 0, 0);
 	EXPECT_EQ(bytesRead, -1);
 
 	portable_close(fd);

@@ -1,8 +1,8 @@
 ---
 title: 优化策略
-description: 本文档涵盖 ZYX 图数据库的性能优化技术。
+description: 查询优化器、索引选择与执行层性能路径。
 category: 性能
-order: 99
+order: 9
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,113 +10,39 @@ projectOrder: 1
 ---
 # 优化策略
 
-本文档涵盖 ZYX 图数据库的性能优化技术。
+性能优化主要发生在三层：逻辑优化、物理执行策略、存储读写路径。
 
-## 查询优化
+## 逻辑优化规则
 
-### 使用特定模式
+默认规则顺序：
 
-从选择性节点开始匹配以提高性能。
+1. 谓词简化（PredicateSimplification）
+2. 过滤下推（FilterPushdown）
+3. 投影下推（ProjectionPushdown）
+4. 增强索引选择（EnhancedIndexSelection）
+5. Join 重排（JoinReorder）
 
-### 提前过滤
+规则采用 fixed-point 迭代直到收敛或达到迭代上限。
 
-在 WHERE 子句中应用过滤条件。
+## 扫描策略选择
 
-### 使用索引
+`NodeScan` 会结合统计信息与索引可用性，在以下策略间选择：
 
-在频繁查询的属性上创建索引。
+- 全量扫描
+- 标签/属性索引扫描
+- 范围扫描
+- 复合索引扫描
 
-### 限制结果集
+未被索引吸收的条件会转为 residual filter。
 
-探索数据时始终使用 LIMIT。
+## 执行层优化点
 
-## 模式优化
+- 多标签匹配使用 residual 多标签过滤
+- 并发路径下支持批量加载实体与并行扫描
+- 向量查询可走专用 vector operator
 
-### 标签设计
+## 源码定位
 
-为不同实体类型使用特定标签。
-
-### 属性优化
-
-高效存储属性，避免单个节点上过多属性。
-
-## 事务优化
-
-### 保持事务简短
-
-最小化事务持续时间。
-
-### 批量操作
-
-将操作分组到批次中。
-
-## 存储优化
-
-### 压缩
-
-为大段启用压缩。
-
-### 段大小调整
-
-根据工作负载调整段大小。
-
-### 检查点配置
-
-优化检查点频率。
-
-## 缓存优化
-
-### 缓存大小调整
-
-根据工作负载调整缓存大小。
-
-### 预取策略
-
-为顺序访问启用预取。
-
-## 并发优化
-
-### 连接池
-
-对于多线程应用使用连接池。
-
-### 并行查询
-
-并行执行独立查询。
-
-## 内存优化
-
-### 流式处理大结果
-
-流式处理结果而不是全部加载到内存。
-
-### 批处理
-
-分批处理以限制内存使用。
-
-## 性能监控
-
-### 查询分析
-
-使用 PROFILE 分析查询执行。
-
-### 统计收集
-
-收集性能指标。
-
-## 最佳实践总结
-
-1. **使用索引**：在频繁查询的属性上创建索引
-2. **提前过滤**：尽早应用 WHERE 子句
-3. **限制结果**：探索数据时始终使用 LIMIT
-4. **批量操作**：将多个操作分组到批次中
-5. **调整缓存大小**：根据工作负载特征调整
-6. **监控性能**：定期使用 PROFILE 和统计信息
-7. **优化事务**：保持事务简短和专注
-8. **使用连接池**：对于多线程应用
-
-## 另请参阅
-
-- [基准测试](/zh/docs/zyx/architecture/benchmarks) - 性能基准
-- [缓存管理](/zh/docs/zyx/architecture/cache) - 缓存优化
-- [查询引擎](/zh/docs/zyx/architecture/query-engine) - 查询执行
+- `src/query/optimizer/Optimizer.cpp`
+- `include/graph/query/optimizer/Optimizer.hpp`
+- `src/query/planner/PhysicalPlanConverter.cpp`

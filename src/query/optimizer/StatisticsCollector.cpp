@@ -7,6 +7,7 @@
 
 #include "graph/query/optimizer/StatisticsCollector.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include <variant>
 
@@ -17,12 +18,21 @@ Statistics StatisticsCollector::collect() const {
 
 	if (!dm_) return stats;
 
-	// Estimate total node count from segment information
-	// We iterate a range to get an approximation
-	auto nodes = dm_->getNodesInRange(1, INT64_MAX, 100000);
+	// Avoid scanning [1, INT64_MAX]: DataManager::getEntitiesInRange pass-1 iterates
+	// IDs linearly until endId or limit, so use allocator high-water marks as bounds.
+	const auto idAllocator = dm_->getIdAllocator();
+	const int64_t maxNodeId = idAllocator ? idAllocator->getCurrentMaxNodeId() : 0;
+	const int64_t maxEdgeId = idAllocator ? idAllocator->getCurrentMaxEdgeId() : 0;
+
+	const int64_t nodeEnd = (std::max)(int64_t(1), maxNodeId);
+	const int64_t edgeEnd = (std::max)(int64_t(1), maxEdgeId);
+	const size_t nodeLimit = static_cast<size_t>((std::max)(int64_t(1), maxNodeId));
+	const size_t edgeLimit = static_cast<size_t>((std::max)(int64_t(1), maxEdgeId));
+
+	auto nodes = dm_->getNodesInRange(1, nodeEnd, nodeLimit);
 	stats.totalNodeCount = static_cast<int64_t>(nodes.size());
 
-	auto edges = dm_->getEdgesInRange(1, INT64_MAX, 100000);
+	auto edges = dm_->getEdgesInRange(1, edgeEnd, edgeLimit);
 	stats.totalEdgeCount = static_cast<int64_t>(edges.size());
 
 	return stats;

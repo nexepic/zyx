@@ -664,8 +664,6 @@ int zyx_result_list_size(const ZYXResult_T *res, int col_index) {
 		return 0;
 	try {
 		auto val = res->cpp_result.get(col_index);
-		if (auto *v = std::get_if<std::vector<float>>(&val))
-			return static_cast<int>(v->size());
 		if (auto *v = std::get_if<std::vector<std::string>>(&val))
 			return static_cast<int>(v->size());
 	} catch (...) {
@@ -678,8 +676,6 @@ ZYXValueType zyx_result_list_get_type(const ZYXResult_T *res, int col_index, [[m
 		return ZYX_NULL;
 	try {
 		auto val = res->cpp_result.get(col_index);
-		if (std::get_if<std::vector<float>>(&val))
-			return ZYX_DOUBLE;
 		if (std::get_if<std::vector<std::string>>(&val))
 			return ZYX_STRING;
 	} catch (...) {
@@ -691,11 +687,8 @@ int64_t zyx_result_list_get_int(const ZYXResult_T *res, int col_index, int list_
 	if (!res)
 		return 0;
 	try {
-		auto val = res->cpp_result.get(col_index);
-		if (auto *v = std::get_if<std::vector<float>>(&val)) {
-			if (list_index >= 0 && list_index < static_cast<int>(v->size()))
-				return static_cast<int64_t>((*v)[list_index]);
-		}
+		[[maybe_unused]] auto val = res->cpp_result.get(col_index);
+		[[maybe_unused]] int idx = list_index;
 	} catch (...) {
 	}
 	return 0;
@@ -705,11 +698,8 @@ double zyx_result_list_get_double(const ZYXResult_T *res, int col_index, int lis
 	if (!res)
 		return 0.0;
 	try {
-		auto val = res->cpp_result.get(col_index);
-		if (auto *v = std::get_if<std::vector<float>>(&val)) {
-			if (list_index >= 0 && list_index < static_cast<int>(v->size()))
-				return static_cast<double>((*v)[list_index]);
-		}
+		[[maybe_unused]] auto val = res->cpp_result.get(col_index);
+		[[maybe_unused]] int idx = list_index;
 	} catch (...) {
 	}
 	return 0.0;
@@ -737,13 +727,6 @@ const char *zyx_result_list_get_string(ZYXResult_T *res, int col_index, int list
 		if (auto *v = std::get_if<std::vector<std::string>>(&val)) {
 			if (list_index >= 0 && list_index < static_cast<int>(v->size()))
 				return stabilize_string(res, (*v)[list_index]);
-		}
-		if (auto *v = std::get_if<std::vector<float>>(&val)) {
-			if (list_index >= 0 && list_index < static_cast<int>(v->size())) {
-				std::ostringstream oss;
-				oss << (*v)[list_index];
-				return stabilize_string(res, oss.str());
-			}
 		}
 	} catch (...) {
 	}

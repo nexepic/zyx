@@ -1,8 +1,8 @@
 ---
 title: 缓存管理
-description: ZYX 实现了复杂的多级缓存系统，以优化读写操作的性能。
+description: PageBufferPool、LRU 缓存与脏数据协同策略。
 category: 核心组件
-order: 99
+order: 7
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,46 +10,29 @@ projectOrder: 1
 ---
 # 缓存管理
 
-ZYX 实现了复杂的多级缓存系统，以优化读写操作的性能。
+当前缓存不是单一模块，而是多处协同：
 
-## 概述
+- 通用页缓存：`PageBufferPool`
+- 若干组件内部 LRU（如向量索引 registry）
+- DirtyEntityRegistry（写路径脏集）
 
-缓存管理器处理：
-- **热数据缓存**：将频繁访问的实体保留在内存中
-- **脏跟踪**：跟踪修改的实体以高效持久化
-- **LRU 驱逐**：缓存满时自动驱逐冷数据
-- **预取**：在需要之前预加载数据
+## 设计目标
 
-## LRU 缓存
+- 降低重复磁盘读
+- 在事务边界前收敛写放大
+- 让批量写在内存受控范围内进行
 
-使用最近最少使用（LRU）策略管理缓存，驱逐最久未使用的项目。
+## Dirty 与 flush
 
-## 脏实体跟踪
+`PersistenceManager` 维护多类实体的 dirty registry，并在达到阈值时触发 auto-flush 回调。
 
-跟踪已修改但尚未持久化的实体。
+关键点：
 
-## 预取
+- 阈值按“所有实体类型总量”计算
+- flush 后提交快照，避免部分类型积压导致内存失控
 
-基于访问模式预测并加载数据。
+## 源码定位
 
-## 缓存统计
-
-监控缓存命中率和其他指标以优化性能。
-
-## 配置
-
-调整缓存大小、预取设置和其他参数。
-
-## 最佳实践
-
-1. **监控命中率**：大多数工作负载目标 >80%
-2. **调整缓存大小**：平衡内存使用和性能
-3. **使用预取**：用于可预测的访问模式
-4. **定期刷新**：不要让脏实体累积
-5. **分析访问模式**：了解您的工作负载
-
-## 另请参阅
-
-- [存储系统](/zh/docs/zyx/architecture/storage) - 整体存储架构
-- [段格式](/zh/docs/zyx/architecture/segment-format) - 数据存储格式
-- [性能优化](/zh/docs/zyx/architecture/optimization) - 性能调优
+- `include/graph/storage/PageBufferPool.hpp`
+- `src/storage/PersistenceManager.cpp`
+- `include/graph/vector/VectorIndexRegistry.hpp`

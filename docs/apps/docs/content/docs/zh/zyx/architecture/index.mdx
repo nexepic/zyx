@@ -1,8 +1,8 @@
 ---
 title: 架构设计
-description: ZYX 架构专为高性能、可扩展性和 ACID 合规性而设计。
+description: ZYX 当前实现的架构总览与阅读路径。
 category: 概述
-order: 99
+order: 1
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,22 +10,15 @@ projectOrder: 1
 ---
 # 架构设计
 
-ZYX 架构专为高性能、可扩展性和 ACID 合规性而设计。
+本章节按“从外到内”组织：
 
-## 核心架构
+1. 先看 [架构概述](overview)
+2. 再看 [查询引擎](query-engine) 与 [存储系统](storage)
+3. 然后看 [事务管理](transactions) 与 [WAL](wal)
+4. 最后看 [优化策略](optimization)、[缓存管理](cache)、[段格式](segment-format)
 
-- [概述](overview) - 系统架构概述
-- [存储系统](storage) - 基于段的存储引擎
-- [查询引擎](query-engine) - 查询执行流水线
-- [事务系统](transactions) - ACID 事务实现
+## 文档口径
 
-## 存储细节
-
-- [段格式](segment-format) - 磁盘存储格式
-- [WAL 实现](wal) - 预写日志
-- [缓存管理](cache) - 缓存策略
-
-## 性能
-
-- [优化策略](optimization) - 性能调优
-- [基准测试](benchmarks) - 性能指标
+- 以当前源码为准（`include/graph/*` + `src/*`）。
+- 避免粘贴大段实现代码，优先解释设计边界、职责分层和数据流。
+- 对关键结论给出源码定位，便于开发者自行深入。

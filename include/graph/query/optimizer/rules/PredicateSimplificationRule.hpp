@@ -74,6 +74,7 @@ private:
                         static_cast<const expressions::UnaryOpExpression *>(inner);
                     if (innerUnary->getOperator() == UnaryOperatorType::UOP_NOT) {
                         // Double negation — return clone of the inner operand.
+                        if (!innerUnary->getOperand()) return expr;
                         return std::shared_ptr<expressions::Expression>(
                             innerUnary->getOperand()->clone());
                     }
@@ -115,10 +116,10 @@ private:
                     if (isBoolLiteral(rhs, rhsBool) && !rhsBool)
                         return std::make_shared<expressions::LiteralExpression>(false);
                     // true AND x → x
-                    if (isBoolLiteral(lhs, lhsBool) && lhsBool)
+                    if (isBoolLiteral(lhs, lhsBool) && lhsBool && rhs)
                         return std::shared_ptr<expressions::Expression>(rhs->clone());
                     // x AND true → x
-                    if (isBoolLiteral(rhs, rhsBool) && rhsBool)
+                    if (isBoolLiteral(rhs, rhsBool) && rhsBool && lhs)
                         return std::shared_ptr<expressions::Expression>(lhs->clone());
                 }
 
@@ -130,10 +131,10 @@ private:
                     if (isBoolLiteral(rhs, rhsBool) && rhsBool)
                         return std::make_shared<expressions::LiteralExpression>(true);
                     // false OR x → x
-                    if (isBoolLiteral(lhs, lhsBool) && !lhsBool)
+                    if (isBoolLiteral(lhs, lhsBool) && !lhsBool && rhs)
                         return std::shared_ptr<expressions::Expression>(rhs->clone());
                     // x OR false → x
-                    if (isBoolLiteral(rhs, rhsBool) && !rhsBool)
+                    if (isBoolLiteral(rhs, rhsBool) && !rhsBool && lhs)
                         return std::shared_ptr<expressions::Expression>(lhs->clone());
                 }
             }

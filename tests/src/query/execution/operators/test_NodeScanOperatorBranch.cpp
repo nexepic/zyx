@@ -330,3 +330,23 @@ TEST_F(NodeScanOperatorBranchTest, AllNodesDeleted) {
 
 	op->close();
 }
+
+// Invalid scan type should fall back to FULL_SCAN via default branch.
+TEST_F(NodeScanOperatorBranchTest, InvalidScanTypeFallsBackToFullScan) {
+	int64_t labelId = dm->getOrCreateLabelId("Person");
+	Node n1(0, labelId);
+	dm->addNode(n1);
+
+	NodeScanConfig config;
+	config.type = static_cast<ScanType>(999);
+	config.variable = "n";
+
+	auto op = std::make_unique<NodeScanOperator>(dm, im, config);
+	op->open();
+
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1UL);
+
+	op->close();
+}

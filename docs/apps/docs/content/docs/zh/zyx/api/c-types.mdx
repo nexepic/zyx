@@ -1,8 +1,8 @@
 ---
 title: C API 类型
-description: 本文档描述 C API 中使用的数据类型。
+description: C API 的句柄、值类型枚举与内存生命周期说明。
 category: C API
-order: 6
+order: 7
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,8 +10,39 @@ projectOrder: 1
 ---
 # C API 类型
 
-本文档描述 C API 中使用的数据类型。
+## 句柄类型
 
-## 类型参考
+以下类型均为不透明句柄：
 
-参见[C API 文档](/zh/docs/zyx/api/c-api)了解使用示例。
+- `ZYXDB_T`
+- `ZYXResult_T`
+- `ZYXTxn_T`
+- `ZYXParams_T`
+
+## 值类型枚举
+
+`ZYXValueType`：
+
+- `ZYX_NULL`
+- `ZYX_BOOL`
+- `ZYX_INT`
+- `ZYX_DOUBLE`
+- `ZYX_STRING`
+- `ZYX_NODE`
+- `ZYX_EDGE`
+- `ZYX_LIST`
+- `ZYX_MAP`
+
+## 图实体轻量结构
+
+- `ZYXNode { id, label }`
+- `ZYXEdge { id, source_id, target_id, type }`
+
+## 字符串与缓冲区生命周期
+
+由 `zyx_result_get_string`、`zyx_result_column_name` 等函数返回的 `const char*`：
+
+- 由 `ZYXResult_T` 内部缓冲管理
+- 在下一次 `zyx_result_next(...)` 或 `zyx_result_close(...)` 后可能失效
+
+因此调用方应在需要长期保存时立即复制。

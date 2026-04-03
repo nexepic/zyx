@@ -180,6 +180,11 @@ TEST_F(AdminClauseHandlerTest, CreateIndexByPattern_UseForQuerying) {
 	EXPECT_EQ(res.getRows()[0].at("n.name").toString(), "Bob");
 }
 
+TEST_F(AdminClauseHandlerTest, CreateIndexByPattern_CompositeProperties) {
+	auto res = execute("CREATE INDEX FOR (n:Person) ON (n.first, n.last)");
+	ASSERT_EQ(res.rowCount(), 1UL);
+}
+
 // === CREATE INDEX - Name Variations ===
 
 TEST_F(AdminClauseHandlerTest, CreateIndex_WithUnderscoreName) {

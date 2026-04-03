@@ -66,11 +66,25 @@ protected:
 
 TEST_F(QueryEngineTest, Initialization) {
 	EXPECT_NE(engine->getIndexManager(), nullptr);
+	EXPECT_NE(engine->getConstraintManager(), nullptr);
 
 	// Verify QueryBuilder creation
 	auto qb = engine->query();
 	// Just verify it returns a valid object (by calling a method that returns ref)
 	qb.skip_(0);
+
+	// Cover inline accessors in QueryEngine.hpp
+	auto &cache = engine->getPlanCache();
+	(void)cache;
+	const QueryEngine &constEngine = *engine;
+	const auto &constCache = constEngine.getPlanCache();
+	(void)constCache;
+}
+
+TEST_F(QueryEngineTest, SetThreadPoolAccessor) {
+	graph::concurrent::ThreadPool pool(2);
+	engine->setThreadPool(&pool);
+	EXPECT_NE(engine->getIndexManager(), nullptr);
 }
 
 // ============================================================================

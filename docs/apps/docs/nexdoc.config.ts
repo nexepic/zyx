@@ -23,6 +23,18 @@ const baseSiteConfig = defineNexDocConfig({
   docsEditBase:
     process.env.NEXT_PUBLIC_DOCS_EDIT_BASE ||
     'https://github.com/nexepic/zyx/edit/main/docs',
+  home: {
+    metadata: {
+      en: {
+        title: 'AI-Native Graph Engine',
+        description: 'Everything you need to get started, integrate, and build with confidence.',
+      },
+      zh: {
+        title: 'AI 原生图数据库引擎',
+        description: '快速上手、集成和构建所需的一切。',
+      },
+    },
+  },
   assets: {
     brand: {
       iconLight: '/assets/branding/icon.svg',
@@ -30,8 +42,10 @@ const baseSiteConfig = defineNexDocConfig({
       alt: 'ZYX',
     },
     icons: {
-      icon: '/assets/branding/icon.svg',
-      favicon: '/assets/branding/icon.svg',
+      icon: '/assets/branding/favicon.svg',
+      favicon: '/assets/branding/favicon.svg',
+      shortcut: '/assets/branding/favicon.svg',
+      apple: '/assets/branding/favicon.svg',
     },
   },
   nav: [

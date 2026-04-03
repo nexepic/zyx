@@ -254,3 +254,8 @@ TEST_F(SystemConfigManagerTest, HandleNullStorageGracefully) {
 	// Also test applyCompaction directly via loadAndApplyAll
 	EXPECT_NO_THROW(configManagerWithNullStorage->loadAndApplyAll());
 }
+
+TEST_F(SystemConfigManagerTest, NegativeThreadPoolSizeIsClampedToOne) {
+	stateManager->set<int64_t>(keys::SYS_CONFIG, keys::Config::THREAD_POOL_SIZE, -8);
+	EXPECT_EQ(configManager->getThreadPoolSize(), 1UL);
+}

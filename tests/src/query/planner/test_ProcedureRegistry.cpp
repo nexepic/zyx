@@ -211,6 +211,20 @@ TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Success) {
 	EXPECT_NE(dynamic_cast<operators::VectorSearchOperator *>(op.get()), nullptr);
 }
 
+TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_IntegerVector_Success) {
+	std::vector<PropertyValue> vec = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))};
+	std::vector<PropertyValue> args = {
+		PropertyValue("test_index"),
+		PropertyValue("5"),
+		PropertyValue(vec)
+	};
+
+	auto op = invoke("db.index.vector.queryNodes", args);
+
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::VectorSearchOperator *>(op.get()), nullptr);
+}
+
 TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_Args_TooFew) {
 	// Test with too few arguments
 	std::vector<PropertyValue> args = {PropertyValue("test_index"), PropertyValue("5")};
@@ -235,6 +249,16 @@ TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_WrongType) {
 		PropertyValue("test_index"),
 		PropertyValue("5"),
 		PropertyValue("not_a_list")
+	};
+	EXPECT_THROW(invoke("db.index.vector.queryNodes", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, VectorIndexQueryNodes_Fail_NonNumericVectorElement) {
+	std::vector<PropertyValue> vec = {PropertyValue(1.0), PropertyValue("bad_value")};
+	std::vector<PropertyValue> args = {
+		PropertyValue("test_index"),
+		PropertyValue("5"),
+		PropertyValue(vec)
 	};
 	EXPECT_THROW(invoke("db.index.vector.queryNodes", args), std::runtime_error);
 }
