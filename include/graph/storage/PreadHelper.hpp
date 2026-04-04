@@ -17,6 +17,7 @@
 		#define WIN32_LEAN_AND_MEAN
 	#endif
 	#include <windows.h>
+	#include <fcntl.h>   // O_RDONLY
 #else
 	#include <fcntl.h>
 	#include <unistd.h>
@@ -30,10 +31,6 @@ namespace graph::storage {
 #ifdef _WIN32
 	// Windows doesn't have ssize_t, define it
 	using ssize_t = intptr_t;
-	// Use int64_t directly instead of redefining off_t to avoid conflicts with Windows SDK
-	// Windows SDK defines off_t as long (32-bit) in sys/types.h
-	// Constants for Windows compatibility
-	constexpr int O_RDONLY = 0x0000;
 #endif
 
 /**
