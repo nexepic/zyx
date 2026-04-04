@@ -20,12 +20,19 @@
 #include <stdexcept>
 #include <type_traits>
 
+// The `#define private public` hack does not work on Windows because MSVC
+// includes access specifiers in mangled names.
+#ifndef _WIN32
 #define private public
+#endif
 #include "graph/concurrent/ThreadPool.hpp"
+#ifndef _WIN32
 #undef private
+#endif
 
 using graph::concurrent::ThreadPool;
 
+#ifndef _WIN32
 TEST(ThreadPoolStoppedBranchTest, SubmitThrowsWhenPoolHasBeenStopped) {
 	ThreadPool pool(2);
 	{
@@ -35,6 +42,7 @@ TEST(ThreadPoolStoppedBranchTest, SubmitThrowsWhenPoolHasBeenStopped) {
 
 	EXPECT_THROW((void)pool.submit([] { return 1; }), std::runtime_error);
 }
+#endif
 
 TEST(ThreadPoolStoppedBranchTest, WorkerLoopDrainsQueuedTasksAfterStopSignal) {
 	auto pool = std::make_unique<ThreadPool>(2);

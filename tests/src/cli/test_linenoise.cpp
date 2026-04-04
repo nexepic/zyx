@@ -39,6 +39,7 @@
 #define dup _dup
 #define dup2 _dup2
 #define close _close
+#define write _write
 #define fileno _fileno
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1

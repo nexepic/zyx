@@ -27,6 +27,10 @@
 // For isatty() and debugger detection
 #if defined(__unix__) || defined(__APPLE__)
 #include <unistd.h>
+#elif defined(_WIN32)
+#include <io.h>
+#define isatty _isatty
+#define STDIN_FILENO 0
 #endif
 #ifdef __APPLE__
 #include <sys/sysctl.h>

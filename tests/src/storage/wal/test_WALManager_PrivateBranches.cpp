@@ -16,11 +16,15 @@
 #ifndef _WIN32
 #include <fcntl.h>
 #include <unistd.h>
-#endif
 
+// The `#define private public` hack does not work on Windows because MSVC
+// includes access specifiers in mangled names.
 #define private public
 #include "graph/storage/wal/WALManager.hpp"
 #undef private
+#endif
+
+#include "graph/storage/wal/WALManager.hpp"
 
 #include "graph/storage/wal/WALRecord.hpp"
 
@@ -51,6 +55,11 @@ protected:
 	}
 };
 
+#ifndef _WIN32
+// The `#define private public` hack does not work on Windows because MSVC
+// includes access specifiers in mangled names — the linker cannot match
+// symbols compiled as private against references compiled as public.
+
 TEST_F(WALManagerPrivateBranchesTest, WriteRecordWithNonNullZeroLengthCoversShortCircuitFalsePath) {
 	WALManager mgr;
 	mgr.open(testDbPath.string());
@@ -72,8 +81,6 @@ TEST_F(WALManagerPrivateBranchesTest, ValidateHeaderReturnsFalseWhenFdIsInvalidE
 
 	EXPECT_FALSE(mgr.validateHeader());
 }
-
-#ifndef _WIN32
 TEST_F(WALManagerPrivateBranchesTest, ValidateHeaderReturnsFalseOnShortReadFromNonSeekableFd) {
 	WALFileHeader hdr;
 	writeRaw(walPath, serializeFileHeader(hdr));

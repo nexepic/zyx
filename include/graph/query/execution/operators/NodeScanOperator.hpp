@@ -236,7 +236,7 @@ namespace graph::query::execution::operators {
 				// Single pread for the entire coalesced group
 				size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<off_t>(group.startOffset);
+				auto groupOffset = static_cast<int64_t>(group.startOffset);
 				ssize_t n = dm_->preadBytes(groupBuf.data(), totalBytes, groupOffset);
 				if (n < static_cast<ssize_t>(totalBytes))
 					return;

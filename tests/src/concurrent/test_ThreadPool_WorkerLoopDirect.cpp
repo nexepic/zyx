@@ -16,12 +16,19 @@
 #include <thread>
 #include <type_traits>
 
+// The `#define private public` hack does not work on Windows because MSVC
+// includes access specifiers in mangled names.
+#ifndef _WIN32
 #define private public
+#endif
 #include "graph/concurrent/ThreadPool.hpp"
+#ifndef _WIN32
 #undef private
+#endif
 
 using graph::concurrent::ThreadPool;
 
+#ifndef _WIN32
 TEST(ThreadPoolWorkerLoopDirectTest, ResolveThreadCountCoversFallbackAndSingleThreadNormalization) {
 	EXPECT_EQ(ThreadPool::resolveThreadCount(0, 0), 2UL);
 	EXPECT_EQ(ThreadPool::resolveThreadCount(0, 6), 6UL);
@@ -46,6 +53,7 @@ TEST(ThreadPoolWorkerLoopDirectTest, WorkerLoopExecutesQueuedTaskThenStops) {
 	EXPECT_EQ(executed.load(std::memory_order_relaxed), 1);
 	EXPECT_TRUE(pool.tasks_.empty());
 }
+#endif
 
 TEST(ThreadPoolWorkerLoopDirectTest, MultiThreadSubmitPathQueuesAndRunsTask) {
 	ThreadPool pool(2);
