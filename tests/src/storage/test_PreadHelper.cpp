@@ -10,6 +10,7 @@
 #include <fstream>
 #include <cstring>
 #include <chrono>
+#include <filesystem>
 #include "graph/storage/PreadHelper.hpp"
 
 using namespace graph::storage;
