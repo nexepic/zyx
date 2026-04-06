@@ -433,7 +433,7 @@ namespace graph::storage {
 	std::unordered_map<int64_t, Property> DataManager::bulkLoadPropertyEntities(
 		const std::vector<int64_t> &ids, concurrent::ThreadPool *pool) const {
 		std::unordered_map<int64_t, Property> result;
-		if (ids.empty() || readFd_ < 0)
+		if (ids.empty() || readFd_ == INVALID_FILE_HANDLE)
 			return result;
 
 		// Sort IDs and group by segment for sequential I/O
@@ -909,7 +909,7 @@ namespace graph::storage {
 	std::optional<EntityType> DataManager::readEntityFromDisk(const int64_t fileOffset) const {
 		EntityType entity;
 
-		if (readFd_ >= 0) {
+		if (readFd_ != INVALID_FILE_HANDLE) {
 			// Thread-safe path: pread() is atomic and needs no synchronization
 			constexpr size_t entitySize = EntityType::getTotalSize();
 			char buf[entitySize];
@@ -954,7 +954,7 @@ namespace graph::storage {
 		auto entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) +
 														relativePosition * EntityType::getTotalSize());
 
-		if (readFd_ >= 0) {
+		if (readFd_ != INVALID_FILE_HANDLE) {
 			// pread path: skip bitmap check — readEntityFromDisk checks isActive() on the
 			// deserialized entity itself. This avoids a shared_lock on SegmentTracker per read.
 			return readEntityFromDisk<EntityType>(entityOffset);
@@ -1006,7 +1006,7 @@ namespace graph::storage {
 					result.push_back(entityOpt.value());
 				}
 			} else {
-				if (readFd_ >= 0) {
+				if (readFd_ != INVALID_FILE_HANDLE) {
 					constexpr size_t entitySize = EntityType::getTotalSize();
 					char buf[entitySize];
 					ssize_t n = storage::portable_pread(readFd_, buf, entitySize, entityOffset);
@@ -1162,7 +1162,7 @@ namespace graph::storage {
 				}
 
 				// Page pool miss — read full segment from disk, populate pool
-				if (readFd_ >= 0) {
+				if (readFd_ != INVALID_FILE_HANDLE) {
 					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
 					ssize_t n = storage::portable_pread(readFd_, segData.data(), TOTAL_SEGMENT_SIZE,
 														static_cast<int64_t>(segmentOffset));
@@ -1247,7 +1247,7 @@ namespace graph::storage {
 					return make_inactive<EntityType>();
 				}
 
-				if (readFd_ >= 0) {
+				if (readFd_ != INVALID_FILE_HANDLE) {
 					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
 					ssize_t n = storage::portable_pread(readFd_, segData.data(), TOTAL_SEGMENT_SIZE,
 														static_cast<int64_t>(segmentOffset));
@@ -1305,7 +1305,7 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::bulkLoadEntities(int64_t filterStartId, int64_t filterEndId) const {
-		if (readFd_ < 0)
+		if (readFd_ == INVALID_FILE_HANDLE)
 			return {}; // Requires pread support
 
 		// Get sorted segment list for this entity type
