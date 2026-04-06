@@ -98,11 +98,15 @@ protected:
 	}
 
 	void TearDown() override {
-		// Clean up resources
+		// Clean up resources - reset shared_ptrs before file removal
+		observer.reset();
+		dataManager.reset();
+		fileStorage.reset();
 		database->close();
 		database.reset();
+		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+			std::filesystem::remove(testFilePath, ec);
 		}
 	}
 

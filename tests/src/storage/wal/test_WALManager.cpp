@@ -50,8 +50,9 @@ protected:
 	}
 
 	void TearDown() override {
-		fs::remove(testDbPath);
-		fs::remove(walPath);
+		std::error_code ec;
+		fs::remove(testDbPath, ec);
+		fs::remove(walPath, ec);
 	}
 
 	fs::path testDbPath;

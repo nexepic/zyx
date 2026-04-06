@@ -220,7 +220,9 @@ protected:
 
 	void TearDown() override {
 		if (db) db->close();
-		if (fs::exists(testDbPath)) fs::remove_all(testDbPath);
+		db.reset();
+		std::error_code ec;
+		if (fs::exists(testDbPath)) fs::remove_all(testDbPath, ec);
 	}
 
 	QueryResult execute(const std::string &query) const {

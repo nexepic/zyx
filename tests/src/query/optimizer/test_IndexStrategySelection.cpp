@@ -81,8 +81,10 @@ protected:
 		if (db) {
 			db->close();
 		}
+		db.reset();
+		std::error_code ec;
 		if (fs::exists(dbPath)) {
-			fs::remove(dbPath);
+			fs::remove(dbPath, ec);
 		}
 	}
 };

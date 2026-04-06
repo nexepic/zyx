@@ -43,8 +43,9 @@ protected:
 	}
 
 	void TearDown() override {
-		fs::remove(testDbPath);
-		fs::remove(walPath);
+		std::error_code ec;
+		fs::remove(testDbPath, ec);
+		fs::remove(walPath, ec);
 	}
 
 	static void writeRaw(const std::string &path, const std::vector<uint8_t> &bytes) {

@@ -43,7 +43,8 @@ protected:
 
 	void TearDown() override {
 		if (storage) storage->close();
-		if (fs::exists(testFilePath)) fs::remove(testFilePath);
+		std::error_code ec;
+		if (fs::exists(testFilePath)) fs::remove(testFilePath, ec);
 	}
 };
 

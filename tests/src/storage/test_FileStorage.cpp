@@ -45,10 +45,11 @@ protected:
 	}
 
 	void TearDown() override {
-		// Clean up using Database
+		fileStorage.reset();
 		database->close();
 		database.reset();
-		std::filesystem::remove(testFilePath);
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	std::filesystem::path testFilePath;
@@ -341,7 +342,7 @@ TEST_F(FileStorageTest, Open_CreateFails_InvalidPath) {
 			},
 			std::runtime_error);
 
-	std::filesystem::remove(dirPath);
+	{ std::error_code ec; std::filesystem::remove(dirPath, ec); }
 }
 
 TEST_F(FileStorageTest, Open_ExistingFails_Permissions) {
@@ -366,7 +367,7 @@ TEST_F(FileStorageTest, Open_ExistingFails_Permissions) {
 
 	// Cleanup: Restore permissions so we can delete it
 	std::filesystem::permissions(lockedPath, std::filesystem::perms::all);
-	std::filesystem::remove(lockedPath);
+	{ std::error_code ec; std::filesystem::remove(lockedPath, ec); }
 }
 
 TEST_F(FileStorageTest, Open_ExistingFails_DirectoryAsFile) {
@@ -380,7 +381,7 @@ TEST_F(FileStorageTest, Open_ExistingFails_DirectoryAsFile) {
 			},
 			std::runtime_error);
 
-	std::filesystem::remove(dirPath);
+	{ std::error_code ec; std::filesystem::remove(dirPath, ec); }
 }
 
 // --- New tests to cover uncovered branches ---
@@ -632,7 +633,7 @@ TEST_F(FileStorageTest, Destructor_ClosesStorage) {
 	}
 	// File should exist even after destructor
 	EXPECT_TRUE(std::filesystem::exists(tmpPath));
-	std::filesystem::remove(tmpPath);
+	{ std::error_code ec; std::filesystem::remove(tmpPath, ec); }
 }
 
 // =========================================================================
@@ -1737,7 +1738,7 @@ TEST_F(FileStorageTest, Open_CreateNewFile_Success) {
 		newDb->close();
 	}
 
-	std::filesystem::remove(newPath);
+	{ std::error_code ec; std::filesystem::remove(newPath, ec); }
 }
 
 TEST_F(FileStorageTest, Open_ExistingFile_Success) {

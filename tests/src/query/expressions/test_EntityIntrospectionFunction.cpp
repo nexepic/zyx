@@ -641,8 +641,9 @@ protected:
 	void TearDown() override {
 		database_->close();
 		database_.reset();
+		std::error_code ec;
 		if (std::filesystem::exists(testFilePath_)) {
-			std::filesystem::remove(testFilePath_);
+			std::filesystem::remove(testFilePath_, ec);
 		}
 	}
 

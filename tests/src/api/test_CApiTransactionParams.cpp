@@ -29,8 +29,9 @@ protected:
 	void TearDown() override {
 		if (db)
 			zyx_close(db);
+		std::error_code ec;
 		if (fs::exists(dbPath))
-			fs::remove_all(dbPath);
+			fs::remove_all(dbPath, ec);
 	}
 };
 

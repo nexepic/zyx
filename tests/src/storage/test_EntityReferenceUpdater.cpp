@@ -115,7 +115,9 @@ protected:
 		segmentTracker.reset();
 		if (file && file->is_open())
 			file->close();
-		std::filesystem::remove(testFilePath);
+		file.reset();
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	// --- Helpers to create valid on-disk entities and sync Tracker ---

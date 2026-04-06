@@ -60,8 +60,9 @@ protected:
 	void TearDown() override {
 		database->close();
 		database.reset();
+		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+			std::filesystem::remove(testFilePath, ec);
 		}
 		// Reset Log state to avoid side effects on other tests
 		log::Log::setDebug(false);

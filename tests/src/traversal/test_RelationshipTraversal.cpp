@@ -60,8 +60,9 @@ protected:
 	void TearDown() override {
 		database->close();
 		database.reset(); // Ensure database is destroyed before file deletion
+		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+			std::filesystem::remove(testFilePath, ec);
 		}
 	}
 
@@ -237,8 +238,9 @@ protected:
 	void TearDown() override {
 		database->close();
 		database.reset();
+		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+			std::filesystem::remove(testFilePath, ec);
 		}
 	}
 

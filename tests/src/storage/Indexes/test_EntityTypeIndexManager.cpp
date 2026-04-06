@@ -79,14 +79,16 @@ protected:
 		// Reset managers before closing DB to release shared_ptrs
 		nodeIndexManager.reset();
 		edgeIndexManager.reset();
+		dataManager.reset();
+		fileStorage.reset();
 
 		if (database) {
 			database->close();
 		}
 		database.reset();
-		if (fs::exists(testFilePath)) {
-			fs::remove(testFilePath);
-		}
+
+		std::error_code ec;
+		fs::remove(testFilePath, ec);
 	}
 
 	fs::path testFilePath;

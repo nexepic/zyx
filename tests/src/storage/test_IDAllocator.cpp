@@ -50,13 +50,15 @@ protected:
 	}
 
 	void TearDown() override {
+		allocator.reset();
+		dataManager.reset();
+		fileStorage.reset();
 		if (database) {
 			database->close();
 			database.reset();
 		}
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	[[nodiscard]] graph::Node insertNode(const std::string &label) const {

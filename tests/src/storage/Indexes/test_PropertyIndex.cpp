@@ -48,12 +48,14 @@ protected:
 	}
 
 	void TearDown() override {
+		propertyIndex.reset();
+		dataManager.reset();
 		if (database) {
 			database->close();
+			database.reset();
 		}
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	static bool vectorContains(const std::vector<int64_t> &vec, int64_t val) {

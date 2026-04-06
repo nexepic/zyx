@@ -93,8 +93,9 @@ protected:
 		tracker.reset();
 		indexManager.reset();
 		fileStream->close();
+		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+			std::filesystem::remove(testFilePath, ec);
 		}
 	}
 

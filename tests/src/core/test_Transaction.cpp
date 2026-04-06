@@ -36,7 +36,7 @@ protected:
 		fs::remove_all(testDbPath);
 	}
 
-	void TearDown() override { fs::remove_all(testDbPath); }
+	void TearDown() override { std::error_code ec; fs::remove_all(testDbPath, ec); }
 
 	fs::path testDbPath;
 };
@@ -276,8 +276,9 @@ TEST_F(TransactionTest, MoveAssignmentFromActiveToActive) {
 
 	db1.close();
 	db2.close();
-	fs::remove_all(testDbPath2);
-	fs::remove(testDbPath2.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testDbPath2, ec);
+	fs::remove(testDbPath2.string() + "-wal", ec);
 }
 
 TEST_F(TransactionTest, MoveAssignmentSelfAssignment) {

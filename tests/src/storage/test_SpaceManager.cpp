@@ -106,7 +106,8 @@ protected:
 		segmentTracker.reset();
 		if (file && file->is_open())
 			file->close();
-		std::filesystem::remove(testFilePath);
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	void createActiveNode(uint64_t offset, uint32_t index, int64_t id) const {

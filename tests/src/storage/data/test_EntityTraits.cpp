@@ -58,21 +58,22 @@ protected:
 	}
 
 	void TearDown() override {
-		// Clean up resources
+		// Release shared_ptrs before closing database
+		dataManager.reset();
+		fileStorage.reset();
+
 		if (database) {
 			database->close();
 		}
+		database.reset();
 
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 
 		// Also clean up WAL file if exists
 		std::filesystem::path walPath = testFilePath;
 		walPath += ".wal";
-		if (std::filesystem::exists(walPath)) {
-			std::filesystem::remove(walPath);
-		}
+		std::filesystem::remove(walPath, ec);
 	}
 
 	// Helper methods to create test entities

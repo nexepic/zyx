@@ -46,8 +46,9 @@ protected:
 			db->close();
 			db.reset();
 		}
-		fs::remove_all(testDbPath);
-		fs::remove(testDbPath.string() + "-wal");
+		std::error_code ec;
+		fs::remove_all(testDbPath, ec);
+		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	fs::path testDbPath;
@@ -270,8 +271,9 @@ TEST(TransactionManagerNoWALTest, TransactionWithoutWAL) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 // ============================================================================
@@ -300,8 +302,9 @@ TEST(TransactionManagerNoWALTest, CommitNonActiveTransactionEarlyReturn) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST(TransactionManagerNoWALTest, RollbackNonActiveTransactionEarlyReturn) {
@@ -325,8 +328,9 @@ TEST(TransactionManagerNoWALTest, RollbackNonActiveTransactionEarlyReturn) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 // ============================================================================
@@ -397,8 +401,9 @@ TEST_F(TransactionManagerTest, RollbackAfterStorageClosed) {
 	EXPECT_FALSE(txn.isActive());
 
 	testDb2.reset();
-	fs::remove_all(testPath2);
-	fs::remove(testPath2.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath2, ec);
+	fs::remove(testPath2.string() + "-wal", ec);
 }
 
 // ============================================================================
@@ -442,8 +447,9 @@ TEST(TransactionManagerClosedWALTest, TransactionWithClosedWAL) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 // ============================================================================
@@ -476,8 +482,9 @@ TEST(TransactionManagerTimeoutTest, TimeoutOnBusyMutex) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST_F(TransactionManagerTest, AtomicHasActiveAfterCommit) {
@@ -539,8 +546,9 @@ TEST(ConcurrentReadTest, MultipleReadTransactionsSimultaneously) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST(ConcurrentReadTest, ReadTransactionGetsSnapshot) {
@@ -564,8 +572,9 @@ TEST(ConcurrentReadTest, ReadTransactionGetsSnapshot) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST(ConcurrentReadTest, ReadDoesNotBlockRead) {
@@ -593,8 +602,9 @@ TEST(ConcurrentReadTest, ReadDoesNotBlockRead) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST(ConcurrentReadTest, WriteBlocksOnActiveReaders) {
@@ -623,8 +633,9 @@ TEST(ConcurrentReadTest, WriteBlocksOnActiveReaders) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST(ConcurrentReadTest, HasActiveTransactionOnlyTracksWrites) {
@@ -652,8 +663,9 @@ TEST(ConcurrentReadTest, HasActiveTransactionOnlyTracksWrites) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST(ConcurrentReadTest, ReadRollbackReleasesLock) {
@@ -681,8 +693,9 @@ TEST(ConcurrentReadTest, ReadRollbackReleasesLock) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }
 
 TEST(ConcurrentReadTest, MultipleReadersOneWriter) {
@@ -727,6 +740,7 @@ TEST(ConcurrentReadTest, MultipleReadersOneWriter) {
 
 	testDb->close();
 	testDb.reset();
-	fs::remove_all(testPath);
-	fs::remove(testPath.string() + "-wal");
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
 }

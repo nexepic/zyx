@@ -55,13 +55,19 @@ protected:
 	}
 
 	void TearDown() override {
-		// Release resources and clean up the file
-		db->close();
+		// Release shared_ptrs before closing database
+		indexEntityManager.reset();
+		deletionManager.reset();
+		dataManager.reset();
+		storage.reset();
+
+		if (db) {
+			db->close();
+		}
 		db.reset();
 
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	// Helper function to create a valid Index entity

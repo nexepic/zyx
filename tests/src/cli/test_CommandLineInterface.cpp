@@ -65,10 +65,11 @@ protected:
 	void TearDown() override { cleanPaths(); }
 
 	void cleanPaths() const {
+		std::error_code ec;
 		if (fs::exists(dbPath))
-			fs::remove_all(dbPath);
+			fs::remove_all(dbPath, ec);
 		if (fs::exists(scriptPath))
-			fs::remove(scriptPath);
+			fs::remove(scriptPath, ec);
 	}
 
 	// Helper to create a dummy cypher script
@@ -167,8 +168,10 @@ TEST_F(CommandLineInterfaceTest, ExecuteScriptSuccessfully) {
 
 // Verify 'exec' command with missing script file
 TEST_F(CommandLineInterfaceTest, ExecuteMissingScriptFile) {
-	if (fs::exists(scriptPath))
-		fs::remove(scriptPath);
+	if (fs::exists(scriptPath)) {
+		std::error_code ec;
+		fs::remove(scriptPath, ec);
+	}
 
 	int exitCode = runMockCLI({"database", "exec", dbPath, scriptPath});
 	EXPECT_NE(exitCode, 0) << "CLI should fail if script file is missing";
@@ -204,8 +207,10 @@ TEST_F(CommandLineInterfaceTest, CreateCommandSafety) {
 
 // Verify 'open' command safety (Should fail if DB missing)
 TEST_F(CommandLineInterfaceTest, OpenCommandSafety) {
-	if (fs::exists(dbPath))
-		fs::remove_all(dbPath);
+	if (fs::exists(dbPath)) {
+		std::error_code ec;
+		fs::remove_all(dbPath, ec);
+	}
 
 	EXPECT_THROW(
 			{
@@ -217,8 +222,10 @@ TEST_F(CommandLineInterfaceTest, OpenCommandSafety) {
 
 // Verify 'open -c' (Create if missing)
 TEST_F(CommandLineInterfaceTest, OpenWithCreateFlag) {
-	if (fs::exists(dbPath))
-		fs::remove_all(dbPath);
+	if (fs::exists(dbPath)) {
+		std::error_code ec;
+		fs::remove_all(dbPath, ec);
+	}
 
 	EXPECT_NO_THROW({
 		graph::Database db(dbPath, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
@@ -243,8 +250,10 @@ TEST_F(CommandLineInterfaceTest, CreateCommandExistingDatabase) {
 // Test open command without create-if-missing flag (should fail for missing DB)
 TEST_F(CommandLineInterfaceTest, OpenCommandMissingDatabase) {
 	// Ensure database doesn't exist
-	if (fs::exists(dbPath))
-		fs::remove_all(dbPath);
+	if (fs::exists(dbPath)) {
+		std::error_code ec;
+		fs::remove_all(dbPath, ec);
+	}
 
 	// Try to open non-existent database - error is caught, returns 0
 	EXPECT_EQ(runMockCLI({"database", "open", dbPath}), 0);

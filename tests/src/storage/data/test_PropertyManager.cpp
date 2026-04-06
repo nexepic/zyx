@@ -81,13 +81,20 @@ protected:
 	}
 
 	void TearDown() override {
-		// Release resources and clean up the file
-		db->close();
+		// Release shared_ptrs before closing database
+		edgeManager.reset();
+		nodeManager.reset();
+		propertyManager.reset();
+		dataManager.reset();
+		storage.reset();
+
+		if (db) {
+			db->close();
+		}
 		db.reset();
 
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	// Helper to create a large property map for testing blob storage

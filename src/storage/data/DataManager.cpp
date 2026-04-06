@@ -79,9 +79,16 @@ namespace graph::storage {
 	}
 
 	DataManager::~DataManager() {
+		closeFileHandles();
+	}
+
+	void DataManager::closeFileHandles() {
 		if (readFd_ != storage::INVALID_FILE_HANDLE) {
 			storage::portable_close(readFd_);
 			readFd_ = storage::INVALID_FILE_HANDLE;
+			if (segmentTracker_) {
+				segmentTracker_->setReadFd(INVALID_FILE_HANDLE);
+			}
 		}
 	}
 

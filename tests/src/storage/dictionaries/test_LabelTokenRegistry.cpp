@@ -63,9 +63,11 @@ protected:
 		// Close and cleanup
 		if (storage) {
 			storage->close();
+		storage.reset();
 		}
+		std::error_code ec;
 		if (fs::exists(testDbPath)) {
-			fs::remove(testDbPath);
+			fs::remove(testDbPath, ec);
 		}
 	}
 

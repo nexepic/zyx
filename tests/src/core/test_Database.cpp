@@ -29,8 +29,9 @@ protected:
 	}
 
 	void TearDown() override {
+		std::error_code ec;
 		if (fs::exists(testDbPath))
-			fs::remove_all(testDbPath);
+			fs::remove_all(testDbPath, ec);
 	}
 
 	std::filesystem::path testDbPath;

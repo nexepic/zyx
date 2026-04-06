@@ -59,12 +59,14 @@ protected:
 	void TearDown() override {
 		if (db)
 			db->close();
+		db.reset();
 
 		// Cleanup paths
+		std::error_code ec;
 		if (fs::exists(dbPath))
-			fs::remove_all(dbPath);
+			fs::remove_all(dbPath, ec);
 		if (fs::exists(scriptPath))
-			fs::remove(scriptPath);
+			fs::remove(scriptPath, ec);
 	}
 
 	// Helper to create a script file

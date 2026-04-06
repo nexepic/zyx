@@ -41,7 +41,9 @@ protected:
 
 	void TearDown() override {
 		if (db) db->close();
-		if (fs::exists(dbPath)) fs::remove(dbPath);
+		db.reset();
+		std::error_code ec;
+		if (fs::exists(dbPath)) fs::remove(dbPath, ec);
 	}
 };
 

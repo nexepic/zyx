@@ -103,11 +103,11 @@ protected:
 
 		if (fileStream) {
 			fileStream->close();
+			fileStream.reset();
 		}
 		// Cleanup file
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
-		}
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	// Helper to create and register a fully initialized segment header

@@ -58,13 +58,18 @@ protected:
 	}
 
 	void TearDown() override {
+		// Release shared_ptrs before closing database
+		indexManager.reset();
+		dataManager.reset();
+		fileStorage.reset();
+
 		if (database) {
 			database->close();
 		}
 		database.reset();
-		if (fs::exists(testFilePath)) {
-			fs::remove(testFilePath);
-		}
+
+		std::error_code ec;
+		fs::remove(testFilePath, ec);
 	}
 
 	// Helper to check if a specific index exists in the detailed list

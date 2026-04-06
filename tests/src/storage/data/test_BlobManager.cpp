@@ -49,11 +49,18 @@ protected:
 	}
 
 	void TearDown() override {
-		database->close();
-		database.reset();
-		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+		// Release shared_ptrs before closing database
+		blobManager.reset();
+		dataManager.reset();
+		fileStorage.reset();
+
+		if (database) {
+			database->close();
 		}
+		database.reset();
+
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	// Helper to create a Blob using the correct API

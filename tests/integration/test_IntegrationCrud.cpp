@@ -45,8 +45,10 @@ protected:
 	void TearDown() override {
 		if (db)
 			db->close();
+		db.reset();
+		std::error_code ec;
 		if (fs::exists(testDbPath))
-			fs::remove_all(testDbPath);
+			fs::remove_all(testDbPath, ec);
 	}
 
 	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }

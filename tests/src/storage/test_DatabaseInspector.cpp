@@ -62,8 +62,9 @@ protected:
 			database->close();
 			database.reset();
 		}
+		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
-			std::filesystem::remove(testFilePath);
+			std::filesystem::remove(testFilePath, ec);
 		}
 	}
 
@@ -261,7 +262,7 @@ TEST_F(DatabaseInspectorTest, InspectEmptyDatabase) {
 				(output.find("does not exist") != std::string::npos) || (output.find("Used: 0") != std::string::npos);
 		EXPECT_TRUE(handled);
 	}
-	std::filesystem::remove(emptyPath);
+	{ std::error_code ec; std::filesystem::remove(emptyPath, ec); }
 }
 
 TEST_F(DatabaseInspectorTest, InspectEdgeWithProperties) {

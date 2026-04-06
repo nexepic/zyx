@@ -44,8 +44,9 @@ protected:
 
 	void TearDown() override {
 		db.reset();
-		fs::remove_all(testDbPath);
-		fs::remove(testDbPath.string() + "-wal");
+		std::error_code ec;
+		fs::remove_all(testDbPath, ec);
+		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	fs::path testDbPath;

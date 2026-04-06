@@ -44,9 +44,8 @@ namespace graph::storage::test {
 
 		void TearDown() override {
 			// Clean up after tests
-			if (fs::exists(testFilePath)) {
-				fs::remove(testFilePath);
-			}
+			std::error_code ec;
+			fs::remove(testFilePath, ec);
 		}
 
 		// Helper to create an empty file of a specific size

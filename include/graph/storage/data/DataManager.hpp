@@ -230,6 +230,13 @@ namespace graph::storage {
 		// Cache management
 		void clearCache() const;
 
+		/**
+		 * Eagerly closes file handles (readFd_) so the database file can be
+		 * deleted on Windows even if the DataManager object is still alive.
+		 * Called by FileStorage::close() and by the destructor as a safety net.
+		 */
+		void closeFileHandles();
+
 		void setMaxDirtyEntities(size_t maxDirtyEntities) const;
 		void setAutoFlushCallback(std::function<void()> callback) const;
 		void checkAndTriggerAutoFlush() const;

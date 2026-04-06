@@ -55,11 +55,13 @@ protected:
 	}
 
 	static void TearDownTestSuite() {
+		dataManager_.reset();
 		if (database_) {
 			database_->close();
 			database_.reset();
+			std::error_code ec;
 			if (std::filesystem::exists(testDbPath_)) {
-				std::filesystem::remove(testDbPath_);
+				std::filesystem::remove(testDbPath_, ec);
 			}
 		}
 	}

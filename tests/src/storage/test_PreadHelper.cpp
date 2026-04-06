@@ -31,7 +31,9 @@ protected:
 	}
 
 	void TearDown() override {
-		std::remove(testFile_.c_str());
+		// Use C++ filesystem remove with error_code for best-effort cleanup on Windows
+		std::error_code ec;
+		std::filesystem::remove(testFile_, ec);
 	}
 };
 

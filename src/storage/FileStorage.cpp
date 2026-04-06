@@ -172,6 +172,7 @@ namespace graph::storage {
 			flush(); // Ensure any pending changes are written
 
 			dataManager->clearCache();
+			dataManager->closeFileHandles();
 
 			// Truncate free trailing segments while all handles are still open.
 			// Pass the native fd so truncation uses portable_ftruncate()

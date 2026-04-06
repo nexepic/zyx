@@ -38,7 +38,8 @@ protected:
 	}
 
 	void TearDown() override {
-		std::filesystem::remove_all(dbPath);
+		std::error_code ec;
+		std::filesystem::remove_all(dbPath, ec);
 	}
 };
 

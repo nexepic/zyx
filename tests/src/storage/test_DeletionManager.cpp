@@ -122,7 +122,8 @@ protected:
 		segmentTracker.reset();
 		if (file && file->is_open())
 			file->close();
-		std::filesystem::remove(testFilePath);
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	// --- Helper Functions to create entities and update Tracker Metadata ---

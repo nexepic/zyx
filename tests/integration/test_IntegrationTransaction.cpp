@@ -48,9 +48,11 @@ protected:
 	void TearDown() override {
 		if (db)
 			db->close();
+		db.reset();
+		std::error_code ec;
 		if (fs::exists(testDbPath))
-			fs::remove_all(testDbPath);
-		fs::remove(testDbPath.string() + "-wal");
+			fs::remove_all(testDbPath, ec);
+		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
@@ -310,8 +312,9 @@ protected:
 
 	void TearDown() override {
 		db.reset();
-		fs::remove_all(testDbPath);
-		fs::remove(testDbPath.string() + "-wal");
+		std::error_code ec;
+		fs::remove_all(testDbPath, ec);
+		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	fs::path testDbPath;

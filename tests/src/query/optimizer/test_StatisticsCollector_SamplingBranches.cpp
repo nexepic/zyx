@@ -40,8 +40,9 @@ protected:
 			db_->close();
 			db_.reset();
 		}
+		std::error_code ec;
 		if (fs::exists(testDbPath_)) {
-			fs::remove(testDbPath_);
+			fs::remove(testDbPath_, ec);
 		}
 	}
 

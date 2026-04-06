@@ -61,7 +61,8 @@ protected:
 		linenoise::linenoiseAtExit();
 
 		// Remove temporary files
-		fs::remove_all(tempDir);
+		std::error_code ec;
+		fs::remove_all(tempDir, ec);
 	}
 
 	fs::path tempDir;

@@ -71,8 +71,7 @@ TEST(StorageBootstrapTest, ScanChainCoversUsedAndUnusedSegmentBranches) {
 		EXPECT_EQ(result.segmentIndexEntries[2].endId, 500);
 	}
 
-	if (fs::exists(filePath)) {
-		fs::remove(filePath);
-	}
+	std::error_code ec;
+	fs::remove(filePath, ec);
 }
 

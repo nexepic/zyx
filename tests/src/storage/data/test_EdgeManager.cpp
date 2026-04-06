@@ -56,9 +56,20 @@ protected:
 	}
 
 	void TearDown() override {
-		database->close();
+		// Release shared_ptrs before closing database
+		nodeManager.reset();
+		edgeManager.reset();
+		deletionManager.reset();
+		dataManager.reset();
+		fileStorage.reset();
+
+		if (database) {
+			database->close();
+		}
 		database.reset();
-		std::filesystem::remove(testFilePath);
+
+		std::error_code ec;
+		std::filesystem::remove(testFilePath, ec);
 	}
 
 	void createTestNodes() {
@@ -519,8 +530,9 @@ TEST_F(EdgeManagerTest, OperationsWithExpiredDataManager) {
 
 	// Clean up
 	tempDatabase->close();
-	std::filesystem::remove(tempPath);
-	std::filesystem::remove(tempPath.string() + ".wal");
+	std::error_code ec;
+	std::filesystem::remove(tempPath, ec);
+	std::filesystem::remove(tempPath.string() + ".wal", ec);
 
 	// NOTE: The weak_ptr expiration scenario (where DataManager is destroyed but
 	// EdgeManager still exists) is difficult to test reliably due to the architecture.

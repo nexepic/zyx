@@ -47,8 +47,10 @@ protected:
 	void TearDown() override {
 		if (db)
 			db->close();
+		db.reset();
+		std::error_code ec;
 		if (fs::exists(testFilePath))
-			fs::remove_all(testFilePath);
+			fs::remove_all(testFilePath, ec);
 	}
 
 	[[nodiscard]] graph::query::QueryResult execute(const std::string &query) const {

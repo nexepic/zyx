@@ -42,6 +42,7 @@ TEST(WALManagerAccessorTest, AutoCheckpointAndWalSizeAccessors) {
 
 	mgr.close();
 	if (fs::exists(walPath)) {
-		fs::remove(walPath);
+		std::error_code ec;
+		fs::remove(walPath, ec);
 	}
 }

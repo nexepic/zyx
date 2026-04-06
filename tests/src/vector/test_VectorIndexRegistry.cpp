@@ -43,8 +43,12 @@ protected:
 	}
 
 	void TearDown() override {
+		dm.reset();
+		sm.reset();
 		database->close();
-		std::filesystem::remove(dbPath);
+		database.reset();
+		std::error_code ec;
+		std::filesystem::remove(dbPath, ec);
 	}
 
 	std::filesystem::path dbPath;

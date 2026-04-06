@@ -61,8 +61,9 @@ protected:
 		if (db_)
 			db_->close();
 		db_.reset();
+		std::error_code ec;
 		if (fs::exists(testDbPath_))
-			fs::remove_all(testDbPath_);
+			fs::remove_all(testDbPath_, ec);
 	}
 
 	static void populateTestData() {
