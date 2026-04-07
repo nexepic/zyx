@@ -29,7 +29,7 @@ public:
 	NotNullConstraint(std::string name, std::string label, std::string property)
 		: name_(std::move(name)), label_(std::move(label)), property_(std::move(property)) {}
 
-	void validateInsert(int64_t entityId,
+	void validateInsert(int64_t /*entityId*/,
 		const std::unordered_map<std::string, PropertyValue> &props) override {
 		auto it = props.find(property_);
 		if (it == props.end() || it->second.getType() == PropertyType::NULL_TYPE) {
@@ -39,8 +39,8 @@ public:
 		}
 	}
 
-	void validateUpdate(int64_t entityId,
-		const std::unordered_map<std::string, PropertyValue> &oldProps,
+	void validateUpdate(int64_t /*entityId*/,
+		const std::unordered_map<std::string, PropertyValue> &/*oldProps*/,
 		const std::unordered_map<std::string, PropertyValue> &newProps) override {
 		// Check the new state of the property
 		auto it = newProps.find(property_);

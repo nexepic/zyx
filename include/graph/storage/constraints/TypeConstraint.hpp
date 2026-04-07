@@ -33,13 +33,13 @@ public:
 		: name_(std::move(name)), label_(std::move(label)),
 		  property_(std::move(property)), expectedType_(expectedType) {}
 
-	void validateInsert(int64_t entityId,
+	void validateInsert(int64_t /*entityId*/,
 		const std::unordered_map<std::string, PropertyValue> &props) override {
 		checkType(props);
 	}
 
-	void validateUpdate(int64_t entityId,
-		const std::unordered_map<std::string, PropertyValue> &oldProps,
+	void validateUpdate(int64_t /*entityId*/,
+		const std::unordered_map<std::string, PropertyValue> &/*oldProps*/,
 		const std::unordered_map<std::string, PropertyValue> &newProps) override {
 		checkType(newProps);
 	}

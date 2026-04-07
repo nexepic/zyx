@@ -150,8 +150,8 @@ TEST_F(PageBufferPoolStatsTest, StatsAccessible) {
 	auto &pool = dm->getPagePool();
 
 	// Stats should be accessible without errors
-	EXPECT_NO_THROW(pool.hits());
-	EXPECT_NO_THROW(pool.misses());
+	(void) pool.hits();
+	(void) pool.misses();
 }
 
 TEST_F(PageBufferPoolStatsTest, ResetStats) {
@@ -183,8 +183,8 @@ TEST_F(PageBufferPoolStatsTest, OperationsGenerateStats) {
 
 	// Page pool may or may not be hit depending on storage layer behavior.
 	// Just verify the counters are accessible and non-negative (no crash).
-	EXPECT_NO_THROW(pool.hits());
-	EXPECT_NO_THROW(pool.misses());
+	(void) pool.hits();
+	(void) pool.misses();
 }
 
 TEST_F(PageBufferPoolStatsTest, ShowStatsViaCypher) {

@@ -28,11 +28,11 @@ ExistsExpression::ExistsExpression(
 	std::unique_ptr<Expression> whereExpr
 )
 	: pattern_(std::move(pattern))
-	, whereExpr_(std::move(whereExpr))
 	, sourceVar_(std::move(sourceVar))
 	, relType_(std::move(relType))
 	, targetLabel_(std::move(targetLabel))
 	, direction_(direction)
+	, whereExpr_(std::move(whereExpr))
 	 {
 }
 

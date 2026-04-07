@@ -16,7 +16,7 @@ TEST(QueryResultTest, NotificationsAreStoredAndReturned) {
 	result.addNotification("used fallback plan");
 
 	const auto &notifications = result.getNotifications();
-	ASSERT_EQ(notifications.size(), 2);
+	ASSERT_EQ(notifications.size(), 2U);
 	EXPECT_EQ(notifications[0], "slow query");
 	EXPECT_EQ(notifications[1], "used fallback plan");
 }

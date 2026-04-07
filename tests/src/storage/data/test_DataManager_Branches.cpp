@@ -275,9 +275,11 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesSequentialSkipsZeroUsedSegment) 
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelHandlesShortReadGroup) {
+	// Create enough entities to guarantee at least 2 property segments
+	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 1;
 	std::vector<int64_t> propertyIds;
-	propertyIds.reserve(5);
-	for (int i = 0; i < 5; ++i) {
+	propertyIds.reserve(entityCount);
+	for (int i = 0; i < entityCount; ++i) {
 		const int64_t id = addNodeWithSinglePropertyEntity(dataManager, "BulkParShortReadNode", i + 1);
 		ASSERT_NE(id, 0);
 		propertyIds.push_back(id);
@@ -308,9 +310,11 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelHandlesShortReadGroup) {
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelCoversZeroUsedInactiveAndOutOfSlot) {
+	// Create enough entities to guarantee at least 2 property segments
+	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 1;
 	std::vector<int64_t> propertyIds;
-	propertyIds.reserve(5);
-	for (int i = 0; i < 5; ++i) {
+	propertyIds.reserve(entityCount);
+	for (int i = 0; i < entityCount; ++i) {
 		const int64_t id = addNodeWithSinglePropertyEntity(dataManager, "BulkParBranchNode", i + 10);
 		ASSERT_NE(id, 0);
 		propertyIds.push_back(id);
@@ -347,8 +351,10 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelCoversZeroUsedInactiveAn
 									return seg.segmentOffset == firstSeg->segmentOffset;
 								});
 	ASSERT_NE(firstIt, patchedIndex.end());
-	firstIt->endId = std::max(firstIt->endId, firstIt->startId + 7);
-	const int64_t outOfSlotId = firstIt->startId + 7;
+	// Place outOfSlotId beyond the actual used count so slot >= header.used
+	const SegmentHeader firstHeader = dataManager->getSegmentTracker()->getSegmentHeaderCopy(firstSeg->segmentOffset);
+	const int64_t outOfSlotId = firstIt->startId + static_cast<int64_t>(firstHeader.used) + 1;
+	firstIt->endId = std::max(firstIt->endId, outOfSlotId);
 	dataManager->getSegmentIndexManager()->setSegmentIndex(Property::typeId, std::move(patchedIndex));
 
 	const int64_t secondSegId = propertyIds.back();
@@ -407,7 +413,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesSequentialHandlesShortRead) {
 	ASSERT_NE(seg, nullptr);
 
 	dataManager->getSegmentTracker()->updateSegmentHeader(seg->segmentOffset, [](SegmentHeader &header) {
-		header.used = 100;
+		// Set used far beyond what the file could contain to guarantee a short read from pread
+		header.used = PROPERTIES_PER_SEGMENT * 100;
 		header.inactive_count = 0;
 	});
 

@@ -818,7 +818,7 @@ TEST_F(IDAllocatorTest, DiskScan_Wrapping) {
 	// This tests cursor.wrappedAround logic in fetchInactiveIdsFromDisk
 
 	// 1. Create many nodes across multiple segments
-	constexpr int COUNT = 300;
+	const int COUNT = static_cast<int>(graph::storage::NODES_PER_SEGMENT) + 50;
 	for (int i = 0; i < COUNT; ++i) {
 		(void)insertNode("N");
 	}
@@ -1577,7 +1577,7 @@ TEST_F(IDAllocatorTest, FetchInactiveIds_ScansMultipleSegments) {
 	allocator->setCacheLimits(200, 100, 50000);
 
 	// Create enough nodes to span multiple segments
-	constexpr int COUNT = 500;
+	const int COUNT = static_cast<int>(graph::storage::NODES_PER_SEGMENT) + 50;
 	for (int i = 0; i < COUNT; ++i) {
 		(void)insertNode("N");
 	}

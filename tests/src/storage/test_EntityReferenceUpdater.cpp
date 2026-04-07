@@ -1302,7 +1302,7 @@ TEST_F(EntityReferenceUpdaterTest, UpdateIndex_InternalNodeMultipleChildren) {
 	// that occurs when creating 4 Index entities (1 parent + 3 children).
 	//
 	// ROOT CAUSE (from Address Sanitizer analysis):
-	// - INDEXES_PER_SEGMENT = SEGMENT_SIZE / Index::getTotalSize() = 1024 / 256 = 4
+	// - INDEXES_PER_SEGMENT = SEGMENT_SIZE / Index::getTotalSize()
 	// - When creating the 4th Index, SegmentHeader::activity_bitmap gets corrupted
 	// - ASan detected invalid address 0x000061500000f434 (contains ASCII "Pa")
 	// - Error occurs in bitmap::getBit() at StorageHeaders.hpp:128

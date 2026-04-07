@@ -291,7 +291,10 @@ TEST_F(TransactionTest, MoveAssignmentSelfAssignment) {
 	EXPECT_TRUE(txn.isActive());
 
 	// Self-assignment should be a no-op
-	txn = std::move(txn); // NOLINT - intentionally testing self-assignment
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-move"
+	txn = std::move(txn);
+#pragma clang diagnostic pop
 
 	EXPECT_TRUE(txn.isActive());
 	EXPECT_EQ(txn.getId(), id);

@@ -1581,9 +1581,10 @@ TEST_F(DataManagerTest, GetEntitiesInRangeStateWithLimitFromDisk) {
 }
 
 TEST_F(DataManagerTest, GetEntitiesInRangeMultiSegmentNonOverlap) {
-	// Create enough nodes to fill at least 2 segments (>4 nodes)
+	// Create enough nodes to fill at least 2 segments
+	const int nodeCount = static_cast<int>(NODES_PER_SEGMENT) + 10;
 	std::vector<int64_t> nodeIds;
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < nodeCount; i++) {
 		auto node = createTestNode(dataManager, "MultiSeg");
 		dataManager->addNode(node);
 		nodeIds.push_back(node.getId());
@@ -1592,11 +1593,11 @@ TEST_F(DataManagerTest, GetEntitiesInRangeMultiSegmentNonOverlap) {
 	fileStorage->flush();
 	dataManager->clearCache();
 
-	// Query only the last few IDs, which live in a later segment.
-	// The first segment (IDs 1-4) should NOT overlap with this range,
+	// Query only the last few IDs, which live in the second segment.
+	// The first segment should NOT overlap with this range,
 	// triggering the intersectStart > intersectEnd continue on line 660.
-	int64_t queryStart = nodeIds[6]; // 7th node
-	int64_t queryEnd = nodeIds[9];   // 10th node
+	int64_t queryStart = nodeIds[nodeCount - 4]; // 4th from the end
+	int64_t queryEnd = nodeIds[nodeCount - 1];   // last node
 	auto result = dataManager->getEntitiesInRange<Node>(queryStart, queryEnd, 100);
 	EXPECT_GE(result.size(), 1UL) << "Should find nodes in later segment";
 	for (const auto &n : result) {

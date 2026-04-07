@@ -163,7 +163,7 @@ void ConstraintManager::validateNodeUpdate(const Node &node,
 	}
 }
 
-void ConstraintManager::validateNodeDelete(const Node &node) {
+void ConstraintManager::validateNodeDelete(const Node &/*node*/) {
 	// No constraints block deletion currently
 }
 
@@ -188,7 +188,7 @@ void ConstraintManager::validateEdgeUpdate(const Edge &edge,
 	}
 }
 
-void ConstraintManager::validateEdgeDelete(const Edge &edge) {
+void ConstraintManager::validateEdgeDelete(const Edge &/*edge*/) {
 	// No constraints block deletion currently
 }
 

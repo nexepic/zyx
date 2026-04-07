@@ -377,7 +377,7 @@ TEST_F(CppApiTest, EdgeStreamMode_GetEntity) {
 // ============================================================================
 
 TEST_F(CppApiTest, ResultWithMapProperty) {
-	db->execute("CREATE (n:MapTestNode {key: 'value', num: 42})");
+	(void) db->execute("CREATE (n:MapTestNode {key: 'value', num: 42})");
 	auto res = db->execute("MATCH (n:MapTestNode) RETURN n.key AS k, n.num AS num");
 	ASSERT_TRUE(res.hasNext());
 	res.next();

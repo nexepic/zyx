@@ -48,7 +48,7 @@ TEST_F(HeterogeneousListTest, DoubleList) {
 
 	ASSERT_EQ(listValue.getType(), PropertyType::LIST);
 	const auto& retrievedList = listValue.getList();
-	ASSERT_EQ(retrievedList.size(), 3);
+	ASSERT_EQ(retrievedList.size(), 3U);
 
 	EXPECT_EQ(retrievedList[0].getType(), PropertyType::DOUBLE);
 	EXPECT_EQ(std::get<double>(retrievedList[0].getVariant()), 1.5);
@@ -112,7 +112,7 @@ TEST_F(HeterogeneousListTest, ListWithNulls) {
 
 	ASSERT_EQ(listValue.getType(), PropertyType::LIST);
 	const auto& retrievedList = listValue.getList();
-	ASSERT_EQ(retrievedList.size(), 3);
+	ASSERT_EQ(retrievedList.size(), 3U);
 
 	EXPECT_EQ(retrievedList[0].getType(), PropertyType::INTEGER);
 	EXPECT_EQ(retrievedList[1].getType(), PropertyType::NULL_TYPE);
