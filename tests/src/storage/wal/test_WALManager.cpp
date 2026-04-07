@@ -1207,6 +1207,9 @@ TEST_F(WALManagerTest, ValidateHeaderTruncatedContent) {
 // After opening, we replace the WAL path with a non-empty directory so
 // fs::remove fails and checkpoint throws.
 TEST_F(WALManagerTest, CheckpointTruncateReopenFailure) {
+#ifdef _WIN32
+	GTEST_SKIP() << "Windows does not allow removing a file while it is open";
+#endif
 	WALManager mgr;
 	mgr.open(testDbPath.string());
 	mgr.writeBegin(1);
