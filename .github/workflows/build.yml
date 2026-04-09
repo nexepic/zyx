@@ -152,6 +152,7 @@ jobs:
       # -----------------------------------------------------------
 
       - name: Generate Coverage Report
+        if: runner.os == 'Linux'
         run: |
           # Dynamic tool resolution
           if [ "$RUNNER_OS" == "macOS" ]; then
@@ -173,6 +174,7 @@ jobs:
         shell: bash
 
       - name: Upload to Codecov
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

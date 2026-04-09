@@ -1,0 +1,218 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            native_file: compiler_options.ini
+            os_tag: linux
+            arch_tag: x86_64
+            ext: tar.gz
+
+          - os: macos-latest
+            native_file: compiler_options_mac.ini
+            os_tag: macos
+            arch_tag: arm64
+            ext: tar.gz
+
+          - os: windows-latest
+            native_file: compiler_options_win64.ini
+            os_tag: windows
+            arch_tag: x86_64
+            ext: zip
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Extract Version
+        id: version
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Common Tools (pip)
+        run: pip install conan meson ninja
+
+      # -----------------------------------------------------------
+      # Platform Specific System Dependencies
+      # -----------------------------------------------------------
+
+      - name: Install System Deps (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install pkgconfiglite --allow-empty-checksums
+          choco install llvm --version=20.1.4 --force
+          echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Install System Deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+
+      - name: Install System Deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pkg-config
+
+      # -----------------------------------------------------------
+      # Conan Dependency Installation
+      # -----------------------------------------------------------
+
+      - name: Install Project Dependencies (Conan)
+        run: |
+          conan profile detect
+          mkdir -p buildDir
+          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+
+      # -----------------------------------------------------------
+      # Build Phase
+      # -----------------------------------------------------------
+
+      - name: Configure and Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd buildDir
+          $DIST_PATH = (Resolve-Path "..\dist").Path
+
+          meson setup . .. `
+            --native-file conan_meson_native.ini `
+            --native-file ..\${{ matrix.native_file }} `
+            --buildtype=release `
+            -Ddefault_library=shared `
+            -Db_lto=true `
+            -Dwarning_level=0 `
+            --prefix="$DIST_PATH" `
+            --libdir=lib
+
+          meson compile
+          meson install
+        shell: pwsh
+
+      - name: Configure and Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd buildDir
+          ABS_DIST_PATH="$(pwd)/../dist"
+          mkdir -p "$ABS_DIST_PATH"
+
+          meson setup . .. \
+            --native-file conan_meson_native.ini \
+            --native-file ../${{ matrix.native_file }} \
+            --buildtype=release \
+            -Ddefault_library=shared \
+            -Db_lto=true \
+            -Dwarning_level=0 \
+            --prefix="$ABS_DIST_PATH" \
+            --libdir=lib
+
+          meson compile
+          meson install
+
+      - name: Configure and Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd buildDir
+          ABS_DIST_PATH="$(pwd)/../dist"
+          mkdir -p "$ABS_DIST_PATH"
+
+          meson setup . .. \
+            --native-file conan_meson_native.ini \
+            --native-file ../compiler_options_mac.ini \
+            --buildtype=release \
+            -Ddefault_library=shared \
+            -Db_lto=true \
+            -Dwarning_level=0 \
+            --prefix="$ABS_DIST_PATH" \
+            --libdir=lib
+
+          meson compile
+          meson install
+
+          # macOS dylib fixup for relocatable library
+          LIB_PATH="$ABS_DIST_PATH/lib/libzyx.dylib"
+          if [ -f "$LIB_PATH" ]; then
+            install_name_tool -id "@rpath/libzyx.dylib" "$LIB_PATH"
+          fi
+
+      # -----------------------------------------------------------
+      # Package CLI Binary
+      # -----------------------------------------------------------
+
+      - name: Package CLI (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CLI_NAME="zyx-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.tar.gz"
+          echo "cli_asset=$CLI_NAME" >> "$GITHUB_ENV"
+
+          mkdir -p cli_package
+          cp buildDir/apps/cli/zyx cli_package/
+          tar -czf "$CLI_NAME" -C cli_package .
+
+      - name: Package CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ steps.version.outputs.version }}"
+          $CLI_NAME = "zyx-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.zip"
+          echo "cli_asset=$CLI_NAME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          New-Item -ItemType Directory -Force -Path cli_package
+          Copy-Item "buildDir\apps\cli\zyx.exe" -Destination cli_package\
+          Compress-Archive -Path cli_package\* -DestinationPath "$CLI_NAME"
+
+      # -----------------------------------------------------------
+      # Package SDK
+      # -----------------------------------------------------------
+
+      - name: Package SDK (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SDK_NAME="zyx-sdk-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.tar.gz"
+          echo "sdk_asset=$SDK_NAME" >> "$GITHUB_ENV"
+
+          tar -czf "$SDK_NAME" -C dist .
+
+      - name: Package SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ steps.version.outputs.version }}"
+          $SDK_NAME = "zyx-sdk-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.zip"
+          echo "sdk_asset=$SDK_NAME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          Compress-Archive -Path dist\* -DestinationPath "$SDK_NAME"
+
+      # -----------------------------------------------------------
+      # Upload Release Assets
+      # -----------------------------------------------------------
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.cli_asset }}
+            ${{ env.sdk_asset }}
