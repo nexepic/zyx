@@ -22,6 +22,7 @@
 #include "graph/query/execution/operators/AlgoShortestPathOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
+#include "graph/query/execution/operators/GdsOperators.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/ResetStatsOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
@@ -131,6 +132,69 @@ namespace graph::query::planner {
 
 		registerProcedure("dbms.resetStats", [](const ProcedureContext &ctx, const auto & /*args*/) {
 			return std::make_unique<execution::operators::ResetStatsOperator>(ctx.dataManager, ctx.indexManager);
+		});
+
+		// --- GDS Graph Projection ---
+		registerProcedure("gds.graph.project", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 3)
+				throw std::runtime_error("gds.graph.project expects (name, nodeLabel, edgeLabel[, weightProperty])");
+			std::string name = args[0].toString();
+			std::string nodeLabel = args[1].toString();
+			std::string edgeLabel = args[2].toString();
+			std::string weightProp = args.size() > 3 ? args[3].toString() : "";
+			return std::make_unique<execution::operators::GdsGraphProjectOperator>(
+				ctx.dataManager, ctx.projectionManager, name, nodeLabel, edgeLabel, weightProp);
+		});
+
+		registerProcedure("gds.graph.drop", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 1)
+				throw std::runtime_error("gds.graph.drop expects (name)");
+			return std::make_unique<execution::operators::GdsGraphDropOperator>(
+				ctx.projectionManager, args[0].toString());
+		});
+
+		// --- GDS Algorithms ---
+		registerProcedure("gds.shortestPath.dijkstra.stream", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 3)
+				throw std::runtime_error("gds.shortestPath.dijkstra.stream expects (graphName, startId, endId)");
+			std::string graphName = args[0].toString();
+			int64_t start = std::stoll(args[1].toString());
+			int64_t end = std::stoll(args[2].toString());
+			return std::make_unique<execution::operators::GdsDijkstraOperator>(
+				ctx.dataManager, ctx.projectionManager, graphName, start, end);
+		});
+
+		registerProcedure("gds.pageRank.stream", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 1)
+				throw std::runtime_error("gds.pageRank.stream expects (graphName[, maxIterations, dampingFactor])");
+			std::string graphName = args[0].toString();
+			int maxIter = args.size() > 1 ? static_cast<int>(std::stoll(args[1].toString())) : 20;
+			double damping = args.size() > 2 ? std::stod(args[2].toString()) : 0.85;
+			return std::make_unique<execution::operators::GdsPageRankOperator>(
+				ctx.dataManager, ctx.projectionManager, graphName, maxIter, damping);
+		});
+
+		registerProcedure("gds.wcc.stream", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 1)
+				throw std::runtime_error("gds.wcc.stream expects (graphName)");
+			return std::make_unique<execution::operators::GdsWccOperator>(
+				ctx.dataManager, ctx.projectionManager, args[0].toString());
+		});
+
+		registerProcedure("gds.betweenness.stream", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 1)
+				throw std::runtime_error("gds.betweenness.stream expects (graphName[, samplingSize])");
+			std::string graphName = args[0].toString();
+			int sampling = args.size() > 1 ? static_cast<int>(std::stoll(args[1].toString())) : 0;
+			return std::make_unique<execution::operators::GdsBetweennessOperator>(
+				ctx.dataManager, ctx.projectionManager, graphName, sampling);
+		});
+
+		registerProcedure("gds.closeness.stream", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 1)
+				throw std::runtime_error("gds.closeness.stream expects (graphName)");
+			return std::make_unique<execution::operators::GdsClosenessOperator>(
+				ctx.dataManager, ctx.projectionManager, args[0].toString());
 		});
 	}
 } // namespace graph::query::planner

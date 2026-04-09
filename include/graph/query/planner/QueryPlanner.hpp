@@ -45,6 +45,9 @@ namespace graph::query::indexes {
 namespace graph::query::optimizer {
 	class Optimizer;
 }
+namespace graph::query::algorithm {
+	class GraphProjectionManager;
+}
 namespace graph::query::execution {
 	class PhysicalOperator;
 	class Record;
@@ -256,12 +259,14 @@ namespace graph::query {
 		[[nodiscard]] std::shared_ptr<storage::DataManager> getDataManager() const { return dm_; }
 		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return im_; }
 		[[nodiscard]] std::shared_ptr<storage::constraints::ConstraintManager> getConstraintManager() const { return cm_; }
+		[[nodiscard]] std::shared_ptr<algorithm::GraphProjectionManager> getProjectionManager() const { return pm_; }
 		[[nodiscard]] optimizer::Optimizer* getOptimizer() const { return optimizer_.get(); }
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<indexes::IndexManager> im_;
 		std::shared_ptr<storage::constraints::ConstraintManager> cm_;
+		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
 
 		// The Brain: Handles logic for selecting the best scan strategy
 		std::unique_ptr<optimizer::Optimizer> optimizer_;

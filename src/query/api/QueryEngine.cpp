@@ -23,6 +23,7 @@
 #include "CypherParserImpl.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/planner/PhysicalPlanConverter.hpp"
+#include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/storage/constraints/ConstraintManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -76,6 +77,7 @@ namespace graph::query {
 			// Cache hit: convert cached logical plan to physical
 			auto dm = storage_->getDataManager();
 			PhysicalPlanConverter converter(dm, indexManager_, constraintManager_,
+			                                queryPlanner_->getProjectionManager(),
 			                                planCache_.hits(), planCache_.misses());
 			planTree = converter.convert(cachedLogical.get());
 		} else {
@@ -116,6 +118,7 @@ namespace graph::query {
 				// Convert logical to physical
 				auto dm = storage_->getDataManager();
 				PhysicalPlanConverter converter(dm, indexManager_, constraintManager_,
+				                                queryPlanner_->getProjectionManager(),
 				                                planCache_.hits(), planCache_.misses());
 				planTree = converter.convert(logicalPlan.get());
 			}

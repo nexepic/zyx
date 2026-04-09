@@ -24,6 +24,10 @@ namespace graph::storage::constraints {
 class ConstraintManager;
 }
 
+namespace graph::query::algorithm {
+class GraphProjectionManager;
+}
+
 namespace graph::query {
 
 class QueryPlanner;
@@ -39,8 +43,9 @@ public:
 	PhysicalPlanConverter(std::shared_ptr<storage::DataManager> dm,
 	                      std::shared_ptr<indexes::IndexManager> im,
 	                      std::shared_ptr<storage::constraints::ConstraintManager> cm = nullptr,
+	                      std::shared_ptr<algorithm::GraphProjectionManager> pm = nullptr,
 	                      uint64_t planCacheHits = 0, uint64_t planCacheMisses = 0)
-		: dm_(std::move(dm)), im_(std::move(im)), cm_(std::move(cm)),
+		: dm_(std::move(dm)), im_(std::move(im)), cm_(std::move(cm)), pm_(std::move(pm)),
 		  planCacheHits_(planCacheHits), planCacheMisses_(planCacheMisses) {}
 
 	/**
@@ -53,6 +58,7 @@ private:
 	std::shared_ptr<storage::DataManager> dm_;
 	std::shared_ptr<indexes::IndexManager> im_;
 	std::shared_ptr<storage::constraints::ConstraintManager> cm_;
+	std::shared_ptr<algorithm::GraphProjectionManager> pm_;
 	uint64_t planCacheHits_ = 0;
 	uint64_t planCacheMisses_ = 0;
 

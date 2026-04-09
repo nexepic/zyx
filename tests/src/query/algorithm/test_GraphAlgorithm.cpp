@@ -25,6 +25,7 @@
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
+#include "graph/query/algorithm/GraphProjection.hpp"
 
 namespace fs = std::filesystem;
 
@@ -529,4 +530,424 @@ TEST_F(GraphAlgorithmTest, DFS_DuplicateInStack) {
 	for (const auto &[id, count] : counts) {
 		EXPECT_EQ(count, 1) << "Node " << id << " should appear exactly once in DFS";
 	}
+}
+
+// ============================================================================
+// GDS Algorithm Tests (GraphProjection-based)
+// ============================================================================
+
+// --- Dijkstra Tests ---
+
+TEST_F(GraphAlgorithmTest, Dijkstra_BasicPath) {
+	// Build unweighted projection (all edges weight 1.0)
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto result = algo->dijkstra(proj, node1Id, node5Id);
+	ASSERT_FALSE(result.nodes.empty());
+	EXPECT_EQ(result.nodes.front().getId(), node1Id);
+	EXPECT_EQ(result.nodes.back().getId(), node5Id);
+	// Shortest path: 1->3->5 (2 hops, weight 2.0)
+	EXPECT_DOUBLE_EQ(result.totalWeight, 2.0);
+	EXPECT_EQ(result.nodes.size(), 3u);
+}
+
+TEST_F(GraphAlgorithmTest, Dijkstra_SameNode) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto result = algo->dijkstra(proj, node1Id, node1Id);
+	ASSERT_EQ(result.nodes.size(), 1u);
+	EXPECT_EQ(result.nodes[0].getId(), node1Id);
+	EXPECT_DOUBLE_EQ(result.totalWeight, 0.0);
+}
+
+TEST_F(GraphAlgorithmTest, Dijkstra_NoPath) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	// Node 5 has no outgoing edges, so no path from 5 to 1 via out-edges
+	auto result = algo->dijkstra(proj, node5Id, node1Id);
+	EXPECT_TRUE(result.nodes.empty());
+}
+
+TEST_F(GraphAlgorithmTest, Dijkstra_NodeNotInProjection) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto result = algo->dijkstra(proj, 999, node1Id);
+	EXPECT_TRUE(result.nodes.empty());
+}
+
+TEST_F(GraphAlgorithmTest, Dijkstra_EndNodeNotInProjection) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	// startId valid, endId invalid (covers !contains(endId) branch)
+	auto result = algo->dijkstra(proj, node1Id, 999);
+	EXPECT_TRUE(result.nodes.empty());
+}
+
+TEST_F(GraphAlgorithmTest, Dijkstra_WeightedEdges) {
+	// Create a small weighted graph: A-[5]->B-[1]->C and A-[3]->C
+	// Dijkstra should pick A->C (weight 3) over A->B->C (weight 6)
+	// This also triggers the stale-entry branch (cost > dist[current])
+	// and the shorter-path update branch (newCost < it->second)
+	graph::Node nA(0, dataManager->getOrCreateLabelId("W"));
+	graph::Node nB(0, dataManager->getOrCreateLabelId("W"));
+	graph::Node nC(0, dataManager->getOrCreateLabelId("W"));
+	dataManager->addNode(nA);
+	dataManager->addNode(nB);
+	dataManager->addNode(nC);
+
+	graph::Edge eAB(0, nA.getId(), nB.getId(), dataManager->getOrCreateLabelId("R"));
+	graph::Edge eBC(0, nB.getId(), nC.getId(), dataManager->getOrCreateLabelId("R"));
+	graph::Edge eAC(0, nA.getId(), nC.getId(), dataManager->getOrCreateLabelId("R"));
+	dataManager->addEdge(eAB);
+	dataManager->addEdge(eBC);
+	dataManager->addEdge(eAC);
+
+	dataManager->addEdgeProperties(eAB.getId(), {{"cost", graph::PropertyValue(5.0)}});
+	dataManager->addEdgeProperties(eBC.getId(), {{"cost", graph::PropertyValue(1.0)}});
+	dataManager->addEdgeProperties(eAC.getId(), {{"cost", graph::PropertyValue(3.0)}});
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "W", "R", "cost");
+
+	auto result = algo->dijkstra(proj, nA.getId(), nC.getId());
+	ASSERT_FALSE(result.nodes.empty());
+	// Direct path A->C with weight 3 is shorter than A->B->C with weight 6
+	EXPECT_DOUBLE_EQ(result.totalWeight, 3.0);
+	EXPECT_EQ(result.nodes.size(), 2u);
+}
+
+TEST_F(GraphAlgorithmTest, Dijkstra_StalePriorityQueueEntries) {
+	// Graph: A-[10]->X, A-[1]->Y, Y-[1]->X, X-[100]->Z. Target = Z.
+	// Processing order: A(0), Y(1), X(2), stale X(10) popped & skipped, Z(102)
+	// The stale X entry (cost=10 > dist[X]=2) triggers the skip branch
+	graph::Node nA(0, dataManager->getOrCreateLabelId("SQ"));
+	graph::Node nX(0, dataManager->getOrCreateLabelId("SQ"));
+	graph::Node nY(0, dataManager->getOrCreateLabelId("SQ"));
+	graph::Node nZ(0, dataManager->getOrCreateLabelId("SQ"));
+	dataManager->addNode(nA);
+	dataManager->addNode(nX);
+	dataManager->addNode(nY);
+	dataManager->addNode(nZ);
+
+	graph::Edge eAX(0, nA.getId(), nX.getId(), dataManager->getOrCreateLabelId("SQR"));
+	graph::Edge eAY(0, nA.getId(), nY.getId(), dataManager->getOrCreateLabelId("SQR"));
+	graph::Edge eYX(0, nY.getId(), nX.getId(), dataManager->getOrCreateLabelId("SQR"));
+	graph::Edge eXZ(0, nX.getId(), nZ.getId(), dataManager->getOrCreateLabelId("SQR"));
+	dataManager->addEdge(eAX);
+	dataManager->addEdge(eAY);
+	dataManager->addEdge(eYX);
+	dataManager->addEdge(eXZ);
+
+	dataManager->addEdgeProperties(eAX.getId(), {{"w", graph::PropertyValue(10.0)}});
+	dataManager->addEdgeProperties(eAY.getId(), {{"w", graph::PropertyValue(1.0)}});
+	dataManager->addEdgeProperties(eYX.getId(), {{"w", graph::PropertyValue(1.0)}});
+	dataManager->addEdgeProperties(eXZ.getId(), {{"w", graph::PropertyValue(100.0)}});
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "SQ", "SQR", "w");
+
+	// Path: A->Y->X->Z = cost 102 (shorter than A->X->Z = cost 110)
+	// Stale X(10) entry will be popped and skipped after X(2) was already processed
+	auto result = algo->dijkstra(proj, nA.getId(), nZ.getId());
+	ASSERT_FALSE(result.nodes.empty());
+	EXPECT_DOUBLE_EQ(result.totalWeight, 102.0);
+	EXPECT_EQ(result.nodes.size(), 4u); // A->Y->X->Z
+}
+
+TEST_F(GraphAlgorithmTest, Betweenness_SamplingSizeExceedsNodeCount) {
+	// Create a small graph and set samplingSize larger than node count
+	// This covers the branch where samplingSize >= n
+	graph::Node x(0, dataManager->getOrCreateLabelId("Tiny"));
+	graph::Node y(0, dataManager->getOrCreateLabelId("Tiny"));
+	dataManager->addNode(x);
+	dataManager->addNode(y);
+
+	graph::Edge exy(0, x.getId(), y.getId(), dataManager->getOrCreateLabelId("T"));
+	dataManager->addEdge(exy);
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "Tiny", "T");
+	// samplingSize=100 but only 2 nodes: should use all nodes (no sampling)
+	auto scores = algo->betweennessCentrality(proj, 100);
+	ASSERT_EQ(scores.size(), 2u);
+}
+
+// --- PageRank Tests ---
+
+TEST_F(GraphAlgorithmTest, PageRank_BasicScores) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto scores = algo->pageRank(proj, 20, 0.85);
+	ASSERT_EQ(scores.size(), 12u);
+
+	// All scores should be positive
+	for (const auto &ns : scores) {
+		EXPECT_GT(ns.score, 0.0);
+	}
+
+	// Scores should sum to approximately 1.0
+	double total = 0.0;
+	for (const auto &ns : scores) {
+		total += ns.score;
+	}
+	EXPECT_NEAR(total, 1.0, 0.01);
+
+	// Results should be sorted descending
+	for (size_t i = 1; i < scores.size(); ++i) {
+		EXPECT_GE(scores[i - 1].score, scores[i].score);
+	}
+}
+
+TEST_F(GraphAlgorithmTest, PageRank_SingleNode) {
+	graph::Node solo(0, dataManager->getOrCreateLabelId("Solo"));
+	dataManager->addNode(solo);
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "Solo");
+	auto scores = algo->pageRank(proj);
+	ASSERT_EQ(scores.size(), 1u);
+	EXPECT_NEAR(scores[0].score, 1.0, 0.01);
+}
+
+TEST_F(GraphAlgorithmTest, PageRank_EmptyGraph) {
+	// Build a projection with a label that no nodes have
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "NonExistent");
+	auto scores = algo->pageRank(proj);
+	EXPECT_TRUE(scores.empty());
+}
+
+TEST_F(GraphAlgorithmTest, PageRank_Convergence) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	// With enough iterations, should converge (no crash or divergence)
+	auto scores = algo->pageRank(proj, 100, 0.85, 1e-10);
+	ASSERT_EQ(scores.size(), 12u);
+}
+
+// --- Connected Components Tests ---
+
+TEST_F(GraphAlgorithmTest, WCC_SingleComponent) {
+	// The test graph topology is connected via undirected edges
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto components = algo->connectedComponents(proj);
+	ASSERT_EQ(components.size(), 12u);
+
+	// All nodes should be in the same component
+	std::unordered_set<int64_t> componentIds;
+	for (const auto &nc : components) {
+		componentIds.insert(nc.componentId);
+	}
+	EXPECT_EQ(componentIds.size(), 1u);
+}
+
+TEST_F(GraphAlgorithmTest, WCC_MultipleComponents) {
+	// Create two isolated nodes (separate from main graph)
+	graph::Node iso1(0, dataManager->getOrCreateLabelId("Island"));
+	graph::Node iso2(0, dataManager->getOrCreateLabelId("Island"));
+	dataManager->addNode(iso1);
+	dataManager->addNode(iso2);
+
+	// Connect the two islands to each other but not to the main graph
+	graph::Edge eIsland(0, iso1.getId(), iso2.getId(), dataManager->getOrCreateLabelId("BRIDGE"));
+	dataManager->addEdge(eIsland);
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+	auto components = algo->connectedComponents(proj);
+	EXPECT_EQ(components.size(), 14u);
+
+	std::unordered_set<int64_t> componentIds;
+	for (const auto &nc : components) {
+		componentIds.insert(nc.componentId);
+	}
+	// Should have 2 components: main graph + island pair
+	EXPECT_EQ(componentIds.size(), 2u);
+}
+
+TEST_F(GraphAlgorithmTest, WCC_IsolatedNodes) {
+	// Create 3 completely isolated nodes
+	graph::Node i1(0, dataManager->getOrCreateLabelId("Iso"));
+	graph::Node i2(0, dataManager->getOrCreateLabelId("Iso"));
+	graph::Node i3(0, dataManager->getOrCreateLabelId("Iso"));
+	dataManager->addNode(i1);
+	dataManager->addNode(i2);
+	dataManager->addNode(i3);
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "Iso");
+	auto components = algo->connectedComponents(proj);
+	ASSERT_EQ(components.size(), 3u);
+
+	// Each node should be its own component
+	std::unordered_set<int64_t> componentIds;
+	for (const auto &nc : components) {
+		componentIds.insert(nc.componentId);
+	}
+	EXPECT_EQ(componentIds.size(), 3u);
+}
+
+TEST_F(GraphAlgorithmTest, WCC_EmptyGraph) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "NonExistent");
+	auto components = algo->connectedComponents(proj);
+	EXPECT_TRUE(components.empty());
+}
+
+// --- Betweenness Centrality Tests ---
+
+TEST_F(GraphAlgorithmTest, Betweenness_BasicScores) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto scores = algo->betweennessCentrality(proj);
+	ASSERT_EQ(scores.size(), 12u);
+
+	// All scores should be non-negative
+	for (const auto &ns : scores) {
+		EXPECT_GE(ns.score, 0.0);
+	}
+
+	// Results should be sorted descending
+	for (size_t i = 1; i < scores.size(); ++i) {
+		EXPECT_GE(scores[i - 1].score, scores[i].score);
+	}
+}
+
+TEST_F(GraphAlgorithmTest, Betweenness_WithSampling) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto scores = algo->betweennessCentrality(proj, 4);
+	ASSERT_EQ(scores.size(), 12u);
+
+	// With sampling, scores should still be non-negative
+	for (const auto &ns : scores) {
+		EXPECT_GE(ns.score, 0.0);
+	}
+}
+
+TEST_F(GraphAlgorithmTest, Betweenness_EmptyGraph) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "NonExistent");
+	auto scores = algo->betweennessCentrality(proj);
+	EXPECT_TRUE(scores.empty());
+}
+
+TEST_F(GraphAlgorithmTest, Betweenness_LinearGraph) {
+	// A -> B -> C: B should have highest betweenness
+	graph::Node a(0, dataManager->getOrCreateLabelId("Lin"));
+	graph::Node b(0, dataManager->getOrCreateLabelId("Lin"));
+	graph::Node c(0, dataManager->getOrCreateLabelId("Lin"));
+	dataManager->addNode(a);
+	dataManager->addNode(b);
+	dataManager->addNode(c);
+
+	graph::Edge e1(0, a.getId(), b.getId(), dataManager->getOrCreateLabelId("SEQ"));
+	graph::Edge e2(0, b.getId(), c.getId(), dataManager->getOrCreateLabelId("SEQ"));
+	dataManager->addEdge(e1);
+	dataManager->addEdge(e2);
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "Lin", "SEQ");
+	auto scores = algo->betweennessCentrality(proj);
+	ASSERT_EQ(scores.size(), 3u);
+
+	// B (middle node) should have the highest betweenness
+	EXPECT_EQ(scores[0].nodeId, b.getId());
+	EXPECT_GT(scores[0].score, 0.0);
+}
+
+// --- Closeness Centrality Tests ---
+
+TEST_F(GraphAlgorithmTest, Closeness_BasicScores) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager);
+
+	auto scores = algo->closenessCentrality(proj);
+	ASSERT_EQ(scores.size(), 12u);
+
+	// All scores should be non-negative
+	for (const auto &ns : scores) {
+		EXPECT_GE(ns.score, 0.0);
+	}
+
+	// Results should be sorted descending
+	for (size_t i = 1; i < scores.size(); ++i) {
+		EXPECT_GE(scores[i - 1].score, scores[i].score);
+	}
+}
+
+TEST_F(GraphAlgorithmTest, Closeness_EmptyGraph) {
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "NonExistent");
+	auto scores = algo->closenessCentrality(proj);
+	EXPECT_TRUE(scores.empty());
+}
+
+TEST_F(GraphAlgorithmTest, Closeness_SingleNode) {
+	graph::Node solo(0, dataManager->getOrCreateLabelId("Solo2"));
+	dataManager->addNode(solo);
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "Solo2");
+	auto scores = algo->closenessCentrality(proj);
+	ASSERT_EQ(scores.size(), 1u);
+	// Single node has closeness 0 (no neighbors reachable)
+	EXPECT_DOUBLE_EQ(scores[0].score, 0.0);
+}
+
+TEST_F(GraphAlgorithmTest, Closeness_StarGraph) {
+	// Center node connected to 3 leaves: center should have highest closeness
+	graph::Node center(0, dataManager->getOrCreateLabelId("Star"));
+	graph::Node leaf1(0, dataManager->getOrCreateLabelId("Star"));
+	graph::Node leaf2(0, dataManager->getOrCreateLabelId("Star"));
+	graph::Node leaf3(0, dataManager->getOrCreateLabelId("Star"));
+	dataManager->addNode(center);
+	dataManager->addNode(leaf1);
+	dataManager->addNode(leaf2);
+	dataManager->addNode(leaf3);
+
+	graph::Edge e1(0, center.getId(), leaf1.getId(), dataManager->getOrCreateLabelId("RAY"));
+	graph::Edge e2(0, center.getId(), leaf2.getId(), dataManager->getOrCreateLabelId("RAY"));
+	graph::Edge e3(0, center.getId(), leaf3.getId(), dataManager->getOrCreateLabelId("RAY"));
+	dataManager->addEdge(e1);
+	dataManager->addEdge(e2);
+	dataManager->addEdge(e3);
+
+	database->getStorage()->flush();
+	database->close();
+	database->open();
+	initPointers();
+
+	auto proj = graph::query::algorithm::GraphProjection::build(dataManager, "Star", "RAY");
+	auto scores = algo->closenessCentrality(proj);
+	ASSERT_EQ(scores.size(), 4u);
+
+	// Center node should have highest closeness
+	EXPECT_EQ(scores[0].nodeId, center.getId());
 }

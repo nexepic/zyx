@@ -32,6 +32,9 @@ namespace graph::storage {
 namespace graph::query::indexes {
 	class IndexManager;
 }
+namespace graph::query::algorithm {
+	class GraphProjectionManager;
+}
 namespace graph::query::execution {
 	class PhysicalOperator;
 }
@@ -44,6 +47,7 @@ namespace graph::query::planner {
 	struct ProcedureContext {
 		std::shared_ptr<storage::DataManager> dataManager;
 		std::shared_ptr<indexes::IndexManager> indexManager;
+		std::shared_ptr<algorithm::GraphProjectionManager> projectionManager;
 		uint64_t planCacheHits = 0;
 		uint64_t planCacheMisses = 0;
 	};

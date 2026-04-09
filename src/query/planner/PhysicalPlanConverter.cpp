@@ -758,7 +758,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertCallProcedure(
 
 	const auto *cp = static_cast<const LogicalCallProcedure *>(op);
 
-	const planner::ProcedureContext ctx{dm_, im_, planCacheHits_, planCacheMisses_};
+	const planner::ProcedureContext ctx{dm_, im_, pm_, planCacheHits_, planCacheMisses_};
 	if (const auto factory = planner::ProcedureRegistry::instance().get(cp->getProcedureName())) {
 		return factory(ctx, cp->getArgs());
 	}

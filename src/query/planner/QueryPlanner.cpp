@@ -46,13 +46,15 @@
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
+#include "graph/query/algorithm/GraphProjectionManager.hpp"
 
 namespace graph::query {
 
 	QueryPlanner::QueryPlanner(std::shared_ptr<storage::DataManager> dm,
 							   const std::shared_ptr<indexes::IndexManager> &im,
 							   std::shared_ptr<storage::constraints::ConstraintManager> cm)
-		: dm_(std::move(dm)), im_(im), cm_(std::move(cm)) {
+		: dm_(std::move(dm)), im_(im), cm_(std::move(cm)),
+		  pm_(std::make_shared<algorithm::GraphProjectionManager>()) {
 
 		// Initialize the Optimizer
 		optimizer_ = std::make_unique<optimizer::Optimizer>(im_);
@@ -195,7 +197,7 @@ namespace graph::query {
 	QueryPlanner::callProcedureOp(const std::string &procedure, const std::vector<PropertyValue> &args) const {
 
 		// 1. Prepare Context
-		const planner::ProcedureContext ctx{dm_, im_};
+		const planner::ProcedureContext ctx{dm_, im_, pm_};
 
 		// 2. Lookup and Execute Factory
 		if (const auto factory = planner::ProcedureRegistry::instance().get(procedure)) {

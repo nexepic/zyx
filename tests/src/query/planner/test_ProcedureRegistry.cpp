@@ -27,6 +27,7 @@
 #include <vector>
 
 // Your Headers
+#include "graph/query/algorithm/GraphProjectionManager.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -36,6 +37,7 @@
 #include "graph/query/execution/operators/AlgoShortestPathOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
+#include "graph/query/execution/operators/GdsOperators.hpp"
 #include "graph/query/execution/operators/ListConfigOperator.hpp"
 #include "graph/query/execution/operators/SetConfigOperator.hpp"
 #include "graph/query/execution/operators/TrainVectorIndexOperator.hpp"
@@ -71,6 +73,7 @@ protected:
 		// 2. Context
 		ctx.dataManager = dataManager;
 		ctx.indexManager = indexManager;
+		ctx.projectionManager = std::make_shared<graph::query::algorithm::GraphProjectionManager>();
 
 		// 3. Registry
 		// Now that the constructor is public, we can create a fresh instance.
@@ -281,4 +284,97 @@ TEST_F(ProcedureRegistryTest, VectorIndexTrain_Fail_Args_TooMany) {
 	// Test with too many arguments
 	std::vector<PropertyValue> args = {PropertyValue("test_index"), PropertyValue("extra")};
 	EXPECT_THROW(invoke("db.index.vector.train", args), std::runtime_error);
+}
+
+// ============================================================================
+// GDS Procedure Argument Validation Tests
+// ============================================================================
+
+TEST_F(ProcedureRegistryTest, GdsGraphProject_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("g"), PropertyValue("Person"), PropertyValue("KNOWS")};
+	auto op = invoke("gds.graph.project", args);
+	ASSERT_NE(op, nullptr);
+	EXPECT_NE(dynamic_cast<operators::GdsGraphProjectOperator *>(op.get()), nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsGraphProject_WithWeightProperty) {
+	std::vector<PropertyValue> args = {PropertyValue("g"), PropertyValue("City"), PropertyValue("ROAD"), PropertyValue("dist")};
+	auto op = invoke("gds.graph.project", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsGraphProject_Fail_TooFewArgs) {
+	std::vector<PropertyValue> args = {PropertyValue("g"), PropertyValue("Person")};
+	EXPECT_THROW(invoke("gds.graph.project", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, GdsGraphDrop_Success) {
+	// First create a projection to have something to drop
+	std::vector<PropertyValue> createArgs = {PropertyValue("toDrop"), PropertyValue("X"), PropertyValue("Y")};
+	(void) invoke("gds.graph.project", createArgs);
+
+	std::vector<PropertyValue> args = {PropertyValue("toDrop")};
+	auto op = invoke("gds.graph.drop", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsGraphDrop_Fail_NoArgs) {
+	EXPECT_THROW(invoke("gds.graph.drop", {}), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, GdsDijkstra_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("g"), PropertyValue("1"), PropertyValue("2")};
+	auto op = invoke("gds.shortestPath.dijkstra.stream", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsDijkstra_Fail_TooFewArgs) {
+	std::vector<PropertyValue> args = {PropertyValue("g"), PropertyValue("1")};
+	EXPECT_THROW(invoke("gds.shortestPath.dijkstra.stream", args), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, GdsPageRank_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("g")};
+	auto op = invoke("gds.pageRank.stream", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsPageRank_Fail_NoArgs) {
+	EXPECT_THROW(invoke("gds.pageRank.stream", {}), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, GdsWcc_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("g")};
+	auto op = invoke("gds.wcc.stream", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsWcc_Fail_NoArgs) {
+	EXPECT_THROW(invoke("gds.wcc.stream", {}), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, GdsBetweenness_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("g")};
+	auto op = invoke("gds.betweenness.stream", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsBetweenness_WithSampling) {
+	std::vector<PropertyValue> args = {PropertyValue("g"), PropertyValue("5")};
+	auto op = invoke("gds.betweenness.stream", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsBetweenness_Fail_NoArgs) {
+	EXPECT_THROW(invoke("gds.betweenness.stream", {}), std::runtime_error);
+}
+
+TEST_F(ProcedureRegistryTest, GdsCloseness_Success) {
+	std::vector<PropertyValue> args = {PropertyValue("g")};
+	auto op = invoke("gds.closeness.stream", args);
+	ASSERT_NE(op, nullptr);
+}
+
+TEST_F(ProcedureRegistryTest, GdsCloseness_Fail_NoArgs) {
+	EXPECT_THROW(invoke("gds.closeness.stream", {}), std::runtime_error);
 }
