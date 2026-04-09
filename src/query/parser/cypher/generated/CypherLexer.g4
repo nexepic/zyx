@@ -105,6 +105,16 @@ K_MAP        : 'MAP';
 K_VECTOR     : 'VECTOR';
 K_OPTIONS    : 'OPTIONS';
 
+// FOREACH / LOAD CSV / Subquery
+K_FOREACH        : 'FOREACH';
+K_LOAD           : 'LOAD';
+K_CSV            : 'CSV';
+K_HEADERS        : 'HEADERS';
+K_FROM           : 'FROM';
+K_FIELDTERMINATOR : 'FIELDTERMINATOR';
+K_TRANSACTIONS   : 'TRANSACTIONS';
+K_ROWS           : 'ROWS';
+
 // Observability
 K_EXPLAIN    : 'EXPLAIN';
 K_PROFILE    : 'PROFILE';

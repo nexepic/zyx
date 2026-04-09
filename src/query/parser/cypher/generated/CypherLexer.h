@@ -26,14 +26,16 @@ public:
     K_UNIQUE = 62, K_MANDATORY = 63, K_SCALAR = 64, K_OF = 65, K_ADD = 66, 
     K_BEGIN = 67, K_COMMIT = 68, K_ROLLBACK = 69, K_TRANSACTION = 70, K_KEY = 71, 
     K_NODE = 72, K_BOOLEAN = 73, K_INTEGER = 74, K_FLOAT = 75, K_STRING = 76, 
-    K_LIST = 77, K_MAP = 78, K_VECTOR = 79, K_OPTIONS = 80, K_EXPLAIN = 81, 
-    K_PROFILE = 82, EQ = 83, NEQ = 84, LT = 85, GT = 86, LTE = 87, GTE = 88, 
-    PLUS = 89, MINUS = 90, MULTIPLY = 91, DIVIDE = 92, MODULO = 93, POWER = 94, 
-    LPAREN = 95, RPAREN = 96, LBRACE = 97, RBRACE = 98, LBRACK = 99, RBRACK = 100, 
-    COMMA = 101, DOT = 102, COLON = 103, PIPE = 104, DOLLAR = 105, RANGE = 106, 
-    SEMI = 107, HexInteger = 108, OctalInteger = 109, DecimalInteger = 110, 
-    DoubleLiteral = 111, ID = 112, StringLiteral = 113, WS = 114, COMMENT = 115, 
-    LINE_COMMENT = 116
+    K_LIST = 77, K_MAP = 78, K_VECTOR = 79, K_OPTIONS = 80, K_FOREACH = 81, 
+    K_LOAD = 82, K_CSV = 83, K_HEADERS = 84, K_FROM = 85, K_FIELDTERMINATOR = 86, 
+    K_TRANSACTIONS = 87, K_ROWS = 88, K_EXPLAIN = 89, K_PROFILE = 90, EQ = 91, 
+    NEQ = 92, LT = 93, GT = 94, LTE = 95, GTE = 96, PLUS = 97, MINUS = 98, 
+    MULTIPLY = 99, DIVIDE = 100, MODULO = 101, POWER = 102, LPAREN = 103, 
+    RPAREN = 104, LBRACE = 105, RBRACE = 106, LBRACK = 107, RBRACK = 108, 
+    COMMA = 109, DOT = 110, COLON = 111, PIPE = 112, DOLLAR = 113, RANGE = 114, 
+    SEMI = 115, HexInteger = 116, OctalInteger = 117, DecimalInteger = 118, 
+    DoubleLiteral = 119, ID = 120, StringLiteral = 121, WS = 122, COMMENT = 123, 
+    LINE_COMMENT = 124
   };
 
   enum {

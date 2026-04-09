@@ -26,6 +26,7 @@
 #include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
+#include "graph/query/planner/ScopeStack.hpp"
 
 namespace graph::parser::cypher {
 
@@ -68,6 +69,8 @@ public:
 	std::any visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *ctx) override;
 	std::any visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) override;
 	std::any visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) override;
+	std::any visitCallSubquery(CypherParser::CallSubqueryContext *ctx) override;
+	std::any visitLoadCsvStatement(CypherParser::LoadCsvStatementContext *ctx) override;
 
 	// --- Projection Clauses ---
 	std::any visitWithClause(CypherParser::WithClauseContext *ctx) override;
@@ -78,6 +81,7 @@ public:
 	std::any visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) override;
 	std::any visitRemoveStatement(CypherParser::RemoveStatementContext *ctx) override;
 	std::any visitMergeStatement(CypherParser::MergeStatementContext *ctx) override;
+	std::any visitForeachStatement(CypherParser::ForeachStatementContext *ctx) override;
 
 	// --- Result Clause ---
 	std::any visitReturnStatement(CypherParser::ReturnStatementContext *ctx) override;
@@ -105,6 +109,7 @@ public:
 private:
 	std::shared_ptr<query::QueryPlanner> planner_;
 	std::unique_ptr<query::logical::LogicalOperator> rootOp_;
+	query::planner::ScopeStack scope_;
 };
 
 } // namespace graph::parser::cypher

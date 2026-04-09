@@ -108,6 +108,14 @@ public:
 
     virtual std::any visitRemoveItem(CypherParser::RemoveItemContext *context) = 0;
 
+    virtual std::any visitForeachStatement(CypherParser::ForeachStatementContext *context) = 0;
+
+    virtual std::any visitCallSubquery(CypherParser::CallSubqueryContext *context) = 0;
+
+    virtual std::any visitInTransactionsClause(CypherParser::InTransactionsClauseContext *context) = 0;
+
+    virtual std::any visitLoadCsvStatement(CypherParser::LoadCsvStatementContext *context) = 0;
+
     virtual std::any visitReturnStatement(CypherParser::ReturnStatementContext *context) = 0;
 
     virtual std::any visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *context) = 0;

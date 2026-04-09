@@ -131,7 +131,9 @@ singleQuery
 readingClause
     : matchStatement
     | unwindStatement
+    | callSubquery
     | inQueryCallStatement
+    | loadCsvStatement
     ;
 
 updatingClause
@@ -140,6 +142,7 @@ updatingClause
     | deleteStatement
     | setStatement
     | removeStatement
+    | foreachStatement
     ;
 
 // --- Projection Clauses (WITH and RETURN) ---
@@ -195,6 +198,28 @@ removeStatement
 removeItem
     : variable nodeLabels
     | propertyExpression
+    ;
+
+// --- FOREACH ---
+
+foreachStatement
+    : K_FOREACH LPAREN variable K_IN expression PIPE updatingClause+ RPAREN
+    ;
+
+// --- CALL { subquery } ---
+
+callSubquery
+    : K_CALL LBRACE singleQuery RBRACE inTransactionsClause?
+    ;
+
+inTransactionsClause
+    : K_IN K_TRANSACTIONS (K_OF expression K_ROWS)?
+    ;
+
+// --- LOAD CSV ---
+
+loadCsvStatement
+    : K_LOAD K_CSV (K_WITH K_HEADERS)? K_FROM expression K_AS variable (K_FIELDTERMINATOR StringLiteral)?
     ;
 
 // --- Return & Call ---
@@ -426,6 +451,8 @@ schemaName
     | K_BEGIN | K_COMMIT | K_ROLLBACK | K_TRANSACTION
     | K_KEY | K_NODE | K_CONSTRAINT
     | K_BOOLEAN | K_INTEGER | K_FLOAT | K_STRING | K_LIST | K_MAP
+    | K_FOREACH | K_LOAD | K_CSV | K_HEADERS | K_FROM | K_FIELDTERMINATOR
+    | K_TRANSACTIONS | K_ROWS
     ;
 
 symbolicName
@@ -451,6 +478,9 @@ symbolicName
     | K_BEGIN | K_COMMIT | K_ROLLBACK | K_TRANSACTION
     // Observability Keywords
     | K_EXPLAIN | K_PROFILE
+    // FOREACH / LOAD CSV / Subquery Keywords
+    | K_FOREACH | K_LOAD | K_CSV | K_HEADERS | K_FROM | K_FIELDTERMINATOR
+    | K_TRANSACTIONS | K_ROWS
     ;
 
 literal

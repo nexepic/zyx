@@ -190,6 +190,22 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitForeachStatement(CypherParser::ForeachStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitCallSubquery(CypherParser::CallSubqueryContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitInTransactionsClause(CypherParser::InTransactionsClauseContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitLoadCsvStatement(CypherParser::LoadCsvStatementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitReturnStatement(CypherParser::ReturnStatementContext *ctx) override {
     return visitChildren(ctx);
   }

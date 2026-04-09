@@ -29,14 +29,16 @@ public:
     K_UNIQUE = 62, K_MANDATORY = 63, K_SCALAR = 64, K_OF = 65, K_ADD = 66, 
     K_BEGIN = 67, K_COMMIT = 68, K_ROLLBACK = 69, K_TRANSACTION = 70, K_KEY = 71, 
     K_NODE = 72, K_BOOLEAN = 73, K_INTEGER = 74, K_FLOAT = 75, K_STRING = 76, 
-    K_LIST = 77, K_MAP = 78, K_VECTOR = 79, K_OPTIONS = 80, K_EXPLAIN = 81, 
-    K_PROFILE = 82, EQ = 83, NEQ = 84, LT = 85, GT = 86, LTE = 87, GTE = 88, 
-    PLUS = 89, MINUS = 90, MULTIPLY = 91, DIVIDE = 92, MODULO = 93, POWER = 94, 
-    LPAREN = 95, RPAREN = 96, LBRACE = 97, RBRACE = 98, LBRACK = 99, RBRACK = 100, 
-    COMMA = 101, DOT = 102, COLON = 103, PIPE = 104, DOLLAR = 105, RANGE = 106, 
-    SEMI = 107, HexInteger = 108, OctalInteger = 109, DecimalInteger = 110, 
-    DoubleLiteral = 111, ID = 112, StringLiteral = 113, WS = 114, COMMENT = 115, 
-    LINE_COMMENT = 116
+    K_LIST = 77, K_MAP = 78, K_VECTOR = 79, K_OPTIONS = 80, K_FOREACH = 81, 
+    K_LOAD = 82, K_CSV = 83, K_HEADERS = 84, K_FROM = 85, K_FIELDTERMINATOR = 86, 
+    K_TRANSACTIONS = 87, K_ROWS = 88, K_EXPLAIN = 89, K_PROFILE = 90, EQ = 91, 
+    NEQ = 92, LT = 93, GT = 94, LTE = 95, GTE = 96, PLUS = 97, MINUS = 98, 
+    MULTIPLY = 99, DIVIDE = 100, MODULO = 101, POWER = 102, LPAREN = 103, 
+    RPAREN = 104, LBRACE = 105, RBRACE = 106, LBRACK = 107, RBRACK = 108, 
+    COMMA = 109, DOT = 110, COLON = 111, PIPE = 112, DOLLAR = 113, RANGE = 114, 
+    SEMI = 115, HexInteger = 116, OctalInteger = 117, DecimalInteger = 118, 
+    DoubleLiteral = 119, ID = 120, StringLiteral = 121, WS = 122, COMMENT = 123, 
+    LINE_COMMENT = 124
   };
 
   enum {
@@ -49,26 +51,27 @@ public:
     RuleUpdatingClause = 18, RuleWithClause = 19, RuleMatchStatement = 20, 
     RuleUnwindStatement = 21, RuleInQueryCallStatement = 22, RuleCreateStatement = 23, 
     RuleMergeStatement = 24, RuleSetStatement = 25, RuleSetItem = 26, RuleDeleteStatement = 27, 
-    RuleRemoveStatement = 28, RuleRemoveItem = 29, RuleReturnStatement = 30, 
-    RuleStandaloneCallStatement = 31, RuleYieldItems = 32, RuleYieldItem = 33, 
-    RuleProjectionBody = 34, RuleProjectionItems = 35, RuleProjectionItem = 36, 
-    RuleOrderStatement = 37, RuleSkipStatement = 38, RuleLimitStatement = 39, 
-    RuleSortItem = 40, RuleWhere = 41, RulePattern = 42, RulePatternPart = 43, 
-    RulePatternElement = 44, RulePatternElementChain = 45, RuleNodePattern = 46, 
-    RuleRelationshipPattern = 47, RuleRelationshipDetail = 48, RuleProperties = 49, 
-    RuleNodeLabels = 50, RuleNodeLabel = 51, RuleRelationshipTypes = 52, 
-    RuleRangeLiteral = 53, RuleExpression = 54, RuleOrExpression = 55, RuleXorExpression = 56, 
-    RuleAndExpression = 57, RuleNotExpression = 58, RuleComparisonExpression = 59, 
-    RuleArithmeticExpression = 60, RulePowerExpression = 61, RuleUnaryExpression = 62, 
-    RuleAccessor = 63, RuleAtom = 64, RuleQuantifierExpression = 65, RuleExistsExpression = 66, 
-    RuleCaseExpression = 67, RulePropertyExpression = 68, RuleFunctionInvocation = 69, 
-    RuleExplicitProcedureInvocation = 70, RuleImplicitProcedureInvocation = 71, 
-    RuleVariable = 72, RuleLabelName = 73, RuleRelTypeName = 74, RulePropertyKeyName = 75, 
-    RuleProcedureName = 76, RuleProcedureResultField = 77, RuleFunctionName = 78, 
-    RuleNamespace = 79, RuleSchemaName = 80, RuleSymbolicName = 81, RuleLiteral = 82, 
-    RuleBooleanLiteral = 83, RuleNumberLiteral = 84, RuleIntegerLiteral = 85, 
-    RuleMapLiteral = 86, RuleListLiteral = 87, RuleParameter = 88, RuleListComprehension = 89, 
-    RuleReduceExpression = 90, RulePatternComprehension = 91
+    RuleRemoveStatement = 28, RuleRemoveItem = 29, RuleForeachStatement = 30, 
+    RuleCallSubquery = 31, RuleInTransactionsClause = 32, RuleLoadCsvStatement = 33, 
+    RuleReturnStatement = 34, RuleStandaloneCallStatement = 35, RuleYieldItems = 36, 
+    RuleYieldItem = 37, RuleProjectionBody = 38, RuleProjectionItems = 39, 
+    RuleProjectionItem = 40, RuleOrderStatement = 41, RuleSkipStatement = 42, 
+    RuleLimitStatement = 43, RuleSortItem = 44, RuleWhere = 45, RulePattern = 46, 
+    RulePatternPart = 47, RulePatternElement = 48, RulePatternElementChain = 49, 
+    RuleNodePattern = 50, RuleRelationshipPattern = 51, RuleRelationshipDetail = 52, 
+    RuleProperties = 53, RuleNodeLabels = 54, RuleNodeLabel = 55, RuleRelationshipTypes = 56, 
+    RuleRangeLiteral = 57, RuleExpression = 58, RuleOrExpression = 59, RuleXorExpression = 60, 
+    RuleAndExpression = 61, RuleNotExpression = 62, RuleComparisonExpression = 63, 
+    RuleArithmeticExpression = 64, RulePowerExpression = 65, RuleUnaryExpression = 66, 
+    RuleAccessor = 67, RuleAtom = 68, RuleQuantifierExpression = 69, RuleExistsExpression = 70, 
+    RuleCaseExpression = 71, RulePropertyExpression = 72, RuleFunctionInvocation = 73, 
+    RuleExplicitProcedureInvocation = 74, RuleImplicitProcedureInvocation = 75, 
+    RuleVariable = 76, RuleLabelName = 77, RuleRelTypeName = 78, RulePropertyKeyName = 79, 
+    RuleProcedureName = 80, RuleProcedureResultField = 81, RuleFunctionName = 82, 
+    RuleNamespace = 83, RuleSchemaName = 84, RuleSymbolicName = 85, RuleLiteral = 86, 
+    RuleBooleanLiteral = 87, RuleNumberLiteral = 88, RuleIntegerLiteral = 89, 
+    RuleMapLiteral = 90, RuleListLiteral = 91, RuleParameter = 92, RuleListComprehension = 93, 
+    RuleReduceExpression = 94, RulePatternComprehension = 95
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -118,6 +121,10 @@ public:
   class DeleteStatementContext;
   class RemoveStatementContext;
   class RemoveItemContext;
+  class ForeachStatementContext;
+  class CallSubqueryContext;
+  class InTransactionsClauseContext;
+  class LoadCsvStatementContext;
   class ReturnStatementContext;
   class StandaloneCallStatementContext;
   class YieldItemsContext;
@@ -721,7 +728,9 @@ public:
     virtual size_t getRuleIndex() const override;
     MatchStatementContext *matchStatement();
     UnwindStatementContext *unwindStatement();
+    CallSubqueryContext *callSubquery();
     InQueryCallStatementContext *inQueryCallStatement();
+    LoadCsvStatementContext *loadCsvStatement();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -739,6 +748,7 @@ public:
     DeleteStatementContext *deleteStatement();
     SetStatementContext *setStatement();
     RemoveStatementContext *removeStatement();
+    ForeachStatementContext *foreachStatement();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -932,6 +942,83 @@ public:
   };
 
   RemoveItemContext* removeItem();
+
+  class  ForeachStatementContext : public antlr4::ParserRuleContext {
+  public:
+    ForeachStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_FOREACH();
+    antlr4::tree::TerminalNode *LPAREN();
+    VariableContext *variable();
+    antlr4::tree::TerminalNode *K_IN();
+    ExpressionContext *expression();
+    antlr4::tree::TerminalNode *PIPE();
+    antlr4::tree::TerminalNode *RPAREN();
+    std::vector<UpdatingClauseContext *> updatingClause();
+    UpdatingClauseContext* updatingClause(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ForeachStatementContext* foreachStatement();
+
+  class  CallSubqueryContext : public antlr4::ParserRuleContext {
+  public:
+    CallSubqueryContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_CALL();
+    antlr4::tree::TerminalNode *LBRACE();
+    SingleQueryContext *singleQuery();
+    antlr4::tree::TerminalNode *RBRACE();
+    InTransactionsClauseContext *inTransactionsClause();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  CallSubqueryContext* callSubquery();
+
+  class  InTransactionsClauseContext : public antlr4::ParserRuleContext {
+  public:
+    InTransactionsClauseContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_IN();
+    antlr4::tree::TerminalNode *K_TRANSACTIONS();
+    antlr4::tree::TerminalNode *K_OF();
+    ExpressionContext *expression();
+    antlr4::tree::TerminalNode *K_ROWS();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  InTransactionsClauseContext* inTransactionsClause();
+
+  class  LoadCsvStatementContext : public antlr4::ParserRuleContext {
+  public:
+    LoadCsvStatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *K_LOAD();
+    antlr4::tree::TerminalNode *K_CSV();
+    antlr4::tree::TerminalNode *K_FROM();
+    ExpressionContext *expression();
+    antlr4::tree::TerminalNode *K_AS();
+    VariableContext *variable();
+    antlr4::tree::TerminalNode *K_WITH();
+    antlr4::tree::TerminalNode *K_HEADERS();
+    antlr4::tree::TerminalNode *K_FIELDTERMINATOR();
+    antlr4::tree::TerminalNode *StringLiteral();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  LoadCsvStatementContext* loadCsvStatement();
 
   class  ReturnStatementContext : public antlr4::ParserRuleContext {
   public:
@@ -1798,6 +1885,14 @@ public:
     antlr4::tree::TerminalNode *K_STRING();
     antlr4::tree::TerminalNode *K_LIST();
     antlr4::tree::TerminalNode *K_MAP();
+    antlr4::tree::TerminalNode *K_FOREACH();
+    antlr4::tree::TerminalNode *K_LOAD();
+    antlr4::tree::TerminalNode *K_CSV();
+    antlr4::tree::TerminalNode *K_HEADERS();
+    antlr4::tree::TerminalNode *K_FROM();
+    antlr4::tree::TerminalNode *K_FIELDTERMINATOR();
+    antlr4::tree::TerminalNode *K_TRANSACTIONS();
+    antlr4::tree::TerminalNode *K_ROWS();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -1893,6 +1988,14 @@ public:
     antlr4::tree::TerminalNode *K_TRANSACTION();
     antlr4::tree::TerminalNode *K_EXPLAIN();
     antlr4::tree::TerminalNode *K_PROFILE();
+    antlr4::tree::TerminalNode *K_FOREACH();
+    antlr4::tree::TerminalNode *K_LOAD();
+    antlr4::tree::TerminalNode *K_CSV();
+    antlr4::tree::TerminalNode *K_HEADERS();
+    antlr4::tree::TerminalNode *K_FROM();
+    antlr4::tree::TerminalNode *K_FIELDTERMINATOR();
+    antlr4::tree::TerminalNode *K_TRANSACTIONS();
+    antlr4::tree::TerminalNode *K_ROWS();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;

@@ -22,6 +22,7 @@
 #include <CLI/CLI.hpp>
 #include <filesystem>
 #include <iostream>
+#include "graph/cli/ImportCommand.hpp"
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/log/Log.hpp"
@@ -119,6 +120,9 @@ namespace graph::cli {
 				throw CLI::CallForHelp();
 			}
 		});
+
+		// --- Import command (top-level) ---
+		registerImportCommand(app);
 
 		app.require_subcommand(1);
 

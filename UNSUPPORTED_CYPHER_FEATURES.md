@@ -113,9 +113,24 @@ All aggregate functions are ✅ Supported: `count()`, `sum()`, `avg()`, `max()`,
 | Heterogeneous lists | ✅ |
 | SET n:Label | ✅ |
 
-## 5. Not Yet Implemented
+## 5. Recently Implemented Features
 
-### 5.1 EXISTS Pattern Expressions
+### 5.1 FOREACH Statement
+**Syntax**: `FOREACH (x IN list | SET x.prop = value)`
+**Status**: ✅ Supported
+**Note**: Iterates over a list and executes write-only operations (CREATE, SET, DELETE, REMOVE, MERGE) for each element. Does not export variables to the outer scope.
+
+### 5.2 CALL { subquery }
+**Syntax**: `CALL { MATCH (m) RETURN m } RETURN m`
+**Status**: ✅ Supported
+**Note**: Executes a subquery per input row with variable scope isolation. Supports `IN TRANSACTIONS OF n ROWS` for batched execution.
+
+### 5.3 LOAD CSV
+**Syntax**: `LOAD CSV WITH HEADERS FROM 'file:///path/to/file.csv' AS row`
+**Status**: ✅ Supported
+**Note**: Streaming RFC 4180-compliant CSV reader. Supports `WITH HEADERS` (map rows) and without headers (list rows). Custom `FIELDTERMINATOR` supported.
+
+### 5.4 EXISTS Pattern Expressions
 **Syntax**: `WHERE EXISTS { (n)-[:KNOWS]->(m) }` or `WHERE exists((n)-[:KNOWS]->(m))`
 **Status**: ✅ Supported
 **Note**: Evaluates pattern existence using graph traversal within expression evaluator.

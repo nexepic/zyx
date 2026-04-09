@@ -96,6 +96,18 @@ std::optional<PropertyValue> EvaluationContext::resolveProperty(const std::strin
 		return std::nullopt;
 	}
 
+	// Try map property access: row.name where row is a MAP PropertyValue
+	if (auto val = record_.getValue(variableName)) {
+		if (val->getType() == PropertyType::MAP) {
+			const auto &map = val->getMap();
+			auto it = map.find(propertyName);
+			if (it != map.end()) {
+				return it->second;
+			}
+			return std::nullopt;
+		}
+	}
+
 	return std::nullopt;
 }
 

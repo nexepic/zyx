@@ -19,8 +19,12 @@
  **/
 
 #include "CypherToPlanVisitor.hpp"
+#include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalExplain.hpp"
+#include "graph/query/logical/operators/LogicalForeach.hpp"
+#include "graph/query/logical/operators/LogicalLoadCsv.hpp"
 #include "graph/query/logical/operators/LogicalProfile.hpp"
+#include "graph/query/logical/operators/LogicalSingleRow.hpp"
 #include "graph/query/logical/operators/LogicalTransactionControl.hpp"
 #include "graph/query/logical/operators/LogicalUnion.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
@@ -30,6 +34,8 @@
 #include "clauses/ResultClauseHandler.hpp"
 #include "clauses/WritingClauseHandler.hpp"
 #include "clauses/WithClauseHandler.hpp"
+#include "helpers/AstExtractor.hpp"
+#include "helpers/ExpressionBuilder.hpp"
 
 namespace graph::parser::cypher {
 
@@ -54,7 +60,8 @@ std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogical
 	                      rootType != query::logical::LogicalOpType::LOP_LIST_CONFIG &&
 	                      rootType != query::logical::LogicalOpType::LOP_SET_CONFIG &&
 	                      rootType != query::logical::LogicalOpType::LOP_EXPLAIN &&
-	                      rootType != query::logical::LogicalOpType::LOP_PROFILE);
+	                      rootType != query::logical::LogicalOpType::LOP_PROFILE &&
+	                      rootType != query::logical::LogicalOpType::LOP_CALL_PROCEDURE);
 
 	if (isOptimizable) {
 		auto *opt = planner_->getOptimizer();
@@ -289,6 +296,122 @@ std::any CypherToPlanVisitor::visitTxnCommit(CypherParser::TxnCommitContext *) {
 std::any CypherToPlanVisitor::visitTxnRollback(CypherParser::TxnRollbackContext *) {
 	rootOp_ = std::make_unique<query::logical::LogicalTransactionControl>(
 		query::logical::LogicalTxnCommand::LTXN_ROLLBACK);
+	return std::any();
+}
+
+// --- FOREACH ---
+std::any CypherToPlanVisitor::visitForeachStatement(CypherParser::ForeachStatementContext *ctx) {
+	// Grammar: K_FOREACH LPAREN variable K_IN expression PIPE updatingClause+ RPAREN
+	std::string iterVar = helpers::AstExtractor::extractVariable(ctx->variable());
+	auto listExpr = std::shared_ptr<query::expressions::Expression>(
+		helpers::ExpressionBuilder::buildExpression(ctx->expression()).release());
+
+	// Save current rootOp_ and scope, compile body independently
+	auto savedRootOp = std::move(rootOp_);
+
+	// Push scope for FOREACH body (non-isolated: inherits outer vars)
+	scope_.pushFrame(false);
+	scope_.define(iterVar);
+
+	// Compile body: each updatingClause chains onto rootOp_
+	// Use a SingleRow as the seed so clause handlers accept non-null input.
+	// The physical plan converter will replace this with a RecordInjector.
+	rootOp_ = std::make_unique<query::logical::LogicalSingleRow>();
+	for (auto *updClause : ctx->updatingClause()) {
+		visitChildren(updClause);
+	}
+	auto bodyOp = std::move(rootOp_);
+
+	// Restore scope
+	scope_.popFrame();
+
+	// Restore rootOp_ and wrap in LogicalForeach
+	rootOp_ = std::make_unique<query::logical::LogicalForeach>(
+		std::move(savedRootOp), iterVar, listExpr, std::move(bodyOp));
+	return std::any();
+}
+
+// --- CALL { subquery } ---
+std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContext *ctx) {
+	// Grammar: K_CALL LBRACE singleQuery RBRACE inTransactionsClause?
+	auto savedRootOp = std::move(rootOp_);
+	auto savedScope = scope_.currentVars();
+
+	// Push isolated scope for subquery
+	scope_.pushFrame(true);
+
+	// Compile the subquery with SingleRow seed so WITH import works
+	rootOp_ = std::make_unique<query::logical::LogicalSingleRow>();
+	visitSingleQuery(ctx->singleQuery());
+	auto subqueryOp = std::move(rootOp_);
+
+	// Extract imported vars (from WITH at start of subquery) and returned vars
+	std::vector<std::string> importedVars;
+	std::vector<std::string> returnedVars;
+	if (subqueryOp) {
+		returnedVars = subqueryOp->getOutputVariables();
+	}
+
+	// Pop subquery scope
+	auto subFrame = scope_.popFrame();
+	// Determine imported vars: any outer scope vars that were used in subquery
+	for (const auto &var : subFrame.variables) {
+		if (savedScope.count(var)) {
+			importedVars.push_back(var);
+		}
+	}
+
+	// Define returned vars in outer scope
+	for (const auto &var : returnedVars) {
+		scope_.define(var);
+	}
+
+	// Handle IN TRANSACTIONS
+	bool inTransactions = false;
+	int64_t batchSize = 0;
+	if (ctx->inTransactionsClause()) {
+		inTransactions = true;
+		auto inTxnCtx = ctx->inTransactionsClause();
+		if (inTxnCtx->expression()) {
+			auto val = helpers::ExpressionBuilder::evaluateLiteralExpression(inTxnCtx->expression());
+			if (val.getType() == graph::PropertyType::INTEGER) {
+				batchSize = std::get<int64_t>(val.getVariant());
+			}
+		}
+	}
+
+	rootOp_ = std::make_unique<query::logical::LogicalCallSubquery>(
+		std::move(savedRootOp), std::move(subqueryOp),
+		std::move(importedVars), std::move(returnedVars),
+		inTransactions, batchSize);
+	return std::any();
+}
+
+// --- LOAD CSV ---
+std::any CypherToPlanVisitor::visitLoadCsvStatement(CypherParser::LoadCsvStatementContext *ctx) {
+	// Grammar: K_LOAD K_CSV (K_WITH K_HEADERS)? K_FROM expression K_AS variable (K_FIELDTERMINATOR StringLiteral)?
+	std::string rowVar = helpers::AstExtractor::extractVariable(ctx->variable());
+	auto urlExpr = std::shared_ptr<query::expressions::Expression>(
+		helpers::ExpressionBuilder::buildExpression(ctx->expression()).release());
+
+	bool withHeaders = (ctx->K_HEADERS() != nullptr);
+
+	std::string fieldTerminator = ",";
+	if (ctx->K_FIELDTERMINATOR()) {
+		std::string ft = ctx->StringLiteral()->getText();
+		// Strip quotes
+		if (ft.size() >= 2) {
+			ft = ft.substr(1, ft.size() - 2);
+		}
+		// Handle escape sequences
+		if (ft == "\\t") ft = "\t";
+		fieldTerminator = ft;
+	}
+
+	scope_.define(rowVar);
+
+	rootOp_ = std::make_unique<query::logical::LogicalLoadCsv>(
+		std::move(rootOp_), urlExpr, rowVar, withHeaders, fieldTerminator);
 	return std::any();
 }
 
