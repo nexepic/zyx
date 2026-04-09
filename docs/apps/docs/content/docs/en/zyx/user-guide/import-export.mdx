@@ -289,7 +289,7 @@ split -l 100000 large_file.csv chunk_
 
 # Import each chunk separately
 for chunk in chunk_*; do
-  zyx-cli < import_$chunk.cypher
+  zyx < import_$chunk.cypher
 done
 ```
 
@@ -298,13 +298,13 @@ done
 ```bash
 # Import multiple files in parallel
 # Terminal 1
-zyx-cli < import_users_1.cypher &
+zyx < import_users_1.cypher &
 
 # Terminal 2
-zyx-cli < import_users_2.cypher &
+zyx < import_users_2.cypher &
 
 # Terminal 3
-zyx-cli < import_users_3.cypher &
+zyx < import_users_3.cypher &
 
 wait
 ```
@@ -387,7 +387,7 @@ CREATE (u:User {
 psql -U user -d database -c "COPY users TO STDOUT WITH CSV HEADER" > users.csv
 
 # Import into ZYX
-zyx-cli -c "LOAD CSV WITH HEADERS FROM 'file:///users.csv' AS row CREATE (u:User {id: toInteger(row.id), name: row.name, email: row.email})"
+zyx -c "LOAD CSV WITH HEADERS FROM 'file:///users.csv' AS row CREATE (u:User {id: toInteger(row.id), name: row.name, email: row.email})"
 ```
 
 ### Import from MongoDB
@@ -472,7 +472,7 @@ CREATE (u:User {
 
 ```bash
 # Log import errors
-zyx-cli < import.cypher 2> import_errors.log
+zyx < import.cypher 2> import_errors.log
 
 # Check log for issues
 grep "ERROR" import_errors.log

@@ -18,10 +18,10 @@ This guide covers the essential CRUD (Create, Read, Update, Delete) operations i
 
 ```bash
 # Create new database
-zyx-cli ./new_database
+zyx ./new_database
 
 # Open existing database
-zyx-cli ./existing_database
+zyx ./existing_database
 ```
 
 The database file will be created automatically if it doesn't exist.
@@ -363,13 +363,13 @@ CREATE (u1)-[:KNOWS]->(u2);
 Import it:
 
 ```bash
-zyx-cli ./mydb < import.cql
+zyx ./mydb < import.cql
 ```
 
 ### Export Query Results
 
 ```bash
-zyx-cli ./mydb > output.txt << 'EOF'
+zyx ./mydb > output.txt << 'EOF'
 MATCH (p:Person) RETURN p.name, p.age
 EOF
 ```

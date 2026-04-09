@@ -15,7 +15,7 @@ This guide will help you get started with ZYX using the command-line interface (
 ::: tip Prerequisites
 Before you begin, make sure you have:
 - ✅ Installed ZYX (downloaded pre-built version or used package manager)
-- ✅ `zyx-cli` executable available
+- ✅ `zyx` executable available
 - ✅ Basic understanding of Cypher query language
 
 **Installation methods:**
@@ -32,10 +32,10 @@ The ZYX CLI provides an interactive REPL (Read-Eval-Print Loop) for executing Cy
 
 ```bash
 # If using pre-built version
-zyx-cli ./mydb
+zyx ./mydb
 
 # Or specify full path
-./zyx-cli ./mydb
+./zyx ./mydb
 ```
 
 ::: info Database Path
@@ -47,7 +47,7 @@ zyx-cli ./mydb
 ### CLI Options
 
 ```bash
-zyx-cli [database_path] [options]
+zyx [database_path] [options]
 
 Options:
   -h, --help     Show usage information
@@ -254,7 +254,7 @@ CREATE (u1)-[:KNOWS]->(u2);
 EOF
 
 # Import the file
-zyx-cli ./mydb < import.cql
+zyx ./mydb < import.cql
 ```
 
 ::: warning Large Dataset Imports
