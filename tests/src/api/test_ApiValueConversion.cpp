@@ -199,7 +199,7 @@ TEST_F(CppApiTest, CreateNodeWithNodePtrProperty) {
 TEST_F(CppApiTest, CreateNodeWithEdgePtrProperty) {
 	auto edgePtr = std::make_shared<zyx::Edge>();
 	edgePtr->id = 1;
-	edgePtr->label = "InnerEdge";
+	edgePtr->type = "InnerEdge";
 
 	std::unordered_map<std::string, zyx::Value> props;
 	props["name"] = "test";

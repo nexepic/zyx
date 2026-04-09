@@ -39,7 +39,7 @@ bool containsId(const std::vector<Edge> &edges, int64_t id) {
 
 Node makeNodeWithLabel(const std::shared_ptr<DataManager> &dataManager, const std::string &label) {
 	Node node;
-	node.setLabelId(dataManager->getOrCreateLabelId(label));
+	node.setLabelId(dataManager->getOrCreateTokenId(label));
 	return node;
 }
 
@@ -129,7 +129,7 @@ TEST_F(DataManagerTest, RangeReadsPreferDirtyMemoryAndSkipDeletedNodesAndEdges) 
 	simulateSave();
 
 	Node updated = dataManager->getNode(n1.getId());
-	updated.setLabelId(dataManager->getOrCreateLabelId("DirtyRangeNodeUpdated"));
+	updated.setLabelId(dataManager->getOrCreateTokenId("DirtyRangeNodeUpdated"));
 	dataManager->updateNode(updated);
 
 	Node deleted = dataManager->getNode(n2.getId());
@@ -151,7 +151,7 @@ TEST_F(DataManagerTest, RangeReadsPreferDirtyMemoryAndSkipDeletedNodesAndEdges) 
 	simulateSave();
 
 	Edge updatedEdge = dataManager->getEdge(e1.getId());
-	updatedEdge.setLabelId(dataManager->getOrCreateLabelId("DIRTY_EDGE_UPDATED"));
+	updatedEdge.setTypeId(dataManager->getOrCreateTokenId("DIRTY_EDGE_UPDATED"));
 	dataManager->updateEdge(updatedEdge);
 
 	Edge deletedEdge = dataManager->getEdge(e2.getId());

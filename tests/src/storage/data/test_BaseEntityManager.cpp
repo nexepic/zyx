@@ -73,7 +73,7 @@ protected:
 	// Helper to create a Node using the correct API
 	static graph::Node createTestNode(const std::shared_ptr<graph::storage::DataManager> &dm, const std::string &label) {
 		graph::Node node;
-		node.setLabelId(dm->getOrCreateLabelId(label));
+		node.setLabelId(dm->getOrCreateTokenId(label));
 		return node;
 	}
 
@@ -82,7 +82,7 @@ protected:
 		graph::Edge edge;
 		edge.setSourceNodeId(sourceId);
 		edge.setTargetNodeId(targetId);
-		edge.setLabelId(dm->getOrCreateLabelId(label));
+		edge.setTypeId(dm->getOrCreateTokenId(label));
 		return edge;
 	}
 
@@ -118,7 +118,7 @@ TEST_F(BaseEntityManagerTest, AddNodeEntity) {
 	EXPECT_EQ(retrievedNode.getId(), node.getId());
 
 	EXPECT_EQ(retrievedNode.getLabelId(), node.getLabelId());
-	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "TestNode");
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedNode.getLabelId()), "TestNode");
 
 	EXPECT_TRUE(retrievedNode.isActive());
 }
@@ -129,11 +129,11 @@ TEST_F(BaseEntityManagerTest, UpdateNodeEntity) {
 	nodeManager->add(node);
 	int64_t nodeId = node.getId();
 
-	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedLabel"));
+	node.setLabelId(dataManager->getOrCreateTokenId("UpdatedLabel"));
 	nodeManager->update(node);
 
 	graph::Node retrievedNode = nodeManager->get(nodeId);
-	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "UpdatedLabel");
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedNode.getLabelId()), "UpdatedLabel");
 }
 
 // Tests for remove method
@@ -264,13 +264,13 @@ TEST_F(BaseEntityManagerTest, EdgeEntityOperations) {
 	EXPECT_EQ(retrievedEdge.getId(), edge.getId());
 	EXPECT_EQ(retrievedEdge.getSourceNodeId(), sourceNode.getId());
 	EXPECT_EQ(retrievedEdge.getTargetNodeId(), targetNode.getId());
-	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "CONNECTS_TO");
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedEdge.getTypeId()), "CONNECTS_TO");
 
-	edge.setLabelId(dataManager->getOrCreateLabelId("RELATED_TO"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("RELATED_TO"));
 	edgeManager->update(edge);
 
 	retrievedEdge = edgeManager->get(edge.getId());
-	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "RELATED_TO");
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedEdge.getTypeId()), "RELATED_TO");
 
 	edgeManager->remove(edge);
 
@@ -318,7 +318,7 @@ TEST_F(BaseEntityManagerTest, GetDirtyWithChangeTypes) {
     graph::Node modifiedNode = createTestNode(dataManager, "OriginalLabel");
     nodeManager->add(modifiedNode);
 
-    modifiedNode.setLabelId(dataManager->getOrCreateLabelId("ModifiedLabel"));
+    modifiedNode.setLabelId(dataManager->getOrCreateTokenId("ModifiedLabel"));
     nodeManager->update(modifiedNode);
 
     // 3. ADDED then REMOVED
@@ -451,7 +451,7 @@ TEST_F(BaseEntityManagerTest, AddBatchEmptyVector) {
 TEST_F(BaseEntityManagerTest, UpdateEntityWithZeroId) {
     graph::Node node;
     node.setId(0); // Explicitly set to zero
-    node.setLabelId(dataManager->getOrCreateLabelId("Test"));
+    node.setLabelId(dataManager->getOrCreateTokenId("Test"));
 
     EXPECT_NO_THROW(nodeManager->update(node));
 
@@ -589,7 +589,7 @@ TEST_F(BaseEntityManagerTest, UpdatePreservesAddedState) {
     nodeManager->add(node);
 
     // Update before flushing - should stay in ADDED state
-    node.setLabelId(dataManager->getOrCreateLabelId("Updated"));
+    node.setLabelId(dataManager->getOrCreateTokenId("Updated"));
     nodeManager->update(node);
 
     // Verify still in ADDED state (not MODIFIED)
@@ -625,7 +625,7 @@ TEST_F(BaseEntityManagerTest, UpdateCreatesModifiedState) {
     dataManager->commitFlushSnapshot();
 
     // Now update - should create MODIFIED state
-    node.setLabelId(dataManager->getOrCreateLabelId("Modified"));
+    node.setLabelId(dataManager->getOrCreateTokenId("Modified"));
     nodeManager->update(node);
 
     // Verify in MODIFIED state
@@ -858,11 +858,11 @@ TEST_F(BaseEntityManagerTest, EdgeUpdate) {
     edgeManager->add(edge);
 
     // Update the edge
-    edge.setLabelId(dataManager->getOrCreateLabelId("NEW_LABEL"));
+    edge.setTypeId(dataManager->getOrCreateTokenId("NEW_LABEL"));
     edgeManager->update(edge);
 
     graph::Edge retrieved = edgeManager->get(edge.getId());
-    EXPECT_EQ(dataManager->resolveLabel(retrieved.getLabelId()), "NEW_LABEL");
+    EXPECT_EQ(dataManager->resolveTokenName(retrieved.getTypeId()), "NEW_LABEL");
 }
 
 // Test edge clearCache and addToCache
@@ -973,11 +973,11 @@ TEST_F(BaseEntityManagerTest, UpdateModifiedEntityAgain) {
     dataManager->commitFlushSnapshot();
 
     // First update creates MODIFIED state
-    node.setLabelId(dataManager->getOrCreateLabelId("FirstMod"));
+    node.setLabelId(dataManager->getOrCreateTokenId("FirstMod"));
     nodeManager->update(node);
 
     // Second update should also use MODIFIED state (dirtyInfo exists, is MODIFIED)
-    node.setLabelId(dataManager->getOrCreateLabelId("SecondMod"));
+    node.setLabelId(dataManager->getOrCreateTokenId("SecondMod"));
     nodeManager->update(node);
 
     // Verify in MODIFIED state
@@ -986,7 +986,7 @@ TEST_F(BaseEntityManagerTest, UpdateModifiedEntityAgain) {
     for (const auto &dn : modifiedNodes) {
         if (dn.getId() == node.getId()) {
             found = true;
-            EXPECT_EQ(dataManager->resolveLabel(dn.getLabelId()), "SecondMod");
+            EXPECT_EQ(dataManager->resolveTokenName(dn.getLabelId()), "SecondMod");
             break;
         }
     }
@@ -1117,7 +1117,7 @@ TEST_F(BaseEntityManagerTest, EdgeAddBatchMixedIds) {
 TEST_F(BaseEntityManagerTest, EdgeUpdateWithZeroId) {
     graph::Edge edge;
     edge.setId(0);
-    edge.setLabelId(dataManager->getOrCreateLabelId("ZeroIdUpdate"));
+    edge.setTypeId(dataManager->getOrCreateTokenId("ZeroIdUpdate"));
 
     // Should return early without error
     EXPECT_NO_THROW(edgeManager->update(edge));
@@ -1174,7 +1174,7 @@ TEST_F(BaseEntityManagerTest, AddBatch_AllEntitiesHaveIds) {
 	for (int i = 1; i <= 5; ++i) {
 		graph::Node node;
 		node.setId(static_cast<int64_t>(10000 + i));
-		node.setLabelId(dataManager->getOrCreateLabelId("PreAssigned"));
+		node.setLabelId(dataManager->getOrCreateTokenId("PreAssigned"));
 		nodes.push_back(node);
 	}
 
@@ -1198,12 +1198,12 @@ TEST_F(BaseEntityManagerTest, AddBatch_MixedIds) {
 	// Node with pre-assigned ID
 	graph::Node nodeWithId;
 	nodeWithId.setId(20001);
-	nodeWithId.setLabelId(dataManager->getOrCreateLabelId("Mixed"));
+	nodeWithId.setLabelId(dataManager->getOrCreateTokenId("Mixed"));
 	nodes.push_back(nodeWithId);
 
 	// Node without ID (needs allocation)
 	graph::Node nodeWithoutId;
-	nodeWithoutId.setLabelId(dataManager->getOrCreateLabelId("Mixed"));
+	nodeWithoutId.setLabelId(dataManager->getOrCreateTokenId("Mixed"));
 	nodes.push_back(nodeWithoutId);
 
 	EXPECT_NO_THROW(nodeManager->addBatch(nodes));
@@ -1230,7 +1230,7 @@ TEST_F(BaseEntityManagerTest, EdgeAddBatch_AllWithIds) {
 		edge.setId(static_cast<int64_t>(30000 + i));
 		edge.setSourceNodeId(src.getId());
 		edge.setTargetNodeId(tgt.getId());
-		edge.setLabelId(dataManager->getOrCreateLabelId("BATCH_EDGE"));
+		edge.setTypeId(dataManager->getOrCreateTokenId("BATCH_EDGE"));
 		edges.push_back(edge);
 	}
 

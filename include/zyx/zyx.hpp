@@ -156,7 +156,7 @@ namespace zyx {
 
 		void createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 						const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
-						const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props) const;
+						const std::string &edgeType, const std::unordered_map<std::string, Value> &props) const;
 
 		/**
 		 * @brief Creates a node and returns its internal ID immediately.
@@ -175,11 +175,11 @@ namespace zyx {
 		 *
 		 * @param sourceId The internal ID of the source node.
 		 * @param targetId The internal ID of the target node.
-		 * @param edgeLabel The edge type (e.g., "FLOWS_TO").
+		 * @param edgeType The edge type (e.g., "FLOWS_TO").
 		 * @param props Edge properties.
 		 * @throws std::runtime_error If sourceId or targetId does not exist.
 		 */
-		void createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
+		void createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeType,
 							const std::unordered_map<std::string, Value> &props = {}) const;
 
 		/**

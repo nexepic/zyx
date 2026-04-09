@@ -107,7 +107,7 @@ TEST_F(IndexManagerCompositeTest, FindNodeIdsByCompositeIndex_Basic) {
 	EXPECT_TRUE(indexManager->createCompositeIndex(
 		"comp_find", "node", "Person", {"name", "age"}));
 
-	int64_t labelId = dataManager->getOrCreateLabelId("Person");
+	int64_t labelId = dataManager->getOrCreateTokenId("Person");
 
 	// Create a node with both properties
 	graph::Node n(0, labelId);
@@ -148,7 +148,7 @@ TEST_F(IndexManagerCompositeTest, CompositeIndexUpdate_OnNodeUpdate) {
 	EXPECT_TRUE(indexManager->createCompositeIndex(
 		"comp_upd", "node", "Person", {"name", "age"}));
 
-	int64_t labelId = dataManager->getOrCreateLabelId("Person");
+	int64_t labelId = dataManager->getOrCreateTokenId("Person");
 
 	// Add node with both composite properties
 	graph::Node n1(0, labelId);
@@ -186,7 +186,7 @@ TEST_F(IndexManagerCompositeTest, CompositeIndex_NodeWithoutAllProperties_Skippe
 	EXPECT_TRUE(indexManager->createCompositeIndex(
 		"comp_skip", "node", "Person", {"name", "age"}));
 
-	int64_t labelId = dataManager->getOrCreateLabelId("Person");
+	int64_t labelId = dataManager->getOrCreateTokenId("Person");
 
 	// Node with only one of the two required properties
 	graph::Node n(0, labelId);
@@ -205,7 +205,7 @@ TEST_F(IndexManagerCompositeTest, CompositeIndex_NodeWithEmptyProperties_Skipped
 	EXPECT_TRUE(indexManager->createCompositeIndex(
 		"comp_empty", "node", "X", {"a", "b"}));
 
-	int64_t labelId = dataManager->getOrCreateLabelId("X");
+	int64_t labelId = dataManager->getOrCreateTokenId("X");
 	graph::Node n(0, labelId);
 	// No properties at all
 	dataManager->addNode(n);
@@ -218,7 +218,7 @@ TEST_F(IndexManagerCompositeTest, CompositeIndex_NodeDeleted) {
 	EXPECT_TRUE(indexManager->createCompositeIndex(
 		"comp_del", "node", "Person", {"name", "age"}));
 
-	int64_t labelId = dataManager->getOrCreateLabelId("Person");
+	int64_t labelId = dataManager->getOrCreateTokenId("Person");
 
 	graph::Node n(0, labelId);
 	n.addProperty("name", std::string("Dave"));
@@ -247,7 +247,7 @@ TEST_F(IndexManagerCompositeTest, CompositeIndex_NullPropertyValue_Skipped) {
 	EXPECT_TRUE(indexManager->createCompositeIndex(
 		"comp_null", "node", "X", {"a", "b"}));
 
-	int64_t labelId = dataManager->getOrCreateLabelId("X");
+	int64_t labelId = dataManager->getOrCreateTokenId("X");
 	graph::Node n(100, labelId);
 	n.addProperty("a", std::string("val"));
 	n.addProperty("b", std::monostate{}); // NULL property
@@ -266,7 +266,7 @@ TEST_F(IndexManagerCompositeTest, CompositeIndex_NullPropertyValue_Skipped) {
 TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_Basic) {
 	(void)indexManager->createIndex("idx_level", "node", "Player", "level");
 
-	int64_t labelId = dataManager->getOrCreateLabelId("Player");
+	int64_t labelId = dataManager->getOrCreateTokenId("Player");
 
 	for (int i = 1; i <= 5; ++i) {
 		graph::Node n(0, labelId);
@@ -304,7 +304,7 @@ TEST_F(IndexManagerCompositeTest, StatsCounters) {
 	EXPECT_EQ(indexManager->indexHits(), 0u);
 
 	// Add data and find → hit count increases
-	int64_t labelId = dataManager->getOrCreateLabelId("S");
+	int64_t labelId = dataManager->getOrCreateTokenId("S");
 	graph::Node n(0, labelId);
 	dataManager->addNode(n);
 	dataManager->addNodeProperties(n.getId(), {{"val", static_cast<int64_t>(42)}});
@@ -323,7 +323,7 @@ TEST_F(IndexManagerCompositeTest, StatsCounters_Label) {
 
 	indexManager->resetStats();
 
-	int64_t labelId = dataManager->getOrCreateLabelId("StatNode");
+	int64_t labelId = dataManager->getOrCreateTokenId("StatNode");
 	graph::Node n(0, labelId);
 	dataManager->addNode(n);
 
@@ -341,11 +341,11 @@ TEST_F(IndexManagerCompositeTest, StatsCounters_EdgeLabel) {
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	int64_t eLbl = dataManager->getOrCreateLabelId("STAT_REL");
+	int64_t eLbl = dataManager->getOrCreateTokenId("STAT_REL");
 	graph::Edge e(0, n1.getId(), n2.getId(), eLbl);
 	dataManager->addEdge(e);
 
-	(void)indexManager->findEdgeIdsByLabel("STAT_REL");
+	(void)indexManager->findEdgeIdsByType("STAT_REL");
 	EXPECT_EQ(indexManager->lookups(), 1u);
 }
 

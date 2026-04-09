@@ -137,13 +137,13 @@ namespace graph::query::planner {
 		// --- GDS Graph Projection ---
 		registerProcedure("gds.graph.project", [](const ProcedureContext &ctx, const auto &args) {
 			if (args.size() < 3)
-				throw std::runtime_error("gds.graph.project expects (name, nodeLabel, edgeLabel[, weightProperty])");
+				throw std::runtime_error("gds.graph.project expects (name, nodeLabel, edgeType[, weightProperty])");
 			std::string name = args[0].toString();
 			std::string nodeLabel = args[1].toString();
-			std::string edgeLabel = args[2].toString();
+			std::string edgeType = args[2].toString();
 			std::string weightProp = args.size() > 3 ? args[3].toString() : "";
 			return std::make_unique<execution::operators::GdsGraphProjectOperator>(
-				ctx.dataManager, ctx.projectionManager, name, nodeLabel, edgeLabel, weightProp);
+				ctx.dataManager, ctx.projectionManager, name, nodeLabel, edgeType, weightProp);
 		});
 
 		registerProcedure("gds.graph.drop", [](const ProcedureContext &ctx, const auto &args) {

@@ -35,9 +35,9 @@ namespace graph::query::execution::operators {
 		GdsGraphProjectOperator(std::shared_ptr<storage::DataManager> dm,
 								std::shared_ptr<algorithm::GraphProjectionManager> pm,
 								std::string name, std::string nodeLabel,
-								std::string edgeLabel, std::string weightProperty)
+								std::string edgeType, std::string weightProperty)
 			: dm_(std::move(dm)), pm_(std::move(pm)), name_(std::move(name)),
-			  nodeLabel_(std::move(nodeLabel)), edgeLabel_(std::move(edgeLabel)),
+			  nodeLabel_(std::move(nodeLabel)), edgeType_(std::move(edgeType)),
 			  weightProperty_(std::move(weightProperty)) {}
 
 		void open() override { executed_ = false; }
@@ -46,7 +46,7 @@ namespace graph::query::execution::operators {
 			if (executed_) return std::nullopt;
 
 			auto projection = std::make_shared<algorithm::GraphProjection>(
-				algorithm::GraphProjection::build(dm_, nodeLabel_, edgeLabel_, weightProperty_));
+				algorithm::GraphProjection::build(dm_, nodeLabel_, edgeType_, weightProperty_));
 
 			size_t nodeCount = projection->nodeCount();
 			size_t edgeCount = projection->edgeCount();
@@ -74,7 +74,7 @@ namespace graph::query::execution::operators {
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
-		std::string name_, nodeLabel_, edgeLabel_, weightProperty_;
+		std::string name_, nodeLabel_, edgeType_, weightProperty_;
 		bool executed_ = false;
 	};
 

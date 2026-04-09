@@ -71,7 +71,7 @@ protected:
 	static graph::Node createTestNode(const std::shared_ptr<graph::storage::DataManager> &dm,
 									  const std::string &label) {
 		graph::Node node;
-		int64_t labelId = dm->getOrCreateLabelId(label);
+		int64_t labelId = dm->getOrCreateTokenId(label);
 		node.setLabelId(labelId);
 		return node;
 	}
@@ -94,7 +94,7 @@ TEST_F(NodeManagerTest, AddAndGetNodeWithProperties) {
 
 	EXPECT_EQ(retrievedNode.getId(), node.getId());
 	EXPECT_EQ(retrievedNode.getLabelId(), node.getLabelId());
-	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "Person");
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedNode.getLabelId()), "Person");
 
 	ASSERT_EQ(retrievedProps.size(), 2UL);
 	EXPECT_EQ(std::get<std::string>(retrievedProps.at("name").getVariant()), "John");
@@ -108,7 +108,7 @@ TEST_F(NodeManagerTest, UpdateNode) {
 	nodeManager->addProperties(node.getId(), {{"name", graph::PropertyValue("John")}});
 
 	// Update the node's label
-	int64_t newLabelId = dataManager->getOrCreateLabelId("Employee");
+	int64_t newLabelId = dataManager->getOrCreateTokenId("Employee");
 	node.setLabelId(newLabelId);
 	nodeManager->update(node);
 
@@ -123,7 +123,7 @@ TEST_F(NodeManagerTest, UpdateNode) {
 	auto retrievedProps = nodeManager->getProperties(node.getId());
 
 	EXPECT_EQ(retrievedNode.getLabelId(), newLabelId) << "Node label should be updated";
-	EXPECT_EQ(dataManager->resolveLabel(retrievedNode.getLabelId()), "Employee");
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedNode.getLabelId()), "Employee");
 	ASSERT_EQ(retrievedProps.size(), 2UL);
 	EXPECT_EQ(std::get<std::string>(retrievedProps.at("name").getVariant()), "John Doe")
 			<< "Node name should be updated";

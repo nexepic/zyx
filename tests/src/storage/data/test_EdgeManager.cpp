@@ -74,8 +74,8 @@ protected:
 
 	void createTestNodes() {
 		// Create source and target nodes for edges
-		int64_t srcLabelId = dataManager->getOrCreateLabelId("SourceNode");
-		int64_t tgtLabelId = dataManager->getOrCreateLabelId("TargetNode");
+		int64_t srcLabelId = dataManager->getOrCreateTokenId("SourceNode");
+		int64_t tgtLabelId = dataManager->getOrCreateTokenId("TargetNode");
 
 		// Add nodes to storage
 		sourceNode = graph::Node(0, srcLabelId);
@@ -110,7 +110,7 @@ protected:
 
 // Test basic edge creation and retrieval
 TEST_F(EdgeManagerTest, AddAndGetEdge) {
-	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateTokenId("CONNECTS_TO");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 
 	edgeManager->add(edge);
@@ -122,15 +122,15 @@ TEST_F(EdgeManagerTest, AddAndGetEdge) {
 	EXPECT_EQ(retrievedEdge.getSourceNodeId(), sourceNode.getId());
 	EXPECT_EQ(retrievedEdge.getTargetNodeId(), targetNode.getId());
 
-	EXPECT_EQ(retrievedEdge.getLabelId(), labelId);
-	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "CONNECTS_TO");
+	EXPECT_EQ(retrievedEdge.getTypeId(), labelId);
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedEdge.getTypeId()), "CONNECTS_TO");
 
 	EXPECT_TRUE(retrievedEdge.isActive());
 }
 
 // Test edge removal for an entity that was added and removed in the same context
 TEST_F(EdgeManagerTest, RemoveEdgeInSameContext) {
-	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateTokenId("CONNECTS_TO");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 
 	edgeManager->add(edge);
@@ -151,7 +151,7 @@ TEST_F(EdgeManagerTest, RemoveEdgeInSameContext) {
 
 // Test edge removal for an entity that is considered "persisted"
 TEST_F(EdgeManagerTest, RemovePersistedEdge) {
-	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateTokenId("CONNECTS_TO");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 
 	edgeManager->add(edge);
@@ -174,12 +174,12 @@ TEST_F(EdgeManagerTest, RemovePersistedEdge) {
 
 // Test findByNode functionality
 TEST_F(EdgeManagerTest, FindEdgesByNode) {
-	int64_t targetLabelId = dataManager->getOrCreateLabelId("Target2");
+	int64_t targetLabelId = dataManager->getOrCreateTokenId("Target2");
 	graph::Node target2(0, targetLabelId);
 	nodeManager->add(target2);
 
-	int64_t connectsLabel = dataManager->getOrCreateLabelId("CONNECTS_TO");
-	int64_t refersLabel = dataManager->getOrCreateLabelId("REFERS_TO");
+	int64_t connectsLabel = dataManager->getOrCreateTokenId("CONNECTS_TO");
+	int64_t refersLabel = dataManager->getOrCreateTokenId("REFERS_TO");
 
 	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), connectsLabel);
 	graph::Edge edge2(0, sourceNode.getId(), target2.getId(), refersLabel);
@@ -197,23 +197,23 @@ TEST_F(EdgeManagerTest, FindEdgesByNode) {
 
 // Test edge updating
 TEST_F(EdgeManagerTest, UpdateEdge) {
-	int64_t initLabel = dataManager->getOrCreateLabelId("INITIAL_LABEL");
+	int64_t initLabel = dataManager->getOrCreateTokenId("INITIAL_LABEL");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), initLabel);
 	edgeManager->add(edge);
 
-	int64_t updatedLabel = dataManager->getOrCreateLabelId("UPDATED_LABEL");
-	edge.setLabelId(updatedLabel);
+	int64_t updatedLabel = dataManager->getOrCreateTokenId("UPDATED_LABEL");
+	edge.setTypeId(updatedLabel);
 
 	edgeManager->update(edge);
 
 	graph::Edge retrievedEdge = edgeManager->get(edge.getId());
-	EXPECT_EQ(retrievedEdge.getLabelId(), updatedLabel);
-	EXPECT_EQ(dataManager->resolveLabel(retrievedEdge.getLabelId()), "UPDATED_LABEL");
+	EXPECT_EQ(retrievedEdge.getTypeId(), updatedLabel);
+	EXPECT_EQ(dataManager->resolveTokenName(retrievedEdge.getTypeId()), "UPDATED_LABEL");
 }
 
 // Test edge properties
 TEST_F(EdgeManagerTest, EdgeProperties) {
-	int64_t labelId = dataManager->getOrCreateLabelId("HAS_PROPERTY");
+	int64_t labelId = dataManager->getOrCreateTokenId("HAS_PROPERTY");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 	edgeManager->add(edge);
 
@@ -237,7 +237,7 @@ TEST_F(EdgeManagerTest, EdgeProperties) {
 
 // Test relationship bidirectionality
 TEST_F(EdgeManagerTest, RelationshipBidirectionality) {
-	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateTokenId("CONNECTS_TO");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 	edgeManager->add(edge);
 
@@ -250,8 +250,8 @@ TEST_F(EdgeManagerTest, RelationshipBidirectionality) {
 
 // Test multiple edges between same nodes
 TEST_F(EdgeManagerTest, MultipleEdgesBetweenSameNodes) {
-	int64_t knowsLabel = dataManager->getOrCreateLabelId("KNOWS");
-	int64_t likesLabel = dataManager->getOrCreateLabelId("LIKES");
+	int64_t knowsLabel = dataManager->getOrCreateTokenId("KNOWS");
+	int64_t likesLabel = dataManager->getOrCreateTokenId("LIKES");
 
 	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), knowsLabel);
 	graph::Edge edge2(0, sourceNode.getId(), targetNode.getId(), likesLabel);
@@ -280,7 +280,7 @@ TEST_F(EdgeManagerTest, BatchOperations) {
 	std::vector<int64_t> edgeIds;
 
 	for (int i = 0; i < 5; i++) {
-		int64_t labelId = dataManager->getOrCreateLabelId("BATCH_EDGE_" + std::to_string(i));
+		int64_t labelId = dataManager->getOrCreateTokenId("BATCH_EDGE_" + std::to_string(i));
 		graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 		edgeManager->add(edge);
 		edges.push_back(edge);
@@ -297,8 +297,8 @@ TEST_F(EdgeManagerTest, BatchOperations) {
 
 // Test edge ID allocation
 TEST_F(EdgeManagerTest, EdgeIdAllocation) {
-	int64_t label1 = dataManager->getOrCreateLabelId("EDGE1");
-	int64_t label2 = dataManager->getOrCreateLabelId("EDGE2");
+	int64_t label1 = dataManager->getOrCreateTokenId("EDGE1");
+	int64_t label2 = dataManager->getOrCreateTokenId("EDGE2");
 
 	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), label1);
 	graph::Edge edge2(0, sourceNode.getId(), targetNode.getId(), label2);
@@ -317,7 +317,7 @@ TEST_F(EdgeManagerTest, ErrorHandling) {
 	graph::Edge nonExistentEdge = edgeManager->get(999999);
 	EXPECT_EQ(nonExistentEdge.getId(), 0);
 
-	int64_t labelId = dataManager->getOrCreateLabelId("INVALID");
+	int64_t labelId = dataManager->getOrCreateTokenId("INVALID");
 	graph::Edge invalidEdge(999999, sourceNode.getId(), targetNode.getId(), labelId);
 	invalidEdge.markInactive(false);
 	EXPECT_THROW(edgeManager->update(invalidEdge), std::runtime_error);
@@ -326,8 +326,8 @@ TEST_F(EdgeManagerTest, ErrorHandling) {
 // Test findByNode with "both" direction
 TEST_F(EdgeManagerTest, FindEdgesByNodeBothDirection) {
 	// Create a bidirectional connection: source -> target and target -> source
-	int64_t label1 = dataManager->getOrCreateLabelId("FORWARD");
-	int64_t label2 = dataManager->getOrCreateLabelId("BACKWARD");
+	int64_t label1 = dataManager->getOrCreateTokenId("FORWARD");
+	int64_t label2 = dataManager->getOrCreateTokenId("BACKWARD");
 
 	graph::Edge edge1(0, sourceNode.getId(), targetNode.getId(), label1);
 	graph::Edge edge2(0, targetNode.getId(), sourceNode.getId(), label2);
@@ -360,7 +360,7 @@ TEST_F(EdgeManagerTest, FindEdgesByNodeBothDirection) {
 
 // Test findByNode with invalid direction
 TEST_F(EdgeManagerTest, FindEdgesByNodeInvalidDirection) {
-	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateTokenId("CONNECTS_TO");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 	edgeManager->add(edge);
 
@@ -384,7 +384,7 @@ TEST_F(EdgeManagerTest, FindEdgesByNodeNonExistent) {
 
 // Test edge persistence and retrieval after save
 TEST_F(EdgeManagerTest, EdgePersistenceAfterSave) {
-	int64_t labelId = dataManager->getOrCreateLabelId("PERSISTENT_EDGE");
+	int64_t labelId = dataManager->getOrCreateTokenId("PERSISTENT_EDGE");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 
 	edgeManager->add(edge);
@@ -403,7 +403,7 @@ TEST_F(EdgeManagerTest, EdgePersistenceAfterSave) {
 
 // Test multiple removals of same edge
 TEST_F(EdgeManagerTest, RemoveEdgeTwice) {
-	int64_t labelId = dataManager->getOrCreateLabelId("CONNECTS_TO");
+	int64_t labelId = dataManager->getOrCreateTokenId("CONNECTS_TO");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 
 	edgeManager->add(edge);
@@ -424,32 +424,32 @@ TEST_F(EdgeManagerTest, RemoveEdgeTwice) {
 
 // Test edge updates with different scenarios
 TEST_F(EdgeManagerTest, UpdateEdgeWithDifferentLabels) {
-	int64_t label1 = dataManager->getOrCreateLabelId("LABEL_A");
-	int64_t label2 = dataManager->getOrCreateLabelId("LABEL_B");
-	int64_t label3 = dataManager->getOrCreateLabelId("LABEL_C");
+	int64_t label1 = dataManager->getOrCreateTokenId("LABEL_A");
+	int64_t label2 = dataManager->getOrCreateTokenId("LABEL_B");
+	int64_t label3 = dataManager->getOrCreateTokenId("LABEL_C");
 
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), label1);
 	edgeManager->add(edge);
 
 	// Update to label2
-	edge.setLabelId(label2);
+	edge.setTypeId(label2);
 	edgeManager->update(edge);
 
 	graph::Edge retrieved1 = edgeManager->get(edge.getId());
-	EXPECT_EQ(retrieved1.getLabelId(), label2);
+	EXPECT_EQ(retrieved1.getTypeId(), label2);
 
 	// Update to label3
-	edge.setLabelId(label3);
+	edge.setTypeId(label3);
 	edgeManager->update(edge);
 
 	graph::Edge retrieved2 = edgeManager->get(edge.getId());
-	EXPECT_EQ(retrieved2.getLabelId(), label3);
-	EXPECT_EQ(dataManager->resolveLabel(retrieved2.getLabelId()), "LABEL_C");
+	EXPECT_EQ(retrieved2.getTypeId(), label3);
+	EXPECT_EQ(dataManager->resolveTokenName(retrieved2.getTypeId()), "LABEL_C");
 }
 
 // Test edge properties with multiple operations
 TEST_F(EdgeManagerTest, EdgePropertiesMultipleOperations) {
-	int64_t labelId = dataManager->getOrCreateLabelId("PROPERTY_EDGE");
+	int64_t labelId = dataManager->getOrCreateTokenId("PROPERTY_EDGE");
 	graph::Edge edge(0, sourceNode.getId(), targetNode.getId(), labelId);
 	edgeManager->add(edge);
 
@@ -511,14 +511,14 @@ TEST_F(EdgeManagerTest, OperationsWithExpiredDataManager) {
 	auto tempEdgeManager = tempDataManager->getEdgeManager();
 
 	// Create some nodes first
-	int64_t labelId = tempDataManager->getOrCreateLabelId("TEST_LABEL");
+	int64_t labelId = tempDataManager->getOrCreateTokenId("TEST_LABEL");
 	graph::Node node1(0, labelId);
 	graph::Node node2(0, labelId);
 	tempDataManager->getNodeManager()->add(node1);
 	tempDataManager->getNodeManager()->add(node2);
 
-	int64_t edgeLabelId = tempDataManager->getOrCreateLabelId("TEST_EDGE");
-	graph::Edge testEdge(0, node1.getId(), node2.getId(), edgeLabelId);
+	int64_t edgeTypeId = tempDataManager->getOrCreateTokenId("TEST_EDGE");
+	graph::Edge testEdge(0, node1.getId(), node2.getId(), edgeTypeId);
 
 	// Test that operations work correctly when DataManager is available
 	tempEdgeManager->add(testEdge);

@@ -63,7 +63,7 @@ namespace graph::query::indexes {
 
 		bool buildNodeLabelIndex() const;
 
-		bool buildEdgeLabelIndex() const;
+		bool buildEdgeTypeIndex() const;
 
 		/**
 		 * @brief Builds an index for a specific property key on all nodes.

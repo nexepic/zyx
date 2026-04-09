@@ -41,7 +41,7 @@ namespace graph::query::execution::operators {
 			dm_(std::move(dm)), variable_(std::move(variable)), labels_(std::move(labels)),
 			props_(std::move(props)), propExpressions_(std::move(propExprs)) {}
 
-		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
+		void setChild(std::unique_ptr<PhysicalOperator> child) override { child_ = std::move(child); }
 
 		void open() override {
 			executed_ = false;
@@ -56,7 +56,7 @@ namespace graph::query::execution::operators {
 			// Resolve all Label IDs once per call.
 			std::vector<int64_t> labelIds;
 			for (const auto &lbl : labels_) {
-				labelIds.push_back(dm_->getOrCreateLabelId(lbl));
+				labelIds.push_back(dm_->getOrCreateTokenId(lbl));
 			}
 			int64_t labelId = labelIds.empty() ? 0 : labelIds[0];
 

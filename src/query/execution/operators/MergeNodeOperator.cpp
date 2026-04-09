@@ -35,7 +35,7 @@ void MergeNodeOperator::open() {
 	// Resolve all Label IDs
 	targetLabelIds_.clear();
 	for (const auto &lbl : labels_) {
-		targetLabelIds_.push_back(dm_->getOrCreateLabelId(lbl));
+		targetLabelIds_.push_back(dm_->getOrCreateTokenId(lbl));
 	}
 }
 

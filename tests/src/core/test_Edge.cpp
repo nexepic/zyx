@@ -47,7 +47,7 @@ TEST_F(EdgeTest, DefaultConstructor) {
 	EXPECT_EQ(edge.getPropertyEntityId(), 0);
 	EXPECT_TRUE(edge.isActive());
 	// Changed: Check Label ID instead of string
-	EXPECT_EQ(edge.getLabelId(), 0);
+	EXPECT_EQ(edge.getTypeId(), 0);
 }
 
 TEST_F(EdgeTest, ParameterizedConstructor) {
@@ -62,7 +62,7 @@ TEST_F(EdgeTest, ParameterizedConstructor) {
 	EXPECT_EQ(edge.getSourceNodeId(), sourceId);
 	EXPECT_EQ(edge.getTargetNodeId(), targetId);
 	// Changed: Check Label ID
-	EXPECT_EQ(edge.getLabelId(), labelId);
+	EXPECT_EQ(edge.getTypeId(), labelId);
 	EXPECT_TRUE(edge.isActive());
 	EXPECT_EQ(edge.getNextOutEdgeId(), 0);
 	EXPECT_EQ(edge.getPrevOutEdgeId(), 0);
@@ -70,13 +70,13 @@ TEST_F(EdgeTest, ParameterizedConstructor) {
 	EXPECT_EQ(edge.getPrevInEdgeId(), 0);
 }
 
-TEST_F(EdgeTest, SetGetLabelId) {
+TEST_F(EdgeTest, SetGetTypeId) {
 	graph::Edge edge;
 	const int64_t testLabelId = 555;
 
-	edge.setLabelId(testLabelId);
+	edge.setTypeId(testLabelId);
 
-	EXPECT_EQ(edge.getLabelId(), testLabelId);
+	EXPECT_EQ(edge.getTypeId(), testLabelId);
 }
 
 TEST_F(EdgeTest, NodeRelationshipSetters) {
@@ -199,7 +199,7 @@ TEST_F(EdgeTest, SerializeDeserializeEmpty) {
 	EXPECT_EQ(deserializedEdge.getId(), originalEdge.getId());
 	EXPECT_EQ(deserializedEdge.getSourceNodeId(), originalEdge.getSourceNodeId());
 	EXPECT_EQ(deserializedEdge.getTargetNodeId(), originalEdge.getTargetNodeId());
-	EXPECT_EQ(deserializedEdge.getLabelId(), originalEdge.getLabelId());
+	EXPECT_EQ(deserializedEdge.getTypeId(), originalEdge.getTypeId());
 	EXPECT_EQ(deserializedEdge.isActive(), originalEdge.isActive());
 }
 
@@ -217,7 +217,7 @@ TEST_F(EdgeTest, SerializeDeserializeWithData) {
 	EXPECT_EQ(deserializedEdge.getId(), originalEdge.getId());
 	EXPECT_EQ(deserializedEdge.getSourceNodeId(), originalEdge.getSourceNodeId());
 	EXPECT_EQ(deserializedEdge.getTargetNodeId(), originalEdge.getTargetNodeId());
-	EXPECT_EQ(deserializedEdge.getLabelId(), originalEdge.getLabelId());
+	EXPECT_EQ(deserializedEdge.getTypeId(), originalEdge.getTypeId());
 	EXPECT_EQ(deserializedEdge.getNextOutEdgeId(), originalEdge.getNextOutEdgeId());
 	EXPECT_EQ(deserializedEdge.getPrevInEdgeId(), originalEdge.getPrevInEdgeId());
 	EXPECT_EQ(deserializedEdge.getPropertyEntityId(), originalEdge.getPropertyEntityId());
@@ -230,7 +230,7 @@ TEST_F(EdgeTest, GetSerializedSize) {
 
 	// Calculate expected size based on POD fields
 	size_t expectedSize = 0;
-	// 9 int64_t fields: id, source, target, nextOut, prevOut, nextIn, prevIn, propEntity, labelId
+	// 9 int64_t fields: id, source, target, nextOut, prevOut, nextIn, prevIn, propEntity, typeId
 	expectedSize += sizeof(int64_t) * 9;
 	// 1 uint32_t field: propertyStorageType
 	expectedSize += sizeof(uint32_t);

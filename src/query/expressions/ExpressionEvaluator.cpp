@@ -751,8 +751,8 @@ void ExpressionEvaluator::visit(const ExistsExpression *expr) {
 	for (const auto& edge : edges) {
 		// Filter by relationship type
 		if (!relType.empty()) {
-			std::string edgeLabel = dataManager->resolveLabel(edge.getLabelId());
-			if (edgeLabel != relType) {
+			std::string edgeType = dataManager->resolveTokenName(edge.getTypeId());
+			if (edgeType != relType) {
 				continue;
 			}
 		}
@@ -762,7 +762,7 @@ void ExpressionEvaluator::visit(const ExistsExpression *expr) {
 			int64_t targetId = (direction == PatternDirection::PAT_INCOMING)
 				? edge.getSourceNodeId() : edge.getTargetNodeId();
 			Node targetNode = dataManager->getNode(targetId);
-			std::string nodeLabel = dataManager->resolveLabel(targetNode.getLabelId());
+			std::string nodeLabel = dataManager->resolveTokenName(targetNode.getLabelId());
 			if (nodeLabel != targetLabel) {
 				continue;
 			}
@@ -818,8 +818,8 @@ void ExpressionEvaluator::visit(const PatternComprehensionExpression *expr) {
 	for (const auto& edge : edges) {
 		// Filter by relationship type
 		if (!relType.empty()) {
-			std::string edgeLabel = dm->resolveLabel(edge.getLabelId());
-			if (edgeLabel != relType) continue;
+			std::string edgeType = dm->resolveTokenName(edge.getTypeId());
+			if (edgeType != relType) continue;
 		}
 
 		// Get the target node
@@ -831,7 +831,7 @@ void ExpressionEvaluator::visit(const PatternComprehensionExpression *expr) {
 		// Filter by target label if specified
 		const std::string& targetLabel = expr->getTargetLabel();
 		if (!targetLabel.empty()) {
-			std::string nodeLabel = dm->resolveLabel(targetNode.getLabelId());
+			std::string nodeLabel = dm->resolveTokenName(targetNode.getLabelId());
 			if (nodeLabel != targetLabel) continue;
 		}
 

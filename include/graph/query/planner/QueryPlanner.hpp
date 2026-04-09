@@ -104,7 +104,7 @@ namespace graph::query {
 		 */
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		traverseOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
-				   const std::string &edgeVar, const std::string &targetVar, const std::string &edgeLabel,
+				   const std::string &edgeVar, const std::string &targetVar, const std::string &edgeType,
 				   const std::string &direction) const;
 
 		/**
@@ -164,7 +164,7 @@ namespace graph::query {
 
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		mergeEdgeOp(const std::string &sourceVar, const std::string &edgeVar,
-					const std::string &targetVar, const std::string &edgeLabel,
+					const std::string &targetVar, const std::string &edgeType,
 					const std::unordered_map<std::string, PropertyValue> &matchProps,
 					const std::string &direction,
 					const std::vector<execution::operators::SetItem> &onCreateItems,
@@ -217,7 +217,7 @@ namespace graph::query {
 
 		[[nodiscard]] std::unique_ptr<execution::PhysicalOperator>
 		traverseVarLengthOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
-							const std::string &targetVar, const std::string &edgeLabel, int minHops, int maxHops,
+							const std::string &targetVar, const std::string &edgeType, int minHops, int maxHops,
 							const std::string &direction) const;
 
 		static std::unique_ptr<execution::PhysicalOperator>

@@ -113,7 +113,7 @@ TEST_F(DataManagerTest, SnapshotReadsPreferSnapshotStateAndDeletionMarker) {
 	fileStorage->flush();
 
 	const int64_t nodeId = node.getId();
-	const int64_t newLabelId = dataManager->getOrCreateLabelId("SnapshotNodeUpdated");
+	const int64_t newLabelId = dataManager->getOrCreateTokenId("SnapshotNodeUpdated");
 
 	CommittedSnapshot snapshot;
 	Node shadow = dataManager->getNode(nodeId);
@@ -136,7 +136,7 @@ TEST_F(DataManagerTest, LoadEntityDirectReturnsDirtyOverrideAndDiskFallback) {
 	fileStorage->flush();
 
 	const int64_t nodeId = node.getId();
-	const int64_t updatedLabelId = dataManager->getOrCreateLabelId("DirectNodeUpdated");
+	const int64_t updatedLabelId = dataManager->getOrCreateTokenId("DirectNodeUpdated");
 
 	Node updated = dataManager->getNode(nodeId);
 	updated.setLabelId(updatedLabelId);

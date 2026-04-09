@@ -53,7 +53,7 @@ protected:
 		fileStorage = database->getStorage();
 		dataManager = fileStorage->getDataManager();
 
-		// Ensure LabelRegistry is ready (Critical for resolveLabel to work in tests)
+		// Ensure TokenRegistry is ready (Critical for resolveTokenName to work in tests)
 		// With the previous fix, this should happen automatically in DataManager initialization.
 
 		// Manually instantiate EntityTypeIndexManager for white-box testing.
@@ -70,7 +70,7 @@ protected:
 
 		// 2. Edge Index Manager
 		edgeIndexManager = std::make_shared<graph::query::indexes::EntityTypeIndexManager>(
-				dataManager, fileStorage->getSystemStateManager(), graph::query::indexes::IndexTypes::EDGE_LABEL_TYPE,
+				dataManager, fileStorage->getSystemStateManager(), graph::query::indexes::IndexTypes::EDGE_TYPE_INDEX,
 				graph::storage::state::keys::Edge::LABEL_ROOT, graph::query::indexes::IndexTypes::EDGE_PROPERTY_TYPE,
 				graph::storage::state::keys::Edge::PROPERTY_PREFIX);
 	}
@@ -164,10 +164,10 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	(void) nodeIndexManager->createPropertyIndex("key1", []() { return true; });
 
 	// 1. Add Node
-	int64_t labelId = dataManager->getOrCreateLabelId("TestLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("TestLabel");
 	ASSERT_GT(labelId, 0);
 	// Sanity check: Ensure label resolves correctly immediately
-	ASSERT_EQ(dataManager->resolveLabel(labelId), "TestLabel");
+	ASSERT_EQ(dataManager->resolveTokenName(labelId), "TestLabel");
 
 	graph::Node node(1, labelId);
 	node.addProperty("key1", "value1");
@@ -190,7 +190,7 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	EXPECT_EQ(propResults[0], 1);
 
 	// 2. Update Node
-	int64_t newLabelId = dataManager->getOrCreateLabelId("NewLabel");
+	int64_t newLabelId = dataManager->getOrCreateTokenId("NewLabel");
 	ASSERT_GT(newLabelId, 0);
 
 	graph::Node updatedNode = node;
@@ -198,9 +198,9 @@ TEST_F(EntityTypeIndexManagerTest, NodeEventHandlers) {
 	updatedNode.addProperty("key1", "value2"); // Change Property Value
 
 	// Sanity Check: Ensure old label still resolves correctly before update
-	// If this fails, resolveLabel returns empty, and updateLabelIndex SKIPS removal.
-	ASSERT_EQ(dataManager->resolveLabel(node.getLabelId()), "TestLabel");
-	ASSERT_EQ(dataManager->resolveLabel(updatedNode.getLabelId()), "NewLabel");
+	// If this fails, resolveTokenName returns empty, and updateLabelIndex SKIPS removal.
+	ASSERT_EQ(dataManager->resolveTokenName(node.getLabelId()), "TestLabel");
+	ASSERT_EQ(dataManager->resolveTokenName(updatedNode.getLabelId()), "NewLabel");
 
 	// Simulate Update Event
 	nodeIndexManager->onEntityUpdated(node, updatedNode);
@@ -239,7 +239,7 @@ TEST_F(EntityTypeIndexManagerTest, EdgeEventHandlers) {
 	(void) edgeIndexManager->createPropertyIndex("weight", []() { return true; });
 
 	// 1. Add Edge
-	int64_t knowsLabel = dataManager->getOrCreateLabelId("KNOWS");
+	int64_t knowsLabel = dataManager->getOrCreateTokenId("KNOWS");
 	graph::Edge edge(10, 1, 2, knowsLabel);
 	edge.addProperty("weight", 0.5);
 
@@ -254,11 +254,11 @@ TEST_F(EntityTypeIndexManagerTest, EdgeEventHandlers) {
 
 	// 2. Update Edge
 	graph::Edge updatedEdge = edge;
-	updatedEdge.setLabelId(dataManager->getOrCreateLabelId("LIKES"));
+	updatedEdge.setTypeId(dataManager->getOrCreateTokenId("LIKES"));
 	updatedEdge.addProperty("weight", 1.0);
 
 	// Sanity Check
-	ASSERT_EQ(dataManager->resolveLabel(edge.getLabelId()), "KNOWS");
+	ASSERT_EQ(dataManager->resolveTokenName(edge.getTypeId()), "KNOWS");
 
 	edgeIndexManager->onEntityUpdated(edge, updatedEdge);
 
@@ -283,7 +283,7 @@ TEST_F(EntityTypeIndexManagerTest, HandleZeroEntityId) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
 	// Create a node with invalid ID 0
-	int64_t lbl = dataManager->getOrCreateLabelId("ZeroNode");
+	int64_t lbl = dataManager->getOrCreateTokenId("ZeroNode");
 	graph::Node node(0, lbl);
 
 	// Try to add
@@ -298,7 +298,7 @@ TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
 	// 1. Add node with empty label (ID 0)
-	// Note: getOrCreateLabelId("") returns 0.
+	// Note: getOrCreateTokenId("") returns 0.
 	graph::Node node(1, 0);
 	nodeIndexManager->onEntityAdded(node);
 
@@ -309,7 +309,7 @@ TEST_F(EntityTypeIndexManagerTest, EmptyLabelHandling) {
 
 	// 2. Update to valid label
 	graph::Node validNode = node;
-	validNode.setLabelId(dataManager->getOrCreateLabelId("Valid"));
+	validNode.setLabelId(dataManager->getOrCreateTokenId("Valid"));
 
 	// updateNode(old=Empty, new=Valid)
 	nodeIndexManager->onEntityUpdated(node, validNode);
@@ -331,7 +331,7 @@ TEST_F(EntityTypeIndexManagerTest, PropertyChangeHandling_AddRemoveFields) {
 	auto propIdx = nodeIndexManager->getPropertyIndex();
 
 	// 1. Node without property
-	graph::Node node(1, dataManager->getOrCreateLabelId("Node"));
+	graph::Node node(1, dataManager->getOrCreateTokenId("Node"));
 	nodeIndexManager->onEntityAdded(node);
 	EXPECT_TRUE(propIdx->findExactMatch("dynamic", 100).empty());
 
@@ -359,7 +359,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_BatchLogic) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 	(void) nodeIndexManager->createPropertyIndex("batch_prop", []() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("BatchLabel");
+	int64_t lbl = dataManager->getOrCreateTokenId("BatchLabel");
 
 	std::vector<graph::Node> nodes;
 	for (int i = 0; i < 5; ++i) {
@@ -405,7 +405,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_WithEmptyLabelIndex) {
 	// Don't create label index, only property index
 	(void) nodeIndexManager->createPropertyIndex("batch_key", []() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("BatchOnly");
+	int64_t lbl = dataManager->getOrCreateTokenId("BatchOnly");
 	std::vector<graph::Node> nodes;
 	for (int i = 0; i < 3; ++i) {
 		graph::Node n(i + 200, lbl);
@@ -425,7 +425,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_WithEmptyPropertyBatch) {
 	// Create label index only, no property index
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("NoPropBatch");
+	int64_t lbl = dataManager->getOrCreateTokenId("NoPropBatch");
 	std::vector<graph::Node> nodes;
 	for (int i = 0; i < 3; ++i) {
 		// Nodes with no properties
@@ -472,7 +472,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_NodesWithEmptyProperties) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 	(void) nodeIndexManager->createPropertyIndex("some_key", []() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("EmptyProps");
+	int64_t lbl = dataManager->getOrCreateTokenId("EmptyProps");
 	std::vector<graph::Node> nodes;
 	for (int i = 0; i < 5; ++i) {
 		graph::Node n(i + 400, lbl);
@@ -491,7 +491,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesWithLabelsAndProperties)
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 	(void) edgeIndexManager->createPropertyIndex("edge_prop", []() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("BATCH_EDGE");
+	int64_t lbl = dataManager->getOrCreateTokenId("BATCH_EDGE");
 	std::vector<graph::Edge> edges;
 	for (int i = 0; i < 3; ++i) {
 		graph::Edge e(i + 500, 1, 2, lbl);
@@ -553,7 +553,7 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_DeleteWithEmptyLabel) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
 	// Add node with a label
-	int64_t labelId = dataManager->getOrCreateLabelId("ToDelete");
+	int64_t labelId = dataManager->getOrCreateTokenId("ToDelete");
 	graph::Node node(10, labelId);
 	nodeIndexManager->onEntityAdded(node);
 
@@ -572,7 +572,7 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_UpdateSameLabel) {
 	// Cover branch: oldLabel != newLabel -> False (same label, no update needed)
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("SameLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("SameLabel");
 	graph::Node oldNode(20, labelId);
 	nodeIndexManager->onEntityAdded(oldNode);
 
@@ -597,10 +597,10 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_UpdateFromEmptyToValid) {
 	auto labelIdx = nodeIndexManager->getLabelIndex();
 
 	// Update to a valid label
-	int64_t labelId = dataManager->getOrCreateLabelId("NewLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("NewLabel");
 	graph::Node newNode(30, labelId);
 
-	// oldLabel is "", so resolveLabel(0) returns empty, skip remove
+	// oldLabel is "", so resolveTokenName(0) returns empty, skip remove
 	nodeIndexManager->onEntityUpdated(oldNode, newNode);
 
 	EXPECT_EQ(labelIdx->findNodes("NewLabel").size(), 1UL);
@@ -613,7 +613,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EmptyLabelString) {
 	// Nodes with labelId that resolves to empty string (labelId=0)
 	std::vector<graph::Node> nodes;
 	for (int i = 0; i < 3; ++i) {
-		graph::Node n(i + 700, 0); // labelId=0 -> resolveLabel returns ""
+		graph::Node n(i + 700, 0); // labelId=0 -> resolveTokenName returns ""
 		nodes.push_back(n);
 	}
 
@@ -637,7 +637,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_PropertyNotIndexed) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 	// Note: We do NOT create a property index
 
-	int64_t lbl = dataManager->getOrCreateLabelId("PropTest");
+	int64_t lbl = dataManager->getOrCreateTokenId("PropTest");
 	std::vector<graph::Node> nodes;
 	graph::Node n(800, lbl);
 	n.addProperty("unindexed_prop", 42);
@@ -705,7 +705,7 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_IsDeleted_WithLabel) {
 	// Cover: isDeleted=true && !newLabel.empty() -> removeNode called (line 90)
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("DeleteMe");
+	int64_t labelId = dataManager->getOrCreateTokenId("DeleteMe");
 	graph::Node node(50, labelId);
 	nodeIndexManager->onEntityAdded(node);
 
@@ -721,8 +721,8 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_LabelChangedBothNonEmpty) {
 	// Cover: oldLabel != newLabel where both are non-empty (lines 93, 96)
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelA = dataManager->getOrCreateLabelId("LabelA");
-	int64_t labelB = dataManager->getOrCreateLabelId("LabelB");
+	int64_t labelA = dataManager->getOrCreateTokenId("LabelA");
+	int64_t labelB = dataManager->getOrCreateTokenId("LabelB");
 
 	graph::Node oldNode(60, labelA);
 	nodeIndexManager->onEntityAdded(oldNode);
@@ -760,7 +760,7 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_EntityIdZero_SkipsUpdate) {
 	// Cover: entity.getId() == 0 -> early return (line 80)
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("ZeroIdNode");
+	int64_t labelId = dataManager->getOrCreateTokenId("ZeroIdNode");
 	graph::Node zeroNode(0, labelId);
 
 	// Should return early without crashing
@@ -797,7 +797,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_WithBothIndexesEnabled) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 	(void) nodeIndexManager->createPropertyIndex("indexed_key", []() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("FullBatch");
+	int64_t lbl = dataManager->getOrCreateTokenId("FullBatch");
 	std::vector<graph::Node> nodes;
 	for (int i = 0; i < 5; ++i) {
 		graph::Node n(i + 1000, lbl);
@@ -822,7 +822,7 @@ TEST_F(EntityTypeIndexManagerTest, EdgeUpdateLabelIndex_EntityIdZero_SkipsUpdate
 	// Cover Edge template: entity.getId() == 0 -> early return (line 80)
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("ZeroEdge");
+	int64_t labelId = dataManager->getOrCreateTokenId("ZeroEdge");
 	graph::Edge zeroEdge(0, 1, 2, labelId);
 
 	// Should return early without crashing since edge ID is 0
@@ -871,7 +871,7 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_DeletedEntityWithValidLabel)
 	// where we delete an entity that actually has a valid label
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("DeleteTarget");
+	int64_t labelId = dataManager->getOrCreateTokenId("DeleteTarget");
 	graph::Node node(100, labelId);
 	nodeIndexManager->onEntityAdded(node);
 
@@ -892,7 +892,7 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_NotDeletedOldLabelEmptyNewLa
 	graph::Node oldNode(200, 0);
 	nodeIndexManager->onEntityAdded(oldNode);
 
-	int64_t labelId = dataManager->getOrCreateLabelId("AddedLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("AddedLabel");
 	graph::Node newNode(200, labelId);
 	nodeIndexManager->onEntityUpdated(oldNode, newNode);
 
@@ -905,7 +905,7 @@ TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_NotDeletedOldLabelValidNewLa
 	// oldLabel != newLabel -> removeNode for old, skip addNode for empty new
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("RemoveLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("RemoveLabel");
 	graph::Node oldNode(300, labelId);
 	nodeIndexManager->onEntityAdded(oldNode);
 
@@ -924,7 +924,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_MixedLabelAndNoLabelNodes) {
 	// Also covers the case where labelId == 0 is skipped (line 182)
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("MixedBatch");
+	int64_t lbl = dataManager->getOrCreateTokenId("MixedBatch");
 	std::vector<graph::Node> nodes;
 
 	// Some nodes with labels, some without
@@ -945,7 +945,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntityDeleted_EdgeWithLabel) {
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 	(void) edgeIndexManager->createPropertyIndex("edge_weight", []() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("DEL_EDGE");
+	int64_t labelId = dataManager->getOrCreateTokenId("DEL_EDGE");
 	graph::Edge edge(600, 1, 2, labelId);
 	edge.addProperty("edge_weight", 5.0);
 
@@ -965,8 +965,8 @@ TEST_F(EntityTypeIndexManagerTest, OnEntityUpdated_EdgeLabelChange) {
 	// Cover: onEntityUpdated Edge template where label changes
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelA = dataManager->getOrCreateLabelId("EDGE_A");
-	int64_t labelB = dataManager->getOrCreateLabelId("EDGE_B");
+	int64_t labelA = dataManager->getOrCreateTokenId("EDGE_A");
+	int64_t labelB = dataManager->getOrCreateTokenId("EDGE_B");
 
 	graph::Edge oldEdge(700, 1, 2, labelA);
 	edgeIndexManager->onEntityAdded(oldEdge);
@@ -986,7 +986,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntityUpdated_EdgeLabelChange) {
 // ============================================================================
 
 TEST_F(EntityTypeIndexManagerTest, EdgeUpdateLabelIndex_EdgeWithLabelIdZero) {
-	// Cover Edge template: entity.getLabelId() != 0 -> False (line 85)
+	// Cover Edge template: entity.getTypeId() != 0 -> False (line 85)
 	// An edge with labelId=0 should skip label index update
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 
@@ -1005,7 +1005,7 @@ TEST_F(EntityTypeIndexManagerTest, EdgeDeleteWithEmptyLabel) {
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 
 	// Add an edge with a label
-	int64_t labelId = dataManager->getOrCreateLabelId("KeepEdge");
+	int64_t labelId = dataManager->getOrCreateTokenId("KeepEdge");
 	graph::Edge edgeWithLabel(810, 1, 2, labelId);
 	edgeIndexManager->onEntityAdded(edgeWithLabel);
 
@@ -1025,7 +1025,7 @@ TEST_F(EntityTypeIndexManagerTest, EdgeUpdateSameLabel) {
 	// Update an edge where old and new label are the same
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("SameEdgeLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("SameEdgeLabel");
 	graph::Edge oldEdge(820, 1, 2, labelId);
 	edgeIndexManager->onEntityAdded(oldEdge);
 
@@ -1044,7 +1044,7 @@ TEST_F(EntityTypeIndexManagerTest, EdgeUpdateFromValidToEmptyLabel) {
 	// Update an edge from valid label to no label
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t labelId = dataManager->getOrCreateLabelId("RemoveEdgeLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("RemoveEdgeLabel");
 	graph::Edge oldEdge(830, 1, 2, labelId);
 	edgeIndexManager->onEntityAdded(oldEdge);
 
@@ -1086,7 +1086,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesAllWithoutLabels) {
 
 	std::vector<graph::Edge> edges;
 	for (int i = 0; i < 3; ++i) {
-		graph::Edge e(i + 2000, 1, 2, 0); // labelId=0 -> resolveLabel returns ""
+		graph::Edge e(i + 2000, 1, 2, 0); // labelId=0 -> resolveTokenName returns ""
 		edges.push_back(e);
 	}
 
@@ -1102,7 +1102,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesBatchPropertyNotEmpty_Pr
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 	// Note: Do NOT create a property index for edges
 
-	int64_t lbl = dataManager->getOrCreateLabelId("BATCH_EDGE_NP");
+	int64_t lbl = dataManager->getOrCreateTokenId("BATCH_EDGE_NP");
 	std::vector<graph::Edge> edges;
 	for (int i = 0; i < 3; ++i) {
 		graph::Edge e(i + 2100, 1, 2, lbl);
@@ -1123,7 +1123,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesMixedLabelsAndNoLabels) 
 	// Exercises nodesByLabelId skip for labelId==0 in Edge template
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 
-	int64_t lbl = dataManager->getOrCreateLabelId("MIXED_EDGE");
+	int64_t lbl = dataManager->getOrCreateTokenId("MIXED_EDGE");
 	std::vector<graph::Edge> edges;
 
 	// Edges with labels
@@ -1140,7 +1140,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesMixedLabelsAndNoLabels) 
 }
 
 TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesWithNoLabels) {
-	// Cover Edge template: entity.getLabelId() != 0 -> False in onEntitiesAdded (line 182)
+	// Cover Edge template: entity.getTypeId() != 0 -> False in onEntitiesAdded (line 182)
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 	(void) edgeIndexManager->createPropertyIndex("ep", []() { return true; });
 
@@ -1164,7 +1164,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesWithPropertyNotIndexed) 
 	(void) edgeIndexManager->createLabelIndex([]() { return true; });
 	// Do NOT create property index for "unindexed_edge_prop"
 
-	int64_t lbl = dataManager->getOrCreateLabelId("EdgePropSkip");
+	int64_t lbl = dataManager->getOrCreateTokenId("EdgePropSkip");
 	std::vector<graph::Edge> edges;
 	graph::Edge e(950, 1, 2, lbl);
 	e.addProperty("unindexed_edge_prop", 42);
@@ -1181,7 +1181,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesWithPropertyNotIndexed) 
 TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_NodeBatch_LabelIndexNotCreated) {
 	// Do NOT create label index - labelIndex_->isEmpty() should return true
 	// But entities have labels, so nodesByLabelId will be non-empty
-	int64_t lbl = dataManager->getOrCreateLabelId("NoIndexLabel");
+	int64_t lbl = dataManager->getOrCreateTokenId("NoIndexLabel");
 	std::vector<graph::Node> nodes;
 	graph::Node n(500, lbl);
 	n.addProperty("somekey", 42);
@@ -1196,7 +1196,7 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_NodeBatch_LabelIndexNotCreate
 // Same for Edge template
 TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgeBatch_LabelIndexNotCreated) {
 	// Do NOT create label index for edges
-	int64_t lbl = dataManager->getOrCreateLabelId("NoEdgeIndexLabel");
+	int64_t lbl = dataManager->getOrCreateTokenId("NoEdgeIndexLabel");
 	std::vector<graph::Edge> edges;
 	graph::Edge e(501, 1, 2, lbl);
 	e.addProperty("edgekey", 99);

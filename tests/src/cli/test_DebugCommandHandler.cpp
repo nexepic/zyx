@@ -77,7 +77,7 @@ protected:
 		auto nm = dm->getNodeManager();
 
 		Node node;
-		node.setLabelId(dm->getOrCreateLabelId("TestNode"));
+		node.setLabelId(dm->getOrCreateTokenId("TestNode"));
 		nm->add(node);
 
 		(void) dm->prepareFlushSnapshot();

@@ -130,7 +130,7 @@ protected:
 		if (offset == 0)
 			offset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
 
-		int64_t labelId = dataManager->getOrCreateLabelId(label);
+		int64_t labelId = dataManager->getOrCreateTokenId(label);
 		Node node(id, labelId);
 
 		dataManager->addNode(node);
@@ -151,7 +151,7 @@ protected:
 		if (offset == 0)
 			offset = spaceManager->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
 
-		int64_t labelId = dataManager->getOrCreateLabelId(label);
+		int64_t labelId = dataManager->getOrCreateTokenId(label);
 		Edge edge(id, src, dst, labelId);
 
 		dataManager->addEdge(edge);

@@ -67,7 +67,7 @@ namespace graph::query::indexes {
 		}
 	}
 
-	bool IndexBuilder::buildEdgeLabelIndex() const {
+	bool IndexBuilder::buildEdgeTypeIndex() const {
 		try {
 			auto labelIndex = indexManager_->getEdgeIndexManager()->getLabelIndex();
 			// Clear existing data to rebuild
@@ -167,7 +167,7 @@ namespace graph::query::indexes {
 
 			if (labelIndex) {
 				if (node.getLabelId() != 0) {
-					std::string labelStr = dataManager_->resolveLabel(node.getLabelId());
+					std::string labelStr = dataManager_->resolveTokenName(node.getLabelId());
 					labelIndex->addNode(nodeId, labelStr);
 				}
 			}
@@ -194,8 +194,8 @@ namespace graph::query::indexes {
 			int64_t edgeId = edge.getId();
 
 			if (labelIndex) {
-				if (edge.getLabelId() != 0) {
-					std::string labelStr = dataManager_->resolveLabel(edge.getLabelId());
+				if (edge.getTypeId() != 0) {
+					std::string labelStr = dataManager_->resolveTokenName(edge.getTypeId());
 					labelIndex->addNode(edgeId, labelStr);
 				}
 			}

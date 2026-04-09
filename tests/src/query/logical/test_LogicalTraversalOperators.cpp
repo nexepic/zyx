@@ -26,7 +26,7 @@ TEST_F(LogicalTraversalTest, BasicConstruction) {
     EXPECT_EQ(trav.getSourceVar(), "n");
     EXPECT_EQ(trav.getEdgeVar(), "r");
     EXPECT_EQ(trav.getTargetVar(), "m");
-    EXPECT_EQ(trav.getEdgeLabel(), "KNOWS");
+    EXPECT_EQ(trav.getEdgeType(), "KNOWS");
     EXPECT_EQ(trav.getDirection(), "OUT");
     EXPECT_TRUE(trav.getTargetLabels().empty());
     EXPECT_TRUE(trav.getTargetProperties().empty());
@@ -104,7 +104,7 @@ TEST_F(LogicalTraversalTest, Clone) {
     EXPECT_EQ(ct->getSourceVar(), "n");
     EXPECT_EQ(ct->getEdgeVar(), "r");
     EXPECT_EQ(ct->getTargetVar(), "m");
-    EXPECT_EQ(ct->getEdgeLabel(), "KNOWS");
+    EXPECT_EQ(ct->getEdgeType(), "KNOWS");
     EXPECT_EQ(ct->getDirection(), "OUT");
     ASSERT_EQ(ct->getTargetLabels().size(), 1u);
 }
@@ -167,7 +167,7 @@ TEST_F(LogicalVarLengthTraversalTest, BasicConstruction) {
     EXPECT_EQ(vlt.getSourceVar(), "n");
     EXPECT_EQ(vlt.getEdgeVar(), "r");
     EXPECT_EQ(vlt.getTargetVar(), "m");
-    EXPECT_EQ(vlt.getEdgeLabel(), "KNOWS");
+    EXPECT_EQ(vlt.getEdgeType(), "KNOWS");
     EXPECT_EQ(vlt.getDirection(), "OUT");
     EXPECT_EQ(vlt.getMinHops(), 1);
     EXPECT_EQ(vlt.getMaxHops(), 3);
@@ -179,7 +179,7 @@ TEST_F(LogicalVarLengthTraversalTest, DifferentHopValues) {
 
     EXPECT_EQ(vlt.getMinHops(), 0);
     EXPECT_EQ(vlt.getMaxHops(), 10);
-    EXPECT_EQ(vlt.getEdgeLabel(), "FOLLOWS");
+    EXPECT_EQ(vlt.getEdgeType(), "FOLLOWS");
     EXPECT_EQ(vlt.getDirection(), "BOTH");
 }
 

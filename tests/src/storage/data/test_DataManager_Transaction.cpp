@@ -56,7 +56,7 @@ TEST_F(DataManagerTest, UpdateNodeWithTransaction) {
 	dataManager->setActiveTransaction(3);
 	observer->reset();
 
-	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedPerson"));
+	node.setLabelId(dataManager->getOrCreateTokenId("UpdatedPerson"));
 	dataManager->updateNode(node);
 	EXPECT_EQ(1UL, observer->updatedNodes.size());
 
@@ -76,7 +76,7 @@ TEST_F(DataManagerTest, UpdateEdgeWithTransaction) {
 	dataManager->setActiveTransaction(4);
 	observer->reset();
 
-	edge.setLabelId(dataManager->getOrCreateLabelId("LIKES"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("LIKES"));
 	dataManager->updateEdge(edge);
 	EXPECT_EQ(1UL, observer->updatedEdges.size());
 
@@ -272,7 +272,7 @@ TEST_F(DataManagerTest, RollbackActiveTransactionWithUpdatedNode) {
 
 	dataManager->setActiveTransaction(103);
 	auto loaded = dataManager->getNode(nodeId);
-	loaded.setLabelId(dataManager->getOrCreateLabelId("UpdatedLabel"));
+	loaded.setLabelId(dataManager->getOrCreateTokenId("UpdatedLabel"));
 	dataManager->updateNode(loaded);
 
 	dataManager->rollbackActiveTransaction();
@@ -384,19 +384,19 @@ TEST_F(DataManagerTest, RollbackWithEdgeUpdateOperation) {
 	auto edge = createTestEdge(dataManager, node1.getId(), node2.getId(), "UPD_ROLLBACK");
 	dataManager->addEdge(edge);
 	int64_t edgeId = edge.getId();
-	uint32_t origLabelId = edge.getLabelId();
+	uint32_t origLabelId = edge.getTypeId();
 
 	fileStorage->flush();
 
 	dataManager->setActiveTransaction(502);
 	auto loadedEdge = dataManager->getEdge(edgeId);
-	loadedEdge.setLabelId(dataManager->getOrCreateLabelId("UPDATED_LABEL"));
+	loadedEdge.setTypeId(dataManager->getOrCreateTokenId("UPDATED_LABEL"));
 	dataManager->updateEdge(loadedEdge);
 
 	dataManager->rollbackActiveTransaction();
 
 	auto result = dataManager->getEdge(edgeId);
-	EXPECT_EQ(origLabelId, result.getLabelId())
+	EXPECT_EQ(origLabelId, result.getTypeId())
 		<< "Edge label should be reverted after rollback";
 }
 

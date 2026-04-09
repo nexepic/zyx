@@ -57,7 +57,7 @@ static PropertyValue labelsImpl(
 		for (int64_t labelId : labelIds) {
 			if (labelId == 0) continue;
 			if (dm) {
-				labels.emplace_back(dm->resolveLabel(labelId));
+				labels.emplace_back(dm->resolveTokenName(labelId));
 			} else {
 				labels.emplace_back(labelId);
 			}
@@ -75,10 +75,10 @@ static PropertyValue typeImpl(
 	const auto& record = context.getRecord();
 
 	if (auto edge = record.getEdge(varName)) {
-		int64_t labelId = edge->getLabelId();
+		int64_t labelId = edge->getTypeId();
 		auto* dm = context.getDataManager();
 		if (dm && labelId != 0) {
-			return PropertyValue(dm->resolveLabel(labelId));
+			return PropertyValue(dm->resolveTokenName(labelId));
 		}
 		return PropertyValue(labelId);
 	}

@@ -210,7 +210,7 @@ TEST_F(IndexManagerTest, LivePropertyUpdate) {
 	// 1. Setup Index
 	(void) indexManager->createIndex("idx_status", "node", "Task", propKey);
 
-	int64_t taskLabelId = dataManager->getOrCreateLabelId("Task");
+	int64_t taskLabelId = dataManager->getOrCreateTokenId("Task");
 	graph::Node node(1, taskLabelId);
 
 	dataManager->addNode(node);
@@ -238,7 +238,7 @@ TEST_F(IndexManagerTest, LiveDeletion) {
 	// 1. Setup
 	(void) indexManager->createIndex("idx_del", "node", "User", "id");
 
-	int64_t userLabelId = dataManager->getOrCreateLabelId("User");
+	int64_t userLabelId = dataManager->getOrCreateTokenId("User");
 	graph::Node node(1, userLabelId);
 
 	dataManager->addNode(node);
@@ -263,8 +263,8 @@ TEST_F(IndexManagerTest, LiveLabelChange) {
 	const std::string labelAStr = "Draft";
 	const std::string labelBStr = "Published";
 
-	int64_t labelA = dataManager->getOrCreateLabelId(labelAStr);
-	int64_t labelB = dataManager->getOrCreateLabelId(labelBStr);
+	int64_t labelA = dataManager->getOrCreateTokenId(labelAStr);
+	int64_t labelB = dataManager->getOrCreateTokenId(labelBStr);
 
 	constexpr int64_t nodeId = 50;
 
@@ -294,14 +294,14 @@ TEST_F(IndexManagerTest, LivePropertyTypeChange) {
 	(void) indexManager->createIndex("idx_mix", "node", "Mix", propKey);
 
 	// 1. Set as String
-	graph::Node n1(200, dataManager->getOrCreateLabelId("Mix"));
+	graph::Node n1(200, dataManager->getOrCreateTokenId("Mix"));
 	n1.addProperty(propKey, std::string("100"));
 	indexManager->onNodeAdded(n1);
 
 	ASSERT_EQ(indexManager->findNodeIdsByProperty(propKey, std::string("100")).size(), 1UL);
 
 	// 2. Change to Int
-	graph::Node n2(200, dataManager->getOrCreateLabelId("Mix"));
+	graph::Node n2(200, dataManager->getOrCreateTokenId("Mix"));
 	n2.addProperty(propKey, 100);
 
 	indexManager->onNodeUpdated(n1, n2);
@@ -323,8 +323,8 @@ TEST_F(IndexManagerTest, NodeEdgeIsolation) {
 	(void) indexManager->createIndex("idx_node_w", "node", "N", "weight");
 	(void) indexManager->createIndex("idx_edge_w", "edge", "E", "weight");
 
-	int64_t nLabel = dataManager->getOrCreateLabelId("N");
-	int64_t eLabel = dataManager->getOrCreateLabelId("E");
+	int64_t nLabel = dataManager->getOrCreateTokenId("N");
+	int64_t eLabel = dataManager->getOrCreateTokenId("E");
 
 	graph::Node n(1, nLabel);
 	dataManager->addNode(n);
@@ -356,7 +356,7 @@ TEST_F(IndexManagerTest, PersistenceAfterRestart) {
 	// 1. Create Index and Data
 	(void) indexManager->createIndex("idx_persist", "node", "SaveMe", "val");
 
-	int64_t labelId = dataManager->getOrCreateLabelId("SaveMe");
+	int64_t labelId = dataManager->getOrCreateTokenId("SaveMe");
 	graph::Node n(1, labelId);
 
 	dataManager->addNode(n);
@@ -394,7 +394,7 @@ TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_OnRestart) {
 	// 1. Enable Node Label Index and add data
 	EXPECT_TRUE(indexManager->createIndex("node_label_idx", "node", "", ""));
 
-	int64_t lblId = dataManager->getOrCreateLabelId("BootstrapNode");
+	int64_t lblId = dataManager->getOrCreateTokenId("BootstrapNode");
 	graph::Node n(1, lblId);
 	dataManager->addNode(n);
 
@@ -440,9 +440,9 @@ TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_OnRestart) {
 
 TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_OnRestart) {
 	// Same logic for Edge
-	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+	EXPECT_TRUE(indexManager->createIndex("edge_type_idx", "edge", "", ""));
 
-	int64_t lblId = dataManager->getOrCreateLabelId("BootstrapEdge");
+	int64_t lblId = dataManager->getOrCreateTokenId("BootstrapEdge");
 	graph::Node n1(1, 0);
 	dataManager->addNode(n1);
 	graph::Node n2(2, 0);
@@ -454,7 +454,7 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_OnRestart) {
 
 	// Corrupt state: Enabled=True, Root=0
 	auto sysState = fileStorage->getSystemStateManager();
-	sysState->set<int64_t>("edge.index.label_root", "root_id", 0);
+	sysState->set<int64_t>("edge.index.type_root", "root_id", 0);
 	fileStorage->flush();
 
 	// Restart
@@ -466,7 +466,7 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_OnRestart) {
 	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
 
 	// Verify
-	auto res = newIndexMgr->findEdgeIdsByLabel("BootstrapEdge");
+	auto res = newIndexMgr->findEdgeIdsByType("BootstrapEdge");
 	EXPECT_EQ(res.size(), 1UL);
 }
 
@@ -501,7 +501,7 @@ TEST_F(IndexManagerTest, ExplicitStorageFlushCall) {
 TEST_F(IndexManagerTest, EnsureMetadata_CreatedOnInitialize) {
 	// 1. Enable indexes
 	(void) indexManager->createIndex("node_label_idx", "node", "", "");
-	(void) indexManager->createIndex("edge_label_idx", "edge", "", "");
+	(void) indexManager->createIndex("edge_type_idx", "edge", "", "");
 
 	// 2. Manually delete metadata from SystemState to force ensureMetadata to run
 	auto sysState = fileStorage->getSystemStateManager();
@@ -524,7 +524,7 @@ TEST_F(IndexManagerTest, EnsureMetadata_CreatedOnInitialize) {
 	for (const auto &row: list) {
 		if (std::get<0>(row) == "node_label_idx")
 			foundNode = true;
-		if (std::get<0>(row) == "edge_label_idx")
+		if (std::get<0>(row) == "edge_type_idx")
 			foundEdge = true;
 	}
 	EXPECT_TRUE(foundNode);
@@ -561,7 +561,7 @@ TEST_F(IndexManagerTest, VectorIndexLifecycle_WithData) {
 	EXPECT_TRUE(indexManager->createVectorIndex("vec_del_test", "Node", "vec", 4, "L2"));
 
 	// 2. Add Node with Vector Property
-	int64_t labelId = dataManager->getOrCreateLabelId("Node");
+	int64_t labelId = dataManager->getOrCreateTokenId("Node");
 	graph::Node node(100, labelId);
 
 	// Construct a float vector property
@@ -594,7 +594,7 @@ TEST_F(IndexManagerTest, VectorIndex_EdgeCases) {
 	// 1. Create index
 	(void) indexManager->createVectorIndex("vec_edge", "Item", "emb", 4, "L2");
 
-	int64_t labelId = dataManager->getOrCreateLabelId("Item");
+	int64_t labelId = dataManager->getOrCreateTokenId("Item");
 	graph::Node node(200, labelId);
 
 	// Case A: Property Type Mismatch (Not a LIST)
@@ -608,7 +608,7 @@ TEST_F(IndexManagerTest, VectorIndex_EdgeCases) {
 
 	// Case B: Label Mismatch (No index for this label)
 	// Covers VectorIndexManager.cpp: if (it != indexMap_.end()) else branch
-	int64_t otherLabelId = dataManager->getOrCreateLabelId("Other");
+	int64_t otherLabelId = dataManager->getOrCreateTokenId("Other");
 	graph::Node otherNode(201, otherLabelId);
 	std::unordered_map<std::string, graph::PropertyValue> goodProps;
 	goodProps["emb"] = graph::PropertyValue(std::vector<PropertyValue>{1, 1, 1, 1});
@@ -642,7 +642,7 @@ TEST_F(IndexManagerTest, VectorIndex_DeleteNode_Coverage) {
 	EXPECT_TRUE(indexManager->createVectorIndex("vec_del", "Person", "vec", 4, "L2"));
 
 	// Create node
-	int64_t lbl = dataManager->getOrCreateLabelId("Person");
+	int64_t lbl = dataManager->getOrCreateTokenId("Person");
 	graph::Node node(100, lbl);
 	std::vector<PropertyValue> data = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0), PropertyValue(4.0)};
 	node.addProperty("vec", graph::PropertyValue(data));
@@ -659,7 +659,7 @@ TEST_F(IndexManagerTest, VectorIndex_DeleteNode_Coverage) {
 
 TEST_F(IndexManagerTest, EdgeEventHandlers_Coverage) {
 	// Simply call all edge event handlers to ensure 100% line coverage for IndexManager delegation
-	int64_t lbl = dataManager->getOrCreateLabelId("REL");
+	int64_t lbl = dataManager->getOrCreateTokenId("REL");
 	graph::Edge e(1, 1, 2, lbl);
 
 	// Add
@@ -740,7 +740,7 @@ TEST_F(IndexManagerTest, NodesAddedWithoutLabels) {
 TEST_F(IndexManagerTest, EdgeLabelIndexCreation) {
 	// Cover branch: else if (entityType == "edge") -> True (line 167)
 	// Create an edge label index
-	bool created = indexManager->createIndex("edge_label_idx", "edge", "", "");
+	bool created = indexManager->createIndex("edge_type_idx", "edge", "", "");
 	EXPECT_TRUE(created) << "Should create edge label index";
 
 	// Verify it was created
@@ -752,14 +752,14 @@ TEST_F(IndexManagerTest, EdgeLabelIndexCreation) {
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	int64_t edgeLabelId = dataManager->getOrCreateLabelId("CONNECTS");
-	graph::Edge e1(10, 1, 2, edgeLabelId);
-	graph::Edge e2(11, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dataManager->getOrCreateTokenId("CONNECTS");
+	graph::Edge e1(10, 1, 2, edgeTypeId);
+	graph::Edge e2(11, 1, 2, edgeTypeId);
 	dataManager->addEdge(e1);
 	dataManager->addEdge(e2);
 
 	// Verify edges are in the label index
-	auto results = indexManager->findEdgeIdsByLabel("CONNECTS");
+	auto results = indexManager->findEdgeIdsByType("CONNECTS");
 	EXPECT_EQ(results.size(), 2UL);
 }
 
@@ -778,10 +778,10 @@ TEST_F(IndexManagerTest, EdgePropertyIndexCreation) {
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	int64_t edgeLabelId = dataManager->getOrCreateLabelId("WEIGHT");
-	graph::Edge e1(10, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dataManager->getOrCreateTokenId("WEIGHT");
+	graph::Edge e1(10, 1, 2, edgeTypeId);
 	e1.addProperty("weight", static_cast<int64_t>(100));
-	graph::Edge e2(11, 1, 2, edgeLabelId);
+	graph::Edge e2(11, 1, 2, edgeTypeId);
 	e2.addProperty("weight", static_cast<int64_t>(200));
 	dataManager->addEdge(e1);
 	dataManager->addEdge(e2);
@@ -807,12 +807,12 @@ TEST_F(IndexManagerTest, DropIndex_EdgeIndex) {
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	int64_t edgeLabelId = dataManager->getOrCreateLabelId("TO_DROP");
-	graph::Edge e1(10, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dataManager->getOrCreateTokenId("TO_DROP");
+	graph::Edge e1(10, 1, 2, edgeTypeId);
 	dataManager->addEdge(e1);
 
 	// Verify edge is indexed
-	auto resultsBefore = indexManager->findEdgeIdsByLabel("TO_DROP");
+	auto resultsBefore = indexManager->findEdgeIdsByType("TO_DROP");
 	EXPECT_EQ(resultsBefore.size(), 1UL);
 
 	// Drop the index
@@ -856,7 +856,7 @@ TEST_F(IndexManagerTest, OnNodesAdded_EmptyPropertiesNodes) {
 	// The vectorIndexManager_ should skip nodes with empty properties
 	(void) indexManager->createVectorIndex("vec_batch", "BatchNode", "emb", 4, "L2");
 
-	int64_t labelId = dataManager->getOrCreateLabelId("BatchNode");
+	int64_t labelId = dataManager->getOrCreateTokenId("BatchNode");
 
 	// Create nodes without any properties
 	std::vector<graph::Node> nodes;
@@ -896,7 +896,7 @@ TEST_F(IndexManagerTest, OnNodesAdded_MixedNodes) {
 	// - Nodes with/without labels
 	(void) indexManager->createVectorIndex("vec_mixed", "MixedNode", "emb", 4, "L2");
 
-	int64_t labelId = dataManager->getOrCreateLabelId("MixedNode");
+	int64_t labelId = dataManager->getOrCreateTokenId("MixedNode");
 
 	std::vector<graph::Node> nodes;
 
@@ -1009,7 +1009,7 @@ TEST_F(IndexManagerTest, OnNodesAdded_BatchWithVectorAndLabels) {
 	// Cover lines 351-362: batch path with vector properties grouped by label
 	(void) indexManager->createVectorIndex("vec_batch3", "BatchNode3", "emb", 4, "L2");
 
-	int64_t labelId = dataManager->getOrCreateLabelId("BatchNode3");
+	int64_t labelId = dataManager->getOrCreateTokenId("BatchNode3");
 
 	std::vector<graph::Node> nodes;
 	for (int i = 0; i < 5; ++i) {
@@ -1085,12 +1085,12 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_NoData_SkipsRebuild) {
 	// Cover branch: getCurrentMaxEdgeId() > 0 -> FALSE (line 99)
 	// When edge label index is enabled but no edges exist, bootstrap should skip rebuild.
 
-	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+	EXPECT_TRUE(indexManager->createIndex("edge_type_idx", "edge", "", ""));
 
 	// Corrupt state to force bootstrap check
 	auto sysState = fileStorage->getSystemStateManager();
-	sysState->set<int64_t>("edge.index.label_root", "root_id", 0);
-	std::string configKey = std::string("edge.index.label_root") + graph::storage::state::keys::SUFFIX_CONFIG;
+	sysState->set<int64_t>("edge.index.type_root", "root_id", 0);
+	std::string configKey = std::string("edge.index.type_root") + graph::storage::state::keys::SUFFIX_CONFIG;
 	sysState->set<bool>(configKey, graph::storage::state::keys::Fields::ENABLED, true);
 	fileStorage->flush();
 
@@ -1102,7 +1102,7 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_NoData_SkipsRebuild) {
 	EXPECT_NO_THROW(database->open());
 
 	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
-	auto res = newIndexMgr->findEdgeIdsByLabel("NonExistent");
+	auto res = newIndexMgr->findEdgeIdsByType("NonExistent");
 	EXPECT_TRUE(res.empty());
 }
 
@@ -1111,7 +1111,7 @@ TEST_F(IndexManagerTest, Initialize_NodeLabelEnabled_WithPhysicalData_SkipsRebui
 	// When label index is enabled AND has physical data, it should NOT rebuild.
 	EXPECT_TRUE(indexManager->createIndex("node_label_idx", "node", "", ""));
 
-	int64_t lblId = dataManager->getOrCreateLabelId("TestNode");
+	int64_t lblId = dataManager->getOrCreateTokenId("TestNode");
 	graph::Node n(1, lblId);
 	dataManager->addNode(n);
 
@@ -1130,15 +1130,15 @@ TEST_F(IndexManagerTest, Initialize_NodeLabelEnabled_WithPhysicalData_SkipsRebui
 }
 
 TEST_F(IndexManagerTest, Initialize_EdgeLabelEnabled_WithPhysicalData_SkipsRebuild) {
-	// Cover branch: !edgeLabelIdx->hasPhysicalData() -> FALSE (line 98)
-	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+	// Cover branch: !edgeTypeIdx->hasPhysicalData() -> FALSE (line 98)
+	EXPECT_TRUE(indexManager->createIndex("edge_type_idx", "edge", "", ""));
 
 	graph::Node n1(1, 0);
 	graph::Node n2(2, 0);
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	int64_t eLbl = dataManager->getOrCreateLabelId("CONNECTS");
+	int64_t eLbl = dataManager->getOrCreateTokenId("CONNECTS");
 	graph::Edge e(10, 1, 2, eLbl);
 	dataManager->addEdge(e);
 
@@ -1152,7 +1152,7 @@ TEST_F(IndexManagerTest, Initialize_EdgeLabelEnabled_WithPhysicalData_SkipsRebui
 	EXPECT_NO_THROW(database->open());
 
 	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
-	auto res = newIndexMgr->findEdgeIdsByLabel("CONNECTS");
+	auto res = newIndexMgr->findEdgeIdsByType("CONNECTS");
 	EXPECT_EQ(res.size(), 1UL);
 }
 
@@ -1274,19 +1274,19 @@ TEST_F(IndexManagerTest, EnsureMetadata_NewEntryCreated) {
 
 	// 1. Enable both label indexes
 	EXPECT_TRUE(indexManager->createIndex("node_label_idx", "node", "", ""));
-	EXPECT_TRUE(indexManager->createIndex("edge_label_idx", "edge", "", ""));
+	EXPECT_TRUE(indexManager->createIndex("edge_type_idx", "edge", "", ""));
 
 	// 2. Remove ONLY the metadata (not the physical index) to force ensureMetadata to recreate it
 	auto sysState = fileStorage->getSystemStateManager();
 	auto allIndexes = sysState->getMap<std::string>(graph::storage::state::keys::SYS_INDEXES);
 	allIndexes.erase("node_label_idx");
-	allIndexes.erase("edge_label_idx");
+	allIndexes.erase("edge_type_idx");
 	sysState->setMap(graph::storage::state::keys::SYS_INDEXES, allIndexes,
 					 graph::storage::state::UpdateMode::REPLACE);
 
 	// Verify metadata is gone
 	EXPECT_FALSE(hasIndexWithName("node_label_idx"));
-	EXPECT_FALSE(hasIndexWithName("edge_label_idx"));
+	EXPECT_FALSE(hasIndexWithName("edge_type_idx"));
 
 	fileStorage->flush();
 
@@ -1304,16 +1304,16 @@ TEST_F(IndexManagerTest, EnsureMetadata_NewEntryCreated) {
 	for (const auto &row : list) {
 		if (std::get<0>(row) == "node_label_idx")
 			foundNode = true;
-		if (std::get<0>(row) == "edge_label_idx")
+		if (std::get<0>(row) == "edge_type_idx")
 			foundEdge = true;
 	}
 	EXPECT_TRUE(foundNode) << "ensureMetadata should have recreated node_label_idx";
-	EXPECT_TRUE(foundEdge) << "ensureMetadata should have recreated edge_label_idx";
+	EXPECT_TRUE(foundEdge) << "ensureMetadata should have recreated edge_type_idx";
 }
 
 TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_WithData_Rebuilds) {
-	// Cover branches: edgeLabelIdx->isEnabled() -> True (line 97)
-	//                 !edgeLabelIdx->hasPhysicalData() -> True (line 98)
+	// Cover branches: edgeTypeIdx->isEnabled() -> True (line 97)
+	//                 !edgeTypeIdx->hasPhysicalData() -> True (line 98)
 	//                 getCurrentMaxEdgeId() > 0 -> True (line 99)
 	// Strategy: Add edge data first WITHOUT building the index,
 	// then set enabled=true in config so on restart it bootstraps.
@@ -1324,7 +1324,7 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_WithData_Rebuilds) {
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	int64_t lblId = dataManager->getOrCreateLabelId("BootEdge");
+	int64_t lblId = dataManager->getOrCreateTokenId("BootEdge");
 	graph::Edge e(10, 1, 2, lblId);
 	dataManager->addEdge(e);
 
@@ -1348,7 +1348,7 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_WithData_Rebuilds) {
 	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
 
 	// Verify edge data is searchable (bootstrap rebuilt the index)
-	auto res = newIndexMgr->findEdgeIdsByLabel("BootEdge");
+	auto res = newIndexMgr->findEdgeIdsByType("BootEdge");
 	EXPECT_EQ(res.size(), 1UL);
 }
 
@@ -1371,7 +1371,7 @@ TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_EnabledWithData_Rebuilds) {
 	// and getCurrentMaxNodeId() > 0 -> True (line 83)
 
 	// Add a node so getCurrentMaxNodeId() > 0
-	int64_t lblId = dataManager->getOrCreateLabelId("BootNode");
+	int64_t lblId = dataManager->getOrCreateTokenId("BootNode");
 	graph::Node n(1, lblId);
 	dataManager->addNode(n);
 	fileStorage->flush();

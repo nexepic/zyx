@@ -186,7 +186,7 @@ namespace zyx {
 		if (dm) {
 			for (int64_t lid : internalNode.getLabelIds()) {
 				if (lid != 0) {
-					pubNode->labels.push_back(dm->resolveLabel(lid));
+					pubNode->labels.push_back(dm->resolveTokenName(lid));
 				}
 			}
 			// Backward compat: first label
@@ -209,7 +209,7 @@ namespace zyx {
 
 		// RESOLVE: ID -> String using DataManager
 		if (dm) {
-			pubEdge->label = dm->resolveLabel(internalEdge.getLabelId());
+			pubEdge->type = dm->resolveTokenName(internalEdge.getTypeId());
 		}
 
 		for (const auto &[key, val]: internalEdge.getProperties()) {
@@ -825,7 +825,7 @@ namespace zyx {
 		// Resolve all label IDs
 		std::vector<int64_t> labelIds;
 		for (const auto &lbl : labels) {
-			labelIds.push_back(dm->getOrCreateLabelId(lbl));
+			labelIds.push_back(dm->getOrCreateTokenId(lbl));
 		}
 
 		int64_t firstLabelId = labelIds.empty() ? 0 : labelIds[0];
@@ -861,7 +861,7 @@ namespace zyx {
 		auto dm = storage->getDataManager();
 
 		// 1. Resolve/Create Label ID ONCE for the batch
-		int64_t labelId = dm->getOrCreateLabelId(label);
+		int64_t labelId = dm->getOrCreateTokenId(label);
 
 		std::vector<graph::Node> nodes;
 		nodes.reserve(propsList.size());
@@ -893,7 +893,7 @@ namespace zyx {
 		auto dm = impl_->db_.getStorage()->getDataManager();
 
 		// 1. Resolve/Create Label ID
-		int64_t labelId = dm->getOrCreateLabelId(label);
+		int64_t labelId = dm->getOrCreateTokenId(label);
 
 		// 2. Use ID constructor
 		graph::Node node(0, labelId);
@@ -913,7 +913,7 @@ namespace zyx {
 		return newId;
 	}
 
-	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeLabel,
+	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeType,
 								  const std::unordered_map<std::string, Value> &props) const {
 		std::optional<graph::Transaction> implicitTxn;
 		if (!impl_->db_.hasActiveTransaction()) {
@@ -922,11 +922,11 @@ namespace zyx {
 
 		auto dm = impl_->db_.getStorage()->getDataManager();
 
-		// 1. Resolve/Create Label ID
-		int64_t labelId = dm->getOrCreateLabelId(edgeLabel);
+		// 1. Resolve/Create Type ID
+		int64_t typeId = dm->getOrCreateTokenId(edgeType);
 
 		// 2. Use ID constructor
-		graph::Edge edge(0, sourceId, targetId, labelId);
+		graph::Edge edge(0, sourceId, targetId, typeId);
 		dm->addEdge(edge);
 
 		if (!props.empty()) {
@@ -943,7 +943,7 @@ namespace zyx {
 
 	void Database::createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 							  const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
-							  const std::string &edgeLabel, const std::unordered_map<std::string, Value> &props) const {
+							  const std::string &edgeType, const std::unordered_map<std::string, Value> &props) const {
 		// This uses Query Engine, which internally handles label resolution if implemented correctly there.
 		// Since QueryEngine likely calls DataManager/Storage eventually, or builds a Plan,
 		// we just delegate to it.
@@ -955,7 +955,7 @@ namespace zyx {
 		// Ensure variables match create_ arguments
 		builder.match_("a", sourceLabel, sourceKey, toInternal(sourceVal));
 		builder.match_("b", targetLabel, targetKey, toInternal(targetVal));
-		builder.create_("e", edgeLabel, "a", "b", edgeProps);
+		builder.create_("e", edgeType, "a", "b", edgeProps);
 		builder.return_({"e"});
 
 		auto plan = builder.build();

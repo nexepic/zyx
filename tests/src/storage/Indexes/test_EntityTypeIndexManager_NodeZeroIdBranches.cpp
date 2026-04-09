@@ -60,8 +60,8 @@ protected:
 TEST_F(EntityTypeIndexManagerZeroIdNodeBranchesTest, OnEntityUpdated_NodeIdZeroSkipsMultiLabelDiff) {
 	(void)nodeIndexManager->createLabelIndex([]() { return true; });
 
-	const int64_t labelA = dataManager->getOrCreateLabelId("A");
-	const int64_t labelB = dataManager->getOrCreateLabelId("B");
+	const int64_t labelA = dataManager->getOrCreateTokenId("A");
+	const int64_t labelB = dataManager->getOrCreateTokenId("B");
 	graph::Node oldNode(1, labelA);
 	graph::Node newNode(0, labelB); // id=0 drives the second condition false path
 
@@ -79,7 +79,7 @@ TEST_F(EntityTypeIndexManagerZeroIdNodeBranchesTest, OnEntityUpdated_NodeIdZeroS
 TEST_F(EntityTypeIndexManagerZeroIdNodeBranchesTest, OnEntityDeleted_NodeIdZeroSkipsDeleteDiff) {
 	(void)nodeIndexManager->createLabelIndex([]() { return true; });
 
-	const int64_t label = dataManager->getOrCreateLabelId("KeepMe");
+	const int64_t label = dataManager->getOrCreateTokenId("KeepMe");
 	graph::Node indexedNode(42, label);
 	nodeIndexManager->onEntityAdded(indexedNode);
 

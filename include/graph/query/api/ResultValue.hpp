@@ -80,7 +80,7 @@ namespace graph::query {
 						} else if constexpr (std::is_same_v<T, Edge>) {
 							std::ostringstream oss;
 							// Format: [:TYPE:ID {props}]
-							oss << "[:LabelID:" << arg.getLabelId() << ":" << arg.getId();
+							oss << "[:TypeID:" << arg.getTypeId() << ":" << arg.getId();
 
 							std::string props = formatProps(arg.getProperties());
 							if (!props.empty())

@@ -656,7 +656,7 @@ protected:
 TEST_F(EntityIntrospectionWithDataManagerTest, Labels_WithDataManager_NonZeroLabelId) {
 	// Cover: labelsImpl branch where dm != nullptr AND labelId != 0
 	// This resolves the label name via DataManager
-	int64_t labelId = dataManager_->getOrCreateLabelId("Person");
+	int64_t labelId = dataManager_->getOrCreateTokenId("Person");
 
 	Record record;
 	Node node(1, labelId);
@@ -699,7 +699,7 @@ TEST_F(EntityIntrospectionWithDataManagerTest, Labels_WithDataManager_ZeroLabelI
 TEST_F(EntityIntrospectionWithDataManagerTest, Type_WithDataManager_NonZeroLabelId) {
 	// Cover: typeImpl branch where dm != nullptr AND labelId != 0
 	// This resolves the relationship type name via DataManager
-	int64_t labelId = dataManager_->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dataManager_->getOrCreateTokenId("KNOWS");
 
 	Record record;
 	Edge edge(1, 10, 20, labelId);

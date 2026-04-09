@@ -31,10 +31,10 @@ namespace graph::query::execution::operators {
 	 */
 	class CreateEdgeOperator : public PhysicalOperator {
 	public:
-		CreateEdgeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string label,
+		CreateEdgeOperator(std::shared_ptr<storage::DataManager> dm, std::string variable, std::string type,
 						   std::unordered_map<std::string, PropertyValue> props, std::string sourceVar,
 						   std::string targetVar) :
-			dm_(std::move(dm)), variable_(std::move(variable)), label_(std::move(label)), props_(std::move(props)),
+			dm_(std::move(dm)), variable_(std::move(variable)), type_(std::move(type)), props_(std::move(props)),
 			sourceVar_(std::move(sourceVar)), targetVar_(std::move(targetVar)) {}
 
 		void open() override {
@@ -54,8 +54,8 @@ namespace graph::query::execution::operators {
 			RecordBatch outputBatch;
 			outputBatch.reserve(batch.size());
 
-			// Optimization: Resolve Label ID once for the entire batch
-			int64_t labelId = dm_->getOrCreateLabelId(label_);
+			// Optimization: Resolve type ID once for the entire batch
+			int64_t typeId = dm_->getOrCreateTokenId(type_);
 
 			for (auto &record: batch) {
 				// 2. Resolve endpoints
@@ -66,7 +66,7 @@ namespace graph::query::execution::operators {
 					// 3. Persist Edge
 					// Use the ID-based constructor.
 					// ID=0 means "allocate new ID".
-					Edge newEdge(0, srcNode->getId(), tgtNode->getId(), labelId);
+					Edge newEdge(0, srcNode->getId(), tgtNode->getId(), typeId);
 
 					// Set properties on edge before addEdge so constraint validation sees them
 					newEdge.setProperties(props_);
@@ -109,10 +109,10 @@ namespace graph::query::execution::operators {
 			return vars;
 		}
 
-		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
+		void setChild(std::unique_ptr<PhysicalOperator> child) override { child_ = std::move(child); }
 
 		[[nodiscard]] std::string toString() const override {
-			return "CreateEdge(var=" + variable_ + ", type=" + label_ + ", src=" + sourceVar_ + ", tgt=" + targetVar_ +
+			return "CreateEdge(var=" + variable_ + ", type=" + type_ + ", src=" + sourceVar_ + ", tgt=" + targetVar_ +
 				   ")";
 		}
 
@@ -127,7 +127,7 @@ namespace graph::query::execution::operators {
 		std::unique_ptr<PhysicalOperator> child_;
 
 		std::string variable_;
-		std::string label_;
+		std::string type_;
 		std::unordered_map<std::string, PropertyValue> props_;
 		std::string sourceVar_;
 		std::string targetVar_;

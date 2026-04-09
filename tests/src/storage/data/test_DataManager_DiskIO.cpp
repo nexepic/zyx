@@ -91,7 +91,7 @@ TEST_F(DataManagerTest, UpdateModifiedEntity) {
 	dataManager->addNode(node);
 
 	// First update - puts it in MODIFIED state (still ADDED in dirty tracking until save)
-	node.setLabelId(dataManager->getOrCreateLabelId("FirstUpdate"));
+	node.setLabelId(dataManager->getOrCreateTokenId("FirstUpdate"));
 	dataManager->updateNode(node);
 
 	// Get the dirty info - should be ADDED or MODIFIED
@@ -99,7 +99,7 @@ TEST_F(DataManagerTest, UpdateModifiedEntity) {
 	ASSERT_TRUE(dirtyInfo1.has_value()) << "Node should be in dirty tracking";
 
 	// Second update - now dirtyInfo exists and is in MODIFIED state
-	node.setLabelId(dataManager->getOrCreateLabelId("SecondUpdate"));
+	node.setLabelId(dataManager->getOrCreateTokenId("SecondUpdate"));
 	dataManager->updateNode(node);
 
 	// Verify it's still in dirty tracking
@@ -231,7 +231,7 @@ TEST_F(DataManagerTest, GetEdgesInRangeMixedDirtyAndDisk) {
 	// Modify 3 edges (puts them in dirty layer as MODIFIED)
 	for (int i = 0; i < 3; i++) {
 		auto edge = dataManager->getEdge(edgeIds[i]);
-		edge.setLabelId(dataManager->getOrCreateLabelId("ModifiedEdge" + std::to_string(i)));
+		edge.setTypeId(dataManager->getOrCreateTokenId("ModifiedEdge" + std::to_string(i)));
 		dataManager->updateEdge(edge);
 	}
 

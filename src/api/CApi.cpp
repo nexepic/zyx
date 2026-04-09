@@ -441,11 +441,11 @@ int64_t zyx_create_node_ret_id(ZYXDB_T *db, const char *label, const ZYXParams_T
 }
 
 bool zyx_create_edge_by_id(ZYXDB_T *db, int64_t source_id, int64_t target_id,
-                            const char *label, const ZYXParams_T *props) {
-	if (!db || !label)
+                            const char *type, const ZYXParams_T *props) {
+	if (!db || !type)
 		return false;
 	try {
-		db->cpp_db->createEdgeById(source_id, target_id, label, params_to_map(props));
+		db->cpp_db->createEdgeById(source_id, target_id, type, params_to_map(props));
 		return true;
 	} catch (const std::exception &e) {
 		set_error(e.what());
@@ -623,7 +623,7 @@ bool zyx_result_get_edge(ZYXResult_T *res, int col_index, ZYXEdge *out_edge) {
 			out_edge->id = edge.id;
 			out_edge->source_id = edge.sourceId;
 			out_edge->target_id = edge.targetId;
-			out_edge->type = stabilize_string(res, edge.label);
+			out_edge->type = stabilize_string(res, edge.type);
 			return true;
 		}
 	} catch (...) {

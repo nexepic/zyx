@@ -46,14 +46,14 @@ protected:
 		traversal = dataManager->getRelationshipTraversal();
 
 		// Create and add two nodes
-		node1 = graph::Node(1, dataManager->getOrCreateLabelId("Node1"));
-		node2 = graph::Node(2, dataManager->getOrCreateLabelId("Node2"));
+		node1 = graph::Node(1, dataManager->getOrCreateTokenId("Node1"));
+		node2 = graph::Node(2, dataManager->getOrCreateTokenId("Node2"));
 		dataManager->addNode(node1);
 		dataManager->addNode(node2);
 
 		// Create and add a single edge between them.
 		// dataManager->addEdge() internally calls linkEdge(), establishing the initial state.
-		edge = graph::Edge(10, node1.getId(), node2.getId(), dataManager->getOrCreateLabelId("RELATED_TO"));
+		edge = graph::Edge(10, node1.getId(), node2.getId(), dataManager->getOrCreateTokenId("RELATED_TO"));
 		dataManager->addEdge(edge);
 	}
 
@@ -134,7 +134,7 @@ TEST_F(RelationshipTraversalTest, UnlinkSingleEdge) {
 
 TEST_F(RelationshipTraversalTest, TraversalOnNodeWithNoEdges) {
 	// Add a new node that has no connections
-	graph::Node node3(3, dataManager->getOrCreateLabelId("IsolatedNode"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("IsolatedNode"));
 	dataManager->addNode(node3);
 
 	EXPECT_TRUE(traversal->getOutgoingEdges(node3.getId()).empty());
@@ -155,7 +155,7 @@ TEST_F(RelationshipTraversalTest, TraversalIgnoresInactiveEdges) {
 
 TEST_F(RelationshipTraversalTest, GetAllConnectedNodesReturnsUniqueNodes) {
 	// Add a second edge from node1 to node2
-	graph::Edge edge2(11, node1.getId(), node2.getId(), dataManager->getOrCreateLabelId("KNOWS"));
+	graph::Edge edge2(11, node1.getId(), node2.getId(), dataManager->getOrCreateTokenId("KNOWS"));
 	dataManager->addEdge(edge2);
 
 	// We have two edges pointing to node2, but should only get one node back
@@ -165,10 +165,10 @@ TEST_F(RelationshipTraversalTest, GetAllConnectedNodesReturnsUniqueNodes) {
 }
 
 TEST_F(RelationshipTraversalTest, SelfReferencingEdge) {
-	graph::Node node3(3, dataManager->getOrCreateLabelId("SelfReferencingNode"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("SelfReferencingNode"));
 	dataManager->addNode(node3);
 
-	graph::Edge selfEdge(12, node3.getId(), node3.getId(), dataManager->getOrCreateLabelId("LOOPS_ON"));
+	graph::Edge selfEdge(12, node3.getId(), node3.getId(), dataManager->getOrCreateTokenId("LOOPS_ON"));
 	dataManager->addEdge(selfEdge);
 
 	auto outEdges = traversal->getOutgoingEdges(node3.getId());
@@ -212,10 +212,10 @@ protected:
 		traversal = dataManager->getRelationshipTraversal();
 
 		// Create nodes: n1, n2, n3, n4
-		n1 = graph::Node(1, dataManager->getOrCreateLabelId("N1"));
-		n2 = graph::Node(2, dataManager->getOrCreateLabelId("N2"));
-		n3 = graph::Node(3, dataManager->getOrCreateLabelId("N3"));
-		n4 = graph::Node(4, dataManager->getOrCreateLabelId("N4"));
+		n1 = graph::Node(1, dataManager->getOrCreateTokenId("N1"));
+		n2 = graph::Node(2, dataManager->getOrCreateTokenId("N2"));
+		n3 = graph::Node(3, dataManager->getOrCreateTokenId("N3"));
+		n4 = graph::Node(4, dataManager->getOrCreateTokenId("N4"));
 		dataManager->addNode(n1);
 		dataManager->addNode(n2);
 		dataManager->addNode(n3);
@@ -227,9 +227,9 @@ protected:
 		// n1 -> n4 (edge12)
 		// Since linkEdge adds to the front, the final linked-list order for out-edges will be: edge12 -> edge11 ->
 		// edge10
-		edge10 = graph::Edge(10, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("points_to"));
-		edge11 = graph::Edge(11, n1.getId(), n3.getId(), dataManager->getOrCreateLabelId("points_to"));
-		edge12 = graph::Edge(12, n1.getId(), n4.getId(), dataManager->getOrCreateLabelId("points_to"));
+		edge10 = graph::Edge(10, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("points_to"));
+		edge11 = graph::Edge(11, n1.getId(), n3.getId(), dataManager->getOrCreateTokenId("points_to"));
+		edge12 = graph::Edge(12, n1.getId(), n4.getId(), dataManager->getOrCreateTokenId("points_to"));
 		dataManager->addEdge(edge10);
 		dataManager->addEdge(edge11);
 		dataManager->addEdge(edge12);
@@ -313,16 +313,16 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInChain) {
 }
 
 TEST_F(RelationshipTraversalAdvancedTest, UnlinkMiddleEdgeFromIncomingChain) {
-	graph::Node n5(5, dataManager->getOrCreateLabelId("N5"));
+	graph::Node n5(5, dataManager->getOrCreateTokenId("N5"));
 	dataManager->addNode(n5);
 
-	graph::Edge edge14(14, n1.getId(), n5.getId(), dataManager->getOrCreateLabelId("links_to"));
+	graph::Edge edge14(14, n1.getId(), n5.getId(), dataManager->getOrCreateTokenId("links_to"));
 	dataManager->addEdge(edge14);
 
-	graph::Edge edge24(24, n2.getId(), n5.getId(), dataManager->getOrCreateLabelId("links_to"));
+	graph::Edge edge24(24, n2.getId(), n5.getId(), dataManager->getOrCreateTokenId("links_to"));
 	dataManager->addEdge(edge24);
 
-	graph::Edge edge34(34, n3.getId(), n5.getId(), dataManager->getOrCreateLabelId("links_to"));
+	graph::Edge edge34(34, n3.getId(), n5.getId(), dataManager->getOrCreateTokenId("links_to"));
 	dataManager->addEdge(edge34);
 
 	auto initialInEdges = traversal->getIncomingEdges(n5.getId());
@@ -440,11 +440,11 @@ TEST_F(RelationshipTraversalTest, LinkEdge_TargetNodeFirstInEdge) {
 	// The basic SetUp already creates one edge (node1->node2), so node2's firstInEdgeId is non-zero
 
 	// Add a new isolated node
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
 	dataManager->addNode(node3);
 
 	// Add edge to node3 (node3 has no incoming edges, firstInEdgeId == 0)
-	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("CONNECTS"));
+	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateTokenId("CONNECTS"));
 	dataManager->addEdge(edge2);
 
 	auto inEdges = traversal->getIncomingEdges(node3.getId());
@@ -454,16 +454,16 @@ TEST_F(RelationshipTraversalTest, LinkEdge_TargetNodeFirstInEdge) {
 
 TEST_F(RelationshipTraversalTest, UnlinkEdge_MiddleInChain_IncomingEdges) {
 	// Cover: unlinkEdge where prevInEdgeId != 0 and nextInEdgeId != 0 (lines 237-248)
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
-	graph::Node node4(4, dataManager->getOrCreateLabelId("Node4"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
+	graph::Node node4(4, dataManager->getOrCreateTokenId("Node4"));
 	dataManager->addNode(node3);
 	dataManager->addNode(node4);
 
 	// Create multiple incoming edges to node2
-	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge2);
 
-	graph::Edge edge3(30, node4.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge3(30, node4.getId(), node2.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge3);
 
 	// Now node2 has incoming edges: [edge3, edge2, edge(10)]
@@ -480,15 +480,15 @@ TEST_F(RelationshipTraversalTest, UnlinkEdge_MiddleInChain_IncomingEdges) {
 
 TEST_F(RelationshipTraversalTest, GetConnectedSourceNodes_MultipleEdges) {
 	// Cover: getConnectedSourceNodes loop with multiple incoming edges
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
-	graph::Node node4(4, dataManager->getOrCreateLabelId("Node4"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
+	graph::Node node4(4, dataManager->getOrCreateTokenId("Node4"));
 	dataManager->addNode(node3);
 	dataManager->addNode(node4);
 
-	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge2);
 
-	graph::Edge edge3(30, node4.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge3(30, node4.getId(), node2.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge3);
 
 	auto sourceNodes = traversal->getConnectedSourceNodes(node2.getId());
@@ -499,7 +499,7 @@ TEST_F(RelationshipTraversalTest, GetAllConnectedNodes_DeduplicatesFromBothDirec
 	// Cover: getAllConnectedNodes when incoming edges produce duplicate node IDs (line 149)
 	// node1 -> node2 (existing edge)
 	// Also add node2 -> node1 (reverse edge)
-	graph::Edge reverseEdge(40, node2.getId(), node1.getId(), dataManager->getOrCreateLabelId("REVERSE"));
+	graph::Edge reverseEdge(40, node2.getId(), node1.getId(), dataManager->getOrCreateTokenId("REVERSE"));
 	dataManager->addEdge(reverseEdge);
 
 	// From node1's perspective: outgoing to node2, incoming from node2
@@ -516,13 +516,13 @@ TEST_F(RelationshipTraversalTest, GetAllConnectedNodes_DeduplicatesFromBothDirec
 TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInIncomingChain) {
 	// Cover: unlinkEdge where prevInEdgeId != 0 but nextInEdgeId == 0
 	// Create multiple incoming edges to n2
-	graph::Node n5(5, dataManager->getOrCreateLabelId("N5"));
+	graph::Node n5(5, dataManager->getOrCreateTokenId("N5"));
 	dataManager->addNode(n5);
 
-	graph::Edge edgeA(50, n2.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	graph::Edge edgeA(50, n2.getId(), n5.getId(), dataManager->getOrCreateTokenId("TO"));
 	dataManager->addEdge(edgeA);
 
-	graph::Edge edgeB(51, n3.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	graph::Edge edgeB(51, n3.getId(), n5.getId(), dataManager->getOrCreateTokenId("TO"));
 	dataManager->addEdge(edgeB);
 
 	// n5 has incoming: [edgeB, edgeA] (LIFO order)
@@ -544,13 +544,13 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkLastEdgeInIncomingChain) {
 
 TEST_F(RelationshipTraversalAdvancedTest, UnlinkFirstEdgeInIncomingChain) {
 	// Cover: unlinkEdge where prevInEdgeId == 0 (head of incoming chain)
-	graph::Node n5(5, dataManager->getOrCreateLabelId("N5"));
+	graph::Node n5(5, dataManager->getOrCreateTokenId("N5"));
 	dataManager->addNode(n5);
 
-	graph::Edge edgeA(50, n2.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	graph::Edge edgeA(50, n2.getId(), n5.getId(), dataManager->getOrCreateTokenId("TO"));
 	dataManager->addEdge(edgeA);
 
-	graph::Edge edgeB(51, n3.getId(), n5.getId(), dataManager->getOrCreateLabelId("TO"));
+	graph::Edge edgeB(51, n3.getId(), n5.getId(), dataManager->getOrCreateTokenId("TO"));
 	dataManager->addEdge(edgeB);
 
 	// n5 has incoming: [edgeB, edgeA] (LIFO order)
@@ -565,15 +565,15 @@ TEST_F(RelationshipTraversalAdvancedTest, UnlinkFirstEdgeInIncomingChain) {
 
 TEST_F(RelationshipTraversalTest, GetConnectedTargetNodes_MultipleOutgoing) {
 	// Cover: getConnectedTargetNodes loop with multiple outgoing edges
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
-	graph::Node node4(4, dataManager->getOrCreateLabelId("Node4"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
+	graph::Node node4(4, dataManager->getOrCreateTokenId("Node4"));
 	dataManager->addNode(node3);
 	dataManager->addNode(node4);
 
-	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge2);
 
-	graph::Edge edge3(30, node1.getId(), node4.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge3(30, node1.getId(), node4.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge3);
 
 	auto targets = traversal->getConnectedTargetNodes(node1.getId());
@@ -583,7 +583,7 @@ TEST_F(RelationshipTraversalTest, GetConnectedTargetNodes_MultipleOutgoing) {
 
 TEST_F(RelationshipTraversalTest, GetAllConnectedEdges_BothDirections) {
 	// Cover: getAllConnectedEdges with edges in both directions
-	graph::Edge reverseEdge(50, node2.getId(), node1.getId(), dataManager->getOrCreateLabelId("BACK"));
+	graph::Edge reverseEdge(50, node2.getId(), node1.getId(), dataManager->getOrCreateTokenId("BACK"));
 	dataManager->addEdge(reverseEdge);
 
 	auto allEdges = traversal->getAllConnectedEdges(node1.getId());
@@ -598,10 +598,10 @@ TEST_F(RelationshipTraversalTest, GetAllConnectedEdges_BothDirections) {
 TEST_F(RelationshipTraversalTest, GetOutgoingEdges_MixActiveAndInactive) {
 	// Cover: getOutgoingEdges where some edges in the chain are inactive (line 52-54)
 	// The traversal should skip inactive edges but continue following the chain
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
 	dataManager->addNode(node3);
 
-	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge2(20, node1.getId(), node3.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge2);
 
 	// Now node1 has outgoing edges: [edge2, edge(10)]
@@ -619,10 +619,10 @@ TEST_F(RelationshipTraversalTest, GetOutgoingEdges_MixActiveAndInactive) {
 
 TEST_F(RelationshipTraversalTest, GetIncomingEdges_MixActiveAndInactive) {
 	// Cover: getIncomingEdges where some edges are inactive (line 82-84)
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
 	dataManager->addNode(node3);
 
-	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge2);
 
 	// Now node2 has incoming edges: [edge2, edge(10)]
@@ -641,11 +641,11 @@ TEST_F(RelationshipTraversalTest, GetIncomingEdges_MixActiveAndInactive) {
 TEST_F(RelationshipTraversalTest, LinkEdge_SourceNodeFirstOutIsZero) {
 	// Cover: linkEdge when source node's firstOutEdgeId == 0 (line 169-171)
 	// Create a new isolated node with no edges
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Isolated"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Isolated"));
 	dataManager->addNode(node3);
 
 	// Create an edge from node3 (which has firstOutEdgeId == 0)
-	graph::Edge newEdge(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("NEW"));
+	graph::Edge newEdge(20, node3.getId(), node2.getId(), dataManager->getOrCreateTokenId("NEW"));
 	dataManager->addEdge(newEdge); // internally calls linkEdge
 
 	auto outEdges = traversal->getOutgoingEdges(node3.getId());
@@ -661,10 +661,10 @@ TEST_F(RelationshipTraversalTest, LinkEdge_SourceNodeFirstOutIsNonZero) {
 	// Cover: linkEdge when source node already has firstOutEdgeId != 0 (line 172-181)
 	// node1 already has an outgoing edge, so adding another should trigger the else branch
 
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
 	dataManager->addNode(node3);
 
-	graph::Edge newEdge(20, node1.getId(), node3.getId(), dataManager->getOrCreateLabelId("SECOND"));
+	graph::Edge newEdge(20, node1.getId(), node3.getId(), dataManager->getOrCreateTokenId("SECOND"));
 	dataManager->addEdge(newEdge); // internally calls linkEdge
 
 	auto outEdges = traversal->getOutgoingEdges(node1.getId());
@@ -711,7 +711,7 @@ TEST_F(RelationshipTraversalTest, GetConnectedTargetNodes_NoOutgoing) {
 
 TEST_F(RelationshipTraversalTest, GetAllConnectedNodes_NoEdges) {
 	// Cover: getAllConnectedNodes when node has no edges at all
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Isolated"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Isolated"));
 	dataManager->addNode(node3);
 
 	auto connectedNodes = traversal->getAllConnectedNodes(node3.getId());
@@ -762,10 +762,10 @@ TEST_F(RelationshipTraversalTest, GetIncomingEdges_NoEdgesToSource) {
 TEST_F(RelationshipTraversalTest, LinkEdge_TargetNodeAlreadyHasIncomingEdge) {
 	// Cover: linkEdge else branch for target in-edge chain (lines 189-198)
 	// node2 already has an incoming edge from setUp, add another
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
 	dataManager->addNode(node3);
 
-	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("ALSO"));
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateTokenId("ALSO"));
 	dataManager->addEdge(edge2); // internally calls linkEdge
 
 	auto inEdges = traversal->getIncomingEdges(node2.getId());
@@ -878,10 +878,10 @@ TEST_F(RelationshipTraversalTest, GetIncomingEdges_InactiveEdgeInChainSkipped) {
 	// the dirty info returns this backup, which is inactive but has valid pointers.
 
 	// Add a second incoming edge to node2
-	graph::Node node3(3, dataManager->getOrCreateLabelId("Node3"));
+	graph::Node node3(3, dataManager->getOrCreateTokenId("Node3"));
 	dataManager->addNode(node3);
 
-	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge edge2(20, node3.getId(), node2.getId(), dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(edge2);
 
 	// Incoming chain for node2: [edge2(20), edge(10)]

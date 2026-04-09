@@ -32,7 +32,7 @@ public:
                               std::string sourceVar,
                               std::string edgeVar,
                               std::string targetVar,
-                              std::string edgeLabel,
+                              std::string edgeType,
                               std::string direction,
                               int minHops,
                               int maxHops,
@@ -42,7 +42,7 @@ public:
         , sourceVar_(std::move(sourceVar))
         , edgeVar_(std::move(edgeVar))
         , targetVar_(std::move(targetVar))
-        , edgeLabel_(std::move(edgeLabel))
+        , edgeType_(std::move(edgeType))
         , direction_(std::move(direction))
         , minHops_(minHops)
         , maxHops_(maxHops)
@@ -72,7 +72,7 @@ public:
     }
 
     [[nodiscard]] std::string toString() const override {
-        return "VarLengthTraversal(" + sourceVar_ + "-[" + edgeVar_ + ":" + edgeLabel_
+        return "VarLengthTraversal(" + sourceVar_ + "-[" + edgeVar_ + ":" + edgeType_
                + "*" + std::to_string(minHops_) + ".." + std::to_string(maxHops_)
                + "]->" + targetVar_ + ")";
     }
@@ -80,7 +80,7 @@ public:
     [[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
         return std::make_unique<LogicalVarLengthTraversal>(
             child_ ? child_->clone() : nullptr,
-            sourceVar_, edgeVar_, targetVar_, edgeLabel_, direction_,
+            sourceVar_, edgeVar_, targetVar_, edgeType_, direction_,
             minHops_, maxHops_,
             targetLabels_, targetProperties_);
     }
@@ -102,7 +102,7 @@ public:
     [[nodiscard]] const std::string &getSourceVar()  const { return sourceVar_;  }
     [[nodiscard]] const std::string &getEdgeVar()    const { return edgeVar_;    }
     [[nodiscard]] const std::string &getTargetVar()  const { return targetVar_;  }
-    [[nodiscard]] const std::string &getEdgeLabel()  const { return edgeLabel_;  }
+    [[nodiscard]] const std::string &getEdgeType()  const { return edgeType_;  }
     [[nodiscard]] const std::string &getDirection()  const { return direction_;  }
     [[nodiscard]] int getMinHops() const { return minHops_; }
     [[nodiscard]] int getMaxHops() const { return maxHops_; }
@@ -114,7 +114,7 @@ private:
     std::string sourceVar_;
     std::string edgeVar_;
     std::string targetVar_;
-    std::string edgeLabel_;
+    std::string edgeType_;
     std::string direction_;
     int minHops_;
     int maxHops_;

@@ -28,10 +28,10 @@ namespace graph::query::execution::operators {
 	class VarLengthTraversalOperator : public PhysicalOperator {
 	public:
 		VarLengthTraversalOperator(std::shared_ptr<storage::DataManager> dm, std::unique_ptr<PhysicalOperator> child,
-								   std::string sourceVar, std::string targetVar, std::string edgeLabel, int minHops,
+								   std::string sourceVar, std::string targetVar, std::string edgeType, int minHops,
 								   int maxHops, std::string direction) :
 			child_(std::move(child)), sourceVar_(std::move(sourceVar)), targetVar_(std::move(targetVar)),
-			edgeLabel_(std::move(edgeLabel)), direction_(std::move(direction)), minHops_(minHops), maxHops_(maxHops) {
+			edgeType_(std::move(edgeType)), direction_(std::move(direction)), minHops_(minHops), maxHops_(maxHops) {
 			algo_ = std::make_unique<algorithm::GraphAlgorithm>(dm);
 		}
 
@@ -55,7 +55,7 @@ namespace graph::query::execution::operators {
 
 				// Call Algorithm to find all reachable targets within range
 				std::vector<Node> targets =
-						algo_->findAllPaths(sourceNode->getId(), minHops_, maxHops_, edgeLabel_, direction_);
+						algo_->findAllPaths(sourceNode->getId(), minHops_, maxHops_, edgeType_, direction_);
 
 				for (const auto &target: targets) {
 					Record newRecord = record;
@@ -94,7 +94,7 @@ namespace graph::query::execution::operators {
 	private:
 		std::unique_ptr<PhysicalOperator> child_;
 		std::unique_ptr<algorithm::GraphAlgorithm> algo_;
-		std::string sourceVar_, targetVar_, edgeLabel_, direction_;
+		std::string sourceVar_, targetVar_, edgeType_, direction_;
 		int minHops_, maxHops_;
 	};
 

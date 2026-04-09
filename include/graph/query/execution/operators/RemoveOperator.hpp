@@ -69,7 +69,7 @@ namespace graph::query::execution::operators {
 							node.setProperties(std::move(props));
 						} else if (item.type == RemoveActionType::LABEL) {
 							// 2. Remove Label
-							int64_t targetLabelId = dm_->getOrCreateLabelId(item.key);
+							int64_t targetLabelId = dm_->getOrCreateTokenId(item.key);
 							if (node.removeLabelId(targetLabelId)) {
 								dm_->updateNode(node);
 							}
@@ -109,6 +109,8 @@ namespace graph::query::execution::operators {
 		}
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {child_.get()}; }
+
+		void setChild(std::unique_ptr<PhysicalOperator> child) override { child_ = std::move(child); }
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

@@ -41,7 +41,7 @@ namespace graph {
 			int64_t nextInEdgeId = 0; // Next incoming edge to target
 			int64_t prevInEdgeId = 0; // Previous incoming edge to target
 			int64_t propertyEntityId = 0; // Property entity ID (if any)
-			int64_t labelId = 0;
+			int64_t typeId = 0;
 			uint32_t propertyStorageType = 0; // How properties are stored
 			bool isActive = true;
 			// Padding is implicit
@@ -49,7 +49,7 @@ namespace graph {
 
 		static constexpr size_t TOTAL_EDGE_SIZE = 256;
 		static constexpr size_t METADATA_SIZE = offsetof(Metadata, isActive) + sizeof(Metadata::isActive);
-		static constexpr size_t LABEL_BUFFER_SIZE = TOTAL_EDGE_SIZE - METADATA_SIZE;
+		static constexpr size_t TYPE_BUFFER_SIZE = TOTAL_EDGE_SIZE - METADATA_SIZE;
 		static constexpr uint32_t typeId = toUnderlying(EntityType::Edge);
 
 		[[nodiscard]] size_t getSerializedSize() const;
@@ -57,14 +57,14 @@ namespace graph {
 		static constexpr size_t getTotalSize() { return TOTAL_EDGE_SIZE; }
 
 		Edge() = default;
-		Edge(int64_t id, int64_t sourceId, int64_t targetId, int64_t labelId);
+		Edge(int64_t id, int64_t sourceId, int64_t targetId, int64_t typeId);
 
 		// Metadata access for CRTP base class
 		[[nodiscard]] const Metadata &getMetadata() const { return metadata; }
 		Metadata &getMutableMetadata() { return metadata; }
 
-		[[nodiscard]] int64_t getLabelId() const { return metadata.labelId; }
-		void setLabelId(int64_t id) { metadata.labelId = id; }
+		[[nodiscard]] int64_t getTypeId() const { return metadata.typeId; }
+		void setTypeId(int64_t id) { metadata.typeId = id; }
 
 		// Node relationship getters
 		[[nodiscard]] int64_t getSourceNodeId() const { return metadata.sourceNodeId; }
@@ -117,8 +117,8 @@ namespace graph {
 		// Fixed-size metadata structure
 		Metadata metadata;
 
-		// Fixed-size buffer for label
-		char labelBuffer[LABEL_BUFFER_SIZE] = {0};
+		// Fixed-size buffer for type
+		char typeBuffer[TYPE_BUFFER_SIZE] = {0};
 
 		// Variable-sized structures (not included in the fixed-size structure)
 		std::unordered_map<std::string, PropertyValue> properties;

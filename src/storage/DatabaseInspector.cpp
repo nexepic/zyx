@@ -140,7 +140,7 @@ namespace graph::storage {
 				Node node = Node::deserialize(*file);
 
 				// Manually resolve the Label String using DataManager
-				std::string labelStr = dataManager_.resolveLabel(node.getLabelId());
+				std::string labelStr = dataManager_.resolveTokenName(node.getLabelId());
 				// Format: "LabelName(ID:123)" for better inspection info
 				std::string labelDisplay = labelStr.empty() ? "<No Label>" :
 					(labelStr + " (ID:" + std::to_string(node.getLabelId()) + ")");
@@ -196,9 +196,9 @@ namespace graph::storage {
 				Edge edge = Edge::deserialize(*file);
 
 				// Manually resolve the Label String using DataManager
-				std::string labelStr = dataManager_.resolveLabel(edge.getLabelId());
+				std::string labelStr = dataManager_.resolveTokenName(edge.getTypeId());
 				std::string labelDisplay = labelStr.empty() ? "<No Label>" :
-					(labelStr + " (ID:" + std::to_string(edge.getLabelId()) + ")");
+					(labelStr + " (ID:" + std::to_string(edge.getTypeId()) + ")");
 
 				auto props = dataManager_.getEdgeProperties(edge.getId());
 

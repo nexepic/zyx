@@ -165,7 +165,7 @@ TEST_F(SetOperatorTest, Set_NodeLabel) {
 
 	// Verify label was appended (SET now appends, not replaces)
 	auto node = dm->getNode(1);
-	int64_t newLabelId = dm->getOrCreateLabelId("NewLabel");
+	int64_t newLabelId = dm->getOrCreateTokenId("NewLabel");
 	EXPECT_EQ(node.getLabelId(), 100); // Original label preserved
 	EXPECT_TRUE(node.hasLabelId(newLabelId)); // New label added
 	EXPECT_EQ(node.getLabelCount(), 2);
@@ -430,7 +430,7 @@ TEST_F(RemoveOperatorTest, Remove_NodeProperty) {
 
 TEST_F(RemoveOperatorTest, Remove_NodeLabel) {
 	// Create node with label
-	int64_t labelId = dm->getOrCreateLabelId("TestLabel");
+	int64_t labelId = dm->getOrCreateTokenId("TestLabel");
 	Node n1(1, labelId);
 	dm->addNode(n1);
 
@@ -457,7 +457,7 @@ TEST_F(RemoveOperatorTest, Remove_NodeLabel) {
 
 TEST_F(RemoveOperatorTest, Remove_NodeLabelWhenNotMatching) {
 	// Create node with different label
-	int64_t labelId1 = dm->getOrCreateLabelId("Label1");
+	int64_t labelId1 = dm->getOrCreateTokenId("Label1");
 	Node n1(1, labelId1);
 	dm->addNode(n1);
 
@@ -585,8 +585,8 @@ TEST_F(TraversalOperatorTest, Traversal_Outgoing) {
 	dm->addNode(n2);
 
 	// Create edge
-	int64_t edgeLabelId = dm->getOrCreateLabelId("LINK");
-	Edge e1(10, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("LINK");
+	Edge e1(10, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
 	// Flush to ensure edges are linked
@@ -628,8 +628,8 @@ TEST_F(TraversalOperatorTest, Traversal_WithEdgeLabelFilter) {
 	dm->addNode(n2);
 	dm->addNode(n3);
 
-	int64_t label1 = dm->getOrCreateLabelId("TYPE1");
-	int64_t label2 = dm->getOrCreateLabelId("TYPE2");
+	int64_t label1 = dm->getOrCreateTokenId("TYPE1");
+	int64_t label2 = dm->getOrCreateTokenId("TYPE2");
 
 	Edge e1(10, 1, 2, label1); // Should match
 	Edge e2(11, 1, 3, label2); // Should not match
@@ -666,8 +666,8 @@ TEST_F(TraversalOperatorTest, Traversal_WithEmptyEdgeLabel) {
 	dm->addNode(n1);
 	dm->addNode(n2);
 
-	int64_t edgeLabelId = dm->getOrCreateLabelId("LINK");
-	Edge e1(10, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("LINK");
+	Edge e1(10, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
 	db->getStorage()->flush();
@@ -771,9 +771,9 @@ TEST_F(VarLengthTraversalOperatorTest, VarLengthTraversal_Basic) {
 	dm->addNode(n3);
 
 	// Create edges
-	int64_t edgeLabelId = dm->getOrCreateLabelId("LINK");
-	Edge e1(10, 1, 2, edgeLabelId);
-	Edge e2(11, 2, 3, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("LINK");
+	Edge e1(10, 1, 2, edgeTypeId);
+	Edge e2(11, 2, 3, edgeTypeId);
 	dm->addEdge(e1);
 	dm->addEdge(e2);
 
@@ -806,8 +806,8 @@ TEST_F(VarLengthTraversalOperatorTest, VarLengthTraversal_WithEdgeLabelFilter) {
 	dm->addNode(n2);
 	dm->addNode(n3);
 
-	int64_t label1 = dm->getOrCreateLabelId("TYPE1");
-	int64_t label2 = dm->getOrCreateLabelId("TYPE2");
+	int64_t label1 = dm->getOrCreateTokenId("TYPE1");
+	int64_t label2 = dm->getOrCreateTokenId("TYPE2");
 
 	Edge e1(10, 1, 2, label1);
 	Edge e2(11, 2, 3, label2);
@@ -857,8 +857,8 @@ TEST_F(VarLengthTraversalOperatorTest, VarLengthTraversal_MinHopsZero) {
 	dm->addNode(n1);
 	dm->addNode(n2);
 
-	int64_t edgeLabelId = dm->getOrCreateLabelId("LINK");
-	Edge e1(10, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("LINK");
+	Edge e1(10, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
 	db->getStorage()->flush();

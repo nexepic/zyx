@@ -51,12 +51,12 @@ namespace graph::query::algorithm {
 		 *
 		 * @param dm The DataManager to read from
 		 * @param nodeLabel Only include nodes with this label (empty = all nodes)
-		 * @param edgeLabel Only include edges with this label (empty = all edges)
+		 * @param edgeType Only include edges with this type (empty = all edges)
 		 * @param weightProperty Edge property to use as weight (empty = unweighted, all edges get weight 1.0)
 		 */
 		static GraphProjection build(const std::shared_ptr<storage::DataManager> &dm,
 									 const std::string &nodeLabel = "",
-									 const std::string &edgeLabel = "",
+									 const std::string &edgeType = "",
 									 const std::string &weightProperty = "");
 
 		[[nodiscard]] const std::unordered_set<int64_t> &getNodeIds() const { return nodeIds_; }

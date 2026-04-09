@@ -26,7 +26,7 @@
 
 namespace graph {
 
-	Edge::Edge(const int64_t id, const int64_t sourceId, const int64_t targetId, const int64_t labelId) {
+	Edge::Edge(const int64_t id, const int64_t sourceId, const int64_t targetId, const int64_t typeId) {
 		metadata.id = id;
 		metadata.sourceNodeId = sourceId;
 		metadata.targetNodeId = targetId;
@@ -34,7 +34,7 @@ namespace graph {
 		metadata.prevOutEdgeId = 0;
 		metadata.nextInEdgeId = 0;
 		metadata.prevInEdgeId = 0;
-		metadata.labelId = labelId;
+		metadata.typeId = typeId;
 		metadata.isActive = true;
 	}
 
@@ -85,7 +85,7 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.nextInEdgeId);
 		utils::Serializer::writePOD(os, metadata.prevInEdgeId);
 		utils::Serializer::writePOD(os, metadata.propertyEntityId);
-		utils::Serializer::writePOD(os, metadata.labelId);
+		utils::Serializer::writePOD(os, metadata.typeId);
 		utils::Serializer::writePOD(os, metadata.propertyStorageType);
 		utils::Serializer::writePOD(os, metadata.isActive);
 	}
@@ -102,7 +102,7 @@ namespace graph {
 		edge.metadata.nextInEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		edge.metadata.prevInEdgeId = utils::Serializer::readPOD<int64_t>(is);
 		edge.metadata.propertyEntityId = utils::Serializer::readPOD<int64_t>(is);
-		edge.metadata.labelId = utils::Serializer::readPOD<int64_t>(is);
+		edge.metadata.typeId = utils::Serializer::readPOD<int64_t>(is);
 		edge.metadata.propertyStorageType = utils::Serializer::readPOD<uint32_t>(is);
 		edge.metadata.isActive = utils::Serializer::readPOD<bool>(is);
 
@@ -120,7 +120,7 @@ namespace graph {
 		size += sizeof(metadata.nextInEdgeId); // int64_t
 		size += sizeof(metadata.prevInEdgeId); // int64_t
 		size += sizeof(metadata.propertyEntityId); // int64_t
-		size += sizeof(metadata.labelId);
+		size += sizeof(metadata.typeId);
 		size += sizeof(metadata.propertyStorageType); // uint32_t
 		size += sizeof(metadata.isActive); // bool
 

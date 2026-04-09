@@ -119,7 +119,7 @@ protected:
 	// Helper methods to create test entities.
 	static Node createTestNode(const std::shared_ptr<DataManager> &dm, const std::string &label = "TestNode") {
 		Node node;
-		node.setLabelId(dm->getOrCreateLabelId(label));
+		node.setLabelId(dm->getOrCreateTokenId(label));
 		return node;
 	}
 
@@ -128,7 +128,7 @@ protected:
 		Edge edge;
 		edge.setSourceNodeId(sourceId);
 		edge.setTargetNodeId(targetId);
-		edge.setLabelId(dm->getOrCreateLabelId(label));
+		edge.setTypeId(dm->getOrCreateTokenId(label));
 		return edge;
 	}
 

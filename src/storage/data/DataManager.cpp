@@ -44,7 +44,7 @@
 #include "graph/storage/data/NodeManager.hpp"
 #include "graph/storage/data/PropertyManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
-#include "graph/storage/dictionaries/LabelTokenRegistry.hpp"
+#include "graph/storage/dictionaries/TokenRegistry.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 
@@ -126,13 +126,13 @@ namespace graph::storage {
 	void DataManager::setSystemStateManager(const std::shared_ptr<state::SystemStateManager> &systemStateManager) {
 		systemStateManager_ = systemStateManager;
 
-		// Now that we have the high-level state manager, we can initialize the label registry
-		initializeLabelRegistry(systemStateManager);
+		// Now that we have the high-level state manager, we can initialize the token registry
+		initializeTokenRegistry(systemStateManager);
 	}
 
-	void DataManager::initializeLabelRegistry(std::shared_ptr<state::SystemStateManager> sm) {
+	void DataManager::initializeTokenRegistry(std::shared_ptr<state::SystemStateManager> sm) {
 		// Pass the correct high-level SystemStateManager to the registry
-		labelRegistry_ = std::make_unique<LabelTokenRegistry>(shared_from_this(), sm);
+		tokenRegistry_ = std::make_unique<TokenRegistry>(shared_from_this(), sm);
 	}
 
 	void DataManager::initializeSegmentIndexes() const {
@@ -192,23 +192,23 @@ namespace graph::storage {
 		notifyFunc(oldEntity, entity);
 	}
 
-	int64_t DataManager::getOrCreateLabelId(const std::string &label) const {
-		if (label.empty())
+	int64_t DataManager::getOrCreateTokenId(const std::string &name) const {
+		if (name.empty())
 			return 0;
-		if (!labelRegistry_) {
-			throw std::runtime_error("LabelTokenRegistry not initialized. Ensure SystemStateManager is set.");
+		if (!tokenRegistry_) {
+			throw std::runtime_error("TokenRegistry not initialized. Ensure SystemStateManager is set.");
 		}
-		return labelRegistry_->getOrCreateLabelId(label);
+		return tokenRegistry_->getOrCreateTokenId(name);
 	}
 
-	std::string DataManager::resolveLabel(int64_t labelId) const {
-		if (labelId == 0)
+	std::string DataManager::resolveTokenName(int64_t tokenId) const {
+		if (tokenId == 0)
 			return "";
-		if (!labelRegistry_) {
+		if (!tokenRegistry_) {
 			return "";
 		}
 
-		return labelRegistry_->getLabelString(labelId);
+		return tokenRegistry_->resolveTokenName(tokenId);
 	}
 
 	// --- Transaction State Management ---

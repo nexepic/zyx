@@ -70,7 +70,7 @@ protected:
 
 		// Create Nodes (IDs 1-12)
 		for (int i = 1; i <= 12; ++i) {
-			graph::Node n(i, dataManager->getOrCreateLabelId("Node" + std::to_string(i)));
+			graph::Node n(i, dataManager->getOrCreateTokenId("Node" + std::to_string(i)));
 			dataManager->addNode(n);
 		}
 
@@ -99,7 +99,7 @@ protected:
 		for (size_t i = 0; i < connections.size(); ++i) {
 			int64_t edgeId = static_cast<int64_t>(100) + static_cast<int64_t>(i);
 			graph::Edge edge(edgeId, connections[i].first, connections[i].second,
-							 dataManager->getOrCreateLabelId("LINK"));
+							 dataManager->getOrCreateTokenId("LINK"));
 			dataManager->addEdge(edge);
 			// Note: DataManager::addEdge MUST call RelationshipTraversal::linkEdge internally!
 		}
@@ -163,7 +163,7 @@ TEST_F(GraphAlgorithmTest, FindShortestPathDisconnected) {
 
 TEST_F(GraphAlgorithmTest, FindShortestPathTrulyIsolated) {
 	// Create a node that is not connected to the main component
-	graph::Node node13(0, dataManager->getOrCreateLabelId("Island"));
+	graph::Node node13(0, dataManager->getOrCreateTokenId("Island"));
 	dataManager->addNode(node13);
 
 	// Now this is guaranteed to be empty even with "both"
@@ -263,7 +263,7 @@ TEST_F(GraphAlgorithmTest, BFS_EarlyTermination) {
 TEST_F(GraphAlgorithmTest, BFS_CycleDetection) {
 	// 1 -> 2 -> 3
 	// Add cycle: 3 -> 1
-	graph::Edge cycle(200, node3Id, node1Id, dataManager->getOrCreateLabelId("CYCLE"));
+	graph::Edge cycle(200, node3Id, node1Id, dataManager->getOrCreateTokenId("CYCLE"));
 	dataManager->addEdge(cycle);
 	// Flush/Reload usually not needed for in-memory traversal updates if DM is live,
 	// but good practice if tests are flaky.
@@ -318,8 +318,8 @@ TEST_F(GraphAlgorithmTest, BFS_HydrationOnDemand) {
 TEST_F(GraphAlgorithmTest, FindAllPathsWithEdgeLabelFilter) {
 	// Test findAllPaths with edge label filter
 	// Create some edges with a specific label
-	graph::Edge labeled1(300, node1Id, node2Id, dataManager->getOrCreateLabelId("SPECIAL"));
-	graph::Edge labeled2(301, node2Id, node4Id, dataManager->getOrCreateLabelId("SPECIAL"));
+	graph::Edge labeled1(300, node1Id, node2Id, dataManager->getOrCreateTokenId("SPECIAL"));
+	graph::Edge labeled2(301, node2Id, node4Id, dataManager->getOrCreateTokenId("SPECIAL"));
 	dataManager->addEdge(labeled1);
 	dataManager->addEdge(labeled2);
 
@@ -425,7 +425,7 @@ TEST_F(GraphAlgorithmTest, DFS_EarlyTermination) {
 
 TEST_F(GraphAlgorithmTest, DFS_CycleDetection) {
 	// Add a cycle: 3 -> 1
-	graph::Edge cycle(201, node3Id, node1Id, dataManager->getOrCreateLabelId("CYCLE"));
+	graph::Edge cycle(201, node3Id, node1Id, dataManager->getOrCreateTokenId("CYCLE"));
 	dataManager->addEdge(cycle);
 
 	std::vector<int64_t> visited;
@@ -470,7 +470,7 @@ TEST_F(GraphAlgorithmTest, DFS_InvalidStartNode) {
 // Covers: Branch (151:8) True path - cycle detection in dfsVariableLength
 TEST_F(GraphAlgorithmTest, FindAllPaths_CycleInVariableLength) {
 	// Add a cycle: 3 -> 1 to create a cycle 1->3->1
-	graph::Edge cycle(202, node3Id, node1Id, dataManager->getOrCreateLabelId("LINK"));
+	graph::Edge cycle(202, node3Id, node1Id, dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(cycle);
 
 	database->getStorage()->flush();
@@ -588,16 +588,16 @@ TEST_F(GraphAlgorithmTest, Dijkstra_WeightedEdges) {
 	// Dijkstra should pick A->C (weight 3) over A->B->C (weight 6)
 	// This also triggers the stale-entry branch (cost > dist[current])
 	// and the shorter-path update branch (newCost < it->second)
-	graph::Node nA(0, dataManager->getOrCreateLabelId("W"));
-	graph::Node nB(0, dataManager->getOrCreateLabelId("W"));
-	graph::Node nC(0, dataManager->getOrCreateLabelId("W"));
+	graph::Node nA(0, dataManager->getOrCreateTokenId("W"));
+	graph::Node nB(0, dataManager->getOrCreateTokenId("W"));
+	graph::Node nC(0, dataManager->getOrCreateTokenId("W"));
 	dataManager->addNode(nA);
 	dataManager->addNode(nB);
 	dataManager->addNode(nC);
 
-	graph::Edge eAB(0, nA.getId(), nB.getId(), dataManager->getOrCreateLabelId("R"));
-	graph::Edge eBC(0, nB.getId(), nC.getId(), dataManager->getOrCreateLabelId("R"));
-	graph::Edge eAC(0, nA.getId(), nC.getId(), dataManager->getOrCreateLabelId("R"));
+	graph::Edge eAB(0, nA.getId(), nB.getId(), dataManager->getOrCreateTokenId("R"));
+	graph::Edge eBC(0, nB.getId(), nC.getId(), dataManager->getOrCreateTokenId("R"));
+	graph::Edge eAC(0, nA.getId(), nC.getId(), dataManager->getOrCreateTokenId("R"));
 	dataManager->addEdge(eAB);
 	dataManager->addEdge(eBC);
 	dataManager->addEdge(eAC);
@@ -624,19 +624,19 @@ TEST_F(GraphAlgorithmTest, Dijkstra_StalePriorityQueueEntries) {
 	// Graph: A-[10]->X, A-[1]->Y, Y-[1]->X, X-[100]->Z. Target = Z.
 	// Processing order: A(0), Y(1), X(2), stale X(10) popped & skipped, Z(102)
 	// The stale X entry (cost=10 > dist[X]=2) triggers the skip branch
-	graph::Node nA(0, dataManager->getOrCreateLabelId("SQ"));
-	graph::Node nX(0, dataManager->getOrCreateLabelId("SQ"));
-	graph::Node nY(0, dataManager->getOrCreateLabelId("SQ"));
-	graph::Node nZ(0, dataManager->getOrCreateLabelId("SQ"));
+	graph::Node nA(0, dataManager->getOrCreateTokenId("SQ"));
+	graph::Node nX(0, dataManager->getOrCreateTokenId("SQ"));
+	graph::Node nY(0, dataManager->getOrCreateTokenId("SQ"));
+	graph::Node nZ(0, dataManager->getOrCreateTokenId("SQ"));
 	dataManager->addNode(nA);
 	dataManager->addNode(nX);
 	dataManager->addNode(nY);
 	dataManager->addNode(nZ);
 
-	graph::Edge eAX(0, nA.getId(), nX.getId(), dataManager->getOrCreateLabelId("SQR"));
-	graph::Edge eAY(0, nA.getId(), nY.getId(), dataManager->getOrCreateLabelId("SQR"));
-	graph::Edge eYX(0, nY.getId(), nX.getId(), dataManager->getOrCreateLabelId("SQR"));
-	graph::Edge eXZ(0, nX.getId(), nZ.getId(), dataManager->getOrCreateLabelId("SQR"));
+	graph::Edge eAX(0, nA.getId(), nX.getId(), dataManager->getOrCreateTokenId("SQR"));
+	graph::Edge eAY(0, nA.getId(), nY.getId(), dataManager->getOrCreateTokenId("SQR"));
+	graph::Edge eYX(0, nY.getId(), nX.getId(), dataManager->getOrCreateTokenId("SQR"));
+	graph::Edge eXZ(0, nX.getId(), nZ.getId(), dataManager->getOrCreateTokenId("SQR"));
 	dataManager->addEdge(eAX);
 	dataManager->addEdge(eAY);
 	dataManager->addEdge(eYX);
@@ -665,12 +665,12 @@ TEST_F(GraphAlgorithmTest, Dijkstra_StalePriorityQueueEntries) {
 TEST_F(GraphAlgorithmTest, Betweenness_SamplingSizeExceedsNodeCount) {
 	// Create a small graph and set samplingSize larger than node count
 	// This covers the branch where samplingSize >= n
-	graph::Node x(0, dataManager->getOrCreateLabelId("Tiny"));
-	graph::Node y(0, dataManager->getOrCreateLabelId("Tiny"));
+	graph::Node x(0, dataManager->getOrCreateTokenId("Tiny"));
+	graph::Node y(0, dataManager->getOrCreateTokenId("Tiny"));
 	dataManager->addNode(x);
 	dataManager->addNode(y);
 
-	graph::Edge exy(0, x.getId(), y.getId(), dataManager->getOrCreateLabelId("T"));
+	graph::Edge exy(0, x.getId(), y.getId(), dataManager->getOrCreateTokenId("T"));
 	dataManager->addEdge(exy);
 
 	database->getStorage()->flush();
@@ -711,7 +711,7 @@ TEST_F(GraphAlgorithmTest, PageRank_BasicScores) {
 }
 
 TEST_F(GraphAlgorithmTest, PageRank_SingleNode) {
-	graph::Node solo(0, dataManager->getOrCreateLabelId("Solo"));
+	graph::Node solo(0, dataManager->getOrCreateTokenId("Solo"));
 	dataManager->addNode(solo);
 	database->getStorage()->flush();
 	database->close();
@@ -758,13 +758,13 @@ TEST_F(GraphAlgorithmTest, WCC_SingleComponent) {
 
 TEST_F(GraphAlgorithmTest, WCC_MultipleComponents) {
 	// Create two isolated nodes (separate from main graph)
-	graph::Node iso1(0, dataManager->getOrCreateLabelId("Island"));
-	graph::Node iso2(0, dataManager->getOrCreateLabelId("Island"));
+	graph::Node iso1(0, dataManager->getOrCreateTokenId("Island"));
+	graph::Node iso2(0, dataManager->getOrCreateTokenId("Island"));
 	dataManager->addNode(iso1);
 	dataManager->addNode(iso2);
 
 	// Connect the two islands to each other but not to the main graph
-	graph::Edge eIsland(0, iso1.getId(), iso2.getId(), dataManager->getOrCreateLabelId("BRIDGE"));
+	graph::Edge eIsland(0, iso1.getId(), iso2.getId(), dataManager->getOrCreateTokenId("BRIDGE"));
 	dataManager->addEdge(eIsland);
 
 	database->getStorage()->flush();
@@ -786,9 +786,9 @@ TEST_F(GraphAlgorithmTest, WCC_MultipleComponents) {
 
 TEST_F(GraphAlgorithmTest, WCC_IsolatedNodes) {
 	// Create 3 completely isolated nodes
-	graph::Node i1(0, dataManager->getOrCreateLabelId("Iso"));
-	graph::Node i2(0, dataManager->getOrCreateLabelId("Iso"));
-	graph::Node i3(0, dataManager->getOrCreateLabelId("Iso"));
+	graph::Node i1(0, dataManager->getOrCreateTokenId("Iso"));
+	graph::Node i2(0, dataManager->getOrCreateTokenId("Iso"));
+	graph::Node i3(0, dataManager->getOrCreateTokenId("Iso"));
 	dataManager->addNode(i1);
 	dataManager->addNode(i2);
 	dataManager->addNode(i3);
@@ -855,15 +855,15 @@ TEST_F(GraphAlgorithmTest, Betweenness_EmptyGraph) {
 
 TEST_F(GraphAlgorithmTest, Betweenness_LinearGraph) {
 	// A -> B -> C: B should have highest betweenness
-	graph::Node a(0, dataManager->getOrCreateLabelId("Lin"));
-	graph::Node b(0, dataManager->getOrCreateLabelId("Lin"));
-	graph::Node c(0, dataManager->getOrCreateLabelId("Lin"));
+	graph::Node a(0, dataManager->getOrCreateTokenId("Lin"));
+	graph::Node b(0, dataManager->getOrCreateTokenId("Lin"));
+	graph::Node c(0, dataManager->getOrCreateTokenId("Lin"));
 	dataManager->addNode(a);
 	dataManager->addNode(b);
 	dataManager->addNode(c);
 
-	graph::Edge e1(0, a.getId(), b.getId(), dataManager->getOrCreateLabelId("SEQ"));
-	graph::Edge e2(0, b.getId(), c.getId(), dataManager->getOrCreateLabelId("SEQ"));
+	graph::Edge e1(0, a.getId(), b.getId(), dataManager->getOrCreateTokenId("SEQ"));
+	graph::Edge e2(0, b.getId(), c.getId(), dataManager->getOrCreateTokenId("SEQ"));
 	dataManager->addEdge(e1);
 	dataManager->addEdge(e2);
 
@@ -907,7 +907,7 @@ TEST_F(GraphAlgorithmTest, Closeness_EmptyGraph) {
 }
 
 TEST_F(GraphAlgorithmTest, Closeness_SingleNode) {
-	graph::Node solo(0, dataManager->getOrCreateLabelId("Solo2"));
+	graph::Node solo(0, dataManager->getOrCreateTokenId("Solo2"));
 	dataManager->addNode(solo);
 	database->getStorage()->flush();
 	database->close();
@@ -923,18 +923,18 @@ TEST_F(GraphAlgorithmTest, Closeness_SingleNode) {
 
 TEST_F(GraphAlgorithmTest, Closeness_StarGraph) {
 	// Center node connected to 3 leaves: center should have highest closeness
-	graph::Node center(0, dataManager->getOrCreateLabelId("Star"));
-	graph::Node leaf1(0, dataManager->getOrCreateLabelId("Star"));
-	graph::Node leaf2(0, dataManager->getOrCreateLabelId("Star"));
-	graph::Node leaf3(0, dataManager->getOrCreateLabelId("Star"));
+	graph::Node center(0, dataManager->getOrCreateTokenId("Star"));
+	graph::Node leaf1(0, dataManager->getOrCreateTokenId("Star"));
+	graph::Node leaf2(0, dataManager->getOrCreateTokenId("Star"));
+	graph::Node leaf3(0, dataManager->getOrCreateTokenId("Star"));
 	dataManager->addNode(center);
 	dataManager->addNode(leaf1);
 	dataManager->addNode(leaf2);
 	dataManager->addNode(leaf3);
 
-	graph::Edge e1(0, center.getId(), leaf1.getId(), dataManager->getOrCreateLabelId("RAY"));
-	graph::Edge e2(0, center.getId(), leaf2.getId(), dataManager->getOrCreateLabelId("RAY"));
-	graph::Edge e3(0, center.getId(), leaf3.getId(), dataManager->getOrCreateLabelId("RAY"));
+	graph::Edge e1(0, center.getId(), leaf1.getId(), dataManager->getOrCreateTokenId("RAY"));
+	graph::Edge e2(0, center.getId(), leaf2.getId(), dataManager->getOrCreateTokenId("RAY"));
+	graph::Edge e3(0, center.getId(), leaf3.getId(), dataManager->getOrCreateTokenId("RAY"));
 	dataManager->addEdge(e1);
 	dataManager->addEdge(e2);
 	dataManager->addEdge(e3);

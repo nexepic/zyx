@@ -54,7 +54,7 @@ protected:
 	Node createNode(const std::string &label,
 	                const std::unordered_map<std::string, PropertyValue> &properties = {}) {
 		Node node;
-		node.setLabelId(dataManager_->getOrCreateLabelId(label));
+		node.setLabelId(dataManager_->getOrCreateTokenId(label));
 		node.setProperties(properties);
 		dataManager_->addNode(node);
 		return node;
@@ -64,7 +64,7 @@ protected:
 		Edge edge;
 		edge.setSourceNodeId(src);
 		edge.setTargetNodeId(dst);
-		edge.setLabelId(dataManager_->getOrCreateLabelId(label));
+		edge.setTypeId(dataManager_->getOrCreateTokenId(label));
 		dataManager_->addEdge(edge);
 		return edge;
 	}
@@ -141,7 +141,7 @@ TEST_F(StatisticsCollectorStorageTest, CollectLabelStatsUsesReservoirSamplingFor
 	std::vector<Node> nodes;
 	nodes.reserve(static_cast<size_t>(totalNodes));
 
-	const int64_t labelId = dataManager_->getOrCreateLabelId("ReservoirLabel");
+	const int64_t labelId = dataManager_->getOrCreateTokenId("ReservoirLabel");
 	for (int64_t i = 0; i < totalNodes; ++i) {
 		Node node;
 		node.setLabelId(labelId);

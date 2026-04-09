@@ -43,38 +43,38 @@ TEST_F(DataManagerTest, NodeCRUD) {
 	// 2. Retrieve
 	auto retrievedNode = dataManager->getNode(node.getId());
 	EXPECT_EQ(node.getId(), retrievedNode.getId());
-	EXPECT_EQ("Person", dataManager->resolveLabel(retrievedNode.getLabelId()));
+	EXPECT_EQ("Person", dataManager->resolveTokenName(retrievedNode.getLabelId()));
 	EXPECT_TRUE(retrievedNode.isActive());
 
 	// 3. Update (while still in 'ADDED' state)
 	// [IMPORTANT] Reset observer to verify the update specifically
 	observer->reset();
 
-	node.setLabelId(dataManager->getOrCreateLabelId("StagingPerson"));
+	node.setLabelId(dataManager->getOrCreateTokenId("StagingPerson"));
 	dataManager->updateNode(node);
 
 	retrievedNode = dataManager->getNode(node.getId());
-	EXPECT_EQ("StagingPerson", dataManager->resolveLabel(retrievedNode.getLabelId()));
+	EXPECT_EQ("StagingPerson", dataManager->resolveTokenName(retrievedNode.getLabelId()));
 
 	// Since DataManager now notifies even for ADDED entities, we expect 1 update event.
 	// Old Label: Person, New Label: StagingPerson
 	ASSERT_EQ(1UL, observer->updatedNodes.size());
-	EXPECT_EQ("Person", dataManager->resolveLabel(observer->updatedNodes[0].first.getLabelId()));
-	EXPECT_EQ("StagingPerson", dataManager->resolveLabel(observer->updatedNodes[0].second.getLabelId()));
+	EXPECT_EQ("Person", dataManager->resolveTokenName(observer->updatedNodes[0].first.getLabelId()));
+	EXPECT_EQ("StagingPerson", dataManager->resolveTokenName(observer->updatedNodes[0].second.getLabelId()));
 
 	// 4. Simulate Save & Update
 	simulateSave(); // Replaces markAllSaved()
 	observer->reset();
 
 	Node oldNode = retrievedNode;
-	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedPerson"));
+	node.setLabelId(dataManager->getOrCreateTokenId("UpdatedPerson"));
 	dataManager->updateNode(node);
 	retrievedNode = dataManager->getNode(node.getId());
-	EXPECT_EQ("UpdatedPerson", dataManager->resolveLabel(retrievedNode.getLabelId()));
+	EXPECT_EQ("UpdatedPerson", dataManager->resolveTokenName(retrievedNode.getLabelId()));
 
 	ASSERT_EQ(1UL, observer->updatedNodes.size());
 	EXPECT_EQ(oldNode.getLabelId(), observer->updatedNodes[0].first.getLabelId());
-	EXPECT_EQ("UpdatedPerson", dataManager->resolveLabel(observer->updatedNodes[0].second.getLabelId()));
+	EXPECT_EQ("UpdatedPerson", dataManager->resolveTokenName(observer->updatedNodes[0].second.getLabelId()));
 
 	// 5. Delete
 	dataManager->deleteNode(node);
@@ -130,7 +130,7 @@ TEST_F(DataManagerTest, EdgeCRUD) {
 	// 2. Retrieve
 	auto retrievedEdge = dataManager->getEdge(edge.getId());
 	EXPECT_EQ(edge.getId(), retrievedEdge.getId());
-	EXPECT_EQ("KNOWS", dataManager->resolveLabel(retrievedEdge.getLabelId()));
+	EXPECT_EQ("KNOWS", dataManager->resolveTokenName(retrievedEdge.getTypeId()));
 	EXPECT_TRUE(retrievedEdge.isActive());
 
 	// 3. Simulate Save
@@ -139,14 +139,14 @@ TEST_F(DataManagerTest, EdgeCRUD) {
 
 	// 4. Update
 	Edge oldEdge = retrievedEdge;
-	edge.setLabelId(dataManager->getOrCreateLabelId("UPDATED_KNOWS"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("UPDATED_KNOWS"));
 	dataManager->updateEdge(edge);
 	retrievedEdge = dataManager->getEdge(edge.getId());
-	EXPECT_EQ("UPDATED_KNOWS", dataManager->resolveLabel(retrievedEdge.getLabelId()));
+	EXPECT_EQ("UPDATED_KNOWS", dataManager->resolveTokenName(retrievedEdge.getTypeId()));
 
 	ASSERT_EQ(1UL, observer->updatedEdges.size());
-	EXPECT_EQ(oldEdge.getLabelId(), observer->updatedEdges[0].first.getLabelId());
-	EXPECT_EQ("UPDATED_KNOWS", dataManager->resolveLabel(observer->updatedEdges[0].second.getLabelId()));
+	EXPECT_EQ(oldEdge.getTypeId(), observer->updatedEdges[0].first.getTypeId());
+	EXPECT_EQ("UPDATED_KNOWS", dataManager->resolveTokenName(observer->updatedEdges[0].second.getTypeId()));
 
 	// 5. Delete
 	dataManager->deleteEdge(edge);
@@ -225,7 +225,7 @@ TEST_F(DataManagerTest, BatchOperations) {
 	ASSERT_EQ(10UL, nodes.size());
 	for (size_t i = 0; i < nodes.size(); i++) {
 		EXPECT_EQ(nodeIds[i], nodes[i].getId());
-		EXPECT_EQ("BatchNode" + std::to_string(i), dataManager->resolveLabel(nodes[i].getLabelId()));
+		EXPECT_EQ("BatchNode" + std::to_string(i), dataManager->resolveTokenName(nodes[i].getLabelId()));
 	}
 
 	auto rangeNodes = dataManager->getNodesInRange(nodeIds.front(), nodeIds.back(), 5);
@@ -264,7 +264,7 @@ TEST_F(DataManagerTest, MultipleEntityTypes) {
 	dataManager->addBlobEntity(blob);
 
 	auto retrievedNode = dataManager->getNode(node.getId());
-	EXPECT_EQ("MultiTypeNode", dataManager->resolveLabel(retrievedNode.getLabelId()));
+	EXPECT_EQ("MultiTypeNode", dataManager->resolveTokenName(retrievedNode.getLabelId()));
 
 	auto retrievedState = dataManager->findStateByKey("multi.type.state");
 	EXPECT_EQ(state.getId(), retrievedState.getId());
@@ -536,20 +536,20 @@ TEST_F(DataManagerTest, BatchEdgesWithProperties) {
 
 TEST_F(DataManagerTest, GetOrCreateLabelIdEmpty) {
 	// Empty label should return 0
-	int64_t labelId = dataManager->getOrCreateLabelId("");
+	int64_t labelId = dataManager->getOrCreateTokenId("");
 	EXPECT_EQ(0, labelId);
 }
 
 TEST_F(DataManagerTest, ResolveLabelZero) {
 	// Zero labelId should return empty string
-	std::string label = dataManager->resolveLabel(0);
+	std::string label = dataManager->resolveTokenName(0);
 	EXPECT_TRUE(label.empty());
 }
 
 TEST_F(DataManagerTest, ResolveLabelNonExistent) {
 	// Non-existent label should return empty string or throw
 	// Since we can't easily create an invalid labelId, test with a high number
-	std::string label = dataManager->resolveLabel(999999);
+	std::string label = dataManager->resolveTokenName(999999);
 	// Behavior depends on implementation - either empty string or throws
 	EXPECT_TRUE(label.empty() || label.empty());
 }
@@ -560,7 +560,7 @@ TEST_F(DataManagerTest, AddPropertiesToModifiedNode) {
 	dataManager->addNode(node);
 
 	// Modify the node
-	node.setLabelId(dataManager->getOrCreateLabelId("NewLabel"));
+	node.setLabelId(dataManager->getOrCreateTokenId("NewLabel"));
 	dataManager->updateNode(node);
 
 	// Add properties (should handle correctly even though node is already modified)
@@ -626,7 +626,7 @@ TEST_F(DataManagerTest, DeleteModifiedEntity) {
 	simulateSave();
 
 	// 3. Update the node (dirty state = MODIFIED)
-	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedNode"));
+	node.setLabelId(dataManager->getOrCreateTokenId("UpdatedNode"));
 	dataManager->updateNode(node);
 
 	// 4. Delete the modified node
@@ -654,7 +654,7 @@ TEST_F(DataManagerTest, DeleteModifiedEdge) {
 	simulateSave();
 
 	// 3. Update the edge (dirty state = MODIFIED)
-	edge.setLabelId(dataManager->getOrCreateLabelId("UPDATED_EDGE"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("UPDATED_EDGE"));
 	dataManager->updateEdge(edge);
 
 	// 4. Delete the modified edge
@@ -710,7 +710,7 @@ TEST_F(DataManagerTest, MarkEntityDeletedMarksInactiveWhenModified) {
 	simulateSave(); // Save to clear ADDED state
 
 	// Modify the node (it's now in MODIFIED state)
-	node.setLabelId(dataManager->getOrCreateLabelId("NewLabel"));
+	node.setLabelId(dataManager->getOrCreateTokenId("NewLabel"));
 	dataManager->updateNode(node);
 	int64_t nodeId = node.getId();
 
@@ -731,13 +731,13 @@ TEST_F(DataManagerTest, MarkEntityDeletedMarksInactiveWhenModified) {
 
 TEST_F(DataManagerTest, GetOrCreateLabelIdEmptyString) {
 	// Covers L218 true branch: label.empty() returns 0
-	int64_t result = dataManager->getOrCreateLabelId("");
+	int64_t result = dataManager->getOrCreateTokenId("");
 	EXPECT_EQ(0, result) << "Empty label should return 0";
 }
 
 TEST_F(DataManagerTest, ResolveLabelZeroId) {
 	// Covers L227 true branch: labelId == 0 returns ""
-	std::string result = dataManager->resolveLabel(0);
+	std::string result = dataManager->resolveTokenName(0);
 	EXPECT_EQ("", result) << "Label ID 0 should resolve to empty string";
 }
 
@@ -873,11 +873,11 @@ TEST_F(DataManagerTest, UpdateEntityTemplateNode) {
 	dataManager->addNode(node);
 	simulateSave();
 
-	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedTemplateNode"));
+	node.setLabelId(dataManager->getOrCreateTokenId("UpdatedTemplateNode"));
 	dataManager->updateEntity<Node>(node);
 
 	auto retrieved = dataManager->getNode(node.getId());
-	EXPECT_EQ("UpdatedTemplateNode", dataManager->resolveLabel(retrieved.getLabelId()));
+	EXPECT_EQ("UpdatedTemplateNode", dataManager->resolveTokenName(retrieved.getLabelId()));
 }
 
 TEST_F(DataManagerTest, UpdateEntityTemplateEdge) {
@@ -891,11 +891,11 @@ TEST_F(DataManagerTest, UpdateEntityTemplateEdge) {
 	dataManager->addEdge(edge);
 	simulateSave();
 
-	edge.setLabelId(dataManager->getOrCreateLabelId("LIKES"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("LIKES"));
 	dataManager->updateEntity<Edge>(edge);
 
 	auto retrieved = dataManager->getEdge(edge.getId());
-	EXPECT_EQ("LIKES", dataManager->resolveLabel(retrieved.getLabelId()));
+	EXPECT_EQ("LIKES", dataManager->resolveTokenName(retrieved.getTypeId()));
 }
 
 TEST_F(DataManagerTest, AddToCacheEdge) {
@@ -948,12 +948,12 @@ TEST_F(DataManagerTest, MarkEntityDeleted_PersistedNode) {
 }
 
 TEST_F(DataManagerTest, ResolveLabel_ZeroId) {
-	auto result = dataManager->resolveLabel(0);
+	auto result = dataManager->resolveTokenName(0);
 	EXPECT_EQ(result, "") << "Label ID 0 should resolve to empty string";
 }
 
 TEST_F(DataManagerTest, GetOrCreateLabelId_EmptyString) {
-	auto result = dataManager->getOrCreateLabelId("");
+	auto result = dataManager->getOrCreateTokenId("");
 	EXPECT_EQ(result, 0) << "Empty label should return 0";
 }
 

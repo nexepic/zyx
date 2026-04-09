@@ -74,7 +74,7 @@ protected:
 
 		// 1. Nodes: Add enough to fill at least one full segment and start a second one.
 		// This ensures Page 0 is full and Page 1 is partially empty (good for testing UNUSED slots).
-		int64_t labelId = dm->getOrCreateLabelId("InspectNode");
+		int64_t labelId = dm->getOrCreateTokenId("InspectNode");
 
 		for (uint32_t i = 0; i < NODES_PER_SEGMENT + 1; ++i) {
 			// Use ID constructor
@@ -90,12 +90,12 @@ protected:
 		dm->addNodeProperties(2, {{"payload", longData}});
 
 		// 4. Edges
-		int64_t edgeLabelId = dm->getOrCreateLabelId("CONNECTS");
-		Edge e1(0, 1, 2, edgeLabelId);
+		int64_t edgeTypeId = dm->getOrCreateTokenId("CONNECTS");
+		Edge e1(0, 1, 2, edgeTypeId);
 		dm->addEdge(e1);
 
 		// 5. Edge with properties (to cover entityType == 1 branch)
-		Edge e2(0, 2, 3, edgeLabelId);
+		Edge e2(0, 2, 3, edgeTypeId);
 		dm->addEdge(e2);
 		dm->addEdgeProperties(e2.getId(), {{"weight", static_cast<int64_t>(50)}, {"label", std::string("test_edge")}});
 
@@ -452,7 +452,7 @@ TEST_F(DatabaseInspectorTest, IndexSegment_InternalNode) {
 	// Covers Branch (342:10) False path: idx.isLeaf() == false => "INTERNAL"
 	// Create enough index entries to force a B-tree split, producing an INTERNAL node
 	auto dm = database->getStorage()->getDataManager();
-	int64_t labelId = dm->getOrCreateLabelId("IndexTestNode");
+	int64_t labelId = dm->getOrCreateTokenId("IndexTestNode");
 
 	// Create many nodes with a property to force B-tree index splits
 	for (int i = 0; i < 200; ++i) {

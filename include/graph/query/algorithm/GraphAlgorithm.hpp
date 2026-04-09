@@ -59,7 +59,7 @@ namespace graph::query::algorithm {
 										   const std::string &direction = "both", int maxDepth = 15) const;
 
 		std::vector<Node> findAllPaths(int64_t startNodeId, int minDepth, int maxDepth,
-									   const std::string &edgeLabel = "", const std::string &direction = "out") const;
+									   const std::string &edgeType = "", const std::string &direction = "out") const;
 
 		void breadthFirstTraversal(int64_t startNodeId, std::function<bool(int64_t nodeId, int depth)> visitor,
 								   const std::string &direction = "both") const;
@@ -110,10 +110,10 @@ namespace graph::query::algorithm {
 		std::shared_ptr<storage::DataManager> dm_;
 
 		std::vector<int64_t> getNeighbors(int64_t nodeId, const std::string &direction,
-										  const std::string &edgeLabel = "") const;
+										  const std::string &edgeType = "") const;
 
 		void dfsVariableLength(int64_t currentId, int currentDepth, int minDepth, int maxDepth,
-							   const std::string &edgeLabel, const std::string &direction,
+							   const std::string &edgeType, const std::string &direction,
 							   std::vector<int64_t> &visitedPath, std::vector<int64_t> &resultIds) const;
 	};
 

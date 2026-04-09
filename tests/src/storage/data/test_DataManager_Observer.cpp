@@ -55,11 +55,11 @@ TEST_F(DataManagerTest, ObserverNotifications) {
 	observer->reset();
 
 	Node oldSource = dataManager->getNode(source.getId());
-	source.setLabelId(dataManager->getOrCreateLabelId("UpdatedSource"));
+	source.setLabelId(dataManager->getOrCreateTokenId("UpdatedSource"));
 	dataManager->updateNode(source);
 
 	Edge oldEdge = dataManager->getEdge(edge.getId());
-	edge.setLabelId(dataManager->getOrCreateLabelId("UPDATED_RELATION"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("UPDATED_RELATION"));
 	dataManager->updateEdge(edge);
 
 	EXPECT_EQ(1UL, observer->updatedNodes.size());

@@ -45,7 +45,7 @@ namespace graph::query::indexes {
 	namespace IndexTypes {
 		constexpr uint32_t NODE_LABEL_TYPE = 1;
 		constexpr uint32_t NODE_PROPERTY_TYPE = 2;
-		constexpr uint32_t EDGE_LABEL_TYPE = 3;
+		constexpr uint32_t EDGE_TYPE_INDEX = 3;
 		constexpr uint32_t EDGE_PROPERTY_TYPE = 4;
 		constexpr uint32_t SYSTEM_LABEL_DICTIONARY = 5;
 		constexpr uint32_t VECTOR_MAPPING_INDEX = 6;
@@ -56,7 +56,7 @@ namespace graph::query::indexes {
 		// Keys for index data (B-Tree roots)
 		constexpr char NODE_LABEL_ROOT[] = "node.index.label_root";
 		constexpr char NODE_PROPERTY_PREFIX[] = "node.index.property";
-		constexpr char EDGE_LABEL_ROOT[] = "edge.index.label_root";
+		constexpr char EDGE_TYPE_ROOT[] = "edge.index.type_root";
 		constexpr char EDGE_PROPERTY_PREFIX[] = "edge.index.property";
 	} // namespace StateKeys
 
@@ -144,7 +144,7 @@ namespace graph::query::indexes {
 		    const std::vector<std::string> &keys,
 		    const std::vector<PropertyValue> &values) const;
 
-		std::vector<int64_t> findEdgeIdsByLabel(const std::string &label) const;
+		std::vector<int64_t> findEdgeIdsByType(const std::string &type) const;
 		std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 
 		[[nodiscard]] uint64_t lookups() const { return lookups_.load(std::memory_order_relaxed); }

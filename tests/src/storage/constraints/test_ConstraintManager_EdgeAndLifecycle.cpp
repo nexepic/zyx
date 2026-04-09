@@ -62,15 +62,15 @@ protected:
 	}
 
 	int64_t addNodeWithLabel(const std::string &label) {
-		Node node(0, dataManager->getOrCreateLabelId(label));
+		Node node(0, dataManager->getOrCreateTokenId(label));
 		dataManager->addNode(node);
 		return node.getId();
 	}
 };
 
 TEST_F(ConstraintManagerEdgeAndLifecycleTest, PersistStateAndDeleteValidatorsAreReachable) {
-	Node node(1, dataManager->getOrCreateLabelId("Person"));
-	Edge edge(1, 1, 2, dataManager->getOrCreateLabelId("REL"));
+	Node node(1, dataManager->getOrCreateTokenId("Person"));
+	Edge edge(1, 1, 2, dataManager->getOrCreateTokenId("REL"));
 
 	EXPECT_NO_THROW(manager->persistState());
 	EXPECT_NO_THROW(manager->validateNodeDelete(node));
@@ -94,8 +94,8 @@ TEST_F(ConstraintManagerEdgeAndLifecycleTest, EdgeConstraintValidationScansAndFi
 	const int64_t src = addNodeWithLabel("Person");
 	const int64_t dst = addNodeWithLabel("Person");
 
-	const int64_t relLabel = dataManager->getOrCreateLabelId("REL");
-	const int64_t otherLabel = dataManager->getOrCreateLabelId("OTHER_REL");
+	const int64_t relLabel = dataManager->getOrCreateTokenId("REL");
+	const int64_t otherLabel = dataManager->getOrCreateTokenId("OTHER_REL");
 
 	Edge validEdge(0, src, dst, relLabel);
 	validEdge.addProperty("score", PropertyValue(int64_t(42)));

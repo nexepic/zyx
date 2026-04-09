@@ -104,8 +104,8 @@ TEST_F(CreateEdgeOperatorBranchTest, ChildExhausted_ReturnsNullopt) {
 
 // Both source and target present -> edge created
 TEST_F(CreateEdgeOperatorBranchTest, BothNodesPresent_EdgeCreated) {
-	Node n1(0, dm->getOrCreateLabelId("Person"));
-	Node n2(0, dm->getOrCreateLabelId("Person"));
+	Node n1(0, dm->getOrCreateTokenId("Person"));
+	Node n2(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n1);
 	dm->addNode(n2);
 
@@ -133,7 +133,7 @@ TEST_F(CreateEdgeOperatorBranchTest, BothNodesPresent_EdgeCreated) {
 
 // Source missing -> no edge created (srcNode && tgtNode is false)
 TEST_F(CreateEdgeOperatorBranchTest, SourceMissing_NoEdge) {
-	Node n2(0, dm->getOrCreateLabelId("Person"));
+	Node n2(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n2);
 
 	Record r1;
@@ -155,7 +155,7 @@ TEST_F(CreateEdgeOperatorBranchTest, SourceMissing_NoEdge) {
 
 // Target missing -> no edge created
 TEST_F(CreateEdgeOperatorBranchTest, TargetMissing_NoEdge) {
-	Node n1(0, dm->getOrCreateLabelId("Person"));
+	Node n1(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n1);
 
 	Record r1;
@@ -177,8 +177,8 @@ TEST_F(CreateEdgeOperatorBranchTest, TargetMissing_NoEdge) {
 
 // Edge with properties (props non-empty branch)
 TEST_F(CreateEdgeOperatorBranchTest, WithProperties) {
-	Node n1(0, dm->getOrCreateLabelId("Person"));
-	Node n2(0, dm->getOrCreateLabelId("Person"));
+	Node n1(0, dm->getOrCreateTokenId("Person"));
+	Node n2(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n1);
 	dm->addNode(n2);
 
@@ -210,8 +210,8 @@ TEST_F(CreateEdgeOperatorBranchTest, WithProperties) {
 
 // Edge without properties (props empty branch - !props_.empty() is false)
 TEST_F(CreateEdgeOperatorBranchTest, WithoutProperties) {
-	Node n1(0, dm->getOrCreateLabelId("Person"));
-	Node n2(0, dm->getOrCreateLabelId("Person"));
+	Node n1(0, dm->getOrCreateTokenId("Person"));
+	Node n2(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n1);
 	dm->addNode(n2);
 
@@ -311,8 +311,8 @@ TEST_F(CreateEdgeOperatorBranchTest, OpenClose_NullChild) {
 
 // Multiple records: some with both nodes, some with missing nodes
 TEST_F(CreateEdgeOperatorBranchTest, MixedRecords) {
-	Node n1(0, dm->getOrCreateLabelId("Person"));
-	Node n2(0, dm->getOrCreateLabelId("Person"));
+	Node n1(0, dm->getOrCreateTokenId("Person"));
+	Node n2(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n1);
 	dm->addNode(n2);
 
@@ -362,8 +362,8 @@ TEST_F(CreateEdgeOperatorBranchTest, BothEndpointsMissing_NoEdge) {
 
 // Multiple batches from child
 TEST_F(CreateEdgeOperatorBranchTest, MultipleBatches) {
-	Node n1(0, dm->getOrCreateLabelId("Person"));
-	Node n2(0, dm->getOrCreateLabelId("Person"));
+	Node n1(0, dm->getOrCreateTokenId("Person"));
+	Node n2(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n1);
 	dm->addNode(n2);
 
@@ -400,8 +400,8 @@ TEST_F(CreateEdgeOperatorBranchTest, MultipleBatches) {
 
 // Child returns empty batch followed by real batch
 TEST_F(CreateEdgeOperatorBranchTest, ChildReturnsEmptyBatchThenReal) {
-	Node n1(0, dm->getOrCreateLabelId("Person"));
-	Node n2(0, dm->getOrCreateLabelId("Person"));
+	Node n1(0, dm->getOrCreateTokenId("Person"));
+	Node n2(0, dm->getOrCreateTokenId("Person"));
 	dm->addNode(n1);
 	dm->addNode(n2);
 

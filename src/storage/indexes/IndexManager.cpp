@@ -43,7 +43,7 @@ namespace graph::query::indexes {
 
 		// Instantiate the Edge index manager similarly.
 		edgeIndexManager_ = std::make_shared<EntityTypeIndexManager>(
-				dataManager_, storage_->getSystemStateManager(), IndexTypes::EDGE_LABEL_TYPE,
+				dataManager_, storage_->getSystemStateManager(), IndexTypes::EDGE_TYPE_INDEX,
 				storage::state::keys::Edge::LABEL_ROOT, IndexTypes::EDGE_PROPERTY_TYPE,
 				storage::state::keys::Edge::PROPERTY_PREFIX);
 
@@ -92,19 +92,19 @@ namespace graph::query::indexes {
 			ensureMetadata("node_label_idx", "node");
 		}
 
-		// --- Edge Label Index ---
-		auto edgeLabelIdx = edgeIndexManager_->getLabelIndex();
+		// --- Edge Type Index ---
+		auto edgeTypeIdx = edgeIndexManager_->getLabelIndex();
 
 		// [CHECK] Only proceed if enabled
-		if (edgeLabelIdx->isEnabled()) {
-			if (!edgeLabelIdx->hasPhysicalData()) {
+		if (edgeTypeIdx->isEnabled()) {
+			if (!edgeTypeIdx->hasPhysicalData()) {
 				if (dataManager_->getIdAllocator()->getCurrentMaxEdgeId() > 0) {
-					log::Log::info("Bootstrapping Edge Label Index...");
-					executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); });
-					edgeLabelIdx->saveState();
+					log::Log::info("Bootstrapping Edge Type Index...");
+					executeBuildTask([&]() { return indexBuilder_->buildEdgeTypeIndex(); });
+					edgeTypeIdx->saveState();
 				}
 			}
-			ensureMetadata("edge_label_idx", "edge");
+			ensureMetadata("edge_type_idx", "edge");
 		}
 	}
 
@@ -167,9 +167,9 @@ namespace graph::query::indexes {
 				success = nodeIndexManager_->createLabelIndex(
 						[&]() { return executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); }); });
 			} else if (entityType == "edge") {
-				// Edge label index
+				// Edge type index
 				success = edgeIndexManager_->createLabelIndex(
-						[&]() { return executeBuildTask([&]() { return indexBuilder_->buildEdgeLabelIndex(); }); });
+						[&]() { return executeBuildTask([&]() { return indexBuilder_->buildEdgeTypeIndex(); }); });
 			}
 		} else {
 			// --- Property Index ---
@@ -335,7 +335,7 @@ namespace graph::query::indexes {
 		if (vectorIndexManager_) { // Safety check
 			std::string labelStr;
 			if (node.getLabelId() != 0) {
-				labelStr = dataManager_->resolveLabel(node.getLabelId());
+				labelStr = dataManager_->resolveTokenName(node.getLabelId());
 			}
 			// Pass the node properties directly.
 			// DataManager has already resolved inline properties into the Node object passed here.
@@ -358,7 +358,7 @@ namespace graph::query::indexes {
 					continue;
 				std::string labelStr;
 				if (node.getLabelId() != 0)
-					labelStr = dataManager_->resolveLabel(node.getLabelId());
+					labelStr = dataManager_->resolveTokenName(node.getLabelId());
 				if (!labelStr.empty())
 					byLabel[labelStr].push_back({node, node.getProperties()});
 			}
@@ -379,7 +379,7 @@ namespace graph::query::indexes {
 		if (vectorIndexManager_) {
 			std::string labelStr;
 			if (newNode.getLabelId() != 0) {
-				labelStr = dataManager_->resolveLabel(newNode.getLabelId());
+				labelStr = dataManager_->resolveTokenName(newNode.getLabelId());
 			}
 			vectorIndexManager_->updateIndex(newNode, labelStr, newNode.getProperties());
 		}
@@ -396,7 +396,7 @@ namespace graph::query::indexes {
 		if (vectorIndexManager_) {
 			std::string labelStr;
 			if (node.getLabelId() != 0) {
-				labelStr = dataManager_->resolveLabel(node.getLabelId());
+				labelStr = dataManager_->resolveTokenName(node.getLabelId());
 			}
 
 			// We only need NodeID and Label to find the index and remove the mapping
@@ -500,10 +500,10 @@ namespace graph::query::indexes {
 		return result;
 	}
 
-	std::vector<int64_t> IndexManager::findEdgeIdsByLabel(const std::string &label) const {
-		log::Log::debug("IndexManager::findEdgeIdsByLabel - label: {}", label);
+	std::vector<int64_t> IndexManager::findEdgeIdsByType(const std::string &type) const {
+		log::Log::debug("IndexManager::findEdgeIdsByType - type: {}", type);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
-		auto result = edgeIndexManager_->getLabelIndex()->findNodes(label);
+		auto result = edgeIndexManager_->getLabelIndex()->findNodes(type);
 		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
 	}

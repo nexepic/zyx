@@ -118,6 +118,8 @@ namespace graph::query::execution::operators {
 
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {child_.get()}; }
 
+		void setChild(std::unique_ptr<PhysicalOperator> child) override { child_ = std::move(child); }
+
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::unique_ptr<PhysicalOperator> child_;

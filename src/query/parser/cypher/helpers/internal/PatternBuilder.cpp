@@ -153,7 +153,7 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 
 		// Rel Details
 		auto relDetail = relPat->relationshipDetail();
-		std::string edgeVar = "", edgeLabel = "";
+		std::string edgeVar = "", edgeType = "";
 		std::unordered_map<std::string, PropertyValue> edgeProps;
 
 		bool isVarLength = false;
@@ -162,7 +162,7 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 
 		if (relDetail) {
 			edgeVar = AstExtractor::extractVariable(relDetail->variable());
-			edgeLabel = AstExtractor::extractRelType(relDetail->relationshipTypes());
+			edgeType = AstExtractor::extractRelType(relDetail->relationshipTypes());
 			edgeProps = AstExtractor::extractProperties(relDetail->properties(),
 				[](CypherParser::ExpressionContext *expr) {
 					return ExpressionBuilder::evaluateLiteralExpression(expr);
@@ -215,11 +215,11 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 		// Build Traversal with target/edge filter data stored on the operator
 		if (isVarLength) {
 			rootOp = std::make_unique<query::logical::LogicalVarLengthTraversal>(
-				std::move(rootOp), var, edgeVar, targetVar, edgeLabel, direction,
+				std::move(rootOp), var, edgeVar, targetVar, edgeType, direction,
 				minHops, maxHops, targetLabels, targetProps);
 		} else {
 			rootOp = std::make_unique<query::logical::LogicalTraversal>(
-				std::move(rootOp), var, edgeVar, targetVar, edgeLabel, direction,
+				std::move(rootOp), var, edgeVar, targetVar, edgeType, direction,
 				targetLabels, targetProps, edgeProps);
 		}
 
@@ -315,12 +315,12 @@ void PatternBuilder::processCreatePatternElement(
 		rootOp = OperatorChain::chain(std::move(rootOp), std::move(targetOp));
 
 		auto relDetail = relPat->relationshipDetail();
-		std::string edgeVar = "", edgeLabel = "";
+		std::string edgeVar = "", edgeType = "";
 		std::unordered_map<std::string, graph::PropertyValue> edgeProps;
 
 		if (relDetail) {
 			edgeVar = AstExtractor::extractVariable(relDetail->variable());
-			edgeLabel = AstExtractor::extractRelType(relDetail->relationshipTypes());
+			edgeType = AstExtractor::extractRelType(relDetail->relationshipTypes());
 			edgeProps = AstExtractor::extractProperties(relDetail->properties(),
 				[](CypherParser::ExpressionContext *expr) {
 					return ExpressionBuilder::evaluateLiteralExpression(expr);
@@ -328,7 +328,7 @@ void PatternBuilder::processCreatePatternElement(
 		}
 
 		auto edgeOp = std::make_unique<query::logical::LogicalCreateEdge>(
-			edgeVar, edgeLabel, edgeProps, prevVar, targetVar);
+			edgeVar, edgeType, edgeProps, prevVar, targetVar);
 		rootOp = OperatorChain::chain(std::move(rootOp), std::move(edgeOp));
 
 		prevVar = targetVar;
@@ -407,12 +407,12 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::buildMergePatte
 
 		// Edge details
 		auto relDetail = relPat->relationshipDetail();
-		std::string edgeVar, edgeLabel;
+		std::string edgeVar, edgeType;
 		std::unordered_map<std::string, PropertyValue> edgeProps;
 
 		if (relDetail) {
 			edgeVar = AstExtractor::extractVariable(relDetail->variable());
-			edgeLabel = AstExtractor::extractRelType(relDetail->relationshipTypes());
+			edgeType = AstExtractor::extractRelType(relDetail->relationshipTypes());
 			edgeProps = AstExtractor::extractProperties(relDetail->properties(),
 				[](CypherParser::ExpressionContext *expr) {
 					return ExpressionBuilder::evaluateLiteralExpression(expr);
@@ -433,7 +433,7 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::buildMergePatte
 		// Apply ON CREATE/MATCH items only to the last edge in the chain
 		bool isLastChain = (i == chains.size() - 1);
 		rootOp = std::make_unique<query::logical::LogicalMergeEdge>(
-			prevVar, edgeVar, targetVar, edgeLabel, direction, edgeProps,
+			prevVar, edgeVar, targetVar, edgeType, direction, edgeProps,
 			isLastChain ? std::move(onCreateActions) : emptyActions,
 			isLastChain ? std::move(onMatchActions) : emptyActions,
 			std::move(rootOp));

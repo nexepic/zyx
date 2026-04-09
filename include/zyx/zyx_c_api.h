@@ -188,7 +188,7 @@ int64_t zyx_create_node_ret_id(ZYXDB_T *db, const char *label, const ZYXParams_T
  * @return true on success.
  */
 bool zyx_create_edge_by_id(ZYXDB_T *db, int64_t source_id, int64_t target_id,
-                            const char *label, const ZYXParams_T *props);
+                            const char *type, const ZYXParams_T *props);
 
 // ========================================================================
 // Result Iteration

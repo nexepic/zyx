@@ -91,7 +91,7 @@ protected:
 		edge.getMutableMetadata().id = id;
 		edge.getMutableMetadata().sourceNodeId = sourceId;
 		edge.getMutableMetadata().targetNodeId = targetId;
-		edge.getMutableMetadata().labelId = 200;
+		edge.getMutableMetadata().typeId = 200;
 		edge.getMutableMetadata().isActive = true;
 		return edge;
 	}

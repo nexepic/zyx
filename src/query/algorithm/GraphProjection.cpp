@@ -28,7 +28,7 @@ namespace graph::query::algorithm {
 
 	GraphProjection GraphProjection::build(const std::shared_ptr<storage::DataManager> &dm,
 										   const std::string &nodeLabel,
-										   const std::string &edgeLabel,
+										   const std::string &edgeType,
 										   const std::string &weightProperty) {
 		GraphProjection proj;
 		proj.isWeighted_ = !weightProperty.empty();
@@ -38,11 +38,11 @@ namespace graph::query::algorithm {
 		// Resolve label IDs once
 		int64_t nodeLabelId = 0;
 		if (!nodeLabel.empty()) {
-			nodeLabelId = dm->getOrCreateLabelId(nodeLabel);
+			nodeLabelId = dm->getOrCreateTokenId(nodeLabel);
 		}
-		int64_t edgeLabelId = 0;
-		if (!edgeLabel.empty()) {
-			edgeLabelId = dm->getOrCreateLabelId(edgeLabel);
+		int64_t edgeTypeId = 0;
+		if (!edgeType.empty()) {
+			edgeTypeId = dm->getOrCreateTokenId(edgeType);
 		}
 
 		// Phase 1: Collect active nodes matching label filter
@@ -68,8 +68,8 @@ namespace graph::query::algorithm {
 					continue;
 				}
 
-				// Filter by edge label
-				if (edgeLabelId != 0 && edge.getLabelId() != edgeLabelId) {
+				// Filter by edge type
+				if (edgeTypeId != 0 && edge.getTypeId() != edgeTypeId) {
 					continue;
 				}
 

@@ -1,5 +1,5 @@
 /**
- * @file LabelTokenRegistry.hpp
+ * @file TokenRegistry.hpp
  * @author Nexepic
  * @date 2026/1/13
  *
@@ -33,22 +33,22 @@ namespace graph::storage {
 	}
 	class DataManager;
 
-	class LabelTokenRegistry {
+	class TokenRegistry {
 	public:
 		// Capacity for the LRU cache
 		static constexpr size_t CACHE_SIZE = 5000;
-		static constexpr int64_t NULL_LABEL_ID = 0;
-		static constexpr char STORAGE_KEY[] = "sys.dict.label_registry.root";
+		static constexpr int64_t NULL_TOKEN_ID = 0;
+		static constexpr char STORAGE_KEY[] = "sys.dict.token_registry.root";
 
-		LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
-						   std::shared_ptr<state::SystemStateManager> stateManager,
-						   size_t cacheSize = CACHE_SIZE);
+		TokenRegistry(std::shared_ptr<DataManager> dataManager,
+					  std::shared_ptr<state::SystemStateManager> stateManager,
+					  size_t cacheSize = CACHE_SIZE);
 
 		// Get ID for string, creating if missing.
-		int64_t getOrCreateLabelId(const std::string &label);
+		int64_t getOrCreateTokenId(const std::string &name);
 
 		// Get string for ID.
-		std::string getLabelString(int64_t labelId);
+		std::string resolveTokenName(int64_t tokenId);
 
 		[[nodiscard]] int64_t getRootIndexId() const { return rootIndexId_; }
 
@@ -69,7 +69,7 @@ namespace graph::storage {
 		LRUCache<std::string, int64_t> stringToIdCache_;
 		LRUCache<int64_t, std::string> idToStringCache_;
 
-		void addToCache(const std::string &label, int64_t id);
+		void addToCache(const std::string &name, int64_t id);
 		void initialize();
 	};
 } // namespace graph::storage

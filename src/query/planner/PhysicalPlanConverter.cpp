@@ -38,6 +38,10 @@
 #include "graph/query/execution/operators/UnionOperator.hpp"
 #include "graph/query/execution/operators/UnwindOperator.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
+#include "graph/query/execution/operators/ForeachOperator.hpp"
+#include "graph/query/execution/operators/CallSubqueryOperator.hpp"
+#include "graph/query/execution/operators/LoadCsvOperator.hpp"
+#include "graph/query/execution/operators/RecordInjectorOperator.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
@@ -71,6 +75,9 @@
 #include "graph/query/logical/operators/LogicalUnion.hpp"
 #include "graph/query/logical/operators/LogicalUnwind.hpp"
 #include "graph/query/logical/operators/LogicalVarLengthTraversal.hpp"
+#include "graph/query/logical/operators/LogicalForeach.hpp"
+#include "graph/query/logical/operators/LogicalCallSubquery.hpp"
+#include "graph/query/logical/operators/LogicalLoadCsv.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -127,6 +134,9 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convert(
 		case LogicalOpType::LOP_CALL_PROCEDURE:       return convertCallProcedure(logicalOp);
 		case LogicalOpType::LOP_EXPLAIN:              return convertExplain(logicalOp);
 		case LogicalOpType::LOP_PROFILE:              return convertProfile(logicalOp);
+		case LogicalOpType::LOP_FOREACH:              return convertForeach(logicalOp);
+		case LogicalOpType::LOP_CALL_SUBQUERY:        return convertCallSubquery(logicalOp);
+		case LogicalOpType::LOP_LOAD_CSV:             return convertLoadCsv(logicalOp);
 		default:
 			throw std::runtime_error(
 				"PhysicalPlanConverter: unsupported logical operator type: " +
@@ -161,7 +171,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNodeScan(
 		std::vector<int64_t> allLabelIds;
 		allLabelIds.reserve(scan->getLabels().size());
 		for (const auto &lbl : scan->getLabels()) {
-			allLabelIds.push_back(dm_->getOrCreateLabelId(lbl));
+			allLabelIds.push_back(dm_->getOrCreateTokenId(lbl));
 		}
 		std::string variable = scan->getVariable();
 		auto predicate = [variable, allLabelIds](const Record &r) -> bool {
@@ -368,7 +378,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertTraversal(
 	std::unique_ptr<PhysicalOperator> root =
 		std::make_unique<TraversalOperator>(dm_, std::move(childPhys),
 		                                    trav->getSourceVar(), trav->getEdgeVar(),
-		                                    trav->getTargetVar(), trav->getEdgeLabel(),
+		                                    trav->getTargetVar(), trav->getEdgeType(),
 		                                    trav->getDirection());
 
 	// Add target label filter if specified
@@ -376,7 +386,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertTraversal(
 		std::vector<int64_t> labelIds;
 		labelIds.reserve(trav->getTargetLabels().size());
 		for (const auto &lbl : trav->getTargetLabels()) {
-			labelIds.push_back(dm_->getOrCreateLabelId(lbl));
+			labelIds.push_back(dm_->getOrCreateTokenId(lbl));
 		}
 		std::string targetVar = trav->getTargetVar();
 		auto predicate = [targetVar, labelIds](const Record &r) -> bool {
@@ -438,7 +448,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertVarLengthTravers
 	std::unique_ptr<PhysicalOperator> root =
 		std::make_unique<VarLengthTraversalOperator>(dm_, std::move(childPhys),
 		                                             vlt->getSourceVar(), vlt->getTargetVar(),
-		                                             vlt->getEdgeLabel(), vlt->getMinHops(),
+		                                             vlt->getEdgeType(), vlt->getMinHops(),
 		                                             vlt->getMaxHops(), vlt->getDirection());
 
 	// Add target label filter if specified
@@ -446,7 +456,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertVarLengthTravers
 		std::vector<int64_t> labelIds;
 		labelIds.reserve(vlt->getTargetLabels().size());
 		for (const auto &lbl : vlt->getTargetLabels()) {
-			labelIds.push_back(dm_->getOrCreateLabelId(lbl));
+			labelIds.push_back(dm_->getOrCreateTokenId(lbl));
 		}
 		std::string targetVar = vlt->getTargetVar();
 		auto predicate = [targetVar, labelIds](const Record &r) -> bool {
@@ -538,7 +548,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertCreateEdge(
 
 	const auto *ce = static_cast<const LogicalCreateEdge *>(op);
 
-	auto physOp = std::make_unique<CreateEdgeOperator>(dm_, ce->getVariable(), ce->getLabel(),
+	auto physOp = std::make_unique<CreateEdgeOperator>(dm_, ce->getVariable(), ce->getEdgeType(),
 	                                                   ce->getProperties(), ce->getSourceVar(),
 	                                                   ce->getTargetVar());
 
@@ -658,7 +668,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertMergeEdge(
 	};
 
 	auto mergeEdge = std::make_unique<MergeEdgeOperator>(dm_, im_, me->getSourceVar(), me->getEdgeVar(),
-	                                                     me->getTargetVar(), me->getEdgeLabel(),
+	                                                     me->getTargetVar(), me->getEdgeType(),
 	                                                     me->getMatchProps(), me->getDirection(),
 	                                                     convertActions(me->getOnCreateActions()),
 	                                                     convertActions(me->getOnMatchActions()));
@@ -781,6 +791,107 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertProfile(
 	// Convert the inner logical plan to physical, then wrap in ProfileOperator
 	auto innerPhys = convert(profile->getInnerPlan());
 	return std::make_unique<ProfileOperator>(std::move(innerPhys));
+}
+
+// ---------------------------------------------------------------------------
+// Subquery & Advanced operators
+// ---------------------------------------------------------------------------
+
+std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertForeach(
+	const LogicalOperator *op) const {
+
+	const auto *foreach = static_cast<const LogicalForeach *>(op);
+
+	std::unique_ptr<PhysicalOperator> childPhys;
+	if (foreach->getInput()) {
+		childPhys = convert(foreach->getInput());
+	}
+
+	std::unique_ptr<PhysicalOperator> bodyPhys;
+	if (foreach->getBody()) {
+		bodyPhys = convert(foreach->getBody());
+	}
+
+	// Create a RecordInjector and attach it as the leaf child of the body.
+	// Walk to the parent of the leaf operator and replace the leaf
+	// (typically a SingleRowOperator) with the RecordInjector.
+	RecordInjectorOperator *injectorPtr = nullptr;
+	if (bodyPhys) {
+		auto injector = std::make_unique<RecordInjectorOperator>();
+		injectorPtr = injector.get();
+
+		// Walk to the parent of the leaf in the body pipeline
+		PhysicalOperator *parent = bodyPhys.get();
+		PhysicalOperator *current = parent;
+		while (true) {
+			auto children = current->getChildren();
+			if (children.empty()) break;
+			parent = current;
+			current = const_cast<PhysicalOperator *>(children[0]);
+		}
+		// Replace the leaf's parent's child with the injector
+		parent->setChild(std::move(injector));
+	}
+
+	return std::make_unique<ForeachOperator>(
+		std::move(childPhys), foreach->getIterVar(),
+		foreach->getListExpr(), std::move(bodyPhys), injectorPtr);
+}
+
+std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertCallSubquery(
+	const LogicalOperator *op) const {
+
+	const auto *callSub = static_cast<const LogicalCallSubquery *>(op);
+
+	std::unique_ptr<PhysicalOperator> inputPhys;
+	if (callSub->getInput()) {
+		inputPhys = convert(callSub->getInput());
+	}
+
+	std::unique_ptr<PhysicalOperator> subqueryPhys;
+	if (callSub->getSubquery()) {
+		subqueryPhys = convert(callSub->getSubquery());
+	}
+
+	// Create a RecordInjector for imported variable injection
+	RecordInjectorOperator *injectorPtr = nullptr;
+	if (subqueryPhys && !callSub->getImportedVars().empty()) {
+		auto injector = std::make_unique<RecordInjectorOperator>();
+		injectorPtr = injector.get();
+
+		// Walk to the parent of the leaf and replace it with the injector
+		PhysicalOperator *parent = subqueryPhys.get();
+		PhysicalOperator *current = parent;
+		while (true) {
+			auto children = current->getChildren();
+			if (children.empty()) break;
+			parent = current;
+			current = const_cast<PhysicalOperator *>(children[0]);
+		}
+		parent->setChild(std::move(injector));
+	}
+
+	return std::make_unique<CallSubqueryOperator>(
+		std::move(inputPhys), std::move(subqueryPhys),
+		callSub->getImportedVars(), callSub->getReturnedVars(),
+		injectorPtr,
+		callSub->isInTransactions(), callSub->getBatchSize());
+}
+
+std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertLoadCsv(
+	const LogicalOperator *op) const {
+
+	const auto *loadCsv = static_cast<const LogicalLoadCsv *>(op);
+
+	std::unique_ptr<PhysicalOperator> childPhys;
+	if (!loadCsv->getChildren().empty() && loadCsv->getChildren()[0]) {
+		childPhys = convert(loadCsv->getChildren()[0]);
+	}
+
+	return std::make_unique<LoadCsvOperator>(
+		std::move(childPhys), loadCsv->getUrlExpr(),
+		loadCsv->getRowVariable(), loadCsv->isWithHeaders(),
+		loadCsv->getFieldTerminator());
 }
 
 } // namespace graph::query

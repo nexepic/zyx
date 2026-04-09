@@ -41,18 +41,18 @@ namespace graph::query::execution::operators {
 		MergeEdgeOperator(std::shared_ptr<storage::DataManager> dm,
 		                  std::shared_ptr<indexes::IndexManager> im,
 		                  std::string sourceVar, std::string edgeVar, std::string targetVar,
-		                  std::string edgeLabel,
+		                  std::string edgeType,
 		                  std::unordered_map<std::string, PropertyValue> matchProps,
 		                  std::string direction,
 		                  std::vector<SetItem> onCreateItems,
 		                  std::vector<SetItem> onMatchItems) :
 			dm_(std::move(dm)), im_(std::move(im)),
 			sourceVar_(std::move(sourceVar)), edgeVar_(std::move(edgeVar)),
-			targetVar_(std::move(targetVar)), edgeLabel_(std::move(edgeLabel)),
+			targetVar_(std::move(targetVar)), edgeType_(std::move(edgeType)),
 			matchProps_(std::move(matchProps)), direction_(std::move(direction)),
 			onCreateItems_(std::move(onCreateItems)), onMatchItems_(std::move(onMatchItems)) {}
 
-		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
+		void setChild(std::unique_ptr<PhysicalOperator> child) override { child_ = std::move(child); }
 
 		void open() override;
 		std::optional<RecordBatch> next() override;
@@ -79,7 +79,7 @@ namespace graph::query::execution::operators {
 		std::string sourceVar_;
 		std::string edgeVar_;
 		std::string targetVar_;
-		std::string edgeLabel_;
+		std::string edgeType_;
 		std::unordered_map<std::string, PropertyValue> matchProps_;
 		std::string direction_;
 
@@ -87,7 +87,7 @@ namespace graph::query::execution::operators {
 		std::vector<SetItem> onMatchItems_;
 
 		bool executed_ = false;
-		int64_t edgeLabelId_ = 0;
+		int64_t edgeTypeId_ = 0;
 
 		void processMergeEdge(Record &record);
 		void applyEdgeUpdates(int64_t edgeId, const std::vector<SetItem> &items, Record &record);

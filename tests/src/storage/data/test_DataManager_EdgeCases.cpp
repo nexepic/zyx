@@ -13,19 +13,19 @@
 
 TEST_F(DataManagerTest, GetOrCreateLabelId_EmptyLabel) {
 	// Line 189: empty label returns 0
-	int64_t id = dataManager->getOrCreateLabelId("");
+	int64_t id = dataManager->getOrCreateTokenId("");
 	EXPECT_EQ(id, 0);
 }
 
 TEST_F(DataManagerTest, ResolveLabel_ZeroId) {
 	// Line 198: labelId == 0 returns ""
-	std::string label = dataManager->resolveLabel(0);
+	std::string label = dataManager->resolveTokenName(0);
 	EXPECT_EQ(label, "");
 }
 
 TEST_F(DataManagerTest, ResolveLabel_NonExistentId) {
-	// resolveLabel for an ID that doesn't exist
-	std::string label = dataManager->resolveLabel(999999);
+	// resolveTokenName for an ID that doesn't exist
+	std::string label = dataManager->resolveTokenName(999999);
 	EXPECT_TRUE(label.empty());
 }
 
@@ -150,7 +150,7 @@ TEST_F(DataManagerTest, Rollback_UndoNodeUpdate) {
 	simulateSave();
 
 	dataManager->setActiveTransaction(103);
-	int64_t newLabel = dataManager->getOrCreateLabelId("Updated");
+	int64_t newLabel = dataManager->getOrCreateTokenId("Updated");
 	node.setLabelId(newLabel);
 	dataManager->updateNode(node);
 
@@ -248,7 +248,7 @@ TEST_F(DataManagerTest, AddNodes_BatchWithProperties) {
 	std::vector<Node> nodes;
 	for (int i = 0; i < 3; ++i) {
 		Node n;
-		n.setLabelId(dataManager->getOrCreateLabelId("Batch"));
+		n.setLabelId(dataManager->getOrCreateTokenId("Batch"));
 		n.addProperty("key", PropertyValue(static_cast<int64_t>(i)));
 		nodes.push_back(n);
 	}
@@ -267,7 +267,7 @@ TEST_F(DataManagerTest, AddNodes_BatchNoProperties) {
 	std::vector<Node> nodes;
 	for (int i = 0; i < 3; ++i) {
 		Node n;
-		n.setLabelId(dataManager->getOrCreateLabelId("NoProp"));
+		n.setLabelId(dataManager->getOrCreateTokenId("NoProp"));
 		nodes.push_back(n);
 	}
 
@@ -285,7 +285,7 @@ TEST_F(DataManagerTest, AddNodes_BatchWithTransaction) {
 	std::vector<Node> nodes;
 	for (int i = 0; i < 2; ++i) {
 		Node n;
-		n.setLabelId(dataManager->getOrCreateLabelId("TxnBatch"));
+		n.setLabelId(dataManager->getOrCreateTokenId("TxnBatch"));
 		nodes.push_back(n);
 	}
 
@@ -320,7 +320,7 @@ TEST_F(DataManagerTest, AddEdges_BatchWithProperties) {
 		Edge e;
 		e.setSourceNodeId(n1.getId());
 		e.setTargetNodeId(n2.getId());
-		e.setLabelId(dataManager->getOrCreateLabelId("BATCH_REL"));
+		e.setTypeId(dataManager->getOrCreateTokenId("BATCH_REL"));
 		e.addProperty("weight", PropertyValue(static_cast<int64_t>(i * 10)));
 		edges.push_back(e);
 	}
@@ -346,7 +346,7 @@ TEST_F(DataManagerTest, AddEdges_BatchNoProperties) {
 		Edge e;
 		e.setSourceNodeId(n1.getId());
 		e.setTargetNodeId(n2.getId());
-		e.setLabelId(dataManager->getOrCreateLabelId("BARE_REL"));
+		e.setTypeId(dataManager->getOrCreateTokenId("BARE_REL"));
 		edges.push_back(e);
 	}
 
@@ -370,7 +370,7 @@ TEST_F(DataManagerTest, AddEdges_BatchWithTransaction) {
 		Edge e;
 		e.setSourceNodeId(n1.getId());
 		e.setTargetNodeId(n2.getId());
-		e.setLabelId(dataManager->getOrCreateLabelId("TXN_EDGE"));
+		e.setTypeId(dataManager->getOrCreateTokenId("TXN_EDGE"));
 		edges.push_back(e);
 	}
 
@@ -536,7 +536,7 @@ TEST_F(DataManagerTest, UpdateNode_InTransaction) {
 
 	dataManager->setActiveTransaction(400);
 
-	int64_t newLabel = dataManager->getOrCreateLabelId("Modified");
+	int64_t newLabel = dataManager->getOrCreateTokenId("Modified");
 	node.setLabelId(newLabel);
 	dataManager->updateNode(node);
 
@@ -557,8 +557,8 @@ TEST_F(DataManagerTest, UpdateEdge_InTransaction) {
 	dataManager->setActiveTransaction(401);
 
 	observer->reset();
-	int64_t newLabel = dataManager->getOrCreateLabelId("UPDATED_REL");
-	edge.setLabelId(newLabel);
+	int64_t newLabel = dataManager->getOrCreateTokenId("UPDATED_REL");
+	edge.setTypeId(newLabel);
 	dataManager->updateEdge(edge);
 
 	EXPECT_GE(observer->updatedEdges.size(), 1UL);

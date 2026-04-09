@@ -76,7 +76,7 @@ TEST_F(NodeScanOperatorBranchTest, FullScan_NoNodes) {
 
 // Full scan with a few active nodes
 TEST_F(NodeScanOperatorBranchTest, FullScan_ActiveNodes) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	dm->addNode(n1);
@@ -102,8 +102,8 @@ TEST_F(NodeScanOperatorBranchTest, FullScan_ActiveNodes) {
 
 // Full scan with label filter - mismatched label should be skipped
 TEST_F(NodeScanOperatorBranchTest, FullScan_WithLabelFilter) {
-	int64_t personLabel = dm->getOrCreateLabelId("Person");
-	int64_t animalLabel = dm->getOrCreateLabelId("Animal");
+	int64_t personLabel = dm->getOrCreateTokenId("Person");
+	int64_t animalLabel = dm->getOrCreateTokenId("Animal");
 	Node n1(0, personLabel);
 	Node n2(0, animalLabel);
 	Node n3(0, personLabel);
@@ -128,7 +128,7 @@ TEST_F(NodeScanOperatorBranchTest, FullScan_WithLabelFilter) {
 
 // Full scan with empty label (no label filter)
 TEST_F(NodeScanOperatorBranchTest, FullScan_EmptyLabel) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -149,7 +149,7 @@ TEST_F(NodeScanOperatorBranchTest, FullScan_EmptyLabel) {
 
 // Full scan with deleted node - isActive() returns false
 TEST_F(NodeScanOperatorBranchTest, FullScan_InactiveNodeSkipped) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	dm->addNode(n1);
@@ -177,7 +177,7 @@ TEST_F(NodeScanOperatorBranchTest, FullScan_InactiveNodeSkipped) {
 // Label scan - nodes added via dm->addNode trigger onNodeAdded observer
 // which automatically indexes the node by label
 TEST_F(NodeScanOperatorBranchTest, LabelScan) {
-	int64_t personLabel = dm->getOrCreateLabelId("Person");
+	int64_t personLabel = dm->getOrCreateTokenId("Person");
 	Node n1(0, personLabel);
 	dm->addNode(n1);
 
@@ -265,7 +265,7 @@ TEST_F(NodeScanOperatorBranchTest, ToString_PropertyScan) {
 
 // Property scan
 TEST_F(NodeScanOperatorBranchTest, PropertyScan) {
-	int64_t personLabel = dm->getOrCreateLabelId("Person");
+	int64_t personLabel = dm->getOrCreateTokenId("Person");
 	Node n1(0, personLabel);
 	dm->addNode(n1);
 	dm->addNodeProperties(n1.getId(), {{"name", PropertyValue(std::string("Alice"))}});
@@ -313,7 +313,7 @@ TEST_F(NodeScanOperatorBranchTest, PropertyScan_NoMatches) {
 
 // All nodes deleted -> batch is empty at end -> nullopt
 TEST_F(NodeScanOperatorBranchTest, AllNodesDeleted) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -335,7 +335,7 @@ TEST_F(NodeScanOperatorBranchTest, AllNodesDeleted) {
 
 // Invalid scan type should fall back to FULL_SCAN via default branch.
 TEST_F(NodeScanOperatorBranchTest, InvalidScanTypeFallsBackToFullScan) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 

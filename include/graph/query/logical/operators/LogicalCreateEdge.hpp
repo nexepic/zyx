@@ -28,13 +28,13 @@ class LogicalCreateEdge : public LogicalOperator {
 public:
 	LogicalCreateEdge(
 		std::string variable,
-		std::string label,
+		std::string type,
 		std::unordered_map<std::string, graph::PropertyValue> properties,
 		std::string sourceVar,
 		std::string targetVar,
 		std::unique_ptr<LogicalOperator> child = nullptr)
 		: variable_(std::move(variable))
-		, label_(std::move(label))
+		, type_(std::move(type))
 		, properties_(std::move(properties))
 		, sourceVar_(std::move(sourceVar))
 		, targetVar_(std::move(targetVar))
@@ -60,7 +60,7 @@ public:
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		return std::make_unique<LogicalCreateEdge>(
 			variable_,
-			label_,
+			type_,
 			properties_,
 			sourceVar_,
 			targetVar_,
@@ -68,7 +68,7 @@ public:
 	}
 
 	[[nodiscard]] std::string toString() const override {
-		return "CreateEdge(" + variable_ + ":" + label_ + ")";
+		return "CreateEdge(" + variable_ + ":" + type_ + ")";
 	}
 
 	void setChild(size_t index, std::unique_ptr<LogicalOperator> child) override {
@@ -82,14 +82,14 @@ public:
 	}
 
 	[[nodiscard]] const std::string &getVariable() const { return variable_; }
-	[[nodiscard]] const std::string &getLabel() const { return label_; }
+	[[nodiscard]] const std::string &getEdgeType() const { return type_; }
 	[[nodiscard]] const std::unordered_map<std::string, graph::PropertyValue> &getProperties() const { return properties_; }
 	[[nodiscard]] const std::string &getSourceVar() const { return sourceVar_; }
 	[[nodiscard]] const std::string &getTargetVar() const { return targetVar_; }
 
 private:
 	std::string variable_;
-	std::string label_;
+	std::string type_;
 	std::unordered_map<std::string, graph::PropertyValue> properties_;
 	std::string sourceVar_;
 	std::string targetVar_;

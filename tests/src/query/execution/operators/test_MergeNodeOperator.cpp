@@ -105,7 +105,7 @@ TEST_F(MergeNodeOperatorTest, CreateNewNode_NoExisting) {
 
 TEST_F(MergeNodeOperatorTest, MatchExistingNode) {
 	// Pre-create a node
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node existingNode(0, labelId);
 	dm->addNode(existingNode);
 	std::unordered_map<std::string, PropertyValue> props;
@@ -132,7 +132,7 @@ TEST_F(MergeNodeOperatorTest, MatchExistingNode) {
 
 TEST_F(MergeNodeOperatorTest, DeletedNode_StillVisible) {
 	// deleteNode marks for deletion but MergeNodeOperator still sees it via scan
-	int64_t labelId = dm->getOrCreateLabelId("Skip");
+	int64_t labelId = dm->getOrCreateTokenId("Skip");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 	dm->deleteNode(n1);
@@ -151,7 +151,7 @@ TEST_F(MergeNodeOperatorTest, DeletedNode_StillVisible) {
 
 TEST_F(MergeNodeOperatorTest, LabelMismatch_CreatesNew) {
 	// Create a node with label "Dog"
-	int64_t dogLabelId = dm->getOrCreateLabelId("Dog");
+	int64_t dogLabelId = dm->getOrCreateTokenId("Dog");
 	Node dogNode(0, dogLabelId);
 	dm->addNode(dogNode);
 
@@ -170,7 +170,7 @@ TEST_F(MergeNodeOperatorTest, LabelMismatch_CreatesNew) {
 
 TEST_F(MergeNodeOperatorTest, PropertyMismatch_CreatesNew) {
 	// Create a node with name="X"
-	int64_t labelId = dm->getOrCreateLabelId("PMism");
+	int64_t labelId = dm->getOrCreateTokenId("PMism");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 	std::unordered_map<std::string, PropertyValue> props;
@@ -268,7 +268,7 @@ TEST_F(MergeNodeOperatorTest, OnCreate_AppliesUpdates) {
 
 TEST_F(MergeNodeOperatorTest, OnMatch_AppliesUpdates) {
 	// Pre-create a node
-	int64_t labelId = dm->getOrCreateLabelId("OMNode");
+	int64_t labelId = dm->getOrCreateTokenId("OMNode");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 	std::unordered_map<std::string, PropertyValue> props;
@@ -308,7 +308,7 @@ TEST_F(MergeNodeOperatorTest, ApplyUpdates_DifferentVariable_Ignored) {
 	std::vector<SetItem> onMatchItems;
 	onMatchItems.emplace_back(SetActionType::PROPERTY, "m", "val", expr);
 
-	int64_t labelId = dm->getOrCreateLabelId("DiffVar");
+	int64_t labelId = dm->getOrCreateTokenId("DiffVar");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -330,7 +330,7 @@ TEST_F(MergeNodeOperatorTest, ApplyUpdates_NonPropertyType_Ignored) {
 	std::vector<SetItem> onMatchItems;
 	onMatchItems.emplace_back(SetActionType::LABEL, "n", "NewLabel", nullptr);
 
-	int64_t labelId = dm->getOrCreateLabelId("LblTest");
+	int64_t labelId = dm->getOrCreateTokenId("LblTest");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -348,7 +348,7 @@ TEST_F(MergeNodeOperatorTest, ApplyUpdates_NullExpression_Ignored) {
 	std::vector<SetItem> onMatchItems;
 	onMatchItems.emplace_back(SetActionType::PROPERTY, "n", "val", nullptr);
 
-	int64_t labelId = dm->getOrCreateLabelId("NullExpr");
+	int64_t labelId = dm->getOrCreateTokenId("NullExpr");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -363,7 +363,7 @@ TEST_F(MergeNodeOperatorTest, ApplyUpdates_NullExpression_Ignored) {
 
 TEST_F(MergeNodeOperatorTest, EmptyLabel_FullScan) {
 	// MERGE (n {name: "X"}) - no label, does full scan
-	int64_t labelId = dm->getOrCreateLabelId("AnyLabel");
+	int64_t labelId = dm->getOrCreateTokenId("AnyLabel");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 	std::unordered_map<std::string, PropertyValue> props;
@@ -408,7 +408,7 @@ TEST_F(MergeNodeOperatorTest, EmptyMatchProps_CreateWithNoProperties) {
 
 TEST_F(MergeNodeOperatorTest, PropertyKeyExists_ValueMismatch) {
 	// Covers the it->second != v branch (line 119) where key exists but value differs
-	int64_t labelId = dm->getOrCreateLabelId("ValMis");
+	int64_t labelId = dm->getOrCreateTokenId("ValMis");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 	std::unordered_map<std::string, PropertyValue> props;
@@ -461,7 +461,7 @@ TEST_F(MergeNodeOperatorTest, OnCreate_MultipleProperties) {
 
 TEST_F(MergeNodeOperatorTest, OnMatch_MultipleProperties) {
 	// Tests ON MATCH SET with multiple property updates
-	int64_t labelId = dm->getOrCreateLabelId("MultiMatch");
+	int64_t labelId = dm->getOrCreateTokenId("MultiMatch");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -550,7 +550,7 @@ TEST_F(MergeNodeOperatorTest, CreateNode_EmptyMatchProps) {
 TEST_F(MergeNodeOperatorTest, MultipleMatchProps_PropertyMismatchOnSecondKey) {
 	// Tests property matching where first key matches but second doesn't
 	// Covers the inner loop break at line 120-122
-	int64_t labelId = dm->getOrCreateLabelId("MultiKey");
+	int64_t labelId = dm->getOrCreateTokenId("MultiKey");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 	std::unordered_map<std::string, PropertyValue> props;
@@ -600,7 +600,7 @@ TEST_F(MergeNodeOperatorTest, OnCreate_EmptyItems) {
 TEST_F(MergeNodeOperatorTest, OnMatch_EmptyItems) {
 	// Tests ON MATCH with empty items list
 	// Covers the items.empty() early return in applyUpdates (line 156)
-	int64_t labelId = dm->getOrCreateLabelId("EmptyOM");
+	int64_t labelId = dm->getOrCreateTokenId("EmptyOM");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -641,7 +641,7 @@ TEST_F(MergeNodeOperatorTest, WithLabelIndex_MatchExistingNode) {
 	// Covers line 93: the label index path (hasLabelIndex returns true)
 	im->createIndex("", "node", "LblIdx", "");
 
-	int64_t labelId = dm->getOrCreateLabelId("LblIdx");
+	int64_t labelId = dm->getOrCreateTokenId("LblIdx");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -662,7 +662,7 @@ TEST_F(MergeNodeOperatorTest, WithPropertyIndex_MatchExistingNode) {
 	// Covers line 85-89: the property index path (hasPropertyIndex returns true)
 	im->createIndex("", "node", "PropIdx", "name");
 
-	int64_t labelId = dm->getOrCreateLabelId("PropIdx");
+	int64_t labelId = dm->getOrCreateTokenId("PropIdx");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 	std::unordered_map<std::string, PropertyValue> props;

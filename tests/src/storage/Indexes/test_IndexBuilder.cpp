@@ -84,28 +84,28 @@ protected:
 	// Helper to populate DB with mixed data
 	void populateDatabase() const {
 		// Active Nodes - use addNodeWithProperties to externalize properties
-		graph::Node n1(1, dataManager->getOrCreateLabelId("Person"));
+		graph::Node n1(1, dataManager->getOrCreateTokenId("Person"));
 		addNodeWithProperties(n1, {{"name", std::string("Alice")}, {"age", graph::PropertyValue(30)}});
 
-		graph::Node n2(2, dataManager->getOrCreateLabelId("Person"));
+		graph::Node n2(2, dataManager->getOrCreateTokenId("Person"));
 		addNodeWithProperties(n2, {{"name", std::string("Bob")}, {"age", graph::PropertyValue(25)}});
 
-		graph::Node n3(3, dataManager->getOrCreateLabelId("Company"));
+		graph::Node n3(3, dataManager->getOrCreateTokenId("Company"));
 		addNodeWithProperties(n3, {{"name", std::string("ZYXDB")}});
 
 		// Deleted Node (ID 4)
-		graph::Node n4(4, dataManager->getOrCreateLabelId("Person"));
+		graph::Node n4(4, dataManager->getOrCreateTokenId("Person"));
 		addNodeWithProperties(n4, {{"name", std::string("Ghost")}});
 		dataManager->deleteNode(n4);
 
 		// Padding (ID 5-20) to prevent tail reclamation
 		for (int i = 5; i <= 20; ++i) {
-			graph::Node n(i, dataManager->getOrCreateLabelId("Extra"));
+			graph::Node n(i, dataManager->getOrCreateTokenId("Extra"));
 			dataManager->addNode(n);
 		}
 
 		// Active Edge
-		graph::Edge e1(10, 1, 3, dataManager->getOrCreateLabelId("WORKS_AT"));
+		graph::Edge e1(10, 1, 3, dataManager->getOrCreateTokenId("WORKS_AT"));
 		addEdgeWithProperties(e1, {{"since", graph::PropertyValue(2020)}});
 
 		// Flush to ensure data persistence logic runs (update headers etc)
@@ -232,18 +232,18 @@ TEST_F(IndexBuilderTest, BuildEdgeLabelIndex) {
 	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
 
 	// 2. Execute Build
-	// This calls buildEdgeLabelIndex -> processEdgeBatch
-	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+	// This calls buildEdgeTypeIndex -> processEdgeBatch
+	EXPECT_TRUE(indexBuilder->buildEdgeTypeIndex());
 
 	// 3. Verify Results
-	auto labelResults = indexManager->findEdgeIdsByLabel("WORKS_AT");
+	auto labelResults = indexManager->findEdgeIdsByType("WORKS_AT");
 
 	// Should find Edge(10)
 	ASSERT_EQ(labelResults.size(), 1UL);
 	EXPECT_EQ(labelResults[0], 10);
 
 	// Verify non-existent label
-	auto missingResults = indexManager->findEdgeIdsByLabel("NON_EXISTENT");
+	auto missingResults = indexManager->findEdgeIdsByType("NON_EXISTENT");
 	EXPECT_TRUE(missingResults.empty());
 }
 
@@ -254,7 +254,7 @@ TEST_F(IndexBuilderTest, BuildNodeLabelIndex_LargeBatch) {
 	// - One partial batch processed after the loop
 
 	constexpr int NODE_COUNT = 1050;
-	int64_t bulkLabelId = dataManager->getOrCreateLabelId("BulkNode");
+	int64_t bulkLabelId = dataManager->getOrCreateTokenId("BulkNode");
 
 	// Use raw pointer or reserve to speed up vector if needed,
 	// but here we just loop addNode which is fine for 1500 items.
@@ -285,7 +285,7 @@ TEST_F(IndexBuilderTest, BuildNodeLabelIndex_LargeBatch) {
 TEST_F(IndexBuilderTest, BuildEdgeLabelIndex_LargeBatch) {
 	// 1. Create > 1000 edges to trigger batch processing logic for edges
 	constexpr int EDGE_COUNT = 1050;
-	int64_t bulkLabelId = dataManager->getOrCreateLabelId("BulkEdge");
+	int64_t bulkLabelId = dataManager->getOrCreateTokenId("BulkEdge");
 
 	// We need at least two nodes to connect
 	graph::Node n1(1, 0);
@@ -304,17 +304,17 @@ TEST_F(IndexBuilderTest, BuildEdgeLabelIndex_LargeBatch) {
 	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
 
 	// 3. Build Index
-	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+	EXPECT_TRUE(indexBuilder->buildEdgeTypeIndex());
 
 	// 4. Verify Results
-	auto results = indexManager->findEdgeIdsByLabel("BulkEdge");
+	auto results = indexManager->findEdgeIdsByType("BulkEdge");
 	EXPECT_EQ(results.size(), static_cast<size_t>(EDGE_COUNT));
 }
 
 TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
 	// 1. Create > 1000 nodes with property
 	constexpr int NODE_COUNT = 1050;
-	int64_t lbl = dataManager->getOrCreateLabelId("PropNode");
+	int64_t lbl = dataManager->getOrCreateTokenId("PropNode");
 
 	for (int i = 0; i < NODE_COUNT; ++i) {
 		graph::Node n(0, lbl);
@@ -345,7 +345,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
 
 TEST_F(IndexBuilderTest, ProcessBatch_SkipInactive) {
 	// 1. Create a node and delete it immediately
-	int64_t lbl = dataManager->getOrCreateLabelId("SkipMe");
+	int64_t lbl = dataManager->getOrCreateTokenId("SkipMe");
 	graph::Node n(1, lbl);
 	dataManager->addNode(n);
 	dataManager->deleteNode(n); // Mark inactive
@@ -376,7 +376,7 @@ TEST_F(IndexBuilderTest, ProcessBatch_SkipNoLabel) {
 
 TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
 	// Cover the branch `if (propertyKey.empty())` -> else
-	graph::Node n(1, dataManager->getOrCreateLabelId("A"));
+	graph::Node n(1, dataManager->getOrCreateTokenId("A"));
 	dataManager->addNode(n);
 	dataManager->addNodeProperties(1, {{"target", graph::PropertyValue(100)}, {"ignore", graph::PropertyValue(200)}});
 	fileStorage->flush();
@@ -395,7 +395,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_SpecificKey) {
 TEST_F(IndexBuilderTest, ProcessNodeBatch_InactiveNode) {
 	// Cover branch: if (edge.getId() == 0 || !edge.isActive())
 	// For nodes: same logic exists in processNodeBatch
-	int64_t lbl = dataManager->getOrCreateLabelId("InactiveNode");
+	int64_t lbl = dataManager->getOrCreateTokenId("InactiveNode");
 	graph::Node n(100, lbl);
 	dataManager->addNode(n);
 	dataManager->deleteNode(n); // Mark inactive
@@ -412,7 +412,7 @@ TEST_F(IndexBuilderTest, ProcessNodeBatch_InactiveNode) {
 
 TEST_F(IndexBuilderTest, ProcessEdgeBatch_InactiveEdge) {
 	// Cover branch: if (edge.getId() == 0 || !edge.isActive())
-	int64_t edgeLbl = dataManager->getOrCreateLabelId("InactiveEdge");
+	int64_t edgeLbl = dataManager->getOrCreateTokenId("InactiveEdge");
 
 	// Create source and target nodes
 	graph::Node n1(1, 0);
@@ -428,10 +428,10 @@ TEST_F(IndexBuilderTest, ProcessEdgeBatch_InactiveEdge) {
 	fileStorage->flush();
 
 	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
-	(void) indexBuilder->buildEdgeLabelIndex();
+	(void) indexBuilder->buildEdgeTypeIndex();
 
 	// Should NOT find inactive edge
-	auto res = indexManager->findEdgeIdsByLabel("InactiveEdge");
+	auto res = indexManager->findEdgeIdsByType("InactiveEdge");
 	EXPECT_TRUE(res.empty());
 }
 
@@ -440,7 +440,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_AllProperties) {
 	// This requires calling with an empty property key, but the API takes a specific key
 	// Let's test by creating multiple properties and indexing them one by one
 
-	int64_t lbl = dataManager->getOrCreateLabelId("MultiProp");
+	int64_t lbl = dataManager->getOrCreateTokenId("MultiProp");
 	graph::Node n(1, lbl);
 	dataManager->addNode(n);
 	dataManager->addNodeProperties(1, {{"prop1", graph::PropertyValue(100)},
@@ -472,7 +472,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_AllProperties) {
 
 TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_AllProperties) {
 	// Cover branch for edges: if (propertyKey.empty())
-	int64_t edgeLbl = dataManager->getOrCreateLabelId("MultiPropEdge");
+	int64_t edgeLbl = dataManager->getOrCreateTokenId("MultiPropEdge");
 
 	// Create source and target nodes
 	graph::Node n1(1, 0);
@@ -507,7 +507,7 @@ TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_AllProperties) {
 
 TEST_F(IndexBuilderTest, BuildNodePropertyIndex_PropertyNotFound) {
 	// Cover branch: if (auto it = properties.find(propertyKey); it != properties.end()) -> False
-	int64_t lbl = dataManager->getOrCreateLabelId("NoProp");
+	int64_t lbl = dataManager->getOrCreateTokenId("NoProp");
 	graph::Node n(1, lbl);
 	dataManager->addNode(n);
 	dataManager->addNodeProperties(1, {{"has_prop", graph::PropertyValue(100)}});
@@ -527,7 +527,7 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_PropertyNotFound) {
 
 TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_PropertyNotFound) {
 	// Cover branch for edges: property not found
-	int64_t edgeLbl = dataManager->getOrCreateLabelId("NoEdgeProp");
+	int64_t edgeLbl = dataManager->getOrCreateTokenId("NoEdgeProp");
 
 	graph::Node n1(1, 0);
 	graph::Node n2(2, 0);
@@ -568,7 +568,7 @@ TEST_F(IndexBuilderTest, BuildEdgeLabelIndex_EmptyDatabase) {
 	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
 
 	// Should succeed even with no edges
-	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+	EXPECT_TRUE(indexBuilder->buildEdgeTypeIndex());
 }
 
 TEST_F(IndexBuilderTest, ProcessNodeBatch_NodeWithZeroLabelId) {
@@ -588,7 +588,7 @@ TEST_F(IndexBuilderTest, ProcessNodeBatch_NodeWithZeroLabelId) {
 }
 
 TEST_F(IndexBuilderTest, ProcessEdgeBatch_EdgeWithZeroLabelId) {
-	// Cover branch: if (edge.getLabelId() != 0) -> False
+	// Cover branch: if (edge.getTypeId() != 0) -> False
 	graph::Node n1(1, 0);
 	graph::Node n2(2, 0);
 	dataManager->addNode(n1);
@@ -601,7 +601,7 @@ TEST_F(IndexBuilderTest, ProcessEdgeBatch_EdgeWithZeroLabelId) {
 	fileStorage->flush();
 
 	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
-	(void) indexBuilder->buildEdgeLabelIndex();
+	(void) indexBuilder->buildEdgeTypeIndex();
 
 	// Edge with labelId=0 should not be added to label index
 	// (This is hard to verify directly other than no crash)
@@ -610,18 +610,18 @@ TEST_F(IndexBuilderTest, ProcessEdgeBatch_EdgeWithZeroLabelId) {
 
 TEST_F(IndexBuilderTest, ProcessBatch_NodeWithEmptyLabel) {
 	// Cover branch: if (!labelStr.empty()) -> False
-	// This tests when resolveLabel returns an empty string
+	// This tests when resolveTokenName returns an empty string
 	// We need to create a node with a label that won't resolve properly
 
 	// First create a node with a valid label
-	int64_t labelId = dataManager->getOrCreateLabelId("TestLabel");
+	int64_t labelId = dataManager->getOrCreateTokenId("TestLabel");
 	graph::Node n(1, labelId);
 	dataManager->addNode(n);
 
 	fileStorage->flush();
 
 	// The label should resolve normally, so this tests the happy path
-	// Testing the empty case would require manipulating the LabelTokenRegistry
+	// Testing the empty case would require manipulating the TokenRegistry
 	// which is difficult to do in a unit test
 
 	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
@@ -636,7 +636,7 @@ TEST_F(IndexBuilderTest, BuildNodeLabelIndex_MultipleSegments) {
 	// This helps cover the loop in getNodeIdRanges
 
 	constexpr int NODE_COUNT = 1050; // Should span multiple segments
-	int64_t lbl = dataManager->getOrCreateLabelId("MultiSeg");
+	int64_t lbl = dataManager->getOrCreateTokenId("MultiSeg");
 
 	for (int i = 0; i < NODE_COUNT; ++i) {
 		graph::Node n(0, lbl);
@@ -655,7 +655,7 @@ TEST_F(IndexBuilderTest, BuildNodeLabelIndex_MultipleSegments) {
 TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_LargeBatch) {
 	// Cover batch processing for edge property index
 	constexpr int EDGE_COUNT = 1050;
-	int64_t edgeLbl = dataManager->getOrCreateLabelId("BulkEdgeProp");
+	int64_t edgeLbl = dataManager->getOrCreateTokenId("BulkEdgeProp");
 
 	// Create source and target nodes
 	graph::Node n1(1, 0);
@@ -687,7 +687,7 @@ TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_LargeBatch) {
 
 TEST_F(IndexBuilderTest, BuildIndex_WithDeletedAndActiveNodes) {
 	// Test mixed scenario with both active and deleted nodes
-	int64_t lbl = dataManager->getOrCreateLabelId("Mixed");
+	int64_t lbl = dataManager->getOrCreateTokenId("Mixed");
 
 	// Create active nodes
 	for (int i = 1; i <= 10; ++i) {
@@ -756,7 +756,7 @@ TEST_F(IndexBuilderTest, DestructorCoverage) {
 // then delete WITHOUT flushing. getNode() returns id=0 for dirty-deleted entities.
 // This covers the getId()==0 True branch in processNodeBatch (line 163).
 TEST_F(IndexBuilderTest, ProcessNodeBatch_DeletedInMemory) {
-	int64_t lbl = dataManager->getOrCreateLabelId("MemDeleteTest");
+	int64_t lbl = dataManager->getOrCreateTokenId("MemDeleteTest");
 
 	// Create 10 nodes
 	std::vector<int64_t> nodeIds;
@@ -790,7 +790,7 @@ TEST_F(IndexBuilderTest, ProcessNodeBatch_DeletedInMemory) {
 // Same approach as ProcessNodeBatch_DeletedInMemory: flush first, then delete without flushing.
 // This covers the getId()==0 True branch in processEdgeBatch (line 191).
 TEST_F(IndexBuilderTest, ProcessEdgeBatch_DeletedInMemory) {
-	int64_t edgeLbl = dataManager->getOrCreateLabelId("EdgeMemDeleteTest");
+	int64_t edgeLbl = dataManager->getOrCreateTokenId("EdgeMemDeleteTest");
 
 	// Create source and target nodes
 	graph::Node n1(1, 0);
@@ -818,10 +818,10 @@ TEST_F(IndexBuilderTest, ProcessEdgeBatch_DeletedInMemory) {
 
 	// Build edge label index
 	indexManager->getEdgeIndexManager()->getLabelIndex()->createIndex();
-	EXPECT_TRUE(indexBuilder->buildEdgeLabelIndex());
+	EXPECT_TRUE(indexBuilder->buildEdgeTypeIndex());
 
 	// Only 6 active edges should be indexed
-	auto results = indexManager->findEdgeIdsByLabel("EdgeMemDeleteTest");
+	auto results = indexManager->findEdgeIdsByType("EdgeMemDeleteTest");
 	EXPECT_EQ(results.size(), 6UL);
 }
 

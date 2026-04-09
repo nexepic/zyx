@@ -1,5 +1,5 @@
 /**
- * @file LabelTokenRegistry.cpp
+ * @file TokenRegistry.cpp
  * @author Nexepic
  * @date 2026/1/13
  *
@@ -18,7 +18,7 @@
  * limitations under the License.
  **/
 
-#include "graph/storage/dictionaries/LabelTokenRegistry.hpp"
+#include "graph/storage/dictionaries/TokenRegistry.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -26,9 +26,9 @@
 
 namespace graph::storage {
 
-	LabelTokenRegistry::LabelTokenRegistry(std::shared_ptr<DataManager> dataManager,
-										   std::shared_ptr<state::SystemStateManager> stateManager,
-										   size_t cacheSize) :
+	TokenRegistry::TokenRegistry(std::shared_ptr<DataManager> dataManager,
+								 std::shared_ptr<state::SystemStateManager> stateManager,
+								 size_t cacheSize) :
 		dataManager_(std::move(dataManager)), stateManager_(std::move(stateManager)), stringToIdCache_(cacheSize),
 		idToStringCache_(cacheSize) {
 
@@ -38,7 +38,7 @@ namespace graph::storage {
 		initialize();
 	}
 
-	void LabelTokenRegistry::initialize() {
+	void TokenRegistry::initialize() {
 		rootIndexId_ = stateManager_->get<int64_t>(STORAGE_KEY, "root_id", 0);
 
 		if (rootIndexId_ == 0) {
@@ -47,76 +47,76 @@ namespace graph::storage {
 		}
 	}
 
-	void LabelTokenRegistry::saveState() const { stateManager_->set<int64_t>(STORAGE_KEY, "root_id", rootIndexId_); }
+	void TokenRegistry::saveState() const { stateManager_->set<int64_t>(STORAGE_KEY, "root_id", rootIndexId_); }
 
-	int64_t LabelTokenRegistry::getOrCreateLabelId(const std::string &label) {
-		if (label.empty())
-			return NULL_LABEL_ID;
+	int64_t TokenRegistry::getOrCreateTokenId(const std::string &name) {
+		if (name.empty())
+			return NULL_TOKEN_ID;
 
 		// 1. Check Cache
 		{
 			// Exclusive lock required for LRU get() as it modifies list order
 			std::lock_guard<std::mutex> lock(cacheMutex_);
-			if (const int64_t cachedId = stringToIdCache_.get(label); cachedId != 0) {
+			if (const int64_t cachedId = stringToIdCache_.get(name); cachedId != 0) {
 				return cachedId;
 			}
 		}
 
 		// 2. Check Index (Disk)
-		std::vector<int64_t> ids = indexTree_->find(rootIndexId_, PropertyValue(label));
+		std::vector<int64_t> ids = indexTree_->find(rootIndexId_, PropertyValue(name));
 		if (!ids.empty()) {
-			addToCache(label, ids[0]);
+			addToCache(name, ids[0]);
 			return ids[0];
 		}
 
 		// 3. Create New
 		// Store String in Blob
-		const auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, label);
+		const auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, name);
 		const int64_t newId = blobs[0].getId();
 
 		// Map String -> ID in Index
 
-		if (const int64_t newRoot = indexTree_->insert(rootIndexId_, PropertyValue(label), newId);
+		if (const int64_t newRoot = indexTree_->insert(rootIndexId_, PropertyValue(name), newId);
 			newRoot != rootIndexId_) {
 			rootIndexId_ = newRoot;
 			saveState();
 		}
 
-		addToCache(label, newId);
+		addToCache(name, newId);
 		return newId;
 	}
 
-	std::string LabelTokenRegistry::getLabelString(int64_t labelId) {
-		if (labelId == NULL_LABEL_ID)
+	std::string TokenRegistry::resolveTokenName(int64_t tokenId) {
+		if (tokenId == NULL_TOKEN_ID)
 			return "";
 
 		// 1. Check Cache
 		{
 			std::lock_guard<std::mutex> lock(cacheMutex_);
-			std::string cachedLabel = idToStringCache_.get(labelId);
-			if (!cachedLabel.empty()) {
-				return cachedLabel;
+			std::string cachedName = idToStringCache_.get(tokenId);
+			if (!cachedName.empty()) {
+				return cachedName;
 			}
 		}
 
 		// 2. Load from Blob (Disk)
 		try {
-			std::string label = dataManager_->getBlobManager()->readBlobChain(labelId);
+			std::string name = dataManager_->getBlobManager()->readBlobChain(tokenId);
 
-			if (!label.empty()) {
-				addToCache(label, labelId);
+			if (!name.empty()) {
+				addToCache(name, tokenId);
 			}
-			return label;
+			return name;
 		} catch (...) {
 			return ""; // Fail gracefully
 		}
 	}
 
-	void LabelTokenRegistry::addToCache(const std::string &label, int64_t id) {
+	void TokenRegistry::addToCache(const std::string &name, int64_t id) {
 		std::lock_guard<std::mutex> lock(cacheMutex_);
 		// LRUCache handles eviction automatically
-		stringToIdCache_.put(label, id);
-		idToStringCache_.put(id, label);
+		stringToIdCache_.put(name, id);
+		idToStringCache_.put(id, name);
 	}
 
 } // namespace graph::storage

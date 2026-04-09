@@ -32,7 +32,7 @@ TEST_F(DataManagerTest, DirtyTracking) {
 	simulateSave();
 	EXPECT_FALSE(dataManager->hasUnsavedChanges());
 
-	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedDirtyNode"));
+	node.setLabelId(dataManager->getOrCreateTokenId("UpdatedDirtyNode"));
 	dataManager->updateNode(node);
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 
@@ -81,7 +81,7 @@ TEST_F(DataManagerTest, GetDirtyEntityInfosAllTypes) {
 	dataManager->addNode(node2);
 
 	// Modify node2 (even though it's in ADDED state, update will track it)
-	node2.setLabelId(dataManager->getOrCreateLabelId("ModifiedLabel"));
+	node2.setLabelId(dataManager->getOrCreateTokenId("ModifiedLabel"));
 	dataManager->updateNode(node2);
 
 	// Get all dirty types
@@ -225,7 +225,7 @@ TEST_F(DataManagerTest, UpdateNodeStandardFlowNotInDirtyTracking) {
 	// 3. Now the entity is no longer in dirty tracking (not ADDED).
 	// Updating it should take the standard update path (L209-214).
 	observer->reset();
-	node.setLabelId(dataManager->getOrCreateLabelId("UpdatedPerson"));
+	node.setLabelId(dataManager->getOrCreateTokenId("UpdatedPerson"));
 	dataManager->updateNode(node);
 
 	// Verify the update notification was fired
@@ -248,7 +248,7 @@ TEST_F(DataManagerTest, UpdateEdgeStandardFlowNotInDirtyTracking) {
 
 	// Update edge - should take standard update path
 	observer->reset();
-	edge.setLabelId(dataManager->getOrCreateLabelId("LIKES"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("LIKES"));
 	dataManager->updateEdge(edge);
 
 	ASSERT_EQ(1UL, observer->updatedEdges.size());
@@ -269,7 +269,7 @@ TEST_F(DataManagerTest, GetDirtyEdgeInfosAllThreeTypes) {
 	auto edge2 = createTestEdge(dataManager, node1.getId(), node2.getId(), "E2");
 	dataManager->addEdge(edge2);
 	simulateSave();
-	edge2.setLabelId(dataManager->getOrCreateLabelId("E2_mod"));
+	edge2.setTypeId(dataManager->getOrCreateTokenId("E2_mod"));
 	dataManager->updateEdge(edge2);
 
 	// Create and delete a third edge (DELETED)

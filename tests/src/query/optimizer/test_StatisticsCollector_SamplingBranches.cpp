@@ -55,7 +55,7 @@ protected:
 
 TEST_F(StatisticsCollectorSamplingBranchesTest, ReservoirSamplingCoversReplacementAndSkipBranches) {
 	const int64_t totalNodes = StatisticsCollector::MAX_SAMPLE_SIZE + 2000;
-	const int64_t labelId = dataManager_->getOrCreateLabelId("ReservoirBranchLabel");
+	const int64_t labelId = dataManager_->getOrCreateTokenId("ReservoirBranchLabel");
 
 	std::vector<Node> nodes;
 	nodes.reserve(static_cast<size_t>(totalNodes));

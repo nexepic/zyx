@@ -71,7 +71,7 @@ TEST_F(GraphProjectionTest, BuildEmptyGraph) {
 }
 
 TEST_F(GraphProjectionTest, BuildSingleNode) {
-	graph::Node n(0, dataManager->getOrCreateLabelId("Person"));
+	graph::Node n(0, dataManager->getOrCreateTokenId("Person"));
 	dataManager->addNode(n);
 	flushAndReopen();
 
@@ -82,12 +82,12 @@ TEST_F(GraphProjectionTest, BuildSingleNode) {
 }
 
 TEST_F(GraphProjectionTest, BuildWithEdges) {
-	graph::Node n1(0, dataManager->getOrCreateLabelId("Person"));
-	graph::Node n2(0, dataManager->getOrCreateLabelId("Person"));
+	graph::Node n1(0, dataManager->getOrCreateTokenId("Person"));
+	graph::Node n2(0, dataManager->getOrCreateTokenId("Person"));
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("KNOWS"));
+	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("KNOWS"));
 	dataManager->addEdge(e);
 	flushAndReopen();
 
@@ -106,15 +106,15 @@ TEST_F(GraphProjectionTest, BuildWithEdges) {
 }
 
 TEST_F(GraphProjectionTest, BuildWithNodeLabelFilter) {
-	graph::Node n1(0, dataManager->getOrCreateLabelId("Person"));
-	graph::Node n2(0, dataManager->getOrCreateLabelId("City"));
-	graph::Node n3(0, dataManager->getOrCreateLabelId("Person"));
+	graph::Node n1(0, dataManager->getOrCreateTokenId("Person"));
+	graph::Node n2(0, dataManager->getOrCreateTokenId("City"));
+	graph::Node n3(0, dataManager->getOrCreateTokenId("Person"));
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 	dataManager->addNode(n3);
 
-	graph::Edge e1(0, n1.getId(), n3.getId(), dataManager->getOrCreateLabelId("KNOWS"));
-	graph::Edge e2(0, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("LIVES_IN"));
+	graph::Edge e1(0, n1.getId(), n3.getId(), dataManager->getOrCreateTokenId("KNOWS"));
+	graph::Edge e2(0, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("LIVES_IN"));
 	dataManager->addEdge(e1);
 	dataManager->addEdge(e2);
 	flushAndReopen();
@@ -131,13 +131,13 @@ TEST_F(GraphProjectionTest, BuildWithNodeLabelFilter) {
 }
 
 TEST_F(GraphProjectionTest, BuildWithEdgeLabelFilter) {
-	graph::Node n1(0, dataManager->getOrCreateLabelId("Person"));
-	graph::Node n2(0, dataManager->getOrCreateLabelId("Person"));
+	graph::Node n1(0, dataManager->getOrCreateTokenId("Person"));
+	graph::Node n2(0, dataManager->getOrCreateTokenId("Person"));
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	graph::Edge e1(0, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("KNOWS"));
-	graph::Edge e2(0, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("WORKS_WITH"));
+	graph::Edge e1(0, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("KNOWS"));
+	graph::Edge e2(0, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("WORKS_WITH"));
 	dataManager->addEdge(e1);
 	dataManager->addEdge(e2);
 	flushAndReopen();
@@ -148,12 +148,12 @@ TEST_F(GraphProjectionTest, BuildWithEdgeLabelFilter) {
 }
 
 TEST_F(GraphProjectionTest, BuildWithWeightProperty) {
-	graph::Node n1(0, dataManager->getOrCreateLabelId("City"));
-	graph::Node n2(0, dataManager->getOrCreateLabelId("City"));
+	graph::Node n1(0, dataManager->getOrCreateTokenId("City"));
+	graph::Node n2(0, dataManager->getOrCreateTokenId("City"));
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("ROAD"));
+	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("ROAD"));
 	dataManager->addEdge(e);
 	dataManager->addEdgeProperties(e.getId(), {{"distance", graph::PropertyValue(42.5)}});
 	flushAndReopen();
@@ -167,12 +167,12 @@ TEST_F(GraphProjectionTest, BuildWithWeightProperty) {
 }
 
 TEST_F(GraphProjectionTest, BuildWithMissingWeightPropertyFallsBackToOne) {
-	graph::Node n1(0, dataManager->getOrCreateLabelId("City"));
-	graph::Node n2(0, dataManager->getOrCreateLabelId("City"));
+	graph::Node n1(0, dataManager->getOrCreateTokenId("City"));
+	graph::Node n2(0, dataManager->getOrCreateTokenId("City"));
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("ROAD"));
+	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("ROAD"));
 	dataManager->addEdge(e);
 	// No 'distance' property set
 	flushAndReopen();
@@ -194,9 +194,9 @@ TEST_F(GraphProjectionTest, GetNeighborsNonExistentNode) {
 }
 
 TEST_F(GraphProjectionTest, BuildWithDeletedNodes) {
-	graph::Node n1(0, dataManager->getOrCreateLabelId("Person"));
-	graph::Node n2(0, dataManager->getOrCreateLabelId("Person"));
-	graph::Node n3(0, dataManager->getOrCreateLabelId("Person"));
+	graph::Node n1(0, dataManager->getOrCreateTokenId("Person"));
+	graph::Node n2(0, dataManager->getOrCreateTokenId("Person"));
+	graph::Node n3(0, dataManager->getOrCreateTokenId("Person"));
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 	dataManager->addNode(n3);
@@ -213,12 +213,12 @@ TEST_F(GraphProjectionTest, BuildWithDeletedNodes) {
 }
 
 TEST_F(GraphProjectionTest, BuildWithIntegerWeightProperty) {
-	graph::Node n1(0, dataManager->getOrCreateLabelId("City"));
-	graph::Node n2(0, dataManager->getOrCreateLabelId("City"));
+	graph::Node n1(0, dataManager->getOrCreateTokenId("City"));
+	graph::Node n2(0, dataManager->getOrCreateTokenId("City"));
 	dataManager->addNode(n1);
 	dataManager->addNode(n2);
 
-	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateLabelId("ROAD"));
+	graph::Edge e(0, n1.getId(), n2.getId(), dataManager->getOrCreateTokenId("ROAD"));
 	dataManager->addEdge(e);
 	// Use INTEGER weight instead of DOUBLE (covers INTEGER branch in weight resolution)
 	dataManager->addEdgeProperties(e.getId(), {{"hops", graph::PropertyValue(static_cast<int64_t>(7))}});

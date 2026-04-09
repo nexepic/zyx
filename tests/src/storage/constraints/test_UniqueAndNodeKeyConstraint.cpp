@@ -57,7 +57,7 @@ protected:
 	Node createNode(const std::string &label,
 		const std::unordered_map<std::string, PropertyValue> &props) const {
 		Node node;
-		node.setLabelId(dm->getOrCreateLabelId(label));
+		node.setLabelId(dm->getOrCreateTokenId(label));
 		dm->addNode(node);
 		dm->addNodeProperties(node.getId(), props);
 		return node;

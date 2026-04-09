@@ -113,7 +113,7 @@ TEST_F(QueryPlannerTest, ScanOp_WithKeyAndPropertyIndex) {
 	// Branch: line 80 config.type != PROPERTY_SCAN -> false (index used)
 
 	// First create a node with label and property so the index has something
-	graph::Node node(0, dataManager->getOrCreateLabelId("Indexed"));
+	graph::Node node(0, dataManager->getOrCreateTokenId("Indexed"));
 	dataManager->addNode(node);
 	dataManager->addNodeProperties(node.getId(), {{"prop", graph::PropertyValue("val")}});
 
@@ -137,8 +137,8 @@ TEST_F(QueryPlannerTest, ScanOp_WithKeyAndPropertyIndex) {
 }
 
 TEST_F(QueryPlannerTest, ScanOp_MultiLabelResidualFilterExecutesPredicateBranches) {
-	const auto labelA = dataManager->getOrCreateLabelId("A");
-	const auto labelB = dataManager->getOrCreateLabelId("B");
+	const auto labelA = dataManager->getOrCreateTokenId("A");
+	const auto labelB = dataManager->getOrCreateTokenId("B");
 
 	graph::Node onlyA(1, labelA);
 	graph::Node both(2, labelA);
@@ -165,7 +165,7 @@ TEST_F(QueryPlannerTest, ScanOp_MultiLabelResidualFilterExecutesPredicateBranche
 }
 
 TEST_F(QueryPlannerTest, ScanOp_ResidualFilterHandlesMissingProperty) {
-	const auto labelId = dataManager->getOrCreateLabelId("User");
+	const auto labelId = dataManager->getOrCreateTokenId("User");
 	graph::Node n1(1, labelId);
 	graph::Node n2(2, labelId);
 	dataManager->addNode(n1);
@@ -424,8 +424,8 @@ TEST_F(QueryPlannerTest, ShowConstraintsOp) {
 
 TEST_F(QueryPlannerTest, ScanOp_MultiLabel) {
 	// Create nodes with two labels
-	int64_t lid1 = dataManager->getOrCreateLabelId("A");
-	int64_t lid2 = dataManager->getOrCreateLabelId("B");
+	int64_t lid1 = dataManager->getOrCreateTokenId("A");
+	int64_t lid2 = dataManager->getOrCreateTokenId("B");
 	graph::Node node(0, lid1);
 	node.addLabelId(lid2);
 	dataManager->addNode(node);

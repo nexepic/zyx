@@ -22,8 +22,8 @@
 
 class CypherBasicTest : public QueryTestFixture {
 protected:
-	[[nodiscard]] std::string resolveLabel(int64_t labelId) const {
-		return db->getStorage()->getDataManager()->resolveLabel(labelId);
+	[[nodiscard]] std::string resolveTokenName(int64_t labelId) const {
+		return db->getStorage()->getDataManager()->resolveTokenName(labelId);
 	}
 };
 
@@ -33,7 +33,7 @@ TEST_F(CypherBasicTest, CreateAndMatchNode) {
 	auto res1 = execute("CREATE (n:User {name: 'Alice', age: 30}) RETURN n");
 	ASSERT_EQ(res1.rowCount(), 1UL);
 	const auto &node1 = res1.getRows()[0].at("n").asNode();
-	EXPECT_EQ(resolveLabel(node1.getLabelId()), "User");
+	EXPECT_EQ(resolveTokenName(node1.getLabelId()), "User");
 	EXPECT_EQ(node1.getProperties().at("name").toString(), "Alice");
 
 	auto res2 = execute("MATCH (n:User) RETURN n");
@@ -48,7 +48,7 @@ TEST_F(CypherBasicTest, CreateAndMatchChain) {
 	EXPECT_TRUE(row.at("n").isNode());
 	EXPECT_TRUE(row.at("m").isNode());
 	EXPECT_TRUE(row.at("r").isEdge());
-	EXPECT_EQ(resolveLabel(row.at("r").asEdge().getLabelId()), "KNOWS");
+	EXPECT_EQ(resolveTokenName(row.at("r").asEdge().getTypeId()), "KNOWS");
 }
 
 // --- Updates (SET/REMOVE/DELETE) ---
@@ -135,7 +135,7 @@ TEST_F(CypherBasicTest, FilterTraversalTarget) {
 	(void) execute("CREATE (a:Node)-[:LINK]->(c:Other {id: 2})");
 	auto res = execute("MATCH (n:Node)-[r]->(t:Target) RETURN t");
 	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(resolveLabel(res.getRows()[0].at("t").asNode().getLabelId()), "Target");
+	EXPECT_EQ(resolveTokenName(res.getRows()[0].at("t").asNode().getLabelId()), "Target");
 }
 
 // --- MERGE ---

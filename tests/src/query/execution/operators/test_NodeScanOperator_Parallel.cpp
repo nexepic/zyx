@@ -59,7 +59,7 @@ protected:
 	std::vector<Node> addNodes(const std::string &label, size_t count) const {
 		std::vector<Node> nodes;
 		nodes.reserve(count);
-		const int64_t labelId = dm->getOrCreateLabelId(label);
+		const int64_t labelId = dm->getOrCreateTokenId(label);
 		for (size_t i = 0; i < count; ++i) {
 			Node n;
 			n.setLabelId(labelId);

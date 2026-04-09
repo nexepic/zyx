@@ -25,12 +25,12 @@ namespace graph::query::execution::operators {
 void TraversalOperator::open() {
 	if (child_) child_->open();
 
-	// Resolve Edge Label ID (Optimization)
-	edgeLabelId_ = 0;
-	if (!edgeLabel_.empty()) {
+	// Resolve Edge Type ID (Optimization)
+	edgeTypeId_ = 0;
+	if (!edgeType_.empty()) {
 		// Use getOrCreate or resolve. Since we are filtering, getOrCreate is fine.
 		// If it creates a new ID, it won't match existing edges anyway.
-		edgeLabelId_ = dm_->getOrCreateLabelId(edgeLabel_);
+		edgeTypeId_ = dm_->getOrCreateTokenId(edgeType_);
 	}
 }
 
@@ -51,9 +51,9 @@ std::optional<RecordBatch> TraversalOperator::next() {
 		std::vector<Edge> edges = dm_->findEdgesByNode(sourceId, direction_);
 
 		for (auto &edge: edges) {
-			// 4. Filter by Edge Label (Using ID comparison)
-			if (edgeLabelId_ != 0) {
-				if (edge.getLabelId() != edgeLabelId_) {
+			// 4. Filter by Edge Type (Using ID comparison)
+			if (edgeTypeId_ != 0) {
+				if (edge.getTypeId() != edgeTypeId_) {
 					continue;
 				}
 			}
@@ -89,7 +89,7 @@ void TraversalOperator::close() {
 }
 
 std::string TraversalOperator::toString() const {
-	return "Traversal(" + sourceVar_ + " - [" + edgeVar_ + ":" + edgeLabel_ + "] -> " + targetVar_ + ")";
+	return "Traversal(" + sourceVar_ + " - [" + edgeVar_ + ":" + edgeType_ + "] -> " + targetVar_ + ")";
 }
 
 } // namespace graph::query::execution::operators

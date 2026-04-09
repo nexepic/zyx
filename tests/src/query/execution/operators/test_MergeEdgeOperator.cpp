@@ -85,7 +85,7 @@ protected:
 	Node createStoredNode(const std::string& label = "") {
 		Node node(0, 0);
 		if (!label.empty()) {
-			int64_t labelId = dm->getOrCreateLabelId(label);
+			int64_t labelId = dm->getOrCreateTokenId(label);
 			node = Node(0, labelId);
 		}
 		dm->addNode(node);
@@ -135,7 +135,7 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 
 	// Manually create the edge
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
@@ -336,7 +336,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_BothDirection) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -408,7 +408,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_SetsProperty) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -451,7 +451,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_PropertyMismatch_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 	dm->addEdgeProperties(existingEdge.getId(), {{"since", PropertyValue(int64_t(2020))}});
@@ -488,7 +488,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_LabelMismatch_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t knowsLabel = dm->getOrCreateLabelId("KNOWS");
+	int64_t knowsLabel = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), knowsLabel);
 	dm->addEdge(existingEdge);
 
@@ -521,7 +521,7 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge_InDirection) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge goes from tgt to src (reverse for "in" direction)
 	Edge existingEdge(0, tgt.getId(), src.getId(), labelId);
 	dm->addEdge(existingEdge);
@@ -555,7 +555,7 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge_WithProperties) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 	dm->addEdgeProperties(existingEdge.getId(), {{"since", PropertyValue(int64_t(2020))}});
@@ -751,7 +751,7 @@ TEST_F(MergeEdgeOperatorTest, OutDirection_EdgeReversed_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge stored in reverse direction: tgt -> src
 	Edge existingEdge(0, tgt.getId(), src.getId(), labelId);
 	dm->addEdge(existingEdge);
@@ -790,7 +790,7 @@ TEST_F(MergeEdgeOperatorTest, InDirection_EdgeWrongWay_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// For "in" direction, we expect edge from tgt->src. Store edge from src->tgt instead.
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
@@ -830,7 +830,7 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_MatchesReverseEdge) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge stored in reverse: tgt -> src. "both" should still match it.
 	Edge existingEdge(0, tgt.getId(), src.getId(), labelId);
 	dm->addEdge(existingEdge);
@@ -870,7 +870,7 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_NoMatchingEdge_CreatesNew) {
 	Node tgt = createStoredNode("Person");
 	Node other = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge between src and other, not tgt
 	Edge existingEdge(0, src.getId(), other.getId(), labelId);
 	dm->addEdge(existingEdge);
@@ -901,7 +901,7 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_NoMatchingEdge_CreatesNew) {
 }
 
 // ============================================================================
-// Branch coverage: edgeLabelId_ == 0 (line 106 first branch False)
+// Branch coverage: edgeTypeId_ == 0 (line 106 first branch False)
 // Empty label means we match any edge label
 // ============================================================================
 
@@ -909,7 +909,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_EmptyLabel_MatchesAnyLabel) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -919,7 +919,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_EmptyLabel_MatchesAnyLabel) {
 
 	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
-	// Empty label: edgeLabelId_ will be 0, so label check is skipped
+	// Empty label: edgeTypeId_ will be 0, so label check is skipped
 	auto op = std::make_unique<MergeEdgeOperator>(
 		dm, im, "a", "r", "b", "",
 		std::unordered_map<std::string, PropertyValue>{},
@@ -948,7 +948,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_PropertyKeyMissing_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 	// Edge has NO properties at all
@@ -990,7 +990,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_EmptyEdgeVar_NoRecordSet) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1027,7 +1027,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_LabelTypeItem_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1122,7 +1122,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_EmptyEdgeVar_UpdateAppliedButNotInRecord) 
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1281,7 +1281,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_PropertyValueDiffers_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 	dm->addEdgeProperties(existingEdge.getId(), {{"since", PropertyValue(int64_t(2020))}});
@@ -1323,7 +1323,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_DifferentVariable_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1372,7 +1372,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_MapMergeType_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1421,7 +1421,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_NullExpression_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1468,7 +1468,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_AllItemsSkipped_NoChange) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1672,7 +1672,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_MixedValidAndInvalidItems) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1815,7 +1815,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_EmptyItems_EarlyReturn) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -1936,7 +1936,7 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_UpdatesRecordEdgeProperties) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
 	dm->addEdge(existingEdge);
 
@@ -2042,7 +2042,7 @@ TEST_F(MergeEdgeOperatorTest, OutDirection_SourceMatchTargetMismatch_CreatesNew)
 	Node tgt = createStoredNode("Person");
 	Node other = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge from src to other (not tgt). Source matches but target doesn't.
 	Edge existingEdge(0, src.getId(), other.getId(), labelId);
 	dm->addEdge(existingEdge);
@@ -2083,7 +2083,7 @@ TEST_F(MergeEdgeOperatorTest, InDirection_SourceMatchTargetMismatch_CreatesNew) 
 	Node tgt = createStoredNode("Person");
 	Node other = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// For "in" direction, the check is:
 	//   edge.getSourceNodeId() == targetId && edge.getTargetNodeId() == sourceId
 	// We want: edge.getSourceNodeId() == tgt.getId() (True)
@@ -2130,7 +2130,7 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_PartialMatchBothConditions_CreatesNe
 	Node tgt = createStoredNode("Person");
 	Node other = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge from src to other: first OR fails (src==src but other!=tgt),
 	// second OR also fails (src!=tgt)
 	Edge existingEdge(0, src.getId(), other.getId(), labelId);
@@ -2172,7 +2172,7 @@ TEST_F(MergeEdgeOperatorTest, InDirection_SelfLoop_SourceMatchTargetMismatch) {
 	Node node = createStoredNode("Person");
 	Node other = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge from node to other. Since sourceId == targetId == node.getId(),
 	// edge.getSourceNodeId() == targetId is node==node (True)
 	// edge.getTargetNodeId() == sourceId is other==node (False) - covers line 98 right False
@@ -2217,7 +2217,7 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_SelfLoop_SecondOrTargetMismatch) {
 	Node node = createStoredNode("Person");
 	Node other = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 	// Edge from other to node. Since sourceId == targetId == node.getId():
 	// First OR: edge.source(other) == sourceId(node) False - first OR short-circuits
 	// Second OR: edge.source(other) == targetId(node) False - also fails

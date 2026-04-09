@@ -84,7 +84,7 @@ void ConstraintManager::createConstraint(const std::string &name, const std::str
 	validateExistingData(entityType, label, *constraint);
 
 	// Register constraint
-	int64_t labelId = dataManager_->getOrCreateLabelId(label);
+	int64_t labelId = dataManager_->getOrCreateTokenId(label);
 
 	auto &constraints = (entityType == "node") ? nodeConstraints_ : edgeConstraints_;
 	constraints[labelId].push_back(std::move(constraint));
@@ -110,7 +110,7 @@ bool ConstraintManager::dropConstraint(const std::string &name) {
 	}
 
 	const auto &meta = metaIt->second;
-	int64_t labelId = dataManager_->getOrCreateLabelId(meta.label);
+	int64_t labelId = dataManager_->getOrCreateTokenId(meta.label);
 
 	auto &constraints = (meta.entityType == "node") ? nodeConstraints_ : edgeConstraints_;
 	auto it = constraints.find(labelId);
@@ -170,7 +170,7 @@ void ConstraintManager::validateNodeDelete(const Node &/*node*/) {
 void ConstraintManager::validateEdgeInsert(const Edge &edge,
 	const std::unordered_map<std::string, PropertyValue> &props) {
 	std::lock_guard<std::recursive_mutex> lock(mutex_);
-	auto it = edgeConstraints_.find(edge.getLabelId());
+	auto it = edgeConstraints_.find(edge.getTypeId());
 	if (it == edgeConstraints_.end()) return;
 	for (const auto &c : it->second) {
 		c->validateInsert(edge.getId(), props);
@@ -181,7 +181,7 @@ void ConstraintManager::validateEdgeUpdate(const Edge &edge,
 	const std::unordered_map<std::string, PropertyValue> &oldProps,
 	const std::unordered_map<std::string, PropertyValue> &newProps) {
 	std::lock_guard<std::recursive_mutex> lock(mutex_);
-	auto it = edgeConstraints_.find(edge.getLabelId());
+	auto it = edgeConstraints_.find(edge.getTypeId());
 	if (it == edgeConstraints_.end()) return;
 	for (const auto &c : it->second) {
 		c->validateUpdate(edge.getId(), oldProps, newProps);
@@ -246,7 +246,7 @@ void ConstraintManager::validateExistingData(const std::string &entityType,
 
 	if (maxId == 0) return; // No entities exist
 
-	int64_t labelId = dataManager_->getOrCreateLabelId(label);
+	int64_t labelId = dataManager_->getOrCreateTokenId(label);
 
 	// Scan all entities up to maxId in batches
 	auto entities = (entityType == "node")
@@ -268,7 +268,7 @@ void ConstraintManager::validateExistingData(const std::string &entityType,
 	} else {
 		auto edges = dataManager_->getEdgesInRange(1, maxId, static_cast<size_t>(maxId));
 		for (const auto &edge : edges) {
-			if (!edge.isActive() || edge.getLabelId() != labelId) continue;
+			if (!edge.isActive() || edge.getTypeId() != labelId) continue;
 			auto props = dataManager_->getEdgeProperties(edge.getId());
 			try {
 				constraint.validateInsert(edge.getId(), props);
@@ -299,7 +299,7 @@ void ConstraintManager::loadFromState() {
 			auto constraint = createConstraintInstance(
 				meta.constraintType, meta.name, meta.label, propList, meta.options);
 
-			int64_t labelId = dataManager_->getOrCreateLabelId(meta.label);
+			int64_t labelId = dataManager_->getOrCreateTokenId(meta.label);
 			auto &constraints = (meta.entityType == "node") ? nodeConstraints_ : edgeConstraints_;
 			constraints[labelId].push_back(std::move(constraint));
 			constraintMeta_[name] = meta;

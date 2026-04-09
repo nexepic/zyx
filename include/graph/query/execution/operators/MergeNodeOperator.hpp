@@ -49,7 +49,7 @@ namespace graph::query::execution::operators {
 			matchProps_(std::move(matchProps)), onCreateItems_(std::move(onCreateItems)),
 			onMatchItems_(std::move(onMatchItems)) {}
 
-		void setChild(std::unique_ptr<PhysicalOperator> child) { child_ = std::move(child); }
+		void setChild(std::unique_ptr<PhysicalOperator> child) override { child_ = std::move(child); }
 
 		void open() override;
 		std::optional<RecordBatch> next() override;

@@ -88,7 +88,7 @@ namespace graph::query {
 		if (labels.size() > 1) {
 			auto allLabelIds = std::vector<int64_t>();
 			for (const auto &lbl : labels) {
-				allLabelIds.push_back(dm_->getOrCreateLabelId(lbl));
+				allLabelIds.push_back(dm_->getOrCreateTokenId(lbl));
 			}
 			auto predicate = [variable, allLabelIds](const execution::Record &r) {
 				auto n = r.getNode(variable);
@@ -146,10 +146,10 @@ namespace graph::query {
 
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::traverseOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
-							 const std::string &edgeVar, const std::string &targetVar, const std::string &edgeLabel,
+							 const std::string &edgeVar, const std::string &targetVar, const std::string &edgeType,
 							 const std::string &direction) const {
 		return std::make_unique<execution::operators::TraversalOperator>(dm_, std::move(source), sourceVar, edgeVar,
-																		 targetVar, edgeLabel, direction);
+																		 targetVar, edgeType, direction);
 	}
 
 	std::unique_ptr<execution::PhysicalOperator>
@@ -236,13 +236,13 @@ namespace graph::query {
 
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::mergeEdgeOp(const std::string &sourceVar, const std::string &edgeVar,
-							  const std::string &targetVar, const std::string &edgeLabel,
+							  const std::string &targetVar, const std::string &edgeType,
 							  const std::unordered_map<std::string, PropertyValue> &matchProps,
 							  const std::string &direction,
 							  const std::vector<execution::operators::SetItem> &onCreateItems,
 							  const std::vector<execution::operators::SetItem> &onMatchItems) const {
 		return std::make_unique<execution::operators::MergeEdgeOperator>(
-			dm_, im_, sourceVar, edgeVar, targetVar, edgeLabel, matchProps, direction,
+			dm_, im_, sourceVar, edgeVar, targetVar, edgeType, matchProps, direction,
 			onCreateItems, onMatchItems);
 	}
 
@@ -295,10 +295,10 @@ namespace graph::query {
 
 	std::unique_ptr<execution::PhysicalOperator>
 	QueryPlanner::traverseVarLengthOp(std::unique_ptr<execution::PhysicalOperator> source, const std::string &sourceVar,
-									  const std::string &targetVar, const std::string &edgeLabel, int minHops,
+									  const std::string &targetVar, const std::string &edgeType, int minHops,
 									  int maxHops, const std::string &direction) const {
 		return std::make_unique<execution::operators::VarLengthTraversalOperator>(
-				dm_, std::move(source), sourceVar, targetVar, edgeLabel, minHops, maxHops, direction);
+				dm_, std::move(source), sourceVar, targetVar, edgeType, minHops, maxHops, direction);
 	}
 
 	std::unique_ptr<execution::PhysicalOperator>

@@ -87,6 +87,12 @@ namespace graph::query::execution {
 		void setQueryContext(const query::QueryContext *ctx) { queryContext_ = ctx; }
 		[[nodiscard]] const query::QueryContext *getQueryContext() const { return queryContext_; }
 
+		/**
+		 * @brief Sets a child operator. Used to dynamically inject children
+		 * (e.g., RecordInjector for FOREACH). Default implementation does nothing.
+		 */
+		virtual void setChild(std::unique_ptr<PhysicalOperator> /*child*/) {}
+
 	protected:
 		concurrent::ThreadPool *threadPool_ = nullptr;
 		const query::QueryContext *queryContext_ = nullptr;

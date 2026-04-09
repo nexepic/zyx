@@ -144,13 +144,13 @@ TEST_F(FileStorageTest, VerifySegmentLinking) {
 TEST_F(FileStorageTest, UpdateEntityInPlace_Explicit) {
 	// 1. Create and Save a Node
 	auto dataManager = fileStorage->getDataManager();
-	int64_t lbl = dataManager->getOrCreateLabelId("Test");
+	int64_t lbl = dataManager->getOrCreateTokenId("Test");
 	graph::Node node(1, lbl);
 	dataManager->addNode(node);
 	fileStorage->flush(); // Ensure it's on disk
 
 	// 2. Modify Node in memory
-	int64_t newLbl = dataManager->getOrCreateLabelId("Updated");
+	int64_t newLbl = dataManager->getOrCreateTokenId("Updated");
 	node.setLabelId(newLbl);
 
 	// 3. Explicitly call updateEntityInPlace
@@ -568,7 +568,7 @@ TEST_F(FileStorageTest, Save_ModifyAndDeleteAllEntityTypes) {
 	n.setLabelId(42);
 	dm->updateNode(n);
 
-	e.setLabelId(42);
+	e.setTypeId(42);
 	dm->updateEdge(e);
 
 	// Flush modifications
@@ -1060,7 +1060,7 @@ TEST_F(FileStorageTest, SaveData_PreAllocatedSlotReuse_Edge) {
 	fileStorage->flush();
 
 	// Update the edge - this creates a MODIFIED dirty entry
-	e.setLabelId(42);
+	e.setTypeId(42);
 	dm->updateEdge(e);
 
 	// Second flush - should find pre-allocated slot and reuse it (line 307, 318 branches)
@@ -1354,7 +1354,7 @@ TEST_F(FileStorageTest, CloseReopenVerifyPersistence) {
 	auto dm = fileStorage->getDataManager();
 
 	// Add nodes with properties
-	int64_t lbl = dm->getOrCreateLabelId("Persist");
+	int64_t lbl = dm->getOrCreateTokenId("Persist");
 	graph::Node n1(0, lbl);
 	dm->addNode(n1);
 	int64_t n1Id = n1.getId();
@@ -1364,7 +1364,7 @@ TEST_F(FileStorageTest, CloseReopenVerifyPersistence) {
 	int64_t n2Id = n2.getId();
 
 	// Add an edge between them
-	int64_t edgeLbl = dm->getOrCreateLabelId("CONNECTS");
+	int64_t edgeLbl = dm->getOrCreateTokenId("CONNECTS");
 	graph::Edge e(0, n1Id, n2Id, edgeLbl);
 	dm->addEdge(e);
 	int64_t eId = e.getId();
@@ -2270,7 +2270,7 @@ TEST_F(FileStorageTest, Save_EdgeSlotReuse_CoversPreAllocatedPath) {
 	std::vector<graph::Edge> edges;
 	for (int i = 0; i < 5; i++) {
 		int64_t eid = alloc->allocateId(graph::Edge::typeId);
-		int64_t labelId = dm->getOrCreateLabelId("KNOWS");
+		int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 		graph::Edge e(eid, n1.getId(), n2.getId(), labelId);
 		dm->addEdge(e);
 		edges.push_back(e);
@@ -2283,7 +2283,7 @@ TEST_F(FileStorageTest, Save_EdgeSlotReuse_CoversPreAllocatedPath) {
 
 	// Create a new edge - the allocator should reuse the deleted ID slot
 	int64_t newEid = alloc->allocateId(graph::Edge::typeId);
-	int64_t labelId = dm->getOrCreateLabelId("FOLLOWS");
+	int64_t labelId = dm->getOrCreateTokenId("FOLLOWS");
 	graph::Edge newEdge(newEid, n1.getId(), n2.getId(), labelId);
 	dm->addEdge(newEdge);
 

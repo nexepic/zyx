@@ -40,14 +40,14 @@ namespace graph::query::execution::operators {
 		 * @param sourceVar Variable name of the start node (already in record).
 		 * @param edgeVar Variable name for the edge to be found.
 		 * @param targetVar Variable name for the target node to be found.
-		 * @param edgeLabel Filter by edge label (empty means all labels).
+		 * @param edgeType Filter by edge type (empty means all types).
 		 * @param direction "out", "in", or "both".
 		 */
 		TraversalOperator(std::shared_ptr<storage::DataManager> dm, std::unique_ptr<PhysicalOperator> child,
-						  std::string sourceVar, std::string edgeVar, std::string targetVar, std::string edgeLabel,
+						  std::string sourceVar, std::string edgeVar, std::string targetVar, std::string edgeType,
 						  std::string direction) :
 			dm_(std::move(dm)), child_(std::move(child)), sourceVar_(std::move(sourceVar)),
-			edgeVar_(std::move(edgeVar)), targetVar_(std::move(targetVar)), edgeLabel_(std::move(edgeLabel)),
+			edgeVar_(std::move(edgeVar)), targetVar_(std::move(targetVar)), edgeType_(std::move(edgeType)),
 			direction_(std::move(direction)) {}
 
 		void open() override;
@@ -75,9 +75,9 @@ namespace graph::query::execution::operators {
 		std::string sourceVar_;
 		std::string edgeVar_;
 		std::string targetVar_;
-		std::string edgeLabel_;
+		std::string edgeType_;
 		std::string direction_;
 
-		int64_t edgeLabelId_ = 0; // Cached ID
+		int64_t edgeTypeId_ = 0; // Cached ID
 	};
 }

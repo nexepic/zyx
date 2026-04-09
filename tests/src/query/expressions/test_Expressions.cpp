@@ -6758,7 +6758,7 @@ TEST_F(ExpressionsTest, ResultValue_ToString_Edge) {
 
 	graph::query::ResultValue rv(edge);
 	std::string result = rv.toString();
-	EXPECT_TRUE(result.find("[:LabelID:42:10") != std::string::npos);
+	EXPECT_TRUE(result.find("[:TypeID:42:10") != std::string::npos);
 	EXPECT_TRUE(result.find("weight") != std::string::npos);
 }
 
@@ -6766,7 +6766,7 @@ TEST_F(ExpressionsTest, ResultValue_ToString_EdgeNoProps) {
 	Edge edge(5, 1, 2, 99);
 	graph::query::ResultValue rv(edge);
 	std::string result = rv.toString();
-	EXPECT_TRUE(result.find("[:LabelID:99:5") != std::string::npos);
+	EXPECT_TRUE(result.find("[:TypeID:99:5") != std::string::npos);
 	EXPECT_TRUE(result.find("]") != std::string::npos);
 }
 

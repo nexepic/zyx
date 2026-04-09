@@ -30,9 +30,9 @@ namespace graph::query::execution::operators {
 void MergeEdgeOperator::open() {
 	executed_ = false;
 	if (child_) child_->open();
-	edgeLabelId_ = 0;
-	if (!edgeLabel_.empty()) {
-		edgeLabelId_ = dm_->getOrCreateLabelId(edgeLabel_);
+	edgeTypeId_ = 0;
+	if (!edgeType_.empty()) {
+		edgeTypeId_ = dm_->getOrCreateTokenId(edgeType_);
 	}
 }
 
@@ -68,7 +68,7 @@ void MergeEdgeOperator::close() {
 }
 
 std::string MergeEdgeOperator::toString() const {
-	return "MergeEdge(" + sourceVar_ + ")-[" + edgeVar_ + ":" + edgeLabel_ + "]->(" + targetVar_ + ")";
+	return "MergeEdge(" + sourceVar_ + ")-[" + edgeVar_ + ":" + edgeType_ + "]->(" + targetVar_ + ")";
 }
 
 void MergeEdgeOperator::processMergeEdge(Record &record) {
@@ -103,8 +103,8 @@ void MergeEdgeOperator::processMergeEdge(Record &record) {
 		}
 		if (!dirMatch) continue;
 
-		// Check label
-		if (edgeLabelId_ != 0 && edge.getLabelId() != edgeLabelId_) continue;
+		// Check type
+		if (edgeTypeId_ != 0 && edge.getTypeId() != edgeTypeId_) continue;
 
 		// Check properties
 		auto edgeProps = dm_->getEdgeProperties(edge.getId());
@@ -139,7 +139,7 @@ void MergeEdgeOperator::processMergeEdge(Record &record) {
 			std::swap(realSourceId, realTargetId);
 		}
 
-		Edge newEdge(0, realSourceId, realTargetId, edgeLabelId_);
+		Edge newEdge(0, realSourceId, realTargetId, edgeTypeId_);
 		dm_->addEdge(newEdge);
 
 		if (!matchProps_.empty()) {

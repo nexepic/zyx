@@ -80,7 +80,7 @@ std::optional<RecordBatch> SetOperator::next() {
 					Node node = *nodeOpt;
 
 					// Resolve string label to ID and add it
-					int64_t newLabelId = dm_->getOrCreateLabelId(item.key);
+					int64_t newLabelId = dm_->getOrCreateTokenId(item.key);
 					node.addLabelId(newLabelId);
 					dm_->updateNode(node); // Persist label change
 

@@ -89,7 +89,7 @@ namespace graph::query::indexes {
 			std::vector<std::string> newLabels;
 			for (int64_t lid : labelIds) {
 				if (lid != 0) {
-					newLabels.push_back(dataManager_->resolveLabel(lid));
+					newLabels.push_back(dataManager_->resolveTokenName(lid));
 				}
 			}
 
@@ -118,10 +118,10 @@ namespace graph::query::indexes {
 				}
 			}
 		} else {
-			// Edge: single-label
+			// Edge: single-type
 			std::string newLabel;
-			if (entity.getLabelId() != 0) {
-				newLabel = dataManager_->resolveLabel(entity.getLabelId());
+			if (entity.getTypeId() != 0) {
+				newLabel = dataManager_->resolveTokenName(entity.getTypeId());
 			}
 
 			if (isDeleted) {
@@ -221,8 +221,8 @@ namespace graph::query::indexes {
 					}
 				}
 			} else {
-				if (entity.getLabelId() != 0) {
-					nodesByLabelId[entity.getLabelId()].push_back(entity.getId());
+				if (entity.getTypeId() != 0) {
+					nodesByLabelId[entity.getTypeId()].push_back(entity.getId());
 				}
 			}
 
@@ -246,7 +246,7 @@ namespace graph::query::indexes {
 				std::unordered_map<std::string, std::vector<int64_t>> nodesByLabelStr;
 
 				for (auto& [labelId, ids] : nodesByLabelId) {
-					std::string labelStr = dataManager_->resolveLabel(labelId);
+					std::string labelStr = dataManager_->resolveTokenName(labelId);
 					if (!labelStr.empty()) {
 						nodesByLabelStr[labelStr] = std::move(ids);
 					}
@@ -283,7 +283,7 @@ namespace graph::query::indexes {
 						if (newLid == oldLid) { found = true; break; }
 					}
 					if (!found) {
-						labelIndex_->removeNode(entityId, dataManager_->resolveLabel(oldLid));
+						labelIndex_->removeNode(entityId, dataManager_->resolveTokenName(oldLid));
 					}
 				}
 
@@ -295,14 +295,14 @@ namespace graph::query::indexes {
 						if (oldLid == newLid) { found = true; break; }
 					}
 					if (!found) {
-						labelIndex_->addNode(entityId, dataManager_->resolveLabel(newLid));
+						labelIndex_->addNode(entityId, dataManager_->resolveTokenName(newLid));
 					}
 				}
 			}
 		} else {
 			std::string oldLabelStr;
-			if (oldEntity.getLabelId() != 0) {
-				oldLabelStr = dataManager_->resolveLabel(oldEntity.getLabelId());
+			if (oldEntity.getTypeId() != 0) {
+				oldLabelStr = dataManager_->resolveTokenName(oldEntity.getTypeId());
 			}
 			updateLabelIndex(newEntity, oldLabelStr, false);
 		}
@@ -319,14 +319,14 @@ namespace graph::query::indexes {
 			if (!labelIndex_->isEmpty() && entity.getId() != 0) {
 				for (int64_t lid : entity.getLabelIds()) {
 					if (lid != 0) {
-						labelIndex_->removeNode(entity.getId(), dataManager_->resolveLabel(lid));
+						labelIndex_->removeNode(entity.getId(), dataManager_->resolveTokenName(lid));
 					}
 				}
 			}
 		} else {
 			std::string labelStr;
-			if (entity.getLabelId() != 0) {
-				labelStr = dataManager_->resolveLabel(entity.getLabelId());
+			if (entity.getTypeId() != 0) {
+				labelStr = dataManager_->resolveTokenName(entity.getTypeId());
 			}
 			updateLabelIndex(entity, labelStr, true);
 		}

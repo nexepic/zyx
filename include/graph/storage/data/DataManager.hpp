@@ -73,7 +73,7 @@ namespace graph::storage {
 	namespace state {
 		class SystemStateManager;
 	}
-	class LabelTokenRegistry;
+	class TokenRegistry;
 
 	class IDAllocator;
 	class SegmentTracker;
@@ -141,10 +141,10 @@ namespace graph::storage {
 							  std::function<void(T)> internalUpdateFunc,
 							  std::function<void(const T &, const T &)> notifyFunc);
 
-		void initializeLabelRegistry(std::shared_ptr<state::SystemStateManager> sm);
+		void initializeTokenRegistry(std::shared_ptr<state::SystemStateManager> sm);
 
-		[[nodiscard]] int64_t getOrCreateLabelId(const std::string &label) const;
-		[[nodiscard]] std::string resolveLabel(int64_t labelId) const;
+		[[nodiscard]] int64_t getOrCreateTokenId(const std::string &name) const;
+		[[nodiscard]] std::string resolveTokenName(int64_t tokenId) const;
 
 		// Node-specific operations
 		void addNode(Node &node) const;
@@ -331,7 +331,7 @@ namespace graph::storage {
 		/**
 		 * @brief Injects the SystemStateManager dependency.
 		 * This must be called after DataManager and SystemStateManager are both created.
-		 * This method will initialize components that depend on SystemStateManager (e.g., LabelTokenRegistry).
+		 * This method will initialize components that depend on SystemStateManager (e.g., TokenRegistry).
 		 */
 		void setSystemStateManager(const std::shared_ptr<state::SystemStateManager> &systemStateManager);
 
@@ -398,7 +398,7 @@ namespace graph::storage {
 
 		std::shared_ptr<PersistenceManager> persistenceManager_;
 
-		std::unique_ptr<LabelTokenRegistry> labelRegistry_;
+		std::unique_ptr<TokenRegistry> tokenRegistry_;
 
 		std::weak_ptr<state::SystemStateManager> systemStateManager_;
 

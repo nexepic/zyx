@@ -90,7 +90,7 @@ TEST_F(DeleteOperatorBranchTest, ChildExhaustedImmediately) {
 
 // Delete a node with no relationships (non-detach mode)
 TEST_F(DeleteOperatorBranchTest, DeleteNode_NoRelationships) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -115,14 +115,14 @@ TEST_F(DeleteOperatorBranchTest, DeleteNode_NoRelationships) {
 
 // Delete a node with relationships (non-detach) -> should throw
 TEST_F(DeleteOperatorBranchTest, DeleteNode_WithRelationships_NonDetach_Throws) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	dm->addNode(n1);
 	dm->addNode(n2);
 
-	int64_t edgeLabelId = dm->getOrCreateLabelId("KNOWS");
-	Edge e1(0, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("KNOWS");
+	Edge e1(0, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
 	db->getStorage()->flush();
@@ -142,14 +142,14 @@ TEST_F(DeleteOperatorBranchTest, DeleteNode_WithRelationships_NonDetach_Throws) 
 
 // DETACH DELETE a node with relationships - should delete edges first
 TEST_F(DeleteOperatorBranchTest, DetachDeleteNode_WithRelationships) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	dm->addNode(n1);
 	dm->addNode(n2);
 
-	int64_t edgeLabelId = dm->getOrCreateLabelId("KNOWS");
-	Edge e1(0, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("KNOWS");
+	Edge e1(0, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
 	db->getStorage()->flush();
@@ -175,14 +175,14 @@ TEST_F(DeleteOperatorBranchTest, DetachDeleteNode_WithRelationships) {
 
 // Delete an edge
 TEST_F(DeleteOperatorBranchTest, DeleteEdge) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	dm->addNode(n1);
 	dm->addNode(n2);
 
-	int64_t edgeLabelId = dm->getOrCreateLabelId("KNOWS");
-	Edge e1(0, 1, 2, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("KNOWS");
+	Edge e1(0, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
 	db->getStorage()->flush();
@@ -222,7 +222,7 @@ TEST_F(DeleteOperatorBranchTest, VariableNotBound) {
 
 // Multiple variables in delete list
 TEST_F(DeleteOperatorBranchTest, MultipleVariables) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	dm->addNode(n1);
@@ -291,7 +291,7 @@ TEST_F(DeleteOperatorBranchTest, OpenClose_NullChild) {
 
 // DETACH DELETE node with no relationships (connectedEdges is empty, detach_ is true)
 TEST_F(DeleteOperatorBranchTest, DetachDeleteNode_NoRelationships) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	dm->addNode(n1);
 
@@ -313,7 +313,7 @@ TEST_F(DeleteOperatorBranchTest, DetachDeleteNode_NoRelationships) {
 
 // DETACH DELETE node with multiple relationships (for loop iterates multiple times)
 TEST_F(DeleteOperatorBranchTest, DetachDeleteNode_MultipleRelationships) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	Node n3(0, labelId);
@@ -321,10 +321,10 @@ TEST_F(DeleteOperatorBranchTest, DetachDeleteNode_MultipleRelationships) {
 	dm->addNode(n2);
 	dm->addNode(n3);
 
-	int64_t edgeLabelId = dm->getOrCreateLabelId("KNOWS");
-	Edge e1(0, 1, 2, edgeLabelId);
-	Edge e2(0, 1, 3, edgeLabelId);
-	Edge e3(0, 3, 1, edgeLabelId);
+	int64_t edgeTypeId = dm->getOrCreateTokenId("KNOWS");
+	Edge e1(0, 1, 2, edgeTypeId);
+	Edge e2(0, 1, 3, edgeTypeId);
+	Edge e3(0, 3, 1, edgeTypeId);
 	dm->addEdge(e1);
 	dm->addEdge(e2);
 	dm->addEdge(e3);
@@ -351,7 +351,7 @@ TEST_F(DeleteOperatorBranchTest, DetachDeleteNode_MultipleRelationships) {
 
 // Delete with multiple records in a single batch
 TEST_F(DeleteOperatorBranchTest, MultipleRecordsInBatch) {
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 	Node n1(0, labelId);
 	Node n2(0, labelId);
 	Node n3(0, labelId);

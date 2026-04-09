@@ -193,13 +193,13 @@ TEST_F(IndexStatsTest, ShowStatsIncludesPlanCache) {
 	EXPECT_TRUE(foundPlanCache) << "showStats should include plan_cache category";
 }
 
-// Test 9: findEdgeIdsByLabel increments stats
+// Test 9: findEdgeIdsByType increments stats
 TEST_F(IndexStatsTest, EdgeLabelLookupIncrementsStats) {
 	auto im = db->getQueryEngine()->getIndexManager();
 
 	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
 	im->resetStats();
 
-	(void) im->findEdgeIdsByLabel("KNOWS");
-	EXPECT_GT(im->lookups(), 0UL) << "findEdgeIdsByLabel should increment lookups";
+	(void) im->findEdgeIdsByType("KNOWS");
+	EXPECT_GT(im->lookups(), 0UL) << "findEdgeIdsByType should increment lookups";
 }

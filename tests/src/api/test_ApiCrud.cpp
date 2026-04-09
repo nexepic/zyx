@@ -142,7 +142,7 @@ TEST_F(CppApiTest, CreateEdgeFullParams) {
 			<< "Expected shared_ptr<Edge>, got something else (maybe Node?)";
 
 	auto edgePtr = std::get<std::shared_ptr<zyx::Edge>>(edgeVal);
-	EXPECT_EQ(edgePtr->label, "FOLLOWS");
+	EXPECT_EQ(edgePtr->type, "FOLLOWS");
 
 	ASSERT_TRUE(edgePtr->properties.contains("since"));
 	auto propVal = edgePtr->properties.at("since");
@@ -251,7 +251,7 @@ TEST_F(CppApiTest, EdgeWithAllPropertyTypes) {
 	EXPECT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Edge>>(edgeVal));
 
 	auto edgePtr = std::get<std::shared_ptr<zyx::Edge>>(edgeVal);
-	EXPECT_EQ(edgePtr->label, "FULL");
+	EXPECT_EQ(edgePtr->type, "FULL");
 	EXPECT_EQ(edgePtr->properties.size(), 4u);
 }
 

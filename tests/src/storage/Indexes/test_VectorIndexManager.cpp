@@ -117,7 +117,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_WithVectorProperty) {
 	vim->createIndex("emb_idx", 4, "L2");
 
 	// 3. Create a node and call updateIndex
-	graph::Node node(1, dm->getOrCreateLabelId("Person"));
+	graph::Node node(1, dm->getOrCreateTokenId("Person"));
 	dm->addNode(node);
 
 	std::unordered_map<std::string, graph::PropertyValue> props;
@@ -154,7 +154,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_NonListProperty) {
 	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_idx2", "Person", "embedding", 4, "L2");
 	vim->createIndex("emb_idx2", 4, "L2");
 
-	graph::Node node(1, dm->getOrCreateLabelId("Person"));
+	graph::Node node(1, dm->getOrCreateTokenId("Person"));
 	dm->addNode(node);
 
 	std::unordered_map<std::string, graph::PropertyValue> props;
@@ -173,7 +173,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_IntegerVectorElements) {
 	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_int", "Item", "vec", 4, "L2");
 	vim->createIndex("emb_int", 4, "L2");
 
-	graph::Node node(1, dm->getOrCreateLabelId("Item"));
+	graph::Node node(1, dm->getOrCreateTokenId("Item"));
 	dm->addNode(node);
 
 	// Use integer elements in the vector (covers INTEGER branch in updateIndex)
@@ -197,7 +197,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_NonNumericVectorElement) {
 	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_bad", "Thing", "vec", 3, "L2");
 	vim->createIndex("emb_bad", 3, "L2");
 
-	graph::Node node(1, dm->getOrCreateLabelId("Thing"));
+	graph::Node node(1, dm->getOrCreateTokenId("Thing"));
 	dm->addNode(node);
 
 	// String element in vector -> should throw and be caught
@@ -222,7 +222,7 @@ TEST_F(ManagerPersistenceTest, RemoveIndex_Basic) {
 	vim->createIndex("rem_idx", 4, "L2");
 
 	// Insert a vector
-	graph::Node node(1, dm->getOrCreateLabelId("Person"));
+	graph::Node node(1, dm->getOrCreateTokenId("Person"));
 	dm->addNode(node);
 
 	std::unordered_map<std::string, graph::PropertyValue> props;
@@ -256,7 +256,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_Basic) {
 	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_idx", "Person", "embedding", 4, "L2");
 	vim->createIndex("batch_idx", 4, "L2");
 
-	int64_t labelId = dm->getOrCreateLabelId("Person");
+	int64_t labelId = dm->getOrCreateTokenId("Person");
 
 	std::vector<std::pair<graph::Node, std::unordered_map<std::string, graph::PropertyValue>>> nodesWithProps;
 
@@ -310,7 +310,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonNumericElement) {
 	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_bad", "Item", "vec", 3, "L2");
 	vim->createIndex("batch_bad", 3, "L2");
 
-	int64_t labelId = dm->getOrCreateLabelId("Item");
+	int64_t labelId = dm->getOrCreateTokenId("Item");
 	graph::Node node(1, labelId);
 	dm->addNode(node);
 
@@ -337,7 +337,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonListProperty) {
 	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_nlist", "Item", "vec", 3, "L2");
 	vim->createIndex("batch_nlist", 3, "L2");
 
-	int64_t labelId = dm->getOrCreateLabelId("Item");
+	int64_t labelId = dm->getOrCreateTokenId("Item");
 	graph::Node node(1, labelId);
 	dm->addNode(node);
 
@@ -359,7 +359,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_IntegerElements) {
 	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_int", "Item", "vec", 4, "L2");
 	vim->createIndex("batch_int", 4, "L2");
 
-	int64_t labelId = dm->getOrCreateLabelId("Item");
+	int64_t labelId = dm->getOrCreateTokenId("Item");
 	graph::Node node(1, labelId);
 	dm->addNode(node);
 

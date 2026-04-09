@@ -64,7 +64,7 @@ protected:
 	[[nodiscard]] graph::Node insertNode(const std::string &label) const {
 		const int64_t id = allocator->allocateId(graph::Node::typeId);
 
-		const int64_t labelId = dataManager->getOrCreateLabelId(label);
+		const int64_t labelId = dataManager->getOrCreateTokenId(label);
 
 		graph::Node node(id, labelId);
 		dataManager->addNode(node);
@@ -73,7 +73,7 @@ protected:
 
 	[[nodiscard]] graph::Edge insertEdge(int64_t startId, int64_t endId, const std::string &label) const {
 		const int64_t id = allocator->allocateId(graph::Edge::typeId);
-		const int64_t labelId = dataManager->getOrCreateLabelId(label);
+		const int64_t labelId = dataManager->getOrCreateTokenId(label);
 
 		graph::Edge edge(id, startId, endId, labelId);
 		dataManager->addEdge(edge);

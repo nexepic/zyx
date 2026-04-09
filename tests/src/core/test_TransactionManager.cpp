@@ -185,7 +185,7 @@ TEST_F(TransactionManagerTest, CommitWithDataPersists) {
 		// Perform some data operation within the transaction
 		auto storage = db->getStorage();
 		auto dm = storage->getDataManager();
-		graph::Node node(0, dm->getOrCreateLabelId("TestLabel"));
+		graph::Node node(0, dm->getOrCreateTokenId("TestLabel"));
 		dm->addNode(node);
 		txn.commit();
 	}
@@ -203,7 +203,7 @@ TEST_F(TransactionManagerTest, RollbackRevertsData) {
 	auto dm = storage->getDataManager();
 	{
 		auto txn = db->beginTransaction();
-		graph::Node node(0, dm->getOrCreateLabelId("RollbackLabel"));
+		graph::Node node(0, dm->getOrCreateTokenId("RollbackLabel"));
 		dm->addNode(node);
 		txn.rollback();
 	}
@@ -225,7 +225,7 @@ TEST_F(TransactionManagerTest, AutoRollbackWithOpenStorage) {
 		auto txn = db->beginTransaction();
 		auto storage = db->getStorage();
 		auto dm = storage->getDataManager();
-		graph::Node node(0, dm->getOrCreateLabelId("AutoRollbackLabel"));
+		graph::Node node(0, dm->getOrCreateTokenId("AutoRollbackLabel"));
 		dm->addNode(node);
 		// Let destructor auto-rollback while storage is open
 	}

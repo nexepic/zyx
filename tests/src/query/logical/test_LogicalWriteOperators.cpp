@@ -153,7 +153,7 @@ TEST_F(LogicalCreateEdgeTest, BasicConstruction) {
 
     EXPECT_EQ(ce.getType(), LogicalOpType::LOP_CREATE_EDGE);
     EXPECT_EQ(ce.getVariable(), "r");
-    EXPECT_EQ(ce.getLabel(), "KNOWS");
+    EXPECT_EQ(ce.getEdgeType(), "KNOWS");
     EXPECT_EQ(ce.getSourceVar(), "n");
     EXPECT_EQ(ce.getTargetVar(), "m");
 }
@@ -197,7 +197,7 @@ TEST_F(LogicalCreateEdgeTest, Clone) {
     auto *cce = dynamic_cast<LogicalCreateEdge *>(cloned.get());
     ASSERT_NE(cce, nullptr);
     EXPECT_EQ(cce->getVariable(), "r");
-    EXPECT_EQ(cce->getLabel(), "KNOWS");
+    EXPECT_EQ(cce->getEdgeType(), "KNOWS");
     EXPECT_EQ(cce->getProperties().size(), 1u);
     EXPECT_EQ(cce->getChildren().size(), 1u);
 }
@@ -556,7 +556,7 @@ TEST_F(LogicalMergeEdgeTest, BasicConstruction) {
     EXPECT_EQ(me.getSourceVar(), "n");
     EXPECT_EQ(me.getEdgeVar(), "r");
     EXPECT_EQ(me.getTargetVar(), "m");
-    EXPECT_EQ(me.getEdgeLabel(), "KNOWS");
+    EXPECT_EQ(me.getEdgeType(), "KNOWS");
     EXPECT_EQ(me.getDirection(), "OUT");
 }
 

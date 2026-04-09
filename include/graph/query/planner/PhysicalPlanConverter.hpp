@@ -133,6 +133,14 @@ private:
 		const logical::LogicalOperator *op) const;
 	std::unique_ptr<execution::PhysicalOperator> convertProfile(
 		const logical::LogicalOperator *op) const;
+
+	// Subquery & Advanced operators
+	std::unique_ptr<execution::PhysicalOperator> convertForeach(
+		const logical::LogicalOperator *op) const;
+	std::unique_ptr<execution::PhysicalOperator> convertCallSubquery(
+		const logical::LogicalOperator *op) const;
+	std::unique_ptr<execution::PhysicalOperator> convertLoadCsv(
+		const logical::LogicalOperator *op) const;
 };
 
 } // namespace graph::query

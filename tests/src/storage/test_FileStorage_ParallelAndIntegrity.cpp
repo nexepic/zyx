@@ -211,7 +211,7 @@ TEST_F(FileStorageParallelTest, Save_WithThreadPool_ModifyAndDelete) {
 	n1.setLabelId(42);
 	dm->updateNode(n1);
 
-	e.setLabelId(42);
+	e.setTypeId(42);
 	dm->updateEdge(e);
 
 	p.setEntityInfo(99, 0);
@@ -363,7 +363,7 @@ TEST_F(FileStorageParallelTest, ParallelSave_ThenReopenAndVerify) {
 	auto dm = fileStorage->getDataManager();
 
 	// Create entities with parallel save
-	int64_t lbl = dm->getOrCreateLabelId("ParallelNode");
+	int64_t lbl = dm->getOrCreateTokenId("ParallelNode");
 	graph::Node n(0, lbl);
 	dm->addNode(n);
 	int64_t nId = n.getId();

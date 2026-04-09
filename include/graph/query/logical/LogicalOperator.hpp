@@ -66,7 +66,12 @@ enum class LogicalOpType {
 
 	// Observability (pass-through)
 	LOP_EXPLAIN,
-	LOP_PROFILE
+	LOP_PROFILE,
+
+	// Subquery & Advanced (pass-through)
+	LOP_FOREACH,
+	LOP_CALL_SUBQUERY,
+	LOP_LOAD_CSV
 };
 
 /**
@@ -144,6 +149,9 @@ inline std::string toString(LogicalOpType type) {
 		case LogicalOpType::LOP_TRAIN_VECTOR_INDEX: return "TrainVectorIndex";
 		case LogicalOpType::LOP_EXPLAIN: return "Explain";
 		case LogicalOpType::LOP_PROFILE: return "Profile";
+		case LogicalOpType::LOP_FOREACH: return "Foreach";
+		case LogicalOpType::LOP_CALL_SUBQUERY: return "CallSubquery";
+		case LogicalOpType::LOP_LOAD_CSV: return "LoadCsv";
 		default: return "Unknown";
 	}
 }

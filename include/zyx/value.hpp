@@ -53,7 +53,7 @@ namespace zyx {
 		int64_t id;
 		int64_t sourceId;
 		int64_t targetId;
-		std::string label; // Relationship Type
+		std::string type; // Relationship Type
 		std::unordered_map<std::string, Value> properties;
 	};
 

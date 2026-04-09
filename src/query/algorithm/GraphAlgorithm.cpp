@@ -34,24 +34,24 @@ namespace graph::query::algorithm {
 
 	// --- Helper: Get Neighbor IDs (Fast, No IO for properties) ---
 	std::vector<int64_t> GraphAlgorithm::getNeighbors(int64_t nodeId, const std::string &direction,
-													  const std::string &edgeLabel) const {
+													  const std::string &edgeType) const {
 		std::vector<int64_t> neighbors;
 
 		// This only reads Edge Headers (Small IO)
 		auto edges = dm_->findEdgesByNode(nodeId, direction);
 
-		// OPTIMIZATION: Resolve edge label ID ONCE before the loop
-		int64_t targetLabelId = 0;
-		if (!edgeLabel.empty()) {
-			// Use getOrCreateLabelId (safe for reads, returns existing ID or new unused one)
-			targetLabelId = dm_->getOrCreateLabelId(edgeLabel);
+		// OPTIMIZATION: Resolve edge type ID ONCE before the loop
+		int64_t targetTypeId = 0;
+		if (!edgeType.empty()) {
+			// Use getOrCreateTokenId (safe for reads, returns existing ID or new unused one)
+			targetTypeId = dm_->getOrCreateTokenId(edgeType);
 		}
 
 		neighbors.reserve(edges.size());
 		for (const auto &edge: edges) {
-			// Filter by edge label in memory (cheap ID comparison)
-			if (targetLabelId != 0) {
-				if (edge.getLabelId() != targetLabelId) {
+			// Filter by edge type in memory (cheap ID comparison)
+			if (targetTypeId != 0) {
+				if (edge.getTypeId() != targetTypeId) {
 					continue;
 				}
 			}
@@ -128,12 +128,12 @@ namespace graph::query::algorithm {
 
 	// --- Variable Length Paths ---
 	std::vector<Node> GraphAlgorithm::findAllPaths(int64_t startNodeId, int minDepth, int maxDepth,
-												   const std::string &edgeLabel, const std::string &direction) const {
+												   const std::string &edgeType, const std::string &direction) const {
 		std::vector<int64_t> resultIds;
 		std::vector<int64_t> visitedPath;
 
 		// DFS
-		dfsVariableLength(startNodeId, 0, minDepth, maxDepth, edgeLabel, direction, visitedPath, resultIds);
+		dfsVariableLength(startNodeId, 0, minDepth, maxDepth, edgeType, direction, visitedPath, resultIds);
 
 		// Hydrate Results
 		std::vector<Node> nodes;
@@ -147,7 +147,7 @@ namespace graph::query::algorithm {
 	}
 
 	void GraphAlgorithm::dfsVariableLength(int64_t currentId, int currentDepth, int minDepth, int maxDepth,
-										   const std::string &edgeLabel, const std::string &direction,
+										   const std::string &edgeType, const std::string &direction,
 										   std::vector<int64_t> &visitedPath, std::vector<int64_t> &resultIds) const {
 		// Cycle Check
 		for (int64_t id: visitedPath) {
@@ -162,9 +162,9 @@ namespace graph::query::algorithm {
 		}
 
 		if (currentDepth < maxDepth) {
-			auto neighbors = getNeighbors(currentId, direction, edgeLabel);
+			auto neighbors = getNeighbors(currentId, direction, edgeType);
 			for (int64_t next: neighbors) {
-				dfsVariableLength(next, currentDepth + 1, minDepth, maxDepth, edgeLabel, direction, visitedPath,
+				dfsVariableLength(next, currentDepth + 1, minDepth, maxDepth, edgeType, direction, visitedPath,
 								  resultIds);
 			}
 		}

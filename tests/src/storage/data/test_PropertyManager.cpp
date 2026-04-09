@@ -67,16 +67,16 @@ protected:
 		edgeManager = dataManager->getEdgeManager();
 
 		// Create test entities using the correct API
-		testNode.setLabelId(dataManager->getOrCreateLabelId("TestNode"));
+		testNode.setLabelId(dataManager->getOrCreateTokenId("TestNode"));
 		nodeManager->add(testNode);
 
 		graph::Node targetNode;
-		targetNode.setLabelId(dataManager->getOrCreateLabelId("TargetNode"));
+		targetNode.setLabelId(dataManager->getOrCreateTokenId("TargetNode"));
 		nodeManager->add(targetNode);
 
 		testEdge.setSourceNodeId(testNode.getId());
 		testEdge.setTargetNodeId(targetNode.getId());
-		testEdge.setLabelId(dataManager->getOrCreateLabelId("CONNECTS_TO"));
+		testEdge.setTypeId(dataManager->getOrCreateTokenId("CONNECTS_TO"));
 		edgeManager->add(testEdge);
 	}
 
@@ -270,7 +270,7 @@ TEST_F(PropertyManagerTest, HasExternalPropertyCheck) {
 	// 3. Test with Blob storage (large properties)
 	// Create a new node for clean slate
 	graph::Node blobNode;
-	blobNode.setLabelId(dataManager->getOrCreateLabelId("BlobNode"));
+	blobNode.setLabelId(dataManager->getOrCreateTokenId("BlobNode"));
 	nodeManager->add(blobNode);
 
 	auto largeProps = createLargePropertyMap();
@@ -310,7 +310,7 @@ TEST_F(PropertyManagerTest, CalculateTotalPropertySize) {
 
 	// 3. Add Large properties (Blob Storage)
 	graph::Node blobNode;
-	blobNode.setLabelId(dataManager->getOrCreateLabelId("BlobNode"));
+	blobNode.setLabelId(dataManager->getOrCreateTokenId("BlobNode"));
 	nodeManager->add(blobNode);
 
 	auto largeProps = createLargePropertyMap();
@@ -484,7 +484,7 @@ TEST_F(PropertyManagerTest, SerializeDeserializeSingleProperty) {
 TEST_F(PropertyManagerTest, AddPropertiesToMultipleEntities) {
 	// Create another node
 	graph::Node node2;
-	node2.setLabelId(dataManager->getOrCreateLabelId("Node2"));
+	node2.setLabelId(dataManager->getOrCreateTokenId("Node2"));
 	nodeManager->add(node2);
 
 	// Add different properties to each node
@@ -537,7 +537,7 @@ TEST_F(PropertyManagerTest, RemovePropertyFromNonExistentEntity) {
 TEST_F(PropertyManagerTest, RemovePropertyFromInactiveEntity) {
 	// Create a node
 	graph::Node tempNode;
-	tempNode.setLabelId(dataManager->getOrCreateLabelId("TempNode"));
+	tempNode.setLabelId(dataManager->getOrCreateTokenId("TempNode"));
 	nodeManager->add(tempNode);
 
 	// Add properties
@@ -648,7 +648,7 @@ TEST_F(PropertyManagerTest, RemoveBlobPropertiesFromEdge) {
 TEST_F(PropertyManagerTest, CalculateSizeInactiveEntity) {
 	// Create a node
 	graph::Node tempNode;
-	tempNode.setLabelId(dataManager->getOrCreateLabelId("TempNode"));
+	tempNode.setLabelId(dataManager->getOrCreateTokenId("TempNode"));
 	nodeManager->add(tempNode);
 
 	// Add properties
@@ -1196,7 +1196,7 @@ TEST_F(PropertyManagerTest, RemoveAllFromEdgePropertyEntity) {
 TEST_F(PropertyManagerTest, AddPropertiesToInactiveNode) {
 	// Create and then remove a node to make it inactive
 	graph::Node tempNode;
-	tempNode.setLabelId(dataManager->getOrCreateLabelId("TempNode"));
+	tempNode.setLabelId(dataManager->getOrCreateTokenId("TempNode"));
 	nodeManager->add(tempNode);
 
 	graph::Node node = nodeManager->get(tempNode.getId());
@@ -1215,15 +1215,15 @@ TEST_F(PropertyManagerTest, AddPropertiesToInactiveNode) {
 TEST_F(PropertyManagerTest, AddPropertiesToInactiveEdge) {
 	// Create nodes and edge, then remove the edge
 	graph::Node src, tgt;
-	src.setLabelId(dataManager->getOrCreateLabelId("Src"));
-	tgt.setLabelId(dataManager->getOrCreateLabelId("Tgt"));
+	src.setLabelId(dataManager->getOrCreateTokenId("Src"));
+	tgt.setLabelId(dataManager->getOrCreateTokenId("Tgt"));
 	nodeManager->add(src);
 	nodeManager->add(tgt);
 
 	graph::Edge tmpEdge;
 	tmpEdge.setSourceNodeId(src.getId());
 	tmpEdge.setTargetNodeId(tgt.getId());
-	tmpEdge.setLabelId(dataManager->getOrCreateLabelId("TMP"));
+	tmpEdge.setTypeId(dataManager->getOrCreateTokenId("TMP"));
 	edgeManager->add(tmpEdge);
 
 	graph::Edge edge = edgeManager->get(tmpEdge.getId());
@@ -1279,15 +1279,15 @@ TEST_F(PropertyManagerTest, CalculateSerializedSizeMultipleTypes) {
 TEST_F(PropertyManagerTest, GetEntityPropertiesInactiveEdge) {
 	// Create an edge, add properties, then remove the edge
 	graph::Node src, tgt;
-	src.setLabelId(dataManager->getOrCreateLabelId("Src2"));
-	tgt.setLabelId(dataManager->getOrCreateLabelId("Tgt2"));
+	src.setLabelId(dataManager->getOrCreateTokenId("Src2"));
+	tgt.setLabelId(dataManager->getOrCreateTokenId("Tgt2"));
 	nodeManager->add(src);
 	nodeManager->add(tgt);
 
 	graph::Edge tmpEdge;
 	tmpEdge.setSourceNodeId(src.getId());
 	tmpEdge.setTargetNodeId(tgt.getId());
-	tmpEdge.setLabelId(dataManager->getOrCreateLabelId("TMP2"));
+	tmpEdge.setTypeId(dataManager->getOrCreateTokenId("TMP2"));
 	edgeManager->add(tmpEdge);
 
 	// Add properties first
@@ -1305,15 +1305,15 @@ TEST_F(PropertyManagerTest, GetEntityPropertiesInactiveEdge) {
 // Test calculateEntityTotalPropertySize for inactive Edge
 TEST_F(PropertyManagerTest, CalculateSizeInactiveEdge) {
 	graph::Node src, tgt;
-	src.setLabelId(dataManager->getOrCreateLabelId("Src3"));
-	tgt.setLabelId(dataManager->getOrCreateLabelId("Tgt3"));
+	src.setLabelId(dataManager->getOrCreateTokenId("Src3"));
+	tgt.setLabelId(dataManager->getOrCreateTokenId("Tgt3"));
 	nodeManager->add(src);
 	nodeManager->add(tgt);
 
 	graph::Edge tmpEdge;
 	tmpEdge.setSourceNodeId(src.getId());
 	tmpEdge.setTargetNodeId(tgt.getId());
-	tmpEdge.setLabelId(dataManager->getOrCreateLabelId("TMP3"));
+	tmpEdge.setTypeId(dataManager->getOrCreateTokenId("TMP3"));
 	edgeManager->add(tmpEdge);
 
 	propertyManager->addEntityProperties<graph::Edge>(tmpEdge.getId(), {{"key", graph::PropertyValue("value")}});
@@ -1330,15 +1330,15 @@ TEST_F(PropertyManagerTest, CalculateSizeInactiveEdge) {
 // Test removeEntityProperty from inactive edge (should not throw, idempotent)
 TEST_F(PropertyManagerTest, RemovePropertyFromInactiveEdge) {
 	graph::Node src, tgt;
-	src.setLabelId(dataManager->getOrCreateLabelId("Src4"));
-	tgt.setLabelId(dataManager->getOrCreateLabelId("Tgt4"));
+	src.setLabelId(dataManager->getOrCreateTokenId("Src4"));
+	tgt.setLabelId(dataManager->getOrCreateTokenId("Tgt4"));
 	nodeManager->add(src);
 	nodeManager->add(tgt);
 
 	graph::Edge tmpEdge;
 	tmpEdge.setSourceNodeId(src.getId());
 	tmpEdge.setTargetNodeId(tgt.getId());
-	tmpEdge.setLabelId(dataManager->getOrCreateLabelId("TMP4"));
+	tmpEdge.setTypeId(dataManager->getOrCreateTokenId("TMP4"));
 	edgeManager->add(tmpEdge);
 
 	propertyManager->addEntityProperties<graph::Edge>(tmpEdge.getId(), {{"key", graph::PropertyValue("value")}});
@@ -1662,15 +1662,15 @@ TEST_F(PropertyManagerTest, GetEntityPropertiesEdgePropertyEntity) {
 TEST_F(PropertyManagerTest, StorePropertiesEdgeSmallFitsInPropertyEntity) {
 	// Create a fresh edge for this test
 	graph::Node src, tgt;
-	src.setLabelId(dataManager->getOrCreateLabelId("Src"));
-	tgt.setLabelId(dataManager->getOrCreateLabelId("Tgt"));
+	src.setLabelId(dataManager->getOrCreateTokenId("Src"));
+	tgt.setLabelId(dataManager->getOrCreateTokenId("Tgt"));
 	nodeManager->add(src);
 	nodeManager->add(tgt);
 
 	graph::Edge edge;
 	edge.setSourceNodeId(src.getId());
 	edge.setTargetNodeId(tgt.getId());
-	edge.setLabelId(dataManager->getOrCreateLabelId("SMALL_PROP"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("SMALL_PROP"));
 	edgeManager->add(edge);
 
 	// Add small properties
@@ -1694,15 +1694,15 @@ TEST_F(PropertyManagerTest, StorePropertiesEdgeSmallFitsInPropertyEntity) {
 // Exercises storePropertiesInBlob<Edge>
 TEST_F(PropertyManagerTest, StorePropertiesEdgeLargeGoesToBlob) {
 	graph::Node src, tgt;
-	src.setLabelId(dataManager->getOrCreateLabelId("Src2"));
-	tgt.setLabelId(dataManager->getOrCreateLabelId("Tgt2"));
+	src.setLabelId(dataManager->getOrCreateTokenId("Src2"));
+	tgt.setLabelId(dataManager->getOrCreateTokenId("Tgt2"));
 	nodeManager->add(src);
 	nodeManager->add(tgt);
 
 	graph::Edge edge;
 	edge.setSourceNodeId(src.getId());
 	edge.setTargetNodeId(tgt.getId());
-	edge.setLabelId(dataManager->getOrCreateLabelId("LARGE_PROP"));
+	edge.setTypeId(dataManager->getOrCreateTokenId("LARGE_PROP"));
 	edgeManager->add(edge);
 
 	// Add large properties
