@@ -306,8 +306,7 @@ private:
  * @class CollectAccumulator
  * @brief Accumulator for collect() function.
  *
- * Note: Since PropertyValue doesn't support LIST type with arbitrary elements,
- * this implementation stores values internally and returns a string representation.
+ * Collects all values into a LIST PropertyValue.
  */
 class CollectAccumulator : public AggregateAccumulator {
 public:
@@ -316,15 +315,7 @@ public:
 	}
 
 	[[nodiscard]] PropertyValue getResult() const override {
-		// For now, return a comma-separated string representation
-		// In a full implementation, we'd need to extend PropertyValue to support lists
-		std::string result = "[";
-		for (size_t i = 0; i < values_.size(); ++i) {
-			if (i > 0) result += ", ";
-			result += values_[i].toString();
-		}
-		result += "]";
-		return PropertyValue(result);
+		return PropertyValue(values_);
 	}
 
 	void reset() override {
@@ -372,6 +363,41 @@ private:
 };
 
 /**
+ * @class CollectDistinctAccumulator
+ * @brief Accumulator for collect(DISTINCT expr) function.
+ */
+class CollectDistinctAccumulator : public AggregateAccumulator {
+public:
+	void update(const PropertyValue& value) override {
+		std::string key = value.toString();
+		if (seen_.find(key) == seen_.end()) {
+			seen_.insert(key);
+			values_.push_back(value);
+		}
+	}
+
+	[[nodiscard]] PropertyValue getResult() const override {
+		return PropertyValue(values_);
+	}
+
+	void reset() override {
+		seen_.clear();
+		values_.clear();
+	}
+
+	[[nodiscard]] std::unique_ptr<AggregateAccumulator> clone() const override {
+		auto acc = std::make_unique<CollectDistinctAccumulator>();
+		acc->seen_ = seen_;
+		acc->values_ = values_;
+		return acc;
+	}
+
+private:
+	std::unordered_set<std::string> seen_;
+	std::vector<PropertyValue> values_;
+};
+
+/**
  * @brief Factory function to create an accumulator for a given aggregate function type.
  */
 [[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type, bool distinct = false) {
@@ -388,6 +414,7 @@ private:
 		case AggregateFunctionType::AGG_MAX:
 			return std::make_unique<MaxAccumulator>();
 		case AggregateFunctionType::AGG_COLLECT:
+			if (distinct) return std::make_unique<CollectDistinctAccumulator>();
 			return std::make_unique<CollectAccumulator>();
 		default:
 			return nullptr;

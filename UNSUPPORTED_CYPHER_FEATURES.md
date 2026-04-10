@@ -2,162 +2,162 @@
 
 This document tracks the Cypher query language feature support status in the ZYX graph database.
 
-## 1. Expression Evaluation
+## 1. Supported Cypher Features
 
-### 1.1 Expression Evaluation in SET Clause
-**Syntax**: `SET n.newVal = n.oldVal * 2`
-**Status**: ✅ Fully Supported
+### Clauses
 
-### 1.2 String Concatenation with +
-**Syntax**: `RETURN n.firstName + ' ' + n.lastName`
-**Status**: ✅ Fully Supported
+- `MATCH` / `OPTIONAL MATCH`
+- `CREATE`
+- `MERGE` with `ON CREATE SET` / `ON MATCH SET`
+- `SET` (property assignment, label assignment with `SET n:Label`)
+- `DELETE`
+- `REMOVE`
+- `RETURN`
+- `WITH`
+- `ORDER BY`, `SKIP`, `LIMIT`
+- `DISTINCT`
+- `UNION` / `UNION ALL`
+- `UNWIND` (including nested property expressions)
+- `CALL` procedures
+- `CALL { subquery }` (with variable scope isolation, supports `IN TRANSACTIONS OF n ROWS`)
+- `FOREACH (x IN list | ...)`
+- `LOAD CSV FROM 'file:///path' AS row` (streaming RFC 4180-compliant, custom `FIELDTERMINATOR`)
+- `EXPLAIN` / `PROFILE`
 
-### 1.3 Arithmetic Expressions
-**Status**: ✅ Fully Supported
-**Operations**: `+`, `-`, `*`, `/`, `%`, `^`, unary `-`, `NOT`
+### Expressions and Operators
 
-### 1.4 CASE WHEN Expression
-**Status**: ✅ Fully Supported (both simple and searched CASE forms)
+- Arithmetic: `+`, `-`, `*`, `/`, `%`, `^`, unary `-`
+- Comparison: `=`, `<>`, `<`, `>`, `<=`, `>=`
+- Boolean: `AND`, `OR`, `XOR`, `NOT`
+- String matching: `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `=~` (regex)
+- `IN` operator (static lists and dynamic variables)
+- `IS NULL` / `IS NOT NULL`
+- String concatenation with `+`
+- `CASE WHEN ... THEN ... ELSE ... END` (simple and searched forms)
+- List literals, list slicing, heterogeneous lists
+- Map literals: `{key: value}`
+- Parameters: `$param`
 
-### 1.5 SET += (Map Merge)
-**Syntax**: `SET n += {newProp: 'value', otherProp: 42}`
-**Status**: ✅ Supported
-**Note**: Merges map literal properties into existing node/relationship properties.
+### Pattern Features
 
-## 2. Scalar Functions
+- Named paths: `p = (a)-[r]->(b)`
+- Variable-length paths: `(a)-[*1..3]->(b)`
+- `shortestPath()` / `allShortestPaths()`
+- Multi-label patterns: `(n:Person:Employee)` (up to 6 labels, AND semantics)
 
-### 2.1 Type Conversion
-| Function | Status |
-|----------|--------|
-| `toString(value)` | ✅ |
-| `toInteger(value)` | ✅ |
-| `toFloat(value)` | ✅ |
-| `toBoolean(value)` | ✅ |
+### Comprehensions
 
-### 2.2 String Functions
-| Function | Status |
-|----------|--------|
-| `upper(text)` | ✅ |
-| `lower(text)` | ✅ |
-| `trim(text)` | ✅ |
-| `lTrim(text)` | ✅ |
-| `rTrim(text)` | ✅ |
-| `left(text, n)` | ✅ |
-| `right(text, n)` | ✅ |
-| `substring(text, start, length?)` | ✅ |
-| `replace(text, search, replace)` | ✅ |
-| `split(text, delimiter)` | ✅ |
-| `reverse(value)` | ✅ |
-| `length(value)` | ✅ |
-| `startsWith(text, prefix)` | ✅ |
-| `endsWith(text, suffix)` | ✅ |
-| `contains(text, substring)` | ✅ |
+- List comprehensions: `[x IN list WHERE cond | expr]`
+- Pattern comprehensions: `[(a)-->(b) | b.prop]`
+- `reduce(acc = init, x IN list | expr)`
+- `exists()` subquery expression
 
-### 2.3 Math Functions
-| Function | Status |
-|----------|--------|
-| `abs(value)` | ✅ |
-| `ceil(value)` | ✅ |
-| `floor(value)` | ✅ |
-| `round(value)` | ✅ |
-| `sqrt(value)` | ✅ |
-| `sign(value)` | ✅ |
+### Map Projections
 
-### 2.4 List Functions
-| Function | Status |
-|----------|--------|
-| `size(list)` | ✅ |
-| `head(list)` | ✅ |
-| `tail(list)` | ✅ |
-| `last(list)` | ✅ |
-| `range(start, end, step?)` | ✅ |
-| `coalesce(v1, v2, ...)` | ✅ |
+- `n {.prop1, key: expr, .*}`
 
-### 2.5 Entity Introspection
-| Function | Status |
-|----------|--------|
-| `id(entity)` | ✅ |
-| `labels(node)` | ✅ |
-| `type(relationship)` | ✅ |
-| `keys(entity)` | ✅ |
-| `properties(entity)` | ✅ |
+### Aggregation Functions
 
-### 2.6 Utility Functions
-| Function | Status |
-|----------|--------|
-| `timestamp()` | ✅ |
-| `randomUUID()` | ✅ |
+| Function | Notes |
+|----------|-------|
+| `count()` | Including `count(DISTINCT x)` |
+| `sum()` | |
+| `avg()` | |
+| `min()` | |
+| `max()` | |
+| `collect()` | Including `collect(DISTINCT x)` |
 
-### 2.7 Quantifier Functions
-| Function | Status |
-|----------|--------|
-| `all(x IN list WHERE pred)` | ✅ |
-| `any(x IN list WHERE pred)` | ✅ |
-| `none(x IN list WHERE pred)` | ✅ |
-| `single(x IN list WHERE pred)` | ✅ |
+### String Functions
 
-## 3. Aggregate Functions
+| Function |
+|----------|
+| `toString(value)` |
+| `toUpper(text)` / `toLower(text)` |
+| `trim(text)` / `lTrim(text)` / `rTrim(text)` |
+| `left(text, n)` / `right(text, n)` |
+| `substring(text, start, length?)` |
+| `replace(text, search, replace)` |
+| `split(text, delimiter)` |
+| `reverse(text)` |
+| `length(text)` / `size(text)` |
+| `startsWith(text, prefix)` / `endsWith(text, suffix)` / `contains(text, sub)` |
 
-All aggregate functions are ✅ Supported: `count()`, `sum()`, `avg()`, `max()`, `min()`, `collect()`
+### Math Functions
 
-## 4. Query Features
+| Function |
+|----------|
+| `abs(value)` |
+| `ceil(value)` / `floor(value)` / `round(value)` |
+| `sqrt(value)` |
+| `sign(value)` |
 
-| Feature | Status |
-|---------|--------|
-| WHERE with IN operator | ✅ |
-| UNION / UNION ALL | ✅ |
-| DISTINCT | ✅ |
-| List literals | ✅ |
-| List slicing | ✅ |
-| List comprehensions (FILTER/EXTRACT) | ✅ |
-| Heterogeneous lists | ✅ |
-| SET n:Label | ✅ |
+### List Functions
 
-## 5. Recently Implemented Features
+| Function |
+|----------|
+| `range(start, end, step?)` |
+| `head(list)` / `tail(list)` / `last(list)` |
+| `keys(entity)` |
+| `reverse(list)` |
+| `size(list)` |
 
-### 5.1 FOREACH Statement
-**Syntax**: `FOREACH (x IN list | SET x.prop = value)`
-**Status**: ✅ Supported
-**Note**: Iterates over a list and executes write-only operations (CREATE, SET, DELETE, REMOVE, MERGE) for each element. Does not export variables to the outer scope.
+### Type Conversion Functions
 
-### 5.2 CALL { subquery }
-**Syntax**: `CALL { MATCH (m) RETURN m } RETURN m`
-**Status**: ✅ Supported
-**Note**: Executes a subquery per input row with variable scope isolation. Supports `IN TRANSACTIONS OF n ROWS` for batched execution.
+| Function |
+|----------|
+| `toInteger(value)` |
+| `toFloat(value)` |
+| `toBoolean(value)` |
 
-### 5.3 LOAD CSV
-**Syntax**: `LOAD CSV WITH HEADERS FROM 'file:///path/to/file.csv' AS row`
-**Status**: ✅ Supported
-**Note**: Streaming RFC 4180-compliant CSV reader. Supports `WITH HEADERS` (map rows) and without headers (list rows). Custom `FIELDTERMINATOR` supported.
+### Path Functions
 
-### 5.4 EXISTS Pattern Expressions
-**Syntax**: `WHERE EXISTS { (n)-[:KNOWS]->(m) }` or `WHERE exists((n)-[:KNOWS]->(m))`
-**Status**: ✅ Supported
-**Note**: Evaluates pattern existence using graph traversal within expression evaluator.
+| Function |
+|----------|
+| `nodes(path)` |
+| `relationships(path)` |
+| `length(path)` |
 
-### 5.2 Pattern Comprehensions
-**Syntax**: `[(n)-[:KNOWS]->(m) | m.name]`
-**Status**: ✅ Supported
-**Note**: Traverses graph patterns and collects projected expressions into a list.
+### Utility Functions
 
-### 5.3 REDUCE Function
-**Syntax**: `reduce(total = 0, x IN [1, 2, 3] | total + x)`
-**Status**: ✅ Supported
-**Note**: Accumulator-based list reduction with custom body expression.
+| Function |
+|----------|
+| `coalesce(v1, v2, ...)` |
+| `id(entity)` |
+| `labels(node)` |
+| `type(relationship)` |
+| `properties(entity)` |
+| `timestamp()` |
+| `randomUUID()` |
 
-### 5.4 Multi-Label Support
-**Syntax**: `(n:Person:Employee)`
-**Status**: ✅ Supported
-**Note**: Nodes support up to 6 labels. MATCH uses AND semantics (node must have ALL specified labels). SET appends labels, REMOVE removes individual labels.
+### Quantifier Functions
 
-### 5.5 UNWIND Nested Properties
-**Syntax**: `MATCH (n) UNWIND n.arrayProp AS x`
-**Status**: ✅ Supported
-**Note**: Expression-based UNWIND evaluates property access at runtime.
+| Function |
+|----------|
+| `all(x IN list WHERE pred)` |
+| `any(x IN list WHERE pred)` |
+| `none(x IN list WHERE pred)` |
+| `single(x IN list WHERE pred)` |
 
-## Testing Notes
+### Schema and Administration
 
-When writing tests for ZYX:
-- Use unique label names to avoid conflicts between tests
-- Avoid using features listed in Section 5
-- Test transaction isolation by using unique labels per test case
+- `CREATE INDEX` / `DROP INDEX` / `SHOW INDEXES`
+- Vector indexes
+- `CREATE CONSTRAINT` / `DROP CONSTRAINT` / `SHOW CONSTRAINTS`
+- `BEGIN` / `COMMIT` / `ROLLBACK` (transactions)
+
+## 2. Not Yet Supported
+
+- Temporal types (`date`, `time`, `datetime`, `duration`) and related functions
+- Spatial types (`point`) and spatial functions (`distance()`, etc.)
+- Extended math functions (`log()`, `e()`, `pi()`, `sin()`, `cos()`, `tan()`, etc.)
+- Statistical aggregation (`percentileDisc()`, `percentileCont()`, `stDev()`, `stDevP()`)
+- Undirected relationship patterns: `-[]-`
+- Multiple relationship types in pattern: `-[:TYPE1|TYPE2]->`
+- `DETACH DELETE`
+- `REMOVE` labels from nodes
+- `SET +=` for map merge
+- `CREATE ... RETURN` (returning created entities)
+- `WITH HEADERS` in `LOAD CSV`
+- `PERIODIC COMMIT`
+- Subquery expressions in `WHERE`
+- Pattern expressions used as existence checks

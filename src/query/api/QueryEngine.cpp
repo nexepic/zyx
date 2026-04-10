@@ -96,8 +96,6 @@ namespace graph::query {
 				                    rootType != logical::LogicalOpType::LOP_CREATE_CONSTRAINT &&
 				                    rootType != logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
 				                    rootType != logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
-				                    rootType != logical::LogicalOpType::LOP_LIST_CONFIG &&
-				                    rootType != logical::LogicalOpType::LOP_SET_CONFIG &&
 				                    rootType != logical::LogicalOpType::LOP_EXPLAIN &&
 				                    rootType != logical::LogicalOpType::LOP_PROFILE);
 

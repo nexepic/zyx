@@ -34,6 +34,7 @@
 #include "graph/query/logical/operators/LogicalCreateEdge.hpp"
 #include "graph/query/logical/operators/LogicalMergeNode.hpp"
 #include "graph/query/logical/operators/LogicalMergeEdge.hpp"
+#include "graph/query/logical/operators/LogicalNamedPath.hpp"
 
 namespace graph::parser::cypher::helpers {
 
@@ -83,6 +84,12 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::buildMatchPatte
 	for (auto part : parts) {
 		auto element = part->patternElement();
 
+		// Check for named path: p = (a)-[r]->(b)
+		std::string pathVar;
+		if (part->variable()) {
+			pathVar = part->variable()->getText();
+		}
+
 		if (!rootOp) {
 			// First component or no prior pipeline: build from scratch
 			rootOp = processMatchPatternElement(element, nullptr);
@@ -95,6 +102,31 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::buildMatchPatte
 			auto partOp = processMatchPatternElement(element, nullptr);
 			rootOp = std::make_unique<query::logical::LogicalJoin>(
 				std::move(rootOp), std::move(partOp));
+		}
+
+		// Wrap with named path operator if path variable is present
+		if (!pathVar.empty()) {
+			std::vector<std::string> nodeVars;
+			std::vector<std::string> edgeVars;
+
+			// Collect node and edge variables from the pattern
+			auto headNode = element->nodePattern();
+			if (headNode && headNode->variable()) {
+				nodeVars.push_back(headNode->variable()->getText());
+			}
+			for (auto chain : element->patternElementChain()) {
+				auto relPat = chain->relationshipPattern();
+				if (relPat && relPat->relationshipDetail() && relPat->relationshipDetail()->variable()) {
+					edgeVars.push_back(relPat->relationshipDetail()->variable()->getText());
+				}
+				auto nodePat = chain->nodePattern();
+				if (nodePat && nodePat->variable()) {
+					nodeVars.push_back(nodePat->variable()->getText());
+				}
+			}
+
+			rootOp = std::make_unique<query::logical::LogicalNamedPath>(
+				std::move(rootOp), pathVar, nodeVars, edgeVars);
 		}
 	}
 

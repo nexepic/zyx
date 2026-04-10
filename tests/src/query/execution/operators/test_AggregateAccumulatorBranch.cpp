@@ -340,7 +340,8 @@ class CollectAccumulatorBranchTest : public ::testing::Test {};
 TEST_F(CollectAccumulatorBranchTest, EmptyCollect) {
 	auto acc = createAccumulator(AggregateFunctionType::AGG_COLLECT);
 	auto result = acc->getResult();
-	EXPECT_EQ(std::get<std::string>(result.getVariant()), "[]");
+	auto list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	EXPECT_TRUE(list.empty());
 }
 
 // Collect with single value - the i > 0 branch is false
@@ -348,7 +349,9 @@ TEST_F(CollectAccumulatorBranchTest, SingleValue) {
 	auto acc = createAccumulator(AggregateFunctionType::AGG_COLLECT);
 	acc->update(PropertyValue(int64_t(42)));
 	auto result = acc->getResult();
-	EXPECT_EQ(std::get<std::string>(result.getVariant()), "[42]");
+	auto list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(list.size(), 1u);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 42);
 }
 
 // Collect with multiple values - the i > 0 branch is true
@@ -358,7 +361,11 @@ TEST_F(CollectAccumulatorBranchTest, MultipleValues) {
 	acc->update(PropertyValue(int64_t(2)));
 	acc->update(PropertyValue(int64_t(3)));
 	auto result = acc->getResult();
-	EXPECT_EQ(std::get<std::string>(result.getVariant()), "[1, 2, 3]");
+	auto list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(list.size(), 3u);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 1);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 2);
+	EXPECT_EQ(std::get<int64_t>(list[2].getVariant()), 3);
 }
 
 // Collect with NULL values (collect includes nulls)
@@ -368,9 +375,8 @@ TEST_F(CollectAccumulatorBranchTest, WithNullValues) {
 	acc->update(PropertyValue());
 	acc->update(PropertyValue(int64_t(3)));
 	auto result = acc->getResult();
-	// Collect includes all values, even nulls
-	auto str = std::get<std::string>(result.getVariant());
-	EXPECT_FALSE(str.empty());
+	auto list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	EXPECT_EQ(list.size(), 3u);
 }
 
 // Collect with mixed types
@@ -380,9 +386,11 @@ TEST_F(CollectAccumulatorBranchTest, MixedTypes) {
 	acc->update(PropertyValue(std::string("hello")));
 	acc->update(PropertyValue(3.14));
 	auto result = acc->getResult();
-	auto str = std::get<std::string>(result.getVariant());
-	EXPECT_TRUE(str.find("1") != std::string::npos);
-	EXPECT_TRUE(str.find("hello") != std::string::npos);
+	auto list = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(list.size(), 3u);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 1);
+	EXPECT_EQ(std::get<std::string>(list[1].getVariant()), "hello");
+	EXPECT_DOUBLE_EQ(std::get<double>(list[2].getVariant()), 3.14);
 }
 
 // Collect clone
@@ -391,7 +399,10 @@ TEST_F(CollectAccumulatorBranchTest, ClonePreservesValues) {
 	acc->update(PropertyValue(int64_t(10)));
 	acc->update(PropertyValue(int64_t(20)));
 	auto clone = acc->clone();
-	EXPECT_EQ(std::get<std::string>(clone->getResult().getVariant()), "[10, 20]");
+	auto list = std::get<std::vector<PropertyValue>>(clone->getResult().getVariant());
+	ASSERT_EQ(list.size(), 2u);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 10);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 20);
 }
 
 // Collect reset
@@ -399,7 +410,8 @@ TEST_F(CollectAccumulatorBranchTest, ResetClearsValues) {
 	auto acc = createAccumulator(AggregateFunctionType::AGG_COLLECT);
 	acc->update(PropertyValue(int64_t(1)));
 	acc->reset();
-	EXPECT_EQ(std::get<std::string>(acc->getResult().getVariant()), "[]");
+	auto list = std::get<std::vector<PropertyValue>>(acc->getResult().getVariant());
+	EXPECT_TRUE(list.empty());
 }
 
 // ============================================================================

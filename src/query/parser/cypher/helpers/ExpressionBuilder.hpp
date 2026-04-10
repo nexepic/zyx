@@ -199,6 +199,12 @@ private:
 	static std::unique_ptr<graph::query::expressions::Expression> buildExistsExpression(
 		CypherParser::ExistsExpressionContext* ctx);
 
+	static std::unique_ptr<graph::query::expressions::Expression> buildShortestPathExpression(
+		CypherParser::ShortestPathExpressionContext* ctx);
+
+	static std::unique_ptr<graph::query::expressions::Expression> buildMapProjectionExpression(
+		CypherParser::MapProjectionContext* ctx);
+
 	// Helper methods for literal value extraction
 	static graph::PropertyValue parseListLiteral(CypherParser::ListLiteralContext *ctx);
 };

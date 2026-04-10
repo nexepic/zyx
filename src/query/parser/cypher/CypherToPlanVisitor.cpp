@@ -57,8 +57,6 @@ std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogical
 	                      rootType != query::logical::LogicalOpType::LOP_CREATE_CONSTRAINT &&
 	                      rootType != query::logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
 	                      rootType != query::logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
-	                      rootType != query::logical::LogicalOpType::LOP_LIST_CONFIG &&
-	                      rootType != query::logical::LogicalOpType::LOP_SET_CONFIG &&
 	                      rootType != query::logical::LogicalOpType::LOP_EXPLAIN &&
 	                      rootType != query::logical::LogicalOpType::LOP_PROFILE &&
 	                      rootType != query::logical::LogicalOpType::LOP_CALL_PROCEDURE);
@@ -335,7 +333,15 @@ std::any CypherToPlanVisitor::visitForeachStatement(CypherParser::ForeachStateme
 std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContext *ctx) {
 	// Grammar: K_CALL LBRACE singleQuery RBRACE inTransactionsClause?
 	auto savedRootOp = std::move(rootOp_);
-	auto savedScope = scope_.currentVars();
+
+	// Determine outer scope variables from the preceding logical plan's output.
+	// The scope stack is not reliably maintained by clause handlers, so we derive
+	// available outer variables directly from the compiled plan.
+	std::unordered_set<std::string> outerVars;
+	if (savedRootOp) {
+		auto vars = savedRootOp->getOutputVariables();
+		outerVars.insert(vars.begin(), vars.end());
+	}
 
 	// Push isolated scope for subquery
 	scope_.pushFrame(true);
@@ -345,19 +351,34 @@ std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContex
 	visitSingleQuery(ctx->singleQuery());
 	auto subqueryOp = std::move(rootOp_);
 
-	// Extract imported vars (from WITH at start of subquery) and returned vars
-	std::vector<std::string> importedVars;
+	// Extract returned vars from the compiled subquery
 	std::vector<std::string> returnedVars;
 	if (subqueryOp) {
 		returnedVars = subqueryOp->getOutputVariables();
 	}
 
 	// Pop subquery scope
-	auto subFrame = scope_.popFrame();
-	// Determine imported vars: any outer scope vars that were used in subquery
-	for (const auto &var : subFrame.variables) {
-		if (savedScope.count(var)) {
-			importedVars.push_back(var);
+	scope_.popFrame();
+
+	// Detect imported vars from the WITH clauses at the start of the subquery.
+	// In CALL { WITH n RETURN ... }, the WITH clause imports outer variables.
+	std::vector<std::string> importedVars;
+	auto *sq = ctx->singleQuery();
+	for (auto *wc : sq->withClause()) {
+		auto *projBody = wc->projectionBody();
+		auto *projItems = projBody->projectionItems();
+		// WITH * imports all outer vars
+		if (projItems->MULTIPLY()) {
+			importedVars.assign(outerVars.begin(), outerVars.end());
+			break;
+		}
+		for (auto *item : projItems->projectionItem()) {
+			// Use the source expression to detect outer scope references.
+			// For WITH n: source is "n". For WITH n AS m: source is "n".
+			std::string sourceVar = item->expression()->getText();
+			if (outerVars.count(sourceVar)) {
+				importedVars.push_back(sourceVar);
+			}
 		}
 	}
 

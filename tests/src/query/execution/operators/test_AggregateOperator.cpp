@@ -229,8 +229,11 @@ TEST_F(AggregateOperatorTest, Collect_Values) {
 	ASSERT_TRUE(batch.has_value());
 	auto val = (*batch)[0].getValue("collected");
 	ASSERT_TRUE(val.has_value());
-	EXPECT_EQ(val->getType(), PropertyType::STRING);
-	EXPECT_EQ(std::get<std::string>(val->getVariant()), "[1, 2]");
+	EXPECT_EQ(val->getType(), PropertyType::LIST);
+	auto list = std::get<std::vector<PropertyValue>>(val->getVariant());
+	ASSERT_EQ(list.size(), 2u);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 1);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 2);
 
 	op->close();
 }
@@ -725,14 +728,18 @@ TEST_F(AggregateOperatorTest, CollectAccumulator_Clone) {
 	acc->update(PropertyValue(int64_t(2)));
 
 	auto clone = acc->clone();
-	EXPECT_EQ(std::get<std::string>(clone->getResult().getVariant()), "[1, 2]");
+	auto list = std::get<std::vector<PropertyValue>>(clone->getResult().getVariant());
+	ASSERT_EQ(list.size(), 2u);
+	EXPECT_EQ(std::get<int64_t>(list[0].getVariant()), 1);
+	EXPECT_EQ(std::get<int64_t>(list[1].getVariant()), 2);
 }
 
 TEST_F(AggregateOperatorTest, CollectAccumulator_Reset) {
 	auto acc = createAccumulator(AggregateFunctionType::AGG_COLLECT);
 	acc->update(PropertyValue(int64_t(1)));
 	acc->reset();
-	EXPECT_EQ(std::get<std::string>(acc->getResult().getVariant()), "[]");
+	auto list = std::get<std::vector<PropertyValue>>(acc->getResult().getVariant());
+	EXPECT_TRUE(list.empty());
 }
 
 TEST_F(AggregateOperatorTest, Avg_IntegerValues) {

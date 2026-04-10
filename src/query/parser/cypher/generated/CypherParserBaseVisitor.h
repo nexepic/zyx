@@ -450,6 +450,18 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitShortestPathExpression(CypherParser::ShortestPathExpressionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitMapProjection(CypherParser::MapProjectionContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitMapProjectionElement(CypherParser::MapProjectionElementContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitPatternComprehension(CypherParser::PatternComprehensionContext *ctx) override {
     return visitChildren(ctx);
   }

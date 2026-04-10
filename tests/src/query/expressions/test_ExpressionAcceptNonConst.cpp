@@ -41,6 +41,8 @@ public:
 	void visit(ExistsExpression *) override {}
 	void visit(PatternComprehensionExpression *) override {}
 	void visit(ParameterExpression *) override {}
+	void visit(ShortestPathExpression *) override {}
+	void visit(MapProjectionExpression *) override {}
 
 	void visit(ListLiteralExpression *) override {
 		count++;

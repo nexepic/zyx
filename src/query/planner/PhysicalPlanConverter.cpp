@@ -42,6 +42,7 @@
 #include "graph/query/execution/operators/CallSubqueryOperator.hpp"
 #include "graph/query/execution/operators/LoadCsvOperator.hpp"
 #include "graph/query/execution/operators/RecordInjectorOperator.hpp"
+#include "graph/query/execution/operators/NamedPathOperator.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
@@ -78,6 +79,7 @@
 #include "graph/query/logical/operators/LogicalForeach.hpp"
 #include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalLoadCsv.hpp"
+#include "graph/query/logical/operators/LogicalNamedPath.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -137,6 +139,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convert(
 		case LogicalOpType::LOP_FOREACH:              return convertForeach(logicalOp);
 		case LogicalOpType::LOP_CALL_SUBQUERY:        return convertCallSubquery(logicalOp);
 		case LogicalOpType::LOP_LOAD_CSV:             return convertLoadCsv(logicalOp);
+		case LogicalOpType::LOP_NAMED_PATH:           return convertNamedPath(logicalOp);
 		default:
 			throw std::runtime_error(
 				"PhysicalPlanConverter: unsupported logical operator type: " +
@@ -519,6 +522,9 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertUnion(
 std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertSingleRow(
 	const LogicalOperator * /*op*/) const {
 
+	if (singleRowOverride_) {
+		return std::move(singleRowOverride_);
+	}
 	return std::make_unique<SingleRowOperator>();
 }
 
@@ -807,31 +813,20 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertForeach(
 		childPhys = convert(foreach->getInput());
 	}
 
+	// Create a RecordInjector and install it as the SingleRow replacement.
+	// When convert() encounters LogicalSingleRow in the body, convertSingleRow()
+	// returns this injector instead of a plain SingleRowOperator.
+	auto injector = std::make_unique<RecordInjectorOperator>();
+	RecordInjectorOperator *injectorPtr = injector.get();
+	singleRowOverride_ = std::move(injector);
+
 	std::unique_ptr<PhysicalOperator> bodyPhys;
 	if (foreach->getBody()) {
 		bodyPhys = convert(foreach->getBody());
 	}
 
-	// Create a RecordInjector and attach it as the leaf child of the body.
-	// Walk to the parent of the leaf operator and replace the leaf
-	// (typically a SingleRowOperator) with the RecordInjector.
-	RecordInjectorOperator *injectorPtr = nullptr;
-	if (bodyPhys) {
-		auto injector = std::make_unique<RecordInjectorOperator>();
-		injectorPtr = injector.get();
-
-		// Walk to the parent of the leaf in the body pipeline
-		PhysicalOperator *parent = bodyPhys.get();
-		PhysicalOperator *current = parent;
-		while (true) {
-			auto children = current->getChildren();
-			if (children.empty()) break;
-			parent = current;
-			current = const_cast<PhysicalOperator *>(children[0]);
-		}
-		// Replace the leaf's parent's child with the injector
-		parent->setChild(std::move(injector));
-	}
+	// Clear any unconsumed override (e.g., if body had no LogicalSingleRow)
+	singleRowOverride_.reset();
 
 	return std::make_unique<ForeachOperator>(
 		std::move(childPhys), foreach->getIterVar(),
@@ -848,28 +843,22 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertCallSubquery(
 		inputPhys = convert(callSub->getInput());
 	}
 
+	// Create a RecordInjector for imported variable injection.
+	// Install it as the SingleRow replacement before converting the subquery.
+	RecordInjectorOperator *injectorPtr = nullptr;
+	if (!callSub->getImportedVars().empty()) {
+		auto injector = std::make_unique<RecordInjectorOperator>();
+		injectorPtr = injector.get();
+		singleRowOverride_ = std::move(injector);
+	}
+
 	std::unique_ptr<PhysicalOperator> subqueryPhys;
 	if (callSub->getSubquery()) {
 		subqueryPhys = convert(callSub->getSubquery());
 	}
 
-	// Create a RecordInjector for imported variable injection
-	RecordInjectorOperator *injectorPtr = nullptr;
-	if (subqueryPhys && !callSub->getImportedVars().empty()) {
-		auto injector = std::make_unique<RecordInjectorOperator>();
-		injectorPtr = injector.get();
-
-		// Walk to the parent of the leaf and replace it with the injector
-		PhysicalOperator *parent = subqueryPhys.get();
-		PhysicalOperator *current = parent;
-		while (true) {
-			auto children = current->getChildren();
-			if (children.empty()) break;
-			parent = current;
-			current = const_cast<PhysicalOperator *>(children[0]);
-		}
-		parent->setChild(std::move(injector));
-	}
+	// Clear any unconsumed override
+	singleRowOverride_.reset();
 
 	return std::make_unique<CallSubqueryOperator>(
 		std::move(inputPhys), std::move(subqueryPhys),
@@ -892,6 +881,24 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertLoadCsv(
 		std::move(childPhys), loadCsv->getUrlExpr(),
 		loadCsv->getRowVariable(), loadCsv->isWithHeaders(),
 		loadCsv->getFieldTerminator());
+}
+
+std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNamedPath(
+	const LogicalOperator *op) const {
+
+	const auto *namedPath = static_cast<const LogicalNamedPath *>(op);
+
+	auto children = namedPath->getChildren();
+	std::unique_ptr<PhysicalOperator> childPhys;
+	if (!children.empty() && children[0]) {
+		childPhys = convert(children[0]);
+	}
+
+	return std::make_unique<NamedPathOperator>(
+		std::move(childPhys), dm_,
+		namedPath->getPathVariable(),
+		namedPath->getNodeVariables(),
+		namedPath->getEdgeVariables());
 }
 
 } // namespace graph::query

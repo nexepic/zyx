@@ -71,7 +71,8 @@ enum class LogicalOpType {
 	// Subquery & Advanced (pass-through)
 	LOP_FOREACH,
 	LOP_CALL_SUBQUERY,
-	LOP_LOAD_CSV
+	LOP_LOAD_CSV,
+	LOP_NAMED_PATH
 };
 
 /**
@@ -152,6 +153,7 @@ inline std::string toString(LogicalOpType type) {
 		case LogicalOpType::LOP_FOREACH: return "Foreach";
 		case LogicalOpType::LOP_CALL_SUBQUERY: return "CallSubquery";
 		case LogicalOpType::LOP_LOAD_CSV: return "LoadCsv";
+		case LogicalOpType::LOP_NAMED_PATH: return "NamedPath";
 		default: return "Unknown";
 	}
 }

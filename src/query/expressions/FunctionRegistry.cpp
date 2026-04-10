@@ -460,34 +460,6 @@ static PropertyValue rangeImpl(
 	return PropertyValue(result);
 }
 
-static PropertyValue reduceImpl(
-	const std::vector<PropertyValue>& args,
-	[[maybe_unused]] const EvaluationContext& context
-) {
-	if (args.empty()) {
-		throw std::runtime_error("REDUCE function requires at least one argument");
-	}
-
-	for (const auto& arg : args) {
-		if (arg.getType() == PropertyType::LIST) {
-			throw std::runtime_error(
-				"REDUCE function is not yet fully implemented. "
-				"The REDUCE syntax 'reduce(accum = init, x IN list | expression)' "
-				"requires special parsing support. "
-				"Please use list comprehensions FILTER/EXTRACT as alternatives."
-			);
-		}
-	}
-
-	throw std::runtime_error(
-		"REDUCE function is not yet implemented. "
-		"REDUCE has special Cypher syntax that requires custom parsing: "
-		"'reduce(accumulator = initial, variable IN list | expression)'. "
-		"Please use list comprehensions [x IN list | expression] or "
-		"[x IN list WHERE condition] as alternatives."
-	);
-}
-
 // ============================================================================
 // Type Conversion Function Implementations
 // ============================================================================
@@ -768,7 +740,6 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 
 	// List functions
 	registerFunction(makeFn("range", 2, 3, &rangeImpl));
-	registerFunction(makeFn("reduce", 1, SIZE_MAX, &reduceImpl, true));
 
 	// Quantifier functions (keep as separate classes — they have special dispatch)
 	registerFunction(std::make_unique<AllFunction>());
@@ -797,6 +768,45 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	// Utility functions
 	registerFunction(makeFn("timestamp", 0, 0, &timestampImpl));
 	registerFunction(makeFn("randomUUID", 0, 0, &randomUUIDImpl));
+
+	// Path functions
+	registerFunction(makeFn("nodes", 1, 1, [](const std::vector<PropertyValue>& args, const EvaluationContext&) -> PropertyValue {
+		if (args.empty() || args[0].getType() != PropertyType::LIST) {
+			return PropertyValue();
+		}
+		const auto& pathList = args[0].getList();
+		std::vector<PropertyValue> nodes;
+		for (const auto& elem : pathList) {
+			if (elem.getType() == PropertyType::MAP) {
+				const auto& map = elem.getMap();
+				auto it = map.find("_type");
+				if (it != map.end() && it->second.getType() == PropertyType::STRING &&
+					std::get<std::string>(it->second.getVariant()) == "node") {
+					nodes.push_back(elem);
+				}
+			}
+		}
+		return PropertyValue(std::move(nodes));
+	}));
+
+	registerFunction(makeFn("relationships", 1, 1, [](const std::vector<PropertyValue>& args, const EvaluationContext&) -> PropertyValue {
+		if (args.empty() || args[0].getType() != PropertyType::LIST) {
+			return PropertyValue();
+		}
+		const auto& pathList = args[0].getList();
+		std::vector<PropertyValue> rels;
+		for (const auto& elem : pathList) {
+			if (elem.getType() == PropertyType::MAP) {
+				const auto& map = elem.getMap();
+				auto it = map.find("_type");
+				if (it != map.end() && it->second.getType() == PropertyType::STRING &&
+					std::get<std::string>(it->second.getVariant()) == "relationship") {
+					rels.push_back(elem);
+				}
+			}
+		}
+		return PropertyValue(std::move(rels));
+	}));
 
 	// Entity introspection functions
 	registerFunction(makeIdFunction());

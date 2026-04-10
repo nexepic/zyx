@@ -358,7 +358,7 @@ notExpression
 
 comparisonExpression
     : arithmeticExpression K_BETWEEN arithmeticExpression K_AND arithmeticExpression
-    | arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | K_IN
+    | arithmeticExpression ( ( EQ | NEQ | LT | GT | LTE | GTE | REGEX_MATCH | K_IN
         | K_STARTS K_WITH | K_ENDS K_WITH | K_CONTAINS ) arithmeticExpression )* ( K_IS K_NOT? K_NULL )?
     ;
 
@@ -390,6 +390,8 @@ atom
     | quantifierExpression
     | reduceExpression
     | existsExpression
+    | shortestPathExpression
+    | mapProjection
     | functionInvocation
     | caseExpression
     | variable
@@ -453,6 +455,8 @@ schemaName
     | K_BOOLEAN | K_INTEGER | K_FLOAT | K_STRING | K_LIST | K_MAP
     | K_FOREACH | K_LOAD | K_CSV | K_HEADERS | K_FROM | K_FIELDTERMINATOR
     | K_TRANSACTIONS | K_ROWS
+    // Shortest path keywords
+    | K_SHORTESTPATH | K_ALLSHORTESTPATHS
     ;
 
 symbolicName
@@ -481,6 +485,8 @@ symbolicName
     // FOREACH / LOAD CSV / Subquery Keywords
     | K_FOREACH | K_LOAD | K_CSV | K_HEADERS | K_FROM | K_FIELDTERMINATOR
     | K_TRANSACTIONS | K_ROWS
+    // Shortest path keywords
+    | K_SHORTESTPATH | K_ALLSHORTESTPATHS
     ;
 
 literal
@@ -517,6 +523,22 @@ listComprehension
 // REDUCE function: reduce(accumulator = initial, variable IN list | expression)
 reduceExpression
     : K_REDUCE LPAREN variable EQ expression COMMA variable K_IN expression PIPE expression RPAREN
+    ;
+
+// Shortest path expressions
+shortestPathExpression
+    : (K_SHORTESTPATH | K_ALLSHORTESTPATHS) LPAREN patternElement RPAREN
+    ;
+
+// Map projection: n {.name, .age, score: expr, .*}
+mapProjection
+    : variable LBRACE mapProjectionElement (COMMA mapProjectionElement)* RBRACE
+    ;
+
+mapProjectionElement
+    : DOT MULTIPLY                              // all-properties: .*
+    | propertyKeyName COLON expression           // literal entry: key: expr
+    | DOT propertyKeyName                        // property selector: .name
     ;
 
 // Pattern comprehension: [(n)-[:REL]->(m) | m.name]

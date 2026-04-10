@@ -48,7 +48,9 @@ enum class ExpressionType {
 	LIST_COMPREHENSION,
 	IS_NULL,
 	IN_LIST,
-	PARAMETER
+	PARAMETER,
+	SHORTEST_PATH,
+	MAP_PROJECTION
 };
 
 /**
@@ -79,6 +81,7 @@ enum class BinaryOperatorType {
 	BOP_STARTS_WITH,
 	BOP_ENDS_WITH,
 	BOP_CONTAINS,
+	BOP_REGEX_MATCH,
 
 	// Logical
 	BOP_AND,
@@ -315,6 +318,9 @@ public:
 	InExpression(std::unique_ptr<Expression> value, std::vector<PropertyValue> listValues)
 		: value_(std::move(value)), listValues_(std::move(listValues)) {}
 
+	InExpression(std::unique_ptr<Expression> value, std::unique_ptr<Expression> listExpr)
+		: value_(std::move(value)), listExpression_(std::move(listExpr)) {}
+
 	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::IN_LIST; }
 	void accept(ExpressionVisitor &visitor) override;
 	void accept(ConstExpressionVisitor &visitor) const override;
@@ -323,10 +329,13 @@ public:
 
 	[[nodiscard]] Expression *getValue() const { return value_.get(); }
 	[[nodiscard]] const std::vector<PropertyValue> &getListValues() const { return listValues_; }
+	[[nodiscard]] bool hasDynamicList() const { return listExpression_ != nullptr; }
+	[[nodiscard]] Expression *getListExpression() const { return listExpression_.get(); }
 
 private:
 	std::unique_ptr<Expression> value_;
 	std::vector<PropertyValue> listValues_;
+	std::unique_ptr<Expression> listExpression_;
 };
 
 // ============================================================================
@@ -423,6 +432,8 @@ public:
 	virtual void visit(class PatternComprehensionExpression *expr) = 0;
 	virtual void visit(class ReduceExpression *expr) = 0;
 	virtual void visit(class ParameterExpression *expr) = 0;
+	virtual void visit(class ShortestPathExpression *expr) = 0;
+	virtual void visit(class MapProjectionExpression *expr) = 0;
 };
 
 /**
@@ -449,6 +460,8 @@ public:
 	virtual void visit(const class PatternComprehensionExpression *expr) = 0;
 	virtual void visit(const class ReduceExpression *expr) = 0;
 	virtual void visit(const class ParameterExpression *expr) = 0;
+	virtual void visit(const class ShortestPathExpression *expr) = 0;
+	virtual void visit(const class MapProjectionExpression *expr) = 0;
 };
 
 // ============================================================================

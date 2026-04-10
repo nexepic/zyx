@@ -24,21 +24,21 @@ public:
     K_STARTS = 34, K_XOR = 35, K_BETWEEN = 36, K_FALSE = 37, K_TRUE = 38, 
     K_NULL = 39, K_CASE = 40, K_WHEN = 41, K_THEN = 42, K_ELSE = 43, K_END = 44, 
     K_COUNT = 45, K_FILTER = 46, K_EXTRACT = 47, K_ANY = 48, K_NONE = 49, 
-    K_SINGLE = 50, K_ALL = 51, K_REDUCE = 52, K_INDEX = 53, K_ON = 54, K_SHOW = 55, 
-    K_DROP = 56, K_IF = 57, K_FOR = 58, K_CONSTRAINT = 59, K_DO = 60, K_REQUIRE = 61, 
-    K_UNIQUE = 62, K_MANDATORY = 63, K_SCALAR = 64, K_OF = 65, K_ADD = 66, 
-    K_BEGIN = 67, K_COMMIT = 68, K_ROLLBACK = 69, K_TRANSACTION = 70, K_KEY = 71, 
-    K_NODE = 72, K_BOOLEAN = 73, K_INTEGER = 74, K_FLOAT = 75, K_STRING = 76, 
-    K_LIST = 77, K_MAP = 78, K_VECTOR = 79, K_OPTIONS = 80, K_FOREACH = 81, 
-    K_LOAD = 82, K_CSV = 83, K_HEADERS = 84, K_FROM = 85, K_FIELDTERMINATOR = 86, 
-    K_TRANSACTIONS = 87, K_ROWS = 88, K_EXPLAIN = 89, K_PROFILE = 90, EQ = 91, 
-    NEQ = 92, LT = 93, GT = 94, LTE = 95, GTE = 96, PLUS = 97, MINUS = 98, 
-    MULTIPLY = 99, DIVIDE = 100, MODULO = 101, POWER = 102, LPAREN = 103, 
-    RPAREN = 104, LBRACE = 105, RBRACE = 106, LBRACK = 107, RBRACK = 108, 
-    COMMA = 109, DOT = 110, COLON = 111, PIPE = 112, DOLLAR = 113, RANGE = 114, 
-    SEMI = 115, HexInteger = 116, OctalInteger = 117, DecimalInteger = 118, 
-    DoubleLiteral = 119, ID = 120, StringLiteral = 121, WS = 122, COMMENT = 123, 
-    LINE_COMMENT = 124
+    K_SINGLE = 50, K_ALL = 51, K_REDUCE = 52, K_SHORTESTPATH = 53, K_ALLSHORTESTPATHS = 54, 
+    K_INDEX = 55, K_ON = 56, K_SHOW = 57, K_DROP = 58, K_IF = 59, K_FOR = 60, 
+    K_CONSTRAINT = 61, K_DO = 62, K_REQUIRE = 63, K_UNIQUE = 64, K_MANDATORY = 65, 
+    K_SCALAR = 66, K_OF = 67, K_ADD = 68, K_BEGIN = 69, K_COMMIT = 70, K_ROLLBACK = 71, 
+    K_TRANSACTION = 72, K_KEY = 73, K_NODE = 74, K_BOOLEAN = 75, K_INTEGER = 76, 
+    K_FLOAT = 77, K_STRING = 78, K_LIST = 79, K_MAP = 80, K_VECTOR = 81, 
+    K_OPTIONS = 82, K_FOREACH = 83, K_LOAD = 84, K_CSV = 85, K_HEADERS = 86, 
+    K_FROM = 87, K_FIELDTERMINATOR = 88, K_TRANSACTIONS = 89, K_ROWS = 90, 
+    K_EXPLAIN = 91, K_PROFILE = 92, REGEX_MATCH = 93, EQ = 94, NEQ = 95, 
+    LT = 96, GT = 97, LTE = 98, GTE = 99, PLUS = 100, MINUS = 101, MULTIPLY = 102, 
+    DIVIDE = 103, MODULO = 104, POWER = 105, LPAREN = 106, RPAREN = 107, 
+    LBRACE = 108, RBRACE = 109, LBRACK = 110, RBRACK = 111, COMMA = 112, 
+    DOT = 113, COLON = 114, PIPE = 115, DOLLAR = 116, RANGE = 117, SEMI = 118, 
+    HexInteger = 119, OctalInteger = 120, DecimalInteger = 121, DoubleLiteral = 122, 
+    ID = 123, StringLiteral = 124, WS = 125, COMMENT = 126, LINE_COMMENT = 127
   };
 
   enum {
@@ -71,7 +71,8 @@ public:
     RuleNamespace = 83, RuleSchemaName = 84, RuleSymbolicName = 85, RuleLiteral = 86, 
     RuleBooleanLiteral = 87, RuleNumberLiteral = 88, RuleIntegerLiteral = 89, 
     RuleMapLiteral = 90, RuleListLiteral = 91, RuleParameter = 92, RuleListComprehension = 93, 
-    RuleReduceExpression = 94, RulePatternComprehension = 95
+    RuleReduceExpression = 94, RuleShortestPathExpression = 95, RuleMapProjection = 96, 
+    RuleMapProjectionElement = 97, RulePatternComprehension = 98
   };
 
   explicit CypherParser(antlr4::TokenStream *input);
@@ -186,6 +187,9 @@ public:
   class ParameterContext;
   class ListComprehensionContext;
   class ReduceExpressionContext;
+  class ShortestPathExpressionContext;
+  class MapProjectionContext;
+  class MapProjectionElementContext;
   class PatternComprehensionContext; 
 
   class  CypherContext : public antlr4::ParserRuleContext {
@@ -1498,6 +1502,8 @@ public:
     antlr4::tree::TerminalNode* LTE(size_t i);
     std::vector<antlr4::tree::TerminalNode *> GTE();
     antlr4::tree::TerminalNode* GTE(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> REGEX_MATCH();
+    antlr4::tree::TerminalNode* REGEX_MATCH(size_t i);
     std::vector<antlr4::tree::TerminalNode *> K_IN();
     antlr4::tree::TerminalNode* K_IN(size_t i);
     std::vector<antlr4::tree::TerminalNode *> K_STARTS();
@@ -1606,6 +1612,8 @@ public:
     QuantifierExpressionContext *quantifierExpression();
     ReduceExpressionContext *reduceExpression();
     ExistsExpressionContext *existsExpression();
+    ShortestPathExpressionContext *shortestPathExpression();
+    MapProjectionContext *mapProjection();
     FunctionInvocationContext *functionInvocation();
     CaseExpressionContext *caseExpression();
     VariableContext *variable();
@@ -1893,6 +1901,8 @@ public:
     antlr4::tree::TerminalNode *K_FIELDTERMINATOR();
     antlr4::tree::TerminalNode *K_TRANSACTIONS();
     antlr4::tree::TerminalNode *K_ROWS();
+    antlr4::tree::TerminalNode *K_SHORTESTPATH();
+    antlr4::tree::TerminalNode *K_ALLSHORTESTPATHS();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -1996,6 +2006,8 @@ public:
     antlr4::tree::TerminalNode *K_FIELDTERMINATOR();
     antlr4::tree::TerminalNode *K_TRANSACTIONS();
     antlr4::tree::TerminalNode *K_ROWS();
+    antlr4::tree::TerminalNode *K_SHORTESTPATH();
+    antlr4::tree::TerminalNode *K_ALLSHORTESTPATHS();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -2163,6 +2175,59 @@ public:
   };
 
   ReduceExpressionContext* reduceExpression();
+
+  class  ShortestPathExpressionContext : public antlr4::ParserRuleContext {
+  public:
+    ShortestPathExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *LPAREN();
+    PatternElementContext *patternElement();
+    antlr4::tree::TerminalNode *RPAREN();
+    antlr4::tree::TerminalNode *K_SHORTESTPATH();
+    antlr4::tree::TerminalNode *K_ALLSHORTESTPATHS();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ShortestPathExpressionContext* shortestPathExpression();
+
+  class  MapProjectionContext : public antlr4::ParserRuleContext {
+  public:
+    MapProjectionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    VariableContext *variable();
+    antlr4::tree::TerminalNode *LBRACE();
+    std::vector<MapProjectionElementContext *> mapProjectionElement();
+    MapProjectionElementContext* mapProjectionElement(size_t i);
+    antlr4::tree::TerminalNode *RBRACE();
+    std::vector<antlr4::tree::TerminalNode *> COMMA();
+    antlr4::tree::TerminalNode* COMMA(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  MapProjectionContext* mapProjection();
+
+  class  MapProjectionElementContext : public antlr4::ParserRuleContext {
+  public:
+    MapProjectionElementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *DOT();
+    antlr4::tree::TerminalNode *MULTIPLY();
+    PropertyKeyNameContext *propertyKeyName();
+    antlr4::tree::TerminalNode *COLON();
+    ExpressionContext *expression();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  MapProjectionElementContext* mapProjectionElement();
 
   class  PatternComprehensionContext : public antlr4::ParserRuleContext {
   public:

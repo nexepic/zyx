@@ -62,6 +62,11 @@ private:
 	uint64_t planCacheHits_ = 0;
 	uint64_t planCacheMisses_ = 0;
 
+	/// When set, convertSingleRow returns this instead of a new SingleRowOperator.
+	/// Used by convertForeach/convertCallSubquery to inject a RecordInjector at
+	/// the leaf of the body/subquery plan without fragile tree-walking.
+	mutable std::unique_ptr<execution::PhysicalOperator> singleRowOverride_;
+
 	// Conversion methods for each logical operator type
 	std::unique_ptr<execution::PhysicalOperator> convertNodeScan(
 		const logical::LogicalOperator *op) const;
@@ -140,6 +145,8 @@ private:
 	std::unique_ptr<execution::PhysicalOperator> convertCallSubquery(
 		const logical::LogicalOperator *op) const;
 	std::unique_ptr<execution::PhysicalOperator> convertLoadCsv(
+		const logical::LogicalOperator *op) const;
+	std::unique_ptr<execution::PhysicalOperator> convertNamedPath(
 		const logical::LogicalOperator *op) const;
 };
 

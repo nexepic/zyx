@@ -238,6 +238,12 @@ public:
 
     virtual std::any visitReduceExpression(CypherParser::ReduceExpressionContext *context) = 0;
 
+    virtual std::any visitShortestPathExpression(CypherParser::ShortestPathExpressionContext *context) = 0;
+
+    virtual std::any visitMapProjection(CypherParser::MapProjectionContext *context) = 0;
+
+    virtual std::any visitMapProjectionElement(CypherParser::MapProjectionElementContext *context) = 0;
+
     virtual std::any visitPatternComprehension(CypherParser::PatternComprehensionContext *context) = 0;
 
 

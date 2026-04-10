@@ -36,6 +36,8 @@
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/expressions/ReduceExpression.hpp"
 #include "graph/query/expressions/ParameterExpression.hpp"
+#include "graph/query/expressions/ShortestPathExpression.hpp"
+#include "graph/query/expressions/MapProjectionExpression.hpp"
 
 using namespace graph;
 using namespace graph::query::expressions;
@@ -3725,6 +3727,8 @@ public:
 	void visit(const PatternComprehensionExpression* expr [[maybe_unused]]) override { visitedPatternComprehension = true; }
 	void visit(const ReduceExpression* expr [[maybe_unused]]) override {}
 	void visit(const ParameterExpression* expr [[maybe_unused]]) override { visitedParameter = true; }
+	void visit(const ShortestPathExpression* expr [[maybe_unused]]) override { visitedShortestPath = true; }
+	void visit(const MapProjectionExpression* expr [[maybe_unused]]) override { visitedMapProjection = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -3742,6 +3746,8 @@ public:
 	bool visitedExists = false;
 	bool visitedPatternComprehension = false;
 	bool visitedParameter = false;
+	bool visitedShortestPath = false;
+	bool visitedMapProjection = false;
 };
 
 /**
@@ -3766,6 +3772,8 @@ public:
 	void visit(PatternComprehensionExpression* expr [[maybe_unused]]) override { visitedPatternComprehension = true; }
 	void visit(ReduceExpression* expr [[maybe_unused]]) override {}
 	void visit(ParameterExpression* expr [[maybe_unused]]) override { visitedParameter = true; }
+	void visit(ShortestPathExpression* expr [[maybe_unused]]) override { visitedShortestPath = true; }
+	void visit(MapProjectionExpression* expr [[maybe_unused]]) override { visitedMapProjection = true; }
 
 	// Track which visit methods were called
 	bool visitedLiteral = false;
@@ -3783,6 +3791,8 @@ public:
 	bool visitedExists = false;
 	bool visitedPatternComprehension = false;
 	bool visitedParameter = false;
+	bool visitedShortestPath = false;
+	bool visitedMapProjection = false;
 };
 
 // ============================================================================
@@ -6579,6 +6589,8 @@ public:
 	void visit(class PatternComprehensionExpression *) override { visitCount++; }
 	void visit(class ReduceExpression *) override { visitCount++; }
 	void visit(class ParameterExpression *) override { visitCount++; }
+	void visit(class ShortestPathExpression *) override { visitCount++; }
+	void visit(class MapProjectionExpression *) override { visitCount++; }
 };
 
 TEST_F(ExpressionsCoverageTest, LiteralExpression_NonConstAccept) {

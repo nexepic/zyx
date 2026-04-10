@@ -29,8 +29,13 @@
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/expressions/ReduceExpression.hpp"
+#include "graph/query/expressions/ShortestPathExpression.hpp"
+#include "graph/query/expressions/MapProjectionExpression.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 #include <cmath>
+#include <regex>
+#include <queue>
+#include <unordered_set>
 
 namespace graph::query::expressions {
 
@@ -211,7 +216,33 @@ void ExpressionEvaluator::visit(const InExpression *expr) {
 	// Evaluate the value expression
 	PropertyValue value = evaluate(expr->getValue());
 
-	// Check if value is in the list
+	// Dynamic list: evaluate the list expression at runtime
+	if (expr->hasDynamicList()) {
+		PropertyValue listVal = evaluate(expr->getListExpression());
+
+		// NULL propagation
+		if (EvaluationContext::isNull(listVal)) {
+			result_ = PropertyValue();
+			return;
+		}
+
+		if (listVal.getType() != PropertyType::LIST) {
+			throw ExpressionEvaluationException("IN requires a list value on the right-hand side");
+		}
+
+		const auto& list = listVal.getList();
+		bool found = false;
+		for (const auto& item : list) {
+			if (value == item) {
+				found = true;
+				break;
+			}
+		}
+		result_ = PropertyValue(found);
+		return;
+	}
+
+	// Static list: check against literal values
 	const auto &listValues = expr->getListValues();
 	bool found = false;
 	for (const auto &listItem : listValues) {
@@ -398,6 +429,17 @@ PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
 			std::string l = EvaluationContext::toString(left);
 			std::string r = EvaluationContext::toString(right);
 			return PropertyValue(l.find(r) != std::string::npos);
+		}
+
+		case BinaryOperatorType::BOP_REGEX_MATCH: {
+			std::string str = EvaluationContext::toString(left);
+			std::string pattern = EvaluationContext::toString(right);
+			try {
+				std::regex re(pattern, std::regex_constants::ECMAScript);
+				return PropertyValue(std::regex_match(str, re));
+			} catch (const std::regex_error&) {
+				throw ExpressionEvaluationException("Invalid regular expression: " + pattern);
+			}
 		}
 		default:
 			break;
@@ -908,6 +950,201 @@ void ExpressionEvaluator::visit(const ParameterExpression *expr) {
 			"Missing query parameter: $" + expr->getParameterName());
 	}
 	result_ = *value;
+}
+
+void ExpressionEvaluator::visit(const ShortestPathExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	auto* dm = context_.getDataManager();
+	if (!dm) {
+		throw ExpressionEvaluationException(
+			"shortestPath requires a DataManager in the evaluation context");
+	}
+
+	// Resolve start and end nodes
+	auto startNode = context_.getRecord().getNode(expr->getStartVar());
+	auto endNode = context_.getRecord().getNode(expr->getEndVar());
+	if (!startNode || !endNode) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	int64_t startId = startNode->getId();
+	int64_t endId = endNode->getId();
+
+	auto dmShared = dm->shared_from_this();
+	graph::traversal::RelationshipTraversal traversal(dmShared);
+
+	// BFS to find shortest path(s)
+	std::vector<std::vector<int64_t>> allPaths;
+	std::queue<std::vector<int64_t>> queue;
+	std::unordered_set<int64_t> visited;
+	queue.push({startId});
+	int shortestLen = -1;
+
+	while (!queue.empty()) {
+		auto path = queue.front();
+		queue.pop();
+
+		int64_t current = path.back();
+
+		if (shortestLen >= 0 && static_cast<int>(path.size()) > shortestLen) {
+			break; // All shortest paths found
+		}
+
+		if (current == endId) {
+			shortestLen = static_cast<int>(path.size());
+			allPaths.push_back(path);
+			if (!expr->isAll()) break; // Only need one
+			continue;
+		}
+
+		visited.insert(current);
+
+		// Get edges
+		auto dir = expr->getDirection();
+		std::vector<Edge> edges;
+		if (dir == PatternDirection::PAT_OUTGOING) {
+			edges = traversal.getOutgoingEdges(current);
+		} else if (dir == PatternDirection::PAT_INCOMING) {
+			edges = traversal.getIncomingEdges(current);
+		} else {
+			edges = traversal.getAllConnectedEdges(current);
+		}
+
+		for (const auto& edge : edges) {
+			// Filter by relationship type
+			if (!expr->getRelType().empty()) {
+				std::string edgeType = dm->resolveTokenName(edge.getTypeId());
+				if (edgeType != expr->getRelType()) continue;
+			}
+
+			int64_t nextId = (edge.getSourceNodeId() == current)
+				? edge.getTargetNodeId() : edge.getSourceNodeId();
+
+			if (visited.find(nextId) == visited.end()) {
+				auto newPath = path;
+				newPath.push_back(nextId);
+				queue.push(std::move(newPath));
+			}
+		}
+	}
+
+	if (allPaths.empty()) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	// Build path as LIST of alternating node/relationship MAPs
+	auto buildPathValue = [&](const std::vector<int64_t>& nodePath) -> PropertyValue {
+		std::vector<PropertyValue> pathList;
+		for (size_t i = 0; i < nodePath.size(); ++i) {
+			// Add node
+			Node node = dm->getNode(nodePath[i]);
+			std::unordered_map<std::string, PropertyValue> nodeMap;
+			nodeMap["_type"] = PropertyValue(std::string("node"));
+			nodeMap["_id"] = PropertyValue(nodePath[i]);
+			auto props = dm->getNodeProperties(nodePath[i]);
+			for (const auto& [k, v] : props) {
+				nodeMap[k] = v;
+			}
+			pathList.push_back(PropertyValue(std::move(nodeMap)));
+
+			// Add edge between this node and next (if not last)
+			if (i + 1 < nodePath.size()) {
+				// Find the edge between nodePath[i] and nodePath[i+1]
+				auto outEdges = traversal.getOutgoingEdges(nodePath[i]);
+				for (const auto& edge : outEdges) {
+					if (edge.getTargetNodeId() == nodePath[i + 1]) {
+						std::unordered_map<std::string, PropertyValue> edgeMap;
+						edgeMap["_type"] = PropertyValue(std::string("relationship"));
+						edgeMap["_id"] = PropertyValue(edge.getId());
+						auto eprops = dm->getEdgeProperties(edge.getId());
+						for (const auto& [k, v] : eprops) {
+							edgeMap[k] = v;
+						}
+						pathList.push_back(PropertyValue(std::move(edgeMap)));
+						break;
+					}
+				}
+				// Try incoming direction too
+				if (pathList.size() % 2 == 1) {
+					auto inEdges = traversal.getIncomingEdges(nodePath[i]);
+					for (const auto& edge : inEdges) {
+						if (edge.getSourceNodeId() == nodePath[i + 1]) {
+							std::unordered_map<std::string, PropertyValue> edgeMap;
+							edgeMap["_type"] = PropertyValue(std::string("relationship"));
+							edgeMap["_id"] = PropertyValue(edge.getId());
+							auto eprops = dm->getEdgeProperties(edge.getId());
+							for (const auto& [k, v] : eprops) {
+								edgeMap[k] = v;
+							}
+							pathList.push_back(PropertyValue(std::move(edgeMap)));
+							break;
+						}
+					}
+				}
+			}
+		}
+		return PropertyValue(std::move(pathList));
+	};
+
+	if (expr->isAll()) {
+		std::vector<PropertyValue> pathsList;
+		for (const auto& p : allPaths) {
+			pathsList.push_back(buildPathValue(p));
+		}
+		result_ = PropertyValue(std::move(pathsList));
+	} else {
+		result_ = buildPathValue(allPaths[0]);
+	}
+}
+
+void ExpressionEvaluator::visit(const MapProjectionExpression *expr) {
+	if (!expr) {
+		result_ = PropertyValue();
+		return;
+	}
+
+	const std::string& varName = expr->getVariable();
+	std::unordered_map<std::string, PropertyValue> resultMap;
+
+	for (const auto& item : expr->getItems()) {
+		switch (item.type) {
+			case MapProjectionItemType::MPROP_PROPERTY: {
+				auto val = context_.resolveProperty(varName, item.key);
+				resultMap[item.key] = val ? *val : PropertyValue();
+				break;
+			}
+			case MapProjectionItemType::MPROP_LITERAL: {
+				if (item.expression) {
+					resultMap[item.key] = evaluate(item.expression.get());
+				} else {
+					resultMap[item.key] = PropertyValue();
+				}
+				break;
+			}
+			case MapProjectionItemType::MPROP_ALL_PROPERTIES: {
+				// Get all properties of the entity
+				auto* dm = context_.getDataManager();
+				if (dm) {
+					auto nodeOpt = context_.getRecord().getNode(varName);
+					if (nodeOpt) {
+						auto props = dm->getNodeProperties(nodeOpt->getId());
+						for (const auto& [k, v] : props) {
+							resultMap[k] = v;
+						}
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	result_ = PropertyValue(std::move(resultMap));
 }
 
 } // namespace graph::query::expressions

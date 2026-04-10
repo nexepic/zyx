@@ -32,6 +32,8 @@
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/expressions/ReduceExpression.hpp"
 #include "graph/query/expressions/ParameterExpression.hpp"
+#include "graph/query/expressions/ShortestPathExpression.hpp"
+#include "graph/query/expressions/MapProjectionExpression.hpp"
 #include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
@@ -267,6 +269,12 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 							continue;
 						}
 					}
+					// Dynamic list: variable or expression as RHS
+					auto rhsExpr = buildArithmeticExpression(arithExprs[arithIdx]);
+					left = std::make_unique<InExpression>(std::move(left), std::move(rhsExpr));
+					hasPendingOp = false;
+					arithIdx++;
+					continue;
 				}
 
 				auto right = buildArithmeticExpression(arithExprs[arithIdx]);
@@ -296,6 +304,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 				case CypherLexer::K_STARTS: pendingOp = BinaryOperatorType::BOP_STARTS_WITH; hasPendingOp = true; expectWith = true; break;
 				case CypherLexer::K_ENDS: pendingOp = BinaryOperatorType::BOP_ENDS_WITH; hasPendingOp = true; expectWith = true; break;
 				case CypherLexer::K_CONTAINS: pendingOp = BinaryOperatorType::BOP_CONTAINS; hasPendingOp = true; break;
+				case CypherLexer::REGEX_MATCH: pendingOp = BinaryOperatorType::BOP_REGEX_MATCH; hasPendingOp = true; break;
 				default: break;
 			}
 		}
@@ -524,6 +533,16 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 	// EXISTS expression: exists((n)-[:KNOWS]->())
 	if (ctx->existsExpression()) {
 		return buildExistsExpression(ctx->existsExpression());
+	}
+
+	// Shortest path expression: shortestPath((a)-[*]-(b))
+	if (ctx->shortestPathExpression()) {
+		return buildShortestPathExpression(ctx->shortestPathExpression());
+	}
+
+	// Map projection: n {.name, .age, key: expr}
+	if (ctx->mapProjection()) {
+		return buildMapProjectionExpression(ctx->mapProjection());
 	}
 
 	throw std::runtime_error("Unsupported atom expression: " + ctx->getText());
@@ -1251,6 +1270,100 @@ std::unique_ptr<Expression> ExpressionBuilder::buildExistsExpression(CypherParse
 
 	return std::make_unique<ExistsExpression>(
 		patternStr, sourceVar, relType, targetLabel, direction, std::move(whereExpr));
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildShortestPathExpression(CypherParser::ShortestPathExpressionContext *ctx) {
+	if (!ctx) return nullptr;
+
+	bool isAll = (ctx->K_ALLSHORTESTPATHS() != nullptr);
+
+	auto patternElem = ctx->patternElement();
+	if (!patternElem) {
+		throw std::runtime_error("shortestPath requires a pattern argument");
+	}
+
+	// Extract start and end nodes
+	auto nodePattern = patternElem->nodePattern();
+	std::string startVar;
+	if (nodePattern && nodePattern->variable()) {
+		startVar = nodePattern->variable()->getText();
+	}
+
+	std::string endVar;
+	std::string relType;
+	PatternDirection direction = PatternDirection::PAT_BOTH;
+	int minHops = 1;
+	int maxHops = 15;
+
+	auto chains = patternElem->patternElementChain();
+	if (!chains.empty()) {
+		auto chain = chains.back();
+
+		// Parse relationship
+		auto relPattern = chain->relationshipPattern();
+		if (relPattern) {
+			bool hasLeft = (relPattern->LT() != nullptr);
+			bool hasRight = (relPattern->GT() != nullptr);
+			if (hasRight && !hasLeft) direction = PatternDirection::PAT_OUTGOING;
+			else if (hasLeft && !hasRight) direction = PatternDirection::PAT_INCOMING;
+
+			auto relDetail = relPattern->relationshipDetail();
+			if (relDetail) {
+				if (relDetail->relationshipTypes()) {
+					auto relTypes = relDetail->relationshipTypes()->relTypeName();
+					if (!relTypes.empty()) {
+						relType = relTypes[0]->getText();
+					}
+				}
+				if (relDetail->rangeLiteral()) {
+					auto range = relDetail->rangeLiteral();
+					auto ints = range->integerLiteral();
+					if (range->RANGE() != nullptr) {
+						if (ints.size() == 2) {
+							minHops = std::stoi(ints[0]->getText());
+							maxHops = std::stoi(ints[1]->getText());
+						} else if (ints.size() == 1) {
+							maxHops = std::stoi(ints[0]->getText());
+						}
+					}
+				}
+			}
+		}
+
+		// Parse end node
+		auto targetNode = chain->nodePattern();
+		if (targetNode && targetNode->variable()) {
+			endVar = targetNode->variable()->getText();
+		}
+	}
+
+	return std::make_unique<ShortestPathExpression>(
+		startVar, endVar, relType, direction, minHops, maxHops, isAll);
+}
+
+std::unique_ptr<Expression> ExpressionBuilder::buildMapProjectionExpression(CypherParser::MapProjectionContext *ctx) {
+	if (!ctx) return nullptr;
+
+	std::string variable = ctx->variable()->getText();
+
+	std::vector<MapProjectionItem> items;
+	for (auto* elemCtx : ctx->mapProjectionElement()) {
+		if (elemCtx->MULTIPLY()) {
+			// .* — all properties
+			items.emplace_back(MapProjectionItemType::MPROP_ALL_PROPERTIES, "");
+		} else if (elemCtx->COLON()) {
+			// key: expr
+			std::string key = elemCtx->propertyKeyName()->getText();
+			auto expr = buildExpression(elemCtx->expression());
+			items.emplace_back(MapProjectionItemType::MPROP_LITERAL, key, std::move(expr));
+		} else if (elemCtx->propertyKeyName()) {
+			// .name
+			std::string key = elemCtx->propertyKeyName()->getText();
+			items.emplace_back(MapProjectionItemType::MPROP_PROPERTY, key);
+		}
+	}
+
+	return std::make_unique<MapProjectionExpression>(variable, std::move(items));
 }
 
 } // namespace graph::parser::cypher::helpers

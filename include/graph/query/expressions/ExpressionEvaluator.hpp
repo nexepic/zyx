@@ -78,6 +78,8 @@ public:
 	void visit(const PatternComprehensionExpression *expr) override;
 	void visit(const ReduceExpression *expr) override;
 	void visit(const ParameterExpression *expr) override;
+	void visit(const ShortestPathExpression *expr) override;
+	void visit(const MapProjectionExpression *expr) override;
 
 	/**
 	 * @brief Gets the result of the most recent evaluation.

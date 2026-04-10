@@ -67,6 +67,10 @@ K_SINGLE     : 'SINGLE';
 K_ALL        : 'ALL';
 K_REDUCE     : 'REDUCE';
 
+// Path functions
+K_SHORTESTPATH     : 'SHORTESTPATH';
+K_ALLSHORTESTPATHS : 'ALLSHORTESTPATHS';
+
 // Admin Keywords
 K_INDEX      : 'INDEX' | 'INDEXES';
 K_ON         : 'ON';
@@ -121,6 +125,7 @@ K_PROFILE    : 'PROFILE';
 
 // --- Symbols ---
 
+REGEX_MATCH  : '=~';
 EQ           : '=';
 NEQ          : '<>';
 LT           : '<';

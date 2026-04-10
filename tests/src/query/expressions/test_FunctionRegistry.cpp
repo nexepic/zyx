@@ -1930,36 +1930,6 @@ TEST_F(FunctionRegistryTest, RandomUUIDFunction_UniqueValues) {
 }
 
 // ============================================================================
-// Reduce Function Tests
-// ============================================================================
-
-TEST_F(FunctionRegistryTest, ReduceFunction_EmptyArgs) {
-	const ScalarFunction* func = registry->lookupScalarFunction("reduce");
-	ASSERT_NE(func, nullptr);
-
-	std::vector<PropertyValue> args;
-	EXPECT_THROW((void)func->evaluate(args, *context_), std::runtime_error);
-}
-
-TEST_F(FunctionRegistryTest, ReduceFunction_WithListArg) {
-	const ScalarFunction* func = registry->lookupScalarFunction("reduce");
-	ASSERT_NE(func, nullptr);
-
-	std::vector<PropertyValue> args;
-	std::vector<PropertyValue> list = {PropertyValue(int64_t(1))};
-	args.push_back(PropertyValue(list));
-	EXPECT_THROW((void)func->evaluate(args, *context_), std::runtime_error);
-}
-
-TEST_F(FunctionRegistryTest, ReduceFunction_WithNonListArg) {
-	const ScalarFunction* func = registry->lookupScalarFunction("reduce");
-	ASSERT_NE(func, nullptr);
-
-	std::vector<PropertyValue> args;
-	args.push_back(PropertyValue(int64_t(42)));
-	EXPECT_THROW((void)func->evaluate(args, *context_), std::runtime_error);
-}
-
 // ============================================================================
 // Substring Edge Cases
 // ============================================================================

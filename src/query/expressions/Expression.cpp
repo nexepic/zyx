@@ -261,16 +261,25 @@ void InExpression::accept(ConstExpressionVisitor &visitor) const {
 
 std::string InExpression::toString() const {
 	std::ostringstream oss;
-	oss << "(" << value_->toString() << " IN [";
-	for (size_t i = 0; i < listValues_.size(); ++i) {
-		if (i > 0) oss << ", ";
-		oss << listValues_[i].toString();
+	oss << "(" << value_->toString() << " IN ";
+	if (hasDynamicList()) {
+		oss << listExpression_->toString();
+	} else {
+		oss << "[";
+		for (size_t i = 0; i < listValues_.size(); ++i) {
+			if (i > 0) oss << ", ";
+			oss << listValues_[i].toString();
+		}
+		oss << "]";
 	}
-	oss << "])";
+	oss << ")";
 	return oss.str();
 }
 
 std::unique_ptr<Expression> InExpression::clone() const {
+	if (hasDynamicList()) {
+		return std::make_unique<InExpression>(value_->clone(), listExpression_->clone());
+	}
 	return std::make_unique<InExpression>(value_->clone(), listValues_);
 }
 
@@ -353,6 +362,7 @@ std::string toString(BinaryOperatorType op) {
 		case BinaryOperatorType::BOP_STARTS_WITH: return "STARTS WITH";
 		case BinaryOperatorType::BOP_ENDS_WITH: return "ENDS WITH";
 		case BinaryOperatorType::BOP_CONTAINS: return "CONTAINS";
+		case BinaryOperatorType::BOP_REGEX_MATCH: return "=~";
 		case BinaryOperatorType::BOP_AND: return "AND";
 		case BinaryOperatorType::BOP_OR: return "OR";
 		case BinaryOperatorType::BOP_XOR: return "XOR";
@@ -386,7 +396,8 @@ bool isComparisonOperator(BinaryOperatorType op) {
 	       op == BinaryOperatorType::BOP_GREATER_EQUAL ||
 	       op == BinaryOperatorType::BOP_STARTS_WITH ||
 	       op == BinaryOperatorType::BOP_ENDS_WITH ||
-	       op == BinaryOperatorType::BOP_CONTAINS;
+	       op == BinaryOperatorType::BOP_CONTAINS ||
+	       op == BinaryOperatorType::BOP_REGEX_MATCH;
 }
 
 bool isLogicalOperator(BinaryOperatorType op) {
