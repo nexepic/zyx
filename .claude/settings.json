@@ -1,0 +1,33 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'CMD=$(echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"command\\\",\\\"\\\"))\" 2>/dev/null); if echo \"$CMD\" | grep -q \"git commit\" && echo \"$CMD\" | grep -qi \"co-authored-by\"; then echo \"BLOCKED: Co-Authored-By trailer is forbidden per CONTRIBUTING.md. Remove it and retry.\"; exit 2; fi'"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"file_path\\\",\\\"\\\"))\" 2>/dev/null); if echo \"$FILE\" | grep -q \"\\.g4$\"; then echo \"REMINDER: After editing .g4 grammar, run: bash src/query/parser/cypher/generate.sh\"; fi'"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"import sys,json; print(json.load(sys.stdin).get(\\\"file_path\\\",\\\"\\\"))\" 2>/dev/null); if echo \"$FILE\" | grep -q \"\\.g4$\"; then echo \"REMINDER: After editing .g4 grammar, run: bash src/query/parser/cypher/generate.sh\"; fi'"
+          }
+        ]
+      }
+    ]
+  }
+}

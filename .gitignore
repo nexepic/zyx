@@ -16,6 +16,7 @@ htmlcov/
 
 # Worktree directory
 .worktrees/
+.claude/worktrees/
 
 # Auto-generated headers
 build_*/include/graph/core/ProjectConfig.hpp
@@ -34,3 +35,6 @@ docs/node_modules/
 docs/.turbo/
 
 docs/superpowers/
+
+# Claude Code
+.claude/settings.local.json
