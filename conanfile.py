@@ -20,6 +20,9 @@ class ProjectConan(ConanFile):
         self.options["gtest"].shared = False
         self.options["cli11"].shared = False
 
+        # Disable Boost components we don't use (requires libbacktrace which may fail)
+        self.options["boost"].without_stacktrace = True
+
         # ANTLR usually works best as static for simple linking,
         # but if you prefer shared, you can uncomment below.
         # self.options["antlr4-cppruntime"].shared = True
