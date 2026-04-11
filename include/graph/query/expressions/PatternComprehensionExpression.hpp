@@ -46,7 +46,7 @@ public:
 	);
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
-		return ExpressionType::LIST_COMPREHENSION;
+		return ExpressionType::EXPR_PATTERN_COMPREHENSION;
 	}
 
 	void accept(ExpressionVisitor &visitor) override;

@@ -1,6 +1,6 @@
 ---
 title: 事务控制
-description: CLI 中事务语句的正确用法与并发行为说明。
+description: REPL/API 下事务的正确用法，包括边界控制、回滚策略与并发注意事项。
 category: 高级主题
 order: 7
 project: zyx
@@ -10,33 +10,53 @@ projectOrder: 1
 ---
 # 事务控制
 
-## 事务语句
+## 事务生命周期
 
-在 REPL 中直接输入：
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Active: BEGIN 或 API beginTransaction()
+  Active --> Committed: COMMIT
+  Active --> RolledBack: ROLLBACK / 异常 / 作用域结束
+  Committed --> Idle
+  RolledBack --> Idle
+```
+
+## REPL 显式事务
 
 ```cypher
 BEGIN;
-CREATE (u:User {name: 'Alice'});
-CREATE (u:User {name: 'Bob'});
+CREATE (:User {name: 'Alice'});
+CREATE (:User {name: 'Bob'});
 COMMIT;
 ```
 
-回滚：
+回滚示例：
 
 ```cypher
 BEGIN;
-CREATE (u:User {name: 'Temp'});
+CREATE (:User {name: 'Temp'});
 ROLLBACK;
 ```
+
+## 隐式事务与显式事务
+
+| 模式 | 适用场景 | 说明 |
+|---|---|---|
+| 隐式（单语句） | 简单一次性读写 | 操作开销最低 |
+| 显式（`BEGIN...COMMIT`） | 多步骤原子写入 | 成功/失败边界清晰 |
+| API 事务对象 | 服务端流程编排 | 未提交自动回滚 |
 
 ## 行为要点
 
 - 不支持嵌套事务。
-- 活跃事务未提交时，离开作用域会自动回滚（API 场景）。
-- 写事务是单写模型；并发读通过快照执行。
+- 写入模型偏单写者；读取通过快照执行。
+- 未提交数据在 `COMMIT` 前不具备持久性。
+- 需要运维可控性时可在提交后执行 `save`/flush。
 
-## 何时使用显式事务
+## 故障处理建议
 
-- 多条语句必须原子提交
-- 批量写入需要明确提交边界
-- 需要在失败时统一回滚
+1. 多步骤写入统一放入显式事务。
+2. 中间用 `MATCH ... RETURN` 做关键校验。
+3. 全部通过后再 `COMMIT`。
+4. 任一步失败立即 `ROLLBACK`。

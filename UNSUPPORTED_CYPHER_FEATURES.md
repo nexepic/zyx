@@ -1,163 +1,92 @@
 # Cypher Feature Support - ZYX Graph Database
 
-This document tracks the Cypher query language feature support status in the ZYX graph database.
+This document tracks Cypher support in ZYX based on current parser/execution tests and implementation.
 
-## 1. Supported Cypher Features
+Last reviewed: **2026-04-10**
+
+## 1. Supported Features
 
 ### Clauses
 
 - `MATCH` / `OPTIONAL MATCH`
-- `CREATE`
+- `CREATE` (including chained patterns and `CREATE ... RETURN`)
 - `MERGE` with `ON CREATE SET` / `ON MATCH SET`
-- `SET` (property assignment, label assignment with `SET n:Label`)
-- `DELETE`
-- `REMOVE`
-- `RETURN`
-- `WITH`
-- `ORDER BY`, `SKIP`, `LIMIT`
-- `DISTINCT`
+- `SET` (property assignment, label assignment, `SET +=` map merge)
+- `REMOVE` (properties and labels)
+- `DELETE` / `DETACH DELETE`
+- `RETURN`, `WITH`
+- `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT`
 - `UNION` / `UNION ALL`
-- `UNWIND` (including nested property expressions)
-- `CALL` procedures
-- `CALL { subquery }` (with variable scope isolation, supports `IN TRANSACTIONS OF n ROWS`)
-- `FOREACH (x IN list | ...)`
-- `LOAD CSV FROM 'file:///path' AS row` (streaming RFC 4180-compliant, custom `FIELDTERMINATOR`)
+- `UNWIND`
+- `FOREACH`
+- `CALL procedure(...) [YIELD ...]`
+- `CALL { subquery }` and `CALL { ... } IN TRANSACTIONS [OF n ROWS]`
+- `LOAD CSV` / `LOAD CSV WITH HEADERS` with optional `FIELDTERMINATOR`
 - `EXPLAIN` / `PROFILE`
 
-### Expressions and Operators
+### Pattern Matching
 
-- Arithmetic: `+`, `-`, `*`, `/`, `%`, `^`, unary `-`
-- Comparison: `=`, `<>`, `<`, `>`, `<=`, `>=`
-- Boolean: `AND`, `OR`, `XOR`, `NOT`
-- String matching: `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `=~` (regex)
-- `IN` operator (static lists and dynamic variables)
+- Directed and undirected patterns: `-[]->`, `<-[]-`, `-[]-`
+- Variable-length relationships: `*`, `*N`, `*N..M`, `*N..`, `*..M`
+- Named paths
+- Multiple relationship types in one pattern: `-[:TYPE1|TYPE2]->`
+- Multi-label nodes: `(n:LabelA:LabelB)`
+
+### Expressions and Data Types
+
+- Arithmetic: `+ - * / % ^`
+- Comparison: `= <> != < <= > >=`, `IN`, `BETWEEN`
+- Boolean: `AND OR XOR NOT` (3-valued logic with `NULL`)
+- String matching operators: `STARTS WITH`, `ENDS WITH`, `CONTAINS`, `=~`
 - `IS NULL` / `IS NOT NULL`
-- String concatenation with `+`
-- `CASE WHEN ... THEN ... ELSE ... END` (simple and searched forms)
+- `CASE` (simple and searched)
 - List literals, list slicing, heterogeneous lists
-- Map literals: `{key: value}`
-- Parameters: `$param`
+- Map literals and map projection (`n {.prop, key: expr, .*}`)
+- Parameters (`$param`)
 
-### Pattern Features
+### Functions
 
-- Named paths: `p = (a)-[r]->(b)`
-- Variable-length paths: `(a)-[*1..3]->(b)`
-- `shortestPath()` / `allShortestPaths()`
-- Multi-label patterns: `(n:Person:Employee)` (up to 6 labels, AND semantics)
-
-### Comprehensions
-
-- List comprehensions: `[x IN list WHERE cond | expr]`
-- Pattern comprehensions: `[(a)-->(b) | b.prop]`
-- `reduce(acc = init, x IN list | expr)`
-- `exists()` subquery expression
-
-### Map Projections
-
-- `n {.prop1, key: expr, .*}`
-
-### Aggregation Functions
-
-| Function | Notes |
-|----------|-------|
-| `count()` | Including `count(DISTINCT x)` |
-| `sum()` | |
-| `avg()` | |
-| `min()` | |
-| `max()` | |
-| `collect()` | Including `collect(DISTINCT x)` |
-
-### String Functions
-
-| Function |
-|----------|
-| `toString(value)` |
-| `toUpper(text)` / `toLower(text)` |
-| `trim(text)` / `lTrim(text)` / `rTrim(text)` |
-| `left(text, n)` / `right(text, n)` |
-| `substring(text, start, length?)` |
-| `replace(text, search, replace)` |
-| `split(text, delimiter)` |
-| `reverse(text)` |
-| `length(text)` / `size(text)` |
-| `startsWith(text, prefix)` / `endsWith(text, suffix)` / `contains(text, sub)` |
-
-### Math Functions
-
-| Function |
-|----------|
-| `abs(value)` |
-| `ceil(value)` / `floor(value)` / `round(value)` |
-| `sqrt(value)` |
-| `sign(value)` |
-
-### List Functions
-
-| Function |
-|----------|
-| `range(start, end, step?)` |
-| `head(list)` / `tail(list)` / `last(list)` |
-| `keys(entity)` |
-| `reverse(list)` |
-| `size(list)` |
-
-### Type Conversion Functions
-
-| Function |
-|----------|
-| `toInteger(value)` |
-| `toFloat(value)` |
-| `toBoolean(value)` |
-
-### Path Functions
-
-| Function |
-|----------|
-| `nodes(path)` |
-| `relationships(path)` |
-| `length(path)` |
-
-### Utility Functions
-
-| Function |
-|----------|
-| `coalesce(v1, v2, ...)` |
-| `id(entity)` |
-| `labels(node)` |
-| `type(relationship)` |
-| `properties(entity)` |
-| `timestamp()` |
-| `randomUUID()` |
-
-### Quantifier Functions
-
-| Function |
-|----------|
-| `all(x IN list WHERE pred)` |
-| `any(x IN list WHERE pred)` |
-| `none(x IN list WHERE pred)` |
-| `single(x IN list WHERE pred)` |
+- Aggregation: `count`, `sum`, `avg`, `min`, `max`, `collect` (including `DISTINCT`)
+- String: `toString`, `upper`, `lower`, `trim`, `lTrim`, `rTrim`, `left`, `right`, `substring`, `replace`, `split`, `reverse`, `length`
+- Math: `abs`, `ceil`, `floor`, `round`, `sqrt`, `sign`
+- List/utility: `size`, `range`, `head`, `tail`, `last`, `coalesce`
+- Type conversion: `toInteger`, `toFloat`, `toBoolean`
+- Path: `nodes(path)`, `relationships(path)`, `length(path)`
+- Entity introspection: `id`, `labels`, `type`, `keys`, `properties`
+- Quantifiers: `all`, `any`, `none`, `single`
+- Misc: `timestamp`, `randomUUID`, `exists((pattern))`, `reduce(...)`
 
 ### Schema and Administration
 
-- `CREATE INDEX` / `DROP INDEX` / `SHOW INDEXES`
-- Vector indexes
-- `CREATE CONSTRAINT` / `DROP CONSTRAINT` / `SHOW CONSTRAINTS`
-- `BEGIN` / `COMMIT` / `ROLLBACK` (transactions)
+- `CREATE INDEX` (pattern syntax and legacy label syntax)
+- `DROP INDEX` (by name and legacy label/property form)
+- `SHOW INDEXES`
+- `CREATE VECTOR INDEX ... OPTIONS {dimension|dim, metric}`
+- `CREATE CONSTRAINT` / `DROP CONSTRAINT` / `SHOW CONSTRAINT`
+  - Node constraints: `UNIQUE`, `NOT NULL`, `IS ::TYPE`, `NODE KEY`
+  - Edge constraints: `UNIQUE`, `NOT NULL`, `IS ::TYPE`
 
-## 2. Not Yet Supported
+### Built-in Procedures
 
-- Temporal types (`date`, `time`, `datetime`, `duration`) and related functions
-- Spatial types (`point`) and spatial functions (`distance()`, etc.)
-- Extended math functions (`log()`, `e()`, `pi()`, `sin()`, `cos()`, `tan()`, etc.)
-- Statistical aggregation (`percentileDisc()`, `percentileCont()`, `stDev()`, `stDevP()`)
-- Undirected relationship patterns: `-[]-`
-- Multiple relationship types in pattern: `-[:TYPE1|TYPE2]->`
-- `DETACH DELETE`
-- `REMOVE` labels from nodes
-- `SET +=` for map merge
-- `CREATE ... RETURN` (returning created entities)
-- `WITH HEADERS` in `LOAD CSV`
+- DBMS: `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, `dbms.resetStats`
+- Algorithms: `algo.shortestPath`
+- Vector: `db.index.vector.queryNodes`, `db.index.vector.train`
+- GDS projection: `gds.graph.project`, `gds.graph.drop`
+- GDS algorithms: `gds.pageRank.stream`, `gds.wcc.stream`, `gds.betweenness.stream`, `gds.closeness.stream`, `gds.shortestPath.dijkstra.stream`
+
+## 2. Not Yet Supported (or Not Verified as Supported)
+
+- Temporal value types and temporal functions (`date`, `time`, `datetime`, `duration`)
+- Spatial value types/functions (`point`, `distance`, ...)
+- Extended math/trigonometric/log functions (`log`, `ln`, `exp`, `sin`, `cos`, `tan`, `pi`, `e`, ...)
+- Statistical aggregates (`percentileDisc`, `percentileCont`, `stDev`, `stDevP`, ...)
+- `USING INDEX` query hints
 - `PERIODIC COMMIT`
-- Subquery expressions in `WHERE`
-- Pattern expressions used as existence checks
+- Full Cypher `EXISTS { ... }` subquery expression form in `WHERE`
+- APOC procedure ecosystem
+
+## 3. Notes
+
+- Cypher compatibility is intentionally pragmatic, not a full Neo4j clone.
+- If this document conflicts with tests, tests and implementation are the source of truth.
+- When adding/removing features, update this file and the bilingual user guide together.

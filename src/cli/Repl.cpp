@@ -22,6 +22,7 @@
 #include <iomanip>
 #include <iostream>
 #include "graph/cli/linenoise.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include "ProjectConfig.hpp"
 
 // For isatty() and debugger detection
@@ -80,7 +81,7 @@ namespace graph {
 		return str.substr(first, (last - first + 1));
 	}
 
-	void printResult(const query::QueryResult &result) {
+	void printResult(const query::QueryResult &result, const query::ResultValue::TokenResolver &resolver) {
 		if (result.isEmpty()) {
 			std::cout << "Empty result.\n";
 			return;
@@ -125,7 +126,7 @@ namespace graph {
 				// Use original 'cols' to find data, but align with 'widths' index
 				auto it = row.find(cols[i]);
 				if (it != row.end()) {
-					valStr = it->second.toString();
+					valStr = it->second.toString(resolver);
 				}
 
 				// Apply truncation to data values
@@ -355,7 +356,17 @@ namespace graph {
 		// --- 3. Execute Cypher Query ---
 		try {
 			auto result = db.getQueryEngine()->execute(command);
-			printResult(result);
+
+			// Build token resolver from DataManager for human-readable output
+			query::ResultValue::TokenResolver resolver = nullptr;
+			if (auto storage = db.getStorage()) {
+				auto dm = storage->getDataManager();
+				resolver = [dm](int64_t id) -> std::string {
+					return dm->resolveTokenName(id);
+				};
+			}
+
+			printResult(result, resolver);
 		} catch (const std::exception &e) {
 			std::cerr << "\033[1;31mError: " << e.what() << "\033[0m\n";
 		}

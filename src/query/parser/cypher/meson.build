@@ -17,19 +17,19 @@ cypher_helpers = files(
 	'helpers/internal/PatternBuilder.cpp'
 )
 
-# Clause handler classes
+# Clause handler classes (retained for existing unit tests; main code path
+# now uses CypherASTBuilder + LogicalPlanBuilder instead)
 cypher_clauses = files(
 	'clauses/ReadingClauseHandler.cpp',
 	'clauses/WritingClauseHandler.cpp',
-	'clauses/ResultClauseHandler.cpp',
-	'clauses/AdminClauseHandler.cpp',
-	'clauses/WithClauseHandler.cpp'
+	'clauses/AdminClauseHandler.cpp'
 )
 
 # List your implementation files
 cypher_impl = files(
 	'CypherParserImpl.cpp',
-	'CypherToPlanVisitor.cpp'
+	'CypherToPlanVisitor.cpp',
+	'ir/CypherASTBuilder.cpp'
 )
 
 # Create a library

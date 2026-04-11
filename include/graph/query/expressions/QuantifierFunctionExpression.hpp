@@ -47,7 +47,7 @@ public:
 	);
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
-		return ExpressionType::FUNCTION_CALL;
+		return ExpressionType::EXPR_QUANTIFIER_FUNCTION;
 	}
 
 	void accept(ExpressionVisitor &visitor) override;

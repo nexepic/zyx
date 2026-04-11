@@ -46,7 +46,7 @@ public:
 	);
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
-		return ExpressionType::FUNCTION_CALL;
+		return ExpressionType::EXPR_REDUCE;
 	}
 
 	void accept(ExpressionVisitor &visitor) override;

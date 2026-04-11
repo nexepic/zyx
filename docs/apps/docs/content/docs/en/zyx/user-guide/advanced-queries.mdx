@@ -1,8 +1,8 @@
 ---
 title: Advanced Queries
-description: This guide covers advanced Cypher query patterns and techniques for complex data retrieval and manipulation in ZYX.
-category: Advanced
-order: 4
+description: Compose pipelines with WITH/UNION/UNWIND, use procedures/subqueries, and run LOAD CSV safely.
+category: Advanced Topics
+order: 6
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,439 +10,80 @@ projectOrder: 1
 ---
 # Advanced Queries
 
-This guide covers advanced Cypher query patterns and techniques for complex data retrieval and manipulation in ZYX.
-
-## Aggregation and Grouping
-
-### Basic Aggregation
+## 1) WITH as a Pipeline Boundary
 
 ```cypher
--- Count nodes
-MATCH (n:Person)
-RETURN COUNT(n) AS total
-
--- Count with conditions
-MATCH (n:Person)
-RETURN COUNT(CASE WHEN n.age > 30 THEN 1 END) AS over_30
-
--- Sum aggregation
-MATCH (n:Person)
-RETURN SUM(n.salary) AS total_salary
-
--- Average aggregation
-MATCH (n:Person)
-RETURN AVG(n.age) AS avg_age
-
--- Min/Max
-MATCH (n:Person)
-RETURN MIN(n.age) AS youngest, MAX(n.age) AS oldest
-```
-
-### Grouping with Multiple Aggregates
-
-```cypher
--- Group by city with multiple aggregations
-MATCH (n:Person)
-RETURN n.city,
-       COUNT(n) AS population,
-       AVG(n.age) AS avg_age,
-       MIN(n.salary) AS min_salary,
-       MAX(n.salary) AS max_salary
-ORDER BY population DESC
-
--- Group by multiple properties
-MATCH (n:Person)
-RETURN n.city, n.country,
-       COUNT(n) AS count
-ORDER BY count DESC
-```
-
-### COLLECT for List Aggregation
-
-```cypher
--- Collect values into a list
-MATCH (n:Person)
-RETURN n.city, COLLECT(n.name) AS residents
-
--- Collect with ordering
-MATCH (n:Person)
-RETURN n.city, COLLECT(n.name ORDER BY n.name) AS residents
-
--- Collect distinct values
-MATCH (n:Person)
-RETURN DISTINCT n.city, COLLECT(DISTINCT n.profession) AS professions
-```
-
-## Advanced Filtering
-
-### Pattern Filtering
-
-```cypher
--- Filter based on relationship existence
-MATCH (n:Person)
-WHERE (n)-[:KNOWS]->()
-RETURN n
-
--- Filter based on non-existence
-MATCH (n:Person)
-WHERE NOT (n)-[:KNOWS]->()
-RETURN n
-
--- Filter by relationship count
-MATCH (n:Person)
-WHERE size((n)-[:KNOWS]->()) > 5
-RETURN n
-```
-
-### List Operations
-
-```cypher
--- Check if value in list
-MATCH (n:Person)
-WHERE 'Developer' IN n.skills
-RETURN n
-
--- Check if list contains any of multiple values
-MATCH (n:Person)
-WHERE ANY(skill IN n.skills WHERE skill IN ['Developer', 'Designer'])
-RETURN n
-
--- Check if all conditions met
-MATCH (n:Person)
-WHERE ALL(skill IN n.skills WHERE length(skill) > 3)
-RETURN n
-```
-
-### String Matching
-
-```cypher
--- Regular expression matching
-MATCH (n:Person)
-WHERE n.name =~ 'A.*'
-RETURN n
-
--- Case-insensitive matching
-MATCH (n:Person)
-WHERE toLower(n.name) = toLower('ALICE')
-RETURN n
-
--- Multiple string conditions
-MATCH (n:Person)
-WHERE n.name STARTS WITH 'A'
-  AND n.email CONTAINS '@example.com'
-RETURN n
-```
-
-## Optional Patterns
-
-### Optional Relationships
-
-```cypher
--- Match nodes with optional relationship
-MATCH (n:Person)
-OPTIONAL MATCH (n)-[:WORKS_AT]->(c:Company)
-RETURN n.name, c.name AS company
-
--- Handle nulls from optional match
-MATCH (n:Person)
-OPTIONAL MATCH (n)-[:WORKS_AT]->(c:Company)
-RETURN n.name,
-       coalesce(c.name, 'Unemployed') AS company
-```
-
-### Multiple Optional Patterns
-
-```cypher
-MATCH (n:Person)
-OPTIONAL MATCH (n)-[:WORKS_AT]->(c:Company)
-OPTIONAL MATCH (n)-[:LIVES_IN]->(l:Location)
-RETURN n.name, c.name, l.city
-```
-
-## UNION and Combining Results
-
-### UNION ALL
-
-```cypher
--- Combine results (including duplicates)
-MATCH (n:Person)
-WHERE n.city = 'New York'
-RETURN n.name AS name
-UNION ALL
-MATCH (n:Person)
-WHERE n.city = 'San Francisco'
-RETURN n.name AS name
-```
-
-### UNION DISTINCT
-
-```cypher
--- Combine results (remove duplicates)
-MATCH (n:Person)
-WHERE n.city = 'New York'
-RETURN n.name AS name
-UNION
-MATCH (n:Person)
-WHERE n.city = 'San Francisco'
-RETURN n.name AS name
-```
-
-## Subqueries and WITH Clause
-
-### Complex WITH Operations
-
-```cypher
--- Chain multiple operations
-MATCH (n:Person)
-WITH n
-WHERE n.age > 30
-WITH n, n.age * 2 AS double_age
-WHERE double_age > 60
-RETURN n.name, double_age
-
--- Aggregate and filter
-MATCH (n:Person)
-WITH n.city AS city, COLLECT(n.name) AS residents, COUNT(n) AS count
-WHERE count > 10
-RETURN city, residents, count
-ORDER BY count DESC
-```
-
-### Pattern Comprehension
-
-```cypher
--- Create list from pattern
-MATCH (n:Person {name: 'Alice'})
-RETURN [(n)-[:KNOWS]->(b) | b.name] AS friends
-
--- Pattern comprehension with filter
-MATCH (n:Person {name: 'Alice'})
-RETURN [(n)-[:KNOWS]->(b) WHERE b.age > 30 | b.name] AS older_friends
-
--- Nested comprehension
-MATCH (n:Person {name: 'Alice'})
-RETURN [(n)-[:KNOWS]->(b) |
-  {name: b.name, friends: [(b)-[:KNOWS]->(c) | c.name]}
-] AS friend_network
-```
-
-## Shortest Path Queries
-
-### Single Shortest Path
-
-```cypher
--- Find shortest path between two nodes
-MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Charlie'})
-MATCH path = shortestPath((a)-[:KNOWS*]-(b))
-RETURN path
-
--- Find shortest path with specific relationship type
-MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Charlie'})
-MATCH path = shortestPath((a)-[:KNOWS*]-(b))
-RETURN path
-
--- Get path length
-MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Charlie'})
-MATCH path = shortestPath((a)-[:KNOWS*]-(b))
-RETURN length(path) AS distance
-```
-
-### All Shortest Paths
-
-```cypher
--- Find all shortest paths
-MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Charlie'})
-MATCH path = allShortestPaths((a)-[:KNOWS*]-(b))
-RETURN path
-```
-
-## Variable Length Paths
-
-### Unbounded Paths
-
-```cypher
--- Find all connected nodes (any depth)
-MATCH (n:Person {name: 'Alice'})-[:KNOWS*]-(connected)
-RETURN DISTINCT connected
-
--- Specify minimum depth
-MATCH (n:Person {name: 'Alice'})-[:KNOWS*2..]-(connected)
-RETURN DISTINCT connected
-
--- Specify maximum depth
-MATCH (n:Person {name: 'Alice'})-[:KNOWS*..3]-(connected)
-RETURN DISTINCT connected
-```
-
-### Bounded Variable Length Paths
-
-```cypher
--- Specify exact range
-MATCH (n:Person {name: 'Alice'})-[:KNOWS*2..3]-(connected)
-RETURN DISTINCT connected
-
--- Path with intermediate nodes
-MATCH path = (a:Person {name: 'Alice'})-[:KNOWS*2..3]-(b:Person)
-RETURN [node in nodes(path) | node.name] AS connection_chain
-```
-
-## Complex Pattern Matching
-
-### Intersection Patterns
-
-```cypher
--- Find nodes connected to multiple specific nodes
-MATCH (n:Person)
-WHERE (n)-[:KNOWS]->({name: 'Alice'})
-  AND (n)-[:KNOWS]->({name: 'Bob'})
-RETURN n
-```
-
-### Exclusion Patterns
-
-```cypher
--- Find people who know Alice but not Bob
-MATCH (n:Person)-[:KNOWS]->({name: 'Alice'})
-WHERE NOT (n)-[:KNOWS]->({name: 'Bob'})
-RETURN n
-```
-
-### Relationship Chains
-
-```cypher
--- Match specific relationship sequences
-MATCH (a:Person)-[:KNOWS]->(b:Person)-[:WORKS_AT]->(c:Company)
-WHERE a.name = 'Alice'
-RETURN a, b, c
-
--- Match relationship with properties
-MATCH (n:Person)-[r:KNOWS {since: 2020}]->(m:Person)
-RETURN n, r, m
-```
-
-## Conditional Logic
-
-### CASE Expressions
-
-```cypher
--- Simple CASE
-MATCH (n:Person)
-RETURN n.name,
-       CASE n.age
-         WHEN < 20 THEN 'Young'
-         WHEN < 40 THEN 'Adult'
-         ELSE 'Senior'
-       END AS age_group
-
--- Generic CASE
-MATCH (n:Person)
-RETURN n.name,
-       CASE
-         WHEN n.age < 18 THEN 'Minor'
-         WHEN n.age >= 18 AND n.age < 65 THEN 'Adult'
-         ELSE 'Senior'
-       END AS category
-```
-
-### COALESCE for Null Handling
-
-```cypher
--- Provide default for null values
-MATCH (n:Person)
-OPTIONAL MATCH (n)-[:WORKS_AT]->(c:Company)
-RETURN n.name, coalesce(c.name, 'Unemployed') AS company
-
--- Multiple fallback values
-MATCH (n:Person)
-RETURN n.name,
-       coalesce(n.email, n.phone, 'No contact info') AS contact
-```
-
-## Performance Optimization
-
-### Query Profiling
-
-```cypher
--- Profile query execution
-PROFILE MATCH (n:Person)
-WHERE n.age > 30
-RETURN n
-
--- Explain query plan (without executing)
-EXPLAIN MATCH (n:Person)
-RETURN n
-```
-
-### Optimization Tips
-
-```cypher
--- GOOD: Start with specific nodes
-MATCH (n:Person {name: 'Alice'})-[:KNOWS]->(b)
-RETURN b
-
--- AVOID: Too broad patterns
-MATCH (a)-[:KNOWS]->(b)
-RETURN a, b
-
--- GOOD: Use labels
-MATCH (n:Person)-[:KNOWS]->(m:Person)
-RETURN n, m
-
--- GOOD: Filter early
-MATCH (n:Person)
-WHERE n.age > 30
-MATCH (n)-[:KNOWS]->(b)
-RETURN b
-```
-
-## Advanced Examples
-
-### Social Network Analysis
-
-```cypher
--- Find friends of friends (not direct friends)
-MATCH (me:Person {name: 'Alice'})-[:KNOWS]->(friend)-[:KNOWS]->(fof)
-WHERE NOT (me)-[:KNOWS]->(fof) AND fof <> me
-RETURN fof.name, COUNT(friend) AS mutual_friends
-ORDER BY mutual_friends DESC
-LIMIT 10
-```
-
-### Recommendation Engine
-
-```cypher
--- Recommend people with similar interests
-MATCH (me:Person {name: 'Alice'})-[:HAS_INTEREST]->(i:Interest)<-[:HAS_INTEREST]-(other:Person)
-WHERE me <> other
-WITH other, COUNT(i) AS common_interests
-ORDER BY common_interests DESC
-RETURN other.name, common_interests
-LIMIT 10
-```
-
-### Influence Analysis
-
-```cypher
--- Find most influential people in a network
 MATCH (p:Person)
-WITH p, SIZE((p)<-[:KNOWS]-()) AS influence
-ORDER BY influence DESC
-RETURN p.name, influence
-LIMIT 10
+WITH p, p.age AS age
+WHERE age >= 30
+RETURN p.name, age
+ORDER BY age DESC;
 ```
 
-## Best Practices
+## 2) UNION / UNION ALL
 
-1. **Use PROFILE**: Always profile complex queries to understand performance
-2. **Limit path lengths**: Use bounded variable length paths to avoid explosion
-3. **Filter early**: Apply WHERE clauses as early as possible
-4. **Use indexes**: Create indexes on frequently queried properties
-5. **Avoid cartesian products**: Be careful with multiple disconnected MATCH patterns
-6. **Use WITH wisely**: Break complex queries into logical steps
-7. **Test incrementally**: Build complex queries step by step
+```cypher
+MATCH (n:Person) RETURN n.name AS name
+UNION ALL
+MATCH (n:Company) RETURN n.name AS name;
+```
 
-## Next Steps
+## 3) UNWIND for Row Expansion
 
-- Explore [Pattern Matching](/en/docs/zyx/user-guide/pattern-matching) for more advanced patterns
-- Learn about [Batch Operations](/en/docs/zyx/user-guide/batch-operations) for bulk data processing
-- Understand [Transaction Control](/en/docs/zyx/user-guide/transactions) for data consistency
+```cypher
+UNWIND [1, 2, 3] AS x
+RETURN x, x * 10;
+```
+
+## 4) CALL Subquery and Transactional Batching
+
+```cypher
+MATCH (n:Input)
+CALL {
+  WITH n
+  CREATE (:Output {v: n.val})
+} IN TRANSACTIONS OF 1000 ROWS
+RETURN n.val;
+```
+
+## 5) LOAD CSV
+
+With headers:
+
+```cypher
+LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
+RETURN row.name, row.age;
+```
+
+Custom delimiter:
+
+```cypher
+LOAD CSV WITH HEADERS FROM 'file:///tmp/users.tsv' AS row FIELDTERMINATOR '\t'
+RETURN row.name;
+```
+
+## 6) Procedure Surface
+
+| Domain | Procedures |
+|---|---|
+| Config & stats | `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, `dbms.resetStats` |
+| Vector | `db.index.vector.queryNodes`, `db.index.vector.train` |
+| Lightweight algo | `algo.shortestPath` |
+| GDS projection | `gds.graph.project`, `gds.graph.drop` |
+| GDS algorithms | `gds.pageRank.stream`, `gds.wcc.stream`, `gds.betweenness.stream`, `gds.closeness.stream`, `gds.shortestPath.dijkstra.stream` |
+
+## 7) EXPLAIN / PROFILE
+
+```cypher
+EXPLAIN MATCH (n:Person {name: 'Alice'}) RETURN n;
+PROFILE MATCH (n:Person {name: 'Alice'}) RETURN n;
+```
+
+```mermaid
+flowchart LR
+  A[Write query] --> B[EXPLAIN]
+  B --> C[Check plan shape]
+  C --> D[PROFILE]
+  D --> E[Measure hotspots]
+  E --> F[Refine query or indexes]
+```

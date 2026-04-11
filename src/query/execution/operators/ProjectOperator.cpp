@@ -42,7 +42,8 @@ Record ProjectOperator::projectRecord(const Record &record) const {
 		std::string key = item.alias;
 
 		// Check if this is a simple variable reference (no property access)
-		if (item.expression && item.expression->getExpressionType() == ExpressionType::PROPERTY_ACCESS) {
+		if (item.expression && (item.expression->getExpressionType() == ExpressionType::VARIABLE_REFERENCE ||
+		                        item.expression->getExpressionType() == ExpressionType::PROPERTY_ACCESS)) {
 			auto* varRef = static_cast<VariableReferenceExpression*>(item.expression.get());
 			if (!varRef->hasProperty()) {
 				const std::string& varName = varRef->getVariableName();

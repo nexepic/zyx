@@ -495,7 +495,7 @@ TEST(ExpressionClone, ExpressionTypes) {
 	EXPECT_EQ(lit.getExpressionType(), ExpressionType::LITERAL);
 
 	VariableReferenceExpression ref("n");
-	EXPECT_EQ(ref.getExpressionType(), ExpressionType::PROPERTY_ACCESS);
+	EXPECT_EQ(ref.getExpressionType(), ExpressionType::VARIABLE_REFERENCE);
 
 	auto left = std::make_unique<LiteralExpression>(int64_t(1));
 	auto right = std::make_unique<LiteralExpression>(int64_t(2));

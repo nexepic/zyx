@@ -1,6 +1,6 @@
 ---
 title: 高级查询
-description: WITH/UNION/UNWIND/CALL 与表达式特性的组合用法。
+description: 使用 WITH/UNION/UNWIND 组装查询管线，结合过程/子查询与 LOAD CSV。
 category: 高级主题
 order: 6
 project: zyx
@@ -10,7 +10,7 @@ projectOrder: 1
 ---
 # 高级查询
 
-## WITH 管道化
+## 1) 用 WITH 切分管线
 
 ```cypher
 MATCH (p:Person)
@@ -20,7 +20,7 @@ RETURN p.name, age
 ORDER BY age DESC;
 ```
 
-## UNION / UNION ALL
+## 2) UNION / UNION ALL
 
 ```cypher
 MATCH (n:Person) RETURN n.name AS name
@@ -28,33 +28,62 @@ UNION ALL
 MATCH (n:Company) RETURN n.name AS name;
 ```
 
-## UNWIND
+## 3) UNWIND 展开行
 
 ```cypher
-UNWIND [1,2,3] AS x
+UNWIND [1, 2, 3] AS x
 RETURN x, x * 10;
 ```
 
-## CALL 过程
-
-当前内置过程包含（以实现为准）：
-
-- `dbms.listConfig()` / `dbms.getConfig(key)` / `dbms.setConfig(key, value)`
-- `dbms.showStats()` / `dbms.resetStats()`
-- `algo.shortestPath(startId, endId)`
-- `db.index.vector.queryNodes(indexName, topK, queryVector)`
-- `db.index.vector.train(indexName)`
-
-示例：
+## 4) CALL 子查询与事务分批
 
 ```cypher
-CALL dbms.showStats() YIELD key, value
-RETURN key, value;
+MATCH (n:Input)
+CALL {
+  WITH n
+  CREATE (:Output {v: n.val})
+} IN TRANSACTIONS OF 1000 ROWS
+RETURN n.val;
 ```
 
-## EXPLAIN / PROFILE
+## 5) LOAD CSV
+
+带表头：
+
+```cypher
+LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
+RETURN row.name, row.age;
+```
+
+自定义分隔符：
+
+```cypher
+LOAD CSV WITH HEADERS FROM 'file:///tmp/users.tsv' AS row FIELDTERMINATOR '\t'
+RETURN row.name;
+```
+
+## 6) 内置过程能力面
+
+| 领域 | 过程 |
+|---|---|
+| 配置与统计 | `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, `dbms.resetStats` |
+| 向量 | `db.index.vector.queryNodes`, `db.index.vector.train` |
+| 轻量算法 | `algo.shortestPath` |
+| GDS 投影 | `gds.graph.project`, `gds.graph.drop` |
+| GDS 算法 | `gds.pageRank.stream`, `gds.wcc.stream`, `gds.betweenness.stream`, `gds.closeness.stream`, `gds.shortestPath.dijkstra.stream` |
+
+## 7) EXPLAIN / PROFILE
 
 ```cypher
 EXPLAIN MATCH (n:Person {name: 'Alice'}) RETURN n;
 PROFILE MATCH (n:Person {name: 'Alice'}) RETURN n;
+```
+
+```mermaid
+flowchart LR
+  A[编写查询] --> B[EXPLAIN]
+  B --> C[检查计划结构]
+  C --> D[PROFILE]
+  D --> E[定位热点]
+  E --> F[调整查询或索引]
 ```

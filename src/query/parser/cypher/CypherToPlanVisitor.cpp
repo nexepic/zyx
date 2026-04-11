@@ -29,11 +29,9 @@
 #include "graph/query/logical/operators/LogicalUnion.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 #include "graph/query/planner/PhysicalPlanConverter.hpp"
-#include "clauses/AdminClauseHandler.hpp"
-#include "clauses/ReadingClauseHandler.hpp"
-#include "clauses/ResultClauseHandler.hpp"
-#include "clauses/WritingClauseHandler.hpp"
-#include "clauses/WithClauseHandler.hpp"
+#include "graph/query/ir/CypherASTBuilder.hpp"
+#include "graph/query/ir/SemanticAnalyzer.hpp"
+#include "graph/query/ir/LogicalPlanBuilder.hpp"
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
 
@@ -90,17 +88,13 @@ std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan
 std::any CypherToPlanVisitor::visitCypher(CypherParser::CypherContext *ctx) { return visitChildren(ctx); }
 
 std::any CypherToPlanVisitor::visitExplainStatement(CypherParser::ExplainStatementContext *ctx) {
-	// Visit inner query/admin statement to build rootOp_
 	visitChildren(ctx);
-	// Wrap in LogicalExplain
 	rootOp_ = std::make_unique<query::logical::LogicalExplain>(std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitProfileStatement(CypherParser::ProfileStatementContext *ctx) {
-	// Visit inner query/admin statement to build rootOp_
 	visitChildren(ctx);
-	// Wrap in LogicalProfile
 	rootOp_ = std::make_unique<query::logical::LogicalProfile>(std::move(rootOp_));
 	return std::any();
 }
@@ -114,32 +108,22 @@ std::any CypherToPlanVisitor::visitAdminStatement(CypherParser::AdminStatementCo
 }
 
 std::any CypherToPlanVisitor::visitRegularQuery(CypherParser::RegularQueryContext *ctx) {
-	// Handle UNION operations
-	// Grammar: regularQuery : singleQuery ( K_UNION K_ALL? singleQuery )*
-
 	auto singleQueries = ctx->singleQuery();
 
-	// Visit first single query to get the initial plan
-	// Note: singleQueries is guaranteed non-empty by grammar (regularQuery requires at least one singleQuery)
 	visitSingleQuery(singleQueries[0]);
-
 	std::unique_ptr<query::logical::LogicalOperator> currentPlan = std::move(rootOp_);
 
-	// Process additional single queries connected by UNION
 	auto unionKeywords = ctx->K_UNION();
 	auto allKeywords = ctx->K_ALL();
 
 	for (size_t i = 1; i < singleQueries.size(); ++i) {
-		// Visit the next single query
 		visitSingleQuery(singleQueries[i]);
 
-		// Check if this is UNION ALL (i-1 because there are n-1 UNIONs for n queries)
 		bool isAll = false;
 		if (i - 1 < allKeywords.size() && allKeywords[i - 1] != nullptr) {
 			isAll = true;
 		}
 
-		// Create LogicalUnion to combine current plan with the new query
 		currentPlan = std::make_unique<query::logical::LogicalUnion>(
 			std::move(currentPlan),
 			std::move(rootOp_),
@@ -147,134 +131,151 @@ std::any CypherToPlanVisitor::visitRegularQuery(CypherParser::RegularQueryContex
 		);
 	}
 
-	// Store the final plan
 	rootOp_ = std::move(currentPlan);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitSingleQuery(CypherParser::SingleQueryContext *ctx) {
-	// Automatically chains children (Clauses) in order
 	return visitChildren(ctx);
 }
 
 // --- Reading Clauses ---
 std::any CypherToPlanVisitor::visitMatchStatement(CypherParser::MatchStatementContext *ctx) {
-	// Check if this is an OPTIONAL MATCH
-	if (ctx->K_OPTIONAL()) {
-		rootOp_ = clauses::ReadingClauseHandler::handleOptionalMatch(ctx, std::move(rootOp_), planner_);
-	} else {
-		rootOp_ = clauses::ReadingClauseHandler::handleMatch(ctx, std::move(rootOp_), planner_);
-	}
+	auto clause = query::ir::CypherASTBuilder::buildMatchClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildMatch(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *ctx) {
-	rootOp_ = clauses::ReadingClauseHandler::handleStandaloneCall(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildStandaloneCallClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCall(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) {
-	rootOp_ = clauses::ReadingClauseHandler::handleInQueryCall(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildInQueryCallClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCall(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) {
-	rootOp_ = clauses::ReadingClauseHandler::handleUnwind(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildUnwindClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildUnwind(clause, std::move(rootOp_));
 	return std::any();
 }
 
 // --- Projection Clauses ---
 std::any CypherToPlanVisitor::visitWithClause(CypherParser::WithClauseContext *ctx) {
-	rootOp_ = clauses::WithClauseHandler::handleWith(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildWithClause(ctx);
+	query::ir::SemanticAnalyzer::analyzeProjection(clause.body);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildWith(clause, std::move(rootOp_));
 	return std::any();
 }
 
 // --- Writing Clauses ---
 std::any CypherToPlanVisitor::visitCreateStatement(CypherParser::CreateStatementContext *ctx) {
-	rootOp_ = clauses::WritingClauseHandler::handleCreate(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildCreateClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCreate(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitSetStatement(CypherParser::SetStatementContext *ctx) {
-	rootOp_ = clauses::WritingClauseHandler::handleSet(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildSetClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildSet(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) {
-	rootOp_ = clauses::WritingClauseHandler::handleDelete(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildDeleteClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildDelete(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitRemoveStatement(CypherParser::RemoveStatementContext *ctx) {
-	rootOp_ = clauses::WritingClauseHandler::handleRemove(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildRemoveClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildRemove(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitMergeStatement(CypherParser::MergeStatementContext *ctx) {
-	rootOp_ = clauses::WritingClauseHandler::handleMerge(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildMergeClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildMerge(clause, std::move(rootOp_));
 	return std::any();
 }
 
 // --- Result Clause ---
 std::any CypherToPlanVisitor::visitReturnStatement(CypherParser::ReturnStatementContext *ctx) {
-	rootOp_ = clauses::ResultClauseHandler::handleReturn(ctx, std::move(rootOp_), planner_);
+	auto clause = query::ir::CypherASTBuilder::buildReturnClause(ctx);
+	query::ir::SemanticAnalyzer::analyzeProjection(clause.body);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildReturn(clause.body, std::move(rootOp_));
 	return std::any();
 }
 
 // --- Administrative Clauses ---
 std::any CypherToPlanVisitor::visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleShowIndexes(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildShowIndexesClause();
+	rootOp_ = query::ir::LogicalPlanBuilder::buildShowIndexes(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateIndexByPattern(CypherParser::CreateIndexByPatternContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleCreateIndexByPattern(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildCreateIndexByPatternClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateIndexByLabel(CypherParser::CreateIndexByLabelContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleCreateIndexByLabel(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildCreateIndexByLabelClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateVectorIndex(CypherParser::CreateVectorIndexContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleCreateVectorIndex(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildCreateVectorIndexClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateVectorIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropIndexByName(CypherParser::DropIndexByNameContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleDropIndexByName(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildDropIndexByNameClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildDropIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleDropIndexByLabel(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildDropIndexByLabelClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildDropIndex(clause);
 	return std::any();
 }
 
 // --- Constraint DDL ---
 std::any CypherToPlanVisitor::visitCreateNodeConstraint(CypherParser::CreateNodeConstraintContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleCreateNodeConstraint(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildCreateNodeConstraintClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateEdgeConstraint(CypherParser::CreateEdgeConstraintContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleCreateEdgeConstraint(ctx, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildCreateEdgeConstraintClause(ctx);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropConstraintByName(CypherParser::DropConstraintByNameContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleDropConstraint(ctx->symbolicName()->getText(), false, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildDropConstraintClause(ctx->symbolicName()->getText(), false);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildDropConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropConstraintIfExists(CypherParser::DropConstraintIfExistsContext *ctx) {
-	rootOp_ = clauses::AdminClauseHandler::handleDropConstraint(ctx->symbolicName()->getText(), true, planner_);
+	auto clause = query::ir::CypherASTBuilder::buildDropConstraintClause(ctx->symbolicName()->getText(), true);
+	rootOp_ = query::ir::LogicalPlanBuilder::buildDropConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitShowConstraintsStatement(CypherParser::ShowConstraintsStatementContext *) {
-	rootOp_ = clauses::AdminClauseHandler::handleShowConstraints(planner_);
+	auto clause = query::ir::CypherASTBuilder::buildShowConstraintsClause();
+	rootOp_ = query::ir::LogicalPlanBuilder::buildShowConstraints(clause);
 	return std::any();
 }
 
@@ -299,31 +300,23 @@ std::any CypherToPlanVisitor::visitTxnRollback(CypherParser::TxnRollbackContext 
 
 // --- FOREACH ---
 std::any CypherToPlanVisitor::visitForeachStatement(CypherParser::ForeachStatementContext *ctx) {
-	// Grammar: K_FOREACH LPAREN variable K_IN expression PIPE updatingClause+ RPAREN
 	std::string iterVar = helpers::AstExtractor::extractVariable(ctx->variable());
 	auto listExpr = std::shared_ptr<query::expressions::Expression>(
 		helpers::ExpressionBuilder::buildExpression(ctx->expression()).release());
 
-	// Save current rootOp_ and scope, compile body independently
 	auto savedRootOp = std::move(rootOp_);
 
-	// Push scope for FOREACH body (non-isolated: inherits outer vars)
 	scope_.pushFrame(false);
 	scope_.define(iterVar);
 
-	// Compile body: each updatingClause chains onto rootOp_
-	// Use a SingleRow as the seed so clause handlers accept non-null input.
-	// The physical plan converter will replace this with a RecordInjector.
 	rootOp_ = std::make_unique<query::logical::LogicalSingleRow>();
 	for (auto *updClause : ctx->updatingClause()) {
 		visitChildren(updClause);
 	}
 	auto bodyOp = std::move(rootOp_);
 
-	// Restore scope
 	scope_.popFrame();
 
-	// Restore rootOp_ and wrap in LogicalForeach
 	rootOp_ = std::make_unique<query::logical::LogicalForeach>(
 		std::move(savedRootOp), iterVar, listExpr, std::move(bodyOp));
 	return std::any();
@@ -331,50 +324,37 @@ std::any CypherToPlanVisitor::visitForeachStatement(CypherParser::ForeachStateme
 
 // --- CALL { subquery } ---
 std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContext *ctx) {
-	// Grammar: K_CALL LBRACE singleQuery RBRACE inTransactionsClause?
 	auto savedRootOp = std::move(rootOp_);
 
-	// Determine outer scope variables from the preceding logical plan's output.
-	// The scope stack is not reliably maintained by clause handlers, so we derive
-	// available outer variables directly from the compiled plan.
 	std::unordered_set<std::string> outerVars;
 	if (savedRootOp) {
 		auto vars = savedRootOp->getOutputVariables();
 		outerVars.insert(vars.begin(), vars.end());
 	}
 
-	// Push isolated scope for subquery
 	scope_.pushFrame(true);
 
-	// Compile the subquery with SingleRow seed so WITH import works
 	rootOp_ = std::make_unique<query::logical::LogicalSingleRow>();
 	visitSingleQuery(ctx->singleQuery());
 	auto subqueryOp = std::move(rootOp_);
 
-	// Extract returned vars from the compiled subquery
 	std::vector<std::string> returnedVars;
 	if (subqueryOp) {
 		returnedVars = subqueryOp->getOutputVariables();
 	}
 
-	// Pop subquery scope
 	scope_.popFrame();
 
-	// Detect imported vars from the WITH clauses at the start of the subquery.
-	// In CALL { WITH n RETURN ... }, the WITH clause imports outer variables.
 	std::vector<std::string> importedVars;
 	auto *sq = ctx->singleQuery();
 	for (auto *wc : sq->withClause()) {
 		auto *projBody = wc->projectionBody();
 		auto *projItems = projBody->projectionItems();
-		// WITH * imports all outer vars
 		if (projItems->MULTIPLY()) {
 			importedVars.assign(outerVars.begin(), outerVars.end());
 			break;
 		}
 		for (auto *item : projItems->projectionItem()) {
-			// Use the source expression to detect outer scope references.
-			// For WITH n: source is "n". For WITH n AS m: source is "n".
 			std::string sourceVar = item->expression()->getText();
 			if (outerVars.count(sourceVar)) {
 				importedVars.push_back(sourceVar);
@@ -382,12 +362,10 @@ std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContex
 		}
 	}
 
-	// Define returned vars in outer scope
 	for (const auto &var : returnedVars) {
 		scope_.define(var);
 	}
 
-	// Handle IN TRANSACTIONS
 	bool inTransactions = false;
 	int64_t batchSize = 0;
 	if (ctx->inTransactionsClause()) {
@@ -410,7 +388,6 @@ std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContex
 
 // --- LOAD CSV ---
 std::any CypherToPlanVisitor::visitLoadCsvStatement(CypherParser::LoadCsvStatementContext *ctx) {
-	// Grammar: K_LOAD K_CSV (K_WITH K_HEADERS)? K_FROM expression K_AS variable (K_FIELDTERMINATOR StringLiteral)?
 	std::string rowVar = helpers::AstExtractor::extractVariable(ctx->variable());
 	auto urlExpr = std::shared_ptr<query::expressions::Expression>(
 		helpers::ExpressionBuilder::buildExpression(ctx->expression()).release());
@@ -420,11 +397,9 @@ std::any CypherToPlanVisitor::visitLoadCsvStatement(CypherParser::LoadCsvStateme
 	std::string fieldTerminator = ",";
 	if (ctx->K_FIELDTERMINATOR()) {
 		std::string ft = ctx->StringLiteral()->getText();
-		// Strip quotes
 		if (ft.size() >= 2) {
 			ft = ft.substr(1, ft.size() - 2);
 		}
-		// Handle escape sequences
 		if (ft == "\\t") ft = "\t";
 		fieldTerminator = ft;
 	}

@@ -95,3 +95,47 @@ TEST_F(BugVerificationTest, QuantifierSingle) {
 	ASSERT_EQ(r.rowCount(), 1UL);
 	EXPECT_EQ(val(r, "val"), "true");
 }
+
+// Bug: ORDER BY on aggregate alias — count(n) was looked up as scalar function
+TEST_F(BugVerificationTest, AggregateOrderByAlias) {
+	(void) execute("CREATE (a:AggOrd {city: 'Beijing'})");
+	(void) execute("CREATE (b:AggOrd {city: 'Beijing'})");
+	(void) execute("CREATE (c:AggOrd {city: 'Shanghai'})");
+	(void) execute("CREATE (d:AggOrd {city: 'Shanghai'})");
+	(void) execute("CREATE (e:AggOrd {city: 'Shanghai'})");
+
+	auto r = execute("MATCH (n:AggOrd) RETURN n.city, count(n) AS cnt ORDER BY cnt DESC");
+	ASSERT_EQ(r.rowCount(), 2UL);
+	// Shanghai has 3 nodes, Beijing has 2 — DESC means Shanghai first
+	EXPECT_EQ(val(r, "n.city", 0), "Shanghai");
+	EXPECT_EQ(val(r, "cnt", 0), "3");
+	EXPECT_EQ(val(r, "n.city", 1), "Beijing");
+	EXPECT_EQ(val(r, "cnt", 1), "2");
+}
+
+// Bug: Aggregate without ORDER BY still works (regression check)
+TEST_F(BugVerificationTest, AggregateWithoutOrderBy) {
+	(void) execute("CREATE (a:AggNoOrd {val: 10})");
+	(void) execute("CREATE (b:AggNoOrd {val: 20})");
+	(void) execute("CREATE (c:AggNoOrd {val: 30})");
+
+	auto r = execute("MATCH (n:AggNoOrd) RETURN count(n) AS cnt, sum(n.val) AS total");
+	ASSERT_EQ(r.rowCount(), 1UL);
+	EXPECT_EQ(val(r, "cnt"), "3");
+	EXPECT_EQ(val(r, "total"), "60");
+}
+
+// Bug: ORDER BY ASC on aggregate alias
+TEST_F(BugVerificationTest, AggregateOrderByAliasAsc) {
+	(void) execute("CREATE (a:AggOrdAsc {cat: 'A', val: 1})");
+	(void) execute("CREATE (b:AggOrdAsc {cat: 'B', val: 2})");
+	(void) execute("CREATE (c:AggOrdAsc {cat: 'B', val: 3})");
+
+	auto r = execute("MATCH (n:AggOrdAsc) RETURN n.cat AS cat, sum(n.val) AS total ORDER BY total");
+	ASSERT_EQ(r.rowCount(), 2UL);
+	// A has total=1, B has total=5 — ASC means A first
+	EXPECT_EQ(val(r, "cat", 0), "A");
+	EXPECT_EQ(val(r, "total", 0), "1");
+	EXPECT_EQ(val(r, "cat", 1), "B");
+	EXPECT_EQ(val(r, "total", 1), "5");
+}

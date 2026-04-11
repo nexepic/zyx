@@ -1,408 +1,62 @@
 ---
-title: Transaction Control
-description: ZYX provides full ACID transaction support through its CLI, allowing you to group multiple operations into atomic units. This guide explains how to co
-category: Advanced
-order: 6
+title: Transactions
+description: Correct transaction usage in REPL/API, including explicit boundaries, rollback strategy, and concurrency notes.
+category: Advanced Topics
+order: 7
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Transaction Control
+# Transactions
 
-ZYX provides full ACID transaction support through its CLI, allowing you to group multiple operations into atomic units. This guide explains how to control transactions in the CLI.
+## Transaction Lifecycle
 
-## Understanding Transactions
-
-### What is a Transaction?
-
-A transaction is a sequence of operations performed as a single logical unit of work. In ZYX, transactions adhere to ACID properties:
-
-- **Atomicity**: All operations in a transaction succeed or all fail
-- **Consistency**: The database transitions from one valid state to another
-- **Isolation**: Concurrent transactions don't interfere with each other
-- **Durability**: Committed transactions persist even after system failure
-
-### When to Use Transactions
-
-Use transactions when:
-- Multiple operations must succeed or fail together
-- Data consistency requires multiple related changes
-- You need to rollback changes if an error occurs
-- Performing complex multi-step data modifications
-
-## Transaction Commands in CLI
-
-### BEGIN TRANSACTION
-
-Start a new transaction:
-
-```bash
-# Start a transaction
-zyx> BEGIN
-
-# Transaction is now active
-zyx (transaction)>
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Active: BEGIN or API beginTransaction()
+  Active --> Committed: COMMIT
+  Active --> RolledBack: ROLLBACK / error / scope exit
+  Committed --> Idle
+  RolledBack --> Idle
 ```
 
-### COMMIT
+## Explicit Transaction in REPL
 
-Commit the current transaction:
-
-```bash
-# In transaction mode
-zyx (transaction)> COMMIT
-
-# Transaction is committed and closed
-zyx>
+```cypher
+BEGIN;
+CREATE (:User {name: 'Alice'});
+CREATE (:User {name: 'Bob'});
+COMMIT;
 ```
 
-### ROLLBACK
+Rollback case:
 
-Rollback the current transaction:
-
-```bash
-# In transaction mode
-zyx (transaction)> ROLLBACK
-
-# All changes are discarded
-zyx>
+```cypher
+BEGIN;
+CREATE (:User {name: 'Temp'});
+ROLLBACK;
 ```
 
-## Transaction Examples
-
-### Simple Transaction
-
-```bash
-# Start transaction
-zyx> BEGIN
-
-# Create nodes
-zyx (transaction)> CREATE (p:Person {name: 'Alice', age: 30})
-zyx (transaction)> CREATE (p:Person {name: 'Bob', age: 25})
-
-# Create relationship
-zyx (transaction)> MATCH (a:Person {name: 'Alice'}), (b:Person {name: 'Bob'})
-zyx (transaction)> CREATE (a)-[:KNOWS]->(b)
-
-# Commit all changes
-zyx (transaction)> COMMIT
-```
-
-### Transaction with Error Handling
-
-```bash
-# Start transaction
-zyx> BEGIN
-
-# Create person
-zyx (transaction)> CREATE (p:Person {name: 'Charlie', age: 35})
-
-# Try to create duplicate (will fail)
-zyx (transaction)> CREATE (p:Person {name: 'Alice', age: 30})
-
-# Rollback on error
-zyx (transaction)> ROLLBACK
-```
-
-### Complex Multi-Step Transaction
-
-```bash
-# Start transaction
-zyx> BEGIN
-
-# Create company
-zyx (transaction)> CREATE (c:Company {name: 'TechCorp', founded: 2020})
-
-# Create employees
-zyx (transaction)> CREATE (e1:Employee {name: 'Alice', role: 'Engineer'})
-zyx (transaction)> CREATE (e2:Employee {name: 'Bob', role: 'Designer'})
-
-# Create relationships
-zyx (transaction)> MATCH (c:Company {name: 'TechCorp'}), (e1:Employee {name: 'Alice'})
-zyx (transaction)> CREATE (e1)-[:WORKS_FOR]->(c)
-
-zyx (transaction)> MATCH (c:Company {name: 'TechCorp'}), (e2:Employee {name: 'Bob'})
-zyx (transaction)> CREATE (e2)-[:WORKS_FOR]->(c)
-
-# Create employee relationship
-zyx (transaction)> MATCH (e1:Employee {name: 'Alice'}), (e2:Employee {name: 'Bob'})
-zyx (transaction)> CREATE (e1)-[:COLLEAGUES]->(e2)
-
-# Commit if all succeed
-zyx (transaction)> COMMIT
-```
-
-## Transaction States
-
-### Auto-Commit Mode (Default)
-
-In auto-commit mode, each statement is executed in its own transaction:
-
-```bash
-# Auto-commit mode (default)
-zyx> CREATE (p:Person {name: 'Alice'})
-# Transaction is automatically committed
-
-zyx> CREATE (p:Person {name: 'Bob'})
-# Another automatic transaction
-```
-
-### Explicit Transaction Mode
-
-In explicit transaction mode, you control when to commit:
-
-```bash
-# Enter transaction mode
-zyx> BEGIN
-
-# All statements are part of this transaction
-zyx (transaction)> CREATE (p:Person {name: 'Charlie'})
-zyx (transaction)> CREATE (p:Person {name: 'Diana'})
-
-# Only commit when ready
-zyx (transaction)> COMMIT
-```
-
-## Transaction Isolation
-
-ZYX provides isolation between concurrent transactions:
-
-```bash
-# Terminal 1
-zyx> BEGIN
-zyx (transaction)> MATCH (n:Person) WHERE name = 'Alice'
-zyx (transaction)> SET n.age = 31
-
-# Terminal 2 (concurrent)
-zyx> BEGIN
-zyx (transaction)> MATCH (n:Person) WHERE name = 'Alice'
-# Sees the original age value
-
-# Terminal 1
-zyx (transaction)> COMMIT
-
-# Terminal 2
-zyx (transaction)> COMMIT
-# May fail due to concurrent modification
-```
-
-## Transaction Best Practices
-
-### Keep Transactions Short
-
-```bash
-# GOOD: Short, focused transaction
-zyx> BEGIN
-zyx (transaction)> CREATE (p:Person {name: 'Eve'})
-zyx (transaction)> COMMIT
-
-# AVOID: Long-running transaction
-zyx> BEGIN
-zyx (transaction)> CREATE (p:Person {name: 'Frank'})
-# ... wait for user input ...
-zyx (transaction)> CREATE (p:Person {name: 'Grace'})
-zyx (transaction)> COMMIT
-```
-
-### Handle Errors Gracefully
-
-```bash
-# Start transaction
-zyx> BEGIN
-
-# Try operations
-zyx (transaction)> CREATE (p:Person {name: 'Henry', age: 28})
-zyx (transaction)> CREATE (p:Person {name: 'Iris', age: 32})
-
-# Check for errors before committing
-zyx (transaction)> MATCH (n:Person) WHERE n.name IN ['Henry', 'Iris']
-zyx (transaction)> RETURN count(n) AS created
-
-# If count is 2, commit
-zyx (transaction)> COMMIT
-
-# Otherwise rollback
-zyx (transaction)> ROLLBACK
-```
-
-### Use Transactions for Data Integrity
-
-```bash
-# Ensure referential integrity
-zyx> BEGIN
-
-# Create department
-zyx (transaction)> CREATE (d:Department {name: 'Engineering'})
-
-# Create employee
-zyx (transaction)> CREATE (e:Employee {name: 'Jack'})
-
-# Link them
-zyx (transaction)> MATCH (d:Department {name: 'Engineering'}), (e:Employee {name: 'Jack'})
-zyx (transaction)> CREATE (e)-[:WORKS_IN]->(d)
-
-# Only commit if all succeed
-zyx (transaction)> COMMIT
-```
-
-## Transaction Patterns
-
-### Batch Insert with Transaction
-
-```bash
-# Insert multiple related records
-zyx> BEGIN
-
-# Insert user
-zyx (transaction)> CREATE (u:User {id: 1, name: 'Alice'})
-
-# Insert user settings
-zyx (transaction)> CREATE (s:Settings {user_id: 1, theme: 'dark'})
-
-# Link them
-zyx (transaction)> MATCH (u:User {id: 1}), (s:Settings {user_id: 1})
-zyx (transaction)> CREATE (u)-[:HAS_SETTINGS]->(s)
-
-# Commit all or none
-zyx (transaction)> COMMIT
-```
-
-### Update with Validation
-
-```bash
-# Validate before committing
-zyx> BEGIN
-
-# Update record
-zyx (transaction)> MATCH (p:Person {name: 'Alice'})
-zyx (transaction)> SET p.age = 32
-
-# Verify update
-zyx (transaction)> MATCH (p:Person {name: 'Alice'})
-zyx (transaction)> RETURN p.age
-
-# If correct, commit; otherwise rollback
-zyx (transaction)> COMMIT
-```
-
-### Conditional Transaction
-
-```bash
-# Transaction with logic
-zyx> BEGIN
-
-# Check if person exists
-zyx (transaction)> MATCH (p:Person {name: 'Bob'})
-zyx (transaction)> RETURN p
-
-# If exists, update; otherwise create
-zyx (transaction)> MERGE (p:Person {name: 'Bob'})
-zyx (transaction)> ON CREATE SET p.age = 25, p.created = timestamp()
-zyx (transaction)> ON MATCH SET p.lastUpdated = timestamp()
-
-# Commit result
-zyx (transaction)> COMMIT
-```
-
-## Transaction Monitoring
-
-### View Transaction Status
-
-```bash
-# Check if in transaction
-zyx> SHOW TRANSACTION
-
-# View transaction details
-zyx> EXPLAIN TRANSACTION
-```
-
-### Transaction Statistics
-
-```bash
-# View transaction statistics
-zyx> SHOW STATS
-
-# Shows:
-# - Active transactions
-# - Committed transactions
-# - Rolled back transactions
-# - Transaction duration
-```
-
-## Error Handling
-
-### Constraint Violations
-
-```bash
-# Unique constraint violation
-zyx> BEGIN
-zyx (transaction)> CREATE (p:Person {email: 'alice@example.com'})
-zyx (transaction)> CREATE (p:Person {email: 'alice@example.com'})
-zyx (transaction)> COMMIT
-# ERROR: Unique constraint violated
-# Transaction automatically rolled back
-```
-
-### Deadlock Handling
-
-```bash
-# If deadlock occurs
-zyx> BEGIN
-# ... operations ...
-zyx (transaction)> COMMIT
-# ERROR: Deadlock detected
-# Transaction automatically rolled back
-
-# Retry the transaction
-zyx> BEGIN
-# ... operations ...
-zyx (transaction)> COMMIT
-# Success
-```
-
-## Performance Considerations
-
-### Transaction Size
-
-```bash
-# GOOD: Small, focused transactions
-zyx> BEGIN
-zyx (transaction)> CREATE (p:Person {name: 'Kevin'})
-zyx (transaction)> COMMIT
-
-# AVOID: Very large transactions
-zyx> BEGIN
-zyx (transaction)> CREATE (p:Person {name: 'Laura'})
-# ... 10,000 more creates ...
-zyx (transaction)> COMMIT
-# May cause performance issues
-```
-
-### Lock Contention
-
-```bash
-# Minimize lock time
-zyx> BEGIN
-# Do read operations first
-zyx (transaction)> MATCH (p:Person) WHERE p.age > 30
-# Then do writes
-zyx (transaction)> MATCH (p:Person {name: 'Alice'}) SET p.age = 31
-zyx (transaction)> COMMIT
-```
-
-## Best Practices Summary
-
-1. **Keep transactions short**: Minimize time between BEGIN and COMMIT
-2. **Handle errors**: Always check for errors before committing
-3. **Use for consistency**: Group related operations in transactions
-4. **Avoid long transactions**: Don't wait for user input in transactions
-5. **Test before commit**: Verify data integrity before committing
-6. **Use MERGE**: Handle create-or-update scenarios elegantly
-7. **Monitor performance**: Use PROFILE to understand transaction impact
-
-## Next Steps
-
-- Learn about [Batch Operations](/en/docs/zyx/user-guide/batch-operations) for bulk data processing
-- Explore [Import & Export](/en/docs/zyx/user-guide/import-export) for data migration
-- Understand [Advanced Queries](/en/docs/zyx/user-guide/advanced-queries) for complex operations
+## Implicit vs Explicit
+
+| Mode | Typical Use | Notes |
+|---|---|---|
+| Implicit (single statement) | Simple one-shot reads/writes | Lowest operational overhead |
+| Explicit (`BEGIN...COMMIT`) | Multi-step atomic updates | Clear success/failure boundary |
+| API transaction object | Service-side orchestration | Auto-rollback if not committed |
+
+## Behavior Notes
+
+- Nested transactions are not supported.
+- Write workload is single-writer oriented; reads rely on snapshots.
+- Uncommitted changes are not durable until commit.
+- Explicit `save`/flush can be used after commit for operational control.
+
+## Failure Handling Pattern
+
+1. Start explicit transaction for multi-step write.
+2. Validate intermediate assumptions with `MATCH ... RETURN`.
+3. `COMMIT` only when all checks pass.
+4. `ROLLBACK` on any semantic or business failure.

@@ -1,6 +1,6 @@
 ---
 title: 用户指南
-description: 面向日常使用者的 CLI、Cypher 与事务操作指南。
+description: 面向日常用户的 ZYX 使用手册，覆盖 CLI、Cypher、事务与导入导出。
 category: 快速开始
 order: 1
 project: zyx
@@ -10,21 +10,42 @@ projectOrder: 1
 ---
 # 用户指南
 
-本指南以当前 CLI 和查询引擎实现为准，帮助你从“能跑”到“可维护地使用”。
+本指南面向“直接使用产品”的用户，重点是如何高效使用 ZYX，而不是源码实现细节。
 
 ## 推荐阅读顺序
 
-1. [快速开始](quick-start)
-2. [基本操作](basic-operations)
-3. [Cypher 基础](cypher-basics)
-4. [模式匹配](pattern-matching)
-5. [高级查询](advanced-queries)
-6. [事务控制](transactions)
-7. [批处理操作](batch-operations)
-8. [导入与导出](import-export)
+| 步骤 | 文档 | 重点 |
+|---|---|---|
+| 1 | [快速开始](quick-start) | 构建、打开数据库、跑通首条查询 |
+| 2 | [基本操作](basic-operations) | CRUD、索引、约束 |
+| 3 | [Cypher 基础](cypher-basics) | 子句模型与表达式能力 |
+| 4 | [模式匹配](pattern-matching) | 有向/无向与变长模式 |
+| 5 | [高级查询](advanced-queries) | WITH/UNION/UNWIND/CALL/LOAD CSV |
+| 6 | [事务控制](transactions) | 显式事务边界与回滚 |
+| 7 | [批处理操作](batch-operations) | 大规模写入与导入策略 |
+| 8 | [导入与导出](import-export) | 数据迁移与备份恢复 |
 
-## 约定
+```mermaid
+flowchart LR
+  A[快速开始] --> B[基本操作]
+  B --> C[Cypher 基础]
+  C --> D[模式匹配]
+  D --> E[高级查询]
+  E --> F[事务控制]
+  F --> G[批处理操作]
+  G --> H[导入与导出]
+```
 
-- 文中 CLI 可执行文件默认是 `buildDir/apps/cli/zyx`。
-- REPL 中普通查询建议以 `;` 结尾。
-- 事务语句使用 `BEGIN` / `COMMIT` / `ROLLBACK`（不是 `:begin` 形式）。
+## 当前产品形态
+
+- 以 CLI 为核心工作流：REPL、脚本模式、批量导入命令。
+- Cypher 已覆盖常见读写子句、子查询、`LOAD CSV` 与管理 DDL。
+- 支持图查询 + 向量检索 + GDS 过程。
+- 事务满足 ACID，持久化基于 WAL。
+
+## 文档约定
+
+- CLI 可执行文件路径：`./buildDir/apps/cli/zyx`
+- REPL 示例默认以 `;` 结束
+- 事务语句为 `BEGIN` / `COMMIT` / `ROLLBACK`
+- 特性边界以仓库根目录 `UNSUPPORTED_CYPHER_FEATURES.md` 为准

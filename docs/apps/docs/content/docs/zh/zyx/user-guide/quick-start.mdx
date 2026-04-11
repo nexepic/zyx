@@ -1,6 +1,6 @@
 ---
 title: 快速开始
-description: 用 5 分钟启动 ZYX CLI、创建图数据并执行第一条查询。
+description: 构建 ZYX、打开数据库、执行首条图查询，并切换 REPL/脚本模式。
 category: 快速开始
 order: 2
 project: zyx
@@ -10,7 +10,7 @@ projectOrder: 1
 ---
 # 快速开始
 
-## 1) 构建项目
+## 1) 一次构建
 
 ```bash
 ./scripts/run_tests.sh --quick
@@ -22,7 +22,9 @@ projectOrder: 1
 ./buildDir/apps/cli/zyx
 ```
 
-## 2) 创建数据库并进入交互模式
+## 2) 打开数据库
+
+创建并进入交互模式：
 
 ```bash
 ./buildDir/apps/cli/zyx database create ./demo.graph
@@ -34,30 +36,50 @@ projectOrder: 1
 ./buildDir/apps/cli/zyx database open ./demo.graph
 ```
 
-## 3) 执行第一组语句
+不存在则创建再打开：
 
-在 REPL 中输入：
+```bash
+./buildDir/apps/cli/zyx database open ./demo.graph --create-if-missing
+```
+
+## 3) 执行第一组图查询
 
 ```cypher
-CREATE (u:User {name: 'Alice', age: 30});
-CREATE (u:User {name: 'Bob', age: 25});
+CREATE (a:User {name: 'Alice', age: 30});
+CREATE (b:User {name: 'Bob', age: 25});
 MATCH (a:User {name: 'Alice'}), (b:User {name: 'Bob'})
-CREATE (a)-[:KNOWS {since: 2024}]->(b);
+CREATE (a)-[:KNOWS {since: 2026}]->(b);
 MATCH (a:User)-[r:KNOWS]->(b:User)
 RETURN a.name, b.name, r.since;
 ```
 
 ## 4) REPL 常用命令
 
-- `help`：查看帮助
-- `save`：flush 到磁盘
-- `debug ...`：查看内部存储状态
-- `exit`：退出
+- `help`：打印帮助
+- `save`：将数据 flush 到磁盘
+- `debug ...`：查看内部状态（进阶）
+- `exit`：退出 REPL
 
-## 5) 脚本模式执行
+## 5) 脚本模式（可复用执行）
 
 ```bash
 ./buildDir/apps/cli/zyx database exec ./demo.graph ./seed.cypher
 ```
 
-`seed.cypher` 中建议每条语句以 `;` 结束。
+`seed.cypher` 建议每条语句以 `;` 结束。
+
+```mermaid
+flowchart TD
+  A[构建] --> B[database create/open]
+  B --> C[REPL 执行查询]
+  C --> D[save]
+  D --> E[database exec 自动化执行]
+```
+
+## 快速排障
+
+| 现象 | 常见原因 | 处理建议 |
+|---|---|---|
+| `Script file not found` | 脚本路径错误 | 使用绝对路径或检查当前目录 |
+| `Syntax Error at line ...` | 缺少 `;` 或使用了未支持语法 | 先对照 [Cypher 基础](cypher-basics) |
+| 查不到预期数据 | 标签/属性名不匹配 | 先执行 `MATCH (n) RETURN n LIMIT 10;` 做全局检查 |

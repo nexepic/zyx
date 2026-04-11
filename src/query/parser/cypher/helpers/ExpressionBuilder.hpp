@@ -134,6 +134,13 @@ public:
 	 */
 	static bool isAggregateFunction(const std::string& functionName);
 
+	/**
+	 * @brief Recursively check if an expression tree contains any aggregate function calls.
+	 * @param expr The expression to check
+	 * @return true if the expression contains count, sum, avg, min, max, or collect
+	 */
+	static bool containsAggregateFunction(const graph::query::expressions::Expression* expr);
+
 private:
 	// =========================================================================
 	// Internal helper methods for AST construction

@@ -1,6 +1,6 @@
 ---
 title: 导入与导出
-description: 当前版本下可落地的数据导入导出路径与备份建议。
+description: ZYX 当前可落地的数据导入导出路径：LOAD CSV、CLI import、API 导出与备份流程。
 category: 高级主题
 order: 9
 project: zyx
@@ -10,36 +10,64 @@ projectOrder: 1
 ---
 # 导入与导出
 
-## 当前能力边界
+## 能力矩阵
 
-当前实现中，`LOAD CSV` / APOC 导入导出并不是内置能力。推荐使用以下路径。
+| 任务 | 内置路径 | 说明 |
+|---|---|---|
+| 查询内 CSV 导入 | `LOAD CSV` / `LOAD CSV WITH HEADERS` | 支持 `FIELDTERMINATOR` |
+| 文件批量导入 | CLI `import` 命令 | 支持 CSV 与 JSONL |
+| 结果导出 | API 迭代结果集 | 由应用层写出 CSV/JSON/Parquet |
+| 物理备份 | `save` + 复制数据库文件 | 快照时应无活跃写事务 |
 
-## 导入路径
+## 导入路径选择
 
-### 1) CLI 脚本导入
+```mermaid
+flowchart LR
+  A[需要导入数据] --> B{数据格式}
+  B -->|CSV/TSV| C[Cypher 中 LOAD CSV]
+  B -->|大文件| D[CLI import]
+  B -->|服务对象| E[API execute/批量方法]
+```
 
-- 将数据转换为 Cypher 语句文件
-- 使用 `database exec` 执行
+## 路径 1：查询管线中的 LOAD CSV
 
-### 2) C++/C API 导入
+```cypher
+LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
+MERGE (:User {name: row.name})
+RETURN count(*) AS imported;
+```
 
-- 参数化 `execute`
-- 或使用原生写入 API（`createNodes` / `createEdgeById`）
+## 路径 2：CLI 批量导入命令
 
-## 导出路径
+```bash
+./buildDir/apps/cli/zyx import \
+  --database ./demo.graph \
+  --nodes ./nodes.csv \
+  --relationships ./rels.csv \
+  --format auto \
+  --array-delimiter ';' \
+  --skip-bad-entries
+```
 
-### 1) 查询结果导出
+CSV 模式可识别 Neo4j 风格表头，例如：
 
-- 使用 API 迭代 `Result`/`ZYXResult_T`
-- 由应用层写出 CSV/JSON/Parquet
+- 节点：`:ID`, `:LABEL`, `name:STRING`, `age:INT`
+- 关系：`:START_ID`, `:END_ID`, `:TYPE`, `since:INT`
 
-### 2) 物理备份
+JSONL 模式当前重点使用保留键（`_id`, `_labels`, `_start`, `_end`, `_type`）完成图结构映射。
 
-- 先执行 `save`（或 API `save()`）并关闭数据库
-- 直接复制数据库文件
+## 路径 3：导出与备份
 
-## 备份建议
+- 结果导出：通过 C++/C API 迭代查询结果。
+- 物理备份建议：
+  1. 执行 `save`（或 API `save()`）并停止写入。
+  2. 复制数据库文件。
+  3. 恢复时在下次打开前替换文件。
 
-- 备份前确保没有活跃写事务
-- 使用定期快照 + 增量导出组合
-- 恢复演练至少定期执行一次
+```mermaid
+flowchart TD
+  A[save / flush] --> B[确认无活跃写事务]
+  B --> C[复制数据库文件]
+  C --> D[保存校验信息与元数据]
+  D --> E[定期恢复演练]
+```

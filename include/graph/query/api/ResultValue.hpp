@@ -20,7 +20,10 @@
 
 #pragma once
 
+#include <algorithm>
+#include <functional>
 #include <variant>
+#include <vector>
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -33,6 +36,7 @@ namespace graph::query {
 	class ResultValue {
 	public:
 		using VariantType = std::variant<PropertyValue, Node, Edge>;
+		using TokenResolver = std::function<std::string(int64_t)>;
 
 		// Constructors
 		ResultValue() : data_(PropertyValue()) {}
@@ -53,41 +57,23 @@ namespace graph::query {
 		const PropertyValue &asPrimitive() const { return std::get<PropertyValue>(data_); }
 
 		/**
-		 * @brief Converts the underlying value to a string representation.
+		 * @brief Converts the underlying value to a Cypher-like string.
 		 *
-		 * - Primitives: Returns the value as string.
-		 * - Nodes: Returns Cypher-like format `(:Label {props})` or `(Node:ID)`.
-		 * - Edges: Returns Cypher-like format `[:TYPE {props}]`.
+		 * @param resolver Optional function to resolve token IDs to names.
+		 *   When provided, nodes display as (:Person {...}) and edges as [:KNOWS {...}].
+		 *   Without resolver, falls back to numeric IDs: (:?1 {...}), [:?2 {...}].
 		 */
-		std::string toString() const {
+		std::string toString(const TokenResolver &resolver = nullptr) const {
 			return std::visit(
-					[/*this*/]<typename T0>(T0 &&arg) -> std::string {
+					[&resolver]<typename T0>(T0 &&arg) -> std::string {
 						using T = std::decay_t<T0>;
 
 						if constexpr (std::is_same_v<T, PropertyValue>) {
 							return arg.toString();
 						} else if constexpr (std::is_same_v<T, Node>) {
-							std::ostringstream oss;
-							// We only have ID now.
-							oss << "(:LabelID:" << arg.getLabelId();
-
-							std::string props = formatProps(arg.getProperties());
-							if (!props.empty())
-								oss << " " << props;
-
-							oss << ")";
-							return oss.str();
+							return formatNode(arg, resolver);
 						} else if constexpr (std::is_same_v<T, Edge>) {
-							std::ostringstream oss;
-							// Format: [:TYPE:ID {props}]
-							oss << "[:TypeID:" << arg.getTypeId() << ":" << arg.getId();
-
-							std::string props = formatProps(arg.getProperties());
-							if (!props.empty())
-								oss << " " << props;
-
-							oss << "]";
-							return oss.str();
+							return formatEdge(arg, resolver);
 						}
 						return "";
 					},
@@ -97,17 +83,67 @@ namespace graph::query {
 	private:
 		VariantType data_;
 
-		// Helper to format properties map to JSON-like string
+		static std::string resolveToken(int64_t id, const TokenResolver &resolver) {
+			if (resolver) {
+				return resolver(id);
+			}
+			return "?" + std::to_string(id);
+		}
+
+		static std::string formatNode(const Node &node, const TokenResolver &resolver) {
+			std::ostringstream oss;
+			oss << "(";
+
+			auto labelIds = node.getLabelIds();
+			for (int64_t lid : labelIds) {
+				if (lid != 0) {
+					oss << ":" << resolveToken(lid, resolver);
+				}
+			}
+
+			std::string props = formatProps(node.getProperties());
+			if (!props.empty())
+				oss << " " << props;
+
+			oss << ")";
+			return oss.str();
+		}
+
+		static std::string formatEdge(const Edge &edge, const TokenResolver &resolver) {
+			std::ostringstream oss;
+			oss << "[";
+
+			int64_t tid = edge.getTypeId();
+			if (tid != 0) {
+				oss << ":" << resolveToken(tid, resolver);
+			}
+
+			std::string props = formatProps(edge.getProperties());
+			if (!props.empty())
+				oss << " " << props;
+
+			oss << "]";
+			return oss.str();
+		}
+
 		static std::string formatProps(const std::unordered_map<std::string, PropertyValue> &props) {
 			if (props.empty())
 				return "";
+
+			// Sort keys for stable output
+			std::vector<std::string> keys;
+			keys.reserve(props.size());
+			for (const auto &[k, v] : props) {
+				keys.push_back(k);
+			}
+			std::sort(keys.begin(), keys.end());
+
 			std::ostringstream oss;
 			oss << "{";
-			auto it = props.begin();
-			while (it != props.end()) {
-				oss << it->first << ": " << it->second.toString();
-				if (++it != props.end())
+			for (size_t i = 0; i < keys.size(); ++i) {
+				if (i > 0)
 					oss << ", ";
+				oss << keys[i] << ": " << props.at(keys[i]).toString();
 			}
 			oss << "}";
 			return oss.str();

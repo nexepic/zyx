@@ -50,7 +50,12 @@ enum class ExpressionType {
 	IN_LIST,
 	PARAMETER,
 	SHORTEST_PATH,
-	MAP_PROJECTION
+	MAP_PROJECTION,
+	EXPR_REDUCE,
+	EXPR_QUANTIFIER_FUNCTION,
+	EXPR_EXISTS,
+	EXPR_PATTERN_COMPREHENSION,
+	EXPR_LIST_LITERAL
 };
 
 /**
@@ -198,7 +203,7 @@ public:
 	VariableReferenceExpression(std::string variableName, std::string propertyName);
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
-		return ExpressionType::PROPERTY_ACCESS;
+		return hasProperty_ ? ExpressionType::PROPERTY_ACCESS : ExpressionType::VARIABLE_REFERENCE;
 	}
 	void accept(ExpressionVisitor &visitor) override;
 	void accept(ConstExpressionVisitor &visitor) const override;

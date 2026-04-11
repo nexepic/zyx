@@ -21,6 +21,7 @@
 #include "../ExpressionBuilder.hpp"
 #include "generated/CypherLexer.h"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionUtils.hpp"
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
@@ -789,12 +790,11 @@ std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::F
 }
 
 bool ExpressionBuilder::isAggregateFunction(const std::string& functionName) {
-	std::string nameLower = functionName;
-	std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
-	               [](unsigned char c) { return std::tolower(c); });
+	return graph::query::expressions::ExpressionUtils::isAggregateFunction(functionName);
+}
 
-	return nameLower == "count" || nameLower == "sum" || nameLower == "avg" ||
-	       nameLower == "min" || nameLower == "max" || nameLower == "collect";
+bool ExpressionBuilder::containsAggregateFunction(const Expression* expr) {
+	return graph::query::expressions::ExpressionUtils::containsAggregate(expr);
 }
 
 std::vector<PropertyValue> ExpressionBuilder::extractListFromExpression(CypherParser::ExpressionContext *ctx) {

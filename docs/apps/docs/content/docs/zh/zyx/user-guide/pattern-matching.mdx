@@ -1,6 +1,6 @@
 ---
 title: 模式匹配
-description: 从单跳到变长路径的模式表达与过滤组合。
+description: 有向/无向模式、变长遍历与模式组合的实战写法。
 category: 核心概念
 order: 5
 project: zyx
@@ -10,29 +10,30 @@ projectOrder: 1
 ---
 # 模式匹配
 
-## 单跳模式
+## 方向语义
+
+| 模式 | 含义 |
+|---|---|
+| `(a)-[:REL]->(b)` | 从 `a` 指向 `b` 的出边 |
+| `(a)<-[:REL]-(b)` | 从 `b` 指向 `a` 的入边 |
+| `(a)-[:REL]-(b)` | 不限定方向 |
+
+## 单模式与组合模式
 
 ```cypher
 MATCH (a:Person)-[:KNOWS]->(b:Person)
-RETURN a, b;
+RETURN a.name, b.name;
 ```
-
-## 可选匹配
 
 ```cypher
-MATCH (p:Person)
-OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
-RETURN p.name, c.name;
+MATCH (a:Person)-[:KNOWS]->(b:Person),
+      (b)-[:WORKS_AT]->(c:Company)
+RETURN a.name, b.name, c.name;
 ```
 
-## 变长路径
+## 变长模式
 
-```cypher
-MATCH p = (a:Person)-[:KNOWS*1..3]->(b:Person)
-RETURN p;
-```
-
-当前支持的变长形式包括：
+当前支持形式：
 
 - `*`
 - `*N`
@@ -40,19 +41,49 @@ RETURN p;
 - `*N..`
 - `*..M`
 
-## 路径过滤建议
-
-优先把过滤放在 `WHERE`，并尽可能使用可索引属性：
-
 ```cypher
-MATCH (p:Person)-[:KNOWS*1..2]->(f:Person)
-WHERE p.name = 'Alice' AND f.age >= 25
-RETURN f;
+MATCH p = (a:Person)-[:KNOWS*1..3]->(b:Person)
+RETURN p, length(p);
 ```
 
-## 多模式组合
+## 多关系类型匹配
 
 ```cypher
-MATCH (a:Person)-[:KNOWS]->(b:Person), (b)-[:WORKS_AT]->(c:Company)
-RETURN a.name, b.name, c.name;
+MATCH (a)-[:TYPE1|TYPE2]->(x)
+RETURN x;
 ```
+
+## 可选匹配与存在性匹配
+
+```cypher
+MATCH (p:Person)
+OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
+RETURN p.name, c.name;
+```
+
+```cypher
+MATCH (n:Person)
+WHERE exists((n)-[:KNOWS]->())
+RETURN n.name;
+```
+
+## 模式推导（Pattern Comprehension）
+
+```cypher
+MATCH (n:Person {name: 'Alice'})
+RETURN [(n)-[:KNOWS]->(m) | m.name] AS friends;
+```
+
+```mermaid
+flowchart TD
+  A[起点过滤] --> B[模式扩展]
+  B --> C[WHERE 条件过滤]
+  C --> D[投影节点/关系/路径字段]
+```
+
+## 实战检查清单
+
+- 尽量在起点/终点就加标签和可索引属性过滤。
+- 变长模式优先给上界（`*1..N`）。
+- 仅在关系确实可缺省时使用 `OPTIONAL MATCH`。
+- 只有需要路径对象本身时才返回 `p`。

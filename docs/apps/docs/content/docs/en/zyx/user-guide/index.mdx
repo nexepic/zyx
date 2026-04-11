@@ -1,8 +1,8 @@
 ---
 title: User Guide
-description: Welcome to the ZYX User Guide! This guide will help you get started with using ZYX graph database.
+description: Practical guide for daily ZYX usage with CLI, Cypher, transactions, and data import/export.
 category: Getting Started
-order: 99
+order: 1
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -10,21 +10,42 @@ projectOrder: 1
 ---
 # User Guide
 
-Welcome to the ZYX User Guide! This guide will help you get started with using ZYX graph database.
+This guide is written for product users who care about using ZYX effectively, not internal source code details.
 
-## Getting Started
+## Recommended Path
 
-- [Quick Start](quick-start) - Get up and running in 5 minutes
-- [Basic Operations](basic-operations) - Learn fundamental database operations
+| Step | Document | Focus |
+|---|---|---|
+| 1 | [Quick Start](quick-start) | Build, open DB, run first queries |
+| 2 | [Basic Operations](basic-operations) | CRUD, indexes, constraints |
+| 3 | [Cypher Basics](cypher-basics) | Clause model and expression surface |
+| 4 | [Pattern Matching](pattern-matching) | Directed/undirected and variable-length patterns |
+| 5 | [Advanced Queries](advanced-queries) | WITH/UNION/UNWIND/CALL/LOAD CSV |
+| 6 | [Transactions](transactions) | Explicit transaction boundaries and rollback |
+| 7 | [Batch Operations](batch-operations) | Large writes/import strategy |
+| 8 | [Import & Export](import-export) | Data movement and backup runbook |
 
-## Cypher Query Language
+```mermaid
+flowchart LR
+  A[Quick Start] --> B[Basic Operations]
+  B --> C[Cypher Basics]
+  C --> D[Pattern Matching]
+  D --> E[Advanced Queries]
+  E --> F[Transactions]
+  F --> G[Batch Operations]
+  G --> H[Import and Export]
+```
 
-- [Cypher Basics](cypher-basics) - Introduction to Cypher query language
-- [Advanced Queries](advanced-queries) - Complex query patterns and optimization
-- [Pattern Matching](pattern-matching) - Graph pattern matching techniques
+## Current Product Profile
 
-## CLI Features
+- CLI-first workflow: REPL, script mode, and bulk import command.
+- Cypher coverage includes read/write clauses, subqueries, `LOAD CSV`, and admin DDL.
+- Hybrid capability for graph + vector + GDS procedures.
+- ACID transactions with WAL-backed durability.
 
-- [Transaction Control](transactions) - Managing database transactions
-- [Batch Operations](batch-operations) - Bulk operations for efficiency
-- [Import & Export](import-export) - Data migration and backup
+## Conventions Used in This Guide
+
+- CLI executable path: `./buildDir/apps/cli/zyx`
+- Most query examples are intended for REPL and end with `;`
+- Transaction statements are `BEGIN` / `COMMIT` / `ROLLBACK`
+- Feature boundary source of truth: repository root `UNSUPPORTED_CYPHER_FEATURES.md`

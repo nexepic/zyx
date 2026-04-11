@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  A high-performance, embeddable graph database engine, designed for efficient storage, indexing, and querying of graph-structured data.
+  High-performance embeddable graph database engine in C++20 with Cypher support.
 </p>
 
 <p align="center">
@@ -32,136 +32,92 @@
     </a>
 </p>
 
-## Features
+## What ZYX Provides
 
-### Core Capabilities
+- Cypher query engine (`MATCH` / `CREATE` / `MERGE` / `WITH` / `UNION` / `UNWIND` / `CALL` / `LOAD CSV`)
+- ACID transactions with WAL and recovery
+- Schema/index administration (`CREATE INDEX`, constraints, vector index)
+- Built-in procedures for DB stats/config, vector search/training, and GDS algorithms
+- CLI modes for interactive REPL, script execution, and bulk import
 
-- **Native Graph Storage**: Purpose-built data structures for nodes, edges, and properties with efficient serialization.
-- **ACID Transactions**: Full transaction support with rollback capabilities and Write-Ahead Logging (WAL).
-- **Advanced Indexing**: Label-based and property-based indexes with automatic index management.
-- **Flexible Schema**: Dynamic property system supporting multiple data types (Int, Long, Double, String, Boolean,
-  Blob).
-- **State Management**: Temporal state tracking with state chains and blob chain management.
-- **Query Engine**: Unified query interface with optimized query planning and execution strategies.
-
-### Storage & Performance
-
-- **Custom File Format**: Segment-based storage with checksums and compression support.
-- **Memory Efficiency**: Smart caching with LRU eviction and dirty entity tracking.
-- **Space Management**: Automatic space reclamation and segment management.
-- **Deletion Handling**: Sophisticated tombstone management and reference updating.
-
-### Developer Experience
-
-- **Interactive REPL**: Full-featured command-line interface for database operations.
-- **Traversal API**: Relationship-based graph traversal with BFS/DFS support.
-- **Type Safety**: Strong type system with compile-time guarantees.
-- **Comprehensive Testing**: Extensive test coverage with Google Test framework.
+Feature support details: [`UNSUPPORTED_CYPHER_FEATURES.md`](UNSUPPORTED_CYPHER_FEATURES.md)
 
 ## Prerequisites
 
-Before building, ensure you have the following installed:
+- C++ compiler with C++20 support (Clang 14+ or GCC 11+)
+- Meson 0.60+
+- Ninja
+- Conan 2.x
+- Python 3.10+
 
-- **C++ Compiler**: Clang 14+ or GCC 11+ (Must support C++20)
-- **Build System**: [Meson](https://mesonbuild.com/) 0.60+ and [Ninja](https://ninja-build.org/)
-- **Package Manager**: [Conan](https://conan.io/) 2.x
-- **Python**: 3.10+
-- **LLVM Tools**: `llvm-cov` and `llvm-profdata` (Required for coverage reports)
-
-## Build & Test
-
-We provide a convenient shell script to automate the environment setup, building, and testing process.
-
-### One-Click Build (Recommended)
-
-The `run_tests.sh` script handles dependency installation (Conan), configuration (Meson), compilation, unit testing, and
-coverage report generation.
+## Build and Test
 
 ```bash
-# Clean build, install dependencies, compile, and run tests
-./run_tests.sh
+# Full build + tests + coverage
+./scripts/run_tests.sh
 
-# Quick run (skip dependency installation if already installed)
-./run_tests.sh --quick
+# Quick local run (skip Conan install stage)
+./scripts/run_tests.sh --quick
 ```
 
-After the script finishes, you can find the build artifacts in `buildDir/` and coverage reports in `buildDir/coverage/`.
-
-### Manual Build Steps
-
-If you prefer to run the steps manually or are integrating into a custom workflow:
-
-1. **Install Dependencies (Conan)**
-   ```bash
-   # Ensure C++20 and Debug mode are used
-   conan profile detect
-   conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
-   ```
-
-2. **Configure Build (Meson)**
-   ```bash
-   # Configure with source-based coverage flags
-   export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
-   
-   meson setup buildDir \
-     --native-file buildDir/conan_meson_native.ini \
-     -Dcpp_args="$FLAGS" \
-     -Dcpp_link_args="$FLAGS" \
-     -Dbuildtype=debug
-   ```
-
-3. **Compile**
-   ```bash
-   meson compile -C buildDir
-   ```
-
-4. **Run Tests**
-   ```bash
-   # Set profile file location to avoid root directory pollution
-   export LLVM_PROFILE_FILE="$(pwd)/buildDir/coverage/raw/code-%p.profraw"
-   
-   meson test -C buildDir
-   ```
-
-5. **Generate Coverage Report**
-   ```bash
-   # macOS example (using xcrun)
-   python3 scripts/generate_coverage.py buildDir buildDir/coverage/coverage.lcov "xcrun llvm-cov" "xcrun llvm-profdata"
-   ```
-
-## Usage
-
-After building, the CLI executable is located at `buildDir/apps/cli/zyx`.
-
-### Database Management
+Useful commands:
 
 ```bash
-# Create and open a new database
-./buildDir/apps/cli/zyx database create mydb.graph
-
-# Open an existing database
-./buildDir/apps/cli/zyx database open mydb.graph
+meson test -C buildDir <test_name>
+./scripts/build_release.sh
 ```
 
-Once inside the REPL, type `help` to see all available commands for node/edge manipulation, querying, and indexing.
+## Quick Start
 
-## Contributing
+### 1) Build
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+```bash
+./scripts/run_tests.sh --quick
+```
+
+### 2) Create and open a database
+
+```bash
+./buildDir/apps/cli/zyx database create ./demo.graph
+```
+
+Open existing DB:
+
+```bash
+./buildDir/apps/cli/zyx database open ./demo.graph
+```
+
+### 3) Run first queries (in REPL)
+
+```cypher
+CREATE (a:User {name: 'Alice'});
+CREATE (b:User {name: 'Bob'});
+MATCH (a:User {name: 'Alice'}), (b:User {name: 'Bob'})
+CREATE (a)-[:KNOWS {since: 2026}]->(b);
+MATCH (a:User)-[r:KNOWS]->(b:User)
+RETURN a.name, b.name, r.since;
+```
+
+## CLI Modes
+
+```bash
+# Script mode
+./buildDir/apps/cli/zyx database exec ./demo.graph ./seed.cypher
+
+# Bulk import (CSV / JSONL)
+./buildDir/apps/cli/zyx import \
+  --database ./demo.graph \
+  --nodes ./nodes.csv \
+  --relationships ./rels.csv
+```
+
+## Documentation
+
+- User guide (EN): `docs/apps/docs/content/docs/en/zyx/user-guide/`
+- User guide (ZH): `docs/apps/docs/content/docs/zh/zyx/user-guide/`
+- Architecture docs: `docs/apps/docs/content/docs/{en,zh}/zyx/architecture/`
+- Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## License
 
-This project is licensed under the Apache License v2.0.<br /> - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built with [Boost](https://www.boost.org/) for cross-platform filesystem and system utilities.
-- CLI powered by [CLI11](https://github.com/CLIUtils/CLI11).
-- Testing with [Google Test](https://github.com/google/googletest).
-- Build system: [Meson](https://mesonbuild.com/).
-- Package management: [Conan](https://conan.io/).
-
-## Contact
-
-- **Repository**: [https://github.com/nexepic/zyx](https://github.com/nexepic/zyx)
-- **Issues**: [GitHub Issues](https://github.com/nexepic/zyx/issues)
+Apache License 2.0. See [`LICENSE`](LICENSE).

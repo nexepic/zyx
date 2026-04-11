@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionUtils.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
@@ -57,46 +58,7 @@ private:
 
     static void harvestVars(const expressions::Expression *expr,
                             std::unordered_set<std::string> &out) {
-        if (!expr) return;
-
-        using expressions::ExpressionType;
-
-        switch (expr->getExpressionType()) {
-            case ExpressionType::VARIABLE_REFERENCE:
-            case ExpressionType::PROPERTY_ACCESS: {
-                const auto *v =
-                    static_cast<const expressions::VariableReferenceExpression *>(expr);
-                out.insert(v->getVariableName());
-                break;
-            }
-            case ExpressionType::BINARY_OP: {
-                const auto *b =
-                    static_cast<const expressions::BinaryOpExpression *>(expr);
-                harvestVars(b->getLeft(), out);
-                harvestVars(b->getRight(), out);
-                break;
-            }
-            case ExpressionType::UNARY_OP: {
-                const auto *u =
-                    static_cast<const expressions::UnaryOpExpression *>(expr);
-                harvestVars(u->getOperand(), out);
-                break;
-            }
-            case ExpressionType::IS_NULL: {
-                const auto *isNull =
-                    static_cast<const expressions::IsNullExpression *>(expr);
-                harvestVars(isNull->getExpression(), out);
-                break;
-            }
-            case ExpressionType::IN_LIST: {
-                const auto *inExpr =
-                    static_cast<const expressions::InExpression *>(expr);
-                harvestVars(inExpr->getValue(), out);
-                break;
-            }
-            default:
-                break;
-        }
+        expressions::ExpressionUtils::collectVariables(expr, out);
     }
 
     // -------------------------------------------------------------------------

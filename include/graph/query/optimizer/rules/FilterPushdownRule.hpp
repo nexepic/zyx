@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionUtils.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/logical/operators/LogicalFilter.hpp"
@@ -60,48 +61,7 @@ private:
     static void collectReferencedVariables(
         const expressions::Expression *expr,
         std::set<std::string> &out) {
-
-        if (!expr) return;
-
-        using expressions::ExpressionType;
-
-        switch (expr->getExpressionType()) {
-            case ExpressionType::VARIABLE_REFERENCE:
-            case ExpressionType::PROPERTY_ACCESS: {
-                const auto *varExpr =
-                    static_cast<const expressions::VariableReferenceExpression *>(expr);
-                out.insert(varExpr->getVariableName());
-                break;
-            }
-            case ExpressionType::BINARY_OP: {
-                const auto *binExpr =
-                    static_cast<const expressions::BinaryOpExpression *>(expr);
-                collectReferencedVariables(binExpr->getLeft(), out);
-                collectReferencedVariables(binExpr->getRight(), out);
-                break;
-            }
-            case ExpressionType::UNARY_OP: {
-                const auto *unExpr =
-                    static_cast<const expressions::UnaryOpExpression *>(expr);
-                collectReferencedVariables(unExpr->getOperand(), out);
-                break;
-            }
-            case ExpressionType::IS_NULL: {
-                const auto *isNullExpr =
-                    static_cast<const expressions::IsNullExpression *>(expr);
-                collectReferencedVariables(isNullExpr->getExpression(), out);
-                break;
-            }
-            case ExpressionType::IN_LIST: {
-                const auto *inExpr =
-                    static_cast<const expressions::InExpression *>(expr);
-                collectReferencedVariables(inExpr->getValue(), out);
-                break;
-            }
-            default:
-                // Literals, function calls, etc. — no variable references to collect.
-                break;
-        }
+        expressions::ExpressionUtils::collectVariables(expr, out);
     }
 
     // -------------------------------------------------------------------------

@@ -33,7 +33,7 @@ public:
 	~ListLiteralExpression() override = default;
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
-		return ExpressionType::LITERAL;
+		return ExpressionType::EXPR_LIST_LITERAL;
 	}
 
 	void accept(ExpressionVisitor &visitor) override;

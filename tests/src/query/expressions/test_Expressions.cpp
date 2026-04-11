@@ -4744,7 +4744,7 @@ TEST_F(ExpressionsCoverageTest, ListLiteralExpression_CompleteCoverage) {
 		ListLiteralExpression expr(listValue);
 		EXPECT_EQ(expr.toString(), "[]");
 		EXPECT_EQ(expr.getValue().getList().size(), 0ULL);
-		EXPECT_EQ(expr.getExpressionType(), ExpressionType::LITERAL);
+		EXPECT_EQ(expr.getExpressionType(), ExpressionType::EXPR_LIST_LITERAL);
 	}
 
 	// Test single element
@@ -6403,7 +6403,7 @@ TEST_F(ExpressionsCoverageTest, EvaluationContext_IsNull) {
 TEST_F(ExpressionsCoverageTest, ExistsExpression_GetExpressionType) {
 	// Test inline getExpressionType() method
 	ExistsExpression expr("(n)-[:FRIENDS]->()");
-	EXPECT_EQ(expr.getExpressionType(), ExpressionType::FUNCTION_CALL);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::EXPR_EXISTS);
 }
 
 TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_GetExpressionType) {
@@ -6412,7 +6412,7 @@ TEST_F(ExpressionsCoverageTest, QuantifierFunctionExpression_GetExpressionType) 
 	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
 
 	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
-	EXPECT_EQ(expr.getExpressionType(), ExpressionType::FUNCTION_CALL);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::EXPR_QUANTIFIER_FUNCTION);
 }
 
 TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_GetExpressionType) {
@@ -6420,7 +6420,7 @@ TEST_F(ExpressionsCoverageTest, PatternComprehensionExpression_GetExpressionType
 	auto mapExpr = std::make_unique<LiteralExpression>(int64_t(42));
 
 	PatternComprehensionExpression expr("(n)-[:KNOWS]->(m)", "m", std::move(mapExpr), nullptr);
-	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LIST_COMPREHENSION);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::EXPR_PATTERN_COMPREHENSION);
 }
 
 TEST_F(ExpressionsCoverageTest, IsNullExpression_GetExpressionType) {
@@ -6457,7 +6457,7 @@ TEST_F(ExpressionsCoverageTest, LiteralExpression_GetExpressionType) {
 TEST_F(ExpressionsCoverageTest, VariableReferenceExpression_GetExpressionType) {
 	// Test inline getExpressionType() method
 	VariableReferenceExpression expr("n");
-	EXPECT_EQ(expr.getExpressionType(), ExpressionType::PROPERTY_ACCESS);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::VARIABLE_REFERENCE);
 }
 
 TEST_F(ExpressionsCoverageTest, FunctionCallExpression_GetExpressionType) {
@@ -6509,7 +6509,7 @@ TEST_F(ExpressionsCoverageTest, ListLiteralExpression_GetExpressionType) {
 	PropertyValue listValue(values);
 
 	ListLiteralExpression expr(listValue);
-	EXPECT_EQ(expr.getExpressionType(), ExpressionType::LITERAL);
+	EXPECT_EQ(expr.getExpressionType(), ExpressionType::EXPR_LIST_LITERAL);
 }
 
 // ============================================================================
@@ -6769,17 +6769,80 @@ TEST_F(ExpressionsTest, ResultValue_ToString_Edge) {
 	edge.setProperties(props);
 
 	graph::query::ResultValue rv(edge);
+
+	// Without resolver: fallback to ?ID format
 	std::string result = rv.toString();
-	EXPECT_TRUE(result.find("[:TypeID:42:10") != std::string::npos);
+	EXPECT_TRUE(result.find(":?42") != std::string::npos);
 	EXPECT_TRUE(result.find("weight") != std::string::npos);
+	// Edge internal ID should NOT appear in output
+	EXPECT_TRUE(result.find(":10") == std::string::npos);
+
+	// With resolver: shows type name
+	auto resolver = [](int64_t id) -> std::string {
+		if (id == 42) return "KNOWS";
+		return "UNKNOWN";
+	};
+	std::string resolved = rv.toString(resolver);
+	EXPECT_TRUE(resolved.find(":KNOWS") != std::string::npos);
+	EXPECT_TRUE(resolved.find("weight") != std::string::npos);
 }
 
 TEST_F(ExpressionsTest, ResultValue_ToString_EdgeNoProps) {
 	Edge edge(5, 1, 2, 99);
 	graph::query::ResultValue rv(edge);
 	std::string result = rv.toString();
-	EXPECT_TRUE(result.find("[:TypeID:99:5") != std::string::npos);
+	EXPECT_TRUE(result.find(":?99") != std::string::npos);
 	EXPECT_TRUE(result.find("]") != std::string::npos);
+}
+
+// ============================================================================
+// ResultValue coverage: Node toString with multi-label and resolver
+// ============================================================================
+
+TEST_F(ExpressionsTest, ResultValue_ToString_NodeWithResolver) {
+	Node node(1, 10);
+	node.addLabelId(20);
+	std::unordered_map<std::string, PropertyValue> props;
+	props["name"] = PropertyValue(std::string("Alice"));
+	props["age"] = PropertyValue(int64_t(30));
+	node.setProperties(props);
+
+	auto resolver = [](int64_t id) -> std::string {
+		if (id == 10) return "Person";
+		if (id == 20) return "Employee";
+		return "Unknown";
+	};
+
+	graph::query::ResultValue rv(node);
+
+	// With resolver: shows all label names
+	std::string resolved = rv.toString(resolver);
+	EXPECT_TRUE(resolved.find(":Person") != std::string::npos);
+	EXPECT_TRUE(resolved.find(":Employee") != std::string::npos);
+	EXPECT_TRUE(resolved.find("name: Alice") != std::string::npos);
+
+	// Without resolver: fallback format
+	std::string fallback = rv.toString();
+	EXPECT_TRUE(fallback.find(":?10") != std::string::npos);
+	EXPECT_TRUE(fallback.find(":?20") != std::string::npos);
+}
+
+TEST_F(ExpressionsTest, ResultValue_ToString_PropsAreSorted) {
+	Node node(1, 5);
+	std::unordered_map<std::string, PropertyValue> props;
+	props["zulu"] = PropertyValue(int64_t(1));
+	props["alpha"] = PropertyValue(int64_t(2));
+	props["mike"] = PropertyValue(int64_t(3));
+	node.setProperties(props);
+
+	graph::query::ResultValue rv(node);
+	std::string result = rv.toString();
+	// Properties should be sorted alphabetically
+	auto posAlpha = result.find("alpha");
+	auto posMike = result.find("mike");
+	auto posZulu = result.find("zulu");
+	EXPECT_LT(posAlpha, posMike);
+	EXPECT_LT(posMike, posZulu);
 }
 
 // ============================================================================

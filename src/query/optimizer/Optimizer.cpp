@@ -8,6 +8,8 @@
  *  3. ProjectionPushdownRule       — annotate projects with required-column sets.
  *  4. EnhancedIndexSelectionRule   — cost-based scan strategy selection.
  *  5. JoinReorderRule              — reorder joins by estimated cardinality.
+ *  6. SortEliminationRule          — remove Sort when index already provides order.
+ *  7. LimitPushdownRule            — push Limit past non-filtering Project.
  *
  * Licensed under the Apache License, Version 2.0
  **/
@@ -16,8 +18,10 @@
 #include "graph/query/optimizer/rules/EnhancedIndexSelectionRule.hpp"
 #include "graph/query/optimizer/rules/FilterPushdownRule.hpp"
 #include "graph/query/optimizer/rules/JoinReorderRule.hpp"
+#include "graph/query/optimizer/rules/LimitPushdownRule.hpp"
 #include "graph/query/optimizer/rules/PredicateSimplificationRule.hpp"
 #include "graph/query/optimizer/rules/ProjectionPushdownRule.hpp"
+#include "graph/query/optimizer/rules/SortEliminationRule.hpp"
 
 namespace graph::query::optimizer {
 
@@ -37,6 +41,12 @@ void Optimizer::registerDefaultRules() {
 
     // Reorder joins so that smaller relations are joined first.
     rules_.push_back(std::make_unique<rules::JoinReorderRule>());
+
+    // Eliminate Sort when an index already provides the required order.
+    rules_.push_back(std::make_unique<rules::SortEliminationRule>());
+
+    // Push Limit below non-filtering Project to reduce rows early.
+    rules_.push_back(std::make_unique<rules::LimitPushdownRule>());
 }
 
 } // namespace graph::query::optimizer
