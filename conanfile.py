@@ -11,7 +11,7 @@ class ProjectConan(ConanFile):
         self.requires("zlib/1.3.1")
         self.requires("gtest/1.13.0")
         self.requires("cli11/2.6.0")
-        self.requires("antlr4-cppruntime/4.13.1")
+        self.requires("antlr4-cppruntime/4.13.2")
 
     def configure(self):
         # Set specific dependencies to shared
