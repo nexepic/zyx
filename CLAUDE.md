@@ -15,6 +15,8 @@ cross-platform compatibility.
 ./scripts/run_tests.sh --quick --file xxx.cpp  # Coverage for specific file
 meson test -C buildDir <test_name>  # Run specific test
 ./scripts/build_release.sh          # Release build
+./scripts/setup_emsdk.sh            # Install Emscripten SDK + antlr4 WASM (one-time)
+./scripts/build_wasm.sh             # Build WASM module (zyx.js + zyx.wasm)
 ```
 
 Build system: **Meson** + **Conan** + **Ninja**. Tests: **Google Test**, auto-discovered from `test_*.cpp`.
@@ -72,6 +74,29 @@ Key entry points:
 - **Query Engine**: `include/graph/query/`
 - **C++ API**: `include/zyx/zyx.hpp`
 - **C API**: `include/zyx/zyx_c_api.h`
+- **WASM**: `scripts/build_wasm.sh` → `build_wasm/zyx.js` + `build_wasm/zyx.wasm`
+
+## WASM Build
+
+Builds ZYX as a WebAssembly module for browser-based Cypher playground. See `rules/architecture.md` § WASM Build
+Target for details.
+
+```bash
+./scripts/setup_emsdk.sh    # One-time: install emsdk + build antlr4 for WASM
+./scripts/build_wasm.sh     # Build: output → build_wasm/zyx.js + zyx.wasm
+```
+
+After building, copy outputs to the docs site:
+```bash
+cp build_wasm/zyx.js build_wasm/zyx.wasm docs/apps/docs/public/wasm/
+```
+
+**Key constraints**:
+- Cross-file: `compiler_options_wasm.ini` (Meson cross-compilation config for emscripten)
+- Exported symbols are listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS` — update this list when adding new C API
+  functions that need browser access
+- The Playground uses **read-only transactions** (`zyx_begin_read_only_transaction` + `zyx_txn_execute`) to prevent
+  any data mutation from user queries
 
 ## Documentation Standards
 

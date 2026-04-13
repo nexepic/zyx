@@ -92,7 +92,10 @@ graph TD
 - **Algorithm** (`include/graph/query/algorithm/`): Neo4j GDS-compatible graph algorithms
     - `GraphProjection` / `GraphProjectionManager`: Named graph projections
     - `GraphAlgorithm`: Algorithm execution framework
-- **Plan Cache** (`include/graph/query/cache/`): Query plan caching (`PlanCache`)
+- **Plan Cache** (`include/graph/query/cache/`): Query plan caching (`PlanCache` stores `QueryPlan` with mutation
+  flags)
+- **Access Control** (`include/graph/query/ExecMode.hpp`): `ExecMode` enum for read-only/read-write enforcement;
+  `QueryPlan` carries `mutatesData`/`mutatesSchema` flags accumulated by `LogicalPlanBuilder`
 
 ### Transaction System (`include/graph/core/Transaction.hpp`)
 
@@ -100,6 +103,25 @@ graph TD
 - Optimistic locking with versioning
 - `TransactionManager` coordinates transaction lifecycle
 - Coordinates with WAL for durability
+- **Read-only transactions**: `beginReadOnlyTransaction()` creates a transaction that rejects all write queries
+
+### Access Control (`include/graph/query/ExecMode.hpp`)
+
+3-layer defense for read-only enforcement:
+
+1. **Plan layer** (`QueryEngine::executePlan()`): `ExecMode` enum (EM_FULL / EM_READ_WRITE / EM_READ_ONLY) checked
+   against `QueryPlan` mutation flags (`mutatesData`, `mutatesSchema`) — O(1) check before execution
+2. **API layer**: `beginReadOnlyTransaction()` exposed in `graph::Database`, `zyx::Database` (C++ API), and C API
+   (`zyx_begin_read_only_transaction`)
+3. **Storage layer**: `DataManager::guardReadOnly()` on all 12 write methods — final safety net backed by
+   `TransactionContext::readOnly_` flag
+
+Key files:
+- `include/graph/query/ExecMode.hpp`: ExecMode enum + helper functions
+- `include/graph/query/QueryPlan.hpp`: QueryPlan struct (plan root + mutation flags)
+- `include/graph/query/ir/LogicalPlanBuilder.hpp`: Stateful builder that accumulates mutation flags during plan
+  construction
+- `include/graph/query/planner/ProcedureRegistry.hpp`: ProcedureDescriptor with mutation metadata
 
 ### Vector Engine (`include/graph/vector/`)
 
@@ -126,14 +148,15 @@ graph TD
 ## Data Flow
 
 1. **Database open**: `Database::open()` → `StorageBootstrap` → `FileStorage::open()` → Initialize all components
-2. **Query execution**: Cypher string → Parser → QueryPlanner → Optimizer → PhysicalPlanConverter → QueryExecutor → Storage operations
+2. **Query execution**: Cypher string → Parser → QueryPlanner → Optimizer → `QueryPlan` (with mutation flags) →
+   ExecMode check → PhysicalPlanConverter → QueryExecutor → Storage operations
 3. **Transaction**: `beginTransaction()` → Operations in context → commit/rollback → WAL updates
 4. **Persistence**: Entity changes → `DirtyEntityRegistry` → `PersistenceManager` → `CacheManager` → FileStorage write → WAL
 
 ## Public API
 
 - **C++ API**: `include/zyx/zyx.hpp` - Embeddable interface for C++ applications
-- **C API**: `include/zyx/zyx_c_api.h` - C-compatible interface for FFI
+- **C API**: `include/zyx/zyx_c_api.h` - C-compatible interface for FFI (Rust, WASM, etc.)
 - **Types**: `include/zyx/value.hpp` - Data type definitions
 - **Query API**: `include/graph/query/api/` - `QueryEngine`, `QueryBuilder`, `QueryResult`, `ResultValue`
 - CLI tool: `buildDir/apps/cli/zyx` - Interactive REPL
@@ -257,7 +280,27 @@ tests/
         ├── index/          # DiskANN tests
         └── quantization/   # Quantizer tests
 
-scripts/                    # Build and utility scripts
+scripts/
+├── run_tests.sh            # Build + test + coverage
+├── build_release.sh        # Release build
+├── build_wasm.sh           # WASM build (zyx.js + zyx.wasm)
+├── setup_emsdk.sh          # Emscripten SDK + antlr4 WASM setup
+└── build_playground_db.mjs # Pre-build playground database files
+
+docs/apps/docs/
+├── home/                   # Homepage components
+│   ├── custom-home.tsx     # Homepage layout
+│   ├── playground.tsx      # Cypher Playground component
+│   └── graph-view.tsx      # D3 graph visualization
+└── public/
+    ├── wasm/               # Deployed WASM module
+    │   ├── zyx.js          # WASM JS loader
+    │   └── zyx.wasm        # WASM binary
+    └── data/               # Pre-built playground databases
+        ├── got.db          # Game of Thrones dataset
+        └── marvel.db       # Marvel Universe dataset
+
+compiler_options_wasm.ini   # Meson cross-file for Emscripten
 ```
 
 ## Dependencies (via Conan)
@@ -267,6 +310,12 @@ scripts/                    # Build and utility scripts
 - **gtest/gmock**: Testing framework
 - **cli11**: Command line interface
 - **antlr4-cppruntime**: Cypher parser generation
+
+## Dependencies (WASM, via Emscripten)
+
+- **Emscripten SDK**: C++ → WASM compiler toolchain (`scripts/setup_emsdk.sh`)
+- **antlr4-cppruntime**: Cross-compiled to WASM static library (`emsdk/antlr4-wasm/`)
+- **zlib**: Built-in Emscripten port (`-sUSE_ZLIB=1`)
 
 ## Implementation Notes
 
@@ -284,3 +333,106 @@ scripts/                    # Build and utility scripts
 - **`zyx_core`**: Internal static library for tests and CLI (not installed)
 - **`libzyx`**: Public shared library for embedding (installed to system)
 - **pkg-config**: Generated for easy integration (`pkg-config --libs --cflags zyx`)
+
+## WASM Build Target
+
+Compiles ZYX to WebAssembly for browser-based usage via Emscripten.
+
+### Prerequisites
+
+```bash
+./scripts/setup_emsdk.sh   # Installs emsdk + builds antlr4-cppruntime for WASM
+```
+
+Outputs: `emsdk/` (Emscripten SDK), `emsdk/antlr4-wasm/` (antlr4 static lib for WASM)
+
+### Build
+
+```bash
+./scripts/build_wasm.sh    # Output: build_wasm/zyx.js + build_wasm/zyx.wasm
+```
+
+### How it works
+
+1. Generates pkg-config stubs for WASM-compatible dependencies (antlr4, zlib, CLI11)
+2. Configures Meson with `compiler_options_wasm.ini` cross-file (emcc/em++ toolchain, wasm32 target)
+3. Compiles `libzyx_core.a` + `libcypher_parser.a` as static WASM libraries
+4. Links with `em++` into final `zyx.js` + `zyx.wasm` module using `-sMODULARIZE`
+
+### Exported C API functions
+
+All functions listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS`. Key categories:
+- **Lifecycle**: `zyx_open`, `zyx_open_if_exists`, `zyx_close`
+- **Execution**: `zyx_execute`, `zyx_execute_params`
+- **Transactions**: `zyx_begin_transaction`, `zyx_begin_read_only_transaction`, `zyx_txn_execute`,
+  `zyx_txn_commit`, `zyx_txn_rollback`, `zyx_txn_close`, `zyx_txn_is_read_only`
+- **Parameters**: `zyx_params_create`, `zyx_params_set_*`, `zyx_params_close`
+- **Batch**: `zyx_create_node`, `zyx_create_node_ret_id`, `zyx_create_edge_by_id`
+- **Result iteration**: `zyx_result_next`, `zyx_result_column_count`, `zyx_result_column_name`,
+  `zyx_result_get_duration`
+- **Data access**: `zyx_result_get_type`, `zyx_result_get_int/double/bool/string`,
+  `zyx_result_get_node`, `zyx_result_get_edge`, `zyx_result_get_props_json`,
+  `zyx_result_get_map_json`
+- **List access**: `zyx_result_list_size`, `zyx_result_list_get_*`
+- **Status**: `zyx_result_is_success`, `zyx_result_get_error`, `zyx_get_last_error`
+- **Memory**: `malloc`, `free`
+
+**When adding new C API functions**: Update both `include/zyx/zyx_c_api.h` (declaration),
+`src/api/CApi.cpp` (implementation), AND `scripts/build_wasm.sh` `-sEXPORTED_FUNCTIONS` (WASM export).
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `scripts/setup_emsdk.sh` | One-time emsdk + antlr4 WASM setup |
+| `scripts/build_wasm.sh` | WASM build script with exported function list |
+| `compiler_options_wasm.ini` | Meson cross-file for Emscripten toolchain |
+| `docs/apps/docs/public/wasm/zyx.js` | Deployed WASM JS loader |
+| `docs/apps/docs/public/wasm/zyx.wasm` | Deployed WASM binary |
+
+## Cypher Playground (Homepage)
+
+Browser-based interactive Cypher query workspace embedded in the docs site homepage.
+
+### Architecture
+
+```mermaid
+graph LR
+    A[playground.tsx] -->|ccall| B[zyx.js WASM Module]
+    B --> C[zyx.wasm - ZYX Engine]
+    C -->|MEMFS| D[Pre-built .db files]
+    A --> E[graph-view.tsx - D3 Visualization]
+```
+
+### Components
+
+| File | Purpose |
+|------|---------|
+| `docs/apps/docs/home/playground.tsx` | Main playground component (query editor, result display, dataset switching) |
+| `docs/apps/docs/home/graph-view.tsx` | D3.js force-directed graph visualization |
+| `docs/apps/docs/home/custom-home.tsx` | Homepage layout integrating the playground |
+| `docs/apps/docs/public/data/*.db` | Pre-built database files fetched at runtime |
+
+### Execution flow
+
+1. WASM module loaded from `/wasm/zyx.js`
+2. Pre-built `.db` + `.db-wal` files fetched and written to Emscripten MEMFS
+3. Database opened via `zyx_open()`
+4. **Read-only transaction** opened via `zyx_begin_read_only_transaction()` — all user queries are routed through
+   `zyx_txn_execute()` to prevent any data mutation
+5. Results parsed from C API (nodes, edges, scalars) and rendered as graph or table
+
+### Read-only enforcement
+
+The Playground enforces read-only mode at the engine level (not client-side filtering):
+- Uses `zyx_begin_read_only_transaction` → `zyx_txn_execute` for all queries
+- Write queries (CREATE, SET, DELETE, MERGE, DROP INDEX, etc.) are rejected by the engine with error:
+  `"Read-only transaction cannot execute write queries"`
+- 3-layer defense: QueryPlan mutation flags → ExecMode check → DataManager guard
+
+### Pre-built datasets
+
+Database files in `docs/apps/docs/public/data/` are pre-built offline. To regenerate:
+```bash
+node scripts/build_playground_db.mjs
+```
