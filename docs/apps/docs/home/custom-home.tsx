@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectGroup } from "@/lib/docs";
+import { CypherPlayground } from "./playground";
 
 type AxisDirection = "x+" | "x-" | "y+" | "y-" | "z+" | "z-";
 
@@ -299,6 +300,10 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
   const expandedRef = useRef(false);
   const lastToggleTimeRef = useRef(0);
 
+  // Playground (third page)
+  const [showPlayground, setShowPlayground] = useState(false);
+  const showPlaygroundRef = useRef(false);
+
   const updateMobileFlag = useCallback(() => {
     const nextIsMobile = window.innerWidth <= 768;
     isMobileRef.current = nextIsMobile;
@@ -535,13 +540,33 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
     animationIdRef.current = window.requestAnimationFrame(tick);
   }, []);
 
+  // Helper to toggle playground with debounce
+  const togglePlayground = useCallback((show: boolean) => {
+    const now = Date.now();
+    if (now - lastToggleTimeRef.current < 800) return;
+    if (show !== showPlaygroundRef.current) {
+      setShowPlayground(show);
+      showPlaygroundRef.current = show;
+      lastToggleTimeRef.current = now;
+    }
+  }, []);
+
   // Listeners for virtual scrolling trigger
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.deltaY > 40) {
-        toggleExpandState(true);
+        if (showPlaygroundRef.current) return; // already on page 3
+        if (expandedRef.current) {
+          togglePlayground(true);   // page 2 → page 3
+        } else {
+          toggleExpandState(true);  // page 1 → page 2
+        }
       } else if (e.deltaY < -40) {
-        toggleExpandState(false);
+        if (showPlaygroundRef.current) {
+          togglePlayground(false);  // page 3 → page 2
+        } else {
+          toggleExpandState(false); // page 2 → page 1
+        }
       }
     };
 
@@ -554,9 +579,18 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       const deltaY = touchStartY - endY;
 
       if (deltaY > 50) {
-        toggleExpandState(true);
+        if (showPlaygroundRef.current) return;
+        if (expandedRef.current) {
+          togglePlayground(true);
+        } else {
+          toggleExpandState(true);
+        }
       } else if (deltaY < -50) {
-        toggleExpandState(false);
+        if (showPlaygroundRef.current) {
+          togglePlayground(false);
+        } else {
+          toggleExpandState(false);
+        }
       }
     };
 
@@ -569,7 +603,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [toggleExpandState]);
+  }, [toggleExpandState, togglePlayground]);
 
   useEffect(() => {
     if (isMobile) {
@@ -1035,9 +1069,9 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
           )}
 
           {/* Subtle scroll hint UI to guide users */}
-          <div 
+          <div
             className={`absolute bottom-[2.5rem] md:bottom-[2rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#566b82] transition-all duration-[600ms] ${
-              isExpanded ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-60 hover:opacity-100"
+              isExpanded || showPlayground ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-60 hover:opacity-100"
             }`}
           >
             <div className="text-[0.6rem] tracking-[0.25em] uppercase text-center font-medium">
@@ -1046,20 +1080,40 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
             <div className="w-[1px] h-6 bg-gradient-to-b from-[#6b829c] to-transparent animate-pulse" />
           </div>
 
-          {/* Reverse scroll hint when in expanded mode */}
-          <div 
+          {/* Scroll hint when in expanded mode — down for playground, up for collapse */}
+          <div
             className={`absolute bottom-[1rem] md:bottom-[2rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#566b82] transition-all duration-[600ms] ${
-              isExpanded ? "opacity-60 hover:opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+              isExpanded && !showPlayground ? "opacity-60 hover:opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
             }`}
           >
-            <div className="w-[1px] h-6 bg-gradient-to-t from-[#6b829c] to-transparent animate-pulse" />
             <div className="text-[0.6rem] tracking-[0.25em] uppercase text-center font-medium">
-              {isEn ? "Collapse" : "收起"}
+              {isEn ? "Playground ↓" : "试验场 ↓"}
+            </div>
+            <div className="w-[1px] h-6 bg-gradient-to-b from-[#6b829c] to-transparent animate-pulse" />
+          </div>
+
+          {/* Playground page (third page) */}
+          <div
+            className={`pointer-events-none absolute inset-0 z-[5] flex flex-col bg-[rgba(11,15,20,0.92)] backdrop-blur-md transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              showPlayground
+                ? "opacity-100 translate-y-0 pointer-events-auto"
+                : "opacity-0 translate-y-[60px]"
+            }`}
+          >
+            {/* Back scroll hint */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-[#566b82] opacity-60 hover:opacity-100 transition-opacity z-10">
+              <div className="w-[1px] h-4 bg-gradient-to-t from-[#6b829c] to-transparent animate-pulse" />
+              <div className="text-[0.6rem] tracking-[0.25em] uppercase font-medium">
+                {isEn ? "Back" : "返回"}
+              </div>
+            </div>
+            <div className="flex-1 pt-10 overflow-hidden">
+              <CypherPlayground isEn={isEn} />
             </div>
           </div>
 
           {/* Footer - Strictly untouched */}
-          <footer className="absolute bottom-[0.8rem] left-1/2 -translate-x-1/2 text-[0.7rem] text-[#566b82]">
+          <footer className={`absolute bottom-[0.8rem] left-1/2 -translate-x-1/2 text-[0.7rem] text-[#566b82] transition-opacity duration-500 ${showPlayground ? "opacity-0" : ""}`}>
             MIT License &copy; 2025 ZYX Contributors
           </footer>
         </div>
