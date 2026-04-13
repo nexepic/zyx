@@ -57,7 +57,6 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
 
     async function init() {
       try {
-        // Dynamic import of the WASM module
         const script = document.createElement("script");
         script.src = "/wasm/zyx.js";
         script.onload = async () => {
@@ -73,10 +72,7 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
             moduleRef.current = mod;
 
             // Open in-memory database using MEMFS
-            const pathPtr = mod.ccall("malloc", "number", ["number"], [64]);
-            mod.stringToUTF8("/playground.db", pathPtr, 64);
-            const db = mod.ccall("zyx_open", "number", ["number"], [pathPtr]);
-            mod.ccall("free", null, ["number"], [pathPtr]);
+            const db = mod.ccall("zyx_open", "number", ["string"], ["/playground.db"]);
 
             if (!db) {
               setStatus("error");
@@ -127,23 +123,18 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
   }, [status, seeded]);
 
   const execQuery = useCallback((mod: any, db: number, cypher: string) => {
-    const cypherPtr = mod.ccall("malloc", "number", ["number"], [cypher.length * 4 + 4]);
-    mod.stringToUTF8(cypher, cypherPtr, cypher.length * 4 + 4);
-    const resultPtr = mod.ccall("zyx_execute", "number", ["number", "number"], [db, cypherPtr]);
-    mod.ccall("free", null, ["number"], [cypherPtr]);
+    const resultPtr = mod.ccall("zyx_execute", "number", ["number", "string"], [db, cypher]);
 
     if (!resultPtr) {
-      const errPtr = mod.ccall("zyx_get_last_error", "number", [], []);
-      const errMsg = errPtr ? mod.UTF8ToString(errPtr) : "Unknown error";
-      return { error: errMsg, columns: [], values: [], duration: 0 };
+      const errMsg = mod.ccall("zyx_get_last_error", "string", [], []);
+      return { error: errMsg || "Unknown error", columns: [], values: [], duration: 0 };
     }
 
     const success = mod.ccall("zyx_result_is_success", "boolean", ["number"], [resultPtr]);
     if (!success) {
-      const errPtr = mod.ccall("zyx_result_get_error", "number", ["number"], [resultPtr]);
-      const errMsg = errPtr ? mod.UTF8ToString(errPtr) : "Query failed";
+      const errMsg = mod.ccall("zyx_result_get_error", "string", ["number"], [resultPtr]);
       mod.ccall("zyx_result_close", null, ["number"], [resultPtr]);
-      return { error: errMsg, columns: [], values: [], duration: 0 };
+      return { error: errMsg || "Query failed", columns: [], values: [], duration: 0 };
     }
 
     const dur = mod.ccall("zyx_result_get_duration", "number", ["number"], [resultPtr]);
@@ -151,8 +142,8 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
 
     const columns: string[] = [];
     for (let i = 0; i < colCount; i++) {
-      const namePtr = mod.ccall("zyx_result_column_name", "number", ["number", "number"], [resultPtr, i]);
-      columns.push(namePtr ? mod.UTF8ToString(namePtr) : `col${i}`);
+      const name = mod.ccall("zyx_result_column_name", "string", ["number", "number"], [resultPtr, i]);
+      columns.push(name || `col${i}`);
     }
 
     const values: string[][] = [];
@@ -166,18 +157,18 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
           case 2: row.push(String(mod.ccall("zyx_result_get_int", "number", ["number", "number"], [resultPtr, i]))); break;
           case 3: row.push(String(mod.ccall("zyx_result_get_double", "number", ["number", "number"], [resultPtr, i]))); break;
           case 4: {
-            const sPtr = mod.ccall("zyx_result_get_string", "number", ["number", "number"], [resultPtr, i]);
-            row.push(sPtr ? mod.UTF8ToString(sPtr) : "");
+            const s = mod.ccall("zyx_result_get_string", "string", ["number", "number"], [resultPtr, i]);
+            row.push(s || "");
             break;
           }
           case 5: { // Node
-            const propsPtr = mod.ccall("zyx_result_get_props_json", "number", ["number", "number"], [resultPtr, i]);
-            row.push(propsPtr ? mod.UTF8ToString(propsPtr) : "(node)");
+            const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [resultPtr, i]);
+            row.push(props || "(node)");
             break;
           }
           case 6: { // Edge
-            const propsPtr = mod.ccall("zyx_result_get_props_json", "number", ["number", "number"], [resultPtr, i]);
-            row.push(propsPtr ? mod.UTF8ToString(propsPtr) : "(edge)");
+            const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [resultPtr, i]);
+            row.push(props || "(edge)");
             break;
           }
           case 7: { // List
@@ -185,8 +176,8 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
             break;
           }
           case 8: { // Map
-            const mapPtr = mod.ccall("zyx_result_get_map_json", "number", ["number", "number"], [resultPtr, i]);
-            row.push(mapPtr ? mod.UTF8ToString(mapPtr) : "{}");
+            const mapJson = mod.ccall("zyx_result_get_map_json", "string", ["number", "number"], [resultPtr, i]);
+            row.push(mapJson || "{}");
             break;
           }
           default: row.push("?");

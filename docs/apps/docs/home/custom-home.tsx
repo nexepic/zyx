@@ -877,7 +877,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       `}</style>
 
       <div className="relative h-screen w-screen overflow-hidden bg-[#0b0f14] font-['Avenir_Next','Segoe_UI',system-ui,sans-serif] text-[#e7edf5] supports-[height:100dvh]:h-dvh">
-        <canvas ref={canvasRef} className="pointer-events-auto absolute inset-0 z-0" />
+        <canvas ref={canvasRef} className={`absolute inset-0 z-0 ${showPlayground ? "pointer-events-none" : "pointer-events-auto"}`} />
 
         <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_50%,rgba(11,15,20,0.6)_0%,transparent_60%)]" />
 
@@ -886,10 +886,12 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
               - Collapsed state: EXACTLY matching your original layout (top-[40%] md:top-[52%] -translate-y-1/2 -translate-x-1/2)
               - Expanded state: top-[12%] md:top-[16%] translate-y-0 (translate-y-0 is required to remove the initial -50% Y shift so it doesn't fly off screen)
           */}
-          <main 
-            className={`pointer-events-auto absolute left-1/2 flex w-[calc(100vw-2.4rem)] -translate-x-1/2 flex-col items-center text-center transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] md:w-[min(860px,92vw)] ${
-              isExpanded 
-                ? "top-[12%] md:top-[16%] translate-y-0 scale-[0.96] md:scale-100" 
+          <main
+            className={`absolute left-1/2 flex w-[calc(100vw-2.4rem)] -translate-x-1/2 flex-col items-center text-center transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] md:w-[min(860px,92vw)] ${
+              showPlayground ? "pointer-events-none" : "pointer-events-auto"
+            } ${
+              isExpanded
+                ? "top-[12%] md:top-[16%] translate-y-0 scale-[0.96] md:scale-100"
                 : "top-[40%] md:top-[52%] -translate-y-1/2 scale-100"
             }`}
           >
@@ -1008,10 +1010,12 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
           </main>
 
           {/* New High-End Expanded Grid Layout - Strictly matched to your provided layout logic */}
-          <div 
+          <div
             className={`pointer-events-none absolute left-1/2 w-[calc(100vw-2.4rem)] max-w-[1100px] -translate-x-1/2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-6 transition-all duration-[800ms] cubic-bezier(0.16,1,0.3,1) max-h-[70vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
-              isExpanded 
-                ? "top-[36%] md:top-[45%] opacity-100 scale-100 pointer-events-auto" 
+              isExpanded && !showPlayground
+                ? "top-[36%] md:top-[45%] opacity-100 scale-100 pointer-events-auto"
+                : isExpanded && showPlayground
+                ? "top-[36%] md:top-[45%] opacity-0 scale-95"
                 : "top-[55%] md:top-[60%] opacity-0 scale-95"
             }`}
           >
