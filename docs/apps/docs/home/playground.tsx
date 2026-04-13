@@ -1,140 +1,190 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
 
-// Pre-built graph data: a small social + movie knowledge graph
-const SEED_QUERIES = [
-  `CREATE (alice:Person {name: 'Alice', age: 30, role: 'Engineer'})`,
-  `CREATE (bob:Person {name: 'Bob', age: 28, role: 'Designer'})`,
-  `CREATE (charlie:Person {name: 'Charlie', age: 35, role: 'Manager'})`,
-  `CREATE (diana:Person {name: 'Diana', age: 26, role: 'Analyst'})`,
-  `CREATE (eve:Person {name: 'Eve', age: 32, role: 'Researcher'})`,
-  `CREATE (matrix:Movie {title: 'The Matrix', year: 1999, genre: 'Sci-Fi'})`,
-  `CREATE (inception:Movie {title: 'Inception', year: 2010, genre: 'Sci-Fi'})`,
-  `CREATE (interstellar:Movie {title: 'Interstellar', year: 2014, genre: 'Sci-Fi'})`,
-  `MATCH (a:Person {name:'Alice'}), (b:Person {name:'Bob'}) CREATE (a)-[:KNOWS {since: 2019}]->(b)`,
-  `MATCH (a:Person {name:'Alice'}), (c:Person {name:'Charlie'}) CREATE (a)-[:REPORTS_TO]->(c)`,
-  `MATCH (b:Person {name:'Bob'}), (c:Person {name:'Charlie'}) CREATE (b)-[:REPORTS_TO]->(c)`,
-  `MATCH (d:Person {name:'Diana'}), (a:Person {name:'Alice'}) CREATE (d)-[:KNOWS {since: 2021}]->(a)`,
-  `MATCH (e:Person {name:'Eve'}), (d:Person {name:'Diana'}) CREATE (e)-[:KNOWS {since: 2020}]->(d)`,
-  `MATCH (a:Person {name:'Alice'}), (m:Movie {title:'The Matrix'}) CREATE (a)-[:LIKES {rating: 5}]->(m)`,
-  `MATCH (b:Person {name:'Bob'}), (m:Movie {title:'Inception'}) CREATE (b)-[:LIKES {rating: 4}]->(m)`,
-  `MATCH (c:Person {name:'Charlie'}), (m:Movie {title:'Interstellar'}) CREATE (c)-[:LIKES {rating: 5}]->(m)`,
-  `MATCH (d:Person {name:'Diana'}), (m:Movie {title:'The Matrix'}) CREATE (d)-[:LIKES {rating: 4}]->(m)`,
-  `MATCH (e:Person {name:'Eve'}), (m:Movie {title:'Inception'}) CREATE (e)-[:LIKES {rating: 5}]->(m)`,
-];
-
-const EXAMPLE_QUERIES = [
-  { label: "All nodes", query: "MATCH (n) RETURN n" },
-  { label: "All relationships", query: "MATCH (a)-[r]->(b) RETURN a.name, type(r), b.name" },
-  { label: "Friends of Alice", query: "MATCH (a:Person {name: 'Alice'})-[:KNOWS]->(friend) RETURN friend.name, friend.role" },
-  { label: "Who likes Sci-Fi?", query: "MATCH (p:Person)-[:LIKES]->(m:Movie) RETURN p.name, m.title, m.genre" },
-  { label: "Reporting chain", query: "MATCH (p:Person)-[:REPORTS_TO]->(mgr:Person) RETURN p.name AS employee, mgr.name AS manager" },
-  { label: "Highly rated movies", query: "MATCH (p:Person)-[l:LIKES]->(m:Movie) WHERE l.rating >= 5 RETURN p.name, m.title, l.rating" },
-];
-
-interface ResultRow {
-  columns: string[];
-  values: string[][];
+interface Dataset {
+  label: string;
+  dbFile: string;
+  walFile: string;
+  exampleQueries: { label: string; query: string }[];
+  initialQuery: string;
+  schema: string;
 }
 
-type ModuleStatus = "loading" | "ready" | "error";
+const DATASETS: Dataset[] = [
+  {
+    label: "Game of Thrones",
+    dbFile: "/data/got.db",
+    walFile: "/data/got.db-wal",
+    exampleQueries: [
+      { label: "Full graph", query: "MATCH (a)-[r]->(b) RETURN a, r, b" },
+      { label: "All characters", query: "MATCH (n:Character) RETURN n.name ORDER BY n.name" },
+      { label: "Jon's network", query: "MATCH (jon:Character {id: 'Jon'})-[r:INTERACTS_WITH]-(other) RETURN jon, r, other" },
+      { label: "Strongest bonds", query: "MATCH (a)-[r:INTERACTS_WITH]->(b) WHERE r.weight >= 10 RETURN a, r, b" },
+      { label: "Most connected", query: "MATCH (n:Character)-[r:INTERACTS_WITH]-() RETURN n.name, count(r) AS connections ORDER BY connections DESC LIMIT 15" },
+      { label: "Lannister circle", query: "MATCH (l:Character)-[r:INTERACTS_WITH]-(other) WHERE l.id IN ['Tyrion', 'Cersei', 'Jaime', 'Tywin'] RETURN l, r, other" },
+    ],
+    initialQuery: "MATCH (a)-[r]->(b) RETURN a, r, b",
+    schema: "(:Character { id, name }) -[:INTERACTS_WITH { weight }]- (:Character)",
+  },
+  {
+    label: "Marvel Universe",
+    dbFile: "/data/marvel.db",
+    walFile: "/data/marvel.db-wal",
+    exampleQueries: [
+      { label: "Full graph", query: "MATCH (a)-[r]->(b) RETURN a, r, b" },
+      { label: "All heroes", query: "MATCH (n:Hero) RETURN n.name ORDER BY n.name" },
+      { label: "Spider-Man's network", query: "MATCH (s:Hero {id: 'SPIDER-MAN'})-[r:ALLIES_WITH]-(other) RETURN s, r, other" },
+      { label: "Strongest alliances", query: "MATCH (a)-[r:ALLIES_WITH]->(b) WHERE r.weight >= 10 RETURN a, r, b" },
+      { label: "Most connected", query: "MATCH (n:Hero)-[r:ALLIES_WITH]-() RETURN n.name, count(r) AS connections ORDER BY connections DESC LIMIT 15" },
+      { label: "Avengers circle", query: "MATCH (a:Hero)-[r:ALLIES_WITH]-(other) WHERE a.id IN ['IRON-MAN', 'CAPTAIN-AMERICA', 'THOR', 'SPIDER-MAN'] RETURN a, r, other" },
+    ],
+    initialQuery: "MATCH (a)-[r]->(b) RETURN a, r, b",
+    schema: "(:Hero { id, name }) -[:ALLIES_WITH { weight }]- (:Hero)",
+  },
+];
+
+interface QueryResult {
+  columns: string[];
+  values: string[][];
+  graphNodes: GraphNode[];
+  graphEdges: GraphEdge[];
+}
+
+type Status = "loading" | "ready" | "error";
+type ViewMode = "graph" | "table";
 
 export function CypherPlayground({ isEn }: { isEn: boolean }) {
-  const [query, setQuery] = useState(EXAMPLE_QUERIES[0].query);
-  const [result, setResult] = useState<ResultRow | null>(null);
+  const [datasetIdx, setDatasetIdx] = useState(0);
+  const [query, setQuery] = useState(DATASETS[0].initialQuery);
+  const [result, setResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
-  const [status, setStatus] = useState<ModuleStatus>("loading");
-  const [seeded, setSeeded] = useState(false);
+  const [status, setStatus] = useState<Status>("loading");
+  const [statusMsg, setStatusMsg] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("graph");
 
   const moduleRef = useRef<any>(null);
   const dbRef = useRef<number>(0);
+  const txnRef = useRef<number>(0);
+  const loadingRef = useRef(false);
 
-  // Load WASM module
-  useEffect(() => {
-    let cancelled = false;
+  const dataset = DATASETS[datasetIdx];
 
-    async function init() {
-      try {
-        const script = document.createElement("script");
-        script.src = "/wasm/zyx.js";
-        script.onload = async () => {
-          try {
-            const createModule = (window as any).createZyxModule;
-            if (!createModule) {
-              setStatus("error");
-              setError("Failed to load WASM module");
-              return;
-            }
-            const mod = await createModule();
-            if (cancelled) return;
-            moduleRef.current = mod;
+  // Load WASM module + fetch DB file
+  const loadDatabase = useCallback(async (dsIdx: number) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setStatus("loading");
+    setResult(null);
+    setError(null);
+    setDuration(null);
 
-            // Open in-memory database using MEMFS
-            const db = mod.ccall("zyx_open", "number", ["string"], ["/playground.db"]);
+    const ds = DATASETS[dsIdx];
 
-            if (!db) {
-              setStatus("error");
-              setError("Failed to open database");
-              return;
-            }
+    try {
+      // Load WASM module if not loaded
+      let mod = moduleRef.current;
+      if (!mod) {
+        setStatusMsg(isEn ? "Loading engine..." : "加载引擎...");
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "/wasm/zyx.js";
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Failed to load /wasm/zyx.js"));
+          document.head.appendChild(script);
+        });
 
-            dbRef.current = db;
-            setStatus("ready");
-          } catch (e: any) {
-            if (!cancelled) {
-              setStatus("error");
-              setError(e.message || "WASM init failed");
-            }
-          }
-        };
-        script.onerror = () => {
-          if (!cancelled) {
-            setStatus("error");
-            setError("Failed to load /wasm/zyx.js");
-          }
-        };
-        document.head.appendChild(script);
-      } catch (e: any) {
-        if (!cancelled) {
-          setStatus("error");
-          setError(e.message || "Init failed");
-        }
+        const createModule = (window as any).createZyxModule;
+        if (!createModule) throw new Error("WASM module factory not found");
+        mod = await createModule();
+        moduleRef.current = mod;
       }
-    }
 
-    init();
-    return () => { cancelled = true; };
+      // Close previous DB if open
+      if (dbRef.current) {
+        if (txnRef.current) {
+          mod.ccall("zyx_txn_close", null, ["number"], [txnRef.current]);
+          txnRef.current = 0;
+        }
+        mod.ccall("zyx_close", null, ["number"], [dbRef.current]);
+        dbRef.current = 0;
+      }
+
+      // Fetch pre-built database file
+      setStatusMsg(isEn ? `Loading ${ds.label}...` : `加载 ${ds.label}...`);
+      const dbPath = `/playground_${dsIdx}.db`;
+      const walPath = `${dbPath}-wal`;
+
+      // Clean previous MEMFS files
+      try { mod.FS.unlink(dbPath); } catch {}
+      try { mod.FS.unlink(walPath); } catch {}
+
+      const [dbResp, walResp] = await Promise.all([
+        fetch(ds.dbFile),
+        fetch(ds.walFile).catch(() => null),
+      ]);
+
+      if (!dbResp.ok) throw new Error(`Failed to fetch ${ds.dbFile}: ${dbResp.status}`);
+
+      const dbData = new Uint8Array(await dbResp.arrayBuffer());
+      mod.FS.writeFile(dbPath, dbData);
+
+      if (walResp && walResp.ok) {
+        const walData = new Uint8Array(await walResp.arrayBuffer());
+        mod.FS.writeFile(walPath, walData);
+      }
+
+      // Open database
+      const db = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
+      if (!db) throw new Error("Failed to open database");
+      dbRef.current = db;
+
+      // Open a read-only transaction to prevent any mutations
+      const txn = mod.ccall("zyx_begin_read_only_transaction", "number", ["number"], [db]);
+      if (!txn) throw new Error("Failed to begin read-only transaction");
+      txnRef.current = txn;
+
+      setStatus("ready");
+      setStatusMsg("");
+      loadingRef.current = false;
+
+      // Auto-run initial query to show graph
+      runQuery(mod, db, ds.initialQuery);
+    } catch (e: any) {
+      setStatus("error");
+      setError(e.message || "Failed to load");
+      setStatusMsg("");
+      loadingRef.current = false;
+    }
+  }, [isEn]);
+
+  // Initial load
+  useEffect(() => {
+    loadDatabase(0);
   }, []);
 
-  // Seed data once module is ready
-  useEffect(() => {
-    if (status !== "ready" || seeded) return;
-
-    const mod = moduleRef.current;
-    const db = dbRef.current;
-    if (!mod || !db) return;
-
-    for (const seedQuery of SEED_QUERIES) {
-      execQuery(mod, db, seedQuery);
+  // Execute a query and update state (uses read-only transaction)
+  const runQuery = useCallback((mod: any, db: number, cypher: string) => {
+    const txn = txnRef.current;
+    if (!txn) {
+      setError("No active read-only transaction");
+      return;
     }
-    setSeeded(true);
-  }, [status, seeded]);
-
-  const execQuery = useCallback((mod: any, db: number, cypher: string) => {
-    const resultPtr = mod.ccall("zyx_execute", "number", ["number", "string"], [db, cypher]);
-
+    const resultPtr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, cypher]);
     if (!resultPtr) {
       const errMsg = mod.ccall("zyx_get_last_error", "string", [], []);
-      return { error: errMsg || "Unknown error", columns: [], values: [], duration: 0 };
+      setError(errMsg || "Unknown error");
+      return;
     }
 
     const success = mod.ccall("zyx_result_is_success", "boolean", ["number"], [resultPtr]);
     if (!success) {
       const errMsg = mod.ccall("zyx_result_get_error", "string", ["number"], [resultPtr]);
       mod.ccall("zyx_result_close", null, ["number"], [resultPtr]);
-      return { error: errMsg || "Query failed", columns: [], values: [], duration: 0 };
+      setError(errMsg || "Query failed");
+      return;
     }
 
     const dur = mod.ccall("zyx_result_get_duration", "number", ["number"], [resultPtr]);
@@ -147,6 +197,10 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
     }
 
     const values: string[][] = [];
+    const nodeMap = new Map<number, GraphNode>();
+    const edgeList: GraphEdge[] = [];
+    const edgeSeen = new Set<number>();
+
     while (mod.ccall("zyx_result_next", "boolean", ["number"], [resultPtr])) {
       const row: string[] = [];
       for (let i = 0; i < colCount; i++) {
@@ -164,18 +218,43 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
           case 5: { // Node
             const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [resultPtr, i]);
             row.push(props || "(node)");
+            // ZYXNode: int64 id (8 bytes) + ptr label (4 bytes) in wasm32
+            const nbuf = mod._malloc(16);
+            if (mod.ccall("zyx_result_get_node", "boolean", ["number", "number", "number"], [resultPtr, i, nbuf])) {
+              const nodeId = mod.HEAP32[nbuf >> 2];
+              let label = String(nodeId);
+              try {
+                const p = JSON.parse(props || "{}");
+                label = p.name || p.id || p.title || String(nodeId);
+              } catch {}
+              nodeMap.set(nodeId, { id: nodeId, label });
+            }
+            mod._free(nbuf);
             break;
           }
           case 6: { // Edge
             const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [resultPtr, i]);
             row.push(props || "(edge)");
+            // ZYXEdge: int64 id (8) + int64 src (8) + int64 tgt (8) + ptr type (4) = 28+ bytes
+            const ebuf = mod._malloc(32);
+            if (mod.ccall("zyx_result_get_edge", "boolean", ["number", "number", "number"], [resultPtr, i, ebuf])) {
+              const edgeId = mod.HEAP32[ebuf >> 2];
+              const srcId = mod.HEAP32[(ebuf + 8) >> 2];
+              const tgtId = mod.HEAP32[(ebuf + 16) >> 2];
+              const typePtr = mod.HEAP32[(ebuf + 24) >> 2] >>> 0;
+              const edgeType = typePtr ? mod.UTF8ToString(typePtr) : "";
+              if (srcId && tgtId && !edgeSeen.has(edgeId)) {
+                edgeSeen.add(edgeId);
+                edgeList.push({ id: edgeId, sourceId: srcId, targetId: tgtId, type: edgeType });
+                if (!nodeMap.has(srcId)) nodeMap.set(srcId, { id: srcId, label: String(srcId) });
+                if (!nodeMap.has(tgtId)) nodeMap.set(tgtId, { id: tgtId, label: String(tgtId) });
+              }
+            }
+            mod._free(ebuf);
             break;
           }
-          case 7: { // List
-            row.push("[list]");
-            break;
-          }
-          case 8: { // Map
+          case 7: row.push("[list]"); break;
+          case 8: {
             const mapJson = mod.ccall("zyx_result_get_map_json", "string", ["number", "number"], [resultPtr, i]);
             row.push(mapJson || "{}");
             break;
@@ -187,7 +266,14 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
     }
 
     mod.ccall("zyx_result_close", null, ["number"], [resultPtr]);
-    return { error: null, columns, values, duration: dur };
+
+    const graphNodes = Array.from(nodeMap.values());
+    const hasGraph = graphNodes.length > 0 && edgeList.length > 0;
+
+    setError(null);
+    setResult({ columns, values, graphNodes, graphEdges: edgeList });
+    setDuration(dur);
+    setViewMode(hasGraph ? "graph" : "table");
   }, []);
 
   const handleRun = useCallback(() => {
@@ -195,19 +281,9 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
     const mod = moduleRef.current;
     const db = dbRef.current;
     if (!mod || !db) return;
-
     setError(null);
-    setResult(null);
-    setDuration(null);
-
-    const res = execQuery(mod, db, query);
-    if (res.error) {
-      setError(res.error);
-    } else {
-      setResult({ columns: res.columns, values: res.values });
-      setDuration(res.duration);
-    }
-  }, [status, query, execQuery]);
+    runQuery(mod, db, query);
+  }, [status, query, runQuery]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -216,117 +292,128 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
     }
   }, [handleRun]);
 
+  const handleDatasetSwitch = useCallback((idx: number) => {
+    if (idx === datasetIdx || status === "loading") return;
+    setDatasetIdx(idx);
+    setQuery(DATASETS[idx].initialQuery);
+    loadDatabase(idx);
+  }, [datasetIdx, status, loadDatabase]);
+
+  const hasGraphData = result ? result.graphNodes.length > 0 && result.graphEdges.length > 0 : false;
+
   return (
-    <div className="flex h-full w-full flex-col gap-4 p-4 md:p-8">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[rgba(122,144,170,0.15)] border border-[rgba(122,144,170,0.2)]">
-          <span className="font-['Space_Mono',monospace] text-[0.65rem] font-bold text-[#94a8be]">
-            {">_"}
-          </span>
-        </div>
-        <h2 className="m-0 text-[1.15rem] font-semibold tracking-[0.02em] text-[#e7edf5]">
-          {isEn ? "Cypher Playground" : "Cypher 试验场"}
-        </h2>
-        <div className={`ml-2 flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.65rem] font-medium ${
-          status === "ready"
-            ? "bg-[rgba(74,222,128,0.1)] text-[#4ade80]"
-            : status === "loading"
-            ? "bg-[rgba(250,204,21,0.1)] text-[#facc15]"
-            : "bg-[rgba(248,113,113,0.1)] text-[#f87171]"
-        }`}>
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${
-            status === "ready" ? "bg-[#4ade80]" : status === "loading" ? "bg-[#facc15] animate-pulse" : "bg-[#f87171]"
-          }`} />
-          {status === "ready" ? (isEn ? "Ready" : "就绪") : status === "loading" ? (isEn ? "Loading..." : "加载中...") : (isEn ? "Error" : "错误")}
-        </div>
-      </div>
-
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col gap-4 overflow-hidden md:flex-row">
-        {/* Left: Editor */}
-        <div className="flex flex-1 flex-col gap-3 min-w-0">
-          {/* Example query chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {EXAMPLE_QUERIES.map((eq) => (
-              <button
-                key={eq.label}
-                onClick={() => setQuery(eq.query)}
-                className={`rounded-md border px-2.5 py-1 text-[0.7rem] font-medium transition-all duration-200 ${
-                  query === eq.query
-                    ? "border-[rgba(148,168,190,0.5)] bg-[rgba(122,144,170,0.2)] text-[#e7edf5]"
-                    : "border-[rgba(122,144,170,0.15)] bg-[rgba(16,22,30,0.6)] text-[#8a9bb0] hover:border-[rgba(122,144,170,0.3)] hover:text-[#aec0d2]"
-                }`}
-              >
-                {eq.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Editor */}
-          <div className="relative flex-1 min-h-[120px]">
-            <textarea
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              spellCheck={false}
-              className="h-full w-full resize-none rounded-lg border border-[rgba(122,144,170,0.15)] bg-[rgba(11,15,20,0.8)] p-4 font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.82rem] leading-relaxed text-[#e7edf5] outline-none transition-colors duration-200 focus:border-[rgba(148,168,190,0.4)] placeholder:text-[#566b82]"
-              placeholder={isEn ? "Enter Cypher query..." : "输入 Cypher 查询..."}
-            />
-            <div className="absolute bottom-3 right-3 flex items-center gap-2">
-              <span className="text-[0.6rem] text-[#566b82]">
-                {navigator.platform?.includes("Mac") ? "Cmd" : "Ctrl"}+Enter
-              </span>
-              <button
-                onClick={handleRun}
-                disabled={status !== "ready"}
-                className="rounded-md border border-[rgba(122,144,170,0.5)] bg-[rgba(35,48,63,0.8)] px-4 py-1.5 text-[0.75rem] font-medium text-[#e7edf5] transition-all duration-200 hover:bg-[rgba(122,144,170,0.3)] disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isEn ? "Run" : "执行"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Results */}
-        <div className="flex flex-1 flex-col gap-2 min-w-0 min-h-[200px] md:min-h-0">
-          <div className="flex items-center justify-between">
-            <span className="text-[0.7rem] font-medium uppercase tracking-[0.12em] text-[#566b82]">
-              {isEn ? "Results" : "结果"}
+    <div className="flex h-full w-full min-h-0 flex-col gap-4 p-4 md:p-6">
+      <header className="shrink-0 rounded-xl border border-[rgba(154,175,198,0.2)] bg-[#111821] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(154,175,198,0.22)] bg-[#1a2430]">
+            <span className="font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.68rem] font-bold text-[#b1c2d4]">
+              {">_"}
             </span>
+          </div>
+
+          <div className="min-w-0">
+            <h2 className="m-0 text-[1rem] font-semibold tracking-[0.02em] text-[#edf3f9]">
+              {isEn ? "Cypher Playground" : "Cypher 试验场"}
+            </h2>
+            <p className="m-0 text-[0.73rem] text-[#8ea2b7]">
+              {isEn ? "Interactive Graph Query Workspace" : "交互式图查询工作台"}
+            </p>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <div className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold ${
+              status === "ready"
+                ? "border-[rgba(74,222,128,0.3)] bg-[rgba(74,222,128,0.1)] text-[#4ade80]"
+                : status === "loading"
+                  ? "border-[rgba(250,204,21,0.3)] bg-[rgba(250,204,21,0.1)] text-[#facc15]"
+                  : "border-[rgba(248,113,113,0.3)] bg-[rgba(248,113,113,0.1)] text-[#f87171]"
+            }`}>
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${
+                status === "ready"
+                  ? "bg-[#4ade80]"
+                  : status === "loading"
+                    ? "bg-[#facc15] animate-pulse"
+                    : "bg-[#f87171]"
+              }`} />
+              {status === "ready"
+                ? (isEn ? "Ready" : "就绪")
+                : status === "loading"
+                  ? (statusMsg || (isEn ? "Loading..." : "加载中..."))
+                  : (isEn ? "Error" : "错误")}
+            </div>
+
             {duration !== null && (
-              <span className="text-[0.65rem] text-[#566b82]">
+              <div className="rounded-md border border-[rgba(154,175,198,0.2)] bg-[#0f161f] px-2 py-1 font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.66rem] text-[#9eb2c6]">
                 {duration.toFixed(2)} ms
-              </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[rgba(154,175,198,0.2)] bg-[#0f161f]">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[rgba(154,175,198,0.16)] px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="m-0 truncate text-[0.73rem] font-semibold tracking-[0.05em] text-[#b1c2d4]">
+                {dataset.label}
+              </p>
+              <p className="m-0 truncate text-[0.62rem] text-[#7f96ad]">
+                {dataset.schema}
+              </p>
+            </div>
+
+            {result && (
+              <div className="ml-auto flex items-center overflow-hidden rounded-md border border-[rgba(154,175,198,0.2)] bg-[#131d28]">
+                <button
+                  onClick={() => setViewMode("graph")}
+                  disabled={!hasGraphData}
+                  className={`px-2.5 py-1 text-[0.62rem] font-medium transition-colors ${
+                    viewMode === "graph"
+                      ? "bg-[#243243] text-[#edf3f9]"
+                      : "text-[#8ea2b7] hover:text-[#d8e3ef]"
+                  } disabled:cursor-not-allowed disabled:opacity-30`}
+                >
+                  Graph
+                </button>
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`px-2.5 py-1 text-[0.62rem] font-medium transition-colors ${
+                    viewMode === "table"
+                      ? "bg-[#243243] text-[#edf3f9]"
+                      : "text-[#8ea2b7] hover:text-[#d8e3ef]"
+                  }`}
+                >
+                  Table
+                </button>
+              </div>
             )}
           </div>
 
-          <div className="flex-1 overflow-auto rounded-lg border border-[rgba(122,144,170,0.15)] bg-[rgba(11,15,20,0.8)] [scrollbar-width:thin] [scrollbar-color:rgba(122,144,170,0.2)_transparent]">
+          <div className="relative min-h-0 flex-1">
             {error ? (
-              <div className="p-4 text-[0.82rem] text-[#f87171] font-['Space_Mono',monospace]">
+              <div className="absolute inset-0 flex items-center justify-center p-4 text-[0.82rem] text-[#f87171] font-['Space_Mono','Ubuntu_Mono',monospace]">
                 {error}
               </div>
-            ) : result ? (
-              result.values.length === 0 ? (
-                <div className="flex h-full items-center justify-center p-4 text-[0.82rem] text-[#566b82]">
-                  {isEn ? "Query executed successfully (no rows returned)" : "查询执行成功（无返回行）"}
-                </div>
-              ) : (
-                <table className="w-full border-collapse text-[0.78rem]">
+            ) : result && viewMode === "graph" && hasGraphData ? (
+              <GraphView nodes={result.graphNodes} edges={result.graphEdges} />
+            ) : result && viewMode === "table" && result.values.length > 0 ? (
+              <div className="absolute inset-0 overflow-auto [scrollbar-width:thin] [scrollbar-color:rgba(154,175,198,0.28)_transparent]">
+                <table className="w-full border-collapse text-[0.74rem]">
                   <thead>
-                    <tr className="border-b border-[rgba(122,144,170,0.15)]">
-                      {result.columns.map((col) => (
-                        <th key={col} className="whitespace-nowrap px-4 py-2.5 text-left font-semibold text-[#94a8be]">
+                    <tr className="sticky top-0 border-b border-[rgba(154,175,198,0.2)] bg-[#101925]">
+                      {result.columns.map((col, ci) => (
+                        <th key={ci} className="whitespace-nowrap px-3 py-2 text-left font-semibold text-[#b1c2d4]">
                           {col}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="font-['Space_Mono',monospace]">
+                  <tbody className="font-['Space_Mono','Ubuntu_Mono',monospace]">
                     {result.values.map((row, ri) => (
-                      <tr key={ri} className="border-b border-[rgba(122,144,170,0.08)] hover:bg-[rgba(122,144,170,0.05)] transition-colors">
+                      <tr key={ri} className="border-b border-[rgba(154,175,198,0.1)] hover:bg-[#141f2a]">
                         {row.map((val, ci) => (
-                          <td key={ci} className="max-w-[300px] truncate px-4 py-2 text-[#c5d2de]">
+                          <td key={ci} className="max-w-[280px] truncate px-3 py-1.5 text-[#d3dfeb]">
                             {val}
                           </td>
                         ))}
@@ -334,22 +421,98 @@ export function CypherPlayground({ isEn }: { isEn: boolean }) {
                     ))}
                   </tbody>
                 </table>
-              )
+              </div>
+            ) : result && result.values.length === 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center text-[0.82rem] text-[#7f96ad]">
+                {isEn ? "Query executed (no rows)" : "查询完成（无返回行）"}
+              </div>
             ) : (
-              <div className="flex h-full items-center justify-center p-4 text-[0.82rem] text-[#566b82]">
+              <div className="absolute inset-0 flex items-center justify-center text-[0.82rem] text-[#7f96ad]">
                 {status === "loading"
-                  ? (isEn ? "Loading ZYX engine..." : "正在加载 ZYX 引擎...")
+                  ? (statusMsg || (isEn ? "Loading..." : "加载中..."))
                   : (isEn ? "Run a query to see results" : "执行查询查看结果")}
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* Schema hint */}
-      <div className="text-[0.65rem] leading-relaxed text-[#566b82]">
-        <span className="font-medium text-[#8a9bb0]">Schema:</span>{" "}
-        (:Person {"{"} name, age, role {"}"}) -[:KNOWS | :REPORTS_TO | :LIKES]- (:Movie {"{"} title, year, genre {"}"})
+        <aside className="flex min-h-0 flex-col gap-3 rounded-xl border border-[rgba(154,175,198,0.2)] bg-[#111821] p-3">
+          <div>
+            <p className="m-0 text-[0.7rem] font-semibold tracking-[0.04em] text-[#9fb2c6]">
+              {isEn ? "Dataset" : "数据集"}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {DATASETS.map((ds, i) => (
+                <button
+                  key={ds.label}
+                  onClick={() => handleDatasetSwitch(i)}
+                  disabled={status === "loading"}
+                  className={`rounded-md border px-2.5 py-1 text-[0.62rem] font-medium transition-colors ${
+                    i === datasetIdx
+                      ? "border-[rgba(177,194,212,0.5)] bg-[#253445] text-[#eef4fa]"
+                      : "border-[rgba(154,175,198,0.22)] bg-[#17222e] text-[#8ea2b7] hover:text-[#d8e3ef]"
+                  } disabled:cursor-not-allowed disabled:opacity-45`}
+                >
+                  {ds.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            <p className="m-0 mb-2 text-[0.7rem] font-semibold tracking-[0.04em] text-[#9fb2c6]">
+              {isEn ? "Examples" : "示例查询"}
+            </p>
+            <div className="min-h-0 overflow-y-auto space-y-1.5 pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(154,175,198,0.22)_transparent]">
+              {dataset.exampleQueries.map((eq) => (
+                <button
+                  key={eq.label}
+                  onClick={() => {
+                    setQuery(eq.query);
+                    if (status === "ready" && moduleRef.current && dbRef.current) {
+                      setError(null);
+                      runQuery(moduleRef.current, dbRef.current, eq.query);
+                    }
+                  }}
+                  className={`w-full rounded-md border px-2.5 py-1.5 text-left text-[0.66rem] font-medium transition-colors ${
+                    query === eq.query
+                      ? "border-[rgba(177,194,212,0.5)] bg-[#253445] text-[#eef4fa]"
+                      : "border-[rgba(154,175,198,0.18)] bg-[#17222e] text-[#8ea2b7] hover:text-[#d8e3ef]"
+                  }`}
+                >
+                  {eq.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="shrink-0 border-t border-[rgba(154,175,198,0.16)] pt-3">
+            <p className="m-0 mb-2 text-[0.7rem] font-semibold tracking-[0.04em] text-[#9fb2c6]">
+              {isEn ? "Query Editor" : "查询编辑器"}
+            </p>
+            <textarea
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              spellCheck={false}
+              rows={5}
+              className="w-full resize-none rounded-md border border-[rgba(154,175,198,0.2)] bg-[#0f161f] p-2.5 font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.73rem] leading-relaxed text-[#edf3f9] outline-none focus:border-[rgba(177,194,212,0.45)] placeholder:text-[#6e859c]"
+              placeholder={isEn ? "Enter Cypher query..." : "输入 Cypher 查询..."}
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="text-[0.58rem] text-[#6e859c]">
+                {typeof navigator !== "undefined" && navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"}+Enter
+              </span>
+              <button
+                onClick={handleRun}
+                disabled={status !== "ready"}
+                className="rounded-md border border-[rgba(177,194,212,0.35)] bg-[#2b3a4c] px-3 py-1 text-[0.72rem] font-semibold text-[#edf3f9] transition-colors hover:bg-[#364b61] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isEn ? "Run Query" : "执行查询"}
+              </button>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );

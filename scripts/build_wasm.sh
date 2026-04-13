@@ -132,6 +132,8 @@ em++ \
         "_zyx_execute_params",
         "_zyx_result_close",
         "_zyx_begin_transaction",
+        "_zyx_begin_read_only_transaction",
+        "_zyx_txn_is_read_only",
         "_zyx_txn_execute",
         "_zyx_txn_execute_params",
         "_zyx_txn_commit",
@@ -171,7 +173,7 @@ em++ \
         "_malloc",
         "_free"
     ]' \
-    -sEXPORTED_RUNTIME_METHODS='["ccall","cwrap","FS"]' \
+    -sEXPORTED_RUNTIME_METHODS='["ccall","cwrap","FS","HEAPU8","HEAP32","UTF8ToString","getValue"]' \
     -sALLOW_MEMORY_GROWTH=1 \
     -sNO_EXIT_RUNTIME=1 \
     -sUSE_ZLIB=1 \
