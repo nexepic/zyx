@@ -180,7 +180,8 @@ em++ \
     -sMODULARIZE=1 \
     -sEXPORT_NAME=createZyxModule \
     -sERROR_ON_UNDEFINED_SYMBOLS=0 \
-    -O2 --no-binaryen-passes
+    -O2 --no-binaryen-passes \
+    -fwasm-exceptions
 
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN} WASM Build Successful!                                ${NC}"
