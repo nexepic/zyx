@@ -5,12 +5,19 @@ subdir('query/parser')
 # ==============================================================================
 # Use Python to recursively find all .cpp files in src/ (excluding parser)
 python = import('python').find_installation()
+
+# Determine directories to exclude from compilation
+_exclude_dirs = ['query/parser']
+if host_machine.system() == 'emscripten'
+    _exclude_dirs += ['cli']
+endif
+
 find_result = run_command(python, '-c', '''
 import os
 import sys
 
 # Paths to exclude (relative to src)
-EXCLUDE_DIRS = ['query/parser']
+EXCLUDE_DIRS = sys.argv[2].split(',')
 
 base_dir = sys.argv[1]
 for root, dirs, files in os.walk(base_dir):
@@ -27,7 +34,7 @@ for root, dirs, files in os.walk(base_dir):
 	for file in files:
 		if file.endswith(".cpp"):
 			print(os.path.join(root, file))
-''', meson.current_source_dir(), check : true)
+''', meson.current_source_dir(), ','.join(_exclude_dirs), check : true)
 
 cpp_files = find_result.stdout().strip().split('\n')
 
@@ -83,33 +90,35 @@ public_headers = [
 
 # Build Shared Library (The Product)
 # Named 'zyx' -> produces libzyx.dylib / libzyx.so
-libzyx = shared_library('zyx',
-						sources : db_src, # db_src already includes api/CApi.cpp via recursive search
-						include_directories : inc_dirs,
-						dependencies : [zlib_dep,
-										boost_dep,
-										cli11_dep,
-										antlr4_dep,
-										cypher_dep
-						],
-						install : true,
-						install_dir : get_option('libdir')
-)
+if host_machine.system() != 'emscripten'
+    libzyx = shared_library('zyx',
+                            sources : db_src,
+                            include_directories : inc_dirs,
+                            dependencies : [zlib_dep,
+                                            boost_dep,
+                                            cli11_dep,
+                                            antlr4_dep,
+                                            cypher_dep
+                            ],
+                            install : true,
+                            install_dir : get_option('libdir')
+    )
 
-# Install Headers
-install_headers(public_headers, subdir : 'zyx')
+    # Install Headers
+    install_headers(public_headers, subdir : 'zyx')
 
-# Generate pkg-config file
-pkg = import('pkgconfig')
-pkg.generate(libzyx,
-			 name : 'ZYX',
-			 description : 'High-performance Graph Database Engine',
-			 version : '0.1.0',
-			 subdirs : 'zyx'
-)
+    # Generate pkg-config file
+    pkg = import('pkgconfig')
+    pkg.generate(libzyx,
+                 name : 'ZYX',
+                 description : 'High-performance Graph Database Engine',
+                 version : '0.1.0',
+                 subdirs : 'zyx'
+    )
 
-# Declare dependency for external-like tests (linking against the .dylib)
-zyx_dep = declare_dependency(
-	link_with : libzyx,
-	include_directories : include_directories('../include')
-)
+    # Declare dependency for external-like tests (linking against the .dylib)
+    zyx_dep = declare_dependency(
+        link_with : libzyx,
+        include_directories : include_directories('../include')
+    )
+endif

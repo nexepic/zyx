@@ -197,9 +197,11 @@ namespace graph::storage::wal {
 
 		// Wait briefly to accumulate more commits from other threads
 		if (groupCommitDelayUs_ > 0) {
+#ifndef __EMSCRIPTEN__
 			lock.unlock();
 			std::this_thread::sleep_for(std::chrono::microseconds(groupCommitDelayUs_));
 			lock.lock();
+#endif
 		}
 
 		// Flush buffer + fsync

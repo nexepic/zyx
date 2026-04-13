@@ -2,6 +2,8 @@
 .DS_Store
 buildDir/
 build_release/
+build_wasm/
+emsdk/
 antlr-*.jar
 
 # LLVM Coverage files

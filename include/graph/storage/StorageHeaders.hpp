@@ -30,8 +30,8 @@
 namespace graph::storage {
 
 	constexpr char FILE_HEADER_MAGIC_STRING[] = "<ZYX-DB>";
-	constexpr uint32_t PAGE_SIZE = 4096;
-	constexpr uint32_t SEGMENT_SIZE = PAGE_SIZE * 32; // 128K per segment
+	constexpr uint32_t STORAGE_PAGE_SIZE = 4096;
+	constexpr uint32_t SEGMENT_SIZE = STORAGE_PAGE_SIZE * 32; // 128K per segment
 	constexpr uint32_t NODES_PER_SEGMENT = SEGMENT_SIZE / Node::getTotalSize();
 	constexpr uint32_t EDGES_PER_SEGMENT = SEGMENT_SIZE / Edge::getTotalSize();
 	constexpr uint32_t PROPERTIES_PER_SEGMENT = SEGMENT_SIZE / Property::getTotalSize();

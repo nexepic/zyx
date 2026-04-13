@@ -53,6 +53,9 @@ namespace graph::concurrent {
 		 * @param threadCount Number of threads. 0 = auto-detect, 1 = single-threaded (inline).
 		 */
 			explicit ThreadPool(size_t threadCount = 0) {
+#ifdef __EMSCRIPTEN__
+				threadCount = 1;  // WASM: single-threaded mode only
+#endif
 				threadCount_ = resolveThreadCount(threadCount, std::thread::hardware_concurrency());
 
 				if (threadCount_ <= 1) {

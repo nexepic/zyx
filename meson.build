@@ -34,8 +34,13 @@ inc_dirs = include_directories('include', 'src', '.')
 
 # Dependencies
 zlib_dep = dependency('zlib')
-boost_dep = dependency('boost', modules : ['filesystem', 'system'])
-cli11_dep = dependency('CLI11')
+if host_machine.system() != 'emscripten'
+    boost_dep = dependency('boost', modules : ['filesystem', 'system'])
+    cli11_dep = dependency('CLI11')
+else
+    boost_dep = declare_dependency()  # empty stub — boost not used in WASM
+    cli11_dep = declare_dependency()  # CLI not built for WASM
+endif
 
 # Windows SDK headers define macros (min/max from minwindef.h, ERROR from wingdi.h)
 # that conflict with third-party headers like antlr4-runtime.
@@ -54,8 +59,10 @@ endif
 
 # Subdirectories
 subdir('src')
-subdir('apps/cli')
-subdir('apps/benchmark')
+if host_machine.system() != 'emscripten'
+    subdir('apps/cli')
+    subdir('apps/benchmark')
+endif
 
 if not meson.is_subproject()
     subdir('tests')

@@ -66,6 +66,10 @@ namespace graph {
 		// Acquire exclusive lock — blocks until all readers and writers finish
 		std::unique_lock<std::shared_mutex> lock(rwMutex_, std::defer_lock);
 
+#ifdef __EMSCRIPTEN__
+		(void)timeout;
+		lock.lock();  // Single-threaded: always succeeds immediately
+#else
 		// Try to acquire with timeout
 		auto deadline = std::chrono::steady_clock::now() + timeout;
 		while (!lock.try_lock()) {
@@ -74,6 +78,7 @@ namespace graph {
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
+#endif
 		writeLock_ = std::move(lock);
 
 		uint64_t txnId = nextTxnId_.fetch_add(1);
