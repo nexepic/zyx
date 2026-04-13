@@ -25,8 +25,10 @@
 #include "generated/CypherParserBaseVisitor.h"
 #include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
+#include "graph/query/QueryPlan.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/query/planner/ScopeStack.hpp"
+#include "graph/query/ir/LogicalPlanBuilder.hpp"
 
 namespace graph::parser::cypher {
 
@@ -50,8 +52,14 @@ public:
 	std::unique_ptr<query::execution::PhysicalOperator> getPlan();
 
 	/**
-	 * @brief Returns the optimized logical plan without physical conversion.
+	 * @brief Returns the optimized logical plan as a QueryPlan with mutation flags.
 	 * Used by PlanCache to store reusable logical plans.
+	 */
+	query::QueryPlan getQueryPlan();
+
+	/**
+	 * @brief Returns the optimized logical plan without physical conversion.
+	 * @deprecated Use getQueryPlan() instead.
 	 */
 	std::unique_ptr<query::logical::LogicalOperator> getLogicalPlan();
 
@@ -110,6 +118,7 @@ private:
 	std::shared_ptr<query::QueryPlanner> planner_;
 	std::unique_ptr<query::logical::LogicalOperator> rootOp_;
 	query::planner::ScopeStack scope_;
+	query::ir::LogicalPlanBuilder builder_;
 };
 
 } // namespace graph::parser::cypher

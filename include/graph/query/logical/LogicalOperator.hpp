@@ -111,6 +111,44 @@ public:
 /**
  * @brief Returns a string name for a LogicalOpType.
  */
+/**
+ * @brief Returns true if the operator type mutates data (DML).
+ */
+inline bool isDataMutatingOp(LogicalOpType type) {
+	switch (type) {
+		case LogicalOpType::LOP_CREATE_NODE:
+		case LogicalOpType::LOP_CREATE_EDGE:
+		case LogicalOpType::LOP_SET:
+		case LogicalOpType::LOP_DELETE:
+		case LogicalOpType::LOP_REMOVE:
+		case LogicalOpType::LOP_MERGE_NODE:
+		case LogicalOpType::LOP_MERGE_EDGE:
+		case LogicalOpType::LOP_FOREACH:
+		case LogicalOpType::LOP_LOAD_CSV:
+		case LogicalOpType::LOP_SET_CONFIG:
+		case LogicalOpType::LOP_TRAIN_VECTOR_INDEX:
+			return true;
+		default:
+			return false;
+	}
+}
+
+/**
+ * @brief Returns true if the operator type mutates schema (DDL).
+ */
+inline bool isSchemaMutatingOp(LogicalOpType type) {
+	switch (type) {
+		case LogicalOpType::LOP_CREATE_INDEX:
+		case LogicalOpType::LOP_DROP_INDEX:
+		case LogicalOpType::LOP_CREATE_VECTOR_INDEX:
+		case LogicalOpType::LOP_CREATE_CONSTRAINT:
+		case LogicalOpType::LOP_DROP_CONSTRAINT:
+			return true;
+		default:
+			return false;
+	}
+}
+
 inline std::string toString(LogicalOpType type) {
 	switch (type) {
 		case LogicalOpType::LOP_NODE_SCAN: return "NodeScan";

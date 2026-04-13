@@ -55,6 +55,15 @@ namespace graph::query::planner {
 	using ProcedureFactory = std::function<std::unique_ptr<execution::PhysicalOperator>(
 			const ProcedureContext &ctx, const std::vector<PropertyValue> &args)>;
 
+	/**
+	 * @brief Describes a registered procedure's factory and mutation characteristics.
+	 */
+	struct ProcedureDescriptor {
+		ProcedureFactory factory;
+		bool mutatesData = false;
+		bool mutatesSchema = false;
+	};
+
 	class ProcedureRegistry {
 	public:
 		// The implementation in .cpp registers all built-in procedures here.
@@ -67,18 +76,28 @@ namespace graph::query::planner {
 			return instance;
 		}
 
-		void registerProcedure(const std::string &name, const ProcedureFactory &factory) {
-			registry_[name] = factory;
+		void registerProcedure(const std::string &name, const ProcedureFactory &factory,
+		                       bool mutatesData = false, bool mutatesSchema = false) {
+			registry_[name] = {factory, mutatesData, mutatesSchema};
 		}
 
 		ProcedureFactory get(const std::string &name) {
 			if (const auto it = registry_.find(name); it != registry_.end())
-				return it->second;
+				return it->second.factory;
+			return nullptr;
+		}
+
+		/**
+		 * @brief Returns the descriptor for a procedure, or nullptr if not found.
+		 */
+		const ProcedureDescriptor *getDescriptor(const std::string &name) const {
+			if (const auto it = registry_.find(name); it != registry_.end())
+				return &it->second;
 			return nullptr;
 		}
 
 	private:
-		std::map<std::string, ProcedureFactory> registry_;
+		std::map<std::string, ProcedureDescriptor> registry_;
 	};
 
 } // namespace graph::query::planner

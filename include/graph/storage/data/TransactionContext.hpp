@@ -49,8 +49,12 @@ namespace graph::storage {
 		void setWALManager(wal::WALManager *wal) { walManager_ = wal; }
 		[[nodiscard]] wal::WALManager *getWALManager() const { return walManager_; }
 
+		void setReadOnly(bool readOnly) { readOnly_ = readOnly; }
+		[[nodiscard]] bool isReadOnly() const { return readOnly_; }
+
 	private:
 		bool transactionActive_ = false;
+		bool readOnly_ = false;
 		uint64_t activeTxnId_ = 0;
 		std::vector<Transaction::TxnOperation> txnOps_;
 		wal::WALManager *walManager_ = nullptr;

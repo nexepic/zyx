@@ -48,6 +48,7 @@ namespace graph {
 		[[nodiscard]] bool isOpen() const;
 
 		Transaction beginTransaction();
+		Transaction beginReadOnlyTransaction();
 
 		// Query engine access (lazy-initialized on first call)
 		std::shared_ptr<query::QueryEngine> getQueryEngine();

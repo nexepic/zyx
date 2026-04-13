@@ -139,3 +139,44 @@ TEST_F(BugVerificationTest, AggregateOrderByAliasAsc) {
 	EXPECT_EQ(val(r, "cat", 1), "B");
 	EXPECT_EQ(val(r, "total", 1), "5");
 }
+
+// Bug: Multi-pattern CREATE only creates first node
+// Standard Cypher: CREATE (:A), (:B) should create 2 nodes
+TEST_F(BugVerificationTest, MultiPatternCreateAnonymousNodes) {
+	(void) execute("CREATE (:MPCA {id: 'a1'}), (:MPCA {id: 'a2'}), (:MPCA {id: 'a3'})");
+
+	auto r = execute("MATCH (n:MPCA) RETURN n.id ORDER BY n.id");
+	ASSERT_EQ(r.rowCount(), 3UL);
+	EXPECT_EQ(val(r, "n.id", 0), "a1");
+	EXPECT_EQ(val(r, "n.id", 1), "a2");
+	EXPECT_EQ(val(r, "n.id", 2), "a3");
+}
+
+TEST_F(BugVerificationTest, MultiPatternCreateTwoNodes) {
+	(void) execute("CREATE (:MPCB {name: 'Alice'}), (:MPCB {name: 'Bob'})");
+
+	auto r = execute("MATCH (n:MPCB) RETURN count(n) AS cnt");
+	ASSERT_EQ(r.rowCount(), 1UL);
+	EXPECT_EQ(val(r, "cnt"), "2");
+}
+
+TEST_F(BugVerificationTest, MultiPatternCreateWithNamedVariables) {
+	// Named variables should still work correctly
+	(void) execute("CREATE (a:MPCC {name: 'X'}), (b:MPCC {name: 'Y'})");
+
+	auto r = execute("MATCH (n:MPCC) RETURN n.name ORDER BY n.name");
+	ASSERT_EQ(r.rowCount(), 2UL);
+	EXPECT_EQ(val(r, "n.name", 0), "X");
+	EXPECT_EQ(val(r, "n.name", 1), "Y");
+}
+
+TEST_F(BugVerificationTest, MultiPatternCreateMixedLabels) {
+	// Different labels in same CREATE
+	(void) execute("CREATE (:MPCD_A {name: 'first'}), (:MPCD_B {name: 'second'})");
+
+	auto ra = execute("MATCH (n:MPCD_A) RETURN count(n) AS cnt");
+	EXPECT_EQ(val(ra, "cnt"), "1");
+
+	auto rb = execute("MATCH (n:MPCD_B) RETURN count(n) AS cnt");
+	EXPECT_EQ(val(rb, "cnt"), "1");
+}

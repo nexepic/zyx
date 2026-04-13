@@ -314,6 +314,31 @@ ZYXTxn_T *zyx_begin_transaction(ZYXDB_T *db) {
 	}
 }
 
+ZYXTxn_T *zyx_begin_read_only_transaction(ZYXDB_T *db) {
+	if (!db)
+		return nullptr;
+	try {
+		auto txn = db->cpp_db->beginReadOnlyTransaction();
+		return new ZYXTxn_T(std::move(txn));
+	} catch (const std::exception &e) {
+		set_error(e.what());
+		return nullptr;
+	} catch (...) {
+		set_error("Unknown Exception during zyx_begin_read_only_transaction");
+		return nullptr;
+	}
+}
+
+bool zyx_txn_is_read_only(const ZYXTxn_T *txn) {
+	if (!txn)
+		return false;
+	try {
+		return txn->cpp_txn.isReadOnly();
+	} catch (...) {
+		return false;
+	}
+}
+
 ZYXResult_T *zyx_txn_execute(ZYXTxn_T *txn, const char *cypher) {
 	if (!txn || !cypher)
 		return nullptr;

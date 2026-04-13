@@ -64,68 +64,52 @@ namespace graph::query {
 		return execute(query, QueryContext{}, lang);
 	}
 
-	QueryResult QueryEngine::execute(const std::string &query, const QueryContext &ctx, const Language lang) {
-		using Clock = std::chrono::steady_clock;
-
-		auto parseStart = Clock::now();
-
-		std::unique_ptr<execution::PhysicalOperator> planTree;
-
+	QueryPlan QueryEngine::buildPlan(const std::string &query, const Language lang) {
 		// Try plan cache first
-		auto cachedLogical = planCache_.get(query);
-		if (cachedLogical) {
-			// Cache hit: convert cached logical plan to physical
-			auto dm = storage_->getDataManager();
-			PhysicalPlanConverter converter(dm, indexManager_, constraintManager_,
-			                                queryPlanner_->getProjectionManager(),
-			                                planCache_.hits(), planCache_.misses());
-			planTree = converter.convert(cachedLogical.get());
-		} else {
-			// Cache miss: parse to logical, cache if cacheable, then convert
-			auto parser = getParser(lang);
-			auto logicalPlan = parser->parseToLogical(query);
+		auto cached = planCache_.get(query);
+		if (cached) {
+			return std::move(*cached);
+		}
 
-			if (logicalPlan) {
-				// Determine if the plan is cacheable (skip DDL/transaction control)
-				auto rootType = logicalPlan->getType();
-				bool isCacheable = (rootType != logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
-				                    rootType != logical::LogicalOpType::LOP_CREATE_INDEX &&
-				                    rootType != logical::LogicalOpType::LOP_DROP_INDEX &&
-				                    rootType != logical::LogicalOpType::LOP_SHOW_INDEXES &&
-				                    rootType != logical::LogicalOpType::LOP_CREATE_VECTOR_INDEX &&
-				                    rootType != logical::LogicalOpType::LOP_CREATE_CONSTRAINT &&
-				                    rootType != logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
-				                    rootType != logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
-				                    rootType != logical::LogicalOpType::LOP_EXPLAIN &&
-				                    rootType != logical::LogicalOpType::LOP_PROFILE);
+		// Cache miss: parse to logical plan
+		auto parser = getParser(lang);
+		auto plan = parser->parseToLogical(query);
 
-				// DDL operations invalidate the cache (schema changes affect plans)
-				bool isDDL = (rootType == logical::LogicalOpType::LOP_CREATE_INDEX ||
-				              rootType == logical::LogicalOpType::LOP_DROP_INDEX ||
-				              rootType == logical::LogicalOpType::LOP_CREATE_VECTOR_INDEX ||
-				              rootType == logical::LogicalOpType::LOP_CREATE_CONSTRAINT ||
-				              rootType == logical::LogicalOpType::LOP_DROP_CONSTRAINT);
-				if (isDDL) {
-					planCache_.clear();
-				}
+		if (plan.root) {
+			// DDL operations invalidate the cache (schema changes affect plans)
+			if (plan.mutatesSchema) {
+				planCache_.clear();
+			}
 
-				if (isCacheable) {
-					planCache_.put(query, logicalPlan.get());
-				}
-
-				// Convert logical to physical
-				auto dm = storage_->getDataManager();
-				PhysicalPlanConverter converter(dm, indexManager_, constraintManager_,
-				                                queryPlanner_->getProjectionManager(),
-				                                planCache_.hits(), planCache_.misses());
-				planTree = converter.convert(logicalPlan.get());
+			if (plan.cacheable) {
+				planCache_.put(query, plan);
 			}
 		}
 
-		debug::PerfTrace::addDuration(
-				"parse", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
-															  parseStart)
-													 .count()));
+		return plan;
+	}
+
+	QueryResult QueryEngine::executePlan(QueryPlan plan, const QueryContext &ctx) {
+		using Clock = std::chrono::steady_clock;
+
+		// ExecMode access control checks
+		if (ctx.execMode == ExecMode::EM_READ_ONLY && (plan.mutatesData || plan.mutatesSchema)) {
+			throw std::runtime_error("Read-only transaction cannot execute write queries");
+		}
+		if (ctx.execMode == ExecMode::EM_READ_WRITE && plan.mutatesSchema) {
+			throw std::runtime_error("Read-write transaction cannot execute schema-modifying queries");
+		}
+
+		if (!plan.root) {
+			return QueryResult{};
+		}
+
+		// Convert logical to physical
+		auto dm = storage_->getDataManager();
+		PhysicalPlanConverter converter(dm, indexManager_, constraintManager_,
+		                                queryPlanner_->getProjectionManager(),
+		                                planCache_.hits(), planCache_.misses());
+		auto planTree = converter.convert(plan.root.get());
 
 		if (!planTree) {
 			return QueryResult{};
@@ -141,6 +125,21 @@ namespace graph::query {
 
 		// Execute
 		return queryExecutor_->execute(std::move(planTree));
+	}
+
+	QueryResult QueryEngine::execute(const std::string &query, const QueryContext &ctx, const Language lang) {
+		using Clock = std::chrono::steady_clock;
+
+		auto parseStart = Clock::now();
+
+		auto plan = buildPlan(query, lang);
+
+		debug::PerfTrace::addDuration(
+				"parse", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+															  parseStart)
+													 .count()));
+
+		return executePlan(std::move(plan), ctx);
 	}
 
 	QueryResult QueryEngine::execute(std::unique_ptr<execution::PhysicalOperator> plan) const {

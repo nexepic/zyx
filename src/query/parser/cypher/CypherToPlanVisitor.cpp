@@ -29,23 +29,24 @@
 #include "graph/query/logical/operators/LogicalUnion.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
 #include "graph/query/planner/PhysicalPlanConverter.hpp"
+#include "graph/query/planner/ProcedureRegistry.hpp"
 #include "graph/query/ir/CypherASTBuilder.hpp"
 #include "graph/query/ir/SemanticAnalyzer.hpp"
-#include "graph/query/ir/LogicalPlanBuilder.hpp"
 #include "helpers/AstExtractor.hpp"
 #include "helpers/ExpressionBuilder.hpp"
 
 namespace graph::parser::cypher {
 
 CypherToPlanVisitor::CypherToPlanVisitor(std::shared_ptr<query::QueryPlanner> planner) :
-	planner_(std::move(planner)) {}
+	planner_(std::move(planner)),
+	builder_(&query::planner::ProcedureRegistry::instance()) {}
 
-std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogicalPlan() {
+query::QueryPlan CypherToPlanVisitor::getQueryPlan() {
 	if (!rootOp_) {
-		return nullptr;
+		return {};
 	}
 
-	// Run the optimizer on read-oriented plans (skip DDL/transaction control)
+	// Determine optimizable from root type
 	auto rootType = rootOp_->getType();
 	bool isOptimizable = (rootType != query::logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
 	                      rootType != query::logical::LogicalOpType::LOP_CREATE_INDEX &&
@@ -59,6 +60,17 @@ std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogical
 	                      rootType != query::logical::LogicalOpType::LOP_PROFILE &&
 	                      rootType != query::logical::LogicalOpType::LOP_CALL_PROCEDURE);
 
+	bool isCacheable = (rootType != query::logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
+	                    rootType != query::logical::LogicalOpType::LOP_CREATE_INDEX &&
+	                    rootType != query::logical::LogicalOpType::LOP_DROP_INDEX &&
+	                    rootType != query::logical::LogicalOpType::LOP_SHOW_INDEXES &&
+	                    rootType != query::logical::LogicalOpType::LOP_CREATE_VECTOR_INDEX &&
+	                    rootType != query::logical::LogicalOpType::LOP_CREATE_CONSTRAINT &&
+	                    rootType != query::logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
+	                    rootType != query::logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
+	                    rootType != query::logical::LogicalOpType::LOP_EXPLAIN &&
+	                    rootType != query::logical::LogicalOpType::LOP_PROFILE);
+
 	if (isOptimizable) {
 		auto *opt = planner_->getOptimizer();
 		if (opt) {
@@ -66,12 +78,23 @@ std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogical
 		}
 	}
 
-	return std::move(rootOp_);
+	query::QueryPlan plan;
+	plan.root = std::move(rootOp_);
+	plan.mutatesData = builder_.mutatesData();
+	plan.mutatesSchema = builder_.mutatesSchema();
+	plan.cacheable = isCacheable;
+	plan.optimizable = isOptimizable;
+	return plan;
+}
+
+std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogicalPlan() {
+	auto plan = getQueryPlan();
+	return std::move(plan.root);
 }
 
 std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan() {
-	auto logicalPlan = getLogicalPlan();
-	if (!logicalPlan) {
+	auto plan = getQueryPlan();
+	if (!plan.root) {
 		return nullptr;
 	}
 
@@ -81,7 +104,7 @@ std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan
 	auto cm = planner_->getConstraintManager();
 
 	query::PhysicalPlanConverter converter(dm, im, cm);
-	return converter.convert(logicalPlan.get());
+	return converter.convert(plan.root.get());
 }
 
 // --- Entry Points ---
@@ -142,25 +165,25 @@ std::any CypherToPlanVisitor::visitSingleQuery(CypherParser::SingleQueryContext 
 // --- Reading Clauses ---
 std::any CypherToPlanVisitor::visitMatchStatement(CypherParser::MatchStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildMatchClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildMatch(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildMatch(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitStandaloneCallStatement(CypherParser::StandaloneCallStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildStandaloneCallClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCall(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildCall(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitInQueryCallStatement(CypherParser::InQueryCallStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildInQueryCallClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCall(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildCall(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildUnwindClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildUnwind(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildUnwind(clause, std::move(rootOp_));
 	return std::any();
 }
 
@@ -168,38 +191,38 @@ std::any CypherToPlanVisitor::visitUnwindStatement(CypherParser::UnwindStatement
 std::any CypherToPlanVisitor::visitWithClause(CypherParser::WithClauseContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildWithClause(ctx);
 	query::ir::SemanticAnalyzer::analyzeProjection(clause.body);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildWith(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildWith(clause, std::move(rootOp_));
 	return std::any();
 }
 
 // --- Writing Clauses ---
 std::any CypherToPlanVisitor::visitCreateStatement(CypherParser::CreateStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildCreateClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCreate(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildCreate(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitSetStatement(CypherParser::SetStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildSetClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildSet(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildSet(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDeleteStatement(CypherParser::DeleteStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildDeleteClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildDelete(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildDelete(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitRemoveStatement(CypherParser::RemoveStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildRemoveClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildRemove(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildRemove(clause, std::move(rootOp_));
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitMergeStatement(CypherParser::MergeStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildMergeClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildMerge(clause, std::move(rootOp_));
+	rootOp_ = builder_.buildMerge(clause, std::move(rootOp_));
 	return std::any();
 }
 
@@ -207,75 +230,75 @@ std::any CypherToPlanVisitor::visitMergeStatement(CypherParser::MergeStatementCo
 std::any CypherToPlanVisitor::visitReturnStatement(CypherParser::ReturnStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildReturnClause(ctx);
 	query::ir::SemanticAnalyzer::analyzeProjection(clause.body);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildReturn(clause.body, std::move(rootOp_));
+	rootOp_ = builder_.buildReturn(clause.body, std::move(rootOp_));
 	return std::any();
 }
 
 // --- Administrative Clauses ---
 std::any CypherToPlanVisitor::visitShowIndexesStatement(CypherParser::ShowIndexesStatementContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildShowIndexesClause();
-	rootOp_ = query::ir::LogicalPlanBuilder::buildShowIndexes(clause);
+	rootOp_ = builder_.buildShowIndexes(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateIndexByPattern(CypherParser::CreateIndexByPatternContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildCreateIndexByPatternClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateIndex(clause);
+	rootOp_ = builder_.buildCreateIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateIndexByLabel(CypherParser::CreateIndexByLabelContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildCreateIndexByLabelClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateIndex(clause);
+	rootOp_ = builder_.buildCreateIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateVectorIndex(CypherParser::CreateVectorIndexContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildCreateVectorIndexClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateVectorIndex(clause);
+	rootOp_ = builder_.buildCreateVectorIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropIndexByName(CypherParser::DropIndexByNameContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildDropIndexByNameClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildDropIndex(clause);
+	rootOp_ = builder_.buildDropIndex(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropIndexByLabel(CypherParser::DropIndexByLabelContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildDropIndexByLabelClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildDropIndex(clause);
+	rootOp_ = builder_.buildDropIndex(clause);
 	return std::any();
 }
 
 // --- Constraint DDL ---
 std::any CypherToPlanVisitor::visitCreateNodeConstraint(CypherParser::CreateNodeConstraintContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildCreateNodeConstraintClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateConstraint(clause);
+	rootOp_ = builder_.buildCreateConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitCreateEdgeConstraint(CypherParser::CreateEdgeConstraintContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildCreateEdgeConstraintClause(ctx);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildCreateConstraint(clause);
+	rootOp_ = builder_.buildCreateConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropConstraintByName(CypherParser::DropConstraintByNameContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildDropConstraintClause(ctx->symbolicName()->getText(), false);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildDropConstraint(clause);
+	rootOp_ = builder_.buildDropConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitDropConstraintIfExists(CypherParser::DropConstraintIfExistsContext *ctx) {
 	auto clause = query::ir::CypherASTBuilder::buildDropConstraintClause(ctx->symbolicName()->getText(), true);
-	rootOp_ = query::ir::LogicalPlanBuilder::buildDropConstraint(clause);
+	rootOp_ = builder_.buildDropConstraint(clause);
 	return std::any();
 }
 
 std::any CypherToPlanVisitor::visitShowConstraintsStatement(CypherParser::ShowConstraintsStatementContext *) {
 	auto clause = query::ir::CypherASTBuilder::buildShowConstraintsClause();
-	rootOp_ = query::ir::LogicalPlanBuilder::buildShowConstraints(clause);
+	rootOp_ = builder_.buildShowConstraints(clause);
 	return std::any();
 }
 
@@ -300,6 +323,7 @@ std::any CypherToPlanVisitor::visitTxnRollback(CypherParser::TxnRollbackContext 
 
 // --- FOREACH ---
 std::any CypherToPlanVisitor::visitForeachStatement(CypherParser::ForeachStatementContext *ctx) {
+	builder_.markDataMutation();
 	std::string iterVar = helpers::AstExtractor::extractVariable(ctx->variable());
 	auto listExpr = std::shared_ptr<query::expressions::Expression>(
 		helpers::ExpressionBuilder::buildExpression(ctx->expression()).release());
@@ -388,6 +412,7 @@ std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContex
 
 // --- LOAD CSV ---
 std::any CypherToPlanVisitor::visitLoadCsvStatement(CypherParser::LoadCsvStatementContext *ctx) {
+	builder_.markDataMutation();
 	std::string rowVar = helpers::AstExtractor::extractVariable(ctx->variable());
 	auto urlExpr = std::shared_ptr<query::expressions::Expression>(
 		helpers::ExpressionBuilder::buildExpression(ctx->expression()).release());

@@ -98,6 +98,7 @@ namespace zyx {
 		void commit();
 		void rollback();
 		[[nodiscard]] bool isActive() const;
+		[[nodiscard]] bool isReadOnly() const;
 
 	private:
 		std::unique_ptr<TransactionImpl> impl_;
@@ -131,6 +132,7 @@ namespace zyx {
 
 		// Transaction support
 		[[nodiscard]] Transaction beginTransaction();
+		[[nodiscard]] Transaction beginReadOnlyTransaction();
 		[[nodiscard]] bool hasActiveTransaction() const;
 
 		// Resize the thread pool at runtime (0=auto, 1=single-thread, >1=N threads)

@@ -32,6 +32,7 @@
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/api/QueryResult.hpp"
 #include "graph/query/QueryContext.hpp"
+#include "graph/query/QueryPlan.hpp"
 #include "zyx/zyx.hpp"
 
 namespace zyx {
@@ -71,31 +72,6 @@ namespace zyx {
 			return std::string(s.substr(start, i - start));
 		}
 
-		bool isTokenBoundary(const std::string_view s, size_t pos, size_t len) {
-			const bool leftBoundary =
-					pos == 0 ||
-					(!std::isalnum(static_cast<unsigned char>(s[pos - 1])) && s[pos - 1] != '_');
-			const size_t end = pos + len;
-			const bool rightBoundary =
-					end >= s.size() ||
-					(!std::isalnum(static_cast<unsigned char>(s[end])) && s[end] != '_');
-			return leftBoundary && rightBoundary;
-		}
-
-		bool containsToken(const std::string_view s, const std::string_view token) {
-			if (token.empty() || s.empty()) {
-				return false;
-			}
-			size_t pos = s.find(token);
-			while (pos != std::string_view::npos) {
-				if (isTokenBoundary(s, pos, token.size())) {
-					return true;
-				}
-				pos = s.find(token, pos + 1);
-			}
-			return false;
-		}
-
 		enum class CypherTxnKind { NONE, TXN_BEGIN, TXN_COMMIT, TXN_ROLLBACK };
 
 		CypherTxnKind detectCypherTxnStatement(const std::string_view query) {
@@ -112,63 +88,6 @@ namespace zyx {
 				return CypherTxnKind::TXN_ROLLBACK;
 			}
 			return CypherTxnKind::NONE;
-		}
-
-		bool isReadOnlyProcedure(const std::string_view procUpper) {
-			static constexpr std::array<std::string_view, 6> kReadOnlyProcedures = {
-					"DB.INDEX.VECTOR.QUERYNODES",
-					"DBMS.LISTCONFIG",
-					"DBMS.GETCONFIG",
-					"ALGO.SHORTESTPATH",
-					"DBMS.SHOWSTATS",
-					"DBMS.RESETSTATS",
-			};
-			return std::ranges::find(kReadOnlyProcedures, procUpper) != kReadOnlyProcedures.end();
-		}
-
-		bool isLikelyReadOnlyQuery(const std::string_view query) {
-			if (query.empty()) {
-				return false;
-			}
-
-			const std::string upper = toUpperCopy(query);
-			std::string_view view = upper;
-
-			// Skip EXPLAIN/PROFILE prefix if present.
-			size_t pos = 0;
-			std::string first = readToken(view, pos);
-			if (first == "EXPLAIN" || first == "PROFILE") {
-				first = readToken(view, pos);
-			}
-			if (first.empty()) {
-				return false;
-			}
-
-			static constexpr std::array<std::string_view, 8> kWriteTokens = {
-					"CREATE", "MERGE", "DELETE", "SET",
-					"REMOVE", "DROP", "INSERT", "TRAIN",
-			};
-			for (const auto token : kWriteTokens) {
-				if (containsToken(view, token)) {
-					return false;
-				}
-			}
-
-			// Conservative fallback: if CALL is present but not the leading clause,
-			// route through transactional path to avoid misclassifying mixed queries.
-			if (containsToken(view, "CALL") && first != "CALL") {
-				return false;
-			}
-
-			if (first == "CALL") {
-				std::string proc = readToken(view, pos);
-				return isReadOnlyProcedure(proc);
-			}
-
-			static constexpr std::array<std::string_view, 6> kReadLeadingTokens = {
-					"MATCH", "RETURN", "WITH", "UNWIND", "OPTIONAL", "SHOW",
-			};
-			return std::ranges::find(kReadLeadingTokens, first) != kReadLeadingTokens.end();
 		}
 	} // namespace
 
@@ -527,38 +446,7 @@ namespace zyx {
 	Transaction &Transaction::operator=(Transaction &&) noexcept = default;
 
 	Result Transaction::execute(const std::string &cypher) const {
-		if (!impl_ || !impl_->txn_.isActive()) {
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
-			res.impl_->error_msg = "Transaction is not active";
-			return res;
-		}
-
-		try {
-			auto start = std::chrono::high_resolution_clock::now();
-
-			auto internalRes = impl_->dbImpl_->db_.getQueryEngine()->execute(cypher);
-
-			auto end = std::chrono::high_resolution_clock::now();
-			std::chrono::duration<double, std::milli> elapsed = end - start;
-			internalRes.setDuration(elapsed.count());
-
-			auto dm = impl_->dbImpl_->db_.getStorage()->getDataManager();
-
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
-			return res;
-		} catch (const std::exception &e) {
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
-			res.impl_->error_msg = e.what();
-			return res;
-		} catch (...) {
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
-			res.impl_->error_msg = "Unknown error";
-			return res;
-		}
+		return execute(cypher, {});
 	}
 
 	Result Transaction::execute(const std::string &cypher,
@@ -574,6 +462,10 @@ namespace zyx {
 			auto start = std::chrono::high_resolution_clock::now();
 
 			auto ctx = toQueryContext(params);
+			// Propagate read-only mode from internal transaction
+			if (impl_->txn_.isReadOnly()) {
+				ctx.execMode = graph::query::ExecMode::EM_READ_ONLY;
+			}
 			auto internalRes = impl_->dbImpl_->db_.getQueryEngine()->execute(cypher, ctx);
 
 			auto end = std::chrono::high_resolution_clock::now();
@@ -612,6 +504,8 @@ namespace zyx {
 
 	bool Transaction::isActive() const { return impl_ && impl_->txn_.isActive(); }
 
+	bool Transaction::isReadOnly() const { return impl_ && impl_->txn_.isReadOnly(); }
+
 	// ========================================================================
 	// 5. Database API Methods
 	// ========================================================================
@@ -633,6 +527,18 @@ namespace zyx {
 		}
 
 		auto internalTxn = impl_->db_.beginTransaction();
+
+		Transaction txn;
+		txn.impl_ = std::make_unique<TransactionImpl>(std::move(internalTxn), impl_.get());
+		return txn;
+	}
+
+	Transaction Database::beginReadOnlyTransaction() {
+		if (!impl_->db_.isOpen()) {
+			impl_->db_.open();
+		}
+
+		auto internalTxn = impl_->db_.beginReadOnlyTransaction();
 
 		Transaction txn;
 		txn.impl_ = std::make_unique<TransactionImpl>(std::move(internalTxn), impl_.get());
@@ -693,21 +599,26 @@ namespace zyx {
 				return res;
 			}
 
+			// Build the plan first to determine if the query mutates data
+			auto queryEngine = impl_->db_.getQueryEngine();
+			auto plan = queryEngine->buildPlan(cypher);
+			bool isReadOnly = !plan.mutatesData && !plan.mutatesSchema;
+
 			// Auto-commit for writes:
 			// - If explicit/cypher transaction exists, execute within it.
 			// - If no explicit transaction and query is read-only, bypass implicit transaction.
 			// - Otherwise, wrap in an implicit transaction.
 			bool needsAutoCommit = !impl_->db_.hasActiveTransaction() && !impl_->cypherTxn_.has_value();
-			bool isReadOnlyFastPath = needsAutoCommit && isLikelyReadOnlyQuery(cypher);
 			std::optional<graph::Transaction> implicitTxn;
 
-			if (needsAutoCommit && !isReadOnlyFastPath) {
+			if (needsAutoCommit && !isReadOnly) {
 				implicitTxn.emplace(impl_->db_.beginTransaction());
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
 
-			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher);
+			graph::query::QueryContext ctx;
+			auto internalRes = queryEngine->executePlan(std::move(plan), ctx);
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double, std::milli> elapsed = end - start;
@@ -758,18 +669,22 @@ namespace zyx {
 				return execute(cypher); // delegate to non-parameterized version
 			}
 
+			// Build the plan first to determine if the query mutates data
+			auto queryEngine = impl_->db_.getQueryEngine();
+			auto plan = queryEngine->buildPlan(cypher);
+			bool isReadOnly = !plan.mutatesData && !plan.mutatesSchema;
+
 			bool needsAutoCommit = !impl_->db_.hasActiveTransaction() && !impl_->cypherTxn_.has_value();
-			bool isReadOnlyFastPath = needsAutoCommit && isLikelyReadOnlyQuery(cypher);
 			std::optional<graph::Transaction> implicitTxn;
 
-			if (needsAutoCommit && !isReadOnlyFastPath) {
+			if (needsAutoCommit && !isReadOnly) {
 				implicitTxn.emplace(impl_->db_.beginTransaction());
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
 
 			auto ctx = toQueryContext(params);
-			auto internalRes = impl_->db_.getQueryEngine()->execute(cypher, ctx);
+			auto internalRes = queryEngine->executePlan(std::move(plan), ctx);
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double, std::milli> elapsed = end - start;

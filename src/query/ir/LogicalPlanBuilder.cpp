@@ -38,6 +38,7 @@
 #include "graph/query/logical/operators/LogicalShowConstraints.hpp"
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
 #include "graph/query/planner/PipelineValidator.hpp"
+#include "graph/query/planner/ProcedureRegistry.hpp"
 #include <algorithm>
 
 namespace graph::query::ir {
@@ -183,6 +184,13 @@ std::unique_ptr<LogicalOperator> appendSortSkipLimit(
 }
 
 } // anonymous namespace
+
+// =============================================================================
+// Constructor
+// =============================================================================
+
+LogicalPlanBuilder::LogicalPlanBuilder(const planner::ProcedureRegistry *registry)
+	: procedureRegistry_(registry) {}
 
 // =============================================================================
 // buildReturn
@@ -436,6 +444,14 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCall(
 	const CallClause& clause,
 	std::unique_ptr<LogicalOperator> /*input*/)
 {
+	// Look up procedure mutation flags from registry
+	if (procedureRegistry_) {
+		if (auto *desc = procedureRegistry_->getDescriptor(clause.procedureName)) {
+			if (desc->mutatesData) mutatesData_ = true;
+			if (desc->mutatesSchema) mutatesSchema_ = true;
+		}
+	}
+
 	std::unique_ptr<LogicalOperator> result =
 		std::make_unique<LogicalCallProcedure>(clause.procedureName, clause.arguments);
 
@@ -488,40 +504,63 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 	const CreateClause& clause,
 	std::unique_ptr<LogicalOperator> input)
 {
+	mutatesData_ = true;
+	// Counter for generating unique anonymous variable names.
+	// Anonymous nodes (no user-specified variable) all get variable == "".
+	// Without unique names, chained CreateNodeOperators would collide:
+	// the outer operator finds the inner's node via record.getNode("")
+	// and skips creation. E.g. CREATE (:A), (:B) would only create 1 node.
+	int anonCounter = 0;
+
 	for (const auto& part : clause.patterns) {
 		const auto& elem = part.element;
 
-		// Head node
+		// Head node — assign unique anonymous variable if empty
+		std::string headVar = elem.headNode.variable;
+		if (headVar.empty()) {
+			headVar = "__anon_" + std::to_string(anonCounter++);
+		}
+
 		std::unordered_map<std::string, PropertyValue> headProps;
 		for (const auto& [k, v] : elem.headNode.properties) {
 			headProps[k] = v;
 		}
 		auto headOp = std::make_unique<LogicalCreateNode>(
-			elem.headNode.variable, elem.headNode.labels,
+			headVar, elem.headNode.labels,
 			headProps, elem.headNode.propertyExpressions);
 		input = chainWriteOp(std::move(input), std::move(headOp));
 
-		std::string prevVar = elem.headNode.variable;
+		std::string prevVar = headVar;
 
 		for (const auto& chain : elem.chain) {
-			// Target node
+			// Target node — assign unique anonymous variable if empty
+			std::string targetVar = chain.targetNode.variable;
+			if (targetVar.empty()) {
+				targetVar = "__anon_" + std::to_string(anonCounter++);
+			}
+
 			std::unordered_map<std::string, PropertyValue> targetProps;
 			for (const auto& [k, v] : chain.targetNode.properties) {
 				targetProps[k] = v;
 			}
 			std::unordered_map<std::string, std::shared_ptr<Expression>> emptyPropExprs;
 			auto targetOp = std::make_unique<LogicalCreateNode>(
-				chain.targetNode.variable, chain.targetNode.labels,
+				targetVar, chain.targetNode.labels,
 				targetProps, emptyPropExprs);
 			input = chainWriteOp(std::move(input), std::move(targetOp));
 
-			// Edge
+			// Edge — assign unique anonymous variable if empty
+			std::string edgeVar = chain.relationship.variable;
+			if (edgeVar.empty()) {
+				edgeVar = "__anon_" + std::to_string(anonCounter++);
+			}
+
 			auto edgeOp = std::make_unique<LogicalCreateEdge>(
-				chain.relationship.variable, chain.relationship.type,
-				chain.relationship.properties, prevVar, chain.targetNode.variable);
+				edgeVar, chain.relationship.type,
+				chain.relationship.properties, prevVar, targetVar);
 			input = chainWriteOp(std::move(input), std::move(edgeOp));
 
-			prevVar = chain.targetNode.variable;
+			prevVar = targetVar;
 		}
 	}
 
@@ -536,6 +575,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildSet(
 	const SetClause& clause,
 	std::unique_ptr<LogicalOperator> input)
 {
+	mutatesData_ = true;
 	if (!input) {
 		throw std::runtime_error("SET clause must follow a MATCH or CREATE clause.");
 	}
@@ -572,6 +612,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildDelete(
 	const DeleteClause& clause,
 	std::unique_ptr<LogicalOperator> input)
 {
+	mutatesData_ = true;
 	if (!input) {
 		throw std::runtime_error("DELETE clause must follow a MATCH or CREATE clause.");
 	}
@@ -587,6 +628,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildRemove(
 	const RemoveClause& clause,
 	std::unique_ptr<LogicalOperator> input)
 {
+	mutatesData_ = true;
 	if (!input) {
 		throw std::runtime_error("REMOVE clause must follow a MATCH or CREATE clause.");
 	}
@@ -610,6 +652,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 	const MergeClause& clause,
 	std::unique_ptr<LogicalOperator> /*input*/)
 {
+	mutatesData_ = true;
 	const auto& elem = clause.pattern.element;
 
 	// Convert SetItemAST → MergeSetAction
@@ -690,6 +733,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildShowIndexes(
 std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreateIndex(
 	const CreateIndexClause& clause)
 {
+	mutatesSchema_ = true;
 	if (clause.properties.size() == 1) {
 		return std::make_unique<LogicalCreateIndex>(clause.name, clause.label, clause.properties[0]);
 	}
@@ -699,12 +743,14 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreateIndex(
 std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildDropIndex(
 	const DropIndexClause& clause)
 {
+	mutatesSchema_ = true;
 	return std::make_unique<LogicalDropIndex>(clause.name, clause.label, clause.property);
 }
 
 std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreateVectorIndex(
 	const CreateVectorIndexClause& clause)
 {
+	mutatesSchema_ = true;
 	return std::make_unique<LogicalCreateVectorIndex>(
 		clause.name, clause.label, clause.property, clause.dimension, clause.metric);
 }
@@ -712,6 +758,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreateVectorIndex(
 std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreateConstraint(
 	const CreateConstraintClause& clause)
 {
+	mutatesSchema_ = true;
 	return std::make_unique<LogicalCreateConstraint>(
 		clause.name, clause.targetType, clause.constraintType,
 		clause.label, clause.properties, clause.typeName);
@@ -720,6 +767,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreateConstraint(
 std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildDropConstraint(
 	const DropConstraintClause& clause)
 {
+	mutatesSchema_ = true;
 	return std::make_unique<LogicalDropConstraint>(clause.name, clause.ifExists);
 }
 

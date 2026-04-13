@@ -26,6 +26,7 @@
 #include "QueryResult.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/QueryContext.hpp"
+#include "graph/query/QueryPlan.hpp"
 #include "graph/query/cache/PlanCache.hpp"
 #include "graph/query/execution/QueryExecutor.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -47,6 +48,19 @@ namespace graph::query {
 		// --- Main Execution ---
 		QueryResult execute(const std::string &query, Language lang = Language::Cypher);
 		QueryResult execute(const std::string &query, const QueryContext &ctx, Language lang = Language::Cypher);
+
+		/**
+		 * @brief Builds a QueryPlan from a query string (parse + optimize + cache).
+		 *        Does NOT execute. Use executePlan() to run the result.
+		 */
+		QueryPlan buildPlan(const std::string &query, Language lang = Language::Cypher);
+
+		/**
+		 * @brief Executes a pre-built QueryPlan with access control checks.
+		 *        Checks execMode against plan mutation flags.
+		 * @throws std::runtime_error if the plan violates the execution mode.
+		 */
+		QueryResult executePlan(QueryPlan plan, const QueryContext &ctx);
 
 		/**
 		 * @brief Executes a pre-built physical plan directly.

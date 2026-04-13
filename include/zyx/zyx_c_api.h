@@ -122,6 +122,18 @@ void zyx_result_close(const ZYXResult_T *res);
 ZYXTxn_T *zyx_begin_transaction(ZYXDB_T *db);
 
 /**
+ * @brief Begins a read-only transaction.
+ *        Write queries executed within this transaction will fail.
+ * @return Transaction handle, or NULL on failure. Must be freed with zyx_txn_close.
+ */
+ZYXTxn_T *zyx_begin_read_only_transaction(ZYXDB_T *db);
+
+/**
+ * @brief Returns true if the transaction is read-only.
+ */
+bool zyx_txn_is_read_only(const ZYXTxn_T *txn);
+
+/**
  * @brief Executes a Cypher query within a transaction.
  */
 ZYXResult_T *zyx_txn_execute(ZYXTxn_T *txn, const char *cypher);

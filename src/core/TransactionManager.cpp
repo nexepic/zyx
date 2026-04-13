@@ -55,6 +55,9 @@ namespace graph {
 		auto dm = storage_->getDataManager();
 		dm->setCurrentSnapshot(snapshot.get());
 
+		// Mark TransactionContext as read-only (storage-layer guard)
+		dm->getTransactionContext().setReadOnly(true);
+
 		Transaction txn(txnId, *this, storage_);
 		txn.readOnly_ = true;
 		txn.readLock_ = std::move(lock);
@@ -108,6 +111,7 @@ namespace graph {
 		if (txn.isReadOnly()) {
 			auto dm = storage_->getDataManager();
 			dm->clearCurrentSnapshot();
+			dm->getTransactionContext().setReadOnly(false);
 			txn.snapshot_.reset();
 			txn.state_ = Transaction::TxnState::TXN_COMMITTED;
 			// shared_lock released via RAII when txn.readLock_ is destroyed/moved
@@ -174,7 +178,10 @@ namespace graph {
 		// Read-only transactions: release snapshot and shared lock
 		if (txn.isReadOnly()) {
 			auto dm = storage_->getDataManager();
-			if (dm) dm->clearCurrentSnapshot();
+			if (dm) {
+				dm->clearCurrentSnapshot();
+				dm->getTransactionContext().setReadOnly(false);
+			}
 			txn.snapshot_.reset();
 			txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;
 			txn.readLock_ = {};

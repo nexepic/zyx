@@ -39,7 +39,7 @@ namespace graph::query::planner {
 				throw std::runtime_error("dbms.setConfig expects (key, value)");
 			return std::make_unique<execution::operators::SetConfigOperator>(ctx.dataManager, args[0].toString(),
 																			 args[1]);
-		});
+		}, /*mutatesData=*/true);
 
 		registerProcedure("dbms.listConfig", [](const ProcedureContext &ctx, const auto & /*args*/) {
 			return std::make_unique<execution::operators::ListConfigOperator>(ctx.dataManager);
@@ -73,14 +73,14 @@ namespace graph::query::planner {
 				   const std::vector<PropertyValue> & /*args*/) -> std::unique_ptr<execution::PhysicalOperator> {
 					return std::make_unique<execution::operators::CreateIndexOperator>(ctx.indexManager,
 																					   "node_label_idx", "", "");
-				});
+				}, /*mutatesData=*/false, /*mutatesSchema=*/true);
 
 		registerProcedure("dbms.dropLabelIndex",
 						  [](const ProcedureContext &ctx, const std::vector<PropertyValue> & /*args*/)
 								  -> std::unique_ptr<execution::PhysicalOperator> {
 							  return std::make_unique<execution::operators::DropIndexOperator>(ctx.indexManager,
 																							   "node_label_idx");
-						  });
+						  }, /*mutatesData=*/false, /*mutatesSchema=*/true);
 
 		registerProcedure("db.index.vector.queryNodes", [](const ProcedureContext &ctx, const auto &args) {
 			if (args.size() != 3) {
@@ -122,7 +122,7 @@ namespace graph::query::planner {
 			std::string indexName = args[0].toString();
 
 			return std::make_unique<execution::operators::TrainVectorIndexOperator>(ctx.indexManager, indexName);
-		});
+		}, /*mutatesData=*/true);
 
 		// --- Statistics ---
 		registerProcedure("dbms.showStats", [](const ProcedureContext &ctx, const auto & /*args*/) {
@@ -132,7 +132,7 @@ namespace graph::query::planner {
 
 		registerProcedure("dbms.resetStats", [](const ProcedureContext &ctx, const auto & /*args*/) {
 			return std::make_unique<execution::operators::ResetStatsOperator>(ctx.dataManager, ctx.indexManager);
-		});
+		}, /*mutatesData=*/true);
 
 		// --- GDS Graph Projection ---
 		registerProcedure("gds.graph.project", [](const ProcedureContext &ctx, const auto &args) {
@@ -144,14 +144,14 @@ namespace graph::query::planner {
 			std::string weightProp = args.size() > 3 ? args[3].toString() : "";
 			return std::make_unique<execution::operators::GdsGraphProjectOperator>(
 				ctx.dataManager, ctx.projectionManager, name, nodeLabel, edgeType, weightProp);
-		});
+		}, /*mutatesData=*/true);
 
 		registerProcedure("gds.graph.drop", [](const ProcedureContext &ctx, const auto &args) {
 			if (args.size() < 1)
 				throw std::runtime_error("gds.graph.drop expects (name)");
 			return std::make_unique<execution::operators::GdsGraphDropOperator>(
 				ctx.projectionManager, args[0].toString());
-		});
+		}, /*mutatesData=*/true);
 
 		// --- GDS Algorithms ---
 		registerProcedure("gds.shortestPath.dijkstra.stream", [](const ProcedureContext &ctx, const auto &args) {

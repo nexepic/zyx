@@ -355,6 +355,12 @@ namespace graph::storage {
 		void rollbackActiveTransaction();
 
 	private:
+		void guardReadOnly() const {
+			if (txnContext_.isReadOnly()) {
+				throw std::runtime_error("Cannot perform write operation in read-only transaction");
+			}
+		}
+
 		// Core file and state
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		FileHeader &fileHeader_; // Cached file header

@@ -24,6 +24,7 @@
 #include "CypherParser.h"
 #include "CypherToPlanVisitor.hpp"
 #include "antlr4-runtime.h"
+#include "graph/query/planner/PhysicalPlanConverter.hpp"
 
 class ThrowingErrorListener final : public antlr4::BaseErrorListener {
 public:
@@ -74,37 +75,21 @@ namespace graph::parser::cypher {
 	CypherParserImpl::CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner) : planner_(std::move(planner)) {}
 
 	std::unique_ptr<query::execution::PhysicalOperator> CypherParserImpl::parse(const std::string &query) const {
-		antlr4::ANTLRInputStream input(query);
-		CypherLexer lexer(&input);
-		antlr4::CommonTokenStream tokens(&lexer);
-		CypherParser parser(&tokens);
-
-		// Remove default listeners to silence stderr output
-		parser.removeErrorListeners();
-		lexer.removeErrorListeners();
-
-		// Register our custom listener
-		ThrowingErrorListener errorListener;
-		parser.addErrorListener(&errorListener);
-		lexer.addErrorListener(&errorListener);
-
-		// 1. Parse
-		CypherParser::CypherContext *tree = parser.cypher();
-
-		// 2. Visit
-		CypherToPlanVisitor visitor(planner_);
-
-		try {
-			visitor.visit(tree);
-		} catch (const std::exception &e) {
-			throw std::runtime_error(std::string("Plan generation failed: ") + e.what());
+		auto plan = parseToLogical(query);
+		if (!plan.root) {
+			return nullptr;
 		}
 
-		// 3. Extract result
-		return visitor.getPlan();
+		// Convert logical plan to physical plan using managers from the planner
+		auto dm = planner_->getDataManager();
+		auto im = planner_->getIndexManager();
+		auto cm = planner_->getConstraintManager();
+
+		query::PhysicalPlanConverter converter(dm, im, cm);
+		return converter.convert(plan.root.get());
 	}
 
-	std::unique_ptr<query::logical::LogicalOperator> CypherParserImpl::parseToLogical(const std::string &query) const {
+	query::QueryPlan CypherParserImpl::parseToLogical(const std::string &query) const {
 		antlr4::ANTLRInputStream input(query);
 		CypherLexer lexer(&input);
 		antlr4::CommonTokenStream tokens(&lexer);
@@ -127,6 +112,6 @@ namespace graph::parser::cypher {
 			throw std::runtime_error(std::string("Plan generation failed: ") + e.what());
 		}
 
-		return visitor.getLogicalPlan();
+		return visitor.getQueryPlan();
 	}
 } // namespace graph::parser::cypher

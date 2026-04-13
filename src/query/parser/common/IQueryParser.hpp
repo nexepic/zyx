@@ -1,21 +1,8 @@
 /**
  * @file IQueryParser.hpp
- * @author Nexepic
- * @date 2025/12/9
+ * @brief Interface that all DSL parsers (Cypher, etc.) must implement.
  *
- * @copyright Copyright (c) 2025 Nexepic
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0
  **/
 
 #pragma once
@@ -23,7 +10,7 @@
 #include <memory>
 #include <string>
 #include "graph/query/execution/PhysicalOperator.hpp"
-#include "graph/query/logical/LogicalOperator.hpp"
+#include "graph/query/QueryPlan.hpp"
 
 namespace graph::parser {
 
@@ -42,9 +29,9 @@ namespace graph::parser {
 		parse(const std::string &query) const = 0;
 
 		/**
-		 * @brief Parses and optimizes a query, returning the logical plan (cacheable).
+		 * @brief Parses and optimizes a query, returning a QueryPlan (cacheable).
 		 */
-		[[nodiscard]] virtual std::unique_ptr<query::logical::LogicalOperator>
+		[[nodiscard]] virtual query::QueryPlan
 		parseToLogical(const std::string &query) const = 0;
 	};
 

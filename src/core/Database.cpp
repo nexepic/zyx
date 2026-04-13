@@ -100,6 +100,18 @@ namespace graph {
 		return transactionManager_->begin();
 	}
 
+	Transaction Database::beginReadOnlyTransaction() {
+		if (!isOpen()) {
+			open();
+		}
+
+		// Ensure WAL and transaction manager are ready
+		const_cast<Database *>(this)->ensureWALAndTransactionManager();
+
+		// Create read-only transaction via TransactionManager
+		return transactionManager_->beginReadOnly();
+	}
+
 	bool Database::hasActiveTransaction() const {
 		return transactionManager_ && transactionManager_->hasActiveTransaction();
 	}

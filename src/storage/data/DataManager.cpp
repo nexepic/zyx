@@ -219,6 +219,7 @@ namespace graph::storage {
 	// --- Node Operations (delegate to NodeManager) ---
 
 	void DataManager::addNode(Node &node) const {
+		guardReadOnly();
 		// Phase 1: Validate
 		for (const auto &v : observerManager_.getValidators()) {
 			v->validateNodeInsert(node, node.getProperties());
@@ -240,6 +241,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::addNodes(std::vector<Node> &nodes) const {
+		guardReadOnly();
 		if (nodes.empty())
 			return;
 
@@ -274,6 +276,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::updateNode(const Node &node) {
+		guardReadOnly();
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
@@ -286,6 +289,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::deleteNode(Node &node) const {
+		guardReadOnly();
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
@@ -307,6 +311,7 @@ namespace graph::storage {
 
 	void DataManager::addNodeProperties(int64_t nodeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
+		guardReadOnly();
 		// 1. Snapshot OLD state
 		Node oldNode = nodeManager_->get(nodeId);
 		// Manually fetch and bake the existing properties into the oldNode object.
@@ -339,6 +344,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) const {
+		guardReadOnly();
 		// 1. Snapshot OLD state
 		Node oldNode = nodeManager_->get(nodeId);
 		// Freeze old properties
@@ -552,6 +558,7 @@ namespace graph::storage {
 	// --- Edge Operations (delegate to EdgeManager) ---
 
 	void DataManager::addEdge(Edge &edge) const {
+		guardReadOnly();
 		// Phase 1: Validate
 		for (const auto &v : observerManager_.getValidators()) {
 			v->validateEdgeInsert(edge, edge.getProperties());
@@ -573,6 +580,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::addEdges(std::vector<Edge> &edges) const {
+		guardReadOnly();
 		if (edges.empty())
 			return;
 
@@ -612,6 +620,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::updateEdge(const Edge &edge) {
+		guardReadOnly();
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
@@ -624,6 +633,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::deleteEdge(Edge &edge) const {
+		guardReadOnly();
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
@@ -645,6 +655,7 @@ namespace graph::storage {
 
 	void DataManager::addEdgeProperties(int64_t edgeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
+		guardReadOnly();
 		// 1. Snapshot OLD state
 		Edge oldEdge = edgeManager_->get(edgeId);
 		// Freeze old properties
@@ -674,6 +685,7 @@ namespace graph::storage {
 	}
 
 	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) const {
+		guardReadOnly();
 		// 1. Snapshot OLD state
 		Edge oldEdge = edgeManager_->get(edgeId);
 		// Freeze old properties
