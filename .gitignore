@@ -33,6 +33,7 @@ out/
 # Documentation build cache
 docs/apps/docs/.next/
 docs/apps/docs/.content-collections/
+docs/apps/docs/next-env.d.ts
 docs/node_modules/
 docs/.turbo/
 

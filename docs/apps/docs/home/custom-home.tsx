@@ -1096,30 +1096,30 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
             <div className="w-[1px] h-6 bg-gradient-to-b from-[#6b829c] to-transparent animate-pulse" />
           </div>
 
-          {/* Playground page (third page) */}
-          <div
-            className={`pointer-events-none absolute inset-0 z-[5] flex flex-col bg-[rgba(11,15,20,0.92)] backdrop-blur-md transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              showPlayground
-                ? "opacity-100 translate-y-0 pointer-events-auto"
-                : "opacity-0 translate-y-[60px]"
-            }`}
-          >
-            {/* Back scroll hint */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-[#566b82] opacity-60 hover:opacity-100 transition-opacity z-10">
-              <div className="w-[1px] h-4 bg-gradient-to-t from-[#6b829c] to-transparent animate-pulse" />
-              <div className="text-[0.6rem] tracking-[0.25em] uppercase font-medium">
-                {isEn ? "Back" : "返回"}
-              </div>
-            </div>
-            <div className="flex-1 pt-10 overflow-hidden">
-              <CypherPlayground isEn={isEn} />
-            </div>
-          </div>
-
           {/* Footer - Strictly untouched */}
           <footer className={`absolute bottom-[0.8rem] left-1/2 -translate-x-1/2 text-[0.7rem] text-[#566b82] transition-opacity duration-500 ${showPlayground ? "opacity-0" : ""}`}>
             MIT License &copy; 2025 ZYX Contributors
           </footer>
+        </div>
+
+        {/* Playground page (third page) — independent top-level overlay */}
+        <div
+          className={`absolute inset-0 z-[10] flex flex-col bg-[rgba(11,15,20,0.92)] backdrop-blur-md transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            showPlayground
+              ? "opacity-100 translate-y-0 pointer-events-auto"
+              : "opacity-0 translate-y-[60px] pointer-events-none"
+          }`}
+        >
+          {/* Back scroll hint */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-[#566b82] opacity-60 hover:opacity-100 transition-opacity z-10">
+            <div className="w-[1px] h-4 bg-gradient-to-t from-[#6b829c] to-transparent animate-pulse" />
+            <div className="text-[0.6rem] tracking-[0.25em] uppercase font-medium">
+              {isEn ? "Back" : "返回"}
+            </div>
+          </div>
+          <div className="flex-1 pt-10 overflow-hidden">
+            <CypherPlayground isEn={isEn} />
+          </div>
         </div>
 
         <script
