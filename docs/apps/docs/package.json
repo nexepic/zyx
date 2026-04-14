@@ -38,7 +38,8 @@
     "unist-util-visit": "^5.1.0",
     "zod": "^4.3.6",
     "@nexdoc/core": "workspace:*",
-    "dompurify": "^3.3.3"
+    "dompurify": "^3.3.3",
+    "d3-force": "^3.0.0"
   },
   "devDependencies": {
     "@nexdoc/config": "workspace:*",
@@ -54,6 +55,7 @@
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "postcss": "^8.4.35",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.2",
+    "@types/d3-force": "^3.0.0"
   }
 }

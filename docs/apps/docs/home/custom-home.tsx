@@ -7,7 +7,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectGroup } from "@/lib/docs";
-import { CypherPlayground } from "./playground";
 
 type AxisDirection = "x+" | "x-" | "y+" | "y-" | "z+" | "z-";
 
@@ -300,9 +299,10 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
   const expandedRef = useRef(false);
   const lastToggleTimeRef = useRef(0);
 
-  // Playground (third page)
-  const [showPlayground, setShowPlayground] = useState(false);
-  const showPlaygroundRef = useRef(false);
+  const playgroundLink = useMemo(
+    () => (isEn ? "/en/playground" : "/zh/playground"),
+    [isEn],
+  );
 
   const updateMobileFlag = useCallback(() => {
     const nextIsMobile = window.innerWidth <= 768;
@@ -540,57 +540,70 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
     animationIdRef.current = window.requestAnimationFrame(tick);
   }, []);
 
-  // Helper to toggle playground with debounce
-  const togglePlayground = useCallback((show: boolean) => {
-    const now = Date.now();
-    if (now - lastToggleTimeRef.current < 800) return;
-    if (show !== showPlaygroundRef.current) {
-      setShowPlayground(show);
-      showPlaygroundRef.current = show;
-      lastToggleTimeRef.current = now;
+  // Check if a scroll event originates inside a container that can still scroll
+  // in the given direction. If so, the page-transition should NOT fire.
+  const isScrollConsumed = useCallback((target: EventTarget | null, scrollingDown: boolean): boolean => {
+    let el = target as HTMLElement | null;
+    while (el && el !== document.documentElement) {
+      // Skip non-scrollable elements
+      const { overflowY, overflowX } = getComputedStyle(el);
+      const isScrollableY = overflowY === "auto" || overflowY === "scroll";
+      const isScrollableX = overflowX === "auto" || overflowX === "scroll";
+
+      if (isScrollableY) {
+        const atTop = el.scrollTop <= 0;
+        const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+        // If scrolling down and not at bottom, the container consumes it
+        if (scrollingDown && !atBottom) return true;
+        // If scrolling up and not at top, the container consumes it
+        if (!scrollingDown && !atTop) return true;
+      }
+
+      // Also check horizontal scroll containers (e.g. mobile carousel, tables)
+      // to avoid accidental page transitions during horizontal scroll gestures
+      if (isScrollableX && el.scrollWidth > el.clientWidth + 1) {
+        return true;
+      }
+
+      // Interactive canvas elements (e.g. graph-view zoom) consume wheel,
+      // but the background particle canvas should not block page scrolling
+      if (el.tagName === "CANVAS" && el !== canvasRef.current) return true;
+      // Textareas consume scroll
+      if (el.tagName === "TEXTAREA") return true;
+
+      el = el.parentElement;
     }
+    return false;
   }, []);
 
   // Listeners for virtual scrolling trigger
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
+      if (isScrollConsumed(e.target, e.deltaY > 0)) return;
+
       if (e.deltaY > 40) {
-        if (showPlaygroundRef.current) return; // already on page 3
-        if (expandedRef.current) {
-          togglePlayground(true);   // page 2 → page 3
-        } else {
-          toggleExpandState(true);  // page 1 → page 2
-        }
+        toggleExpandState(true);  // page 1 → page 2
       } else if (e.deltaY < -40) {
-        if (showPlaygroundRef.current) {
-          togglePlayground(false);  // page 3 → page 2
-        } else {
-          toggleExpandState(false); // page 2 → page 1
-        }
+        toggleExpandState(false); // page 2 → page 1
       }
     };
 
     let touchStartY = 0;
+    let touchTarget: EventTarget | null = null;
     const handleTouchStart = (e: TouchEvent) => {
       touchStartY = e.touches[0].clientY;
+      touchTarget = e.target;
     };
     const handleTouchEnd = (e: TouchEvent) => {
       const endY = e.changedTouches[0].clientY;
       const deltaY = touchStartY - endY;
 
+      if (isScrollConsumed(touchTarget, deltaY > 0)) return;
+
       if (deltaY > 50) {
-        if (showPlaygroundRef.current) return;
-        if (expandedRef.current) {
-          togglePlayground(true);
-        } else {
-          toggleExpandState(true);
-        }
+        toggleExpandState(true);
       } else if (deltaY < -50) {
-        if (showPlaygroundRef.current) {
-          togglePlayground(false);
-        } else {
-          toggleExpandState(false);
-        }
+        toggleExpandState(false);
       }
     };
 
@@ -603,7 +616,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [toggleExpandState, togglePlayground]);
+  }, [toggleExpandState, isScrollConsumed]);
 
   useEffect(() => {
     if (isMobile) {
@@ -877,7 +890,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       `}</style>
 
       <div className="relative h-screen w-screen overflow-hidden bg-[#0b0f14] font-['Avenir_Next','Segoe_UI',system-ui,sans-serif] text-[#e7edf5] supports-[height:100dvh]:h-dvh">
-        <canvas ref={canvasRef} className={`absolute inset-0 z-0 ${showPlayground ? "pointer-events-none" : "pointer-events-auto"}`} />
+        <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-auto" />
 
         <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_50%,rgba(11,15,20,0.6)_0%,transparent_60%)]" />
 
@@ -887,9 +900,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
               - Expanded state: top-[12%] md:top-[16%] translate-y-0 (translate-y-0 is required to remove the initial -50% Y shift so it doesn't fly off screen)
           */}
           <main
-            className={`absolute left-1/2 flex w-[calc(100vw-2.4rem)] -translate-x-1/2 flex-col items-center text-center transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] md:w-[min(860px,92vw)] ${
-              showPlayground ? "pointer-events-none" : "pointer-events-auto"
-            } ${
+            className={`absolute left-1/2 flex w-[calc(100vw-2.4rem)] -translate-x-1/2 flex-col items-center text-center transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] md:w-[min(860px,92vw)] pointer-events-auto ${
               isExpanded
                 ? "top-[12%] md:top-[16%] translate-y-0 scale-[0.96] md:scale-100"
                 : "top-[40%] md:top-[52%] -translate-y-1/2 scale-100"
@@ -1011,11 +1022,9 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
 
           {/* New High-End Expanded Grid Layout - Strictly matched to your provided layout logic */}
           <div
-            className={`pointer-events-none absolute left-1/2 w-[calc(100vw-2.4rem)] max-w-[1100px] -translate-x-1/2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-6 transition-all duration-[800ms] cubic-bezier(0.16,1,0.3,1) max-h-[70vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
-              isExpanded && !showPlayground
+            className={`pointer-events-none absolute left-1/2 w-[calc(100vw-2.4rem)] max-w-[1100px] -translate-x-1/2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-5 transition-all duration-[800ms] cubic-bezier(0.16,1,0.3,1) max-h-[55vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
+              isExpanded
                 ? "top-[36%] md:top-[45%] opacity-100 scale-100 pointer-events-auto"
-                : isExpanded && showPlayground
-                ? "top-[36%] md:top-[45%] opacity-0 scale-95"
                 : "top-[55%] md:top-[60%] opacity-0 scale-95"
             }`}
           >
@@ -1023,7 +1032,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
               <div
                 key={`grid-${feature.titleEn}`}
                 style={{ transitionDelay: isExpanded ? `${i * 60}ms` : '0ms' }}
-                className={`group relative flex flex-col p-6 md:p-8 rounded-[12px] bg-gradient-to-br from-[rgba(26,35,46,0.65)] to-[rgba(13,18,24,0.85)] border border-[rgba(122,144,170,0.15)] backdrop-blur-xl transition-all duration-[500ms] ease-out hover:-translate-y-[4px] hover:border-[rgba(148,168,190,0.4)] hover:bg-[rgba(32,43,58,0.7)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden ${
+                className={`group relative flex flex-col p-4 md:p-5 rounded-[10px] bg-gradient-to-br from-[rgba(26,35,46,0.65)] to-[rgba(13,18,24,0.85)] border border-[rgba(122,144,170,0.15)] backdrop-blur-xl transition-all duration-[500ms] ease-out hover:-translate-y-[4px] hover:border-[rgba(148,168,190,0.4)] hover:bg-[rgba(32,43,58,0.7)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden ${
                   isExpanded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
                 }`}
               >
@@ -1031,17 +1040,17 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
                 <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[rgba(148,168,190,0.5)] to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 
                 {/* Left side minimal accent bar */}
-                <div className="absolute left-0 top-8 bottom-8 w-[2px] bg-gradient-to-b from-transparent via-[rgba(107,130,156,0.2)] to-transparent group-hover:via-[#94a8be] transition-colors duration-300" />
+                <div className="absolute left-0 top-6 bottom-6 w-[2px] bg-gradient-to-b from-transparent via-[rgba(107,130,156,0.2)] to-transparent group-hover:via-[#94a8be] transition-colors duration-300" />
 
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-[8px] bg-[rgba(122,144,170,0.1)] border border-[rgba(122,144,170,0.15)] font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.7rem] font-bold tracking-widest text-[#94a8be] group-hover:bg-[rgba(148,168,190,0.15)] group-hover:text-[#e7edf5] transition-all duration-300">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-[7px] bg-[rgba(122,144,170,0.1)] border border-[rgba(122,144,170,0.15)] font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.65rem] font-bold tracking-widest text-[#94a8be] group-hover:bg-[rgba(148,168,190,0.15)] group-hover:text-[#e7edf5] transition-all duration-300">
                     {feature.icon}
                   </div>
-                  <h3 className="m-0 text-[1.05rem] font-semibold tracking-[0.02em] text-[#e7edf5] group-hover:text-white transition-colors duration-300">
+                  <h3 className="m-0 text-[0.95rem] font-semibold tracking-[0.02em] text-[#e7edf5] group-hover:text-white transition-colors duration-300">
                     {isEn ? feature.titleEn : feature.titleZh}
                   </h3>
                 </div>
-                <p className="m-0 text-[0.88rem] leading-[1.65] text-[#8a9bb0] group-hover:text-[#aec0d2] transition-colors duration-300">
+                <p className="m-0 text-[0.82rem] leading-[1.6] text-[#8a9bb0] group-hover:text-[#aec0d2] transition-colors duration-300">
                   {isEn ? feature.descEn : feature.descZh}
                 </p>
               </div>
@@ -1075,7 +1084,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
           {/* Subtle scroll hint UI to guide users */}
           <div
             className={`absolute bottom-[2.5rem] md:bottom-[2rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#566b82] transition-all duration-[600ms] ${
-              isExpanded || showPlayground ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-60 hover:opacity-100"
+              isExpanded ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-60 hover:opacity-100"
             }`}
           >
             <div className="text-[0.6rem] tracking-[0.25em] uppercase text-center font-medium">
@@ -1084,42 +1093,25 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
             <div className="w-[1px] h-6 bg-gradient-to-b from-[#6b829c] to-transparent animate-pulse" />
           </div>
 
-          {/* Scroll hint when in expanded mode — down for playground, up for collapse */}
+          {/* Playground entry link when in expanded mode */}
           <div
-            className={`absolute bottom-[1rem] md:bottom-[2rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#566b82] transition-all duration-[600ms] ${
-              isExpanded && !showPlayground ? "opacity-60 hover:opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+            className={`absolute bottom-[4rem] md:bottom-[4rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-[#566b82] transition-all duration-[600ms] ${
+              isExpanded ? "opacity-60 hover:opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
             }`}
           >
-            <div className="text-[0.6rem] tracking-[0.25em] uppercase text-center font-medium">
-              {isEn ? "Playground ↓" : "试验场 ↓"}
-            </div>
-            <div className="w-[1px] h-6 bg-gradient-to-b from-[#6b829c] to-transparent animate-pulse" />
+            <Link
+              href={playgroundLink}
+              className="flex items-center gap-2 rounded-[8px] border border-[rgba(122,144,170,0.3)] bg-[rgba(22,30,39,0.5)] px-4 py-2 text-[0.75rem] font-medium tracking-[0.1em] text-[#aec0d2] no-underline backdrop-blur-[4px] transition-all duration-[250ms] ease-in-out hover:bg-[rgba(118,142,167,0.2)] hover:text-white hover:border-[rgba(148,168,190,0.5)]"
+            >
+              {isEn ? "Try Playground" : "试验场"}
+              <span aria-hidden="true">&rarr;</span>
+            </Link>
           </div>
 
-          {/* Footer - Strictly untouched */}
-          <footer className={`absolute bottom-[0.8rem] left-1/2 -translate-x-1/2 text-[0.7rem] text-[#566b82] transition-opacity duration-500 ${showPlayground ? "opacity-0" : ""}`}>
+          {/* Footer */}
+          <footer className="absolute bottom-[0.8rem] left-1/2 -translate-x-1/2 text-[0.7rem] text-[#566b82]">
             MIT License &copy; 2025 ZYX Contributors
           </footer>
-        </div>
-
-        {/* Playground page (third page) — independent top-level overlay */}
-        <div
-          className={`absolute inset-0 z-[10] flex flex-col bg-[rgba(11,15,20,0.92)] backdrop-blur-md transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            showPlayground
-              ? "opacity-100 translate-y-0 pointer-events-auto"
-              : "opacity-0 translate-y-[60px] pointer-events-none"
-          }`}
-        >
-          {/* Back scroll hint */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-[#566b82] opacity-60 hover:opacity-100 transition-opacity z-10">
-            <div className="w-[1px] h-4 bg-gradient-to-t from-[#6b829c] to-transparent animate-pulse" />
-            <div className="text-[0.6rem] tracking-[0.25em] uppercase font-medium">
-              {isEn ? "Back" : "返回"}
-            </div>
-          </div>
-          <div className="flex-1 pt-10 overflow-hidden">
-            <CypherPlayground isEn={isEn} />
-          </div>
         </div>
 
         <script
