@@ -38,11 +38,13 @@ namespace graph::query::algorithm {
 		// Resolve label IDs once
 		int64_t nodeLabelId = 0;
 		if (!nodeLabel.empty()) {
-			nodeLabelId = dm->getOrCreateTokenId(nodeLabel);
+			nodeLabelId = dm->resolveTokenId(nodeLabel);
+			if (nodeLabelId == 0) nodeLabelId = -1; // non-existent label — match nothing
 		}
 		int64_t edgeTypeId = 0;
 		if (!edgeType.empty()) {
-			edgeTypeId = dm->getOrCreateTokenId(edgeType);
+			edgeTypeId = dm->resolveTokenId(edgeType);
+			if (edgeTypeId == 0) edgeTypeId = -1; // non-existent type — match nothing
 		}
 
 		// Phase 1: Collect active nodes matching label filter

@@ -144,6 +144,7 @@ namespace graph::storage {
 		void initializeTokenRegistry(std::shared_ptr<state::SystemStateManager> sm);
 
 		[[nodiscard]] int64_t getOrCreateTokenId(const std::string &name) const;
+		[[nodiscard]] int64_t resolveTokenId(const std::string &name) const;
 		[[nodiscard]] std::string resolveTokenName(int64_t tokenId) const;
 
 		// Node-specific operations

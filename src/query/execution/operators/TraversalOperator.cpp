@@ -28,9 +28,9 @@ void TraversalOperator::open() {
 	// Resolve Edge Type ID (Optimization)
 	edgeTypeId_ = 0;
 	if (!edgeType_.empty()) {
-		// Use getOrCreate or resolve. Since we are filtering, getOrCreate is fine.
-		// If it creates a new ID, it won't match existing edges anyway.
-		edgeTypeId_ = dm_->getOrCreateTokenId(edgeType_);
+		// Use resolveTokenId (read-only, returns 0 if not found — won't match any edges)
+		edgeTypeId_ = dm_->resolveTokenId(edgeType_);
+		if (edgeTypeId_ == 0) edgeTypeId_ = -1; // non-existent type — match nothing
 	}
 }
 

@@ -635,3 +635,109 @@ TEST_F(TokenRegistryTest, MixedEmptyAndNonEmptyLabels) {
 	EXPECT_EQ(registry.resolveTokenName(id1), "Label1");
 	EXPECT_EQ(registry.resolveTokenName(id2), "Label2");
 }
+
+// ==========================================
+// resolveTokenId Tests
+// ==========================================
+
+TEST_F(TokenRegistryTest, ResolveTokenId_EmptyString) {
+	graph::storage::TokenRegistry registry(dataManager, systemStateManager);
+
+	int64_t id = registry.resolveTokenId("");
+	EXPECT_EQ(id, graph::storage::TokenRegistry::NULL_TOKEN_ID);
+}
+
+TEST_F(TokenRegistryTest, ResolveTokenId_NotFound) {
+	graph::storage::TokenRegistry registry(dataManager, systemStateManager);
+
+	// Fresh registry — no tokens created yet
+	int64_t id = registry.resolveTokenId("NonExistent");
+	EXPECT_EQ(id, graph::storage::TokenRegistry::NULL_TOKEN_ID);
+}
+
+TEST_F(TokenRegistryTest, ResolveTokenId_FoundAfterCreate) {
+	graph::storage::TokenRegistry registry(dataManager, systemStateManager);
+
+	// Create with getOrCreateTokenId
+	int64_t createdId = registry.getOrCreateTokenId("Person");
+	EXPECT_GT(createdId, 0);
+
+	// Resolve with resolveTokenId — should find it
+	int64_t resolvedId = registry.resolveTokenId("Person");
+	EXPECT_EQ(resolvedId, createdId);
+}
+
+TEST_F(TokenRegistryTest, ResolveTokenId_CacheHit) {
+	graph::storage::TokenRegistry registry(dataManager, systemStateManager);
+
+	int64_t createdId = registry.getOrCreateTokenId("CachedToken");
+	EXPECT_GT(createdId, 0);
+
+	// First resolveTokenId populates/hits cache
+	int64_t id1 = registry.resolveTokenId("CachedToken");
+	EXPECT_EQ(id1, createdId);
+
+	// Second call should hit cache path
+	int64_t id2 = registry.resolveTokenId("CachedToken");
+	EXPECT_EQ(id2, createdId);
+}
+
+TEST_F(TokenRegistryTest, ResolveTokenId_DiskLookup) {
+	// Use small cache to force eviction, then verify disk lookup
+	constexpr size_t TEST_CACHE_SIZE = 5;
+	graph::storage::TokenRegistry registry(dataManager, systemStateManager, TEST_CACHE_SIZE);
+
+	// Create more tokens than cache size to force evictions
+	std::vector<std::pair<std::string, int64_t>> tokens;
+	for (int i = 0; i < 20; ++i) {
+		std::string name = "DiskToken_" + std::to_string(i);
+		int64_t id = registry.getOrCreateTokenId(name);
+		tokens.emplace_back(name, id);
+	}
+
+	// Early tokens should have been evicted from cache — resolveTokenId must find via disk
+	for (const auto &[name, expectedId] : tokens) {
+		int64_t resolvedId = registry.resolveTokenId(name);
+		EXPECT_EQ(resolvedId, expectedId) << "Failed for token: " << name;
+	}
+}
+
+TEST_F(TokenRegistryTest, ResolveTokenId_Persistence) {
+	int64_t personId = 0;
+
+	// Create and flush
+	{
+		graph::storage::TokenRegistry registry(dataManager, systemStateManager);
+		personId = registry.getOrCreateTokenId("PersistentToken");
+		EXPECT_GT(personId, 0);
+		storage->flush();
+	}
+
+	// Reopen database
+	reopenStorage();
+
+	// resolveTokenId should find persisted token
+	{
+		graph::storage::TokenRegistry registry(dataManager, systemStateManager);
+		int64_t resolvedId = registry.resolveTokenId("PersistentToken");
+		EXPECT_EQ(resolvedId, personId);
+
+		// Non-existent token should still return NULL_TOKEN_ID
+		int64_t missingId = registry.resolveTokenId("NeverCreated");
+		EXPECT_EQ(missingId, graph::storage::TokenRegistry::NULL_TOKEN_ID);
+	}
+}
+
+TEST_F(TokenRegistryTest, ResolveTokenId_DataManagerIntegration) {
+	// Create via DataManager
+	int64_t id = dataManager->getOrCreateTokenId("IntegratedResolve");
+	EXPECT_GT(id, 0);
+
+	// Resolve via DataManager
+	int64_t resolvedId = dataManager->resolveTokenId("IntegratedResolve");
+	EXPECT_EQ(resolvedId, id);
+
+	// Non-existent should return 0
+	int64_t missingId = dataManager->resolveTokenId("DoesNotExist");
+	EXPECT_EQ(missingId, 0);
+}

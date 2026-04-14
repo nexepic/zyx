@@ -174,7 +174,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNodeScan(
 		std::vector<int64_t> allLabelIds;
 		allLabelIds.reserve(scan->getLabels().size());
 		for (const auto &lbl : scan->getLabels()) {
-			allLabelIds.push_back(dm_->getOrCreateTokenId(lbl));
+			allLabelIds.push_back(dm_->resolveTokenId(lbl));
 		}
 		std::string variable = scan->getVariable();
 		auto predicate = [variable, allLabelIds](const Record &r) -> bool {

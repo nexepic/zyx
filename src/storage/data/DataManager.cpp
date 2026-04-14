@@ -201,6 +201,15 @@ namespace graph::storage {
 		return tokenRegistry_->getOrCreateTokenId(name);
 	}
 
+	int64_t DataManager::resolveTokenId(const std::string &name) const {
+		if (name.empty())
+			return 0;
+		if (!tokenRegistry_) {
+			throw std::runtime_error("TokenRegistry not initialized. Ensure SystemStateManager is set.");
+		}
+		return tokenRegistry_->resolveTokenId(name);
+	}
+
 	std::string DataManager::resolveTokenName(int64_t tokenId) const {
 		if (tokenId == 0)
 			return "";

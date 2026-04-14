@@ -88,7 +88,7 @@ namespace graph::query {
 		if (labels.size() > 1) {
 			auto allLabelIds = std::vector<int64_t>();
 			for (const auto &lbl : labels) {
-				allLabelIds.push_back(dm_->getOrCreateTokenId(lbl));
+				allLabelIds.push_back(dm_->resolveTokenId(lbl));
 			}
 			auto predicate = [variable, allLabelIds](const execution::Record &r) {
 				auto n = r.getNode(variable);

@@ -43,8 +43,9 @@ namespace graph::query::algorithm {
 		// OPTIMIZATION: Resolve edge type ID ONCE before the loop
 		int64_t targetTypeId = 0;
 		if (!edgeType.empty()) {
-			// Use getOrCreateTokenId (safe for reads, returns existing ID or new unused one)
-			targetTypeId = dm_->getOrCreateTokenId(edgeType);
+			// Use resolveTokenId (read-only, returns 0 if not found)
+			targetTypeId = dm_->resolveTokenId(edgeType);
+			if (targetTypeId == 0) targetTypeId = -1; // non-existent type — match nothing
 		}
 
 		neighbors.reserve(edges.size());

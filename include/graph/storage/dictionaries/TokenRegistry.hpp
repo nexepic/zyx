@@ -47,6 +47,9 @@ namespace graph::storage {
 		// Get ID for string, creating if missing.
 		int64_t getOrCreateTokenId(const std::string &name);
 
+		// Get ID for string, returning NULL_TOKEN_ID if not found (read-only).
+		int64_t resolveTokenId(const std::string &name);
+
 		// Get string for ID.
 		std::string resolveTokenName(int64_t tokenId);
 

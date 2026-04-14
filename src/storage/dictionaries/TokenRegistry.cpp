@@ -86,6 +86,29 @@ namespace graph::storage {
 		return newId;
 	}
 
+	int64_t TokenRegistry::resolveTokenId(const std::string &name) {
+		if (name.empty())
+			return NULL_TOKEN_ID;
+
+		// 1. Check Cache
+		{
+			std::lock_guard<std::mutex> lock(cacheMutex_);
+			if (const int64_t cachedId = stringToIdCache_.get(name); cachedId != 0) {
+				return cachedId;
+			}
+		}
+
+		// 2. Check Index (Disk)
+		std::vector<int64_t> ids = indexTree_->find(rootIndexId_, PropertyValue(name));
+		if (!ids.empty()) {
+			addToCache(name, ids[0]);
+			return ids[0];
+		}
+
+		// 3. Not found — return NULL_TOKEN_ID (no creation)
+		return NULL_TOKEN_ID;
+	}
+
 	std::string TokenRegistry::resolveTokenName(int64_t tokenId) {
 		if (tokenId == NULL_TOKEN_ID)
 			return "";

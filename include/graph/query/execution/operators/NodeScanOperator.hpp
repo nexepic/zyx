@@ -93,7 +93,7 @@ namespace graph::query::execution::operators {
 			targetLabelIds_.clear();
 			if (!config_.labels.empty()) {
 				for (const auto &lbl : config_.labels) {
-					targetLabelIds_.push_back(dm_->getOrCreateTokenId(lbl));
+					targetLabelIds_.push_back(dm_->resolveTokenId(lbl));
 				}
 			}
 		}

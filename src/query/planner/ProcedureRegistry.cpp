@@ -144,14 +144,14 @@ namespace graph::query::planner {
 			std::string weightProp = args.size() > 3 ? args[3].toString() : "";
 			return std::make_unique<execution::operators::GdsGraphProjectOperator>(
 				ctx.dataManager, ctx.projectionManager, name, nodeLabel, edgeType, weightProp);
-		}, /*mutatesData=*/true);
+		}, /*mutatesData=*/false);
 
 		registerProcedure("gds.graph.drop", [](const ProcedureContext &ctx, const auto &args) {
 			if (args.size() < 1)
 				throw std::runtime_error("gds.graph.drop expects (name)");
 			return std::make_unique<execution::operators::GdsGraphDropOperator>(
 				ctx.projectionManager, args[0].toString());
-		}, /*mutatesData=*/true);
+		}, /*mutatesData=*/false);
 
 		// --- GDS Algorithms ---
 		registerProcedure("gds.shortestPath.dijkstra.stream", [](const ProcedureContext &ctx, const auto &args) {
