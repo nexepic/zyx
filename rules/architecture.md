@@ -39,14 +39,15 @@ graph TD
     - `ConstraintManager`: Schema constraint enforcement
         - `UniqueConstraint`, `NotNullConstraint`, `NodeKeyConstraint`, `TypeConstraint`
     - `DeletionManager`: Tombstone management and space reclamation
-    - `CacheManager`: LRU cache with dirty entity tracking
+    - `PageBufferPool`: Segment-level LRU cache with targeted invalidation
     - `PersistenceManager`: Manages entity persistence to disk
-    - `SnapshotManager`: Committed state snapshot management
-    - `DirtyEntityRegistry`: Tracks modified entities for efficient persistence
+    - `SnapshotManager`: Committed state snapshot management for read isolation
+    - `CommittedSnapshot`: Immutable snapshot of committed dirty entity state
+    - `DirtyEntityRegistry`: Double-buffered (active/flushing) dirty entity tracking
     - `TokenRegistry`: Maps string labels/types to integer tokens
     - `WALManager`: Write-Ahead Log for durability and crash recovery
+    - `UndoLog`: Transaction-scoped undo log for fine-grained rollback
     - `StorageBootstrap`: Initialization and bootstrap logic
-    - `PageBufferPool`: Buffered I/O for segment reads/writes
 - **ACID compliance**: Full transaction support with WAL
 - **State management**: Temporal state tracking via state chains (`StateChainManager`)
 
@@ -100,9 +101,21 @@ graph TD
 ### Transaction System (`include/graph/core/Transaction.hpp`)
 
 - ACID transactions with full rollback capabilities
-- Optimistic locking with versioning
-- `TransactionManager` coordinates transaction lifecycle
-- Coordinates with WAL for durability
+- **Concurrency model**: Single-writer / multi-reader via `std::shared_mutex`
+    - Write transactions acquire exclusive lock (`std::unique_lock`)
+    - Read-only transactions acquire shared lock (`std::shared_lock`)
+    - Lock ownership lives on `Transaction` object (RAII — released when transaction ends)
+- **Undo Log** (`include/graph/storage/wal/UndoLog.hpp`): Fine-grained rollback of entity mutations within a
+  transaction. Each write operation records the inverse operation; on rollback, the undo log replays in reverse order.
+- **Snapshot Isolation** (`include/graph/storage/CommittedSnapshot.hpp`):
+    - `CommittedSnapshot` captures dirty entity state before each commit
+    - `SnapshotManager` provides thread-safe publish/acquire for immutable snapshots
+    - Read-only transactions receive a snapshot at `begin()` and see consistent committed state throughout their
+      lifetime, unaffected by concurrent writes
+    - `thread_local` snapshot pointer in `DataManager` for zero-contention reads
+- **WAL Integration**: Write operations are logged to WAL before disk writes for durability and crash recovery
+- **PageBufferPool**: Segment-level LRU cache with targeted invalidation (`invalidateDirtySegments`) — only evicts
+  pages for segments modified in a flush, rather than clearing the entire cache
 - **Read-only transactions**: `beginReadOnlyTransaction()` creates a transaction that rejects all write queries
 
 ### Access Control (`include/graph/query/ExecMode.hpp`)
@@ -150,8 +163,12 @@ Key files:
 1. **Database open**: `Database::open()` → `StorageBootstrap` → `FileStorage::open()` → Initialize all components
 2. **Query execution**: Cypher string → Parser → QueryPlanner → Optimizer → `QueryPlan` (with mutation flags) →
    ExecMode check → PhysicalPlanConverter → QueryExecutor → Storage operations
-3. **Transaction**: `beginTransaction()` → Operations in context → commit/rollback → WAL updates
-4. **Persistence**: Entity changes → `DirtyEntityRegistry` → `PersistenceManager` → `CacheManager` → FileStorage write → WAL
+3. **Write transaction**: `beginTransaction()` → Exclusive lock → Operations recorded in UndoLog + WAL → Commit:
+   capture `CommittedSnapshot` → flush dirty entities → publish snapshot → release lock
+4. **Read-only transaction**: `beginReadOnly()` → Shared lock → Acquire immutable `CommittedSnapshot` → All reads
+   check snapshot first, then cache/disk → Commit: release snapshot + lock
+5. **Persistence**: Entity changes → `DirtyEntityRegistry` → `PersistenceManager` → `PageBufferPool` →
+   FileStorage write → targeted cache invalidation → WAL
 
 ## Public API
 
@@ -321,12 +338,14 @@ compiler_options_wasm.ini   # Meson cross-file for Emscripten
 
 1. **Segment Architecture**: All data is stored in fixed-size segments with bitmap tracking for space management
 2. **State Chains**: All persistent modifications go through state chains for versioning and rollback
-3. **Dirty Tracking**: Modified entities are tracked via `DirtyEntityRegistry` for efficient persistence
-4. **LRU Cache**: Hot entities are cached in memory with configurable eviction policy
+3. **Dirty Tracking**: Modified entities are tracked via double-buffered `DirtyEntityRegistry` for efficient persistence
+4. **Page Buffer Pool**: Segment-level LRU cache with targeted invalidation (only dirty segments evicted on flush)
 5. **WAL Integration**: Write operations are logged to WAL before actual disk writes for durability
-6. **Parser Generation**: ANTLR4 grammar files are in `src/query/parser/cypher/` - generated code should not be manually edited
-7. **Vector Engine**: DiskANN-based approximate nearest neighbor search with product quantization support
-8. **Graph Algorithms**: Neo4j GDS-compatible graph algorithms with named projection support
+6. **Undo Log**: Each write transaction records inverse operations for fine-grained rollback without full snapshot restore
+7. **Snapshot Isolation**: Read-only transactions acquire an immutable `CommittedSnapshot` at begin, providing consistent reads throughout transaction lifetime
+8. **Parser Generation**: ANTLR4 grammar files are in `src/query/parser/cypher/` - generated code should not be manually edited
+9. **Vector Engine**: DiskANN-based approximate nearest neighbor search with product quantization support
+10. **Graph Algorithms**: Neo4j GDS-compatible graph algorithms with named projection support
 
 ## Library Build Outputs
 

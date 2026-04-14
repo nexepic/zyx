@@ -1,6 +1,6 @@
 /**
  * @file test_LogicalOpTypeToString.cpp
- * @brief Unit tests for LogicalOpType toString() covering all enum values.
+ * @brief Unit tests for LogicalOpType toString(), isDataMutatingOp(), isSchemaMutatingOp().
  */
 
 #include <gtest/gtest.h>
@@ -56,4 +56,60 @@ TEST(LogicalOpTypeToStringTest, DDLAndAdminOperators) {
 TEST(LogicalOpTypeToStringTest, ObservabilityOperators) {
     EXPECT_EQ(toString(LogicalOpType::LOP_EXPLAIN), "Explain");
     EXPECT_EQ(toString(LogicalOpType::LOP_PROFILE), "Profile");
+}
+
+TEST(LogicalOpTypeToStringTest, SubqueryAndAdvancedOperators) {
+    EXPECT_EQ(toString(LogicalOpType::LOP_FOREACH), "Foreach");
+    EXPECT_EQ(toString(LogicalOpType::LOP_CALL_SUBQUERY), "CallSubquery");
+    EXPECT_EQ(toString(LogicalOpType::LOP_LOAD_CSV), "LoadCsv");
+    EXPECT_EQ(toString(LogicalOpType::LOP_NAMED_PATH), "NamedPath");
+}
+
+TEST(LogicalOpTypeToStringTest, UnknownFallback) {
+    EXPECT_EQ(toString(static_cast<LogicalOpType>(9999)), "Unknown");
+}
+
+// =========================================================================
+// isDataMutatingOp tests
+// =========================================================================
+
+TEST(LogicalOpTypeMutationTest, DataMutatingOps_ReturnTrue) {
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_CREATE_NODE));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_CREATE_EDGE));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_SET));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_DELETE));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_REMOVE));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_MERGE_NODE));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_MERGE_EDGE));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_FOREACH));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_LOAD_CSV));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_SET_CONFIG));
+    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_TRAIN_VECTOR_INDEX));
+}
+
+TEST(LogicalOpTypeMutationTest, NonDataMutatingOps_ReturnFalse) {
+    EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_NODE_SCAN));
+    EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_FILTER));
+    EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_PROJECT));
+    EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_CREATE_INDEX));
+    EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_EXPLAIN));
+}
+
+// =========================================================================
+// isSchemaMutatingOp tests
+// =========================================================================
+
+TEST(LogicalOpTypeMutationTest, SchemaMutatingOps_ReturnTrue) {
+    EXPECT_TRUE(isSchemaMutatingOp(LogicalOpType::LOP_CREATE_INDEX));
+    EXPECT_TRUE(isSchemaMutatingOp(LogicalOpType::LOP_DROP_INDEX));
+    EXPECT_TRUE(isSchemaMutatingOp(LogicalOpType::LOP_CREATE_VECTOR_INDEX));
+    EXPECT_TRUE(isSchemaMutatingOp(LogicalOpType::LOP_CREATE_CONSTRAINT));
+    EXPECT_TRUE(isSchemaMutatingOp(LogicalOpType::LOP_DROP_CONSTRAINT));
+}
+
+TEST(LogicalOpTypeMutationTest, NonSchemaMutatingOps_ReturnFalse) {
+    EXPECT_FALSE(isSchemaMutatingOp(LogicalOpType::LOP_NODE_SCAN));
+    EXPECT_FALSE(isSchemaMutatingOp(LogicalOpType::LOP_CREATE_NODE));
+    EXPECT_FALSE(isSchemaMutatingOp(LogicalOpType::LOP_DELETE));
+    EXPECT_FALSE(isSchemaMutatingOp(LogicalOpType::LOP_SHOW_INDEXES));
 }
