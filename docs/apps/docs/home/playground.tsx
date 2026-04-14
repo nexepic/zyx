@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
+import { GdsPanel } from "./gds-panel";
 
 interface SchemaNode {
   label: string;
@@ -21,7 +22,6 @@ interface DatasetSchema {
 interface Dataset {
   label: string;
   dbFile: string;
-  walFile: string;
   exampleQueries: { label: string; query: string }[];
   initialQuery: string;
 }
@@ -30,7 +30,6 @@ const DATASETS: Dataset[] = [
   {
     label: "Game of Thrones",
     dbFile: "/data/got.db",
-    walFile: "/data/got.db-wal",
     exampleQueries: [
       { label: "Full graph", query: "MATCH (a)-[r]->(b) RETURN a, r, b" },
       { label: "Stark family", query: "MATCH (c:Character)-[r:BELONGS_TO]->(h:House {name: 'Stark'}) RETURN c, r, h" },
@@ -43,18 +42,17 @@ const DATASETS: Dataset[] = [
     initialQuery: "MATCH (a)-[r]->(b) RETURN a, r, b",
   },
   {
-    label: "Marvel Universe",
-    dbFile: "/data/marvel.db",
-    walFile: "/data/marvel.db-wal",
+    label: "IMDb Movies",
+    dbFile: "/data/imdb.db",
     exampleQueries: [
-      { label: "Full graph", query: "MATCH (a)-[r]->(b) RETURN a, r, b" },
-      { label: "All heroes", query: "MATCH (n:Hero) RETURN n.name ORDER BY n.name" },
-      { label: "Spider-Man's network", query: "MATCH (s:Hero {id: 'SPIDER-MAN'})-[r:ALLIES_WITH]-(other) RETURN s, r, other" },
-      { label: "Strongest alliances", query: "MATCH (a)-[r:ALLIES_WITH]->(b) WHERE r.weight >= 10 RETURN a, r, b" },
-      { label: "Most connected", query: "MATCH (n:Hero)-[r:ALLIES_WITH]-() RETURN n.name, count(r) AS connections ORDER BY connections DESC LIMIT 15" },
-      { label: "Avengers circle", query: "MATCH (a:Hero)-[r:ALLIES_WITH]-(other) WHERE a.id IN ['IRON-MAN', 'CAPTAIN-AMERICA', 'THOR', 'SPIDER-MAN'] RETURN a, r, other" },
+      { label: "Full graph", query: "MATCH (a)-[r]->(b) RETURN a, r, b LIMIT 200" },
+      { label: "Nolan films", query: "MATCH (d:Person {name: 'Christopher Nolan'})-[r:DIRECTED]->(m:Movie) RETURN d, r, m" },
+      { label: "Top rated", query: "MATCH (m:Movie) RETURN m.title, m.rating, m.year ORDER BY m.rating DESC LIMIT 20" },
+      { label: "Action movies", query: "MATCH (m:Movie)-[r:HAS_GENRE]->(g:Genre {name: 'Action'}) RETURN m, r, g LIMIT 100" },
+      { label: "Actor network", query: "MATCH (p:Person)-[r:ACTED_IN]->(m:Movie)<-[r2:ACTED_IN]-(p2:Person) WHERE p.name = 'Leonardo DiCaprio' RETURN p, r, m, r2, p2" },
+      { label: "Directors ranking", query: "MATCH (d:Person)-[:DIRECTED]->(m:Movie) RETURN d.name, count(m) AS films, avg(m.rating) AS avgRating ORDER BY films DESC LIMIT 15" },
     ],
-    initialQuery: "MATCH (a)-[r]->(b) RETURN a, r, b",
+    initialQuery: "MATCH (d:Person)-[r:DIRECTED]->(m:Movie) RETURN d, r, m LIMIT 100",
   },
 ];
 
@@ -78,6 +76,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
   const [statusMsg, setStatusMsg] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("graph");
   const [liveSchema, setLiveSchema] = useState<DatasetSchema>({ nodes: [], edges: [] });
+  const [dbStats, setDbStats] = useState<{ nodes: number; edges: number; labels: number; types: number } | null>(null);
 
   const moduleRef = useRef<any>(null);
   const dbRef = useRef<number>(0);
@@ -124,25 +123,14 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
       setStatusMsg(isEn ? `Loading ${ds.label}...` : `加载 ${ds.label}...`);
       const dbPath = `/playground_${dsIdx}.db`;
-      const walPath = `${dbPath}-wal`;
 
       try { mod.FS.unlink(dbPath); } catch {}
-      try { mod.FS.unlink(walPath); } catch {}
 
-      const [dbResp, walResp] = await Promise.all([
-        fetch(ds.dbFile),
-        fetch(ds.walFile).catch(() => null),
-      ]);
-
+      const dbResp = await fetch(ds.dbFile);
       if (!dbResp.ok) throw new Error(`Failed to fetch ${ds.dbFile}: ${dbResp.status}`);
 
       const dbData = new Uint8Array(await dbResp.arrayBuffer());
       mod.FS.writeFile(dbPath, dbData);
-
-      if (walResp && walResp.ok) {
-        const walData = new Uint8Array(await walResp.arrayBuffer());
-        mod.FS.writeFile(walPath, walData);
-      }
 
       const db = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
       if (!db) throw new Error("Failed to open database");
@@ -155,6 +143,23 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
       setStatus("ready");
       setStatusMsg("");
       loadingRef.current = false;
+
+      // Gather db stats
+      const queryInt = (q: string): number => {
+        const p = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, q]);
+        if (!p) return 0;
+        let val = 0;
+        if (mod.ccall("zyx_result_is_success", "boolean", ["number"], [p]) && mod.ccall("zyx_result_next", "boolean", ["number"], [p])) {
+          val = mod.ccall("zyx_result_get_int", "number", ["number", "number"], [p, 0]);
+        }
+        mod.ccall("zyx_result_close", null, ["number"], [p]);
+        return val;
+      };
+      const nNodes = queryInt("MATCH (n) RETURN count(n)");
+      const nEdges = queryInt("MATCH ()-[r]->() RETURN count(r)");
+      const nLabels = queryInt("MATCH (n) RETURN count(DISTINCT labels(n))");
+      const nTypes = queryInt("MATCH ()-[r]->() RETURN count(DISTINCT type(r))");
+      setDbStats({ nodes: nNodes, edges: nEdges, labels: nLabels, types: nTypes });
 
       runQuery(mod, db, ds.initialQuery);
     } catch (e: any) {
@@ -231,8 +236,10 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
               const labelPtr = mod.HEAP32[(nbuf + 8) >> 2] >>> 0;
               const nodeLabel = labelPtr ? mod.UTF8ToString(labelPtr) : "";
               let displayLabel = String(nodeId);
+              let parsedProps: Record<string, unknown> = {};
               try {
                 const p = JSON.parse(props || "{}");
+                parsedProps = p;
                 displayLabel = p.name || p.id || p.title || String(nodeId);
                 // Collect schema: label → property keys
                 if (nodeLabel) {
@@ -242,7 +249,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
                   }
                 }
               } catch {}
-              nodeMap.set(nodeId, { id: nodeId, label: displayLabel });
+              nodeMap.set(nodeId, { id: nodeId, label: displayLabel, props: parsedProps, nodeLabel: nodeLabel || undefined });
             }
             mod._free(nbuf);
             break;
@@ -323,6 +330,197 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     loadDatabase(idx);
   }, [datasetIdx, status, loadDatabase]);
 
+  const handleGdsQuery = useCallback((queries: string[], scope: { nodeLabel: string; edgeType: string }) => {
+    if (status !== "ready") return;
+    const mod = moduleRef.current;
+    const db = dbRef.current;
+    const txn = txnRef.current;
+    if (!mod || !db || !txn) return;
+    setError(null);
+
+    // 1. Run drop + project silently via direct WASM calls
+    for (let i = 0; i < queries.length - 1; i++) {
+      const ptr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, queries[i]]);
+      if (ptr) mod.ccall("zyx_result_close", null, ["number"], [ptr]);
+    }
+
+    // 2. Run algorithm query directly, parse nodeId→score map
+    const algoQuery = queries[queries.length - 1];
+    setQuery(algoQuery);
+
+    const algoPtr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, algoQuery]);
+    if (!algoPtr) {
+      const errMsg = mod.ccall("zyx_get_last_error", "string", [], []);
+      setError(errMsg || "Algorithm execution failed");
+      return;
+    }
+    const algoSuccess = mod.ccall("zyx_result_is_success", "boolean", ["number"], [algoPtr]);
+    if (!algoSuccess) {
+      const errMsg = mod.ccall("zyx_result_get_error", "string", ["number"], [algoPtr]);
+      mod.ccall("zyx_result_close", null, ["number"], [algoPtr]);
+      setError(errMsg || "Algorithm failed");
+      return;
+    }
+
+    const algoDur = mod.ccall("zyx_result_get_duration", "number", ["number"], [algoPtr]);
+    const algoColCount = mod.ccall("zyx_result_column_count", "number", ["number"], [algoPtr]);
+    const algoCols: string[] = [];
+    for (let i = 0; i < algoColCount; i++) {
+      algoCols.push(mod.ccall("zyx_result_column_name", "string", ["number", "number"], [algoPtr, i]) || `col${i}`);
+    }
+
+    // Find nodeId and score/componentId columns
+    const nodeIdCol = algoCols.indexOf("nodeId");
+    const scoreCol = algoCols.indexOf("score");
+    const compCol = algoCols.indexOf("componentId");
+    const costCol = algoCols.indexOf("cost");
+    const valueCol = scoreCol >= 0 ? scoreCol : compCol >= 0 ? compCol : costCol;
+
+    const scoreMap = new Map<number, number>();
+    const algoValues: string[][] = [];
+
+    while (mod.ccall("zyx_result_next", "boolean", ["number"], [algoPtr])) {
+      const row: string[] = [];
+      for (let i = 0; i < algoColCount; i++) {
+        const type = mod.ccall("zyx_result_get_type", "number", ["number", "number"], [algoPtr, i]);
+        switch (type) {
+          case 2: row.push(String(mod.ccall("zyx_result_get_int", "number", ["number", "number"], [algoPtr, i]))); break;
+          case 3: row.push(String(mod.ccall("zyx_result_get_double", "number", ["number", "number"], [algoPtr, i]))); break;
+          default: row.push(String(mod.ccall("zyx_result_get_string", "string", ["number", "number"], [algoPtr, i]) || ""));
+        }
+      }
+      algoValues.push(row);
+
+      if (nodeIdCol >= 0 && valueCol >= 0) {
+        const nid = Number(row[nodeIdCol]);
+        const val = Number(row[valueCol]);
+        if (!isNaN(nid) && !isNaN(val)) scoreMap.set(nid, val);
+      }
+    }
+    mod.ccall("zyx_result_close", null, ["number"], [algoPtr]);
+
+    const isDijkstra = algoQuery.includes("shortestPath.dijkstra");
+
+    // Dijkstra with no results means no path exists
+    if (isDijkstra && scoreMap.size === 0) {
+      setResult({ columns: algoCols, values: algoValues, graphNodes: [], graphEdges: [] });
+      setDuration(algoDur);
+      setError(isEn ? "No path found between the specified nodes." : "指定节点之间不存在路径。");
+      setViewMode("table");
+      return;
+    }
+
+    // 3. Run a MATCH query to get graph structure for visualization
+    const labelFilter = scope.nodeLabel ? `:${scope.nodeLabel}` : "";
+    const typeFilter = scope.edgeType ? `:${scope.edgeType}` : "";
+    const matchQuery = `MATCH (a${labelFilter})-[r${typeFilter}]->(b) RETURN a, r, b`;
+
+    const matchPtr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, matchQuery]);
+    const graphEdges: GraphEdge[] = [];
+    const nodeMap = new Map<number, GraphNode>();
+    const edgeSeen = new Set<number>();
+
+    // Determine path node set for Dijkstra highlighting
+    const pathNodeIds = new Set<number>();
+    if (isDijkstra) {
+      for (const [nid] of scoreMap) pathNodeIds.add(nid);
+    }
+    // Build ordered path pairs for edge highlighting
+    const pathEdgePairs = new Set<string>();
+    if (isDijkstra && algoValues.length > 1 && nodeIdCol >= 0) {
+      for (let i = 0; i < algoValues.length - 1; i++) {
+        const a = Number(algoValues[i][nodeIdCol]);
+        const b = Number(algoValues[i + 1][nodeIdCol]);
+        pathEdgePairs.add(`${a}-${b}`);
+        pathEdgePairs.add(`${b}-${a}`);
+      }
+    }
+
+    if (matchPtr) {
+      const matchSuccess = mod.ccall("zyx_result_is_success", "boolean", ["number"], [matchPtr]);
+      if (matchSuccess) {
+        const matchColCount = mod.ccall("zyx_result_column_count", "number", ["number"], [matchPtr]);
+
+        // Collect raw data per row
+        const rowNodes: { nodeId: number; props: string; nodeLabel: string }[] = [];
+        const rowEdges: { edgeId: number; srcId: number; tgtId: number; edgeType: string }[] = [];
+
+        while (mod.ccall("zyx_result_next", "boolean", ["number"], [matchPtr])) {
+          rowNodes.length = 0;
+          rowEdges.length = 0;
+
+          // Collect all columns in this row
+          for (let i = 0; i < matchColCount; i++) {
+            const type = mod.ccall("zyx_result_get_type", "number", ["number", "number"], [matchPtr, i]);
+            if (type === 5) {
+              const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [matchPtr, i]);
+              const nbuf = mod._malloc(16);
+              if (mod.ccall("zyx_result_get_node", "boolean", ["number", "number", "number"], [matchPtr, i, nbuf])) {
+                const labelPtr = mod.HEAP32[(nbuf + 8) >> 2] >>> 0;
+                const nodeLabel = labelPtr ? mod.UTF8ToString(labelPtr) : "";
+                rowNodes.push({ nodeId: mod.HEAP32[nbuf >> 2], props: props || "{}", nodeLabel });
+              }
+              mod._free(nbuf);
+            } else if (type === 6) {
+              const ebuf = mod._malloc(32);
+              if (mod.ccall("zyx_result_get_edge", "boolean", ["number", "number", "number"], [matchPtr, i, ebuf])) {
+                const typePtr = mod.HEAP32[(ebuf + 24) >> 2] >>> 0;
+                rowEdges.push({
+                  edgeId: mod.HEAP32[ebuf >> 2],
+                  srcId: mod.HEAP32[(ebuf + 8) >> 2],
+                  tgtId: mod.HEAP32[(ebuf + 16) >> 2],
+                  edgeType: typePtr ? mod.UTF8ToString(typePtr) : "",
+                });
+              }
+              mod._free(ebuf);
+            }
+          }
+
+          // Pass 1: process nodes first (so labels are correct)
+          for (const rn of rowNodes) {
+            if (!nodeMap.has(rn.nodeId)) {
+              let displayLabel = String(rn.nodeId);
+              let parsedProps: Record<string, unknown> = {};
+              try {
+                const p = JSON.parse(rn.props);
+                parsedProps = p;
+                displayLabel = p.name || p.id || p.title || String(rn.nodeId);
+              } catch {}
+              const score = scoreMap.get(rn.nodeId);
+              const highlighted = isDijkstra && pathNodeIds.has(rn.nodeId);
+              nodeMap.set(rn.nodeId, { id: rn.nodeId, label: displayLabel, score, highlighted, props: parsedProps, nodeLabel: rn.nodeLabel || undefined });
+            }
+          }
+
+          // Pass 2: process edges (nodes are already in the map)
+          for (const re of rowEdges) {
+            if (re.srcId && re.tgtId && !edgeSeen.has(re.edgeId)) {
+              edgeSeen.add(re.edgeId);
+              const edgeHL = pathEdgePairs.has(`${re.srcId}-${re.tgtId}`);
+              graphEdges.push({ id: re.edgeId, sourceId: re.srcId, targetId: re.tgtId, type: re.edgeType, highlighted: edgeHL });
+              // Fallback for nodes only referenced by edges
+              if (!nodeMap.has(re.srcId)) {
+                nodeMap.set(re.srcId, { id: re.srcId, label: String(re.srcId), score: scoreMap.get(re.srcId), highlighted: isDijkstra && pathNodeIds.has(re.srcId) });
+              }
+              if (!nodeMap.has(re.tgtId)) {
+                nodeMap.set(re.tgtId, { id: re.tgtId, label: String(re.tgtId), score: scoreMap.get(re.tgtId), highlighted: isDijkstra && pathNodeIds.has(re.tgtId) });
+              }
+            }
+          }
+        }
+      }
+      mod.ccall("zyx_result_close", null, ["number"], [matchPtr]);
+    }
+
+    const graphNodeList = Array.from(nodeMap.values());
+    const hasGraph = graphNodeList.length > 0 && graphEdges.length > 0;
+
+    // 4. Set result — keep liveSchema unchanged (don't overwrite with empty schema)
+    setResult({ columns: algoCols, values: algoValues, graphNodes: graphNodeList, graphEdges });
+    setDuration(algoDur);
+    setViewMode(hasGraph ? "graph" : "table");
+  }, [status]);
+
   const hasGraphData = result ? result.graphNodes.length > 0 && result.graphEdges.length > 0 : false;
 
   return (
@@ -368,23 +566,132 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
         {/* Spacer — fills remaining space */}
         <div className="flex-1" />
 
-        {/* Right: duration + status — never shrink */}
-        <div className="flex shrink-0 items-center gap-4">
-          {duration !== null && (
-            <span className="font-['Space_Mono','Ubuntu_Mono',monospace] text-[0.7rem] text-[#8a9bb0]">
-              {duration.toFixed(2)} ms
-            </span>
+        {/* Center: result stats + actions */}
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Result stats */}
+          {result && (
+            <div className="flex items-center gap-3 text-[0.65rem] text-[#6b7f94] font-['Space_Mono','Ubuntu_Mono',monospace]">
+              {result.graphNodes.length > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" opacity="0.5"><circle cx="8" cy="8" r="5" /></svg>
+                  {result.graphNodes.length}
+                </span>
+              )}
+              {result.graphEdges.length > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5"><path d="M3 8h10M10 5l3 3-3 3" /></svg>
+                  {result.graphEdges.length}
+                </span>
+              )}
+              {result.values.length > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5"><path d="M2 4h12M2 8h12M2 12h8" /></svg>
+                  {result.values.length} {result.values.length === 1 ? "row" : "rows"}
+                </span>
+              )}
+            </div>
           )}
-          <div className="flex items-center gap-2 text-[0.7rem] uppercase tracking-wider font-medium whitespace-nowrap">
-            <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+
+          {/* Separator */}
+          {result && <span className="text-[rgba(122,144,170,0.2)]">|</span>}
+
+          {/* Copy query */}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(query).catch(() => {});
+            }}
+            className="flex items-center gap-1.5 rounded-md border border-[rgba(122,144,170,0.12)] px-2.5 py-1 text-[0.65rem] text-[#6b7f94] transition-colors hover:border-[rgba(122,144,170,0.3)] hover:text-[#8a9bb0]"
+            title={isEn ? "Copy query to clipboard" : "复制查询到剪贴板"}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="5" width="9" height="9" rx="1.5" />
+              <path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" />
+            </svg>
+            <span>{isEn ? "Copy" : "复制"}</span>
+          </button>
+
+          {/* Export CSV */}
+          {result && result.values.length > 0 && (
+            <button
+              onClick={() => {
+                const header = result.columns.join(",");
+                const rows = result.values.map((r) =>
+                  r.map((v) => {
+                    const s = String(v);
+                    return s.includes(",") || s.includes('"') || s.includes("\n")
+                      ? '"' + s.replace(/"/g, '""') + '"'
+                      : s;
+                  }).join(",")
+                );
+                const csv = [header, ...rows].join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "zyx-result.csv";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-1.5 rounded-md border border-[rgba(122,144,170,0.12)] px-2.5 py-1 text-[0.65rem] text-[#6b7f94] transition-colors hover:border-[rgba(122,144,170,0.3)] hover:text-[#8a9bb0]"
+              title={isEn ? "Export results as CSV" : "导出结果为 CSV"}
+            >
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 2v8M5 7l3 3 3-3" />
+                <path d="M2 11v2.5A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5V11" />
+              </svg>
+              <span>CSV</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Right: db info + duration + status — never shrink */}
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Engine version badge */}
+          <div className="flex items-center gap-1.5 rounded-md border border-[rgba(122,144,170,0.12)] bg-[rgba(122,144,170,0.04)] px-2.5 py-1 text-[0.6rem] text-[#6b7f94]">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 4l6-2.5L14 4v4.5c0 3.5-3 6-6 7-3-1-6-3.5-6-7V4z" />
+            </svg>
+            <span>ZYX WASM</span>
+          </div>
+          {/* DB stats */}
+          {dbStats && status === "ready" && (
+            <div className="flex items-center gap-2.5 rounded-md border border-[rgba(122,144,170,0.12)] bg-[rgba(122,144,170,0.04)] px-2.5 py-1 text-[0.6rem] text-[#6b7f94]">
+              <span className="flex items-center gap-1">
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor" opacity="0.45"><circle cx="8" cy="8" r="5" /></svg>
+                <span>{dbStats.nodes.toLocaleString()}</span>
+              </span>
+              <span className="text-[rgba(122,144,170,0.2)]">|</span>
+              <span className="flex items-center gap-1">
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.45"><path d="M3 8h10M10 5l3 3-3 3" /></svg>
+                <span>{dbStats.edges.toLocaleString()}</span>
+              </span>
+            </div>
+          )}
+          {/* Execution duration */}
+          {duration !== null && (
+            <div className="flex items-center gap-1.5 rounded-md border border-[rgba(122,144,170,0.12)] bg-[rgba(122,144,170,0.04)] px-2.5 py-1 text-[0.65rem] text-[#8a9bb0]">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="8" cy="8" r="6.5" />
+                <polyline points="8,4.5 8,8 10.5,9.5" />
+              </svg>
+              <span>
+                {duration < 1 ? `${(duration * 1000).toFixed(0)} μs` : duration < 1000 ? `${duration.toFixed(1)} ms` : `${(duration / 1000).toFixed(2)} s`}
+              </span>
+            </div>
+          )}
+          {/* Status indicator */}
+          <div className="flex items-center gap-2 rounded-md border border-[rgba(122,144,170,0.12)] bg-[rgba(122,144,170,0.04)] px-2.5 py-1 text-[0.65rem] font-medium whitespace-nowrap">
+            <span className={`inline-block h-[6px] w-[6px] shrink-0 rounded-full ${
               status === "ready"
-                ? "bg-[#6b8a76]"
+                ? "bg-[#6b8a76] shadow-[0_0_4px_rgba(107,138,118,0.5)]"
                 : status === "loading"
-                  ? "bg-[#a38d5d]"
+                  ? "bg-[#a38d5d] animate-pulse"
                   : "bg-[#a35d5d]"
             }`} />
             <span className={
-              status === "ready" ? "text-[#8a9bb0]" :
+              status === "ready" ? "text-[#6b8a76]" :
               status === "loading" ? "text-[#a38d5d]" : "text-[#a35d5d]"
             }>
               {status === "ready"
@@ -482,6 +789,15 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
             )}
           </div>
         </section>
+
+        {/* GDS Analytics panel (Middle) */}
+        <GdsPanel
+          key={datasetIdx}
+          isEn={isEn}
+          schema={liveSchema}
+          onRunGds={handleGdsQuery}
+          status={status}
+        />
 
         {/* Sidebar (Right) */}
         <aside className="flex w-[380px] shrink-0 flex-col border-l border-[rgba(122,144,170,0.15)] bg-[rgba(11,15,20,0.6)] backdrop-blur-md">
