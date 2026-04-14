@@ -171,6 +171,12 @@ namespace graph::storage {
 		if (isFileOpen) {
 			flush(); // Ensure any pending changes are written
 
+			// Always flush file header on close, even when no dirty entities exist.
+			// allocateId() increments max ID counters in memory without marking
+			// entities dirty. If save() skipped flushFileHeader() (no dirty data),
+			// those counter advances would be lost on restart.
+			fileHeaderManager->flushFileHeader();
+
 			dataManager->clearCache();
 			dataManager->closeFileHandles();
 
@@ -437,7 +443,7 @@ namespace graph::storage {
 
 		// 5. COMMIT: Clear the snapshot data and invalidate stale cached pages
 		dataManager->commitFlushSnapshot();
-		dataManager->getPagePool().clear();
+		dataManager->invalidateDirtySegments(snapshot);
 		debug::PerfTrace::addDuration(
 				"save.total", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 													  totalStart)
@@ -851,20 +857,17 @@ namespace graph::storage {
 						idAllocator->resetAfterCompaction();
 
 						dataManager->getSegmentIndexManager()->buildSegmentIndexes();
+
+						// Re-persist headers after compaction modified segments
+						persistSegmentHeaders();
+						auto compactSegCrcs = segmentTracker->collectSegmentCrcs();
+						fileHeaderManager->updateAggregatedCrc(compactSegCrcs);
+						fileHeaderManager->flushFileHeader();
 					}
 				}
 				// Reset the flag after handling potential compaction
 				deleteOperationPerformed.store(false);
 			}
-
-			// Persist segment headers
-			persistSegmentHeaders();
-
-			// Update aggregated CRC from segment CRCs before flushing file header
-			auto flushSegCrcs = segmentTracker->collectSegmentCrcs();
-			fileHeaderManager->updateAggregatedCrc(flushSegCrcs);
-
-			fileHeaderManager->flushFileHeader();
 		} catch (const std::exception &e) {
 			// Log the error
 			std::cerr << "Exception during flush operation: " << e.what() << std::endl;

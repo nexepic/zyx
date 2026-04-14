@@ -67,7 +67,7 @@ namespace graph::storage {
 		 * @param count Number of IDs to allocate.
 		 * @return The first ID in the allocated range. The range is [return, return + count - 1].
 		 */
-		int64_t allocateIdBatch(uint32_t entityType, size_t count) const;
+		int64_t allocateIdBatch(uint32_t entityType, size_t count);
 
 		/**
 		 * @brief Frees an ID, routing it to the appropriate cache (Volatile vs Persisted).
@@ -146,7 +146,11 @@ namespace graph::storage {
 		};
 
 		bool fetchInactiveIdsFromDisk(uint32_t entityType);
-		int64_t allocateNewSequentialId(uint32_t entityType) const;
+		int64_t allocateNewSequentialId(uint32_t entityType);
+
+		// Returns a reference to the max ID counter for the given entity type.
+		// Centralizes the entityType → counter mapping used across multiple methods.
+		int64_t &getMaxIdRef(uint32_t entityType);
 
 		// Recovers gaps between logical MaxID and physical disk storage on startup.
 		void recoverGapIds(uint32_t entityType, int64_t &logicalMaxId);

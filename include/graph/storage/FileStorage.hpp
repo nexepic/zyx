@@ -115,8 +115,6 @@ namespace graph::storage {
 
 	private:
 		std::string dbFilePath;
-		std::unordered_map<uint64_t, Node> nodes;
-		std::unordered_map<uint64_t, Edge> edges;
 
 		FileHeader fileHeader;
 
@@ -131,10 +129,6 @@ namespace graph::storage {
 		OpenMode openMode_;
 
 		std::shared_ptr<IDAllocator> idAllocator;
-
-		// Segment management
-		std::vector<uint64_t> nodeSegments; // List of node segment offsets
-		std::vector<uint64_t> edgeSegments; // List of edge segment offsets
 
 		std::shared_ptr<FileHeaderManager> fileHeaderManager;
 

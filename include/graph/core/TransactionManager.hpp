@@ -57,7 +57,6 @@ namespace graph {
 	private:
 		friend class Transaction;
 		std::shared_mutex rwMutex_;
-		std::unique_lock<std::shared_mutex> writeLock_; // single-writer lock
 		std::atomic<uint64_t> nextTxnId_{1};
 		std::atomic<bool> activeWriteTxn_{false};
 		std::shared_ptr<storage::FileStorage> storage_;

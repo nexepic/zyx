@@ -21,6 +21,7 @@
 #include "graph/storage/PersistenceManager.hpp"
 
 #include "graph/log/Log.hpp"
+#include "graph/storage/CommittedSnapshot.hpp"
 
 namespace graph::storage {
 
@@ -49,7 +50,9 @@ namespace graph::storage {
 			stateRegistry_->upsert(info);
 		}
 
-		checkAndTriggerAutoFlush();
+		if (!transactionActive_.load(std::memory_order_acquire)) {
+			checkAndTriggerAutoFlush();
+		}
 	}
 
 	template<typename EntityType>
@@ -94,13 +97,17 @@ namespace graph::storage {
 			if (totalDirtyCount >= maxDirtyEntities_) {
 				// Trigger the auto-flush callback (usually FileStorage::flush).
 				// This writes current dirty data to disk and clears the registries.
-				checkAndTriggerAutoFlush();
+				if (!transactionActive_.load(std::memory_order_acquire)) {
+					checkAndTriggerAutoFlush();
+				}
 			}
 		}
 
 		// 3. Final Check (Optional but recommended).
 		// Ensures that if the batch ended exactly at the threshold, we flush now rather than later.
-		checkAndTriggerAutoFlush();
+		if (!transactionActive_.load(std::memory_order_acquire)) {
+			checkAndTriggerAutoFlush();
+		}
 	}
 
 	template<typename EntityType>
@@ -215,6 +222,17 @@ namespace graph::storage {
 			log::Log::debug("Auto-flush triggered: {} dirty entities (threshold: {})", total, maxDirtyEntities_);
 			autoFlushCallback_();
 		}
+	}
+
+	std::shared_ptr<CommittedSnapshot> PersistenceManager::captureCommittedSnapshot() const {
+		auto snap = std::make_shared<CommittedSnapshot>();
+		snap->nodes = nodeRegistry_->copyMergedMap();
+		snap->edges = edgeRegistry_->copyMergedMap();
+		snap->properties = propertyRegistry_->copyMergedMap();
+		snap->blobs = blobRegistry_->copyMergedMap();
+		snap->indexes = indexRegistry_->copyMergedMap();
+		snap->states = stateRegistry_->copyMergedMap();
+		return snap;
 	}
 
 	// Explicit instantiations to ensure linking

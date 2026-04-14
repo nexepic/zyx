@@ -125,6 +125,19 @@ namespace graph::storage {
 		}
 
 		/**
+		 * @brief Returns a merged copy of active + flushing maps (active takes priority).
+		 * Used to capture committed state for snapshot isolation without moving data.
+		 */
+		DirtyMap copyMergedMap() const {
+			std::shared_lock<std::shared_mutex> lock(mutex_);
+			DirtyMap result = flushingMap_;
+			for (const auto &[id, info] : activeMap_) {
+				result[id] = info;
+			}
+			return result;
+		}
+
+		/**
 		 * @brief Checks if an entity is marked as dirty.
 		 */
 		bool contains(int64_t id) const {

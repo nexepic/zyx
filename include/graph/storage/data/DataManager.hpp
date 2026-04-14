@@ -232,6 +232,13 @@ namespace graph::storage {
 		void clearCache() const;
 
 		/**
+		 * @brief Invalidates only the page buffer pool entries for segments
+		 * that contain entities from the given flush snapshot.
+		 * More efficient than clearCache() when only a few segments are dirty.
+		 */
+		void invalidateDirtySegments(const FlushSnapshot &snapshot) const;
+
+		/**
 		 * Eagerly closes file handles (readFd_) so the database file can be
 		 * deleted on Windows even if the DataManager object is still alive.
 		 * Called by FileStorage::close() and by the destructor as a safety net.
@@ -368,14 +375,6 @@ namespace graph::storage {
 
 		// Unified page buffer pool (replaces 6 entity-level LRU caches)
 		std::unique_ptr<PageBufferPool> pagePool_;
-
-		// Dirty tracking
-		std::unordered_map<int64_t, DirtyEntityInfo<Node>> dirtyNodes_;
-		std::unordered_map<int64_t, DirtyEntityInfo<Edge>> dirtyEdges_;
-		std::unordered_map<int64_t, DirtyEntityInfo<Property>> dirtyProperties_;
-		std::unordered_map<int64_t, DirtyEntityInfo<Blob>> dirtyBlobs_;
-		std::unordered_map<int64_t, DirtyEntityInfo<Index>> dirtyIndexes_;
-		std::unordered_map<int64_t, DirtyEntityInfo<State>> dirtyStates_;
 
 		// Transaction bookkeeping (mutable: logically separate from entity state,
 		// needs to be modifiable from const entity mutation methods)

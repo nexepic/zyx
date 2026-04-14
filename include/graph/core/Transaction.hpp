@@ -78,8 +78,10 @@ namespace graph {
 		std::vector<TxnOperation> operations_;
 
 		// Shared lock held for read-only transaction's lifetime (RAII)
-		// Write lock is stored on TransactionManager (single writer)
 		std::shared_lock<std::shared_mutex> readLock_;
+
+		// Write lock held for write transaction's lifetime (RAII, moves with Transaction)
+		std::unique_lock<std::shared_mutex> writeLock_;
 
 		// Snapshot for read-only transactions (immutable once acquired)
 		std::shared_ptr<storage::CommittedSnapshot> snapshot_;

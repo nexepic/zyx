@@ -22,6 +22,7 @@
 #include <cstring>
 #include <map>
 #include <sstream>
+#include <unordered_set>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/core/BlobChainManager.hpp"
@@ -31,6 +32,7 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/SegmentReadUtils.hpp"
 #include "graph/storage/wal/WALManager.hpp"
+#include "graph/utils/FixedSizeSerializer.hpp"
 #include "graph/storage/DeletionManager.hpp"
 #include "graph/storage/EntityReferenceUpdater.hpp"
 #include "graph/storage/IDAllocator.hpp"
@@ -240,9 +242,12 @@ namespace graph::storage {
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
+			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
 			if (txnContext_.getWALManager()) {
+				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(node, Node::getTotalSize());
 				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Node),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), node.getId(), {});
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), node.getId(),
+											   {walBuf.begin(), walBuf.end()});
 			}
 		}
 
@@ -269,6 +274,7 @@ namespace graph::storage {
 			for (const auto &node: nodes) {
 				txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 								   static_cast<uint8_t>(EntityType::Node), node.getId()});
+				txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
 			}
 		}
 
@@ -289,6 +295,15 @@ namespace graph::storage {
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
+			Node oldNode = nodeManager_->get(node.getId());
+			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldNode, Node::getTotalSize());
+			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_MODIFIED, {buf.begin(), buf.end()}});
+			if (txnContext_.getWALManager()) {
+				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(node, Node::getTotalSize());
+				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Node),
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_MODIFIED), node.getId(),
+											   {walBuf.begin(), walBuf.end()});
+			}
 		}
 
 		updateEntityImpl<Node>(
@@ -302,6 +317,14 @@ namespace graph::storage {
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
 							   static_cast<uint8_t>(EntityType::Node), node.getId()});
+			Node oldNode = nodeManager_->get(node.getId());
+			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldNode, Node::getTotalSize());
+			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_DELETED, {buf.begin(), buf.end()}});
+			if (txnContext_.getWALManager()) {
+				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Node),
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_DELETED), node.getId(),
+											   {buf.begin(), buf.end()});
+			}
 		}
 
 		nodeManager_->remove(node);
@@ -579,9 +602,12 @@ namespace graph::storage {
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
 			if (txnContext_.getWALManager()) {
+				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(edge, Edge::getTotalSize());
 				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Edge),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), edge.getId(), {});
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), edge.getId(),
+											   {walBuf.begin(), walBuf.end()});
 			}
 		}
 
@@ -610,6 +636,7 @@ namespace graph::storage {
 			for (const auto &edge: edges) {
 				txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
 								   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+				txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
 			}
 		}
 
@@ -633,6 +660,15 @@ namespace graph::storage {
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+			Edge oldEdge = edgeManager_->get(edge.getId());
+			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldEdge, Edge::getTotalSize());
+			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_MODIFIED, {buf.begin(), buf.end()}});
+			if (txnContext_.getWALManager()) {
+				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(edge, Edge::getTotalSize());
+				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Edge),
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_MODIFIED), edge.getId(),
+											   {walBuf.begin(), walBuf.end()});
+			}
 		}
 
 		updateEntityImpl<Edge>(
@@ -646,6 +682,14 @@ namespace graph::storage {
 		if (txnContext_.isActive()) {
 			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
 							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
+			Edge oldEdge = edgeManager_->get(edge.getId());
+			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldEdge, Edge::getTotalSize());
+			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_DELETED, {buf.begin(), buf.end()}});
+			if (txnContext_.getWALManager()) {
+				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Edge),
+											   static_cast<uint8_t>(EntityChangeType::CHANGE_DELETED), edge.getId(),
+											   {buf.begin(), buf.end()});
+			}
 		}
 
 		edgeManager_->remove(edge);
@@ -1425,44 +1469,82 @@ namespace graph::storage {
 	// --- Transaction Rollback ---
 
 	void DataManager::rollbackActiveTransaction() {
-		// 1. Fire reverse observer notifications to revert index state
-		for (auto it = txnContext_.getOps().rbegin(); it != txnContext_.getOps().rend(); ++it) {
+		// Suppress auto-flush during rollback to prevent partial state being written to disk
+		persistenceManager_->setTransactionActive(true);
+
+		// Replay undo log in reverse order for observer notifications (index rollback)
+		const auto &entries = txnContext_.undoLog().entries();
+		for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
 			auto entityType = static_cast<EntityType>(it->entityType);
 
-			switch (it->opType) {
-				case Transaction::TxnOperation::OP_ADD: {
-					// Undo ADD: notify observers as if entity was deleted
+			switch (it->changeType) {
+				case wal::UndoChangeType::UNDO_ADDED: {
+					// Entity was added in this txn — notify observers to revert indexes
 					if (entityType == EntityType::Node) {
 						try {
 							Node node = nodeManager_->get(it->entityId);
 							observerManager_.notifyNodeDeleted(node);
-						} catch (...) {
-						}
+						} catch (...) {}
 					} else if (entityType == EntityType::Edge) {
 						try {
 							Edge edge = edgeManager_->get(it->entityId);
 							observerManager_.notifyEdgeDeleted(edge);
-						} catch (...) {
+						} catch (...) {}
+					}
+					break;
+				}
+				case wal::UndoChangeType::UNDO_MODIFIED: {
+					// Entity was modified — notify observers with before-image
+					if (!it->beforeImage.empty()) {
+						std::string imgStr(it->beforeImage.begin(), it->beforeImage.end());
+						std::istringstream iss(imgStr, std::ios::binary);
+						if (entityType == EntityType::Node) {
+							try {
+								Node oldNode = utils::FixedSizeSerializer::deserializeWithFixedSize<Node>(iss, Node::getTotalSize());
+								Node currentNode = nodeManager_->get(it->entityId);
+								observerManager_.notifyNodeUpdated(currentNode, oldNode);
+							} catch (...) {}
+						} else if (entityType == EntityType::Edge) {
+							try {
+								Edge oldEdge = utils::FixedSizeSerializer::deserializeWithFixedSize<Edge>(iss, Edge::getTotalSize());
+								Edge currentEdge = edgeManager_->get(it->entityId);
+								observerManager_.notifyEdgeUpdated(currentEdge, oldEdge);
+							} catch (...) {}
 						}
 					}
 					break;
 				}
-				case Transaction::TxnOperation::OP_DELETE: {
-					// Undo DELETE: we can't easily restore deleted entities without snapshots.
-					// The dirty registry clearing will handle removing the delete markers.
-					break;
-				}
-				case Transaction::TxnOperation::OP_UPDATE: {
-					// Undo UPDATE: similar to delete, handled by dirty registry clearing
+				case wal::UndoChangeType::UNDO_DELETED: {
+					// Entity was deleted — notify observers to re-add to indexes
+					if (!it->beforeImage.empty()) {
+						std::string imgStr(it->beforeImage.begin(), it->beforeImage.end());
+						std::istringstream iss(imgStr, std::ios::binary);
+						if (entityType == EntityType::Node) {
+							try {
+								Node oldNode = utils::FixedSizeSerializer::deserializeWithFixedSize<Node>(iss, Node::getTotalSize());
+								observerManager_.notifyNodeAdded(oldNode);
+							} catch (...) {}
+						} else if (entityType == EntityType::Edge) {
+							try {
+								Edge oldEdge = utils::FixedSizeSerializer::deserializeWithFixedSize<Edge>(iss, Edge::getTotalSize());
+								observerManager_.notifyEdgeAdded(oldEdge);
+							} catch (...) {}
+						}
+					}
 					break;
 				}
 			}
 		}
 
-		// 2. Clear all dirty registries (revert all entity state changes)
+		// Clear all dirty registries (revert all in-memory entity state changes)
+		// Entities that were only added in this txn disappear from dirty state.
+		// Entities that were modified/deleted revert to their on-disk state.
 		persistenceManager_->clearAll();
 
-		// 3. Clear all caches (force reload from disk on next access)
+		// Re-enable auto-flush now that rollback is complete
+		persistenceManager_->setTransactionActive(false);
+
+		// Clear all caches (force reload from disk on next access)
 		clearCache();
 	}
 
@@ -1470,6 +1552,30 @@ namespace graph::storage {
 
 	void DataManager::clearCache() const {
 		pagePool_->clear();
+	}
+
+	void DataManager::invalidateDirtySegments(const FlushSnapshot &snapshot) const {
+		std::unordered_set<uint64_t> dirtySegments;
+
+		auto collect = [&](const auto &entityMap, auto findSeg) {
+			for (const auto &[id, info] : entityMap) {
+				uint64_t seg = findSeg(id);
+				if (seg != 0) {
+					dirtySegments.insert(seg);
+				}
+			}
+		};
+
+		collect(snapshot.nodes, [&](int64_t id) { return findSegmentForEntityId<Node>(id); });
+		collect(snapshot.edges, [&](int64_t id) { return findSegmentForEntityId<Edge>(id); });
+		collect(snapshot.properties, [&](int64_t id) { return findSegmentForEntityId<Property>(id); });
+		collect(snapshot.blobs, [&](int64_t id) { return findSegmentForEntityId<Blob>(id); });
+		collect(snapshot.indexes, [&](int64_t id) { return findSegmentForEntityId<Index>(id); });
+		collect(snapshot.states, [&](int64_t id) { return findSegmentForEntityId<State>(id); });
+
+		for (uint64_t seg : dirtySegments) {
+			pagePool_->invalidate(seg);
+		}
 	}
 
 	template<typename EntityType>

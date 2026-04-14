@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <vector>
 #include "graph/core/Transaction.hpp"
+#include "graph/storage/wal/UndoLog.hpp"
 
 namespace graph::storage {
 
@@ -52,12 +53,16 @@ namespace graph::storage {
 		void setReadOnly(bool readOnly) { readOnly_ = readOnly; }
 		[[nodiscard]] bool isReadOnly() const { return readOnly_; }
 
+		[[nodiscard]] wal::UndoLog &undoLog() { return undoLog_; }
+		[[nodiscard]] const wal::UndoLog &undoLog() const { return undoLog_; }
+
 	private:
 		bool transactionActive_ = false;
 		bool readOnly_ = false;
 		uint64_t activeTxnId_ = 0;
 		std::vector<Transaction::TxnOperation> txnOps_;
 		wal::WALManager *walManager_ = nullptr;
+		wal::UndoLog undoLog_;
 	};
 
 } // namespace graph::storage

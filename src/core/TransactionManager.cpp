@@ -24,6 +24,7 @@
 #include "graph/core/Transaction.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/PersistenceManager.hpp"
 #include "graph/storage/SnapshotManager.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 
@@ -82,7 +83,6 @@ namespace graph {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 #endif
-		writeLock_ = std::move(lock);
 
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
@@ -95,9 +95,14 @@ namespace graph {
 		auto dm = storage_->getDataManager();
 		dm->setActiveTransaction(txnId);
 
+		// Suppress auto-flush during active transaction
+		dm->getPersistenceManager()->setTransactionActive(true);
+
 		activeWriteTxn_ = true;
 
-		return Transaction(txnId, *this, storage_);
+		Transaction txn(txnId, *this, storage_);
+		txn.writeLock_ = std::move(lock);
+		return txn;
 	}
 
 	void TransactionManager::commitTransaction(Transaction &txn) {
@@ -131,6 +136,12 @@ namespace graph {
 												 .count()));
 		}
 
+		// Capture dirty state into snapshot BEFORE save flushes and clears registries.
+		// Read-only transactions that start after this commit will use this snapshot
+		// to see the committed state even though data is now on disk.
+		auto dm = storage_->getDataManager();
+		auto newSnapshot = dm->getPersistenceManager()->captureCommittedSnapshot();
+
 		// Persist dirty data to main DB file
 		auto saveStart = Clock::now();
 		storage_->save();
@@ -150,23 +161,20 @@ namespace graph {
 												 .count()));
 		}
 
-		// Build and publish new snapshot from current committed state
-		// (After save, dirty registries have been flushed, so snapshot is empty —
-		//  this is correct because the data is now on disk)
-		auto newSnapshot = std::make_shared<storage::CommittedSnapshot>();
+		// Publish the populated snapshot for future readers
 		snapshotManager_->publishSnapshot(std::move(newSnapshot));
 
 		// Clear DataManager transaction context
-		auto dm = storage_->getDataManager();
 		dm->clearActiveTransaction();
+		dm->getPersistenceManager()->setTransactionActive(false);
 
 		// Update transaction state
 		txn.state_ = Transaction::TxnState::TXN_COMMITTED;
 		activeWriteTxn_ = false;
 
 		// Release exclusive lock via RAII
-		if (writeLock_.owns_lock()) {
-			writeLock_.unlock();
+		if (txn.writeLock_.owns_lock()) {
+			txn.writeLock_.unlock();
 		}
 	}
 
@@ -197,12 +205,12 @@ namespace graph {
 
 				// Clear DataManager transaction context
 				dm->clearActiveTransaction();
+				dm->getPersistenceManager()->setTransactionActive(false);
 			}
 
 			// Write WAL rollback record
 			if (walManager_ && walManager_->isOpen()) {
 				walManager_->writeRollback(txn.getId());
-				walManager_->checkpoint();
 			}
 		}
 
@@ -211,8 +219,8 @@ namespace graph {
 		activeWriteTxn_ = false;
 
 		// Release exclusive lock via RAII
-		if (writeLock_.owns_lock()) {
-			writeLock_.unlock();
+		if (txn.writeLock_.owns_lock()) {
+			txn.writeLock_.unlock();
 		}
 	}
 

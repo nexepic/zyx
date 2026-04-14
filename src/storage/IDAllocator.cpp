@@ -157,19 +157,7 @@ namespace graph::storage {
 	}
 
 	void IDAllocator::initializeFromScan(uint32_t entityType, int64_t physicalMaxId) {
-		// Map entityType to the corresponding logical max ID reference
-		int64_t *logicalMaxPtr = nullptr;
-		switch (entityType) {
-			case 0: logicalMaxPtr = &currentMaxNodeId_; break;  // Node
-			case 1: logicalMaxPtr = &currentMaxEdgeId_; break;  // Edge
-			case 2: logicalMaxPtr = &currentMaxPropId_; break;  // Property
-			case 3: logicalMaxPtr = &currentMaxBlobId_; break;  // Blob
-			case 4: logicalMaxPtr = &currentMaxIndexId_; break; // Index
-			case 5: logicalMaxPtr = &currentMaxStateId_; break; // State
-			default: return;
-		}
-
-		int64_t &logicalMaxId = *logicalMaxPtr;
+		int64_t &logicalMaxId = getMaxIdRef(entityType);
 
 		// Same gap recovery logic as recoverGapIds, but without the chain walk
 		if (logicalMaxId > physicalMaxId) {
@@ -202,17 +190,12 @@ namespace graph::storage {
 	void IDAllocator::resetAfterCompaction() {
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		// Log format updated
 		Log::info("IDAllocator: Resetting ALL caches after compaction.");
 
 		hotCache_.clear();
 		coldCache_.clear();
 		volatileCache_.clear();
 		scanCursors_.clear();
-
-		for (auto &cursor: scanCursors_ | std::views::values) {
-			cursor = ScanCursor{0, false, false};
-		}
 	}
 
 	int64_t IDAllocator::allocateId(const uint32_t entityType) {
@@ -269,47 +252,15 @@ namespace graph::storage {
 		return allocateNewSequentialId(entityType);
 	}
 
-	int64_t IDAllocator::allocateIdBatch(const uint32_t entityType, size_t count) const {
+	int64_t IDAllocator::allocateIdBatch(const uint32_t entityType, size_t count) {
 		if (count == 0)
 			return 0;
 
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		// For batch allocation, we bypass the reuse caches (L1/L2/Volatile)
-		// to guarantee contiguous IDs and maximum speed.
-		// This is a trade-off: slightly more ID space fragmentation vs massive speedup.
-
-		int64_t startId = 0;
-
-		// Use the reference to the global max counter
-		switch (entityType) {
-			case Node::typeId:
-				startId = currentMaxNodeId_ + 1;
-				currentMaxNodeId_ += static_cast<int64_t>(count);
-				break;
-			case Edge::typeId:
-				startId = currentMaxEdgeId_ + 1;
-				currentMaxEdgeId_ += static_cast<int64_t>(count);
-				break;
-			case Property::typeId:
-				startId = currentMaxPropId_ + 1;
-				currentMaxPropId_ += static_cast<int64_t>(count);
-				break;
-			case Blob::typeId:
-				startId = currentMaxBlobId_ + 1;
-				currentMaxBlobId_ += static_cast<int64_t>(count);
-				break;
-			case Index::typeId:
-				startId = currentMaxIndexId_ + 1;
-				currentMaxIndexId_ += static_cast<int64_t>(count);
-				break;
-			case State::typeId:
-				startId = currentMaxStateId_ + 1;
-				currentMaxStateId_ += static_cast<int64_t>(count);
-				break;
-			default:
-				throw std::runtime_error("Invalid entity type for batch allocation");
-		}
+		int64_t &maxId = getMaxIdRef(entityType);
+		int64_t startId = maxId + 1;
+		maxId += static_cast<int64_t>(count);
 
 		return startId;
 	}
@@ -460,20 +411,20 @@ namespace graph::storage {
 		return foundAny;
 	}
 
-	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) const {
-		if (entityType == Node::typeId)
-			return ++currentMaxNodeId_;
-		if (entityType == Edge::typeId)
-			return ++currentMaxEdgeId_;
-		if (entityType == Property::typeId)
-			return ++currentMaxPropId_;
-		if (entityType == Blob::typeId)
-			return ++currentMaxBlobId_;
-		if (entityType == Index::typeId)
-			return ++currentMaxIndexId_;
-		if (entityType == State::typeId)
-			return ++currentMaxStateId_;
-		throw std::runtime_error("Invalid entity type");
+	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) {
+		return ++getMaxIdRef(entityType);
+	}
+
+	int64_t &IDAllocator::getMaxIdRef(uint32_t entityType) {
+		switch (entityType) {
+			case Node::typeId: return currentMaxNodeId_;
+			case Edge::typeId: return currentMaxEdgeId_;
+			case Property::typeId: return currentMaxPropId_;
+			case Blob::typeId: return currentMaxBlobId_;
+			case Index::typeId: return currentMaxIndexId_;
+			case State::typeId: return currentMaxStateId_;
+			default: throw std::runtime_error("Invalid entity type: " + std::to_string(entityType));
+		}
 	}
 
 } // namespace graph::storage

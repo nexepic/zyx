@@ -31,6 +31,7 @@ namespace graph::storage {
 		transactionActive_ = false;
 		activeTxnId_ = 0;
 		txnOps_.clear();
+		undoLog_.clear();
 	}
 
 	void TransactionContext::recordOp(Transaction::TxnOperation op) {

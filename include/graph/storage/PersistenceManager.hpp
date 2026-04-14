@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include "DirtyEntityRegistry.hpp"
@@ -31,6 +32,8 @@
 #include "graph/core/State.hpp"
 
 namespace graph::storage {
+
+	struct CommittedSnapshot;
 
 	// Snapshot structure to hold all data being flushed
 	struct FlushSnapshot {
@@ -77,10 +80,20 @@ namespace graph::storage {
 		[[nodiscard]] bool hasUnsavedChanges() const;
 		void clearAll() const;
 
+		/**
+		 * @brief Captures current dirty state as a CommittedSnapshot for read isolation.
+		 * Copies (not moves) data from all registries so the flush path is unaffected.
+		 */
+		[[nodiscard]] std::shared_ptr<CommittedSnapshot> captureCommittedSnapshot() const;
+
 		// --- Auto Flush ---
 		void setMaxDirtyEntities(size_t max) { maxDirtyEntities_ = max; }
 		void setAutoFlushCallback(std::function<void()> callback) { autoFlushCallback_ = std::move(callback); }
 		void checkAndTriggerAutoFlush() const;
+
+		// --- Transaction State ---
+		void setTransactionActive(bool active) { transactionActive_.store(active, std::memory_order_release); }
+		[[nodiscard]] bool isTransactionActive() const { return transactionActive_.load(std::memory_order_acquire); }
 
 	private:
 		std::unique_ptr<DirtyEntityRegistry<Node>> nodeRegistry_;
@@ -92,5 +105,6 @@ namespace graph::storage {
 
 		size_t maxDirtyEntities_ = 10000;
 		std::function<void()> autoFlushCallback_;
+		std::atomic<bool> transactionActive_{false};
 	};
 } // namespace graph::storage
