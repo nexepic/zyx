@@ -76,9 +76,6 @@ namespace graph::parser::cypher {
 
 	std::unique_ptr<query::execution::PhysicalOperator> CypherParserImpl::parse(const std::string &query) const {
 		auto plan = parseToLogical(query);
-		if (!plan.root) {
-			return nullptr;
-		}
 
 		// Convert logical plan to physical plan using managers from the planner
 		auto dm = planner_->getDataManager();
