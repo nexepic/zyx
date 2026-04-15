@@ -15,6 +15,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/StorageBootstrap.hpp"
+#include "graph/storage/StorageIO.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph::storage;
@@ -47,7 +48,8 @@ TEST(StorageBootstrapTest, ScanChainCoversUsedAndUnusedSegmentBranches) {
 		ASSERT_TRUE(file->is_open());
 
 		FileHeader header;
-		auto tracker = std::make_shared<SegmentTracker>(file, header);
+		auto storageIO = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto tracker = std::make_shared<SegmentTracker>(storageIO, header);
 
 		// 100 -> 200 -> 300
 		// - First segment sets physicalMaxId.

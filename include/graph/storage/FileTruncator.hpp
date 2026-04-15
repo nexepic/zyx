@@ -9,19 +9,19 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
 #include "PwriteHelper.hpp"
 #include "SegmentTracker.hpp"
 #include "StorageHeaders.hpp"
+#include "StorageIO.hpp"
 
 namespace graph::storage {
 
 	class FileTruncator {
 	public:
-		FileTruncator(std::shared_ptr<std::fstream> file, std::string fileName,
+		FileTruncator(std::shared_ptr<StorageIO> io, std::string fileName,
 					  std::shared_ptr<SegmentTracker> tracker);
 		~FileTruncator();
 
@@ -33,7 +33,7 @@ namespace graph::storage {
 	private:
 		std::vector<uint64_t> findTruncatableSegments() const;
 
-		std::shared_ptr<std::fstream> file_;
+		std::shared_ptr<StorageIO> io_;
 		std::string fileName_;
 		std::shared_ptr<SegmentTracker> tracker_;
 	};

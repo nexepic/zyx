@@ -31,6 +31,7 @@
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/SegmentTypeRegistry.hpp"
 #include "graph/storage/StorageHeaders.hpp"
+#include "graph/storage/StorageIO.hpp"
 
 using namespace graph::storage;
 
@@ -77,7 +78,8 @@ protected:
 
 		FileHeader header; // Empty header
 		// 2. Init Tracker
-		tracker = std::make_shared<SegmentTracker>(fileStream, header);
+		auto storageIO = std::make_shared<StorageIO>(fileStream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		tracker = std::make_shared<SegmentTracker>(storageIO, header);
 
 		// 3. Init IndexManager
 		indexManager = std::make_shared<SegmentIndexManager>(tracker);

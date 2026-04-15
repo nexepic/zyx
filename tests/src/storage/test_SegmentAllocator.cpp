@@ -38,6 +38,7 @@
 #include "graph/storage/SegmentAllocator.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/StorageHeaders.hpp"
+#include "graph/storage/StorageIO.hpp"
 
 using namespace graph::storage;
 using namespace graph;
@@ -63,13 +64,15 @@ protected:
 		file->write(reinterpret_cast<char *>(&header), sizeof(FileHeader));
 		file->flush();
 
-		segmentTracker = std::make_shared<SegmentTracker>(file, header);
+		auto storageIO = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+
+		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
 		idAllocator = std::make_shared<IDAllocator>(
 			file, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
 			fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 			fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
-		allocator = std::make_shared<SegmentAllocator>(file, segmentTracker, fileHeaderManager, idAllocator);
+		allocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
 	}
 
 	void TearDown() override {

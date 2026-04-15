@@ -23,11 +23,10 @@
 #include <cstring>
 #include <functional>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
-#include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
-#include "graph/storage/SegmentTypeRegistry.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
@@ -38,8 +37,8 @@ namespace graph::storage {
 		return static_cast<std::underlying_type_t<E>>(e);
 	}
 
-	SegmentTracker::SegmentTracker(std::shared_ptr<std::fstream> file, const FileHeader &fileHeader) :
-		file_(std::move(file)) {
+	SegmentTracker::SegmentTracker(std::shared_ptr<StorageIO> io, const FileHeader &fileHeader) :
+		io_(std::move(io)) {
 		initialize(fileHeader);
 	}
 
@@ -86,8 +85,8 @@ namespace graph::storage {
 		uint64_t lastOffset = 0;
 		while (offset != 0) {
 			SegmentHeader header;
-			file_->seekg(static_cast<std::streamoff>(offset));
-			if (!file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader))) {
+			size_t bytesRead = io_->readAt(offset, &header, sizeof(SegmentHeader));
+			if (bytesRead < sizeof(SegmentHeader)) {
 				break;
 			}
 
@@ -167,14 +166,12 @@ namespace graph::storage {
 				return it->second;
 		}
 		// Slow path: segment not cached (should be rare after initialization)
-		// Fall back to pread the header directly without caching
-		if (readFd_ != INVALID_FILE_HANDLE) {
-			SegmentHeader header;
-			ssize_t n = storage::portable_pread(readFd_, &header, sizeof(SegmentHeader), static_cast<int64_t>(offset));
-			if (n >= static_cast<ssize_t>(sizeof(SegmentHeader))) {
-				header.file_offset = offset;
-				return header;
-			}
+		// Fall back to readAt (uses pread when available)
+		SegmentHeader header;
+		size_t n = io_->readAt(offset, &header, sizeof(SegmentHeader));
+		if (n >= sizeof(SegmentHeader)) {
+			header.file_offset = offset;
+			return header;
 		}
 		throw std::runtime_error("Segment not found at offset " + std::to_string(offset));
 	}
@@ -296,8 +293,7 @@ namespace graph::storage {
 
 		SegmentHeader emptyHeader{};
 		emptyHeader.data_type = 0xFF;
-		file_->seekp(static_cast<std::streamoff>(offset));
-		file_->write(reinterpret_cast<const char *>(&emptyHeader), sizeof(SegmentHeader));
+		io_->writeAt(offset, &emptyHeader, sizeof(SegmentHeader));
 	}
 
 	std::vector<uint64_t> SegmentTracker::getFreeSegments() const {
@@ -313,33 +309,19 @@ namespace graph::storage {
 	void SegmentTracker::writeSegmentHeader(uint64_t offset, const SegmentHeader &header) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// Recompute segment CRC before writing the header (only if stream is healthy)
+		// Recompute segment CRC before writing the header
 		SegmentHeader headerToWrite = header;
-		if (file_->good()) {
-			file_->flush();
+		io_->flushStream();
 
-			uint64_t dataOffset = offset + sizeof(SegmentHeader);
-			std::vector<char> buffer(SEGMENT_SIZE, 0);
+		uint64_t dataOffset = offset + sizeof(SegmentHeader);
+		std::vector<char> buffer(SEGMENT_SIZE, 0);
 
-			if (readFd_ != INVALID_FILE_HANDLE) {
-				ssize_t n = portable_pread(readFd_, buffer.data(), SEGMENT_SIZE, static_cast<int64_t>(dataOffset));
-				if (n > 0) {
-					headerToWrite.segment_crc = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
-				}
-			} else {
-				file_->seekg(static_cast<std::streamoff>(dataOffset));
-				file_->read(buffer.data(), SEGMENT_SIZE);
-				if (file_->gcount() > 0) {
-					headerToWrite.segment_crc = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
-				}
-				file_->clear();
-			}
+		size_t n = io_->readAt(dataOffset, buffer.data(), SEGMENT_SIZE);
+		if (n > 0) {
+			headerToWrite.segment_crc = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
 		}
 
-		file_->seekp(static_cast<std::streamoff>(offset));
-		file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
-		if (!*file_)
-			throw std::runtime_error("Failed to write segment header");
+		io_->writeAt(offset, &headerToWrite, sizeof(SegmentHeader));
 
 		segments_[offset] = headerToWrite;
 		segments_[offset].file_offset = offset;
@@ -526,16 +508,9 @@ namespace graph::storage {
 	void SegmentTracker::ensureSegmentCached(uint64_t offset) {
 		if (!segments_.contains(offset)) {
 			SegmentHeader header;
-			if (readFd_ != INVALID_FILE_HANDLE) {
-				ssize_t n = storage::portable_pread(readFd_, &header, sizeof(SegmentHeader), static_cast<int64_t>(offset));
-				if (n < static_cast<ssize_t>(sizeof(SegmentHeader))) {
-					throw std::runtime_error("Failed to pread segment header at offset " + std::to_string(offset));
-				}
-			} else {
-				file_->seekg(static_cast<std::streamoff>(offset));
-				if (!file_->read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader))) {
-					throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
-				}
+			size_t n = io_->readAt(offset, &header, sizeof(SegmentHeader));
+			if (n < sizeof(SegmentHeader)) {
+				throw std::runtime_error("Failed to read segment header at offset " + std::to_string(offset));
 			}
 			header.file_offset = offset;
 			header.needs_compaction = 0;
@@ -553,7 +528,7 @@ namespace graph::storage {
 			return;
 
 		// Flush pending writes so CRC reads see the latest data
-		file_->flush();
+		io_->flushStream();
 
 		// Sort segments by offset to optimize disk seek times (Sequential Write)
 		std::vector sortedSegments(dirtySegments_.begin(), dirtySegments_.end());
@@ -573,15 +548,14 @@ namespace graph::storage {
 				SegmentHeader &header = it->second;
 				SegmentHeader headerToWrite = header;
 
-				file_->seekp(static_cast<std::streamoff>(offset));
-				file_->write(reinterpret_cast<const char *>(&headerToWrite), sizeof(SegmentHeader));
+				io_->writeAt(offset, &headerToWrite, sizeof(SegmentHeader));
 
 				it->second.is_dirty = 0;
 			}
 		}
 
 		dirtySegments_.clear();
-		file_->flush();
+		io_->flushStream();
 	}
 
 	// Template Instantiations
@@ -596,8 +570,14 @@ namespace graph::storage {
 		}
 
 		uint64_t itemOffset = segmentOffset + sizeof(SegmentHeader) + itemIndex * itemSize;
-		file_->seekg(static_cast<std::streamoff>(itemOffset));
-		return utils::FixedSizeSerializer::deserializeWithFixedSize<T>(*file_, itemSize);
+		std::vector<char> buf(itemSize);
+		size_t bytesRead = io_->readAt(itemOffset, buf.data(), itemSize);
+		if (bytesRead < itemSize) {
+			throw std::runtime_error("Failed to read entity at offset " + std::to_string(itemOffset));
+		}
+		std::string bufStr(buf.begin(), buf.end());
+		std::istringstream iss(bufStr, std::ios::binary);
+		return utils::FixedSizeSerializer::deserializeWithFixedSize<T>(iss, itemSize);
 	}
 
 	template<typename T>
@@ -605,8 +585,8 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(segmentOffset);
 		uint64_t itemOffset = segmentOffset + sizeof(SegmentHeader) + itemIndex * itemSize;
-		file_->seekp(static_cast<std::streamoff>(itemOffset));
-		utils::FixedSizeSerializer::serializeWithFixedSize(*file_, entity, itemSize);
+		auto buf = utils::FixedSizeSerializer::serializeToBuffer(entity, itemSize);
+		io_->writeAt(itemOffset, buf.data(), buf.size());
 
 		auto it = segments_.find(segmentOffset);
 		if (it != segments_.end()) {
@@ -637,16 +617,8 @@ namespace graph::storage {
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader);
 		std::vector<char> buffer(SEGMENT_SIZE, 0);
 
-		if (readFd_ != INVALID_FILE_HANDLE) {
-			ssize_t n = portable_pread(readFd_, buffer.data(), SEGMENT_SIZE, static_cast<int64_t>(dataOffset));
-			if (n <= 0) return;
-		} else {
-			file_->clear();
-			file_->seekg(static_cast<std::streamoff>(dataOffset));
-			file_->read(buffer.data(), SEGMENT_SIZE);
-			if (file_->gcount() <= 0) return;
-			file_->clear();
-		}
+		size_t n = io_->readAt(dataOffset, buffer.data(), SEGMENT_SIZE);
+		if (n == 0) return;
 
 		uint32_t crc = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
 
@@ -674,21 +646,10 @@ namespace graph::storage {
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader);
 		std::vector<char> buffer(SEGMENT_SIZE, 0);
 
-		if (readFd_ != INVALID_FILE_HANDLE) {
-			file_->flush();
-			ssize_t n = portable_pread(readFd_, buffer.data(), SEGMENT_SIZE, static_cast<int64_t>(dataOffset));
-			if (n <= 0) {
-				throw std::runtime_error("Failed to read segment data at offset " + std::to_string(segmentOffset));
-			}
-		} else {
-			file_->flush();
-			file_->clear();
-			file_->seekg(static_cast<std::streamoff>(dataOffset));
-			file_->read(buffer.data(), SEGMENT_SIZE);
-			if (file_->gcount() <= 0) {
-				throw std::runtime_error("Failed to read segment data at offset " + std::to_string(segmentOffset));
-			}
-			file_->clear();
+		io_->flushStream();
+		size_t n = io_->readAt(dataOffset, buffer.data(), SEGMENT_SIZE);
+		if (n == 0) {
+			throw std::runtime_error("Failed to read segment data at offset " + std::to_string(segmentOffset));
 		}
 
 		uint32_t computed = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);

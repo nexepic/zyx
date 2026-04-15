@@ -39,6 +39,7 @@
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/SegmentAllocator.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
@@ -82,7 +83,8 @@ protected:
 		file->flush();
 
 		// 2. Initialize Storage Layer Dependencies
-		segmentTracker = std::make_shared<SegmentTracker>(file, header);
+		auto storageIO = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
 
 		idAllocator = std::make_shared<IDAllocator>(
@@ -91,7 +93,7 @@ protected:
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 
 		segmentAllocator =
-				std::make_shared<SegmentAllocator>(file, segmentTracker, fileHeaderManager, idAllocator);
+				std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
 
 		// 3. Initialize DataManager
 		dataManager = std::make_shared<DataManager>(file,

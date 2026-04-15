@@ -13,9 +13,9 @@
 
 namespace graph::storage {
 
-	FileTruncator::FileTruncator(std::shared_ptr<std::fstream> file, std::string fileName,
+	FileTruncator::FileTruncator(std::shared_ptr<StorageIO> io, std::string fileName,
 								 std::shared_ptr<SegmentTracker> tracker) :
-		file_(std::move(file)), fileName_(std::move(fileName)), tracker_(std::move(tracker)) {}
+		io_(std::move(io)), fileName_(std::move(fileName)), tracker_(std::move(tracker)) {}
 
 	FileTruncator::~FileTruncator() = default;
 
@@ -34,19 +34,21 @@ namespace graph::storage {
 			newFileSize = FILE_HEADER_SIZE;
 		}
 
-		file_->flush();
+		io_->flushStream();
 
 		if (nativeFd != INVALID_FILE_HANDLE) {
 			if (portable_ftruncate(nativeFd, newFileSize) != 0) {
 				return false;
 			}
-			file_->clear();
-			file_->seekg(0, std::ios::beg);
-			file_->seekp(0, std::ios::beg);
+			auto stream = io_->getStream();
+			stream->clear();
+			stream->seekg(0, std::ios::beg);
+			stream->seekp(0, std::ios::beg);
 		} else {
-			file_->close();
+			auto stream = io_->getStream();
+			stream->close();
 			std::filesystem::resize_file(fileName_, newFileSize);
-			file_->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
+			stream->open(fileName_, std::ios::in | std::ios::out | std::ios::binary);
 		}
 
 		for (uint64_t offset : truncatableSegments) {

@@ -12,10 +12,10 @@
 
 namespace graph::storage {
 
-	SegmentAllocator::SegmentAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> tracker,
+	SegmentAllocator::SegmentAllocator(std::shared_ptr<StorageIO> io, std::shared_ptr<SegmentTracker> tracker,
 									   std::shared_ptr<FileHeaderManager> fileHeaderManager,
 									   std::shared_ptr<IDAllocator> idAllocator) :
-		file_(std::move(file)), segmentTracker_(std::move(tracker)),
+		io_(std::move(io)), segmentTracker_(std::move(tracker)),
 		fileHeaderManager_(std::move(fileHeaderManager)), idAllocator_(std::move(idAllocator)) {}
 
 	SegmentAllocator::~SegmentAllocator() = default;
@@ -41,11 +41,8 @@ namespace graph::storage {
 			offset = freeSegments.front();
 			segmentTracker_->removeFromFreeList(offset);
 		} else {
-			file_->seekp(0, std::ios::end);
-			offset = file_->tellp();
-
 			std::vector<char> zeros(segmentSize, 0);
-			file_->write(zeros.data(), static_cast<std::streamsize>(segmentSize));
+			offset = io_->append(zeros.data(), segmentSize);
 		}
 
 		SegmentHeader header;
@@ -68,8 +65,7 @@ namespace graph::storage {
 		header.bitmap_size = bitmap::calculateBitmapSize(capacity);
 		std::memset(header.activity_bitmap, 0, sizeof(header.activity_bitmap));
 
-		file_->seekp(static_cast<std::streamoff>(offset));
-		file_->write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
+		io_->writeAt(offset, &header, sizeof(SegmentHeader));
 
 		segmentTracker_->registerSegment(header);
 

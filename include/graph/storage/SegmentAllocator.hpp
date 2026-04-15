@@ -9,19 +9,19 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <vector>
 #include "FileHeaderManager.hpp"
 #include "IDAllocator.hpp"
 #include "SegmentTracker.hpp"
 #include "StorageHeaders.hpp"
+#include "StorageIO.hpp"
 
 namespace graph::storage {
 
 	class SegmentAllocator {
 	public:
-		SegmentAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> tracker,
+		SegmentAllocator(std::shared_ptr<StorageIO> io, std::shared_ptr<SegmentTracker> tracker,
 						 std::shared_ptr<FileHeaderManager> fileHeaderManager, std::shared_ptr<IDAllocator> idAllocator);
 		~SegmentAllocator();
 
@@ -34,7 +34,7 @@ namespace graph::storage {
 		std::shared_ptr<SegmentTracker> getTracker() const { return segmentTracker_; }
 
 	private:
-		std::shared_ptr<std::fstream> file_;
+		std::shared_ptr<StorageIO> io_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
 		std::shared_ptr<FileHeaderManager> fileHeaderManager_;
 		std::shared_ptr<IDAllocator> idAllocator_;

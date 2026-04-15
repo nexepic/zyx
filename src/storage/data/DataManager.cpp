@@ -66,10 +66,6 @@ namespace graph::storage {
 		// concurrently on the same fd without any synchronization.
 		if (!filePath.empty()) {
 			readFd_ = storage::portable_open(filePath.c_str(), O_RDONLY);
-			// Share the fd with SegmentTracker so its ensureSegmentCached() is also lock-free
-			if (readFd_ != storage::INVALID_FILE_HANDLE) {
-				segmentTracker_->setReadFd(readFd_);
-			}
 		}
 
 		persistenceManager_ = std::make_shared<PersistenceManager>();
@@ -85,9 +81,6 @@ namespace graph::storage {
 		if (readFd_ != storage::INVALID_FILE_HANDLE) {
 			storage::portable_close(readFd_);
 			readFd_ = storage::INVALID_FILE_HANDLE;
-			if (segmentTracker_) {
-				segmentTracker_->setReadFd(INVALID_FILE_HANDLE);
-			}
 		}
 	}
 

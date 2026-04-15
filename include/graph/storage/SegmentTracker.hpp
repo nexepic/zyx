@@ -32,6 +32,7 @@
 #include "PwriteHelper.hpp"
 #include "SegmentTypeRegistry.hpp"
 #include "StorageHeaders.hpp"
+#include "StorageIO.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
@@ -40,7 +41,7 @@ namespace graph::storage {
 
 	class SegmentTracker {
 	public:
-		explicit SegmentTracker(std::shared_ptr<std::fstream> file, const FileHeader &fileHeader);
+		explicit SegmentTracker(std::shared_ptr<StorageIO> io, const FileHeader &fileHeader);
 		~SegmentTracker();
 
 		void initialize(const FileHeader &header);
@@ -106,8 +107,6 @@ namespace graph::storage {
 			segmentIndexManager_ = std::move(indexManager);
 		}
 
-		void setReadFd(file_handle_t fd) { readFd_ = fd; }
-
 		// get segment type registry
 		SegmentTypeRegistry getSegmentTypeRegistry() const { return registry_; }
 
@@ -117,8 +116,7 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<uint32_t> collectSegmentCrcs() const;
 
 	private:
-		std::shared_ptr<std::fstream> file_;
-		file_handle_t readFd_ = INVALID_FILE_HANDLE; // pread fd for thread-safe reads (not owned, do not close)
+		std::shared_ptr<StorageIO> io_;
 		mutable std::shared_mutex rwMutex_;    // Read-write lock for concurrent read access
 		mutable std::recursive_mutex mutex_;   // Legacy exclusive lock for write operations
 

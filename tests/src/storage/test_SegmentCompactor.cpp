@@ -28,9 +28,11 @@
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentAllocator.hpp"
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/SegmentCompactor.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/StorageHeaders.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 using namespace graph::storage;
@@ -61,13 +63,14 @@ protected:
 		file->write(reinterpret_cast<char *>(&header), sizeof(FileHeader));
 		file->flush();
 
-		segmentTracker = std::make_shared<SegmentTracker>(file, header);
+		auto storageIO = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
 		idAllocator = std::make_shared<IDAllocator>(
 			file, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
 			fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 			fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
-		segmentAllocator = std::make_shared<SegmentAllocator>(file, segmentTracker, fileHeaderManager, idAllocator);
+		segmentAllocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
 		compactor = std::make_shared<SegmentCompactor>(file, segmentTracker, segmentAllocator, fileHeaderManager);
 
 		dataManager = std::make_shared<DataManager>(file, 100, header, idAllocator, segmentTracker);

@@ -30,6 +30,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/SegmentTypeRegistry.hpp"
 #include "graph/storage/StorageHeaders.hpp"
 
@@ -82,7 +83,8 @@ protected:
 		fileStream->read(reinterpret_cast<char *>(&header), sizeof(FileHeader));
 
 		// 4. Initialize Tracker
-		tracker = std::make_shared<SegmentTracker>(fileStream, header);
+		auto storageIO = std::make_shared<StorageIO>(fileStream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		tracker = std::make_shared<SegmentTracker>(storageIO, header);
 
 		// 5. Initialize and Link IndexManager
 		// We need a real IndexManager to test the integration (e.g., updating indexes when tracker updates)
@@ -881,7 +883,8 @@ TEST_F(SegmentTrackerTest, LoadSegmentChain_TypeMismatch) {
 
 	// Re-initialize tracker with mismatched type
 	// This should trigger the type mismatch warning and break
-	auto newTracker = std::make_shared<SegmentTracker>(fileStream, fh);
+	auto newStorageIO = std::make_shared<StorageIO>(fileStream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto newTracker = std::make_shared<SegmentTracker>(newStorageIO, fh);
 	// The chain should be empty because of the mismatch
 	auto nodeSegments = newTracker->getSegmentsByType(nodeType);
 	EXPECT_TRUE(nodeSegments.empty());
@@ -899,7 +902,8 @@ TEST_F(SegmentTrackerTest, LoadSegmentChain_ReadFailure) {
 	fh.state_segment_head = 0;
 
 	// Should handle read failure gracefully (break on failed read)
-	auto newTracker = std::make_shared<SegmentTracker>(fileStream, fh);
+	auto newStorageIO = std::make_shared<StorageIO>(fileStream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto newTracker = std::make_shared<SegmentTracker>(newStorageIO, fh);
 	auto nodeSegments = newTracker->getSegmentsByType(static_cast<uint32_t>(EntityType::Node));
 	EXPECT_TRUE(nodeSegments.empty());
 }
@@ -1381,7 +1385,8 @@ TEST_F(SegmentTrackerTest, LoadSegmentChain_MultipleSegments) {
 	fh.index_segment_head = 0;
 	fh.state_segment_head = 0;
 
-	auto newTracker = std::make_shared<SegmentTracker>(fileStream, fh);
+	auto newStorageIO = std::make_shared<StorageIO>(fileStream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto newTracker = std::make_shared<SegmentTracker>(newStorageIO, fh);
 
 	// Both segments should be loaded
 	auto nodeSegments = newTracker->getSegmentsByType(nodeType);
