@@ -76,18 +76,28 @@ namespace graph::storage {
 		uint64_t chainHead = segmentTracker_->getChainHead(type);
 		if (chainHead == 0) {
 			segmentTracker_->updateChainHead(type, offset);
+			segmentTracker_->updateChainTail(type, offset);
 		} else {
-			uint64_t current = chainHead;
-			uint64_t prev = 0;
-			while (current != 0) {
-				const SegmentHeader currentHeader = segmentTracker_->getSegmentHeader(current);
-				prev = current;
-				current = currentHeader.next_segment_offset;
+			// O(1) tail access — append directly to the chain tail
+			uint64_t tail = segmentTracker_->getChainTail(type);
+			if (tail != 0) {
+				SegmentHeader tailHeader = segmentTracker_->getSegmentHeader(tail);
+				segmentTracker_->updateSegmentLinks(offset, tail, 0);
+				segmentTracker_->updateSegmentLinks(tail, tailHeader.prev_segment_offset, offset);
+			} else {
+				// Fallback: tail not cached (should not happen after init)
+				uint64_t current = chainHead;
+				uint64_t prev = 0;
+				while (current != 0) {
+					const SegmentHeader currentHeader = segmentTracker_->getSegmentHeader(current);
+					prev = current;
+					current = currentHeader.next_segment_offset;
+				}
+				segmentTracker_->updateSegmentLinks(offset, prev, 0);
+				SegmentHeader prevHeader = segmentTracker_->getSegmentHeader(prev);
+				segmentTracker_->updateSegmentLinks(prev, prevHeader.prev_segment_offset, offset);
 			}
-
-			segmentTracker_->updateSegmentLinks(offset, prev, 0);
-			SegmentHeader prevHeader = segmentTracker_->getSegmentHeader(prev);
-			segmentTracker_->updateSegmentLinks(prev, prevHeader.prev_segment_offset, offset);
+			segmentTracker_->updateChainTail(type, offset);
 		}
 
 		return offset;

@@ -83,6 +83,7 @@ namespace graph::storage {
 
 	void SegmentTracker::loadSegmentChain(uint64_t headOffset, uint32_t expectedType) {
 		uint64_t offset = headOffset;
+		uint64_t lastOffset = 0;
 		while (offset != 0) {
 			SegmentHeader header;
 			file_->seekg(static_cast<std::streamoff>(offset));
@@ -97,7 +98,11 @@ namespace graph::storage {
 
 			header.file_offset = offset;
 			segments_[offset] = header;
+			lastOffset = offset;
 			offset = header.next_segment_offset;
+		}
+		if (lastOffset != 0) {
+			registry_.setChainTail(static_cast<EntityType>(expectedType), lastOffset);
 		}
 	}
 
@@ -224,6 +229,16 @@ namespace graph::storage {
 		registry_.setChainHead(static_cast<EntityType>(type), newHead);
 	}
 
+	uint64_t SegmentTracker::getChainTail(uint32_t type) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		return registry_.getChainTail(static_cast<EntityType>(type));
+	}
+
+	void SegmentTracker::updateChainTail(uint32_t type, uint64_t newTail) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		registry_.setChainTail(static_cast<EntityType>(type), newTail);
+	}
+
 	void SegmentTracker::updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		ensureSegmentCached(offset);
@@ -245,6 +260,11 @@ namespace graph::storage {
 		if (changed) {
 			header.is_dirty = 1;
 			markSegmentDirty(offset);
+
+			// Maintain chain tail: if this segment now has no next, it's the tail
+			if (nextOffset == 0) {
+				registry_.setChainTail(static_cast<EntityType>(header.data_type), offset);
+			}
 		}
 	}
 
@@ -255,6 +275,14 @@ namespace graph::storage {
 		}
 
 		if (segments_.contains(offset)) {
+			const SegmentHeader &header = segments_[offset];
+
+			// If this was the chain tail, update tail to its predecessor
+			auto type = static_cast<EntityType>(header.data_type);
+			if (registry_.getChainTail(type) == offset) {
+				registry_.setChainTail(type, header.prev_segment_offset);
+			}
+
 			if (auto indexMgr = segmentIndexManager_.lock()) {
 				indexMgr->removeSegmentIndex(segments_[offset]);
 			}
@@ -403,6 +431,33 @@ namespace graph::storage {
 
 	void SegmentTracker::setEntityActive(uint64_t offset, uint32_t index, bool active) {
 		setBitmapBit(offset, index, active);
+	}
+
+	void SegmentTracker::setEntityActiveRange(uint64_t offset, uint32_t startIndex, uint32_t count, bool active) {
+		std::unique_lock<std::shared_mutex> rwLock(rwMutex_);
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		ensureSegmentCached(offset);
+		SegmentHeader &header = segments_[offset];
+
+		uint32_t changed = 0;
+		for (uint32_t i = 0; i < count; i++) {
+			uint32_t idx = startIndex + i;
+			bool oldValue = bitmap::getBit(header.activity_bitmap, idx);
+			if (oldValue != active) {
+				bitmap::setBit(header.activity_bitmap, idx, active);
+				changed++;
+			}
+		}
+
+		if (changed > 0) {
+			if (active) {
+				header.inactive_count = (header.inactive_count >= changed) ? header.inactive_count - changed : 0;
+			} else {
+				header.inactive_count += changed;
+			}
+			header.is_dirty = 1;
+			markSegmentDirty(offset);
+		}
 	}
 
 	bool SegmentTracker::isEntityActive(uint64_t offset, uint32_t index) const { return getBitmapBit(offset, index); }

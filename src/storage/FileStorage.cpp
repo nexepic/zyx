@@ -27,6 +27,7 @@
 #include <fstream>
 #include <future>
 #include <sstream>
+#include <tuple>
 #include "graph/storage/StorageBootstrap.hpp"
 #include <utility>
 #include <zlib.h>
@@ -213,16 +214,45 @@ namespace graph::storage {
 		}
 	}
 
+	// Classify entities from a dirty map into added/modified/deleted vectors
 	template<typename EntityType>
-	std::vector<EntityType> getEntitiesByType(const std::unordered_map<int64_t, DirtyEntityInfo<EntityType>> &map,
-											  EntityChangeType type) {
-		std::vector<EntityType> result;
-		for (const auto &[id, info]: map) {
-			if (info.changeType == type && info.backup.has_value()) {
-				result.push_back(*info.backup);
+	struct SaveBatch {
+		std::vector<EntityType> added, modified, deleted;
+	};
+
+	template<typename EntityType>
+	SaveBatch<EntityType> classifyEntities(
+			const std::unordered_map<int64_t, DirtyEntityInfo<EntityType>> &map) {
+		SaveBatch<EntityType> batch;
+		for (const auto &[id, info] : map) {
+			if (!info.backup.has_value()) continue;
+			switch (info.changeType) {
+				case EntityChangeType::CHANGE_ADDED:
+					batch.added.push_back(*info.backup);
+					break;
+				case EntityChangeType::CHANGE_MODIFIED:
+					batch.modified.push_back(*info.backup);
+					break;
+				case EntityChangeType::CHANGE_DELETED:
+					batch.deleted.push_back(*info.backup);
+					break;
 			}
 		}
-		return result;
+		return batch;
+	}
+
+	template<typename T>
+	void FileStorage::saveNewEntities(std::vector<T> &entities) {
+		if (entities.empty()) return;
+		uint64_t &segHead = getSegmentHead(fileHeader, T::typeId);
+		constexpr uint32_t perSeg = storage::itemsPerSegment<T>();
+		saveData(entities, segHead, perSeg);
+	}
+
+	template<typename T>
+	void FileStorage::saveModifiedAndDeleted(const std::vector<T> &modified, const std::vector<T> &deleted) {
+		for (const auto &e : modified) updateEntityInPlace(e);
+		for (const auto &e : deleted) deleteEntityOnDisk(e);
 	}
 
 	void FileStorage::save() {
@@ -241,97 +271,22 @@ namespace graph::storage {
 		if (snapshot.isEmpty())
 			return;
 
-		// 2. PARALLEL DATA PREPARATION PHASE
-		// Classify entities by change type for all entity types in parallel.
-		// This is pure in-memory work with no I/O dependencies.
+		// 2. DATA PREPARATION PHASE
+		// Classify entities by change type for all entity types.
 		auto prepStart = Clock::now();
-		std::vector<Node> newNodes, modNodes, delNodes;
-		std::vector<Edge> newEdges, modEdges, delEdges;
-		std::vector<Property> newProps, modProps, delProps;
-		std::vector<Blob> newBlobs, modBlobs, delBlobs;
-		std::vector<Index> newIndexes, modIndexes, delIndexes;
-		std::vector<State> newStates, modStates, delStates;
+
+		auto allBatches = std::make_tuple(
+				classifyEntities(snapshot.nodes),
+				classifyEntities(snapshot.edges),
+				classifyEntities(snapshot.properties),
+				classifyEntities(snapshot.blobs),
+				classifyEntities(snapshot.indexes),
+				classifyEntities(snapshot.states));
 
 		if (threadPool_ && !threadPool_->isSingleThreaded()) {
-			std::vector<std::future<void>> prep;
-
-			if (!snapshot.nodes.empty()) {
-				prep.push_back(threadPool_->submit([&] {
-					newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_ADDED);
-					modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_MODIFIED);
-					delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_DELETED);
-				}));
-			}
-			if (!snapshot.edges.empty()) {
-				prep.push_back(threadPool_->submit([&] {
-					newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_ADDED);
-					modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_MODIFIED);
-					delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_DELETED);
-				}));
-			}
-			if (!snapshot.properties.empty()) {
-				prep.push_back(threadPool_->submit([&] {
-					newProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_ADDED);
-					modProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_MODIFIED);
-					delProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_DELETED);
-				}));
-			}
-			if (!snapshot.blobs.empty()) {
-				prep.push_back(threadPool_->submit([&] {
-					newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_ADDED);
-					modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_MODIFIED);
-					delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_DELETED);
-				}));
-			}
-			if (!snapshot.indexes.empty()) {
-				prep.push_back(threadPool_->submit([&] {
-					newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_ADDED);
-					modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_MODIFIED);
-					delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_DELETED);
-				}));
-			}
-			if (!snapshot.states.empty()) {
-				prep.push_back(threadPool_->submit([&] {
-					newStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_ADDED);
-					modStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_MODIFIED);
-					delStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_DELETED);
-				}));
-			}
-
-			for (auto &f : prep)
-				f.get();
-		} else {
-			// Sequential preparation
-			if (!snapshot.nodes.empty()) {
-				newNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_ADDED);
-				modNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_MODIFIED);
-				delNodes = getEntitiesByType(snapshot.nodes, EntityChangeType::CHANGE_DELETED);
-			}
-			if (!snapshot.edges.empty()) {
-				newEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_ADDED);
-				modEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_MODIFIED);
-				delEdges = getEntitiesByType(snapshot.edges, EntityChangeType::CHANGE_DELETED);
-			}
-			if (!snapshot.properties.empty()) {
-				newProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_ADDED);
-				modProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_MODIFIED);
-				delProps = getEntitiesByType(snapshot.properties, EntityChangeType::CHANGE_DELETED);
-			}
-			if (!snapshot.blobs.empty()) {
-				newBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_ADDED);
-				modBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_MODIFIED);
-				delBlobs = getEntitiesByType(snapshot.blobs, EntityChangeType::CHANGE_DELETED);
-			}
-			if (!snapshot.indexes.empty()) {
-				newIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_ADDED);
-				modIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_MODIFIED);
-				delIndexes = getEntitiesByType(snapshot.indexes, EntityChangeType::CHANGE_DELETED);
-			}
-			if (!snapshot.states.empty()) {
-				newStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_ADDED);
-				modStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_MODIFIED);
-				delStates = getEntitiesByType(snapshot.states, EntityChangeType::CHANGE_DELETED);
-			}
+			// Parallel classification is unnecessary — classifyEntities is in-memory
+			// and the tuple construction above already ran them sequentially.
+			// The parallelism benefit comes from the I/O phase below.
 		}
 
 		debug::PerfTrace::addDuration(
@@ -342,95 +297,28 @@ namespace graph::storage {
 		// 3. I/O PHASE
 		auto ioStart = Clock::now();
 
-		// Step 1: Sequential — new entities (need segment allocation via SpaceManager)
-		if (!newNodes.empty()) {
-			std::unordered_map<int64_t, Node> map;
-			for (auto &e : newNodes) map[e.getId()] = e;
-			saveData(map, fileHeader.node_segment_head, NODES_PER_SEGMENT);
-		}
-		if (!newEdges.empty()) {
-			std::unordered_map<int64_t, Edge> map;
-			for (auto &e : newEdges) map[e.getId()] = e;
-			saveData(map, fileHeader.edge_segment_head, EDGES_PER_SEGMENT);
-		}
-		if (!newProps.empty()) {
-			std::unordered_map<int64_t, Property> map;
-			for (auto &e : newProps) map[e.getId()] = e;
-			saveData(map, fileHeader.property_segment_head, PROPERTIES_PER_SEGMENT);
-		}
-		if (!newBlobs.empty()) {
-			std::unordered_map<int64_t, Blob> map;
-			for (auto &e : newBlobs) map[e.getId()] = e;
-			saveData(map, fileHeader.blob_segment_head, BLOBS_PER_SEGMENT);
-		}
-		if (!newIndexes.empty()) {
-			std::unordered_map<int64_t, Index> map;
-			for (auto &e : newIndexes) map[e.getId()] = e;
-			saveData(map, fileHeader.index_segment_head, INDEXES_PER_SEGMENT);
-		}
-		if (!newStates.empty()) {
-			std::unordered_map<int64_t, State> map;
-			for (auto &e : newStates) map[e.getId()] = e;
-			saveData(map, fileHeader.state_segment_head, STATES_PER_SEGMENT);
-		}
+		// Step 1: Sequential — new entities (need segment allocation)
+		std::apply([this](auto &...batch) { (saveNewEntities(batch.added), ...); }, allBatches);
 
 		// Step 2: Modified + deleted entities (known offsets, non-overlapping regions)
-		// When thread pool available, parallelize across entity types using pwrite
 		if (threadPool_ && !threadPool_->isSingleThreaded()) {
 			std::vector<std::future<void>> ioTasks;
-
-			if (!modNodes.empty() || !delNodes.empty()) {
-				ioTasks.push_back(threadPool_->submit([&] {
-					for (const auto &n : modNodes) updateEntityInPlace(n);
-					for (const auto &n : delNodes) deleteEntityOnDisk(n);
-				}));
-			}
-			if (!modEdges.empty() || !delEdges.empty()) {
-				ioTasks.push_back(threadPool_->submit([&] {
-					for (const auto &e : modEdges) updateEntityInPlace(e);
-					for (const auto &e : delEdges) deleteEntityOnDisk(e);
-				}));
-			}
-			if (!modProps.empty() || !delProps.empty()) {
-				ioTasks.push_back(threadPool_->submit([&] {
-					for (const auto &p : modProps) updateEntityInPlace(p);
-					for (const auto &p : delProps) deleteEntityOnDisk(p);
-				}));
-			}
-			if (!modBlobs.empty() || !delBlobs.empty()) {
-				ioTasks.push_back(threadPool_->submit([&] {
-					for (const auto &b : modBlobs) updateEntityInPlace(b);
-					for (const auto &b : delBlobs) deleteEntityOnDisk(b);
-				}));
-			}
-			if (!modIndexes.empty() || !delIndexes.empty()) {
-				ioTasks.push_back(threadPool_->submit([&] {
-					for (const auto &i : modIndexes) updateEntityInPlace(i);
-					for (const auto &i : delIndexes) deleteEntityOnDisk(i);
-				}));
-			}
-			if (!modStates.empty() || !delStates.empty()) {
-				ioTasks.push_back(threadPool_->submit([&] {
-					for (const auto &s : modStates) updateEntityInPlace(s);
-					for (const auto &s : delStates) deleteEntityOnDisk(s);
-				}));
-			}
-
-			for (auto &f : ioTasks) f.get();
+			std::apply(
+					[this, &ioTasks](auto &...batch) {
+						auto submit = [this, &ioTasks](auto &b) {
+							if (!b.modified.empty() || !b.deleted.empty()) {
+								ioTasks.push_back(threadPool_->submit(
+										[this, &b] { saveModifiedAndDeleted(b.modified, b.deleted); }));
+							}
+						};
+						(submit(batch), ...);
+					},
+					allBatches);
+			for (auto &f : ioTasks)
+				f.get();
 		} else {
-			// Sequential fallback
-			for (const auto &n : modNodes) updateEntityInPlace(n);
-			for (const auto &n : delNodes) deleteEntityOnDisk(n);
-			for (const auto &e : modEdges) updateEntityInPlace(e);
-			for (const auto &e : delEdges) deleteEntityOnDisk(e);
-			for (const auto &p : modProps) updateEntityInPlace(p);
-			for (const auto &p : delProps) deleteEntityOnDisk(p);
-			for (const auto &b : modBlobs) updateEntityInPlace(b);
-			for (const auto &b : delBlobs) deleteEntityOnDisk(b);
-			for (const auto &i : modIndexes) updateEntityInPlace(i);
-			for (const auto &i : delIndexes) deleteEntityOnDisk(i);
-			for (const auto &s : modStates) updateEntityInPlace(s);
-			for (const auto &s : delStates) deleteEntityOnDisk(s);
+			std::apply([this](auto &...batch) { (saveModifiedAndDeleted(batch.modified, batch.deleted), ...); },
+					   allBatches);
 		}
 
 		// Step 3: Persist segment headers (so pread-based reads see correct used/start_id)
@@ -460,7 +348,7 @@ namespace graph::storage {
 	}
 
 	template<typename T>
-	void FileStorage::saveData(std::unordered_map<int64_t, T> &data, uint64_t &segmentHead, uint32_t itemsPerSegment) {
+	void FileStorage::saveData(std::vector<T> &data, uint64_t &segmentHead, uint32_t itemsPerSegment) {
 		if (data.empty())
 			return;
 
@@ -469,11 +357,8 @@ namespace graph::storage {
 		std::unordered_map<uint64_t, std::vector<T>> entitiesBySegment; // Segment offset -> entities
 
 		// First pass: determine if each entity has a pre-allocated slot
-		for (const auto &[id, entity]: data) {
-			uint64_t segmentOffset = 0;
-
-			// Find if entity has a segment assignment (either from inactive slot reuse or existing entity)
-			segmentOffset = dataManager->findSegmentForEntityId<T>(id);
+		for (const auto &entity : data) {
+			uint64_t segmentOffset = dataManager->findSegmentForEntityId<T>(entity.getId());
 
 			if (segmentOffset != 0) {
 				// Entity has a pre-allocated slot - group by segment for batch processing
@@ -530,14 +415,19 @@ namespace graph::storage {
 		SegmentHeader currentSegHeader;
 		bool isFirstSegment = (currentSegmentOffset == 0);
 
-		// If we have a segment head, find the last segment in the chain
+		// If we have a segment head, find the last segment via O(1) tail lookup
 		if (currentSegmentOffset != 0) {
-			// Find the last segment in the chain
-			while (true) {
-				currentSegHeader = readSegmentHeader(currentSegmentOffset);
-				if (currentSegHeader.next_segment_offset == 0)
-					break;
-				currentSegmentOffset = currentSegHeader.next_segment_offset;
+			uint64_t tail = segmentTracker->getChainTail(T::typeId);
+			if (tail != 0) {
+				currentSegmentOffset = tail;
+			} else {
+				// Fallback: walk the chain (should not happen after init)
+				while (true) {
+					currentSegHeader = readSegmentHeader(currentSegmentOffset);
+					if (currentSegHeader.next_segment_offset == 0)
+						break;
+					currentSegmentOffset = currentSegHeader.next_segment_offset;
+				}
 			}
 		}
 
@@ -749,7 +639,8 @@ namespace graph::storage {
 		segmentTracker->setEntityActive(segmentOffset, entityIndex, isActive);
 	}
 
-	// Update bitmap for batch operations
+	// Update bitmap for batch operations — delegates to SegmentTracker's
+	// single-lock-acquisition range setter, avoiding the vector<bool> roundtrip.
 	void FileStorage::updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count,
 										  bool isActive) const {
 		if (segmentOffset == 0 || count == 0) {
@@ -765,21 +656,7 @@ namespace graph::storage {
 			throw std::runtime_error("Entity range out of bounds for segment bitmap batch update");
 		}
 
-		// Create the activity map
-		std::vector<bool> currentActivity = segmentTracker->getActivityBitmap(segmentOffset);
-
-		// Ensure the vector is large enough
-		if (currentActivity.size() < startIndex + count) {
-			currentActivity.resize(startIndex + count);
-		}
-
-		// Update activity status for the specified range
-		for (uint32_t i = 0; i < count; i++) {
-			currentActivity[startIndex + i] = isActive;
-		}
-
-		// Delegate the update to SegmentTracker
-		segmentTracker->updateActivityBitmap(segmentOffset, currentActivity);
+		segmentTracker->setEntityActiveRange(segmentOffset, static_cast<uint32_t>(startIndex), count, isActive);
 	}
 
 	// Template instantiations

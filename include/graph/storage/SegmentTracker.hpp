@@ -58,6 +58,8 @@ namespace graph::storage {
 
 		uint64_t getChainHead(uint32_t type) const;
 		void updateChainHead(uint32_t type, uint64_t newHead);
+		uint64_t getChainTail(uint32_t type) const;
+		void updateChainTail(uint32_t type, uint64_t newTail);
 		void updateSegmentLinks(uint64_t offset, uint64_t prevOffset, uint64_t nextOffset);
 
 		void markSegmentFree(uint64_t offset);
@@ -84,6 +86,7 @@ namespace graph::storage {
 
 		// Bitmap operations
 		void setEntityActive(uint64_t offset, uint32_t index, bool active);
+		void setEntityActiveRange(uint64_t offset, uint32_t startIndex, uint32_t count, bool active);
 		bool isEntityActive(uint64_t offset, uint32_t index) const;
 		uint32_t countActiveEntities(uint64_t offset) const;
 

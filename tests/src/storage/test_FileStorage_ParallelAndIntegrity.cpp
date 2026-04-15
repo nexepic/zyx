@@ -337,9 +337,9 @@ TEST_F(FileStorageParallelTest, WriteSegmentData_PwritePath) {
 	// (which it always is after open())
 	auto dm = fileStorage->getDataManager();
 
-	std::unordered_map<int64_t, graph::Node> data;
+	std::vector<graph::Node> data;
 	for (int64_t i = 1; i <= 20; ++i) {
-		data[i] = graph::Node(i, 100);
+		data.push_back(graph::Node(i, 100));
 	}
 	uint64_t segHead = 0;
 	fileStorage->saveData(data, segHead, 100);

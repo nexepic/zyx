@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <stdexcept>
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
@@ -44,6 +45,12 @@ namespace graph::storage {
 	constexpr uint32_t TOTAL_SEGMENT_SIZE = SEGMENT_SIZE + SEGMENT_HEADER_SIZE;
 
 	constexpr uint32_t MAX_BITMAP_SIZE = 64; // 64 bytes = 512 bits
+
+	// Generic items-per-segment computation for any entity type
+	template<typename T>
+	constexpr uint32_t itemsPerSegment() {
+		return SEGMENT_SIZE / T::getTotalSize();
+	}
 
 	// File header
 	struct alignas(FILE_HEADER_SIZE) FileHeader {
@@ -70,6 +77,19 @@ namespace graph::storage {
 
 		FileHeader() { std::copy(std::begin(FILE_HEADER_MAGIC_STRING), std::end(FILE_HEADER_MAGIC_STRING) - 1, magic); }
 	};
+
+	// Type-indexed access to segment chain heads in FileHeader
+	inline uint64_t &getSegmentHead(FileHeader &h, uint32_t type) {
+		switch (type) {
+			case 0: return h.node_segment_head;
+			case 1: return h.edge_segment_head;
+			case 2: return h.property_segment_head;
+			case 3: return h.blob_segment_head;
+			case 4: return h.index_segment_head;
+			case 5: return h.state_segment_head;
+			default: throw std::invalid_argument("Invalid entity type for segment head");
+		}
+	}
 
 	template<typename HeaderType>
 	uint32_t calculateActiveCount(const HeaderType &header) {

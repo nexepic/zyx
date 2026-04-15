@@ -21,6 +21,7 @@
 #pragma once
 #include <atomic>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/PwriteHelper.hpp"
@@ -56,7 +57,7 @@ namespace graph::storage {
 		void persistSegmentHeaders() const;
 
 		template<typename T>
-		void saveData(std::unordered_map<int64_t, T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
+		void saveData(std::vector<T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
 
 		template<typename T>
 		void writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t usedItems);
@@ -72,6 +73,12 @@ namespace graph::storage {
 
 		template<typename T>
 		void deleteEntityOnDisk(const T &entity);
+
+		template<typename T>
+		void saveNewEntities(std::vector<T> &entities);
+
+		template<typename T>
+		void saveModifiedAndDeleted(const std::vector<T> &modified, const std::vector<T> &deleted);
 
 		// isFileOpen getter
 		[[nodiscard]] bool isOpen() const { return isFileOpen; }

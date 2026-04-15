@@ -57,6 +57,149 @@ protected:
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 };
 
+// Entity test helper traits for TYPED_TEST parameterization
+template<typename T>
+struct EntityTestHelper;
+
+template<>
+struct EntityTestHelper<graph::Node> {
+    static graph::Node create(graph::storage::DataManager& dm) {
+        graph::Node n(0, 0);
+        dm.addNode(n);
+        return n;
+    }
+    static void update(graph::storage::DataManager& dm, graph::Node& e) {
+        e.setLabelId(42);
+        dm.updateNode(e);
+    }
+    static void del(graph::storage::DataManager& dm, graph::Node& e) {
+        dm.deleteNode(e);
+    }
+    static graph::Node get(graph::storage::DataManager& dm, int64_t id) {
+        return dm.getNode(id);
+    }
+    static constexpr uint32_t typeId = graph::Node::typeId;
+};
+
+template<>
+struct EntityTestHelper<graph::Edge> {
+    static graph::Edge create(graph::storage::DataManager& dm) {
+        // Edge needs two nodes
+        graph::Node n1(0, 0), n2(0, 0);
+        dm.addNode(n1);
+        dm.addNode(n2);
+        graph::Edge e(0, n1.getId(), n2.getId(), 0);
+        dm.addEdge(e);
+        return e;
+    }
+    static void update(graph::storage::DataManager& dm, graph::Edge& e) {
+        e.setTypeId(42);
+        dm.updateEdge(e);
+    }
+    static void del(graph::storage::DataManager& dm, graph::Edge& e) {
+        dm.deleteEdge(e);
+    }
+    static graph::Edge get(graph::storage::DataManager& dm, int64_t id) {
+        return dm.getEdge(id);
+    }
+    static constexpr uint32_t typeId = graph::Edge::typeId;
+};
+
+template<>
+struct EntityTestHelper<graph::Property> {
+    static graph::Property create(graph::storage::DataManager& dm) {
+        graph::Property p;
+        p.setId(0);
+        p.getMutableMetadata().isActive = true;
+        dm.addPropertyEntity(p);
+        return p;
+    }
+    static void update(graph::storage::DataManager& dm, graph::Property& e) {
+        e.setProperties({{"key1", graph::PropertyValue(2)}});
+        dm.updatePropertyEntity(e);
+    }
+    static void del(graph::storage::DataManager& dm, graph::Property& e) {
+        dm.deleteProperty(e);
+    }
+    static graph::Property get(graph::storage::DataManager& dm, int64_t id) {
+        return dm.getProperty(id);
+    }
+    static constexpr uint32_t typeId = graph::Property::typeId;
+};
+
+template<>
+struct EntityTestHelper<graph::Blob> {
+    static graph::Blob create(graph::storage::DataManager& dm) {
+        graph::Blob b;
+        b.setId(0);
+        b.setData("initial");
+        b.getMutableMetadata().isActive = true;
+        dm.addBlobEntity(b);
+        return b;
+    }
+    static void update(graph::storage::DataManager& dm, graph::Blob& e) {
+        e.setData("updated");
+        dm.updateBlobEntity(e);
+    }
+    static void del(graph::storage::DataManager& dm, graph::Blob& e) {
+        dm.deleteBlob(e);
+    }
+    static graph::Blob get(graph::storage::DataManager& dm, int64_t id) {
+        return dm.getBlob(id);
+    }
+    static constexpr uint32_t typeId = graph::Blob::typeId;
+};
+
+template<>
+struct EntityTestHelper<graph::Index> {
+    static graph::Index create(graph::storage::DataManager& dm) {
+        graph::Index idx;
+        idx.setId(0);
+        idx.getMutableMetadata().isActive = true;
+        dm.addIndexEntity(idx);
+        return idx;
+    }
+    static void update(graph::storage::DataManager& dm, graph::Index& e) {
+        e.getMutableMetadata().isActive = true;
+        dm.updateIndexEntity(e);
+    }
+    static void del(graph::storage::DataManager& dm, graph::Index& e) {
+        dm.deleteIndex(e);
+    }
+    static graph::Index get(graph::storage::DataManager& dm, int64_t id) {
+        return dm.getIndex(id);
+    }
+    static constexpr uint32_t typeId = graph::Index::typeId;
+};
+
+template<>
+struct EntityTestHelper<graph::State> {
+    static graph::State create(graph::storage::DataManager& dm) {
+        graph::State s;
+        s.setId(0);
+        s.setKey("testkey");
+        dm.addStateEntity(s);
+        return s;
+    }
+    static void update(graph::storage::DataManager& dm, graph::State& e) {
+        e.setKey("updated");
+        dm.updateStateEntity(e);
+    }
+    static void del(graph::storage::DataManager& dm, graph::State& e) {
+        dm.deleteState(e);
+    }
+    static graph::State get(graph::storage::DataManager& dm, int64_t id) {
+        return dm.getState(id);
+    }
+    static constexpr uint32_t typeId = graph::State::typeId;
+};
+
+template<typename T>
+class FileStorageTypedTest : public FileStorageTest {};
+
+using AllEntityTypes = ::testing::Types<graph::Node, graph::Edge, graph::Property, graph::Blob, graph::Index, graph::State>;
+TYPED_TEST_SUITE(FileStorageTypedTest, AllEntityTypes);
+
 // Remove redundant open() calls from all test methods
 TEST_F(FileStorageTest, AllocateSegment) {
 	// Allocate a segment
@@ -80,7 +223,7 @@ TEST_F(FileStorageTest, TestOpenClose) {
 }
 
 TEST_F(FileStorageTest, SaveDataEmpty) {
-	std::unordered_map<int64_t, graph::Node> data;
+	std::vector<graph::Node> data;
 	uint64_t segmentHead = 0;
 
 	fileStorage->saveData(data, segmentHead, 100);
@@ -88,7 +231,7 @@ TEST_F(FileStorageTest, SaveDataEmpty) {
 }
 
 TEST_F(FileStorageTest, SaveDataSingleElement) {
-	std::unordered_map<int64_t, graph::Node> data = {{1, graph::Node(1, 10)}};
+	std::vector<graph::Node> data = {graph::Node(1, 10)};
 	uint64_t segmentHead = 0;
 
 	fileStorage->saveData(data, segmentHead, 100);
@@ -96,9 +239,9 @@ TEST_F(FileStorageTest, SaveDataSingleElement) {
 }
 
 TEST_F(FileStorageTest, SaveDataFitsInOneSegment) {
-	std::unordered_map<int64_t, graph::Node> data;
+	std::vector<graph::Node> data;
 	for (int64_t i = 1; i <= 50; ++i) {
-		data[i] = graph::Node(i, 100);
+		data.push_back(graph::Node(i, 100));
 	}
 	uint64_t segmentHead = 0;
 	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
@@ -108,9 +251,9 @@ TEST_F(FileStorageTest, SaveDataFitsInOneSegment) {
 }
 
 TEST_F(FileStorageTest, SaveDataMultipleSegments) {
-	std::unordered_map<int64_t, graph::Node> data;
+	std::vector<graph::Node> data;
 	for (int64_t i = 1; i <= 300; ++i) {
-		data[i] = graph::Node(i, 100);
+		data.push_back(graph::Node(i, 100));
 	}
 	uint64_t segmentHead = 0;
 	std::fstream file(testFilePath, std::ios::binary | std::ios::in | std::ios::out);
@@ -120,9 +263,9 @@ TEST_F(FileStorageTest, SaveDataMultipleSegments) {
 }
 
 TEST_F(FileStorageTest, VerifySegmentLinking) {
-	std::unordered_map<int64_t, graph::Node> data;
+	std::vector<graph::Node> data;
 	for (int64_t i = 1; i <= 300; ++i) {
-		data[i] = graph::Node(i, 100);
+		data.push_back(graph::Node(i, 100));
 	}
 	uint64_t segmentHead = 0;
 
@@ -641,8 +784,8 @@ TEST_F(FileStorageTest, Destructor_ClosesStorage) {
 // =========================================================================
 
 TEST_F(FileStorageTest, SaveData_EmptyData) {
-	// Test saveData with empty data map (line 276 early return)
-	std::unordered_map<int64_t, graph::Edge> emptyData;
+	// Test saveData with empty data vector (line 276 early return)
+	std::vector<graph::Edge> emptyData;
 	uint64_t segHead = 0;
 	fileStorage->saveData(emptyData, segHead, 100);
 	EXPECT_EQ(segHead, 0u);
@@ -674,9 +817,9 @@ TEST_F(FileStorageTest, SaveData_EdgesInMultipleSegments) {
 	fileStorage->flush();
 
 	// Create many edges
-	std::unordered_map<int64_t, graph::Edge> edgeData;
+	std::vector<graph::Edge> edgeData;
 	for (int64_t i = 1; i <= 200; ++i) {
-		edgeData[i] = graph::Edge(i, n1.getId(), n2.getId(), 0);
+		edgeData.push_back(graph::Edge(i, n1.getId(), n2.getId(), 0));
 	}
 	uint64_t edgeSegHead = 0;
 	fileStorage->saveData(edgeData, edgeSegHead, 100);
@@ -786,62 +929,6 @@ TEST_F(FileStorageTest, Flush_DeleteOperationNotPerformed) {
 	dm->addNode(n);
 
 	// Flush without any delete operations
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-TEST_F(FileStorageTest, SaveData_PropertyDeletion) {
-	// Test deletion path for properties
-	auto dm = fileStorage->getDataManager();
-
-	graph::Property p;
-	p.setId(0);
-	dm->addPropertyEntity(p);
-	fileStorage->flush();
-
-	// Delete the property
-	dm->deleteProperty(p);
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-TEST_F(FileStorageTest, SaveData_BlobDeletion) {
-	// Test deletion path for blobs
-	auto dm = fileStorage->getDataManager();
-
-	graph::Blob b;
-	b.setId(0);
-	dm->addBlobEntity(b);
-	fileStorage->flush();
-
-	// Delete the blob
-	dm->deleteBlob(b);
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-TEST_F(FileStorageTest, SaveData_IndexDeletion) {
-	// Test deletion path for indexes
-	auto dm = fileStorage->getDataManager();
-
-	graph::Index idx;
-	idx.setId(0);
-	dm->addIndexEntity(idx);
-	fileStorage->flush();
-
-	// Delete the index
-	dm->deleteIndex(idx);
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-TEST_F(FileStorageTest, SaveData_StateDeletion) {
-	// Test deletion path for states
-	auto dm = fileStorage->getDataManager();
-
-	graph::State s;
-	s.setId(0);
-	dm->addStateEntity(s);
-	fileStorage->flush();
-
-	// Delete the state
-	dm->deleteState(s);
 	EXPECT_NO_THROW(fileStorage->flush());
 }
 
@@ -1043,106 +1130,6 @@ TEST_F(FileStorageTest, SaveData_MultipleEntityTypesInSequence) {
 	EXPECT_NO_THROW(fileStorage->flush());
 }
 
-// Test saveData pre-allocated slot reuse path for Edge type
-// First save allocates new slot, second save (after update) reuses the pre-allocated slot
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlotReuse_Edge) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::Node n1(0, 0);
-	dm->addNode(n1);
-	graph::Node n2(0, 0);
-	dm->addNode(n2);
-
-	graph::Edge e(0, n1.getId(), n2.getId(), 0);
-	dm->addEdge(e);
-
-	// First flush - allocates new segment slot for edge
-	fileStorage->flush();
-
-	// Update the edge - this creates a MODIFIED dirty entry
-	e.setTypeId(42);
-	dm->updateEdge(e);
-
-	// Second flush - should find pre-allocated slot and reuse it (line 307, 318 branches)
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test saveData pre-allocated slot reuse path for Property type
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlotReuse_Property) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::Node n(0, 0);
-	dm->addNode(n);
-
-	graph::Property p;
-	p.setId(0);
-	p.getMutableMetadata().entityId = n.getId();
-	p.getMutableMetadata().entityType = 0;
-	p.getMutableMetadata().isActive = true;
-	p.setProperties({{"key1", graph::PropertyValue(1)}});
-	dm->addPropertyEntity(p);
-
-	fileStorage->flush();
-
-	// Update property
-	p.setProperties({{"key1", graph::PropertyValue(2)}});
-	dm->updatePropertyEntity(p);
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test saveData pre-allocated slot reuse path for Blob type
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlotReuse_Blob) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::Blob b;
-	b.setId(0);
-	b.setData("initial");
-	b.getMutableMetadata().isActive = true;
-	dm->addBlobEntity(b);
-
-	fileStorage->flush();
-
-	b.setData("updated");
-	dm->updateBlobEntity(b);
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test saveData pre-allocated slot reuse path for Index type
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlotReuse_Index) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::Index idx;
-	idx.setId(0);
-	idx.getMutableMetadata().isActive = true;
-	dm->addIndexEntity(idx);
-
-	fileStorage->flush();
-
-	idx.getMutableMetadata().isActive = true;
-	dm->updateIndexEntity(idx);
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test saveData pre-allocated slot reuse path for State type
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlotReuse_State) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::State s;
-	s.setId(0);
-	s.setKey("testkey");
-	dm->addStateEntity(s);
-
-	fileStorage->flush();
-
-	s.setKey("updated");
-	dm->updateStateEntity(s);
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
 // Test bitmap inconsistency detection (line 579 True branch)
 TEST_F(FileStorageTest, VerifyBitmapConsistency_Inconsistent) {
 	auto dm = fileStorage->getDataManager();
@@ -1191,87 +1178,6 @@ TEST_F(FileStorageTest, FlushTriggersCompaction) {
 	EXPECT_NO_THROW(fileStorage->flush());
 }
 
-// =========================================================================
-// Additional Branch Coverage Tests: Entity modification and deletion paths
-// =========================================================================
-
-// Test that save() processes modified and deleted blobs correctly
-TEST_F(FileStorageTest, Save_ModifyAndDeleteBlobs) {
-	auto dm = fileStorage->getDataManager();
-
-	// Add multiple blobs
-	graph::Blob b1;
-	b1.setId(0);
-	b1.setData("blob_data_1");
-	dm->addBlobEntity(b1);
-
-	graph::Blob b2;
-	b2.setId(0);
-	b2.setData("blob_data_2");
-	dm->addBlobEntity(b2);
-
-	fileStorage->flush();
-
-	// Modify first blob (triggers CHANGE_MODIFIED path for blobs in save)
-	b1.setData("modified_blob");
-	dm->updateBlobEntity(b1);
-
-	// Delete second blob (triggers CHANGE_DELETED path for blobs in save)
-	dm->deleteBlob(b2);
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test that save() processes modified and deleted indexes correctly
-TEST_F(FileStorageTest, Save_ModifyAndDeleteIndexes) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::Index idx1;
-	idx1.setId(0);
-	dm->addIndexEntity(idx1);
-
-	graph::Index idx2;
-	idx2.setId(0);
-	dm->addIndexEntity(idx2);
-
-	fileStorage->flush();
-
-	// Modify first index
-	idx1.setParentId(99);
-	dm->updateIndexEntity(idx1);
-
-	// Delete second index
-	dm->deleteIndex(idx2);
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test that save() processes modified and deleted states correctly
-TEST_F(FileStorageTest, Save_ModifyAndDeleteStates) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::State s1;
-	s1.setId(0);
-	s1.setKey("state1");
-	dm->addStateEntity(s1);
-
-	graph::State s2;
-	s2.setId(0);
-	s2.setKey("state2");
-	dm->addStateEntity(s2);
-
-	fileStorage->flush();
-
-	// Modify first state
-	s1.setKey("modified_state");
-	dm->updateStateEntity(s1);
-
-	// Delete second state
-	dm->deleteState(s2);
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
 // Test flush with both delete flag and compaction enabled but shouldCompact returns false
 TEST_F(FileStorageTest, Flush_DeleteWithCompactionEnabled_NoCompactionNeeded) {
 	fileStorage->setCompactionEnabled(true);
@@ -1288,61 +1194,6 @@ TEST_F(FileStorageTest, Flush_DeleteWithCompactionEnabled_NoCompactionNeeded) {
 	// Flush should check compaction but shouldCompact likely returns false
 	EXPECT_NO_THROW(fileStorage->flush());
 	fileStorage->setCompactionEnabled(false);
-}
-
-// Test save with only new properties (no modify or delete)
-TEST_F(FileStorageTest, Save_OnlyNewProperties) {
-	auto dm = fileStorage->getDataManager();
-
-	// Add multiple property entities (triggers newProps path in save)
-	for (int i = 0; i < 3; i++) {
-		graph::Property p;
-		p.setId(0);
-		dm->addPropertyEntity(p);
-	}
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test save with only new blobs
-TEST_F(FileStorageTest, Save_OnlyNewBlobs) {
-	auto dm = fileStorage->getDataManager();
-
-	for (int i = 0; i < 3; i++) {
-		graph::Blob b;
-		b.setId(0);
-		b.setData("blob_" + std::to_string(i));
-		dm->addBlobEntity(b);
-	}
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test save with only new indexes
-TEST_F(FileStorageTest, Save_OnlyNewIndexes) {
-	auto dm = fileStorage->getDataManager();
-
-	for (int i = 0; i < 3; i++) {
-		graph::Index idx;
-		idx.setId(0);
-		dm->addIndexEntity(idx);
-	}
-
-	EXPECT_NO_THROW(fileStorage->flush());
-}
-
-// Test save with only new states
-TEST_F(FileStorageTest, Save_OnlyNewStates) {
-	auto dm = fileStorage->getDataManager();
-
-	for (int i = 0; i < 3; i++) {
-		graph::State s;
-		s.setId(0);
-		s.setKey("key_" + std::to_string(i));
-		dm->addStateEntity(s);
-	}
-
-	EXPECT_NO_THROW(fileStorage->flush());
 }
 
 // =========================================================================
@@ -1529,18 +1380,18 @@ TEST_F(FileStorageTest, SaveData_WriteToExistingSegmentChain) {
 	auto dm = fileStorage->getDataManager();
 
 	// First batch creates the segment chain
-	std::unordered_map<int64_t, graph::Node> data1;
+	std::vector<graph::Node> data1;
 	for (int64_t i = 1; i <= 50; ++i) {
-		data1[i] = graph::Node(i, 100);
+		data1.push_back(graph::Node(i, 100));
 	}
 	uint64_t segmentHead = 0;
 	fileStorage->saveData(data1, segmentHead, 100);
 	EXPECT_NE(segmentHead, 0u);
 
 	// Second batch adds to existing chain
-	std::unordered_map<int64_t, graph::Node> data2;
+	std::vector<graph::Node> data2;
 	for (int64_t i = 51; i <= 100; ++i) {
-		data2[i] = graph::Node(i, 200);
+		data2.push_back(graph::Node(i, 200));
 	}
 	fileStorage->saveData(data2, segmentHead, 100);
 
@@ -1585,17 +1436,17 @@ TEST_F(FileStorageTest, WriteSegmentData_NonZeroBaseUsed) {
 	auto dm = fileStorage->getDataManager();
 
 	// Create a batch that partially fills a segment
-	std::unordered_map<int64_t, graph::Node> data1;
+	std::vector<graph::Node> data1;
 	for (int64_t i = 1; i <= 10; ++i) {
-		data1[i] = graph::Node(i, 100);
+		data1.push_back(graph::Node(i, 100));
 	}
 	uint64_t segmentHead = 0;
 	fileStorage->saveData(data1, segmentHead, 100);
 
 	// Now add more data to the same segment chain (non-zero baseUsed)
-	std::unordered_map<int64_t, graph::Node> data2;
+	std::vector<graph::Node> data2;
 	for (int64_t i = 11; i <= 20; ++i) {
-		data2[i] = graph::Node(i, 200);
+		data2.push_back(graph::Node(i, 200));
 	}
 	fileStorage->saveData(data2, segmentHead, 100);
 
@@ -1932,126 +1783,6 @@ TEST_F(FileStorageTest, Save_ModifiedAndDeletedNodes_CoversAllPaths) {
 }
 
 // =========================================================================
-// Branch Coverage: saveData with empty maps for non-Node/Edge types (line 276)
-// =========================================================================
-
-TEST_F(FileStorageTest, SaveData_EmptyPropertyMap) {
-	std::unordered_map<int64_t, graph::Property> emptyData;
-	uint64_t segHead = 0;
-	fileStorage->saveData(emptyData, segHead, 100);
-	EXPECT_EQ(segHead, 0u);
-}
-
-TEST_F(FileStorageTest, SaveData_EmptyBlobMap) {
-	std::unordered_map<int64_t, graph::Blob> emptyData;
-	uint64_t segHead = 0;
-	fileStorage->saveData(emptyData, segHead, 100);
-	EXPECT_EQ(segHead, 0u);
-}
-
-TEST_F(FileStorageTest, SaveData_EmptyIndexMap) {
-	std::unordered_map<int64_t, graph::Index> emptyData;
-	uint64_t segHead = 0;
-	fileStorage->saveData(emptyData, segHead, 100);
-	EXPECT_EQ(segHead, 0u);
-}
-
-TEST_F(FileStorageTest, SaveData_EmptyStateMap) {
-	std::unordered_map<int64_t, graph::State> emptyData;
-	uint64_t segHead = 0;
-	fileStorage->saveData(emptyData, segHead, 100);
-	EXPECT_EQ(segHead, 0u);
-}
-
-// =========================================================================
-// Branch Coverage: saveData pre-allocated slot reuse for Property type
-// Covers lines 290 (True), 300, 307, 318, 323, 332 for Property instantiation
-// =========================================================================
-
-TEST_F(FileStorageTest, SaveData_PropertyPreAllocatedSlotReuse) {
-	auto dm = fileStorage->getDataManager();
-
-	// Step 1: Create properties and flush to disk to establish segments
-	std::vector<graph::Property> props;
-	for (int i = 0; i < 5; ++i) {
-		graph::Property p;
-		p.setId(0);
-		dm->addPropertyEntity(p);
-		props.push_back(p);
-	}
-	fileStorage->flush();
-
-	// Step 2: Delete properties to create free slots with inactive_count > 0
-	for (auto &p : props) {
-		dm->deleteProperty(p);
-	}
-	fileStorage->flush();
-
-	// Step 3: Rebuild segment indexes so findSegmentForEntityId can find existing segments
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	// Step 4: Now directly call saveData with Property entities that have IDs
-	// within the range of existing segments, triggering pre-allocated slot reuse
-	std::unordered_map<int64_t, graph::Property> data;
-	for (auto &p : props) {
-		graph::Property newP;
-		newP.setId(p.getId());
-		newP.getMutableMetadata().isActive = true;
-		data[p.getId()] = newP;
-	}
-	uint64_t segHead = fileStorage->getDataManager()->getSegmentTracker()->getChainHead(graph::Property::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::PROPERTIES_PER_SEGMENT);
-
-	// Verify entities were written
-	EXPECT_NE(segHead, 0u);
-}
-
-// =========================================================================
-// Branch Coverage: saveData pre-allocated slot reuse for Blob type
-// =========================================================================
-
-TEST_F(FileStorageTest, SaveData_BlobPreAllocatedSlotReuse) {
-	auto dm = fileStorage->getDataManager();
-
-	// Step 1: Create blobs and flush
-	std::vector<graph::Blob> blobs;
-	for (int i = 0; i < 5; ++i) {
-		graph::Blob b;
-		b.setId(0);
-		b.setData("data_" + std::to_string(i));
-		dm->addBlobEntity(b);
-		blobs.push_back(b);
-	}
-	fileStorage->flush();
-
-	// Step 2: Delete blobs
-	for (auto &b : blobs) {
-		dm->deleteBlob(b);
-	}
-	fileStorage->flush();
-
-	// Rebuild segment index so findSegmentForEntityId can find the segments
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	// Step 3: Rebuild segment indexes so findSegmentForEntityId can find slots
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	// Step 4: Call saveData with blobs that match existing segment slots
-	std::unordered_map<int64_t, graph::Blob> data;
-	for (auto &b : blobs) {
-		graph::Blob newB;
-		newB.setId(b.getId());
-		newB.setData("reused");
-		newB.getMutableMetadata().isActive = true;
-		data[b.getId()] = newB;
-	}
-	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Blob::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::BLOBS_PER_SEGMENT);
-
-	EXPECT_NE(segHead, 0u);
-}
-
-// =========================================================================
 // Branch Coverage: saveData pre-allocated slot reuse for Index type
 // =========================================================================
 
@@ -2078,12 +1809,12 @@ TEST_F(FileStorageTest, SaveData_IndexPreAllocatedSlotReuse) {
 	dm->getSegmentIndexManager()->buildSegmentIndexes();
 
 	// Step 4: Call saveData with indexes matching existing segment slots
-	std::unordered_map<int64_t, graph::Index> data;
+	std::vector<graph::Index> data;
 	for (auto &idx : indexes) {
 		graph::Index newIdx;
 		newIdx.setId(idx.getId());
 		newIdx.getMutableMetadata().isActive = true;
-		data[idx.getId()] = newIdx;
+		data.push_back(newIdx);
 	}
 	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Index::typeId);
 	fileStorage->saveData(data, segHead, graph::storage::INDEXES_PER_SEGMENT);
@@ -2119,90 +1850,15 @@ TEST_F(FileStorageTest, SaveData_StatePreAllocatedSlotReuse) {
 	dm->getSegmentIndexManager()->buildSegmentIndexes();
 
 	// Step 4: Call saveData with states matching existing segment slots
-	std::unordered_map<int64_t, graph::State> data;
+	std::vector<graph::State> data;
 	for (auto &s : states) {
 		graph::State newS;
 		newS.setId(s.getId());
 		newS.setKey("reused");
-		data[s.getId()] = newS;
+		data.push_back(newS);
 	}
 	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::State::typeId);
 	fileStorage->saveData(data, segHead, graph::storage::STATES_PER_SEGMENT);
-
-	EXPECT_NE(segHead, 0u);
-}
-
-// =========================================================================
-// Branch Coverage: saveData where ALL entities have pre-allocated slots
-// Covers line 332 (entitiesForNewSlots.empty() True branch) for non-Node types
-// =========================================================================
-
-TEST_F(FileStorageTest, SaveData_AllEntitiesPreAllocated_Property) {
-	auto dm = fileStorage->getDataManager();
-
-	// Create properties and flush to create segments
-	graph::Property p1;
-	p1.setId(0);
-	dm->addPropertyEntity(p1);
-	graph::Property p2;
-	p2.setId(0);
-	dm->addPropertyEntity(p2);
-	fileStorage->flush();
-
-	// Rebuild segment index so findSegmentForEntityId can locate existing segments
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	// Now call saveData with the same IDs - they should all find pre-allocated slots
-	// since those entities already exist in segments on disk
-	std::unordered_map<int64_t, graph::Property> data;
-	graph::Property p1Copy;
-	p1Copy.setId(p1.getId());
-	p1Copy.getMutableMetadata().isActive = true;
-	data[p1.getId()] = p1Copy;
-
-	graph::Property p2Copy;
-	p2Copy.setId(p2.getId());
-	p2Copy.getMutableMetadata().isActive = true;
-	data[p2.getId()] = p2Copy;
-
-	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Property::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::PROPERTIES_PER_SEGMENT);
-
-	EXPECT_NE(segHead, 0u);
-}
-
-TEST_F(FileStorageTest, SaveData_AllEntitiesPreAllocated_Blob) {
-	auto dm = fileStorage->getDataManager();
-
-	graph::Blob b1;
-	b1.setId(0);
-	b1.setData("test1");
-	dm->addBlobEntity(b1);
-	graph::Blob b2;
-	b2.setId(0);
-	b2.setData("test2");
-	dm->addBlobEntity(b2);
-	fileStorage->flush();
-
-	// Rebuild segment index
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	// Call saveData with same IDs - all should find pre-allocated slots
-	std::unordered_map<int64_t, graph::Blob> data;
-	graph::Blob b1Copy;
-	b1Copy.setId(b1.getId());
-	b1Copy.setData("updated1");
-	b1Copy.getMutableMetadata().isActive = true;
-	data[b1.getId()] = b1Copy;
-
-	graph::Blob b2Copy;
-	b2Copy.setId(b2.getId());
-	b2Copy.setData("updated2");
-	b2Copy.getMutableMetadata().isActive = true;
-	data[b2.getId()] = b2Copy;
-
-	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Blob::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::BLOBS_PER_SEGMENT);
 
 	EXPECT_NE(segHead, 0u);
 }
@@ -2216,25 +1872,25 @@ TEST_F(FileStorageTest, SaveData_PropertyMultiSegmentChain) {
 	auto dm = fileStorage->getDataManager();
 
 	// Fill first segment
-	std::unordered_map<int64_t, graph::Property> data1;
+	std::vector<graph::Property> data1;
 	uint32_t capacity = graph::storage::PROPERTIES_PER_SEGMENT;
 	for (uint32_t i = 1; i <= capacity; ++i) {
 		graph::Property p;
 		p.setId(static_cast<int64_t>(i));
 		p.getMutableMetadata().isActive = true;
-		data1[static_cast<int64_t>(i)] = p;
+		data1.push_back(p);
 	}
 	uint64_t segHead = 0;
 	fileStorage->saveData(data1, segHead, capacity);
 	ASSERT_NE(segHead, 0u);
 
 	// Add more to trigger second segment allocation
-	std::unordered_map<int64_t, graph::Property> data2;
+	std::vector<graph::Property> data2;
 	for (uint32_t i = capacity + 1; i <= capacity + 10; ++i) {
 		graph::Property p;
 		p.setId(static_cast<int64_t>(i));
 		p.getMutableMetadata().isActive = true;
-		data2[static_cast<int64_t>(i)] = p;
+		data2.push_back(p);
 	}
 	fileStorage->saveData(data2, segHead, capacity);
 
@@ -2292,126 +1948,6 @@ TEST_F(FileStorageTest, Save_EdgeSlotReuse_CoversPreAllocatedPath) {
 }
 
 // =========================================================================
-// Branch Coverage: Line 318 False - bitmap bit already set during saveData
-// When saveData writes to a pre-allocated slot that is already active,
-// getBitmapBit returns true (bit is set), so the if-body is skipped.
-// =========================================================================
-
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlot_BitmapAlreadySet_Node) {
-	// For Node entities: create nodes, flush (bitmap set), then call saveData
-	// again with the same IDs. The bitmap bits are already set, covering line 318 False.
-	auto dm = fileStorage->getDataManager();
-
-	// Create nodes and flush to disk
-	std::vector<graph::Node> nodes;
-	for (int i = 0; i < 3; ++i) {
-		graph::Node n(0, 0);
-		dm->addNode(n);
-		nodes.push_back(n);
-	}
-	fileStorage->flush();
-
-	// Rebuild segment index for findSegmentForEntityId
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	// Now call saveData with the same IDs - bitmap bits are already set
-	std::unordered_map<int64_t, graph::Node> data;
-	for (auto &n : nodes) {
-		graph::Node copy(n.getId(), 99);
-		data[n.getId()] = copy;
-	}
-	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Node::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::NODES_PER_SEGMENT);
-	EXPECT_NE(segHead, 0u);
-}
-
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlot_BitmapAlreadySet_Edge) {
-	// Same as above but for Edge entities
-	auto dm = fileStorage->getDataManager();
-
-	graph::Node n1(0, 0);
-	dm->addNode(n1);
-	graph::Node n2(0, 0);
-	dm->addNode(n2);
-
-	std::vector<graph::Edge> edges;
-	for (int i = 0; i < 3; ++i) {
-		graph::Edge e(0, n1.getId(), n2.getId(), 0);
-		dm->addEdge(e);
-		edges.push_back(e);
-	}
-	fileStorage->flush();
-
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	// Call saveData with same edge IDs - bitmap bits already set
-	std::unordered_map<int64_t, graph::Edge> data;
-	for (auto &e : edges) {
-		graph::Edge copy(e.getId(), n1.getId(), n2.getId(), 42);
-		data[e.getId()] = copy;
-	}
-	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Edge::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::EDGES_PER_SEGMENT);
-	EXPECT_NE(segHead, 0u);
-}
-
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlot_BitmapAlreadySet_Index) {
-	// Same for Index entities
-	auto dm = fileStorage->getDataManager();
-
-	std::vector<graph::Index> indexes;
-	for (int i = 0; i < 3; ++i) {
-		graph::Index idx;
-		idx.setId(0);
-		idx.getMutableMetadata().isActive = true;
-		dm->addIndexEntity(idx);
-		indexes.push_back(idx);
-	}
-	fileStorage->flush();
-
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	std::unordered_map<int64_t, graph::Index> data;
-	for (auto &idx : indexes) {
-		graph::Index copy;
-		copy.setId(idx.getId());
-		copy.getMutableMetadata().isActive = true;
-		data[idx.getId()] = copy;
-	}
-	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Index::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::INDEXES_PER_SEGMENT);
-	EXPECT_NE(segHead, 0u);
-}
-
-TEST_F(FileStorageTest, SaveData_PreAllocatedSlot_BitmapAlreadySet_State) {
-	// Same for State entities
-	auto dm = fileStorage->getDataManager();
-
-	std::vector<graph::State> states;
-	for (int i = 0; i < 3; ++i) {
-		graph::State s;
-		s.setId(0);
-		s.setKey("key_" + std::to_string(i));
-		dm->addStateEntity(s);
-		states.push_back(s);
-	}
-	fileStorage->flush();
-
-	dm->getSegmentIndexManager()->buildSegmentIndexes();
-
-	std::unordered_map<int64_t, graph::State> data;
-	for (auto &s : states) {
-		graph::State copy;
-		copy.setId(s.getId());
-		copy.setKey("updated");
-		data[s.getId()] = copy;
-	}
-	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::State::typeId);
-	fileStorage->saveData(data, segHead, graph::storage::STATES_PER_SEGMENT);
-	EXPECT_NE(segHead, 0u);
-}
-
-// =========================================================================
 // Branch Coverage: Line 351 False for Property template instantiation
 // Property saveData must traverse a multi-segment chain (next_segment_offset != 0)
 // =========================================================================
@@ -2422,24 +1958,24 @@ TEST_F(FileStorageTest, SaveData_PropertyMultiSegmentChain_TraversalBranch) {
 	uint32_t capacity = graph::storage::PROPERTIES_PER_SEGMENT;
 
 	// First batch: fill exactly one segment
-	std::unordered_map<int64_t, graph::Property> data1;
+	std::vector<graph::Property> data1;
 	for (uint32_t i = 1; i <= capacity; ++i) {
 		graph::Property p;
 		p.setId(static_cast<int64_t>(i));
 		p.getMutableMetadata().isActive = true;
-		data1[static_cast<int64_t>(i)] = p;
+		data1.push_back(p);
 	}
 	uint64_t segHead = 0;
 	fileStorage->saveData(data1, segHead, capacity);
 	ASSERT_NE(segHead, 0u);
 
 	// Second batch: overflow into second segment, forcing chain traversal
-	std::unordered_map<int64_t, graph::Property> data2;
+	std::vector<graph::Property> data2;
 	for (uint32_t i = capacity + 1; i <= capacity * 2 + 5; ++i) {
 		graph::Property p;
 		p.setId(static_cast<int64_t>(i));
 		p.getMutableMetadata().isActive = true;
-		data2[static_cast<int64_t>(i)] = p;
+		data2.push_back(p);
 	}
 	fileStorage->saveData(data2, segHead, capacity);
 
@@ -2455,12 +1991,12 @@ TEST_F(FileStorageTest, SaveData_PropertyMultiSegmentChain_TraversalBranch) {
 	EXPECT_GE(segCount, 3);
 
 	// Third batch: add more to force traversal through existing multi-segment chain
-	std::unordered_map<int64_t, graph::Property> data3;
+	std::vector<graph::Property> data3;
 	for (uint32_t i = capacity * 2 + 6; i <= capacity * 2 + 10; ++i) {
 		graph::Property p;
 		p.setId(static_cast<int64_t>(i));
 		p.getMutableMetadata().isActive = true;
-		data3[static_cast<int64_t>(i)] = p;
+		data3.push_back(p);
 	}
 	fileStorage->saveData(data3, segHead, capacity);
 	EXPECT_NE(segHead, 0u);
@@ -2477,24 +2013,24 @@ TEST_F(FileStorageTest, SaveData_IndexMultiSegmentChain_TraversalBranch) {
 	uint32_t capacity = graph::storage::INDEXES_PER_SEGMENT;
 
 	// First batch: fill exactly one segment
-	std::unordered_map<int64_t, graph::Index> data1;
+	std::vector<graph::Index> data1;
 	for (uint32_t i = 1; i <= capacity; ++i) {
 		graph::Index idx;
 		idx.setId(static_cast<int64_t>(i));
 		idx.getMutableMetadata().isActive = true;
-		data1[static_cast<int64_t>(i)] = idx;
+		data1.push_back(idx);
 	}
 	uint64_t segHead = 0;
 	fileStorage->saveData(data1, segHead, capacity);
 	ASSERT_NE(segHead, 0u);
 
 	// Second batch: overflow into second segment, forcing chain traversal
-	std::unordered_map<int64_t, graph::Index> data2;
+	std::vector<graph::Index> data2;
 	for (uint32_t i = capacity + 1; i <= capacity * 2 + 5; ++i) {
 		graph::Index idx;
 		idx.setId(static_cast<int64_t>(i));
 		idx.getMutableMetadata().isActive = true;
-		data2[static_cast<int64_t>(i)] = idx;
+		data2.push_back(idx);
 	}
 	fileStorage->saveData(data2, segHead, capacity);
 
@@ -2510,12 +2046,12 @@ TEST_F(FileStorageTest, SaveData_IndexMultiSegmentChain_TraversalBranch) {
 	EXPECT_GE(segCount, 3);
 
 	// Third batch: add more to force traversal through existing multi-segment chain
-	std::unordered_map<int64_t, graph::Index> data3;
+	std::vector<graph::Index> data3;
 	for (uint32_t i = capacity * 2 + 6; i <= capacity * 2 + 10; ++i) {
 		graph::Index idx;
 		idx.setId(static_cast<int64_t>(i));
 		idx.getMutableMetadata().isActive = true;
-		data3[static_cast<int64_t>(i)] = idx;
+		data3.push_back(idx);
 	}
 	fileStorage->saveData(data3, segHead, capacity);
 	EXPECT_NE(segHead, 0u);
@@ -2558,11 +2094,11 @@ TEST_F(FileStorageTest, SaveData_EdgePreAllocatedSlot_InactiveCountDecrement) {
 
 	// Now call saveData with the deleted edge IDs - should find pre-allocated
 	// inactive slots and decrement inactive_count (line 324 True path for Edge)
-	std::unordered_map<int64_t, graph::Edge> data;
+	std::vector<graph::Edge> data;
 	graph::Edge r1(edges[1].getId(), n1.getId(), n2.getId(), 42);
-	data[edges[1].getId()] = r1;
+	data.push_back(r1);
 	graph::Edge r2(edges[3].getId(), n1.getId(), n2.getId(), 42);
-	data[edges[3].getId()] = r2;
+	data.push_back(r2);
 
 	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Edge::typeId);
 	fileStorage->saveData(data, segHead, graph::storage::EDGES_PER_SEGMENT);
@@ -2584,18 +2120,18 @@ TEST_F(FileStorageTest, WriteSegmentData_NonZeroBaseUsed_Edge) {
 	dm->addNode(n2);
 
 	// First batch: partially fill segment
-	std::unordered_map<int64_t, graph::Edge> data1;
+	std::vector<graph::Edge> data1;
 	for (int64_t i = 1; i <= 5; ++i) {
-		data1[i] = graph::Edge(i, n1.getId(), n2.getId(), 0);
+		data1.push_back(graph::Edge(i, n1.getId(), n2.getId(), 0));
 	}
 	uint64_t segHead = 0;
 	fileStorage->saveData(data1, segHead, 100);
 	ASSERT_NE(segHead, 0u);
 
 	// Second batch: add to same segment (baseUsed > 0)
-	std::unordered_map<int64_t, graph::Edge> data2;
+	std::vector<graph::Edge> data2;
 	for (int64_t i = 6; i <= 10; ++i) {
-		data2[i] = graph::Edge(i, n1.getId(), n2.getId(), 0);
+		data2.push_back(graph::Edge(i, n1.getId(), n2.getId(), 0));
 	}
 	fileStorage->saveData(data2, segHead, 100);
 
@@ -2619,18 +2155,18 @@ TEST_F(FileStorageTest, SaveData_EdgeMultiSegmentChainTraversal) {
 
 	// First batch: fill enough to create multiple segments
 	uint32_t capacity = graph::storage::EDGES_PER_SEGMENT;
-	std::unordered_map<int64_t, graph::Edge> data1;
+	std::vector<graph::Edge> data1;
 	for (uint32_t i = 1; i <= capacity; ++i) {
-		data1[static_cast<int64_t>(i)] = graph::Edge(static_cast<int64_t>(i), n.getId(), n.getId(), 0);
+		data1.push_back(graph::Edge(static_cast<int64_t>(i), n.getId(), n.getId(), 0));
 	}
 	uint64_t segHead = 0;
 	fileStorage->saveData(data1, segHead, capacity);
 	ASSERT_NE(segHead, 0u);
 
 	// Second batch: more edges to trigger chain traversal and second segment
-	std::unordered_map<int64_t, graph::Edge> data2;
+	std::vector<graph::Edge> data2;
 	for (uint32_t i = capacity + 1; i <= capacity + 10; ++i) {
-		data2[static_cast<int64_t>(i)] = graph::Edge(static_cast<int64_t>(i), n.getId(), n.getId(), 0);
+		data2.push_back(graph::Edge(static_cast<int64_t>(i), n.getId(), n.getId(), 0));
 	}
 	fileStorage->saveData(data2, segHead, capacity);
 
@@ -2692,17 +2228,17 @@ TEST_F(FileStorageTest, SaveData_AppendToPartiallyFilledSegment_Node) {
 TEST_F(FileStorageTest, SaveData_NodeMultiSegmentChainTraversal) {
 	uint32_t capacity = graph::storage::NODES_PER_SEGMENT;
 
-	std::unordered_map<int64_t, graph::Node> data1;
+	std::vector<graph::Node> data1;
 	for (uint32_t i = 1; i <= capacity; ++i) {
-		data1[static_cast<int64_t>(i)] = graph::Node(static_cast<int64_t>(i), 100);
+		data1.push_back(graph::Node(static_cast<int64_t>(i), 100));
 	}
 	uint64_t segHead = 0;
 	fileStorage->saveData(data1, segHead, capacity);
 	ASSERT_NE(segHead, 0u);
 
-	std::unordered_map<int64_t, graph::Node> data2;
+	std::vector<graph::Node> data2;
 	for (uint32_t i = capacity + 1; i <= capacity + 5; ++i) {
-		data2[static_cast<int64_t>(i)] = graph::Node(static_cast<int64_t>(i), 200);
+		data2.push_back(graph::Node(static_cast<int64_t>(i), 200));
 	}
 	fileStorage->saveData(data2, segHead, capacity);
 
@@ -2741,11 +2277,11 @@ TEST_F(FileStorageTest, SaveData_PreAllocatedSlot_DecrementInactiveCount) {
 
 	// Now call saveData with the deleted node IDs - should find pre-allocated
 	// inactive slots and decrement inactive_count (line 323 True path)
-	std::unordered_map<int64_t, graph::Node> data;
+	std::vector<graph::Node> data;
 	graph::Node r1(nodes[1].getId(), 42);
-	data[nodes[1].getId()] = r1;
+	data.push_back(r1);
 	graph::Node r2(nodes[3].getId(), 42);
-	data[nodes[3].getId()] = r2;
+	data.push_back(r2);
 
 	uint64_t segHead = dm->getSegmentTracker()->getChainHead(graph::Node::typeId);
 	fileStorage->saveData(data, segHead, graph::storage::NODES_PER_SEGMENT);
@@ -2842,5 +2378,71 @@ TEST_F(FileStorageTest, Flush_ConcurrentFlushLockContention) {
 
 	// No crash means success - one thread acquired the lock, the other returned early
 	EXPECT_TRUE(true);
+}
+
+// =========================================================================
+// TYPED_TEST: SaveData_PreAllocatedSlotReuse (replaces 6 individual tests)
+// =========================================================================
+TYPED_TEST(FileStorageTypedTest, SaveData_PreAllocatedSlotReuse) {
+    using Helper = EntityTestHelper<TypeParam>;
+    auto dm = this->fileStorage->getDataManager();
+
+    auto entity = Helper::create(*dm);
+    this->fileStorage->flush();
+
+    Helper::update(*dm, entity);
+    EXPECT_NO_THROW(this->fileStorage->flush());
+}
+
+// =========================================================================
+// TYPED_TEST: SaveData_EmptyData (replaces 5 individual tests)
+// =========================================================================
+TYPED_TEST(FileStorageTypedTest, SaveData_EmptyData) {
+    std::vector<TypeParam> emptyData;
+    uint64_t segHead = 0;
+    this->fileStorage->saveData(emptyData, segHead, 100);
+    EXPECT_EQ(segHead, 0u);
+}
+
+// =========================================================================
+// TYPED_TEST: Save_OnlyNewEntities (replaces 4 individual tests)
+// =========================================================================
+TYPED_TEST(FileStorageTypedTest, Save_OnlyNewEntities) {
+    using Helper = EntityTestHelper<TypeParam>;
+    auto dm = this->fileStorage->getDataManager();
+
+    auto entity = Helper::create(*dm);
+    (void)entity;
+    EXPECT_NO_THROW(this->fileStorage->save());
+}
+
+// =========================================================================
+// TYPED_TEST: SaveData_Deletion (replaces 4 individual tests)
+// =========================================================================
+TYPED_TEST(FileStorageTypedTest, SaveData_Deletion) {
+    using Helper = EntityTestHelper<TypeParam>;
+    auto dm = this->fileStorage->getDataManager();
+
+    auto entity = Helper::create(*dm);
+    this->fileStorage->flush();
+
+    Helper::del(*dm, entity);
+    EXPECT_NO_THROW(this->fileStorage->flush());
+}
+
+// =========================================================================
+// TYPED_TEST: Save_ModifyAndDeleteEntities (replaces 3 individual tests)
+// =========================================================================
+TYPED_TEST(FileStorageTypedTest, Save_ModifyAndDeleteEntities) {
+    using Helper = EntityTestHelper<TypeParam>;
+    auto dm = this->fileStorage->getDataManager();
+
+    auto e1 = Helper::create(*dm);
+    auto e2 = Helper::create(*dm);
+    this->fileStorage->flush();
+
+    Helper::update(*dm, e1);
+    Helper::del(*dm, e2);
+    EXPECT_NO_THROW(this->fileStorage->save());
 }
 

@@ -57,9 +57,17 @@ namespace graph::storage {
 
 		void clear() { typeInfo_.clear(); }
 
+		void setChainTail(const EntityType type, const uint64_t offset) { typeInfo_[type].chainTail = offset; }
+
+		[[nodiscard]] uint64_t getChainTail(const EntityType type) const {
+			auto it = typeInfo_.find(type);
+			return it != typeInfo_.end() ? it->second.chainTail : 0;
+		}
+
 	private:
 		struct TypeInfo {
 			uint64_t chainHead = 0;
+			uint64_t chainTail = 0;
 		};
 
 		std::unordered_map<EntityType, TypeInfo> typeInfo_;
