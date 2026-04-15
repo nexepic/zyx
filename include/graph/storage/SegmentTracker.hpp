@@ -23,7 +23,6 @@
 #include <fstream>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -88,6 +87,7 @@ namespace graph::storage {
 		// Bitmap operations
 		void setEntityActive(uint64_t offset, uint32_t index, bool active);
 		void setEntityActiveRange(uint64_t offset, uint32_t startIndex, uint32_t count, bool active);
+		void batchSetEntityActive(uint64_t offset, const std::vector<std::pair<uint32_t, bool>> &indexActiveList);
 		bool isEntityActive(uint64_t offset, uint32_t index) const;
 		uint32_t countActiveEntities(uint64_t offset) const;
 
@@ -115,10 +115,12 @@ namespace graph::storage {
 		void validateSegmentCrc(uint64_t segmentOffset);
 		[[nodiscard]] std::vector<uint32_t> collectSegmentCrcs() const;
 
+		/// Store a pre-computed CRC for a segment, avoiding 128KB read-back at flush time.
+		void setPendingCrc(uint64_t segmentOffset, uint32_t crc);
+
 	private:
 		std::shared_ptr<StorageIO> io_;
-		mutable std::shared_mutex rwMutex_;    // Read-write lock for concurrent read access
-		mutable std::recursive_mutex mutex_;   // Legacy exclusive lock for write operations
+		mutable std::shared_mutex mutex_;  // Single lock: shared for reads, unique for writes
 
 		// Segment cache - stores actual segment headers
 		std::unordered_map<uint64_t, SegmentHeader> segments_;
@@ -126,6 +128,7 @@ namespace graph::storage {
 		std::unordered_set<uint64_t> freeSegments_;
 		std::unordered_set<uint64_t> dirtySegments_;
 		std::unordered_set<uint64_t> validatedSegments_;
+		std::unordered_map<uint64_t, uint32_t> pendingCrcs_; // Pre-computed CRCs from write path
 		std::weak_ptr<SegmentIndexManager> segmentIndexManager_;
 
 		SegmentTypeRegistry registry_;
@@ -137,10 +140,13 @@ namespace graph::storage {
 		// Load a chain of segments
 		void loadSegmentChain(uint64_t headOffset, uint32_t type);
 
-		// Ensure a segment is in cache
-		void ensureSegmentCached(uint64_t offset);
+		// Ensure a segment is in cache (caller must hold unique lock)
+		void ensureSegmentCached_locked(uint64_t offset);
 
-		// Mark a segment as dirty
+		// Get segment header without locking (caller must hold at least shared lock)
+		SegmentHeader &getSegmentHeader_locked(uint64_t offset);
+
+		// Mark a segment as dirty (caller must hold unique lock)
 		void markSegmentDirty(uint64_t offset);
 	};
 
