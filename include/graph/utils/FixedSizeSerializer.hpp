@@ -19,6 +19,7 @@
  **/
 
 #pragma once
+#include <cstring>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -57,6 +58,20 @@ namespace graph::utils {
 			serializeWithFixedSize(oss, obj, fixedSize);
 			auto str = oss.str();
 			return {str.begin(), str.end()};
+		}
+
+		/**
+		 * @brief Serialize directly into a pre-allocated buffer at the given destination.
+		 *
+		 * Eliminates the intermediate ostringstream/string/vector copies of serializeToBuffer.
+		 * The destination must have at least fixedSize bytes available.
+		 */
+		template<typename T>
+		static void serializeInto(char *dest, const T &obj, size_t fixedSize) {
+			std::ostringstream oss(std::ios::binary);
+			serializeWithFixedSize(oss, obj, fixedSize);
+			auto str = oss.str();
+			std::memcpy(dest, str.data(), fixedSize);
 		}
 
 		template<typename T>

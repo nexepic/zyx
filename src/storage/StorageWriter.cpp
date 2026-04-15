@@ -28,6 +28,7 @@
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
+#include "graph/utils/ChecksumUtils.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
@@ -120,6 +121,19 @@ namespace graph::storage {
 			std::apply([this](auto &...batch) { (saveModifiedAndDeleted(batch.modified, batch.deleted), ...); },
 					   allBatches);
 		}
+
+		// Flush accumulated shadow buffers as pre-computed CRCs
+		flushPendingCrcs();
+	}
+
+	// ── flushPendingCrcs ───────────────────────────────────────────────────
+
+	void StorageWriter::flushPendingCrcs() {
+		for (auto &[segmentOffset, buf] : pendingSegmentData_) {
+			uint32_t crc = utils::calculateCrc(buf.data(), SEGMENT_SIZE);
+			tracker_->setPendingCrc(segmentOffset, crc);
+		}
+		pendingSegmentData_.clear();
 	}
 
 	// ── saveNewEntities ─────────────────────────────────────────────────────
@@ -162,30 +176,47 @@ namespace graph::storage {
 			}
 		}
 
-		// Process entities with pre-allocated slots
+		// Process entities with pre-allocated slots — batch consecutive entities
 		for (auto &[segmentOffset, entities] : entitiesBySegment) {
 			SegmentHeader header = readSegmentHeader(segmentOffset);
+			const size_t itemSize = T::getTotalSize();
 
 			std::sort(entities.begin(), entities.end(), [](const T &a, const T &b) { return a.getId() < b.getId(); });
 
-			for (const auto &entity : entities) {
-				auto index = static_cast<uint32_t>(entity.getId() - header.start_id);
+			// Group consecutive entities for batch I/O
+			std::vector<std::pair<uint32_t, bool>> bitmapUpdates;
+			size_t i = 0;
+			while (i < entities.size()) {
+				size_t batchStart = i;
+				auto startIndex = static_cast<uint32_t>(entities[i].getId() - header.start_id);
 
-				uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + index * T::getTotalSize();
+				// Find consecutive run
+				while (i + 1 < entities.size() &&
+					   entities[i + 1].getId() == entities[i].getId() + 1) {
+					i++;
+				}
+				i++;
+				size_t batchSize = i - batchStart;
 
-				auto buf = utils::FixedSizeSerializer::serializeToBuffer(entity, T::getTotalSize());
-				io_->writeAt(entityOffset, buf.data(), buf.size());
+				// Serialize all into one buffer
+				std::vector<char> buf(batchSize * itemSize);
+				for (size_t j = 0; j < batchSize; j++) {
+					utils::FixedSizeSerializer::serializeInto(buf.data() + j * itemSize,
+															  entities[batchStart + j], itemSize);
+				}
 
-				if (!tracker_->getBitmapBit(segmentOffset, index)) {
-					tracker_->setEntityActive(segmentOffset, index, true);
+				// Single pwrite for the batch
+				uint64_t offset = segmentOffset + sizeof(SegmentHeader) + startIndex * itemSize;
+				io_->writeAt(offset, buf.data(), buf.size());
 
-					tracker_->updateSegmentHeader(segmentOffset, [](SegmentHeader &header) {
-						if (header.inactive_count > 0) {
-							header.inactive_count--;
-						}
-					});
+				// Collect bitmap updates
+				for (size_t j = 0; j < batchSize; j++) {
+					bitmapUpdates.emplace_back(startIndex + static_cast<uint32_t>(j), true);
 				}
 			}
+
+			// Batch bitmap update (single lock acquisition)
+			tracker_->batchSetEntityActive(segmentOffset, bitmapUpdates);
 		}
 
 		if (entitiesForNewSlots.empty()) {
@@ -277,13 +308,18 @@ namespace graph::storage {
 
 		size_t totalSize = data.size() * itemSize;
 		std::vector<char> buf(totalSize);
-		size_t pos = 0;
-		for (const auto &item : data) {
-			auto serialized = utils::FixedSizeSerializer::serializeToBuffer(item, itemSize);
-			std::memcpy(buf.data() + pos, serialized.data(), serialized.size());
-			pos += itemSize;
+		for (size_t i = 0; i < data.size(); i++) {
+			utils::FixedSizeSerializer::serializeInto(buf.data() + i * itemSize, data[i], itemSize);
 		}
 		io_->writeAt(dataOffset, buf.data(), totalSize);
+
+		// Accumulate into shadow buffer for write-time CRC computation
+		auto &segBuf = pendingSegmentData_[segmentOffset];
+		if (segBuf.empty()) {
+			segBuf.resize(SEGMENT_SIZE, 0);
+		}
+		size_t bufOffset = baseUsed * itemSize;
+		std::memcpy(segBuf.data() + bufOffset, buf.data(), totalSize);
 
 		tracker_->updateSegmentHeader(segmentOffset, [&](SegmentHeader &header) {
 			header.used = baseUsed + static_cast<uint32_t>(data.size());
