@@ -21,6 +21,7 @@
 #include <utility>
 
 #include "graph/core/BlobChainManager.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 
 namespace graph::storage {

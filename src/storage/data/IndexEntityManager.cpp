@@ -20,6 +20,7 @@
 
 #include "graph/storage/data/IndexEntityManager.hpp"
 #include <utility>
+#include "graph/storage/IDAllocator.hpp"
 
 namespace graph::storage {
 

@@ -593,7 +593,12 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
           )}
 
           {/* Separator */}
-          {result && <span className="text-[rgba(122,144,170,0.2)]">|</span>}
+          {result && (
+            <span
+              aria-hidden="true"
+              className="block h-6 w-px self-center rounded-full bg-[rgba(122,144,170,0.28)]"
+            />
+          )}
 
           {/* Copy query */}
           <button

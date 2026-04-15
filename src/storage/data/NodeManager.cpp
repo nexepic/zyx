@@ -20,6 +20,7 @@
 
 #include "graph/storage/data/NodeManager.hpp"
 #include <utility>
+#include "graph/storage/IDAllocator.hpp"
 
 namespace graph::storage {
 

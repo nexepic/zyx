@@ -39,7 +39,7 @@
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentTracker.hpp"
-#include "graph/storage/SpaceManager.hpp"
+#include "graph/storage/SegmentAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
@@ -60,7 +60,7 @@ protected:
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
 	std::shared_ptr<IDAllocator> idAllocator;
-	std::shared_ptr<SpaceManager> spaceManager;
+	std::shared_ptr<SegmentAllocator> segmentAllocator;
 
 	// High-level Components
 	std::shared_ptr<DataManager> dataManager;
@@ -89,27 +89,24 @@ protected:
 				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 
-		// Note: DataManager constructor initializes EntityReferenceUpdater internally,
-		// but we can also create one for testing or access the one in DataManager.
-		// To ensure we test the exact instance used by the system:
-		spaceManager = std::make_shared<SpaceManager>(file, testFilePath.string(), segmentTracker, fileHeaderManager,
-													  idAllocator);
+		segmentAllocator =
+				std::make_shared<SegmentAllocator>(file, segmentTracker, fileHeaderManager, idAllocator);
 
-		dataManager = std::make_shared<DataManager>(file, 100, header, idAllocator, segmentTracker, spaceManager);
+		dataManager = std::make_shared<DataManager>(file, 100, header, idAllocator, segmentTracker);
 		dataManager->initialize(); // This initializes EntityReferenceUpdater internally
 
 		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
 
 		dataManager->setSystemStateManager(systemStateManager);
 
-		// Retrieve the updater from SpaceManager (where it was set during DataManager::initialize)
+		// Retrieve the updater from DataManager (created during DataManager::initialize)
 		updater = dataManager->getEntityReferenceUpdater();
 	}
 
 	void TearDown() override {
 		updater.reset();
 		dataManager.reset();
-		spaceManager.reset();
+		segmentAllocator.reset();
 		idAllocator.reset();
 		fileHeaderManager.reset();
 		segmentTracker.reset();
@@ -128,7 +125,7 @@ protected:
 		int64_t id = idAllocator->allocateId(Node::typeId);
 		uint64_t offset = segmentTracker->getSegmentOffsetForNodeId(id);
 		if (offset == 0)
-			offset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
 
 		int64_t labelId = dataManager->getOrCreateTokenId(label);
 		Node node(id, labelId);
@@ -149,7 +146,7 @@ protected:
 		int64_t id = idAllocator->allocateId(Edge::typeId);
 		uint64_t offset = segmentTracker->getSegmentOffsetForEdgeId(id);
 		if (offset == 0)
-			offset = spaceManager->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
 
 		int64_t labelId = dataManager->getOrCreateTokenId(label);
 		Edge edge(id, src, dst, labelId);
@@ -169,7 +166,7 @@ protected:
 		int64_t id = idAllocator->allocateId(Property::typeId);
 		uint64_t offset = segmentTracker->getSegmentOffsetForPropId(id);
 		if (offset == 0)
-			offset = spaceManager->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
 
 		Property prop;
 		prop.setId(id);
@@ -189,7 +186,7 @@ protected:
 		int64_t id = idAllocator->allocateId(Blob::typeId);
 		uint64_t offset = segmentTracker->getSegmentOffsetForBlobId(id);
 		if (offset == 0)
-			offset = spaceManager->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
 
 		Blob blob;
 		blob.setId(id);
@@ -209,7 +206,7 @@ protected:
 		int64_t id = idAllocator->allocateId(Index::typeId);
 		uint64_t offset = segmentTracker->getSegmentOffsetForIndexId(id);
 		if (offset == 0)
-			offset = spaceManager->allocateSegment(Index::typeId, INDEXES_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(Index::typeId, INDEXES_PER_SEGMENT);
 
 		Index idx(id, nodeType, 1);
 		dataManager->addIndexEntity(idx);
@@ -226,7 +223,7 @@ protected:
 		int64_t id = idAllocator->allocateId(State::typeId);
 		uint64_t offset = segmentTracker->getSegmentOffsetForStateId(id);
 		if (offset == 0)
-			offset = spaceManager->allocateSegment(State::typeId, STATES_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(State::typeId, STATES_PER_SEGMENT);
 
 		State st(id, key, "data");
 		dataManager->addStateEntity(st);
@@ -624,7 +621,7 @@ TEST_F(EntityReferenceUpdaterTest, Functional_GraphTraversal_AfterNodeMove) {
 	// We must manually write "movedB" to disk so DataManager can find it at newId
 	// (This mocks the SpaceManager copying the bytes)
 	{
-		[[maybe_unused]] uint64_t newOffset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
+		[[maybe_unused]] uint64_t newOffset = segmentAllocator->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
 		// We cheat a bit on offset calculation for the mock, just ensuring it exists
 		// In reality, we'd calculate where newBId lands.
 		// For this test, we just add it via DataManager which handles placement.
@@ -644,7 +641,7 @@ TEST_F(EntityReferenceUpdaterTest, Functional_GraphTraversal_AfterNodeMove) {
 	// If A points to newBId, and we ask A for its neighbor, it returns newBId.
 
 	// Suppress unused variable warning
-	(void)spaceManager;
+	(void)segmentAllocator;
 
 	// ACTION: Update References
 	updater->updateEntityReferences(oldBId, &movedB, toUnderlying(SegmentType::Node));

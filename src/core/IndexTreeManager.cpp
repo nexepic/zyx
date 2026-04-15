@@ -20,6 +20,7 @@
 
 #include "graph/core/IndexTreeManager.hpp"
 #include <algorithm>
+#include <map>
 #include <ranges>
 #include <stdexcept>
 #include "graph/storage/data/BlobManager.hpp"

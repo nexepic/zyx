@@ -27,6 +27,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/utils/Serializer.hpp"

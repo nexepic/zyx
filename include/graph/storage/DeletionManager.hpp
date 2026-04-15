@@ -24,7 +24,8 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include "SpaceManager.hpp"
+#include "IDAllocator.hpp"
+#include "SegmentTracker.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Property.hpp"
 
@@ -39,7 +40,7 @@ namespace graph::storage {
 	 */
 	class DeletionManager {
 	public:
-		DeletionManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<SpaceManager> spaceManager,
+		DeletionManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<SegmentTracker> tracker,
 						std::shared_ptr<IDAllocator> idAllocator);
 		~DeletionManager();
 
@@ -140,7 +141,7 @@ namespace graph::storage {
 		// std::shared_ptr<std::fstream> file_;
 		// FileStorage &storage_;
 		std::shared_ptr<DataManager> dataManager_;
-		std::shared_ptr<SpaceManager> spaceManager_;
+		std::shared_ptr<SegmentTracker> tracker_;
 		std::shared_ptr<IDAllocator> idAllocator_;
 
 		// Compaction thresholds and counters

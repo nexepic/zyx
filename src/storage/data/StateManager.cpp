@@ -23,6 +23,7 @@
 #include <sstream>
 #include <utility>
 #include "graph/core/StateChainManager.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
 #include "graph/storage/data/PropertyManager.hpp"
 

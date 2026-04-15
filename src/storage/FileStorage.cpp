@@ -115,13 +115,19 @@ namespace graph::storage {
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 		idAllocator->clearAllCaches();
 
-		// Then create the space manager
+		// Then create the space management components
+		segmentAllocator =
+				std::make_shared<SegmentAllocator>(fileStream, segmentTracker, fileHeaderManager, idAllocator);
+		auto segmentCompactor =
+				std::make_shared<SegmentCompactor>(fileStream, segmentTracker, segmentAllocator, fileHeaderManager);
+		fileTruncator =
+				std::make_shared<FileTruncator>(fileStream, dbFilePath, segmentTracker);
 		spaceManager =
-				std::make_shared<SpaceManager>(fileStream, dbFilePath, segmentTracker, fileHeaderManager, idAllocator);
+				std::make_shared<SpaceManager>(segmentAllocator, segmentCompactor, fileTruncator, segmentTracker);
 
 		// Initialize data manager (pass filePath for pread-based parallel reads)
 		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,
-													spaceManager, dbFilePath);
+													dbFilePath);
 
 		// --- Merged segment chain walk via StorageBootstrap ---
 		// Walk each chain ONCE, feeding results to both IDAllocator and SegmentIndexManager.
@@ -157,6 +163,9 @@ namespace graph::storage {
 		dataManager->initialize(/*skipSegmentIndexBuild=*/true);
 		dataManager->setDeletionFlagReference(&deleteOperationPerformed);
 
+		// Wire up EntityReferenceUpdater to the SegmentCompactor
+		spaceManager->getCompactor()->setEntityReferenceUpdater(dataManager->getEntityReferenceUpdater());
+
 		// Always set up auto-flush callback
 		dataManager->setAutoFlushCallback([this]() { this->flush(); });
 
@@ -184,7 +193,7 @@ namespace graph::storage {
 			// Pass the native fd so truncation uses portable_ftruncate()
 			// instead of the close-reopen pattern (which leaves a leaked handle
 			// on Windows and causes "file in use" errors on deletion).
-			(void) spaceManager->truncateFile(writeFd_);
+			(void) fileTruncator->truncateFile(writeFd_);
 
 			// Close the native pwrite handle
 			if (writeFd_ != INVALID_FILE_HANDLE) {
@@ -601,7 +610,7 @@ namespace graph::storage {
 
 	uint64_t FileStorage::allocateSegment(uint32_t type, uint32_t capacity) const {
 		// Use SpaceManager's allocateSegment function instead of direct file operations
-		return spaceManager->allocateSegment(type, capacity);
+		return segmentAllocator->allocateSegment(type, capacity);
 	}
 
 	template<typename T>

@@ -38,7 +38,7 @@
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentTracker.hpp"
-#include "graph/storage/SpaceManager.hpp"
+#include "graph/storage/SegmentAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
@@ -60,7 +60,7 @@ protected:
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
 	std::shared_ptr<IDAllocator> idAllocator;
-	std::shared_ptr<SpaceManager> spaceManager;
+	std::shared_ptr<SegmentAllocator> segmentAllocator;
 	std::shared_ptr<EntityReferenceUpdater> refUpdater;
 
 	// Data Management Components
@@ -90,19 +90,18 @@ protected:
 				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 
-		spaceManager = std::make_shared<SpaceManager>(file, testFilePath.string(), segmentTracker, fileHeaderManager,
-													  idAllocator);
-		spaceManager->setEntityReferenceUpdater(refUpdater);
+		segmentAllocator =
+				std::make_shared<SegmentAllocator>(file, segmentTracker, fileHeaderManager, idAllocator);
 
 		// 3. Initialize DataManager
 		dataManager = std::make_shared<DataManager>(file,
 													100, // Cache size
-													header, idAllocator, segmentTracker, spaceManager);
+													header, idAllocator, segmentTracker);
 
 		refUpdater = std::make_shared<EntityReferenceUpdater>(dataManager);
 
 		// 4. Initialize System Under Test (DeletionManager)
-		deletionManager = std::make_shared<DeletionManager>(dataManager, spaceManager, idAllocator);
+		deletionManager = std::make_shared<DeletionManager>(dataManager, segmentTracker, idAllocator);
 
 		// Circular dependency resolution usually happens inside DataManager,
 		// ensuring it is initialized.
@@ -115,7 +114,7 @@ protected:
 	void TearDown() override {
 		deletionManager.reset();
 		dataManager.reset();
-		spaceManager.reset();
+		segmentAllocator.reset();
 		refUpdater.reset();
 		idAllocator.reset();
 		fileHeaderManager.reset();
@@ -133,7 +132,7 @@ protected:
 
 		uint64_t offset = segmentTracker->getSegmentOffsetForNodeId(id);
 		if (offset == 0) {
-			offset = spaceManager->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
 		}
 
 		int64_t labelId = dataManager->getOrCreateTokenId(label);
@@ -160,7 +159,7 @@ protected:
 
 		uint64_t offset = segmentTracker->getSegmentOffsetForEdgeId(id);
 		if (offset == 0) {
-			offset = spaceManager->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
+			offset = segmentAllocator->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
 		}
 
 		int64_t labelId = dataManager->getOrCreateTokenId(label);
@@ -181,7 +180,7 @@ protected:
 
 	[[nodiscard]] Property createProperty() const {
 		int64_t id = idAllocator->allocateId(Property::typeId);
-		uint64_t offset = spaceManager->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
+		uint64_t offset = segmentAllocator->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
 
 		Property prop;
 		prop.setId(id);
@@ -196,7 +195,7 @@ protected:
 
 	[[nodiscard]] Blob createBlob() const {
 		int64_t id = idAllocator->allocateId(Blob::typeId);
-		uint64_t offset = spaceManager->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
+		uint64_t offset = segmentAllocator->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
 
 		Blob blob;
 		blob.setId(id);
@@ -297,8 +296,8 @@ TEST_F(DeletionManagerTest, DeleteNode_CascadesToPropertyEntity) {
 	EXPECT_TRUE(isNodeDeleted(node.getId()));
 
 	// Verify Property is gone (via tracker bitmap)
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
 }
 
@@ -314,8 +313,8 @@ TEST_F(DeletionManagerTest, DeleteNode_CascadesToBlobEntity) {
 	deletionManager->deleteNode(node);
 
 	// Verify Blob is gone
-	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	uint64_t bSeg = segmentTracker->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(bSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
 }
 
@@ -350,8 +349,8 @@ TEST_F(DeletionManagerTest, DeleteEdge_CascadesToProperty) {
 	EXPECT_TRUE(isEdgeDeleted(edge.getId()));
 
 	// Check Property is deleted
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
 }
 
@@ -365,8 +364,8 @@ TEST_F(DeletionManagerTest, DeleteProperty_Direct) {
 
 	deletionManager->deleteProperty(prop);
 
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
 }
 
@@ -376,14 +375,14 @@ TEST_F(DeletionManagerTest, DeleteBlob_Direct) {
 
 	deletionManager->deleteBlob(blob);
 
-	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	uint64_t bSeg = segmentTracker->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(bSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
 }
 
 TEST_F(DeletionManagerTest, DeleteIndex) {
 	int64_t id = idAllocator->allocateId(Index::typeId);
-	uint64_t offset = spaceManager->allocateSegment(Index::typeId, INDEXES_PER_SEGMENT);
+	uint64_t offset = segmentAllocator->allocateSegment(Index::typeId, INDEXES_PER_SEGMENT);
 
 	Index idx;
 	idx.setId(id);
@@ -401,7 +400,7 @@ TEST_F(DeletionManagerTest, DeleteIndex) {
 
 TEST_F(DeletionManagerTest, DeleteState) {
 	int64_t id = idAllocator->allocateId(State::typeId);
-	uint64_t offset = spaceManager->allocateSegment(State::typeId, STATES_PER_SEGMENT);
+	uint64_t offset = segmentAllocator->allocateSegment(State::typeId, STATES_PER_SEGMENT);
 
 	State state;
 	state.setId(id);
@@ -424,7 +423,7 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Triggered) {
 	// 1. Manually allocate a segment to strictly control capacity (10)
 	uint32_t type = Node::typeId;
 	uint32_t capacity = 10;
-	uint64_t offset = spaceManager->allocateSegment(type, capacity);
+	uint64_t offset = segmentAllocator->allocateSegment(type, capacity);
 
 	// Get the segment header
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
@@ -505,7 +504,7 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Triggered) {
 
 TEST_F(DeletionManagerTest, CompactionThreshold_NotTriggered) {
 	uint32_t type = Node::typeId;
-	uint64_t offset = spaceManager->allocateSegment(type, 10);
+	uint64_t offset = segmentAllocator->allocateSegment(type, 10);
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 
 	// Fill 10 nodes
@@ -534,7 +533,7 @@ TEST_F(DeletionManagerTest, AnalyzeFragmentation) {
 	uint32_t type = Node::typeId;
 
 	// Setup Segment 1: 50% Fragmented
-	uint64_t seg1 = spaceManager->allocateSegment(type, 10);
+	uint64_t seg1 = segmentAllocator->allocateSegment(type, 10);
 	[[maybe_unused]] SegmentHeader h1 = segmentTracker->getSegmentHeader(seg1);
 	for (int i = 0; i < 10; i++) {
 		segmentTracker->setEntityActive(seg1, i, true);
@@ -547,7 +546,7 @@ TEST_F(DeletionManagerTest, AnalyzeFragmentation) {
 	}
 
 	// Setup Segment 2: 0% Fragmented
-	uint64_t seg2 = spaceManager->allocateSegment(type, 10);
+	uint64_t seg2 = segmentAllocator->allocateSegment(type, 10);
 	[[maybe_unused]] SegmentHeader h2 = segmentTracker->getSegmentHeader(seg2);
 	for (int i = 0; i < 10; i++) {
 		segmentTracker->setEntityActive(seg2, i, true);
@@ -629,8 +628,8 @@ TEST_F(DeletionManagerTest, DeletePropertyEntity_WithInactiveProperty) {
 	Property prop = createProperty();
 
 	// Mark as inactive
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	uint32_t idx = prop.getId() - h.start_id;
 	segmentTracker->setEntityActive(pSeg, idx, false);
 
@@ -643,8 +642,8 @@ TEST_F(DeletionManagerTest, DeletePropertyEntity_WithInactiveBlob) {
 	Blob blob = createBlob();
 
 	// Mark as inactive
-	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	uint64_t bSeg = segmentTracker->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(bSeg);
 	uint32_t idx = blob.getId() - h.start_id;
 	segmentTracker->setEntityActive(bSeg, idx, false);
 
@@ -717,7 +716,7 @@ TEST_F(DeletionManagerTest, FindSegmentForNonExistentId) {
 TEST_F(DeletionManagerTest, MarkForCompactionNotTriggeredBelowThreshold) {
 	// Test that compaction is NOT marked when fragmentation is below threshold
 	uint32_t type = Node::typeId;
-	uint64_t offset = spaceManager->allocateSegment(type, 100);
+	uint64_t offset = segmentAllocator->allocateSegment(type, 100);
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 
 	// Fill 100 nodes
@@ -788,8 +787,8 @@ TEST_F(DeletionManagerTest, DeletePropertyEntityWithPropertyStorageType) {
 
 	// Verify property is deleted
 	EXPECT_TRUE(isNodeDeleted(node.getId()));
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
 }
 
@@ -807,8 +806,8 @@ TEST_F(DeletionManagerTest, DeletePropertyEntityWithBlobStorageType) {
 
 	// Verify blob is deleted
 	EXPECT_TRUE(isNodeDeleted(node.getId()));
-	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	uint64_t bSeg = segmentTracker->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(bSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
 }
 
@@ -884,8 +883,8 @@ TEST_F(DeletionManagerTest, DeleteBlobWithInvalidSegmentOffset) {
 TEST_F(DeletionManagerTest, CompactionThreshold_Edge) {
 	// Test compaction triggering for edges (fragmentation >= threshold)
 	uint32_t type = Edge::typeId;
-	uint64_t offset = spaceManager->allocateSegment(type, 10);
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(offset);
+	uint64_t offset = segmentAllocator->allocateSegment(type, 10);
+	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 
 	// Create source and target nodes
 	Node n1 = createNode("Source");
@@ -896,25 +895,25 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Edge) {
 	for (int i = 0; i < 10; i++) {
 		Edge e(h.start_id + i, n1.getId(), n2.getId(), 10);
 		dataManager->addEdge(e);
-		spaceManager->getTracker()->setEntityActive(offset, i, true);
+		segmentTracker->setEntityActive(offset, i, true);
 		edges.push_back(e);
 	}
-	spaceManager->getTracker()->updateSegmentUsage(offset, 10, 0);
+	segmentTracker->updateSegmentUsage(offset, 10, 0);
 
 	// Delete 4 edges (40% fragmentation >= 30% threshold)
 	for (int i = 0; i < 4; i++) {
 		deletionManager->deleteEdge(edges[i]);
 	}
 
-	SegmentHeader hAfter = spaceManager->getTracker()->getSegmentHeader(offset);
+	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
 	EXPECT_EQ(hAfter.needs_compaction, 1U);
 }
 
 TEST_F(DeletionManagerTest, CompactionThreshold_Property) {
 	// Test compaction triggering for properties
 	uint32_t type = Property::typeId;
-	uint64_t offset = spaceManager->allocateSegment(type, 10);
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(offset);
+	uint64_t offset = segmentAllocator->allocateSegment(type, 10);
+	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 
 	// Create a node to own properties
 	Node node = createNode("PropOwner");
@@ -927,17 +926,17 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Property) {
 		prop.setId(h.start_id + i);
 		prop.setEntityInfo(node.getId(), Node::typeId);
 		dataManager->addPropertyEntity(prop);
-		spaceManager->getTracker()->setEntityActive(offset, i, true);
+		segmentTracker->setEntityActive(offset, i, true);
 		props.push_back(prop);
 	}
-	spaceManager->getTracker()->updateSegmentUsage(offset, 10, 0);
+	segmentTracker->updateSegmentUsage(offset, 10, 0);
 
 	// Delete 4 properties (40% fragmentation >= 30% threshold)
 	for (int i = 0; i < 4; i++) {
 		deletionManager->deleteProperty(props[i]);
 	}
 
-	SegmentHeader hAfter = spaceManager->getTracker()->getSegmentHeader(offset);
+	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
 	EXPECT_EQ(hAfter.needs_compaction, 1U);
 }
 
@@ -945,8 +944,8 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Property) {
 // 	// Test compaction triggering for blobs
 // 	// DISABLED: This test causes SIGBUS error
 // 	uint32_t type = Blob::typeId;
-// 	uint64_t offset = spaceManager->allocateSegment(type, 10);
-// 	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(offset);
+// 	uint64_t offset = segmentAllocator->allocateSegment(type, 10);
+// 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 //
 // 	// Create a node to own blobs
 // 	Node node = createNode("BlobOwner");
@@ -957,17 +956,17 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Property) {
 // 		Blob blob = createBlob();
 // 		blob.setEntityInfo(node.getId(), Node::typeId);
 // 		dataManager->updateBlobEntity(blob);
-// 		spaceManager->getTracker()->setEntityActive(offset, i, true);
+// 		segmentTracker->setEntityActive(offset, i, true);
 // 		blobs.push_back(blob);
 // 	}
-// 	spaceManager->getTracker()->updateSegmentUsage(offset, 10, 0);
+// 	segmentTracker->updateSegmentUsage(offset, 10, 0);
 //
 // 	// Delete 4 blobs (40% fragmentation >= 30% threshold)
 // 	for (int i = 0; i < 4; i++) {
 // 		deletionManager->deleteBlob(blobs[i]);
 // 	}
 //
-// 	SegmentHeader hAfter = spaceManager->getTracker()->getSegmentHeader(offset);
+// 	SegmentHeader hAfter = segmentTracker->getSegmentHeader(offset);
 // 	EXPECT_EQ(hAfter.needs_compaction, 1U);
 // }
 
@@ -994,10 +993,10 @@ TEST_F(DeletionManagerTest, DeleteNode_PreviouslyDeletedProperty) {
 	dataManager->updateNode(node);
 
 	// Manually mark property as inactive
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	uint32_t idx = prop.getId() - h.start_id;
-	spaceManager->getTracker()->setEntityActive(pSeg, idx, false);
+	segmentTracker->setEntityActive(pSeg, idx, false);
 
 	// Delete node - should handle inactive property gracefully
 	EXPECT_NO_THROW(deletionManager->deleteNode(node));
@@ -1018,10 +1017,10 @@ TEST_F(DeletionManagerTest, DeleteNode_PreviouslyDeletedProperty) {
 // 	dataManager->updateNode(node);
 //
 // 	// Manually mark blob as inactive
-// 	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
-// 	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+// 	uint64_t bSeg = segmentTracker->getSegmentOffsetForBlobId(blob.getId());
+// 	SegmentHeader h = segmentTracker->getSegmentHeader(bSeg);
 // 	uint32_t idx = blob.getId() - h.start_id;
-// 	spaceManager->getTracker()->setEntityActive(bSeg, idx, false);
+// 	segmentTracker->setEntityActive(bSeg, idx, false);
 //
 // 	// Delete node - should handle inactive blob gracefully
 // 	EXPECT_NO_THROW(deletionManager->deleteNode(node));
@@ -1039,10 +1038,10 @@ TEST_F(DeletionManagerTest, DeleteEdge_PreviouslyDeletedProperty) {
 	dataManager->updateEdge(edge);
 
 	// Manually mark property as inactive
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	uint32_t idx = prop.getId() - h.start_id;
-	spaceManager->getTracker()->setEntityActive(pSeg, idx, false);
+	segmentTracker->setEntityActive(pSeg, idx, false);
 
 	// Delete edge - should handle inactive property gracefully
 	EXPECT_NO_THROW(deletionManager->deleteEdge(edge));
@@ -1100,8 +1099,8 @@ TEST_F(DeletionManagerTest, DeletePropertyEntity_ActivePropertyDirect) {
 	ASSERT_GT(prop.getId(), 0);
 
 	// Verify property is active before deletion
-	uint64_t pSeg = spaceManager->getTracker()->getSegmentOffsetForPropId(prop.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(pSeg);
+	uint64_t pSeg = segmentTracker->getSegmentOffsetForPropId(prop.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(pSeg);
 	ASSERT_TRUE(segmentTracker->isEntityActive(pSeg, prop.getId() - h.start_id));
 
 	// Call deletePropertyEntity directly with the active property
@@ -1118,8 +1117,8 @@ TEST_F(DeletionManagerTest, DeletePropertyEntity_ActiveBlobDirect) {
 	ASSERT_GT(blob.getId(), 0);
 
 	// Verify blob is active before deletion
-	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	uint64_t bSeg = segmentTracker->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(bSeg);
 	ASSERT_TRUE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
 
 	// Call deletePropertyEntity directly with the active blob
@@ -1158,8 +1157,8 @@ TEST_F(DeletionManagerTest, DeleteEdge_CascadesToBlobEntity) {
 	EXPECT_TRUE(isEdgeDeleted(edge.getId()));
 
 	// Verify Blob is deleted
-	uint64_t bSeg = spaceManager->getTracker()->getSegmentOffsetForBlobId(blob.getId());
-	SegmentHeader h = spaceManager->getTracker()->getSegmentHeader(bSeg);
+	uint64_t bSeg = segmentTracker->getSegmentOffsetForBlobId(blob.getId());
+	SegmentHeader h = segmentTracker->getSegmentHeader(bSeg);
 	EXPECT_FALSE(segmentTracker->isEntityActive(bSeg, blob.getId() - h.start_id));
 }
 
@@ -1171,7 +1170,7 @@ TEST_F(DeletionManagerTest, CompactionThreshold_Index) {
 	// Test compaction triggering for indexes
 	// Covers lines 214-220: markIndexInactive compaction check
 	uint32_t type = Index::typeId;
-	uint64_t offset = spaceManager->allocateSegment(type, 10);
+	uint64_t offset = segmentAllocator->allocateSegment(type, 10);
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 
 	// Create and activate 10 indexes
@@ -1198,7 +1197,7 @@ TEST_F(DeletionManagerTest, CompactionThreshold_State) {
 	// Test compaction triggering for states
 	// Covers lines 227-233: markStateInactive compaction check
 	uint32_t type = State::typeId;
-	uint64_t offset = spaceManager->allocateSegment(type, 10);
+	uint64_t offset = segmentAllocator->allocateSegment(type, 10);
 	SegmentHeader h = segmentTracker->getSegmentHeader(offset);
 
 	// Create and activate 10 states

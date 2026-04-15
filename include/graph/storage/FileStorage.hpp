@@ -27,8 +27,11 @@
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
 #include "FileHeaderManager.hpp"
+#include "FileTruncator.hpp"
 #include "IDAllocator.hpp"
 #include "IStorageEventListener.hpp"
+#include "SegmentAllocator.hpp"
+#include "SpaceManager.hpp"
 #include "StorageHeaders.hpp"
 #include "StorageTypes.hpp"
 #include "data/DataManager.hpp"
@@ -134,7 +137,9 @@ namespace graph::storage {
 
 		std::shared_ptr<DataManager> dataManager;
 
+		std::shared_ptr<SegmentAllocator> segmentAllocator;
 		std::shared_ptr<SpaceManager> spaceManager;
+		std::shared_ptr<FileTruncator> fileTruncator;
 
 		std::shared_ptr<DatabaseInspector> databaseInspector;
 

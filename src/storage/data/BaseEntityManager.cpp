@@ -22,6 +22,7 @@
 
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/log/Log.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
 #include "graph/storage/data/PropertyManager.hpp"

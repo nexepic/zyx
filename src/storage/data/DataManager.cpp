@@ -38,7 +38,6 @@
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
-#include "graph/storage/SpaceManager.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/EdgeManager.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
@@ -57,12 +56,10 @@ namespace graph::storage {
 
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
-							 std::shared_ptr<SpaceManager> spaceManager,
 							 const std::string &filePath) :
 		file_(std::move(file)), fileHeader_(fileHeader),
 		pagePool_(std::make_unique<PageBufferPool>(cacheSize)),
-		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)),
-		spaceManager_(std::move(spaceManager)) {
+		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)) {
 
 		// Open a read-only file descriptor for pread()-based parallel reads.
 		// pread() is atomic (no seek+read race) so multiple threads can call it
@@ -111,9 +108,8 @@ namespace graph::storage {
 
 	void DataManager::initialize(bool skipSegmentIndexBuild) {
 		// Initialize low-level components
-		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), spaceManager_, idAllocator_);
+		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), segmentTracker_, idAllocator_);
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(shared_from_this());
-		spaceManager_->setEntityReferenceUpdater(entityReferenceUpdater_);
 		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(shared_from_this());
 
 		// Initialize segment indexes (unless pre-built by StorageBootstrap)

@@ -77,7 +77,6 @@ namespace graph::storage {
 
 	class IDAllocator;
 	class SegmentTracker;
-	class SpaceManager;
 	class SegmentIndexManager;
 	class EntityReferenceUpdater;
 	class DeletionManager;
@@ -102,11 +101,10 @@ namespace graph::storage {
 		 * @param fileHeader Reference to the file header
 		 * @param idAllocator Allocator for entity IDs
 		 * @param segmentTracker Tracks segment information
-		 * @param spaceManager Manages storage space allocation
+		 * @param filePath Optional path for pread-based parallel reads
 		 */
 		explicit DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
-							 std::shared_ptr<SpaceManager> spaceManager,
 							 const std::string &filePath = "");
 
 		/**
@@ -386,7 +384,6 @@ namespace graph::storage {
 		// Dependency components
 		std::shared_ptr<IDAllocator> idAllocator_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
-		std::shared_ptr<SpaceManager> spaceManager_;
 		std::shared_ptr<SegmentIndexManager> segmentIndexManager_;
 		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;
 		std::shared_ptr<traversal::RelationshipTraversal> relationshipTraversal_;

@@ -28,9 +28,9 @@
 namespace graph::storage {
 
 	DeletionManager::DeletionManager(std::shared_ptr<DataManager> dataManager,
-									 std::shared_ptr<SpaceManager> spaceManager,
+									 std::shared_ptr<SegmentTracker> tracker,
 									 std::shared_ptr<IDAllocator> idAllocator) :
-		dataManager_(std::move(dataManager)), spaceManager_(std::move(spaceManager)),
+		dataManager_(std::move(dataManager)), tracker_(std::move(tracker)),
 		idAllocator_(std::move(idAllocator)) {}
 
 	DeletionManager::~DeletionManager() = default;
@@ -91,32 +91,32 @@ namespace graph::storage {
 
 	uint64_t DeletionManager::findSegmentForNodeId(int64_t id) const {
 		// Use the tracker's method instead of reimplementing the logic
-		return spaceManager_->getTracker()->getSegmentOffsetForNodeId(id);
+		return tracker_->getSegmentOffsetForNodeId(id);
 	}
 
 	uint64_t DeletionManager::findSegmentForEdgeId(int64_t id) const {
 		// Use the tracker's method instead of reimplementing the logic
-		return spaceManager_->getTracker()->getSegmentOffsetForEdgeId(id);
+		return tracker_->getSegmentOffsetForEdgeId(id);
 	}
 
 	uint64_t DeletionManager::findSegmentForPropertyId(int64_t id) const {
 		// Use the tracker's method instead of reimplementing the logic
-		return spaceManager_->getTracker()->getSegmentOffsetForPropId(id);
+		return tracker_->getSegmentOffsetForPropId(id);
 	}
 
 	uint64_t DeletionManager::findSegmentForBlobId(int64_t id) const {
 		// Use the tracker's method instead of reimplementing the logic
-		return spaceManager_->getTracker()->getSegmentOffsetForBlobId(id);
+		return tracker_->getSegmentOffsetForBlobId(id);
 	}
 
 	uint64_t DeletionManager::findSegmentForIndexId(int64_t id) const {
 		// Use the tracker's method instead of reimplementing the logic
-		return spaceManager_->getTracker()->getSegmentOffsetForIndexId(id);
+		return tracker_->getSegmentOffsetForIndexId(id);
 	}
 
 	uint64_t DeletionManager::findSegmentForStateId(int64_t id) const {
 		// Use the tracker's method instead of reimplementing the logic
-		return spaceManager_->getTracker()->getSegmentOffsetForStateId(id);
+		return tracker_->getSegmentOffsetForStateId(id);
 	}
 
 	void DeletionManager::deletePropertyEntity(int64_t propertyId, PropertyStorageType storageType) const {
@@ -161,9 +161,9 @@ namespace graph::storage {
 		// updated. Optimization: freeId already updated the bitmap, so fragmentation ratio is current.
 		uint64_t segmentOffset = findSegmentForNodeId(node.getId());
 		if (segmentOffset != 0) {
-			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			SegmentHeader segmentHeader = tracker_->getSegmentHeader(segmentOffset);
 			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+				tracker_->markForCompaction(segmentOffset, true);
 			}
 		}
 	}
@@ -174,9 +174,9 @@ namespace graph::storage {
 
 		uint64_t segmentOffset = findSegmentForEdgeId(edge.getId());
 		if (segmentOffset != 0) {
-			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			SegmentHeader segmentHeader = tracker_->getSegmentHeader(segmentOffset);
 			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+				tracker_->markForCompaction(segmentOffset, true);
 			}
 		}
 	}
@@ -187,9 +187,9 @@ namespace graph::storage {
 
 		uint64_t segmentOffset = findSegmentForPropertyId(property.getId());
 		if (segmentOffset != 0) {
-			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			SegmentHeader segmentHeader = tracker_->getSegmentHeader(segmentOffset);
 			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+				tracker_->markForCompaction(segmentOffset, true);
 			}
 		}
 	}
@@ -200,9 +200,9 @@ namespace graph::storage {
 
 		uint64_t segmentOffset = findSegmentForBlobId(blob.getId());
 		if (segmentOffset != 0) {
-			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			SegmentHeader segmentHeader = tracker_->getSegmentHeader(segmentOffset);
 			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+				tracker_->markForCompaction(segmentOffset, true);
 			}
 		}
 	}
@@ -213,9 +213,9 @@ namespace graph::storage {
 
 		uint64_t segmentOffset = findSegmentForIndexId(index.getId());
 		if (segmentOffset != 0) {
-			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			SegmentHeader segmentHeader = tracker_->getSegmentHeader(segmentOffset);
 			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+				tracker_->markForCompaction(segmentOffset, true);
 			}
 		}
 	}
@@ -226,9 +226,9 @@ namespace graph::storage {
 
 		uint64_t segmentOffset = findSegmentForStateId(state.getId());
 		if (segmentOffset != 0) {
-			SegmentHeader segmentHeader = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+			SegmentHeader segmentHeader = tracker_->getSegmentHeader(segmentOffset);
 			if (segmentHeader.getFragmentationRatio() >= COMPACTION_THRESHOLD) {
-				spaceManager_->getTracker()->markForCompaction(segmentOffset, true);
+				tracker_->markForCompaction(segmentOffset, true);
 			}
 		}
 	}
@@ -241,13 +241,13 @@ namespace graph::storage {
 		}
 
 		// Get segment header from tracker
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+		SegmentHeader header = tracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate the index within the segment
 		auto indexInSegment = static_cast<uint32_t>(nodeId - header.start_id);
 
 		// Check if this node is active using the bitmap
-		return spaceManager_->getTracker()->isEntityActive(segmentOffset, indexInSegment);
+		return tracker_->isEntityActive(segmentOffset, indexInSegment);
 	}
 
 	bool DeletionManager::isEdgeActive(int64_t edgeId) const {
@@ -258,20 +258,20 @@ namespace graph::storage {
 		}
 
 		// Get segment header from tracker
-		SegmentHeader header = spaceManager_->getTracker()->getSegmentHeader(segmentOffset);
+		SegmentHeader header = tracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate the index within the segment
 		auto indexInSegment = static_cast<uint32_t>(edgeId - header.start_id);
 
 		// Check if this edge is active using the bitmap
-		return spaceManager_->getTracker()->isEntityActive(segmentOffset, indexInSegment);
+		return tracker_->isEntityActive(segmentOffset, indexInSegment);
 	}
 
 	std::unordered_map<uint64_t, double> DeletionManager::analyzeSegmentFragmentation(uint32_t entityType) const {
 		std::unordered_map<uint64_t, double> result;
 
 		// Get all segments of the specified type
-		auto segments = spaceManager_->getTracker()->getSegmentsByType(entityType);
+		auto segments = tracker_->getSegmentsByType(entityType);
 
 		// Calculate fragmentation ratio for each segment
 		for (const auto &header: segments) {

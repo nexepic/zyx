@@ -20,6 +20,7 @@
 
 #include "graph/storage/data/EdgeManager.hpp"
 #include <utility>
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::storage {
