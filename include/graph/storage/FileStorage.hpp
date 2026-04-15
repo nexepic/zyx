@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/IntegrityChecker.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/StorageWriter.hpp"
 #include "DatabaseInspector.hpp"
@@ -92,6 +93,8 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<StorageIO> getStorageIO() const { return storageIO_; }
 
+		[[nodiscard]] std::shared_ptr<IntegrityChecker> getIntegrityChecker() const { return integrityChecker_; }
+
 		[[nodiscard]] std::shared_ptr<DataManager> getDataManager() const { return dataManager; }
 
 		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator() const { return idAllocator; }
@@ -112,18 +115,8 @@ namespace graph::storage {
 
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
 
-		struct SegmentVerifyResult {
-			uint64_t offset = 0;
-			int64_t startId = 0;
-			uint32_t capacity = 0;
-			uint32_t dataType = 0;
-			bool passed = false;
-		};
-
-		struct IntegrityResult {
-			bool allPassed = true;
-			std::vector<SegmentVerifyResult> segments;
-		};
+		using SegmentVerifyResult = IntegrityChecker::SegmentVerifyResult;
+		using IntegrityResult = IntegrityChecker::IntegrityResult;
 
 		[[nodiscard]] IntegrityResult verifyIntegrity() const;
 
@@ -181,5 +174,8 @@ namespace graph::storage {
 
 		// Entity write engine (saveData, updateEntityInPlace, deleteEntityOnDisk, etc.)
 		std::shared_ptr<StorageWriter> storageWriter_;
+
+		// Diagnostic verification engine (verifyBitmapConsistency, verifyIntegrity)
+		std::shared_ptr<IntegrityChecker> integrityChecker_;
 	};
 } // namespace graph::storage

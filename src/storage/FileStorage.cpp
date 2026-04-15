@@ -19,20 +19,16 @@
  **/
 
 #include "graph/storage/FileStorage.hpp"
-#include <algorithm>
 #include <chrono>
-#include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <future>
-#include <sstream>
 #include <tuple>
-#include "graph/storage/StorageBootstrap.hpp"
 #include <utility>
-#include <zlib.h>
-#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/IntegrityChecker.hpp"
 #include "graph/storage/PreadHelper.hpp"
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageBootstrap.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
@@ -188,6 +184,9 @@ namespace graph::storage {
 		// Create StorageWriter after all dependencies are ready
 		storageWriter_ = std::make_shared<StorageWriter>(storageIO_, segmentTracker, segmentAllocator, dataManager,
 														 idAllocator, fileHeader);
+
+		// Create IntegrityChecker after SegmentTracker and StorageIO are ready
+		integrityChecker_ = std::make_shared<IntegrityChecker>(segmentTracker, storageIO_);
 	}
 
 	void FileStorage::close() {
@@ -223,6 +222,9 @@ namespace graph::storage {
 
 			// Release StorageWriter before its dependencies
 			storageWriter_.reset();
+
+			// Release IntegrityChecker before its dependencies
+			integrityChecker_.reset();
 
 			// Release StorageIO before closing the stream it wraps
 			storageIO_.reset();
@@ -362,29 +364,7 @@ namespace graph::storage {
 	template void FileStorage::saveModifiedAndDeleted<State>(const std::vector<State> &, const std::vector<State> &);
 
 	bool FileStorage::verifyBitmapConsistency(uint64_t segmentOffset) const {
-		if (segmentOffset == 0) {
-			return false;
-		}
-
-		// Read segment header through the tracker
-		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
-
-		// Count inactive items in bitmap
-		uint32_t inactiveCount = 0;
-		for (uint32_t i = 0; i < header.used; i++) {
-			if (!segmentTracker->getBitmapBit(segmentOffset, i)) {
-				inactiveCount++;
-			}
-		}
-
-		// Compare with header's inactive_count
-		if (inactiveCount != header.inactive_count) {
-			std::cerr << "Bitmap inconsistency detected: Counted " << inactiveCount
-					  << " inactive items but header reports " << header.inactive_count << std::endl;
-			return false;
-		}
-
-		return true;
+		return integrityChecker_->verifyBitmapConsistency(segmentOffset);
 	}
 
 	void FileStorage::persistSegmentHeaders() const {
@@ -467,40 +447,7 @@ namespace graph::storage {
 	void FileStorage::clearCache() const { dataManager->clearCache(); }
 
 	FileStorage::IntegrityResult FileStorage::verifyIntegrity() const {
-		IntegrityResult result;
-
-		auto registry = segmentTracker->getSegmentTypeRegistry();
-		for (const auto &type : registry.getAllTypes()) {
-			auto segments = segmentTracker->getSegmentsByType(static_cast<uint32_t>(type));
-			for (const auto &header : segments) {
-				SegmentVerifyResult segResult;
-				segResult.offset = header.file_offset;
-				segResult.startId = header.start_id;
-				segResult.capacity = header.capacity;
-				segResult.dataType = header.data_type;
-
-				// Read the segment data region and compute CRC
-				uint64_t dataOffset = header.file_offset + sizeof(SegmentHeader);
-				std::vector<char> buffer(SEGMENT_SIZE, 0);
-
-				size_t bytesRead = storageIO_->readAt(dataOffset, buffer.data(), SEGMENT_SIZE);
-
-				if (bytesRead > 0) {
-					uint32_t computed = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
-					segResult.passed = (computed == header.segment_crc);
-				} else {
-					segResult.passed = false;
-				}
-
-				if (!segResult.passed) {
-					result.allPassed = false;
-				}
-
-				result.segments.push_back(segResult);
-			}
-		}
-
-		return result;
+		return integrityChecker_->verifyIntegrity();
 	}
 
 } // namespace graph::storage
