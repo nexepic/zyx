@@ -32,6 +32,7 @@
 #include <utility>
 #include <zlib.h>
 #include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/PreadHelper.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
@@ -93,13 +94,21 @@ namespace graph::storage {
 			fileHeaderManager->validateAndReadHeader();
 		}
 
-		initializeComponents();
-
-		// Open a separate fd for pwrite-based parallel writes and native truncation
+		// Open native file handles for pwrite/pread-based parallel I/O
 		writeFd_ = portable_open_rw(dbFilePath.c_str());
 		if (writeFd_ == INVALID_FILE_HANDLE) {
-			throw std::runtime_error("Cannot open native file handle for parallel writes: " + dbFilePath);
+			throw std::runtime_error("Cannot open native write handle for parallel writes: " + dbFilePath);
 		}
+
+		readFd_ = portable_open(dbFilePath.c_str(), O_RDONLY);
+		if (readFd_ == INVALID_FILE_HANDLE) {
+			throw std::runtime_error("Cannot open native read handle for parallel reads: " + dbFilePath);
+		}
+
+		// Create unified I/O abstraction (before components that depend on it)
+		storageIO_ = std::make_shared<StorageIO>(fileStream, writeFd_, readFd_);
+
+		initializeComponents();
 
 		isFileOpen = true;
 	}
@@ -107,7 +116,7 @@ namespace graph::storage {
 	void FileStorage::initializeComponents() {
 		fileHeaderManager->extractFileHeaderInfo();
 
-		segmentTracker = std::make_shared<SegmentTracker>(fileStream, fileHeader);
+		segmentTracker = std::make_shared<SegmentTracker>(storageIO_, fileHeader);
 
 		// Initialize ID allocator (without chain walk — StorageBootstrap will provide data)
 		idAllocator = std::make_unique<IDAllocator>(
@@ -118,11 +127,11 @@ namespace graph::storage {
 
 		// Then create the space management components
 		segmentAllocator =
-				std::make_shared<SegmentAllocator>(fileStream, segmentTracker, fileHeaderManager, idAllocator);
+				std::make_shared<SegmentAllocator>(storageIO_, segmentTracker, fileHeaderManager, idAllocator);
 		auto segmentCompactor =
 				std::make_shared<SegmentCompactor>(fileStream, segmentTracker, segmentAllocator, fileHeaderManager);
 		fileTruncator =
-				std::make_shared<FileTruncator>(fileStream, dbFilePath, segmentTracker);
+				std::make_shared<FileTruncator>(storageIO_, dbFilePath, segmentTracker);
 		spaceManager =
 				std::make_shared<SpaceManager>(segmentAllocator, segmentCompactor, fileTruncator, segmentTracker);
 
@@ -175,6 +184,10 @@ namespace graph::storage {
 		dataManager->setSystemStateManager(systemStateManager);
 
 		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
+
+		// Create StorageWriter after all dependencies are ready
+		storageWriter_ = std::make_shared<StorageWriter>(storageIO_, segmentTracker, segmentAllocator, dataManager,
+														 idAllocator, fileHeader);
 	}
 
 	void FileStorage::close() {
@@ -202,6 +215,18 @@ namespace graph::storage {
 				writeFd_ = INVALID_FILE_HANDLE;
 			}
 
+			// Close the native pread handle
+			if (readFd_ != INVALID_FILE_HANDLE) {
+				portable_close(readFd_);
+				readFd_ = INVALID_FILE_HANDLE;
+			}
+
+			// Release StorageWriter before its dependencies
+			storageWriter_.reset();
+
+			// Release StorageIO before closing the stream it wraps
+			storageIO_.reset();
+
 			// Close the fstream
 			if (fileStream) {
 				fileStream->flush();
@@ -214,45 +239,16 @@ namespace graph::storage {
 		}
 	}
 
-	// Classify entities from a dirty map into added/modified/deleted vectors
-	template<typename EntityType>
-	struct SaveBatch {
-		std::vector<EntityType> added, modified, deleted;
-	};
-
-	template<typename EntityType>
-	SaveBatch<EntityType> classifyEntities(
-			const std::unordered_map<int64_t, DirtyEntityInfo<EntityType>> &map) {
-		SaveBatch<EntityType> batch;
-		for (const auto &[id, info] : map) {
-			if (!info.backup.has_value()) continue;
-			switch (info.changeType) {
-				case EntityChangeType::CHANGE_ADDED:
-					batch.added.push_back(*info.backup);
-					break;
-				case EntityChangeType::CHANGE_MODIFIED:
-					batch.modified.push_back(*info.backup);
-					break;
-				case EntityChangeType::CHANGE_DELETED:
-					batch.deleted.push_back(*info.backup);
-					break;
-			}
-		}
-		return batch;
-	}
+	// ── Delegate methods to StorageWriter ───────────────────────────────────
 
 	template<typename T>
 	void FileStorage::saveNewEntities(std::vector<T> &entities) {
-		if (entities.empty()) return;
-		uint64_t &segHead = getSegmentHead(fileHeader, T::typeId);
-		constexpr uint32_t perSeg = storage::itemsPerSegment<T>();
-		saveData(entities, segHead, perSeg);
+		storageWriter_->saveNewEntities(entities);
 	}
 
 	template<typename T>
 	void FileStorage::saveModifiedAndDeleted(const std::vector<T> &modified, const std::vector<T> &deleted) {
-		for (const auto &e : modified) updateEntityInPlace(e);
-		for (const auto &e : deleted) deleteEntityOnDisk(e);
+		storageWriter_->saveModifiedAndDeleted(modified, deleted);
 	}
 
 	void FileStorage::save() {
@@ -271,57 +267,12 @@ namespace graph::storage {
 		if (snapshot.isEmpty())
 			return;
 
-		// 2. DATA PREPARATION PHASE
-		// Classify entities by change type for all entity types.
-		auto prepStart = Clock::now();
-
-		auto allBatches = std::make_tuple(
-				classifyEntities(snapshot.nodes),
-				classifyEntities(snapshot.edges),
-				classifyEntities(snapshot.properties),
-				classifyEntities(snapshot.blobs),
-				classifyEntities(snapshot.indexes),
-				classifyEntities(snapshot.states));
-
-		if (threadPool_ && !threadPool_->isSingleThreaded()) {
-			// Parallel classification is unnecessary — classifyEntities is in-memory
-			// and the tuple construction above already ran them sequentially.
-			// The parallelism benefit comes from the I/O phase below.
-		}
-
-		debug::PerfTrace::addDuration(
-				"save.prepare", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
-													 prepStart)
-												   .count()));
-
-		// 3. I/O PHASE
+		// 2. I/O PHASE: Classify + write all entity types via StorageWriter
 		auto ioStart = Clock::now();
 
-		// Step 1: Sequential — new entities (need segment allocation)
-		std::apply([this](auto &...batch) { (saveNewEntities(batch.added), ...); }, allBatches);
+		storageWriter_->writeSnapshot(snapshot, threadPool_);
 
-		// Step 2: Modified + deleted entities (known offsets, non-overlapping regions)
-		if (threadPool_ && !threadPool_->isSingleThreaded()) {
-			std::vector<std::future<void>> ioTasks;
-			std::apply(
-					[this, &ioTasks](auto &...batch) {
-						auto submit = [this, &ioTasks](auto &b) {
-							if (!b.modified.empty() || !b.deleted.empty()) {
-								ioTasks.push_back(threadPool_->submit(
-										[this, &b] { saveModifiedAndDeleted(b.modified, b.deleted); }));
-							}
-						};
-						(submit(batch), ...);
-					},
-					allBatches);
-			for (auto &f : ioTasks)
-				f.get();
-		} else {
-			std::apply([this](auto &...batch) { (saveModifiedAndDeleted(batch.modified, batch.deleted), ...); },
-					   allBatches);
-		}
-
-		// Step 3: Persist segment headers (so pread-based reads see correct used/start_id)
+		// 3. Persist segment headers (so pread-based reads see correct used/start_id)
 		persistSegmentHeaders();
 
 		// Update aggregated CRC from segment CRCs before flushing file header
@@ -330,8 +281,8 @@ namespace graph::storage {
 
 		fileHeaderManager->flushFileHeader();
 
-		// Step 4: Single fsync to flush all writes (entity data + segment headers)
-		if (writeFd_ != INVALID_FILE_HANDLE) portable_fsync(writeFd_);
+		// 4. Single fsync to flush all writes (entity data + segment headers)
+		storageIO_->sync();
 
 		debug::PerfTrace::addDuration(
 				"save.io", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
@@ -348,320 +299,67 @@ namespace graph::storage {
 	}
 
 	template<typename T>
-	void FileStorage::saveData(std::vector<T> &data, uint64_t &segmentHead, uint32_t itemsPerSegment) {
-		if (data.empty())
-			return;
-
-		// Group entities by whether they have pre-allocated slots or need new allocation
-		std::vector<T> entitiesForNewSlots;
-		std::unordered_map<uint64_t, std::vector<T>> entitiesBySegment; // Segment offset -> entities
-
-		// First pass: determine if each entity has a pre-allocated slot
-		for (const auto &entity : data) {
-			uint64_t segmentOffset = dataManager->findSegmentForEntityId<T>(entity.getId());
-
-			if (segmentOffset != 0) {
-				// Entity has a pre-allocated slot - group by segment for batch processing
-				entitiesBySegment[segmentOffset].push_back(entity);
-			} else {
-				// Entity needs a new slot
-				entitiesForNewSlots.push_back(entity);
-			}
-		}
-
-		// Process entities with pre-allocated slots
-		for (auto &[segmentOffset, entities]: entitiesBySegment) {
-			SegmentHeader header = readSegmentHeader(segmentOffset);
-
-			// Sort entities by ID for efficient placement
-			std::sort(entities.begin(), entities.end(), [](const T &a, const T &b) { return a.getId() < b.getId(); });
-
-			// Process each entity
-			for (const auto &entity: entities) {
-				auto index = static_cast<uint32_t>(entity.getId() - header.start_id);
-
-				// Calculate file offset for this entity
-				uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + index * T::getTotalSize();
-
-				// Write entity
-				fileStream->seekp(static_cast<std::streamoff>(entityOffset));
-				utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, T::getTotalSize());
-
-				// Mark entity as active if it wasn't already
-				if (!segmentTracker->getBitmapBit(segmentOffset, index)) {
-					segmentTracker->setEntityActive(segmentOffset, index, true);
-
-					// Update inactive count in the segment header if needed
-					segmentTracker->updateSegmentHeader(segmentOffset, [](SegmentHeader &header) {
-						if (header.inactive_count > 0) {
-							header.inactive_count--;
-						}
-					});
-				}
-			}
-		}
-
-		// Exit if all entities were saved to pre-allocated slots
-		if (entitiesForNewSlots.empty()) {
-			return;
-		}
-
-		// For remaining entities, sort by ID for sequential storage
-		std::sort(entitiesForNewSlots.begin(), entitiesForNewSlots.end(),
-				  [](const T &a, const T &b) { return a.getId() < b.getId(); });
-
-		// Process entities that need new slots
-		uint64_t currentSegmentOffset = segmentHead;
-		SegmentHeader currentSegHeader;
-		bool isFirstSegment = (currentSegmentOffset == 0);
-
-		// If we have a segment head, find the last segment via O(1) tail lookup
-		if (currentSegmentOffset != 0) {
-			uint64_t tail = segmentTracker->getChainTail(T::typeId);
-			if (tail != 0) {
-				currentSegmentOffset = tail;
-			} else {
-				// Fallback: walk the chain (should not happen after init)
-				while (true) {
-					currentSegHeader = readSegmentHeader(currentSegmentOffset);
-					if (currentSegHeader.next_segment_offset == 0)
-						break;
-					currentSegmentOffset = currentSegHeader.next_segment_offset;
-				}
-			}
-		}
-
-		auto dataIt = entitiesForNewSlots.begin();
-		while (dataIt != entitiesForNewSlots.end()) {
-			uint32_t remaining = 0;
-			bool needNewSegment = (currentSegmentOffset == 0);
-
-			// Calculate remaining space in current segment (if it exists)
-			if (currentSegmentOffset != 0) {
-				currentSegHeader = readSegmentHeader(currentSegmentOffset);
-				remaining = currentSegHeader.capacity - currentSegHeader.used;
-
-				// Check if the next entity's ID is contiguous with the segment.
-				// Segment stores entities at position = id - start_id, so the next
-				// expected ID is start_id + used. If there's a gap, start a new segment.
-				int64_t expectedNextId = currentSegHeader.start_id + currentSegHeader.used;
-				if (remaining == 0 || dataIt->getId() != expectedNextId) {
-					needNewSegment = true;
-				}
-			}
-
-			if (needNewSegment) {
-				// Allocate new segment
-				// Note: SpaceManager will handle all segment linking automatically
-				uint64_t newOffset = allocateSegment(T::typeId, itemsPerSegment);
-
-				// If this is the first segment for this type, update the segment head
-				if (isFirstSegment) {
-					segmentHead = newOffset;
-					segmentTracker->updateChainHead(T::typeId, newOffset);
-					isFirstSegment = false;
-				}
-
-				// Update the start_id if needed (only for a new segment)
-				SegmentHeader newSegHeader = readSegmentHeader(newOffset);
-				if (newSegHeader.start_id != dataIt->getId()) {
-					// Only update start_id if it differs from what SpaceManager set
-					segmentTracker->updateSegmentHeader(
-							newOffset, [dataIt](SegmentHeader &header) { header.start_id = dataIt->getId(); });
-				}
-
-				// Move to new segment
-				currentSegmentOffset = newOffset;
-				currentSegHeader = readSegmentHeader(newOffset);
-				remaining = currentSegHeader.capacity;
-			}
-
-			// Calculate number of items to write, limited to contiguous IDs.
-			// Entities are sorted by ID, so we count sequential IDs from the current position.
-			uint32_t maxCount = (std::min)(remaining, static_cast<uint32_t>(entitiesForNewSlots.end() - dataIt));
-			int64_t expectedId = dataIt->getId();
-			uint32_t writeCount = 0;
-			for (auto it = dataIt; writeCount < maxCount; ++it, ++writeCount) {
-				if (it->getId() != expectedId) break;
-				expectedId++;
-			}
-
-			std::vector<T> batch(dataIt, dataIt + writeCount);
-
-			// Write data
-			writeSegmentData(currentSegmentOffset, batch, currentSegHeader.used);
-
-			// Reload header to get updated used count
-			currentSegHeader = readSegmentHeader(currentSegmentOffset);
-
-			dataIt += writeCount;
-		}
+	void FileStorage::saveData(std::vector<T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize) {
+		storageWriter_->saveData(data, segmentHead, maxSegmentSize);
 	}
 
 	uint64_t FileStorage::allocateSegment(uint32_t type, uint32_t capacity) const {
-		// Use SpaceManager's allocateSegment function instead of direct file operations
 		return segmentAllocator->allocateSegment(type, capacity);
 	}
 
 	template<typename T>
 	void FileStorage::writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t baseUsed) {
-		const size_t itemSize = T::getTotalSize();
-		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + baseUsed * itemSize;
-
-		if (writeFd_ != INVALID_FILE_HANDLE) {
-			// pwrite path: build entire payload into a single buffer
-			size_t totalSize = data.size() * itemSize;
-			std::vector<char> buf(totalSize);
-			size_t pos = 0;
-			for (const auto &item : data) {
-				auto serialized = utils::FixedSizeSerializer::serializeToBuffer(item, itemSize);
-				std::memcpy(buf.data() + pos, serialized.data(), serialized.size());
-				pos += itemSize;
-			}
-			portable_pwrite(writeFd_, buf.data(), totalSize,
-							static_cast<pwrite_off_t>(dataOffset));
-		} else {
-			// fstream fallback
-			fileStream->seekp(static_cast<std::streamoff>(dataOffset));
-			for (const auto &item: data) {
-				utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, item, itemSize);
-			}
-			fileStream->flush();
-		}
-
-		// Use the tracker to update the segment header
-		segmentTracker->updateSegmentHeader(segmentOffset, [&](SegmentHeader &header) {
-			header.used = baseUsed + static_cast<uint32_t>(data.size());
-			if (baseUsed == 0 && !data.empty()) {
-				header.start_id = data.front().getId();
-			}
-		});
-
-		// Update bitmap for the newly added entities directly
-		if (!data.empty()) {
-			updateSegmentBitmap(segmentOffset, data.front().getId(), static_cast<uint32_t>(data.size()), true);
-		}
+		storageWriter_->writeSegmentData(segmentOffset, data, baseUsed);
 	}
 
 	template<typename T>
 	void FileStorage::updateEntityInPlace(const T &entity, uint64_t knownSegmentOffset) {
-		int64_t id = entity.getId();
-		uint64_t segmentOffset = knownSegmentOffset;
-
-		if (segmentOffset == 0) {
-			segmentOffset = dataManager->findSegmentForEntityId<T>(id);
-		}
-
-		if (segmentOffset == 0) {
-			throw std::runtime_error("Cannot update entity: entity not found via index lookup. ID: " +
-									 std::to_string(id));
-		}
-
-		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
-
-		// Calculate entity position within segment
-		uint64_t entityIndex = id - header.start_id;
-
-		if (entityIndex >= header.capacity) {
-			std::stringstream ss;
-			ss << "Entity index out of bounds for segment. "
-			   << "ID: " << id << ", StartID: " << header.start_id << ", Index: " << entityIndex
-			   << ", Capacity: " << header.capacity;
-			throw std::runtime_error(ss.str());
-		}
-
-		// Calculate file offset for this entity
-		uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + entityIndex * T::getTotalSize();
-
-		if (writeFd_ != INVALID_FILE_HANDLE) {
-			// pwrite path: serialize to buffer, single pwrite call
-			auto buf = utils::FixedSizeSerializer::serializeToBuffer(entity, T::getTotalSize());
-			portable_pwrite(writeFd_, buf.data(), buf.size(),
-							static_cast<pwrite_off_t>(entityOffset));
-		} else {
-			// fstream fallback
-			fileStream->seekp(static_cast<std::streamoff>(entityOffset));
-			utils::FixedSizeSerializer::serializeWithFixedSize(*fileStream, entity, T::getTotalSize());
-			fileStream->flush();
-		}
-
-		// Update bitmap to reflect entity's active state
-		updateBitmapForEntity<T>(segmentOffset, id, entity.isActive());
+		storageWriter_->updateEntityInPlace(entity, knownSegmentOffset);
 	}
 
 	template<typename T>
 	void FileStorage::deleteEntityOnDisk(const T &entity) {
-		int64_t id = entity.getId();
-
-		if (id <= 0) {
-			return;
-		}
-
-		// Mark the ID as available for reuse
-		idAllocator->freeId(id, entity.typeId);
-
-		if (uint64_t segmentOffset = dataManager->findSegmentForEntityId<T>(id); segmentOffset != 0) {
-			// Entity exists on disk, update it in place
-			updateEntityInPlace(entity, segmentOffset);
-		}
-		// If entity doesn't exist on disk, there's nothing to update
+		storageWriter_->deleteEntityOnDisk(entity);
 	}
 
-	// Template specializations
-	template void FileStorage::deleteEntityOnDisk<Node>(const Node &entity);
-	template void FileStorage::deleteEntityOnDisk<Edge>(const Edge &entity);
+	// Template instantiations for delegate methods
+	template void FileStorage::saveData<Node>(std::vector<Node> &, uint64_t &, uint32_t);
+	template void FileStorage::saveData<Edge>(std::vector<Edge> &, uint64_t &, uint32_t);
+	template void FileStorage::saveData<Property>(std::vector<Property> &, uint64_t &, uint32_t);
+	template void FileStorage::saveData<Blob>(std::vector<Blob> &, uint64_t &, uint32_t);
+	template void FileStorage::saveData<Index>(std::vector<Index> &, uint64_t &, uint32_t);
+	template void FileStorage::saveData<State>(std::vector<State> &, uint64_t &, uint32_t);
 
-	// Read segment header
-	SegmentHeader FileStorage::readSegmentHeader(uint64_t segmentOffset) const {
-		return segmentTracker->getSegmentHeader(segmentOffset);
-	}
+	template void FileStorage::writeSegmentData<Node>(uint64_t, const std::vector<Node> &, uint32_t);
+	template void FileStorage::writeSegmentData<Edge>(uint64_t, const std::vector<Edge> &, uint32_t);
+	template void FileStorage::writeSegmentData<Property>(uint64_t, const std::vector<Property> &, uint32_t);
+	template void FileStorage::writeSegmentData<Blob>(uint64_t, const std::vector<Blob> &, uint32_t);
+	template void FileStorage::writeSegmentData<Index>(uint64_t, const std::vector<Index> &, uint32_t);
+	template void FileStorage::writeSegmentData<State>(uint64_t, const std::vector<State> &, uint32_t);
 
-	// Write segment header
-	void FileStorage::writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header) const {
-		segmentTracker->writeSegmentHeader(segmentOffset, header);
-	}
+	template void FileStorage::updateEntityInPlace<Node>(const Node &, uint64_t);
+	template void FileStorage::updateEntityInPlace<Edge>(const Edge &, uint64_t);
+	template void FileStorage::updateEntityInPlace<Property>(const Property &, uint64_t);
+	template void FileStorage::updateEntityInPlace<Blob>(const Blob &, uint64_t);
+	template void FileStorage::updateEntityInPlace<Index>(const Index &, uint64_t);
+	template void FileStorage::updateEntityInPlace<State>(const State &, uint64_t);
 
-	// Update bitmap for a specific entity in the segment
-	template<typename EntityType>
-	void FileStorage::updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive) {
-		if (segmentOffset == 0) {
-			return; // No segment to update
-		}
+	template void FileStorage::deleteEntityOnDisk<Node>(const Node &);
+	template void FileStorage::deleteEntityOnDisk<Edge>(const Edge &);
 
-		// Calculate entity position within segment
-		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
-		uint64_t entityIndex = entityId - header.start_id;
-		if (entityIndex >= header.capacity) {
-			throw std::runtime_error("Entity index out of bounds for segment bitmap update");
-		}
+	template void FileStorage::saveNewEntities<Node>(std::vector<Node> &);
+	template void FileStorage::saveNewEntities<Edge>(std::vector<Edge> &);
+	template void FileStorage::saveNewEntities<Property>(std::vector<Property> &);
+	template void FileStorage::saveNewEntities<Blob>(std::vector<Blob> &);
+	template void FileStorage::saveNewEntities<Index>(std::vector<Index> &);
+	template void FileStorage::saveNewEntities<State>(std::vector<State> &);
 
-		// Delegate bitmap update to SegmentTracker
-		segmentTracker->setEntityActive(segmentOffset, entityIndex, isActive);
-	}
-
-	// Update bitmap for batch operations — delegates to SegmentTracker's
-	// single-lock-acquisition range setter, avoiding the vector<bool> roundtrip.
-	void FileStorage::updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count,
-										  bool isActive) const {
-		if (segmentOffset == 0 || count == 0) {
-			return;
-		}
-
-		// Read segment header to get start_id
-		SegmentHeader header = segmentTracker->getSegmentHeader(segmentOffset);
-
-		// Calculate relative start position
-		uint64_t startIndex = startId - header.start_id;
-		if (startIndex + count > header.capacity) {
-			throw std::runtime_error("Entity range out of bounds for segment bitmap batch update");
-		}
-
-		segmentTracker->setEntityActiveRange(segmentOffset, static_cast<uint32_t>(startIndex), count, isActive);
-	}
-
-	// Template instantiations
-	template void FileStorage::updateBitmapForEntity<Node>(uint64_t segmentOffset, uint64_t entityId, bool isActive);
-	template void FileStorage::updateBitmapForEntity<Edge>(uint64_t segmentOffset, uint64_t entityId, bool isActive);
+	template void FileStorage::saveModifiedAndDeleted<Node>(const std::vector<Node> &, const std::vector<Node> &);
+	template void FileStorage::saveModifiedAndDeleted<Edge>(const std::vector<Edge> &, const std::vector<Edge> &);
+	template void FileStorage::saveModifiedAndDeleted<Property>(const std::vector<Property> &, const std::vector<Property> &);
+	template void FileStorage::saveModifiedAndDeleted<Blob>(const std::vector<Blob> &, const std::vector<Blob> &);
+	template void FileStorage::saveModifiedAndDeleted<Index>(const std::vector<Index> &, const std::vector<Index> &);
+	template void FileStorage::saveModifiedAndDeleted<State>(const std::vector<State> &, const std::vector<State> &);
 
 	bool FileStorage::verifyBitmapConsistency(uint64_t segmentOffset) const {
 		if (segmentOffset == 0) {
@@ -785,9 +483,7 @@ namespace graph::storage {
 				uint64_t dataOffset = header.file_offset + sizeof(SegmentHeader);
 				std::vector<char> buffer(SEGMENT_SIZE, 0);
 
-				fileStream->seekg(static_cast<std::streamoff>(dataOffset));
-				fileStream->read(buffer.data(), SEGMENT_SIZE);
-				auto bytesRead = fileStream->gcount();
+				size_t bytesRead = storageIO_->readAt(dataOffset, buffer.data(), SEGMENT_SIZE);
 
 				if (bytesRead > 0) {
 					uint32_t computed = utils::calculateCrc(buffer.data(), SEGMENT_SIZE);
@@ -803,9 +499,6 @@ namespace graph::storage {
 				result.segments.push_back(segResult);
 			}
 		}
-
-		// Clear any stream errors from seeking/reading
-		fileStream->clear();
 
 		return result;
 	}

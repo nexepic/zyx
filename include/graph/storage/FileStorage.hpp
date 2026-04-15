@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageIO.hpp"
+#include "graph/storage/StorageWriter.hpp"
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
 #include "FileHeaderManager.hpp"
@@ -87,6 +89,8 @@ namespace graph::storage {
 		bool verifyBitmapConsistency(uint64_t segmentOffset) const;
 
 		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker; }
+
+		[[nodiscard]] std::shared_ptr<StorageIO> getStorageIO() const { return storageIO_; }
 
 		[[nodiscard]] std::shared_ptr<DataManager> getDataManager() const { return dataManager; }
 
@@ -157,19 +161,6 @@ namespace graph::storage {
 		std::vector<std::weak_ptr<IStorageEventListener>> eventListeners_;
 		std::mutex listenerMutex_;
 
-		// Update bitmap for an entity in the segment header
-		template<typename EntityType>
-		void updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive);
-
-		// Update bitmap when writing segment data in batch
-		void updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count, bool isActive = true) const;
-
-		// Read the current segment header from disk
-		SegmentHeader readSegmentHeader(uint64_t segmentOffset) const;
-
-		// Write updated segment header to disk
-		void writeSegmentHeader(uint64_t segmentOffset, const SegmentHeader &header) const;
-
 		std::mutex flushMutex;
 		std::atomic<bool> flushInProgress{false};
 		std::atomic<bool> deleteOperationPerformed{false};
@@ -180,5 +171,15 @@ namespace graph::storage {
 		// Native file handle for pwrite-based parallel writes and truncation.
 		// Opened alongside fstream in open(), closed in close().
 		file_handle_t writeFd_ = INVALID_FILE_HANDLE;
+
+		// Native file handle for pread-based parallel reads.
+		// Opened alongside fstream in open(), closed in close().
+		file_handle_t readFd_ = INVALID_FILE_HANDLE;
+
+		// Unified I/O abstraction wrapping fstream + writeFd + readFd
+		std::shared_ptr<StorageIO> storageIO_;
+
+		// Entity write engine (saveData, updateEntityInPlace, deleteEntityOnDisk, etc.)
+		std::shared_ptr<StorageWriter> storageWriter_;
 	};
 } // namespace graph::storage
