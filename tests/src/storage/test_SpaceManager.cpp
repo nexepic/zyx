@@ -77,7 +77,7 @@ protected:
 			fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 
 		segmentAllocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
-		segmentCompactor = std::make_shared<SegmentCompactor>(file, segmentTracker, segmentAllocator, fileHeaderManager);
+		segmentCompactor = std::make_shared<SegmentCompactor>(storageIO, segmentTracker, segmentAllocator, fileHeaderManager);
 		fileTruncator = std::make_shared<FileTruncator>(storageIO, testFilePath.string(), segmentTracker);
 		spaceManager = std::make_shared<SpaceManager>(segmentAllocator, segmentCompactor, fileTruncator, segmentTracker);
 

@@ -9,7 +9,6 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <vector>
 #include "EntityDispatch.hpp"
@@ -18,12 +17,13 @@
 #include "SegmentAllocator.hpp"
 #include "SegmentTracker.hpp"
 #include "StorageHeaders.hpp"
+#include "StorageIO.hpp"
 
 namespace graph::storage {
 
 	class SegmentCompactor {
 	public:
-		SegmentCompactor(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> tracker,
+		SegmentCompactor(std::shared_ptr<StorageIO> io, std::shared_ptr<SegmentTracker> tracker,
 						 std::shared_ptr<SegmentAllocator> allocator,
 						 std::shared_ptr<FileHeaderManager> fileHeaderManager);
 		~SegmentCompactor();
@@ -64,7 +64,7 @@ namespace graph::storage {
 		uint64_t calculateCurrentFileSize() const;
 		int64_t calculateLastUsedIdInSegment(const SegmentHeader &header) const;
 
-		std::shared_ptr<std::fstream> file_;
+		std::shared_ptr<StorageIO> io_;
 		std::shared_ptr<SegmentTracker> tracker_;
 		std::shared_ptr<SegmentAllocator> allocator_;
 		std::shared_ptr<FileHeaderManager> fileHeaderManager_;

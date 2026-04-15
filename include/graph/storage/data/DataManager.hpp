@@ -48,6 +48,7 @@ using ssize_t = intptr_t;
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/PageBufferPool.hpp"
 #include "graph/storage/PersistenceManager.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/constraints/IEntityValidator.hpp"
 #include "graph/storage/indexes/IEntityObserver.hpp"
@@ -101,11 +102,11 @@ namespace graph::storage {
 		 * @param fileHeader Reference to the file header
 		 * @param idAllocator Allocator for entity IDs
 		 * @param segmentTracker Tracks segment information
-		 * @param filePath Optional path for pread-based parallel reads
+		 * @param storageIO Unified I/O abstraction for pread-based parallel reads
 		 */
 		explicit DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
-							 const std::string &filePath = "");
+							 std::shared_ptr<StorageIO> storageIO = nullptr);
 
 		/**
 		 * Destructor that ensures the file is closed
@@ -237,9 +238,11 @@ namespace graph::storage {
 		void invalidateDirtySegments(const FlushSnapshot &snapshot) const;
 
 		/**
-		 * Eagerly closes file handles (readFd_) so the database file can be
+		 * Eagerly closes file handles so the database file can be
 		 * deleted on Windows even if the DataManager object is still alive.
 		 * Called by FileStorage::close() and by the destructor as a safety net.
+		 * Note: Since readFd_ is now owned by StorageIO, this is a no-op
+		 * but kept for API compatibility.
 		 */
 		void closeFileHandles();
 
@@ -273,7 +276,7 @@ namespace graph::storage {
 												 int64_t filterEndId = INT64_MAX) const;
 
 		// Thread-safe read via pread (no locks needed)
-		[[nodiscard]] bool hasPreadSupport() const { return readFd_ != INVALID_FILE_HANDLE; }
+		[[nodiscard]] bool hasPreadSupport() const { return storageIO_ && storageIO_->hasPreadSupport(); }
 		[[nodiscard]] ssize_t preadBytes(void *buf, size_t count, int64_t offset) const;
 
 		// Loading entities from disk
@@ -438,9 +441,8 @@ namespace graph::storage {
 		static thread_local const CommittedSnapshot *currentSnapshot_;
 
 		// Native file handle for thread-safe pread() based parallel reads.
-		// pread() is atomic (no separate seek+read) and multiple threads
-		// can call it concurrently on the same fd without synchronization.
-		file_handle_t readFd_ = INVALID_FILE_HANDLE;
+		// Delegated to StorageIO which owns the actual file descriptor.
+		std::shared_ptr<StorageIO> storageIO_;
 	};
 
 } // namespace graph::storage

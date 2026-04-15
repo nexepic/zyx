@@ -14,10 +14,10 @@
 
 namespace graph::storage {
 
-	SegmentCompactor::SegmentCompactor(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> tracker,
+	SegmentCompactor::SegmentCompactor(std::shared_ptr<StorageIO> io, std::shared_ptr<SegmentTracker> tracker,
 									   std::shared_ptr<SegmentAllocator> allocator,
 									   std::shared_ptr<FileHeaderManager> fileHeaderManager) :
-		file_(std::move(file)), tracker_(std::move(tracker)),
+		io_(std::move(io)), tracker_(std::move(tracker)),
 		allocator_(std::move(allocator)), fileHeaderManager_(std::move(fileHeaderManager)) {}
 
 	SegmentCompactor::~SegmentCompactor() = default;
@@ -396,19 +396,12 @@ namespace graph::storage {
 		for (size_t offset = 0; offset < TOTAL_SEGMENT_SIZE; offset += COPY_BLOCK_SIZE) {
 			size_t copySize = std::min(COPY_BLOCK_SIZE, static_cast<size_t>(TOTAL_SEGMENT_SIZE) - offset);
 
-			file_->seekg(static_cast<std::streamoff>(sourceOffset + offset));
-			file_->read(buffer.data(), static_cast<std::streamsize>(copySize));
-
-			if (file_->fail() || file_->gcount() != static_cast<std::streamsize>(copySize)) {
+			size_t bytesRead = io_->readAt(sourceOffset + offset, buffer.data(), copySize);
+			if (bytesRead != copySize) {
 				return false;
 			}
 
-			file_->seekp(static_cast<std::streamoff>(destinationOffset + offset));
-			file_->write(buffer.data(), static_cast<std::streamsize>(copySize));
-
-			if (file_->fail()) {
-				return false;
-			}
+			io_->writeAt(destinationOffset + offset, buffer.data(), copySize);
 		}
 
 		return true;

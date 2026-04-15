@@ -165,7 +165,6 @@ namespace graph::storage {
 		std::vector<T> entitiesForNewSlots;
 		std::unordered_map<uint64_t, std::vector<T>> entitiesBySegment;
 
-		// First pass: determine if each entity has a pre-allocated slot
 		for (const auto &entity : data) {
 			uint64_t segmentOffset = dataManager_->findSegmentForEntityId<T>(entity.getId());
 
@@ -176,23 +175,35 @@ namespace graph::storage {
 			}
 		}
 
-		// Process entities with pre-allocated slots — batch consecutive entities
+		writePreAllocatedEntities(entitiesBySegment);
+
+		if (!entitiesForNewSlots.empty()) {
+			writeNewSlotEntities(entitiesForNewSlots, segmentHead, itemsPerSegment);
+		}
+	}
+
+	// ── writePreAllocatedEntities ────────────────────────────────────────────
+
+	template<typename T>
+	void StorageWriter::writePreAllocatedEntities(
+			const std::unordered_map<uint64_t, std::vector<T>> &entitiesBySegment) {
 		for (auto &[segmentOffset, entities] : entitiesBySegment) {
 			SegmentHeader header = readSegmentHeader(segmentOffset);
 			const size_t itemSize = T::getTotalSize();
 
-			std::sort(entities.begin(), entities.end(), [](const T &a, const T &b) { return a.getId() < b.getId(); });
+			auto sorted = entities;
+			std::sort(sorted.begin(), sorted.end(), [](const T &a, const T &b) { return a.getId() < b.getId(); });
 
 			// Group consecutive entities for batch I/O
 			std::vector<std::pair<uint32_t, bool>> bitmapUpdates;
 			size_t i = 0;
-			while (i < entities.size()) {
+			while (i < sorted.size()) {
 				size_t batchStart = i;
-				auto startIndex = static_cast<uint32_t>(entities[i].getId() - header.start_id);
+				auto startIndex = static_cast<uint32_t>(sorted[i].getId() - header.start_id);
 
 				// Find consecutive run
-				while (i + 1 < entities.size() &&
-					   entities[i + 1].getId() == entities[i].getId() + 1) {
+				while (i + 1 < sorted.size() &&
+					   sorted[i + 1].getId() == sorted[i].getId() + 1) {
 					i++;
 				}
 				i++;
@@ -202,7 +213,7 @@ namespace graph::storage {
 				std::vector<char> buf(batchSize * itemSize);
 				for (size_t j = 0; j < batchSize; j++) {
 					utils::FixedSizeSerializer::serializeInto(buf.data() + j * itemSize,
-															  entities[batchStart + j], itemSize);
+															  sorted[batchStart + j], itemSize);
 				}
 
 				// Single pwrite for the batch
@@ -218,11 +229,13 @@ namespace graph::storage {
 			// Batch bitmap update (single lock acquisition)
 			tracker_->batchSetEntityActive(segmentOffset, bitmapUpdates);
 		}
+	}
 
-		if (entitiesForNewSlots.empty()) {
-			return;
-		}
+	// ── writeNewSlotEntities ─────────────────────────────────────────────────
 
+	template<typename T>
+	void StorageWriter::writeNewSlotEntities(std::vector<T> &entitiesForNewSlots,
+											  uint64_t &segmentHead, uint32_t itemsPerSegment) {
 		std::sort(entitiesForNewSlots.begin(), entitiesForNewSlots.end(),
 				  [](const T &a, const T &b) { return a.getId() < b.getId(); });
 

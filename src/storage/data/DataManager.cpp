@@ -56,17 +56,11 @@ namespace graph::storage {
 
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
-							 const std::string &filePath) :
+							 std::shared_ptr<StorageIO> storageIO) :
 		file_(std::move(file)), fileHeader_(fileHeader),
 		pagePool_(std::make_unique<PageBufferPool>(cacheSize)),
-		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)) {
-
-		// Open a read-only file descriptor for pread()-based parallel reads.
-		// pread() is atomic (no seek+read race) so multiple threads can call it
-		// concurrently on the same fd without any synchronization.
-		if (!filePath.empty()) {
-			readFd_ = storage::portable_open(filePath.c_str(), O_RDONLY);
-		}
+		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)),
+		storageIO_(std::move(storageIO)) {
 
 		persistenceManager_ = std::make_shared<PersistenceManager>();
 		segmentIndexManager_ = std::make_shared<SegmentIndexManager>(segmentTracker_);
@@ -78,16 +72,13 @@ namespace graph::storage {
 	}
 
 	void DataManager::closeFileHandles() {
-		if (readFd_ != storage::INVALID_FILE_HANDLE) {
-			storage::portable_close(readFd_);
-			readFd_ = storage::INVALID_FILE_HANDLE;
-		}
+		// readFd_ is now owned by StorageIO — nothing to close here.
 	}
 
 	ssize_t DataManager::preadBytes(void *buf, size_t count, int64_t offset) const {
-		if (readFd_ == storage::INVALID_FILE_HANDLE)
+		if (!storageIO_ || !storageIO_->hasPreadSupport())
 			return -1;
-		return storage::portable_pread(readFd_, buf, count, offset);
+		return static_cast<ssize_t>(storageIO_->readAt(static_cast<uint64_t>(offset), buf, count));
 	}
 
 	// Helper streambuf that wraps an existing memory buffer for zero-copy deserialization.
@@ -460,7 +451,7 @@ namespace graph::storage {
 	std::unordered_map<int64_t, Property> DataManager::bulkLoadPropertyEntities(
 		const std::vector<int64_t> &ids, concurrent::ThreadPool *pool) const {
 		std::unordered_map<int64_t, Property> result;
-		if (ids.empty() || readFd_ == INVALID_FILE_HANDLE)
+		if (ids.empty() || !hasPreadSupport())
 			return result;
 
 		// Sort IDs and group by segment for sequential I/O
@@ -506,7 +497,7 @@ namespace graph::storage {
 				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
 				auto groupOffset = static_cast<int64_t>(group.startOffset);
-				ssize_t n = storage::portable_pread(readFd_, groupBuf.data(), totalBytes, groupOffset);
+				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
 				if (n < static_cast<ssize_t>(totalBytes))
 					return;
 
@@ -556,8 +547,7 @@ namespace graph::storage {
 				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 				std::vector<char> buf(dataBytes);
 				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes))
+				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);				if (n < static_cast<ssize_t>(dataBytes))
 					continue;
 
 				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
@@ -963,11 +953,11 @@ namespace graph::storage {
 	std::optional<EntityType> DataManager::readEntityFromDisk(const int64_t fileOffset) const {
 		EntityType entity;
 
-		if (readFd_ != INVALID_FILE_HANDLE) {
+		if (hasPreadSupport()) {
 			// Thread-safe path: pread() is atomic and needs no synchronization
 			constexpr size_t entitySize = EntityType::getTotalSize();
 			char buf[entitySize];
-			ssize_t n = storage::portable_pread(readFd_, buf, entitySize, fileOffset);
+			ssize_t n = preadBytes(buf, entitySize, fileOffset);
 			if (n < static_cast<ssize_t>(entitySize))
 				return std::nullopt;
 			membuf mb(buf, entitySize);
@@ -1008,7 +998,7 @@ namespace graph::storage {
 		auto entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) +
 														relativePosition * EntityType::getTotalSize());
 
-		if (readFd_ != INVALID_FILE_HANDLE) {
+		if (hasPreadSupport()) {
 			// pread path: skip bitmap check — readEntityFromDisk checks isActive() on the
 			// deserialized entity itself. This avoids a shared_lock on SegmentTracker per read.
 			return readEntityFromDisk<EntityType>(entityOffset);
@@ -1060,10 +1050,10 @@ namespace graph::storage {
 					result.push_back(entityOpt.value());
 				}
 			} else {
-				if (readFd_ != INVALID_FILE_HANDLE) {
+				if (hasPreadSupport()) {
 					constexpr size_t entitySize = EntityType::getTotalSize();
 					char buf[entitySize];
-					ssize_t n = storage::portable_pread(readFd_, buf, entitySize, entityOffset);
+					ssize_t n = preadBytes(buf, entitySize, entityOffset);
 					if (n >= static_cast<ssize_t>(entitySize)) {
 						membuf mb(buf, entitySize);
 						std::istream stream(&mb);
@@ -1216,9 +1206,9 @@ namespace graph::storage {
 				}
 
 				// Page pool miss — read full segment from disk, populate pool
-				if (readFd_ != INVALID_FILE_HANDLE) {
+				if (hasPreadSupport()) {
 					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
-					ssize_t n = storage::portable_pread(readFd_, segData.data(), TOTAL_SEGMENT_SIZE,
+					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE,
 														static_cast<int64_t>(segmentOffset));
 					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
 						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
@@ -1301,9 +1291,9 @@ namespace graph::storage {
 					return make_inactive<EntityType>();
 				}
 
-				if (readFd_ != INVALID_FILE_HANDLE) {
+				if (hasPreadSupport()) {
 					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
-					ssize_t n = storage::portable_pread(readFd_, segData.data(), TOTAL_SEGMENT_SIZE,
+					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE,
 														static_cast<int64_t>(segmentOffset));
 					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
 						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
@@ -1359,7 +1349,7 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::bulkLoadEntities(int64_t filterStartId, int64_t filterEndId) const {
-		if (readFd_ == INVALID_FILE_HANDLE)
+		if (!hasPreadSupport())
 			return {}; // Requires pread support
 
 		// Get sorted segment list for this entity type
@@ -1383,7 +1373,7 @@ namespace graph::storage {
 			size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 			std::vector<char> buf(dataBytes);
 			auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-			ssize_t n = storage::portable_pread(readFd_, buf.data(), dataBytes, dataOffset);
+			ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
 			if (n < static_cast<ssize_t>(dataBytes))
 				continue;
 

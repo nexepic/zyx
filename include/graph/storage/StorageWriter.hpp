@@ -101,6 +101,20 @@ namespace graph::storage {
 		void saveModifiedAndDeleted(const std::vector<T> &modified, const std::vector<T> &deleted);
 
 	private:
+		/**
+		 * @brief Write entities that already have pre-allocated segment slots.
+		 */
+		template<typename T>
+		void writePreAllocatedEntities(
+				const std::unordered_map<uint64_t, std::vector<T>> &entitiesBySegment);
+
+		/**
+		 * @brief Append entities that need new segment slot allocation.
+		 */
+		template<typename T>
+		void writeNewSlotEntities(std::vector<T> &entitiesForNewSlots,
+								  uint64_t &segmentHead, uint32_t itemsPerSegment);
+
 		template<typename EntityType>
 		void updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive);
 

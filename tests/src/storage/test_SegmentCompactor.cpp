@@ -71,7 +71,7 @@ protected:
 			fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
 			fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
 		segmentAllocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
-		compactor = std::make_shared<SegmentCompactor>(file, segmentTracker, segmentAllocator, fileHeaderManager);
+		compactor = std::make_shared<SegmentCompactor>(storageIO, segmentTracker, segmentAllocator, fileHeaderManager);
 
 		dataManager = std::make_shared<DataManager>(file, 100, header, idAllocator, segmentTracker);
 		refUpdater = std::make_shared<EntityReferenceUpdater>(dataManager);

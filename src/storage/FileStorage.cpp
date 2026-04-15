@@ -38,7 +38,6 @@
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
 #include "graph/debug/PerfTrace.hpp"
-#include "graph/storage/DatabaseInspector.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
@@ -125,15 +124,15 @@ namespace graph::storage {
 		segmentAllocator =
 				std::make_shared<SegmentAllocator>(storageIO_, segmentTracker, fileHeaderManager, idAllocator);
 		auto segmentCompactor =
-				std::make_shared<SegmentCompactor>(fileStream, segmentTracker, segmentAllocator, fileHeaderManager);
+				std::make_shared<SegmentCompactor>(storageIO_, segmentTracker, segmentAllocator, fileHeaderManager);
 		fileTruncator =
 				std::make_shared<FileTruncator>(storageIO_, dbFilePath, segmentTracker);
 		spaceManager =
 				std::make_shared<SpaceManager>(segmentAllocator, segmentCompactor, fileTruncator, segmentTracker);
 
-		// Initialize data manager (pass filePath for pread-based parallel reads)
+		// Initialize data manager (pass storageIO for pread-based parallel reads)
 		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,
-													dbFilePath);
+													storageIO_);
 
 		// --- Merged segment chain walk via StorageBootstrap ---
 		// Walk each chain ONCE, feeding results to both IDAllocator and SegmentIndexManager.
@@ -178,8 +177,6 @@ namespace graph::storage {
 		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
 
 		dataManager->setSystemStateManager(systemStateManager);
-
-		databaseInspector = std::make_shared<DatabaseInspector>(fileHeader, fileStream, *dataManager);
 
 		// Create StorageWriter after all dependencies are ready
 		storageWriter_ = std::make_shared<StorageWriter>(storageIO_, segmentTracker, segmentAllocator, dataManager,

@@ -145,8 +145,6 @@ namespace graph::storage {
 		std::shared_ptr<SpaceManager> spaceManager;
 		std::shared_ptr<FileTruncator> fileTruncator;
 
-		std::shared_ptr<DatabaseInspector> databaseInspector;
-
 		std::shared_ptr<SegmentTracker> segmentTracker;
 
 		std::shared_ptr<state::SystemStateManager> systemStateManager;
