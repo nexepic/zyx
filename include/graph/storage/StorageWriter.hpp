@@ -108,12 +108,19 @@ namespace graph::storage {
 
 		SegmentHeader readSegmentHeader(uint64_t segmentOffset) const;
 
+		/// Flush accumulated segment data as pre-computed CRCs to SegmentTracker.
+		void flushPendingCrcs();
+
 		std::shared_ptr<StorageIO> io_;
 		std::shared_ptr<SegmentTracker> tracker_;
 		std::shared_ptr<SegmentAllocator> allocator_;
 		std::shared_ptr<DataManager> dataManager_;
 		std::shared_ptr<IDAllocator> idAllocator_;
 		FileHeader &fileHeader_;
+
+		/// Shadow buffers for segments written via writeSegmentData (new entities).
+		/// Used to compute CRC at write time, avoiding 128KB read-back at flush.
+		std::unordered_map<uint64_t, std::vector<char>> pendingSegmentData_;
 	};
 
 } // namespace graph::storage
