@@ -46,6 +46,7 @@ using ssize_t = intptr_t;
 #include "graph/core/State.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/PageBufferPool.hpp"
 #include "graph/storage/PersistenceManager.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -76,7 +77,6 @@ namespace graph::storage {
 	}
 	class TokenRegistry;
 
-	class IDAllocator;
 	class SegmentTracker;
 	class SegmentIndexManager;
 	class EntityReferenceUpdater;
@@ -100,12 +100,12 @@ namespace graph::storage {
 		 * @param file The file stream for persistent storage
 		 * @param cacheSize Size of the entity caches
 		 * @param fileHeader Reference to the file header
-		 * @param idAllocator Allocator for entity IDs
+		 * @param allocators Per-type ID allocators
 		 * @param segmentTracker Tracks segment information
 		 * @param storageIO Unified I/O abstraction for pread-based parallel reads
 		 */
 		explicit DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
-							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
+							 IDAllocators allocators, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<StorageIO> storageIO = nullptr);
 
 		/**
@@ -307,7 +307,13 @@ namespace graph::storage {
 			return segmentIndexManager_;
 		}
 		[[nodiscard]] std::shared_ptr<SegmentTracker> getSegmentTracker() const { return segmentTracker_; }
-		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator() const { return idAllocator_; }
+		[[nodiscard]] const IDAllocators &getIdAllocators() const { return allocators_; }
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator(EntityType type) const {
+			return allocators_[static_cast<size_t>(type)];
+		}
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator(uint32_t typeId) const {
+			return allocators_[typeId];
+		}
 		[[nodiscard]] std::shared_ptr<traversal::RelationshipTraversal> getRelationshipTraversal() const {
 			return relationshipTraversal_;
 		}
@@ -385,7 +391,7 @@ namespace graph::storage {
 		std::atomic<bool> *deleteOperationPerformedFlag_ = nullptr;
 
 		// Dependency components
-		std::shared_ptr<IDAllocator> idAllocator_;
+		IDAllocators allocators_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
 		std::shared_ptr<SegmentIndexManager> segmentIndexManager_;
 		std::shared_ptr<EntityReferenceUpdater> entityReferenceUpdater_;

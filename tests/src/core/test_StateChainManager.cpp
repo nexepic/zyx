@@ -1062,7 +1062,7 @@ TEST_F(StateChainManagerTest, DeleteBlobChainWithZeroExternalId) {
 	const std::string key = "blob_zero_ext_key";
 
 	// Create a blob state manually with externalId = 0
-	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t stateId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
 	graph::State headState(stateId, key, "");
 	headState.setExternalId(0);
 	// Mark as blob storage by setting the blob flag
@@ -1496,7 +1496,7 @@ TEST_F(StateChainManagerTest, IsDataSameCorruptedChainReturnsFalse) {
 // Covers: line 187 !currentState.isActive() break in getStateChainIds
 TEST_F(StateChainManagerTest, GetStateChainIdsWithNonExistentIntermediate) {
 	// Create a chain where head points to a non-existent state
-	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t stateId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
 	graph::State headState(stateId, "orphan_key", "data");
 	headState.setNextStateId(999888); // Points to non-existent state
 	dataManager->addStateEntity(headState);
@@ -1768,7 +1768,7 @@ TEST_F(StateChainManagerTest, CreateBlobStorageWithEmptyDataStillSetsExternalId)
 // bypassing updateStateEntity which rejects inactive entities.
 TEST_F(StateChainManagerTest, ReadStateChainWithMarkInactiveHead) {
 	// Allocate a valid state ID
-	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t stateId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
 
 	// Create a state, mark it inactive, then add to cache
 	graph::State inactiveState(stateId, "inactive_head_key", "data");
@@ -1788,8 +1788,8 @@ TEST_F(StateChainManagerTest, ReadStateChainWithMarkInactiveHead) {
 // getId() != 0 but !isActive()
 TEST_F(StateChainManagerTest, ReadChainWithMarkInactiveIntermediate) {
 	// Create head state (active, chained)
-	int64_t headId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
-	int64_t midId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t headId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
+	int64_t midId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
 
 	graph::State headState(headId, "chain_head", "part1");
 	headState.setNextStateId(midId);
@@ -1815,7 +1815,7 @@ TEST_F(StateChainManagerTest, ReadChainWithMarkInactiveIntermediate) {
 // Covers line 119 branch 2: updateStateChain where head has getId() != 0
 // but !isActive()
 TEST_F(StateChainManagerTest, UpdateStateChainWithMarkInactiveHead) {
-	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t stateId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
 
 	// Add an inactive state with valid ID
 	graph::State inactiveState(stateId, "inactive_upd_key", "data");
@@ -1835,7 +1835,7 @@ TEST_F(StateChainManagerTest, UpdateStateChainWithMarkInactiveHead) {
 // Covers line 158 branch 2: deleteStateChain where head has getId() != 0
 // but !isActive() - should early return
 TEST_F(StateChainManagerTest, DeleteStateChainWithMarkInactiveHead) {
-	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t stateId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
 
 	// Add an inactive state with valid ID
 	graph::State inactiveState(stateId, "inactive_del_key", "data");
@@ -1850,7 +1850,7 @@ TEST_F(StateChainManagerTest, DeleteStateChainWithMarkInactiveHead) {
 // Creates an inactive state with externalId != 0 (so isBlobStorage() is true)
 // to hit the False branch of head.isActive() in the blob path
 TEST_F(StateChainManagerTest, GetStateChainIdsBlobHeadInactiveViaMarkInactive) {
-	int64_t stateId = dataManager->getIdAllocator()->allocateId(graph::State::typeId);
+	int64_t stateId = dataManager->getIdAllocator(graph::EntityType::State)->allocate();
 
 	// Create a state with externalId != 0 (so isBlobStorage() returns true)
 	// but inactive

@@ -56,11 +56,11 @@ namespace graph::storage {
 	thread_local bool DataManager::readOnlyMode_ = false;
 
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
-							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,
+							 IDAllocators allocators, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<StorageIO> storageIO) :
 		file_(std::move(file)), fileHeader_(fileHeader),
 		pagePool_(std::make_unique<PageBufferPool>(cacheSize)),
-		idAllocator_(std::move(idAllocator)), segmentTracker_(std::move(segmentTracker)),
+		allocators_(std::move(allocators)), segmentTracker_(std::move(segmentTracker)),
 		storageIO_(std::move(storageIO)) {
 
 		persistenceManager_ = std::make_shared<PersistenceManager>();
@@ -93,7 +93,7 @@ namespace graph::storage {
 
 	void DataManager::initialize(bool skipSegmentIndexBuild) {
 		// Initialize low-level components
-		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), segmentTracker_, idAllocator_);
+		deletionManager_ = std::make_shared<DeletionManager>(shared_from_this(), segmentTracker_, allocators_);
 		entityReferenceUpdater_ = std::make_shared<EntityReferenceUpdater>(shared_from_this());
 		relationshipTraversal_ = std::make_shared<traversal::RelationshipTraversal>(shared_from_this());
 

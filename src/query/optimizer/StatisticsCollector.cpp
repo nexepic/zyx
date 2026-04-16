@@ -20,9 +20,8 @@ Statistics StatisticsCollector::collect() const {
 
 	// Avoid scanning [1, INT64_MAX]: DataManager::getEntitiesInRange pass-1 iterates
 	// IDs linearly until endId or limit, so use allocator high-water marks as bounds.
-	const auto idAllocator = dm_->getIdAllocator();
-	const int64_t maxNodeId = idAllocator ? idAllocator->getCurrentMaxNodeId() : 0;
-	const int64_t maxEdgeId = idAllocator ? idAllocator->getCurrentMaxEdgeId() : 0;
+	const int64_t maxNodeId = dm_->getIdAllocator(EntityType::Node)->getCurrentMaxId();
+	const int64_t maxEdgeId = dm_->getIdAllocator(EntityType::Edge)->getCurrentMaxId();
 
 	const int64_t nodeEnd = (std::max)(int64_t(1), maxNodeId);
 	const int64_t edgeEnd = (std::max)(int64_t(1), maxEdgeId);

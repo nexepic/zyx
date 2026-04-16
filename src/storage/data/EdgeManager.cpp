@@ -47,7 +47,7 @@ namespace graph::storage {
 	}
 
 	int64_t EdgeManager::doAllocateId() {
-		return getDataManagerPtr()->getIdAllocator()->allocateId(Edge::typeId);
+		return getDataManagerPtr()->getIdAllocator(EntityType::Edge)->allocate();
 	}
 
 } // namespace graph::storage

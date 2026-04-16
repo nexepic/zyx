@@ -12,7 +12,6 @@
 #include <memory>
 #include <vector>
 #include "FileHeaderManager.hpp"
-#include "IDAllocator.hpp"
 #include "SegmentTracker.hpp"
 #include "StorageHeaders.hpp"
 #include "StorageIO.hpp"
@@ -22,7 +21,7 @@ namespace graph::storage {
 	class SegmentAllocator {
 	public:
 		SegmentAllocator(std::shared_ptr<StorageIO> io, std::shared_ptr<SegmentTracker> tracker,
-						 std::shared_ptr<FileHeaderManager> fileHeaderManager, std::shared_ptr<IDAllocator> idAllocator);
+						 std::shared_ptr<FileHeaderManager> fileHeaderManager);
 		~SegmentAllocator();
 
 		static uint64_t findMaxId(uint32_t type, const std::shared_ptr<SegmentTracker> &tracker);
@@ -37,7 +36,6 @@ namespace graph::storage {
 		std::shared_ptr<StorageIO> io_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
 		std::shared_ptr<FileHeaderManager> fileHeaderManager_;
-		std::shared_ptr<IDAllocator> idAllocator_;
 	};
 
 } // namespace graph::storage

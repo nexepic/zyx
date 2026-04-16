@@ -44,7 +44,7 @@ protected:
 	std::shared_ptr<StorageIO> storageIO;
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
-	std::shared_ptr<IDAllocator> idAllocator;
+	IDAllocators allocators;
 	std::shared_ptr<SegmentAllocator> allocator;
 	std::shared_ptr<DataManager> dataManager;
 	std::shared_ptr<StorageWriter> writer;
@@ -63,22 +63,30 @@ protected:
 		storageIO = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
-		idAllocator = std::make_shared<IDAllocator>(
-			file, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
-			fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
-			fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
-		allocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
-		dataManager = std::make_shared<DataManager>(file, 16, header, idAllocator, segmentTracker);
+		std::pair<EntityType, int64_t *> typeMaxPairs[] = {
+			{EntityType::Node, &fileHeaderManager->getMaxNodeIdRef()},
+			{EntityType::Edge, &fileHeaderManager->getMaxEdgeIdRef()},
+			{EntityType::Property, &fileHeaderManager->getMaxPropIdRef()},
+			{EntityType::Blob, &fileHeaderManager->getMaxBlobIdRef()},
+			{EntityType::Index, &fileHeaderManager->getMaxIndexIdRef()},
+			{EntityType::State, &fileHeaderManager->getMaxStateIdRef()},
+		};
+		for (auto &[type, maxIdPtr] : typeMaxPairs) {
+			allocators[static_cast<size_t>(type)] =
+				std::make_shared<IDAllocator>(type, segmentTracker, *maxIdPtr);
+		}
+		allocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager);
+		dataManager = std::make_shared<DataManager>(file, 16, header, allocators, segmentTracker);
 		dataManager->initialize();
 
-		writer = std::make_shared<StorageWriter>(storageIO, segmentTracker, allocator, dataManager, idAllocator, header);
+		writer = std::make_shared<StorageWriter>(storageIO, segmentTracker, allocator, dataManager, allocators, header);
 	}
 
 	void TearDown() override {
 		writer.reset();
 		dataManager.reset();
 		allocator.reset();
-		idAllocator.reset();
+		for (auto &alloc : allocators) alloc.reset();
 		segmentTracker.reset();
 		storageIO.reset();
 

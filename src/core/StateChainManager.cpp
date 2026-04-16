@@ -32,7 +32,7 @@ namespace graph {
 	std::vector<State> StateChainManager::createStateChain(const std::string &key,
 														   const std::string &data,
 														   bool useBlobStorage) const {
-		int64_t stateId = dataManager_->getIdAllocator()->allocateId(State::typeId);
+		int64_t stateId = dataManager_->getIdAllocator(EntityType::State)->allocate();
 		State headState(stateId, key, "");
 
 		std::vector<State> chain;
@@ -246,7 +246,7 @@ namespace graph {
 			int64_t prevId = headState.getId();
 
 			for (size_t i = 1; i < chunks.size(); i++) {
-				int64_t newId = dataManager_->getIdAllocator()->allocateId(State::typeId);
+				int64_t newId = dataManager_->getIdAllocator(EntityType::State)->allocate();
 				State chunkState(newId, "", chunks[i]);
 
 				chunkState.setChainPosition(static_cast<int32_t>(i));

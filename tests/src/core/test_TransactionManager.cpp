@@ -194,7 +194,7 @@ TEST_F(TransactionManagerTest, CommitWithDataPersists) {
 	auto storage = db->getStorage();
 	auto dm = storage->getDataManager();
 	// The node should have been created with a valid ID
-	EXPECT_TRUE(dm->getIdAllocator()->getCurrentMaxNodeId() > 0);
+	EXPECT_TRUE(dm->getIdAllocator(graph::EntityType::Node)->getCurrentMaxId() > 0);
 }
 
 TEST_F(TransactionManagerTest, RollbackRevertsData) {

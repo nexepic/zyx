@@ -1914,7 +1914,7 @@ TEST_F(FileStorageTest, Save_EdgeSlotReuse_CoversPreAllocatedPath) {
 	// Create edges, flush to disk, delete one, flush, then create new edge
 	// that reuses the deleted slot. This covers line 290 True for Edge template.
 	auto dm = fileStorage->getDataManager();
-	auto alloc = fileStorage->getIDAllocator();
+	auto edgeAlloc = fileStorage->getIDAllocator(graph::EntityType::Edge);
 
 	// Create two nodes for edges to reference
 	graph::Node n1(0, 0);
@@ -1925,7 +1925,7 @@ TEST_F(FileStorageTest, Save_EdgeSlotReuse_CoversPreAllocatedPath) {
 	// Create several edges and flush to disk
 	std::vector<graph::Edge> edges;
 	for (int i = 0; i < 5; i++) {
-		int64_t eid = alloc->allocateId(graph::Edge::typeId);
+		int64_t eid = edgeAlloc->allocate();
 		int64_t labelId = dm->getOrCreateTokenId("KNOWS");
 		graph::Edge e(eid, n1.getId(), n2.getId(), labelId);
 		dm->addEdge(e);
@@ -1938,7 +1938,7 @@ TEST_F(FileStorageTest, Save_EdgeSlotReuse_CoversPreAllocatedPath) {
 	fileStorage->flush();
 
 	// Create a new edge - the allocator should reuse the deleted ID slot
-	int64_t newEid = alloc->allocateId(graph::Edge::typeId);
+	int64_t newEid = edgeAlloc->allocate();
 	int64_t labelId = dm->getOrCreateTokenId("FOLLOWS");
 	graph::Edge newEdge(newEid, n1.getId(), n2.getId(), labelId);
 	dm->addEdge(newEdge);

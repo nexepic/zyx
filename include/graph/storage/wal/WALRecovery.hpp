@@ -26,10 +26,10 @@
 #include <vector>
 #include "WALManager.hpp"
 #include "WALRecord.hpp"
+#include "graph/storage/IDAllocator.hpp"
 
 namespace graph::storage {
 	class StorageWriter;
-	class IDAllocator;
 	class SegmentTracker;
 	class StorageIO;
 	class DataManager;
@@ -59,7 +59,7 @@ namespace graph::storage::wal {
 
 		WALRecovery(WALManager &wal,
 					std::shared_ptr<StorageWriter> writer,
-					std::shared_ptr<IDAllocator> idAllocator,
+					IDAllocators allocators,
 					std::shared_ptr<SegmentTracker> segmentTracker,
 					std::shared_ptr<StorageIO> storageIO,
 					std::shared_ptr<DataManager> dataManager,
@@ -99,7 +99,7 @@ namespace graph::storage::wal {
 
 		WALManager &wal_;
 		std::shared_ptr<StorageWriter> writer_;
-		std::shared_ptr<IDAllocator> idAllocator_;
+		IDAllocators allocators_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
 		std::shared_ptr<StorageIO> storageIO_;
 		std::shared_ptr<DataManager> dataManager_;

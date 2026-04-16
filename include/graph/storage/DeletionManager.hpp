@@ -41,7 +41,7 @@ namespace graph::storage {
 	class DeletionManager {
 	public:
 		DeletionManager(std::shared_ptr<DataManager> dataManager, std::shared_ptr<SegmentTracker> tracker,
-						std::shared_ptr<IDAllocator> idAllocator);
+						IDAllocators allocators);
 		~DeletionManager();
 
 		/**
@@ -142,7 +142,7 @@ namespace graph::storage {
 		// FileStorage &storage_;
 		std::shared_ptr<DataManager> dataManager_;
 		std::shared_ptr<SegmentTracker> tracker_;
-		std::shared_ptr<IDAllocator> idAllocator_;
+		IDAllocators allocators_;
 
 		// Compaction thresholds and counters
 		static constexpr double COMPACTION_THRESHOLD = 0.3; // 30% inactive triggers compaction

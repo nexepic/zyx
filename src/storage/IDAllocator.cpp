@@ -19,14 +19,10 @@
  **/
 
 #include "graph/storage/IDAllocator.hpp"
+
 #include <algorithm>
 #include <stdexcept>
-#include "graph/core/Blob.hpp"
-#include "graph/core/Edge.hpp"
-#include "graph/core/Index.hpp"
-#include "graph/core/Node.hpp"
-#include "graph/core/Property.hpp"
-#include "graph/core/State.hpp"
+
 #include "graph/log/Log.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 
@@ -35,264 +31,77 @@ using graph::log::Log;
 namespace graph::storage {
 
 	// =========================================================
-	// IDIntervalSet Implementation
+	// Construction
 	// =========================================================
 
-	void IDAllocator::IDIntervalSet::add(int64_t id) { addRange(id, id); }
-
-	void IDAllocator::IDIntervalSet::addRange(int64_t start, int64_t end) {
-		if (start > end)
-			return;
-
-		// Optimization: Check if we can simply append to the last interval
-		if (!intervals_.empty()) {
-			auto lastIt = intervals_.rbegin();
-			if (lastIt->second == start - 1) {
-				lastIt->second = end; // Extend last interval
-				return;
-			}
-		}
-
-		// General Insert & Merge Logic
-		auto it = intervals_.upper_bound(start);
-
-		// Check overlap/adjacency with previous interval
-		if (it != intervals_.begin()) {
-			auto prev = std::prev(it);
-			if (prev->second >= start - 1) {
-				start = prev->first;
-				end = std::max(end, prev->second);
-				intervals_.erase(prev);
-			}
-		}
-
-		// Check overlap/adjacency with subsequent intervals
-		while (it != intervals_.end() && it->first <= end + 1) {
-			end = std::max(end, it->second);
-			it = intervals_.erase(it);
-		}
-
-		intervals_[start] = end;
-	}
-
-	int64_t IDAllocator::IDIntervalSet::pop() {
-		if (intervals_.empty())
-			return 0;
-
-		auto it = intervals_.begin();
-		int64_t start = it->first;
-		int64_t end = it->second;
-		int64_t idToReturn = start;
-
-		if (start == end) {
-			intervals_.erase(it);
-		} else {
-			intervals_.erase(it);
-			intervals_.emplace_hint(intervals_.begin(), start + 1, end);
-		}
-
-		return idToReturn;
-	}
+	IDAllocator::IDAllocator(EntityType entityType, std::shared_ptr<SegmentTracker> segmentTracker, int64_t &maxId) :
+		entityType_(entityType), segmentTracker_(std::move(segmentTracker)), maxId_(maxId) {}
 
 	// =========================================================
-	// IDAllocator Implementation
+	// Core Operations
 	// =========================================================
 
-	IDAllocator::IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
-							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId,
-							 int64_t &maxIndexId, int64_t &maxStateId) :
-		file_(std::move(file)), segmentTracker_(std::move(segmentTracker)), currentMaxNodeId_(maxNodeId),
-		currentMaxEdgeId_(maxEdgeId), currentMaxPropId_(maxPropId), currentMaxBlobId_(maxBlobId),
-		currentMaxIndexId_(maxIndexId), currentMaxStateId_(maxStateId) {}
+	int64_t IDAllocator::allocate() {
+		std::lock_guard lock(mutex_);
 
-	void IDAllocator::initialize() {
-		// Clear caches but keep memory structure ready
-		clearAllCaches();
-
-		// [Robustness] Recover "Ghost Gaps" AND Synchronize Counters
-		recoverGapIds(Node::typeId, currentMaxNodeId_);
-		recoverGapIds(Edge::typeId, currentMaxEdgeId_);
-		recoverGapIds(Property::typeId, currentMaxPropId_);
-		recoverGapIds(Blob::typeId, currentMaxBlobId_);
-		recoverGapIds(Index::typeId, currentMaxIndexId_);
-		recoverGapIds(State::typeId, currentMaxStateId_);
-	}
-
-	void IDAllocator::recoverGapIds(uint32_t entityType, int64_t &logicalMaxId) {
-		int64_t physicalMaxId = 0;
-		uint64_t currentOffset = segmentTracker_->getChainHead(entityType);
-
-		// 1. Scan Disk to find the TRUE physical max ID
-		while (currentOffset != 0) {
-			SegmentHeader header = segmentTracker_->getSegmentHeader(currentOffset);
-
-			if (header.used > 0) {
-				int64_t segmentUsedEndId = header.start_id + header.used - 1;
-				if (segmentUsedEndId > physicalMaxId) {
-					physicalMaxId = segmentUsedEndId;
-				}
-			}
-
-			currentOffset = header.next_segment_offset;
+		// 1. Volatile Cache
+		if (!volatileCache_.empty()) {
+			int64_t id = volatileCache_.pop();
+			Log::debug("IDAllocator[{}]: Returning ID {} from VolatileCache", toUnderlying(entityType_), id);
+			return id;
 		}
 
-		// 2. CASE A: Recover Gaps (Normal Restart)
-		if (logicalMaxId > physicalMaxId) {
-			int64_t gapStart = physicalMaxId + 1;
-			int64_t gapEnd = logicalMaxId;
-
-			volatileCache_[entityType].addRange(gapStart, gapEnd);
-
-			// Log format updated to use {} placeholders
-			Log::info("IDAllocator: Recovered gaps for Type {}: [{}, {}]", entityType, gapStart, gapEnd);
-		}
-		// 3. CASE B: Fix Stale Header (Crash Recovery)
-		else if (physicalMaxId > logicalMaxId) {
-			// Log format updated
-			Log::warn("IDAllocator: Detected stale header for Type {}. Logical: {}, Physical: {}. Correcting to "
-					  "Physical Max.",
-					  entityType, logicalMaxId, physicalMaxId);
-			logicalMaxId = physicalMaxId;
-		}
-	}
-
-	void IDAllocator::initializeFromScan(uint32_t entityType, int64_t physicalMaxId) {
-		int64_t &logicalMaxId = getMaxIdRef(entityType);
-
-		// Same gap recovery logic as recoverGapIds, but without the chain walk
-		if (logicalMaxId > physicalMaxId) {
-			int64_t gapStart = physicalMaxId + 1;
-			int64_t gapEnd = logicalMaxId;
-			volatileCache_[entityType].addRange(gapStart, gapEnd);
-			Log::info("IDAllocator: Recovered gaps for Type {}: [{}, {}]", entityType, gapStart, gapEnd);
-		} else if (physicalMaxId > logicalMaxId) {
-			Log::warn("IDAllocator: Detected stale header for Type {}. Logical: {}, Physical: {}. Correcting to "
-					  "Physical Max.",
-					  entityType, logicalMaxId, physicalMaxId);
-			logicalMaxId = physicalMaxId;
-		}
-	}
-
-	void IDAllocator::clearAllCaches() {
-		std::lock_guard<std::mutex> lock(mutex_);
-		hotCache_.clear();
-		coldCache_.clear();
-		scanCursors_.clear();
-	}
-
-	void IDAllocator::clearCache(uint32_t entityType) {
-		std::lock_guard<std::mutex> lock(mutex_);
-		hotCache_[entityType].clear();
-		coldCache_[entityType].clear();
-		scanCursors_[entityType] = ScanCursor{0, false, false};
-	}
-
-	void IDAllocator::resetAfterCompaction() {
-		std::lock_guard<std::mutex> lock(mutex_);
-
-		Log::info("IDAllocator: Resetting ALL caches after compaction.");
-
-		hotCache_.clear();
-		coldCache_.clear();
-		volatileCache_.clear();
-		scanCursors_.clear();
-	}
-
-	int64_t IDAllocator::allocateId(const uint32_t entityType) {
-		std::lock_guard<std::mutex> lock(mutex_);
-
-		auto &volCache = volatileCache_[entityType];
-		auto &hot = hotCache_[entityType];
-		auto &cold = coldCache_[entityType];
-
-		int64_t recycledId = 0;
-
-		// 1. Check Volatile Cache
-		if (!volCache.empty()) {
-			recycledId = volCache.pop();
-			// Log format updated
-			Log::debug("allocateId: Returning ID {} from VolatileCache", recycledId);
-			return recycledId;
+		// 2. L1 Hot Cache (LIFO stack)
+		if (!hotCache_.empty()) {
+			int64_t id = hotCache_.back();
+			hotCache_.pop_back();
+			Log::debug("IDAllocator[{}]: Found ID {} in L1 Cache", toUnderlying(entityType_), id);
+			return id;
 		}
 
-		// 2. Check L1 Hot Cache
-		if (!hot.empty()) {
-			recycledId = hot.front();
-			hot.pop_front();
-			// Log format updated
-			Log::debug("allocateId: Found ID {} in L1 Cache", recycledId);
+		// 3. L2 Cold Cache
+		if (!coldCache_.empty()) {
+			int64_t id = coldCache_.pop();
+			Log::debug("IDAllocator[{}]: Found ID {} in L2 Cache", toUnderlying(entityType_), id);
+			return id;
 		}
-		// 3. Check L2 Cold Cache
-		else if (!cold.empty()) {
-			recycledId = cold.pop();
-			// Log format updated
-			Log::debug("allocateId: Found ID {} in L2 Cache", recycledId);
-		}
-		// 4. Check Disk
-		else {
-			auto &cursor = scanCursors_[entityType];
-			if (!cursor.diskExhausted) {
-				if (fetchInactiveIdsFromDisk(entityType)) {
-					if (!hot.empty()) {
-						recycledId = hot.front();
-						hot.pop_front();
-						// Log format updated
-						Log::debug("allocateId: Found ID {} via Disk Scan", recycledId);
-					}
+
+		// 4. Disk Scan
+		if (!scanCursor_.diskExhausted) {
+			if (fetchInactiveIdsFromDisk()) {
+				if (!hotCache_.empty()) {
+					int64_t id = hotCache_.back();
+					hotCache_.pop_back();
+					Log::debug("IDAllocator[{}]: Found ID {} via Disk Scan", toUnderlying(entityType_), id);
+					return id;
 				}
 			}
 		}
 
-		// 5. Validate and Return
-		if (recycledId != 0) {
-			return recycledId;
-		}
-
-		// 6. Fallback: New Sequential ID
-		return allocateNewSequentialId(entityType);
+		// 5. Sequential
+		return ++maxId_;
 	}
 
-	int64_t IDAllocator::allocateIdBatch(const uint32_t entityType, size_t count) {
+	int64_t IDAllocator::allocateBatch(size_t count) {
 		if (count == 0)
 			return 0;
 
-		std::lock_guard<std::mutex> lock(mutex_);
+		std::lock_guard lock(mutex_);
 
-		int64_t &maxId = getMaxIdRef(entityType);
-		int64_t startId = maxId + 1;
-		maxId += static_cast<int64_t>(count);
+		int64_t startId = maxId_ + 1;
+		maxId_ += static_cast<int64_t>(count);
 
 		return startId;
 	}
 
-	void IDAllocator::freeId(const int64_t id, const uint32_t entityType) {
-		std::lock_guard<std::mutex> lock(mutex_);
+	void IDAllocator::free(int64_t id) {
+		std::lock_guard lock(mutex_);
+		validateId(id);
+
+		uint64_t segmentOffset =
+				segmentTracker_->getSegmentOffsetForEntityId(entityType_, id);
 
 		bool isPersisted = false;
-		uint64_t segmentOffset = 0;
-
-		switch (entityType) {
-			case Node::typeId:
-				segmentOffset = segmentTracker_->getSegmentOffsetForNodeId(id);
-				break;
-			case Edge::typeId:
-				segmentOffset = segmentTracker_->getSegmentOffsetForEdgeId(id);
-				break;
-			case Property::typeId:
-				segmentOffset = segmentTracker_->getSegmentOffsetForPropId(id);
-				break;
-			case Blob::typeId:
-				segmentOffset = segmentTracker_->getSegmentOffsetForBlobId(id);
-				break;
-			case Index::typeId:
-				segmentOffset = segmentTracker_->getSegmentOffsetForIndexId(id);
-				break;
-			case State::typeId:
-				segmentOffset = segmentTracker_->getSegmentOffsetForStateId(id);
-				break;
-			default:;
-		}
-
 		bool isDirtyInPreAlloc = false;
 
 		if (segmentOffset != 0) {
@@ -306,64 +115,148 @@ namespace graph::storage {
 				if (isActive) {
 					segmentTracker_->setEntityActive(segmentOffset, index, false);
 					isPersisted = true;
-					// Log format updated
-					Log::debug("freeId: Deactivated ID {} on disk.", id);
+					Log::debug("IDAllocator[{}]: Deactivated ID {} on disk.", toUnderlying(entityType_), id);
 				} else {
 					if (isWithinUsedRange) {
-						// Log format updated
-						Log::debug("freeId: ID {} is already inactive (Double Free). Skipping.", id);
+						Log::debug("IDAllocator[{}]: ID {} is already inactive (Double Free). Skipping.",
+								   toUnderlying(entityType_), id);
 						return;
-					} else {
-						isDirtyInPreAlloc = true;
-						isPersisted = false;
 					}
+					isDirtyInPreAlloc = true;
 				}
 			}
 		}
 
 		if (segmentOffset == 0 || isDirtyInPreAlloc) {
-			auto &volCache = volatileCache_[entityType];
-
-			if (volCache.intervalCount() < volatileMaxIntervals_) {
-				volCache.add(id);
-				// Log format updated
-				Log::debug("freeId: Added ID {} to VolatileCache", id);
+			if (volatileCache_.intervalCount() < volatileMaxIntervals_) {
+				volatileCache_.add(id);
+				Log::debug("IDAllocator[{}]: Added ID {} to VolatileCache", toUnderlying(entityType_), id);
 			} else {
-				// Log format updated
-				Log::warn("freeId: VolatileCache full, dropping ID {}. Gap created.", id);
+				Log::warn("IDAllocator[{}]: VolatileCache full, dropping ID {}. Gap created.",
+						  toUnderlying(entityType_), id);
 			}
 		} else if (isPersisted) {
-			auto &l1 = hotCache_[entityType];
-			auto &l2 = coldCache_[entityType];
-
-			if (l1.size() < l1CacheSize_) {
-				l1.push_front(id);
-			} else if (l2.intervalCount() < l2MaxIntervals_) {
-				l2.add(id);
+			if (hotCache_.size() < l1CacheSize_) {
+				hotCache_.push_back(id);
+			} else if (coldCache_.intervalCount() < l2MaxIntervals_) {
+				coldCache_.add(id);
 			}
 		}
 	}
 
-	bool IDAllocator::fetchInactiveIdsFromDisk(uint32_t entityType) {
-		auto &cursor = scanCursors_[entityType];
-		auto &l1 = hotCache_[entityType];
+	// =========================================================
+	// Lifecycle
+	// =========================================================
 
-		if (cursor.diskExhausted)
-			return false;
+	void IDAllocator::initialize() {
+		clearPersistedCaches();
+		int64_t physicalMaxId = scanPhysicalMaxId();
+		recoverGaps(physicalMaxId);
+	}
 
-		uint64_t chainHead = segmentTracker_->getChainHead(entityType);
+	void IDAllocator::initializeFromScan(int64_t physicalMaxId) {
+		recoverGaps(physicalMaxId);
+	}
 
-		if (cursor.nextSegmentOffset == 0) {
-			cursor.nextSegmentOffset = chainHead;
-			cursor.wrappedAround = (chainHead == 0);
+	void IDAllocator::clearPersistedCaches() {
+		std::lock_guard lock(mutex_);
+		hotCache_.clear();
+		coldCache_.clear();
+		scanCursor_ = ScanCursor{};
+	}
+
+	void IDAllocator::resetAfterCompaction() {
+		std::lock_guard lock(mutex_);
+		Log::info("IDAllocator[{}]: Resetting ALL caches after compaction.", toUnderlying(entityType_));
+		hotCache_.clear();
+		coldCache_.clear();
+		volatileCache_.clear();
+		scanCursor_ = ScanCursor{};
+	}
+
+	void IDAllocator::ensureMaxId(int64_t id) {
+		std::lock_guard lock(mutex_);
+		if (id > maxId_) {
+			maxId_ = id;
+		}
+	}
+
+	// =========================================================
+	// Query
+	// =========================================================
+
+	int64_t IDAllocator::getCurrentMaxId() const {
+		std::lock_guard lock(mutex_);
+		return maxId_;
+	}
+
+	// =========================================================
+	// Testing Support
+	// =========================================================
+
+	void IDAllocator::setCacheLimits(size_t l1Size, size_t l2Intervals, size_t volatileIntervals) {
+		std::lock_guard lock(mutex_);
+		l1CacheSize_ = l1Size;
+		l2MaxIntervals_ = l2Intervals;
+		volatileMaxIntervals_ = volatileIntervals;
+	}
+
+	// =========================================================
+	// Private Helpers
+	// =========================================================
+
+	void IDAllocator::validateId(int64_t id) const {
+		if (id <= 0) {
+			throw std::runtime_error("IDAllocator: Invalid ID " + std::to_string(id));
+		}
+	}
+
+	int64_t IDAllocator::scanPhysicalMaxId() const {
+		int64_t physicalMax = 0;
+		uint64_t offset = segmentTracker_->getChainHead(toUnderlying(entityType_));
+
+		while (offset != 0) {
+			SegmentHeader header = segmentTracker_->getSegmentHeader(offset);
+			if (header.used > 0) {
+				int64_t segmentUsedEndId = header.start_id + header.used - 1;
+				physicalMax = std::max(physicalMax, segmentUsedEndId);
+			}
+			offset = header.next_segment_offset;
 		}
 
-		if (cursor.nextSegmentOffset == 0) {
-			cursor.diskExhausted = true;
+		return physicalMax;
+	}
+
+	void IDAllocator::recoverGaps(int64_t physicalMaxId) {
+		if (maxId_ > physicalMaxId) {
+			int64_t gapStart = physicalMaxId + 1;
+			int64_t gapEnd = maxId_;
+			volatileCache_.addRange(gapStart, gapEnd);
+			Log::info("IDAllocator[{}]: Recovered gaps [{}, {}]", toUnderlying(entityType_), gapStart, gapEnd);
+		} else if (physicalMaxId > maxId_) {
+			Log::warn("IDAllocator[{}]: Detected stale header. Logical: {}, Physical: {}. Correcting to Physical Max.",
+					  toUnderlying(entityType_), maxId_, physicalMaxId);
+			maxId_ = physicalMaxId;
+		}
+	}
+
+	bool IDAllocator::fetchInactiveIdsFromDisk() {
+		if (scanCursor_.diskExhausted)
+			return false;
+
+		uint64_t chainHead = segmentTracker_->getChainHead(toUnderlying(entityType_));
+
+		if (scanCursor_.nextSegmentOffset == 0) {
+			scanCursor_.nextSegmentOffset = chainHead;
+			scanCursor_.wrappedAround = (chainHead == 0);
+		}
+
+		if (scanCursor_.nextSegmentOffset == 0) {
+			scanCursor_.diskExhausted = true;
 			return false;
 		}
 
-		uint64_t currentOffset = cursor.nextSegmentOffset;
+		uint64_t currentOffset = scanCursor_.nextSegmentOffset;
 		int scannedCount = 0;
 		constexpr int MAX_SCANS_PER_CALL = 20;
 		bool foundAny = false;
@@ -377,17 +270,17 @@ namespace graph::storage {
 				for (uint32_t i = 0; i < header.used; ++i) {
 					if (!bitmap[i]) {
 						int64_t recoveredId = header.start_id + i;
-						l1.push_back(recoveredId);
+						hotCache_.push_back(recoveredId);
 						foundAny = true;
 
-						if (l1.size() >= l1CacheSize_)
+						if (hotCache_.size() >= l1CacheSize_)
 							break;
 					}
 				}
 			}
 
-			if (l1.size() >= l1CacheSize_) {
-				cursor.nextSegmentOffset = header.next_segment_offset;
+			if (hotCache_.size() >= l1CacheSize_) {
+				scanCursor_.nextSegmentOffset = header.next_segment_offset;
 				return true;
 			}
 
@@ -396,43 +289,19 @@ namespace graph::storage {
 		}
 
 		if (currentOffset == 0) {
-			if (cursor.wrappedAround) {
-				cursor.diskExhausted = true;
-				cursor.nextSegmentOffset = 0;
-				cursor.wrappedAround = false;
+			if (scanCursor_.wrappedAround) {
+				scanCursor_.diskExhausted = true;
+				scanCursor_.nextSegmentOffset = 0;
+				scanCursor_.wrappedAround = false;
 			} else {
-				cursor.wrappedAround = true;
-				cursor.nextSegmentOffset = chainHead;
+				scanCursor_.wrappedAround = true;
+				scanCursor_.nextSegmentOffset = chainHead;
 			}
 		} else {
-			cursor.nextSegmentOffset = currentOffset;
+			scanCursor_.nextSegmentOffset = currentOffset;
 		}
 
 		return foundAny;
-	}
-
-	void IDAllocator::ensureMaxId(uint32_t entityType, int64_t id) {
-		std::lock_guard<std::mutex> lock(mutex_);
-		int64_t &maxId = getMaxIdRef(entityType);
-		if (id > maxId) {
-			maxId = id;
-		}
-	}
-
-	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) {
-		return ++getMaxIdRef(entityType);
-	}
-
-	int64_t &IDAllocator::getMaxIdRef(uint32_t entityType) {
-		switch (entityType) {
-			case Node::typeId: return currentMaxNodeId_;
-			case Edge::typeId: return currentMaxEdgeId_;
-			case Property::typeId: return currentMaxPropId_;
-			case Blob::typeId: return currentMaxBlobId_;
-			case Index::typeId: return currentMaxIndexId_;
-			case State::typeId: return currentMaxStateId_;
-			default: throw std::runtime_error("Invalid entity type: " + std::to_string(entityType));
-		}
 	}
 
 } // namespace graph::storage

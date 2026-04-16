@@ -34,7 +34,6 @@
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
-#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentAllocator.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/StorageHeaders.hpp"
@@ -50,7 +49,6 @@ protected:
 	FileHeader header;
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
-	std::shared_ptr<IDAllocator> idAllocator;
 	std::shared_ptr<SegmentAllocator> allocator;
 
 	void SetUp() override {
@@ -68,16 +66,11 @@ protected:
 
 		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
-		idAllocator = std::make_shared<IDAllocator>(
-			file, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
-			fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
-			fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
-		allocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
+		allocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager);
 	}
 
 	void TearDown() override {
 		allocator.reset();
-		idAllocator.reset();
 		fileHeaderManager.reset();
 		segmentTracker.reset();
 		if (file && file->is_open()) file->close();

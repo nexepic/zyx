@@ -102,7 +102,7 @@ void MergeNodeOperator::processMerge(Record &record) {
 	}
 
 	if (!indexUsed) {
-		int64_t maxId = dm_->getIdAllocator()->getCurrentMaxNodeId();
+		int64_t maxId = dm_->getIdAllocator(EntityType::Node)->getCurrentMaxId();
 		for (int64_t i = 1; i <= maxId; ++i) candidates.push_back(i);
 	}
 

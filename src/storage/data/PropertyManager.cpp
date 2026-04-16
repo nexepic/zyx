@@ -39,7 +39,7 @@ namespace graph::storage {
 		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 
 	int64_t PropertyManager::doAllocateId() {
-		return getDataManagerPtr()->getIdAllocator()->allocateId(Property::typeId);
+		return getDataManagerPtr()->getIdAllocator(EntityType::Property)->allocate();
 	}
 
 	void PropertyManager::doRemove(Property &property) {

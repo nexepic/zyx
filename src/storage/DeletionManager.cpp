@@ -29,15 +29,18 @@ namespace graph::storage {
 
 	DeletionManager::DeletionManager(std::shared_ptr<DataManager> dataManager,
 									 std::shared_ptr<SegmentTracker> tracker,
-									 std::shared_ptr<IDAllocator> idAllocator) :
+									 IDAllocators allocators) :
 		dataManager_(std::move(dataManager)), tracker_(std::move(tracker)),
-		idAllocator_(std::move(idAllocator)) {}
+		allocators_(std::move(allocators)) {}
 
 	DeletionManager::~DeletionManager() = default;
 
 	void DeletionManager::initialize() {}
 
 	void DeletionManager::deleteNode(Node &node) const {
+		if (node.getId() == 0)
+			return;
+
 		if (node.hasPropertyEntity()) {
 			deletePropertyEntity(node.getPropertyEntityId(), node.getPropertyStorageType());
 		}
@@ -49,6 +52,9 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::deleteEdge(Edge &edge) const {
+		if (edge.getId() == 0)
+			return;
+
 		if (edge.hasPropertyEntity()) {
 			deletePropertyEntity(edge.getPropertyEntityId(), edge.getPropertyStorageType());
 		}
@@ -150,7 +156,7 @@ namespace graph::storage {
 	void DeletionManager::markNodeInactive(Node &node) const {
 		// 1. Eagerly free the ID
 		// This updates the SegmentTracker bitmap to 0 AND puts the ID into the L1 Cache immediately.
-		idAllocator_->freeId(node.getId(), Node::typeId);
+		allocators_[Node::typeId]->free(node.getId());
 
 		// 2. Mark logical deletion in DataManager (Persistence Layer)
 		// This ensures the entity is treated as DELETED in transactions/queries.
@@ -169,7 +175,7 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markEdgeInactive(Edge &edge) const {
-		idAllocator_->freeId(edge.getId(), Edge::typeId);
+		allocators_[Edge::typeId]->free(edge.getId());
 		dataManager_->markEntityDeleted(edge);
 
 		uint64_t segmentOffset = findSegmentForEdgeId(edge.getId());
@@ -182,7 +188,7 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markPropertyInactive(Property &property) const {
-		idAllocator_->freeId(property.getId(), Property::typeId);
+		allocators_[Property::typeId]->free(property.getId());
 		dataManager_->markEntityDeleted(property);
 
 		uint64_t segmentOffset = findSegmentForPropertyId(property.getId());
@@ -195,7 +201,7 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markBlobInactive(Blob &blob) const {
-		idAllocator_->freeId(blob.getId(), Blob::typeId);
+		allocators_[Blob::typeId]->free(blob.getId());
 		dataManager_->markEntityDeleted(blob);
 
 		uint64_t segmentOffset = findSegmentForBlobId(blob.getId());
@@ -208,7 +214,7 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markIndexInactive(Index &index) const {
-		idAllocator_->freeId(index.getId(), Index::typeId);
+		allocators_[Index::typeId]->free(index.getId());
 		dataManager_->markEntityDeleted(index);
 
 		uint64_t segmentOffset = findSegmentForIndexId(index.getId());
@@ -221,7 +227,7 @@ namespace graph::storage {
 	}
 
 	void DeletionManager::markStateInactive(State &state) const {
-		idAllocator_->freeId(state.getId(), State::typeId);
+		allocators_[State::typeId]->free(state.getId());
 		dataManager_->markEntityDeleted(state);
 
 		uint64_t segmentOffset = findSegmentForStateId(state.getId());

@@ -113,16 +113,24 @@ namespace graph::storage {
 
 		segmentTracker = std::make_shared<SegmentTracker>(storageIO_, fileHeader);
 
-		// Initialize ID allocator (without chain walk — StorageBootstrap will provide data)
-		idAllocator = std::make_unique<IDAllocator>(
-				fileStream, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
-				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
-				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
-		idAllocator->clearAllCaches();
+		// Initialize per-type ID allocators (without chain walk — StorageBootstrap will provide data)
+		std::pair<EntityType, int64_t *> typeMaxPairs[] = {
+				{EntityType::Node, &fileHeaderManager->getMaxNodeIdRef()},
+				{EntityType::Edge, &fileHeaderManager->getMaxEdgeIdRef()},
+				{EntityType::Property, &fileHeaderManager->getMaxPropIdRef()},
+				{EntityType::Blob, &fileHeaderManager->getMaxBlobIdRef()},
+				{EntityType::Index, &fileHeaderManager->getMaxIndexIdRef()},
+				{EntityType::State, &fileHeaderManager->getMaxStateIdRef()},
+		};
+		for (auto &[type, maxIdPtr] : typeMaxPairs) {
+			auto alloc = std::make_shared<IDAllocator>(type, segmentTracker, *maxIdPtr);
+			alloc->clearPersistedCaches();
+			idAllocators_[static_cast<size_t>(type)] = std::move(alloc);
+		}
 
 		// Then create the space management components
 		segmentAllocator =
-				std::make_shared<SegmentAllocator>(storageIO_, segmentTracker, fileHeaderManager, idAllocator);
+				std::make_shared<SegmentAllocator>(storageIO_, segmentTracker, fileHeaderManager);
 		auto segmentCompactor =
 				std::make_shared<SegmentCompactor>(storageIO_, segmentTracker, segmentAllocator, fileHeaderManager);
 		fileTruncator =
@@ -131,7 +139,7 @@ namespace graph::storage {
 				std::make_shared<SpaceManager>(segmentAllocator, segmentCompactor, fileTruncator, segmentTracker);
 
 		// Initialize data manager (pass storageIO for pread-based parallel reads)
-		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocator, segmentTracker,
+		dataManager = std::make_shared<DataManager>(fileStream, cacheSize, fileHeader, idAllocators_, segmentTracker,
 													storageIO_);
 
 		// --- Merged segment chain walk via StorageBootstrap ---
@@ -160,7 +168,7 @@ namespace graph::storage {
 
 		for (const auto &chain : chains) {
 			auto result = bootstrap.scanChain(chain.head);
-			idAllocator->initializeFromScan(chain.entityType, result.physicalMaxId);
+			idAllocators_[chain.entityType]->initializeFromScan(result.physicalMaxId);
 			segmentIndexManager->setSegmentIndex(chain.entityType, std::move(result.segmentIndexEntries));
 		}
 
@@ -180,7 +188,7 @@ namespace graph::storage {
 
 		// Create StorageWriter after all dependencies are ready
 		storageWriter_ = std::make_shared<StorageWriter>(storageIO_, segmentTracker, segmentAllocator, dataManager,
-														 idAllocator, fileHeader);
+														 idAllocators_, fileHeader);
 
 		// Create IntegrityChecker after SegmentTracker and StorageIO are ready
 		integrityChecker_ = std::make_shared<IntegrityChecker>(segmentTracker, storageIO_);
@@ -414,8 +422,8 @@ namespace graph::storage {
 					if (spaceManager->safeCompactSegments()) {
 						dataManager->clearCache();
 
-						// Just clear the allocator cache. It will lazy-load on next insert.
-						idAllocator->resetAfterCompaction();
+						// Just clear all allocator caches. They will lazy-load on next insert.
+						for (auto &alloc : idAllocators_) alloc->resetAfterCompaction();
 
 						dataManager->getSegmentIndexManager()->buildSegmentIndexes();
 

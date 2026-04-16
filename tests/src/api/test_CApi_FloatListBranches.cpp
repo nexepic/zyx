@@ -19,9 +19,12 @@ protected:
 
 	void SetUp() override {
 		dbPath = (fs::temp_directory_path() / ("c_api_float_list_" + std::to_string(std::rand()))).string();
-		if (fs::exists(dbPath)) {
-			fs::remove_all(dbPath);
-		}
+		std::error_code ec;
+		if (fs::exists(dbPath))
+			fs::remove_all(dbPath, ec);
+		std::string walPath = dbPath + "-wal";
+		if (fs::exists(walPath))
+			fs::remove(walPath, ec);
 		db = zyx_open(dbPath.c_str());
 		ASSERT_NE(db, nullptr);
 	}
@@ -29,12 +32,14 @@ protected:
 	void TearDown() override {
 		if (db) {
 			zyx_close(db);
-		db = nullptr;
+			db = nullptr;
 		}
 		std::error_code ec;
-		if (fs::exists(dbPath)) {
+		if (fs::exists(dbPath))
 			fs::remove_all(dbPath, ec);
-		}
+		std::string walPath = dbPath + "-wal";
+		if (fs::exists(walPath))
+			fs::remove(walPath, ec);
 	}
 
 	static int findColumn(ZYXResult_T *res, const char *needle) {

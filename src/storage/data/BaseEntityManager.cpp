@@ -66,7 +66,7 @@ namespace graph::storage {
 		// 2. Batch ID Allocation (Critical Optimization)
 		// One mutex lock for N entities.
 		if (!newEntities.empty()) {
-			int64_t startId = dataManager->getIdAllocator()->allocateIdBatch(EntityType::typeId, newEntities.size());
+			int64_t startId = dataManager->getIdAllocator(EntityType::typeId)->allocateBatch(newEntities.size());
 
 			// Assign sequential IDs
 			for (size_t i = 0; i < newEntities.size(); ++i) {

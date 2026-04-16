@@ -75,7 +75,7 @@ namespace graph::query::execution::operators {
 
 				case ScanType::FULL_SCAN:
 				default:
-					int64_t maxId = dm_->getIdAllocator()->getCurrentMaxNodeId();
+					int64_t maxId = dm_->getIdAllocator(EntityType::Node)->getCurrentMaxId();
 					candidateIds_.reserve(maxId);
 					for (int64_t i = 1; i <= maxId; ++i)
 						candidateIds_.push_back(i);

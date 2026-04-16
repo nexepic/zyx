@@ -60,7 +60,7 @@ protected:
 	// Core Storage Components
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
-	std::shared_ptr<IDAllocator> idAllocator;
+	IDAllocators allocators;
 	std::shared_ptr<SegmentAllocator> segmentAllocator;
 
 	// High-level Components
@@ -86,15 +86,23 @@ protected:
 		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
 
-		idAllocator = std::make_shared<IDAllocator>(
-				file, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
-				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
-				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
+		std::pair<EntityType, int64_t *> typeMaxPairs[] = {
+				{EntityType::Node, &fileHeaderManager->getMaxNodeIdRef()},
+				{EntityType::Edge, &fileHeaderManager->getMaxEdgeIdRef()},
+				{EntityType::Property, &fileHeaderManager->getMaxPropIdRef()},
+				{EntityType::Blob, &fileHeaderManager->getMaxBlobIdRef()},
+				{EntityType::Index, &fileHeaderManager->getMaxIndexIdRef()},
+				{EntityType::State, &fileHeaderManager->getMaxStateIdRef()},
+		};
+		for (auto &[type, maxIdPtr] : typeMaxPairs) {
+			allocators[static_cast<size_t>(type)] =
+					std::make_shared<IDAllocator>(type, segmentTracker, *maxIdPtr);
+		}
 
 		segmentAllocator =
-				std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
+				std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager);
 
-		dataManager = std::make_shared<DataManager>(file, 100, header, idAllocator, segmentTracker);
+		dataManager = std::make_shared<DataManager>(file, 100, header, allocators, segmentTracker);
 		dataManager->initialize(); // This initializes EntityReferenceUpdater internally
 
 		systemStateManager = std::make_shared<state::SystemStateManager>(dataManager);
@@ -109,7 +117,7 @@ protected:
 		updater.reset();
 		dataManager.reset();
 		segmentAllocator.reset();
-		idAllocator.reset();
+		for (auto &alloc : allocators) alloc.reset();
 		fileHeaderManager.reset();
 		segmentTracker.reset();
 		if (file && file->is_open())
@@ -124,7 +132,7 @@ protected:
 	// which is crucial for EntityReferenceUpdater to locate entities.
 
 	[[nodiscard]] Node createNode(const std::string &label) const {
-		int64_t id = idAllocator->allocateId(Node::typeId);
+		int64_t id = allocators[Node::typeId]->allocate();
 		uint64_t offset = segmentTracker->getSegmentOffsetForNodeId(id);
 		if (offset == 0)
 			offset = segmentAllocator->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
@@ -145,7 +153,7 @@ protected:
 	}
 
 	[[nodiscard]] Edge createEdge(int64_t src, int64_t dst, const std::string &label) const {
-		int64_t id = idAllocator->allocateId(Edge::typeId);
+		int64_t id = allocators[Edge::typeId]->allocate();
 		uint64_t offset = segmentTracker->getSegmentOffsetForEdgeId(id);
 		if (offset == 0)
 			offset = segmentAllocator->allocateSegment(Edge::typeId, EDGES_PER_SEGMENT);
@@ -165,7 +173,7 @@ protected:
 	}
 
 	[[nodiscard]] Property createProperty(int64_t ownerId, uint32_t ownerType) const {
-		int64_t id = idAllocator->allocateId(Property::typeId);
+		int64_t id = allocators[Property::typeId]->allocate();
 		uint64_t offset = segmentTracker->getSegmentOffsetForPropId(id);
 		if (offset == 0)
 			offset = segmentAllocator->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
@@ -185,7 +193,7 @@ protected:
 	}
 
 	[[nodiscard]] Blob createBlob(int64_t ownerId, uint32_t ownerType) const {
-		int64_t id = idAllocator->allocateId(Blob::typeId);
+		int64_t id = allocators[Blob::typeId]->allocate();
 		uint64_t offset = segmentTracker->getSegmentOffsetForBlobId(id);
 		if (offset == 0)
 			offset = segmentAllocator->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
@@ -205,7 +213,7 @@ protected:
 	}
 
 	[[nodiscard]] Index createIndex(Index::NodeType nodeType) const {
-		int64_t id = idAllocator->allocateId(Index::typeId);
+		int64_t id = allocators[Index::typeId]->allocate();
 		uint64_t offset = segmentTracker->getSegmentOffsetForIndexId(id);
 		if (offset == 0)
 			offset = segmentAllocator->allocateSegment(Index::typeId, INDEXES_PER_SEGMENT);
@@ -222,7 +230,7 @@ protected:
 	}
 
 	[[nodiscard]] State createState(const std::string &key) const {
-		int64_t id = idAllocator->allocateId(State::typeId);
+		int64_t id = allocators[State::typeId]->allocate();
 		uint64_t offset = segmentTracker->getSegmentOffsetForStateId(id);
 		if (offset == 0)
 			offset = segmentAllocator->allocateSegment(State::typeId, STATES_PER_SEGMENT);

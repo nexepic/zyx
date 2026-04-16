@@ -20,130 +20,79 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
-#include <deque>
-#include <fstream>
-#include <map>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 #include <vector>
+
+#include "IntervalSet.hpp"
+#include "graph/core/Types.hpp"
 
 namespace graph::storage {
 
 	class SegmentTracker;
 
 	/**
-	 * @brief Manages entity ID allocation with OOM protection and Interval merging.
+	 * @brief Per-type entity ID allocator with multi-layer caching.
 	 *
-	 * Handles ID lifecycles through multiple cache layers:
-	 * 1. Volatile Cache: For IDs allocated but never persisted (rollback/transient).
-	 * 2. L1 (Hot) Cache: Recently freed persisted IDs (fast reuse).
-	 * 3. L2 (Cold) Cache: Older freed persisted IDs (compact interval storage).
-	 * 4. Disk Scan: Lazy recovery of gaps from physical storage.
+	 * Cache priority: Volatile → L1 (hot) → L2 (cold) → Disk Scan → Sequential.
+	 * - Volatile: IDs allocated but never persisted (rollback/transient).
+	 * - L1: Recently freed persisted IDs (LIFO stack for temporal locality).
+	 * - L2: Older freed persisted IDs (compact interval storage).
+	 * - Disk Scan: Lazy recovery of inactive slots from physical storage.
+	 *
+	 * Each instance manages exactly ONE entity type. No internal type dispatch.
 	 */
 	class IDAllocator {
 	public:
-		void setCacheLimits(size_t l1Size, size_t l2Intervals, size_t volatileIntervals) {
-			l1CacheSize_ = l1Size;
-			l2MaxIntervals_ = l2Intervals;
-			volatileMaxIntervals_ = volatileIntervals;
-		}
+		static constexpr size_t ENTITY_TYPE_COUNT = static_cast<size_t>(getMaxEntityType()) + 1;
 
-		explicit IDAllocator(std::shared_ptr<std::fstream> file, std::shared_ptr<SegmentTracker> segmentTracker,
-							 int64_t &maxNodeId, int64_t &maxEdgeId, int64_t &maxPropId, int64_t &maxBlobId,
-							 int64_t &maxIndexId, int64_t &maxStateId);
+		explicit IDAllocator(EntityType entityType, std::shared_ptr<SegmentTracker> segmentTracker, int64_t &maxId);
 
-		/**
-		 * @brief Allocates an ID, prioritizing caches in order: Volatile -> L1 -> L2 -> Disk.
-		 * If all caches are empty, allocates a new sequential ID.
-		 */
-		int64_t allocateId(uint32_t entityType);
+		// ── Core Operations ──────────────────────────────────
 
-		/**
-		 * @brief Allocates a contiguous range of IDs efficiently.
-		 * Ignores cached/recycled IDs to ensure O(1) performance for bulk operations.
-		 * @param entityType The type of entity.
-		 * @param count Number of IDs to allocate.
-		 * @return The first ID in the allocated range. The range is [return, return + count - 1].
-		 */
-		int64_t allocateIdBatch(uint32_t entityType, size_t count);
+		/// Allocates an ID: Volatile → L1 → L2 → Disk → Sequential.
+		int64_t allocate();
 
-		/**
-		 * @brief Frees an ID, routing it to the appropriate cache (Volatile vs Persisted).
-		 * Detects if the ID was backed by disk storage to decide handling strategy.
-		 */
-		void freeId(int64_t id, uint32_t entityType);
+		/// Allocates a contiguous range, bypassing caches for O(1) bulk.
+		/// Returns the first ID; range is [return, return + count - 1].
+		int64_t allocateBatch(size_t count);
 
-		/**
-		 * @brief Initializes the allocator, recovering logic/physical ID gaps from disk.
-		 * Should be called on startup.
-		 */
+		/// Frees an ID, routing to Volatile (unpersisted) or L1/L2 (persisted).
+		void free(int64_t id);
+
+		// ── Lifecycle ────────────────────────────────────────
+
+		/// Full initialization: chain walk + gap recovery. Call at startup.
 		void initialize();
 
-		/**
-		 * @brief Initializes gap recovery for a single entity type using pre-scanned physical max ID.
-		 * Used by StorageBootstrap to avoid duplicate chain walks.
-		 */
-		void initializeFromScan(uint32_t entityType, int64_t physicalMaxId);
+		/// Gap recovery only (physicalMaxId provided by caller). Used by StorageBootstrap.
+		void initializeFromScan(int64_t physicalMaxId);
 
-		/**
-		 * @brief Clears caches for persisted IDs (L1/L2).
-		 * @note Does NOT clear Volatile cache to prevent ID leaks during normal operation.
-		 */
-		void clearAllCaches();
-		void clearCache(uint32_t entityType);
+		/// Clears L1/L2/cursor. Does NOT clear Volatile (prevents ID leaks).
+		void clearPersistedCaches();
 
-		/**
-		 * @brief Ensures the max-ID counter for an entity type is at least the given value.
-		 * Used by WAL recovery to advance counters for replayed entities.
-		 */
-		void ensureMaxId(uint32_t entityType, int64_t id);
-
-		/**
-		 * @brief Completely resets ALL caches, including Volatile.
-		 * MUST ONLY be called after a full database compaction/truncation where
-		 * all IDs have been re-mapped to a contiguous range [1..Max].
-		 */
+		/// Clears ALL caches including Volatile. Only after compaction.
 		void resetAfterCompaction();
 
-		// Getters
-		[[nodiscard]] int64_t getCurrentMaxNodeId() const { return currentMaxNodeId_; }
-		[[nodiscard]] int64_t getCurrentMaxEdgeId() const { return currentMaxEdgeId_; }
-		[[nodiscard]] int64_t getCurrentMaxPropId() const { return currentMaxPropId_; }
-		[[nodiscard]] int64_t getCurrentMaxBlobId() const { return currentMaxBlobId_; }
-		[[nodiscard]] int64_t getCurrentMaxIndexId() const { return currentMaxIndexId_; }
-		[[nodiscard]] int64_t getCurrentMaxStateId() const { return currentMaxStateId_; }
+		/// Ensures maxId counter is at least `id`. Used by WAL replay.
+		void ensureMaxId(int64_t id);
+
+		// ── Query ────────────────────────────────────────────
+
+		[[nodiscard]] int64_t getCurrentMaxId() const;
+		[[nodiscard]] EntityType getEntityType() const { return entityType_; }
+
+		// ── Testing Support ──────────────────────────────────
+
+		void setCacheLimits(size_t l1Size, size_t l2Intervals, size_t volatileIntervals);
 
 	private:
-		// L1 Cache Limit: Fast access for immediate reuse (Persisted IDs)
-		size_t l1CacheSize_ = 4096;
-		// L2 Cache Limit: Number of INTERVALS (Persisted IDs)
-		// 10,000 intervals can represent millions of IDs efficiently.
-		size_t l2MaxIntervals_ = 10000;
-		// Volatile Cache Limit: Number of INTERVALS (Memory-only IDs)
-		// Allowed to be larger to handle massive transaction rollbacks gracefully.
-		size_t volatileMaxIntervals_ = 50000;
-		/**
-		 * @brief Helper class to store ID ranges compactly (e.g., [1-1000]).
-		 * Replaces std::deque for bulk storage to reduce memory footprint by orders of magnitude.
-		 */
-		class IDIntervalSet {
-		public:
-			void add(int64_t id);
-			void addRange(int64_t start, int64_t end);
-
-			// Retrieves and removes the first available ID. Returns 0 if empty.
-			int64_t pop();
-
-			[[nodiscard]] size_t intervalCount() const { return intervals_.size(); }
-			[[nodiscard]] bool empty() const { return intervals_.empty(); }
-			void clear() { intervals_.clear(); }
-
-		private:
-			// Map: StartID -> EndID. Keeps ranges sorted and merged.
-			std::map<int64_t, int64_t> intervals_;
-		};
+		void validateId(int64_t id) const;
+		int64_t scanPhysicalMaxId() const;
+		void recoverGaps(int64_t physicalMaxId);
+		bool fetchInactiveIdsFromDisk();
 
 		struct ScanCursor {
 			uint64_t nextSegmentOffset = 0;
@@ -151,47 +100,23 @@ namespace graph::storage {
 			bool wrappedAround = false;
 		};
 
-		bool fetchInactiveIdsFromDisk(uint32_t entityType);
-		int64_t allocateNewSequentialId(uint32_t entityType);
-
-		// Returns a reference to the max ID counter for the given entity type.
-		// Centralizes the entityType → counter mapping used across multiple methods.
-		int64_t &getMaxIdRef(uint32_t entityType);
-
-		// Recovers gaps between logical MaxID and physical disk storage on startup.
-		void recoverGapIds(uint32_t entityType, int64_t &logicalMaxId);
-
-		std::shared_ptr<std::fstream> file_;
+		EntityType entityType_;
 		std::shared_ptr<SegmentTracker> segmentTracker_;
+		int64_t &maxId_;
 
-		// --- Cache Layering ---
+		size_t l1CacheSize_ = 4096;
+		size_t l2MaxIntervals_ = 10000;
+		size_t volatileMaxIntervals_ = 50000;
 
-		// 1. Volatile Cache: IDs allocated but NEVER persisted (or dirty pre-allocs).
-		// Stored as Intervals to handle massive transaction rollbacks efficiently.
-		// Priority: HIGH (Reuse these first to avoid holes).
-		std::unordered_map<uint32_t, IDIntervalSet> volatileCache_;
-
-		// 2. L1 Hot Cache: Recently freed PERSISTED IDs.
-		// Stored as Deque for O(1) push/pop without tree rebalancing overhead.
-		// Priority: MEDIUM (Reuse active disk slots).
-		std::unordered_map<uint32_t, std::deque<int64_t>> hotCache_;
-
-		// 3. L2 Cold Cache: Older freed PERSISTED IDs.
-		// Stored as Intervals to save memory.
-		// Priority: LOW.
-		std::unordered_map<uint32_t, IDIntervalSet> coldCache_;
-
-		std::unordered_map<uint32_t, ScanCursor> scanCursors_;
-
-		// References to global max counters managed by FileHeaderManager
-		int64_t &currentMaxNodeId_;
-		int64_t &currentMaxEdgeId_;
-		int64_t &currentMaxPropId_;
-		int64_t &currentMaxBlobId_;
-		int64_t &currentMaxIndexId_;
-		int64_t &currentMaxStateId_;
+		IntervalSet volatileCache_;
+		std::vector<int64_t> hotCache_;
+		IntervalSet coldCache_;
+		ScanCursor scanCursor_{};
 
 		mutable std::mutex mutex_;
 	};
+
+	/// Convenience alias for the full set of per-type allocators.
+	using IDAllocators = std::array<std::shared_ptr<IDAllocator>, IDAllocator::ENTITY_TYPE_COUNT>;
 
 } // namespace graph::storage

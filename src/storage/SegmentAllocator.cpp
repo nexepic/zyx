@@ -13,10 +13,9 @@
 namespace graph::storage {
 
 	SegmentAllocator::SegmentAllocator(std::shared_ptr<StorageIO> io, std::shared_ptr<SegmentTracker> tracker,
-									   std::shared_ptr<FileHeaderManager> fileHeaderManager,
-									   std::shared_ptr<IDAllocator> idAllocator) :
+									   std::shared_ptr<FileHeaderManager> fileHeaderManager) :
 		io_(std::move(io)), segmentTracker_(std::move(tracker)),
-		fileHeaderManager_(std::move(fileHeaderManager)), idAllocator_(std::move(idAllocator)) {}
+		fileHeaderManager_(std::move(fileHeaderManager)) {}
 
 	SegmentAllocator::~SegmentAllocator() = default;
 

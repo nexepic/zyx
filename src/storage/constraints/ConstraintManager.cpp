@@ -234,12 +234,11 @@ std::unique_ptr<IConstraint> ConstraintManager::createConstraintInstance(
 void ConstraintManager::validateExistingData(const std::string &entityType,
 											  const std::string &label,
 											  IConstraint &constraint) const {
-	auto idAllocator = dataManager_->getIdAllocator();
 	int64_t maxId = 0;
 	if (entityType == "node") {
-		maxId = idAllocator->getCurrentMaxNodeId();
+		maxId = dataManager_->getIdAllocator(EntityType::Node)->getCurrentMaxId();
 	} else if (entityType == "edge") {
-		maxId = idAllocator->getCurrentMaxEdgeId();
+		maxId = dataManager_->getIdAllocator(EntityType::Edge)->getCurrentMaxId();
 	} else {
 		return;
 	}

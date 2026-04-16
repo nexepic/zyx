@@ -20,8 +20,13 @@ protected:
 	void SetUp() override {
 		auto tempDir = fs::temp_directory_path();
 		dbPath = (tempDir / ("c_api_txn_test_" + std::to_string(std::rand()))).string();
+		// Clean up any leftover DB and WAL files from previous runs
+		std::error_code ec;
 		if (fs::exists(dbPath))
-			fs::remove_all(dbPath);
+			fs::remove_all(dbPath, ec);
+		std::string walPath = dbPath + "-wal";
+		if (fs::exists(walPath))
+			fs::remove(walPath, ec);
 		db = zyx_open(dbPath.c_str());
 		ASSERT_NE(db, nullptr);
 	}
@@ -32,6 +37,10 @@ protected:
 		std::error_code ec;
 		if (fs::exists(dbPath))
 			fs::remove_all(dbPath, ec);
+		// Also clean up WAL file
+		std::string walPath = dbPath + "-wal";
+		if (fs::exists(walPath))
+			fs::remove(walPath, ec);
 	}
 };
 

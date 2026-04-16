@@ -33,7 +33,7 @@ namespace graph::query::algorithm {
 		GraphProjection proj;
 		proj.isWeighted_ = !weightProperty.empty();
 
-		int64_t maxNodeId = dm->getIdAllocator()->getCurrentMaxNodeId();
+		int64_t maxNodeId = dm->getIdAllocator(EntityType::Node)->getCurrentMaxId();
 
 		// Resolve label IDs once
 		int64_t nodeLabelId = 0;

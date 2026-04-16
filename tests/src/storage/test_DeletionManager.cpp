@@ -60,7 +60,7 @@ protected:
 	// Core Storage Components
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
-	std::shared_ptr<IDAllocator> idAllocator;
+	IDAllocators allocators;
 	std::shared_ptr<SegmentAllocator> segmentAllocator;
 	std::shared_ptr<EntityReferenceUpdater> refUpdater;
 
@@ -87,23 +87,31 @@ protected:
 		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
 
-		idAllocator = std::make_shared<IDAllocator>(
-				file, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
-				fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
-				fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
+		std::pair<EntityType, int64_t *> typeMaxPairs[] = {
+				{EntityType::Node, &fileHeaderManager->getMaxNodeIdRef()},
+				{EntityType::Edge, &fileHeaderManager->getMaxEdgeIdRef()},
+				{EntityType::Property, &fileHeaderManager->getMaxPropIdRef()},
+				{EntityType::Blob, &fileHeaderManager->getMaxBlobIdRef()},
+				{EntityType::Index, &fileHeaderManager->getMaxIndexIdRef()},
+				{EntityType::State, &fileHeaderManager->getMaxStateIdRef()},
+		};
+		for (auto &[type, maxIdPtr] : typeMaxPairs) {
+			allocators[static_cast<size_t>(type)] =
+					std::make_shared<IDAllocator>(type, segmentTracker, *maxIdPtr);
+		}
 
 		segmentAllocator =
-				std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
+				std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager);
 
 		// 3. Initialize DataManager
 		dataManager = std::make_shared<DataManager>(file,
 													100, // Cache size
-													header, idAllocator, segmentTracker);
+													header, allocators, segmentTracker);
 
 		refUpdater = std::make_shared<EntityReferenceUpdater>(dataManager);
 
 		// 4. Initialize System Under Test (DeletionManager)
-		deletionManager = std::make_shared<DeletionManager>(dataManager, segmentTracker, idAllocator);
+		deletionManager = std::make_shared<DeletionManager>(dataManager, segmentTracker, allocators);
 
 		// Circular dependency resolution usually happens inside DataManager,
 		// ensuring it is initialized.
@@ -118,7 +126,6 @@ protected:
 		dataManager.reset();
 		segmentAllocator.reset();
 		refUpdater.reset();
-		idAllocator.reset();
 		fileHeaderManager.reset();
 		segmentTracker.reset();
 		if (file && file->is_open())
@@ -130,7 +137,7 @@ protected:
 	// --- Helper Functions to create entities and update Tracker Metadata ---
 
 	[[nodiscard]] Node createNode(const std::string &label) const {
-		int64_t id = idAllocator->allocateId(Node::typeId);
+		int64_t id = allocators[Node::typeId]->allocate();
 
 		uint64_t offset = segmentTracker->getSegmentOffsetForNodeId(id);
 		if (offset == 0) {
@@ -157,7 +164,7 @@ protected:
 	}
 
 	[[nodiscard]] Edge createEdge(int64_t srcId, int64_t dstId, const std::string &label) const {
-		int64_t id = idAllocator->allocateId(Edge::typeId);
+		int64_t id = allocators[Edge::typeId]->allocate();
 
 		uint64_t offset = segmentTracker->getSegmentOffsetForEdgeId(id);
 		if (offset == 0) {
@@ -181,7 +188,7 @@ protected:
 	}
 
 	[[nodiscard]] Property createProperty() const {
-		int64_t id = idAllocator->allocateId(Property::typeId);
+		int64_t id = allocators[Property::typeId]->allocate();
 		uint64_t offset = segmentAllocator->allocateSegment(Property::typeId, PROPERTIES_PER_SEGMENT);
 
 		Property prop;
@@ -196,7 +203,7 @@ protected:
 	}
 
 	[[nodiscard]] Blob createBlob() const {
-		int64_t id = idAllocator->allocateId(Blob::typeId);
+		int64_t id = allocators[Blob::typeId]->allocate();
 		uint64_t offset = segmentAllocator->allocateSegment(Blob::typeId, BLOBS_PER_SEGMENT);
 
 		Blob blob;
@@ -383,7 +390,7 @@ TEST_F(DeletionManagerTest, DeleteBlob_Direct) {
 }
 
 TEST_F(DeletionManagerTest, DeleteIndex) {
-	int64_t id = idAllocator->allocateId(Index::typeId);
+	int64_t id = allocators[Index::typeId]->allocate();
 	uint64_t offset = segmentAllocator->allocateSegment(Index::typeId, INDEXES_PER_SEGMENT);
 
 	Index idx;
@@ -401,7 +408,7 @@ TEST_F(DeletionManagerTest, DeleteIndex) {
 }
 
 TEST_F(DeletionManagerTest, DeleteState) {
-	int64_t id = idAllocator->allocateId(State::typeId);
+	int64_t id = allocators[State::typeId]->allocate();
 	uint64_t offset = segmentAllocator->allocateSegment(State::typeId, STATES_PER_SEGMENT);
 
 	State state;
@@ -831,7 +838,7 @@ TEST_F(DeletionManagerTest, IsActiveNegativeId) {
 
 TEST_F(DeletionManagerTest, DeleteNodeWithInvalidSegmentOffset) {
 	// Test deletion when entity is not in any segment (segmentOffset == 0)
-	int64_t id = idAllocator->allocateId(Node::typeId);
+	int64_t id = allocators[Node::typeId]->allocate();
 	Node node(id, 0);
 
 	// Don't add node to DataManager - this ensures findSegmentForNodeId returns 0
@@ -842,7 +849,7 @@ TEST_F(DeletionManagerTest, DeleteNodeWithInvalidSegmentOffset) {
 
 TEST_F(DeletionManagerTest, DeleteEdgeWithInvalidSegmentOffset) {
 	// Test deletion when edge is not in any segment
-	int64_t id = idAllocator->allocateId(Edge::typeId);
+	int64_t id = allocators[Edge::typeId]->allocate();
 	Node n1 = createNode("N1");
 	Node n2 = createNode("N2");
 	Edge edge(id, n1.getId(), n2.getId(), 0);
@@ -854,7 +861,7 @@ TEST_F(DeletionManagerTest, DeleteEdgeWithInvalidSegmentOffset) {
 
 TEST_F(DeletionManagerTest, DeletePropertyWithInvalidSegmentOffset) {
 	// Test deletion when property is not in any segment
-	int64_t id = idAllocator->allocateId(Property::typeId);
+	int64_t id = allocators[Property::typeId]->allocate();
 	Property prop;
 	prop.setId(id);
 
@@ -867,7 +874,7 @@ TEST_F(DeletionManagerTest, DeletePropertyWithInvalidSegmentOffset) {
 
 TEST_F(DeletionManagerTest, DeleteBlobWithInvalidSegmentOffset) {
 	// Test deletion when blob is not in any segment
-	int64_t id = idAllocator->allocateId(Blob::typeId);
+	int64_t id = allocators[Blob::typeId]->allocate();
 	Blob blob;
 	blob.setId(id);
 

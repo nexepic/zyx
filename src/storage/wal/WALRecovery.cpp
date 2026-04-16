@@ -39,14 +39,14 @@ namespace graph::storage::wal {
 
 	WALRecovery::WALRecovery(WALManager &wal,
 							 std::shared_ptr<StorageWriter> writer,
-							 std::shared_ptr<IDAllocator> idAllocator,
+							 IDAllocators allocators,
 							 std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<StorageIO> storageIO,
 							 std::shared_ptr<DataManager> dataManager,
 							 std::shared_ptr<FileHeaderManager> fileHeaderManager) :
 		wal_(wal),
 		writer_(std::move(writer)),
-		idAllocator_(std::move(idAllocator)),
+		allocators_(std::move(allocators)),
 		segmentTracker_(std::move(segmentTracker)),
 		storageIO_(std::move(storageIO)),
 		dataManager_(std::move(dataManager)),
@@ -158,7 +158,7 @@ namespace graph::storage::wal {
 		T entity = utils::FixedSizeSerializer::deserializeWithFixedSize<T>(iss, T::getTotalSize());
 
 		// Ensure max-ID counter reflects this entity (crash may have lost counter advance)
-		idAllocator_->ensureMaxId(T::typeId, entityId);
+		allocators_[T::typeId]->ensureMaxId(entityId);
 
 		// Check if entity already has a segment slot
 		uint64_t segmentOffset = dataManager_->findSegmentForEntityId<T>(entityId);
@@ -191,7 +191,7 @@ namespace graph::storage::wal {
 
 		// Write inactive entity to disk and free ID
 		writer_->updateEntityInPlace(entity, segmentOffset);
-		idAllocator_->freeId(entityId, T::typeId);
+		allocators_[T::typeId]->free(entityId);
 	}
 
 	// ── recover() — orchestrates all 4 phases ──────────────────────────────

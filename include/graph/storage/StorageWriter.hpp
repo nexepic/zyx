@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/StorageHeaders.hpp"
 
 namespace graph::storage {
@@ -26,7 +27,6 @@ namespace graph::storage {
 	class SegmentTracker;
 	class SegmentAllocator;
 	class DataManager;
-	class IDAllocator;
 	struct FlushSnapshot;
 
 	template<typename EntityType>
@@ -48,7 +48,7 @@ namespace graph::storage {
 					  std::shared_ptr<SegmentTracker> tracker,
 					  std::shared_ptr<SegmentAllocator> allocator,
 					  std::shared_ptr<DataManager> dataManager,
-					  std::shared_ptr<IDAllocator> idAllocator,
+					  IDAllocators allocators,
 					  FileHeader &fileHeader);
 
 		~StorageWriter() = default;
@@ -129,7 +129,7 @@ namespace graph::storage {
 		std::shared_ptr<SegmentTracker> tracker_;
 		std::shared_ptr<SegmentAllocator> allocator_;
 		std::shared_ptr<DataManager> dataManager_;
-		std::shared_ptr<IDAllocator> idAllocator_;
+		IDAllocators allocators_;
 		FileHeader &fileHeader_;
 
 		/// Shadow buffers for segments written via writeSegmentData (new entities).

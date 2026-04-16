@@ -46,7 +46,7 @@ protected:
 
 	std::shared_ptr<SegmentTracker> segmentTracker;
 	std::shared_ptr<FileHeaderManager> fileHeaderManager;
-	std::shared_ptr<IDAllocator> idAllocator;
+	IDAllocators allocators;
 	std::shared_ptr<SegmentAllocator> segmentAllocator;
 	std::shared_ptr<SegmentCompactor> compactor;
 	std::shared_ptr<DataManager> dataManager;
@@ -66,14 +66,22 @@ protected:
 		auto storageIO = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 		segmentTracker = std::make_shared<SegmentTracker>(storageIO, header);
 		fileHeaderManager = std::make_shared<FileHeaderManager>(file, header);
-		idAllocator = std::make_shared<IDAllocator>(
-			file, segmentTracker, fileHeaderManager->getMaxNodeIdRef(), fileHeaderManager->getMaxEdgeIdRef(),
-			fileHeaderManager->getMaxPropIdRef(), fileHeaderManager->getMaxBlobIdRef(),
-			fileHeaderManager->getMaxIndexIdRef(), fileHeaderManager->getMaxStateIdRef());
-		segmentAllocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager, idAllocator);
+		std::pair<EntityType, int64_t *> typeMaxPairs[] = {
+			{EntityType::Node, &fileHeaderManager->getMaxNodeIdRef()},
+			{EntityType::Edge, &fileHeaderManager->getMaxEdgeIdRef()},
+			{EntityType::Property, &fileHeaderManager->getMaxPropIdRef()},
+			{EntityType::Blob, &fileHeaderManager->getMaxBlobIdRef()},
+			{EntityType::Index, &fileHeaderManager->getMaxIndexIdRef()},
+			{EntityType::State, &fileHeaderManager->getMaxStateIdRef()},
+		};
+		for (auto &[type, maxIdPtr] : typeMaxPairs) {
+			allocators[static_cast<size_t>(type)] =
+				std::make_shared<IDAllocator>(type, segmentTracker, *maxIdPtr);
+		}
+		segmentAllocator = std::make_shared<SegmentAllocator>(storageIO, segmentTracker, fileHeaderManager);
 		compactor = std::make_shared<SegmentCompactor>(storageIO, segmentTracker, segmentAllocator, fileHeaderManager);
 
-		dataManager = std::make_shared<DataManager>(file, 100, header, idAllocator, segmentTracker);
+		dataManager = std::make_shared<DataManager>(file, 100, header, allocators, segmentTracker);
 		refUpdater = std::make_shared<EntityReferenceUpdater>(dataManager);
 		compactor->setEntityReferenceUpdater(refUpdater);
 	}
@@ -83,7 +91,7 @@ protected:
 		refUpdater.reset();
 		dataManager.reset();
 		segmentAllocator.reset();
-		idAllocator.reset();
+		for (auto &alloc : allocators) alloc.reset();
 		fileHeaderManager.reset();
 		segmentTracker.reset();
 		if (file && file->is_open())

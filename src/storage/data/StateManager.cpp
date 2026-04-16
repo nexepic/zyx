@@ -194,7 +194,7 @@ namespace graph::storage {
 	}
 
 	int64_t StateManager::doAllocateId() {
-		return getDataManagerPtr()->getIdAllocator()->allocateId(State::typeId);
+		return getDataManagerPtr()->getIdAllocator(EntityType::State)->allocate();
 	}
 
 } // namespace graph::storage

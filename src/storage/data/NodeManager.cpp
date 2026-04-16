@@ -31,7 +31,7 @@ namespace graph::storage {
 	void NodeManager::doRemove(Node &node) { deletionManager_->deleteNode(node); }
 
 	int64_t NodeManager::doAllocateId() {
-		return getDataManagerPtr()->getIdAllocator()->allocateId(Node::typeId);
+		return getDataManagerPtr()->getIdAllocator(EntityType::Node)->allocate();
 	}
 
 } // namespace graph::storage

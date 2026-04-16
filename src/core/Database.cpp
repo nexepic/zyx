@@ -169,7 +169,7 @@ namespace graph {
 				storage::wal::WALRecovery recovery(
 						*walManager_,
 						storage->getStorageWriter(),
-						storage->getIDAllocator(),
+						storage->getIDAllocators(),
 						storage->getSegmentTracker(),
 						storage->getStorageIO(),
 						storage->getDataManager(),

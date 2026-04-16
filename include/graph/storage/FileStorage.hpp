@@ -97,7 +97,13 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<DataManager> getDataManager() const { return dataManager; }
 
-		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator() const { return idAllocator; }
+		[[nodiscard]] const IDAllocators &getIDAllocators() const { return idAllocators_; }
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator(EntityType type) const {
+			return idAllocators_[static_cast<size_t>(type)];
+		}
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator(uint32_t typeId) const {
+			return idAllocators_[typeId];
+		}
 
 		[[nodiscard]] std::shared_ptr<StorageWriter> getStorageWriter() const { return storageWriter_; }
 
@@ -139,7 +145,7 @@ namespace graph::storage {
 
 		OpenMode openMode_;
 
-		std::shared_ptr<IDAllocator> idAllocator;
+		IDAllocators idAllocators_;
 
 		std::shared_ptr<FileHeaderManager> fileHeaderManager;
 

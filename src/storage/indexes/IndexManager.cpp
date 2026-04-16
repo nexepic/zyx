@@ -82,7 +82,7 @@ namespace graph::query::indexes {
 		if (nodeLabelIdx->isEnabled()) {
 			// Build if missing data
 			if (!nodeLabelIdx->hasPhysicalData()) {
-				if (dataManager_->getIdAllocator()->getCurrentMaxNodeId() > 0) {
+				if (dataManager_->getIdAllocator(EntityType::Node)->getCurrentMaxId() > 0) {
 					log::Log::info("Bootstrapping Node Label Index...");
 					executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); });
 					nodeLabelIdx->saveState();
@@ -98,7 +98,7 @@ namespace graph::query::indexes {
 		// [CHECK] Only proceed if enabled
 		if (edgeTypeIdx->isEnabled()) {
 			if (!edgeTypeIdx->hasPhysicalData()) {
-				if (dataManager_->getIdAllocator()->getCurrentMaxEdgeId() > 0) {
+				if (dataManager_->getIdAllocator(EntityType::Edge)->getCurrentMaxId() > 0) {
 					log::Log::info("Bootstrapping Edge Type Index...");
 					executeBuildTask([&]() { return indexBuilder_->buildEdgeTypeIndex(); });
 					edgeTypeIdx->saveState();

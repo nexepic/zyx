@@ -56,7 +56,7 @@ namespace graph::storage {
 	}
 
 	int64_t BlobManager::doAllocateId() {
-		return getDataManagerPtr()->getIdAllocator()->allocateId(Blob::typeId);
+		return getDataManagerPtr()->getIdAllocator(EntityType::Blob)->allocate();
 	}
 
 } // namespace graph::storage

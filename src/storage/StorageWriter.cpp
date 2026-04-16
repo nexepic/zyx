@@ -37,13 +37,13 @@ namespace graph::storage {
 								 std::shared_ptr<SegmentTracker> tracker,
 								 std::shared_ptr<SegmentAllocator> allocator,
 								 std::shared_ptr<DataManager> dataManager,
-								 std::shared_ptr<IDAllocator> idAllocator,
+								 IDAllocators allocators,
 								 FileHeader &fileHeader) :
 		io_(std::move(io)),
 		tracker_(std::move(tracker)),
 		allocator_(std::move(allocator)),
 		dataManager_(std::move(dataManager)),
-		idAllocator_(std::move(idAllocator)),
+		allocators_(std::move(allocators)),
 		fileHeader_(fileHeader) {}
 
 	// ── classifyEntities (free function) ────────────────────────────────────
@@ -392,7 +392,7 @@ namespace graph::storage {
 			return;
 		}
 
-		idAllocator_->freeId(id, entity.typeId);
+		allocators_[entity.typeId]->free(id);
 
 		if (uint64_t segmentOffset = dataManager_->findSegmentForEntityId<T>(id); segmentOffset != 0) {
 			updateEntityInPlace(entity, segmentOffset);
