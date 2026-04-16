@@ -80,10 +80,12 @@ namespace graph {
 		mutable std::once_flag threadPoolInitFlag_;
 		mutable std::once_flag queryEngineInitFlag_;
 		mutable std::once_flag walInitFlag_;
+		mutable std::once_flag walWriteInitFlag_;
 
 		void ensureThreadPool();
 		void ensureQueryEngine();
 		void ensureWALAndTransactionManager();
+		void ensureWALForWrites();
 	};
 
 } // namespace graph

@@ -425,6 +425,16 @@ namespace zyx {
 		explicit DatabaseImpl(const std::string &path) : db_(path) {}
 		graph::Database db_;
 		std::optional<graph::Transaction> cypherTxn_;
+
+		[[nodiscard]] bool needsImplicitTransaction() const {
+			return !db_.hasActiveTransaction() && !cypherTxn_.has_value();
+		}
+
+		void ensureOpen() {
+			if (!db_.isOpen()) {
+				db_.open();
+			}
+		}
 	};
 
 	// ========================================================================
@@ -558,9 +568,7 @@ namespace zyx {
 	Result Database::execute(const std::string &cypher,
 	                         const std::unordered_map<std::string, Value> &params) const {
 		try {
-			if (!impl_->db_.isOpen()) {
-				impl_->db_.open();
-			}
+			impl_->ensureOpen();
 
 			// Intercept transaction control statements (BEGIN/COMMIT/ROLLBACK)
 			auto txnKind = detectCypherTxnStatement(cypher);
@@ -613,10 +621,9 @@ namespace zyx {
 			// - If explicit/cypher transaction exists, execute within it.
 			// - If no explicit transaction: wrap writes in implicit write txn,
 			//   wrap reads in implicit read-only txn (for snapshot isolation).
-			bool needsImplicitTxn = !impl_->db_.hasActiveTransaction() && !impl_->cypherTxn_.has_value();
 			std::optional<graph::Transaction> implicitTxn;
 
-			if (needsImplicitTxn) {
+			if (impl_->needsImplicitTransaction()) {
 				if (isReadOnly) {
 					implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
 				} else {
@@ -669,8 +676,9 @@ namespace zyx {
 	}
 
 	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
+		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
-		if (!impl_->db_.hasActiveTransaction()) {
+		if (impl_->needsImplicitTransaction()) {
 			implicitTxn.emplace(impl_->db_.beginTransaction());
 		}
 
@@ -688,8 +696,9 @@ namespace zyx {
 
 	void Database::createNode(const std::vector<std::string> &labels,
 							  const std::unordered_map<std::string, Value> &props) const {
+		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
-		if (!impl_->db_.hasActiveTransaction()) {
+		if (impl_->needsImplicitTransaction()) {
 			implicitTxn.emplace(impl_->db_.beginTransaction());
 		}
 
@@ -725,8 +734,9 @@ namespace zyx {
 		if (propsList.empty())
 			return;
 
+		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
-		if (!impl_->db_.hasActiveTransaction()) {
+		if (impl_->needsImplicitTransaction()) {
 			implicitTxn.emplace(impl_->db_.beginTransaction());
 		}
 
@@ -758,8 +768,9 @@ namespace zyx {
 
 	int64_t Database::createNodeRetId(const std::string &label,
 									  const std::unordered_map<std::string, Value> &props) const {
+		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
-		if (!impl_->db_.hasActiveTransaction()) {
+		if (impl_->needsImplicitTransaction()) {
 			implicitTxn.emplace(impl_->db_.beginTransaction());
 		}
 
@@ -788,8 +799,9 @@ namespace zyx {
 
 	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeType,
 								  const std::unordered_map<std::string, Value> &props) const {
+		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
-		if (!impl_->db_.hasActiveTransaction()) {
+		if (impl_->needsImplicitTransaction()) {
 			implicitTxn.emplace(impl_->db_.beginTransaction());
 		}
 
@@ -817,8 +829,9 @@ namespace zyx {
 	void Database::createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 							  const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
 							  const std::string &edgeType, const std::unordered_map<std::string, Value> &props) const {
+		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
-		if (!impl_->db_.hasActiveTransaction()) {
+		if (impl_->needsImplicitTransaction()) {
 			implicitTxn.emplace(impl_->db_.beginTransaction());
 		}
 
@@ -842,12 +855,10 @@ namespace zyx {
 
 	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) const {
 		try {
-			if (!impl_->db_.isOpen()) {
-				impl_->db_.open();
-			}
+			impl_->ensureOpen();
 
 			std::optional<graph::Transaction> implicitTxn;
-			if (!impl_->db_.hasActiveTransaction()) {
+			if (impl_->needsImplicitTransaction()) {
 				implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
 			}
 
@@ -878,12 +889,10 @@ namespace zyx {
 
 	void Database::bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const {
 		try {
-			if (!impl_->db_.isOpen()) {
-				impl_->db_.open();
-			}
+			impl_->ensureOpen();
 
 			std::optional<graph::Transaction> implicitTxn;
-			if (!impl_->db_.hasActiveTransaction()) {
+			if (impl_->needsImplicitTransaction()) {
 				implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
 			}
 

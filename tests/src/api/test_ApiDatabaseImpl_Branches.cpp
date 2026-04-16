@@ -96,6 +96,66 @@ TEST_F(CppApiTest, CreateNodeWithMultipleLabelsCoversImplicitAndExplicitTxnPaths
 	EXPECT_TRUE(anyNode.isSuccess());
 }
 
+// ============================================================================
+// Batch methods inside a Cypher-level BEGIN transaction
+// Covers: needsImplicitTransaction() returning false via cypherTxn_.has_value()
+// ============================================================================
+
+TEST_F(CppApiTest, BatchMethodsInsideCypherTransaction) {
+	// Start a Cypher-level transaction via execute("BEGIN")
+	auto beginRes = db->execute("BEGIN");
+	ASSERT_TRUE(beginRes.isSuccess());
+	EXPECT_TRUE(db->hasActiveTransaction());
+
+	// All batch write methods should participate in the Cypher transaction
+	// (no implicit transaction created — needsImplicitTransaction() == false)
+	EXPECT_NO_THROW(db->createNode("CypherTxnNode", {{"val", (int64_t) 1}}));
+	EXPECT_NO_THROW(db->createNode(std::vector<std::string>{"MultiA", "MultiB"}, {{"val", (int64_t) 2}}));
+	EXPECT_NO_THROW(db->createNodes("BatchNode", {{{"val", (int64_t) 3}}, {{"val", (int64_t) 4}}}));
+	int64_t nodeId = db->createNodeRetId("RetIdNode", {{"val", (int64_t) 5}});
+	EXPECT_GT(nodeId, 0);
+	int64_t nodeId2 = db->createNodeRetId("RetIdNode", {{"val", (int64_t) 6}});
+	EXPECT_NO_THROW(db->createEdgeById(nodeId, nodeId2, "LINK", {{"w", (int64_t) 10}}));
+
+	// Rollback — all batch changes should be undone
+	auto rollbackRes = db->execute("ROLLBACK");
+	ASSERT_TRUE(rollbackRes.isSuccess());
+	EXPECT_FALSE(db->hasActiveTransaction());
+
+	// Verify nothing was persisted
+	auto countRes = db->execute("MATCH (n) RETURN count(n)");
+	ASSERT_TRUE(countRes.hasNext());
+	countRes.next();
+	auto count = std::get<int64_t>(countRes.get(0));
+	EXPECT_EQ(count, 0);
+}
+
+// ============================================================================
+// Auto-open: batch methods on a not-yet-opened database (ensureOpen)
+// ============================================================================
+
+TEST_F(CppApiTest, BatchMethodsAutoOpenDatabase) {
+	// Create a fresh Database that has NOT been opened
+	auto tempDir = fs::temp_directory_path();
+	auto freshPath = (tempDir / ("auto_open_test_" + std::to_string(std::rand()))).string();
+	auto freshDb = std::make_unique<zyx::Database>(freshPath);
+	// Do NOT call freshDb->open()
+
+	// createNode should auto-open the database via ensureOpen()
+	EXPECT_NO_THROW(freshDb->createNode("AutoOpen", {{"k", (int64_t) 1}}));
+
+	// Verify the data was written
+	auto res = freshDb->execute("MATCH (n:AutoOpen) RETURN n.k");
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+	EXPECT_EQ(std::get<int64_t>(res.get("n.k")), 1);
+
+	freshDb->close();
+	std::error_code ec;
+	fs::remove_all(freshPath, ec);
+	fs::remove(freshPath + "-wal", ec);
+}
+
 TEST_F(CppApiTest, UtilityMethodsSaveThreadPoolAndTokenBoundaryQuery) {
 	EXPECT_NO_THROW(db->setThreadPoolSize(2));
 	EXPECT_NO_THROW(db->save());

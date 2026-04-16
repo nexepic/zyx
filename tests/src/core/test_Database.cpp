@@ -605,3 +605,55 @@ TEST_F(DatabaseTest, Close_AfterBeginTransaction_WALInitialized) {
 	EXPECT_NO_THROW(db->close());
 	EXPECT_FALSE(db->isOpen());
 }
+
+// ============================================================================
+// WAL deferred initialization: ensureWALForWrites skips when WAL already
+// exists from recovery
+// ============================================================================
+
+TEST_F(DatabaseTest, WALRecoveryThenWriteTransactionReusesExistingWAL) {
+	std::string walPath = testDbPath.string() + "-wal";
+
+	// Phase 1: Create a database with a WAL file left behind (simulate crash)
+	{
+		auto db1 = std::make_unique<Database>(testDbPath.string());
+		db1->open();
+		auto txn = db1->beginTransaction();
+		// Don't commit — destructor auto-rolls back, but WAL file remains
+	}
+	EXPECT_TRUE(fs::exists(walPath));
+
+	// Phase 2: Reopen — ensureWALAndTransactionManager detects WAL, opens it for recovery.
+	// Then beginTransaction calls ensureWALForWrites — should early-return since
+	// walManager_ was already created during recovery.
+	{
+		auto db2 = std::make_unique<Database>(testDbPath.string());
+		db2->open();
+
+		// First write transaction: WAL already exists from recovery path
+		auto txn = db2->beginTransaction();
+		EXPECT_TRUE(txn.isActive());
+		EXPECT_TRUE(fs::exists(walPath));
+		txn.commit();
+
+		db2->close();
+	}
+}
+
+TEST_F(DatabaseTest, ReadOnlyTransactionDoesNotCreateWALFile) {
+	std::string walPath = testDbPath.string() + "-wal";
+
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	EXPECT_FALSE(fs::exists(walPath));
+
+	// Multiple read-only transactions should not create a WAL file
+	for (int i = 0; i < 3; ++i) {
+		auto roTxn = db->beginReadOnlyTransaction();
+		EXPECT_TRUE(roTxn.isReadOnly());
+		roTxn.commit();
+	}
+
+	EXPECT_FALSE(fs::exists(walPath));
+	db->close();
+}

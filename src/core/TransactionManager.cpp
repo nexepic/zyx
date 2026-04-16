@@ -238,4 +238,8 @@ namespace graph {
 
 	bool TransactionManager::hasActiveTransaction() const { return activeWriteTxn_.load(std::memory_order_acquire); }
 
+	void TransactionManager::setWALManager(std::shared_ptr<storage::wal::WALManager> walManager) {
+		walManager_ = std::move(walManager);
+	}
+
 } // namespace graph

@@ -53,6 +53,7 @@ namespace graph {
 		void commitTransaction(Transaction &txn);
 		void rollbackTransaction(Transaction &txn);
 		[[nodiscard]] bool hasActiveTransaction() const;
+		void setWALManager(std::shared_ptr<storage::wal::WALManager> walManager);
 
 	private:
 		friend class Transaction;

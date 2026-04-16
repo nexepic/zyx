@@ -89,8 +89,10 @@ namespace graph {
 			open();
 		}
 
-		// Ensure WAL and transaction manager are ready
+		// Ensure transaction manager is ready (Phase 1: opens WAL only if recovery needed)
 		const_cast<Database *>(this)->ensureWALAndTransactionManager();
+		// Ensure WAL file exists for write durability (Phase 2: creates WAL if not yet open)
+		const_cast<Database *>(this)->ensureWALForWrites();
 
 		// Create transaction via TransactionManager
 		// TransactionManager::begin() acquires the write lock, writes WAL begin,
@@ -155,32 +157,50 @@ namespace graph {
 		std::call_once(walInitFlag_, [this]() {
 			ensureThreadPool();
 
-			// Initialize WAL manager
+			// Only open WAL if a WAL file already exists on disk (crash recovery).
+			// For clean databases with only read-only operations (e.g., WASM Playground),
+			// we skip WAL creation entirely — TransactionManager handles nullptr safely.
+			std::string walFilePath = dbPath + "-wal";
+			if (std::filesystem::exists(walFilePath)) {
+				walManager_ = std::make_shared<storage::wal::WALManager>();
+				walManager_->open(dbPath);
+
+				// WAL Recovery: replay committed transactions that weren't flushed to DB file.
+				if (walManager_->needsRecovery()) {
+					storage::wal::WALRecovery recovery(
+							*walManager_,
+							storage->getStorageWriter(),
+							storage->getIDAllocators(),
+							storage->getSegmentTracker(),
+							storage->getStorageIO(),
+							storage->getDataManager(),
+							storage->getFileHeaderManager());
+					recovery.recover();
+				}
+
+				storage->getDataManager()->setWALManager(walManager_.get());
+			}
+
+			// Always create TransactionManager (walManager_ may be nullptr for pure read-only paths)
+			transactionManager_ = std::make_unique<TransactionManager>(storage, walManager_);
+		});
+	}
+
+	void Database::ensureWALForWrites() {
+		std::call_once(walWriteInitFlag_, [this]() {
+			// If WAL was already created during recovery in ensureWALAndTransactionManager(), skip
+			if (walManager_) {
+				return;
+			}
+
+			// Create WAL file for the first write transaction
 			walManager_ = std::make_shared<storage::wal::WALManager>();
 			walManager_->open(dbPath);
 
-			// WAL Recovery: replay committed transactions that weren't flushed to DB file.
-			// The commit protocol writes WAL commit+fsync BEFORE storage_->save(). If
-			// save() completed, the WAL is redundant. If the process crashed between WAL
-			// commit and save completion, committed data exists only in the WAL. Replay
-			// deserializes those entities and writes them to the DB file via StorageWriter,
-			// then checkpoints (truncates) the WAL.
-			if (walManager_->needsRecovery()) {
-				storage::wal::WALRecovery recovery(
-						*walManager_,
-						storage->getStorageWriter(),
-						storage->getIDAllocators(),
-						storage->getSegmentTracker(),
-						storage->getStorageIO(),
-						storage->getDataManager(),
-						storage->getFileHeaderManager());
-				recovery.recover();
-			}
+			// Wire WAL into TransactionManager for future WAL record writes
+			transactionManager_->setWALManager(walManager_);
 
-			// Initialize transaction manager
-			transactionManager_ = std::make_unique<TransactionManager>(storage, walManager_);
-
-			// Set WAL manager reference in DataManager
+			// Wire WAL into DataManager for per-entity WAL recording during mutations
 			storage->getDataManager()->setWALManager(walManager_.get());
 		});
 	}

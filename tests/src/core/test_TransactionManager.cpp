@@ -131,6 +131,32 @@ TEST_F(TransactionManagerTest, WALFileCreatedOnOpen) {
 	txn.rollback();
 }
 
+TEST_F(TransactionManagerTest, WALNotCreatedForReadOnlyTransactions) {
+	std::string walPath = testDbPath.string() + "-wal";
+
+	// WAL file should not exist before any transaction
+	EXPECT_FALSE(fs::exists(walPath));
+
+	// Begin and commit a read-only transaction
+	{
+		auto roTxn = db->beginReadOnlyTransaction();
+		EXPECT_TRUE(roTxn.isActive());
+		EXPECT_TRUE(roTxn.isReadOnly());
+		roTxn.commit();
+	}
+
+	// WAL file should still not exist — read-only path skips WAL creation
+	EXPECT_FALSE(fs::exists(walPath));
+
+	// Now begin a write transaction — WAL should be created
+	{
+		auto wrTxn = db->beginTransaction();
+		EXPECT_TRUE(wrTxn.isActive());
+		EXPECT_TRUE(fs::exists(walPath));
+		wrTxn.rollback();
+	}
+}
+
 // ============================================================================
 // Coverage Tests: Commit/Rollback on non-active transactions
 // Transaction::commit/rollback throw when not active, but
