@@ -22,7 +22,10 @@
 #include <cstdint>
 #include <vector>
 #include "graph/core/Transaction.hpp"
+#include "graph/core/Types.hpp"
+#include "graph/storage/data/EntityChangeType.hpp"
 #include "graph/storage/wal/UndoLog.hpp"
+#include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
 
@@ -55,6 +58,18 @@ namespace graph::storage {
 
 		[[nodiscard]] wal::UndoLog &undoLog() { return undoLog_; }
 		[[nodiscard]] const wal::UndoLog &undoLog() const { return undoLog_; }
+
+		// --- Template transaction recording methods ---
+		// Encapsulate recordOp + undoLog.record + optional WAL write for each mutation type.
+
+		template<typename EntityType>
+		void recordAdd(const EntityType &entity);
+
+		template<typename EntityType>
+		void recordUpdate(const EntityType &newEntity, const EntityType &oldEntity);
+
+		template<typename EntityType>
+		void recordDelete(int64_t id, std::function<EntityType(int64_t)> getOld);
 
 	private:
 		bool transactionActive_ = false;

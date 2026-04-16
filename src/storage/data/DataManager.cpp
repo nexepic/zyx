@@ -143,37 +143,6 @@ namespace graph::storage {
 	// Observer registration is now inline in DataManager.hpp, delegating to observerManager_.
 	// All notification methods are now on EntityObserverManager.
 
-	template<typename T>
-	void DataManager::updateEntityImpl(const T &entity, std::function<T(int64_t)> getOldFunc,
-									   std::function<void(T)> internalUpdateFunc,
-									   std::function<void(const T &, const T &)> notifyFunc) {
-		// Check dirty info via persistence manager
-		auto dirtyInfo = persistenceManager_->getDirtyInfo<T>(entity.getId());
-
-		// If entity is marked as ADDED, this update is part of creation.
-		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
-			// Even if it's "ADDED", the content (Label/Props) might have changed since the initial addNode().
-			// We MUST notify observers (IndexManager) to update their in-memory structures.
-
-			// 1. Get the current state from memory (Old Label)
-			T oldEntity = getOldFunc(entity.getId());
-
-			// 2. Perform the update (New Label)
-			internalUpdateFunc(entity);
-
-			// 3. Notify (Old vs New)
-			notifyFunc(oldEntity, entity);
-			return;
-		}
-
-		// Standard update flow for existing entities
-		T oldEntity = getOldFunc(entity.getId());
-
-		internalUpdateFunc(entity);
-
-		notifyFunc(oldEntity, entity);
-	}
-
 	int64_t DataManager::getOrCreateTokenId(const std::string &name) const {
 		if (name.empty())
 			return 0;
@@ -211,26 +180,11 @@ namespace graph::storage {
 
 	void DataManager::addNode(Node &node) const {
 		guardReadOnly();
-		// Phase 1: Validate
 		for (const auto &v : observerManager_.getValidators()) {
 			v->validateNodeInsert(node, node.getProperties());
 		}
-
-		// Phase 2: Write
 		nodeManager_->add(node);
-
-		if (txnContext_.isActive()) {
-			txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
-							   static_cast<uint8_t>(EntityType::Node), node.getId()});
-			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
-			if (txnContext_.getWALManager()) {
-				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(node, Node::getTotalSize());
-				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Node),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), node.getId(),
-											   {walBuf.begin(), walBuf.end()});
-			}
-		}
-
+		txnContext_.recordAdd(node);
 		observerManager_.notifyNodeAdded(node);
 	}
 
@@ -250,12 +204,8 @@ namespace graph::storage {
 		nodeManager_->addBatch(nodes);
 		observerManager_.notifyNodesAdded(nodes);
 
-		if (txnContext_.isActive()) {
-			for (const auto &node: nodes) {
-				txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
-								   static_cast<uint8_t>(EntityType::Node), node.getId()});
-				txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
-			}
+		for (const auto &node: nodes) {
+			txnContext_.recordAdd(node);
 		}
 
 		for (auto &node: nodes) {
@@ -272,41 +222,15 @@ namespace graph::storage {
 
 	void DataManager::updateNode(const Node &node) {
 		guardReadOnly();
-		if (txnContext_.isActive()) {
-			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
-							   static_cast<uint8_t>(EntityType::Node), node.getId()});
-			Node oldNode = nodeManager_->get(node.getId());
-			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldNode, Node::getTotalSize());
-			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_MODIFIED, {buf.begin(), buf.end()}});
-			if (txnContext_.getWALManager()) {
-				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(node, Node::getTotalSize());
-				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Node),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_MODIFIED), node.getId(),
-											   {walBuf.begin(), walBuf.end()});
-			}
-		}
-
-		updateEntityImpl<Node>(
-				node, [this](int64_t id) { return nodeManager_->get(id); },
-				[this](const Node &n) { nodeManager_->update(n); },
-				[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
+		Node oldNode = nodeManager_->get(node.getId());
+		txnContext_.recordUpdate<Node>(node, oldNode);
+		nodeManager_->update(node);
+		observerManager_.notifyNodeUpdated(oldNode, node);
 	}
 
 	void DataManager::deleteNode(Node &node) const {
 		guardReadOnly();
-		if (txnContext_.isActive()) {
-			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
-							   static_cast<uint8_t>(EntityType::Node), node.getId()});
-			Node oldNode = nodeManager_->get(node.getId());
-			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldNode, Node::getTotalSize());
-			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Node), node.getId(), wal::UndoChangeType::UNDO_DELETED, {buf.begin(), buf.end()}});
-			if (txnContext_.getWALManager()) {
-				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Node),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_DELETED), node.getId(),
-											   {buf.begin(), buf.end()});
-			}
-		}
-
+		txnContext_.recordDelete<Node>(node.getId(), [this](int64_t id) { return nodeManager_->get(id); });
 		nodeManager_->remove(node);
 		observerManager_.notifyNodeDeleted(node);
 	}
@@ -323,65 +247,23 @@ namespace graph::storage {
 
 	void DataManager::addNodeProperties(int64_t nodeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
-		guardReadOnly();
-		// 1. Snapshot OLD state
-		Node oldNode = nodeManager_->get(nodeId);
-		// Manually fetch and bake the existing properties into the oldNode object.
-		// This ensures oldNode.getProperties() returns the state BEFORE the modification.
-		auto existingProps = nodeManager_->getProperties(nodeId);
-		oldNode.setProperties(existingProps);
-
-		// 1.5. Validate: build merged new props for constraint checking
-		auto mergedProps = existingProps;
-		for (const auto &[key, val] : properties) {
-			mergedProps[key] = val;
-		}
-		for (const auto &v : observerManager_.getValidators()) {
-			v->validateNodeUpdate(oldNode, existingProps, mergedProps);
-		}
-
-		// 2. Perform the modification (suppress intermediate notifications from updateEntity
-		//    inside PropertyManager, which would fire with cleared inline properties)
-		observerManager_.setSuppressNotifications(true);
-		nodeManager_->addProperties(nodeId, properties);
-		observerManager_.setSuppressNotifications(false);
-
-		// 3. Snapshot NEW state
-		Node newNode = nodeManager_->get(nodeId);
-		auto newProps = nodeManager_->getProperties(nodeId);
-		newNode.setProperties(newProps);
-
-		// 4. Notify with valid snapshots (full properties, not just inline)
-		observerManager_.notifyNodeUpdated(oldNode, newNode);
+		addEntityPropertiesImpl<Node>(
+			nodeId, properties, *nodeManager_,
+			[this](const Node &node, const auto &oldProps, const auto &newProps) {
+				for (const auto &v : observerManager_.getValidators())
+					v->validateNodeUpdate(node, oldProps, newProps);
+			},
+			[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
 	}
 
 	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) const {
-		guardReadOnly();
-		// 1. Snapshot OLD state
-		Node oldNode = nodeManager_->get(nodeId);
-		// Freeze old properties
-		auto existingProps = nodeManager_->getProperties(nodeId);
-		oldNode.setProperties(existingProps);
-
-		// 1.5. Validate: build props with key removed
-		auto removedProps = existingProps;
-		removedProps.erase(key);
-		for (const auto &v : observerManager_.getValidators()) {
-			v->validateNodeUpdate(oldNode, existingProps, removedProps);
-		}
-
-		// 2. Perform removal (suppress intermediate notifications)
-		observerManager_.setSuppressNotifications(true);
-		nodeManager_->removeProperty(nodeId, key);
-		observerManager_.setSuppressNotifications(false);
-
-		// 3. Snapshot NEW state
-		Node newNode = nodeManager_->get(nodeId);
-		auto newProps = nodeManager_->getProperties(nodeId);
-		newNode.setProperties(newProps);
-
-		// 4. Notify
-		observerManager_.notifyNodeUpdated(oldNode, newNode);
+		removeEntityPropertyImpl<Node>(
+			nodeId, key, *nodeManager_,
+			[this](const Node &node, const auto &oldProps, const auto &newProps) {
+				for (const auto &v : observerManager_.getValidators())
+					v->validateNodeUpdate(node, oldProps, newProps);
+			},
+			[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) const {
@@ -570,26 +452,11 @@ namespace graph::storage {
 
 	void DataManager::addEdge(Edge &edge) const {
 		guardReadOnly();
-		// Phase 1: Validate
 		for (const auto &v : observerManager_.getValidators()) {
 			v->validateEdgeInsert(edge, edge.getProperties());
 		}
-
-		// Phase 2: Write
 		edgeManager_->add(edge);
-
-		if (txnContext_.isActive()) {
-			txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
-							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
-			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
-			if (txnContext_.getWALManager()) {
-				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(edge, Edge::getTotalSize());
-				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Edge),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), edge.getId(),
-											   {walBuf.begin(), walBuf.end()});
-			}
-		}
-
+		txnContext_.recordAdd(edge);
 		observerManager_.notifyEdgeAdded(edge);
 	}
 
@@ -611,12 +478,8 @@ namespace graph::storage {
 		// 2. Indexing (needs IDs + Props)
 		observerManager_.notifyEdgesAdded(edges);
 
-		if (txnContext_.isActive()) {
-			for (const auto &edge: edges) {
-				txnContext_.recordOp({Transaction::TxnOperation::OP_ADD,
-								   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
-				txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_ADDED, {}});
-			}
+		for (const auto &edge: edges) {
+			txnContext_.recordAdd(edge);
 		}
 
 		// 3. Property Storage Handling
@@ -636,41 +499,15 @@ namespace graph::storage {
 
 	void DataManager::updateEdge(const Edge &edge) {
 		guardReadOnly();
-		if (txnContext_.isActive()) {
-			txnContext_.recordOp({Transaction::TxnOperation::OP_UPDATE,
-							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
-			Edge oldEdge = edgeManager_->get(edge.getId());
-			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldEdge, Edge::getTotalSize());
-			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_MODIFIED, {buf.begin(), buf.end()}});
-			if (txnContext_.getWALManager()) {
-				auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(edge, Edge::getTotalSize());
-				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Edge),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_MODIFIED), edge.getId(),
-											   {walBuf.begin(), walBuf.end()});
-			}
-		}
-
-		updateEntityImpl<Edge>(
-				edge, [this](int64_t id) { return edgeManager_->get(id); },
-				[this](const Edge &e) { edgeManager_->update(e); },
-				[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
+		Edge oldEdge = edgeManager_->get(edge.getId());
+		txnContext_.recordUpdate<Edge>(edge, oldEdge);
+		edgeManager_->update(edge);
+		observerManager_.notifyEdgeUpdated(oldEdge, edge);
 	}
 
 	void DataManager::deleteEdge(Edge &edge) const {
 		guardReadOnly();
-		if (txnContext_.isActive()) {
-			txnContext_.recordOp({Transaction::TxnOperation::OP_DELETE,
-							   static_cast<uint8_t>(EntityType::Edge), edge.getId()});
-			Edge oldEdge = edgeManager_->get(edge.getId());
-			auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldEdge, Edge::getTotalSize());
-			txnContext_.undoLog().record({static_cast<uint8_t>(EntityType::Edge), edge.getId(), wal::UndoChangeType::UNDO_DELETED, {buf.begin(), buf.end()}});
-			if (txnContext_.getWALManager()) {
-				txnContext_.getWALManager()->writeEntityChange(txnContext_.activeTxnId(), static_cast<uint8_t>(EntityType::Edge),
-											   static_cast<uint8_t>(EntityChangeType::CHANGE_DELETED), edge.getId(),
-											   {buf.begin(), buf.end()});
-			}
-		}
-
+		txnContext_.recordDelete<Edge>(edge.getId(), [this](int64_t id) { return edgeManager_->get(id); });
 		edgeManager_->remove(edge);
 		observerManager_.notifyEdgeDeleted(edge);
 	}
@@ -687,61 +524,23 @@ namespace graph::storage {
 
 	void DataManager::addEdgeProperties(int64_t edgeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
-		guardReadOnly();
-		// 1. Snapshot OLD state
-		Edge oldEdge = edgeManager_->get(edgeId);
-		// Freeze old properties
-		auto existingProps = edgeManager_->getProperties(edgeId);
-		oldEdge.setProperties(existingProps);
-
-		// 1.5. Validate: build merged new props for constraint checking
-		auto mergedProps = existingProps;
-		for (const auto &[key, val] : properties) {
-			mergedProps[key] = val;
-		}
-		for (const auto &v : observerManager_.getValidators()) {
-			v->validateEdgeUpdate(oldEdge, existingProps, mergedProps);
-		}
-
-		// 2. Perform modification (suppress intermediate notifications)
-		observerManager_.setSuppressNotifications(true);
-		edgeManager_->addProperties(edgeId, properties);
-		observerManager_.setSuppressNotifications(false);
-
-		// 3. Snapshot NEW state
-		Edge newEdge = edgeManager_->get(edgeId);
-		auto newProps = edgeManager_->getProperties(edgeId);
-		newEdge.setProperties(newProps);
-
-		observerManager_.notifyEdgeUpdated(oldEdge, newEdge);
+		addEntityPropertiesImpl<Edge>(
+			edgeId, properties, *edgeManager_,
+			[this](const Edge &edge, const auto &oldProps, const auto &newProps) {
+				for (const auto &v : observerManager_.getValidators())
+					v->validateEdgeUpdate(edge, oldProps, newProps);
+			},
+			[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
 	}
 
 	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) const {
-		guardReadOnly();
-		// 1. Snapshot OLD state
-		Edge oldEdge = edgeManager_->get(edgeId);
-		// Freeze old properties
-		auto existingProps = edgeManager_->getProperties(edgeId);
-		oldEdge.setProperties(existingProps);
-
-		// 1.5. Validate: build props with key removed
-		auto removedProps = existingProps;
-		removedProps.erase(key);
-		for (const auto &v : observerManager_.getValidators()) {
-			v->validateEdgeUpdate(oldEdge, existingProps, removedProps);
-		}
-
-		// 2. Perform removal (suppress intermediate notifications)
-		observerManager_.setSuppressNotifications(true);
-		edgeManager_->removeProperty(edgeId, key);
-		observerManager_.setSuppressNotifications(false);
-
-		// 3. Snapshot NEW state
-		Edge newEdge = edgeManager_->get(edgeId);
-		auto newProps = edgeManager_->getProperties(edgeId);
-		newEdge.setProperties(newProps);
-
-		observerManager_.notifyEdgeUpdated(oldEdge, newEdge);
+		removeEntityPropertyImpl<Edge>(
+			edgeId, key, *edgeManager_,
+			[this](const Edge &edge, const auto &oldProps, const auto &newProps) {
+				for (const auto &v : observerManager_.getValidators())
+					v->validateEdgeUpdate(edge, oldProps, newProps);
+			},
+			[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) const {
@@ -756,6 +555,63 @@ namespace graph::storage {
 		} else { // "both" is the default
 			return relationshipTraversal_->getAllConnectedEdges(nodeId);
 		}
+	}
+
+	// --- Property Operation Templates ---
+
+	template<typename EntityType, typename ManagerType>
+	void DataManager::addEntityPropertiesImpl(
+		int64_t entityId,
+		const std::unordered_map<std::string, PropertyValue> &properties,
+		ManagerType &manager,
+		std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+						   const std::unordered_map<std::string, PropertyValue> &)> validate,
+		std::function<void(const EntityType &, const EntityType &)> notify) const {
+		guardReadOnly();
+		EntityType oldEntity = manager.get(entityId);
+		auto existingProps = manager.getProperties(entityId);
+		oldEntity.setProperties(existingProps);
+
+		auto mergedProps = existingProps;
+		for (const auto &[key, val] : properties) {
+			mergedProps[key] = val;
+		}
+		validate(oldEntity, existingProps, mergedProps);
+
+		observerManager_.setSuppressNotifications(true);
+		manager.addProperties(entityId, properties);
+		observerManager_.setSuppressNotifications(false);
+
+		EntityType newEntity = manager.get(entityId);
+		auto newProps = manager.getProperties(entityId);
+		newEntity.setProperties(newProps);
+		notify(oldEntity, newEntity);
+	}
+
+	template<typename EntityType, typename ManagerType>
+	void DataManager::removeEntityPropertyImpl(
+		int64_t entityId, const std::string &key,
+		ManagerType &manager,
+		std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+						   const std::unordered_map<std::string, PropertyValue> &)> validate,
+		std::function<void(const EntityType &, const EntityType &)> notify) const {
+		guardReadOnly();
+		EntityType oldEntity = manager.get(entityId);
+		auto existingProps = manager.getProperties(entityId);
+		oldEntity.setProperties(existingProps);
+
+		auto removedProps = existingProps;
+		removedProps.erase(key);
+		validate(oldEntity, existingProps, removedProps);
+
+		observerManager_.setSuppressNotifications(true);
+		manager.removeProperty(entityId, key);
+		observerManager_.setSuppressNotifications(false);
+
+		EntityType newEntity = manager.get(entityId);
+		auto newProps = manager.getProperties(entityId);
+		newEntity.setProperties(newProps);
+		notify(oldEntity, newEntity);
 	}
 
 	// --- Property Entity Operations ---
@@ -1404,126 +1260,104 @@ namespace graph::storage {
 	// --- Loading Entities from Disk ---
 
 	Node DataManager::loadNodeFromDisk(const int64_t id) const {
-		auto nodeOpt = findAndReadEntity<Node>(id);
-		if (nodeOpt.has_value())
-			return *nodeOpt;
-		return make_inactive<Node>();
+		return findAndReadEntity<Node>(id).value_or(make_inactive<Node>());
 	}
-
 	Edge DataManager::loadEdgeFromDisk(const int64_t id) const {
-		auto edgeOpt = findAndReadEntity<Edge>(id);
-		if (edgeOpt.has_value())
-			return *edgeOpt;
-		return make_inactive<Edge>();
+		return findAndReadEntity<Edge>(id).value_or(make_inactive<Edge>());
 	}
-
 	Property DataManager::loadPropertyFromDisk(const int64_t id) const {
-		auto propertyOpt = findAndReadEntity<Property>(id);
-		if (propertyOpt.has_value())
-			return *propertyOpt;
-		return make_inactive<Property>();
+		return findAndReadEntity<Property>(id).value_or(make_inactive<Property>());
 	}
-
 	Blob DataManager::loadBlobFromDisk(const int64_t id) const {
-		auto blobOpt = findAndReadEntity<Blob>(id);
-		if (blobOpt.has_value())
-			return *blobOpt;
-		return make_inactive<Blob>();
+		return findAndReadEntity<Blob>(id).value_or(make_inactive<Blob>());
 	}
-
 	Index DataManager::loadIndexFromDisk(const int64_t id) const {
-		auto indexOpt = findAndReadEntity<Index>(id);
-		if (indexOpt.has_value())
-			return *indexOpt;
-		return make_inactive<Index>();
+		return findAndReadEntity<Index>(id).value_or(make_inactive<Index>());
+	}
+	State DataManager::loadStateFromDisk(const int64_t id) const {
+		return findAndReadEntity<State>(id).value_or(make_inactive<State>());
 	}
 
-	State DataManager::loadStateFromDisk(const int64_t id) const {
-		auto stateOpt = findAndReadEntity<State>(id);
-		if (stateOpt.has_value())
-			return *stateOpt;
-		return make_inactive<State>();
+	// --- Rollback Template Helpers ---
+
+	template<typename EntityType, typename ManagerType>
+	void DataManager::rollbackAddedEntry(const wal::UndoEntry &entry, ManagerType &manager,
+										  std::function<void(const EntityType &)> notifyDeleted) const {
+		try {
+			EntityType entity = manager.get(entry.entityId);
+			notifyDeleted(entity);
+		} catch (...) {}
+	}
+
+	template<typename EntityType, typename ManagerType>
+	void DataManager::rollbackModifiedEntry(const wal::UndoEntry &entry, ManagerType &manager,
+											 std::function<void(const EntityType &, const EntityType &)> notifyUpdated) const {
+		if (entry.beforeImage.empty()) return;
+		try {
+			std::string imgStr(entry.beforeImage.begin(), entry.beforeImage.end());
+			std::istringstream iss(imgStr, std::ios::binary);
+			EntityType oldEntity = utils::FixedSizeSerializer::deserializeWithFixedSize<EntityType>(iss, EntityType::getTotalSize());
+			EntityType currentEntity = manager.get(entry.entityId);
+			notifyUpdated(currentEntity, oldEntity);
+		} catch (...) {}
+	}
+
+	template<typename EntityType>
+	void DataManager::rollbackDeletedEntry(const wal::UndoEntry &entry,
+											std::function<void(const EntityType &)> notifyAdded) const {
+		if (entry.beforeImage.empty()) return;
+		try {
+			std::string imgStr(entry.beforeImage.begin(), entry.beforeImage.end());
+			std::istringstream iss(imgStr, std::ios::binary);
+			EntityType oldEntity = utils::FixedSizeSerializer::deserializeWithFixedSize<EntityType>(iss, EntityType::getTotalSize());
+			notifyAdded(oldEntity);
+		} catch (...) {}
 	}
 
 	// --- Transaction Rollback ---
 
 	void DataManager::rollbackActiveTransaction() {
-		// Suppress auto-flush during rollback to prevent partial state being written to disk
 		persistenceManager_->setTransactionActive(true);
 
-		// Replay undo log in reverse order for observer notifications (index rollback)
 		const auto &entries = txnContext_.undoLog().entries();
 		for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
 			auto entityType = static_cast<EntityType>(it->entityType);
+			bool isNode = (entityType == EntityType::Node);
+			bool isEdge = (entityType == EntityType::Edge);
 
 			switch (it->changeType) {
-				case wal::UndoChangeType::UNDO_ADDED: {
-					// Entity was added in this txn — notify observers to revert indexes
-					if (entityType == EntityType::Node) {
-						try {
-							Node node = nodeManager_->get(it->entityId);
-							observerManager_.notifyNodeDeleted(node);
-						} catch (...) {}
-					} else if (entityType == EntityType::Edge) {
-						try {
-							Edge edge = edgeManager_->get(it->entityId);
-							observerManager_.notifyEdgeDeleted(edge);
-						} catch (...) {}
+				case wal::UndoChangeType::UNDO_ADDED:
+					if (isNode) {
+						rollbackAddedEntry<Node>(*it, *nodeManager_,
+							[this](const Node &n) { observerManager_.notifyNodeDeleted(n); });
+					} else if (isEdge) {
+						rollbackAddedEntry<Edge>(*it, *edgeManager_,
+							[this](const Edge &e) { observerManager_.notifyEdgeDeleted(e); });
 					}
 					break;
-				}
-				case wal::UndoChangeType::UNDO_MODIFIED: {
-					// Entity was modified — notify observers with before-image
-					if (!it->beforeImage.empty()) {
-						std::string imgStr(it->beforeImage.begin(), it->beforeImage.end());
-						std::istringstream iss(imgStr, std::ios::binary);
-						if (entityType == EntityType::Node) {
-							try {
-								Node oldNode = utils::FixedSizeSerializer::deserializeWithFixedSize<Node>(iss, Node::getTotalSize());
-								Node currentNode = nodeManager_->get(it->entityId);
-								observerManager_.notifyNodeUpdated(currentNode, oldNode);
-							} catch (...) {}
-						} else if (entityType == EntityType::Edge) {
-							try {
-								Edge oldEdge = utils::FixedSizeSerializer::deserializeWithFixedSize<Edge>(iss, Edge::getTotalSize());
-								Edge currentEdge = edgeManager_->get(it->entityId);
-								observerManager_.notifyEdgeUpdated(currentEdge, oldEdge);
-							} catch (...) {}
-						}
+				case wal::UndoChangeType::UNDO_MODIFIED:
+					if (isNode) {
+						rollbackModifiedEntry<Node>(*it, *nodeManager_,
+							[this](const Node &c, const Node &o) { observerManager_.notifyNodeUpdated(c, o); });
+					} else if (isEdge) {
+						rollbackModifiedEntry<Edge>(*it, *edgeManager_,
+							[this](const Edge &c, const Edge &o) { observerManager_.notifyEdgeUpdated(c, o); });
 					}
 					break;
-				}
-				case wal::UndoChangeType::UNDO_DELETED: {
-					// Entity was deleted — notify observers to re-add to indexes
-					if (!it->beforeImage.empty()) {
-						std::string imgStr(it->beforeImage.begin(), it->beforeImage.end());
-						std::istringstream iss(imgStr, std::ios::binary);
-						if (entityType == EntityType::Node) {
-							try {
-								Node oldNode = utils::FixedSizeSerializer::deserializeWithFixedSize<Node>(iss, Node::getTotalSize());
-								observerManager_.notifyNodeAdded(oldNode);
-							} catch (...) {}
-						} else if (entityType == EntityType::Edge) {
-							try {
-								Edge oldEdge = utils::FixedSizeSerializer::deserializeWithFixedSize<Edge>(iss, Edge::getTotalSize());
-								observerManager_.notifyEdgeAdded(oldEdge);
-							} catch (...) {}
-						}
+				case wal::UndoChangeType::UNDO_DELETED:
+					if (isNode) {
+						rollbackDeletedEntry<Node>(*it,
+							[this](const Node &n) { observerManager_.notifyNodeAdded(n); });
+					} else if (isEdge) {
+						rollbackDeletedEntry<Edge>(*it,
+							[this](const Edge &e) { observerManager_.notifyEdgeAdded(e); });
 					}
 					break;
-				}
 			}
 		}
 
-		// Clear all dirty registries (revert all in-memory entity state changes)
-		// Entities that were only added in this txn disappear from dirty state.
-		// Entities that were modified/deleted revert to their on-disk state.
 		persistenceManager_->clearAll();
-
-		// Re-enable auto-flush now that rollback is complete
 		persistenceManager_->setTransactionActive(false);
-
-		// Clear all caches (force reload from disk on next access)
 		clearCache();
 	}
 

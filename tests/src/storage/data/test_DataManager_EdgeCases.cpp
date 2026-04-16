@@ -5,25 +5,26 @@
  *        with properties, checkAndTriggerAutoFlush, and getDirtyEntityInfos.
  **/
 
+#include "DataManagerSharedTestFixture.hpp"
 #include "DataManagerTestFixture.hpp"
 
 // ============================================================================
 // Label resolution edge cases
 // ============================================================================
 
-TEST_F(DataManagerTest, GetOrCreateLabelId_EmptyLabel) {
+TEST_F(DataManagerSharedTest, GetOrCreateLabelId_EmptyLabel) {
 	// Line 189: empty label returns 0
 	int64_t id = dataManager->getOrCreateTokenId("");
 	EXPECT_EQ(id, 0);
 }
 
-TEST_F(DataManagerTest, ResolveLabel_ZeroId) {
+TEST_F(DataManagerSharedTest, ResolveLabel_ZeroId) {
 	// Line 198: labelId == 0 returns ""
 	std::string label = dataManager->resolveTokenName(0);
 	EXPECT_EQ(label, "");
 }
 
-TEST_F(DataManagerTest, ResolveLabel_NonExistentId) {
+TEST_F(DataManagerSharedTest, ResolveLabel_NonExistentId) {
 	// resolveTokenName for an ID that doesn't exist
 	std::string label = dataManager->resolveTokenName(999999);
 	EXPECT_TRUE(label.empty());
@@ -33,7 +34,7 @@ TEST_F(DataManagerTest, ResolveLabel_NonExistentId) {
 // findEdgesByNode — direction branches (lines 700-708)
 // ============================================================================
 
-TEST_F(DataManagerTest, FindEdgesByNode_OutDirection) {
+TEST_F(DataManagerSharedTest, FindEdgesByNode_OutDirection) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -47,7 +48,7 @@ TEST_F(DataManagerTest, FindEdgesByNode_OutDirection) {
 	EXPECT_EQ(outEdges[0].getSourceNodeId(), n1.getId());
 }
 
-TEST_F(DataManagerTest, FindEdgesByNode_InDirection) {
+TEST_F(DataManagerSharedTest, FindEdgesByNode_InDirection) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -61,7 +62,7 @@ TEST_F(DataManagerTest, FindEdgesByNode_InDirection) {
 	EXPECT_EQ(inEdges.size(), 1UL);
 }
 
-TEST_F(DataManagerTest, FindEdgesByNode_BothDirection) {
+TEST_F(DataManagerSharedTest, FindEdgesByNode_BothDirection) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -75,7 +76,7 @@ TEST_F(DataManagerTest, FindEdgesByNode_BothDirection) {
 	EXPECT_GE(bothEdges.size(), 1UL);
 }
 
-TEST_F(DataManagerTest, FindEdgesByNode_DefaultDirection) {
+TEST_F(DataManagerSharedTest, FindEdgesByNode_DefaultDirection) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -93,7 +94,7 @@ TEST_F(DataManagerTest, FindEdgesByNode_DefaultDirection) {
 // rollbackActiveTransaction (lines 1399-1439)
 // ============================================================================
 
-TEST_F(DataManagerTest, Rollback_UndoNodeAdd) {
+TEST_F(DataManagerSharedTest, Rollback_UndoNodeAdd) {
 	dataManager->setActiveTransaction(100);
 
 	auto node = createTestNode(dataManager, "RollbackNode");
@@ -108,7 +109,7 @@ TEST_F(DataManagerTest, Rollback_UndoNodeAdd) {
 	EXPECT_EQ(observer->deletedNodes.size(), 1UL);
 }
 
-TEST_F(DataManagerTest, Rollback_UndoEdgeAdd) {
+TEST_F(DataManagerSharedTest, Rollback_UndoEdgeAdd) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -127,7 +128,7 @@ TEST_F(DataManagerTest, Rollback_UndoEdgeAdd) {
 	EXPECT_EQ(observer->deletedEdges.size(), 1UL);
 }
 
-TEST_F(DataManagerTest, Rollback_UndoNodeDelete) {
+TEST_F(DataManagerSharedTest, Rollback_UndoNodeDelete) {
 	auto node = createTestNode(dataManager, "Keep");
 	dataManager->addNode(node);
 	simulateSave();
@@ -144,7 +145,7 @@ TEST_F(DataManagerTest, Rollback_UndoNodeDelete) {
 	SUCCEED();
 }
 
-TEST_F(DataManagerTest, Rollback_UndoNodeUpdate) {
+TEST_F(DataManagerSharedTest, Rollback_UndoNodeUpdate) {
 	auto node = createTestNode(dataManager, "Original");
 	dataManager->addNode(node);
 	simulateSave();
@@ -162,7 +163,7 @@ TEST_F(DataManagerTest, Rollback_UndoNodeUpdate) {
 	SUCCEED();
 }
 
-TEST_F(DataManagerTest, Rollback_MixedOps) {
+TEST_F(DataManagerSharedTest, Rollback_MixedOps) {
 	// Add two nodes, then rollback
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
@@ -204,7 +205,7 @@ TEST_F(DataManagerTest, MarkEntityDeleted_AddedEntity) {
 	EXPECT_FALSE(retrieved.isActive());
 }
 
-TEST_F(DataManagerTest, MarkEntityDeleted_ExistingEntity) {
+TEST_F(DataManagerSharedTest, MarkEntityDeleted_ExistingEntity) {
 	// When an entity is persisted, deleting marks CHANGE_DELETED
 	auto node = createTestNode(dataManager, "Persistent");
 	dataManager->addNode(node);
@@ -220,7 +221,7 @@ TEST_F(DataManagerTest, MarkEntityDeleted_ExistingEntity) {
 // checkAndTriggerAutoFlush — transaction suppression (line 1053-1054)
 // ============================================================================
 
-TEST_F(DataManagerTest, CheckAutoFlush_SuppressedDuringTransaction) {
+TEST_F(DataManagerSharedTest, CheckAutoFlush_SuppressedDuringTransaction) {
 	dataManager->setActiveTransaction(200);
 
 	// During active transaction, auto-flush should be suppressed
@@ -229,7 +230,7 @@ TEST_F(DataManagerTest, CheckAutoFlush_SuppressedDuringTransaction) {
 	dataManager->clearActiveTransaction();
 }
 
-TEST_F(DataManagerTest, CheckAutoFlush_TriggeredOutsideTransaction) {
+TEST_F(DataManagerSharedTest, CheckAutoFlush_TriggeredOutsideTransaction) {
 	// Outside transaction, auto-flush check should proceed normally
 	EXPECT_NO_THROW(dataManager->checkAndTriggerAutoFlush());
 }
@@ -238,13 +239,13 @@ TEST_F(DataManagerTest, CheckAutoFlush_TriggeredOutsideTransaction) {
 // addNodes batch with properties (lines 235-267)
 // ============================================================================
 
-TEST_F(DataManagerTest, AddNodes_BatchEmpty) {
+TEST_F(DataManagerSharedTest, AddNodes_BatchEmpty) {
 	std::vector<Node> empty;
 	dataManager->addNodes(empty);
 	EXPECT_EQ(observer->addedNodes.size(), 0UL);
 }
 
-TEST_F(DataManagerTest, AddNodes_BatchWithProperties) {
+TEST_F(DataManagerSharedTest, AddNodes_BatchWithProperties) {
 	std::vector<Node> nodes;
 	for (int i = 0; i < 3; ++i) {
 		Node n;
@@ -263,7 +264,7 @@ TEST_F(DataManagerTest, AddNodes_BatchWithProperties) {
 	}
 }
 
-TEST_F(DataManagerTest, AddNodes_BatchNoProperties) {
+TEST_F(DataManagerSharedTest, AddNodes_BatchNoProperties) {
 	std::vector<Node> nodes;
 	for (int i = 0; i < 3; ++i) {
 		Node n;
@@ -279,7 +280,7 @@ TEST_F(DataManagerTest, AddNodes_BatchNoProperties) {
 	}
 }
 
-TEST_F(DataManagerTest, AddNodes_BatchWithTransaction) {
+TEST_F(DataManagerSharedTest, AddNodes_BatchWithTransaction) {
 	dataManager->setActiveTransaction(300);
 
 	std::vector<Node> nodes;
@@ -302,14 +303,14 @@ TEST_F(DataManagerTest, AddNodes_BatchWithTransaction) {
 // addEdges batch with properties (lines 568-605)
 // ============================================================================
 
-TEST_F(DataManagerTest, AddEdges_BatchEmpty) {
+TEST_F(DataManagerSharedTest, AddEdges_BatchEmpty) {
 	std::vector<Edge> empty;
 	dataManager->addEdges(empty);
 	// No crash expected
 	SUCCEED();
 }
 
-TEST_F(DataManagerTest, AddEdges_BatchWithProperties) {
+TEST_F(DataManagerSharedTest, AddEdges_BatchWithProperties) {
 	auto n1 = createTestNode(dataManager, "S");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "T");
@@ -335,7 +336,7 @@ TEST_F(DataManagerTest, AddEdges_BatchWithProperties) {
 	}
 }
 
-TEST_F(DataManagerTest, AddEdges_BatchNoProperties) {
+TEST_F(DataManagerSharedTest, AddEdges_BatchNoProperties) {
 	auto n1 = createTestNode(dataManager, "S");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "T");
@@ -357,7 +358,7 @@ TEST_F(DataManagerTest, AddEdges_BatchNoProperties) {
 	}
 }
 
-TEST_F(DataManagerTest, AddEdges_BatchWithTransaction) {
+TEST_F(DataManagerSharedTest, AddEdges_BatchWithTransaction) {
 	auto n1 = createTestNode(dataManager, "S");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "T");
@@ -387,7 +388,7 @@ TEST_F(DataManagerTest, AddEdges_BatchWithTransaction) {
 // preadBytes (line 88-92)
 // ============================================================================
 
-TEST_F(DataManagerTest, PreadBytes_ValidRead) {
+TEST_F(DataManagerSharedTest, PreadBytes_ValidRead) {
 	// preadBytes on a valid fd should work
 	char buf[16];
 	ssize_t n = dataManager->preadBytes(buf, sizeof(buf), 0);
@@ -398,7 +399,7 @@ TEST_F(DataManagerTest, PreadBytes_ValidRead) {
 // Node/Edge property operations with observer notifications
 // ============================================================================
 
-TEST_F(DataManagerTest, AddNodeProperties_TriggersUpdate) {
+TEST_F(DataManagerSharedTest, AddNodeProperties_TriggersUpdate) {
 	auto node = createTestNode(dataManager, "PropNode");
 	dataManager->addNode(node);
 	simulateSave();
@@ -409,7 +410,7 @@ TEST_F(DataManagerTest, AddNodeProperties_TriggersUpdate) {
 	EXPECT_EQ(observer->updatedNodes.size(), 1UL);
 }
 
-TEST_F(DataManagerTest, RemoveNodeProperty_TriggersUpdate) {
+TEST_F(DataManagerSharedTest, RemoveNodeProperty_TriggersUpdate) {
 	auto node = createTestNode(dataManager, "RemPropNode");
 	node.addProperty("name", PropertyValue(std::string("Alice")));
 	dataManager->addNode(node);
@@ -424,7 +425,7 @@ TEST_F(DataManagerTest, RemoveNodeProperty_TriggersUpdate) {
 	EXPECT_EQ(observer->updatedNodes.size(), 1UL);
 }
 
-TEST_F(DataManagerTest, AddEdgeProperties_TriggersUpdate) {
+TEST_F(DataManagerSharedTest, AddEdgeProperties_TriggersUpdate) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -439,7 +440,7 @@ TEST_F(DataManagerTest, AddEdgeProperties_TriggersUpdate) {
 	EXPECT_EQ(observer->updatedEdges.size(), 1UL);
 }
 
-TEST_F(DataManagerTest, RemoveEdgeProperty_TriggersUpdate) {
+TEST_F(DataManagerSharedTest, RemoveEdgeProperty_TriggersUpdate) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -460,14 +461,14 @@ TEST_F(DataManagerTest, RemoveEdgeProperty_TriggersUpdate) {
 // hasUnsavedChanges / prepareFlushSnapshot / commitFlushSnapshot
 // ============================================================================
 
-TEST_F(DataManagerTest, HasUnsavedChanges_AfterAdd) {
+TEST_F(DataManagerSharedTest, HasUnsavedChanges_AfterAdd) {
 	auto node = createTestNode(dataManager, "Dirty");
 	dataManager->addNode(node);
 
 	EXPECT_TRUE(dataManager->hasUnsavedChanges());
 }
 
-TEST_F(DataManagerTest, HasUnsavedChanges_AfterFlush) {
+TEST_F(DataManagerSharedTest, HasUnsavedChanges_AfterFlush) {
 	auto node = createTestNode(dataManager, "Clean");
 	dataManager->addNode(node);
 	simulateSave();
@@ -479,7 +480,7 @@ TEST_F(DataManagerTest, HasUnsavedChanges_AfterFlush) {
 // State operations
 // ============================================================================
 
-TEST_F(DataManagerTest, StateOperations_CRUD) {
+TEST_F(DataManagerSharedTest, StateOperations_CRUD) {
 	// Add state
 	auto state = createTestState("test_key");
 	dataManager->addStateEntity(state);
@@ -503,7 +504,7 @@ TEST_F(DataManagerTest, StateOperations_CRUD) {
 	dataManager->deleteState(state);
 }
 
-TEST_F(DataManagerTest, AddStateProperties) {
+TEST_F(DataManagerSharedTest, AddStateProperties) {
 	auto state = createTestState("prop_state");
 	dataManager->addStateEntity(state);
 
@@ -514,7 +515,7 @@ TEST_F(DataManagerTest, AddStateProperties) {
 	EXPECT_FALSE(props.empty());
 }
 
-TEST_F(DataManagerTest, RemoveState_ByKey) {
+TEST_F(DataManagerSharedTest, RemoveState_ByKey) {
 	auto state = createTestState("remove_me");
 	dataManager->addStateEntity(state);
 
@@ -529,7 +530,7 @@ TEST_F(DataManagerTest, RemoveState_ByKey) {
 // updateNode / updateEdge while in transaction
 // ============================================================================
 
-TEST_F(DataManagerTest, UpdateNode_InTransaction) {
+TEST_F(DataManagerSharedTest, UpdateNode_InTransaction) {
 	auto node = createTestNode(dataManager, "Original");
 	dataManager->addNode(node);
 	simulateSave();
@@ -545,7 +546,7 @@ TEST_F(DataManagerTest, UpdateNode_InTransaction) {
 	dataManager->clearActiveTransaction();
 }
 
-TEST_F(DataManagerTest, UpdateEdge_InTransaction) {
+TEST_F(DataManagerSharedTest, UpdateEdge_InTransaction) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -566,7 +567,7 @@ TEST_F(DataManagerTest, UpdateEdge_InTransaction) {
 	dataManager->clearActiveTransaction();
 }
 
-TEST_F(DataManagerTest, DeleteNode_InTransaction) {
+TEST_F(DataManagerSharedTest, DeleteNode_InTransaction) {
 	auto node = createTestNode(dataManager, "ToDelete");
 	dataManager->addNode(node);
 	simulateSave();
@@ -579,7 +580,7 @@ TEST_F(DataManagerTest, DeleteNode_InTransaction) {
 	dataManager->clearActiveTransaction();
 }
 
-TEST_F(DataManagerTest, DeleteEdge_InTransaction) {
+TEST_F(DataManagerSharedTest, DeleteEdge_InTransaction) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -600,7 +601,7 @@ TEST_F(DataManagerTest, DeleteEdge_InTransaction) {
 // Batch retrieval
 // ============================================================================
 
-TEST_F(DataManagerTest, GetNodeBatch) {
+TEST_F(DataManagerSharedTest, GetNodeBatch) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -610,7 +611,7 @@ TEST_F(DataManagerTest, GetNodeBatch) {
 	EXPECT_EQ(batch.size(), 2UL);
 }
 
-TEST_F(DataManagerTest, GetEdgeBatch) {
+TEST_F(DataManagerSharedTest, GetEdgeBatch) {
 	auto n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "B");
@@ -625,7 +626,7 @@ TEST_F(DataManagerTest, GetEdgeBatch) {
 	EXPECT_EQ(batch.size(), 2UL);
 }
 
-TEST_F(DataManagerTest, GetNodesInRange) {
+TEST_F(DataManagerSharedTest, GetNodesInRange) {
 	for (int i = 0; i < 5; ++i) {
 		auto n = createTestNode(dataManager, "Range");
 		dataManager->addNode(n);
@@ -635,7 +636,7 @@ TEST_F(DataManagerTest, GetNodesInRange) {
 	EXPECT_GE(nodes.size(), 5UL);
 }
 
-TEST_F(DataManagerTest, GetEdgesInRange) {
+TEST_F(DataManagerSharedTest, GetEdgesInRange) {
 	auto n1 = createTestNode(dataManager, "S");
 	dataManager->addNode(n1);
 	auto n2 = createTestNode(dataManager, "T");
@@ -654,7 +655,7 @@ TEST_F(DataManagerTest, GetEdgesInRange) {
 // Blob and Index entity operations
 // ============================================================================
 
-TEST_F(DataManagerTest, BlobOperations_CRUD) {
+TEST_F(DataManagerSharedTest, BlobOperations_CRUD) {
 	auto blob = createTestBlob("hello world");
 	dataManager->addBlobEntity(blob);
 	EXPECT_NE(blob.getId(), 0);
@@ -668,7 +669,7 @@ TEST_F(DataManagerTest, BlobOperations_CRUD) {
 	dataManager->deleteBlob(blob);
 }
 
-TEST_F(DataManagerTest, IndexOperations_CRUD) {
+TEST_F(DataManagerSharedTest, IndexOperations_CRUD) {
 	auto index = createTestIndex(Index::NodeType::INTERNAL, 0);
 	dataManager->addIndexEntity(index);
 	EXPECT_NE(index.getId(), 0);
@@ -686,7 +687,7 @@ TEST_F(DataManagerTest, IndexOperations_CRUD) {
 // clearCache
 // ============================================================================
 
-TEST_F(DataManagerTest, ClearCache_NoException) {
+TEST_F(DataManagerSharedTest, ClearCache_NoException) {
 	auto node = createTestNode(dataManager, "Cached");
 	dataManager->addNode(node);
 	simulateSave();

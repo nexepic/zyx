@@ -135,11 +135,6 @@ namespace graph::storage {
 		[[nodiscard]] EntityObserverManager &getObserverManager() { return observerManager_; }
 		[[nodiscard]] const EntityObserverManager &getObserverManager() const { return observerManager_; }
 
-		template<typename T>
-		void updateEntityImpl(const T &entity, std::function<T(int64_t)> getOldFunc,
-							  std::function<void(T)> internalUpdateFunc,
-							  std::function<void(const T &, const T &)> notifyFunc);
-
 		void initializeTokenRegistry(std::shared_ptr<state::SystemStateManager> sm);
 
 		[[nodiscard]] int64_t getOrCreateTokenId(const std::string &name) const;
@@ -433,6 +428,35 @@ namespace graph::storage {
 		// Entity property operations
 		template<typename EntityType>
 		void removeEntityProperty(int64_t entityId, const std::string &key);
+
+		// Template helpers for property operations (Node/Edge deduplication)
+		template<typename EntityType, typename ManagerType>
+		void addEntityPropertiesImpl(int64_t entityId,
+									 const std::unordered_map<std::string, PropertyValue> &properties,
+									 ManagerType &manager,
+									 std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+														const std::unordered_map<std::string, PropertyValue> &)> validate,
+									 std::function<void(const EntityType &, const EntityType &)> notify) const;
+
+		template<typename EntityType, typename ManagerType>
+		void removeEntityPropertyImpl(int64_t entityId, const std::string &key,
+									  ManagerType &manager,
+									  std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+														 const std::unordered_map<std::string, PropertyValue> &)> validate,
+									  std::function<void(const EntityType &, const EntityType &)> notify) const;
+
+		// Template helpers for rollback dispatch (Node/Edge deduplication)
+		template<typename EntityType, typename ManagerType>
+		void rollbackAddedEntry(const wal::UndoEntry &entry, ManagerType &manager,
+								std::function<void(const EntityType &)> notifyDeleted) const;
+
+		template<typename EntityType, typename ManagerType>
+		void rollbackModifiedEntry(const wal::UndoEntry &entry, ManagerType &manager,
+								   std::function<void(const EntityType &, const EntityType &)> notifyUpdated) const;
+
+		template<typename EntityType>
+		void rollbackDeletedEntry(const wal::UndoEntry &entry,
+								  std::function<void(const EntityType &)> notifyAdded) const;
 
 		EntityObserverManager observerManager_;
 
