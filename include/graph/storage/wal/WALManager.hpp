@@ -33,6 +33,13 @@ namespace graph::storage {
 
 namespace graph::storage::wal {
 
+	/**
+	 * Write-Ahead Log manager for transaction durability.
+	 *
+	 * Recovery: WALRecovery reads committed-but-unflushed transactions via
+	 * readRecords(), replays entity writes to the DB file via StorageWriter,
+	 * then calls checkpoint() to truncate the WAL. See WALRecovery.hpp.
+	 */
 	class WALManager {
 	public:
 		WALManager() = default;

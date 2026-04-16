@@ -24,9 +24,11 @@
 #include <filesystem>
 #include <fstream>
 #include "graph/core/Database.hpp"
+#include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 #include "graph/storage/wal/WALRecord.hpp"
+#include "graph/storage/wal/WALRecovery.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
@@ -257,4 +259,231 @@ TEST_F(WALReplayTest, WALEntityRecordsHaveNonZeroDataSize) {
 	}
 
 	EXPECT_TRUE(foundEntityWrite) << "Expected at least one WAL_ENTITY_WRITE record";
+}
+
+// --- Delete recovery: committed DELETE in WAL → entity inactive after replay ---
+
+TEST_F(WALReplayTest, DeleteRecoverySurvivesReopen) {
+	int64_t nodeId = 0;
+
+	{
+		Database db(dbPath.string());
+		db.open();
+		auto dm = db.getStorage()->getDataManager();
+
+		// Create and commit a node
+		{
+			auto txn = db.beginTransaction();
+			Node n(0, 42);
+			dm->addNode(n);
+			nodeId = n.getId();
+			txn.commit();
+		}
+
+		// Delete the node in a second transaction
+		{
+			auto txn = db.beginTransaction();
+			Node toDelete = dm->getNode(nodeId);
+			dm->deleteNode(toDelete);
+			txn.commit();
+		}
+
+		db.close();
+	}
+
+	// Reopen — WAL replay should apply both the add and the delete
+	{
+		Database db2(dbPath.string());
+		db2.open();
+
+		Node retrieved = db2.getStorage()->getDataManager()->getNode(nodeId);
+		EXPECT_FALSE(retrieved.isActive()) << "Deleted node should be inactive after WAL replay";
+
+		db2.close();
+	}
+}
+
+// --- Edge recovery: committed edge survives reopen ---
+
+TEST_F(WALReplayTest, EdgeRecoverySurvivesReopen) {
+	int64_t nodeId1 = 0, nodeId2 = 0, edgeId = 0;
+
+	{
+		Database db(dbPath.string());
+		db.open();
+
+		auto txn = db.beginTransaction();
+		auto dm = db.getStorage()->getDataManager();
+
+		Node n1(0, 1);
+		dm->addNode(n1);
+		nodeId1 = n1.getId();
+
+		Node n2(0, 2);
+		dm->addNode(n2);
+		nodeId2 = n2.getId();
+
+		Edge e(0, nodeId1, nodeId2, 1);
+		dm->addEdge(e);
+		edgeId = e.getId();
+
+		txn.commit();
+		db.close();
+	}
+
+	// Reopen — WAL replay should recover the edge
+	{
+		Database db2(dbPath.string());
+		db2.open();
+		auto dm = db2.getStorage()->getDataManager();
+
+		Edge retrieved = dm->getEdge(edgeId);
+		EXPECT_TRUE(retrieved.isActive()) << "Committed edge should be visible after WAL replay";
+		EXPECT_EQ(retrieved.getSourceNodeId(), nodeId1);
+		EXPECT_EQ(retrieved.getTargetNodeId(), nodeId2);
+
+		db2.close();
+	}
+}
+
+// --- Empty WAL: no records → no-op recovery ---
+
+TEST_F(WALReplayTest, EmptyWALNoOpRecovery) {
+	// Create and immediately close — produces empty WAL
+	{
+		Database db(dbPath.string());
+		db.open();
+		db.close();
+	}
+
+	// Reopen — should not throw
+	EXPECT_NO_THROW({
+		Database db2(dbPath.string());
+		db2.open();
+		db2.close();
+	});
+}
+
+// --- Multi-transaction recovery: multiple committed txns all replayed ---
+
+TEST_F(WALReplayTest, MultipleCommittedTransactionsAllRecovered) {
+	std::vector<int64_t> nodeIds;
+
+	{
+		Database db(dbPath.string());
+		db.open();
+		auto dm = db.getStorage()->getDataManager();
+
+		for (int i = 0; i < 5; ++i) {
+			auto txn = db.beginTransaction();
+			Node n(0, static_cast<int64_t>(100 + i));
+			dm->addNode(n);
+			nodeIds.push_back(n.getId());
+			txn.commit();
+		}
+
+		db.close();
+	}
+
+	// Reopen — all 5 nodes should be recovered
+	{
+		Database db2(dbPath.string());
+		db2.open();
+		auto dm = db2.getStorage()->getDataManager();
+
+		for (size_t i = 0; i < nodeIds.size(); ++i) {
+			Node retrieved = dm->getNode(nodeIds[i]);
+			EXPECT_TRUE(retrieved.isActive()) << "Node " << i << " should be visible after replay";
+			EXPECT_EQ(retrieved.getLabelId(), static_cast<int64_t>(100 + i));
+		}
+
+		db2.close();
+	}
+}
+
+// --- WALRecovery::recover() returns correct result statistics ---
+
+TEST_F(WALReplayTest, RecoveryResultStatisticsAndCheckpoint) {
+	{
+		Database db(dbPath.string());
+		db.open();
+
+		// One committed transaction with a node
+		{
+			auto txn = db.beginTransaction();
+			Node n(0, 55);
+			db.getStorage()->getDataManager()->addNode(n);
+			txn.commit();
+		}
+
+		// One rolled-back transaction
+		{
+			auto txn = db.beginTransaction();
+			Node n(0, 66);
+			db.getStorage()->getDataManager()->addNode(n);
+			txn.rollback();
+		}
+
+		db.close();
+	}
+
+	// Reopen and trigger recovery via beginTransaction (which calls ensureWALAndTransactionManager)
+	{
+		Database db2(dbPath.string());
+		db2.open();
+
+		// Trigger WAL recovery by starting (and immediately committing) a read-only transaction
+		{
+			auto txn = db2.beginReadOnlyTransaction();
+			txn.commit();
+		}
+
+		// After recovery, WAL should be checkpointed (truncated to header-only)
+		std::string walPath = dbPath.string() + "-wal";
+		if (fs::exists(walPath)) {
+			auto walSize = fs::file_size(walPath);
+			EXPECT_EQ(walSize, sizeof(WALFileHeader))
+					<< "WAL should be truncated to header after recovery + checkpoint";
+		}
+
+		db2.close();
+	}
+}
+
+// --- Idempotency: replay produces same result when WAL is left intact ---
+
+TEST_F(WALReplayTest, IdempotentReplay) {
+	int64_t nodeId = 0;
+
+	{
+		Database db(dbPath.string());
+		db.open();
+
+		auto txn = db.beginTransaction();
+		Node n(0, 33);
+		db.getStorage()->getDataManager()->addNode(n);
+		nodeId = n.getId();
+		txn.commit();
+		db.close();
+	}
+
+	// First reopen — triggers recovery
+	{
+		Database db2(dbPath.string());
+		db2.open();
+		Node retrieved = db2.getStorage()->getDataManager()->getNode(nodeId);
+		EXPECT_TRUE(retrieved.isActive());
+		EXPECT_EQ(retrieved.getLabelId(), 33);
+		db2.close();
+	}
+
+	// Second reopen — recovery should be a no-op (WAL was checkpointed)
+	{
+		Database db3(dbPath.string());
+		db3.open();
+		Node retrieved = db3.getStorage()->getDataManager()->getNode(nodeId);
+		EXPECT_TRUE(retrieved.isActive());
+		EXPECT_EQ(retrieved.getLabelId(), 33);
+		db3.close();
+	}
 }

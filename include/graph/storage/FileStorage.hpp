@@ -99,6 +99,10 @@ namespace graph::storage {
 
 		[[nodiscard]] std::shared_ptr<IDAllocator> getIDAllocator() const { return idAllocator; }
 
+		[[nodiscard]] std::shared_ptr<StorageWriter> getStorageWriter() const { return storageWriter_; }
+
+		[[nodiscard]] std::shared_ptr<FileHeaderManager> getFileHeaderManager() const { return fileHeaderManager; }
+
 		[[nodiscard]] std::shared_ptr<state::SystemStateManager> getSystemStateManager() const {
 			return systemStateManager;
 		}

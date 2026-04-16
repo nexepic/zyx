@@ -43,9 +43,22 @@ namespace graph {
 		return beginReadOnly(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout));
 	}
 
-	Transaction TransactionManager::beginReadOnly(std::chrono::milliseconds /*timeout*/) {
+	Transaction TransactionManager::beginReadOnly(std::chrono::milliseconds timeout) {
 		// Acquire shared lock — multiple readers can hold this concurrently
-		std::shared_lock<std::shared_mutex> lock(rwMutex_);
+		std::shared_lock<std::shared_mutex> lock(rwMutex_, std::defer_lock);
+
+#ifdef __EMSCRIPTEN__
+		(void)timeout;
+		lock.lock(); // Single-threaded: always succeeds immediately
+#else
+		auto deadline = std::chrono::steady_clock::now() + timeout;
+		while (!lock.try_lock()) {
+			if (std::chrono::steady_clock::now() >= deadline) {
+				throw std::runtime_error("Read-only transaction begin timed out: a write transaction is blocking");
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+#endif
 
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
@@ -56,8 +69,8 @@ namespace graph {
 		auto dm = storage_->getDataManager();
 		dm->setCurrentSnapshot(snapshot.get());
 
-		// Mark TransactionContext as read-only (storage-layer guard)
-		dm->getTransactionContext().setReadOnly(true);
+		// Mark DataManager's thread-local read-only guard
+		dm->setReadOnlyMode(true);
 
 		Transaction txn(txnId, *this, storage_);
 		txn.readOnly_ = true;
@@ -116,7 +129,7 @@ namespace graph {
 		if (txn.isReadOnly()) {
 			auto dm = storage_->getDataManager();
 			dm->clearCurrentSnapshot();
-			dm->getTransactionContext().setReadOnly(false);
+			dm->setReadOnlyMode(false);
 			txn.snapshot_.reset();
 			txn.state_ = Transaction::TxnState::TXN_COMMITTED;
 			// shared_lock released via RAII when txn.readLock_ is destroyed/moved
@@ -124,11 +137,10 @@ namespace graph {
 			return;
 		}
 
-		// Write WAL commit record and sync
+		// Write WAL commit record (writeCommit internally flushes buffer + fsync via group commit)
 		if (walManager_ && walManager_->isOpen()) {
 			auto walStart = Clock::now();
 			walManager_->writeCommit(txn.getId());
-			walManager_->sync();
 			debug::PerfTrace::addDuration(
 					"wal.commit_sync",
 					static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
@@ -188,7 +200,7 @@ namespace graph {
 			auto dm = storage_->getDataManager();
 			if (dm) {
 				dm->clearCurrentSnapshot();
-				dm->getTransactionContext().setReadOnly(false);
+				dm->setReadOnlyMode(false);
 			}
 			txn.snapshot_.reset();
 			txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;

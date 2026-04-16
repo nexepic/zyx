@@ -53,8 +53,8 @@ namespace graph::storage {
 		void setWALManager(wal::WALManager *wal) { walManager_ = wal; }
 		[[nodiscard]] wal::WALManager *getWALManager() const { return walManager_; }
 
-		void setReadOnly(bool readOnly) { readOnly_ = readOnly; }
-		[[nodiscard]] bool isReadOnly() const { return readOnly_; }
+		// readOnly_ removed: was a plain bool shared across concurrent readers,
+		// causing a data race. Read-only guard is now thread_local in DataManager.
 
 		[[nodiscard]] wal::UndoLog &undoLog() { return undoLog_; }
 		[[nodiscard]] const wal::UndoLog &undoLog() const { return undoLog_; }
@@ -73,7 +73,6 @@ namespace graph::storage {
 
 	private:
 		bool transactionActive_ = false;
-		bool readOnly_ = false;
 		uint64_t activeTxnId_ = 0;
 		std::vector<Transaction::TxnOperation> txnOps_;
 		wal::WALManager *walManager_ = nullptr;

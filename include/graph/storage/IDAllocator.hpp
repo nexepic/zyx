@@ -95,6 +95,12 @@ namespace graph::storage {
 		void clearCache(uint32_t entityType);
 
 		/**
+		 * @brief Ensures the max-ID counter for an entity type is at least the given value.
+		 * Used by WAL recovery to advance counters for replayed entities.
+		 */
+		void ensureMaxId(uint32_t entityType, int64_t id);
+
+		/**
 		 * @brief Completely resets ALL caches, including Volatile.
 		 * MUST ONLY be called after a full database compaction/truncation where
 		 * all IDs have been re-mapped to a contiguous range [1..Max].

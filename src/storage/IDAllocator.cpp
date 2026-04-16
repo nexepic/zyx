@@ -411,6 +411,14 @@ namespace graph::storage {
 		return foundAny;
 	}
 
+	void IDAllocator::ensureMaxId(uint32_t entityType, int64_t id) {
+		std::lock_guard<std::mutex> lock(mutex_);
+		int64_t &maxId = getMaxIdRef(entityType);
+		if (id > maxId) {
+			maxId = id;
+		}
+	}
+
 	int64_t IDAllocator::allocateNewSequentialId(uint32_t entityType) {
 		return ++getMaxIdRef(entityType);
 	}

@@ -42,7 +42,6 @@ namespace graph {
 	Transaction::Transaction(Transaction &&other) noexcept :
 		txnId_(other.txnId_), state_(other.state_), readOnly_(other.readOnly_), manager_(other.manager_),
 		storage_(std::move(other.storage_)),
-		operations_(std::move(other.operations_)),
 		readLock_(std::move(other.readLock_)),
 		writeLock_(std::move(other.writeLock_)),
 		snapshot_(std::move(other.snapshot_)) {
@@ -65,7 +64,6 @@ namespace graph {
 			readOnly_ = other.readOnly_;
 			manager_ = other.manager_;
 			storage_ = std::move(other.storage_);
-			operations_ = std::move(other.operations_);
 			readLock_ = std::move(other.readLock_);
 			writeLock_ = std::move(other.writeLock_);
 			snapshot_ = std::move(other.snapshot_);
@@ -89,7 +87,5 @@ namespace graph {
 		}
 		manager_->rollbackTransaction(*this);
 	}
-
-	void Transaction::recordOperation(TxnOperation op) { operations_.push_back(op); }
 
 } // namespace graph

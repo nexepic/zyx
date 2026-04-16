@@ -53,6 +53,7 @@ namespace graph::storage {
 
 	// Thread-local snapshot pointer for read-only transactions
 	thread_local const CommittedSnapshot *DataManager::currentSnapshot_ = nullptr;
+	thread_local bool DataManager::readOnlyMode_ = false;
 
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 std::shared_ptr<IDAllocator> idAllocator, std::shared_ptr<SegmentTracker> segmentTracker,

@@ -552,6 +552,11 @@ namespace zyx {
 	void Database::setThreadPoolSize(size_t poolSize) const { impl_->db_.setThreadPoolSize(poolSize); }
 
 	Result Database::execute(const std::string &cypher) const {
+		return execute(cypher, {});
+	}
+
+	Result Database::execute(const std::string &cypher,
+	                         const std::unordered_map<std::string, Value> &params) const {
 		try {
 			if (!impl_->db_.isOpen()) {
 				impl_->db_.open();
@@ -604,20 +609,27 @@ namespace zyx {
 			auto plan = queryEngine->buildPlan(cypher);
 			bool isReadOnly = !plan.mutatesData && !plan.mutatesSchema;
 
-			// Auto-commit for writes:
+			// Implicit transaction wrapping:
 			// - If explicit/cypher transaction exists, execute within it.
-			// - If no explicit transaction and query is read-only, bypass implicit transaction.
-			// - Otherwise, wrap in an implicit transaction.
-			bool needsAutoCommit = !impl_->db_.hasActiveTransaction() && !impl_->cypherTxn_.has_value();
+			// - If no explicit transaction: wrap writes in implicit write txn,
+			//   wrap reads in implicit read-only txn (for snapshot isolation).
+			bool needsImplicitTxn = !impl_->db_.hasActiveTransaction() && !impl_->cypherTxn_.has_value();
 			std::optional<graph::Transaction> implicitTxn;
 
-			if (needsAutoCommit && !isReadOnly) {
-				implicitTxn.emplace(impl_->db_.beginTransaction());
+			if (needsImplicitTxn) {
+				if (isReadOnly) {
+					implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
+				} else {
+					implicitTxn.emplace(impl_->db_.beginTransaction());
+				}
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
 
-			graph::query::QueryContext ctx;
+			auto ctx = toQueryContext(params);
+			if (implicitTxn && implicitTxn->isReadOnly()) {
+				ctx.execMode = graph::query::ExecMode::EM_READ_ONLY;
+			}
 			auto internalRes = queryEngine->executePlan(std::move(plan), ctx);
 
 			auto end = std::chrono::high_resolution_clock::now();
@@ -656,76 +668,22 @@ namespace zyx {
 		}
 	}
 
-	Result Database::execute(const std::string &cypher,
-	                         const std::unordered_map<std::string, Value> &params) const {
-		try {
-			if (!impl_->db_.isOpen()) {
-				impl_->db_.open();
-			}
-
-			// Transaction control statements don't use parameters
-			auto txnKind = detectCypherTxnStatement(cypher);
-			if (txnKind != CypherTxnKind::NONE) {
-				return execute(cypher); // delegate to non-parameterized version
-			}
-
-			// Build the plan first to determine if the query mutates data
-			auto queryEngine = impl_->db_.getQueryEngine();
-			auto plan = queryEngine->buildPlan(cypher);
-			bool isReadOnly = !plan.mutatesData && !plan.mutatesSchema;
-
-			bool needsAutoCommit = !impl_->db_.hasActiveTransaction() && !impl_->cypherTxn_.has_value();
-			std::optional<graph::Transaction> implicitTxn;
-
-			if (needsAutoCommit && !isReadOnly) {
-				implicitTxn.emplace(impl_->db_.beginTransaction());
-			}
-
-			auto start = std::chrono::high_resolution_clock::now();
-
-			auto ctx = toQueryContext(params);
-			auto internalRes = queryEngine->executePlan(std::move(plan), ctx);
-
-			auto end = std::chrono::high_resolution_clock::now();
-			std::chrono::duration<double, std::milli> elapsed = end - start;
-			internalRes.setDuration(elapsed.count());
-
-			// Slow query logging
-			if (auto cm = impl_->db_.getConfigManager(); cm && cm->isSlowLogEnabled()) {
-				if (elapsed.count() > static_cast<double>(cm->getSlowLogThresholdMs())) {
-					graph::log::Log::warn("Slow query ({}ms): {}", static_cast<int64_t>(elapsed.count()), cypher);
-				}
-			}
-
-			if (implicitTxn) {
-				implicitTxn->commit();
-			}
-
-			auto dm = impl_->db_.getStorage()->getDataManager();
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
-			return res;
-		} catch (const std::exception &e) {
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
-			res.impl_->error_msg = e.what();
-			return res;
-		} catch (...) {
-			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
-			res.impl_->error_msg = "Unknown error";
-			return res;
-		}
-	}
-
 	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
-		// Use Query Engine for standard creation
+		std::optional<graph::Transaction> implicitTxn;
+		if (!impl_->db_.hasActiveTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
 		auto builder = impl_->db_.getQueryEngine()->query();
 		std::unordered_map<std::string, graph::PropertyValue> internalProps;
 		for (const auto &[k, v]: props)
 			internalProps[k] = toInternal(v);
 		auto plan = builder.create_("n", label, internalProps).build();
 		(void) impl_->db_.getQueryEngine()->execute(std::move(plan));
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
 	}
 
 	void Database::createNode(const std::vector<std::string> &labels,
@@ -859,15 +817,16 @@ namespace zyx {
 	void Database::createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
 							  const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
 							  const std::string &edgeType, const std::unordered_map<std::string, Value> &props) const {
-		// This uses Query Engine, which internally handles label resolution if implemented correctly there.
-		// Since QueryEngine likely calls DataManager/Storage eventually, or builds a Plan,
-		// we just delegate to it.
+		std::optional<graph::Transaction> implicitTxn;
+		if (!impl_->db_.hasActiveTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
 		auto builder = impl_->db_.getQueryEngine()->query();
 		std::unordered_map<std::string, graph::PropertyValue> edgeProps;
 		for (const auto &[k, v]: props)
 			edgeProps[k] = toInternal(v);
 
-		// Ensure variables match create_ arguments
 		builder.match_("a", sourceLabel, sourceKey, toInternal(sourceVal));
 		builder.match_("b", targetLabel, targetKey, toInternal(targetVal));
 		builder.create_("e", edgeType, "a", "b", edgeProps);
@@ -875,27 +834,41 @@ namespace zyx {
 
 		auto plan = builder.build();
 		(void) impl_->db_.getQueryEngine()->execute(std::move(plan));
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
 	}
 
 	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) const {
 		try {
+			if (!impl_->db_.isOpen()) {
+				impl_->db_.open();
+			}
+
+			std::optional<graph::Transaction> implicitTxn;
+			if (!impl_->db_.hasActiveTransaction()) {
+				implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
+			}
+
 			auto storage = impl_->db_.getStorage();
 			if (!storage)
 				return {};
 			auto dm = storage->getDataManager();
 
 			graph::query::algorithm::GraphAlgorithm algo(dm);
-			// Default "out" for directed shortest path
 			auto internalPath = algo.findShortestPath(startId, endId, "out", maxDepth);
 
 			std::vector<Node> publicPath;
 			publicPath.reserve(internalPath.size());
 			for (const auto &n: internalPath) {
-				// Fetch full properties
 				graph::Node fullNode = dm->getNode(n.getId());
 				fullNode.setProperties(dm->getNodeProperties(n.getId()));
-				// Pass DM for label resolution
 				publicPath.push_back(toPublicNode(fullNode, dm));
+			}
+
+			if (implicitTxn) {
+				implicitTxn->commit();
 			}
 			return publicPath;
 		} catch (...) {
@@ -905,6 +878,15 @@ namespace zyx {
 
 	void Database::bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const {
 		try {
+			if (!impl_->db_.isOpen()) {
+				impl_->db_.open();
+			}
+
+			std::optional<graph::Transaction> implicitTxn;
+			if (!impl_->db_.hasActiveTransaction()) {
+				implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
+			}
+
 			auto storage = impl_->db_.getStorage();
 			if (!storage)
 				return;
@@ -914,10 +896,13 @@ namespace zyx {
 			auto internalVisitor = [&](int64_t nodeId, [[maybe_unused]] int depth) -> bool {
 				graph::Node internalNode = dm->getNode(nodeId);
 				internalNode.setProperties(dm->getNodeProperties(nodeId));
-				// Pass DM for label resolution
 				return visitor(toPublicNode(internalNode, dm));
 			};
 			algo.breadthFirstTraversal(startNodeId, internalVisitor, "out");
+
+			if (implicitTxn) {
+				implicitTxn->commit();
+			}
 		} catch (...) {
 		}
 	}

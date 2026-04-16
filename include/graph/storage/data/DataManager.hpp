@@ -344,6 +344,11 @@ namespace graph::storage {
 		void clearCurrentSnapshot() { currentSnapshot_ = nullptr; }
 		[[nodiscard]] const CommittedSnapshot *getCurrentSnapshot() const { return currentSnapshot_; }
 
+		// Thread-local read-only mode guard (replaces TransactionContext::readOnly_ which was
+		// a single bool shared across concurrent readers — a data race).
+		static void setReadOnlyMode(bool readOnly) { readOnlyMode_ = readOnly; }
+		[[nodiscard]] static bool isReadOnlyMode() { return readOnlyMode_; }
+
 		// Transaction context management
 		void setActiveTransaction(uint64_t txnId) { txnContext_.setActive(txnId); }
 		void clearActiveTransaction() { txnContext_.clear(); }
@@ -360,7 +365,7 @@ namespace graph::storage {
 
 	private:
 		void guardReadOnly() const {
-			if (txnContext_.isReadOnly()) {
+			if (readOnlyMode_) {
 				throw std::runtime_error("Cannot perform write operation in read-only transaction");
 			}
 		}
@@ -463,6 +468,11 @@ namespace graph::storage {
 		// Thread-local snapshot pointer for read-only transactions.
 		// Each reader thread has its own snapshot pointer, set at transaction begin.
 		static thread_local const CommittedSnapshot *currentSnapshot_;
+
+		// Thread-local read-only mode flag.
+		// Each reader thread has its own flag, avoiding the data race that occurred
+		// when concurrent readers shared a single TransactionContext::readOnly_ bool.
+		static thread_local bool readOnlyMode_;
 
 		// Native file handle for thread-safe pread() based parallel reads.
 		// Delegated to StorageIO which owns the actual file descriptor.

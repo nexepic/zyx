@@ -25,6 +25,7 @@
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/VectorIndexManager.hpp"
 #include "graph/storage/wal/WALManager.hpp"
+#include "graph/storage/wal/WALRecovery.hpp"
 
 namespace graph {
 
@@ -90,9 +91,6 @@ namespace graph {
 
 		// Ensure WAL and transaction manager are ready
 		const_cast<Database *>(this)->ensureWALAndTransactionManager();
-
-		// Flush any pending changes to ensure clean start
-		storage->flush();
 
 		// Create transaction via TransactionManager
 		// TransactionManager::begin() acquires the write lock, writes WAL begin,
@@ -161,9 +159,22 @@ namespace graph {
 			walManager_ = std::make_shared<storage::wal::WALManager>();
 			walManager_->open(dbPath);
 
-			// If WAL needs recovery, replay committed transactions
+			// WAL Recovery: replay committed transactions that weren't flushed to DB file.
+			// The commit protocol writes WAL commit+fsync BEFORE storage_->save(). If
+			// save() completed, the WAL is redundant. If the process crashed between WAL
+			// commit and save completion, committed data exists only in the WAL. Replay
+			// deserializes those entities and writes them to the DB file via StorageWriter,
+			// then checkpoints (truncates) the WAL.
 			if (walManager_->needsRecovery()) {
-				walManager_->checkpoint();
+				storage::wal::WALRecovery recovery(
+						*walManager_,
+						storage->getStorageWriter(),
+						storage->getIDAllocator(),
+						storage->getSegmentTracker(),
+						storage->getStorageIO(),
+						storage->getDataManager(),
+						storage->getFileHeaderManager());
+				recovery.recover();
 			}
 
 			// Initialize transaction manager

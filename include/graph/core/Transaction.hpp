@@ -23,7 +23,6 @@
 #include <cstdint>
 #include <memory>
 #include <shared_mutex>
-#include <vector>
 
 namespace graph::storage {
 	class FileStorage;
@@ -61,9 +60,6 @@ namespace graph {
 		[[nodiscard]] bool isActive() const { return state_ == TxnState::TXN_ACTIVE; }
 		[[nodiscard]] bool isReadOnly() const { return readOnly_; }
 
-		void recordOperation(TxnOperation op);
-		[[nodiscard]] const std::vector<TxnOperation> &getOperations() const { return operations_; }
-
 		[[nodiscard]] const storage::CommittedSnapshot *getSnapshot() const { return snapshot_.get(); }
 
 	private:
@@ -75,7 +71,6 @@ namespace graph {
 		bool readOnly_ = false;
 		TransactionManager *manager_ = nullptr; // Non-owning
 		std::shared_ptr<storage::FileStorage> storage_;
-		std::vector<TxnOperation> operations_;
 
 		// Shared lock held for read-only transaction's lifetime (RAII)
 		std::shared_lock<std::shared_mutex> readLock_;
