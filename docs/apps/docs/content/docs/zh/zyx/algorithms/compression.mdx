@@ -1,6 +1,6 @@
 ---
-title: 压缩算法
-description: 基于 zlib 的无损压缩工具与在存储路径中的使用方式。
+title: 压缩
+description: ZYX 使用基于 zlib 的无损压缩来处理状态链和大型数据段。
 category: 存储
 categoryOrder: 2
 order: 5
@@ -9,30 +9,76 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# 压缩算法
+# 压缩
 
-## 实现
+ZYX 使用 **zlib (DEFLATE)** 对状态链和大型数据段进行无损压缩。压缩可以减少存储占用和 I/O 带宽，同时保证数据完整性。
 
-当前压缩工具位于：
+## 压缩的应用场景
 
-- `utils::zlibCompress`
-- `utils::zlibDecompress`
+压缩主要应用于以下两种场景：
 
-使用 zlib 进行无损压缩/解压。
+- **状态链**：由 `StateChainManager` 管理的配置数据（索引元数据、根 ID 映射、键类型映射）在存储前会先序列化并压缩。读取时，数据会被解压并反序列化。
+- **大型数据段**：超过实用内联阈值的数据会以 Blob 实体的形式外部存储，这些数据可能会被压缩。
 
-## 使用场景
+```mermaid
+sequenceDiagram
+    participant App
+    participant SCM as StateChainManager
+    participant Comp as CompressUtils
+    participant DM as DataManager
 
-- 适合较大文本或序列化负载的存储压缩
-- 与 Blob/State 等大对象路径协同（具体由上层组件决定何时压缩）
+    App->>SCM: updateStateChain(key, data)
+    SCM->>SCM: Serialize data to bytes
+    SCM->>Comp: zlibCompress(serialized)
+    Comp-->>SCM: Compressed bytes
+    SCM->>DM: Split into State entities
+    DM-->>SCM: Stored
 
-## 设计取舍
+    App->>SCM: readStateChain(key)
+    SCM->>DM: Read State entities
+    DM-->>SCM: Compressed bytes
+    SCM->>Comp: zlibDecompress(bytes, originalSize)
+    Comp-->>SCM: Decompressed bytes
+    SCM->>SCM: Deserialize
+    SCM-->>App: Configuration data
+```
 
-- 优点：降低磁盘占用与 IO 体积
-- 成本：增加 CPU 压缩/解压开销
+## 压缩 API
 
-通常建议在“体积明显大于压缩开销”时启用。
+压缩层提供两个函数：
 
-## 源码定位
+| 函数 | 用途 |
+|------|------|
+| `zlibCompress(data)` | 使用 zlib DEFLATE 压缩原始字节 |
+| `zlibDecompress(data, originalSize)` | 解压还原为原始字节 |
 
-- `include/graph/utils/CompressUtils.hpp`
-- `src/utils/CompressUtils.cpp`
+两个函数均在内部处理内存分配，并验证压缩/解压结果。失败时会抛出异常（在覆盖率模式下，错误会被记录到日志而非抛出异常）。
+
+## 状态链压缩流程
+
+当 `StateChainManager` 写入配置数据时：
+
+1. **序列化**：将配置对象（根 ID、键类型映射、启用标志）序列化为二进制字节流
+2. **压缩**：使用 `zlibCompress()` 压缩序列化后的字节
+3. **拆分**：如果压缩后的数据超过单个 State 实体的容量，则拆分到多个 State 实体形成链式结构
+4. **存储**：每个 State 实体通过 `DataManager` 写入存储层
+
+读取时，流程反向执行：读取 State 实体，拼接数据，解压，然后反序列化。
+
+## 性能特征
+
+| 指标 | 典型值 |
+|------|--------|
+| 压缩率（索引元数据） | 缩减 60-80% 体积 |
+| 压缩速度 | ~100 MB/s |
+| 解压速度 | ~200 MB/s |
+| 状态链开销 | 每条链一个段（128 KB） |
+
+压缩在写入时执行，解压在读取时执行。由于状态链属于配置数据（而非查询结果数据），性能影响可以忽略不计——状态链仅在启动时读取，并在索引生命周期变更时写入。
+
+## 源码位置
+
+| 组件 | 路径 |
+|------|------|
+| CompressUtils | `include/graph/utils/CompressUtils.hpp` |
+| StateChainManager | `include/graph/core/StateChainManager.hpp` |

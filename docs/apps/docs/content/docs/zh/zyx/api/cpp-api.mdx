@@ -1,6 +1,6 @@
 ---
 title: C++ API 参考
-description: 基于 include/zyx/zyx.hpp 的当前 C++ API 能力说明。
+description: ZYX C++ API 完整参考 — Database、Result、高性能写入与图算法。
 category: C++ API
 categoryOrder: 2
 order: 2
@@ -13,61 +13,242 @@ projectOrder: 1
 
 头文件：`include/zyx/zyx.hpp`
 
-## 核心类
+## Database
 
-### Database
+`zyx::Database` 是主入口。
 
-构造：
+### 构造与生命周期
 
 ```cpp
+// 构造并打开（文件不存在则创建）
 zyx::Database db("/path/to/db");
+
+// 仅在数据库已存在时打开
+zyx::Database db("/path/to/db");
+bool ok = db.openIfExists();
 ```
 
-主要方法：
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| 构造函数 | `Database(const string& path, OpenMode mode = OPEN_CREATE_OR_OPEN_FILE, size_t cacheSize = 10000)` | 创建 Database 对象，`path` 为数据库文件路径 |
+| `open` | `void open() const` | 打开数据库，失败时抛异常 |
+| `openIfExists` | `bool openIfExists() const` | 仅在文件存在时打开，不存在返回 `false` |
+| `close` | `void close() const` | 刷新并关闭数据库 |
+| `save` | `void save() const` | 将脏数据刷新到磁盘但不关闭 |
+| `isOpen` | `bool isOpen() const` | 检查数据库是否已打开 |
+| `exists` | `bool exists() const` | 检查数据库文件是否存在于磁盘 |
 
-- 生命周期：`open()`、`openIfExists()`、`close()`、`save()`
-- 事务：`beginTransaction()`、`hasActiveTransaction()`
-- 查询：`execute(cypher)`、`execute(cypher, params)`
-- 线程池：`setThreadPoolSize(size_t)`
-- 高性能写入：`createNode*`、`createEdge*`、`createNodes`、`createNodeRetId`
-- 图算法快捷接口：`getShortestPath(...)`、`bfs(...)`
-
-### Transaction
-
-由 `Database::beginTransaction()` 创建，支持：
-
-- `execute(cypher)`
-- `execute(cypher, params)`
-- `commit()`
-- `rollback()`
-- `isActive()`
-
-该类型是 move-only，析构时若仍活跃会自动回滚。
-
-### Result
-
-`execute` 返回 `Result`，统一通过游标读取：
-
-- 迭代：`hasNext()` / `next()`
-- 取值：`get("col")` / `get(index)`
-- 元数据：`getColumnCount()` / `getColumnName(index)` / `getDuration()`
-- 状态：`isSuccess()` / `getError()`
-
-## 参数化查询
-
-参数类型为：
+### 查询执行
 
 ```cpp
-std::unordered_map<std::string, zyx::Value>
+// 自动提交查询（写语句自动包事务）
+zyx::Result result = db.execute("CREATE (n:Person {name: 'Alice'})");
+
+// 参数化查询
+std::unordered_map<std::string, zyx::Value> params;
+params["name"] = std::string("Alice");
+params["age"] = int64_t(30);
+zyx::Result result = db.execute(
+    "CREATE (n:Person {name: $name, age: $age})", params);
+
+// 读查询（走只读快速路径）
+zyx::Result result = db.execute("MATCH (n:Person) RETURN n.name, n.age");
+while (result.hasNext()) {
+    auto name = result.get("n.name");
+    auto age = result.get("n.age");
+    result.next();
+}
 ```
 
-`zyx::Value` 支持：
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `execute` | `Result execute(const string& cypher) const` | 执行 Cypher 查询，写语句自动提交，读语句走只读路径 |
+| `execute` | `Result execute(const string& cypher, const unordered_map<string, Value>& params) const` | 执行参数化 Cypher 查询 |
 
-- `null`、`bool`、`int64_t`、`double`、`std::string`
-- `std::shared_ptr<zyx::Node>`、`std::shared_ptr<zyx::Edge>`
-- `std::vector<float>`、`std::vector<std::string>`
+### 事务
+
+```cpp
+// 写事务
+auto tx = db.beginTransaction();
+tx.execute("CREATE (n:Person {name: 'Bob'})");
+tx.commit();
+
+// 只读事务（快照隔离）
+auto roTx = db.beginReadOnlyTransaction();
+auto result = roTx.execute("MATCH (n) RETURN count(n)");
+// roTx 在析构时自动回滚
+```
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `beginTransaction` | `Transaction beginTransaction()` | 开始读写事务，若有其他写事务活跃则阻塞 |
+| `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | 开始只读事务，快照隔离，可多并发 |
+| `hasActiveTransaction` | `bool hasActiveTransaction() const` | 检查是否有活跃写事务 |
+
+### 高性能写入 API
+
+这些方法绕过 Cypher 解析器，吞吐量最大：
+
+```cpp
+// 创建单标签节点
+db.createNode("Person", {{"name", std::string("Alice")}, {"age", int64_t(30)}});
+
+// 创建多标签节点
+db.createNode(std::vector<std::string>{"Person", "Employee"},
+              {{"name", std::string("Bob")}, {"salary", int64_t(50000)}});
+
+// 创建节点并获取内部 ID
+int64_t aliceId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
+
+// 批量创建节点
+db.createNodes("Person", {
+    {{"name", std::string("Alice")}, {"age", int64_t(30)}},
+    {{"name", std::string("Bob")}, {"age", int64_t(25)}},
+});
+
+// 通过属性查找源/目标节点创建边
+db.createEdge(
+    "Person", "name", std::string("Alice"),   // 源：name = Alice 的 Person
+    "Person", "name", std::string("Bob"),      // 目标：name = Bob 的 Person
+    "KNOWS",                                    // 边类型
+    {{"since", int64_t(2020)}}                  // 边属性
+);
+
+// 通过内部 ID 创建边（最快）
+int64_t src = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
+int64_t tgt = db.createNodeRetId("Person", {{"name", std::string("Bob")}});
+db.createEdgeById(src, tgt, "KNOWS", {});
+```
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `createNode` | `void createNode(const string& label, const unordered_map<string, Value>& props) const` | 创建单标签节点 |
+| `createNode` | `void createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | 创建多标签节点 |
+| `createNodes` | `void createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | 批量创建同标签节点 |
+| `createNodeRetId` | `int64_t createNodeRetId(const string& label, const unordered_map<string, Value>& props = {}) const` | 创建节点并返回内部 ID |
+| `createEdge` | `void createEdge(srcLabel, srcKey, srcVal, tgtLabel, tgtKey, tgtVal, edgeType, props) const` | 通过属性查找节点创建边 |
+| `createEdgeById` | `void createEdgeById(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过内部 ID 创建边（最快） |
+
+### 图算法
+
+```cpp
+// 最短路径（BFS）
+auto path = db.getShortestPath(startId, endId);
+for (const auto& node : path) {
+    // node.id, node.labels, node.properties
+}
+
+// 广度优先搜索
+db.bfs(startId, [](const zyx::Node& node) {
+    std::cout << "访问: " << node.id << std::endl;
+    return false; // 返回 true 提前终止
+});
+```
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `getShortestPath` | `vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15) const` | 求两节点间最短路径，返回路径上的有序节点列表 |
+| `bfs` | `void bfs(int64_t startNodeId, const function<bool(const Node&)>& visitor) const` | 广度优先遍历，visitor 返回 `true` 可提前终止 |
+
+### 配置
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `setThreadPoolSize` | `void setThreadPoolSize(size_t poolSize) const` | 调整线程池大小 |
+
+## Result
+
+`zyx::Result` 持有查询输出，move-only。
+
+```cpp
+zyx::Result result = db.execute(
+    "MATCH (n:Person) RETURN n.name, n.age ORDER BY n.name");
+
+if (!result.isSuccess()) {
+    std::cerr << "查询失败: " << result.getError() << std::endl;
+    return;
+}
+
+int colCount = result.getColumnCount();      // 2
+std::string col0 = result.getColumnName(0);  // "n.name"
+
+while (result.hasNext()) {
+    auto name = result.get("n.name");   // 或 result.get(0)
+    auto age = result.get("n.age");     // 或 result.get(1)
+    result.next();
+}
+
+double ms = result.getDuration();
+```
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `hasNext` | `bool hasNext() const` | 是否还有更多行 |
+| `next` | `void next() const` | 前进到下一行 |
+| `get` | `Value get(const string& key) const` | 按列名取当前行值 |
+| `get` | `Value get(int index) const` | 按列索引取当前行值（0 起始） |
+| `getColumnCount` | `int getColumnCount() const` | 结果列数 |
+| `getColumnName` | `string getColumnName(int index) const` | 按索引取列名 |
+| `getDuration` | `double getDuration() const` | 执行耗时（毫秒） |
+| `isSuccess` | `bool isSuccess() const` | 查询是否成功 |
+| `getError` | `string getError() const` | 失败时的错误信息 |
+
+## QueryBuilder
+
+`QueryBuilder` 提供流式、编程式的查询构建方式，无需拼接 Cypher 字符串：
+
+```cpp
+auto plan = db.query()
+    .match_("n", "Person", "name", std::string("Alice"))
+    .return_({"n"})
+    .build();
+```
+
+### 读操作
+
+| 方法 | 说明 |
+|------|------|
+| `match_(variable, label, key, value)` | 添加单标签节点 MATCH 模式，可选属性过滤 |
+| `match_(variable, labels, key, value)` | 多标签版本 |
+| `where_(variable, key, value)` | 添加 WHERE 过滤 |
+| `return_(variables)` | 设置 RETURN 子句 |
+| `skip_(offset)` | 设置 SKIP |
+| `limit_(count)` | 设置 LIMIT |
+| `orderBy_(items)` | 设置 ORDER BY，`SortOrder{variable, property, ascending}` |
+
+### 写操作
+
+| 方法 | 说明 |
+|------|------|
+| `create_(variable, label, props)` | 创建节点 |
+| `create_(variable, labels, props)` | 创建多标签节点 |
+| `create_(variable, type, sourceVar, targetVar, props)` | 创建边 |
+| `delete_(variables, detach)` | 删除变量（`detach = true` 即 DETACH DELETE） |
+| `set_(variable, key, value)` | 设置属性 |
+| `setLabel_(variable, label)` | 添加标签 |
+| `remove_(variable, key, isLabel)` | 删除属性（`isLabel = true` 时删除标签） |
+
+### 索引管理
+
+| 方法 | 说明 |
+|------|------|
+| `createIndex_(label, property, indexName)` | 创建属性索引 |
+| `dropIndex_(indexName)` | 按名称删除索引 |
+| `dropIndex_(label, property)` | 按标签+属性删除索引 |
+| `showIndexes_()` | 列出所有索引 |
+
+### 存储过程与收尾
+
+| 方法 | 说明 |
+|------|------|
+| `call_(procedure, args)` | 调用存储过程（如向量索引操作） |
+| `unwind(list, alias)` | 添加 UNWIND 子句 |
+| `build()` | 编译为 `unique_ptr<PhysicalOperator>` |
 
 ## 源码定位
 
-- Public API：`include/zyx/zyx.hpp`
-- 实现：`src/api/DatabaseImpl.cpp`
+| 组件 | 路径 |
+|------|------|
+| Public API | `include/zyx/zyx.hpp` |
+| 实现 | `src/api/DatabaseImpl.cpp` |
+| QueryBuilder | `include/graph/query/QueryBuilder.hpp` |

@@ -1,9 +1,9 @@
 ---
 title: C API Types
-description: This page describes the data types used in the C API.
+description: Opaque handles, value types, node/edge structs, and enums used in the ZYX C API.
 category: C API
 categoryOrder: 3
-order: 6
+order: 7
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -11,8 +11,91 @@ projectOrder: 1
 ---
 # C API Types
 
-This page describes the data types used in the C API.
+Header: `include/zyx/zyx_c_api.h`
 
-## Types Reference
+## Opaque Handles
 
-See the [C API documentation](/en/docs/zyx/api/c-api) for usage examples.
+```c
+typedef struct ZYXDB_T ZYXDB_T;          // Database handle
+typedef struct ZYXResult_T ZYXResult_T;  // Query result handle
+typedef struct ZYXTxn_T ZYXTxn_T;        // Transaction handle
+typedef struct ZYXParams_T ZYXParams_T;  // Parameter set handle
+```
+
+All handles are opaque pointers. Create them with the corresponding `zyx_*` functions and free them with the matching `zyx_*_close` functions.
+
+## ZYXValueType
+
+```c
+typedef enum {
+    ZYX_NULL   = 0,
+    ZYX_BOOL   = 1,
+    ZYX_INT    = 2,
+    ZYX_DOUBLE = 3,
+    ZYX_STRING = 4,
+    ZYX_NODE   = 5,
+    ZYX_EDGE   = 6,
+    ZYX_LIST   = 7,
+    ZYX_MAP    = 8
+} ZYXValueType;
+```
+
+Returned by `zyx_result_get_type()` and `zyx_result_list_get_type()`. Use this to determine which accessor function to call.
+
+| Value | Description | Accessor |
+|-------|-------------|----------|
+| `ZYX_NULL` | Null value | No accessor needed |
+| `ZYX_BOOL` | Boolean | `zyx_result_get_bool()` |
+| `ZYX_INT` | Integer | `zyx_result_get_int()` |
+| `ZYX_DOUBLE` | Floating point | `zyx_result_get_double()` |
+| `ZYX_STRING` | String | `zyx_result_get_string()` |
+| `ZYX_NODE` | Graph node | `zyx_result_get_node()` |
+| `ZYX_EDGE` | Graph edge | `zyx_result_get_edge()` |
+| `ZYX_LIST` | List value | `zyx_result_list_*()` functions |
+| `ZYX_MAP` | Map value | `zyx_result_get_map_json()` |
+
+## ZYXNode
+
+```c
+typedef struct {
+    int64_t id;
+    const char* label;   // Primary label, null-terminated
+} ZYXNode;
+```
+
+Populated by `zyx_result_get_node()`. The `label` pointer is owned by the result handle and valid until `zyx_result_close()`.
+
+To access full properties, use `zyx_result_get_props_json()`.
+
+## ZYXEdge
+
+```c
+typedef struct {
+    int64_t id;
+    int64_t source_id;
+    int64_t target_id;
+    const char* type;    // Relationship type, null-terminated
+} ZYXEdge;
+```
+
+Populated by `zyx_result_get_edge()`. The `type` pointer is owned by the result handle and valid until `zyx_result_close()`.
+
+## String Lifetime Rules
+
+| Function returns `const char*` | Valid until |
+|-------------------------------|-------------|
+| `zyx_result_get_string()` | `zyx_result_close()` |
+| `zyx_result_get_props_json()` | `zyx_result_close()` |
+| `zyx_result_get_map_json()` | `zyx_result_close()` |
+| `zyx_result_get_error()` | `zyx_result_close()` |
+| `zyx_result_column_name()` | `zyx_result_close()` |
+| `zyx_result_list_get_string()` | `zyx_result_close()` |
+| `zyx_get_last_error()` | Next ZYX API call on this thread |
+
+**Important**: Copy strings immediately if you need them beyond the lifetime above.
+
+## Source Locations
+
+| Component | Path |
+|-----------|------|
+| C API types | `include/zyx/zyx_c_api.h` |

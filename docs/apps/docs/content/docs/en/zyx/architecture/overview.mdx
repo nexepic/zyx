@@ -1,6 +1,6 @@
 ---
 title: Architecture Overview
-description: ZYX is a high-performance, embeddable graph database built on a custom storage engine with segment-based architecture.
+description: ZYX's layered architecture, core objects, and main execution paths.
 category: Overview
 categoryOrder: 1
 order: 1
@@ -11,278 +11,169 @@ projectOrder: 1
 ---
 # Architecture Overview
 
-ZYX is a high-performance, embeddable graph database built on a custom storage engine with segment-based architecture.
+ZYX is an embeddable graph database engine. Its core is an in-process library — no separate server process is required.
 
-## System Architecture
+## Layered Architecture
 
 ```mermaid
 graph TB
     subgraph "Application Layer"
-        CLI[CLI Tool]
-        APP[Embedded Application]
+        CLI[CLI REPL]
+        BM[Benchmark]
+        APP[Host Application]
     end
 
     subgraph "API Layer"
-        CPP[C++ API]
-        CA[C API]
+        CPP["C++ API (zyx.hpp)"]
+        CA["C API (zyx_c_api.h)"]
+        WASM["WASM Playground"]
     end
 
-    subgraph "Query Engine"
-        P[Parser]
-        QP[Query Planner]
-        QE[Query Executor]
+    subgraph "Query Layer"
+        Parser["ANTLR4 Cypher Parser"]
+        Planner["Logical Planner + Optimizer"]
+        Executor["Physical Executor"]
     end
 
     subgraph "Storage Layer"
+        DM[DataManager]
+        PM[PersistenceManager]
         FS[FileStorage]
-        WAL[WAL]
-        SM[State Manager]
+        WAL[WALManager]
+        PB[PageBufferPool]
     end
 
-    subgraph "Core"
+    subgraph "Core Layer"
         DB[Database]
+        TM[TransactionManager]
         TX[Transaction]
-        ENT[Entity Manager]
     end
 
     CLI --> CPP
+    BM --> CPP
     APP --> CPP
-    CPP --> DB
     CA --> DB
+    WASM --> CA
 
+    CPP --> DB
+    DB --> TM
     DB --> TX
-    DB --> QE
-    TX --> ENT
 
-    QE --> QP
-    QP --> P
-
-    TX --> FS
+    TX --> DM
     TX --> WAL
-    FS --> SM
+
+    Parser --> Planner --> Executor
+    Executor --> DM
+
+    DM --> PM
+    PM --> FS
+    DM --> PB
 ```
 
-**Architecture Layers:**
-- **Application Layer**: CLI tool and embedded applications
-- **API Layer**: C++ and C APIs for integration
-- **Query Engine**: ANTLR4 parser, query planner, and executor
-- **Storage Layer**: FileStorage, WAL, and state management
-- **Core**: Database, transaction, and entity management
+**Layer responsibilities:**
 
-## Key Design Principles
+- **Application Layer** — CLI tool, benchmark suite, and host applications that embed ZYX.
+- **API Layer** — C++ API (`zyx.hpp`), C API (`zyx_c_api.h`), and WASM bindings for browser use.
+- **Query Layer** — Cypher text is parsed, planned, optimized, and executed as a pipeline of physical operators.
+- **Storage Layer** — `DataManager` orchestrates entity read/write, `PersistenceManager` tracks dirty entities, `FileStorage` manages the segment-based file, `WALManager` handles write-ahead logging, and `PageBufferPool` provides an LRU segment cache.
+- **Core Layer** — `Database` is the top-level entry point; `TransactionManager` enforces single-writer/multi-reader concurrency; `Transaction` provides the external handle.
 
-### 1. Embeddable First
-ZYX is designed as a library, not a server. Embed directly into your C++ application without external dependencies.
+## Key Objects
 
-### 2. ACID Compliance
-Full transaction support with optimistic concurrency control and Write-Ahead Logging ensures data integrity.
+| Object | Responsibility | Source |
+|--------|---------------|--------|
+| `graph::Database` | Lifecycle management, lazy initialization of QueryEngine / ThreadPool / WAL | `include/graph/core/Database.hpp` |
+| `graph::query::QueryEngine` | Cypher parsing, plan building, and execution | `include/graph/query/api/QueryEngine.hpp` |
+| `graph::storage::FileStorage` | Segment-based file layout, flush/save coordination | `include/graph/storage/FileStorage.hpp` |
+| `graph::storage::DataManager` | Unified entry point for Node / Edge / Property / Blob / Index / State I/O | `include/graph/storage/data/DataManager.hpp` |
+| `TransactionManager` | Single-writer lock, snapshot management, commit / rollback coordination | `include/graph/core/TransactionManager.hpp` |
 
-### 3. Custom Storage Engine
-Segment-based file format optimized for graph workloads with efficient space management and fast access patterns.
+## Main Execution Paths
 
-### 4. Extensible
-Plugin-based architecture for custom indexes and operators.
-
-## Component Overview
-
-| Component | Description | Location |
-|-----------|-------------|----------|
-| **Database** | Main entry point, lifecycle management | `graph/core/Database.hpp` |
-| **FileStorage** | Segment-based file storage | `graph/storage/FileStorage.hpp` |
-| **QueryEngine** | Cypher query execution | `graph/query/QueryEngine.hpp` |
-| **Transaction** | ACID transaction management | `graph/core/Transaction.hpp` |
-| **WAL** | Write-Ahead Logging | `graph/storage/WAL.hpp` |
-
-## Data Flow
+### Query Path
 
 ```mermaid
 sequenceDiagram
     participant App
     participant DB as Database
-    participant TX as Transaction
-    participant QE as QueryExecutor
-    participant FS as FileStorage
-    participant WAL as WAL
-
-    App->>DB: open(path)
-    DB->>FS: initialize()
-    DB->>WAL: recover()
+    participant QE as QueryEngine
+    participant DM as DataManager
 
     App->>DB: beginTransaction()
-    DB->>TX: create()
-
-    App->>TX: executeQuery("CREATE (n)")
-    TX->>QE: execute(cypher)
-    QE->>FS: createNode()
-    FS->>TX: markDirty()
-    TX->>WAL: log(operation)
-
-    App->>TX: commit()
-    TX->>WAL: flush()
-    TX->>FS: persistDirty()
-    WAL->>WAL: checkpoint()
+    DB->>App: Transaction (write lock acquired)
+    App->>QE: execute("CREATE (n:User {name: 'Alice'})")
+    QE->>QE: Parse → Logical Plan → Optimize → Physical Plan
+    QE->>DM: Execute operators
+    DM->>DM: Allocate ID, write entity, mark dirty
+    App->>App: tx.commit()
+    Note over App,DM: See Write Path below
 ```
 
-### Flow Explanation
+### Write Path (commit)
 
-1. **Database Open**: `Database::open()` initializes all storage components
-2. **Transaction Start**: Creates isolated context for operations
-3. **Query Execution**: Parsed, planned, and executed through operators
-4. **Write Operations**: Logged to WAL first, then applied to storage
-5. **Commit**: WAL flushed, dirty entities persisted, checkpoint triggered
+```mermaid
+sequenceDiagram
+    participant TX as Transaction
+    participant WAL as WALManager
+    participant PM as PersistenceManager
+    participant SW as StorageWriter
+    participant FS as FileStorage
 
-## Layered Architecture
-
-```
-Applications (CLI, Benchmark)
-         ↓
-   Public API (C++ & C)
-         ↓
-   Query Engine (Parser → Planner → Executor)
-         ↓
-   Storage Layer (FileStorage, WAL, State Management)
-         ↓
-   Core (Database, Transaction, Entity Management)
-```
-
-### Application Layer
-
-- **CLI Tool**: Interactive REPL for executing Cypher queries
-- **Embedded Applications**: Custom applications using ZYX as a library
-- **Benchmark**: Performance testing suite
-
-### API Layer
-
-- **C++ API**: Modern C++20 interface with RAII and type safety
-- **C API**: C-compatible interface for FFI bindings
-- **Types**: Value system supporting various data types
-
-### Query Engine
-
-- **Parser**: ANTLR4-based Cypher parser with full language support
-- **Planner**: Converts parsed Cypher to logical plans with optimization
-- **Executor**: Executes physical plans with efficient operators
-
-### Storage Layer
-
-- **FileStorage**: Segment-based file format with compression
-- **WAL**: Write-Ahead Logging for durability
-- **State Manager**: Version tracking and rollback support
-
-### Core
-
-- **Database**: Lifecycle management and coordination
-- **Transaction**: ACID properties and isolation
-- **Entity Manager**: Node and relationship management
-
-## Technology Stack
-
-### C++20 Features
-
-ZYX leverages modern C++20 features:
-
-- **Concepts**: Type constraints for template parameters
-- **Coroutines**: Efficient async operations (future)
-- **Modules**: Faster compilation times (planned)
-- **Ranges**: Functional data processing
-
-### Dependencies
-
-| Dependency | Purpose | Version |
-|------------|---------|---------|
-| **Boost** | Filesystem, system utilities | Latest |
-| **zlib** | Compression | 1.2+ |
-| **ANTLR4** | Parser generation | 4.13.1 |
-| **GoogleTest** | Testing framework | Latest |
-
-## Performance Characteristics
-
-| Operation | Complexity | Notes |
-|-----------|------------|-------|
-| Create Node | O(1) | Direct segment allocation |
-| Create Edge | O(1) | Link to existing nodes |
-| Lookup by ID | O(1) | Direct offset calculation |
-| Label Scan | O(n) | Scan all nodes with label |
-| Property Query | O(1) | With index |
-| Property Query | O(n) | Without index |
-
-## Memory Management
-
-### Stack and Heap Allocation
-
-- **Stack**: Small objects, frequent allocations
-- **Pool**: Custom allocators for entities
-- **Arena**: Temporary query execution data
-
-### Cache Strategy
-
-- **LRU Cache**: Hot entities cached in memory
-- **Dirty Tracking**: Modified entities tracked for persistence
-- **Eviction Policy**: Configurable cache size limits
-
-## Concurrency Model
-
-### Optimistic Concurrency Control
-
-- **Versioning**: Each entity has a version number
-- **Conflict Detection**: Detect concurrent modifications
-- **Retry Strategy**: Automatic retry on conflicts
-
-### Isolation Levels
-
-- **Read Committed**: Default isolation level
-- **Serializable**: Full isolation (planned)
-- **Snapshot Consistency**: Per-transaction views
-
-## Error Handling
-
-### Exception Safety
-
-- **Basic Guarantee**: No resource leaks
-- **Strong Guarantee**: Rollback on errors
-- **Noexcept**: Critical operations don't throw
-
-### Error Types
-
-- **StorageError**: Disk I/O failures
-- **TransactionError**: Transaction conflicts
-- **QueryError**: Invalid Cypher syntax
-- **ConstraintError**: Violation of constraints
-
-## Extensibility Points
-
-### Custom Indexes
-
-Implement the `Index` interface for custom indexing strategies:
-
-```cpp
-class CustomIndex : public Index {
-    // Implementation
-};
+    TX->>WAL: Write WAL_TXN_COMMIT + sync
+    TX->>PM: createSnapshot() of all dirty registries
+    PM-->>TX: FlushSnapshot (nodes, edges, props, blobs, indexes, states)
+    TX->>SW: writeSnapshot(snapshot)
+    SW->>FS: Persist each entity type to its segment chain
+    SW->>FS: Update FileHeader (max IDs)
+    TX->>WAL: checkpoint() if threshold reached
+    TX->>PM: commitSnapshot() — swap double-buffer, clear flushing set
+    TX->>TX: Release write lock, publish new CommittedSnapshot
 ```
 
-### Custom Operators
+### Read Path
 
-Extend `Operator` for custom query operations:
+```mermaid
+sequenceDiagram
+    participant App
+    participant TX as Transaction (read-only)
+    participant DM as DataManager
+    participant PM as PersistenceManager
+    participant PB as PageBufferPool
+    participant IO as StorageIO
 
-```cpp
-class CustomOperator : public Operator {
-    // Implementation
-};
+    App->>TX: beginReadOnlyTransaction()
+    TX->>TX: Acquire shared lock, capture CommittedSnapshot
+    App->>DM: getNode(id)
+    DM->>PM: Check flushing dirty set
+    alt Dirty hit
+        PM-->>DM: Return from dirty registry
+    else Clean
+        DM->>PB: getPage(segmentOffset)
+        alt Cache hit
+            PB-->>DM: Cached page
+        else Cache miss
+            PB->>IO: pread(segment data)
+            IO-->>PB: Raw bytes
+            PB-->>DM: Page data
+        end
+    end
+    DM-->>App: Node
 ```
 
-### Storage Plugins
+## Design Principles
 
-Implement storage backend interface for alternative storage:
+1. **Embeddable first** — ZYX is a library, not a server. Link directly into your process.
+2. **Single-writer / multi-reader** — `std::shared_mutex` gives exclusive write access while allowing concurrent reads.
+3. **Segment-based storage** — Fixed-size (128 KB) segments with linked-list chains per entity type.
+4. **Lazy initialization** — `QueryEngine`, `ThreadPool`, and `WAL` are created only when first accessed, keeping startup fast.
+5. **Double-buffered dirty tracking** — `PersistenceManager` maintains active and flushing dirty maps so reads can proceed during I/O.
 
-```cpp
-class CustomStorage : public IStorageBackend {
-    // Implementation
-};
-```
+## Source Locations
 
-## Next Steps
-
-- [Storage System](/en/docs/zyx/architecture/storage) - Deep dive into storage architecture
-- [Query Engine](/en/docs/zyx/architecture/query-engine) - How queries are executed
-- [Transactions](/en/docs/zyx/architecture/transactions) - Transaction management details
+| Component | Header | Implementation |
+|-----------|--------|----------------|
+| Database | `include/graph/core/Database.hpp` | `src/core/Database.cpp` |
+| QueryEngine | `include/graph/query/api/QueryEngine.hpp` | `src/query/` |
+| FileStorage | `include/graph/storage/FileStorage.hpp` | `src/storage/` |
+| TransactionManager | `include/graph/core/TransactionManager.hpp` | `src/core/TransactionManager.cpp` |
+| WAL | `include/graph/storage/wal/WALManager.hpp` | `src/storage/wal/` |

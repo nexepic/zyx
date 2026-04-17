@@ -11,21 +11,33 @@ projectOrder: 1
 ---
 # API Reference
 
-ZYX provides both C++ and C APIs for embedding in your applications.
+ZYX exposes two embedding interfaces — a modern C++ API and a C-compatible API for FFI bindings.
 
-## C++ API
+## Which API to use?
 
-The C++ API offers a modern, type-safe interface for C++20 applications.
+- **C++ API** (`include/zyx/zyx.hpp`) — Use when developing in C++20. Offers type-safe values, RAII transaction management, and a fluent `QueryBuilder`.
+- **C API** (`include/zyx/zyx_c_api.h`) — Use when building Rust, Go, Node.js, Python, or WASM bindings. Opaque handles with explicit lifecycle management.
 
-- [Database Class](cpp-api) - Main database interface
-- [Transaction Class](transaction) - Transaction management
-- [Value Types](types) - Data type system
-- [Error Handling](errors) - Exception handling
+## Sections
 
-## C API
+### C++ API
 
-The C API provides a C-compatible interface for FFI bindings.
+- [C++ API Reference](cpp-api) — `Database`, `Result`, high-performance write APIs, graph algorithms
+- [Transaction API](transaction) — Explicit transactions, read-only transactions, Cypher transaction statements
+- [Type System](types) — `Value`, `Node`, `Edge`, `PropertyValue`, `ResultValue`
+- [Error Handling](errors) — Exception-based vs. Result-based error reporting
 
-- [Functions](c-api) - C API functions
-- [Types](c-types) - C type definitions
-- [Error Codes](c-errors) - Error code reference
+### C API
+
+- [C API Functions](c-api) — All C functions with signatures and usage
+- [C API Types](c-types) — Opaque handles, `ZYXNode`, `ZYXEdge`, `ZYXValueType`
+- [C API Error Handling](c-errors) — Thread-local errors and Result-level errors
+
+## Design Conventions
+
+- Query execution returns a `Result` / `ZYXResult_T*`. Callers iterate rows explicitly.
+- Transactions are available in three forms:
+  - **API-level explicit transactions** — `beginTransaction()` / `zyx_begin_transaction()`
+  - **Read-only transactions** — `beginReadOnlyTransaction()` / `zyx_begin_read_only_transaction()`
+  - **Cypher transaction statements** — `BEGIN` / `COMMIT` / `ROLLBACK` within `execute()`
+- When no explicit transaction is active, `execute()` auto-commits write queries and uses a read-only fast path for reads.

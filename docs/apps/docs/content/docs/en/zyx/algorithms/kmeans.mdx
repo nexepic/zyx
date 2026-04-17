@@ -31,7 +31,7 @@ K-Means partitions a set of n data points into k clusters, where each data point
 K-Means optimizes the following objective function:
 
 ```
-J = Σ(i=1 to n) Σ(j=1 to k) ||x_i - μ_j||²
+J = Sum(i=1..n) Sum(j=1..k) ||x_i - mu_j||^2
 ```
 
 Where:
@@ -39,8 +39,8 @@ Where:
 - `n` = Number of data points
 - `k` = Number of clusters
 - `x_i` = i-th data point
-- `μ_j` = Centroid of cluster j
-- `||·||` = L2 norm (Euclidean distance)
+- `mu_j` = Centroid of cluster j
+- `||.||` = L2 norm (Euclidean distance)
 
 ### Convergence Properties
 
@@ -51,90 +51,87 @@ Where:
 
 ## Algorithm Steps
 
-The K-Means algorithm follows an iterative Expectation-Maximization (EM) approach:
+The K-Means algorithm follows an iterative Expectation-Maximization (EM) approach. ZYX uses the classic Lloyd's algorithm with random initialization, a fixed seed for reproducibility, and a maximum of 15 iterations.
 
 ### 1. Initialization
 
-Choose initial centroids from the data:
+The algorithm selects k random data points as initial centroids using a Mersenne Twister random number generator (`std::mt19937`) seeded with the fixed value **42**. This deterministic seeding ensures reproducible results across runs -- given the same input data, K-Means always produces identical centroids.
 
-```cpp
-std::vector centroids(k, std::vector<float>(dim));
-std::mt19937 rng(42);  // Fixed seed for reproducibility
-std::uniform_int_distribution<size_t> dist(0, n - 1);
-
-for (size_t i = 0; i < k; ++i) {
-    centroids[i] = data[dist(rng)];  // Random selection
-}
-```
+For each of the k centroids, a random index is drawn uniformly from the range `[0, n-1]`, and the corresponding data point is copied as the initial centroid. This is standard random initialization, not K-Means++.
 
 ### 2. E-Step (Expectation)
 
-Assign each point to the nearest centroid:
+In each iteration, every data point is assigned to the cluster whose centroid is closest under L2 squared distance. For each point, the algorithm computes the distance to all k centroids and selects the one with the minimum distance.
 
-```cpp
-for (size_t i = 0; i < n; ++i) {
-    float min_dist = std::numeric_limits<float>::max();
-    int best_c = 0;
+The distance computation uses `VectorMetric::computeL2Sqr`, which employs 4-way loop unrolling: the inner loop processes four dimensions per iteration, accumulating partial sums in four separate temporaries before combining them. This reduces loop overhead and aids compiler auto-vectorization. Any remaining dimensions (when the vector length is not a multiple of four) are handled in a separate scalar tail loop.
 
-    for (size_t c = 0; c < k; ++c) {
-        float dist_val = VectorMetric::computeL2Sqr(
-            data[i].data(),
-            centroids[c].data(),
-            dim
-        );
+After computing the new assignment, the algorithm checks whether it differs from the previous iteration's assignment. A `changed` flag tracks whether any point switched clusters, which is used for convergence detection.
 
-        if (dist_val < min_dist) {
-            min_dist = dist_val;
-            best_c = c;
-        }
-    }
-    assignment[i] = best_c;
-}
-```
+While performing assignments, the algorithm also accumulates per-cluster sums and counts, so that the subsequent M-step can reuse this work without a second pass over the data.
 
 ### 3. M-Step (Maximization)
 
-Update centroids to be the mean of assigned points:
+For each cluster with at least one assigned point, the centroid is updated to the mean of all points assigned to it. The mean is computed by multiplying the accumulated sum by the reciprocal of the count (`1.0f / count`), avoiding repeated division.
 
-```cpp
-for (size_t c = 0; c < k; ++c) {
-    if (counts[c] > 0) {
-        float inv_count = 1.0f / static_cast<float>(counts[c]);
-        for (size_t d = 0; d < dim; ++d) {
-            centroids[c][d] = sums[c][d] * inv_count;
-        }
-    } else {
-        // Re-initialize empty cluster
-        centroids[c] = data[dist(rng)];
-    }
-}
-```
+For empty clusters (those with zero assigned points), the centroid is re-initialized to a new random data point drawn from the same uniform distribution. This prevents the cluster from remaining permanently empty and potentially degrading quantization quality.
 
 ### 4. Convergence Check
 
-Stop when assignments don't change or max iterations reached:
+After the E-step, if no data point changed its cluster assignment (`changed` is false), the algorithm has converged and terminates early. Otherwise, it continues until the maximum iteration count (15) is reached.
 
-```cpp
-if (!changed) {
-    break;  // Converged
-}
+### One EM Iteration in Detail
+
+The following sequence diagram illustrates the detailed flow of a single EM iteration:
+
+```mermaid
+sequenceDiagram
+    participant Main as Iteration Loop
+    participant E as E-Step
+    participant Metric as VectorMetric
+    participant M as M-Step
+
+    Main->>E: Begin iteration
+    loop For each data point x_i
+        E->>Metric: computeL2Sqr(x_i, centroid_c) for all k centroids
+        Metric-->>E: L2 squared distances
+        E->>E: Find min-distance centroid (best_c)
+        E->>E: Check if assignment[i] != best_c
+        E->>E: Accumulate sums[best_c] += x_i
+        E->>E: Increment counts[best_c]
+    end
+    E-->>Main: changed flag (any assignment changed?)
+
+    alt No changes (converged)
+        Main-->>Main: Break loop
+    else Assignments changed
+        Main->>M: Update centroids
+        loop For each cluster c
+            alt counts[c] > 0
+                M->>M: centroids[c] = sums[c] / counts[c]
+            else counts[c] == 0 (empty cluster)
+                M->>M: centroids[c] = random data point
+            end
+        end
+        M-->>Main: Updated centroids
+        Main->>Main: Continue to next iteration
+    end
 ```
 
 ## Algorithm Flowchart
 
 ```mermaid
 flowchart TD
-    A[Start] --> B[Initialize Centroids]
-    B --> C{Max iterations?}
-    C -->|No| D[E-Step: Assignment]
-    D --> E{Assignments changed?}
-    E -->|Yes| F[M-Step: Update]
-    E -->|No| G[Converged]
+    A[Start] --> B[Initialize k centroids from random data points]
+    B --> C{Iteration less than max_iter 15?}
+    C -->|No| G[Return Centroids]
+    C -->|Yes| D[E-Step: Assign each point to nearest centroid via L2 squared distance]
+    D --> E{Any assignment changed?}
+    E -->|No| G[Return Centroids - Converged]
+    E -->|Yes| F[M-Step: Update centroids as mean of assigned points]
     F --> H{Empty clusters?}
-    H -->|Yes| I[Re-initialize]
+    H -->|Yes| I[Re-initialize empty centroids to random data points]
     H -->|No| C
     I --> C
-    C -->|Yes| G[Return Centroids]
     G --> J[End]
 ```
 
@@ -145,311 +142,97 @@ flowchart TD
 - Check for convergence or max iterations
 - Handle empty clusters by re-initialization
 
-## Centroid Initialization Strategies
-
-### Random Initialization (Default)
-
-Select k random data points as initial centroids:
-
-```cpp
-std::uniform_int_distribution<size_t> dist(0, n - 1);
-for (size_t i = 0; i < k; ++i) {
-    centroids[i] = data[dist(rng)];
-}
-```
-
-**Pros**: Simple, fast
-**Cons**: Poor initialization can lead to slow convergence or suboptimal results
-
-### K-Means++ Initialization
-
-Probabilistically select centroids to be far apart:
-
-```cpp
-// First centroid: random selection
-centroids[0] = data[dist(rng)];
-
-// Subsequent centroids: probability proportional to distance
-for (size_t i = 1; i < k; ++i) {
-    std::vector<float> distances(n);
-    float total_dist = 0.0f;
-
-    // Compute distance to nearest centroid
-    for (size_t j = 0; j < n; ++j) {
-        float min_dist = std::numeric_limits<float>::max();
-        for (size_t c = 0; c < i; ++c) {
-            float d = VectorMetric::computeL2Sqr(
-                data[j].data(), centroids[c].data(), dim
-            );
-            min_dist = std::min(min_dist, d);
-        }
-        distances[j] = min_dist;
-        total_dist += min_dist;
-    }
-
-    // Select with probability proportional to distance²
-    std::uniform_real_distribution<float> prob_dist(0, total_dist);
-    float threshold = prob_dist(rng);
-    float cumulative = 0.0f;
-
-    for (size_t j = 0; j < n; ++j) {
-        cumulative += distances[j];
-        if (cumulative >= threshold) {
-            centroids[i] = data[j];
-            break;
-        }
-    }
-}
-```
-
-**Pros**: Better spread of initial centroids, faster convergence
-**Cons**: More expensive initialization
-
 ## Handling Empty Clusters
 
-When a cluster becomes empty (no assigned points), several strategies exist:
+When a cluster becomes empty (no assigned points during the E-step), the algorithm re-initializes its centroid to a randomly selected data point. This strategy is simple and effective for the PQ use case, where the training data is typically large enough that empty clusters are rare. Alternative strategies (such as splitting the largest cluster) are not used in ZYX.
 
-### 1. Re-initialization Strategy (Used in ZYX)
+## Distance Computation: L2 Squared
 
-```cpp
-if (counts[c] == 0) {
-    centroids[c] = data[dist(rng)];  // New random point
-}
-```
+K-Means uses the L2 squared distance rather than the full Euclidean distance. This is an optimization with no impact on correctness:
 
-### 2. Split Largest Cluster
+- **No sqrt required**: The square root is expensive and unnecessary for comparison -- the ordering of distances is preserved without it.
+- **Same argmin**: Because sqrt is monotonic, `argmin ||a - b||^2 == argmin ||a - b||`.
+- **Faster computation**: Each distance check saves one floating-point square root operation.
 
-Move a point from the largest cluster to the empty one.
-
-### 3. Ignore Empty Clusters
-
-Reduce effective number of clusters (not recommended).
-
-## Complete Implementation
-
-The complete K-Means implementation used in ZYX:
-
-```cpp
-#include <limits>
-#include <random>
-#include <vector>
-#include "graph/vector/core/VectorMetric.hpp"
-
-namespace graph::vector {
-    class KMeans {
-    public:
-        static std::vector<std::vector<float>> run(
-            const std::vector<std::vector<float>>& data,
-            size_t k,
-            size_t max_iter = 15
-        ) {
-            if (data.empty())
-                return {};
-
-            size_t dim = data[0].size();
-            size_t n = data.size();
-
-            // Initialize Centroids
-            std::vector centroids(k, std::vector<float>(dim));
-            std::vector<int> assignment(n);
-            std::mt19937 rng(42);  // Fixed seed for reproducibility
-            std::uniform_int_distribution<size_t> dist(0, n - 1);
-
-            for (size_t i = 0; i < k; ++i) {
-                centroids[i] = data[dist(rng)];
-            }
-
-            // Main iteration loop
-            for (size_t it = 0; it < max_iter; ++it) {
-                bool changed = false;
-                std::vector sums(k, std::vector(dim, 0.0f));
-                std::vector<size_t> counts(k, 0);
-
-                // E-Step: Assign points to nearest centroid
-                for (size_t i = 0; i < n; ++i) {
-                    float min_dist = std::numeric_limits<float>::max();
-                    int best_c = 0;
-
-                    for (size_t c = 0; c < k; ++c) {
-                        float dist_val = VectorMetric::computeL2Sqr(
-                            data[i].data(),
-                            centroids[c].data(),
-                            dim
-                        );
-
-                        if (dist_val < min_dist) {
-                            min_dist = dist_val;
-                            best_c = c;
-                        }
-                    }
-
-                    if (assignment[i] != best_c)
-                        changed = true;
-                    assignment[i] = best_c;
-
-                    // Accumulate for M-Step
-                    for (size_t d = 0; d < dim; ++d)
-                        sums[best_c][d] += data[i][d];
-                    counts[best_c]++;
-                }
-
-                // Check convergence
-                if (!changed)
-                    break;
-
-                // M-Step: Update centroids
-                for (size_t c = 0; c < k; ++c) {
-                    if (counts[c] > 0) {
-                        float inv_count = 1.0f / static_cast<float>(counts[c]);
-                        for (size_t d = 0; d < dim; ++d)
-                            centroids[c][d] = sums[c][d] * inv_count;
-                    } else {
-                        // Re-initialize empty cluster
-                        centroids[c] = data[dist(rng)];
-                    }
-                }
-            }
-
-            return centroids;
-        }
-    };
-} // namespace graph::vector
-```
+The implementation in `VectorMetric::computeL2Sqr` uses 4-way loop unrolling: it processes four dimension differences per loop iteration, squaring and summing them together. This reduces loop overhead and creates opportunities for SIMD auto-vectorization by the compiler. A scalar tail loop handles any remaining dimensions when the vector length is not a multiple of four.
 
 ## Time and Space Complexity
 
 ### Time Complexity
 
 **Per Iteration:**
-- Assignment step: O(n × k × d)
+- Assignment step: O(n x k x d)
   - n data points
   - k centroids
   - d dimensions
-- Update step: O(n × d)
-- **Total per iteration**: O(n × k × d)
+- Update step: O(n x d)
+- **Total per iteration**: O(n x k x d)
 
 **Overall:**
-- **Worst case**: O(n × k × d × I)
+- **Worst case**: O(n x k x d x I)
   - I = number of iterations (typically 10-50)
-- **Average case**: O(n × k × d × log I)
-- **Typical**: O(n × k × d × 15) [default max iterations]
+- **Average case**: O(n x k x d x log I)
+- **Typical**: O(n x k x d x 15) [default max iterations]
 
 ### Space Complexity
 
-- **Centroids**: O(k × d)
+- **Centroids**: O(k x d)
 - **Assignments**: O(n)
-- **Accumulators**: O(k × d)
-- **Total**: O(k × d + n)
+- **Accumulators**: O(k x d)
+- **Total**: O(k x d + n)
 
 ### Complexity Comparison
 
 | Component | Space | Time (per iter) |
 |-----------|-------|-----------------|
-| Centroids | O(k×d) | - |
+| Centroids | O(k x d) | - |
 | Assignments | O(n) | - |
-| E-Step | - | O(n×k×d) |
-| M-Step | - | O(n×d) |
-| **Total** | **O(n + k×d)** | **O(n×k×d)** |
+| E-Step | - | O(n x k x d) |
+| M-Step | - | O(n x d) |
+| **Total** | **O(n + k x d)** | **O(n x k x d)** |
 
 ## Integration with Product Quantization
 
-K-Means is used to train codebooks in Product Quantization:
+K-Means is not a general-purpose clustering tool in ZYX. It exists specifically to train PQ codebooks. The Product Quantizer splits each input vector into sub-vectors (one per subspace) and runs K-Means independently on each subspace to produce a codebook of 256 centroids. Each centroid is a codeword, and the K-Means training ensures that codewords minimize the quantization error within their subspace.
 
-### Codebook Training Process
+### PQ Codebook Training Flow
 
-```cpp
-// Split vector into sub-vectors
-size_t num_subspaces = 8;
-size_t sub_dim = dim / num_subspaces;
+The following diagram shows how K-Means integrates into the PQ training pipeline:
 
-// Train codebook for each subspace
-for (size_t s = 0; s < num_subspaces; ++s) {
-    // Extract sub-vectors
-    std::vector<std::vector<float>> sub_data(n, std::vector<float>(sub_dim));
-    for (size_t i = 0; i < n; ++i) {
-        std::copy(
-            data[i].begin() + s * sub_dim,
-            data[i].begin() + (s + 1) * sub_dim,
-            sub_data[i].begin()
-        );
-    }
+```mermaid
+flowchart TD
+    A[Input: n training vectors of dimension D] --> B[Split each vector into M sub-vectors]
+    B --> C[Subspace 0: dims 0..D/M-1]
+    B --> D[Subspace 1: dims D/M..2D/M-1]
+    B --> E[Subspace M-1: dims D-D/M..D-1]
+    C --> F[K-Means k=256, max_iter=15]
+    D --> G[K-Means k=256, max_iter=15]
+    E --> H[K-Means k=256, max_iter=15]
+    F --> I[Codebook 0: 256 codewords]
+    G --> J[Codebook 1: 256 codewords]
+    H --> K[Codebook M-1: 256 codewords]
+    I --> L[Encode each vector as M bytes]
+    J --> L
+    K --> L
 
-    // Run K-Means to get codebook
-    size_t k = 256;  // 256 codewords (8 bits)
-    auto codebook = KMeans::run(sub_data, k);
-
-    // Store codebook for this subspace
-    codebooks[s] = codebook;
-}
+    style F fill:#eee,stroke:#333
+    style G fill:#eee,stroke:#333
+    style H fill:#eee,stroke:#333
 ```
+
+### How It Works
+
+1. **Subspace extraction**: Each training vector of dimension D is split into M equal-length sub-vectors. For example, a 128-dimensional vector with M=8 subspaces produces 8 sub-vectors of 16 dimensions each.
+
+2. **Independent K-Means per subspace**: For each subspace, all n sub-vectors are collected and passed to K-Means with k=256. This produces a codebook of 256 codewords (centroids) per subspace. The value 256 is chosen so that each codeword index fits in a single byte (8 bits).
+
+3. **Encoding**: After training, any vector is encoded as a sequence of M bytes. For each subspace, the nearest codeword in the corresponding codebook is found (again using L2 squared distance), and its index (0-255) is stored as a `uint8_t`.
+
+4. **Parallelism across subspaces**: The PQ trainer can run K-Means for different subspaces in parallel using a thread pool (outer parallelism). Additionally, each individual K-Means run can use the thread pool for inner parallelism during the E-step, using thread-local accumulators to avoid contention.
 
 ### PQ Encoding
 
-Each vector is encoded as a sequence of codeword indices:
-
-```cpp
-std::vector<uint8_t> encode(const std::vector<float>& vec) {
-    std::vector<uint8_t> codes(num_subspaces);
-
-    for (size_t s = 0; s < num_subspaces; ++s) {
-        // Find nearest codeword in subspace
-        float min_dist = std::numeric_limits<float>::max();
-        uint8_t best_code = 0;
-
-        for (size_t k = 0; k < 256; ++k) {
-            float dist = VectorMetric::computeL2Sqr(
-                vec.data() + s * sub_dim,
-                codebooks[s][k].data(),
-                sub_dim
-            );
-
-            if (dist < min_dist) {
-                min_dist = dist;
-                best_code = static_cast<uint8_t>(k);
-            }
-        }
-
-        codes[s] = best_code;
-    }
-
-    return codes;
-}
-```
-
-## L2 Distance Computation
-
-K-Means uses L2 squared distance for efficiency:
-
-```cpp
-static float computeL2Sqr(const float* a, const float* b, size_t dim) {
-    float sum = 0.0f;
-    size_t i = 0;
-
-    // 4-way unrolling for vectorization
-    for (; i + 4 <= dim; i += 4) {
-        float d0 = a[i] - b[i];
-        float d1 = a[i + 1] - b[i + 1];
-        float d2 = a[i + 2] - b[i + 2];
-        float d3 = a[i + 3] - b[i + 3];
-
-        sum += d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
-    }
-
-    // Handle remaining elements
-    for (; i < dim; ++i) {
-        float d = a[i] - b[i];
-        sum += d * d;
-    }
-
-    return sum;
-}
-```
-
-**Why squared distance?**
-- Avoids expensive sqrt operation
-- Preserves ordering (same argmin)
-- Faster computation
-- Sufficient for comparison
+After codebooks are trained, encoding a vector involves finding the nearest codeword in each subspace. For each of the M sub-vectors, the algorithm computes the L2 squared distance to all 256 codewords in the corresponding codebook and stores the index of the closest one. The result is a compact M-byte representation of the original D-dimensional vector.
 
 ## Configuration Parameters
 
@@ -457,83 +240,41 @@ static float computeL2Sqr(const float* a, const float* b, size_t dim) {
 
 | Parameter | Default | Range | Description |
 |-----------|---------|-------|-------------|
-| `k` | Required | 2-√n | Number of clusters |
+| `k` | 256 (for PQ) | 2 to sqrt(n) | Number of clusters (codewords per subspace) |
 | `max_iter` | 15 | 1-1000 | Maximum iterations |
-| `seed` | 42 | Any | Random seed for initialization |
+| `seed` | 42 | Fixed | Random seed for initialization (not configurable) |
 
-### Parameter Selection Guidelines
+### Parameter Selection
 
-**Choosing k:**
-- For PQ: k = 256 (8-bit codes)
-- For compression: k = 16-128
-- Elbow method: Plot WCSS vs k
-- Silhouette analysis: Measure cluster quality
+**k = 256 for PQ**: This value is fixed for Product Quantization because each codeword index must fit in a single byte (8 bits = 256 values). This provides a good balance between quantization accuracy and compression ratio.
 
-**Choosing max_iter:**
-- Default 15 works for most cases
-- Increase for high-dimensional data
-- Decrease for faster training
-- Monitor convergence rate
+**max_iter = 15**: Empirically sufficient for PQ codebook training. The algorithm typically converges within 10-15 iterations on subspace data. Increasing this value rarely improves codebook quality significantly.
 
 ## Performance Optimization
 
-### Optimization Techniques Used
+### Optimization Techniques
 
-1. **Fixed Seed**: Deterministic initialization for reproducibility
-2. **Loop Unrolling**: 4-way unrolling in distance computation
-3. **Accumulation**: Efficient sum computation in M-step
-4. **Early Convergence**: Stop when assignments stabilize
+1. **Fixed Seed (42)**: Deterministic initialization ensures reproducible results and simplifies testing and debugging.
+2. **4-Way Loop Unrolling**: The L2 squared distance computation processes four dimensions per iteration, reducing loop overhead and enabling compiler auto-vectorization.
+3. **Single-Pass E-Step**: Cluster assignment and accumulator updates happen in the same loop over the data, avoiding a second pass.
+4. **Early Convergence**: The algorithm terminates immediately when no point changes cluster, avoiding unnecessary iterations.
+5. **Multiplicative Inverse**: Centroid updates use `sum * (1.0f / count)` instead of `sum / count`, replacing repeated division with a single division and multiplication.
+
+### Thread Pool Parallelism
+
+When a thread pool is provided and the dataset contains at least 256 points, the E-step runs in parallel across multiple threads. Each thread maintains its own local accumulators (sums and counts) to avoid contention. After all threads complete, the thread-local accumulators are merged into global sums and counts before the M-step updates centroids. The parallel path uses relaxed atomic operations for the `changed` flag.
 
 ### Memory Efficiency
 
-- **In-place updates**: Centroids updated without allocation
-- **Contiguous storage**: Vector of vectors for cache locality
-- **Minimal overhead**: Only essential data structures
-
-### Parallelization Opportunities
-
-```cpp
-// Parallel E-step (future enhancement)
-#pragma omp parallel for
-for (size_t i = 0; i < n; ++i) {
-    // Assignment computation
-}
-
-// Parallel distance computation
-for (size_t c = 0; c < k; ++c) {
-    #pragma omp parallel for
-    for (size_t i = 0; i < n; ++i) {
-        // Distance to centroid c
-    }
-}
-```
+- **In-place updates**: Centroids are updated directly without allocating new storage each iteration.
+- **Contiguous storage**: Data and centroids use `std::vector<std::vector<float>>` for cache-friendly sequential access.
+- **Minimal overhead**: Only essential data structures are allocated -- centroids, assignments, sums, and counts.
 
 ## Use Cases in ZYX
 
-### 1. Product Quantization Training
+### Product Quantization Codebook Training
 
-Train codebooks for vector compression:
-
-```cpp
-// Train PQ codebooks
-auto codebooks = trainPQCodebooks(vectors, num_subspaces=8, k=256);
-```
-
-### 2. Vector Clustering
-
-Group similar vectors for analysis:
-
-```cpp
-auto clusters = KMeans::run(vectors, k=10);
-```
-
-### 3. Data Compression
-
-Reduce storage through quantization:
-
-```cpp
-auto compressed = encodeWithPQ(vectors, codebooks);
-```
+The sole purpose of K-Means in ZYX is to train PQ codebooks. Each subspace gets its own independent K-Means run with k=256, producing 256 codewords that minimize quantization error within that subspace.
 
 ## Advantages and Limitations
 
@@ -541,24 +282,22 @@ auto compressed = encodeWithPQ(vectors, codebooks);
 
 - **Simple**: Easy to understand and implement
 - **Efficient**: Linear scaling with data size
-- **Effective**: Works well for many applications
-- **Fast convergence**: Typically 10-20 iterations
+- **Effective**: Works well for PQ subspace clustering
+- **Fast convergence**: Typically converges within 10-15 iterations
+- **Deterministic**: Fixed seed ensures reproducible results
 
 ### Limitations
 
-- **Local Optima**: Sensitive to initialization
-- **Fixed k**: Requires knowing number of clusters
-- **Spherical Clusters**: Assumes isotropic clusters
-- **Outlier Sensitivity**: Mean is sensitive to outliers
+- **Local Optima**: Sensitive to random initialization; different seeds may produce different results
+- **Fixed k**: The number of clusters must be known in advance
+- **Spherical Clusters**: Assumes isotropic (round) cluster shapes
+- **Outlier Sensitivity**: The mean is sensitive to outliers, which can pull centroids away from the cluster center
 
-## Best Practices
+## Source Locations
 
-1. **Normalization**: Scale features to similar ranges
-2. **Initialization**: Use K-Means++ for better results
-3. **Multiple Runs**: Try different initializations
-4. **Convergence**: Monitor objective function
-5. **Empty Clusters**: Handle appropriately
-6. **Outliers**: Consider preprocessing or robust variants
+- **KMeans**: `include/graph/vector/quantization/KMeans.hpp`
+- **VectorMetric** (L2 distance): `include/graph/vector/core/VectorMetric.hpp`
+- **ProductQuantizer** (caller): `include/graph/vector/quantization/NativeProductQuantizer.hpp`
 
 ## See Also
 

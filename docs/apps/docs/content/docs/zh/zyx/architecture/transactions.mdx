@@ -1,9 +1,9 @@
 ---
 title: 事务管理
-description: 当前实现的事务状态机、并发控制和提交/回滚流程。
+description: 事务状态机、并发控制与提交/回滚流程。
 category: 核心组件
 categoryOrder: 2
-order: 5
+order: 6
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -11,45 +11,137 @@ projectOrder: 1
 ---
 # 事务管理
 
-事务由 `TransactionManager` 管理，`Transaction` 提供外部句柄。
+事务由 `TransactionManager` 管理，`Transaction` 提供外部句柄，具有 RAII 语义。
 
 ## 状态机
 
-`Transaction::TxnState`：
+```mermaid
+stateDiagram-v2
+    [*] --> TXN_ACTIVE: begin() / beginReadOnly()
+    TXN_ACTIVE --> TXN_COMMITTED: commit()
+    TXN_ACTIVE --> TXN_ROLLED_BACK: rollback()
+    TXN_COMMITTED --> [*]
+    TXN_ROLLED_BACK --> [*]
+```
 
-- `TXN_ACTIVE`
-- `TXN_COMMITTED`
-- `TXN_ROLLED_BACK`
-
-`Transaction` 为 move-only；若对象析构时仍为 active，会自动回滚。
+`Transaction` 为 move-only；若对象析构时仍为 `TXN_ACTIVE`，会自动回滚。
 
 ## 并发策略
 
-- 写事务：单写（`std::shared_mutex` 独占锁）
-- 只读事务：多读（共享锁 + `CommittedSnapshot`）
+```mermaid
+graph LR
+    subgraph "写事务"
+        WT["begin() → unique_lock(shared_mutex)"]
+    end
+    subgraph "只读事务（N 个并发）"
+        RT1["beginReadOnly() → shared_lock"]
+        RT2["beginReadOnly() → shared_lock"]
+        RT3["beginReadOnly() → shared_lock"]
+    end
+```
 
-这意味着：
+- **写事务** — 获取排他锁（`std::unique_lock<std::shared_mutex>`），同一时刻只能有一个活跃写事务。
+- **只读事务** — 获取共享锁（`std::shared_lock<std::shared_mutex>`），多个只读事务可并发运行，但不能与写事务并发。
 
-- 只读事务可并发运行
-- 同一时刻只有一个写事务可以提交修改
+这种单写多读设计完全避免写-写冲突，并为读者提供快照隔离。
 
-## 提交流程（写事务）
+## 写事务提交流程
 
-1. 写 WAL commit 记录并 `sync`
-2. `FileStorage::save()` 持久化主存储
-3. 达到阈值时触发 WAL checkpoint
-4. 发布新的 committed snapshot
-5. 清理事务上下文并释放写锁
+```mermaid
+sequenceDiagram
+    participant App
+    participant TX as Transaction
+    participant TM as TransactionManager
+    participant WAL as WALManager
+    participant PM as PersistenceManager
+    participant SW as StorageWriter
+
+    App->>TX: commit()
+    TX->>TM: commitTransaction(tx)
+
+    TM->>WAL: writeCommit(txnId)
+    TM->>WAL: sync() — flush + fsync
+
+    TM->>PM: createSnapshot()
+    PM-->>TM: FlushSnapshot（nodes, edges, props, blobs, indexes, states）
+
+    TM->>SW: writeSnapshot(snapshot)
+    SW->>SW: 将各实体类型持久化到段链
+    SW->>SW: 更新 FileHeader max IDs
+
+    TM->>WAL: 若大小 ≥ 阈值则 checkpoint()
+
+    TM->>PM: commitSnapshot()
+    Note over PM: 交换双缓冲、清空 flushing 集
+
+    TM->>TM: 发布新 CommittedSnapshot
+
+    TM->>TX: state = TXN_COMMITTED
+    Note over TX: 析构函数释放写锁
+```
+
+**逐步说明：**
+
+1. **WAL commit 记录** — 写入 `WAL_TXN_COMMIT` 并 `sync()` 到磁盘。这是不可回退点——此后即使进程崩溃，事务也是持久的。
+2. **快照脏实体** — `PersistenceManager.createSnapshot()` 捕获所有脏实体并交换为新的空注册表（双缓冲），新写入可继续进入活跃集。
+3. **持久化到存储** — `StorageWriter` 将各实体类型写入对应段链，按需分配新段。
+4. **Checkpoint** — 若 WAL 增长超过阈值（默认 1 MB），执行 checkpoint 截断 WAL。
+5. **发布快照** — 发布新 `CommittedSnapshot` 供只读事务使用。
+6. **释放锁** — `Transaction` 对象析构时释放写锁。
 
 ## 回滚流程
 
-1. DataManager 回滚当前事务脏修改
-2. 记录 WAL rollback
-3. checkpoint 清理 WAL
-4. 清理事务上下文并释放锁
+```mermaid
+sequenceDiagram
+    participant TX as Transaction
+    participant TM as TransactionManager
+    participant DM as DataManager
+    participant WAL as WALManager
+
+    TX->>TM: rollbackTransaction(tx)
+    TM->>DM: UndoLog — 撤销当前事务中的所有变更
+    TM->>WAL: writeRollback(txnId)
+    TM->>TX: state = TXN_ROLLED_BACK
+    Note over TX: 析构函数释放写锁
+```
+
+回滚时，`TransactionContext` 中的 `UndoLog` 撤销事务期间记录的每个操作（add → remove、update → restore、delete → re-insert）。写入 `WAL_TXN_ROLLBACK` 记录后释放写锁。
+
+## WAL 初始化（两阶段）
+
+ZYX 将 WAL 创建推迟到实际需要时：
+
+```mermaid
+graph TD
+    A["Database::open()"] --> B{WAL 文件存在?}
+    B -->|是| C["ensureWALAndTransactionManager()"]
+    C --> D[WAL 恢复：回放已提交事务]
+    D --> E[正常运行]
+    B -->|否| E
+
+    E --> F{首次写事务?}
+    F -->|是| G["ensureWALForWrites()"]
+    G --> H[创建 WAL 文件，初始化 WALManager]
+    H --> I[继续执行写入]
+```
+
+这种两阶段方式意味着只读工作负载永远不会产生 WAL 文件创建的开销。
+
+## 只读事务
+
+只读事务在开始时获取不可变的 `CommittedSnapshot`，保证在整个生命周期内看到一致的数据库视图，不受并发写事务影响。
+
+三层只读强制机制防止任何数据变更：
+
+1. **ExecMode** — 查询引擎在只读模式下拒绝写操作。
+2. **QueryPlan 标志** — 计划本身标记为只读。
+3. **DataManager 守卫** — 数据层拒绝来自只读事务的任何写调用。
 
 ## 源码定位
 
-- `include/graph/core/Transaction.hpp`
-- `include/graph/core/TransactionManager.hpp`
-- `src/core/TransactionManager.cpp`
+| 组件 | 路径 |
+|------|------|
+| Transaction | `include/graph/core/Transaction.hpp` |
+| TransactionManager | `include/graph/core/TransactionManager.hpp` |
+| CommittedSnapshot | `include/graph/storage/SnapshotManager.hpp` |
+| PersistenceManager | `include/graph/storage/PersistenceManager.hpp` |

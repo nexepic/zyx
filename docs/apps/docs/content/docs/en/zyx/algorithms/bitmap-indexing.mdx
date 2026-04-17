@@ -1,6 +1,6 @@
 ---
-title: Bitmap Indexing Algorithm
-description: ZYX uses bitmap-based indexing for efficient space tracking and fast lookup operations. Bitmaps provide O(1) space checking with minimal memory overhe
+title: Bitmap Indexing
+description: How ZYX uses bitmap structures for free slot tracking within segments.
 category: Indexing
 categoryOrder: 3
 order: 3
@@ -9,361 +9,70 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Bitmap Indexing Algorithm
+# Bitmap Indexing
 
-ZYX uses bitmap-based indexing for efficient space tracking and fast lookup operations. Bitmaps provide O(1) space checking with minimal memory overhead.
+ZYX uses bitmap structures to track free and used slots within segments. Each segment maintains metadata about which slots are occupied, enabling O(1) slot allocation checks and efficient space utilization tracking.
 
-## Overview
+## How Slot Tracking Works
 
-Bitmaps are arrays of bits where each bit represents the state of a fixed-size block (64 bytes) within a segment.
+Each segment header records the total slot count and current data usage. Slot metadata is stored as an array within the segment, where each entry tracks:
 
-## Bitmap Structure
+- **Entity ID**: The ID assigned to the entity stored in this slot
+- **Data offset**: Byte offset within the segment's data area
+- **Data size**: Size of the entity data in bytes
+- **Flags**: Active/inactive status and other per-slot flags
 
-### Layout
+```mermaid
+graph TD
+    SH[Segment Header] --> SM[Slot Metadata Array]
+    SH --> DA[Data Area]
 
-| Byte | Bit 0 | Bit 1 | Bit 2 | Bit 3 | Bit 4 | Bit 5 | Bit 6 | Bit 7 |
-|------|-------|-------|-------|-------|-------|-------|-------|-------|
-| Byte 0 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-| Byte 1 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
-| ... | ... | ... | ... | ... | ... | ... | ... | ... |
-| Byte N | 8N | 8N+1 | 8N+2 | 8N+3 | 8N+4 | 8N+5 | 8N+6 | 8N+7 |
-
-### Bitmap Size
-
-```cpp
-// For a 4MB segment with 64-byte blocks:
-constexpr size_t SEGMENT_SIZE = 4 * 1024 * 1024;  // 4 MB
-constexpr size_t BLOCK_SIZE = 64;
-constexpr size_t BLOCKS_PER_SEGMENT = SEGMENT_SIZE / BLOCK_SIZE;  // 65536
-constexpr size_t BITMAP_SIZE = BLOCKS_PER_SEGMENT / 8;  // 8192 bytes (8 KB)
+    SM --> S1["Slot 0: id=1, offset=0, size=128"]
+    SM --> S2["Slot 1: id=2, offset=128, size=96"]
+    SM --> S3["Slot 2: id=3, offset=224, size=64"]
+    SM --> S4["Slot 3: FREE"]
+    SM --> S5["Slot 4: id=5, offset=288, size=112"]
 ```
 
-## Core Operations
+When an entity is written to a segment, a slot is claimed from the free pool. The `IDAllocator` determines the entity ID, and the segment records the slot metadata. When an entity is deleted, its slot is marked inactive, and the ID is returned to the allocator's volatile intervals.
 
-### Test Block Status
+## Allocation Strategy
 
-```cpp
-bool isFree(size_t blockIndex) const {
-    size_t byteIndex = blockIndex / 8;
-    size_t bitIndex = blockIndex % 8;
-    return (bitmap_[byteIndex] & (1 << bitIndex)) == 0;
-}
-```
+ZYX uses a **first-available** slot allocation strategy within segments:
 
-**Complexity**: O(1)
+1. When a new entity is created, the system walks the segment chain for the appropriate entity type
+2. The first segment with available slot capacity and sufficient data space is selected
+3. If no existing segment has room, a new segment is allocated at the end of the file
+4. The slot metadata entry is populated with the entity's ID and data location
 
-### Mark Block as Used
+This approach avoids fragmentation within segments because entity data is written sequentially into the data area, and slot metadata grows independently.
 
-```cpp
-void markUsed(size_t blockIndex) {
-    size_t byteIndex = blockIndex / 8;
-    size_t bitIndex = blockIndex % 8;
-    bitmap_[byteIndex] |= (1 << bitIndex);
-}
-```
+## Space Efficiency
 
-**Complexity**: O(1)
+Slot tracking adds minimal overhead:
 
-### Mark Block as Free
+| Component | Size | Notes |
+|-----------|------|-------|
+| Segment header | 40 bytes | Fixed per segment |
+| Per-slot metadata | ~32 bytes | ID, offset, size, flags |
+| Data area alignment | 8 bytes | Aligned for cross-platform access |
 
-```cpp
-void markFree(size_t blockIndex) {
-    size_t byteIndex = blockIndex / 8;
-    size_t bitIndex = blockIndex % 8;
-    bitmap_[byteIndex] &= ~(1 << bitIndex);
-}
-```
+For a 128 KB segment, the typical slot capacity ranges from hundreds (for large entities like Blob) to thousands (for small entities like Property).
 
-**Complexity**: O(1)
+## Integration with IDAllocator
 
-## Search Operations
+The bitmap/slot tracking works together with `IDAllocator`:
 
-### Find Single Free Block
+- **Allocation**: `IDAllocator` assigns an ID, segment allocator finds a slot, entity is written
+- **Deallocation**: Slot is marked inactive, ID returned to `IDAllocator`'s volatile intervals
+- **Recovery**: WAL replay rebuilds slot state by re-applying committed writes
 
-```cpp
-size_t findFreeBlock() const {
-    for (size_t byte = 0; byte < bitmapSize_; ++byte) {
-        if (bitmap_[byte] != 0xFF) {  // Not all used
-            for (size_t bit = 0; bit < 8; ++bit) {
-                if (!(bitmap_[byte] & (1 << bit))) {
-                    return byte * 8 + bit;
-                }
-            }
-        }
-    }
-    return SIZE_MAX;  // No free block
-}
-```
+See [Segment Allocation](segment-allocation) for details on the full allocation pipeline.
 
-**Complexity**: O(n) where n is bitmap size
+## Source Locations
 
-**Optimization**: Use `__builtin_ctz()` or similar for faster bit scanning:
-
-```cpp
-size_t findFreeBlock() const {
-    for (size_t byte = 0; byte < bitmapSize_; ++byte) {
-        uint8_t value = bitmap_[byte];
-        if (value != 0xFF) {
-            uint8_t inverted = ~value;
-            int trailingZeros = __builtin_ctz(inverted);
-            return byte * 8 + trailingZeros;
-        }
-    }
-    return SIZE_MAX;
-}
-```
-
-### Find Contiguous Free Blocks
-
-```cpp
-size_t findContiguousFree(size_t requiredBlocks) const {
-    size_t contiguous = 0;
-    size_t startBlock = 0;
-
-    for (size_t i = 0; i < totalBlocks_; ++i) {
-        if (isFree(i)) {
-            if (contiguous == 0) {
-                startBlock = i;
-            }
-            contiguous++;
-
-            if (contiguous >= requiredBlocks) {
-                return startBlock;
-            }
-        } else {
-            contiguous = 0;
-        }
-    }
-
-    return SIZE_MAX;  // Not enough contiguous space
-}
-```
-
-**Complexity**: O(n) where n is total blocks
-
-### Count Free Blocks
-
-```cpp
-size_t countFreeBlocks() const {
-    size_t count = 0;
-    for (size_t byte = 0; byte < bitmapSize_; ++byte) {
-        uint8_t value = bitmap_[byte];
-        count += 8 - __builtin_popcount(value);
-    }
-    return count;
-}
-```
-
-**Complexity**: O(n) where n is bitmap size
-
-**Optimization**: Use SIMD instructions for batch counting:
-
-```cpp
-size_t countFreeBlocksSIMD() const {
-    size_t count = 0;
-    size_t i = 0;
-
-    // Process 64 bytes (512 bits) at a time
-    for (; i + 64 <= bitmapSize_; i += 64) {
-        __m512i vec = _mm512_loadu_si512((__m512i*)&bitmap_[i]);
-        count += 512 - _mm512_popcnt_epi64(vec);
-    }
-
-    // Process remaining bytes
-    for (; i < bitmapSize_; ++i) {
-        count += 8 - __builtin_popcount(bitmap_[i]);
-    }
-
-    return count;
-}
-```
-
-## Bulk Operations
-
-### Mark Range as Used
-
-```cpp
-void markRangeUsed(size_t startBlock, size_t count) {
-    size_t endBlock = startBlock + count;
-
-    for (size_t block = startBlock; block < endBlock; ++block) {
-        markUsed(block);
-    }
-}
-```
-
-**Optimization**: Process whole bytes at once:
-
-```cpp
-void markRangeUsedOptimized(size_t startBlock, size_t count) {
-    size_t startByte = startBlock / 8;
-    size_t startBit = startBlock % 8;
-    size_t endByte = (startBlock + count - 1) / 8;
-
-    // Handle first partial byte
-    if (startBit != 0) {
-        uint8_t mask = 0xFF << startBit;
-        bitmap_[startByte] |= mask;
-        startByte++;
-    }
-
-    // Handle whole bytes
-    for (size_t byte = startByte; byte < endByte; ++byte) {
-        bitmap_[byte] = 0xFF;
-    }
-
-    // Handle last partial byte
-    size_t endBit = (startBlock + count) % 8;
-    if (endBit != 0) {
-        uint8_t mask = ~(0xFF << endBit);
-        bitmap_[endByte] |= mask;
-    }
-}
-```
-
-### Clear Entire Bitmap
-
-```cpp
-void clear() {
-    std::memset(bitmap_, 0, bitmapSize_);
-}
-```
-
-**Complexity**: O(n) but highly optimized by memset
-
-## Concurrent Operations
-
-### Atomic Bitmap Operations
-
-```cpp
-class AtomicBitmap {
-    std::atomic<uint8_t>* bitmap_;
-
-public:
-    bool tryAllocate(size_t blockIndex) {
-        size_t byteIndex = blockIndex / 8;
-        size_t bitIndex = blockIndex % 8;
-        uint8_t mask = 1 << bitIndex;
-
-        uint8_t old = bitmap_[byteIndex].fetch_or(mask);
-        return !(old & mask);  // Was free
-    }
-
-    bool tryAllocateRange(size_t startBlock, size_t count) {
-        // Check if all blocks are free
-        for (size_t i = 0; i < count; ++i) {
-            if (!isFree(startBlock + i)) {
-                return false;
-            }
-        }
-
-        // Try to allocate all blocks
-        for (size_t i = 0; i < count; ++i) {
-            if (!tryAllocate(startBlock + i)) {
-                // Rollback on failure
-                for (size_t j = 0; j < i; ++j) {
-                    markFree(startBlock + j);
-                }
-                return false;
-            }
-        }
-
-        return true;
-    }
-};
-```
-
-## Bitmap Compression
-
-For sparse bitmaps (mostly free or mostly used):
-
-### Run-Length Encoding
-
-```cpp
-struct CompressedBitmap {
-    std::vector<std::pair<uint8_t, size_t>> runs;
-
-    void compress(const uint8_t* bitmap, size_t size) {
-        size_t i = 0;
-        while (i < size) {
-            uint8_t value = bitmap[i];
-            size_t count = 1;
-
-            while (i + count < size && bitmap[i + count] == value) {
-                count++;
-            }
-
-            runs.push_back({value, count});
-            i += count;
-        }
-    }
-};
-```
-
-### Sparse Bitmap
-
-Store only the set bits:
-
-```cpp
-struct SparseBitmap {
-    std::vector<size_t> setBits;
-
-    void compress(const uint8_t* bitmap, size_t size) {
-        for (size_t byte = 0; byte < size; ++byte) {
-            for (size_t bit = 0; bit < 8; ++bit) {
-                if (bitmap[byte] & (1 << bit)) {
-                    setBits.push_back(byte * 8 + bit);
-                }
-            }
-        }
-    }
-
-    bool isSet(size_t blockIndex) const {
-        return std::binary_search(setBits.begin(), setBits.end(), blockIndex);
-    }
-};
-```
-
-## Performance Characteristics
-
-### Memory Usage
-
-- **Uncompressed**: 8 KB per 4 MB segment (0.2% overhead)
-- **Compressed**: Variable, depends on fragmentation
-
-### Cache Efficiency
-
-Bitmaps are cache-friendly:
-
-- **Small size**: Fits in L1 cache (8 KB)
-- **Sequential access**: Good for cache prefetching
-- **Bit operations**: CPU-optimized
-
-### Scalability
-
-Bitmap operations scale linearly with bitmap size:
-
-- **O(1)**: Single bit operations
-- **O(n)**: Search operations (n = bitmap size)
-- **O(n)**: Count operations (optimizable with SIMD)
-
-## Use Cases in ZYX
-
-1. **Free Space Tracking**: Track free/used blocks in segments
-2. **Entity Existence**: Quick check if entity exists
-3. **Label Index**: Track nodes with specific labels
-4. **Dirty Tracking**: Track modified entities
-
-## Best Practices
-
-1. **Align to block boundaries**: Reduce partial block operations
-2. **Batch operations**: Process multiple blocks at once
-3. **Use SIMD**: Leverage CPU vector instructions
-4. **Keep bitmap small**: Ensure it fits in cache
-5. **Consider compression**: For sparse bitmaps
-
-## See Also
-
-- [Segment Allocation](/en/docs/zyx/algorithms/segment-allocation) - How bitmaps are used
-- [Storage System](/en/docs/zyx/architecture/storage) - Overall storage architecture
-- [Cache Management](/en/docs/zyx/architecture/cache) - Caching bitmap data
+| Component | Path |
+|-----------|------|
+| Segment headers | `include/graph/storage/StorageHeaders.hpp` |
+| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
+| IDAllocator | `include/graph/core/IDAllocator.hpp` |

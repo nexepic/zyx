@@ -1,44 +1,78 @@
 ---
-title: 位图索引算法
-description: segment 级 activity bitmap 的活跃槽位跟踪机制。
-category: 索引
+title: 位图索引
+description: ZYX 如何使用位图结构进行段内空闲槽位跟踪。
+category: Indexing
 categoryOrder: 3
-order: 4
+order: 3
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# 位图索引算法
+# 位图索引
 
-这里的“位图”主要指存储段内部的活跃槽位位图，不是独立查询引擎位图索引。
+ZYX 使用位图结构来跟踪段内的空闲和已用槽位。每个段维护有关哪些槽位已被占用的元数据，支持 O(1) 的槽位分配检查和高效的空间利用率跟踪。
 
-## 数据结构
+## 槽位跟踪的工作原理
 
-`SegmentHeader` 内包含：
+每个段头记录了总槽位数和当前数据使用量。槽位元数据以数组形式存储在段内，每条记录跟踪：
 
-- `bitmap_size`
-- `activity_bitmap[MAX_BITMAP_SIZE]`
+- **实体 ID**：分配给存储在此槽位中的实体的 ID
+- **数据偏移**：在段数据区域内的字节偏移量
+- **数据大小**：实体数据的字节大小
+- **标志位**：活跃/非活跃状态及其他逐槽位标志
 
-每一位对应一个槽位：
+```mermaid
+graph TD
+    SH[Segment Header] --> SM[Slot Metadata Array]
+    SH --> DA[Data Area]
 
-- `1`：活跃
-- `0`：空闲/失效
+    SM --> S1["Slot 0: id=1, offset=0, size=128"]
+    SM --> S2["Slot 1: id=2, offset=128, size=96"]
+    SM --> S3["Slot 2: id=3, offset=224, size=64"]
+    SM --> S4["Slot 3: FREE"]
+    SM --> S5["Slot 4: id=5, offset=288, size=112"]
+```
 
-## 作用
+当一个实体被写入段时，会从空闲池中申请一个槽位。`IDAllocator` 确定实体 ID，段记录槽位元数据。当一个实体被删除时，其槽位被标记为非活跃，ID 被归还给分配器的 volatile intervals。
 
-- 快速判断实体槽是否可读
-- 统计活跃数与空闲数
-- 辅助碎片率计算与压缩决策
+## 分配策略
 
-## 关键接口
+ZYX 在段内使用**首个可用**（first-available）槽位分配策略：
 
-- `SegmentTracker::setEntityActive(...)`
-- `SegmentTracker::isEntityActive(...)`
-- `SegmentTracker::countActiveEntities(...)`
-- `storage::bitmap::setBit/getBit(...)`
+1. 当创建新实体时，系统遍历对应实体类型的段链
+2. 选择第一个具有可用槽位容量和足够数据空间的段
+3. 如果没有现有段有空间，则在文件末尾分配新段
+4. 用实体的 ID 和数据位置填充槽位元数据条目
 
-## 源码定位
+这种方法避免了段内碎片化，因为实体数据按顺序写入数据区域，而槽位元数据独立增长。
 
-- `include/graph/storage/StorageHeaders.hpp`
-- `include/graph/storage/SegmentTracker.hpp`
+## 空间效率
+
+槽位跟踪增加的开销极小：
+
+| 组件 | 大小 | 说明 |
+|------|------|------|
+| 段头 | 40 字节 | 每段固定 |
+| 每槽位元数据 | ~32 字节 | ID、偏移量、大小、标志位 |
+| 数据区域对齐 | 8 字节 | 跨平台访问对齐 |
+
+对于 128 KB 的段，典型的槽位容量范围从数百个（用于 Blob 等大型实体）到数千个（用于 Property 等小型实体）。
+
+## 与 IDAllocator 的集成
+
+位图/槽位跟踪与 `IDAllocator` 协同工作：
+
+- **分配**：`IDAllocator` 分配 ID，段分配器找到槽位，写入实体
+- **释放**：槽位被标记为非活跃，ID 归还给 `IDAllocator` 的 volatile intervals
+- **恢复**：WAL 重放通过重新应用已提交的写入来重建槽位状态
+
+有关完整分配管道的详细信息，请参阅[段分配](segment-allocation)。
+
+## 源码位置
+
+| 组件 | 路径 |
+|------|------|
+| 段头 | `include/graph/storage/StorageHeaders.hpp` |
+| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
+| IDAllocator | `include/graph/core/IDAllocator.hpp` |

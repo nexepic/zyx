@@ -1,6 +1,6 @@
 ---
 title: Property Index
-description: ZYX implements a high-performance property index system using type-specific B+Tree structures to efficiently map property values to their correspondin
+description: ZYX implements a high-performance property index system using type-specific B+Tree structures to efficiently map property values to their corresponding entity IDs.
 category: Indexing
 categoryOrder: 3
 order: 11
@@ -29,6 +29,8 @@ The property index provides:
 
 ### Multi-Type Index Structure
 
+The `PropertyIndex` class maintains four separate `IndexTreeManager` instances, one per supported property type. Each tree manager owns a root map that maps property key names to B+Tree root IDs. A shared `indexedKeyTypes_` map records the declared type for each property key.
+
 ```mermaid
 graph TD
     A[PropertyIndex] --> B[stringTreeManager_]
@@ -41,13 +43,17 @@ graph TD
     D --> H[doubleRoots_: price, rating]
     E --> I[boolRoots_: active, verified]
 
-    F --> J[B+Tree: name → Node IDs]
-    G --> K[B+Tree: age → Node IDs]
-    H --> L[B+Tree: price → Node IDs]
-    I --> M[B+Tree: active → Node IDs]
+    F --> J[B+Tree: name to Node IDs]
+    G --> K[B+Tree: age to Node IDs]
+    H --> L[B+Tree: price to Node IDs]
+    I --> M[B+Tree: active to Node IDs]
 ```
 
+At construction, the `PropertyIndex` creates all four `IndexTreeManager` instances -- each configured with its corresponding `PropertyType` for key comparison -- and calls `initialize()` to restore persisted state. Source: `include/graph/storage/indexes/PropertyIndex.hpp`.
+
 ### Property-Based Query Flow
+
+When a Cypher query contains a property-based filter, the query planner decides whether the property index can satisfy it. If an index exists for the filtered property key, the planner emits an index lookup instead of a full node scan.
 
 ```mermaid
 sequenceDiagram
@@ -71,390 +77,134 @@ sequenceDiagram
     E-->>Q: Results
 ```
 
-## Implementation
-
-### Class Definition
-
-```cpp
-class PropertyIndex {
-public:
-    PropertyIndex(std::shared_ptr<storage::DataManager> dataManager,
-                  std::shared_ptr<storage::state::SystemStateManager> systemStateManager,
-                  uint32_t indexType,
-                  std::string baseStateKey);
-
-    // Core operations
-    void addProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
-    void addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties);
-    void removeProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
-    std::vector<int64_t> findExactMatch(const std::string &key, const PropertyValue &value) const;
-    std::vector<int64_t> findRange(const std::string &key, double minValue, double maxValue) const;
-
-    // Index lifecycle
-    void createIndex(const std::string &key);
-    void clearIndexData(const std::string &key);
-    void clearKey(const std::string &key);
-    void dropKey(const std::string &key);
-    void clear();
-    void drop();
-    void flush() const;
-    void saveState() const;
-
-    // Status queries
-    bool isEmpty() const;
-    bool hasKeyIndexed(const std::string &key) const;
-    const std::vector<std::string> &getIndexedKeys() const;
-    PropertyType getIndexedKeyType(const std::string &key) const;
-
-private:
-    std::shared_ptr<storage::DataManager> dataManager_;
-    std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;
-
-    // Type-specific tree managers
-    std::shared_ptr<IndexTreeManager> stringTreeManager_;
-    std::shared_ptr<IndexTreeManager> intTreeManager_;
-    std::shared_ptr<IndexTreeManager> doubleTreeManager_;
-    std::shared_ptr<IndexTreeManager> boolTreeManager_;
-
-    mutable std::shared_mutex mutex_;
-    const std::string baseStateKey_;
-
-    // Root IDs for different property types
-    std::unordered_map<std::string, int64_t> stringRoots_;
-    std::unordered_map<std::string, int64_t> intRoots_;
-    std::unordered_map<std::string, int64_t> doubleRoots_;
-    std::unordered_map<std::string, int64_t> boolRoots_;
-
-    // Type mapping for each indexed key
-    std::unordered_map<std::string, PropertyType> indexedKeyTypes_;
-    std::vector<std::string> indexedKeysList_;
-};
-```
+The executor retrieves entity IDs from the index, then fetches the full entity data from the `DataManager`.
 
 ## Core Operations
 
 ### Initialization
 
-The property index is initialized from persistent state on startup:
+On startup, `initialize()` loads persisted index metadata under an exclusive lock. The process has three steps:
 
-```cpp
-void PropertyIndex::initialize() {
-    std::unique_lock lock(mutex_);
+1. **Deserialize root maps**: Load the four root maps (string, int, double, bool) from `SystemStateManager`. Each map associates a property key name with a B+Tree root ID.
+2. **Deserialize key type map**: Load the map of property key names to their `PropertyType` values. Types are stored as `int64_t` in persistent state and cast back to the enum on load.
+3. **Rebuild key list cache**: Populate `indexedKeysList_` from the keys of `indexedKeyTypes_` to provide fast enumeration of indexed keys.
 
-    // 1. Load root maps for all types
-    deserializeRootMap();
-
-    // 2. Load key type mappings
-    deserializeKeyTypeMap();
-
-    // 3. Rebuild indexed keys list cache
-    indexedKeysList_.clear();
-    indexedKeysList_.reserve(indexedKeyTypes_.size());
-    for (const auto &key: indexedKeyTypes_ | std::views::keys) {
-        indexedKeysList_.push_back(key);
-    }
-}
-```
-
-**Key Points**:
-- Separate root maps for each property type (string, int, double, bool)
-- Key type mapping tracks which type each property key uses
-- Indexed keys list cache for fast enumeration
-- All metadata persisted across restarts
+All metadata is restored atomically under a single lock acquisition.
 
 ### Create Index
 
-Registers a property key for indexing:
+The `createIndex(key)` operation registers a property key for indexing before any data is inserted. It acquires an exclusive lock and, if the key is not already registered, adds it to `indexedKeyTypes_` with type `UNKNOWN` and appends it to `indexedKeysList_`.
 
-```cpp
-void PropertyIndex::createIndex(const std::string &key) {
-    std::unique_lock lock(mutex_);
-    if (!indexedKeyTypes_.contains(key)) {
-        indexedKeyTypes_[key] = PropertyType::UNKNOWN;
-        indexedKeysList_.push_back(key);
-    }
-}
+Key characteristics:
+
+- **Immediate registration**: The key becomes visible to `getIndexedKeys()` even before any data insertion.
+- **Deferred type**: The type starts as `UNKNOWN` and is determined from the first value inserted for that key.
+- **Idempotent**: Calling `createIndex` multiple times for the same key is safe; subsequent calls are no-ops.
+- **No B+Tree allocation**: No tree nodes are created until the first value is actually inserted.
+
+This operation is typically used to pre-declare indexes before a bulk data load.
+
+### Type Inference
+
+Type inference determines the property type from the first inserted value and enforces type consistency for all subsequent insertions.
+
+```mermaid
+flowchart TD
+    A[Insert property value for key K] --> B{Is key K registered in indexedKeyTypes_?}
+    B -- No --> C{Insertion mode?}
+    C -- Single addProperty --> D[Auto-create: register K with value type]
+    C -- Batch addPropertiesBatch --> E[Skip: no auto-creation in batch mode]
+    B -- Yes --> F{Registered type == UNKNOWN?}
+    F -- Yes --> G[Transition: set type to value type]
+    F -- No --> H{Registered type matches value type?}
+    H -- Yes --> I[Proceed with insert]
+    H -- No --> J[Silently ignore this value]
+    D --> I
+    G --> I
 ```
 
-**Characteristics**:
-- **Immediate registration**: Key is visible to `listIndexes()` even before data insertion
-- **Type inference**: Type starts as UNKNOWN, determined from first inserted value
-- **Idempotent**: Safe to call multiple times for same key
-- **No data structures created**: B+Tree initialized only on first data insertion
-
-**Use Case**: Pre-declare indexes before bulk data loading
+The inference rules apply identically to both `addProperty` and `addPropertiesBatch`, with one critical difference: batch mode never auto-creates a new key registration. Values whose type is `UNKNOWN` or `NULL_TYPE` are always rejected and never indexed.
 
 ### Add Property
 
-Adds a single property value to the index:
+The `addProperty(entityId, key, value)` operation adds a single property entry to the index. It acquires an exclusive lock and performs the following steps:
 
-```cpp
-void PropertyIndex::addProperty(int64_t entityId, const std::string &key,
-                                const PropertyValue &value) {
-    std::unique_lock lock(mutex_);
+1. **Validate value type**: Determine the `PropertyType` of the incoming value. If it is `UNKNOWN` or `NULL_TYPE`, return immediately.
+2. **Resolve key type**: Look up the key in `indexedKeyTypes_`. If not found, auto-create an entry with the inferred type. If found with `UNKNOWN`, transition to the concrete type. If the registered type does not match the value type, silently ignore the value.
+3. **Locate tree structures**: Use `getTreeManagerForType` and `getRootMapForType` to select the correct `IndexTreeManager` and root map for the resolved type.
+4. **Initialize B+Tree if needed**: If the root map does not contain an entry for this key, create a new B+Tree via `treeManager->initialize()` and store the root ID.
+5. **Insert into B+Tree**: Call `treeManager->insert(rootId, value, entityId)` and update the stored root ID in case the tree grew due to a root split.
 
-    // 1. Validate value type
-    PropertyType valueType = getPropertyType(value);
-    if (valueType == PropertyType::UNKNOWN || valueType == PropertyType::NULL_TYPE) {
-        return;
-    }
-
-    // 2. Check or register key type
-    auto it = indexedKeyTypes_.find(key);
-    if (it == indexedKeyTypes_.end()) {
-        // Auto-creation: register key with inferred type
-        indexedKeyTypes_[key] = valueType;
-    } else if (it->second == PropertyType::UNKNOWN) {
-        // Transition from UNKNOWN to concrete type
-        it->second = valueType;
-    } else if (it->second != valueType) {
-        // Type mismatch: ignore value
-        return;
-    }
-
-    // 3. Get type-specific tree manager and root map
-    auto treeManager = getTreeManagerForType(valueType);
-    auto &rootMap = getRootMapForType(valueType);
-
-    // 4. Initialize B+Tree if needed
-    if (!rootMap.contains(key)) {
-        rootMap[key] = treeManager->initialize();
-    }
-
-    // 5. Insert into B+Tree
-    rootMap[key] = treeManager->insert(rootMap[key], value, entityId);
-}
-```
-
-**Characteristics**:
-- **Time Complexity**: O(log n) where n is the number of unique property values
-- **Space Complexity**: O(1) amortized (B+Tree growth)
-- **Auto-creation**: Automatically creates index if key not registered
-- **Type validation**: Enforces type consistency for existing indexes
-
-**Type Inference Rules**:
-1. First insertion determines the type
-2. Subsequent insertions must match type
-3. Type mismatches are silently ignored
-4. NULL and UNKNOWN values are never indexed
+Time complexity: O(log n) where n is the number of unique property values. Space complexity: O(1) amortized per insertion.
 
 ### Batch Add Properties
 
-Optimized bulk insertion for multiple properties:
+The `addPropertiesBatch(properties)` operation provides optimized bulk insertion. It receives a flat list of (entity ID, key, value) tuples and processes them in two phases.
 
-```cpp
-void PropertyIndex::addPropertiesBatch(
-    const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties
-) {
-    if (properties.empty())
-        return;
-
-    std::unique_lock lock(mutex_);
-
-    // Structure: Type -> Key -> List of {Value, EntityID} pairs
-    std::map<PropertyType, std::map<std::string, std::vector<std::pair<PropertyValue, int64_t>>>> groupedBatch;
-
-    // 1. Classification & Filtering Phase
-    for (const auto &[entityId, key, value]: properties) {
-        PropertyType valueType = getPropertyType(value);
-        if (valueType == PropertyType::UNKNOWN || valueType == PropertyType::NULL_TYPE) {
-            continue;
-        }
-
-        // Check if key is registered (NO auto-creation in batch mode)
-        auto it = indexedKeyTypes_.find(key);
-        if (it == indexedKeyTypes_.end()) {
-            continue;
-        }
-
-        PropertyType registeredType = it->second;
-
-        if (registeredType == PropertyType::UNKNOWN) {
-            // First time seeing data, set the type
-            indexedKeyTypes_[key] = valueType;
-            registeredType = valueType;
-        } else if (registeredType != valueType) {
-            // Type mismatch, skip this property
-            continue;
-        }
-
-        // Add to grouped batch
-        groupedBatch[registeredType][key].emplace_back(value, entityId);
-    }
-
-    // 2. Batch Insertion Phase
-    for (auto &[type, keyMap]: groupedBatch) {
-        auto treeManager = getTreeManagerForType(type);
-        auto &rootMap = getRootMapForType(type);
-
-        if (!treeManager)
-            continue;
-
-        for (auto &[key, entries]: keyMap) {
-            if (entries.empty())
-                continue;
-
-            // Ensure root exists
-            if (!rootMap.contains(key)) {
-                rootMap[key] = treeManager->initialize();
-            }
-
-            int64_t currentRootId = rootMap[key];
-
-            // Execute batch insert on B+Tree
-            int64_t newRootId = treeManager->insertBatch(currentRootId, entries);
-
-            // Update root if tree grew
-            if (newRootId != currentRootId) {
-                rootMap[key] = newRootId;
-            }
-        }
-    }
-}
+```mermaid
+flowchart TD
+    A[Input: list of entityID, key, value tuples] --> B[Phase 1: Classification and Filtering]
+    B --> C[Filter out NULL and UNKNOWN values]
+    C --> D[Filter out unregistered keys - no auto-creation]
+    D --> E[Resolve type: set UNKNOWN to concrete, skip mismatches]
+    E --> F[Group entries: Type then Key then value-ID pairs]
+    F --> G[Phase 2: Batch Insertion]
+    G --> H[For each type group: select tree manager and root map]
+    H --> I[For each key group: ensure B+Tree root exists]
+    I --> J[Call treeManager.insertBatch with all value-ID pairs for that key]
+    J --> K[Update root ID if tree grew]
 ```
 
-**Optimizations**:
-- **Single lock acquisition**: Reduces contention vs individual inserts
-- **Type-based grouping**: Minimizes tree manager switches
-- **Key-based grouping**: Optimizes B+Tree batch insertion
-- **No auto-creation**: Prevents accidental index explosion in bulk loads
+**Phase 1 -- Classification and Filtering**: Each tuple is examined. Values with `UNKNOWN` or `NULL_TYPE` are skipped. Keys not found in `indexedKeyTypes_` are skipped (no auto-creation in batch mode). Keys with `UNKNOWN` type are transitioned to the concrete value type. Entries that survive filtering are placed into a nested grouping structure: `PropertyType -> key name -> list of (value, entityId) pairs`.
 
-**Performance**:
-- **Throughput**: ~10x faster than individual inserts for large batches
-- **Memory**: Groups entries in memory before insertion
-- **Use Case**: Index building during database startup or bulk import
+**Phase 2 -- Batch Insertion**: For each type group, the corresponding `IndexTreeManager` and root map are selected. For each key within a type group, the B+Tree root is initialized if it does not exist, then `insertBatch` is called with the entire list of entries for that key. The root ID is updated if the tree grew.
+
+Optimizations:
+
+- **Single lock acquisition**: The entire batch runs under one exclusive lock, reducing contention compared to individual inserts.
+- **Type-based grouping**: Minimizes tree manager switches by processing all entries of the same type together.
+- **Key-based grouping**: Each key's entries are passed to `insertBatch` in a single call, allowing the B+Tree to optimize internal node splitting.
+- **No auto-creation**: Prevents accidental index explosion during bulk loads. Keys must be registered via `createIndex` beforehand.
+
+Throughput is approximately 10x faster than individual inserts for large batches.
 
 ### Remove Property
 
-Removes a property value from the index:
+The `removeProperty(entityId, key, value)` operation removes a specific property entry from the index. It acquires an exclusive lock and:
 
-```cpp
-void PropertyIndex::removeProperty(int64_t entityId, const std::string &key,
-                                   const PropertyValue &value) {
-    std::unique_lock lock(mutex_);
+1. Looks up the registered type for the key. If the key is not indexed, returns immediately.
+2. Checks that the value's type matches the registered type. If not, returns immediately.
+3. Selects the appropriate tree manager and root map, locates the B+Tree root for the key, and calls `treeManager->remove(rootId, value, entityId)`.
 
-    // 1. Find registered type for key
-    const auto it = indexedKeyTypes_.find(key);
-    if (it == indexedKeyTypes_.end()) {
-        return; // Key not indexed
-    }
-
-    const PropertyType registeredType = it->second;
-    const PropertyType valueType = getPropertyType(value);
-
-    // 2. Validate type match
-    if (registeredType != valueType) {
-        return;
-    }
-
-    // 3. Get type-specific structures
-    const auto treeManager = getTreeManagerForType(registeredType);
-    auto &rootMap = getRootMapForType(registeredType);
-    const auto rootIt = rootMap.find(key);
-
-    if (rootIt == rootMap.end()) {
-        return; // No root for this key
-    }
-
-    // 4. Remove from B+Tree
-    (void) treeManager->remove(rootMap.at(key), value, entityId);
-}
-```
-
-**Characteristics**:
-- **Time Complexity**: O(log n)
-- **Automatic rebalancing**: B+Tree handles underflow via merge/redistribute
-- **Type validation**: Only removes if type matches registered type
+The B+Tree handles any necessary rebalancing (merge or redistribute) after the removal. Time complexity: O(log n).
 
 ### Find Exact Match
 
-Retrieves entities with exact property value match:
+The `findExactMatch(key, value)` operation retrieves all entity IDs that have an exact property value match. It acquires a shared lock and:
 
-```cpp
-std::vector<int64_t> PropertyIndex::findExactMatch(
-    const std::string &key,
-    const PropertyValue &value
-) const {
-    std::shared_lock lock(mutex_);
+1. Determines the value's type and checks that the key is indexed with a matching type. Returns an empty vector on mismatch.
+2. Looks up the root ID in the appropriate type-specific root map.
+3. Calls `treeManager->find(rootId, value)` to traverse the B+Tree and collect all entity IDs at the matching leaf.
 
-    // 1. Get value type
-    const PropertyType valueType = getPropertyType(value);
+Returns a vector of entity IDs. Time complexity: O(log n + k) where k is the number of matching entities. The shared lock allows concurrent reads.
 
-    // 2. Check if key is indexed with matching type
-    if (const auto it = indexedKeyTypes_.find(key);
-        it == indexedKeyTypes_.end() || it->second != valueType) {
-        return {};
-    }
-
-    // 3. Get type-specific root map
-    const auto &rootMap = getRootMapForType(valueType);
-    const auto rootIt = rootMap.find(key);
-
-    if (rootIt == rootMap.end()) {
-        return {};
-    }
-
-    // 4. Search B+Tree
-    return getTreeManagerForType(valueType)->find(rootIt->second, value);
-}
-```
-
-**Characteristics**:
-- **Time Complexity**: O(log n + k) where k is the number of matching entities
-- **Concurrency**: Shared lock allows concurrent reads
-- **Type validation**: Returns empty if type mismatch
-- **Return**: Vector of entity IDs (empty if not found)
-
-**Use Case**: Queries like `WHERE n.name = 'Alice'`
+Use case: Cypher queries with equality predicates such as `WHERE n.name = 'Alice'`.
 
 ### Find Range
 
-Retrieves entities with property values in a numeric range:
+The `findRange(key, minValue, maxValue)` operation retrieves entity IDs whose property value falls within a numeric or string range. It acquires a shared lock and:
 
-```cpp
-std::vector<int64_t> PropertyIndex::findRange(
-    const std::string &key,
-    double minValue,
-    double maxValue
-) const {
-    std::shared_lock lock(mutex_);
+1. Looks up the indexed type for the key. Only `INTEGER`, `DOUBLE`, and `STRING` types support range queries. Returns empty for other types.
+2. Performs type promotion on the bounds to match the indexed type:
+   - If the index type is `INTEGER` and a bound is `DOUBLE`, the bound is converted using `ceil` for the lower bound and `floor` for the upper bound.
+   - If the index type is `DOUBLE` and a bound is `INTEGER`, the bound is promoted to `DOUBLE`.
+   - If the bound is `NULL_TYPE`, it is treated as unbounded.
+   - Incompatible type combinations return empty.
+3. Calls `treeManager->findRange(rootId, minKey, maxKey)` to scan the B+Tree for all entries in the range.
 
-    // 1. Get key type
-    PropertyType type = getIndexedKeyType(key);
+Returns a vector of entity IDs. Time complexity: O(log n + k) where k is the number of entities in the range.
 
-    // 2. Validate numeric type
-    if (type != PropertyType::INTEGER && type != PropertyType::DOUBLE) {
-        return {};
-    }
-
-    // 3. Get type-specific root map
-    const auto &rootMap = getRootMapForType(type);
-    auto rootIt = rootMap.find(key);
-
-    if (rootIt == rootMap.end()) {
-        return {};
-    }
-
-    // 4. Convert to appropriate type
-    PropertyValue minKey, maxKey;
-    if (type == PropertyType::INTEGER) {
-        minKey = static_cast<int64_t>(std::ceil(minValue));
-        maxKey = static_cast<int64_t>(std::floor(maxValue));
-    } else {
-        minKey = minValue;
-        maxKey = maxValue;
-    }
-
-    // 5. Search B+Tree range
-    return getTreeManagerForType(type)->findRange(rootIt->second, minKey, maxKey);
-}
-```
-
-**Characteristics**:
-- **Time Complexity**: O(log n + k) where k is the number of entities in range
-- **Numeric only**: Only supports INTEGER and DOUBLE types
-- **Type conversion**: Automatically converts doubles to integers for INTEGER indexes
-- **Use Case**: Queries like `WHERE n.age > 25 AND n.age < 65`
+Use case: Cypher range queries such as `WHERE n.age > 25 AND n.age < 65`.
 
 ## Type System
 
@@ -464,320 +214,100 @@ The property index supports four indexed property types:
 
 | Type | Description | Example Values | Range Queries |
 |------|-------------|----------------|---------------|
-| STRING | Text strings | "Alice", "Bob" | No |
+| STRING | Text strings | "Alice", "Bob" | Yes |
 | INTEGER | 64-bit integers | 25, -10, 1000 | Yes |
 | DOUBLE | Floating-point numbers | 3.14, -0.5, 1e6 | Yes |
 | BOOLEAN | True/false values | true, false | No |
 
-### Type Inference
-
-Types are inferred from the first inserted value:
-
-```cpp
-// First insertion determines type
-propertyIndex.addProperty(1, "age", PropertyValue(25));  // Type: INTEGER
-propertyIndex.addProperty(2, "age", PropertyValue(30));  // OK: matches INTEGER
-propertyIndex.addProperty(3, "age", PropertyValue("25")); // Ignored: type mismatch
-
-// Explicit creation allows deferred type inference
-propertyIndex.createIndex("salary");  // Type: UNKNOWN
-propertyIndex.addProperty(1, "salary", PropertyValue(50000.50));  // Type: DOUBLE
-```
-
 ### Type Validation
 
-```cpp
-// Type validation ensures consistency
-propertyIndex.addProperty(1, "name", PropertyValue("Alice"));  // Type: STRING
-propertyIndex.addProperty(2, "name", PropertyValue(123));       // Ignored: INTEGER != STRING
-propertyIndex.addProperty(3, "name", PropertyValue(true));      // Ignored: BOOLEAN != STRING
-```
+Type validation enforces consistency within a single property key's index:
+
+- The first value inserted for a key determines the type for that key's entire index.
+- Subsequent insertions must provide a value whose type matches the registered type.
+- Values that do not match the registered type are silently ignored -- no error is raised.
+- `NULL_TYPE` and `UNKNOWN` values are never indexed under any circumstances.
+
+This design means that a property key like `"age"` can only ever be `INTEGER` or `DOUBLE` or `STRING` -- never a mix. If a key was initially registered via `createIndex` (type `UNKNOWN`), the first concrete value settles the type permanently.
 
 ## Index Lifecycle
 
-### Clear Index Data
-
-Clears B+Tree data while keeping index definition:
-
-```cpp
-void PropertyIndex::clearIndexData(const std::string &key) {
-    std::unique_lock lock(mutex_);
-
-    if (!indexedKeyTypes_.contains(key)) {
-        return;
-    }
-
-    // Clear roots for all types (defense in depth)
-    auto clearRoot = [&](auto &rootMap, auto &treeManager) {
-        if (auto rootIt = rootMap.find(key); rootIt != rootMap.end()) {
-            treeManager->clear(rootIt->second);
-            rootMap.erase(rootIt);
-        }
-    };
-
-    clearRoot(stringRoots_, stringTreeManager_);
-    clearRoot(intRoots_, intTreeManager_);
-    clearRoot(doubleRoots_, doubleTreeManager_);
-    clearRoot(boolRoots_, boolTreeManager_);
-
-    // Reset type to UNKNOWN for rebuild
-    indexedKeyTypes_[key] = PropertyType::UNKNOWN;
-}
+```mermaid
+flowchart LR
+    A[createIndex] -->|Type: UNKNOWN| B[addProperty / addPropertiesBatch]
+    B -->|Type set to concrete| C[Queryable: findExactMatch / findRange]
+    C -->|Rebuild needed| D[clearIndexData]
+    D -->|Type reset to UNKNOWN| B
+    C -->|Remove one key| E[clearKey]
+    C -->|Remove key and persist state| F[dropKey]
+    A -->|Remove all| G[clear]
+    A -->|Remove all and persist state| H[drop]
+    E --> I[Gone]
+    F --> I
+    G --> I
+    H --> I
 ```
 
-**Use Case**: Index rebuilding scenarios
+### Clear Index Data
+
+The `clearIndexData(key)` operation removes all B+Tree data for a key while preserving the key definition in `indexedKeyTypes_`. It acquires an exclusive lock and:
+
+1. Checks that the key exists in `indexedKeyTypes_`. Returns immediately if not.
+2. Clears the root entry from all four root maps (string, int, double, bool) as a defensive measure, even though logically only one type map should contain the key.
+3. Resets the key's type to `UNKNOWN` in `indexedKeyTypes_`, allowing the type to be re-determined during a subsequent rebuild.
+
+This operation is used by the index builder when rebuilding indexes from scratch.
 
 ### Clear Key
 
-Removes both data and definition for a specific key:
+The `clearKey(key)` operation removes both the B+Tree data and the key definition for a specific property key. It acquires an exclusive lock and:
 
-```cpp
-void PropertyIndex::clearKey(const std::string &key) {
-    std::unique_lock lock(mutex_);
-
-    auto it = indexedKeyTypes_.find(key);
-    if (it == indexedKeyTypes_.end()) {
-        return;
-    }
-
-    PropertyType type = it->second;
-
-    // Handle UNKNOWN type (no B+Tree to clear)
-    if (type == PropertyType::UNKNOWN) {
-        indexedKeyTypes_.erase(it);
-        return;
-    }
-
-    // Clear B+Tree for concrete type
-    auto &rootMap = getRootMapForType(type);
-    auto rootIt = rootMap.find(key);
-
-    if (rootIt != rootMap.end()) {
-        auto treeManager = getTreeManagerForType(type);
-        treeManager->clear(rootIt->second);
-        rootMap.erase(rootIt);
-    }
-
-    // Remove type mapping
-    indexedKeyTypes_.erase(it);
-    std::erase(indexedKeysList_, key);
-}
-```
+1. If the key's type is `UNKNOWN` (no B+Tree was ever created), simply removes it from `indexedKeyTypes_` and returns.
+2. For concrete types, selects the appropriate root map and tree manager, clears the B+Tree, removes the root entry from the root map, removes the key from `indexedKeyTypes_`, and removes it from `indexedKeysList_`.
 
 ### Drop Key
 
-Completely removes a key and its persistent state:
-
-```cpp
-void PropertyIndex::dropKey(const std::string &key) {
-    // Clear data and definition
-    clearKey(key);
-
-    // Remove persistent state if maps are empty
-    if (stringRoots_.empty()) {
-        systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_STRING_ROOTS);
-    }
-    if (intRoots_.empty()) {
-        systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_INT_ROOTS);
-    }
-    if (doubleRoots_.empty()) {
-        systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_DOUBLE_ROOTS);
-    }
-    if (boolRoots_.empty()) {
-        systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_BOOL_ROOTS);
-    }
-
-    if (indexedKeyTypes_.empty()) {
-        systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_KEY_TYPES);
-    }
-}
-```
+The `dropKey(key)` operation extends `clearKey` by additionally removing persistent state. After calling `clearKey(key)`, it checks each root map and the type map. If any of these maps are now empty, it removes the corresponding entry from `SystemStateManager` to clean up persistent storage.
 
 ### Clear All
 
-Removes all index data:
-
-```cpp
-void PropertyIndex::clear() {
-    std::unique_lock lock(mutex_);
-
-    auto clearAllRoots = [&](auto &rootMap, auto &treeManager) {
-        for (const auto &rootId: rootMap | std::views::values) {
-            treeManager->clear(rootId);
-        }
-        rootMap.clear();
-    };
-
-    clearAllRoots(stringRoots_, stringTreeManager_);
-    clearAllRoots(intRoots_, intTreeManager_);
-    clearAllRoots(doubleRoots_, doubleTreeManager_);
-    clearAllRoots(boolRoots_, boolTreeManager_);
-
-    indexedKeyTypes_.clear();
-    indexedKeysList_.clear();
-}
-```
+The `clear()` operation removes all index data for every key. It acquires an exclusive lock and iterates over all four root maps, clearing every B+Tree via its tree manager. It then clears `indexedKeyTypes_` and `indexedKeysList_`.
 
 ### Drop All
 
-Completely removes the index:
-
-```cpp
-void PropertyIndex::drop() {
-    clear();
-
-    // Remove all persistent state
-    systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_STRING_ROOTS);
-    systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_INT_ROOTS);
-    systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_DOUBLE_ROOTS);
-    systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_BOOL_ROOTS);
-    systemStateManager_->remove(baseStateKey_ + storage::state::keys::SUFFIX_KEY_TYPES);
-}
-```
+The `drop()` operation calls `clear()` to remove all in-memory data, then removes all five persistent state entries (four root maps and the key type map) from `SystemStateManager`.
 
 ## State Persistence
 
+Index metadata is persisted through `SystemStateManager`, which stores key-value maps to durable storage.
+
 ### Save State
 
-Persists index metadata to disk:
+The `saveState()` operation acquires a shared lock and serializes two categories of data:
 
-```cpp
-void PropertyIndex::saveState() const {
-    std::shared_lock lock(mutex_);
+- **Root maps**: Each non-empty root map (string, int, double, bool) is written as a `string -> int64_t` map, keyed by a base state key plus a type-specific suffix.
+- **Key type map**: The `indexedKeyTypes_` map is serialized by casting each `PropertyType` enum value to `int64_t` and storing as a `string -> int64_t` map.
 
-    // Save all root maps
-    serializeRootMap();
-
-    // Save key type mappings
-    serializeKeyTypeMap();
-}
-
-void PropertyIndex::serializeRootMap() const {
-    if (!stringRoots_.empty()) {
-        systemStateManager_->setMap(baseStateKey_ + storage::state::keys::SUFFIX_STRING_ROOTS, stringRoots_);
-    }
-    if (!intRoots_.empty()) {
-        systemStateManager_->setMap(baseStateKey_ + storage::state::keys::SUFFIX_INT_ROOTS, intRoots_);
-    }
-    if (!doubleRoots_.empty()) {
-        systemStateManager_->setMap(baseStateKey_ + storage::state::keys::SUFFIX_DOUBLE_ROOTS, doubleRoots_);
-    }
-    if (!boolRoots_.empty()) {
-        systemStateManager_->setMap(baseStateKey_ + storage::state::keys::SUFFIX_BOOL_ROOTS, boolRoots_);
-    }
-}
-
-void PropertyIndex::serializeKeyTypeMap() const {
-    if (!indexedKeyTypes_.empty()) {
-        std::unordered_map<std::string, int64_t> rawTypeMap;
-        for (const auto &[k, v]: indexedKeyTypes_) {
-            rawTypeMap[k] = static_cast<int64_t>(v);
-        }
-        systemStateManager_->setMap(baseStateKey_ + storage::state::keys::SUFFIX_KEY_TYPES, rawTypeMap);
-    }
-}
-```
-
-**Persistence Strategy**:
-- Only persist non-empty maps (sparse state)
-- Type enums stored as int64_t for serialization
-- Root IDs map property keys to B+Tree roots
+Only non-empty maps are persisted, resulting in sparse state that avoids writing unnecessary data.
 
 ### Load State
 
-Restores index metadata from disk:
+The `deserializeRootMap()` and `deserializeKeyTypeMap()` methods load the root maps and key type map from `SystemStateManager`. The type map is deserialized by casting each `int64_t` back to `PropertyType`.
 
-```cpp
-void PropertyIndex::deserializeRootMap() {
-    stringRoots_ = systemStateManager_->getMap<int64_t>(baseStateKey_ + storage::state::keys::SUFFIX_STRING_ROOTS);
-    intRoots_ = systemStateManager_->getMap<int64_t>(baseStateKey_ + storage::state::keys::SUFFIX_INT_ROOTS);
-    doubleRoots_ = systemStateManager_->getMap<int64_t>(baseStateKey_ + storage::state::keys::SUFFIX_DOUBLE_ROOTS);
-    boolRoots_ = systemStateManager_->getMap<int64_t>(baseStateKey_ + storage::state::keys::SUFFIX_BOOL_ROOTS);
-}
+### Flush
 
-void PropertyIndex::deserializeKeyTypeMap() {
-    auto rawTypeMap = systemStateManager_->getMap<int64_t>(baseStateKey_ + storage::state::keys::SUFFIX_KEY_TYPES);
-    indexedKeyTypes_.clear();
-    for (const auto &[k, v]: rawTypeMap) {
-        indexedKeyTypes_[k] = static_cast<PropertyType>(v);
-    }
-}
-```
+The `flush()` method is a convenience wrapper that calls `saveState()` to persist current metadata to durable storage.
 
 ## Concurrency Control
 
-### Shared Mutex
+The property index uses a single `std::shared_mutex` per `PropertyIndex` instance to coordinate concurrent access.
 
-The property index uses `std::shared_mutex` for concurrent access:
+**Lock strategy**:
 
-```cpp
-mutable std::shared_mutex mutex_;
-```
+- **Shared lock** (`std::shared_lock`): Used by all read operations -- `findExactMatch`, `findRange`, `isEmpty`, `hasKeyIndexed`, `getIndexedKeyType`, `getIndexedKeys`, and `saveState`. Multiple threads can hold shared locks simultaneously.
+- **Exclusive lock** (`std::unique_lock`): Used by all write operations -- `addProperty`, `addPropertiesBatch`, `removeProperty`, `createIndex`, `clearIndexData`, `clearKey`, `clear`, and `initialize`. Only one thread can hold an exclusive lock, and it blocks all shared locks.
 
-**Lock Types**:
-- **Shared Lock** (`std::shared_lock`): Concurrent reads allowed
-- **Exclusive Lock** (`std::unique_lock`): Writes require exclusive access
-
-**Lock Strategy**:
-- Read operations (`findExactMatch`, `findRange`, `getIndexedKeys`): Shared lock
-- Write operations (`addProperty`, `removeProperty`, `addPropertiesBatch`): Exclusive lock
-- State queries (`isEmpty`, `hasKeyIndexed`, `getIndexedKeyType`): Shared lock
-
-### Performance Implications
-
-- **High read concurrency**: Multiple threads can query simultaneously
-- **Write serialization**: Only one writer at a time
-- **Fair scheduling**: No reader-writer starvation
-- **Fine-grained locking**: Separate locks per PropertyIndex instance
-
-## Integration with Cypher Query
-
-### Query Planning
-
-The query planner uses property indexes for optimization:
-
-```cypher
--- Exact match query
-MATCH (n) WHERE n.name = 'Alice' RETURN n;
-
--- Planner optimization
-1. Check if property index exists for "name"
-2. If exists: Use PropertyIndex.findExactMatch("name", "Alice")
-3. If not: Full node scan with property filter
-```
-
-```cypher
--- Range query
-MATCH (n) WHERE n.age > 25 AND n.age < 65 RETURN n;
-
--- Planner optimization
-1. Check if property index exists for "age"
-2. If exists and type is numeric: Use PropertyIndex.findRange("age", 25, 65)
-3. If not: Full node scan with property filter
-```
-
-### Query Execution
-
-```cpp
-// Pseudo-code for property-based query execution
-std::vector<Node> executePropertyFilter(
-    const std::string &key,
-    const PropertyValue &value
-) {
-    // Use property index if available
-    if (indexManager->hasPropertyIndex("Node", key)) {
-        auto entityIds = propertyIndex.findExactMatch(key, value);
-        return fetchNodesByIds(entityIds);
-    }
-
-    // Fallback to full scan
-    return fullScanWithPropertyFilter(key, value);
-}
-```
-
-**Performance Comparison**:
-- **With Index**: O(log n + k) where k = matching entities
-- **Without Index**: O(N) where N = total entities
+This strategy provides high read concurrency with write serialization. Each `PropertyIndex` instance (typically one for nodes and one for edges) has its own independent mutex, so node property lookups do not block edge property lookups.
 
 ## Performance Characteristics
 
@@ -796,221 +326,66 @@ std::vector<Node> executePropertyFilter(
 
 Where:
 - n = number of unique property values for a key
-- m = number of properties in batch
+- m = number of properties in the batch
 - k = number of entities matching the query
 
 ### Space Complexity
 
 | Component | Space | Description |
 |-----------|-------|-------------|
-| B+Tree Nodes (per key) | O(n × b) | n values, b = branch factor |
+| B+Tree Nodes (per key) | O(n x b) | n values, b = branch factor |
 | Root Maps | O(k) | k = number of indexed keys |
 | Type Map | O(k) | k = number of indexed keys |
 | Key List | O(k) | Cached key list |
 
-Total: **O(N)** where N = total number of property-value-entity associations
+Total: O(N) where N = total number of property-value-entity associations.
 
 ### Memory Overhead
 
-```
 For 1 million nodes with 5 indexed properties each:
 
-B+Tree Structures (per property key):
-- Internal nodes: ~100 nodes × 256 bytes = 25.6 KB
-- Leaf nodes: ~500 nodes × 256 bytes = 128 KB
-- Entity ID references: 1M × 8 bytes = 8 MB
-
-Total per property key: ~8.15 MB
-Total for 5 properties: ~40.75 MB
-Overhead per property-value-entity: ~8 bytes
-
-State Metadata:
-- Root maps (4 types): ~1 KB
-- Type map: ~500 bytes
-- Key list: ~500 bytes
-```
+- B+Tree structures (per property key): internal nodes ~25.6 KB, leaf nodes ~128 KB, entity ID references ~8 MB, totaling ~8.15 MB per key.
+- Total for 5 properties: ~40.75 MB.
+- Overhead per property-value-entity association: ~8 bytes.
+- State metadata (root maps, type map, key list): ~2 KB total.
 
 ## Multi-Key Indexing
 
-### Multiple Properties Per Entity
+Entities can have multiple indexed properties, each maintained in its own independent B+Tree. There are no cross-property compound indexes in the single-property API; each property key is indexed separately. Multiple index results can be combined via set intersection at the query execution layer.
 
-Entities can have multiple indexed properties:
+Each property type is routed to its dedicated tree manager: string values go to `stringTreeManager_` with roots stored in `stringRoots_`, integer values to `intTreeManager_` with `intRoots_`, and so on. This type separation ensures type safety within each B+Tree and allows the tree manager to use type-optimized comparison functions. Only numeric types (INTEGER, DOUBLE) and STRING support range queries via `findRange`.
 
-```cpp
-// Entity with multiple indexed properties
-propertyIndex.addProperty(1, "name", PropertyValue("Alice"));
-propertyIndex.addProperty(1, "age", PropertyValue(30));
-propertyIndex.addProperty(1, "active", PropertyValue(true));
+## Composite Indexes
 
-// Query by any property
-auto alice = propertyIndex.findExactMatch("name", PropertyValue("Alice"));
-auto thirty = propertyIndex.findExactMatch("age", PropertyValue(30));
-auto active = propertyIndex.findExactMatch("active", PropertyValue(true));
-```
+In addition to single-property indexes, `PropertyIndex` supports composite indexes over multiple property keys. A composite index encodes multiple property values into a single string key using null-byte separators, then stores the encoded key in a dedicated `compositeTreeManager_` B+Tree.
 
-**Characteristics**:
-- Each property key maintains independent B+Tree
-- No cross-property indexes (no compound indexes)
-- Multiple queries can be combined via intersection
+Key operations:
 
-### Type-Specific Indexes
+- **createCompositeIndex(keys)**: Registers a composite index for an ordered list of property keys. Creates a new B+Tree root.
+- **addCompositeEntry(entityId, keys, values)**: Encodes the values into a composite key and inserts the entity ID.
+- **findCompositeExact(keys, values)**: Finds entity IDs matching all values exactly.
+- **findCompositePrefix(prefixKeys, prefixValues)**: Finds entity IDs matching a leading subset of the composite key, using a range scan from the encoded prefix to a high sentinel.
 
-Each property type has dedicated B+Tree structures:
-
-```cpp
-// String property
-propertyIndex.addProperty(1, "name", PropertyValue("Alice"));
-// Uses: stringTreeManager_, stored in stringRoots_["name"]
-
-// Integer property
-propertyIndex.addProperty(1, "age", PropertyValue(30));
-// Uses: intTreeManager_, stored in intRoots_["age"]
-
-// Double property
-propertyIndex.addProperty(1, "salary", PropertyValue(50000.50));
-// Uses: doubleTreeManager_, stored in doubleRoots_["salary"]
-
-// Boolean property
-propertyIndex.addProperty(1, "active", PropertyValue(true));
-// Uses: boolTreeManager_, stored in boolRoots_["active"]
-```
-
-**Benefits**:
-- **Type safety**: Prevents type mixing in indexes
-- **Optimization**: Each B+Tree optimized for its type
-- **Range queries**: Only numeric types support range queries
-
-## Usage Examples
-
-### Basic Operations
-
-```cpp
-// Create property index
-PropertyIndex propertyIndex(dataManager, systemStateManager,
-                            IndexTypes::NODE_PROPERTY_TYPE,
-                            StateKeys::NODE_PROPERTY_ROOT);
-
-// Add properties
-propertyIndex.addProperty(1, "name", PropertyValue("Alice"));
-propertyIndex.addProperty(2, "name", PropertyValue("Bob"));
-propertyIndex.addProperty(1, "age", PropertyValue(30));
-propertyIndex.addProperty(2, "age", PropertyValue(25));
-
-// Find exact matches
-auto alice = propertyIndex.findExactMatch("name", PropertyValue("Alice"));
-auto thirty = propertyIndex.findExactMatch("age", PropertyValue(30));
-
-// Find range (numeric only)
-auto adults = propertyIndex.findRange("age", 18.0, 65.0);
-
-// Remove property
-propertyIndex.removeProperty(1, "name", PropertyValue("Alice"));
-```
-
-### Batch Import
-
-```cpp
-// Prepare batch data
-std::vector<std::tuple<int64_t, std::string, PropertyValue>> properties;
-
-properties.emplace_back(1, "name", PropertyValue("Alice"));
-properties.emplace_back(1, "age", PropertyValue(30));
-properties.emplace_back(2, "name", PropertyValue("Bob"));
-properties.emplace_back(2, "age", PropertyValue(25));
-properties.emplace_back(3, "name", PropertyValue("Charlie"));
-properties.emplace_back(3, "age", PropertyValue(35));
-
-// Create indexes first
-propertyIndex.createIndex("name");
-propertyIndex.createIndex("age");
-
-// Batch insert for performance
-propertyIndex.addPropertiesBatch(properties);
-```
-
-### Index Management
-
-```cpp
-// Create index explicitly
-propertyIndex.createIndex("email");
-
-// Check if key is indexed
-if (propertyIndex.hasKeyIndexed("email")) {
-    std::cout << "Email is indexed" << std::endl;
-}
-
-// Get indexed keys
-auto keys = propertyIndex.getIndexedKeys();
-for (const auto &key : keys) {
-    PropertyType type = propertyIndex.getIndexedKeyType(key);
-    std::cout << key << " (" << propertyTypeToString(type) << ")" << std::endl;
-}
-
-// Clear index data (keep definition)
-propertyIndex.clearIndexData("email");
-
-// Drop specific key
-propertyIndex.dropKey("email");
-
-// Clear all indexes
-propertyIndex.clear();
-
-// Drop all indexes
-propertyIndex.drop();
-
-// Persist state
-propertyIndex.flush();
-```
-
-### Type Inference
-
-```cpp
-// Type is inferred from first insertion
-propertyIndex.addProperty(1, "score", PropertyValue(100));
-// "score" is now INTEGER type
-
-// Subsequent insertions must match type
-propertyIndex.addProperty(2, "score", PropertyValue(200));  // OK
-propertyIndex.addProperty(3, "score", PropertyValue("100")); // Ignored: type mismatch
-
-// Explicit creation defers type inference
-propertyIndex.createIndex("rating");  // Type: UNKNOWN
-propertyIndex.addProperty(1, "rating", PropertyValue(4.5));  // Type: DOUBLE
-```
+Composite index definitions and roots are persisted alongside single-property state.
 
 ## Best Practices
 
-1. **Explicit Index Creation**: Use `createIndex()` before bulk loads for predictable behavior
-2. **Batch Operations**: Use `addPropertiesBatch()` for bulk data loading
-3. **Type Consistency**: Ensure property values have consistent types across entities
-4. **Selective Indexing**: Only index frequently queried properties
-5. **Numeric for Ranges**: Use numeric types (INTEGER, DOUBLE) for range queries
-6. **Monitor State**: Check `hasKeyIndexed()` and `getIndexedKeyType()` status
-7. **Persist Regularly**: Call `flush()` after critical operations
-8. **Cleanup**: Use `dropKey()` when index is no longer needed
+1. **Explicit index creation**: Use `createIndex()` before bulk loads for predictable behavior.
+2. **Batch operations**: Use `addPropertiesBatch()` for bulk data loading -- approximately 10x faster than individual inserts.
+3. **Type consistency**: Ensure property values have consistent types across all entities sharing a key.
+4. **Selective indexing**: Only index frequently queried properties to avoid unnecessary memory and write overhead.
+5. **Numeric types for ranges**: Use INTEGER or DOUBLE types for properties that need range queries.
+6. **Monitor state**: Check `hasKeyIndexed()` and `getIndexedKeyType()` to verify index status.
+7. **Persist regularly**: Call `flush()` after critical operations to ensure metadata durability.
+8. **Cleanup**: Use `dropKey()` when an index is no longer needed to reclaim both memory and persistent state.
 
 ## Limitations
 
-1. **No Compound Indexes**: Each property indexed independently (no multi-column indexes)
-2. **No Partial Matches**: String properties require exact match (no wildcards/prefixes)
-3. **No Range for Strings**: Only numeric types support range queries
-4. **Type Strictness**: Type mismatches silently ignored (no error reporting)
-5. **Memory Bound**: Entire index structure must fit in memory
-6. **Write Serialization**: Only one concurrent writer per PropertyIndex instance
-7. **No Auto-Removal**: Removing entity doesn't automatically update property indexes
-
-## Future Enhancements
-
-Potential improvements for property index:
-
-1. **Compound Indexes**: Multi-property indexes for complex queries
-2. **Full-Text Search**: Advanced string indexing with partial matches
-3. **Hash Indexes**: O(1) exact match lookups for specific use cases
-4. **Covering Indexes**: Include additional properties in index for faster queries
-5. **Partial Indexes**: Index only subsets of data (e.g., WHERE active = true)
-6. **Automatic Indexing**: AI-driven index suggestion based on query patterns
-7. **Distributed Indexing**: Shard properties across multiple nodes
-8. **Compression**: Compress property values in index for space efficiency
+1. **No partial string matches**: String property lookups require exact match or range; no wildcard or prefix search on single-property indexes.
+2. **Type strictness**: Type mismatches are silently ignored with no error reporting.
+3. **Memory bound**: The entire index structure must fit in memory.
+4. **Write serialization**: Only one concurrent writer per `PropertyIndex` instance.
+5. **No automatic removal**: Deleting an entity does not automatically remove its entries from property indexes; the caller must explicitly invoke `removeProperty`.
 
 ## See Also
 

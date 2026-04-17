@@ -3,7 +3,7 @@ title: 存储系统
 description: FileStorage + DataManager 驱动的段式持久化与实体管理。
 category: 核心组件
 categoryOrder: 2
-order: 4
+order: 2
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -11,52 +11,188 @@ projectOrder: 1
 ---
 # 存储系统
 
-存储层由 `FileStorage` 统筹，`DataManager` 负责实体读写，`SegmentTracker/SpaceManager` 负责空间管理。
+存储层由 `FileStorage` 统筹，`DataManager` 负责实体读写，`SegmentTracker` / `SpaceManager` 负责空间管理。
 
-## 核心组件职责
+## 组件职责
 
-- `FileStorage`
-  - 打开/关闭文件
-  - 组件初始化与 flush/save 协调
-- `DataManager`
-  - Node/Edge/Property/Blob/Index/State 的统一入口
-  - 脏数据管理与事务上下文
-- `PersistenceManager`
-  - 维护各实体类型 dirty registry
-  - 触发自动 flush
-- `SegmentTracker`
-  - 跟踪 segment header 与链表关系
-- `IDAllocator`
-  - 管理实体 ID 分配与恢复
+```mermaid
+graph TB
+    subgraph "存储协调"
+        FS[FileStorage]
+    end
 
-## 存储对象类型
+    subgraph "实体 I/O"
+        DM[DataManager]
+        NM[NodeManager]
+        EM[EdgeManager]
+        PM[PropertyManager]
+        BM[BlobManager]
+        IM[IndexEntityManager]
+        SM[StateManager]
+    end
 
-系统内统一管理六类实体：
+    subgraph "持久化"
+        PMan[PersistenceManager]
+        DR["DirtyEntityRegistry (×6)"]
+        SW[StorageWriter]
+    end
 
-- Node
-- Edge
-- Property
-- Blob
-- Index
-- State
+    subgraph "基础设施"
+        ST[SegmentTracker]
+        SA[SegmentAllocator]
+        SpM[SpaceManager]
+        PB[PageBufferPool]
+        SIO[StorageIO]
+        IDA["IDAllocator (×6)"]
+    end
 
-各类型使用各自的 segment chain 与索引结构。
+    FS --> DM
+    DM --> NM
+    DM --> EM
+    DM --> PM
+    DM --> BM
+    DM --> IM
+    DM --> SM
 
-## 读写路径（简化）
+    DM --> PMan
+    PMan --> DR
+    PMan --> SW
+    SW --> SIO
 
-1. 查询算子调用 DataManager
-2. DataManager 优先走事务上下文/脏数据视图
-3. 命中失败则回落到缓存或磁盘读取
-4. 写入进入 dirty registry，提交时统一持久化
+    DM --> PB
+    DM --> ST
+    DM --> IDA
 
-## 校验与运维支持
+    ST --> SIO
+    SA --> SIO
+    SpM --> ST
+```
 
-- 完整性检查：`FileStorage::verifyIntegrity()`
-- 调试检查器：`DatabaseInspector`
-- REPL `debug` 命令可检查 nodes/edges/props/blobs/indexes/states
+| 组件 | 职责 |
+|------|------|
+| **FileStorage** | 打开/关闭数据库文件，初始化所有子组件，协调 `save()` / `flush()` |
+| **DataManager** | 所有实体类型的统一门面；持有 `TransactionContext`、`PageBufferPool` 及各类型管理器 |
+| **PersistenceManager** | 维护六个 `DirtyEntityRegistry`（每实体类型一个）；脏数据量超阈值时触发自动 flush |
+| **StorageWriter** | 将 `FlushSnapshot` 写入磁盘 — 处理段分配、原地更新和文件截断 |
+| **SegmentTracker** | 跟踪段头与链表关系；通过 activity bitmap 将实体 ID 映射到段偏移 |
+| **IDAllocator** | 每类型独立的 ID 分配，三级缓存（hot vector、cold intervals、volatile intervals），以段扫描为后备 |
+| **StorageIO** | 跨平台 I/O 抽象 — 优先使用 `pread`/`pwrite`，回退到 `fstream` seek |
+
+## 实体类型
+
+系统管理六类实体，每类有独立的段链和索引结构：
+
+| 类型 | 说明 | 段链头 |
+|------|------|--------|
+| Node | 带标签和属性引用的图节点 | `fileHeader.node_segment_head` |
+| Edge | 带类型和端点引用的有向边 | `fileHeader.edge_segment_head` |
+| Property | 键值属性记录（内联或 blob 支撑） | `fileHeader.property_segment_head` |
+| Blob | 大块二进制数据（zlib 压缩） | `fileHeader.blob_segment_head` |
+| Index | 索引元数据和结构 | `fileHeader.index_segment_head` |
+| State | 内部系统状态记录 | `fileHeader.state_segment_head` |
+
+## 读取路径
+
+```mermaid
+sequenceDiagram
+    participant OP as 查询算子
+    participant DM as DataManager
+    participant TX as TransactionContext
+    participant PM as PersistenceManager
+    participant PB as PageBufferPool
+    participant SIO as StorageIO
+
+    OP->>DM: getNode(id)
+    DM->>TX: 检查当前事务的脏实体
+    alt 活跃事务中有脏数据
+        TX-->>OP: 返回修改后的实体
+    else 非脏数据
+        DM->>PM: 检查 flushing 脏集
+        alt 在 flushing 集中
+            PM-->>OP: 从脏快照返回
+        else 干净数据
+            DM->>PB: getPage(segmentOffset)
+            alt 缓存命中
+                PB-->>OP: 缓存页数据
+            else 缓存未命中
+                PB->>SIO: pread(offset, size)
+                SIO-->>PB: 原始字节
+                PB-->>OP: 页数据
+            end
+        end
+    end
+```
+
+读取路径有三个查找层次：
+
+1. **事务上下文** — 若当前事务已修改该实体，返回内存中的版本。
+2. **Flushing 脏集** — 若 `PersistenceManager` 有未刷新的脏实体（双缓冲），从该处返回。
+3. **PageBufferPool → 磁盘** — 检查 LRU 段缓存；未命中则通过 `StorageIO` 读取磁盘。
+
+## 写入路径
+
+```mermaid
+sequenceDiagram
+    participant OP as 查询算子
+    participant DM as DataManager
+    participant IDA as IDAllocator
+    participant PM as PersistenceManager
+    participant WAL as WALManager
+
+    OP->>DM: addNode(node)
+    DM->>IDA: allocate() → 新 ID
+    IDA-->>DM: node.id = 已分配 ID
+    DM->>DM: 写入实体到段（内存中）
+    DM->>PM: upsert(node, changeType)
+    PM->>PM: 添加到 active DirtyEntityRegistry
+    DM->>WAL: writeEntityChange(txnId, type, data)
+```
+
+写入在内存中累积：
+
+1. `IDAllocator` 从其分级缓存中分配唯一 ID。
+2. 实体写入内存中的段表示。
+3. `PersistenceManager.upsert()` 将其添加到活跃脏注册表。
+4. 追加 WAL 记录以确保持久性。
+
+## Flush 与 Save
+
+写事务提交时，`FileStorage::save()` 协调持久化：
+
+```mermaid
+graph TD
+    A[事务提交] --> B[WAL writeCommit + sync]
+    B --> C[PersistenceManager.createSnapshot]
+    C --> D[StorageWriter.writeSnapshot]
+    D --> E["将各实体类型持久化到段链"]
+    E --> F[更新 FileHeader max IDs]
+    F --> G[若达到阈值则 WAL checkpoint]
+    G --> H[PersistenceManager.commitSnapshot]
+    H --> I[PageBufferPool.invalidateDirtySegments]
+    I --> J[释放写锁]
+```
+
+**关键细节：**
+
+- `createSnapshot()` 捕获活跃脏映射并交换为新的空映射（双缓冲），新写入可继续进入活跃集。
+- `StorageWriter` 处理新实体的段分配、修改的原地更新和删除的墓碑标记。
+- 刷新后，`invalidateDirtySegments()` 仅从 `PageBufferPool` 中移除受影响的页，避免全量清缓存。
+
+## 校验与调试
+
+- **完整性校验**：`FileStorage::verifyIntegrity()` 验证所有段 CRC 及交叉引用。
+- **调试检查器**：`DatabaseInspector` 提供已存实体的详细视图。
+- **REPL `debug` 命令**：交互式检查 nodes、edges、properties、blobs、indexes、states。
 
 ## 源码定位
 
-- `include/graph/storage/FileStorage.hpp`
-- `include/graph/storage/data/DataManager.hpp`
-- `src/storage/PersistenceManager.cpp`
+| 组件 | 路径 |
+|------|------|
+| FileStorage | `include/graph/storage/FileStorage.hpp` |
+| DataManager | `include/graph/storage/data/DataManager.hpp` |
+| PersistenceManager | `include/graph/storage/PersistenceManager.hpp` |
+| StorageWriter | `include/graph/storage/StorageWriter.hpp` |
+| SegmentTracker | `include/graph/storage/SegmentTracker.hpp` |
+| IDAllocator | `include/graph/storage/IDAllocator.hpp` |
+| StorageIO | `include/graph/storage/StorageIO.hpp` |
+| PageBufferPool | `include/graph/storage/PageBufferPool.hpp` |

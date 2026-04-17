@@ -1,6 +1,6 @@
 ---
-title: 类型定义
-description: C++ API 中 Value / Node / Edge 的实际结构与使用建议。
+title: 类型系统
+description: C++ API 中 Value、Node、Edge、PropertyValue、ResultValue 的定义与使用。
 category: C++ API
 categoryOrder: 2
 order: 4
@@ -9,44 +9,146 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# 类型定义
+# 类型系统
 
 头文件：`include/zyx/value.hpp`
 
-## Value
+## zyx::Value
 
-`zyx::Value` 是 `std::variant`，当前包含：
+`zyx::Value` 是 `std::variant`，用于查询参数和结果访问：
 
-- `std::monostate`（NULL）
-- `bool`
-- `int64_t`
-- `double`
-- `std::string`
-- `std::shared_ptr<Node>`
-- `std::shared_ptr<Edge>`
-- `std::vector<float>`（常用于 embedding）
-- `std::vector<std::string>`
+| 变体 | C++ 类型 | 说明 |
+|------|----------|------|
+| Null | `std::monostate` | 空值 |
+| Boolean | `bool` | `true` 或 `false` |
+| Integer | `int64_t` | 64 位有符号整数 |
+| Float | `double` | 双精度浮点数 |
+| String | `std::string` | UTF-8 字符串 |
+| Node | `std::shared_ptr<Node>` | 图节点引用 |
+| Edge | `std::shared_ptr<Edge>` | 图边引用 |
+| 浮点向量 | `std::vector<float>` | 紧凑数值向量（常用于 embedding） |
+| 字符串列表 | `std::vector<std::string>` | 字符串列表 |
 
-## Node
+### 用法
 
-`zyx::Node` 字段：
+```cpp
+// 构造查询参数
+std::unordered_map<std::string, zyx::Value> params;
+params["name"] = std::string("Alice");
+params["age"] = int64_t(30);
+params["active"] = true;
+params["score"] = 95.5;
 
-- `id`
-- `label`（首标签，兼容字段）
-- `labels`（全量标签）
-- `properties`
+// 从结果中读取值
+zyx::Value val = result.get("n.name");
+if (std::holds_alternative<std::string>(val)) {
+    std::string name = std::get<std::string>(val);
+}
+```
 
-## Edge
+## zyx::Node
 
-`zyx::Edge` 字段：
+```cpp
+struct Node {
+    int64_t id;
+    std::string label;                           // 首标签（向后兼容）
+    std::vector<std::string> labels;             // 全量标签
+    std::unordered_map<std::string, Value> properties;
+};
+```
 
-- `id`
-- `sourceId`
-- `targetId`
-- `label`
-- `properties`
+| 字段 | 说明 |
+|------|------|
+| `id` | 内部节点 ID（由 `IDAllocator` 分配） |
+| `label` | 主标签（列表中第一个） |
+| `labels` | 该节点的所有标签 |
+| `properties` | 键值属性映射 |
 
-## 类型建议
+## zyx::Edge
 
-- 向量检索属性建议优先使用 `std::vector<float>`。
-- 通用列表若需要数值精度控制，建议在业务层统一序列化策略。
+```cpp
+struct Edge {
+    int64_t id;
+    int64_t sourceId;
+    int64_t targetId;
+    std::string type;                            // 关系类型
+    std::unordered_map<std::string, Value> properties;
+};
+```
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 内部边 ID |
+| `sourceId` | 源节点 ID |
+| `targetId` | 目标节点 ID |
+| `type` | 关系类型（如 `"KNOWS"`） |
+| `properties` | 键值属性映射 |
+
+注意：Edge 使用 `type`（非 `label`）。Node 使用 `labels`（复数，可有多个）。
+
+## graph::PropertyValue
+
+查询引擎内部用于属性存储和 `QueryBuilder`：
+
+```cpp
+struct PropertyValue {
+    using MapType = std::unordered_map<std::string, PropertyValue>;
+
+    PropertyValue();                    // Null
+    PropertyValue(bool value);
+    PropertyValue(int64_t value);
+    PropertyValue(double value);
+    PropertyValue(const std::string& value);
+    PropertyValue(std::vector<PropertyValue> vec);  // List
+    PropertyValue(MapType map);                      // Map
+
+    PropertyType getType() const;
+    std::string toString() const;
+};
+```
+
+| `PropertyType` | 说明 |
+|----------------|------|
+| `NULL_TYPE` | 空值 |
+| `BOOLEAN` | `bool` |
+| `INTEGER` | `int64_t` |
+| `DOUBLE` | `double` |
+| `STRING` | `std::string` |
+| `LIST` | `std::vector<PropertyValue>` |
+| `MAP` | `unordered_map<string, PropertyValue>` |
+
+## graph::ResultValue
+
+封装查询引擎返回的值：
+
+```cpp
+class ResultValue {
+    bool isNode() const;
+    bool isEdge() const;
+    bool isPrimitive() const;
+
+    const Node& asNode() const;
+    const Edge& asEdge() const;
+    const PropertyValue& asPrimitive() const;
+
+    std::string toString() const;
+};
+```
+
+## 枚举类型
+
+| 枚举 | 值 | 说明 |
+|------|-----|------|
+| `EntityType` | `Node`, `Edge`, `Property`, `Blob`, `Index`, `State` | 内部实体类型 |
+| `OpenMode` | `OPEN_CREATE_NEW_FILE`, `OPEN_EXISTING_FILE`, `OPEN_CREATE_OR_OPEN_FILE` | 数据库打开模式 |
+| `TxnState` | `TXN_ACTIVE`, `TXN_COMMITTED`, `TXN_ROLLED_BACK` | 事务状态 |
+| `Language` | `Cypher` | 查询语言（当前仅 Cypher） |
+
+## 源码定位
+
+| 组件 | 路径 |
+|------|------|
+| Value 类型 | `include/zyx/value.hpp` |
+| PropertyValue | `include/graph/query/types/PropertyValue.hpp` |
+| ResultValue | `include/graph/query/types/ResultValue.hpp` |
+| EntityType | `include/graph/core/types.hpp` |

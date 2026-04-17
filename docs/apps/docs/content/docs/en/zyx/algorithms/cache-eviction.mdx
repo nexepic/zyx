@@ -11,320 +11,292 @@ projectOrder: 1
 ---
 # Cache Eviction Algorithm
 
-ZYX implements an LRU (Least Recently Used) cache eviction policy with dirty tracking to optimize memory usage and performance.
+ZYX uses an LRU (Least Recently Used) cache eviction strategy for its in-memory caches. The core `LRUCache` template provides O(1) lookups and updates, while the `PageBufferPool` applies this strategy at the storage segment level. Modified entities are tracked separately through a double-buffered `DirtyEntityRegistry` that allows non-blocking writes during flush operations.
 
 ## Overview
 
-The cache manager uses:
+The cache system is built on three components:
 
-- **LRU Eviction**: Evict least recently used entities first
-- **Dirty Tracking**: Track modified entities for persistence
-- **Size Limits**: Configurable cache size limits
-- **Hint-Based Eviction**: Optional eviction hints
+- **LRUCache** -- a generic template class using a hash map plus doubly-linked list, providing O(1) get, put, and eviction
+- **PageBufferPool** -- a segment-level LRU cache backed internally by the same hash-map-plus-list pattern, caching entire storage segments as raw byte pages
+- **DirtyEntityRegistry** -- a double-buffered registry that tracks modified (dirty) entities across two maps (active and flushing) to enable non-blocking concurrent writes during I/O
 
-## LRU Cache Implementation
+Source locations:
 
-### Data Structure
+- `LRUCache`: `include/graph/storage/CacheManager.hpp`
+- `PageBufferPool`: `include/graph/storage/PageBufferPool.hpp`
+- `DirtyEntityRegistry`: `include/graph/storage/DirtyEntityRegistry.hpp`
 
-```cpp
-template<typename K, typename V>
-class LRUCache {
-private:
-    struct Node {
-        K key;
-        V value;
-        std::list<Node*>::iterator it;
-    };
+## LRU Cache Data Structure
 
-    std::list<Node*> lruList_;  // Most recent at front
-    std::unordered_map<K, Node*> cache_;
-    size_t capacity_;
+The `LRUCache<K, V>` template combines two standard containers:
 
-public:
-    std::optional<V> get(const K& key) {
-        auto it = cache_.find(key);
-        if (it == cache_.end()) {
-            return std::nullopt;
-        }
+1. A `std::list<std::pair<K, V>>` (doubly-linked list) ordered by recency -- most recently used at the front, least recently used at the back
+2. A `std::unordered_map<K, iterator>` (hash map) mapping each key directly to its list iterator for O(1) lookup
 
-        // Move to front (most recently used)
-        Node* node = it->second;
-        lruList_.splice(lruList_.begin(), lruList_, node->it);
-        return node->value;
-    }
+This combination allows every operation to complete in constant time:
 
-    void put(const K& key, const V& value) {
-        auto it = cache_.find(key);
+| Operation | Time Complexity | Notes |
+|---|---|---|
+| `get(key)` | O(1) | Hash map lookup + `splice` to list front |
+| `put(key, value)` | O(1) | Hash map lookup + list insert or update |
+| `remove(key)` | O(1) | Hash map lookup + list erase |
+| `evict()` | O(1) | Remove back of list + erase from map |
+| `peek(key)` | O(1) | Hash map lookup, no order change |
+| `contains(key)` | O(1) | Hash map lookup only |
 
-        if (it != cache_.end()) {
-            // Update existing
-            Node* node = it->second;
-            node->value = value;
-            lruList_.splice(lruList_.begin(), lruList_, node->it);
-        } else {
-            // Add new
-            if (cache_.size() >= capacity_) {
-                evict();
-            }
+The following diagram shows the internal layout of the data structure:
 
-            Node* node = new Node{key, value};
-            lruList_.push_front(node);
-            node->it = lruList_.begin();
-            cache_[key] = node;
-        }
-    }
+```mermaid
+graph LR
+    subgraph HashMap["Hash Map (unordered_map)"]
+        K1["key_1"] --> IT1["iterator → Node A"]
+        K2["key_2"] --> IT2["iterator → Node B"]
+        K3["key_3"] --> IT3["iterator → Node C"]
+        K4["key_4"] --> IT4["iterator → Node D"]
+    end
 
-private:
-    void evict() {
-        // Evict least recently used (back of list)
-        Node* node = lruList_.back();
-        cache_.erase(node->key);
-        lruList_.pop_back();
+    subgraph DoublyLinkedList["Doubly-Linked List (recency order)"]
+        Front["FRONT (MRU)"]
+        NA["Node A<br/>key_1, val_1"]
+        NB["Node B<br/>key_2, val_2"]
+        NC["Node C<br/>key_3, val_3"]
+        ND["Node D<br/>key_4, val_4"]
+        Back["BACK (LRU) → evict here"]
+        Front --> NA --> NB --> NC --> ND --> Back
+    end
 
-        // Handle dirty entities before eviction
-        if (isDirty(node)) {
-            flushToDisk(node);
-        }
-
-        delete node;
-    }
-};
+    IT1 -.-> NA
+    IT2 -.-> NB
+    IT3 -.-> NC
+    IT4 -.-> ND
 ```
+
+## LRU Operations
+
+### Get Operation
+
+When `get(key)` is called:
+
+1. Look up the key in the hash map
+2. If not found, increment the miss counter and return a default-constructed `V`
+3. If found, increment the hit counter, move the node to the front of the list via `splice`, and return the value
+
+The `splice` operation detaches the list node from its current position and reinserts it at the front in O(1) time without any memory allocation or copy.
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant HashMap as Hash Map
+    participant List as Doubly-Linked List
+
+    Caller->>HashMap: get(key_3)
+    HashMap-->>Caller: iterator found
+    Caller->>List: splice Node C to front
+    Note over List: Node C moves from position 3 to position 1<br/>No allocation or copy needed
+    List-->>Caller: return value
+```
+
+### Put Operation
+
+When `put(key, value)` is called:
+
+1. If capacity is 0, return immediately (caching disabled)
+2. Look up the key in the hash map
+3. If the key exists, update the value in place and `splice` the node to the front
+4. If the key is new and the cache is at capacity, evict the least recently used item (back of list), then insert the new entry at the front
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant HashMap as Hash Map
+    participant List as Doubly-Linked List
+
+    Caller->>HashMap: put(key_5, val_5)
+    HashMap-->>Caller: key not found
+
+    alt Cache at capacity
+        Caller->>List: Remove back node (LRU)
+        Note over List: Remove Node D (key_4)
+        Caller->>HashMap: erase(key_4)
+    end
+
+    Caller->>List: emplace_front(key_5, val_5)
+    Caller->>HashMap: map[key_5] = list.begin()
+    Note over HashMap,List: key_5 is now at front (MRU)
+```
+
+### Eviction
+
+Eviction happens inline during `put` when the cache is full. The least recently used entry is always the back element of the list:
+
+1. Access `list.back()` to get the LRU key-value pair
+2. Erase the key from the hash map
+3. Pop the back element from the list
+
+The eviction is pure LRU -- there is no weighted scoring, no frequency tracking, and no adaptive tuning. Items are evicted strictly in the order they were last accessed.
+
+### Additional Operations
+
+Beyond the core get/put/evict cycle, `LRUCache` provides:
+
+- **`tryPut(key, value)`** -- a non-blocking variant that attempts to acquire the write lock with `std::try_to_lock`. If the lock is contended, it silently returns `false` rather than blocking. This is used in parallel scan paths where waiting on cache insertion would be more costly than a cache miss.
+- **`peek(key)`** -- returns the value without moving the node to the front. Takes a shared lock, so it does not disrupt the recency order.
+- **`remove(key)`** -- explicitly removes a specific entry regardless of its position in the LRU list.
+- **`snapshot()`** -- takes a shared lock and returns a vector copy of all key-value pairs in recency order.
+- **`contains(key)`** -- checks for key existence without affecting order (shared lock).
+
+## Thread Safety Model
+
+`LRUCache` uses a `std::shared_mutex` for read-write locking:
+
+| Operation | Lock Type | Rationale |
+|---|---|---|
+| `get(key)` | Exclusive (`unique_lock`) | Mutates list order via `splice` |
+| `put(key, value)` | Exclusive (`unique_lock`) | Mutates both map and list |
+| `tryPut(key, value)` | Exclusive (`try_to_lock`) | Non-blocking attempt; skips if contended |
+| `peek(key)` | Shared (`shared_lock`) | Read-only; no order change |
+| `contains(key)` | Shared (`shared_lock`) | Read-only; hash map lookup only |
+| `size()` | Shared (`shared_lock`) | Read-only |
+| `snapshot()` | Shared (`shared_lock`) | Read-only copy |
+
+Note that `get` requires an exclusive lock because it calls `splice`, which mutates the list. Operations that are truly read-only (`peek`, `contains`, `size`, `snapshot`) use shared locks, allowing concurrent reads.
+
+Hit and miss statistics are tracked via `std::atomic<uint64_t>` counters with `std::memory_order_relaxed`, so they never contend with the mutex.
+
+## Cache Statistics
+
+Both `LRUCache` and `PageBufferPool` track hit and miss counts:
+
+- **Hits**: incremented every time `get` or `getPage` finds the requested entry
+- **Misses**: incremented every time the lookup fails
+- **Reset**: `resetStats()` zeroes both counters
+
+The hit rate is computed as `hits / (hits + misses)`. These counters are atomic and can be read without acquiring the mutex.
+
+## PageBufferPool
+
+The `PageBufferPool` is a segment-level cache that stores entire storage segments as raw byte buffers. It implements the same LRU pattern as `LRUCache` but is specialized for page-level I/O:
+
+- **Key**: segment offset (`uint64_t`) identifying the on-disk location
+- **Value**: `Page` struct containing the segment offset and a `std::vector<uint8_t>` of raw data
+- **Capacity**: measured in number of pages, not bytes
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph StorageEngine["Storage Engine"]
+        FileStorage["FileStorage"]
+    end
+
+    subgraph PageBufferPool["PageBufferPool"]
+        PageMap["page_map_<br/>unordered_map&lt;offset, iterator&gt;"]
+        PageList["pages_ (list&lt;Page&gt;)<br/>Front = MRU, Back = LRU"]
+        Stats["hits_ / misses_<br/>atomic counters"]
+    end
+
+    subgraph Disk["Disk"]
+        Seg1["Segment 0x0000"]
+        Seg2["Segment 0x1000"]
+        Seg3["Segment 0x2000"]
+    end
+
+    FileStorage -->|"getPage(offset)"| PageBufferPool
+    PageBufferPool -->|"cache miss: read from disk"| Disk
+    PageBufferPool -->|"putPage(offset, data)"| PageMap
+    PageMap --> PageList
+```
+
+### Operations
+
+**getPage(segmentOffset)**: Looks up the segment offset in the hash map. On a hit, the page is moved to the front of the list and a pointer to the cached data is returned. On a miss, `nullptr` is returned and the caller (typically `FileStorage`) must read the segment from disk and insert it via `putPage`.
+
+**putPage(segmentOffset, data)**: If the page already exists, its data is updated in place and it is moved to the front. If the cache is full, the LRU page is evicted (removed from both the list and the map). The new page is then inserted at the front.
+
+**invalidate(segmentOffset)**: Removes a specific page from the cache. This is used after write operations that modify a segment on disk, ensuring the cached copy does not become stale.
+
+**clear()**: Removes all pages from both the map and the list.
 
 ## Dirty Entity Tracking
 
-### Dirty Registry
+The `DirtyEntityRegistry` tracks which entities (nodes and edges) have been modified but not yet persisted to disk. Unlike a simple set, it uses a double-buffered design to allow writes to continue while a flush is in progress.
 
-```cpp
-class DirtyEntityRegistry {
-private:
-    std::unordered_set<uint64_t> dirtyEntities_;
-    std::mutex mutex_;
+### Double-Buffer Design
 
-public:
-    void markDirty(uint64_t entityId) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        dirtyEntities_.insert(entityId);
-    }
+```mermaid
+graph TB
+    subgraph DirtyEntityRegistry["DirtyEntityRegistry&lt;EntityType&gt;"]
+        ActiveMap["activeMap_<br/>Buffer A: receiving new updates<br/>unordered_map&lt;id, DirtyEntityInfo&gt;"]
+        FlushingMap["flushingMap_<br/>Buffer B: being written to disk<br/>unordered_map&lt;id, DirtyEntityInfo&gt;"]
+        DirtyCount["dirtyCount_<br/>atomic&lt;size_t&gt;"]
+    end
 
-    void markClean(uint64_t entityId) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        dirtyEntities_.erase(entityId);
-    }
+    Txn["Write Transaction"] -->|"upsert(entity)"| ActiveMap
+    Flush["Flush Thread"] -->|"createFlushSnapshot()"| FlushingMap
+    Flush -->|"commitFlush()"| FlushingMap
 
-    bool isDirty(uint64_t entityId) const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return dirtyEntities_.count(entityId) > 0;
-    }
-
-    std::vector<uint64_t> getDirtyEntities() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return std::vector<uint64_t>(dirtyEntities_.begin(), dirtyEntities_.end());
-    }
-};
+    ActiveMap -->|"swap on createFlushSnapshot()"| FlushingMap
 ```
 
-### Cache with Dirty Tracking
+### How Double-Buffering Works
 
-```cpp
-class EntityCache {
-private:
-    LRUCache<uint64_t, Entity*> cache_;
-    DirtyEntityRegistry dirtyRegistry_;
+Each entity is wrapped in a `DirtyEntityInfo<EntityType>` struct that records:
 
-public:
-    Entity* getEntity(uint64_t entityId) {
-        auto entity = cache_.get(entityId);
-        if (entity) {
-            cacheHits_++;
-        } else {
-            cacheMisses++;
-        }
-        return entity.value_or(nullptr);
-    }
+- **EntityChangeType**: one of `CHANGE_ADDED`, `CHANGE_MODIFIED`, or `CHANGE_DELETED`
+- **Backup**: an optional copy of the original entity state (used for rollback)
 
-    void putEntity(uint64_t entityId, Entity* entity, bool isDirty) {
-        cache_.put(entityId, entity);
-        if (isDirty) {
-            dirtyRegistry_.markDirty(entityId);
-        }
-    }
+The flush cycle proceeds as follows:
 
-    void updateEntity(uint64_t entityId, Entity* entity) {
-        cache_.put(entityId, entity);
-        dirtyRegistry_.markDirty(entityId);
-    }
+1. **createFlushSnapshot()** -- The calling thread acquires an exclusive lock and swaps the active map into the flushing map. A new empty active map is created. This "freezes" the current set of dirty entities for the I/O thread to write while new updates flow into the fresh active map.
 
-    std::vector<uint64_t> flushDirtyEntities() {
-        auto dirty = dirtyRegistry_.getDirtyEntities();
+2. **I/O write** -- The flushing map is iterated and each entity is written to disk. This happens outside the registry lock, so new updates are not blocked.
 
-        for (uint64_t entityId : dirty) {
-            Entity* entity = getEntity(entityId);
-            if (entity) {
-                writeToDisk(entity);
-                dirtyRegistry_.markClean(entityId);
-            }
-        }
+3. **commitFlush()** -- After all writes succeed, the flushing map is cleared under an exclusive lock.
 
-        return dirty;
-    }
-};
-```
+If a second `createFlushSnapshot()` is called before `commitFlush()` (which should not happen in normal operation), the active map entries are merged into the existing flushing map rather than overwriting it.
 
-## Eviction Strategies
+### Concurrent Access Safety
 
-### Basic LRU
+The registry uses `std::shared_mutex` for thread safety:
 
-```cpp
-void evictLRU() {
-    if (lruList_.empty()) return;
+| Operation | Lock Type | Notes |
+|---|---|---|
+| `upsert()` | Exclusive | Writes to active map |
+| `remove()` | Exclusive | Checks flushing map first; refuses if entity is being flushed |
+| `getInfo()` | Shared | Checks active map, then flushing map |
+| `getAllDirtyInfos()` | Shared | Merges both maps (active takes priority) |
+| `copyMergedMap()` | Shared | Returns merged copy for snapshot isolation |
+| `contains()` | Shared | Checks both maps |
+| `createFlushSnapshot()` | Exclusive | Swaps buffers |
+| `commitFlush()` | Exclusive | Clears flushing buffer |
 
-    // Evict least recently used
-    Node* node = lruList_.back();
-    if (dirtyRegistry_.isDirty(node->key)) {
-        flushToDisk(node->value);
-    }
+The `remove()` operation has a safety check: if the entity is currently in the flushing map, removal is refused because the I/O thread is about to write it to disk. Removing it at that point would cause a memory-disk inconsistency.
 
-    cache_.erase(node->key);
-    lruList_.pop_back();
-    delete node;
-}
-```
+## Complexity Analysis
 
-### LFU (Least Frequently Used)
-
-```cpp
-class LFUCache {
-private:
-    struct Node {
-        uint64_t key;
-        Entity* value;
-        size_t frequency;
-    };
-
-    std::unordered_map<uint64_t, Node*> cache_;
-    std::map<size_t, std::unordered_set<uint64_t>> frequencyMap_;
-
-public:
-    void evictLFU() {
-        // Evict entity with lowest frequency
-        auto& [minFreq, entities] = *frequencyMap_.begin();
-        uint64_t entityId = *entities.begin();
-
-        removeEntity(entityId);
-    }
-
-    void access(uint64_t entityId) {
-        auto* node = cache_[entityId];
-        frequencyMap_[node->frequency].erase(entityId);
-        node->frequency++;
-        frequencyMap_[node->frequency].insert(entityId);
-    }
-};
-```
-
-### ARC (Adaptive Replacement Cache)
-
-```cpp
-class ARCCache {
-private:
-    size_t size_;
-    size_t p_;  // Pivot point
-
-    LRUCache<uint64_t, Entity*> t1_;  // Recent, once
-    LRUCache<uint64_t, Entity*> t2_;  // Recent, twice+
-    LRUCache<uint64_t, Entity*> b1_;  // Frequent, once
-    LRUCache<uint64_t, Entity*> b2_;  // Frequent, twice+
-
-public:
-    void evictARC() {
-        if (t1_.size() >= std::max(p_, size_ / 2)) {
-            // Replace from t1
-            auto* entity = t1_.evict();
-            b1_.put(entity->id, entity);
-        } else {
-            // Replace from t2
-            auto* entity = t2_.evict();
-            b2_.put(entity->id, entity);
-        }
-    }
-};
-```
-
-## Performance Tuning
-
-### Cache Sizing
-
-```cpp
-size_t calculateOptimalCacheSize(size_t availableMemory, size_t workingSetSize) {
-    // Use 70% of available memory
-    size_t recommended = availableMemory * 0.7;
-
-    // But don't exceed working set size by too much
-    return std::min(recommended, workingSetSize * 2);
-}
-```
-
-### Eviction Threshold
-
-```cpp
-struct CacheConfig {
-    size_t maxSize;
-    double evictionThreshold;  // Evict when 90% full
-    double watermarkLow;       // Stop eviction at 70%
-    double watermarkHigh;      // Start eviction at 90%
-};
-
-void manageCacheSize() {
-    if (cache_.size() > config_.maxSize * config_.watermarkHigh) {
-        // Evict until low watermark
-        while (cache_.size() > config_.maxSize * config_.watermarkLow) {
-            evict();
-        }
-    }
-}
-```
-
-## Performance Metrics
-
-### Hit Rate Tracking
-
-```cpp
-struct CacheStats {
-    uint64_t hits;
-    uint64_t misses;
-    uint64_t evictions;
-    uint64_t dirtyFlushes;
-
-    double getHitRate() const {
-        double total = hits + misses;
-        return total > 0 ? hits / total : 0.0;
-    }
-};
-
-CacheStats getStats() const {
-    return {
-        .hits = cacheHits_,
-        .misses = cacheMisses_,
-        .evictions = evictionCount_,
-        .dirtyFlushes = dirtyFlushCount_
-    };
-}
-```
-
-### Target Metrics
-
-- **Hit Rate**: &gt;80% for most workloads
-- **Eviction Rate**: &lt;10% of accesses
-- **Dirty Ratio**: &lt;30% of cached entities
+| Component | Operation | Time | Space |
+|---|---|---|---|
+| LRUCache | get | O(1) | O(capacity) |
+| LRUCache | put | O(1) | O(capacity) |
+| LRUCache | evict | O(1) | -- |
+| LRUCache | peek | O(1) | -- |
+| LRUCache | tryPut | O(1) | -- |
+| PageBufferPool | getPage | O(1) | O(capacity pages) |
+| PageBufferPool | putPage | O(1) | O(capacity pages) |
+| PageBufferPool | invalidate | O(1) | -- |
+| DirtyEntityRegistry | upsert | O(1) amortized | O(dirty entity count) |
+| DirtyEntityRegistry | getInfo | O(1) | -- |
+| DirtyEntityRegistry | createFlushSnapshot | O(1) swap | -- |
+| DirtyEntityRegistry | commitFlush | O(n) where n = flushing count | -- |
 
 ## Best Practices
 
-1. **Monitor hit rate**: Track and optimize
-2. **Tune cache size**: Balance memory and performance
-3. **Flush dirty entities**: Don't let them accumulate
-4. **Use appropriate eviction**: Choose strategy for workload
-5. **Profile access patterns**: Understand your data access
+1. **Size the cache appropriately**: The `LRUCache` capacity is set at construction time. For `PageBufferPool`, the capacity is measured in pages. Choose a size that fits the working set without exceeding available memory.
+2. **Monitor hit rate**: Use `hits()` and `misses()` to compute the hit rate. A well-sized cache should achieve a hit rate above 80% for most workloads.
+3. **Use tryPut in parallel paths**: When multiple threads are scanning and populating the cache, `tryPut` avoids blocking a scan thread on a contended lock.
+4. **Invalidate after writes**: After modifying a segment on disk, call `invalidate()` on the `PageBufferPool` to prevent stale reads.
+5. **Let the flush cycle complete**: Do not call `createFlushSnapshot()` a second time before `commitFlush()` finishes, as this forces an unnecessary merge.
 
 ## See Also
 

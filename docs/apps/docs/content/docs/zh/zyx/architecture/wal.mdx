@@ -3,7 +3,7 @@ title: WAL 实现
 description: WAL 文件结构、记录类型、组提交与 checkpoint 机制。
 category: 核心组件
 categoryOrder: 2
-order: 6
+order: 5
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -11,41 +11,171 @@ projectOrder: 1
 ---
 # WAL 实现
 
-WAL 由 `WALManager` 管理，文件路径为 `<db_path>-wal`。
+WAL 由 `WALManager` 管理，文件路径为 `<db_path>-wal`，与主数据库文件并列。
+
+## 为什么需要 WAL？
+
+WAL 保证**持久性** — 一旦事务的 commit 记录被写入并 `sync()` 到 WAL 文件，该事务的变更就能在后续的任何进程崩溃中存活。重启时，`WALRecovery` 回放已提交但未刷新的实体写入，将数据库恢复到一致状态。
 
 ## 记录类型
 
-`WALRecordType` 当前包含：
+`WALRecordType` 定义四种记录类型：
 
-- `WAL_TXN_BEGIN`
-- `WAL_TXN_COMMIT`
-- `WAL_TXN_ROLLBACK`
-- `WAL_ENTITY_WRITE`
+| 类型 | 值 | 用途 |
+|------|-----|------|
+| `WAL_TXN_BEGIN` | 1 | 标记事务开始 |
+| `WAL_TXN_COMMIT` | 2 | 标记成功提交（不可回退点） |
+| `WAL_TXN_ROLLBACK` | 3 | 标记回滚（恢复时忽略此事务） |
+| `WAL_ENTITY_WRITE` | 4 | 记录实体变更（创建、更新或删除） |
 
-每条记录含 header 与 CRC32 校验。
+### 记录格式
+
+每条 WAL 记录由固定头部和可选负载组成：
+
+```mermaid
+graph LR
+    subgraph "WALRecordHeader（固定）"
+        A["recordSize (4 bytes)"]
+        B["txnId (8 bytes)"]
+        C["type (1 byte)"]
+        D["checksum (4 bytes, CRC32)"]
+    end
+
+    subgraph "负载（可变，仅 ENTITY_WRITE）"
+        E["entityType (1 byte)"]
+        F["changeType (1 byte)"]
+        G["entityId (8 bytes)"]
+        H["dataSize (4 bytes)"]
+        I["序列化实体数据"]
+    end
+```
+
+CRC32 校验覆盖头部之后的所有数据，在恢复时提供完整性验证。
+
+## WAL 文件结构
+
+```mermaid
+graph TB
+    subgraph "WAL 文件 (<db_path>-wal)"
+        WH["WALFileHeader (32 bytes)"]
+        R1["Record: WAL_TXN_BEGIN (txn 1)"]
+        R2["Record: WAL_ENTITY_WRITE (txn 1)"]
+        R3["Record: WAL_ENTITY_WRITE (txn 1)"]
+        R4["Record: WAL_TXN_COMMIT (txn 1)"]
+        R5["Record: WAL_TXN_BEGIN (txn 2)"]
+        R6["Record: WAL_ENTITY_WRITE (txn 2)"]
+        R7["...更多记录..."]
+    end
+    WH --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> R7
+```
+
+`WALFileHeader`（32 字节）包含：
+
+| 字段 | 说明 |
+|------|------|
+| `magic` | `0x5A594C57`（"ZYLW"）— 验证这是 ZYX WAL 文件 |
+| `version` | WAL 格式版本 |
+| `dbFileSize` | WAL 创建时的数据库文件大小 |
+| `salt1`、`salt2` | 用于完整性检查的随机值 |
 
 ## 写入机制
 
-- 内存缓冲：`writeBuffer_`
-- 缓冲满时先刷盘（不 fsync）
-- commit 时采用 group commit（微秒级延迟窗口）
-- `sync()` 执行 flush + fsync
+```mermaid
+sequenceDiagram
+    participant TX as Transaction
+    participant WAL as WALManager
+    participant BUF as 写入缓冲区
+    participant DISK[(磁盘)]
 
-## checkpoint
+    TX->>WAL: writeBegin(txnId)
+    WAL->>BUF: 追加 WAL_TXN_BEGIN 记录
+    TX->>WAL: writeEntityChange(txnId, entityType, changeType, entityId, data)
+    WAL->>BUF: 追加 WAL_ENTITY_WRITE + 序列化负载
 
-满足条件时执行 checkpoint：
+    Note over BUF: 缓冲区累积记录（默认 64 KB）
 
-- 刷新并 fsync
-- 重建 WAL 文件并写入新 header
-- 重置写偏移
+    TX->>WAL: writeCommit(txnId)
+    WAL->>BUF: 追加 WAL_TXN_COMMIT 记录
+    WAL->>DISK: flush() — 将缓冲区写入文件
+    WAL->>DISK: sync() — fsync 保证持久性
 
-## 关于恢复
+    Note over DISK: 事务现在是持久的
+```
 
-当前启动阶段会检查 WAL 是否有未消费数据，并进行 checkpoint 清理。恢复路径仍在持续演进中，文档应以 `Database::ensureWALAndTransactionManager()` 的当前实现为准。
+**关键细节：**
+
+- **内存缓冲** — `writeBuffer_` 在内存中累积记录（默认 64 KB），将小写入批量化为较大 I/O 操作。
+- **缓冲满刷新** — 当缓冲区超过容量时，刷新到磁盘（不做 `fsync`）以释放内存。
+- **提交时同步** — `writeCommit()` 时，缓冲区被刷新并 `fsync`。这是持久性保证。
+- **组提交** — 多个事务并发提交时，`WALManager` 使用微秒级延迟窗口（默认 1 ms）将多个 commit 记录批量到一个 `fsync`。
+
+## 组提交
+
+```mermaid
+sequenceDiagram
+    participant TX1 as Transaction 1
+    participant TX2 as Transaction 2
+    participant WAL as WALManager
+    participant DISK[(磁盘)]
+
+    TX1->>WAL: writeCommit(txn1)
+    TX2->>WAL: writeCommit(txn2)
+
+    Note over WAL: 两个提交在组窗口内
+
+    WAL->>DISK: 一次 flush + fsync 包含两者
+    DISK-->>WAL: 完成
+    WAL-->>TX1: 已提交
+    WAL-->>TX2: 已提交
+```
+
+组提交减少 `fsync` 调用次数 — 最昂贵的 I/O 操作 — 通过将多个事务提交批量到一次磁盘同步。
+
+## Checkpoint
+
+Checkpoint 在所有脏数据已持久化到主数据库文件后截断 WAL：
+
+```mermaid
+graph TD
+    A["自动 checkpoint 阈值达到（1 MB）"] --> B["flush() + fsync WAL"]
+    B --> C["重建 WAL 文件并写入新 header"]
+    C --> D["重置写偏移"]
+    D --> E[WAL 现在为空，准备接受新写入]
+```
+
+自动 checkpoint 阈值可配置（默认 1 MB）。数据库关闭时也会触发 checkpoint 以确保干净关闭。
+
+## 恢复
+
+当数据库打开并检测到已有 WAL 文件时，执行恢复：
+
+```mermaid
+graph TD
+    A["Database::open()"] --> B{WAL 文件存在?}
+    B -->|否| C[正常打开]
+    B -->|是| D["WALRecovery：读取所有记录"]
+    D --> E["区分已提交与未提交事务"]
+    E --> F["回放已提交事务的实体写入"]
+    F --> G["StorageWriter 将实体写入段"]
+    G --> H["checkpoint() — 截断 WAL"]
+    H --> C
+```
+
+**恢复流程：**
+
+1. 顺序读取所有 WAL 记录。
+2. 识别有 `WAL_TXN_COMMIT` 记录的事务 — 这些是已提交的。
+3. 对每个已提交事务，回放其 `WAL_ENTITY_WRITE` 记录（通过 `StorageWriter`）。
+4. 没有 commit 记录的事务视为未提交，直接忽略。
+5. 回放完成后执行 checkpoint 截断 WAL。
+
+WAL 文件采用惰性创建 — 仅在首次写事务实际需要时创建。只读工作负载永远不会创建 WAL 文件。
 
 ## 源码定位
 
-- `include/graph/storage/wal/WALManager.hpp`
-- `include/graph/storage/wal/WALRecord.hpp`
-- `src/storage/wal/WALManager.cpp`
-- `src/core/Database.cpp`
+| 组件 | 路径 |
+|------|------|
+| WALManager | `include/graph/storage/wal/WALManager.hpp` |
+| WALRecord | `include/graph/storage/wal/WALRecord.hpp` |
+| WALRecovery | `src/storage/wal/WALRecovery.cpp` |
+| Database（WAL 初始化） | `src/core/Database.cpp` |

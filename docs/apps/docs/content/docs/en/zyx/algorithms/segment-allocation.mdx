@@ -1,6 +1,6 @@
 ---
-title: Segment Allocation Algorithm
-description: ZYX uses a sophisticated segment allocation algorithm that efficiently manages fixed-size storage blocks while minimizing fragmentation and maximizing
+title: Segment Allocation
+description: How ZYX allocates fixed-size segments, chains them per entity type, and manages slot allocation with IDAllocator.
 category: Storage
 categoryOrder: 2
 order: 2
@@ -9,325 +9,113 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Segment Allocation Algorithm
+# Segment Allocation
 
-ZYX uses a sophisticated segment allocation algorithm that efficiently manages fixed-size storage blocks while minimizing fragmentation and maximizing performance.
+ZYX stores all graph data in fixed-size segments (128 KB by default). Each entity type (Node, Edge, Property, Blob, Index, State) has its own chain of segments. The allocation algorithm manages segment creation, slot assignment via `IDAllocator`, and chain linking through the file header.
 
-## Overview
+## Architecture Overview
 
-Segments are fixed-size blocks (default: 4MB) used to store graph entities. The allocation algorithm manages:
+```mermaid
+graph TD
+    FH[File Header] --> N[Node Chain]
+    FH --> E[Edge Chain]
+    FH --> P[Property Chain]
+    FH --> B[Blob Chain]
+    FH --> I[Index Chain]
+    FH --> S[State Chain]
 
-- **Segment Metadata**: Tracking segment usage and availability
-- **Free Space Management**: Bitmap-based free space tracking within segments
-- **Allocation Strategies**: First-fit and best-fit allocation
-- **Segment Reuse**: Reclaiming freed segments
+    N --> N1[Segment 0]
+    N1 --> N2[Segment 1]
+    N2 --> N3[Segment 2]
 
-## Data Structures
-
-### Segment Table
-
-```cpp
-struct SegmentTableEntry {
-    uint64_t segmentId;
-    SegmentType type;
-    uint32_t usedSlots;
-    uint32_t totalSlots;
-    uint64_t offset;        // File offset
-    bool isFree;
-};
+    E --> E1[Segment 3]
+    E1 --> E2[Segment 4]
 ```
 
-### Free Segment List
+The file header stores the head offset for each entity type's chain. Each segment header contains a `nextSegmentOffset` field that links to the next segment in the chain. When a segment fills up, a new segment is allocated and appended to the chain.
 
-```cpp
-class FreeSegmentList {
-    std::priority_queue<
-        uint64_t,
-        std::vector<uint64_t>,
-        std::greater<uint64_t>
-    > freeSegments;  // Min-heap by segment ID
+## Segment Structure
 
-public:
-    void addFreeSegment(uint64_t segmentId);
-    uint64_t allocateSegment();  // Returns smallest free segment ID
-    void markUsed(uint64_t segmentId);
-};
+Each segment has a fixed layout:
+
+| Region | Purpose |
+|--------|---------|
+| Segment Header (40 bytes) | Entity type, slot count, data usage, next/prev segment offsets, checksum |
+| Slot Metadata Array | Per-slot metadata (entity ID, data offset, data size, flags) |
+| Data Area | Actual entity data |
+
+The segment header uses CRC32 checksums to detect data corruption. All fields use fixed-size integer types for cross-platform compatibility.
+
+## Allocation Process
+
+When a new entity needs to be stored:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant SA as SegmentAllocator
+    participant FH as File Header
+    participant DM as DataManager
+
+    Client->>SA: allocateSegment(type, capacity)
+    SA->>SA: findMaxId(type) — scan last segment
+    SA->>FH: Read chain head offset
+    FH-->>SA: Head offset for type
+    SA->>SA: Walk to end of chain
+    SA->>DM: Create new segment at file end
+    DM-->>SA: New segment offset
+    SA->>FH: Update chain head/tail
+    SA-->>Client: Segment offset
 ```
 
-## Allocation Algorithm
+1. **Find maximum ID**: The allocator scans the last segment in the chain to determine the highest allocated entity ID for the given type. This ensures IDs are monotonically increasing.
+2. **Allocate new segment**: If the current tail segment is full, a new segment is created at the end of the file with the specified capacity.
+3. **Update chain links**: The previous tail segment's `nextSegmentOffset` is updated to point to the new segment. The file header may also be updated if the chain head changes.
+4. **Assign slot**: Within a segment with free slots, the `IDAllocator` assigns the next available ID.
 
-### Step 1: Find Free Segment
+## ID Allocation
 
-```cpp
-uint64_t allocateSegment(Database* db, SegmentType type) {
-    // 1. Check free list first
-    if (!db->freeSegments.empty()) {
-        uint64_t segmentId = db->freeSegments.allocateSegment();
-        if (validateSegment(segmentId, type)) {
-            return segmentId;
-        }
-    }
+`IDAllocator` uses a three-tier ID management system:
 
-    // 2. No free segment, allocate new
-    return allocateNewSegment(db, type);
-}
+```mermaid
+graph LR
+    A[Hot Vector] --> B[Cold Intervals]
+    B --> C[Volatile Intervals]
+
+    A -->|Fast path| D[O-1 allocation]
+    B -->|Refill hot| A
+    C -->|Reclaim freed| B
 ```
 
-**Complexity**: O(1) for free list, O(1) for new allocation
+- **Hot vector**: A pre-allocated block of contiguous IDs. Allocation from the hot vector is O(1) — just increment and return.
+- **Cold intervals**: When the hot vector is exhausted, new IDs are sourced from `IntervalSet` — a sorted collection of `[start, end]` ranges. This allows efficient bulk allocation.
+- **Volatile intervals**: Freed IDs are returned to volatile intervals for potential reuse. This prevents ID space exhaustion on workloads with heavy creation and deletion.
 
-### Step 2: Find Free Space Within Segment
+The `IntervalSet` data structure stores non-overlapping intervals and supports merge/split operations for efficient range management.
 
-```cpp
-size_t findFreeSpace(Segment* segment, size_t requiredBlocks) {
-    Bitmap& bitmap = segment->bitmap;
+## Deallocation
 
-    // First-fit allocation
-    size_t contiguous = 0;
-    size_t startBlock = 0;
+When a segment is deallocated:
 
-    for (size_t i = 0; i < bitmap.totalBlocks(); ++i) {
-        if (bitmap.isFree(i)) {
-            if (contiguous == 0) {
-                startBlock = i;
-            }
-            contiguous++;
+1. The segment is marked as inactive in the segment header
+2. Its slot in the parent chain is cleared
+3. Freed IDs are returned to the `IDAllocator` volatile intervals
+4. The file is not truncated — space is available for reuse
 
-            if (contiguous >= requiredBlocks) {
-                return startBlock;
-            }
-        } else {
-            contiguous = 0;
-        }
-    }
+Freed slots within a segment are reused by the `IDAllocator` before allocating new segments. When fragmentation exceeds 30%, ZYX can run multi-phase segment compaction to reclaim space — see [Segment Compaction](segment-compaction) for details.
 
-    return SIZE_MAX;  // No space found
-}
-```
+## Cross-Platform Considerations
 
-**Complexity**: O(n) where n is number of blocks in segment
+All on-disk structures use fixed-size types (`int64_t`, `uint32_t`, etc.) and explicit byte ordering. Segment headers include a checksum for integrity verification on load. The `StorageIO` abstraction handles platform differences in file I/O (`pread`/`pwrite` on POSIX, `fstream` fallback elsewhere).
 
-### Step 3: Mark Space as Used
+## Source Locations
 
-```cpp
-void allocateBlocks(Segment* segment, size_t startBlock, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        segment->bitmap.setUsed(startBlock + i);
-    }
-    segment->header.usedSlots += count;
-}
-```
-
-**Complexity**: O(k) where k is number of blocks
-
-## Deallocation Algorithm
-
-### Step 1: Mark Blocks as Free
-
-```cpp
-void freeBlocks(Segment* segment, size_t startBlock, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        segment->bitmap.setFree(startBlock + i);
-    }
-    segment->header.usedSlots -= count;
-}
-```
-
-**Complexity**: O(k) where k is number of blocks
-
-### Step 2: Check if Segment is Empty
-
-```cpp
-bool isSegmentEmpty(Segment* segment) {
-    return segment->header.usedSlots == 0;
-}
-```
-
-**Complexity**: O(1)
-
-### Step 3: Return Segment to Free List
-
-```cpp
-void deallocateSegment(Database* db, uint64_t segmentId) {
-    Segment* segment = loadSegment(db, segmentId);
-
-    if (isSegmentEmpty(segment)) {
-        // Add to free list for reuse
-        db->freeSegments.addFreeSegment(segmentId);
-    }
-}
-```
-
-**Complexity**: O(log n) for heap insertion
-
-## Optimization Strategies
-
-### Best-Fit Allocation
-
-For better space utilization:
-
-```cpp
-size_t findBestFit(Segment* segment, size_t requiredBlocks) {
-    size_t bestStart = SIZE_MAX;
-    size_t bestSize = SIZE_MAX;
-    size_t contiguous = 0;
-    size_t startBlock = 0;
-
-    for (size_t i = 0; i < bitmap.totalBlocks(); ++i) {
-        if (bitmap.isFree(i)) {
-            if (contiguous == 0) {
-                startBlock = i;
-            }
-            contiguous++;
-        } else {
-            if (contiguous >= requiredBlocks) {
-                if (contiguous < bestSize) {
-                    bestStart = startBlock;
-                    bestSize = contiguous;
-                }
-            }
-            contiguous = 0;
-        }
-    }
-
-    return bestStart;
-}
-```
-
-### Segregation by Size
-
-Maintain separate free lists for different allocation sizes:
-
-```cpp
-class SegregatedFreeList {
-    std::array<FreeSegmentList, 8> lists;  // By size class
-
-public:
-    uint64_t allocate(size_t size) {
-        size_t class = getSizeClass(size);
-        return lists[class].allocateSegment();
-    }
-
-private:
-    size_t getSizeClass(size_t size) {
-        // Power-of-2 size classes
-        return std::bit_width(size) - 1;
-    }
-};
-```
-
-### Coalescing Free Blocks
-
-Merge adjacent free blocks to reduce fragmentation:
-
-```cpp
-void coalesceFreeBlocks(Segment* segment) {
-    bool coalesced;
-    do {
-        coalesced = false;
-        for (size_t i = 0; i < bitmap.totalBlocks() - 1; ++i) {
-            if (bitmap.isFree(i) && bitmap.isFree(i + 1)) {
-                // Merge blocks (implementation-specific)
-                coalesced = true;
-            }
-        }
-    } while (coalesced);
-}
-```
-
-## Performance Characteristics
-
-### Time Complexity
-
-| Operation | Average Case | Worst Case |
-|-----------|-------------|------------|
-| Allocate Segment | O(1) | O(1) |
-| Find Free Space | O(n) | O(n) |
-| Allocate Blocks | O(k) | O(k) |
-| Free Blocks | O(k) | O(k) |
-| Deallocate Segment | O(log n) | O(log n) |
-
-Where:
-- n = number of blocks in segment
-- k = number of blocks being allocated/freed
-
-### Space Complexity
-
-- **Segment Table**: O(m) where m is total segments
-- **Free List**: O(f) where f is free segments
-- **Bitmap**: O(1) per segment (fixed size)
-
-## Fragmentation Management
-
-### Internal Fragmentation
-
-Wasted space within allocated blocks:
-
-- **Cause**: Allocating more space than needed
-- **Mitigation**: Use appropriate block sizes
-
-### External Fragmentation
-
-Free blocks too small to satisfy allocations:
-
-- **Cause**: Random allocation/deallocation pattern
-- **Mitigation**: Coalescing, compaction
-
-### Fragmentation Metrics
-
-```cpp
-struct FragmentationMetrics {
-    size_t totalFreeSpace;
-    size_t largestFreeBlock;
-    size_t fragmentedBlocks;
-    double fragmentationRatio;  // 0-1, higher = more fragmented
-};
-```
-
-## Concurrent Allocation
-
-### Lock-Free Bitmap Operations
-
-Use atomic operations for bitmap updates:
-
-```cpp
-class LockFreeBitmap {
-    std::atomic<uint64_t>* bits_;
-
-public:
-    bool tryAllocate(size_t blockIndex) {
-        uint64_t mask = 1ULL << (blockIndex % 64);
-        uint64_t old = bits_[blockIndex / 64].fetch_or(mask);
-        return !(old & mask);  // Was free
-    }
-};
-```
-
-### Segment-Level Locking
-
-Lock individual segments during allocation:
-
-```cpp
-class SegmentAllocator {
-    std::mutex segmentLocks[MAX_SEGMENTS];
-
-public:
-    size_t allocateInSegment(uint64_t segmentId, size_t blocks) {
-        std::lock_guard<std::mutex> lock(segmentLocks[segmentId]);
-        return findFreeSpace(segmentId, blocks);
-    }
-};
-```
-
-## Best Practices
-
-1. **Allocate in batches**: Group multiple allocations together
-2. **Free adjacent blocks together**: Reduces fragmentation
-3. **Use appropriate segment size**: Match to workload
-4. **Monitor fragmentation**: Compact when needed
-5. **Reuse segments**: Prefer reusing over allocating new
-
-## See Also
-
-- [Bitmap Indexing](/en/docs/zyx/algorithms/bitmap-indexing) - Detailed bitmap operations
-- [Storage System](/en/docs/zyx/architecture/storage) - Overall storage architecture
-- [Segment Format](/en/docs/zyx/architecture/segment-format) - Segment data structure
+| Component | Path |
+|-----------|------|
+| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
+| IDAllocator | `include/graph/core/IDAllocator.hpp` |
+| IntervalSet | `include/graph/core/IntervalSet.hpp` |
+| StorageHeaders | `include/graph/storage/StorageHeaders.hpp` |
+| File Header | `include/graph/storage/FileHeader.hpp` |
+| SegmentCompactor | `include/graph/storage/SegmentCompactor.hpp` |
+| SpaceManager | `include/graph/storage/SpaceManager.hpp` |

@@ -1,6 +1,6 @@
 ---
 title: API 参考
-description: ZYX 当前可用的 C++/C 嵌入式 API 总览与选型建议。
+description: ZYX 提供 C++ 和 C 两种嵌入式 API，覆盖图数据库的全部操作。
 category: 概述
 categoryOrder: 1
 order: 1
@@ -11,35 +11,33 @@ projectOrder: 1
 ---
 # API 参考
 
-本节以当前源码为准，描述 ZYX 的公开嵌入式接口：
+ZYX 暴露两种嵌入式接口 — 现代 C++ API 和用于 FFI 绑定的 C 兼容 API。
 
-- C++ API：`include/zyx/zyx.hpp`
-- C API：`include/zyx/zyx_c_api.h`
+## 如何选择？
 
-## 如何选择
-
-- 使用 C++20 开发，优先选 C++ API（类型更完整、接口更自然）。
-- 做 Rust/Go/Node 等 FFI 绑定，优先选 C API（句柄式接口、边界清晰）。
+- **C++ API**（`include/zyx/zyx.hpp`）— C++20 开发首选。类型安全的 Value、RAII 事务管理、流式 `QueryBuilder`。
+- **C API**（`include/zyx/zyx_c_api.h`）— 构建 Rust、Go、Node.js、Python 或 WASM 绑定时使用。不透明句柄，显式生命周期管理。
 
 ## 目录
 
 ### C++ API
 
-- [C++ API 总览](cpp-api)
-- [事务模型](transaction)
-- [类型系统](types)
-- [错误与返回语义](errors)
+- [C++ API 参考](cpp-api) — `Database`、`Result`、高性能写入 API、图算法
+- [事务 API](transaction) — 显式事务、只读事务、Cypher 事务语句
+- [类型系统](types) — `Value`、`Node`、`Edge`、`PropertyValue`、`ResultValue`
+- [错误处理](errors) — 异常机制 vs. Result 机制
 
 ### C API
 
-- [C API 函数](c-api)
-- [C API 类型](c-types)
-- [C API 错误处理](c-errors)
+- [C API 函数](c-api) — 全部 C 函数签名与用法
+- [C API 类型](c-types) — 不透明句柄、`ZYXNode`、`ZYXEdge`、`ZYXValueType`
+- [C API 错误处理](c-errors) — 线程本地错误与 Result 级错误
 
 ## 设计约定
 
-- 查询执行统一返回 `Result`/`ZYXResult_T`，由调用方显式迭代结果集。
-- 事务支持两种方式：
-  - API 显式事务（`beginTransaction` / `zyx_begin_transaction`）
-  - Cypher 事务语句（`BEGIN` / `COMMIT` / `ROLLBACK`）
-- 所有文档以当前实现能力为准，不再使用过时的模板异常体系命名。
+- 查询执行统一返回 `Result` / `ZYXResult_T*`，由调用方显式迭代结果集。
+- 事务支持三种形式：
+  - **API 级显式事务** — `beginTransaction()` / `zyx_begin_transaction()`
+  - **只读事务** — `beginReadOnlyTransaction()` / `zyx_begin_read_only_transaction()`
+  - **Cypher 事务语句** — 在 `execute()` 中使用 `BEGIN` / `COMMIT` / `ROLLBACK`
+- 无显式事务时，`execute()` 对写查询自动提交，对读查询走只读快速路径。

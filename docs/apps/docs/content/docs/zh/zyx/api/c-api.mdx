@@ -1,6 +1,6 @@
 ---
 title: C API 参考
-description: 基于 include/zyx/zyx_c_api.h 的当前 C 语言接口。
+description: 基于 include/zyx/zyx_c_api.h 的完整 C 语言接口参考。
 category: C API
 categoryOrder: 3
 order: 6
@@ -13,54 +13,333 @@ projectOrder: 1
 
 头文件：`include/zyx/zyx_c_api.h`
 
-## 生命周期
+所有导出函数使用 `ZYX_EXPORT` 调用约定。
 
-- `zyx_open(path)`
-- `zyx_open_if_exists(path)`
-- `zyx_close(db)`
-- `zyx_get_last_error()`
+## 不透明句柄
+
+| 类型 | 说明 | 释放函数 |
+|------|------|---------|
+| `ZYXDB_T*` | 数据库句柄 | `zyx_close()` |
+| `ZYXResult_T*` | 查询结果句柄 | `zyx_result_close()` |
+| `ZYXTxn_T*` | 事务句柄 | `zyx_txn_close()` |
+| `ZYXParams_T*` | 参数集句柄 | `zyx_params_close()` |
+
+## 数据库生命周期
+
+### `zyx_open`
+
+```c
+ZYXDB_T* zyx_open(const char* path);
+```
+
+打开或创建 `path` 处的数据库。返回数据库句柄，失败时返回 `NULL`（调用 `zyx_get_last_error()` 获取详情）。
+
+### `zyx_open_if_exists`
+
+```c
+ZYXDB_T* zyx_open_if_exists(const char* path);
+```
+
+仅在文件已存在时打开数据库。文件不存在时返回 `NULL`。
+
+### `zyx_close`
+
+```c
+void zyx_close(const ZYXDB_T* db);
+```
+
+关闭数据库并释放所有资源。
+
+### `zyx_get_last_error`
+
+```c
+const char* zyx_get_last_error(void);
+```
+
+返回调用线程的最近错误消息。线程本地存储，多线程安全。
 
 ## 查询执行
 
-- `zyx_execute(db, cypher)`
-- `zyx_execute_params(db, cypher, params)`
-- `zyx_result_close(res)`
+### `zyx_execute`
+
+```c
+ZYXResult_T* zyx_execute(const ZYXDB_T* db, const char* cypher);
+```
+
+执行 Cypher 查询（自动提交）。返回结果句柄，分配失败时返回 `NULL`。
+
+### `zyx_execute_params`
+
+```c
+ZYXResult_T* zyx_execute_params(const ZYXDB_T* db, const char* cypher, const ZYXParams_T* params);
+```
+
+执行参数化 Cypher 查询。
+
+### `zyx_result_close`
+
+```c
+void zyx_result_close(const ZYXResult_T* res);
+```
+
+释放结果句柄。每个 `zyx_execute*` 返回的结果都必须调用。
 
 ## 事务
 
-- `zyx_begin_transaction(db)`
-- `zyx_txn_execute(...)`
-- `zyx_txn_execute_params(...)`
-- `zyx_txn_commit(txn)`
-- `zyx_txn_rollback(txn)`
-- `zyx_txn_close(txn)`
+### `zyx_begin_transaction`
 
-## 参数构造
+```c
+ZYXTxn_T* zyx_begin_transaction(ZYXDB_T* db);
+```
 
-- `zyx_params_create()`
-- `zyx_params_set_int/double/string/bool/null(...)`
-- `zyx_params_close(...)`
+开始读写事务。若有其他写事务活跃则返回 `NULL`。
+
+### `zyx_begin_read_only_transaction`
+
+```c
+ZYXTxn_T* zyx_begin_read_only_transaction(ZYXDB_T* db);
+```
+
+开始只读事务，快照隔离。多个只读事务可并发运行。
+
+### `zyx_txn_execute`
+
+```c
+ZYXResult_T* zyx_txn_execute(ZYXTxn_T* txn, const char* cypher);
+```
+
+在事务内执行 Cypher 查询。
+
+### `zyx_txn_execute_params`
+
+```c
+ZYXResult_T* zyx_txn_execute_params(ZYXTxn_T* txn, const char* cypher, const ZYXParams_T* params);
+```
+
+在事务内执行参数化 Cypher 查询。
+
+### `zyx_txn_commit`
+
+```c
+bool zyx_txn_commit(ZYXTxn_T* txn);
+```
+
+提交事务。成功返回 `true`。提交（或回滚）后句柄仍有效，需调用 `zyx_txn_close()` 释放。
+
+### `zyx_txn_rollback`
+
+```c
+void zyx_txn_rollback(ZYXTxn_T* txn);
+```
+
+回滚事务。
+
+### `zyx_txn_is_read_only`
+
+```c
+bool zyx_txn_is_read_only(const ZYXTxn_T* txn);
+```
+
+检查是否为只读事务。
+
+### `zyx_txn_close`
+
+```c
+void zyx_txn_close(ZYXTxn_T* txn);
+```
+
+释放事务句柄。每个事务都必须调用。
+
+## 参数
+
+### `zyx_params_create`
+
+```c
+ZYXParams_T* zyx_params_create(void);
+```
+
+创建新的参数集。
+
+### 设置参数
+
+```c
+void zyx_params_set_int(ZYXParams_T* p, const char* key, int64_t val);
+void zyx_params_set_double(ZYXParams_T* p, const char* key, double val);
+void zyx_params_set_string(ZYXParams_T* p, const char* key, const char* val);
+void zyx_params_set_bool(ZYXParams_T* p, const char* key, bool val);
+void zyx_params_set_null(ZYXParams_T* p, const char* key);
+```
+
+### `zyx_params_close`
+
+```c
+void zyx_params_close(ZYXParams_T* p);
+```
+
+释放参数集。
 
 ## 高性能写入接口
 
-- `zyx_create_node(...)`
-- `zyx_create_node_ret_id(...)`
-- `zyx_create_edge_by_id(...)`
+### `zyx_create_node`
 
-## 结果读取
+```c
+bool zyx_create_node(ZYXDB_T* db, const char* label, const ZYXParams_T* props);
+```
 
-- 行推进：`zyx_result_next(res)`
-- 列元数据：`zyx_result_column_count` / `zyx_result_column_name`
-- 类型判断：`zyx_result_get_type`
-- 标量读取：`zyx_result_get_int/double/bool/string`
-- 图实体读取：`zyx_result_get_node` / `zyx_result_get_edge`
-- 复合类型：
-  - `zyx_result_get_props_json`
-  - `zyx_result_list_*`
-  - `zyx_result_get_map_json`
-- 状态：`zyx_result_is_success` / `zyx_result_get_error`
+创建单标签节点。成功返回 `true`。
 
-## 资源管理约定
+### `zyx_create_node_ret_id`
 
-- `ZYXDB_T*`、`ZYXTxn_T*`、`ZYXResult_T*`、`ZYXParams_T*` 都由调用方释放。
-- 字符串指针生命周期见 [C API 类型](c-types)。
+```c
+int64_t zyx_create_node_ret_id(ZYXDB_T* db, const char* label, const ZYXParams_T* props);
+```
+
+创建节点并返回内部 ID。失败返回 `-1`。
+
+### `zyx_create_edge_by_id`
+
+```c
+bool zyx_create_edge_by_id(ZYXDB_T* db, int64_t source_id, int64_t target_id, const char* type, const ZYXParams_T* props);
+```
+
+通过内部 ID 创建边。
+
+## 结果迭代
+
+### 行导航
+
+```c
+bool zyx_result_next(ZYXResult_T* res);
+```
+
+前进到下一行。无更多行时返回 `false`。读取第一行前需先调用。
+
+### 列元数据
+
+```c
+int zyx_result_column_count(const ZYXResult_T* res);
+const char* zyx_result_column_name(ZYXResult_T* res, int index);
+double zyx_result_get_duration(const ZYXResult_T* res);
+```
+
+### 类型判断
+
+```c
+ZYXValueType zyx_result_get_type(const ZYXResult_T* res, int col_index);
+```
+
+返回当前行指定列的值类型。
+
+### 标量值读取
+
+```c
+int64_t zyx_result_get_int(const ZYXResult_T* res, int col_index);
+double zyx_result_get_double(const ZYXResult_T* res, int col_index);
+bool zyx_result_get_bool(const ZYXResult_T* res, int col_index);
+const char* zyx_result_get_string(ZYXResult_T* res, int col_index);
+```
+
+### 图实体读取
+
+```c
+bool zyx_result_get_node(ZYXResult_T* res, int col_index, ZYXNode* out_node);
+bool zyx_result_get_edge(ZYXResult_T* res, int col_index, ZYXEdge* out_edge);
+const char* zyx_result_get_props_json(ZYXResult_T* res, int col_index);
+```
+
+`zyx_result_get_node` 和 `zyx_result_get_edge` 填充输出结构体，成功返回 `true`。
+
+### 列表读取
+
+```c
+int zyx_result_list_size(const ZYXResult_T* res, int col_index);
+ZYXValueType zyx_result_list_get_type(const ZYXResult_T* res, int col_index, int list_index);
+int64_t zyx_result_list_get_int(const ZYXResult_T* res, int col_index, int list_index);
+double zyx_result_list_get_double(const ZYXResult_T* res, int col_index, int list_index);
+bool zyx_result_list_get_bool(const ZYXResult_T* res, int col_index, int list_index);
+const char* zyx_result_list_get_string(ZYXResult_T* res, int col_index, int list_index);
+```
+
+### Map 读取
+
+```c
+const char* zyx_result_get_map_json(ZYXResult_T* res, int col_index);
+```
+
+返回 map 值的 JSON 字符串表示。返回的指针由结果句柄持有。
+
+### 状态
+
+```c
+bool zyx_result_is_success(const ZYXResult_T* res);
+const char* zyx_result_get_error(ZYXResult_T* res);
+```
+
+## 完整示例
+
+```c
+#include <zyx/zyx_c_api.h>
+#include <stdio.h>
+
+int main() {
+    // 打开数据库
+    ZYXDB_T* db = zyx_open("./testdb");
+    if (!db) {
+        printf("打开失败: %s\n", zyx_get_last_error());
+        return 1;
+    }
+
+    // 事务写入
+    ZYXTxn_T* tx = zyx_begin_transaction(db);
+
+    ZYXParams_T* params = zyx_params_create();
+    zyx_params_set_string(params, "name", "Alice");
+    zyx_params_set_int(params, "age", 30);
+
+    ZYXResult_T* res = zyx_txn_execute_params(tx,
+        "CREATE (n:Person {name: $name, age: $age})", params);
+
+    if (!zyx_result_is_success(res)) {
+        printf("查询失败: %s\n", zyx_result_get_error(res));
+        zyx_txn_rollback(tx);
+    } else {
+        zyx_txn_commit(tx);
+    }
+    zyx_result_close(res);
+    zyx_params_close(params);
+    zyx_txn_close(tx);
+
+    // 只读查询
+    ZYXResult_T* read_res = zyx_execute(db,
+        "MATCH (n:Person) RETURN n.name, n.age ORDER BY n.name");
+
+    if (zyx_result_is_success(read_res)) {
+        int cols = zyx_result_column_count(read_res);
+        while (zyx_result_next(read_res)) {
+            const char* name = zyx_result_get_string(read_res, 0);
+            int64_t age = zyx_result_get_int(read_res, 1);
+            printf("%s is %ld years old\n", name, (long)age);
+        }
+    }
+    zyx_result_close(read_res);
+
+    zyx_close(db);
+    return 0;
+}
+```
+
+## 资源所有权
+
+| 资源 | 创建者 | 释放者 | 备注 |
+|------|--------|--------|------|
+| `ZYXDB_T*` | `zyx_open` | `zyx_close` | 单一所有者 |
+| `ZYXResult_T*` | `zyx_execute*`, `zyx_txn_execute*` | `zyx_result_close` | 结果中的字符串指针在 `zyx_result_close` 前有效 |
+| `ZYXTxn_T*` | `zyx_begin_transaction`, `zyx_begin_read_only_transaction` | `zyx_txn_close` | 提交/回滚后仍需关闭 |
+| `ZYXParams_T*` | `zyx_params_create` | `zyx_params_close` | 字符串键值在内部已复制 |
+
+## 源码定位
+
+| 组件 | 路径 |
+|------|------|
+| C API 声明 | `include/zyx/zyx_c_api.h` |
+| C API 实现 | `src/api/CApi.cpp` |

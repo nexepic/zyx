@@ -1,6 +1,6 @@
 ---
 title: Transaction Management
-description: ZYX provides full ACID transaction support with optimistic concurrency control and comprehensive rollback capabilities.
+description: Transaction state machine, concurrency control, and commit/rollback flows in ZYX.
 category: Core Components
 categoryOrder: 2
 order: 6
@@ -11,398 +11,137 @@ projectOrder: 1
 ---
 # Transaction Management
 
-ZYX provides full ACID transaction support with optimistic concurrency control and comprehensive rollback capabilities.
+Transactions are managed by `TransactionManager`. `Transaction` serves as the external handle with RAII semantics.
 
-## ACID Properties
-
-```mermaid
-graph TD
-    A[Atomicity] --> D[Transactions]
-    B[Consistency] --> D
-    C[Isolation] --> D
-    E[Durability] --> D
-```
-
-### Atomicity
-
-All operations in a transaction succeed or fail together.
-
-```mermaid
-sequenceDiagram
-    participant TX as Transaction
-    participant DB as Database
-    participant WAL as Write-Ahead Log
-
-    TX->>WAL: log(operation1)
-    TX->>WAL: log(operation2)
-    TX->>WAL: log(operation3)
-
-    Note over TX: Operation 3 fails!
-
-    TX->>TX: rollback()
-    TX->>WAL: reverse all operations
-
-    Note over DB: Database unchanged
-```
-
-**Implementation**:
-- WAL records all operations before execution
-- On failure, reverse operations from WAL
-- Database remains consistent
-
-### Consistency
-
-Database always transitions from one valid state to another.
+## State Machine
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Valid
-    Valid --> Valid: Transaction
-    Valid --> Invalid: Violation
-    Invalid --> Valid: Rollback
+    [*] --> TXN_ACTIVE: begin() / beginReadOnly()
+    TXN_ACTIVE --> TXN_COMMITTED: commit()
+    TXN_ACTIVE --> TXN_ROLLED_BACK: rollback()
+    TXN_COMMITTED --> [*]
+    TXN_ROLLED_BACK --> [*]
 ```
 
-**Constraints**:
-- **Type Constraints**: Property types must match
-- **Uniqueness Constraints**: Unique property values (future)
-- **Existence Constraints**: Required properties (future)
+`Transaction` is move-only. If a `Transaction` object is destroyed while still `TXN_ACTIVE`, it automatically rolls back.
 
-### Isolation
-
-Concurrent transactions don't interfere with each other.
-
-```mermaid
-sequenceDiagram
-    participant TX1 as Transaction 1
-    participant TX2 as Transaction 2
-    participant DB as Database
-
-    TX1->>DB: read(value)
-    TX1->>TX1: value = 10
-
-    TX2->>DB: read(value)
-    TX2->>TX2: value = 10
-
-    TX1->>TX1: modify to 20
-    TX1->>DB: commit()
-    Note over TX1: TX1 sees 20
-
-    TX2->>TX2: modify to 30
-    TX2->>DB: commit()
-    Note over TX2: Conflict detected!
-```
-
-**Isolation Levels**:
-- **Read Committed**: Default, see committed data
-- **Serializable**: Full isolation (planned)
-- **Snapshot Consistency**: Per-transaction views
-
-### Durability
-
-Committed changes survive failures.
-
-```mermaid
-graph TD
-    A[Commit] --> B[WAL Flush]
-    B --> C[Main Storage]
-    C --> D[Checkpoint]
-```
-
-**Guarantees**:
-- WAL flushed to disk on commit
-- Changes persist even if process crashes
-- Recovery replays committed transactions
-
-## Transaction Lifecycle
-
-```mermaid
-stateDiagram-v2
-    [*] --> Active: begin()
-    Active --> Active: execute()
-    Active --> Committed: commit()
-    Active --> RolledBack: rollback()
-    Committed --> [*]
-    RolledBack --> [*]
-```
-
-### Beginning a Transaction
-
-```cpp
-auto db = Database::open("./mydb");
-auto tx = db->beginTransaction();
-```
-
-### Executing Operations
-
-```cpp
-tx->execute("CREATE (n:User {name: 'Alice'})");
-tx->execute("CREATE (n:User {name: 'Bob'})");
-```
-
-### Committing
-
-```cpp
-tx->commit();
-```
-
-### Rolling Back
-
-```cpp
-tx->rollback();
-```
-
-## Optimistic Concurrency Control
-
-ZYX uses optimistic concurrency control with versioning.
-
-### Version Tracking
+## Concurrency Strategy
 
 ```mermaid
 graph LR
-    A[Entity v1] --> B[Entity v2]
-    A --> C[TX1 reads v1]
-    B --> D[TX2 reads v2]
-
-    C --> E[TX1 modifies]
-    D --> F[TX2 modifies]
-
-    E --> G{Conflict?}
-    F --> G
-    G -->|Yes| H[Rollback]
-    G -->|No| I[Commit]
-```
-
-### Conflict Detection
-
-```cpp
-class Entity {
-private:
-    uint64_t version_;
-
-public:
-    bool detectConflict(const Entity& other) const {
-        return version_ != other.version_;
-    }
-};
-```
-
-### Conflict Resolution
-
-1. **Detect**: Version mismatch on commit
-2. **Retry**: Automatic retry with exponential backoff
-3. **Fail**: After max retries, throw error
-
-## Transaction State Management
-
-### State Chains
-
-Each entity maintains a chain of states:
-
-```mermaid
-graph LR
-    S1[State v1] --> S2[State v2]
-    S2 --> S3[State v3]
-    S3 -.->|Commit| S4[Committed State]
-    S3 -.->|Rollback| S1
-```
-
-**State Chain Evolution:**
-- v1: Initial state
-- v2: Modified state
-- v3: Modified state (can commit or rollback)
-
-### Dirty Entity Tracking
-
-```cpp
-class DirtyEntityRegistry {
-private:
-    std::unordered_set<EntityId> dirty_;
-
-public:
-    void markDirty(EntityId id);
-    bool isDirty(EntityId id) const;
-    void clear();
-};
-```
-
-### Flush on Commit
-
-```mermaid
-sequenceDiagram
-    participant TX as Transaction
-    participant DR as Dirty Registry
-    participant FS as FileStorage
-    participant WAL as Write-Ahead Log
-
-    TX->>TX: commit()
-    TX->>DR: getDirtyEntities()
-    DR->>TX: dirty list
-
-    loop For each dirty entity
-        TX->>WAL: log(operation)
-        TX->>FS: persist(entity)
+    subgraph "Write Transaction"
+        WT["begin() → unique_lock(shared_mutex)"]
     end
-
-    TX->>WAL: flush()
-    TX->>DR: clear()
+    subgraph "Read-Only Transactions (N concurrent)"
+        RT1["beginReadOnly() → shared_lock"]
+        RT2["beginReadOnly() → shared_lock"]
+        RT3["beginReadOnly() → shared_lock"]
+    end
 ```
 
-## Transaction Isolation
+- **Write transactions** — Acquire an exclusive lock (`std::unique_lock<std::shared_mutex>`). Only one write transaction can be active at a time.
+- **Read-only transactions** — Acquire a shared lock (`std::shared_lock<std::shared_mutex>`). Multiple read-only transactions can run concurrently with each other, but not while a write transaction holds the exclusive lock.
 
-### Read Committed (Default)
+This single-writer / multi-reader design avoids write-write conflicts entirely and provides snapshot isolation for readers.
 
-```cpp
-auto tx = db->beginTransaction(IsolationLevel::ReadCommitted);
+## Write Transaction Commit Flow
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant TX as Transaction
+    participant TM as TransactionManager
+    participant WAL as WALManager
+    participant PM as PersistenceManager
+    participant SW as StorageWriter
+
+    App->>TX: commit()
+    TX->>TM: commitTransaction(tx)
+
+    TM->>WAL: writeCommit(txnId)
+    TM->>WAL: sync() — flush + fsync
+
+    TM->>PM: createSnapshot()
+    PM-->>TM: FlushSnapshot (nodes, edges, props, blobs, indexes, states)
+
+    TM->>SW: writeSnapshot(snapshot)
+    SW->>SW: Persist each entity type to segment chains
+    SW->>SW: Update FileHeader max IDs
+
+    TM->>WAL: checkpoint() if size ≥ threshold
+
+    TM->>PM: commitSnapshot()
+    Note over PM: Swap double-buffer, clear flushing set
+
+    TM->>TM: Publish new CommittedSnapshot
+
+    TM->>TX: state = TXN_COMMITTED
+    Note over TX: Destructor releases write lock
 ```
 
-**Behavior**:
-- See only committed data
-- Non-repeatable reads possible
-- Phantom reads possible
+**Step-by-step:**
 
-### Serializable (Planned)
+1. **WAL commit record** — A `WAL_TXN_COMMIT` record is written and `sync()`'d to disk. This is the point of no return — after this, the transaction is durable even if the process crashes.
+2. **Snapshot dirty entities** — `PersistenceManager.createSnapshot()` captures all dirty entities and swaps in fresh registries (double-buffer), allowing new writes to proceed.
+3. **Persist to storage** — `StorageWriter` writes each entity type to its segment chain, allocating new segments as needed.
+4. **Checkpoint** — If the WAL has grown past the threshold (default 1 MB), a checkpoint truncates it.
+5. **Publish snapshot** — A new `CommittedSnapshot` is published for read-only transactions to see.
+6. **Release lock** — The write lock is released when the `Transaction` object is destroyed.
 
-```cpp
-auto tx = db->beginTransaction(IsolationLevel::Serializable);
+## Rollback Flow
+
+```mermaid
+sequenceDiagram
+    participant TX as Transaction
+    participant TM as TransactionManager
+    participant DM as DataManager
+    participant WAL as WALManager
+
+    TX->>TM: rollbackTransaction(tx)
+    TM->>DM: UndoLog — reverse all changes in current txn
+    TM->>WAL: writeRollback(txnId)
+    TM->>TX: state = TXN_ROLLED_BACK
+    Note over TX: Destructor releases write lock
 ```
 
-**Behavior**:
-- Full isolation
-- No phantom reads
-- Higher overhead
+On rollback, the `UndoLog` in `TransactionContext` reverses every operation recorded during the transaction (add → remove, update → restore, delete → re-insert). A `WAL_TXN_ROLLBACK` record is written, and the write lock is released.
 
-## Nested Transactions
+## WAL Initialization (Two-Phase)
 
-ZYX supports savepoints for nested transactions:
+ZYX defers WAL creation until it is actually needed:
 
-```cpp
-auto tx = db->beginTransaction();
+```mermaid
+graph TD
+    A["Database::open()"] --> B{WAL file exists?}
+    B -->|Yes| C["ensureWALAndTransactionManager()"]
+    C --> D[WAL recovery: replay committed txns]
+    D --> E[Normal operation]
+    B -->|No| E
 
-tx->execute("CREATE (n:User {name: 'Alice'})");
-
-auto savepoint = tx->createSavepoint("sp1");
-
-tx->execute("CREATE (n:User {name: 'Bob'})");
-
-// Rollback to savepoint
-tx->rollbackToSavepoint("sp1");
-
-tx->commit(); // Only Alice is committed
+    E --> F{First write transaction?}
+    F -->|Yes| G["ensureWALForWrites()"]
+    G --> H[Create WAL file, initialize WALManager]
+    H --> I[Proceed with write]
 ```
 
-## Transaction Configuration
+This two-phase approach means read-only workloads never incur the overhead of WAL file creation.
 
-### Timeout Configuration
+## Read-Only Transactions
 
-```cpp
-struct TransactionConfig {
-    std::chrono::milliseconds timeout = 30000ms;  // 30 seconds
-    size_t maxRetries = 3;
-    std::chrono::milliseconds retryDelay = 100ms;
-};
-```
+Read-only transactions receive an immutable `CommittedSnapshot` captured at the moment the transaction begins. They are guaranteed a consistent view of the database throughout their lifetime, without being affected by concurrent write transactions.
 
-### Isolation Level
+Three-layer read-only enforcement prevents any data mutation:
 
-```cpp
-enum class IsolationLevel {
-    ReadCommitted,
-    Serializable
-};
-```
+1. **ExecMode** — The query engine rejects write operations in read-only mode.
+2. **QueryPlan flags** — The plan itself is marked read-only.
+3. **DataManager guard** — The data layer rejects any write calls from a read-only transaction.
 
-## Error Handling
+## Source Locations
 
-### Transaction Errors
-
-```cpp
-try {
-    auto tx = db->beginTransaction();
-    tx->execute("CREATE (n:User {name: 'Alice'})");
-    tx->commit();
-} catch (const TransactionError& e) {
-    // Transaction failed, already rolled back
-    std::cerr << "Transaction failed: " << e.what() << std::endl;
-} catch (const StorageError& e) {
-    // Storage I/O error
-    std::cerr << "Storage error: " << e.what() << std::endl;
-}
-```
-
-### Automatic Rollback
-
-Transactions are automatically rolled back on:
-- Unhandled exceptions
-- Timeout
-- Database closure
-- Conflict detection failure
-
-## Performance Considerations
-
-### Transaction Size
-
-**Best Practices**:
-- Keep transactions short
-- Minimize operations per transaction
-- Avoid long-running transactions
-
-### Batch Operations
-
-```cpp
-// Good - Multiple small transactions
-for (int i = 0; i < 1000; ++i) {
-    auto tx = db->beginTransaction();
-    tx->execute("CREATE (n:User {id: $id})", {{"id", i}});
-    tx->commit();
-}
-
-// Better - Batch in single transaction (if acceptable)
-auto tx = db->beginTransaction();
-for (int i = 0; i < 1000; ++i) {
-    tx->execute("CREATE (n:User {id: $id})", {{"id", i}});
-}
-tx->commit();
-```
-
-### WAL Management
-
-- **Checkpoint Frequency**: Balance performance and durability
-- **WAL Size**: Monitor and truncate old entries
-- **Flush Strategy**: Group flushes for efficiency
-
-## Monitoring and Debugging
-
-### Transaction Statistics
-
-```cpp
-class TransactionStats {
-public:
-    size_t getActiveCount() const;
-    size_t getCommittedCount() const;
-    size_t getRolledBackCount() const;
-    std::chrono::milliseconds getAverageDuration() const;
-};
-```
-
-### Logging
-
-Enable transaction logging for debugging:
-
-```cpp
-db->setLogLevel(LogLevel::Debug);
-db->setLogTransaction(true);
-```
-
-## Best Practices
-
-1. **Always commit or rollback**: Never leave transactions open
-2. **Handle exceptions**: Catch and handle transaction errors
-3. **Keep transactions short**: Minimize lock duration
-4. **Use appropriate isolation**: Use lowest isolation level needed
-5. **Monitor performance**: Track transaction duration and conflicts
-
-## Next Steps
-
-- [Storage System](/en/docs/zyx/architecture/storage) - How transactions persist data
-- [Query Engine](/en/docs/zyx/architecture/query-engine) - Query execution in transactions
-- [API Reference](/en/docs/zyx/api/cpp-api) - Transaction API usage
+| Component | Path |
+|-----------|------|
+| Transaction | `include/graph/core/Transaction.hpp` |
+| TransactionManager | `include/graph/core/TransactionManager.hpp` |
+| CommittedSnapshot | `include/graph/storage/SnapshotManager.hpp` |
+| PersistenceManager | `include/graph/storage/PersistenceManager.hpp` |

@@ -39,17 +39,11 @@ DiskANN builds a navigable small-world graph where vectors are nodes connected b
 
 ## Graph Structure
 
-The graph is built as a directed graph where each node (vector) maintains connections to its nearest neighbors.
+The graph is built as a directed graph where each node (vector) maintains connections to its nearest neighbors. Each graph node stores three categories of data:
 
-```cpp
-struct GraphNode {
-    int64_t nodeId;              // Node identifier
-    std::vector<float> vector;   // High-dimensional vector
-    std::vector<int64_t> neighbors;  // Adjacency list (maxDegree connections)
-};
-```
-
-### Graph Properties
+- **Identity**: A unique node identifier mapping to a vector in the database
+- **Vector data**: The high-dimensional vector itself, stored in BFloat16 format (2 bytes per dimension)
+- **Adjacency list**: Up to `maxDegree` neighbor node identifiers
 
 ```mermaid
 graph TD
@@ -62,25 +56,27 @@ graph TD
     D -->|distance| H[Node H]
 ```
 
+### Graph Properties
+
 - **Max Degree**: Each node maintains at most `maxDegree` outgoing edges (default: 64)
 - **Entry Point**: A designated node serves as the starting point for searches
 - **Bidirectional Edges**: Edges are created in both directions for efficient traversal
 
 ## Configuration
 
-```cpp
-struct DiskANNConfig {
-    uint32_t dim;                       // Vector dimensionality
-    uint32_t beamWidth = 100;           // Search beam width
-    uint32_t maxDegree = 64;            // Maximum connections per node
-    float alpha = 1.2f;                 // Pruning factor (1.0-2.0)
-    size_t autoTrainThreshold = 2000;   // Vectors before auto-training PQ
-    std::string metric = "L2";          // Distance metric (L2, IP, Cosine)
-};
-```
+The DiskANN index is configured through `DiskANNConfig` with the following parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `dim` | `uint32_t` | required | Vector space dimensionality |
+| `beamWidth` | `uint32_t` | 100 | Search beam width, controls candidate queue size |
+| `maxDegree` | `uint32_t` | 64 | Maximum number of neighbors per node |
+| `alpha` | `float` | 1.2 | Pruning factor controlling graph density (range: 1.0-2.0) |
+| `autoTrainThreshold` | `size_t` | 2000 | Number of vectors before auto-training PQ |
+| `metric` | `string` | `"L2"` | Distance metric: `"L2"`, `"IP"`, or `"Cosine"` |
 
 ::: details Configuration Details
-- **dim**: Vector space dimensionality, must match the vectors you're indexing
+- **dim**: Vector space dimensionality, must match the vectors you are indexing
 - **beamWidth**: Beam search width, controls candidate queue size during search
 - **maxDegree**: Maximum number of neighbors each node maintains in the graph
 - **alpha**: Pruning factor, controls how aggressively the graph is pruned
@@ -108,411 +104,265 @@ Adjust these parameters based on your use case:
 
 ### Insert Vector
 
-Inserts a new vector into the index and builds graph connections:
+Inserting a new vector into the index follows a multi-phase pipeline that validates the input, optionally trains the PQ model, stores vector data, discovers neighbors via greedy search, prunes the edge set, and establishes bidirectional links.
 
-```cpp
-void insert(int64_t nodeId, const std::vector<float>& vec) {
-    // 1. Validate dimension
-    if (vec.size() != config_.dim) {
-        throw std::invalid_argument("Dimension mismatch");
-    }
-
-    // 2. Auto-train PQ if threshold reached
-    if (!isPQTrained() && cachedCount_++ == config_.autoTrainThreshold) {
-        auto samples = sampleVectors(config_.autoTrainThreshold);
-        train(samples);
-    }
-
-    // 3. Store vector data
-    int64_t rawBlob = registry_->saveRawVector(toBFloat16(vec));
-    int64_t pqBlob = isPQTrained() ? registry_->savePQCodes(quantizer_->encode(vec)) : 0;
-
-    // 4. Handle first node
-    if (entryPoint == 0) {
-        registry_->updateEntryPoint(nodeId);
-        return;
-    }
-
-    // 5. Find nearest neighbors using greedy search
-    auto pqTable = isPQTrained() ? quantizer_->computeDistanceTable(vec) : std::vector<float>{};
-    auto neighbors = greedySearch(vec, entryPoint, config_.beamWidth, pqTable);
-
-    // 6. Prune candidates and create bidirectional edges
-    std::vector<int64_t> candidates;
-    for (auto& [id, dist] : neighbors) {
-        candidates.push_back(id);
-    }
-    prune(nodeId, candidates);
-
-    // 7. Save adjacency and create back-links
-    registry_->saveAdjacency(nodeId, candidates);
-    for (int64_t neighbor : candidates) {
-        addBackLink(neighbor, nodeId);
-    }
-}
+```mermaid
+flowchart TD
+    Start([Insert vector]) --> Validate[Validate dimension matches config]
+    Validate -->|Mismatch| Error[Skip insertion, log error]
+    Validate -->|Match| AutoTrain{PQ trained?}
+    AutoTrain -->|No| Threshold{Count reached autoTrainThreshold?}
+    Threshold -->|Yes| Train[Sample existing vectors and train PQ]
+    Threshold -->|No| Store
+    Train --> Store[Store BFloat16 raw vector and PQ codes]
+    AutoTrain -->|Yes| Store
+    Store --> FirstNode{First node in index?}
+    FirstNode -->|Yes| SetEntry[Set as entry point, no edges]
+    FirstNode -->|No| PQTable{PQ trained?}
+    PQTable -->|Yes| ComputePQ[Compute PQ distance table]
+    PQTable -->|No| Search
+    ComputePQ --> Search[Greedy search from entry point]
+    Search --> Prune[Alpha-based pruning of candidates]
+    Prune --> SaveAdj[Save adjacency list for new node]
+    SaveAdj --> BackLinks[Create back-links to neighbors]
+    BackLinks --> Done([Insertion complete])
+    SetEntry --> Done
+    Error --> Done2([End])
 ```
 
-**Complexity**: O(beamWidth × maxDegree × dim)
+The insertion pipeline proceeds through these steps:
+
+1. **Dimension validation**: The input vector's dimension is checked against the configured `dim` value. If they do not match, the insertion is skipped and an error is logged.
+
+2. **Auto-training check**: If PQ has not yet been trained, the index increments its internal node count. When the count reaches `autoTrainThreshold`, the index samples existing vectors and trains the PQ model synchronously.
+
+3. **Data storage**: The raw vector is converted to BFloat16 format (halving memory from 4 bytes to 2 bytes per dimension) and persisted. If PQ is trained, the vector is also encoded into compact PQ codes (1 byte per subspace) and stored alongside.
+
+4. **First-node shortcut**: If the index has no entry point yet, the new node becomes the entry point with an empty adjacency list and the insertion is complete.
+
+5. **Neighbor discovery**: A PQ distance table is computed for the new vector (if PQ is available), then greedy beam search is executed from the entry point to find the approximate nearest neighbors.
+
+6. **Pruning**: The candidate neighbor list is passed through alpha-based pruning to remove redundant edges while maintaining graph navigability.
+
+7. **Link establishment**: The pruned adjacency list is saved for the new node. Back-links are created by adding the new node to each neighbor's adjacency list. If a neighbor's list exceeds `maxDegree * 1.2`, that neighbor is also pruned.
+
+**Complexity**: O(beamWidth x maxDegree x dim)
 
 ### Search
 
-Finds k nearest neighbors using beam search:
+Search finds the k nearest neighbors using a two-phase hybrid approach: graph navigation with PQ-based approximate distances, followed by re-ranking with exact distances computed from raw BFloat16 vectors.
 
-```cpp
-std::vector<std::pair<int64_t, float>> search(
-    const std::vector<float>& query,
-    size_t k
-) const {
-    // 1. Compute PQ distance table for fast approximation
-    auto pqTable = isPQTrained() ? quantizer_->computeDistanceTable(query) : std::vector<float>{};
-
-    // 2. Greedy search with beam width
-    auto candidates = greedySearch(query, entryPoint, std::max(config_.beamWidth, k * 2), pqTable);
-
-    // 3. Re-rank with exact distances
-    std::vector<std::pair<int64_t, float>> results;
-    for (auto& [nodeId, _] : candidates) {
-        float exactDist = distRaw(query, nodeId);
-        results.push_back({nodeId, exactDist});
-    }
-
-    // 4. Sort and return top-k
-    std::sort(results.begin(), results.end(), [](auto& a, auto& b) {
-        return a.second < b.second;
-    });
-    results.resize(k);
-    return results;
-}
+```mermaid
+flowchart TD
+    Start([Search query]) --> Entry{Entry point exists?}
+    Entry -->|No| Empty([Return empty results])
+    Entry -->|Yes| PQTable{PQ trained?}
+    PQTable -->|Yes| BuildTable[Build PQ distance table for query]
+    PQTable -->|No| Beam
+    BuildTable --> Beam[Greedy beam search with hybrid distances]
+    Beam --> Load[Batch-load raw vectors for all candidates]
+    Load --> Rank[Compute exact distances against raw vectors]
+    Rank --> Filter[Filter removed nodes and sort by distance]
+    Filter --> TopK[Return top-k results]
+    TopK --> Done([End])
 ```
 
-**Complexity**: O(beamWidth × maxDegree × dim + k × dim)
+The search process works as follows:
+
+1. **Distance table construction**: If PQ is trained, a distance table is precomputed. This table stores the distance from each subspace of the query to each centroid, enabling O(numSubspaces) distance lookups during graph traversal.
+
+2. **Greedy beam search**: Starting from the entry point, the algorithm traverses the graph using beam search. During navigation, the hybrid distance function uses PQ table lookups for nodes that have PQ codes, and falls back to raw vector distance for nodes that were inserted before PQ training.
+
+3. **Re-ranking**: After beam search produces a candidate set of up to `max(beamWidth, k * 2)` results, raw BFloat16 vectors are batch-loaded for all candidates. Exact distances are computed against these raw vectors and used to produce the final ranking.
+
+4. **Filtering and sorting**: Nodes that have been logically deleted (returning infinite distance) are removed. The remaining results are sorted by distance and truncated to the requested k.
+
+**Complexity**: O(beamWidth x maxDegree x dim + k x dim)
 
 ## Greedy Search Algorithm
 
-The core search algorithm traverses the graph using beam search:
-
-```cpp
-std::vector<std::pair<int64_t, float>> greedySearch(
-    const std::vector<float>& query,
-    int64_t startNode,
-    size_t beamWidth,
-    const std::vector<float>& pqTable
-) const {
-    std::unordered_set<int64_t> visited;
-    std::priority_queue<
-        std::pair<float, int64_t>,
-        std::vector<std::pair<float, int64_t>>,
-        std::greater<>
-    > queue;  // Min-heap: (distance, node)
-
-    std::vector<std::pair<int64_t, float>> results;
-
-    // Initialize with entry point
-    float startDist = computeDistance(query, pqTable, startNode);
-    queue.push({startDist, startNode});
-    visited.insert(startNode);
-    results.push_back({startNode, startDist});
-
-    // Beam search traversal
-    while (!queue.empty()) {
-        auto [dist, currentNode] = queue.top();
-        queue.pop();
-
-        // Explore neighbors
-        auto neighbors = registry_->loadAdjacency(currentNode);
-        for (int64_t neighbor : neighbors) {
-            if (visited.contains(neighbor)) continue;
-            visited.insert(neighbor);
-
-            float neighborDist = computeDistance(query, pqTable, neighbor);
-            results.push_back({neighbor, neighborDist});
-            queue.push({neighborDist, neighbor});
-        }
-    }
-
-    // Sort and limit to beam width
-    std::sort(results.begin(), results.end(), [](auto& a, auto& b) {
-        return a.second < b.second;
-    });
-    if (results.size() > beamWidth) {
-        results.resize(beamWidth);
-    }
-
-    return results;
-}
-```
+The core traversal algorithm uses beam search with two priority queues: a min-heap frontier for expansion (closest nodes explored first) and a max-heap result set (enabling bounded eviction of the worst candidate).
 
 ### Search Flow
 
 ```mermaid
 flowchart TD
-    Start([Start Query]) --> Init[Initialize queue with entry point]
-    Init --> Loop{Queue empty?}
-    Loop -->|No| Pop[Pop closest node]
-    Pop --> Expand[Explore unvisited neighbors]
-    Expand --> Compute[Compute distances to neighbors]
-    Compute --> Push[Push neighbors to queue]
-    Push --> Loop
-    Loop -->|Yes| Sort[Sort results by distance]
-    Sort --> Limit[Limit to beam width]
-    Limit --> Rerank[Re-rank with exact distances]
-    Rerank --> Return([Return top-k results])
+    Start([Start Query]) --> Init[Initialize frontier and results with entry point]
+    Init --> Loop{Frontier empty?}
+    Loop -->|Yes| Extract
+    Loop -->|No| Pop[Pop closest node from frontier]
+    Pop --> Early{Closest worse than worst result and results full?}
+    Early -->|Yes| Extract
+    Early -->|No| Load[Load adjacency list for current node]
+    Load --> Neighbors{Unvisited neighbors?}
+    Neighbors -->|No| Loop
+    Neighbors -->|Yes| Dist[Compute distance to each unvisited neighbor]
+    Dist --> Improve{Improves result set?}
+    Improve -->|Yes| Add[Add to frontier and results, evict worst if over beamWidth]
+    Improve -->|No| Skip[Skip this neighbor]
+    Add --> Neighbors
+    Skip --> Neighbors
+    Extract[Extract results from max-heap] --> Sort[Sort by distance ascending]
+    Sort --> Return([Return beamWidth results])
 ```
 
-**Complexity**: O(beamWidth × maxDegree × dim)
+The algorithm proceeds in these steps:
+
+1. **Initialization**: The entry point is evaluated and pushed onto both the frontier min-heap and the results max-heap. It is marked as visited.
+
+2. **Expansion loop**: The closest node is popped from the frontier. Its adjacency list is loaded from storage.
+
+3. **Neighbor evaluation**: For each unvisited neighbor, the hybrid distance function computes an approximate or exact distance. If the neighbor is closer than the worst result in the result set (or the result set is not yet full), it is added to both heaps.
+
+4. **Bounded result set**: When the result set exceeds `beamWidth`, the furthest element is evicted from the max-heap.
+
+5. **Early termination**: If the closest unexpanded node on the frontier is further than the worst result in the full result set, the search terminates early since no improvement is possible.
+
+6. **Output**: The result max-heap is drained into a sorted vector and returned in ascending distance order.
+
+**Complexity**: O(beamWidth x maxDegree x dim)
 
 ## Pruning Strategy
 
-Robust pruning maintains graph quality by removing redundant edges:
+Robust pruning maintains graph quality by removing redundant edges. The core idea is that a candidate neighbor is unnecessary if an already-accepted neighbor provides a similar or better path to the same region of the vector space.
 
-```cpp
-void prune(int64_t nodeId, std::vector<int64_t>& candidates) const {
-    // Load node vector for accurate distance computation
-    auto nodeVec = loadRawVector(nodeId);
+### Alpha-Based Occlusion
 
-    // 1. Sort candidates by distance to node
-    std::vector<std::pair<int64_t, float>> candDists;
-    for (int64_t candId : candidates) {
-        float dist = computeDistance(nodeVec, candId);
-        candDists.push_back({candId, dist});
-    }
-    std::sort(candDists.begin(), candDists.end(), [](auto& a, auto& b) {
-        return a.second < b.second;
-    });
+A candidate is considered **occluded** when there exists an already-accepted neighbor that is "close enough" to the candidate. Formally, a candidate `C` at distance `d(node, C)` from the target node is occluded by an accepted neighbor `N` if:
 
-    // 2. Alpha-pruning: Remove occluded candidates
-    std::vector<int64_t> result;
-    result.reserve(config_.maxDegree);
-
-    for (const auto& [candId, candDist] : candDists) {
-        if (result.size() >= config_.maxDegree) break;
-
-        bool occluded = false;
-        auto candVec = loadRawVector(candId);
-
-        // Check if candidate is occluded by existing neighbors
-        for (int64_t existingId : result) {
-            auto existingVec = loadRawVector(existingId);
-            float distExistingToCand = computeDistance(existingVec, candVec);
-
-            // Occlusion condition: alpha * dist(existing, cand) <= dist(node, cand)
-            if (config_.alpha * distExistingToCand <= candDist) {
-                occluded = true;
-                break;
-            }
-        }
-
-        if (!occluded) {
-            result.push_back(candId);
-        }
-    }
-
-    candidates = result;
-}
+```
+alpha x distance(N, C) <= distance(node, C)
 ```
 
-### Pruning Logic
+When `alpha = 1.0`, this means a candidate is kept only if it is closer to the target node than to any already-accepted neighbor. Higher alpha values (up to 2.0) make the occlusion condition harder to satisfy, producing denser graphs with more edges and higher recall at the cost of memory and search time.
 
 ```mermaid
 graph TD
-    A[Node] -->|1.0| B[Candidate 1]
-    A -->|1.5| C[Candidate 2]
-    A -->|2.0| D[Candidate 3]
+    A[Target Node] -->|dist = 1.0| B[Accepted: Candidate 1]
+    A -->|dist = 1.5| C[Candidate 2]
+    A -->|dist = 2.0| D[Candidate 3]
 
-    B -->|0.8| C
-    B -->|1.2| D
+    B -->|dist = 0.8| C
+    B -->|dist = 1.2| D
 
-
-    Note["Candidate 2 is occluded: alpha*0.8 <= 1.5"]
+    Note["Candidate 2 is occluded: alpha x 0.8 = 0.96 <= 1.5"]
 ```
 
-**Occlusion Condition**: A candidate is occluded if:
-```
-alpha × distance(existing, candidate) ≤ distance(node, candidate)
-```
+In the diagram above, Candidate 2 is occluded because Candidate 1 is already accepted and is very close (0.8) to Candidate 2. With `alpha = 1.2`, the occlusion check is `1.2 x 0.8 = 0.96 <= 1.5`, so Candidate 2 is pruned. Candidate 3 is not occluded because `1.2 x 1.2 = 1.44 > 2.0`.
 
-**Complexity**: O(maxDegree² × dim)
+### Pruning Algorithm Steps
+
+1. **Load target vector**: The raw BFloat16 vector for the target node is loaded and converted to float32.
+
+2. **Compute candidate distances**: The distance from the target node to each candidate is computed using raw vectors for accuracy. Candidates are sorted by distance in ascending order.
+
+3. **Iterative selection**: Candidates are processed from closest to furthest. For each candidate, its raw vector is loaded and checked against all previously accepted candidates. If any accepted candidate satisfies the occlusion condition, the current candidate is discarded.
+
+4. **Capacity limit**: The process stops when `maxDegree` candidates have been accepted.
+
+5. **Vector caching**: Vectors of accepted candidates are cached in memory during the pruning loop to avoid redundant I/O when checking subsequent candidates.
+
+**Complexity**: O(maxDegree^2 x dim)
 
 ## Product Quantization Integration
 
+Product Quantization (PQ) compresses high-dimensional vectors into compact codes, enabling fast approximate distance computation via precomputed lookup tables.
+
+### How PQ Works
+
+A vector of dimension `D` is split into `M` subvectors, each of dimension `D/M`. For example, a 768-dimensional vector is split into 96 subvectors of 8 dimensions each (subDim = 8 is the default). Each subspace has its own codebook of 256 centroids learned via K-means. A vector is encoded by finding the nearest centroid in each subspace, producing a compact code of `M` bytes (one byte per subspace).
+
 ### PQ Training
 
-```cpp
-void train(const std::vector<std::vector<float>>& samples) {
-    // Determine subspace configuration
-    size_t subDim = 8;  // Subspace dimension
-    size_t numSubspaces = config_.dim / subDim;  // e.g., 768/8 = 96
+Training is triggered automatically when the number of inserted vectors reaches the `autoTrainThreshold` (default: 2000). The training process:
 
-    // Create and train quantizer
-    auto pq = std::make_unique<NativeProductQuantizer>(
-        config_.dim,
-        numSubspaces,
-        256  // 256 centroids per subspace
-    );
-    pq->train(samples);
+1. Samples existing raw vectors from the index using reservoir sampling
+2. Determines the subspace configuration: `M = dim / 8` subspaces, each of dimension 8
+3. Runs K-means clustering (15 iterations, 256 centroids) independently on each subspace
+4. Persists the resulting codebooks to storage
 
-    // Persist quantizer
-    registry_->saveQuantizer(*pq);
-    quantizer_ = std::move(pq);
-}
-```
+The subspace count `M` must evenly divide the vector dimension. For a 768-dimensional vector, this produces 96 codebooks each containing 256 centroids of 8 dimensions.
+
+Training can be parallelized: when a thread pool is configured, subspaces are trained concurrently across threads. For small subspace counts (32 or fewer), the overhead of thread dispatch exceeds the benefit, so training runs sequentially.
 
 ### PQ Encoding
 
-```cpp
-std::vector<uint8_t> encode(const std::vector<float>& vec) const {
-    std::vector<uint8_t> codes(numSubspaces_);
+Once trained, each vector is encoded by:
 
-    for (size_t m = 0; m < numSubspaces_; ++m) {
-        size_t offset = m * subDim_;
-        const float* subVec = vec.data() + offset;
+1. Splitting the vector into `M` subvectors
+2. For each subvector, finding the nearest centroid in its codebook by computing L2 squared distances to all 256 candidates
+3. Storing the centroid index as a single byte
 
-        // Find nearest centroid
-        float minDist = std::numeric_limits<float>::max();
-        uint8_t bestIdx = 0;
+This produces a compact code of `M` bytes per vector, achieving 8-32x compression depending on the original vector size.
 
-        for (size_t c = 0; c < numCentroids_; ++c) {
-            float dist = VectorMetric::computeL2Sqr(
-                subVec,
-                codebooks_[m][c].data(),
-                subDim_
-            );
-            if (dist < minDist) {
-                minDist = dist;
-                bestIdx = static_cast<uint8_t>(c);
-            }
-        }
-        codes[m] = bestIdx;
-    }
+### PQ Distance Computation
 
-    return codes;
-}
-```
+Rather than decoding PQ codes back to vectors, distances are computed efficiently using a precomputed distance table:
 
-### Distance Computation
+1. **Table construction**: For each query, a distance table of size `M x 256` is built. Entry `[m][c]` stores the L2 squared distance between the query's subvector `m` and centroid `c`.
 
-```cpp
-// Compute distance table for query (once per search)
-std::vector<float> computeDistanceTable(const std::vector<float>& query) const {
-    std::vector<float> table(numSubspaces_ * numCentroids_);
-
-    for (size_t m = 0; m < numSubspaces_; ++m) {
-        size_t offset = m * subDim_;
-        const float* querySub = query.data() + offset;
-
-        for (size_t c = 0; c < numCentroids_; ++c) {
-            table[m * numCentroids_ + c] = VectorMetric::computeL2Sqr(
-                querySub,
-                codebooks_[m][c].data(),
-                subDim_
-            );
-        }
-    }
-
-    return table;
-}
-
-// Fast PQ distance using table lookup
-float computeDistance(
-    const std::vector<float>& pqTable,
-    const std::vector<uint8_t>& codes
-) const {
-    float dist = 0.0f;
-    for (size_t m = 0; m < numSubspaces_; ++m) {
-        dist += pqTable[m * numCentroids_ + codes[m]];
-    }
-    return dist;
-}
-```
+2. **Table lookup**: To compute the approximate distance between the query and any encoded vector, the algorithm sums the table entries corresponding to each subspace's code. This is an O(M) operation per vector, with loop unrolling applied for efficiency.
 
 ### Hybrid Mode
 
-ZYX uses a hybrid approach:
+ZYX uses a hybrid approach where both PQ codes and raw BFloat16 vectors coexist:
 
-```cpp
-float computeDistance(
-    const std::vector<float>& query,
-    const std::vector<float>& pqTable,
-    int64_t targetId
-) const {
-    auto ptrs = registry_->getBlobPtrs(targetId);
-
-    // Use PQ if available and trained
-    if (isPQTrained() && ptrs.pqBlob != 0 && !pqTable.empty()) {
-        return distPQ(pqTable, targetId);
-    }
-
-    // Fallback to raw vector
-    return distRaw(query, targetId);
-}
+```mermaid
+flowchart TD
+    Start[Compute distance to target node] --> PQ{PQ trained and target has PQ codes?}
+    PQ -->|Yes| Fast[Use PQ distance table lookup: O of M per vector]
+    PQ -->|No| Raw[Use raw BFloat16 vector distance: O of dim per vector]
+    Fast --> Result[Return approximate distance]
+    Raw --> Result2[Return exact distance]
 ```
 
-**Benefits**:
-- **Navigation**: Fast approximate distances using PQ
-- **Re-ranking**: Exact distances using raw vectors for top results
-- **Backward Compatibility**: Old vectors work without PQ codes
+This hybrid design has important implications:
+
+- **Graph navigation**: During greedy search, PQ distances are used for nodes that have PQ codes. This is fast (O(M) per distance) but approximate.
+- **Final re-ranking**: After graph traversal completes, exact distances from raw BFloat16 vectors are used to produce the final ranked results.
+- **Backward compatibility**: Nodes inserted before PQ was trained have no PQ codes. The distance function automatically falls back to raw vector computation for these nodes.
+- **No retroactive encoding**: When PQ training is triggered, existing nodes are not re-encoded. Only newly inserted nodes receive PQ codes.
 
 ## Distance Metrics
 
+ZYX supports three distance metrics for vector similarity computation:
+
 ### L2 Distance (Euclidean)
 
-```cpp
-float computeL2Sqr(
-    const float* vecA,
-    const float* vecB,
-    size_t dim
-) {
-    float dist = 0.0f;
-    for (size_t i = 0; i < dim; ++i) {
-        float diff = vecA[i] - vecB[i];
-        dist += diff * diff;
-    }
-    return dist;
-}
+Computes the squared Euclidean distance between two vectors. This is the default metric and is suitable for most use cases. The squared form avoids the unnecessary square root operation while preserving ordering.
+
+```
+dist(A, B) = sum of (A[i] - B[i])^2 for all dimensions i
 ```
 
 ### Inner Product (IP)
 
-```cpp
-float computeIP(
-    const float* vecA,
-    const float* vecB,
-    size_t dim
-) {
-    float ip = 0.0f;
-    for (size_t i = 0; i < dim; ++i) {
-        ip += vecA[i] * vecB[i];
-    }
-    return -ip;  // Negate for min-heap
-}
+Computes the negative inner product. The result is negated so that the min-heap priority queue used in search returns the most similar (highest inner product) vectors first.
+
+```
+dist(A, B) = -(sum of A[i] * B[i] for all dimensions i)
 ```
 
 ### Cosine Similarity
 
-```cpp
-float computeCosine(
-    const float* vecA,
-    const float* vecB,
-    size_t dim
-) {
-    float dot = 0.0f, normA = 0.0f, normB = 0.0f;
-    for (size_t i = 0; i < dim; ++i) {
-        dot += vecA[i] * vecB[i];
-        normA += vecA[i] * vecA[i];
-        normB += vecB[i] * vecB[i];
-    }
-    return -dot / (std::sqrt(normA) * std::sqrt(normB));  // Negate for min-heap
-}
+Computes the negative cosine similarity. Like IP, the result is negated for min-heap ordering. This metric is invariant to vector magnitude, making it suitable for comparing vectors of varying norms.
+
 ```
+dist(A, B) = -(dot(A, B) / (||A|| * ||B||))
+```
+
+## BFloat16 Storage
+
+All raw vectors are stored in BFloat16 (Brain Float 16) format, which reduces memory usage by 50% compared to standard float32 while maintaining sufficient precision for vector similarity tasks. BFloat16 preserves the same exponent range as float32 (8 exponent bits) but reduces mantissa precision (7 mantissa bits), making it well-suited for approximate nearest neighbor workloads where exact numeric precision is less critical than representational range.
 
 ## Time Complexity Analysis
 
 | Operation | Complexity | Notes |
 |-----------|------------|-------|
-| Insert | O(beamWidth × maxDegree × dim) | Includes search and pruning |
-| Search | O(beamWidth × maxDegree × dim + k × dim) | Beam search + re-ranking |
-| Prune | O(maxDegree² × dim) | Pairwise distance checks |
-| PQ Train | O(samples × dim × iterations) | K-means clustering |
+| Insert | O(beamWidth x maxDegree x dim) | Includes search and pruning |
+| Search | O(beamWidth x maxDegree x dim + k x dim) | Beam search + re-ranking |
+| Prune | O(maxDegree^2 x dim) | Pairwise distance checks |
+| PQ Train | O(samples x dim x iterations) | K-means clustering per subspace |
 | PQ Encode | O(dim) | Subspace quantization |
 | PQ Distance | O(numSubspaces) | Table lookup |
 
@@ -520,17 +370,17 @@ float computeCosine(
 
 | Component | Space | Notes |
 |-----------|-------|-------|
-| Raw Vectors | O(n × dim × 2 bytes) | BFloat16 storage |
-| PQ Codes | O(n × numSubspaces) | Typically 8-32x compression |
-| Graph Edges | O(n × maxDegree) | Average degree ~maxDegree |
-| PQ Codebooks | O(dim) | Shared across all vectors |
-| Distance Table | O(numSubspaces × 256) | Per query |
+| Raw Vectors | O(n x dim x 2 bytes) | BFloat16 storage |
+| PQ Codes | O(n x numSubspaces) | 1 byte per subspace per vector |
+| Graph Edges | O(n x maxDegree) | 8 bytes per edge (int64) |
+| PQ Codebooks | O(dim x 256) | Shared across all vectors |
+| Distance Table | O(numSubspaces x 256) | Per query, ephemeral |
 
 For n = 1M vectors with dim = 768:
 - Raw vectors: ~1.5 GB (BFloat16)
 - PQ codes: ~96 MB (96 subspaces)
-- Graph edges: ~256 MB (64 edges/node)
-- **Total**: ~1.85 GB
+- Graph edges: ~512 MB (64 edges/node x 8 bytes)
+- **Total**: ~2.1 GB
 
 ## Performance Characteristics
 
@@ -548,7 +398,7 @@ For n = 1M vectors with dim = 768:
 |-----------|------------|-------|
 | Insert | 10K vectors/sec | Includes graph updates |
 | PQ Train | 5K vectors/sec | One-time cost |
-| Batch Insert | 50K vectors/sec | Optimized path |
+| Batch Insert | 50K vectors/sec | Optimized path with deferred back-links |
 
 ### Memory Efficiency
 
@@ -557,38 +407,6 @@ For n = 1M vectors with dim = 768:
 | Raw only | 1536 bytes (768D BF16) | 1x |
 | PQ (8D) | 96 bytes (96 subspaces) | 16x |
 | PQ (4D) | 192 bytes (192 subspaces) | 8x |
-
-## Use Cases
-
-### Recommendation Systems
-
-```cpp
-// Find similar items for recommendations
-auto similarItems = vectorIndex.search(userEmbedding, 10);
-for (auto& [itemId, score] : similarItems) {
-    std::cout << "Item " << itemId << " (score: " << score << ")\n";
-}
-```
-
-### Semantic Search
-
-```cpp
-// Find semantically similar documents
-auto documents = vectorIndex.search(queryEmbedding, 20);
-for (auto& [docId, score] : documents) {
-    std::cout << "Document " << docId << " (similarity: " << -score << ")\n";
-}
-```
-
-### Deduplication
-
-```cpp
-// Find near-duplicate vectors
-auto duplicates = vectorIndex.search(vectorEmbedding, 5);
-if (!duplicates.empty() && duplicates[0].second < 0.01) {
-    std::cout << "Duplicate found: " << duplicates[0].first << "\n";
-}
-```
 
 ## Best Practices
 
@@ -605,11 +423,12 @@ if (!duplicates.empty() && duplicates[0].second < 0.01) {
 ## Limitations and Considerations
 
 ::: warning Known Limitations
-- **Memory Footprint**: Raw vectors still stored for re-ranking
+- **Memory Footprint**: Raw vectors are still stored for re-ranking, so PQ only reduces the graph navigation cost
 - **Training Requirements**: PQ requires sufficient training data (minimum 1000 samples recommended)
-- **Space Reclamation**: Deletions are logical only, space not immediately reclaimed
-- **Update Method**: Vector updates performed through delete + insert
+- **Space Reclamation**: Deletions are logical only (blob pointers zeroed), space is not immediately reclaimed
+- **Update Method**: Vector updates are performed through delete followed by insert
 - **Dimension Limits**: High dimensions (>1000) may require dimensionality reduction for optimal performance
+- **Pruning Accuracy**: Pruning always uses raw vectors for distance computation to maintain graph quality, even when PQ is available
 :::
 
 ::: tip Memory Optimization
@@ -618,6 +437,16 @@ If memory is constrained, you can:
 2. Decrease `maxDegree` parameter
 3. Store only PQ codes, load raw vectors from external storage when needed
 :::
+
+## Source Locations
+
+| Component | Header | Implementation |
+|-----------|--------|----------------|
+| DiskANN Index | `include/graph/vector/index/DiskANNIndex.hpp` | `src/vector/index/DiskANNIndex.cpp` |
+| PQ Quantizer | `include/graph/vector/quantization/NativeProductQuantizer.hpp` | -- |
+| Vector Metrics | `include/graph/vector/core/VectorMetric.hpp` | -- |
+| BFloat16 | `include/graph/vector/core/BFloat16.hpp` | -- |
+| Index Config | `include/graph/vector/VectorIndexConfig.hpp` | -- |
 
 ## See Also
 

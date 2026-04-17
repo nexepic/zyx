@@ -1,24 +1,154 @@
 ---
-title: Type Definitions
-description: "Data types supported by ZYX"
+title: Type System
+description: Value, Node, Edge, PropertyValue, and ResultValue types used in the ZYX C++ API.
 category: C++ API
 categoryOrder: 2
-order: 3
+order: 4
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Type Definitions
+# Type System
 
-## Value Types
+Header: `include/zyx/value.hpp`
 
-ZYX supports the following data types:
+## zyx::Value
 
-- **Null**: `Value()`
-- **Boolean**: `Value(bool)`
-- **Integer**: `Value(int64_t)`
-- **Float**: `Value(double)`
-- **String**: `Value(std::string)`
-- **List**: `Value(std::vector<Value>)`
-- **Map**: `Value(std::unordered_map<std::string, Value>)`
+`zyx::Value` is a `std::variant` used for query parameters and result access:
+
+| Alternative | C++ Type | Description |
+|-------------|----------|-------------|
+| Null | `std::monostate` | Absent / null value |
+| Boolean | `bool` | `true` or `false` |
+| Integer | `int64_t` | 64-bit signed integer |
+| Float | `double` | Double-precision floating point |
+| String | `std::string` | UTF-8 string |
+| Node | `std::shared_ptr<Node>` | Graph node reference |
+| Edge | `std::shared_ptr<Edge>` | Graph edge reference |
+| Float vector | `std::vector<float>` | Compact numeric vector (used for embeddings) |
+| String list | `std::vector<std::string>` | List of strings |
+
+### Usage
+
+```cpp
+// Constructing values for query parameters
+std::unordered_map<std::string, zyx::Value> params;
+params["name"] = std::string("Alice");
+params["age"] = int64_t(30);
+params["active"] = true;
+params["score"] = 95.5;
+
+// Reading values from results
+zyx::Value val = result.get("n.name");
+if (std::holds_alternative<std::string>(val)) {
+    std::string name = std::get<std::string>(val);
+}
+```
+
+## zyx::Node
+
+```cpp
+struct Node {
+    int64_t id;
+    std::string label;                           // First label (backward compat)
+    std::vector<std::string> labels;             // All labels
+    std::unordered_map<std::string, Value> properties;
+};
+```
+
+| Field | Description |
+|-------|-------------|
+| `id` | Internal node ID (assigned by `IDAllocator`) |
+| `label` | Primary label (first in the list) |
+| `labels` | All labels assigned to this node |
+| `properties` | Key-value property map |
+
+## zyx::Edge
+
+```cpp
+struct Edge {
+    int64_t id;
+    int64_t sourceId;
+    int64_t targetId;
+    std::string type;                            // Relationship type
+    std::unordered_map<std::string, Value> properties;
+};
+```
+
+| Field | Description |
+|-------|-------------|
+| `id` | Internal edge ID |
+| `sourceId` | ID of the source node |
+| `targetId` | ID of the target node |
+| `type` | Relationship type (e.g., `"KNOWS"`) |
+| `properties` | Key-value property map |
+
+Note: Edge uses `type` (not `label`). Node uses `labels` (plural, can have multiple).
+
+## graph::PropertyValue
+
+Used internally by the query engine for property storage and `QueryBuilder`:
+
+```cpp
+struct PropertyValue {
+    using MapType = std::unordered_map<std::string, PropertyValue>;
+
+    PropertyValue();                    // Null
+    PropertyValue(bool value);
+    PropertyValue(int64_t value);
+    PropertyValue(double value);
+    PropertyValue(const std::string& value);
+    PropertyValue(std::vector<PropertyValue> vec);  // List
+    PropertyValue(MapType map);                      // Map
+
+    PropertyType getType() const;
+    std::string toString() const;
+};
+```
+
+| `PropertyType` | Description |
+|-----------------|-------------|
+| `NULL_TYPE` | Null value |
+| `BOOLEAN` | `bool` |
+| `INTEGER` | `int64_t` |
+| `DOUBLE` | `double` |
+| `STRING` | `std::string` |
+| `LIST` | `std::vector<PropertyValue>` |
+| `MAP` | `unordered_map<string, PropertyValue>` |
+
+## graph::ResultValue
+
+Wraps a value returned by the query engine:
+
+```cpp
+class ResultValue {
+    bool isNode() const;
+    bool isEdge() const;
+    bool isPrimitive() const;
+
+    const Node& asNode() const;
+    const Edge& asEdge() const;
+    const PropertyValue& asPrimitive() const;
+
+    std::string toString() const;
+};
+```
+
+## Enums
+
+| Enum | Values | Description |
+|------|--------|-------------|
+| `EntityType` | `Node`, `Edge`, `Property`, `Blob`, `Index`, `State` | Internal entity types |
+| `OpenMode` | `OPEN_CREATE_NEW_FILE`, `OPEN_EXISTING_FILE`, `OPEN_CREATE_OR_OPEN_FILE` | Database open mode |
+| `TxnState` | `TXN_ACTIVE`, `TXN_COMMITTED`, `TXN_ROLLED_BACK` | Transaction state |
+| `Language` | `Cypher` | Query language (currently only Cypher) |
+
+## Source Locations
+
+| Component | Path |
+|-----------|------|
+| Value types | `include/zyx/value.hpp` |
+| PropertyValue | `include/graph/query/types/PropertyValue.hpp` |
+| ResultValue | `include/graph/query/types/ResultValue.hpp` |
+| EntityType | `include/graph/core/types.hpp` |

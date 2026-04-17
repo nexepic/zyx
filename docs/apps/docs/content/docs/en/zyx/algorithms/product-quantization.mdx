@@ -29,6 +29,33 @@ Product Quantization works by decomposing high-dimensional vectors into lower-di
 - **DiskANN Integration**: Seamless integration with graph-based ANN search
 - **Zero-Copy Operations**: Efficient memory layout for cache-friendly access
 
+### PQ Pipeline
+
+The full Product Quantization workflow consists of three stages: training codebooks from data, encoding vectors into compact codes, and searching with asymmetric distance computation.
+
+```mermaid
+flowchart LR
+    subgraph Train["Training Phase"]
+        T1["Training vectors"] --> T2["Split into M subspaces"]
+        T2 --> T3["K-Means per subspace"]
+        T3 --> T4["M codebooks<br/>(256 centroids each)"]
+    end
+
+    subgraph Encode["Encoding Phase"]
+        E1["Raw vector x"] --> E2["Split into sub-vectors"]
+        E2 --> E3["Find nearest centroid<br/>per subspace"]
+        E3 --> E4["PQ codes<br/>(M uint8 values)"]
+        T4 -.->|"codebooks"| E3
+    end
+
+    subgraph Search["Search Phase"]
+        S1["Query q"] --> S2["Build distance table<br/>T[m][c]"]
+        S2 --> S3["Lookup + sum<br/>d = Sum T[m][codes[m]]"]
+        E4 -.->|"PQ codes"| S3
+        T4 -.->|"codebooks"| S2
+    end
+```
+
 ## Mathematical Foundation
 
 ### Quantization Problem
@@ -36,18 +63,18 @@ Product Quantization works by decomposing high-dimensional vectors into lower-di
 Given a high-dimensional vector space R^D, Product Quantization decomposes it into M subspaces:
 
 ```
-R^D = R^D1 × R^D2 × ... × R^DM
+R^D = R^D1 x R^D2 x ... x R^DM
 ```
 
 Where:
 - D = total dimension (e.g., 768 for embeddings)
 - M = number of subspaces (e.g., 96)
 - Di = dimension of subspace i (D/M, e.g., 8)
-- D = Σ Di (sum of all subspace dimensions)
+- D = Sum of all Di
 
 ### Codebook Training
 
-For each subspace m ∈ [1, M], we train a codebook Cm containing K centroids:
+For each subspace m in [1, M], we train a codebook Cm containing K centroids:
 
 ```
 Cm = {c_m1, c_m2, ..., c_mK}
@@ -55,115 +82,44 @@ Cm = {c_m1, c_m2, ..., c_mK}
 
 Where:
 - K = number of centroids per subspace (typically 256 = 2^8)
-- c_mi ∈ R^Di (i-th centroid in m-th subspace)
+- c_mi in R^Di (i-th centroid in m-th subspace)
 
-Training uses K-Means clustering on training data:
+Training applies K-Means clustering independently to each subspace. For each of the M subspaces, the training data is sliced into sub-vectors covering that subspace's dimensions, and K-Means runs with a fixed seed of 42 and a maximum of 15 iterations. The resulting K centroids form the codebook for that subspace.
 
-```cpp
-void train(const std::vector<std::vector<float>>& trainingData) {
-    codebooks_.resize(numSubspaces_);
-
-    for (size_t m = 0; m < numSubspaces_; ++m) {
-        std::vector<std::vector<float>> subData;
-        subData.reserve(trainingData.size());
-
-        size_t offset = m * subDim_;
-
-        // Extract sub-vectors for this subspace
-        for (const auto& vec : trainingData) {
-            std::vector<float> sub(
-                vec.begin() + offset,
-                vec.begin() + offset + subDim_
-            );
-            subData.push_back(std::move(sub));
-        }
-
-        // Train K-Means on this subspace
-        codebooks_[m] = KMeans::run(subData, numCentroids_);
-    }
-    isTrained_ = true;
-}
-```
+The `NativeProductQuantizer` class (defined in `include/graph/vector/core/NativeProductQuantizer.hpp`) manages this process: it iterates over all M subspaces, extracts the corresponding sub-vectors from the training set, invokes `KMeans::run` from `include/graph/vector/core/KMeans.hpp`, and stores the resulting centroids.
 
 ### Encoding
 
-A vector x ∈ R^D is encoded into PQ codes by finding the nearest centroid in each subspace:
+A vector x in R^D is encoded into PQ codes by finding the nearest centroid in each subspace:
 
 ```
 encode(x) = [q_1, q_2, ..., q_M]
 ```
 
-Where q_m ∈ [0, K-1] is the index of the nearest centroid in subspace m:
+Where q_m in [0, K-1] is the index of the nearest centroid in subspace m:
 
 ```
-q_m = argmin_i ||x_m - c_mi||²
+q_m = argmin_i ||x_m - c_mi||^2
 ```
 
-Here x_m is the sub-vector of x corresponding to subspace m:
-
-```cpp
-std::vector<uint8_t> encode(const std::vector<float>& vec) const {
-    std::vector<uint8_t> codes(numSubspaces_);
-
-    for (size_t m = 0; m < numSubspaces_; ++m) {
-        size_t offset = m * subDim_;
-        float min_dist = std::numeric_limits<float>::max();
-        uint8_t best_idx = 0;
-
-        const float* subVecPtr = vec.data() + offset;
-
-        // Find nearest centroid in this subspace
-        for (size_t c = 0; c < numCentroids_; ++c) {
-            float dist = VectorMetric::computeL2Sqr(
-                subVecPtr,
-                codebooks_[m][c].data(),
-                subDim_
-            );
-
-            if (dist < min_dist) {
-                min_dist = dist;
-                best_idx = static_cast<uint8_t>(c);
-            }
-        }
-        codes[m] = best_idx;
-    }
-    return codes;
-}
-```
+Here x_m is the sub-vector of x corresponding to subspace m. Concretely, for each subspace m, the encoder takes the Di-dimensional sub-vector at offset `m * subDim`, computes the squared L2 distance to every centroid in codebook m using `VectorMetric::computeL2Sqr` (from `include/graph/vector/core/VectorMetric.hpp`), and records the index of the closest centroid as a `uint8_t`. Because K = 256, each code fits in exactly one byte, yielding a total of M bytes per vector.
 
 ### Decoding
 
-Decoding reconstructs an approximate vector from PQ codes:
-
-```cpp
-std::vector<float> decode(const std::vector<uint8_t>& codes) const {
-    std::vector<float> reconstructed(dim_);
-
-    for (size_t m = 0; m < numSubspaces_; ++m) {
-        size_t offset = m * subDim_;
-        const auto& centroid = codebooks_[m][codes[m]];
-
-        // Copy centroid values to reconstructed vector
-        std::copy(centroid.begin(), centroid.end(),
-                  reconstructed.begin() + offset);
-    }
-
-    return reconstructed;
-}
-```
-
-The reconstructed vector x̂ is:
+Decoding reconstructs an approximate vector from PQ codes. For each subspace m, the decoder looks up the centroid at index `codes[m]` in codebook m and copies those Di float values into the corresponding region of the output vector. The reconstructed vector x-hat is:
 
 ```
-x̂ = [c_1,q_1, c_2,q_2, ..., c_M,q_M]
+x-hat = [c_1,q_1, c_2,q_2, ..., c_M,q_M]
 ```
+
+This is an approximation of the original vector; the quality depends on how well the codebooks capture the data distribution.
 
 ### Quantization Error
 
 The quantization error for a vector x is:
 
 ```
-||x - x̂||² = Σ ||x_m - c_m,q_m||²
+||x - x-hat||^2 = Sum ||x_m - c_m,q_m||^2
 ```
 
 This error is bounded by the within-cluster variance in each subspace.
@@ -207,10 +163,10 @@ graph TB
 ```
 
 **Codebook Structure:**
-- Each codebook: 256 × 8 floats (256 codewords, 8 dimensions each)
+- Each codebook: 256 x 8 floats (256 codewords, 8 dimensions each)
 - Vector: 768 dimensions total
 - Subspaces: M subspaces, 8D each
-- PQ Codes: 96 bytes (M × 1 byte per subspace)
+- PQ Codes: 96 bytes (M x 1 byte per subspace)
 
 ### Memory Layout
 
@@ -218,12 +174,12 @@ For D = 768 dimensions with M = 96 subspaces (Di = 8):
 
 | Component | Memory | Formula | Example |
 |-----------|--------|---------|---------|
-| Raw vector (FP32) | 3072 bytes | D × 4 | 768 × 4 = 3072 |
-| Raw vector (BF16) | 1536 bytes | D × 2 | 768 × 2 = 1536 |
-| PQ codes | 96 bytes | M × 1 | 96 × 1 = 96 |
-| Codebooks | 786,432 bytes | M × K × Di × 4 | 96 × 256 × 8 × 4 |
+| Raw vector (FP32) | 3072 bytes | D x 4 | 768 x 4 = 3072 |
+| Raw vector (BF16) | 1536 bytes | D x 2 | 768 x 2 = 1536 |
+| PQ codes | 96 bytes | M x 1 | 96 x 1 = 96 |
+| Codebooks | 786,432 bytes | M x K x Di x 4 | 96 x 256 x 8 x 4 |
 
-**Compression Ratio**: 1536 / 96 = **16×** for BF16 vectors
+**Compression Ratio**: 1536 / 96 = **16x** for BF16 vectors
 
 **Amortized Cost**: For n vectors, codebook overhead per vector = 786,432 / n
 
@@ -236,74 +192,44 @@ For n = 1,000,000 vectors:
 
 ### Asymmetric Distance Computation (ADC)
 
-ADC computes approximate distances between a query vector and PQ-encoded database vectors without full decoding.
+ADC computes approximate distances between a query vector and PQ-encoded database vectors without full decoding. The key insight is to precompute a distance table from the query once, then perform only cheap table lookups for each database vector.
 
 #### Distance Table Precomputation
 
-For a query vector q, precompute distances to all centroids in all subspaces:
-
-```cpp
-std::vector<float> computeDistanceTable(
-    const std::vector<float>& query
-) const {
-    std::vector<float> table(numSubspaces_ * numCentroids_);
-
-    for (size_t m = 0; m < numSubspaces_; ++m) {
-        size_t offset = m * subDim_;
-        const float* querySubPtr = query.data() + offset;
-
-        for (size_t c = 0; c < numCentroids_; ++c) {
-            float dist = VectorMetric::computeL2Sqr(
-                querySubPtr,
-                codebooks_[m][c].data(),
-                subDim_
-            );
-            table[m * numCentroids_ + c] = dist;
-        }
-    }
-    return table;
-}
-```
-
-This creates a distance table T of size M × K:
+For a query vector q, the system precomputes distances to all centroids in all subspaces, producing a table T of size M x K:
 
 ```
-T[m][i] = ||q_m - c_mi||²
+T[m][i] = ||q_m - c_mi||^2
 ```
 
-For M = 96, K = 256: Table size = 96 × 256 × 4 = **98,304 bytes** (~96 KB)
+For each subspace m, the query sub-vector q_m is compared against every centroid in codebook m using squared L2 distance. For M = 96 and K = 256, the table occupies 96 x 256 x 4 = **98,304 bytes** (~96 KB).
 
 #### Fast Distance Lookup
 
-Given PQ codes for a database vector x, compute approximate distance:
+Given PQ codes for a database vector x, the approximate distance is the sum of table lookups:
 
 ```
-d(q, x) ≈ Σ T[m][codes[m]]
+d(q, x) = Sum over m of T[m][codes[m]]
 ```
 
-```cpp
-static float computeDistance(
-    const std::vector<uint8_t>& codes,
-    const std::vector<float>& distTable,
-    size_t numSubspaces,
-    size_t numCentroids = 256
-) {
-    float dist = 0.0f;
-    size_t m = 0;
-    size_t stride = numCentroids;
+Each term is a single array access: index into row m at column `codes[m]`. The `NativeProductQuantizer` applies 4-way loop unrolling to amortize loop overhead and improve pipeline utilization. For M = 96, this reduces to roughly 24 unrolled iterations plus a small remainder loop.
 
-    // Manual loop unrolling for pipelining
-    for (; m + 3 < numSubspaces; m += 4) {
-        dist += distTable[(m + 0) * stride + codes[m + 0]];
-        dist += distTable[(m + 1) * stride + codes[m + 1]];
-        dist += distTable[(m + 2) * stride + codes[m + 2]];
-        dist += distTable[(m + 3) * stride + codes[m + 3]];
-    }
-    for (; m < numSubspaces; ++m) {
-        dist += distTable[m * stride + codes[m]];
-    }
-    return dist;
-}
+### ADC Distance Table Lookup
+
+```mermaid
+flowchart TD
+    Q["Query vector q<br/>(768D)"] --> Split["Split into M sub-vectors<br/>q_1, q_2, ..., q_M"]
+    Split --> T1["T[1][c] = L2 q_1, centroid_c"]
+    Split --> T2["T[2][c] = L2 q_2, centroid_c"]
+    Split --> TM["T[M][c] = L2 q_M, centroid_c"]
+
+    T1 --> Table["Distance Table T<br/>(M x K floats, ~96 KB)"]
+    T2 --> Table
+    TM --> Table
+
+    Codes["DB vector PQ codes<br/>[q1, q2, ..., qM]<br/>(M bytes)"] --> Lookup
+    Table --> Lookup["Sum T[1][q1]<br/>+ T[2][q2]<br/>+ ...<br/>+ T[M][qM]"]
+    Lookup --> Dist["Approximate distance d(q, x)<br/>O(M) lookups"]
 ```
 
 ### Distance Computation Flow
@@ -321,8 +247,8 @@ flowchart TD
 ```
 
 **Distance Computation:**
-- Table T: M × K entries (~96 KB for M=96, K=256)
-- For each database vector: d = Σ T[m, codes[m]]
+- Table T: M x K entries (~96 KB for M=96, K=256)
+- For each database vector: d = Sum T[m, codes[m]]
 - Complexity: O(M) per vector after table precomputation
 
 ### Complexity Analysis
@@ -330,15 +256,15 @@ flowchart TD
 | Operation | Raw Computation | PQ with ADC | Speedup |
 |-----------|----------------|-------------|---------|
 | Single distance | O(D) | O(M) | D/M |
-| Distance table | - | O(M × K × Di) | - |
-| 1000 distances | O(1000 × D) | O(M × K × Di + 1000 × M) | ~D/M |
+| Distance table | - | O(M x K x Di) | - |
+| 1000 distances | O(1000 x D) | O(M x K x Di + 1000 x M) | ~D/M |
 
 For D = 768, M = 96, K = 256, Di = 8:
-- Raw: 1000 × 768 = 768,000 operations
-- PQ: 96 × 256 × 8 + 1000 × 96 = 196,608 + 96,000 = 292,608 operations
-- **Speedup**: 2.6×
+- Raw: 1000 x 768 = 768,000 operations
+- PQ: 96 x 256 x 8 + 1000 x 96 = 196,608 + 96,000 = 292,608 operations
+- **Speedup**: 2.6x
 
-For 10,000 distances: **Speedup**: ~7.5× (amortized)
+For 10,000 distances: **Speedup**: ~7.5x (amortized)
 
 ## K-Means Training
 
@@ -346,88 +272,26 @@ K-Means clustering is used to train codebooks for each subspace.
 
 ### Algorithm
 
-```cpp
-class KMeans {
-public:
-    static std::vector<std::vector<float>> run(
-        const std::vector<std::vector<float>>& data,
-        size_t k,
-        size_t max_iter = 15
-    ) {
-        if (data.empty()) return {};
-        size_t dim = data[0].size();
-        size_t n = data.size();
+The K-Means implementation (`include/graph/vector/core/KMeans.hpp`) follows the standard Expectation-Maximization (EM) approach:
 
-        // Initialize centroids randomly
-        std::vector centroids(k, std::vector<float>(dim));
-        std::vector<int> assignment(n);
-        std::mt19937 rng(42);
-        std::uniform_int_distribution<size_t> dist(0, n - 1);
+1. **Initialization**: K centroids are seeded by randomly selecting K data points. The random number generator uses a fixed seed of 42 for reproducibility.
 
-        for (size_t i = 0; i < k; ++i) {
-            centroids[i] = data[dist(rng)];
-        }
+2. **E-Step (Assignment)**: Each data point is assigned to the nearest centroid based on squared L2 distance, computed via `VectorMetric::computeL2Sqr`. If no assignments change compared to the previous iteration, training converges early.
 
-        // EM iterations
-        for (size_t it = 0; it < max_iter; ++it) {
-            bool changed = false;
-            std::vector sums(k, std::vector(dim, 0.0f));
-            std::vector<size_t> counts(k, 0);
+3. **M-Step (Update)**: Each centroid is recomputed as the mean of all points assigned to it. If a cluster becomes empty (no assigned points), its centroid is re-initialized to a randomly chosen data point.
 
-            // E-Step: Assign points to nearest centroid
-            for (size_t i = 0; i < n; ++i) {
-                float min_dist = std::numeric_limits<float>::max();
-                int best_c = 0;
-
-                for (size_t c = 0; c < k; ++c) {
-                    float dist_val = VectorMetric::computeL2Sqr(
-                        data[i].data(),
-                        centroids[c].data(),
-                        dim
-                    );
-
-                    if (dist_val < min_dist) {
-                        min_dist = dist_val;
-                        best_c = c;
-                    }
-                }
-                if (assignment[i] != best_c) changed = true;
-                assignment[i] = best_c;
-
-                // Accumulate for M-Step
-                for (size_t d = 0; d < dim; ++d)
-                    sums[best_c][d] += data[i][d];
-                counts[best_c]++;
-            }
-
-            if (!changed) break;
-
-            // M-Step: Update centroids
-            for (size_t c = 0; c < k; ++c) {
-                if (counts[c] > 0) {
-                    float inv_count = 1.0f / static_cast<float>(counts[c]);
-                    for (size_t d = 0; d < dim; ++d)
-                        centroids[c][d] = sums[c][d] * inv_count;
-                } else {
-                    centroids[c] = data[dist(rng)]; // Re-init empty cluster
-                }
-            }
-        }
-        return centroids;
-    }
-};
-```
+4. **Iteration**: The EM loop runs for up to 15 iterations, stopping early if assignments stabilize.
 
 ### Training Complexity
 
 For one subspace:
-- E-Step: O(n × K × Di)
-- M-Step: O(K × Di)
-- Total per iteration: O(n × K × Di)
-- Total for M subspaces: O(M × n × K × Di × iterations)
+- E-Step: O(n x K x Di)
+- M-Step: O(K x Di)
+- Total per iteration: O(n x K x Di)
+- Total for M subspaces: O(M x n x K x Di x iterations)
 
 For n = 10,000 training vectors, M = 96, K = 256, Di = 8, iterations = 15:
-- Operations: 96 × 10,000 × 256 × 8 × 15 = **2,952,960,000**
+- Operations: 96 x 10,000 x 256 x 8 x 15 = **2,952,960,000**
 
 **Training time**: ~5-10 seconds on modern hardware
 
@@ -435,13 +299,11 @@ For n = 10,000 training vectors, M = 96, K = 256, Di = 8, iterations = 15:
 
 ### Parameters
 
-```cpp
-struct PQConfig {
-    size_t dim;                    // Total dimension
-    size_t numSubspaces;           // Number of subspaces (M)
-    size_t numCentroids = 256;     // Centroids per subspace (K)
-};
-```
+The `NativeProductQuantizer` is configured with three parameters:
+
+- **dim** -- Total dimensionality of the input vectors (e.g., 768)
+- **numSubspaces** -- Number of subspaces M into which the vector is decomposed
+- **numCentroids** -- Number of centroids K per subspace, defaulting to 256
 
 ### Parameter Selection
 
@@ -453,100 +315,44 @@ struct PQConfig {
 For D = 768:
 | numSubspaces | Di | PQ Codes Size | Compression | Accuracy |
 |--------------|----|----------------|-------------|----------|
-| 32 | 24 | 32 bytes | 48× | Lower |
-| 64 | 12 | 64 bytes | 24× | Medium |
-| 96 | 8 | 96 bytes | 16× | High |
-| 192 | 4 | 192 bytes | 8× | Very High |
+| 32 | 24 | 32 bytes | 48x | Lower |
+| 64 | 12 | 64 bytes | 24x | Medium |
+| 96 | 8 | 96 bytes | 16x | High |
+| 192 | 4 | 192 bytes | 8x | Very High |
 
 **Recommendation**: Use Di = 8 (numSubspaces = D/8) for balanced performance.
 
 ### Training Data
 
 **Guidelines**:
-- **Minimum**: 10 × K × M vectors (~250K for K=256, M=96)
-- **Recommended**: 100 × K × M vectors (~2.5M)
+- **Minimum**: 10 x K x M vectors (~250K for K=256, M=96)
+- **Recommended**: 100 x K x M vectors (~2.5M)
 - **Representative**: Training data should match query distribution
 - **Random sampling**: Use uniform random sampling from dataset
 
-```cpp
-// Sample training data
-std::vector<std::vector<float>> sampleTrainingData(
-    size_t numSamples,
-    const std::vector<std::vector<float>>& dataset
-) {
-    std::vector<std::vector<float>> samples;
-    std::mt19937 rng(42);
-    std::uniform_int_distribution<size_t> dist(0, dataset.size() - 1);
-
-    samples.reserve(numSamples);
-    for (size_t i = 0; i < numSamples; ++i) {
-        samples.push_back(dataset[dist(rng)]);
-    }
-    return samples;
-}
-```
+Training data is sampled from the dataset using a random number generator with a fixed seed (42), selecting vectors uniformly at random to form the training set.
 
 ## Integration with DiskANN
 
 ### Hybrid Search Strategy
 
-ZYX uses a hybrid approach combining PQ and raw vectors:
-
-```cpp
-float computeDistance(
-    const std::vector<float>& query,
-    const std::vector<float>& pqTable,
-    int64_t targetId
-) const {
-    auto ptrs = registry_->getBlobPtrs(targetId);
-
-    // Use PQ for fast navigation
-    if (isPQTrained() && ptrs.pqBlob != 0 && !pqTable.empty()) {
-        return distPQ(pqTable, targetId);
-    }
-
-    // Fallback to raw vector
-    return distRaw(query, targetId);
-}
-```
+ZYX uses a hybrid approach combining PQ and raw vectors within the DiskANN search pipeline. When computing the distance between a query and a candidate vector, the system first checks whether PQ is trained and PQ codes are available for that vector. If so, it uses the fast PQ distance via the precomputed distance table. Otherwise, it falls back to computing the exact distance from the raw vector.
 
 ### Search Workflow
 
-1. **Graph Traversal**: Use PQ distances for fast navigation
-2. **Candidate Selection**: Find top candidates using approximate distances
-3. **Re-ranking**: Compute exact distances using raw vectors for top-k results
-
-```cpp
-std::vector<std::pair<int64_t, float>> search(
-    const std::vector<float>& query,
-    size_t k
-) const {
-    // 1. Compute PQ distance table
-    auto pqTable = isPQTrained() ?
-        quantizer_->computeDistanceTable(query) :
-        std::vector<float>{};
-
-    // 2. Greedy search with PQ distances
-    auto candidates = greedySearch(
-        query,
-        entryPoint,
-        std::max(config_.beamWidth, k * 2),
-        pqTable
-    );
-
-    // 3. Re-rank with exact distances
-    std::vector<std::pair<int64_t, float>> results;
-    for (auto& [nodeId, _] : candidates) {
-        float exactDist = distRaw(query, nodeId);
-        results.push_back({nodeId, exactDist});
-    }
-
-    // 4. Sort and return top-k
-    std::sort(results.begin(), results.end());
-    results.resize(k);
-    return results;
-}
+```mermaid
+flowchart TD
+    Q["Query vector"] --> DT["Compute PQ distance table<br/>(M x K entries)"]
+    DT --> GS["Greedy graph search<br/>using PQ distances for navigation"]
+    GS --> Cands["Top candidates<br/>(approximate distances)"]
+    Cands --> RR["Re-rank with exact<br/>raw-vector distances"]
+    RR --> TopK["Return top-k results<br/>(exact distances)"]
 ```
+
+1. **Distance Table**: The query vector is used to precompute the PQ distance table (M x K entries).
+2. **Graph Traversal**: During greedy search on the DiskANN graph, PQ distances guide navigation toward promising regions. Each neighbor comparison requires only M table lookups.
+3. **Candidate Selection**: The beam search collects candidate vectors using approximate PQ distances.
+4. **Re-ranking**: The top candidates are re-scored using exact L2 distances computed from raw vectors, ensuring the final ranking is accurate.
 
 ### Benefits
 
@@ -557,52 +363,14 @@ std::vector<std::pair<int64_t, float>> search(
 
 ## Serialization
 
-PQ codebooks can be serialized for persistence:
+PQ codebooks are serialized for persistence using the `utils::Serializer` utility. The serialized format contains:
 
-```cpp
-void serialize(std::ostream& os) const {
-    utils::Serializer::writePOD(os, dim_);
-    utils::Serializer::writePOD(os, numSubspaces_);
-    utils::Serializer::writePOD(os, numCentroids_);
-    utils::Serializer::writePOD(os, isTrained_);
+1. **Header**: dimension, number of subspaces, number of centroids, and a trained flag (4 POD values).
+2. **Codebook data**: If the trained flag is true, all M codebooks are written sequentially. Each codebook contains K centroids, and each centroid contains Di float values.
 
-    if (isTrained_) {
-        for (const auto& subspace : codebooks_) {
-            for (const auto& centroid : subspace) {
-                for (float v : centroid)
-                    utils::Serializer::writePOD(os, v);
-            }
-        }
-    }
-}
+Deserialization reads the header back, reconstructs a `NativeProductQuantizer` instance, and -- if the trained flag was set -- restores the full codebook array by reading M x K x Di floats.
 
-static std::unique_ptr<NativeProductQuantizer> deserialize(
-    std::istream& is
-) {
-    size_t dim = utils::Serializer::readPOD<size_t>(is);
-    size_t subs = utils::Serializer::readPOD<size_t>(is);
-    size_t cents = utils::Serializer::readPOD<size_t>(is);
-    bool trained = utils::Serializer::readPOD<bool>(is);
-
-    auto pq = std::make_unique<NativeProductQuantizer>(dim, subs, cents);
-    pq->isTrained_ = trained;
-
-    if (trained) {
-        pq->codebooks_.resize(subs);
-        size_t subDim = dim / subs;
-        for (size_t m = 0; m < subs; ++m) {
-            pq->codebooks_[m].resize(cents);
-            for (size_t c = 0; c < cents; ++c) {
-                pq->codebooks_[m][c].resize(subDim);
-                for (size_t d = 0; d < subDim; ++d)
-                    pq->codebooks_[m][c][d] =
-                        utils::Serializer::readPOD<float>(is);
-            }
-        }
-    }
-    return pq;
-}
-```
+The total serialized size for a trained 768D quantizer with M=96, K=256 is approximately 786 KB (the codebook data) plus a small fixed-size header.
 
 ## Performance Characteristics
 
@@ -610,12 +378,12 @@ static std::unique_ptr<NativeProductQuantizer> deserialize(
 
 | Dimension | Raw (FP32) | Raw (BF16) | PQ (8D) | Ratio (vs BF16) |
 |-----------|------------|------------|---------|-----------------|
-| 128 | 512 bytes | 256 bytes | 16 bytes | 16× |
-| 256 | 1024 bytes | 512 bytes | 32 bytes | 16× |
-| 384 | 1536 bytes | 768 bytes | 48 bytes | 16× |
-| 512 | 2048 bytes | 1024 bytes | 64 bytes | 16× |
-| 768 | 3072 bytes | 1536 bytes | 96 bytes | 16× |
-| 1024 | 4096 bytes | 2048 bytes | 128 bytes | 16× |
+| 128 | 512 bytes | 256 bytes | 16 bytes | 16x |
+| 256 | 1024 bytes | 512 bytes | 32 bytes | 16x |
+| 384 | 1536 bytes | 768 bytes | 48 bytes | 16x |
+| 512 | 2048 bytes | 1024 bytes | 64 bytes | 16x |
+| 768 | 3072 bytes | 1536 bytes | 96 bytes | 16x |
+| 1024 | 4096 bytes | 2048 bytes | 128 bytes | 16x |
 
 ### Search Performance
 
@@ -640,10 +408,10 @@ static std::unique_ptr<NativeProductQuantizer> deserialize(
 ### Accuracy Analysis
 
 Quantization error depends on:
-1. **Subspace dimension**: Larger Di → lower error
-2. **Number of centroids**: Larger K → lower error
-3. **Training data quality**: Representative data → lower error
-4. **Data distribution**: Clustered data → lower error
+1. **Subspace dimension**: Larger Di means lower error
+2. **Number of centroids**: Larger K means lower error
+3. **Training data quality**: Representative data means lower error
+4. **Data distribution**: Clustered data means lower error
 
 **Typical Recall@10** (vs exact search):
 - PQ (4D subspaces): 95-98%
@@ -687,39 +455,6 @@ Quantization error depends on:
 3. **Memory Overhead**: Codebooks add memory overhead
 4. **Fixed Dimension**: Requires dimension to be divisible by numSubspaces
 5. **Update Cost**: Re-encoding needed for vector updates
-
-## Use Cases
-
-### Large-Scale Similarity Search
-
-```cpp
-// Search through millions of vectors
-auto results = vectorIndex.search(queryEmbedding, 100);
-for (auto& [id, score] : results) {
-    std::cout << "ID: " << id << ", Score: " << score << "\n";
-}
-```
-
-### Recommendation Systems
-
-```cpp
-// Find similar items for recommendations
-auto similarItems = vectorIndex.search(userEmbedding, 10);
-for (auto& [itemId, score] : similarItems) {
-    std::cout << "Recommended item: " << itemId << "\n";
-}
-```
-
-### Semantic Search
-
-```cpp
-// Find semantically similar documents
-auto documents = vectorIndex.search(queryEmbedding, 20);
-for (auto& [docId, score] : documents) {
-    std::cout << "Document " << docId << " (similarity: "
-              << std::sqrt(-score) << ")\n";
-}
-```
 
 ## See Also
 

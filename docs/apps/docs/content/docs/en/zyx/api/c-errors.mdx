@@ -1,18 +1,96 @@
 ---
-title: C API Error Codes
-description: This page describes error codes used in the C API.
+title: C API Error Handling
+description: Thread-local error messages and Result-level error reporting in the ZYX C API.
 category: C API
 categoryOrder: 3
-order: 7
+order: 8
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# C API Error Codes
+# C API Error Handling
 
-This page describes error codes used in the C API.
+The C API uses a **return value + error string** pattern — no error code enums.
 
-## Error Codes
+## 1. API-Level Errors
 
-See the [Error Handling documentation](/en/docs/zyx/api/errors) for detailed error handling information.
+When a function returns `NULL` or `false`, call `zyx_get_last_error()` to retrieve the error message:
+
+```c
+ZYXDB_T* db = zyx_open("./mydb");
+if (!db) {
+    printf("Failed to open database: %s\n", zyx_get_last_error());
+    return 1;
+}
+
+ZYXTxn_T* tx = zyx_begin_transaction(db);
+if (!tx) {
+    printf("Failed to begin transaction: %s\n", zyx_get_last_error());
+    zyx_close(db);
+    return 1;
+}
+```
+
+`zyx_get_last_error()` reads from **thread-local storage** — each thread has its own last error. It is safe to call from multiple threads concurrently.
+
+## 2. Result-Level Errors
+
+Query execution returns a `ZYXResult_T*` that may contain query-level errors:
+
+```c
+ZYXResult_T* res = zyx_execute(db, "INVALID CYPHER");
+if (!zyx_result_is_success(res)) {
+    printf("Query failed: %s\n", zyx_result_get_error(res));
+    zyx_result_close(res);
+    return 1;
+}
+zyx_result_close(res);
+```
+
+Always check `zyx_result_is_success()` before iterating results.
+
+## Recommended Error-Checking Pattern
+
+```c
+// 1. Check return value (NULL / false)
+// 2. On failure, read zyx_get_last_error()
+// 3. For query results, additionally check zyx_result_is_success()
+// 4. On query failure, read zyx_result_get_error()
+
+ZYXDB_T* db = zyx_open("./mydb");
+if (!db) { /* check zyx_get_last_error() */ }
+
+ZYXResult_T* res = zyx_execute(db, "MATCH (n) RETURN n");
+if (!res) { /* allocation failure — check zyx_get_last_error() */ }
+
+if (!zyx_result_is_success(res)) {
+    printf("Query error: %s\n", zyx_result_get_error(res));
+    zyx_result_close(res);
+    zyx_close(db);
+    return 1;
+}
+
+// Safe to iterate
+while (zyx_result_next(res)) {
+    // ...
+}
+
+zyx_result_close(res);
+zyx_close(db);
+```
+
+## Error String Lifetimes
+
+| Function | Valid until |
+|----------|-------------|
+| `zyx_get_last_error()` | Next ZYX API call on the same thread |
+| `zyx_result_get_error()` | `zyx_result_close()` |
+
+Copy strings immediately if you need them to outlive these scopes.
+
+## Source Locations
+
+| Component | Path |
+|-----------|------|
+| C API implementation | `src/api/CApi.cpp` |

@@ -1,9 +1,9 @@
 ---
 title: C++ API Reference
-description: cpp
+description: Complete reference for the ZYX C++ API — Database, Result, high-performance writes, and graph algorithms.
 category: C++ API
 categoryOrder: 2
-order: 1
+order: 2
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -11,27 +11,257 @@ projectOrder: 1
 ---
 # C++ API Reference
 
-## Database Class
+Header: `include/zyx/zyx.hpp`
 
-### `open()`
+## Database
 
-```cpp
-static std::unique_ptr<Database> Database::open(const std::string& path)
-```
+`zyx::Database` is the main entry point.
 
-Opens or creates a database at the specified path.
-
-**Parameters:**
-- `path`: File system path to the database directory
-
-**Returns:** Unique pointer to Database instance
-
-### `beginTransaction()`
+### Construction & Lifecycle
 
 ```cpp
-std::unique_ptr<Transaction> Database::beginTransaction()
+// Construct and open (creates file if it doesn't exist)
+zyx::Database db("/path/to/db");
+
+// Or open only if the database already exists
+zyx::Database db("/path/to/db");
+bool ok = db.openIfExists();
 ```
 
-Begins a new transaction.
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| Constructor | `Database(const std::string& path, OpenMode mode = OPEN_CREATE_OR_OPEN_FILE, size_t cacheSize = 10000)` | Creates a Database object. `path` is the database file path. |
+| `open` | `void open() const` | Opens the database. Throws on failure. |
+| `openIfExists` | `bool openIfExists() const` | Opens only if the file exists. Returns `false` if not found. |
+| `close` | `void close() const` | Flushes and closes the database. |
+| `save` | `void save() const` | Flushes dirty data to disk without closing. |
+| `isOpen` | `bool isOpen() const` | Checks whether the database is open. |
+| `exists` | `bool exists() const` | Checks whether the database file exists on disk. |
 
-**Returns:** Unique pointer to Transaction instance
+### Query Execution
+
+```cpp
+// Auto-commit query (write statements auto-wrap in a transaction)
+zyx::Result result = db.execute("CREATE (n:Person {name: 'Alice'})");
+
+// Parameterized query
+std::unordered_map<std::string, zyx::Value> params;
+params["name"] = std::string("Alice");
+params["age"] = int64_t(30);
+zyx::Result result = db.execute(
+    "CREATE (n:Person {name: $name, age: $age})", params);
+
+// Read query (uses read-only fast path)
+zyx::Result result = db.execute("MATCH (n:Person) RETURN n.name, n.age");
+while (result.hasNext()) {
+    auto name = result.get("n.name");
+    auto age = result.get("n.age");
+    result.next();
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `execute` | `Result execute(const std::string& cypher) const` | Execute a Cypher query. Auto-commits writes, uses read-only path for reads. |
+| `execute` | `Result execute(const std::string& cypher, const unordered_map<string, Value>& params) const` | Execute a parameterized Cypher query. |
+
+### Transactions
+
+```cpp
+// Write transaction
+auto tx = db.beginTransaction();
+tx.execute("CREATE (n:Person {name: 'Bob'})");
+tx.commit();
+
+// Read-only transaction (snapshot isolation)
+auto roTx = db.beginReadOnlyTransaction();
+auto result = roTx.execute("MATCH (n) RETURN count(n)");
+// roTx auto-rolls back on destruction
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `beginTransaction` | `Transaction beginTransaction()` | Begin a read-write transaction. Blocks if another write transaction is active. |
+| `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | Begin a read-only transaction with snapshot isolation. Multiple can run concurrently. |
+| `hasActiveTransaction` | `bool hasActiveTransaction() const` | Check if a write transaction is currently active. |
+
+### High-Performance Write APIs
+
+These bypass the Cypher parser for maximum throughput:
+
+```cpp
+// Create a single node with one label
+db.createNode("Person", {{"name", std::string("Alice")}, {"age", int64_t(30)}});
+
+// Create a node with multiple labels
+db.createNode(std::vector<std::string>{"Person", "Employee"},
+              {{"name", std::string("Bob")}, {"salary", int64_t(50000)}});
+
+// Create a node and get its internal ID
+int64_t aliceId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
+
+// Batch create nodes
+db.createNodes("Person", {
+    {{"name", std::string("Alice")}, {"age", int64_t(30)}},
+    {{"name", std::string("Bob")}, {"age", int64_t(25)}},
+    {{"name", std::string("Charlie")}, {"age", int64_t(35)}}
+});
+
+// Create an edge by looking up source/target nodes by property
+db.createEdge(
+    "Person", "name", std::string("Alice"),   // source: Person where name = Alice
+    "Person", "name", std::string("Bob"),      // target: Person where name = Bob
+    "KNOWS",                                    // edge type
+    {{"since", int64_t(2020)}}                  // edge properties
+);
+
+// Create an edge by internal IDs (fastest)
+int64_t sourceId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
+int64_t targetId = db.createNodeRetId("Person", {{"name", std::string("Bob")}});
+db.createEdgeById(sourceId, targetId, "KNOWS", {});
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `createNode` | `void createNode(const string& label, const unordered_map<string, Value>& props) const` | Create a node with one label and properties. |
+| `createNode` | `void createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | Create a node with multiple labels. |
+| `createNodes` | `void createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | Batch-create nodes with the same label. |
+| `createNodeRetId` | `int64_t createNodeRetId(const string& label, const unordered_map<string, Value>& props = {}) const` | Create a node and return its internal ID. |
+| `createEdge` | `void createEdge(const string& srcLabel, const string& srcKey, const Value& srcVal, const string& tgtLabel, const string& tgtKey, const Value& tgtVal, const string& edgeType, const unordered_map<string, Value>& props) const` | Create an edge by looking up source and target nodes by a property value. |
+| `createEdgeById` | `void createEdgeById(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by internal node IDs. Fastest method. |
+
+### Graph Algorithms
+
+```cpp
+// Shortest path (BFS-based)
+int64_t startId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
+int64_t endId = db.createNodeRetId("Person", {{"name", std::string("Charlie")}});
+// ... create edges connecting them ...
+auto path = db.getShortestPath(startId, endId);
+for (const auto& node : path) {
+    // node.id, node.labels, node.properties
+}
+
+// Breadth-first search
+db.bfs(startId, [](const zyx::Node& node) {
+    std::cout << "Visited: " << node.id << std::endl;
+    return false; // return true to stop traversal
+});
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `getShortestPath` | `vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15) const` | Find shortest path between two nodes. Returns ordered list of nodes on the path. |
+| `bfs` | `void bfs(int64_t startNodeId, const function<bool(const Node&)>& visitor) const` | Breadth-first traversal. Return `true` from visitor to stop early. |
+
+### Configuration
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `setThreadPoolSize` | `void setThreadPoolSize(size_t poolSize) const` | Resize the thread pool for parallel operations. |
+
+## Result
+
+`zyx::Result` holds query output. It is move-only.
+
+```cpp
+zyx::Result result = db.execute("MATCH (n:Person) RETURN n.name, n.age ORDER BY n.name");
+
+// Check success
+if (!result.isSuccess()) {
+    std::cerr << "Query failed: " << result.getError() << std::endl;
+    return;
+}
+
+// Get column metadata
+int colCount = result.getColumnCount();      // 2
+std::string col0 = result.getColumnName(0);  // "n.name"
+
+// Iterate rows
+while (result.hasNext()) {
+    auto name = result.get("n.name");   // or result.get(0)
+    auto age = result.get("n.age");     // or result.get(1)
+    // ... use name and age ...
+    result.next();
+}
+
+// Execution time
+double ms = result.getDuration();
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `hasNext` | `bool hasNext() const` | Whether more rows are available. |
+| `next` | `void next() const` | Advance to the next row. |
+| `get` | `Value get(const string& key) const` | Get value by column name on the current row. |
+| `get` | `Value get(int index) const` | Get value by column index (0-based) on the current row. |
+| `getColumnCount` | `int getColumnCount() const` | Number of columns in the result. |
+| `getColumnName` | `string getColumnName(int index) const` | Column name by index. |
+| `getDuration` | `double getDuration() const` | Execution time in milliseconds. |
+| `isSuccess` | `bool isSuccess() const` | Whether the query succeeded. |
+| `getError` | `string getError() const` | Error message if the query failed. |
+
+## QueryBuilder
+
+`QueryBuilder` provides a fluent, programmatic way to construct queries without writing Cypher strings:
+
+```cpp
+auto plan = db.query()
+    .match_("n", "Person", "name", std::string("Alice"))
+    .return_({"n"})
+    .build();
+```
+
+### Building Read Queries
+
+| Method | Description |
+|--------|-------------|
+| `match_(variable, label, key, value)` | Add a MATCH pattern for a single-label node with an optional property filter. |
+| `match_(variable, labels, key, value)` | Same, but with multiple labels. |
+| `where_(variable, key, value)` | Add a WHERE filter. |
+| `return_(variables)` | Set the RETURN clause. |
+| `skip_(offset)` | Set SKIP. |
+| `limit_(count)` | Set LIMIT. |
+| `orderBy_(items)` | Set ORDER BY with `SortOrder{variable, property, ascending}`. |
+
+### Building Write Queries
+
+| Method | Description |
+|--------|-------------|
+| `create_(variable, label, props)` | Create a node. |
+| `create_(variable, labels, props)` | Create a node with multiple labels. |
+| `create_(variable, type, sourceVar, targetVar, props)` | Create an edge between two variables. |
+| `delete_(variables, detach)` | Delete variables (`detach = true` for DETACH DELETE). |
+| `set_(variable, key, value)` | Set a property. |
+| `setLabel_(variable, label)` | Add a label to a node. |
+| `remove_(variable, key, isLabel)` | Remove a property (or label if `isLabel = true`). |
+
+### Index Management
+
+| Method | Description |
+|--------|-------------|
+| `createIndex_(label, property, indexName)` | Create a property index. |
+| `dropIndex_(indexName)` | Drop index by name. |
+| `dropIndex_(label, property)` | Drop index by label + property. |
+| `showIndexes_()` | List all indexes. |
+
+### Procedures
+
+| Method | Description |
+|--------|-------------|
+| `call_(procedure, args)` | Call a stored procedure (e.g., vector index operations). |
+| `unwind(list, alias)` | Add an UNWIND clause. |
+
+### Finalization
+
+| Method | Description |
+|--------|-------------|
+| `build()` | Compile the builder into a `unique_ptr<PhysicalOperator>` ready for execution. |
+
+## Source Locations
+
+| Component | Path |
+|-----------|------|
+| Public API | `include/zyx/zyx.hpp` |
+| Implementation | `src/api/DatabaseImpl.cpp` |
+| QueryBuilder | `include/graph/query/QueryBuilder.hpp` |

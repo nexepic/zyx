@@ -1,6 +1,6 @@
 ---
 title: WAL Implementation
-description: ZYX uses Write-Ahead Logging (WAL) to ensure ACID transaction durability and enable crash recovery.
+description: WAL file structure, record types, group commit, and checkpoint mechanism.
 category: Core Components
 categoryOrder: 2
 order: 5
@@ -11,372 +11,171 @@ projectOrder: 1
 ---
 # WAL Implementation
 
-ZYX uses Write-Ahead Logging (WAL) to ensure ACID transaction durability and enable crash recovery.
+The Write-Ahead Log is managed by `WALManager`. The WAL file is stored at `<db_path>-wal` alongside the main database file.
 
-## Overview
+## Why WAL?
 
-The Write-Ahead Log records all changes before they are applied to the main database file. This ensures:
+The WAL guarantees **durability** — once a transaction's commit record is written and `sync()`'d to the WAL file, the transaction's changes survive any subsequent process crash. On restart, `WALRecovery` replays committed-but-unflushed entity writes to restore the database to a consistent state.
 
-- **Atomicity**: All transaction changes are logged before commit
-- **Durability**: Committed changes survive system crashes
-- **Recovery**: Database can be recovered to a consistent state
+## Record Types
+
+`WALRecordType` defines four record types:
+
+| Type | Value | Purpose |
+|------|-------|---------|
+| `WAL_TXN_BEGIN` | 1 | Marks the start of a transaction |
+| `WAL_TXN_COMMIT` | 2 | Marks successful commit (point of no return) |
+| `WAL_TXN_ROLLBACK` | 3 | Marks rollback (ignore this transaction on recovery) |
+| `WAL_ENTITY_WRITE` | 4 | Records an entity change (create, update, or delete) |
+
+### Record Format
+
+Each WAL record consists of a fixed header followed by optional payload:
+
+```mermaid
+graph LR
+    subgraph "WALRecordHeader (fixed)"
+        A["recordSize (4 bytes)"]
+        B["txnId (8 bytes)"]
+        C["type (1 byte)"]
+        D["checksum (4 bytes, CRC32)"]
+    end
+
+    subgraph "Payload (variable, for ENTITY_WRITE only)"
+        E["entityType (1 byte)"]
+        F["changeType (1 byte)"]
+        G["entityId (8 bytes)"]
+        H["dataSize (4 bytes)"]
+        I["serialized entity data"]
+    end
+```
+
+The CRC32 checksum covers all data after the header, providing integrity verification on recovery.
+
+## WAL File Structure
+
+```mermaid
+graph TB
+    subgraph "WAL File (<db_path>-wal)"
+        WH["WALFileHeader (32 bytes)"]
+        R1["Record: WAL_TXN_BEGIN (txn 1)"]
+        R2["Record: WAL_ENTITY_WRITE (txn 1)"]
+        R3["Record: WAL_ENTITY_WRITE (txn 1)"]
+        R4["Record: WAL_TXN_COMMIT (txn 1)"]
+        R5["Record: WAL_TXN_BEGIN (txn 2)"]
+        R6["Record: WAL_ENTITY_WRITE (txn 2)"]
+        R7["...more records..."]
+    end
+    WH --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> R7
+```
+
+`WALFileHeader` (32 bytes) contains:
+
+| Field | Description |
+|-------|-------------|
+| `magic` | `0x5A594C57` ("ZYLW") — validates this is a ZYX WAL file |
+| `version` | WAL format version |
+| `dbFileSize` | Database file size at WAL creation time |
+| `salt1`, `salt2` | Random values for integrity checks |
+
+## Write Mechanism
 
 ```mermaid
 sequenceDiagram
-    participant Client
-    participant Transaction
-    participant WAL
-    participant Storage
+    participant TX as Transaction
+    participant WAL as WALManager
+    participant BUF as Write Buffer
+    participant DISK[(Disk)]
 
-    Client->>Transaction: BEGIN
-    Client->>Transaction: EXECUTE "CREATE (n)"
-    Transaction->>WAL: Log operation
-    WAL->>Storage: Write to WAL file
-    Storage-->>WAL: Acknowledge
-    WAL-->>Transaction: Log complete
-    Transaction-->>Client: Operation done
+    TX->>WAL: writeBegin(txnId)
+    WAL->>BUF: Append WAL_TXN_BEGIN record
+    TX->>WAL: writeEntityChange(txnId, entityType, changeType, entityId, data)
+    WAL->>BUF: Append WAL_ENTITY_WRITE + serialized payload
 
-    Client->>Transaction: COMMIT
-    Transaction->>WAL: Write commit record
-    WAL->>Storage: Flush to disk
-    Storage-->>WAL: Sync complete
-    WAL-->>Transaction: Commit durable
-    Transaction->>Storage: Apply to database
-    Transaction-->>Client: Transaction committed
+    Note over BUF: Buffer accumulates records (64 KB default)
+
+    TX->>WAL: writeCommit(txnId)
+    WAL->>BUF: Append WAL_TXN_COMMIT record
+    WAL->>DISK: flush() — write buffer to file
+    WAL->>DISK: sync() — fsync for durability
+
+    Note over DISK: Transaction is now durable
 ```
 
-## WAL Structure
+**Key details:**
 
-### WAL File Layout
+- **In-memory buffer** — `writeBuffer_` accumulates records in memory (default 64 KB). This batches small writes into larger I/O operations.
+- **Buffer-full flush** — When the buffer exceeds its capacity, it is flushed to disk (without `fsync`) to free memory.
+- **Commit-time sync** — On `writeCommit()`, the buffer is flushed and `fsync`'d. This is the durability guarantee.
+- **Group commit** — When multiple transactions commit concurrently, `WALManager` uses a microsecond-scale delay window (default 1 ms) to batch multiple commit records into a single `fsync`.
 
-```cpp
-struct WALHeader {
-    static constexpr uint64_t WAL_MAGIC = 0x57414C4C4F474900; // "WALLOGI"
+## Group Commit
 
-    uint64_t magic;              // Magic number
-    uint64_t version;            // WAL format version
-    uint64_t dbFileSize;         // Database file size at WAL start
-    uint64_t checkpointSequence; // Last checkpoint sequence number
-    uint64_t firstRecordOffset;  // First valid record offset
-    uint64_t currentOffset;      // Current write position
-    uint32_t pageSize;           // System page size
-    uint32_t checksum;           // Header checksum
-    uint64_t createdAt;          // WAL creation timestamp
-};
+```mermaid
+sequenceDiagram
+    participant TX1 as Transaction 1
+    participant TX2 as Transaction 2
+    participant WAL as WALManager
+    participant DISK[(Disk)]
+
+    TX1->>WAL: writeCommit(txn1)
+    TX2->>WAL: writeCommit(txn2)
+
+    Note over WAL: Both commits within group window
+
+    WAL->>DISK: Single flush + fsync for both
+    DISK-->>WAL: Done
+    WAL-->>TX1: Committed
+    WAL-->>TX2: Committed
 ```
 
-### WAL Record Format
+Group commit reduces the number of `fsync` calls — the most expensive I/O operation — by batching multiple transaction commits into a single disk sync.
 
-```cpp
-enum class WALRecordType : uint8_t {
-    BEGIN_TX       = 0x01,
-    COMMIT_TX      = 0x02,
-    ROLLBACK_TX    = 0x03,
-    CREATE_NODE    = 0x10,
-    CREATE_EDGE    = 0x11,
-    UPDATE_NODE    = 0x12,
-    UPDATE_EDGE    = 0x13,
-    DELETE_NODE    = 0x14,
-    DELETE_EDGE    = 0x15,
-    CHECKPOINT     = 0x20
-};
+## Checkpoint
 
-struct WALRecord {
-    uint64_t       sequence;     // Record sequence number
-    uint64_t       transactionId;// Transaction identifier
-    uint32_t       size;         // Record size
-    uint32_t       checksum;     // Record checksum
-    uint64_t       timestamp;    // Record timestamp
-    WALRecordType  type;         // Record type
-    uint8_t        data[];       // Record-specific data
-};
+Checkpointing truncates the WAL after all dirty data has been persisted to the main database file:
+
+```mermaid
+graph TD
+    A["Auto-checkpoint threshold reached (1 MB)"] --> B["flush() + fsync WAL"]
+    B --> C["Rebuild WAL file with new header"]
+    C --> D["Reset write offset"]
+    D --> E[WAL is now empty and ready for new writes]
 ```
 
-## Write Process
+The auto-checkpoint threshold is configurable (default 1 MB). Checkpoints are also triggered during database close to ensure a clean shutdown.
 
-### Transaction Begin
+## Recovery
 
-```cpp
-void beginTransaction(Transaction* tx) {
-    WALRecord record;
-    record.sequence = nextSequence();
-    record.transactionId = tx->getId();
-    record.type = WALRecordType::BEGIN_TX;
-    record.size = 0;
-    record.timestamp = getCurrentTimestamp();
-    record.checksum = computeChecksum(&record);
+When the database opens and detects an existing WAL file, recovery is performed:
 
-    wal->writeRecord(&record);
-    wal->flush(); // Ensure durable
-}
+```mermaid
+graph TD
+    A["Database::open()"] --> B{WAL file exists?}
+    B -->|No| C[Normal open]
+    B -->|Yes| D["WALRecovery: read all records"]
+    D --> E["Separate committed vs. uncommitted transactions"]
+    E --> F["Replay entity writes from committed transactions"]
+    F --> G["StorageWriter writes entities to segments"]
+    G --> H["checkpoint() — truncate WAL"]
+    H --> C
 ```
 
-### Logging Operations
+**Recovery process:**
 
-```cpp
-void logCreateNode(Transaction* tx, const Node& node) {
-    // Serialize node data
-    size_t dataSize = serializeNodeSize(node);
-    std::vector<uint8_t> data(dataSize);
-    serializeNode(node, data.data());
+1. Read all WAL records sequentially.
+2. Identify transactions that have a `WAL_TXN_COMMIT` record — these are committed.
+3. For each committed transaction, replay its `WAL_ENTITY_WRITE` records via `StorageWriter`.
+4. Transactions without a commit record are considered uncommitted and are ignored.
+5. After replay, perform a checkpoint to truncate the WAL.
 
-    // Create WAL record
-    WALRecord record;
-    record.sequence = nextSequence();
-    record.transactionId = tx->getId();
-    record.type = WALRecordType::CREATE_NODE;
-    record.size = dataSize;
-    record.timestamp = getCurrentTimestamp();
+The WAL file is created lazily — only when the first write transaction actually needs it. Read-only workloads never create a WAL file.
 
-    // Write record
-    wal->writeRecord(&record, data.data());
-    // Note: Don't flush yet, batch writes
-}
-```
+## Source Locations
 
-### Transaction Commit
-
-```cpp
-void commitTransaction(Transaction* tx) {
-    // Write commit record
-    WALRecord record;
-    record.sequence = nextSequence();
-    record.transactionId = tx->getId();
-    record.type = WALRecordType::COMMIT_TX;
-    record.size = 0;
-    record.timestamp = getCurrentTimestamp();
-
-    wal->writeRecord(&record);
-
-    // Flush all buffered writes
-    wal->flush();
-
-    // Now apply to database
-    tx->applyToDatabase();
-}
-```
-
-## Recovery Process
-
-### Recovery Algorithm
-
-```cpp
-void recoverFromWAL(Database* db) {
-    WAL* wal = db->getWAL();
-
-    // 1. Scan WAL records
-    std::vector<WALRecord*> records = wal->scanRecords();
-
-    // 2. Separate committed and uncommitted transactions
-    std::map<uint64_t, std::vector<WALRecord*>> transactions;
-    std::set<uint64_t> committedTransactions;
-
-    for (auto* record : records) {
-        switch (record->type) {
-            case WALRecordType::BEGIN_TX:
-                transactions[record->transactionId].push_back(record);
-                break;
-            case WALRecordType::COMMIT_TX:
-                committedTransactions.insert(record->transactionId);
-                break;
-            default:
-                transactions[record->transactionId].push_back(record);
-                break;
-        }
-    }
-
-    // 3. Replay committed transactions
-    for (uint64_t txId : committedTransactions) {
-        auto& txRecords = transactions[txId];
-
-        // Apply operations in order
-        for (auto* record : txRecords) {
-            switch (record->type) {
-                case WALRecordType::CREATE_NODE:
-                    replayCreateNode(db, record);
-                    break;
-                case WALRecordType::CREATE_EDGE:
-                    replayCreateEdge(db, record);
-                    break;
-                // ... other operations
-            }
-        }
-    }
-
-    // 4. Uncommitted transactions are ignored (rolled back)
-
-    // 5. Checkpoint after recovery
-    db->checkpoint();
-}
-```
-
-## Checkpointing
-
-### Checkpoint Algorithm
-
-```cpp
-void checkpoint(Database* db) {
-    WAL* wal = db->getWAL();
-
-    // 1. Write checkpoint record
-    WALRecord checkpointRecord;
-    checkpointRecord.type = WALRecordType::CHECKPOINT;
-    checkpointRecord.sequence = nextSequence();
-    wal->writeRecord(&checkpointRecord);
-    wal->flush();
-
-    // 2. Flush database file
-    db->flush();
-
-    // 3. Truncate WAL
-    wal->truncate();
-
-    // 4. Update WAL header
-    wal->setCheckpointSequence(checkpointRecord.sequence);
-}
-```
-
-### Checkpoint Triggers
-
-```cpp
-class WALManager {
-public:
-    void shouldCheckpoint() {
-        // Checkpoint if WAL size exceeds threshold
-        if (wal->getSize() > maxWalSize) {
-            db->checkpoint();
-        }
-
-        // Checkpoint based on time
-        auto now = getCurrentTime();
-        if (now - lastCheckpointTime > checkpointInterval) {
-            db->checkpoint();
-            lastCheckpointTime = now;
-        }
-
-        // Checkpoint based on record count
-        if (wal->getRecordCount() > maxRecords) {
-            db->checkpoint();
-        }
-    }
-
-private:
-    size_t maxWalSize = 100 * 1024 * 1024; // 100 MB
-    Duration checkpointInterval = Duration::minutes(5);
-    size_t maxRecords = 100000;
-};
-```
-
-## Performance Optimization
-
-### Group Commit
-
-```cpp
-class GroupCommit {
-public:
-    void scheduleCommit(Transaction* tx) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        pendingCommits_.push_back(tx);
-
-        // Flush if too many pending
-        if (pendingCommits_.size() >= groupSize) {
-            flushGroup();
-        }
-    }
-
-    void flushGroup() {
-        // Write all commit records
-        for (auto* tx : pendingCommits_) {
-            writeCommitRecord(tx);
-        }
-
-        // Single flush for all
-        wal->flush();
-
-        // Notify all waiting transactions
-        for (auto* tx : pendingCommits_) {
-            tx->notifyCommitted();
-        }
-
-        pendingCommits_.clear();
-    }
-
-private:
-    std::vector<Transaction*> pendingCommits_;
-    size_t groupSize = 10;
-    std::mutex mutex_;
-};
-```
-
-### WAL Buffering
-
-```cpp
-class WALBuffer {
-public:
-    void writeRecord(const WALRecord* record, const uint8_t* data) {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        // Buffer record
-        buffer_.insert(buffer_.end(),
-                      reinterpret_cast<const uint8_t*>(record),
-                      reinterpret_cast<const uint8_t*>(record) + sizeof(WALRecord));
-
-        if (data && record->size > 0) {
-            buffer_.insert(buffer_.end(), data, data + record->size);
-        }
-
-        // Flush if buffer full
-        if (buffer_.size() >= bufferSize_) {
-            flush();
-        }
-    }
-
-    void flush() {
-        if (buffer_.empty()) return;
-
-        // Write to file
-        walFile_.write(buffer_.data(), buffer_.size());
-
-        // Sync if needed
-        if (syncOnFlush_) {
-            walFile_.sync();
-        }
-
-        buffer_.clear();
-    }
-
-private:
-    std::vector<uint8_t> buffer_;
-    size_t bufferSize_ = 64 * 1024; // 64 KB
-    bool syncOnFlush_ = false;
-    std::mutex mutex_;
-};
-```
-
-## Configuration
-
-```cpp
-struct WALConfig {
-    size_t    maxWalSize        = 100 * 1024 * 1024; // 100 MB
-    Duration  checkpointInterval = Duration::minutes(5);
-    size_t    maxRecords        = 100000;
-    size_t    bufferSize        = 64 * 1024;          // 64 KB
-    bool      fsyncOnCommit     = true;
-    bool      enableCompression = false;
-    uint32_t  flushInterval     = 1000;               // ms
-};
-```
-
-## Best Practices
-
-1. **Monitor WAL size**: Checkpoint before it grows too large
-2. **Use group commit**: Batch commits for better throughput
-3. **Tune buffer size**: Balance between memory and performance
-4. **Regular checkpoints**: Prevent long recovery times
-5. **Monitor recovery time**: Track how long recovery takes
-
-## See Also
-
-- [Storage System](/en/docs/zyx/architecture/storage) - Overall storage architecture
-- [Segment Format](/en/docs/zyx/architecture/segment-format) - Data storage format
-- [Transaction System](/en/docs/zyx/architecture/transactions) - Transaction management
+| Component | Path |
+|-----------|------|
+| WALManager | `include/graph/storage/wal/WALManager.hpp` |
+| WALRecord | `include/graph/storage/wal/WALRecord.hpp` |
+| WALRecovery | `src/storage/wal/WALRecovery.cpp` |
+| Database (WAL init) | `src/core/Database.cpp` |

@@ -30,6 +30,8 @@ Vector metrics measure the similarity or dissimilarity between two vectors in hi
 - **Zero-Allocation**: Efficient computation without dynamic memory allocation
 - **SIMD-Friendly**: Data layouts optimized for CPU vector instructions
 
+The `VectorMetric` class (source: `include/graph/vector/core/VectorMetric.hpp`) provides all distance computations as static functions. Each metric is overloaded for three precision combinations: Float32 vs Float32, Float32 vs BFloat16 (mixed precision for search), and BFloat16 vs BFloat16 (internal graph maintenance). All functions use stack-allocated accumulators only -- no dynamic memory, no virtual dispatch, no exceptions.
+
 ## Distance Metrics
 
 ### L2 Distance (Euclidean)
@@ -41,83 +43,28 @@ L2 distance is the most common metric for vector similarity, measuring the strai
 For two vectors **a** and **b** of dimension *d*, the L2 squared distance is:
 
 ```
-L2(a,b)² = Σ(aᵢ - bᵢ)²
+L2(a,b)^2 = sum((a_i - b_i)^2)  for i = 0..d-1
 ```
 
 #### Why L2 Squared?
 
 ZYX uses **L2 squared** instead of L2 distance for computational efficiency:
 
-- **Avoids Square Root**: Computing √x is expensive
+- **Avoids Square Root**: Computing sqrt(x) is expensive and unnecessary for ranking
 - **Same Ordering**: Squared distance preserves the same ranking as actual distance
 - **Faster Comparison**: Direct comparison without sqrt operation
 
 **Trade-off**: If you need the actual distance value, compute the square root of the result.
 
-#### Float32 Implementation
+#### Implementation Strategy
 
-```cpp
-static float computeL2Sqr(const float *a, const float *b, size_t dim) {
-    float sum = 0.0f;
-    size_t i = 0;
+ZYX provides two overloads of `computeL2Sqr`:
 
-    // 4-way loop unrolling for compiler auto-vectorization
-    // and reduced loop overhead
-    for (; i + 4 <= dim; i += 4) {
-        float d0 = a[i] - b[i];
-        float d1 = a[i + 1] - b[i + 1];
-        float d2 = a[i + 2] - b[i + 2];
-        float d3 = a[i + 3] - b[i + 3];
+1. **Float32 vs Float32**: Used during K-means clustering and Product Quantizer training, where both operands are full-precision vectors.
 
-        sum += d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
-    }
+2. **Float32 vs BFloat16 (mixed precision)**: Used during search, where the query vector remains Float32 for accuracy while stored vectors use BFloat16 for memory efficiency. Each BFloat16 element is converted to Float32 on the fly before computing the difference.
 
-    // Handle remaining elements (dim % 4)
-    for (; i < dim; ++i) {
-        float d = a[i] - b[i];
-        sum += d * d;
-    }
-    return sum;
-}
-```
-
-**Optimizations**:
-- **4-way unrolling**: Processes 4 elements per iteration
-- **Auto-vectorization**: Compiler can use SSE/AVX instructions
-- **Reduced branching**: Minimizes loop overhead
-- **Cache-friendly**: Sequential memory access pattern
-
-#### Mixed Precision Implementation
-
-During search, queries are typically Float32 while stored vectors use BFloat16 for memory efficiency:
-
-```cpp
-static float computeL2Sqr(const float *query, const BFloat16 *target, size_t dim) {
-    float sum = 0.0f;
-    size_t i = 0;
-
-    // Mixed precision: Float32 query vs BFloat16 target
-    for (; i + 4 <= dim; i += 4) {
-        float d0 = query[i] - target[i].toFloat();
-        float d1 = query[i + 1] - target[i + 1].toFloat();
-        float d2 = query[i + 2] - target[i + 2].toFloat();
-        float d3 = query[i + 3] - target[i + 3].toFloat();
-
-        sum += d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
-    }
-
-    for (; i < dim; ++i) {
-        float d = query[i] - target[i].toFloat();
-        sum += d * d;
-    }
-    return sum;
-}
-```
-
-**Benefits**:
-- **Memory efficiency**: BFloat16 uses 2 bytes vs Float32's 4 bytes
-- **On-the-fly conversion**: BFloat16 → Float32 during computation
-- **No precision loss for queries**: Query vector remains full precision
+Both overloads use the same 4-way loop unrolling pattern (described in the Performance Optimizations section below), processing four element pairs per iteration and accumulating squared differences into a single scalar. A tail loop handles any remaining elements when the dimension is not a multiple of four.
 
 ### Inner Product (IP)
 
@@ -126,51 +73,34 @@ Inner Product measures the alignment between two vectors, useful for normalized 
 #### Mathematical Definition
 
 ```
-IP(a,b) = Σ(aᵢ × bᵢ)
+IP(a,b) = sum(a_i * b_i)  for i = 0..d-1
 ```
 
-#### Implementation
+#### Negated Result
 
-```cpp
-static float computeIP(const float *a, const float *b, size_t dim) {
-    float sum = 0.0f;
-    size_t i = 0;
-
-    // 4-way unrolled dot product
-    for (; i + 4 <= dim; i += 4) {
-        sum += a[i] * b[i] +
-               a[i + 1] * b[i + 1] +
-               a[i + 2] * b[i + 2] +
-               a[i + 3] * b[i + 3];
-    }
-
-    // Handle remaining elements
-    for (; i < dim; ++i) {
-        sum += a[i] * b[i];
-    }
-
-    return -sum;  // Negated for min-heap compatibility
-}
-```
-
-**Important**: The result is **negated** because ZYX uses min-heaps for distance sorting. Larger inner products (more similar) should have smaller distance values.
+ZYX returns **-IP** rather than the raw inner product. This is because ZYX uses min-heaps for distance sorting throughout the search pipeline -- smaller values mean "closer." For inner product, a larger value means more similar, so negation converts the similarity into a distance-like quantity that works with the min-heap ordering without any special-case logic.
 
 #### When to Use Inner Product
 
 Use IP when:
+
 - Vectors are **L2-normalized** (unit length)
 - You want **cosine similarity** without computing norms
 - Working with **word embeddings** or **neural network embeddings**
 
 **Relationship to Cosine**:
+
 ```
-Cosine(a,b) = IP(a,b) / (||a|| × ||b||)
+Cosine(a,b) = IP(a,b) / (||a|| * ||b||)
 ```
 
 For normalized vectors where ||a|| = ||b|| = 1:
+
 ```
 Cosine(a,b) = IP(a,b)
 ```
+
+Like L2, the `computeIP` function is overloaded for all three precision combinations (Float32/Float32, Float32/BFloat16, BFloat16/BFloat16) and uses the same 4-way unrolling pattern.
 
 ### Cosine Similarity
 
@@ -179,104 +109,76 @@ Cosine similarity measures the cosine of the angle between two vectors, ranging 
 #### Mathematical Definition
 
 ```
-Cosine(a,b) = IP(a,b) / (||a|| × ||b||)
-            = Σ(aᵢ × bᵢ) / (√Σ(aᵢ²) × √Σ(bᵢ²))
+Cosine(a,b) = IP(a,b) / (||a|| * ||b||)
+            = sum(a_i * b_i) / (sqrt(sum(a_i^2)) * sqrt(sum(b_i^2)))
 ```
 
-#### Implementation Pattern
+#### Design Decision: Not a Separate Function
 
-While Cosine is not directly implemented in `VectorMetric` (use normalized vectors with IP instead), here's the pattern:
+Cosine similarity is not directly implemented as a `VectorMetric` function. Instead, ZYX follows the standard optimization of pre-normalizing vectors once at index time and then using Inner Product for all comparisons. This avoids repeated norm computation -- each cosine comparison would require three passes (dot product, two norms, and a division), while IP requires only one pass after normalization.
 
-```cpp
-float computeCosine(const float *a, const float *b, size_t dim) {
-    float dot = 0.0f, normA = 0.0f, normB = 0.0f;
-
-    for (size_t i = 0; i < dim; ++i) {
-        dot += a[i] * b[i];
-        normA += a[i] * a[i];
-        normB += b[i] * b[i];
-    }
-
-    return -dot / (std::sqrt(normA) * std::sqrt(normB));
-}
-```
-
-**Optimization**: Pre-normalize vectors once, then use Inner Product for all comparisons.
+**When you need cosine similarity**: Normalize your vectors to unit length before insertion, then use `computeIP` for all distance queries.
 
 ## BFloat16 Format
 
-BFloat16 (Brain Floating Point) is a reduced-precision format that provides the same dynamic range as Float32 but with reduced precision.
+BFloat16 (Brain Floating Point) is a reduced-precision format that provides the same dynamic range as Float32 but with reduced precision. The implementation lives in `include/graph/vector/core/BFloat16.hpp`.
+
+### Bit Layout
+
+```mermaid
+graph LR
+    subgraph Float32 ["Float32 -- 32 bits"]
+        F32_S["S"]
+        F32_E["E E E E E E E E"]
+        F32_M["M M M M M M M M M M M M M M M M M M M M M M M"]
+    end
+    subgraph BFloat16 ["BFloat16 -- 16 bits"]
+        BF16_S["S"]
+        BF16_E["E E E E E E E E"]
+        BF16_M["M M M M M M M"]
+    end
+    F32_S --- BF16_S
+    F32_E --- BF16_E
+    F32_M -.->|"Truncated (16 bits lost)"| BF16_M
+```
+
+The BFloat16 format retains the top 16 bits of a Float32 value:
+
+| Component | Float32 | BFloat16 | Preserved? |
+|-----------|---------|----------|------------|
+| Sign      | 1 bit   | 1 bit    | Yes        |
+| Exponent  | 8 bits  | 8 bits   | Yes        |
+| Mantissa  | 23 bits | 7 bits   | Truncated  |
 
 ### Format Comparison
 
 | Format | Bits | Exponent | Mantissa | Range | Precision |
 |--------|------|----------|----------|-------|-----------|
-| Float32 | 32 | 8 bits | 23 bits | ±3.4×10³⁸ | ~7 decimal digits |
-| BFloat16 | 16 | 8 bits | 7 bits | ±3.4×10³⁸ | ~2 decimal digits |
-| Float16 | 16 | 5 bits | 10 bits | ±6.5×10⁴ | ~3 decimal digits |
+| Float32 | 32 | 8 bits | 23 bits | +/-3.4x10^38 | ~7 decimal digits |
+| BFloat16 | 16 | 8 bits | 7 bits | +/-3.4x10^38 | ~2 decimal digits |
+| Float16 | 16 | 5 bits | 10 bits | +/-6.5x10^4 | ~3 decimal digits |
 
 ### Key Advantages
 
 **1. Same Exponent as Float32**
-- Identical dynamic range
-- No overflow/underflow issues
-- Direct truncation conversion
+- Identical dynamic range -- no overflow or underflow when converting from Float32
+- Direct truncation conversion with no rounding logic needed
+- Zero-cycle conversion overhead on modern CPUs
 
 **2. Memory Efficiency**
-- 50% memory reduction (2 bytes vs 4 bytes)
-- Better cache utilization
-- Reduced memory bandwidth
+- 50% memory reduction (2 bytes per element vs 4 bytes)
+- Better cache utilization for large vector collections
+- Reduced memory bandwidth during search
 
 **3. Fast Conversion**
-- Simple bit truncation
-- No rounding required
-- Zero-cycle conversion on modern CPUs
+- Float32 to BFloat16: take the upper 16 bits of the 32-bit representation (right-shift by 16, store as uint16_t)
+- BFloat16 to Float32: place the 16 bits into the upper half of a 32-bit word, zero the lower 16 bits (left-shift by 16)
+- Both directions use `memcpy` to avoid strict-aliasing violations, and the compiler optimizes these away entirely
 
-### BFloat16 Implementation
-
-```cpp
-struct alignas(2) BFloat16 {
-    uint16_t data;
-
-    // Fast truncation from Float32
-    explicit BFloat16(float v) {
-        uint32_t f_bits;
-        std::memcpy(&f_bits, &v, sizeof(float));
-        data = static_cast<uint16_t>(f_bits >> 16);  // Truncate lower 16 bits
-    }
-
-    // Convert back to Float32
-    [[nodiscard]] float toFloat() const {
-        uint32_t f_bits = static_cast<uint32_t>(data) << 16;
-        float v;
-        std::memcpy(&v, &f_bits, sizeof(float));
-        return v;
-    }
-};
-```
-
-**Conversion Diagram**:
-
-```mermaid
-graph LR
-    A[Float32] --> B[Sign + Exponent]
-    A --> C[Mantissa]
-
-    B --> D[BFloat16]
-
-    A2[Float32 layout] --> B2[BFloat16 layout]
-```
-
-**Bit Representation:**
-- Float32: SEEEEEEE EMMMMMMM MMMMMMMM MMMMMMMM (32 bits)
-- BFloat16: SEEEEEEE EMMMMMMM (16 bits)
-- S: Sign (1 bit)
-- E: Exponent (8 bits)
-- M: Mantissa (7 bits in BFloat16, 23 bits in Float32)
-
-- **S**: Sign bit (1 bit)
-- **E**: Exponent (8 bits)
-- **M**: Mantissa (7 bits in BFloat16, 23 bits in Float32)
+**4. Alignment**
+- The `BFloat16` struct uses `alignas(2)` for 2-byte alignment
+- Avoids misalignment penalties on architectures that require aligned access
+- Enables efficient packed SIMD loads when processing consecutive elements
 
 ### Precision Loss Analysis
 
@@ -290,64 +192,42 @@ Error:    ~0.001 (0.03%)
 ```
 
 **Impact on Vector Search**:
-- **Minimal** for high-dimensional vectors (errors average out)
+- **Minimal** for high-dimensional vectors (errors average out across hundreds of dimensions)
 - **Acceptable** for approximate nearest neighbor search
-- **Re-ranked** with exact distances for top results
+- **Re-ranked** with exact distances for top results, so precision loss only affects the candidate selection phase, not final rankings
 
 ## Performance Optimizations
 
-### Loop Unrolling
+### 4-Way Loop Unrolling
 
-Loop unrolling reduces loop overhead and enables better instruction-level parallelism:
+All metric functions process four element pairs per loop iteration. The pattern accumulates four independent differences or products before adding them to the running sum. A second, scalar loop handles the tail elements when the dimension is not a multiple of four.
 
-```cpp
-// Unrolled version (4x)
-for (; i + 4 <= dim; i += 4) {
-    sum += a[i] * b[i] + a[i+1] * b[i+1] +
-           a[i+2] * b[i+2] + a[i+3] * b[i+3];
-}
+This approach provides three benefits:
 
-// vs Scalar version
-for (; i < dim; ++i) {
-    sum += a[i] * b[i];
-}
-```
-
-**Benefits**:
-- **Reduced branching**: 4x fewer loop iterations
-- **Better ILP**: CPU can execute multiple operations in parallel
-- **Improved vectorization**: Compiler can use SIMD instructions
+1. **Reduced branching**: The main loop executes `dim / 4` iterations instead of `dim`, cutting branch predictor pressure by 4x.
+2. **Instruction-level parallelism**: The four difference/product operations are independent, so the CPU's out-of-order execution engine can issue them simultaneously to multiple arithmetic units.
+3. **Auto-vectorization**: The regular pattern of four independent accumulations is the exact shape that compilers recognize for generating SIMD instructions. The compiler can emit SSE, AVX, AVX-512, or NEON code without any intrinsics in the source.
 
 ### SIMD Vectorization
 
 Modern CPUs support SIMD (Single Instruction, Multiple Data) instructions:
 
-| Instruction Set | Width | Operations |
-|-----------------|-------|------------|
-| SSE | 128-bit | 4 Float32 |
-| AVX | 256-bit | 8 Float32 |
-| AVX-512 | 512-bit | 16 Float32 |
+| Instruction Set | Width | Float32 Elements |
+|-----------------|-------|------------------|
+| SSE             | 128-bit | 4              |
+| AVX             | 256-bit | 8              |
+| AVX-512         | 512-bit | 16             |
+| NEON (ARM)      | 128-bit | 4              |
 
-**Auto-vectorization**: The compiler automatically generates SIMD code from the unrolled loops:
-
-```cpp
-// Compiler generates AVX code like this:
-__m256 diff = _mm256_sub_ps(_mm256_load_ps(a), _mm256_load_ps(b));
-__m256 sq = _mm256_mul_ps(diff, diff);
-sum = _mm256_reduce_add_ps(sq);
-```
+The 4-way unrolled loops in ZYX map naturally onto these instruction sets. With SSE, one iteration of the unrolled loop can be compiled into a single subtract and multiply-add. With AVX, the compiler may fuse two iterations into one 256-bit operation. No platform-specific intrinsics are used in the source -- portability is maintained by relying on compiler auto-vectorization with `-O3 -march=native` or equivalent flags.
 
 ### Cache Optimization
 
 Memory access patterns are optimized for CPU caches:
 
-**Sequential Access**: Vectors stored contiguously
-- **Spatial locality**: Adjacent elements loaded together
-- **Prefetching**: CPU predicts and preloads data
-
-**Alignment**: BFloat16 aligned to 2-byte boundaries
-- **Avoids misalignment penalties**
-- **Enables efficient SIMD loads**
+- **Sequential access**: Both input vectors are read element-by-element in order. This gives optimal spatial locality and allows the CPU's hardware prefetcher to load cache lines ahead of use.
+- **Compact storage with BFloat16**: At 2 bytes per element, BFloat16 vectors fit twice as much data per cache line (typically 64 bytes holds 32 BFloat16 values vs 16 Float32 values). This halves the cache miss rate for large vector scans.
+- **Alignment**: BFloat16 is aligned to 2-byte boundaries, avoiding misaligned-load penalties.
 
 ## Performance Characteristics
 
@@ -396,8 +276,8 @@ For 1 million vectors with 768 dimensions:
 
 | Metric | Range | Use Case | Pros | Cons |
 |--------|-------|----------|------|------|
-| **L2** | [0, ∞) | Geometric distance | Intuitive, scale-sensitive | Affected by vector magnitude |
-| **IP** | (-∞, ∞) | Normalized vectors | Fast, equals cosine for unit vectors | Requires normalization |
+| **L2** | [0, inf) | Geometric distance | Intuitive, scale-sensitive | Affected by vector magnitude |
+| **IP** | (-inf, inf) | Normalized vectors | Fast, equals cosine for unit vectors | Requires normalization |
 | **Cosine** | [-1, 1] | Angular similarity | Magnitude-independent | Slower (requires normalization) |
 
 ### Decision Tree
@@ -436,211 +316,56 @@ flowchart TD
 
 ### Search Pipeline
 
-Vector metrics are used throughout the DiskANN search pipeline:
+During a DiskANN search, vector metrics are used at multiple stages of the pipeline. The process starts with a Float32 query vector and progresses through progressively more accurate distance computations:
 
-```cpp
-std::vector<std::pair<int64_t, float>> search(
-    const std::vector<float>& query,
-    size_t k
-) {
-    // 1. Compute PQ distance table (uses L2Sqr on sub-vectors)
-    auto pqTable = quantizer_->computeDistanceTable(query);
-
-    // 2. Greedy graph search (uses fast PQ distance)
-    auto candidates = greedySearch(query, entryPoint, beamWidth, pqTable);
-
-    // 3. Re-rank with exact L2 distance (uses L2Sqr with BFloat16)
-    std::vector<std::pair<int64_t, float>> results;
-    for (auto& [nodeId, _] : candidates) {
-        float exactDist = VectorMetric::computeL2Sqr(
-            query.data(),
-            loadBFloat16Vector(nodeId),
-            dim
-        );
-        results.push_back({nodeId, exactDist});
-    }
-
-    // 4. Sort and return top-k
-    std::sort(results.begin(), results.end(), [](auto& a, auto& b) {
-        return a.second < b.second;
-    });
-    results.resize(k);
-    return results;
-}
+```mermaid
+flowchart TD
+    Q["Float32 Query Vector"] --> PQ["1. Compute PQ Distance Table"]
+    PQ -->|"L2Sqr on sub-vectors (Float32 vs Float32)"| GT["2. Greedy Graph Traversal"]
+    GT -->|"Fast PQ approximate distance for each neighbor"| C["3. Collect Top Candidates"]
+    C -->|"Exact distance for final ranking"| RR["4. Re-rank with Exact L2"]
+    RR -->|"L2Sqr Float32 vs BFloat16"| TOPK["5. Return Top-K Results"]
 ```
 
-### Hybrid Distance Computation
+**Stage 1 -- PQ Distance Table**: When a query arrives, `computeL2Sqr` (Float32 vs Float32) computes the distance from the query's sub-vectors to every PQ centroid. This produces a lookup table of size `numSubspaces x numCentroids`. The table is built once per query and reused for every candidate evaluation during graph traversal.
 
-DiskANN uses a hybrid approach:
+**Stage 2 -- Graph Traversal**: During greedy search, the PQ distance table enables fast approximate distance computation for each neighbor. Instead of loading the full vector, only the PQ code (one byte per subspace) is read and used to look up pre-computed distances in the table. This makes neighbor evaluation extremely fast since it requires only table lookups and additions rather than floating-point arithmetic on the full dimension.
 
-```cpp
-float computeDistance(
-    const std::vector<float>& query,
-    const std::vector<float>& pqTable,
-    int64_t targetId
-) {
-    // Fast approximate distance using PQ
-    if (hasPQCodes(targetId) && !pqTable.empty()) {
-        return computePQDistance(pqTable, targetId);  // Very fast
-    }
+**Stage 3 -- Exact Re-ranking**: After graph traversal collects a set of candidate vectors, `computeL2Sqr` (Float32 vs BFloat16) computes exact distances against the stored BFloat16 vectors. This step corrects for PQ approximation error and produces the final ranking. The mixed-precision approach keeps query vectors at full Float32 accuracy while the BFloat16 storage halves memory usage.
 
-    // Exact distance using BFloat16 vectors
-    return VectorMetric::computeL2Sqr(
-        query.data(),
-        loadBFloat16Vector(targetId),
-        dim
-    );
-}
-```
+### Hybrid Distance Strategy
 
-**Benefits**:
-- **Navigation**: Fast PQ distance for graph traversal
-- **Accuracy**: Exact distance for final ranking
-- **Memory**: BFloat16 reduces memory footprint
+DiskANN dynamically selects between PQ-based approximate distance and exact BFloat16 distance depending on context:
+
+- **During navigation (graph traversal)**: PQ approximate distance is used for speed -- each neighbor evaluation requires only a few table lookups
+- **For final ranking**: Exact L2 squared distance (Float32 query vs BFloat16 stored vector) ensures accuracy in the results returned to the caller
+- **When PQ codes are unavailable**: Falls back to exact distance computation for any vector that has not been PQ-encoded
 
 ## Integration with Product Quantization
 
 ### PQ Training
 
-K-means clustering in PQ training uses L2 squared distance:
-
-```cpp
-void trainPQ(const std::vector<std::vector<float>>& samples) {
-    for (size_t m = 0; m < numSubspaces; ++m) {
-        // For each subspace
-        for (size_t iter = 0; iter < maxIterations; ++iter) {
-            // Assign each sample to nearest centroid
-            for (const auto& sample : samples) {
-                size_t offset = m * subDim;
-                float minDist = std::numeric_limits<float>::max();
-
-                for (size_t c = 0; c < numCentroids; ++c) {
-                    float dist = VectorMetric::computeL2Sqr(
-                        sample.data() + offset,
-                        codebooks[m][c].data(),
-                        subDim
-                    );
-                    if (dist < minDist) {
-                        minDist = dist;
-                        bestCentroid = c;
-                    }
-                }
-                assignments.push_back(bestCentroid);
-            }
-
-            // Update centroids
-            updateCentroids(assignments);
-        }
-    }
-}
-```
+K-means clustering in PQ training uses L2 squared distance to assign samples to their nearest centroid. For each of the `numSubspaces` subspaces, training iterates over all samples and calls `computeL2Sqr` (Float32 vs Float32) on the sub-vector of each sample against every centroid. The sample is assigned to the centroid with the smallest squared distance. This is the most distance-computation-intensive phase of PQ, running for `numSubspaces x maxIterations x numSamples x numCentroids` distance evaluations.
 
 ### PQ Encoding
 
-Encoding finds the nearest centroid using L2 distance:
-
-```cpp
-std::vector<uint8_t> encode(const std::vector<float>& vec) const {
-    std::vector<uint8_t> codes(numSubspaces);
-
-    for (size_t m = 0; m < numSubspaces; ++m) {
-        size_t offset = m * subDim;
-        float minDist = std::numeric_limits<float>::max();
-        uint8_t bestIdx = 0;
-
-        // Find nearest centroid in this subspace
-        for (size_t c = 0; c < numCentroids; ++c) {
-            float dist = VectorMetric::computeL2Sqr(
-                vec.data() + offset,
-                codebooks[m][c].data(),
-                subDim
-            );
-            if (dist < minDist) {
-                minDist = dist;
-                bestIdx = static_cast<uint8_t>(c);
-            }
-        }
-        codes[m] = bestIdx;
-    }
-
-    return codes;
-}
-```
+Encoding a vector into PQ codes follows the same pattern as training: for each subspace, `computeL2Sqr` finds the nearest centroid, and the centroid index is stored as a single byte. The encoding step uses L2 rather than IP because PQ operates on raw sub-vectors that are not normalized.
 
 ### Distance Table Computation
 
-PQ search pre-computes a distance table using L2:
+At query time, PQ search pre-computes a distance table using `computeL2Sqr`. For each subspace `m` and each centroid `c`, the function computes the L2 squared distance between the query sub-vector and the centroid. The resulting table has `numSubspaces x numCentroids` entries. Once built, the distance for any PQ-encoded vector can be approximated by summing the corresponding table entries -- no floating-point subtraction or multiplication is needed during the hot loop of graph traversal.
 
-```cpp
-std::vector<float> computeDistanceTable(
-    const std::vector<float>& query
-) const {
-    std::vector<float> table(numSubspaces * numCentroids);
-
-    for (size_t m = 0; m < numSubspaces; ++m) {
-        size_t offset = m * subDim;
-        const float* querySub = query.data() + offset;
-
-        for (size_t c = 0; c < numCentroids; ++c) {
-            // Compute L2 distance from query to each centroid
-            table[m * numCentroids + c] = VectorMetric::computeL2Sqr(
-                querySub,
-                codebooks[m][c].data(),
-                subDim
-            );
-        }
-    }
-
-    return table;
-}
-```
-
-**Efficiency**: Distance table computed once per query, reused for all candidates.
+**Efficiency**: The distance table is computed once per query and reused for all candidate evaluations, amortizing the cost across potentially millions of distance approximations.
 
 ## Best Practices
 
 ### 1. Vector Normalization
 
-Pre-normalize vectors when using cosine similarity:
-
-```cpp
-// Normalize once during indexing
-void normalizeVector(std::vector<float>& vec) {
-    float norm = 0.0f;
-    for (float v : vec) {
-        norm += v * v;
-    }
-    norm = std::sqrt(norm);
-
-    for (float& v : vec) {
-        v /= norm;
-    }
-}
-
-// Then use fast Inner Product for all comparisons
-float similarity = -VectorMetric::computeIP(a, b, dim);  // Negate back
-```
+Pre-normalize vectors when using cosine similarity. Normalize once at index time (divide each element by the L2 norm of the vector), then use Inner Product for all subsequent comparisons. This converts an O(3d) cosine computation into an O(d) inner product.
 
 ### 2. Batch Processing
 
-Process multiple distance computations in batches:
-
-```cpp
-// Better cache utilization
-std::vector<float> computeBatchDistances(
-    const float* query,
-    const std::vector<const float*>& vectors,
-    size_t dim
-) {
-    std::vector<float> distances(vectors.size());
-
-    for (size_t i = 0; i < vectors.size(); ++i) {
-        distances[i] = VectorMetric::computeL2Sqr(query, vectors[i], dim);
-    }
-
-    return distances;
-}
-```
+Process multiple distance computations in sequence rather than interleaving with other work. Sequential distance calls benefit from cache warmth -- if the query vector and adjacent target vectors are already in L1/L2 cache from the previous call, the next computation avoids cache misses.
 
 ### 3. Precision Selection
 
@@ -653,51 +378,36 @@ Choose precision based on use case:
 | Search | BFloat16 | Float32 | Fast queries |
 | Re-ranking | BFloat16 | Float32 | Good accuracy |
 
-### 4. Aligned Allocation
+### 4. Memory Layout
 
-Align vectors for SIMD efficiency:
-
-```cpp
-// Allocate aligned memory
-float* allocateAlignedVector(size_t dim) {
-    #ifdef _MSC_VER
-        return static_cast<float*>(_aligned_malloc(dim * sizeof(float), 32));
-    #else
-        return static_cast<float*>(aligned_alloc(32, dim * sizeof(float)));
-    #endif
-}
-```
+Store vectors contiguously with proper alignment. BFloat16 vectors are aligned to 2-byte boundaries by default. For Float32 vectors, 32-byte alignment enables AVX-aligned loads (`_mm256_load_ps`) which are faster than unaligned loads on many processors.
 
 ## Implementation Notes
 
 ### Zero-Allocation Design
 
-All metric functions are zero-allocation:
+All `VectorMetric` functions are zero-allocation:
 
-- **No dynamic memory**: Uses stack-allocated variables
-- **No virtual calls**: Static functions enable inlining
-- **No exceptions**: Fast error handling
+- **No dynamic memory**: Uses only stack-allocated accumulators (a single `float sum`)
+- **No virtual calls**: All functions are static, enabling the compiler to inline them at call sites
+- **No exceptions**: All code paths are noexcept, avoiding exception-handling overhead
 
 ### Compiler Optimizations
 
-Enable compiler optimizations:
+For best performance, build with the following flags:
 
-```cpp
-// Compiler flags for optimal performance
--O3                    // Maximum optimization
--march=native          // Use CPU-specific instructions
--ffast-math           // Aggressive floating-point optimizations
--funroll-loops        // Loop unrolling
--ftree-vectorize      // Auto-vectorization
-```
+- `-O3` -- maximum optimization level
+- `-march=native` -- use CPU-specific SIMD instructions
+- `-ffast-math` -- aggressive floating-point optimizations (reassociation, no signed-zero handling)
+- `-ftree-vectorize` -- explicit auto-vectorization hint (enabled by default at `-O3`)
 
 ### Portability
 
-Code is portable across platforms:
+The implementation uses only standard C++20 with no platform-specific intrinsics:
 
-- **x86_64**: SSE, AVX, AVX-512 support
-- **ARM64**: NEON support
-- **Cross-platform**: Standard C++20
+- **x86_64**: Compiler emits SSE, AVX, or AVX-512 from the unrolled loops
+- **ARM64**: Compiler emits NEON instructions
+- **Cross-platform**: Same source compiles on macOS, Linux, and Windows
 
 ## See Also
 

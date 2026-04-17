@@ -1,6 +1,6 @@
 ---
 title: 错误处理
-description: 当前 C++ API 的错误语义：抛异常的方法与返回失败 Result 的方法。
+description: ZYX C++ API 的两种错误报告机制 — 生命周期操作抛异常，查询失败返回 Result。
 category: C++ API
 categoryOrder: 2
 order: 5
@@ -11,42 +11,81 @@ projectOrder: 1
 ---
 # 错误处理
 
-当前 C++ API 未暴露模板式“异常类层次树”。应按下面两类处理。
+ZYX 根据操作类型使用两种互补的错误报告机制。
 
-## 1. 直接抛异常的方法
+## 1. 异常（生命周期操作）
 
-典型包括：
+无法返回 `Result` 的方法在失败时抛出 `std::exception`（或其子类）：
 
-- `Database::open()` / `openIfExists()` / `beginTransaction()`
-- `Transaction::commit()` / `rollback()`
+| 方法 | 失败场景 |
+|------|---------|
+| `Database::open()` | 文件 I/O 错误、文件头损坏 |
+| `Database::openIfExists()` | 文件不存在、文件头损坏 |
+| `Transaction::commit()` | WAL 同步失败、存储刷新失败 |
+| `Transaction::rollback()` | Undo 过程中存储 I/O 错误 |
 
-建议在调用边界统一捕获 `std::exception`。
+```cpp
+try {
+    zyx::Database db("/path/to/db");
+    auto tx = db.beginTransaction();
+    tx.execute("CREATE (n:Person {name: 'Alice'})");
+    tx.commit();
+} catch (const std::exception& e) {
+    std::cerr << "错误: " << e.what() << std::endl;
+}
+```
 
-## 2. 返回失败 Result 的方法
+在应用边界统一捕获 `std::exception`。ZYX 异常携带描述性的 `what()` 消息。
 
-典型包括：
+## 2. 失败 Result（查询执行）
 
-- `Database::execute(...)`
-- `Transaction::execute(...)`
+`Database::execute()` 和 `Transaction::execute()` **不会为查询级错误抛异常**。错误被捕获在 `Result` 中：
 
-这两类方法内部会捕获执行异常，并把错误写入 `Result`：
+```cpp
+auto result = db.execute("INVALID CYPHER");
+if (!result.isSuccess()) {
+    std::cerr << "查询失败: " << result.getError() << std::endl;
+}
+```
 
-- `isSuccess() == false`
-- `getError()` 返回错误文本
+| Result 方法 | 说明 |
+|-------------|------|
+| `isSuccess()` | 查询失败时返回 `false` |
+| `getError()` | 返回错误信息字符串 |
+
+常见查询失败原因：
+
+- **解析错误** — 无效的 Cypher 语法
+- **执行错误** — 算子执行过程中的运行时错误
+- **参数错误** — 缺少参数或类型不匹配
 
 ## 推荐模式
 
 ```cpp
-auto res = db.execute("MATCH (n) RETURN n");
-if (!res.isSuccess()) {
-  // 统一处理查询失败
-  auto msg = res.getError();
+zyx::Database db("/path/to/db");
+
+auto tx = db.beginTransaction();
+try {
+    auto result = tx.execute(
+        "CREATE (n:Person {name: $name})", {{"name", std::string("Alice")}});
+
+    if (!result.isSuccess()) {
+        // 查询级错误 — 无异常抛出
+        std::cerr << "查询错误: " << result.getError() << std::endl;
+        // tx 析构时自动回滚
+        return;
+    }
+
+    tx.commit();
+} catch (const std::exception& e) {
+    // 生命周期错误（WAL 同步、存储失败等）
+    std::cerr << "系统错误: " << e.what() << std::endl;
 }
 ```
 
-## C++/C 混合绑定建议
+## 源码定位
 
-如果上层还会提供 C API，建议在一层 Adapter 中统一映射：
-
-- C++ 异常 -> C 层错误字符串
-- 失败 Result -> 统一错误码或错误消息
+| 组件 | 路径 |
+|------|------|
+| Database API | `src/api/DatabaseImpl.cpp` |
+| TransactionManager | `src/core/TransactionManager.cpp` |

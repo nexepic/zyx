@@ -1,6 +1,6 @@
 ---
 title: 优化策略
-description: 查询优化器、索引选择与执行层性能路径。
+description: 查询优化器规则、索引选择与执行层性能技术。
 category: 性能
 categoryOrder: 5
 order: 9
@@ -11,39 +11,93 @@ projectOrder: 1
 ---
 # 优化策略
 
-性能优化主要发生在三层：逻辑优化、物理执行策略、存储读写路径。
+ZYX 的性能优化发生在三层：逻辑优化、物理执行策略和存储 I/O 路径。
 
 ## 逻辑优化规则
 
-默认规则顺序：
+优化器按固定顺序应用规则，迭代至计划收敛或达到最大迭代次数：
 
-1. 谓词简化（PredicateSimplification）
-2. 过滤下推（FilterPushdown）
-3. 投影下推（ProjectionPushdown）
-4. 增强索引选择（EnhancedIndexSelection）
-5. Join 重排（JoinReorder）
+| 规则 | 效果 |
+|------|------|
+| **PredicateSimplification** | 化简布尔表达式（如 `true AND x` → `x`、`x OR true` → `true`） |
+| **FilterPushdown** | 将过滤谓词下推到扫描算子附近，减少下游处理的行数 |
+| **ProjectionPushdown** | 移除后续算子中不使用的列，缩减元组宽度 |
+| **EnhancedIndexSelection** | 评估可用索引并为每次扫描选择最具选择性的索引 |
+| **JoinReorder** | 重排连接操作以最小化中间结果大小 |
 
-规则采用 fixed-point 迭代直到收敛或达到迭代上限。
+```mermaid
+graph LR
+    A["原始逻辑计划"] --> B["PredicateSimplification"]
+    B --> C["FilterPushdown"]
+    C --> D["ProjectionPushdown"]
+    D --> E["EnhancedIndexSelection"]
+    E --> F["JoinReorder"]
+    F --> G["优化后逻辑计划"]
+    G -->|"未收敛"| B
+```
 
 ## 扫描策略选择
 
-`NodeScan` 会结合统计信息与索引可用性，在以下策略间选择：
+`NodeScanOperator` 执行时评估可用索引和统计信息，选择最优访问路径：
 
-- 全量扫描
-- 标签/属性索引扫描
-- 范围扫描
-- 复合索引扫描
+```mermaid
+graph TD
+    A["对 :Person 的扫描请求"] --> B{标签索引存在?}
+    B -->|是| C["标签索引扫描 → 节点 ID 列表"]
+    B -->|否| D["全段扫描"]
 
-未被索引吸收的条件会转为 residual filter。
+    C --> E{属性过滤条件?}
+    D --> E
 
-## 执行层优化点
+    E -->|"属性索引可用"| F["属性索引扫描（B-tree 或 hash）"]
+    E -->|"范围过滤 + B-tree"| G["属性索引范围扫描"]
+    E -->|"无索引过滤"| H["对扫描行应用 residual filter"]
 
-- 多标签匹配使用 residual 多标签过滤
-- 并发路径下支持批量加载实体与并行扫描
-- 向量查询可走专用 vector operator
+    F --> I["返回匹配节点"]
+    G --> I
+    H --> I
+```
+
+未被选中索引吸收的条件作为 **residual filter** 在扫描后应用。
+
+## 执行层技术
+
+### 多标签过滤
+
+当查询指定多个标签（如 `MATCH (n:A:B)`）时，扫描算子选择基数最小的标签作为主索引查找，然后将剩余标签作为 residual filter 应用。
+
+### 批量实体加载
+
+`DataManager.bulkLoadEntities()` 按顺序读取整个段链，比逐实体的随机访问快得多。这在索引构建和恢复期间内部使用。
+
+### 向量查询优化
+
+向量相似性查询使用专用算子（`VectorSearchOperator`），利用 HNSW 索引结构进行近似最近邻搜索，避免全库扫描。
+
+### 并行执行
+
+配置线程池后，某些操作（并行段扫描、索引构建）可将工作分布到多个线程。
+
+## 存储 I/O 优化
+
+### StorageIO 抽象
+
+`StorageIO` 在支持的平台（Linux、macOS）使用原生 `pread`/`pwrite` 系统调用，在不支持的平台上回退到 `fstream` seek。双文件描述符模型（独立的读/写句柄）使并发读不会阻塞写。
+
+### PageBufferPool
+
+段级 LRU 缓存避免热段的冗余磁盘读取。刷新后的定向失效（`invalidateDirtySegments`）保留未修改段的缓存条目。
+
+### WAL 组提交
+
+多个事务提交被批量到一个 `fsync` 调用，将最昂贵的 I/O 操作从每事务降到每组。默认组窗口为 1 毫秒。
 
 ## 源码定位
 
-- `src/query/optimizer/Optimizer.cpp`
-- `include/graph/query/optimizer/Optimizer.hpp`
-- `src/query/planner/PhysicalPlanConverter.cpp`
+| 组件 | 路径 |
+|------|------|
+| Optimizer | `src/query/optimizer/Optimizer.cpp` |
+| 优化规则 | `include/graph/query/optimizer/Optimizer.hpp` |
+| PhysicalPlanConverter | `src/query/planner/PhysicalPlanConverter.cpp` |
+| StorageIO | `include/graph/storage/StorageIO.hpp` |
+| PageBufferPool | `include/graph/storage/PageBufferPool.hpp` |

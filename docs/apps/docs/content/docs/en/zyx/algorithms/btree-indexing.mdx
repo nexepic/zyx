@@ -82,7 +82,7 @@ graph TD
 
 ### Internal Node Structure
 
-Internal nodes contain separator keys and child pointers:
+Internal nodes contain separator keys and child pointers. Each child pointer is associated with a separator key that divides the key space. The first child has a dummy key (representing negative infinity) and subsequent children are paired with the key value that separates their key ranges.
 
 ```mermaid
 classDiagram
@@ -107,11 +107,11 @@ classDiagram
     ChildEntry : [Key: 150] -> ChildId: 203
 ```
 
-**Search Logic**: For a key K, find the largest separator key ≤ K, traverse to that child.
+**Search Logic**: For a key K, find the largest separator key that is less than or equal to K, then traverse to that child.
 
 ### Leaf Node Structure
 
-Leaf nodes contain actual key-value pairs with linked list pointers:
+Leaf nodes contain the actual key-value pairs along with next and previous leaf pointers that form a doubly-linked list across all leaf nodes.
 
 ```mermaid
 classDiagram
@@ -139,35 +139,60 @@ classDiagram
     Entry : [Key: 45] -> [Values: 2, 4, 6]
 ```
 
-**Entry Structure**:
-```cpp
-struct Entry {
-    PropertyValue key;           // The indexed key
-    std::vector<int64_t> values; // Entity IDs with this key
-    int64_t keyBlobId;           // Blob ID for oversized keys
-    int64_t valuesBlobId;        // Blob ID for oversized value lists
-};
+**Entry Structure**: Each entry stores the indexed key, a vector of entity IDs that share that key value, and optional blob IDs. The `keyBlobId` field holds a reference to blob storage when the key itself exceeds the inline threshold. The `valuesBlobId` field holds a reference to blob storage when the list of entity IDs grows too large to fit inline.
+
+### Node Memory Layout
+
+Each B+Tree node occupies a fixed 256-byte block divided into two regions:
+
+```mermaid
+block-beta
+    columns 4
+    block:metadata:4
+        columns 4
+        M1["NodeType<br/>(1 byte)"]
+        M2["EntryCount<br/>(4 bytes)"]
+        M3["Level<br/>(4 bytes)"]
+        M4["ParentId<br/>(8 bytes)"]
+    end
+    block:leafmeta:4
+        columns 2
+        M5["NextLeafId<br/>(8 bytes)"]
+        M6["PrevLeafId<br/>(8 bytes)"]
+        M7["DataUsage<br/>(2 bytes)"]
+        M8["Padding<br/>(8 bytes)"]
+    end
+    block:entries:4
+        columns 1
+        E1["Entry 1: key + values + blobIds"]
+        E2["Entry 2: key + values + blobIds"]
+        E3["..."]
+        E4["Entry N: key + values + blobIds"]
+    end
+
+    style metadata fill:#e0e0e0,stroke:#333
+    style leafmeta fill:#d0d0d0,stroke:#333
+    style entries fill:#f0f0f0,stroke:#333
 ```
+
+- **Metadata region** (43 bytes): Contains the node type (leaf or internal), entry count, tree level, parent pointer, and for leaf nodes the next/previous leaf pointers. This overhead is fixed regardless of content.
+- **Data region** (213 bytes): Stores the actual entries (key-value pairs for leaves, separator-child pairs for internal nodes). Entries are packed sequentially; oversized data is offloaded to blob storage.
 
 ## Node Size and Capacity
 
 ### Storage Parameters
 
-```cpp
-constexpr size_t TOTAL_INDEX_SIZE = 256;  // Total node size in bytes
-constexpr size_t METADATA_SIZE = 43;      // Metadata overhead
-constexpr size_t DATA_SIZE = 213;         // Available data space
-```
+ZYX uses fixed-size 256-byte nodes to align with storage block boundaries. Each node dedicates 43 bytes to metadata (node type, level, parent ID, leaf link pointers, data usage tracking) and 213 bytes to actual entry data. This layout ensures predictable I/O behavior and simplifies space management.
 
 ### Capacity Calculations
 
 **Leaf Node Entry Capacity**:
-- Small inline entries: ~20-30 entries per node
-- With blob storage: Can store many more entries
+- Small inline entries: approximately 20-30 entries per node
+- With blob storage for oversized data: effectively unlimited entries
 
 **Internal Node Fanout**:
 - Typical fanout: 40-50 children per internal node
-- Tree height for 1M entries: log₅₀(1,000,000) ≈ 3-4 levels
+- Tree height for 1M entries: log50(1,000,000) is approximately 3-4 levels
 
 ## Insertion Algorithm
 
@@ -198,49 +223,19 @@ flowchart TD
     Q --> E
 ```
 
-### Insert Example
+### Insert Walkthrough
 
-```cpp
-// Insert property value into index
-void PropertyIndex::addProperty(int64_t entityId,
-                                const std::string& key,
-                                const PropertyValue& value) {
-    auto treeManager = getTreeManagerForType(value.getType());
-    auto& rootId = getRootMapForType(value.getType())[key];
+When a property value is added to the index, the system routes it to the appropriate `IndexTreeManager` based on the value's type (integer, string, double, boolean). The tree manager then locates the correct leaf node by traversing from the root through internal nodes using the separator key comparison logic.
 
-    // Insert into B+Tree
-    rootId = treeManager->insert(rootId, value, entityId);
-}
-```
+If the target leaf has sufficient space, the entry is inserted in sorted order and the operation completes. When the leaf is full, a 50/50 split occurs: a new sibling leaf node is created, entries are divided evenly between the original and new node, and the doubly-linked leaf chain is updated. The first key of the new (right) node becomes the separator key that is propagated up to the parent.
 
-### Node Splitting
+This propagation may cascade if the parent is also full, causing the parent to split in turn. In the worst case, splits propagate all the way to the root, at which point a new root is created with two children, increasing the tree height by one.
 
-**Leaf Split** (50/50 distribution):
-```cpp
-void splitLeaf(Index& leaf, vector<Entry>& allEntries, int64_t& rootId) {
-    // 1. Create sibling node
-    int64_t newLeafId = createNewNode(NodeType::LEAF);
-    Index newLeaf = dataManager_->getIndex(newLeafId);
+### Node Splitting (50/50 Distribution)
 
-    // 2. Split entries evenly
-    size_t mid = allEntries.size() / 2;
-    vector<Entry> leftEntries(allEntries.begin(), allEntries.begin() + mid);
-    vector<Entry> rightEntries(allEntries.begin() + mid, allEntries.end());
+Leaf splitting divides entries evenly between two nodes. The original (left) node keeps the first half of entries, while the new (right) node receives the second half. After the split, the leaf chain is repaired: the left node's next pointer and the right node's previous pointer are updated to maintain the doubly-linked list. The separator key (the first key in the right node) is then inserted into the parent.
 
-    // 3. Update linked list
-    newLeaf.setNextLeafId(leaf.getNextLeafId());
-    newLeaf.setPrevLeafId(leaf.getId());
-    leaf.setNextLeafId(newLeafId);
-
-    // 4. Write data and propagate
-    leaf.setAllEntries(leftEntries, dataManager_);
-    newLeaf.setAllEntries(rightEntries, dataManager_);
-
-    // 5. Insert separator key into parent
-    PropertyValue separatorKey = rightEntries.front().key;
-    insertIntoParent(leaf, separatorKey, newLeafId, rootId);
-}
-```
+Internal node splitting follows the same 50/50 principle but includes an extra step: the middle key is promoted upward as the separator rather than remaining in either child.
 
 ## Deletion Algorithm
 
@@ -271,150 +266,39 @@ flowchart TD
 
 ### Underflow Detection
 
-```cpp
-bool isUnderflow(double thresholdRatio) const {
-    if (getEntryCount() == 0) return true;
+After removing an entry, the system checks whether the node has fallen below the underflow threshold. The threshold is set at 40% of the total node size (256 bytes), meaning a node is considered underfull when its data usage drops below approximately 102 bytes. An empty node is always treated as underfull regardless of the threshold.
 
-    double currentUsage = static_cast<double>(metadata.dataUsage);
-    double threshold = TOTAL_INDEX_SIZE * thresholdRatio;
-    return currentUsage < threshold;
-}
-```
-
-**Underflow Threshold**: 40% of node capacity
+The 40% ratio (defined by `UNDERFLOW_THRESHOLD_RATIO = 0.4`) balances two concerns: a lower threshold would tolerate more wasted space and trigger fewer merges, while a higher threshold would cause frequent merging and redistribution. The chosen value allows nodes to be moderately sparse without triggering excessive rebalancing.
 
 ### Redistribution
 
-Borrow entries from sibling to balance nodes:
+When a node underflows but one of its siblings has entries to spare, the system redistributes entries between them. For leaf nodes, the last entry from the left sibling (or the first entry from the right sibling) is moved to the underfull node. The parent's separator key is then updated to reflect the new boundary between the two nodes.
 
-```cpp
-void redistribute(Index& node, Index& sibling, Index& parent, bool isLeftSibling) {
-    if (node.isLeaf()) {
-        // Borrow from left sibling
-        auto nodeEntries = node.getAllEntries(dataManager_);
-        auto siblingEntries = sibling.getAllEntries(dataManager_);
-
-        // Move last entry from sibling to front of node
-        Entry borrowed = std::move(siblingEntries.back());
-        siblingEntries.pop_back();
-        nodeEntries.insert(nodeEntries.begin(), std::move(borrowed));
-
-        // Update parent separator
-        parentChildren[nodeIdx].key = nodeEntries.front().key;
-
-        node.setAllEntries(nodeEntries, dataManager_);
-        sibling.setAllEntries(siblingEntries, dataManager_);
-    }
-}
-```
+This is preferred over merging because it does not reduce the total number of nodes and avoids propagating changes further up the tree.
 
 ### Node Merging
 
-When siblings are both underfull, merge them:
+When both the underfull node and its sibling are too sparse to allow redistribution, the two nodes are merged into one. For leaf nodes, all entries from the right node are appended to the left node, and the doubly-linked leaf chain is updated to skip the removed node. For internal nodes, the parent's separator key is pulled down into the merged node along with all child entries from both nodes.
 
-```cpp
-void mergeNodes(Index& leftNode, Index& rightNode,
-                Index& parent, const PropertyValue& separatorKey,
-                int64_t& rootId) {
-    if (leftNode.isLeaf()) {
-        // Merge leaf entries
-        auto leftEntries = leftNode.getAllEntries(dataManager_);
-        auto rightEntries = rightNode.getAllEntries(dataManager_);
-
-        leftEntries.insert(leftEntries.end(),
-                          std::make_move_iterator(rightEntries.begin()),
-                          std::make_move_iterator(rightEntries.end()));
-
-        leftNode.setAllEntries(leftEntries, dataManager_);
-
-        // Update linked list
-        leftNode.setNextLeafId(rightNode.getNextLeafId());
-    } else {
-        // Merge internal nodes with separator
-        auto leftChildren = leftNode.getAllChildren(dataManager_);
-        auto rightChildren = rightNode.getAllChildren(dataManager_);
-
-        ChildEntry separatorChildEntry{separatorKey, rightChildren.front().childId, 0};
-        rightChildren.erase(rightChildren.begin());
-
-        leftChildren.push_back(std::move(separatorChildEntry));
-        leftChildren.insert(leftChildren.end(),
-                           std::make_move_iterator(rightChildren.begin()),
-                           std::make_move_iterator(rightChildren.end()));
-
-        leftNode.setAllChildren(leftChildren, dataManager_);
-    }
-
-    // Remove right node and update parent
-    dataManager_->deleteIndex(rightNode);
-    // Check parent for underflow...
-}
-```
+After merging, the right node is deleted and the parent loses one separator-child pair. This may cause the parent itself to underflow, triggering recursive rebalancing up the tree. If rebalancing reaches the root and the root is left with only one child, the root is collapsed (replaced by its sole child), reducing the tree height by one.
 
 ## Search Operations
 
 ### Exact Match Search
 
-```cpp
-std::vector<int64_t> PropertyIndex::findExactMatch(
-    const std::string& key,
-    const PropertyValue& value) const {
-
-    auto treeManager = getTreeManagerForType(value.getType());
-    const auto& rootId = getRootMapForType(value.getType()).at(key);
-
-    return treeManager->find(rootId, value);
-}
-```
+Exact match search traverses the tree from root to leaf. At each internal node level, the algorithm locates the appropriate child by finding the largest separator key that is less than or equal to the search key. Once the leaf level is reached, the entries are scanned for an exact key match, and the associated vector of entity IDs is returned.
 
 **Search Path**:
 1. Start at root
-2. At each internal node, find appropriate child
-3. Traverse to leaf level
-4. Scan leaf for matching key
+2. At each internal node, find the appropriate child using separator keys
+3. Traverse down to the leaf level
+4. Scan the leaf for a matching key and return its values
 
-**Time Complexity**: O(logₙ N) where n is fanout, N is total entries
+**Time Complexity**: O(log_n N) where n is the fanout and N is the total number of entries.
 
 ### Range Query
 
-```cpp
-std::vector<int64_t> IndexTreeManager::findRange(
-    int64_t rootId,
-    const PropertyValue& minKey,
-    const PropertyValue& maxKey) const {
-
-    std::vector<int64_t> results;
-
-    // 1. Find starting leaf node
-    int64_t startLeafId = findLeafNode(rootId, minKey);
-    int64_t currentLeafId = startLeafId;
-
-    // 2. Scan linked leaf nodes
-    while (currentLeafId != 0) {
-        auto currentLeaf = dataManager_->getIndex(currentLeafId);
-        auto entries = currentLeaf.getAllEntries(dataManager_);
-
-        // 3. Collect matching entries
-        for (const auto& entry : entries) {
-            if (!keyComparator_(entry.key, maxKey)) {
-                // Entry key > maxKey, done scanning
-                return results;
-            }
-            if (!keyComparator_(entry.key, minKey)) {
-                // Entry key >= minKey, add values
-                results.insert(results.end(), entry.values.begin(), entry.values.end());
-            }
-        }
-
-        // 4. Move to next leaf
-        currentLeafId = currentLeaf.getNextLeafId();
-    }
-
-    return results;
-}
-```
-
-**Range Query Traversal**:
+Range queries leverage the doubly-linked leaf structure for efficient sequential scanning. The algorithm first descends the tree to find the leaf node containing the minimum key of the range. From that starting leaf, it scans entries sequentially, collecting all entity IDs whose keys fall within the specified range. When a leaf is exhausted, the algorithm follows the next-leaf pointer to continue scanning in the adjacent leaf. Scanning stops when a key exceeding the maximum bound is encountered or when no more leaves remain.
 
 ```mermaid
 graph LR
@@ -426,30 +310,22 @@ graph LR
     D -->|No| F[Return Results]
 ```
 
+**Time Complexity**: O(log_n N + K) where K is the number of entries in the result range. The logarithmic term accounts for finding the starting leaf, and the linear term covers the sequential scan through linked leaves.
+
 ## Blob Storage for Large Data
 
-### When Keys/Values Don't Fit Inline
+### When Keys/Values Do Not Fit Inline
 
-**Thresholds**:
-- Internal keys: 32 bytes inline
-- Leaf keys: 32 bytes inline
-- Leaf values: 32 bytes inline
+Each node has limited inline storage (213 bytes of data). When a key or a value list exceeds the 32-byte inline threshold, it is serialized to a separate blob storage area and only its blob ID is kept in the node entry.
+
+**Inline Thresholds**:
+- Internal keys: 32 bytes -- keys longer than this are stored as blobs
+- Leaf keys: 32 bytes -- same threshold for leaf-level keys
+- Leaf values: 32 bytes -- the serialized value list must fit within this limit
 
 **Blob Storage Strategy**:
 
-```cpp
-struct Entry {
-    PropertyValue key;
-    std::vector<int64_t> values;
-    int64_t keyBlobId = 0;      // Blob for oversized key
-    int64_t valuesBlobId = 0;   // Blob chain for oversized values
-};
-```
-
-When data exceeds thresholds:
-1. Serialize data to blob storage
-2. Store blob ID in entry
-3. Retrieve from blob on access
+The `Entry` structure contains two blob ID fields alongside its inline data. The `keyBlobId` field is set to a non-zero value when the key has been offloaded to blob storage. Similarly, `valuesBlobId` is set when the entity ID list is too large. On read access, the system checks these blob IDs and retrieves the full data from blob storage when necessary. This two-tier approach keeps common (small) entries compact within the node while supporting arbitrarily large keys and value lists without sacrificing node capacity.
 
 ## Time and Space Complexity
 
@@ -479,8 +355,8 @@ Where:
 **Fanout Calculation**:
 - Pointer size: 8 bytes
 - Key size: varies (typically 4-16 bytes)
-- Child entry: ~16-24 bytes
-- Fanout: 213 / 16 ≈ 13 children (conservative)
+- Child entry: approximately 16-24 bytes
+- Fanout: 213 / 16 is approximately 13 children (conservative estimate)
 - Actual fanout: 40-50 with optimization
 
 ## Disk I/O Characteristics
@@ -489,10 +365,10 @@ Where:
 
 | Operation | Disk Reads | Disk Writes |
 |-----------|------------|-------------|
-| Search | O(logₙ N) | 0 |
-| Insert | O(logₙ N) | O(logₙ N) |
-| Delete | O(logₙ N) | O(logₙ N) |
-| Range Query | O(logₙ N + K/b) | 0 |
+| Search | O(log_n N) | 0 |
+| Insert | O(log_n N) | O(log_n N) |
+| Delete | O(log_n N) | O(log_n N) |
+| Range Query | O(log_n N + K/b) | 0 |
 
 Where:
 - n = fanout (number of children per internal node)
@@ -504,144 +380,60 @@ Where:
 
 1. **High Fanout**: Minimizes tree height
 2. **Node Size**: 256 bytes fits in disk blocks
-3. **Sequential Scanning**: Leaf linking enables range queries
+3. **Sequential Scanning**: Leaf linking enables range queries without tree re-traversal
 4. **Batch Operations**: Reduces I/O for bulk inserts
 
 **Example**: For 1 million entries with fanout 50:
-- Tree height: ⌈log₅₀(1,000,000)⌉ = 4 levels
+- Tree height: ceil(log50(1,000,000)) = 4 levels
 - Max I/O per search: 4 disk reads
 
 ## Concurrent Operations
 
 ### Locking Strategy
 
-```cpp
-class IndexTreeManager {
-    mutable std::shared_mutex mutex_;  // Reader-writer lock
-};
-```
+The `IndexTreeManager` uses a `std::shared_mutex` to coordinate concurrent access. This reader-writer lock allows multiple threads to perform read operations simultaneously while ensuring that write operations have exclusive access.
 
 **Lock Types**:
-- **Shared Lock**: For read operations (find, findRange)
-- **Exclusive Lock**: For write operations (insert, remove, clear)
+- **Shared Lock**: Acquired for read operations (exact match search, range query). Multiple readers can hold shared locks concurrently, allowing high throughput for lookup-heavy workloads.
+- **Exclusive Lock**: Acquired for write operations (insert, remove, clear). Only one writer can hold the lock at a time, and all readers are blocked during writes.
 
-### Concurrency Control
-
-```cpp
-// Read operations - shared lock
-std::vector<int64_t> find(int64_t rootId, const PropertyValue& key) const {
-    std::shared_lock lock(mutex_);  // Allow concurrent readers
-    // ... search logic
-}
-
-// Write operations - exclusive lock
-int64_t insert(int64_t rootId, const PropertyValue& key, int64_t value) {
-    std::unique_lock lock(mutex_);  // Exclusive access
-    // ... insert logic
-}
-```
-
-**Benefits**:
-- Multiple concurrent readers
-- Single writer with exclusive access
-- No deadlocks with proper locking order
+This approach favors read-heavy access patterns, which are typical for graph database index lookups. Write operations are serialized but benefit from the fact that the tree structure changes (splits and merges) are relatively infrequent compared to the total number of operations.
 
 ## Use in ZYX
 
 ### Label Index
 
-Maps label tokens to entity IDs:
-
-```cpp
-class LabelIndex {
-    std::shared_ptr<IndexTreeManager> treeManager_;
-    std::unordered_map<LabelToken, int64_t> labelRoots_;
-
-    void addLabel(LabelToken label, int64_t entityId);
-    std::vector<int64_t> findEntities(LabelToken label);
-};
-```
+The label index maps label tokens to entity IDs using a B+Tree. Each unique label has its own tree root stored in an in-memory map. When a node is assigned a label, the node's ID is inserted into the tree rooted at that label's root. Lookups traverse the tree to find the label's entry and return all associated entity IDs.
 
 ### Property Index
 
-Maps property values to entity IDs:
+The property index maintains separate `IndexTreeManager` instances for each property value type: string, integer, double, and boolean. This type-segregated approach ensures that comparisons within a tree are always type-consistent and avoids the complexity of cross-type ordering.
 
-```cpp
-class PropertyIndex {
-    // Separate tree managers for each property type
-    std::shared_ptr<IndexTreeManager> stringTreeManager_;
-    std::shared_ptr<IndexTreeManager> intTreeManager_;
-    std::shared_ptr<IndexTreeManager> doubleTreeManager_;
-    std::shared_ptr<IndexTreeManager> boolTreeManager_;
-
-    void addProperty(int64_t entityId, const std::string& key,
-                    const PropertyValue& value);
-    std::vector<int64_t> findExactMatch(const std::string& key,
-                                       const PropertyValue& value);
-    std::vector<int64_t> findRange(const std::string& key,
-                                  double minValue, double maxValue);
-};
-```
+For each property name, a tree root is tracked per type. Exact match queries route to the appropriate tree manager and perform a standard B+Tree lookup. Range queries (applicable to numeric types) use the linked-leaf scan described earlier to collect all entity IDs whose property values fall within the specified bounds.
 
 ## Configuration Parameters
 
 ### Node Size
 
-```cpp
-constexpr size_t TOTAL_INDEX_SIZE = 256;
-```
-
-**Trade-offs**:
-- Larger nodes: Higher fanout, shorter tree, but more disk I/O per node
-- Smaller nodes: Less disk I/O per node, but taller tree
-- 256 bytes: Balanced for typical disk block sizes
+The total node size is fixed at 256 bytes. This value was chosen as a balance: larger nodes would provide higher fanout and shorter trees but would increase the I/O cost of reading and writing each node. Smaller nodes would reduce per-node I/O but require more levels in the tree. At 256 bytes, the node fits comfortably within typical storage block sizes while providing adequate fanout for most datasets.
 
 ### Underflow Threshold
 
-```cpp
-static constexpr double UNDERFLOW_THRESHOLD_RATIO = 0.4;
-```
-
-**Trade-offs**:
-- Lower threshold: More aggressive merging, less space waste
-- Higher threshold: Fewer merges, but more empty space
-- 0.4 (40%): Balanced between merge frequency and space utilization
+The underflow threshold ratio is set to 0.4 (40%). This means a node is considered underfull when its data usage drops below 40% of the total node size. The trade-off is between merge frequency and space utilization: a lower threshold tolerates more wasted space but reduces rebalancing overhead, while a higher threshold keeps nodes dense at the cost of more frequent merges and redistributions. The 40% value provides a practical balance.
 
 ### Inline Thresholds
 
-```cpp
-constexpr size_t INTERNAL_KEY_INLINE_THRESHOLD = 32;
-constexpr size_t LEAF_KEY_INLINE_THRESHOLD = 32;
-constexpr size_t LEAF_VALUES_INLINE_THRESHOLD = 32;
-```
-
-**Trade-offs**:
-- Larger thresholds: Fewer blob reads, but larger nodes
-- Smaller thresholds: Smaller nodes, but more blob overhead
-- 32 bytes: Balanced for typical property values
+All inline thresholds (internal keys, leaf keys, and leaf values) are set to 32 bytes. Data within this limit is stored directly in the node entry. Data exceeding the threshold is offloaded to blob storage with only a blob ID retained inline. The 32-byte threshold accommodates most common property values (small integers, short strings, booleans) while keeping the node entry format compact.
 
 ## Performance Considerations
 
 ### Optimization Techniques
 
-1. **Batch Insertion**:
-   ```cpp
-   int64_t insertBatch(int64_t rootId,
-                      const vector<pair<PropertyValue, int64_t>>& entries);
-   ```
-   - Sorts and coalesces entries before insertion
-   - Reduces tree restructuring overhead
+1. **Batch Insertion**: The `insertBatch` method accepts a collection of key-value pairs, sorts them, and coalesces duplicates before inserting them into the tree. This reduces the number of tree restructuring operations compared to inserting entries one at a time.
 
-2. **Single-Pass Insert**:
-   ```cpp
-   InsertResult tryInsertEntry(const PropertyValue& key, int64_t value);
-   ```
-   - Combines deserialize + insert + serialize
-   - Prevents double deserialization
+2. **Single-Pass Insert**: The `tryInsertEntry` method combines deserialization, insertion, and serialization into a single pass over the node data. This avoids the overhead of deserializing a node, modifying it, and re-serializing it as separate steps.
 
-3. **Cached Nodes**:
-   - Frequently accessed nodes cached in memory
-   - Reduces disk I/O for hot data
+3. **Cached Nodes**: Frequently accessed nodes are cached in memory by the page buffer pool, reducing disk I/O for hot index data. This is especially effective for upper tree levels, which are accessed on every operation.
 
 ### Benchmarks
 
@@ -652,8 +444,8 @@ Typical performance characteristics:
 | Entries per Leaf | 20-30 |
 | Fanout | 40-50 |
 | Tree Height (1M entries) | 3-4 levels |
-| Search Time | ~4 disk reads |
-| Insert Time | ~4 disk reads + ~4 disk writes |
+| Search Time | approximately 4 disk reads |
+| Insert Time | approximately 4 disk reads + 4 disk writes |
 | Range Query | O(log N + K/b) |
 
 ## Best Practices
@@ -663,6 +455,11 @@ Typical performance characteristics:
 3. **Batch Operations**: Use batch insertion for bulk loads
 4. **Monitor Tree Height**: Rebuild if tree grows too tall
 5. **Configure Thresholds**: Tune for workload characteristics
+
+## Source
+
+- Header: `include/graph/core/IndexTreeManager.hpp`
+- Implementation: `src/core/IndexTreeManager.cpp`
 
 ## See Also
 

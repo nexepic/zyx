@@ -1,9 +1,9 @@
 ---
 title: 算法总览
-description: ZYX 算法按查询、存储、索引、向量四大类分层协同。
+description: ZYX 在索引、存储管理、查询优化、向量搜索和并发控制等方面采用了一系列算法。
 category: 概述
 categoryOrder: 1
-order: 2
+order: 1
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
@@ -11,34 +11,94 @@ projectOrder: 1
 ---
 # 算法总览
 
-## 一、查询与优化
+ZYX 在索引、存储、查询处理、向量搜索和并发控制等方面采用了一系列算法。本节记录每种算法的设计、数据流和性能特征。
 
-- 逻辑重写：谓词简化、过滤下推、投影下推
-- 代价驱动：增强索引选择、Join 重排
-- 位置：`src/query/optimizer/*`
+## 算法分类
 
-## 二、索引与查找
+### 存储算法
 
-- B+Tree 基础结构：`IndexTreeManager`
-- 标签索引：`LabelIndex`
-- 属性索引：`PropertyIndex`（含复合索引）
-- 位置：`include/graph/core/IndexTreeManager.hpp`、`src/storage/indexes/*`
+管理持久化数据存储与分配的算法：
 
-## 三、存储与空间管理
+- **[段分配](segment-allocation)** — 段如何分配、链接成链，以及按实体类型进行跟踪
+- **[段压缩](segment-compaction)** — 多阶段压缩，在删除操作后回收碎片化空间
+- **[位图索引](bitmap-indexing)** — 使用位图结构跟踪段内空闲槽位
+- **[压缩](compression)** — 基于 Zlib 的无损压缩，用于状态链和大数据
 
-- 段链管理、空闲段复用、压缩/整理
-- activity bitmap 跟踪槽位活跃性
-- LRU 缓存降低热点读取开销
-- 位置：`src/storage/*`
+### 事务与并发
 
-## 四、向量检索
+保证 ACID 特性和崩溃恢复的算法：
 
-- 距离函数（L2/IP）
-- KMeans 训练码本
-- Product Quantization 编码与近似距离
-- DiskANN 图索引搜索
-- 位置：`include/graph/vector/*`、`src/vector/*`
+- **[状态链与乐观锁](state-chain-optimistic-locking)** — 基于版本链的配置存储，支持原子读写
+- **[WAL 恢复](wal-recovery)** — 4 阶段崩溃恢复：扫描、去重、重放、收尾
 
-## 组合关系
+### 索引算法
 
-这些算法不是孤立调用：查询优化会选择索引策略，索引读写又依赖存储结构；向量索引与普通图查询通过过程调用和算子集成在同一执行框架中。
+用于快速数据查找的算法：
+
+- **[B+Tree 索引](btree-indexing)** — 用于标签索引和属性索引的 B+Tree 结构
+- **[标签索引](label-index)** — 使用 B+Tree 的标签到节点 ID 映射
+- **[属性索引](property-index)** — 针对属性值的类型特定 B+Tree 索引
+
+### 查询算法
+
+用于高效查询执行的算法：
+
+- **[查询优化](query-optimization)** — 基于固定点迭代的多规则优化器
+- **[关系遍历](relationship-traversal)** — 用于边遍历的双向链表邻接表
+
+### 缓存
+
+- **[缓存淘汰](cache-eviction)** — 带命中/未命中统计和线程安全操作的 LRU 缓存
+
+### 向量搜索
+
+用于高维向量相似性搜索的算法：
+
+- **[向量度量](vector-metrics)** — 经过优化的 L2 和 IP 距离计算，支持混合精度
+- **[乘积量化](product-quantization)** — 通过子空间量化进行向量压缩
+- **[K-Means 聚类](kmeans)** — Lloyd 算法，用于 PQ 码本训练
+- **[DiskANN](diskann)** — 可导航小世界图，用于近似最近邻搜索
+
+## 设计原则
+
+```mermaid
+graph TD
+    A[ZYX Algorithm Design] --> B[Performance]
+    A --> C[Reliability]
+    A --> D[Concurrency]
+
+    B --> B1[O-1 or O-log-n core ops]
+    B --> B2[Batch operations]
+    B --> B3[Cache-friendly layouts]
+
+    C --> C1[ACID transactions]
+    C --> C2[Crash recovery via WAL]
+    C --> C3[Checksums on all records]
+
+    D --> D1[shared_mutex read/write]
+    D --> D2[Single writer / multi reader]
+    D --> D3[Thread-safe statistics]
+```
+
+所有算法共享以下特性：
+
+- **线程安全**：使用 `std::shared_mutex` 实现并发读访问和独占写访问
+- **批量操作**：针对索引构建和数据导入的优化批量处理路径
+- **惰性初始化**：组件（QueryEngine、ThreadPool、WAL）在首次使用时初始化
+- **基于段的存储**：所有数据存储在固定大小的段中，以链表形式链接
+
+## 复杂度汇总
+
+| 类别 | 关键操作 | 复杂度 |
+|----------|--------------|------------|
+| Segment Allocation | Allocate entity slot | O(1) amortized |
+| B+Tree Index | Search / Insert | O(log n) |
+| Label Index | Find nodes by label | O(log n + k) |
+| Property Index | Exact match | O(log n + k) |
+| Property Index | Range query | O(log n + k) |
+| Relationship Traversal | Get outgoing/incoming edges | O(k) |
+| LRU Cache | Get / Put | O(1) |
+| DiskANN Search | K-nearest neighbors | O(beamWidth × maxDegree × dim) |
+| PQ Distance | Approximate distance | O(numSubspaces) |
+
+其中 n = 索引中的条目数，k = 结果数量，dim = 向量维度。

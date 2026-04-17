@@ -17,7 +17,7 @@ ZYX implements a high-performance label index using B+Tree structure to efficien
 
 The label index provides:
 
-- **B+Tree-based indexing**: Efficient label → node IDs mapping using B+Tree structure
+- **B+Tree-based indexing**: Efficient label-to-node-IDs mapping using a single B+Tree via IndexTreeManager
 - **Multi-label support**: Nodes can have multiple labels indexed simultaneously
 - **Batch operations**: Optimized bulk insertion for efficient index building
 - **Concurrent access**: Thread-safe operations with shared mutex
@@ -42,6 +42,8 @@ graph TD
     H --> K[Node IDs: 3, 7, 11]
 ```
 
+LabelIndex owns a single IndexTreeManager instance, which manages one B+Tree. The tree uses label strings as keys and node IDs as values. Because the B+Tree supports duplicate keys, multiple node IDs can be stored under the same label. Each label-to-node-ID mapping is independent: adding or removing a node from one label has no effect on other labels.
+
 ### Query Flow
 
 ```mermaid
@@ -65,449 +67,166 @@ sequenceDiagram
     E-->>Q: Results
 ```
 
-## Implementation
-
-### Class Definition
-
-```cpp
-class LabelIndex {
-public:
-    LabelIndex(std::shared_ptr<storage::DataManager> dataManager,
-               std::shared_ptr<storage::state::SystemStateManager> systemStateManager,
-               uint32_t indexType,
-               std::string stateKey);
-
-    // Core operations
-    void addNode(int64_t nodeId, const std::string &label);
-    void addNodesBatch(const std::unordered_map<std::string, std::vector<int64_t>> &nodesByLabel);
-    void removeNode(int64_t nodeId, const std::string &label);
-    std::vector<int64_t> findNodes(const std::string &label) const;
-    bool hasLabel(int64_t entityId, const std::string &label) const;
-
-    // Lifecycle management
-    void initialize();
-    void createIndex();
-    void clear();
-    void drop();
-    void flush() const;
-    void saveState() const;
-
-    // Status queries
-    bool isEmpty() const;
-    bool isEnabled() const;
-    bool hasPhysicalData() const;
-
-private:
-    std::shared_ptr<storage::DataManager> dataManager_;
-    std::shared_ptr<storage::state::SystemStateManager> systemStateManager_;
-    std::shared_ptr<IndexTreeManager> treeManager_;
-    mutable std::shared_mutex mutex_;
-    int64_t rootId_ = 0;
-    bool enabled_ = false;
-    const std::string stateKey_;
-};
-```
-
-## Core Operations
-
-### Initialization
-
-The label index is initialized from persistent state on startup:
-
-```cpp
-void LabelIndex::initialize() {
-    std::unique_lock lock(mutex_);
-
-    // 1. Load Root ID from persistent state
-    rootId_ = systemStateManager_->get<int64_t>(
-        stateKey_,
-        storage::state::keys::Fields::ROOT_ID,
-        0
-    );
-
-    // 2. Load Enabled Config
-    std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-    enabled_ = systemStateManager_->get<bool>(
-        configKey,
-        storage::state::keys::Fields::ENABLED,
-        false
-    );
-
-    // Fallback: If we have physical data, force enable
-    if (!enabled_ && rootId_ != 0) {
-        enabled_ = true;
-    }
-}
-```
-
-**Key Points**:
-- Root ID is persisted in system state
-- Enabled flag controls whether index is active
-- Physical data (rootId_ != 0) forces enablement to prevent data drift
-
-### Add Node
-
-Adds a single node to the label index:
-
-```cpp
-void LabelIndex::addNode(int64_t entityId, const std::string &label) {
-    std::unique_lock lock(mutex_);
-
-    // Initialize B+Tree if needed
-    if (rootId_ == 0) {
-        rootId_ = treeManager_->initialize();
-    }
-
-    // Insert into B+Tree (label → nodeId mapping)
-    int64_t newRootId = treeManager_->insert(rootId_, label, entityId);
-
-    // Update root if tree split occurred
-    if (newRootId != rootId_) {
-        rootId_ = newRootId;
-    }
-}
-```
-
-**Characteristics**:
-- **Time Complexity**: O(log n) where n is the number of unique labels
-- **Space Complexity**: O(1) amortized (B+Tree growth)
-- **Concurrency**: Exclusive lock ensures thread safety
-
-### Batch Add Nodes
-
-Optimized bulk insertion for multiple nodes:
-
-```cpp
-void LabelIndex::addNodesBatch(
-    const std::unordered_map<std::string, std::vector<int64_t>> &nodesByLabel
-) {
-    // Single lock for entire batch
-    std::unique_lock lock(mutex_);
-
-    if (rootId_ == 0) {
-        rootId_ = treeManager_->initialize();
-    }
-
-    // Process each label group
-    for (const auto &[label, entityIds]: nodesByLabel) {
-        if (entityIds.empty())
-            continue;
-
-        // Prepare batch entries
-        std::vector<std::pair<PropertyValue, int64_t>> batchEntries;
-        batchEntries.reserve(entityIds.size());
-
-        for (int64_t id: entityIds) {
-            batchEntries.emplace_back(PropertyValue(label), id);
-        }
-
-        // Perform batch insertion
-        int64_t newRootId = treeManager_->insertBatch(rootId_, batchEntries);
-
-        if (newRootId != rootId_) {
-            rootId_ = newRootId;
-        }
-    }
-}
-```
-
-**Optimizations**:
-- **Single lock acquisition**: Reduces contention compared to individual inserts
-- **Batch preparation**: Minimizes memory allocations
-- **Grouped by label**: Optimizes for B+Tree structure
-
-**Performance**:
-- **Throughput**: ~10x faster than individual inserts for large batches
-- **Use Case**: Index building during database startup or bulk import
-
-### Remove Node
-
-Removes a node from the label index:
-
-```cpp
-void LabelIndex::removeNode(int64_t entityId, const std::string &label) {
-    std::unique_lock lock(mutex_);
-
-    if (rootId_ == 0) {
-        return;
-    }
-
-    // Remove from B+Tree
-    bool success = treeManager_->remove(rootId_, label, entityId);
-
-    // Note: Underflow handling is automatic in IndexTreeManager
-    (void) success;
-}
-```
-
-**Characteristics**:
-- **Time Complexity**: O(log n)
-- **Automatic rebalancing**: B+Tree handles underflow via merge/redistribute
-
-### Find Nodes
-
-Retrieves all nodes with a specific label:
-
-```cpp
-std::vector<int64_t> LabelIndex::findNodes(const std::string &label) const {
-    std::shared_lock lock(mutex_);
-
-    if (rootId_ == 0) {
-        return {};
-    }
-
-    return treeManager_->find(rootId_, label);
-}
-```
-
-**Characteristics**:
-- **Time Complexity**: O(log n + k) where k is the number of nodes with the label
-- **Concurrency**: Shared lock allows concurrent reads
-- **Return**: Vector of node IDs (empty if label not found)
-
-### Has Label
-
-Checks if a specific node has a label:
-
-```cpp
-bool LabelIndex::hasLabel(int64_t entityId, const std::string &label) const {
-    std::shared_lock lock(mutex_);
-
-    if (rootId_ == 0) {
-        return false;
-    }
-
-    auto nodes = treeManager_->find(rootId_, label);
-    return std::ranges::find(nodes, entityId) != nodes.end();
-}
-```
-
-**Use Case**: Fast label existence check without fetching all nodes
+When the query planner encounters a label filter such as `MATCH (n:Person)`, it checks whether the label index is available and enabled. If so, the executor calls `findNodes("Person")` to retrieve matching node IDs directly from the B+Tree, then fetches the full node data from storage. Without the index, a full node scan with a label filter would be required.
 
 ## Index Lifecycle
 
-### Create Index
+The label index transitions through several states during its lifetime. State is persisted via `SystemStateManager`, which stores the B+Tree root ID and an enabled flag as key-value pairs.
 
-Explicitly enables the label index:
+### Lifecycle State Diagram
 
-```cpp
-void LabelIndex::createIndex() {
-    std::unique_lock lock(mutex_);
-    enabled_ = true;
-
-    // Persist enabled state
-    std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-    systemStateManager_->set<bool>(
-        configKey,
-        storage::state::keys::Fields::ENABLED,
-        true
-    );
-}
+```mermaid
+stateDiagram-v2
+    [*] --> Uninitialized
+    Uninitialized --> Disabled: construct LabelIndex
+    Disabled --> Active: createIndex()
+    Active --> Active: addNode / removeNode / findNodes
+    Active --> Cleared: clear()
+    Cleared --> Active: addNode (auto-reinitializes)
+    Active --> Dropped: drop()
+    Cleared --> Dropped: drop()
+    Dropped --> [*]
 ```
 
-**Behavior**:
-- Sets enabled flag to true
-- Persists configuration to system state
-- Subsequent restarts will load index as enabled
+### Initialization
 
-### Clear Index
+When a `LabelIndex` is constructed, it calls `initialize()` automatically. This method loads two pieces of persistent state from `SystemStateManager`:
 
-Removes all index data while keeping enabled state:
+1. **Root ID** -- the segment ID of the B+Tree root node. A value of 0 means no B+Tree has been created yet.
+2. **Enabled flag** -- stored under a config key derived from the state key with a config suffix. Defaults to false if absent.
 
-```cpp
-void LabelIndex::clear() {
-    std::unique_lock lock(mutex_);
-    if (rootId_ != 0) {
-        treeManager_->clear(rootId_);
-        rootId_ = 0;
-    }
-}
+A safety fallback prevents data drift: if the root ID is non-zero but the enabled flag is false, the index forces `enabled_` to true. This ensures that any physical B+Tree data present on disk is never orphaned by a stale enabled flag.
+
+### createIndex()
+
+Calling `createIndex()` sets `enabled_` to true and immediately persists the enabled flag to `SystemStateManager`. This guarantees that after a restart, `initialize()` will read the flag as true and the index will be active.
+
+### clear()
+
+The `clear()` method removes all B+Tree data by delegating to `IndexTreeManager::clear(rootId_)`, then resets the in-memory root ID to 0. Importantly, the enabled flag remains true. This makes `clear()` suitable for index rebuild scenarios where the index will be repopulated immediately.
+
+### drop()
+
+The `drop()` method performs a full teardown: it calls `clear()` to remove all B+Tree data, sets `enabled_` to false, and removes both the config key and the root ID key from `SystemStateManager`. After `drop()`, the index is in a clean state as if it never existed.
+
+### saveState()
+
+During normal operation, `saveState()` persists the current root ID (if non-zero) and the enabled flag (if true) to `SystemStateManager`. It uses a sparse persistence strategy: only non-default values are written, minimizing state storage overhead. The `flush()` method delegates directly to `saveState()`.
+
+## Core Operations
+
+### addNode
+
+Adds a single node-to-label mapping to the index. The operation acquires an exclusive lock, initializes the B+Tree on first use (when root ID is 0), then inserts the label-to-node-ID pair via `IndexTreeManager::insert()`. If the B+Tree root splits during insertion, the in-memory root ID is updated to the new root.
+
+- **Time complexity**: O(log n) where n is the number of unique labels
+- **Space complexity**: O(1) amortized per insertion (B+Tree growth)
+- **Concurrency**: Exclusive lock
+
+### addNodesBatch
+
+Accepts a map of label strings to vectors of node IDs and inserts them in bulk. The operation acquires a single exclusive lock for the entire batch, initializes the B+Tree if needed, then iterates over each label group. For each label, it prepares a vector of `PropertyValue`-to-node-ID pairs and calls `IndexTreeManager::insertBatch()`.
+
+This grouping by label is important for B+Tree efficiency: all entries sharing the same key are inserted together, reducing the number of tree traversals and node splits.
+
+### Batch Insert Flow
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant LI as LabelIndex
+    participant ITM as IndexTreeManager
+    participant BPT as B+Tree
+
+    Caller->>LI: addNodesBatch({Person: [1,2,3], Company: [10,20]})
+    LI->>LI: Acquire exclusive lock
+    LI->>LI: Initialize B+Tree if rootId_ == 0
+    loop For each label group
+        LI->>LI: Prepare batch entries for label
+        LI->>ITM: insertBatch(rootId_, entries)
+        ITM->>BPT: Bulk insert entries
+        BPT-->>ITM: New root ID (if split)
+        ITM-->>LI: Updated root ID
+    end
+    LI-->>Caller: Batch complete
 ```
 
-**Use Case**: Index rebuild or reindexing scenarios
+**Optimizations**:
 
-### Drop Index
+- **Single lock acquisition**: Reduces contention compared to individual inserts
+- **Grouped by label**: Minimizes B+Tree traversals and node splits
+- **Pre-allocated vectors**: Batch entry vectors are reserved to the exact size needed
 
-Completely removes the index:
+### removeNode
 
-```cpp
-void LabelIndex::drop() {
-    clear();  // Remove all data
+Removes a node-to-label mapping. If the B+Tree has not been initialized (root ID is 0), the operation returns immediately. Otherwise it delegates to `IndexTreeManager::remove()`, which handles underflow automatically through redistribution or merging of B+Tree nodes.
 
-    std::unique_lock lock(mutex_);
-    enabled_ = false;
+- **Time complexity**: O(log n)
+- **Automatic rebalancing**: B+Tree handles underflow via merge or redistribute
 
-    // Remove configuration keys
-    std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-    systemStateManager_->remove(configKey);
-    systemStateManager_->remove(stateKey_);
-}
-```
+### findNodes
 
-**Behavior**:
-- Clears all index data
-- Disables the index
-- Removes persistent state
-- Restores "clean" state (as if index never existed)
+Retrieves all node IDs associated with a given label. Returns an empty vector if the B+Tree has not been initialized. The operation acquires a shared lock, allowing concurrent reads from multiple threads.
 
-### Save State
+- **Time complexity**: O(log n + k) where k is the number of nodes with the label
+- **Concurrency**: Shared lock
+- **Return**: Vector of node IDs
 
-Persists index state to disk:
+### hasLabel
 
-```cpp
-void LabelIndex::saveState() const {
-    std::shared_lock lock(mutex_);
+Checks whether a specific node ID is associated with a given label. Internally it calls `findNodes()` and searches the result for the target ID. Returns false if the B+Tree has not been initialized.
 
-    // Save Root ID if data exists
-    if (rootId_ != 0) {
-        systemStateManager_->set<int64_t>(
-            stateKey_,
-            storage::state::keys::Fields::ROOT_ID,
-            rootId_
-        );
-    }
-
-    // Save Enabled Config (only if true)
-    if (enabled_) {
-        std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-        systemStateManager_->set<bool>(
-            configKey,
-            storage::state::keys::Fields::ENABLED,
-            true
-        );
-    }
-}
-```
-
-**Persistence Strategy**:
-- Only persist non-zero values (sparse state)
-- Enabled = false is implicit (not stored)
-- Minimizes state storage overhead
+- **Time complexity**: O(log n + k) where k is the number of nodes with the label
+- **Concurrency**: Shared lock
+- **Use case**: Fast label existence check without fetching full node data
 
 ## B+Tree Integration
 
-### IndexTreeManager
+LabelIndex delegates all B+Tree operations to `IndexTreeManager` (source: `include/graph/core/IndexTreeManager.hpp`). The manager provides the following capabilities:
 
-The label index delegates B+Tree operations to `IndexTreeManager`:
+| Method | Description |
+|--------|-------------|
+| `initialize()` | Creates a new empty B+Tree root node and returns its ID |
+| `insert(rootId, key, value)` | Inserts a single key-value pair; returns the (possibly new) root ID |
+| `insertBatch(rootId, entries)` | Bulk-inserts multiple key-value pairs; returns the (possibly new) root ID |
+| `remove(rootId, key, value)` | Removes a specific key-value pair; handles rebalancing automatically |
+| `find(rootId, key)` | Returns all values associated with the given key |
+| `clear(rootId)` | Deletes the entire B+Tree rooted at the given ID |
+| `findLeafNode(rootId, key)` | Locates the leaf node that would contain the given key |
 
-```cpp
-class IndexTreeManager {
-public:
-    // Initialize B+Tree
-    int64_t initialize() const;
+Key features of the B+Tree layer:
 
-    // Insert operations
-    int64_t insert(int64_t rootId, const PropertyValue &key, int64_t value);
-    int64_t insertBatch(int64_t rootId,
-                       const std::vector<std::pair<PropertyValue, int64_t>> &entries);
-
-    // Remove operations
-    bool remove(int64_t &rootId, const PropertyValue &key, int64_t value);
-
-    // Query operations
-    std::vector<int64_t> find(int64_t rootId, const PropertyValue &key) const;
-
-    // Tree management
-    void clear(int64_t rootId) const;
-    int64_t findLeafNode(int64_t rootId, const PropertyValue &key) const;
-
-private:
-    std::shared_ptr<storage::DataManager> dataManager_;
-    mutable std::shared_mutex mutex_;
-    uint32_t indexType_;
-    PropertyType keyDataType_;
-    std::function<bool(const PropertyValue &, const PropertyValue &)> keyComparator_;
-};
-```
-
-### Key Features
-
-1. **Duplicate Key Support**: Multiple node IDs can share the same label
-2. **Automatic Rebalancing**: Split/merge operations maintain balance
-3. **Blob Storage**: Large key/value lists stored externally
-4. **Type Safety**: String keys for labels, int64_t values for node IDs
+1. **Duplicate key support**: Multiple node IDs can share the same label key
+2. **Automatic rebalancing**: Split and merge operations maintain tree balance
+3. **Blob storage**: Large value lists are stored externally when they exceed node capacity
+4. **Type safety**: LabelIndex configures the tree with `PropertyType::STRING` keys and `int64_t` values for node IDs
 
 ## Concurrency Control
 
-### Shared Mutex
+LabelIndex uses `std::shared_mutex` for thread-safe access:
 
-The label index uses `std::shared_mutex` for concurrent access:
+| Lock Type | Operations | Behavior |
+|-----------|-----------|----------|
+| Shared lock | `findNodes`, `hasLabel`, `isEmpty`, `isEnabled`, `hasPhysicalData`, `saveState` | Multiple readers can proceed concurrently |
+| Exclusive lock | `addNode`, `addNodesBatch`, `removeNode`, `createIndex`, `clear`, `drop`, `initialize` | Only one writer at a time; blocks all readers |
 
-```cpp
-mutable std::shared_mutex mutex_;
-```
+This allows high read concurrency: multiple threads can query the index simultaneously. Write operations are serialized, and a writer blocks all readers until it completes.
 
-**Lock Types**:
-- **Shared Lock** (`std::shared_lock`): Concurrent reads allowed
-- **Exclusive Lock** (`std::unique_lock`): Writes require exclusive access
+## Status Queries
 
-**Lock Strategy**:
-- Read operations (`findNodes`, `hasLabel`): Shared lock
-- Write operations (`addNode`, `removeNode`): Exclusive lock
-- State queries (`isEmpty`, `isEnabled`): Shared lock
+LabelIndex exposes three methods for inspecting index state:
 
-### Performance Implications
+| Method | Description |
+|--------|-------------|
+| `isEmpty()` | Returns true if the index is not enabled (checks the enabled flag, not physical data) |
+| `isEnabled()` | Returns the enabled flag directly |
+| `hasPhysicalData()` | Returns true if the root ID is non-zero (B+Tree exists on disk) |
 
-- **High read concurrency**: Multiple threads can query simultaneously
-- **Write serialization**: Only one writer at a time
-- **No reader-writer starvation**: Fair scheduling
+Note that `isEmpty()` and `hasPhysicalData()` can return different results. An index that has been `clear()`ed is still enabled (so `isEmpty()` returns false) but has no physical data (so `hasPhysicalData()` returns false).
 
 ## Multi-Label Support
 
-Nodes can have multiple labels indexed simultaneously:
-
-```cpp
-// Node with multiple labels
-labelIndex.addNode(1, "Person");
-labelIndex.addNode(1, "Employee");
-labelIndex.addNode(1, "Manager");
-
-// Query by any label
-auto persons = labelIndex.findNodes("Person");    // Returns [1, ...]
-auto employees = labelIndex.findNodes("Employee"); // Returns [1, ...]
-auto managers = labelIndex.findNodes("Manager");   // Returns [1, ...]
-```
-
-**Characteristics**:
-- Each label → node ID mapping is independent
-- Removing a node from one label doesn't affect others
-- B+Tree structure naturally supports multi-value keys
-
-## Integration with Cypher Query
-
-### Query Planning
-
-The query planner uses label index for optimization:
-
-```cypher
--- Query with label filter
-MATCH (n:Person) RETURN n;
-
--- Planner optimization
-1. Check if label index exists for "Person"
-2. If exists: Use LabelIndex.findNodes("Person")
-3. If not: Full node scan with label filter
-```
-
-### Query Execution
-
-```cpp
-// Pseudo-code for query execution
-std::vector<Node> executeLabelScan(const std::string &label) {
-    // Use label index if available
-    if (indexManager->hasLabelIndex("Node")) {
-        auto nodeIds = labelIndex.findNodes(label);
-        return fetchNodesByIds(nodeIds);
-    }
-
-    // Fallback to full scan
-    return fullScanWithLabelFilter(label);
-}
-```
-
-**Performance Comparison**:
-- **With Index**: O(log n + k) where k = nodes with label
-- **Without Index**: O(N) where N = total nodes
+Nodes can have multiple labels indexed simultaneously. Each label-to-node-ID mapping is stored as an independent entry in the B+Tree. Adding a node under the "Person" label, then under the "Employee" label, creates two separate entries. Querying by either label returns the node. Removing a node from one label does not affect its presence under other labels.
 
 ## Performance Characteristics
 
@@ -522,15 +241,16 @@ std::vector<Node> executeLabelScan(const std::string &label) {
 | hasLabel | O(log n + k) | O(log n + k) |
 
 Where:
-- n = number of unique labels
-- m = number of nodes in batch
+
+- n = number of unique labels in the B+Tree
+- m = number of nodes in the batch
 - k = number of nodes with the specified label
 
 ### Space Complexity
 
 | Component | Space | Description |
 |-----------|-------|-------------|
-| B+Tree Nodes | O(n × b) | n labels, b = branch factor |
+| B+Tree Nodes | O(n x b) | n labels, b = branch factor |
 | Leaf Entries | O(N) | All node ID references |
 | State Metadata | O(1) | Root ID + enabled flag |
 
@@ -542,9 +262,9 @@ Total: **O(N)** where N = total number of node-label associations
 For 1 million nodes with 2 labels each:
 
 B+Tree Structure:
-- Internal nodes: ~100 nodes × 256 bytes = 25.6 KB
-- Leaf nodes: ~500 nodes × 256 bytes = 128 KB
-- Node ID references: 2M × 8 bytes = 16 MB
+- Internal nodes: ~100 nodes x 256 bytes = 25.6 KB
+- Leaf nodes: ~500 nodes x 256 bytes = 128 KB
+- Node ID references: 2M x 8 bytes = 16 MB
 
 Total Index Size: ~16.15 MB
 Overhead per Node-Label: ~8 bytes
@@ -554,93 +274,18 @@ State Storage:
 - Enabled flag: 1 byte (if true)
 ```
 
-## Usage Examples
-
-### Basic Operations
-
-```cpp
-// Create label index
-LabelIndex labelIndex(dataManager, systemStateManager,
-                      IndexTypes::NODE_LABEL_TYPE,
-                      StateKeys::NODE_LABEL_ROOT);
-
-// Add nodes with labels
-labelIndex.addNode(1, "Person");
-labelIndex.addNode(2, "Company");
-labelIndex.addNode(3, "Person");
-
-// Find all nodes with a label
-auto persons = labelIndex.findNodes("Person");  // [1, 3]
-auto companies = labelIndex.findNodes("Company"); // [2]
-
-// Check if node has label
-bool isPerson = labelIndex.hasLabel(1, "Person");  // true
-bool isCompany = labelIndex.hasLabel(1, "Company"); // false
-
-// Remove node from label
-labelIndex.removeNode(1, "Person");
-```
-
-### Batch Import
-
-```cpp
-// Batch import for performance
-std::unordered_map<std::string, std::vector<int64_t>> nodesByLabel;
-
-nodesByLabel["Person"] = {1, 2, 3, 4, 5};
-nodesByLabel["Company"] = {10, 20, 30, 40, 50};
-nodesByLabel["Location"] = {100, 200, 300};
-
-// Single efficient operation
-labelIndex.addNodesBatch(nodesByLabel);
-```
-
-### Index Management
-
-```cpp
-// Create (enable) index
-labelIndex.createIndex();
-
-// Check status
-if (labelIndex.isEnabled()) {
-    std::cout << "Index is active" << std::endl;
-}
-
-// Rebuild index
-labelIndex.clear();
-// ... repopulate with current data ...
-
-// Drop index completely
-labelIndex.drop();
-
-// Persist state
-labelIndex.flush();
-```
-
-## Best Practices
-
-1. **Enable Early**: Create label indexes before adding data for optimal performance
-2. **Batch Imports**: Use `addNodesBatch` for bulk operations
-3. **Monitor State**: Check `isEnabled()` and `hasPhysicalData()` status
-4. **Persist Regularly**: Call `flush()` after critical operations
-5. **Cleanup**: Use `drop()` when index is no longer needed
-
 ## Limitations
 
-1. **No Partial Matches**: Labels must match exactly (no wildcards)
-2. **No Range Queries**: Labels are categorical, not ordered
-3. **Memory Bound**: Entire index structure must fit in memory
-4. **Write Serialization**: Only one concurrent writer
+1. **No partial matches**: Labels must match exactly (no wildcards or prefix searches)
+2. **No range queries**: Labels are categorical, not ordered
+3. **Memory bound**: Entire index structure must fit in memory during operations
+4. **Write serialization**: Only one concurrent writer at a time
 
-## Future Enhancements
+## Source Locations
 
-Potential improvements for label index:
-
-1. **Compressed Labels**: Dictionary encoding for common labels
-2. **Label Statistics**: Track label frequencies for query optimization
-3. **Hybrid Indexing**: Combine with property indexes for compound queries
-4. **Incremental Updates**: Optimize for incremental label changes
-5. **Distributed Indexing**: Shard labels across multiple nodes
+- `include/graph/storage/indexes/LabelIndex.hpp` -- LabelIndex class definition
+- `src/storage/indexes/LabelIndex.cpp` -- LabelIndex implementation
+- `include/graph/core/IndexTreeManager.hpp` -- B+Tree manager used by LabelIndex
 
 ## See Also
 

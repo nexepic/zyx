@@ -1,6 +1,6 @@
 ---
 title: 段格式
-description: FileHeader/SegmentHeader 与 activity bitmap 的当前定义。
+description: FileHeader、SegmentHeader、activity bitmap 与链表结构。
 category: 存储格式
 categoryOrder: 3
 order: 8
@@ -11,36 +11,177 @@ projectOrder: 1
 ---
 # 段格式
 
-底层结构定义在 `StorageHeaders.hpp`。
+底层存储格式定义在 `StorageHeaders.hpp`。数据库文件被划分为固定大小的段，以链表形式组织，每种实体类型各一条链。
+
+## 常量
+
+| 常量 | 值 | 说明 |
+|------|-----|------|
+| `FILE_HEADER_MAGIC_STRING` | `<ZYX-DB>` | 文件起始的魔数字符串 |
+| `STORAGE_PAGE_SIZE` | 4096 字节 | OS 页大小 |
+| `SEGMENT_SIZE` | 128 KB（32 页） | 每段数据区大小 |
+| `FILE_HEADER_SIZE` | 128 字节 | 文件头大小（对齐填充） |
+| `SEGMENT_HEADER_SIZE` | 128 字节 | 段头大小（对齐填充） |
+| `MAX_BITMAP_SIZE` | 64 字节（512 位） | Activity bitmap 容量 |
+
+每段实际实体数量取决于实体类型的固定记录大小。段大小常量可能在不同版本间变化 — 始终以源码头文件为准。
 
 ## 文件级结构
 
-- `FileHeader`：魔数、版本、各实体链表头、max id、CRC
-- 魔数：`<ZYX-DB>`
-- 版本字段：`version`
+```mermaid
+graph TB
+    subgraph "数据库文件"
+        FH["FileHeader (128 bytes)"]
+        S0["Segment 0 (Node)"]
+        S1["Segment 1 (Node)"]
+        S2["Segment 2 (Edge)"]
+        S3["Segment 3 (Property)"]
+        SN["... 更多段 ..."]
+    end
 
-## 段级结构
+    FH -->|"node_segment_head"| S0
+    S0 -->|"next_segment_offset"| S1
+    S1 -->|"next_segment_offset = 0"| NULL1["(链尾)"]
 
-`SegmentHeader` 记录：
+    FH -->|"edge_segment_head"| S2
+    FH -->|"property_segment_head"| S3
+    FH -->|"..."| SN
+```
 
-- 段偏移与前后指针
-- `start_id`、`capacity`、`used`、`inactive_count`
-- `data_type`
-- `activity_bitmap`
-- `segment_crc`
-- `needs_compaction` / `is_dirty`
+每种实体类型有独立的段链表。`FileHeader` 存储每条链的头偏移。
 
-## 活跃位图
+## FileHeader
 
-- bitmap 记录实体槽位是否活跃
-- 支持快速计算 active/free 数量
-- 与 `inactive_count` 一起反映碎片化程度
+```mermaid
+classDiagram
+    class FileHeader {
+        <<struct, 128 bytes>>
+        +char magic[8]
+        +uint64 node_segment_head
+        +uint64 edge_segment_head
+        +uint64 property_segment_head
+        +uint64 blob_segment_head
+        +uint64 index_segment_head
+        +uint64 state_segment_head
+        +int64 max_node_id
+        +int64 max_edge_id
+        +int64 max_prop_id
+        +int64 max_blob_id
+        +int64 max_index_id
+        +int64 max_state_id
+        +uint32 version
+        +uint32 data_crc
+    }
+```
 
-## 为什么文档不写死容量数字
+| 字段 | 用途 |
+|------|------|
+| `magic` | 验证字符串：`<ZYX-DB>` |
+| `*_segment_head` | 各实体类型链表的第一个段的文件偏移（0 = 空） |
+| `max_*_id` | 各实体类型已分配的最高 ID — 启动时被 `IDAllocator` 使用 |
+| `version` | 文件格式版本（当前为 3） |
+| `data_crc` | 头部内容的 CRC32 校验 |
 
-段尺寸、每段实体容量等常量由代码常量推导（如 `SEGMENT_SIZE`、`NODES_PER_SEGMENT`）。为避免文档滞后，推荐直接查看头文件常量，而不是依赖静态文档表格。
+## SegmentHeader
+
+```mermaid
+classDiagram
+    class SegmentHeader {
+        <<struct, 128 bytes>>
+        +uint64 file_offset
+        +uint64 next_segment_offset
+        +uint64 prev_segment_offset
+        +int64 start_id
+        +uint32 capacity
+        +uint32 used
+        +uint32 inactive_count
+        +uint32 data_type
+        +uint32 bitmap_size
+        +uint8 activity_bitmap[64]
+        +uint32 segment_crc
+        +uint8 needs_compaction
+        +uint8 is_dirty
+    }
+```
+
+| 字段 | 用途 |
+|------|------|
+| `file_offset` | 文件中的自引用偏移 |
+| `next_segment_offset` | 链表中下一个段（0 = 尾部） |
+| `prev_segment_offset` | 链表中上一个段（0 = 头部） |
+| `start_id` | 该段第一个槽位的实体 ID |
+| `capacity` | 实体槽位总数 |
+| `used` | 当前占用的槽位数 |
+| `inactive_count` | 已删除（墓碑标记）的槽位数 |
+| `data_type` | 段中存储的实体类型 |
+| `activity_bitmap` | 512 位位图 — bit = 1 表示槽位活跃 |
+| `segment_crc` | 段数据的 CRC32 用于完整性检查 |
+| `needs_compaction` | 碎片化超过阈值时设置的标志 |
+| `is_dirty` | 表示有未刷新修改的标志 |
+
+## 段内部布局
+
+```mermaid
+graph LR
+    subgraph "Segment（128 KB 总数据区）"
+        SH["SegmentHeader (128 bytes)"]
+        BM["Activity Bitmap（最多 64 bytes）"]
+        DATA["实体数据（固定大小槽位）"]
+    end
+
+    SH --> BM --> DATA
+```
+
+每段以固定大小槽位存储实体。槽位大小取决于实体类型。Activity bitmap 跟踪哪些槽位在使用中：
+
+- Bit `i` = 1 → 槽位 `i` 活跃（被存活实体占用）
+- Bit `i` = 0 → 槽位 `i` 空闲（从未使用或已墓碑标记）
+
+Bitmap 的作用：
+
+- **快速活跃/空闲计数** — 对 bitmap 做 popcount 得到活跃数。
+- **碎片化检测** — `inactive_count` 跟踪墓碑标记的槽位。当 `inactive_count / capacity` 超过阈值时，段被标记为需要压缩。
+- **按 ID 查找实体** — 给定实体 ID，`start_id` 和 bitmap 确定槽位索引以及实体是否活跃。
+
+## 段链操作
+
+### 分配新段
+
+```mermaid
+sequenceDiagram
+    participant SW as StorageWriter
+    participant SA as SegmentAllocator
+    participant SIO as StorageIO
+    participant ST as SegmentTracker
+
+    SW->>SA: allocateSegment(entityType)
+    SA->>SIO: append(segment data) — 扩展文件
+    SIO-->>SA: 新文件偏移
+    SA->>SA: 初始化 SegmentHeader（start_id, capacity, data_type）
+    SA->>ST: registerSegment(header)
+    SA->>ST: updateChainHead(entityType, 新偏移)
+    SA-->>SW: 段偏移
+```
+
+### 实体查找
+
+```mermaid
+graph TD
+    A["getEntity(entityType, id)"] --> B["SegmentTracker：通过链查找段"]
+    B --> C["计算槽位索引 = id - start_id"]
+    C --> D{Bitmap 位已设置?}
+    D -->|是| E["在槽位偏移处读取实体"]
+    D -->|否| F["实体未找到 / 已删除"]
+```
+
+## 校验和
+
+每个段携带 `segment_crc` 字段，对段数据（排除校验和字段本身）计算 CRC32。`FileStorage::verifyIntegrity()` 期间验证所有段校验和以检测文件损坏。
 
 ## 源码定位
 
-- `include/graph/storage/StorageHeaders.hpp`
-- `include/graph/storage/SegmentTracker.hpp`
+| 组件 | 路径 |
+|------|------|
+| StorageHeaders | `include/graph/storage/StorageHeaders.hpp` |
+| SegmentTracker | `include/graph/storage/SegmentTracker.hpp` |
+| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
