@@ -2,12 +2,14 @@
 title: Import & Export
 description: Practical data ingestion/export paths in ZYX, including LOAD CSV, CLI import, API export, and backup workflow.
 category: Advanced Topics
+categoryOrder: 3
 order: 9
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Import & Export
 
 ## Capability Matrix
@@ -29,7 +31,9 @@ flowchart LR
   B -->|Service objects| E[API execute/bulk methods]
 ```
 
-## Path 1: LOAD CSV in Query Pipeline
+## Path 1: LOAD CSV
+
+Ingest CSV within the Cypher query pipeline — suitable for small to medium files:
 
 ```cypher
 LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
@@ -37,10 +41,12 @@ MERGE (:User {name: row.name})
 RETURN count(*) AS imported;
 ```
 
-## Path 2: CLI Bulk Import Command
+## Path 2: CLI Bulk Import
+
+Dedicated import command for large file bulk loading:
 
 ```bash
-./buildDir/apps/cli/zyx import \
+zyx import \
   --database ./demo.graph \
   --nodes ./nodes.csv \
   --relationships ./rels.csv \
@@ -49,20 +55,54 @@ RETURN count(*) AS imported;
   --skip-bad-entries
 ```
 
-CSV mode understands Neo4j-style headers such as:
+### Supported File Formats
 
-- Node: `:ID`, `:LABEL`, `name:STRING`, `age:INT`
-- Relationship: `:START_ID`, `:END_ID`, `:TYPE`, `since:INT`
+#### CSV (Neo4j-compatible headers)
 
-JSONL mode currently prioritizes reserved keys (`_id`, `_labels`, `_start`, `_end`, `_type`) for graph mapping.
+Node file example:
+
+```csv
+:name:STRING,:ID,:LABEL,:age:INT
+"Alice",p1,"Person;Employee",30
+"Bob",p2,"Person",25
+```
+
+Relationship file example:
+
+```csv
+:START_ID,:END_ID,:TYPE,:since:INT
+p1,p2,KNOWS,2026
+```
+
+#### JSONL
+
+```json
+{"_id": "p1", "_labels": ["Person"], "name": "Alice", "age": 30}
+{"_id": "p2", "_labels": ["Person"], "name": "Bob", "age": 25}
+```
+
+### Import Command Options
+
+| Option | Description |
+|---|---|
+| `--database, --db <path>` | Database path (required) |
+| `--nodes <files>` | Node data files (required) |
+| `--relationships <files>` | Relationship data files (optional) |
+| `--format <auto\|csv\|jsonl>` | File format (default: `auto`) |
+| `--array-delimiter <char>` | Array value delimiter (default: `;`) |
+| `--skip-bad-entries` | Skip malformed rows instead of failing |
+
+:::tip
+Use `--skip-bad-entries` to tolerate minor format issues during import. Check the log after import to confirm the number of skipped rows.
+:::
 
 ## Path 3: Export and Backup
 
-- Export query results through C++/C API result iteration.
-- For physical backup:
-  1. `save` (or API `save()`) and stop writes.
-  2. Copy database files.
-  3. Restore by replacing files before next open.
+### Query Result Export
+
+Iterate query results through C++ / C API. The application layer decides the output format.
+
+### Physical Backup Workflow
 
 ```mermaid
 flowchart TD
@@ -71,3 +111,7 @@ flowchart TD
   C --> D[Store checksum and metadata]
   D --> E[Periodic restore drill]
 ```
+
+:::warning Backup Consistency
+No active write transactions must exist before physical backup. Run `save` and pause writes before copying files.
+:::

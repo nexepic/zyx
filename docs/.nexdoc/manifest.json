@@ -1,10 +1,9 @@
 {
   "schemaVersion": 1,
   "generator": "create-nexdoc",
-  "templateVersion": "0.5.0",
-  "generatedAt": "2026-04-04T11:09:21.519Z",
+  "templateVersion": "0.6.0",
+  "generatedAt": "2026-04-16T15:51:08.487Z",
   "files": {
-    ".gitignore": "9d1852a8d52110b9ee5180eab4f66e6ae377a149cd3a53602fc27922e6026812",
     "README.md": "f559c51c4111de8a5bb4e92d8426e6e91f774654444b4b9ae09c0ff9ebd72efe",
     "apps/docs/.eslintrc.js": "60cec77792b2becce88a014b8e3a1a1a812c111652c011b548d9070e3c5f1d27",
     "apps/docs/__tests__/components/Breadcrumbs.test.tsx": "e7e4813a9c183c2fcc7219ee43ce9ee3c3697babd8574e69a0a563b901c4f286",
@@ -45,7 +44,7 @@
     "apps/docs/jest.config.js": "89627dcec5fbee9b27490252f90b166044280f6f1b31b6494152850b7a7303bb",
     "apps/docs/jest.setup.js": "4b3284479d0f699c35b14edc87da85e6ae31b444c0a6895d26f406b293f3830f",
     "apps/docs/lib/config.ts": "60960a544680c6fc98db95f885af2c4ba2650cba7f1b9d86c9ca713e5dd40bf0",
-    "apps/docs/lib/docs.ts": "5095f2171aea1790edf3ceaa5122cc8bcf9c39554b6a720b8b2d11ddcc341401",
+    "apps/docs/lib/docs.ts": "2a1b8bd93667c6f942551f48af05d873d56af3396000bbfbce38e9727dfc071f",
     "apps/docs/lib/i18n.ts": "22c4144e4aefd1158090731dca040f069845405bedea25887a00475297fa904e",
     "apps/docs/lib/mdx.ts": "b3bdb2deb238bfcbb177d99f875ec2f2ab7e8745189cf9e65e7b658fa8d723c5",
     "apps/docs/lib/metadata.ts": "83dfa4627339c12f0046dea219f69bfbf0a80705e3f1b9ab397f47a745f32240",

@@ -69,22 +69,27 @@ meson test -C buildDir <test_name>
 
 ## Quick Start
 
-### 1) Build
+Most users can run ZYX directly from a pre-built executable or package-manager installation.
+Building from source is optional.
+
+### 1) Install or download the CLI executable
 
 ```bash
-./scripts/run_tests.sh --quick
+zyx --help
 ```
+
+If the executable is not on `PATH`, use the full path (for example `./zyx` or `./buildDir/apps/cli/zyx`).
 
 ### 2) Create and open a database
 
 ```bash
-./buildDir/apps/cli/zyx database create ./demo.graph
+zyx database create ./demo.graph
 ```
 
 Open existing DB:
 
 ```bash
-./buildDir/apps/cli/zyx database open ./demo.graph
+zyx database open ./demo.graph
 ```
 
 ### 3) Run first queries (in REPL)
@@ -102,10 +107,10 @@ RETURN a.name, b.name, r.since;
 
 ```bash
 # Script mode
-./buildDir/apps/cli/zyx database exec ./demo.graph ./seed.cypher
+zyx database exec ./demo.graph ./seed.cypher
 
 # Bulk import (CSV / JSONL)
-./buildDir/apps/cli/zyx import \
+zyx import \
   --database ./demo.graph \
   --nodes ./nodes.csv \
   --relationships ./rels.csv

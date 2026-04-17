@@ -2,12 +2,14 @@
 title: Batch Operations
 description: Reliable high-volume write patterns using Cypher batching, subquery transactions, scripts, and native APIs.
 category: Advanced Topics
+categoryOrder: 3
 order: 8
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Batch Operations
 
 ## Strategy Selection
@@ -25,6 +27,8 @@ flowchart TD
 
 ## Pattern A: UNWIND + Explicit Transaction
 
+Best for medium-scale writes when data is already in memory as a list:
+
 ```cypher
 BEGIN;
 UNWIND [
@@ -37,6 +41,8 @@ COMMIT;
 
 ## Pattern B: Subquery Transaction Batching
 
+Best for large-scale writes with automatic batch commits:
+
 ```cypher
 UNWIND $rows AS row
 CALL {
@@ -46,25 +52,35 @@ CALL {
 RETURN count(*) AS processed;
 ```
 
+:::info
+`IN TRANSACTIONS OF N ROWS` splits data into batches of N rows, each committed independently. A failed batch does not affect already-completed batches.
+:::
+
 ## Pattern C: Script Execution
 
+Best for repeatable operational runs or CI-style seeding:
+
 ```bash
-./buildDir/apps/cli/zyx database exec ./demo.graph ./batch.cypher
+zyx database exec ./demo.graph ./batch.cypher
 ```
 
-Use this when you need repeatable operational runs or CI-style seeding.
+## Pattern D: Native Bulk APIs
 
-## Pattern D: Native Bulk APIs (Service Side)
+Prefer native C++ APIs for extreme throughput:
 
-Prefer native APIs for extreme throughput:
+| Method | Description |
+|---|---|
+| `Database::createNodes(label, propsList)` | Batch-create nodes with the same label |
+| `Database::createNodeRetId(label, props)` | Create a node and immediately return its internal ID |
+| `Database::createEdgeById(srcId, dstId, type, props)` | Create an edge by ID directly, O(1) complexity |
 
-- `Database::createNodes(...)`
-- `Database::createNodeRetId(...)`
-- `Database::createEdgeById(...)`
+:::tip
+`createEdgeById` bypasses query parsing and index lookups, directly creating edges by internal ID — the most efficient way to create edges.
+:::
 
 ## Operational Checklist
 
-- Define a clear batch size and commit cadence.
-- Log successful/failed batch ranges for restartability.
-- Keep idempotent keys for replay safety (`MERGE` where needed).
-- Run integrity verification query after each major batch.
+- Define a clear batch size and commit cadence
+- Log successful/failed batch ranges for restartability
+- Keep idempotent keys for replay safety (`MERGE` where needed)
+- Run integrity verification query after each major batch

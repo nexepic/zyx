@@ -2,12 +2,14 @@
 title: Transactions
 description: Correct transaction usage in REPL/API, including explicit boundaries, rollback strategy, and concurrency notes.
 category: Advanced Topics
+categoryOrder: 3
 order: 7
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Transactions
 
 ## Transaction Lifecycle
@@ -22,7 +24,7 @@ stateDiagram-v2
   RolledBack --> Idle
 ```
 
-## Explicit Transaction in REPL
+## Explicit Transactions in REPL
 
 ```cypher
 BEGIN;
@@ -39,24 +41,42 @@ CREATE (:User {name: 'Temp'});
 ROLLBACK;
 ```
 
-## Implicit vs Explicit
+## Three Transaction Modes
 
 | Mode | Typical Use | Notes |
 |---|---|---|
-| Implicit (single statement) | Simple one-shot reads/writes | Lowest operational overhead |
+| Implicit (single statement) | Simple one-shot reads/writes | Each statement auto-wrapped in a transaction; lowest overhead |
 | Explicit (`BEGIN...COMMIT`) | Multi-step atomic updates | Clear success/failure boundary |
-| API transaction object | Service-side orchestration | Auto-rollback if not committed |
+| API transaction object | Service-side orchestration | C++ `Transaction` class; auto-rolls back on destruction if not committed |
+
+:::tip API Auto-Rollback
+A `Transaction` object obtained through the C++ API will automatically roll back when destroyed without a prior `commit()` call, ensuring no uncommitted dirty data is left behind.
+:::
 
 ## Behavior Notes
 
-- Nested transactions are not supported.
-- Write workload is single-writer oriented; reads rely on snapshots.
-- Uncommitted changes are not durable until commit.
-- Explicit `save`/flush can be used after commit for operational control.
+:::warning Concurrency Model
+ZYX uses a **single-writer/multi-reader** model: only one write transaction is allowed at a time, while read transactions execute concurrently via snapshot isolation. Nested transactions are not supported.
+:::
+
+- Uncommitted changes are not durable until `COMMIT`
+- After `COMMIT`, data is written to WAL and can be recovered even if the process crashes
+- Use `save` or API `save()` after commit when immediate disk persistence is needed
 
 ## Failure Handling Pattern
 
-1. Start explicit transaction for multi-step write.
-2. Validate intermediate assumptions with `MATCH ... RETURN`.
-3. `COMMIT` only when all checks pass.
-4. `ROLLBACK` on any semantic or business failure.
+```mermaid
+flowchart TD
+  A[BEGIN] --> B[Execute write statements]
+  B --> C{Intermediate check passed?}
+  C -->|Yes| D{All done?}
+  C -->|No| E[ROLLBACK]
+  D -->|Yes| F[COMMIT]
+  D -->|No| B
+  F --> G[save — optional flush]
+```
+
+1. Start an explicit transaction for multi-step writes
+2. Validate intermediate assumptions with `MATCH ... RETURN`
+3. `COMMIT` only when all checks pass
+4. `ROLLBACK` on any semantic or business failure

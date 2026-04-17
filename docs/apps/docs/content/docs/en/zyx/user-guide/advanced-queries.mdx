@@ -2,15 +2,29 @@
 title: Advanced Queries
 description: Compose pipelines with WITH/UNION/UNWIND, use procedures/subqueries, and run LOAD CSV safely.
 category: Advanced Topics
+categoryOrder: 3
 order: 6
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Advanced Queries
 
-## 1) WITH as a Pipeline Boundary
+This page covers the core constructs for composing complex query pipelines.
+
+```mermaid
+flowchart LR
+  A[Data source] --> B[WITH segmentation]
+  B --> C[Subquery/procedure]
+  C --> D[UNION merge]
+  D --> E[RETURN result]
+```
+
+## WITH — Pipeline Boundary
+
+`WITH` splits a query into stages, each with independent filtering and projection:
 
 ```cypher
 MATCH (p:Person)
@@ -20,7 +34,13 @@ RETURN p.name, age
 ORDER BY age DESC;
 ```
 
-## 2) UNION / UNION ALL
+:::info
+After `WITH`, only the listed variables remain available in subsequent stages. Unlisted variables are discarded.
+:::
+
+## UNION / UNION ALL
+
+Combine results from multiple structurally identical queries:
 
 ```cypher
 MATCH (n:Person) RETURN n.name AS name
@@ -28,14 +48,21 @@ UNION ALL
 MATCH (n:Company) RETURN n.name AS name;
 ```
 
-## 3) UNWIND for Row Expansion
+| Type | Behavior |
+|---|---|
+| `UNION` | Deduplicated merge |
+| `UNION ALL` | Keep all rows (including duplicates) |
+
+## UNWIND — Expand into Rows
+
+Expand a list into multiple rows — commonly used as a data source for batch operations:
 
 ```cypher
 UNWIND [1, 2, 3] AS x
 RETURN x, x * 10;
 ```
 
-## 4) CALL Subquery and Transactional Batching
+## CALL Subquery and Transactional Batching
 
 ```cypher
 MATCH (n:Input)
@@ -46,38 +73,73 @@ CALL {
 RETURN n.val;
 ```
 
-## 5) LOAD CSV
+:::tip
+`IN TRANSACTIONS OF N ROWS` commits in batches of N rows, ideal for large-volume writes. See [Batch Operations](batch-operations).
+:::
 
-With headers:
+## LOAD CSV
+
+Ingest CSV files directly within a query:
 
 ```cypher
 LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
 RETURN row.name, row.age;
 ```
 
-Custom delimiter:
+Custom field delimiter (e.g., TSV):
 
 ```cypher
 LOAD CSV WITH HEADERS FROM 'file:///tmp/users.tsv' AS row FIELDTERMINATOR '\t'
 RETURN row.name;
 ```
 
-## 6) Procedure Surface
+## Built-in Procedures
 
-| Domain | Procedures |
+### Config & Stats
+
+| Procedure | Description |
 |---|---|
-| Config & stats | `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, `dbms.resetStats` |
-| Vector | `db.index.vector.queryNodes`, `db.index.vector.train` |
-| Lightweight algo | `algo.shortestPath` |
-| GDS projection | `gds.graph.project`, `gds.graph.drop` |
-| GDS algorithms | `gds.pageRank.stream`, `gds.wcc.stream`, `gds.betweenness.stream`, `gds.closeness.stream`, `gds.shortestPath.dijkstra.stream` |
+| `dbms.listConfig()` | List all configuration items |
+| `dbms.getConfig(key)` | Get a specific config value |
+| `dbms.setConfig(key, value)` | Set a configuration item |
+| `dbms.showStats()` | View database statistics |
+| `dbms.resetStats()` | Reset statistics counters |
 
-## 7) EXPLAIN / PROFILE
+### Vector Index
 
-```cypher
-EXPLAIN MATCH (n:Person {name: 'Alice'}) RETURN n;
-PROFILE MATCH (n:Person {name: 'Alice'}) RETURN n;
-```
+| Procedure | Description |
+|---|---|
+| `db.index.vector.queryNodes(idx, k, vec)` | Vector nearest-neighbor search |
+| `db.index.vector.train(idx)` | Train a vector index |
+
+### Graph Algorithms
+
+| Procedure | Description |
+|---|---|
+| `algo.shortestPath(startId, endId)` | Shortest path |
+
+### GDS Graph Algorithms
+
+GDS (Graph Data Science) procedures use a named projection pattern: project a subgraph first, then run algorithms.
+
+| Procedure | Parameters | Description |
+|---|---|---|
+| `gds.graph.project(name, label, type, weight?)` | Projection name, node label, edge type, optional weight property | Create graph projection |
+| `gds.graph.drop(name)` | Projection name | Drop graph projection |
+| `gds.pageRank.stream(name, maxIter?, damping?)` | Projection name, optional iterations, optional damping factor | PageRank |
+| `gds.wcc.stream(name)` | Projection name | Weakly Connected Components |
+| `gds.betweenness.stream(name, samplingSize?)` | Projection name, optional sampling size | Betweenness Centrality |
+| `gds.closeness.stream(name)` | Projection name | Closeness Centrality |
+| `gds.shortestPath.dijkstra.stream(name, startId, endId)` | Projection name, source ID, target ID | Dijkstra shortest path |
+
+## EXPLAIN / PROFILE
+
+Two key tools for query tuning:
+
+| Command | Purpose |
+|---|---|
+| `EXPLAIN` | View the logical plan structure without executing |
+| `PROFILE` | Execute the query and return actual timing and row counts per step |
 
 ```mermaid
 flowchart LR

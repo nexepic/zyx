@@ -2,21 +2,40 @@
 title: Basic Operations
 description: Core CRUD workflow plus index/constraint/vector-index operations that are actually supported.
 category: Core Concepts
+categoryOrder: 2
 order: 3
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Basic Operations
 
+This page covers the most common graph operations in ZYX, organized by CRUD flow.
+
 ```mermaid
-graph LR
-  P1[Person] -->|WORKS_AT| C1[Company]
-  P1 -->|KNOWS| P2[Person]
+flowchart LR
+  subgraph Write
+    C[CREATE]
+    M[MERGE]
+    S[SET / REMOVE]
+  end
+  subgraph Read
+    R[MATCH ... RETURN]
+  end
+  subgraph Delete
+    D[DELETE]
+    DD[DETACH DELETE]
+  end
+  C --> R
+  M --> R
+  S --> R
+  R --> D
+  R --> DD
 ```
 
-## Create
+## Create Nodes and Relationships
 
 ```cypher
 CREATE (p:Person {name: 'Alice', age: 30});
@@ -24,6 +43,10 @@ CREATE (c:Company {name: 'ZYX'});
 MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'ZYX'})
 CREATE (p)-[:WORKS_AT {since: 2026}]->(c);
 ```
+
+:::tip Idempotent Writes
+For "create if not exists, update if exists" semantics, use `MERGE` instead of `CREATE`. See [Cypher Basics](cypher-basics).
+:::
 
 ## Read
 
@@ -33,39 +56,33 @@ MATCH (p:Person)-[r:WORKS_AT]->(c:Company)
 RETURN p.name, c.name, r.since;
 ```
 
-## Update
+## Update Properties and Labels
 
-```cypher
-MATCH (p:Person {name: 'Alice'})
-SET p.age = 31, p.city = 'Shanghai';
+| Operation | Syntax |
+|---|---|
+| Set properties | `SET p.age = 31, p.city = 'Shanghai'` |
+| Add label | `SET p:Employee` |
+| Remove property | `REMOVE p.city` |
+| Merge properties | `SET p += {active: true}` |
 
-MATCH (p:Person {name: 'Alice'})
-SET p:Employee;
-
-MATCH (p:Person {name: 'Alice'})
-REMOVE p.city;
-
-MATCH (p:Person)
-SET p += {active: true, source: 'import-1'};
-```
+:::info
+`SET p += {...}` is a merge operation — it only overwrites the specified keys without affecting other properties.
+:::
 
 ## Delete
 
-Delete relationship only:
+| Target | Statement |
+|---|---|
+| Relationship only | `DELETE r` |
+| Node with all attached edges | `DETACH DELETE p` |
 
-```cypher
-MATCH (:Person {name: 'Alice'})-[r:WORKS_AT]->(:Company)
-DELETE r;
-```
+:::warning
+`DELETE` on a node that still has relationships will cause an error. Use `DETACH DELETE` to remove the node and all its relationships together.
+:::
 
-Delete node with attached edges:
+## Indexes
 
-```cypher
-MATCH (p:Person {name: 'Alice'})
-DETACH DELETE p;
-```
-
-## Indexes and Constraints
+### Property Index
 
 ```cypher
 CREATE INDEX person_name_idx FOR (n:Person) ON (n.name);
@@ -73,14 +90,9 @@ SHOW INDEXES;
 DROP INDEX person_name_idx;
 ```
 
-```cypher
-CREATE CONSTRAINT person_email_unique FOR (n:Person)
-REQUIRE n.email IS UNIQUE;
-SHOW CONSTRAINT;
-DROP CONSTRAINT person_email_unique;
-```
+### Vector Index
 
-## Vector Index (if your workload includes embeddings)
+For embedding-based nearest-neighbor search (e.g., RAG scenarios):
 
 ```cypher
 CREATE VECTOR INDEX doc_vec_idx ON :Doc(embedding)
@@ -91,7 +103,33 @@ YIELD node, score
 RETURN node, score;
 ```
 
-## Which Operation Pattern to Choose
+## Constraints
+
+ZYX supports the following constraint types on both nodes and edges:
+
+| Constraint | Semantics |
+|---|---|
+| `IS UNIQUE` | Property value must be unique |
+| `IS NOT NULL` | Property must not be null |
+| `NODE KEY` | Composite unique key (nodes only) |
+| `IS ::TYPE` | Property type constraint (e.g., `IS ::BOOLEAN`, `IS ::INTEGER`) |
+
+```cypher
+CREATE CONSTRAINT person_email_unique FOR (n:Person)
+REQUIRE n.email IS UNIQUE;
+
+CREATE CONSTRAINT user_age_not_null FOR (n:Person)
+REQUIRE n.age IS NOT NULL;
+
+CREATE CONSTRAINT rel_since_type FOR ()-[r:WORKS_AT]-()
+REQUIRE r.since IS ::INTEGER;
+```
+
+:::tip
+A unique constraint automatically creates an index. Creating an index on frequently queried properties can significantly improve `MATCH` performance.
+:::
+
+## Operation Selection Cheat Sheet
 
 | Goal | Recommended Pattern |
 |---|---|

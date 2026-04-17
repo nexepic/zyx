@@ -2,21 +2,33 @@
 title: Cypher 基础
 description: ZYX 当前可用的子句管线、表达式能力与内置函数分组。
 category: 核心概念
+categoryOrder: 2
 order: 4
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Cypher 基础
+
+ZYX 使用 Cypher 作为图查询语言。本页概述当前可用的子句、表达式与函数能力。
+
+## 查询管线
+
+一条典型 Cypher 查询按照以下管线执行：
 
 ```mermaid
 flowchart LR
-  A[MATCH 或 CREATE] --> B[WHERE]
+  A[MATCH / CREATE] --> B[WHERE]
   B --> C[WITH]
   C --> D[RETURN]
   D --> E[ORDER BY / SKIP / LIMIT]
 ```
+
+:::info
+并非所有子句都必须出现。最简查询可以只有一个 `RETURN`。上图的顺序反映了子句的典型组合方式。
+:::
 
 ## 子句分组
 
@@ -30,35 +42,44 @@ flowchart LR
 | 数据加载与诊断 | `LOAD CSV`, `EXPLAIN`, `PROFILE` |
 | 管理 DDL | `CREATE/DROP INDEX`, `CREATE/DROP CONSTRAINT`, `SHOW INDEXES`, `SHOW CONSTRAINT` |
 
-## 模式与表达式基础块
+## 模式与表达式
 
-- 节点模式：`(n)`、`(n:Label)`、`(n {k: v})`
-- 关系模式：`(a)-[:REL]->(b)`、`(a)-[r:REL]->(b)`、`(a)-[:REL]-(b)`
-- 多标签节点：`(n:Person:Employee)`
-- 变长关系：`[:REL*1..3]`
+| 构造 | 写法 | 说明 |
+|---|---|---|
+| 节点 | `(n)`, `(n:Label)`, `(n {k: v})` | 变量、标签、属性可任意组合 |
+| 关系 | `-[r:REL]->`, `-[:REL]->`, `-[:REL]-` | 有向或无向 |
+| 多标签 | `(n:Person:Employee)` | 同时匹配多个标签 |
+| 变长 | `[:REL*1..3]` | 1 到 3 跳 |
+| Map 投影 | `n {.name, .age, score: expr, .*}` | 选择性投影节点属性 |
+| 列表推导 | `[x IN list WHERE cond \| expr]` | 过滤并转换列表 |
+| 模式推导 | `[(n)-[:KNOWS]->(m) \| m.name]` | 将模式匹配结果投影为列表 |
 
 ## 运算符与谓词
 
-- 算术：`+ - * / % ^`
-- 比较：`= <> != < <= > >=`、`IN`、`BETWEEN`
-- 逻辑：`AND OR XOR NOT`
-- 字符串谓词：`STARTS WITH`、`ENDS WITH`、`CONTAINS`、正则 `=~`
-- 空值判断：`IS NULL`、`IS NOT NULL`
-- 条件表达式：`CASE WHEN ... THEN ... ELSE ... END`
-
-## 内置函数分组
-
-| 分组 | 代表函数 |
+| 类别 | 运算符 |
 |---|---|
-| 字符串 | `toString`, `upper`, `lower`, `trim`, `substring`, `replace`, `split` |
+| 算术 | `+ - * / % ^` |
+| 比较 | `= <> != < <= > >=` `IN` `BETWEEN ... AND ...` |
+| 逻辑 | `AND OR XOR NOT` |
+| 字符串 | `STARTS WITH` `ENDS WITH` `CONTAINS` `=~` |
+| 空值 | `IS NULL` `IS NOT NULL` |
+| 条件 | `CASE WHEN ... THEN ... ELSE ... END` |
+
+## 内置函数
+
+| 分组 | 函数 |
+|---|---|
+| 聚合 | `count`, `sum`, `avg`, `min`, `max`, `collect`（均支持 `DISTINCT`） |
+| 字符串 | `toString`, `upper`, `lower`, `trim`, `lTrim`, `rTrim`, `left`, `right`, `substring`, `replace`, `split`, `reverse`, `length` |
 | 数值 | `abs`, `ceil`, `floor`, `round`, `sqrt`, `sign` |
 | 列表 | `size`, `range`, `head`, `tail`, `last`, `reverse` |
 | 类型转换 | `toInteger`, `toFloat`, `toBoolean` |
 | 实体自省 | `id`, `labels`, `type`, `keys`, `properties` |
+| 路径 | `nodes(path)`, `relationships(path)`, `length(path)`, `shortestPath(...)` |
 | 量词 | `all`, `any`, `none`, `single` |
-| 通用 | `coalesce`, `timestamp`, `randomUUID` |
+| 通用 | `coalesce`, `timestamp`, `randomUUID`, `exists((pattern))`, `reduce(...)` |
 
-## 参数化查询模式
+## 参数化查询
 
 ```cypher
 MATCH (u:User {name: $name})
@@ -66,11 +87,12 @@ WHERE u.age >= $minAge
 RETURN u.name, u.age;
 ```
 
-生产环境建议使用参数 API：
-
+:::tip 生产环境建议
+使用参数 API 可以避免 Cypher 注入并提升计划缓存命中率：
 - C++：`Database::execute(query, params)`
 - C API：`zyx_execute_params(...)`
+:::
 
 ## 特性边界
 
-完整支持/未支持清单维护在仓库根目录 `UNSUPPORTED_CYPHER_FEATURES.md`。
+完整支持/未支持清单维护在仓库根目录 [`UNSUPPORTED_CYPHER_FEATURES.md`](https://github.com/nexepic/zyx/blob/main/UNSUPPORTED_CYPHER_FEATURES.md)。

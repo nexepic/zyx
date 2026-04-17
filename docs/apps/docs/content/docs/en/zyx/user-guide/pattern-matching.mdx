@@ -2,12 +2,14 @@
 title: Pattern Matching
 description: Practical guide to directed/undirected patterns, variable-length traversal, and pattern composition.
 category: Core Concepts
+categoryOrder: 2
 order: 5
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Pattern Matching
 
 ## Direction Semantics
@@ -20,10 +22,14 @@ projectOrder: 1
 
 ## Basic and Composite Patterns
 
+Single pattern — find all KNOWS relationships:
+
 ```cypher
 MATCH (a:Person)-[:KNOWS]->(b:Person)
 RETURN a.name, b.name;
 ```
+
+Composite patterns — declare multiple relationship patterns in one `MATCH`:
 
 ```cypher
 MATCH (a:Person)-[:KNOWS]->(b:Person),
@@ -31,20 +37,28 @@ MATCH (a:Person)-[:KNOWS]->(b:Person),
 RETURN a.name, b.name, c.name;
 ```
 
+:::tip
+In composite patterns, all sub-patterns share intermediate variables (e.g., `b` above). The engine automatically performs equijoins on shared variables.
+:::
+
 ## Variable-Length Patterns
 
-Supported forms:
-
-- `*`
-- `*N`
-- `*N..M`
-- `*N..`
-- `*..M`
+| Syntax | Meaning |
+|---|---|
+| `*` | Any number of hops |
+| `*N` | Exactly N hops |
+| `*N..M` | N to M hops |
+| `*N..` | At least N hops |
+| `*..M` | At most M hops |
 
 ```cypher
 MATCH p = (a:Person)-[:KNOWS*1..3]->(b:Person)
 RETURN p, length(p);
 ```
+
+:::warning
+Variable-length patterns without an upper bound (`*1..`) can trigger full-graph traversal. Always prefer bounded ranges (e.g., `*1..4`).
+:::
 
 ## Multiple Relationship Types
 
@@ -53,7 +67,9 @@ MATCH (a)-[:TYPE1|TYPE2]->(x)
 RETURN x;
 ```
 
-## Optional Pattern and Existence Pattern
+## Optional Match and Existence Check
+
+`OPTIONAL MATCH` returns `null` instead of dropping rows when the pattern does not match:
 
 ```cypher
 MATCH (p:Person)
@@ -61,29 +77,48 @@ OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
 RETURN p.name, c.name;
 ```
 
+Use `exists()` in WHERE to test pattern existence:
+
 ```cypher
 MATCH (n:Person)
 WHERE exists((n)-[:KNOWS]->())
 RETURN n.name;
 ```
 
+## Shortest Path
+
+Find the shortest path between two nodes:
+
+```cypher
+MATCH p = shortestPath((a:Person {name: 'Alice'})-[:KNOWS*]-(b:Person {name: 'Charlie'}))
+RETURN p;
+```
+
+:::info
+You can also use the `algo.shortestPath` procedure for shortest path, or `gds.shortestPath.dijkstra.stream` for weighted shortest paths via GDS.
+:::
+
 ## Pattern Comprehension
+
+Project matched results directly into a list:
 
 ```cypher
 MATCH (n:Person {name: 'Alice'})
 RETURN [(n)-[:KNOWS]->(m) | m.name] AS friends;
 ```
 
+## Query Processing Flow
+
 ```mermaid
 flowchart TD
-  A[Start node filter] --> B[Expand pattern]
+  A[Start node filter] --> B[Expand along pattern]
   B --> C[Apply WHERE predicates]
   C --> D[Project node/edge/path fields]
 ```
 
-## Practical Checklist
+## Performance Checklist
 
-- Filter start/end nodes early with labels + indexed properties.
-- Keep variable-length upper bound (`*1..N`) whenever possible.
-- Use `OPTIONAL MATCH` only for genuinely optional relationships.
-- Use path projection only when path object is actually needed.
+- Filter start/end nodes early with labels + indexed properties
+- Keep variable-length upper bound (`*1..N`) whenever possible
+- Use `OPTIONAL MATCH` only for genuinely optional relationships
+- Name and return path variables only when the path object is needed

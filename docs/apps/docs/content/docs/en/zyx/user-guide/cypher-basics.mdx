@@ -2,13 +2,21 @@
 title: Cypher Basics
 description: Clause pipeline, expression surface, and built-in function families currently available in ZYX.
 category: Core Concepts
+categoryOrder: 2
 order: 4
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Cypher Basics
+
+ZYX uses Cypher as its graph query language. This page outlines the available clauses, expressions, and functions.
+
+## Query Pipeline
+
+A typical Cypher query follows this pipeline:
 
 ```mermaid
 flowchart LR
@@ -17,6 +25,10 @@ flowchart LR
   C --> D[RETURN]
   D --> E[ORDER BY / SKIP / LIMIT]
 ```
+
+:::info
+Not all clauses are required — a minimal query can be just `RETURN`. The diagram above shows the typical composition order.
+:::
 
 ## Clause Families
 
@@ -30,35 +42,44 @@ flowchart LR
 | Data loading & inspection | `LOAD CSV`, `EXPLAIN`, `PROFILE` |
 | Admin DDL | `CREATE/DROP INDEX`, `CREATE/DROP CONSTRAINT`, `SHOW INDEXES`, `SHOW CONSTRAINT` |
 
-## Pattern and Expression Building Blocks
+## Patterns and Expressions
 
-- Node patterns: `(n)`, `(n:Label)`, `(n {k: v})`
-- Relationship patterns: `(a)-[:REL]->(b)`, `(a)-[r:REL]->(b)`, `(a)-[:REL]-(b)`
-- Multi-label node pattern: `(n:Person:Employee)`
-- Variable-length pattern: `[:REL*1..3]`
+| Construct | Syntax | Description |
+|---|---|---|
+| Node | `(n)`, `(n:Label)`, `(n {k: v})` | Variable, label, and properties can be freely combined |
+| Relationship | `-[r:REL]->`, `-[:REL]->`, `-[:REL]-` | Directed or undirected |
+| Multi-label | `(n:Person:Employee)` | Match nodes with all listed labels |
+| Variable-length | `[:REL*1..3]` | 1 to 3 hops |
+| Map projection | `n {.name, .age, score: expr, .*}` | Selectively project node properties |
+| List comprehension | `[x IN list WHERE cond \| expr]` | Filter and transform lists |
+| Pattern comprehension | `[(n)-[:KNOWS]->(m) \| m.name]` | Project pattern matches into a list |
 
 ## Operators and Predicates
 
-- Arithmetic: `+ - * / % ^`
-- Comparison: `= <> != < <= > >=`, `IN`, `BETWEEN`
-- Boolean: `AND OR XOR NOT`
-- String predicates: `STARTS WITH`, `ENDS WITH`, `CONTAINS`, regex `=~`
-- Null checks: `IS NULL`, `IS NOT NULL`
-- Conditional: `CASE WHEN ... THEN ... ELSE ... END`
+| Category | Operators |
+|---|---|
+| Arithmetic | `+ - * / % ^` |
+| Comparison | `= <> != < <= > >=` `IN` `BETWEEN ... AND ...` |
+| Boolean | `AND OR XOR NOT` |
+| String | `STARTS WITH` `ENDS WITH` `CONTAINS` `=~` |
+| Null | `IS NULL` `IS NOT NULL` |
+| Conditional | `CASE WHEN ... THEN ... ELSE ... END` |
 
 ## Built-in Function Groups
 
-| Group | Representative Functions |
+| Group | Functions |
 |---|---|
-| String | `toString`, `upper`, `lower`, `trim`, `substring`, `replace`, `split` |
+| Aggregation | `count`, `sum`, `avg`, `min`, `max`, `collect` (all support `DISTINCT`) |
+| String | `toString`, `upper`, `lower`, `trim`, `lTrim`, `rTrim`, `left`, `right`, `substring`, `replace`, `split`, `reverse`, `length` |
 | Math | `abs`, `ceil`, `floor`, `round`, `sqrt`, `sign` |
 | List | `size`, `range`, `head`, `tail`, `last`, `reverse` |
 | Conversion | `toInteger`, `toFloat`, `toBoolean` |
 | Introspection | `id`, `labels`, `type`, `keys`, `properties` |
+| Path | `nodes(path)`, `relationships(path)`, `length(path)`, `shortestPath(...)` |
 | Quantifier | `all`, `any`, `none`, `single` |
-| Utility | `coalesce`, `timestamp`, `randomUUID` |
+| Utility | `coalesce`, `timestamp`, `randomUUID`, `exists((pattern))`, `reduce(...)` |
 
-## Parameterized Query Pattern
+## Parameterized Queries
 
 ```cypher
 MATCH (u:User {name: $name})
@@ -66,11 +87,12 @@ WHERE u.age >= $minAge
 RETURN u.name, u.age;
 ```
 
-Use parameter APIs for production workloads:
-
+:::tip Production Recommendation
+Use parameter APIs to prevent Cypher injection and improve plan cache hit rates:
 - C++: `Database::execute(query, params)`
 - C API: `zyx_execute_params(...)`
+:::
 
 ## Capability Boundary
 
-Feature boundary and unsupported list are maintained in repository root `UNSUPPORTED_CYPHER_FEATURES.md`.
+Feature boundary and unsupported list are maintained in [`UNSUPPORTED_CYPHER_FEATURES.md`](https://github.com/nexepic/zyx/blob/main/UNSUPPORTED_CYPHER_FEATURES.md).

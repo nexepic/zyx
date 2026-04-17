@@ -2,12 +2,14 @@
 title: 导入与导出
 description: ZYX 当前可落地的数据导入导出路径：LOAD CSV、CLI import、API 导出与备份流程。
 category: 高级主题
+categoryOrder: 3
 order: 9
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # 导入与导出
 
 ## 能力矩阵
@@ -29,7 +31,9 @@ flowchart LR
   B -->|服务对象| E[API execute/批量方法]
 ```
 
-## 路径 1：查询管线中的 LOAD CSV
+## 路径 1：LOAD CSV
+
+在 Cypher 查询管线内导入 CSV，适合小到中等文件：
 
 ```cypher
 LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
@@ -37,10 +41,12 @@ MERGE (:User {name: row.name})
 RETURN count(*) AS imported;
 ```
 
-## 路径 2：CLI 批量导入命令
+## 路径 2：CLI 批量导入
+
+专用导入命令，适合大文件批量加载：
 
 ```bash
-./buildDir/apps/cli/zyx import \
+zyx import \
   --database ./demo.graph \
   --nodes ./nodes.csv \
   --relationships ./rels.csv \
@@ -49,20 +55,54 @@ RETURN count(*) AS imported;
   --skip-bad-entries
 ```
 
-CSV 模式可识别 Neo4j 风格表头，例如：
+### 支持的文件格式
 
-- 节点：`:ID`, `:LABEL`, `name:STRING`, `age:INT`
-- 关系：`:START_ID`, `:END_ID`, `:TYPE`, `since:INT`
+#### CSV（Neo4j 兼容表头）
 
-JSONL 模式当前重点使用保留键（`_id`, `_labels`, `_start`, `_end`, `_type`）完成图结构映射。
+节点文件示例：
+
+```csv
+:name:STRING,:ID,:LABEL,:age:INT
+"Alice",p1,"Person;Employee",30
+"Bob",p2,"Person",25
+```
+
+关系文件示例：
+
+```csv
+:START_ID,:END_ID,:TYPE,:since:INT
+p1,p2,KNOWS,2026
+```
+
+#### JSONL
+
+```json
+{"_id": "p1", "_labels": ["Person"], "name": "Alice", "age": 30}
+{"_id": "p2", "_labels": ["Person"], "name": "Bob", "age": 25}
+```
+
+### 导入命令参数
+
+| 参数 | 说明 |
+|---|---|
+| `--database, --db <path>` | 数据库路径（必填） |
+| `--nodes <files>` | 节点数据文件（必填） |
+| `--relationships <files>` | 关系数据文件（可选） |
+| `--format <auto\|csv\|jsonl>` | 文件格式（默认 `auto`） |
+| `--array-delimiter <char>` | 数组分隔符（默认 `;`） |
+| `--skip-bad-entries` | 跳过格式错误的行而非中断 |
+
+:::tip
+使用 `--skip-bad-entries` 可以在导入时容忍少量格式问题，导入完成后检查日志确认跳过的行数。
+:::
 
 ## 路径 3：导出与备份
 
-- 结果导出：通过 C++/C API 迭代查询结果。
-- 物理备份建议：
-  1. 执行 `save`（或 API `save()`）并停止写入。
-  2. 复制数据库文件。
-  3. 恢复时在下次打开前替换文件。
+### 查询结果导出
+
+通过 C++ / C API 迭代查询结果，由应用层决定输出格式。
+
+### 物理备份流程
 
 ```mermaid
 flowchart TD
@@ -71,3 +111,7 @@ flowchart TD
   C --> D[保存校验信息与元数据]
   D --> E[定期恢复演练]
 ```
+
+:::warning 备份一致性
+物理备份前必须确保没有活跃的写事务。建议在备份前执行 `save` 命令，并暂停写入操作。
+:::

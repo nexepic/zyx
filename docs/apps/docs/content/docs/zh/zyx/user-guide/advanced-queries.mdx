@@ -2,15 +2,29 @@
 title: 高级查询
 description: 使用 WITH/UNION/UNWIND 组装查询管线，结合过程/子查询与 LOAD CSV。
 category: 高级主题
+categoryOrder: 3
 order: 6
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # 高级查询
 
-## 1) 用 WITH 切分管线
+本页介绍用于组装复杂查询管线的核心构造。
+
+```mermaid
+flowchart LR
+  A[数据源] --> B[WITH 分段]
+  B --> C[子查询/过程]
+  C --> D[UNION 合并]
+  D --> E[RETURN 结果]
+```
+
+## WITH — 切分管线
+
+`WITH` 将查询分成多个阶段，每个阶段可以独立过滤和投影：
 
 ```cypher
 MATCH (p:Person)
@@ -20,7 +34,13 @@ RETURN p.name, age
 ORDER BY age DESC;
 ```
 
-## 2) UNION / UNION ALL
+:::info
+`WITH` 之后只有被列出的变量在后续阶段可用，未列出的变量会被丢弃。
+:::
+
+## UNION / UNION ALL
+
+合并多个结构相同的查询结果：
 
 ```cypher
 MATCH (n:Person) RETURN n.name AS name
@@ -28,14 +48,21 @@ UNION ALL
 MATCH (n:Company) RETURN n.name AS name;
 ```
 
-## 3) UNWIND 展开行
+| 类型 | 行为 |
+|---|---|
+| `UNION` | 去重合并 |
+| `UNION ALL` | 保留所有行（含重复） |
+
+## UNWIND — 展开为行
+
+将列表展开成多行，常用于批量操作的数据源：
 
 ```cypher
 UNWIND [1, 2, 3] AS x
 RETURN x, x * 10;
 ```
 
-## 4) CALL 子查询与事务分批
+## CALL 子查询与事务分批
 
 ```cypher
 MATCH (n:Input)
@@ -46,38 +73,73 @@ CALL {
 RETURN n.val;
 ```
 
-## 5) LOAD CSV
+:::tip
+`IN TRANSACTIONS OF N ROWS` 会按 N 行分批提交，适合大批量写入。详见[批处理操作](batch-operations)。
+:::
 
-带表头：
+## LOAD CSV
+
+在查询中直接导入 CSV 文件：
 
 ```cypher
 LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
 RETURN row.name, row.age;
 ```
 
-自定义分隔符：
+自定义字段分隔符（如 TSV）：
 
 ```cypher
 LOAD CSV WITH HEADERS FROM 'file:///tmp/users.tsv' AS row FIELDTERMINATOR '\t'
 RETURN row.name;
 ```
 
-## 6) 内置过程能力面
+## 内置过程
 
-| 领域 | 过程 |
+### 配置与统计
+
+| 过程 | 说明 |
 |---|---|
-| 配置与统计 | `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, `dbms.resetStats` |
-| 向量 | `db.index.vector.queryNodes`, `db.index.vector.train` |
-| 轻量算法 | `algo.shortestPath` |
-| GDS 投影 | `gds.graph.project`, `gds.graph.drop` |
-| GDS 算法 | `gds.pageRank.stream`, `gds.wcc.stream`, `gds.betweenness.stream`, `gds.closeness.stream`, `gds.shortestPath.dijkstra.stream` |
+| `dbms.listConfig()` | 列出所有配置项 |
+| `dbms.getConfig(key)` | 获取指定配置值 |
+| `dbms.setConfig(key, value)` | 设置配置项 |
+| `dbms.showStats()` | 查看数据库统计 |
+| `dbms.resetStats()` | 重置统计计数 |
 
-## 7) EXPLAIN / PROFILE
+### 向量索引
 
-```cypher
-EXPLAIN MATCH (n:Person {name: 'Alice'}) RETURN n;
-PROFILE MATCH (n:Person {name: 'Alice'}) RETURN n;
-```
+| 过程 | 说明 |
+|---|---|
+| `db.index.vector.queryNodes(idx, k, vec)` | 向量近邻检索 |
+| `db.index.vector.train(idx)` | 训练向量索引 |
+
+### 图算法
+
+| 过程 | 说明 |
+|---|---|
+| `algo.shortestPath(startId, endId)` | 最短路径 |
+
+### GDS 图算法
+
+GDS（Graph Data Science）过程使用命名投影模式：先投影子图，再运行算法。
+
+| 过程 | 参数 | 说明 |
+|---|---|---|
+| `gds.graph.project(name, label, type, weight?)` | 投影名、节点标签、边类型、可选权重属性 | 创建图投影 |
+| `gds.graph.drop(name)` | 投影名 | 删除图投影 |
+| `gds.pageRank.stream(name, maxIter?, damping?)` | 投影名、可选迭代次数、可选阻尼系数 | PageRank |
+| `gds.wcc.stream(name)` | 投影名 | 弱连通分量 |
+| `gds.betweenness.stream(name, samplingSize?)` | 投影名、可选采样数 | 介数中心性 |
+| `gds.closeness.stream(name)` | 投影名 | 接近中心性 |
+| `gds.shortestPath.dijkstra.stream(name, startId, endId)` | 投影名、起点 ID、终点 ID | Dijkstra 最短路径 |
+
+## EXPLAIN / PROFILE
+
+查询调优的两个关键工具：
+
+| 命令 | 用途 |
+|---|---|
+| `EXPLAIN` | 查看逻辑执行计划结构（不实际执行） |
+| `PROFILE` | 执行查询并返回每步的实际耗时和行数 |
 
 ```mermaid
 flowchart LR

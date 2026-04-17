@@ -2,21 +2,27 @@
 title: User Guide
 description: Practical guide for daily ZYX usage with CLI, Cypher, transactions, and data import/export.
 category: Getting Started
+categoryOrder: 1
 order: 1
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # User Guide
 
-This guide is written for product users who care about using ZYX effectively, not internal source code details.
+This guide is for end users of ZYX. It focuses on how to use the product effectively, not on source code internals.
+
+:::info
+ZYX is an embedded graph database engine with a CLI-first workflow and Cypher query support. If you need to embed ZYX into your own C/C++ application, refer to the C/C++ API documentation.
+:::
 
 ## Recommended Path
 
 | Step | Document | Focus |
 |---|---|---|
-| 1 | [Quick Start](quick-start) | Build, open DB, run first queries |
+| 1 | [Quick Start](quick-start) | Install CLI, open DB, run first queries |
 | 2 | [Basic Operations](basic-operations) | CRUD, indexes, constraints |
 | 3 | [Cypher Basics](cypher-basics) | Clause model and expression surface |
 | 4 | [Pattern Matching](pattern-matching) | Directed/undirected and variable-length patterns |
@@ -38,14 +44,36 @@ flowchart LR
 
 ## Current Product Profile
 
-- CLI-first workflow: REPL, script mode, and bulk import command.
-- Cypher coverage includes read/write clauses, subqueries, `LOAD CSV`, and admin DDL.
-- Hybrid capability for graph + vector + GDS procedures.
-- ACID transactions with WAL-backed durability.
+- **CLI-first workflow**: REPL interactive mode, script execution, and bulk import command
+- **Cypher query language**: Read/write clauses, subqueries, `LOAD CSV`, and admin DDL
+- **Multi-modal queries**: Graph queries + vector search + GDS graph algorithm procedures
+- **ACID transactions**: Single-writer/multi-reader concurrency model with WAL-backed durability
+
+```mermaid
+flowchart LR
+  subgraph CLI
+    A[REPL]
+    B[Script Mode]
+    C[Bulk Import]
+  end
+  subgraph Engine
+    D[Cypher Parser]
+    E[Query Optimizer]
+    F[Transaction Manager]
+    G[Storage Engine]
+  end
+  CLI --> Engine
+  D --> E
+  E --> F
+  F --> G
+```
 
 ## Conventions Used in This Guide
 
-- CLI executable path: `./buildDir/apps/cli/zyx`
-- Most query examples are intended for REPL and end with `;`
-- Transaction statements are `BEGIN` / `COMMIT` / `ROLLBACK`
-- Feature boundary source of truth: repository root `UNSUPPORTED_CYPHER_FEATURES.md`
+:::tip CLI Convention
+CLI command examples use `zyx`. If your executable is not on `PATH`, replace `zyx` with the actual path (for example `./zyx` or `./buildDir/apps/cli/zyx`).
+:::
+
+- Queries in the REPL execute immediately when terminated with `;`, or on an empty line
+- Each Cypher statement runs as an implicit transaction by default (auto-commits on success, auto-rolls back on failure); use `BEGIN` / `COMMIT` / `ROLLBACK` for explicit transaction boundaries
+- Feature boundary source of truth: [`UNSUPPORTED_CYPHER_FEATURES.md`](https://github.com/nexepic/zyx/blob/main/UNSUPPORTED_CYPHER_FEATURES.md)

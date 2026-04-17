@@ -2,12 +2,14 @@
 title: 事务控制
 description: REPL/API 下事务的正确用法，包括边界控制、回滚策略与并发注意事项。
 category: 高级主题
+categoryOrder: 3
 order: 7
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # 事务控制
 
 ## 事务生命周期
@@ -22,7 +24,7 @@ stateDiagram-v2
   RolledBack --> Idle
 ```
 
-## REPL 显式事务
+## REPL 中的显式事务
 
 ```cypher
 BEGIN;
@@ -39,24 +41,42 @@ CREATE (:User {name: 'Temp'});
 ROLLBACK;
 ```
 
-## 隐式事务与显式事务
+## 三种事务模式
 
 | 模式 | 适用场景 | 说明 |
 |---|---|---|
-| 隐式（单语句） | 简单一次性读写 | 操作开销最低 |
+| 隐式（单语句） | 简单一次性读写 | 每条语句自动包裹事务，开销最低 |
 | 显式（`BEGIN...COMMIT`） | 多步骤原子写入 | 成功/失败边界清晰 |
-| API 事务对象 | 服务端流程编排 | 未提交自动回滚 |
+| API 事务对象 | 服务端流程编排 | C++ `Transaction` 类，析构时未提交则自动回滚 |
+
+:::tip API 事务自动回滚
+通过 C++ API 获取的 `Transaction` 对象在析构时如果没有调用 `commit()`，会自动执行回滚，确保不会留下未提交的脏数据。
+:::
 
 ## 行为要点
 
-- 不支持嵌套事务。
-- 写入模型偏单写者；读取通过快照执行。
-- 未提交数据在 `COMMIT` 前不具备持久性。
-- 需要运维可控性时可在提交后执行 `save`/flush。
+:::warning 并发模型
+ZYX 采用**单写者多读者**模型：同一时刻只允许一个写事务，读事务通过快照隔离并发执行。不支持嵌套事务。
+:::
 
-## 故障处理建议
+- 未提交的数据在 `COMMIT` 前不具备持久性
+- `COMMIT` 后数据写入 WAL，即使进程崩溃也可通过 WAL 恢复
+- 需要立即落盘时可在提交后执行 `save` 或 API `save()`
 
-1. 多步骤写入统一放入显式事务。
-2. 中间用 `MATCH ... RETURN` 做关键校验。
-3. 全部通过后再 `COMMIT`。
-4. 任一步失败立即 `ROLLBACK`。
+## 故障处理模式
+
+```mermaid
+flowchart TD
+  A[BEGIN] --> B[执行写入语句]
+  B --> C{中间校验通过？}
+  C -->|是| D{全部完成？}
+  C -->|否| E[ROLLBACK]
+  D -->|是| F[COMMIT]
+  D -->|否| B
+  F --> G[save 可选落盘]
+```
+
+1. 多步骤写入统一放入显式事务
+2. 中间用 `MATCH ... RETURN` 做关键校验
+3. 全部通过后再 `COMMIT`
+4. 任一步失败立即 `ROLLBACK`

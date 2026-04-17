@@ -2,21 +2,40 @@
 title: 基本操作
 description: 以当前实现为准的核心 CRUD、索引、约束与向量索引操作。
 category: 核心概念
+categoryOrder: 2
 order: 3
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # 基本操作
 
+本页覆盖 ZYX 中最常用的图操作，按 CRUD 流程组织。
+
 ```mermaid
-graph LR
-  P1[Person] -->|WORKS_AT| C1[Company]
-  P1 -->|KNOWS| P2[Person]
+flowchart LR
+  subgraph 写入
+    C[CREATE]
+    M[MERGE]
+    S[SET / REMOVE]
+  end
+  subgraph 读取
+    R[MATCH ... RETURN]
+  end
+  subgraph 删除
+    D[DELETE]
+    DD[DETACH DELETE]
+  end
+  C --> R
+  M --> R
+  S --> R
+  R --> D
+  R --> DD
 ```
 
-## 创建（Create）
+## 创建节点与关系
 
 ```cypher
 CREATE (p:Person {name: 'Alice', age: 30});
@@ -25,7 +44,11 @@ MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'ZYX'})
 CREATE (p)-[:WORKS_AT {since: 2026}]->(c);
 ```
 
-## 读取（Read）
+:::tip 幂等写入
+如果需要"不存在则创建、存在则更新"的语义，使用 `MERGE` 代替 `CREATE`。详见 [Cypher 基础](cypher-basics)。
+:::
+
+## 查询
 
 ```cypher
 MATCH (p:Person) RETURN p.name, p.age ORDER BY p.age DESC;
@@ -33,39 +56,33 @@ MATCH (p:Person)-[r:WORKS_AT]->(c:Company)
 RETURN p.name, c.name, r.since;
 ```
 
-## 更新（Update）
+## 更新属性与标签
 
-```cypher
-MATCH (p:Person {name: 'Alice'})
-SET p.age = 31, p.city = 'Shanghai';
+| 操作 | 语法 |
+|---|---|
+| 设置属性 | `SET p.age = 31, p.city = 'Shanghai'` |
+| 添加标签 | `SET p:Employee` |
+| 移除属性 | `REMOVE p.city` |
+| 合并属性 | `SET p += {active: true}` |
 
-MATCH (p:Person {name: 'Alice'})
-SET p:Employee;
+:::info
+`SET p += {...}` 是合并语义，仅覆盖指定键而不影响其他属性。
+:::
 
-MATCH (p:Person {name: 'Alice'})
-REMOVE p.city;
+## 删除
 
-MATCH (p:Person)
-SET p += {active: true, source: 'import-1'};
-```
+| 目标 | 语句 |
+|---|---|
+| 仅删除关系 | `DELETE r` |
+| 删除节点及所有关联关系 | `DETACH DELETE p` |
 
-## 删除（Delete）
+:::warning
+直接 `DELETE` 一个仍有关系连接的节点会报错。如果需要连同关系一起删除，请使用 `DETACH DELETE`。
+:::
 
-仅删除关系：
+## 索引
 
-```cypher
-MATCH (:Person {name: 'Alice'})-[r:WORKS_AT]->(:Company)
-DELETE r;
-```
-
-删除节点及其关联关系：
-
-```cypher
-MATCH (p:Person {name: 'Alice'})
-DETACH DELETE p;
-```
-
-## 索引与约束
+### 属性索引
 
 ```cypher
 CREATE INDEX person_name_idx FOR (n:Person) ON (n.name);
@@ -73,14 +90,9 @@ SHOW INDEXES;
 DROP INDEX person_name_idx;
 ```
 
-```cypher
-CREATE CONSTRAINT person_email_unique FOR (n:Person)
-REQUIRE n.email IS UNIQUE;
-SHOW CONSTRAINT;
-DROP CONSTRAINT person_email_unique;
-```
+### 向量索引
 
-## 向量索引（嵌入检索场景）
+用于嵌入向量近邻检索（如 RAG 场景）：
 
 ```cypher
 CREATE VECTOR INDEX doc_vec_idx ON :Doc(embedding)
@@ -91,7 +103,33 @@ YIELD node, score
 RETURN node, score;
 ```
 
-## 场景与推荐写法
+## 约束
+
+ZYX 支持以下约束类型，节点和边均可使用：
+
+| 约束类型 | 语义 |
+|---|---|
+| `IS UNIQUE` | 属性值唯一 |
+| `IS NOT NULL` | 属性不允许为空 |
+| `NODE KEY` | 复合唯一键（仅节点） |
+| `IS ::TYPE` | 属性类型约束（如 `IS ::BOOLEAN`、`IS ::INTEGER`） |
+
+```cypher
+CREATE CONSTRAINT person_email_unique FOR (n:Person)
+REQUIRE n.email IS UNIQUE;
+
+CREATE CONSTRAINT user_age_not_null FOR (n:Person)
+REQUIRE n.age IS NOT NULL;
+
+CREATE CONSTRAINT rel_since_type FOR ()-[r:WORKS_AT]-()
+REQUIRE r.since IS ::INTEGER;
+```
+
+:::tip
+唯一约束会自动创建索引。为高频查询属性创建索引可以显著提升 `MATCH` 性能。
+:::
+
+## 操作选择速查
 
 | 目标 | 推荐模式 |
 |---|---|
