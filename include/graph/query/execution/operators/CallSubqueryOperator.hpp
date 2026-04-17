@@ -12,6 +12,7 @@
 
 #include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/query/execution/operators/RecordInjectorOperator.hpp"
+#include "graph/query/QueryContext.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -140,6 +141,7 @@ private:
 		// Collect all subquery results
 		bool hasResults = false;
 		while (auto subBatch = subquery_->next()) {
+			if (queryContext_) queryContext_->checkGuard();
 			for (auto &subRecord : *subBatch) {
 				hasResults = true;
 				// Merge input record with subquery result

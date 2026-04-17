@@ -19,6 +19,7 @@
  **/
 
 #include "graph/query/execution/operators/TraversalOperator.hpp"
+#include "graph/query/QueryContext.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -51,6 +52,7 @@ std::optional<RecordBatch> TraversalOperator::next() {
 		std::vector<Edge> edges = dm_->findEdgesByNode(sourceId, direction_);
 
 		for (auto &edge: edges) {
+			if (queryContext_) queryContext_->checkGuard();
 			// 4. Filter by Edge Type (Using ID comparison)
 			if (edgeTypeId_ != 0) {
 				if (edge.getTypeId() != edgeTypeId_) {

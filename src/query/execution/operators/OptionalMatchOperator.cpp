@@ -19,6 +19,7 @@
  **/
 
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
+#include "graph/query/QueryContext.hpp"
 #include <stdexcept>
 
 namespace graph::query::execution::operators {
@@ -53,6 +54,8 @@ std::optional<RecordBatch> OptionalMatchOperator::next() {
 
 	// Process until we exhaust input
 	while (!inputExhausted_) {
+		if (queryContext_) queryContext_->checkGuard();
+
 		// Need to fetch new input batch?
 		if (currentInputIndex_ >= currentInputBatch_.size()) {
 			auto batchOpt = input_->next();

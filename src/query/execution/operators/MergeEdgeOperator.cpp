@@ -89,6 +89,7 @@ void MergeEdgeOperator::processMergeEdge(Record &record) {
 	auto edges = dm_->findEdgesByNode(sourceId, "both");
 
 	for (const auto &edge : edges) {
+		if (queryContext_) queryContext_->checkGuard();
 		if (!edge.isActive()) continue;
 
 		// Check direction

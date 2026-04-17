@@ -109,6 +109,7 @@ void MergeNodeOperator::processMerge(Record &record) {
 	// Filter candidates
 	int64_t foundId = 0;
 	for (int64_t id: candidates) {
+		if (queryContext_) queryContext_->checkGuard();
 		Node n = dm_->getNode(id);
 		if (!n.isActive()) continue;
 

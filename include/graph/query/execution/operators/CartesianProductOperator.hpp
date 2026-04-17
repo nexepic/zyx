@@ -21,6 +21,7 @@
 #pragma once
 
 #include "../PhysicalOperator.hpp"
+#include "graph/query/QueryContext.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -78,6 +79,7 @@ namespace graph::query::execution::operators {
 				const auto &leftRecord = (*currentLeftBatch_)[leftIdx_];
 
 				while (rightIdx_ < rightBuffer_.size() && outputBatch.size() < DEFAULT_BATCH_SIZE) {
+					if (queryContext_) queryContext_->checkGuard();
 					const auto &rightRecord = rightBuffer_[rightIdx_];
 
 					Record merged = leftRecord;

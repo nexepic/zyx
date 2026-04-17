@@ -145,6 +145,7 @@ namespace graph {
 			ensureThreadPool();
 			queryEngine = std::make_shared<query::QueryEngine>(storage);
 			queryEngine->setThreadPool(threadPool_.get());
+			queryEngine->setConfigManager(configManager_.get());
 
 			// Wire thread pool to vector index subsystem
 			auto vim = queryEngine->getIndexManager()->getVectorIndexManager();

@@ -63,6 +63,9 @@ namespace graph::config {
 		[[nodiscard]] bool isSlowLogEnabled() const;
 		[[nodiscard]] int64_t getSlowLogThresholdMs() const;
 		[[nodiscard]] bool isStatsEnabled() const;
+		[[nodiscard]] int64_t getQueryTimeoutMs() const;
+		[[nodiscard]] int64_t getQueryMaxMemoryMb() const;
+		[[nodiscard]] int64_t getQueryMaxVarLengthDepth() const;
 
 	private:
 		std::weak_ptr<storage::FileStorage> storage_;

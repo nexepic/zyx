@@ -12,6 +12,8 @@
 
 namespace graph::query {
 
+class QueryGuard;
+
 /**
  * @brief Holds execution-time context that flows through the query pipeline.
  *
@@ -21,6 +23,10 @@ namespace graph::query {
 struct QueryContext {
 	std::unordered_map<std::string, PropertyValue> parameters;
 	ExecMode execMode = ExecMode::EM_FULL;
+	QueryGuard *guard = nullptr;
+	int maxVarLengthDepth = 50;
+
+	void checkGuard() const;
 };
 
 } // namespace graph::query

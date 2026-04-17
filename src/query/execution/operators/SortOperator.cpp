@@ -43,6 +43,7 @@ std::optional<RecordBatch> SortOperator::next() {
 	// 1. Materialize Phase (Blocking)
 	if (!isSorted_) {
 		while (true) {
+			if (queryContext_) queryContext_->checkGuard();
 			auto batchOpt = child_->next();
 			if (!batchOpt)
 				break;

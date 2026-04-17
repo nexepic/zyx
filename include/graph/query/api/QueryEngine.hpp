@@ -25,6 +25,7 @@
 #include "QueryBuilder.hpp"
 #include "QueryResult.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/config/SystemConfigManager.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/QueryPlan.hpp"
 #include "graph/query/cache/PlanCache.hpp"
@@ -75,6 +76,7 @@ namespace graph::query {
 		[[nodiscard]] std::shared_ptr<storage::constraints::ConstraintManager> getConstraintManager() const { return constraintManager_; }
 
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+		void setConfigManager(config::SystemConfigManager *cfg) { configManager_ = cfg; }
 
 		[[nodiscard]] cache::PlanCache &getPlanCache() { return planCache_; }
 		[[nodiscard]] const cache::PlanCache &getPlanCache() const { return planCache_; }
@@ -88,6 +90,7 @@ namespace graph::query {
 
 		std::unordered_map<Language, std::shared_ptr<parser::IQueryParser>> parsers_;
 		concurrent::ThreadPool *threadPool_ = nullptr;
+		config::SystemConfigManager *configManager_ = nullptr;
 		cache::PlanCache planCache_;
 
 		std::shared_ptr<parser::IQueryParser> getParser(Language lang);

@@ -37,6 +37,9 @@ namespace graph::storage::state::keys {
 		constexpr char SLOW_LOG_ENABLED[] = "query.slow_log.enabled";
 		constexpr char SLOW_LOG_THRESHOLD_MS[] = "query.slow_log.threshold_ms";
 		constexpr char STATS_ENABLED[] = "stats.enabled";
+		constexpr char QUERY_TIMEOUT_MS[] = "query.timeout_ms";
+		constexpr char QUERY_MAX_MEMORY_MB[] = "query.max_memory_mb";
+		constexpr char QUERY_MAX_VAR_LENGTH_DEPTH[] = "query.max_var_length_depth";
 	} // namespace Config
 
 	// --- Base Keys for Entities ---

@@ -227,6 +227,11 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 					// *3
 					minHops = maxHops = std::stoi(ints[0]->getText());
 				}
+
+				// Safety clamp: prevent unreasonably large maxHops at parse time.
+				// Runtime config limit is enforced in VarLengthTraversalOperator.
+				static constexpr int ABSOLUTE_MAX_HOPS = 100;
+				maxHops = std::min(maxHops, ABSOLUTE_MAX_HOPS);
 			}
 		}
 

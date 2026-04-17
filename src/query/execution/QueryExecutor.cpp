@@ -24,6 +24,7 @@
 #include "debug/PlanVisualizer.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/log/Log.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/api/QueryResult.hpp"
 
 namespace graph::query {
@@ -52,6 +53,7 @@ namespace graph::query {
 		result.setColumns(outputVars);
 
 		// 2. Pipeline Execution Loop
+		auto *ctx = plan->getQueryContext();
 		uint64_t pullNsTotal = 0;
 		uint64_t materializeNsTotal = 0;
 		while (true) {
@@ -63,6 +65,8 @@ namespace graph::query {
 			if (!batchOpt) {
 				break;
 			}
+
+			if (ctx) ctx->checkGuard();
 
 			auto materializeStart = Clock::now();
 			const auto &batch = batchOpt.value();

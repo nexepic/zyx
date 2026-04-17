@@ -45,6 +45,7 @@ std::optional<RecordBatch> AggregateOperator::next() {
 
 	// Consume all input records and accumulate
 	while (auto batchOpt = child_->next()) {
+		if (queryContext_) queryContext_->checkGuard();
 		for (const auto& record : *batchOpt) {
 			if (groupByItems_.empty()) {
 				// Global aggregation - update all accumulators

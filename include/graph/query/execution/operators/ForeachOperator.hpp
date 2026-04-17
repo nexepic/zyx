@@ -12,6 +12,7 @@
 
 #include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/query/execution/operators/RecordInjectorOperator.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 
@@ -60,6 +61,7 @@ public:
 			const auto &list = listVal.getList();
 
 			for (const auto &elem : list) {
+				if (queryContext_) queryContext_->checkGuard();
 				Record bodyRecord = record;
 				bodyRecord.setValue(iterVar_, elem);
 

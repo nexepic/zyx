@@ -31,6 +31,7 @@
 #include "../PhysicalOperator.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/expressions/Expression.hpp"
 
 namespace graph::storage { class DataManager; }
@@ -67,6 +68,7 @@ namespace graph::query::execution::operators {
 
 		std::optional<RecordBatch> next() override {
 			while (true) {
+				if (queryContext_) queryContext_->checkGuard();
 				auto batchOpt = child_->next();
 				if (!batchOpt)
 					return std::nullopt;

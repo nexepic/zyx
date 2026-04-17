@@ -22,6 +22,7 @@
 #include <chrono>
 #include "CypherParserImpl.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/QueryGuard.hpp"
 #include "graph/query/planner/PhysicalPlanConverter.hpp"
 #include "graph/query/planner/QueryPlanner.hpp"
 #include "graph/storage/constraints/ConstraintManager.hpp"
@@ -115,13 +116,28 @@ namespace graph::query {
 			return QueryResult{};
 		}
 
+		// Create QueryGuard from config
+		int64_t timeoutMs = 30000;
+		int64_t memoryMb = 0;
+		int maxVarLengthDepth = 50;
+		if (configManager_) {
+			timeoutMs = configManager_->getQueryTimeoutMs();
+			memoryMb = configManager_->getQueryMaxMemoryMb();
+			maxVarLengthDepth = static_cast<int>(configManager_->getQueryMaxVarLengthDepth());
+		}
+		QueryGuard guard(timeoutMs, memoryMb);
+
+		// Build enriched context with guard
+		QueryContext enrichedCtx = ctx;
+		enrichedCtx.guard = &guard;
+		enrichedCtx.maxVarLengthDepth = maxVarLengthDepth;
+
 		// Propagate thread pool to all operators in the tree
 		if (threadPool_)
 			propagateThreadPool(planTree.get(), threadPool_);
 
-		// Propagate query context (parameters) to operators
-		if (!ctx.parameters.empty())
-			propagateQueryContext(planTree.get(), &ctx);
+		// Propagate query context (parameters + guard) to operators
+		propagateQueryContext(planTree.get(), &enrichedCtx);
 
 		// Execute
 		return queryExecutor_->execute(std::move(planTree));

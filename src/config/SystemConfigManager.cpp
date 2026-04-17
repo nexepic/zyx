@@ -104,4 +104,16 @@ namespace graph::config {
 		return systemStateManager_->get<bool>(keys::SYS_CONFIG, keys::Config::STATS_ENABLED, true);
 	}
 
+	int64_t SystemConfigManager::getQueryTimeoutMs() const {
+		return systemStateManager_->get<int64_t>(keys::SYS_CONFIG, keys::Config::QUERY_TIMEOUT_MS, 30000);
+	}
+
+	int64_t SystemConfigManager::getQueryMaxMemoryMb() const {
+		return systemStateManager_->get<int64_t>(keys::SYS_CONFIG, keys::Config::QUERY_MAX_MEMORY_MB, 0);
+	}
+
+	int64_t SystemConfigManager::getQueryMaxVarLengthDepth() const {
+		return systemStateManager_->get<int64_t>(keys::SYS_CONFIG, keys::Config::QUERY_MAX_VAR_LENGTH_DEPTH, 50);
+	}
+
 } // namespace graph::config
