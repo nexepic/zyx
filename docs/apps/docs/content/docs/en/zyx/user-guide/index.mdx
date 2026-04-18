@@ -22,18 +22,20 @@ ZYX is an embedded graph database engine with a CLI-first workflow and Cypher qu
 
 | Step | Document | Focus |
 |---|---|---|
-| 1 | [Quick Start](quick-start) | Install CLI, open DB, run first queries |
-| 2 | [Basic Operations](basic-operations) | CRUD, indexes, constraints |
-| 3 | [Cypher Basics](cypher-basics) | Clause model and expression surface |
-| 4 | [Pattern Matching](pattern-matching) | Directed/undirected and variable-length patterns |
-| 5 | [Advanced Queries](advanced-queries) | WITH/UNION/UNWIND/CALL/LOAD CSV |
-| 6 | [Transactions](transactions) | Explicit transaction boundaries and rollback |
-| 7 | [Batch Operations](batch-operations) | Large writes/import strategy |
-| 8 | [Import & Export](import-export) | Data movement and backup runbook |
+| 1 | [Features](features) | What ZYX offers — storage, indexing, vector search, transactions |
+| 2 | [Quick Start](quick-start) | Install CLI, open DB, run first queries |
+| 3 | [Basic Operations](basic-operations) | CRUD, indexes, constraints |
+| 4 | [Cypher Basics](cypher-basics) | Clause model and expression surface |
+| 5 | [Pattern Matching](pattern-matching) | Directed/undirected and variable-length patterns |
+| 6 | [Advanced Queries](advanced-queries) | WITH/UNION/UNWIND/CALL/LOAD CSV |
+| 7 | [Transactions](transactions) | Explicit transaction boundaries and rollback |
+| 8 | [Batch Operations](batch-operations) | Large writes/import strategy |
+| 9 | [Import & Export](import-export) | Data movement and backup runbook |
 
 ```mermaid
 flowchart LR
-  A[Quick Start] --> B[Basic Operations]
+  Z[Features] --> A[Quick Start]
+  A --> B[Basic Operations]
   B --> C[Cypher Basics]
   C --> D[Pattern Matching]
   D --> E[Advanced Queries]
