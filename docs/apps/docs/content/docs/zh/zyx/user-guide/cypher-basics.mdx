@@ -69,15 +69,89 @@ flowchart LR
 
 | 分组 | 函数 |
 |---|---|
-| 聚合 | `count`, `sum`, `avg`, `min`, `max`, `collect`（均支持 `DISTINCT`） |
-| 字符串 | `toString`, `upper`, `lower`, `trim`, `lTrim`, `rTrim`, `left`, `right`, `substring`, `replace`, `split`, `reverse`, `length` |
-| 数值 | `abs`, `ceil`, `floor`, `round`, `sqrt`, `sign` |
+| 聚合 | `count`, `sum`, `avg`, `min`, `max`, `collect`（均支持 `DISTINCT`）, `stDev`, `stDevP`, `percentileDisc`, `percentileCont` |
+| 字符串 | `toString`, `upper`/`toUpper`, `lower`/`toLower`, `trim`, `lTrim`, `rTrim`, `left`, `right`, `substring`, `replace`, `split`, `reverse`, `length` |
+| 数值 | `abs`, `ceil`, `floor`, `round`, `sqrt`, `sign`, `log`, `log10`, `exp`, `pow`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `rand`, `pi`, `e` |
 | 列表 | `size`, `range`, `head`, `tail`, `last`, `reverse` |
 | 类型转换 | `toInteger`, `toFloat`, `toBoolean` |
+| 时间 | `date`, `datetime`, `duration` |
 | 实体自省 | `id`, `labels`, `type`, `keys`, `properties` |
 | 路径 | `nodes(path)`, `relationships(path)`, `length(path)`, `shortestPath(...)` |
 | 量词 | `all`, `any`, `none`, `single` |
 | 通用 | `coalesce`, `timestamp`, `randomUUID`, `exists((pattern))`, `reduce(...)` |
+
+## 时间类型
+
+ZYX 支持三种时间类型：**Date**、**DateTime** 和 **Duration**。
+
+### 创建时间值
+
+```cypher
+// 当前日期与时间
+RETURN date() AS today, datetime() AS now
+
+// 从 ISO 字符串创建
+RETURN date("2024-01-15") AS d,
+       datetime("2024-01-15T13:45:30") AS dt,
+       duration("P1Y2M3DT4H5M6S") AS dur
+
+// 从分量 map 创建
+RETURN date({year: 2024, month: 1, day: 15}) AS d,
+       datetime({year: 2024, month: 1, day: 15, hour: 13, minute: 45, second: 30}) AS dt,
+       duration({years: 1, months: 2, days: 3, hours: 4}) AS dur
+```
+
+### 时间算术
+
+| 表达式 | 结果类型 | 说明 |
+|---|---|---|
+| `date + duration` | Date | 日期加时长 |
+| `datetime + duration` | DateTime | 时间戳加时长 |
+| `date - duration` | Date | 日期减时长 |
+| `datetime - duration` | DateTime | 时间戳减时长 |
+| `date - date` | Duration | 两个日期之差 |
+| `datetime - datetime` | Duration | 两个时间戳之差 |
+| `duration + duration` | Duration | 两个时长之和 |
+| `duration - duration` | Duration | 两个时长之差 |
+
+### 分量访问
+
+```cypher
+WITH date("2024-06-15") AS d
+RETURN d.year, d.month, d.day
+
+WITH datetime("2024-06-15T13:45:30") AS dt
+RETURN dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second
+
+WITH duration("P1Y2M3DT4H5M6S") AS dur
+RETURN dur.months, dur.days
+```
+
+## 统计聚合
+
+除基本聚合函数外，ZYX 还支持统计聚合：
+
+```cypher
+// 样本标准差与总体标准差
+MATCH (s:Student)
+RETURN stDev(s.score) AS sampleStdDev,
+       stDevP(s.score) AS populationStdDev
+
+// 离散百分位数（返回集合中的实际值）
+MATCH (p:Person)
+RETURN percentileDisc(p.age, 0.5) AS medianAge
+
+// 连续百分位数（线性插值）
+MATCH (p:Person)
+RETURN percentileCont(p.score, 0.75) AS p75Score
+```
+
+| 函数 | 说明 |
+|---|---|
+| `stDev(expr)` | 样本标准差（Welford 算法）。n < 2 时返回 NULL。 |
+| `stDevP(expr)` | 总体标准差。n < 1 时返回 NULL。 |
+| `percentileDisc(expr, p)` | 离散百分位数 — 返回排位 `floor(p * (n-1))` 处的值。 |
+| `percentileCont(expr, p)` | 连续百分位数 — 相邻值间线性插值。 |
 
 ## 参数化查询
 

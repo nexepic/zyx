@@ -23,6 +23,8 @@ All exported functions use the `ZYX_EXPORT` calling convention.
 | `ZYXResult_T*` | Query result handle | `zyx_result_close()` |
 | `ZYXTxn_T*` | Transaction handle | `zyx_txn_close()` |
 | `ZYXParams_T*` | Parameter set handle | `zyx_params_close()` |
+| `ZYXList_T*` | List builder handle | `zyx_list_close()` |
+| `ZYXMap_T*` | Map builder handle | `zyx_map_close()` |
 
 ## Database Lifecycle
 
@@ -168,6 +170,8 @@ void zyx_params_set_double(ZYXParams_T* p, const char* key, double val);
 void zyx_params_set_string(ZYXParams_T* p, const char* key, const char* val);
 void zyx_params_set_bool(ZYXParams_T* p, const char* key, bool val);
 void zyx_params_set_null(ZYXParams_T* p, const char* key);
+void zyx_params_set_list(ZYXParams_T* p, const char* key, ZYXList_T* list);
+void zyx_params_set_map(ZYXParams_T* p, const char* key, ZYXMap_T* map);
 ```
 
 ### `zyx_params_close`
@@ -177,6 +181,103 @@ void zyx_params_close(ZYXParams_T* p);
 ```
 
 Free a parameter set.
+
+## List Builder
+
+Build list values for use as query parameters. All push functions are null-safe (null handle = no-op).
+
+### `zyx_list_create`
+
+```c
+ZYXList_T* zyx_list_create();
+```
+
+Create an empty list builder.
+
+### Pushing Values
+
+```c
+void zyx_list_push_int(ZYXList_T* list, int64_t val);
+void zyx_list_push_double(ZYXList_T* list, double val);
+void zyx_list_push_string(ZYXList_T* list, const char* val);
+void zyx_list_push_bool(ZYXList_T* list, bool val);
+void zyx_list_push_null(ZYXList_T* list);
+void zyx_list_push_list(ZYXList_T* list, ZYXList_T* nested);
+```
+
+### `zyx_list_close`
+
+```c
+void zyx_list_close(ZYXList_T* list);
+```
+
+Free a list builder.
+
+## Map Builder
+
+Build map values for use as query parameters. All set functions are null-safe (null handle = no-op).
+
+### `zyx_map_create`
+
+```c
+ZYXMap_T* zyx_map_create();
+```
+
+Create an empty map builder.
+
+### Setting Map Entries
+
+```c
+void zyx_map_set_int(ZYXMap_T* map, const char* key, int64_t val);
+void zyx_map_set_double(ZYXMap_T* map, const char* key, double val);
+void zyx_map_set_string(ZYXMap_T* map, const char* key, const char* val);
+void zyx_map_set_bool(ZYXMap_T* map, const char* key, bool val);
+void zyx_map_set_null(ZYXMap_T* map, const char* key);
+void zyx_map_set_list(ZYXMap_T* map, const char* key, ZYXList_T* list);
+void zyx_map_set_map(ZYXMap_T* map, const char* key, ZYXMap_T* nested);
+```
+
+### `zyx_map_close`
+
+```c
+void zyx_map_close(ZYXMap_T* map);
+```
+
+Free a map builder.
+
+### List/Map Example
+
+```c
+// Build a list parameter: [1, 2, 3]
+ZYXList_T* ids = zyx_list_create();
+zyx_list_push_int(ids, 1);
+zyx_list_push_int(ids, 2);
+zyx_list_push_int(ids, 3);
+
+ZYXParams_T* params = zyx_params_create();
+zyx_params_set_list(params, "ids", ids);
+zyx_list_close(ids);
+
+ZYXResult_T* res = zyx_execute_params(db,
+    "MATCH (n) WHERE id(n) IN $ids RETURN n", params);
+zyx_result_close(res);
+zyx_params_close(params);
+
+// Build a map parameter: {year: 2024, month: 1, day: 15}
+ZYXMap_T* dateMap = zyx_map_create();
+zyx_map_set_int(dateMap, "year", 2024);
+zyx_map_set_int(dateMap, "month", 1);
+zyx_map_set_int(dateMap, "day", 15);
+
+params = zyx_params_create();
+zyx_params_set_map(params, "d", dateMap);
+zyx_map_close(dateMap);
+
+res = zyx_execute_params(db,
+    "RETURN date($d) AS d", params);
+zyx_result_close(res);
+zyx_params_close(params);
+```
 
 ## High-Performance Write APIs
 
@@ -336,6 +437,8 @@ int main() {
 | `ZYXResult_T*` | `zyx_execute*`, `zyx_txn_execute*` | `zyx_result_close` | String pointers from result are valid until `zyx_result_close` |
 | `ZYXTxn_T*` | `zyx_begin_transaction`, `zyx_begin_read_only_transaction` | `zyx_txn_close` | Valid after commit/rollback until closed |
 | `ZYXParams_T*` | `zyx_params_create` | `zyx_params_close` | String key/value pointers are copied internally |
+| `ZYXList_T*` | `zyx_list_create` | `zyx_list_close` | Ownership transfers to params on `zyx_params_set_list` |
+| `ZYXMap_T*` | `zyx_map_create` | `zyx_map_close` | Ownership transfers to params on `zyx_params_set_map` |
 
 ## Source Locations
 

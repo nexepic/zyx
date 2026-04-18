@@ -33,7 +33,9 @@ bool ExpressionUtils::isAggregateFunction(const std::string& functionName) {
 	               [](unsigned char c) { return std::tolower(c); });
 
 	return nameLower == "count" || nameLower == "sum" || nameLower == "avg" ||
-	       nameLower == "min" || nameLower == "max" || nameLower == "collect";
+	       nameLower == "min" || nameLower == "max" || nameLower == "collect" ||
+	       nameLower == "stdev" || nameLower == "stdevp" ||
+	       nameLower == "percentiledisc" || nameLower == "percentilecont";
 }
 
 // =============================================================================
@@ -321,7 +323,15 @@ std::unique_ptr<Expression> ExpressionUtils::extractAndReplaceAggregates(
 				}
 			}
 
-			aggItems.emplace_back(funcNameLower, argExpr, tempAlias, funcCall->isDistinct());
+			// For percentile functions, capture the second argument (percentile value)
+			std::shared_ptr<Expression> extraArg = nullptr;
+			if ((funcNameLower == "percentiledisc" || funcNameLower == "percentilecont") &&
+			    funcCall->getArgumentCount() > 1) {
+				const auto& args = funcCall->getArguments();
+				extraArg = std::shared_ptr<Expression>(args[1]->clone().release());
+			}
+
+			aggItems.emplace_back(funcNameLower, argExpr, tempAlias, funcCall->isDistinct(), extraArg);
 			return std::make_unique<VariableReferenceExpression>(tempAlias);
 		}
 

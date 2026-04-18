@@ -28,6 +28,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include "graph/core/TemporalTypes.hpp"
 
 namespace graph {
 
@@ -41,7 +42,10 @@ namespace graph {
 		STRING = 5,
 		LIST = 6, // Support for Vector/List
 		MAP = 7,  // Support for Map/Dictionary
-		COMPOSITE = 8 // Multi-property composite key
+		COMPOSITE = 8, // Multi-property composite key
+		DATE = 9,
+		DATETIME = 10,
+		DURATION = 11
 	};
 
 	// CompositeKey is defined after PropertyValue (uses PropertyValue in components)
@@ -56,7 +60,9 @@ namespace graph {
 	private:
 		// The actual data storage.
 		// Order matters for default comparison: null < bool < int < double < string
-		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string, std::vector<PropertyValue>, MapType>;
+		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string,
+		                                std::vector<PropertyValue>, MapType,
+		                                TemporalDate, TemporalDateTime, TemporalDuration>;
 		VariantType data;
 
 	public:
@@ -86,6 +92,10 @@ namespace graph {
 
 		explicit PropertyValue(MapType map) : data(std::move(map)) {}
 
+		PropertyValue(TemporalDate d) : data(d) {}
+		PropertyValue(TemporalDateTime dt) : data(dt) {}
+		PropertyValue(TemporalDuration dur) : data(dur) {}
+
 		// Expose the underlying variant for pattern matching with std::visit.
 		const VariantType &getVariant() const { return data; }
 
@@ -104,6 +114,8 @@ namespace graph {
 			return std::visit([&other]<typename T>(const T& val) -> bool {
 				if constexpr (std::is_same_v<std::decay_t<T>, MapType>) {
 					return false;
+				} else if constexpr (std::is_same_v<std::decay_t<T>, TemporalDuration>) {
+					return val < std::get<T>(other.data);
 				} else {
 					return val < std::get<T>(other.data);
 				}
@@ -151,6 +163,12 @@ namespace graph {
 							}
 							oss << "}";
 							return oss.str();
+						} else if constexpr (std::is_same_v<T, TemporalDate>) {
+							return value.toISO();
+						} else if constexpr (std::is_same_v<T, TemporalDateTime>) {
+							return value.toISO();
+						} else if constexpr (std::is_same_v<T, TemporalDuration>) {
+							return value.toISO();
 						} else {
 							return "";
 						}
@@ -177,6 +195,12 @@ namespace graph {
 							return "LIST";
 						else if constexpr (std::is_same_v<T, MapType>)
 							return "MAP";
+						else if constexpr (std::is_same_v<T, TemporalDate>)
+							return "DATE";
+						else if constexpr (std::is_same_v<T, TemporalDateTime>)
+							return "DATETIME";
+						else if constexpr (std::is_same_v<T, TemporalDuration>)
+							return "DURATION";
 						else
 							return "UNKNOWN";
 					},
@@ -201,6 +225,12 @@ namespace graph {
 				return PropertyType::LIST;
 			if (std::holds_alternative<MapType>(data))
 				return PropertyType::MAP;
+			if (std::holds_alternative<TemporalDate>(data))
+				return PropertyType::DATE;
+			if (std::holds_alternative<TemporalDateTime>(data))
+				return PropertyType::DATETIME;
+			if (std::holds_alternative<TemporalDuration>(data))
+				return PropertyType::DURATION;
 			return PropertyType::UNKNOWN;
 		}
 
@@ -282,6 +312,12 @@ namespace graph {
 						type = PropertyType::LIST;
 					} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
 						type = PropertyType::MAP;
+					} else if constexpr (std::is_same_v<T, TemporalDate>) {
+						type = PropertyType::DATE;
+					} else if constexpr (std::is_same_v<T, TemporalDateTime>) {
+						type = PropertyType::DATETIME;
+					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
+						type = PropertyType::DURATION;
 					}
 				},
 				value.getVariant());

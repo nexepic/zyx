@@ -158,9 +158,12 @@ namespace zyx {
 						}
 						return strVec;
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue::MapType>) {
-						// Maps are converted to string representation
 						graph::PropertyValue pv(arg);
 						return pv.toString();
+					} else if constexpr (std::is_same_v<T, graph::TemporalDate> ||
+					                     std::is_same_v<T, graph::TemporalDateTime> ||
+					                     std::is_same_v<T, graph::TemporalDuration>) {
+						return arg.toISO();
 					} else {
 						// Primitives (int, double, bool, string) map directly
 						return arg;
@@ -232,6 +235,21 @@ namespace zyx {
 							vec.push_back(graph::PropertyValue(s));
 						}
 						return graph::PropertyValue(vec);
+					} else if constexpr (std::is_same_v<T, std::shared_ptr<ValueList>>) {
+						if (!arg) return graph::PropertyValue();
+						std::vector<graph::PropertyValue> vec;
+						vec.reserve(arg->elements.size());
+						for (const auto& elem : arg->elements) {
+							vec.push_back(toInternal(elem));
+						}
+						return graph::PropertyValue(std::move(vec));
+					} else if constexpr (std::is_same_v<T, std::shared_ptr<ValueMap>>) {
+						if (!arg) return graph::PropertyValue();
+						graph::PropertyValue::MapType map;
+						for (const auto& [k, v] : arg->entries) {
+							map.emplace(k, toInternal(v));
+						}
+						return graph::PropertyValue(std::move(map));
 					} else if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
 										 std::is_same_v<T, std::shared_ptr<Edge>>) {
 						return {};

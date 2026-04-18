@@ -44,6 +44,8 @@
 #include "graph/query/execution/operators/RecordInjectorOperator.hpp"
 #include "graph/query/execution/operators/NamedPathOperator.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
+#include "graph/query/expressions/ExpressionEvaluator.hpp"
+#include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
 #include "graph/query/logical/operators/LogicalCreateConstraint.hpp"
@@ -290,20 +292,37 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertAggregate(
 
 	// Map function name string to AggregateFunctionType enum
 	auto mapFn = [](const std::string &name) -> AggregateFunctionType {
-		if (name == "count")   return AggregateFunctionType::AGG_COUNT;
-		if (name == "sum")     return AggregateFunctionType::AGG_SUM;
-		if (name == "avg")     return AggregateFunctionType::AGG_AVG;
-		if (name == "min")     return AggregateFunctionType::AGG_MIN;
-		if (name == "max")     return AggregateFunctionType::AGG_MAX;
-		if (name == "collect") return AggregateFunctionType::AGG_COLLECT;
+		if (name == "count")          return AggregateFunctionType::AGG_COUNT;
+		if (name == "sum")            return AggregateFunctionType::AGG_SUM;
+		if (name == "avg")            return AggregateFunctionType::AGG_AVG;
+		if (name == "min")            return AggregateFunctionType::AGG_MIN;
+		if (name == "max")            return AggregateFunctionType::AGG_MAX;
+		if (name == "collect")        return AggregateFunctionType::AGG_COLLECT;
+		if (name == "stdev")          return AggregateFunctionType::AGG_STDEV;
+		if (name == "stdevp")         return AggregateFunctionType::AGG_STDEVP;
+		if (name == "percentiledisc") return AggregateFunctionType::AGG_PERCENTILE_DISC;
+		if (name == "percentilecont") return AggregateFunctionType::AGG_PERCENTILE_CONT;
 		throw std::runtime_error("PhysicalPlanConverter: unknown aggregate function: " + name);
 	};
 
 	std::vector<AggregateItem> aggregates;
 	aggregates.reserve(agg->getAggregations().size());
 	for (const auto &litem : agg->getAggregations()) {
+		double percentileArg = 0.5;
+		if (litem.extraArg) {
+			// Evaluate the percentile literal as a constant
+			graph::query::expressions::EvaluationContext dummyCtx(
+				graph::query::execution::Record{}, nullptr);
+			graph::query::expressions::ExpressionEvaluator eval(dummyCtx);
+			auto pval = eval.evaluate(litem.extraArg.get());
+			if (pval.getType() == PropertyType::DOUBLE) {
+				percentileArg = std::get<double>(pval.getVariant());
+			} else if (pval.getType() == PropertyType::INTEGER) {
+				percentileArg = static_cast<double>(std::get<int64_t>(pval.getVariant()));
+			}
+		}
 		aggregates.emplace_back(mapFn(litem.functionName), litem.argument,
-		                        litem.alias, litem.distinct);
+		                        litem.alias, litem.distinct, percentileArg);
 	}
 
 	// Build GroupByItems – use stored aliases if available, fall back to expression's toString()

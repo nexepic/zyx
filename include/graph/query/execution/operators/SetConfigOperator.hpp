@@ -50,8 +50,11 @@ namespace graph::query::execution::operators {
 						if constexpr (std::is_same_v<T, std::monostate>) {
 							// NULL — nothing to set
 						} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>> ||
-						                     std::is_same_v<T, PropertyValue::MapType>) {
-							throw std::runtime_error("Cannot use LIST or MAP as a config value");
+						                     std::is_same_v<T, PropertyValue::MapType> ||
+						                     std::is_same_v<T, TemporalDate> ||
+						                     std::is_same_v<T, TemporalDateTime> ||
+						                     std::is_same_v<T, TemporalDuration>) {
+							throw std::runtime_error("Cannot use LIST, MAP, or temporal types as a config value");
 						} else {
 							stateManager_->set(stateKey, key_, arg);
 						}

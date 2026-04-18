@@ -33,11 +33,40 @@
 #include "graph/query/expressions/MapProjectionExpression.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 #include <cmath>
+#include "graph/core/TemporalTypes.hpp"
 #include <regex>
 #include <queue>
 #include <unordered_set>
 
 namespace graph::query::expressions {
+// --- Temporal component access helper ---
+static PropertyValue extractTemporalComponent(const PropertyValue& val, const std::string& component) {
+	if (val.getType() == PropertyType::DATE) {
+		const auto& d = std::get<TemporalDate>(val.getVariant());
+		if (component == "year") return PropertyValue(static_cast<int64_t>(d.year()));
+		if (component == "month") return PropertyValue(static_cast<int64_t>(d.month()));
+		if (component == "day") return PropertyValue(static_cast<int64_t>(d.day()));
+		if (component == "epochDays") return PropertyValue(static_cast<int64_t>(d.epochDays));
+	} else if (val.getType() == PropertyType::DATETIME) {
+		const auto& dt = std::get<TemporalDateTime>(val.getVariant());
+		if (component == "year") return PropertyValue(static_cast<int64_t>(dt.year()));
+		if (component == "month") return PropertyValue(static_cast<int64_t>(dt.month()));
+		if (component == "day") return PropertyValue(static_cast<int64_t>(dt.day()));
+		if (component == "hour") return PropertyValue(static_cast<int64_t>(dt.hour()));
+		if (component == "minute") return PropertyValue(static_cast<int64_t>(dt.minute()));
+		if (component == "second") return PropertyValue(static_cast<int64_t>(dt.second()));
+		if (component == "epochMillis") return PropertyValue(dt.epochMillis);
+	} else if (val.getType() == PropertyType::DURATION) {
+		const auto& dur = std::get<TemporalDuration>(val.getVariant());
+		if (component == "months") return PropertyValue(dur.months);
+		if (component == "days") return PropertyValue(dur.days);
+		if (component == "seconds") return PropertyValue(dur.nanos / 1000000000LL);
+		if (component == "nanoseconds") return PropertyValue(dur.nanos);
+	}
+	return PropertyValue(); // null for unknown component
+}
+
+
 
 ExpressionEvaluator::ExpressionEvaluator(const EvaluationContext &context)
 	: context_(context), result_() {}
@@ -84,8 +113,15 @@ void ExpressionEvaluator::visit(const VariableReferenceExpression *expr) {
 		if (value) {
 			result_ = *value;
 		} else {
-			// Missing property → NULL
-			result_ = PropertyValue();
+			// Check if variable is a temporal type with component access
+			auto varValue = context_.resolveVariable(varName);
+			if (varValue && (varValue->getType() == PropertyType::DATE ||
+			                 varValue->getType() == PropertyType::DATETIME ||
+			                 varValue->getType() == PropertyType::DURATION)) {
+				result_ = extractTemporalComponent(*varValue, expr->getPropertyName());
+			} else {
+				result_ = PropertyValue();
+			}
 		}
 	} else {
 		// Simple variable reference: n
@@ -315,6 +351,96 @@ void ExpressionEvaluator::visit(const CaseExpression *expr) {
 PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
                                                        const PropertyValue &left,
                                                        const PropertyValue &right) {
+	// --- Temporal arithmetic ---
+	auto lt = left.getType();
+	auto rt = right.getType();
+
+	// DATE + DURATION -> DATE
+	if (op == BinaryOperatorType::BOP_ADD && lt == PropertyType::DATE && rt == PropertyType::DURATION) {
+		const auto& d = std::get<TemporalDate>(left.getVariant());
+		const auto& dur = std::get<TemporalDuration>(right.getVariant());
+		int y = d.year(), m = d.month(), dy = d.day();
+		// Add months
+		int64_t totalMonths = static_cast<int64_t>(y) * 12 + (m - 1) + dur.months;
+		y = static_cast<int>(totalMonths / 12);
+		m = static_cast<int>(totalMonths % 12) + 1;
+		if (m <= 0) { y--; m += 12; }
+		// Add days
+		auto result = TemporalDate::fromYMD(y, m, dy);
+		result.epochDays += static_cast<int32_t>(dur.days + dur.nanos / (86400LL * 1000000000LL));
+		return PropertyValue(result);
+	}
+
+	// DURATION + DATE -> DATE (commutative)
+	if (op == BinaryOperatorType::BOP_ADD && lt == PropertyType::DURATION && rt == PropertyType::DATE) {
+		return evaluateArithmetic(op, right, left);
+	}
+
+	// DATETIME + DURATION -> DATETIME
+	if (op == BinaryOperatorType::BOP_ADD && lt == PropertyType::DATETIME && rt == PropertyType::DURATION) {
+		const auto& dt = std::get<TemporalDateTime>(left.getVariant());
+		const auto& dur = std::get<TemporalDuration>(right.getVariant());
+		int y = dt.year(), m = dt.month(), dy = dt.day();
+		int64_t totalMonths = static_cast<int64_t>(y) * 12 + (m - 1) + dur.months;
+		y = static_cast<int>(totalMonths / 12);
+		m = static_cast<int>(totalMonths % 12) + 1;
+		if (m <= 0) { y--; m += 12; }
+		auto result = TemporalDateTime::fromComponents(y, m, dy, dt.hour(), dt.minute(), dt.second());
+		result.epochMillis += dur.days * 86400LL * 1000LL + dur.nanos / 1000000LL;
+		return PropertyValue(result);
+	}
+
+	// DURATION + DATETIME -> DATETIME (commutative)
+	if (op == BinaryOperatorType::BOP_ADD && lt == PropertyType::DURATION && rt == PropertyType::DATETIME) {
+		return evaluateArithmetic(op, right, left);
+	}
+
+	// DURATION + DURATION -> DURATION
+	if (op == BinaryOperatorType::BOP_ADD && lt == PropertyType::DURATION && rt == PropertyType::DURATION) {
+		const auto& a = std::get<TemporalDuration>(left.getVariant());
+		const auto& b = std::get<TemporalDuration>(right.getVariant());
+		return PropertyValue(TemporalDuration{a.months + b.months, a.days + b.days, a.nanos + b.nanos});
+	}
+
+	// DATE - DURATION -> DATE
+	if (op == BinaryOperatorType::BOP_SUBTRACT && lt == PropertyType::DATE && rt == PropertyType::DURATION) {
+		const auto& dur = std::get<TemporalDuration>(right.getVariant());
+		TemporalDuration neg{-dur.months, -dur.days, -dur.nanos};
+		return evaluateArithmetic(BinaryOperatorType::BOP_ADD, left, PropertyValue(neg));
+	}
+
+	// DATETIME - DURATION -> DATETIME
+	if (op == BinaryOperatorType::BOP_SUBTRACT && lt == PropertyType::DATETIME && rt == PropertyType::DURATION) {
+		const auto& dur = std::get<TemporalDuration>(right.getVariant());
+		TemporalDuration neg{-dur.months, -dur.days, -dur.nanos};
+		return evaluateArithmetic(BinaryOperatorType::BOP_ADD, left, PropertyValue(neg));
+	}
+
+	// DURATION - DURATION -> DURATION
+	if (op == BinaryOperatorType::BOP_SUBTRACT && lt == PropertyType::DURATION && rt == PropertyType::DURATION) {
+		const auto& a = std::get<TemporalDuration>(left.getVariant());
+		const auto& b = std::get<TemporalDuration>(right.getVariant());
+		return PropertyValue(TemporalDuration{a.months - b.months, a.days - b.days, a.nanos - b.nanos});
+	}
+
+	// DATE - DATE -> DURATION (day difference)
+	if (op == BinaryOperatorType::BOP_SUBTRACT && lt == PropertyType::DATE && rt == PropertyType::DATE) {
+		const auto& a = std::get<TemporalDate>(left.getVariant());
+		const auto& b = std::get<TemporalDate>(right.getVariant());
+		return PropertyValue(TemporalDuration{0, static_cast<int64_t>(a.epochDays - b.epochDays), 0});
+	}
+
+	// DATETIME - DATETIME -> DURATION (millisecond difference)
+	if (op == BinaryOperatorType::BOP_SUBTRACT && lt == PropertyType::DATETIME && rt == PropertyType::DATETIME) {
+		const auto& a = std::get<TemporalDateTime>(left.getVariant());
+		const auto& b = std::get<TemporalDateTime>(right.getVariant());
+		int64_t diffMs = a.epochMillis - b.epochMillis;
+		int64_t diffDays = diffMs / (86400LL * 1000LL);
+		int64_t remainMs = diffMs % (86400LL * 1000LL);
+		return PropertyValue(TemporalDuration{0, diffDays, remainMs * 1000000LL});
+	}
+
+
 	// String concatenation: if either operand is a string and op is ADD, concatenate
 	if (op == BinaryOperatorType::BOP_ADD &&
 	    (left.getType() == PropertyType::STRING || right.getType() == PropertyType::STRING)) {
@@ -799,13 +925,36 @@ void ExpressionEvaluator::visit(const ExistsExpression *expr) {
 			}
 		}
 
+		// Determine target node id
+		int64_t targetId = (direction == PatternDirection::PAT_INCOMING)
+			? edge.getSourceNodeId() : edge.getTargetNodeId();
+
 		// Filter by target label
 		if (!targetLabel.empty()) {
-			int64_t targetId = (direction == PatternDirection::PAT_INCOMING)
-				? edge.getSourceNodeId() : edge.getTargetNodeId();
 			Node targetNode = dataManager->getNode(targetId);
 			std::string nodeLabel = dataManager->resolveTokenName(targetNode.getLabelId());
 			if (nodeLabel != targetLabel) {
+				continue;
+			}
+		}
+
+		// Apply WHERE clause filter if present
+		if (expr->hasWhereClause()) {
+			Node targetNode = dataManager->getNode(targetId);
+			const std::string& targetVar = expr->getTargetVar();
+
+			// Build a sub-record with the target node bound
+			execution::Record subRecord(context_.getRecord());
+			if (!targetVar.empty()) {
+				subRecord.setNode(targetVar, targetNode);
+			}
+
+			// Evaluate WHERE expression in sub-context
+			EvaluationContext subContext(subRecord, dataManager);
+			ExpressionEvaluator subEval(subContext);
+			PropertyValue whereResult = subEval.evaluate(expr->getWhereExpression());
+
+			if (!EvaluationContext::toBoolean(whereResult)) {
 				continue;
 			}
 		}

@@ -25,7 +25,8 @@ ExistsExpression::ExistsExpression(
 	std::string relType,
 	std::string targetLabel,
 	PatternDirection direction,
-	std::unique_ptr<Expression> whereExpr
+	std::unique_ptr<Expression> whereExpr,
+	std::string targetVar
 )
 	: pattern_(std::move(pattern))
 	, sourceVar_(std::move(sourceVar))
@@ -33,6 +34,7 @@ ExistsExpression::ExistsExpression(
 	, targetLabel_(std::move(targetLabel))
 	, direction_(direction)
 	, whereExpr_(std::move(whereExpr))
+	, targetVar_(std::move(targetVar))
 	 {
 }
 
@@ -58,7 +60,8 @@ std::unique_ptr<Expression> ExistsExpression::clone() const {
 	if (!sourceVar_.empty()) {
 		return std::make_unique<ExistsExpression>(
 			pattern_, sourceVar_, relType_, targetLabel_, direction_,
-			whereExpr_ ? whereExpr_->clone() : nullptr
+			whereExpr_ ? whereExpr_->clone() : nullptr,
+			targetVar_
 		);
 	}
 	return std::make_unique<ExistsExpression>(

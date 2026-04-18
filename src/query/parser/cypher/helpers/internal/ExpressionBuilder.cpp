@@ -1250,9 +1250,13 @@ std::unique_ptr<Expression> ExpressionBuilder::buildExistsExpression(CypherParse
 			}
 		}
 
-		// Target node label
+		// Target node label and variable
+		std::string targetVar;
 		auto targetNode = chain->nodePattern();
 		if (targetNode) {
+			if (targetNode->variable()) {
+				targetVar = targetNode->variable()->getText();
+			}
 			if (targetNode->nodeLabels()) {
 				auto labels = targetNode->nodeLabels()->nodeLabel();
 				if (!labels.empty()) {
@@ -1260,9 +1264,18 @@ std::unique_ptr<Expression> ExpressionBuilder::buildExistsExpression(CypherParse
 				}
 			}
 		}
+
+		// Build WHERE expression if present
+		std::unique_ptr<Expression> whereExpr;
+		if (ctx->K_WHERE()) {
+			whereExpr = buildExpression(ctx->expression());
+		}
+
+		return std::make_unique<ExistsExpression>(
+			patternStr, sourceVar, relType, targetLabel, direction, std::move(whereExpr), targetVar);
 	}
 
-	// Build WHERE expression if present
+	// No chain - simple exists with possible WHERE
 	std::unique_ptr<Expression> whereExpr;
 	if (ctx->K_WHERE()) {
 		whereExpr = buildExpression(ctx->expression());

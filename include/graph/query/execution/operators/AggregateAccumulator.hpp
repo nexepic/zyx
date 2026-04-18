@@ -23,11 +23,13 @@
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <unordered_set>
-#include <vector>
 #include <variant>
+#include <vector>
 
 namespace graph::query::execution::operators {
 
@@ -41,7 +43,11 @@ enum class AggregateFunctionType {
 	AGG_AVG,
 	AGG_MIN,
 	AGG_MAX,
-	AGG_COLLECT
+	AGG_COLLECT,
+	AGG_STDEV,
+	AGG_STDEVP,
+	AGG_PERCENTILE_DISC,
+	AGG_PERCENTILE_CONT
 };
 
 /**
@@ -398,9 +404,157 @@ private:
 };
 
 /**
+ * @class StDevAccumulator
+ * @brief Accumulator for stDev()/stDevP() using Welford's online algorithm.
+ */
+class StDevAccumulator : public AggregateAccumulator {
+public:
+	explicit StDevAccumulator(bool population) : population_(population) {}
+
+	void update(const PropertyValue& value) override {
+		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+			return;
+		}
+		PropertyType type = value.getType();
+		double x = 0.0;
+		if (type == PropertyType::INTEGER) {
+			x = static_cast<double>(std::get<int64_t>(value.getVariant()));
+		} else if (type == PropertyType::DOUBLE) {
+			x = std::get<double>(value.getVariant());
+		} else {
+			return;
+		}
+		n_++;
+		double delta = x - mean_;
+		mean_ += delta / static_cast<double>(n_);
+		double delta2 = x - mean_;
+		m2_ += delta * delta2;
+	}
+
+	[[nodiscard]] PropertyValue getResult() const override {
+		if (population_) {
+			if (n_ < 1) return PropertyValue();
+			return PropertyValue(std::sqrt(m2_ / static_cast<double>(n_)));
+		}
+		if (n_ < 2) return PropertyValue();
+		return PropertyValue(std::sqrt(m2_ / static_cast<double>(n_ - 1)));
+	}
+
+	void reset() override {
+		n_ = 0;
+		mean_ = 0.0;
+		m2_ = 0.0;
+	}
+
+	[[nodiscard]] std::unique_ptr<AggregateAccumulator> clone() const override {
+		auto acc = std::make_unique<StDevAccumulator>(population_);
+		acc->n_ = n_;
+		acc->mean_ = mean_;
+		acc->m2_ = m2_;
+		return acc;
+	}
+
+private:
+	bool population_;
+	size_t n_ = 0;
+	double mean_ = 0.0;
+	double m2_ = 0.0;
+};
+
+/**
+ * @class PercentileDiscAccumulator
+ * @brief Accumulator for percentileDisc() — materialize + sort, pick nearest rank.
+ */
+class PercentileDiscAccumulator : public AggregateAccumulator {
+public:
+	explicit PercentileDiscAccumulator(double percentile) : percentile_(percentile) {}
+
+	void update(const PropertyValue& value) override {
+		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+			values_.push_back(value);
+		}
+	}
+
+	[[nodiscard]] PropertyValue getResult() const override {
+		if (values_.empty()) return PropertyValue();
+		auto sorted = values_;
+		std::sort(sorted.begin(), sorted.end());
+		size_t idx = static_cast<size_t>(std::floor(percentile_ * static_cast<double>(sorted.size() - 1)));
+		return sorted[idx];
+	}
+
+	void reset() override {
+		values_.clear();
+	}
+
+	[[nodiscard]] std::unique_ptr<AggregateAccumulator> clone() const override {
+		auto acc = std::make_unique<PercentileDiscAccumulator>(percentile_);
+		acc->values_ = values_;
+		return acc;
+	}
+
+private:
+	double percentile_;
+	std::vector<PropertyValue> values_;
+};
+
+/**
+ * @class PercentileContAccumulator
+ * @brief Accumulator for percentileCont() — materialize + sort + linear interpolation.
+ */
+class PercentileContAccumulator : public AggregateAccumulator {
+public:
+	explicit PercentileContAccumulator(double percentile) : percentile_(percentile) {}
+
+	void update(const PropertyValue& value) override {
+		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+			return;
+		}
+		PropertyType type = value.getType();
+		if (type == PropertyType::INTEGER || type == PropertyType::DOUBLE) {
+			values_.push_back(value);
+		}
+	}
+
+	[[nodiscard]] PropertyValue getResult() const override {
+		if (values_.empty()) return PropertyValue();
+		auto sorted = values_;
+		std::sort(sorted.begin(), sorted.end());
+		double rank = percentile_ * static_cast<double>(sorted.size() - 1);
+		size_t lo = static_cast<size_t>(std::floor(rank));
+		size_t hi = static_cast<size_t>(std::ceil(rank));
+		if (lo == hi || hi >= sorted.size()) {
+			return sorted[lo];
+		}
+		double loVal = (sorted[lo].getType() == PropertyType::INTEGER)
+			? static_cast<double>(std::get<int64_t>(sorted[lo].getVariant()))
+			: std::get<double>(sorted[lo].getVariant());
+		double hiVal = (sorted[hi].getType() == PropertyType::INTEGER)
+			? static_cast<double>(std::get<int64_t>(sorted[hi].getVariant()))
+			: std::get<double>(sorted[hi].getVariant());
+		double frac = rank - static_cast<double>(lo);
+		return PropertyValue(loVal + frac * (hiVal - loVal));
+	}
+
+	void reset() override {
+		values_.clear();
+	}
+
+	[[nodiscard]] std::unique_ptr<AggregateAccumulator> clone() const override {
+		auto acc = std::make_unique<PercentileContAccumulator>(percentile_);
+		acc->values_ = values_;
+		return acc;
+	}
+
+private:
+	double percentile_;
+	std::vector<PropertyValue> values_;
+};
+
+/**
  * @brief Factory function to create an accumulator for a given aggregate function type.
  */
-[[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type, bool distinct = false) {
+[[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type, bool distinct = false, double percentileArg = 0.5) {
 	switch (type) {
 		case AggregateFunctionType::AGG_COUNT:
 			if (distinct) return std::make_unique<CountDistinctAccumulator>();
@@ -416,6 +570,14 @@ private:
 		case AggregateFunctionType::AGG_COLLECT:
 			if (distinct) return std::make_unique<CollectDistinctAccumulator>();
 			return std::make_unique<CollectAccumulator>();
+		case AggregateFunctionType::AGG_STDEV:
+			return std::make_unique<StDevAccumulator>(false);
+		case AggregateFunctionType::AGG_STDEVP:
+			return std::make_unique<StDevAccumulator>(true);
+		case AggregateFunctionType::AGG_PERCENTILE_DISC:
+			return std::make_unique<PercentileDiscAccumulator>(percentileArg);
+		case AggregateFunctionType::AGG_PERCENTILE_CONT:
+			return std::make_unique<PercentileContAccumulator>(percentileArg);
 		default:
 			return nullptr;
 	}

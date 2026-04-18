@@ -56,8 +56,20 @@ namespace graph::property_utils {
 							total += getPropertyValueSize(element);
 						}
 						return total;
+					} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
+						size_t total = sizeof(uint32_t);
+						for (const auto &[k, v] : arg) {
+							total += k.size() + sizeof(size_t);
+							total += getPropertyValueSize(v);
+						}
+						return total;
+					} else if constexpr (std::is_same_v<T, TemporalDate>) {
+						return sizeof(int32_t);
+					} else if constexpr (std::is_same_v<T, TemporalDateTime>) {
+						return sizeof(int64_t);
+					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
+						return sizeof(int64_t) * 3;
 					} else {
-						// All variant types are handled above
 						return 0;
 					}
 				},

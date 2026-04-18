@@ -42,12 +42,14 @@ struct AggregateItem {
 	std::shared_ptr<graph::query::expressions::Expression> expression; // Expression to aggregate
 	std::string alias; // Output variable name
 	bool distinct = false; // DISTINCT modifier (e.g., count(DISTINCT expr))
+	double percentileArg = 0.5; // For percentileDisc/percentileCont
 
 	AggregateItem(AggregateFunctionType type,
 	              std::shared_ptr<graph::query::expressions::Expression> expr,
 	              std::string alias,
-	              bool distinct = false)
-		: functionType(type), expression(std::move(expr)), alias(std::move(alias)), distinct(distinct) {}
+	              bool distinct = false,
+	              double percentileArg = 0.5)
+		: functionType(type), expression(std::move(expr)), alias(std::move(alias)), distinct(distinct), percentileArg(percentileArg) {}
 };
 
 struct GroupByItem {

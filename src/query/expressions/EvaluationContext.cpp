@@ -139,6 +139,9 @@ bool EvaluationContext::toBoolean(const PropertyValue &value) {
 			} else if constexpr (std::is_same_v<TPlain, PropertyValue::MapType>) {
 				// Empty map → false, non-empty → true
 				return !arg.empty();
+			} else {
+				// Temporal types → true (non-null)
+				return true;
 			}
 		},
 		value.getVariant());
@@ -186,6 +189,12 @@ int64_t EvaluationContext::toInteger(const PropertyValue &value) {
 					PropertyType::INTEGER,
 					PropertyType::MAP
 				);
+			} else {
+				throw TypeMismatchException(
+					"Cannot convert temporal type to INTEGER",
+					PropertyType::INTEGER,
+					PropertyType::UNKNOWN
+				);
 			}
 		},
 		value.getVariant());
@@ -231,6 +240,12 @@ double EvaluationContext::toDouble(const PropertyValue &value) {
 					"Cannot convert MAP to DOUBLE",
 					PropertyType::DOUBLE,
 					PropertyType::MAP
+				);
+			} else {
+				throw TypeMismatchException(
+					"Cannot convert temporal type to DOUBLE",
+					PropertyType::DOUBLE,
+					PropertyType::UNKNOWN
 				);
 			}
 		},

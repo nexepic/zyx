@@ -11,32 +11,159 @@ projectOrder: 1
 ---
 # Benchmarks
 
-ZYX ships a standalone benchmark application (`apps/benchmark`) that covers insertion, querying, concurrency, vector retrieval, and optimizer scenarios.
+ZYX ships a standalone benchmark application (`apps/benchmark`) with **51 benchmarks** across 7 categories: insertion, querying, algorithms, vectors, concurrency, transactions, and storage footprint.
 
-## Covered Scenarios
+## Categories
 
-| Category | What it tests |
-|----------|--------------|
-| **Insert** | Cypher vs. native API write paths, with and without indexes |
-| **Query** | Property index lookups, label scans, full scans |
-| **Algo** | Shortest path and other graph algorithms |
-| **Vector** | Vector insertion and ANN (approximate nearest neighbor) queries |
-| **Concurrency** | Multi-threaded read, write, sorting, and vector search |
-| **Optimizer** | Side-by-side comparison of optimization rule effectiveness |
+| Category | Type flag | What it tests | Benchmark count |
+|----------|-----------|---------------|-----------------|
+| **Insert** | `insert` | Cypher vs. native API write paths (single and batch), across 4 index modes (none / label / property / both) | 16 |
+| **Query** | `query` | Property index lookups, label scans, full scans, and optimizer effectiveness (filter pushdown, AND splitting, join filtering) | 7 |
+| **Algo** | `algo` | Shortest path via Cypher and native API on a 1000-node chain | 2 |
+| **Vector** | `vector` | Vector insertion (128d/768d, with/without HNSW index) and ANN top-10 search | 5 |
+| **Concurrency** | `concurrency` | Single-thread vs. multi-thread comparison for queries, sorting, batch inserts, PQ training, vector search, and concurrent reads | 12 |
+| **Transaction** | `transaction` | Implicit commit vs. explicit transaction vs. explicit batch — inserting 1000 nodes per run | 3 |
+| **Storage** | `storage` | On-disk footprint profiling: numeric, short text, long text, mixed properties, graph with indexes, and vector indexes | 6 |
 
-## How to Run
+## How to Build and Run
 
-Build the benchmark binary and run it directly:
+Build the benchmark binary:
 
 ```bash
-./buildDir/apps/benchmark/benchmark
+ninja -C buildDir zyx-bench
 ```
 
-The benchmark framework (`BenchmarkFramework`) accepts configuration via `BenchmarkConfig` to control dataset size, thread count, warmup iterations, and measurement duration.
+Run all benchmarks:
+
+```bash
+./buildDir/apps/benchmark/zyx-bench
+```
+
+### CLI Options
+
+| Flag | Description |
+|------|-------------|
+| `-t, --type <type,...>` | Filter by category (comma-separated). Accepts: `insert`, `query`, `algo`, `vector`, `concurrency`, `storage`, `transaction`, `all` |
+| `-b, --bench <id,...>` | Run specific benchmark(s) by exact ID |
+| `--list` | Print all categories and benchmark IDs, then exit |
+| `--list-types` | Print only the 7 category names, then exit |
+
+Type aliases are accepted: `write`/`writes` for insert, `read`/`reads` for query, `algorithm`/`algorithms` for algo, `vec` for vector, `conc`/`parallel` for concurrency, `footprint` for storage, `txn` for transaction.
+
+### Examples
+
+```bash
+# Run only insert benchmarks
+./buildDir/apps/benchmark/zyx-bench --type insert
+
+# Run query and vector benchmarks
+./buildDir/apps/benchmark/zyx-bench --type query,vector
+
+# Run a specific benchmark by ID
+./buildDir/apps/benchmark/zyx-bench --bench query.cypher.property_index
+
+# List all available benchmarks
+./buildDir/apps/benchmark/zyx-bench --list
+```
+
+## Metrics
+
+Latency/throughput benchmarks report four columns:
+
+| Metric | Description |
+|--------|-------------|
+| **Ops/Sec** | Throughput (operations per second). Batch benchmarks report per-item throughput. |
+| **Avg(us)** | Mean latency per operation in microseconds |
+| **P99(us)** | 99th-percentile latency from sorted per-iteration timings |
+| **Mem(KB)** | Peak RSS via `getrusage` (macOS/Linux) or `GetProcessMemoryInfo` (Windows) |
+
+Each benchmark also reports a **stage breakdown** (`[Stage avg ms/op]`) showing the average time spent in each query engine stage (parsing, planning, execution, etc.), sorted by cost.
+
+Storage benchmarks use a different output format: `Nodes | Edges | Props | DB(MB) | WAL(MB) | Total(MB) | Bytes/Node`, and export results to `/tmp/zyx_storage_profile.csv`.
+
+## Benchmark Reference
+
+### Insert Benchmarks
+
+4 index modes (`none` / `label` / `prop` / `all`) × 4 variants = 16 benchmarks.
+
+| ID Pattern | What it tests |
+|------------|---------------|
+| `insert.cypher.single.<mode>` | Single `CREATE` statement per node via Cypher |
+| `insert.native.single.<mode>` | Single `db.createNode()` call per node via C++ API |
+| `insert.cypher.batch.<mode>` | One multi-node `CREATE` statement for all nodes |
+| `insert.native.batch.<mode>` | `db.createNodes()` with pre-allocated data |
+
+### Query Benchmarks
+
+Setup: 500 User nodes + 2000 noise nodes (Product/Order/Category/Log).
+
+| ID | What it tests |
+|----|---------------|
+| `query.cypher.property_index` | Property index lookup on `uid` (100 iterations) |
+| `query.cypher.label_scan` | Label-indexed lookup without property index (20 iterations) |
+| `query.cypher.full_scan` | Full scan without any index (5 iterations) |
+| `query.optimizer.filter_pushdown` | WHERE clause pushed into index scan by optimizer |
+| `query.optimizer.inline_baseline` | Inline predicate baseline (no optimizer transform needed) |
+| `query.optimizer.and_split` | AND condition splitting across filter stages |
+| `query.optimizer.join_filter` | Cross-join with filter pushed to reduce cartesian product |
+
+### Algorithm Benchmarks
+
+Both build a 1000-node linear chain connected by `NEXT` edges.
+
+| ID | What it tests |
+|----|---------------|
+| `algo.cypher.shortest_path` | `CALL algo.shortestPath(startId, endId)` via Cypher |
+| `algo.native.shortest_path` | `db.getShortestPath(startId, endId)` via native API |
+
+### Vector Benchmarks
+
+| ID | What it tests |
+|----|---------------|
+| `vector.insert.no_index.128d` | 128d vector insertion without HNSW index |
+| `vector.insert.indexed.128d` | 128d vector insertion with HNSW index |
+| `vector.insert.indexed.768d` | 768d vector insertion with HNSW index |
+| `vector.search.128d.top10` | ANN top-10 search on 500 × 128d vectors |
+| `vector.search.768d.top10` | ANN top-10 search on 500 × 768d vectors |
+
+### Transaction Benchmarks
+
+All insert 1000 nodes per run.
+
+| ID | What it tests |
+|----|---------------|
+| `transaction.implicit_insert` | 1000 individual auto-committed `CREATE` statements |
+| `transaction.explicit_insert` | 1000 individual `CREATE` statements in one explicit transaction |
+| `transaction.explicit_batch_insert` | One multi-node `CREATE` statement in one explicit transaction |
+
+### Concurrency Benchmarks
+
+Each scenario has a `single_thread` and `multi_thread` variant (using `hardware_concurrency()` threads). Data size: 10000 nodes, 5 iterations.
+
+| ID Pair | What it tests |
+|---------|---------------|
+| `concurrency.query.*` | NodeScan + Filter operator parallelization |
+| `concurrency.sort.*` | SortOperator parallelization on 10000 nodes |
+| `concurrency.batch_insert.*` | `FileStorage::save()` parallel preparation |
+| `concurrency.pq_train.*` | ProductQuantizer parallel subspace training (1000 × 128d) |
+| `concurrency.vector_search.*` | DiskANN re-ranking + PQ distance table parallelization (1000 × 768d) |
+| `concurrency.read.*` | Snapshot isolation under concurrent reader threads via `std::thread` |
+
+### Storage Benchmarks
+
+Measure on-disk footprint after `db.save()`.
+
+| ID | What it creates |
+|----|-----------------|
+| `storage.numeric` | 5000 nodes with `uid: int64` |
+| `storage.short_text` | 5000 nodes with `uid` + 32-char `name` |
+| `storage.long_text` | 2000 nodes with `uid` + 512-char `bio` |
+| `storage.mixed` | 5000 nodes with 6 mixed-type properties (bool/int/double/string/list) |
+| `storage.graph_indexes` | 3000 nodes + 6000 edges + label and property indexes |
+| `storage.vector_index` | 1200 nodes with 128d vectors + HNSW index |
 
 ## Interpreting Results
-
-When reading benchmark output, keep these guidelines in mind:
 
 1. **Fix your hardware and compiler flags** — Results vary significantly across CPUs, storage devices, and optimization levels. Always use the same `-O3` release build for comparisons.
 2. **Separate cold-start from steady-state** — The first run exercises the page cache and WAL creation; subsequent runs benefit from warm caches. Report both.
@@ -49,8 +176,12 @@ When reading benchmark output, keep these guidelines in mind:
 | Component | Path |
 |-----------|------|
 | Entry point | `apps/benchmark/main.cpp` |
-| Framework & config | `apps/benchmark/BenchmarkFramework.hpp`, `BenchmarkConfig.hpp` |
-| Storage benchmarks | `apps/benchmark/BenchmarkStorage.hpp` |
+| Framework & metrics | `apps/benchmark/BenchmarkFramework.hpp` |
+| Configuration constants | `apps/benchmark/BenchmarkConfig.hpp` |
+| Benchmark selection / CLI | `apps/benchmark/BenchmarkSelection.hpp` |
+| Insert / Query / Algo benchmarks | `apps/benchmark/BenchmarkCases.hpp` |
+| Storage footprint benchmarks | `apps/benchmark/BenchmarkStorage.hpp` |
 | Vector benchmarks | `apps/benchmark/BenchmarkVector.hpp` |
 | Optimizer benchmarks | `apps/benchmark/BenchmarkOptimizer.hpp` |
 | Concurrency benchmarks | `apps/benchmark/BenchmarkConcurrency.hpp` |
+| Build definition | `apps/benchmark/meson.build` |

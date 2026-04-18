@@ -20,9 +20,11 @@ typedef struct ZYXDB_T ZYXDB_T;          // Database handle
 typedef struct ZYXResult_T ZYXResult_T;  // Query result handle
 typedef struct ZYXTxn_T ZYXTxn_T;        // Transaction handle
 typedef struct ZYXParams_T ZYXParams_T;  // Parameter set handle
+typedef struct ZYXList_T ZYXList_T;      // List builder handle
+typedef struct ZYXMap_T  ZYXMap_T;       // Map builder handle
 ```
 
-All handles are opaque pointers. Create them with the corresponding `zyx_*` functions and free them with the matching `zyx_*_close` functions.
+All handles are opaque pointers. Create them with the corresponding `zyx_*` functions and free them with the matching `zyx_*_close` functions. `ZYXList_T` and `ZYXMap_T` are builder handles for constructing complex parameter values (see [C API Reference](c-api) for usage).
 
 ## ZYXValueType
 

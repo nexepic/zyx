@@ -34,7 +34,7 @@ void AggregateOperator::open() {
 
 	// Initialize accumulators for each aggregate (with distinct flag)
 	for (const auto& agg : aggregates_) {
-		accumulators_.push_back(createAccumulator(agg.functionType, agg.distinct));
+		accumulators_.push_back(createAccumulator(agg.functionType, agg.distinct, agg.percentileArg));
 	}
 }
 

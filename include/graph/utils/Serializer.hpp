@@ -113,10 +113,27 @@ namespace graph::utils {
 					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
 						writePOD(os, PropertyType::LIST);
 						writePOD(os, static_cast<uint32_t>(arg.size()));
-						// Recursively serialize each element for heterogeneous list support
 						for (const auto &element : arg) {
 							serialize(os, element);
 						}
+					} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
+						writePOD(os, PropertyType::MAP);
+						writePOD(os, static_cast<uint32_t>(arg.size()));
+						for (const auto &[k, v] : arg) {
+							serialize<std::string>(os, k);
+							serialize(os, v);
+						}
+					} else if constexpr (std::is_same_v<T, TemporalDate>) {
+						writePOD(os, PropertyType::DATE);
+						writePOD(os, arg.epochDays);
+					} else if constexpr (std::is_same_v<T, TemporalDateTime>) {
+						writePOD(os, PropertyType::DATETIME);
+						writePOD(os, arg.epochMillis);
+					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
+						writePOD(os, PropertyType::DURATION);
+						writePOD(os, arg.months);
+						writePOD(os, arg.days);
+						writePOD(os, arg.nanos);
 					}
 				},
 				value.getVariant());
@@ -140,17 +157,35 @@ namespace graph::utils {
 			case PropertyType::DOUBLE:
 				return PropertyValue(readPOD<double>(is));
 			case PropertyType::STRING:
-				// Call the std::string specialization to read the value
 				return PropertyValue(deserialize<std::string>(is));
 			case PropertyType::LIST: {
 				uint32_t count = readPOD<uint32_t>(is);
 				std::vector<PropertyValue> vec;
 				vec.reserve(count);
-				// Recursively deserialize each element for heterogeneous list support
 				for (uint32_t i = 0; i < count; ++i) {
 					vec.push_back(deserialize<PropertyValue>(is));
 				}
 				return PropertyValue(vec);
+			}
+			case PropertyType::MAP: {
+				uint32_t count = readPOD<uint32_t>(is);
+				PropertyValue::MapType map;
+				for (uint32_t i = 0; i < count; ++i) {
+					std::string key = deserialize<std::string>(is);
+					PropertyValue val = deserialize<PropertyValue>(is);
+					map.emplace(std::move(key), std::move(val));
+				}
+				return PropertyValue(std::move(map));
+			}
+			case PropertyType::DATE:
+				return PropertyValue(TemporalDate{readPOD<int32_t>(is)});
+			case PropertyType::DATETIME:
+				return PropertyValue(TemporalDateTime{readPOD<int64_t>(is)});
+			case PropertyType::DURATION: {
+				int64_t months = readPOD<int64_t>(is);
+				int64_t days = readPOD<int64_t>(is);
+				int64_t nanos = readPOD<int64_t>(is);
+				return PropertyValue(TemporalDuration{months, days, nanos});
 			}
 			default:
 				throw std::runtime_error("Invalid PropertyType tag in stream during deserialization.");
@@ -171,11 +206,22 @@ namespace graph::utils {
 										 std::is_same_v<T, double>) {
 						size += sizeof(T);
 					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
-						size += sizeof(uint32_t); // Count
-						// Recursively calculate size for heterogeneous list support
+						size += sizeof(uint32_t);
 						for (const auto &element : arg) {
 							size += getSerializedSize(element);
 						}
+					} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
+						size += sizeof(uint32_t);
+						for (const auto &[k, v] : arg) {
+							size += sizeof(uint32_t) + k.size();
+							size += getSerializedSize(v);
+						}
+					} else if constexpr (std::is_same_v<T, TemporalDate>) {
+						size += sizeof(int32_t);
+					} else if constexpr (std::is_same_v<T, TemporalDateTime>) {
+						size += sizeof(int64_t);
+					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
+						size += sizeof(int64_t) * 3;
 					}
 				},
 				value.getVariant());

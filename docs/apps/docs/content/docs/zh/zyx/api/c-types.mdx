@@ -20,9 +20,11 @@ typedef struct ZYXDB_T ZYXDB_T;          // 数据库句柄
 typedef struct ZYXResult_T ZYXResult_T;  // 查询结果句柄
 typedef struct ZYXTxn_T ZYXTxn_T;        // 事务句柄
 typedef struct ZYXParams_T ZYXParams_T;  // 参数集句柄
+typedef struct ZYXList_T ZYXList_T;      // 列表构建句柄
+typedef struct ZYXMap_T  ZYXMap_T;       // Map 构建句柄
 ```
 
-所有句柄均为不透明指针。用对应的 `zyx_*` 函数创建，用对应的 `zyx_*_close` 函数释放。
+所有句柄均为不透明指针。用对应的 `zyx_*` 函数创建，用对应的 `zyx_*_close` 函数释放。`ZYXList_T` 和 `ZYXMap_T` 是用于构建复杂参数值的构建句柄（详见 [C API 参考](c-api)）。
 
 ## ZYXValueType
 

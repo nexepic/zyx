@@ -33,6 +33,8 @@ typedef struct ZYXDB_T ZYXDB_T;
 typedef struct ZYXResult_T ZYXResult_T;
 typedef struct ZYXTxn_T ZYXTxn_T;
 typedef struct ZYXParams_T ZYXParams_T;
+typedef struct ZYXList_T ZYXList_T;
+typedef struct ZYXMap_T ZYXMap_T;
 
 // ========================================================================
 // Data Structures (Mapped to Rust structs via repr(C))
@@ -178,6 +180,35 @@ void zyx_params_set_null(ZYXParams_T *p, const char *key);
  * @brief Frees the parameter set.
  */
 void zyx_params_close(ZYXParams_T *p);
+
+// ========================================================================
+// List Builder
+// ========================================================================
+
+ZYXList_T *zyx_list_create();
+void zyx_list_push_int(ZYXList_T *list, int64_t val);
+void zyx_list_push_double(ZYXList_T *list, double val);
+void zyx_list_push_string(ZYXList_T *list, const char *val);
+void zyx_list_push_bool(ZYXList_T *list, bool val);
+void zyx_list_push_null(ZYXList_T *list);
+void zyx_list_push_list(ZYXList_T *list, ZYXList_T *nested);
+void zyx_list_close(ZYXList_T *list);
+void zyx_params_set_list(ZYXParams_T *p, const char *key, ZYXList_T *list);
+
+// ========================================================================
+// Map Builder
+// ========================================================================
+
+ZYXMap_T *zyx_map_create();
+void zyx_map_set_int(ZYXMap_T *map, const char *key, int64_t val);
+void zyx_map_set_double(ZYXMap_T *map, const char *key, double val);
+void zyx_map_set_string(ZYXMap_T *map, const char *key, const char *val);
+void zyx_map_set_bool(ZYXMap_T *map, const char *key, bool val);
+void zyx_map_set_null(ZYXMap_T *map, const char *key);
+void zyx_map_set_list(ZYXMap_T *map, const char *key, ZYXList_T *list);
+void zyx_map_set_map(ZYXMap_T *map, const char *key, ZYXMap_T *nested);
+void zyx_map_close(ZYXMap_T *map);
+void zyx_params_set_map(ZYXParams_T *p, const char *key, ZYXMap_T *map);
 
 // ========================================================================
 // Batch Operations

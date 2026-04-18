@@ -611,12 +611,12 @@ TEST(PropertyValueTest, MapHash) {
 }
 
 TEST(PropertyValueTest, MapSize) {
-	// getPropertyValueSize with MAP falls through to else branch returning 0
+	// getPropertyValueSize with MAP now correctly computes size
 	PropertyValue::MapType map;
 	map["k"] = PropertyValue(int64_t(1));
 	graph::PropertyValue v(map);
-	// MAP is not handled in getPropertyValueSize, so returns 0
-	EXPECT_EQ(getPropertyValueSize(v), 0u);
+	// MAP: sizeof(uint32_t) + key("k": sizeof(size_t) + 1) + value(int64: 1 tag + 8)
+	EXPECT_GT(getPropertyValueSize(v), 0u);
 }
 
 // ============================================================================

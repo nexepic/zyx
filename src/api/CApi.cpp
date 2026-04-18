@@ -73,6 +73,16 @@ struct ZYXParams_T {
 	std::unordered_map<std::string, zyx::Value> params;
 };
 
+struct ZYXList_T {
+	std::shared_ptr<zyx::ValueList> list;
+	ZYXList_T() : list(std::make_shared<zyx::ValueList>()) {}
+};
+
+struct ZYXMap_T {
+	std::shared_ptr<zyx::ValueMap> map;
+	ZYXMap_T() : map(std::make_shared<zyx::ValueMap>()) {}
+};
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -177,6 +187,25 @@ void value_to_json(std::ostringstream &oss, const zyx::Value &v) {
 						oss << "\"" << escape_json_string(arg[i]) << "\"";
 					}
 					oss << "]";
+				} else if constexpr (std::is_same_v<T, std::shared_ptr<zyx::ValueList>>) {
+					if (!arg) { oss << "null"; return; }
+					oss << "[";
+					for (size_t i = 0; i < arg->elements.size(); ++i) {
+						if (i > 0) oss << ",";
+						value_to_json(oss, arg->elements[i]);
+					}
+					oss << "]";
+				} else if constexpr (std::is_same_v<T, std::shared_ptr<zyx::ValueMap>>) {
+					if (!arg) { oss << "null"; return; }
+					oss << "{";
+					bool first = true;
+					for (const auto& [k, v] : arg->entries) {
+						if (!first) oss << ",";
+						oss << "\"" << escape_json_string(k) << "\":";
+						value_to_json(oss, v);
+						first = false;
+					}
+					oss << "}";
 				} else {
 					oss << "\"<ComplexObject>\"";
 				}
@@ -432,6 +461,91 @@ void zyx_params_set_null(ZYXParams_T *p, const char *key) {
 
 void zyx_params_close(ZYXParams_T *p) {
 	delete p;
+}
+
+// --- List Builder ---
+
+ZYXList_T *zyx_list_create() {
+	return new (std::nothrow) ZYXList_T();
+}
+
+void zyx_list_push_int(ZYXList_T *list, int64_t val) {
+	if (list && list->list) list->list->elements.push_back(val);
+}
+
+void zyx_list_push_double(ZYXList_T *list, double val) {
+	if (list && list->list) list->list->elements.push_back(val);
+}
+
+void zyx_list_push_string(ZYXList_T *list, const char *val) {
+	if (list && list->list && val) list->list->elements.push_back(std::string(val));
+}
+
+void zyx_list_push_bool(ZYXList_T *list, bool val) {
+	if (list && list->list) list->list->elements.push_back(val);
+}
+
+void zyx_list_push_null(ZYXList_T *list) {
+	if (list && list->list) list->list->elements.push_back(std::monostate{});
+}
+
+void zyx_list_push_list(ZYXList_T *list, ZYXList_T *nested) {
+	if (list && list->list && nested && nested->list)
+		list->list->elements.push_back(nested->list);
+}
+
+void zyx_list_close(ZYXList_T *list) {
+	delete list;
+}
+
+void zyx_params_set_list(ZYXParams_T *p, const char *key, ZYXList_T *list) {
+	if (p && key && list && list->list)
+		p->params[key] = list->list;
+}
+
+// --- Map Builder ---
+
+ZYXMap_T *zyx_map_create() {
+	return new (std::nothrow) ZYXMap_T();
+}
+
+void zyx_map_set_int(ZYXMap_T *map, const char *key, int64_t val) {
+	if (map && map->map && key) map->map->entries[key] = val;
+}
+
+void zyx_map_set_double(ZYXMap_T *map, const char *key, double val) {
+	if (map && map->map && key) map->map->entries[key] = val;
+}
+
+void zyx_map_set_string(ZYXMap_T *map, const char *key, const char *val) {
+	if (map && map->map && key && val) map->map->entries[key] = std::string(val);
+}
+
+void zyx_map_set_bool(ZYXMap_T *map, const char *key, bool val) {
+	if (map && map->map && key) map->map->entries[key] = val;
+}
+
+void zyx_map_set_null(ZYXMap_T *map, const char *key) {
+	if (map && map->map && key) map->map->entries[key] = std::monostate{};
+}
+
+void zyx_map_set_list(ZYXMap_T *map, const char *key, ZYXList_T *list) {
+	if (map && map->map && key && list && list->list)
+		map->map->entries[key] = list->list;
+}
+
+void zyx_map_set_map(ZYXMap_T *map, const char *key, ZYXMap_T *nested) {
+	if (map && map->map && key && nested && nested->map)
+		map->map->entries[key] = nested->map;
+}
+
+void zyx_map_close(ZYXMap_T *map) {
+	delete map;
+}
+
+void zyx_params_set_map(ZYXParams_T *p, const char *key, ZYXMap_T *map) {
+	if (p && key && map && map->map)
+		p->params[key] = map->map;
 }
 
 // --- Batch Operations ---

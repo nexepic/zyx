@@ -28,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 #include <cctype>
+#include "graph/core/TemporalTypes.hpp"
 #include <random>
 #include <sstream>
 
@@ -381,6 +382,167 @@ static PropertyValue signImpl(
 }
 
 // ============================================================================
+// Extended Math Function Implementations
+// ============================================================================
+
+static PropertyValue logImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	double val = EvaluationContext::toDouble(args[0]);
+	if (val <= 0.0) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::log(val));
+}
+
+static PropertyValue log10Impl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	double val = EvaluationContext::toDouble(args[0]);
+	if (val <= 0.0) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::log10(val));
+}
+
+static PropertyValue expImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	double val = EvaluationContext::toDouble(args[0]);
+	return PropertyValue(std::exp(val));
+}
+
+static PropertyValue powImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
+		return PropertyValue();
+	}
+	double base = EvaluationContext::toDouble(args[0]);
+	double exponent = EvaluationContext::toDouble(args[1]);
+	return PropertyValue(std::pow(base, exponent));
+}
+
+static PropertyValue sinImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::sin(EvaluationContext::toDouble(args[0])));
+}
+
+static PropertyValue cosImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::cos(EvaluationContext::toDouble(args[0])));
+}
+
+static PropertyValue tanImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::tan(EvaluationContext::toDouble(args[0])));
+}
+
+static PropertyValue asinImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	double val = EvaluationContext::toDouble(args[0]);
+	if (val < -1.0 || val > 1.0) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::asin(val));
+}
+
+static PropertyValue acosImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	double val = EvaluationContext::toDouble(args[0]);
+	if (val < -1.0 || val > 1.0) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::acos(val));
+}
+
+static PropertyValue atanImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
+		return PropertyValue();
+	}
+	return PropertyValue(std::atan(EvaluationContext::toDouble(args[0])));
+}
+
+static PropertyValue atan2Impl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
+		return PropertyValue();
+	}
+	double y = EvaluationContext::toDouble(args[0]);
+	double x = EvaluationContext::toDouble(args[1]);
+	return PropertyValue(std::atan2(y, x));
+}
+
+static PropertyValue randImpl(
+	[[maybe_unused]] const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	static thread_local std::mt19937_64 gen(std::random_device{}());
+	std::uniform_real_distribution<double> dist(0.0, 1.0);
+	return PropertyValue(dist(gen));
+}
+
+static constexpr double PI_CONSTANT = 3.14159265358979323846;
+static constexpr double E_CONSTANT = 2.71828182845904523536;
+
+static PropertyValue piImpl(
+	[[maybe_unused]] const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	return PropertyValue(PI_CONSTANT);
+}
+
+static PropertyValue eConstImpl(
+	[[maybe_unused]] const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	return PropertyValue(E_CONSTANT);
+}
+
+// ============================================================================
 // Utility Function Implementations
 // ============================================================================
 
@@ -709,6 +871,104 @@ static PropertyValue randomUUIDImpl(
 	return PropertyValue(uuid);
 }
 
+
+// ============================================================================
+// Temporal Function Implementations
+// ============================================================================
+
+static PropertyValue dateImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty()) {
+		return PropertyValue(TemporalDate::today());
+	}
+	const auto& arg = args[0];
+	if (arg.getType() == PropertyType::STRING) {
+		return PropertyValue(TemporalDate::fromISO(std::get<std::string>(arg.getVariant())));
+	}
+	if (arg.getType() == PropertyType::MAP) {
+		const auto& map = arg.getMap();
+		int year = 1970, month = 1, day = 1;
+		auto it = map.find("year");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			year = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("month");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			month = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("day");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			day = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		return PropertyValue(TemporalDate::fromYMD(year, month, day));
+	}
+	return PropertyValue();
+}
+
+static PropertyValue datetimeImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty()) {
+		return PropertyValue(TemporalDateTime::now());
+	}
+	const auto& arg = args[0];
+	if (arg.getType() == PropertyType::STRING) {
+		return PropertyValue(TemporalDateTime::fromISO(std::get<std::string>(arg.getVariant())));
+	}
+	if (arg.getType() == PropertyType::MAP) {
+		const auto& map = arg.getMap();
+		int y = 1970, mo = 1, d = 1, h = 0, mi = 0, s = 0, ms = 0;
+		auto it = map.find("year");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			y = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("month");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			mo = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("day");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			d = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("hour");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			h = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("minute");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			mi = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("second");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			s = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		it = map.find("millisecond");
+		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+			ms = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		return PropertyValue(TemporalDateTime::fromComponents(y, mo, d, h, mi, s, ms));
+	}
+	return PropertyValue();
+}
+
+static PropertyValue durationImpl(
+	const std::vector<PropertyValue>& args,
+	[[maybe_unused]] const EvaluationContext& context
+) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) return PropertyValue();
+	const auto& arg = args[0];
+	if (arg.getType() == PropertyType::STRING) {
+		return PropertyValue(TemporalDuration::fromISO(std::get<std::string>(arg.getVariant())));
+	}
+	if (arg.getType() == PropertyType::MAP) {
+		const auto& map = arg.getMap();
+		auto getInt = [&](const char* key) -> int64_t {
+			auto it = map.find(key);
+			if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
+				return std::get<int64_t>(it->second.getVariant());
+			return 0;
+		};
+		return PropertyValue(TemporalDuration::fromComponents(
+			getInt("years"), getInt("months"), getInt("weeks"),
+			getInt("days"), getInt("hours"), getInt("minutes"),
+			getInt("seconds"), getInt("nanoseconds")));
+	}
+	return PropertyValue();
+}
+
 // ============================================================================
 // Registration
 // ============================================================================
@@ -733,6 +993,22 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	registerFunction(makeFn("round", 1, 1, &roundImpl));
 	registerFunction(makeFn("sqrt", 1, 1, &sqrtImpl));
 	registerFunction(makeFn("sign", 1, 1, &signImpl));
+
+	// Extended math functions
+	registerFunction(makeFn("log", 1, 1, &logImpl));
+	registerFunction(makeFn("log10", 1, 1, &log10Impl));
+	registerFunction(makeFn("exp", 1, 1, &expImpl));
+	registerFunction(makeFn("pow", 2, 2, &powImpl));
+	registerFunction(makeFn("sin", 1, 1, &sinImpl));
+	registerFunction(makeFn("cos", 1, 1, &cosImpl));
+	registerFunction(makeFn("tan", 1, 1, &tanImpl));
+	registerFunction(makeFn("asin", 1, 1, &asinImpl));
+	registerFunction(makeFn("acos", 1, 1, &acosImpl));
+	registerFunction(makeFn("atan", 1, 1, &atanImpl));
+	registerFunction(makeFn("atan2", 2, 2, &atan2Impl));
+	registerFunction(makeFn("rand", 0, 0, &randImpl));
+	registerFunction(makeFn("pi", 0, 0, &piImpl));
+	registerFunction(makeFn("e", 0, 0, &eConstImpl));
 
 	// Utility functions
 	registerFunction(makeFn("coalesce", 1, SIZE_MAX, &coalesceImpl, true));
@@ -764,6 +1040,10 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	registerFunction(makeFn("head", 1, 1, &headImpl));
 	registerFunction(makeFn("tail", 1, 1, &tailImpl));
 	registerFunction(makeFn("last", 1, 1, &lastImpl));
+
+	// String aliases
+	registerFunction(makeFn("toUpper", 1, 1, &upperImpl));
+	registerFunction(makeFn("toLower", 1, 1, &lowerImpl));
 
 	// Utility functions
 	registerFunction(makeFn("timestamp", 0, 0, &timestampImpl));
@@ -814,6 +1094,11 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	registerFunction(makeTypeFunction());
 	registerFunction(makeKeysFunction());
 	registerFunction(makePropertiesFunction());
+
+	// Temporal functions
+	registerFunction(makeFn("date", 0, 1, &dateImpl));
+	registerFunction(makeFn("datetime", 0, 1, &datetimeImpl));
+	registerFunction(makeFn("duration", 1, 1, &durationImpl));
 }
 
 } // namespace graph::query::expressions

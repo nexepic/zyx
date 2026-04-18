@@ -35,7 +35,8 @@ public:
 		std::string relType,
 		std::string targetLabel,
 		PatternDirection direction,
-		std::unique_ptr<Expression> whereExpr = nullptr
+		std::unique_ptr<Expression> whereExpr = nullptr,
+		std::string targetVar = ""
 	);
 
 	/**
@@ -61,6 +62,7 @@ public:
 	[[nodiscard]] const std::string& getSourceVar() const { return sourceVar_; }
 	[[nodiscard]] const std::string& getRelType() const { return relType_; }
 	[[nodiscard]] const std::string& getTargetLabel() const { return targetLabel_; }
+	[[nodiscard]] const std::string& getTargetVar() const { return targetVar_; }
 	[[nodiscard]] PatternDirection getDirection() const { return direction_; }
 	[[nodiscard]] bool hasStructuredPattern() const { return !sourceVar_.empty(); }
 
@@ -72,6 +74,7 @@ private:
 	std::string sourceVar_;
 	std::string relType_;
 	std::string targetLabel_;
+	std::string targetVar_;
 	PatternDirection direction_ = PatternDirection::PAT_OUTGOING;
 	std::unique_ptr<Expression> whereExpr_;
 };

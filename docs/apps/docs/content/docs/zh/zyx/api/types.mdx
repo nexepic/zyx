@@ -28,6 +28,8 @@ projectOrder: 1
 | Edge | `std::shared_ptr<Edge>` | 图边引用 |
 | 浮点向量 | `std::vector<float>` | 紧凑数值向量（常用于 embedding） |
 | 字符串列表 | `std::vector<std::string>` | 字符串列表 |
+| 列表 | `std::shared_ptr<ValueList>` | 异构值列表 |
+| Map | `std::shared_ptr<ValueMap>` | 字符串键映射 |
 
 ### 用法
 
@@ -116,6 +118,9 @@ struct PropertyValue {
 | `STRING` | `std::string` |
 | `LIST` | `std::vector<PropertyValue>` |
 | `MAP` | `unordered_map<string, PropertyValue>` |
+| `DATE` | `TemporalDate` — 日历日期（距 epoch 天数） |
+| `DATETIME` | `TemporalDateTime` — 时间戳（距 epoch 毫秒数） |
+| `DURATION` | `TemporalDuration` — ISO 8601 时长（months + days + nanos） |
 
 ## graph::ResultValue
 
@@ -135,6 +140,73 @@ class ResultValue {
 };
 ```
 
+## 时间类型
+
+头文件：`include/graph/core/TemporalTypes.hpp`
+
+### TemporalDate
+
+以距 1970-01-01 的天数存储的日历日期。
+
+```cpp
+struct TemporalDate {
+    int32_t epochDays = 0;
+
+    static TemporalDate today();
+    static TemporalDate fromISO(const std::string& s);   // "YYYY-MM-DD"
+    static TemporalDate fromYMD(int year, int month, int day);
+
+    int year() const;
+    int month() const;
+    int day() const;
+    std::string toISO() const;  // "YYYY-MM-DD"
+};
+```
+
+### TemporalDateTime
+
+以距 epoch 的毫秒数存储的时间戳。
+
+```cpp
+struct TemporalDateTime {
+    int64_t epochMillis = 0;
+
+    static TemporalDateTime now();
+    static TemporalDateTime fromISO(const std::string& s);  // "YYYY-MM-DDTHH:MM:SS"
+    static TemporalDateTime fromComponents(int y, int mo, int d, int h, int mi, int s, int ms = 0);
+
+    int year() const;
+    int month() const;
+    int day() const;
+    int hour() const;
+    int minute() const;
+    int second() const;
+    std::string toISO() const;  // "YYYY-MM-DDTHH:MM:SSZ"
+};
+```
+
+### TemporalDuration
+
+ISO 8601 时长，包含三个独立分量：月、日、纳秒。
+
+```cpp
+struct TemporalDuration {
+    int64_t months = 0;   // years * 12 + months
+    int64_t days   = 0;   // weeks * 7 + days
+    int64_t nanos  = 0;   // 时/分/秒折算为纳秒
+
+    static TemporalDuration fromISO(const std::string& s);  // "P1Y2M3DT4H5M6S"
+    static TemporalDuration fromComponents(int64_t years, int64_t months, int64_t weeks,
+                                           int64_t days, int64_t hours, int64_t minutes,
+                                           int64_t seconds, int64_t nanoseconds = 0);
+    std::string toISO() const;
+};
+```
+
+:::info
+时间类型支持 Cypher 算术运算：`date + duration`、`datetime - duration`、`date - date`（返回 duration）等。可通过属性语法访问分量：`d.year`、`dt.hour`、`dur.months`。
+:::
+
 ## 枚举类型
 
 | 枚举 | 值 | 说明 |
@@ -150,5 +222,6 @@ class ResultValue {
 |------|------|
 | Value 类型 | `include/zyx/value.hpp` |
 | PropertyValue | `include/graph/query/types/PropertyValue.hpp` |
+| 时间类型 | `include/graph/core/TemporalTypes.hpp` |
 | ResultValue | `include/graph/query/types/ResultValue.hpp` |
 | EntityType | `include/graph/core/types.hpp` |

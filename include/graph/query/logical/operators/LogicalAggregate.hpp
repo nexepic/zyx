@@ -26,15 +26,18 @@ struct LogicalAggItem {
     std::shared_ptr<graph::query::expressions::Expression> argument;
     std::string alias;
     bool distinct;
+    std::shared_ptr<graph::query::expressions::Expression> extraArg; // percentile literal
 
     LogicalAggItem(std::string fn,
                    std::shared_ptr<graph::query::expressions::Expression> arg,
                    std::string al,
-                   bool dist = false)
+                   bool dist = false,
+                   std::shared_ptr<graph::query::expressions::Expression> extra = nullptr)
         : functionName(std::move(fn))
         , argument(std::move(arg))
         , alias(std::move(al))
-        , distinct(dist) {}
+        , distinct(dist)
+        , extraArg(std::move(extra)) {}
 };
 
 /**
@@ -95,7 +98,9 @@ public:
         for (const auto &agg : aggregations_) {
             std::shared_ptr<graph::query::expressions::Expression> clonedArg(
                 agg.argument ? agg.argument->clone() : nullptr);
-            clonedAggs.emplace_back(agg.functionName, std::move(clonedArg), agg.alias, agg.distinct);
+            std::shared_ptr<graph::query::expressions::Expression> clonedExtra(
+                agg.extraArg ? agg.extraArg->clone() : nullptr);
+            clonedAggs.emplace_back(agg.functionName, std::move(clonedArg), agg.alias, agg.distinct, std::move(clonedExtra));
         }
 
         return std::make_unique<LogicalAggregate>(

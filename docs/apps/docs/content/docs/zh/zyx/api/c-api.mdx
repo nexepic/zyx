@@ -23,6 +23,8 @@ projectOrder: 1
 | `ZYXResult_T*` | 查询结果句柄 | `zyx_result_close()` |
 | `ZYXTxn_T*` | 事务句柄 | `zyx_txn_close()` |
 | `ZYXParams_T*` | 参数集句柄 | `zyx_params_close()` |
+| `ZYXList_T*` | 列表构建句柄 | `zyx_list_close()` |
+| `ZYXMap_T*` | Map 构建句柄 | `zyx_map_close()` |
 
 ## 数据库生命周期
 
@@ -168,6 +170,8 @@ void zyx_params_set_double(ZYXParams_T* p, const char* key, double val);
 void zyx_params_set_string(ZYXParams_T* p, const char* key, const char* val);
 void zyx_params_set_bool(ZYXParams_T* p, const char* key, bool val);
 void zyx_params_set_null(ZYXParams_T* p, const char* key);
+void zyx_params_set_list(ZYXParams_T* p, const char* key, ZYXList_T* list);
+void zyx_params_set_map(ZYXParams_T* p, const char* key, ZYXMap_T* map);
 ```
 
 ### `zyx_params_close`
@@ -177,6 +181,103 @@ void zyx_params_close(ZYXParams_T* p);
 ```
 
 释放参数集。
+
+## 列表构建器
+
+构建列表值作为查询参数。所有 push 函数均为空安全（null 句柄 = 无操作）。
+
+### `zyx_list_create`
+
+```c
+ZYXList_T* zyx_list_create();
+```
+
+创建空列表构建器。
+
+### 追加值
+
+```c
+void zyx_list_push_int(ZYXList_T* list, int64_t val);
+void zyx_list_push_double(ZYXList_T* list, double val);
+void zyx_list_push_string(ZYXList_T* list, const char* val);
+void zyx_list_push_bool(ZYXList_T* list, bool val);
+void zyx_list_push_null(ZYXList_T* list);
+void zyx_list_push_list(ZYXList_T* list, ZYXList_T* nested);
+```
+
+### `zyx_list_close`
+
+```c
+void zyx_list_close(ZYXList_T* list);
+```
+
+释放列表构建器。
+
+## Map 构建器
+
+构建 map 值作为查询参数。所有 set 函数均为空安全（null 句柄 = 无操作）。
+
+### `zyx_map_create`
+
+```c
+ZYXMap_T* zyx_map_create();
+```
+
+创建空 map 构建器。
+
+### 设置 Map 条目
+
+```c
+void zyx_map_set_int(ZYXMap_T* map, const char* key, int64_t val);
+void zyx_map_set_double(ZYXMap_T* map, const char* key, double val);
+void zyx_map_set_string(ZYXMap_T* map, const char* key, const char* val);
+void zyx_map_set_bool(ZYXMap_T* map, const char* key, bool val);
+void zyx_map_set_null(ZYXMap_T* map, const char* key);
+void zyx_map_set_list(ZYXMap_T* map, const char* key, ZYXList_T* list);
+void zyx_map_set_map(ZYXMap_T* map, const char* key, ZYXMap_T* nested);
+```
+
+### `zyx_map_close`
+
+```c
+void zyx_map_close(ZYXMap_T* map);
+```
+
+释放 map 构建器。
+
+### 列表/Map 示例
+
+```c
+// 构建列表参数: [1, 2, 3]
+ZYXList_T* ids = zyx_list_create();
+zyx_list_push_int(ids, 1);
+zyx_list_push_int(ids, 2);
+zyx_list_push_int(ids, 3);
+
+ZYXParams_T* params = zyx_params_create();
+zyx_params_set_list(params, "ids", ids);
+zyx_list_close(ids);
+
+ZYXResult_T* res = zyx_execute_params(db,
+    "MATCH (n) WHERE id(n) IN $ids RETURN n", params);
+zyx_result_close(res);
+zyx_params_close(params);
+
+// 构建 map 参数: {year: 2024, month: 1, day: 15}
+ZYXMap_T* dateMap = zyx_map_create();
+zyx_map_set_int(dateMap, "year", 2024);
+zyx_map_set_int(dateMap, "month", 1);
+zyx_map_set_int(dateMap, "day", 15);
+
+params = zyx_params_create();
+zyx_params_set_map(params, "d", dateMap);
+zyx_map_close(dateMap);
+
+res = zyx_execute_params(db,
+    "RETURN date($d) AS d", params);
+zyx_result_close(res);
+zyx_params_close(params);
+```
 
 ## 高性能写入接口
 
@@ -336,6 +437,8 @@ int main() {
 | `ZYXResult_T*` | `zyx_execute*`, `zyx_txn_execute*` | `zyx_result_close` | 结果中的字符串指针在 `zyx_result_close` 前有效 |
 | `ZYXTxn_T*` | `zyx_begin_transaction`, `zyx_begin_read_only_transaction` | `zyx_txn_close` | 提交/回滚后仍需关闭 |
 | `ZYXParams_T*` | `zyx_params_create` | `zyx_params_close` | 字符串键值在内部已复制 |
+| `ZYXList_T*` | `zyx_list_create` | `zyx_list_close` | 调用 `zyx_params_set_list` 后所有权转移至参数集 |
+| `ZYXMap_T*` | `zyx_map_create` | `zyx_map_close` | 调用 `zyx_params_set_map` 后所有权转移至参数集 |
 
 ## 源码定位
 

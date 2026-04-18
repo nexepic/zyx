@@ -28,6 +28,8 @@ Header: `include/zyx/value.hpp`
 | Edge | `std::shared_ptr<Edge>` | Graph edge reference |
 | Float vector | `std::vector<float>` | Compact numeric vector (used for embeddings) |
 | String list | `std::vector<std::string>` | List of strings |
+| List | `std::shared_ptr<ValueList>` | Heterogeneous list of values |
+| Map | `std::shared_ptr<ValueMap>` | String-keyed map of values |
 
 ### Usage
 
@@ -116,6 +118,9 @@ struct PropertyValue {
 | `STRING` | `std::string` |
 | `LIST` | `std::vector<PropertyValue>` |
 | `MAP` | `unordered_map<string, PropertyValue>` |
+| `DATE` | `TemporalDate` — calendar date (days since epoch) |
+| `DATETIME` | `TemporalDateTime` — timestamp (milliseconds since epoch) |
+| `DURATION` | `TemporalDuration` — ISO 8601 duration (months + days + nanos) |
 
 ## graph::ResultValue
 
@@ -135,6 +140,73 @@ class ResultValue {
 };
 ```
 
+## Temporal Types
+
+Header: `include/graph/core/TemporalTypes.hpp`
+
+### TemporalDate
+
+Calendar date stored as days since 1970-01-01.
+
+```cpp
+struct TemporalDate {
+    int32_t epochDays = 0;
+
+    static TemporalDate today();
+    static TemporalDate fromISO(const std::string& s);   // "YYYY-MM-DD"
+    static TemporalDate fromYMD(int year, int month, int day);
+
+    int year() const;
+    int month() const;
+    int day() const;
+    std::string toISO() const;  // "YYYY-MM-DD"
+};
+```
+
+### TemporalDateTime
+
+Timestamp stored as milliseconds since epoch.
+
+```cpp
+struct TemporalDateTime {
+    int64_t epochMillis = 0;
+
+    static TemporalDateTime now();
+    static TemporalDateTime fromISO(const std::string& s);  // "YYYY-MM-DDTHH:MM:SS"
+    static TemporalDateTime fromComponents(int y, int mo, int d, int h, int mi, int s, int ms = 0);
+
+    int year() const;
+    int month() const;
+    int day() const;
+    int hour() const;
+    int minute() const;
+    int second() const;
+    std::string toISO() const;  // "YYYY-MM-DDTHH:MM:SSZ"
+};
+```
+
+### TemporalDuration
+
+ISO 8601 duration with three orthogonal components: months, days, and nanoseconds.
+
+```cpp
+struct TemporalDuration {
+    int64_t months = 0;   // years * 12 + months
+    int64_t days   = 0;   // weeks * 7 + days
+    int64_t nanos  = 0;   // hours/minutes/seconds rolled into nanoseconds
+
+    static TemporalDuration fromISO(const std::string& s);  // "P1Y2M3DT4H5M6S"
+    static TemporalDuration fromComponents(int64_t years, int64_t months, int64_t weeks,
+                                           int64_t days, int64_t hours, int64_t minutes,
+                                           int64_t seconds, int64_t nanoseconds = 0);
+    std::string toISO() const;
+};
+```
+
+:::info
+Temporal types support arithmetic in Cypher: `date + duration`, `datetime - duration`, `date - date` (returns duration), etc. Component access is available via property syntax: `d.year`, `dt.hour`, `dur.months`.
+:::
+
 ## Enums
 
 | Enum | Values | Description |
@@ -150,5 +222,6 @@ class ResultValue {
 |-----------|------|
 | Value types | `include/zyx/value.hpp` |
 | PropertyValue | `include/graph/query/types/PropertyValue.hpp` |
+| Temporal types | `include/graph/core/TemporalTypes.hpp` |
 | ResultValue | `include/graph/query/types/ResultValue.hpp` |
 | EntityType | `include/graph/core/types.hpp` |
