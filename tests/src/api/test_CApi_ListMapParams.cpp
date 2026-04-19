@@ -15,6 +15,7 @@
  * limitations under the License.
  **/
 
+#include <filesystem>
 #include <gtest/gtest.h>
 #include "zyx/zyx_c_api.h"
 
@@ -102,7 +103,9 @@ TEST(CApiListMapParams, MapSetList_And_MapSetMap) {
 // ============================================================================
 
 TEST(CApiListMapParams, ParamsSetList_QueryIntegration) {
-	ZYXDB_T *db = zyx_open(":memory:");
+	// Note: ZYX doesn't support ":memory:" databases, use temp file instead
+	std::string dbPath = (std::filesystem::temp_directory_path() / "test_zyx_list_params.graph").string();
+	ZYXDB_T *db = zyx_open(dbPath.c_str());
 	ASSERT_NE(db, nullptr);
 
 	// Build a list parameter [42, 99]
@@ -125,6 +128,10 @@ TEST(CApiListMapParams, ParamsSetList_QueryIntegration) {
 	zyx_result_close(res);
 	zyx_params_close(params);
 	zyx_close(db);
+
+	// Clean up temp file
+	std::error_code ec;
+	std::filesystem::remove(dbPath, ec);
 }
 
 // ============================================================================
@@ -132,7 +139,9 @@ TEST(CApiListMapParams, ParamsSetList_QueryIntegration) {
 // ============================================================================
 
 TEST(CApiListMapParams, ParamsSetMap_QueryIntegration) {
-	ZYXDB_T *db = zyx_open(":memory:");
+	// Note: ZYX doesn't support ":memory:" databases, use temp file instead
+	std::string dbPath = (std::filesystem::temp_directory_path() / "test_zyx_map_params.graph").string();
+	ZYXDB_T *db = zyx_open(dbPath.c_str());
 	ASSERT_NE(db, nullptr);
 
 	// Build a map parameter {name: "Alice", age: 30}
@@ -155,6 +164,10 @@ TEST(CApiListMapParams, ParamsSetMap_QueryIntegration) {
 	zyx_result_close(res);
 	zyx_params_close(params);
 	zyx_close(db);
+
+	// Clean up temp file
+	std::error_code ec;
+	std::filesystem::remove(dbPath, ec);
 }
 
 // ============================================================================
