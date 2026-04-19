@@ -21,6 +21,11 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include "graph/query/expressions/FunctionRegistry.hpp"
+
+// Define M_PI for Windows/MSVC compatibility
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/execution/Record.hpp"
 
