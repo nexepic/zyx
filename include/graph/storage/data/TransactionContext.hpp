@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 #include "graph/core/Transaction.hpp"
 #include "graph/core/Types.hpp"
