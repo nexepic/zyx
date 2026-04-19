@@ -8,6 +8,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <memory>
 
 #include "query/parser/cypher/CypherToPlanVisitor.hpp"
@@ -247,7 +248,11 @@ protected:
 		out << content;
 		out.close();
 		csvFiles.push_back(path);
-		return path.string();
+		// Convert path to use forward slashes for Cypher compatibility
+		// Windows backslashes cause Cypher lexer to treat \U as escape sequence
+		auto pathStr = path.string();
+		std::replace(pathStr.begin(), pathStr.end(), '\\', '/');
+		return pathStr;
 	}
 };
 

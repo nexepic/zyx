@@ -9,6 +9,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
 #include <gtest/gtest.h>
 
 #include "graph/query/execution/operators/RecordInjectorOperator.hpp"
@@ -416,7 +417,11 @@ protected:
 		out << content;
 		out.close();
 		tempFiles.push_back(path);
-		return path.string();
+		// Convert path to use forward slashes for Cypher compatibility
+		// Windows backslashes cause Cypher lexer to treat \U as escape sequence
+		auto pathStr = path.string();
+		std::replace(pathStr.begin(), pathStr.end(), '\\', '/');
+		return pathStr;
 	}
 
 	void TearDown() override {
