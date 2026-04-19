@@ -47,15 +47,21 @@ public:
 			throw std::runtime_error("LOAD CSV: URL expression must evaluate to a string");
 		}
 
-		// Strip file:/// prefix and handle Windows paths
+		// Strip file:/// prefix
 		const std::string filePrefix = "file:///";
 		if (filePath.substr(0, filePrefix.size()) == filePrefix) {
 			filePath = filePath.substr(filePrefix.size());
-			// Remove leading slash on Windows: /C:\path -> C:\path
-			// On Unix: /home/user -> /home/user (keep leading slash)
 #ifdef _WIN32
+			// On Windows: remove leading slash if present
+			// file:///C:/Users -> C:/Users
 			if (!filePath.empty() && filePath[0] == '/') {
 				filePath = filePath.substr(1);
+			}
+#else
+			// On Unix: ensure leading slash is present
+			// file:///home/user -> /home/user
+			if (filePath.empty() || filePath[0] != '/') {
+				filePath = "/" + filePath;
 			}
 #endif
 		}

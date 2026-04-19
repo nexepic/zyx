@@ -12,7 +12,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <fstream>
-#include <algorithm>
 #include <gtest/gtest.h>
 
 #include "graph/core/Database.hpp"
@@ -60,11 +59,10 @@ protected:
 		out << content;
 		out.close();
 		csvFiles.push_back(path);
-		// Convert path to use forward slashes for Cypher compatibility
-		// Windows backslashes cause Cypher lexer to treat \U as escape sequence
-		auto pathStr = path.string();
-		std::replace(pathStr.begin(), pathStr.end(), '\\', '/');
-		return pathStr;
+
+		// Use std::filesystem to convert path to generic format (forward slashes)
+		// This handles Windows backslashes properly and is more portable than manual replace
+		return path.generic_string();
 	}
 
 	std::filesystem::path testDbPath;
