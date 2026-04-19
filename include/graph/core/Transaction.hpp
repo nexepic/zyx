@@ -22,6 +22,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 
 namespace graph::storage {

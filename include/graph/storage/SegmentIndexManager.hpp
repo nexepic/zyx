@@ -21,6 +21,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <shared_mutex> // Changed from mutex to shared_mutex for R/W locking
 #include <vector>
 #include "StorageHeaders.hpp"
