@@ -60,7 +60,7 @@ public:
 #else
 			// On Unix: ensure leading slash is present
 			// file:///home/user -> /home/user
-			if (filePath.empty() || filePath[0] != '/') {
+			if (!filePath.empty() && filePath[0] != '/') {
 				filePath = "/" + filePath;
 			}
 #endif
