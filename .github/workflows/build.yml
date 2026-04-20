@@ -29,11 +29,11 @@ jobs:
             llvm_profdata: llvm-profdata
 
           # --- macOS Configuration ---
-    #          - os: macos-latest
-    #            native_file: compiler_options_mac.ini
-    #            # We will dynamically resolve these using xcrun in the report step
-    #            llvm_cov: llvm-cov
-    #            llvm_profdata: llvm-profdata
+          - os: macos-latest
+            native_file: compiler_options_mac.ini
+            # We will dynamically resolve these using xcrun in the report step
+            llvm_cov: llvm-cov
+            llvm_profdata: llvm-profdata
 
     steps:
       - name: Checkout Code
