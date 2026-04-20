@@ -2,7 +2,7 @@ const createMDX = require('@next/mdx')
 const { withContentCollections } = require('@content-collections/next')
 const withNextIntl = require('next-intl/plugin')('./i18n.ts')
 
-const basePath = process.env.BASE_PATH || ''
+const basePath = process.env.BASE_PATH || '/zyx'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
