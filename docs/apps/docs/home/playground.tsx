@@ -5,6 +5,9 @@ import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
 import { GdsPanel } from "./gds-panel";
 
+// Base path for WASM files - must match Next.js basePath
+const WASM_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "/zyx";
+
 interface SchemaNode {
   label: string;
   props: string[];
@@ -100,15 +103,17 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
         setStatusMsg(isEn ? "Loading engine..." : "加载引擎...");
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement("script");
-          script.src = "/wasm/zyx.js";
+          script.src = `${WASM_BASE_PATH}/wasm/zyx.js`;
           script.onload = () => resolve();
-          script.onerror = () => reject(new Error("Failed to load /wasm/zyx.js"));
+          script.onerror = () => reject(new Error(`Failed to load ${WASM_BASE_PATH}/wasm/zyx.js`));
           document.head.appendChild(script);
         });
 
         const createModule = (window as any).createZyxModule;
         if (!createModule) throw new Error("WASM module factory not found");
-        mod = await createModule();
+        mod = await createModule({
+          locateFile: (file: string) => `${WASM_BASE_PATH}/wasm/${file}`,
+        });
         moduleRef.current = mod;
       }
 

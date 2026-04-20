@@ -20,6 +20,11 @@ const nextConfig = {
 
   // Ensure proper trailing slash behavior for static hosting
   trailingSlash: true,
+
+  // Expose basePath to client-side code
+  env: {
+    NEXT_PUBLIC_BASE_PATH: basePath,
+  },
 }
 
 const withMDX = createMDX({
