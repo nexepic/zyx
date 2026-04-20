@@ -1,6 +1,6 @@
 /**
- * @file test_CApi_TypeMatrixCoverage.cpp
- * @brief Focused type-matrix coverage tests for C API result accessors.
+ * @file test_CApi_TypeMatrix.cpp
+ * @brief Type-matrix tests for C API result accessors.
  */
 
 #include <filesystem>

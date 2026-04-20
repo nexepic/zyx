@@ -354,3 +354,163 @@ TEST_F(SegmentAllocatorTest, GetTracker_ReturnsSameInstance) {
 	auto tracker = allocator->getTracker();
 	EXPECT_EQ(tracker.get(), segmentTracker.get());
 }
+
+// =========================================================================
+// GROUP 7: Invalid Type and Edge Cases
+// =========================================================================
+
+TEST_F(SegmentAllocatorTest, AllocateSegment_InvalidTypeThrows) {
+	// Type greater than getMaxEntityType() should throw std::invalid_argument
+	uint32_t invalidType = getMaxEntityType() + 1;
+	EXPECT_THROW(allocator->allocateSegment(invalidType, 10), std::invalid_argument);
+}
+
+TEST_F(SegmentAllocatorTest, AllocateSegment_InvalidTypeLargeValueThrows) {
+	// A much larger invalid type value
+	uint32_t invalidType = getMaxEntityType() + 100;
+	EXPECT_THROW(allocator->allocateSegment(invalidType, 10), std::invalid_argument);
+}
+
+TEST_F(SegmentAllocatorTest, AllocateSegment_TailZeroFallback) {
+	auto type = toUnderlying(EntityType::Node);
+
+	// Allocate a first segment so chainHead != 0
+	uint64_t off1 = allocator->allocateSegment(type, 10);
+	EXPECT_NE(off1, 0ULL);
+
+	// Force the chain tail to 0 to trigger the fallback traversal path
+	segmentTracker->updateChainTail(type, 0);
+
+	// Allocate a second segment; the fallback path will walk the chain to find the tail
+	uint64_t off2 = allocator->allocateSegment(type, 10);
+	EXPECT_NE(off2, 0ULL);
+	EXPECT_NE(off2, off1);
+
+	// Verify chain is still properly linked: off1 <-> off2
+	SegmentHeader h1 = segmentTracker->getSegmentHeader(off1);
+	SegmentHeader h2 = segmentTracker->getSegmentHeader(off2);
+	EXPECT_EQ(h1.next_segment_offset, off2);
+	EXPECT_EQ(h2.prev_segment_offset, off1);
+	EXPECT_EQ(h2.next_segment_offset, 0ULL);
+}
+
+TEST_F(SegmentAllocatorTest, AllocateSegment_TailZeroFallbackMultipleSegments) {
+	auto type = toUnderlying(EntityType::Edge);
+
+	// Build a chain of 3 segments
+	(void)allocator->allocateSegment(type, 10);
+	(void)allocator->allocateSegment(type, 10);
+	uint64_t off3 = allocator->allocateSegment(type, 10);
+
+	// Force the chain tail to 0 to trigger the fallback traversal
+	segmentTracker->updateChainTail(type, 0);
+
+	// Allocate a 4th segment; fallback walks off1 -> off2 -> off3 to find the end
+	uint64_t off4 = allocator->allocateSegment(type, 10);
+	EXPECT_NE(off4, 0ULL);
+
+	// Verify off3 -> off4 link
+	SegmentHeader h3 = segmentTracker->getSegmentHeader(off3);
+	SegmentHeader h4 = segmentTracker->getSegmentHeader(off4);
+	EXPECT_EQ(h3.next_segment_offset, off4);
+	EXPECT_EQ(h4.prev_segment_offset, off3);
+	EXPECT_EQ(h4.next_segment_offset, 0ULL);
+}
+
+TEST_F(SegmentAllocatorTest, DeallocateSegment_OnlySegmentInChain) {
+	auto type = toUnderlying(EntityType::Node);
+
+	// Allocate a single segment — it is both the head and tail
+	uint64_t off1 = allocator->allocateSegment(type, 10);
+
+	// Deallocate the only segment (isChainHead == true, nextOffset == 0)
+	allocator->deallocateSegment(off1);
+
+	// Chain should now be empty
+	EXPECT_EQ(segmentTracker->getChainHead(type), 0ULL);
+
+	// The segment should be on the free list
+	auto freeSegs = segmentTracker->getFreeSegments();
+	EXPECT_EQ(freeSegs.size(), 1u);
+	EXPECT_EQ(freeSegs[0], off1);
+
+	// File header should reflect the empty chain
+	FileHeader &fh = fileHeaderManager->getFileHeader();
+	EXPECT_EQ(fh.node_segment_head, 0ULL);
+}
+
+TEST_F(SegmentAllocatorTest, DeallocateSegment_HeadWithNext) {
+	auto type = toUnderlying(EntityType::Property);
+
+	uint64_t off1 = allocator->allocateSegment(type, 10);
+	uint64_t off2 = allocator->allocateSegment(type, 10);
+
+	// Deallocate head (isChainHead == true, nextOffset != 0)
+	allocator->deallocateSegment(off1);
+
+	// off2 should be the new head with no previous
+	EXPECT_EQ(segmentTracker->getChainHead(type), off2);
+	SegmentHeader h2 = segmentTracker->getSegmentHeader(off2);
+	EXPECT_EQ(h2.prev_segment_offset, 0ULL);
+
+	// File header should be updated
+	FileHeader &fh = fileHeaderManager->getFileHeader();
+	EXPECT_EQ(fh.property_segment_head, off2);
+}
+
+TEST_F(SegmentAllocatorTest, DeallocateSegment_MiddleWithNextAndPrev) {
+	auto type = toUnderlying(EntityType::Node);
+
+	uint64_t off1 = allocator->allocateSegment(type, 10);
+	uint64_t off2 = allocator->allocateSegment(type, 10);
+	uint64_t off3 = allocator->allocateSegment(type, 10);
+	uint64_t off4 = allocator->allocateSegment(type, 10);
+
+	// Remove off2 (middle segment, prevOffset != 0, nextOffset != 0)
+	allocator->deallocateSegment(off2);
+
+	// Chain should be: off1 <-> off3 <-> off4
+	verifyChainLinks(type, {off1, off3, off4});
+
+	// off2 should be free
+	auto freeSegs = segmentTracker->getFreeSegments();
+	EXPECT_EQ(freeSegs.size(), 1u);
+	EXPECT_EQ(freeSegs[0], off2);
+}
+
+TEST_F(SegmentAllocatorTest, AllocateSegment_ReusesFreeSegmentFromDeallocatedHead) {
+	auto type = toUnderlying(EntityType::Node);
+
+	uint64_t off1 = allocator->allocateSegment(type, 10);
+	(void)allocator->allocateSegment(type, 10);
+
+	// Deallocate the head segment, putting it on the free list
+	allocator->deallocateSegment(off1);
+
+	// Allocate a new segment — should reuse the freed offset
+	uint64_t off3 = allocator->allocateSegment(type, 10);
+	EXPECT_EQ(off3, off1);
+
+	// Free list should now be empty
+	auto freeSegs = segmentTracker->getFreeSegments();
+	EXPECT_TRUE(freeSegs.empty());
+}
+
+TEST_F(SegmentAllocatorTest, AllocateSegment_AllEntityTypes) {
+	// Verify allocation works for all valid entity types including Blob, Index, State
+	auto blobType = toUnderlying(EntityType::Blob);
+	auto indexType = toUnderlying(EntityType::Index);
+	auto stateType = toUnderlying(EntityType::State);
+
+	uint64_t blobOff = allocator->allocateSegment(blobType, 10);
+	uint64_t indexOff = allocator->allocateSegment(indexType, 10);
+	uint64_t stateOff = allocator->allocateSegment(stateType, 10);
+
+	EXPECT_NE(blobOff, 0ULL);
+	EXPECT_NE(indexOff, 0ULL);
+	EXPECT_NE(stateOff, 0ULL);
+
+	EXPECT_EQ(segmentTracker->getSegmentHeader(blobOff).data_type, blobType);
+	EXPECT_EQ(segmentTracker->getSegmentHeader(indexOff).data_type, indexType);
+	EXPECT_EQ(segmentTracker->getSegmentHeader(stateOff).data_type, stateType);
+}

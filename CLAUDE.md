@@ -34,7 +34,8 @@ Before completing any code change:
 - Source code bug → Fix the source code
 - Test code wrong → Fix the test code
 
-Coverage goals: 95%+ with focus on branch coverage. See `rules/testing.md` for test requirement extraction guide.
+Coverage goals: 95%+ with focus on branch coverage. Max **2000 lines** per test file — split into category files with
+shared fixture header when exceeded (see `rules/testing.md`).
 
 ## Windows Enum Naming
 

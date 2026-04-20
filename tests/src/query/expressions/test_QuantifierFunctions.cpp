@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <vector>
+#include "query/expressions/ExpressionsTestFixture.hpp"
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -990,4 +991,128 @@ TEST_F(QuantifierFunctionsEvaluationTest, NoneFunction_ListTruthiness_AllEmpty) 
 	evaluator.visit(quantExpr.get());
 
 	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+}
+
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_ConstructorAll) {
+	// Test QuantifierFunctionExpression constructor for 'all'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "all");
+	EXPECT_EQ(expr.getVariable(), "x");
+	EXPECT_NE(expr.getListExpression(), nullptr);
+	EXPECT_NE(expr.getWhereExpression(), nullptr);
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_ConstructorAny) {
+	// Test QuantifierFunctionExpression constructor for 'any'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("any", "item", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "any");
+	EXPECT_EQ(expr.getVariable(), "item");
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_ConstructorNone) {
+	// Test QuantifierFunctionExpression constructor for 'none'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("none", "elem", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "none");
+	EXPECT_EQ(expr.getVariable(), "elem");
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_ConstructorSingle) {
+	// Test QuantifierFunctionExpression constructor for 'single'
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("single", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getFunctionName(), "single");
+	EXPECT_EQ(expr.getVariable(), "x");
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_GetListExpression) {
+	// Test getListExpression() accessor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{
+		PropertyValue(int64_t(1)), PropertyValue(int64_t(2)), PropertyValue(int64_t(3))
+	}));
+	auto* listPtr = listExpr.get();
+
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getListExpression(), listPtr);
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_GetWhereExpression) {
+	// Test getWhereExpression() accessor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	auto* wherePtr = whereExpr.get();
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	EXPECT_EQ(expr.getWhereExpression(), wherePtr);
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_ToString) {
+	// Test toString() method
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	std::string str = expr.toString();
+	EXPECT_TRUE(str.find("all") != std::string::npos);
+	EXPECT_TRUE(str.find("x") != std::string::npos);
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_Clone) {
+	// Test clone() method
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+	auto cloned = expr.clone();
+
+	ASSERT_NE(cloned, nullptr);
+	auto* clonedQuantifier = dynamic_cast<QuantifierFunctionExpression*>(cloned.get());
+	ASSERT_NE(clonedQuantifier, nullptr);
+	EXPECT_EQ(clonedQuantifier->getFunctionName(), expr.getFunctionName());
+	EXPECT_EQ(clonedQuantifier->getVariable(), expr.getVariable());
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_AcceptVisitor) {
+	// Test accept() with ExpressionVisitor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	TestExpressionVisitor visitor;
+	expr.accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedQuantifierFunction);
+}
+
+TEST_F(ExpressionsTest, QuantifierFunctionExpression_AcceptConstVisitor) {
+	// Test accept() with ConstExpressionVisitor
+	auto listExpr = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+
+	const QuantifierFunctionExpression expr("all", "x", std::move(listExpr), std::move(whereExpr));
+
+	TestConstExpressionVisitor visitor;
+	expr.accept(visitor);
+
+	EXPECT_TRUE(visitor.visitedQuantifierFunction);
 }

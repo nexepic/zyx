@@ -19,6 +19,16 @@
 - `ApiTestFixture.hpp`: Base fixture for C/C++ API tests (database lifecycle, temp dirs)
 - `QueryTestFixture.hpp`: Base fixture for query execution tests (database + query engine setup)
 
+## Test File Size Limit
+
+Single test files MUST NOT exceed **2000 lines**. When a test file grows beyond this limit, split it:
+
+1. Extract the fixture class into a shared header under `tests/include/<module>/` (e.g., `tests/include/storage/FooTestFixture.hpp`)
+2. Split tests by logical category into separate files with suffix naming (e.g., `test_Foo_Insert.cpp`, `test_Foo_Query.cpp`)
+3. Keep the slimmed original for core/misc tests
+4. Each split file includes the shared fixture header (path relative to `tests/include/`)
+5. Verify: every test appears in exactly one file, zero tests lost
+
 ## Extract Test Requirements from Code
 
 **For Classes/Structures:**
