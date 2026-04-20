@@ -130,6 +130,11 @@ inline ssize_t portable_pread(file_handle_t fd, void* buf, size_t count, int64_t
 	);
 
 	if (!result) {
+		// ERROR_HANDLE_EOF means we tried to read at/past end of file.
+		// Return 0 (short read) to match Unix pread semantics.
+		if (::GetLastError() == ERROR_HANDLE_EOF) {
+			return static_cast<ssize_t>(bytesRead);
+		}
 		return -1;
 	}
 

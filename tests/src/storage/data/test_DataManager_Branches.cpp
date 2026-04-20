@@ -303,17 +303,7 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelHandlesShortReadGroup) {
 	const int64_t realIdB = propertyIds.back();
 	concurrent::ThreadPool pool(2);
 
-	// On Windows, reading beyond file size throws an exception
-	// On Linux/Unix, it returns short read (0 bytes)
-	// We catch the exception to allow the test to continue on Windows
-	std::unordered_map<int64_t, Property> loaded;
-	try {
-		loaded = dataManager->bulkLoadPropertyEntities({realIdA, realIdB, fakeSeg.startId}, &pool);
-	} catch (const std::runtime_error& e) {
-		// Windows: pread failed exception - expected for fake segment
-		// The real entities should still be loaded via stream fallback
-		loaded = dataManager->bulkLoadPropertyEntities({realIdA, realIdB}, &pool);
-	}
+	const auto loaded = dataManager->bulkLoadPropertyEntities({realIdA, realIdB, fakeSeg.startId}, &pool);
 
 	EXPECT_TRUE(loaded.contains(realIdA));
 	EXPECT_TRUE(loaded.contains(realIdB));

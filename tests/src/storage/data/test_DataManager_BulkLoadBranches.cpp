@@ -103,15 +103,6 @@ TEST_F(DataManagerTest, LoadNodeFromDiskReturnsInactiveWhenEntityReadIsShort) {
 	ASSERT_TRUE(std::filesystem::exists(testFilePath));
 	std::filesystem::resize_file(testFilePath, 1);
 
-	// On Windows, reading from truncated file throws an exception
-	// On Linux/Unix, it returns a short read (inactive entity)
-	Node loaded;
-	try {
-		loaded = dataManager->loadNodeFromDisk(n1.getId());
-	} catch (const std::runtime_error& e) {
-		// Windows: pread failed - create an inactive node
-		loaded = Node(n1.getId(), false);
-	}
-
+	const Node loaded = dataManager->loadNodeFromDisk(n1.getId());
 	EXPECT_FALSE(loaded.isActive());
 }
