@@ -16,7 +16,8 @@ export function getSiteUrl(): string {
 
   try {
     const url = new URL(raw)
-    return url.origin
+    // Return origin + pathname (e.g., https://nexepic.github.io/zyx)
+    return url.origin + (url.pathname || '')
   } catch {
     return 'https://nexdoc.dev'
   }

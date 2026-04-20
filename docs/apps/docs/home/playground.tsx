@@ -5,8 +5,17 @@ import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
 import { GdsPanel } from "./gds-panel";
 
-// Base path for WASM files - set by build:gh-pages script
-const WASM_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+// Determine WASM base path from current URL
+const getWasmBasePath = (): string => {
+  if (typeof window === "undefined") return "";
+  // Check if we're on GitHub Pages
+  if (window.location.hostname === "nexepic.github.io") {
+    return "/zyx";
+  }
+  return "";
+};
+
+const WASM_BASE_PATH = getWasmBasePath();
 
 interface SchemaNode {
   label: string;
