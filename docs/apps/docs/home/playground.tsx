@@ -5,8 +5,8 @@ import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
 import { GdsPanel } from "./gds-panel";
 
-// Base path for WASM files - must match Next.js basePath
-const WASM_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "/zyx";
+// Base path for WASM files - set by build:gh-pages script
+const WASM_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 interface SchemaNode {
   label: string;

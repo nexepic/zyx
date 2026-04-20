@@ -2,28 +2,19 @@ const createMDX = require('@next/mdx')
 const { withContentCollections } = require('@content-collections/next')
 const withNextIntl = require('next-intl/plugin')('./i18n.ts')
 
-// basePath defaults to empty for local development
-// Set BASE_PATH=/zyx environment variable for GitHub Pages deployment
 const basePath = process.env.BASE_PATH || ''
+const isStaticExport = Boolean(process.env.BASE_PATH)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  output: isStaticExport ? 'export' : 'standalone',
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'mdx', 'ts', 'tsx'],
   transpilePackages: ['@nexdoc/core'],
   basePath,
   assetPrefix: basePath || undefined,
 
-  // Static export configuration
-  images: {
-    unoptimized: true,
-  },
-
-  // Ensure proper trailing slash behavior for static hosting
-  trailingSlash: true,
-
-  // Expose basePath to client-side code
+  // Expose basePath to client-side code for playground
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
   },
