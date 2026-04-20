@@ -58,6 +58,12 @@ public:
 
 class MergeEdgeOperatorTest : public ::testing::Test {
 protected:
+	struct TestSetup {
+		Node src;
+		Node tgt;
+		Record record;
+	};
+
 	std::unique_ptr<Database> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
@@ -91,32 +97,70 @@ protected:
 		dm->addNode(node);
 		return node;
 	}
+
+	TestSetup createTestSetup(const std::string& label = "Person") {
+		TestSetup setup;
+		setup.src = createStoredNode(label);
+		setup.tgt = createStoredNode(label);
+		setup.record.setNode("a", setup.src);
+		setup.record.setNode("b", setup.tgt);
+		return setup;
+	}
+
+	Edge createExistingEdge(const Node& src, const Node& tgt, const std::string& type = "KNOWS") {
+		int64_t labelId = dm->getOrCreateTokenId(type);
+		Edge edge(0, src.getId(), tgt.getId(), labelId);
+		dm->addEdge(edge);
+		return edge;
+	}
+
+	std::unique_ptr<MergeEdgeOperator> createMergeOp(
+		const std::string& srcVar = "a",
+		const std::string& edgeVar = "r",
+		const std::string& tgtVar = "b",
+		const std::string& edgeType = "KNOWS",
+		const std::unordered_map<std::string, PropertyValue>& matchProps = {},
+		const std::string& direction = "out",
+		const std::vector<SetItem>& onCreate = {},
+		const std::vector<SetItem>& onMatch = {}
+	) {
+		return std::make_unique<MergeEdgeOperator>(
+			dm,
+			im,
+			srcVar,
+			edgeVar,
+			tgtVar,
+			edgeType,
+			matchProps,
+			direction,
+			onCreate,
+			onMatch
+		);
+	}
+
+	void attachSingleRecordChild(MergeEdgeOperator& op, const Record& record) {
+		op.setChild(std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}}));
+	}
+
+	std::optional<RecordBatch> openAndNext(MergeEdgeOperator& op) {
+		op.open();
+		return op.next();
+	}
+
+	std::optional<RecordBatch> runSingleRecord(MergeEdgeOperator& op, const Record& record) {
+		attachSingleRecordChild(op, record);
+		return openAndNext(op);
+	}
+
 };
 
-// ============================================================================
-// Basic MergeEdge - Create new edge
-// ============================================================================
+// --- Basic MergeEdge - Create new edge ---
 
 TEST_F(MergeEdgeOperatorTest, CreateNewEdge_NoExistingEdge) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
+	auto [src, tgt, record] = createTestSetup();
 
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto op = createMergeOp();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 	ASSERT_EQ(batch->size(), 1UL);
 
@@ -145,18 +189,8 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge) {
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto op = createMergeOp();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 	ASSERT_EQ(batch->size(), 1UL);
 
@@ -168,28 +202,16 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge) {
 }
 
 TEST_F(MergeEdgeOperatorTest, CreateEdge_WithProperties) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["since"] = PropertyValue(int64_t(2020));
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		matchProps,
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 	ASSERT_EQ(batch->size(), 1UL);
 
@@ -203,25 +225,13 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_WithProperties) {
 }
 
 TEST_F(MergeEdgeOperatorTest, CreateEdge_InDirection) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
+	auto [src, tgt, record] = createTestSetup();
 
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"in",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"in"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -237,12 +247,7 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_WithoutChild) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 
 	op->open();
 	// Without child and without nodes in empty record, should throw
@@ -251,12 +256,7 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_WithoutChild) {
 }
 
 TEST_F(MergeEdgeOperatorTest, ToString) {
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 
 	std::string str = op->toString();
 	EXPECT_TRUE(str.find("MergeEdge") != std::string::npos);
@@ -267,12 +267,7 @@ TEST_F(MergeEdgeOperatorTest, ToString) {
 
 TEST_F(MergeEdgeOperatorTest, GetOutputVariables_WithChild) {
 	auto mock = std::make_unique<MergeEdgeMockOperator>();
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 	op->setChild(std::move(mock));
 
 	auto vars = op->getOutputVariables();
@@ -280,12 +275,7 @@ TEST_F(MergeEdgeOperatorTest, GetOutputVariables_WithChild) {
 }
 
 TEST_F(MergeEdgeOperatorTest, GetOutputVariables_WithoutChild) {
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 
 	auto vars = op->getOutputVariables();
 	ASSERT_EQ(vars.size(), 1UL);
@@ -293,11 +283,9 @@ TEST_F(MergeEdgeOperatorTest, GetOutputVariables_WithoutChild) {
 }
 
 TEST_F(MergeEdgeOperatorTest, GetOutputVariables_EmptyEdgeVar) {
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "", "b", "KNOWS",
+	auto op = createMergeOp("a", "", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
 
 	auto vars = op->getOutputVariables();
@@ -307,12 +295,7 @@ TEST_F(MergeEdgeOperatorTest, GetOutputVariables_EmptyEdgeVar) {
 TEST_F(MergeEdgeOperatorTest, GetChildren_WithChild) {
 	auto mock = std::make_unique<MergeEdgeMockOperator>();
 	auto mockPtr = mock.get();
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 	op->setChild(std::move(mock));
 
 	auto children = op->getChildren();
@@ -321,12 +304,7 @@ TEST_F(MergeEdgeOperatorTest, GetChildren_WithChild) {
 }
 
 TEST_F(MergeEdgeOperatorTest, GetChildren_WithoutChild) {
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 
 	auto children = op->getChildren();
 	EXPECT_TRUE(children.empty());
@@ -336,26 +314,17 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_BothDirection) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"both",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"both"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -366,14 +335,7 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_BothDirection) {
 }
 
 TEST_F(MergeEdgeOperatorTest, OnCreate_SetsProperty) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	std::vector<SetItem> onCreateItems;
 	onCreateItems.emplace_back(
@@ -383,16 +345,12 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_SetsProperty) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
-		onCreateItems, std::vector<SetItem>{}
+		onCreateItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -408,15 +366,11 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_SetsProperty) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	std::vector<SetItem> onMatchItems;
 	onMatchItems.emplace_back(
@@ -426,16 +380,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_SetsProperty) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -451,30 +401,21 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_PropertyMismatch_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 	dm->addEdgeProperties(existingEdge.getId(), {{"since", PropertyValue(int64_t(2020))}});
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["since"] = PropertyValue(int64_t(2025)); // different property
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		matchProps,
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -496,18 +437,11 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_LabelMismatch_CreatesNew) {
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "FRIENDS",
+	auto op = createMergeOp("a", "r", "b", "FRIENDS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -530,18 +464,11 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge_InDirection) {
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"in",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"in"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -555,30 +482,21 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge_WithProperties) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 	dm->addEdgeProperties(existingEdge.getId(), {{"since", PropertyValue(int64_t(2020))}});
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["since"] = PropertyValue(int64_t(2020)); // same property
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		matchProps,
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -589,25 +507,13 @@ TEST_F(MergeEdgeOperatorTest, MatchExistingEdge_WithProperties) {
 }
 
 TEST_F(MergeEdgeOperatorTest, CreateEdge_NoLabel) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
+	auto [src, tgt, record] = createTestSetup();
 
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "",
+	auto op = createMergeOp("a", "r", "b", "",
 		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -618,25 +524,13 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_NoLabel) {
 }
 
 TEST_F(MergeEdgeOperatorTest, CreateEdge_EmptyEdgeVar) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
+	auto [src, tgt, record] = createTestSetup();
 
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "", "b", "KNOWS",
+	auto op = createMergeOp("a", "", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 	EXPECT_EQ(batch->size(), 1UL);
 
@@ -659,12 +553,7 @@ TEST_F(MergeEdgeOperatorTest, MultipleBatches) {
 		std::vector<RecordBatch>{{r1}, {r2}}
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -683,9 +572,7 @@ TEST_F(MergeEdgeOperatorTest, MultipleBatches) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: no-child path executed twice (line 54 True branch)
-// ============================================================================
+// --- Branch coverage: no-child path executed twice (line 54 True branch) ---
 
 TEST_F(MergeEdgeOperatorTest, NoChild_SecondCallReturnsNullopt) {
 	Node src = createStoredNode("Person");
@@ -700,12 +587,7 @@ TEST_F(MergeEdgeOperatorTest, NoChild_SecondCallReturnsNullopt) {
 	// returning nullopt is to have a child that returns nullopt on first call.
 	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{});
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 	op->setChild(std::move(mock));
 
 	op->open();
@@ -716,9 +598,7 @@ TEST_F(MergeEdgeOperatorTest, NoChild_SecondCallReturnsNullopt) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: sourceNode exists but targetNode is missing (line 78 second branch)
-// ============================================================================
+// --- Branch coverage: sourceNode exists but targetNode is missing (line 78 second branch) ---
 
 TEST_F(MergeEdgeOperatorTest, ThrowsWhenTargetNodeMissing) {
 	Node src = createStoredNode("Person");
@@ -727,25 +607,16 @@ TEST_F(MergeEdgeOperatorTest, ThrowsWhenTargetNodeMissing) {
 	record.setNode("a", src);
 	// "b" is NOT set - target node is missing
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
+	auto op = createMergeOp();
+	attachSingleRecordChild(*op, record);
 
 	op->open();
 	EXPECT_THROW(op->next(), std::runtime_error);
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: direction "out" but edge goes wrong way (line 96 False branches)
-// This also covers line 103 dirMatch=false continue branch
-// ============================================================================
+// --- Branch coverage: direction "out" but edge goes wrong way (line 96 False branches)
+// This also covers line 103 dirMatch=false continue branch ---
 
 TEST_F(MergeEdgeOperatorTest, OutDirection_EdgeReversed_CreatesNew) {
 	Node src = createStoredNode("Person");
@@ -760,18 +631,8 @@ TEST_F(MergeEdgeOperatorTest, OutDirection_EdgeReversed_CreatesNew) {
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto op = createMergeOp();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -782,9 +643,7 @@ TEST_F(MergeEdgeOperatorTest, OutDirection_EdgeReversed_CreatesNew) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: direction "in" but edge goes wrong way (line 98 False branches)
-// ============================================================================
+// --- Branch coverage: direction "in" but edge goes wrong way (line 98 False branches) ---
 
 TEST_F(MergeEdgeOperatorTest, InDirection_EdgeWrongWay_CreatesNew) {
 	Node src = createStoredNode("Person");
@@ -799,18 +658,11 @@ TEST_F(MergeEdgeOperatorTest, InDirection_EdgeWrongWay_CreatesNew) {
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"in",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"in"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -821,10 +673,8 @@ TEST_F(MergeEdgeOperatorTest, InDirection_EdgeWrongWay_CreatesNew) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: "both" direction matching via reverse edge (lines 100-101)
-// First OR condition fails, second succeeds
-// ============================================================================
+// --- Branch coverage: "both" direction matching via reverse edge (lines 100-101)
+// First OR condition fails, second succeeds ---
 
 TEST_F(MergeEdgeOperatorTest, BothDirection_MatchesReverseEdge) {
 	Node src = createStoredNode("Person");
@@ -839,18 +689,11 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_MatchesReverseEdge) {
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"both",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"both"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -861,9 +704,7 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_MatchesReverseEdge) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: "both" direction with no matching edge at all (lines 100-101 all False)
-// ============================================================================
+// --- Branch coverage: "both" direction with no matching edge at all (lines 100-101 all False) ---
 
 TEST_F(MergeEdgeOperatorTest, BothDirection_NoMatchingEdge_CreatesNew) {
 	Node src = createStoredNode("Person");
@@ -879,18 +720,11 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_NoMatchingEdge_CreatesNew) {
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"both",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"both"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -900,36 +734,25 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_NoMatchingEdge_CreatesNew) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: edgeTypeId_ == 0 (line 106 first branch False)
-// Empty label means we match any edge label
-// ============================================================================
+// --- Branch coverage: edgeTypeId_ == 0 (line 106 first branch False)
+// Empty label means we match any edge label ---
 
 TEST_F(MergeEdgeOperatorTest, MatchEdge_EmptyLabel_MatchesAnyLabel) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
 	// Empty label: edgeTypeId_ will be 0, so label check is skipped
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "",
+	auto op = createMergeOp("a", "r", "b", "",
 		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -940,38 +763,27 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_EmptyLabel_MatchesAnyLabel) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: property key not found in edge (line 113 first True branch)
-// ============================================================================
+// --- Branch coverage: property key not found in edge (line 113 first True branch) ---
 
 TEST_F(MergeEdgeOperatorTest, MatchEdge_PropertyKeyMissing_CreatesNew) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 	// Edge has NO properties at all
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["nonexistent"] = PropertyValue(std::string("value"));
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		matchProps,
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -982,35 +794,24 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_PropertyKeyMissing_CreatesNew) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: matched edge with empty edgeVar (line 121 False branch)
-// ============================================================================
+// --- Branch coverage: matched edge with empty edgeVar (line 121 False branch) ---
 
 TEST_F(MergeEdgeOperatorTest, MatchEdge_EmptyEdgeVar_NoRecordSet) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
 	// Empty edgeVar: edge is matched but not stored in the record
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "", "b", "KNOWS",
+	auto op = createMergeOp("a", "", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"out"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 	EXPECT_EQ(batch->size(), 1UL);
 	// No edge variable should be in the record
@@ -1019,23 +820,17 @@ TEST_F(MergeEdgeOperatorTest, MatchEdge_EmptyEdgeVar_NoRecordSet) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: applyEdgeUpdates with non-PROPERTY type (line 164 second False branch)
-// ============================================================================
+// --- Branch coverage: applyEdgeUpdates with non-PROPERTY type (line 164 second False branch) ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_LabelTypeItem_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	// Use LABEL type instead of PROPERTY - should be skipped in applyEdgeUpdates
 	std::vector<SetItem> onMatchItems;
@@ -1046,16 +841,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_LabelTypeItem_Skipped) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1068,19 +859,10 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_LabelTypeItem_Skipped) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: applyEdgeUpdates with null expression (line 164 third False branch)
-// ============================================================================
+// --- Branch coverage: applyEdgeUpdates with null expression (line 164 third False branch) ---
 
 TEST_F(MergeEdgeOperatorTest, OnCreate_NullExpression_Skipped) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	// PROPERTY type but null expression - should be skipped
 	std::vector<SetItem> onCreateItems;
@@ -1091,16 +873,12 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_NullExpression_Skipped) {
 		nullptr
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
-		onCreateItems, std::vector<SetItem>{}
+		onCreateItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1113,24 +891,18 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_NullExpression_Skipped) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: applyEdgeUpdates with empty edgeVar but changed=true (line 175 False)
-// and also covers line 176 False branch (getEdge returns nullopt)
-// ============================================================================
+// --- Branch coverage: applyEdgeUpdates with empty edgeVar but changed=true (line 175 False)
+// and also covers line 176 False branch (getEdge returns nullopt) ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_EmptyEdgeVar_UpdateAppliedButNotInRecord) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	// ON MATCH with empty edgeVar - the update will match item.variable=="" == edgeVar_=""
 	// and changed will be true but edgeVar_.empty() will skip record update
@@ -1142,16 +914,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_EmptyEdgeVar_UpdateAppliedButNotInRecord) 
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "", "b", "KNOWS",
+	auto op = createMergeOp("a", "", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 	EXPECT_EQ(batch->size(), 1UL);
 
@@ -1162,19 +930,10 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_EmptyEdgeVar_UpdateAppliedButNotInRecord) 
 	op->close();
 }
 
-// ============================================================================
-// Edge case tests
-// ============================================================================
+// --- Edge case tests ---
 
 TEST_F(MergeEdgeOperatorTest, OnCreate_ItemForDifferentVariable) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	// ON CREATE SET for different variable (not "r") - should be ignored
 	std::vector<SetItem> onCreateItems;
@@ -1185,16 +944,12 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_ItemForDifferentVariable) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
-		onCreateItems, std::vector<SetItem>{}
+		onCreateItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1207,26 +962,17 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_ItemForDifferentVariable) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: close() without child (line 66 False branch)
-// ============================================================================
+// --- Branch coverage: close() without child (line 66 False branch) ---
 
 TEST_F(MergeEdgeOperatorTest, Close_WithoutChild) {
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 
 	op->open();
 	// close without child should not crash
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: source node missing (line 78 first condition True)
-// ============================================================================
+// --- Branch coverage: source node missing (line 78 first condition True) ---
 
 TEST_F(MergeEdgeOperatorTest, ThrowsWhenSourceNodeMissing) {
 	Node tgt = createStoredNode("Person");
@@ -1235,103 +981,42 @@ TEST_F(MergeEdgeOperatorTest, ThrowsWhenSourceNodeMissing) {
 	// "a" (source) is NOT set
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
+	auto op = createMergeOp();
+	attachSingleRecordChild(*op, record);
 
 	op->open();
 	EXPECT_THROW(op->next(), std::runtime_error);
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: both source and target missing (line 78 both conditions True)
-// ============================================================================
+// --- Branch coverage: both source and target missing (line 78 both conditions True) ---
 
 TEST_F(MergeEdgeOperatorTest, ThrowsWhenBothNodesMissing) {
 	Record record;
 	// Neither "a" nor "b" set
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
+	auto op = createMergeOp();
+	attachSingleRecordChild(*op, record);
 
 	op->open();
 	EXPECT_THROW(op->next(), std::runtime_error);
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: property key exists but value differs (line 113 second condition)
-// ============================================================================
+// --- Branch coverage: property key exists but value differs (line 113 second condition) ---
 
-TEST_F(MergeEdgeOperatorTest, MatchEdge_PropertyValueDiffers_CreatesNew) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
-	dm->addEdgeProperties(existingEdge.getId(), {{"since", PropertyValue(int64_t(2020))}});
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	// Match requires since=2025 but edge has since=2020 (key exists, value differs)
-	std::unordered_map<std::string, PropertyValue> matchProps;
-	matchProps["since"] = PropertyValue(int64_t(2025));
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		matchProps,
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
-	ASSERT_TRUE(batch.has_value());
-
-	auto edge = (*batch)[0].getEdge("r");
-	ASSERT_TRUE(edge.has_value());
-	EXPECT_NE(edge->getId(), existingEdge.getId());
-
-	op->close();
-}
-
-// ============================================================================
-// Branch coverage: ON MATCH with different variable name (line 164 first False)
-// ============================================================================
+// --- Branch coverage: ON MATCH with different variable name (line 164 first False) ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_DifferentVariable_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	// ON MATCH SET for variable "other" instead of "r"
 	std::vector<SetItem> onMatchItems;
@@ -1342,16 +1027,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_DifferentVariable_Skipped) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1364,23 +1045,17 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_DifferentVariable_Skipped) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: ON MATCH with MAP_MERGE type (line 164 second False - type check)
-// ============================================================================
+// --- Branch coverage: ON MATCH with MAP_MERGE type (line 164 second False - type check) ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_MapMergeType_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	// MAP_MERGE type with correct variable - should still be skipped
 	std::vector<SetItem> onMatchItems;
@@ -1391,16 +1066,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_MapMergeType_Skipped) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1412,24 +1083,18 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_MapMergeType_Skipped) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: ON MATCH null expression with correct variable and PROPERTY type
-// (line 164 third condition False)
-// ============================================================================
+// --- Branch coverage: ON MATCH null expression with correct variable and PROPERTY type
+// (line 164 third condition False) ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_NullExpression_Skipped) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	std::vector<SetItem> onMatchItems;
 	onMatchItems.emplace_back(
@@ -1439,16 +1104,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_NullExpression_Skipped) {
 		nullptr  // null expression
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1460,23 +1121,17 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_NullExpression_Skipped) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: applyEdgeUpdates with items but none match (changed=false, line 173 False)
-// ============================================================================
+// --- Branch coverage: applyEdgeUpdates with items but none match (changed=false, line 173 False) ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_AllItemsSkipped_NoChange) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	// Multiple items, all of which fail the condition check
 	std::vector<SetItem> onMatchItems;
@@ -1502,16 +1157,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_AllItemsSkipped_NoChange) {
 		nullptr
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1526,19 +1177,10 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_AllItemsSkipped_NoChange) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: ON CREATE with empty edgeVar (line 149 False, and line 175 False in create path)
-// ============================================================================
+// --- Branch coverage: ON CREATE with empty edgeVar (line 149 False, and line 175 False in create path) ---
 
 TEST_F(MergeEdgeOperatorTest, OnCreate_EmptyEdgeVar_PropertyStillWritten) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	// ON CREATE SET with matching empty variable
 	std::vector<SetItem> onCreateItems;
@@ -1549,16 +1191,12 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_EmptyEdgeVar_PropertyStillWritten) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "", "b", "KNOWS",
+	auto op = createMergeOp("a", "", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
-		onCreateItems, std::vector<SetItem>{}
+		onCreateItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 	EXPECT_EQ(batch->size(), 1UL);
 
@@ -1568,9 +1206,7 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_EmptyEdgeVar_PropertyStillWritten) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: Multiple records in single batch from child
-// ============================================================================
+// --- Branch coverage: Multiple records in single batch from child ---
 
 TEST_F(MergeEdgeOperatorTest, MultipleRecordsInSingleBatch) {
 	Node src1 = createStoredNode("Person");
@@ -1591,16 +1227,10 @@ TEST_F(MergeEdgeOperatorTest, MultipleRecordsInSingleBatch) {
 		std::vector<RecordBatch>{{r1, r2}}
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
+	auto op = createMergeOp();
 	op->setChild(std::move(mock));
 
-	op->open();
-	auto batch = op->next();
+	auto batch = openAndNext(*op);
 	ASSERT_TRUE(batch.has_value());
 	ASSERT_EQ(batch->size(), 2UL);
 
@@ -1613,19 +1243,10 @@ TEST_F(MergeEdgeOperatorTest, MultipleRecordsInSingleBatch) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: ON CREATE SET with multiple properties (verify all applied)
-// ============================================================================
+// --- Branch coverage: ON CREATE SET with multiple properties (verify all applied) ---
 
 TEST_F(MergeEdgeOperatorTest, OnCreate_MultipleProperties) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	std::vector<SetItem> onCreateItems;
 	onCreateItems.emplace_back(
@@ -1641,16 +1262,12 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_MultipleProperties) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(int64_t(42))
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
-		onCreateItems, std::vector<SetItem>{}
+		onCreateItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1663,24 +1280,18 @@ TEST_F(MergeEdgeOperatorTest, OnCreate_MultipleProperties) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: ON MATCH SET with multiple items, mix of valid and invalid
-// Tests that valid items are applied and invalid ones skipped
-// ============================================================================
+// --- Branch coverage: ON MATCH SET with multiple items, mix of valid and invalid
+// Tests that valid items are applied and invalid ones skipped ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_MixedValidAndInvalidItems) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	std::vector<SetItem> onMatchItems;
 	// Valid: correct variable, PROPERTY type, non-null expression
@@ -1712,16 +1323,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_MixedValidAndInvalidItems) {
 		nullptr
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1736,30 +1343,16 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_MixedValidAndInvalidItems) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: Create edge with "both" direction (line 137 False in create path)
-// ============================================================================
+// --- Branch coverage: Create edge with "both" direction (line 137 False in create path) ---
 
 TEST_F(MergeEdgeOperatorTest, CreateEdge_BothDirection) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
+	auto [src, tgt, record] = createTestSetup();
 
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"both",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"both"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1771,129 +1364,21 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_BothDirection) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: ON CREATE with empty items (line 158 True in create path)
-// This is the default case but explicitly verify the early return
-// ============================================================================
+// --- Branch coverage: ON CREATE with empty items (line 158 True in create path)
+// This is the default case but explicitly verify the early return ---
 
-TEST_F(MergeEdgeOperatorTest, OnCreate_EmptyItems_EarlyReturn) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
 
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
+// --- Branch coverage: ON MATCH with empty items (line 158 True in match path) ---
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}  // both empty
-	);
-	op->setChild(std::move(mock));
+// --- Branch coverage: Create edge with matchProps empty (line 144 False) ---
 
-	op->open();
-	auto batch = op->next();
-	ASSERT_TRUE(batch.has_value());
 
-	auto edge = (*batch)[0].getEdge("r");
-	ASSERT_TRUE(edge.has_value());
-
-	auto props = dm->getEdgeProperties(edge->getId());
-	EXPECT_TRUE(props.empty());
-
-	op->close();
-}
-
-// ============================================================================
-// Branch coverage: ON MATCH with empty items (line 158 True in match path)
-// ============================================================================
-
-TEST_F(MergeEdgeOperatorTest, OnMatch_EmptyItems_EarlyReturn) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}  // both empty
-	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
-	ASSERT_TRUE(batch.has_value());
-
-	auto edge = (*batch)[0].getEdge("r");
-	ASSERT_TRUE(edge.has_value());
-	EXPECT_EQ(edge->getId(), existingEdge.getId());
-
-	op->close();
-}
-
-// ============================================================================
-// Branch coverage: Create edge with matchProps empty (line 144 False)
-// ============================================================================
-
-TEST_F(MergeEdgeOperatorTest, CreateEdge_EmptyMatchProps_SkipsAddProperties) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	// Empty matchProps - should skip addEdgeProperties call
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
-	ASSERT_TRUE(batch.has_value());
-
-	auto edge = (*batch)[0].getEdge("r");
-	ASSERT_TRUE(edge.has_value());
-
-	auto props = dm->getEdgeProperties(edge->getId());
-	EXPECT_TRUE(props.empty());
-
-	op->close();
-}
-
-// ============================================================================
-// Branch coverage: Create edge with "in" direction and ON CREATE SET
-// Exercises create path line 137 True + applyEdgeUpdates on new edge
-// ============================================================================
+// --- Branch coverage: Create edge with "in" direction and ON CREATE SET
+// Exercises create path line 137 True + applyEdgeUpdates on new edge ---
 
 TEST_F(MergeEdgeOperatorTest, CreateEdge_InDirection_WithOnCreate) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	std::vector<SetItem> onCreateItems;
 	onCreateItems.emplace_back(
@@ -1903,16 +1388,12 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_InDirection_WithOnCreate) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(true)
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"in",
-		onCreateItems, std::vector<SetItem>{}
+		onCreateItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1927,24 +1408,18 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_InDirection_WithOnCreate) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: Match edge with properties and ON MATCH SET
-// Covers line 176 True branch (getEdge returns valid edge, updates record)
-// ============================================================================
+// --- Branch coverage: Match edge with properties and ON MATCH SET
+// Covers line 176 True branch (getEdge returns valid edge, updates record) ---
 
 TEST_F(MergeEdgeOperatorTest, OnMatch_UpdatesRecordEdgeProperties) {
 	Node src = createStoredNode("Person");
 	Node tgt = createStoredNode("Person");
 
-	int64_t labelId = dm->getOrCreateTokenId("KNOWS");
-	Edge existingEdge(0, src.getId(), tgt.getId(), labelId);
-	dm->addEdge(existingEdge);
+	Edge existingEdge = createExistingEdge(src, tgt);
 
 	Record record;
 	record.setNode("a", src);
 	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
 
 	std::vector<SetItem> onMatchItems;
 	onMatchItems.emplace_back(
@@ -1954,16 +1429,12 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_UpdatesRecordEdgeProperties) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(std::string("yes"))
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
 		"out",
 		std::vector<SetItem>{}, onMatchItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -1980,20 +1451,11 @@ TEST_F(MergeEdgeOperatorTest, OnMatch_UpdatesRecordEdgeProperties) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: ON CREATE with properties and ON CREATE SET
-// Tests that applyEdgeUpdates runs after edge creation with matchProps
-// ============================================================================
+// --- Branch coverage: ON CREATE with properties and ON CREATE SET
+// Tests that applyEdgeUpdates runs after edge creation with matchProps ---
 
 TEST_F(MergeEdgeOperatorTest, CreateEdge_WithPropertiesAndOnCreate) {
-	Node src = createStoredNode("Person");
-	Node tgt = createStoredNode("Person");
-
-	Record record;
-	record.setNode("a", src);
-	record.setNode("b", tgt);
-
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
+	auto [src, tgt, record] = createTestSetup();
 
 	std::unordered_map<std::string, PropertyValue> matchProps;
 	matchProps["since"] = PropertyValue(int64_t(2020));
@@ -2006,16 +1468,12 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_WithPropertiesAndOnCreate) {
 		std::make_shared<graph::query::expressions::LiteralExpression>(std::string("value"))
 	);
 
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		matchProps,
 		"out",
-		onCreateItems, std::vector<SetItem>{}
+		onCreateItems
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -2032,10 +1490,8 @@ TEST_F(MergeEdgeOperatorTest, CreateEdge_WithPropertiesAndOnCreate) {
 // easily triggered through the DataManager API since deleted edges are unlinked
 // from the traversal chain and updateEdge() rejects inactive entities.
 
-// ============================================================================
-// Branch coverage: out direction - source matches but target does NOT match
-// (line 96 right: edge.getTargetNodeId() == targetId False)
-// ============================================================================
+// --- Branch coverage: out direction - source matches but target does NOT match
+// (line 96 right: edge.getTargetNodeId() == targetId False) ---
 
 TEST_F(MergeEdgeOperatorTest, OutDirection_SourceMatchTargetMismatch_CreatesNew) {
 	Node src = createStoredNode("Person");
@@ -2051,18 +1507,8 @@ TEST_F(MergeEdgeOperatorTest, OutDirection_SourceMatchTargetMismatch_CreatesNew)
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
-		std::unordered_map<std::string, PropertyValue>{},
-		"out",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
-	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto op = createMergeOp();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -2073,10 +1519,8 @@ TEST_F(MergeEdgeOperatorTest, OutDirection_SourceMatchTargetMismatch_CreatesNew)
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: in direction - source matches targetId but target does NOT
-// match sourceId (line 98 right: edge.getTargetNodeId() == sourceId False)
-// ============================================================================
+// --- Branch coverage: in direction - source matches targetId but target does NOT
+// match sourceId (line 98 right: edge.getTargetNodeId() == sourceId False) ---
 
 TEST_F(MergeEdgeOperatorTest, InDirection_SourceMatchTargetMismatch_CreatesNew) {
 	Node src = createStoredNode("Person");
@@ -2096,18 +1540,11 @@ TEST_F(MergeEdgeOperatorTest, InDirection_SourceMatchTargetMismatch_CreatesNew) 
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"in",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"in"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -2118,12 +1555,10 @@ TEST_F(MergeEdgeOperatorTest, InDirection_SourceMatchTargetMismatch_CreatesNew) 
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: "both" direction - first OR condition partially matches
+// --- Branch coverage: "both" direction - first OR condition partially matches
 // (source matches sourceId but target does NOT match targetId),
 // AND second OR condition also partially fails
-// This covers line 100-101 more thoroughly
-// ============================================================================
+// This covers line 100-101 more thoroughly ---
 
 TEST_F(MergeEdgeOperatorTest, BothDirection_PartialMatchBothConditions_CreatesNew) {
 	Node src = createStoredNode("Person");
@@ -2140,18 +1575,11 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_PartialMatchBothConditions_CreatesNe
 	record.setNode("a", src);
 	record.setNode("b", tgt);
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"both",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"both"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -2161,11 +1589,9 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_PartialMatchBothConditions_CreatesNe
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: "in" direction self-loop scenario - edge from node to
+// --- Branch coverage: "in" direction self-loop scenario - edge from node to
 // different node triggers line 98 right False branch
-// (edge.getSourceNodeId() == targetId True, edge.getTargetNodeId() == sourceId False)
-// ============================================================================
+// (edge.getSourceNodeId() == targetId True, edge.getTargetNodeId() == sourceId False) ---
 
 TEST_F(MergeEdgeOperatorTest, InDirection_SelfLoop_SourceMatchTargetMismatch) {
 	// Use the same node for both source and target variables (self-loop MERGE)
@@ -2183,18 +1609,11 @@ TEST_F(MergeEdgeOperatorTest, InDirection_SelfLoop_SourceMatchTargetMismatch) {
 	record.setNode("a", node);
 	record.setNode("b", node); // same node - self-loop scenario
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"in",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"in"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
@@ -2205,12 +1624,10 @@ TEST_F(MergeEdgeOperatorTest, InDirection_SelfLoop_SourceMatchTargetMismatch) {
 	op->close();
 }
 
-// ============================================================================
-// Branch coverage: "both" direction self-loop scenario - edge from node to
+// --- Branch coverage: "both" direction self-loop scenario - edge from node to
 // different node triggers line 101 right False branch
 // In the second OR of "both": edge.getSourceNodeId() == targetId True,
-// edge.getTargetNodeId() == sourceId False
-// ============================================================================
+// edge.getTargetNodeId() == sourceId False ---
 
 TEST_F(MergeEdgeOperatorTest, BothDirection_SelfLoop_SecondOrTargetMismatch) {
 	// Self-loop scenario: source and target are the same node
@@ -2237,18 +1654,11 @@ TEST_F(MergeEdgeOperatorTest, BothDirection_SelfLoop_SecondOrTargetMismatch) {
 	record.setNode("a", node);
 	record.setNode("b", node); // same node
 
-	auto mock = std::make_unique<MergeEdgeMockOperator>(std::vector<RecordBatch>{{record}});
-
-	auto op = std::make_unique<MergeEdgeOperator>(
-		dm, im, "a", "r", "b", "KNOWS",
+	auto op = createMergeOp("a", "r", "b", "KNOWS",
 		std::unordered_map<std::string, PropertyValue>{},
-		"both",
-		std::vector<SetItem>{}, std::vector<SetItem>{}
+		"both"
 	);
-	op->setChild(std::move(mock));
-
-	op->open();
-	auto batch = op->next();
+	auto batch = runSingleRecord(*op, record);
 	ASSERT_TRUE(batch.has_value());
 
 	auto edge = (*batch)[0].getEdge("r");
