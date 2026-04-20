@@ -2,7 +2,9 @@ const createMDX = require('@next/mdx')
 const { withContentCollections } = require('@content-collections/next')
 const withNextIntl = require('next-intl/plugin')('./i18n.ts')
 
-const basePath = process.env.BASE_PATH || '/zyx'
+// basePath defaults to empty for local development
+// Set BASE_PATH=/zyx environment variable for GitHub Pages deployment
+const basePath = process.env.BASE_PATH || ''
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

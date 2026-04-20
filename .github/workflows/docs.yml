@@ -41,7 +41,16 @@ jobs:
 
       - name: Build NexDoc site
         working-directory: ./docs
+        env:
+          BASE_PATH: /zyx
         run: bun run build
+
+      - name: Fix asset paths for GitHub Pages
+        working-directory: ./docs/apps/docs/out
+        run: |
+          # Replace /assets/ paths with /zyx/assets/ in HTML files
+          find . -type f -name "*.html" -exec sed -i 's|href="/assets/|href="/zyx/assets/|g' {} +
+          find . -type f -name "*.html" -exec sed -i 's|src="/assets/|src="/zyx/assets/|g' {} +
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
