@@ -50,7 +50,7 @@ using namespace graph::storage::wal;
  */
 inline fs::path makeTempDbPath() {
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	return fs::temp_directory_path() / ("test_walreplay_" + boost::uuids::to_string(uuid) + ".graph");
+	return fs::temp_directory_path() / ("test_walreplay_" + boost::uuids::to_string(uuid) + ".zyx");
 }
 
 class WALReplayTest : public ::testing::Test {

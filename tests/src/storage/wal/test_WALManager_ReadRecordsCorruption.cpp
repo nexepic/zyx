@@ -26,7 +26,7 @@ protected:
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		testDbPath = fs::temp_directory_path() / ("test_wal_read_corrupt_" + boost::uuids::to_string(uuid) + ".graph");
+		testDbPath = fs::temp_directory_path() / ("test_wal_read_corrupt_" + boost::uuids::to_string(uuid) + ".zyx");
 		walPath = testDbPath.string() + "-wal";
 	}
 

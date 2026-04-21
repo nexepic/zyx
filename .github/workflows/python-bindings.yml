@@ -1,0 +1,114 @@
+name: Python Bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bindings/python/**'
+      - 'include/**'
+      - 'src/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bindings/python/**'
+      - 'include/**'
+      - 'src/**'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.11'
+          - os: ubuntu-latest
+            python: '3.12'
+          - os: macos-latest
+            python: '3.12'
+          - os: windows-latest
+            python: '3.12'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install build tools
+        run: pip install meson ninja conan
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+
+      - name: Install system deps (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install pkgconfiglite --allow-empty-checksums
+          choco install llvm --version=20.1.4 --force
+          echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pkg-config
+
+      - name: Install Conan dependencies
+        run: |
+          conan profile detect
+          mkdir -p buildDir
+          conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+
+      - name: Install zyxdb (editable)
+        run: pip install -e "bindings/python[test]"
+
+      - name: Run tests
+        run: |
+          cd bindings/python
+          python -m pytest tests/ -v
+
+  build-wheels:
+    name: Build wheels
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install cibuildwheel
+        run: pip install cibuildwheel
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse bindings/python
+        env:
+          CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-*
+          CIBW_SKIP: '*-musllinux_*'
+          CIBW_BEFORE_ALL_LINUX: >
+            pip install conan meson ninja &&
+            conan profile detect &&
+            mkdir -p buildDir &&
+            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl

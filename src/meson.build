@@ -112,7 +112,7 @@ if host_machine.system() != 'emscripten'
     pkg.generate(libzyx,
                  name : 'ZYX',
                  description : 'High-performance Graph Database Engine',
-                 version : '0.1.0',
+                 version : meson.project_version(),
                  subdirs : 'zyx'
     )
 

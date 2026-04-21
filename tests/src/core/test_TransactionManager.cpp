@@ -34,7 +34,7 @@ class TransactionManagerTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testDbPath = fs::temp_directory_path() / ("test_txnmgr_" + boost::uuids::to_string(uuid) + ".graph");
+		testDbPath = fs::temp_directory_path() / ("test_txnmgr_" + boost::uuids::to_string(uuid) + ".zyx");
 		fs::remove_all(testDbPath);
 
 		db = std::make_unique<graph::Database>(testDbPath.string());
@@ -270,7 +270,7 @@ TEST(TransactionManagerNoWALTest, TransactionWithoutWAL) {
 	// Cover: walManager_ && walManager_->isOpen() -> False branches in begin, commit, rollback
 	// Create a separate database for this test
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_txnmgr_nowal_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_txnmgr_nowal_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -310,7 +310,7 @@ TEST(TransactionManagerNoWALTest, CommitNonActiveTransactionEarlyReturn) {
 	// Cover: TransactionManager::commitTransaction line 52: if (txn.getState() != TXN_ACTIVE) return
 	// We call commitTransaction directly on a TransactionManager with a non-active transaction
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_txnmgr_commit_noop_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_txnmgr_commit_noop_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -336,7 +336,7 @@ TEST(TransactionManagerNoWALTest, CommitNonActiveTransactionEarlyReturn) {
 TEST(TransactionManagerNoWALTest, RollbackNonActiveTransactionEarlyReturn) {
 	// Cover: TransactionManager::rollbackTransaction line 85: if (txn.getState() != TXN_ACTIVE) return
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_txnmgr_rollback_noop_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_txnmgr_rollback_noop_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -408,7 +408,7 @@ TEST_F(TransactionManagerTest, RollbackAfterStorageClosed) {
 	// Cover: storage_->isOpen() -> False branch in rollbackTransaction (line 90)
 	// Create a separate database, begin transaction, close DB, then let destructor auto-rollback
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath2 = fs::temp_directory_path() / ("test_txnmgr_closed_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath2 = fs::temp_directory_path() / ("test_txnmgr_closed_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath2);
 
 	auto testDb2 = std::make_unique<graph::Database>(testPath2.string());
@@ -440,7 +440,7 @@ TEST(TransactionManagerClosedWALTest, TransactionWithClosedWAL) {
 	// Cover: walManager_ && walManager_->isOpen() -> walManager_->isOpen() is false
 	// This exercises the second operand of the && check in begin, commit, rollback.
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_txnmgr_closedwal_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_txnmgr_closedwal_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -484,7 +484,7 @@ TEST(TransactionManagerClosedWALTest, TransactionWithClosedWAL) {
 
 TEST(TransactionManagerTimeoutTest, TimeoutOnBusyMutex) {
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_txnmgr_timeout_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_txnmgr_timeout_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -534,7 +534,7 @@ TEST_F(TransactionManagerTest, AtomicHasActiveAfterRollback) {
 TEST(ConcurrentReadTest, MultipleReadTransactionsSimultaneously) {
 	// Multiple threads can hold read-only transactions concurrently
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_conc_read_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_conc_read_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -580,7 +580,7 @@ TEST(ConcurrentReadTest, MultipleReadTransactionsSimultaneously) {
 TEST(ConcurrentReadTest, ReadTransactionGetsSnapshot) {
 	// Read-only transaction gets a snapshot pointer
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_read_snapshot_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_read_snapshot_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -606,7 +606,7 @@ TEST(ConcurrentReadTest, ReadTransactionGetsSnapshot) {
 TEST(ConcurrentReadTest, ReadDoesNotBlockRead) {
 	// A read-only transaction does not block other read-only transactions
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_read_no_block_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_read_no_block_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -636,7 +636,7 @@ TEST(ConcurrentReadTest, ReadDoesNotBlockRead) {
 TEST(ConcurrentReadTest, WriteBlocksOnActiveReaders) {
 	// A write transaction must wait for all active readers to finish
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_write_blocks_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_write_blocks_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -667,7 +667,7 @@ TEST(ConcurrentReadTest, WriteBlocksOnActiveReaders) {
 TEST(ConcurrentReadTest, HasActiveTransactionOnlyTracksWrites) {
 	// hasActiveTransaction() only returns true for write transactions
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_has_active_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_has_active_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -697,7 +697,7 @@ TEST(ConcurrentReadTest, HasActiveTransactionOnlyTracksWrites) {
 TEST(ConcurrentReadTest, ReadRollbackReleasesLock) {
 	// Rolling back a read-only transaction releases the shared lock
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_read_rollback_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_read_rollback_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());
@@ -727,7 +727,7 @@ TEST(ConcurrentReadTest, ReadRollbackReleasesLock) {
 TEST(ConcurrentReadTest, MultipleReadersOneWriter) {
 	// N reader threads + 1 writer thread, verify isolation
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	auto testPath = fs::temp_directory_path() / ("test_multi_rw_" + boost::uuids::to_string(uuid) + ".graph");
+	auto testPath = fs::temp_directory_path() / ("test_multi_rw_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
 	auto testDb = std::make_unique<graph::Database>(testPath.string());

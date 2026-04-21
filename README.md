@@ -83,13 +83,13 @@ If the executable is not on `PATH`, use the full path (for example `./zyx` or `.
 ### 2) Create and open a database
 
 ```bash
-zyx database create ./demo.graph
+zyx database create ./demo.zyx
 ```
 
 Open existing DB:
 
 ```bash
-zyx database open ./demo.graph
+zyx database open ./demo.zyx
 ```
 
 ### 3) Run first queries (in REPL)
@@ -107,11 +107,11 @@ RETURN a.name, b.name, r.since;
 
 ```bash
 # Script mode
-zyx database exec ./demo.graph ./seed.cypher
+zyx database exec ./demo.zyx ./seed.cypher
 
 # Bulk import (CSV / JSONL)
 zyx import \
-  --database ./demo.graph \
+  --database ./demo.zyx \
   --nodes ./nodes.csv \
   --relationships ./rels.csv
 ```

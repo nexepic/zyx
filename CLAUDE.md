@@ -17,6 +17,7 @@ meson test -C buildDir <test_name>  # Run specific test
 ./scripts/build_release.sh          # Release build
 ./scripts/setup_emsdk.sh            # Install Emscripten SDK + antlr4 WASM (one-time)
 ./scripts/build_wasm.sh             # Build WASM module (zyx.js + zyx.wasm)
+python3 scripts/bump_version.py vX.Y.Z  # Bump version + commit + tag
 ```
 
 Build system: **Meson** + **Conan** + **Ninja**. Tests: **Google Test**, auto-discovered from `test_*.cpp`.
@@ -50,6 +51,18 @@ ComprehensionType { COMP_FILTER, COMP_EXTRACT, COMP_REDUCE }
 ```
 
 **When adding new enum types**: ALWAYS use descriptive prefixes (3-5 chars) followed by underscore.
+
+## Version Management
+
+`meson.build` line 2 is the **single source of truth** for the project version. All other locations derive from it
+automatically (`src/meson.build` via `meson.project_version()`, `pyproject.toml` via `dynamic`, `__init__.py` via
+`importlib.metadata`) or are synced by the bump script (docs `package.json` files).
+
+**Never hardcode version strings** — to bump the version:
+```bash
+python3 scripts/bump_version.py v1.0.0        # Update all files + commit + tag
+python3 scripts/bump_version.py v1.0.0 --no-commit  # Update files only
+```
 
 ## Git Commits
 

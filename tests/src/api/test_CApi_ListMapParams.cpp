@@ -104,7 +104,7 @@ TEST(CApiListMapParams, MapSetList_And_MapSetMap) {
 
 TEST(CApiListMapParams, ParamsSetList_QueryIntegration) {
 	// Note: ZYX doesn't support ":memory:" databases, use temp file instead
-	std::string dbPath = (std::filesystem::temp_directory_path() / "test_zyx_list_params.graph").string();
+	std::string dbPath = (std::filesystem::temp_directory_path() / "test_zyx_list_params.zyx").string();
 	ZYXDB_T *db = zyx_open(dbPath.c_str());
 	ASSERT_NE(db, nullptr);
 
@@ -140,7 +140,7 @@ TEST(CApiListMapParams, ParamsSetList_QueryIntegration) {
 
 TEST(CApiListMapParams, ParamsSetMap_QueryIntegration) {
 	// Note: ZYX doesn't support ":memory:" databases, use temp file instead
-	std::string dbPath = (std::filesystem::temp_directory_path() / "test_zyx_map_params.graph").string();
+	std::string dbPath = (std::filesystem::temp_directory_path() / "test_zyx_map_params.zyx").string();
 	ZYXDB_T *db = zyx_open(dbPath.c_str());
 	ASSERT_NE(db, nullptr);
 

@@ -37,23 +37,23 @@ If your executable is not on `PATH`, use the actual path (for example `./zyx` or
 Create and enter the REPL interactive mode:
 
 ```bash
-zyx database create ./demo.graph
+zyx database create ./demo.zyx
 ```
 
 Open an existing DB:
 
 ```bash
-zyx database open ./demo.graph
+zyx database open ./demo.zyx
 ```
 
 Open or create if missing:
 
 ```bash
-zyx database open ./demo.graph --create-if-missing
+zyx database open ./demo.zyx --create-if-missing
 ```
 
 :::tip Shorthand
-`zyx database open ./demo.graph -c` is the short form of `--create-if-missing`. It is especially useful in scripts and automation.
+`zyx database open ./demo.zyx -c` is the short form of `--create-if-missing`. It is especially useful in scripts and automation.
 :::
 
 ## 3) Run Your First Graph Query Set
@@ -97,7 +97,7 @@ The `debug` command supports several subcommands:
 ## 5) Script Mode for Repeatable Runs
 
 ```bash
-zyx database exec ./demo.graph ./seed.cypher
+zyx database exec ./demo.zyx ./seed.cypher
 ```
 
 Each statement in `seed.cypher` should end with `;`. The script supports `//` line comments and ignores empty lines.
@@ -120,7 +120,7 @@ In addition to inserting data one statement at a time in the REPL, ZYX provides 
 
 ```bash
 zyx import \
-  --database ./demo.graph \
+  --database ./demo.zyx \
   --nodes ./nodes.csv \
   --relationships ./rels.csv
 ```

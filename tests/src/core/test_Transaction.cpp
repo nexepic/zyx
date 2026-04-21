@@ -33,7 +33,7 @@ class TransactionTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testDbPath = fs::temp_directory_path() / ("test_txn_" + boost::uuids::to_string(uuid) + ".graph");
+		testDbPath = fs::temp_directory_path() / ("test_txn_" + boost::uuids::to_string(uuid) + ".zyx");
 		fs::remove_all(testDbPath);
 	}
 
@@ -248,7 +248,7 @@ TEST_F(TransactionTest, MoveAssignmentFromActiveToActive) {
 
 	// Create two separate databases with separate TransactionManagers
 	boost::uuids::uuid uuid2 = boost::uuids::random_generator()();
-	auto testDbPath2 = fs::temp_directory_path() / ("test_txn_move2_" + boost::uuids::to_string(uuid2) + ".graph");
+	auto testDbPath2 = fs::temp_directory_path() / ("test_txn_move2_" + boost::uuids::to_string(uuid2) + ".zyx");
 	fs::remove_all(testDbPath2);
 
 	graph::Database db1(testDbPath.string());

@@ -25,7 +25,7 @@ class IntegrationCypherNewFeaturesTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testDbPath = fs::temp_directory_path() / ("test_new_features_" + boost::uuids::to_string(uuid) + ".graph");
+		testDbPath = fs::temp_directory_path() / ("test_new_features_" + boost::uuids::to_string(uuid) + ".zyx");
 		if (fs::exists(testDbPath))
 			fs::remove_all(testDbPath);
 		db = std::make_unique<Database>(testDbPath.string());

@@ -47,7 +47,7 @@ protected:
 
 	static void SetUpTestSuite() {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testDbPath_ = fs::temp_directory_path() / ("test_optbench_" + boost::uuids::to_string(uuid) + ".graph");
+		testDbPath_ = fs::temp_directory_path() / ("test_optbench_" + boost::uuids::to_string(uuid) + ".zyx");
 		if (fs::exists(testDbPath_))
 			fs::remove_all(testDbPath_);
 

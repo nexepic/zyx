@@ -39,5 +39,15 @@ docs/.turbo/
 
 docs/superpowers/
 
+# Meson subprojects (downloaded sources, keep .wrap files)
+subprojects/packagecache/
+subprojects/pybind11-*/
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
 # Claude Code
 .claude/settings.local.json
