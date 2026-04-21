@@ -41,7 +41,7 @@ protected:
 	void SetUp() override {
 		// Create a unique temporary database file
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testFilePath = std::filesystem::temp_directory_path() / ("test_stateManager_" + to_string(uuid) + ".db");
+		testFilePath = std::filesystem::temp_directory_path() / ("test_stateManager_" + to_string(uuid) + ".zyx");
 
 		// Initialize database and get managers from the DataManager
 		db = std::make_unique<graph::Database>(testFilePath.string());

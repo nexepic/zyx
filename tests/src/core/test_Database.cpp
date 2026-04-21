@@ -8,6 +8,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 
 #include "graph/core/Database.hpp"
@@ -614,12 +615,38 @@ TEST_F(DatabaseTest, Close_AfterBeginTransaction_WALInitialized) {
 TEST_F(DatabaseTest, WALRecoveryThenWriteTransactionReusesExistingWAL) {
 	std::string walPath = testDbPath.string() + "-wal";
 
-	// Phase 1: Create a database with a WAL file left behind (simulate crash)
+	// Phase 1: Create a database with a WAL file left behind (simulate crash).
+	// Since close() now deletes the WAL, we read the WAL content before the
+	// destructor runs, then restore it to simulate an unclean shutdown.
 	{
 		auto db1 = std::make_unique<Database>(testDbPath.string());
 		db1->open();
-		auto txn = db1->beginTransaction();
-		// Don't commit — destructor auto-rolls back, but WAL file remains
+		{
+			auto txn = db1->beginTransaction();
+			// Don't commit — destructor auto-rolls back, but we want the WAL
+			// to persist to simulate a crash.
+		}
+
+		// Read WAL content before db1 goes out of scope (destructor calls close
+		// which deletes the WAL)
+		std::vector<uint8_t> walContent;
+		{
+			std::ifstream walIn(walPath, std::ios::binary);
+			if (walIn.is_open()) {
+				walContent.assign(std::istreambuf_iterator<char>(walIn),
+								  std::istreambuf_iterator<char>());
+			}
+		}
+
+		// Let db1 destruct (this deletes the WAL)
+		db1.reset();
+
+		// Restore the WAL to simulate a process crash (no clean shutdown)
+		if (!walContent.empty()) {
+			std::ofstream walOut(walPath, std::ios::binary | std::ios::trunc);
+			walOut.write(reinterpret_cast<const char *>(walContent.data()),
+						 static_cast<std::streamsize>(walContent.size()));
+		}
 	}
 	EXPECT_TRUE(fs::exists(walPath));
 

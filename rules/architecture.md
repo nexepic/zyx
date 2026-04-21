@@ -314,8 +314,8 @@ docs/apps/docs/
     │   ├── zyx.js          # WASM JS loader
     │   └── zyx.wasm        # WASM binary
     └── data/               # Pre-built playground databases
-        ├── got.db          # Game of Thrones dataset
-        └── marvel.db       # Marvel Universe dataset
+        ├── got.zyx          # Game of Thrones dataset
+        └── imdb.zyx        # IMDb Movies dataset
 
 compiler_options_wasm.ini   # Meson cross-file for Emscripten
 ```
@@ -419,7 +419,7 @@ Browser-based interactive Cypher query workspace embedded in the docs site homep
 graph LR
     A[playground.tsx] -->|ccall| B[zyx.js WASM Module]
     B --> C[zyx.wasm - ZYX Engine]
-    C -->|MEMFS| D[Pre-built .db files]
+    C -->|MEMFS| D[Pre-built .zyx files]
     A --> E[graph-view.tsx - D3 Visualization]
 ```
 
@@ -430,12 +430,12 @@ graph LR
 | `docs/apps/docs/home/playground.tsx` | Main playground component (query editor, result display, dataset switching) |
 | `docs/apps/docs/home/graph-view.tsx` | D3.js force-directed graph visualization |
 | `docs/apps/docs/home/custom-home.tsx` | Homepage layout integrating the playground |
-| `docs/apps/docs/public/data/*.db` | Pre-built database files fetched at runtime |
+| `docs/apps/docs/public/data/*.zyx` | Pre-built database files fetched at runtime |
 
 ### Execution flow
 
 1. WASM module loaded from `/wasm/zyx.js`
-2. Pre-built `.db` + `.db-wal` files fetched and written to Emscripten MEMFS
+2. Pre-built `.zyx` + `.zyx-wal` files fetched and written to Emscripten MEMFS
 3. Database opened via `zyx_open()`
 4. **Read-only transaction** opened via `zyx_begin_read_only_transaction()` — all user queries are routed through
    `zyx_txn_execute()` to prevent any data mutation

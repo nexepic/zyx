@@ -64,7 +64,7 @@ protected:
 
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		dbPath = fs::temp_directory_path() / ("test_merge_node_" + to_string(uuid) + ".db");
+		dbPath = fs::temp_directory_path() / ("test_merge_node_" + to_string(uuid) + ".zyx");
 		db = std::make_unique<Database>(dbPath.string());
 		db->open();
 		dm = db->getStorage()->getDataManager();

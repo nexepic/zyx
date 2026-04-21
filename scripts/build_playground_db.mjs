@@ -69,21 +69,45 @@ async function buildDatabase(mod, dbPath, seedQueries, label) {
   }
   console.log(`  Seeded ${count}/${seedQueries.length} queries`);
 
-  // Close to flush WAL
+  // Close to flush data to main file
   mod.ccall("zyx_close", null, ["number"], [db]);
+
+  // If WAL file exists in MEMFS, reopen the database to trigger WAL recovery
+  // which merges WAL data into the main file, then close again.
+  const walPath = dbPath + "-wal";
+  let hasWal = false;
+  try {
+    const walStat = mod.FS.stat(walPath);
+    hasWal = walStat.size > 0;
+  } catch {
+    // No WAL file
+  }
+
+  if (hasWal) {
+    console.log(`  WAL detected, reopening to trigger recovery...`);
+    const db2 = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
+    if (db2) {
+      // Begin a read-only transaction to trigger ensureWALAndTransactionManager → recovery
+      const txn = mod.ccall("zyx_begin_read_only_transaction", "number", ["number"], [db2]);
+      if (txn) {
+        mod.ccall("zyx_txn_close", null, ["number"], [txn]);
+      }
+      mod.ccall("zyx_close", null, ["number"], [db2]);
+    }
+  }
 
   // Read the database file from MEMFS
   const data = mod.FS.readFile(dbPath);
   console.log(`  Database size: ${(data.length / 1024).toFixed(1)} KB`);
 
-  // Check for WAL file
-  const walPath = dbPath + "-wal";
-  let walData = null;
+  // Verify WAL is gone or empty after recovery
   try {
-    walData = mod.FS.readFile(walPath);
-    console.log(`  WAL size: ${(walData.length / 1024).toFixed(1)} KB`);
+    const walData = mod.FS.readFile(walPath);
+    if (walData.length > 32) {
+      console.warn(`  Warning: WAL still has ${(walData.length / 1024).toFixed(1)} KB after recovery`);
+    }
   } catch {
-    // No WAL file (expected after clean close)
+    // No WAL file — expected
   }
 
   // Clean up MEMFS
@@ -94,7 +118,7 @@ async function buildDatabase(mod, dbPath, seedQueries, label) {
     mod.FS.unlink(walPath);
   } catch {}
 
-  return { data, walData };
+  return { data };
 }
 
 async function main() {
@@ -102,7 +126,7 @@ async function main() {
 
   // Dynamically import seed data (TypeScript files)
   // These need to be compiled first or run via bun/tsx
-  let GOT_SEED_QUERIES, MARVEL_SEED_QUERIES;
+  let GOT_SEED_QUERIES, IMDB_SEED_QUERIES;
 
   try {
     const gotMod = await import(
@@ -110,10 +134,10 @@ async function main() {
     );
     GOT_SEED_QUERIES = gotMod.GOT_SEED_QUERIES;
 
-    const marvelMod = await import(
-      "../docs/apps/docs/home/data/marvel-seed.ts"
+    const imdbMod = await import(
+      "../docs/apps/docs/home/data/imdb-seed.ts"
     );
-    MARVEL_SEED_QUERIES = marvelMod.MARVEL_SEED_QUERIES;
+    IMDB_SEED_QUERIES = imdbMod.IMDB_SEED_QUERIES;
   } catch (e) {
     console.error(
       "Failed to import seed data. Run with bun or tsx for TypeScript support."
@@ -123,7 +147,7 @@ async function main() {
   }
 
   console.log(
-    `GoT queries: ${GOT_SEED_QUERIES.length}, Marvel queries: ${MARVEL_SEED_QUERIES.length}`
+    `GoT queries: ${GOT_SEED_QUERIES.length}, IMDb queries: ${IMDB_SEED_QUERIES.length}`
   );
 
   // Load WASM module
@@ -135,23 +159,21 @@ async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
 
   // Build GoT database
-  const got = await buildDatabase(mod, "/got.db", GOT_SEED_QUERIES, "Game of Thrones");
-  writeFileSync(join(OUT_DIR, "got.db"), got.data);
-  if (got.walData) writeFileSync(join(OUT_DIR, "got.db-wal"), got.walData);
+  const got = await buildDatabase(mod, "/got.zyx", GOT_SEED_QUERIES, "Game of Thrones");
+  writeFileSync(join(OUT_DIR, "got.zyx"), got.data);
 
-  // Build Marvel database
-  const marvel = await buildDatabase(
+  // Build IMDb database
+  const imdb = await buildDatabase(
     mod,
-    "/marvel.db",
-    MARVEL_SEED_QUERIES,
-    "Marvel Universe"
+    "/imdb.zyx",
+    IMDB_SEED_QUERIES,
+    "IMDb Movies"
   );
-  writeFileSync(join(OUT_DIR, "marvel.db"), marvel.data);
-  if (marvel.walData) writeFileSync(join(OUT_DIR, "marvel.db-wal"), marvel.walData);
+  writeFileSync(join(OUT_DIR, "imdb.zyx"), imdb.data);
 
   console.log(`\nDone! Files written to ${OUT_DIR}/`);
-  console.log("  got.db    - Game of Thrones character network");
-  console.log("  marvel.db - Marvel Universe hero network");
+  console.log("  got.zyx - Game of Thrones character network");
+  console.log("  imdb.zyx - IMDb Movies dataset");
 }
 
 main().catch((e) => {

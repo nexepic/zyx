@@ -30,7 +30,7 @@ protected:
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		dbPath = fs::temp_directory_path() / ("test_vector_search_branches_" + boost::uuids::to_string(uuid) + ".db");
+		dbPath = fs::temp_directory_path() / ("test_vector_search_branches_" + boost::uuids::to_string(uuid) + ".zyx");
 		if (fs::exists(dbPath)) {
 			fs::remove(dbPath);
 		}

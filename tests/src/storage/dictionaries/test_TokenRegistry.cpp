@@ -45,7 +45,7 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 
-		testDbPath = std::filesystem::temp_directory_path() / ("test_label_registry_" + to_string(uuid) + ".db");
+		testDbPath = std::filesystem::temp_directory_path() / ("test_label_registry_" + to_string(uuid) + ".zyx");
 
 		// Ensure clean state
 		if (fs::exists(testDbPath)) {

@@ -43,7 +43,7 @@ protected:
 
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_engine_" + to_string(uuid) + ".db");
+		testFilePath = fs::temp_directory_path() / ("test_engine_" + to_string(uuid) + ".zyx");
 
 		storage =
 				std::make_shared<storage::FileStorage>(testFilePath.string(), 4096, storage::OpenMode::OPEN_CREATE_NEW_FILE);

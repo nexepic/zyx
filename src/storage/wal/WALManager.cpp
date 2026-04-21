@@ -81,6 +81,16 @@ namespace graph::storage::wal {
 				walFd_ = INVALID_FILE_HANDLE;
 			}
 			isOpen_ = false;
+
+			// Remove WAL file — all committed data was already persisted to the
+			// main DB file by save() during each commitTransaction().  Leaving
+			// the WAL around would trigger an unnecessary (but idempotent)
+			// recovery pass on the next open.
+			try {
+				std::filesystem::remove(walPath_);
+			} catch (...) {
+				// Non-fatal: next open will run idempotent recovery
+			}
 		}
 	}
 

@@ -150,7 +150,7 @@ protected:
 	void SetUp() override {
 		// Setup temporary DB
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		dbPath = std::filesystem::temp_directory_path() / ("vec_test_" + to_string(uuid) + ".db");
+		dbPath = std::filesystem::temp_directory_path() / ("vec_test_" + to_string(uuid) + ".zyx");
 
 		database = std::make_unique<graph::Database>(dbPath.string());
 		database->open();

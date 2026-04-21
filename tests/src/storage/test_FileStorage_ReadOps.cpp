@@ -129,7 +129,7 @@ TEST_F(FileStorageTest, Open_CreateFails_InvalidPath) {
 
 TEST_F(FileStorageTest, Open_ExistingFails_Permissions) {
 	// 1. Create a dummy file
-	std::filesystem::path lockedPath = std::filesystem::temp_directory_path() / "locked.db";
+	std::filesystem::path lockedPath = std::filesystem::temp_directory_path() / "locked.zyx";
 	{
 		std::ofstream f(lockedPath);
 	} // file created and closed

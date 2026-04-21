@@ -26,8 +26,10 @@
 
 TEST_F(WALReplayTest, CommittedTransactionSurvivesReopen) {
 	int64_t nodeId = 0;
+	std::string walPath = dbPath.string() + "-wal";
 
-	// Phase 1: Open DB, add a node, commit — then close WITHOUT checkpointing
+	// Phase 1: Open DB, add a node, commit — then simulate crash by saving WAL
+	// content before close (close now deletes the WAL file)
 	{
 		Database db(dbPath.string());
 		db.open();
@@ -39,12 +41,29 @@ TEST_F(WALReplayTest, CommittedTransactionSurvivesReopen) {
 		ASSERT_GT(nodeId, 0);
 		txn.commit();
 
-		// Close DB (WAL is NOT manually checkpointed so WAL file persists)
+		// Read WAL content before closing (close deletes the WAL)
+		std::vector<uint8_t> walContent;
+		{
+			std::ifstream walIn(walPath, std::ios::binary);
+			ASSERT_TRUE(walIn.is_open()) << "WAL file should exist before close";
+			walContent.assign(std::istreambuf_iterator<char>(walIn),
+							  std::istreambuf_iterator<char>());
+		}
+		ASSERT_GT(walContent.size(), sizeof(WALFileHeader));
+
+		// Close DB — this deletes the WAL file
 		db.close();
+
+		// Restore WAL file to simulate a crash scenario
+		{
+			std::ofstream walOut(walPath, std::ios::binary | std::ios::trunc);
+			ASSERT_TRUE(walOut.is_open()) << "Should be able to write WAL file";
+			walOut.write(reinterpret_cast<const char *>(walContent.data()),
+						 static_cast<std::streamsize>(walContent.size()));
+		}
 	}
 
 	// Verify WAL file has data
-	std::string walPath = dbPath.string() + "-wal";
 	ASSERT_TRUE(fs::exists(walPath));
 	EXPECT_GT(fs::file_size(walPath), sizeof(WALFileHeader));
 
@@ -192,7 +211,26 @@ TEST_F(WALReplayTest, WALEntityRecordsHaveNonZeroDataSize) {
 		Node n(0, 88);
 		db.getStorage()->getDataManager()->addNode(n);
 		txn.commit();
+
+		// Read WAL content before closing (close deletes the WAL)
+		std::vector<uint8_t> walContent;
+		{
+			std::ifstream walIn(walPath, std::ios::binary);
+			ASSERT_TRUE(walIn.is_open()) << "WAL file should exist before close";
+			walContent.assign(std::istreambuf_iterator<char>(walIn),
+							  std::istreambuf_iterator<char>());
+		}
+		ASSERT_GT(walContent.size(), sizeof(WALFileHeader));
+
 		db.close();
+
+		// Restore WAL file to simulate a crash scenario
+		{
+			std::ofstream walOut(walPath, std::ios::binary | std::ios::trunc);
+			ASSERT_TRUE(walOut.is_open()) << "Should be able to write WAL file";
+			walOut.write(reinterpret_cast<const char *>(walContent.data()),
+						 static_cast<std::streamsize>(walContent.size()));
+		}
 	}
 
 	// Open WAL directly and verify ENTITY_WRITE records have data

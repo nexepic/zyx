@@ -34,7 +34,7 @@ class RegistryTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		dbPath = std::filesystem::temp_directory_path() / ("reg_test_" + to_string(uuid) + ".db");
+		dbPath = std::filesystem::temp_directory_path() / ("reg_test_" + to_string(uuid) + ".zyx");
 		database = std::make_unique<graph::Database>(dbPath.string());
 		database->open();
 

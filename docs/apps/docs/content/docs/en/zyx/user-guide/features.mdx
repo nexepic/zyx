@@ -322,7 +322,7 @@ Native API with `std::variant`-based value types, RAII transaction management, a
 ```cpp
 #include <zyx/zyx.hpp>
 
-zyx::Database db("./my.db");
+zyx::Database db("./my.zyx");
 db.open();
 
 // Parameterized query
@@ -346,7 +346,7 @@ Plain-C API for FFI integration with Python, Rust, Go, or any language with C in
 ```c
 #include <zyx/zyx_c_api.h>
 
-ZYXDB_T* db = zyx_open("./my.db");
+ZYXDB_T* db = zyx_open("./my.zyx");
 ZYXResult_T* res = zyx_execute(db, "MATCH (n:Person) RETURN n.name");
 
 while (zyx_result_next(res)) {

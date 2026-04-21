@@ -41,7 +41,7 @@ interface Dataset {
 const DATASETS: Dataset[] = [
   {
     label: "Game of Thrones",
-    dbFile: "/data/got.db",
+    dbFile: "/data/got.zyx",
     exampleQueries: [
       { label: "Full graph", query: "MATCH (a)-[r]->(b) RETURN a, r, b" },
       { label: "Stark family", query: "MATCH (c:Character)-[r:BELONGS_TO]->(h:House {name: 'Stark'}) RETURN c, r, h" },
@@ -55,7 +55,7 @@ const DATASETS: Dataset[] = [
   },
   {
     label: "IMDb Movies",
-    dbFile: "/data/imdb.db",
+    dbFile: "/data/imdb.zyx",
     exampleQueries: [
       { label: "Full graph", query: "MATCH (a)-[r]->(b) RETURN a, r, b LIMIT 200" },
       { label: "Nolan films", query: "MATCH (d:Person {name: 'Christopher Nolan'})-[r:DIRECTED]->(m:Movie) RETURN d, r, m" },
@@ -136,7 +136,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
       }
 
       setStatusMsg(isEn ? `Loading ${ds.label}...` : `加载 ${ds.label}...`);
-      const dbPath = `/playground_${dsIdx}.db`;
+      const dbPath = `/playground_${dsIdx}.zyx`;
 
       try { mod.FS.unlink(dbPath); } catch {}
 

@@ -33,7 +33,7 @@ protected:
 
 	void SetUp() override {
 		// Deterministic path to allow reopening
-		dbPath = std::filesystem::temp_directory_path() / "vim_persistence_test.db";
+		dbPath = std::filesystem::temp_directory_path() / "vim_persistence_test.zyx";
 		std::filesystem::remove_all(dbPath); // Clean start
 	}
 

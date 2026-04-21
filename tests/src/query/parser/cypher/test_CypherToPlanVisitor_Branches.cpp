@@ -28,7 +28,7 @@ protected:
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_cypher_visitor_" + boost::uuids::to_string(uuid) + ".db");
+		testFilePath = fs::temp_directory_path() / ("test_cypher_visitor_" + boost::uuids::to_string(uuid) + ".zyx");
 
 		storage = std::make_shared<graph::storage::FileStorage>(
 			testFilePath.string(), 4096, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
@@ -104,7 +104,7 @@ protected:
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_visitor_e2e_" + boost::uuids::to_string(uuid) + ".db");
+		testFilePath = fs::temp_directory_path() / ("test_visitor_e2e_" + boost::uuids::to_string(uuid) + ".zyx");
 		db = std::make_unique<graph::Database>(testFilePath.string());
 		db->open();
 	}

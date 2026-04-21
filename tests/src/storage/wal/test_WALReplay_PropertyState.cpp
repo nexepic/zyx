@@ -537,6 +537,8 @@ TEST_F(WALReplayTest, AllEntityTypesInSingleTransactionRecovery) {
 }
 
 TEST_F(WALReplayTest, InjectedWALRecordsReadableForAllEntityTypes) {
+	std::string walPath = dbPath.string() + "-wal";
+
 	// Phase 1: Create a clean DB with a committed node
 	{
 		Database db(dbPath.string());
@@ -546,9 +548,13 @@ TEST_F(WALReplayTest, InjectedWALRecordsReadableForAllEntityTypes) {
 		db.getStorage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
+		// db.close() deletes the WAL file; that is fine here since we want
+		// Phase 2 to inject fresh WAL records into a new WAL.
 	}
 
 	// Phase 2: Inject WAL records for ALL entity types (Property, Blob, Index, State)
+	// Save the WAL content before mgr.close() so Phase 2.5 and Phase 3 can read it.
+	std::vector<uint8_t> injectedWALContent;
 	{
 		WALManager mgr;
 		mgr.open(dbPath.string());
@@ -586,7 +592,25 @@ TEST_F(WALReplayTest, InjectedWALRecordsReadableForAllEntityTypes) {
 
 		mgr.writeCommit(txnId);
 		mgr.sync();
+
+		// Read WAL content before close (close deletes the WAL)
+		{
+			std::ifstream walIn(walPath, std::ios::binary);
+			ASSERT_TRUE(walIn.is_open()) << "WAL file should exist before mgr.close()";
+			injectedWALContent.assign(std::istreambuf_iterator<char>(walIn),
+									  std::istreambuf_iterator<char>());
+		}
+		ASSERT_GT(injectedWALContent.size(), sizeof(WALFileHeader));
+
 		mgr.close();
+
+		// Restore WAL so Phase 2.5 and Phase 3 can read the injected records
+		{
+			std::ofstream walOut(walPath, std::ios::binary | std::ios::trunc);
+			ASSERT_TRUE(walOut.is_open()) << "Should be able to write WAL file";
+			walOut.write(reinterpret_cast<const char *>(injectedWALContent.data()),
+						 static_cast<std::streamsize>(injectedWALContent.size()));
+		}
 	}
 
 	// Phase 2.5: Verify the WAL records are readable and contain all entity types
@@ -594,6 +618,16 @@ TEST_F(WALReplayTest, InjectedWALRecordsReadableForAllEntityTypes) {
 		WALManager mgr;
 		mgr.open(dbPath.string());
 		auto result = mgr.readRecords();
+
+		// Read and save WAL content again before mgr.close() deletes it
+		{
+			std::ifstream walIn(walPath, std::ios::binary);
+			if (walIn.is_open()) {
+				injectedWALContent.assign(std::istreambuf_iterator<char>(walIn),
+										  std::istreambuf_iterator<char>());
+			}
+		}
+
 		mgr.close();
 
 		ASSERT_FALSE(result.records.empty());
@@ -616,6 +650,15 @@ TEST_F(WALReplayTest, InjectedWALRecordsReadableForAllEntityTypes) {
 				<< "WAL should contain Index entity records";
 		EXPECT_TRUE(entityTypesFound.count(static_cast<uint8_t>(State::typeId)))
 				<< "WAL should contain State entity records";
+
+		// Restore WAL for Phase 3 (mgr.close() above deleted it)
+		if (!injectedWALContent.empty()) {
+			std::ofstream walOut(walPath, std::ios::binary | std::ios::trunc);
+			if (walOut.is_open()) {
+				walOut.write(reinterpret_cast<const char *>(injectedWALContent.data()),
+							 static_cast<std::streamsize>(injectedWALContent.size()));
+			}
+		}
 	}
 
 	// Phase 3: Reopen DB — WAL recovery should exercise replayAddOrModify for all 4 types

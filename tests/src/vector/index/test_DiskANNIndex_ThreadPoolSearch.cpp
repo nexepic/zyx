@@ -22,7 +22,7 @@ class DiskANNThreadPoolSearchTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		dbPath = std::filesystem::temp_directory_path() / ("ann_tp_" + to_string(uuid) + ".db");
+		dbPath = std::filesystem::temp_directory_path() / ("ann_tp_" + to_string(uuid) + ".zyx");
 		database = std::make_unique<graph::Database>(dbPath.string());
 		database->open();
 		dm = database->getStorage()->getDataManager();

@@ -21,6 +21,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -69,6 +70,8 @@ TEST_F(WALManagerTest, OpenCreatesWALFile) {
 
 	mgr.close();
 	EXPECT_FALSE(mgr.isOpen());
+	// close() removes the WAL file
+	EXPECT_FALSE(fs::exists(walPath));
 }
 
 TEST_F(WALManagerTest, DoubleOpenIsNoop) {
@@ -135,21 +138,19 @@ TEST_F(WALManagerTest, NeedsRecoveryFreshWAL) {
 }
 
 TEST_F(WALManagerTest, NeedsRecoveryWithRecords) {
-	{
-		WALManager mgr;
-		mgr.open(testDbPath.string());
+	WALManager mgr;
+	mgr.open(testDbPath.string());
 
-		mgr.writeBegin(1);
-		mgr.writeCommit(1);
-		mgr.sync();
-		mgr.close();
-	}
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.sync();
 
-	// Reopen and check
-	WALManager mgr2;
-	mgr2.open(testDbPath.string());
-	EXPECT_TRUE(mgr2.needsRecovery());
-	mgr2.close();
+	// While still open, WAL has records beyond header
+	EXPECT_TRUE(mgr.needsRecovery());
+
+	mgr.close();
+	// After close, WAL file is removed
+	EXPECT_FALSE(fs::exists(walPath));
 }
 
 TEST_F(WALManagerTest, CheckpointTruncatesWAL) {
@@ -255,7 +256,7 @@ TEST_F(WALManagerTest, WriteEntityChange_EmptyData) {
 	mgr.close();
 }
 
-TEST_F(WALManagerTest, ReopenExistingWAL) {
+TEST_F(WALManagerTest, ReopenAfterClose) {
 	{
 		WALManager mgr;
 		mgr.open(testDbPath.string());
@@ -265,10 +266,12 @@ TEST_F(WALManagerTest, ReopenExistingWAL) {
 		mgr.close();
 	}
 
+	// close() removes WAL; reopen creates a fresh one
+	EXPECT_FALSE(fs::exists(walPath));
 	WALManager mgr2;
 	mgr2.open(testDbPath.string());
 	EXPECT_TRUE(mgr2.isOpen());
-	EXPECT_TRUE(mgr2.needsRecovery());
+	EXPECT_FALSE(mgr2.needsRecovery());
 	mgr2.writeBegin(2);
 	mgr2.writeCommit(2);
 	mgr2.close();
@@ -782,33 +785,24 @@ TEST_F(WALManagerTest, WriteEntityChange_ZeroLengthSerializedData) {
 
 // Test open on existing WAL file (exercises the exists==true branch at line 37)
 // followed by writing and checkpoint to exercise full lifecycle
-TEST_F(WALManagerTest, OpenExistingWALAndFullLifecycle) {
-	// First create and close a WAL
-	{
-		WALManager mgr;
-		mgr.open(testDbPath.string());
-		mgr.writeBegin(1);
-		mgr.writeCommit(1);
-		mgr.sync();
-		mgr.close();
-	}
+TEST_F(WALManagerTest, OpenAndFullLifecycle) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+	EXPECT_TRUE(mgr.isOpen());
+	EXPECT_FALSE(mgr.needsRecovery());
 
-	// Now reopen the existing WAL (exercises the exists==true path)
-	WALManager mgr2;
-	mgr2.open(testDbPath.string());
-	EXPECT_TRUE(mgr2.isOpen());
-	EXPECT_TRUE(mgr2.needsRecovery());
-
-	// Write more records, checkpoint, verify
-	mgr2.writeBegin(2);
+	// Write records, checkpoint, verify
+	mgr.writeBegin(1);
 	std::vector<uint8_t> payload = {0x01, 0x02};
-	mgr2.writeEntityChange(2, 0, 0, 10, payload);
-	mgr2.writeCommit(2);
-	mgr2.sync();
+	mgr.writeEntityChange(1, 0, 0, 10, payload);
+	mgr.writeCommit(1);
+	mgr.sync();
 
-	mgr2.checkpoint();
-	EXPECT_FALSE(mgr2.needsRecovery());
-	mgr2.close();
+	EXPECT_TRUE(mgr.needsRecovery());
+	mgr.checkpoint();
+	EXPECT_FALSE(mgr.needsRecovery());
+	mgr.close();
+	EXPECT_FALSE(fs::exists(walPath));
 }
 
 // Test destructor closes WAL properly when records are present
@@ -820,11 +814,13 @@ TEST_F(WALManagerTest, DestructorWithPendingRecords) {
 		mgr.writeCommit(1);
 		// Don't close explicitly; destructor should handle it
 	}
-	// Verify file still exists and can be reopened
-	EXPECT_TRUE(fs::exists(walPath));
+	// Destructor calls close() which removes the WAL file
+	EXPECT_FALSE(fs::exists(walPath));
+
+	// Reopening creates a fresh WAL with no recovery needed
 	WALManager mgr2;
 	mgr2.open(testDbPath.string());
-	EXPECT_TRUE(mgr2.needsRecovery());
+	EXPECT_FALSE(mgr2.needsRecovery());
 	mgr2.close();
 }
 
@@ -888,81 +884,90 @@ TEST_F(WALManagerTest, ReadRecords_EntityChangeWithData) {
 }
 
 TEST_F(WALManagerTest, ReadRecords_CorruptedChecksum) {
-	WALManager mgr;
-	mgr.open(testDbPath.string());
-
-	mgr.writeBegin(1);
-	std::vector<uint8_t> data = {0xAA, 0xBB, 0xCC};
-	mgr.writeEntityChange(1, 0, 0, 10, data);
-	mgr.writeCommit(1);
-	mgr.sync();
-	mgr.close();
-
-	// Corrupt the data payload of the entity write record
-	// File layout: [32-byte file header] [BEGIN record header] [ENTITY_WRITE record header + data] [COMMIT record header]
-	// BEGIN record: sizeof(WALRecordHeader) with no data
-	// We corrupt a byte in the entity write data section
+	// Simulate crash scenario: write records, save WAL content, close (removes WAL),
+	// then restore the WAL file with corruption for recovery testing
+	std::string walContent;
 	{
-		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
-		// Seek past file header + BEGIN record header + ENTITY_WRITE record header
-		auto corruptPos = static_cast<std::streamoff>(
-			sizeof(WALFileHeader) + sizeof(WALRecordHeader) + sizeof(WALRecordHeader) + 1);
-		f.seekp(corruptPos);
-		char garbage = 0xFF;
-		f.write(&garbage, 1);
-		f.flush();
+		WALManager mgr;
+		mgr.open(testDbPath.string());
+		mgr.writeBegin(1);
+		std::vector<uint8_t> data = {0xAA, 0xBB, 0xCC};
+		mgr.writeEntityChange(1, 0, 0, 10, data);
+		mgr.writeCommit(1);
+		mgr.sync();
+
+		// Read WAL file content before close deletes it
+		std::ifstream in(walPath, std::ios::binary);
+		walContent.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	}
+
+	// Restore WAL file and corrupt a byte in the entity write data section
+	{
+		auto corruptPos = sizeof(WALFileHeader) + sizeof(WALRecordHeader) + sizeof(WALRecordHeader) + 1;
+		if (corruptPos < walContent.size()) {
+			walContent[corruptPos] = static_cast<char>(0xFF);
+		}
+		std::ofstream out(walPath, std::ios::binary);
+		out.write(walContent.data(), static_cast<std::streamsize>(walContent.size()));
 	}
 
 	WALManager mgr2;
 	mgr2.open(testDbPath.string());
 	auto result = mgr2.readRecords();
-	// Should detect corruption at the entity write record
 	EXPECT_TRUE(result.corrupted);
-	// BEGIN record should have been read successfully before the corrupt one
 	EXPECT_EQ(result.records.size(), 1U);
 	mgr2.close();
 }
 
 TEST_F(WALManagerTest, ReadRecords_TruncatedRecord) {
-	WALManager mgr;
-	mgr.open(testDbPath.string());
+	std::string walContent;
+	{
+		WALManager mgr;
+		mgr.open(testDbPath.string());
+		mgr.writeBegin(1);
+		std::vector<uint8_t> data(64, 0x42);
+		mgr.writeEntityChange(1, 0, 0, 99, data);
+		mgr.writeCommit(1);
+		mgr.sync();
 
-	mgr.writeBegin(1);
-	std::vector<uint8_t> data(64, 0x42);
-	mgr.writeEntityChange(1, 0, 0, 99, data);
-	mgr.writeCommit(1);
-	mgr.sync();
-	mgr.close();
+		std::ifstream in(walPath, std::ios::binary);
+		walContent.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	}
 
-	// Truncate the file to cut off the commit record mid-way
-	auto fileSize = fs::file_size(walPath);
-	fs::resize_file(walPath, fileSize - 5);
+	// Restore WAL file but truncated (cut off last 5 bytes)
+	{
+		std::ofstream out(walPath, std::ios::binary);
+		out.write(walContent.data(), static_cast<std::streamsize>(walContent.size()) - 5);
+	}
 
 	WALManager mgr2;
 	mgr2.open(testDbPath.string());
 	auto result = mgr2.readRecords();
-	// The last record (commit) is truncated, but BEGIN and ENTITY should be fine
 	EXPECT_EQ(result.records.size(), 2U);
-	EXPECT_FALSE(result.corrupted); // just ran out of data, not CRC corruption
+	EXPECT_FALSE(result.corrupted);
 	mgr2.close();
 }
 
 TEST_F(WALManagerTest, ReadRecords_CorruptedRecordSize) {
-	WALManager mgr;
-	mgr.open(testDbPath.string());
-
-	mgr.writeBegin(1);
-	mgr.writeCommit(1);
-	mgr.sync();
-	mgr.close();
-
-	// Corrupt the recordSize field of the first record to be impossibly large
+	std::string walContent;
 	{
-		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
-		f.seekp(static_cast<std::streamoff>(sizeof(WALFileHeader)));
+		WALManager mgr;
+		mgr.open(testDbPath.string());
+		mgr.writeBegin(1);
+		mgr.writeCommit(1);
+		mgr.sync();
+
+		std::ifstream in(walPath, std::ios::binary);
+		walContent.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	}
+
+	// Restore WAL with corrupted recordSize field
+	{
+		auto pos = sizeof(WALFileHeader);
 		uint32_t badSize = 0xFFFFFFFF;
-		f.write(reinterpret_cast<const char *>(&badSize), sizeof(badSize));
-		f.flush();
+		std::memcpy(&walContent[pos], &badSize, sizeof(badSize));
+		std::ofstream out(walPath, std::ios::binary);
+		out.write(walContent.data(), static_cast<std::streamsize>(walContent.size()));
 	}
 
 	WALManager mgr2;
@@ -974,21 +979,25 @@ TEST_F(WALManagerTest, ReadRecords_CorruptedRecordSize) {
 }
 
 TEST_F(WALManagerTest, ReadRecords_CorruptedRecordSizeTooSmall) {
-	WALManager mgr;
-	mgr.open(testDbPath.string());
-
-	mgr.writeBegin(1);
-	mgr.writeCommit(1);
-	mgr.sync();
-	mgr.close();
-
-	// Set recordSize to less than sizeof(WALRecordHeader)
+	std::string walContent;
 	{
-		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
-		f.seekp(static_cast<std::streamoff>(sizeof(WALFileHeader)));
-		uint32_t badSize = 1; // Way too small
-		f.write(reinterpret_cast<const char *>(&badSize), sizeof(badSize));
-		f.flush();
+		WALManager mgr;
+		mgr.open(testDbPath.string());
+		mgr.writeBegin(1);
+		mgr.writeCommit(1);
+		mgr.sync();
+
+		std::ifstream in(walPath, std::ios::binary);
+		walContent.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	}
+
+	// Restore WAL with recordSize too small
+	{
+		auto pos = sizeof(WALFileHeader);
+		uint32_t badSize = 1;
+		std::memcpy(&walContent[pos], &badSize, sizeof(badSize));
+		std::ofstream out(walPath, std::ios::binary);
+		out.write(walContent.data(), static_cast<std::streamsize>(walContent.size()));
 	}
 
 	WALManager mgr2;
@@ -1000,22 +1009,24 @@ TEST_F(WALManagerTest, ReadRecords_CorruptedRecordSizeTooSmall) {
 }
 
 TEST_F(WALManagerTest, ReadRecords_NonZeroChecksumOnEmptyData) {
-	WALManager mgr;
-	mgr.open(testDbPath.string());
-
-	mgr.writeBegin(1);
-	mgr.sync();
-	mgr.close();
-
-	// Corrupt the checksum of the BEGIN record (which has no data, so checksum should be 0)
+	std::string walContent;
 	{
-		std::fstream f(walPath, std::ios::binary | std::ios::in | std::ios::out);
-		// checksum is at offset: recordSize(4) + txnId(8) + type(1) = 13 bytes into the record header
-		auto checksumOffset = static_cast<std::streamoff>(sizeof(WALFileHeader) + offsetof(WALRecordHeader, checksum));
-		f.seekp(checksumOffset);
+		WALManager mgr;
+		mgr.open(testDbPath.string());
+		mgr.writeBegin(1);
+		mgr.sync();
+
+		std::ifstream in(walPath, std::ios::binary);
+		walContent.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+	}
+
+	// Restore WAL with corrupted checksum on BEGIN record
+	{
+		auto checksumOffset = sizeof(WALFileHeader) + offsetof(WALRecordHeader, checksum);
 		uint32_t badChecksum = 0xDEADBEEF;
-		f.write(reinterpret_cast<const char *>(&badChecksum), sizeof(badChecksum));
-		f.flush();
+		std::memcpy(&walContent[checksumOffset], &badChecksum, sizeof(badChecksum));
+		std::ofstream out(walPath, std::ios::binary);
+		out.write(walContent.data(), static_cast<std::streamsize>(walContent.size()));
 	}
 
 	WALManager mgr2;
@@ -1151,6 +1162,8 @@ TEST_F(WALManagerTest, NeedsRecoveryClosedManagerReturnsFalse) {
 
 	// After close, isOpen_ = false => needsRecovery returns false
 	EXPECT_FALSE(mgr.needsRecovery());
+	// WAL file is also removed
+	EXPECT_FALSE(fs::exists(walPath));
 }
 
 // Cover line 159: checkpoint truncate reopen path
@@ -1430,4 +1443,80 @@ TEST_F(WALManagerTest, GroupCommitSetters) {
 	mgr.writeBegin(1);
 	mgr.writeCommit(1);
 	mgr.close();
+}
+
+// ============================================================================
+// WAL file removal on close() tests
+// ============================================================================
+
+TEST_F(WALManagerTest, CloseRemovesWALFile_FreshWAL) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+	EXPECT_TRUE(fs::exists(walPath));
+
+	mgr.close();
+	EXPECT_FALSE(fs::exists(walPath));
+}
+
+TEST_F(WALManagerTest, CloseRemovesWALFile_WithCommittedRecords) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	std::vector<uint8_t> data = {0x01, 0x02, 0x03};
+	mgr.writeEntityChange(1, 0, 0, 42, data);
+	mgr.writeCommit(1);
+	mgr.sync();
+
+	EXPECT_TRUE(fs::exists(walPath));
+	EXPECT_TRUE(mgr.needsRecovery());
+
+	mgr.close();
+	EXPECT_FALSE(fs::exists(walPath));
+}
+
+TEST_F(WALManagerTest, CloseRemovesWALFile_AfterCheckpoint) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.sync();
+	mgr.checkpoint();
+
+	// After checkpoint, WAL exists but is empty (header only)
+	EXPECT_TRUE(fs::exists(walPath));
+	EXPECT_FALSE(mgr.needsRecovery());
+
+	mgr.close();
+	// close() still removes the WAL file
+	EXPECT_FALSE(fs::exists(walPath));
+}
+
+TEST_F(WALManagerTest, CloseRemovesWALFile_ReopenCreatesNew) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+	mgr.writeBegin(1);
+	mgr.writeCommit(1);
+	mgr.close();
+
+	EXPECT_FALSE(fs::exists(walPath));
+
+	// Reopen should create a fresh WAL
+	mgr.open(testDbPath.string());
+	EXPECT_TRUE(fs::exists(walPath));
+	EXPECT_FALSE(mgr.needsRecovery());
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, DestructorRemovesWALFile) {
+	{
+		WALManager mgr;
+		mgr.open(testDbPath.string());
+		mgr.writeBegin(1);
+		mgr.writeCommit(1);
+		mgr.sync();
+		// destructor calls close()
+	}
+	EXPECT_FALSE(fs::exists(walPath));
 }

@@ -322,7 +322,7 @@ flowchart TB
 ```cpp
 #include <zyx/zyx.hpp>
 
-zyx::Database db("./my.db");
+zyx::Database db("./my.zyx");
 db.open();
 
 // 参数化查询
@@ -346,7 +346,7 @@ db.close();
 ```c
 #include <zyx/zyx_c_api.h>
 
-ZYXDB_T* db = zyx_open("./my.db");
+ZYXDB_T* db = zyx_open("./my.zyx");
 ZYXResult_T* res = zyx_execute(db, "MATCH (n:Person) RETURN n.name");
 
 while (zyx_result_next(res)) {
