@@ -140,7 +140,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
       try { mod.FS.unlink(dbPath); } catch {}
 
-      const dbResp = await fetch(ds.dbFile);
+      const dbResp = await fetch(`${WASM_BASE_PATH}${ds.dbFile}`);
       if (!dbResp.ok) throw new Error(`Failed to fetch ${ds.dbFile}: ${dbResp.status}`);
 
       const dbData = new Uint8Array(await dbResp.arrayBuffer());
