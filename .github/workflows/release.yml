@@ -92,6 +92,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
+          New-Item -ItemType Directory -Force -Path "..\dist" | Out-Null
           $DIST_PATH = (Resolve-Path "..\dist").Path
 
           meson setup . .. `
