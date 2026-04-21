@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generator": "create-nexdoc",
-  "templateVersion": "0.6.0",
-  "generatedAt": "2026-04-16T15:51:08.487Z",
+  "templateVersion": "0.5.0",
+  "generatedAt": "2026-04-21T02:41:30.399Z",
   "files": {
     "README.md": "f559c51c4111de8a5bb4e92d8426e6e91f774654444b4b9ae09c0ff9ebd72efe",
     "apps/docs/.eslintrc.js": "60cec77792b2becce88a014b8e3a1a1a812c111652c011b548d9070e3c5f1d27",
