@@ -72,15 +72,15 @@ jobs:
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
 
-      - name: Install zyxdb (editable, Unix)
+      - name: Install zyxdb (Unix)
         if: runner.os != 'Windows'
-        run: PKG_CONFIG_PATH=$PWD/buildDir pip install -e "bindings/python[test]"
+        run: PKG_CONFIG_PATH=$PWD/buildDir pip install "bindings/python[test]"
 
-      - name: Install zyxdb (editable, Windows)
+      - name: Install zyxdb (Windows)
         if: runner.os == 'Windows'
         run: |
           $env:PKG_CONFIG_PATH = "$PWD\buildDir"
-          pip install -e "bindings/python[test]"
+          pip install "bindings/python[test]"
         shell: pwsh
 
       - name: Run tests
