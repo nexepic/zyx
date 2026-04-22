@@ -13,6 +13,8 @@ on:
       - 'bindings/python/**'
       - 'include/**'
       - 'src/**'
+  release:
+    types: [published]
 
 jobs:
   test:
@@ -87,9 +89,9 @@ jobs:
           python -m pytest tests/ -v
 
   build-wheels:
-    name: Build wheels
+    name: Build wheels on ${{ matrix.os }}
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'release'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -116,9 +118,96 @@ jobs:
             conan profile detect &&
             mkdir -p buildDir &&
             conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+          CIBW_BEFORE_ALL_MACOS: >
+            brew install pkg-config &&
+            pip install conan meson ninja &&
+            conan profile detect &&
+            mkdir -p buildDir &&
+            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+          CIBW_BEFORE_ALL_WINDOWS: >
+            choco install pkgconfiglite --allow-empty-checksums &&
+            choco install llvm --version=20.1.4 --force &&
+            pip install conan meson ninja &&
+            conan profile detect &&
+            mkdir -p buildDir &&
+            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
+
+  build-sdist:
+    name: Build sdist
+    needs: test
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build sdist
+        run: pip install build && python -m build --sdist bindings/python --outdir dist/
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Download sdist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  upload-release-assets:
+    name: Upload release assets
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Download sdist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist/
+
+      - name: Upload assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --repo "${{ github.repository }}"
