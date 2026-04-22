@@ -129,6 +129,41 @@ zyx import \
 导入命令的完整参数说明请参考 [导入与导出](import-export) 章节。
 :::
 
+## 7) Python 快速开始
+
+如果你更喜欢使用 Python，可以安装 `zyxdb` 包并以编程方式操作 ZYX：
+
+```bash
+pip install zyxdb
+```
+
+```python
+import zyxdb
+
+with zyxdb.Database("/tmp/demo.zyx") as db:
+    # 创建节点（返回节点 ID）
+    alice = db.create_node("User", {"name": "Alice", "age": 30})
+    bob = db.create_node("User", {"name": "Bob", "age": 25})
+
+    # 创建边
+    db.create_edge(alice, bob, "KNOWS", {"since": 2026})
+
+    # 使用 Cypher 查询
+    for row in db.execute(
+        "MATCH (a:User)-[r:KNOWS]->(b:User) "
+        "RETURN a.name AS src, b.name AS dst, r.since AS since"
+    ):
+        print(f"{row['src']} 认识 {row['dst']}，自 {row['since']} 年")
+
+    # 标量查询
+    count = db.execute("MATCH (n) RETURN count(n) AS c").scalar()
+    print(f"总节点数: {count}")
+```
+
+:::tip
+完整的 Python API 参考请查看 [Python API 参考](../api/python-api)。
+:::
+
 ## 快速排障
 
 | 现象 | 常见原因 | 处理建议 |

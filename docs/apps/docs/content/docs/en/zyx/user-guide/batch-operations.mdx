@@ -19,7 +19,7 @@ flowchart TD
   A[Need batch write] --> B{Data source}
   B -->|In-memory rows| C[UNWIND + transaction]
   B -->|CSV file| D[LOAD CSV or CLI import]
-  B -->|Application service| E[C++/C API bulk methods]
+  B -->|Application service| E[C++/Python/C API bulk methods]
   C --> F{Data volume very large?}
   F -->|Yes| G[CALL subquery IN TRANSACTIONS]
   F -->|No| H[Single explicit transaction]
@@ -66,16 +66,43 @@ zyx database exec ./demo.zyx ./batch.cypher
 
 ## Pattern D: Native Bulk APIs
 
-Prefer native C++ APIs for extreme throughput:
+### C++
+
+All create methods now return IDs for maximum flexibility:
 
 | Method | Description |
 |---|---|
-| `Database::createNodes(label, propsList)` | Batch-create nodes with the same label |
-| `Database::createNodeRetId(label, props)` | Create a node and immediately return its internal ID |
-| `Database::createEdgeById(srcId, dstId, type, props)` | Create an edge by ID directly, O(1) complexity |
+| `Database::createNode(label, props)` | Create a node and return its ID |
+| `Database::createNodes(label, propsList)` | Batch-create nodes, returns list of IDs |
+| `Database::createEdge(srcId, dstId, type, props)` | Create an edge by ID, returns edge ID |
+| `Database::createEdges(edges)` | Batch-create edges, returns list of edge IDs |
 
 :::tip
-`createEdgeById` bypasses query parsing and index lookups, directly creating edges by internal ID — the most efficient way to create edges.
+`createEdge` bypasses query parsing and index lookups, directly creating edges by internal ID — the most efficient way to create edges.
+:::
+
+### Python
+
+```python
+import zyxdb
+
+with zyxdb.Database("/tmp/bulk.zyx") as db:
+    # Batch create nodes (returns list of IDs)
+    ids = db.create_nodes("User", [
+        {"name": "Alice", "age": 30},
+        {"name": "Bob", "age": 25},
+        {"name": "Charlie", "age": 35},
+    ])
+
+    # Batch create edges (returns list of edge IDs)
+    edge_ids = db.create_edges("KNOWS", [
+        (ids[0], ids[1], {"since": 2020}),
+        (ids[1], ids[2], None),
+    ])
+```
+
+:::tip
+For the full Python bulk API reference, see [Python API Reference](../api/python-api#high-performance-write-apis).
 :::
 
 ## Operational Checklist

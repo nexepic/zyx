@@ -87,47 +87,42 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 
 ### 高性能写入 API
 
-这些方法绕过 Cypher 解析器，吞吐量最大：
+这些方法绕过 Cypher 解析器，吞吐量最大。所有创建方法均返回 ID。
 
 ```cpp
-// 创建单标签节点
-db.createNode("Person", {{"name", std::string("Alice")}, {"age", int64_t(30)}});
+// 创建单标签节点（返回节点 ID）
+int64_t aliceId = db.createNode("Person",
+    {{"name", std::string("Alice")}, {"age", int64_t(30)}});
 
 // 创建多标签节点
-db.createNode(std::vector<std::string>{"Person", "Employee"},
-              {{"name", std::string("Bob")}, {"salary", int64_t(50000)}});
+int64_t empId = db.createNode(
+    std::vector<std::string>{"Person", "Employee"},
+    {{"name", std::string("Bob")}, {"salary", int64_t(50000)}});
 
-// 创建节点并获取内部 ID
-int64_t aliceId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
-
-// 批量创建节点
-db.createNodes("Person", {
+// 批量创建节点（返回 ID 列表）
+auto ids = db.createNodes("Person", {
     {{"name", std::string("Alice")}, {"age", int64_t(30)}},
     {{"name", std::string("Bob")}, {"age", int64_t(25)}},
 });
 
-// 通过属性查找源/目标节点创建边
-db.createEdge(
-    "Person", "name", std::string("Alice"),   // 源：name = Alice 的 Person
-    "Person", "name", std::string("Bob"),      // 目标：name = Bob 的 Person
-    "KNOWS",                                    // 边类型
-    {{"since", int64_t(2020)}}                  // 边属性
-);
+// 通过节点 ID 创建边（返回边 ID）
+int64_t edgeId = db.createEdge(aliceId, empId, "KNOWS",
+    {{"since", int64_t(2020)}});
 
-// 通过内部 ID 创建边（最快）
-int64_t src = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
-int64_t tgt = db.createNodeRetId("Person", {{"name", std::string("Bob")}});
-db.createEdgeById(src, tgt, "KNOWS", {});
+// 批量创建边（返回边 ID 列表）
+auto edgeIds = db.createEdges({
+    {id1, id2, "FOLLOWS", {{"weight", 1.0}}},
+    {id2, id3, "FOLLOWS", {}},
+});
 ```
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createNode` | `void createNode(const string& label, const unordered_map<string, Value>& props) const` | 创建单标签节点 |
-| `createNode` | `void createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | 创建多标签节点 |
-| `createNodes` | `void createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | 批量创建同标签节点 |
-| `createNodeRetId` | `int64_t createNodeRetId(const string& label, const unordered_map<string, Value>& props = {}) const` | 创建节点并返回内部 ID |
-| `createEdge` | `void createEdge(srcLabel, srcKey, srcVal, tgtLabel, tgtKey, tgtVal, edgeType, props) const` | 通过属性查找节点创建边 |
-| `createEdgeById` | `void createEdgeById(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过内部 ID 创建边（最快） |
+| `createNode` | `int64_t createNode(const string& label, const unordered_map<string, Value>& props) const` | 创建单标签节点，返回节点 ID |
+| `createNode` | `int64_t createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | 创建多标签节点，返回节点 ID |
+| `createNodes` | `vector<int64_t> createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | 批量创建同标签节点，返回 ID 列表 |
+| `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过节点 ID 创建边，返回边 ID |
+| `createEdges` | `vector<int64_t> createEdges(const vector<tuple<int64_t, int64_t, string, unordered_map<string, Value>>>& edges) const` | 批量创建边，返回边 ID 列表 |
 
 ### 图算法
 

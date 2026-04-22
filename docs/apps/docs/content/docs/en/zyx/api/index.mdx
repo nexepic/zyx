@@ -16,7 +16,8 @@ ZYX exposes two embedding interfaces — a modern C++ API and a C-compatible API
 ## Which API to use?
 
 - **C++ API** (`include/zyx/zyx.hpp`) — Use when developing in C++20. Offers type-safe values, RAII transaction management, and a fluent `QueryBuilder`.
-- **C API** (`include/zyx/zyx_c_api.h`) — Use when building Rust, Go, Node.js, Python, or WASM bindings. Opaque handles with explicit lifecycle management.
+- **Python API** (`pip install zyxdb`) — Use when developing in Python. Provides Pythonic interface with context managers, iterators, and pandas integration.
+- **C API** (`include/zyx/zyx_c_api.h`) — Use when building Rust, Go, Node.js, or WASM bindings. Opaque handles with explicit lifecycle management.
 
 ## Sections
 
@@ -26,6 +27,10 @@ ZYX exposes two embedding interfaces — a modern C++ API and a C-compatible API
 - [Transaction API](transaction) — Explicit transactions, read-only transactions, Cypher transaction statements
 - [Type System](types) — `Value`, `Node`, `Edge`, `PropertyValue`, `ResultValue`
 - [Error Handling](errors) — Exception-based vs. Result-based error reporting
+
+### Python API
+
+- [Python API Reference](python-api) — `Database`, `Transaction`, `Result`, `Record`, high-performance write methods
 
 ### C API
 

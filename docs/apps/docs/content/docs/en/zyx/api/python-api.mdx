@@ -1,0 +1,363 @@
+---
+title: Python API Reference
+description: Complete reference for the ZYX Python API — Database, Transaction, Result, Record, and high-performance write methods.
+category: Python API
+categoryOrder: 4
+order: 9
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Python API Reference
+
+Package: `zyxdb` (PEP 561 typed)
+
+## Installation
+
+```bash
+pip install zyxdb
+```
+
+## Database
+
+`zyxdb.Database` is the main entry point.
+
+### Construction & Lifecycle
+
+```python
+import zyxdb
+
+# Open (creates if not exists)
+db = zyxdb.Database("/path/to/db")
+
+# Open only if exists
+db = zyxdb.Database("/path/to/db", open=False)
+opened = db.open_if_exists()  # Returns bool
+
+# Context manager (auto-closes on exit)
+with zyxdb.Database("/tmp/mydb") as db:
+    db.execute("CREATE (n:Person {name: 'Alice'})")
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| Constructor | `Database(path: str, *, open: bool = True)` | Create and optionally open a database. |
+| `open` | `open() -> None` | Open the database (creates file if not exists). |
+| `open_if_exists` | `open_if_exists() -> bool` | Open only if the file exists. Returns `False` if not found. |
+| `close` | `close() -> None` | Flush and close the database. |
+| `save` | `save() -> None` | Flush dirty data to disk without closing. |
+
+### Query Execution
+
+```python
+# Auto-commit query
+result = db.execute("CREATE (n:Person {name: 'Alice', age: 30})")
+
+# Parameterized query (keyword arguments)
+result = db.execute(
+    "MATCH (n:Person) WHERE n.name = $name RETURN n.age AS age",
+    name="Alice"
+)
+
+# Iterate results — yields Record objects
+for row in result:
+    print(row["age"])       # Access by column name
+    print(row[0])           # Access by column index
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `execute` | `execute(cypher: str, **params) -> Result` | Execute a Cypher query with optional keyword parameters. |
+
+### Transactions
+
+```python
+# Write transaction — auto-commits on normal exit
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    tx.execute("CREATE (n:Person {name: 'Bob'})")
+    # auto-commits here
+
+# Explicit rollback
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Temp'})")
+    tx.rollback()
+
+# Auto-rollback on exception
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    raise ValueError("oops")  # auto-rolls back
+
+# Read-only transaction (snapshot isolation)
+with db.begin_read_only_transaction() as tx:
+    rows = list(tx.execute("MATCH (n:Person) RETURN n.name AS name"))
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `begin_transaction` | `begin_transaction() -> Transaction` | Begin a read-write transaction. |
+| `begin_read_only_transaction` | `begin_read_only_transaction() -> Transaction` | Begin a read-only transaction with snapshot isolation. |
+| `has_active_transaction` | `@property -> bool` | Whether there is an active transaction. |
+
+### High-Performance Write APIs
+
+These bypass the Cypher parser for maximum throughput. All create methods return IDs.
+
+```python
+# Create a node (returns node ID)
+alice_id = db.create_node("Person", {"name": "Alice", "age": 30})
+
+# Create a node with multiple labels
+emp_id = db.create_node(["Person", "Employee"], {"name": "Bob"})
+
+# Batch create nodes (returns list of IDs)
+ids = db.create_nodes("Person", [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35},
+])
+
+# Create an edge by node IDs (returns edge ID)
+edge_id = db.create_edge(alice_id, emp_id, "KNOWS", {"since": 2020})
+
+# Batch create edges (returns list of IDs)
+edge_ids = db.create_edges("FOLLOWS", [
+    (id1, id2, {"weight": 1.0}),
+    (id2, id3, None),            # No properties
+])
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `create_node` | `create_node(label: str \| list[str], props: dict \| None = None) -> int` | Create a node and return its internal ID. |
+| `create_nodes` | `create_nodes(label: str, props_list: list[dict]) -> list[int]` | Batch-create nodes with the same label. Returns list of IDs. |
+| `create_edge` | `create_edge(src_id: int, dst_id: int, edge_type: str, props: dict \| None = None) -> int` | Create an edge by node IDs. Returns edge ID. |
+| `create_edges` | `create_edges(edge_type: str, edges: list[tuple]) -> list[int]` | Batch-create edges. Each tuple is `(src_id, dst_id, props_or_None)`. Returns list of IDs. |
+
+### Graph Algorithms
+
+```python
+# Shortest path — returns list of Node objects
+path = db.get_shortest_path(start_id, end_id, max_depth=15)
+for node in path:
+    print(node.id, node.labels, node.properties)
+
+# Breadth-first search
+visited = []
+db.bfs(start_id, lambda node: (visited.append(node["id"]), True)[1])
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get_shortest_path` | `get_shortest_path(start_id: int, end_id: int, max_depth: int = 15) -> list[Node]` | Find shortest path. Returns list of `Node` objects. |
+| `bfs` | `bfs(start_id: int, visitor: Callable) -> None` | Breadth-first traversal. Visitor receives a node dict; return `True` to continue, `False` to stop. |
+
+### Configuration
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `set_thread_pool_size` | `set_thread_pool_size(size: int) -> None` | Resize the thread pool (0=auto). |
+
+## Transaction
+
+`zyxdb.Transaction` provides ACID transaction semantics with context manager support.
+
+The `__exit__` behavior:
+- **Normal exit** (no exception) — auto-commits if still active.
+- **Exception** — auto-rolls back if still active.
+
+```python
+# Auto-commit pattern (recommended)
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    # Commits automatically on exit
+
+# Explicit commit (also valid)
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    tx.commit()  # Already committed; __exit__ is a no-op
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `execute` | `execute(cypher: str, **params) -> Result` | Execute a Cypher query within this transaction. |
+| `commit` | `commit() -> None` | Commit the transaction. |
+| `rollback` | `rollback() -> None` | Roll back the transaction. |
+| `is_active` | `@property -> bool` | Whether the transaction is still active. |
+| `is_read_only` | `@property -> bool` | Whether this is a read-only transaction. |
+
+## Result
+
+`zyxdb.Result` wraps query output with Pythonic iteration and convenience methods.
+
+```python
+result = db.execute("MATCH (n:Person) RETURN n.name AS name, n.age AS age")
+
+# Iterate as Record objects
+for row in result:
+    print(row["name"], row["age"])
+
+# Or use convenience methods
+result = db.execute("MATCH (n:Person) RETURN n.name AS name")
+all_rows = result.fetchall()
+one_row = result.fetchone()
+first_n = result.fetchmany(10)
+
+# Single row (raises ValueError if not exactly 1 row)
+row = db.execute("MATCH (n:Person {name: 'Alice'}) RETURN n.age AS age").single()
+
+# Scalar value (first column of first row)
+count = db.execute("MATCH (n:Person) RETURN count(n) AS c").scalar()
+
+# All rows as list of dicts
+data = result.data()
+
+# Convert to pandas DataFrame (requires pandas)
+df = result.to_df()
+```
+
+| Method / Property | Signature | Description |
+|-------------------|-----------|-------------|
+| `columns` | `@property -> list[str]` | Column names from the result set. |
+| `is_success` | `@property -> bool` | Whether the query executed successfully. |
+| `error` | `@property -> str \| None` | Error message, or `None` if successful. |
+| `duration` | `@property -> float` | Query execution duration in milliseconds. |
+| `__iter__` | `-> Iterator[Record]` | Iterate rows as `Record` objects. |
+| `fetchone` | `fetchone() -> Record \| None` | Fetch the next row, or `None` if exhausted. |
+| `fetchall` | `fetchall() -> list[Record]` | Fetch all remaining rows. |
+| `fetchmany` | `fetchmany(size: int) -> list[Record]` | Fetch up to `size` rows. |
+| `single` | `single(strict: bool = True) -> Record` | Return the single result row. Raises `ValueError` if not exactly 1 row. |
+| `scalar` | `scalar() -> Any` | Return the first column of the first row. |
+| `data` | `data() -> list[dict]` | Return all rows as a list of dicts. |
+| `to_df` | `to_df() -> pandas.DataFrame` | Convert to pandas DataFrame (lazy import). |
+
+## Record
+
+`zyxdb.Record` represents a single row from a query result. Supports dict-like access.
+
+```python
+for row in db.execute("MATCH (n:Person) RETURN n.name AS name, n.age AS age"):
+    # Access by column name
+    name = row["name"]
+
+    # Access by column index
+    first_col = row[0]
+
+    # Safe access with default
+    city = row.get("city", "unknown")
+
+    # Metadata
+    keys = row.keys()      # ["name", "age"]
+    vals = row.values()    # ["Alice", 30]
+    d = row.data()         # {"name": "Alice", "age": 30}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `__getitem__` | `[key: str \| int] -> Any` | Access by column name or index. |
+| `get` | `get(key: str, default=None) -> Any` | Safe access with default value. |
+| `keys` | `keys() -> list[str]` | Return column names. |
+| `values` | `values() -> list[Any]` | Return values in column order. |
+| `data` | `data() -> dict` | Return the row as a dict. |
+
+## Types
+
+### Node
+
+```python
+@dataclass
+class Node:
+    id: int
+    labels: list[str]
+    properties: dict[str, Any]
+
+    @property
+    def label(self) -> str:
+        """Primary label (first label)."""
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Node: ...
+```
+
+### Edge
+
+```python
+@dataclass
+class Edge:
+    id: int
+    source_id: int
+    target_id: int
+    type: str
+    properties: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Edge: ...
+```
+
+## Error Handling
+
+```python
+import zyxdb
+
+# Query errors are captured in the Result
+result = db.execute("INVALID SYNTAX")
+if not result.is_success:
+    print(f"Query failed: {result.error}")
+
+# DatabaseError for C++ exceptions
+try:
+    db.create_edge(999999, 999998, "LINK")
+except zyxdb.DatabaseError as e:
+    print(f"Database error: {e}")
+```
+
+| Exception | Raised by |
+|-----------|-----------|
+| `zyxdb.DatabaseError` | C++ runtime errors (invalid node IDs, storage failures, etc.) |
+
+Query parse/execution errors are captured in `Result.error` rather than raised as exceptions.
+
+## Complete Example
+
+```python
+import zyxdb
+
+with zyxdb.Database("/tmp/social.zyx") as db:
+    # Create nodes
+    alice = db.create_node("Person", {"name": "Alice", "age": 30})
+    bob = db.create_node("Person", {"name": "Bob", "age": 25})
+
+    # Create edge
+    db.create_edge(alice, bob, "KNOWS", {"since": 2020})
+
+    # Query
+    for row in db.execute(
+        "MATCH (a:Person)-[r:KNOWS]->(b:Person) "
+        "RETURN a.name AS src, b.name AS dst, r.since AS since"
+    ):
+        print(f"{row['src']} knows {row['dst']} since {row['since']}")
+
+    # Transaction with auto-commit
+    with db.begin_transaction() as tx:
+        tx.execute("CREATE (n:Company {name: 'ZYX'})")
+        tx.execute(
+            "MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'ZYX'}) "
+            "CREATE (p)-[:WORKS_AT]->(c)"
+        )
+
+    # Scalar query
+    count = db.execute("MATCH (n) RETURN count(n) AS c").scalar()
+    print(f"Total nodes: {count}")
+```
+
+## Source Locations
+
+| Component | Path |
+|-----------|------|
+| Python package | `bindings/python/src/zyxdb/` |
+| pybind11 bindings | `bindings/python/src/zyxdb/_core.cpp` |
+| Database wrapper | `bindings/python/src/zyxdb/database.py` |
+| Transaction wrapper | `bindings/python/src/zyxdb/transaction.py` |
+| Result/Record | `bindings/python/src/zyxdb/result.py` |
+| Types | `bindings/python/src/zyxdb/types.py` |

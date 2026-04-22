@@ -87,55 +87,50 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 
 ### High-Performance Write APIs
 
-These bypass the Cypher parser for maximum throughput:
+These bypass the Cypher parser for maximum throughput. All create methods return IDs.
 
 ```cpp
-// Create a single node with one label
-db.createNode("Person", {{"name", std::string("Alice")}, {"age", int64_t(30)}});
+// Create a single node (returns node ID)
+int64_t aliceId = db.createNode("Person",
+    {{"name", std::string("Alice")}, {"age", int64_t(30)}});
 
 // Create a node with multiple labels
-db.createNode(std::vector<std::string>{"Person", "Employee"},
-              {{"name", std::string("Bob")}, {"salary", int64_t(50000)}});
+int64_t empId = db.createNode(
+    std::vector<std::string>{"Person", "Employee"},
+    {{"name", std::string("Bob")}, {"salary", int64_t(50000)}});
 
-// Create a node and get its internal ID
-int64_t aliceId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
-
-// Batch create nodes
-db.createNodes("Person", {
+// Batch create nodes (returns list of IDs)
+auto ids = db.createNodes("Person", {
     {{"name", std::string("Alice")}, {"age", int64_t(30)}},
     {{"name", std::string("Bob")}, {"age", int64_t(25)}},
     {{"name", std::string("Charlie")}, {"age", int64_t(35)}}
 });
 
-// Create an edge by looking up source/target nodes by property
-db.createEdge(
-    "Person", "name", std::string("Alice"),   // source: Person where name = Alice
-    "Person", "name", std::string("Bob"),      // target: Person where name = Bob
-    "KNOWS",                                    // edge type
-    {{"since", int64_t(2020)}}                  // edge properties
-);
+// Create an edge by node IDs (returns edge ID)
+int64_t edgeId = db.createEdge(aliceId, empId, "KNOWS",
+    {{"since", int64_t(2020)}});
 
-// Create an edge by internal IDs (fastest)
-int64_t sourceId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
-int64_t targetId = db.createNodeRetId("Person", {{"name", std::string("Bob")}});
-db.createEdgeById(sourceId, targetId, "KNOWS", {});
+// Batch create edges (returns list of edge IDs)
+auto edgeIds = db.createEdges({
+    {id1, id2, "FOLLOWS", {{"weight", 1.0}}},
+    {id2, id3, "FOLLOWS", {}},
+});
 ```
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `createNode` | `void createNode(const string& label, const unordered_map<string, Value>& props) const` | Create a node with one label and properties. |
-| `createNode` | `void createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | Create a node with multiple labels. |
-| `createNodes` | `void createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | Batch-create nodes with the same label. |
-| `createNodeRetId` | `int64_t createNodeRetId(const string& label, const unordered_map<string, Value>& props = {}) const` | Create a node and return its internal ID. |
-| `createEdge` | `void createEdge(const string& srcLabel, const string& srcKey, const Value& srcVal, const string& tgtLabel, const string& tgtKey, const Value& tgtVal, const string& edgeType, const unordered_map<string, Value>& props) const` | Create an edge by looking up source and target nodes by a property value. |
-| `createEdgeById` | `void createEdgeById(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by internal node IDs. Fastest method. |
+| `createNode` | `int64_t createNode(const string& label, const unordered_map<string, Value>& props) const` | Create a node with one label. Returns node ID. |
+| `createNode` | `int64_t createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | Create a node with multiple labels. Returns node ID. |
+| `createNodes` | `vector<int64_t> createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | Batch-create nodes with the same label. Returns list of IDs. |
+| `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by node IDs. Returns edge ID. |
+| `createEdges` | `vector<int64_t> createEdges(const vector<tuple<int64_t, int64_t, string, unordered_map<string, Value>>>& edges) const` | Batch-create edges. Returns list of edge IDs. |
 
 ### Graph Algorithms
 
 ```cpp
 // Shortest path (BFS-based)
-int64_t startId = db.createNodeRetId("Person", {{"name", std::string("Alice")}});
-int64_t endId = db.createNodeRetId("Person", {{"name", std::string("Charlie")}});
+int64_t startId = db.createNode("Person", {{"name", std::string("Alice")}});
+int64_t endId = db.createNode("Person", {{"name", std::string("Charlie")}});
 // ... create edges connecting them ...
 auto path = db.getShortestPath(startId, endId);
 for (const auto& node : path) {

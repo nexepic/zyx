@@ -16,7 +16,8 @@ ZYX 暴露两种嵌入式接口 — 现代 C++ API 和用于 FFI 绑定的 C 兼
 ## 如何选择？
 
 - **C++ API**（`include/zyx/zyx.hpp`）— C++20 开发首选。类型安全的 Value、RAII 事务管理、流式 `QueryBuilder`。
-- **C API**（`include/zyx/zyx_c_api.h`）— 构建 Rust、Go、Node.js、Python 或 WASM 绑定时使用。不透明句柄，显式生命周期管理。
+- **Python API**（`pip install zyxdb`）— Python 开发首选。提供 Pythonic 接口，支持上下文管理器、迭代器和 pandas 集成。
+- **C API**（`include/zyx/zyx_c_api.h`）— 构建 Rust、Go、Node.js 或 WASM 绑定时使用。不透明句柄，显式生命周期管理。
 
 ## 目录
 
@@ -26,6 +27,10 @@ ZYX 暴露两种嵌入式接口 — 现代 C++ API 和用于 FFI 绑定的 C 兼
 - [事务 API](transaction) — 显式事务、只读事务、Cypher 事务语句
 - [类型系统](types) — `Value`、`Node`、`Edge`、`PropertyValue`、`ResultValue`
 - [错误处理](errors) — 异常机制 vs. Result 机制
+
+### Python API
+
+- [Python API 参考](python-api) — `Database`、`Transaction`、`Result`、`Record`、高性能写入方法
 
 ### C API
 

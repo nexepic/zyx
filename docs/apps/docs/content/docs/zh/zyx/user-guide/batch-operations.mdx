@@ -19,7 +19,7 @@ flowchart TD
   A[需要批量写入] --> B{数据来源}
   B -->|内存行数据| C[UNWIND + 事务]
   B -->|CSV 文件| D[LOAD CSV 或 CLI import]
-  B -->|应用服务| E[C++/C API 原生批量方法]
+  B -->|应用服务| E[C++/Python/C API 原生批量方法]
   C --> F{数据量是否很大}
   F -->|是| G[CALL 子查询 IN TRANSACTIONS]
   F -->|否| H[单个显式事务]
@@ -66,16 +66,43 @@ zyx database exec ./demo.zyx ./batch.cypher
 
 ## 方案 D：原生批量 API
 
-在极限吞吐场景优先使用原生 C++ API：
+### C++
+
+所有创建方法现在均返回 ID，便于后续操作：
 
 | 方法 | 说明 |
 |---|---|
-| `Database::createNodes(label, propsList)` | 批量创建同标签节点 |
-| `Database::createNodeRetId(label, props)` | 创建节点并立即返回内部 ID |
-| `Database::createEdgeById(srcId, dstId, type, props)` | 按 ID 直接建边，O(1) 复杂度 |
+| `Database::createNode(label, props)` | 创建节点并返回 ID |
+| `Database::createNodes(label, propsList)` | 批量创建节点，返回 ID 列表 |
+| `Database::createEdge(srcId, dstId, type, props)` | 按 ID 创建边，返回边 ID |
+| `Database::createEdges(edges)` | 批量创建边，返回边 ID 列表 |
 
 :::tip
-`createEdgeById` 绕过查询解析和索引查找，直接通过内部 ID 建边，是最高效的边创建方式。
+`createEdge` 绕过查询解析和索引查找，直接通过内部 ID 建边，是最高效的边创建方式。
+:::
+
+### Python
+
+```python
+import zyxdb
+
+with zyxdb.Database("/tmp/bulk.zyx") as db:
+    # 批量创建节点（返回 ID 列表）
+    ids = db.create_nodes("User", [
+        {"name": "Alice", "age": 30},
+        {"name": "Bob", "age": 25},
+        {"name": "Charlie", "age": 35},
+    ])
+
+    # 批量创建边（返回边 ID 列表）
+    edge_ids = db.create_edges("KNOWS", [
+        (ids[0], ids[1], {"since": 2020}),
+        (ids[1], ids[2], None),
+    ])
+```
+
+:::tip
+完整的 Python 批量 API 参考请查看 [Python API 参考](../api/python-api#高性能写入-api)。
 :::
 
 ## 运维检查清单

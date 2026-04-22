@@ -1,0 +1,363 @@
+---
+title: Python API 参考
+description: ZYX Python API 完整参考 — Database、Transaction、Result、Record 与高性能写入方法。
+category: Python API
+categoryOrder: 4
+order: 9
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Python API 参考
+
+包名：`zyxdb`（支持 PEP 561 类型标注）
+
+## 安装
+
+```bash
+pip install zyxdb
+```
+
+## Database
+
+`zyxdb.Database` 是主入口。
+
+### 构造与生命周期
+
+```python
+import zyxdb
+
+# 打开（不存在则创建）
+db = zyxdb.Database("/path/to/db")
+
+# 仅在已存在时打开
+db = zyxdb.Database("/path/to/db", open=False)
+opened = db.open_if_exists()  # 返回 bool
+
+# 上下文管理器（退出时自动关闭）
+with zyxdb.Database("/tmp/mydb") as db:
+    db.execute("CREATE (n:Person {name: 'Alice'})")
+```
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| 构造函数 | `Database(path: str, *, open: bool = True)` | 创建并可选打开数据库。 |
+| `open` | `open() -> None` | 打开数据库（文件不存在则创建）。 |
+| `open_if_exists` | `open_if_exists() -> bool` | 仅在文件存在时打开。不存在返回 `False`。 |
+| `close` | `close() -> None` | 刷新并关闭数据库。 |
+| `save` | `save() -> None` | 将脏数据刷新到磁盘但不关闭。 |
+
+### 查询执行
+
+```python
+# 自动提交查询
+result = db.execute("CREATE (n:Person {name: 'Alice', age: 30})")
+
+# 参数化查询（关键字参数）
+result = db.execute(
+    "MATCH (n:Person) WHERE n.name = $name RETURN n.age AS age",
+    name="Alice"
+)
+
+# 迭代结果 — 产生 Record 对象
+for row in result:
+    print(row["age"])       # 按列名访问
+    print(row[0])           # 按列索引访问
+```
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| `execute` | `execute(cypher: str, **params) -> Result` | 执行 Cypher 查询，支持可选的关键字参数。 |
+
+### 事务
+
+```python
+# 写事务 — 正常退出时自动提交
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    tx.execute("CREATE (n:Person {name: 'Bob'})")
+    # 此处自动提交
+
+# 显式回滚
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Temp'})")
+    tx.rollback()
+
+# 异常时自动回滚
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    raise ValueError("oops")  # 自动回滚
+
+# 只读事务（快照隔离）
+with db.begin_read_only_transaction() as tx:
+    rows = list(tx.execute("MATCH (n:Person) RETURN n.name AS name"))
+```
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| `begin_transaction` | `begin_transaction() -> Transaction` | 开始读写事务。 |
+| `begin_read_only_transaction` | `begin_read_only_transaction() -> Transaction` | 开始只读事务，快照隔离。 |
+| `has_active_transaction` | `@property -> bool` | 是否有活跃事务。 |
+
+### 高性能写入 API
+
+这些方法绕过 Cypher 解析器以获得最大吞吐量。所有创建方法均返回 ID。
+
+```python
+# 创建节点（返回节点 ID）
+alice_id = db.create_node("Person", {"name": "Alice", "age": 30})
+
+# 创建多标签节点
+emp_id = db.create_node(["Person", "Employee"], {"name": "Bob"})
+
+# 批量创建节点（返回 ID 列表）
+ids = db.create_nodes("Person", [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35},
+])
+
+# 通过节点 ID 创建边（返回边 ID）
+edge_id = db.create_edge(alice_id, emp_id, "KNOWS", {"since": 2020})
+
+# 批量创建边（返回 ID 列表）
+edge_ids = db.create_edges("FOLLOWS", [
+    (id1, id2, {"weight": 1.0}),
+    (id2, id3, None),            # 无属性
+])
+```
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| `create_node` | `create_node(label: str \| list[str], props: dict \| None = None) -> int` | 创建节点并返回其内部 ID。 |
+| `create_nodes` | `create_nodes(label: str, props_list: list[dict]) -> list[int]` | 批量创建同标签节点。返回 ID 列表。 |
+| `create_edge` | `create_edge(src_id: int, dst_id: int, edge_type: str, props: dict \| None = None) -> int` | 通过节点 ID 创建边。返回边 ID。 |
+| `create_edges` | `create_edges(edge_type: str, edges: list[tuple]) -> list[int]` | 批量创建边。每个元组为 `(src_id, dst_id, props_or_None)`。返回 ID 列表。 |
+
+### 图算法
+
+```python
+# 最短路径 — 返回 Node 对象列表
+path = db.get_shortest_path(start_id, end_id, max_depth=15)
+for node in path:
+    print(node.id, node.labels, node.properties)
+
+# 广度优先搜索
+visited = []
+db.bfs(start_id, lambda node: (visited.append(node["id"]), True)[1])
+```
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| `get_shortest_path` | `get_shortest_path(start_id: int, end_id: int, max_depth: int = 15) -> list[Node]` | 查找最短路径。返回 `Node` 对象列表。 |
+| `bfs` | `bfs(start_id: int, visitor: Callable) -> None` | 广度优先遍历。访问者接收节点字典；返回 `True` 继续，`False` 停止。 |
+
+### 配置
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| `set_thread_pool_size` | `set_thread_pool_size(size: int) -> None` | 调整线程池大小（0=自动）。 |
+
+## Transaction
+
+`zyxdb.Transaction` 提供 ACID 事务语义，支持上下文管理器。
+
+`__exit__` 行为：
+- **正常退出**（无异常）— 若仍活跃则自动提交。
+- **异常**— 若仍活跃则自动回滚。
+
+```python
+# 自动提交模式（推荐）
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    # 退出时自动提交
+
+# 显式提交（同样有效）
+with db.begin_transaction() as tx:
+    tx.execute("CREATE (n:Person {name: 'Alice'})")
+    tx.commit()  # 已提交；__exit__ 为空操作
+```
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| `execute` | `execute(cypher: str, **params) -> Result` | 在此事务中执行 Cypher 查询。 |
+| `commit` | `commit() -> None` | 提交事务。 |
+| `rollback` | `rollback() -> None` | 回滚事务。 |
+| `is_active` | `@property -> bool` | 事务是否仍活跃。 |
+| `is_read_only` | `@property -> bool` | 是否为只读事务。 |
+
+## Result
+
+`zyxdb.Result` 包装查询输出，提供 Pythonic 迭代和便捷方法。
+
+```python
+result = db.execute("MATCH (n:Person) RETURN n.name AS name, n.age AS age")
+
+# 迭代为 Record 对象
+for row in result:
+    print(row["name"], row["age"])
+
+# 或使用便捷方法
+result = db.execute("MATCH (n:Person) RETURN n.name AS name")
+all_rows = result.fetchall()
+one_row = result.fetchone()
+first_n = result.fetchmany(10)
+
+# 单行（若不是恰好 1 行则抛 ValueError）
+row = db.execute("MATCH (n:Person {name: 'Alice'}) RETURN n.age AS age").single()
+
+# 标量值（第一行第一列）
+count = db.execute("MATCH (n:Person) RETURN count(n) AS c").scalar()
+
+# 所有行作为字典列表
+data = result.data()
+
+# 转换为 pandas DataFrame（需要 pandas）
+df = result.to_df()
+```
+
+| 方法 / 属性 | 签名 | 说明 |
+|-------------------|-----------|-------------|
+| `columns` | `@property -> list[str]` | 结果集的列名。 |
+| `is_success` | `@property -> bool` | 查询是否执行成功。 |
+| `error` | `@property -> str \| None` | 错误消息，成功时为 `None`。 |
+| `duration` | `@property -> float` | 查询执行时长（毫秒）。 |
+| `__iter__` | `-> Iterator[Record]` | 迭代行为 `Record` 对象。 |
+| `fetchone` | `fetchone() -> Record \| None` | 获取下一行，耗尽时返回 `None`。 |
+| `fetchall` | `fetchall() -> list[Record]` | 获取所有剩余行。 |
+| `fetchmany` | `fetchmany(size: int) -> list[Record]` | 获取最多 `size` 行。 |
+| `single` | `single(strict: bool = True) -> Record` | 返回单个结果行。若不是恰好 1 行则抛 `ValueError`。 |
+| `scalar` | `scalar() -> Any` | 返回第一行第一列。 |
+| `data` | `data() -> list[dict]` | 返回所有行作为字典列表。 |
+| `to_df` | `to_df() -> pandas.DataFrame` | 转换为 pandas DataFrame（延迟导入）。 |
+
+## Record
+
+`zyxdb.Record` 表示查询结果的单行。支持类字典访问。
+
+```python
+for row in db.execute("MATCH (n:Person) RETURN n.name AS name, n.age AS age"):
+    # 按列名访问
+    name = row["name"]
+
+    # 按列索引访问
+    first_col = row[0]
+
+    # 安全访问（带默认值）
+    city = row.get("city", "unknown")
+
+    # 元数据
+    keys = row.keys()      # ["name", "age"]
+    vals = row.values()    # ["Alice", 30]
+    d = row.data()         # {"name": "Alice", "age": 30}
+```
+
+| 方法 | 签名 | 说明 |
+|--------|-----------|-------------|
+| `__getitem__` | `[key: str \| int] -> Any` | 按列名或索引访问。 |
+| `get` | `get(key: str, default=None) -> Any` | 安全访问（带默认值）。 |
+| `keys` | `keys() -> list[str]` | 返回列名。 |
+| `values` | `values() -> list[Any]` | 按列顺序返回值。 |
+| `data` | `data() -> dict` | 返回行作为字典。 |
+
+## 类型
+
+### Node
+
+```python
+@dataclass
+class Node:
+    id: int
+    labels: list[str]
+    properties: dict[str, Any]
+
+    @property
+    def label(self) -> str:
+        """主标签（第一个标签）。"""
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Node: ...
+```
+
+### Edge
+
+```python
+@dataclass
+class Edge:
+    id: int
+    source_id: int
+    target_id: int
+    type: str
+    properties: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Edge: ...
+```
+
+## 错误处理
+
+```python
+import zyxdb
+
+# 查询错误在 Result 中捕获
+result = db.execute("INVALID SYNTAX")
+if not result.is_success:
+    print(f"查询失败: {result.error}")
+
+# DatabaseError 用于 C++ 异常
+try:
+    db.create_edge(999999, 999998, "LINK")
+except zyxdb.DatabaseError as e:
+    print(f"数据库错误: {e}")
+```
+
+| 异常 | 抛出场景 |
+|-----------|-----------|
+| `zyxdb.DatabaseError` | C++ 运行时错误（无效节点 ID、存储失败等） |
+
+查询解析/执行错误在 `Result.error` 中捕获，而非作为异常抛出。
+
+## 完整示例
+
+```python
+import zyxdb
+
+with zyxdb.Database("/tmp/social.zyx") as db:
+    # 创建节点
+    alice = db.create_node("Person", {"name": "Alice", "age": 30})
+    bob = db.create_node("Person", {"name": "Bob", "age": 25})
+
+    # 创建边
+    db.create_edge(alice, bob, "KNOWS", {"since": 2020})
+
+    # 查询
+    for row in db.execute(
+        "MATCH (a:Person)-[r:KNOWS]->(b:Person) "
+        "RETURN a.name AS src, b.name AS dst, r.since AS since"
+    ):
+        print(f"{row['src']} 认识 {row['dst']}，自 {row['since']} 年")
+
+    # 事务（自动提交）
+    with db.begin_transaction() as tx:
+        tx.execute("CREATE (n:Company {name: 'ZYX'})")
+        tx.execute(
+            "MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'ZYX'}) "
+            "CREATE (p)-[:WORKS_AT]->(c)"
+        )
+
+    # 标量查询
+    count = db.execute("MATCH (n) RETURN count(n) AS c").scalar()
+    print(f"总节点数: {count}")
+```
+
+## 源码位置
+
+| 组件 | 路径 |
+|-----------|------|
+| Python 包 | `bindings/python/src/zyxdb/` |
+| pybind11 绑定 | `bindings/python/src/zyxdb/_core.cpp` |
+| Database 包装器 | `bindings/python/src/zyxdb/database.py` |
+| Transaction 包装器 | `bindings/python/src/zyxdb/transaction.py` |
+| Result/Record | `bindings/python/src/zyxdb/result.py` |
+| 类型 | `bindings/python/src/zyxdb/types.py` |

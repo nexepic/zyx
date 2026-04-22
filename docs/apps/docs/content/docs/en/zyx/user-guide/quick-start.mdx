@@ -129,6 +129,41 @@ zyx import \
 For full import command options, see the [Import & Export](import-export) chapter.
 :::
 
+## 7) Python Quick Start
+
+If you prefer Python, install the `zyxdb` package and interact with ZYX programmatically:
+
+```bash
+pip install zyxdb
+```
+
+```python
+import zyxdb
+
+with zyxdb.Database("/tmp/demo.zyx") as db:
+    # Create nodes (returns node IDs)
+    alice = db.create_node("User", {"name": "Alice", "age": 30})
+    bob = db.create_node("User", {"name": "Bob", "age": 25})
+
+    # Create an edge
+    db.create_edge(alice, bob, "KNOWS", {"since": 2026})
+
+    # Query with Cypher
+    for row in db.execute(
+        "MATCH (a:User)-[r:KNOWS]->(b:User) "
+        "RETURN a.name AS src, b.name AS dst, r.since AS since"
+    ):
+        print(f"{row['src']} knows {row['dst']} since {row['since']}")
+
+    # Scalar query
+    count = db.execute("MATCH (n) RETURN count(n) AS c").scalar()
+    print(f"Total nodes: {count}")
+```
+
+:::tip
+For the full Python API reference, see [Python API Reference](../api/python-api).
+:::
+
 ## Quick Troubleshooting
 
 | Symptom | Typical Cause | Action |
