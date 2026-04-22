@@ -68,13 +68,5 @@ if not meson.is_subproject()
     subdir('tests')
 endif
 
-# Python bindings (optional, only when Python + pybind11 available and not cross-compiling)
-if not meson.is_cross_build() and host_machine.system() != 'emscripten'
-    py_opt = import('python').find_installation(required: false)
-    if py_opt.found()
-        pybind11_check = dependency('pybind11', required: false, allow_fallback: true)
-        if pybind11_check.found()
-            subdir('bindings/python')
-        endif
-    endif
-endif
+# Python bindings are built separately via: pip install -e bindings/python
+# See bindings/python/meson.build for standalone build configuration.

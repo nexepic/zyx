@@ -26,6 +26,8 @@ jobs:
             python: '3.11'
           - os: ubuntu-latest
             python: '3.12'
+          - os: ubuntu-latest
+            python: '3.13'
           - os: macos-latest
             python: '3.12'
           - os: windows-latest
@@ -68,8 +70,16 @@ jobs:
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
 
-      - name: Install zyxdb (editable)
-        run: pip install -e "bindings/python[test]"
+      - name: Install zyxdb (editable, Unix)
+        if: runner.os != 'Windows'
+        run: PKG_CONFIG_PATH=$PWD/buildDir pip install -e "bindings/python[test]"
+
+      - name: Install zyxdb (editable, Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $env:PKG_CONFIG_PATH = "$PWD\buildDir"
+          pip install -e "bindings/python[test]"
+        shell: pwsh
 
       - name: Run tests
         run: |
