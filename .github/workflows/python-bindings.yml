@@ -60,40 +60,47 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           choco install pkgconfiglite --allow-empty-checksums
-          choco install llvm --version=20.1.4 --force
           echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
+      # Activate MSVC developer environment (sets LIB, INCLUDE, PATH for cl.exe).
+      # Must run BEFORE Conan so profile detection finds MSVC, not MinGW.
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Set clang-cl as compiler (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          echo "CC=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "CXX=clang-cl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        shell: pwsh
 
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
         run: brew install pkg-config
 
-      - name: Install Conan dependencies
+      - name: Install Conan dependencies (Unix)
+        if: runner.os != 'Windows'
         run: |
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
 
+      # Use Release to match meson-python's default buildtype=release (avoids CRT mismatch: /MD vs /MDd).
+      # Do NOT set CC/CXX here — let Conan detect MSVC naturally from ilammy environment.
+      - name: Install Conan dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          conan profile detect
+          mkdir -p buildDir
+          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+
       - name: Install zyxdb (Unix)
         if: runner.os != 'Windows'
         run: PKG_CONFIG_PATH=$PWD/buildDir pip install "bindings/python[test]"
 
+      # Set CC/CXX=cl ONLY for this step so meson-python uses MSVC (matching Conan-built deps),
+      # instead of picking up MinGW GCC from Strawberry Perl.
       - name: Install zyxdb (Windows)
         if: runner.os == 'Windows'
         run: |
           $env:PKG_CONFIG_PATH = "$PWD\buildDir"
+          $env:CC = "cl"
+          $env:CXX = "cl"
           pip install "bindings/python[test]"
         shell: pwsh
 
@@ -140,7 +147,6 @@ jobs:
             conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
           CIBW_BEFORE_ALL_WINDOWS: >
             choco install pkgconfiglite --allow-empty-checksums &&
-            choco install llvm --version=20.1.4 --force &&
             pip install conan meson ninja &&
             conan profile detect &&
             mkdir -p buildDir &&
