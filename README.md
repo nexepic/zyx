@@ -10,8 +10,10 @@
     <br />
 </p>
 
+<h3 align="center">Embeddable Graph Database Engine</h3>
+
 <p align="center">
-  High-performance embeddable graph database engine in C++20 with Cypher support.
+  ACID-compliant graph database with Cypher queries, vector search, and graph algorithms — embeds anywhere from CLI to browser.
 </p>
 
 <p align="center">
@@ -27,101 +29,115 @@
     <a href="https://en.cppreference.com/w/cpp/20">
         <img alt="C++" src="https://img.shields.io/badge/C++-20-blue.svg" />
     </a>
-    <a href="https://mesonbuild.com/">
-        <img alt="Meson" src="https://img.shields.io/badge/Build-Meson-blue.svg" />
+    <a href="https://nexepic.github.io/zyx">
+        <img alt="Docs" src="https://img.shields.io/badge/Docs-nexepic.github.io/zyx-green.svg" />
     </a>
 </p>
 
-## What ZYX Provides
+---
 
-- Cypher query engine (`MATCH` / `CREATE` / `MERGE` / `WITH` / `UNION` / `UNWIND` / `CALL` / `LOAD CSV`)
-- ACID transactions with WAL and recovery
-- Schema/index administration (`CREATE INDEX`, constraints, vector index)
-- Built-in procedures for DB stats/config, vector search/training, and GDS algorithms
-- CLI modes for interactive REPL, script execution, and bulk import
+## Try It
 
-Feature support details: [`UNSUPPORTED_CYPHER_FEATURES.md`](UNSUPPORTED_CYPHER_FEATURES.md)
+```
+$ zyx database create ./movies.zyx
 
-## Prerequisites
+<ZYX> Shell.
+Type 'help' or 'exit'.
+Enter queries ending with ';' OR press Enter on an empty line to execute.
 
-- C++ compiler with C++20 support (Clang 14+ or GCC 11+)
-- Meson 0.60+
-- Ninja
-- Conan 2.x
-- Python 3.10+
+zyx> CREATE (m:Movie {title: 'The Matrix', year: 1999}),
+     ->        (a:Actor {name: 'Keanu Reeves'}),
+     ->        (a)-[:ACTED_IN {role: 'Neo'}]->(m);
+Empty result.
 
-## Build and Test
+zyx> MATCH (a:Actor)-[r:ACTED_IN]->(m:Movie)
+     -> RETURN a.name AS actor, m.title AS movie, r.role AS role;
++---------------+------------+------+
+| actor         | movie      | role |
++---------------+------------+------+
+| Keanu Reeves  | The Matrix | Neo  |
++---------------+------------+------+
+(1 rows)
 
-```bash
-# Full build + tests + coverage
-./scripts/run_tests.sh
-
-# Quick local run (skip Conan install stage)
-./scripts/run_tests.sh --quick
+zyx> CALL db.stats();
++--------+-------+--------+
+| nodes  | edges | labels |
++--------+-------+--------+
+| 2      | 1     | 3      |
++--------+-------+--------+
+(1 rows)
 ```
 
-Useful commands:
+Or try it in the browser — [**Live Playground**](https://nexepic.github.io/zyx/en/playground) (no install required, runs via WebAssembly).
 
-```bash
-meson test -C buildDir <test_name>
-./scripts/build_release.sh
-```
+## Highlights
+
+- **Cypher Query Engine** — `MATCH`, `CREATE`, `MERGE`, `WITH`, `UNION`, `UNWIND`, `CALL`, `LOAD CSV`
+- **ACID Transactions** — Write-ahead logging, crash recovery, snapshot isolation
+- **Vector Search** — HNSW index with cosine/euclidean/dot-product similarity
+- **Graph Algorithms** — PageRank, shortest path, community detection via built-in procedures
+- **Schema & Indexes** — Label indexes, property indexes, uniqueness constraints
+- **Embeddable** — C++ header-only API, C API, Python bindings (`zyxdb`), and WebAssembly
+- **Cross-Platform** — macOS, Linux, Windows
 
 ## Quick Start
 
-Most users can run ZYX directly from a pre-built executable or package-manager installation.
-Building from source is optional.
+### Install
 
-### 1) Install or download the CLI executable
-
-```bash
-zyx --help
-```
-
-If the executable is not on `PATH`, use the full path (for example `./zyx` or `./buildDir/apps/cli/zyx`).
-
-### 2) Create and open a database
+Download a pre-built binary from [Releases](https://github.com/nexepic/zyx/releases), or build from source:
 
 ```bash
-zyx database create ./demo.zyx
+./scripts/run_tests.sh          # Full build + tests + coverage
+./scripts/build_release.sh      # Release build only
 ```
 
-Open existing DB:
+Prerequisites: C++20 compiler (Clang 14+ / GCC 11+), Meson 0.60+, Ninja, Conan 2.x, Python 3.10+
+
+### Use
 
 ```bash
-zyx database open ./demo.zyx
+zyx database create ./mydb.zyx      # Create new database
+zyx database open ./mydb.zyx        # Open existing database
+zyx database exec ./mydb.zyx q.cql  # Execute a Cypher script
+zyx import --database ./mydb.zyx \
+  --nodes nodes.csv \
+  --relationships rels.csv          # Bulk CSV/JSONL import
 ```
 
-### 3) Run first queries (in REPL)
+### Embed
 
-```cypher
-CREATE (a:User {name: 'Alice'});
-CREATE (b:User {name: 'Bob'});
-MATCH (a:User {name: 'Alice'}), (b:User {name: 'Bob'})
-CREATE (a)-[:KNOWS {since: 2026}]->(b);
-MATCH (a:User)-[r:KNOWS]->(b:User)
-RETURN a.name, b.name, r.since;
+**C++**
+```cpp
+#include <zyx/zyx.hpp>
+
+zyx::Database db("./mydb.zyx");
+db.open();
+auto result = db.query("MATCH (n) RETURN n.name LIMIT 5");
+db.close();
 ```
 
-## CLI Modes
+**Python**
+```python
+import zyxdb
 
-```bash
-# Script mode
-zyx database exec ./demo.zyx ./seed.cypher
-
-# Bulk import (CSV / JSONL)
-zyx import \
-  --database ./demo.zyx \
-  --nodes ./nodes.csv \
-  --relationships ./rels.csv
+db = zyxdb.Database("./mydb.zyx")
+db.open()
+result = db.execute("MATCH (n) RETURN n.name LIMIT 5")
+db.close()
 ```
 
 ## Documentation
 
-- User guide (EN): `docs/apps/docs/content/docs/en/zyx/user-guide/`
-- User guide (ZH): `docs/apps/docs/content/docs/zh/zyx/user-guide/`
-- Architecture docs: `docs/apps/docs/content/docs/{en,zh}/zyx/architecture/`
-- Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+Full docs with architecture deep-dives, API reference, and algorithm guides:
+
+**[nexepic.github.io/zyx](https://nexepic.github.io/zyx)**
+
+- [User Guide](https://nexepic.github.io/zyx/docs/zyx/user-guide/quick-start)
+- [API Reference](https://nexepic.github.io/zyx/docs/zyx/api/cpp-api)
+- [Architecture](https://nexepic.github.io/zyx/docs/zyx/architecture/overview)
+- [Contributing](CONTRIBUTING.md)
+
+Feature support details: [`UNSUPPORTED_CYPHER_FEATURES.md`](UNSUPPORTED_CYPHER_FEATURES.md)
 
 ## License
 
