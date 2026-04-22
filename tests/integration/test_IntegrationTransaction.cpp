@@ -343,7 +343,7 @@ TEST_F(BulkApiTransactionTest, BulkApiWithExplicitTransaction) {
 	// Begin explicit transaction, use bulk API, commit
 	auto txn = db->beginTransaction();
 
-	int64_t nodeId = db->createNodeRetId("BulkTest", {{"name", std::string("Alice")}});
+	int64_t nodeId = db->createNode("BulkTest", {{"name", std::string("Alice")}});
 	EXPECT_GT(nodeId, 0);
 
 	txn.commit();
@@ -357,7 +357,7 @@ TEST_F(BulkApiTransactionTest, BulkApiRollback) {
 	// Begin explicit transaction, use bulk API, rollback
 	auto txn = db->beginTransaction();
 
-	(void) db->createNodeRetId("BulkTest", {{"name", std::string("Bob")}});
+	(void) db->createNode("BulkTest", {{"name", std::string("Bob")}});
 
 	txn.rollback();
 

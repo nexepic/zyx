@@ -120,7 +120,6 @@ class TestCollectionValues:
         rows = list(db.execute("MATCH (n:T) RETURN n.embedding AS emb"))
         result = rows[0]["emb"]
         assert len(result) == 3
-        # Engine may return float vectors as string-typed list elements
         assert abs(float(result[0]) - 0.1) < 1e-5
 
 
@@ -132,3 +131,41 @@ class TestErrorHandling:
 
     def test_database_error_exists(self):
         assert hasattr(zyxdb, "DatabaseError")
+
+
+class TestRecordAccess:
+    """Test that Record objects from iteration support dict-like access."""
+
+    def test_record_getitem_str(self, db):
+        db.execute("CREATE (n:T {x: 42})")
+        for row in db.execute("MATCH (n:T) RETURN n.x AS x"):
+            assert row["x"] == 42
+
+    def test_record_getitem_int(self, db):
+        db.execute("CREATE (n:T {x: 42})")
+        for row in db.execute("MATCH (n:T) RETURN n.x AS x"):
+            assert row[0] == 42
+
+    def test_record_get(self, db):
+        db.execute("CREATE (n:T {x: 42})")
+        for row in db.execute("MATCH (n:T) RETURN n.x AS x"):
+            assert row.get("x") == 42
+            assert row.get("missing", "default") == "default"
+
+    def test_record_keys_values(self, db):
+        db.execute("CREATE (n:T {x: 42})")
+        for row in db.execute("MATCH (n:T) RETURN n.x AS x"):
+            assert "x" in row.keys()
+            assert 42 in row.values()
+
+    def test_record_data(self, db):
+        db.execute("CREATE (n:T {x: 42})")
+        for row in db.execute("MATCH (n:T) RETURN n.x AS x"):
+            d = row.data()
+            assert isinstance(d, dict)
+            assert d["x"] == 42
+
+    def test_record_repr(self, db):
+        db.execute("CREATE (n:T {x: 42})")
+        for row in db.execute("MATCH (n:T) RETURN n.x AS x"):
+            assert "Record" in repr(row)

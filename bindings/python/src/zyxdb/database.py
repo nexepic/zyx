@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from zyxdb._core import Database as _CoreDatabase
+from zyxdb.result import Result
 from zyxdb.transaction import Transaction
+from zyxdb.types import Node
 
 
 class Database:
@@ -48,12 +50,12 @@ class Database:
         """Flush data to disk."""
         self._db.save()
 
-    def execute(self, cypher: str, **params: Any) -> Any:
+    def execute(self, cypher: str, **params: Any) -> Result:
         """Execute a Cypher query with optional keyword parameters.
 
-        Returns an iterable Result object.
+        Returns a :class:`Result` wrapper with iteration and convenience methods.
         """
-        return self._db.execute(cypher, **params)
+        return Result(self._db.execute(cypher, **params))
 
     def begin_transaction(self) -> Transaction:
         """Begin a read-write transaction."""
@@ -74,55 +76,46 @@ class Database:
 
     def create_node(
         self, label: str | list[str], props: dict[str, Any] | None = None
-    ) -> None:
-        """Create a node with given label(s) and properties."""
-        self._db.create_node(label, props or {})
-
-    def create_node_ret_id(
-        self, label: str, props: dict[str, Any] | None = None
     ) -> int:
-        """Create a node and return its internal ID."""
-        return self._db.create_node_ret_id(label, props or {})
+        """Create a node with given label(s) and properties. Returns node ID."""
+        return self._db.create_node(label, props or {})
 
     def create_nodes(
         self, label: str, props_list: list[dict[str, Any]]
-    ) -> None:
-        """Create multiple nodes in one batch."""
-        self._db.create_nodes(label, props_list)
+    ) -> list[int]:
+        """Create multiple nodes in one batch. Returns list of node IDs."""
+        return self._db.create_nodes(label, props_list)
 
     def create_edge(
-        self,
-        src_label: str,
-        src_key: str,
-        src_val: Any,
-        dst_label: str,
-        dst_key: str,
-        dst_val: Any,
-        edge_type: str,
-        props: dict[str, Any] | None = None,
-    ) -> None:
-        """Create an edge by matching source and target nodes via label+property."""
-        self._db.create_edge(
-            src_label, src_key, src_val,
-            dst_label, dst_key, dst_val,
-            edge_type, props or {},
-        )
-
-    def create_edge_by_id(
         self,
         src_id: int,
         dst_id: int,
         edge_type: str,
         props: dict[str, Any] | None = None,
-    ) -> None:
-        """Create an edge directly between two known internal IDs."""
-        self._db.create_edge_by_id(src_id, dst_id, edge_type, props or {})
+    ) -> int:
+        """Create an edge between two nodes by ID. Returns edge ID."""
+        return self._db.create_edge(src_id, dst_id, edge_type, props or {})
+
+    def create_edges(
+        self,
+        edge_type: str,
+        edges: list[tuple[int, int, dict[str, Any] | None]],
+    ) -> list[int]:
+        """Create multiple edges in one batch. Returns list of edge IDs."""
+        return self._db.create_edges(edge_type, edges)
 
     def get_shortest_path(
         self, start_id: int, end_id: int, max_depth: int = 15
-    ) -> list[dict[str, Any]]:
-        """Find shortest path between two nodes. Returns list of node dicts."""
-        return self._db.get_shortest_path(start_id, end_id, max_depth)
+    ) -> list[Node]:
+        """Find shortest path between two nodes. Returns list of Node objects."""
+        raw = self._db.get_shortest_path(start_id, end_id, max_depth)
+        return [Node.from_dict(d) for d in raw]
+
+    def bfs(
+        self, start_id: int, visitor: Any
+    ) -> None:
+        """Breadth-first traversal from start_id. Visitor receives node dicts."""
+        self._db.bfs(start_id, visitor)
 
     def __enter__(self) -> Database:
         return self
@@ -130,6 +123,9 @@ class Database:
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         self.close()
         return False
+
+    def __repr__(self) -> str:
+        return f"Database(active_txn={self.has_active_transaction})"
 
     def __del__(self) -> None:
         try:

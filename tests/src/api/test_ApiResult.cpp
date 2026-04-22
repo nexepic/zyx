@@ -463,9 +463,9 @@ TEST_F(CppApiTest, NodeStreamModeKeyNotMatchingColName) {
 }
 
 TEST_F(CppApiTest, EdgeStreamModeKeyNotMatchingColNameOrEmpty) {
-	int64_t id1 = db->createNodeRetId("ESK1");
-	int64_t id2 = db->createNodeRetId("ESK2");
-	db->createEdgeById(id1, id2, "ESKREL", {{"prop1", (int64_t)42}, {"prop2", "value"}});
+	int64_t id1 = db->createNode("ESK1");
+	int64_t id2 = db->createNode("ESK2");
+	db->createEdge(id1, id2, "ESKREL", {{"prop1", (int64_t)42}, {"prop2", "value"}});
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:ESKREL]->() RETURN e");
@@ -536,11 +536,11 @@ TEST_F(CppApiTest, NodeStreamModeMultipleRows) {
 }
 
 TEST_F(CppApiTest, EdgeStreamModeMultipleRows) {
-	int64_t a = db->createNodeRetId("ESM_A");
-	int64_t b = db->createNodeRetId("ESM_B");
-	int64_t c = db->createNodeRetId("ESM_C");
-	db->createEdgeById(a, b, "ESM_REL", {{"w", (int64_t)1}});
-	db->createEdgeById(a, c, "ESM_REL", {{"w", (int64_t)2}});
+	int64_t a = db->createNode("ESM_A");
+	int64_t b = db->createNode("ESM_B");
+	int64_t c = db->createNode("ESM_C");
+	db->createEdge(a, b, "ESM_REL", {{"w", (int64_t)1}});
+	db->createEdge(a, c, "ESM_REL", {{"w", (int64_t)2}});
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:ESM_REL]->() RETURN e");
@@ -650,9 +650,9 @@ TEST_F(CppApiTest, ReverseFuzzyMatchEndswithFalse) {
 }
 
 TEST_F(CppApiTest, EdgeStreamModePropertyNotFoundFallthrough) {
-	int64_t id1 = db->createNodeRetId("ESFT1");
-	int64_t id2 = db->createNodeRetId("ESFT2");
-	db->createEdgeById(id1, id2, "ESFT_REL", {{"w", (int64_t)10}});
+	int64_t id1 = db->createNode("ESFT1");
+	int64_t id2 = db->createNode("ESFT2");
+	db->createEdge(id1, id2, "ESFT_REL", {{"w", (int64_t)10}});
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:ESFT_REL]->() RETURN e");

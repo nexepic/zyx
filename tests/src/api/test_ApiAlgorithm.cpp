@@ -29,11 +29,11 @@
 // ============================================================================
 
 TEST_F(CppApiTest, AlgorithmShortestPath) {
-	int64_t a = db->createNodeRetId("A", {{"val", (int64_t) 1}});
-	int64_t b = db->createNodeRetId("B", {{"val", (int64_t) 2}});
-	int64_t c = db->createNodeRetId("C", {{"val", (int64_t) 3}});
-	db->createEdgeById(a, b, "NEXT");
-	db->createEdgeById(b, c, "NEXT");
+	int64_t a = db->createNode("A", {{"val", (int64_t) 1}});
+	int64_t b = db->createNode("B", {{"val", (int64_t) 2}});
+	int64_t c = db->createNode("C", {{"val", (int64_t) 3}});
+	db->createEdge(a, b, "NEXT");
+	db->createEdge(b, c, "NEXT");
 	db->save();
 
 	auto path = db->getShortestPath(a, c);
@@ -46,9 +46,9 @@ TEST_F(CppApiTest, AlgorithmShortestPath) {
 }
 
 TEST_F(CppApiTest, AlgorithmBFS) {
-	int64_t root = db->createNodeRetId("Root");
-	int64_t child = db->createNodeRetId("Child");
-	db->createEdgeById(root, child, "LINK");
+	int64_t root = db->createNode("Root");
+	int64_t child = db->createNode("Child");
+	db->createEdge(root, child, "LINK");
 	db->save();
 
 	std::vector<int64_t> visited;
@@ -60,14 +60,14 @@ TEST_F(CppApiTest, AlgorithmBFS) {
 }
 
 TEST_F(CppApiTest, ShortestPathWithMaxDepth) {
-	int64_t a = db->createNodeRetId("Node", {{"name", "A"}});
-	int64_t b = db->createNodeRetId("Node", {{"name", "B"}});
-	int64_t c = db->createNodeRetId("Node", {{"name", "C"}});
-	int64_t d = db->createNodeRetId("Node", {{"name", "D"}});
+	int64_t a = db->createNode("Node", {{"name", "A"}});
+	int64_t b = db->createNode("Node", {{"name", "B"}});
+	int64_t c = db->createNode("Node", {{"name", "C"}});
+	int64_t d = db->createNode("Node", {{"name", "D"}});
 
-	db->createEdgeById(a, b, "NEXT");
-	db->createEdgeById(b, c, "NEXT");
-	db->createEdgeById(c, d, "NEXT");
+	db->createEdge(a, b, "NEXT");
+	db->createEdge(b, c, "NEXT");
+	db->createEdge(c, d, "NEXT");
 	db->save();
 
 	auto path = db->getShortestPath(a, d, 2);
@@ -75,12 +75,12 @@ TEST_F(CppApiTest, ShortestPathWithMaxDepth) {
 }
 
 TEST_F(CppApiTest, BFSEarlyTermination) {
-	int64_t root = db->createNodeRetId("Root");
-	int64_t child1 = db->createNodeRetId("Child1");
-	int64_t child2 = db->createNodeRetId("Child2");
+	int64_t root = db->createNode("Root");
+	int64_t child1 = db->createNode("Child1");
+	int64_t child2 = db->createNode("Child2");
 
-	db->createEdgeById(root, child1, "LINK");
-	db->createEdgeById(root, child2, "LINK");
+	db->createEdge(root, child1, "LINK");
+	db->createEdge(root, child2, "LINK");
 	db->save();
 
 	std::vector<int64_t> visited;
@@ -94,11 +94,11 @@ TEST_F(CppApiTest, BFSEarlyTermination) {
 }
 
 TEST_F(CppApiTest, BfsTraversal) {
-	int64_t a = db->createNodeRetId("BFSNode", {{"name", "A"}});
-	int64_t b = db->createNodeRetId("BFSNode", {{"name", "B"}});
-	int64_t c = db->createNodeRetId("BFSNode", {{"name", "C"}});
-	db->createEdgeById(a, b, "LINK");
-	db->createEdgeById(b, c, "LINK");
+	int64_t a = db->createNode("BFSNode", {{"name", "A"}});
+	int64_t b = db->createNode("BFSNode", {{"name", "B"}});
+	int64_t c = db->createNode("BFSNode", {{"name", "C"}});
+	db->createEdge(a, b, "LINK");
+	db->createEdge(b, c, "LINK");
 	db->save();
 
 	std::vector<std::string> visited;
@@ -114,11 +114,11 @@ TEST_F(CppApiTest, BfsTraversal) {
 }
 
 TEST_F(CppApiTest, BfsTraversal_StopEarly) {
-	int64_t a = db->createNodeRetId("BFSStop", {{"name", "A"}});
-	int64_t b = db->createNodeRetId("BFSStop", {{"name", "B"}});
-	int64_t c = db->createNodeRetId("BFSStop", {{"name", "C"}});
-	db->createEdgeById(a, b, "LINK");
-	db->createEdgeById(b, c, "LINK");
+	int64_t a = db->createNode("BFSStop", {{"name", "A"}});
+	int64_t b = db->createNode("BFSStop", {{"name", "B"}});
+	int64_t c = db->createNode("BFSStop", {{"name", "C"}});
+	db->createEdge(a, b, "LINK");
+	db->createEdge(b, c, "LINK");
 	db->save();
 
 	int count = 0;
@@ -131,8 +131,8 @@ TEST_F(CppApiTest, BfsTraversal_StopEarly) {
 }
 
 TEST_F(CppApiTest, ShortestPath_NoPath) {
-	int64_t a = db->createNodeRetId("SPNode", {{"name", "A"}});
-	int64_t b = db->createNodeRetId("SPNode", {{"name", "B"}});
+	int64_t a = db->createNode("SPNode", {{"name", "A"}});
+	int64_t b = db->createNode("SPNode", {{"name", "B"}});
 	db->save();
 
 	auto path = db->getShortestPath(a, b);

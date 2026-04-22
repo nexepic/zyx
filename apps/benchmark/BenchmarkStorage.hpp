@@ -246,7 +246,7 @@ namespace zyx::benchmark {
 					nodeIds.reserve(static_cast<size_t>(config::STORAGE_PROFILE_GRAPH_NODE_COUNT));
 
 					for (int i = 0; i < config::STORAGE_PROFILE_GRAPH_NODE_COUNT; ++i) {
-						int64_t id = db.createNodeRetId(
+						int64_t id = db.createNode(
 								"RelUser", {{"uid", static_cast<int64_t>(i)}, {"tier", static_cast<int64_t>(i % 10)}});
 						nodeIds.push_back(id);
 					}
@@ -258,8 +258,8 @@ namespace zyx::benchmark {
 						const int64_t skipDst =
 								nodeIds[static_cast<size_t>((i + 17) % config::STORAGE_PROFILE_GRAPH_NODE_COUNT)];
 
-						db.createEdgeById(src, nearDst, "FOLLOWS", {{"weight", 1.0}, {"kind", "near"}});
-						db.createEdgeById(src, skipDst, "FOLLOWS", {{"weight", 2.0}, {"kind", "skip"}});
+						db.createEdge(src, nearDst, "FOLLOWS", {{"weight", 1.0}, {"kind", "near"}});
+						db.createEdge(src, skipDst, "FOLLOWS", {{"weight", 2.0}, {"kind", "skip"}});
 					}
 
 					const int64_t edges = static_cast<int64_t>(config::STORAGE_PROFILE_GRAPH_NODE_COUNT) * 2LL;

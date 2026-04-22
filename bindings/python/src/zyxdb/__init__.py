@@ -4,6 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from zyxdb._core import DatabaseError
 from zyxdb.database import Database
+from zyxdb.result import Record, Result
 from zyxdb.transaction import Transaction
 from zyxdb.types import Edge, Node
 
@@ -16,5 +17,7 @@ __all__ = [
     "DatabaseError",
     "Edge",
     "Node",
+    "Record",
+    "Result",
     "Transaction",
 ]

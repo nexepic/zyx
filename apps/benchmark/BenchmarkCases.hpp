@@ -263,9 +263,9 @@ namespace zyx::benchmark {
 			std::cout << " (Building chain " << chainLen << ") " << std::flush;
 			int64_t prevId = -1;
 			for (int i = 0; i < chainLen; ++i) {
-				int64_t curr = db.createNodeRetId("Node", {{"id", static_cast<int64_t>(i)}});
+				int64_t curr = db.createNode("Node", {{"id", static_cast<int64_t>(i)}});
 				if (prevId != -1)
-					db.createEdgeById(prevId, curr, "NEXT");
+					db.createEdge(prevId, curr, "NEXT");
 				prevId = curr;
 				if (i == 0)
 					startId = curr;
@@ -288,9 +288,9 @@ namespace zyx::benchmark {
 			std::cout << " (Building chain " << chainLen << ") " << std::flush;
 			int64_t prevId = -1;
 			for (int i = 0; i < chainLen; ++i) {
-				int64_t curr = db.createNodeRetId("Node", {{"id", static_cast<int64_t>(i)}});
+				int64_t curr = db.createNode("Node", {{"id", static_cast<int64_t>(i)}});
 				if (prevId != -1)
-					db.createEdgeById(prevId, curr, "NEXT");
+					db.createEdge(prevId, curr, "NEXT");
 				prevId = curr;
 				if (i == 0)
 					startId = curr;

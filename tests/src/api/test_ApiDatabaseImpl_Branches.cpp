@@ -112,10 +112,10 @@ TEST_F(CppApiTest, BatchMethodsInsideCypherTransaction) {
 	EXPECT_NO_THROW(db->createNode("CypherTxnNode", {{"val", (int64_t) 1}}));
 	EXPECT_NO_THROW(db->createNode(std::vector<std::string>{"MultiA", "MultiB"}, {{"val", (int64_t) 2}}));
 	EXPECT_NO_THROW(db->createNodes("BatchNode", {{{"val", (int64_t) 3}}, {{"val", (int64_t) 4}}}));
-	int64_t nodeId = db->createNodeRetId("RetIdNode", {{"val", (int64_t) 5}});
+	int64_t nodeId = db->createNode("RetIdNode", {{"val", (int64_t) 5}});
 	EXPECT_GT(nodeId, 0);
-	int64_t nodeId2 = db->createNodeRetId("RetIdNode", {{"val", (int64_t) 6}});
-	EXPECT_NO_THROW(db->createEdgeById(nodeId, nodeId2, "LINK", {{"w", (int64_t) 10}}));
+	int64_t nodeId2 = db->createNode("RetIdNode", {{"val", (int64_t) 6}});
+	EXPECT_NO_THROW(db->createEdge(nodeId, nodeId2, "LINK", {{"w", (int64_t) 10}}));
 
 	// Rollback — all batch changes should be undone
 	auto rollbackRes = db->execute("ROLLBACK");

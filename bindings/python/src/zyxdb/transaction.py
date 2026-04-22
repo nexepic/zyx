@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from zyxdb.result import Result
+
 
 class Transaction:
     """Context manager wrapper around the core Transaction.
@@ -12,18 +14,17 @@ class Transaction:
 
         with db.begin_transaction() as tx:
             tx.execute("CREATE (n:Person {name: $name})", name="Alice")
-            tx.commit()
+            # auto-commits on normal exit
 
-    Auto-rolls back on exception. If no exception and commit() was not called,
-    the transaction remains active until garbage collected (auto-rollback).
+    Auto-commits on normal exit, auto-rolls back on exception.
     """
 
     def __init__(self, core_tx: Any) -> None:
         self._tx = core_tx
 
-    def execute(self, cypher: str, **params: Any) -> Any:
+    def execute(self, cypher: str, **params: Any) -> Result:
         """Execute a Cypher query within this transaction."""
-        return self._tx.execute(cypher, **params)
+        return Result(self._tx.execute(cypher, **params))
 
     def commit(self) -> None:
         """Commit the transaction."""
@@ -50,4 +51,11 @@ class Transaction:
         if self._tx.is_active:
             if exc_type is not None:
                 self._tx.rollback()
+            else:
+                self._tx.commit()
         return False
+
+    def __repr__(self) -> str:
+        status = "active" if self.is_active else "closed"
+        mode = "read-only" if self.is_read_only else "read-write"
+        return f"Transaction({status}, {mode})"

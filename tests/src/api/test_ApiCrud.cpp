@@ -101,10 +101,10 @@ TEST_F(CppApiTest, ReturnFullNode) {
 // ============================================================================
 
 TEST_F(CppApiTest, CreateNodeRetId) {
-	int64_t id1 = db->createNodeRetId("User", {{"uid", (int64_t) 100}});
-	int64_t id2 = db->createNodeRetId("User", {{"uid", (int64_t) 200}});
+	int64_t id1 = db->createNode("User", {{"uid", (int64_t) 100}});
+	int64_t id2 = db->createNode("User", {{"uid", (int64_t) 200}});
 
-	db->createEdgeById(id1, id2, "KNOWS");
+	db->createEdge(id1, id2, "KNOWS");
 	db->save();
 
 	auto res = db->execute("MATCH (a)-[:KNOWS]->(b) RETURN a.uid, b.uid");
@@ -121,12 +121,12 @@ TEST_F(CppApiTest, CreateNodeRetId) {
 
 TEST_F(CppApiTest, CreateEdgeFullParams) {
 	// 1. Setup
-	db->createNode("User", {{"uid", (int64_t) 1}});
-	db->createNode("User", {{"uid", (int64_t) 2}});
+	int64_t id1 = db->createNode("User", {{"uid", (int64_t) 1}});
+	int64_t id2 = db->createNode("User", {{"uid", (int64_t) 2}});
 	db->save();
 
-	// 2. Action: Create Edge
-	db->createEdge("User", "uid", (int64_t) 1, "User", "uid", (int64_t) 2, "FOLLOWS", {{"since", (int64_t) 2025}});
+	// 2. Action: Create Edge by ID
+	db->createEdge(id1, id2, "FOLLOWS", {{"since", (int64_t) 2025}});
 	db->save();
 
 	// 3. Verification
@@ -189,10 +189,10 @@ TEST_F(CppApiTest, CreateNodesWithMultipleNodes) {
 }
 
 TEST_F(CppApiTest, CreateEdgeByIdWithProperties) {
-	int64_t id1 = db->createNodeRetId("User", {{"uid", (int64_t) 1}});
-	int64_t id2 = db->createNodeRetId("User", {{"uid", (int64_t) 2}});
+	int64_t id1 = db->createNode("User", {{"uid", (int64_t) 1}});
+	int64_t id2 = db->createNode("User", {{"uid", (int64_t) 2}});
 
-	db->createEdgeById(id1, id2, "CONNECTED", {{"weight", (int64_t) 100}, {"active", true}});
+	db->createEdge(id1, id2, "CONNECTED", {{"weight", (int64_t) 100}, {"active", true}});
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:CONNECTED]->() RETURN e.weight, e.active");
@@ -220,10 +220,10 @@ TEST_F(CppApiTest, CreateNodesWithSingleEmptyProps) {
 }
 
 TEST_F(CppApiTest, CreateEdgeByIdNoProps) {
-	int64_t id1 = db->createNodeRetId("Node1");
-	int64_t id2 = db->createNodeRetId("Node2");
+	int64_t id1 = db->createNode("Node1");
+	int64_t id2 = db->createNode("Node2");
 
-	db->createEdgeById(id1, id2, "LINK");
+	db->createEdge(id1, id2, "LINK");
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:LINK]->() RETURN e");
@@ -231,8 +231,8 @@ TEST_F(CppApiTest, CreateEdgeByIdNoProps) {
 }
 
 TEST_F(CppApiTest, EdgeWithAllPropertyTypes) {
-	int64_t id1 = db->createNodeRetId("A");
-	int64_t id2 = db->createNodeRetId("B");
+	int64_t id1 = db->createNode("A");
+	int64_t id2 = db->createNode("B");
 
 	std::unordered_map<std::string, zyx::Value> edgeProps;
 	edgeProps["str"] = "test";
@@ -240,7 +240,7 @@ TEST_F(CppApiTest, EdgeWithAllPropertyTypes) {
 	edgeProps["dbl"] = 3.14;
 	edgeProps["bool"] = true;
 
-	db->createEdgeById(id1, id2, "FULL", edgeProps);
+	db->createEdge(id1, id2, "FULL", edgeProps);
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:FULL]->() RETURN e");
@@ -256,7 +256,7 @@ TEST_F(CppApiTest, EdgeWithAllPropertyTypes) {
 }
 
 TEST_F(CppApiTest, CreateNodeRetIdNoProps) {
-	int64_t id = db->createNodeRetId("EmptyNode");
+	int64_t id = db->createNode("EmptyNode");
 	EXPECT_GT(id, 0);
 	db->save();
 
@@ -265,7 +265,7 @@ TEST_F(CppApiTest, CreateNodeRetIdNoProps) {
 }
 
 TEST_F(CppApiTest, CreateNodeRetIdWithProps) {
-	int64_t id = db->createNodeRetId("PropNode", {{"key", "value"}, {"num", (int64_t)42}});
+	int64_t id = db->createNode("PropNode", {{"key", "value"}, {"num", (int64_t)42}});
 	EXPECT_GT(id, 0);
 	db->save();
 
@@ -282,14 +282,12 @@ TEST_F(CppApiTest, CreateNodeRetIdWithProps) {
 	EXPECT_EQ(std::get<int64_t>(numVal), 42);
 }
 
-TEST_F(CppApiTest, CreateEdge_QueryBased) {
-	db->createNode("CENode", {{"name", "X"}});
-	db->createNode("CENode", {{"name", "Y"}});
+TEST_F(CppApiTest, CreateEdge_ById) {
+	int64_t idX = db->createNode("CENode", {{"name", "X"}});
+	int64_t idY = db->createNode("CENode", {{"name", "Y"}});
 	db->save();
 
-	db->createEdge("CENode", "name", std::string("X"),
-				   "CENode", "name", std::string("Y"),
-				   "KNOWS", {{"since", (int64_t)2025}});
+	db->createEdge(idX, idY, "KNOWS", {{"since", (int64_t)2025}});
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:KNOWS]->() RETURN e.since");
@@ -323,9 +321,9 @@ TEST_F(CppApiTest, DeleteNodeViaCypher) {
 }
 
 TEST_F(CppApiTest, DeleteEdgeViaCypher) {
-	int64_t a = db->createNodeRetId("DA", {{"id", (int64_t)1}});
-	int64_t b = db->createNodeRetId("DB", {{"id", (int64_t)2}});
-	db->createEdgeById(a, b, "DEL_REL", {{"weight", (int64_t)10}});
+	int64_t a = db->createNode("DA", {{"id", (int64_t)1}});
+	int64_t b = db->createNode("DB", {{"id", (int64_t)2}});
+	db->createEdge(a, b, "DEL_REL", {{"weight", (int64_t)10}});
 	db->save();
 
 	auto res = db->execute("MATCH ()-[e:DEL_REL]->() DELETE e");
@@ -340,14 +338,14 @@ TEST_F(CppApiTest, DeleteEdgeViaCypher) {
 }
 
 TEST_F(CppApiTest, CreateAndDeleteMultipleEdges) {
-	int64_t hub = db->createNodeRetId("Hub");
-	int64_t spoke1 = db->createNodeRetId("Spoke", {{"id", (int64_t)1}});
-	int64_t spoke2 = db->createNodeRetId("Spoke", {{"id", (int64_t)2}});
-	int64_t spoke3 = db->createNodeRetId("Spoke", {{"id", (int64_t)3}});
+	int64_t hub = db->createNode("Hub");
+	int64_t spoke1 = db->createNode("Spoke", {{"id", (int64_t)1}});
+	int64_t spoke2 = db->createNode("Spoke", {{"id", (int64_t)2}});
+	int64_t spoke3 = db->createNode("Spoke", {{"id", (int64_t)3}});
 
-	db->createEdgeById(hub, spoke1, "CONNECTS");
-	db->createEdgeById(hub, spoke2, "CONNECTS");
-	db->createEdgeById(hub, spoke3, "CONNECTS");
+	db->createEdge(hub, spoke1, "CONNECTS");
+	db->createEdge(hub, spoke2, "CONNECTS");
+	db->createEdge(hub, spoke3, "CONNECTS");
 	db->save();
 
 	auto delRes = db->execute("MATCH (h:Hub)-[e:CONNECTS]->(s:Spoke {id: 2}) DELETE e");
@@ -368,12 +366,12 @@ TEST_F(CppApiTest, CreateAndDeleteMultipleEdges) {
 // ============================================================================
 
 TEST_F(CppApiTest, MultipleNodesAndEdgesQuery) {
-	int64_t a = db->createNodeRetId("A", {{"name", "NodeA"}});
-	int64_t b = db->createNodeRetId("B", {{"name", "NodeB"}});
-	int64_t c = db->createNodeRetId("C", {{"name", "NodeC"}});
+	int64_t a = db->createNode("A", {{"name", "NodeA"}});
+	int64_t b = db->createNode("B", {{"name", "NodeB"}});
+	int64_t c = db->createNode("C", {{"name", "NodeC"}});
 
-	db->createEdgeById(a, b, "LINK", {{"weight", (int64_t) 1}});
-	db->createEdgeById(b, c, "LINK", {{"weight", (int64_t) 2}});
+	db->createEdge(a, b, "LINK", {{"weight", (int64_t) 1}});
+	db->createEdge(b, c, "LINK", {{"weight", (int64_t) 2}});
 	db->save();
 
 	auto res = db->execute("MATCH (a:A)-[e1:LINK]->(b:B)-[e2:LINK]->(c:C) RETURN a, e1, b, e2, c");
@@ -439,14 +437,14 @@ TEST_F(CppApiTest, QueryWithSetProperty) {
 }
 
 TEST_F(CppApiTest, ComplexGraphTraversalQuery) {
-	int64_t a = db->createNodeRetId("Chain", {{"pos", (int64_t)1}});
-	int64_t b = db->createNodeRetId("Chain", {{"pos", (int64_t)2}});
-	int64_t c = db->createNodeRetId("Chain", {{"pos", (int64_t)3}});
-	int64_t d = db->createNodeRetId("Chain", {{"pos", (int64_t)4}});
+	int64_t a = db->createNode("Chain", {{"pos", (int64_t)1}});
+	int64_t b = db->createNode("Chain", {{"pos", (int64_t)2}});
+	int64_t c = db->createNode("Chain", {{"pos", (int64_t)3}});
+	int64_t d = db->createNode("Chain", {{"pos", (int64_t)4}});
 
-	db->createEdgeById(a, b, "NEXT");
-	db->createEdgeById(b, c, "NEXT");
-	db->createEdgeById(c, d, "NEXT");
+	db->createEdge(a, b, "NEXT");
+	db->createEdge(b, c, "NEXT");
+	db->createEdge(c, d, "NEXT");
 	db->save();
 
 	auto res = db->execute("MATCH (a:Chain)-[:NEXT]->(b:Chain)-[:NEXT]->(c:Chain) RETURN a.pos, b.pos, c.pos");
@@ -460,9 +458,9 @@ TEST_F(CppApiTest, ComplexGraphTraversalQuery) {
 }
 
 TEST_F(CppApiTest, QueryReturningEdgeValues) {
-	int64_t a = db->createNodeRetId("QE_A");
-	int64_t b = db->createNodeRetId("QE_B");
-	db->createEdgeById(a, b, "QE_REL", {{"score", 3.14}});
+	int64_t a = db->createNode("QE_A");
+	int64_t b = db->createNode("QE_B");
+	db->createEdge(a, b, "QE_REL", {{"score", 3.14}});
 	db->save();
 
 	auto res = db->execute("MATCH (a)-[r:QE_REL]->(b) RETURN a, r, b");

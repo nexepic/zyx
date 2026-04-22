@@ -146,43 +146,43 @@ namespace zyx {
 		                             const std::unordered_map<std::string, Value> &params) const;
 
 		// High-performance direct insert APIs
-		void createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const;
-		void createNode(const std::vector<std::string> &labels, const std::unordered_map<std::string, Value> &props) const;
+
+		/**
+		 * @brief Create a node with a single label and return its internal ID.
+		 * @return The internal ID (int64_t) of the created node.
+		 */
+		[[nodiscard]] int64_t createNode(const std::string &label,
+										 const std::unordered_map<std::string, Value> &props = {}) const;
+
+		/**
+		 * @brief Create a node with multiple labels and return its internal ID.
+		 * @return The internal ID (int64_t) of the created node.
+		 */
+		[[nodiscard]] int64_t createNode(const std::vector<std::string> &labels,
+										 const std::unordered_map<std::string, Value> &props = {}) const;
 
 		/**
 		 * @brief Create multiple nodes in one batch.
-		 *        Essential for high-performance data loading tools.
+		 * @return Vector of internal IDs for the created nodes.
 		 */
-		void createNodes(const std::string &label,
+		[[nodiscard]] std::vector<int64_t> createNodes(const std::string &label,
 						 const std::vector<std::unordered_map<std::string, Value>> &propsList) const;
 
-		void createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
-						const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
-						const std::string &edgeType, const std::unordered_map<std::string, Value> &props) const;
-
 		/**
-		 * @brief Creates a node and returns its internal ID immediately.
-		 *        Essential for tools that need to link nodes later without re-querying.
-		 *
-		 * @param label The node label (e.g., "BasicBlock", "Instruction").
-		 * @param props The properties.
-		 * @return The internal ID (int64_t) of the created node.
-		 */
-		[[nodiscard]] int64_t createNodeRetId(const std::string &label,
-											  const std::unordered_map<std::string, Value> &props = {}) const;
-
-		/**
-		 * @brief Creates an edge directly between two known internal IDs.
-		 *        This bypasses the query parser and index lookups, offering O(1) performance.
-		 *
-		 * @param sourceId The internal ID of the source node.
-		 * @param targetId The internal ID of the target node.
-		 * @param edgeType The edge type (e.g., "FLOWS_TO").
-		 * @param props Edge properties.
+		 * @brief Create an edge between two known internal IDs and return the edge ID.
 		 * @throws std::runtime_error If sourceId or targetId does not exist.
+		 * @return The internal ID (int64_t) of the created edge.
 		 */
-		void createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeType,
-							const std::unordered_map<std::string, Value> &props = {}) const;
+		[[nodiscard]] int64_t createEdge(int64_t sourceId, int64_t targetId, const std::string &edgeType,
+										 const std::unordered_map<std::string, Value> &props = {}) const;
+
+		/**
+		 * @brief Create multiple edges in one batch.
+		 * @return Vector of internal IDs for the created edges.
+		 */
+		[[nodiscard]] std::vector<int64_t> createEdges(
+				const std::string &edgeType,
+				const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList) const;
 
 		/**
 		 * @brief Finds the shortest path between two nodes.

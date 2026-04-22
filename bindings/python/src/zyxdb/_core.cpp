@@ -110,11 +110,9 @@ static zyx::Value pythonToValue(const py::handle &obj) {
 	if (py::isinstance<py::list>(obj)) {
 		auto lst = obj.cast<py::list>();
 		if (lst.empty()) {
-			// Empty list → empty ValueList
 			auto vl = std::make_shared<zyx::ValueList>();
 			return vl;
 		}
-		// Check if all elements are float → vector<float>
 		bool all_float = true;
 		bool all_str = true;
 		for (const auto &item : lst) {
@@ -141,7 +139,6 @@ static zyx::Value pythonToValue(const py::handle &obj) {
 			}
 			return vec;
 		}
-		// Mixed list → ValueList
 		auto vl = std::make_shared<zyx::ValueList>();
 		for (const auto &item : lst) {
 			vl->elements.push_back(pythonToValue(item));
@@ -200,14 +197,10 @@ PYBIND11_MODULE(_core, m) {
 	// Custom exception type
 	static py::exception<std::runtime_error> DatabaseError(m, "DatabaseError");
 
-	// Register exception translator
-	// Note: pybind11 exceptions (stop_iteration, etc.) inherit from std::runtime_error,
-	// so we must let them pass through by re-throwing pybind11 exceptions.
 	py::register_exception_translator([](std::exception_ptr p) {
 		try {
 			if (p) std::rethrow_exception(p);
 		} catch (const py::builtin_exception &) {
-			// Let pybind11's built-in exceptions (stop_iteration, etc.) pass through
 			throw;
 		} catch (const std::runtime_error &e) {
 			DatabaseError(e.what());
@@ -280,9 +273,11 @@ PYBIND11_MODULE(_core, m) {
 			if (tx.isActive()) {
 				if (!exc_type.is_none()) {
 					tx.rollback();
+				} else {
+					tx.commit();
 				}
 			}
-			return false; // Don't suppress exceptions
+			return false;
 		});
 
 	// =========================================================================
@@ -305,18 +300,13 @@ PYBIND11_MODULE(_core, m) {
 			return db.execute(cypher, kwargsToParams(kw));
 		}, py::arg("cypher"))
 		.def("create_node",
-			[](zyx::Database &db, const py::object &label, const py::dict &props) {
+			[](zyx::Database &db, const py::object &label, const py::dict &props) -> int64_t {
 				auto propMap = dictToParams(props);
 				if (py::isinstance<py::list>(label)) {
-					db.createNode(label.cast<std::vector<std::string>>(), propMap);
+					return db.createNode(label.cast<std::vector<std::string>>(), propMap);
 				} else {
-					db.createNode(label.cast<std::string>(), propMap);
+					return db.createNode(label.cast<std::string>(), propMap);
 				}
-			},
-			py::arg("label"), py::arg("props") = py::dict())
-		.def("create_node_ret_id",
-			[](zyx::Database &db, const std::string &label, const py::dict &props) {
-				return db.createNodeRetId(label, dictToParams(props));
 			},
 			py::arg("label"), py::arg("props") = py::dict())
 		.def("create_nodes",
@@ -326,31 +316,42 @@ PYBIND11_MODULE(_core, m) {
 				for (const auto &item : propsList) {
 					vec.push_back(dictToParams(item.cast<py::dict>()));
 				}
-				db.createNodes(label, vec);
+				py::gil_scoped_release release;
+				return db.createNodes(label, vec);
 			},
 			py::arg("label"), py::arg("props_list"))
 		.def("create_edge",
-			[](zyx::Database &db,
-			   const std::string &srcLabel, const std::string &srcKey, const py::object &srcVal,
-			   const std::string &dstLabel, const std::string &dstKey, const py::object &dstVal,
-			   const std::string &edgeType, const py::dict &props) {
-				db.createEdge(srcLabel, srcKey, pythonToValue(srcVal),
-							  dstLabel, dstKey, pythonToValue(dstVal),
-							  edgeType, dictToParams(props));
-			},
-			py::arg("src_label"), py::arg("src_key"), py::arg("src_val"),
-			py::arg("dst_label"), py::arg("dst_key"), py::arg("dst_val"),
-			py::arg("edge_type"), py::arg("props") = py::dict())
-		.def("create_edge_by_id",
 			[](zyx::Database &db, int64_t srcId, int64_t dstId,
-			   const std::string &edgeType, const py::dict &props) {
-				db.createEdgeById(srcId, dstId, edgeType, dictToParams(props));
+			   const std::string &edgeType, const py::dict &props) -> int64_t {
+				return db.createEdge(srcId, dstId, edgeType, dictToParams(props));
 			},
 			py::arg("src_id"), py::arg("dst_id"), py::arg("edge_type"),
 			py::arg("props") = py::dict())
+		.def("create_edges",
+			[](zyx::Database &db, const std::string &edgeType, const py::list &edgesList) {
+				std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, zyx::Value>>> vec;
+				vec.reserve(edgesList.size());
+				for (const auto &item : edgesList) {
+					auto tup = item.cast<py::tuple>();
+					int64_t src = tup[0].cast<int64_t>();
+					int64_t dst = tup[1].cast<int64_t>();
+					std::unordered_map<std::string, zyx::Value> props;
+					if (tup.size() > 2 && !tup[2].is_none()) {
+						props = dictToParams(tup[2].cast<py::dict>());
+					}
+					vec.emplace_back(src, dst, std::move(props));
+				}
+				py::gil_scoped_release release;
+				return db.createEdges(edgeType, vec);
+			},
+			py::arg("edge_type"), py::arg("edges"))
 		.def("get_shortest_path",
 			[](zyx::Database &db, int64_t startId, int64_t endId, int maxDepth) {
-				auto nodes = db.getShortestPath(startId, endId, maxDepth);
+				std::vector<zyx::Node> nodes;
+				{
+					py::gil_scoped_release release;
+					nodes = db.getShortestPath(startId, endId, maxDepth);
+				}
 				py::list result;
 				for (const auto &node : nodes) {
 					py::dict d;
@@ -363,6 +364,21 @@ PYBIND11_MODULE(_core, m) {
 				return result;
 			},
 			py::arg("start_id"), py::arg("end_id"), py::arg("max_depth") = 15)
+		.def("bfs",
+			[](zyx::Database &db, int64_t startId, const py::function &visitor) {
+				auto wrappedVisitor = [&visitor](const zyx::Node &node) -> bool {
+					py::gil_scoped_acquire acquire;
+					py::dict d;
+					d["id"] = py::int_(node.id);
+					d["label"] = py::str(node.label);
+					d["labels"] = py::cast(node.labels);
+					d["properties"] = propsToDict(node.properties);
+					return visitor(d).cast<bool>();
+				};
+				py::gil_scoped_release release;
+				db.bfs(startId, wrappedVisitor);
+			},
+			py::arg("start_id"), py::arg("visitor"))
 		.def("__enter__", [](zyx::Database &db) -> zyx::Database& {
 			return db;
 		}, py::return_value_policy::reference_internal)

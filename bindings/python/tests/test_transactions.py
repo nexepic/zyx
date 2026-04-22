@@ -14,6 +14,14 @@ class TestTransactionBasic:
         assert len(rows) == 1
         assert rows[0]["name"] == "Alice"
 
+    def test_auto_commit_on_normal_exit(self, db):
+        with db.begin_transaction() as tx:
+            tx.execute("CREATE (n:Person {name: 'AutoCommit'})")
+            # No explicit commit — should auto-commit on exit
+        rows = list(db.execute("MATCH (n:Person) RETURN n.name AS name"))
+        assert len(rows) == 1
+        assert rows[0]["name"] == "AutoCommit"
+
     def test_rollback(self, db):
         with db.begin_transaction() as tx:
             tx.execute("CREATE (n:Person {name: 'Alice'})")
@@ -36,6 +44,19 @@ class TestTransactionBasic:
             tx.commit()
             assert not tx.is_active
 
+    def test_transaction_repr(self, db):
+        tx = db.begin_transaction()
+        assert "active" in repr(tx)
+        tx.rollback()
+
+    def test_transaction_execute_returns_result(self, db):
+        with db.begin_transaction() as tx:
+            tx.execute("CREATE (n:Person {name: 'Test'})")
+            result = tx.execute("MATCH (n:Person) RETURN n.name AS name")
+            assert isinstance(result, zyxdb.Result)
+            rows = result.fetchall()
+            assert len(rows) == 1
+
 
 class TestReadOnlyTransaction:
     def test_read_only_flag(self, db):
@@ -55,8 +76,6 @@ class TestTransactionIsolation:
         db.execute("CREATE (n:Person {name: 'Before'})")
         tx = db.begin_transaction()
         tx.execute("CREATE (n:Person {name: 'During'})")
-        # Without commit, the new node should not be visible to auto-commit queries
-        # (depends on isolation level — this tests the basic behavior)
         tx.rollback()
         rows = list(db.execute("MATCH (n:Person) RETURN n.name AS name"))
         names = {r["name"] for r in rows}

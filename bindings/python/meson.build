@@ -1,6 +1,6 @@
 project('zyxdb', 'cpp',
         version : run_command(
-            import('python').find_installation(), '-c',
+            'python3', '-c',
             'import re, pathlib; print(re.search(r"version\\s*:\\s*\'([^\']+)\'", pathlib.Path("' + meson.current_source_dir() / '..' / '..' / 'meson.build' + '").read_text()).group(1))',
             check : true).stdout().strip(),
         default_options : [
@@ -35,11 +35,14 @@ if not antlr4_dep.found()
 endif
 
 # ==============================================================================
-# ANTLR4 generated parser sources
+# ANTLR4 generated parser sources + implementation
 # ==============================================================================
 parser_dir = zyx_root / 'src' / 'query' / 'parser' / 'cypher' / 'generated'
+parser_impl_dir = zyx_root / 'src' / 'query' / 'parser' / 'cypher'
 
 _py = import('python').find_installation()
+
+# Generated parser files
 _find_parser = run_command(_py, '-c', '''
 import os, sys
 d = sys.argv[1]
@@ -55,9 +58,30 @@ foreach f : _parser_files
     endif
 endforeach
 
+# Parser implementation files (CypherParserImpl, helpers, clauses, etc.)
+_find_parser_impl = run_command(_py, '-c', '''
+import os, sys
+base_dir = sys.argv[1]
+for root, dirs, files_list in os.walk(base_dir):
+    for f in sorted(files_list):
+        if f.endswith(".cpp"):
+            print(os.path.join(root, f))
+''', parser_impl_dir, check : true)
+_parser_impl_files = _find_parser_impl.stdout().strip().split('\n')
+foreach f : _parser_impl_files
+    if f != '' and f not in _parser_files
+        parser_src += files(f)
+    endif
+endforeach
+
 cypher_dep = declare_dependency(
     sources : parser_src,
-    include_directories : include_directories(parser_dir),
+    include_directories : include_directories(
+        '../../src/query/parser/cypher/generated',
+        '../../src/query/parser/cypher',
+        '../../src/query/parser/cypher/helpers/internal',
+        '../../src/query/parser/cypher/helpers/public',
+    ),
 )
 
 # ==============================================================================
@@ -89,7 +113,12 @@ foreach f : _src_files
     endif
 endforeach
 
-inc_dirs = include_directories(zyx_root / 'include', src_dir, zyx_root)
+inc_dirs = include_directories(
+    '../../include',
+    '../../src',
+    '../..',
+    '../../src/query/parser/cypher',
+)
 
 # Generate ProjectConfig.hpp from template
 project_config = configuration_data()
@@ -136,7 +165,9 @@ zyxdb_core = py.extension_module(
 py.install_sources(
     'src/zyxdb/__init__.py',
     'src/zyxdb/database.py',
+    'src/zyxdb/result.py',
     'src/zyxdb/transaction.py',
     'src/zyxdb/types.py',
+    'src/zyxdb/py.typed',
     subdir: 'zyxdb',
 )

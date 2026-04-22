@@ -693,27 +693,7 @@ namespace zyx {
 		}
 	}
 
-	void Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
-		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
-		}
-
-		auto builder = impl_->db_.getQueryEngine()->query();
-		std::unordered_map<std::string, graph::PropertyValue> internalProps;
-		for (const auto &[k, v]: props)
-			internalProps[k] = toInternal(v);
-		auto plan = builder.create_("n", label, internalProps).build();
-		(void) impl_->db_.getQueryEngine()->execute(std::move(plan));
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-	}
-
-	void Database::createNode(const std::vector<std::string> &labels,
-							  const std::unordered_map<std::string, Value> &props) const {
+	int64_t Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
 		if (impl_->needsImplicitTransaction()) {
@@ -722,82 +702,7 @@ namespace zyx {
 
 		auto dm = impl_->db_.getStorage()->getDataManager();
 
-		// Resolve all label IDs
-		std::vector<int64_t> labelIds;
-		for (const auto &lbl : labels) {
-			labelIds.push_back(dm->getOrCreateTokenId(lbl));
-		}
-
-		int64_t firstLabelId = labelIds.empty() ? 0 : labelIds[0];
-		graph::Node node(0, firstLabelId);
-		for (size_t i = 1; i < labelIds.size(); ++i) {
-			node.addLabelId(labelIds[i]);
-		}
-		dm->addNode(node);
-
-		if (!props.empty()) {
-			std::unordered_map<std::string, graph::PropertyValue> internalProps;
-			for (const auto &[k, v] : props)
-				internalProps[k] = toInternal(v);
-			dm->addNodeProperties(node.getId(), internalProps);
-		}
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-	}
-
-	void Database::createNodes(const std::string &label,
-							   const std::vector<std::unordered_map<std::string, Value>> &propsList) const {
-		if (propsList.empty())
-			return;
-
-		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
-		}
-
-		auto storage = impl_->db_.getStorage();
-		auto dm = storage->getDataManager();
-
-		// 1. Resolve/Create Label ID ONCE for the batch
 		int64_t labelId = dm->getOrCreateTokenId(label);
-
-		std::vector<graph::Node> nodes;
-		nodes.reserve(propsList.size());
-
-		for (const auto &props: propsList) {
-			// 2. Use ID constructor
-			graph::Node n(0, labelId);
-			std::unordered_map<std::string, graph::PropertyValue> internalProps;
-			for (const auto &[k, v]: props)
-				internalProps[k] = toInternal(v);
-			n.setProperties(std::move(internalProps));
-			nodes.push_back(std::move(n));
-		}
-
-		dm->addNodes(nodes);
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-	}
-
-	int64_t Database::createNodeRetId(const std::string &label,
-									  const std::unordered_map<std::string, Value> &props) const {
-		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
-		}
-
-		auto dm = impl_->db_.getStorage()->getDataManager();
-
-		// 1. Resolve/Create Label ID
-		int64_t labelId = dm->getOrCreateTokenId(label);
-
-		// 2. Use ID constructor
 		graph::Node node(0, labelId);
 		dm->addNode(node);
 		int64_t newId = node.getId();
@@ -815,7 +720,85 @@ namespace zyx {
 		return newId;
 	}
 
-	void Database::createEdgeById(int64_t sourceId, int64_t targetId, const std::string &edgeType,
+	int64_t Database::createNode(const std::vector<std::string> &labels,
+							  const std::unordered_map<std::string, Value> &props) const {
+		impl_->ensureOpen();
+		std::optional<graph::Transaction> implicitTxn;
+		if (impl_->needsImplicitTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
+		auto dm = impl_->db_.getStorage()->getDataManager();
+
+		std::vector<int64_t> labelIds;
+		for (const auto &lbl : labels) {
+			labelIds.push_back(dm->getOrCreateTokenId(lbl));
+		}
+
+		int64_t firstLabelId = labelIds.empty() ? 0 : labelIds[0];
+		graph::Node node(0, firstLabelId);
+		for (size_t i = 1; i < labelIds.size(); ++i) {
+			node.addLabelId(labelIds[i]);
+		}
+		dm->addNode(node);
+		int64_t newId = node.getId();
+
+		if (!props.empty()) {
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v] : props)
+				internalProps[k] = toInternal(v);
+			dm->addNodeProperties(newId, internalProps);
+		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
+		return newId;
+	}
+
+	std::vector<int64_t> Database::createNodes(const std::string &label,
+							   const std::vector<std::unordered_map<std::string, Value>> &propsList) const {
+		if (propsList.empty())
+			return {};
+
+		impl_->ensureOpen();
+		std::optional<graph::Transaction> implicitTxn;
+		if (impl_->needsImplicitTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
+		auto storage = impl_->db_.getStorage();
+		auto dm = storage->getDataManager();
+
+		int64_t labelId = dm->getOrCreateTokenId(label);
+
+		std::vector<graph::Node> nodes;
+		nodes.reserve(propsList.size());
+
+		for (const auto &props: propsList) {
+			graph::Node n(0, labelId);
+			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			for (const auto &[k, v]: props)
+				internalProps[k] = toInternal(v);
+			n.setProperties(std::move(internalProps));
+			nodes.push_back(std::move(n));
+		}
+
+		dm->addNodes(nodes);
+
+		std::vector<int64_t> ids;
+		ids.reserve(nodes.size());
+		for (const auto &n : nodes) {
+			ids.push_back(n.getId());
+		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
+		return ids;
+	}
+
+	int64_t Database::createEdge(int64_t sourceId, int64_t targetId, const std::string &edgeType,
 								  const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
@@ -825,112 +808,120 @@ namespace zyx {
 
 		auto dm = impl_->db_.getStorage()->getDataManager();
 
-		// 1. Resolve/Create Type ID
 		int64_t typeId = dm->getOrCreateTokenId(edgeType);
-
-		// 2. Use ID constructor
 		graph::Edge edge(0, sourceId, targetId, typeId);
 		dm->addEdge(edge);
+		int64_t edgeId = edge.getId();
 
 		if (!props.empty()) {
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
 			for (const auto &[k, v]: props)
 				internalProps[k] = toInternal(v);
-			dm->addEdgeProperties(edge.getId(), internalProps);
+			dm->addEdgeProperties(edgeId, internalProps);
 		}
 
 		if (implicitTxn) {
 			implicitTxn->commit();
 		}
+		return edgeId;
 	}
 
-	void Database::createEdge(const std::string &sourceLabel, const std::string &sourceKey, const Value &sourceVal,
-							  const std::string &targetLabel, const std::string &targetKey, const Value &targetVal,
-							  const std::string &edgeType, const std::unordered_map<std::string, Value> &props) const {
+	std::vector<int64_t> Database::createEdges(
+			const std::string &edgeType,
+			const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList) const {
+		if (edgesList.empty())
+			return {};
+
 		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
 		if (impl_->needsImplicitTransaction()) {
 			implicitTxn.emplace(impl_->db_.beginTransaction());
 		}
 
-		auto builder = impl_->db_.getQueryEngine()->query();
-		std::unordered_map<std::string, graph::PropertyValue> edgeProps;
-		for (const auto &[k, v]: props)
-			edgeProps[k] = toInternal(v);
+		auto dm = impl_->db_.getStorage()->getDataManager();
+		int64_t typeId = dm->getOrCreateTokenId(edgeType);
 
-		builder.match_("a", sourceLabel, sourceKey, toInternal(sourceVal));
-		builder.match_("b", targetLabel, targetKey, toInternal(targetVal));
-		builder.create_("e", edgeType, "a", "b", edgeProps);
-		builder.return_({"e"});
+		std::vector<graph::Edge> edges;
+		edges.reserve(edgesList.size());
 
-		auto plan = builder.build();
-		(void) impl_->db_.getQueryEngine()->execute(std::move(plan));
+		for (const auto &[srcId, dstId, props] : edgesList) {
+			graph::Edge e(0, srcId, dstId, typeId);
+			if (!props.empty()) {
+				std::unordered_map<std::string, graph::PropertyValue> internalProps;
+				for (const auto &[k, v] : props)
+					internalProps[k] = toInternal(v);
+				e.setProperties(std::move(internalProps));
+			}
+			edges.push_back(std::move(e));
+		}
+
+		dm->addEdges(edges);
+
+		std::vector<int64_t> ids;
+		ids.reserve(edges.size());
+		for (const auto &e : edges) {
+			ids.push_back(e.getId());
+		}
 
 		if (implicitTxn) {
 			implicitTxn->commit();
 		}
+		return ids;
 	}
 
 	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) const {
-		try {
-			impl_->ensureOpen();
+		impl_->ensureOpen();
 
-			std::optional<graph::Transaction> implicitTxn;
-			if (impl_->needsImplicitTransaction()) {
-				implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
-			}
-
-			auto storage = impl_->db_.getStorage();
-			if (!storage)
-				return {};
-			auto dm = storage->getDataManager();
-
-			graph::query::algorithm::GraphAlgorithm algo(dm);
-			auto internalPath = algo.findShortestPath(startId, endId, "out", maxDepth);
-
-			std::vector<Node> publicPath;
-			publicPath.reserve(internalPath.size());
-			for (const auto &n: internalPath) {
-				graph::Node fullNode = dm->getNode(n.getId());
-				fullNode.setProperties(dm->getNodeProperties(n.getId()));
-				publicPath.push_back(toPublicNode(fullNode, dm));
-			}
-
-			if (implicitTxn) {
-				implicitTxn->commit();
-			}
-			return publicPath;
-		} catch (...) {
-			return {};
+		std::optional<graph::Transaction> implicitTxn;
+		if (impl_->needsImplicitTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
 		}
+
+		auto storage = impl_->db_.getStorage();
+		if (!storage)
+			throw std::runtime_error("Storage not available");
+		auto dm = storage->getDataManager();
+
+		graph::query::algorithm::GraphAlgorithm algo(dm);
+		auto internalPath = algo.findShortestPath(startId, endId, "out", maxDepth);
+
+		std::vector<Node> publicPath;
+		publicPath.reserve(internalPath.size());
+		for (const auto &n: internalPath) {
+			graph::Node fullNode = dm->getNode(n.getId());
+			fullNode.setProperties(dm->getNodeProperties(n.getId()));
+			publicPath.push_back(toPublicNode(fullNode, dm));
+		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
+		return publicPath;
 	}
 
 	void Database::bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const {
-		try {
-			impl_->ensureOpen();
+		impl_->ensureOpen();
 
-			std::optional<graph::Transaction> implicitTxn;
-			if (impl_->needsImplicitTransaction()) {
-				implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
-			}
+		std::optional<graph::Transaction> implicitTxn;
+		if (impl_->needsImplicitTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
+		}
 
-			auto storage = impl_->db_.getStorage();
-			if (!storage)
-				return;
-			auto dm = storage->getDataManager();
+		auto storage = impl_->db_.getStorage();
+		if (!storage)
+			throw std::runtime_error("Storage not available");
+		auto dm = storage->getDataManager();
 
-			graph::query::algorithm::GraphAlgorithm algo(dm);
-			auto internalVisitor = [&](int64_t nodeId, [[maybe_unused]] int depth) -> bool {
-				graph::Node internalNode = dm->getNode(nodeId);
-				internalNode.setProperties(dm->getNodeProperties(nodeId));
-				return visitor(toPublicNode(internalNode, dm));
-			};
-			algo.breadthFirstTraversal(startNodeId, internalVisitor, "out");
+		graph::query::algorithm::GraphAlgorithm algo(dm);
+		auto internalVisitor = [&](int64_t nodeId, [[maybe_unused]] int depth) -> bool {
+			graph::Node internalNode = dm->getNode(nodeId);
+			internalNode.setProperties(dm->getNodeProperties(nodeId));
+			return visitor(toPublicNode(internalNode, dm));
+		};
+		algo.breadthFirstTraversal(startNodeId, internalVisitor, "out");
 
-			if (implicitTxn) {
-				implicitTxn->commit();
-			}
-		} catch (...) {
+		if (implicitTxn) {
+			implicitTxn->commit();
 		}
 	}
 
