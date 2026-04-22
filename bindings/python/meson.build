@@ -46,10 +46,11 @@ _py = import('python').find_installation()
 _find_parser = run_command(_py, '-c', '''
 import os, sys
 d = sys.argv[1]
+source_dir = sys.argv[2]
 for f in sorted(os.listdir(d)):
     if f.endswith(".cpp"):
-        print(os.path.join(d, f))
-''', parser_dir, check : true)
+        print(os.path.relpath(os.path.join(d, f), source_dir))
+''', parser_dir, meson.current_source_dir(), check : true)
 _parser_files = _find_parser.stdout().strip().split('\n')
 parser_src = []
 foreach f : _parser_files
@@ -62,14 +63,21 @@ endforeach
 _find_parser_impl = run_command(_py, '-c', '''
 import os, sys
 base_dir = sys.argv[1]
+source_dir = sys.argv[2]
+seen = set()
+for line in sys.argv[3].splitlines():
+    if line.strip():
+        seen.add(os.path.normpath(line.strip()))
 for root, dirs, files_list in os.walk(base_dir):
     for f in sorted(files_list):
         if f.endswith(".cpp"):
-            print(os.path.join(root, f))
-''', parser_impl_dir, check : true)
+            rel = os.path.relpath(os.path.join(root, f), source_dir)
+            if os.path.normpath(rel) not in seen:
+                print(rel)
+''', parser_impl_dir, meson.current_source_dir(), '\n'.join(_parser_files), check : true)
 _parser_impl_files = _find_parser_impl.stdout().strip().split('\n')
 foreach f : _parser_impl_files
-    if f != '' and f not in _parser_files
+    if f != ''
         parser_src += files(f)
     endif
 endforeach
@@ -91,6 +99,7 @@ src_dir = zyx_root / 'src'
 _find_src = run_command(_py, '-c', '''
 import os, sys
 base_dir = sys.argv[1]
+source_dir = sys.argv[2]
 exclude = ["query/parser"]
 for root, dirs, files_list in os.walk(base_dir):
     rel_root = os.path.relpath(root, base_dir)
@@ -103,8 +112,8 @@ for root, dirs, files_list in os.walk(base_dir):
         continue
     for f in sorted(files_list):
         if f.endswith(".cpp"):
-            print(os.path.join(root, f))
-''', src_dir, check : true)
+            print(os.path.relpath(os.path.join(root, f), source_dir))
+''', src_dir, meson.current_source_dir(), check : true)
 _src_files = _find_src.stdout().strip().split('\n')
 db_src = []
 foreach f : _src_files
