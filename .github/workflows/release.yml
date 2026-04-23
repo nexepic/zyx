@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:                                                                                                                                                                                                                                                                                                                                                      
+  contents: write   
+
 jobs:
   verify-version:
     name: Verify version consistency
