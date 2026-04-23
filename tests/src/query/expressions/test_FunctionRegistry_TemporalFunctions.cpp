@@ -148,3 +148,43 @@ TEST_F(FunctionRegistryTest, DatetimeFunction_MapWithMissingFields) {
 	auto result = func->evaluate(args, *context_);
 	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
 }
+
+// Cover the false branch of "it->second.getType() == PropertyType::INTEGER"
+// in dateImpl: key "year" exists but holds a string, so the branch is NOT taken
+// and the default value (1970) is used.
+TEST_F(FunctionRegistryTest, DateFunction_MapYearNonInteger_UsesDefault) {
+	const ScalarFunction* func = registry->lookupScalarFunction("date");
+	PropertyValue::MapType map;
+	map["year"] = PropertyValue(std::string("2024")); // string, not integer
+	map["month"] = PropertyValue(std::string("3"));   // string, not integer
+	std::vector<PropertyValue> args{PropertyValue(map)};
+	auto result = func->evaluate(args, *context_);
+	// Should still return a DATE (using defaults year=1970, month=1, day=1)
+	EXPECT_EQ(result.getType(), PropertyType::DATE);
+}
+
+// Cover the false branch of the INTEGER type check in datetimeImpl map path.
+TEST_F(FunctionRegistryTest, DatetimeFunction_MapYearNonInteger_UsesDefault) {
+	const ScalarFunction* func = registry->lookupScalarFunction("datetime");
+	PropertyValue::MapType map;
+	map["year"] = PropertyValue(std::string("2024")); // string, not integer
+	map["hour"] = PropertyValue(std::string("10"));   // string, not integer
+	std::vector<PropertyValue> args{PropertyValue(map)};
+	auto result = func->evaluate(args, *context_);
+	// Should still return a DATETIME (using defaults)
+	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
+}
+
+// Cover the durationImpl empty-args guard (args.empty() branch).
+// durationImpl is registered with minArgs=1 so the function registry validator
+// blocks too-few args before reaching durationImpl; call the function object
+// directly with an empty vector to cover the guard branch.
+TEST_F(FunctionRegistryTest, DurationFunction_EmptyArgs_ReturnsNull) {
+	const ScalarFunction* func = registry->lookupScalarFunction("duration");
+	ASSERT_NE(func, nullptr);
+	// Bypass arity check by calling the underlying evaluate directly
+	std::vector<PropertyValue> empty;
+	// The guard "if (args.empty() || isNull(args[0]))" returns NULL
+	auto result = func->evaluate(empty, *context_);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+}

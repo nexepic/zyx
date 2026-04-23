@@ -19,6 +19,7 @@
  **/
 
 #include "query/expressions/ExpressionEvaluatorTestFixture.hpp"
+#include "graph/core/TemporalTypes.hpp"
 
 // ============================================================================
 // Arithmetic Tests
@@ -286,4 +287,145 @@ TEST_F(ExpressionEvaluatorTest, Arithmetic_BoolBool_Add) {
 	auto result = eval(&expr);
 	EXPECT_EQ(result.getType(), PropertyType::DOUBLE);
 	EXPECT_DOUBLE_EQ(std::get<double>(result.getVariant()), 1.0);
+}
+
+// ============================================================================
+// Temporal Arithmetic Tests (covers DATE+DURATION, DURATION+DATE,
+// DATETIME+DURATION, DURATION+DATETIME branches in evaluateArithmetic)
+// ============================================================================
+
+// Helper: set temporal values in the record using a sub-fixture
+class ExpressionEvaluatorTemporalTest : public ::testing::Test {
+protected:
+	void SetUp() override {
+		record_.setValue("d", PropertyValue(TemporalDate::fromYMD(2024, 3, 15)));
+		record_.setValue("dt", PropertyValue(TemporalDateTime::fromComponents(2024, 3, 15, 10, 30, 0)));
+		record_.setValue("dur", PropertyValue(TemporalDuration{1, 5, 0})); // 1 month, 5 days
+		context_ = std::make_unique<EvaluationContext>(record_);
+	}
+
+	PropertyValue eval(const Expression* expr) {
+		ExpressionEvaluator evaluator(*context_);
+		return evaluator.evaluate(expr);
+	}
+
+	Record record_;
+	std::unique_ptr<EvaluationContext> context_;
+};
+
+// DATE + DURATION -> DATE
+TEST_F(ExpressionEvaluatorTemporalTest, Arithmetic_DatePlusDuration) {
+	auto left  = std::make_unique<VariableReferenceExpression>("d");
+	auto right = std::make_unique<VariableReferenceExpression>("dur");
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::DATE);
+}
+
+// DURATION + DATE -> DATE (commutative path)
+TEST_F(ExpressionEvaluatorTemporalTest, Arithmetic_DurationPlusDate) {
+	auto left  = std::make_unique<VariableReferenceExpression>("dur");
+	auto right = std::make_unique<VariableReferenceExpression>("d");
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::DATE);
+}
+
+// DATETIME + DURATION -> DATETIME
+TEST_F(ExpressionEvaluatorTemporalTest, Arithmetic_DateTimePlusDuration) {
+	auto left  = std::make_unique<VariableReferenceExpression>("dt");
+	auto right = std::make_unique<VariableReferenceExpression>("dur");
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
+}
+
+// DURATION + DATETIME -> DATETIME (commutative path)
+TEST_F(ExpressionEvaluatorTemporalTest, Arithmetic_DurationPlusDateTime) {
+	auto left  = std::make_unique<VariableReferenceExpression>("dur");
+	auto right = std::make_unique<VariableReferenceExpression>("dt");
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
+}
+
+// ============================================================================
+// Temporal Component Access Tests (covers extractTemporalComponent)
+// ============================================================================
+
+// Accessing .year on a DATE variable triggers extractTemporalComponent for DATE
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DateYear) {
+	VariableReferenceExpression expr("d", "year");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 2024);
+}
+
+// Accessing .month on a DATE variable
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DateMonth) {
+	VariableReferenceExpression expr("d", "month");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 3);
+}
+
+// Accessing .day on a DATE variable
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DateDay) {
+	VariableReferenceExpression expr("d", "day");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 15);
+}
+
+// Accessing .epochDays on a DATE variable
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DateEpochDays) {
+	VariableReferenceExpression expr("d", "epochDays");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+}
+
+// Accessing .year on a DATETIME variable triggers extractTemporalComponent for DATETIME
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DateTimeYear) {
+	VariableReferenceExpression expr("dt", "year");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 2024);
+}
+
+// Accessing .hour on a DATETIME variable
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DateTimeHour) {
+	VariableReferenceExpression expr("dt", "hour");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 10);
+}
+
+// Accessing .epochMillis on a DATETIME variable
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DateTimeEpochMillis) {
+	VariableReferenceExpression expr("dt", "epochMillis");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+}
+
+// Accessing .months on a DURATION variable triggers extractTemporalComponent for DURATION
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DurationMonths) {
+	VariableReferenceExpression expr("dur", "months");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 1);
+}
+
+// Accessing .days on a DURATION variable
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_DurationDays) {
+	VariableReferenceExpression expr("dur", "days");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
+	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 5);
+}
+
+// Accessing an unknown component returns NULL
+TEST_F(ExpressionEvaluatorTemporalTest, TemporalComponent_UnknownComponent_ReturnsNull) {
+	VariableReferenceExpression expr("d", "unknownField");
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
 }

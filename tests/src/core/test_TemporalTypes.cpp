@@ -356,3 +356,38 @@ TEST(TemporalDurationTest, ToISOYearsAndMonths) {
 	auto dur = TemporalDuration::fromComponents(2, 6, 0, 0, 0, 0, 0);
 	EXPECT_EQ(dur.toISO(), "P2Y6M");
 }
+
+// --- TemporalDuration::operator< nanos tiebreaker (same totalDays, different nanos) ---
+
+TEST(TemporalDurationTest, CompareByNanosWhenTotalDaysEqual) {
+	// Same months*30 + days, but different nanos: tests the nanos < o.nanos branch
+	TemporalDuration a;
+	a.months = 1;
+	a.days = 0;
+	a.nanos = 100;
+	// b has same totalDays (1*30+0 == 0*30+30), different nanos
+	TemporalDuration b;
+	b.months = 0;
+	b.days = 30;
+	b.nanos = 200;
+	// totalDays equal: fall through to nanos comparison
+	EXPECT_LT(a, b);
+	EXPECT_GT(b, a);
+	EXPECT_FALSE(b < a);
+}
+
+TEST(TemporalDurationTest, EqualTotalDaysAndEqualNanosNotLess) {
+	TemporalDuration a;
+	a.months = 1;
+	a.days = 0;
+	a.nanos = 500;
+	TemporalDuration b;
+	b.months = 0;
+	b.days = 30;
+	b.nanos = 500;
+	// totalDays equal AND nanos equal: neither is less than the other
+	EXPECT_FALSE(a < b);
+	EXPECT_FALSE(b < a);
+	EXPECT_LE(a, b);
+	EXPECT_GE(a, b);
+}

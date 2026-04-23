@@ -350,3 +350,33 @@ TEST_F(TransactionUndoLogTest, AddNodeWritesSerializedDataToWAL) {
 	EXPECT_GT(node.getId(), 0);
 	// If we get here without throw, WAL write with serialized data succeeded
 }
+
+// --- TransactionContext const overloads ---
+
+TEST_F(TransactionUndoLogTest, ConstUndoLogOverloadIsCallable) {
+	// Cover the const overload of TransactionContext::undoLog()
+	// by binding a const reference to the non-const TransactionContext.
+	auto &dm = *db->getStorage()->getDataManager();
+	auto txn = db->beginTransaction();
+
+	Node node(0, 0);
+	dm.addNode(node);
+
+	// Binding via const ref forces the const overload: const wal::UndoLog& undoLog() const
+	const TransactionContext &constCtx = dm.getTransactionContext();
+	const wal::UndoLog &constLog = constCtx.undoLog();
+	EXPECT_EQ(constLog.size(), 1u);
+
+	txn.rollback();
+}
+
+TEST_F(TransactionUndoLogTest, ConstGetWALManagerOverloadIsCallable) {
+	// Cover the const overload of TransactionContext::getWALManager()
+	// by binding a const reference to the non-const TransactionContext.
+	auto &dm = *db->getStorage()->getDataManager();
+
+	// Binding via const ref forces the const overload: wal::WALManager* getWALManager() const
+	const TransactionContext &constCtx = dm.getTransactionContext();
+	(void)constCtx.getWALManager();
+	// No assertion needed — the call itself provides coverage.
+}

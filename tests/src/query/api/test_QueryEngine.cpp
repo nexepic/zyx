@@ -30,6 +30,11 @@
 
 // We need a dummy operator for direct execution testing
 #include "graph/query/execution/operators/LimitOperator.hpp" // Any simple operator
+#include "graph/query/execution/operators/SingleRowOperator.hpp"
+#include "graph/query/QueryContext.hpp"
+#include "graph/query/QueryPlan.hpp"
+#include "graph/query/ExecMode.hpp"
+#include "graph/query/logical/operators/LogicalSingleRow.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
@@ -155,4 +160,80 @@ TEST_F(QueryEngineTest, Execute_DirectPlan) {
 		count++;
 	}
 	EXPECT_EQ(count, 3);
+}
+
+// ============================================================================
+// executePlan() access-control branches
+// ============================================================================
+
+TEST_F(QueryEngineTest, ExecutePlan_ReadOnly_MutatesSchema_Throws) {
+	// Build a plan with a valid root but mutatesSchema = true
+	QueryPlan plan;
+	plan.root = std::make_unique<logical::LogicalSingleRow>();
+	plan.mutatesSchema = true;
+
+	QueryContext ctx;
+	ctx.execMode = ExecMode::EM_READ_ONLY;
+
+	EXPECT_THROW(engine->executePlan(std::move(plan), ctx), std::runtime_error);
+}
+
+TEST_F(QueryEngineTest, ExecutePlan_ReadOnly_MutatesData_Throws) {
+	// Build a plan with a valid root but mutatesData = true
+	QueryPlan plan;
+	plan.root = std::make_unique<logical::LogicalSingleRow>();
+	plan.mutatesData = true;
+
+	QueryContext ctx;
+	ctx.execMode = ExecMode::EM_READ_ONLY;
+
+	EXPECT_THROW(engine->executePlan(std::move(plan), ctx), std::runtime_error);
+}
+
+TEST_F(QueryEngineTest, ExecutePlan_ReadWrite_MutatesSchema_Throws) {
+	// EM_READ_WRITE mode forbids schema-modifying operations
+	QueryPlan plan;
+	plan.root = std::make_unique<logical::LogicalSingleRow>();
+	plan.mutatesSchema = true;
+
+	QueryContext ctx;
+	ctx.execMode = ExecMode::EM_READ_WRITE;
+
+	EXPECT_THROW(engine->executePlan(std::move(plan), ctx), std::runtime_error);
+}
+
+TEST_F(QueryEngineTest, ExecutePlan_NullRoot_ReturnsEmptyResult) {
+	// A plan with no root node returns an empty QueryResult without error
+	QueryPlan plan;
+	// plan.root is nullptr by default
+
+	QueryContext ctx;
+	ctx.execMode = ExecMode::EM_FULL;
+
+	auto result = engine->executePlan(std::move(plan), ctx);
+	EXPECT_TRUE(result.getRows().empty());
+}
+
+// ============================================================================
+// execute(unique_ptr<PhysicalOperator>) with thread pool set
+// ============================================================================
+
+TEST_F(QueryEngineTest, Execute_DirectPlan_WithThreadPool) {
+	// Set a thread pool on the engine, then execute a direct physical plan.
+	// This covers the threadPool_ != nullptr branch in execute(unique_ptr<>).
+	graph::concurrent::ThreadPool pool(2);
+	engine->setThreadPool(&pool);
+
+	auto plan = engine->query()
+	                .unwind({PropertyValue(10), PropertyValue(20)}, "v")
+	                .build();
+	ASSERT_NE(plan, nullptr);
+
+	auto result = engine->execute(std::move(plan));
+
+	int count = 0;
+	for ([[maybe_unused]] const auto &record : result.getRows()) {
+		count++;
+	}
+	EXPECT_EQ(count, 2);
 }

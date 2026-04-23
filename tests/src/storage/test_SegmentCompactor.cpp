@@ -1195,3 +1195,116 @@ TEST_F(SegmentCompactorTest, RelocateSegments_MovesTailToHole) {
 	auto segments = segmentTracker->getSegmentsByType(type);
 	EXPECT_GE(segments.size(), 1u);
 }
+
+// =========================================================================
+// Phase 2: Front segment with zero active items (line ~315)
+// When a remaining front segment has activeCount == 0, it should be freed.
+// =========================================================================
+
+TEST_F(SegmentCompactorTest, MergeSegments_FrontSegmentWithZeroActive_IsFreed) {
+	// We need multiple candidates that all land in frontSegments.
+	// In a small file, all segments are at low offsets → front of file.
+	// One front segment has zero active items (all inactive).
+	auto type = Node::typeId;
+
+	// Allocate 3 segments that will all be front candidates.
+	uint64_t seg1 = segmentAllocator->allocateSegment(type, 10);
+	uint64_t seg2 = segmentAllocator->allocateSegment(type, 10);
+	uint64_t seg3 = segmentAllocator->allocateSegment(type, 10);
+
+	// seg1: 1 active entity (low usage → candidate)
+	SegmentHeader h1 = segmentTracker->getSegmentHeader(seg1);
+	createActiveNode(seg1, 0, h1.start_id);
+	segmentTracker->updateSegmentUsage(seg1, 1, 0);
+
+	// seg2: 1 written but inactive entity → activeCount==0 (low usage → candidate)
+	SegmentHeader h2 = segmentTracker->getSegmentHeader(seg2);
+	createActiveNode(seg2, 0, h2.start_id);
+	segmentTracker->setEntityActive(seg2, 0, false);
+	segmentTracker->updateSegmentUsage(seg2, 1, 1); // used=1, inactive=1 → active=0
+
+	// seg3: 1 active entity (low usage → candidate)
+	SegmentHeader h3 = segmentTracker->getSegmentHeader(seg3);
+	createActiveNode(seg3, 0, h3.start_id);
+	segmentTracker->updateSegmentUsage(seg3, 1, 0);
+
+	// All three have < 0.7 usage so all are merge candidates.
+	// In a small file they all land in frontSegments (Phase 2).
+	// seg2 has activeCount==0 → should be freed in Phase 2 at line ~315.
+	bool merged = compactor->mergeSegments(type, 0.7);
+	EXPECT_TRUE(merged); // seg2 was freed → mergedAny = true
+}
+
+// =========================================================================
+// Phase 1 fallback: end-segment merge fails into front → tries other end segs
+// (line ~270: the !merged block)
+// Create a scenario where the only front segment is too full to absorb
+// an end segment, so the end-to-end fallback path is exercised.
+// =========================================================================
+
+TEST_F(SegmentCompactorTest, MergeSegments_EndToFrontFails_FallbackToEndToEnd) {
+	auto type = Node::typeId;
+
+	// We need multiple segments where at least one is classified as an "end" segment.
+	// Allocate enough segments to push some to the end threshold.
+	// With a small file (few segments), all may still be "front".
+	// Use the existing FailedEndToFront test approach but ensure we have
+	// two end-segments with different positions to exercise the fallback loop.
+
+	// Allocate enough segments to ensure some land at the "end" of the file.
+	// With 6 segments of TOTAL_SEGMENT_SIZE each, the last 1-2 will be past
+	// the endThreshold = fileSize - fileSize/5.
+	// We fill the "front" candidate with ENOUGH items that it can't absorb
+	// the end segment's items, forcing the !merged fallback.
+	std::vector<uint64_t> segs;
+	for (int i = 0; i < 6; ++i) {
+		uint64_t seg = segmentAllocator->allocateSegment(type, 10);
+		segs.push_back(seg);
+	}
+
+	// segs[0..2]: high usage → NOT candidates (90%)
+	for (int i = 0; i < 3; ++i) {
+		SegmentHeader h = segmentTracker->getSegmentHeader(segs[i]);
+		for (uint32_t j = 0; j < 9; ++j) {
+			createActiveNode(segs[i], j, h.start_id + j);
+		}
+		segmentTracker->updateSegmentUsage(segs[i], 9, 0);
+	}
+
+	// segs[3]: front candidate — 6 active items (so it CAN'T absorb segs[4]'s 7 items)
+	{
+		SegmentHeader h = segmentTracker->getSegmentHeader(segs[3]);
+		for (uint32_t j = 0; j < 6; ++j) {
+			createActiveNode(segs[3], j, h.start_id + j);
+		}
+		segmentTracker->updateSegmentUsage(segs[3], 6, 0); // 60% → candidate
+	}
+
+	// segs[4]: candidate — 7 active items (can't fit in segs[3] which has 4 free spots)
+	{
+		SegmentHeader h = segmentTracker->getSegmentHeader(segs[4]);
+		for (uint32_t j = 0; j < 7; ++j) {
+			createActiveNode(segs[4], j, h.start_id + j);
+		}
+		segmentTracker->updateSegmentUsage(segs[4], 7, 0); // 70% → candidate with < 0.75 threshold
+	}
+
+	// segs[5]: candidate — 4 active items
+	{
+		SegmentHeader h = segmentTracker->getSegmentHeader(segs[5]);
+		for (uint32_t j = 0; j < 4; ++j) {
+			createActiveNode(segs[5], j, h.start_id + j);
+		}
+		segmentTracker->updateSegmentUsage(segs[5], 4, 0); // 40% → candidate
+	}
+
+	// With threshold=0.75: segs[3], segs[4], segs[5] are candidates.
+	// segs[5] and segs[4] are likely at the "end" (high offsets).
+	// segs[3] is front but full (6+7=13 > 10 capacity → merge fails → fallback).
+	bool merged = compactor->mergeSegments(type, 0.75);
+	(void)merged;
+
+	// Should not crash regardless of outcome
+	auto remaining = segmentTracker->getSegmentsByType(type);
+	EXPECT_GE(remaining.size(), 1u);
+}

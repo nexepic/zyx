@@ -427,3 +427,17 @@ TYPED_TEST(FileStorageTypedTest, Save_ModifyAndDeleteEntities) {
     Helper::del(*dm, e2);
     EXPECT_NO_THROW(this->fileStorage->save());
 }
+
+TEST_F(FileStorageTest, GetIntegrityChecker_ReturnsNonNull) {
+	// Covers FileStorage::getIntegrityChecker()
+	auto checker = fileStorage->getIntegrityChecker();
+	EXPECT_NE(checker, nullptr);
+}
+
+TEST_F(FileStorageTest, GetIDAllocatorByTypeId_ReturnsNonNull) {
+	// Covers FileStorage::getIDAllocator(uint32_t typeId) for all 6 entity types
+	for (uint32_t typeId = 0; typeId < 6; ++typeId) {
+		auto allocator = fileStorage->getIDAllocator(typeId);
+		EXPECT_NE(allocator, nullptr) << "typeId=" << typeId;
+	}
+}

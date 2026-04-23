@@ -291,6 +291,40 @@ TEST_F(SetOperatorTest, Set_ToString) {
 	EXPECT_EQ(str, "Set(2 items)");
 }
 
+TEST_F(SetOperatorTest, SetChild_ReplacesChild) {
+	// Covers SetOperator::setChild(unique_ptr<PhysicalOperator>)
+	Node n1(1, 100);
+	dm->addNode(n1);
+
+	Record r1;
+	r1.setNode("n", n1);
+
+	// Create initial operator with a mock child
+	auto* initialMock = new MockOperator({{r1}});
+	std::vector<SetItem> items;
+	items.emplace_back(
+		SetActionType::PROPERTY, "n", "key",
+		std::make_shared<graph::query::expressions::LiteralExpression>(static_cast<int64_t>(7))
+	);
+	auto op = std::make_unique<SetOperator>(dm, std::unique_ptr<PhysicalOperator>(initialMock), items);
+
+	// Verify original child is accessible
+	EXPECT_EQ(op->getChildren().size(), 1UL);
+
+	// Replace child via setChild
+	Record r2;
+	r2.setNode("n", n1);
+	auto newMock = std::make_unique<MockOperator>(std::vector<RecordBatch>{{r2}});
+	op->setChild(std::move(newMock));
+
+	// The new child should be in place; open/next/close should work without crashing
+	EXPECT_EQ(op->getChildren().size(), 1UL);
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	op->close();
+}
+
 TEST_F(SetOperatorTest, Set_PropertyItemWithNullExpression) {
 	// Covers: item.type == PROPERTY && item.expression is nullptr (skip branch)
 	Node n1(1, 100);

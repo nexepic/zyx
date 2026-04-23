@@ -1023,6 +1023,39 @@ TEST_F(CApiTest, GetBoolFalse) {
 	zyx_result_close(res);
 }
 
+// ============================================================================
+// Read-only transaction tests
+// ============================================================================
+
+TEST_F(CApiTest, BeginReadOnlyTransaction_NonNull) {
+	ZYXTxn_T *txn = zyx_begin_read_only_transaction(db);
+	ASSERT_NE(txn, nullptr) << "zyx_begin_read_only_transaction should return a non-null transaction";
+	zyx_txn_close(txn);
+}
+
+TEST_F(CApiTest, BeginReadOnlyTransaction_NullDb) {
+	ZYXTxn_T *txn = zyx_begin_read_only_transaction(nullptr);
+	EXPECT_EQ(txn, nullptr) << "zyx_begin_read_only_transaction(nullptr) should return null";
+}
+
+TEST_F(CApiTest, TxnIsReadOnly_ReadOnlyTransaction) {
+	ZYXTxn_T *txn = zyx_begin_read_only_transaction(db);
+	ASSERT_NE(txn, nullptr);
+	EXPECT_TRUE(zyx_txn_is_read_only(txn)) << "Transaction started with begin_read_only should be read-only";
+	zyx_txn_close(txn);
+}
+
+TEST_F(CApiTest, TxnIsReadOnly_ReadWriteTransaction) {
+	ZYXTxn_T *txn = zyx_begin_transaction(db);
+	ASSERT_NE(txn, nullptr);
+	EXPECT_FALSE(zyx_txn_is_read_only(txn)) << "Transaction started with begin_transaction should not be read-only";
+	zyx_txn_close(txn);
+}
+
+TEST_F(CApiTest, TxnIsReadOnly_NullTransaction) {
+	EXPECT_FALSE(zyx_txn_is_read_only(nullptr)) << "zyx_txn_is_read_only(nullptr) should return false";
+}
+
 TEST_F(CApiTest, GetDoubleValid) {
 	// Exercise the get_double path with valid double
 	auto *res = zyx_execute(db, "RETURN 2.718 AS e");

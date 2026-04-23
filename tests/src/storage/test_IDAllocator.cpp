@@ -24,6 +24,12 @@
 // RecoverGapIds, ResetAfterCompaction, DiskScan & Remaining Tests
 // ============================================================================
 
+TEST_F(IDAllocatorTest, GetEntityTypeReturnsCorrectType) {
+	// Covers the inline getEntityType() method in IDAllocator.hpp
+	EXPECT_EQ(nodeAllocator->getEntityType(), graph::EntityType::Node);
+	EXPECT_EQ(edgeAllocator->getEntityType(), graph::EntityType::Edge);
+}
+
 TEST_F(IDAllocatorTest, SequentialAllocation) {
 	// Verify that IDs increment sequentially when no holes exist.
 	graph::Node n1 = insertNode("A");

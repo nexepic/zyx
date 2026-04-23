@@ -588,6 +588,33 @@ TEST(PropertyValueTest, MapCheckPropertyMatch) {
 	EXPECT_TRUE(checkPropertyMatch(graph::PropertyValue(map1), graph::PropertyValue(map2)));
 }
 
+// ============================================================================
+// Temporal Type Size Tests
+// ============================================================================
+
+TEST(PropertyValueTest, SizeOfTemporalDate) {
+	graph::TemporalDate d;
+	d.epochDays = 19000;
+	graph::PropertyValue v(d);
+	EXPECT_EQ(getPropertyValueSize(v), sizeof(int32_t));
+}
+
+TEST(PropertyValueTest, SizeOfTemporalDateTime) {
+	graph::TemporalDateTime dt;
+	dt.epochMillis = 1700000000000LL;
+	graph::PropertyValue v(dt);
+	EXPECT_EQ(getPropertyValueSize(v), sizeof(int64_t));
+}
+
+TEST(PropertyValueTest, SizeOfTemporalDuration) {
+	graph::TemporalDuration dur;
+	dur.months = 1;
+	dur.days = 15;
+	dur.nanos = 500000000LL;
+	graph::PropertyValue v(dur);
+	EXPECT_EQ(getPropertyValueSize(v), sizeof(int64_t) * 3);
+}
+
 TEST(PropertyValueTest, MapHash) {
 	// Test that PropertyValueHash works with MAP type
 	graph::PropertyValueHash hasher;
