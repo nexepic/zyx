@@ -396,3 +396,21 @@ TEST_F(PersistenceManagerTest, GetAllDirtyInfosEmpty) {
 	EXPECT_TRUE(manager->getAllDirtyInfos<Index>().empty());
 	EXPECT_TRUE(manager->getAllDirtyInfos<State>().empty());
 }
+
+// Test isTransactionActive before and after setTransactionActive
+TEST_F(PersistenceManagerTest, IsTransactionActive_DefaultFalse) {
+	// Initially transaction should not be active
+	EXPECT_FALSE(manager->isTransactionActive());
+}
+
+TEST_F(PersistenceManagerTest, IsTransactionActive_SetTrue) {
+	manager->setTransactionActive(true);
+	EXPECT_TRUE(manager->isTransactionActive());
+}
+
+TEST_F(PersistenceManagerTest, IsTransactionActive_SetFalseAfterTrue) {
+	manager->setTransactionActive(true);
+	EXPECT_TRUE(manager->isTransactionActive());
+	manager->setTransactionActive(false);
+	EXPECT_FALSE(manager->isTransactionActive());
+}

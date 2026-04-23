@@ -112,3 +112,43 @@ TEST_F(ExpressionsTest, ExistsExpression_NotImplemented_Throws) {
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
+
+TEST_F(ExpressionsTest, ExistsExpression_GetTargetVar_Empty) {
+	// Pattern-only constructor: targetVar_ is empty
+	ExistsExpression expr("(n)-[:FRIENDS]->()");
+	EXPECT_EQ(expr.getTargetVar(), "");
+}
+
+TEST_F(ExpressionsTest, ExistsExpression_GetTargetVar_Structured) {
+	// Structured constructor: targetVar_ is set explicitly
+	ExistsExpression expr(
+		"(n)-[:FRIENDS]->(m)",
+		"n",
+		"FRIENDS",
+		"Person",
+		PatternDirection::PAT_OUTGOING,
+		nullptr,
+		"m"
+	);
+	EXPECT_EQ(expr.getTargetVar(), "m");
+}
+
+TEST_F(ExpressionsTest, ExistsExpression_HasStructuredPattern_False) {
+	// Pattern-only constructor: sourceVar_ is empty => hasStructuredPattern() == false
+	ExistsExpression expr("(n)-[:FRIENDS]->()");
+	EXPECT_FALSE(expr.hasStructuredPattern());
+}
+
+TEST_F(ExpressionsTest, ExistsExpression_HasStructuredPattern_True) {
+	// Structured constructor: sourceVar_ is non-empty => hasStructuredPattern() == true
+	ExistsExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"n",
+		"KNOWS",
+		"",
+		PatternDirection::PAT_BOTH
+	);
+	EXPECT_TRUE(expr.hasStructuredPattern());
+	EXPECT_EQ(expr.getSourceVar(), "n");
+	EXPECT_EQ(expr.getRelType(), "KNOWS");
+}

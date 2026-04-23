@@ -770,3 +770,83 @@ TEST(ConcurrentReadTest, MultipleReadersOneWriter) {
 	fs::remove_all(testPath, ec);
 	fs::remove(testPath.string() + "-wal", ec);
 }
+
+// ============================================================================
+// Coverage: beginReadOnly timeout when a write transaction is active
+// Exercises lines 55-60: while (!lock.try_lock()) + deadline check
+// ============================================================================
+
+TEST(TransactionManagerReadOnlyTimeoutTest, ReadOnlyTimeoutBlockedByWriter) {
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_ro_timeout_" + boost::uuids::to_string(uuid) + ".zyx");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+
+	graph::TransactionManager txnMgr(storage, nullptr);
+
+	// Acquire write lock (exclusive) — blocks shared locks
+	auto writeTxn = txnMgr.begin();
+	EXPECT_TRUE(writeTxn.isActive());
+
+	// beginReadOnly with short timeout should fail because write lock is held
+	EXPECT_THROW(txnMgr.beginReadOnly(std::chrono::milliseconds(100)),
+				 std::runtime_error);
+
+	// Release the write lock so cleanup can proceed
+	txnMgr.commitTransaction(writeTxn);
+	EXPECT_FALSE(writeTxn.isActive());
+
+	testDb->close();
+	testDb.reset();
+	std::error_code ec2;
+	fs::remove_all(testPath, ec2);
+	fs::remove(testPath.string() + "-wal", ec2);
+}
+// shouldCheckpoint() returns true when currentWriteOffset_ > autoCheckpointThreshold_
+// Set threshold to 0 so any WAL write triggers a checkpoint on commit.
+// ============================================================================
+
+TEST(TransactionManagerCheckpointTest, CommitTriggersWALCheckpointWhenThresholdZero) {
+	boost::uuids::uuid uuid = boost::uuids::random_generator()();
+	auto testPath = fs::temp_directory_path() / ("test_txnmgr_ckpt_" + boost::uuids::to_string(uuid) + ".zyx");
+	fs::remove_all(testPath);
+
+	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	testDb->open();
+	auto storage = testDb->getStorage();
+
+	// Create a WAL manager with threshold=0 so shouldCheckpoint() returns true
+	// immediately after the first write.
+	auto walMgr = std::make_shared<graph::storage::wal::WALManager>();
+	walMgr->open(testPath.string());
+	walMgr->setAutoCheckpointThreshold(0); // Force checkpoint on every commit
+
+	graph::TransactionManager txnMgr(storage, walMgr);
+
+	// Begin a write transaction — this writes a BEGIN record, making WALSize > 0
+	auto txn = txnMgr.begin();
+	EXPECT_TRUE(txn.isActive());
+
+	// Add a node so the commit has real work to persist
+	auto dm = storage->getDataManager();
+	graph::Node node(0, dm->getOrCreateTokenId("CheckpointLabel"));
+	dm->addNode(node);
+
+	// Commit — should write WAL commit record, save, then trigger checkpoint
+	// because shouldCheckpoint() returns (walSize > 0 > threshold=0) == true
+	txnMgr.commitTransaction(txn);
+	EXPECT_FALSE(txn.isActive());
+
+	// After checkpoint, WAL is truncated — WAL size should be 0 (or very small)
+	EXPECT_LE(walMgr->getWALSize(), walMgr->getAutoCheckpointThreshold() + 1024ULL);
+
+	walMgr->close();
+	testDb->close();
+	testDb.reset();
+	std::error_code ec;
+	fs::remove_all(testPath, ec);
+	fs::remove(testPath.string() + "-wal", ec);
+}

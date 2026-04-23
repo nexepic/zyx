@@ -1495,3 +1495,48 @@ TEST_F(SegmentTrackerTest, GetSegmentHeader_NonExistentOffset_Throws) {
 	EXPECT_THROW(tracker->getSegmentHeader(invalidOffset), std::runtime_error);
 }
 
+// ============================================================================
+// SegmentTypeRegistry: unregistered type returns 0 (ternary false branch)
+// ============================================================================
+
+TEST(SegmentTypeRegistryTest, GetChainHeadUnregisteredTypeReturnsZero) {
+	SegmentTypeRegistry registry;
+	// Register only Node type
+	registry.registerType(EntityType::Node);
+	registry.setChainHead(EntityType::Node, 0xABCDu);
+
+	// Edge was never registered — ternary false branch returns 0
+	EXPECT_EQ(registry.getChainHead(EntityType::Edge), 0u);
+}
+
+TEST(SegmentTypeRegistryTest, GetChainTailUnregisteredTypeReturnsZero) {
+	SegmentTypeRegistry registry;
+	// Register only Node type
+	registry.registerType(EntityType::Node);
+	registry.setChainTail(EntityType::Node, 0x1234u);
+
+	// Property was never registered — ternary false branch returns 0
+	EXPECT_EQ(registry.getChainTail(EntityType::Property), 0u);
+}
+
+TEST(SegmentTypeRegistryTest, GetChainHeadAndTailOnRegisteredType) {
+	SegmentTypeRegistry registry;
+	registry.registerType(EntityType::Edge);
+	registry.setChainHead(EntityType::Edge, 100u);
+	registry.setChainTail(EntityType::Edge, 200u);
+
+	EXPECT_EQ(registry.getChainHead(EntityType::Edge), 100u);
+	EXPECT_EQ(registry.getChainTail(EntityType::Edge), 200u);
+}
+
+TEST(SegmentTypeRegistryTest, ClearMakesAllTypesUnregistered) {
+	SegmentTypeRegistry registry;
+	registry.registerType(EntityType::Node);
+	registry.setChainHead(EntityType::Node, 42u);
+	registry.clear();
+
+	// After clear, Node is no longer registered — ternary false branch returns 0
+	EXPECT_EQ(registry.getChainHead(EntityType::Node), 0u);
+	EXPECT_EQ(registry.getChainTail(EntityType::Node), 0u);
+}
+

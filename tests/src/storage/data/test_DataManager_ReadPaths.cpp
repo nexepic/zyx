@@ -157,6 +157,81 @@ TEST_F(DataManagerTest, LoadEntityDirectReturnsDirtyOverrideAndDiskFallback) {
 	EXPECT_FALSE(directDeleted.isActive());
 }
 
+// ============================================================================
+// getNodePropertiesFromMap: inactive non-zero node → early-return {}
+// Covers the !node.isActive() branch at line ~307 (node.getId()!=0 but inactive)
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesFromMap_InactiveNodeWithNonZeroId) {
+	// Create and add a node, flush to disk, then delete it so it gets a non-zero ID
+	// but becomes inactive.
+	auto node = createTestNode(dataManager, "InactiveMapNode");
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"x", PropertyValue(int64_t(42))}});
+	simulateSave();
+
+	// Build a property map from the persisted property entity
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_NE(storedNode.getId(), 0);
+	ASSERT_TRUE(storedNode.isActive());
+
+	// Now create a copy with the same non-zero ID but mark it inactive
+	Node inactiveNode = storedNode;
+	inactiveNode.markInactive();
+	EXPECT_NE(inactiveNode.getId(), 0);
+	EXPECT_FALSE(inactiveNode.isActive());
+
+	// getNodePropertiesFromMap should return {} for an inactive node (even with non-zero ID)
+	std::unordered_map<int64_t, Property> propMap;
+	if (storedNode.hasPropertyEntity()) {
+		propMap[storedNode.getPropertyEntityId()] = dataManager->getProperty(storedNode.getPropertyEntityId());
+	}
+	const auto result = dataManager->getNodePropertiesFromMap(inactiveNode, propMap);
+	EXPECT_TRUE(result.empty());
+}
+
+// ============================================================================
+// getNodePropertiesDirect: inactive node with non-zero ID → early-return {}
+// Covers the !node.isActive() branch at line ~275 (getId()!=0 but inactive)
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesDirect_InactiveNodeWithNonZeroId) {
+	auto node = createTestNode(dataManager, "DirectInactiveNode");
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"y", PropertyValue(int64_t(7))}});
+	simulateSave();
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_NE(storedNode.getId(), 0);
+	ASSERT_TRUE(storedNode.isActive());
+
+	// Make an inactive copy with non-zero ID
+	Node inactiveNode = storedNode;
+	inactiveNode.markInactive();
+	EXPECT_NE(inactiveNode.getId(), 0);
+	EXPECT_FALSE(inactiveNode.isActive());
+
+	// getNodePropertiesDirect should return {} for an inactive node with non-zero ID
+	const auto result = dataManager->getNodePropertiesDirect(inactiveNode);
+	EXPECT_TRUE(result.empty());
+}
+
+// ============================================================================
+// addNodes / addEdges: empty vector → early return (line ~194)
+// ============================================================================
+
+TEST_F(DataManagerTest, AddNodes_EmptyVector_NoOp) {
+	std::vector<Node> emptyNodes;
+	EXPECT_NO_THROW(dataManager->addNodes(emptyNodes));
+	EXPECT_EQ(observer->addedNodes.size(), 0u);
+}
+
+TEST_F(DataManagerTest, AddEdges_EmptyVector_NoOp) {
+	std::vector<Edge> emptyEdges;
+	EXPECT_NO_THROW(dataManager->addEdges(emptyEdges));
+	EXPECT_EQ(observer->addedEdges.size(), 0u);
+}
+
 TEST_F(DataManagerTest, HeaderSnapshotAndTransactionAccessors) {
 	const auto header = dataManager->getFileHeader();
 	EXPECT_EQ(dataManager->getFileVersion(), header.version);
@@ -182,4 +257,103 @@ TEST_F(DataManagerTest, HeaderSnapshotAndTransactionAccessors) {
 	(void)dataManager->getTransactionContext();
 	dataManager->clearActiveTransaction();
 	EXPECT_FALSE(dataManager->hasActiveTransaction());
+}
+
+// ============================================================================
+// resolveTokenId("") → early return 0 (line ~157)
+// ============================================================================
+
+TEST_F(DataManagerTest, ResolveTokenId_EmptyName_ReturnsZero) {
+	EXPECT_EQ(dataManager->resolveTokenId(""), 0);
+}
+
+// ============================================================================
+// getNodePropertiesDirect: node with no external property entity → skip blob/prop branch
+// Covers the hasPropertyEntity() == false branch at line ~282
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesDirect_NodeWithNoExternalProperties) {
+	// Create a node with no properties — no external property entity is created
+	auto node = createTestNode(dataManager, "NoPropNode");
+	dataManager->addNode(node);
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_TRUE(storedNode.isActive());
+	EXPECT_FALSE(storedNode.hasPropertyEntity());
+
+	// getNodePropertiesDirect should return {} since there are no properties at all
+	const auto result = dataManager->getNodePropertiesDirect(storedNode);
+	EXPECT_TRUE(result.empty());
+}
+
+// ============================================================================
+// getNodePropertiesFromMap: node with no external property entity → skip map lookup
+// Covers the hasPropertyEntity() == false branch at line ~312
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesFromMap_NodeWithNoExternalProperties) {
+	// Create a node with no properties
+	auto node = createTestNode(dataManager, "NoPropMapNode");
+	dataManager->addNode(node);
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_TRUE(storedNode.isActive());
+	EXPECT_FALSE(storedNode.hasPropertyEntity());
+
+	// Even with a non-empty map, should return {} because node has no external property entity
+	std::unordered_map<int64_t, Property> propMap;
+	propMap[999] = Property{}; // irrelevant entry
+	const auto result = dataManager->getNodePropertiesFromMap(storedNode, propMap);
+	EXPECT_TRUE(result.empty());
+}
+
+// ============================================================================
+// getNodePropertiesFromMap: property map entry has id==0 → skip that entry
+// Covers the it->second.getId() != 0 → False branch at line ~318
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesFromMap_PropertyMapEntryWithZeroId) {
+	// Create a node with external properties so hasPropertyEntity() == true
+	auto node = createTestNode(dataManager, "ZeroIdPropNode");
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"z", PropertyValue(int64_t(0))}});
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_TRUE(storedNode.hasPropertyEntity());
+	const int64_t propEntityId = storedNode.getPropertyEntityId();
+
+	// Put a Property with id==0 in the map for the correct key
+	std::unordered_map<int64_t, Property> propMap;
+	propMap[propEntityId] = Property{}; // default-constructed: id==0
+
+	// Should return empty because the map entry's id is 0
+	const auto result = dataManager->getNodePropertiesFromMap(storedNode, propMap);
+	EXPECT_TRUE(result.empty());
+}
+
+// ============================================================================
+// getNodePropertiesDirect: property entity has been deleted → loadEntityDirect returns id==0
+// Covers the property.getId() != 0 → False branch at line ~288
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesDirect_DeletedPropertyEntityReturnsEmpty) {
+	// Create a node with external properties
+	auto node = createTestNode(dataManager, "DeletedPropNode");
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"q", PropertyValue(int64_t(1))}});
+	simulateSave();
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_TRUE(storedNode.hasPropertyEntity());
+	ASSERT_EQ(storedNode.getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
+
+	// Directly delete the property entity so it ends up in dirty layer as CHANGE_DELETED
+	Property prop = dataManager->getProperty(storedNode.getPropertyEntityId());
+	ASSERT_NE(prop.getId(), 0);
+	dataManager->deleteProperty(prop);
+
+	// getNodePropertiesDirect calls loadEntityDirect<Property>, which finds CHANGE_DELETED
+	// and returns a property with id==0, hitting the False branch of property.getId() != 0
+	const auto result = dataManager->getNodePropertiesDirect(storedNode);
+	EXPECT_TRUE(result.empty());
 }
