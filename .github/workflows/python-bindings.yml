@@ -93,14 +93,12 @@ jobs:
         if: runner.os != 'Windows'
         run: PKG_CONFIG_PATH=$PWD/buildDir pip install "bindings/python[test]"
 
-      # Set CC/CXX=cl ONLY for this step so meson-python uses MSVC (matching Conan-built deps),
-      # instead of picking up MinGW GCC from Strawberry Perl.
+      # Let ilammy/msvc-dev-cmd set PATH so meson-python finds MSVC cl.exe automatically.
+      # No CC/CXX override needed — MSVC is first in PATH after dev-cmd action.
       - name: Install zyxdb (Windows)
         if: runner.os == 'Windows'
         run: |
           $env:PKG_CONFIG_PATH = "$PWD\buildDir"
-          $env:CC = "cl"
-          $env:CXX = "cl"
           pip install "bindings/python[test]"
         shell: pwsh
 
@@ -130,15 +128,8 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # Set CC/CXX via GITHUB_ENV so ALL cibuildwheel subprocesses inherit it,
-      # including CIBW_BEFORE_ALL (which CIBW_ENVIRONMENT does not cover).
-      - name: Set MSVC compiler (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          echo "CC=cl" >> "$GITHUB_ENV"
-          echo "CXX=cl" >> "$GITHUB_ENV"
-
+      # cibuildwheel automatically detects MSVC from ilammy/msvc-dev-cmd and propagates
+      # the environment to CIBW_BEFORE_ALL. No CC/CXX override needed.
       - name: Install cibuildwheel
         run: pip install cibuildwheel
 
@@ -164,7 +155,7 @@ jobs:
             conan profile detect &&
             mkdir -p buildDir &&
             conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
-          CIBW_ENVIRONMENT_WINDOWS: CC=cl CXX=cl
+          # No CIBW_ENVIRONMENT_WINDOWS needed — MSVC is auto-detected from ilammy/msvc-dev-cmd
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
