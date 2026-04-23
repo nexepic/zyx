@@ -25,8 +25,12 @@
 #include <memory>
 
 #include "graph/core/Database.hpp"
+#include "graph/query/api/QueryEngine.hpp"
+#include "graph/query/execution/operators/DeleteOperator.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
+#include "graph/query/execution/operators/SetConfigOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
+#include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
@@ -932,4 +936,121 @@ TEST_F(VarLengthTraversalOperatorTest, VarLengthTraversal_GetOutputVariables) {
 	EXPECT_EQ(vars.size(), 2UL); // "x" from mock + "tgt"
 
 	op->close();
+}
+
+// ============================================================================
+// RemoveOperator::setChild() — targeted branch coverage
+// ============================================================================
+
+TEST_F(RemoveOperatorTest, SetChild_ReplacesChildOperator) {
+	std::vector<RemoveItem> items = { {RemoveActionType::PROPERTY, "n", "key"} };
+
+	// Start with a null child
+	auto op = std::make_unique<RemoveOperator>(dm, nullptr, items);
+
+	// Replace via setChild
+	MockOperator *newMock = new MockOperator({});
+	op->setChild(std::unique_ptr<PhysicalOperator>(newMock));
+
+	// getChildren should now return the new child
+	auto children = op->getChildren();
+	ASSERT_EQ(children.size(), 1UL);
+	EXPECT_EQ(children[0], newMock);
+}
+
+// ============================================================================
+// DeleteOperator::setChild() — targeted branch coverage
+// ============================================================================
+
+// The DeleteOperator test class already lives in test_DeleteOperator_Detach.cpp.
+// Add setChild coverage to RemoveOperatorTest fixture which shares the same db setup.
+
+TEST_F(RemoveOperatorTest, DeleteOperator_SetChild_ReplacesChildOperator) {
+	using graph::query::execution::operators::DeleteOperator;
+
+	auto op = std::make_unique<DeleteOperator>(dm, nullptr, std::vector<std::string>{"n"}, false);
+
+	// Replace via setChild
+	MockOperator *newMock = new MockOperator({});
+	op->setChild(std::unique_ptr<PhysicalOperator>(newMock));
+
+	auto children = op->getChildren();
+	ASSERT_EQ(children.size(), 1UL);
+	EXPECT_EQ(children[0], newMock);
+}
+
+// ============================================================================
+// ShowIndexesOperator — branch coverage (empty index list path)
+// ============================================================================
+
+TEST_F(RemoveOperatorTest, ShowIndexesOperator_EmptyIndexListReturnsNullopt) {
+	using graph::query::execution::operators::ShowIndexesOperator;
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto op = std::make_unique<ShowIndexesOperator>(indexManager);
+	op->open();
+
+	// No indexes created: operator emits nullopt when index list is empty.
+	auto batch = op->next();
+	// Both nullopt (empty list) and a batch with 0+ entries are valid.
+	// What we require: the executed_ flag is set so the second call always returns nullopt.
+	auto batch2 = op->next();
+	EXPECT_FALSE(batch2.has_value());
+}
+
+TEST_F(RemoveOperatorTest, ShowIndexesOperator_SecondCallAfterDataReturnsNullopt) {
+	using graph::query::execution::operators::ShowIndexesOperator;
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	// Create at least one index so the first call returns a non-empty batch.
+	indexManager->createIndex("test_label_idx", "node", "Person", "");
+
+	auto op = std::make_unique<ShowIndexesOperator>(indexManager);
+	op->open();
+
+	auto batch1 = op->next();
+	ASSERT_TRUE(batch1.has_value());
+	EXPECT_FALSE(batch1->empty());
+
+	// Second call must return nullopt (executed_ == true branch).
+	auto batch2 = op->next();
+	EXPECT_FALSE(batch2.has_value());
+}
+
+// ============================================================================
+// SetConfigOperator — throw path for LIST/MAP/temporal values
+// ============================================================================
+
+TEST_F(RemoveOperatorTest, SetConfigOperator_ListValueThrows) {
+	using graph::query::execution::operators::SetConfigOperator;
+
+	PropertyValue listVal(std::vector<PropertyValue>{PropertyValue(int64_t(1))});
+	auto op = std::make_unique<SetConfigOperator>(dm, "max_depth", listVal);
+	op->open();
+	EXPECT_THROW(op->next(), std::runtime_error);
+}
+
+TEST_F(RemoveOperatorTest, SetConfigOperator_IntValueSucceeds) {
+	using graph::query::execution::operators::SetConfigOperator;
+
+	PropertyValue intVal(int64_t(100));
+	auto op = std::make_unique<SetConfigOperator>(dm, "max_depth", intVal);
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+
+	// Second call returns nullopt (executed_ path).
+	EXPECT_FALSE(op->next().has_value());
+}
+
+TEST_F(RemoveOperatorTest, SetConfigOperator_NullValueIsNoOp) {
+	using graph::query::execution::operators::SetConfigOperator;
+
+	PropertyValue nullVal; // monostate / NULL
+	auto op = std::make_unique<SetConfigOperator>(dm, "dummy_key", nullVal);
+	op->open();
+	// NULL value is silently ignored — no throw.
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
 }

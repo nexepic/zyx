@@ -1308,3 +1308,70 @@ TEST_F(SegmentCompactorTest, MergeSegments_EndToFrontFails_FallbackToEndToEnd) {
 	auto remaining = segmentTracker->getSegmentsByType(type);
 	EXPECT_GE(remaining.size(), 1u);
 }
+
+// ============================================================================
+// PHASE 2: empty front segment (activeItemsSource == 0, lines 315-319)
+// Create two "front" segments (both under the merge threshold) where one has
+// ALL its entities deleted (0 active items). mergeSegments must detect the
+// 0-active segment and call markSegmentFree on it rather than trying to merge.
+// ============================================================================
+
+TEST_F(SegmentCompactorTest, MergeSegments_Phase2_EmptyFrontSegmentFreed) {
+	auto type = Node::typeId;
+
+	// Allocate 6 segments so fileSize is large enough that endThreshold
+	// (= fileSize - fileSize/5, rounded down to TOTAL_SEGMENT_SIZE) puts the
+	// first two segments clearly in the "front" zone (offset < endThreshold).
+	//
+	// With 6 segments:
+	//   fileSize    = 128 + 6 * 131200 = 787328
+	//   endThreshold = floor(787328*4/5 / 131200) * 131200 = 4 * 131200 = 524800
+	//   seg0 = 128       < 524800 → front
+	//   seg1 = 131328    < 524800 → front
+	//   seg2..seg5        > 524800 → end (filled full, not candidates)
+	constexpr uint32_t CAP = 10;
+	uint64_t seg0 = segmentAllocator->allocateSegment(type, CAP);
+	uint64_t seg1 = segmentAllocator->allocateSegment(type, CAP);
+	// Allocate 4 filler segments to push fileSize up
+	for (int k = 0; k < 4; ++k) {
+		uint64_t fillerSeg = segmentAllocator->allocateSegment(type, CAP);
+		// Fill completely (usage = 1.0 > threshold → not a candidate)
+		SegmentHeader fh = segmentTracker->getSegmentHeader(fillerSeg);
+		for (uint32_t i = 0; i < CAP; ++i) {
+			createActiveNode(fillerSeg, i, fh.start_id + static_cast<int64_t>(i));
+		}
+		segmentTracker->updateSegmentUsage(fillerSeg, CAP, 0);
+	}
+
+	// seg0: fill with 5 nodes then delete ALL → 0 active items (100% fragmented)
+	{
+		SegmentHeader h = segmentTracker->getSegmentHeader(seg0);
+		for (uint32_t i = 0; i < 5; ++i) {
+			createActiveNode(seg0, i, h.start_id + static_cast<int64_t>(i));
+		}
+		segmentTracker->updateSegmentUsage(seg0, 5, 0);
+		for (uint32_t i = 0; i < 5; ++i) {
+			segmentTracker->setEntityActive(seg0, i, false);
+		}
+		segmentTracker->updateSegmentUsage(seg0, 5, 5); // 0 active, 5 deleted
+	}
+
+	// seg1: 1 active node out of 10 → usage = 0.1 < threshold 0.2 → candidate
+	{
+		SegmentHeader h = segmentTracker->getSegmentHeader(seg1);
+		createActiveNode(seg1, 0, h.start_id);
+		segmentTracker->updateSegmentUsage(seg1, 1, 0);
+	}
+
+	// Both seg0 and seg1 are candidates (usage < 0.2) and both are front segments
+	// (offset < endThreshold=524800). PHASE 2 finds seg0 first (sorted by usage
+	// ascending: 0.0 before 0.1), detects activeItemsSource==0, and frees it.
+	bool merged = compactor->mergeSegments(type, 0.2);
+	EXPECT_TRUE(merged);
+
+	// seg0 must have been freed
+	auto remaining = segmentTracker->getSegmentsByType(type);
+	for (const auto &h : remaining) {
+		EXPECT_NE(h.file_offset, seg0) << "seg0 (empty front segment) should have been freed";
+	}
+}

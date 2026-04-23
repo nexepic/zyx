@@ -1832,3 +1832,87 @@ TEST_F(PropertyManagerTest, CalculateSerializedSizeEmpty) {
 	// Should be just sizeof(uint32_t) for the count field
 	EXPECT_EQ(size, static_cast<uint32_t>(sizeof(uint32_t)));
 }
+
+// ============================================================================
+// getEntityProperties: entity id==0 → early return (id==0 means not found)
+// Covers the `entity.getId() == 0` branch at line ~252
+// ============================================================================
+
+TEST_F(PropertyManagerTest, GetEntityProperties_EntityIdZero_ReturnsEmpty) {
+	// Requesting properties for id=0 returns the entity with id=0 (not found),
+	// hitting the early-return guard in getEntityProperties.
+	auto props = propertyManager->getEntityProperties<graph::Node>(0);
+	EXPECT_TRUE(props.empty());
+}
+
+// ============================================================================
+// getEntityProperties: entity is inactive (id != 0 but !isActive)
+// hits the `!entity.isActive()` early return after fetching the entity.
+// ============================================================================
+
+TEST_F(PropertyManagerTest, GetEntityProperties_InactiveEntity_ReturnsEmpty) {
+	// Create a node, add properties, then delete it to make it inactive.
+	graph::Node n;
+	n.setLabelId(dataManager->getOrCreateTokenId("InactivePropNode"));
+	dataManager->addNode(n);
+	propertyManager->addEntityProperties<graph::Node>(n.getId(), {{"x", graph::PropertyValue(int64_t(1))}});
+
+	graph::Node toDelete = dataManager->getNode(n.getId());
+	dataManager->deleteNode(toDelete);
+
+	// After deletion the entity is inactive — getEntityProperties should return {}
+	auto props = propertyManager->getEntityProperties<graph::Node>(n.getId());
+	EXPECT_TRUE(props.empty());
+}
+
+// ============================================================================
+// removeEntityProperty blob path: key does NOT exist in the blob
+// hits `it == properties.end()` → no removal, propertyWasRemoved stays false.
+// ============================================================================
+
+TEST_F(PropertyManagerTest, RemoveEntityProperty_BlobStorage_KeyNotInBlob_NoOp) {
+	// Create a node with enough blob-sized properties.
+	graph::Node blobNode;
+	blobNode.setLabelId(dataManager->getOrCreateTokenId("BlobRemoveNoKey"));
+	dataManager->addNode(blobNode);
+
+	std::unordered_map<std::string, graph::PropertyValue> largeProps;
+	for (int i = 0; i < 10; ++i) {
+		std::string val(800, 'Q');
+		largeProps["brnk_" + std::to_string(i)] = graph::PropertyValue(val);
+	}
+	propertyManager->addEntityProperties<graph::Node>(blobNode.getId(), largeProps);
+
+	// Verify it's stored as BLOB
+	graph::Node stored = dataManager->getNode(blobNode.getId());
+	ASSERT_EQ(stored.getPropertyStorageType(), graph::PropertyStorageType::BLOB_ENTITY);
+
+	// Attempt to remove a key that does NOT exist in the blob — should be a no-op
+	EXPECT_NO_THROW(propertyManager->removeEntityProperty<graph::Node>(blobNode.getId(), "nonexistent_key"));
+
+	// All original keys must still be present
+	auto propsAfter = propertyManager->getEntityProperties<graph::Node>(blobNode.getId());
+	EXPECT_EQ(propsAfter.size(), largeProps.size());
+}
+
+// ============================================================================
+// removeEntityProperty property-entity path: key NOT in the property entity
+// hits `property.hasPropertyValue(key)` → False (no removal, no update).
+// ============================================================================
+
+TEST_F(PropertyManagerTest, RemoveEntityProperty_PropertyEntity_KeyNotPresent_NoOp) {
+	// Create a node with small properties so it uses PROPERTY_ENTITY storage.
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), {
+		{"present_key", graph::PropertyValue(std::string("present"))}
+	});
+
+	graph::Node stored = dataManager->getNode(testNode.getId());
+	ASSERT_EQ(stored.getPropertyStorageType(), graph::PropertyStorageType::PROPERTY_ENTITY);
+
+	// Remove a key that was never added — should be a no-op.
+	EXPECT_NO_THROW(propertyManager->removeEntityProperty<graph::Node>(testNode.getId(), "absent_key"));
+
+	// The existing property must still be intact.
+	auto props = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
+	EXPECT_TRUE(props.contains("present_key"));
+}

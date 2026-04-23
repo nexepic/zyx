@@ -1118,6 +1118,62 @@ TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesBatchPropertyNotEmpty_Pr
 	EXPECT_EQ(labelIdx->findNodes("BATCH_EDGE_NP").size(), 3UL);
 }
 
+// ============================================================================
+// updateLabelIndex (Node): oldLabel still present in new labels →
+// stillPresent == true branch (line ~108): skip removeNode.
+// Also exercises nl != oldLabel → False branch (line 115).
+// ============================================================================
+
+TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_OldLabelStillPresentInNewLabels_SkipsRemove) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+
+	int64_t labelId = dataManager->getOrCreateTokenId("KeepLabel");
+	graph::Node oldNode(9001, labelId);
+	nodeIndexManager->onEntityAdded(oldNode);
+
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	EXPECT_EQ(labelIdx->findNodes("KeepLabel").size(), 1UL);
+
+	// Update with the same label — oldLabel is still present in newLabels.
+	// This hits the `stillPresent = true` branch and skips removeNode.
+	// nl == oldLabel also hits the `nl != oldLabel` → False branch on line 115.
+	graph::Node newNode(9001, labelId);
+	nodeIndexManager->onEntityUpdated(oldNode, newNode);
+
+	// Label should still be in the index (not removed then re-added).
+	EXPECT_EQ(labelIdx->findNodes("KeepLabel").size(), 1UL);
+}
+
+// ============================================================================
+// updateLabelIndex (Node): id==0, labelIndex non-empty → early return
+// Also hit by multi-label path for completeness.
+// ============================================================================
+
+TEST_F(EntityTypeIndexManagerTest, UpdateLabelIndex_Node_MultiLabel_OneNewLabel) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+
+	int64_t lblA = dataManager->getOrCreateTokenId("MultiA");
+	int64_t lblB = dataManager->getOrCreateTokenId("MultiB");
+
+	// Old node has labelA; new node has both labelA and labelB.
+	// lblA is in newLabels → stillPresent = true (skip remove).
+	// lblB is new → nl != oldLabel for the add step.
+	graph::Node oldNode(9002, lblA);
+	nodeIndexManager->onEntityAdded(oldNode);
+
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	EXPECT_EQ(labelIdx->findNodes("MultiA").size(), 1UL);
+
+	// Simulate update adding a second label by using onEntityUpdated
+	// with a node whose label is the new label (single-label model in Node object).
+	graph::Node newNode(9002, lblB);
+	nodeIndexManager->onEntityUpdated(oldNode, newNode);
+
+	// oldLabel (MultiA) should be removed; newLabel (MultiB) should be added.
+	EXPECT_TRUE(labelIdx->findNodes("MultiA").empty());
+	EXPECT_EQ(labelIdx->findNodes("MultiB").size(), 1UL);
+}
+
 TEST_F(EntityTypeIndexManagerTest, OnEntitiesAdded_EdgesMixedLabelsAndNoLabels) {
 	// Cover Edge template: mixed batch where some edges have labels and some don't
 	// Exercises nodesByLabelId skip for labelId==0 in Edge template

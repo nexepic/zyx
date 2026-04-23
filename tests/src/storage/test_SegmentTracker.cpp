@@ -1540,3 +1540,42 @@ TEST(SegmentTypeRegistryTest, ClearMakesAllTypesUnregistered) {
 	EXPECT_EQ(registry.getChainTail(EntityType::Node), 0u);
 }
 
+// ============================================================================
+// getSegmentHeaderCopy slow path: cache miss → read from disk
+// The SegmentTracker constructor loads all known segments into the in-memory
+// cache. If we re-initialize the tracker from a fresh FileHeader (no known
+// segments) but then write a segment header directly to the file and call
+// getSegmentHeaderCopy, the fast path (shared_lock find) will miss and the
+// slow path will read from disk.
+// ============================================================================
+
+TEST_F(SegmentTrackerTest, GetSegmentHeaderCopy_CacheMiss_ReadsFromDisk) {
+	// 1. Allocate a segment via the well-known SegmentAllocator pattern:
+	//    write a valid SegmentHeader at a known aligned offset.
+	uint64_t offset = getSegmentOffset(0);
+
+	SegmentHeader hdr{};
+	hdr.data_type = static_cast<uint32_t>(EntityType::Node);
+	hdr.capacity  = 50;
+	hdr.used      = 3;
+	hdr.start_id  = 42;
+	hdr.file_offset = offset;
+
+	// Write the header to the test file at the correct position
+	fileStream->seekp(static_cast<std::streamoff>(offset));
+	fileStream->write(reinterpret_cast<const char *>(&hdr), sizeof(SegmentHeader));
+	fileStream->flush();
+
+	// 2. Reinitialise the tracker from an empty FileHeader so the cache is empty.
+	FileHeader emptyHeader{};
+	tracker->initialize(emptyHeader);
+
+	// 3. getSegmentHeaderCopy should take the slow path (disk read) since the
+	//    segment was not part of any chain in emptyHeader.
+	SegmentHeader read = tracker->getSegmentHeaderCopy(offset);
+	EXPECT_EQ(read.data_type, static_cast<uint32_t>(EntityType::Node));
+	EXPECT_EQ(read.capacity, 50u);
+	EXPECT_EQ(read.used, 3u);
+	EXPECT_EQ(read.start_id, 42);
+}
+

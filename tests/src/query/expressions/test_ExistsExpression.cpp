@@ -152,3 +152,49 @@ TEST_F(ExpressionsTest, ExistsExpression_HasStructuredPattern_True) {
 	EXPECT_EQ(expr.getSourceVar(), "n");
 	EXPECT_EQ(expr.getRelType(), "KNOWS");
 }
+
+TEST_F(ExpressionsTest, ExistsExpression_CloneStructuredWithWhere) {
+	auto whereExpr = std::make_unique<LiteralExpression>(bool(true));
+	ExistsExpression expr(
+		"(n)-[:FRIENDS]->(m)",
+		"n",
+		"FRIENDS",
+		"Person",
+		PatternDirection::PAT_OUTGOING,
+		std::move(whereExpr),
+		"m"
+	);
+
+	auto cloned = expr.clone();
+	ASSERT_NE(cloned, nullptr);
+	auto* clonedExists = dynamic_cast<ExistsExpression*>(cloned.get());
+	ASSERT_NE(clonedExists, nullptr);
+	EXPECT_EQ(clonedExists->getPattern(), "(n)-[:FRIENDS]->(m)");
+	EXPECT_TRUE(clonedExists->hasStructuredPattern());
+	EXPECT_EQ(clonedExists->getSourceVar(), "n");
+	EXPECT_EQ(clonedExists->getRelType(), "FRIENDS");
+	EXPECT_EQ(clonedExists->getTargetLabel(), "Person");
+	EXPECT_EQ(clonedExists->getTargetVar(), "m");
+	EXPECT_TRUE(clonedExists->hasWhereClause());
+	EXPECT_NE(clonedExists->getWhereExpression(), nullptr);
+}
+
+TEST_F(ExpressionsTest, ExistsExpression_CloneStructuredWithoutWhere) {
+	ExistsExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"n",
+		"KNOWS",
+		"",
+		PatternDirection::PAT_BOTH,
+		nullptr,
+		"m"
+	);
+
+	auto cloned = expr.clone();
+	ASSERT_NE(cloned, nullptr);
+	auto* clonedExists = dynamic_cast<ExistsExpression*>(cloned.get());
+	ASSERT_NE(clonedExists, nullptr);
+	EXPECT_TRUE(clonedExists->hasStructuredPattern());
+	EXPECT_FALSE(clonedExists->hasWhereClause());
+	EXPECT_EQ(clonedExists->getTargetVar(), "m");
+}

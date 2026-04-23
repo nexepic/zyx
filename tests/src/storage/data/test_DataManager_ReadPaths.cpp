@@ -357,3 +357,58 @@ TEST_F(DataManagerTest, GetNodePropertiesDirect_DeletedPropertyEntityReturnsEmpt
 	const auto result = dataManager->getNodePropertiesDirect(storedNode);
 	EXPECT_TRUE(result.empty());
 }
+
+// ============================================================================
+// getNodePropertiesFromMap: node with BLOB_ENTITY storage
+// Covers the `storageType == BLOB_ENTITY` branch at DataManager.cpp ~line 323
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesFromMap_BlobEntityStorage) {
+	auto node = createTestNode(dataManager, "BlobMapNode");
+	dataManager->addNode(node);
+
+	std::unordered_map<std::string, PropertyValue> largeProps;
+	for (int i = 0; i < 10; ++i) {
+		std::string val(800, static_cast<char>('A' + i));
+		largeProps["bmap_key_" + std::to_string(i)] = PropertyValue(val);
+	}
+	dataManager->addNodeProperties(node.getId(), largeProps);
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_TRUE(storedNode.isActive());
+	ASSERT_EQ(storedNode.getPropertyStorageType(), PropertyStorageType::BLOB_ENTITY);
+
+	// Build an empty (no-op) property map — the blob path ignores the map and
+	// reads from the blob chain directly.
+	std::unordered_map<int64_t, Property> propMap; // intentionally empty
+
+	// getNodePropertiesFromMap with BLOB_ENTITY reads from blob chain.
+	const auto fromMap = dataManager->getNodePropertiesFromMap(storedNode, propMap);
+	EXPECT_EQ(fromMap.size(), largeProps.size());
+}
+
+// ============================================================================
+// getNodePropertiesDirect: node with BLOB_ENTITY storage
+// Covers the `storageType == BLOB_ENTITY` fallback at DataManager.cpp ~line 293
+// ============================================================================
+
+TEST_F(DataManagerTest, GetNodePropertiesDirect_BlobEntityStorage) {
+	auto node = createTestNode(dataManager, "BlobDirectNode");
+	dataManager->addNode(node);
+
+	std::unordered_map<std::string, PropertyValue> largeProps;
+	for (int i = 0; i < 10; ++i) {
+		std::string val(800, static_cast<char>('a' + i));
+		largeProps["bd_key_" + std::to_string(i)] = PropertyValue(val);
+	}
+	dataManager->addNodeProperties(node.getId(), largeProps);
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	ASSERT_TRUE(storedNode.isActive());
+	ASSERT_EQ(storedNode.getPropertyStorageType(), PropertyStorageType::BLOB_ENTITY);
+
+	// getNodePropertiesDirect uses the blob fallback for BLOB_ENTITY nodes
+	const auto direct = dataManager->getNodePropertiesDirect(storedNode);
+	EXPECT_EQ(direct.size(), largeProps.size());
+}
+

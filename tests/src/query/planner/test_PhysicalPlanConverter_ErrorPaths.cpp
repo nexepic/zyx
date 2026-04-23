@@ -187,3 +187,38 @@ TEST_F(PhysicalPlanConverterErrorPathsTest, ConvertRemoveCoversDefaultAndNullChi
 	auto *remOp = dynamic_cast<RemoveOperator *>(phys.get());
 	ASSERT_NE(remOp, nullptr);
 }
+
+// ============================================================================
+// Percentile extraArg — covers lines 312-323 (if (litem.extraArg) block)
+// Tests both the DOUBLE branch (lines 318-319) and INTEGER branch (lines 320-321)
+// ============================================================================
+
+TEST_F(PhysicalPlanConverterErrorPathsTest, ConvertAggregatePercentileDiscWithDoubleExtraArg) {
+	// extraArg = LiteralExpression(0.75) → DOUBLE branch (line 318-319)
+	auto child = std::make_unique<LogicalSingleRow>();
+	std::vector<std::shared_ptr<Expression>> groupByExprs;
+	std::vector<LogicalAggItem> aggs;
+	auto extraDouble = std::shared_ptr<Expression>(
+		std::make_unique<LiteralExpression>(0.75).release());
+	aggs.emplace_back("percentiledisc", varRef("x"), "p_disc", false, extraDouble);
+
+	LogicalAggregate agg(std::move(child), std::move(groupByExprs), std::move(aggs), {});
+	auto phys = converter->convert(&agg);
+	auto *aggOp = dynamic_cast<AggregateOperator *>(phys.get());
+	ASSERT_NE(aggOp, nullptr);
+}
+
+TEST_F(PhysicalPlanConverterErrorPathsTest, ConvertAggregatePercentileContWithIntegerExtraArg) {
+	// extraArg = LiteralExpression(int64_t 1) → INTEGER branch (line 320-321)
+	auto child = std::make_unique<LogicalSingleRow>();
+	std::vector<std::shared_ptr<Expression>> groupByExprs;
+	std::vector<LogicalAggItem> aggs;
+	auto extraInt = std::shared_ptr<Expression>(
+		std::make_unique<LiteralExpression>(static_cast<int64_t>(1)).release());
+	aggs.emplace_back("percentilecont", varRef("x"), "p_cont", false, extraInt);
+
+	LogicalAggregate agg(std::move(child), std::move(groupByExprs), std::move(aggs), {});
+	auto phys = converter->convert(&agg);
+	auto *aggOp = dynamic_cast<AggregateOperator *>(phys.get());
+	ASSERT_NE(aggOp, nullptr);
+}

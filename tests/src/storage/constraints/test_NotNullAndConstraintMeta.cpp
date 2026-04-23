@@ -82,3 +82,20 @@ TEST(ConstraintMetadataTest, FromStringHandlesNonTrailingAndCorruptInput) {
 	EXPECT_EQ(corrupt.options, "");
 }
 
+// Covers the str.empty() branch in fromString: when the input string is empty
+// the trailing-'|' guard takes the false branch (str is empty), parts is also
+// empty (<5), so the corrupt fallback path is taken.
+TEST(ConstraintMetadataTest, FromStringEmptyInputReturnsUnknown) {
+	auto result = ConstraintMetadata::fromString("empty_name", "");
+	EXPECT_EQ(result.name, "empty_name");
+	EXPECT_EQ(result.entityType, "unknown");
+	EXPECT_EQ(result.constraintType, "unknown");
+}
+
+// Covers toString() round-trip with non-empty options field (no trailing '|' appended).
+TEST(ConstraintMetadataTest, ToStringIncludesOptions) {
+	ConstraintMetadata meta{"c3", "node", "property_type", "Person", "age", "INTEGER"};
+	auto s = meta.toString();
+	EXPECT_EQ(s, "node|property_type|Person|age|INTEGER");
+}
+

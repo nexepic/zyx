@@ -182,7 +182,9 @@ std::string BinaryOpExpression::toString() const {
 }
 
 std::unique_ptr<Expression> BinaryOpExpression::clone() const {
-	return std::make_unique<BinaryOpExpression>(left_->clone(), op_, right_->clone());
+	return std::make_unique<BinaryOpExpression>(
+		left_ ? left_->clone() : nullptr, op_,
+		right_ ? right_->clone() : nullptr);
 }
 
 // ============================================================================
@@ -202,12 +204,12 @@ void UnaryOpExpression::accept(ConstExpressionVisitor &visitor) const {
 
 std::string UnaryOpExpression::toString() const {
 	std::ostringstream oss;
-	oss << graph::query::expressions::toString(op_) << "(" << operand_->toString() << ")";
+	oss << graph::query::expressions::toString(op_) << "(" << (operand_ ? operand_->toString() : "null") << ")";
 	return oss.str();
 }
 
 std::unique_ptr<Expression> UnaryOpExpression::clone() const {
-	return std::make_unique<UnaryOpExpression>(op_, operand_->clone());
+	return std::make_unique<UnaryOpExpression>(op_, operand_ ? operand_->clone() : nullptr);
 }
 
 // ============================================================================

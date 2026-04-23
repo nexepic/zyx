@@ -255,3 +255,76 @@ TEST_F(FilterPushdownRuleEdgeCasesTest, JoinPushdownCollectsVarsFromInList) {
     ASSERT_NE(j->getLeft(), nullptr);
     EXPECT_EQ(j->getLeft()->getType(), LogicalOpType::LOP_FILTER);
 }
+
+// Covers the string-value branch in extractPropertyEquality (line 163):
+// Filter(n.name = "Alice") → NodeScan with property predicate {name: "Alice"}.
+TEST_F(FilterPushdownRuleEdgeCasesTest, StringEqualityPushesIntoScan) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = binaryExpr(
+        propRef("n", "name"),
+        BinaryOperatorType::BOP_EQUAL,
+        std::make_shared<LiteralExpression>(std::string("Alice")));
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->getType(), LogicalOpType::LOP_NODE_SCAN);
+    auto *s = static_cast<LogicalNodeScan *>(result.get());
+    ASSERT_EQ(s->getPropertyPredicates().size(), 1u);
+    EXPECT_EQ(s->getPropertyPredicates()[0].first, "name");
+    EXPECT_EQ(s->getPropertyPredicates()[0].second.toString(), "Alice");
+}
+
+// Covers the string-value branch in extractPropertyRange (line 226): reversed form.
+TEST_F(FilterPushdownRuleEdgeCasesTest, StringRangePushesIntoScan) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    // n.name > "Alice"
+    auto pred = binaryExpr(
+        propRef("n", "name"),
+        BinaryOperatorType::BOP_GREATER,
+        std::make_shared<LiteralExpression>(std::string("Alice")));
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->getType(), LogicalOpType::LOP_NODE_SCAN);
+    auto *s = static_cast<LogicalNodeScan *>(result.get());
+    ASSERT_EQ(s->getRangePredicates().size(), 1u);
+    EXPECT_EQ(s->getRangePredicates()[0].key, "name");
+}
+
+// Covers: conjunct splitting — AND predicate is split into two separate filters/pushdowns.
+TEST_F(FilterPushdownRuleEdgeCasesTest, ConjunctivePredIsSplitAndBothPartsArePushed) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred1 = binaryExpr(propRef("n", "age"), BinaryOperatorType::BOP_EQUAL, litInt(30));
+    auto pred2 = binaryExpr(propRef("n", "active"), BinaryOperatorType::BOP_EQUAL,
+                            std::make_shared<LiteralExpression>(true));
+    auto combined = andExpr(pred1, pred2);
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), combined);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    // Both predicates pushed down: result should be a NodeScan with 2 property predicates.
+    ASSERT_EQ(result->getType(), LogicalOpType::LOP_NODE_SCAN);
+    auto *s = static_cast<LogicalNodeScan *>(result.get());
+    EXPECT_EQ(s->getPropertyPredicates().size(), 2u);
+}
+
+// Covers: join pushdown — predicate referencing both sides stays above the join.
+TEST_F(FilterPushdownRuleEdgeCasesTest, JoinBothSidesPredicateStaysAboveJoin) {
+    auto left = std::make_unique<LogicalNodeScan>("n");
+    auto right = std::make_unique<LogicalNodeScan>("m");
+    auto join = std::make_unique<LogicalJoin>(std::move(left), std::move(right));
+    // Predicate references both n and m — cannot be pushed to either side.
+    auto pred = binaryExpr(propRef("n", "id"), BinaryOperatorType::BOP_EQUAL, propRef("m", "id"));
+    auto filter = std::make_unique<LogicalFilter>(std::move(join), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    // Filter stays above join.
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
