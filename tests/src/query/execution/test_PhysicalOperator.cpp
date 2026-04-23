@@ -39,3 +39,14 @@ TEST(PhysicalOperatorTest, DefaultChildrenIsEmpty) {
 	DummyPhysicalOperator op;
 	EXPECT_TRUE(op.getChildren().empty());
 }
+
+// Covers the default setChild() implementation (no-op virtual method).
+// Without this test the branch in PhysicalOperator::setChild is never executed.
+TEST(PhysicalOperatorTest, DefaultSetChildIsNoOp) {
+	DummyPhysicalOperator op;
+	auto child = std::make_unique<DummyPhysicalOperator>();
+	// Default implementation does nothing — must not throw or crash.
+	EXPECT_NO_THROW(op.setChild(std::move(child)));
+	// Children list is still empty because the default impl discards the child.
+	EXPECT_TRUE(op.getChildren().empty());
+}

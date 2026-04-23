@@ -1736,3 +1736,41 @@ TEST_F(BlobChainManagerTest, CreateMultiBlobChainPass2LinkingVerification) {
 	std::string readBack = chainManager->readBlobChain(blobChain[0].getId());
 	EXPECT_EQ(readBack, largeData);
 }
+
+// ============================================================================
+// updateBlobChain: headBlob exists but is inactive
+// Covers line 128: `if (headBlob.getId() != 0 && headBlob.isActive())` → False
+// When the head blob is present (non-zero ID) but has been deleted (inactive),
+// updateBlobChain should skip deleteBlobChain and just create a new chain.
+// ============================================================================
+
+TEST_F(BlobChainManagerTest, UpdateBlobChain_HeadBlobInactive_CreatesNewChain) {
+	constexpr int64_t entityId = 7700;
+	constexpr uint32_t entityTypeId = 77;
+
+	// 1. Create an initial blob chain.
+	const std::string originalData = "initial_blob_data_for_inactive_test";
+	auto originalChain = chainManager->createBlobChain(entityId, entityTypeId, originalData, false);
+	ASSERT_FALSE(originalChain.empty());
+	int64_t headId = originalChain[0].getId();
+
+	// 2. Delete the blob so it becomes inactive (simulates corruption or out-of-order ops).
+	graph::Blob headBlob = dataManager->getBlob(headId);
+	ASSERT_NE(headBlob.getId(), 0);
+	ASSERT_TRUE(headBlob.isActive());
+	dataManager->deleteBlob(headBlob);
+
+	// Verify the blob is now inactive.
+	graph::Blob afterDelete = dataManager->getBlob(headId);
+	EXPECT_FALSE(afterDelete.isActive());
+
+	// 3. updateBlobChain should detect the inactive head blob, skip deletion,
+	//    and create a brand-new chain with the new data.
+	const std::string newData = "updated_data_after_inactive_head";
+	auto newChain = chainManager->updateBlobChain(headId, entityId, entityTypeId, newData, false);
+	ASSERT_FALSE(newChain.empty());
+
+	// The new chain must be readable and contain the new data.
+	std::string readBack = chainManager->readBlobChain(newChain[0].getId());
+	EXPECT_EQ(readBack, newData);
+}

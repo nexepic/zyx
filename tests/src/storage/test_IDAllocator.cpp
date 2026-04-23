@@ -1082,3 +1082,71 @@ TEST_F(IDAllocatorTest, RecoverGapIds_MultipleSegments_UsedZeroInSome) {
 	int64_t id = nodeAllocator->allocate();
 	EXPECT_GT(id, 0);
 }
+
+// ============================================================================
+// initialize(): clears caches, scans physical max ID, recovers gaps.
+// Covered functions: initialize(), scanPhysicalMaxId(), recoverGaps().
+// ============================================================================
+
+TEST_F(IDAllocatorTest, Initialize_ClearsCachesAndRescansPhysicalMax) {
+	// Create several nodes so segments exist on disk with real entity data.
+	constexpr int COUNT = 5;
+	int64_t lastId = 0;
+	for (int i = 0; i < COUNT; ++i) {
+		graph::Node n = insertNode("InitNode");
+		lastId = n.getId();
+	}
+	fileStorage->flush();
+
+	int64_t maxBefore = nodeAllocator->getCurrentMaxId();
+	EXPECT_EQ(maxBefore, lastId);
+
+	// Calling initialize() on an allocator that already tracks a populated
+	// SegmentTracker: it clears hot/cold caches, scans all segments, and
+	// calls recoverGaps(). The final maxId should remain consistent.
+	nodeAllocator->initialize();
+
+	int64_t maxAfter = nodeAllocator->getCurrentMaxId();
+	// After re-initialization the logical max must be at least what was on disk.
+	EXPECT_GE(maxAfter, lastId);
+
+	// Allocation must still work and produce valid IDs.
+	int64_t newId = nodeAllocator->allocate();
+	EXPECT_GT(newId, 0);
+}
+
+// ============================================================================
+// ensureMaxId(): id <= maxId → no change (False branch at line 179)
+// ============================================================================
+
+TEST_F(IDAllocatorTest, EnsureMaxId_IdLessThanOrEqualToCurrentMax_NoChange) {
+	// Allocate a few nodes to advance maxId.
+	for (int i = 0; i < 3; ++i) {
+		insertNode("EnsureNode");
+	}
+	int64_t maxBefore = nodeAllocator->getCurrentMaxId();
+	EXPECT_EQ(maxBefore, 3);
+
+	// Call ensureMaxId with a value <= current max — maxId must not change.
+	nodeAllocator->ensureMaxId(1);
+	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), maxBefore);
+
+	nodeAllocator->ensureMaxId(maxBefore);
+	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), maxBefore);
+}
+
+// ============================================================================
+// ensureMaxId(): id > maxId → maxId updated (True branch at line 180)
+// ============================================================================
+
+TEST_F(IDAllocatorTest, EnsureMaxId_IdGreaterThanCurrentMax_MaxIdUpdated) {
+	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), 0);
+
+	// Bump to a high value.
+	nodeAllocator->ensureMaxId(9999);
+	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), 9999);
+
+	// Next sequential allocation should be 10000.
+	int64_t next = nodeAllocator->allocate();
+	EXPECT_EQ(next, 10000);
+}

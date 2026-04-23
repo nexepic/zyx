@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "graph/core/Database.hpp"
+#include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/optimizer/CostModel.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
@@ -216,3 +217,110 @@ TEST(OptimizerCostModelAdditionalTest, RangeCompositeAndCrossJoinCardinality) {
 
 	EXPECT_DOUBLE_EQ(CostModel::crossJoinCardinality(3.0, 4.0), 12.0);
 }
+
+// ============================================================================
+// EnhancedIndexSelectionRule — targeted branch coverage
+// ============================================================================
+
+// Cover: selectBestScan with null indexManager → early return.
+TEST(EnhancedIndexSelectionRuleTest, NullIndexManagerIsNoOp) {
+	EnhancedIndexSelectionRule rule(nullptr);
+	Statistics stats = makeStats();
+
+	auto scan = std::make_unique<LogicalNodeScan>("n", std::vector<std::string>{"Person"});
+	std::unique_ptr<LogicalOperator> plan = std::move(scan);
+	auto optimized = rule.apply(std::move(plan), stats);
+	// With null indexManager the scan is returned as-is (no crash).
+	ASSERT_NE(optimized, nullptr);
+}
+
+// Cover: non-NodeScan root causes recursive walk into children (no-op, no scan).
+TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_NonScanRootWalksChildren) {
+	EnhancedIndexSelectionRule rule(im);
+	Statistics stats = makeStats();
+
+	// Wrap a NodeScan inside a Filter — root is a Filter, not a NodeScan.
+	auto scan = std::make_unique<LogicalNodeScan>("n", std::vector<std::string>{"Person"});
+	auto filter = std::make_unique<LogicalFilter>(std::move(scan), nullptr);
+	std::unique_ptr<LogicalOperator> plan = std::move(filter);
+	auto optimized = rule.apply(std::move(plan), stats);
+	// Plan structure survives.
+	ASSERT_NE(optimized, nullptr);
+	EXPECT_EQ(optimized->getType(), LogicalOpType::LOP_FILTER);
+}
+
+// Cover: property index exists but its cost is NOT cheaper than full scan → FULL_SCAN kept.
+// This happens when stats make the full scan cheaper (e.g., tiny totalNodeCount).
+TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_PropertyNotCheaperThanFullScan) {
+	ASSERT_TRUE(im->createIndex("idx_p_age2", "node", "Person", "age"));
+
+	EnhancedIndexSelectionRule rule(im);
+
+	// Tiny database: fullScanCost < propertyScanCost because totalNodeCount is tiny.
+	Statistics tinyStats;
+	tinyStats.totalNodeCount = 1;
+	LabelStatistics tiny;
+	tiny.label = "Person";
+	tiny.nodeCount = 1;
+	PropertyStatistics ageStats;
+	ageStats.distinctValueCount = 1;
+	tiny.properties["age"] = ageStats;
+	tinyStats.labelStats["Person"] = tiny;
+
+	auto scan = std::make_unique<LogicalNodeScan>(
+		"n",
+		std::vector<std::string>{"Person"},
+		std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(int64_t(1))}});
+	std::unique_ptr<LogicalOperator> plan = std::move(scan);
+	auto optimized = rule.apply(std::move(plan), tinyStats);
+	ASSERT_NE(optimized, nullptr);
+	// Any valid scan type is acceptable — just ensure no crash and we get a scan back.
+	EXPECT_NE(dynamic_cast<LogicalNodeScan *>(optimized.get()), nullptr);
+}
+
+// Cover: propPreds.size() >= 2 but composite index does NOT exist → no composite set.
+TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_TwoPropPredsNoCompositeIndex) {
+	// Create individual property indexes but no composite index.
+	ASSERT_TRUE(im->createIndex("idx_person_name", "node", "Person", "name"));
+	ASSERT_TRUE(im->createIndex("idx_person_age3", "node", "Person", "age"));
+
+	EnhancedIndexSelectionRule rule(im);
+	Statistics stats = makeStats();
+
+	auto scan = std::make_unique<LogicalNodeScan>(
+		"n",
+		std::vector<std::string>{"Person"},
+		std::vector<std::pair<std::string, PropertyValue>>{
+			{"name", PropertyValue(std::string("Alice"))},
+			{"age",  PropertyValue(int64_t(30))}});
+	std::unique_ptr<LogicalOperator> plan = std::move(scan);
+	auto optimized = rule.apply(std::move(plan), stats);
+	ASSERT_NE(optimized, nullptr);
+	auto *s = dynamic_cast<LogicalNodeScan *>(optimized.get());
+	ASSERT_NE(s, nullptr);
+	// No composite index → composite equality should not be set to a composite scan.
+	// (It may have been set to PROPERTY_SCAN or LABEL_SCAN.)
+	EXPECT_NE(s->getPreferredScanType(), execution::ScanType::COMPOSITE_SCAN);
+}
+
+// Cover: compositeEq already set with < 2 keys → composite scan cost branch not taken.
+TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_CompositeEqOnlyOneKey) {
+	EnhancedIndexSelectionRule rule(im);
+	Statistics stats = makeStats();
+
+	auto scan = std::make_unique<LogicalNodeScan>("n", std::vector<std::string>{"Person"});
+	// Set a composite equality with only 1 key — should not trigger composite scan path.
+	CompositeEqualityPredicate singleKeyEq;
+	singleKeyEq.keys = {"age"};
+	singleKeyEq.values = {PropertyValue(int64_t(30))};
+	scan->setCompositeEquality(std::move(singleKeyEq));
+
+	std::unique_ptr<LogicalOperator> plan = std::move(scan);
+	auto optimized = rule.apply(std::move(plan), stats);
+	ASSERT_NE(optimized, nullptr);
+	auto *s = dynamic_cast<LogicalNodeScan *>(optimized.get());
+	ASSERT_NE(s, nullptr);
+	// Single-key composite eq cannot be a composite scan.
+	EXPECT_NE(s->getPreferredScanType(), execution::ScanType::COMPOSITE_SCAN);
+}
+

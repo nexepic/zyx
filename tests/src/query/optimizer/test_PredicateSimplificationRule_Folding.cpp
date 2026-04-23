@@ -207,3 +207,91 @@ TEST_F(PredicateSimplificationRuleFoldingTest, ChildFilterWithNullPredicateDoesN
     ASSERT_NE(outerFilter->getChildren()[0], nullptr);
     EXPECT_EQ(outerFilter->getChildren()[0]->getType(), LogicalOpType::LOP_FILTER);
 }
+
+// Covers: simplifyExpr double-NOT path where innerUnary->getOperand() is null
+// → returns the original expr instead of cloning.
+TEST_F(PredicateSimplificationRuleFoldingTest, DoubleNotWithNullInnerOperandReturnsSelf) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    // Construct NOT(NOT(null)): inner NOT has a null operand.
+    auto innerNot = std::shared_ptr<Expression>(
+        std::make_unique<UnaryOpExpression>(UnaryOperatorType::UOP_NOT, nullptr).release());
+    auto outerNot = std::shared_ptr<Expression>(
+        std::make_unique<UnaryOpExpression>(UnaryOperatorType::UOP_NOT, innerNot->clone()).release());
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), outerNot);
+
+    auto result = rule.apply(std::move(filter), stats);
+    ASSERT_NE(result, nullptr);
+    // Should still be a filter because the simplification bailed out.
+    ASSERT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
+// Covers: AND branch — false AND x (lhs is false literal).
+TEST_F(PredicateSimplificationRuleFoldingTest, FalseAndXSimplifiesToFalseLiteral) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = binaryExpr(litBool(false), BinaryOperatorType::BOP_AND, propRef("n", "age"));
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+    auto out = boolFromFilter(result.get());
+    ASSERT_EQ(out->getExpressionType(), ExpressionType::LITERAL);
+    EXPECT_FALSE(static_cast<LiteralExpression *>(out.get())->getBooleanValue());
+}
+
+// Covers: AND branch — true AND x (lhs is true literal, simplifies to rhs clone).
+TEST_F(PredicateSimplificationRuleFoldingTest, TrueAndXSimplifiesToX) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = binaryExpr(litBool(true), BinaryOperatorType::BOP_AND, propRef("n", "age"));
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+    auto out = boolFromFilter(result.get());
+    EXPECT_EQ(out->toString(), "n.age");
+}
+
+// Covers: rewrite — predicate simplified to literal true → filter dropped,
+// returning the child scan directly.
+TEST_F(PredicateSimplificationRuleFoldingTest, TrueLiteralFilterIsDropped) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), litBool(true));
+
+    auto result = rule.apply(std::move(filter), stats);
+    ASSERT_NE(result, nullptr);
+    // Filter eliminated — result is the raw node scan.
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_NODE_SCAN);
+}
+
+// Covers: adjacent-filter deduplication — two filters with identical predicates.
+TEST_F(PredicateSimplificationRuleFoldingTest, DuplicateAdjacentFiltersAreDeduped) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = propRef("n", "age");
+    auto inner = std::make_unique<LogicalFilter>(std::move(scan), pred);
+    auto outer = std::make_unique<LogicalFilter>(std::move(inner), pred);
+
+    auto result = rule.apply(std::move(outer), stats);
+    ASSERT_NE(result, nullptr);
+    // Outer filter removed — only inner filter (or scan) remains.
+    // Result type is LOP_FILTER wrapping the scan.
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
+// Covers: adjacent-filter merging — two filters with different predicates.
+TEST_F(PredicateSimplificationRuleFoldingTest, TwoAdjacentFiltersAreMergedWithAnd) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred1 = propRef("n", "age");
+    auto pred2 = propRef("n", "name");
+    auto inner = std::make_unique<LogicalFilter>(std::move(scan), pred1);
+    auto outer = std::make_unique<LogicalFilter>(std::move(inner), pred2);
+
+    auto result = rule.apply(std::move(outer), stats);
+    ASSERT_NE(result, nullptr);
+    // Should collapse to a single filter with merged predicate.
+    ASSERT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+    auto merged = boolFromFilter(result.get());
+    ASSERT_NE(merged, nullptr);
+    // Merged result should be a binary AND combining both predicates.
+    EXPECT_EQ(merged->getExpressionType(), ExpressionType::BINARY_OP);
+}

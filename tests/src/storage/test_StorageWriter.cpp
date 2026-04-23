@@ -322,3 +322,48 @@ TEST_F(StorageWriterTest, EdgeWriteSegmentDataRoundtrip) {
 	EXPECT_TRUE(segmentTracker->getBitmapBit(segOff, 0));
 	EXPECT_TRUE(segmentTracker->getBitmapBit(segOff, 1));
 }
+
+// ============================================================================
+// writeSegmentData with a single entity: exercises updateSegmentBitmap with
+// count=1 (the non-zero path) ensuring the guard logic is exercised normally.
+// The count=0 guard in updateSegmentBitmap is only reachable via direct call
+// which is private; we test the guarded public path instead.
+// ============================================================================
+
+TEST_F(StorageWriterTest, WriteSegmentDataSingleEntityBitmapSet) {
+	constexpr uint32_t capacity = itemsPerSegment<Node>();
+	uint64_t segOff = allocator->allocateSegment(Node::typeId, capacity);
+	ASSERT_NE(segOff, 0u);
+
+	// Write exactly one node — updateSegmentBitmap is called with count=1
+	std::vector<Node> nodes = {makeNode(5)};
+	writer->writeSegmentData(segOff, nodes, 0);
+
+	SegmentHeader hdr = segmentTracker->getSegmentHeader(segOff);
+	EXPECT_EQ(hdr.used, 1u);
+	EXPECT_EQ(hdr.start_id, 5);
+
+	EXPECT_TRUE(segmentTracker->getBitmapBit(segOff, 0));
+}
+
+// ============================================================================
+// updateEntityInPlace: exercised through updateEntityInPlace(entity, segOff)
+// Also indirectly exercises updateBitmapForEntity for a valid segment offset.
+// ============================================================================
+
+TEST_F(StorageWriterTest, UpdateEntityInPlaceAndBitmapSetCorrectly) {
+	constexpr uint32_t capacity = itemsPerSegment<Node>();
+	uint64_t segOff = allocator->allocateSegment(Node::typeId, capacity);
+
+	std::vector<Node> nodes = {makeNode(10)};
+	writer->writeSegmentData(segOff, nodes, 0);
+
+	// Verify bitmap bit is set for slot 0
+	EXPECT_TRUE(segmentTracker->getBitmapBit(segOff, 0));
+
+	// Now update with an inactive node — updateBitmapForEntity should clear the bit
+	Node inactive = makeNode(10, false);
+	writer->updateEntityInPlace(inactive, segOff);
+
+	EXPECT_FALSE(segmentTracker->getBitmapBit(segOff, 0));
+}

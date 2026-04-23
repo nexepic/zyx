@@ -572,6 +572,15 @@ TEST_F(DatabaseTest, SetThreadPoolSize) {
 	EXPECT_NO_THROW(db->setThreadPoolSize(4));
 }
 
+TEST_F(DatabaseTest, SetThreadPoolSize_WithoutQueryEngine) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	// Do NOT call getQueryEngine() — queryEngine is null
+	// setThreadPoolSize should still work (the if(queryEngine) branch is false)
+	EXPECT_NO_THROW(db->setThreadPoolSize(2));
+}
+
 TEST_F(DatabaseTest, GetThreadPool_BeforeOpen) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	EXPECT_FALSE(db->isOpen());
@@ -665,6 +674,18 @@ TEST_F(DatabaseTest, WALRecoveryThenWriteTransactionReusesExistingWAL) {
 
 		db2->close();
 	}
+}
+
+TEST_F(DatabaseTest, BeginReadOnlyTransaction_AutoOpensClosedDb) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	db->close();
+	EXPECT_FALSE(db->isOpen());
+
+	auto txn = db->beginReadOnlyTransaction();
+	EXPECT_TRUE(db->isOpen());
+	EXPECT_TRUE(txn.isReadOnly());
+	txn.commit();
 }
 
 TEST_F(DatabaseTest, ReadOnlyTransactionDoesNotCreateWALFile) {

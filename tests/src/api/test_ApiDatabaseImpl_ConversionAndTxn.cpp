@@ -8,6 +8,10 @@
 #include <vector>
 
 #include "ApiTestFixture.hpp"
+#include "graph/core/TemporalTypes.hpp"
+#include "graph/core/PropertyTypes.hpp"
+#include "graph/core/Database.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 TEST_F(CppApiTest, VectorFloatPropertyConversionRoundTrip) {
 	std::unordered_map<std::string, zyx::Value> props;
@@ -162,4 +166,133 @@ TEST_F(CppApiTest, UtilityMethodsSaveThreadPoolAndTokenBoundaryQuery) {
 
 	auto boundaryRes = db->execute("RETURN 'CREATED' AS token");
 	EXPECT_TRUE(boundaryRes.isSuccess());
+}
+
+// ============================================================================
+// toPublicValue for temporal types (TemporalDate, TemporalDateTime, TemporalDuration)
+// These are stored via the internal DataManager API and read back through the
+// C++ public API (Result::get()), hitting the temporal branches of toPublicValue.
+// ============================================================================
+
+TEST_F(CppApiTest, TemporalDate_ConversionToPublicValue) {
+	// Store a TemporalDate via Cypher date() function if supported,
+	// or use internal graph::Database directly.
+	// We create a standalone test using graph::Database to bypass the zyx wrapper.
+	auto tempDir = fs::temp_directory_path();
+	auto path = (tempDir / ("temporal_date_test_" + std::to_string(std::rand()))).string();
+	{
+		graph::Database internalDb(path);
+		internalDb.open();
+
+		auto dm = internalDb.getStorage()->getDataManager();
+		int64_t labelId = dm->getOrCreateTokenId("TemporalNode");
+		graph::Node node(0, labelId);
+		auto txn = internalDb.beginTransaction();
+		dm->addNode(node);
+		int64_t nodeId = node.getId();
+
+		graph::TemporalDate date = graph::TemporalDate::fromISO("2024-06-15");
+		dm->addNodeProperties(nodeId, {{"birthday", graph::PropertyValue(date)}});
+		txn.commit();
+		internalDb.close();
+	}
+
+	// Now open via public zyx API and read back — hits TemporalDate branch
+	zyx::Database zyxDb(path);
+	zyxDb.open();
+
+	auto res = zyxDb.execute("MATCH (n:TemporalNode) RETURN n.birthday");
+	ASSERT_TRUE(res.isSuccess());
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto val = res.get("n.birthday");
+	// TemporalDate converts to ISO string via toPublicValue
+	ASSERT_TRUE(std::holds_alternative<std::string>(val));
+	const auto &s = std::get<std::string>(val);
+	EXPECT_NE(s.find("2024"), std::string::npos) << "ISO date should contain year 2024: " << s;
+
+	zyxDb.close();
+	std::error_code ec;
+	fs::remove_all(path, ec);
+	fs::remove(path + "-wal", ec);
+}
+
+TEST_F(CppApiTest, TemporalDateTime_ConversionToPublicValue) {
+	auto tempDir = fs::temp_directory_path();
+	auto path = (tempDir / ("temporal_dt_test_" + std::to_string(std::rand()))).string();
+	{
+		graph::Database internalDb(path);
+		internalDb.open();
+
+		auto dm = internalDb.getStorage()->getDataManager();
+		int64_t labelId = dm->getOrCreateTokenId("EventNode");
+		graph::Node node(0, labelId);
+		auto txn = internalDb.beginTransaction();
+		dm->addNode(node);
+		int64_t nodeId = node.getId();
+
+		graph::TemporalDateTime dt = graph::TemporalDateTime::fromISO("2024-06-15T10:30:00");
+		dm->addNodeProperties(nodeId, {{"timestamp", graph::PropertyValue(dt)}});
+		txn.commit();
+		internalDb.close();
+	}
+
+	zyx::Database zyxDb(path);
+	zyxDb.open();
+
+	auto res = zyxDb.execute("MATCH (n:EventNode) RETURN n.timestamp");
+	ASSERT_TRUE(res.isSuccess());
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto val = res.get("n.timestamp");
+	ASSERT_TRUE(std::holds_alternative<std::string>(val));
+	const auto &s = std::get<std::string>(val);
+	EXPECT_NE(s.find("2024"), std::string::npos) << "ISO datetime should contain year 2024: " << s;
+
+	zyxDb.close();
+	std::error_code ec;
+	fs::remove_all(path, ec);
+	fs::remove(path + "-wal", ec);
+}
+
+TEST_F(CppApiTest, TemporalDuration_ConversionToPublicValue) {
+	auto tempDir = fs::temp_directory_path();
+	auto path = (tempDir / ("temporal_dur_test_" + std::to_string(std::rand()))).string();
+	{
+		graph::Database internalDb(path);
+		internalDb.open();
+
+		auto dm = internalDb.getStorage()->getDataManager();
+		int64_t labelId = dm->getOrCreateTokenId("DurationNode");
+		graph::Node node(0, labelId);
+		auto txn = internalDb.beginTransaction();
+		dm->addNode(node);
+		int64_t nodeId = node.getId();
+
+		graph::TemporalDuration dur = graph::TemporalDuration::fromComponents(1, 2, 0, 3, 4, 5, 6);
+		dm->addNodeProperties(nodeId, {{"tenure", graph::PropertyValue(dur)}});
+		txn.commit();
+		internalDb.close();
+	}
+
+	zyx::Database zyxDb(path);
+	zyxDb.open();
+
+	auto res = zyxDb.execute("MATCH (n:DurationNode) RETURN n.tenure");
+	ASSERT_TRUE(res.isSuccess());
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto val = res.get("n.tenure");
+	ASSERT_TRUE(std::holds_alternative<std::string>(val));
+	const auto &s = std::get<std::string>(val);
+	// ISO duration starts with P
+	EXPECT_EQ(s.front(), 'P') << "ISO duration should start with 'P': " << s;
+
+	zyxDb.close();
+	std::error_code ec;
+	fs::remove_all(path, ec);
+	fs::remove(path + "-wal", ec);
 }
