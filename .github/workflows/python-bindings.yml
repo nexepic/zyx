@@ -126,6 +126,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install cibuildwheel
         run: pip install cibuildwheel
 
@@ -151,6 +155,7 @@ jobs:
             conan profile detect &&
             mkdir -p buildDir &&
             conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+          CIBW_ENVIRONMENT_WINDOWS: CC=cl CXX=cl
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
