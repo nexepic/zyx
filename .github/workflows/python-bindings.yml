@@ -130,6 +130,15 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      # Set CC/CXX via GITHUB_ENV so ALL cibuildwheel subprocesses inherit it,
+      # including CIBW_BEFORE_ALL (which CIBW_ENVIRONMENT does not cover).
+      - name: Set MSVC compiler (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "CC=cl" >> "$GITHUB_ENV"
+          echo "CXX=cl" >> "$GITHUB_ENV"
+
       - name: Install cibuildwheel
         run: pip install cibuildwheel
 
