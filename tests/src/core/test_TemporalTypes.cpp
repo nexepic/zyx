@@ -376,7 +376,61 @@ TEST(TemporalDurationTest, CompareByNanosWhenTotalDaysEqual) {
 	EXPECT_FALSE(b < a);
 }
 
-TEST(TemporalDurationTest, EqualTotalDaysAndEqualNanosNotLess) {
+// --- TemporalDuration::fromISO time-only with seconds ---
+
+TEST(TemporalDurationTest, FromISOTimeWithSeconds) {
+	auto dur = TemporalDuration::fromISO("PT45S");
+	EXPECT_EQ(dur.months, 0);
+	EXPECT_EQ(dur.days, 0);
+	EXPECT_EQ(dur.nanos, 45LL * 1'000'000'000LL);
+}
+
+TEST(TemporalDurationTest, FromISOFullTime) {
+	auto dur = TemporalDuration::fromISO("PT1H2M3S");
+	int64_t expectedNanos = (1LL * 3600 + 2 * 60 + 3) * 1'000'000'000LL;
+	EXPECT_EQ(dur.nanos, expectedNanos);
+}
+
+// --- TemporalDuration::toISO individual time components ---
+
+TEST(TemporalDurationTest, ToISOOnlyHours) {
+	auto dur = TemporalDuration::fromComponents(0, 0, 0, 0, 3, 0, 0);
+	EXPECT_EQ(dur.toISO(), "PT3H");
+}
+
+TEST(TemporalDurationTest, ToISOOnlyMinutes) {
+	auto dur = TemporalDuration::fromComponents(0, 0, 0, 0, 0, 15, 0);
+	EXPECT_EQ(dur.toISO(), "PT15M");
+}
+
+TEST(TemporalDurationTest, ToISOOnlySeconds) {
+	auto dur = TemporalDuration::fromComponents(0, 0, 0, 0, 0, 0, 30);
+	EXPECT_EQ(dur.toISO(), "PT30S");
+}
+
+TEST(TemporalDurationTest, ToISOHoursAndSeconds) {
+	auto dur = TemporalDuration::fromComponents(0, 0, 0, 0, 2, 0, 10);
+	EXPECT_EQ(dur.toISO(), "PT2H10S");
+}
+
+TEST(TemporalDurationTest, ToISOAllComponents) {
+	auto dur = TemporalDuration::fromComponents(2, 3, 1, 5, 4, 30, 15);
+	// months = 2*12+3 = 27, days = 1*7+5 = 12
+	// nanos = (4*3600+30*60+15)*1e9
+	std::string iso = dur.toISO();
+	EXPECT_EQ(iso, "P2Y3M12DT4H30M15S");
+}
+
+// --- TemporalDate validation branches ---
+
+TEST(TemporalDateTest, FromISOFebruary28NonLeapYear) {
+	auto d = TemporalDate::fromISO("2023-02-28");
+	EXPECT_EQ(d.year(), 2023);
+	EXPECT_EQ(d.month(), 2);
+	EXPECT_EQ(d.day(), 28);
+}
+
+TEST(TemporalDateTest, EqualTotalDaysAndEqualNanosNotLess) {
 	TemporalDuration a;
 	a.months = 1;
 	a.days = 0;

@@ -58,7 +58,7 @@ protected:
 	}
 };
 
-TEST(ProfileOperatorHeaderBranchTest, NullInnerOperatorCoversFallbackPaths) {
+TEST(ProfileOperatorHeaderNullGuardTest, NullInnerOperatorCoversFallbackPaths) {
 	ProfileOperator op(nullptr);
 
 	op.open();
@@ -74,12 +74,12 @@ TEST(ProfileOperatorHeaderBranchTest, NullInnerOperatorCoversFallbackPaths) {
 	EXPECT_TRUE(op.getChildren().empty());
 }
 
-TEST(TraversalOperatorHeaderBranchTest, GetChildrenReturnsEmptyWhenChildMissing) {
+TEST(TraversalOperatorHeaderNullGuardTest, GetChildrenReturnsEmptyWhenChildMissing) {
 	TraversalOperator op(nullptr, nullptr, "a", "e", "b", "KNOWS", "out");
 	EXPECT_TRUE(op.getChildren().empty());
 }
 
-TEST(LimitOperatorHeaderBranchTest, OpenAndCloseWithoutChildCoverNullGuards) {
+TEST(LimitOperatorHeaderNullGuardTest, OpenAndCloseWithoutChildCoverNullGuards) {
 	LimitOperator op(nullptr, 5);
 	EXPECT_NO_THROW(op.open());
 	EXPECT_NO_THROW(op.close());
@@ -87,7 +87,7 @@ TEST(LimitOperatorHeaderBranchTest, OpenAndCloseWithoutChildCoverNullGuards) {
 	EXPECT_EQ(op.getChildren()[0], nullptr);
 }
 
-TEST(SkipOperatorHeaderBranchTest, OpenAndCloseWithoutChildCoverNullGuards) {
+TEST(SkipOperatorHeaderNullGuardTest, OpenAndCloseWithoutChildCoverNullGuards) {
 	SkipOperator op(nullptr, 3);
 	EXPECT_NO_THROW(op.open());
 	EXPECT_NO_THROW(op.close());

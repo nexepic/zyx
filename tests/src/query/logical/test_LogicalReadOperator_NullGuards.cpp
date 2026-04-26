@@ -22,7 +22,7 @@ using namespace graph;
 using namespace graph::query::expressions;
 using namespace graph::query::logical;
 
-TEST(LogicalFilterNullBranchTest, HandlesNullChildAndNullPredicate) {
+TEST(LogicalFilterNullGuardTest, HandlesNullChildAndNullPredicate) {
 	LogicalFilter filter(nullptr, nullptr);
 
 	EXPECT_TRUE(filter.getOutputVariables().empty());
@@ -36,7 +36,7 @@ TEST(LogicalFilterNullBranchTest, HandlesNullChildAndNullPredicate) {
 	EXPECT_EQ(clonedFilter->getPredicate(), nullptr);
 }
 
-TEST(LogicalSortNullBranchTest, CloneCoversNullExpressionAndNullChild) {
+TEST(LogicalSortNullGuardTest, CloneCoversNullExpressionAndNullChild) {
 	std::vector<LogicalSortItem> items;
 	std::shared_ptr<Expression> nullExpr;
 	items.emplace_back(nullExpr, true);
@@ -56,7 +56,7 @@ TEST(LogicalSortNullBranchTest, CloneCoversNullExpressionAndNullChild) {
 	EXPECT_THROW(sort.detachChild(1), std::out_of_range);
 }
 
-TEST(LogicalProjectNullBranchTest, CloneCoversNullExpressionAndNullChild) {
+TEST(LogicalProjectNullGuardTest, CloneCoversNullExpressionAndNullChild) {
 	std::vector<LogicalProjectItem> items;
 	std::shared_ptr<Expression> nullExpr;
 	items.emplace_back(nullExpr, "x");
@@ -74,7 +74,7 @@ TEST(LogicalProjectNullBranchTest, CloneCoversNullExpressionAndNullChild) {
 	EXPECT_THROW(project.detachChild(1), std::out_of_range);
 }
 
-TEST(LogicalAggregateNullBranchTest, OutputAndCloneHandleNullExpressionsAndChild) {
+TEST(LogicalAggregateNullGuardTest, OutputAndCloneHandleNullExpressionsAndChild) {
 	std::vector<std::shared_ptr<Expression>> groupByExprs;
 	groupByExprs.push_back(nullptr);
 
@@ -98,7 +98,7 @@ TEST(LogicalAggregateNullBranchTest, OutputAndCloneHandleNullExpressionsAndChild
 	EXPECT_THROW(aggregate.detachChild(1), std::out_of_range);
 }
 
-TEST(LogicalJoinNullBranchTest, OutputAndCloneHandleNullChildren) {
+TEST(LogicalJoinNullGuardTest, OutputAndCloneHandleNullChildren) {
 	LogicalJoin join(nullptr, nullptr);
 	EXPECT_TRUE(join.getOutputVariables().empty());
 
@@ -110,7 +110,7 @@ TEST(LogicalJoinNullBranchTest, OutputAndCloneHandleNullChildren) {
 	EXPECT_EQ(clonedJoin->getChildren()[1], nullptr);
 }
 
-TEST(LogicalUnwindNullBranchTest, OutputAndCloneHandleNullChildInLiteralMode) {
+TEST(LogicalUnwindNullGuardTest, OutputAndCloneHandleNullChildInLiteralMode) {
 	std::vector<PropertyValue> values = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2))};
 	LogicalUnwind unwind(nullptr, "x", values);
 

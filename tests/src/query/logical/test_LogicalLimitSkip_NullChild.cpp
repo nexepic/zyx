@@ -14,7 +14,7 @@
 
 using namespace graph::query::logical;
 
-TEST(LogicalLimitBranchTest, OutputVariablesAndCloneHandleNullChild) {
+TEST(LogicalLimitNullChildTest, OutputVariablesAndCloneHandleNullChild) {
 	LogicalLimit limit(nullptr, 10);
 
 	EXPECT_TRUE(limit.getOutputVariables().empty());
@@ -26,7 +26,7 @@ TEST(LogicalLimitBranchTest, OutputVariablesAndCloneHandleNullChild) {
 	EXPECT_EQ(clonedLimit->getChildren()[0], nullptr);
 }
 
-TEST(LogicalLimitBranchTest, OutputVariablesFromChildAndOutOfRangeGuards) {
+TEST(LogicalLimitNullChildTest, OutputVariablesFromChildAndOutOfRangeGuards) {
 	LogicalLimit limit(std::make_unique<LogicalNodeScan>("n"), 3);
 
 	auto vars = limit.getOutputVariables();
@@ -37,7 +37,7 @@ TEST(LogicalLimitBranchTest, OutputVariablesFromChildAndOutOfRangeGuards) {
 	EXPECT_THROW(limit.detachChild(1), std::out_of_range);
 }
 
-TEST(LogicalSkipBranchTest, OutputVariablesAndCloneHandleNullChild) {
+TEST(LogicalSkipNullChildTest, OutputVariablesAndCloneHandleNullChild) {
 	LogicalSkip skip(nullptr, 5);
 
 	EXPECT_TRUE(skip.getOutputVariables().empty());
@@ -49,7 +49,7 @@ TEST(LogicalSkipBranchTest, OutputVariablesAndCloneHandleNullChild) {
 	EXPECT_EQ(clonedSkip->getChildren()[0], nullptr);
 }
 
-TEST(LogicalSkipBranchTest, OutputVariablesFromChildAndOutOfRangeGuards) {
+TEST(LogicalSkipNullChildTest, OutputVariablesFromChildAndOutOfRangeGuards) {
 	LogicalSkip skip(std::make_unique<LogicalNodeScan>("n"), 2);
 
 	auto vars = skip.getOutputVariables();
