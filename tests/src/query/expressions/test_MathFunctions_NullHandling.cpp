@@ -1,5 +1,5 @@
 /**
- * @file test_MathFunctions_NullBranches.cpp
+ * @file test_MathFunctions_NullHandling.cpp
  *
  * Licensed under the Apache License, Version 2.0
  **/

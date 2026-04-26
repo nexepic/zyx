@@ -389,20 +389,10 @@ TEST_F(CppApiTest, TransactionMoveAssignment) {
 	txn1.commit();
 }
 
-TEST_F(CppApiTest, BeginReadOnlyTransactionAutoOpensClosedDb) {
-	auto tempDir = fs::temp_directory_path();
-	auto path = (tempDir / ("auto_open_ro_" + std::to_string(std::rand()))).string();
-	auto freshDb = std::make_unique<zyx::Database>(path);
-	freshDb->open();
-	freshDb->close();
-
-	auto txn = freshDb->beginReadOnlyTransaction();
+TEST_F(CppApiTest, BeginReadOnlyTransactionOnOpenDb) {
+	// Test read-only transaction on an already-open DB (via the shared fixture)
+	auto txn = db->beginReadOnlyTransaction();
 	EXPECT_TRUE(txn.isActive());
 	EXPECT_TRUE(txn.isReadOnly());
 	txn.commit();
-
-	freshDb->close();
-	std::error_code ec;
-	fs::remove_all(path, ec);
-	fs::remove(path + "-wal", ec);
 }

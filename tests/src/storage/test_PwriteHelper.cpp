@@ -162,3 +162,26 @@ TEST_F(PwriteHelperTest, OpenRWNullPath) {
 	file_handle_t fd = portable_open_rw(nullptr);
 	EXPECT_EQ(fd, INVALID_FILE_HANDLE);
 }
+
+// Covers: portable_pwrite with null buffer returns -1
+TEST_F(PwriteHelperTest, PwriteNullBuffer) {
+	file_handle_t fd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
+
+	auto result = portable_pwrite(fd, nullptr, 10, 0);
+	EXPECT_EQ(result, -1);
+
+	portable_close_rw(fd);
+}
+
+// Covers: portable_pwrite with count=0 returns -1
+TEST_F(PwriteHelperTest, PwriteZeroCount) {
+	file_handle_t fd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
+
+	const char data[] = "test";
+	auto result = portable_pwrite(fd, data, 0, 0);
+	EXPECT_EQ(result, -1);
+
+	portable_close_rw(fd);
+}

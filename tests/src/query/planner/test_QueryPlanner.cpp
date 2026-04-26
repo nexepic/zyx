@@ -461,3 +461,84 @@ TEST_F(QueryPlannerTest, MergeNodeOp_MultiLabel) {
 		{{"key", graph::PropertyValue("val")}}, {}, {});
 	ASSERT_NE(op, nullptr);
 }
+
+// ============================================================================
+// Multi-label scan predicate: cover null node branch (line 95)
+// When multi-label filter encounters a record where the node is not found,
+// it should return false.
+// ============================================================================
+
+TEST_F(QueryPlannerTest, ScanOp_MultiLabelFilterSkipsNodeWithMissingLabel) {
+	// Create a node with only label A but not label B
+	int64_t lidA = dataManager->getOrCreateTokenId("MLA");
+	int64_t lidB = dataManager->getOrCreateTokenId("MLB");
+
+	graph::Node nodeA(10, lidA);
+	dataManager->addNode(nodeA);
+
+	// Scan for multi-label [MLA, MLB] - node with only MLA should be filtered out
+	auto op = planner->scanOp("n", std::vector<std::string>{"MLA", "MLB"});
+	ASSERT_NE(op, nullptr);
+
+	op->open();
+	auto batch = op->next();
+	if (batch.has_value()) {
+		// Should not contain the node since it only has label A
+		EXPECT_TRUE(batch->empty());
+	}
+	op->close();
+	(void)lidB;
+}
+
+// ============================================================================
+// Residual property filter: cover null node branch (line 110)
+// When property filter encounters a record where getNode returns nullopt,
+// it should return false.
+// ============================================================================
+
+TEST_F(QueryPlannerTest, ScanOp_ResidualPropertyFilterNoNodes) {
+	// Create label token but no nodes matching the filter criteria
+	dataManager->getOrCreateTokenId("EmptyLabel");
+
+	auto op = planner->scanOp("n", "EmptyLabel", "prop", graph::PropertyValue("val"));
+	ASSERT_NE(op, nullptr);
+
+	op->open();
+	auto batch = op->next();
+	if (batch.has_value()) {
+		EXPECT_TRUE(batch->empty());
+	}
+	op->close();
+}
+
+// ============================================================================
+// Single-label convenience with empty label
+// ============================================================================
+
+TEST_F(QueryPlannerTest, ScanOp_EmptyLabel) {
+	auto op = planner->scanOp("n", "");
+	ASSERT_NE(op, nullptr);
+}
+
+// ============================================================================
+// scanOp with property key and property index (PROPERTY_SCAN path)
+// ensures the else branch at line 119-125 is covered
+// ============================================================================
+
+TEST_F(QueryPlannerTest, ScanOp_PropertyScanSkipsResidualFilter) {
+	// Create node
+	int64_t lid = dataManager->getOrCreateTokenId("PScan");
+	graph::Node node(20, lid);
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(20, {{"key", graph::PropertyValue("match")}});
+
+	// Create property index
+	indexManager->createIndex("idx_pscan", "node", "PScan", "key");
+
+	auto op = planner->scanOp("n", "PScan", "key", graph::PropertyValue("match"));
+	ASSERT_NE(op, nullptr);
+
+	// With property index, should NOT have a FilterOperator wrapping
+	auto *scanOp = dynamic_cast<graph::query::execution::operators::NodeScanOperator *>(op.get());
+	EXPECT_NE(scanOp, nullptr) << "With property index, scan should not need residual filter";
+}
