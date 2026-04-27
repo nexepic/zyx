@@ -18,6 +18,10 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   test:
     name: Test on ${{ matrix.os }} / Python ${{ matrix.python }}
@@ -200,8 +204,6 @@ jobs:
     needs: [build-wheels, build-sdist]
     runs-on: ubuntu-latest
     environment: pypi
-    permissions:
-      id-token: write
 
     steps:
       - name: Download wheel artifacts
@@ -224,8 +226,6 @@ jobs:
     name: Upload release assets
     needs: [build-wheels, build-sdist]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Download wheel artifacts
@@ -242,6 +242,6 @@ jobs:
           path: dist/
 
       - name: Upload assets to GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --repo "${{ github.repository }}"
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
