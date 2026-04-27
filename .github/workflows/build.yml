@@ -79,12 +79,17 @@ jobs:
       # Conan Dependency Installation
       # -----------------------------------------------------------
 
-      # Force CC=cl on Windows so conan profile detect finds MSVC, not VS-bundled clang-cl.
+      # Load vcvarsall.bat temporarily so conan profile detect finds MSVC (cl.exe),
+      # not VS-bundled clang-cl. The env changes stay within this pwsh process only.
       - name: Install Project Dependencies (Conan) (Windows)
         if: runner.os == 'Windows'
         run: |
-          $env:CC = "cl"
-          $env:CXX = "cl"
+          $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Object {
+            if ($_ -match "^([^=]+)=(.*)$") {
+              [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+            }
+          }
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
