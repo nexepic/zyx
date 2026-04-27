@@ -19,7 +19,9 @@
 #include "graph/core/Database.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 
-// Now expose private members for VectorIndexRegistry only
+// The `#define private public` hack does not work on Windows because MSVC
+// includes access specifiers in mangled names.
+#ifndef _WIN32
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wkeyword-macro"
 #define private public
@@ -27,8 +29,13 @@
 #include "graph/vector/VectorIndexRegistry.hpp"
 #undef private
 
+#else
+#include "graph/vector/VectorIndexRegistry.hpp"
+#endif
+
 using namespace graph::vector;
 
+#ifndef _WIN32
 class VectorRegistryDataIntegrityTest : public ::testing::Test {
 protected:
 	void SetUp() override {
@@ -91,3 +98,4 @@ TEST_F(VectorRegistryDataIntegrityTest, GetBlobPtrsCorruptedBlobSize) {
 	EXPECT_EQ(ptrs.pqBlob, 0);
 	EXPECT_EQ(ptrs.adjBlob, 0);
 }
+#endif // _WIN32

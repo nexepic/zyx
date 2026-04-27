@@ -24,12 +24,7 @@
 #include "graph/core/Database.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wkeyword-macro"
-#define private public
-#pragma clang diagnostic pop
 #include "graph/vector/VectorIndexRegistry.hpp"
-#undef private
 
 using namespace graph::vector;
 
@@ -242,15 +237,15 @@ TEST_F(VectorRegistryPathsTest, UpdateConfig) {
 	createRegistry();
 	auto txn = database->beginTransaction();
 
-	VectorIndexConfig newConfig;
+	VectorIndexConfig newConfig = registry->getConfig();
 	newConfig.dimension = 128;
 	newConfig.pqSubspaces = 8;
 	newConfig.entryPointNodeId = 42;
 	registry->updateConfig(newConfig);
 
-	EXPECT_EQ(registry->config_.dimension, 128u);
-	EXPECT_EQ(registry->config_.pqSubspaces, 8u);
-	EXPECT_EQ(registry->config_.entryPointNodeId, 42);
+	EXPECT_EQ(registry->getConfig().dimension, 128u);
+	EXPECT_EQ(registry->getConfig().pqSubspaces, 8u);
+	EXPECT_EQ(registry->getConfig().entryPointNodeId, 42);
 
 	txn.commit();
 }
@@ -264,7 +259,7 @@ TEST_F(VectorRegistryPathsTest, UpdateEntryPoint) {
 	auto txn = database->beginTransaction();
 
 	registry->updateEntryPoint(99);
-	EXPECT_EQ(registry->config_.entryPointNodeId, 99);
+	EXPECT_EQ(registry->getConfig().entryPointNodeId, 99);
 
 	txn.commit();
 }
@@ -357,10 +352,11 @@ TEST_F(VectorRegistryPathsTest, LoadQuantizerEmptyData) {
 	createRegistry();
 	auto txn = database->beginTransaction();
 
-	// Manually set isTrained=true but don't save any codebook data
-	registry->config_.isTrained = true;
-	registry->config_.codebookKey = registry->codebookStateKey_;
-	registry->saveConfig();
+	// Set isTrained=true via the public API but don't save any codebook data.
+	// After createRegistry(), config already has codebookKey set correctly.
+	auto cfg = registry->getConfig();
+	cfg.isTrained = true;
+	registry->updateConfig(cfg);
 
 	auto pq = registry->loadQuantizer();
 	EXPECT_EQ(pq, nullptr);

@@ -91,7 +91,7 @@ export function Sidebar({ isMobileMenuOpen = false, onMobileMenuClose }: Sidebar
                       onClick={onMobileMenuClose}
                       style={active ? { color: 'var(--accent)' } : undefined}
                       className={cn(
-                        'docs-nav-item block py-1.5 pl-3 text-[14px] leading-normal rounded-md transition-colors duration-100',
+                        'docs-nav-item block py-1.5 pl-3 pr-3 text-[14px] leading-normal rounded-md transition-colors duration-100',
                         active
                           ? 'bg-[var(--bg-elevated)]'
                           : 'hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
