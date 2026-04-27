@@ -259,7 +259,8 @@ jobs:
       # -----------------------------------------------------------
 
       - name: Upload Release Assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: gh release upload "${{ github.event.release.tag_name }}" "${{ env.cli_asset }}" "${{ env.sdk_asset }}" --repo "${{ github.repository }}"
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.cli_asset }}
+            ${{ env.sdk_asset }}
