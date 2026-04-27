@@ -101,10 +101,10 @@ classDiagram
     }
 
     InternalNode "1" --> "4" ChildEntry : contains
-    ChildEntry : [DummyKey] -> ChildId: 200
-    ChildEntry : [Key: 50] -> ChildId: 201
-    ChildEntry : [Key: 100] -> ChildId: 202
-    ChildEntry : [Key: 150] -> ChildId: 203
+    ChildEntry : DummyKey → ChildId 200
+    ChildEntry : Key 50 → ChildId 201
+    ChildEntry : Key 100 → ChildId 202
+    ChildEntry : Key 150 → ChildId 203
 ```
 
 **搜索逻辑**：对于键 K，找到小于或等于 K 的最大分隔键，然后进入对应的子节点。
@@ -133,10 +133,10 @@ classDiagram
     }
 
     LeafNode "1" --> "4" Entry : contains
-    Entry : [Key: 10] -> [Values: 1, 5, 8]
-    Entry : [Key: 25] -> [Values: 3]
-    Entry : [Key: 40] -> [Values: 7, 9]
-    Entry : [Key: 45] -> [Values: 2, 4, 6]
+    Entry : Key 10 → Values 1 5 8
+    Entry : Key 25 → Values 3
+    Entry : Key 40 → Values 7 9
+    Entry : Key 45 → Values 2 4 6
 ```
 
 **条目结构**：每个条目存储索引键、共享该键值的实体 ID 向量以及可选的 blob ID。`keyBlobId` 字段在键本身超过内联阈值时持有对 blob 存储的引用。`valuesBlobId` 字段在实体 ID 列表过大无法内联存储时持有对 blob 存储的引用。
@@ -146,33 +146,24 @@ classDiagram
 每个 B+Tree 节点占用固定的 256 字节块，分为两个区域：
 
 ```mermaid
-block-beta
-    columns 4
-    block:metadata:4
-        columns 4
-        M1["NodeType<br/>(1 byte)"]
-        M2["EntryCount<br/>(4 bytes)"]
-        M3["Level<br/>(4 bytes)"]
-        M4["ParentId<br/>(8 bytes)"]
+graph TD
+    subgraph Metadata["Metadata Region (43 bytes)"]
+        M1["NodeType (1 byte)"]
+        M2["EntryCount (4 bytes)"]
+        M3["Level (4 bytes)"]
+        M4["ParentId (8 bytes)"]
+        M5["NextLeafId (8 bytes)"]
+        M6["PrevLeafId (8 bytes)"]
+        M7["DataUsage (2 bytes)"]
+        M8["Padding (8 bytes)"]
     end
-    block:leafmeta:4
-        columns 2
-        M5["NextLeafId<br/>(8 bytes)"]
-        M6["PrevLeafId<br/>(8 bytes)"]
-        M7["DataUsage<br/>(2 bytes)"]
-        M8["Padding<br/>(8 bytes)"]
-    end
-    block:entries:4
-        columns 1
+    subgraph Data["Data Region (213 bytes)"]
         E1["Entry 1: key + values + blobIds"]
         E2["Entry 2: key + values + blobIds"]
         E3["..."]
         E4["Entry N: key + values + blobIds"]
     end
-
-    style metadata fill:#e0e0e0,stroke:#333
-    style leafmeta fill:#d0d0d0,stroke:#333
-    style entries fill:#f0f0f0,stroke:#333
+    Metadata --> Data
 ```
 
 - **元数据区域**（43 字节）：包含节点类型（叶子或内部）、条目计数、树层级、父节点指针，以及叶子节点的 next/previous 指针。此开销固定不变，不受内容影响。

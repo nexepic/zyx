@@ -101,10 +101,10 @@ classDiagram
     }
 
     InternalNode "1" --> "4" ChildEntry : contains
-    ChildEntry : [DummyKey] -> ChildId: 200
-    ChildEntry : [Key: 50] -> ChildId: 201
-    ChildEntry : [Key: 100] -> ChildId: 202
-    ChildEntry : [Key: 150] -> ChildId: 203
+    ChildEntry : DummyKey → ChildId 200
+    ChildEntry : Key 50 → ChildId 201
+    ChildEntry : Key 100 → ChildId 202
+    ChildEntry : Key 150 → ChildId 203
 ```
 
 **Search Logic**: For a key K, find the largest separator key that is less than or equal to K, then traverse to that child.
@@ -133,10 +133,10 @@ classDiagram
     }
 
     LeafNode "1" --> "4" Entry : contains
-    Entry : [Key: 10] -> [Values: 1, 5, 8]
-    Entry : [Key: 25] -> [Values: 3]
-    Entry : [Key: 40] -> [Values: 7, 9]
-    Entry : [Key: 45] -> [Values: 2, 4, 6]
+    Entry : Key 10 → Values 1 5 8
+    Entry : Key 25 → Values 3
+    Entry : Key 40 → Values 7 9
+    Entry : Key 45 → Values 2 4 6
 ```
 
 **Entry Structure**: Each entry stores the indexed key, a vector of entity IDs that share that key value, and optional blob IDs. The `keyBlobId` field holds a reference to blob storage when the key itself exceeds the inline threshold. The `valuesBlobId` field holds a reference to blob storage when the list of entity IDs grows too large to fit inline.
@@ -146,33 +146,24 @@ classDiagram
 Each B+Tree node occupies a fixed 256-byte block divided into two regions:
 
 ```mermaid
-block-beta
-    columns 4
-    block:metadata:4
-        columns 4
-        M1["NodeType<br/>(1 byte)"]
-        M2["EntryCount<br/>(4 bytes)"]
-        M3["Level<br/>(4 bytes)"]
-        M4["ParentId<br/>(8 bytes)"]
+graph TD
+    subgraph Metadata["Metadata Region (43 bytes)"]
+        M1["NodeType (1 byte)"]
+        M2["EntryCount (4 bytes)"]
+        M3["Level (4 bytes)"]
+        M4["ParentId (8 bytes)"]
+        M5["NextLeafId (8 bytes)"]
+        M6["PrevLeafId (8 bytes)"]
+        M7["DataUsage (2 bytes)"]
+        M8["Padding (8 bytes)"]
     end
-    block:leafmeta:4
-        columns 2
-        M5["NextLeafId<br/>(8 bytes)"]
-        M6["PrevLeafId<br/>(8 bytes)"]
-        M7["DataUsage<br/>(2 bytes)"]
-        M8["Padding<br/>(8 bytes)"]
-    end
-    block:entries:4
-        columns 1
+    subgraph Data["Data Region (213 bytes)"]
         E1["Entry 1: key + values + blobIds"]
         E2["Entry 2: key + values + blobIds"]
         E3["..."]
         E4["Entry N: key + values + blobIds"]
     end
-
-    style metadata fill:#e0e0e0,stroke:#333
-    style leafmeta fill:#d0d0d0,stroke:#333
-    style entries fill:#f0f0f0,stroke:#333
+    Metadata --> Data
 ```
 
 - **Metadata region** (43 bytes): Contains the node type (leaf or internal), entry count, tree level, parent pointer, and for leaf nodes the next/previous leaf pointers. This overhead is fixed regardless of content.
