@@ -52,13 +52,12 @@ jobs:
       # Platform Specific System Dependencies
       # -----------------------------------------------------------
 
-      - name: Install System Deps (Windows)
+      # Install pkgconfiglite BEFORE Conan. LLVM installed AFTER to prevent
+      # conan profile detect from picking up clang instead of MSVC.
+      - name: Install pkg-config (Windows)
         if: runner.os == 'Windows'
-        # Install LLVM 20 and Pkg-Config, then add to PATH
         run: |
           choco install pkgconfiglite --allow-empty-checksums
-          choco install llvm --version=20.1.4 --force
-          # Add pkgconfiglite to PATH before Strawberry Perl
           echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
@@ -86,6 +85,13 @@ jobs:
           mkdir -p buildDir
           # Force Debug build and C++20 to match Meson settings
           conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+
+      # Install LLVM AFTER Conan so clang-cl is available for Meson build
+      # but doesn't interfere with Conan's MSVC profile detection.
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=20.1.4 --force
+        shell: pwsh
 
       # -----------------------------------------------------------
       # Build Phase - Windows
