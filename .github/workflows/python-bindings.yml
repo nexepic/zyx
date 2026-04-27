@@ -78,12 +78,17 @@ jobs:
           conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
 
       # Use Release to match meson-python's default buildtype=release (avoids /MD vs /MDd CRT mismatch).
-      # Force CC=cl so conan profile detect finds MSVC, not VS-bundled clang-cl.
+      # Load vcvarsall.bat temporarily so conan profile detect finds MSVC (cl.exe),
+      # not VS-bundled clang-cl. The env changes stay within this pwsh process only.
       - name: Install Conan dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          $env:CC = "cl"
-          $env:CXX = "cl"
+          $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Object {
+            if ($_ -match "^([^=]+)=(.*)$") {
+              [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+            }
+          }
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
@@ -154,7 +159,7 @@ jobs:
           CIBW_BEFORE_ALL_WINDOWS: >
             choco install pkgconfiglite --allow-empty-checksums &&
             pip install conan meson ninja &&
-            set CC=cl && set CXX=cl &&
+            call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64 &&
             conan profile detect &&
             mkdir -p buildDir &&
             conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 &&
