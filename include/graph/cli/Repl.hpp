@@ -34,6 +34,9 @@ namespace graph {
 		Database &db;
 		void handleCommand(const std::string &command) const;
 		void runBasic() const; // Fallback for non-TTY environments
+		void printBanner(bool basicMode) const;
+		void printHelp() const;
+		void echoMultilineBuffer(const std::string &buffer) const;
 		cli::DebugCommandHandler debugHandler_{db};
 
 		// Allow REPLTest to access private members for testing

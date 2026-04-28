@@ -23,12 +23,12 @@ IGNORE_PATTERNS = [
     "MSVC",
     "Program Files",
     "generated",
-    "linenoise.hpp",
     "subprojects",
     "antlr4",
     "helpers/internal",  # Internal implementation files (tested through integration tests)
-    "cli/",  # CLI interactive REPL code (not unit-testable)
-    "debug/"  # Debug visualization utilities (not unit-testable)
+    "debug/",  # Debug visualization utilities (not unit-testable)
+    "Terminal.cpp", # OS-level terminal wrapper (untestable without real PTY)
+    "src/cli/Repl.cpp" # Top-level REPL entrypoint (blocks on stdin)
 ]
 
 
