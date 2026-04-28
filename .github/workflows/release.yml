@@ -112,6 +112,8 @@ jobs:
               [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
             }
           }
+          $env:CC = "cl"
+          $env:CXX = "cl"
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20

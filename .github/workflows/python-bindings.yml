@@ -93,6 +93,8 @@ jobs:
               [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
             }
           }
+          $env:CC = "cl"
+          $env:CXX = "cl"
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
@@ -164,6 +166,7 @@ jobs:
             choco install pkgconfiglite --allow-empty-checksums &&
             pip install conan meson ninja &&
             call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64 &&
+            set CC=cl && set CXX=cl &&
             conan profile detect &&
             mkdir -p buildDir &&
             conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 &&
