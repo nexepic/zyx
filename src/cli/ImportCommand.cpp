@@ -149,6 +149,34 @@ std::vector<std::string> splitLabels(const std::string &labelStr) {
 	return labels;
 }
 
+std::string formatValueForCypher(const PropertyValue &v) {
+        if (v.getType() == PropertyType::STRING) {
+                std::string escaped = v.toString();
+                size_t pos = 0;
+                while ((pos = escaped.find('\'', pos)) != std::string::npos) {
+                        escaped.replace(pos, 1, "\\'");
+                        pos += 2;
+                }
+                return "'" + escaped + "'";
+        } else if (v.getType() == PropertyType::LIST) {
+                std::string res = "[";
+                const auto& list = v.getList();
+                for (size_t i = 0; i < list.size(); ++i) {
+                        if (i > 0) res += ", ";
+                        res += formatValueForCypher(list[i]);
+                }
+                res += "]";
+                return res;
+        } else if (v.getType() == PropertyType::DATE) {
+                return "date('" + v.toString() + "')";
+        } else if (v.getType() == PropertyType::DATETIME) {
+                return "datetime('" + v.toString() + "')";
+        } else if (v.getType() == PropertyType::DURATION) {
+                return "duration('" + v.toString() + "')";
+        }
+        return v.toString();
+}
+
 /**
  * Import nodes from a Neo4j-compatible CSV file.
  */
@@ -212,25 +240,12 @@ void importNodesCsv(Database &db, const std::string &filePath,
 			bool first = true;
 			for (const auto &[k, v] : properties) {
 				if (!first) propsStr += ", ";
-				propsStr += k + ": ";
-				if (v.getType() == PropertyType::STRING) {
-					// Escape single quotes in string values
-					std::string escaped = v.toString();
-					size_t pos = 0;
-					while ((pos = escaped.find('\'', pos)) != std::string::npos) {
-						escaped.replace(pos, 1, "\\'");
-						pos += 2;
-					}
-					propsStr += "'" + escaped + "'";
-				} else {
-					propsStr += v.toString();
-				}
+				propsStr += k + ": " + formatValueForCypher(v);
 				first = false;
 				ctx.propertiesSet++;
 			}
 			propsStr += "}";
 		}
-
 		std::string query = "CREATE (n" + labelStr + propsStr + ") RETURN id(n)";
 
 		try {
@@ -324,24 +339,12 @@ void importRelationshipsCsv(Database &db, const std::string &filePath,
 			bool first = true;
 			for (const auto &[k, v] : properties) {
 				if (!first) propsStr += ", ";
-				propsStr += k + ": ";
-				if (v.getType() == PropertyType::STRING) {
-					std::string escaped = v.toString();
-					size_t pos = 0;
-					while ((pos = escaped.find('\'', pos)) != std::string::npos) {
-						escaped.replace(pos, 1, "\\'");
-						pos += 2;
-					}
-					propsStr += "'" + escaped + "'";
-				} else {
-					propsStr += v.toString();
-				}
+				propsStr += k + ": " + formatValueForCypher(v);
 				first = false;
 				ctx.propertiesSet++;
 			}
 			propsStr += "}";
 		}
-
 		std::string query = "MATCH (a), (b) WHERE id(a) = " +
 		                    std::to_string(startIt->second) + " AND id(b) = " +
 		                    std::to_string(endIt->second) +
@@ -527,51 +530,55 @@ std::string detectFormat(const std::string &filePath) {
 // Public API
 // ============================================================================
 
+struct ImportOptions {
+	std::vector<std::string> nodeFiles;
+	std::vector<std::string> relFiles;
+	std::string dbPath;
+	std::string format = "auto";
+	std::string arrayDelimiter = ";";
+	bool skipBadEntries = false;
+};
+
 void registerImportCommand(CLI::App &parentApp) {
 	auto *importCmd = parentApp.add_subcommand("import", "Bulk import data from CSV/JSONL files");
 
-	static std::vector<std::string> nodeFiles;
-	static std::vector<std::string> relFiles;
-	static std::string dbPath;
-	static std::string format = "auto";
-	static std::string arrayDelimiter = ";";
-	static bool skipBadEntries = false;
+	auto options = std::make_shared<ImportOptions>();
 
-	importCmd->add_option("--nodes", nodeFiles, "Node data files (CSV or JSONL)")
+	importCmd->add_option("--nodes", options->nodeFiles, "Node data files (CSV or JSONL)")
 		->required();
-	importCmd->add_option("--relationships,--rels", relFiles, "Relationship data files");
-	importCmd->add_option("--database,--db", dbPath, "Database path")->required();
-	importCmd->add_option("--format", format, "File format: auto, csv, jsonl (default: auto)");
-	importCmd->add_option("--array-delimiter", arrayDelimiter, "Array value delimiter (default: ;)");
-	importCmd->add_flag("--skip-bad-entries", skipBadEntries, "Skip malformed rows");
+	importCmd->add_option("--relationships,--rels", options->relFiles, "Relationship data files");
+	importCmd->add_option("--database,--db", options->dbPath, "Database path")->required();
+	importCmd->add_option("--format", options->format, "File format: auto, csv, jsonl (default: auto)");
+	importCmd->add_option("--array-delimiter", options->arrayDelimiter, "Array value delimiter (default: ;)");
+	importCmd->add_flag("--skip-bad-entries", options->skipBadEntries, "Skip malformed rows");
 
-	importCmd->callback([&]() {
+	importCmd->callback([options]() {
 		try {
-			Database db(dbPath, storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+			Database db(options->dbPath, storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 			db.open();
 
 			ImportContext ctx;
 
 			std::cout << "Importing nodes..." << std::endl;
-			for (const auto &file : nodeFiles) {
-				std::string fmt = (format == "auto") ? detectFormat(file) : format;
+			for (const auto &file : options->nodeFiles) {
+				std::string fmt = (options->format == "auto") ? detectFormat(file) : options->format;
 				std::cout << "  " << file << " (format: " << fmt << ")" << std::endl;
 				if (fmt == "jsonl") {
-					importNodesJsonl(db, file, ctx, skipBadEntries);
+					importNodesJsonl(db, file, ctx, options->skipBadEntries);
 				} else {
-					importNodesCsv(db, file, ctx, arrayDelimiter, skipBadEntries);
+					importNodesCsv(db, file, ctx, options->arrayDelimiter, options->skipBadEntries);
 				}
 			}
 
-			if (!relFiles.empty()) {
+			if (!options->relFiles.empty()) {
 				std::cout << "Importing relationships..." << std::endl;
-				for (const auto &file : relFiles) {
-					std::string fmt = (format == "auto") ? detectFormat(file) : format;
+				for (const auto &file : options->relFiles) {
+					std::string fmt = (options->format == "auto") ? detectFormat(file) : options->format;
 					std::cout << "  " << file << " (format: " << fmt << ")" << std::endl;
 					if (fmt == "jsonl") {
-						importRelationshipsJsonl(db, file, ctx, skipBadEntries);
+						importRelationshipsJsonl(db, file, ctx, options->skipBadEntries);
 					} else {
-						importRelationshipsCsv(db, file, ctx, arrayDelimiter, skipBadEntries);
+						importRelationshipsCsv(db, file, ctx, options->arrayDelimiter, options->skipBadEntries);
 					}
 				}
 			}
