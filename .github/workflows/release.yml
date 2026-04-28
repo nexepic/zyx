@@ -30,6 +30,10 @@ jobs:
     name: Build on ${{ matrix.os }}
     needs: verify-version
     runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: write
+    
     strategy:
       fail-fast: false
       matrix:
