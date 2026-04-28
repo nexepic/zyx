@@ -19,9 +19,11 @@
  **/
 
 #include "graph/cli/Repl.hpp"
+#include <chrono>
 #include <iomanip>
 #include <iostream>
-#include "graph/cli/linenoise.hpp"
+#include <sstream>
+#include "graph/cli/repl/Session.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "ProjectConfig.hpp"
 
@@ -32,6 +34,7 @@
 #include <io.h>
 #define isatty _isatty
 #define STDIN_FILENO 0
+#define STDOUT_FILENO 1
 #endif
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -39,35 +42,46 @@
 
 namespace graph {
 
+	// --- ANSI Color Helpers ---
+
+	namespace ansi {
+		inline bool colorEnabled() {
+			static const bool enabled = isatty(STDOUT_FILENO) != 0;
+			return enabled;
+		}
+
+		inline std::string dim(const std::string &s) { return colorEnabled() ? "\033[90m" + s + "\033[0m" : s; }
+		inline std::string bold(const std::string &s) { return colorEnabled() ? "\033[1m" + s + "\033[0m" : s; }
+		inline std::string boldWhite(const std::string &s) { return colorEnabled() ? "\033[1;37m" + s + "\033[0m" : s; }
+		inline std::string green(const std::string &s) { return colorEnabled() ? "\033[32m" + s + "\033[0m" : s; }
+		inline std::string boldGreen(const std::string &s) { return colorEnabled() ? "\033[1;32m" + s + "\033[0m" : s; }
+		inline std::string boldYellow(const std::string &s) { return colorEnabled() ? "\033[1;33m" + s + "\033[0m" : s; }
+		inline std::string boldRed(const std::string &s) { return colorEnabled() ? "\033[1;31m" + s + "\033[0m" : s; }
+		inline std::string dimItalic(const std::string &s) { return colorEnabled() ? "\033[3;90m" + s + "\033[0m" : s; }
+	} // namespace ansi
+
 	// --- Helpers ---
 
-	// Function to check if a debugger is attached (macOS specific)
 	bool isDebuggerAttached() {
 #ifdef __APPLE__
 		int mib[4];
 		struct kinfo_proc info;
 		size_t size;
 
-		// Initialize the flags so we don't touch any random memory.
 		info.kp_proc.p_flag = 0;
 
-		// Initialize mib, which tells sysctl the info we want, in this case
-		// we're looking for information about a specific process ID.
 		mib[0] = CTL_KERN;
 		mib[1] = KERN_PROC;
 		mib[2] = KERN_PROC_PID;
 		mib[3] = getpid();
 
-		// Call sysctl.
 		size = sizeof(info);
 		if (sysctl(mib, std::size(mib), &info, &size, nullptr, 0) != 0) {
-			return false; // Could not retrieve process info
+			return false;
 		}
 
-		// We're being debugged if the P_TRACED flag is set.
 		return (info.kp_proc.p_flag & P_TRACED) != 0;
 #else
-		// Fallback for other Unix-like systems or disable for non-Apple.
 		return false;
 #endif
 	}
@@ -81,19 +95,33 @@ namespace graph {
 		return str.substr(first, (last - first + 1));
 	}
 
-	void printResult(const query::QueryResult &result, const query::ResultValue::TokenResolver &resolver) {
+	std::string formatDuration(std::chrono::steady_clock::duration elapsed) {
+		auto us = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+		std::ostringstream oss;
+		if (us >= 1000000) {
+			oss << std::fixed << std::setprecision(2) << (static_cast<double>(us) / 1000000.0) << "s";
+		} else {
+			oss << std::fixed << std::setprecision(2) << (static_cast<double>(us) / 1000.0) << "ms";
+		}
+		return oss.str();
+	}
+
+	void printResult(const query::QueryResult &result, const query::ResultValue::TokenResolver &resolver,
+					 std::chrono::steady_clock::duration elapsed) {
+		auto rowCount = result.rowCount();
+		std::string rowWord = (rowCount == 1) ? "row" : "rows";
+		std::string timing = formatDuration(elapsed);
+
 		if (result.isEmpty()) {
-			std::cout << "Empty result.\n";
+			std::cout << ansi::dim("(0 " + rowWord + ", " + timing + ")") << "\n";
 			return;
 		}
 
 		const auto &cols = result.getColumns();
 		const auto &rows = result.getRows();
 
-		// Configuration: Stricter max width (30 chars) to prevent line wrapping
 		const size_t MAX_COL_WIDTH = 30;
 
-		// Helper: Truncate string with ellipsis
 		auto truncate = [&](const std::string &str) -> std::string {
 			if (str.length() > MAX_COL_WIDTH) {
 				return str.substr(0, MAX_COL_WIDTH - 3) + "...";
@@ -101,92 +129,160 @@ namespace graph {
 			return str;
 		};
 
-		// 1. Process Headers (Apply truncation AND calculate initial width)
+		// 1. Process Headers
 		std::vector<std::string> displayHeaders;
 		std::vector<size_t> widths;
 		displayHeaders.reserve(cols.size());
 		widths.reserve(cols.size());
 
 		for (const auto &col: cols) {
-			// Truncate the header name itself!
 			std::string headerStr = truncate(col);
 			displayHeaders.push_back(headerStr);
 			widths.push_back(headerStr.length());
 		}
 
-		// 2. Process Data Rows
+		// 2. Process Data Rows (track which cells are null for coloring)
 		std::vector<std::vector<std::string>> dataTable;
+		std::vector<std::vector<bool>> isNull;
 		dataTable.reserve(rows.size());
+		isNull.reserve(rows.size());
 
 		for (const auto &row: rows) {
 			std::vector<std::string> rowStrings;
+			std::vector<bool> rowNulls;
 			rowStrings.reserve(cols.size());
+			rowNulls.reserve(cols.size());
 			for (size_t i = 0; i < cols.size(); ++i) {
 				std::string valStr = "null";
-				// Use original 'cols' to find data, but align with 'widths' index
+				bool cellIsNull = true;
 				auto it = row.find(cols[i]);
 				if (it != row.end()) {
 					valStr = it->second.toString(resolver);
+					cellIsNull = false;
 				}
 
-				// Apply truncation to data values
 				valStr = truncate(valStr);
 
-				// Update max width if data is wider than header
 				if (valStr.length() > widths[i]) {
 					widths[i] = valStr.length();
 				}
 				rowStrings.push_back(std::move(valStr));
+				rowNulls.push_back(cellIsNull);
 			}
 			dataTable.push_back(std::move(rowStrings));
+			isNull.push_back(std::move(rowNulls));
 		}
 
 		// Add padding (1 space left, 1 space right)
 		for (auto &w: widths)
 			w += 2;
 
-		// Helper: Print divider line
-		auto printDivider = [&](char junction = '+', char dash = '-') {
-			std::cout << junction;
-			for (size_t w: widths) {
-				std::cout << std::string(w, dash) << junction;
+		// Unicode box-drawing characters
+		const std::string H = "\u2500"; // ─
+		const std::string V = "\u2502"; // │
+		const std::string TL = "\u250c"; // ┌
+		const std::string TR = "\u2510"; // ┐
+		const std::string BL = "\u2514"; // └
+		const std::string BR = "\u2518"; // ┘
+		const std::string LT = "\u251c"; // ├
+		const std::string RT = "\u2524"; // ┤
+		const std::string TT = "\u252c"; // ┬
+		const std::string BT = "\u2534"; // ┴
+		const std::string CR = "\u253c"; // ┼
+
+		// Helper: repeat a UTF-8 string n times
+		auto repeat = [](const std::string &s, size_t n) -> std::string {
+			std::string result;
+			result.reserve(s.size() * n);
+			for (size_t i = 0; i < n; ++i)
+				result += s;
+			return result;
+		};
+
+		// Helper: Print divider line with specified junction characters
+		auto printDivider = [&](const std::string &left, const std::string &mid, const std::string &right) {
+			std::cout << ansi::dim(left);
+			for (size_t i = 0; i < widths.size(); ++i) {
+				std::cout << ansi::dim(repeat(H, widths[i]));
+				if (i < widths.size() - 1)
+					std::cout << ansi::dim(mid);
 			}
-			std::cout << "\n";
+			std::cout << ansi::dim(right) << "\n";
 		};
 
 		// 3. Print Table
-		printDivider(); // Top border
+		printDivider(TL, TT, TR); // Top border: ┌──┬──┐
 
-		// Print Header using truncated 'displayHeaders'
-		std::cout << "|";
+		// Print Header
+		std::cout << ansi::dim(V);
 		for (size_t i = 0; i < cols.size(); ++i) {
-			std::cout << " " << std::left << std::setw(widths[i] - 1) << displayHeaders[i] << "|";
+			std::ostringstream cell;
+			cell << " " << std::left << std::setw(static_cast<int>(widths[i] - 1)) << displayHeaders[i];
+			std::cout << ansi::boldWhite(cell.str()) << ansi::dim(V);
 		}
 		std::cout << "\n";
 
-		printDivider(); // Header separator
+		printDivider(LT, CR, RT); // Header separator: ├──┼──┤
 
 		// Print Data Rows
-		for (const auto &rowStrings: dataTable) {
-			std::cout << "|";
+		for (size_t r = 0; r < dataTable.size(); ++r) {
+			std::cout << ansi::dim(V);
 			for (size_t i = 0; i < cols.size(); ++i) {
-				std::cout << " " << std::left << std::setw(widths[i] - 1) << rowStrings[i] << "|";
+				std::ostringstream cell;
+				cell << " " << std::left << std::setw(static_cast<int>(widths[i] - 1)) << dataTable[r][i];
+				if (isNull[r][i]) {
+					std::cout << ansi::dimItalic(cell.str());
+				} else {
+					std::cout << cell.str();
+				}
+				std::cout << ansi::dim(V);
 			}
 			std::cout << "\n";
 		}
 
-		printDivider(); // Bottom border
-		std::cout << "(" << result.rowCount() << " rows)\n";
+		printDivider(BL, BT, BR); // Bottom border: └──┴──┘
+
+		// Row count with timing
+		std::cout << ansi::dim("(" + std::to_string(rowCount) + " " + rowWord + ", " + timing + ")") << "\n";
 	}
 
 	// --- REPL Implementation ---
 
 	REPL::REPL(Database &db) : db(db) {}
 
-	// Fallback REPL for non-interactive sessions (like debugging in some IDEs)
+	void REPL::printBanner(bool basicMode) const {
+		std::string version = PROJECT_VERSION_STR;
+		std::string dbPath = db.getPath();
+
+		if (basicMode) {
+			std::cout << PROJECT_DISPLAY_STR << " Graph Database v" << version << " (Basic Mode)\n"
+					  << "Connected to: " << dbPath << "\n"
+					  << "Type 'exit' to quit.\n";
+		} else {
+			std::cout << ansi::boldGreen(std::string(PROJECT_DISPLAY_STR) + " Graph Database") << " v" << version
+					  << "\n"
+					  << ansi::dim("Connected to: " + dbPath) << "\n"
+					  << "Type " << ansi::bold("help") << " for commands, " << ansi::bold("exit") << " to quit.\n";
+		}
+	}
+
+	void REPL::echoMultilineBuffer(const std::string &buffer) const {
+		// Only echo if the buffer contains multiple lines
+		if (buffer.find('\n') == std::string::npos)
+			return;
+
+		std::istringstream stream(buffer);
+		std::string line;
+		while (std::getline(stream, line)) {
+			std::string trimmed = trim(line);
+			if (!trimmed.empty()) {
+				std::cout << ansi::dim("  \u00bb " + trimmed) << "\n";
+			}
+		}
+	}
+
 	void REPL::runBasic() const {
-		std::cout << "<" << PROJECT_DISPLAY_STR << "> Shell (Basic Mode).\n"
-				  << "Type 'exit' to quit.\n";
+		printBanner(true);
 
 		std::string line;
 		std::string buffer;
@@ -218,34 +314,31 @@ namespace graph {
 	}
 
 	void REPL::run() const {
-		// Check if a debugger is attached or if not in a TTY.
-		// If so, fall back to basic I/O to avoid conflicts.
 		if (isDebuggerAttached() || !isatty(STDIN_FILENO)) {
 			runBasic();
 			return;
 		}
 
-		linenoise::SetMultiLine(true);
-		linenoise::SetHistoryMaxLen(100);
-		static const std::string PROMPT_COLOR = "\033[1;32m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
-		const char *promptNormal = PROMPT_COLOR.c_str();
-		const char *promptMulti = "\033[1;33m     ->\033[0m "; // Yellow
+		zyx::repl::Session replSession(100);
 
-		std::cout << "<" << PROJECT_DISPLAY_STR << "> Shell.\n"
-				  << "Type 'help' or 'exit'.\n"
-				  << "Enter queries ending with ';' OR press Enter on an empty line to execute.\n";
+		static const std::string PROMPT_COLOR = "\033[1;32m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
+		const std::string promptNormal = PROMPT_COLOR;
+		const std::string promptMulti = "\033[1;33m     \u00b7\u00b7\u00b7\033[0m "; // Yellow ···
+
+		printBanner(false);
 
 		std::string buffer;
 
 		while (true) {
-			const char *currentPrompt = buffer.empty() ? promptNormal : promptMulti;
+			const std::string& currentPrompt = buffer.empty() ? promptNormal : promptMulti;
 
-			bool quit = false;
-			std::string line = linenoise::Readline(currentPrompt, quit);
+			auto result = replSession.readLine(currentPrompt);
 
-			if (quit)
-				break; // Handle Ctrl+D
+			if (!result.has_value()) {
+				break;
+			}
 
+			std::string line = result.value();
 			std::string trimmedLine = trim(line);
 
 			if (trimmedLine == "exit")
@@ -253,7 +346,8 @@ namespace graph {
 
 			if (trimmedLine.empty()) {
 				if (!buffer.empty()) {
-					linenoise::AddHistory(buffer.c_str());
+					replSession.addHistory(buffer);
+					echoMultilineBuffer(buffer);
 					handleCommand(buffer);
 					buffer.clear();
 				}
@@ -261,8 +355,8 @@ namespace graph {
 			}
 
 			if (buffer.empty()) {
-				if (trimmedLine == "help" || trimmedLine == "save") {
-					linenoise::AddHistory(trimmedLine.c_str());
+				if (trimmedLine == "help" || trimmedLine == "save" || trimmedLine == "clear") {
+					replSession.addHistory(trimmedLine);
 					handleCommand(trimmedLine);
 					continue;
 				}
@@ -273,7 +367,8 @@ namespace graph {
 			buffer += line;
 
 			if (trimmedLine.back() == ';') {
-				linenoise::AddHistory(buffer.c_str());
+				replSession.addHistory(buffer);
+				echoMultilineBuffer(buffer);
 				handleCommand(buffer);
 				buffer.clear();
 			}
@@ -299,7 +394,7 @@ namespace graph {
 			if (trimmed.empty())
 				continue;
 			if (trimmed.rfind("//", 0) == 0)
-				continue; // Skip comments
+				continue;
 
 			if (!buffer.empty())
 				buffer += "\n";
@@ -328,21 +423,21 @@ namespace graph {
 
 		// --- 1. Basic System Commands ---
 		if (trimmed == "help") {
-			std::cout << "Commands:\n";
-			constexpr int colWidth = 18;
-			std::cout << "  " << std::left << std::setw(colWidth) << "save" << "Persist data to disk\n"
-					  << "  " << std::left << std::setw(colWidth) << "debug" << "Enter debug mode (see 'debug help')\n"
-					  << "  " << std::left << std::setw(colWidth) << "exit" << "Quit\n"
-					  << "  " << std::left << std::setw(colWidth) << "<Query>" << "Cypher query ending in ';'\n";
+			printHelp();
+			return;
+		}
+
+		if (trimmed == "clear") {
+			std::cout << "\033[2J\033[H" << std::flush;
 			return;
 		}
 
 		if (trimmed == "save") {
 			if (auto storage = db.getStorage()) {
 				storage->flush();
-				std::cout << "Database flushed to disk.\n";
+				std::cout << ansi::green("Database flushed to disk.") << "\n";
 			} else {
-				std::cerr << "Error: Storage not accessible.\n";
+				std::cerr << ansi::boldRed("Error: Storage not accessible.") << "\n";
 			}
 			return;
 		}
@@ -355,7 +450,9 @@ namespace graph {
 
 		// --- 3. Execute Cypher Query ---
 		try {
+			auto start = std::chrono::steady_clock::now();
 			auto result = db.getQueryEngine()->execute(command);
+			auto elapsed = std::chrono::steady_clock::now() - start;
 
 			// Build token resolver from DataManager for human-readable output
 			query::ResultValue::TokenResolver resolver = nullptr;
@@ -366,10 +463,70 @@ namespace graph {
 				};
 			}
 
-			printResult(result, resolver);
+			printResult(result, resolver, elapsed);
 		} catch (const std::exception &e) {
-			std::cerr << "\033[1;31mError: " << e.what() << "\033[0m\n";
+			std::cerr << ansi::boldRed("Error: " + std::string(e.what())) << "\n";
 		}
+	}
+
+	void REPL::printHelp() const {
+		// Unicode table for help display
+		const std::string H = "\u2500";
+		const std::string V = "\u2502";
+		const std::string TL = "\u250c";
+		const std::string TR = "\u2510";
+		const std::string BL = "\u2514";
+		const std::string BR = "\u2518";
+		const std::string LT = "\u251c";
+		const std::string RT = "\u2524";
+		const std::string TT = "\u252c";
+		const std::string BT = "\u2534";
+
+		auto repeat = [](const std::string &s, size_t n) -> std::string {
+			std::string result;
+			result.reserve(s.size() * n);
+			for (size_t i = 0; i < n; ++i)
+				result += s;
+			return result;
+		};
+
+		const size_t col1W = 12; // command column
+		const size_t col2W = 30; // description column
+
+		auto printRow = [&](const std::string &cmd, const std::string &desc) {
+			std::ostringstream c1, c2;
+			c1 << " " << std::left << std::setw(static_cast<int>(col1W - 1)) << cmd;
+			c2 << " " << std::left << std::setw(static_cast<int>(col2W - 1)) << desc;
+			std::cout << ansi::dim(V) << ansi::boldWhite(c1.str()) << ansi::dim(V) << c2.str() << ansi::dim(V) << "\n";
+		};
+
+		auto printDiv = [&](const std::string &l, const std::string &m, const std::string &r) {
+			std::cout << ansi::dim(l + repeat(H, col1W) + m + repeat(H, col2W) + r) << "\n";
+		};
+
+		auto printHeader = [&](const std::string &title) {
+			std::ostringstream oss;
+			oss << " " << std::left << std::setw(static_cast<int>(col1W + col2W)) << title;
+			std::cout << ansi::dim(V) << ansi::boldWhite(oss.str()) << ansi::dim(V) << "\n";
+		};
+
+		// Top border
+		std::cout << ansi::dim(TL + repeat(H, col1W + col2W + 1) + TR) << "\n";
+		printHeader("Commands");
+		std::cout << ansi::dim(LT + repeat(H, col1W) + TT + repeat(H, col2W) + RT) << "\n";
+
+		printRow("help", "Show this help message");
+		printRow("save", "Persist data to disk");
+		printRow("clear", "Clear the screen");
+		printRow("exit", "Quit the shell");
+
+		printDiv(LT, "\u253c", RT);
+
+		printRow("debug", "Debug mode (see 'debug help')");
+		printRow("<query>;", "Execute a Cypher query");
+
+		// Bottom border
+		printDiv(BL, BT, BR);
 	}
 
 } // namespace graph

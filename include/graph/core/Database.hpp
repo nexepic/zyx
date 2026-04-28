@@ -61,6 +61,8 @@ namespace graph {
 
 		[[nodiscard]] std::shared_ptr<config::SystemConfigManager> getConfigManager() const { return configManager_; }
 
+		[[nodiscard]] const std::string &getPath() const { return dbPath; }
+
 		// Access to thread pool for parallel operations (lazy-initialized on first call)
 		std::shared_ptr<concurrent::ThreadPool> getThreadPool();
 

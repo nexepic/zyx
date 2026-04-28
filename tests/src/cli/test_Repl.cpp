@@ -231,7 +231,7 @@ TEST_F(REPLTest, HandleCommandHelp) {
 	std::cout.rdbuf(old);
 
 	std::string output = ss.str();
-	EXPECT_TRUE(output.find("Commands:") != std::string::npos);
+	EXPECT_TRUE(output.find("Commands") != std::string::npos);
 	EXPECT_TRUE(output.find("save") != std::string::npos);
 	EXPECT_TRUE(output.find("debug") != std::string::npos);
 	EXPECT_TRUE(output.find("exit") != std::string::npos);
@@ -532,7 +532,7 @@ TEST_F(REPLTest, QueryReturningNodesWithProperties) {
 	std::cout.rdbuf(old);
 
 	std::string output = ss.str();
-	EXPECT_TRUE(output.find("1 rows") != std::string::npos);
+	EXPECT_TRUE(output.find("1 row") != std::string::npos);
 }
 
 // Test script with very long lines
@@ -646,8 +646,8 @@ TEST_F(REPLTest, MultipleQueriesSameScript) {
 	std::cout.rdbuf(old);
 
 	std::string output = ss.str();
-	// Should have output from both queries
-	EXPECT_TRUE(output.find("rows") != std::string::npos);
+	// Should have output from queries (singular "row" or plural "rows")
+	EXPECT_TRUE(output.find("row") != std::string::npos);
 }
 
 // Test handleCommand with query that has trailing semicolon
@@ -776,8 +776,8 @@ TEST_F(REPLTest, RunBasicWithQuery) {
 	);
 	EXPECT_EQ(res.rowCount(), 1UL);
 
-	// Output should contain query result
-	EXPECT_TRUE(output.find("rows") != std::string::npos);
+	// Output should contain query result (singular "row" or plural "rows")
+	EXPECT_TRUE(output.find("row") != std::string::npos);
 }
 
 // Test runBasic with save command
@@ -1289,7 +1289,7 @@ TEST_F(REPLTest, DebugCommandVariousTargets) {
 	}
 }
 
-// Test handleCommand with empty query (just semicolon)
+// End of tests
 TEST_F(REPLTest, HandleCommandWithEmptyQuery) {
 	createScript(";");  // Just a semicolon
 
