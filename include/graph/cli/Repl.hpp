@@ -30,6 +30,8 @@ namespace graph {
 
 		void runScript(const std::string &scriptPath) const;
 
+		static const std::vector<std::string>& getCommandNames();
+
 	private:
 		Database &db;
 		void handleCommand(const std::string &command) const;

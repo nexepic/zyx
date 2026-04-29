@@ -35,6 +35,11 @@ namespace graph::query::expressions {
 class ExpressionUtils {
 public:
 	/**
+	 * @brief Returns all aggregate function names (lowercase).
+	 */
+	static const std::vector<std::string>& getAggregateFunctionNames();
+
+	/**
 	 * @brief Check if a function name is an aggregate function.
 	 * @param functionName The function name (case-insensitive)
 	 * @return true if count, sum, avg, min, max, or collect

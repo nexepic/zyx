@@ -27,15 +27,21 @@ namespace graph::query::expressions {
 // isAggregateFunction
 // =============================================================================
 
+const std::vector<std::string>& ExpressionUtils::getAggregateFunctionNames() {
+	static const std::vector<std::string> names = {
+		"count", "sum", "avg", "min", "max", "collect",
+		"stdev", "stdevp", "percentiledisc", "percentilecont"
+	};
+	return names;
+}
+
 bool ExpressionUtils::isAggregateFunction(const std::string& functionName) {
 	std::string nameLower = functionName;
 	std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
 	               [](unsigned char c) { return std::tolower(c); });
 
-	return nameLower == "count" || nameLower == "sum" || nameLower == "avg" ||
-	       nameLower == "min" || nameLower == "max" || nameLower == "collect" ||
-	       nameLower == "stdev" || nameLower == "stdevp" ||
-	       nameLower == "percentiledisc" || nameLower == "percentilecont";
+	const auto& names = getAggregateFunctionNames();
+	return std::find(names.begin(), names.end(), nameLower) != names.end();
 }
 
 // =============================================================================

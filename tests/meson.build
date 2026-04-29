@@ -26,7 +26,27 @@ for root, dirs, files in os.walk(sys.argv[1]):
 		endif
 	endforeach
 
-	test_include_dirs = include_directories('include', '../tests/include', '../src/query/parser/cypher/generated')
+	# Also collect inputxx library tests
+	inputxx_tests_dir = meson.project_source_root() / 'lib' / 'inputxx' / 'tests'
+	find_result_inputxx = run_command(python, '-c', '''
+import os
+import sys
+base = sys.argv[1]
+rel_prefix = sys.argv[2]
+for root, dirs, files in os.walk(base):
+	for file in files:
+		if file.startswith("test_") and file.endswith(".cpp"):
+			rel_path = os.path.relpath(os.path.join(root, file), base)
+			print(os.path.join(rel_prefix, rel_path))
+	''', inputxx_tests_dir, '../lib/inputxx/tests', check : true)
+
+	foreach file : find_result_inputxx.stdout().strip().split('\n')
+		if file != '' and file != '.'
+			test_sources += files(file)
+		endif
+	endforeach
+
+	test_include_dirs = include_directories('include', '../tests/include', '../src/query/parser/cypher/generated', '../lib/inputxx/tests')
 
 	if test_sources.length() > 0
 	        test_executable = executable('zyx_test_suite',
@@ -37,7 +57,8 @@ for root, dirs, files in os.walk(sys.argv[1]):
 	                                             gmock_dep,
 	                                             antlr4_dep,
 	                                             boost_dep,
-	                                             cli11_dep
+	                                             cli11_dep,
+	                                             inputxx_dep
 	                                     ],	                                     include_directories : test_include_dirs,
 	                                     build_by_default : true
 	        )

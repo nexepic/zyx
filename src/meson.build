@@ -61,7 +61,8 @@ db_lib = static_library('zyx_core',
 							boost_dep,
 							cli11_dep,
 							antlr4_dep,
-							cypher_dep
+							cypher_dep,
+							inputxx_dep
 						],
 						# Exclude zlib compression error handling from coverage
 						# because it's extremely difficult to trigger in tests
@@ -98,7 +99,8 @@ if host_machine.system() != 'emscripten'
                                             boost_dep,
                                             cli11_dep,
                                             antlr4_dep,
-                                            cypher_dep
+                                            cypher_dep,
+                                            inputxx_dep
                             ],
                             install : true,
                             install_dir : get_option('libdir')
