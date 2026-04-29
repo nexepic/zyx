@@ -1,13 +1,15 @@
 #include "graph/cli/repl/io/Terminal.hpp"
 #include <iostream>
-#include <unistd.h>
-#include <sys/ioctl.h>
 #include <errno.h>
 
 #ifndef _WIN32
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <sys/select.h>
 #include <termios.h>
 #else
 #include <windows.h>
+#include <io.h>
 #endif
 
 namespace zyx {
@@ -24,10 +26,6 @@ Terminal::Terminal() {
 Terminal::~Terminal() {
     disableRawMode();
 }
-
-#ifndef _WIN32
-#include <sys/select.h>
-#endif
 
 // ...
 
@@ -96,9 +94,14 @@ int Terminal::readByte() {
     }
 
     char c;
+#ifndef _WIN32
     int nread = read(STDIN_FILENO, &c, 1);
+#else
+    DWORD nread = 0;
+    if (!ReadFile(hConsoleIn_, &c, 1, &nread, NULL)) nread = 0;
+#endif
     if (nread <= 0) return -1;
-    return c;
+    return static_cast<unsigned char>(c);
 }
 
 KeyEvent Terminal::readKey() {
@@ -190,7 +193,12 @@ KeyEvent Terminal::readKey() {
 }
 
 void Terminal::write(const std::string& str) {
+#ifndef _WIN32
     ::write(STDOUT_FILENO, str.c_str(), str.length());
+#else
+    DWORD written;
+    WriteFile(hConsoleOut_, str.c_str(), static_cast<DWORD>(str.length()), &written, NULL);
+#endif
 }
 
 int Terminal::getColumns() {
