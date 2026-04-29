@@ -165,7 +165,7 @@ jobs:
           CIBW_BEFORE_ALL_WINDOWS: >
             choco install pkgconfiglite --allow-empty-checksums &&
             pip install conan meson ninja &&
-            python -c "import pathlib; p=pathlib.Path.home()/'.conan2'/'profiles'; p.mkdir(parents=True,exist_ok=True); (p/'default').write_text('[settings]\nos=Windows\narch=x86_64\nbuild_type=Release\ncompiler=msvc\ncompiler.version=194\ncompiler.cppstd=20\ncompiler.runtime=dynamic\n')" &&
+            python scripts/write_conan_msvc_profile.py &&
             mkdir -p buildDir &&
             conan install . --output-folder=buildDir --build=missing &&
             choco install llvm --version=20.1.4 --force
