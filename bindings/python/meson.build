@@ -93,6 +93,35 @@ cypher_dep = declare_dependency(
 )
 
 # ==============================================================================
+# inputxx library (required by core/cli)
+# ==============================================================================
+inputxx_src_dir = zyx_root / 'lib' / 'inputxx' / 'src'
+_find_inputxx = run_command(_py, '-c', '''
+import os, sys
+base_dir = sys.argv[1]
+for root, dirs, files in os.walk(base_dir):
+    for f in sorted(files):
+        if f.endswith(".cpp"):
+            print(os.path.relpath(os.path.join(root, f), base_dir))
+''', inputxx_src_dir, check : true)
+inputxx_src = []
+foreach f : _find_inputxx.stdout().strip().split('\n')
+    if f != ''
+        inputxx_src += files(zyx_root / 'lib' / 'inputxx' / 'src' / f)
+    endif
+endforeach
+inputxx_inc = include_directories('../../lib/inputxx/include')
+inputxx_lib = static_library('inputxx',
+    sources : inputxx_src,
+    include_directories : inputxx_inc,
+    install : false,
+)
+inputxx_dep = declare_dependency(
+    include_directories : inputxx_inc,
+    link_with : inputxx_lib,
+)
+
+# ==============================================================================
 # Core library sources (same discovery as src/meson.build)
 # ==============================================================================
 src_dir = zyx_root / 'src'
@@ -100,7 +129,7 @@ _find_src = run_command(_py, '-c', '''
 import os, sys
 base_dir = sys.argv[1]
 source_dir = sys.argv[2]
-exclude = ["query/parser"]
+exclude = ["query/parser", "cli"]
 for root, dirs, files_list in os.walk(base_dir):
     rel_root = os.path.relpath(root, base_dir)
     skip = False
@@ -144,7 +173,7 @@ configure_file(
 db_lib = static_library('zyx_core',
     sources : db_src,
     include_directories : inc_dirs,
-    dependencies : [zlib_dep, boost_dep, cli11_dep, antlr4_dep, cypher_dep],
+    dependencies : [zlib_dep, boost_dep, cli11_dep, antlr4_dep, cypher_dep, inputxx_dep],
     cpp_args : ['-DCOVERAGE_SKIP_ZLIB_ERRORS'],
     install : false,
 )
@@ -152,7 +181,7 @@ db_lib = static_library('zyx_core',
 db_dep = declare_dependency(
     include_directories : inc_dirs,
     link_with : db_lib,
-    dependencies : [cypher_dep, zlib_dep, boost_dep, cli11_dep, antlr4_dep],
+    dependencies : [cypher_dep, zlib_dep, boost_dep, cli11_dep, antlr4_dep, inputxx_dep],
 )
 
 # ==============================================================================

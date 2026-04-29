@@ -6,10 +6,9 @@ detect, which incorrectly picks up VS-bundled clang-cl on GHA runners.
 
 import pathlib
 
-profile_dir = pathlib.Path.home() / ".conan2" / "profiles"
-profile_dir.mkdir(parents=True, exist_ok=True)
+profile_path = pathlib.Path("conan_msvc_profile")
 
-(profile_dir / "default").write_text(
+profile_path.write_text(
     "[settings]\n"
     "os=Windows\n"
     "arch=x86_64\n"
