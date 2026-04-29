@@ -12,12 +12,13 @@ cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Objec
     }
 }
 
-# Explicitly unset CC and CXX so Conan uses the default MSVC compiler (cl.exe)
-# instead of picking up cibuildwheel's clang-cl environment variables.
-$env:CC = ""
-$env:CXX = ""
+# Remove CC and CXX variables from the current session so CMake doesn't try to use clang-cl
+Remove-Item Env:\CC -ErrorAction Ignore
+Remove-Item Env:\CXX -ErrorAction Ignore
 
 Write-Host "Generating explicit MSVC Conan profile..."
+# We explicitly set the generator to Visual Studio 17 2022 so CMake completely
+# ignores any remaining CC/CXX variables and uses MSBuild and cl.exe correctly.
 $profile = @"
 [settings]
 os=Windows
@@ -26,6 +27,8 @@ compiler=msvc
 compiler.version=194
 compiler.cppstd=20
 compiler.runtime=dynamic
+[conf]
+tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022
 "@
 $profile | Out-File -FilePath "conan_msvc_profile" -Encoding utf8
 
