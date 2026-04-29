@@ -202,13 +202,13 @@ jobs:
           LIB_PATH="$ABS_DIST_PATH/lib/libzyx.dylib"
           if [ -f "$LIB_PATH" ]; then
             install_name_tool -id "@rpath/libzyx.dylib" "$LIB_PATH"
-            codesign --force --sign - "$LIB_PATH"
+            codesign --force --sign - -o runtime "$LIB_PATH"
           fi
 
           # Ad-hoc sign CLI binary to avoid Gatekeeper blocking
           CLI_PATH="buildDir/apps/cli/zyx"
           if [ -f "$CLI_PATH" ]; then
-            codesign --force --sign - "$CLI_PATH"
+            codesign --force --sign - -o runtime "$CLI_PATH"
           fi
 
       # -----------------------------------------------------------
