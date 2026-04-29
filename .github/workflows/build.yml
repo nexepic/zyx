@@ -36,13 +36,6 @@ jobs:
             llvm_profdata: llvm-profdata
 
     steps:
-      - name: Free Disk Space (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force || true
-          df -h /
-
       - name: Checkout Code
         uses: actions/checkout@v3
 
@@ -127,9 +120,10 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd buildDir
-          $FLAGS="-fprofile-instr-generate -fcoverage-mapping"
-          
+          $FLAGS="-fprofile-instr-generate -fcoverage-mapping -g1"
+
           # Use compiler_options_win64.ini to force clang-cl
+          # -g1 (line tables only) overrides -g from buildtype=debug to reduce binary size
           meson setup . .. --native-file conan_meson_native.ini --native-file ../${{ matrix.native_file }} -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS" -Dbuildtype=debug
           meson compile
         shell: pwsh
@@ -142,9 +136,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd buildDir
-          export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
-          
+          export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20 -g1"
+
           # Use compiler_options.ini to force clang-20
+          # -g1 (line tables only) overrides -g from buildtype=debug to reduce binary size
           meson setup . .. --native-file conan_meson_native.ini --native-file ../${{ matrix.native_file }} -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS" -Dbuildtype=debug
           meson compile
 
@@ -156,7 +151,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cd buildDir
-          export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
+          export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20 -g1"
           
           # 2. Setup Meson using the generated ini file
           meson setup . .. --native-file conan_meson_native.ini --native-file ../compiler_options_mac.ini -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS" -Dbuildtype=debug
