@@ -12,15 +12,16 @@ cross-platform compatibility.
 ./scripts/run_tests.sh --quick      # Quick build (skip Conan)
 ./scripts/run_tests.sh --no-conan   # Use system dependencies
 ./scripts/run_tests.sh --html       # HTML coverage report
-./scripts/run_tests.sh --quick --file xxx.cpp  # Coverage for specific file
-meson test -C buildDir <test_name>  # Run specific test
+./scripts/run_tests.sh --quick --file xxx.cpp  # Coverage report for specific file
+ninja -C buildDir tests/zyx_test_suite && ./buildDir/tests/zyx_test_suite --gtest_filter="SuiteName.*" # Compile and run specific test suite
+ninja -C buildDir tests/zyx_test_suite && ./buildDir/tests/zyx_test_suite --gtest_filter="SuiteName.TestName" # Compile and run specific test case
 ./scripts/build_release.sh          # Release build
 ./scripts/setup_emsdk.sh            # Install Emscripten SDK + antlr4 WASM (one-time)
 ./scripts/build_wasm.sh             # Build WASM module (zyx.js + zyx.wasm)
 python3 scripts/bump_version.py vX.Y.Z  # Bump version + commit + tag
 ```
 
-Build system: **Meson** + **Conan** + **Ninja**. Tests: **Google Test**, auto-discovered from `test_*.cpp`.
+Build system: **Meson** + **Conan** + **Ninja**. Tests: **Google Test**, auto-discovered from `test_*.cpp` and compiled into a single `zyx_test_suite` executable for faster linking and smaller footprint.
 
 ## Verification
 

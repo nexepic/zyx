@@ -641,7 +641,7 @@ TEST_F(WALReplayTest, InjectedUnknownEntityTypeSkipped) {
 
 // --- Inject modify for existing entity (segmentOffset != 0) for all types ---
 
-TEST_F(WALReplayTest, InjectedModifyExistingBlobRecovery) {
+TEST_F(WALReplayTest, InjectedModifyExistingBlobRecoveryNodeEdge) {
 	int64_t blobId = 0;
 	{
 		Database db(dbPath.string());
@@ -771,7 +771,7 @@ TEST_F(WALReplayTest, InjectedModifyExistingStateRecovery) {
 	}
 }
 
-TEST_F(WALReplayTest, InjectedModifyExistingPropertyRecovery) {
+TEST_F(WALReplayTest, InjectedModifyExistingPropertyRecoveryNodeEdge) {
 	int64_t propId = 0;
 	{
 		Database db(dbPath.string());

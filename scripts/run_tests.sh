@@ -105,7 +105,14 @@ meson compile -C "$BUILD_DIR"
 # Step 3: Run Tests
 # ==============================================================================
 echo -e "${BLUE}>>> [4/5] Running Tests...${NC}"
-meson test -C "$BUILD_DIR"
+if [ -n "$REPORT_ARGS" ]; then
+    ./$BUILD_DIR/tests/zyx_test_suite
+else
+    # Run the unified test suite natively.
+    # Our custom test_main.cpp suppresses stdout/stderr of tests unless they fail,
+    # keeping the progress display clean and legible!
+    ./$BUILD_DIR/tests/zyx_test_suite
+fi
 
 # ==============================================================================
 # Step 4: Generate Reports

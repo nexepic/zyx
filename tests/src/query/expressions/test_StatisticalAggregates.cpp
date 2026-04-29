@@ -29,7 +29,7 @@ using namespace graph::query::execution::operators;
 // StDevAccumulator (sample) tests
 // ============================================================================
 
-TEST(StDevAccumulatorTest, SampleStDev) {
+TEST(StDevAccumulator_Expressions_Test, SampleStDev) {
 	StDevAccumulator acc(false);  // sample
 	for (int v : {2, 4, 4, 4, 5, 5, 7, 9}) {
 		acc.update(PropertyValue(static_cast<int64_t>(v)));
@@ -39,14 +39,14 @@ TEST(StDevAccumulatorTest, SampleStDev) {
 	EXPECT_NEAR(std::get<double>(result.getVariant()), 2.138, 0.01);
 }
 
-TEST(StDevAccumulatorTest, SampleSingleValueReturnsNull) {
+TEST(StDevAccumulator_Expressions_Test, SampleSingleValueReturnsNull) {
 	StDevAccumulator acc(false);  // sample
 	acc.update(PropertyValue(static_cast<int64_t>(42)));
 	auto result = acc.getResult();
 	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
 }
 
-TEST(StDevAccumulatorTest, SampleEmptyReturnsNull) {
+TEST(StDevAccumulator_Expressions_Test, SampleEmptyReturnsNull) {
 	StDevAccumulator acc(false);  // sample
 	auto result = acc.getResult();
 	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
@@ -56,7 +56,7 @@ TEST(StDevAccumulatorTest, SampleEmptyReturnsNull) {
 // StDevAccumulator (population) tests
 // ============================================================================
 
-TEST(StDevAccumulatorTest, PopulationStDev) {
+TEST(StDevAccumulator_Expressions_Test, PopulationStDev) {
 	auto acc = createAccumulator(AggregateFunctionType::AGG_STDEVP);
 	for (int v : {2, 4, 4, 4, 5, 5, 7, 9}) {
 		acc->update(PropertyValue(static_cast<int64_t>(v)));
@@ -75,7 +75,7 @@ TEST(StDevAccumulatorTest, PopulationStDev) {
 	EXPECT_NEAR(std::get<double>(result.getVariant()), 2.0, 0.01);
 }
 
-TEST(StDevAccumulatorTest, PopulationEmptyReturnsNull) {
+TEST(StDevAccumulator_Expressions_Test, PopulationEmptyReturnsNull) {
 	StDevAccumulator acc(true);  // population
 	auto result = acc.getResult();
 	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
@@ -85,7 +85,7 @@ TEST(StDevAccumulatorTest, PopulationEmptyReturnsNull) {
 // PercentileDiscAccumulator tests
 // ============================================================================
 
-TEST(PercentileDiscAccumulatorTest, MedianOfFiveValues) {
+TEST(PercentileDiscAccumulator_Expressions_Test, MedianOfFiveValues) {
 	PercentileDiscAccumulator acc(0.5);
 	for (int v : {1, 2, 3, 4, 5}) {
 		acc.update(PropertyValue(static_cast<int64_t>(v)));
@@ -95,7 +95,7 @@ TEST(PercentileDiscAccumulatorTest, MedianOfFiveValues) {
 	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 3);
 }
 
-TEST(PercentileDiscAccumulatorTest, ZeroPercentile) {
+TEST(PercentileDiscAccumulator_Expressions_Test, ZeroPercentile) {
 	PercentileDiscAccumulator acc(0.0);
 	for (int v : {1, 2, 3, 4, 5}) {
 		acc.update(PropertyValue(static_cast<int64_t>(v)));
@@ -105,7 +105,7 @@ TEST(PercentileDiscAccumulatorTest, ZeroPercentile) {
 	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 1);
 }
 
-TEST(PercentileDiscAccumulatorTest, OneHundredPercentile) {
+TEST(PercentileDiscAccumulator_Expressions_Test, OneHundredPercentile) {
 	PercentileDiscAccumulator acc(1.0);
 	for (int v : {1, 2, 3, 4, 5}) {
 		acc.update(PropertyValue(static_cast<int64_t>(v)));
@@ -115,7 +115,7 @@ TEST(PercentileDiscAccumulatorTest, OneHundredPercentile) {
 	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 5);
 }
 
-TEST(PercentileDiscAccumulatorTest, EmptyReturnsNull) {
+TEST(PercentileDiscAccumulator_Expressions_Test, EmptyReturnsNull) {
 	PercentileDiscAccumulator acc(0.5);
 	auto result = acc.getResult();
 	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
@@ -125,7 +125,7 @@ TEST(PercentileDiscAccumulatorTest, EmptyReturnsNull) {
 // PercentileContAccumulator tests
 // ============================================================================
 
-TEST(PercentileContAccumulatorTest, InterpolateTwoValues) {
+TEST(PercentileContAccumulator_Expressions_Test, InterpolateTwoValues) {
 	PercentileContAccumulator acc(0.5);
 	acc.update(PropertyValue(static_cast<int64_t>(1)));
 	acc.update(PropertyValue(static_cast<int64_t>(2)));
@@ -134,7 +134,7 @@ TEST(PercentileContAccumulatorTest, InterpolateTwoValues) {
 	EXPECT_NEAR(std::get<double>(result.getVariant()), 1.5, 0.001);
 }
 
-TEST(PercentileContAccumulatorTest, MedianOfThreeValues) {
+TEST(PercentileContAccumulator_Expressions_Test, MedianOfThreeValues) {
 	PercentileContAccumulator acc(0.5);
 	for (int v : {1, 2, 3}) {
 		acc.update(PropertyValue(static_cast<int64_t>(v)));
@@ -145,7 +145,7 @@ TEST(PercentileContAccumulatorTest, MedianOfThreeValues) {
 	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 2);
 }
 
-TEST(PercentileContAccumulatorTest, EmptyReturnsNull) {
+TEST(PercentileContAccumulator_Expressions_Test, EmptyReturnsNull) {
 	PercentileContAccumulator acc(0.5);
 	auto result = acc.getResult();
 	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);

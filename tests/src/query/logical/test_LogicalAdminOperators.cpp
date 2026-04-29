@@ -399,7 +399,7 @@ TEST_F(LogicalExplainTest, BasicConstruction) {
     EXPECT_NE(explain.getInnerPlan(), nullptr);
 }
 
-TEST_F(LogicalExplainTest, OutputVariables) {
+TEST_F(LogicalExplainTest, OutputVariables_Admin) {
     auto inner = std::make_unique<LogicalNodeScan>("n");
     LogicalExplain explain(std::move(inner));
 
