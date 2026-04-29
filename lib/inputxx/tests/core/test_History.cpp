@@ -1,7 +1,14 @@
 #include <gtest/gtest.h>
 #include "inputxx/core/History.hpp"
 #include <cstdio>
+#include <string>
+
+#ifdef _WIN32
+#include <process.h>
+#define getpid _getpid
+#else
 #include <unistd.h>
+#endif
 
 using namespace inputxx::core;
 
@@ -66,7 +73,7 @@ TEST(HistoryTest, Clear) {
 }
 
 TEST(HistoryTest, SaveAndLoad) {
-    std::string tmpfile = "/tmp/zyx_test_history_" + std::to_string(::getpid()) + ".txt";
+    std::string tmpfile = "/tmp/zyx_test_history_" + std::to_string(getpid()) + ".txt";
 
     History h1(50);
     h1.add("MATCH (n) RETURN n");
@@ -85,7 +92,7 @@ TEST(HistoryTest, SaveAndLoad) {
 }
 
 TEST(HistoryTest, LoadRespectMaxSize) {
-    std::string tmpfile = "/tmp/zyx_test_history_max_" + std::to_string(::getpid()) + ".txt";
+    std::string tmpfile = "/tmp/zyx_test_history_max_" + std::to_string(getpid()) + ".txt";
 
     History h1(100);
     h1.add("cmd1");

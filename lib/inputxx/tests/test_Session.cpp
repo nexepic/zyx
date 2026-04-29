@@ -2,7 +2,15 @@
 #include <gmock/gmock.h>
 #include <vector>
 #include <cstdio>
+#include <string>
+
+#ifdef _WIN32
+#include <process.h>
+#define getpid _getpid
+#else
 #include <unistd.h>
+#endif
+
 #include "inputxx/Session.hpp"
 #include "io/MockTerminal.hpp"
 
@@ -58,7 +66,7 @@ TEST(SessionTest, CompletionCallback) {
 }
 
 TEST(SessionTest, SaveAndLoadHistory) {
-    std::string tmpfile = "/tmp/inputxx_session_test_" + std::to_string(::getpid()) + ".txt";
+    std::string tmpfile = "/tmp/inputxx_session_test_" + std::to_string(getpid()) + ".txt";
 
     {
         auto terminal = std::make_shared<NiceMock<io::MockTerminal>>();
