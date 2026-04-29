@@ -167,7 +167,7 @@ jobs:
             pip install conan meson ninja &&
             python scripts/write_conan_msvc_profile.py &&
             mkdir -p buildDir &&
-            conan install . --output-folder=buildDir --build=missing &&
+            conan install . --output-folder=buildDir --build=missing --profile conan_msvc_profile &&
             choco install llvm --version=20.1.4 --force
           CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl
 
