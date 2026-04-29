@@ -19,11 +19,12 @@
  **/
 
 #include "graph/cli/Repl.hpp"
+#include "graph/cli/CypherCompleter.hpp"
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include "graph/cli/repl/Session.hpp"
+#include "inputxx/Session.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "ProjectConfig.hpp"
 
@@ -250,6 +251,13 @@ namespace graph {
 
 	REPL::REPL(Database &db) : db(db) {}
 
+	const std::vector<std::string>& REPL::getCommandNames() {
+		static const std::vector<std::string> commands = {
+			"help", "save", "clear", "exit", "debug"
+		};
+		return commands;
+	}
+
 	void REPL::printBanner(bool basicMode) const {
 		std::string version = PROJECT_VERSION_STR;
 		std::string dbPath = db.getPath();
@@ -319,7 +327,13 @@ namespace graph {
 			return;
 		}
 
-		zyx::repl::Session replSession(100);
+		inputxx::Session replSession(100);
+
+		cli::CypherCompleter completer;
+		replSession.setCompletionCallback(
+			[&completer](const std::string& line, std::vector<std::string>& completions) {
+				completer.complete(line, completions);
+			});
 
 		static const std::string PROMPT_COLOR = "\033[1;32m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
 		const std::string promptNormal = PROMPT_COLOR;

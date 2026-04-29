@@ -88,6 +88,18 @@ namespace graph::query::planner {
 		}
 
 		/**
+		 * @brief Returns all registered procedure names.
+		 */
+		std::vector<std::string> getRegisteredNames() const {
+			std::vector<std::string> names;
+			names.reserve(registry_.size());
+			for (const auto& [name, _] : registry_) {
+				names.push_back(name);
+			}
+			return names;
+		}
+
+		/**
 		 * @brief Returns the descriptor for a procedure, or nullptr if not found.
 		 */
 		const ProcedureDescriptor *getDescriptor(const std::string &name) const {

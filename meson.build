@@ -58,6 +58,7 @@ if not antlr4_dep.found()
 endif
 
 # Subdirectories
+subdir('lib/inputxx')
 subdir('src')
 if host_machine.system() != 'emscripten'
     subdir('apps/cli')
