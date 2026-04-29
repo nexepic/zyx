@@ -91,7 +91,7 @@ protected:
 	std::vector<std::vector<float>> trainData;
 };
 
-TEST_F(NativePQTest, TrainAndEncode) {
+TEST_F(NativePQTest, TrainAndEncode_VectorIndex) {
 	// Dim=16, M=4, Centroids=16
 	// SubDim = 16/4 = 4
 	NativeProductQuantizer pq(16, 4, 16);

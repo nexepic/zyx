@@ -28,29 +28,19 @@ for root, dirs, files in os.walk(sys.argv[1]):
 
 	test_include_dirs = include_directories('include', '../tests/include', '../src/query/parser/cypher/generated')
 
-	foreach file : test_files
-		if file != '' and file != '.'
-			# Extract just the filename without path and extension
-			base_name = file.split('/')[-1].replace('.cpp', '')
-			# Create a unique test name by replacing path separators with underscores
-			test_name = file.replace('/', '_').replace('\\', '_').replace('.cpp', '')
-
-			test_executable = executable(test_name,
-										 sources : files(file),
-										 dependencies : [
-											 db_dep,
-											 gtest_dep,
-											 gtest_main_dep,
-											 gmock_dep,
-											 gmock_main_dep,
-											 antlr4_dep,
-											 boost_dep,
-											 cli11_dep
-										 ],
-										 include_directories : test_include_dirs,
-										 build_by_default : true
-			)
-			test(test_name, test_executable)
-		endif
-	endforeach
+	if test_sources.length() > 0
+	        test_executable = executable('zyx_test_suite',
+	                                     sources : test_sources,
+	                                     dependencies : [
+	                                             db_dep,
+	                                             gtest_dep,
+	                                             gmock_dep,
+	                                             antlr4_dep,
+	                                             boost_dep,
+	                                             cli11_dep
+	                                     ],	                                     include_directories : test_include_dirs,
+	                                     build_by_default : true
+	        )
+	        test('zyx_all_tests', test_executable, protocol : 'gtest', timeout : 600)
+	endif
 endif

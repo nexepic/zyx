@@ -42,60 +42,59 @@ using namespace graph::query::execution::operators;
 // LogicalExplain / LogicalProfile unit tests
 // ============================================================================
 
-TEST(LogicalExplainTest, TypeIsExplain) {
-	auto explain = std::make_unique<LogicalExplain>(nullptr);
-	EXPECT_EQ(explain->getType(), LogicalOpType::LOP_EXPLAIN);
+TEST(LogicalExplain_ExplainProfile_Test, TypeIsExplain) {
+        auto explain = std::make_unique<LogicalExplain>(nullptr);
+        EXPECT_EQ(explain->getType(), LogicalOpType::LOP_EXPLAIN);
 }
 
-TEST(LogicalExplainTest, ToStringReturnsExplain) {
-	auto explain = std::make_unique<LogicalExplain>(nullptr);
-	EXPECT_EQ(explain->toString(), "Explain");
+TEST(LogicalExplain_ExplainProfile_Test, ToStringReturnsExplain) {
+        auto explain = std::make_unique<LogicalExplain>(nullptr);
+        EXPECT_EQ(explain->toString(), "Explain");
 }
 
-TEST(LogicalExplainTest, NullInnerPlanReturnsEmptyChildren) {
-	auto explain = std::make_unique<LogicalExplain>(nullptr);
-	EXPECT_TRUE(explain->getChildren().empty());
-	EXPECT_EQ(explain->getInnerPlan(), nullptr);
+TEST(LogicalExplain_ExplainProfile_Test, NullInnerPlanReturnsEmptyChildren) {
+        auto explain = std::make_unique<LogicalExplain>(nullptr);
+        EXPECT_TRUE(explain->getChildren().empty());
+        EXPECT_EQ(explain->getInnerPlan(), nullptr);
 }
 
-TEST(LogicalExplainTest, CloneWithNullInner) {
-	auto explain = std::make_unique<LogicalExplain>(nullptr);
-	auto cloned = explain->clone();
-	ASSERT_NE(cloned, nullptr);
-	EXPECT_EQ(cloned->getType(), LogicalOpType::LOP_EXPLAIN);
+TEST(LogicalExplain_ExplainProfile_Test, CloneWithNullInner) {
+        auto explain = std::make_unique<LogicalExplain>(nullptr);
+        auto cloned = explain->clone();
+        ASSERT_NE(cloned, nullptr);
+        EXPECT_EQ(cloned->getType(), LogicalOpType::LOP_EXPLAIN);
 }
 
-TEST(LogicalExplainTest, OutputVariables) {
-	auto explain = std::make_unique<LogicalExplain>(nullptr);
-	auto vars = explain->getOutputVariables();
-	ASSERT_EQ(vars.size(), 2UL);
-	EXPECT_EQ(vars[0], "operator");
-	EXPECT_EQ(vars[1], "details");
+TEST(LogicalExplain_ProfileTest, OutputVariables) {
+    auto explain = std::make_unique<LogicalExplain>(nullptr);
+    auto vars = explain->getOutputVariables();
+        ASSERT_EQ(vars.size(), 2UL);
+        EXPECT_EQ(vars[0], "operator");
+        EXPECT_EQ(vars[1], "details");
 }
 
-TEST(LogicalProfileTest, TypeIsProfile) {
-	auto profile = std::make_unique<LogicalProfile>(nullptr);
-	EXPECT_EQ(profile->getType(), LogicalOpType::LOP_PROFILE);
+TEST(LogicalProfile_ExplainProfile_Test, TypeIsProfile) {
+        auto profile = std::make_unique<LogicalProfile>(nullptr);
+        EXPECT_EQ(profile->getType(), LogicalOpType::LOP_PROFILE);
 }
 
-TEST(LogicalProfileTest, ToStringReturnsProfile) {
-	auto profile = std::make_unique<LogicalProfile>(nullptr);
-	EXPECT_EQ(profile->toString(), "Profile");
+TEST(LogicalProfile_ExplainProfile_Test, ToStringReturnsProfile) {
+        auto profile = std::make_unique<LogicalProfile>(nullptr);
+        EXPECT_EQ(profile->toString(), "Profile");
 }
 
-TEST(LogicalProfileTest, NullInnerPlanReturnsEmptyChildren) {
-	auto profile = std::make_unique<LogicalProfile>(nullptr);
-	EXPECT_TRUE(profile->getChildren().empty());
-	EXPECT_EQ(profile->getInnerPlan(), nullptr);
+TEST(LogicalProfile_ExplainProfile_Test, NullInnerPlanReturnsEmptyChildren) {
+        auto profile = std::make_unique<LogicalProfile>(nullptr);
+        EXPECT_TRUE(profile->getChildren().empty());
+        EXPECT_EQ(profile->getInnerPlan(), nullptr);
 }
 
-TEST(LogicalProfileTest, CloneWithNullInner) {
-	auto profile = std::make_unique<LogicalProfile>(nullptr);
-	auto cloned = profile->clone();
-	ASSERT_NE(cloned, nullptr);
-	EXPECT_EQ(cloned->getType(), LogicalOpType::LOP_PROFILE);
+TEST(LogicalProfile_ExplainProfile_Test, CloneWithNullInner) {
+        auto profile = std::make_unique<LogicalProfile>(nullptr);
+        auto cloned = profile->clone();
+        ASSERT_NE(cloned, nullptr);
+        EXPECT_EQ(cloned->getType(), LogicalOpType::LOP_PROFILE);
 }
-
 // ============================================================================
 // ExplainOperator unit tests
 // ============================================================================

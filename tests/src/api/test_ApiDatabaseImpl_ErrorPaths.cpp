@@ -316,7 +316,7 @@ TEST_F(CppApiTest, ShortestPathBasic) {
 	EXPECT_GE(path.size(), 2UL);
 }
 
-TEST_F(CppApiTest, BfsTraversal) {
+TEST_F(CppApiTest, BfsTraversal_ErrorPaths) {
 	auto id1 = db->createNode("BFS", {{"v", int64_t(1)}});
 	auto id2 = db->createNode("BFS", {{"v", int64_t(2)}});
 	db->createEdge(id1, id2, "CONN", {});
@@ -368,7 +368,7 @@ TEST_F(CppApiTest, HasActiveTransactionWithoutCypherTxn) {
 	EXPECT_FALSE(db->hasActiveTransaction());
 }
 
-TEST_F(CppApiTest, ResultMoveAssignment) {
+TEST_F(CppApiTest, ResultMoveAssignment_ErrorPaths) {
 	auto res1 = db->execute("RETURN 1");
 	EXPECT_TRUE(res1.isSuccess());
 

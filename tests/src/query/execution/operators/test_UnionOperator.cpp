@@ -28,35 +28,38 @@
 using namespace graph::query::execution;
 using namespace graph::query::execution::operators;
 
+namespace {
+
 // Mock Operator for testing
 class MockOperator : public PhysicalOperator {
 public:
-	std::vector<RecordBatch> batches;
-	size_t current_index = 0;
+        std::vector<RecordBatch> batches;
+        size_t current_index = 0;
 
-	explicit MockOperator(std::vector<RecordBatch> data = {}) : batches(std::move(data)) {}
+        explicit MockOperator(std::vector<RecordBatch> data = {}) : batches(std::move(data)) {}
 
-	void open() override {}
-	std::optional<RecordBatch> next() override {
-		if (current_index >= batches.size()) {
-			return std::nullopt;
-		}
-		return batches[current_index++];
-	}
-	void close() override {}
-	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"x", "y"}; }
-	[[nodiscard]] std::string toString() const override { return "Mock"; }
-	[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {}; }
+        void open() override {}
+        std::optional<RecordBatch> next() override {
+                if (current_index >= batches.size()) {
+                        return std::nullopt;
+                }
+                return batches[current_index++];
+        }
+        void close() override {}
+        [[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"x", "y"}; }
+        [[nodiscard]] std::string toString() const override { return "Mock"; }
+        [[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {}; }
 };
 
 // Helper to create a record with two values
 Record makeRecord(int64_t x, int64_t y) {
-	Record r;
-	r.setValue("x", x);
-	r.setValue("y", y);
-	return r;
+        Record r;
+        r.setValue("x", x);
+        r.setValue("y", y);
+        return r;
 }
 
+} // namespace
 // ============================================================================
 // UnionOperator Tests
 // ============================================================================
