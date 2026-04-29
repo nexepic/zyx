@@ -66,7 +66,7 @@ public:
 
         if (test_info.result()->Failed()) {
             suite_failed_tests_++;
-            std::cout << "\n" << getProgressPrefix() << "\033[1;31m✖ " << test_info.name() << " FAILED\033[0m\n";
+            std::cout << "\n" << getProgressPrefix() << "\033[1;31mX " << test_info.name() << " FAILED\033[0m\n";
             
             for (const auto& msg : current_test_failures_) {
                 std::stringstream ss(msg);
@@ -97,9 +97,9 @@ public:
         std::cout << getProgressPrefix();
         
         if (suite_failed_tests_ == 0) {
-            std::cout << "\033[1;32m✔ PASS\033[0m \033[1m" << test_suite.name() << "\033[0m \033[1;34m(" << test_suite.elapsed_time() << " ms)\033[0m\n";
+            std::cout << "\033[1;32mPASS\033[0m \033[1m" << test_suite.name() << "\033[0m \033[1;34m(" << test_suite.elapsed_time() << " ms)\033[0m\n";
         } else {
-            std::cout << "\033[1;31m✖ FAIL\033[0m \033[1m" << test_suite.name() << "\033[0m \033[1;31m(" << suite_failed_tests_ << " failures, " << test_suite.elapsed_time() << " ms)\033[0m\n";
+            std::cout << "\033[1;31mFAIL\033[0m \033[1m" << test_suite.name() << "\033[0m \033[1;31m(" << suite_failed_tests_ << " failures, " << test_suite.elapsed_time() << " ms)\033[0m\n";
         }
     }
 
@@ -110,9 +110,9 @@ public:
     void OnTestProgramEnd(const ::testing::UnitTest& unit_test) override {
         std::cout << "\n\033[1;34m================================================================================\033[0m\n";
         if (unit_test.failed_test_count() == 0) {
-            std::cout << "\033[1;32m  🎉 ALL TESTS PASSED!\033[0m\n";
+            std::cout << "\033[1;32m  ALL TESTS PASSED!\033[0m\n";
         } else {
-            std::cout << "\033[1;31m  💥 TESTS FAILED!\033[0m\n";
+            std::cout << "\033[1;31m  TESTS FAILED!\033[0m\n";
         }
         std::cout << "\n";
         std::cout << "  Passed: \033[1;32m" << unit_test.successful_test_count() << "\033[0m\n"
