@@ -12,34 +12,43 @@ cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Objec
     }
 }
 
-# Remove CC and CXX variables from the current session so CMake doesn't try to use clang-cl
+# GUARANTEE CC and CXX are completely unset for child processes
+[System.Environment]::SetEnvironmentVariable('CC', $null)
+[System.Environment]::SetEnvironmentVariable('CXX', $null)
 Remove-Item Env:\CC -ErrorAction Ignore
 Remove-Item Env:\CXX -ErrorAction Ignore
 
-Write-Host "Generating explicit MSVC Conan profile..."
-# We explicitly set the generator to Visual Studio 17 2022 so CMake completely
-# ignores any remaining CC/CXX variables and uses MSBuild and cl.exe correctly.
-$profile = @"
-[settings]
-os=Windows
-arch=x86_64
-compiler=msvc
-compiler.version=194
-compiler.cppstd=20
-compiler.runtime=dynamic
-[conf]
-tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022
-"@
-$profile | Out-File -FilePath "conan_msvc_profile" -Encoding utf8
+# Generate base default profile so Conan doesn't fail
+conan profile detect --force
 
-# Check if build_type argument was passed to script, default to Release
 $buildType = "Release"
 if ($args.Count -gt 0) {
     $buildType = $args[0]
 }
 
-Write-Host "Running Conan install with build_type=$buildType..."
+Write-Host "Running Conan install with build_type=$buildType and explicitly forced MSVC arguments..."
 New-Item -ItemType Directory -Force -Path buildDir | Out-Null
-conan install . --output-folder=buildDir --build=missing -s build_type=$buildType --profile:build conan_msvc_profile --profile:host conan_msvc_profile
+
+$conanArgs = @(
+    "install",
+    ".",
+    "--output-folder=buildDir",
+    "--build=missing",
+    "-s", "os=Windows",
+    "-s", "arch=x86_64",
+    "-s", "build_type=$buildType",
+    "-s", "compiler=msvc",
+    "-s", "compiler.version=194",
+    "-s", "compiler.cppstd=20",
+    "-s", "compiler.runtime=dynamic",
+    "-c", 'tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022'
+)
+
+& conan $conanArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Conan install failed."
+    exit $LASTEXITCODE
+}
 
 Write-Host "Conan install completed."

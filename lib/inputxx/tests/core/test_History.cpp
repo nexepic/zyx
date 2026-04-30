@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include "inputxx/core/History.hpp"
 #include <cstdio>
+#include <cstdlib>
 #include <string>
+#include <filesystem>
 
 #ifdef _WIN32
 #include <process.h>
@@ -9,6 +11,13 @@
 #else
 #include <unistd.h>
 #endif
+
+namespace {
+std::string getTempFilePath(const std::string& name) {
+    auto tmp = std::filesystem::temp_directory_path() / (name + "_" + std::to_string(getpid()) + ".txt");
+    return tmp.string();
+}
+} // namespace
 
 using namespace inputxx::core;
 
@@ -73,7 +82,7 @@ TEST(HistoryTest, Clear) {
 }
 
 TEST(HistoryTest, SaveAndLoad) {
-    std::string tmpfile = "/tmp/zyx_test_history_" + std::to_string(getpid()) + ".txt";
+    std::string tmpfile = getTempFilePath("zyx_test_history");
 
     History h1(50);
     h1.add("MATCH (n) RETURN n");
@@ -92,7 +101,7 @@ TEST(HistoryTest, SaveAndLoad) {
 }
 
 TEST(HistoryTest, LoadRespectMaxSize) {
-    std::string tmpfile = "/tmp/zyx_test_history_max_" + std::to_string(getpid()) + ".txt";
+    std::string tmpfile = getTempFilePath("zyx_test_history_max");
 
     History h1(100);
     h1.add("cmd1");

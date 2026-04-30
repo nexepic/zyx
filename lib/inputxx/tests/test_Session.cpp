@@ -2,7 +2,9 @@
 #include <gmock/gmock.h>
 #include <vector>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
+#include <filesystem>
 
 #ifdef _WIN32
 #include <process.h>
@@ -13,6 +15,13 @@
 
 #include "inputxx/Session.hpp"
 #include "io/MockTerminal.hpp"
+
+namespace {
+std::string getTempFilePath(const std::string& name) {
+    auto tmp = std::filesystem::temp_directory_path() / (name + "_" + std::to_string(getpid()) + ".txt");
+    return tmp.string();
+}
+} // namespace
 
 using namespace inputxx;
 using ::testing::Return;
@@ -66,7 +75,7 @@ TEST(SessionTest, CompletionCallback) {
 }
 
 TEST(SessionTest, SaveAndLoadHistory) {
-    std::string tmpfile = "/tmp/inputxx_session_test_" + std::to_string(getpid()) + ".txt";
+    std::string tmpfile = getTempFilePath("inputxx_session_test");
 
     {
         auto terminal = std::make_shared<NiceMock<io::MockTerminal>>();
