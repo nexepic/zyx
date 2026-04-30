@@ -11,6 +11,7 @@
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include "CypherLexer.h"
+#include "antlr4-runtime.h"
 
 #include <algorithm>
 #include <cctype>
@@ -22,7 +23,11 @@ CypherCompleter::CypherCompleter() {
 	std::set<std::string> tokens;
 
 	// 1. Cypher keywords from ANTLR4 Lexer vocabulary
-	const auto& vocab = CypherLexer(nullptr).getVocabulary();
+	// Use an empty input stream instead of nullptr to avoid undefined behavior
+	// in ANTLR4's Lexer destructor (crashes on MSVC debug builds).
+	antlr4::ANTLRInputStream emptyInput("");
+	CypherLexer lexer(&emptyInput);
+	const auto& vocab = lexer.getVocabulary();
 	for (size_t i = 1; i <= vocab.getMaxTokenType(); ++i) {
 		auto sym = vocab.getSymbolicName(i);
 		if (sym.empty()) continue;
