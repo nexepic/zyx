@@ -18,13 +18,13 @@ cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Objec
 Remove-Item Env:\CC -ErrorAction Ignore
 Remove-Item Env:\CXX -ErrorAction Ignore
 
-# Force CMake to use Visual Studio generator for ALL cmake invocations.
-# This is critical because tools.cmake.cmaketoolchain:generator only applies
-# to Conan recipes using the new CMakeToolchain, but antlr4-cppruntime uses
-# the legacy cmake helper which ignores that conf. Without this, CMake finds
-# mingw32-make on PATH and picks "MinGW Makefiles", causing clang-cl + lld-link
-# to fail with missing msvcrtd.lib.
-$env:CMAKE_GENERATOR = "Visual Studio 17 2022"
+# Remove MinGW from PATH to prevent CMake from detecting mingw32-make and
+# selecting "MinGW Makefiles" generator. GitHub Actions windows-latest has
+# C:\mingw64\bin on PATH by default, which interferes with MSVC builds.
+# Conan 2 ignores the CMAKE_GENERATOR env var (it always passes -G explicitly),
+# so the only reliable way to prevent MinGW interference is to remove it from PATH.
+$env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*mingw*' }) -join ';'
+Write-Host "Removed MinGW from PATH."
 
 # Generate base default profile so Conan doesn't fail
 conan profile detect --force
@@ -48,7 +48,8 @@ $conanArgs = @(
     "-s", "compiler=msvc",
     "-s", "compiler.version=194",
     "-s", "compiler.cppstd=20",
-    "-s", "compiler.runtime=dynamic"
+    "-s", "compiler.runtime=dynamic",
+    "-c", "tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022"
 )
 
 & conan $conanArgs
