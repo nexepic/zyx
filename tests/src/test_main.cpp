@@ -41,11 +41,14 @@ public:
         suite_failed_tests_ = 0;
     }
 
-    void OnTestStart(const ::testing::TestInfo&) override {
+    void OnTestStart(const ::testing::TestInfo& test_info) override {
         captured_stdout_.str(""); captured_stdout_.clear();
         captured_stderr_.str(""); captured_stderr_.clear();
         current_test_failures_.clear();
-        
+
+        // Log current test to stderr before capturing, so crashes show which test was running
+        std::cerr << "[  RUN ] " << test_info.test_suite_name() << "." << test_info.name() << std::endl;
+
         old_stdout_buf_ = std::cout.rdbuf(captured_stdout_.rdbuf());
         old_stderr_buf_ = std::cerr.rdbuf(captured_stderr_.rdbuf());
     }
