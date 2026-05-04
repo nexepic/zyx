@@ -31,6 +31,12 @@ if ($args.Count -gt 0) {
     $buildType = $args[0]
 }
 
+# Optional: extra Conan flags (e.g., "-o with_tests=False")
+$extraArgs = @()
+if ($args.Count -gt 1) {
+    $extraArgs = $args[1..($args.Count - 1)]
+}
+
 Write-Host "Build type: $buildType"
 
 # Write an explicit Conan profile file to avoid any PowerShell argument parsing issues.
@@ -42,7 +48,7 @@ arch=x86_64
 build_type=$buildType
 compiler=msvc
 compiler.version=194
-compiler.cppstd=17
+compiler.cppstd=20
 compiler.runtime=dynamic
 
 [conf]
@@ -59,7 +65,7 @@ New-Item -ItemType Directory -Force -Path buildDir | Out-Null
 
 # Use explicit profile file instead of command-line -s flags to ensure
 # settings are applied correctly regardless of PowerShell argument handling.
-conan install . --output-folder=buildDir --build=missing --profile:host="$profilePath" --profile:build="$profilePath"
+conan install . --output-folder=buildDir --build=missing --profile:host="$profilePath" --profile:build="$profilePath" @extraArgs
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Conan install failed."

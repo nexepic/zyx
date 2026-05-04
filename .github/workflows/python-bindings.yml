@@ -79,14 +79,14 @@ jobs:
         run: |
           conan profile detect
           mkdir -p buildDir
-          conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+          conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20 -o with_tests=False
 
       # Use Release to match meson-python's default buildtype=release (avoids /MD vs /MDd CRT mismatch).
       # Load vcvarsall.bat temporarily so conan profile detect finds MSVC (cl.exe),
       # not VS-bundled clang-cl. The env changes stay within this pwsh process only.
       - name: Install Conan dependencies (Windows)
         if: runner.os == 'Windows'
-        run: pwsh scripts/install_conan_windows.ps1
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
 
       # Install LLVM AFTER Conan so clang-cl is available for meson-python build
       # but doesn't interfere with Conan's MSVC profile detection.
@@ -143,17 +143,17 @@ jobs:
             pip install conan meson ninja &&
             conan profile detect &&
             mkdir -p buildDir &&
-            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
           CIBW_BEFORE_ALL_MACOS: >
             brew install pkg-config &&
             pip install conan meson ninja &&
             conan profile detect &&
             mkdir -p buildDir &&
-            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
           CIBW_BEFORE_ALL_WINDOWS: >
             choco install pkgconfiglite --allow-empty-checksums &&
             pip install conan meson ninja &&
-            pwsh scripts/install_conan_windows.ps1 &&
+            pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False &&
             choco install llvm --version=20.1.4 --force
           CIBW_ENVIRONMENT_LINUX: PKG_CONFIG_PATH=/project/buildDir
           CIBW_ENVIRONMENT_MACOS: PKG_CONFIG_PATH=buildDir
@@ -184,7 +184,7 @@ jobs:
           pip install conan meson ninja
           conan profile detect
           mkdir -p buildDir
-          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
 
       - name: Build sdist
         run: |
