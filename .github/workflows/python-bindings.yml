@@ -143,7 +143,7 @@ jobs:
             pip install conan meson ninja &&
             conan profile detect &&
             mkdir -p buildDir &&
-            conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=17 -o with_tests=False
+            conan install . --output-folder=buildDir --build=missing --build="b2/*" -s build_type=Release -s compiler.cppstd=17 -o with_tests=False
           CIBW_BEFORE_ALL_MACOS: >
             brew install pkg-config &&
             pip install conan meson ninja &&
