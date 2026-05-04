@@ -105,14 +105,14 @@ jobs:
       # not VS-bundled clang-cl. The env changes stay within this pwsh process only.
       - name: Install Project Dependencies (Conan) (Windows)
         if: runner.os == 'Windows'
-        run: pwsh scripts/install_conan_windows.ps1
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
 
       - name: Install Project Dependencies (Conan) (Unix)
         if: runner.os != 'Windows'
         run: |
           conan profile detect
           mkdir -p buildDir
-          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
 
       # Install LLVM AFTER Conan so clang-cl is available for Meson build
       # but doesn't interfere with Conan's MSVC profile detection.
