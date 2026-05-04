@@ -139,6 +139,7 @@ jobs:
             -Ddefault_library=shared `
             -Db_lto=true `
             -Dwarning_level=0 `
+            -Dtests=disabled `
             --prefix="$DIST_PATH" `
             --libdir=lib
 
@@ -160,6 +161,7 @@ jobs:
             -Ddefault_library=shared \
             -Db_lto=true \
             -Dwarning_level=0 \
+            -Dtests=disabled \
             --prefix="$ABS_DIST_PATH" \
             --libdir=lib
 
@@ -180,6 +182,7 @@ jobs:
             -Ddefault_library=shared \
             -Db_lto=true \
             -Dwarning_level=0 \
+            -Dtests=disabled \
             --prefix="$ABS_DIST_PATH" \
             --libdir=lib
 

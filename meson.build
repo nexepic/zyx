@@ -65,7 +65,7 @@ if host_machine.system() != 'emscripten'
     subdir('apps/benchmark')
 endif
 
-if not meson.is_subproject()
+if not meson.is_subproject() and get_option('tests').allowed()
     subdir('tests')
 endif
 
