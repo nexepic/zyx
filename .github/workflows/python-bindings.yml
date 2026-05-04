@@ -155,7 +155,9 @@ jobs:
             pip install conan meson ninja &&
             pwsh scripts/install_conan_windows.ps1 &&
             choco install llvm --version=20.1.4 --force
-          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl
+          CIBW_ENVIRONMENT_LINUX: PKG_CONFIG_PATH=/project/buildDir
+          CIBW_ENVIRONMENT_MACOS: PKG_CONFIG_PATH=buildDir
+          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl PKG_CONFIG_PATH=buildDir
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -177,8 +179,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Conan dependencies
+        run: |
+          pip install conan meson ninja
+          conan profile detect
+          mkdir -p buildDir
+          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20
+
       - name: Build sdist
-        run: pip install build && python -m build --sdist bindings/python --outdir dist/
+        run: |
+          pip install build
+          PKG_CONFIG_PATH=$PWD/buildDir python -m build --sdist bindings/python --outdir dist/
 
       - name: Upload sdist
         uses: actions/upload-artifact@v4

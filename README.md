@@ -41,31 +41,40 @@
 ```
 $ zyx database create ./movies.zyx
 
-<ZYX> Shell.
-Type 'help' or 'exit'.
-Enter queries ending with ';' OR press Enter on an empty line to execute.
+ZYX Graph Database v0.1.0
+Connected to: ./movies.zyx
+Type help for commands, exit to quit.
+```
 
-zyx> CREATE (m:Movie {title: 'The Matrix', year: 1999}),
-     ->        (a:Actor {name: 'Keanu Reeves'}),
-     ->        (a)-[:ACTED_IN {role: 'Neo'}]->(m);
-Empty result.
+Create nodes and relationships:
+```
+ZYX> CREATE (m:Movie {title: 'The Matrix', year: 1999}),
+     ··· (a:Actor {name: 'Keanu Reeves'}),
+     ··· (a)-[:ACTED_IN {role: 'Neo'}]->(m);
+(0 rows, 1.23ms)
+```
 
-zyx> MATCH (a:Actor)-[r:ACTED_IN]->(m:Movie)
-     -> RETURN a.name AS actor, m.title AS movie, r.role AS role;
-+---------------+------------+------+
-| actor         | movie      | role |
-+---------------+------------+------+
-| Keanu Reeves  | The Matrix | Neo  |
-+---------------+------------+------+
-(1 rows)
+Query with pattern matching:
+```
+ZYX> MATCH (a:Actor)-[r:ACTED_IN]->(m:Movie)
+     ··· RETURN a.name AS actor, m.title AS movie, r.role AS role;
+┌────────────────┬────────────┬──────┐
+│ actor          │ movie      │ role │
+├────────────────┼────────────┼──────┤
+│ Keanu Reeves   │ The Matrix │ Neo  │
+└────────────────┴────────────┴──────┘
+(1 row, 0.85ms)
+```
 
-zyx> CALL db.stats();
-+--------+-------+--------+
-| nodes  | edges | labels |
-+--------+-------+--------+
-| 2      | 1     | 3      |
-+--------+-------+--------+
-(1 rows)
+Aggregation:
+```
+ZYX> MATCH (n) RETURN count(n) AS total_nodes;
+┌─────────────┐
+│ total_nodes │
+├─────────────┤
+│ 2           │
+└─────────────┘
+(1 row, 0.42ms)
 ```
 
 Or try it in the browser — [**Live Playground**](https://nexepic.github.io/zyx/en/playground) (no install required, runs via WebAssembly).
