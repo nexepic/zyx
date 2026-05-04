@@ -1,1 +1,2 @@
 option('tests', type : 'feature', value : 'auto', description : 'Build and run tests')
+
