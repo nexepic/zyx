@@ -156,8 +156,8 @@ jobs:
             pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False &&
             choco install llvm --version=20.1.4 --force
           CIBW_ENVIRONMENT_LINUX: PKG_CONFIG_PATH=/project/buildDir
-          CIBW_ENVIRONMENT_MACOS: PKG_CONFIG_PATH=buildDir
-          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl PKG_CONFIG_PATH=buildDir
+          CIBW_ENVIRONMENT_MACOS: PKG_CONFIG_PATH={project}/buildDir
+          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl PKG_CONFIG_PATH={project}/buildDir
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
