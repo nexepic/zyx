@@ -170,11 +170,20 @@ configure_file(
     install: false,
 )
 
+# Python's Token.h defines macros (SEMI, COMMA, etc.) that conflict with
+# ANTLR4 parser method names. Force-include an undef header to neutralize them.
+_undef_header = meson.current_source_dir() / 'undef_python_tokens.h'
+if cxx.get_argument_syntax() == 'msvc'
+    _force_include = ['/FI' + _undef_header]
+else
+    _force_include = ['-include', _undef_header]
+endif
+
 db_lib = static_library('zyx_core',
     sources : db_src,
     include_directories : inc_dirs,
     dependencies : [zlib_dep, boost_dep, cli11_dep, antlr4_dep, cypher_dep, inputxx_dep],
-    cpp_args : ['-DCOVERAGE_SKIP_ZLIB_ERRORS'],
+    cpp_args : ['-DCOVERAGE_SKIP_ZLIB_ERRORS'] + _force_include,
     install : false,
 )
 
