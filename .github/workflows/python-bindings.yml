@@ -152,7 +152,8 @@ jobs:
           CIBW_BEFORE_ALL_WINDOWS: >
             choco install pkgconfiglite --allow-empty-checksums &&
             pip install conan meson ninja &&
-            pwsh scripts/install_conan_windows.ps1 Release --output-folder=C:/conan-deps -o with_tests=False &&
+            set CONAN_OUTPUT_DIR=C:\conan-deps &&
+            pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False &&
             choco install llvm --version=20.1.4 --force
           CIBW_ENVIRONMENT_LINUX: PKG_CONFIG_PATH=/project/buildDir
           CIBW_ENVIRONMENT_MACOS: PKG_CONFIG_PATH=/tmp/conan-deps
