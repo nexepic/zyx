@@ -27,14 +27,19 @@ $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*VC\Tools\Llvm*'
 Write-Host "Removed VS-bundled LLVM from PATH."
 
 $buildType = "Release"
-if ($args.Count -gt 0) {
-    $buildType = $args[0]
-}
-
-# Optional: extra Conan flags (e.g., "-o with_tests=False")
+$outputDir = "buildDir"
 $extraArgs = @()
-if ($args.Count -gt 1) {
-    $extraArgs = $args[1..($args.Count - 1)]
+
+# Parse arguments: first is build type, then optional --output-folder=PATH,
+# remaining are extra Conan flags
+for ($i = 0; $i -lt $args.Count; $i++) {
+    if ($i -eq 0) {
+        $buildType = $args[$i]
+    } elseif ($args[$i] -match '^--output-folder=(.+)$') {
+        $outputDir = $matches[1]
+    } else {
+        $extraArgs += $args[$i]
+    }
 }
 
 Write-Host "Build type: $buildType"
@@ -61,11 +66,13 @@ Write-Host "=== Written Conan profile ==="
 Get-Content $profilePath
 Write-Host "=== End profile ==="
 
-New-Item -ItemType Directory -Force -Path buildDir | Out-Null
+New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+
+Write-Host "Output directory: $outputDir"
 
 # Use explicit profile file instead of command-line -s flags to ensure
 # settings are applied correctly regardless of PowerShell argument handling.
-conan install . --output-folder=buildDir --build=missing --profile:host="$profilePath" --profile:build="$profilePath" @extraArgs
+conan install . --output-folder=$outputDir --build=missing --profile:host="$profilePath" --profile:build="$profilePath" @extraArgs
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Conan install failed."
