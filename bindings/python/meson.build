@@ -82,14 +82,16 @@ foreach f : _parser_impl_files
     endif
 endforeach
 
+cypher_inc = include_directories(
+    '../../src/query/parser/cypher/generated',
+    '../../src/query/parser/cypher',
+    '../../src/query/parser/cypher/helpers/internal',
+    '../../src/query/parser/cypher/helpers/public',
+)
+
 cypher_dep = declare_dependency(
     sources : parser_src,
-    include_directories : include_directories(
-        '../../src/query/parser/cypher/generated',
-        '../../src/query/parser/cypher',
-        '../../src/query/parser/cypher/helpers/internal',
-        '../../src/query/parser/cypher/helpers/public',
-    ),
+    include_directories : cypher_inc,
 )
 
 # ==============================================================================
@@ -188,9 +190,9 @@ db_lib = static_library('zyx_core',
 )
 
 db_dep = declare_dependency(
-    include_directories : inc_dirs,
+    include_directories : [inc_dirs, cypher_inc],
     link_with : db_lib,
-    dependencies : [cypher_dep, zlib_dep, boost_dep, cli11_dep, antlr4_dep, inputxx_dep],
+    dependencies : [zlib_dep, boost_dep, cli11_dep, antlr4_dep, inputxx_dep],
 )
 
 # ==============================================================================
