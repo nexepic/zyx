@@ -27,16 +27,13 @@ $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*VC\Tools\Llvm*'
 Write-Host "Removed VS-bundled LLVM from PATH."
 
 $buildType = "Release"
-$outputDir = "buildDir"
+$outputDir = if ($env:CONAN_OUTPUT_DIR) { $env:CONAN_OUTPUT_DIR } else { "buildDir" }
 $extraArgs = @()
 
-# Parse arguments: first is build type, then optional --output-folder=PATH,
-# remaining are extra Conan flags
+# Parse arguments: first is build type, remaining are extra Conan flags
 for ($i = 0; $i -lt $args.Count; $i++) {
     if ($i -eq 0) {
         $buildType = $args[$i]
-    } elseif ($args[$i] -match '^--output-folder=(.+)$') {
-        $outputDir = $matches[1]
     } else {
         $extraArgs += $args[$i]
     }
