@@ -1,0 +1,37 @@
+{
+  "name": "zyxdb",
+  "version": "0.1.0",
+  "description": "Node.js bindings for ZYX graph database",
+  "main": "lib/index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "install": "cmake-js compile",
+    "build": "cmake-js compile",
+    "rebuild": "cmake-js rebuild",
+    "test": "node --test test/*.test.js",
+    "clean": "cmake-js clean"
+  },
+  "keywords": [
+    "graph",
+    "database",
+    "cypher",
+    "native",
+    "addon"
+  ],
+  "author": "Nexepic",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "node-addon-api": "^8.0.0",
+    "cmake-js": "^7.3.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "gypfile": false,
+  "binary": {
+    "module_name": "zyxdb",
+    "module_path": "./build/Release/",
+    "host": "https://github.com/nexepic/zyx/releases/download/"
+  }
+}
