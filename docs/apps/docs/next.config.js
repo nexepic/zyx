@@ -13,19 +13,6 @@ const nextConfig = {
   transpilePackages: ['@nexdoc/core'],
   basePath,
   assetPrefix: basePath || undefined,
-
-  // Expose basePath to client-side code for playground
-  // Using webpack define to ensure it's inlined at build time
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        '#config/basePath': basePath,
-      }
-    }
-    return config
-  },
-
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
   },

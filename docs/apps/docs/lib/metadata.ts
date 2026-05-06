@@ -52,10 +52,9 @@ function inferIconMimeType(iconPath: string): string | undefined {
 }
 
 function buildIconDescriptor(iconPath: string, media?: string) {
-  const absoluteUrl = toAbsoluteAssetUrl(iconPath)
   const mimeType = inferIconMimeType(iconPath)
   return {
-    url: absoluteUrl,
+    url: iconPath,
     ...(media ? { media } : {}),
     ...(mimeType ? { type: mimeType } : {}),
     ...(mimeType === 'image/svg+xml' ? { sizes: 'any' } : {}),
