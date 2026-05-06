@@ -871,7 +871,7 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::readEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
-																 size_t limit, bool filterDeleted) const {
+																 size_t limit) const {
 		std::vector<EntityType> result;
 		if (segmentOffset == 0 || limit == 0) {
 			return result;
@@ -899,28 +899,11 @@ namespace graph::storage {
 		auto entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader) +
 														startOffset * EntityType::getTotalSize());
 
-		// Read entities
+		// Read entities (only active entities are returned)
 		for (uint64_t i = 0; i < count; ++i) {
-			if (filterDeleted) {
-				auto entityOpt = readEntityFromDisk<EntityType>(entityOffset);
-				if (entityOpt.has_value()) {
-					result.push_back(entityOpt.value());
-				}
-			} else {
-				if (hasPreadSupport()) {
-					constexpr size_t entitySize = EntityType::getTotalSize();
-					char buf[entitySize];
-					ssize_t n = preadBytes(buf, entitySize, entityOffset);
-					if (n >= static_cast<ssize_t>(entitySize)) {
-						membuf mb(buf, entitySize);
-						std::istream stream(&mb);
-						result.push_back(EntityType::deserialize(stream));
-					}
-				} else {
-					file_->seekg(entityOffset);
-					EntityType entity = EntityType::deserialize(*file_);
-					result.push_back(entity);
-				}
+			auto entityOpt = readEntityFromDisk<EntityType>(entityOffset);
+			if (entityOpt.has_value()) {
+				result.push_back(entityOpt.value());
 			}
 
 			// Move to next entity
@@ -1437,8 +1420,7 @@ namespace graph::storage {
 	template std::vector<Node> DataManager::loadEntitiesFromSegment<Node>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::optional<Node> DataManager::readEntityFromDisk<Node>(int64_t fileOffset) const;
 	template std::optional<Node> DataManager::findAndReadEntity<Node>(int64_t id) const;
-	template std::vector<Node> DataManager::readEntitiesFromSegment<Node>(uint64_t, int64_t, int64_t, size_t,
-																		  bool) const;
+	template std::vector<Node> DataManager::readEntitiesFromSegment<Node>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::vector<DirtyEntityInfo<Node>>
 	DataManager::getDirtyEntityInfos<Node>(const std::vector<EntityChangeType> &);
 	template void DataManager::setEntityDirty<Node>(const DirtyEntityInfo<Node> &);
@@ -1456,8 +1438,7 @@ namespace graph::storage {
 	template std::vector<Edge> DataManager::loadEntitiesFromSegment<Edge>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::optional<Edge> DataManager::readEntityFromDisk<Edge>(int64_t fileOffset) const;
 	template std::optional<Edge> DataManager::findAndReadEntity<Edge>(int64_t id) const;
-	template std::vector<Edge> DataManager::readEntitiesFromSegment<Edge>(uint64_t, int64_t, int64_t, size_t,
-																		  bool) const;
+	template std::vector<Edge> DataManager::readEntitiesFromSegment<Edge>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::vector<DirtyEntityInfo<Edge>>
 	DataManager::getDirtyEntityInfos<Edge>(const std::vector<EntityChangeType> &);
 	template void DataManager::setEntityDirty<Edge>(const DirtyEntityInfo<Edge> &);

@@ -105,7 +105,7 @@ NodePatternAST extractNodePattern(CypherParser::NodePatternContext* nodePat) {
 		auto mapLit = nodePat->properties()->mapLiteral();
 		auto keys = mapLit->propertyKeyName();
 		auto exprs = mapLit->expression();
-		for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+		for (size_t i = 0; i < keys.size(); ++i) {
 			std::string key = keys[i]->getText();
 			PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
 			if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
@@ -134,7 +134,7 @@ NodePatternAST extractCreateNodePattern(CypherParser::NodePatternContext* nodePa
 		auto mapLit = nodePat->properties()->mapLiteral();
 		auto keys = mapLit->propertyKeyName();
 		auto exprs = mapLit->expression();
-		for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+		for (size_t i = 0; i < keys.size(); ++i) {
 			std::string key = keys[i]->getText();
 			PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
 			if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
@@ -176,7 +176,7 @@ RelationshipPatternAST extractRelationshipPattern(CypherParser::RelationshipPatt
 			auto mapLit = relDetail->properties()->mapLiteral();
 			auto keys = mapLit->propertyKeyName();
 			auto exprs = mapLit->expression();
-			for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+			for (size_t i = 0; i < keys.size(); ++i) {
 				std::string key = keys[i]->getText();
 				PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
 				if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
@@ -284,15 +284,13 @@ MatchClause CypherASTBuilder::buildMatchClause(void* ctx) {
 	clause.optional = (matchCtx->K_OPTIONAL() != nullptr);
 
 	auto* pattern = matchCtx->pattern();
-	if (pattern) {
-		for (auto* part : pattern->patternPart()) {
-			PatternPartAST patternPart;
-			if (part->variable()) {
-				patternPart.pathVariable = part->variable()->getText();
-			}
-			patternPart.element = extractPatternElement(part->patternElement());
-			clause.patterns.push_back(std::move(patternPart));
+	for (auto* part : pattern->patternPart()) {
+		PatternPartAST patternPart;
+		if (part->variable()) {
+			patternPart.pathVariable = part->variable()->getText();
 		}
+		patternPart.element = extractPatternElement(part->patternElement());
+		clause.patterns.push_back(std::move(patternPart));
 	}
 
 	if (matchCtx->where()) {
@@ -346,7 +344,7 @@ CallClause CypherASTBuilder::buildInQueryCallClause(void* ctx) {
 		clause.arguments.push_back(ExpressionBuilder::evaluateLiteralExpression(expr));
 	}
 
-	if (callCtx->K_YIELD() && callCtx->yieldItems()) {
+	if (callCtx->K_YIELD()) {
 		for (auto item : callCtx->yieldItems()->yieldItem()) {
 			CallClause::YieldItem yi;
 			yi.alias = AstExtractor::extractVariable(item->variable());
@@ -371,34 +369,32 @@ CreateClause CypherASTBuilder::buildCreateClause(void* ctx) {
 	CreateClause clause;
 
 	auto* pattern = createCtx->pattern();
-	if (pattern) {
-		for (auto* part : pattern->patternPart()) {
-			PatternPartAST patternPart;
-			// Extract head and chains using CREATE-specific extraction (expression properties)
-			auto* element = part->patternElement();
-			PatternElementAST elemAST;
-			elemAST.headNode = extractCreateNodePattern(element->nodePattern());
+	for (auto* part : pattern->patternPart()) {
+		PatternPartAST patternPart;
+		// Extract head and chains using CREATE-specific extraction (expression properties)
+		auto* element = part->patternElement();
+		PatternElementAST elemAST;
+		elemAST.headNode = extractCreateNodePattern(element->nodePattern());
 
-			for (auto* chain : element->patternElementChain()) {
-				PatternChainAST chainAST;
-				chainAST.relationship = extractRelationshipPattern(chain->relationshipPattern());
-				// For CREATE target nodes, use literal extraction only
-				auto targetNodePat = chain->nodePattern();
-				chainAST.targetNode.variable = AstExtractor::extractVariable(targetNodePat->variable());
-				chainAST.targetNode.labels = AstExtractor::extractLabels(targetNodePat->nodeLabels());
-				auto targetProps = AstExtractor::extractProperties(targetNodePat->properties(),
-					[](CypherParser::ExpressionContext* expr) {
-						return ExpressionBuilder::evaluateLiteralExpression(expr);
-					});
-				for (const auto& [k, v] : targetProps) {
-					chainAST.targetNode.properties.emplace_back(k, v);
-				}
-				elemAST.chain.push_back(std::move(chainAST));
+		for (auto* chain : element->patternElementChain()) {
+			PatternChainAST chainAST;
+			chainAST.relationship = extractRelationshipPattern(chain->relationshipPattern());
+			// For CREATE target nodes, use literal extraction only
+			auto targetNodePat = chain->nodePattern();
+			chainAST.targetNode.variable = AstExtractor::extractVariable(targetNodePat->variable());
+			chainAST.targetNode.labels = AstExtractor::extractLabels(targetNodePat->nodeLabels());
+			auto targetProps = AstExtractor::extractProperties(targetNodePat->properties(),
+				[](CypherParser::ExpressionContext* expr) {
+					return ExpressionBuilder::evaluateLiteralExpression(expr);
+				});
+			for (const auto& [k, v] : targetProps) {
+				chainAST.targetNode.properties.emplace_back(k, v);
 			}
-
-			patternPart.element = std::move(elemAST);
-			clause.patterns.push_back(std::move(patternPart));
+			elemAST.chain.push_back(std::move(chainAST));
 		}
+
+		patternPart.element = std::move(elemAST);
+		clause.patterns.push_back(std::move(patternPart));
 	}
 
 	return clause;
@@ -433,7 +429,7 @@ RemoveClause CypherASTBuilder::buildRemoveClause(void* ctx) {
 			ri.type = RemoveItemType::RIT_PROPERTY;
 			ri.variable = item->propertyExpression()->atom()->getText();
 			ri.key = item->propertyExpression()->propertyKeyName(0)->getText();
-		} else if (item->variable() && item->nodeLabels()) {
+		} else {
 			ri.type = RemoveItemType::RIT_LABEL;
 			ri.variable = AstExtractor::extractVariable(item->variable());
 			ri.key = AstExtractor::extractLabel(item->nodeLabels());
@@ -466,7 +462,7 @@ MergeClause CypherASTBuilder::buildMergeClause(void* ctx) {
 			if (sawOn) {
 				if (tokenType == CypherLexer::K_MATCH) {
 					isOnMatch = true;
-				} else if (tokenType == CypherLexer::K_CREATE) {
+				} else {
 					isOnMatch = false;
 				}
 				sawOn = false;
@@ -505,7 +501,7 @@ CreateIndexClause CypherASTBuilder::buildCreateIndexByPatternClause(void* ctx) {
 	}
 
 	auto pat = createCtx->nodePattern();
-	if (pat->nodeLabels() && !pat->nodeLabels()->nodeLabel().empty()) {
+	if (pat->nodeLabels()) {
 		clause.label = AstExtractor::extractLabelFromNodeLabel(pat->nodeLabels()->nodeLabel(0));
 	} else {
 		throw std::runtime_error("CREATE INDEX pattern must specify a Label (e.g. :User)");
@@ -539,7 +535,7 @@ CreateVectorIndexClause CypherASTBuilder::buildCreateVectorIndexClause(void* ctx
 	clause.label = AstExtractor::extractLabelFromNodeLabel(createCtx->nodeLabel());
 	clause.property = createCtx->propertyKeyName()->getText();
 
-	if (createCtx->K_OPTIONS() && createCtx->mapLiteral()) {
+	if (createCtx->K_OPTIONS()) {
 		auto mapLit = createCtx->mapLiteral();
 		auto keys = mapLit->propertyKeyName();
 		auto exprs = mapLit->expression();
@@ -625,15 +621,13 @@ PatternElementAST CypherASTBuilder::extractPatternElement(void* ctx) {
 std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 	auto* setCtx = static_cast<CypherParser::SetStatementContext*>(ctx);
 	std::vector<SetItemAST> items;
-	if (!setCtx)
-		return items;
 
 	for (auto item : setCtx->setItem()) {
 		// Case 1: Property Update (n.prop = expr)
-		if (item->propertyExpression() && item->EQ()) {
+		if (item->propertyExpression()) {
 			auto propExpr = item->propertyExpression();
 			std::string varName;
-			if (propExpr->atom() && propExpr->atom()->variable()) {
+			if (propExpr->atom()->variable()) {
 				varName = AstExtractor::extractVariable(propExpr->atom()->variable());
 			}
 			std::string keyName = AstExtractor::extractPropertyKeyFromExpr(propExpr);
@@ -644,7 +638,7 @@ std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 			items.push_back({SetItemType::SIT_PROPERTY, varName, keyName, exprShared});
 		}
 		// Case 2: Map Merge (n += {key: value, ...})
-		else if (item->variable() && item->PLUS() && item->EQ() && item->expression()) {
+		else if (item->PLUS()) {
 			std::string varName = AstExtractor::extractVariable(item->variable());
 
 			// Find mapLiteral by traversing the parse tree
@@ -664,7 +658,7 @@ std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 			if (mapLit) {
 				auto keys = mapLit->propertyKeyName();
 				auto exprs = mapLit->expression();
-				for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+				for (size_t i = 0; i < keys.size(); ++i) {
 					auto expressionAST = ExpressionBuilder::buildExpression(exprs[i]);
 					auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
 					items.push_back({SetItemType::SIT_PROPERTY, varName, keys[i]->getText(), exprShared});
@@ -676,7 +670,7 @@ std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 			}
 		}
 		// Case 3: Label Assignment (n:Label)
-		else if (item->variable() && item->nodeLabels()) {
+		else {
 			std::string varName = AstExtractor::extractVariable(item->variable());
 			std::string labelName = AstExtractor::extractLabel(item->nodeLabels());
 			items.push_back({SetItemType::SIT_LABEL, varName, labelName, nullptr});

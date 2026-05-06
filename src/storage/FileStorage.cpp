@@ -246,18 +246,6 @@ namespace graph::storage {
 		}
 	}
 
-	// ── Delegate methods to StorageWriter ───────────────────────────────────
-
-	template<typename T>
-	void FileStorage::saveNewEntities(std::vector<T> &entities) {
-		storageWriter_->saveNewEntities(entities);
-	}
-
-	template<typename T>
-	void FileStorage::saveModifiedAndDeleted(const std::vector<T> &modified, const std::vector<T> &deleted) {
-		storageWriter_->saveModifiedAndDeleted(modified, deleted);
-	}
-
 	void FileStorage::save() {
 		using Clock = std::chrono::steady_clock;
 
@@ -315,11 +303,6 @@ namespace graph::storage {
 	}
 
 	template<typename T>
-	void FileStorage::writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t baseUsed) {
-		storageWriter_->writeSegmentData(segmentOffset, data, baseUsed);
-	}
-
-	template<typename T>
 	void FileStorage::updateEntityInPlace(const T &entity, uint64_t knownSegmentOffset) {
 		storageWriter_->updateEntityInPlace(entity, knownSegmentOffset);
 	}
@@ -337,13 +320,6 @@ namespace graph::storage {
 	template void FileStorage::saveData<Index>(std::vector<Index> &, uint64_t &, uint32_t);
 	template void FileStorage::saveData<State>(std::vector<State> &, uint64_t &, uint32_t);
 
-	template void FileStorage::writeSegmentData<Node>(uint64_t, const std::vector<Node> &, uint32_t);
-	template void FileStorage::writeSegmentData<Edge>(uint64_t, const std::vector<Edge> &, uint32_t);
-	template void FileStorage::writeSegmentData<Property>(uint64_t, const std::vector<Property> &, uint32_t);
-	template void FileStorage::writeSegmentData<Blob>(uint64_t, const std::vector<Blob> &, uint32_t);
-	template void FileStorage::writeSegmentData<Index>(uint64_t, const std::vector<Index> &, uint32_t);
-	template void FileStorage::writeSegmentData<State>(uint64_t, const std::vector<State> &, uint32_t);
-
 	template void FileStorage::updateEntityInPlace<Node>(const Node &, uint64_t);
 	template void FileStorage::updateEntityInPlace<Edge>(const Edge &, uint64_t);
 	template void FileStorage::updateEntityInPlace<Property>(const Property &, uint64_t);
@@ -353,20 +329,6 @@ namespace graph::storage {
 
 	template void FileStorage::deleteEntityOnDisk<Node>(const Node &);
 	template void FileStorage::deleteEntityOnDisk<Edge>(const Edge &);
-
-	template void FileStorage::saveNewEntities<Node>(std::vector<Node> &);
-	template void FileStorage::saveNewEntities<Edge>(std::vector<Edge> &);
-	template void FileStorage::saveNewEntities<Property>(std::vector<Property> &);
-	template void FileStorage::saveNewEntities<Blob>(std::vector<Blob> &);
-	template void FileStorage::saveNewEntities<Index>(std::vector<Index> &);
-	template void FileStorage::saveNewEntities<State>(std::vector<State> &);
-
-	template void FileStorage::saveModifiedAndDeleted<Node>(const std::vector<Node> &, const std::vector<Node> &);
-	template void FileStorage::saveModifiedAndDeleted<Edge>(const std::vector<Edge> &, const std::vector<Edge> &);
-	template void FileStorage::saveModifiedAndDeleted<Property>(const std::vector<Property> &, const std::vector<Property> &);
-	template void FileStorage::saveModifiedAndDeleted<Blob>(const std::vector<Blob> &, const std::vector<Blob> &);
-	template void FileStorage::saveModifiedAndDeleted<Index>(const std::vector<Index> &, const std::vector<Index> &);
-	template void FileStorage::saveModifiedAndDeleted<State>(const std::vector<State> &, const std::vector<State> &);
 
 	bool FileStorage::verifyBitmapConsistency(uint64_t segmentOffset) const {
 		return integrityChecker_->verifyBitmapConsistency(segmentOffset);
