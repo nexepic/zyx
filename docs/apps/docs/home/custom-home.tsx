@@ -892,7 +892,18 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       <div className="relative h-screen w-screen overflow-hidden bg-[#0b0f14] font-['Avenir_Next','Segoe_UI',system-ui,sans-serif] text-[#e7edf5] supports-[height:100dvh]:h-dvh">
         <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-auto" />
 
+        {/* Noise dither layer — overlay blend is brightness-neutral on dark backgrounds */}
+        <svg className="absolute h-0 w-0" aria-hidden="true">
+          <defs>
+            <filter id="noise-dither" x="0%" y="0%" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+              <feColorMatrix type="saturate" values="0" />
+            </filter>
+          </defs>
+        </svg>
+
         <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_50%,rgba(11,15,20,0.6)_0%,transparent_60%)]" />
+        <div className="pointer-events-none absolute inset-0 z-[1] [filter:url(#noise-dither)] [mix-blend-mode:overlay] opacity-[0.15]" />
 
         <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col">
           {/* Main Hero Container

@@ -146,16 +146,32 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 	std::string var = AstExtractor::extractVariable(headNodePat->variable());
 	auto labels = AstExtractor::extractLabels(headNodePat->nodeLabels());
 
-	// Extract properties using AST-based evaluation
-	auto props = AstExtractor::extractProperties(headNodePat->properties(),
-		[](CypherParser::ExpressionContext *expr) {
-			return ExpressionBuilder::evaluateLiteralExpression(expr);
-		});
-
-	// Build property predicates vector for LogicalNodeScan
+	// Extract properties: split into literal predicates (for index optimization)
+	// and expression-based predicates (for runtime parameter resolution via LogicalFilter)
 	std::vector<std::pair<std::string, PropertyValue>> propertyPredicates;
-	for (const auto &[key, val] : props) {
-		propertyPredicates.emplace_back(key, val);
+	std::vector<std::shared_ptr<graph::query::expressions::Expression>> exprFilters;
+
+	if (headNodePat->properties() && headNodePat->properties()->mapLiteral()) {
+		auto mapLit = headNodePat->properties()->mapLiteral();
+		auto keys = mapLit->propertyKeyName();
+		auto exprs = mapLit->expression();
+		for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+			std::string key = keys[i]->getText();
+			PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
+			if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
+				// Literal value — use as predicate for index optimization
+				propertyPredicates.emplace_back(key, litVal);
+			} else {
+				// Non-literal (e.g. $param) — build expression: var.key = expr
+				auto lhs = std::make_unique<graph::query::expressions::VariableReferenceExpression>(var, key);
+				auto rhs = ExpressionBuilder::buildExpression(exprs[i]);
+				auto cmp = std::make_unique<graph::query::expressions::BinaryOpExpression>(
+					std::move(lhs),
+					graph::query::expressions::BinaryOperatorType::BOP_EQUAL,
+					std::move(rhs));
+				exprFilters.push_back(std::shared_ptr<graph::query::expressions::Expression>(cmp.release()));
+			}
+		}
 	}
 
 	auto currentOp = std::make_unique<query::logical::LogicalNodeScan>(var, labels, propertyPredicates);
@@ -167,6 +183,11 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 		// Cross join with existing root
 		rootOp = std::make_unique<query::logical::LogicalJoin>(
 			std::move(rootOp), std::move(currentOp));
+	}
+
+	// Add expression-based filters for non-literal MATCH properties (e.g. $param)
+	for (auto &filterExpr : exprFilters) {
+		rootOp = std::make_unique<query::logical::LogicalFilter>(std::move(rootOp), filterExpr);
 	}
 
 	// 2. Traversal Chain (e.g. -[r]->(b))
@@ -192,13 +213,35 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 		int minHops = 1;
 		int maxHops = 1;
 
+		std::vector<std::shared_ptr<graph::query::expressions::Expression>> edgeExprFilters;
+
 		if (relDetail) {
 			edgeVar = AstExtractor::extractVariable(relDetail->variable());
 			edgeType = AstExtractor::extractRelType(relDetail->relationshipTypes());
-			edgeProps = AstExtractor::extractProperties(relDetail->properties(),
-				[](CypherParser::ExpressionContext *expr) {
-					return ExpressionBuilder::evaluateLiteralExpression(expr);
-				});
+
+			// Split edge properties into literals and expressions
+			if (relDetail->properties() && relDetail->properties()->mapLiteral()) {
+				auto mapLit = relDetail->properties()->mapLiteral();
+				auto keys = mapLit->propertyKeyName();
+				auto exprs = mapLit->expression();
+				for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+					std::string key = keys[i]->getText();
+					PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
+					if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
+						edgeProps[key] = litVal;
+					} else {
+						// Non-literal — build expression: edgeVar.key = expr
+						std::string eVar = edgeVar.empty() ? "__edge__" : edgeVar;
+						auto lhs = std::make_unique<graph::query::expressions::VariableReferenceExpression>(eVar, key);
+						auto rhs = ExpressionBuilder::buildExpression(exprs[i]);
+						auto cmp = std::make_unique<graph::query::expressions::BinaryOpExpression>(
+							std::move(lhs),
+							graph::query::expressions::BinaryOperatorType::BOP_EQUAL,
+							std::move(rhs));
+						edgeExprFilters.push_back(std::shared_ptr<graph::query::expressions::Expression>(cmp.release()));
+					}
+				}
+			}
 
 			// Variable Length Logic
 			if (relDetail->rangeLiteral()) {
@@ -238,15 +281,31 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 		// Target Node
 		std::string targetVar = AstExtractor::extractVariable(nodePat->variable());
 		auto targetLabels = AstExtractor::extractLabels(nodePat->nodeLabels());
-		auto targetPropsMap = AstExtractor::extractProperties(nodePat->properties(),
-			[](CypherParser::ExpressionContext *expr) {
-				return ExpressionBuilder::evaluateLiteralExpression(expr);
-			});
 
-		// Convert target properties map to vector of pairs
+		// Split target properties into literals and expressions
 		std::vector<std::pair<std::string, PropertyValue>> targetProps;
-		for (const auto &[k, v] : targetPropsMap) {
-			targetProps.emplace_back(k, v);
+		std::vector<std::shared_ptr<graph::query::expressions::Expression>> targetExprFilters;
+
+		if (nodePat->properties() && nodePat->properties()->mapLiteral()) {
+			auto mapLit = nodePat->properties()->mapLiteral();
+			auto keys = mapLit->propertyKeyName();
+			auto exprs = mapLit->expression();
+			for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+				std::string key = keys[i]->getText();
+				PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
+				if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
+					targetProps.emplace_back(key, litVal);
+				} else {
+					// Non-literal — build expression: targetVar.key = expr
+					auto lhs = std::make_unique<graph::query::expressions::VariableReferenceExpression>(targetVar, key);
+					auto rhs = ExpressionBuilder::buildExpression(exprs[i]);
+					auto cmp = std::make_unique<graph::query::expressions::BinaryOpExpression>(
+						std::move(lhs),
+						graph::query::expressions::BinaryOperatorType::BOP_EQUAL,
+						std::move(rhs));
+					targetExprFilters.push_back(std::shared_ptr<graph::query::expressions::Expression>(cmp.release()));
+				}
+			}
 		}
 
 		// Build Traversal with target/edge filter data stored on the operator
@@ -258,6 +317,16 @@ std::unique_ptr<query::logical::LogicalOperator> PatternBuilder::processMatchPat
 			rootOp = std::make_unique<query::logical::LogicalTraversal>(
 				std::move(rootOp), var, edgeVar, targetVar, edgeType, direction,
 				targetLabels, targetProps, edgeProps);
+		}
+
+		// Add expression-based filters for non-literal target node properties
+		for (auto &filterExpr : targetExprFilters) {
+			rootOp = std::make_unique<query::logical::LogicalFilter>(std::move(rootOp), filterExpr);
+		}
+
+		// Add expression-based filters for non-literal edge properties
+		for (auto &filterExpr : edgeExprFilters) {
+			rootOp = std::make_unique<query::logical::LogicalFilter>(std::move(rootOp), filterExpr);
 		}
 
 		// Update current variable for next hop

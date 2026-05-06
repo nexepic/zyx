@@ -103,6 +103,8 @@ struct RelationshipPatternAST {
 	std::string type;
 	std::string direction; // "in", "out", "both"
 	std::unordered_map<std::string, graph::PropertyValue> properties;
+	// Expression-based properties (for MATCH/CREATE with non-literal values)
+	std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> propertyExpressions;
 	bool isVarLength = false;
 	int minHops = 1;
 	int maxHops = 1;

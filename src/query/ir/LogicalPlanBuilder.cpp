@@ -278,6 +278,30 @@ namespace {
 /**
  * @brief Build logical operators for a single pattern element (MATCH).
  */
+/**
+ * @brief Build comparison expression filters from propertyExpressions.
+ *
+ * For each entry (key, expr), creates: variable.key = expr
+ * These are used for runtime parameter resolution in MATCH inline properties.
+ */
+void addPropertyExpressionFilters(
+	std::unique_ptr<LogicalOperator>& rootOp,
+	const std::string& variable,
+	const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>& propExprs)
+{
+	using namespace graph::query::expressions;
+	for (const auto& [key, expr] : propExprs) {
+		auto lhs = std::make_unique<VariableReferenceExpression>(variable, key);
+		auto rhs = expr->clone();
+		auto cmp = std::make_unique<BinaryOpExpression>(
+			std::move(lhs),
+			BinaryOperatorType::BOP_EQUAL,
+			std::move(rhs));
+		auto filter = std::shared_ptr<Expression>(cmp.release());
+		rootOp = std::make_unique<LogicalFilter>(std::move(rootOp), filter);
+	}
+}
+
 std::unique_ptr<LogicalOperator> buildMatchElement(
 	const PatternElementAST& element,
 	std::unique_ptr<LogicalOperator> rootOp)
@@ -293,6 +317,9 @@ std::unique_ptr<LogicalOperator> buildMatchElement(
 	} else {
 		rootOp = std::make_unique<LogicalJoin>(std::move(rootOp), std::move(currentOp));
 	}
+
+	// Add expression-based filters for parameterized head node properties
+	addPropertyExpressionFilters(rootOp, element.headNode.variable, element.headNode.propertyExpressions);
 
 	// Traversal chains
 	std::string var = element.headNode.variable;
@@ -315,6 +342,14 @@ std::unique_ptr<LogicalOperator> buildMatchElement(
 				std::move(rootOp), var, rel.variable, target.variable,
 				rel.type, rel.direction, target.labels, targetProps,
 				rel.properties);
+		}
+
+		// Add expression-based filters for parameterized target node properties
+		addPropertyExpressionFilters(rootOp, target.variable, target.propertyExpressions);
+
+		// Add expression-based filters for parameterized edge properties
+		if (!rel.variable.empty()) {
+			addPropertyExpressionFilters(rootOp, rel.variable, rel.propertyExpressions);
 		}
 
 		var = target.variable;

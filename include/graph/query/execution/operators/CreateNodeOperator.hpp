@@ -22,6 +22,7 @@
 
 #include "../PhysicalOperator.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 
@@ -181,8 +182,15 @@ namespace graph::query::execution::operators {
 
 		std::unordered_map<std::string, PropertyValue> resolveProperties(const Record &record) const {
 			auto resolved = props_;
-			for (const auto &[key, expr] : propExpressions_) {
-				resolved[key] = graph::query::expressions::ExpressionEvaluationHelper::evaluate(expr.get(), record);
+			if (!propExpressions_.empty()) {
+				const std::unordered_map<std::string, PropertyValue> *params = nullptr;
+				if (queryContext_ && !queryContext_->parameters.empty()) {
+					params = &queryContext_->parameters;
+				}
+				for (const auto &[key, expr] : propExpressions_) {
+					resolved[key] = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+						expr.get(), record, nullptr, params);
+				}
 			}
 			return resolved;
 		}
@@ -201,11 +209,14 @@ namespace graph::query::execution::operators {
 			for (size_t i = 1; i < labelIds.size(); ++i) {
 				newNode.addLabelId(labelIds[i]);
 			}
+			// Resolve all properties: static literals + expression-based (e.g. $param)
+			Record emptyRecord;
+			auto allProps = resolveProperties(emptyRecord);
 			// Set properties on node before addNode so constraint validation sees them
-			newNode.setProperties(props_);
+			newNode.setProperties(allProps);
 			dm_->addNode(newNode);
-			if (!props_.empty()) {
-				dm_->addNodeProperties(newNode.getId(), props_);
+			if (!allProps.empty()) {
+				dm_->addNodeProperties(newNode.getId(), allProps);
 			}
 			return newNode;
 		}

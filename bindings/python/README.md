@@ -1,6 +1,6 @@
 # zyxdb
 
-Python bindings for [ZYX](https://github.com/nicklauslititz/zyx), a high-performance embeddable graph database engine with Cypher query support.
+Python bindings for [ZYX](https://github.com/nexepic/zyx), a high-performance embeddable graph database engine with Cypher query support.
 
 ## Installation
 
@@ -20,53 +20,50 @@ pip install -e ".[test]"
 ```python
 import zyxdb
 
-# Open a database (creates if not exists)
-db = zyxdb.Database("/tmp/mydb")
+# Open a database (creates if not exists, auto-closes on exit)
+with zyxdb.Database("/tmp/movies") as db:
 
-# Create nodes with Cypher
-db.execute("CREATE (n:Person {name: $name, age: $age})", name="Alice", age=30)
+    # Create nodes — returns node ID (int)
+    alice = db.create_node("Person", {"name": "Alice", "age": 30})
+    bob   = db.create_node("Person", {"name": "Bob",   "age": 25})
+    carol = db.create_node("Person", {"name": "Carol", "age": 35})
 
-# Query with iteration
-for row in db.execute("MATCH (n:Person) RETURN n.name AS name, n.age AS age"):
-    print(row["name"], row["age"])
+    # Create edges between nodes
+    db.create_edge(alice, bob,   "FRIENDS_WITH")
+    db.create_edge(bob,   carol, "FRIENDS_WITH")
 
-# Batch insert
-db.create_nodes("Person", [
-    {"name": "Bob", "age": 25},
-    {"name": "Carol", "age": 35},
-])
+    # Cypher works too — with parameterized queries
+    db.execute("CREATE (m:Movie {title: $title, year: $year})",
+               title="The Matrix", year=1999)
 
-# Transactions with context manager
-with db.begin_transaction() as tx:
-    tx.execute("CREATE (n:Movie {title: 'Matrix'})")
-    tx.execute(
-        "MATCH (a:Person {name: 'Alice'}), (m:Movie {title: 'Matrix'}) "
-        "CREATE (a)-[:WATCHED]->(m)"
-    )
-    tx.commit()
+    # Transactions — all or nothing
+    with db.begin_transaction() as tx:
+        tx.execute(
+            "MATCH (p:Person {name: 'Alice'}), (m:Movie {title: 'The Matrix'}) "
+            "CREATE (p)-[:RATED {score: 9.5}]->(m)"
+        )
+        tx.execute(
+            "MATCH (p:Person {name: 'Bob'}), (m:Movie {title: 'The Matrix'}) "
+            "CREATE (p)-[:RATED {score: 10.0}]->(m)"
+        )
+        tx.commit()
 
-# Read-only transaction
-with db.begin_read_only_transaction() as tx:
-    for row in tx.execute("MATCH (n) RETURN count(n) AS cnt"):
-        print(row["cnt"])
+    # Query with iteration
+    for row in db.execute(
+        "MATCH (p:Person)-[r:RATED]->(m:Movie) "
+        "RETURN p.name AS person, m.title AS movie, r.score AS score"
+    ):
+        print(f"{row['person']} rated {row['movie']} {row['score']}/10")
 
-# Direct node/edge creation by ID (high performance)
-id1 = db.create_node_ret_id("Person", {"name": "Dave"})
-id2 = db.create_node_ret_id("Person", {"name": "Eve"})
-db.create_edge_by_id(id1, id2, "KNOWS", {"since": 2024})
+    # Read-only transaction for safe reads
+    with db.begin_read_only_transaction() as tx:
+        for row in tx.execute("MATCH (p:Person) RETURN count(p) AS cnt"):
+            print(f"Total people: {row['cnt']}")
 
-# Shortest path
-path = db.get_shortest_path(id1, id2)
-
-db.close()
-```
-
-## Context Manager
-
-```python
-with zyxdb.Database("/tmp/mydb") as db:
-    db.execute("CREATE (n:Test {x: 1})")
-    # Auto-closes on exit
+    # Shortest path
+    path = db.get_shortest_path(alice, carol)
+    names = [n.properties["name"] for n in path]
+    print(" -> ".join(names))  # Alice -> Bob -> Carol
 ```
 
 ## Supported Value Types
@@ -90,13 +87,15 @@ with zyxdb.Database("/tmp/mydb") as db:
 - `execute(cypher, **params)` — Execute Cypher query with keyword parameters
 - `begin_transaction()` — Start a read-write transaction
 - `begin_read_only_transaction()` — Start a read-only transaction
-- `create_node(label, props)` — Create a node (label can be `str` or `list[str]`)
-- `create_node_ret_id(label, props)` — Create a node, return its ID
-- `create_nodes(label, props_list)` — Batch create nodes
-- `create_edge_by_id(src_id, dst_id, type, props)` — Create edge between known IDs
-- `get_shortest_path(start_id, end_id, max_depth=15)` — Find shortest path
+- `create_node(label, props)` — Create a node, return its ID (label can be `str` or `list[str]`)
+- `create_nodes(label, props_list)` — Batch create nodes, return list of IDs
+- `create_edge(src_id, dst_id, edge_type, props)` — Create edge between two nodes by ID
+- `create_edges(edge_type, edges)` — Batch create edges
+- `get_shortest_path(start_id, end_id, max_depth=15)` — Find shortest path, return list of `Node`
+- `bfs(start_id, visitor)` — Breadth-first traversal
 - `save()` — Flush to disk
 - `close()` — Close the database
+- `has_active_transaction` — Whether there is an active transaction
 
 ### `Transaction`
 
@@ -108,11 +107,18 @@ with zyxdb.Database("/tmp/mydb") as db:
 
 ### `Result`
 
-- Iterable: `for row in result` yields `dict[str, Any]`
-- `column_names` — List of column names
-- `duration` — Query execution time (ms)
+- Iterable: `for row in result` yields `Record` objects
+- `columns` / `column_names` — List of column names
 - `is_success` — Whether query succeeded
 - `error` — Error message or `None`
+- `duration` — Query execution time (ms)
+- `fetchone()` — Fetch next row or `None`
+- `fetchall()` — Fetch all remaining rows
+- `fetchmany(size)` — Fetch up to *size* rows
+- `single(strict=True)` — Return the single result row
+- `scalar()` — Return first column of first row
+- `data()` — Return all rows as list of dicts
+- `to_df()` — Convert to pandas DataFrame
 
 ## License
 

@@ -101,12 +101,22 @@ NodePatternAST extractNodePattern(CypherParser::NodePatternContext* nodePat) {
 	node.variable = AstExtractor::extractVariable(nodePat->variable());
 	node.labels = AstExtractor::extractLabels(nodePat->nodeLabels());
 
-	auto props = AstExtractor::extractProperties(nodePat->properties(),
-		[](CypherParser::ExpressionContext* expr) {
-			return ExpressionBuilder::evaluateLiteralExpression(expr);
-		});
-	for (const auto& [key, val] : props) {
-		node.properties.emplace_back(key, val);
+	if (nodePat->properties() && nodePat->properties()->mapLiteral()) {
+		auto mapLit = nodePat->properties()->mapLiteral();
+		auto keys = mapLit->propertyKeyName();
+		auto exprs = mapLit->expression();
+		for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+			std::string key = keys[i]->getText();
+			PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
+			if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
+				node.properties.emplace_back(key, litVal);
+			} else {
+				// Non-literal (e.g. $param) — store as expression for runtime evaluation
+				auto exprAST = ExpressionBuilder::buildExpression(exprs[i]);
+				node.propertyExpressions[key] =
+					std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+			}
+		}
 	}
 
 	return node;
@@ -160,10 +170,24 @@ RelationshipPatternAST extractRelationshipPattern(CypherParser::RelationshipPatt
 	if (relDetail) {
 		rel.variable = AstExtractor::extractVariable(relDetail->variable());
 		rel.type = AstExtractor::extractRelType(relDetail->relationshipTypes());
-		rel.properties = AstExtractor::extractProperties(relDetail->properties(),
-			[](CypherParser::ExpressionContext* expr) {
-				return ExpressionBuilder::evaluateLiteralExpression(expr);
-			});
+
+		// Split edge properties into literals and expressions
+		if (relDetail->properties() && relDetail->properties()->mapLiteral()) {
+			auto mapLit = relDetail->properties()->mapLiteral();
+			auto keys = mapLit->propertyKeyName();
+			auto exprs = mapLit->expression();
+			for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
+				std::string key = keys[i]->getText();
+				PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
+				if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
+					rel.properties[key] = litVal;
+				} else {
+					auto exprAST = ExpressionBuilder::buildExpression(exprs[i]);
+					rel.propertyExpressions[key] =
+						std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+				}
+			}
+		}
 
 		// Variable-length path
 		if (relDetail->rangeLiteral()) {
