@@ -1916,3 +1916,69 @@ TEST_F(PropertyManagerTest, RemoveEntityProperty_PropertyEntity_KeyNotPresent_No
 	auto props = propertyManager->getEntityProperties<graph::Node>(testNode.getId());
 	EXPECT_TRUE(props.contains("present_key"));
 }
+
+// ============================================================================
+// calculateEntityTotalPropertySize: PROPERTY_ENTITY path where the property
+// entity itself has been externally deleted (property.getId() == 0 branch).
+//
+// Covers line 473:10 False branch:
+//   if (property.getId() != 0 && property.isActive())
+// where property.getId() == 0 because the backing Property entity no longer
+// exists in storage, so getProperty() returns a default-constructed (id=0)
+// entity.
+// ============================================================================
+
+TEST_F(PropertyManagerTest, CalculateSizeNode_PropertyEntityDeleted_ReturnsZero) {
+	// Add small properties to the node so it uses PROPERTY_ENTITY storage.
+	propertyManager->addEntityProperties<graph::Node>(testNode.getId(), {
+		{"alive_key", graph::PropertyValue(std::string("alive_value"))}
+	});
+
+	// Confirm the node has a PROPERTY_ENTITY reference.
+	graph::Node nodeWithProp = nodeManager->get(testNode.getId());
+	ASSERT_EQ(nodeWithProp.getPropertyStorageType(), graph::PropertyStorageType::PROPERTY_ENTITY);
+	int64_t propEntityId = graph::storage::EntityPropertyTraits<graph::Node>::getPropertyEntityId(nodeWithProp);
+	ASSERT_NE(propEntityId, 0);
+
+	// Delete the backing Property entity directly, without updating the node's
+	// reference.  After this, getProperty(propEntityId) will return an entity
+	// with getId() == 0 (not found / inactive), hitting the False branch of
+	// "property.getId() != 0 && property.isActive()" inside
+	// calculateEntityTotalPropertySize.
+	graph::Property propEntity = propertyManager->get(propEntityId);
+	ASSERT_NE(propEntity.getId(), 0) << "Property entity must exist before deletion";
+	propertyManager->remove(propEntity);
+	dataManager->clearCache();
+
+	// The node still has a PROPERTY_ENTITY storage-type pointer, but the
+	// backing entity is gone.  Size calculation must not crash and must return
+	// 0 (the invalid/missing property contributes nothing).
+	size_t size = propertyManager->calculateEntityTotalPropertySize<graph::Node>(testNode.getId());
+	EXPECT_EQ(size, 0UL)
+		<< "Size must be 0 when the backing Property entity has been deleted";
+}
+
+TEST_F(PropertyManagerTest, CalculateSizeEdge_PropertyEntityDeleted_ReturnsZero) {
+	// Add small properties to the edge so it uses PROPERTY_ENTITY storage.
+	propertyManager->addEntityProperties<graph::Edge>(testEdge.getId(), {
+		{"edge_alive", graph::PropertyValue(std::string("edge_val"))}
+	});
+
+	// Confirm PROPERTY_ENTITY storage.
+	graph::Edge edgeWithProp = edgeManager->get(testEdge.getId());
+	ASSERT_EQ(edgeWithProp.getPropertyStorageType(), graph::PropertyStorageType::PROPERTY_ENTITY);
+	int64_t propEntityId = graph::storage::EntityPropertyTraits<graph::Edge>::getPropertyEntityId(edgeWithProp);
+	ASSERT_NE(propEntityId, 0);
+
+	// Delete the backing Property entity without touching the edge's reference.
+	graph::Property propEntity = propertyManager->get(propEntityId);
+	ASSERT_NE(propEntity.getId(), 0) << "Property entity must exist before deletion";
+	propertyManager->remove(propEntity);
+	dataManager->clearCache();
+
+	// calculateEntityTotalPropertySize should handle the missing property entity
+	// gracefully (getId() == 0) and return 0.
+	size_t size = propertyManager->calculateEntityTotalPropertySize<graph::Edge>(testEdge.getId());
+	EXPECT_EQ(size, 0UL)
+		<< "Size must be 0 when the backing Property entity has been deleted";
+}

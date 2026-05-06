@@ -84,37 +84,12 @@ namespace graph::query::indexes {
 		const int64_t entityId = entity.getId();
 
 		if constexpr (std::is_same_v<T, Node>) {
-			// Multi-label support for Nodes
+			// Node multi-label: only called from onEntityAdded (oldLabel="", isDeleted=false).
+			// Deletion and update are handled directly in onEntityDeleted/onEntityUpdated.
 			auto labelIds = entity.getLabelIds();
-			std::vector<std::string> newLabels;
 			for (int64_t lid : labelIds) {
 				if (lid != 0) {
-					newLabels.push_back(dataManager_->resolveTokenName(lid));
-				}
-			}
-
-			if (isDeleted) {
-				for (const auto &lbl : newLabels) {
-					labelIndex_->removeNode(entityId, lbl);
-				}
-			} else {
-				// For multi-label updates, we receive oldLabels as a single comma-free string
-				// from the caller (backward compat). For proper diff, use the overloaded version.
-				// Simple approach: remove old label if present, add all new labels
-				if (!oldLabel.empty()) {
-					// Check if oldLabel is still in newLabels
-					bool stillPresent = false;
-					for (const auto &nl : newLabels) {
-						if (nl == oldLabel) { stillPresent = true; break; }
-					}
-					if (!stillPresent) {
-						labelIndex_->removeNode(entityId, oldLabel);
-					}
-				}
-				for (const auto &nl : newLabels) {
-					if (nl != oldLabel) {
-						labelIndex_->addNode(entityId, nl);
-					}
+					labelIndex_->addNode(entityId, dataManager_->resolveTokenName(lid));
 				}
 			}
 		} else {

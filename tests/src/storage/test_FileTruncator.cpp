@@ -217,3 +217,63 @@ TEST_F(FileTruncatorTest, TruncateFile_AllSegmentsFreed) {
 	EXPECT_GE(sizeAfter, sizeof(FileHeader));
 	EXPECT_LT(sizeAfter, sizeof(FileHeader) + 2 * TOTAL_SEGMENT_SIZE);
 }
+
+// 9. Line 34 branch: newFileSize < FILE_HEADER_SIZE defensive guard.
+//
+// The minimum offset reachable via the public API is exactly FILE_HEADER_SIZE
+// (= 128 bytes, when only the very first segment is deallocated), so the
+// condition `newFileSize < FILE_HEADER_SIZE` evaluates to false in normal usage.
+// This test exercises the native-fd success path (nativeFd != INVALID_FILE_HANDLE,
+// lines 39 and 43-46) while simultaneously reaching line 33 with the boundary
+// value (newFileSize == FILE_HEADER_SIZE), confirming the guard does not interfere
+// with a valid truncation.
+TEST_F(FileTruncatorTest, TruncateFile_NativeFd_MinimumFileSizeGuard) {
+	// Allocate and then free the sole segment so that the trailing free offset
+	// equals FILE_HEADER_SIZE — the lowest value possible through the public API.
+	uint64_t offset = segmentAllocator->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
+	file->flush();
+	EXPECT_EQ(getFileSize(), sizeof(FileHeader) + TOTAL_SEGMENT_SIZE);
+
+	segmentAllocator->deallocateSegment(offset);
+
+	// Open a real native fd on the test file so the nativeFd branch is taken.
+	file_handle_t nativeFd = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeFd, INVALID_FILE_HANDLE) << "Failed to open test file for native fd path";
+
+	bool result = truncator->truncateFile(nativeFd);
+
+	portable_close_rw(nativeFd);
+
+	// Truncation succeeds; the file must not shrink below the header size.
+	EXPECT_TRUE(result);
+	EXPECT_GE(getFileSize(), FILE_HEADER_SIZE);
+}
+
+// 10. Lines 41-42 branch: portable_ftruncate failure path.
+//
+// Passing fd = -2 is not the INVALID_FILE_HANDLE sentinel (-1), so the
+// nativeFd != INVALID_FILE_HANDLE guard passes.  portable_ftruncate then
+// calls ::ftruncate(-2, ...) which fails with EBADF, making truncateFile
+// return false without modifying the file.
+TEST_F(FileTruncatorTest, TruncateFile_NativeFd_FtruncateFailure) {
+	uint64_t offsetA = segmentAllocator->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
+	uint64_t offsetB = segmentAllocator->allocateSegment(Node::typeId, NODES_PER_SEGMENT);
+	file->flush();
+
+	uint64_t sizeBefore = getFileSize();
+	EXPECT_EQ(sizeBefore, sizeof(FileHeader) + 2 * TOTAL_SEGMENT_SIZE);
+
+	// Deallocate the trailing segment so truncatableSegments is non-empty.
+	segmentAllocator->deallocateSegment(offsetB);
+
+	// fd -2 is deliberately invalid but not the INVALID_FILE_HANDLE sentinel,
+	// so the native-fd branch is entered and ftruncate fails.
+	constexpr file_handle_t kBadFd = -2;
+	bool result = truncator->truncateFile(kBadFd);
+
+	// truncateFile must return false on ftruncate failure.
+	EXPECT_FALSE(result);
+
+	// The file on disk must be unchanged.
+	EXPECT_EQ(getFileSize(), sizeBefore);
+}

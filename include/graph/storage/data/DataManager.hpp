@@ -434,7 +434,7 @@ namespace graph::storage {
 
 		template<typename EntityType>
 		std::vector<EntityType> readEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
-														size_t limit, bool filterDeleted = true) const;
+														size_t limit) const;
 
 		// Entity property operations
 		template<typename EntityType>
