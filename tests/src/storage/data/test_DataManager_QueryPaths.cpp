@@ -1,5 +1,5 @@
 /**
- * @file test_DataManager_CoveragePaths.cpp
+ * @file test_DataManager_QueryPaths.cpp
  * @brief Branch coverage tests for DataManager — covers edge cases in
  *        getEntityFromMemoryOrDisk, findEdgesByNode, getDirtyEntityInfos,
  *        and other underexercised paths.
@@ -9,9 +9,9 @@
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/data/PropertyManager.hpp"
 
-class DataManagerCoverageTest : public DataManagerSharedTest {};
+class DataManagerQueryPathsTest : public DataManagerSharedTest {};
 
-TEST_F(DataManagerCoverageTest, FindEdgesByNode_OutDirection) {
+TEST_F(DataManagerQueryPathsTest, FindEdgesByNode_OutDirection) {
 	Node n1 = createTestNode(dataManager, "A");
 	dataManager->addNode(n1);
 	Node n2 = createTestNode(dataManager, "B");
@@ -24,7 +24,7 @@ TEST_F(DataManagerCoverageTest, FindEdgesByNode_OutDirection) {
 	EXPECT_GE(out.size(), 1u);
 }
 
-TEST_F(DataManagerCoverageTest, FindEdgesByNode_InDirection) {
+TEST_F(DataManagerQueryPathsTest, FindEdgesByNode_InDirection) {
 	Node n1 = createTestNode(dataManager, "X");
 	dataManager->addNode(n1);
 	Node n2 = createTestNode(dataManager, "Y");
@@ -37,7 +37,7 @@ TEST_F(DataManagerCoverageTest, FindEdgesByNode_InDirection) {
 	EXPECT_GE(in.size(), 1u);
 }
 
-TEST_F(DataManagerCoverageTest, FindEdgesByNode_BothDirection) {
+TEST_F(DataManagerQueryPathsTest, FindEdgesByNode_BothDirection) {
 	Node n1 = createTestNode(dataManager, "P");
 	dataManager->addNode(n1);
 	Node n2 = createTestNode(dataManager, "Q");
@@ -50,7 +50,7 @@ TEST_F(DataManagerCoverageTest, FindEdgesByNode_BothDirection) {
 	EXPECT_GE(both.size(), 1u);
 }
 
-TEST_F(DataManagerCoverageTest, GetDirtyEntityInfos_FilterByType) {
+TEST_F(DataManagerQueryPathsTest, GetDirtyEntityInfos_FilterByType) {
 	Node n1 = createTestNode(dataManager, "Filter");
 	dataManager->addNode(n1);
 
@@ -71,7 +71,7 @@ TEST_F(DataManagerCoverageTest, GetDirtyEntityInfos_FilterByType) {
 	EXPECT_FALSE(foundInDeleted);
 }
 
-TEST_F(DataManagerCoverageTest, GetDirtyEntityInfos_AllTypes) {
+TEST_F(DataManagerQueryPathsTest, GetDirtyEntityInfos_AllTypes) {
 	Node n = createTestNode(dataManager, "All");
 	dataManager->addNode(n);
 
@@ -80,7 +80,7 @@ TEST_F(DataManagerCoverageTest, GetDirtyEntityInfos_AllTypes) {
 	EXPECT_GE(all.size(), 1u);
 }
 
-TEST_F(DataManagerCoverageTest, SetEntityDirty_ZeroId) {
+TEST_F(DataManagerQueryPathsTest, SetEntityDirty_ZeroId) {
 	Node n;
 	n.setId(0);
 	DirtyEntityInfo<Node> info(EntityChangeType::CHANGE_ADDED, n);
@@ -89,7 +89,7 @@ TEST_F(DataManagerCoverageTest, SetEntityDirty_ZeroId) {
 	EXPECT_FALSE(dirty.has_value());
 }
 
-TEST_F(DataManagerCoverageTest, GetEntityFromMemoryOrDisk_DeletedEntity) {
+TEST_F(DataManagerQueryPathsTest, GetEntityFromMemoryOrDisk_DeletedEntity) {
 	Node n = createTestNode(dataManager, "Del");
 	dataManager->addNode(n);
 	simulateSave();
@@ -100,7 +100,7 @@ TEST_F(DataManagerCoverageTest, GetEntityFromMemoryOrDisk_DeletedEntity) {
 	EXPECT_FALSE(got.isActive());
 }
 
-TEST_F(DataManagerCoverageTest, MarkEntityDeleted_WasAdded) {
+TEST_F(DataManagerQueryPathsTest, MarkEntityDeleted_WasAdded) {
 	Node n = createTestNode(dataManager, "AddThenDel");
 	dataManager->addNode(n);
 
@@ -110,7 +110,7 @@ TEST_F(DataManagerCoverageTest, MarkEntityDeleted_WasAdded) {
 	EXPECT_FALSE(dirty.has_value());
 }
 
-TEST_F(DataManagerCoverageTest, MarkEntityDeleted_WasExisting) {
+TEST_F(DataManagerQueryPathsTest, MarkEntityDeleted_WasExisting) {
 	Node n = createTestNode(dataManager, "Existing");
 	dataManager->addNode(n);
 	simulateSave();
@@ -126,7 +126,7 @@ TEST_F(DataManagerCoverageTest, MarkEntityDeleted_WasExisting) {
 	EXPECT_EQ(dirty->changeType, EntityChangeType::CHANGE_DELETED);
 }
 
-TEST_F(DataManagerCoverageTest, GetNodePropertiesDirect_NoProperties) {
+TEST_F(DataManagerQueryPathsTest, GetNodePropertiesDirect_NoProperties) {
 	Node n = createTestNode(dataManager, "NoProp");
 	dataManager->addNode(n);
 	simulateSave();
@@ -135,14 +135,14 @@ TEST_F(DataManagerCoverageTest, GetNodePropertiesDirect_NoProperties) {
 	EXPECT_TRUE(props.empty());
 }
 
-TEST_F(DataManagerCoverageTest, GetNodePropertiesDirect_InactiveNode) {
+TEST_F(DataManagerQueryPathsTest, GetNodePropertiesDirect_InactiveNode) {
 	Node n;
 	n.setId(0);
 	auto props = dataManager->getNodePropertiesDirect(n);
 	EXPECT_TRUE(props.empty());
 }
 
-TEST_F(DataManagerCoverageTest, GetNodePropertiesFromMap_InactiveNode) {
+TEST_F(DataManagerQueryPathsTest, GetNodePropertiesFromMap_InactiveNode) {
 	Node n;
 	n.setId(0);
 	std::unordered_map<int64_t, Property> propMap;
@@ -150,25 +150,25 @@ TEST_F(DataManagerCoverageTest, GetNodePropertiesFromMap_InactiveNode) {
 	EXPECT_TRUE(props.empty());
 }
 
-TEST_F(DataManagerCoverageTest, ResolveTokenName_ZeroId) {
+TEST_F(DataManagerQueryPathsTest, ResolveTokenName_ZeroId) {
 	EXPECT_EQ(dataManager->resolveTokenName(0), "");
 }
 
-TEST_F(DataManagerCoverageTest, ResolveTokenId_EmptyName) {
+TEST_F(DataManagerQueryPathsTest, ResolveTokenId_EmptyName) {
 	EXPECT_EQ(dataManager->resolveTokenId(""), 0);
 }
 
-TEST_F(DataManagerCoverageTest, GetOrCreateTokenId_EmptyName) {
+TEST_F(DataManagerQueryPathsTest, GetOrCreateTokenId_EmptyName) {
 	EXPECT_EQ(dataManager->getOrCreateTokenId(""), 0);
 }
 
-TEST_F(DataManagerCoverageTest, CheckAndTriggerAutoFlush_DuringTransaction) {
+TEST_F(DataManagerQueryPathsTest, CheckAndTriggerAutoFlush_DuringTransaction) {
 	dataManager->setActiveTransaction(1);
 	EXPECT_NO_THROW(dataManager->checkAndTriggerAutoFlush());
 	dataManager->clearActiveTransaction();
 }
 
-TEST_F(DataManagerCoverageTest, UpdateEntityNode) {
+TEST_F(DataManagerQueryPathsTest, UpdateEntityNode) {
 	Node n = createTestNode(dataManager, "Upd");
 	dataManager->addNode(n);
 	simulateSave();
@@ -180,7 +180,7 @@ TEST_F(DataManagerCoverageTest, UpdateEntityNode) {
 	EXPECT_TRUE(reloaded.isActive());
 }
 
-TEST_F(DataManagerCoverageTest, UpdateEntityEdge) {
+TEST_F(DataManagerQueryPathsTest, UpdateEntityEdge) {
 	Node n1 = createTestNode(dataManager, "U1");
 	dataManager->addNode(n1);
 	Node n2 = createTestNode(dataManager, "U2");
@@ -196,17 +196,17 @@ TEST_F(DataManagerCoverageTest, UpdateEntityEdge) {
 	EXPECT_TRUE(reloaded.isActive());
 }
 
-TEST_F(DataManagerCoverageTest, GetEntitiesInRange_StartGtEnd) {
+TEST_F(DataManagerQueryPathsTest, GetEntitiesInRange_StartGtEnd) {
 	auto result = dataManager->getEntitiesInRange<Node>(100, 1, 10);
 	EXPECT_TRUE(result.empty());
 }
 
-TEST_F(DataManagerCoverageTest, GetEntitiesInRange_ZeroLimit) {
+TEST_F(DataManagerQueryPathsTest, GetEntitiesInRange_ZeroLimit) {
 	auto result = dataManager->getEntitiesInRange<Node>(1, 100, 0);
 	EXPECT_TRUE(result.empty());
 }
 
-TEST_F(DataManagerCoverageTest, GetEntitiesInRange_LimitReachedFromMemory) {
+TEST_F(DataManagerQueryPathsTest, GetEntitiesInRange_LimitReachedFromMemory) {
 	// Create many dirty entities so the memory pass fills the limit
 	Node n1 = createTestNode(dataManager, "Limit1");
 	dataManager->addNode(n1);

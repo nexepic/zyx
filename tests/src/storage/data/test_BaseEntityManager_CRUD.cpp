@@ -13,6 +13,10 @@
  **/
 
 #include "DataManagerSharedTestFixture.hpp"
+#include "graph/storage/data/BlobManager.hpp"
+#include "graph/storage/data/IndexEntityManager.hpp"
+#include "graph/storage/data/PropertyManager.hpp"
+#include "graph/storage/data/StateManager.hpp"
 
 class BaseEntityManagerCRUDTest : public DataManagerSharedTest {};
 
@@ -463,6 +467,35 @@ TEST_F(BaseEntityManagerCRUDTest, GetProperties_BlobType) {
 }
 
 // ============================================================================
+// Property: update inactive entity throws
+// Covers the "Update inactive entity" throw (BaseEntityManager.cpp line 96-97)
+// for the Property template instantiation — not previously exercised.
+// ============================================================================
+
+TEST_F(BaseEntityManagerCRUDTest, UpdateProperty_Inactive_Throws) {
+	std::unordered_map<std::string, PropertyValue> propMap = {{"pk", PropertyValue(1)}};
+	Property p = createTestProperty(1, Node::typeId, propMap);
+	dataManager->addPropertyEntity(p);
+
+	p.markInactive();
+	EXPECT_THROW(dataManager->updatePropertyEntity(p), std::runtime_error);
+}
+
+// ============================================================================
+// State: update inactive entity throws
+// Covers the "Update inactive entity" throw (BaseEntityManager.cpp line 96-97)
+// for the State template instantiation — not previously exercised.
+// ============================================================================
+
+TEST_F(BaseEntityManagerCRUDTest, UpdateState_Inactive_Throws) {
+	State s = createTestState("inactive_state_key");
+	dataManager->addStateEntity(s);
+
+	s.markInactive();
+	EXPECT_THROW(dataManager->updateStateEntity(s), std::runtime_error);
+}
+
+// ============================================================================
 // Edge: update preserves CHANGE_ADDED
 // ============================================================================
 
@@ -477,4 +510,69 @@ TEST_F(BaseEntityManagerCRUDTest, UpdateEdge_PreservesAddedChangeType) {
 
 	// Update immediately before flush
 	EXPECT_NO_THROW(dataManager->updateEdge(e));
+}
+
+// ============================================================================
+// addBatch for Property type (template instantiation coverage)
+// ============================================================================
+
+TEST_F(BaseEntityManagerCRUDTest, AddBatch_Property) {
+	auto pm = dataManager->getPropertyManager();
+	std::vector<Property> props;
+	for (int i = 0; i < 3; ++i) {
+		auto p = createTestProperty(1, Node::typeId, {{"bk" + std::to_string(i), PropertyValue(i)}});
+		props.push_back(p);
+	}
+	EXPECT_NO_THROW(pm->addBatch(props));
+	for (const auto &p : props) {
+		EXPECT_NE(p.getId(), 0);
+	}
+}
+
+// ============================================================================
+// addBatch for Blob type (template instantiation coverage)
+// ============================================================================
+
+TEST_F(BaseEntityManagerCRUDTest, AddBatch_Blob) {
+	auto bm = dataManager->getBlobManager();
+	std::vector<Blob> blobs;
+	for (int i = 0; i < 3; ++i) {
+		blobs.push_back(createTestBlob("batch_blob_" + std::to_string(i)));
+	}
+	EXPECT_NO_THROW(bm->addBatch(blobs));
+	for (const auto &b : blobs) {
+		EXPECT_NE(b.getId(), 0);
+	}
+}
+
+// ============================================================================
+// addBatch for State type (template instantiation coverage)
+// ============================================================================
+
+TEST_F(BaseEntityManagerCRUDTest, AddBatch_State) {
+	auto sm = dataManager->getStateManager();
+	std::vector<State> states;
+	for (int i = 0; i < 3; ++i) {
+		states.push_back(createTestState("batch_state_" + std::to_string(i)));
+	}
+	EXPECT_NO_THROW(sm->addBatch(states));
+	for (const auto &s : states) {
+		EXPECT_NE(s.getId(), 0);
+	}
+}
+
+// ============================================================================
+// addBatch for Index type (template instantiation coverage)
+// ============================================================================
+
+TEST_F(BaseEntityManagerCRUDTest, AddBatch_Index) {
+	auto im = dataManager->getIndexEntityManager();
+	std::vector<Index> indexes;
+	for (int i = 0; i < 3; ++i) {
+		indexes.push_back(createTestIndex(Index::NodeType::LEAF, static_cast<uint32_t>(i + 10)));
+	}
+	EXPECT_NO_THROW(im->addBatch(indexes));
+	for (const auto &idx : indexes) {
+		EXPECT_NE(idx.getId(), 0);
+	}
 }

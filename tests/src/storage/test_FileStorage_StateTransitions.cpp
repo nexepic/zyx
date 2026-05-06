@@ -322,3 +322,55 @@ TEST_F(FileStorageStateTransitionsTest, Flush_DeleteWithCompaction) {
 	EXPECT_NO_THROW(fs->flush());
 	db.close();
 }
+
+// ============================================================================
+// flush() with compaction enabled but below threshold (shouldCompact() false)
+// ============================================================================
+
+TEST_F(FileStorageStateTransitionsTest, Flush_DeleteBelowCompactionThreshold) {
+	graph::Database db(testFilePath.string());
+	db.open();
+	auto fs = db.getStorage();
+
+	fs->setCompactionEnabled(true);
+
+	auto dm = fs->getDataManager();
+
+	// Add many nodes and flush to persist
+	std::vector<graph::Node> nodes;
+	for (int i = 0; i < 20; ++i) {
+		graph::Node n(0, 1);
+		dm->addNode(n);
+		nodes.push_back(n);
+	}
+	fs->flush();
+
+	// Delete only 1 node out of 20 (5% fragmentation, well below 30% threshold)
+	dm->deleteNode(nodes[0]);
+
+	// flush() enters compaction block (deleteOperationPerformed=true,
+	// compactionEnabled=true) but shouldCompact() returns false.
+	EXPECT_NO_THROW(fs->flush());
+	db.close();
+}
+
+// ============================================================================
+// save() with empty snapshot (snapshot.isEmpty() == true)
+// ============================================================================
+
+TEST_F(FileStorageStateTransitionsTest, Save_EmptySnapshot) {
+	graph::Database db(testFilePath.string());
+	db.open();
+	auto fs = db.getStorage();
+
+	auto dm = fs->getDataManager();
+
+	// Add a node and flush to clear dirty state
+	graph::Node n(0, 1);
+	dm->addNode(n);
+	fs->flush();
+
+	// Now save() with no new dirty data — prepareFlushSnapshot returns empty
+	EXPECT_NO_THROW(fs->save());
+	db.close();
+}
