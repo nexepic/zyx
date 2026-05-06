@@ -27,5 +27,6 @@ classifiers = [
 test = ["pytest>=7.0"]
 
 [project.urls]
-Homepage = "https://github.com/nexepic/zyx"
+Homepage = "https://nexepic.github.io/zyx/"
 Repository = "https://github.com/nexepic/zyx"
+Documentation = "https://nexepic.github.io/zyx/"

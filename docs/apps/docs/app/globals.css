@@ -167,7 +167,7 @@ body {
 
 html {
   scroll-behavior: auto;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--bg-primary);
 }
 
