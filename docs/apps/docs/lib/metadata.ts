@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { locales } from '@/lib/i18n'
-import { siteConfig, getSiteUrl, withSiteUrl } from '@/lib/site'
+import { siteConfig, getSiteUrl, withSiteUrl, withBasePath } from '@/lib/site'
 
 interface SiteMetadataInput {
   title?: string
@@ -54,7 +54,7 @@ function inferIconMimeType(iconPath: string): string | undefined {
 function buildIconDescriptor(iconPath: string, media?: string) {
   const mimeType = inferIconMimeType(iconPath)
   return {
-    url: iconPath,
+    url: withBasePath(iconPath),
     ...(media ? { media } : {}),
     ...(mimeType ? { type: mimeType } : {}),
     ...(mimeType === 'image/svg+xml' ? { sizes: 'any' } : {}),
