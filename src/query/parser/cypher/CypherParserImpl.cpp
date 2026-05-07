@@ -72,7 +72,28 @@ private:
 
 namespace graph::parser::cypher {
 
-	CypherParserImpl::CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner) : planner_(std::move(planner)) {}
+	CypherParserImpl::CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner) :
+		planner_(std::move(planner)),
+		input_(std::make_unique<antlr4::ANTLRInputStream>("")),
+		lexer_(std::make_unique<CypherLexer>(input_.get())),
+		tokens_(std::make_unique<antlr4::CommonTokenStream>(lexer_.get())),
+		parser_(std::make_unique<CypherParser>(tokens_.get())),
+		errorListener_(std::make_unique<ThrowingErrorListener>()) {
+
+		lexer_->removeErrorListeners();
+		parser_->removeErrorListeners();
+		lexer_->addErrorListener(errorListener_.get());
+		parser_->addErrorListener(errorListener_.get());
+	}
+
+	CypherParserImpl::~CypherParserImpl() {
+		// Explicit destructor needed because forward-declared types are used
+		// with unique_ptr. Destruction order matters: parser → tokens → lexer → input.
+		parser_.reset();
+		tokens_.reset();
+		lexer_.reset();
+		input_.reset();
+	}
 
 	std::unique_ptr<query::execution::PhysicalOperator> CypherParserImpl::parse(const std::string &query) const {
 		auto plan = parseToLogical(query);
@@ -87,19 +108,14 @@ namespace graph::parser::cypher {
 	}
 
 	query::QueryPlan CypherParserImpl::parseToLogical(const std::string &query) const {
-		antlr4::ANTLRInputStream input(query);
-		CypherLexer lexer(&input);
-		antlr4::CommonTokenStream tokens(&lexer);
-		CypherParser parser(&tokens);
+		// Reset the input stream and re-feed the pipeline
+		input_->load(query);
+		lexer_->setInputStream(input_.get());
+		tokens_->setTokenSource(lexer_.get());
+		parser_->setTokenStream(tokens_.get());
+		parser_->reset();
 
-		parser.removeErrorListeners();
-		lexer.removeErrorListeners();
-
-		ThrowingErrorListener errorListener;
-		parser.addErrorListener(&errorListener);
-		lexer.addErrorListener(&errorListener);
-
-		CypherParser::CypherContext *tree = parser.cypher();
+		CypherParser::CypherContext *tree = parser_->cypher();
 
 		CypherToPlanVisitor visitor(planner_);
 

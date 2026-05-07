@@ -287,6 +287,7 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
 
   const ambientParticlesRef = useRef<AmbientParticle[]>([]);
   const glyphParticlesRef = useRef<GlyphParticle[]>([]);
+  const vignetteCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const isMobileRef = useRef(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -434,6 +435,49 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
     }
   }, [createGlyphTargets]);
 
+  const buildVignette = useCallback((w: number, h: number, dpr: number) => {
+    const pw = Math.floor(w * dpr);
+    const ph = Math.floor(h * dpr);
+    const vc = document.createElement("canvas");
+    vc.width = pw;
+    vc.height = ph;
+    const vctx = vc.getContext("2d", { willReadFrequently: true });
+    if (!vctx) return null;
+
+    const cx = pw * 0.5;
+    const cy = ph * 0.5;
+    // 60% of farthest-corner, matching CSS radial-gradient default sizing
+    const maxR = Math.sqrt(cx * cx + cy * cy) * 0.6;
+    const invR = maxR > 0 ? 1 / maxR : 0;
+
+    // Compute gradient mathematically with TPDF dithering at quantization time
+    // — bypasses canvas gradient renderer's 8-bit banding entirely
+    const imgData = vctx.createImageData(pw, ph);
+    const d = imgData.data;
+
+    for (let j = 0; j < ph; j++) {
+      const dy = j - cy;
+      const dy2 = dy * dy;
+      for (let i = 0; i < pw; i++) {
+        const dx = i - cx;
+        const t = Math.sqrt(dx * dx + dy2) * invR;
+        if (t >= 1) continue; // alpha = 0, imageData default
+        // Exact floating-point alpha: 0.6 at center → 0 at maxR
+        const a = (1 - t) * 153; // 0.6 * 255
+        // TPDF dither: triangular noise in [-1, +1]
+        const noise = Math.random() + Math.random() - 1;
+        const idx = (j * pw + i) * 4;
+        d[idx] = 11;
+        d[idx + 1] = 15;
+        d[idx + 2] = 20;
+        d[idx + 3] = Math.max(0, Math.round(a + noise));
+      }
+    }
+
+    vctx.putImageData(imgData, 0, 0);
+    return vc;
+  }, []);
+
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
@@ -453,7 +497,8 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
     ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
     updateMobileFlag();
     resetParticles();
-  }, [resetParticles, updateMobileFlag]);
+    vignetteCanvasRef.current = buildVignette(widthRef.current, heightRef.current, dprRef.current);
+  }, [resetParticles, updateMobileFlag, buildVignette]);
 
   const transitionToNextFeature = useCallback(() => {
     setActiveFeatureIndex((current) => {
@@ -785,7 +830,14 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
       // Hide axes to reduce visual noise when grid is open
       const finalAxisAlpha = axisAlpha * (expandedRef.current ? 0.05 : 1);
       drawAxes(canvasCtx, cosX, sinX, cosY, sinY, cx, cy, fov, finalAxisAlpha);
-      
+
+      // Draw pre-rendered dithered vignette (eliminates CSS gradient banding)
+      const vig = vignetteCanvasRef.current;
+      if (vig) {
+        canvasCtx.globalAlpha = 1;
+        canvasCtx.drawImage(vig, 0, 0, width, height);
+      }
+
       if (!isAnimatingRef.current) {
         return;
       }
@@ -891,19 +943,6 @@ export function ZyxHomePage(props: ZyxHomePageProps) {
 
       <div className="relative h-screen w-screen overflow-hidden bg-[#0b0f14] font-['Avenir_Next','Segoe_UI',system-ui,sans-serif] text-[#e7edf5] supports-[height:100dvh]:h-dvh">
         <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-auto" />
-
-        {/* Noise dither layer — overlay blend is brightness-neutral on dark backgrounds */}
-        <svg className="absolute h-0 w-0" aria-hidden="true">
-          <defs>
-            <filter id="noise-dither" x="0%" y="0%" width="100%" height="100%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
-              <feColorMatrix type="saturate" values="0" />
-            </filter>
-          </defs>
-        </svg>
-
-        <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_50%,rgba(11,15,20,0.6)_0%,transparent_60%)]" />
-        <div className="pointer-events-none absolute inset-0 z-[1] [filter:url(#noise-dither)] [mix-blend-mode:overlay] opacity-[0.15]" />
 
         <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col">
           {/* Main Hero Container
