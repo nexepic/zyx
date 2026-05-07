@@ -20,9 +20,12 @@
 
 #include <gtest/gtest.h>
 #include <memory>
+#include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
+#include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
+#include "graph/core/State.hpp"
 #include "graph/storage/PersistenceManager.hpp"
 
 using namespace graph::storage;
@@ -413,4 +416,60 @@ TEST_F(PersistenceManagerTest, IsTransactionActive_SetFalseAfterTrue) {
 	EXPECT_TRUE(manager->isTransactionActive());
 	manager->setTransactionActive(false);
 	EXPECT_FALSE(manager->isTransactionActive());
+}
+
+// --- FlushSnapshot::isEmpty() branch coverage ---
+// Tests each short-circuit branch in the && chain
+
+TEST(FlushSnapshotTest, EmptySnapshotIsEmpty) {
+	FlushSnapshot snapshot;
+	EXPECT_TRUE(snapshot.isEmpty());
+}
+
+TEST(FlushSnapshotTest, NonEmptyNodes) {
+	FlushSnapshot snapshot;
+	Node n;
+	n.setId(1);
+	snapshot.nodes.emplace(1, DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, n));
+	EXPECT_FALSE(snapshot.isEmpty());
+}
+
+TEST(FlushSnapshotTest, NonEmptyEdges) {
+	FlushSnapshot snapshot;
+	Edge e;
+	e.setId(1);
+	snapshot.edges.emplace(1, DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_ADDED, e));
+	EXPECT_FALSE(snapshot.isEmpty());
+}
+
+TEST(FlushSnapshotTest, NonEmptyProperties) {
+	FlushSnapshot snapshot;
+	Property p;
+	p.setId(1);
+	snapshot.properties.emplace(1, DirtyEntityInfo<Property>(EntityChangeType::CHANGE_ADDED, p));
+	EXPECT_FALSE(snapshot.isEmpty());
+}
+
+TEST(FlushSnapshotTest, NonEmptyBlobs) {
+	FlushSnapshot snapshot;
+	Blob b;
+	b.setId(1);
+	snapshot.blobs.emplace(1, DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_ADDED, b));
+	EXPECT_FALSE(snapshot.isEmpty());
+}
+
+TEST(FlushSnapshotTest, NonEmptyIndexes) {
+	FlushSnapshot snapshot;
+	Index idx;
+	idx.setId(1);
+	snapshot.indexes.emplace(1, DirtyEntityInfo<Index>(EntityChangeType::CHANGE_ADDED, idx));
+	EXPECT_FALSE(snapshot.isEmpty());
+}
+
+TEST(FlushSnapshotTest, NonEmptyStates) {
+	FlushSnapshot snapshot;
+	State s;
+	s.setId(1);
+	snapshot.states.emplace(1, DirtyEntityInfo<State>(EntityChangeType::CHANGE_ADDED, s));
+	EXPECT_FALSE(snapshot.isEmpty());
 }
