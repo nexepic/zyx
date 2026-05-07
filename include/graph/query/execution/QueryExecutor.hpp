@@ -35,6 +35,9 @@ namespace graph::query {
 		 * @brief Executes a physical plan tree.
 		 * @param plan The root of the operator tree.
 		 * @return QueryResult containing the aggregated data.
+		 *
+		 * Internal anonymous variables (__anon_*) are filtered from the
+		 * output columns as they are pipeline-internal implementation details.
 		 */
 		static QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan);
 	};

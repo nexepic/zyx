@@ -415,14 +415,14 @@ namespace graph {
 			buffer += line;
 
 			if (trim(buffer).back() == ';') {
-				std::cout << "[stmt " << ++statementsExecuted << "] ";
+				std::cout << ansi::dim("[stmt " + std::to_string(++statementsExecuted) + "]") << "\n";
 				handleCommand(buffer);
 				buffer.clear();
 			}
 		}
 
 		if (!trim(buffer).empty()) {
-			std::cout << "[stmt " << ++statementsExecuted << "] (Implicit EOF) ";
+			std::cout << ansi::dim("[stmt " + std::to_string(++statementsExecuted) + "] (Implicit EOF)") << "\n";
 			handleCommand(buffer);
 		}
 	}

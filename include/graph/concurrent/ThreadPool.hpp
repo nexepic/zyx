@@ -119,14 +119,7 @@ namespace graph::concurrent {
 				std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 
 			auto future = task->get_future();
-
-			{
-				std::unique_lock lock(mutex_);
-				if (stop_)
-					throw std::runtime_error("Cannot submit to stopped ThreadPool");
-				tasks_.emplace([task]() { (*task)(); });
-			}
-			condition_.notify_one();
+			enqueue([task]() { (*task)(); });
 			return future;
 		}
 
@@ -164,7 +157,7 @@ namespace graph::concurrent {
 
 			size_t start = begin;
 			for (size_t c = 0; c < numChunks; ++c) {
-				size_t thisChunk = chunkSize + (c < remainder ? 1 : 0);
+				size_t thisChunk = chunkSize + static_cast<size_t>(c < remainder);
 				size_t chunkEnd = start + thisChunk;
 
 				futures.push_back(submit([start, chunkEnd, &func]() {
@@ -192,6 +185,16 @@ namespace graph::concurrent {
 		[[nodiscard]] bool isSingleThreaded() const { return threadCount_ <= 1; }
 
 		private:
+			void enqueue(std::function<void()> task) {
+				{
+					std::unique_lock lock(mutex_);
+					if (stop_)
+						throw std::runtime_error("Cannot submit to stopped ThreadPool");
+					tasks_.emplace(std::move(task));
+				}
+				condition_.notify_one();
+			}
+
 			static size_t resolveThreadCount(size_t requestedThreadCount, unsigned int hardwareThreadCount) {
 				if (requestedThreadCount == 0) {
 					requestedThreadCount = static_cast<size_t>(hardwareThreadCount);
@@ -206,16 +209,15 @@ namespace graph::concurrent {
 			}
 
 			void workerLoop() {
-				while (true) {
+			for (;;) {
 				std::function<void()> task;
-				{
-					std::unique_lock lock(mutex_);
-					condition_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
-					if (stop_ && tasks_.empty())
-						return;
-					task = std::move(tasks_.front());
-					tasks_.pop();
-				}
+				std::unique_lock lock(mutex_);
+				condition_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
+				if (stop_ && tasks_.empty())
+					return;
+				task = std::move(tasks_.front());
+				tasks_.pop();
+				lock.unlock();
 				task();
 			}
 		}

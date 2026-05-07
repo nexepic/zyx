@@ -8,9 +8,19 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include "graph/query/logical/LogicalOperator.hpp"
 
 namespace graph::query {
+
+/// Prefix used internally for anonymous pattern variables (unnamed nodes/edges).
+/// These are pipeline-internal and must never appear in user-facing output.
+inline constexpr const char *ANONYMOUS_VAR_PREFIX = "__anon_";
+
+/// Returns true if a variable name is an internal anonymous variable.
+inline bool isAnonymousVariable(const std::string &name) {
+	return name.compare(0, 7, ANONYMOUS_VAR_PREFIX) == 0;
+}
 
 /**
  * @struct QueryPlan

@@ -553,7 +553,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 		// Head node — assign unique anonymous variable if empty
 		std::string headVar = elem.headNode.variable;
 		if (headVar.empty()) {
-			headVar = "__anon_" + std::to_string(anonCounter++);
+			headVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(anonCounter++);
 		}
 
 		std::unordered_map<std::string, PropertyValue> headProps;
@@ -571,7 +571,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 			// Target node — assign unique anonymous variable if empty
 			std::string targetVar = chain.targetNode.variable;
 			if (targetVar.empty()) {
-				targetVar = "__anon_" + std::to_string(anonCounter++);
+				targetVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(anonCounter++);
 			}
 
 			std::unordered_map<std::string, PropertyValue> targetProps;
@@ -587,7 +587,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 			// Edge — assign unique anonymous variable if empty
 			std::string edgeVar = chain.relationship.variable;
 			if (edgeVar.empty()) {
-				edgeVar = "__anon_" + std::to_string(anonCounter++);
+				edgeVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(anonCounter++);
 			}
 
 			auto edgeOp = std::make_unique<LogicalCreateEdge>(
