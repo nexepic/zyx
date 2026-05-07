@@ -1170,6 +1170,76 @@ TEST_F(ImportCommandTest, JsonlNodeFileNotFound) {
     EXPECT_NO_THROW(app.parse(cmd, true));
 }
 
+// ---------- CSV rel: startId not found but endId found ----------
+
+TEST_F(ImportCommandTest, RelCsvStartIdNotFoundSkip) {
+    writeCsv(nodeFile, ":ID,:LABEL\n2,Person\n");
+    // Start "999" not found, end "2" found → covers branch 325:7 True path for startIt
+    writeCsv(edgeFile, ":START_ID,:END_ID,:TYPE\n999,2,KNOWS\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + nodeFile.string() +
+                      " --rels " + edgeFile.string() +
+                      " --db " + dbPath.string() +
+                      " --skip-bad-entries";
+    EXPECT_NO_THROW(app.parse(cmd, true));
+}
+
+// ---------- JSONL rel: _start key missing from line ----------
+
+TEST_F(ImportCommandTest, JsonlRelMissingStartKey) {
+    writeCsv(jsonlNodeFile, "{\"_id\": \"a\", \"_labels\": [\"X\"]}\n"
+                            "{\"_id\": \"b\", \"_labels\": [\"X\"]}\n");
+    // Line has no _start key → extractStr returns "" → covers branch 477
+    writeCsv(jsonlEdgeFile, "{\"_end\": \"b\", \"_type\": \"KNOWS\"}\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + jsonlNodeFile.string() +
+                      " --rels " + jsonlEdgeFile.string() +
+                      " --db " + dbPath.string() +
+                      " --format jsonl --skip-bad-entries";
+    EXPECT_NO_THROW(app.parse(cmd, true));
+}
+
+// ---------- JSONL rel: startId not found but endId found ----------
+
+TEST_F(ImportCommandTest, JsonlRelStartIdNotFoundSkip) {
+    writeCsv(jsonlNodeFile, "{\"_id\": \"b\", \"_labels\": [\"X\"]}\n");
+    // _start = "missing", _end = "b" → startIt not found, endIt found → branch 491:7
+    writeCsv(jsonlEdgeFile, "{\"_start\": \"missing\", \"_end\": \"b\", \"_type\": \"KNOWS\"}\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + jsonlNodeFile.string() +
+                      " --rels " + jsonlEdgeFile.string() +
+                      " --db " + dbPath.string() +
+                      " --format jsonl --skip-bad-entries";
+    EXPECT_NO_THROW(app.parse(cmd, true));
+}
+
+// ---------- JSONL rel: value has no quote after colon ----------
+
+TEST_F(ImportCommandTest, JsonlRelMalformedValue) {
+    writeCsv(jsonlNodeFile, "{\"_id\": \"a\", \"_labels\": [\"X\"]}\n"
+                            "{\"_id\": \"b\", \"_labels\": [\"X\"]}\n");
+    // Malformed: _start has numeric value (no quotes) → extractStr returns "" → branch 480
+    writeCsv(jsonlEdgeFile, "{\"_start\": 123, \"_end\": \"b\", \"_type\": \"KNOWS\"}\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + jsonlNodeFile.string() +
+                      " --rels " + jsonlEdgeFile.string() +
+                      " --db " + dbPath.string() +
+                      " --format jsonl --skip-bad-entries";
+    EXPECT_NO_THROW(app.parse(cmd, true));
+}
+
 // ---------- JSONL rel file open failure ----------
 
 TEST_F(ImportCommandTest, JsonlRelFileNotFound) {
