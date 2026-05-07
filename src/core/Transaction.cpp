@@ -27,7 +27,7 @@ namespace graph {
 		txnId_(txnId), manager_(&mgr), storage_(std::move(storage)) {}
 
 	Transaction::~Transaction() {
-		if (state_ == TxnState::TXN_ACTIVE && manager_) {
+		if (state_ == TxnState::TXN_ACTIVE) {
 			try {
 				manager_->rollbackTransaction(*this);
 			} catch (...) {
@@ -52,7 +52,7 @@ namespace graph {
 	Transaction &Transaction::operator=(Transaction &&other) noexcept {
 		if (this != &other) {
 			// If this transaction is still active, roll it back
-			if (state_ == TxnState::TXN_ACTIVE && manager_) {
+			if (state_ == TxnState::TXN_ACTIVE) {
 				try {
 					manager_->rollbackTransaction(*this);
 				} catch (...) {

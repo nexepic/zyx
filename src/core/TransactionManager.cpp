@@ -184,10 +184,8 @@ namespace graph {
 		txn.state_ = Transaction::TxnState::TXN_COMMITTED;
 		activeWriteTxn_ = false;
 
-		// Release exclusive lock via RAII
-		if (txn.writeLock_.owns_lock()) {
-			txn.writeLock_.unlock();
-		}
+		// Release exclusive lock
+		txn.writeLock_.unlock();
 	}
 
 	void TransactionManager::rollbackTransaction(Transaction &txn) {
@@ -198,10 +196,8 @@ namespace graph {
 		// Read-only transactions: release snapshot and shared lock
 		if (txn.isReadOnly()) {
 			auto dm = storage_->getDataManager();
-			if (dm) {
-				dm->clearCurrentSnapshot();
-				dm->setReadOnlyMode(false);
-			}
+			dm->clearCurrentSnapshot();
+			dm->setReadOnlyMode(false);
 			txn.snapshot_.reset();
 			txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;
 			txn.readLock_ = {};
@@ -209,16 +205,14 @@ namespace graph {
 		}
 
 		// Check if storage is still open (may have been closed before auto-rollback)
-		if (storage_ && storage_->isOpen()) {
+		if (storage_->isOpen()) {
 			auto dm = storage_->getDataManager();
-			if (dm) {
-				// Rollback: undo all changes from this transaction
-				dm->rollbackActiveTransaction();
+			// Rollback: undo all changes from this transaction
+			dm->rollbackActiveTransaction();
 
-				// Clear DataManager transaction context
-				dm->clearActiveTransaction();
-				dm->getPersistenceManager()->setTransactionActive(false);
-			}
+			// Clear DataManager transaction context
+			dm->clearActiveTransaction();
+			dm->getPersistenceManager()->setTransactionActive(false);
 
 			// Write WAL rollback record
 			if (walManager_ && walManager_->isOpen()) {
@@ -230,10 +224,8 @@ namespace graph {
 		txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;
 		activeWriteTxn_ = false;
 
-		// Release exclusive lock via RAII
-		if (txn.writeLock_.owns_lock()) {
-			txn.writeLock_.unlock();
-		}
+		// Release exclusive lock
+		txn.writeLock_.unlock();
 	}
 
 	bool TransactionManager::hasActiveTransaction() const { return activeWriteTxn_.load(std::memory_order_acquire); }
