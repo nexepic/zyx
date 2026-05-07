@@ -39,24 +39,41 @@ public:
 
 class CypherSyntaxTest : public ::testing::Test {
 protected:
-	static bool validate(const std::string &query) {
-		antlr4::ANTLRInputStream input(query);
-		CypherLexer lexer(&input);
-		lexer.removeErrorListeners();
-		TestErrorListener lexerErrorListener;
-		lexer.addErrorListener(&lexerErrorListener);
+	// ANTLR4 objects are kept alive across validate() calls to avoid DFA cache
+	// corruption.  The static DFA cache retains pointers into the ATN simulator
+	// owned by each Lexer/Parser; destroying them leaves dangling pointers.
+	inline static std::unique_ptr<antlr4::ANTLRInputStream> input_;
+	inline static std::unique_ptr<CypherLexer> lexer_;
+	inline static std::unique_ptr<antlr4::CommonTokenStream> tokens_;
+	inline static std::unique_ptr<CypherParser> parser_;
 
-		antlr4::CommonTokenStream tokens(&lexer);
-		CypherParser parser(&tokens);
-		parser.removeErrorListeners();
-		TestErrorListener parserErrorListener;
-		parser.addErrorListener(&parserErrorListener);
-
-		parser.cypher();
-
-		if (lexerErrorListener.hasErrors() || parserErrorListener.hasErrors()) {
-			return false;
+	static void ensureParser() {
+		if (!parser_) {
+			input_ = std::make_unique<antlr4::ANTLRInputStream>("");
+			lexer_ = std::make_unique<CypherLexer>(input_.get());
+			tokens_ = std::make_unique<antlr4::CommonTokenStream>(lexer_.get());
+			parser_ = std::make_unique<CypherParser>(tokens_.get());
 		}
-		return true;
+	}
+
+	static bool validate(const std::string &query) {
+		ensureParser();
+
+		input_->load(query);
+		lexer_->setInputStream(input_.get());
+		tokens_->setTokenSource(lexer_.get());
+		parser_->setTokenStream(tokens_.get());
+		parser_->reset();
+
+		lexer_->removeErrorListeners();
+		parser_->removeErrorListeners();
+		TestErrorListener lexerErrorListener;
+		TestErrorListener parserErrorListener;
+		lexer_->addErrorListener(&lexerErrorListener);
+		parser_->addErrorListener(&parserErrorListener);
+
+		parser_->cypher();
+
+		return !lexerErrorListener.hasErrors() && !parserErrorListener.hasErrors();
 	}
 };

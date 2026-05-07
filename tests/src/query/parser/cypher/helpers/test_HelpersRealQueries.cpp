@@ -19,18 +19,34 @@ using graph::PropertyValue;
 
 class HelpersRealQueriesTest : public ::testing::Test {
 protected:
-	// Test helper to verify basic parsing works
+	// ANTLR4 objects kept alive across calls to avoid static DFA cache corruption.
+	std::unique_ptr<antlr4::ANTLRInputStream> input_;
+	std::unique_ptr<CypherLexer> lexer_;
+	std::unique_ptr<antlr4::CommonTokenStream> tokens_;
+	std::unique_ptr<CypherParser> parser_;
+
+	void ensureParser() {
+		if (!parser_) {
+			input_ = std::make_unique<antlr4::ANTLRInputStream>("");
+			lexer_ = std::make_unique<CypherLexer>(input_.get());
+			tokens_ = std::make_unique<antlr4::CommonTokenStream>(lexer_.get());
+			parser_ = std::make_unique<CypherParser>(tokens_.get());
+		}
+	}
+
 	bool parseSuccessfully(const std::string& query) {
-		antlr4::ANTLRInputStream input(query);
-		CypherLexer lexer(&input);
-		antlr4::CommonTokenStream tokens(&lexer);
-		CypherParser parser(&tokens);
+		ensureParser();
 
-		// Remove error listeners
-		lexer.removeErrorListeners();
-		parser.removeErrorListeners();
+		input_->load(query);
+		lexer_->setInputStream(input_.get());
+		tokens_->setTokenSource(lexer_.get());
+		parser_->setTokenStream(tokens_.get());
+		parser_->reset();
 
-		auto ctx = parser.cypher();
+		lexer_->removeErrorListeners();
+		parser_->removeErrorListeners();
+
+		auto ctx = parser_->cypher();
 		return ctx != nullptr;
 	}
 };

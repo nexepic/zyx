@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
 import { GdsPanel } from "./gds-panel";
@@ -78,6 +78,8 @@ interface QueryResult {
 type Status = "loading" | "ready" | "error";
 type ViewMode = "graph" | "table";
 
+const MAX_UPLOAD_SIZE = 50 * 1024 * 1024; // 50 MB
+
 export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?: string }) {
   const [datasetIdx, setDatasetIdx] = useState(0);
   const [query, setQuery] = useState(DATASETS[0].initialQuery);
@@ -90,6 +92,11 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
   const [liveSchema, setLiveSchema] = useState<DatasetSchema>({ nodes: [], edges: [] });
   const [dbStats, setDbStats] = useState<{ nodes: number; edges: number; labels: number; types: number } | null>(null);
 
+  // User upload state
+  const [userDbName, setUserDbName] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const moduleRef = useRef<any>(null);
   const dbRef = useRef<number>(0);
   const txnRef = useRef<number>(0);
@@ -97,85 +104,113 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
   const dataset = DATASETS[datasetIdx];
 
+  const userExampleQueries = useMemo(() => [
+    { label: isEn ? "Sample graph" : "示例图", query: "MATCH (a)-[r]->(b) RETURN a, r, b LIMIT 100" },
+    { label: isEn ? "Node count" : "节点统计", query: "MATCH (n) RETURN count(n) AS nodes" },
+    { label: isEn ? "Edge count" : "关系统计", query: "MATCH ()-[r]->() RETURN count(r) AS edges" },
+    { label: isEn ? "Labels" : "节点标签", query: "MATCH (n) RETURN DISTINCT labels(n) AS labels" },
+    { label: isEn ? "Edge types" : "关系类型", query: "MATCH ()-[r]->() RETURN DISTINCT type(r) AS type" },
+    { label: isEn ? "Sample nodes" : "节点示例", query: "MATCH (n) RETURN n LIMIT 25" },
+  ], [isEn]);
+
+  const exampleQueries = dataset ? dataset.exampleQueries : userExampleQueries;
+
+  const ensureModule = useCallback(async (): Promise<any> => {
+    let mod = moduleRef.current;
+    if (!mod) {
+      setStatusMsg(isEn ? "Loading engine..." : "加载引擎...");
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = `${WASM_BASE_PATH}/wasm/zyx.js`;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load ${WASM_BASE_PATH}/wasm/zyx.js`));
+        document.head.appendChild(script);
+      });
+
+      const createModule = (window as any).createZyxModule;
+      if (!createModule) throw new Error("WASM module factory not found");
+      mod = await createModule({
+        locateFile: (file: string) => `${WASM_BASE_PATH}/wasm/${file}`,
+      });
+      moduleRef.current = mod;
+    }
+    return mod;
+  }, [isEn]);
+
+  const closeCurrentDb = useCallback((mod: any) => {
+    if (dbRef.current) {
+      if (txnRef.current) {
+        mod.ccall("zyx_txn_close", null, ["number"], [txnRef.current]);
+        txnRef.current = 0;
+      }
+      mod.ccall("zyx_close", null, ["number"], [dbRef.current]);
+      dbRef.current = 0;
+    }
+  }, []);
+
+  // runQuery is referenced by openDbFromBytes; use a ref to avoid declaration-order issues
+  const runQueryRef = useRef<((mod: any, db: number, cypher: string) => void) | null>(null);
+
+  const openDbFromBytes = useCallback(async (mod: any, data: Uint8Array, dbPath: string, autoQuery: string) => {
+    try { mod.FS.unlink(dbPath); } catch {}
+    mod.FS.writeFile(dbPath, data);
+
+    const db = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
+    if (!db) throw new Error(mod.ccall("zyx_get_last_error", "string", [], []) || "Failed to open database");
+    dbRef.current = db;
+
+    const txn = mod.ccall("zyx_begin_read_only_transaction", "number", ["number"], [db]);
+    if (!txn) throw new Error("Failed to begin read-only transaction");
+    txnRef.current = txn;
+
+    setStatus("ready");
+    setStatusMsg("");
+
+    // Gather db stats
+    const queryInt = (q: string): number => {
+      const p = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, q]);
+      if (!p) return 0;
+      let val = 0;
+      if (mod.ccall("zyx_result_is_success", "boolean", ["number"], [p]) && mod.ccall("zyx_result_next", "boolean", ["number"], [p])) {
+        val = mod.ccall("zyx_result_get_int", "number", ["number", "number"], [p, 0]);
+      }
+      mod.ccall("zyx_result_close", null, ["number"], [p]);
+      return val;
+    };
+    const nNodes = queryInt("MATCH (n) RETURN count(n)");
+    const nEdges = queryInt("MATCH ()-[r]->() RETURN count(r)");
+    const nLabels = queryInt("MATCH (n) RETURN count(DISTINCT labels(n))");
+    const nTypes = queryInt("MATCH ()-[r]->() RETURN count(DISTINCT type(r))");
+    setDbStats({ nodes: nNodes, edges: nEdges, labels: nLabels, types: nTypes });
+
+    setQuery(autoQuery);
+    runQueryRef.current?.(mod, db, autoQuery);
+  }, []);
+
   const loadDatabase = useCallback(async (dsIdx: number) => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setStatus("loading");
     setError(null);
     setDuration(null);
+    setResult(null);
 
     const ds = DATASETS[dsIdx];
 
     try {
-      let mod = moduleRef.current;
-      if (!mod) {
-        setStatusMsg(isEn ? "Loading engine..." : "加载引擎...");
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement("script");
-          script.src = `${WASM_BASE_PATH}/wasm/zyx.js`;
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error(`Failed to load ${WASM_BASE_PATH}/wasm/zyx.js`));
-          document.head.appendChild(script);
-        });
-
-        const createModule = (window as any).createZyxModule;
-        if (!createModule) throw new Error("WASM module factory not found");
-        mod = await createModule({
-          locateFile: (file: string) => `${WASM_BASE_PATH}/wasm/${file}`,
-        });
-        moduleRef.current = mod;
-      }
-
-      if (dbRef.current) {
-        if (txnRef.current) {
-          mod.ccall("zyx_txn_close", null, ["number"], [txnRef.current]);
-          txnRef.current = 0;
-        }
-        mod.ccall("zyx_close", null, ["number"], [dbRef.current]);
-        dbRef.current = 0;
-      }
+      const mod = await ensureModule();
+      closeCurrentDb(mod);
 
       setStatusMsg(isEn ? `Loading ${ds.label}...` : `加载 ${ds.label}...`);
-      const dbPath = `/playground_${dsIdx}.zyx`;
-
-      try { mod.FS.unlink(dbPath); } catch {}
 
       const dbResp = await fetch(`${WASM_BASE_PATH}${ds.dbFile}`);
       if (!dbResp.ok) throw new Error(`Failed to fetch ${ds.dbFile}: ${dbResp.status}`);
 
       const dbData = new Uint8Array(await dbResp.arrayBuffer());
-      mod.FS.writeFile(dbPath, dbData);
+      await openDbFromBytes(mod, dbData, `/playground_${dsIdx}.zyx`, ds.initialQuery);
 
-      const db = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
-      if (!db) throw new Error("Failed to open database");
-      dbRef.current = db;
-
-      const txn = mod.ccall("zyx_begin_read_only_transaction", "number", ["number"], [db]);
-      if (!txn) throw new Error("Failed to begin read-only transaction");
-      txnRef.current = txn;
-
-      setStatus("ready");
-      setStatusMsg("");
+      setUserDbName(null);
       loadingRef.current = false;
-
-      // Gather db stats
-      const queryInt = (q: string): number => {
-        const p = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, q]);
-        if (!p) return 0;
-        let val = 0;
-        if (mod.ccall("zyx_result_is_success", "boolean", ["number"], [p]) && mod.ccall("zyx_result_next", "boolean", ["number"], [p])) {
-          val = mod.ccall("zyx_result_get_int", "number", ["number", "number"], [p, 0]);
-        }
-        mod.ccall("zyx_result_close", null, ["number"], [p]);
-        return val;
-      };
-      const nNodes = queryInt("MATCH (n) RETURN count(n)");
-      const nEdges = queryInt("MATCH ()-[r]->() RETURN count(r)");
-      const nLabels = queryInt("MATCH (n) RETURN count(DISTINCT labels(n))");
-      const nTypes = queryInt("MATCH ()-[r]->() RETURN count(DISTINCT type(r))");
-      setDbStats({ nodes: nNodes, edges: nEdges, labels: nLabels, types: nTypes });
-
-      runQuery(mod, db, ds.initialQuery);
     } catch (e: any) {
       setStatus("error");
       setResult(null);
@@ -183,11 +218,61 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
       setStatusMsg("");
       loadingRef.current = false;
     }
-  }, [isEn]);
+  }, [isEn, ensureModule, closeCurrentDb, openDbFromBytes]);
+
+  const loadUserFile = useCallback(async (file: File) => {
+    if (file.size > MAX_UPLOAD_SIZE) {
+      setError(isEn
+        ? `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 50 MB.`
+        : `文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），最大支持 50 MB。`);
+      return;
+    }
+
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setStatus("loading");
+    setError(null);
+    setDuration(null);
+    setResult(null);
+
+    try {
+      const mod = await ensureModule();
+      closeCurrentDb(mod);
+
+      setStatusMsg(isEn ? `Loading ${file.name}...` : `加载 ${file.name}...`);
+      const data = new Uint8Array(await file.arrayBuffer());
+      await openDbFromBytes(mod, data, "/user_upload.zyx", "MATCH (a)-[r]->(b) RETURN a, r, b LIMIT 200");
+
+      setUserDbName(file.name);
+      setDatasetIdx(-1);
+      loadingRef.current = false;
+    } catch (e: any) {
+      setStatus("error");
+      setResult(null);
+      setError(e.message || "Failed to load user database");
+      setStatusMsg("");
+      setUserDbName(null);
+      loadingRef.current = false;
+    }
+  }, [isEn, ensureModule, closeCurrentDb, openDbFromBytes]);
+
+  const handleFileDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) loadUserFile(file);
+  }, [loadUserFile]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadUserFile(file);
+    e.target.value = "";
+  }, [loadUserFile]);
 
   useEffect(() => {
     loadDatabase(0);
-  }, [loadDatabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runQuery = useCallback((mod: any, db: number, cypher: string) => {
     const txn = txnRef.current;
@@ -321,6 +406,9 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     setViewMode(hasGraph ? "graph" : "table");
   }, []);
 
+  // Keep ref in sync for openDbFromBytes
+  runQueryRef.current = runQuery;
+
   const handleRun = useCallback(() => {
     if (status !== "ready") return;
     const mod = moduleRef.current;
@@ -341,6 +429,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     if (idx === datasetIdx || status === "loading") return;
     setDatasetIdx(idx);
     setQuery(DATASETS[idx].initialQuery);
+    setUserDbName(null);
     loadDatabase(idx);
   }, [datasetIdx, status, loadDatabase]);
 
@@ -538,7 +627,55 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
   const hasGraphData = result ? result.graphNodes.length > 0 && result.graphEdges.length > 0 : false;
 
   return (
-    <div className="flex h-full w-full min-h-0 flex-col bg-transparent text-[#e7edf5]">
+    <div
+      className="relative flex h-full w-full min-h-0 flex-col bg-transparent text-[#e7edf5]"
+      onDragEnter={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer.types.includes("Files")) setIsDragOver(true);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(e) => {
+        // Only hide when leaving the outer container (not children)
+        if (e.currentTarget === e.target) setIsDragOver(false);
+      }}
+      onDrop={handleFileDrop}
+    >
+      {/* Drag-and-drop overlay */}
+      {isDragOver && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[#0b0f14]/90 backdrop-blur-sm transition-opacity duration-200">
+          <div className="relative flex w-[440px] flex-col items-center justify-center gap-6 rounded-xl border-2 border-dashed border-[rgba(122,144,170,0.25)] bg-[rgba(18,24,32,0.6)] px-10 py-12 shadow-2xl backdrop-blur-md">
+            
+            {/* Elegant static icon */}
+            <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(122,144,170,0.08)] border border-[rgba(122,144,170,0.15)]">
+              <svg className="h-6 w-6 text-[#9db0c4]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+
+            {/* Refined typography */}
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <h3 className="m-0 text-[1.1rem] font-medium tracking-wide text-[#e7edf5]">
+                {isEn ? "Drop database file" : "拖放数据库文件"}
+              </h3>
+              <p className="mt-2 text-[0.85rem] text-[#8a9bb0]">
+                {isEn ? "Release to load your .zyx database" : "释放以加载 .zyx 数据库"}
+              </p>
+              
+              <div className="mt-6 flex items-center justify-center gap-4 text-[0.7rem] font-medium text-[#6b7f94] uppercase tracking-wider font-['Space_Mono','Ubuntu_Mono',monospace]">
+                <span>{isEn ? "Local Parse" : "本地解析"}</span>
+                <span className="h-1 w-1 rounded-full bg-[rgba(122,144,170,0.3)]"></span>
+                <span>{isEn ? "Max 50MB" : "最大 50MB"}</span>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      )}
       {/* Top bar - Minimalist borders */}
       <header className="shrink-0 flex items-center border-b border-[rgba(122,144,170,0.15)] px-6 py-3 bg-[rgba(11,15,20,0.4)] backdrop-blur-sm">
         {/* Left: logo + dataset switcher — never shrink */}
@@ -559,13 +696,13 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
             </span>
           </div>
 
-          <div className="flex items-center gap-1 rounded-md border border-[rgba(122,144,170,0.15)] bg-[rgba(11,15,20,0.5)] p-[3px]">
+          <div className="flex items-center gap-1 rounded-md border border-[rgba(122,144,170,0.15)] bg-[rgba(11,15,20,0.5)] p-[2px]">
             {DATASETS.map((ds, i) => (
               <button
                 key={ds.label}
                 onClick={() => handleDatasetSwitch(i)}
                 disabled={status === "loading"}
-                className={`rounded px-3 py-1.5 text-[0.75rem] transition-colors ${
+                className={`rounded px-3 py-1 text-[0.75rem] transition-colors ${
                   i === datasetIdx
                     ? "bg-[rgba(122,144,170,0.2)] text-[#e7edf5] font-medium shadow-sm"
                     : "text-[#8a9bb0] hover:text-[#e7edf5] hover:bg-[rgba(122,144,170,0.08)]"
@@ -574,6 +711,42 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
                 {ds.label}
               </button>
             ))}
+          </div>
+
+          {/* Upload button */}
+          <div className="relative">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".zyx"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={status === "loading"}
+              className={`group flex items-center gap-2 rounded-md border px-3 py-1.5 text-[0.75rem] transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+                userDbName
+                  ? "border-[rgba(107,138,118,0.4)] bg-[rgba(107,138,118,0.1)] text-[#8aad96] hover:bg-[rgba(107,138,118,0.18)]"
+                  : "border-[rgba(122,144,170,0.2)] bg-[rgba(11,15,20,0.5)] text-[#8a9bb0] hover:border-[rgba(148,168,190,0.4)] hover:bg-[rgba(122,144,170,0.08)] hover:text-[#e7edf5]"
+              }`}
+              title={isEn ? "Upload your .zyx database file (max 50 MB)" : "上传你的 .zyx 数据库文件（最大 50 MB）"}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:-translate-y-[1px]">
+                <path d="M8 11V2M5 5l3-3 3 3" />
+                <path d="M2 11v2.5A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5V11" />
+              </svg>
+              <span className="hidden sm:inline whitespace-nowrap">
+                {userDbName ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block h-[5px] w-[5px] rounded-full bg-[#6b8a76] shadow-[0_0_4px_rgba(107,138,118,0.6)]" />
+                    <span className="max-w-[140px] truncate font-['Space_Mono','Ubuntu_Mono',monospace]">{userDbName}</span>
+                  </span>
+                ) : (
+                  isEn ? "Upload" : "上传"
+                )}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -885,7 +1058,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 [scrollbar-width:thin] [scrollbar-color:rgba(122,144,170,0.2)_transparent]">
               <div className="space-y-1">
-                {dataset.exampleQueries.map((eq) => (
+                {exampleQueries.map((eq) => (
                   <button
                     key={eq.label}
                     onClick={() => {

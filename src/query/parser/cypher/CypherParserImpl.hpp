@@ -25,6 +25,15 @@
 #include "../../../../include/graph/query/planner/QueryPlanner.hpp"
 #include "query/parser/common/IQueryParser.hpp"
 
+// Forward declarations to avoid including ANTLR headers here
+namespace antlr4 {
+	class ANTLRInputStream;
+	class CommonTokenStream;
+	class BaseErrorListener;
+} // namespace antlr4
+class CypherLexer;
+class CypherParser;
+
 namespace graph::parser::cypher {
 
 	/**
@@ -37,6 +46,10 @@ namespace graph::parser::cypher {
 	 * 2. Invokes the parser rules.
 	 * 3. Uses CypherToPlanVisitor (which uses QueryPlanner) to traverse the AST
 	 *    and build the Physical Operator Tree.
+	 *
+	 * The ANTLR4 lexer and parser are kept alive across calls to avoid
+	 * DFA cache corruption that occurs when the ATN simulator is destroyed
+	 * while the static DFA cache still references its states.
 	 */
 	class CypherParserImpl : public IQueryParser {
 	public:
@@ -47,7 +60,7 @@ namespace graph::parser::cypher {
 		 */
 		explicit CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner);
 
-		~CypherParserImpl() override = default;
+		~CypherParserImpl() override;
 
 		/**
 		 * @brief Parses a raw Cypher query string into an executable pipeline.
@@ -64,6 +77,19 @@ namespace graph::parser::cypher {
 
 	private:
 		std::shared_ptr<query::QueryPlanner> planner_;
+
+		// Persistent ANTLR4 objects — kept alive to preserve DFA cache integrity.
+		// ANTLR4's static DFA cache retains pointers into the ATN simulator owned
+		// by each Lexer/Parser instance.  Destroying and recreating these objects
+		// leaves dangling pointers in the cache, causing SIGSEGV/SIGBUS on the
+		// next parse.  Keeping them alive for the lifetime of CypherParserImpl
+		// avoids this.
+		// Mutable because parsing mutates internal ANTLR state but is logically const.
+		mutable std::unique_ptr<antlr4::ANTLRInputStream> input_;
+		mutable std::unique_ptr<CypherLexer> lexer_;
+		mutable std::unique_ptr<antlr4::CommonTokenStream> tokens_;
+		mutable std::unique_ptr<CypherParser> parser_;
+		std::unique_ptr<antlr4::BaseErrorListener> errorListener_;
 	};
 
 } // namespace graph::parser::cypher
