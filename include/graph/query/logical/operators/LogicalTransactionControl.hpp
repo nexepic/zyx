@@ -50,12 +50,9 @@ public:
 	}
 
 	[[nodiscard]] std::string toString() const override {
-		switch (command_) {
-			case LogicalTxnCommand::LTXN_BEGIN:    return "TransactionControl(BEGIN)";
-			case LogicalTxnCommand::LTXN_COMMIT:   return "TransactionControl(COMMIT)";
-			case LogicalTxnCommand::LTXN_ROLLBACK: return "TransactionControl(ROLLBACK)";
-			default:                               return "TransactionControl(UNKNOWN)";
-		}
+		if (command_ == LogicalTxnCommand::LTXN_BEGIN) return "TransactionControl(BEGIN)";
+		if (command_ == LogicalTxnCommand::LTXN_COMMIT) return "TransactionControl(COMMIT)";
+		return "TransactionControl(ROLLBACK)";
 	}
 
 	void setChild(size_t, std::unique_ptr<LogicalOperator>) override {

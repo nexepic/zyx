@@ -91,9 +91,9 @@ namespace graph::query::indexes {
 		bool dropIndexByDefinition(const std::string &label, const std::string &property) const;
 
 		/**
-		 * @brief Returns list of {Name, EntityType, Label, Property}
+		 * @brief Returns list of {Name, EntityType, IndexType, Label, Property}
 		 */
-		std::vector<std::tuple<std::string, std::string, std::string, std::string>> listIndexesDetailed() const;
+		std::vector<std::tuple<std::string, std::string, std::string, std::string, std::string>> listIndexesDetailed() const;
 
 		/**
 		 * @brief Creates a vector index and persists metadata.
