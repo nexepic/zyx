@@ -19,12 +19,14 @@
  **/
 
 #include "graph/query/execution/QueryExecutor.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include "debug/PlanVisualizer.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/query/QueryContext.hpp"
+#include "graph/query/QueryPlan.hpp"
 #include "graph/query/api/QueryResult.hpp"
 
 namespace graph::query {
@@ -48,8 +50,13 @@ namespace graph::query {
 																   openStart)
 														  .count()));
 
-		// Ensure columns are set explicitly from the plan
+		// Derive user-visible output columns from the physical plan root,
+		// filtering internal anonymous variables (__anon_*) that are
+		// pipeline implementation details for unnamed pattern elements.
 		auto outputVars = plan->getOutputVariables();
+		outputVars.erase(
+			std::remove_if(outputVars.begin(), outputVars.end(), isAnonymousVariable),
+			outputVars.end());
 		result.setColumns(outputVars);
 
 		// 2. Pipeline Execution Loop
