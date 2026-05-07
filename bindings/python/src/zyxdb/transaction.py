@@ -24,14 +24,20 @@ class Transaction:
 
     def execute(self, cypher: str, **params: Any) -> Result:
         """Execute a Cypher query within this transaction."""
+        if not self._tx.is_active:
+            raise RuntimeError("Cannot execute: transaction is not active")
         return Result(self._tx.execute(cypher, **params))
 
     def commit(self) -> None:
         """Commit the transaction."""
+        if not self._tx.is_active:
+            raise RuntimeError("Cannot commit: transaction is not active")
         self._tx.commit()
 
     def rollback(self) -> None:
         """Roll back the transaction."""
+        if not self._tx.is_active:
+            raise RuntimeError("Cannot rollback: transaction is not active")
         self._tx.rollback()
 
     @property

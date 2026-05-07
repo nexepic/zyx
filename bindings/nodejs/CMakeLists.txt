@@ -7,7 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
 find_package(ZLIB REQUIRED)
-find_package(Boost REQUIRED)
+
+# Find Boost via pkg-config (Conan generates .pc files)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(BOOST REQUIRED boost)
 
 # ANTLR4 runtime
 find_library(ANTLR4_LIBRARY NAMES antlr4-runtime REQUIRED)
@@ -65,7 +68,7 @@ include_directories(
     ${ZYX_ROOT}/lib/inputxx/include
     ${CMAKE_CURRENT_BINARY_DIR}
     ${ANTLR4_INCLUDE_DIR}
-    ${Boost_INCLUDE_DIRS}
+    ${BOOST_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/node_modules/node-addon-api
 )
 

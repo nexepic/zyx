@@ -42,6 +42,10 @@ class Record:
         items = ", ".join(f"{k}={self._data[k]!r}" for k in self._columns)
         return f"Record({items})"
 
+    def __contains__(self, key: str) -> bool:
+        """Check if a column name exists in this record."""
+        return key in self._data
+
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Record):
             return self._data == other._data
