@@ -1,11 +1,17 @@
 {
   "name": "@nexepic/zyxdb-linux-x64-gnu",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ZYX graph database native addon for Linux x64",
-  "os": ["linux"],
-  "cpu": ["x64"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
   "main": "zyxdb.node",
-  "files": ["zyxdb.node"],
+  "files": [
+    "zyxdb.node"
+  ],
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
