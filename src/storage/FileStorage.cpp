@@ -214,16 +214,12 @@ namespace graph::storage {
 			(void) fileTruncator->truncateFile(writeFd_);
 
 			// Close the native pwrite handle
-			if (writeFd_ != INVALID_FILE_HANDLE) {
-				portable_close_rw(writeFd_);
-				writeFd_ = INVALID_FILE_HANDLE;
-			}
+			portable_close_rw(writeFd_);
+			writeFd_ = INVALID_FILE_HANDLE;
 
 			// Close the native pread handle
-			if (readFd_ != INVALID_FILE_HANDLE) {
-				portable_close(readFd_);
-				readFd_ = INVALID_FILE_HANDLE;
-			}
+			portable_close(readFd_);
+			readFd_ = INVALID_FILE_HANDLE;
 
 			// Release StorageWriter before its dependencies
 			storageWriter_.reset();
@@ -235,11 +231,9 @@ namespace graph::storage {
 			storageIO_.reset();
 
 			// Close the fstream
-			if (fileStream) {
-				fileStream->flush();
-				fileStream->close();
-				fileStream.reset();
-			}
+			fileStream->flush();
+			fileStream->close();
+			fileStream.reset();
 
 			dataManager.reset();
 			isFileOpen = false;
@@ -258,9 +252,6 @@ namespace graph::storage {
 
 		// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
 		auto snapshot = dataManager->prepareFlushSnapshot();
-
-		if (snapshot.isEmpty())
-			return;
 
 		// 2. I/O PHASE: Classify + write all entity types via StorageWriter
 		auto ioStart = Clock::now();

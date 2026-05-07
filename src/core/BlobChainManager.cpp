@@ -82,10 +82,8 @@ namespace graph {
 		for (size_t i = 0; i < blobIds.size() - 1; i++) {
 			// Update DataManager
 			Blob blob = dataManager_->getBlob(blobIds[i]);
-			if (blob.getId() != 0 && blob.isActive()) {
-				blob.setNextBlobId(blobIds[i + 1]);
-				dataManager_->updateBlobEntity(blob);
-			}
+			blob.setNextBlobId(blobIds[i + 1]);
+			dataManager_->updateBlobEntity(blob);
 
 			// Keep returned vector in sync with DataManager
 			// This is critical because blobChain contains copies, not references
@@ -139,7 +137,7 @@ namespace graph {
 	std::string BlobChainManager::readBlobChain(int64_t headBlobId) const {
 		// Get the head blob
 		Blob headBlob = dataManager_->getBlob(headBlobId);
-		if (headBlob.getId() == 0 || !headBlob.isActive()) {
+		if (headBlob.getId() == 0) {
 			throw std::runtime_error("Head blob not found: " + std::to_string(headBlobId));
 		}
 
@@ -162,7 +160,7 @@ namespace graph {
 		while (currentBlobId != 0) {
 			Blob currentBlob = dataManager_->getBlob(currentBlobId);
 
-			if (currentBlob.getId() == 0 || !currentBlob.isActive()) {
+			if (currentBlob.getId() == 0) {
 				throw std::runtime_error("Blob chain corrupted: missing blob at position " +
 										 std::to_string(expectedPosition));
 			}
@@ -191,8 +189,8 @@ namespace graph {
 
 	void BlobChainManager::deleteBlobChain(int64_t headBlobId) const {
 		const Blob headBlob = dataManager_->getBlob(headBlobId);
-		if (headBlob.getId() == 0 || !headBlob.isActive()) {
-			throw std::runtime_error("Head blob not found or is inactive for deletion: " + std::to_string(headBlobId));
+		if (headBlob.getId() == 0) {
+			throw std::runtime_error("Head blob not found for deletion: " + std::to_string(headBlobId));
 		}
 
 		// Delete each blob in the chain
@@ -228,7 +226,7 @@ namespace graph {
 		while (currentBlobId != 0) {
 			Blob currentBlob = dataManager_->getBlob(currentBlobId);
 
-			if (currentBlob.getId() == 0 || !currentBlob.isActive()) {
+			if (currentBlob.getId() == 0) {
 				break;
 			}
 
