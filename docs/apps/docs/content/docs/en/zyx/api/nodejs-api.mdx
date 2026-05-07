@@ -1,0 +1,311 @@
+---
+title: Node.js API Reference
+description: Complete reference for the ZYX Node.js API — Database, Transaction, Result, Record, and high-performance write methods.
+category: Node.js API
+categoryOrder: 5
+order: 10
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Node.js API Reference
+
+Package: `zyxdb` (native addon via N-API)
+
+## Installation
+
+```bash
+npm install zyxdb
+```
+
+Platform-specific prebuilt binaries are automatically installed via optional dependencies (`@nexepic/zyxdb-linux-x64-gnu`, `@nexepic/zyxdb-darwin-arm64`, `@nexepic/zyxdb-win32-x64-msvc`).
+
+## Database
+
+`Database` is the main entry point. All I/O methods are async.
+
+### Construction & Lifecycle
+
+```javascript
+const { Database } = require('zyxdb');
+
+// Create and open
+const db = new Database('/path/to/db');
+await db.open();
+
+// Use the database...
+
+// Close when done
+await db.close();
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| Constructor | `new Database(path: string)` | Create a database instance. |
+| `open` | `open(): Promise<void>` | Open the database (creates file if not exists). |
+| `close` | `close(): Promise<void>` | Flush and close the database. |
+| `save` | `save(): Promise<void>` | Flush dirty data to disk without closing. |
+
+### Query Execution
+
+```javascript
+// Auto-commit query
+const result = await db.execute('CREATE (n:Person {name: "Alice", age: 30})');
+
+// Parameterized query
+const result = await db.execute(
+  'MATCH (n:Person) WHERE n.name = $name RETURN n.age AS age',
+  { name: 'Alice' }
+);
+
+// Iterate results
+for (const row of result) {
+  console.log(row.age);       // Access by column name (via Proxy)
+  console.log(row.get(0));    // Access by column index
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `execute` | `execute(cypher: string, params?: object): Promise<Result>` | Execute a Cypher query with optional parameters. |
+
+### Transactions
+
+```javascript
+// Write transaction
+const tx = await db.beginTransaction();
+try {
+  await tx.execute('CREATE (n:Person {name: "Alice"})');
+  await tx.execute('CREATE (n:Person {name: "Bob"})');
+  await tx.commit();
+} catch (e) {
+  await tx.rollback();
+  throw e;
+}
+
+// Read-only transaction (snapshot isolation)
+const tx = await db.beginReadOnlyTransaction();
+const result = await tx.execute('MATCH (n:Person) RETURN n.name AS name');
+await tx.commit();
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `beginTransaction` | `beginTransaction(): Promise<Transaction>` | Begin a read-write transaction. |
+| `beginReadOnlyTransaction` | `beginReadOnlyTransaction(): Promise<Transaction>` | Begin a read-only transaction with snapshot isolation. |
+| `hasActiveTransaction` | `get hasActiveTransaction: boolean` | Whether there is an active transaction. |
+
+### High-Performance Write APIs
+
+These bypass the Cypher parser for maximum throughput. All create methods return IDs.
+
+```javascript
+// Create a node (returns node ID)
+const aliceId = await db.createNode('Person', { name: 'Alice', age: 30 });
+
+// Create a node with multiple labels
+const empId = await db.createNode(['Person', 'Employee'], { name: 'Bob' });
+
+// Batch create nodes (returns array of IDs)
+const ids = await db.createNodes('Person', [
+  { name: 'Alice', age: 30 },
+  { name: 'Bob', age: 25 },
+  { name: 'Charlie', age: 35 },
+]);
+
+// Create an edge (returns edge ID)
+const edgeId = await db.createEdge(aliceId, empId, 'KNOWS', { since: 2020 });
+
+// Batch create edges (returns array of IDs)
+const edgeIds = await db.createEdges('FOLLOWS', [
+  [id1, id2, { weight: 1.0 }],
+  [id2, id3, null],           // No properties
+]);
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `createNode` | `createNode(label: string \| string[], props?: object): Promise<number>` | Create a node and return its internal ID. |
+| `createNodes` | `createNodes(label: string, propsList: object[]): Promise<number[]>` | Batch-create nodes with the same label. |
+| `createEdge` | `createEdge(srcId: number, dstId: number, edgeType: string, props?: object): Promise<number>` | Create an edge by node IDs. |
+| `createEdges` | `createEdges(edgeType: string, edges: Array): Promise<number[]>` | Batch-create edges. Each element is `[srcId, dstId, props?]`. |
+
+### Graph Algorithms
+
+```javascript
+// Shortest path — returns array of node objects
+const path = await db.getShortestPath(startId, endId, 15);
+for (const node of path) {
+  console.log(node.id, node.labels, node.properties);
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `getShortestPath` | `getShortestPath(startId: number, endId: number, maxDepth?: number): Promise<object[]>` | Find shortest path. Returns array of node objects. |
+
+## Transaction
+
+`Transaction` provides ACID transaction semantics. Must be explicitly committed or rolled back.
+
+```javascript
+const tx = await db.beginTransaction();
+try {
+  await tx.execute('CREATE (n:Person {name: "Alice"})');
+  await tx.commit();
+} catch (e) {
+  await tx.rollback();
+  throw e;
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `execute` | `execute(cypher: string, params?: object): Promise<Result>` | Execute a Cypher query within this transaction. |
+| `commit` | `commit(): Promise<void>` | Commit the transaction. |
+| `rollback` | `rollback(): Promise<void>` | Roll back the transaction. |
+| `isActive` | `get isActive: boolean` | Whether the transaction is still active. |
+| `isReadOnly` | `get isReadOnly: boolean` | Whether this is a read-only transaction. |
+
+Calling `execute`, `commit`, or `rollback` on a closed transaction throws an `Error`.
+
+## Result
+
+`Result` wraps query output with iteration and convenience methods.
+
+```javascript
+const result = await db.execute('MATCH (n:Person) RETURN n.name AS name, n.age AS age');
+
+// Iterate as Record objects
+for (const row of result) {
+  console.log(row.name, row.age);
+}
+
+// Convenience methods
+const all = result.fetchAll();
+const one = result.single();        // Throws if not exactly 1 row
+const val = result.scalar();        // First column of first row
+const data = result.data();         // Array of plain objects
+```
+
+| Method / Property | Signature | Description |
+|-------------------|-----------|-------------|
+| `columns` | `get columns: string[]` | Column names from the result set. |
+| `isSuccess` | `get isSuccess: boolean` | Whether the query executed successfully. |
+| `error` | `get error: string \| null` | Error message, or `null` if successful. |
+| `duration` | `get duration: number` | Query execution duration in milliseconds. |
+| `records` | `get records: Record[]` | All rows as Record objects. |
+| `[Symbol.iterator]` | `*[Symbol.iterator](): Iterator<Record>` | Iterate rows as Record objects. |
+| `fetchAll` | `fetchAll(): Record[]` | Fetch all rows as Record objects. |
+| `single` | `single(strict?: boolean): Record` | Return the single result row. Throws if `strict` (default) and row count != 1. |
+| `scalar` | `scalar(): any` | Return the first column of the first row. |
+| `data` | `data(): object[]` | Return all rows as plain objects. |
+
+## Record
+
+`Record` represents a single row. Supports property access via Proxy (e.g., `row.name`) and explicit `get()`.
+
+```javascript
+for (const row of result) {
+  // Direct property access (Proxy)
+  console.log(row.name);
+
+  // By index
+  console.log(row.get(0));
+
+  // Metadata
+  const keys = row.keys();      // ['name', 'age']
+  const vals = row.values();    // ['Alice', 30]
+  const obj = row.data();       // { name: 'Alice', age: 30 }
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get` | `get(key: string \| number): any` | Access by column name or index. |
+| `keys` | `keys(): string[]` | Return column names. |
+| `values` | `values(): any[]` | Return values in column order. |
+| `data` | `data(): object` | Return the row as a plain object. |
+| `length` | `get length: number` | Number of columns. |
+
+## Error Handling
+
+```javascript
+const { Database } = require('zyxdb');
+
+// Query errors are captured in the Result
+const result = await db.execute('INVALID SYNTAX');
+if (!result.isSuccess) {
+  console.error(`Query failed: ${result.error}`);
+}
+
+// Native errors throw standard Error
+try {
+  await db.createEdge(999999, 999998, 'LINK');
+} catch (e) {
+  console.error(`Database error: ${e.message}`);
+}
+```
+
+Query parse/execution errors are captured in `Result.error` rather than thrown as exceptions.
+
+## Complete Example
+
+```javascript
+const { Database } = require('zyxdb');
+
+async function main() {
+  const db = new Database('/tmp/social.zyx');
+  await db.open();
+
+  // Create nodes
+  const alice = await db.createNode('Person', { name: 'Alice', age: 30 });
+  const bob = await db.createNode('Person', { name: 'Bob', age: 25 });
+
+  // Create edge
+  await db.createEdge(alice, bob, 'KNOWS', { since: 2020 });
+
+  // Query
+  const result = await db.execute(
+    'MATCH (a:Person)-[r:KNOWS]->(b:Person) ' +
+    'RETURN a.name AS src, b.name AS dst, r.since AS since'
+  );
+  for (const row of result) {
+    console.log(`${row.src} knows ${row.dst} since ${row.since}`);
+  }
+
+  // Transaction
+  const tx = await db.beginTransaction();
+  try {
+    await tx.execute("CREATE (n:Company {name: 'ZYX'})");
+    await tx.execute(
+      "MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'ZYX'}) " +
+      "CREATE (p)-[:WORKS_AT]->(c)"
+    );
+    await tx.commit();
+  } catch (e) {
+    await tx.rollback();
+    throw e;
+  }
+
+  // Scalar query
+  const count = (await db.execute('MATCH (n) RETURN count(n) AS c')).scalar();
+  console.log(`Total nodes: ${count}`);
+
+  await db.close();
+}
+
+main().catch(console.error);
+```
+
+## Source Locations
+
+| Component | Path |
+|-----------|------|
+| npm package | `bindings/nodejs/` |
+| Native addon (N-API) | `bindings/nodejs/src/addon.cpp` |
+| Database wrapper | `bindings/nodejs/lib/database.js` |
+| Transaction wrapper | `bindings/nodejs/lib/transaction.js` |
+| Result/Record | `bindings/nodejs/lib/result.js` |
+| Platform packages | `bindings/nodejs/npm/` |
