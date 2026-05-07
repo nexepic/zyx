@@ -1,0 +1,13 @@
+{
+  "name": "@nexepic/zyxdb-darwin-arm64",
+  "version": "0.1.1",
+  "description": "ZYX graph database native addon for macOS ARM64",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "main": "zyxdb.node",
+  "files": ["zyxdb.node"],
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  }
+}
