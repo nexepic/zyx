@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generator": "create-nexdoc",
   "templateVersion": "0.6.0",
-  "generatedAt": "2026-05-06T16:14:54.783Z",
+  "generatedAt": "2026-05-07T02:40:10.010Z",
   "files": {
     ".gitignore": "9d1852a8d52110b9ee5180eab4f66e6ae377a149cd3a53602fc27922e6026812",
     "README.md": "f559c51c4111de8a5bb4e92d8426e6e91f774654444b4b9ae09c0ff9ebd72efe",
@@ -48,7 +48,7 @@
     "apps/docs/lib/docs.ts": "2a1b8bd93667c6f942551f48af05d873d56af3396000bbfbce38e9727dfc071f",
     "apps/docs/lib/i18n.ts": "22c4144e4aefd1158090731dca040f069845405bedea25887a00475297fa904e",
     "apps/docs/lib/mdx.ts": "b3bdb2deb238bfcbb177d99f875ec2f2ab7e8745189cf9e65e7b658fa8d723c5",
-    "apps/docs/lib/metadata.ts": "83dfa4627339c12f0046dea219f69bfbf0a80705e3f1b9ab397f47a745f32240",
+    "apps/docs/lib/metadata.ts": "44fb124ad438dc7861c5d55789892f5a66275d52bf30a2d2446b8de20d4b21ce",
     "apps/docs/lib/plugins/mermaid.ts": "2f5de6420851b7ea831aff3cad2bb2072c82b6f438062ea7513619f7d22f1403",
     "apps/docs/lib/search.ts": "b1f27f413f92618acfcc14f7eebac981c23c91d1e365281fda140d6cc95f70fd",
     "apps/docs/lib/site.ts": "6a6b8d91c01d3283129921cda1a5b6996ab426d0d75680ca9d203a55797cf03a",
