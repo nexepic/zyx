@@ -1,0 +1,241 @@
+name: Node.js Bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nodejs-bindings.yml'
+      - 'bindings/nodejs/**'
+      - 'include/**'
+      - 'src/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/nodejs-bindings.yml'
+      - 'bindings/nodejs/**'
+      - 'include/**'
+      - 'src/**'
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: '18'
+          - os: ubuntu-latest
+            node: '20'
+          - os: ubuntu-latest
+            node: '22'
+          - os: macos-latest
+            node: '20'
+          - os: windows-latest
+            node: '20'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install build tools
+        run: pip install conan
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+
+      - name: Install pkg-config (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install pkgconfiglite --allow-empty-checksums
+          echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pkg-config
+
+      - name: Install Conan dependencies (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          conan profile detect
+          mkdir -p buildDir
+          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+
+      - name: Install Conan dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=20.1.4 --force
+        shell: pwsh
+
+      - name: Install npm dependencies
+        working-directory: bindings/nodejs
+        run: npm install --ignore-scripts
+
+      - name: Build native addon (Unix)
+        if: runner.os != 'Windows'
+        working-directory: bindings/nodejs
+        run: npx cmake-js compile --CDPKG_CONFIG_PATH=${{ github.workspace }}/buildDir
+
+      - name: Build native addon (Windows)
+        if: runner.os == 'Windows'
+        working-directory: bindings/nodejs
+        run: |
+          $env:CC = "clang-cl"
+          $env:CXX = "clang-cl"
+          npx cmake-js compile --CDPKG_CONFIG_PATH=${{ github.workspace }}\buildDir
+        shell: pwsh
+
+      - name: Run tests
+        working-directory: bindings/nodejs
+        run: npm test
+
+  build-prebuilt:
+    name: Build prebuilt on ${{ matrix.os }}
+    needs: test
+    if: github.event_name == 'release'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform-pkg: linux-x64-gnu
+          - os: macos-latest
+            platform-pkg: darwin-arm64
+          - os: windows-latest
+            platform-pkg: win32-x64-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install build tools
+        run: pip install conan
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+
+      - name: Install pkg-config (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install pkgconfiglite --allow-empty-checksums
+          echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pkg-config
+
+      - name: Install Conan dependencies (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          conan profile detect
+          mkdir -p buildDir
+          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+
+      - name: Install Conan dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=20.1.4 --force
+        shell: pwsh
+
+      - name: Install npm dependencies
+        working-directory: bindings/nodejs
+        run: npm install --ignore-scripts
+
+      - name: Build native addon (Unix)
+        if: runner.os != 'Windows'
+        working-directory: bindings/nodejs
+        run: npx cmake-js compile --release --CDPKG_CONFIG_PATH=${{ github.workspace }}/buildDir
+
+      - name: Build native addon (Windows)
+        if: runner.os == 'Windows'
+        working-directory: bindings/nodejs
+        run: |
+          $env:CC = "clang-cl"
+          $env:CXX = "clang-cl"
+          npx cmake-js compile --release --CDPKG_CONFIG_PATH=${{ github.workspace }}\buildDir
+        shell: pwsh
+
+      - name: Copy binary to platform package
+        run: cp bindings/nodejs/build/Release/zyxdb.node bindings/nodejs/npm/${{ matrix.platform-pkg }}/zyxdb.node
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilt-${{ matrix.platform-pkg }}
+          path: bindings/nodejs/npm/${{ matrix.platform-pkg }}/zyxdb.node
+
+  publish-npm:
+    name: Publish to npm
+    needs: build-prebuilt
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download all prebuilt artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilt-*
+          path: bindings/nodejs/npm/
+          merge-multiple: false
+
+      - name: Place binaries into platform packages
+        run: |
+          for pkg in linux-x64-gnu darwin-arm64 win32-x64-msvc; do
+            cp "bindings/nodejs/npm/prebuilt-${pkg}/zyxdb.node" "bindings/nodejs/npm/${pkg}/zyxdb.node"
+          done
+
+      - name: Publish platform packages
+        working-directory: bindings/nodejs
+        run: |
+          for pkg in npm/linux-x64-gnu npm/darwin-arm64 npm/win32-x64-msvc; do
+            npm publish "$pkg" --provenance --access public
+          done
+
+      - name: Publish main package
+        working-directory: bindings/nodejs
+        run: npm publish --provenance --access public

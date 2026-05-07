@@ -22,6 +22,10 @@ PACKAGE_JSONS = [
     ROOT / "docs" / "apps" / "docs" / "package.json",
     ROOT / "docs" / "packages" / "core" / "package.json",
     ROOT / "docs" / "packages" / "config" / "package.json",
+    ROOT / "bindings" / "nodejs" / "package.json",
+    ROOT / "bindings" / "nodejs" / "npm" / "linux-x64-gnu" / "package.json",
+    ROOT / "bindings" / "nodejs" / "npm" / "darwin-arm64" / "package.json",
+    ROOT / "bindings" / "nodejs" / "npm" / "win32-x64-msvc" / "package.json",
 ]
 
 VERSION_RE = re.compile(r"^v(\d+\.\d+\.\d+)$")
@@ -60,6 +64,10 @@ def update_meson_build(version: str) -> None:
 def update_package_json(path: Path, version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     data["version"] = version
+    # Sync optionalDependencies versions (for Node.js platform packages)
+    if "optionalDependencies" in data:
+        for dep in data["optionalDependencies"]:
+            data["optionalDependencies"][dep] = version
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
