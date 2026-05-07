@@ -253,6 +253,9 @@ namespace graph::storage {
 		// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
 		auto snapshot = dataManager->prepareFlushSnapshot();
 
+		if (snapshot.isEmpty())
+			return;
+
 		// 2. I/O PHASE: Classify + write all entity types via StorageWriter
 		auto ioStart = Clock::now();
 

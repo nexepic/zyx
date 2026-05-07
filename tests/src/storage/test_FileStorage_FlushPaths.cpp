@@ -137,6 +137,72 @@ TEST_F(FileStorageFlushTest, VerifyIntegrity) {
 	db.close();
 }
 
+TEST_F(FileStorageFlushTest, FlushAfterMinimalDeleteSkipsCompaction) {
+	// Fill all entity segments above 70% capacity so getTotalFragmentationRatio() < 0.3
+	// This makes shouldCompact() return false, covering the False branch at line 374.
+	auto storage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 64);
+	storage->open();
+	storage->setCompactionEnabled(true);
+	auto dm = storage->getDataManager();
+
+	// Fill nodes (capacity=512, need 359+ per segment for <30% frag)
+	std::vector<Node> nodes;
+	for (int i = 0; i < 400; ++i) {
+		Node n(0, 0);
+		dm->addNode(n);
+		nodes.push_back(n);
+	}
+
+	// Fill index segment (capacity varies, add enough to dominate)
+	for (int i = 0; i < 400; ++i) {
+		graph::Index idx;
+		idx.setId(0);
+		idx.getMutableMetadata().isActive = true;
+		dm->addIndexEntity(idx);
+	}
+
+	// Fill state segment
+	for (int i = 0; i < 400; ++i) {
+		graph::State s;
+		s.setId(0);
+		s.setKey("k" + std::to_string(i));
+		dm->addStateEntity(s);
+	}
+
+	storage->flush();
+
+	// Delete only 1 node — overall fragmentation stays low
+	dm->deleteNode(nodes[0]);
+	storage->flush();
+
+	storage->close();
+}
+
+TEST_F(FileStorageFlushTest, ConcurrentFlushReturnsEarly) {
+	// Exercise the flush lock contention path (!lock.owns_lock())
+	Database db(testFilePath.string());
+	db.open();
+	auto storage = db.getStorage();
+	auto dm = storage->getDataManager();
+
+	// Add some data so flush has work to do
+	for (int i = 0; i < 50; ++i) {
+		Node n(0, 0);
+		dm->addNode(n);
+	}
+
+	// Launch multiple concurrent flushes — some will fail to acquire the lock
+	std::vector<std::thread> threads;
+	for (int i = 0; i < 4; ++i) {
+		threads.emplace_back([&storage]() { storage->flush(); });
+	}
+	for (auto &t : threads) {
+		t.join();
+	}
+
+	db.close();
+}
+
 TEST_F(FileStorageFlushTest, VerifyBitmapConsistency) {
 	Database db(testFilePath.string());
 	db.open();
