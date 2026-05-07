@@ -257,7 +257,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, ListIndexes) {
 	ASSERT_TRUE(im->createIndex("list_idx", "node", "ListLabel", "listprop"));
 	auto indexes = im->listIndexesDetailed();
 	bool found = false;
-	for (const auto &[name, etype, label, prop] : indexes) {
+	for (const auto &[name, etype, idxType, label, prop] : indexes) {
 		if (name == "list_idx") found = true;
 	}
 	EXPECT_TRUE(found);

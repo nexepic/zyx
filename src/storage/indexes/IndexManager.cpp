@@ -257,18 +257,18 @@ namespace graph::query::indexes {
 	// ------------------------------------------------------------------------
 	// List Indexes (Returning Metadata)
 	// ------------------------------------------------------------------------
-	std::vector<std::tuple<std::string, std::string, std::string, std::string>>
+	std::vector<std::tuple<std::string, std::string, std::string, std::string, std::string>>
 	IndexManager::listIndexesDetailed() const {
-		// Returns: {Name, Type, Label, Property}
+		// Returns: {Name, EntityType, IndexType, Label, Property}
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 		auto sysState = storage_->getSystemStateManager();
 		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
 
-		std::vector<std::tuple<std::string, std::string, std::string, std::string>> result;
+		std::vector<std::tuple<std::string, std::string, std::string, std::string, std::string>> result;
 		for (const auto &[name, rawMeta]: allIndexes) {
 			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
-			result.emplace_back(meta.name, meta.indexType, meta.label, meta.property);
+			result.emplace_back(meta.name, meta.entityType, meta.indexType, meta.label, meta.property);
 		}
 		return result;
 	}

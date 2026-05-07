@@ -41,13 +41,12 @@ namespace graph::query::execution::operators {
 			// Use the detailed list API from IndexManager
 			auto indexes = indexManager_->listIndexesDetailed();
 
-			for (const auto &[name, type, label, prop]: indexes) {
+			for (const auto &[name, entityType, indexType, label, prop]: indexes) {
 				Record r;
 				// Set the values in the Record
 				r.setValue("name", PropertyValue(name));
-				r.setValue("type", PropertyValue(type));
-				r.setValue("entity", PropertyValue(type == "node" ? "NODE" : "EDGE"));
-				r.setValue("name", PropertyValue(name));
+				r.setValue("type", PropertyValue(indexType));
+				r.setValue("entity", PropertyValue(entityType == "node" ? "NODE" : "EDGE"));
 				r.setValue("label", PropertyValue(label));
 				r.setValue("properties", PropertyValue(prop));
 

@@ -36,11 +36,9 @@ namespace graph::query::execution::operators {
 				return std::nullopt;
 
 			std::string statusMsg;
-			switch (command_) {
-				case TransactionCommand::TXN_CTL_BEGIN: statusMsg = "Transaction started"; break;
-				case TransactionCommand::TXN_CTL_COMMIT: statusMsg = "Transaction committed"; break;
-				case TransactionCommand::TXN_CTL_ROLLBACK: statusMsg = "Transaction rolled back"; break;
-			}
+			if (command_ == TransactionCommand::TXN_CTL_BEGIN) statusMsg = "Transaction started";
+			else if (command_ == TransactionCommand::TXN_CTL_COMMIT) statusMsg = "Transaction committed";
+			else statusMsg = "Transaction rolled back";
 
 			Record record;
 			record.setValue("result", PropertyValue(statusMsg));
@@ -57,12 +55,9 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"result"}; }
 
 		[[nodiscard]] std::string toString() const override {
-			switch (command_) {
-				case TransactionCommand::TXN_CTL_BEGIN: return "TransactionControl(BEGIN)";
-				case TransactionCommand::TXN_CTL_COMMIT: return "TransactionControl(COMMIT)";
-				case TransactionCommand::TXN_CTL_ROLLBACK: return "TransactionControl(ROLLBACK)";
-			}
-			return "TransactionControl(UNKNOWN)";
+			if (command_ == TransactionCommand::TXN_CTL_BEGIN) return "TransactionControl(BEGIN)";
+			if (command_ == TransactionCommand::TXN_CTL_COMMIT) return "TransactionControl(COMMIT)";
+			return "TransactionControl(ROLLBACK)";
 		}
 
 	private:
