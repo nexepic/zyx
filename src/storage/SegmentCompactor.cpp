@@ -230,13 +230,7 @@ namespace graph::storage {
 			return usageA < usageB;
 		});
 
-		std::ranges::sort(frontSegments, [this](uint64_t a, uint64_t b) {
-			if (a < b) return true;
-			if (a > b) return false;
-			SegmentHeader headerA = tracker_->getSegmentHeader(a);
-			SegmentHeader headerB = tracker_->getSegmentHeader(b);
-			return headerA.getTotalFreeSpace() > headerB.getTotalFreeSpace();
-		});
+		std::ranges::sort(frontSegments);
 
 		bool mergedAny = false;
 		std::unordered_set<uint64_t> mergedSegments;

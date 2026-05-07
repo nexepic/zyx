@@ -214,10 +214,7 @@ namespace graph::storage {
 				continue;
 
 			propertyManager_->storeProperties(node);
-
-			if (EntityPropertyTraits<Node>::hasPropertyEntity(node)) {
-				nodeManager_->update(node);
-			}
+			nodeManager_->update(node);
 		}
 	}
 
@@ -987,22 +984,12 @@ namespace graph::storage {
 	// Returns default entity (id==0) if the entity is not in range or inactive.
 	template<typename EntityType>
 	EntityType deserializeEntityFromPage(const Page &page, int64_t id) {
-		// Parse segment header from the cached page bytes
-		if (page.data.size() < SEGMENT_HEADER_SIZE) {
-			return EntityType{};
-		}
 		const auto *header = reinterpret_cast<const SegmentHeader *>(page.data.data());
 
 		int64_t relativePosition = id - header->start_id;
-		if (relativePosition < 0 || static_cast<uint32_t>(relativePosition) >= header->used) {
-			return EntityType{};
-		}
 
 		constexpr size_t entitySize = EntityType::getTotalSize();
 		size_t entityOffset = SEGMENT_HEADER_SIZE + static_cast<size_t>(relativePosition) * entitySize;
-		if (entityOffset + entitySize > page.data.size()) {
-			return EntityType{};
-		}
 
 		membuf mb(const_cast<char *>(reinterpret_cast<const char *>(page.data.data() + entityOffset)), entitySize);
 		std::istream stream(&mb);
