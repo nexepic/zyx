@@ -15,9 +15,8 @@ if(PKG_CONFIG_PATH)
 endif()
 pkg_check_modules(BOOST REQUIRED boost)
 
-# ANTLR4 runtime
-find_library(ANTLR4_LIBRARY NAMES antlr4-runtime REQUIRED)
-find_path(ANTLR4_INCLUDE_DIR antlr4-runtime.h PATH_SUFFIXES antlr4-runtime)
+# ANTLR4 runtime (via pkg-config, Conan generates .pc files)
+pkg_check_modules(ANTLR4 REQUIRED antlr4-cppruntime)
 
 # cmake-js provides these variables
 include_directories(${CMAKE_JS_INC})
@@ -70,7 +69,7 @@ include_directories(
     ${ZYX_SRC_DIR}/query/parser/cypher/helpers/public
     ${ZYX_ROOT}/lib/inputxx/include
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${ANTLR4_INCLUDE_DIR}
+    ${ANTLR4_INCLUDE_DIRS}
     ${BOOST_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/node_modules/node-addon-api
 )
@@ -97,7 +96,7 @@ set_target_properties(zyxdb PROPERTIES
 target_link_libraries(zyxdb
     ${CMAKE_JS_LIB}
     ZLIB::ZLIB
-    ${ANTLR4_LIBRARY}
+    ${ANTLR4_LINK_LIBRARIES}
 )
 
 # Platform-specific settings
