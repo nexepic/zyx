@@ -10,6 +10,9 @@ find_package(ZLIB REQUIRED)
 
 # Find Boost via pkg-config (Conan generates .pc files)
 find_package(PkgConfig REQUIRED)
+if(PKG_CONFIG_PATH)
+    set(ENV{PKG_CONFIG_PATH} "${PKG_CONFIG_PATH}:$ENV{PKG_CONFIG_PATH}")
+endif()
 pkg_check_modules(BOOST REQUIRED boost)
 
 # ANTLR4 runtime
