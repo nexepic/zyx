@@ -76,7 +76,7 @@ jobs:
         run: |
           conan profile detect
           mkdir -p buildDir
-          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+          conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
 
       - name: Install Conan dependencies (Windows)
         if: runner.os == 'Windows'
@@ -159,7 +159,7 @@ jobs:
         run: |
           conan profile detect
           mkdir -p buildDir
-          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+          conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
 
       - name: Install Conan dependencies (Windows)
         if: runner.os == 'Windows'

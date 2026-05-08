@@ -112,7 +112,7 @@ jobs:
         run: |
           conan profile detect
           mkdir -p buildDir
-          conan install . --output-folder=buildDir --build=missing -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+          conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
 
       # Install LLVM AFTER Conan so clang-cl is available for Meson build
       # but doesn't interfere with Conan's MSVC profile detection.

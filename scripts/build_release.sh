@@ -56,6 +56,7 @@ echo -e "${BLUE}>>> [2/5] Installing Dependencies (Release Mode)...${NC}"
 conan install . \
     --output-folder="$BUILD_DIR" \
     --build=missing \
+    --build="antlr4-cppruntime/*" \
     -s build_type=Release \
     -s compiler.cppstd=20 \
     -o *:shared=False \

@@ -90,8 +90,9 @@ jobs:
         run: |
           conan profile detect
           mkdir -p buildDir
-          # Force Debug build and C++20 to match Meson settings
-          conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+          # Force Debug build and C++20 to match Meson settings.
+          # antlr4 must be built from source to avoid ABI mismatch (see conanfile.py).
+          conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
 
       # Install LLVM AFTER Conan so clang-cl is available for Meson build
       # but doesn't interfere with Conan's MSVC profile detection.
