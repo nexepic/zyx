@@ -69,7 +69,7 @@ Write-Host "Output directory: $outputDir"
 
 # Use explicit profile file instead of command-line -s flags to ensure
 # settings are applied correctly regardless of PowerShell argument handling.
-conan install . --output-folder=$outputDir --build=missing --profile:host="$profilePath" --profile:build="$profilePath" @extraArgs
+conan install . --output-folder=$outputDir --build=missing --build="antlr4-cppruntime/*" --profile:host="$profilePath" --profile:build="$profilePath" @extraArgs
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Conan install failed."

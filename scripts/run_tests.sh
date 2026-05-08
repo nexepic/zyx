@@ -67,7 +67,7 @@ else
 
     if [ "$NO_CONAN" != true ] && command -v conan &> /dev/null; then
         conan profile detect 2>/dev/null || true
-        conan install . --output-folder="$BUILD_DIR" --build=missing -s build_type=Debug -s compiler.cppstd=20
+        conan install . --output-folder="$BUILD_DIR" --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
     fi
 fi
 

@@ -12,6 +12,10 @@ class ProjectConan(ConanFile):
         self.requires("boost/1.87.0")
         self.requires("zlib/1.3.1")
         self.requires("cli11/2.6.0")
+        # IMPORTANT: antlr4 exposes C++ STL types in its public headers (DFA,
+        # ATNConfigSet, etc.). A pre-built binary compiled with a different C++
+        # standard causes ABI mismatch and SIGSEGV at runtime. Always build from
+        # source via: --build="antlr4-cppruntime/*"
         self.requires("antlr4-cppruntime/4.13.2")
         if self.options.with_tests:
             self.requires("gtest/1.13.0")
