@@ -5,15 +5,17 @@ project(zyxdb_addon)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find required packages
-find_package(ZLIB REQUIRED)
-
-# Find Boost via pkg-config (Conan generates .pc files)
+# Find required packages via pkg-config (Conan generates .pc files)
 find_package(PkgConfig REQUIRED)
 if(PKG_CONFIG_PATH)
-    set(ENV{PKG_CONFIG_PATH} "${PKG_CONFIG_PATH}:$ENV{PKG_CONFIG_PATH}")
+    if(WIN32)
+        set(ENV{PKG_CONFIG_PATH} "${PKG_CONFIG_PATH};$ENV{PKG_CONFIG_PATH}")
+    else()
+        set(ENV{PKG_CONFIG_PATH} "${PKG_CONFIG_PATH}:$ENV{PKG_CONFIG_PATH}")
+    endif()
 endif()
 pkg_check_modules(BOOST REQUIRED boost)
+pkg_check_modules(ZLIB REQUIRED zlib)
 
 # ANTLR4 runtime (via pkg-config, Conan generates .pc files)
 pkg_check_modules(ANTLR4 REQUIRED antlr4-cppruntime)
@@ -71,6 +73,7 @@ include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}
     ${ANTLR4_INCLUDE_DIRS}
     ${BOOST_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/node_modules/node-addon-api
 )
 
@@ -95,7 +98,7 @@ set_target_properties(zyxdb PROPERTIES
 # Link libraries
 target_link_libraries(zyxdb
     ${CMAKE_JS_LIB}
-    ZLIB::ZLIB
+    ${ZLIB_LINK_LIBRARIES}
     ${ANTLR4_LINK_LIBRARIES}
 )
 

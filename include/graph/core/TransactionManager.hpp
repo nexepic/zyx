@@ -22,9 +22,9 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <stdexcept>
+
+#include "graph/concurrent/AtomicRWLock.hpp"
 
 namespace graph::storage {
 	class FileStorage;
@@ -57,7 +57,7 @@ namespace graph {
 
 	private:
 		friend class Transaction;
-		std::shared_mutex rwMutex_;
+		concurrent::AtomicRWLock rwLock_;
 		std::atomic<uint64_t> nextTxnId_{1};
 		std::atomic<bool> activeWriteTxn_{false};
 		std::shared_ptr<storage::FileStorage> storage_;

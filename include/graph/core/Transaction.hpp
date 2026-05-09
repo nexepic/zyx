@@ -22,8 +22,8 @@
 
 #include <cstdint>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
+
+#include "graph/concurrent/AtomicRWLock.hpp"
 
 namespace graph::storage {
 	class FileStorage;
@@ -74,10 +74,10 @@ namespace graph {
 		std::shared_ptr<storage::FileStorage> storage_;
 
 		// Shared lock held for read-only transaction's lifetime (RAII)
-		std::shared_lock<std::shared_mutex> readLock_;
+		concurrent::ReadLockGuard readLock_;
 
 		// Write lock held for write transaction's lifetime (RAII, moves with Transaction)
-		std::unique_lock<std::shared_mutex> writeLock_;
+		concurrent::WriteLockGuard writeLock_;
 
 		// Snapshot for read-only transactions (immutable once acquired)
 		std::shared_ptr<storage::CommittedSnapshot> snapshot_;

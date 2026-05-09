@@ -33,8 +33,8 @@ namespace graph {
 			} catch (...) {
 				// Suppress exceptions in destructor
 				// Release locks even if rollback fails
-				readLock_ = {};
-				writeLock_ = {};
+				readLock_.reset();
+				writeLock_.reset();
 			}
 		}
 	}
