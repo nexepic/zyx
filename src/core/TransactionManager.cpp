@@ -45,20 +45,19 @@ namespace graph {
 
 	Transaction TransactionManager::beginReadOnly(std::chrono::milliseconds timeout) {
 		// Acquire shared lock — multiple readers can hold this concurrently
-		std::shared_lock<std::shared_mutex> lock(rwMutex_, std::defer_lock);
-
 #ifdef __EMSCRIPTEN__
 		(void)timeout;
-		lock.lock(); // Single-threaded: always succeeds immediately
+		while (!rwLock_.try_lock_read()) {} // Single-threaded: always succeeds immediately
 #else
 		auto deadline = std::chrono::steady_clock::now() + timeout;
-		while (!lock.try_lock()) {
+		while (!rwLock_.try_lock_read()) {
 			if (std::chrono::steady_clock::now() >= deadline) {
 				throw std::runtime_error("Read-only transaction begin timed out: a write transaction is blocking");
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 #endif
+		concurrent::ReadLockGuard lock(rwLock_);
 
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
@@ -81,21 +80,20 @@ namespace graph {
 
 	Transaction TransactionManager::begin(std::chrono::milliseconds timeout) {
 		// Acquire exclusive lock — blocks until all readers and writers finish
-		std::unique_lock<std::shared_mutex> lock(rwMutex_, std::defer_lock);
-
 #ifdef __EMSCRIPTEN__
 		(void)timeout;
-		lock.lock();  // Single-threaded: always succeeds immediately
+		while (!rwLock_.try_lock_write()) {} // Single-threaded: always succeeds immediately
 #else
 		// Try to acquire with timeout
 		auto deadline = std::chrono::steady_clock::now() + timeout;
-		while (!lock.try_lock()) {
+		while (!rwLock_.try_lock_write()) {
 			if (std::chrono::steady_clock::now() >= deadline) {
 				throw std::runtime_error("Transaction begin timed out: another transaction is active");
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 #endif
+		concurrent::WriteLockGuard lock(rwLock_);
 
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
@@ -132,8 +130,7 @@ namespace graph {
 			dm->setReadOnlyMode(false);
 			txn.snapshot_.reset();
 			txn.state_ = Transaction::TxnState::TXN_COMMITTED;
-			// shared_lock released via RAII when txn.readLock_ is destroyed/moved
-			txn.readLock_ = {};
+			txn.readLock_.reset();
 			return;
 		}
 
@@ -200,7 +197,7 @@ namespace graph {
 			dm->setReadOnlyMode(false);
 			txn.snapshot_.reset();
 			txn.state_ = Transaction::TxnState::TXN_ROLLED_BACK;
-			txn.readLock_ = {};
+			txn.readLock_.reset();
 			return;
 		}
 
