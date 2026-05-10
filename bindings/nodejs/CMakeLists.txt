@@ -79,6 +79,9 @@ include_directories(
 
 # Compile definitions
 add_definitions(-DCOVERAGE_SKIP_ZLIB_ERRORS -DNAPI_VERSION=8)
+if(WIN32)
+    add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+endif()
 
 # =============================================================================
 # Build the addon
