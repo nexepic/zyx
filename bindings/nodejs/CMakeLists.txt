@@ -5,6 +5,13 @@ project(zyxdb_addon)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Force dynamic CRT (/MD) on MSVC to match Conan-built dependencies.
+# cmake-js defaults to /MT (static CRT) which conflicts with libraries
+# built with compiler.runtime=dynamic.
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
+
 # Find required packages via pkg-config (Conan generates .pc files)
 find_package(PkgConfig REQUIRED)
 if(PKG_CONFIG_PATH)
