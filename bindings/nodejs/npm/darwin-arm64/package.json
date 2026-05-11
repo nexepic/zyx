@@ -13,6 +13,11 @@
     "zyxdb.node"
   ],
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nexepic/zyx.git",
+    "directory": "bindings/nodejs/npm/darwin-arm64"
+  },
   "publishConfig": {
     "access": "public"
   }
