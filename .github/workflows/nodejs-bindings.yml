@@ -233,7 +233,7 @@ jobs:
         working-directory: bindings/nodejs
         run: |
           for pkg in npm/linux-x64-gnu npm/darwin-arm64 npm/win32-x64-msvc; do
-            npm publish "$pkg" --provenance --access public
+            npm publish "./$pkg" --provenance --access public
           done
 
       - name: Publish main package
