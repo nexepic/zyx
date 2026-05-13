@@ -210,11 +210,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: '24'
 
       - name: Download all prebuilt artifacts
         uses: actions/download-artifact@v4
@@ -231,6 +230,8 @@ jobs:
 
       - name: Publish platform packages
         working-directory: bindings/nodejs
+        env:
+          NPM_CONFIG_PROVENANCE: true
         run: |
           for pkg in npm/linux-x64-gnu npm/darwin-arm64 npm/win32-x64-msvc; do
             npm publish "./$pkg" --provenance --access public
@@ -238,4 +239,6 @@ jobs:
 
       - name: Publish main package
         working-directory: bindings/nodejs
+        env:
+          NPM_CONFIG_PROVENANCE: true
         run: npm publish --provenance --access public
