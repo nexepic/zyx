@@ -56,6 +56,7 @@ namespace graph {
 		inline std::string boldWhite(const std::string &s) { return colorEnabled() ? "\033[1;37m" + s + "\033[0m" : s; }
 		inline std::string green(const std::string &s) { return colorEnabled() ? "\033[32m" + s + "\033[0m" : s; }
 		inline std::string boldGreen(const std::string &s) { return colorEnabled() ? "\033[1;32m" + s + "\033[0m" : s; }
+		inline std::string brandBlue(const std::string &s) { return colorEnabled() ? "\033[38;5;105;1m" + s + "\033[0m" : s; }
 		inline std::string boldYellow(const std::string &s) { return colorEnabled() ? "\033[1;33m" + s + "\033[0m" : s; }
 		inline std::string boldRed(const std::string &s) { return colorEnabled() ? "\033[1;31m" + s + "\033[0m" : s; }
 		inline std::string dimItalic(const std::string &s) { return colorEnabled() ? "\033[3;90m" + s + "\033[0m" : s; }
@@ -267,7 +268,7 @@ namespace graph {
 					  << "Connected to: " << dbPath << "\n"
 					  << "Type 'exit' to quit.\n";
 		} else {
-			std::cout << ansi::boldGreen(std::string(PROJECT_DISPLAY_STR) + " Graph Database") << " v" << version
+			std::cout << ansi::brandBlue(std::string(PROJECT_DISPLAY_STR) + " Graph Database") << " v" << version
 					  << "\n"
 					  << ansi::dim("Connected to: " + dbPath) << "\n"
 					  << "Type " << ansi::bold("help") << " for commands, " << ansi::bold("exit") << " to quit.\n";
@@ -335,9 +336,10 @@ namespace graph {
 				completer.complete(line, completions);
 			});
 
-		static const std::string PROMPT_COLOR = "\033[1;32m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
+		// Use 256-color palette (color 105 is slate blue, matching #818cf8) to ensure compatibility across older terminals like macOS Terminal.app
+		static const std::string PROMPT_COLOR = "\033[38;5;105;1m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
 		const std::string promptNormal = PROMPT_COLOR;
-		const std::string promptMulti = "\033[1;33m     \u00b7\u00b7\u00b7\033[0m "; // Yellow ···
+		const std::string promptMulti = "\033[38;5;105;1m     \u00b7\u00b7\u00b7\033[0m "; // Matching color ···
 
 		printBanner(false);
 
