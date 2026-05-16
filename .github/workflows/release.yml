@@ -264,3 +264,34 @@ jobs:
           files: |
             ${{ env.cli_asset }}
             ${{ env.sdk_asset }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: [verify-version, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          TARBALL_URL="https://github.com/nexepic/zyx/archive/refs/tags/${TAG}.tar.gz"
+
+          # Download and compute sha256
+          SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | cut -d' ' -f1)
+
+          # Clone tap repository
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/nexepic/homebrew-zyx.git"
+          cd homebrew-zyx
+
+          # Update url and sha256 in Formula
+          sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/zyx.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/zyx.rb
+
+          # Commit and push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/zyx.rb
+          git commit -m "Update zyx to ${VERSION}"
+          git push
