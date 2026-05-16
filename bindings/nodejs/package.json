@@ -5,7 +5,6 @@
   "main": "lib/index.js",
   "types": "index.d.ts",
   "scripts": {
-    "install": "cmake-js compile",
     "build": "cmake-js compile",
     "rebuild": "cmake-js rebuild",
     "test": "node --test",

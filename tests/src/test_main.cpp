@@ -19,17 +19,17 @@ private:
     std::string getProgressPrefix() {
         char buf[64];
         int percentage = total_suites_ > 0 ? (completed_suites_ * 100 / total_suites_) : 0;
-        // Using Bright Blue (\033[1;34m) for the progress bracket
-        snprintf(buf, sizeof(buf), "\033[1;34m[%3d%% | %3d/%3d]\033[0m ", percentage, completed_suites_, total_suites_);
+        // Using Bright Blue (\033[38;5;105;1m) for the progress bracket
+        snprintf(buf, sizeof(buf), "\033[38;5;105;1m[%3d%% | %3d/%3d]\033[0m ", percentage, completed_suites_, total_suites_);
         return std::string(buf);
     }
 
 public:
     void OnTestProgramStart(const ::testing::UnitTest& unit_test) override {
         total_suites_ = unit_test.test_suite_to_run_count();
-        std::cout << "\n\033[1;34m================================================================================\033[0m\n"
+        std::cout << "\n\033[38;5;105;1m================================================================================\033[0m\n"
                   << "\033[1m ZYX Graph Database - Unit Test Suite\033[0m\n"
-                  << "\033[1;34m================================================================================\033[0m\n"
+                  << "\033[38;5;105;1m================================================================================\033[0m\n"
                   << " Target: " << unit_test.test_to_run_count() << " tests across " << total_suites_ << " suites\n\n";
     }
 
@@ -97,7 +97,7 @@ public:
         std::cout << getProgressPrefix();
         
         if (suite_failed_tests_ == 0) {
-            std::cout << "\033[1;32mPASS\033[0m \033[1m" << test_suite.name() << "\033[0m \033[1;34m(" << test_suite.elapsed_time() << " ms)\033[0m\n";
+            std::cout << "\033[1;32mPASS\033[0m \033[1m" << test_suite.name() << "\033[0m \033[38;5;105;1m(" << test_suite.elapsed_time() << " ms)\033[0m\n";
         } else {
             std::cout << "\033[1;31mFAIL\033[0m \033[1m" << test_suite.name() << "\033[0m \033[1;31m(" << suite_failed_tests_ << " failures, " << test_suite.elapsed_time() << " ms)\033[0m\n";
         }
@@ -108,7 +108,7 @@ public:
     void OnTestIterationEnd(const ::testing::UnitTest&, int) override {}
 
     void OnTestProgramEnd(const ::testing::UnitTest& unit_test) override {
-        std::cout << "\n\033[1;34m================================================================================\033[0m\n";
+        std::cout << "\n\033[38;5;105;1m================================================================================\033[0m\n";
         if (unit_test.failed_test_count() == 0) {
             std::cout << "\033[1;32m  ALL TESTS PASSED!\033[0m\n";
         } else {
@@ -118,7 +118,7 @@ public:
         std::cout << "  Passed: \033[1;32m" << unit_test.successful_test_count() << "\033[0m\n"
                   << "  Failed: \033[1;31m" << unit_test.failed_test_count() << "\033[0m\n"
                   << "  Time  : " << unit_test.elapsed_time() << " ms\n"
-                  << "\033[1;34m================================================================================\033[0m\n\n";
+                  << "\033[38;5;105;1m================================================================================\033[0m\n\n";
     }
 };
 
