@@ -93,11 +93,16 @@ Or try it in the browser — [**Live Playground**](https://nexepic.github.io/zyx
 
 ### Install
 
-Download a pre-built binary from [Releases](https://github.com/nexepic/zyx/releases). 
+**macOS** (Homebrew):
 
-*(**macOS Users**: If you encounter the "Apple could not verify..." malware warning, you must remove the quarantine attribute before running: `xattr -d com.apple.quarantine zyx`)*
+```bash
+brew tap nexepic/zyx
+brew install zyx
+```
 
-Or build from source:
+**Linux / Windows**: Download a pre-built binary from [Releases](https://github.com/nexepic/zyx/releases).
+
+**Build from source** (all platforms):
 
 ```bash
 ./scripts/run_tests.sh          # Full build + tests + coverage
