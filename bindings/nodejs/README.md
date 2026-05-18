@@ -30,57 +30,61 @@ Requires CMake, a C++20 compiler, and Conan 2 for dependencies.
 ```js
 const { Database } = require('zyxdb');
 
-const db = new Database('/tmp/movies');
-await db.open();
+async function main() {
+    const db = new Database('/tmp/movies');
+    await db.open();
 
-// Create nodes — returns node ID (number)
-const alice = await db.createNode('Person', { name: 'Alice', age: 30 });
-const bob   = await db.createNode('Person', { name: 'Bob',   age: 25 });
-const carol = await db.createNode('Person', { name: 'Carol', age: 35 });
+    // Create nodes — returns node ID (number)
+    const alice = await db.createNode('Person', { name: 'Alice', age: 30 });
+    const bob   = await db.createNode('Person', { name: 'Bob',   age: 25 });
+    const carol = await db.createNode('Person', { name: 'Carol', age: 35 });
 
-// Create edges between nodes
-await db.createEdge(alice, bob,   'FRIENDS_WITH');
-await db.createEdge(bob,   carol, 'FRIENDS_WITH');
+    // Create edges between nodes
+    await db.createEdge(alice, bob,   'FRIENDS_WITH');
+    await db.createEdge(bob,   carol, 'FRIENDS_WITH');
 
-// Cypher works too — with parameterized queries
-await db.execute(
-    'CREATE (m:Movie {title: $title, year: $year})',
-    { title: 'The Matrix', year: 1999 }
-);
+    // Cypher works too — with parameterized queries
+    await db.execute(
+        'CREATE (m:Movie {title: $title, year: $year})',
+        { title: 'The Matrix', year: 1999 }
+    );
 
-// Transactions — all or nothing
-const tx = await db.beginTransaction();
-await tx.execute(
-    "MATCH (p:Person {name: 'Alice'}), (m:Movie {title: 'The Matrix'}) " +
-    "CREATE (p)-[:RATED {score: 9.5}]->(m)"
-);
-await tx.execute(
-    "MATCH (p:Person {name: 'Bob'}), (m:Movie {title: 'The Matrix'}) " +
-    "CREATE (p)-[:RATED {score: 10.0}]->(m)"
-);
-await tx.commit();
+    // Transactions — all or nothing
+    const tx = await db.beginTransaction();
+    await tx.execute(
+        "MATCH (p:Person {name: 'Alice'}), (m:Movie {title: 'The Matrix'}) " +
+        "CREATE (p)-[:RATED {score: 9.5}]->(m)"
+    );
+    await tx.execute(
+        "MATCH (p:Person {name: 'Bob'}), (m:Movie {title: 'The Matrix'}) " +
+        "CREATE (p)-[:RATED {score: 10.0}]->(m)"
+    );
+    await tx.commit();
 
-// Query with iteration
-const result = await db.execute(
-    'MATCH (p:Person)-[r:RATED]->(m:Movie) ' +
-    'RETURN p.name AS person, m.title AS movie, r.score AS score'
-);
-for (const row of result) {
-    console.log(`${row.person} rated ${row.movie} ${row.score}/10`);
+    // Query with iteration
+    const result = await db.execute(
+        'MATCH (p:Person)-[r:RATED]->(m:Movie) ' +
+        'RETURN p.name AS person, m.title AS movie, r.score AS score'
+    );
+    for (const row of result) {
+        console.log(`${row.person} rated ${row.movie} ${row.score}/10`);
+    }
+
+    // Read-only transaction for safe reads
+    const roTx = await db.beginReadOnlyTransaction();
+    const counts = await roTx.execute('MATCH (p:Person) RETURN count(p) AS cnt');
+    console.log(`Total people: ${counts.scalar()}`);
+    await roTx.commit();
+
+    // Shortest path
+    const path = await db.getShortestPath(alice, carol);
+    const names = path.map(n => n.properties.name);
+    console.log(names.join(' -> ')); // Alice -> Bob -> Carol
+
+    await db.close();
 }
 
-// Read-only transaction for safe reads
-const roTx = await db.beginReadOnlyTransaction();
-const counts = await roTx.execute('MATCH (p:Person) RETURN count(p) AS cnt');
-console.log(`Total people: ${counts.scalar()}`);
-await roTx.commit();
-
-// Shortest path
-const path = await db.getShortestPath(alice, carol);
-const names = path.map(n => n.properties.name);
-console.log(names.join(' -> ')); // Alice -> Bob -> Carol
-
-await db.close();
+main();
 ```
 
 ## Supported Value Types
