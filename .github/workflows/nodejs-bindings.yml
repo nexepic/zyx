@@ -77,6 +77,9 @@ jobs:
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+        env:
+          CC: ${{ runner.os == 'Linux' && 'clang-20' || '' }}
+          CXX: ${{ runner.os == 'Linux' && 'clang++-20' || '' }}
 
       - name: Install Conan dependencies (Windows)
         if: runner.os == 'Windows'
@@ -95,11 +98,17 @@ jobs:
         if: runner.os != 'Windows'
         working-directory: bindings/nodejs
         run: npx cmake-js compile --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/buildDir/conan_toolchain.cmake
+        env:
+          CC: ${{ runner.os == 'Linux' && 'clang-20' || '' }}
+          CXX: ${{ runner.os == 'Linux' && 'clang++-20' || '' }}
 
       - name: Build native addon (Windows)
         if: runner.os == 'Windows'
         working-directory: bindings/nodejs
-        run: npx cmake-js compile --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
+        run: |
+          $env:CC = "clang-cl"
+          $env:CXX = "clang-cl"
+          npx cmake-js compile --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
         shell: pwsh
 
       - name: Run tests
@@ -157,6 +166,9 @@ jobs:
           conan profile detect
           mkdir -p buildDir
           conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+        env:
+          CC: ${{ runner.os == 'Linux' && 'clang-20' || '' }}
+          CXX: ${{ runner.os == 'Linux' && 'clang++-20' || '' }}
 
       - name: Install Conan dependencies (Windows)
         if: runner.os == 'Windows'
@@ -175,11 +187,17 @@ jobs:
         if: runner.os != 'Windows'
         working-directory: bindings/nodejs
         run: npx cmake-js compile --release --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/buildDir/conan_toolchain.cmake
+        env:
+          CC: ${{ runner.os == 'Linux' && 'clang-20' || '' }}
+          CXX: ${{ runner.os == 'Linux' && 'clang++-20' || '' }}
 
       - name: Build native addon (Windows)
         if: runner.os == 'Windows'
         working-directory: bindings/nodejs
-        run: npx cmake-js compile --release --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
+        run: |
+          $env:CC = "clang-cl"
+          $env:CXX = "clang-cl"
+          npx cmake-js compile --release --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
         shell: pwsh
 
       - name: Copy binary to platform package

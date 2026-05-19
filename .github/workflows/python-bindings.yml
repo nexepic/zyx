@@ -68,6 +68,11 @@ jobs:
         if: runner.os == 'Windows'
         run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
 
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=20.1.4 --force
+        shell: pwsh
+
       - name: Install zyxdb (Unix)
         if: runner.os != 'Windows'
         run: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=$PWD/buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release" pip install "bindings/python[test]"
@@ -76,6 +81,8 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           $toolchain = "$PWD\buildDir\conan_toolchain.cmake" -replace '\\', '/'
+          $env:CC = "clang-cl"
+          $env:CXX = "clang-cl"
           $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$toolchain -DCMAKE_BUILD_TYPE=Release"
           pip install "bindings/python[test]"
         shell: pwsh
@@ -122,10 +129,11 @@ jobs:
           CIBW_BEFORE_ALL_WINDOWS: >
             pip install conan ninja &&
             set "CONAN_OUTPUT_DIR=C:\conan-deps" &&
-            pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
+            pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False &&
+            choco install llvm --version=20.1.4 --force
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
           CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/tmp/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release" MACOSX_DEPLOYMENT_TARGET=13.3
-          CIBW_ENVIRONMENT_WINDOWS: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
