@@ -1,6 +1,6 @@
 {
   "name": "@nexdoc/config",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "files": [
     "*.js",
