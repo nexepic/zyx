@@ -36,24 +36,24 @@ The project compiles all tests into a single, unified executable (`zyx_test_suit
 **Run all tests (Full Suite):**
 ```bash
 ./scripts/run_tests.sh --quick
-# or directly via meson
-meson test -C buildDir
+# or directly via CTest
+ctest --test-dir buildDir --output-on-failure
 ```
 
 **Run a specific test suite or test case:**
 To avoid building the entire project, you can use `ninja` to specifically compile only the test suite binary, then use Google Test's `--gtest_filter` argument. You can use wildcards (`*`).
 ```bash
 # Compile just the test suite
-ninja -C buildDir tests/zyx_test_suite
+cmake --build buildDir --target zyx_test_suite
 
 # Run all tests inside the ReplTest suite
-./buildDir/tests/zyx_test_suite --gtest_filter="REPLTest.*"
+./buildDir/zyx_test_suite --gtest_filter="REPLTest.*"
 
 # Run a specific test case
-./buildDir/tests/zyx_test_suite --gtest_filter="ImportCommandTest.SkipBadEntries"
+./buildDir/zyx_test_suite --gtest_filter="ImportCommandTest.SkipBadEntries"
 
 # You can combine compilation and execution in one line:
-ninja -C buildDir tests/zyx_test_suite && ./buildDir/tests/zyx_test_suite --gtest_filter="*Index*"
+cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="*Index*"
 ```
 
 ## Extract Test Requirements from Code

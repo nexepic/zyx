@@ -13,15 +13,15 @@ cross-platform compatibility.
 ./scripts/run_tests.sh --no-conan   # Use system dependencies
 ./scripts/run_tests.sh --html       # HTML coverage report
 ./scripts/run_tests.sh --quick --file xxx.cpp  # Coverage report for specific file
-ninja -C buildDir tests/zyx_test_suite && ./buildDir/tests/zyx_test_suite --gtest_filter="SuiteName.*" # Compile and run specific test suite
-ninja -C buildDir tests/zyx_test_suite && ./buildDir/tests/zyx_test_suite --gtest_filter="SuiteName.TestName" # Compile and run specific test case
+cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="SuiteName.*" # Compile and run specific test suite
+cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="SuiteName.TestName" # Compile and run specific test case
 ./scripts/build_release.sh          # Release build
 ./scripts/setup_emsdk.sh            # Install Emscripten SDK + antlr4 WASM (one-time)
 ./scripts/build_wasm.sh             # Build WASM module (zyx.js + zyx.wasm)
 python3 scripts/bump_version.py vX.Y.Z  # Bump version + commit + tag
 ```
 
-Build system: **Meson** + **Conan** + **Ninja**. Tests: **Google Test**, auto-discovered from `test_*.cpp` and compiled into a single `zyx_test_suite` executable for faster linking and smaller footprint.
+Build system: **CMake** + **Conan** + **Ninja**. Tests: **Google Test**, auto-discovered from `test_*.cpp` and compiled into a single `zyx_test_suite` executable for faster linking and smaller footprint.
 
 ## Verification
 
@@ -55,9 +55,7 @@ ComprehensionType { COMP_FILTER, COMP_EXTRACT, COMP_REDUCE }
 
 ## Version Management
 
-`meson.build` line 2 is the **single source of truth** for the project version. All other locations derive from it
-automatically (`src/meson.build` via `meson.project_version()`, `pyproject.toml` via `dynamic`, `__init__.py` via
-`importlib.metadata`) or are synced by the bump script.
+Root `CMakeLists.txt` `project(zyx VERSION ...)` is the **single source of truth** for the project version. C++ config headers, Python metadata, and release scripts derive from it; package manifests are synced by the bump script.
 
 **Never hardcode version strings** — to bump the version:
 ```bash
@@ -66,7 +64,7 @@ python3 scripts/bump_version.py v1.0.0 --no-commit  # Update files only
 ```
 
 The bump script updates all of the following:
-- `meson.build` (project version)
+- `CMakeLists.txt` (project version)
 - `docs/` package.json files
 - `bindings/nodejs/package.json` (version + `optionalDependencies` versions)
 - `bindings/nodejs/npm/*/package.json` (platform packages)
@@ -113,7 +111,7 @@ cp build_wasm/zyx.js build_wasm/zyx.wasm docs/apps/docs/public/wasm/
 ```
 
 **Key constraints**:
-- Cross-file: `compiler_options_wasm.ini` (Meson cross-compilation config for emscripten)
+- CMake option: `ZYX_WASM=ON` configures the Emscripten build and disables desktop-only targets
 - Exported symbols are listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS` — update this list when adding new C API
   functions that need browser access
 - The Playground uses **read-only transactions** (`zyx_begin_read_only_transaction` + `zyx_txn_execute`) to prevent

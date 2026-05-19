@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-MESON_BUILD = ROOT / "meson.build"
+CMAKE_LISTS = ROOT / "CMakeLists.txt"
 
 PACKAGE_JSONS = [
     ROOT / "docs" / "package.json",
@@ -29,7 +29,10 @@ PACKAGE_JSONS = [
 ]
 
 VERSION_RE = re.compile(r"^v(\d+\.\d+\.\d+)$")
-MESON_VERSION_RE = re.compile(r"(version\s*:\s*')(\d+\.\d+\.\d+)(')")
+CMAKE_PROJECT_RE = re.compile(
+    r"(project\s*\(\s*zyx\b(?:(?!\)).)*?\bVERSION\s+)(\d+\.\d+\.\d+)((?:(?!\)).)*\))",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,30 +55,29 @@ def validate_version(tag: str) -> str:
     return m.group(1)
 
 
-def update_meson_build(version: str) -> None:
-    text = MESON_BUILD.read_text(encoding="utf-8")
-    new_text, count = MESON_VERSION_RE.subn(rf"\g<1>{version}\g<3>", text, count=1)
+def update_cmake_lists(version: str) -> None:
+    text = CMAKE_LISTS.read_text(encoding="utf-8")
+    new_text, count = CMAKE_PROJECT_RE.subn(rf"\g<1>{version}\g<3>", text, count=1)
     if count == 0:
-        print("Error: could not find version in meson.build", file=sys.stderr)
+        print("Error: could not find project(zyx VERSION ...) in CMakeLists.txt", file=sys.stderr)
         sys.exit(1)
-    MESON_BUILD.write_text(new_text, encoding="utf-8")
+    CMAKE_LISTS.write_text(new_text, encoding="utf-8")
 
 
 def update_package_json(path: Path, version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     data["version"] = version
-    # Sync optionalDependencies versions (for Node.js platform packages)
     if "optionalDependencies" in data:
         for dep in data["optionalDependencies"]:
             data["optionalDependencies"][dep] = version
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def read_meson_version() -> str:
-    text = MESON_BUILD.read_text(encoding="utf-8")
-    m = MESON_VERSION_RE.search(text)
+def read_cmake_version() -> str:
+    text = CMAKE_LISTS.read_text(encoding="utf-8")
+    m = CMAKE_PROJECT_RE.search(text)
     if not m:
-        print("Error: could not read version from meson.build", file=sys.stderr)
+        print("Error: could not read version from CMakeLists.txt", file=sys.stderr)
         sys.exit(1)
     return m.group(2)
 
@@ -87,9 +89,9 @@ def read_package_json_version(path: Path) -> str:
 
 def verify_consistency(version: str) -> None:
     errors = []
-    actual = read_meson_version()
+    actual = read_cmake_version()
     if actual != version:
-        errors.append(f"  meson.build: expected {version}, got {actual}")
+        errors.append(f"  CMakeLists.txt: expected {version}, got {actual}")
     for path in PACKAGE_JSONS:
         actual = read_package_json_version(path)
         if actual != version:
@@ -119,23 +121,20 @@ def main() -> None:
 
     print(f"Bumping version to {tag} ({version}) ...")
 
-    # Update files
-    update_meson_build(version)
+    update_cmake_lists(version)
     for path in PACKAGE_JSONS:
         update_package_json(path, version)
 
-    # Verify consistency
     verify_consistency(version)
     print("All files updated and verified.")
 
-    # Git commit + tag
-    changed_files = [MESON_BUILD] + PACKAGE_JSONS
+    changed_files = [CMAKE_LISTS] + PACKAGE_JSONS
     if args.no_commit:
         print("Skipping git commit and tag (--no-commit).")
     else:
         git_commit_and_tag(tag, changed_files)
         print(f"Committed and tagged {tag}.")
-        print(f"Done! Run 'git push && git push --tags' to publish.")
+        print("Done! Run 'git push && git push --tags' to publish.")
 
 
 if __name__ == "__main__":

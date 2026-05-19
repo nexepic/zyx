@@ -14,16 +14,16 @@ projectOrder: 1
 ## 前置要求
 
 - C++20 编译器
-- Meson, Conan, Ninja
+- CMake, Conan, Ninja
 - Google Test
 - ANTLR4（用于解析器更改）
 
 ## 构建
 
 ```bash
-conan install . --output-folder=buildDir --build=missing
-meson setup buildDir
-meson compile -C buildDir
+conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s compiler.cppstd=20
+cmake -S . -B buildDir -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake
+cmake --build buildDir
 ```
 
 ## 测试

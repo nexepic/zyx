@@ -1,0 +1,28 @@
+function(zyx_apply_common_options target)
+    target_compile_features(${target} INTERFACE cxx_std_20)
+
+    if(WIN32)
+        target_compile_definitions(${target} INTERFACE NOMINMAX NOGDI WIN32_LEAN_AND_MEAN ANTLR4CPP_STATIC)
+    endif()
+
+    if(MSVC)
+        set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        target_compile_options(${target} INTERFACE /W3)
+    else()
+        target_compile_options(${target} INTERFACE -Wall -Wextra -Wno-unused-parameter)
+    endif()
+
+    if(ZYX_ENABLE_COVERAGE)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+            target_compile_options(${target} INTERFACE -fprofile-instr-generate -fcoverage-mapping)
+            target_link_options(${target} INTERFACE -fprofile-instr-generate -fcoverage-mapping)
+        else()
+            message(WARNING "ZYX_ENABLE_COVERAGE is optimized for Clang/LLVM; current compiler is ${CMAKE_CXX_COMPILER_ID}.")
+        endif()
+    endif()
+
+    if(ZYX_WASM)
+        target_compile_options(${target} INTERFACE -fwasm-exceptions)
+        target_link_options(${target} INTERFACE -fwasm-exceptions)
+    endif()
+endfunction()

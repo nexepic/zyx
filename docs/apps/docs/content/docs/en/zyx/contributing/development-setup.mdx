@@ -1,6 +1,6 @@
 ---
 title: Development Setup
-description: "C++20 compiler, Meson, Conan, Ninja, Google Test, and ANTLR4"
+description: "C++20 compiler, CMake, Conan, Ninja, Google Test, and ANTLR4"
 category: Getting Started
 categoryOrder: 1
 order: 1
@@ -14,16 +14,16 @@ projectOrder: 1
 ## Prerequisites
 
 - C++20 compiler
-- Meson, Conan, Ninja
+- CMake, Conan, Ninja
 - Google Test
 - ANTLR4 (for parser changes)
 
 ## Building
 
 ```bash
-conan install . --output-folder=buildDir --build=missing
-meson setup buildDir
-meson compile -C buildDir
+conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s compiler.cppstd=20
+cmake -S . -B buildDir -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake
+cmake --build buildDir
 ```
 
 ## Testing

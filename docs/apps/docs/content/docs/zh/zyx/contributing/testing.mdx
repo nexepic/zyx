@@ -26,7 +26,8 @@ projectOrder: 1
 ./scripts/run_tests.sh
 
 # 特定测试
-meson test -C buildDir <test_name>
+cmake --build buildDir --target zyx_test_suite
+./buildDir/zyx_test_suite --gtest_filter="SuiteName.TestName"
 
 # 生成覆盖率报告
 ./scripts/run_tests.sh --html
