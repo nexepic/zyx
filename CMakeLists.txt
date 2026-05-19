@@ -144,7 +144,10 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
             zyx::gmock
     )
     add_test(NAME zyx_all_tests COMMAND zyx_test_suite)
-    set_tests_properties(zyx_all_tests PROPERTIES TIMEOUT 600)
+    set_tests_properties(zyx_all_tests PROPERTIES
+        TIMEOUT 600
+        INPUT_FILE /dev/null
+    )
 endif()
 
 if(ZYX_BUILD_PYTHON)
