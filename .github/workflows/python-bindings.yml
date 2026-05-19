@@ -75,7 +75,8 @@ jobs:
       - name: Install zyxdb (Windows)
         if: runner.os == 'Windows'
         run: |
-          $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$PWD\buildDir\conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
+          $toolchain = "$PWD\buildDir\conan_toolchain.cmake" -replace '\\', '/'
+          $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$toolchain -DCMAKE_BUILD_TYPE=Release"
           pip install "bindings/python[test]"
         shell: pwsh
 

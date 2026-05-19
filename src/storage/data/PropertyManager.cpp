@@ -528,16 +528,36 @@ namespace graph::storage {
 	PropertyManager::getEntityProperties<Node>(int64_t entityId);
 	template std::unordered_map<std::string, PropertyValue>
 	PropertyManager::getEntityProperties<Edge>(int64_t entityId);
+	template std::unordered_map<std::string, PropertyValue>
+	PropertyManager::getEntityProperties<Property>(int64_t entityId);
+	template std::unordered_map<std::string, PropertyValue>
+	PropertyManager::getEntityProperties<Blob>(int64_t entityId);
+	template std::unordered_map<std::string, PropertyValue>
+	PropertyManager::getEntityProperties<Index>(int64_t entityId);
+	template std::unordered_map<std::string, PropertyValue>
+	PropertyManager::getEntityProperties<State>(int64_t entityId);
 
 	// addEntityProperties instantiations
 	template void PropertyManager::addEntityProperties<Node>(int64_t entityId,
 															 const std::unordered_map<std::string, PropertyValue> &);
 	template void PropertyManager::addEntityProperties<Edge>(int64_t entityId,
 															 const std::unordered_map<std::string, PropertyValue> &);
+	template void PropertyManager::addEntityProperties<Property>(int64_t entityId,
+																 const std::unordered_map<std::string, PropertyValue> &);
+	template void PropertyManager::addEntityProperties<Blob>(int64_t entityId,
+															 const std::unordered_map<std::string, PropertyValue> &);
+	template void PropertyManager::addEntityProperties<Index>(int64_t entityId,
+															 const std::unordered_map<std::string, PropertyValue> &);
+	template void PropertyManager::addEntityProperties<State>(int64_t entityId,
+															 const std::unordered_map<std::string, PropertyValue> &);
 
 	// removeEntityProperty instantiations
 	template void PropertyManager::removeEntityProperty<Node>(int64_t entityId, const std::string &);
 	template void PropertyManager::removeEntityProperty<Edge>(int64_t entityId, const std::string &);
+	template void PropertyManager::removeEntityProperty<Property>(int64_t entityId, const std::string &);
+	template void PropertyManager::removeEntityProperty<Blob>(int64_t entityId, const std::string &);
+	template void PropertyManager::removeEntityProperty<Index>(int64_t entityId, const std::string &);
+	template void PropertyManager::removeEntityProperty<State>(int64_t entityId, const std::string &);
 
 	// hasExternalProperty instantiations
 	template bool PropertyManager::hasExternalProperty<Node>(const Node &entity, const std::string &);
