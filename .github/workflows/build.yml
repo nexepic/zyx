@@ -15,6 +15,8 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            cc: clang-20
+            cxx: clang++-20
             llvm_cov: llvm-cov-20
             llvm_profdata: llvm-profdata-20
           - os: windows-latest
@@ -53,6 +55,9 @@ jobs:
         run: |
           conan profile detect
           conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
 
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
@@ -69,6 +74,9 @@ jobs:
             -DZYX_ENABLE_COVERAGE=ON
           cmake --build buildDir --config Debug --target zyx_test_suite
         shell: bash
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
 
       - name: Run Unit Tests
         run: |

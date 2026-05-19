@@ -12,7 +12,16 @@ target_include_directories(zyxdb_core PRIVATE
     "${PROJECT_SOURCE_DIR}"
     "${PROJECT_BINARY_DIR}"
 )
-target_link_libraries(zyxdb_core PRIVATE zyx::core)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(zyxdb_core PRIVATE
+        -Wl,--start-group
+        zyx::core
+        zyx::cypher_parser
+        -Wl,--end-group
+    )
+else()
+    target_link_libraries(zyxdb_core PRIVATE zyx::core)
+endif()
 
 if(MSVC)
     target_compile_options(zyxdb_core PRIVATE /FI"${CMAKE_CURRENT_SOURCE_DIR}/undef_python_tokens.h")
