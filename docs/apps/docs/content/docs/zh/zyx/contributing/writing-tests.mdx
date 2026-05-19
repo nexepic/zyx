@@ -181,7 +181,8 @@ ASSERT_TRUE(found) << "未找到 id 为 " << nodeId << " 的节点";
 ### 运行特定测试
 
 ```bash
-meson test -C buildDir test_Database
+cmake --build buildDir --target zyx_test_suite
+./buildDir/zyx_test_suite --gtest_filter="Database*"
 ```
 
 ### 运行覆盖率

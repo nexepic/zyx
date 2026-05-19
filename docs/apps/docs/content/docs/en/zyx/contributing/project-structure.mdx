@@ -249,8 +249,8 @@ buildDir/
 
 ```
 zyx/
-├── meson.build           # Main build file
-├── conanfile.txt         # Conan dependencies
+├── CMakeLists.txt        # Main build file
+├── conanfile.py          # Conan dependencies
 ├── .clang-format         # Code formatting rules
 ├── .clang-tidy           # Static analysis rules
 └── CONTRIBUTING.md       # Contribution guidelines
@@ -295,16 +295,9 @@ TEST(NewFeature, DoSomething) {
 }
 ```
 
-### 4. Update Build Files
+### 4. Build Discovery
 
-```python
-# meson.build
-zyx_core_lib = static_library(
-    'zyx_core',
-    'src/core/NewFeature.cpp',
-    # ... other sources
-)
-```
+CMake discovers `src/**/*.cpp` and `tests/**/test_*.cpp` automatically via `cmake/SourceSets.cmake`, so new source and test files are picked up on the next configure/build.
 
 ## Code Organization Principles
 

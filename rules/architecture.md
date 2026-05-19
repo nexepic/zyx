@@ -317,7 +317,7 @@ docs/apps/docs/
         ├── got.zyx          # Game of Thrones dataset
         └── imdb.zyx        # IMDb Movies dataset
 
-compiler_options_wasm.ini   # Meson cross-file for Emscripten
+CMakeLists.txt              # CMake build entry point; use ZYX_WASM=ON for Emscripten
 ```
 
 ## Dependencies (via Conan)
@@ -373,9 +373,9 @@ Outputs: `emsdk/` (Emscripten SDK), `emsdk/antlr4-wasm/` (antlr4 static lib for 
 
 ### How it works
 
-1. Generates pkg-config stubs for WASM-compatible dependencies (antlr4, zlib, CLI11)
-2. Configures Meson with `compiler_options_wasm.ini` cross-file (emcc/em++ toolchain, wasm32 target)
-3. Compiles `libzyx_core.a` + `libcypher_parser.a` as static WASM libraries
+1. Uses `emcmake cmake` with `ZYX_WASM=ON` and the Emscripten toolchain
+2. Resolves WASM-compatible dependencies from `emsdk/antlr4-wasm/` and Emscripten-provided zlib
+3. Compiles `libzyx_core.a` + `libzyx_cypher_parser.a` as static WASM libraries
 4. Links with `em++` into final `zyx.js` + `zyx.wasm` module using `-sMODULARIZE`
 
 ### Exported C API functions
@@ -405,7 +405,7 @@ All functions listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS`. Key categories:
 |------|---------|
 | `scripts/setup_emsdk.sh` | One-time emsdk + antlr4 WASM setup |
 | `scripts/build_wasm.sh` | WASM build script with exported function list |
-| `compiler_options_wasm.ini` | Meson cross-file for Emscripten toolchain |
+| `CMakeLists.txt` | Root CMake build graph; use `ZYX_WASM=ON` for Emscripten builds |
 | `docs/apps/docs/public/wasm/zyx.js` | Deployed WASM JS loader |
 | `docs/apps/docs/public/wasm/zyx.wasm` | Deployed WASM binary |
 

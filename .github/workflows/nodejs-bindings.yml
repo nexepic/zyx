@@ -94,15 +94,12 @@ jobs:
       - name: Build native addon (Unix)
         if: runner.os != 'Windows'
         working-directory: bindings/nodejs
-        run: npx cmake-js compile --CDPKG_CONFIG_PATH=${{ github.workspace }}/buildDir
+        run: npx cmake-js compile --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/buildDir/conan_toolchain.cmake
 
       - name: Build native addon (Windows)
         if: runner.os == 'Windows'
         working-directory: bindings/nodejs
-        run: |
-          $env:CC = "clang-cl"
-          $env:CXX = "clang-cl"
-          npx cmake-js compile --CDPKG_CONFIG_PATH=${{ github.workspace }}\buildDir
+        run: npx cmake-js compile --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
         shell: pwsh
 
       - name: Run tests
@@ -177,15 +174,12 @@ jobs:
       - name: Build native addon (Unix)
         if: runner.os != 'Windows'
         working-directory: bindings/nodejs
-        run: npx cmake-js compile --release --CDPKG_CONFIG_PATH=${{ github.workspace }}/buildDir
+        run: npx cmake-js compile --release --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/buildDir/conan_toolchain.cmake
 
       - name: Build native addon (Windows)
         if: runner.os == 'Windows'
         working-directory: bindings/nodejs
-        run: |
-          $env:CC = "clang-cl"
-          $env:CXX = "clang-cl"
-          npx cmake-js compile --release --CDPKG_CONFIG_PATH=${{ github.workspace }}\buildDir
+        run: npx cmake-js compile --release --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
         shell: pwsh
 
       - name: Copy binary to platform package

@@ -8,7 +8,6 @@
 
 set -e
 
-# Define colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -20,9 +19,6 @@ BUILD_DIR="$PROJECT_ROOT/build_wasm"
 EMSDK_DIR="$PROJECT_ROOT/emsdk"
 ANTLR4_WASM_DIR="$EMSDK_DIR/antlr4-wasm"
 
-# ==============================================================================
-# Step 1: Check prerequisites
-# ==============================================================================
 echo -e "${BLUE}>>> [1/5] Checking prerequisites...${NC}"
 
 if [ ! -f "$EMSDK_DIR/emsdk_env.sh" ]; then
@@ -37,91 +33,46 @@ fi
 
 source "$EMSDK_DIR/emsdk_env.sh"
 
-# ==============================================================================
-# Step 2: Clean build directory
-# ==============================================================================
 echo -e "${BLUE}>>> [2/5] Preparing build directory...${NC}"
-
-if [ -d "$BUILD_DIR" ]; then
-    rm -rf "$BUILD_DIR"
-fi
+rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
-# ==============================================================================
-# Step 3: Generate pkg-config files
-# ==============================================================================
-echo -e "${BLUE}>>> [3/5] Generating pkg-config files...${NC}"
+export ZYX_ANTLR4_WASM_DIR="$ANTLR4_WASM_DIR"
 
-PC_DIR="$BUILD_DIR/pkgconfig"
-mkdir -p "$PC_DIR"
+echo -e "${BLUE}>>> [3/5] Configuring CMake build...${NC}"
+emcmake cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DZYX_WASM=ON \
+    -DZYX_BUILD_TESTS=OFF \
+    -DZYX_BUILD_APPS=OFF \
+    -DZYX_BUILD_PYTHON=OFF \
+    -DBUILD_SHARED_LIBS=OFF
 
-# antlr4-cppruntime pkg-config
-cat > "$PC_DIR/antlr4-cppruntime.pc" << EOF
-prefix=$ANTLR4_WASM_DIR
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
+echo -e "${BLUE}>>> [4/5] Compiling static libraries...${NC}"
+cmake --build "$BUILD_DIR" --target zyx_core
 
-Name: antlr4-cppruntime
-Description: ANTLR4 C++ Runtime (WASM build)
-Version: 4.13.2
-Libs: -L\${libdir} -lantlr4-runtime
-Cflags: -I\${includedir} -I\${includedir}/antlr4-runtime
-EOF
+echo -e "${BLUE}>>> [5/5] Linking WASM module...${NC}"
 
-# zlib pkg-config (provided by Emscripten's -sUSE_ZLIB=1)
-cat > "$PC_DIR/zlib.pc" << EOF
-Name: zlib
-Description: zlib (Emscripten built-in)
-Version: 1.2.13
-Libs: -sUSE_ZLIB=1
-Cflags: -sUSE_ZLIB=1
-EOF
-
-# CLI11 stub (headers only, not needed for WASM library build but satisfies dependency)
-cat > "$PC_DIR/CLI11.pc" << EOF
-Name: CLI11
-Description: CLI11 stub for WASM build
-Version: 2.4.1
-Cflags:
-EOF
-
-# ==============================================================================
-# Step 4: Configure with Meson
-# ==============================================================================
-echo -e "${BLUE}>>> [4/5] Configuring Meson build...${NC}"
-
-meson setup "$BUILD_DIR" \
-    --cross-file "$PROJECT_ROOT/compiler_options_wasm.ini" \
-    -Dbuildtype=release \
-    -Ddefault_library=static \
-    -Dtests=disabled \
-    --pkg-config-path="$PC_DIR"
-
-# ==============================================================================
-# Step 5: Compile
-# ==============================================================================
-echo -e "${BLUE}>>> [5/5] Compiling...${NC}"
-
-meson compile -C "$BUILD_DIR"
-
-# ==============================================================================
-# Step 6: Link final WASM output
-# ==============================================================================
-echo -e "${BLUE}>>> Linking WASM module...${NC}"
-
-# Find the static library
-ZYX_CORE_LIB="$BUILD_DIR/src/libzyx_core.a"
-CYPHER_LIB="$BUILD_DIR/src/query/parser/cypher/libcypher_parser.a"
+ZYX_CORE_LIB="$BUILD_DIR/libzyx_core.a"
+CYPHER_LIB="$BUILD_DIR/libzyx_cypher_parser.a"
+INPUTXX_LIB="$BUILD_DIR/libzyx_inputxx.a"
 
 if [ ! -f "$ZYX_CORE_LIB" ]; then
     echo -e "${RED}Error: $ZYX_CORE_LIB not found${NC}"
     exit 1
 fi
+if [ ! -f "$CYPHER_LIB" ]; then
+    echo -e "${RED}Error: $CYPHER_LIB not found${NC}"
+    exit 1
+fi
+if [ ! -f "$INPUTXX_LIB" ]; then
+    echo -e "${RED}Error: $INPUTXX_LIB not found${NC}"
+    exit 1
+fi
 
 em++ \
     -o "$BUILD_DIR/zyx.js" \
-    "$ZYX_CORE_LIB" \
-    "$CYPHER_LIB" \
+    -Wl,--whole-archive "$ZYX_CORE_LIB" "$CYPHER_LIB" "$INPUTXX_LIB" -Wl,--no-whole-archive \
     -L"$ANTLR4_WASM_DIR/lib" -lantlr4-runtime \
     -sEXPORTED_FUNCTIONS='[
         "_zyx_open",

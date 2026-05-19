@@ -406,7 +406,8 @@ TEST_F(ResourceTest, CleanupAfterTest) {
 ### Run Specific Test
 
 ```bash
-meson test -C buildDir test_Database
+cmake --build buildDir --target zyx_test_suite
+./buildDir/zyx_test_suite --gtest_filter="Database*"
 ```
 
 ### Run with Coverage

@@ -21,32 +21,32 @@ projectOrder: 1
   - GCC 11+ 或 Clang 13+ (Linux)
   - Xcode 14+ (macOS)
   - MSVC 2022+ (Windows)
-- **Meson**: 构建系统（版本 0.63+）
-- **Conan**: 包管理器（版本 1.60+）
+- **CMake**: 构建系统（版本 3.21+）
+- **Conan**: 包管理器（版本 2.0+）
 - **Ninja**: 构建后端
 
 ### 在 macOS 上安装
 
 ```bash
-brew install meson conan ninja
+brew install cmake conan ninja
 ```
 
 ### 在 Linux 上安装 (Ubuntu/Debian)
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3-pip g++ cmake
-pip3 install meson conan ninja
+sudo apt-get install -y python3-pip g++ cmake ninja-build
+pip3 install conan
 ```
 
 ### 在 Windows 上安装
 
 ```powershell
 # 使用 Chocolatey
-choco install meson conan ninja
+choco install cmake conan ninja
 
-# 或使用 pip
-pip install meson conan ninja
+# 或使用 pip 安装 Conan
+pip install conan
 ```
 
 ## 从源码构建
@@ -66,7 +66,7 @@ cd zyx
 
 此脚本将：
 1. 安装所有 Conan 依赖
-2. 使用 Meson 配置构建
+2. 使用 CMake 配置构建
 3. 编译项目
 4. 运行所有测试并生成覆盖率报告
 
@@ -84,13 +84,13 @@ cd zyx
 
 ```bash
 # 安装 Conan 依赖
-conan install . --output-folder=buildDir --build=missing -s build_type=Debug -s compiler.cppstd=20
+conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
 
-# 配置 Meson 构建
-meson setup buildDir --native-file buildDir/conan_meson_native.ini
+# 配置 CMake 构建
+cmake -S . -B buildDir -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Debug
 
 # 编译
-meson compile -C buildDir
+cmake --build buildDir
 ```
 
 ## 构建发布版本
@@ -108,7 +108,7 @@ meson compile -C buildDir
 构建完成后，验证 CLI 工具是否可用：
 
 ```bash
-./buildDir/apps/cli/zyx --help
+./buildDir/zyx --help
 ```
 
 您应该看到 ZYX CLI 的使用信息。
@@ -117,16 +117,16 @@ meson compile -C buildDir
 
 构建输出位于：
 
-- **CLI 工具**: `buildDir/apps/cli/zyx`
-- **库**: `buildDir/zyx_core.a`（内部使用的静态库）
-- **测试**: `buildDir/tests/src/*/test_*`
+- **CLI 工具**: `buildDir/zyx`
+- **库**: `buildDir/libzyx.*`（公共库）和 `buildDir/libzyx_core.a`（内部静态库）
+- **测试**: `buildDir/zyx_test_suite`
 
 ## 可选：系统级安装
 
 要将 ZYX 安装到系统范围（需要 sudo）：
 
 ```bash
-meson install -C buildDir
+cmake --install buildDir
 ```
 
 这将安装：
@@ -160,10 +160,11 @@ g++ --version
 clang++ --version
 ```
 
-### Meson 版本问题
+### CMake 版本问题
 
 ```bash
-pip3 install --upgrade meson
+cmake --version
+pip3 install --upgrade conan
 ```
 
 ## 下一步

@@ -26,8 +26,8 @@ ZYX 需要 C++20 兼容的编译器：
 
 ### 构建工具
 
-- **Meson**: 版本 0.63 或更高
-- **Conan**: 版本 1.60 或更高
+- **CMake**: 版本 3.21 或更高
+- **Conan**: 版本 2.0 或更高
 - **Ninja**: 版本 1.10 或更高
 - **Python**: 版本 3.8 或更高（用于构建脚本）
 
@@ -194,7 +194,7 @@ ZYX 未在网络文件系统（NFS、SMB 等）上进行测试。使用本地文
 g++ --version  # 或 clang++ --version
 
 # 检查构建工具
-meson --version
+cmake --version
 conan --version
 ninja --version
 

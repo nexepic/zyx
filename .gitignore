@@ -1,8 +1,10 @@
 .idea/
 .DS_Store
 buildDir/
+buildDir_*/
 build_release/
 build_wasm/
+CMakeUserPresets.json
 emsdk/
 antlr-*.jar
 
@@ -39,7 +41,7 @@ docs/.turbo/
 
 docs/superpowers/
 
-# Meson subprojects (downloaded sources, keep .wrap files)
+# Conan/CMake downloaded or generated dependency sources
 subprojects/packagecache/
 subprojects/pybind11-*/
 

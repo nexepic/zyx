@@ -109,7 +109,7 @@ brew install zyx
 ./scripts/build_release.sh      # Release build only
 ```
 
-Prerequisites: C++20 compiler (Clang 14+ / GCC 11+), Meson 0.60+, Ninja, Conan 2.x, Python 3.10+
+Prerequisites: C++20 compiler (Clang 14+ / GCC 11+), CMake 3.21+, Ninja, Conan 2.x, Python 3.10+
 
 ### Use
 

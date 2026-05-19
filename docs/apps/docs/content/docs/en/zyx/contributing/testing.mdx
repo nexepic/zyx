@@ -26,7 +26,8 @@ Located in `tests/integration/` for end-to-end workflows.
 ./scripts/run_tests.sh
 
 # Specific test
-meson test -C buildDir <test_name>
+cmake --build buildDir --target zyx_test_suite
+./buildDir/zyx_test_suite --gtest_filter="SuiteName.TestName"
 
 # With coverage
 ./scripts/run_tests.sh --html

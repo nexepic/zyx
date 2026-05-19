@@ -14,24 +14,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # --- Linux Configuration ---
           - os: ubuntu-latest
-            native_file: compiler_options.ini
-            # Linux specific tools (versioned)
             llvm_cov: llvm-cov-20
             llvm_profdata: llvm-profdata-20
-
-          # --- Windows Configuration ---
           - os: windows-latest
-            native_file: compiler_options_win64.ini
-            # Windows specific tools (usually in PATH)
             llvm_cov: llvm-cov
             llvm_profdata: llvm-profdata
-
-          # --- macOS Configuration ---
           - os: macos-latest
-            native_file: compiler_options_mac.ini
-            # We will dynamically resolve these using xcrun in the report step
             llvm_cov: llvm-cov
             llvm_profdata: llvm-profdata
 
@@ -44,43 +33,17 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Common Tools (pip)
-        # Install Conan, Meson, and Ninja via pip (works on all platforms)
-        run: pip install conan meson ninja
-
-      # -----------------------------------------------------------
-      # Platform Specific System Dependencies
-      # -----------------------------------------------------------
-
-      # Install pkgconfiglite BEFORE Conan. LLVM installed AFTER to prevent
-      # conan profile detect from picking up clang instead of MSVC.
-      - name: Install pkg-config (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          choco install pkgconfiglite --allow-empty-checksums
-          echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: pwsh
+      - name: Install Common Tools
+        run: pip install conan ninja
 
       - name: Install System Deps (Linux)
         if: runner.os == 'Linux'
         run: |
-          # Install LLVM 20
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
           sudo apt update
           sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
 
-      - name: Install System Deps (macOS)
-        if: runner.os == 'macOS'
-        # Install pkg-config (required for Conan/Meson to find zlib)
-        run: brew install pkg-config
-
-      # -----------------------------------------------------------
-      # Conan Dependency Installation
-      # -----------------------------------------------------------
-
-      # Load vcvarsall.bat temporarily so conan profile detect finds MSVC (cl.exe),
-      # not VS-bundled clang-cl. The env changes stay within this pwsh process only.
       - name: Install Project Dependencies (Conan) (Windows)
         if: runner.os == 'Windows'
         run: pwsh scripts/install_conan_windows.ps1 Debug
@@ -89,102 +52,37 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           conan profile detect
-          mkdir -p buildDir
-          # Force Debug build and C++20 to match Meson settings.
-          # antlr4 must be built from source to avoid ABI mismatch (see conanfile.py).
           conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
 
-      # Install LLVM AFTER Conan so clang-cl is available for Meson build
-      # but doesn't interfere with Conan's MSVC profile detection.
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: choco install llvm --version=20.1.4 --force
         shell: pwsh
 
-      # -----------------------------------------------------------
-      # Build Phase - Windows
-      # -----------------------------------------------------------
-
-      - name: Configure and Build (Windows)
-        if: runner.os == 'Windows'
+      - name: Configure and Build
         run: |
-          cd buildDir
-          $FLAGS="-fprofile-instr-generate -fcoverage-mapping"
-          
-          # Use compiler_options_win64.ini to force clang-cl
-          meson setup . .. --native-file conan_meson_native.ini --native-file ../${{ matrix.native_file }} -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS" -Dbuildtype=debug
-          meson compile
-        shell: pwsh
-
-      # -----------------------------------------------------------
-      # Build Phase - Linux
-      # -----------------------------------------------------------
-
-      - name: Configure and Build (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cd buildDir
-          export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
-          
-          # Use compiler_options.ini to force clang-20
-          meson setup . .. --native-file conan_meson_native.ini --native-file ../${{ matrix.native_file }} -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS" -Dbuildtype=debug
-          meson compile
-
-      # -----------------------------------------------------------
-      # Build Phase - macOS
-      # -----------------------------------------------------------
-
-      - name: Configure and Build (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          cd buildDir
-          export FLAGS="-fprofile-instr-generate -fcoverage-mapping -std=c++20"
-          
-          # 2. Setup Meson using the generated ini file
-          meson setup . .. --native-file conan_meson_native.ini --native-file ../compiler_options_mac.ini -Dcpp_args="$FLAGS" -Dcpp_link_args="$FLAGS" -Dbuildtype=debug
-          
-          # 3. Compile
-          meson compile
-
-      # -----------------------------------------------------------
-      # Test Phase
-      # -----------------------------------------------------------
+          cmake -S . -B buildDir \
+            -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DZYX_BUILD_TESTS=ON \
+            -DZYX_BUILD_APPS=ON \
+            -DZYX_ENABLE_COVERAGE=ON
+          cmake --build buildDir --config Debug --target zyx_test_suite
+        shell: bash
 
       - name: Run Unit Tests
         run: |
-          cd buildDir
-          # Use absolute path for profile generation
-          # %p expands to process ID to allow parallel tests safe write
-          export LLVM_PROFILE_FILE="$PWD/code-%p.profraw"
-          
-          # Run tests
-          meson test --verbose
+          export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
+          ctest --test-dir buildDir --build-config Debug --output-on-failure
         shell: bash
-
-      # -----------------------------------------------------------
-      # Report Generation Phase
-      # -----------------------------------------------------------
 
       - name: Generate Coverage Report
         if: runner.os == 'Linux'
         run: |
-          # Dynamic tool resolution
-          if [ "$RUNNER_OS" == "macOS" ]; then
-             # On macOS, use xcrun -f to find the absolute path of the tools
-             # This prevents Python subprocess errors with spaces in commands
-             COV_CMD=$(xcrun -f llvm-cov)
-             PROF_CMD=$(xcrun -f llvm-profdata)
-          else
-             # On Linux/Windows, use the matrix values directly
-             COV_CMD="${{ matrix.llvm_cov }}"
-             PROF_CMD="${{ matrix.llvm_profdata }}"
-          fi
-          
-          # Call the Python script with named arguments
           python scripts/generate_coverage.py buildDir \
             --lcov coverage.lcov \
-            --llvm-cov "$COV_CMD" \
-            --llvm-prof "$PROF_CMD"
+            --llvm-cov "${{ matrix.llvm_cov }}" \
+            --llvm-prof "${{ matrix.llvm_profdata }}"
         shell: bash
 
       - name: Upload to Codecov
