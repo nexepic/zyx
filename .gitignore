@@ -4,6 +4,8 @@ buildDir/
 buildDir_*/
 build_release/
 build_wasm/
+CMakeFiles/
+CMakeCache.txt
 CMakeUserPresets.json
 emsdk/
 antlr-*.jar
