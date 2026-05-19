@@ -38,6 +38,8 @@ jobs:
             os_tag: linux
             arch_tag: x86_64
             ext: tar.gz
+            cc: clang-20
+            cxx: clang++-20
           - os: macos-latest
             os_tag: macos
             arch_tag: arm64
@@ -67,6 +69,19 @@ jobs:
       - name: Install Common Tools
         run: pip install conan ninja
 
+      - name: Install System Deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=20.1.4 --force
+        shell: pwsh
+
       - name: Install Project Dependencies (Conan) (Windows)
         if: runner.os == 'Windows'
         run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
@@ -76,8 +91,20 @@ jobs:
         run: |
           conan profile detect
           conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
 
-      - name: Configure, Build, and Install
+      - name: Configure, Build, and Install (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S . -B buildDir -T ClangCL -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake -DZYX_BUILD_TESTS=OFF -DZYX_BUILD_APPS=ON -DZYX_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX="$PWD/dist" -DCMAKE_INSTALL_LIBDIR=lib
+          cmake --build buildDir --config Release
+          cmake --install buildDir --config Release
+        shell: pwsh
+
+      - name: Configure, Build, and Install (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           cmake -S . -B buildDir \
@@ -92,6 +119,9 @@ jobs:
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
           cmake --build buildDir --config Release
           cmake --install buildDir --config Release
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
 
       - name: Package CLI (Linux/macOS)
         if: runner.os != 'Windows'
