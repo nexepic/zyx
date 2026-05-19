@@ -92,10 +92,10 @@ cmake -S . -B "$BUILD_DIR" "${GENERATOR_ARGS[@]}" "${TOOLCHAIN_ARGS[@]}" \
 cmake --build "$BUILD_DIR" --target zyx_test_suite
 
 echo -e "${BLUE}>>> [3/5] Running tests...${NC}"
-"./$BUILD_DIR/zyx_test_suite"
+"./$BUILD_DIR/zyx_test_suite" < /dev/null
 
-echo -e "${BLUE}>>> [4/5] Running CTest registration...${NC}"
-ctest --test-dir "$BUILD_DIR" --output-on-failure
+echo -e "${BLUE}>>> [4/5] Verifying CTest registration...${NC}"
+ctest --test-dir "$BUILD_DIR" -N
 
 echo -e "${BLUE}>>> [5/5] Generating reports...${NC}"
 if [ ! -f "$PYTHON_SCRIPT" ]; then
