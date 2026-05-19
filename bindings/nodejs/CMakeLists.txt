@@ -29,7 +29,21 @@ target_include_directories(zyxdb PRIVATE
     "${ZYX_NODE_ROOT}/include"
 )
 target_compile_definitions(zyxdb PRIVATE NAPI_VERSION=8)
-target_link_libraries(zyxdb PRIVATE ${CMAKE_JS_LIB} zyx::core)
+if(UNIX AND NOT APPLE)
+    # On Linux, GNU ld processes static archives left-to-right.
+    # zyx_core and zyx_cypher_parser have a circular dependency
+    # (CypherToPlanVisitor uses LogicalPlanBuilder from core),
+    # so we wrap them in --start-group/--end-group to resolve all symbols.
+    target_link_libraries(zyxdb PRIVATE
+        ${CMAKE_JS_LIB}
+        -Wl,--start-group
+        zyx::core
+        zyx::cypher_parser
+        -Wl,--end-group
+    )
+else()
+    target_link_libraries(zyxdb PRIVATE ${CMAKE_JS_LIB} zyx::core)
+endif()
 
 if(MSVC)
     target_compile_options(zyxdb PRIVATE /W4)

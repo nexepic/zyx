@@ -33,12 +33,12 @@ namespace graph::storage {
 	constexpr char FILE_HEADER_MAGIC_STRING[] = "<ZYX-DB>";
 	constexpr uint32_t STORAGE_PAGE_SIZE = 4096;
 	constexpr uint32_t SEGMENT_SIZE = STORAGE_PAGE_SIZE * 32; // 128K per segment
-	constexpr uint32_t NODES_PER_SEGMENT = SEGMENT_SIZE / Node::getTotalSize();
-	constexpr uint32_t EDGES_PER_SEGMENT = SEGMENT_SIZE / Edge::getTotalSize();
-	constexpr uint32_t PROPERTIES_PER_SEGMENT = SEGMENT_SIZE / Property::getTotalSize();
-	constexpr uint32_t BLOBS_PER_SEGMENT = SEGMENT_SIZE / Blob::getTotalSize();
-	constexpr uint32_t INDEXES_PER_SEGMENT = SEGMENT_SIZE / Index::getTotalSize();
-	constexpr uint32_t STATES_PER_SEGMENT = SEGMENT_SIZE / State::getTotalSize();
+	constexpr uint32_t NODES_PER_SEGMENT = SEGMENT_SIZE / static_cast<uint32_t>(Node::getTotalSize());
+	constexpr uint32_t EDGES_PER_SEGMENT = SEGMENT_SIZE / static_cast<uint32_t>(Edge::getTotalSize());
+	constexpr uint32_t PROPERTIES_PER_SEGMENT = SEGMENT_SIZE / static_cast<uint32_t>(Property::getTotalSize());
+	constexpr uint32_t BLOBS_PER_SEGMENT = SEGMENT_SIZE / static_cast<uint32_t>(Blob::getTotalSize());
+	constexpr uint32_t INDEXES_PER_SEGMENT = SEGMENT_SIZE / static_cast<uint32_t>(Index::getTotalSize());
+	constexpr uint32_t STATES_PER_SEGMENT = SEGMENT_SIZE / static_cast<uint32_t>(State::getTotalSize());
 
 	constexpr size_t FILE_HEADER_SIZE = 128;
 	constexpr size_t SEGMENT_HEADER_SIZE = 128;
