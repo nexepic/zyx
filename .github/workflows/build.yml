@@ -69,22 +69,8 @@ jobs:
       - name: Configure and Build (Windows)
         if: runner.os == 'Windows'
         run: |
-          # Load MSVC environment for system headers and link.exe
-          $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Object {
-            if ($_ -match "^([^=]+)=(.*)$") {
-              [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-            }
-          }
-          $env:CC = "clang-cl"
-          $env:CXX = "clang-cl"
-          cmake -S . -B buildDir -G Ninja `
-            -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake `
-            -DCMAKE_BUILD_TYPE=Debug `
-            -DZYX_BUILD_TESTS=ON `
-            -DZYX_BUILD_APPS=ON `
-            -DZYX_ENABLE_COVERAGE=ON
-          cmake --build buildDir --target zyx_test_suite
+          cmake -S . -B buildDir -T ClangCL -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake -DZYX_BUILD_TESTS=ON -DZYX_BUILD_APPS=ON -DZYX_ENABLE_COVERAGE=ON
+          cmake --build buildDir --config Debug --target zyx_test_suite
         shell: pwsh
 
       - name: Configure and Build (Unix)
