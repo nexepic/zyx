@@ -12,19 +12,24 @@ cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Objec
     }
 }
 
-# GUARANTEE CC and CXX are completely unset for child processes
-[System.Environment]::SetEnvironmentVariable('CC', $null)
-[System.Environment]::SetEnvironmentVariable('CXX', $null)
-Remove-Item Env:\CC -ErrorAction Ignore
-Remove-Item Env:\CXX -ErrorAction Ignore
+# GUARANTEE CC and CXX point to clang-cl for Conan profile detection
+$env:CC = "clang-cl"
+$env:CXX = "clang-cl"
 
 # Remove MinGW from PATH to prevent CMake from detecting mingw32-make.
 $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*mingw*' }) -join ';'
 Write-Host "Removed MinGW from PATH."
 
-# Also remove VS-bundled LLVM from PATH so cmake finds cl.exe, not clang-cl.
+# Also remove VS-bundled LLVM from PATH so choco-installed LLVM takes precedence.
 $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*VC\Tools\Llvm*' }) -join ';'
 Write-Host "Removed VS-bundled LLVM from PATH."
+
+# Ensure choco-installed LLVM is in PATH (for clang-cl, lld-link)
+$llvmBin = "C:\Program Files\LLVM\bin"
+if ((Test-Path $llvmBin) -and ($env:PATH -notlike "*$llvmBin*")) {
+    $env:PATH = "$llvmBin;$env:PATH"
+    Write-Host "Added LLVM to PATH: $llvmBin"
+}
 
 $buildType = "Release"
 $outputDir = if ($env:CONAN_OUTPUT_DIR) { $env:CONAN_OUTPUT_DIR } else { "buildDir" }
@@ -54,7 +59,7 @@ compiler.cppstd=20
 compiler.runtime=dynamic
 
 [conf]
-tools.cmake.cmaketoolchain:generator=Visual Studio 17 2022
+tools.cmake.cmaketoolchain:generator=Ninja
 "@
 
 $profilePath = "conan_windows_profile"
