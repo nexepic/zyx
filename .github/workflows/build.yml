@@ -69,7 +69,7 @@ jobs:
       - name: Configure and Build (Windows)
         if: runner.os == 'Windows'
         run: |
-          cmake -S . -B buildDir -T ClangCL -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake -DZYX_BUILD_TESTS=ON -DZYX_BUILD_APPS=ON -DZYX_ENABLE_COVERAGE=ON
+          cmake -S . -B buildDir -T ClangCL "-DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake" -DZYX_BUILD_TESTS=ON -DZYX_BUILD_APPS=ON -DZYX_ENABLE_COVERAGE=ON
           cmake --build buildDir --config Debug --target zyx_test_suite
         shell: pwsh
 

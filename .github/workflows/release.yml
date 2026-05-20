@@ -98,7 +98,7 @@ jobs:
       - name: Configure, Build, and Install (Windows)
         if: runner.os == 'Windows'
         run: |
-          cmake -S . -B buildDir -T ClangCL -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake -DZYX_BUILD_TESTS=OFF -DZYX_BUILD_APPS=ON -DZYX_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX="$PWD/dist" -DCMAKE_INSTALL_LIBDIR=lib
+          cmake -S . -B buildDir -T ClangCL "-DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake" -DZYX_BUILD_TESTS=OFF -DZYX_BUILD_APPS=ON -DZYX_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON "-DCMAKE_INSTALL_PREFIX=$PWD/dist" -DCMAKE_INSTALL_LIBDIR=lib
           cmake --build buildDir --config Release
           cmake --install buildDir --config Release
         shell: pwsh

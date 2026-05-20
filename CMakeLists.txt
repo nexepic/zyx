@@ -120,12 +120,30 @@ endif()
 if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
     add_executable(zyx_cli apps/cli/main.cpp)
     set_target_properties(zyx_cli PROPERTIES OUTPUT_NAME zyx)
-    target_link_libraries(zyx_cli PRIVATE zyx::core)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(zyx_cli PRIVATE
+            -Wl,--start-group
+            zyx::core
+            zyx::cypher_parser
+            -Wl,--end-group
+        )
+    else()
+        target_link_libraries(zyx_cli PRIVATE zyx::core)
+    endif()
 
     add_executable(zyx_bench apps/benchmark/main.cpp)
     set_target_properties(zyx_bench PROPERTIES OUTPUT_NAME zyx-bench)
     target_include_directories(zyx_bench PRIVATE "${PROJECT_SOURCE_DIR}/apps/benchmark")
-    target_link_libraries(zyx_bench PRIVATE zyx::core)
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(zyx_bench PRIVATE
+            -Wl,--start-group
+            zyx::core
+            zyx::cypher_parser
+            -Wl,--end-group
+        )
+    else()
+        target_link_libraries(zyx_bench PRIVATE zyx::core)
+    endif()
 endif()
 
 if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
