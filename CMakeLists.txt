@@ -46,7 +46,7 @@ target_include_directories(zyx_inputxx
 target_link_libraries(zyx_inputxx PUBLIC zyx_project_options)
 add_library(zyx::inputxx ALIAS zyx_inputxx)
 
-add_library(zyx_cypher_parser STATIC ${ZYX_CYPHER_SOURCES})
+add_library(zyx_cypher_parser OBJECT ${ZYX_CYPHER_SOURCES})
 target_include_directories(zyx_cypher_parser
     PUBLIC
         "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
@@ -120,30 +120,12 @@ endif()
 if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
     add_executable(zyx_cli apps/cli/main.cpp)
     set_target_properties(zyx_cli PROPERTIES OUTPUT_NAME zyx)
-    if(UNIX AND NOT APPLE)
-        target_link_libraries(zyx_cli PRIVATE
-            -Wl,--start-group
-            zyx::core
-            zyx::cypher_parser
-            -Wl,--end-group
-        )
-    else()
-        target_link_libraries(zyx_cli PRIVATE zyx::core)
-    endif()
+    target_link_libraries(zyx_cli PRIVATE zyx::core)
 
     add_executable(zyx_bench apps/benchmark/main.cpp)
     set_target_properties(zyx_bench PROPERTIES OUTPUT_NAME zyx-bench)
     target_include_directories(zyx_bench PRIVATE "${PROJECT_SOURCE_DIR}/apps/benchmark")
-    if(UNIX AND NOT APPLE)
-        target_link_libraries(zyx_bench PRIVATE
-            -Wl,--start-group
-            zyx::core
-            zyx::cypher_parser
-            -Wl,--end-group
-        )
-    else()
-        target_link_libraries(zyx_bench PRIVATE zyx::core)
-    endif()
+    target_link_libraries(zyx_bench PRIVATE zyx::core)
 endif()
 
 if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
