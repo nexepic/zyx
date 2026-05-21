@@ -48,6 +48,8 @@ jobs:
             os_tag: windows
             arch_tag: x86_64
             ext: zip
+            cc: clang-cl
+            cxx: clang-cl
 
     steps:
       - name: Checkout Code
@@ -97,19 +99,9 @@ jobs:
           CC: ${{ matrix.cc || '' }}
           CXX: ${{ matrix.cxx || '' }}
 
-      - name: Configure, Build, and Install (Windows)
-        if: runner.os == 'Windows'
+      - name: Configure, Build, and Install
         run: |
-          cmake -S . -B buildDir -G Ninja "-DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake" -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Release -DZYX_BUILD_TESTS=OFF -DZYX_BUILD_APPS=ON -DZYX_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX="$PWD/dist" -DCMAKE_INSTALL_LIBDIR=lib
-          cmake --build buildDir
-          cmake --install buildDir
-        shell: pwsh
-
-      - name: Configure, Build, and Install (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          cmake -S . -B buildDir \
+          cmake -S . -B buildDir -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DZYX_BUILD_TESTS=OFF \
@@ -121,6 +113,7 @@ jobs:
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
           cmake --build buildDir
           cmake --install buildDir
+        shell: bash
         env:
           CC: ${{ matrix.cc || '' }}
           CXX: ${{ matrix.cxx || '' }}
@@ -138,14 +131,14 @@ jobs:
 
       - name: Package CLI (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
-          $VERSION = "${{ steps.version.outputs.version }}"
-          $CLI_NAME = "zyx-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.zip"
-          echo "cli_asset=$CLI_NAME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          New-Item -ItemType Directory -Force -Path cli_package
-          Copy-Item "buildDir\Release\zyx.exe" -Destination cli_package\
-          Compress-Archive -Path cli_package\* -DestinationPath "$CLI_NAME"
+          VERSION="${{ steps.version.outputs.version }}"
+          CLI_NAME="zyx-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.zip"
+          echo "cli_asset=$CLI_NAME" >> "$GITHUB_ENV"
+          mkdir -p cli_package
+          cp buildDir/zyx.exe cli_package/
+          cd cli_package && 7z a -tzip "../$CLI_NAME" .
 
       - name: Package SDK (Linux/macOS)
         if: runner.os != 'Windows'
@@ -158,12 +151,12 @@ jobs:
 
       - name: Package SDK (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
-          $VERSION = "${{ steps.version.outputs.version }}"
-          $SDK_NAME = "zyx-sdk-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.zip"
-          echo "sdk_asset=$SDK_NAME" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Compress-Archive -Path dist\* -DestinationPath "$SDK_NAME"
+          VERSION="${{ steps.version.outputs.version }}"
+          SDK_NAME="zyx-sdk-${VERSION}-${{ matrix.os_tag }}-${{ matrix.arch_tag }}.zip"
+          echo "sdk_asset=$SDK_NAME" >> "$GITHUB_ENV"
+          cd dist && 7z a -tzip "../$SDK_NAME" .
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
