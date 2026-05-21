@@ -70,7 +70,9 @@ jobs:
 
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
-        run: choco install llvm --version=20.1.4 --force
+        run: |
+          choco install llvm --version=20.1.4 --force
+          echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
       - name: Install zyxdb (Unix)
