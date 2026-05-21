@@ -72,6 +72,8 @@ jobs:
         run: |
           cmake -S . -B buildDir -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake \
+            ${CC:+-DCMAKE_C_COMPILER=$CC} \
+            ${CXX:+-DCMAKE_CXX_COMPILER=$CXX} \
             -DCMAKE_BUILD_TYPE=Debug \
             -DZYX_BUILD_TESTS=ON \
             -DZYX_BUILD_APPS=ON \
