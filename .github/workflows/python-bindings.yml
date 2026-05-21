@@ -85,7 +85,7 @@ jobs:
           $toolchain = "$PWD\buildDir\conan_toolchain.cmake" -replace '\\', '/'
           $env:CC = "clang-cl"
           $env:CXX = "clang-cl"
-          $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$toolchain -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl"
+          $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$toolchain -DCMAKE_BUILD_TYPE=Release"
           pip install "bindings/python[test]"
         shell: pwsh
 
@@ -135,7 +135,7 @@ jobs:
             choco install llvm --version=20.1.4 --force
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
           CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/tmp/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release" MACOSX_DEPLOYMENT_TARGET=13.3
-          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl"
+          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
