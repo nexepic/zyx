@@ -60,6 +60,7 @@ compiler.runtime=dynamic
 
 [conf]
 tools.cmake.cmaketoolchain:generator=Ninja
+tools.cmake.cmaketoolchain:compiler_executables={"c": "clang-cl", "cpp": "clang-cl"}
 "@
 
 $profilePath = "conan_windows_profile"
