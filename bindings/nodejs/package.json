@@ -1,6 +1,6 @@
 {
   "name": "zyxdb",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Node.js bindings for ZYX graph database",
   "main": "lib/index.js",
   "types": "index.d.ts",
@@ -31,9 +31,9 @@
     "cmake-js": "^7.3.0"
   },
   "optionalDependencies": {
-    "@nexepic/zyxdb-linux-x64-gnu": "0.1.17",
-    "@nexepic/zyxdb-darwin-arm64": "0.1.17",
-    "@nexepic/zyxdb-win32-x64-msvc": "0.1.17"
+    "@nexepic/zyxdb-linux-x64-gnu": "0.1.18",
+    "@nexepic/zyxdb-darwin-arm64": "0.1.18",
+    "@nexepic/zyxdb-win32-x64-msvc": "0.1.18"
   },
   "engines": {
     "node": ">=18.0.0"
