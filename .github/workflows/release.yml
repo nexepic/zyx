@@ -100,13 +100,10 @@ jobs:
       - name: Configure, Build, and Install (Windows)
         if: runner.os == 'Windows'
         run: |
-          cmake -S . -B buildDir -G Ninja "-DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DZYX_BUILD_TESTS=OFF -DZYX_BUILD_APPS=ON -DZYX_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX="$PWD/dist" -DCMAKE_INSTALL_LIBDIR=lib
+          cmake -S . -B buildDir -G Ninja "-DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake" -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Release -DZYX_BUILD_TESTS=OFF -DZYX_BUILD_APPS=ON -DZYX_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX="$PWD/dist" -DCMAKE_INSTALL_LIBDIR=lib
           cmake --build buildDir
           cmake --install buildDir
         shell: pwsh
-        env:
-          CC: clang-cl
-          CXX: clang-cl
 
       - name: Configure, Build, and Install (Unix)
         if: runner.os != 'Windows'
