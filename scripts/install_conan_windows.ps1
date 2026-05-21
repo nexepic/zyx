@@ -81,4 +81,12 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+# Conan's msvc profile sets CMAKE_C/CXX_COMPILER to "cl" in the generated
+# toolchain file as non-cache variables, which override any -D flags passed
+# on the cmake command line.  Append clang-cl overrides so they take effect
+# after Conan's own set() calls.
+$toolchainFile = Join-Path $outputDir "conan_toolchain.cmake"
+Add-Content -Path $toolchainFile -Value "`nset(CMAKE_C_COMPILER clang-cl)`nset(CMAKE_CXX_COMPILER clang-cl)"
+Write-Host "Patched $toolchainFile to use clang-cl."
+
 Write-Host "Conan install completed."

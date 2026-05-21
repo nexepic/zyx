@@ -110,7 +110,7 @@ jobs:
         run: |
           $env:CC = "clang-cl"
           $env:CXX = "clang-cl"
-          npx cmake-js compile --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake --CDCMAKE_C_COMPILER=clang-cl --CDCMAKE_CXX_COMPILER=clang-cl
+          npx cmake-js compile --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
         shell: pwsh
 
       - name: Run tests
@@ -201,7 +201,7 @@ jobs:
         run: |
           $env:CC = "clang-cl"
           $env:CXX = "clang-cl"
-          npx cmake-js compile --release --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake --CDCMAKE_C_COMPILER=clang-cl --CDCMAKE_CXX_COMPILER=clang-cl
+          npx cmake-js compile --release --CDCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}\buildDir\conan_toolchain.cmake
         shell: pwsh
 
       - name: Copy binary to platform package
