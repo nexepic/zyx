@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(zyx VERSION 0.1.19 LANGUAGES CXX)
+project(zyx VERSION 0.1.20 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
