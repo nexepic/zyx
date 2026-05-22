@@ -56,7 +56,20 @@ zyx_driver_status_t zyx_driver_db_open(const char *path, zyx_driver_db_t **out_d
 zyx_driver_status_t zyx_driver_db_open_if_exists(const char *path, zyx_driver_db_t **out_db, zyx_driver_error_t **out_error);
 zyx_driver_status_t zyx_driver_db_close(zyx_driver_db_t *db, zyx_driver_error_t **out_error);
 
-zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cypher,
+zyx_driver_status_t zyx_driver_params_create(zyx_driver_params_t **out_params, zyx_driver_error_t **out_error);
+void zyx_driver_params_free(zyx_driver_params_t *params, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_params_set_null(zyx_driver_params_t *params, const char *key,
+                                               zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_params_set_bool(zyx_driver_params_t *params, const char *key, bool value,
+                                               zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_params_set_int64(zyx_driver_params_t *params, const char *key, int64_t value,
+                                                zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_params_set_double(zyx_driver_params_t *params, const char *key, double value,
+                                                 zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, const char *key, const char *value,
+                                                 zyx_driver_error_t **out_error);
+
+zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cypher, zyx_driver_params_t *params,
                                           zyx_driver_result_t **out_result, zyx_driver_error_t **out_error);
 void zyx_driver_result_free(zyx_driver_result_t *result);
 zyx_driver_status_t zyx_driver_result_next(zyx_driver_result_t *result, zyx_driver_error_t **out_error);

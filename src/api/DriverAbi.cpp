@@ -6,6 +6,7 @@
 #include <sstream>
 #include <new>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "ProjectConfig.hpp"
@@ -23,6 +24,10 @@ struct zyx_driver_db_t {
 struct zyx_driver_result_t {
     zyx::Result result;
     std::deque<std::string> string_buffers;
+};
+
+struct zyx_driver_params_t {
+    std::unordered_map<std::string, zyx::Value> values;
 };
 
 namespace {
@@ -199,8 +204,100 @@ zyx_driver_status_t zyx_driver_db_close(zyx_driver_db_t *db, zyx_driver_error_t 
 }
 
 
-zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cypher, zyx_driver_result_t **out_result,
-                                          zyx_driver_error_t **out_error) {
+zyx_driver_status_t zyx_driver_params_create(zyx_driver_params_t **out_params, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_params must not be null");
+    }
+    *out_params = nullptr;
+
+    try {
+        *out_params = new zyx_driver_params_t();
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    }
+}
+
+void zyx_driver_params_free(zyx_driver_params_t *params, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    delete params;
+}
+
+zyx_driver_status_t zyx_driver_params_set_null(zyx_driver_params_t *params, const char *key,
+                                               zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
+    }
+    if (key == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
+    }
+    params->values[key] = std::monostate{};
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_params_set_bool(zyx_driver_params_t *params, const char *key, bool value,
+                                               zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
+    }
+    if (key == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
+    }
+    params->values[key] = value;
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_params_set_int64(zyx_driver_params_t *params, const char *key, int64_t value,
+                                                zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
+    }
+    if (key == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
+    }
+    params->values[key] = value;
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_params_set_double(zyx_driver_params_t *params, const char *key, double value,
+                                                 zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
+    }
+    if (key == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
+    }
+    params->values[key] = value;
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, const char *key, const char *value,
+                                                 zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
+    }
+    if (key == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
+    }
+    if (value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "value must not be null");
+    }
+    try {
+        params->values[key] = std::string(value);
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    }
+}
+
+zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cypher, zyx_driver_params_t *params,
+                                          zyx_driver_result_t **out_result, zyx_driver_error_t **out_error) {
     clearError(out_error);
     if (out_result == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_result must not be null");
@@ -215,7 +312,7 @@ zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cyphe
 
     try {
         auto handle = std::make_unique<zyx_driver_result_t>();
-        handle->result = db->db->execute(cypher);
+        handle->result = params != nullptr ? db->db->execute(cypher, params->values) : db->db->execute(cypher);
         if (!handle->result.isSuccess()) {
             return setError(out_error, ZYX_DRIVER_EXECUTION_ERROR, handle->result.getError());
         }
