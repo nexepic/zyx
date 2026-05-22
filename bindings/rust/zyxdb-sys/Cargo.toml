@@ -1,0 +1,12 @@
+[package]
+name = "zyxdb-sys"
+version = "0.1.0"
+edition = "2021"
+links = "zyx"
+build = "build.rs"
+
+[lib]
+name = "zyxdb_sys"
+path = "src/lib.rs"
+
+[dependencies]
