@@ -43,7 +43,7 @@ TEST_F(DriverAbiResultCursorTest, StreamsScalarRowWithColumnMetadataAndTypedGett
     zyx_driver_result_t *result = nullptr;
 
     ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 7 AS id, 'Alice' AS name, 'blue' AS tag, true AS ok, 3.5 AS score",
-                                     &result, &error),
+                                     nullptr, &result, &error),
               ZYX_DRIVER_OK);
     ASSERT_NE(result, nullptr);
     ASSERT_EQ(error, nullptr);
@@ -99,7 +99,7 @@ TEST_F(DriverAbiResultCursorTest, StreamsScalarRowWithColumnMetadataAndTypedGett
 TEST_F(DriverAbiResultCursorTest, StringPointersRemainStableUntilNextOrFree) {
     zyx_driver_result_t *result = nullptr;
 
-    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 'Alice' AS name, 'blue' AS tag", &result, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 'Alice' AS name, 'blue' AS tag", nullptr, &result, &error), ZYX_DRIVER_OK);
     ASSERT_NE(result, nullptr);
     ASSERT_EQ(error, nullptr);
     ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
@@ -127,10 +127,48 @@ TEST_F(DriverAbiResultCursorTest, StringPointersRemainStableUntilNextOrFree) {
     zyx_driver_result_free(result);
 }
 
+TEST_F(DriverAbiResultCursorTest, ExecuteWithScalarParams) {
+    zyx_driver_params_t *params = nullptr;
+    zyx_driver_result_t *result = nullptr;
+
+    ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(params, nullptr);
+    ASSERT_EQ(error, nullptr);
+    ASSERT_EQ(zyx_driver_params_set_string(params, "name", "Ada", &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_params_set_int64(params, "age", 37, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_params_set_bool(params, "active", true, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(error, nullptr);
+
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN $name AS name, $age AS age, $active AS active", params, &result,
+                                    &error),
+              ZYX_DRIVER_OK);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(error, nullptr);
+
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+    ASSERT_EQ(error, nullptr);
+
+    const char *name = nullptr;
+    int64_t age = 0;
+    bool active = false;
+    EXPECT_EQ(zyx_driver_result_get_string(result, 0, &name, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(name, nullptr);
+    EXPECT_STREQ(name, "Ada");
+    EXPECT_EQ(zyx_driver_result_get_int64(result, 1, &age, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(age, 37);
+    EXPECT_EQ(zyx_driver_result_get_bool(result, 2, &active, &error), ZYX_DRIVER_OK);
+    EXPECT_TRUE(active);
+    EXPECT_EQ(error, nullptr);
+
+    zyx_driver_result_free(result);
+    zyx_driver_params_free(params, &error);
+    EXPECT_EQ(error, nullptr);
+}
+
 TEST_F(DriverAbiResultCursorTest, TypeMismatchReturnsStructuredError) {
     zyx_driver_result_t *result = nullptr;
 
-    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 'Alice' AS name", &result, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 'Alice' AS name", nullptr, &result, &error), ZYX_DRIVER_OK);
     ASSERT_NE(result, nullptr);
     ASSERT_EQ(error, nullptr);
     ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
