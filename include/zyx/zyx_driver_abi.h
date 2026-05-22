@@ -56,6 +56,20 @@ zyx_driver_status_t zyx_driver_db_open(const char *path, zyx_driver_db_t **out_d
 zyx_driver_status_t zyx_driver_db_open_if_exists(const char *path, zyx_driver_db_t **out_db, zyx_driver_error_t **out_error);
 zyx_driver_status_t zyx_driver_db_close(zyx_driver_db_t *db, zyx_driver_error_t **out_error);
 
+/* Transaction handles are opaque and must be released with zyx_driver_txn_close.
+ * Commit and rollback finalize transaction state. Closing an active transaction rolls back.
+ */
+zyx_driver_status_t zyx_driver_txn_begin(zyx_driver_db_t *db, zyx_driver_txn_t **out_txn,
+                                         zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_txn_begin_read_only(zyx_driver_db_t *db, zyx_driver_txn_t **out_txn,
+                                                   zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_txn_execute(zyx_driver_txn_t *txn, const char *cypher,
+                                           const zyx_driver_params_t *params,
+                                           zyx_driver_result_t **out_result, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_txn_commit(zyx_driver_txn_t *txn, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_txn_rollback(zyx_driver_txn_t *txn, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_txn_close(zyx_driver_txn_t *txn, zyx_driver_error_t **out_error);
+
 zyx_driver_status_t zyx_driver_params_create(zyx_driver_params_t **out_params, zyx_driver_error_t **out_error);
 void zyx_driver_params_free(zyx_driver_params_t *params, zyx_driver_error_t **out_error);
 zyx_driver_status_t zyx_driver_params_set_null(zyx_driver_params_t *params, const char *key,

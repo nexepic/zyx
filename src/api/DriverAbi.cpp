@@ -23,6 +23,10 @@ struct zyx_driver_db_t {
     std::unique_ptr<zyx::Database> db;
 };
 
+struct zyx_driver_txn_t {
+    zyx::Transaction txn;
+};
+
 struct zyx_driver_result_t {
     zyx::Result result;
     std::deque<std::string> string_buffers;
@@ -133,6 +137,26 @@ EdgeValueAccess getEdgeValue(const zyx_driver_result_t *result, uint32_t column,
 zyx_driver_status_t internalError(zyx_driver_error_t **out_error, const char *message) {
     return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, message);
 }
+
+zyx_driver_status_t resultErrorStatus(const zyx::Result &result) {
+    const std::string error = result.getError();
+    if (error.find("Read-only transaction cannot execute write queries") != std::string::npos) {
+        return ZYX_DRIVER_READ_ONLY_VIOLATION;
+    }
+    if (error.find("Transaction") != std::string::npos || error.find("transaction") != std::string::npos) {
+        return ZYX_DRIVER_TRANSACTION_ERROR;
+    }
+    return ZYX_DRIVER_EXECUTION_ERROR;
+}
+
+zyx_driver_status_t transactionExceptionStatus(const std::exception &ex) {
+    const std::string message = ex.what();
+    if (message.find("Read-only transaction cannot execute write queries") != std::string::npos) {
+        return ZYX_DRIVER_READ_ONLY_VIOLATION;
+    }
+    return ZYX_DRIVER_TRANSACTION_ERROR;
+}
+
 
 zyx_driver_status_t catchAbiException(zyx_driver_error_t **out_error) {
     try {
@@ -319,6 +343,149 @@ zyx_driver_status_t zyx_driver_db_close(zyx_driver_db_t *db, zyx_driver_error_t 
     }
 }
 
+
+
+zyx_driver_status_t zyx_driver_txn_begin(zyx_driver_db_t *db, zyx_driver_txn_t **out_txn,
+                                         zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_txn == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_txn must not be null");
+    }
+    *out_txn = nullptr;
+    if (db == nullptr || db->db == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "db must not be null");
+    }
+
+    try {
+        auto handle = std::make_unique<zyx_driver_txn_t>(zyx_driver_txn_t{db->db->beginTransaction()});
+        *out_txn = handle.release();
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_TRANSACTION_ERROR, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
+zyx_driver_status_t zyx_driver_txn_begin_read_only(zyx_driver_db_t *db, zyx_driver_txn_t **out_txn,
+                                                   zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_txn == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_txn must not be null");
+    }
+    *out_txn = nullptr;
+    if (db == nullptr || db->db == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "db must not be null");
+    }
+
+    try {
+        auto handle = std::make_unique<zyx_driver_txn_t>(zyx_driver_txn_t{db->db->beginReadOnlyTransaction()});
+        *out_txn = handle.release();
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_TRANSACTION_ERROR, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
+zyx_driver_status_t zyx_driver_txn_execute(zyx_driver_txn_t *txn, const char *cypher,
+                                           const zyx_driver_params_t *params,
+                                           zyx_driver_result_t **out_result, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_result == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_result must not be null");
+    }
+    *out_result = nullptr;
+    if (txn == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "txn must not be null");
+    }
+    if (cypher == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "cypher must not be null");
+    }
+
+    try {
+        auto handle = std::make_unique<zyx_driver_result_t>();
+        handle->result = params != nullptr ? txn->txn.execute(cypher, params->values) : txn->txn.execute(cypher);
+        if (!handle->result.isSuccess()) {
+            return setError(out_error, resultErrorStatus(handle->result), handle->result.getError());
+        }
+        *out_result = handle.release();
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, transactionExceptionStatus(ex), ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
+zyx_driver_status_t zyx_driver_txn_commit(zyx_driver_txn_t *txn, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (txn == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "txn must not be null");
+    }
+
+    try {
+        txn->txn.commit();
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, transactionExceptionStatus(ex), ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
+zyx_driver_status_t zyx_driver_txn_rollback(zyx_driver_txn_t *txn, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (txn == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "txn must not be null");
+    }
+
+    try {
+        if (txn->txn.isActive()) {
+            txn->txn.rollback();
+        }
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, transactionExceptionStatus(ex), ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
+zyx_driver_status_t zyx_driver_txn_close(zyx_driver_txn_t *txn, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (txn == nullptr) {
+        return ZYX_DRIVER_OK;
+    }
+
+    try {
+        if (txn->txn.isActive()) {
+            txn->txn.rollback();
+        }
+        delete txn;
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        delete txn;
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        delete txn;
+        return setError(out_error, transactionExceptionStatus(ex), ex.what());
+    } catch (...) {
+        delete txn;
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
 
 zyx_driver_status_t zyx_driver_params_create(zyx_driver_params_t **out_params, zyx_driver_error_t **out_error) {
     clearError(out_error);
