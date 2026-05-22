@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <sstream>
 #include <new>
 #include <string>
 #include <utility>
@@ -18,6 +19,12 @@ struct zyx_driver_db_t {
     std::unique_ptr<zyx::Database> db;
 };
 
+struct zyx_driver_result_t {
+    zyx::Result result;
+    std::vector<std::string> column_name_buffers;
+    std::string string_buffer;
+};
+
 namespace {
 
 void clearError(zyx_driver_error_t **out_error) {
@@ -31,6 +38,69 @@ zyx_driver_status_t setError(zyx_driver_error_t **out_error, zyx_driver_status_t
         *out_error = new zyx_driver_error_t{code, std::move(message)};
     }
     return code;
+}
+
+zyx_driver_value_type_t valueType(const zyx::Value &value) {
+    if (std::holds_alternative<std::monostate>(value)) return ZYX_DRIVER_VALUE_NULL;
+    if (std::holds_alternative<bool>(value)) return ZYX_DRIVER_VALUE_BOOL;
+    if (std::holds_alternative<int64_t>(value)) return ZYX_DRIVER_VALUE_INT64;
+    if (std::holds_alternative<double>(value)) return ZYX_DRIVER_VALUE_DOUBLE;
+    if (std::holds_alternative<std::string>(value)) return ZYX_DRIVER_VALUE_STRING;
+    if (std::holds_alternative<std::shared_ptr<zyx::Node>>(value)) return ZYX_DRIVER_VALUE_NODE;
+    if (std::holds_alternative<std::shared_ptr<zyx::Edge>>(value)) return ZYX_DRIVER_VALUE_EDGE;
+    if (std::holds_alternative<std::vector<float>>(value) || std::holds_alternative<std::vector<std::string>>(value) ||
+        std::holds_alternative<std::shared_ptr<zyx::ValueList>>(value)) {
+        return ZYX_DRIVER_VALUE_LIST;
+    }
+    if (std::holds_alternative<std::shared_ptr<zyx::ValueMap>>(value)) return ZYX_DRIVER_VALUE_MAP;
+    return ZYX_DRIVER_VALUE_NULL;
+}
+
+std::string typeName(zyx_driver_value_type_t type) {
+    switch (type) {
+        case ZYX_DRIVER_VALUE_NULL: return "null";
+        case ZYX_DRIVER_VALUE_BOOL: return "bool";
+        case ZYX_DRIVER_VALUE_INT64: return "int64";
+        case ZYX_DRIVER_VALUE_DOUBLE: return "double";
+        case ZYX_DRIVER_VALUE_STRING: return "string";
+        case ZYX_DRIVER_VALUE_NODE: return "node";
+        case ZYX_DRIVER_VALUE_EDGE: return "edge";
+        case ZYX_DRIVER_VALUE_LIST: return "list";
+        case ZYX_DRIVER_VALUE_MAP: return "map";
+    }
+    return "unknown";
+}
+
+zyx_driver_status_t validateColumn(const zyx_driver_result_t *result, uint32_t column, zyx_driver_error_t **out_error) {
+    if (result == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "result must not be null");
+    }
+    if (column >= static_cast<uint32_t>(result->result.getColumnCount())) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_RANGE, "column index is out of range");
+    }
+    return ZYX_DRIVER_OK;
+}
+
+template <typename T>
+zyx_driver_status_t getScalar(const zyx_driver_result_t *result, uint32_t column, T *out_value,
+                              zyx_driver_error_t **out_error, zyx_driver_value_type_t expected) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+        return status;
+    }
+
+    zyx::Value value = result->result.get(static_cast<int>(column));
+    if (const auto *typed = std::get_if<T>(&value)) {
+        *out_value = *typed;
+        return ZYX_DRIVER_OK;
+    }
+
+    std::ostringstream message;
+    message << "type mismatch: expected " << typeName(expected) << ", got " << typeName(valueType(value));
+    return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
 }
 
 zyx_driver_status_t openDatabase(const char *path, zyx_driver_db_t **out_db, zyx_driver_error_t **out_error,
@@ -126,6 +196,125 @@ zyx_driver_status_t zyx_driver_db_close(zyx_driver_db_t *db, zyx_driver_error_t 
         delete db;
         return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
     }
+}
+
+
+zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cypher, zyx_driver_result_t **out_result,
+                                          zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_result == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_result must not be null");
+    }
+    *out_result = nullptr;
+    if (db == nullptr || db->db == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "db must not be null");
+    }
+    if (cypher == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "cypher must not be null");
+    }
+
+    try {
+        auto handle = std::make_unique<zyx_driver_result_t>();
+        handle->result = db->db->execute(cypher);
+        if (!handle->result.isSuccess()) {
+            return setError(out_error, ZYX_DRIVER_EXECUTION_ERROR, handle->result.getError());
+        }
+        int column_count = handle->result.getColumnCount();
+        if (column_count > 0) {
+            handle->column_name_buffers.reserve(static_cast<size_t>(column_count));
+            for (int i = 0; i < column_count; ++i) {
+                handle->column_name_buffers.push_back(handle->result.getColumnName(i));
+            }
+        }
+        *out_result = handle.release();
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_EXECUTION_ERROR, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
+void zyx_driver_result_free(zyx_driver_result_t *result) { delete result; }
+
+zyx_driver_status_t zyx_driver_result_next(zyx_driver_result_t *result, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (result == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "result must not be null");
+    }
+    result->string_buffer.clear();
+    try {
+        if (!result->result.hasNext()) {
+            return ZYX_DRIVER_DONE;
+        }
+        result->result.next();
+        return ZYX_DRIVER_ROW;
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_EXECUTION_ERROR, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
+uint32_t zyx_driver_result_column_count(const zyx_driver_result_t *result) {
+    if (result == nullptr) {
+        return 0;
+    }
+    int count = result->result.getColumnCount();
+    return count < 0 ? 0u : static_cast<uint32_t>(count);
+}
+
+const char *zyx_driver_result_column_name(zyx_driver_result_t *result, uint32_t column) {
+    if (result == nullptr || column >= result->column_name_buffers.size()) {
+        return nullptr;
+    }
+    return result->column_name_buffers[column].c_str();
+}
+
+zyx_driver_value_type_t zyx_driver_result_value_type(const zyx_driver_result_t *result, uint32_t column) {
+    if (result == nullptr || column >= zyx_driver_result_column_count(result)) {
+        return ZYX_DRIVER_VALUE_NULL;
+    }
+    return valueType(result->result.get(static_cast<int>(column)));
+}
+
+zyx_driver_status_t zyx_driver_result_get_int64(const zyx_driver_result_t *result, uint32_t column, int64_t *out_value,
+                                                zyx_driver_error_t **out_error) {
+    return getScalar(result, column, out_value, out_error, ZYX_DRIVER_VALUE_INT64);
+}
+
+zyx_driver_status_t zyx_driver_result_get_double(const zyx_driver_result_t *result, uint32_t column, double *out_value,
+                                                 zyx_driver_error_t **out_error) {
+    return getScalar(result, column, out_value, out_error, ZYX_DRIVER_VALUE_DOUBLE);
+}
+
+zyx_driver_status_t zyx_driver_result_get_bool(const zyx_driver_result_t *result, uint32_t column, bool *out_value,
+                                               zyx_driver_error_t **out_error) {
+    return getScalar(result, column, out_value, out_error, ZYX_DRIVER_VALUE_BOOL);
+}
+
+zyx_driver_status_t zyx_driver_result_get_string(zyx_driver_result_t *result, uint32_t column, const char **out_value,
+                                                 zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+        return status;
+    }
+
+    zyx::Value value = result->result.get(static_cast<int>(column));
+    if (const auto *typed = std::get_if<std::string>(&value)) {
+        result->string_buffer = *typed;
+        *out_value = result->string_buffer.c_str();
+        return ZYX_DRIVER_OK;
+    }
+
+    std::ostringstream message;
+    message << "type mismatch: expected string, got " << typeName(valueType(value));
+    return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
 }
 
 } // extern "C"

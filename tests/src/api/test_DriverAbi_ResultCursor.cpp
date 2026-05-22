@@ -1,0 +1,107 @@
+#include <cstdlib>
+#include <filesystem>
+#include <string>
+
+#include <gtest/gtest.h>
+
+#include "zyx/zyx_driver_abi.h"
+
+namespace fs = std::filesystem;
+
+class DriverAbiResultCursorTest : public ::testing::Test {
+protected:
+    std::string dbPath;
+    zyx_driver_db_t *db = nullptr;
+    zyx_driver_error_t *error = nullptr;
+
+    void SetUp() override {
+        dbPath = (fs::temp_directory_path() / ("zyx_driver_abi_result_cursor_" + std::to_string(std::rand()))).string();
+        cleanup();
+        ASSERT_EQ(zyx_driver_db_open(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+        ASSERT_NE(db, nullptr);
+        ASSERT_EQ(error, nullptr);
+    }
+
+    void TearDown() override {
+        if (db != nullptr) {
+            EXPECT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+            db = nullptr;
+        }
+        zyx_driver_error_free(error);
+        error = nullptr;
+        cleanup();
+    }
+
+    void cleanup() {
+        std::error_code ec;
+        fs::remove_all(dbPath, ec);
+        fs::remove(dbPath + "-wal", ec);
+    }
+};
+
+TEST_F(DriverAbiResultCursorTest, StreamsScalarRowWithColumnMetadataAndTypedGetters) {
+    zyx_driver_result_t *result = nullptr;
+
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 7 AS id, 'Alice' AS name, true AS ok, 3.5 AS score", &result, &error),
+              ZYX_DRIVER_OK);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(error, nullptr);
+
+    EXPECT_EQ(zyx_driver_result_column_count(result), 4u);
+    const char *idColumn = zyx_driver_result_column_name(result, 0);
+    const char *nameColumn = zyx_driver_result_column_name(result, 1);
+    const char *okColumn = zyx_driver_result_column_name(result, 2);
+    const char *scoreColumn = zyx_driver_result_column_name(result, 3);
+    EXPECT_STREQ(idColumn, "id");
+    EXPECT_STREQ(nameColumn, "name");
+    EXPECT_STREQ(okColumn, "ok");
+    EXPECT_STREQ(scoreColumn, "score");
+
+    EXPECT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+    ASSERT_EQ(error, nullptr);
+
+    EXPECT_EQ(zyx_driver_result_value_type(result, 0), ZYX_DRIVER_VALUE_INT64);
+    EXPECT_EQ(zyx_driver_result_value_type(result, 1), ZYX_DRIVER_VALUE_STRING);
+    EXPECT_EQ(zyx_driver_result_value_type(result, 2), ZYX_DRIVER_VALUE_BOOL);
+    EXPECT_EQ(zyx_driver_result_value_type(result, 3), ZYX_DRIVER_VALUE_DOUBLE);
+
+    int64_t id = 0;
+    const char *name = nullptr;
+    bool ok = false;
+    double score = 0.0;
+
+    EXPECT_EQ(zyx_driver_result_get_int64(result, 0, &id, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(id, 7);
+    EXPECT_EQ(zyx_driver_result_get_string(result, 1, &name, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(name, nullptr);
+    EXPECT_STREQ(name, "Alice");
+    EXPECT_EQ(zyx_driver_result_get_bool(result, 2, &ok, &error), ZYX_DRIVER_OK);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(zyx_driver_result_get_double(result, 3, &score, &error), ZYX_DRIVER_OK);
+    EXPECT_DOUBLE_EQ(score, 3.5);
+    EXPECT_EQ(error, nullptr);
+
+    EXPECT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_DONE);
+    EXPECT_EQ(error, nullptr);
+
+    zyx_driver_result_free(result);
+}
+
+TEST_F(DriverAbiResultCursorTest, TypeMismatchReturnsStructuredError) {
+    zyx_driver_result_t *result = nullptr;
+
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 'Alice' AS name", &result, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(error, nullptr);
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+
+    int64_t value = 0;
+    EXPECT_EQ(zyx_driver_result_get_int64(result, 0, &value, &error), ZYX_DRIVER_TYPE_MISMATCH);
+    ASSERT_NE(error, nullptr);
+    EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_TYPE_MISMATCH);
+    EXPECT_NE(std::string(zyx_driver_error_message(error)).find("type"), std::string::npos);
+
+    zyx_driver_error_free(error);
+    error = nullptr;
+    zyx_driver_result_free(result);
+}
