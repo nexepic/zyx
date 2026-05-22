@@ -1,6 +1,7 @@
 #include "zyx/zyx_driver_abi.h"
 
 #include <deque>
+#include <exception>
 #include <filesystem>
 #include <memory>
 #include <sstream>
@@ -233,8 +234,16 @@ zyx_driver_status_t zyx_driver_params_set_null(zyx_driver_params_t *params, cons
     if (key == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
     }
-    params->values[key] = std::monostate{};
-    return ZYX_DRIVER_OK;
+    try {
+        params->values[key] = std::monostate{};
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
 }
 
 zyx_driver_status_t zyx_driver_params_set_bool(zyx_driver_params_t *params, const char *key, bool value,
@@ -246,8 +255,16 @@ zyx_driver_status_t zyx_driver_params_set_bool(zyx_driver_params_t *params, cons
     if (key == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
     }
-    params->values[key] = value;
-    return ZYX_DRIVER_OK;
+    try {
+        params->values[key] = value;
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
 }
 
 zyx_driver_status_t zyx_driver_params_set_int64(zyx_driver_params_t *params, const char *key, int64_t value,
@@ -259,8 +276,16 @@ zyx_driver_status_t zyx_driver_params_set_int64(zyx_driver_params_t *params, con
     if (key == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
     }
-    params->values[key] = value;
-    return ZYX_DRIVER_OK;
+    try {
+        params->values[key] = value;
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
 }
 
 zyx_driver_status_t zyx_driver_params_set_double(zyx_driver_params_t *params, const char *key, double value,
@@ -272,8 +297,16 @@ zyx_driver_status_t zyx_driver_params_set_double(zyx_driver_params_t *params, co
     if (key == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
     }
-    params->values[key] = value;
-    return ZYX_DRIVER_OK;
+    try {
+        params->values[key] = value;
+        return ZYX_DRIVER_OK;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
 }
 
 zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, const char *key, const char *value,
@@ -293,6 +326,10 @@ zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, co
         return ZYX_DRIVER_OK;
     } catch (const std::bad_alloc &) {
         return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
     }
 }
 

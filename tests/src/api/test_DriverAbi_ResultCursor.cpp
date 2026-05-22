@@ -165,6 +165,36 @@ TEST_F(DriverAbiResultCursorTest, ExecuteWithScalarParams) {
     EXPECT_EQ(error, nullptr);
 }
 
+TEST_F(DriverAbiResultCursorTest, ParamsSettersRejectNullInputs) {
+    zyx_driver_params_t *params = nullptr;
+    ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(params, nullptr);
+    ASSERT_EQ(error, nullptr);
+
+    auto expectInvalidArgument = [this](zyx_driver_status_t status) {
+        EXPECT_EQ(status, ZYX_DRIVER_INVALID_ARGUMENT);
+        ASSERT_NE(error, nullptr);
+        EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_INVALID_ARGUMENT);
+        zyx_driver_error_free(error);
+        error = nullptr;
+    };
+
+    expectInvalidArgument(zyx_driver_params_set_null(nullptr, "value", &error));
+    expectInvalidArgument(zyx_driver_params_set_null(params, nullptr, &error));
+    expectInvalidArgument(zyx_driver_params_set_bool(nullptr, "value", true, &error));
+    expectInvalidArgument(zyx_driver_params_set_bool(params, nullptr, true, &error));
+    expectInvalidArgument(zyx_driver_params_set_int64(nullptr, "value", 1, &error));
+    expectInvalidArgument(zyx_driver_params_set_int64(params, nullptr, 1, &error));
+    expectInvalidArgument(zyx_driver_params_set_double(nullptr, "value", 1.0, &error));
+    expectInvalidArgument(zyx_driver_params_set_double(params, nullptr, 1.0, &error));
+    expectInvalidArgument(zyx_driver_params_set_string(nullptr, "value", "text", &error));
+    expectInvalidArgument(zyx_driver_params_set_string(params, nullptr, "text", &error));
+    expectInvalidArgument(zyx_driver_params_set_string(params, "value", nullptr, &error));
+
+    zyx_driver_params_free(params, &error);
+    EXPECT_EQ(error, nullptr);
+}
+
 TEST_F(DriverAbiResultCursorTest, TypeMismatchReturnsStructuredError) {
     zyx_driver_result_t *result = nullptr;
 
