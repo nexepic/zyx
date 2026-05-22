@@ -711,11 +711,16 @@ uint32_t zyx_driver_result_column_count(const zyx_driver_result_t *result) {
 }
 
 const char *zyx_driver_result_column_name(zyx_driver_result_t *result, uint32_t column) {
-    if (result == nullptr || column >= static_cast<uint32_t>(result->result.getColumnCount())) {
-        return nullptr;
+    try {
+        if (result == nullptr || column >= static_cast<uint32_t>(result->result.getColumnCount())) {
+            return nullptr;
+        }
+        result->string_buffers.push_back(result->result.getColumnName(static_cast<int>(column)));
+        return result->string_buffers.back().c_str();
+    } catch (...) {
+        // No error out-parameter is available for this ABI; keep exceptions from crossing C.
+        return "";
     }
-    result->string_buffers.push_back(result->result.getColumnName(static_cast<int>(column)));
-    return result->string_buffers.back().c_str();
 }
 
 zyx_driver_value_type_t zyx_driver_result_value_type(const zyx_driver_result_t *result, uint32_t column) {
