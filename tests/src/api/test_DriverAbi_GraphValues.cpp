@@ -62,11 +62,8 @@ TEST_F(DriverAbiGraphValuesTest, NodeExposesPluralLabelsAndPropertiesJson) {
     uint32_t labelCount = 0;
     const char *propertiesJson = nullptr;
     EXPECT_EQ(zyx_driver_result_get_node_id(result, 0, &nodeId, &error), ZYX_DRIVER_OK);
-    EXPECT_GT(nodeId + 1, 0);
+    EXPECT_GT(nodeId, 0);
     EXPECT_EQ(zyx_driver_result_get_node_label_count(result, 0, &labelCount, &error), ZYX_DRIVER_OK);
-    if (labelCount == 0) {
-        GTEST_SKIP() << "Cypher create-return currently loses graph metadata before Driver ABI getters run";
-    }
     EXPECT_GE(labelCount, 1u);
 
     std::vector<std::string> labels;
@@ -114,15 +111,12 @@ TEST_F(DriverAbiGraphValuesTest, EdgeExposesTypeAndTopology) {
     EXPECT_EQ(zyx_driver_result_get_edge_id(result, 0, &edgeId, &error), ZYX_DRIVER_OK);
     EXPECT_EQ(zyx_driver_result_get_edge_source_id(result, 0, &sourceId, &error), ZYX_DRIVER_OK);
     EXPECT_EQ(zyx_driver_result_get_edge_target_id(result, 0, &targetId, &error), ZYX_DRIVER_OK);
-    EXPECT_GT(edgeId + 1, 0);
-    EXPECT_GT(sourceId + 1, 0);
-    EXPECT_GT(targetId + 1, 0);
+    EXPECT_GT(edgeId, 0);
+    EXPECT_GT(sourceId, 0);
+    EXPECT_GT(targetId, 0);
 
     EXPECT_EQ(zyx_driver_result_get_edge_type(result, 0, &edgeType, &error), ZYX_DRIVER_OK);
     ASSERT_NE(edgeType, nullptr);
-    if (std::string(edgeType).empty()) {
-        GTEST_SKIP() << "Cypher create-return currently loses graph metadata before Driver ABI getters run";
-    }
     EXPECT_STREQ(edgeType, "KNOWS");
     EXPECT_EQ(error, nullptr);
 
