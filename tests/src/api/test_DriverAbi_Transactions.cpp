@@ -153,6 +153,58 @@ TEST_F(DriverAbiTransactionsTest, ReadOnlyTransactionRejectsWritesAndAllowsReads
     EXPECT_EQ(countPeopleNamed("Blocked"), 0);
 }
 
+
+TEST_F(DriverAbiTransactionsTest, DbCloseRejectsActiveTransactionAndSucceedsAfterRollbackClose) {
+    zyx_driver_txn_t *txn = nullptr;
+    ASSERT_EQ(zyx_driver_txn_begin(db, &txn, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(txn, nullptr);
+
+    EXPECT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+    ASSERT_NE(error, nullptr);
+    EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_TRANSACTION_ERROR);
+    zyx_driver_error_free(error);
+    error = nullptr;
+
+    EXPECT_EQ(zyx_driver_txn_rollback(txn, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_txn_close(txn, &error), ZYX_DRIVER_OK);
+    txn = nullptr;
+
+    EXPECT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(error, nullptr);
+    db = nullptr;
+}
+
+TEST_F(DriverAbiTransactionsTest, DbCloseActiveTransactionPreservesStatusWithoutErrorOut) {
+    zyx_driver_txn_t *txn = nullptr;
+    ASSERT_EQ(zyx_driver_txn_begin(db, &txn, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(txn, nullptr);
+
+    EXPECT_EQ(zyx_driver_db_close(db, nullptr), ZYX_DRIVER_TRANSACTION_ERROR);
+
+    EXPECT_EQ(zyx_driver_txn_rollback(txn, nullptr), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_txn_close(txn, nullptr), ZYX_DRIVER_OK);
+    txn = nullptr;
+
+    EXPECT_EQ(zyx_driver_db_close(db, nullptr), ZYX_DRIVER_OK);
+    db = nullptr;
+}
+
+TEST_F(DriverAbiTransactionsTest, FinalizedTransactionRejectsRepeatedOperations) {
+    zyx_driver_txn_t *txn = nullptr;
+    zyx_driver_result_t *result = nullptr;
+    ASSERT_EQ(zyx_driver_txn_begin(db, &txn, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(txn, nullptr);
+
+    EXPECT_EQ(zyx_driver_txn_commit(txn, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_txn_execute(txn, "RETURN 1", nullptr, &result, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+    EXPECT_EQ(result, nullptr);
+    zyx_driver_error_free(error);
+    error = nullptr;
+    EXPECT_EQ(zyx_driver_txn_commit(txn, nullptr), ZYX_DRIVER_TRANSACTION_ERROR);
+    EXPECT_EQ(zyx_driver_txn_rollback(txn, nullptr), ZYX_DRIVER_TRANSACTION_ERROR);
+    EXPECT_EQ(zyx_driver_txn_close(txn, &error), ZYX_DRIVER_OK);
+}
+
 TEST_F(DriverAbiTransactionsTest, TransactionErrorsPreserveStatusWithoutErrorOut) {
     zyx_driver_txn_t *txn = nullptr;
     zyx_driver_result_t *result = reinterpret_cast<zyx_driver_result_t *>(0x1);
