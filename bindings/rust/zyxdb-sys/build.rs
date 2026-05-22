@@ -6,13 +6,21 @@ use std::{
 fn main() {
     println!("cargo:rerun-if-env-changed=ZYX_LIB_DIR");
 
-    if let Ok(lib_dir) = env::var("ZYX_LIB_DIR") {
-        println!("cargo:rustc-link-search=native={lib_dir}");
-    } else if let Some(lib_dir) = discover_repo_lib_dir() {
+    let lib_dir = env::var_os("ZYX_LIB_DIR")
+        .map(PathBuf::from)
+        .or_else(discover_repo_lib_dir);
+    if let Some(lib_dir) = lib_dir {
         println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        emit_runtime_path(&lib_dir);
     }
 
     println!("cargo:rustc-link-lib=dylib=zyx");
+}
+
+fn emit_runtime_path(lib_dir: &Path) {
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
+    }
 }
 
 fn discover_repo_lib_dir() -> Option<PathBuf> {
