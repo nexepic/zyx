@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -54,6 +55,22 @@ void zyx_driver_error_free(zyx_driver_error_t *error);
 zyx_driver_status_t zyx_driver_db_open(const char *path, zyx_driver_db_t **out_db, zyx_driver_error_t **out_error);
 zyx_driver_status_t zyx_driver_db_open_if_exists(const char *path, zyx_driver_db_t **out_db, zyx_driver_error_t **out_error);
 zyx_driver_status_t zyx_driver_db_close(zyx_driver_db_t *db, zyx_driver_error_t **out_error);
+
+zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cypher,
+                                          zyx_driver_result_t **out_result, zyx_driver_error_t **out_error);
+void zyx_driver_result_free(zyx_driver_result_t *result);
+zyx_driver_status_t zyx_driver_result_next(zyx_driver_result_t *result, zyx_driver_error_t **out_error);
+uint32_t zyx_driver_result_column_count(const zyx_driver_result_t *result);
+const char *zyx_driver_result_column_name(zyx_driver_result_t *result, uint32_t column);
+zyx_driver_value_type_t zyx_driver_result_value_type(const zyx_driver_result_t *result, uint32_t column);
+zyx_driver_status_t zyx_driver_result_get_int64(const zyx_driver_result_t *result, uint32_t column, int64_t *out_value,
+                                                zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_double(const zyx_driver_result_t *result, uint32_t column, double *out_value,
+                                                 zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_bool(const zyx_driver_result_t *result, uint32_t column, bool *out_value,
+                                               zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_string(zyx_driver_result_t *result, uint32_t column, const char **out_value,
+                                                 zyx_driver_error_t **out_error);
 
 #ifdef __cplusplus
 }
