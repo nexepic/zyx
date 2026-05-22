@@ -13,6 +13,8 @@ cross-platform compatibility.
 ./scripts/run_tests.sh --no-conan   # Use system dependencies
 ./scripts/run_tests.sh --html       # HTML coverage report
 ./scripts/run_tests.sh --quick --file xxx.cpp  # Coverage report for specific file
+cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="DriverAbi*" # Driver ABI tests
+cmake --build buildDir --target zyx && cd bindings/rust && cargo test # Rust SDK tests after building libzyx
 cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="SuiteName.*" # Compile and run specific test suite
 cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="SuiteName.TestName" # Compile and run specific test case
 ./scripts/build_release.sh          # Release build
@@ -92,6 +94,8 @@ Key entry points:
 - **Storage**: `include/graph/storage/FileStorage.hpp`
 - **Query Engine**: `include/graph/query/`
 - **C++ API**: `include/zyx/zyx.hpp`
+- **Driver ABI**: `include/zyx/zyx_driver_abi.h` (long-term C-facing stable ABI for C and language bindings)
+- **Rust SDK**: `bindings/rust/zyxdb` with raw FFI in `bindings/rust/zyxdb-sys`
 - **C API**: `include/zyx/zyx_c_api.h`
 - **WASM**: `scripts/build_wasm.sh` → `build_wasm/zyx.js` + `build_wasm/zyx.wasm`
 
