@@ -84,6 +84,24 @@ zyx_driver_status_t zyx_driver_result_get_bool(const zyx_driver_result_t *result
                                                zyx_driver_error_t **out_error);
 zyx_driver_status_t zyx_driver_result_get_string(zyx_driver_result_t *result, uint32_t column, const char **out_value,
                                                  zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_node_id(const zyx_driver_result_t *result, uint32_t column,
+                                                  int64_t *out_value, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_node_label_count(const zyx_driver_result_t *result, uint32_t column,
+                                                           uint32_t *out_value, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_node_label(zyx_driver_result_t *result, uint32_t column,
+                                                     uint32_t label_index, const char **out_value,
+                                                     zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_edge_id(const zyx_driver_result_t *result, uint32_t column,
+                                                  int64_t *out_value, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_edge_source_id(const zyx_driver_result_t *result, uint32_t column,
+                                                         int64_t *out_value, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_edge_target_id(const zyx_driver_result_t *result, uint32_t column,
+                                                         int64_t *out_value, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_edge_type(zyx_driver_result_t *result, uint32_t column,
+                                                    const char **out_value, zyx_driver_error_t **out_error);
+zyx_driver_status_t zyx_driver_result_get_entity_properties_json(zyx_driver_result_t *result, uint32_t column,
+                                                                 const char **out_value,
+                                                                 zyx_driver_error_t **out_error);
 
 #ifdef __cplusplus
 }

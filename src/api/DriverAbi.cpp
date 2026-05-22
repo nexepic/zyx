@@ -3,6 +3,7 @@
 #include <deque>
 #include <exception>
 #include <filesystem>
+#include <iomanip>
 #include <memory>
 #include <sstream>
 #include <new>
@@ -85,6 +86,98 @@ zyx_driver_status_t validateColumn(const zyx_driver_result_t *result, uint32_t c
         return setError(out_error, ZYX_DRIVER_OUT_OF_RANGE, "column index is out of range");
     }
     return ZYX_DRIVER_OK;
+}
+
+const zyx::Node *getNodeValue(const zyx_driver_result_t *result, uint32_t column, zyx_driver_error_t **out_error) {
+    if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+        return nullptr;
+    }
+
+    zyx::Value value = result->result.get(static_cast<int>(column));
+    if (const auto *node = std::get_if<std::shared_ptr<zyx::Node>>(&value); node != nullptr && *node != nullptr) {
+        return node->get();
+    }
+
+    std::ostringstream message;
+    message << "type mismatch: expected node, got " << typeName(valueType(value));
+    setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
+    return nullptr;
+}
+
+const zyx::Edge *getEdgeValue(const zyx_driver_result_t *result, uint32_t column, zyx_driver_error_t **out_error) {
+    if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+        return nullptr;
+    }
+
+    zyx::Value value = result->result.get(static_cast<int>(column));
+    if (const auto *edge = std::get_if<std::shared_ptr<zyx::Edge>>(&value); edge != nullptr && *edge != nullptr) {
+        return edge->get();
+    }
+
+    std::ostringstream message;
+    message << "type mismatch: expected edge, got " << typeName(valueType(value));
+    setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
+    return nullptr;
+}
+
+zyx_driver_status_t currentErrorStatus(const zyx_driver_error_t *error) {
+    return error == nullptr ? ZYX_DRIVER_INTERNAL_ERROR : error->code;
+}
+
+void appendJsonString(std::ostringstream &out, const std::string &value) {
+    out << '"';
+    for (unsigned char ch : value) {
+        switch (ch) {
+            case '"': out << "\\\""; break;
+            case '\\': out << "\\\\"; break;
+            case '\b': out << "\\b"; break;
+            case '\f': out << "\\f"; break;
+            case '\n': out << "\\n"; break;
+            case '\r': out << "\\r"; break;
+            case '\t': out << "\\t"; break;
+            default:
+                if (ch < 0x20) {
+                    out << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(ch) << std::dec;
+                } else {
+                    out << static_cast<char>(ch);
+                }
+                break;
+        }
+    }
+    out << '"';
+}
+
+void appendJsonValue(std::ostringstream &out, const zyx::Value &value) {
+    if (std::holds_alternative<std::monostate>(value)) {
+        out << "null";
+    } else if (const auto *typed = std::get_if<bool>(&value)) {
+        out << (*typed ? "true" : "false");
+    } else if (const auto *typed = std::get_if<int64_t>(&value)) {
+        out << *typed;
+    } else if (const auto *typed = std::get_if<double>(&value)) {
+        out << *typed;
+    } else if (const auto *typed = std::get_if<std::string>(&value)) {
+        appendJsonString(out, *typed);
+    } else {
+        out << "null";
+    }
+}
+
+std::string propertiesToJson(const std::unordered_map<std::string, zyx::Value> &properties) {
+    std::ostringstream out;
+    out << '{';
+    bool first = true;
+    for (const auto &[key, value] : properties) {
+        if (!first) {
+            out << ',';
+        }
+        first = false;
+        appendJsonString(out, key);
+        out << ':';
+        appendJsonValue(out, value);
+    }
+    out << '}';
+    return out.str();
 }
 
 template <typename T>
@@ -442,6 +535,141 @@ zyx_driver_status_t zyx_driver_result_get_string(zyx_driver_result_t *result, ui
 
     std::ostringstream message;
     message << "type mismatch: expected string, got " << typeName(valueType(value));
+    return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
+}
+
+zyx_driver_status_t zyx_driver_result_get_node_id(const zyx_driver_result_t *result, uint32_t column,
+                                                  int64_t *out_value, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    const zyx::Node *node = getNodeValue(result, column, out_error);
+    if (node == nullptr) {
+        return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
+    }
+    *out_value = node->id;
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_result_get_node_label_count(const zyx_driver_result_t *result, uint32_t column,
+                                                           uint32_t *out_value, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    const zyx::Node *node = getNodeValue(result, column, out_error);
+    if (node == nullptr) {
+        return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
+    }
+    *out_value = node->labels.empty() ? (node->label.empty() ? 0u : 1u) : static_cast<uint32_t>(node->labels.size());
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_result_get_node_label(zyx_driver_result_t *result, uint32_t column,
+                                                     uint32_t label_index, const char **out_value,
+                                                     zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    const zyx::Node *node = getNodeValue(result, column, out_error);
+    if (node == nullptr) {
+        return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
+    }
+
+    const uint32_t labelCount = node->labels.empty() ? (node->label.empty() ? 0u : 1u) : static_cast<uint32_t>(node->labels.size());
+    if (label_index >= labelCount) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_RANGE, "node label index is out of range");
+    }
+
+    result->string_buffers.push_back(node->labels.empty() ? node->label : node->labels[label_index]);
+    *out_value = result->string_buffers.back().c_str();
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_result_get_edge_id(const zyx_driver_result_t *result, uint32_t column,
+                                                  int64_t *out_value, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    if (edge == nullptr) {
+        return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
+    }
+    *out_value = edge->id;
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_result_get_edge_source_id(const zyx_driver_result_t *result, uint32_t column,
+                                                         int64_t *out_value, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    if (edge == nullptr) {
+        return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
+    }
+    *out_value = edge->sourceId;
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_result_get_edge_target_id(const zyx_driver_result_t *result, uint32_t column,
+                                                         int64_t *out_value, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    if (edge == nullptr) {
+        return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
+    }
+    *out_value = edge->targetId;
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_result_get_edge_type(zyx_driver_result_t *result, uint32_t column,
+                                                    const char **out_value, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    if (edge == nullptr) {
+        return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
+    }
+    result->string_buffers.push_back(edge->type);
+    *out_value = result->string_buffers.back().c_str();
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t zyx_driver_result_get_entity_properties_json(zyx_driver_result_t *result, uint32_t column,
+                                                                 const char **out_value,
+                                                                 zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+    }
+    if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+        return status;
+    }
+
+    zyx::Value value = result->result.get(static_cast<int>(column));
+    if (const auto *node = std::get_if<std::shared_ptr<zyx::Node>>(&value); node != nullptr && *node != nullptr) {
+        result->string_buffers.push_back(propertiesToJson((*node)->properties));
+        *out_value = result->string_buffers.back().c_str();
+        return ZYX_DRIVER_OK;
+    }
+    if (const auto *edge = std::get_if<std::shared_ptr<zyx::Edge>>(&value); edge != nullptr && *edge != nullptr) {
+        result->string_buffers.push_back(propertiesToJson((*edge)->properties));
+        *out_value = result->string_buffers.back().c_str();
+        return ZYX_DRIVER_OK;
+    }
+
+    std::ostringstream message;
+    message << "type mismatch: expected node or edge, got " << typeName(valueType(value));
     return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
 }
 
