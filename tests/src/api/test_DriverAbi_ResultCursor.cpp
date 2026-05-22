@@ -96,6 +96,37 @@ TEST_F(DriverAbiResultCursorTest, StreamsScalarRowWithColumnMetadataAndTypedGett
     zyx_driver_result_free(result);
 }
 
+TEST_F(DriverAbiResultCursorTest, StringPointersRemainStableUntilNextOrFree) {
+    zyx_driver_result_t *result = nullptr;
+
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 'Alice' AS name, 'blue' AS tag", &result, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(error, nullptr);
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+    ASSERT_EQ(error, nullptr);
+
+    const char *firstName = nullptr;
+    ASSERT_EQ(zyx_driver_result_get_string(result, 0, &firstName, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(firstName, nullptr);
+    ASSERT_STREQ(firstName, "Alice");
+
+    for (int i = 0; i < 256; ++i) {
+        const char *columnName = zyx_driver_result_column_name(result, 1);
+        ASSERT_NE(columnName, nullptr);
+        ASSERT_STREQ(columnName, "tag");
+
+        const char *tag = nullptr;
+        ASSERT_EQ(zyx_driver_result_get_string(result, 1, &tag, &error), ZYX_DRIVER_OK);
+        ASSERT_NE(tag, nullptr);
+        ASSERT_STREQ(tag, "blue");
+    }
+
+    EXPECT_STREQ(firstName, "Alice");
+    EXPECT_EQ(error, nullptr);
+
+    zyx_driver_result_free(result);
+}
+
 TEST_F(DriverAbiResultCursorTest, TypeMismatchReturnsStructuredError) {
     zyx_driver_result_t *result = nullptr;
 

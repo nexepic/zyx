@@ -1,12 +1,12 @@
 #include "zyx/zyx_driver_abi.h"
 
+#include <deque>
 #include <filesystem>
 #include <memory>
 #include <sstream>
 #include <new>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "ProjectConfig.hpp"
 #include "zyx/zyx.hpp"
@@ -22,7 +22,7 @@ struct zyx_driver_db_t {
 
 struct zyx_driver_result_t {
     zyx::Result result;
-    std::vector<std::string> string_buffers;
+    std::deque<std::string> string_buffers;
 };
 
 namespace {
@@ -218,10 +218,6 @@ zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cyphe
         handle->result = db->db->execute(cypher);
         if (!handle->result.isSuccess()) {
             return setError(out_error, ZYX_DRIVER_EXECUTION_ERROR, handle->result.getError());
-        }
-        int column_count = handle->result.getColumnCount();
-        if (column_count > 0) {
-            handle->string_buffers.reserve(static_cast<size_t>(column_count) * 2u);
         }
         *out_result = handle.release();
         return ZYX_DRIVER_OK;
