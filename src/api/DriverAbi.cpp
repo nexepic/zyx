@@ -88,14 +88,15 @@ zyx_driver_status_t validateColumn(const zyx_driver_result_t *result, uint32_t c
     return ZYX_DRIVER_OK;
 }
 
-const zyx::Node *getNodeValue(const zyx_driver_result_t *result, uint32_t column, zyx_driver_error_t **out_error) {
+std::shared_ptr<zyx::Node> getNodeValue(const zyx_driver_result_t *result, uint32_t column,
+                                      zyx_driver_error_t **out_error) {
     if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
         return nullptr;
     }
 
     zyx::Value value = result->result.get(static_cast<int>(column));
     if (const auto *node = std::get_if<std::shared_ptr<zyx::Node>>(&value); node != nullptr && *node != nullptr) {
-        return node->get();
+        return *node;
     }
 
     std::ostringstream message;
@@ -104,14 +105,15 @@ const zyx::Node *getNodeValue(const zyx_driver_result_t *result, uint32_t column
     return nullptr;
 }
 
-const zyx::Edge *getEdgeValue(const zyx_driver_result_t *result, uint32_t column, zyx_driver_error_t **out_error) {
+std::shared_ptr<zyx::Edge> getEdgeValue(const zyx_driver_result_t *result, uint32_t column,
+                                      zyx_driver_error_t **out_error) {
     if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
         return nullptr;
     }
 
     zyx::Value value = result->result.get(static_cast<int>(column));
     if (const auto *edge = std::get_if<std::shared_ptr<zyx::Edge>>(&value); edge != nullptr && *edge != nullptr) {
-        return edge->get();
+        return *edge;
     }
 
     std::ostringstream message;
@@ -544,7 +546,7 @@ zyx_driver_status_t zyx_driver_result_get_node_id(const zyx_driver_result_t *res
     if (out_value == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
     }
-    const zyx::Node *node = getNodeValue(result, column, out_error);
+    auto node = getNodeValue(result, column, out_error);
     if (node == nullptr) {
         return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
     }
@@ -558,7 +560,7 @@ zyx_driver_status_t zyx_driver_result_get_node_label_count(const zyx_driver_resu
     if (out_value == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
     }
-    const zyx::Node *node = getNodeValue(result, column, out_error);
+    auto node = getNodeValue(result, column, out_error);
     if (node == nullptr) {
         return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
     }
@@ -573,7 +575,7 @@ zyx_driver_status_t zyx_driver_result_get_node_label(zyx_driver_result_t *result
     if (out_value == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
     }
-    const zyx::Node *node = getNodeValue(result, column, out_error);
+    auto node = getNodeValue(result, column, out_error);
     if (node == nullptr) {
         return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
     }
@@ -594,7 +596,7 @@ zyx_driver_status_t zyx_driver_result_get_edge_id(const zyx_driver_result_t *res
     if (out_value == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
     }
-    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    auto edge = getEdgeValue(result, column, out_error);
     if (edge == nullptr) {
         return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
     }
@@ -608,7 +610,7 @@ zyx_driver_status_t zyx_driver_result_get_edge_source_id(const zyx_driver_result
     if (out_value == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
     }
-    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    auto edge = getEdgeValue(result, column, out_error);
     if (edge == nullptr) {
         return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
     }
@@ -622,7 +624,7 @@ zyx_driver_status_t zyx_driver_result_get_edge_target_id(const zyx_driver_result
     if (out_value == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
     }
-    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    auto edge = getEdgeValue(result, column, out_error);
     if (edge == nullptr) {
         return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
     }
@@ -636,7 +638,7 @@ zyx_driver_status_t zyx_driver_result_get_edge_type(zyx_driver_result_t *result,
     if (out_value == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
     }
-    const zyx::Edge *edge = getEdgeValue(result, column, out_error);
+    auto edge = getEdgeValue(result, column, out_error);
     if (edge == nullptr) {
         return currentErrorStatus(out_error == nullptr ? nullptr : *out_error);
     }
