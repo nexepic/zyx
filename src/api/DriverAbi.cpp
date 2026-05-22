@@ -6,6 +6,7 @@
 #include <new>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "ProjectConfig.hpp"
 #include "zyx/zyx.hpp"
@@ -21,8 +22,7 @@ struct zyx_driver_db_t {
 
 struct zyx_driver_result_t {
     zyx::Result result;
-    std::vector<std::string> column_name_buffers;
-    std::string string_buffer;
+    std::vector<std::string> string_buffers;
 };
 
 namespace {
@@ -221,10 +221,7 @@ zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cyphe
         }
         int column_count = handle->result.getColumnCount();
         if (column_count > 0) {
-            handle->column_name_buffers.reserve(static_cast<size_t>(column_count));
-            for (int i = 0; i < column_count; ++i) {
-                handle->column_name_buffers.push_back(handle->result.getColumnName(i));
-            }
+            handle->string_buffers.reserve(static_cast<size_t>(column_count) * 2u);
         }
         *out_result = handle.release();
         return ZYX_DRIVER_OK;
@@ -244,7 +241,7 @@ zyx_driver_status_t zyx_driver_result_next(zyx_driver_result_t *result, zyx_driv
     if (result == nullptr) {
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "result must not be null");
     }
-    result->string_buffer.clear();
+    result->string_buffers.clear();
     try {
         if (!result->result.hasNext()) {
             return ZYX_DRIVER_DONE;
@@ -267,10 +264,11 @@ uint32_t zyx_driver_result_column_count(const zyx_driver_result_t *result) {
 }
 
 const char *zyx_driver_result_column_name(zyx_driver_result_t *result, uint32_t column) {
-    if (result == nullptr || column >= result->column_name_buffers.size()) {
+    if (result == nullptr || column >= static_cast<uint32_t>(result->result.getColumnCount())) {
         return nullptr;
     }
-    return result->column_name_buffers[column].c_str();
+    result->string_buffers.push_back(result->result.getColumnName(static_cast<int>(column)));
+    return result->string_buffers.back().c_str();
 }
 
 zyx_driver_value_type_t zyx_driver_result_value_type(const zyx_driver_result_t *result, uint32_t column) {
@@ -307,8 +305,8 @@ zyx_driver_status_t zyx_driver_result_get_string(zyx_driver_result_t *result, ui
 
     zyx::Value value = result->result.get(static_cast<int>(column));
     if (const auto *typed = std::get_if<std::string>(&value)) {
-        result->string_buffer = *typed;
-        *out_value = result->string_buffer.c_str();
+        result->string_buffers.push_back(*typed);
+        *out_value = result->string_buffers.back().c_str();
         return ZYX_DRIVER_OK;
     }
 

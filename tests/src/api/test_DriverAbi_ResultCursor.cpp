@@ -42,18 +42,21 @@ protected:
 TEST_F(DriverAbiResultCursorTest, StreamsScalarRowWithColumnMetadataAndTypedGetters) {
     zyx_driver_result_t *result = nullptr;
 
-    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 7 AS id, 'Alice' AS name, true AS ok, 3.5 AS score", &result, &error),
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 7 AS id, 'Alice' AS name, 'blue' AS tag, true AS ok, 3.5 AS score",
+                                     &result, &error),
               ZYX_DRIVER_OK);
     ASSERT_NE(result, nullptr);
     ASSERT_EQ(error, nullptr);
 
-    EXPECT_EQ(zyx_driver_result_column_count(result), 4u);
+    EXPECT_EQ(zyx_driver_result_column_count(result), 5u);
     const char *idColumn = zyx_driver_result_column_name(result, 0);
     const char *nameColumn = zyx_driver_result_column_name(result, 1);
-    const char *okColumn = zyx_driver_result_column_name(result, 2);
-    const char *scoreColumn = zyx_driver_result_column_name(result, 3);
+    const char *tagColumn = zyx_driver_result_column_name(result, 2);
+    const char *okColumn = zyx_driver_result_column_name(result, 3);
+    const char *scoreColumn = zyx_driver_result_column_name(result, 4);
     EXPECT_STREQ(idColumn, "id");
     EXPECT_STREQ(nameColumn, "name");
+    EXPECT_STREQ(tagColumn, "tag");
     EXPECT_STREQ(okColumn, "ok");
     EXPECT_STREQ(scoreColumn, "score");
 
@@ -62,11 +65,13 @@ TEST_F(DriverAbiResultCursorTest, StreamsScalarRowWithColumnMetadataAndTypedGett
 
     EXPECT_EQ(zyx_driver_result_value_type(result, 0), ZYX_DRIVER_VALUE_INT64);
     EXPECT_EQ(zyx_driver_result_value_type(result, 1), ZYX_DRIVER_VALUE_STRING);
-    EXPECT_EQ(zyx_driver_result_value_type(result, 2), ZYX_DRIVER_VALUE_BOOL);
-    EXPECT_EQ(zyx_driver_result_value_type(result, 3), ZYX_DRIVER_VALUE_DOUBLE);
+    EXPECT_EQ(zyx_driver_result_value_type(result, 2), ZYX_DRIVER_VALUE_STRING);
+    EXPECT_EQ(zyx_driver_result_value_type(result, 3), ZYX_DRIVER_VALUE_BOOL);
+    EXPECT_EQ(zyx_driver_result_value_type(result, 4), ZYX_DRIVER_VALUE_DOUBLE);
 
     int64_t id = 0;
     const char *name = nullptr;
+    const char *tag = nullptr;
     bool ok = false;
     double score = 0.0;
 
@@ -75,9 +80,13 @@ TEST_F(DriverAbiResultCursorTest, StreamsScalarRowWithColumnMetadataAndTypedGett
     EXPECT_EQ(zyx_driver_result_get_string(result, 1, &name, &error), ZYX_DRIVER_OK);
     ASSERT_NE(name, nullptr);
     EXPECT_STREQ(name, "Alice");
-    EXPECT_EQ(zyx_driver_result_get_bool(result, 2, &ok, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_result_get_string(result, 2, &tag, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(tag, nullptr);
+    EXPECT_STREQ(tag, "blue");
+    EXPECT_STREQ(name, "Alice");
+    EXPECT_EQ(zyx_driver_result_get_bool(result, 3, &ok, &error), ZYX_DRIVER_OK);
     EXPECT_TRUE(ok);
-    EXPECT_EQ(zyx_driver_result_get_double(result, 3, &score, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_result_get_double(result, 4, &score, &error), ZYX_DRIVER_OK);
     EXPECT_DOUBLE_EQ(score, 3.5);
     EXPECT_EQ(error, nullptr);
 
