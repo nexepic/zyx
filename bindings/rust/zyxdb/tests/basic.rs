@@ -1,5 +1,10 @@
 use zyxdb::{params, Database, Params};
 
+#[cfg(unix)]
+use std::ffi::OsString;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStringExt;
+
 #[test]
 fn executes_scalar_query() -> zyxdb::Result<()> {
     let tempdir = tempfile::tempdir().unwrap();
@@ -34,7 +39,7 @@ fn executes_query_with_params() -> zyxdb::Result<()> {
         "ratio" => 2.5_f64,
         "ok" => true,
         "name" => "neo",
-    );
+    )?;
 
     let mut result = db.execute(
         "RETURN $answer AS answer, $ratio AS ratio, $ok AS ok, $name AS name",
@@ -52,7 +57,7 @@ fn executes_query_with_params() -> zyxdb::Result<()> {
 
 #[test]
 fn supports_builder_params() -> zyxdb::Result<()> {
-    let params = Params::new()
+    let params = Params::try_new()?
         .set("i32", 7_i32)?
         .set("owned", String::from("value"))?;
     let tempdir = tempfile::tempdir().unwrap();
@@ -65,4 +70,30 @@ fn supports_builder_params() -> zyxdb::Result<()> {
     assert_eq!(row.get_str(1)?, "value");
 
     Ok(())
+}
+
+#[test]
+fn rejects_column_index_exceeding_driver_range() -> zyxdb::Result<()> {
+    let tempdir = tempfile::tempdir().unwrap();
+    let db_path = tempdir.path().join("test.zyx");
+    let db = Database::open(&db_path)?;
+    let mut result = db.execute("RETURN 42 AS answer", None)?;
+
+    let err = result.column_name(i32::MAX as usize + 1).unwrap_err();
+    assert_eq!(err.code(), zyxdb::ErrorCode::OutOfRange);
+    let row = result.next()?.expect("expected one row");
+    let err = row.get_i64(i32::MAX as usize + 1).unwrap_err();
+    assert_eq!(err.code(), zyxdb::ErrorCode::OutOfRange);
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_non_utf8_database_paths() {
+    let path = OsString::from_vec(vec![b't', b'e', b's', b't', 0xff]);
+    let Err(err) = Database::open(path) else {
+        panic!("non-UTF-8 path was accepted");
+    };
+    assert_eq!(err.code(), zyxdb::ErrorCode::InvalidArgument);
 }

@@ -34,7 +34,8 @@ impl ResultSet {
     }
 
     pub fn column_name(&mut self, index: usize) -> crate::Result<&str> {
-        let ptr = unsafe { sys::zyx_driver_result_column_name(self.raw, index as u32) };
+        let index = checked_index(index)?;
+        let ptr = unsafe { sys::zyx_driver_result_column_name(self.raw, index) };
         if ptr.is_null() {
             return Err(Error::new(
                 ErrorCode::OutOfRange,
@@ -64,9 +65,9 @@ impl<'a> Record<'a> {
     pub fn get_i64(&self, index: usize) -> crate::Result<i64> {
         let mut value = 0;
         let mut error = ptr::null_mut();
-        let status = unsafe {
-            sys::zyx_driver_result_get_int64(self.raw, index as u32, &mut value, &mut error)
-        };
+        let index = checked_index(index)?;
+        let status =
+            unsafe { sys::zyx_driver_result_get_int64(self.raw, index, &mut value, &mut error) };
         status_to_result(status, error)?;
         Ok(value)
     }
@@ -74,9 +75,9 @@ impl<'a> Record<'a> {
     pub fn get_f64(&self, index: usize) -> crate::Result<f64> {
         let mut value = 0.0;
         let mut error = ptr::null_mut();
-        let status = unsafe {
-            sys::zyx_driver_result_get_double(self.raw, index as u32, &mut value, &mut error)
-        };
+        let index = checked_index(index)?;
+        let status =
+            unsafe { sys::zyx_driver_result_get_double(self.raw, index, &mut value, &mut error) };
         status_to_result(status, error)?;
         Ok(value)
     }
@@ -84,9 +85,9 @@ impl<'a> Record<'a> {
     pub fn get_bool(&self, index: usize) -> crate::Result<bool> {
         let mut value = false;
         let mut error = ptr::null_mut();
-        let status = unsafe {
-            sys::zyx_driver_result_get_bool(self.raw, index as u32, &mut value, &mut error)
-        };
+        let index = checked_index(index)?;
+        let status =
+            unsafe { sys::zyx_driver_result_get_bool(self.raw, index, &mut value, &mut error) };
         status_to_result(status, error)?;
         Ok(value)
     }
@@ -94,9 +95,9 @@ impl<'a> Record<'a> {
     pub fn get_str(&self, index: usize) -> crate::Result<String> {
         let mut value = ptr::null();
         let mut error = ptr::null_mut();
-        let status = unsafe {
-            sys::zyx_driver_result_get_string(self.raw, index as u32, &mut value, &mut error)
-        };
+        let index = checked_index(index)?;
+        let status =
+            unsafe { sys::zyx_driver_result_get_string(self.raw, index, &mut value, &mut error) };
         status_to_result(status, error)?;
         if value.is_null() {
             return Err(Error::new(
@@ -109,4 +110,14 @@ impl<'a> Record<'a> {
             .map_err(|err| Error::new(ErrorCode::InternalError, err.to_string()))?
             .to_owned())
     }
+}
+
+fn checked_index(index: usize) -> crate::Result<u32> {
+    let index = i32::try_from(index).map_err(|_| {
+        Error::new(
+            ErrorCode::OutOfRange,
+            "column index exceeds driver ABI range",
+        )
+    })?;
+    Ok(index as u32)
 }

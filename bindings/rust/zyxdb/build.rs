@@ -10,11 +10,8 @@ fn main() {
         .map(PathBuf::from)
         .or_else(discover_repo_lib_dir);
     if let Some(lib_dir) = lib_dir {
-        println!("cargo:rustc-link-search=native={}", lib_dir.display());
         emit_runtime_path(&lib_dir);
     }
-
-    println!("cargo:rustc-link-lib=dylib=zyx");
 }
 
 fn emit_runtime_path(lib_dir: &Path) {

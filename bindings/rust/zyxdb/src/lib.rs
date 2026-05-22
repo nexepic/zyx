@@ -13,11 +13,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[macro_export]
 macro_rules! params {
     () => {
-        $crate::Params::new()
+        $crate::Params::try_new()
     };
     ($($key:expr => $value:expr),+ $(,)?) => {{
-        let params = $crate::Params::new();
-        $(let params = params.set($key, $value)?;)+
-        params
+        (|| -> $crate::Result<$crate::Params> {
+            let params = $crate::Params::try_new()?;
+            $(let params = params.set($key, $value)?;)+
+            Ok(params)
+        })()
     }};
 }

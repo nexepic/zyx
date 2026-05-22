@@ -10,26 +10,17 @@ pub struct Params {
 }
 
 impl Params {
-    pub fn new() -> Self {
+    pub fn try_new() -> crate::Result<Self> {
         let mut raw = ptr::null_mut();
         let mut error = ptr::null_mut();
         let status = unsafe { sys::zyx_driver_params_create(&mut raw, &mut error) };
-        if status != sys::ZYX_DRIVER_OK {
-            let err = unsafe { crate::Error::from_abi(status, error) };
-            panic!("failed to create ZYX params: {err}");
-        }
-        Self { raw }
+        status_to_result(status, error)?;
+        Ok(Self { raw })
     }
 
     pub fn set<V: IntoParam>(self, key: &str, value: V) -> crate::Result<Self> {
         value.set_param(&self, key)?;
         Ok(self)
-    }
-}
-
-impl Default for Params {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
