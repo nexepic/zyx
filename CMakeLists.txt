@@ -94,6 +94,7 @@ if(NOT ZYX_WASM)
             "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
     )
     target_compile_features(zyx PUBLIC cxx_std_20)
+    target_compile_definitions(zyx PRIVATE ZYX_DRIVER_ABI_EXPORTS)
     if(WIN32)
         target_compile_definitions(zyx PUBLIC NOMINMAX NOGDI WIN32_LEAN_AND_MEAN)
     endif()
