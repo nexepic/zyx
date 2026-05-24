@@ -30,7 +30,14 @@ zyx/
 
 ### 公共头文件 (`include/zyx/`)
 
-包含面向公共的 API 头文件。
+```cpp
+include/zyx/
+├── zyx.hpp              # C++ 主公共头文件
+├── zyx_driver_abi.h     # 稳定的 C-facing Driver ABI 头文件
+└── value.hpp            # 公共 Value 类型定义
+```
+
+`zyx_driver_abi.h` 是唯一受支持的 C-facing ABI 头文件。
 
 ### 内部头文件 (`include/graph/`)
 
