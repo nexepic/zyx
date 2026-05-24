@@ -1,6 +1,6 @@
 [package]
 name = "zyxdb-sys"
-version = "0.1.21"
+version = "0.1.23"
 edition = "2021"
 description = "Raw Driver ABI bindings for the ZYX embedded graph database"
 license = "Apache-2.0"
