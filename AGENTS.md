@@ -94,9 +94,8 @@ Key entry points:
 - **Storage**: `include/graph/storage/FileStorage.hpp`
 - **Query Engine**: `include/graph/query/`
 - **C++ API**: `include/zyx/zyx.hpp`
-- **Driver ABI**: `include/zyx/zyx_driver_abi.h` (long-term C-facing stable ABI for C and language bindings)
+- **Driver ABI**: `include/zyx/zyx_driver_abi.h` (long-term stable ABI for Rust, Python, Node.js, WASM, and future bindings)
 - **Rust SDK**: `bindings/rust/zyxdb` with raw FFI in `bindings/rust/zyxdb-sys`
-- **C API**: `include/zyx/zyx_c_api.h`
 - **WASM**: `scripts/build_wasm.sh` → `build_wasm/zyx.js` + `build_wasm/zyx.wasm`
 
 ## WASM Build
@@ -116,10 +115,10 @@ cp build_wasm/zyx.js build_wasm/zyx.wasm docs/apps/docs/public/wasm/
 
 **Key constraints**:
 - CMake option: `ZYX_WASM=ON` configures the Emscripten build and disables desktop-only targets
-- Exported symbols are listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS` — update this list when adding new C API
+- Exported symbols are listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS` — update this list when adding Driver ABI
   functions that need browser access
-- The Playground uses **read-only transactions** (`zyx_begin_read_only_transaction` + `zyx_txn_execute`) to prevent
-  any data mutation from user queries
+- The Playground uses **read-only Driver ABI transactions** (`zyx_driver_txn_begin_read_only` +
+  `zyx_driver_txn_execute`) to prevent any data mutation from user queries
 
 ## Documentation Standards
 

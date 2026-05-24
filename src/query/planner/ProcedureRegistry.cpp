@@ -19,6 +19,7 @@
  **/
 
 #include "graph/query/planner/ProcedureRegistry.hpp"
+#include <limits>
 #include "graph/query/execution/operators/AlgoShortestPathOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
@@ -56,13 +57,21 @@ namespace graph::query::planner {
 			if (args.size() < 2)
 				throw std::runtime_error("algo.shortestPath expects (startId, endId)");
 			int64_t start = 0, end = 0;
+			int maxDepth = 15;
 			try {
 				start = std::stoll(args[0].toString());
 				end = std::stoll(args[1].toString());
+				if (args.size() > 2) {
+					const int64_t parsedMaxDepth = std::stoll(args[2].toString());
+					if (parsedMaxDepth <= 0 || parsedMaxDepth > std::numeric_limits<int>::max()) {
+						throw std::out_of_range("maxDepth must be a positive int");
+					}
+					maxDepth = static_cast<int>(parsedMaxDepth);
+				}
 			} catch (...) {
-				throw std::runtime_error("IDs must be numeric");
+				throw std::runtime_error("IDs and maxDepth must be numeric and maxDepth must be positive");
 			}
-			return std::make_unique<execution::operators::AlgoShortestPathOperator>(ctx.dataManager, start, end);
+			return std::make_unique<execution::operators::AlgoShortestPathOperator>(ctx.dataManager, start, end, "both", maxDepth);
 		});
 
 		// --- Index Administration (Now Integrated!) ---

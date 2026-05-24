@@ -50,6 +50,19 @@ test('Database - create node and query', async () => {
         assert.strictEqual(rows[0].name, 'Alice'); // Proxy access
         assert.strictEqual(rows[0].get('age'), 30);
 
+        const listResult = await db.execute("RETURN [1, true, 2.5, 'ok', null] AS items");
+        assert.deepStrictEqual(listResult.single().items, [1, true, 2.5, 'ok', null]);
+
+        const nestedMapResult = await db.execute('RETURN $value AS value', {
+            value: { name: 'Ada', nested: [1, { ok: true }], none: null }
+        });
+        assert.deepStrictEqual(nestedMapResult.single().value, { name: 'Ada', nested: [1, { ok: true }], none: null });
+
+        const nestedListResult = await db.execute('RETURN $value AS value', {
+            value: [1, [2, 'two'], { active: true }]
+        });
+        assert.deepStrictEqual(nestedListResult.single().value, [1, [2, 'two'], { active: true }]);
+
         await db.close();
     } finally {
         cleanup(dbPath);
@@ -121,6 +134,10 @@ test('Database - create edge', async () => {
         assert.strictEqual(record.to, 'Bob');
         assert.strictEqual(record.since, 2020);
 
+        const unicodeId = await db.createNode('Person', { name: 'Control\u0001Value' });
+        const unicodeResult = await db.execute(`MATCH (n:Person) WHERE id(n) = ${unicodeId} RETURN n`);
+        assert.strictEqual(unicodeResult.single().n.properties.name, 'Control\u0001Value');
+
         await db.close();
     } finally {
         cleanup(dbPath);
@@ -185,6 +202,25 @@ test('Transaction - read-only', async () => {
         assert.strictEqual(result.fetchAll().length, 1);
 
         await tx.commit();
+        await db.close();
+    } finally {
+        cleanup(dbPath);
+    }
+});
+
+test('Transaction - direct graph create rejected while transaction is active', async () => {
+    const dbPath = getTestDbPath();
+    try {
+        const db = new Database(dbPath);
+        await db.open();
+
+        const tx = await db.beginTransaction();
+        await assert.rejects(() => db.createNode('Person', { name: 'Blocked' }), /active transactions/);
+        await tx.rollback();
+
+        const result = await db.execute('MATCH (n:Person) RETURN n.name AS name');
+        assert.strictEqual(result.fetchAll().length, 0);
+
         await db.close();
     } finally {
         cleanup(dbPath);
@@ -271,6 +307,12 @@ test('Database - shortest path', async () => {
         assert.strictEqual(shortestPath.length, 3);
         assert.strictEqual(shortestPath[0].properties.name, 'A');
         assert.strictEqual(shortestPath[2].properties.name, 'C');
+
+        const tooShallow = await db.getShortestPath(id1, id3, 1);
+        assert.strictEqual(tooShallow.length, 0);
+
+        const enoughDepth = await db.getShortestPath(id1, id3, 2);
+        assert.strictEqual(enoughDepth.length, 3);
 
         await db.close();
     } finally {

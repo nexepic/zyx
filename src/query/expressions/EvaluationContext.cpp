@@ -56,8 +56,6 @@ std::optional<PropertyValue> EvaluationContext::resolveVariable(const std::strin
 
 	// Try to get as a Node first
 	if (auto node = record_.getNode(variableName)) {
-		// For now, convert Node to a simple representation
-		// In a full implementation, you might return a special type
 		return PropertyValue(node->getId());
 	}
 

@@ -94,6 +94,9 @@ namespace zyx {
 	// Forward declaration
 	Value toPublicValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
 	Value toPublicValue(const graph::PropertyValue &v);
+	Value toDriverAbiValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
+	Value toDriverAbiValue(const graph::PropertyValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
+	Value toStringListValue(const std::vector<graph::PropertyValue> &values);
 
 	// Convert Internal Node to Public Node Pointer (For shared_ptr usage in Value)
 	std::shared_ptr<Node> toPublicNodePtr(const graph::Node &internalNode,
@@ -144,6 +147,15 @@ namespace zyx {
 	}
 
 	// Convert internal PropertyValue to public Value variant
+	Value toStringListValue(const std::vector<graph::PropertyValue> &values) {
+		std::vector<std::string> strings;
+		strings.reserve(values.size());
+		for (const auto &val: values) {
+			strings.push_back(val.toString());
+		}
+		return strings;
+	}
+
 	Value toPublicValue(const graph::PropertyValue &v) {
 		return std::visit(
 				[]<typename T0>(T0 &&arg) -> Value {
@@ -151,12 +163,7 @@ namespace zyx {
 					if constexpr (std::is_same_v<T, std::monostate>) {
 						return std::monostate{};
 					} else if constexpr (std::is_same_v<T, std::vector<graph::PropertyValue>>) {
-						std::vector<std::string> strVec;
-						strVec.reserve(arg.size());
-						for (const auto &val: arg) {
-							strVec.push_back(val.toString());
-						}
-						return strVec;
+						return toStringListValue(arg);
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue::MapType>) {
 						graph::PropertyValue pv(arg);
 						return pv.toString();
@@ -166,6 +173,36 @@ namespace zyx {
 						return arg.toISO();
 					} else {
 						// Primitives (int, double, bool, string) map directly
+						return arg;
+					}
+				},
+				v.getVariant());
+	}
+
+	Value toDriverAbiValue(const graph::PropertyValue &v, const std::shared_ptr<graph::storage::DataManager> &dm) {
+		return std::visit(
+				[&dm]<typename T0>(T0 &&arg) -> Value {
+					using T = std::decay_t<T0>;
+					if constexpr (std::is_same_v<T, std::monostate>) {
+						return std::monostate{};
+					} else if constexpr (std::is_same_v<T, std::vector<graph::PropertyValue>>) {
+						auto list = std::make_shared<ValueList>();
+						list->elements.reserve(arg.size());
+						for (const auto &val: arg) {
+							list->elements.push_back(toDriverAbiValue(val, dm));
+						}
+						return list;
+					} else if constexpr (std::is_same_v<T, graph::PropertyValue::MapType>) {
+						auto map = std::make_shared<ValueMap>();
+						for (const auto &[key, val]: arg) {
+							map->entries.emplace(key, toDriverAbiValue(val, dm));
+						}
+						return map;
+					} else if constexpr (std::is_same_v<T, graph::TemporalDate> ||
+					                     std::is_same_v<T, graph::TemporalDateTime> ||
+					                     std::is_same_v<T, graph::TemporalDuration>) {
+						return arg.toISO();
+					} else {
 						return arg;
 					}
 				},
@@ -184,6 +221,24 @@ namespace zyx {
 						return toPublicEdgePtr(arg, dm);
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue>) {
 						return toPublicValue(arg);
+					} else {
+						return std::monostate{};
+					}
+				},
+				v.getVariant());
+	}
+
+	Value toDriverAbiValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm) {
+		return std::visit(
+				[&dm]<typename T0>(T0 &&arg) -> Value {
+					using T = std::decay_t<T0>;
+
+					if constexpr (std::is_same_v<T, graph::Node>) {
+						return toPublicNodePtr(arg, dm);
+					} else if constexpr (std::is_same_v<T, graph::Edge>) {
+						return toPublicEdgePtr(arg, dm);
+					} else if constexpr (std::is_same_v<T, graph::PropertyValue>) {
+						return toDriverAbiValue(arg, dm);
 					} else {
 						return std::monostate{};
 					}
@@ -416,6 +471,28 @@ namespace zyx {
 		return get(impl_->columnNames_[index]);
 	}
 
+	namespace detail {
+		Value getTypedResultValue(const Result &result, int index) {
+			if (!result.impl_ || !result.impl_->started_ || index < 0 ||
+			    index >= static_cast<int>(result.impl_->columnNames_.size())) {
+				return std::monostate{};
+			}
+
+			const auto &rows = result.impl_->result_.getRows();
+			if (result.impl_->cursor_ >= rows.size()) {
+				return std::monostate{};
+			}
+
+			const auto &row = rows[result.impl_->cursor_];
+			const auto &columnName = result.impl_->columnNames_[index];
+			auto it = row.find(columnName);
+			if (it == row.end()) {
+				return std::monostate{};
+			}
+			return toDriverAbiValue(it->second, result.impl_->dataManager_);
+		}
+	}
+
 	int Result::getColumnCount() const { return impl_ ? static_cast<int>(impl_->columnNames_.size()) : 0; }
 
 	std::string Result::getColumnName(int index) const {
@@ -617,7 +694,7 @@ namespace zyx {
 						impl_->cypherTxn_.reset(); // destructor auto-rolls back
 						txnResult.addRow({{"result", graph::query::ResultValue(graph::PropertyValue("Transaction rolled back"))}});
 						break;
-					default:
+					default: // ZYX_COV_EXCL_LINE: detectCypherTxnStatement returns only handled transaction kinds.
 						break;
 				}
 
@@ -878,7 +955,7 @@ namespace zyx {
 		}
 
 		auto storage = impl_->db_.getStorage();
-		if (!storage)
+		if (!storage) // ZYX_COV_EXCL_LINE: ensureOpen initializes storage before graph algorithms run.
 			throw std::runtime_error("Storage not available");
 		auto dm = storage->getDataManager();
 
@@ -908,7 +985,7 @@ namespace zyx {
 		}
 
 		auto storage = impl_->db_.getStorage();
-		if (!storage)
+		if (!storage) // ZYX_COV_EXCL_LINE: ensureOpen initializes storage before graph algorithms run.
 			throw std::runtime_error("Storage not available");
 		auto dm = storage->getDataManager();
 

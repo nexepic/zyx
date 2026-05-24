@@ -7,7 +7,7 @@
   "scripts": {
     "build": "cmake-js compile",
     "rebuild": "cmake-js rebuild",
-    "test": "node --test",
+    "test": "node scripts/test-local.cjs",
     "clean": "cmake-js clean"
   },
   "keywords": [

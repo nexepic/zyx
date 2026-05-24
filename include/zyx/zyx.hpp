@@ -28,6 +28,12 @@
 
 namespace zyx {
 
+	class Result;
+
+	namespace detail {
+		Value getTypedResultValue(const Result &result, int index);
+	}
+
 	// Forward declarations of implementation classes.
 	// These are defined ONLY in the .cpp file to keep this header clean.
 	class DatabaseImpl;
@@ -56,14 +62,14 @@ namespace zyx {
 		void next() const;
 		[[nodiscard]] Value get(const std::string &key) const;
 
-		// --- Data Access (By Index) - NEW for C API ---
+		// --- Data Access (By Index) - used by bindings and Driver ABI ---
 		/**
 		 * @brief Get value by column index (0-based).
 		 * @throws std::out_of_range if index is invalid.
 		 */
 		[[nodiscard]] Value get(int index) const;
 
-		// --- Metadata - NEW for C API ---
+		// --- Metadata - used by bindings and Driver ABI ---
 		[[nodiscard]] int getColumnCount() const;
 		[[nodiscard]] std::string getColumnName(int index) const;
 
@@ -76,6 +82,7 @@ namespace zyx {
 		std::unique_ptr<ResultImpl> impl_;
 		friend class Database; // Allow Database to create Results
 		friend class Transaction; // Allow Transaction to create Results
+		friend Value detail::getTypedResultValue(const Result &result, int index);
 	};
 
 	/**

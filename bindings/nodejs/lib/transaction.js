@@ -22,6 +22,7 @@ class Transaction {
      */
     constructor(nativeTx) {
         this._tx = nativeTx;
+        this._queue = Promise.resolve();
     }
 
     /**
@@ -30,38 +31,47 @@ class Transaction {
      * @param {Object} [params] - Optional query parameters.
      * @returns {Promise<Result>}
      */
-    async execute(cypher, params) {
+    execute(cypher, params) {
         if (!this._tx) {
             throw new Error('Transaction already closed');
         }
-        const raw = await this._tx.execute(cypher, params || undefined);
-        return new Result(raw);
+        const tx = this._tx;
+        const operation = this._queue.then(async () => {
+            const raw = await tx.execute(cypher, params || undefined);
+            return new Result(raw);
+        });
+        this._queue = operation.then(() => undefined, () => undefined);
+        return operation;
     }
 
     /**
      * Commit the transaction.
      * @returns {Promise<void>}
      */
-    async commit() {
+    commit() {
         if (!this._tx) {
             throw new Error('Transaction already closed');
         }
         const tx = this._tx;
         this._tx = null;
-        return tx.commit();
+        const operation = this._queue.then(() => tx.commit());
+        this._queue = operation.then(() => undefined, () => undefined);
+        return operation;
     }
 
     /**
      * Roll back the transaction.
      * @returns {Promise<void>}
      */
-    async rollback() {
+    rollback() {
         if (!this._tx) {
             throw new Error('Transaction already closed');
         }
         const tx = this._tx;
         this._tx = null;
-        return tx.rollback();
+        const operation = this._queue.then(() => tx.rollback());
+        this._queue = operation.then(() => undefined, () => undefined);
+        return operation;
     }
 
     /**

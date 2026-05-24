@@ -1,6 +1,6 @@
 ---
 title: API Reference
-description: ZYX provides both C++ and C APIs for embedding in your applications.
+description: ZYX provides C++, Node.js, Python, and Driver ABI surfaces for embedding in your applications.
 category: Overview
 categoryOrder: 1
 order: 1
@@ -11,14 +11,14 @@ projectOrder: 1
 ---
 # API Reference
 
-ZYX exposes two embedding interfaces — a modern C++ API and a C-compatible API for FFI bindings.
+ZYX exposes a modern C++ API plus language bindings built on the stable Driver ABI.
 
 ## Which API to use?
 
 - **C++ API** (`include/zyx/zyx.hpp`) — Use when developing in C++20. Offers type-safe values, RAII transaction management, and a fluent `QueryBuilder`.
 - **Node.js API** (`npm install zyxdb`) — Use when developing in Node.js. Async interface with prebuilt platform binaries.
 - **Python API** (`pip install zyxdb`) — Use when developing in Python. Provides Pythonic interface with context managers, iterators, and pandas integration.
-- **C API** (`include/zyx/zyx_c_api.h`) — Use when building Rust, Go, or WASM bindings. Opaque handles with explicit lifecycle management.
+- **Driver ABI** (`include/zyx/zyx_driver_abi.h`) — Use for Rust, WASM, and future bindings. It exposes opaque handles, explicit lifecycle management, nested value traversal, and stable `zyx_driver_*` symbols.
 
 ## Sections
 
@@ -37,17 +37,15 @@ ZYX exposes two embedding interfaces — a modern C++ API and a C-compatible API
 
 - [Python API Reference](python-api) — `Database`, `Transaction`, `Result`, `Record`, high-performance write methods
 
-### C API
+### Driver ABI
 
-- [C API Functions](c-api) — All C functions with signatures and usage
-- [C API Types](c-types) — Opaque handles, `ZYXNode`, `ZYXEdge`, `ZYXValueType`
-- [C API Error Handling](c-errors) — Thread-local errors and Result-level errors
+The Driver ABI is the stable C-facing runtime boundary used by language bindings and WASM. Its public contract lives in `include/zyx/zyx_driver_abi.h`; most application code should prefer the C++, Node.js, or Python APIs above.
 
 ## Design Conventions
 
-- Query execution returns a `Result` / `ZYXResult_T*`. Callers iterate rows explicitly.
+- Query execution returns a `Result` or Driver ABI result handle. Callers iterate rows explicitly.
 - Transactions are available in three forms:
-  - **API-level explicit transactions** — `beginTransaction()` / `zyx_begin_transaction()`
-  - **Read-only transactions** — `beginReadOnlyTransaction()` / `zyx_begin_read_only_transaction()`
+  - **API-level explicit transactions** — `beginTransaction()` / `zyx_driver_txn_begin()`
+  - **Read-only transactions** — `beginReadOnlyTransaction()` / `zyx_driver_txn_begin_read_only()`
   - **Cypher transaction statements** — `BEGIN` / `COMMIT` / `ROLLBACK` within `execute()`
 - When no explicit transaction is active, `execute()` auto-commits write queries and uses a read-only fast path for reads.

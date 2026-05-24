@@ -25,7 +25,7 @@ graph TB
 
     subgraph "API Layer"
         CPP["C++ API (zyx.hpp)"]
-        CA["C API (zyx_c_api.h)"]
+        ABI["Driver ABI (zyx_driver_abi.h)"]
         WASM["WASM Playground"]
     end
 
@@ -52,8 +52,8 @@ graph TB
     CLI --> CPP
     BM --> CPP
     APP --> CPP
-    CA --> DB
-    WASM --> CA
+    ABI --> DB
+    WASM --> ABI
 
     CPP --> DB
     DB --> TM
@@ -73,7 +73,7 @@ graph TB
 **Layer responsibilities:**
 
 - **Application Layer** — CLI tool, benchmark suite, and host applications that embed ZYX.
-- **API Layer** — C++ API (`zyx.hpp`), C API (`zyx_c_api.h`), and WASM bindings for browser use.
+- **API Layer** — C++ API (`zyx.hpp`), stable Driver ABI (`zyx_driver_abi.h`), language bindings, and WASM bindings for browser use.
 - **Query Layer** — Cypher text is parsed, planned, optimized, and executed as a pipeline of physical operators.
 - **Storage Layer** — `DataManager` orchestrates entity read/write, `PersistenceManager` tracks dirty entities, `FileStorage` manages the segment-based file, `WALManager` handles write-ahead logging, and `PageBufferPool` provides an LRU segment cache.
 - **Core Layer** — `Database` is the top-level entry point; `TransactionManager` enforces single-writer/multi-reader concurrency; `Transaction` provides the external handle.

@@ -28,8 +28,8 @@ namespace graph::query::execution::operators {
 	class AlgoShortestPathOperator : public PhysicalOperator {
 	public:
 		AlgoShortestPathOperator(std::shared_ptr<storage::DataManager> dm, int64_t startId, int64_t endId,
-								 std::string direction = "both") :
-			startId_(startId), endId_(endId), direction_(std::move(direction)) {
+								 std::string direction = "both", int maxDepth = 15) :
+			startId_(startId), endId_(endId), direction_(std::move(direction)), maxDepth_(maxDepth) {
 			// Initialize algorithm instance
 			algo_ = std::make_unique<algorithm::GraphAlgorithm>(dm);
 		}
@@ -41,7 +41,7 @@ namespace graph::query::execution::operators {
 				return std::nullopt;
 
 			// 1. Execute Algorithm
-			std::vector<Node> path = algo_->findShortestPath(startId_, endId_, direction_);
+			std::vector<Node> path = algo_->findShortestPath(startId_, endId_, direction_, maxDepth_);
 
 			if (path.empty())
 				return std::nullopt;
@@ -80,6 +80,7 @@ namespace graph::query::execution::operators {
 		int64_t startId_;
 		int64_t endId_;
 		std::string direction_;
+		int maxDepth_;
 		bool executed_ = false;
 	};
 

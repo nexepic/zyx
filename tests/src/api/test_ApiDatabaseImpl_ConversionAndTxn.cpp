@@ -54,6 +54,35 @@ TEST_F(CppApiTest, StringVectorParsingCoversIntDoubleAndFallbackBranches) {
 	EXPECT_EQ(vec[3], "hello");
 }
 
+TEST_F(CppApiTest, PublicApiCollectNodeDoesNotExposeDriverAbiEntityMarkerMap) {
+	db->execute("CREATE (:CppCollectNode {name:'Ada'})");
+
+	auto res = db->execute("MATCH (n:CppCollectNode) RETURN collect(n) AS nodes");
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto val = res.get("nodes");
+	ASSERT_TRUE(std::holds_alternative<std::vector<std::string>>(val));
+	const auto vec = std::get<std::vector<std::string>>(val);
+	ASSERT_EQ(vec.size(), 1UL);
+	EXPECT_EQ(vec[0], "1");
+	EXPECT_EQ(vec[0].find("__zyx_driver_entity"), std::string::npos);
+}
+
+TEST_F(CppApiTest, PublicApiMapPropertyValueRemainsStringifiedForCompatibility) {
+	auto map = std::make_shared<zyx::ValueMap>();
+	map->entries["x"] = static_cast<int64_t>(7);
+	db->createNode("CppMapValueNode", {{"map", map}});
+	db->save();
+
+	auto res = db->execute("MATCH (n:CppMapValueNode) RETURN n.map");
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto val = res.get("n.map");
+	EXPECT_TRUE(std::holds_alternative<std::string>(val));
+}
+
 TEST_F(CppApiTest, ExecuteParamsCoversTxnDelegateAndAutoCommitBranches) {
 	auto beginRes = db->execute("BEGIN");
 	EXPECT_TRUE(beginRes.isSuccess());
@@ -166,6 +195,177 @@ TEST_F(CppApiTest, UtilityMethodsSaveThreadPoolAndTokenBoundaryQuery) {
 
 	auto boundaryRes = db->execute("RETURN 'CREATED' AS token");
 	EXPECT_TRUE(boundaryRes.isSuccess());
+
+	auto schemaRes = db->execute("CREATE INDEX ON :CppApiSchemaBranch(prop)");
+	EXPECT_TRUE(schemaRes.isSuccess()) << schemaRes.getError();
+}
+
+TEST_F(CppApiTest, ExecuteLogsWhenSlowLogThresholdIsZero) {
+	auto enableRes = db->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
+	ASSERT_TRUE(enableRes.isSuccess()) << enableRes.getError();
+	auto thresholdRes = db->execute("CALL dbms.setConfig('query.slow_log.threshold_ms', 0)");
+	ASSERT_TRUE(thresholdRes.isSuccess()) << thresholdRes.getError();
+
+	ASSERT_TRUE(db->execute("BEGIN").isSuccess());
+	ASSERT_TRUE(db->execute("COMMIT").isSuccess());
+	auto res = db->execute("RETURN 1 AS one");
+	EXPECT_TRUE(res.isSuccess()) << res.getError();
+}
+
+TEST_F(CppApiTest, TransactionControlTokensAcceptTrailingDelimitersAndWhitespace) {
+	auto dottedToken = db->execute("BEGIN.foo");
+	EXPECT_FALSE(dottedToken.isSuccess());
+
+	auto noCommit = db->execute("COMMIT;");
+	EXPECT_FALSE(noCommit.isSuccess());
+	EXPECT_NE(noCommit.getError().find("No active transaction"), std::string::npos);
+
+	auto noRollback = db->execute("  ROLLBACK \t");
+	EXPECT_FALSE(noRollback.isSuccess());
+	EXPECT_NE(noRollback.getError().find("No active transaction"), std::string::npos);
+
+	auto begin = db->execute("\tBEGIN;");
+	ASSERT_TRUE(begin.isSuccess()) << begin.getError();
+	EXPECT_TRUE(db->hasActiveTransaction());
+
+	auto nested = db->execute("BEGIN ");
+	EXPECT_FALSE(nested.isSuccess());
+	EXPECT_NE(nested.getError().find("Nested transactions"), std::string::npos);
+	EXPECT_TRUE(db->hasActiveTransaction());
+
+	auto rollback = db->execute("ROLLBACK;");
+	EXPECT_TRUE(rollback.isSuccess()) << rollback.getError();
+	EXPECT_FALSE(db->hasActiveTransaction());
+}
+
+TEST_F(CppApiTest, ResultGetSupportsFuzzySuffixLookupInBothDirections) {
+	db->execute("CREATE (:FuzzyLookup {name:'Ada'})");
+
+	auto propertyRes = db->execute("MATCH (n:FuzzyLookup) RETURN n.name");
+	ASSERT_TRUE(propertyRes.isSuccess()) << propertyRes.getError();
+	ASSERT_TRUE(propertyRes.hasNext());
+	propertyRes.next();
+	EXPECT_EQ(std::get<std::string>(propertyRes.get("name")), "Ada");
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(propertyRes.get("person.name")));
+
+	auto aliasRes = db->execute("RETURN 42 AS n");
+	ASSERT_TRUE(aliasRes.isSuccess()) << aliasRes.getError();
+	ASSERT_TRUE(aliasRes.hasNext());
+	aliasRes.next();
+	EXPECT_EQ(std::get<int64_t>(aliasRes.get("person.n")), 42);
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(aliasRes.get("person.missing")));
+}
+
+TEST_F(CppApiTest, ResultEntityStreamExposesNodeAndEdgeAliasesPropertiesAndMissingValues) {
+	int64_t adaId = db->createNode("EntityStreamPerson", {{"name", std::string("Ada")}});
+	int64_t bobId = db->createNode("EntityStreamPerson", {{"name", std::string("Bob")}});
+	int64_t edgeId = db->createEdge(adaId, bobId, "ENTITY_STREAM_LINK", {{"since", (int64_t) 1843}});
+	ASSERT_GT(edgeId, 0);
+
+	auto nodeRes = db->execute("MATCH (n:EntityStreamPerson {name:'Ada'}) RETURN n");
+	ASSERT_TRUE(nodeRes.isSuccess()) << nodeRes.getError();
+	ASSERT_TRUE(nodeRes.hasNext());
+	nodeRes.next();
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(nodeRes.get("")));
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(nodeRes.get("n")));
+	EXPECT_EQ(std::get<std::string>(nodeRes.get("name")), "Ada");
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(nodeRes.get("missing")));
+
+	auto edgeRes = db->execute("MATCH ()-[e:ENTITY_STREAM_LINK]->() RETURN e");
+	ASSERT_TRUE(edgeRes.isSuccess()) << edgeRes.getError();
+	ASSERT_TRUE(edgeRes.hasNext());
+	edgeRes.next();
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Edge>>(edgeRes.get("")));
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Edge>>(edgeRes.get("e")));
+	EXPECT_EQ(std::get<int64_t>(edgeRes.get("since")), 1843);
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(edgeRes.get("missing")));
+}
+
+TEST_F(CppApiTest, EntityStreamPreservesEmptyLabelsForUnlabeledNodes) {
+	int64_t nodeId = db->createNode(std::vector<std::string>{}, {{"name", std::string("NoLabel")}});
+
+	auto res = db->execute("MATCH (n) RETURN n");
+	ASSERT_TRUE(res.isSuccess()) << res.getError();
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+
+	auto value = res.get("");
+	ASSERT_TRUE(std::holds_alternative<std::shared_ptr<zyx::Node>>(value));
+	auto node = std::get<std::shared_ptr<zyx::Node>>(value);
+	ASSERT_NE(node, nullptr);
+	EXPECT_EQ(node->id, nodeId);
+	EXPECT_TRUE(node->labels.empty());
+	EXPECT_TRUE(node->label.empty());
+	EXPECT_EQ(std::get<std::string>(res.get("name")), "NoLabel");
+}
+
+TEST_F(CppApiTest, DefaultAndCursorBoundaryTypedResultValuesReturnNull) {
+	zyx::Result empty;
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(zyx::detail::getTypedResultValue(empty, 0)));
+
+	auto res = db->execute("RETURN 99 AS value");
+	ASSERT_TRUE(res.isSuccess()) << res.getError();
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(zyx::detail::getTypedResultValue(res, 0)));
+
+	ASSERT_TRUE(res.hasNext());
+	res.next();
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(zyx::detail::getTypedResultValue(res, -1)));
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(zyx::detail::getTypedResultValue(res, res.getColumnCount())));
+	EXPECT_EQ(std::get<int64_t>(zyx::detail::getTypedResultValue(res, 0)), 99);
+
+	res.next();
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(zyx::detail::getTypedResultValue(res, 0)));
+}
+
+TEST_F(CppApiTest, TransactionReadOnlyFlagsCoverWriteAndAutoOpenedReadOnlyTransactions) {
+	auto writeTxn = db->beginTransaction();
+	ASSERT_TRUE(writeTxn.isActive());
+	EXPECT_FALSE(writeTxn.isReadOnly());
+	writeTxn.rollback();
+	EXPECT_FALSE(writeTxn.isActive());
+
+	auto tempDir = fs::temp_directory_path();
+	auto freshPath = (tempDir / ("readonly_auto_open_test_" + std::to_string(std::rand()))).string();
+	{
+		zyx::Database freshDb(freshPath);
+		auto readOnlyTxn = freshDb.beginReadOnlyTransaction();
+		ASSERT_TRUE(readOnlyTxn.isActive());
+		EXPECT_TRUE(readOnlyTxn.isReadOnly());
+		readOnlyTxn.rollback();
+		freshDb.close();
+	}
+	std::error_code ec;
+	fs::remove_all(freshPath, ec);
+	fs::remove(freshPath + "-wal", ec);
+}
+
+TEST_F(CppApiTest, CreateEdgesShortestPathAndBfsUseImplicitTransactions) {
+	int64_t first = db->createNode("GraphApiNode", {{"name", std::string("first")}});
+	int64_t middle = db->createNode("GraphApiNode", {{"name", std::string("middle")}});
+	int64_t last = db->createNode("GraphApiNode", {{"name", std::string("last")}});
+
+	auto edgeIds = db->createEdges(
+		"GRAPH_API_LINK",
+		{
+			{first, middle, {{"order", (int64_t) 1}}},
+			{middle, last, {{"order", (int64_t) 2}}},
+		});
+	ASSERT_EQ(edgeIds.size(), 2UL);
+	EXPECT_GT(edgeIds[0], 0);
+	EXPECT_GT(edgeIds[1], 0);
+	db->save();
+
+	auto edgeRes = db->execute("MATCH ()-[e:GRAPH_API_LINK]->() RETURN e.order");
+	ASSERT_TRUE(edgeRes.isSuccess()) << edgeRes.getError();
+
+	EXPECT_NO_THROW((void)db->getShortestPath(first, last, 4));
+
+	std::vector<int64_t> visited;
+	EXPECT_NO_THROW(db->bfs(first, [&](const zyx::Node &node) {
+		visited.push_back(node.id);
+		return visited.size() < 3;
+	}));
+	EXPECT_NE(std::find(visited.begin(), visited.end(), first), visited.end());
 }
 
 // ============================================================================

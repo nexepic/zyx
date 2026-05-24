@@ -124,8 +124,8 @@ graph TD
 
 1. **Plan layer** (`QueryEngine::executePlan()`): `ExecMode` enum (EM_FULL / EM_READ_WRITE / EM_READ_ONLY) checked
    against `QueryPlan` mutation flags (`mutatesData`, `mutatesSchema`) — O(1) check before execution
-2. **API layer**: `beginReadOnlyTransaction()` exposed in `graph::Database`, `zyx::Database` (C++ API), and C API
-   (`zyx_begin_read_only_transaction`)
+2. **API layer**: `beginReadOnlyTransaction()` exposed in `graph::Database`, `zyx::Database` (C++ API), and the Driver ABI
+   (`zyx_driver_txn_begin_read_only`)
 3. **Storage layer**: `DataManager::guardReadOnly()` on all 12 write methods — final safety net backed by
    `TransactionContext::readOnly_` flag
 
@@ -173,7 +173,7 @@ Key files:
 ## Public API
 
 - **C++ API**: `include/zyx/zyx.hpp` - Embeddable interface for C++ applications
-- **C API**: `include/zyx/zyx_c_api.h` - C-compatible interface for FFI (Rust, WASM, etc.)
+- **Driver ABI**: `include/zyx/zyx_driver_abi.h` - stable C-facing runtime boundary for Rust, Python, Node.js, WASM, and future bindings
 - **Types**: `include/zyx/value.hpp` - Data type definitions
 - **Query API**: `include/graph/query/api/` - `QueryEngine`, `QueryBuilder`, `QueryResult`, `ResultValue`
 - CLI tool: `buildDir/apps/cli/zyx` - Interactive REPL
@@ -184,7 +184,7 @@ Key files:
 include/
 ├── zyx/                     # Public headers (API)
 │   ├── zyx.hpp              # C++ API
-│   ├── zyx_c_api.h          # C API
+│   ├── zyx_driver_abi.h     # Stable Driver ABI for language bindings and WASM
 │   └── value.hpp            # Value types
 └── graph/                   # Internal headers
     ├── core/               # Database, Transaction, Entity, State, Index, Types
@@ -248,7 +248,7 @@ src/
 ├── traversal/              # Traversal implementation
 ├── vector/                 # Vector engine implementation
 │   └── index/              # DiskANN implementation
-├── api/                    # C API implementation
+├── api/                    # Public C++ API and Driver ABI implementation
 ├── cli/                    # CLI implementation
 ├── config/                 # Configuration implementation
 ├── debug/                  # Debug/perf tracing implementation
@@ -262,7 +262,7 @@ tests/
 ├── include/                # Shared test utilities and helpers
 ├── integration/            # Integration tests (end-to-end workflows)
 └── src/                    # Unit tests (mirrors source structure)
-    ├── api/                # C/C++ API tests
+    ├── api/                # C++ API and Driver ABI tests
     ├── cli/                # CLI tests
     ├── concurrent/         # Thread pool tests
     ├── config/             # Configuration tests
@@ -378,26 +378,21 @@ Outputs: `emsdk/` (Emscripten SDK), `emsdk/antlr4-wasm/` (antlr4 static lib for 
 3. Compiles `libzyx_core.a` + `libzyx_cypher_parser.a` as static WASM libraries
 4. Links with `em++` into final `zyx.js` + `zyx.wasm` module using `-sMODULARIZE`
 
-### Exported C API functions
+### Exported Driver ABI functions
 
-All functions listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS`. Key categories:
-- **Lifecycle**: `zyx_open`, `zyx_open_if_exists`, `zyx_close`
-- **Execution**: `zyx_execute`, `zyx_execute_params`
-- **Transactions**: `zyx_begin_transaction`, `zyx_begin_read_only_transaction`, `zyx_txn_execute`,
-  `zyx_txn_commit`, `zyx_txn_rollback`, `zyx_txn_close`, `zyx_txn_is_read_only`
-- **Parameters**: `zyx_params_create`, `zyx_params_set_*`, `zyx_params_close`
-- **Batch**: `zyx_create_node`, `zyx_create_node_ret_id`, `zyx_create_edge_by_id`
-- **Result iteration**: `zyx_result_next`, `zyx_result_column_count`, `zyx_result_column_name`,
-  `zyx_result_get_duration`
-- **Data access**: `zyx_result_get_type`, `zyx_result_get_int/double/bool/string`,
-  `zyx_result_get_node`, `zyx_result_get_edge`, `zyx_result_get_props_json`,
-  `zyx_result_get_map_json`
-- **List access**: `zyx_result_list_size`, `zyx_result_list_get_*`
-- **Status**: `zyx_result_is_success`, `zyx_result_get_error`, `zyx_get_last_error`
-- **Memory**: `malloc`, `free`
+All browser-visible runtime functions are listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS`. Key categories:
+- **Lifecycle**: `zyx_driver_db_open`, `zyx_driver_db_open_if_exists`, `zyx_driver_db_close`, `zyx_driver_db_save`
+- **Execution**: `zyx_driver_db_execute`, `zyx_driver_txn_execute`
+- **Transactions**: `zyx_driver_txn_begin`, `zyx_driver_txn_begin_read_only`, `zyx_driver_txn_commit`,
+  `zyx_driver_txn_rollback`, `zyx_driver_txn_close`
+- **Parameters and values**: `zyx_driver_params_*`, `zyx_driver_value_*`
+- **Graph writes**: `zyx_driver_db_create_node`, `zyx_driver_db_create_node_with_labels`, `zyx_driver_db_create_edge`
+- **Result iteration**: `zyx_driver_result_next`, `zyx_driver_result_column_count`, `zyx_driver_result_column_name`
+- **Data access**: scalar getters plus `zyx_driver_result_get_value` and `zyx_driver_value_ref_*` nested traversal
+- **Errors and memory**: `zyx_driver_error_*`, `malloc`, `free`
 
-**When adding new C API functions**: Update both `include/zyx/zyx_c_api.h` (declaration),
-`src/api/CApi.cpp` (implementation), AND `scripts/build_wasm.sh` `-sEXPORTED_FUNCTIONS` (WASM export).
+**When adding new Driver ABI functions**: Update `include/zyx/zyx_driver_abi.h`, the focused implementation files under
+`src/api/driver_abi/`, relevant binding declarations, and `scripts/build_wasm.sh` `-sEXPORTED_FUNCTIONS` when browser access is needed.
 
 ### Key files
 
@@ -417,10 +412,10 @@ Browser-based interactive Cypher query workspace embedded in the docs site homep
 
 ```mermaid
 graph LR
-    A[playground.tsx] -->|ccall| B[zyx.js WASM Module]
-    B --> C[zyx.wasm - ZYX Engine]
-    C -->|MEMFS| D[Pre-built .zyx files]
-    A --> E[graph-view.tsx - D3 Visualization]
+    A[playground.tsx] --> B[wasmDriverAbi.ts] -->|Driver ABI ccall| C[zyx.js WASM Module]
+    C --> D[zyx.wasm - ZYX Engine]
+    D -->|MEMFS| E[Pre-built .zyx files]
+    A --> F[graph-view.tsx - D3 Visualization]
 ```
 
 ### Components
@@ -428,6 +423,7 @@ graph LR
 | File | Purpose |
 |------|---------|
 | `docs/apps/docs/home/playground.tsx` | Main playground component (query editor, result display, dataset switching) |
+| `docs/apps/docs/home/wasmDriverAbi.ts` | TypeScript wrapper around Driver ABI handles, errors, values, and result traversal |
 | `docs/apps/docs/home/graph-view.tsx` | D3.js force-directed graph visualization |
 | `docs/apps/docs/home/custom-home.tsx` | Homepage layout integrating the playground |
 | `docs/apps/docs/public/data/*.zyx` | Pre-built database files fetched at runtime |
@@ -436,15 +432,15 @@ graph LR
 
 1. WASM module loaded from `/wasm/zyx.js`
 2. Pre-built `.zyx` + `.zyx-wal` files fetched and written to Emscripten MEMFS
-3. Database opened via `zyx_open()`
-4. **Read-only transaction** opened via `zyx_begin_read_only_transaction()` — all user queries are routed through
-   `zyx_txn_execute()` to prevent any data mutation
-5. Results parsed from C API (nodes, edges, scalars) and rendered as graph or table
+3. Database opened through `WasmDriverAbi.open()` → `zyx_driver_db_open`
+4. **Read-only transaction** opened through `WasmDriverAbi.beginReadOnly()` → `zyx_driver_txn_begin_read_only`; all user queries use
+   `zyx_driver_txn_execute()` to prevent data mutation
+5. Results are materialized through Driver ABI scalar and nested value-ref APIs, then rendered as graph or table
 
 ### Read-only enforcement
 
 The Playground enforces read-only mode at the engine level (not client-side filtering):
-- Uses `zyx_begin_read_only_transaction` → `zyx_txn_execute` for all queries
+- Uses `zyx_driver_txn_begin_read_only` → `zyx_driver_txn_execute` for all queries
 - Write queries (CREATE, SET, DELETE, MERGE, DROP INDEX, etc.) are rejected by the engine with error:
   `"Read-only transaction cannot execute write queries"`
 - 3-layer defense: QueryPlan mutation flags → ExecMode check → DataManager guard

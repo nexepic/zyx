@@ -1,6 +1,6 @@
 ---
 title: API 参考
-description: ZYX 提供 C++ 和 C 两种嵌入式 API，覆盖图数据库的全部操作。
+description: ZYX 提供 C++、Node.js、Python 与 Driver ABI 等嵌入式接口。
 category: 概述
 categoryOrder: 1
 order: 1
@@ -11,14 +11,14 @@ projectOrder: 1
 ---
 # API 参考
 
-ZYX 暴露两种嵌入式接口 — 现代 C++ API 和用于 FFI 绑定的 C 兼容 API。
+ZYX 暴露现代 C++ API，并通过稳定的 Driver ABI 支撑各语言绑定。
 
 ## 如何选择？
 
 - **C++ API**（`include/zyx/zyx.hpp`）— C++20 开发首选。类型安全的 Value、RAII 事务管理、流式 `QueryBuilder`。
 - **Node.js API**（`npm install zyxdb`）— Node.js 开发首选。异步接口，预编译平台二进制。
 - **Python API**（`pip install zyxdb`）— Python 开发首选。提供 Pythonic 接口，支持上下文管理器、迭代器和 pandas 集成。
-- **C API**（`include/zyx/zyx_c_api.h`）— 构建 Rust、Go 或 WASM 绑定时使用。不透明句柄，显式生命周期管理。
+- **Driver ABI**（`include/zyx/zyx_driver_abi.h`）— 构建 Rust、WASM 与未来语言绑定时使用。提供不透明句柄、显式生命周期、嵌套值遍历与稳定的 `zyx_driver_*` 符号。
 
 ## 目录
 
@@ -37,17 +37,15 @@ ZYX 暴露两种嵌入式接口 — 现代 C++ API 和用于 FFI 绑定的 C 兼
 
 - [Python API 参考](python-api) — `Database`、`Transaction`、`Result`、`Record`、高性能写入方法
 
-### C API
+### Driver ABI
 
-- [C API 函数](c-api) — 全部 C 函数签名与用法
-- [C API 类型](c-types) — 不透明句柄、`ZYXNode`、`ZYXEdge`、`ZYXValueType`
-- [C API 错误处理](c-errors) — 线程本地错误与 Result 级错误
+Driver ABI 是语言绑定和 WASM 使用的稳定 C-facing 运行时边界。公共契约位于 `include/zyx/zyx_driver_abi.h`；多数应用代码应优先使用上方的 C++、Node.js 或 Python API。
 
 ## 设计约定
 
-- 查询执行统一返回 `Result` / `ZYXResult_T*`，由调用方显式迭代结果集。
+- 查询执行统一返回 `Result` 或 Driver ABI 结果句柄，由调用方显式迭代结果集。
 - 事务支持三种形式：
-  - **API 级显式事务** — `beginTransaction()` / `zyx_begin_transaction()`
-  - **只读事务** — `beginReadOnlyTransaction()` / `zyx_begin_read_only_transaction()`
+  - **API 级显式事务** — `beginTransaction()` / `zyx_driver_txn_begin()`
+  - **只读事务** — `beginReadOnlyTransaction()` / `zyx_driver_txn_begin_read_only()`
   - **Cypher 事务语句** — 在 `execute()` 中使用 `BEGIN` / `COMMIT` / `ROLLBACK`
 - 无显式事务时，`execute()` 对写查询自动提交，对读查询走只读快速路径。

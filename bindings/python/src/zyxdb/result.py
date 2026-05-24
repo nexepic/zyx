@@ -96,9 +96,10 @@ class Result:
         return self._result.column_count
 
     def __iter__(self) -> Iterator[Record]:
-        cols = self.columns
-        for row_dict in self._result:
-            yield Record(row_dict, cols)
+        while self._result.has_next():
+            self._result.next()
+            cols = self.columns
+            yield Record(self._result.row_dict(), cols)
         self._consumed = True
 
     def fetchone(self) -> Record | None:

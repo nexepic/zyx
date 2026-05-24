@@ -57,6 +57,30 @@ class TestResultIteration:
         row = result.fetchone()
         assert row is None
 
+    def test_core_has_next_peeks_without_consuming(self, db):
+        db.execute("CREATE (n:T {x: 1})")
+        db.execute("CREATE (n:T {x: 2})")
+        result = db.execute("MATCH (n:T) RETURN n.x AS x ORDER BY n.x")
+
+        assert result._result.has_next()
+        assert result._result.has_next()
+        assert result.fetchone()["x"] == 1
+        assert result._result.has_next()
+        assert result.fetchone()["x"] == 2
+        assert not result._result.has_next()
+
+    def test_mixed_list_result_values(self, db):
+        result = db.execute("RETURN [1, true, 2.5, 'ok', null] AS items")
+        assert result.single()["items"] == [1, True, 2.5, "ok", None]
+
+    def test_nested_map_and_list_result_values(self, db):
+        result = db.execute("RETURN $value AS value", value={"name": "Ada", "nested": [1, {"ok": True}], "none": None})
+        assert result.single()["value"] == {"name": "Ada", "nested": [1, {"ok": True}], "none": None}
+
+    def test_nested_list_parameter_values(self, db):
+        result = db.execute("RETURN $value AS value", value=[1, [2, "two"], {"active": True}])
+        assert result.single()["value"] == [1, [2, "two"], {"active": True}]
+
     def test_fetchall(self, db):
         db.execute("CREATE (n:T {x: 1})")
         db.execute("CREATE (n:T {x: 2})")

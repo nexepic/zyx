@@ -57,6 +57,40 @@ class TestTransactionBasic:
             rows = result.fetchall()
             assert len(rows) == 1
 
+    def test_close_with_active_transaction_keeps_database_open(self, db):
+        tx = db.begin_transaction()
+        with pytest.raises(zyxdb.DatabaseError):
+            db.close()
+
+        assert db.has_active_transaction
+        tx.rollback()
+        db.execute("CREATE (n:Person {name: 'AfterRollback'})")
+        rows = list(db.execute("MATCH (n:Person) RETURN n.name AS name"))
+        assert rows[0]["name"] == "AfterRollback"
+
+    def test_direct_create_node_rejects_active_transaction(self, db):
+        tx = db.begin_transaction()
+        with pytest.raises(zyxdb.DatabaseError):
+            db.create_node("Person", {"name": "Blocked"})
+
+        tx.rollback()
+        rows = list(db.execute("MATCH (n:Person) RETURN n.name AS name"))
+        assert rows == []
+
+    def test_native_transaction_rejects_execute_after_commit(self, db):
+        tx = db._db.begin_transaction()
+        tx.commit()
+
+        with pytest.raises(zyxdb.DatabaseError, match="already closed"):
+            tx.execute("RETURN 1 AS value")
+
+    def test_native_transaction_rejects_execute_after_rollback(self, db):
+        tx = db._db.begin_transaction()
+        tx.rollback()
+
+        with pytest.raises(zyxdb.DatabaseError, match="already closed"):
+            tx.execute("RETURN 1 AS value")
+
 
 class TestReadOnlyTransaction:
     def test_read_only_flag(self, db):

@@ -92,7 +92,7 @@ Or try it in the browser — [**Live Playground**](https://nexepic.github.io/zyx
 - **Vector Search** — HNSW index with cosine/euclidean/dot-product similarity
 - **Graph Algorithms** — PageRank, shortest path, community detection via built-in procedures
 - **Schema & Indexes** — Label indexes, property indexes, uniqueness constraints
-- **Embeddable** — C++ header-only API, C API, Python bindings (`zyxdb`), and WebAssembly
+- **Embeddable** — C++ header-only API, Driver ABI, Python bindings (`zyxdb`), Node.js bindings, and WebAssembly
 - **Cross-Platform** — macOS, Linux, Windows
 
 ## Quick Start
