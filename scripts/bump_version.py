@@ -28,6 +28,12 @@ PACKAGE_JSONS = [
     ROOT / "bindings" / "nodejs" / "npm" / "win32-x64-msvc" / "package.json",
 ]
 
+RUST_MANIFESTS = [
+    ROOT / "bindings" / "rust" / "zyxdb" / "Cargo.toml",
+    ROOT / "bindings" / "rust" / "zyxdb-sys" / "Cargo.toml",
+]
+RUST_LOCKFILE = ROOT / "bindings" / "rust" / "Cargo.lock"
+
 VERSION_RE = re.compile(r"^v(\d+\.\d+\.\d+)$")
 CMAKE_PROJECT_RE = re.compile(
     r"(project\s*\(\s*zyx\b(?:(?!\)).)*?\bVERSION\s+)(\d+\.\d+\.\d+)((?:(?!\)).)*\))",
@@ -73,6 +79,51 @@ def update_package_json(path: Path, version: str) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def update_cargo_toml(path: Path, version: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    new_text, count = re.subn(
+        r'(?m)^(version\s*=\s*)"[^"]+"',
+        rf'\1"{version}"',
+        text,
+        count=1,
+    )
+    if count == 0:
+        print(f"Error: could not find package version in {path.relative_to(ROOT)}", file=sys.stderr)
+        sys.exit(1)
+    new_text = re.sub(
+        r'(zyxdb-sys\s*=\s*\{[^}]*version\s*=\s*)"[^"]+"',
+        rf'\1"{version}"',
+        new_text,
+        count=1,
+    )
+    path.write_text(new_text, encoding="utf-8")
+
+
+def update_cargo_lock(version: str) -> None:
+    if not RUST_LOCKFILE.exists():
+        return
+    text = RUST_LOCKFILE.read_text(encoding="utf-8")
+    for package in ("zyxdb", "zyxdb-sys"):
+        pattern = re.compile(
+            rf'(\[\[package\]\]\nname = "{re.escape(package)}"\nversion = )"[^"]+"',
+            re.MULTILINE,
+        )
+        text, count = pattern.subn(rf'\1"{version}"', text, count=1)
+        if count == 0:
+            print(f"Error: could not find {package} in {RUST_LOCKFILE.relative_to(ROOT)}", file=sys.stderr)
+            sys.exit(1)
+    RUST_LOCKFILE.write_text(text, encoding="utf-8")
+
+
+def read_cargo_toml_version(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    m = re.search(r'(?m)^version\s*=\s*"([^"]+)"', text)
+    if not m:
+        print(f"Error: could not read package version from {path.relative_to(ROOT)}", file=sys.stderr)
+        sys.exit(1)
+    return m.group(1)
+
+
 def read_cmake_version() -> str:
     text = CMAKE_LISTS.read_text(encoding="utf-8")
     m = CMAKE_PROJECT_RE.search(text)
@@ -94,6 +145,10 @@ def verify_consistency(version: str) -> None:
         errors.append(f"  CMakeLists.txt: expected {version}, got {actual}")
     for path in PACKAGE_JSONS:
         actual = read_package_json_version(path)
+        if actual != version:
+            errors.append(f"  {path.relative_to(ROOT)}: expected {version}, got {actual}")
+    for path in RUST_MANIFESTS:
+        actual = read_cargo_toml_version(path)
         if actual != version:
             errors.append(f"  {path.relative_to(ROOT)}: expected {version}, got {actual}")
     if errors:
@@ -124,11 +179,16 @@ def main() -> None:
     update_cmake_lists(version)
     for path in PACKAGE_JSONS:
         update_package_json(path, version)
+    for path in RUST_MANIFESTS:
+        update_cargo_toml(path, version)
+    update_cargo_lock(version)
 
     verify_consistency(version)
     print("All files updated and verified.")
 
-    changed_files = [CMAKE_LISTS] + PACKAGE_JSONS
+    changed_files = [CMAKE_LISTS] + PACKAGE_JSONS + RUST_MANIFESTS
+    if RUST_LOCKFILE.exists():
+        changed_files.append(RUST_LOCKFILE)
     if args.no_commit:
         print("Skipping git commit and tag (--no-commit).")
     else:

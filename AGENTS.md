@@ -70,6 +70,8 @@ The bump script updates all of the following:
 - `docs/` package.json files
 - `bindings/nodejs/package.json` (version + `optionalDependencies` versions)
 - `bindings/nodejs/npm/*/package.json` (platform packages)
+- `bindings/rust/zyxdb*/Cargo.toml` (crate versions and internal dependency version)
+- `bindings/rust/Cargo.lock` (workspace package versions)
 
 ## Git Commits
 

@@ -1,0 +1,157 @@
+name: Rust Bindings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rust-bindings.yml'
+      - 'bindings/rust/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'conanfile.py'
+      - 'include/**'
+      - 'src/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/rust-bindings.yml'
+      - 'bindings/rust/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'conanfile.py'
+      - 'include/**'
+      - 'src/**'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: clang-20
+            cxx: clang++-20
+          - os: macos-latest
+          - os: windows-latest
+            cc: clang-cl
+            cxx: clang-cl
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install conan ninja
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+
+      - name: Install pkg-config (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install pkgconfiglite --allow-empty-checksums
+          echo "C:\Program Files\pkgconfiglite\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install llvm --version=20.1.4 --force
+          echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Install Conan dependencies (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          conan profile detect
+          conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
+
+      - name: Install Conan dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
+
+      - name: Build native Driver ABI library
+        run: |
+          cmake -S . -B buildDir -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=buildDir/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DZYX_BUILD_TESTS=OFF \
+            -DZYX_BUILD_APPS=OFF \
+            -DZYX_BUILD_PYTHON=OFF
+          cmake --build buildDir --target zyx
+        shell: bash
+        env:
+          CC: ${{ matrix.cc || '' }}
+          CXX: ${{ matrix.cxx || '' }}
+
+      - name: Add native library to PATH (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "${{ github.workspace }}\buildDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${{ github.workspace }}\buildDir\Release" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path bindings/rust/Cargo.toml
+        env:
+          ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
+
+  package:
+    name: Package crates
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Package and verify sys crate
+        run: cargo package --manifest-path bindings/rust/Cargo.toml -p zyxdb-sys
+        env:
+          ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
+
+      - name: Package workspace crates
+        run: cargo package --manifest-path bindings/rust/Cargo.toml --workspace --no-verify
+
+      - name: Collect crate packages
+        run: |
+          mkdir -p dist
+          cp bindings/rust/target/package/*.crate dist/
+
+      - name: Upload crate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-crates
+          path: dist/*.crate
+
+      - name: Upload crates to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.crate

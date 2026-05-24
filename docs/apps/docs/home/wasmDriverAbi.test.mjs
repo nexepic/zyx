@@ -4,6 +4,7 @@ import vm from 'node:vm';
 
 const source = readFileSync(new URL('./wasmDriverAbi.ts', import.meta.url), 'utf8');
 const buildScript = readFileSync(new URL('../../../../scripts/build_wasm.sh', import.meta.url), 'utf8');
+const publicWasmLoader = readFileSync(new URL('../public/wasm/zyx.js', import.meta.url), 'utf8');
 
 function loadWasmDriverAbi() {
   const js = source
@@ -284,6 +285,7 @@ assert.match(source, /VALUE_REF_FIELDS\s*=\s*4/);
 assert.match(source, /VALUE_REF_BYTES\s*=\s*VALUE_REF_TOKEN_BYTES\s*\*\s*VALUE_REF_FIELDS/);
 assert.match(source, /Driver ABI value references use fixed uint64 tokens/);
 assert.doesNotMatch(source, /POINTER_SLOT_BYTES\s*\*\s*2/);
+assert.doesNotMatch(buildScript, /libzyx_cypher_parser\.a/, 'WASM link does not duplicate parser objects already in zyx_core');
 assert.match(source, /wasm32 pointer slots/);
 assert.match(source, /freeErrorFromSlot/);
 assert.match(source, /UTF8ToString/);
@@ -334,6 +336,24 @@ const browserRequiredExports = [
 
 for (const symbol of browserRequiredExports) {
   assert.match(buildScript, new RegExp(`['"]${symbol}['"]`), `${symbol} is exported by the browser WASM profile`);
+}
+
+assert.match(publicWasmLoader, /createZyxModule/, 'public WASM loader exposes the Emscripten module factory');
+assert.match(publicWasmLoader, /zyx_driver_db_open/, 'public WASM loader references Driver ABI exports');
+assert.match(publicWasmLoader, /globalThis\.createZyxModule/, 'public WASM loader exposes the factory on globalThis for script tag loading');
+assert.doesNotMatch(publicWasmLoader, /Placeholder loader/, 'public WASM loader is not the legacy placeholder');
+
+if (/createZyxModule\.isStub\s*=\s*true/.test(publicWasmLoader)) {
+  const context = { module: { exports: undefined } };
+  context.globalThis = context;
+  context.window = context;
+  vm.runInNewContext(publicWasmLoader, context, { filename: 'zyx.js' });
+  assert.equal(typeof context.createZyxModule, 'function', 'public loader installs createZyxModule globally');
+  assert.equal(context.createZyxModule.isStub, true, 'public fallback is marked as a stub');
+  assert.deepEqual(Array.from(context.createZyxModule.expectedExports), ['zyx_driver_db_open']);
+  assert.throws(() => context.createZyxModule(), /ZYX WASM loader has not been generated/);
+} else {
+  assert.doesNotMatch(publicWasmLoader, /ZYX WASM loader has not been generated/, 'generated public loader replaces fallback guidance');
 }
 
 {
