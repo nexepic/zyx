@@ -38,6 +38,8 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 export ZYX_ANTLR4_WASM_DIR="$ANTLR4_WASM_DIR"
+# Avoid Emscripten's post-link llvm-objcopy stripping pass; some macOS Gatekeeper setups kill that tool.
+export EMCC_STRIP_DEBUG="${EMCC_STRIP_DEBUG:-0}"
 
 echo -e "${BLUE}>>> [3/5] Configuring CMake build...${NC}"
 emcmake cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" \
@@ -54,15 +56,10 @@ cmake --build "$BUILD_DIR" --target zyx_core
 echo -e "${BLUE}>>> [5/5] Linking WASM module...${NC}"
 
 ZYX_CORE_LIB="$BUILD_DIR/libzyx_core.a"
-CYPHER_LIB="$BUILD_DIR/libzyx_cypher_parser.a"
 INPUTXX_LIB="$BUILD_DIR/libzyx_inputxx.a"
 
 if [ ! -f "$ZYX_CORE_LIB" ]; then
     echo -e "${RED}Error: $ZYX_CORE_LIB not found${NC}"
-    exit 1
-fi
-if [ ! -f "$CYPHER_LIB" ]; then
-    echo -e "${RED}Error: $CYPHER_LIB not found${NC}"
     exit 1
 fi
 if [ ! -f "$INPUTXX_LIB" ]; then
@@ -72,7 +69,7 @@ fi
 
 em++ \
     -o "$BUILD_DIR/zyx.js" \
-    -Wl,--whole-archive "$ZYX_CORE_LIB" "$CYPHER_LIB" "$INPUTXX_LIB" -Wl,--no-whole-archive \
+    -Wl,--whole-archive "$ZYX_CORE_LIB" "$INPUTXX_LIB" -Wl,--no-whole-archive \
     -L"$ANTLR4_WASM_DIR/lib" -lantlr4-runtime \
     -sEXPORTED_FUNCTIONS='[
         "_zyx_driver_abi_version_major",
@@ -149,7 +146,7 @@ em++ \
     -sMODULARIZE=1 \
     -sEXPORT_NAME=createZyxModule \
     -sERROR_ON_UNDEFINED_SYMBOLS=0 \
-    -O2 --no-binaryen-passes \
+    -O1 --no-binaryen-passes \
     -fwasm-exceptions
 
 echo -e "${GREEN}======================================================${NC}"

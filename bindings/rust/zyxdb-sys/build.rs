@@ -6,6 +6,10 @@ use std::{
 fn main() {
     println!("cargo:rerun-if-env-changed=ZYX_LIB_DIR");
 
+    if env::var_os("CARGO_FEATURE_SYSTEM").is_none() {
+        panic!("zyxdb-sys requires a native library backend. Enable the `system` feature to link against an existing libzyx.");
+    }
+
     let lib_dir = env::var_os("ZYX_LIB_DIR")
         .map(PathBuf::from)
         .or_else(discover_repo_lib_dir);

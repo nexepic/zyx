@@ -2,8 +2,20 @@
 name = "zyxdb-sys"
 version = "0.1.21"
 edition = "2021"
+description = "Raw Driver ABI bindings for the ZYX embedded graph database"
+license = "Apache-2.0"
+repository = "https://github.com/try-zyx/zyx"
+homepage = "https://try-zyx.github.io/zyx"
+documentation = "https://try-zyx.github.io/zyx/en/docs/zyx/api"
+readme = "README.md"
+keywords = ["graph", "database", "cypher", "ffi"]
+categories = ["database", "external-ffi-bindings"]
 links = "zyx"
 build = "build.rs"
+
+[features]
+default = ["system"]
+system = []
 
 [lib]
 name = "zyxdb_sys"

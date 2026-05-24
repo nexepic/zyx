@@ -156,6 +156,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
       const createModule = (window as any).createZyxModule;
       if (!createModule) throw new Error("WASM module factory not found");
+      if (createModule.isStub) throw new Error("ZYX WASM loader has not been generated. Run ./scripts/build_wasm.sh and copy build_wasm/zyx.js and build_wasm/zyx.wasm to docs/apps/docs/public/wasm/.");
       mod = await createModule({
         locateFile: (file: string) => `${WASM_BASE_PATH}/wasm/${file}`,
       });
