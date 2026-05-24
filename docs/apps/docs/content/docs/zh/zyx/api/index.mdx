@@ -39,7 +39,7 @@ ZYX 暴露现代 C++ API，并通过稳定的 Driver ABI 支撑各语言绑定�
 
 ### Driver ABI
 
-Driver ABI 是语言绑定和 WASM 使用的稳定 C-facing 运行时边界。公共契约位于 `include/zyx/zyx_driver_abi.h`；多数应用代码应优先使用上方的 C++、Node.js 或 Python API。
+Driver ABI 是语言绑定和 WASM 使用的稳定 C-facing 运行时边界。公共契约位于 `include/zyx/zyx_driver_abi.h`，导出符号统一使用 `zyx_driver_*` 前缀。新的 C 集成应直接使用 Driver ABI，多数应用代码仍应优先使用上方的 C++、Node.js 或 Python API。
 
 ## 设计约定
 

@@ -32,13 +32,12 @@ zyx/
 
 ```cpp
 include/zyx/
-├── zyx.hpp            # Main public header
-├── zyx_driver_abi.h   # Stable Driver ABI header
-├── value.hpp             # Value type definitions
-├── result.hpp            # Query result types
-├── transaction.hpp       # Transaction API
-└── config.hpp            # Configuration API
+├── zyx.hpp              # Main C++ public header
+├── zyx_driver_abi.h     # Stable C-facing Driver ABI header
+└── value.hpp            # Public value type definitions
 ```
+
+`zyx_driver_abi.h` is the only supported C-facing ABI header.
 
 ### Internal Headers (`include/graph/`)
 

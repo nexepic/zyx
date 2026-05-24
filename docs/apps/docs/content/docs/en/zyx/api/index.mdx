@@ -39,7 +39,7 @@ ZYX exposes a modern C++ API plus language bindings built on the stable Driver A
 
 ### Driver ABI
 
-The Driver ABI is the stable C-facing runtime boundary used by language bindings and WASM. Its public contract lives in `include/zyx/zyx_driver_abi.h`; most application code should prefer the C++, Node.js, or Python APIs above.
+The Driver ABI is the stable C-facing runtime boundary used by language bindings and WASM. Its public contract lives in `include/zyx/zyx_driver_abi.h`, and exported symbols use the `zyx_driver_*` prefix. New C integrations should use the Driver ABI directly, while most application code should prefer the C++, Node.js, or Python APIs above.
 
 ## Design Conventions
 
