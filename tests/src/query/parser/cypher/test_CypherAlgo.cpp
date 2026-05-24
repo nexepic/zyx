@@ -44,6 +44,32 @@ TEST_F(CypherAlgoTest, AlgoShortestPathNoPath) {
 	EXPECT_TRUE(res.isEmpty());
 }
 
+TEST_F(CypherAlgoTest, AlgoShortestPathRespectsMaxDepth) {
+	(void) execute("CREATE (a:LimitedPath {name: 'A'})-[r1:ROAD]->(b:LimitedPath {name: 'B'})");
+	(void) execute("MATCH (b:LimitedPath {name: 'B'}) CREATE (b)-[r2:ROAD]->(c:LimitedPath {name: 'C'})");
+
+	int64_t idA = execute("MATCH (n:LimitedPath {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idC = execute("MATCH (n:LimitedPath {name: 'C'}) RETURN n").getRows()[0].at("n").asNode().getId();
+
+	auto tooShallow = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idC) + ", 1)");
+	EXPECT_TRUE(tooShallow.isEmpty());
+
+	auto enoughDepth = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idC) + ", 2)");
+	ASSERT_EQ(enoughDepth.rowCount(), 3UL);
+}
+
+TEST_F(CypherAlgoTest, AlgoShortestPathRejectsNonPositiveMaxDepth) {
+	(void) execute("CREATE (a:InvalidDepth {name: 'A'})-[r:ROAD]->(b:InvalidDepth {name: 'B'})");
+
+	int64_t idA = execute("MATCH (n:InvalidDepth {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idB = execute("MATCH (n:InvalidDepth {name: 'B'}) RETURN n").getRows()[0].at("n").asNode().getId();
+
+	EXPECT_THROW({ (void) execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ", 0)"); },
+	             std::runtime_error);
+	EXPECT_THROW({ (void) execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ", -1)"); },
+	             std::runtime_error);
+}
+
 // --- Additional Shortest Path Tests ---
 
 TEST_F(CypherAlgoTest, AlgoShortestPathDirectConnection) {

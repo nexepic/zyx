@@ -164,7 +164,7 @@ RETURN u.name, u.age;
 :::tip Production Recommendation
 Use parameter APIs to prevent Cypher injection and improve plan cache hit rates:
 - C++: `Database::execute(query, params)`
-- C API: `zyx_execute_params(...)`
+- Driver ABI: `zyx_driver_db_execute(...)` with `zyx_driver_params_t`
 :::
 
 ## Capability Boundary

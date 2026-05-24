@@ -33,7 +33,7 @@ zyx/
 ```cpp
 include/zyx/
 ├── zyx.hpp            # Main public header
-├── zyx_c_api.h        # C API header
+├── zyx_driver_abi.h   # Stable Driver ABI header
 ├── value.hpp             # Value type definitions
 ├── result.hpp            # Query result types
 ├── transaction.hpp       # Transaction API
@@ -104,7 +104,7 @@ src/
 │           ├── generated/# Generated code
 │           └── CypherParser.cpp
 ├── traversal/            # Traversal implementation
-├── api/                  # C API implementation
+├── api/                  # C++ API and Driver ABI implementation
 └── cli/                  # CLI implementation
 ```
 

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { GraphView, type GraphNode, type GraphEdge } from "./graph-view";
 import { GdsPanel } from "./gds-panel";
+import { buildScopedGraphMatchQuery } from "./cypherEscape";
+import { WasmDriverAbi, type DriverEdge, type DriverNode, type DriverResult, type DriverValue } from "./wasmDriverAbi";
 
 // Determine WASM base path from current URL
 const getWasmBasePath = (): string => {
@@ -80,6 +82,30 @@ type ViewMode = "graph" | "table";
 
 const MAX_UPLOAD_SIZE = 50 * 1024 * 1024; // 50 MB
 
+const isDriverNode = (value: DriverValue): value is DriverNode =>
+  typeof value === "object" && value !== null && !Array.isArray(value) && (value as DriverNode).kind === "node";
+
+const isDriverEdge = (value: DriverValue): value is DriverEdge =>
+  typeof value === "object" && value !== null && !Array.isArray(value) && (value as DriverEdge).kind === "edge";
+
+const formatDriverValue = (value: DriverValue): string => {
+  if (value === null) return "null";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return "[list]";
+  if (isDriverNode(value)) return JSON.stringify(value.properties) || "(node)";
+  if (isDriverEdge(value)) return JSON.stringify(value.properties) || "(edge)";
+  return JSON.stringify(value) || "{}";
+};
+
+const displayLabelForNode = (node: DriverNode): string => {
+  const props = node.properties;
+  const label = props.name ?? props.id ?? props.title;
+  return typeof label === "string" || typeof label === "number" ? String(label) : String(node.id);
+};
+
+
 export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?: string }) {
   const [datasetIdx, setDatasetIdx] = useState(0);
   const [query, setQuery] = useState(DATASETS[0].initialQuery);
@@ -98,6 +124,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const moduleRef = useRef<any>(null);
+  const driverRef = useRef<WasmDriverAbi | null>(null);
   const dbRef = useRef<number>(0);
   const txnRef = useRef<number>(0);
   const loadingRef = useRef(false);
@@ -133,34 +160,34 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
         locateFile: (file: string) => `${WASM_BASE_PATH}/wasm/${file}`,
       });
       moduleRef.current = mod;
+      driverRef.current = new WasmDriverAbi(mod);
     }
     return mod;
   }, [isEn]);
 
-  const closeCurrentDb = useCallback((mod: any) => {
-    if (dbRef.current) {
-      if (txnRef.current) {
-        mod.ccall("zyx_txn_close", null, ["number"], [txnRef.current]);
-        txnRef.current = 0;
-      }
-      mod.ccall("zyx_close", null, ["number"], [dbRef.current]);
+  const closeCurrentDb = useCallback(() => {
+    const driver = driverRef.current;
+    if (driver && txnRef.current) {
+      driver.closeTxn(txnRef.current);
+      txnRef.current = 0;
+    }
+    if (driver && dbRef.current) {
+      driver.close(dbRef.current);
       dbRef.current = 0;
     }
   }, []);
 
   // runQuery is referenced by openDbFromBytes; use a ref to avoid declaration-order issues
-  const runQueryRef = useRef<((mod: any, db: number, cypher: string) => void) | null>(null);
+  const runQueryRef = useRef<((driver: WasmDriverAbi, cypher: string) => void) | null>(null);
 
-  const openDbFromBytes = useCallback(async (mod: any, data: Uint8Array, dbPath: string, autoQuery: string) => {
+  const openDbFromBytes = useCallback(async (mod: any, driver: WasmDriverAbi, data: Uint8Array, dbPath: string, autoQuery: string) => {
     try { mod.FS.unlink(dbPath); } catch {}
     mod.FS.writeFile(dbPath, data);
 
-    const db = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
-    if (!db) throw new Error(mod.ccall("zyx_get_last_error", "string", [], []) || "Failed to open database");
+    const db = driver.open(dbPath);
     dbRef.current = db;
 
-    const txn = mod.ccall("zyx_begin_read_only_transaction", "number", ["number"], [db]);
-    if (!txn) throw new Error("Failed to begin read-only transaction");
+    const txn = driver.beginReadOnly(db);
     txnRef.current = txn;
 
     setStatus("ready");
@@ -168,14 +195,8 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
     // Gather db stats
     const queryInt = (q: string): number => {
-      const p = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, q]);
-      if (!p) return 0;
-      let val = 0;
-      if (mod.ccall("zyx_result_is_success", "boolean", ["number"], [p]) && mod.ccall("zyx_result_next", "boolean", ["number"], [p])) {
-        val = mod.ccall("zyx_result_get_int", "number", ["number", "number"], [p, 0]);
-      }
-      mod.ccall("zyx_result_close", null, ["number"], [p]);
-      return val;
+      const firstRow = driver.executeReadOnly(txn, q).rows[0];
+      return Number(firstRow?.[0] ?? 0);
     };
     const nNodes = queryInt("MATCH (n) RETURN count(n)");
     const nEdges = queryInt("MATCH ()-[r]->() RETURN count(r)");
@@ -184,7 +205,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     setDbStats({ nodes: nNodes, edges: nEdges, labels: nLabels, types: nTypes });
 
     setQuery(autoQuery);
-    runQueryRef.current?.(mod, db, autoQuery);
+    runQueryRef.current?.(driver, autoQuery);
   }, []);
 
   const loadDatabase = useCallback(async (dsIdx: number) => {
@@ -199,7 +220,9 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
     try {
       const mod = await ensureModule();
-      closeCurrentDb(mod);
+      const driver = driverRef.current;
+      if (!driver) throw new Error("WASM Driver ABI wrapper not initialized");
+      closeCurrentDb();
 
       setStatusMsg(isEn ? `Loading ${ds.label}...` : `加载 ${ds.label}...`);
 
@@ -207,7 +230,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
       if (!dbResp.ok) throw new Error(`Failed to fetch ${ds.dbFile}: ${dbResp.status}`);
 
       const dbData = new Uint8Array(await dbResp.arrayBuffer());
-      await openDbFromBytes(mod, dbData, `/playground_${dsIdx}.zyx`, ds.initialQuery);
+      await openDbFromBytes(mod, driver, dbData, `/playground_${dsIdx}.zyx`, ds.initialQuery);
 
       setUserDbName(null);
       loadingRef.current = false;
@@ -237,11 +260,13 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
     try {
       const mod = await ensureModule();
-      closeCurrentDb(mod);
+      const driver = driverRef.current;
+      if (!driver) throw new Error("WASM Driver ABI wrapper not initialized");
+      closeCurrentDb();
 
       setStatusMsg(isEn ? `Loading ${file.name}...` : `加载 ${file.name}...`);
       const data = new Uint8Array(await file.arrayBuffer());
-      await openDbFromBytes(mod, data, "/user_upload.zyx", "MATCH (a)-[r]->(b) RETURN a, r, b LIMIT 200");
+      await openDbFromBytes(mod, driver, data, "/user_upload.zyx", "MATCH (a)-[r]->(b) RETURN a, r, b LIMIT 200");
 
       setUserDbName(file.name);
       setDatasetIdx(-1);
@@ -274,36 +299,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const runQuery = useCallback((mod: any, db: number, cypher: string) => {
-    const txn = txnRef.current;
-    if (!txn) {
-      setError("No active read-only transaction");
-      return;
-    }
-    const resultPtr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, cypher]);
-    if (!resultPtr) {
-      const errMsg = mod.ccall("zyx_get_last_error", "string", [], []);
-      setError(errMsg || "Unknown error");
-      return;
-    }
-
-    const success = mod.ccall("zyx_result_is_success", "boolean", ["number"], [resultPtr]);
-    if (!success) {
-      const errMsg = mod.ccall("zyx_result_get_error", "string", ["number"], [resultPtr]);
-      mod.ccall("zyx_result_close", null, ["number"], [resultPtr]);
-      setError(errMsg || "Query failed");
-      return;
-    }
-
-    const dur = mod.ccall("zyx_result_get_duration", "number", ["number"], [resultPtr]);
-    const colCount = mod.ccall("zyx_result_column_count", "number", ["number"], [resultPtr]);
-
-    const columns: string[] = [];
-    for (let i = 0; i < colCount; i++) {
-      const name = mod.ccall("zyx_result_column_name", "string", ["number", "number"], [resultPtr, i]);
-      columns.push(name || `col${i}`);
-    }
-
+  const materializeQueryResult = useCallback((driverResult: DriverResult) => {
     const values: string[][] = [];
     const nodeMap = new Map<number, GraphNode>();
     const edgeList: GraphEdge[] = [];
@@ -311,111 +307,86 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     const schemaLabelProps = new Map<string, Set<string>>();
     const schemaEdgeTypes = new Set<string>();
 
-    while (mod.ccall("zyx_result_next", "boolean", ["number"], [resultPtr])) {
-      const row: string[] = [];
-      for (let i = 0; i < colCount; i++) {
-        const type = mod.ccall("zyx_result_get_type", "number", ["number", "number"], [resultPtr, i]);
-        switch (type) {
-          case 0: row.push("null"); break;
-          case 1: row.push(mod.ccall("zyx_result_get_bool", "boolean", ["number", "number"], [resultPtr, i]) ? "true" : "false"); break;
-          case 2: row.push(String(mod.ccall("zyx_result_get_int", "number", ["number", "number"], [resultPtr, i]))); break;
-          case 3: row.push(String(mod.ccall("zyx_result_get_double", "number", ["number", "number"], [resultPtr, i]))); break;
-          case 4: {
-            const s = mod.ccall("zyx_result_get_string", "string", ["number", "number"], [resultPtr, i]);
-            row.push(s || "");
-            break;
-          }
-          case 5: {
-            const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [resultPtr, i]);
-            row.push(props || "(node)");
-            const nbuf = mod._malloc(16);
-            if (mod.ccall("zyx_result_get_node", "boolean", ["number", "number", "number"], [resultPtr, i, nbuf])) {
-              const nodeId = mod.HEAP32[nbuf >> 2];
-              // Read node label from ZYXNode struct (label pointer at offset 8)
-              const labelPtr = mod.HEAP32[(nbuf + 8) >> 2] >>> 0;
-              const nodeLabel = labelPtr ? mod.UTF8ToString(labelPtr) : "";
-              let displayLabel = String(nodeId);
-              let parsedProps: Record<string, unknown> = {};
-              try {
-                const p = JSON.parse(props || "{}");
-                parsedProps = p;
-                displayLabel = p.name || p.id || p.title || String(nodeId);
-                // Collect schema: label → property keys
-                if (nodeLabel) {
-                  if (!schemaLabelProps.has(nodeLabel)) schemaLabelProps.set(nodeLabel, new Set());
-                  for (const key of Object.keys(p)) {
-                    schemaLabelProps.get(nodeLabel)!.add(key);
-                  }
-                }
-              } catch {}
-              nodeMap.set(nodeId, { id: nodeId, label: displayLabel, props: parsedProps, nodeLabel: nodeLabel || undefined });
-            }
-            mod._free(nbuf);
-            break;
-          }
-          case 6: {
-            const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [resultPtr, i]);
-            row.push(props || "(edge)");
-            const ebuf = mod._malloc(32);
-            if (mod.ccall("zyx_result_get_edge", "boolean", ["number", "number", "number"], [resultPtr, i, ebuf])) {
-              const edgeId = mod.HEAP32[ebuf >> 2];
-              const srcId = mod.HEAP32[(ebuf + 8) >> 2];
-              const tgtId = mod.HEAP32[(ebuf + 16) >> 2];
-              const typePtr = mod.HEAP32[(ebuf + 24) >> 2] >>> 0;
-              const edgeType = typePtr ? mod.UTF8ToString(typePtr) : "";
-              if (srcId && tgtId && !edgeSeen.has(edgeId)) {
-                edgeSeen.add(edgeId);
-                edgeList.push({ id: edgeId, sourceId: srcId, targetId: tgtId, type: edgeType });
-                if (edgeType) schemaEdgeTypes.add(edgeType);
-                if (!nodeMap.has(srcId)) nodeMap.set(srcId, { id: srcId, label: String(srcId) });
-                if (!nodeMap.has(tgtId)) nodeMap.set(tgtId, { id: tgtId, label: String(tgtId) });
-              }
-            }
-            mod._free(ebuf);
-            break;
-          }
-          case 7: row.push("[list]"); break;
-          case 8: {
-            const mapJson = mod.ccall("zyx_result_get_map_json", "string", ["number", "number"], [resultPtr, i]);
-            row.push(mapJson || "{}");
-            break;
-          }
-          default: row.push("?");
-        }
+    const addNode = (node: DriverNode, extra?: Pick<GraphNode, "score" | "highlighted">) => {
+      const nodeLabel = node.labels[0] || "";
+      if (nodeLabel) {
+        if (!schemaLabelProps.has(nodeLabel)) schemaLabelProps.set(nodeLabel, new Set());
+        for (const key of Object.keys(node.properties)) schemaLabelProps.get(nodeLabel)!.add(key);
       }
-      values.push(row);
+      if (!nodeMap.has(node.id)) {
+        nodeMap.set(node.id, {
+          id: node.id,
+          label: displayLabelForNode(node),
+          props: node.properties,
+          nodeLabel: nodeLabel || undefined,
+          ...extra,
+        });
+      }
+    };
+
+    const addEdge = (edge: DriverEdge) => {
+      if (!edge.sourceId || !edge.targetId || edgeSeen.has(edge.id)) return;
+      edgeSeen.add(edge.id);
+      edgeList.push({ id: edge.id, sourceId: edge.sourceId, targetId: edge.targetId, type: edge.type });
+      if (edge.type) schemaEdgeTypes.add(edge.type);
+      if (!nodeMap.has(edge.sourceId)) nodeMap.set(edge.sourceId, { id: edge.sourceId, label: String(edge.sourceId) });
+      if (!nodeMap.has(edge.targetId)) nodeMap.set(edge.targetId, { id: edge.targetId, label: String(edge.targetId) });
+    };
+
+    for (const resultRow of driverResult.rows) {
+      values.push(resultRow.map(formatDriverValue));
+      for (const value of resultRow) {
+        if (isDriverNode(value)) addNode(value);
+        if (isDriverEdge(value)) addEdge(value);
+      }
     }
 
-    mod.ccall("zyx_result_close", null, ["number"], [resultPtr]);
-
-    // Build live schema from result
     const schemaNodes: SchemaNode[] = [];
-    for (const [label, props] of schemaLabelProps) {
-      schemaNodes.push({ label, props: Array.from(props).sort() });
-    }
+    for (const [label, props] of schemaLabelProps) schemaNodes.push({ label, props: Array.from(props).sort() });
     schemaNodes.sort((a, b) => a.label.localeCompare(b.label));
-    const schemaEdges: SchemaEdge[] = Array.from(schemaEdgeTypes).sort().map((t) => ({ type: t }));
-    setLiveSchema({ nodes: schemaNodes, edges: schemaEdges });
+    const schemaEdges: SchemaEdge[] = Array.from(schemaEdgeTypes).sort().map((type) => ({ type }));
 
-    const graphNodes = Array.from(nodeMap.values());
-    const hasGraph = graphNodes.length > 0 && edgeList.length > 0;
-
-    setError(null);
-    setResult({ columns, values, graphNodes, graphEdges: edgeList });
-    setDuration(dur);
-    setViewMode(hasGraph ? "graph" : "table");
+    return { values, graphNodes: Array.from(nodeMap.values()), graphEdges: edgeList, schemaNodes, schemaEdges };
   }, []);
+
+  const runQuery = useCallback((driver: WasmDriverAbi, cypher: string) => {
+    const txn = txnRef.current;
+    if (!txn) {
+      setError("No active read-only transaction");
+      return;
+    }
+
+    try {
+      const startedAt = performance.now();
+      const driverResult = driver.executeReadOnly(txn, cypher);
+      const dur = performance.now() - startedAt;
+      const materialized = materializeQueryResult(driverResult);
+      const hasGraph = materialized.graphNodes.length > 0 && materialized.graphEdges.length > 0;
+
+      setLiveSchema({ nodes: materialized.schemaNodes, edges: materialized.schemaEdges });
+      setError(null);
+      setResult({
+        columns: driverResult.columns,
+        values: materialized.values,
+        graphNodes: materialized.graphNodes,
+        graphEdges: materialized.graphEdges,
+      });
+      setDuration(dur);
+      setViewMode(hasGraph ? "graph" : "table");
+    } catch (e: any) {
+      setError(e.message || "Query failed");
+    }
+  }, [materializeQueryResult]);
 
   // Keep ref in sync for openDbFromBytes
   runQueryRef.current = runQuery;
 
   const handleRun = useCallback(() => {
     if (status !== "ready") return;
-    const mod = moduleRef.current;
-    const db = dbRef.current;
-    if (!mod || !db) return;
+    const driver = driverRef.current;
+    if (!driver || !dbRef.current) return;
     setError(null);
-    runQuery(mod, db, query);
+    runQuery(driver, query);
   }, [status, query, runQuery]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -435,194 +406,107 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
 
   const handleGdsQuery = useCallback((queries: string[], scope: { nodeLabel: string; edgeType: string }) => {
     if (status !== "ready") return;
-    const mod = moduleRef.current;
-    const db = dbRef.current;
+    const driver = driverRef.current;
     const txn = txnRef.current;
-    if (!mod || !db || !txn) return;
+    if (!driver || !txn) return;
     setError(null);
 
-    // 1. Run drop + project silently via direct WASM calls
-    for (let i = 0; i < queries.length - 1; i++) {
-      const ptr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, queries[i]]);
-      if (ptr) mod.ccall("zyx_result_close", null, ["number"], [ptr]);
-    }
+    try {
+      for (let i = 0; i < queries.length - 1; i++) driver.executeReadOnly(txn, queries[i]);
 
-    // 2. Run algorithm query directly, parse nodeId→score map
-    const algoQuery = queries[queries.length - 1];
-    setQuery(algoQuery);
+      const algoQuery = queries[queries.length - 1];
+      setQuery(algoQuery);
 
-    const algoPtr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, algoQuery]);
-    if (!algoPtr) {
-      const errMsg = mod.ccall("zyx_get_last_error", "string", [], []);
-      setError(errMsg || "Algorithm execution failed");
-      return;
-    }
-    const algoSuccess = mod.ccall("zyx_result_is_success", "boolean", ["number"], [algoPtr]);
-    if (!algoSuccess) {
-      const errMsg = mod.ccall("zyx_result_get_error", "string", ["number"], [algoPtr]);
-      mod.ccall("zyx_result_close", null, ["number"], [algoPtr]);
-      setError(errMsg || "Algorithm failed");
-      return;
-    }
+      const startedAt = performance.now();
+      const algoResult = driver.executeReadOnly(txn, algoQuery);
+      const algoDur = performance.now() - startedAt;
+      const algoValues = algoResult.rows.map((row) => row.map(formatDriverValue));
 
-    const algoDur = mod.ccall("zyx_result_get_duration", "number", ["number"], [algoPtr]);
-    const algoColCount = mod.ccall("zyx_result_column_count", "number", ["number"], [algoPtr]);
-    const algoCols: string[] = [];
-    for (let i = 0; i < algoColCount; i++) {
-      algoCols.push(mod.ccall("zyx_result_column_name", "string", ["number", "number"], [algoPtr, i]) || `col${i}`);
-    }
+      const nodeIdCol = algoResult.columns.indexOf("nodeId");
+      const scoreCol = algoResult.columns.indexOf("score");
+      const compCol = algoResult.columns.indexOf("componentId");
+      const costCol = algoResult.columns.indexOf("cost");
+      const valueCol = scoreCol >= 0 ? scoreCol : compCol >= 0 ? compCol : costCol;
 
-    // Find nodeId and score/componentId columns
-    const nodeIdCol = algoCols.indexOf("nodeId");
-    const scoreCol = algoCols.indexOf("score");
-    const compCol = algoCols.indexOf("componentId");
-    const costCol = algoCols.indexOf("cost");
-    const valueCol = scoreCol >= 0 ? scoreCol : compCol >= 0 ? compCol : costCol;
-
-    const scoreMap = new Map<number, number>();
-    const algoValues: string[][] = [];
-
-    while (mod.ccall("zyx_result_next", "boolean", ["number"], [algoPtr])) {
-      const row: string[] = [];
-      for (let i = 0; i < algoColCount; i++) {
-        const type = mod.ccall("zyx_result_get_type", "number", ["number", "number"], [algoPtr, i]);
-        switch (type) {
-          case 2: row.push(String(mod.ccall("zyx_result_get_int", "number", ["number", "number"], [algoPtr, i]))); break;
-          case 3: row.push(String(mod.ccall("zyx_result_get_double", "number", ["number", "number"], [algoPtr, i]))); break;
-          default: row.push(String(mod.ccall("zyx_result_get_string", "string", ["number", "number"], [algoPtr, i]) || ""));
+      const scoreMap = new Map<number, number>();
+      for (const row of algoValues) {
+        if (nodeIdCol >= 0 && valueCol >= 0) {
+          const nid = Number(row[nodeIdCol]);
+          const val = Number(row[valueCol]);
+          if (!isNaN(nid) && !isNaN(val)) scoreMap.set(nid, val);
         }
       }
-      algoValues.push(row);
 
-      if (nodeIdCol >= 0 && valueCol >= 0) {
-        const nid = Number(row[nodeIdCol]);
-        const val = Number(row[valueCol]);
-        if (!isNaN(nid) && !isNaN(val)) scoreMap.set(nid, val);
+      const isDijkstra = algoQuery.includes("shortestPath.dijkstra");
+      if (isDijkstra && scoreMap.size === 0) {
+        setResult({ columns: algoResult.columns, values: algoValues, graphNodes: [], graphEdges: [] });
+        setDuration(algoDur);
+        setError(isEn ? "No path found between the specified nodes." : "指定节点之间不存在路径。");
+        setViewMode("table");
+        return;
       }
-    }
-    mod.ccall("zyx_result_close", null, ["number"], [algoPtr]);
 
-    const isDijkstra = algoQuery.includes("shortestPath.dijkstra");
+      const matchResult = driver.executeReadOnly(txn, buildScopedGraphMatchQuery(scope.nodeLabel, scope.edgeType));
+      const graphEdges: GraphEdge[] = [];
+      const nodeMap = new Map<number, GraphNode>();
+      const edgeSeen = new Set<number>();
+      const pathNodeIds = new Set<number>();
+      if (isDijkstra) for (const [nid] of scoreMap) pathNodeIds.add(nid);
 
-    // Dijkstra with no results means no path exists
-    if (isDijkstra && scoreMap.size === 0) {
-      setResult({ columns: algoCols, values: algoValues, graphNodes: [], graphEdges: [] });
+      const pathEdgePairs = new Set<string>();
+      if (isDijkstra && algoValues.length > 1 && nodeIdCol >= 0) {
+        for (let i = 0; i < algoValues.length - 1; i++) {
+          const a = Number(algoValues[i][nodeIdCol]);
+          const b = Number(algoValues[i + 1][nodeIdCol]);
+          pathEdgePairs.add(`${a}-${b}`);
+          pathEdgePairs.add(`${b}-${a}`);
+        }
+      }
+
+      for (const row of matchResult.rows) {
+        for (const value of row) {
+          if (isDriverNode(value) && !nodeMap.has(value.id)) {
+            const score = scoreMap.get(value.id);
+            const highlighted = isDijkstra && pathNodeIds.has(value.id);
+            nodeMap.set(value.id, {
+              id: value.id,
+              label: displayLabelForNode(value),
+              score,
+              highlighted,
+              props: value.properties,
+              nodeLabel: value.labels[0] || undefined,
+            });
+          }
+        }
+
+        for (const value of row) {
+          if (!isDriverEdge(value) || !value.sourceId || !value.targetId || edgeSeen.has(value.id)) continue;
+          edgeSeen.add(value.id);
+          graphEdges.push({
+            id: value.id,
+            sourceId: value.sourceId,
+            targetId: value.targetId,
+            type: value.type,
+            highlighted: pathEdgePairs.has(`${value.sourceId}-${value.targetId}`),
+          });
+          if (!nodeMap.has(value.sourceId)) {
+            nodeMap.set(value.sourceId, { id: value.sourceId, label: String(value.sourceId), score: scoreMap.get(value.sourceId), highlighted: isDijkstra && pathNodeIds.has(value.sourceId) });
+          }
+          if (!nodeMap.has(value.targetId)) {
+            nodeMap.set(value.targetId, { id: value.targetId, label: String(value.targetId), score: scoreMap.get(value.targetId), highlighted: isDijkstra && pathNodeIds.has(value.targetId) });
+          }
+        }
+      }
+
+      const graphNodeList = Array.from(nodeMap.values());
+      const hasGraph = graphNodeList.length > 0 && graphEdges.length > 0;
+      setResult({ columns: algoResult.columns, values: algoValues, graphNodes: graphNodeList, graphEdges });
       setDuration(algoDur);
-      setError(isEn ? "No path found between the specified nodes." : "指定节点之间不存在路径。");
-      setViewMode("table");
-      return;
+      setViewMode(hasGraph ? "graph" : "table");
+    } catch (e: any) {
+      setError(e.message || "Algorithm execution failed");
     }
-
-    // 3. Run a MATCH query to get graph structure for visualization
-    const labelFilter = scope.nodeLabel ? `:${scope.nodeLabel}` : "";
-    const typeFilter = scope.edgeType ? `:${scope.edgeType}` : "";
-    const matchQuery = `MATCH (a${labelFilter})-[r${typeFilter}]->(b) RETURN a, r, b`;
-
-    const matchPtr = mod.ccall("zyx_txn_execute", "number", ["number", "string"], [txn, matchQuery]);
-    const graphEdges: GraphEdge[] = [];
-    const nodeMap = new Map<number, GraphNode>();
-    const edgeSeen = new Set<number>();
-
-    // Determine path node set for Dijkstra highlighting
-    const pathNodeIds = new Set<number>();
-    if (isDijkstra) {
-      for (const [nid] of scoreMap) pathNodeIds.add(nid);
-    }
-    // Build ordered path pairs for edge highlighting
-    const pathEdgePairs = new Set<string>();
-    if (isDijkstra && algoValues.length > 1 && nodeIdCol >= 0) {
-      for (let i = 0; i < algoValues.length - 1; i++) {
-        const a = Number(algoValues[i][nodeIdCol]);
-        const b = Number(algoValues[i + 1][nodeIdCol]);
-        pathEdgePairs.add(`${a}-${b}`);
-        pathEdgePairs.add(`${b}-${a}`);
-      }
-    }
-
-    if (matchPtr) {
-      const matchSuccess = mod.ccall("zyx_result_is_success", "boolean", ["number"], [matchPtr]);
-      if (matchSuccess) {
-        const matchColCount = mod.ccall("zyx_result_column_count", "number", ["number"], [matchPtr]);
-
-        // Collect raw data per row
-        const rowNodes: { nodeId: number; props: string; nodeLabel: string }[] = [];
-        const rowEdges: { edgeId: number; srcId: number; tgtId: number; edgeType: string }[] = [];
-
-        while (mod.ccall("zyx_result_next", "boolean", ["number"], [matchPtr])) {
-          rowNodes.length = 0;
-          rowEdges.length = 0;
-
-          // Collect all columns in this row
-          for (let i = 0; i < matchColCount; i++) {
-            const type = mod.ccall("zyx_result_get_type", "number", ["number", "number"], [matchPtr, i]);
-            if (type === 5) {
-              const props = mod.ccall("zyx_result_get_props_json", "string", ["number", "number"], [matchPtr, i]);
-              const nbuf = mod._malloc(16);
-              if (mod.ccall("zyx_result_get_node", "boolean", ["number", "number", "number"], [matchPtr, i, nbuf])) {
-                const labelPtr = mod.HEAP32[(nbuf + 8) >> 2] >>> 0;
-                const nodeLabel = labelPtr ? mod.UTF8ToString(labelPtr) : "";
-                rowNodes.push({ nodeId: mod.HEAP32[nbuf >> 2], props: props || "{}", nodeLabel });
-              }
-              mod._free(nbuf);
-            } else if (type === 6) {
-              const ebuf = mod._malloc(32);
-              if (mod.ccall("zyx_result_get_edge", "boolean", ["number", "number", "number"], [matchPtr, i, ebuf])) {
-                const typePtr = mod.HEAP32[(ebuf + 24) >> 2] >>> 0;
-                rowEdges.push({
-                  edgeId: mod.HEAP32[ebuf >> 2],
-                  srcId: mod.HEAP32[(ebuf + 8) >> 2],
-                  tgtId: mod.HEAP32[(ebuf + 16) >> 2],
-                  edgeType: typePtr ? mod.UTF8ToString(typePtr) : "",
-                });
-              }
-              mod._free(ebuf);
-            }
-          }
-
-          // Pass 1: process nodes first (so labels are correct)
-          for (const rn of rowNodes) {
-            if (!nodeMap.has(rn.nodeId)) {
-              let displayLabel = String(rn.nodeId);
-              let parsedProps: Record<string, unknown> = {};
-              try {
-                const p = JSON.parse(rn.props);
-                parsedProps = p;
-                displayLabel = p.name || p.id || p.title || String(rn.nodeId);
-              } catch {}
-              const score = scoreMap.get(rn.nodeId);
-              const highlighted = isDijkstra && pathNodeIds.has(rn.nodeId);
-              nodeMap.set(rn.nodeId, { id: rn.nodeId, label: displayLabel, score, highlighted, props: parsedProps, nodeLabel: rn.nodeLabel || undefined });
-            }
-          }
-
-          // Pass 2: process edges (nodes are already in the map)
-          for (const re of rowEdges) {
-            if (re.srcId && re.tgtId && !edgeSeen.has(re.edgeId)) {
-              edgeSeen.add(re.edgeId);
-              const edgeHL = pathEdgePairs.has(`${re.srcId}-${re.tgtId}`);
-              graphEdges.push({ id: re.edgeId, sourceId: re.srcId, targetId: re.tgtId, type: re.edgeType, highlighted: edgeHL });
-              // Fallback for nodes only referenced by edges
-              if (!nodeMap.has(re.srcId)) {
-                nodeMap.set(re.srcId, { id: re.srcId, label: String(re.srcId), score: scoreMap.get(re.srcId), highlighted: isDijkstra && pathNodeIds.has(re.srcId) });
-              }
-              if (!nodeMap.has(re.tgtId)) {
-                nodeMap.set(re.tgtId, { id: re.tgtId, label: String(re.tgtId), score: scoreMap.get(re.tgtId), highlighted: isDijkstra && pathNodeIds.has(re.tgtId) });
-              }
-            }
-          }
-        }
-      }
-      mod.ccall("zyx_result_close", null, ["number"], [matchPtr]);
-    }
-
-    const graphNodeList = Array.from(nodeMap.values());
-    const hasGraph = graphNodeList.length > 0 && graphEdges.length > 0;
-
-    // 4. Set result — keep liveSchema unchanged (don't overwrite with empty schema)
-    setResult({ columns: algoCols, values: algoValues, graphNodes: graphNodeList, graphEdges });
-    setDuration(algoDur);
-    setViewMode(hasGraph ? "graph" : "table");
-  }, [status]);
+  }, [isEn, status]);
 
   const hasGraphData = result ? result.graphNodes.length > 0 && result.graphEdges.length > 0 : false;
 
@@ -1063,9 +947,10 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
                     key={eq.label}
                     onClick={() => {
                       setQuery(eq.query);
-                      if (status === "ready" && moduleRef.current && dbRef.current) {
+                      const driver = driverRef.current;
+                      if (status === "ready" && driver && dbRef.current) {
                         setError(null);
-                        runQuery(moduleRef.current, dbRef.current, eq.query);
+                        runQuery(driver, eq.query);
                       }
                     }}
                     className={`w-full rounded-md px-3 py-2.5 text-left text-[0.8rem] transition-colors border ${

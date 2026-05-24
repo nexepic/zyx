@@ -19,7 +19,7 @@ flowchart TD
   A[Need batch write] --> B{Data source}
   B -->|In-memory rows| C[UNWIND + transaction]
   B -->|CSV file| D[LOAD CSV or CLI import]
-  B -->|Application service| E[C++/Python/C API bulk methods]
+  B -->|Application service| E[C++/Python/Node.js/Driver ABI bulk methods]
   C --> F{Data volume very large?}
   F -->|Yes| G[CALL subquery IN TRANSACTIONS]
   F -->|No| H[Single explicit transaction]

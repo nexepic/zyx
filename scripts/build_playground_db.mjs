@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
+import { WasmDriverAbi } from "../docs/apps/docs/home/wasmDriverAbi.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,31 +38,19 @@ async function loadWasmModule() {
   return mod;
 }
 
-function execCypher(mod, db, query) {
-  const resultPtr = mod.ccall(
-    "zyx_execute",
-    "number",
-    ["number", "string"],
-    [db, query]
-  );
-  if (resultPtr) {
-    mod.ccall("zyx_result_close", null, ["number"], [resultPtr]);
-  }
+function execCypher(driver, db, query) {
+  driver.execute(db, query);
 }
 
-async function buildDatabase(mod, dbPath, seedQueries, label) {
+async function buildDatabase(mod, driver, dbPath, seedQueries, label) {
   console.log(`\nBuilding ${label} database...`);
   console.log(`  Seed queries: ${seedQueries.length}`);
 
-  const db = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
-  if (!db) {
-    console.error(`  Failed to open database at ${dbPath}`);
-    process.exit(1);
-  }
+  const db = driver.open(dbPath);
 
   let count = 0;
   for (const q of seedQueries) {
-    execCypher(mod, db, q);
+    execCypher(driver, db, q);
     count++;
     if (count % 100 === 0) {
       process.stdout.write(`  Seeded ${count}/${seedQueries.length}\r`);
@@ -70,7 +59,7 @@ async function buildDatabase(mod, dbPath, seedQueries, label) {
   console.log(`  Seeded ${count}/${seedQueries.length} queries`);
 
   // Close to flush data to main file
-  mod.ccall("zyx_close", null, ["number"], [db]);
+  driver.close(db);
 
   // If WAL file exists in MEMFS, reopen the database to trigger WAL recovery
   // which merges WAL data into the main file, then close again.
@@ -85,15 +74,11 @@ async function buildDatabase(mod, dbPath, seedQueries, label) {
 
   if (hasWal) {
     console.log(`  WAL detected, reopening to trigger recovery...`);
-    const db2 = mod.ccall("zyx_open", "number", ["string"], [dbPath]);
-    if (db2) {
-      // Begin a read-only transaction to trigger ensureWALAndTransactionManager → recovery
-      const txn = mod.ccall("zyx_begin_read_only_transaction", "number", ["number"], [db2]);
-      if (txn) {
-        mod.ccall("zyx_txn_close", null, ["number"], [txn]);
-      }
-      mod.ccall("zyx_close", null, ["number"], [db2]);
-    }
+    const db2 = driver.open(dbPath);
+    // Begin a read-only transaction to trigger ensureWALAndTransactionManager recovery.
+    const txn = driver.beginReadOnly(db2);
+    driver.closeTxn(txn);
+    driver.close(db2);
   }
 
   // Read the database file from MEMFS
@@ -153,18 +138,20 @@ async function main() {
   // Load WASM module
   console.log("\nLoading WASM module...");
   const mod = await loadWasmModule();
+  const driver = new WasmDriverAbi(mod);
   console.log("WASM module loaded.");
 
   // Create output directory
   mkdirSync(OUT_DIR, { recursive: true });
 
   // Build GoT database
-  const got = await buildDatabase(mod, "/got.zyx", GOT_SEED_QUERIES, "Game of Thrones");
+  const got = await buildDatabase(mod, driver, "/got.zyx", GOT_SEED_QUERIES, "Game of Thrones");
   writeFileSync(join(OUT_DIR, "got.zyx"), got.data);
 
   // Build IMDb database
   const imdb = await buildDatabase(
     mod,
+    driver,
     "/imdb.zyx",
     IMDB_SEED_QUERIES,
     "IMDb Movies"

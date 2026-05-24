@@ -472,11 +472,11 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 				return PropertyValue(l % r);
 			case BinaryOperatorType::BOP_POWER:
 				return PropertyValue(std::pow(static_cast<double>(l), static_cast<double>(r)));
-			default:
+			default: // ZYX_COV_EXCL_LINE: arithmetic dispatch only calls this switch with arithmetic operators
 				break;
 		}
 		// All arithmetic operators are handled above; this is unreachable but satisfies the compiler.
-		throw ExpressionEvaluationException("Invalid arithmetic operator");
+		throw ExpressionEvaluationException("Invalid arithmetic operator"); // ZYX_COV_EXCL_LINE
 	}
 
 	// Floating-point arithmetic for mixed types or double operands
@@ -510,11 +510,11 @@ PropertyValue ExpressionEvaluator::evaluateArithmetic(BinaryOperatorType op,
 
 		case BinaryOperatorType::BOP_POWER:
 			return PropertyValue(std::pow(leftDouble, rightDouble));
-		default:
+		default: // ZYX_COV_EXCL_LINE: arithmetic dispatch only calls this switch with arithmetic operators
 			break;
 	}
 	// All arithmetic operators are handled above; this is unreachable but satisfies the compiler.
-	throw ExpressionEvaluationException("Invalid arithmetic operator");
+	throw ExpressionEvaluationException("Invalid arithmetic operator"); // ZYX_COV_EXCL_LINE
 }
 
 PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
@@ -567,11 +567,11 @@ PropertyValue ExpressionEvaluator::evaluateComparison(BinaryOperatorType op,
 				throw ExpressionEvaluationException("Invalid regular expression: " + pattern);
 			}
 		}
-		default:
+		default: // ZYX_COV_EXCL_LINE: comparison dispatch only calls this switch with comparison operators
 			break;
 	}
 	// All comparison operators are handled above; unreachable but satisfies the compiler.
-	throw ExpressionEvaluationException("Invalid comparison operator");
+	throw ExpressionEvaluationException("Invalid comparison operator"); // ZYX_COV_EXCL_LINE
 }
 
 PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
@@ -615,11 +615,11 @@ PropertyValue ExpressionEvaluator::evaluateLogical(BinaryOperatorType op,
 			if (leftNull || rightNull) return PropertyValue();
 			return PropertyValue(EvaluationContext::toBoolean(left) != EvaluationContext::toBoolean(right));
 		}
-		default:
+		default: // ZYX_COV_EXCL_LINE: logical dispatch only calls this switch with logical operators
 			break;
 	}
 	// All logical operators are handled above; unreachable but satisfies the compiler.
-	throw ExpressionEvaluationException("Invalid logical operator");
+	throw ExpressionEvaluationException("Invalid logical operator"); // ZYX_COV_EXCL_LINE
 }
 
 PropertyValue ExpressionEvaluator::evaluateUnary(UnaryOperatorType op, const PropertyValue &operand) {
@@ -639,7 +639,7 @@ PropertyValue ExpressionEvaluator::evaluateUnary(UnaryOperatorType op, const Pro
 		}
 	}
 	// All unary operators are handled above; unreachable but satisfies the compiler.
-	return PropertyValue();
+	return PropertyValue(); // ZYX_COV_EXCL_LINE
 }
 
 bool ExpressionEvaluator::propagateNull(const PropertyValue &left, const PropertyValue &right) {

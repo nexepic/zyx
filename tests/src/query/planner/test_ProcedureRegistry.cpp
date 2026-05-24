@@ -164,7 +164,17 @@ TEST_F(ProcedureRegistryTest, AlgoShortestPath_Fail_Type) {
 		(void) invoke("algo.shortestPath", args);
 		FAIL();
 	} catch (const std::runtime_error &e) {
-		EXPECT_STREQ(e.what(), "IDs must be numeric");
+		EXPECT_STREQ(e.what(), "IDs and maxDepth must be numeric and maxDepth must be positive");
+	}
+}
+
+TEST_F(ProcedureRegistryTest, AlgoShortestPathRejectsNonPositiveMaxDepth) {
+	const std::vector<PropertyValue> args = {PropertyValue("1"), PropertyValue("2"), PropertyValue("0")};
+	try {
+		(void) invoke("algo.shortestPath", args);
+		FAIL();
+	} catch (const std::runtime_error &e) {
+		EXPECT_STREQ(e.what(), "IDs and maxDepth must be numeric and maxDepth must be positive");
 	}
 }
 

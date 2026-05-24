@@ -24,7 +24,7 @@ ZYX links directly into your application as a library (like SQLite for graphs). 
 flowchart TB
   subgraph API["Multi-Language API Layer"]
     CPP["C++ API"]
-    CAPI["C API (FFI)"]
+    DRIVER["Driver ABI (FFI)"]
     WASM["WASM (Browser)"]
   end
 
@@ -300,14 +300,14 @@ CALL dbms.showStats
 
 ## Multi-Language API
 
-ZYX provides three API surfaces to fit different use cases:
+ZYX provides API surfaces for native applications, language bindings, and browser use:
 
 ```mermaid
 flowchart TB
   subgraph APIs
     direction LR
     A["C++ API\nNative, zero-copy"]
-    B["C API\nFFI for any language"]
+    B["Driver ABI\nStable FFI boundary"]
     C["WASM\nBrowser playground"]
   end
   A --> Core["ZYX Core Engine"]
@@ -339,27 +339,32 @@ txn.commit();  // Or let destructor rollback
 db.close();
 ```
 
-### C API
+### Driver ABI
 
-Plain-C API for FFI integration with Python, Rust, Go, or any language with C interop. Includes list/map builders for complex parameter types.
+Stable C-facing ABI for Rust, Python, Node.js, WebAssembly, and future language bindings. It uses opaque handles, explicit error objects, value builders for parameters, and nested value references for lists, maps, nodes, and edges.
 
 ```c
-#include <zyx/zyx_c_api.h>
+#include <zyx/zyx_driver_abi.h>
 
-ZYXDB_T* db = zyx_open("./my.zyx");
-ZYXResult_T* res = zyx_execute(db, "MATCH (n:Person) RETURN n.name");
+zyx_driver_db_t *db = NULL;
+zyx_driver_error_t *error = NULL;
+zyx_driver_db_open("./my.zyx", &db, &error);
 
-while (zyx_result_next(res)) {
-    const char* name = zyx_result_get_string(res, 0);
+zyx_driver_result_t *result = NULL;
+zyx_driver_db_execute(db, "MATCH (n:Person) RETURN n.name", NULL, &result, &error);
+
+while (zyx_driver_result_next(result, &error) == ZYX_DRIVER_ROW) {
+    const char *name = NULL;
+    zyx_driver_result_get_string(result, 0, &name, &error);
     printf("%s\n", name);
 }
-zyx_result_close(res);
-zyx_close(db);
+zyx_driver_result_free(result);
+zyx_driver_db_close(db, &error);
 ```
 
 ### WebAssembly
 
-ZYX compiles to WebAssembly via Emscripten, enabling a browser-based Cypher playground. Read-only transactions enforce safety in the browser environment.
+ZYX compiles to WebAssembly via Emscripten. The browser playground uses the Driver ABI TypeScript wrapper and read-only transactions to enforce safety in the browser environment.
 
 ## Cross-Platform Support
 

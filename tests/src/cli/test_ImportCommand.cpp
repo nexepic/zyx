@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <chrono>
 
 using namespace graph;
 using namespace graph::cli;
@@ -21,6 +22,9 @@ protected:
         jsonlNodeFile = std::filesystem::temp_directory_path() / "nodes.jsonl";
         jsonlEdgeFile = std::filesystem::temp_directory_path() / "edges.jsonl";
         invalidFile = std::filesystem::temp_directory_path() / "invalid.csv";
+        auto uniqueSuffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+        shortCsvFile = std::filesystem::temp_directory_path() / ("zyx_import_short_csv_" + uniqueSuffix);
+        std::filesystem::remove(shortCsvFile);
     }
 
     void TearDown() override {
@@ -30,6 +34,7 @@ protected:
         std::filesystem::remove(jsonlNodeFile);
         std::filesystem::remove(jsonlEdgeFile);
         std::filesystem::remove(invalidFile);
+        std::filesystem::remove(shortCsvFile);
     }
     
     void writeCsv(const std::filesystem::path& path, const std::string& content) {
@@ -43,6 +48,7 @@ protected:
     std::filesystem::path jsonlNodeFile;
     std::filesystem::path jsonlEdgeFile;
     std::filesystem::path invalidFile;
+    std::filesystem::path shortCsvFile;
 };
 
 TEST_F(ImportCommandTest, BasicCsvImport) {
@@ -1227,8 +1233,8 @@ TEST_F(ImportCommandTest, JsonlRelStartIdNotFoundSkip) {
 TEST_F(ImportCommandTest, JsonlRelMalformedValue) {
     writeCsv(jsonlNodeFile, "{\"_id\": \"a\", \"_labels\": [\"X\"]}\n"
                             "{\"_id\": \"b\", \"_labels\": [\"X\"]}\n");
-    // Malformed: _start has numeric value (no quotes) → extractStr returns "" → branch 480
-    writeCsv(jsonlEdgeFile, "{\"_start\": 123, \"_end\": \"b\", \"_type\": \"KNOWS\"}\n");
+    // Malformed: _type has numeric value at end (no following quotes), so extractStr returns "".
+    writeCsv(jsonlEdgeFile, "{\"_start\": \"a\", \"_end\": \"b\", \"_type\": 123}\n");
 
     CLI::App app;
     registerImportCommand(app);
@@ -1238,6 +1244,11 @@ TEST_F(ImportCommandTest, JsonlRelMalformedValue) {
                       " --db " + dbPath.string() +
                       " --format jsonl --skip-bad-entries";
     EXPECT_NO_THROW(app.parse(cmd, true));
+
+    Database db(dbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+    db.open();
+    auto result = db.getQueryEngine()->execute("MATCH ()-[r]->() RETURN COUNT(r) as c");
+    EXPECT_EQ(result.getRows()[0].at("c").asPrimitive().toString(), "0");
 }
 
 // ---------- JSONL rel file open failure ----------
@@ -1255,4 +1266,105 @@ TEST_F(ImportCommandTest, JsonlRelFileNotFound) {
                       " --rels " + nonexistentRel.string() +
                       " --db " + dbPath.string();
     EXPECT_NO_THROW(app.parse(cmd, true));
+}
+
+// ---------- Additional malformed JSONL and CSV edge cases ----------
+
+TEST_F(ImportCommandTest, JsonlNodeMalformedIdAndLabels) {
+    // Numeric _id has no quoted value; malformed _labels lacks brackets and should default to :Node.
+    writeCsv(jsonlNodeFile, "{\"_id\": 123}\n"
+                            "{\"_labels\": \"Person\"}\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + jsonlNodeFile.string() +
+                      " --db " + dbPath.string() + " --format jsonl";
+    EXPECT_NO_THROW(app.parse(cmd, true));
+
+    Database db(dbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+    db.open();
+    auto result = db.getQueryEngine()->execute("MATCH (n:Node) RETURN COUNT(n) as c");
+    EXPECT_EQ(result.getRows()[0].at("c").asPrimitive().toString(), "2");
+}
+
+TEST_F(ImportCommandTest, JsonlNodeMalformedLabelsMissingEndBracket) {
+    writeCsv(jsonlNodeFile, "{\"_id\": \"1\", \"_labels\": [\"Person\"}\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + jsonlNodeFile.string() +
+                      " --db " + dbPath.string() + " --format jsonl";
+    EXPECT_NO_THROW(app.parse(cmd, true));
+
+    Database db(dbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+    db.open();
+    auto result = db.getQueryEngine()->execute("MATCH (n:Node) RETURN COUNT(n) as c");
+    EXPECT_EQ(result.getRows()[0].at("c").asPrimitive().toString(), "1");
+}
+
+TEST_F(ImportCommandTest, CsvLabelEmptySegmentsAreSkipped) {
+    writeCsv(nodeFile, ":ID,:LABEL,name\n1,Person;;Employee;,Alice\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + nodeFile.string() + " --db " + dbPath.string();
+    EXPECT_NO_THROW(app.parse(cmd, true));
+
+    Database db(dbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+    db.open();
+    auto result = db.getQueryEngine()->execute("MATCH (n:Person:Employee) RETURN COUNT(n) as c");
+    EXPECT_EQ(result.getRows()[0].at("c").asPrimitive().toString(), "1");
+}
+
+TEST_F(ImportCommandTest, CsvNamedIdGroupWithoutClosingParen) {
+    writeCsv(nodeFile, "personId:ID(People,:LABEL,name\nP1,Person,Alice\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + nodeFile.string() + " --db " + dbPath.string();
+    EXPECT_NO_THROW(app.parse(cmd, true));
+
+    Database db(dbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+    db.open();
+    auto result = db.getQueryEngine()->execute("MATCH (n:Person) RETURN COUNT(n) as c");
+    EXPECT_EQ(result.getRows()[0].at("c").asPrimitive().toString(), "1");
+}
+
+TEST_F(ImportCommandTest, JsonlRelMissingTypeCreatesSyntaxErrorAndSkips) {
+    writeCsv(jsonlNodeFile, "{\"_id\": \"a\", \"_labels\": [\"X\"]}\n"
+                            "{\"_id\": \"b\", \"_labels\": [\"X\"]}\n");
+    writeCsv(jsonlEdgeFile, "{\"_start\": \"a\", \"_end\": \"b\"}\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + jsonlNodeFile.string() +
+                      " --rels " + jsonlEdgeFile.string() +
+                      " --db " + dbPath.string() +
+                      " --format jsonl --skip-bad-entries";
+    EXPECT_NO_THROW(app.parse(cmd, true));
+
+    Database db(dbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+    db.open();
+    auto result = db.getQueryEngine()->execute("MATCH ()-[r]->() RETURN COUNT(r) as c");
+    EXPECT_EQ(result.getRows()[0].at("c").asPrimitive().toString(), "0");
+}
+
+TEST_F(ImportCommandTest, AutoDetectShortCsvPath) {
+    writeCsv(shortCsvFile, ":ID,:LABEL\n1,Short\n");
+
+    CLI::App app;
+    registerImportCommand(app);
+
+    std::string cmd = "zyx import --nodes " + shortCsvFile.string() + " --db " + dbPath.string();
+    EXPECT_NO_THROW(app.parse(cmd, true));
+
+    Database db(dbPath.string(), storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+    db.open();
+    auto result = db.getQueryEngine()->execute("MATCH (n:Short) RETURN COUNT(n) as c");
+    EXPECT_EQ(result.getRows()[0].at("c").asPrimitive().toString(), "1");
 }

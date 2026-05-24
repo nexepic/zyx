@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { escapeCypherStringLiteral } from "./cypherEscape";
 
 interface DatasetSchema {
   nodes: { label: string; props: string[] }[];
@@ -54,7 +55,7 @@ const ALGORITHMS: AlgorithmDef[] = [
       { key: "damping", label: "Damping factor", labelZh: "阻尼系数", placeholder: "0.85" },
     ],
     buildQuery: (g, p) => {
-      const parts = [`'${g}'`];
+      const parts = [escapeCypherStringLiteral(g)];
       if (p.maxIter) parts.push(p.maxIter);
       if (p.maxIter && p.damping) parts.push(p.damping);
       return `CALL gds.pageRank.stream(${parts.join(", ")}) YIELD nodeId, score RETURN nodeId, score ORDER BY score DESC`;
@@ -68,7 +69,7 @@ const ALGORITHMS: AlgorithmDef[] = [
     descriptionZh: "发现连通的节点分组",
     params: [],
     buildQuery: (g) =>
-      `CALL gds.wcc.stream('${g}') YIELD nodeId, componentId RETURN componentId, collect(nodeId) AS nodes ORDER BY componentId`,
+      `CALL gds.wcc.stream(${escapeCypherStringLiteral(g)}) YIELD nodeId, componentId RETURN componentId, collect(nodeId) AS nodes ORDER BY componentId`,
   },
   {
     id: "betweenness",
@@ -80,7 +81,7 @@ const ALGORITHMS: AlgorithmDef[] = [
       { key: "sampling", label: "Sampling size", labelZh: "采样大小", placeholder: "0 (all)" },
     ],
     buildQuery: (g, p) => {
-      const parts = [`'${g}'`];
+      const parts = [escapeCypherStringLiteral(g)];
       if (p.sampling) parts.push(p.sampling);
       return `CALL gds.betweenness.stream(${parts.join(", ")}) YIELD nodeId, score RETURN nodeId, score ORDER BY score DESC`;
     },
@@ -93,7 +94,7 @@ const ALGORITHMS: AlgorithmDef[] = [
     descriptionZh: "衡量节点到其他节点的距离",
     params: [],
     buildQuery: (g) =>
-      `CALL gds.closeness.stream('${g}') YIELD nodeId, score RETURN nodeId, score ORDER BY score DESC`,
+      `CALL gds.closeness.stream(${escapeCypherStringLiteral(g)}) YIELD nodeId, score RETURN nodeId, score ORDER BY score DESC`,
   },
   {
     id: "dijkstra",
@@ -106,7 +107,7 @@ const ALGORITHMS: AlgorithmDef[] = [
       { key: "endId", label: "End node ID", labelZh: "终止节点 ID", placeholder: "10", required: true, type: "number" },
     ],
     buildQuery: (g, p) =>
-      `CALL gds.shortestPath.dijkstra.stream('${g}', ${p.startId}, ${p.endId}) YIELD nodeId, cost RETURN nodeId, cost`,
+      `CALL gds.shortestPath.dijkstra.stream(${escapeCypherStringLiteral(g)}, ${p.startId}, ${p.endId}) YIELD nodeId, cost RETURN nodeId, cost`,
   },
 ];
 
@@ -133,9 +134,10 @@ export function GdsPanel({ isEn, schema, onRunGds, status }: GdsPanelProps) {
     }
 
     // Build: drop old → project (with optional scope) → run algorithm
+    const graphName = escapeCypherStringLiteral(PROJ_NAME);
     const queries = [
-      `CALL gds.graph.drop('${PROJ_NAME}')`,
-      `CALL gds.graph.project('${PROJ_NAME}', '${selectedNodeLabel}', '${selectedEdgeType}')`,
+      `CALL gds.graph.drop(${graphName})`,
+      `CALL gds.graph.project(${graphName}, ${escapeCypherStringLiteral(selectedNodeLabel)}, ${escapeCypherStringLiteral(selectedEdgeType)})`,
       algo.buildQuery(PROJ_NAME, algoParams),
     ];
     setRunning(true);

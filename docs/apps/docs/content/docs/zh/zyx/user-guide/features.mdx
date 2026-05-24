@@ -24,7 +24,7 @@ ZYX 以库的形式直接链接到你的应用中（类似于 SQLite 之于关�
 flowchart TB
   subgraph API["多语言 API 层"]
     CPP["C++ API"]
-    CAPI["C API (FFI)"]
+    DRIVER["Driver ABI (FFI)"]
     WASM["WASM (浏览器)"]
   end
 
@@ -300,14 +300,14 @@ CALL dbms.showStats
 
 ## 多语言 API
 
-ZYX 提供三套 API 以适配不同使用场景：
+ZYX 提供多套 API，以适配原生应用、语言绑定和浏览器场景：
 
 ```mermaid
 flowchart TB
   subgraph APIs["API 层"]
     direction LR
     A["C++ API\n原生, 零拷贝"]
-    B["C API\n支持任意语言 FFI"]
+    B["Driver ABI\n稳定 FFI 边界"]
     C["WASM\n浏览器 Playground"]
   end
   A --> Core["ZYX 核心引擎"]
@@ -339,27 +339,32 @@ txn.commit();  // 或让析构函数回滚
 db.close();
 ```
 
-### C API
+### Driver ABI
 
-纯 C API，可通过 FFI 与 Python、Rust、Go 等任何支持 C 互操作的语言集成。支持列表/Map 构建器处理复杂参数类型。
+面向 Rust、Python、Node.js、WebAssembly 和未来语言绑定的稳定 C-facing ABI。它使用不透明句柄、显式错误对象、参数值构建器，以及可遍历 list、map、node、edge 的嵌套 value ref。
 
 ```c
-#include <zyx/zyx_c_api.h>
+#include <zyx/zyx_driver_abi.h>
 
-ZYXDB_T* db = zyx_open("./my.zyx");
-ZYXResult_T* res = zyx_execute(db, "MATCH (n:Person) RETURN n.name");
+zyx_driver_db_t *db = NULL;
+zyx_driver_error_t *error = NULL;
+zyx_driver_db_open("./my.zyx", &db, &error);
 
-while (zyx_result_next(res)) {
-    const char* name = zyx_result_get_string(res, 0);
+zyx_driver_result_t *result = NULL;
+zyx_driver_db_execute(db, "MATCH (n:Person) RETURN n.name", NULL, &result, &error);
+
+while (zyx_driver_result_next(result, &error) == ZYX_DRIVER_ROW) {
+    const char *name = NULL;
+    zyx_driver_result_get_string(result, 0, &name, &error);
     printf("%s\n", name);
 }
-zyx_result_close(res);
-zyx_close(db);
+zyx_driver_result_free(result);
+zyx_driver_db_close(db, &error);
 ```
 
 ### WebAssembly
 
-ZYX 通过 Emscripten 编译为 WebAssembly，支持基于浏览器的 Cypher Playground。浏览器环境中使用只读事务保证安全性。
+ZYX 通过 Emscripten 编译为 WebAssembly。浏览器 Playground 使用 Driver ABI TypeScript 包装器和只读事务，在浏览器环境中保证安全性。
 
 ## 跨平台支持
 

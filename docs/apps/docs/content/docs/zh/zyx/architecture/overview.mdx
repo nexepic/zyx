@@ -25,7 +25,7 @@ graph TB
 
     subgraph "API 层"
         CPP["C++ API (zyx.hpp)"]
-        CA["C API (zyx_c_api.h)"]
+        ABI["Driver ABI (zyx_driver_abi.h)"]
         WASM["WASM Playground"]
     end
 
@@ -52,8 +52,8 @@ graph TB
     CLI --> CPP
     BM --> CPP
     APP --> CPP
-    CA --> DB
-    WASM --> CA
+    ABI --> DB
+    WASM --> ABI
 
     CPP --> DB
     DB --> TM
@@ -73,7 +73,7 @@ graph TB
 **各层职责：**
 
 - **应用层** — CLI 工具、benchmark 套件以及嵌入 ZYX 的宿主应用。
-- **API 层** — C++ API（`zyx.hpp`）、C API（`zyx_c_api.h`）及 WASM 绑定。
+- **API 层** — C++ API（`zyx.hpp`）、稳定 Driver ABI（`zyx_driver_abi.h`）、语言绑定及 WASM 绑定。
 - **查询层** — Cypher 文本经解析、计划、优化后，作为物理算子流水线执行。
 - **存储层** — `DataManager` 统一管理实体读写，`PersistenceManager` 跟踪脏数据，`FileStorage` 管理段式文件，`WALManager` 处理预写日志，`PageBufferPool` 提供 LRU 段缓存。
 - **核心层** — `Database` 为顶层入口；`TransactionManager` 实现单写多读并发；`Transaction` 为外部句柄。

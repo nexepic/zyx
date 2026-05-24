@@ -164,7 +164,7 @@ RETURN u.name, u.age;
 :::tip 生产环境建议
 使用参数 API 可以避免 Cypher 注入并提升计划缓存命中率：
 - C++：`Database::execute(query, params)`
-- C API：`zyx_execute_params(...)`
+- Driver ABI：配合 `zyx_driver_params_t` 使用 `zyx_driver_db_execute(...)`
 :::
 
 ## 特性边界

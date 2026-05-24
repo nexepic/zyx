@@ -135,6 +135,9 @@ class TestShortestPath:
         assert len(path) >= 2
         assert all(isinstance(n, zyxdb.Node) for n in path)
 
+        assert db.get_shortest_path(id1, id3, max_depth=1) == []
+        assert len(db.get_shortest_path(id1, id3, max_depth=2)) >= 2
+
 
 class TestBfs:
     def test_bfs_traversal(self, db):
