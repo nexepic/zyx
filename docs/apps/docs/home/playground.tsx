@@ -105,6 +105,16 @@ const displayLabelForNode = (node: DriverNode): string => {
   return typeof label === "string" || typeof label === "number" ? String(label) : String(node.id);
 };
 
+export function executeGdsPreparationQueries(driver: WasmDriverAbi, txn: number, queries: string[]): void {
+  for (let i = 0; i < queries.length - 1; i += 1) {
+    try {
+      driver.executeReadOnly(txn, queries[i]);
+    } catch (e: any) {
+      const message = String(e?.message || e || "");
+      if (!queries[i].startsWith("CALL gds.graph.drop") || !message.includes("not found")) throw e;
+    }
+  }
+}
 
 export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?: string }) {
   const [datasetIdx, setDatasetIdx] = useState(0);
@@ -413,7 +423,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
     setError(null);
 
     try {
-      for (let i = 0; i < queries.length - 1; i++) driver.executeReadOnly(txn, queries[i]);
+      executeGdsPreparationQueries(driver, txn, queries);
 
       const algoQuery = queries[queries.length - 1];
       setQuery(algoQuery);
@@ -974,7 +984,7 @@ export function CypherPlayground({ isEn, homeLink }: { isEn: boolean; homeLink?:
                 {isEn ? "Editor" : "编辑器"}
               </p>
               <span className="text-[0.65rem] text-[#566b82] font-['Space_Mono']">
-                {typeof navigator !== "undefined" && navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"} + Enter
+                Ctrl + Enter
               </span>
             </div>
             <textarea
