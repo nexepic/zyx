@@ -189,6 +189,25 @@ def test_zyx_adapter_rejects_profile_events_missing_database_or_scale(tmp_path: 
     assert "scale" in results[-1].error
 
 
+def test_zyx_adapter_rejects_malformed_profile_event(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-bad-profile.py"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "print(json.dumps({'event':'profile','database':'zyx','equivalent_mode':'api','scale':'smoke','profile':'scan','workload':'load_nodes_edges','iteration':0,'phase':'parse','total_time_ms':'not-a-number','calls':1}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke")
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert len(results) == 1
+    assert results[0].status == "failed"
+    assert results[0].workload == "subprocess_output"
+    assert "invalid profile event" in results[0].error
+
+
 def test_zyx_adapter_defaults_binary_path(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("ZYX_COMPARE_BENCH", raising=False)
     monkeypatch.delenv("ZYX_COMPARE_TIMEOUT_SECONDS", raising=False)
