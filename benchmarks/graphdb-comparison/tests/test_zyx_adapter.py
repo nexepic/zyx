@@ -55,6 +55,7 @@ def test_zyx_adapter_forwards_profile_to_subprocess(tmp_path: Path, monkeypatch)
         "property_range_indexed",
     ]
     assert "--profile\nindexed" in args_path.read_text()
+    assert "--emit-profile" in args_path.read_text().splitlines()
 
 
 def test_zyx_adapter_fails_incomplete_indexed_workload_samples(tmp_path: Path, monkeypatch):
@@ -188,4 +189,36 @@ def test_profile_event_to_event_uses_profile_schema():
         "calls": 2,
         "equivalent_mode": "api",
         "event": "profile",
+    }
+
+
+def test_zyx_adapter_parses_profile_events_separately_from_samples(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-profile-events.py"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "workloads = ['load_nodes_edges', 'point_lookup_indexed', 'property_equality_indexed', 'property_range_indexed']\n"
+        "for workload in workloads:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n"
+        "print(json.dumps({'event':'profile','database':'zyx','equivalent_mode':'api','scale':'smoke','profile':'indexed','workload':'point_lookup_indexed','iteration':0,'phase':'parse','total_time_ms':0.25,'calls':1}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.status for result in results] == ["ok"] * 4
+    assert len(adapter.profile_events) == 1
+    assert adapter.profile_events[0].to_event() == {
+        "database": "zyx",
+        "equivalent_mode": "api",
+        "event": "profile",
+        "scale": "smoke",
+        "profile": "indexed",
+        "workload": "point_lookup_indexed",
+        "iteration": 0,
+        "phase": "parse",
+        "total_time_ms": 0.25,
+        "calls": 1,
     }

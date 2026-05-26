@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, PROFILE_WORKLOADS, WorkloadResult
-from runner.models import Sample
+from runner.models import ProfileEvent, Sample
 
 
 class ZyxAdapter(BenchmarkAdapter):
@@ -16,12 +16,15 @@ class ZyxAdapter(BenchmarkAdapter):
         self.binary = Path(os.environ.get("ZYX_COMPARE_BENCH", "/usr/local/bin/zyx-compare-bench"))
         self.db_path = dataset_dir.parent / "zyx.db"
         self.timeout_seconds = float(os.environ.get("ZYX_COMPARE_TIMEOUT_SECONDS", "600"))
+        self.profile_events: list[ProfileEvent] = []
 
     def run_all(self, warmup: int, iterations: int) -> list[WorkloadResult]:
         if warmup < 0:
             return [self._failed_result("run_all", "warmup must be >= 0")]
         if iterations <= 0:
             return [self._failed_result("run_all", "iterations must be > 0")]
+
+        self.profile_events = []
 
         command = [
             str(self.binary),
@@ -37,6 +40,7 @@ class ZyxAdapter(BenchmarkAdapter):
             str(warmup),
             "--iterations",
             str(iterations),
+            "--emit-profile",
         ]
         try:
             completed = subprocess.run(
@@ -134,6 +138,28 @@ class ZyxAdapter(BenchmarkAdapter):
                 )
                 return
             results[workload].samples.append(sample)
+        elif event_type == "profile":
+            try:
+                profile_event = ProfileEvent(
+                    database=str(event.get("database", "zyx")),
+                    workload=workload,
+                    scale=str(event.get("scale", self.scale)),
+                    profile=str(event["profile"]),
+                    iteration=int(event["iteration"]),
+                    phase=str(event["phase"]),
+                    total_time_ms=float(event["total_time_ms"]),
+                    calls=int(event["calls"]),
+                    equivalent_mode=str(event.get("equivalent_mode", "api")),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                malformed.append(f"{stream_name}:{line_number}: invalid profile event: {exc}")
+                return
+            if workload not in results:
+                malformed.append(
+                    f"{stream_name}:{line_number}: unexpected workload for profile {self.profile!r}: {workload}"
+                )
+                return
+            self.profile_events.append(profile_event)
         elif event_type in {"error", "failure"}:
             errors.append(
                 WorkloadResult(
