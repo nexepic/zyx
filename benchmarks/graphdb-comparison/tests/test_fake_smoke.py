@@ -240,6 +240,83 @@ def test_run_benchmark_records_profile_and_uses_profile_workloads(tmp_path: Path
     ]
 
 
+def test_run_benchmark_writes_zyx_profiles_jsonl(tmp_path: Path, monkeypatch):
+    import runner.run as run_module
+    from runner.adapters.base import WorkloadResult
+    from runner.models import ProfileEvent, Sample
+
+    class ProfiledZyxAdapter:
+        def __init__(self, database: str, dataset_dir: Path, scale: str, profile: str):
+            self.profile_events = [
+                ProfileEvent(
+                    database="zyx",
+                    workload="load_nodes_edges",
+                    scale=scale,
+                    profile=profile,
+                    iteration=0,
+                    phase="parse",
+                    total_time_ms=0.5,
+                    calls=1,
+                    equivalent_mode="api",
+                )
+            ]
+
+        def run_all(self, warmup: int, iterations: int) -> list[WorkloadResult]:
+            return [
+                WorkloadResult(
+                    database="zyx",
+                    workload="load_nodes_edges",
+                    scale="smoke",
+                    status="ok",
+                    samples=[
+                        Sample(
+                            database="zyx",
+                            workload="load_nodes_edges",
+                            scale="smoke",
+                            iteration=0,
+                            latency_ms=1.0,
+                            equivalent_mode="api",
+                        )
+                    ],
+                    equivalent_mode="api",
+                )
+            ]
+
+    def fake_adapter_for(database: str, dataset_dir: Path, scale: str, profile: str):
+        assert database == "zyx"
+        return ProfiledZyxAdapter(database, dataset_dir, scale, profile)
+
+    monkeypatch.setattr(run_module, "_adapter_for", fake_adapter_for)
+
+    result_dir = run_benchmark(
+        databases=["zyx"],
+        scale="smoke",
+        seed=42,
+        output_root=tmp_path / "results",
+        warmup=0,
+        iterations=1,
+        profile="scan",
+    )
+
+    profile_path = result_dir / "zyx_profiles.jsonl"
+    assert profile_path.exists()
+    events = _read_jsonl(profile_path)
+    assert events == [
+        {
+            "database": "zyx",
+            "equivalent_mode": "api",
+            "event": "profile",
+            "scale": "smoke",
+            "profile": "scan",
+            "workload": "load_nodes_edges",
+            "iteration": 0,
+            "phase": "parse",
+            "total_time_ms": 0.5,
+            "calls": 1,
+        }
+    ]
+
+
 def test_run_benchmark_result_dirs_do_not_collide(tmp_path: Path):
     output_root = tmp_path / "results"
 

@@ -51,6 +51,24 @@ def _write_failure(raw_handle: TextIO, errors_handle: TextIO, failure: FailureEv
     _write_jsonl(raw_handle, failure.to_event())
 
 
+def _write_profile_events(result_dir: Path, events: Iterable[object]) -> None:
+    serialized: list[dict[str, object]] = []
+    for event in events:
+        to_event = getattr(event, "to_event", None)
+        if callable(to_event):
+            serialized.append(to_event())
+        elif isinstance(event, dict):
+            serialized.append(event)
+        else:
+            raise TypeError(f"unsupported profile event type: {type(event).__name__}")
+    if not serialized:
+        return
+    profile_path = result_dir / "zyx_profiles.jsonl"
+    with profile_path.open("a") as handle:
+        for event in serialized:
+            _write_jsonl(handle, event)
+
+
 def _environment(databases: Iterable[str], scale: str, seed: int, warmup: int, iterations: int, profile: str) -> dict[str, object]:
     return {
         "event": "environment",
@@ -138,6 +156,7 @@ def run_benchmark(
 
             try:
                 results = adapter.run_all(warmup=warmup, iterations=iterations)
+                _write_profile_events(result_dir, getattr(adapter, "profile_events", []))
             except Exception as exc:
                 failure = FailureEvent(
                     database=database,
