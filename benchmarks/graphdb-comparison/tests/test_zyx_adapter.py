@@ -54,8 +54,14 @@ def test_zyx_adapter_forwards_profile_to_subprocess(tmp_path: Path, monkeypatch)
         "property_equality_indexed",
         "property_range_indexed",
     ]
-    assert "--profile\nindexed" in args_path.read_text()
-    assert "--emit-profile" in args_path.read_text().splitlines()
+    args = args_path.read_text().splitlines()
+    profile_index = args.index("--profile")
+    iterations_index = args.index("--iterations")
+    emit_profile_index = args.index("--emit-profile")
+    assert args[profile_index + 1] == "indexed"
+    assert args[iterations_index + 1] == "1"
+    assert profile_index < iterations_index
+    assert emit_profile_index == iterations_index + 2
 
 
 def test_zyx_adapter_fails_incomplete_indexed_workload_samples(tmp_path: Path, monkeypatch):
@@ -135,6 +141,52 @@ def test_zyx_adapter_converts_subprocess_error_event(tmp_path: Path, monkeypatch
     assert results[0].workload == "point_lookup_indexed"
     assert results[0].error == "boom"
     assert results[0].equivalent_mode == "api"
+
+
+def test_zyx_adapter_clears_profile_events_before_validation(tmp_path: Path, monkeypatch):
+    from runner.models import ProfileEvent
+
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke")
+    adapter.profile_events = [
+        ProfileEvent(
+            database="zyx",
+            workload="point_lookup_indexed",
+            scale="smoke",
+            profile="indexed",
+            iteration=0,
+            phase="parse",
+            total_time_ms=1.0,
+            calls=1,
+        )
+    ]
+
+    results = adapter.run_all(warmup=-1, iterations=1)
+
+    assert results[0].status == "failed"
+    assert adapter.profile_events == []
+
+
+def test_zyx_adapter_rejects_profile_events_missing_database_or_scale(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-bad-profile.py"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "for workload in ['load_nodes_edges', 'point_lookup_indexed', 'property_equality_indexed', 'property_range_indexed']:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n"
+        "print(json.dumps({'event':'profile','equivalent_mode':'api','scale':'smoke','profile':'indexed','workload':'point_lookup_indexed','iteration':0,'phase':'parse','total_time_ms':0.25,'calls':1}))\n"
+        "print(json.dumps({'event':'profile','database':'zyx','equivalent_mode':'api','profile':'indexed','workload':'point_lookup_indexed','iteration':0,'phase':'execute','total_time_ms':0.5,'calls':1}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert results[-1].status == "failed"
+    assert results[-1].workload == "subprocess_output"
+    assert "invalid profile event" in results[-1].error
+    assert "database" in results[-1].error
+    assert "scale" in results[-1].error
 
 
 def test_zyx_adapter_defaults_binary_path(tmp_path: Path, monkeypatch):
