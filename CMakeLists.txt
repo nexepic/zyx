@@ -127,6 +127,10 @@ if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
     set_target_properties(zyx_bench PROPERTIES OUTPUT_NAME zyx-bench)
     target_include_directories(zyx_bench PRIVATE "${PROJECT_SOURCE_DIR}/apps/benchmark")
     target_link_libraries(zyx_bench PRIVATE zyx::core)
+
+    add_executable(zyx_compare_bench apps/compare_benchmark/main.cpp)
+    set_target_properties(zyx_compare_bench PROPERTIES OUTPUT_NAME zyx-compare-bench)
+    target_link_libraries(zyx_compare_bench PRIVATE zyx::core)
 endif()
 
 if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)

@@ -1,0 +1,51 @@
+# Keep Docker build contexts small and reproducible.
+.git
+.gitignore
+.dockerignore
+.claude/
+.worktrees/
+.idea/
+.DS_Store
+
+# Local build outputs
+buildDir/
+buildDir_*/
+build_release/
+build_wasm/
+build-docker/
+CMakeFiles/
+CMakeCache.txt
+CMakeUserPresets.json
+cmake-build-*/
+
+# Dependency/build caches
+subprojects/packagecache/
+subprojects/pybind11-*/
+emsdk/
+antlr-*.jar
+.pytest_cache/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Coverage and generated reports
+coverage/
+htmlcov/
+*.profraw
+*.profdata
+default.profraw
+default.profdata
+
+# Documentation/node artifacts
+docs/superpowers/
+docs/node_modules/
+docs/.turbo/
+docs/apps/docs/.next/
+docs/apps/docs/.content-collections/
+docs/apps/docs/next-env.d.ts
+.next/
+out/
+
+# Benchmark outputs are mounted at runtime.
+benchmarks/graphdb-comparison/results/*
+!benchmarks/graphdb-comparison/results/.gitkeep

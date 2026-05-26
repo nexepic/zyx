@@ -53,6 +53,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# Graph database benchmark results
+benchmarks/graphdb-comparison/results/*
+!benchmarks/graphdb-comparison/results/.gitkeep
+
 # Rust build artifacts
 bindings/rust/target/
 

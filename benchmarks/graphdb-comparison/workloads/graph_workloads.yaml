@@ -1,0 +1,13 @@
+defaults:
+  warmup: 20
+  iterations: 100
+  timeouts:
+    load_seconds: 600
+    query_seconds: 30
+workloads:
+  - load_nodes_edges
+  - point_lookup_indexed
+  - label_scan_filter
+  - one_hop_expand
+  - two_hop_expand
+  - shortest_path_chain
