@@ -160,3 +160,32 @@ def test_zyx_adapter_returns_failed_result_on_timeout(tmp_path: Path, monkeypatc
     assert results[0].status == "failed"
     assert results[0].workload == "run_all"
     assert "timed out after 0.01s" in results[0].error
+
+
+def test_profile_event_to_event_uses_profile_schema():
+    from runner.models import ProfileEvent
+
+    event = ProfileEvent(
+        database="zyx",
+        workload="label_scan_filter",
+        scale="smoke",
+        profile="scan",
+        iteration=0,
+        phase="parse",
+        total_time_ms=1.5,
+        calls=2,
+        equivalent_mode="api",
+    )
+
+    assert event.to_event() == {
+        "database": "zyx",
+        "workload": "label_scan_filter",
+        "scale": "smoke",
+        "profile": "scan",
+        "iteration": 0,
+        "phase": "parse",
+        "total_time_ms": 1.5,
+        "calls": 2,
+        "equivalent_mode": "api",
+        "event": "profile",
+    }

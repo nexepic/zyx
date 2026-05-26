@@ -21,6 +21,24 @@ class Sample:
 
 
 @dataclass(frozen=True)
+class ProfileEvent:
+    database: str
+    workload: str
+    scale: str
+    profile: str
+    iteration: int
+    phase: str
+    total_time_ms: float
+    calls: int
+    equivalent_mode: str = "api"
+
+    def to_event(self) -> dict[str, Any]:
+        event = asdict(self)
+        event["event"] = "profile"
+        return event
+
+
+@dataclass(frozen=True)
 class FailureEvent:
     database: str
     workload: str
