@@ -367,8 +367,9 @@ LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &db
     return loaded;
 }
 
-template<typename Fn>
-auto measureOperation(const Options &options, const std::string &workload, int iteration, Fn &&operation) {
+template<typename Fn, typename ValidateFn>
+auto measureOperation(const Options &options, const std::string &workload, int iteration, Fn &&operation,
+                      ValidateFn &&validate) {
     if (options.emitProfile) {
         graph::debug::PerfTrace::setEnabled(true);
         graph::debug::PerfTrace::reset();
@@ -384,6 +385,7 @@ auto measureOperation(const Options &options, const std::string &workload, int i
             graph::debug::PerfTrace::setEnabled(false);
         }
         const auto latencyMs = std::chrono::duration<double, std::milli>(end - start).count();
+        validate(value);
         emitSample(workload, options.scale, iteration, latencyMs);
         if (options.emitProfile) {
             emitProfileSnapshot(options, workload, iteration, snapshot);
@@ -408,10 +410,14 @@ LoadedGraph measureLoadWorkload(const Options &options) {
 
     for (int i = 0; i < options.iterations; ++i) {
         const auto iterationPath = suffixedDbPath(options.dbPath, ".load-iteration-" + std::to_string(i));
-        const LoadedGraph loaded = measureOperation(options, "load_nodes_edges", i, [&]() {
-            return loadDatabase(options, iterationPath);
-        });
-        requireNonNegative("load_nodes_edges", loaded.loadedRows);
+        const LoadedGraph loaded = measureOperation(
+                options, "load_nodes_edges", i,
+                [&]() {
+                    return loadDatabase(options, iterationPath);
+                },
+                [](const LoadedGraph &loadedGraph) {
+                    requireNonNegative("load_nodes_edges", loadedGraph.loadedRows);
+                });
         std::filesystem::remove_all(iterationPath);
     }
 
@@ -427,12 +433,16 @@ void runMeasured(const Options &options, const std::string &workload, Fn &&opera
         }
     }
     for (int i = 0; i < options.iterations; ++i) {
-        const int64_t value = measureOperation(options, workload, i, [&]() {
-            return operation();
-        });
-        if (validateResult) {
-            requireNonNegative(workload, value);
-        }
+        (void) measureOperation(
+                options, workload, i,
+                [&]() {
+                    return operation();
+                },
+                [&](const int64_t value) {
+                    if (validateResult) {
+                        requireNonNegative(workload, value);
+                    }
+                });
     }
 }
 
