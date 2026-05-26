@@ -1,4 +1,5 @@
 #include "zyx/zyx.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -29,6 +30,7 @@ struct Options {
     std::filesystem::path dbPath;
     std::string scale;
     std::string profile = std::string(kProfileScan);
+    bool emitProfile = false;
     int warmup = 0;
     int iterations = 1;
 };
@@ -90,6 +92,23 @@ void emitSample(const std::string &workload, const std::string &scale, int itera
               << "\",\"event\":\"sample\",\"iteration\":" << iteration << ",\"latency_ms\":" << latencyMs
               << ",\"scale\":\"" << jsonEscape(scale) << "\",\"status\":\"ok\",\"workload\":\"" << workload
               << "\"}\n";
+}
+
+void emitProfileEvent(const std::string &workload, const std::string &scale, const std::string &profile,
+                      int iteration, const std::string &phase, double totalTimeMs, uint64_t calls) {
+    std::cout << "{\"database\":\"" << kDatabase << "\",\"equivalent_mode\":\"" << kEquivalentMode
+              << "\",\"event\":\"profile\",\"iteration\":" << iteration << ",\"phase\":\""
+              << jsonEscape(phase) << "\",\"profile\":\"" << jsonEscape(profile) << "\",\"scale\":\""
+              << jsonEscape(scale) << "\",\"total_time_ms\":" << totalTimeMs << ",\"calls\":" << calls
+              << ",\"workload\":\"" << jsonEscape(workload) << "\"}\n";
+}
+
+void emitProfileSnapshot(const Options &options, const std::string &workload, int iteration,
+                         const graph::debug::PerfTrace::Snapshot &snapshot) {
+    for (const auto &[phase, entry]: snapshot) {
+        const double totalMs = static_cast<double>(entry.totalNs) / 1e6;
+        emitProfileEvent(workload, options.scale, options.profile, iteration, phase, totalMs, entry.calls);
+    }
 }
 
 void emitError(const std::string &workload, const std::string &scale, const std::string &error) {
@@ -348,6 +367,37 @@ LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &db
     return loaded;
 }
 
+template<typename Fn>
+auto measureOperation(const Options &options, const std::string &workload, int iteration, Fn &&operation) {
+    if (options.emitProfile) {
+        graph::debug::PerfTrace::setEnabled(true);
+        graph::debug::PerfTrace::reset();
+    }
+
+    const auto start = Clock::now();
+    try {
+        auto value = operation();
+        const auto end = Clock::now();
+        graph::debug::PerfTrace::Snapshot snapshot;
+        if (options.emitProfile) {
+            snapshot = graph::debug::PerfTrace::snapshotAndReset();
+            graph::debug::PerfTrace::setEnabled(false);
+        }
+        const auto latencyMs = std::chrono::duration<double, std::milli>(end - start).count();
+        emitSample(workload, options.scale, iteration, latencyMs);
+        if (options.emitProfile) {
+            emitProfileSnapshot(options, workload, iteration, snapshot);
+        }
+        return value;
+    } catch (...) {
+        if (options.emitProfile) {
+            [[maybe_unused]] const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+            graph::debug::PerfTrace::setEnabled(false);
+        }
+        throw;
+    }
+}
+
 LoadedGraph measureLoadWorkload(const Options &options) {
     for (int i = 0; i < options.warmup; ++i) {
         const auto warmupPath = suffixedDbPath(options.dbPath, ".load-warmup-" + std::to_string(i));
@@ -358,12 +408,10 @@ LoadedGraph measureLoadWorkload(const Options &options) {
 
     for (int i = 0; i < options.iterations; ++i) {
         const auto iterationPath = suffixedDbPath(options.dbPath, ".load-iteration-" + std::to_string(i));
-        const auto start = Clock::now();
-        const LoadedGraph loaded = loadDatabase(options, iterationPath);
-        const auto end = Clock::now();
+        const LoadedGraph loaded = measureOperation(options, "load_nodes_edges", i, [&]() {
+            return loadDatabase(options, iterationPath);
+        });
         requireNonNegative("load_nodes_edges", loaded.loadedRows);
-        const auto latencyMs = std::chrono::duration<double, std::milli>(end - start).count();
-        emitSample("load_nodes_edges", options.scale, i, latencyMs);
         std::filesystem::remove_all(iterationPath);
     }
 
@@ -379,14 +427,12 @@ void runMeasured(const Options &options, const std::string &workload, Fn &&opera
         }
     }
     for (int i = 0; i < options.iterations; ++i) {
-        const auto start = Clock::now();
-        const int64_t value = operation();
-        const auto end = Clock::now();
+        const int64_t value = measureOperation(options, workload, i, [&]() {
+            return operation();
+        });
         if (validateResult) {
             requireNonNegative(workload, value);
         }
-        const auto latencyMs = std::chrono::duration<double, std::milli>(end - start).count();
-        emitSample(workload, options.scale, i, latencyMs);
     }
 }
 
@@ -429,6 +475,8 @@ Options parseArgs(int argc, char **argv) {
             if (options.profile != kProfileScan && options.profile != kProfileIndexed) {
                 throw std::invalid_argument("--profile must be scan or indexed");
             }
+        } else if (arg == "--emit-profile") {
+            options.emitProfile = true;
         } else if (arg == "--warmup") {
             options.warmup = std::stoi(requireValue(arg));
         } else if (arg == "--iterations") {
