@@ -19,12 +19,12 @@ class ZyxAdapter(BenchmarkAdapter):
         self.profile_events: list[ProfileEvent] = []
 
     def run_all(self, warmup: int, iterations: int) -> list[WorkloadResult]:
+        self.profile_events = []
+
         if warmup < 0:
             return [self._failed_result("run_all", "warmup must be >= 0")]
         if iterations <= 0:
             return [self._failed_result("run_all", "iterations must be > 0")]
-
-        self.profile_events = []
 
         command = [
             str(self.binary),
@@ -141,9 +141,9 @@ class ZyxAdapter(BenchmarkAdapter):
         elif event_type == "profile":
             try:
                 profile_event = ProfileEvent(
-                    database=str(event.get("database", "zyx")),
+                    database=str(event["database"]),
                     workload=workload,
-                    scale=str(event.get("scale", self.scale)),
+                    scale=str(event["scale"]),
                     profile=str(event["profile"]),
                     iteration=int(event["iteration"]),
                     phase=str(event["phase"]),
