@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "graph/core/Database.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeBatchLoader.hpp"
 #include "graph/query/execution/NodeScanRequirements.hpp"
 #include "graph/query/execution/ScanConfigs.hpp"
@@ -36,6 +37,8 @@ protected:
 		db.reset();
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
+		debug::PerfTrace::reset();
+		debug::PerfTrace::setEnabled(false);
 	}
 
 	int64_t addLabeledNode(const std::vector<std::string> &labels,
@@ -137,6 +140,31 @@ TEST_F(NodeBatchLoaderTest, MissingSelectedPropertyIsNullopt) {
 	ASSERT_TRUE(batch.hasPropertyColumn("age"));
 	ASSERT_EQ(batch.propertyColumns["age"].size(), 1U);
 	EXPECT_FALSE(batch.propertyColumns["age"][0].has_value());
+}
+
+TEST_F(NodeBatchLoaderTest, SelectedPropertyModeEmitsLoadPropertiesProfilePhase) {
+	const int64_t first = addPerson({{"age", PropertyValue(int64_t{42})}});
+	const int64_t second = addPerson({{"age", PropertyValue(int64_t{7})}});
+	NodeScanConfig config;
+	config.variable = "n";
+	config.labels = {"Person"};
+
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	NodeBatchLoader loader(dm);
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	auto batch = loader.load(std::vector<int64_t>{first, second}, 0, 2, config, requirements);
+
+	EXPECT_EQ(batch.size(), 2U);
+	ASSERT_TRUE(batch.hasPropertyColumn("age"));
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(snapshot.contains("node_scan.load_properties"));
+	EXPECT_EQ(snapshot.at("node_scan.load_properties").calls, 1U);
+	EXPECT_TRUE(snapshot.contains("node_scan.load_property_entities"));
+	EXPECT_TRUE(snapshot.contains("node_scan.extract_property_columns"));
 }
 
 TEST_F(NodeBatchLoaderTest, InactiveNodeIsNotSelected) {
