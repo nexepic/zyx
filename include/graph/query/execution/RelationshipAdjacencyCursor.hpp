@@ -1,0 +1,29 @@
+#pragma once
+
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "graph/core/Edge.hpp"
+#include "graph/core/Node.hpp"
+#include "graph/query/execution/RelationshipExpandConfig.hpp"
+#include "graph/storage/data/DataManager.hpp"
+
+namespace graph::query::execution {
+
+	class RelationshipAdjacencyCursor {
+	public:
+		explicit RelationshipAdjacencyCursor(std::shared_ptr<storage::DataManager> dm);
+
+		[[nodiscard]] RelationshipExpandBatch expand(const std::vector<int64_t> &sourceIds,
+		                                             const RelationshipExpandConfig &config,
+		                                             const RelationshipExpandRequirements &requirements) const;
+
+	private:
+		[[nodiscard]] bool matchesTargetLabels(const Node &node, const RelationshipExpandConfig &config) const;
+		[[nodiscard]] int64_t targetForSource(const Edge &edge, int64_t sourceId, const std::string &direction) const;
+
+		std::shared_ptr<storage::DataManager> dm_;
+	};
+
+} // namespace graph::query::execution
