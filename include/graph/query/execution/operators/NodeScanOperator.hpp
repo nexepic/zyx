@@ -31,6 +31,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include "../NodeCandidateSource.hpp"
 #include "../PhysicalOperator.hpp"
 #include "../ScanConfigs.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
@@ -53,41 +54,8 @@ namespace graph::query::execution::operators {
 			currentIdx_ = 0;
 			candidateIds_.clear();
 
-			// 1. Determine Candidate IDs
-			switch (config_.type) {
-				case ScanType::PROPERTY_SCAN:
-					candidateIds_ = im_->findNodeIdsByProperty(config_.indexKey, config_.indexValue);
-					break;
-
-				case ScanType::RANGE_SCAN:
-					candidateIds_ = im_->findNodeIdsByPropertyRange(
-						config_.indexKey, config_.rangeMin, config_.rangeMax);
-					break;
-
-				case ScanType::COMPOSITE_SCAN:
-					candidateIds_ = im_->findNodeIdsByCompositeIndex(
-						config_.compositeKeys, config_.compositeValues);
-					break;
-
-				case ScanType::LABEL_SCAN:
-					candidateIds_ = im_->findNodeIdsByLabel(config_.label());
-					break;
-
-				case ScanType::FULL_SCAN:
-				default:
-					int64_t maxId = dm_->getIdAllocator(EntityType::Node)->getCurrentMaxId();
-					candidateIds_.reserve(maxId);
-					for (int64_t i = 1; i <= maxId; ++i)
-						candidateIds_.push_back(i);
-					break;
-			}
-
-			// Parallel segment loading assumes candidate IDs are in ascending order
-			// to derive a valid [startId, endId] window and avoid empty segment matches.
-			if (candidateIds_.size() > 1) {
-				std::sort(candidateIds_.begin(), candidateIds_.end());
-				candidateIds_.erase(std::unique(candidateIds_.begin(), candidateIds_.end()), candidateIds_.end());
-			}
+			NodeCandidateSource candidateSource(dm_, im_);
+			candidateIds_ = candidateSource.collect(config_);
 
 			// Pre-resolve label IDs for the scan loop (optimization)
 			targetLabelIds_.clear();
