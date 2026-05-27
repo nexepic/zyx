@@ -23,6 +23,7 @@
 #include "graph/query/execution/operators/LimitOperator.hpp"
 #include "graph/query/execution/operators/MergeEdgeOperator.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
+#include "graph/query/execution/operators/NodeCountFastPathOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
@@ -83,6 +84,7 @@
 #include "graph/query/logical/operators/LogicalLoadCsv.hpp"
 #include "graph/query/logical/operators/LogicalNamedPath.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
+#include "graph/query/planner/NodeCountFastPathPlanner.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
@@ -287,6 +289,12 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertAggregate(
 	const LogicalOperator *op) const {
 
 	const auto *agg = static_cast<const LogicalAggregate *>(op);
+
+	if (auto fastPath = planner::tryBuildNodeCountFastPathPlan(*agg)) {
+		return std::make_unique<NodeCountFastPathOperator>(
+			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
+			std::move(fastPath->predicates), std::move(fastPath->outputAlias));
+	}
 
 	auto childPhys = convert(agg->getChildren()[0]);
 
