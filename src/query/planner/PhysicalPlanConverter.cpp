@@ -27,6 +27,7 @@
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
+#include "graph/query/execution/operators/RelationshipCountFastPathOperator.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/query/execution/operators/ShowConstraintsOperator.hpp"
@@ -86,6 +87,7 @@
 #include "graph/query/optimizer/Optimizer.hpp"
 #include "graph/query/planner/NodeCountFastPathPlanner.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
+#include "graph/query/planner/RelationshipCountFastPathPlanner.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 #include <stdexcept>
@@ -294,6 +296,12 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertAggregate(
 		return std::make_unique<NodeCountFastPathOperator>(
 			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
 			std::move(fastPath->predicates), std::move(fastPath->outputAlias));
+	}
+
+	if (auto fastPath = planner::tryBuildRelationshipCountFastPathPlan(*agg)) {
+		return std::make_unique<RelationshipCountFastPathOperator>(
+			dm_, im_, std::move(fastPath->seedConfig), std::move(fastPath->seedRequirements),
+			std::move(fastPath->seedPredicates), std::move(fastPath->hops), std::move(fastPath->outputAlias));
 	}
 
 	auto childPhys = convert(agg->getChildren()[0]);
