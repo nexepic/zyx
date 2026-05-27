@@ -37,10 +37,59 @@ void addEqualityPredicate(NodeCountFastPathPlan &plan,
 	plan.predicates.push_back(std::move(predicate));
 }
 
-bool isClosedInclusiveRange(const logical::RangePredicate &range) {
-	return range.minInclusive && range.maxInclusive &&
-	       range.minValue.getType() != PropertyType::NULL_TYPE &&
-	       range.maxValue.getType() != PropertyType::NULL_TYPE;
+bool hasValueBound(const PropertyValue &value) {
+	return value.getType() != PropertyType::NULL_TYPE;
+}
+
+execution::VectorizedPropertyPredicate makeRangePredicate(const std::string &variable,
+                                                          const std::string &key,
+                                                          execution::VectorPredicateOp op,
+                                                          const PropertyValue &value) {
+	execution::VectorizedPropertyPredicate predicate;
+	predicate.variable = variable;
+	predicate.propertyKey = key;
+	predicate.op = op;
+	predicate.value = value;
+	return predicate;
+}
+
+bool hasOpenRangeBounds(const execution::NodeScanConfig &config) {
+	return config.type == execution::ScanType::RANGE_SCAN &&
+	       (config.rangeMin.getType() == PropertyType::NULL_TYPE || config.rangeMax.getType() == PropertyType::NULL_TYPE);
+}
+
+bool addRangePredicates(NodeCountFastPathPlan &plan,
+                        const std::string &variable,
+                        const logical::RangePredicate &range) {
+	const bool hasMin = hasValueBound(range.minValue);
+	const bool hasMax = hasValueBound(range.maxValue);
+	if (!hasMin && !hasMax) {
+		return false;
+	}
+
+	addRequiredProperty(plan.requirements, range.key);
+	if (hasMin && hasMax && range.minInclusive && range.maxInclusive) {
+		auto predicate = makeRangePredicate(variable, range.key, execution::VectorPredicateOp::VPO_RANGE_CLOSED, range.minValue);
+		predicate.upperValue = range.maxValue;
+		plan.predicates.push_back(std::move(predicate));
+		return true;
+	}
+
+	if (hasMin) {
+		plan.predicates.push_back(makeRangePredicate(
+				variable,
+				range.key,
+				range.minInclusive ? execution::VectorPredicateOp::VPO_GE : execution::VectorPredicateOp::VPO_GT,
+				range.minValue));
+	}
+	if (hasMax) {
+		plan.predicates.push_back(makeRangePredicate(
+				variable,
+				range.key,
+				range.maxInclusive ? execution::VectorPredicateOp::VPO_LE : execution::VectorPredicateOp::VPO_LT,
+				range.maxValue));
+	}
+	return true;
 }
 
 } // namespace
@@ -82,17 +131,9 @@ tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate) {
 	}
 
 	for (const auto &range : scan->getRangePredicates()) {
-		if (!isClosedInclusiveRange(range)) {
+		if (!addRangePredicates(plan, scan->getVariable(), range)) {
 			return std::nullopt;
 		}
-		addRequiredProperty(plan.requirements, range.key);
-		execution::VectorizedPropertyPredicate predicate;
-		predicate.variable = scan->getVariable();
-		predicate.propertyKey = range.key;
-		predicate.op = execution::VectorPredicateOp::VPO_RANGE_CLOSED;
-		predicate.value = range.minValue;
-		predicate.upperValue = range.maxValue;
-		plan.predicates.push_back(std::move(predicate));
 	}
 
 	if (scan->getCompositeEquality().has_value()) {
@@ -136,6 +177,10 @@ tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate) {
 		case execution::ScanType::LABEL_SCAN:
 		case execution::ScanType::FULL_SCAN:
 			break;
+	}
+
+	if (hasOpenRangeBounds(plan.config)) {
+		plan.config.type = plan.config.labels.empty() ? execution::ScanType::FULL_SCAN : execution::ScanType::LABEL_SCAN;
 	}
 
 	return plan;

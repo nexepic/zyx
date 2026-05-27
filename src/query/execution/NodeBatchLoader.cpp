@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/NodePropertyColumnLoader.hpp"
 
 namespace graph::query::execution {
 
@@ -36,7 +37,6 @@ namespace graph::query::execution {
 	                                      size_t end,
 	                                      const NodeScanConfig &config,
 	                                      const NodeScanRequirements &requirements) const {
-		(void) threadPool_;
 		const size_t clampedEnd = std::min(end, candidateIds.size());
 
 		NodeColumnBatch batch;
@@ -47,15 +47,12 @@ namespace graph::query::execution {
 		const size_t rowCount = clampedEnd - begin;
 		batch.nodeIds.reserve(rowCount);
 		batch.selected.reserve(rowCount);
+		std::vector<Node> loadedNodes;
+		loadedNodes.reserve(rowCount);
+
 		const bool needsPropertyColumns = requirements.materialization == NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
 		if (requirements.needsFullNode()) {
 			batch.materializedNodes.reserve(rowCount);
-		}
-		if (needsPropertyColumns) {
-			for (const auto &key : requirements.requiredProperties) {
-				batch.propertyColumns.emplace(key, std::vector<std::optional<PropertyValue>>{});
-				batch.propertyColumns[key].reserve(rowCount);
-			}
 		}
 
 		for (size_t index = begin; index < clampedEnd; ++index) {
@@ -81,7 +78,7 @@ namespace graph::query::execution {
 			}
 
 			std::unordered_map<std::string, PropertyValue> properties;
-			if (selected && (needsPropertyColumns || requirements.needsFullNode())) {
+			if (selected && requirements.needsFullNode()) {
 				if (debug::PerfTrace::isEnabled()) {
 					const auto propStart = Clock::now();
 					properties = dm_->getNodeProperties(nodeId);
@@ -93,27 +90,22 @@ namespace graph::query::execution {
 
 			batch.nodeIds.push_back(nodeId);
 			batch.selected.push_back(selected ? uint8_t{1} : uint8_t{0});
-
-			if (needsPropertyColumns) {
-				for (const auto &key : requirements.requiredProperties) {
-					auto &column = batch.propertyColumns[key];
-					if (!selected) {
-						column.push_back(std::nullopt);
-						continue;
-					}
-
-					auto propertyIt = properties.find(key);
-					if (propertyIt == properties.end()) {
-						column.push_back(std::nullopt);
-					} else {
-						column.push_back(propertyIt->second);
-					}
-				}
-			}
+			loadedNodes.push_back(node);
 
 			if (requirements.needsFullNode() && selected) {
 				node.setProperties(std::move(properties));
 				batch.materializedNodes.push_back(std::move(node));
+			}
+		}
+
+		if (needsPropertyColumns) {
+			NodePropertyColumnLoader propertyLoader(dm_, threadPool_);
+			if (debug::PerfTrace::isEnabled()) {
+				const auto propStart = Clock::now();
+				batch.propertyColumns = propertyLoader.loadColumns(loadedNodes, batch.selected, requirements.requiredProperties);
+				debug::PerfTrace::addDuration("node_scan.load_properties", elapsedNs(propStart));
+			} else {
+				batch.propertyColumns = propertyLoader.loadColumns(loadedNodes, batch.selected, requirements.requiredProperties);
 			}
 		}
 

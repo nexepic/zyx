@@ -25,6 +25,7 @@ protected:
 		db->open();
 		(void) execute("CREATE (:Person {name: 'Alice', age: 42, score: 10})");
 		(void) execute("CREATE (:Person {name: 'Bob', age: 7, score: 20})");
+		(void) execute("CREATE (:Person {name: 'Cara', age: 65, score: 5, country: 'CN'})");
 		(void) execute("CREATE (:Animal {name: 'Cat', age: 42, score: 30})");
 		(void) execute("CREATE (:Person {name: 'MissingAge'})");
 	}
@@ -68,7 +69,7 @@ TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsLabelNodesWithFastPathP
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
 
-	EXPECT_EQ(runCount("MATCH (n:Person) RETURN count(n) AS count"), 3);
+	EXPECT_EQ(runCount("MATCH (n:Person) RETURN count(n) AS count"), 4);
 
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.count"));
@@ -84,12 +85,42 @@ TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsPropertyEqualityNodesWi
 	EXPECT_TRUE(snapshot.contains("node_scan.count"));
 }
 
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsWhereLowerBoundPropertyFilterWithFastPathProfilePhase) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (n) WHERE n.age >= 30 RETURN count(n) AS count"), 3);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+}
+
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsWhereUpperBoundPropertyFilterWithFastPathProfilePhase) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (n) WHERE n.score < 20 RETURN count(n) AS count"), 2);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+}
+
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsWhereEqualityAndRangeFilterWithFastPathProfilePhase) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (u:Person) WHERE u.country = 'CN' AND u.age >= 30 RETURN count(u) AS count"), 1);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+}
+
 TEST_F(VectorizedNodeCountFastPathIntegrationTest, ReturningNodesUsesLegacyPath) {
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
 
 	auto result = execute("MATCH (n:Person) RETURN n");
-	EXPECT_EQ(result.rowCount(), 3U);
+	EXPECT_EQ(result.rowCount(), 4U);
 
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_FALSE(snapshot.contains("node_scan.count"));
