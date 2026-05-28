@@ -393,6 +393,108 @@ namespace graph {
 		return keyExists ? it->values : std::vector<int64_t>{};
 	}
 
+	size_t Index::countValues(const PropertyValue &key,
+	                          const std::shared_ptr<storage::DataManager> &dataManager,
+	                          const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const {
+		if (metadata.nodeType != NodeType::LEAF) {
+			throw std::logic_error("Values can only be counted from leaf nodes.");
+		}
+		if (metadata.entryCount == 0)
+			return 0;
+
+		std::string serializedData(dataBuffer, metadata.dataUsage);
+		std::istringstream is(serializedData);
+
+		auto skipValues = [&](EntrySerializationFlags flags, uint32_t valueCount) {
+			if (flags & EntrySerializationFlags::VALUES_ARE_BLOB) {
+				(void) utils::Serializer::readPOD<int64_t>(is);
+			} else {
+				is.seekg(static_cast<std::streamoff>(valueCount * sizeof(int64_t)), std::ios::cur);
+			}
+		};
+
+		for (uint32_t i = 0; i < metadata.entryCount; i++) {
+			auto flags = utils::Serializer::readPOD<EntrySerializationFlags>(is);
+
+			PropertyValue entryKey;
+			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
+				const int64_t keyBlobId = utils::Serializer::readPOD<int64_t>(is);
+				std::string keyData = dataManager->getBlobManager()->readBlobChain(keyBlobId);
+				std::istringstream keyStream(keyData);
+				entryKey = utils::Serializer::deserialize<PropertyValue>(keyStream);
+			} else {
+				entryKey = utils::Serializer::deserialize<PropertyValue>(is);
+			}
+
+			const auto valueCount = utils::Serializer::readPOD<uint32_t>(is);
+			if (!comparator(entryKey, key) && !comparator(key, entryKey)) {
+				return valueCount;
+			}
+			if (comparator(key, entryKey)) {
+				return 0;
+			}
+			skipValues(flags, valueCount);
+		}
+		return 0;
+	}
+
+	size_t Index::countValuesInRange(
+	    const PropertyValue &minKey,
+	    const PropertyValue &maxKey,
+	    bool minInclusive,
+	    bool maxInclusive,
+	    bool &continueScan,
+	    const std::shared_ptr<storage::DataManager> &dataManager,
+	    const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const {
+		if (metadata.nodeType != NodeType::LEAF) {
+			throw std::logic_error("Values can only be counted from leaf nodes.");
+		}
+		if (metadata.entryCount == 0)
+			return 0;
+
+		std::string serializedData(dataBuffer, metadata.dataUsage);
+		std::istringstream is(serializedData);
+		size_t count = 0;
+		const auto equalsKey = [&](const PropertyValue &a, const PropertyValue &b) {
+			return !comparator(a, b) && !comparator(b, a);
+		};
+
+		auto skipValues = [&](EntrySerializationFlags flags, uint32_t valueCount) {
+			if (flags & EntrySerializationFlags::VALUES_ARE_BLOB) {
+				(void) utils::Serializer::readPOD<int64_t>(is);
+			} else {
+				is.seekg(static_cast<std::streamoff>(valueCount * sizeof(int64_t)), std::ios::cur);
+			}
+		};
+
+		for (uint32_t i = 0; i < metadata.entryCount; i++) {
+			auto flags = utils::Serializer::readPOD<EntrySerializationFlags>(is);
+
+			PropertyValue entryKey;
+			if (flags & EntrySerializationFlags::KEY_IS_BLOB) {
+				const int64_t keyBlobId = utils::Serializer::readPOD<int64_t>(is);
+				std::string keyData = dataManager->getBlobManager()->readBlobChain(keyBlobId);
+				std::istringstream keyStream(keyData);
+				entryKey = utils::Serializer::deserialize<PropertyValue>(keyStream);
+			} else {
+				entryKey = utils::Serializer::deserialize<PropertyValue>(is);
+			}
+
+			const auto valueCount = utils::Serializer::readPOD<uint32_t>(is);
+			if (comparator(entryKey, minKey) || (!minInclusive && equalsKey(entryKey, minKey))) {
+				skipValues(flags, valueCount);
+				continue;
+			}
+			if (comparator(maxKey, entryKey) || (!maxInclusive && equalsKey(entryKey, maxKey))) {
+				continueScan = false;
+				break;
+			}
+			count += valueCount;
+			skipValues(flags, valueCount);
+		}
+		return count;
+	}
+
 	void Index::addChild(ChildEntry &newEntry, const std::shared_ptr<storage::DataManager> &dataManager,
 						 const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) {
 		if (isLeaf())

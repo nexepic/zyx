@@ -23,7 +23,27 @@ namespace graph::query::execution::operators {
 
 	void NodeCountFastPathOperator::open() {
 		NodeCandidateSource source(dm_, im_);
-		candidates_ = source.collect(config_);
+		candidateSet_ = NodeCandidateSet{};
+		directCount_.reset();
+
+		const bool canUseIndexCount =
+				requirements_.countOnly &&
+				requirements_.materialization == NodeMaterializationMode::NSM_ID_ONLY &&
+				predicates_.empty();
+		if (canUseIndexCount) {
+			auto candidateCount = source.countWithMetadata(config_);
+			const bool satisfiesRequirements =
+					candidateCount.available &&
+					(!requirements_.needsActiveCheck || candidateCount.activeOnly) &&
+					(!requirements_.needsLabels || candidateCount.labelsSatisfied);
+			if (satisfiesRequirements) {
+				directCount_ = candidateCount.count;
+				emitted_ = false;
+				return;
+			}
+		}
+
+		candidateSet_ = source.collectWithMetadata(config_);
 		emitted_ = false;
 	}
 
@@ -36,13 +56,25 @@ namespace graph::query::execution::operators {
 
 		const auto start = Clock::now();
 		int64_t count = 0;
-		NodeBatchLoader loader(dm_, threadPool_);
+		const bool canCountCandidatesDirectly =
+				requirements_.countOnly &&
+				requirements_.materialization == NodeMaterializationMode::NSM_ID_ONLY &&
+				predicates_.empty() &&
+				(!requirements_.needsActiveCheck || candidateSet_.activeOnly) &&
+				(!requirements_.needsLabels || candidateSet_.labelsSatisfied);
 
-		for (size_t begin = 0; begin < candidates_.size(); begin += PhysicalOperator::DEFAULT_BATCH_SIZE) {
-			const size_t end = std::min(begin + PhysicalOperator::DEFAULT_BATCH_SIZE, candidates_.size());
-			auto batch = loader.load(candidates_, begin, end, config_, requirements_);
-			applyPredicates(batch, predicates_);
-			count += static_cast<int64_t>(batch.selectedCount());
+		if (directCount_.has_value()) {
+			count = *directCount_;
+		} else if (canCountCandidatesDirectly) {
+			count = static_cast<int64_t>(candidateSet_.ids.size());
+		} else {
+			NodeBatchLoader loader(dm_, threadPool_);
+			for (size_t begin = 0; begin < candidateSet_.ids.size(); begin += PhysicalOperator::DEFAULT_BATCH_SIZE) {
+				const size_t end = std::min(begin + PhysicalOperator::DEFAULT_BATCH_SIZE, candidateSet_.ids.size());
+				auto batch = loader.load(candidateSet_.ids, begin, end, config_, requirements_);
+				applyPredicates(batch, predicates_);
+				count += static_cast<int64_t>(batch.selectedCount());
+			}
 		}
 
 		if (debug::PerfTrace::isEnabled()) {
@@ -59,7 +91,8 @@ namespace graph::query::execution::operators {
 	}
 
 	void NodeCountFastPathOperator::close() {
-		candidates_.clear();
+		candidateSet_ = NodeCandidateSet{};
+		directCount_.reset();
 		emitted_ = false;
 	}
 

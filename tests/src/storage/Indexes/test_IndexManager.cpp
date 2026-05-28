@@ -110,6 +110,7 @@ TEST_F(IndexManagerTest, CreateAndDropNamedIndex) {
 
 	// 2. Verify Physical Existence
 	EXPECT_TRUE(indexManager->hasPropertyIndex("node", "age"));
+	EXPECT_TRUE(indexManager->hasNodePropertyIndexForLabel("User", "age"));
 
 	// 3. Verify Metadata Existence
 	EXPECT_TRUE(hasIndexWithName("idx_user_age"));
@@ -132,6 +133,7 @@ TEST_F(IndexManagerTest, CreateAndDropNamedIndex) {
 
 	// 5. Verify Removal
 	EXPECT_FALSE(indexManager->hasPropertyIndex("node", "age"));
+	EXPECT_FALSE(indexManager->hasNodePropertyIndexForLabel("User", "age"));
 	EXPECT_FALSE(hasIndexWithName("idx_user_age"));
 }
 

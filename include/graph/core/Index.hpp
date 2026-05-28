@@ -151,6 +151,17 @@ namespace graph {
 		[[nodiscard]] std::vector<int64_t>
 		findValues(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
 				   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
+		[[nodiscard]] size_t
+		countValues(const PropertyValue &key, const std::shared_ptr<storage::DataManager> &dataManager,
+		            const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
+		[[nodiscard]] size_t
+		countValuesInRange(const PropertyValue &minKey,
+		                   const PropertyValue &maxKey,
+		                   bool minInclusive,
+		                   bool maxInclusive,
+		                   bool &continueScan,
+		                   const std::shared_ptr<storage::DataManager> &dataManager,
+		                   const std::function<bool(const PropertyValue &, const PropertyValue &)> &comparator) const;
 		[[nodiscard]] std::vector<Entry> getAllEntries(const std::shared_ptr<storage::DataManager> &dataManager) const;
 		void setAllEntries(std::vector<Entry> &entries, const std::shared_ptr<storage::DataManager> &dataManager);
 

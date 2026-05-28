@@ -36,7 +36,8 @@ namespace graph::query::execution::operators {
 		NodeScanRequirements requirements_;
 		std::vector<VectorizedPropertyPredicate> predicates_;
 		std::string outputAlias_;
-		std::vector<int64_t> candidates_;
+		NodeCandidateSet candidateSet_;
+		std::optional<int64_t> directCount_;
 		bool emitted_ = false;
 	};
 

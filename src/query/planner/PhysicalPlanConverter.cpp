@@ -292,13 +292,13 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertAggregate(
 
 	const auto *agg = static_cast<const LogicalAggregate *>(op);
 
-	if (auto fastPath = planner::tryBuildNodeCountFastPathPlan(*agg)) {
+	if (auto fastPath = planner::tryBuildNodeCountFastPathPlan(*agg, im_)) {
 		return std::make_unique<NodeCountFastPathOperator>(
 			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
 			std::move(fastPath->predicates), std::move(fastPath->outputAlias));
 	}
 
-	if (auto fastPath = planner::tryBuildRelationshipCountFastPathPlan(*agg)) {
+	if (auto fastPath = planner::tryBuildRelationshipCountFastPathPlan(*agg, im_)) {
 		return std::make_unique<RelationshipCountFastPathOperator>(
 			dm_, im_, std::move(fastPath->seedConfig), std::move(fastPath->seedRequirements),
 			std::move(fastPath->seedPredicates), std::move(fastPath->hops), std::move(fastPath->outputAlias));

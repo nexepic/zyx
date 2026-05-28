@@ -102,41 +102,28 @@ void SortOperator::performSort() {
 	using Clock = std::chrono::steady_clock;
 	auto sortStart = Clock::now();
 
-	auto comparator = [this](const Record &a, const Record &b) -> bool {
-		for (const auto &item: sortItems_) {
-			PropertyValue valA, valB;
+	std::vector<DecoratedRecord> decorated;
+	decorated.reserve(sortedRecords_.size());
+	for (auto &record: sortedRecords_) {
+		auto keys = evaluateSortKeys(record);
+		decorated.push_back(DecoratedRecord{std::move(record), std::move(keys)});
+	}
+	sortedRecords_.clear();
 
-			if (item.expression) {
-				auto makeCtx = [this](const Record &r) {
-					if (queryContext_ && !queryContext_->parameters.empty())
-						return graph::query::expressions::EvaluationContext(r, queryContext_->parameters);
-					return graph::query::expressions::EvaluationContext(r);
-				};
-				auto contextA = makeCtx(a);
-				graph::query::expressions::ExpressionEvaluator evaluatorA(contextA);
-				valA = evaluatorA.evaluate(item.expression.get());
-
-				auto contextB = makeCtx(b);
-				graph::query::expressions::ExpressionEvaluator evaluatorB(contextB);
-				valB = evaluatorB.evaluate(item.expression.get());
-			}
-
-			if (valA != valB) {
-				if (item.ascending)
-					return valA < valB;
-				else
-					return valA > valB;
-			}
-		}
-		return false;
+	auto comparator = [this](const DecoratedRecord &a, const DecoratedRecord &b) -> bool {
+		return compareKeys(a.sortKeys, b.sortKeys);
 	};
 
 	static constexpr size_t PARALLEL_SORT_THRESHOLD = 8192;
 
 	if (!threadPool_ || threadPool_->isSingleThreaded() ||
-		sortedRecords_.size() < PARALLEL_SORT_THRESHOLD) {
+		decorated.size() < PARALLEL_SORT_THRESHOLD) {
 		// Sequential sort for small datasets
-		std::sort(sortedRecords_.begin(), sortedRecords_.end(), comparator);
+		std::sort(decorated.begin(), decorated.end(), comparator);
+		sortedRecords_.reserve(decorated.size());
+		for (auto &item: decorated) {
+			sortedRecords_.push_back(std::move(item.record));
+		}
 		debug::PerfTrace::addDuration(
 				"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 														 sortStart)
@@ -146,7 +133,7 @@ void SortOperator::performSort() {
 
 	// Parallel sort: split into chunks, sort each in parallel, then k-way merge
 	size_t numChunks = threadPool_->getThreadCount();
-	size_t total = sortedRecords_.size();
+	size_t total = decorated.size();
 	size_t chunkSize = total / numChunks;
 	size_t remainder = total % numChunks;
 
@@ -164,8 +151,8 @@ void SortOperator::performSort() {
 	}
 
 	threadPool_->parallelFor(0, numChunks, [&](size_t c) {
-		std::sort(sortedRecords_.begin() + chunks[c].begin,
-				  sortedRecords_.begin() + chunks[c].end, comparator);
+		std::sort(decorated.begin() + chunks[c].begin,
+				  decorated.begin() + chunks[c].end, comparator);
 	});
 
 	// Phase 2: Sequential k-way merge (merge pairs bottom-up)
@@ -186,17 +173,57 @@ void SortOperator::performSort() {
 								 ? chunks[std::min(right + step, numChunks) - 1].end
 								 : chunks[numChunks - 1].end;
 
-			std::inplace_merge(sortedRecords_.begin() + mergeBegin,
-							   sortedRecords_.begin() + mergeMid,
-							   sortedRecords_.begin() + mergeEnd, comparator);
+			std::inplace_merge(decorated.begin() + mergeBegin,
+							   decorated.begin() + mergeMid,
+							   decorated.begin() + mergeEnd, comparator);
 		});
 		step *= 2;
+	}
+
+	sortedRecords_.reserve(decorated.size());
+	for (auto &item: decorated) {
+		sortedRecords_.push_back(std::move(item.record));
 	}
 
 	debug::PerfTrace::addDuration(
 			"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 													 sortStart)
 											  .count()));
+}
+
+std::vector<PropertyValue> SortOperator::evaluateSortKeys(const Record &record) const {
+	std::vector<PropertyValue> keys;
+	keys.reserve(sortItems_.size());
+
+	for (const auto &item: sortItems_) {
+		PropertyValue value;
+		if (item.expression) {
+			if (queryContext_ && !queryContext_->parameters.empty()) {
+				graph::query::expressions::EvaluationContext context(record, queryContext_->parameters);
+				graph::query::expressions::ExpressionEvaluator evaluator(context);
+				value = evaluator.evaluate(item.expression.get());
+			} else {
+				graph::query::expressions::EvaluationContext context(record);
+				graph::query::expressions::ExpressionEvaluator evaluator(context);
+				value = evaluator.evaluate(item.expression.get());
+			}
+		}
+		keys.push_back(std::move(value));
+	}
+
+	return keys;
+}
+
+bool SortOperator::compareKeys(const std::vector<PropertyValue> &left,
+                               const std::vector<PropertyValue> &right) const {
+	const size_t count = std::min(left.size(), right.size());
+	for (size_t i = 0; i < count; ++i) {
+		if (left[i] == right[i]) {
+			continue;
+		}
+		return sortItems_[i].ascending ? left[i] < right[i] : left[i] > right[i];
+	}
+	return false;
 }
 
 } // namespace graph::query::execution::operators

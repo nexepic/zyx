@@ -17,7 +17,18 @@ using namespace graph::query::planner;
 namespace {
 std::unique_ptr<LogicalNodeScan> makeSeedScan() {
 	std::vector<std::pair<std::string, PropertyValue>> predicates = {{"id", PropertyValue("u1")}};
+	auto scan = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"}, predicates);
+	scan->setPreferredScanType(execution::ScanType::PROPERTY_SCAN);
+	return scan;
+}
+
+std::unique_ptr<LogicalNodeScan> makeUnindexedSeedScan() {
+	std::vector<std::pair<std::string, PropertyValue>> predicates = {{"id", PropertyValue("u1")}};
 	return std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"}, predicates);
+}
+
+std::unique_ptr<LogicalNodeScan> makeUnanchoredSeedScan() {
+	return std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"});
 }
 
 std::unique_ptr<LogicalTraversal> makeOneHop() {
@@ -38,15 +49,14 @@ TEST(RelationshipCountFastPathPlannerTest, AcceptsOneHopCountTraversal) {
 	auto plan = tryBuildRelationshipCountFastPathPlan(aggregate);
 
 	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->seedConfig.type, execution::ScanType::PROPERTY_SCAN);
+	EXPECT_EQ(plan->seedConfig.indexKey, "id");
+	EXPECT_EQ(plan->seedConfig.indexValue, PropertyValue("u1"));
 	EXPECT_EQ(plan->seedConfig.variable, "u");
 	EXPECT_EQ(plan->seedConfig.labels, (std::vector<std::string>{"User"}));
-	EXPECT_EQ(plan->seedRequirements.materialization, execution::NodeMaterializationMode::NSM_SELECTED_PROPERTIES);
-	EXPECT_EQ(plan->seedRequirements.requiredProperties, (std::vector<std::string>{"id"}));
-	ASSERT_EQ(plan->seedPredicates.size(), 1U);
-	EXPECT_EQ(plan->seedPredicates[0].variable, "u");
-	EXPECT_EQ(plan->seedPredicates[0].propertyKey, "id");
-	EXPECT_EQ(plan->seedPredicates[0].op, execution::VectorPredicateOp::VPO_EQ);
-	EXPECT_EQ(plan->seedPredicates[0].value, PropertyValue("u1"));
+	EXPECT_EQ(plan->seedRequirements.materialization, execution::NodeMaterializationMode::NSM_ID_ONLY);
+	EXPECT_TRUE(plan->seedRequirements.requiredProperties.empty());
+	EXPECT_TRUE(plan->seedPredicates.empty());
 	ASSERT_EQ(plan->hops.size(), 1U);
 	EXPECT_EQ(plan->hops[0].sourceVar, "u");
 	EXPECT_EQ(plan->hops[0].edgeVar, "r");
@@ -77,6 +87,26 @@ TEST(RelationshipCountFastPathPlannerTest, AcceptsCountStarAndCountEdgeVariable)
 
 	LogicalAggregate countEdge(makeOneHop(), {}, makeAggs(std::make_shared<expressions::VariableReferenceExpression>("r")));
 	EXPECT_TRUE(tryBuildRelationshipCountFastPathPlan(countEdge).has_value());
+}
+
+TEST(RelationshipCountFastPathPlannerTest, RejectsAnchoredSeedWithoutIndexCandidateSource) {
+	auto hop = std::make_unique<LogicalTraversal>(makeUnindexedSeedScan(), "u", "r", "v", "FOLLOWS", "out",
+	                                             std::vector<std::string>{"User"});
+	LogicalAggregate aggregate(std::move(hop), {}, makeAggs());
+
+	EXPECT_FALSE(tryBuildRelationshipCountFastPathPlan(aggregate).has_value());
+}
+
+TEST(RelationshipCountFastPathPlannerTest, PreservesUnanchoredRelationshipTypeScanFastPath) {
+	auto hop = std::make_unique<LogicalTraversal>(makeUnanchoredSeedScan(), "u", "r", "v", "FOLLOWS", "out",
+	                                             std::vector<std::string>{"User"});
+	LogicalAggregate aggregate(std::move(hop), {}, makeAggs());
+
+	auto plan = tryBuildRelationshipCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->seedConfig.type, execution::ScanType::FULL_SCAN);
+	EXPECT_TRUE(plan->seedPredicates.empty());
 }
 
 TEST(RelationshipCountFastPathPlannerTest, RejectsDistinctGroupedAndPropertyFilters) {

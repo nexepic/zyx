@@ -17,12 +17,27 @@
 
 namespace graph::query::execution {
 
+	struct NodeCandidateSet {
+		std::vector<int64_t> ids;
+		bool activeOnly = false;
+		bool labelsSatisfied = false;
+	};
+
+	struct NodeCandidateCount {
+		int64_t count = 0;
+		bool activeOnly = false;
+		bool labelsSatisfied = false;
+		bool available = false;
+	};
+
 	class NodeCandidateSource {
 	public:
 		NodeCandidateSource(std::shared_ptr<storage::DataManager> dm,
 							std::shared_ptr<indexes::IndexManager> im);
 
 		[[nodiscard]] std::vector<int64_t> collect(const NodeScanConfig &config) const;
+		[[nodiscard]] NodeCandidateSet collectWithMetadata(const NodeScanConfig &config) const;
+		[[nodiscard]] NodeCandidateCount countWithMetadata(const NodeScanConfig &config) const;
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;

@@ -170,6 +170,9 @@ TEST_F(PropertyIndexTest, FindRangeForNumericTypes) {
 	ASSERT_EQ(foundInts.size(), 1u);
 	EXPECT_EQ(foundInts[0], 9);
 
+	auto exclusiveInts = propertyIndex->findRange("level", graph::PropertyValue(10), graph::PropertyValue(20), false, false);
+	EXPECT_TRUE(exclusiveInts.empty());
+
 	// Act & Assert: Test double range query.
 	auto foundDoubles = propertyIndex->findRange("rating", graph::PropertyValue(4.0), graph::PropertyValue(5.0));
 	ASSERT_EQ(foundDoubles.size(), 2u);
@@ -178,6 +181,24 @@ TEST_F(PropertyIndexTest, FindRangeForNumericTypes) {
 
 	// Act & Assert: A range query on a key indexed with a non-numeric type should return nothing.
 	EXPECT_TRUE(propertyIndex->findRange("name", graph::PropertyValue(0), graph::PropertyValue(100)).empty());
+}
+
+TEST_F(PropertyIndexTest, CountExactAndRangeMatchesFindResults) {
+	propertyIndex->createIndex("level");
+	for (int64_t id = 1; id <= 100; ++id) {
+		propertyIndex->addProperty(id, "level", graph::PropertyValue(id % 10));
+	}
+
+	EXPECT_EQ(propertyIndex->countExactMatch("level", graph::PropertyValue(int64_t{3})), 10UL);
+	EXPECT_EQ(propertyIndex->findExactMatch("level", graph::PropertyValue(int64_t{3})).size(), 10UL);
+	EXPECT_EQ(propertyIndex->countRange(
+		"level",
+		graph::PropertyValue(int64_t{3}),
+		graph::PropertyValue(int64_t{6}),
+		true,
+		false),
+		30UL);
+	EXPECT_EQ(propertyIndex->countExactMatch("missing", graph::PropertyValue(int64_t{3})), 0UL);
 }
 
 TEST_F(PropertyIndexTest, GetIndexedKeys) {
@@ -1861,4 +1882,3 @@ TEST_F(PropertyIndexTest, FindExactMatch_ListTypeThrowsFromRootMap) {
 	listVal.push_back(graph::PropertyValue(int64_t(1)));
 	EXPECT_THROW(idx->findExactMatch("list_key", graph::PropertyValue(listVal)), std::invalid_argument);
 }
-

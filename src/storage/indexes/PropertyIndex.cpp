@@ -352,7 +352,9 @@ namespace graph::query::indexes {
 
 	std::vector<int64_t> PropertyIndex::findRange(const std::string &key,
 	                                                const PropertyValue &minValue,
-	                                                const PropertyValue &maxValue) const {
+	                                                const PropertyValue &maxValue,
+	                                                bool minInclusive,
+	                                                bool maxInclusive) const {
 		std::shared_lock lock(mutex_);
 
 		// Access indexedKeyTypes_ directly to avoid re-entrant lock bug
@@ -395,7 +397,68 @@ namespace graph::query::indexes {
 		if (!promoteToType(minKey, type) || !promoteToType(maxKey, type))
 			return {};
 
-		return getTreeManagerForType(type)->findRange(rootIt->second, minKey, maxKey);
+		return getTreeManagerForType(type)->findRange(rootIt->second, minKey, maxKey, minInclusive, maxInclusive);
+	}
+
+	size_t PropertyIndex::countExactMatch(const std::string &key, const PropertyValue &value) const {
+		std::shared_lock lock(mutex_);
+		const PropertyType valueType = getPropertyType(value);
+		if (const auto it = indexedKeyTypes_.find(key); it == indexedKeyTypes_.end() || it->second != valueType) {
+			return 0;
+		}
+
+		const auto &rootMap = getRootMapForType(valueType);
+		const auto rootIt = rootMap.find(key);
+		if (rootIt == rootMap.end()) {
+			return 0;
+		}
+
+		return getTreeManagerForType(valueType)->count(rootIt->second, value);
+	}
+
+	size_t PropertyIndex::countRange(const std::string &key,
+	                                 const PropertyValue &minValue,
+	                                 const PropertyValue &maxValue,
+	                                 bool minInclusive,
+	                                 bool maxInclusive) const {
+		std::shared_lock lock(mutex_);
+
+		auto typeIt = indexedKeyTypes_.find(key);
+		if (typeIt == indexedKeyTypes_.end())
+			return 0;
+
+		PropertyType type = typeIt->second;
+		if (type != PropertyType::INTEGER && type != PropertyType::DOUBLE && type != PropertyType::STRING)
+			return 0;
+
+		const auto &rootMap = getRootMapForType(type);
+		auto rootIt = rootMap.find(key);
+		if (rootIt == rootMap.end())
+			return 0;
+
+		PropertyValue minKey = minValue;
+		PropertyValue maxKey = maxValue;
+
+		auto promoteToType = [&](PropertyValue &val, PropertyType targetType) -> bool {
+			if (val.getType() == PropertyType::NULL_TYPE) return true;
+			if (val.getType() == targetType) return true;
+
+			if (targetType == PropertyType::DOUBLE && val.getType() == PropertyType::INTEGER) {
+				val = PropertyValue(static_cast<double>(std::get<int64_t>(val.getVariant())));
+				return true;
+			}
+			if (targetType == PropertyType::INTEGER && val.getType() == PropertyType::DOUBLE) {
+				double dval = std::get<double>(val.getVariant());
+				val = PropertyValue(static_cast<int64_t>(&val == &minKey ? std::ceil(dval) : std::floor(dval)));
+				return true;
+			}
+			return false;
+		};
+
+		if (!promoteToType(minKey, type) || !promoteToType(maxKey, type))
+			return 0;
+
+		return getTreeManagerForType(type)->countRange(rootIt->second, minKey, maxKey, minInclusive, maxInclusive);
 	}
 
 	std::shared_ptr<IndexTreeManager> PropertyIndex::getTreeManagerForType(PropertyType type) const {

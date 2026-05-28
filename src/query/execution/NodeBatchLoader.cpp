@@ -55,6 +55,15 @@ namespace graph::query::execution {
 			batch.materializedNodes.reserve(rowCount);
 		}
 
+		std::vector<int64_t> requiredLabelIds;
+		if (requirements.needsLabels) {
+			requiredLabelIds.reserve(config.labels.size());
+			for (const auto &label : config.labels) {
+				const int64_t labelId = dm_->resolveTokenId(label);
+				requiredLabelIds.push_back(labelId == 0 ? -1 : labelId);
+			}
+		}
+
 		for (size_t index = begin; index < clampedEnd; ++index) {
 			const int64_t nodeId = candidateIds[index];
 			auto maybeNode = loadNodeWithTrace(dm_, nodeId);
@@ -68,11 +77,11 @@ namespace graph::query::execution {
 			if (requirements.needsLabels) {
 				if (debug::PerfTrace::isEnabled()) {
 					const auto labelStart = Clock::now();
-					if (selected && !matchesLabels(node, config)) {
+					if (selected && !matchesLabels(node, requiredLabelIds)) {
 						selected = false;
 					}
 					debug::PerfTrace::addDuration("node_scan.label_check", elapsedNs(labelStart));
-				} else if (selected && !matchesLabels(node, config)) {
+				} else if (selected && !matchesLabels(node, requiredLabelIds)) {
 					selected = false;
 				}
 			}
@@ -112,10 +121,9 @@ namespace graph::query::execution {
 		return batch;
 	}
 
-	bool NodeBatchLoader::matchesLabels(const Node &node, const NodeScanConfig &config) const {
-		for (const auto &label : config.labels) {
-			const int64_t labelId = dm_->resolveTokenId(label);
-			if (labelId == 0 || !node.hasLabelId(labelId)) {
+	bool NodeBatchLoader::matchesLabels(const Node &node, const std::vector<int64_t> &labelIds) const {
+		for (const int64_t labelId : labelIds) {
+			if (labelId <= 0 || !node.hasLabelId(labelId)) {
 				return false;
 			}
 		}

@@ -103,7 +103,12 @@ namespace graph::query::indexes {
 		 * @param maxKey The upper bound of the range
 		 * @return Vector of values within the range
 		 */
-		std::vector<int64_t> findRange(int64_t rootId, const PropertyValue &minKey, const PropertyValue &maxKey) const;
+		std::vector<int64_t> findRange(int64_t rootId, const PropertyValue &minKey, const PropertyValue &maxKey,
+		                               bool minInclusive = true, bool maxInclusive = true) const;
+
+		size_t count(int64_t rootId, const PropertyValue &key) const;
+		size_t countRange(int64_t rootId, const PropertyValue &minKey, const PropertyValue &maxKey,
+		                  bool minInclusive = true, bool maxInclusive = true) const;
 
 		int64_t findLeafNode(int64_t rootId, const PropertyValue &key) const;
 

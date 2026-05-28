@@ -133,7 +133,38 @@ namespace graph::query::indexes {
 		std::vector<int64_t> findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 		std::vector<int64_t> findNodeIdsByPropertyRange(const std::string &key,
 		                                                 const PropertyValue &minValue,
-		                                                 const PropertyValue &maxValue) const;
+		                                                 const PropertyValue &maxValue,
+		                                                 bool minInclusive = true,
+		                                                 bool maxInclusive = true) const;
+		bool hasNodePropertyIndexForLabel(const std::string &label, const std::string &key) const;
+		std::vector<int64_t> findNodeIdsByLabelAndProperty(
+		    const std::string &label,
+		    const std::string &key,
+		    const PropertyValue &value) const;
+		std::vector<int64_t> findNodeIdsByLabelAndPropertyRange(
+		    const std::string &label,
+		    const std::string &key,
+		    const PropertyValue &minValue,
+		    const PropertyValue &maxValue,
+		    bool minInclusive = true,
+		    bool maxInclusive = true) const;
+		size_t countNodeIdsByProperty(const std::string &key, const PropertyValue &value) const;
+		size_t countNodeIdsByPropertyRange(const std::string &key,
+		                                   const PropertyValue &minValue,
+		                                   const PropertyValue &maxValue,
+		                                   bool minInclusive = true,
+		                                   bool maxInclusive = true) const;
+		size_t countNodeIdsByLabelAndProperty(
+		    const std::string &label,
+		    const std::string &key,
+		    const PropertyValue &value) const;
+		size_t countNodeIdsByLabelAndPropertyRange(
+		    const std::string &label,
+		    const std::string &key,
+		    const PropertyValue &minValue,
+		    const PropertyValue &maxValue,
+		    bool minInclusive = true,
+		    bool maxInclusive = true) const;
 
 		// Composite index API
 		bool createCompositeIndex(const std::string &indexName, const std::string &entityType,
@@ -171,6 +202,8 @@ namespace graph::query::indexes {
 		// Composite index maintenance helpers
 		void updateCompositeIndexForNode(const Node &node);
 		void removeCompositeIndexForNode(const Node &node);
+		void updateScopedPropertyIndexesForNode(const Node &oldNode, const Node &newNode);
+		void removeScopedPropertyIndexesForNode(const Node &node);
 
 		mutable std::atomic<uint64_t> lookups_{0};
 		mutable std::atomic<uint64_t> indexHits_{0};
