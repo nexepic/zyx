@@ -3,6 +3,7 @@
 buildDir/
 buildDir_*/
 build_release/
+build_bench_release/
 build_wasm/
 CMakeFiles/
 CMakeCache.txt
